@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 694 total = 21 GAP + 673 EXT
+# counts: 695 total = 20 GAP + 675 EXT
 
 GAP ?BeginDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?DrawFacesInRange@DxMesh@@UAAXHH@Z  # target defines it in system/rnddx9/Mesh.obj
@@ -27,7 +27,6 @@ GAP ?EndDrawing@DxRnd@@UAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?FindMITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@H2@Z  # target defines it in xdk/LIBCMT/rtti.obj
 GAP ?FindSITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@1@Z  # target defines it in xdk/LIBCMT/rtti.obj
 GAP ?FindVITargetTypeInstance@@YAPBU_s_RTTIBaseClassDescriptor@@PAXPBU_s_RTTICompleteObjectLocator@@PAUTypeDescriptor@@H2@Z  # target defines it in xdk/LIBCMT/rtti.obj
-GAP ?Init@MicManagerXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
 GAP ?Poll@MicXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
@@ -395,6 +394,7 @@ EXT XGetLocale
 EXT XGetOverlappedExtendedError
 EXT XGetOverlappedResult
 EXT XGetVideoMode
+EXT XHV2CreateEngine
 EXT XINPUTID_0F_CONTROLLER
 EXT XINPUTID_19_CONTROLLER
 EXT XINPUTID_OUT_UNSPECIFIED_DWORD_0
@@ -607,6 +607,7 @@ EXT _strtoui64
 EXT _time64
 EXT _woutput_s_l
 EXT _write
+EXT _xhv_loopback_mode
 EXT _xhv_voicechat_mode
 EXT accept
 EXT acos

@@ -15,6 +15,8 @@
 #include "synth_xbox\ExternalMic.h"
 #include "synth_xbox\FxSend.h"
 #include "synth_xbox\GainEffect.h"
+#include "synth_xbox\HeadsetPlaybackEffect.h"
+#include "synth_xbox\HeadsetXferEffect.h"
 #include "synth_xbox\Voice.h"
 #include "utl\MemStream.h"
 #include "utl\Std.h"
@@ -411,6 +413,58 @@ MicManagerXbox::MicManagerXbox()
     synthConfig->FindData("local_gain", gLocalGain);
     synthConfig->FindData("remote_gain", gRemoteGain);
     GainEffect::sGain = DbToRatio(gRemoteGain);
+}
+
+void MicManagerXbox::Init() {
+    MILO_ASSERT(this == sInstance, 0xB8);
+
+    void *processingModes[2];
+    XAUDIO2_EFFECT_CHAIN chain;
+    XAUDIO2_EFFECT_DESCRIPTOR desc;
+    HeadsetXferEffect *xfer[4];
+    XHV2INIT init;
+
+    processingModes[0] = _xhv_voicechat_mode;
+    processingModes[1] = _xhv_loopback_mode;
+
+    memset(&init, 0, sizeof(init));
+    init.MaxRemoteTalkers = 5;
+    init.MaxLocalTalkers = 4;
+    init.LocalProcessingModes = processingModes;
+    init.NumLocalProcessingModes = 2;
+    init.RemoteProcessingModes = processingModes;
+    init.NumRemoteProcessingModes = 1;
+    init.MaxNumPackets = 1;
+    init.Unk1c = 1;
+    init.pfnMicrophoneRawDataReady = DataReadyCallback;
+    init.Unk30 = TheXboxSynth->unkec;
+
+    HRESULT hr = XHV2CreateEngine(&init, (DWORD *)&unk2c, &mXHVEngine);
+    DX_ASSERT_CODE(hr, 0xCD);
+
+    if (!TheXboxSynth->mHeadsetSubmixes.empty()) {
+        // One HeadsetXferEffect capture ring per player, pulled back out of the
+        // submix it was installed on.
+        for (int i = 0; i < 4; i++) {
+            IXAudio2SubmixVoice *submix = TheXboxSynth->GetHeadsetSubmix(i);
+            HeadsetXferEffect *effect;
+            HRESULT hr = submix->GetEffectParameters(0, &effect, sizeof(effect));
+            MILO_ASSERT(SUCCEEDED(hr), 0xD9);
+            xfer[i] = effect;
+        }
+        HeadsetPlaybackEffect *playback = new HeadsetPlaybackEffect(xfer);
+
+        desc.pEffect = static_cast<IXAPO *>(playback);
+        desc.InitialState = 0;
+        desc.OutputChannels = 1;
+        chain.EffectCount = 1;
+        chain.pEffectDescriptors = &desc;
+        AddRemoteMic(0x00DEADBEEFFACEF0ULL, &chain);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        unkc[i] = new ChatReceiver(mXHVEngine, i);
+    }
 }
 
 MicManagerXbox::~MicManagerXbox() {}

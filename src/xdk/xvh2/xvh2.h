@@ -44,3 +44,27 @@ struct IXHV2Engine { /* Size=0x4 */
 // `_xhv_voicechat_mode` (linker map 0x822869d4).  Declaring it as C++ made us
 // emit `?_xhv_voicechat_mode@@3PAXA`, which is a different symbol.
 extern "C" void *_xhv_voicechat_mode;
+extern "C" void *_xhv_loopback_mode;
+
+// Raw microphone data callback: (dwUserIndex, pvData, dwSize, pFlags).
+typedef void XHV2_MIC_RAW_DATA_READY(DWORD, void *, DWORD, int *);
+
+// Offsets are read off MicManagerXbox::Init's target listing; the fields that
+// listing does not write are left as Unk with their offsets.
+struct XHV2INIT { /* Size=0x34 */
+    /* 0x0000 */ DWORD MaxRemoteTalkers;
+    /* 0x0004 */ DWORD MaxLocalTalkers;
+    /* 0x0008 */ void **LocalProcessingModes;
+    /* 0x000c */ DWORD NumLocalProcessingModes;
+    /* 0x0010 */ void **RemoteProcessingModes;
+    /* 0x0014 */ DWORD NumRemoteProcessingModes;
+    /* 0x0018 */ DWORD MaxNumPackets;
+    /* 0x001c */ DWORD Unk1c;
+    /* 0x0020 */ XHV2_MIC_RAW_DATA_READY *pfnMicrophoneRawDataReady;
+    /* 0x0024 */ DWORD Unk24;
+    /* 0x0028 */ DWORD Unk28;
+    /* 0x002c */ DWORD Unk2c;
+    /* 0x0030 */ DWORD Unk30;
+};
+
+extern "C" HRESULT XHV2CreateEngine(const XHV2INIT *, DWORD *, IXHV2Engine **);
