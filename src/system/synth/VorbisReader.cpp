@@ -35,7 +35,7 @@ namespace {
             WaitForSingleObject(gEvent, -1);
             gLock.Enter();
             if (!gNewReaders.empty()) {
-                gReaders.insert(gReaders.end(), gNewReaders.begin(), gNewReaders.end());
+                gReaders.splice(gReaders.begin(), gNewReaders);
             }
             gLock.Exit();
 
@@ -46,10 +46,10 @@ namespace {
                     VorbisReader *cur = *it;
                     if (cur->Unk24()) {
                         it = gReaders.erase(it);
-                        // set unk24 to false
+                        cur->SetUnk24(false);
                     } else {
                         ++it;
-                        b2 = cur->DecodeThreadPoll() || !b2;
+                        b2 = cur->DecodeThreadPoll() || b2;
                     }
                 }
             } while (b2);
