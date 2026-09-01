@@ -69,7 +69,35 @@
 #      (scripts/native_configure.sh has its own space: 9 = a required external
 #      dependency is missing, 10 = cmake failed. Its code is printed in the
 #      banner, never returned from here.)
+#  10  THE SYSTEM TOOLCHAIN MOVED under this build dir and it could not be
+#      refreshed (--no-configure, or the reconfigure itself failed). See
+#      scripts/native_toolchain_check.py; the WHY is below.
 #   *  anything else is ctest's own exit status
+#
+# WHY THIS SCRIPT CHECKS THE SYSTEM TOOLCHAIN
+# -------------------------------------------
+# Measured 2026-09-01. One `pacman -Syu` moved gtest 1.17->1.18, ffmpeg 8->9,
+# glfw and nvidia-utils in a single transaction, and every configured
+# native/build in every checkout became unbuildable at once. The main
+# checkout's milo-tests had SIX unresolvable DT_NEEDED entries -- it could not
+# be exec'd -- yet `ninja` considered the tree up to date and re-ran nothing.
+#
+# The reason is worth stating exactly, because it is not a missing dependency
+# edge: cmake DOES declare /usr/lib/cmake/GTest/GTestConfig.cmake as an input
+# of the build.ninja regeneration edge. **pacman restores each file's upstream
+# mtime**, so gtest 1.18's files landed dated 2026-08-30 21:08 -- OLDER than
+# the build.ninja written 2026-08-31 17:05. Ninja's whole staleness model is
+# "input newer than output"; a package manager that moves mtimes BACKWARDS
+# defeats it silently, and TestGates.BuildMatchesSources asks ninja, so it is
+# blind by construction too.
+#
+# The loud form of this is a deleted soname (ninja hard-errors, exit 6 here,
+# with a message that does not say "reconfigure"). The quiet form is an
+# in-place ABI bump: same path, new content, headers' mtimes also backwards,
+# so ninja recompiles nothing and you link last month's objects against this
+# month's library. native_toolchain_check.py catches both by CONTENT HASH,
+# never mtime, and this script refreshes the build dir rather than measuring
+# through it.
 #
 # WHY THIS SCRIPT BUILDS
 # ----------------------
@@ -174,6 +202,66 @@ if [ ! -f "$BUILD_DIR/CTestTestfile.cmake" ]; then
     fi
     echo "==============================================================" >&2
     exit 9
+fi
+
+# ---------------------------------------------------------------------------
+# The system toolchain is an input to this build dir, and ninja cannot see it
+# move. Check by content hash before building. See the header comment.
+# ---------------------------------------------------------------------------
+TOOLCHAIN_CHECK="$REPO_ROOT/scripts/native_toolchain_check.py"
+if [ -f "$TOOLCHAIN_CHECK" ]; then
+    TC_OUT="$(python3 "$TOOLCHAIN_CHECK" --check "$BUILD_DIR" 2>&1)"
+    TC_RC=$?
+    case "$TC_RC" in
+        0) ;;                                   # current
+        4) python3 "$TOOLCHAIN_CHECK" --record "$BUILD_DIR" --quiet ;;
+        2|3)
+            echo >&2
+            echo "==============================================================" >&2
+            echo " SYSTEM TOOLCHAIN MOVED UNDER THIS BUILD DIR" >&2
+            echo "--------------------------------------------------------------" >&2
+            echo "$TC_OUT" | sed 's/^/ /' >&2
+            echo "--------------------------------------------------------------" >&2
+            echo " ninja CANNOT see this: pacman restores upstream mtimes, so" >&2
+            echo " newer packages install OLDER files and every staleness rule" >&2
+            echo " keyed on mtime -- ninja's, and TestGates.BuildMatchesSources" >&2
+            echo " which asks ninja -- reports the tree as current." >&2
+            echo " Measuring through it would report the old toolchain's" >&2
+            echo " results, or link objects against a library they were not" >&2
+            echo " compiled for." >&2
+            echo "==============================================================" >&2
+            # --no-build is refused here rather than warned about: healing this
+            # means reconfiguring and (for a library move) discarding object
+            # files, and doing that without then rebuilding would hand ctest an
+            # even emptier build dir than it started with.
+            if [ "$DO_CONFIGURE" != "1" ] || [ "$DO_BUILD" != "1" ] \
+               || [ ! -x "$REPO_ROOT/scripts/native_configure.sh" ]; then
+                echo >&2
+                echo " NATIVE GATE DID NOT RUN -- this is NOT a pass." >&2
+                echo " Refresh it:  scripts/native_configure.sh $BUILD_DIR" >&2
+                echo " then, if a LIBRARY moved:  cmake --build $BUILD_DIR --target clean" >&2
+                echo " then re-run this script WITHOUT --no-build/--no-configure." >&2
+                exit 10
+            fi
+            echo "==> refreshing: reconfigure$(echo "$TC_OUT" | grep -q 'REMEDY: clean-rebuild' && echo ' + clean rebuild')" >&2
+            if ! "$REPO_ROOT/scripts/native_configure.sh" "$BUILD_DIR"; then
+                echo "error: reconfigure FAILED; the build dir is still stale." >&2
+                exit 10
+            fi
+            if echo "$TC_OUT" | grep -q 'REMEDY: clean-rebuild'; then
+                # A library moved. Object files compiled against the old
+                # headers are suspect and ninja will not rebuild them, because
+                # the new headers' mtimes went backwards too. Only a clean
+                # rebuild is honest here.
+                cmake --build "$BUILD_DIR" --target clean >/dev/null 2>&1 || true
+            fi
+            python3 "$TOOLCHAIN_CHECK" --record "$BUILD_DIR" --quiet
+            ;;
+        *)
+            echo "warning: native_toolchain_check.py exited $TC_RC; continuing." >&2
+            echo "$TC_OUT" | sed 's/^/  /' >&2
+            ;;
+    esac
 fi
 
 # Build BEFORE testing. A stale build dir silently narrows the suite: the tests
@@ -297,11 +385,54 @@ if [ -n "$budget" ]; then
 fi
 echo "=============================================================="
 
+# Why the GPU gets named here, and not left to the reader.
+#
+# On 2026-09-01 a `pacman -Syu` upgraded nvidia-utils 610.43.03 -> 610.57.04
+# WITHOUT a reboot, so the loaded kernel module and the userspace libraries
+# disagreed and the only Vulkan ICD on this box (nvidia_icd.json) failed to
+# load: `vulkaninfo` reported "Found no drivers". Every GPU-gated test skipped,
+# the count went 69 -> 74, and the ratchet fired with "Coverage shrank. Either
+# restore the gate, or raise the budget" -- a message that points a lane at the
+# SOURCE TREE for a fault that is entirely in the machine. A lane that believes
+# it launders an environmental outage into the budget file permanently. So the
+# environment gets audited before the number is believed, exactly as it already
+# is for the gitignored archive/ golden.
+gpu_unavailable_reason() {
+    local nvrm userspace glcore
+    if [ -r /proc/driver/nvidia/version ]; then
+        nvrm=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' /proc/driver/nvidia/version | head -1)
+        glcore=$(ls /usr/lib/libnvidia-glcore.so.[0-9]* 2>/dev/null | head -1)
+        userspace=$(printf '%s' "${glcore:-}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        if [ -n "${nvrm:-}" ] && [ -n "${userspace:-}" ] && [ "$nvrm" != "$userspace" ]; then
+            echo "NVIDIA kernel module is $nvrm but the userspace libraries are $userspace."
+            echo "The driver was upgraded without a reboot, so every Vulkan ICD fails to"
+            echo "load and this box has NO GPU at all until it is rebooted. Confirm with:"
+            echo "  vulkaninfo --summary     (expect: 'Found no drivers')"
+            return 0
+        fi
+    fi
+    if command -v vulkaninfo >/dev/null 2>&1 \
+       && ! timeout 60 vulkaninfo --summary >/dev/null 2>&1; then
+        echo "vulkaninfo cannot create a Vulkan instance: no working Vulkan driver."
+        echo "Every GPU-gated test will skip until that is fixed."
+        return 0
+    fi
+    return 1
+}
+
+GPU_REASON=""
 if [ "$skipped" -gt 0 ]; then
     echo
     echo "Skipped suites (a green ctest says nothing about these):"
     grep '\*\*\*Skipped' "$LOG" | sed -E 's/.*Test +#[0-9]+: ([^ ]+).*/  \1/' \
         | sed 's/\..*//' | sort | uniq -c | sort -rn
+    GPU_REASON="$(gpu_unavailable_reason || true)"
+    if [ -n "$GPU_REASON" ]; then
+        echo
+        echo "  NOTE: the GPU is unavailable on this box right now."
+        echo "$GPU_REASON" | sed 's/^/    /'
+        echo "    GPU-gated tests skip for that reason and NOT because of the tree."
+    fi
 fi
 
 if [ "${SKIP_BUDGET_UPDATE:-0}" = "1" ]; then
@@ -342,6 +473,15 @@ if [ -n "$budget" ]; then
         echo "FAIL: $skipped tests skipped, budget is $budget."
         echo "      Coverage shrank. Either restore the gate, or raise the budget"
         echo "      in $BUDGET_FILE with a commit message saying why."
+        if [ -n "$GPU_REASON" ]; then
+            echo
+            echo "      DO NOT TOUCH THE BUDGET YET -- this box has no GPU:"
+            echo "$GPU_REASON" | sed 's/^/        /'
+            echo "      That is an outage on the machine, not a regression in the"
+            echo "      tree. Raising the budget would make an environmental"
+            echo "      outage the permanent new normal. Fix the box (reboot),"
+            echo "      or report the gate red with this as the reason."
+        fi
         # Check the environment before believing the number. The budget was
         # recorded in the main checkout; archive/ is in .gitignore, so it exists
         # ONLY there, and exactly one test reads a golden out of it. A worktree
