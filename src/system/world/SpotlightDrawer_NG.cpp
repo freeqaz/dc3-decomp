@@ -755,14 +755,13 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
     PlaneEquation(rightPlane, invRight, rightD, rightEq);
 
     // Narrow end of the cone, and the distance from the apex to the light.
-    float minR = botR;
-    if ((topR - botR) < 0.0f) {
-        minR = topR;
-    }
+    float minR = (topR - botR) >= 0.0f ? botR : topR;
 
-    float apexDist = 0.0f;
+    float apexDist;
     if (0.0f < botR) {
         apexDist = (len * minR) / (botR - minR);
+    } else {
+        apexDist = 0.0f;
     }
 
     float halfAngle = (botR * 0.5f) / (len + apexDist);
@@ -787,7 +786,8 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
         vis = 0.0f;
     }
 
-    Vector4 visConst(vis, 0.0f, 0.0f, 0.0f);
+    Vector4 visConst;
+    visConst.Set(vis, 0.0f, 0.0f, 0.0f);
     TheShaderMgr.SetPConstant((PShaderConstant)0x56, visConst);
     TheShaderMgr.SetPConstant((PShaderConstant)0x57, rightEq);
     TheShaderMgr.SetPConstant((PShaderConstant)0x58, leftEq);
