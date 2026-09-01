@@ -2184,19 +2184,29 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
     int mismatchCount = 0;
     RndMesh::VertVector &srcVerts = const_cast<RndMesh *>(src)->Verts();
     RndMesh::VertVector &dstVerts = dst->Verts();
+    // Retail loads dst's geom owner once (lwz r25, 0x148(r4)) and reaches both
+    // Verts (0x100) and Faces (0x110/0x114) through it; 'dst->Faces()' inside
+    // the loop re-derefs 0x148 every time.
+    std::vector<RndMesh::Face> &dstFaces = dst->Faces();
     int srcCount = srcVerts.mNumVerts;
     float tolerance = 1e-5f;
-    RndMesh::Vert tmp;
+    // Raw swap buffer, NOT a constructed Vert: the target function contains no
+    // ??0Vert@RndMesh@@QAA@XZ call at all (only 3x memcpy + the MakeString
+    // notify), so declaring a Vert here emits a constructor the retail code
+    // never runs.
+    char tmp[sizeof(RndMesh::Vert)];
     if (srcCount > 0) {
         unsigned int i = 0;
         do {
             unsigned int j = 0;
-            float stx = srcVerts.mVerts[i].tex.x;
-            float sty = srcVerts.mVerts[i].tex.y;
+            // Retail copies the whole Vector2 into a stack temp with an integer
+            // ld/std pair and reads the two floats back out of it; two separate
+            // float loads do not produce that shape.
+            Vector2 srcTex = srcVerts.mVerts[i].tex;
             if (dstVerts.mNumVerts > 0) {
                 do {
-                    if (fabsf(stx - dstVerts.mVerts[j].tex.x) < tolerance
-                        && fabsf(sty - dstVerts.mVerts[j].tex.y) < tolerance)
+                    if (fabsf(srcTex.x - dstVerts.mVerts[j].tex.x) < tolerance
+                        && fabsf(srcTex.y - dstVerts.mVerts[j].tex.y) < tolerance)
                         goto found;
                     j++;
                 } while ((int)j < dstVerts.mNumVerts);
@@ -2212,9 +2222,9 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
                         &dstVerts.mVerts[js], &dstVerts.mVerts[ii], sizeof(RndMesh::Vert)
                     );
                     memcpy(&dstVerts.mVerts[ii], &tmp, sizeof(RndMesh::Vert));
-                    int numFaces = (int)dst->Faces().size();
+                    int numFaces = (int)dstFaces.size();
                     if (numFaces > 0) {
-                        unsigned short *faceData = &dst->Faces()[0].v1;
+                        unsigned short *faceData = &dstFaces[0].v1;
                         int n = numFaces;
                         do {
                             if (faceData[0] == js)
