@@ -556,11 +556,12 @@ void EQEffect::SetParameter(int param, float value) {
         double sinWc = sin((double)wcPi);
         float alpha = (float)((float)sinWc * invGainF) * half;
         float k = (one - alpha) * half / (alpha + one);
+        float kHalf = k + half;
         double cosWc = cos((double)wcPi);
         mBand3A2 = k * 2.0f;
-        float cosKhalf = (float)cosWc * (k + half);
+        float cosKhalf = (float)cosWc * kHalf;
         mBand3A1 = cosKhalf * -2.0f;
-        float fk4 = (k + half) - cosKhalf;
+        float fk4 = (kHalf - cosKhalf) * 0.25f;
         float fk2 = fk4 * 2.0f;
         mBand3B0 = fk2;
         mBand3B1 = fk4 * 4.0f;
