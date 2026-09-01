@@ -297,6 +297,61 @@ float DxMesh::FurWeight(RndMat *mat) {
     return -1.0f;
 }
 
+// Target: Mesh.obj .data:0xA0 (0x82F136C4), the single 0xBF800000 word.
+static float sFurLodBias = -1.0f;
+
+DxMat *DxMesh::DrawFur(DxMat *mat) {
+    if (TheRnd.DrawMode() != Rnd::kDrawNormal) {
+        return static_cast<DxMat *>(dynamic_cast<RndMat *>(mat->NextPass()));
+    }
+    DxMesh *owner = static_cast<DxMesh *>(GetGeomOwner());
+    MILO_ASSERT(owner && owner->CanDraw(), 0x21B);
+    MILO_ASSERT(mat, 0x21D);
+    // Each bone costs two 4x3 transform slots (the regular one plus the fur
+    // one), and only 43 constant registers are available from
+    // kVS_WorldTransform on.
+    if (NumBones() * 2 >= 43) {
+        MILO_NOTIFY_ONCE(
+            "%s: Too many bones for fur (%d > %d)", PathName(this), NumBones(), 21
+        );
+        return static_cast<DxMat *>(dynamic_cast<RndMat *>(mat->NextPass()));
+    }
+    RndFur *fur = mat->GetFur();
+    MILO_ASSERT(fur, 0x227);
+    int numBones = NumBones();
+    if (numBones == 0)
+        numBones = 1;
+    MILO_ASSERT(mTransformCache.size() == numBones, 0x22A);
+    for (int i = 0; i < numBones; i++) {
+        TheShaderMgr.SetVConstant4x3(
+            (VShaderConstant)(kVS_WorldTransform + (numBones + i) * 3),
+            Hmx::Matrix4(mTransformCache[i])
+        );
+    }
+    fur->Prep(owner, mat);
+    DWORD savedLod12 = D3DDevice_GetSamplerState_MipMapLodBias(TheDxRnd.Device(), 0xC);
+    DWORD savedLod0 = D3DDevice_GetSamplerState_MipMapLodBias(TheDxRnd.Device(), 0);
+    D3DDevice_SetSamplerState_MipMapLodBias(
+        TheDxRnd.Device(), 0xC, *(DWORD *)&sFurLodBias
+    );
+    D3DDevice_SetSamplerState_MipMapLodBias(
+        TheDxRnd.Device(), 0, *(DWORD *)&sFurLodBias
+    );
+    int numPasses = fur->Layers();
+    MILO_ASSERT(numPasses > 0, 0x243);
+    DxMat *next = static_cast<DxMat *>(dynamic_cast<RndMat *>(mat->NextPass()));
+    for (int i = 0; i < numPasses; i++) {
+        fur->Shell(i, owner, mat);
+        owner->DrawFacesInRange(0, -1);
+    }
+    D3DDevice_SetSamplerState_MipMapLodBias(TheDxRnd.Device(), 0xC, savedLod12);
+    D3DDevice_SetSamplerState_MipMapLodBias(TheDxRnd.Device(), 0, savedLod0);
+    // Sampler 6 is restored to sampler 0's saved bias, not its own -- that is
+    // what the shipped code does.
+    D3DDevice_SetSamplerState_MipMapLodBias(TheDxRnd.Device(), 6, savedLod0);
+    return next;
+}
+
 void DxMesh::OnSync(int flags) {
     PhysMemTypeTracker tracker("D3D(phys):Mesh");
     RndMesh *geom = GetGeomOwner();

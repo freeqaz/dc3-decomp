@@ -22,14 +22,19 @@ public:
      *  Both ?Prep@RndFur@@UBA_NPAVRndMesh@@PAVRndMat@@@Z and
      *  ?Shell@RndFur@@UBA_NHPAVRndMesh@@PAVRndMat@@@Z sit at 0x82AEAE70
      *  ("li r3,0; blr") in ham_xbox_r.map.  Because both bodies ICF-folded to
-     *  the SAME address, the vtable cannot witness their relative order --
-     *  either order reproduces the target bytes.  There are no call sites in
-     *  the tree, so this order is a guess; do not treat it as established. */
+     *  the SAME address, the vtable cannot witness their relative order.
+     *  ESTABLISHED 2026-09-01 by the CALL SITES instead: DxMesh::DrawFur
+     *  (Mesh.s 0x8262231C / 0x826223F8) dispatches the 2-argument
+     *  (RndMesh*, RndMat*) call through slot 0x58 and the 3-argument
+     *  (int, RndMesh*, RndMat*) call through slot 0x5C, which is this
+     *  order.  Writing that body reproduces both loads with no offset
+     *  mismatch. */
     virtual bool Prep(class RndMesh *, class RndMat *) const { return false; }
     virtual bool Shell(int, class RndMesh *, class RndMat *) const { return false; }
 
     bool LoadOld(BinStreamRev &);
     RndTex* GetFurDetail() const { return mFurDetail; }
+    int Layers() const { return mLayers; }
     RndWind* GetWind() const { return mWind; }
     float GetFluidity() const { return mFluidity; }
 

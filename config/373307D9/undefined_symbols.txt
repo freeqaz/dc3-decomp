@@ -14,9 +14,8 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 693 total = 21 GAP + 672 EXT
+# counts: 694 total = 20 GAP + 674 EXT
 
-GAP ?DrawFur@DxMesh@@IAAPAVDxMat@@PAV2@@Z  # target defines it in system/rnddx9/Mesh.obj
 GAP ?DrawRect@DxRnd@@UAAXABVRect@Hmx@@PAVRndMat@@W4ShaderType@@ABVColor@3@PBV63@4@Z  # target defines it in system/rnddx9/Rnd.obj
 GAP ?DrawShowing@DxMultiMesh@@UAAXXZ  # target defines it in system/rnddx9/MultiMesh.obj
 GAP ?DrawShowing@DxParticleSys@@UAAXXZ  # target defines it in system/rnddx9/Part.obj
@@ -158,6 +157,7 @@ EXT D3DDevice_EndIndexedVertices
 EXT D3DDevice_EndTiling
 EXT D3DDevice_GetDepthStencilSurface
 EXT D3DDevice_GetRenderTarget
+EXT D3DDevice_GetSamplerState_MipMapLodBias
 EXT D3DDevice_InsertFence
 EXT D3DDevice_QueryPerfCounters
 EXT D3DDevice_QuerySwapStatus
@@ -210,6 +210,7 @@ EXT D3DDevice_SetSamplerState_MagFilter
 EXT D3DDevice_SetSamplerState_MaxMipLevel
 EXT D3DDevice_SetSamplerState_MinFilter
 EXT D3DDevice_SetSamplerState_MinMipLevel
+EXT D3DDevice_SetSamplerState_MipMapLodBias
 EXT D3DDevice_SetShaderGPRAllocation
 EXT D3DDevice_SetStreamSource
 EXT D3DDevice_SetSwapMode
