@@ -45,10 +45,16 @@ public:
     float mFrequency;           // 0x0C
     float mConfidence;          // 0x10
     float mClarity;             // 0x14
-    SpectralAnalysis mSpectral; // 0x18 (size 0xDC -> ends 0xF4)
-    int mUnusedF4;              // 0xF4
-    int mUnusedF8;              // 0xF8
-    int mUnusedFC;              // 0xFC
+    // sizeof(SpectralAnalysis) is 0xE8, not 0xDC: ?Analyze@SpectralAnalysis
+    // loads and stores mAccum as a double at 0xE0(this) on the TARGET side
+    // (`stfd f12, 0xe0(r31)` / `lfd f9, 0xe0(r31)`), so the class really does
+    // extend to 0xE8 and mSpectral spans 0x18..0x100.
+    // That leaves no room for the three `mUnusedF4/F8/FC` ints a previous pass
+    // put here on the assumption that mSpectral ended at 0xF4 -- 0xF4/0xF8/0xFC
+    // are INSIDE mSpectral (0xF8 is mAccum's second word).  They pushed every
+    // following member up by 12, against ??1PitchDetector, which destroys
+    // mSpectrum/mWindow/mWeight at 0x100/0x10c/0x118 on the target side.
+    SpectralAnalysis mSpectral; // 0x18 (size 0xE8 -> ends 0x100)
     stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > mSpectrum; // 0x100
     stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > mWindow;   // 0x10C
     stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > mWeight;   // 0x118
