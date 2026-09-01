@@ -134,8 +134,9 @@ void NgPostProc::DoBloom() {
 
             RndOverlay *overlay = RndOverlay::Find("postproc", true);
             if (overlay->Showing()) {
+                RndPostProc *activePostProc = TheHamDirector->GetActivePostProc();
                 TextStream *prevReflect = TheDebug.SetReflect(overlay);
-                const char *worldName = PathName(TheHamDirector->GetActivePostProc());
+                const char *worldName = PathName(activePostProc);
                 float intensity = BloomIntensity();
                 int r = (int)(mBloomColor.red * 256.0);
                 int g = (int)(mBloomColor.green * 256.0);
