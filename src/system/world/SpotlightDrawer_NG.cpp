@@ -625,33 +625,48 @@ void NgSpotlightDrawer::RenderScene() {
 
 namespace {
 
-// Slides a beam corner along `dir` by `scale`.  `dir` arrives by value: retail
-// copies the whole 16-byte Vector3 (padding included) into a fresh stack slot
-// at every one of the five corner sites, which is what produces the
-// lwz/lwz/lwz/lwz + stw/stw/stw/stw runs that dominate this function.
+// Slides a beam corner along `dir` by `scale`.  `dir` arrives by value AND IS
+// SCALED IN PLACE -- that is what makes the copy survive.  Xenon MSVC at /O1
+// folds an *unmodified* local-to-local 16-byte Vector3 copy unconditionally,
+// but a by-value parameter the callee writes to is a distinct object it has to
+// materialise.  Each of the five corner sites therefore keeps its own
+// lwz/lwz/lwz/lwz + stw/stw/stw/stw run, exactly as retail does.  (The scaled
+// stores themselves are dead and get removed, so all five copies can share
+// stack slots with one another.)
 void SlideCorner(Vector3 &pt, Vector3 dir, float scale) {
-    pt.x += dir.x * scale;
-    pt.y += dir.y * scale;
-    pt.z += dir.z * scale;
+    dir *= scale;
+    pt.x += dir.x;
+    pt.y += dir.y;
+    pt.z += dir.z;
 }
 
 void SlideCornerBack(Vector3 &pt, Vector3 dir, float scale) {
-    pt.x -= dir.x * scale;
-    pt.y -= dir.y * scale;
-    pt.z -= dir.z * scale;
+    dir *= scale;
+    pt.x -= dir.x;
+    pt.y -= dir.y;
+    pt.z -= dir.z;
 }
 
 // Normal of the plane through the eye and the silhouette edge a..b.  Both
-// endpoints arrive by value for the same reason as above.
+// endpoints arrive by value and are rebased onto the eye in place, for the same
+// reason as above -- that keeps both 16-byte copies.
 void EyeEdgePlane(Vector3 a, Vector3 b, const Vector3 &eye, Vector3 &dst) {
-    dst.Set(
-        (a.y - eye.y) * (b.z - eye.z) - (a.z - eye.z) * (b.y - eye.y),
-        (a.z - eye.z) * (b.x - eye.x) - (a.x - eye.x) * (b.z - eye.z),
-        (a.x - eye.x) * (b.y - eye.y) - (a.y - eye.y) * (b.x - eye.x)
-    );
+    a -= eye;
+    b -= eye;
+    Cross(a, b, dst);
 }
 
 void NormalizeCopy(Vector3 v, Vector3 &dst) { Normalize(v, dst); }
+
+// Divides a silhouette plane through by its projection onto the bisector and
+// packs it as a shader plane equation.  `n` is by value and scaled in place for
+// the same copy-preserving reason as SlideCorner.
+void PlaneEquation(Vector3 n, float inv, float d, Vector4 &out) {
+    n.x *= inv;
+    n.y *= inv;
+    n.z *= inv;
+    out.Set(n.x, n.y, n.z, inv * d);
+}
 
 }
 
@@ -672,8 +687,14 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
     // The beam points down the spotlight's local +Y axis.
     const Vector3 &beamDir = sl->WorldXfm().m.y;
 
+    // Component-wise on purpose: `toCam -= camXfm.v` makes MSVC materialise
+    // &camXfm.v into a GPR for operator-=' reference parameter, and that
+    // address computation is dead by the time the loads are folded back to
+    // 0x30/0x34/0x38(r30).  Retail has no such addi.
     Vector3 toCam = lightPos;
-    toCam -= camXfm.v;
+    toCam.x -= camXfm.v.x;
+    toCam.y -= camXfm.v.y;
+    toCam.z -= camXfm.v.z;
 
     Vector3 viewDir = toCam;
     Normalize(viewDir, viewDir);
@@ -703,19 +724,24 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
     Vector3 botLeft = botCenter;
     SlideCornerBack(botLeft, perp, botR);
 
+    // The eye position is read once into a local.  `camXfm` is a reference to
+    // memory this function does not own, so every `camXfm.v.x` re-spelling has
+    // to be re-loaded after each `Normalize` call; a local whose address never
+    // escapes gets scalarised into callee-saved FPRs and survives them, which
+    // is what retail does (f18/f26/f25 hold eye.x/y/z across both plane calls).
+    Vector3 eye(camXfm.v.x, camXfm.v.y, camXfm.v.z);
+
     Vector3 rightPlane;
-    EyeEdgePlane(topRight, botRight, camXfm.v, rightPlane);
+    EyeEdgePlane(topRight, botRight, eye, rightPlane);
     Normalize(rightPlane, rightPlane);
 
     Vector3 leftPlane;
-    EyeEdgePlane(topLeft, botLeft, camXfm.v, leftPlane);
+    EyeEdgePlane(topLeft, botLeft, eye, leftPlane);
     Normalize(leftPlane, leftPlane);
 
     // Plane constants: the eye lies on both planes, so d == dot(eye, n).
-    float rightD = camXfm.v.x * rightPlane.x
-        + (camXfm.v.y * rightPlane.y + camXfm.v.z * rightPlane.z);
-    float leftD = camXfm.v.x * leftPlane.x
-        + (camXfm.v.y * leftPlane.y + camXfm.v.z * leftPlane.z);
+    float rightD = eye.x * rightPlane.x + (eye.y * rightPlane.y + eye.z * rightPlane.z);
+    float leftD = eye.x * leftPlane.x + (eye.y * leftPlane.y + eye.z * leftPlane.z);
 
     // Bisector of the two silhouette planes.
     Vector3 bisector = rightPlane;
@@ -740,28 +766,19 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
         invLeft = 1.0f / leftCos;
     }
 
-    Vector4 leftEq(
-        leftPlane.x * invLeft,
-        leftPlane.y * invLeft,
-        leftPlane.z * invLeft,
-        invLeft * leftD
-    );
-    Vector4 rightEq(
-        rightPlane.x * invRight,
-        rightPlane.y * invRight,
-        rightPlane.z * invRight,
-        invRight * rightD
-    );
+    Vector4 leftEq;
+    PlaneEquation(leftPlane, invLeft, leftD, leftEq);
+    Vector4 rightEq;
+    PlaneEquation(rightPlane, invRight, rightD, rightEq);
 
     // Narrow end of the cone, and the distance from the apex to the light.
-    float minR = botR;
-    if ((topR - botR) < 0.0f) {
-        minR = topR;
-    }
+    float minR = (topR - botR) >= 0.0f ? botR : topR;
 
-    float apexDist = 0.0f;
+    float apexDist;
     if (0.0f < botR) {
         apexDist = (len * minR) / (botR - minR);
+    } else {
+        apexDist = 0.0f;
     }
 
     float halfAngle = (botR * 0.5f) / (len + apexDist);
@@ -786,7 +803,8 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
         vis = 0.0f;
     }
 
-    Vector4 visConst(vis, 0.0f, 0.0f, 0.0f);
+    Vector4 visConst;
+    visConst.Set(vis, 0.0f, 0.0f, 0.0f);
     TheShaderMgr.SetPConstant((PShaderConstant)0x56, visConst);
     TheShaderMgr.SetPConstant((PShaderConstant)0x57, rightEq);
     TheShaderMgr.SetPConstant((PShaderConstant)0x58, leftEq);
@@ -975,4 +993,6 @@ SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
 
 }  // namespace stlpmtx_std
 #endif // HX_NATIVE
+
+
 
