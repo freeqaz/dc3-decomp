@@ -18,7 +18,7 @@ struct SynapseBand {
 };  // size = 0x1c
 
 struct SynapseAPOParams {
-    SynapseAPOParams();
+    SynapseAPOParams() throw();
 
     SynapseBand bands[3];     // 0x00 - 0x53
     float lowCutoffFreq;      // 0x54 - low cutoff frequency (default 20 Hz)

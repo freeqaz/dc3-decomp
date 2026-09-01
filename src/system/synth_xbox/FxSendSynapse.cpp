@@ -65,7 +65,7 @@ void FxSendSynapse360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
 
 namespace DSP {
 
-SynapseAPOParams::SynapseAPOParams() {
+SynapseAPOParams::SynapseAPOParams() throw() {
     for (int i = 0; i < 3; i++) {
         bands[i].freq = 220.0f;
         bands[i].gain = 0.0f;
