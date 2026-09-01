@@ -870,9 +870,11 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     if ((unsigned int)samplesToConsume != 0) {
         bool floatSamples = mFloatSamples;
         std::vector<std::pair<int, int> >::iterator mapIt = mChanMaps.begin();
-        int copySize = samplesToConsume * (floatSamples ? 4 : 2);
+        int bytesPerSample = floatSamples ? 4 : 2;
         while (mapIt != mChanMaps.end()) {
-            memcpy(pcm[mapIt->second], pcm[mapIt->first], copySize);
+            memcpy(
+                pcm[mapIt->second], pcm[mapIt->first], samplesToConsume * bytesPerSample
+            );
             mapIt++;
         }
 
@@ -881,14 +883,12 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
         while (chIdx < numChannels) {
             void *data;
             if (mFloatSamples) {
-                if ((unsigned int)samplesToConsume != 0) {
-                    int j = 0;
-                    while (j < samplesToConsume) {
-                        float f = ((float *)pcm[chIdx])[j] * 32767.0f;
-                        f = Clamp(-32767.0f, 32767.0f, f);
-                        convBuf[j] = (short)f;
-                        j++;
-                    }
+                unsigned int j = 0;
+                while (j < (unsigned int)samplesToConsume) {
+                    float f = ((float *)pcm[chIdx])[j] * 32767.0f;
+                    f = Clamp(-32767.0f, 32767.0f, f);
+                    convBuf[j] = (short)f;
+                    j++;
                 }
                 data = convBuf;
             } else {
