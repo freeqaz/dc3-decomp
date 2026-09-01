@@ -48,9 +48,20 @@ so nowhere: `# N rows` on stderr, with no denominator anywhere.  Measured here:
 Every one of those skips is now a counted drop, so the row count arrives with
 the population it came from.
 
+SECOND MODE: --nothrow
+======================
+`--nothrow` censuses a DIFFERENT signature out of the same two objects: the
+C++ EH state (r31 frame pointer + dead argument home store + one extra
+callee-saved GPR) present in OUR build and absent from the target, which is
+bought by a callee MSVC cannot prove nothrow.  Whole binary, 2026-09-01:
+0 rows with the full three-symptom signature, 1 with the r31 asymmetry, out of
+30,524 comparable pairs.  See
+docs/decomp/patterns/fixable-inline-boundary.md#condition-1-is-a-source-lever--the-callee-msvc-cannot-prove-nothrow
+
 Usage:
     python3 scripts/analysis/home_store_census.py --min 90 --max 99.9
     python3 scripts/analysis/home_store_census.py --json /tmp/home.json --all
+    python3 scripts/analysis/home_store_census.py --nothrow --all --min-score 3
 """
 
 import argparse
