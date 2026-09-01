@@ -14,7 +14,7 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 813 total = 169 GAP + 644 EXT
+# counts: 821 total = 168 GAP + 653 EXT
 
 GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
@@ -62,7 +62,6 @@ GAP ?QueryInterface@CXAPOParametersBase@@UAAJABU_GUID@@PAPAX@Z  # target defines
 GAP ?Release@CXAPOBase@@UAAKXZ  # target defines it in system/synth_xbox/Synth.obj
 GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?ResolveMipChain@DxTex@@AAAXXZ  # target defines it in system/rnddx9/Tex.obj
-GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
 GAP ?ShowControllerRequiredUI@PlatformMgr@@QAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?Start@SingleItemEnumJob@@UAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
@@ -532,14 +531,23 @@ EXT XGetLocale
 EXT XGetOverlappedExtendedError
 EXT XGetOverlappedResult
 EXT XGetVideoMode
+EXT XINPUTID_0F_CONTROLLER
+EXT XINPUTID_19_CONTROLLER
 EXT XINPUTID_OUT_UNSPECIFIED_DWORD_0
 EXT XINPUTID_OUT_UNSPECIFIED_DWORD_1
+EXT XINPUTID_UNSPECIFIED_DWORD_0
+EXT XINPUTID_UNSPECIFIED_DWORD_1
+EXT XINPUTID_UNSPECIFIED_DWORD_2
+EXT XINPUTID_UNSPECIFIED_DWORD_3
 EXT XInput2BeginUpdate
 EXT XInput2EndUpdate
+EXT XInput2GetDWord
+EXT XInput2GetDeviceId
 EXT XInput2Sample
 EXT XInput2SetDWord
 EXT XInputGetCapabilities
 EXT XInputGetKeystroke
+EXT XInputGetState
 EXT XLaunchNewImage
 EXT XMPOverrideBackgroundMusic
 EXT XMPRestoreBackgroundMusic

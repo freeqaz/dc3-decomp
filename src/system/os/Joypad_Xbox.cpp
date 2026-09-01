@@ -44,7 +44,12 @@
 // ParseRawData writes tRawPending as tRawData - 0x48). Anonymous-namespace
 // variables are external in MSVC and never get folded that way, which is why
 // only tBreed and sThreadData -- the two the target names -- live in one.
-static CriticalSection tCritSection;
+namespace {
+    // Stays in the anonymous namespace: its ??__E/??__F initializer and atexit
+    // thunks carry the namespace decoration in the target, and nothing reaches
+    // it by displacement, so it does not need internal linkage.
+    CriticalSection tCritSection;
+}
 // Pad needs its XInput capabilities re-queried before it can be read.
 // The align(8) is a PLACEMENT WORKAROUND, not something recovered from the
 // target: tRawOutput(8) + tRawPending(4) leaves a four byte hole ahead of the
@@ -56,13 +61,14 @@ static CriticalSection tCritSection;
 __declspec(align(8)) static bool tNeedCaps[kNumJoypads];
 static unsigned int tButtonStatesPrev[kNumJoypads];
 static unsigned int tButtonStatesCurr[kNumJoypads];
+// Thread handle and termination flag grouped for proper codegen.
+// File-scope static rather than anonymous-namespace, so RunXinputJoypadLoop
+// can reach tNoHandle as tButtonStatesPrev - 0x14 the way the target does.
+static struct {
+    HANDLE tThread;
+    bool tNoHandle;
+} sThreadData;
 namespace {
-    // Thread handle and termination flag grouped for proper codegen
-    // The struct layout is required to match the original binary's data layout
-    struct {
-        HANDLE tThread;
-        bool tNoHandle;
-    } sThreadData;
     BreedData tBreed[kNumJoypads];
 }
 static XINPUT_STATE tInputStates[kNumJoypads];
@@ -434,6 +440,82 @@ namespace {
         InitXinputJoypadThreadData();
         RunXinputJoypadLoop();
         return 0;
+    }
+
+    // Polls every pad until XinputJoypadThreadDestruction sets tNoHandle.
+    // Runs on its own thread, so the shared per-pad state is taken under
+    // tCritSection for the whole sweep.
+    void RunXinputJoypadLoop() {
+        while (!tNoHandle) {
+            {
+                CritSecTracker tracker(&tCritSection);
+                for (int pad = 0; pad < kNumJoypads; pad++) {
+                    XINPUT_STATE state;
+                    if (XInputGetState(pad, &state) != 0) {
+                        // Nothing plugged in: force a capability re-query and a
+                        // breed re-read for when it comes back.
+                        tBreed[pad].mPending = true;
+                        tInputStates[pad].dwPacketNumber = -1;
+                        tNeedCaps[pad] = true;
+                        continue;
+                    }
+                    if (state.dwPacketNumber == tInputStates[pad].dwPacketNumber
+                        && tInputStates[pad].dwPacketNumber != -1
+                        && JoypadGetPadData(pad)->mConnected) {
+                        continue;
+                    }
+                    bool consumed = false;
+                    XINPUT_CAPABILITIES caps;
+                    if (JoypadGetCachedXInputCaps(pad, &caps, tNeedCaps[pad])) {
+                        tNeedCaps[pad] = false;
+                        XINPUT2_HANDLE sample;
+                        DWORD flags;
+                        if (!XInput2Sample(pad, &sample, &flags)) {
+                            MILO_LOG("No sample available in RunXinputJoypadLoop\n");
+                            continue;
+                        }
+                        XINPUT2_DEVICE_ID deviceId;
+                        if (!XInput2GetDeviceId(sample, &deviceId)) {
+                            MILO_LOG("Error getting device ID\n");
+                            continue;
+                        }
+                        // Only the two Harmonix peripheral classes carry a raw
+                        // HID payload worth reading.
+                        if (memcmp(&deviceId, &XINPUTID_0F_CONTROLLER, 16) == 0
+                            || memcmp(&deviceId, &XINPUTID_19_CONTROLLER, 16) == 0) {
+                            unsigned char raw[16];
+                            if (XInput2GetDWord(
+                                    sample, XINPUTID_UNSPECIFIED_DWORD_0, (DWORD *)&raw[0]
+                                )
+                                && XInput2GetDWord(
+                                    sample, XINPUTID_UNSPECIFIED_DWORD_1, (DWORD *)&raw[4]
+                                )
+                                && XInput2GetDWord(
+                                    sample, XINPUTID_UNSPECIFIED_DWORD_2, (DWORD *)&raw[8]
+                                )
+                                && XInput2GetDWord(
+                                    sample, XINPUTID_UNSPECIFIED_DWORD_3, (DWORD *)&raw[12]
+                                )) {
+                                consumed = ParseRawData(pad, raw);
+                            } else {
+                                MILO_LOG("Error reading data\n");
+                            }
+                        }
+                    }
+                    if (consumed) {
+                        // The report was an upstream response, not pad state.
+                        tInputStates[pad].dwPacketNumber = state.dwPacketNumber;
+                        continue;
+                    }
+                    unsigned int translated;
+                    TranslateButtons(&translated, state.Gamepad.wButtons);
+                    tInputStates[pad] = state;
+                    tButtonStatesCurr[pad] |=
+                        (tButtonStatesPrev[pad] ^ translated) & translated;
+                }
+            }
+            Sleep(4);
+        }
     }
 
     // Puts every pad into the "nothing known yet" state the polling loop
