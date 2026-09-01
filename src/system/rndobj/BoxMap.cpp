@@ -192,25 +192,26 @@ void BoxMapLighting::ApplyLight(
 ) const {
     for (unsigned int i = 0; i < arr.NumElements(); i++) {
         const LightParams_Point &light = arr[i];
-        if (light.mFalloffStart < light.mRange) {
-            float dx = light.mPosition.x - viewPos.x;
+        if (light.mRange > light.mFalloffStart) {
             float dy = light.mPosition.y - viewPos.y;
+            float dx = light.mPosition.x - viewPos.x;
             float dz = light.mPosition.z - viewPos.z;
-            float *buf1 = (float *)&gLightBuffer1[gLightIndex];
-            buf1[0] = dx;
-            buf1[1] = dy;
-            buf1[2] = dz;
+            Hmx::Color &dir = gLightBuffer1[gLightIndex];
+            dir.red = dx;
+            dir.green = dy;
+            dir.blue = dz;
             float distSq = dy * dy + dx * dx + dz * dz;
             if (0.0f < distSq) {
                 float invDist = 1.0f / sqrtf(distSq);
                 float dist = Max(0.0f, invDist * distSq - light.mFalloffStart);
                 float atten = Max(0.0f, 1.0f - dist / (light.mRange - light.mFalloffStart));
-                gLightBuffer2[gLightIndex].red = light.mColor.red * atten;
-                gLightBuffer2[gLightIndex].green = light.mColor.green * atten;
-                gLightBuffer2[gLightIndex].blue = light.mColor.blue * atten;
-                buf1[0] = dx * invDist;
-                buf1[1] = dy * invDist;
-                buf1[2] = dz * invDist;
+                Hmx::Color &col = gLightBuffer2[gLightIndex];
+                col.red = light.mColor.red * atten;
+                col.green = light.mColor.green * atten;
+                col.blue = light.mColor.blue * atten;
+                dir.red = dx * invDist;
+                dir.green = dy * invDist;
+                dir.blue = dz * invDist;
                 gLightIndex++;
             }
         }
@@ -227,10 +228,10 @@ void BoxMapLighting::ApplyLight(
         float dy = viewPos.y - light.mApex.y;
         float distSq = dz * dz + dx * dx + dy * dy;
         float invDist = 1.0f / sqrtf(distSq);
+        float dist = invDist * distSq * light.mHalfLengthRecip - light.mOffsetFactor;
         float ndz = dz * invDist;
         float ndx = dx * invDist;
         float ndy = dy * invDist;
-        float dist = invDist * distSq * light.mHalfLengthRecip - light.mOffsetFactor;
         float cone = light.mDirection.y * ndy
             + (light.mDirection.x * ndx + light.mDirection.z * ndz);
         dist = Min(1.0f, dist);
