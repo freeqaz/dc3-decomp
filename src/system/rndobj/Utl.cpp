@@ -1463,8 +1463,13 @@ void MakeTangentsLate(RndMesh *m) {
                    < 0.0f)
             ? -1.0f
             : 1.0f;
+        // Retail normalizes into a STACK TEMP (r31+0x80), copies all four words
+        // into faceTangents[i] (lwz/stw x4), and only then stores w at +0xc --
+        // it does not normalize straight into the vector element.
+        Vector4 tangent;
+        Normalize(basis.x, *(Vector3 *)&tangent);
+        faceTangents[i] = tangent;
         faceTangents[i].w = w;
-        Normalize(basis.x, *(Vector3 *)&faceTangents[i]);
     }
 
     double zeroThresh = 0.0;
