@@ -32,6 +32,7 @@ PROJECT_DIR = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_DIR))
 
 # Import the module we're testing
+from scripts.orchestrator import context_collector as cc
 from scripts.orchestrator.context_collector import (
     collect_pre_run_context,
     extract_key_patterns,
@@ -78,10 +79,119 @@ class DirectGhidraClientError(Exception):
 
 
 # =============================================================================
+# Hermeticity
+# =============================================================================
+#
+# THESE TESTS USED TO BE A FUNCTION OF A BACKGROUND DAEMON.  Measured
+# 2026-09-01 on this box:
+#
+#     pyghidra-mcp DOWN                 pyghidra-mcp UP (any response)
+#     ----------------------            ------------------------------
+#     test_xrefs_preview        FAIL    test_xrefs_preview        PASS
+#     test_..._ghidra_unavailable PASS  test_..._ghidra_unavailable FAIL
+#     test_..._xrefs_after_client_error PASS  ...                 FAIL
+#
+# Cause: every one of them patched `DirectGhidraClient`, the in-process JVM
+# door — which `context_collector` only opens when `GHIDRA_USE_JVM=1`, i.e.
+# never, since it was disabled as "broken/hangs".  Production's real doors are
+# the decomp.db cache and then `GhidraMCPClient` over HTTP to
+# 127.0.0.1:8000, and the tests patched NEITHER.  So each run made a live
+# network call and the assertions graded the daemon.
+#
+# The damage was not only flakiness.  `test_xrefs_preview` was in the GREEN
+# column when the 2026-08-17 known-bad baseline was taken, and it was green
+# **vacuously**: the service answered with zero cross-references, so the file
+# it asserted on was written from live data with `Callers (0 total)` and the
+# fifteen callers the test had carefully mocked were never used at all.  It
+# passed while testing nothing, which is why it is not in the manifest and its
+# siblings are.
+#
+# Both helpers below therefore shut every live door AND assert it stayed shut.
+
+def no_live_ghidra():
+    """Shut both live Ghidra doors; the caller asserts neither was knocked on.
+
+    Returns the MagicMock standing in for `GhidraMCPClient`. Tests assert
+    `not http.called` — a negative control INSIDE the test, so a future edit
+    that re-introduces a live call fails here rather than silently making the
+    suite depend on a daemon again.
+    """
+    http = MagicMock(name="GhidraMCPClient")
+    return http, [
+        patch('scripts.orchestrator.context_collector.GhidraMCPClient', http),
+        patch('scripts.orchestrator.context_collector.DirectGhidraClient', None),
+    ]
+
+
+def ghidra_cache(*, decompilation=None, callers=None, callees=None):
+    """Serve `collect_pre_run_context`'s CACHE-FIRST path from the test.
+
+    This is production's primary door (`scripts.orchestrator.database.get_xrefs`
+    / `get_decompilation`), so driving it exercises the real parsing, the real
+    xrefs-file writer and the real preview slice — not a re-implementation.
+
+    Patching the `database` module rather than `context_collector` is required:
+    the collector imports these names INSIDE the function body, so a patch on
+    the collector's namespace would not be seen.
+    """
+    from scripts.orchestrator import database as _db
+    xrefs = None if callers is None else (callers, callees or [])
+    return [
+        patch.object(_db, 'get_connection', MagicMock(return_value=MagicMock())),
+        patch.object(_db, 'get_decompilation', MagicMock(return_value=decompilation)),
+        patch.object(_db, 'get_xrefs', MagicMock(return_value=xrefs)),
+        patch.object(_db, 'put_decompilation', MagicMock()),
+        patch.object(_db, 'put_xrefs', MagicMock()),
+    ]
+
+
+class _Patches:
+    """Apply a list of patchers as one context manager."""
+
+    def __init__(self, *groups):
+        self.patchers = [p for g in groups for p in g]
+
+    def __enter__(self):
+        for p in self.patchers:
+            p.start()
+        return self
+
+    def __exit__(self, *exc):
+        for p in reversed(self.patchers):
+            p.stop()
+        return False
+
+
+class _ProjectDirMixin:
+    """A project dir the collector's cache probe can actually find.
+
+    `collect_pre_run_context` only opens the cache when
+    `<project_dir>/decomp.db` EXISTS, so a test that wants to exercise the
+    cache path needs one. It is a temp dir, never the repo: `PROJECT_DIR` here
+    resolves to `<repo>/scripts` (three `.parent`s from
+    scripts/orchestrator/tests/), and in a worktree the repo-root decomp.db is
+    a deliberate tripwire that is not a valid SQLite file.
+    """
+
+    def setUpProject(self):
+        root = Path(self.temp_dir.name)
+        cached = root / "project"
+        cached.mkdir(parents=True, exist_ok=True)
+        (cached / "decomp.db").touch()
+        #: cache AVAILABLE -- pair with ghidra_cache().
+        self.project_dir = str(cached)
+        #: cache ABSENT -- the collector never calls get_connection, so the
+        #: live door is the only one left. Pair with a failing http mock.
+        nocache = root / "project-nocache"
+        nocache.mkdir(parents=True, exist_ok=True)
+        self.project_dir_no_cache = str(nocache)
+
+
+# =============================================================================
 # Test Cases
 # =============================================================================
 
-class TestCollectPreRunContextSuccess(unittest.TestCase):
+class TestCollectPreRunContextSuccess(unittest.TestCase, _ProjectDirMixin):
     """Test normal case: all context available."""
 
     def setUp(self):
@@ -89,7 +199,7 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.worktree_dir = Path(self.temp_dir.name) / "worktree"
         self.worktree_dir.mkdir(parents=True, exist_ok=True)
-        self.project_dir = str(PROJECT_DIR)
+        self.setUpProject()
         self.symbol = "?Load@CharMirror@@UAAXAAVBinStream@@@Z"
         self.unit = "system/char/CharMirror"
 
@@ -99,9 +209,8 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
 
     @patch('scripts.orchestrator.context_collector.get_binary_path')
     @patch('scripts.orchestrator.context_collector.run_objdiff')
-    @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_collect_pre_run_context_success(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff, mock_get_binary):
+    def test_collect_pre_run_context_success(self, mock_get_attempts, mock_run_objdiff, mock_get_binary):
         """Test successful context collection with all data available."""
         # Setup mocks
         mock_get_binary.return_value = "/fake/path/to/binary.xex"
@@ -113,25 +222,21 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
         )
         mock_run_objdiff.return_value = objdiff_result
 
-        # Mock Ghidra client
-        mock_client = MagicMock()
-        mock_ghidra_class.return_value = mock_client
-        mock_client.decompile_function.return_value = "void func() { /* original */ }"
-        mock_client.list_cross_references.return_value = (
-            ["caller1", "caller2"],
-            ["callee1", "callee2"]
-        )
-
         # Mock previous attempts (returns tuple of (formatted_string, count))
         mock_get_attempts.return_value = ("Attempt 1: haiku, 85.5% → 86.2%\nAttempt 2: sonnet, 86.2% → 87.0%", 2)
 
-        # Call function
-        context = collect_pre_run_context(
-            symbol=self.symbol,
-            unit=self.unit,
-            project_dir=self.project_dir,
-            worktree_dir=str(self.worktree_dir)
-        )
+        http, doors = no_live_ghidra()
+        with _Patches(doors, ghidra_cache(
+                decompilation="void func() { /* original */ }",
+                callers=["caller1", "caller2"],
+                callees=["callee1", "callee2"])):
+            context = collect_pre_run_context(
+                symbol=self.symbol,
+                unit=self.unit,
+                project_dir=self.project_dir,
+                worktree_dir=str(self.worktree_dir)
+            )
+        self.assertFalse(http.called, "no live Ghidra call may happen in a unit test")
 
         # Assertions
         self.assertIsInstance(context, dict)
@@ -169,26 +274,24 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
         self.assertIn("Callers", context["xrefs_preview"])
 
     @patch('scripts.orchestrator.context_collector.run_objdiff')
-    @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_incremental_build_flag(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff):
+    def test_incremental_build_flag(self, mock_get_attempts, mock_run_objdiff):
         """Verify incremental=True is passed to run_objdiff."""
         objdiff_result = MockObjdiffResult()
         mock_run_objdiff.return_value = objdiff_result
 
-        mock_client = MagicMock()
-        mock_ghidra_class.return_value = mock_client
-        mock_client.decompile_function.return_value = "void func() {}"
-        mock_client.list_cross_references.return_value = ([], [])
-
         mock_get_attempts.return_value = ("None yet", 0)
 
-        collect_pre_run_context(
-            symbol=self.symbol,
-            unit=self.unit,
-            project_dir=self.project_dir,
-            worktree_dir=str(self.worktree_dir)
-        )
+        http, doors = no_live_ghidra()
+        with _Patches(doors, ghidra_cache(decompilation="void func() {}",
+                                          callers=[], callees=[])):
+            collect_pre_run_context(
+                symbol=self.symbol,
+                unit=self.unit,
+                project_dir=self.project_dir,
+                worktree_dir=str(self.worktree_dir)
+            )
+        self.assertFalse(http.called)
 
         # Verify run_objdiff was called with incremental=True
         mock_run_objdiff.assert_called_once()
@@ -197,7 +300,7 @@ class TestCollectPreRunContextSuccess(unittest.TestCase):
                        "incremental parameter should be True")
 
 
-class TestCollectContextGhidraUnavailable(unittest.TestCase):
+class TestCollectContextGhidraUnavailable(unittest.TestCase, _ProjectDirMixin):
     """Test graceful fallback when Ghidra is unavailable."""
 
     def setUp(self):
@@ -205,7 +308,7 @@ class TestCollectContextGhidraUnavailable(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.worktree_dir = Path(self.temp_dir.name) / "worktree"
         self.worktree_dir.mkdir(parents=True, exist_ok=True)
-        self.project_dir = str(PROJECT_DIR)
+        self.setUpProject()
         self.symbol = "?Load@CharMirror@@UAAXAAVBinStream@@@Z"
         self.unit = "system/char/CharMirror"
 
@@ -214,26 +317,38 @@ class TestCollectContextGhidraUnavailable(unittest.TestCase):
         self.temp_dir.cleanup()
 
     @patch('scripts.orchestrator.context_collector.run_objdiff')
-    @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_collect_context_ghidra_unavailable(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff):
-        """Test that function gracefully handles Ghidra initialization failure."""
+    def test_collect_context_ghidra_unavailable(self, mock_get_attempts, mock_run_objdiff):
+        """Every Ghidra door shut: degrade gracefully, keep the objdiff context.
+
+        The scenario used to be spelled `DirectGhidraClient.side_effect = ...`,
+        which by 2026-09-01 arranged nothing: that door is bolted shut unless
+        `GHIDRA_USE_JVM=1`, so the collector went to the LIVE HTTP service and
+        this test's verdict became "is pyghidra-mcp down right now?". The
+        scenario is now injected at the door production actually uses, so the
+        answer no longer depends on the daemon — it simulates the daemon being
+        down instead of requiring it to be.
+        """
         # Setup mocks
         objdiff_result = MockObjdiffResult()
         mock_run_objdiff.return_value = objdiff_result
 
-        # Make DirectGhidraClient raise error
-        mock_ghidra_class.side_effect = DirectGhidraClientError("Ghidra not available")
-
         mock_get_attempts.return_value = ("None yet", 0)
 
-        # Call function - should not crash
-        context = collect_pre_run_context(
-            symbol=self.symbol,
-            unit=self.unit,
-            project_dir=self.project_dir,
-            worktree_dir=str(self.worktree_dir)
-        )
+        # No decomp.db under project_dir => cache miss; the live HTTP client
+        # then fails to connect, which is the real "Ghidra unavailable" shape.
+        http, doors = no_live_ghidra()
+        http.side_effect = cc.GhidraMCPError("Could not connect to MCP server")
+        with _Patches(doors):
+            context = collect_pre_run_context(
+                symbol=self.symbol,
+                unit=self.unit,
+                project_dir=self.project_dir_no_cache,
+                worktree_dir=str(self.worktree_dir)
+            )
+        # The live door really was tried — otherwise this test would be
+        # asserting the fallback of a code path it never entered.
+        self.assertTrue(http.called)
 
         # Verify graceful fallback
         self.assertIsInstance(context, dict)
@@ -247,7 +362,7 @@ class TestCollectContextGhidraUnavailable(unittest.TestCase):
         self.assertEqual(context["verdict"], "LIKELY_FIXABLE")
 
 
-class TestCollectContextNoPreviousAttempts(unittest.TestCase):
+class TestCollectContextNoPreviousAttempts(unittest.TestCase, _ProjectDirMixin):
     """Test handling of functions with no attempt history."""
 
     def setUp(self):
@@ -255,7 +370,7 @@ class TestCollectContextNoPreviousAttempts(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.worktree_dir = Path(self.temp_dir.name) / "worktree"
         self.worktree_dir.mkdir(parents=True, exist_ok=True)
-        self.project_dir = str(PROJECT_DIR)
+        self.setUpProject()
         self.symbol = "?NewFunction@@UAAXAAVBinStream@@@Z"
         self.unit = "system/new/NewClass"
 
@@ -264,32 +379,30 @@ class TestCollectContextNoPreviousAttempts(unittest.TestCase):
         self.temp_dir.cleanup()
 
     @patch('scripts.orchestrator.context_collector.run_objdiff')
-    @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_collect_context_no_previous_attempts(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff):
+    def test_collect_context_no_previous_attempts(self, mock_get_attempts, mock_run_objdiff):
         """Test that function handles no previous attempts gracefully."""
         objdiff_result = MockObjdiffResult()
         mock_run_objdiff.return_value = objdiff_result
 
-        mock_client = MagicMock()
-        mock_ghidra_class.return_value = mock_client
-        mock_client.decompile_function.return_value = "void func() {}"
-        mock_client.list_cross_references.return_value = ([], [])
-
         # No previous attempts
         mock_get_attempts.return_value = ("None yet", 0)
 
-        context = collect_pre_run_context(
-            symbol=self.symbol,
-            unit=self.unit,
-            project_dir=self.project_dir,
-            worktree_dir=str(self.worktree_dir)
-        )
+        http, doors = no_live_ghidra()
+        with _Patches(doors, ghidra_cache(decompilation="void func() {}",
+                                          callers=[], callees=[])):
+            context = collect_pre_run_context(
+                symbol=self.symbol,
+                unit=self.unit,
+                project_dir=self.project_dir,
+                worktree_dir=str(self.worktree_dir)
+            )
+        self.assertFalse(http.called)
 
         self.assertEqual(context["previous_attempts"], "None yet")
 
 
-class TestXrefsFileCreation(unittest.TestCase):
+class TestXrefsFileCreation(unittest.TestCase, _ProjectDirMixin):
     """Test xrefs file writing and formatting."""
 
     def setUp(self):
@@ -297,7 +410,7 @@ class TestXrefsFileCreation(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.worktree_dir = Path(self.temp_dir.name) / "worktree"
         self.worktree_dir.mkdir(parents=True, exist_ok=True)
-        self.project_dir = str(PROJECT_DIR)
+        self.setUpProject()
         self.symbol = "?TestFunc@@UAAXXZ"
         self.unit = "system/test/Test"
 
@@ -307,31 +420,31 @@ class TestXrefsFileCreation(unittest.TestCase):
 
     @patch('scripts.orchestrator.context_collector.get_binary_path')
     @patch('scripts.orchestrator.context_collector.run_objdiff')
-    @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_xrefs_file_created(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff, mock_get_binary):
+    def test_xrefs_file_created(self, mock_get_attempts, mock_run_objdiff, mock_get_binary):
         """Test that xrefs file is created at correct path with correct format."""
         mock_get_binary.return_value = "/fake/path/to/binary.xex"
 
         objdiff_result = MockObjdiffResult()
         mock_run_objdiff.return_value = objdiff_result
 
-        # Create mock Ghidra client with cross-references
-        mock_client = MagicMock()
-        mock_ghidra_class.return_value = mock_client
-        mock_client.decompile_function.return_value = "void test() {}"
         callers = ["Caller1", "Caller2", "Caller3"]
         callees = ["Callee1", "Callee2"]
-        mock_client.list_cross_references.return_value = (callers, callees)
 
         mock_get_attempts.return_value = ("None yet", 0)
 
-        context = collect_pre_run_context(
-            symbol=self.symbol,
-            unit=self.unit,
-            project_dir=self.project_dir,
-            worktree_dir=str(self.worktree_dir)
-        )
+        http, doors = no_live_ghidra()
+        with _Patches(doors, ghidra_cache(decompilation="void test() {}",
+                                          callers=callers, callees=callees)):
+            context = collect_pre_run_context(
+                symbol=self.symbol,
+                unit=self.unit,
+                project_dir=self.project_dir,
+                worktree_dir=str(self.worktree_dir)
+            )
+        # The counts below must come from THESE lists. Until 2026-09-01 this
+        # test's data came from a live daemon and the mocked lists were unused.
+        self.assertFalse(http.called, "the cache must serve; no live call")
 
         # Verify file exists
         xrefs_path = Path(context["xrefs_path_absolute"])
@@ -362,31 +475,37 @@ class TestXrefsFileCreation(unittest.TestCase):
 
     @patch('scripts.orchestrator.context_collector.get_binary_path')
     @patch('scripts.orchestrator.context_collector.run_objdiff')
-    @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_xrefs_preview(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff, mock_get_binary):
-        """Test that xrefs preview contains first 20 lines of file."""
+    def test_xrefs_preview(self, mock_get_attempts, mock_run_objdiff, mock_get_binary):
+        """The preview is the first 20 lines of the xrefs file, and no more.
+
+        The 15+15 lists are chosen so the FULL file is comfortably longer than
+        20 lines; a preview that silently became the whole file would still
+        contain the header, so "contains the header" alone cannot detect it.
+        Both the truncation and the header are asserted, against the file on
+        disk rather than against a constant retyped here.
+        """
         mock_get_binary.return_value = "/fake/path/to/binary.xex"
 
         objdiff_result = MockObjdiffResult()
         mock_run_objdiff.return_value = objdiff_result
 
-        mock_client = MagicMock()
-        mock_ghidra_class.return_value = mock_client
-        mock_client.decompile_function.return_value = "void test() {}"
-        # Create many callers and callees to exceed 20 lines
+        # Enough entries that the file must exceed the 20-line preview.
         callers = [f"Caller_{i}" for i in range(15)]
         callees = [f"Callee_{i}" for i in range(15)]
-        mock_client.list_cross_references.return_value = (callers, callees)
 
         mock_get_attempts.return_value = ("None yet", 0)
 
-        context = collect_pre_run_context(
-            symbol=self.symbol,
-            unit=self.unit,
-            project_dir=self.project_dir,
-            worktree_dir=str(self.worktree_dir)
-        )
+        http, doors = no_live_ghidra()
+        with _Patches(doors, ghidra_cache(decompilation="void test() {}",
+                                          callers=callers, callees=callees)):
+            context = collect_pre_run_context(
+                symbol=self.symbol,
+                unit=self.unit,
+                project_dir=self.project_dir,
+                worktree_dir=str(self.worktree_dir)
+            )
+        self.assertFalse(http.called, "the cache must serve; no live call")
 
         # Preview should be first 20 lines (not full file)
         preview = context["xrefs_preview"]
@@ -395,8 +514,20 @@ class TestXrefsFileCreation(unittest.TestCase):
         self.assertGreater(len(lines), 0)
         self.assertIn("Cross-references for", preview)
 
+        # NEGATIVE CONTROL, inline: the file really is longer than the preview,
+        # so `assertLessEqual(..., 21)` above is a truncation check and not a
+        # tautology about a short file.
+        with open(context["xrefs_path_absolute"]) as f:
+            full = f.readlines()
+        self.assertGreater(len(full), 21,
+                           "fixture too small to distinguish preview from file")
+        self.assertEqual(preview, ''.join(full[:20]))
+        # And the preview really is data the TEST supplied, not whatever some
+        # background service happened to answer.
+        self.assertIn("Caller_0", preview)
 
-class TestPreviousAttemptsFormatting(unittest.TestCase):
+
+class TestPreviousAttemptsFormatting(unittest.TestCase, _ProjectDirMixin):
     """Test previous attempts formatting."""
 
     def setUp(self):
@@ -404,7 +535,7 @@ class TestPreviousAttemptsFormatting(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.worktree_dir = Path(self.temp_dir.name) / "worktree"
         self.worktree_dir.mkdir(parents=True, exist_ok=True)
-        self.project_dir = str(PROJECT_DIR)
+        self.setUpProject()
         self.symbol = "?TestFunc@@UAAXXZ"
         self.unit = "system/test/Test"
 
@@ -450,7 +581,7 @@ class TestPreviousAttemptsFormatting(unittest.TestCase):
         self.assertIn("\n", attempts_str)  # Multiple attempts separated by newlines
 
 
-class TestExceptionHandling(unittest.TestCase):
+class TestExceptionHandling(unittest.TestCase, _ProjectDirMixin):
     """Test exception handling and graceful degradation."""
 
     def setUp(self):
@@ -458,7 +589,7 @@ class TestExceptionHandling(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.worktree_dir = Path(self.temp_dir.name) / "worktree"
         self.worktree_dir.mkdir(parents=True, exist_ok=True)
-        self.project_dir = str(PROJECT_DIR)
+        self.setUpProject()
         self.symbol = "?TestFunc@@UAAXXZ"
         self.unit = "system/test/Test"
 
@@ -467,27 +598,25 @@ class TestExceptionHandling(unittest.TestCase):
         self.temp_dir.cleanup()
 
     @patch('scripts.orchestrator.context_collector.run_objdiff')
-    @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_collect_context_objdiff_failure(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff):
+    def test_collect_context_objdiff_failure(self, mock_get_attempts, mock_run_objdiff):
         """Test graceful handling of run_objdiff failure."""
         # Make objdiff fail
         mock_run_objdiff.side_effect = Exception("objdiff crashed")
 
-        mock_client = MagicMock()
-        mock_ghidra_class.return_value = mock_client
-        mock_client.decompile_function.return_value = "void test() {}"
-        mock_client.list_cross_references.return_value = ([], [])
-
         mock_get_attempts.return_value = ("None yet", 0)
 
         # Should still return a dict (graceful degradation)
-        context = collect_pre_run_context(
-            symbol=self.symbol,
-            unit=self.unit,
-            project_dir=self.project_dir,
-            worktree_dir=str(self.worktree_dir)
-        )
+        http, doors = no_live_ghidra()
+        with _Patches(doors, ghidra_cache(decompilation="void test() {}",
+                                          callers=[], callees=[])):
+            context = collect_pre_run_context(
+                symbol=self.symbol,
+                unit=self.unit,
+                project_dir=self.project_dir,
+                worktree_dir=str(self.worktree_dir)
+            )
+        self.assertFalse(http.called)
 
         self.assertIsInstance(context, dict)
         # Should have default values from exception
@@ -495,29 +624,37 @@ class TestExceptionHandling(unittest.TestCase):
         self.assertEqual(context["verdict"], "UNKNOWN")
 
     @patch('scripts.orchestrator.context_collector.run_objdiff')
-    @patch('scripts.orchestrator.context_collector.DirectGhidraClient')
     @patch('scripts.orchestrator.context_collector.get_last_attempt')
-    def test_collect_context_xrefs_after_client_error(self, mock_get_attempts, mock_ghidra_class, mock_run_objdiff):
-        """Test handling when client initialization raises DirectGhidraClientError.
+    def test_collect_context_xrefs_after_client_error(self, mock_get_attempts, mock_run_objdiff):
+        """The client CONNECTS and then the xrefs call raises mid-request.
 
-        When DirectGhidraClientError is raised during client init, the entire
-        Ghidra block is skipped (not just decompilation). This verifies graceful
-        fallback to unavailable.
+        A distinct failure mode from test_collect_context_ghidra_unavailable
+        (where construction itself fails): here `initialize()` succeeds and
+        `list_xrefs` throws, so the collector must fall back on a half-open
+        client rather than only on a dead one.
+
+        This was previously written against `DirectGhidraClient`, the JVM door
+        that production never opens, so it exercised neither.
         """
         objdiff_result = MockObjdiffResult()
         mock_run_objdiff.return_value = objdiff_result
 
-        # Make DirectGhidraClient initialization fail
-        mock_ghidra_class.side_effect = DirectGhidraClientError("Client init failed")
-
         mock_get_attempts.return_value = ("None yet", 0)
 
-        context = collect_pre_run_context(
-            symbol=self.symbol,
-            unit=self.unit,
-            project_dir=self.project_dir,
-            worktree_dir=str(self.worktree_dir)
-        )
+        http, doors = no_live_ghidra()
+        client = http.return_value
+        client.decompile_function.side_effect = cc.GhidraMCPError("decompile failed")
+        client.list_xrefs.side_effect = cc.GhidraMCPError("xrefs failed")
+
+        with _Patches(doors):
+            context = collect_pre_run_context(
+                symbol=self.symbol,
+                unit=self.unit,
+                project_dir=self.project_dir_no_cache,
+                worktree_dir=str(self.worktree_dir)
+            )
+        self.assertTrue(client.list_xrefs.called,
+                        "the failing call must actually have been reached")
 
         # When client init fails, everything should be unavailable
         self.assertEqual(context["decompilation"], "(unavailable)")
@@ -564,7 +701,7 @@ class TestExtractKeyPatterns(unittest.TestCase):
         self.assertIsInstance(patterns, list)
 
 
-class TestContextDictStructure(unittest.TestCase):
+class TestContextDictStructure(unittest.TestCase, _ProjectDirMixin):
     """Test the structure and keys of returned context dict."""
 
     def setUp(self):
@@ -572,7 +709,7 @@ class TestContextDictStructure(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.worktree_dir = Path(self.temp_dir.name) / "worktree"
         self.worktree_dir.mkdir(parents=True, exist_ok=True)
-        self.project_dir = str(PROJECT_DIR)
+        self.setUpProject()
         self.symbol = "?TestFunc@@UAAXXZ"
         self.unit = "system/test/Test"
 

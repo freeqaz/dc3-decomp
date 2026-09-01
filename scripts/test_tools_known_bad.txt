@@ -62,13 +62,33 @@ scripts/orchestrator/tests/test_agent_runner.py::TestBuildSdkOptions::test_custo
 scripts/orchestrator/tests/test_agent_runner.py::TestBuildSdkOptions::test_default_tools_when_none
 scripts/orchestrator/tests/test_agent_runner.py::TestBuildSdkOptions::test_disallowed_tools_default
 
-# [drift] context_collector's rendered output moved past the tests' string
-# expectations ("Callers (N total):" is no longer the xref header) and one case
-# asserts on an absolute path under the temp worktree.
-scripts/orchestrator/tests/test_context_collector.py::TestCollectPreRunContextSuccess::test_collect_pre_run_context_success
-scripts/orchestrator/tests/test_context_collector.py::TestCollectContextGhidraUnavailable::test_collect_context_ghidra_unavailable
-scripts/orchestrator/tests/test_context_collector.py::TestXrefsFileCreation::test_xrefs_file_created
-scripts/orchestrator/tests/test_context_collector.py::TestExceptionHandling::test_collect_context_xrefs_after_client_error
+# FIXED 2026-09-01 (task #177) — all four entries removed, and the [drift]
+# diagnosis they carried was WRONG. It read "context_collector's rendered output
+# moved past the tests' string expectations ('Callers (N total):' is no longer
+# the xref header)". The writer still emits exactly that header; nothing about
+# the rendering had moved.
+#
+# The real cause: every test in the file patched `DirectGhidraClient`, the
+# in-process JVM door, which context_collector only opens under
+# GHIDRA_USE_JVM=1 — it was disabled as "broken/hangs" and nothing updated the
+# tests. So the mocks arranged nothing, the collector went to the LIVE HTTP
+# service on 127.0.0.1:8000, and the assertions graded whether pyghidra-mcp
+# happened to be running. Measured both ways on 2026-09-01: with the daemon
+# down, test_..._ghidra_unavailable and test_..._xrefs_after_client_error PASS
+# and test_xrefs_preview FAILS; with it up, all three flip. Two of these four
+# entries were reported STALE for exactly that reason — they were "passing" on
+# the daemon being absent, not on anything having been fixed.
+#
+# Worse, test_xrefs_preview (never manifested) was GREEN when this baseline was
+# taken and green VACUOUSLY: the service answered with zero cross-references,
+# so the fifteen callers it mocked were never used and it asserted on live data.
+#
+# The tests now drive production's real cache-first door
+# (scripts.orchestrator.database.get_xrefs / get_decompilation) and assert
+# inside each test that no live client was constructed. Control: the whole file
+# is 33 passed with the daemon simulated UP and answering different data, and
+# 33 passed with it down. Sabotage-verified — dropping the 20-line preview
+# slice, the header, the callee section, or the cache lookup each turns it red.
 
 # [drift] the refactor prompt no longer contains "./bin/objdiff-cli diff", and
 # the pass now runs on haiku where the test still expects sonnet. A model-choice
@@ -78,30 +98,21 @@ scripts/orchestrator/tests/test_refactor_pass.py::TestRefactorPassIntegration::t
 
 # ── scripts/unicorn_runner/tests ──────────────────────────────────────────────
 
-# [drift] classify_divergence's taxonomy and the tests' expectations disagree in
-# ONE direction: the tests assert the coarse two-value vocabulary
-# ("logic" / "build_env") while the shipped comparator returns the refined
-# ~20-value one it grew ("merged_call", "call_count", "error", "fpr_precision",
-# "merged_arg", ...). Identical files and identical failures in rb3-xenon, whose
-# copies were ported from here. Updating the expectations needs someone who
-# knows which fine-grained class each case is meant to land in; it is NOT a code
-# bug.
-#   expects build_env, gets merged_call
-scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_build_env_call_count_merged
-#   expects build_env, gets merged_arg
-scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_build_env_merged_symbol_warning
-#   expects logic, gets call_count
-scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_logic_call_count_no_merged
-#   expects logic, gets error
-scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_logic_decomp_error
-#   expects logic, gets error
-scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_logic_error_mismatch
-#   expects logic, gets fpr_precision
-scripts/unicorn_runner/tests/test_comparator.py::TestClassifyDivergence::test_logic_fpr_mismatch
-
-# [drift] asserts the string "Equiv fills:" appears in format_probe_result's
-# output; prober.py:454 now writes "  Runs: N (x equiv, y div, z err)".
-scripts/unicorn_runner/tests/test_prober.py::TestFormatProbeResult::test_format_input_sensitive
+# RESOLVED by 57e6e20dd (2026-08-18), entries removed 2026-09-01 (task #177).
+# The seven expectations really did describe the pre-Phase-4 classifier; that
+# commit updated them to the refined vocabulary (merged_call / merged_arg /
+# error / fpr_precision / call_count) and renamed each test to say what it
+# checks. Verified: TestClassifyDivergence and TestFormatProbeResult are green.
+#
+# ⚠ HOW THESE READ BEFORE THEY WERE REMOVED, because it is a manifest failure
+# mode worth naming. 57e6e20dd RENAMED six of them
+# (test_logic_fpr_mismatch -> test_fpr_mismatch, ...), so the entries matched
+# nothing at all and the runner — which infers "not observed failing" ==
+# "passes" — printed them under "STALE ... these PASSED". They did not pass;
+# they did not exist. Here that was harmless because the renamed tests really
+# were fixed in the same commit, but a rename carrying a still-broken test
+# would have read identically and deleted live coverage. test_tools.py now
+# separates PHANTOM (names no collectable test) from STALE (ran and passed).
 
 # ── tests/ ────────────────────────────────────────────────────────────────────
 

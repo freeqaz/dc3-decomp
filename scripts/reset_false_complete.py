@@ -119,7 +119,14 @@ def main() -> int:
 
     print(f"database          : {db}")
     print(f"functions rows    : {total:,}")
-    print(f"carry the marker  : {marked:,}   (verdict_reason LIKE '%base_size=0%')")
+    # Print the CONSTANT, never a hand-copied paraphrase of it.  This line used
+    # to spell the selector out as `verdict_reason LIKE '%base_size=0%'`, which
+    # is a DIFFERENT query from the one above it -- unescaped, `_` is a
+    # single-char wildcard, so the printed form also matches `base-size=0`,
+    # `base size=0`, ... A reader auditing "which rows did it count?" against
+    # that line would have been auditing a query the script never ran.
+    # (honesty_lint E1 flagged the literal; the fix is to stop having two.)
+    print(f"carry the marker  : {marked:,}   ({BUG_MARKER_SQL})")
     print(f"  ...and COMPLETE : {marked_complete:,}")
     print(f"  ...SELF-MARKED  : {self_marked:,}   <- written by THIS script; "
           f"the latch. Never eligible.")

@@ -59,6 +59,22 @@ def _all_rows(rep):
             yield u.get("name", ""), f
 
 
+def _fn(name, *, norm=None, fuzzy=None, size=100):
+    """A report.json function row.
+
+    `fuzzy=None` OMITS the key entirely, which is what objdiff actually does
+    for a function we never defined -- 16,520 of 48,357 rows in the live
+    report. Writing `"fuzzy_match_percent": None` instead would be a fixture
+    that cannot reproduce the population it stands for.
+    """
+    d = {"name": name, "size": size, "address": "0", "metadata": {}}
+    if norm is not None:
+        d["match_percent_normalized"] = norm
+    if fuzzy is not None:
+        d["fuzzy_match_percent"] = fuzzy
+    return d
+
+
 # =========================================================================== #
 # batch_pattern_scan
 # =========================================================================== #
@@ -683,30 +699,72 @@ def test_vtable_gather_accounts_for_every_report_row(capsys):
     assert named == noraw and noraw > 0
 
 
-@needs_report
-def test_the_all_of_them_are_norm_zero_justification_has_an_exception():
+def test_the_norm_zero_justification_has_a_counted_exception_bucket(tmp_path):
     """The audit justified the skip with "all 16,920 have norm == 0.0, so no
     raw-vs-norm gap is possible". That generalisation is off by one, and the
-    scanner now buckets the exception separately instead of absorbing it.
+    scanner must bucket the exception SEPARATELY instead of absorbing it.
 
-    Both sides are computed from report.json: the oracle by scanning the file,
-    the claim by running the scanner. Neither is a literal typed here.
+    WHY THIS IS A FIXTURE AND NOT A LIVE-REPORT TEST ANY MORE
+    --------------------------------------------------------
+    It used to read build/373307D9/report.json and assert the exception row
+    still existed. On 2026-09-01 it went red, and the reason was the good one:
+    the single live exception named in 685b5c435 --
+    `?CalcShaderOpts@RndShaderDepthVolume@@...` in default/system/rndobj/Shader,
+    which carried match_percent_normalized 3.59375 and no fuzzy_match_percent --
+    **is now matched at 100.0** and therefore has a fuzzy score and has left the
+    population. The live report now holds 16,520 no-fuzzy rows, all norm 0.0.
+
+    Deleting the test there would have thrown away the property; keeping it
+    live would mean the property is only checked while some unrelated function
+    happens to be unmatched, which is not a check. The scanner's obligation --
+    "an exception to the blanket justification gets its own counted slug" -- is
+    a property of the CODE, so it is asserted against a fixture that always
+    contains one. The live half of this claim is still covered, unconditionally,
+    by test_vtable_gather_accounts_for_every_report_row: the two buckets there
+    must sum to exactly the live no-fuzzy population, whatever its split.
     """
-    rep = _load_report()
-    exceptions = [(u, f["name"]) for u, f in _all_rows(rep)
-                  if f.get("fuzzy_match_percent") is None
-                  and f.get("match_percent_normalized")]
-    assert exceptions, ("no exception rows left — if the build changed this test "
-                        "should be retired deliberately, not deleted silently")
+    rep = {"units": [{"name": "default/u", "functions": [
+        # The exception shape: no fuzzy score, but a NONZERO normalized one.
+        # A raw-vs-norm gap is UNMEASURABLE here, not impossible -- which is
+        # precisely what the blanket "norm == 0 so no gap can exist" wording
+        # would paper over.
+        _fn("?Exception@@YAXXZ", norm=3.59375, fuzzy=None),
+        # The blanket population: no fuzzy score, norm == 0.0.
+        _fn("?NoBody1@@YAXXZ", norm=0.0, fuzzy=None),
+        _fn("?NoBody2@@YAXXZ", norm=0.0, fuzzy=None),
+        _fn("?NoBody3@@YAXXZ", norm=0.0, fuzzy=None),
+        # A real candidate (raw < norm, norm >= 98) so the scan is not vacuous.
+        _fn("?Gap@@YAXXZ", norm=99.5, fuzzy=98.5),
+        # ...and a row with no gap, so the candidate set is a real selection.
+        _fn("?NoGap@@YAXXZ", norm=99.5, fuzzy=99.5),
+    ]}]}
+    path = tmp_path / "report.json"
+    path.write_text(json.dumps(rep))
 
-    cov = CoverageReport("vtable_dispatch_scan")
-    cov.universe(sum(1 for _ in _all_rows(rep)))
-    vds.gather_candidates(REPORT, 98.0, False, cov=cov)
+    total = sum(1 for _ in _all_rows(rep))
+    cov = CoverageReport("vtable_dispatch_scan", allow_truncation=False)
+    cov.universe(total, "function rows in the fixture")
+    cands = vds.gather_candidates(str(path), 98.0, False, cov=cov)
+    cov.examine(len(cands))
+
     d = cov.as_dict()
-    assert d["dropped"]["no-fuzzy-percent-but-nonzero-norm"] == len(exceptions)
-    # ...and it is genuinely a separate bucket, not folded into the big one.
-    assert d["dropped"]["no-fuzzy-percent-norm-zero"] != d["dropped"][
-        "no-fuzzy-percent-but-nonzero-norm"]
+    # The exception is counted, in its OWN slug...
+    assert d["dropped"]["no-fuzzy-percent-but-nonzero-norm"] == 1
+    # ...not absorbed into the blanket one...
+    assert d["dropped"]["no-fuzzy-percent-norm-zero"] == 3
+    # ...and every row is still accounted for, which is what stops a "separate
+    # bucket" from being implemented as a silent extra `continue`.
+    assert cov.unaccounted == 0
+    assert [c[0] for c in cands] == ["?Gap@@YAXXZ"]
+
+    # NEGATIVE CONTROL, inline: the old blanket justification really is refuted
+    # by this input. If someone folds the two slugs back together the counts
+    # above become 0 and 4, and the exception becomes unsayable again.
+    blanket = [f for f in rep["units"][0]["functions"]
+               if f.get("fuzzy_match_percent") is None]
+    assert len(blanket) == 4
+    assert not all(f["match_percent_normalized"] == 0.0 for f in blanket), \
+        "the fixture must actually break the 'all of them are norm == 0' claim"
 
 
 @needs_report
