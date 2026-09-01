@@ -712,19 +712,24 @@ void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &d
     Vector3 botLeft = botCenter;
     SlideCornerBack(botLeft, perp, botR);
 
+    // The eye position is read once into a local.  `camXfm` is a reference to
+    // memory this function does not own, so every `camXfm.v.x` re-spelling has
+    // to be re-loaded after each `Normalize` call; a local whose address never
+    // escapes gets scalarised into callee-saved FPRs and survives them, which
+    // is what retail does (f18/f26/f25 hold eye.x/y/z across both plane calls).
+    Vector3 eye(camXfm.v.x, camXfm.v.y, camXfm.v.z);
+
     Vector3 rightPlane;
-    EyeEdgePlane(topRight, botRight, camXfm.v, rightPlane);
+    EyeEdgePlane(topRight, botRight, eye, rightPlane);
     Normalize(rightPlane, rightPlane);
 
     Vector3 leftPlane;
-    EyeEdgePlane(topLeft, botLeft, camXfm.v, leftPlane);
+    EyeEdgePlane(topLeft, botLeft, eye, leftPlane);
     Normalize(leftPlane, leftPlane);
 
     // Plane constants: the eye lies on both planes, so d == dot(eye, n).
-    float rightD = camXfm.v.x * rightPlane.x
-        + (camXfm.v.y * rightPlane.y + camXfm.v.z * rightPlane.z);
-    float leftD = camXfm.v.x * leftPlane.x
-        + (camXfm.v.y * leftPlane.y + camXfm.v.z * leftPlane.z);
+    float rightD = eye.x * rightPlane.x + (eye.y * rightPlane.y + eye.z * rightPlane.z);
+    float leftD = eye.x * leftPlane.x + (eye.y * leftPlane.y + eye.z * leftPlane.z);
 
     // Bisector of the two silhouette planes.
     Vector3 bisector = rightPlane;
