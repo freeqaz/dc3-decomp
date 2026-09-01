@@ -14,9 +14,8 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 702 total = 67 GAP + 635 EXT
+# counts: 697 total = 62 GAP + 635 EXT
 
-GAP ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@AAV0@ABV?$ObjDirPtr@VHamScrollSpeedIndicator@@@@@Z  # target defines it in system/ui/UILabel.obj
 GAP ??0GranularSynth@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@III@Z  # target defines it in system/synth_xbox/GranularSynth.obj
 GAP ??0PeakDetector@Synapse@DSP@@QAA@ABV?$vector@MV?$StlNodeAlloc@M@stlpmtx_std@@@stlpmtx_std@@II@Z  # target defines it in system/synth_xbox/PeakDetector.obj
 GAP ??0SingleItemEnumJob@@QAA@PAVObject@Hmx@@H_K@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
@@ -55,17 +54,13 @@ GAP ?LockBitmap@DxTex@@UAAXAAVRndBitmap@@H@Z  # target defines it in system/rndd
 GAP ?OnCompletion@SingleItemEnumJob@@UAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?Poll@MicXbox@@QAAXXZ  # target defines it in system/synth_xbox/Mic.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
-GAP ?QueryInterface@CXAPOParametersBase@@UAAJABU_GUID@@PAPAX@Z  # target defines it in system/synth_xbox/Synth.obj
-GAP ?Release@CXAPOBase@@UAAKXZ  # target defines it in system/synth_xbox/Synth.obj
 GAP ?ReleaseAutoRelease@DxRnd@@QAAXXZ  # target defines it in system/rnddx9/Rnd_Xbox.obj
 GAP ?ResolveMipChain@DxTex@@AAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?RunXinputJoypadLoop@?A0x439b694a@@YAXXZ  # target defines it in system/os/Joypad_Xbox.obj
 GAP ?SendRawData@@YAXHEEEEEEE@Z  # target defines it in system/os/Joypad_Xbox.obj
-GAP ?SetGlobalReverbPreset@Synth360@@QAAXPBD@Z  # target defines it in system/synth_xbox/Synth.obj
 GAP ?ShowControllerRequiredUI@PlatformMgr@@QAAXPAVObject@Hmx@@@Z  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?Start@SingleItemEnumJob@@UAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
-GAP ?SyncEffectParams@FxSendChorus360@@UBAXPAUIXAudio2SubmixVoice@@@Z  # target defines it in system/synth_xbox/FxSendChorus.obj
 GAP ?Synthesize@GranularSynth@Synapse@DSP@@QAAXIPBQAM@Z  # target defines it in system/synth_xbox/GranularSynth.obj
 GAP ?Terminate@ExternalMic@@SAXXZ  # target defines it in system/synth_xbox/ExternalMic.obj
 GAP ?UpdateMix@Voice@@AAAXXZ  # target defines it in system/synth_xbox/Voice.obj
