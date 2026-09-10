@@ -191,8 +191,8 @@ void HollaBackMinigame::BeginMinigame(DataArray *a) {
         TheGameData->Player(1);
         unk444 = false;
         mInitialMoveCount = 2;
-        mSpecifyFirstMoveMeasure = -1;
         mMaxRoutineSize = 4;
+        mSpecifyFirstMoveMeasure = -1;
         mInitialMusicJump = -1;
         mIntroShoutout = Symbol("hb_intro_70s");
         mWinShoutouts.clear();
