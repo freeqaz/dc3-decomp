@@ -376,21 +376,15 @@ extern "C" const char __link_glue_empty_str[] = "";
 // ============================================================================
 
 // -- ObjPtr/ObjRef template instantiations --
-// merged_ObjPtrListPopBack is an invented name (it appears in no config file
-// and in no map); PostProc_NG.cpp declares it and calls it inside
-// NgPostProc::DoVelocity's drain loop.  Bound to __link_glue_noop that loop
-// HANGS: it re-reads the list head from the same address every iteration and
-// the no-op never advances it, so a non-empty mMotionBlurDrawList spins
-// forever.  The shipped image calls a real function there --
-// build/373307D9/asm/system/rndobj/PostProc_NG.s, 0x826AB720:
-//     bl "?pop_back@?$ObjPtrList@VRndMesh@@VObjectDir@@@@QAAXXZ"
-// -- which our link inputs already define (map: 0x823912C8), same
-// this-in-r3 signature.  Point the alias at it.
-#pragma comment(                                                                         \
-    linker,                                                                              \
-    "/ALTERNATENAME:?merged_ObjPtrListPopBack@@YAXPAX@Z="                                \
-    "?pop_back@?$ObjPtrList@VRndMesh@@VObjectDir@@@@QAAXXZ"                              \
-)
+// Removed: merged_ObjPtrListPopBack — an invented name (it appeared in no
+// config file and in no map) that PostProc_NG.cpp declared and called inside
+// NgPostProc::DoVelocity's drain loop, aliased here onto
+// ?pop_back@?$ObjPtrList@VRndMesh@@VObjectDir@@@@QAAXXZ.  The image's callee
+// is only *named* for RndMesh because /OPT:ICF folded every
+// ObjPtrList<T,ObjectDir>::pop_back to one address: ham_xbox_r.map lists
+// ObjPtrList<RndDrawable,ObjectDir>::pop_back at that same 0x823912c8.
+// DoVelocity now spells the drain as `mMotionBlurDrawList.clear()`, so the
+// real templated pop_back is called and the alias is no longer needed.
 
 // -- BinStream operators --
 // Removed: operator>>(BinStream&, FlowTrigger::PropTriggerDefn&) — implemented in

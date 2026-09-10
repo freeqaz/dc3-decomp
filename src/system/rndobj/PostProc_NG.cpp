@@ -20,7 +20,6 @@
 #include "utl\MakeString.h"
 #include <math.h>
 
-extern void merged_ObjPtrListPopBack(void *);
 void SetBloomBlurWeights(bool, float, float);
 void SetBloomBlurWeightsStreak(bool, float, float, float, int, float);
 
@@ -274,24 +273,23 @@ void NgPostProc::DoVelocity() {
 }
 #else
 void NgPostProc::DoVelocity() {
-    typedef void (*ShaderFunc)(void*, int, float*);
-    *(s8*)((u8*)&TheShaderMgr + 0x39) = 0;
-    if ((mMotionBlurVelocity) && (*(u8*)((u8*)&TheHiResScreen + 0x4) == 0) &&
-        (RndVelocityBuffer::Singleton().Draw(*(RndCam**)((u8*)&TheRnd + 0xE4), mMotionBlurDrawList) != 0)) {
-        *(s8*)((u8*)&TheShaderMgr + 0x39) = 1;
-        float sp50 = *(float*)((u8*)&RndVelocityBuffer::Singleton() + 0x36BE8);
-        void* shaderMgrVTable = *(void**)&TheShaderMgr;
-        ShaderFunc func = *(ShaderFunc*)((u8*)shaderMgrVTable + 0x40);
-        func(&TheShaderMgr, 0x7A, &sp50);
+    TheShaderMgr.unk39 = false;
+    if (mMotionBlurVelocity && !TheHiResScreen.IsActive()) {
+        if (RndVelocityBuffer::Singleton().Draw(
+                TheRnd.GetWorldCamCopy(), mMotionBlurDrawList
+            )) {
+            TheShaderMgr.unk39 = true;
+            Vector4 velocityScale(
+                RndVelocityBuffer::Singleton().GetUnk36be8(),
+                RndVelocityBuffer::Singleton().GetUnk36be8(),
+                RndVelocityBuffer::Singleton().GetUnk36be8(),
+                RndVelocityBuffer::Singleton().GetUnk36be8()
+            );
+            TheShaderMgr.SetPConstant((PShaderConstant)0x7a, velocityScale);
+        }
     }
-    int head = *(int*)((u8*)this + 0x240);
-    if (head != 0) {
-        void* pList = (u8*)this + 0x23C;
-        do {
-            merged_ObjPtrListPopBack(pList);
-            head = *(int*)((u8*)pList + 4);
-        } while (head != 0);
-    }
+    if (!mMotionBlurDrawList.empty())
+        mMotionBlurDrawList.clear();
 }
 #endif
 
