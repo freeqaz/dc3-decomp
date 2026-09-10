@@ -813,7 +813,7 @@ void BustAMovePanel::OnBeat() {
         mStreamJumped = false;
     }
 
-    mRecorder->SetVal44(mBeatCount);
+    mRecorder->SetBeatIndex(mBeatCount);
 
     switch (mState) {
     case kBAMState_CountIn:
@@ -964,10 +964,10 @@ void BustAMovePanel::OnBeat() {
         }
         mRecorder->StopRecording();
         mRecorder->StartPlayback(false);
-#define mReps mRepsRemaining
+#define mReps mBeatCount
         MILO_ASSERT(mReps == 0, 0x328);
 #undef mReps
-        mFlashcardLabels.push_back(gNullStr);
+        mFlashcardLabels.push_back(Symbol(gNullStr));
         break;
     }
     case kBAMState_PlayCountIn: {
@@ -977,7 +977,7 @@ void BustAMovePanel::OnBeat() {
         }
         mRecorder->StopPlayback();
         if (mRepsRemaining > 3) {
-            mFlashcardLabels.push_back(gNullStr);
+            mFlashcardLabels.push_back(Symbol(gNullStr));
         }
         if (mRepsRemaining == 3) {
             mFlashcardSlots.push_back(-1);
@@ -987,14 +987,14 @@ void BustAMovePanel::OnBeat() {
             mFlashcardSlots.push_back(mMoveIndex - 1);
             mFlashcardSlots.push_back(mMoveIndex - 1);
             mFlashcardSlots.push_back(mMoveIndex - 1);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-                        char *sideStr;
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+                        const char *sideStr;
             if ((SkeletonSide)mCreatorSide == kSkeletonLeft) {
                 sideStr = "left";
             } else {
@@ -1240,15 +1240,15 @@ void BustAMovePanel::OnBeat() {
             }
         }
         if (mRepsRemaining > 3) {
-            mFlashcardLabels.push_back(gNullStr);
+            mFlashcardLabels.push_back(Symbol(gNullStr));
         }
         if (mRepsRemaining == 3) {
             static Message bothMessage("bustamove_both_dance");
             TheHamProvider->Handle(bothMessage, false);
             PlayVO(Symbol("nar_bam_trans"));
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
-            mFlashcardLabels.push_back(gNullStr);
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
+            mFlashcardLabels.push_back(Symbol(gNullStr));
             mFlashcardSlots.push_back(-1);
             mFlashcardSlots.push_back(-1);
             mFlashcardSlots.push_back(-1);
@@ -1390,12 +1390,11 @@ void BustAMovePanel::OnBeat() {
             mRecorder->StartPlayback(false);
         }
         // Score both players for the final sequence.
-        // mPlayerScoreLeft/Right are ints reinterpreted as floats (codegen requirement).
         // The goto merges Perfect and SuperPerfect into a shared scoring path.
         if (mBeatCount > 0) {
             bool sentMsg = false;
             int player = 0;
-            float *scores = (float *)&mPlayerScoreLeft;
+            float *scores = &mPlayerScoreLeft;
             do {
                 MoveRating rating = GetMoveRating(*scores);
                 int side = TheGameData->Player(player)->Side();
@@ -1425,8 +1424,8 @@ void BustAMovePanel::OnBeat() {
         if (mBeatCount == 11 && (mFinalSequenceType == 1 || mFinalSequenceType == 3)) {
             PlayVO(Symbol("nar_bam_finale_fast"));
         }
-        mPlayerScoreLeft = 0;
-        mPlayerScoreRight = 0;
+        mPlayerScoreLeft = 0.0f;
+        mPlayerScoreRight = 0.0f;
         break;
     default:
         break;
@@ -1564,10 +1563,10 @@ void BustAMovePanel::Poll() {
                 TheGameData->Player(p)->GetSkeletonTrackingID()
             );
             SkeletonSide pSide = TheGameData->Player(p)->Side();
-            ((float *)&mPlayerScoreLeft)[p] =
+            (&mPlayerScoreLeft)[p] =
                 mRecorder->GetScore(pSkelIdx, p, -1.0f, false);
             mPhraseMeters[pSide]->SetShowing(true);
-            float pBase = ((float *)&mPlayerScoreLeft)[p];
+            float pBase = (&mPlayerScoreLeft)[p];
             unsigned int pE = 2;
             float pScoreSq = 1.0f;
             do {

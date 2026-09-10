@@ -92,8 +92,8 @@ private:
     int mMoveIndex; // 0x84 - current freestyle move slot (0-3)
     int unk88; // 0x88
     int unk8c; // 0x8c
-    int mPlayerScoreLeft; // 0x90 - reinterpreted as float for final sequence scoring
-    int mPlayerScoreRight; // 0x94 - reinterpreted as float for final sequence scoring
+    float mPlayerScoreLeft; // 0x90 - final sequence score, left player
+    float mPlayerScoreRight; // 0x94 - final sequence score, right player
     RndDir *mBAMColumns[kNumSkeletonSides]; // 0x98
     int mCreatorSide; // 0xa0 - side of the move creator (SkeletonSide)
     DancerSkeleton mCapturePoses[3]; // 0xa4 - skeleton poses for flashcard capture

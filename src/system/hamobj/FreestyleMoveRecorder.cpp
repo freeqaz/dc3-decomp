@@ -414,7 +414,7 @@ BaseSkeleton *FreestyleMoveRecorder::GetLiveSkeleton() {
         int idx = 0;
         int byteOff = 0;
         do {
-            if (count == unk40)
+            if (count == mBeatIndex)
                 break;
             float *base = (float *)((char *)mClipFrames + byteOff);
             if (base[0x2d8 / 4] > base[0x5b4 / 4]) {

@@ -56,6 +56,7 @@ public:
     int GetCurrentMoveNumFrames() const { return mTakes[mCurrentTakeIndex].mNumFrames; }
 
     void SetVal44(int i) { mSkeletonIndex = i; } // change once context found
+    void SetBeatIndex(int i) { mBeatIndex = i; }
 
     void SetFreestyleMove(int index) {
         MILO_ASSERT(index >= 0 && index < MAX_FREESTYLE_MOVES, 0x50);
@@ -100,7 +101,7 @@ private:
     bool mRecording;
     bool mPlaybackActive; // 0x39
     Symbol mRecordingTarget; // 0x3c
-    int unk40;
+    int mBeatIndex; // 0x40 - beat index within the current take (set by BustAMovePanel::OnBeat)
     int mSkeletonIndex;
     FreestyleMove mTakes[4]; // 0x48
     int mCurrentTakeIndex;
