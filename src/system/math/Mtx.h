@@ -86,10 +86,24 @@ namespace Hmx {
             y.Set(0.0f, 1.0f, 0.0f);
             z.Set(0.0f, 0.0f, 1.0f);
         }
-        Matrix3 &operator=(const Matrix3 &mtx) {
-            memcpy(this, &mtx, sizeof(*this));
-            return *this;
-        }
+        // NO user-declared operator=. The implicit one is what the target has,
+        // and the difference is observable in any class that CONTAINS a Matrix3:
+        // a user-declared copy-assignment makes Matrix3 (and therefore Transform,
+        // and therefore Key<Transform>) non-trivially-assignable, so the enclosing
+        // class's implicit operator= has to call it member by member instead of
+        // being lowered to one whole-object memcpy.
+        //
+        // Evidence: `??4Matrix3@Hmx@@QAAAAV01@ABV01@@Z` appears in 0 of the 2,223
+        // target objects (and `??4Transform@@` in 0 of 2,223); before this change
+        // they were emitted by 18 and 56 of our objects respectively. And in
+        // vector<Key<Transform> >::_M_fill_insert_aux the target copies a whole
+        // Key with `li r5, 0x44; bl memcpy` where we emitted `li r5, 0x40;
+        // bl memcpy` + `lfs/stfs` for the trailing `frame` -- exactly the split a
+        // user-declared Transform::operator= forces.
+        //
+        // Direct `a = b` on a Matrix3/Transform is unaffected: every member is
+        // trivially assignable, so the implicit operator= is the same 0x30/0x40
+        // byte copy the memcpy body was.
         Vector3 &operator[](int i) { return *(&x + i); }
         const Vector3 &operator[](int i) const { return *(&x + i); }
 
@@ -254,10 +268,9 @@ public:
     Transform(const Hmx::Matrix3 &mtx, const Vector3 &vec) : m(mtx), v(vec) {}
 
     // Transform(const Transform &tf);
-    Transform &operator=(const Transform &tf) {
-        memcpy(this, &tf, sizeof(*this));
-        return *this;
-    }
+    // NO user-declared operator= -- see the note on Hmx::Matrix3::operator= above.
+    // Transform must stay trivially assignable so that Key<Transform> (and every
+    // other class holding one) gets a single whole-object memcpy.
 
     void Reset() {
         m.Identity();
