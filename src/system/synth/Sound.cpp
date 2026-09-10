@@ -440,6 +440,32 @@ void Sound::SetMoggClip(MoggClip *clip) {
     mIsSynthSample = false;
 }
 
+#ifndef HX_NATIVE
+// Sound.obj in every shipped DC3 build defines two SampleMarker template
+// instantiations that nothing in Sound.obj calls:
+//   ??1?$vector@VSampleMarker@@...      0x82741F28  (136 B)
+//   ??1?$_Vector_base@VSampleMarker@@... 0x8273D9A0 ( 40 B)
+// ham_xbox_r.map attributes both to `synth:Sound.obj` -- in the retail map and
+// in all three of the 8.28.12 Prototype (Debug) / 9.16.12 (Final Debug) maps --
+// so Sound.cpp really did instantiate them; the linker simply picked this TU's
+// COMDAT copies to satisfy the calls in SampleData.obj and SampleInst.obj.
+//
+// Yet the whole of the target Sound.obj contains exactly three SampleMarker
+// references, and all three are inside those two dtors and the vector dtor's own
+// unwind funclet. Every other function in the object is already reproduced
+// byte-for-byte from source that mentions no vector<SampleMarker>. So whatever
+// odr-used the destructor contributed no surviving code: it lived in a Sound.cpp
+// function that was never called, which MSVC still had to codegen (and therefore
+// instantiate through) before /OPT:REF discarded the body at link time. Its name
+// is not recoverable from the binary -- the linker kept the COMDAT it dragged in
+// and dropped everything else.
+//
+// A `static` stand-in does NOT work: MSVC drops an unreferenced static function
+// before instantiating anything in it, and both dtors go back to 0%. External
+// linkage is what reproduces the original mechanism.
+void SoundMarkerVectorInstantiation() { std::vector<SampleMarker> markers; }
+#endif
+
 int Sound::NumMarkers() const {
     if (mSynthSample) {
         return mSynthSample->NumMarkers();
