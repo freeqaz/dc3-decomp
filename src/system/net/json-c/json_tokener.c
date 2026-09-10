@@ -187,14 +187,13 @@ json_tokener_parse_ex(struct json_tokener *tok, const char *str, int len)
     while (POP_CHAR(c, tok)) {
     redo_char:
         switch (state) {
-            char c2;
         case json_tokener_state_eatws:
             /* Advance until we change state */
-            while (c2 = c, isspace(c)) {
-                if ((!ADVANCE_CHAR(str, tok, c2)) || (!POP_CHAR(c, tok)))
+            while (isspace((int)c)) {
+                if ((!ADVANCE_CHAR(str, tok, c)) || (!POP_CHAR(c, tok)))
                     goto out;
             }
-            if (tok && c == '/') {
+            if (c == '/') {
                 printbuf_reset(tok->pb);
                 printbuf_memappend_fast(tok->pb, &c, 1);
                 state = json_tokener_state_comment_start;
