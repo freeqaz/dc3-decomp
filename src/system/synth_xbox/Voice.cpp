@@ -862,24 +862,32 @@ unsigned long StartVoiceThreadEntry(void *) {
         }
         gVoiceGC.Exit();
 
-        if (TheXboxSynth) {
-            CriticalSection *cs = &TheXboxSynth->unkb0;
+        // NOT `if (TheXboxSynth) { ... }`: the target computes &TheXboxSynth->unkb0
+        // unconditionally (addic. r29, r11, 0xb0) and guards only the Enter()/Exit()
+        // pair on the resulting pointer -- the same idiom createOrReuse() uses above.
+        // The drain loop itself runs even with no synth.
+        CriticalSection *cs = &TheXboxSynth->unkb0;
+        if (cs) {
             cs->Enter();
-            for (std::deque<PoolVoice>::iterator it = s_voiceGCInProgress.begin();
-                 it != s_voiceGCInProgress.end(); ++it) {
-                PoolVoice &pv = *it;
-                if (pv.sourceVoice) {
-                    int *pSv = (int *)pv.sourceVoice;
-                    ((void (*)(int *, int))(*(int *)(*(int *)pSv + 0x48)))(pSv, 0);
-                }
-                if (pv.eg) {
-                    int *pEg = (int *)pv.eg;
-                    ((void (*)(int *, int))(*(int *)(*(int *)pEg + 0x38)))(pEg, 1);
-                    pv.eg = 0;
-                    PoolFree(0x10, pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
-                    pv.egParams = 0;
-                }
+        }
+        for (std::deque<PoolVoice>::iterator it = s_voiceGCInProgress.begin();
+             it != s_voiceGCInProgress.end(); ++it) {
+            PoolVoice &pv = *it;
+            // IXAudio2Voice::DestroyVoice() -- slot 0x48, no arguments, and the
+            // target calls it without a null check on sourceVoice.
+            int *pSv = (int *)pv.sourceVoice;
+            ((void (*)(int *))(*(int *)(*(int *)pSv + 0x48)))(pSv);
+            // `delete`-shaped: the null check guards only the deleting destructor
+            // call; the field clears and the egParams free are unconditional.
+            if (pv.eg) {
+                int *pEg = (int *)pv.eg;
+                ((void (*)(int *, int))(*(int *)(*(int *)pEg + 0x38)))(pEg, 1);
             }
+            pv.eg = 0;
+            PoolFree(0x10, pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
+            pv.egParams = 0;
+        }
+        if (cs) {
             cs->Exit();
         }
         s_voiceGCInProgress.clear();

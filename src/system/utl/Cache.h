@@ -38,7 +38,11 @@ enum CacheResourceResult {
 
 class CacheDirEntry {
 public:
-    CacheDirEntry() : mSize(0) {}
+    // mSize is deliberately NOT initialised here: the only default-construction
+    // site in the binary (CacheXbox::ThreadGetDir) emits String's ctor and
+    // DateTime's 6-byte memset and nothing else -- a `: mSize(0)` shows up as two
+    // base-only instructions (li r11,0 / stw r11,0x60(r31)) against the target.
+    CacheDirEntry() {}
     CacheDirEntry(const CacheDirEntry &o);
     String mName;
     DateTime mDateTime;
