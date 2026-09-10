@@ -88,7 +88,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from scripts.orchestrator import symbol_sweep  # noqa: E402
+from scripts.orchestrator import object_baseline, symbol_sweep  # noqa: E402
 from scripts.orchestrator.patch_guard import (  # noqa: E402
     UnpatchedTreeError, ensure_patched_tree,
 )
@@ -260,6 +260,19 @@ def main() -> int:
     instrument_before = read_instrument(project_dir, refresh=True)
     print(f"instrument (pre-scan) : {instrument_before}")
 
+    # --- and bracket it a second way: the OBJECTS must hold still too ---
+    # Same argument as the instrument bracket, applied to the other half of the
+    # measurement.  A whole-binary census is minutes long and several lanes
+    # build at once, so some unit's target or base object can be rewritten
+    # mid-sweep; the resulting rows are real findings whose baseline nothing can
+    # attribute.  Those units are recorded `raced = 1` rather than dropped or
+    # silently stamped -- the same refusal-to-attribute the `--version` bracket
+    # makes, at the grain where it is affordable.
+    units_cfg = object_baseline.unit_paths(project_dir)
+    objects_before = object_baseline.fingerprint_units(project_dir, units_cfg)
+    print(f"object baseline (pre-scan) : {len(objects_before)} unit pairs "
+          f"content-hashed")
+
     try:
         res = symbol_sweep.sweep_functions(
             project_dir, symbols, include_patterns=args.patterns,
@@ -269,6 +282,18 @@ def main() -> int:
     except symbol_sweep.RelocBlindPatternError as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 4
+
+    objects_after = object_baseline.fingerprint_units(project_dir, units_cfg)
+    raced = object_baseline.race_units(objects_before, objects_after)
+    if raced:
+        print(f"object baseline (post-scan): {len(raced)} of {len(objects_before)} "
+              f"unit(s) MOVED DURING THE SCAN and are recorded raced=1 -- their "
+              f"findings are real but their baseline is not attributable: "
+              f"{', '.join(sorted(raced)[:10])}"
+              f"{' ...' if len(raced) > 10 else ''}", file=sys.stderr)
+    else:
+        print(f"object baseline (post-scan): unchanged across the scan "
+              f"({len(objects_before)} unit pairs)")
 
     instrument_after = read_instrument(project_dir, refresh=True)
     instrument_changed = instrument_before != instrument_after
@@ -344,6 +369,13 @@ def main() -> int:
                     "project_dir": str(project_dir),
                     "build_rev": git_rev(project_dir),
                     "tree_verified": tree_verified,
+                    "object_units": len(objects_before),
+                    "object_units_raced": sorted(raced),
+                    "tree_verified_note": (
+                        "object_units is the number of objdiff.json unit pairs "
+                        "whose target AND base objects were content-hashed "
+                        "before the sweep; object_units_raced moved before the "
+                        "sweep finished"),
                     "universe": universe,
                     "examined": examined,
                     "truncated": truncated,
@@ -408,13 +440,15 @@ def main() -> int:
                   f"stamp it.", file=sys.stderr)
             return 2
         write_scan(Path(args.db), args, res, rows_out, uni, universe, examined,
-                   tree_verified, project_dir, started)
+                   tree_verified, project_dir, started,
+                   objects_before, raced)
 
     return 3 if truncated else 0
 
 
 def write_scan(db_path, args, res, rows_out, uni, universe, examined,
-               tree_verified, project_dir, started) -> None:
+               tree_verified, project_dir, started,
+               objects_before=None, raced=frozenset()) -> None:
     """Record the scan. Every finding is a row; the ruler is on the scan."""
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
     from orchestrator import database as db_mod
@@ -427,6 +461,11 @@ def write_scan(db_path, args, res, rows_out, uni, universe, examined,
         # two places that both know the schema is how they drift.
         db_mod.init_database(str(db_path))
         conn = sqlite3.connect(str(db_path))
+    # Not routed through the version ladder: two lanes were extending this
+    # schema in the same week, and a database already migrated by the OTHER
+    # lane's v18 would never see this table's DDL.  `ensure_pattern_scan_units`
+    # is idempotent and version-independent for exactly that reason.
+    db_mod.ensure_pattern_scan_units(conn)
 
     ids = {r[0]: r[1] for r in conn.execute("SELECT symbol, id FROM functions")}
 
@@ -457,10 +496,32 @@ def write_scan(db_path, args, res, rows_out, uni, universe, examined,
                      examined_rows)
     conn.executemany("INSERT OR REPLACE INTO function_patterns VALUES (?,?,?,?,?,?,?)",
                      pattern_rows)
+
+    # The object baselines, per unit, taken from the SAME objects this scan
+    # diffed -- hashed immediately before the sweep, re-hashed immediately
+    # after, and any unit that moved between the two reads is marked `raced`
+    # rather than being stamped as if it had held still.  Without this the scan
+    # records WHICH objdiff took the measurement and nothing about WHAT it
+    # measured, and every consumer then reads findings about objects that no
+    # longer exist as current facts.
+    unit_rows = [(scan_id, unit, h.get("target"), h.get("base"),
+                  1 if unit in raced else 0)
+                 for unit, h in sorted((objects_before or {}).items())]
+    conn.executemany("INSERT OR REPLACE INTO pattern_scan_units "
+                     "(scan_id, unit, target_sha256, base_sha256, raced) "
+                     "VALUES (?,?,?,?,?)", unit_rows)
     conn.commit()
     print(f"\nrecorded scan id={scan_id} ruler={args.ruler}: "
           f"{len(examined_rows)} examined rows, {len(pattern_rows)} pattern rows"
           + (f", {unmatched} symbols had no decomp.db row" if unmatched else ""))
+    if unit_rows:
+        print(f"  object baseline: {len(unit_rows)} unit pairs recorded"
+              + (f", {len(raced)} raced" if raced else ""))
+    else:
+        # Loud, because a scan with no baseline is refused on read
+        # (`UnfingerprintedPatternScanError`) and the fix is here, not there.
+        print("  WARNING: NO object baseline recorded for this scan -- "
+              "callee_gate will refuse to read it.", file=sys.stderr)
 
     if args.ruler == "name_check":
         refresh_legacy_flags(conn, scan_id)

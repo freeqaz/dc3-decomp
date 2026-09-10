@@ -86,10 +86,41 @@ error.
 Sabotage-tested in `tests/test_split_currency.py` (10 tests, each carrying its
 negative control, each red assertion pinning *which* condition fired).
 
+## The second consumer: a pattern scan carries its own copy (2026-09-10)
+
+The split-currency guard above answers "do the objects on disk match the config
+that produced them?" — a property of the **tree right now**. A recorded
+`pattern_scans` row asks a different question: "are the findings I stored still
+about the objects on disk?" — a property of a **moment in the past**, which no
+amount of stamp-checking on the current tree can answer.
+
+Since schema **v18**, `pattern_scan_units` stores, per unit, a sha256 of the
+target object **and** of the base object as they were when the scan ran, plus a
+`raced` flag for any unit whose objects moved between the census's pre-sweep and
+post-sweep reads. `callee_gate.stale_units(db, scan_id)` returns
+`{unit: direction}` and `verify_pattern_scan_current.py --check` exits **4**
+(target moved) or **5** (base moved), naming the units.
+
+Two things this settles:
+
+* **`build_rev` is not provenance for a scan.** Scan 16 was taken across a
+  landing merge: it recorded `b91fc0cb5`, repaired 3 rows that were stale against
+  deleted base objects, and introduced 6 new ones. On an active repo a whole-repo
+  rev names *a* commit from the measurement window, never *the* tree diffed.
+* **Per unit, not per tree.** A tree-wide "something moved" verdict is
+  permanently red here and would be routed around inside a day; a per-unit answer
+  lets a lane ask about the unit it is working on.
+
+There is deliberately **no backfill** for scans written before v18: their
+objects' hashes are not recoverable, and taking them from today's objects would
+manufacture a green reading for exactly the condition the table detects.
+
 ## What it does NOT cover
 
-* The target objects' own **bytes**. That is a different assertion ("nobody
-  hand-edited a target object") and has not happened here.
+* The target objects' own **bytes**, *for the split-currency guard*. That is a
+  different assertion ("nobody hand-edited a target object") and has not happened
+  here. (A pattern scan's *recorded* baseline does hash them — see above — but
+  that vouches for one past measurement, not for the tree.)
 * Any measurement taken **before** this landed. Split state and patch state
   leave no historical record, so which past number ran against which tree state
   is not reconstructible. Treat undated matched-function figures accordingly.

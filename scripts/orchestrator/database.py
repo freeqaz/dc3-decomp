@@ -15,7 +15,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 18
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -789,10 +789,86 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
             JOIN functions f ON f.id = p.function_id
         """)
 
+    if from_version < 18 <= to_version:
+        # Migration v17 -> v18: what the scan MEASURED, not just what measured it.
+        #
+        # v17 records the instrument (`tool_version`, with the xxh3 that makes it
+        # provenance rather than a claim), the tree's identity (`project_dir`,
+        # `build_rev`) and whether the tree was a post-compile fixed point
+        # (`tree_verified`).  It records NOTHING about the 4,447 object files the
+        # scan actually diffed, and both sides of every one of them move:
+        #
+        #   TARGET  build/373307D9/obj/**.obj -- `dtk xex split`'s undeclared
+        #           output, rewritten by any `config/373307D9/symbols.txt` edit.
+        #   BASE    build/373307D9/src/**.obj -- rebuilt by any source commit.
+        #
+        # `build_rev` is not a substitute, and that is measured rather than
+        # argued: scan 16 was taken across a landing merge, recorded
+        # `build_rev b91fc0cb5`, repaired 3 stale rows and INTRODUCED 6.  On an
+        # active repo a whole-repo rev names *a* commit from the measurement
+        # window, never *the* tree that was diffed.
+        #
+        # WHY A TABLE AND NOT A BLOB ON `pattern_scans`.  A tree-wide digest can
+        # only answer "something moved", which on this repo is permanently true
+        # and therefore permanently ignored.  Per-unit rows answer "WHICH units
+        # moved, and on which side", which is the question a caller can act on:
+        # a lane working `default/system/obj/Dir` can be told that ITS unit is
+        # current while 200 others are not.  A unit is exactly one target object
+        # and one base object -- objdiff's own grain, and the grain
+        # `functions.unit` already carries.
+        #
+        # NULL sha256 is a VALUE: 1,234 of 2,224 units have no base object at
+        # all (target-only library units).  "absent then, absent now" must
+        # compare equal, and only a recorded NULL can distinguish that from
+        # "there was one and it is gone".
+        #
+        # `raced` is written by `pattern_census.py`, which fingerprints before
+        # AND after its sweep: a unit whose objects moved between the two reads
+        # has findings that are real but whose baseline is not attributable, and
+        # saying so is the whole point of this table.
+        print("  Migration v18: Adding per-unit object baselines for pattern scans...")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pattern_scan_units (
+                scan_id INTEGER NOT NULL REFERENCES pattern_scans(id) ON DELETE CASCADE,
+                unit TEXT NOT NULL,           -- objdiff.json unit name, e.g. default/system/obj/Dir
+                target_sha256 TEXT,           -- build/<v>/obj/**.obj  (NULL == absent)
+                base_sha256 TEXT,             -- build/<v>/src/**.obj  (NULL == absent)
+                raced INTEGER NOT NULL DEFAULT 0,  -- object moved DURING the scan
+                PRIMARY KEY (scan_id, unit)
+            ) WITHOUT ROWID
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pattern_scan_units_scan "
+                     "ON pattern_scan_units(scan_id)")
+
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))
     conn.commit()
     print(f"  Migration complete. Database at v{to_version}")
+
+
+#: The DDL for `pattern_scan_units`, callable OUTSIDE the migration ladder.
+#:
+#: Two lanes were adding to this schema in the same week (this table, and a
+#: `jobs` column on `pattern_scans`).  Whichever lands second gets the next
+#: version number, and a database migrated by the FIRST one is then at a version
+#: the ladder considers done -- so the second lane's DDL would never run on it.
+#: A writer that calls this first is immune to that ordering, and the reader
+#: treats an absent table as "no baseline recorded" rather than as "clean", so
+#: neither half can fail silent.
+def ensure_pattern_scan_units(conn: sqlite3.Connection) -> None:
+    """Create `pattern_scan_units` if the ladder has not (idempotent)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS pattern_scan_units (
+            scan_id INTEGER NOT NULL REFERENCES pattern_scans(id) ON DELETE CASCADE,
+            unit TEXT NOT NULL,
+            target_sha256 TEXT,
+            base_sha256 TEXT,
+            raced INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (scan_id, unit)
+        ) WITHOUT ROWID
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pattern_scan_units_scan "
+                 "ON pattern_scan_units(scan_id)")
 
 
 def ingest_report(
@@ -1130,6 +1206,7 @@ def query_functions(
     is_stub: bool | None = None,
     objdiff_pattern: str | None = None,
     pattern_ruler: str = "name_check",
+    stale_units: str = "flag",
 ) -> list[dict[str, Any]]:
     """
     Query multiple functions matching criteria.
@@ -1165,6 +1242,31 @@ def query_functions(
                             an answer that reads exactly like "this class is
                             exhausted". See docs/analysis/2026-08-21-pattern-
                             census-4.2.6.md.
+        stale_units:        What to do with rows whose UNIT's objects have moved
+                            since that scan measured them ('flag', the default,
+                            'exclude', or 'ignore'). Only consulted when
+                            `objdiff_pattern` is set, because only then is a
+                            stored finding being served as a fact.
+
+                            A pattern scan is a set of findings about 2,224
+                            object PAIRS, and both sides move: the target objects
+                            are rewritten by any `symbols.txt` edit, the base
+                            objects by any landed commit. Since schema v18 each
+                            scan records a per-unit content hash of both sides
+                            (`pattern_scan_units`), so "is this row still about
+                            the objects on disk?" is answerable per unit -- which
+                            is the only grain at which the answer is usable, a
+                            whole-tree verdict being permanently red here.
+
+                            'flag' adds `unit_objects_stale` to every returned
+                            row: None when the unit is current, otherwise the
+                            direction ('target', 'base', 'both', 'unrecorded',
+                            'removed'), or 'unfingerprinted' when the scan
+                            predates the table and cannot be checked at all.
+                            'exclude' drops the stale rows -- ask for it
+                            deliberately, because a shrunken result set reads
+                            exactly like "this class is exhausted", which is the
+                            failure mode this whole subsystem exists to prevent.
 
     Returns list of function dicts.
 
@@ -1220,6 +1322,7 @@ def query_functions(
         query += f" AND is_stub = {1 if is_stub else 0}"
 
     # objdiff pattern filter -- joins the measured table, never a has_* column.
+    pattern_scan_id: int | None = None
     if objdiff_pattern:
         if pattern_ruler == "none":
             raise ValueError(
@@ -1243,6 +1346,7 @@ def query_functions(
         query += (" AND id IN (SELECT function_id FROM function_patterns "
                   "WHERE scan_id = ? AND pattern = ?)")
         params.extend([scan[0], objdiff_pattern])
+        pattern_scan_id = scan[0]
 
     # Unicorn verdict filter
     if unicorn_verdict:
@@ -1270,7 +1374,63 @@ def query_functions(
     params.append(limit)
 
     rows = conn.execute(query, params).fetchall()
-    return [dict(row) for row in rows]
+    out = [dict(row) for row in rows]
+    if objdiff_pattern and stale_units != "ignore":
+        out = _attach_unit_currency(conn, pattern_scan_id, out,
+                                    drop_stale=(stale_units == "exclude"))
+    return out
+
+
+def _attach_unit_currency(conn: sqlite3.Connection, scan_id: int,
+                          rows: list[dict[str, Any]], *,
+                          drop_stale: bool) -> list[dict[str, Any]]:
+    """Mark each row with whether ITS unit's objects still match the scan's.
+
+    A pattern row is a finding about one target object diffed against one base
+    object.  `pattern_scans` records which objdiff took the measurement; since
+    v18 `pattern_scan_units` records those two objects' content hashes, so a
+    stored finding can be served WITH its currency instead of as a current fact.
+
+    Deliberately never raises.  `query_functions` is the work-selection index a
+    lane calls first, and wedging it would only move people to raw SQL, which
+    reports nothing at all.  The failure modes surface as VALUES instead: a
+    pre-v18 scan flags every row `unfingerprinted`, an unreadable `objdiff.json`
+    flags `unknown`.  Both are louder than the silent `None` a green reading
+    would have looked like.
+    """
+    try:
+        from . import object_baseline
+    except ImportError:                       # pragma: no cover - packaging only
+        import object_baseline                # type: ignore[no-redef]
+
+    recorded: dict[str, dict[str, str | None]] = {}
+    try:
+        for unit, tgt, base in conn.execute(
+                "SELECT unit, target_sha256, base_sha256 FROM pattern_scan_units "
+                "WHERE scan_id = ?", (scan_id,)):
+            recorded[unit] = {"target": tgt, "base": base}
+    except sqlite3.OperationalError:          # table absent: pre-v18 database
+        recorded = {}
+
+    if not recorded:
+        for r in rows:
+            r["unit_objects_stale"] = "unfingerprinted"
+        return rows
+
+    project_root = Path(__file__).resolve().parents[2]
+    try:
+        stale = object_baseline.compare_fingerprints(
+            recorded, object_baseline.fingerprint_units(project_root))
+    except object_baseline.ObjectBaselineError:
+        for r in rows:
+            r["unit_objects_stale"] = "unknown"
+        return rows
+
+    for r in rows:
+        r["unit_objects_stale"] = stale.get(r.get("unit"))
+    if drop_stale:
+        return [r for r in rows if not r["unit_objects_stale"]]
+    return rows
 
 
 def lock_function(
