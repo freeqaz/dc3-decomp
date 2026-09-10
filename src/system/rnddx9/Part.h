@@ -18,5 +18,7 @@ public:
 protected:
     DxParticleSys();
 
+    void DrawParticles(const Hmx::Color &);
+
     static D3DVertexDeclaration *sVertexDecl;
 };
