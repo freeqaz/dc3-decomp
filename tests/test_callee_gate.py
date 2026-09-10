@@ -33,6 +33,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+from orchestrator import object_baseline  # noqa: E402
 from orchestrator.callee_gate import (  # noqa: E402
     CALLEE_PATTERNS, LinkerMapError, StalePatternScanError, build_callee_gate,
     classify_pair, ensure_current_scan, installed_objdiff_version,
@@ -88,14 +89,70 @@ def _write_map(root: Path) -> Path:
     return p
 
 
+#: The fixture tree's units.  Two, because one cannot show that a per-unit
+#: answer is per-unit.
+FIXTURE_UNITS = ("default/alpha", "default/beta")
+
+
+def write_fixture_tree(root: Path, *, units=FIXTURE_UNITS, marker: str = "v1",
+                       sides=("target", "base")) -> Path:
+    """A minimal objdiff.json plus one target and one base object per unit.
+
+    Small on purpose: `object_baseline` reads objdiff's own unit list and
+    content-hashes both sides, so a four-file tree exercises exactly the same
+    code path the 3,203-object real one does.
+    """
+    root = Path(root)
+    cfg: dict = {"units": []}
+    for unit in units:
+        leaf = unit.split("/")[-1]
+        rels = {"target": f"build/373307D9/obj/{leaf}.obj",
+                "base": f"build/373307D9/src/{leaf}.obj"}
+        for side in sides:
+            p = root / rels[side]
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(f"{unit}:{side}:{marker}".encode())
+        cfg["units"].append({"name": unit, "target_path": rels["target"],
+                             "base_path": rels["base"]})
+    out = root / "objdiff.json"
+    out.write_text(json.dumps(cfg, indent=1))
+    return out
+
+
+def record_object_baseline(con: sqlite3.Connection, tree: Path, *,
+                           scan_id: int) -> None:
+    """Build a fixture object tree at `tree` and record it for `scan_id`.
+
+    Since v18 a scan carries a content hash of BOTH sides of every unit, and one
+    with no baseline at all is refused rather than believed.  Every fixture that
+    wants the gate to get as far as the adjudication therefore has to be a scan
+    that measured something.
+    """
+    tree = Path(tree)
+    tree.mkdir(parents=True, exist_ok=True)
+    write_fixture_tree(tree)
+    con.execute("DELETE FROM pattern_scan_units WHERE scan_id = ?", (scan_id,))
+    for unit, h in object_baseline.fingerprint_units(tree).items():
+        con.execute("INSERT OR REPLACE INTO pattern_scan_units "
+                    "(scan_id, unit, target_sha256, base_sha256, raced) "
+                    "VALUES (?,?,?,?,0)", (scan_id, unit, h["target"], h["base"]))
+
+
 def _make_db(path: Path, *, tool_version: str, tree_verified: int = 1,
              ruler: str = "name_check", project_dir: str | None = None,
-             patterns: list[tuple[str, str, str, str | None]] = ()) -> None:
-    """A minimal v17-shaped DB.  `patterns` = (symbol, pattern, fixability, details).
+             patterns: list[tuple[str, str, str, str | None]] = (),
+             with_objects: bool = True) -> None:
+    """A minimal v18-shaped DB.  `patterns` = (symbol, pattern, fixability, details).
 
     `project_dir` defaults to the DB's OWN directory, which is the state
     `check_scan_tree` requires: a scan describes the tree that owns the database
     it lands in.  Pass a different path to build the unmoored fixture.
+
+    `with_objects` also builds a two-unit object tree beside the DB and records
+    its content hashes in `pattern_scan_units`, because since v18 a scan with no
+    recorded object baseline is refused (`UnfingerprintedPatternScanError`) --
+    the fixture has to be a scan that measured SOMETHING, or every provenance
+    test would be passing on the wrong refusal.
     """
     project_dir = project_dir or str(Path(path).resolve().parent)
     con = sqlite3.connect(path)
@@ -113,6 +170,10 @@ def _make_db(path: Path, *, tool_version: str, tree_verified: int = 1,
                                 pattern TEXT NOT NULL, confidence TEXT, fixability TEXT,
                                 instruction_count INTEGER, details TEXT,
                                 PRIMARY KEY (scan_id, function_id, pattern)) WITHOUT ROWID;
+        CREATE TABLE pattern_scan_units (scan_id INTEGER NOT NULL, unit TEXT NOT NULL,
+                                target_sha256 TEXT, base_sha256 TEXT,
+                                raced INTEGER NOT NULL DEFAULT 0,
+                                PRIMARY KEY (scan_id, unit)) WITHOUT ROWID;
         CREATE VIEW v_latest_pattern_scan AS
             SELECT s.* FROM pattern_scans s
              WHERE s.id = (SELECT MAX(s2.id) FROM pattern_scans s2 WHERE s2.ruler = s.ruler);
@@ -123,6 +184,13 @@ def _make_db(path: Path, *, tool_version: str, tree_verified: int = 1,
             " tree_verified, universe, examined, finished_at) VALUES (1,?,?,?,?,?,?,?,?)",
             (ruler, tool_version, project_dir, "abc1234", tree_verified,
              10, 10, "2026-08-22 00:00:00"))
+        owner = Path(path).resolve().parent
+        if with_objects and Path(project_dir).resolve() == owner:
+            # The scan measured OBJECTS, and since v18 it has to say which.
+            # Written only for a MOORED scan: the unmoored fixture's whole point
+            # is a `project_dir` that does not exist, and creating it here would
+            # quietly repair the state under test.
+            record_object_baseline(con, owner, scan_id=1)
     for i, (symbol, pattern, fixability, details) in enumerate(patterns, start=1):
         con.execute("INSERT OR IGNORE INTO functions (id, symbol, unit) VALUES (?,?,?)",
                     (i, symbol, "default/fake"))
@@ -624,7 +692,30 @@ REAL_MAP = REPO_ROOT / "orig" / "373307D9" / "ham_xbox_r.map"
 #: every reason string the gate is allowed to emit.  A disposition outside this
 #: set is a new silent behaviour, not a pass.
 _KNOWN_REASONS = {"real_other_address", "unresolved", "no_evidence",
-                  "icf_fold", "merged_stub", "unverifiable_pairing"}
+                  "icf_fold", "merged_stub", "unverifiable_pairing",
+                  # v18: the finding is real but was measured against objects
+                  # that have since moved, so it may not be certified from.
+                  "stale_objects"}
+
+
+def _fixture_baseline_for_latest_scan(con: sqlite3.Connection, tree: Path) -> None:
+    """Point the real DB's latest name_check scan at a matching fixture tree.
+
+    A copy of `decomp.db` carries the real scan's real object baseline -- hashes
+    of the MAIN checkout's objects at census time.  Read from a worktree, or read
+    minutes after somebody lands a commit, every unit is stale, and a test about
+    /OPT:ICF adjudication would then be decided by that.  So the copy gets a
+    baseline it matches, exactly as it already gets a corrected `tool_version`
+    and `project_dir`, and the object axis is tested where it belongs.
+    """
+    scan_id = con.execute("SELECT MAX(id) FROM pattern_scans "
+                          "WHERE ruler = 'name_check'").fetchone()[0]
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS pattern_scan_units (
+            scan_id INTEGER NOT NULL, unit TEXT NOT NULL, target_sha256 TEXT,
+            base_sha256 TEXT, raced INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (scan_id, unit)) WITHOUT ROWID""")
+    record_object_baseline(con, tree, scan_id=scan_id)
 
 
 def _independent_map(path: Path) -> dict[str, set[str]]:
@@ -844,6 +935,14 @@ def test_positive_control_on_the_real_population_both_directions(tmp_path: Path)
     con.execute("UPDATE pattern_scans SET project_dir = ? "
                 " WHERE id = (SELECT MAX(id) FROM pattern_scans WHERE ruler='name_check')",
                 (str(tmp_path.resolve()),))
+    # Same reasoning, one axis further: give the re-pointed scan a fixture
+    # object baseline it MATCHES, so this test measures the adjudication and not
+    # the object-currency guard, which has its own file
+    # (`tests/test_object_baseline.py`) and its own sabotage harness.  Without
+    # this the real DB's real baseline -- hashes of main's objects, taken
+    # minutes or days ago -- would decide the result of a test about /OPT:ICF
+    # folds.
+    _fixture_baseline_for_latest_scan(con, tmp_path)
     con.commit()
 
     scan_id = con.execute("SELECT MAX(id) FROM pattern_scans "
@@ -1045,6 +1144,9 @@ def test_sync_objdiff_refuses_to_certify_from_a_stale_scan_end_to_end(tmp_path: 
     # directory so the ONE axis under test here stays the tool version.
     con.execute("UPDATE pattern_scans SET project_dir = ? WHERE ruler = 'name_check'",
                 (str(tmp_path.resolve()),))
+    # ...and give it an object baseline it matches, for the same reason: the ONE
+    # axis under test here is the tool version.
+    _fixture_baseline_for_latest_scan(con, tmp_path)
     con.commit(); con.close()
     r = subprocess.run([sys.executable, str(script), "--db", str(fresh), *argv],
                        capture_output=True, text=True)

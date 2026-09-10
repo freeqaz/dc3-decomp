@@ -161,6 +161,11 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+try:                                          # normal: imported as a package
+    from . import object_baseline
+except ImportError:                           # `python3 scripts/orchestrator/callee_gate.py`
+    import object_baseline                    # type: ignore[no-redef]
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 MAP_REL = "orig/373307D9/ham_xbox_r.map"
@@ -227,6 +232,58 @@ class UnmooredPatternScanError(StalePatternScanError):
     refusing.  It is a distinct class so a caller can tell "re-run the census"
     from "re-run the census FROM THE MAIN CHECKOUT", and it is deliberately NOT
     an `UnreadableDatabaseError` -- the database is fine, the scan is not.
+    """
+
+
+class StaleObjectBaselineError(StalePatternScanError):
+    """The OBJECTS the scan measured are not the objects on disk.
+
+    The three v17 refusals are all about the instrument or the bookkeeping --
+    which objdiff took the measurement, whether the tree was a fixed point, which
+    directory it was taken from.  None of them looks at either side of the 2,224
+    object pairs that WERE the measurement, and both sides move:
+
+      target  `build/373307D9/obj/**.obj`, rewritten by any `symbols.txt` edit
+              (an undeclared ninja output; nothing stats it);
+      base    `build/373307D9/src/**.obj`, rebuilt by any source commit.
+
+    `build_rev` is not a substitute and that is measured, not argued: scan 16
+    recorded `b91fc0cb5` while racing a landing merge, repaired 3 stale rows and
+    introduced 6.  You cannot re-run your way to currency on an active repo, so
+    the row must carry what it measured.
+
+    A subclass of `StalePatternScanError` on purpose: every existing
+    ``except StalePatternScanError`` keeps refusing.  The two concrete
+    subclasses exist so a caller can tell the two directions apart WITHOUT
+    parsing prose -- the target direction means somebody changed the split
+    config, the base direction means somebody landed source.
+    """
+
+    def __init__(self, message: str, stale: dict[str, str],
+                 scan_id: int | None = None):
+        super().__init__(message)
+        #: unit -> direction, the whole finding.  Never a truncated list.
+        self.stale = stale
+        self.scan_id = scan_id
+
+
+class StaleTargetObjectsError(StaleObjectBaselineError):
+    """At least one unit's TARGET object differs from the one the scan diffed."""
+
+
+class StaleBaseObjectsError(StaleObjectBaselineError):
+    """At least one unit's BASE object differs, and no target object does."""
+
+
+class UnfingerprintedPatternScanError(StalePatternScanError):
+    """The scan recorded NO object baseline, so currency cannot be established.
+
+    Every scan written before this table existed is of this shape, and there is
+    no honest repair: the hashes of the objects as they stood on 2026-09-01
+    cannot be reconstructed from anything in the tree today.  Backfilling them
+    from the CURRENT objects would manufacture a green reading for exactly the
+    condition the table exists to detect, so the answer is "cannot say", with
+    the command that fixes it.
     """
 
 
@@ -392,18 +449,161 @@ def check_scan_tree(scan: dict, db_path: Path, *,
         f"--ruler {ruler} --apply")
 
 
+# --------------------------------------------------------------------------
+# the object baselines: what the scan actually diffed
+# --------------------------------------------------------------------------
+
+def recorded_units(db: sqlite3.Connection, scan_id: int) -> dict[str, dict]:
+    """`unit -> {"target","base","raced"}` as the scan recorded it.
+
+    An EMPTY result is returned as `{}` and the caller decides what it means --
+    for `ensure_current_scan` it is an `UnfingerprintedPatternScanError`, never a
+    pass.  A missing table is the same empty answer for the same reason: two
+    lanes were extending this schema in one week, so "the ladder ran the other
+    lane's v18 and not mine" is a real state and it must not read as clean.
+    """
+    db.row_factory = sqlite3.Row
+    try:
+        rows = db.execute(
+            "SELECT unit, target_sha256, base_sha256, raced "
+            "  FROM pattern_scan_units WHERE scan_id = ?", (scan_id,)).fetchall()
+    except sqlite3.OperationalError as e:
+        if "no such table" in str(e).lower():
+            return {}
+        raise _unreadable(connection_path(db), e) from e
+    return {r["unit"]: {"target": r["target_sha256"], "base": r["base_sha256"],
+                        "raced": bool(r["raced"])} for r in rows}
+
+
+def raced_units(db: sqlite3.Connection, scan_id: int) -> list[str]:
+    """Units whose objects moved WHILE the scan was running (`raced = 1`).
+
+    Not staleness: the findings are real and the objects may not have moved
+    since.  It is un-attributability, and it is reported next to the stale list
+    rather than folded into it.
+    """
+    return sorted(u for u, r in recorded_units(db, scan_id).items() if r["raced"])
+
+
+def stale_units(db: sqlite3.Connection, scan_id: int, *,
+                project_dir: Path | str = REPO_ROOT) -> dict[str, str]:
+    """`unit -> direction` for every unit whose objects moved since `scan_id`.
+
+    Empty dict == every unit's target AND base object still hashes to what the
+    scan recorded.  Directions are `object_baseline.DIRECTIONS`.
+
+    This is the query a consumer wants: `query_functions(objdiff_pattern=...)`
+    uses it to mark rows whose unit has moved, so a finding is served with its
+    currency attached instead of as a current fact.  ~0.12 s over 3,203 objects,
+    content-hashed; never mtime (CLAUDE.md: pacman restores upstream mtimes and
+    ninja is blind by construction).
+    """
+    recorded = recorded_units(db, scan_id)
+    if not recorded:
+        raise UnfingerprintedPatternScanError(
+            f"pattern scan id={scan_id} recorded NO per-unit object baseline, so "
+            f"whether its findings are about the objects on disk today cannot be "
+            f"established.\n"
+            f"Every scan written before `pattern_scan_units` existed is of this "
+            f"shape, and it cannot be repaired after the fact: the hashes of the "
+            f"objects as they stood when it ran are not recoverable from this "
+            f"tree, and backfilling them from the CURRENT objects would "
+            f"manufacture a GREEN reading for exactly the condition the table "
+            f"exists to detect.\n"
+            f"Re-derive the scan FROM THE MAIN CHECKOUT:\n"
+            f"  python3 scripts/analysis/pattern_census.py --ruler {DEFAULT_RULER} "
+            f"--apply --db <main>/decomp.db")
+    live = object_baseline.fingerprint_units(project_dir)
+    return object_baseline.compare_fingerprints(
+        {u: {k: r[k] for k in object_baseline.SIDES} for u, r in recorded.items()},
+        live)
+
+
+def check_scan_objects(db: sqlite3.Connection, scan: dict, *,
+                       project_dir: Path | str = REPO_ROOT,
+                       units: set[str] | None = None,
+                       list_limit: int = 20) -> None:
+    """Refuse a scan whose object baselines have moved.  One error per DIRECTION.
+
+    `units` scopes the refusal: pass the unit names a caller actually cares
+    about and drift elsewhere in the tree is reported in the message but does not
+    refuse.  That is what keeps this usable on a repo several lanes land into --
+    a whole-tree verdict would be permanently red, and a permanently red guard is
+    a guard people route around (this project has the receipts).
+    """
+    stale = stale_units(db, scan["id"], project_dir=project_dir)
+    scoped = ({u: d for u, d in stale.items() if u in units}
+              if units is not None else stale)
+    if not scoped:
+        return
+    target_side, base_side = object_baseline.sides_touched(scoped)
+    scope_note = ("" if units is None else
+                  f"\n  (scoped to {len(units)} unit(s); {len(stale)} unit(s) in "
+                  f"the whole tree have moved)")
+    body = (f"  scan   : id={scan['id']} ruler={scan.get('ruler')} @ "
+            f"{scan.get('build_rev')} finished {scan.get('finished_at')}\n"
+            f"  tree   : {Path(project_dir).resolve()}\n"
+            f"  stale  : {len(scoped)} unit(s) -- "
+            f"{len(target_side)} on the TARGET side, {len(base_side)} on the BASE side"
+            f"{scope_note}\n"
+            + object_baseline.render_stale(scoped, limit=list_limit, indent="  ")
+            + f"\n`stale_units()` returns the full mapping; a caller that only "
+              f"cares about one unit can pass `units={{'<unit>'}}` and be answered "
+              f"about that unit alone.")
+    if target_side:
+        raise StaleTargetObjectsError(
+            "the TARGET objects this pattern scan measured are not the ones on "
+            "disk.\n" + body + "\n"
+            "The target side is `dtk xex split`'s output and its content is "
+            "decided by config/373307D9/symbols.txt -- an undeclared ninja "
+            "output that nothing stats. A finding recorded against a differently "
+            "named target object is not a weaker finding, it is a finding about "
+            "another object.\n"
+            "Re-derive: python3 scripts/analysis/pattern_census.py "
+            f"--ruler {scan.get('ruler') or DEFAULT_RULER} --apply",
+            scoped, scan["id"])
+    raise StaleBaseObjectsError(
+        "the BASE objects this pattern scan measured are not the ones on disk.\n"
+        + body + "\n"
+        "The base side is ordinary compiler output: any landed source commit "
+        "moves some of it. Measured on this repo -- scan 14 held 3 callee-class "
+        "rows against base objects that no longer existed, and scan 16, taken to "
+        "repair it, raced a landing merge (fixed 3, introduced 6). This is the "
+        "expected steady state of an active tree, which is why the answer is a "
+        "LIST OF UNITS and not a verdict.\n"
+        "Re-derive: python3 scripts/analysis/pattern_census.py "
+        f"--ruler {scan.get('ruler') or DEFAULT_RULER} --apply",
+        scoped, scan["id"])
+
+
 def ensure_current_scan(db: sqlite3.Connection, *, ruler: str = DEFAULT_RULER,
-                        repo_root: Path | str = REPO_ROOT) -> dict:
+                        repo_root: Path | str = REPO_ROOT,
+                        check_objects: bool = True,
+                        project_dir: Path | str | None = None,
+                        units: set[str] | None = None,
+                        list_limit: int = 20) -> dict:
     """Return the latest `ruler` scan, or raise `StalePatternScanError`.
 
-    Three refusals, each on a column ``pattern_scans`` already records:
+    Refusals, each on something ``pattern_scans`` (or, since v18,
+    ``pattern_scan_units``) actually records:
 
     * no scan at all for this ruler -- there is nothing to certify from;
     * ``tool_version`` != the installed ``objdiff-cli --version``;
     * ``tree_verified = 0`` -- the census did not assert a post-compile fixed
       point, so its pattern set was measured on an unsettled tree;
     * ``project_dir`` is not the checkout that owns this database -- an
-      `UnmooredPatternScanError`, see `check_scan_tree`.
+      `UnmooredPatternScanError`, see `check_scan_tree`;
+    * the OBJECTS have moved since the scan -- `StaleTargetObjectsError` or
+      `StaleBaseObjectsError`, one per direction, see `check_scan_objects`; a
+      scan with no recorded baseline at all is `UnfingerprintedPatternScanError`.
+
+    ``check_objects`` defaults to **True**: the first four checks are all about
+    the instrument and the bookkeeping, and a caller that wanted those was never
+    asking to be told nothing about the objects.  Pass ``check_objects=False``
+    only to do something STRICTER with the per-unit list -- `build_callee_gate`
+    does exactly that, blocking each stale unit's symbols individually instead
+    of refusing the whole population.  ``units`` scopes the refusal to the unit
+    names the caller cares about.
 
     Before any of those it establishes WHICH database it is holding, and raises
     `UnreadableDatabaseError` for a worktree-local `decomp.db`.  That check is by
@@ -480,6 +680,13 @@ def ensure_current_scan(db: sqlite3.Connection, *, ruler: str = DEFAULT_RULER,
             f"set was measured on an unsettled tree.  Re-derive it:\n"
             f"  python3 scripts/analysis/pattern_census.py --ruler {ruler} --apply")
     check_scan_tree(scan, path, ruler=ruler)
+    if check_objects:
+        # The tree the scan MEASURED is the tree that owns the database (the
+        # check above is total), so `project_dir` defaults to that rather than
+        # to `repo_root` -- which may be a worktree symlinking main's objects.
+        check_scan_objects(db, scan,
+                           project_dir=project_dir or owning_tree(path),
+                           units=units, list_limit=list_limit)
     return scan
 
 
@@ -579,6 +786,9 @@ class CalleeGate:
     cleared: dict[str, str] = field(default_factory=dict)
     evidence: dict[str, list[str]] = field(default_factory=dict)
     linker_map_path: str = ""
+    #: unit -> direction, for units whose objects have moved since the scan.
+    #: Every symbol in one of these units is blocked `stale_objects`.
+    stale_units: dict[str, str] = field(default_factory=dict)
 
     def blocks(self, symbol: str) -> bool:
         return symbol in self.blocked
@@ -601,13 +811,18 @@ class CalleeGate:
                 f"  population {len(self.blocked) + len(self.cleared)}  "
                 f"blocked {len(self.blocked)}  judged non-actionable {len(self.cleared)}")
         body = "".join(f"\n    {k:32} {v:4}" for k, v in sorted(c.items()))
+        if self.stale_units:
+            t, b = object_baseline.sides_touched(self.stale_units)
+            body += (f"\n  object baseline: {len(self.stale_units)} unit(s) moved "
+                     f"since the scan ({len(t)} target-side, {len(b)} base-side); "
+                     f"their symbols are blocked `stale_objects`")
         return head + body
 
 
 def _callee_rows(db: sqlite3.Connection, scan_id: int) -> dict[str, list[sqlite3.Row]]:
     db.row_factory = sqlite3.Row
     rows = db.execute(
-        "SELECT f.symbol AS symbol, p.pattern, p.fixability, p.details "
+        "SELECT f.symbol AS symbol, f.unit AS unit, p.pattern, p.fixability, p.details "
         "  FROM function_patterns p JOIN functions f ON f.id = p.function_id "
         " WHERE p.scan_id = ? AND p.pattern IN (%s)"
         % ",".join("?" * len(CALLEE_PATTERNS)),
@@ -646,12 +861,43 @@ def build_callee_gate(db: sqlite3.Connection, *, ruler: str = DEFAULT_RULER,
     Raises `StalePatternScanError` if that scan was not taken by the installed
     objdiff-cli, and `LinkerMapError` if the adjudicator cannot be loaded.  Both
     are refusals: the caller must surface them, never fall back to certifying.
+
+    THE OBJECT BASELINE IS HANDLED PER UNIT, NOT AS A REFUSAL.  This is the one
+    caller that passes `check_objects=False`, and it does so to be STRICTER, not
+    laxer: instead of refusing the whole population because some unit somewhere
+    was rebuilt, it blocks every symbol whose OWN unit has moved, with reason
+    `stale_objects`.  A finding measured against objects that no longer exist is
+    not evidence that a function is unfixable, and the auto-AT_LIMIT rule may not
+    issue a certificate on it -- but the hundreds of units that did not move are
+    still adjudicable, and wedging them would only produce a guard someone turns
+    off.  A scan carrying NO baseline at all still raises
+    (`UnfingerprintedPatternScanError`): nothing there is attributable.
     """
-    scan = ensure_current_scan(db, ruler=ruler, repo_root=repo_root)
+    scan = ensure_current_scan(db, ruler=ruler, repo_root=repo_root,
+                               check_objects=False)
     lmap = load_linker_map(project_dir or repo_root)
     gate = CalleeGate(scan=scan, linker_map_path=str(lmap.path))
+    # Raises UnfingerprintedPatternScanError on a pre-v18 scan -- deliberately
+    # NOT caught here.  See the class docstring: there is no honest backfill.
+    # The tree to fingerprint is the SCAN'S, never the caller's `project_dir`
+    # (which selects the linker map).  `check_scan_tree` has already proved the
+    # scan describes the checkout that owns this database, so this is also the
+    # only tree whose objects are comparable: MSVC writes the source path into
+    # `S_OBJNAME`, so two worktrees legitimately hash differently for identical
+    # sources (CLAUDE.md, `tree_sha256` is same-path-only).
+    gate.stale_units = stale_units(
+        db, scan["id"], project_dir=scan.get("project_dir") or repo_root)
 
     for symbol, rows in _callee_rows(db, scan["id"]).items():
+        unit = rows[0]["unit"]
+        if unit in gate.stale_units:
+            direction = gate.stale_units[unit]
+            gate.blocked[symbol] = "stale_objects"
+            gate.evidence[symbol] = [
+                f"unit {unit}: {direction}-side object(s) differ from the ones "
+                f"scan id={scan['id']} diffed; this finding is not about the "
+                f"objects on disk"]
+            continue
         actionable = [r for r in rows if (r["fixability"] or "") != UNVERIFIABLE]
         if not actionable:
             # objdiff 4.2.7 itself marked every finding on this function
