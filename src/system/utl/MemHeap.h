@@ -36,6 +36,11 @@ public:
     void LastFit(int, int, FreeBlockInfo &);
 
     const char *Name() const { return mName; }
+    // MemAlloc's temp-allocation search asserts on this accessor by name --
+    // the shipped assert string is literally "heap->AllowTemp()".
+    bool AllowTemp() const { return mAllowTemp; }
+    Strategy GetStrategy() const { return mStrategy; }
+    void SetStrategy(Strategy strategy) { mStrategy = strategy; }
     int SizeWords() const { return mSizeWords; }
     int *Start() const { return mStart; }
     int *End() const { return mStart + mSizeWords; }
