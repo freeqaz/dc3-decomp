@@ -364,13 +364,39 @@ void BinkMovieImpl::Draw() {
         TheNgRnd.Clear(1, Hmx::Color(0, 0, 0, 0));
     } else {
         unsigned int flags = mBink->OpenFlags;
-        // mInternalBufs->unk40->SetNormalMap()
+        // Bind this frame's four Bink planes onto the movie material.  The
+        // texture-set index is EndFrame's bare `unk40 >= TotalFrames` (no
+        // modulo); the frame index is the buffer Bink last decompressed into.
+        bool grayscale = flags & BINKGRAYSCALE;
+        bool alpha = flags & BINKALPHA;
+        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
+        int frame = mInternalBufs->mBuffers.FrameNum;
+        mInternalBufs->unk40->SetDiffuseTex(mInternalBufs->YTex[frame][texSet]);
+        mInternalBufs->unk40->SetSpecularMap(
+            !grayscale ? mInternalBufs->CrTex[frame][texSet] : nullptr
+        );
+        mInternalBufs->unk40->SetEmissiveMap(
+            !grayscale ? mInternalBufs->CbTex[frame][texSet] : nullptr
+        );
+        mInternalBufs->unk40->SetNormalMap(
+            alpha ? mInternalBufs->ATex[frame][texSet] : nullptr
+        );
         SetRect();
         TheNgRnd.DrawRect(
             unk30,
             mInternalBufs->unk40,
             kMovieShader,
+#ifdef HX_NATIVE
+            // The target passes a DEFAULT-constructed Hmx::Color here: it writes
+            // nothing at all into the temp at 0x70(r1), where the Clear() arm
+            // above really does emit four stfs for its Hmx::Color(0,0,0,0).
+            // Hmx::Color's default ctor is `Color() {}`, so the movie shader
+            // simply never reads the value.  Natively DrawRect2D DOES read it,
+            // so keep a defined colour on that side only.
             Hmx::Color(0, 0, 0, 0),
+#else
+            Hmx::Color(),
+#endif
             nullptr,
             nullptr
         );

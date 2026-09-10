@@ -144,6 +144,13 @@ public:
         mNormalMap = tex;
         mDirty |= 2;
     }
+    // Inlined at BinkMovieImpl::Draw's third texture bind, where the target
+    // stores into mEmissiveMap (mat+0xe4) and then ORs 2 into mDirty -- the
+    // same shape as SetDiffuseTex / SetNormalMap either side of it.
+    void SetEmissiveMap(RndTex *tex) {
+        mEmissiveMap = tex;
+        mDirty |= 2;
+    }
     void SetCull(Cull cull) {
         mCull = cull;
         mDirty |= 2;
