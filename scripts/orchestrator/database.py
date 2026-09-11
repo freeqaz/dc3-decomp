@@ -15,7 +15,13 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
+
+# `SCHEMA` below is the v1 BASE schema, and deliberately stays that way: a fresh
+# database is created from it and then walked up the migration ladder (see
+# `init_database`). Do NOT "helpfully" add a v-latest column to SCHEMA -- a
+# second description of the same shape is what produced the defect that fix
+# documented.
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -339,10 +345,41 @@ def init_database(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
     )
     if cursor.fetchone() is None:
-        # Fresh database - create schema
+        # Fresh database: create the v1 BASE schema, stamp it v1, and walk the
+        # SAME ladder every existing database walked.
+        #
+        # WHY NOT stamp SCHEMA_VERSION here (what this did until 2026-09-11).
+        # `SCHEMA` is the v1 shape. Stamping it 19 made the version column a
+        # lie that nothing could ever repair: `_run_migrations` only runs for
+        # `version < SCHEMA_VERSION`, so a brand-new decomp.db was permanently
+        # frozen missing every migration-created table and column. Measured on
+        # the code this replaces -- fresh vs ladder-built, same module:
+        #
+        #   missing tables/views : function_patterns, patch_queue,
+        #                          pattern_scan_examined, pattern_scan_units,
+        #                          pattern_scans, v_function_patterns,
+        #                          v_latest_pattern_scan      (7)
+        #   missing functions.*  : is_stub, verdict_reason, unicorn_verdict,
+        #                          pattern_flags_scan_id, ... (36 columns)
+        #
+        # so `query_functions(objdiff_pattern=...)` on a fresh DB died with
+        # "no such table: pattern_scans" and `ingest_report` wrote rows nothing
+        # else could query.
+        #
+        # WHY THE LADDER AND NOT A v20-SHAPED BASE CREATE. Two descriptions of
+        # one schema drift, and this file already demonstrates the cost: the
+        # base CREATE re-states file_pairs / merged_symbols / decompilations /
+        # xrefs, which migrations v3/v6/v7 also create -- harmless only because
+        # both spellings happen to still agree. The ladder is the single
+        # description that every *existing* database was actually built from,
+        # and every step of it is idempotent (CREATE ... IF NOT EXISTS, and
+        # ALTER TABLE guarded on "duplicate column"), which is exactly what
+        # running it over the base schema requires. Cost is ~20 no-op DDL
+        # statements once, at creation.
         conn.executescript(SCHEMA)
-        conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
+        conn.execute("INSERT INTO schema_version (version) VALUES (1)")
         conn.commit()
+        _run_migrations(conn, 1, SCHEMA_VERSION)
         print(f"Initialized database at {db_path}")
     else:
         # Check version for migrations
@@ -877,6 +914,66 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
             WHERE s.id = (SELECT MAX(s2.id) FROM pattern_scans s2
                           WHERE s2.ruler = s.ruler)
         """)
+
+    if from_version < 20 <= to_version:
+        # Migration v19 -> v20: adopt two columns the LIVE database has had for
+        # months and that NO migration and NO base CREATE ever created.
+        #
+        # `functions.has_linker_merged` and `functions.match_percent_normalized`
+        # exist in decomp.db, are read by orchestrator code, and came from
+        # outside this ladder:
+        #
+        #   has_linker_merged        -- created by the 2026-03 meta-strategy
+        #                               tooling, since deleted. database.py has
+        #                               only ever READ it (the oldest commit in
+        #                               this file, fd8ffa621, already selects it
+        #                               and never creates it). Also read by
+        #                               recon.py, unicorn/reclassify_logic.py,
+        #                               unicorn_runner/comparator.py, and
+        #                               written by backfill_reloc_patterns.py
+        #                               and batch_promote.py.
+        #   match_percent_normalized -- created by an ad-hoc ALTER inside
+        #                               scripts/sync_match_percent.py
+        #                               (`ensure_normalized_column`), which
+        #                               still runs and stays correct: this
+        #                               migration is guarded the same way, so
+        #                               whichever touches a database first, the
+        #                               other is a no-op.
+        #
+        # The concrete breakage, measured before this migration existed: the
+        # v17 view `v_function_patterns` SELECTs `f.match_percent_normalized`,
+        # and SQLite resolves a view's columns lazily -- so the view CREATED
+        # fine on a ladder-built database and every query against it failed
+        # with "no such column: f.match_percent_normalized". The view has been
+        # unusable on any database except the live one since v17 landed.
+        #
+        # SCOPE, stated rather than left to inference: a live-vs-ladder census
+        # finds 25 such orphan columns. Only these two are adopted. The other
+        # 23 are the archived meta-strategy experiment (`excluded`,
+        # `priority_score`, `ease_score`, `reachable_100`, `has_bool_mask`, ...)
+        # plus columns owned by scripts that already carry their own idempotent
+        # ALTER and their own writer (`floor_cert_*` in certify_floor.py,
+        # `unicorn_source_hash*` in unicorn/apply_refresh.py). This repo
+        # DROPPED two always-zero flags for exactly that reason (see
+        # `_DROPPED_DEAD_COLUMNS`); resurrecting a dead flag into the canonical
+        # ladder would re-make that mistake. `get_stats()` still cannot run on a
+        # fresh database because it sums `has_bool_mask` -- that is a real,
+        # reported, deliberately-unfixed gap, not an oversight here.
+        #
+        # On the live database both columns already exist, so both ALTERs hit
+        # the duplicate-column guard and this migration is a pure version bump.
+        print("  Migration v20: Adopting has_linker_merged + "
+              "match_percent_normalized into the ladder...")
+        new_columns = [
+            ("has_linker_merged", "BOOLEAN DEFAULT 0"),
+            ("match_percent_normalized", "REAL"),
+        ]
+        for col_name, col_def in new_columns:
+            try:
+                conn.execute(f"ALTER TABLE functions ADD COLUMN {col_name} {col_def}")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" not in str(e).lower():
+                    raise
 
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))
