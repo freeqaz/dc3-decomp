@@ -221,15 +221,12 @@ BEGIN_LOADS(RndLight)
     if (d.rev > 0xB) {
         bs >> mFalloffStart;
     }
-    if (d.rev > 4) {
-        if (d.rev < 5) {
-            bool tmp;
-            d >> tmp;
-            mAnimateColorFromPreset = tmp;
-            mAnimatePositionFromPreset = tmp;
-        }
-    }
-    if (d.rev > 5) {
+    if (d.rev > 4 && d.rev < 5) {
+        bool tmp;
+        d >> tmp;
+        mAnimateColorFromPreset = tmp;
+        mAnimatePositionFromPreset = tmp;
+    } else if (d.rev > 5) {
         d >> mAnimateColorFromPreset;
         d >> mAnimatePositionFromPreset;
     }
