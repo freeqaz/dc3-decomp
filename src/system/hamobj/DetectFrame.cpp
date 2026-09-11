@@ -93,9 +93,9 @@ float DetectFrame::LimbPSNR(const FilterVersion *filter_version, int i2) const {
     for (int i = 0; i < numNodes; i++) {
         ErrorNode *curErrorNode = filter_version->mErrorNodes[i];
         auto _tmp0 = curErrorNode->GetFeedbackLimbs();
-        if (i2 == -1
-            || _tmp0 & i2
-                && curErrorNode->Type() & typeMask) {
+        // Image: (i2 == -1 || limbs & i2) && (Type() & typeMask) -- the type
+        // mask is tested even when i2 == -1 (beq lands on the Type() load).
+        if ((i2 == -1 || _tmp0 & i2) && curErrorNode->Type() & typeMask) {
             const Vector3 &nodeWeight = mMoveFrame->NodeWeight(i, mMirror);
             float d = Dot(nodeWeight, mBestNodeErrors[i]);
             f12 += d * d;
@@ -104,7 +104,7 @@ float DetectFrame::LimbPSNR(const FilterVersion *filter_version, int i2) const {
     }
     if (f13 != 0) {
         float max_mse = 1;
-        float mse = Min(f12 / f13, max_mse);
+        float mse = Min(max_mse, f12 / f13);
         MILO_ASSERT(mse >= 0, 0x20);
         MILO_ASSERT(mse <= max_mse, 0x21);
         if (mse == 0) {
