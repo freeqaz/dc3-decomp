@@ -669,7 +669,10 @@ void LiveCameraInput::ClearSnapshots() {
             delete mat;
         }
     }
-    mSnapshots.erase(mSnapshots.begin(), mSnapshots.end());
+    // clear() -- the inlined erase(begin(), end()) reads both ends off the
+    // vector's own this (r31), where a spelled-out erase reloads end() via
+    // the outer this.
+    mSnapshots.clear();
     mNumSnapshots = 0;
     // Bind mSnapshotBatches to a reference so its address is materialized once,
     // matching the target's register selection for the erase() call.

@@ -291,8 +291,8 @@ PropKeys::ExceptionID PropKeys::PropExceptionID(Hmx::Object *o, DataArray *path)
 void FloatKeys::SetFrame(float frame, float f2, float f3) {
     if (mProp && mTarget && size()) {
         int idx;
+        float val;
         if (mPropExceptionID != kHandleInterp) {
-            float val;
             idx = FloatAt(frame, val);
             mTarget->SetProperty(mProp, val * f3);
         } else {
@@ -301,7 +301,7 @@ void FloatKeys::SetFrame(float frame, float f2, float f3) {
             float ref = 0;
             idx = AtFrame(frame, prev, next, ref);
             sInterpMessage.SetType(mInterpHandler);
-            sInterpMessage[0] = prev->value * f3;
+            sInterpMessage[0] = f3 * prev->value;
             sInterpMessage[1] = next->value * f3;
             sInterpMessage[2] = ref;
             sInterpMessage[3] = next->frame;

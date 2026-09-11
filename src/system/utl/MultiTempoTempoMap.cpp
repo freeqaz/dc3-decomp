@@ -106,12 +106,12 @@ const MultiTempoTempoMap::TempoInfoPoint *MultiTempoTempoMap::PointForTick(float
 
 const MultiTempoTempoMap::TempoInfoPoint *MultiTempoTempoMap::PointForTime(float time
 ) const {
-    TempoInfoPoint pt;
-    pt.mMs = time;
     MILO_ASSERT(mTempoPoints.size() >= 1, 0x121);
 
+    // upper_bound takes the parameter by reference: the image spills `time` to
+    // its own home slot (0x8c(r1)) and passes that; there is no local copy.
     const TempoInfoPoint *pt2 =
-        std::upper_bound(mTempoPoints.begin(), mTempoPoints.end(), pt.mMs, CompareTime);
+        std::upper_bound(mTempoPoints.begin(), mTempoPoints.end(), time, CompareTime);
     if (pt2 != mTempoPoints.begin()) {
         pt2--;
     }
