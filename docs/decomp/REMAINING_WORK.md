@@ -57,9 +57,10 @@ a full `ninja`**, and never conclude a fix regressed from one.
 | `has_prologue_mismatch` and friends | **Fixed 2026-08-19; refresh before use.** Four flags (`has_linker_merged`, `has_prologue_mismatch`, `has_scope_counter_mismatch`, `has_makestring_mismatch`) were identically 0 because `sync_objdiff` runs objdiff with `functionRelocDiffs=none`, masking the relocation diffs those detectors read. A reloc-visible pass sets them to 1,310 / 221 / 81 / 63. Run `python3 scripts/backfill_reloc_patterns.py --apply` after a build. `has_assert_revs` / `has_ltcg_pooling` were dropped (always 0, no writer, no detector). |
 | `reachable_100`, `primary_pattern`, `priority_score`, `ease_score`, `fan_in` | Products of a 2026-02 scoring experiment that was never re-run. Present, unmaintained. |
 
+| `is_stub` | **Refuted 2026-09-11. 482 of the 675 rows carrying it are not stubs.** Re-derive with `python3 scripts/analysis/stub_flag_audit.py`; do not read the column. |
+
 Columns that *are* reliable: `symbol`, `demangled`, `unit`, `size`, `excluded`,
-`is_stub`, `attempt_count`, `unicorn_verdict`, `unicorn_class`,
-`unicorn_confidence`.
+`attempt_count`, `unicorn_verdict`, `unicorn_class`, `unicorn_confidence`.
 
 **DB hygiene — specifically the 875 rotted COMPLETE certificates — is a lane
 already in flight (coordinator task #101). Do not repair the database from a
@@ -95,7 +96,29 @@ mcp__orchestrator__query_functions(status="workable", skip_boilerplate=True, lim
 
 ### 2. Stubs — bodies we never wrote
 
-494 functions, 117,920 bytes. `is_stub` is trustworthy.
+**`is_stub = 1` is not a stub list.** Re-derived 2026-09-11 over all 675 rows
+carrying the flag, against `report.json`, the COFF symbol tables of our own
+objects, `orig/373307D9/ham_xbox_r.map` and `config/373307D9/symbols.txt`:
+
+| class | rows | what it really is |
+|---|---:|---|
+| `NOT_A_STUB` | 324 | our objects define a body; 82 of them are non-excluded and below 100 %, i.e. **51,496 bytes of real work that read as "stub" and got skipped** |
+| `REAL_STUB` | 193 | target has a body, we emit none — but 183 are `excluded = 1` (Bink, XDK), leaving **10**, all SDK or compiler boilerplate |
+| `RETIRED_SPELLING` | 123 | absent from `report.json` entirely; the `/OPT:ICF` fold-survivor rename (`e5b1e3ce7`) retired the spelling and nothing has measured them since |
+| `FUNCLET_MISLABELLED` | 26 | `fn_<addr>` EH funclets; the map names `__unwind$…` at that address |
+| `UNNAMED_TARGET_SYMBOL` | 9 | `fn_<addr>` the map gives a real name — e.g. `fn_825CCF20` is `?DebugModal@@…`, which we do define |
+
+The writer defect is fixed (`sync_objdiff.py`, guards `stub_action`), but the
+column is only repaired by running the audit's `--apply` from the **main**
+checkout. Until then, and in general, **re-derive rather than reading it**:
+
+```bash
+python3 scripts/analysis/stub_flag_audit.py --list          # classify, read-only
+python3 scripts/analysis/stub_flag_audit.py --apply         # main checkout only
+```
+
+The queries below still work for *choosing* a unit, but treat every row they
+return as a claim to re-derive.
 
 ```sql
 -- by file, biggest first
