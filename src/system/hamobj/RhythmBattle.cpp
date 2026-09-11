@@ -951,7 +951,11 @@ void RhythmBattle::OnBeat() {
                 if (goofy) {
                     b36 = !b36;
                 }
-                mSwagJackState = b36 ? 5 : 6;
+                if (b36) {
+                    mSwagJackState = 5;
+                } else {
+                    mSwagJackState = 6;
+                }
                 int jacked = second->SwagJacked(focusPanel, (RhythmBattleJackState)mSwagJackState);
                 first->SwagJackedBonus(focusPanel, (RhythmBattleJackState)mSwagJackState, jacked);
                 i6b4 = (int)mSwagJackState;
@@ -1162,8 +1166,10 @@ void RhythmBattle::OnBeat() {
             static Symbol inzone_warning("inzone_warning");
             if ((mPlayerOne->ZoneValue() && !mPlayerOne->GetPrevInTheZone())
                 || (mPlayerTwo->ZoneValue() && !mPlayerTwo->GetPrevInTheZone())) {
-                bool b42 = false;
-                bool b43 = false;
+                // The target materialises the pair as one zero copied into the other
+                // (li r29, 0; mr r30, r29), i.e. a chained assignment.
+                bool b42, b43;
+                b42 = b43 = false;
                 if (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone()) {
                     if (!mPlayerOne->InTheZone() || !mPlayerTwo->InTheZone()) {
                         play_vo[0] = inzone_warning;
