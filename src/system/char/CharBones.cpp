@@ -74,23 +74,6 @@ void ShortQuat::Set(const Hmx::Quat &quat) {
     w = (short)floor(Clamp(-32767.0f, 32767.0f, quat.w * 32767.0f + 0.5f));
 }
 
-void ShortQuat::ToQuat(Hmx::Quat &quat) const {
-    quat.Set(
-        (float)(long long)x * 3.051851e-05f,
-        (float)(long long)y * 3.051851e-05f,
-        (float)(long long)z * 3.051851e-05f,
-        (float)(long long)w * 3.051851e-05f
-    );
-}
-
-void ByteQuat::ToQuat(Hmx::Quat &quat) const {
-    quat.Set(
-        (float)(long long)x * 0.0078740157f,
-        (float)(long long)y * 0.0078740157f,
-        (float)(long long)z * 0.0078740157f,
-        (float)(long long)w * 0.0078740157f
-    );
-}
 
 void ByteQuat::Set(const Hmx::Quat &quat) {
     x = (char)floor(Clamp(-127.0f, 127.0f, quat.x * 127.0f + 0.5f));

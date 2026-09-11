@@ -1212,7 +1212,7 @@ void RndMesh::OnSync(int flags) {
         std::vector<Face> faces;
         Vector3 v40(0, 0, 0);
         int i4 = 0;
-        do {
+        while (!mFaces.empty()) {
             int u5 = 4;
             float f68 = 0;
             std::vector<Face>::iterator faceIt = mFaces.begin();
@@ -1246,14 +1246,15 @@ void RndMesh::OnSync(int flags) {
                 i4 = 0;
             }
             for (int i = 0; i < 3; i++) {
-                if (!gPatchVerts.HasVert((*faceIt)[i])) {
-                    gPatchVerts.Add((*faceIt)[i], mVerts, v40);
+                unsigned short &vertIdx = (*faceIt)[i];
+                if (!gPatchVerts.HasVert(vertIdx)) {
+                    gPatchVerts.Add(vertIdx, mVerts, v40);
                 }
             }
             faces.push_back(*faceIt);
             mFaces.erase(faceIt);
             i4++;
-        } while (!mFaces.empty());
+        }
         mPatches.push_back(i4);
         mFaces.swap(faces);
     }

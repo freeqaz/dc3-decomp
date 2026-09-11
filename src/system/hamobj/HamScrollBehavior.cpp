@@ -150,7 +150,8 @@ void HamScrollBehavior::Update(float input) {
         }
         float dt = TheTaskMgr.DeltaUISeconds();
         mSettleTimer -= dt;
-        if (mSettleTimer <= 0.0f) {
+        bool settled = mSettleTimer <= 0.0f;
+        if (settled) {
             static Message scrollingSettledMsg("scrolling_settled");
             UIScreen *screen = TheUI->CurrentScreen();
             if (screen) {

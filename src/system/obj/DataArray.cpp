@@ -953,7 +953,9 @@ DataNode DataArray::Execute(bool fail) {
         break;
     }
     case kDataString: {
-        Hmx::Object *object = gDataDir->FindObject(node.UncheckedStr(), true, true);
+        // A kDataString node holds a DataNode* whose value is the string.
+        Hmx::Object *object =
+            gDataDir->FindObject(node.UncheckedVar()->UncheckedStr(), true, true);
         if (object) {
             return object->Handle(this, true);
         }
@@ -991,10 +993,12 @@ DataNode DataArray::Execute(bool fail) {
                     "%s not function or object (file %s, line %d)", str.c_str(), mFile, mLine
                 );
             } else {
+                // Node(0) first, then its evaluated value: the target stores
+                // str.c_str() in the first argument slot.
                 MILO_FAIL_DTA(
                     "%s = %s not function or object (file %s, line %d)",
-                    str2.c_str(),
                     str.c_str(),
+                    str2.c_str(),
                     mFile,
                     mLine
                 );

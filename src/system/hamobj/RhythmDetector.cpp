@@ -90,13 +90,11 @@ namespace {
                         }
 
                         // Fill raw with absolute joint velocities
-                        if (raw.size() != 0) {
-                            for (unsigned int f = 0; f < raw.size(); f++) {
-                                float val = frames[f].mJointVelocities[jointIdx][comp];
-                                float absVal = fabs(val);
-                                raw[f] = absVal;
-                                rawAbsSum += absVal;
-                            }
+                        for (unsigned int f = 0; f < raw.size(); f++) {
+                            float val = frames[f].mJointVelocities[jointIdx][comp];
+                            float absVal = fabs(val);
+                            raw[f] = absVal;
+                            rawAbsSum += absVal;
                         }
 
                         // Z-score first 6 entries using window [0, 10]
@@ -117,12 +115,12 @@ namespace {
                             int rawOffset = 6;
                             int remaining = midEnd - 6;
                             do {
-                                mean = Mean(raw, windowStart, windowStart + 10);
-                                float diff = raw[rawOffset] - mean;
-                                var = Variance(raw, mean, windowStart, windowStart + 10);
+                                float m = Mean(raw, windowStart, windowStart + 10);
+                                float diff = raw[rawOffset] - m;
+                                float v = Variance(raw, m, windowStart, windowStart + 10);
                                 remaining--;
                                 windowStart++;
-                                normalized[rawOffset] = diff / var;
+                                normalized[rawOffset] = diff / v;
                                 rawOffset++;
                             } while (remaining != 0);
                         }
