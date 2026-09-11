@@ -102,8 +102,7 @@ private:
     int mCaptureFrames; // 0x934 - frames left to render flashcard capture
     HamPanel *mBAMVisualizerPanel; // 0x938
     int mMoveNameIndices[4]; // 0x93c - indices into shuffled move names per slot
-    int mRetryCount0; // 0x94c - retry count for player 0
-    int mRetryCount1; // 0x950 - retry count for player 1
+    int mRetryCounts[2]; // 0x94c - retry count per player
     int mMaxRetries; // 0x954 - maximum allowed retries
     float mLoopStartBeat; // 0x958 - audio loop start (-1 = none)
     float mLoopEndBeat; // 0x95c - audio loop end (-1 = none)
