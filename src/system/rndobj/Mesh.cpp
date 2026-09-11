@@ -1112,9 +1112,8 @@ void RndMesh::CopyGeometry(const RndMesh *mesh, bool b2) {
 }
 
 void RndMesh::SetVolume(RndMesh::Volume vol) {
-    ObjOwnerPtr<RndMesh> &_ref0 = mGeomOwner;
-    if (_ref0 != this)
-        _ref0->SetVolume(vol);
+    if (mGeomOwner != this)
+        mGeomOwner->SetVolume(vol);
     else {
         mVolume = vol;
         RELEASE(mBSPTree);
@@ -1137,8 +1136,7 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                     plane.a = vb0.x;
                     plane.b = vb0.y;
                     plane.c = vb0.z;
-                    plane.d = -(vb0.x * planePoint.x + vb0.y * planePoint.y
-                                + vb0.z * planePoint.z);
+                    plane.d = -Dot(vb0, planePoint);
                     bspIt->left = 0;
                     if (i == 5) {
                         bspIt->right = 0;
