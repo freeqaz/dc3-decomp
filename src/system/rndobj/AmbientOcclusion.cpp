@@ -261,9 +261,9 @@ void RndAmbientOcclusion::BuildTrees(Quality quality) {
                         Multiply(mesh->Verts()[face.v2].pos, xfm, v1);
                         Multiply(mesh->Verts()[face.v3].pos, xfm, v2);
 
-                        float d01 = Distance(v1, v0);
-                        float d12 = Distance(v1, v2);
+                        float d01 = Distance(v0, v1);
                         float d20 = Distance(v0, v2);
+                        float d12 = Distance(v1, v2);
 
                         if ((d01 + d12 + d20) > 9.999999747378752e-05f && (d01 * d12 * d20) > 1.1920928955078125e-07f) {
                             box.GrowToContain(v0, false);
