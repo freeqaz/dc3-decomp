@@ -570,6 +570,103 @@ changes that on its own. **Adjudicate a `NEITHER_IN_MAP` / `BASE_NOT_IN_MAP` pai
 against `config/373307D9/symbols.txt`, not only against the linker map** — the map
 resolves neither name here, symbols.txt resolves 648 of the 727 pairs.
 
+### 4. …and the tool now files that shape as `ANCHOR_DISPLACEMENT`, not `IDENTITY` (2026-09-11)
+
+Section 3 was written as advice to a reader; the tool kept saying `IDENTITY`,
+and two more rows of exactly that shape were handed to a lane as real
+wrong-variable bugs the same day. Both were artifacts:
+
+* `?MemPushTemp@@YAXXZ` — target `lis/addi r11, ?gNumHeaps@@3HA; lbz r10, -0x13(r11)`.
+  `0x830E56EC − 0x13 = 0x830E56D9` = `gInitted`, internal linkage, present only
+  as `lbl_830E56D9` in `symbols.txt` and never in the map. Ours anchors on
+  `gInitted` directly. Control: `MemPushHeap` in the same object anchors the
+  *other* way round.
+* `?PreInitSystem@@…` / `?InitSystem@@…` — target anchors on `gUsingCD`
+  (`0x82F652E8`) and reads `gSystemConfig` at `-0x8(r30)`; we anchor on
+  `gSystemConfig`. The anchor choice survived reordering the declarations, reading
+  the global directly, and binding a reference to it — it follows no source lever.
+
+MSVC materialises **one** `lis/addi` anchor for a pair of same-section globals and
+reaches the neighbour by a compile-time displacement on the load/store. The
+relocation names only the anchor. A positional pair of two different names can
+therefore address the same byte, and a name-only comparison cannot see it.
+
+**Mechanism.** `reloc_name_gate.py --json-out` now records, per charged pair, the
+displacements the anchor register's consumers apply on each side
+(`target_disps` / `base_disps`; `anchor_displacements()` walks forward from the
+charged `lis`/`addi` row until a call, a branch, a reload of the register, or 16
+rows). `reloc_order_vs_identity.py` then, after the ORDER multiset test fails and
+with at least one **non-zero** displacement in play, resolves `anchor ± disp` in
+`config/373307D9/symbols.txt` (plus `ham_xbox_r.map` for named globals):
+
+* the two sides reach a **common address** → `ANCHOR_DISPLACEMENT`
+  (PreInitSystem: `gUsingCD − 8 == gSystemConfig + 0`);
+* one side's name is unresolvable (a static dtk could only call `lbl_<addr>`) and
+  the other side's displaced address lands **exactly on an `lbl_`** →
+  `ANCHOR_DISPLACEMENT` (MemPushTemp);
+* the displaced address resolves to a **named third symbol**, or to nothing, or
+  every displacement is zero, or there is no address index → stays `IDENTITY`.
+
+The verdict has its own column next to ORDER and IDENTITY; `--no-anchor` restores
+the pre-2026-09-11 reading; `--anchor-out` dumps the reclassified rows with the
+resolved address in each pair's `note`. The `--selftest` carries both fixtures
+above (expect `ANCHOR_DISPLACEMENT`, in both directions), a `bl` pair and a
+two-globals-at-`+0` pair (expect `IDENTITY`), a displacement onto a named third
+symbol and onto nothing (expect `IDENTITY`), and no-index / no-data vacuity
+controls; it exits non-zero on any failed expectation, and the four
+`ANCHOR_DISPLACEMENT` expectations were watched failing before the filter existed.
+
+**Sweep, this tree at `519f9fc82`, objdiff 4.2.8, one full `ninja`** (269 standing
+rows / 219,896 B, 571 charged pairs):
+
+| class | pairs | ORDER | ANCHOR_DISP | IDENTITY before → after |
+|---|---:|---:|---:|---:|
+| `named_symbol` | 47 | 11 | **6** | 36 → **30** |
+| every other class (13) | 524 | 69 | 0 | 455 → 455 |
+| TOTAL | 571 | 80 | 6 | 491 → 485 |
+
+Rows: 245 IDENTITY / 24 ORDER_ONLY before → **239 IDENTITY / 6 ANCHOR_DISPLACEMENT
+(1,624 B) / 24 ORDER_ONLY** after. The six reclassified rows are exactly the
+MemMgr/System family a lane had been handed: `PreInitSystem`, `InitSystem`
+(`gUsingCD[0]` vs `gSystemConfig[8]`, both reach `0x82F652E8`), `MemPushTemp`,
+`MemPopTemp`, `MemPopHeap` (`gNumHeaps − 0x13 = lbl_830E56D9`, ours `gInitted`
+unresolvable) and `MemFindAddrHeap` (`gHeaps[4, 660]` reaches `gNumHeaps`, the
+section-3 row). The same six come out whether the displacements are read from the
+gate's JSON or re-derived from the diff (the fallback path for an older
+`rows.json`).
+
+Two things the filter deliberately did **not** take, both live rows: `BlurShadowRT`
+(ours anchors the local static `kWeights` and reads `−4` — `kWeights - 1` pointer
+arithmetic; the target's `0x82001214` is a named string literal, so it is not the
+same byte) and `CharDebug::DisplayObject`, where our side's "name" is the literal
+`328` — **no relocation at all** on our instruction — and `target + 0x148` happens
+to be an `lbl_`. The first cut of the filter laundered that one; a missing
+relocation is the loudest form of the bug, and it is now guarded and sabotage-tested.
+
+**The 24 surviving `named_symbol` IDENTITY rows (26,656 B)**, which are what a lane
+should be looking at now — and nine of them are one shape:
+
+| B | function | pair (target vs ours) |
+|---:|---|---|
+| 5072 | `MoveDir::UpdateOverlay` | `?ClosestMoveFrame@MoveDir@@` vs `?CurrentMoveMode@@` — and the reverse (both directions charged = order, but the multisets differ elsewhere) |
+| 2228 | `Locale::Init` | `??$FastSort@$02@LocaleChunkSort@@` vs `?LocaleChunkSortFunc@@` |
+| 2160 | `ArcDetector::UpdateOverlay` | `MakeString<float>` vs `MakeString<float,float>` |
+| 1644 | `MakeBSPTree` | `_List_base<BSPFace>::clear` vs `27088` (no relocation on our side); `?gBSPDirTol@@3MA` vs `?gBSPMaxDepth@@3HA` |
+| 1608 | `rijndael_test` | `?Component@?1??GetSwizzleVectorSrc@@…` vs `?key192@?1??rijndael_test@@…` — the target symbol is 0x18 B, exactly `key192[24]`; almost certainly an rdata ICF fold the map cannot show (function-local statics are not in it) |
+| 1584 | `RndShaderProgram::Cache` | `?MakeString@@YAPBDPBD@Z` vs `MakeString<const char*, u64, const char*, const char*, const char*>` |
+| 1168 | `StartVoiceThreadEntry` | `?TheXboxSynth@@` vs `?gCommitTag@@`; `GetTickCount` vs `CriticalSection::Enter` |
+| 1160 | `fft_matrix_inverse_columnwise` | `__vmx@0000…` vs `__vmx_0000…` (×2) — a *spelling* of the VMX constant pool symbol, not a value |
+| 656 | `XboxEnumeration::Poll` | `MakeString<unsigned>` vs `MakeString<ulong,ulong,ulong>`; and vs `TextStream::operator<<` |
+| 648 | `CacheResource` | `?MovieExtension@@` vs `??1String@@` |
+| 644 | `CharDebug::DisplayObject` | `?mesh@?8??DisplayObject…` vs `328` (no relocation on our side) |
+| 588 | `FreestyleMoveRecorder::DrawDebug` | `lbl_82F0F2E0` vs `8`; `lbl_82F620A4` vs `-4` (no relocation on our side, twice) |
+| 176 / 80 | `XinputJoypadThreadStart` / `…Destruction` | `?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A` vs `sThreadData` — the target's static is in an anonymous namespace, ours is not; a one-line source fix |
+| 104 | `operator<<(BinStream&, vector<TransformCrowd>)` | `TransformCrowd::Save` vs `operator<<(…ObjRefConcrete<WorldCrowd>…)` |
+| 1524, 1388, 732, 704, 660, 592, 536, 508, 492 | `CharEyes::Load`, `CharIKHand::Load`, `HamNavList::PreLoad`, `SkeletonViz::PreLoad`, `RhythmBattlePlayer::Load`, `HamDirector::Load`, `RndSpline::Load`, `RndAmbientOcclusion::Load`, `CharIKFoot::Load` | `?TheDebug@@3VDebug@@A` vs `gRev` (`gAltRev` once) — **nine rows, one shape**: a hoist-order swap the multiset test cannot forgive because the target's copy of our file-static `gRev` is an unnamed `lbl_` (e.g. `lbl_820108F8`), so the two sides' symbol sets differ by a *name*, not a variable. The next noise class to close; not a wrong variable. |
+
+Reproduce: `python3 scripts/analysis/reloc_name_gate.py --project . --json-out rows.json --limit 0`
+then `python3 scripts/analysis/reloc_order_vs_identity.py --rows rows.json --project . --list-identity --anchor-out anchors.json`.
+
 ### Four experiments that made things WORSE — do not retry blind
 
 Every one of these "fixed" the charged constant and cost more in code shape than

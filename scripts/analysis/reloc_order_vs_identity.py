@@ -77,9 +77,14 @@ displacement in play, `anchor + displacement` is resolved in
 two sides reach a common address, or the resolvable side's displaced address
 lands exactly on an unnamed `lbl_` where the other side's name is
 unresolvable, the pair is ANCHOR_DISPLACEMENT.  A displacement resolving to a
-NAMED third symbol, or to nothing, stays IDENTITY.  Measured on this tree
-2026-09-11: 36 named_symbol IDENTITY pairs -> see the doc section for the
-before/after table.
+NAMED third symbol, or to nothing, stays IDENTITY; so does a pair whose "name"
+on one side is not a symbol at all (repr of an int: that instruction has NO
+relocation, the loudest form of the bug).  Measured on this tree 2026-09-11
+(269 standing rows, 571 pairs): named_symbol 47 pairs = 11 ORDER / 6
+ANCHOR_DISPLACEMENT / 30 IDENTITY (was 36); rows 239 IDENTITY / 6
+ANCHOR_DISPLACEMENT (1,624 B) / 24 ORDER_ONLY.  The six are exactly the
+MemMgr/System family; no other class moved.  Table and the surviving list:
+docs/decomp/patterns/relocation-names-are-unmetered.md section 4.
 
 WHAT IT IS NOT
 ==============
@@ -230,6 +235,13 @@ class AddressIndex:
         return sorted(self.by_addr.get(addr, []))
 
 
+_NOT_A_SYMBOL = re.compile(r"^(-?\d+|None|True|False)$")
+
+
+def _is_symbol_name(name) -> bool:
+    return isinstance(name, str) and bool(name) and not _NOT_A_SYMBOL.match(name)
+
+
 def anchor_displacement_note(p: dict, addr: AddressIndex | None) -> str | None:
     """Explain a pair as one anchor reaching the other side's global, or None.
 
@@ -256,6 +268,12 @@ def anchor_displacement_note(p: dict, addr: AddressIndex | None) -> str | None:
     """
     if addr is None:
         return None
+    # A pair whose "name" on one side is not a symbol at all (the gate stores
+    # repr() of a non-string typed_arg value, e.g. "328" or "None") means that
+    # side has NO relocation on that instruction.  That is the loudest form of
+    # the wrong-symbol bug, not an anchor choice: never reclassify it.
+    if not all(_is_symbol_name(p.get(k)) for k in ("target", "base")):
+        return None
     td, bd = p.get("target_disps"), p.get("base_disps")
     if td is None and bd is None:
         return None
@@ -272,19 +290,27 @@ def anchor_displacement_note(p: dict, addr: AddressIndex | None) -> str | None:
         a = min(common)
         return (f"both anchors reach 0x{a:08X} ({', '.join(addr.names_at(a)) or '?'}): "
                 f"target {p['target']}{td} / ours {p['base']}{bd}")
-    # One side unresolvable: the resolvable side's displaced address must land
-    # exactly on an lbl_ (a static the splitter could not name).
-    known, disps, other = ((reach_t, td, p["base"]) if at is not None
-                           else (reach_b, bd, p["target"]))
-    base_addr = at if at is not None else ab
-    for d in disps:
-        if d == 0:
-            continue
-        names = addr.names_at(base_addr + d)
-        if names and all(n.startswith("lbl_") for n in names):
-            return (f"displacement {d:+#x} off "
-                    f"{p['target'] if at is not None else p['base']} lands on "
-                    f"{'/'.join(names)}; {other} is unresolvable (internal linkage)")
+    # One side unresolvable (an internal-linkage static the splitter could only
+    # call lbl_).  If the two anchors reach one address, the unresolvable
+    # anchor sits at (reached address - its own displacement); that candidate
+    # must land EXACTLY on an lbl_ in symbols.txt.  Symmetric in which side
+    # carries the displacement: MemPushTemp is `gNumHeaps - 0x13 = lbl_` with
+    # the resolvable side displaced; the mirror is ours anchoring the static
+    # and reading the named global at +d, so the static is at (named - d).
+    if at is not None:
+        known, known_name, unk_disps, unk_name = reach_t, p["target"], bd, p["base"]
+    else:
+        known, known_name, unk_disps, unk_name = reach_b, p["base"], td, p["target"]
+    for r in sorted(known):
+        for d in (unk_disps or [0]):
+            cand = r - d
+            if cand == (at if at is not None else ab) and d == 0:
+                continue  # the resolvable anchor itself, which is named
+            names = addr.names_at(cand)
+            if names and all(n.startswith("lbl_") for n in names):
+                return (f"{unk_name} is unresolvable (internal linkage); "
+                        f"{known_name} reaches 0x{r:08X} and {unk_name}{unk_disps} "
+                        f"puts it at 0x{cand:08X} = {'/'.join(names)}")
     return None
 
 
@@ -426,6 +452,59 @@ def _selftest() -> int:
     v, d = adjudicate(row, b, t, addr)
     check("  ...symmetrically when OUR side carries the displacement",
           d[0][1] == "ANCHOR_DISPLACEMENT", d[0][1])
+
+    # The mirror of MemPushTemp: OURS anchors the unresolvable static and
+    # reads the named global at +0x13; the target anchors the named global.
+    # The static then sits at gNumHeaps - 0x13, which is lbl_830E56D9.
+    row = {"pairs": [{"target": "?gNumHeaps@@3HA", "base": "gInitted",
+                      "target_disps": [0], "base_disps": [0, 19]}]}
+    t = collections.Counter({"?gNumHeaps@@3HA": 2})
+    b = collections.Counter({"gInitted": 2})
+    v, d = adjudicate(row, t, b, addr)
+    check("mirror: unresolvable side carries the displacement, static lands on lbl_",
+          d[0][1] == "ANCHOR_DISPLACEMENT", d[0][1])
+    # ...but NOT when that candidate address holds a NAMED symbol.  Live row:
+    # ?BlurShadowRT@NgLight@@ -- ours anchors kWeights (function-local static,
+    # unresolvable) and reads -4 (`kWeights - 1` pointer arithmetic); the
+    # target anchors __real@3f800000 @ 0x82001210 at +0.  0x82001214 is a
+    # named string literal in the target, so kWeights is not there: IDENTITY.
+    addr5 = AddressIndex({"__real@3f800000": 0x82001210,
+                          "??_C@_0CP@BLHNOOJH@e?3?2lazer_build_gmc1@": 0x82001214})
+    row = {"pairs": [{"target": "__real@3f800000",
+                      "base": "?kWeights@?1??BlurShadowRT@NgLight@@MAAXXZ@4QBMB",
+                      "target_disps": [0], "base_disps": [-4]}]}
+    t = collections.Counter({"__real@3f800000": 2})
+    b = collections.Counter({"?kWeights@?1??BlurShadowRT@NgLight@@MAAXXZ@4QBMB": 2})
+    v, d = adjudicate(row, t, b, addr5)
+    check("BlurShadowRT shape (candidate address holds a NAMED literal) stays IDENTITY",
+          d[0][1] == "IDENTITY", d[0][1])
+
+    # One side has NO relocation: the gate stores repr() of the non-string
+    # typed_arg, so our "name" is "328".  Live row ?DisplayObject@CharDebug@@:
+    # target anchors ?mesh@?8??DisplayObject... @ 0x82F5E3A8 and reads +0x148;
+    # 0x82F5E4F0 is an lbl_ in symbols.txt, which is exactly how the first
+    # cut of this filter laundered the row.  A missing relocation is the
+    # loudest form of the bug and must stay IDENTITY whatever the displacement
+    # lands on.
+    addr6 = AddressIndex({"?mesh@?8??DisplayObject@CharDebug@@AAAXPAVObject@Hmx@@@Z@4PAVRndMesh@@A": 0x82F5E3A8,
+                          "lbl_82F5E4F0": 0x82F5E4F0})
+    row = {"pairs": [{"target": "?mesh@?8??DisplayObject@CharDebug@@AAAXPAVObject@Hmx@@@Z@4PAVRndMesh@@A",
+                      "base": "328", "target_disps": [328], "base_disps": [256, 272]}]}
+    t = collections.Counter({"?mesh@?8??DisplayObject@CharDebug@@AAAXPAVObject@Hmx@@@Z@4PAVRndMesh@@A": 2})
+    b = collections.Counter()
+    v, d = adjudicate(row, t, b, addr6)
+    check("one side has NO relocation (name is repr of an int) stays IDENTITY",
+          d[0][1] == "IDENTITY", d[0][1])
+    # The verbatim row above is also rejected by the candidate arithmetic
+    # (0x82F5E3A8+0x148-0x100 and -0x110 hold nothing), so it does not prove
+    # the guard is live.  This variant DOES land the candidate on the lbl_
+    # (ours consumed at +0): only the no-relocation guard keeps it IDENTITY.
+    # Sabotage `_is_symbol_name` to always-True and this line must FAIL.
+    row = {"pairs": [{"target": "?mesh@?8??DisplayObject@CharDebug@@AAAXPAVObject@Hmx@@@Z@4PAVRndMesh@@A",
+                      "base": "328", "target_disps": [328], "base_disps": [0]}]}
+    v, d = adjudicate(row, t, b, addr6)
+    check("  ...even when the displacement lands exactly on an lbl_ (guard is live)",
+          d[0][1] == "IDENTITY", d[0][1])
 
     # A genuine identity pair must survive the filter.  Two shapes: a `bl`
     # pair has no anchor at all, and a data pair whose anchors are consumed
