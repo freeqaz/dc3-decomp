@@ -650,14 +650,13 @@ void DirLoader::SaveObjects(BinStream &bs, ObjectDir *dir) {
     }
     if (!bs.Cached()) {
         dir->PostSave(bs);
-        for (std::list<Hmx::Object *>::const_iterator it = objects.begin();
-             it != objects.end();
+        for (std::list<Hmx::Object *>::iterator it = objects.begin(); it != objects.end();
              it++) {
             (*it)->PostSave(bs);
         }
     }
     if (parentDir != dir) {
-        dir->SetName(name, dir);
+        dir->SetName(name, parentDir);
     }
     if (sTopSaveDir == dir) {
         sTopSaveDir = nullptr;
