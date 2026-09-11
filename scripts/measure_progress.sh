@@ -411,16 +411,60 @@ else
     }
     trap cleanup EXIT
 
+    # --- The baseline worktree must own its own scripts/ ---------------------
+    #
+    # This script used to REPLACE the baseline worktree's scripts/ with a
+    # symlink to the main checkout's, and restore it after every reset. Two
+    # things were wrong with that, found 2026-09-11:
+    #
+    #  1. Every guard and patcher the baseline build runs is invoked by ninja
+    #     as `python3 scripts/<name>.py` with cwd set to this worktree. They
+    #     derived their project root from `Path(__file__).resolve()`, which
+    #     FOLLOWS the symlink -- so they acted on the MAIN checkout. Measured
+    #     in a baseline-shaped tree holding one object and its own matching
+    #     manifest: `verify_objs_patched.py --verify-manifest` exited 1 quoting
+    #     main's 990-object manifest and 817 drifted objects, and
+    #     `verify_split_current.py --check` said "split current" for a tree
+    #     that had never been split. The patcher edges run with `--apply`, so
+    #     the baseline build was also a WRITER into main's build directory.
+    #     (scripts/project_root.py now fixes the root resolution itself; this
+    #     is the other half, and either alone would have been enough.)
+    #  2. main's scripts + a baseline commit's sources is a tree that no commit
+    #     reproduces. The dtk/objdiff forcing below exists because those are
+    #     external, unversioned tools; the in-repo patchers are versioned, and
+    #     a patcher change between the baseline and now is a real part of the
+    #     delta being measured, not a tool skew to be normalised away.
+    #
+    # So: if a previous run (or an older version of this script) left a
+    # symlink here, drop it BEFORE the reset -- `git reset --hard` cannot check
+    # files out through a symlinked directory.
+    if [[ -L "${WORKTREE}/scripts" ]]; then
+        echo "Replacing legacy scripts/ symlink with this worktree's own checkout..."
+        rm -f "${WORKTREE}/scripts"
+    fi
+
     # --- Reset worktree to baseline commit ---
     echo "Resetting worktree to baseline ${BASELINE_SHORT}..."
     git -C "${WORKTREE}" reset --hard --quiet "${BASELINE_COMMIT}"
 
-    # Clean untracked source files but preserve build artifacts and symlinks
+    # The reset restores scripts/ from the baseline commit. Insist on it: a
+    # build whose guards are missing is a build whose guards do not run.
+    if [[ ! -d "${WORKTREE}/scripts" || -L "${WORKTREE}/scripts" ]]; then
+        echo "Error: ${WORKTREE}/scripts is not a real directory after reset." >&2
+        echo "       The baseline build's guards and patchers would act on" >&2
+        echo "       whatever tree that path resolves to. Refusing." >&2
+        exit 1
+    fi
+
+    # Clean untracked source files but preserve build artifacts and symlinks.
+    # scripts/ is deliberately NOT excluded any more: it is an ordinary tracked
+    # directory here now, and leaving untracked leftovers (a newer commit's
+    # helper module, a stale __pycache__) inside it is how a baseline build
+    # ends up running code from no commit at all.
     git -C "${WORKTREE}" clean -fd \
         --exclude=build/ \
         --exclude=bin/ \
         --exclude=orig \
-        --exclude=scripts \
         --exclude=compile_commands.json \
         --exclude=decomp.db \
         --exclude=objdiff.json \
@@ -432,13 +476,6 @@ else
         rm -rf "${WORKTREE}/orig"
         ln -sf "${MAIN_REPO}/orig" "${WORKTREE}/orig"
         echo "Restored orig/ symlink"
-    fi
-
-    # --- Ensure scripts symlink ---
-    if [[ ! -L "${WORKTREE}/scripts" || "$(readlink "${WORKTREE}/scripts")" != "${MAIN_REPO}/scripts" ]]; then
-        rm -rf "${WORKTREE}/scripts"
-        ln -sf "${MAIN_REPO}/scripts" "${WORKTREE}/scripts"
-        echo "Restored scripts/ symlink"
     fi
 
     # --- Ensure build tools and compilers are available (avoid downloads) ---

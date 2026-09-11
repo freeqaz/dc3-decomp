@@ -104,12 +104,22 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from project_root import project_root  # noqa: E402
+
+#: Default tree AND the place the two sibling guards are loaded from.  Derived
+#: from the invocation, not `Path(__file__).resolve()` -- see
+#: scripts/project_root.py.  (The guard CALLS below always pass the project dir
+#: explicitly, so this file was never the one that measured the wrong tree; it
+#: matters for `--project-dir`'s default and for loading a worktree's own copy
+#: of the guards when it has one.)
+REPO_ROOT = project_root(__file__)
 VERSION = "373307D9"
 REPORT_REL = f"build/{VERSION}/report.json"
 

@@ -72,8 +72,14 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPTS_DIR.parent
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from project_root import project_root  # noqa: E402
+
+# Both derived from the INVOCATION path, not the real path: with a symlinked
+# `scripts/` the old spelling loaded the patcher modules from -- and defaulted
+# --obj-dir/--src-dir into -- the other checkout.  See scripts/project_root.py.
+SCRIPTS_DIR = Path(os.path.abspath(__file__)).parent
+PROJECT_ROOT = project_root(__file__)
 BUILD_ID = os.environ.get("DC3_VERSION", "373307D9")
 
 #: In configure.py's order.  Kept in step with verify_objs_patched.py's

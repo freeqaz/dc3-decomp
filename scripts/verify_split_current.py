@@ -74,7 +74,14 @@ import sys
 import time
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from project_root import project_root  # noqa: E402
+
+#: The tree this invocation is ABOUT.  Never `Path(__file__).resolve()`: with a
+#: symlinked `scripts/` that reads another checkout's split stamp, and this
+#: guard then reported "split current" for a tree that had never been split.
+#: See scripts/project_root.py.
+REPO_ROOT = project_root(__file__)
 VERSION = "373307D9"
 
 #: The files whose CONTENT decides what dtk writes into build/<v>/obj/**.obj.

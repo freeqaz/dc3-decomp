@@ -26,7 +26,11 @@ import struct
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from project_root import project_root  # noqa: E402
+
+# The tree this invocation names; see scripts/project_root.py.
+PROJECT_ROOT = project_root(__file__)
 BUILD_DIR = PROJECT_ROOT / "build" / "373307D9"
 SPLIT_OBJ_DIR = BUILD_DIR / "obj"
 DATA_STUB_DIR = BUILD_DIR / "data"
