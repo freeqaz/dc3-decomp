@@ -379,14 +379,15 @@ void UILabel::PreLoad(BinStream &bs) {
         }
         if (d.rev < 4) {
             Transform &xfm = DirtyLocalXfm();
-            if (mAlignment & 1) {
+            int align = mAlignment;
+            if (align & 1) {
                 xfm.v.x -= mWidth / 2.0f;
-            } else if (mAlignment & 4) {
+            } else if (align & 4) {
                 xfm.v.x += mWidth / 2.0f;
             }
-            if (mAlignment & 0x10) {
+            if (align & 0x10) {
                 xfm.v.z += mHeight / 2.0f;
-            } else if (mAlignment & 0x40) {
+            } else if (align & 0x40) {
                 xfm.v.z -= mHeight / 2.0f;
             }
         }
