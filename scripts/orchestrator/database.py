@@ -1321,6 +1321,72 @@ _EXCLUDE_FN = like_prefix_clause("symbol", "fn_")
 _EXCLUDE_STLPMTX = "demangled NOT LIKE '%stlpmtx\\_std::%' ESCAPE '\\'"
 
 
+#: The callee-NAME patterns.  Each of these is a finding of the shape "the
+#: target calls X here and we call Y", which objdiff can only make about a
+#: symbol PAIR -- and when the enclosing symbol has no name of its own
+#: (``fn_<addr>``, an MSVC EH funclet), objdiff pairs it by MASKED BYTE
+#: SIGNATURE.  Byte-identical funclets pair arbitrarily, so the "wrong callee"
+#: is then a statement about objdiff's guess, not about our source.  objdiff
+#: declares that itself, per function, as ``UNVERIFIABLE_PAIRING``.
+#:
+#: Measured on scan 18 (name_check, objdiff 4.2.8, whole binary): **56 of 62**
+#: WRONG_CALLEE rows also carried UNVERIFIABLE_PAIRING.  A worklist that does
+#: not subtract them is ~90% rows a lane cannot adjudicate.
+PAIRING_SENSITIVE_PATTERNS = frozenset({
+    "WRONG_CALLEE",
+    "TEMPLATE_INSTANTIATION_MISMATCH",
+    "MAKESTRING_TEMPLATE_MISMATCH",
+})
+
+#: The pattern that says "objdiff guessed this symbol pair".
+UNVERIFIABLE_PAIRING = "UNVERIFIABLE_PAIRING"
+
+
+class FunctionQueryResult(list):
+    """The rows, plus what was subtracted to produce them.
+
+    A plain ``list`` in every respect a caller already relies on (``len``,
+    indexing, iteration, ``==`` against a list).  The extra attributes exist so
+    that the *hidden* set can never read as absence: a query that silently drops
+    56 of 62 rows and returns 6 is indistinguishable, at the call site, from a
+    class that only ever had 6 members.
+
+    Attributes:
+        unverifiable_hidden:  how many rows the pairing filter removed.  This is
+            the true population under the SAME other filters, not a page of it,
+            so it is comparable to ``len(self)``.
+        unverifiable_pattern: the pattern that was asked for, for the message.
+        unverifiable_note:    the rendered line, or ``""`` when nothing was
+            hidden and there is nothing to say.  Also carries the *vocabulary*
+            warning: a scan taken by objdiff < 4.2.7 has no UNVERIFIABLE_PAIRING
+            in its vocabulary at all, so subtracting it removes nothing -- which
+            must not be reported as "no funclet rows here".
+    """
+
+    unverifiable_hidden: int = 0
+    unverifiable_pattern: str | None = None
+    unverifiable_note: str = ""
+
+
+def _pairing_vocabulary_missing(conn: sqlite3.Connection, scan_id: int) -> bool:
+    """True when this scan's detector vocabulary predates UNVERIFIABLE_PAIRING.
+
+    ``pattern_scans.patterns_checked`` is the JSON list of detectors the binary
+    that took the scan actually speaks.  objdiff 4.2.6 had none of the pairing
+    classes, so an exclusion against a 4.2.6 scan is a silent no-op.  Say so
+    rather than reporting a clean zero.
+    """
+    row = conn.execute("SELECT patterns_checked FROM pattern_scans WHERE id = ?",
+                       (scan_id,)).fetchone()
+    if row is None or not row[0]:
+        return False                       # unknown vocabulary: do not claim
+    try:
+        checked = json.loads(row[0])
+    except (ValueError, TypeError):
+        return False
+    return isinstance(checked, list) and UNVERIFIABLE_PAIRING not in checked
+
+
 def query_functions(
     pattern: str | list[str] = "*",
     min_percent: float = 0,
@@ -1342,7 +1408,8 @@ def query_functions(
     objdiff_pattern: str | None = None,
     pattern_ruler: str = "name_check",
     stale_units: str = "flag",
-) -> list[dict[str, Any]]:
+    include_unverifiable: bool = False,
+) -> "FunctionQueryResult":
     """
     Query multiple functions matching criteria.
 
@@ -1403,7 +1470,27 @@ def query_functions(
                             exactly like "this class is exhausted", which is the
                             failure mode this whole subsystem exists to prevent.
 
-    Returns list of function dicts.
+        include_unverifiable: Only consulted for the callee-NAME patterns
+                            (`PAIRING_SENSITIVE_PATTERNS`). False (the default)
+                            EXCLUDES rows whose same-scan pattern set also
+                            contains `UNVERIFIABLE_PAIRING` -- objdiff's own
+                            declaration that the enclosing symbol pair was
+                            guessed by masked byte signature, which is what an
+                            unnamed `fn_<addr>` EH funclet always is. On such a
+                            row the differing `bl` is evidence about objdiff's
+                            pairing, not about our source: 56 of scan 18's 62
+                            WRONG_CALLEE rows are of that shape. True returns
+                            them. Either way `FunctionQueryResult
+                            .unverifiable_hidden` / `.unverifiable_note` carry
+                            the count, so the subtraction is never silent.
+
+                            Unverifiable is not uninformative -- those rows still
+                            answer "does our tree emit that callee ANYWHERE?".
+                            That is `scripts/analysis/callee_emitted_anywhere.py`,
+                            not this filter.
+
+    Returns a `FunctionQueryResult` (a list of function dicts, plus the
+    hidden-row accounting).
 
     Raises:
         ValueError: `pattern_ruler='none'` with an `objdiff_pattern` set, or a
@@ -1500,6 +1587,38 @@ def query_functions(
     if max_attempts is not None:
         query += f" AND (attempt_count IS NULL OR attempt_count < {max_attempts})"
 
+    # Subtract the rows objdiff itself declares unverifiable.
+    #
+    # This runs LAST among the WHERE clauses on purpose: the hidden COUNT has to
+    # be taken under every other filter the caller asked for, or it is not
+    # comparable to len(rows) and the note becomes its own small lie. Composing
+    # the finished WHERE two ways -- NOT EXISTS for the answer, EXISTS for the
+    # count -- is what makes the two numbers a partition of one population.
+    hidden_count = 0
+    vocab_missing = False
+    if objdiff_pattern and objdiff_pattern in PAIRING_SENSITIVE_PATTERNS:
+        vocab_missing = _pairing_vocabulary_missing(conn, pattern_scan_id)
+        pairing = (" {op} (SELECT 1 FROM function_patterns up "
+                   "WHERE up.scan_id = ? AND up.function_id = functions.id "
+                   "AND up.pattern = '" + UNVERIFIABLE_PAIRING + "')")
+        if vocab_missing:
+            # The instrument that took this scan could not fire the detector, so
+            # whatever the table does or does not hold is not a measurement of
+            # the pairing class. Subtracting on it would manufacture a net set
+            # out of an instrument's blind spot. Serve the gross set and SAY so.
+            pass
+        else:
+            # Counted whether or not it is subtracted: with the opt-in the note
+            # says how many of the rows SHOWN are pairing guesses, which is the
+            # same fact from the other side.
+            hidden_count = conn.execute(
+                "SELECT COUNT(*) FROM (" + query
+                + pairing.format(op="AND EXISTS") + ")",
+                params + [pattern_scan_id]).fetchone()[0]
+            if not include_unverifiable:
+                query += pairing.format(op="AND NOT EXISTS")
+                params.append(pattern_scan_id)
+
     query += """
         ORDER BY
             CASE WHEN current_percent IS NULL THEN 1 ELSE 0 END,
@@ -1509,11 +1628,44 @@ def query_functions(
     params.append(limit)
 
     rows = conn.execute(query, params).fetchall()
-    out = [dict(row) for row in rows]
+    out = FunctionQueryResult(dict(row) for row in rows)
     if objdiff_pattern and stale_units != "ignore":
-        out = _attach_unit_currency(conn, pattern_scan_id, out,
-                                    drop_stale=(stale_units == "exclude"))
+        out = FunctionQueryResult(
+            _attach_unit_currency(conn, pattern_scan_id, list(out),
+                                  drop_stale=(stale_units == "exclude")))
+    out.unverifiable_pattern = objdiff_pattern
+    out.unverifiable_hidden = hidden_count
+    out.unverifiable_note = _render_unverifiable_note(
+        objdiff_pattern, hidden_count, include_unverifiable, vocab_missing)
     return out
+
+
+def _render_unverifiable_note(pattern: str | None, hidden: int,
+                              included: bool, vocab_missing: bool) -> str:
+    """The one line that keeps the subtraction from reading as absence."""
+    if pattern is None or pattern not in PAIRING_SENSITIVE_PATTERNS:
+        return ""
+    if vocab_missing:
+        return (f"Note: this scan's detector vocabulary has no "
+                f"{UNVERIFIABLE_PAIRING} (objdiff < 4.2.7), so the "
+                f"byte-signature-paired funclet rows CANNOT be subtracted here "
+                f"and are still in this result. Re-derive with "
+                f"scripts/analysis/pattern_census.py --ruler name_check --apply.")
+    if hidden == 0:
+        return ""
+    if included:
+        return (f"Note: {hidden} of these rows are shown only because "
+                f"include_unverifiable was set: enclosing symbol is a "
+                f"byte-signature-paired funclet ({UNVERIFIABLE_PAIRING} in the "
+                f"same scan), so the differing callee is objdiff's pairing "
+                f"guess, not evidence about our source.")
+    return (f"Note: {hidden} rows hidden: enclosing symbol is a "
+            f"byte-signature-paired funclet ({UNVERIFIABLE_PAIRING} in the same "
+            f"scan), so the 'wrong callee' is objdiff's arbitrary pick among "
+            f"byte-identical funclets and cannot be adjudicated as written. "
+            f"Pass include_unverifiable=true to see them; they DO answer 'does "
+            f"our tree emit that callee anywhere?' -- "
+            f"scripts/analysis/callee_emitted_anywhere.py.")
 
 
 def _attach_unit_currency(conn: sqlite3.Connection, scan_id: int,

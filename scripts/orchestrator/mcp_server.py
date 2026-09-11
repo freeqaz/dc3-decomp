@@ -1213,6 +1213,25 @@ class DecompMCPServer:
                                 ),
                                 "enum": ["flag", "exclude", "ignore"],
                             },
+                            "include_unverifiable": {
+                                "type": "boolean",
+                                "description": (
+                                    "Only consulted for the callee-NAME patterns "
+                                    "('WRONG_CALLEE', 'TEMPLATE_INSTANTIATION_MISMATCH', "
+                                    "'MAKESTRING_TEMPLATE_MISMATCH'). Default false EXCLUDES rows "
+                                    "that also carry 'UNVERIFIABLE_PAIRING' in the same scan -- "
+                                    "objdiff's own declaration that it paired the enclosing symbols "
+                                    "by MASKED BYTE SIGNATURE, which is what an unnamed fn_<addr> EH "
+                                    "funclet always is. Byte-identical funclets pair arbitrarily, so "
+                                    "the 'wrong callee' there is objdiff's pick, not a claim about "
+                                    "our source: 56 of scan 18's 62 WRONG_CALLEE rows. The hidden "
+                                    "count is ALWAYS rendered, so the subtraction never reads as an "
+                                    "exhausted class. true returns them -- they still answer the one "
+                                    "falsifiable question, 'does our tree emit that callee anywhere?' "
+                                    "(scripts/analysis/callee_emitted_anywhere.py), which flagged 7 "
+                                    "real source defects out of 58 with 0 false positives."
+                                ),
+                            },
                         },
                     },
                 ),
@@ -1677,6 +1696,13 @@ class DecompMCPServer:
         objdiff_pattern = args.get("objdiff_pattern")
         pattern_ruler = args.get("pattern_ruler", "name_check")
         stale_units = args.get("stale_units", "flag")
+        # Net-of-pairing by default for the callee-name classes. See
+        # database.PAIRING_SENSITIVE_PATTERNS: the gross set is ~90% rows whose
+        # enclosing symbol objdiff paired by byte signature, which no lane can
+        # adjudicate. The count of what was subtracted is rendered below --
+        # a silent subtraction would be the same "reads as absence" defect the
+        # rest of this handler exists to prevent.
+        include_unverifiable = args.get("include_unverifiable", False)
 
         # Map status filter to database query params
         if status == "all":
@@ -1714,7 +1740,13 @@ class DecompMCPServer:
             objdiff_pattern=objdiff_pattern,
             pattern_ruler=pattern_ruler,
             stale_units=stale_units,
+            include_unverifiable=include_unverifiable,
         )
+        # The pairing accounting travels ON the result (FunctionQueryResult is a
+        # list subclass), so it survives the `if not results` path below -- which
+        # is precisely the path where "N rows hidden" matters most: an empty
+        # answer with 56 subtracted rows behind it is not an empty class.
+        pairing_note = getattr(results, "unverifiable_note", "")
         # NOTE: `database.query_functions` RAISES ValueError for
         # pattern_ruler='none' and for a pattern whose ruler has no recorded
         # scan.  That exception is deliberately NOT caught: the mcp lowlevel
@@ -1764,6 +1796,8 @@ class DecompMCPServer:
                     msg += (" Rows whose unit's objects moved since that scan "
                             "were DROPPED -- re-run with stale_units='flag' "
                             "before reading this as an exhausted class.")
+            if pairing_note:
+                msg += "\n" + pairing_note
             if hidden_note:
                 msg += hidden_note
             return [TextContent(type="text", text=msg)]
@@ -1773,7 +1807,10 @@ class DecompMCPServer:
         output = f"Found {len(results)} functions"
         if len(results) > max_display:
             output += f" (showing first {max_display})"
-        output += ":\n\n"
+        output += ":\n"
+        if pairing_note:
+            output += f"{pairing_note}\n"
+        output += "\n"
         for func in results[:max_display]:
             pct = func.get("current_percent")
             pct_str = format_match_percent(pct)
