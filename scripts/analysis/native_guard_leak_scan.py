@@ -95,6 +95,7 @@ A checker that has never been shown to fail is not evidence.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -102,6 +103,20 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict
+from pathlib import Path
+
+
+def _load_freshness():
+    """scripts/report_freshness.py, loaded by path (scripts/ is not a package)."""
+    path = Path(__file__).resolve().parent.parent / "report_freshness.py"
+    spec = importlib.util.spec_from_file_location("_report_freshness", path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_freshness = _load_freshness()
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -913,20 +928,22 @@ def provenance_banner(repo, cov):
 
 
 def ninja_state(repo):
-    """'clean' | 'dirty' | 'unknown' for build/373307D9/report.json."""
+    """'clean' | 'dirty' | 'unknown' for build/373307D9/report.json.
+
+    This used to be `ninja -n <report> | grep "no work to do"`, which has read
+    'dirty' in every tree since 2026-08-21: report.json carries `always`-dirty
+    guard implicits whose `restat` can only be applied by a real build, never
+    by a dry run.  The banner therefore said 'dirty' on freshly built trees.
+    scripts/report_freshness.py classifies the dry run's root causes instead.
+    """
     try:
-        out = subprocess.run(
-            ["ninja", "-n", "build/373307D9/report.json"],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-    except (OSError, subprocess.SubprocessError):
+        return {
+            _freshness.CURRENT: "clean",
+            _freshness.STALE: "dirty",
+            _freshness.CANNOT_VERIFY: "unknown",
+        }[_freshness.check(repo).status]
+    except (OSError, subprocess.SubprocessError, KeyError, ValueError):
         return "unknown"
-    if out.returncode != 0:
-        return "unknown"
-    return "clean" if "no work to do" in out.stdout else "dirty"
 
 
 def main():
