@@ -178,3 +178,47 @@ local before the rev<4 `xfm` stores then took it to **99.8** (`a4b17abaa`).
 The 70 AT_LIMIT certificates typed `artifact:stack_layout` should be re-read against this: a frame
 delta that is a multiple of a local's size, with the local handed only to out-of-line callees, is
 now a known source lever, not a floor.
+
+## Temporaries: highest free slot, full-expression lifetime (w3-s2, 2026-09-11)
+
+The rule above is about *named locals*. The **compiler temporaries** that inline
+`operator<<`/`operator>>` create (the by-value `rhs` copy, the `unsigned char uc` of the bool
+overload, a `Symbol`/`String` built for an argument) follow a second rule that is fully
+determined by the target's store sequence, so it can be *decoded* rather than guessed:
+
+1. a temp takes the **highest currently-free slot** of its size class (bytes and words are
+   separate classes); a new slot is opened above only when none is free;
+2. **every temp of one full-expression lives to its end**, so a chain `bs << a << b << c`
+   holds three slots at once while three single statements all reuse the top one;
+3. a temp's slot is freed at the end of its statement, so the next single statement lands
+   on the highest of the freed ones.
+
+Read the target's `stw/stfs/stb ... (r1)` sequence and the chain structure falls out. Four
+crossings came from exactly this (all `run_objdiff` 100.0, every row equal):
+
+| function | target sequence (temp slots) | decoded source |
+|---|---|---|
+| `SampleData::Save` | `54 54 \| 54 58 5c 60 \| 50 \| 60` | `bs << mFormat << mNumSamples << mSampleRate << mSizeBytes;` (a 3-chain reads `54 58 5c`, -4 everywhere) |
+| `RndPostProc::Save` | `... 58 54 \| 58 58 58 \| 58 54 5c \| 5c ... 5c 58 \| 5c ...` | four chains that were single statements (`mTrailThreshold << mTrailDuration`, the three `mKaleidoscope*`, `mHallOfTimeRate << mHallOfTimeColor << mHallOfTimeMix`, `mBloomStreakAttenuation << mBloomStreakAngle`) |
+| `UIListDir::Save` | `54 54 58 \| 50 58 54 5c 60 64 68 51 6c` | `bs << mOrientation << mFadeOffset;` then ONE chain from `mTestMode` to `mScrollHighlightChange` -- the bool at `0x51` is only possible while `mTestMode`'s byte still holds `0x50` |
+| `HamCamShot::Target operator<<` | six bytes all on `50`, float on `54` | write the bool bitfields through `operator<<(bool)`; six named `unsigned char` locals overlap in scope and took `50..55` |
+
+The probe is [`scripts/analysis/slotprobe/store_seq_probe.py`](../../../scripts/analysis/slotprobe/store_seq_probe.py)
+(`<unit> <symbol> <src> [variant.py ...]`, run from a worktree after a full `ninja`): one
+`cl.exe /FAs` compile plus one `objdiff-cli` diff of the scratch object against the target
+object, ~20 s, no ninja, prints both sides' store-slot sequences and the differing positions.
+`slot_table.py` prints the `name$ = offset` table for one PROC (its regex accepts the
+unnumbered `goofy$ = 140` form that `tu_census.py` skips).
+
+Two more levers the same session confirmed on this class, both on named locals:
+
+- **Implicit conversion vs explicit temporary** (`CharCuff::Load` 99.99 -> 100, `DirLoader::AddTypeObjectMemDelta` 95.4 -> 99.9): `mCategory = "";` reads the temp back from its slot, `mCategory = Symbol("")` reads it through the ctor's return register; `find(String(name))` hands the ctor return straight to `_M_find`, `find(name)` re-materialises the slot address. Which one the target used is visible in the row after the ctor call (`lwz r11, 0x54(r1)` vs `lwz r11, 0x0(r3)`, `mr r4, r3` vs `addi r4, r31, ..`).
+- **A by-value parameter's home is a slot too** (`CharLookAt DrawBounds` 99.7 -> 100): the target had no `Vector3 result`; it multiplies back into `lookDir`'s parameter home at frame+0x10 and passes that to `AddLine`.
+
+And the negative result, so nobody repeats it: the *named-local* pinned-region order is still
+not a source lever. `RhythmBattle::OnBeat` (99.44997) differs from its target by exactly one
+word -- the target packs `inMindControl`/`goofy` on `0x8c`/`0x8d`, ours gives each a word --
+and 30+ variants through `slot_table.py` (six declaration orders, provably byte-identical;
+const; a Symbol local; direct-init; every deref spelling; a const-ref inline pin) either did
+nothing or packed the bools while adding another slot. Same for `CacheMgrXbox::PollSearch`'s
+`numFound`/`res` swap (declaration order, both scopings, the type, renaming: inert).

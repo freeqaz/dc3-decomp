@@ -68,7 +68,7 @@ BEGIN_LOADS(UIListLabel)
     bs >> mLabel;
     if (d.rev < 1) {
         String tmp;
-        bs >> tmp;
+        d >> tmp; // the inline forwarding read pins tmp on its own slot (0x60), as the target has it
     }
     if (d.altRev >= 1) {
         d >> mHighlightAltStyles;

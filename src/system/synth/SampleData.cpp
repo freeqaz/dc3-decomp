@@ -80,10 +80,10 @@ BinStream &operator>>(BinStream &bs, SampleMarker &m) {
 void SampleData::Save(BinStream &bs) const {
     SAVE_REVS(0x10, 0);
     bs << mCRC;
-    bs << mFormat;
-    bs << mNumSamples;
-    bs << mSampleRate;
-    bs << mSizeBytes;
+    // One chained statement: the four inline operator<<(int) copies are live in the
+    // same full-expression, so the target keeps them on four slots (0x54..0x60)
+    // instead of packing them with rev/mCRC on 0x54.
+    bs << mFormat << mNumSamples << mSampleRate << mSizeBytes;
     bool hasData = mData;
     bs << hasData;
     if (hasData) {

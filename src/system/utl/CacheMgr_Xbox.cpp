@@ -382,8 +382,12 @@ void CacheMgrXbox::PollSearch() {
     if (mOverlapped.InternalLow != 0x3E5) {
         numFound = 0;
         res = XGetOverlappedResult(&mOverlapped, &numFound, false);
-        if (res != 0 && res != 0x65B) {
-            MILO_FAIL("CacheMgrXbox::PollSearch() encountered unknown error %u.\n", res);
+        // res == ERROR_NO_MORE_FILES (0x65B) goes straight to EndSearch in the
+        // target -- it does not fall into the numFound check.
+        if (res != 0) {
+            if (res != 0x65B) {
+                MILO_FAIL("CacheMgrXbox::PollSearch() encountered unknown error %u.\n", res);
+            }
         } else if (numFound != 0) {
             MILO_ASSERT(numFound == 1, 0x1FB);
             mContentData.szFileName[0] &= 0x7F;
@@ -426,7 +430,7 @@ void CacheMgrXbox::PollMount() {
         DWORD res;
         DWORD err;
         res = XGetOverlappedResult(&mOverlapped, &err, false);
-        if ((int)res == 0) {
+        if (res == 0) {
             MILO_ASSERT(mppCache != NULL, 0x293);
             MILO_ASSERT(*mppCache == NULL, 0x294);
             MILO_ASSERT(mCacheIDXbox, 0x295);
@@ -435,18 +439,22 @@ void CacheMgrXbox::PollMount() {
             SetLastResult(kCache_NoError);
         } else if (res == 0x65B) {
             DWORD extErr = XGetOverlappedExtendedError(&mOverlapped);
-            if (XContentGetDeviceState(mContentData.DeviceID, nullptr)) {
+            // The switch and the first %u see the low 16 bits (clrlwi 16); the
+            // 0x%08X sees the full value, and the device check reads the
+            // CacheIDXbox's content data, not mContentData.
+            DWORD code = extErr & 0xFFFF;
+            if (XContentGetDeviceState(mCacheIDXbox->DeviceID(), nullptr)) {
                 MILO_NOTIFY(
                     "CacheMgrXbox::PollMount(): error %u (0x%08X) occurred, but the device is no longer connected, so changing to %u.\n",
-                    extErr,
+                    code,
                     extErr,
                     // MakeString<unsigned long, unsigned long, unsigned long> in
                     // the target; a bare 0x48F makes the third argument an int.
                     0x48FUL
                 );
-                extErr = 0x48F;
+                code = 0x48F;
             }
-            switch (extErr) {
+            switch (code) {
             case 0xB7:
             case 0x570:
                 SetLastResult(kCache_ErrorCorrupt);
@@ -462,7 +470,7 @@ void CacheMgrXbox::PollMount() {
                     "CacheMgrXbox::PollMount(): Unhandled error %u %u %u returned from XContentCreateEx().\n",
                     res,
                     err,
-                    extErr
+                    code
                 );
                 SetLastResult(kCache_ErrorUnknown);
                 break;
@@ -475,15 +483,17 @@ void CacheMgrXbox::PollMount() {
             );
             SetLastResult(kCache_ErrorUnknown);
         }
-    }
-    mppCache = nullptr;
-    mCacheIDXbox = nullptr;
-    SetOp(kOpNone);
-    if (mCallback) {
-        static Message msg("cache_mgr_mount_result", GetLastResult());
-        msg[0] = GetLastResult();
-        mCallback->Handle(msg, true);
-        mCallback = nullptr;
+        // Still inside the if: while the overlapped op is pending (0x3E5) the
+        // target branches straight to the epilogue and leaves the op registered.
+        mCacheIDXbox = nullptr;
+        mppCache = nullptr;
+        SetOp(kOpNone);
+        if (mCallback) {
+            static Message msg("cache_mgr_mount_result", GetLastResult());
+            msg[0] = GetLastResult();
+            mCallback->Handle(msg, true);
+            mCallback = nullptr;
+        }
     }
 }
 

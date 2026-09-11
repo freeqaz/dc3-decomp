@@ -253,18 +253,17 @@ BEGIN_SAVES(RndPostProc)
     bs << mNoiseBaseScale << mNoiseTopScale << mNoiseIntensity << mNoiseStationary;
     bs << mNoiseMap;
     bs << mNoiseMidtone;
-    bs << mTrailThreshold;
-    bs << mTrailDuration;
+    // Chain structure decoded from the target's temp slots: a temp takes the highest
+    // free slot and every temp of one full-expression lives to its end, so a chain
+    // of N pushes N distinct slots while single statements all reuse the top one.
+    bs << mTrailThreshold << mTrailDuration;
     bs << mEmulateFPS;
     bs << mPosterLevels;
     bs << mPosterMin;
-    bs << mKaleidoscopeComplexity;
-    bs << mKaleidoscopeSize;
-    bs << mKaleidoscopeAngle;
+    bs << mKaleidoscopeComplexity << mKaleidoscopeSize << mKaleidoscopeAngle;
     bs << mKaleidoscopeRadius;
     bs << mKaleidoscopeFlipUVs;
-    bs << mHallOfTimeRate;
-    bs << mHallOfTimeColor << mHallOfTimeMix;
+    bs << mHallOfTimeRate << mHallOfTimeColor << mHallOfTimeMix;
     bs << mHallOfTimeType;
     bs << mMotionBlurBlend;
     bs << mMotionBlurWeight;
@@ -286,8 +285,7 @@ BEGIN_SAVES(RndPostProc)
     bs << mVignetteIntensity;
     bs << mBloomGlare;
     bs << mBloomStreak;
-    bs << mBloomStreakAttenuation;
-    bs << mBloomStreakAngle;
+    bs << mBloomStreakAttenuation << mBloomStreakAngle;
     bs << mHueTarget;
     bs << mHueFocus;
     bs << mBlendAmount;

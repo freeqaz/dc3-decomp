@@ -84,7 +84,10 @@ void DirectionGestureFilterSingleUser::Draw(const Skeleton &skeleton, SkeletonVi
     }
 }
 
-static float sValidHandFloats[4] = { 0.2f, 2.0f, 0.3f, 0.3f };
+static float sValidHandFloats[3] = { 0.2f, 2.0f, 0.3f };
+// Its own .data object in the target (lbl_82F444AC, right after the array): the
+// scroll check anchors r31 here and reads sValidHandFloats[2] as -4 from it.
+static float sValidScrollHandRadius = 0.3f;
 
 bool DirectionGestureFilterSingleUser::HandAtSide(
     const Skeleton &skeleton, float radius, float xScale, float elbowBlend
@@ -127,7 +130,7 @@ bool DirectionGestureFilterSingleUser::IsValidScrollPos(const Skeleton &skeleton
     if (IsValidSwipePosition(skeleton)) {
         return true;
     } else if (HandAtSide(skeleton, sValidHandFloats[2], 1.0f, 0.5f)) {
-        return !HandAtSide(skeleton, sValidHandFloats[3], 1.0f, 0.0f);
+        return !HandAtSide(skeleton, sValidScrollHandRadius, 1.0f, 0.0f);
     } else {
         return false;
     }

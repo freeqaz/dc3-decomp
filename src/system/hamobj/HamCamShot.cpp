@@ -452,24 +452,21 @@ BEGIN_PROPSYNCS(HamCamShot)
 END_PROPSYNCS
 
 BinStream &operator<<(BinStream &bs, const HamCamShot::Target &t) {
+    // The bool bitfields go through the inline operator<<(bool): each expansion's
+    // `unsigned char uc` is a sibling-scope local, so all six share slot 0x50 in the
+    // target. Named function-scope locals would overlap and get 0x50..0x55.
     bs << t.mTarget;
-    unsigned char teleport = t.mTeleport;
-    bs.Write(&teleport, 1);
+    bs << t.mTeleport;
     bs << t.mTo;
     bs << t.mAnimGroup;
-    unsigned char ret = t.mReturn;
-    bs.Write(&ret, 1);
+    bs << t.mReturn;
     bs << t.mFastForward;
     bs << t.mForwardEvent;
-    unsigned char selfShadow = t.mSelfShadow;
-    bs.Write(&selfShadow, 1);
-    unsigned char p4 = t.unk68p4;
-    bs.Write(&p4, 1);
-    unsigned char p3 = t.unk68p3;
-    bs.Write(&p3, 1);
+    bs << t.mSelfShadow;
+    bs << t.unk68p4;
+    bs << t.unk68p3;
     bs << t.mEnvOverride;
-    unsigned char forceLOD = t.mForceLOD;
-    bs.Write(&forceLOD, 1);
+    bs << (unsigned char)t.mForceLOD;
     return bs;
 }
 
