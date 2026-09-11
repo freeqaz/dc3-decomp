@@ -95,9 +95,7 @@ HamNavList::~HamNavList() {
     delete mDirectionGestureFilter;
     delete mHandHeightFilter;
     if (mListRibbonResource) {
-        Sound *slideSound = mListRibbonResource->SlideSound();
-        if (slideSound)
-            slideSound->Stop(nullptr, false);
+        mListRibbonResource->StopSlideSound();
     }
 }
 
@@ -1102,10 +1100,7 @@ void HamNavList::Enter() {
     }
 
     if (!mDisableSlideSound && mListRibbonResource) {
-        Sound *slideSound = mListRibbonResource->SlideSound();
-        if (slideSound) {
-            slideSound->Play(0, 0, 0, nullptr, 0);
-        }
+        mListRibbonResource->PlaySlideSound();
     }
     unkc8 = false;
     if (mSuppressAutomaticEnter) {
@@ -1146,10 +1141,7 @@ void HamNavList::Exit() {
         handle.RemoveCallback(static_cast<SkeletonCallback *>(this));
     }
     if (mListRibbonResource) {
-        Sound *slideSound = mListRibbonResource->SlideSound();
-        if (slideSound) {
-            slideSound->Stop(nullptr, false);
-        }
+        mListRibbonResource->StopSlideSound();
     }
     if (mScrollSpeedIndicatorResource) {
         mScrollSpeedIndicatorResource->HandleExit();
