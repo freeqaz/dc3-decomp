@@ -14,6 +14,7 @@
 #include "utl\Std.h"
 #include <cmath>
 
+
 extern "C" void OnlyReturns() {}
 
 static const float sLargeFloat = kHugeFloat;
@@ -488,9 +489,9 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     TheRnd.DrawRect(rect, borderColor2, nullptr, nullptr, nullptr);
 
     // Draw top border
-    Hmx::Color borderColor3(1.0f, 1.0f, 1.0f, 1.0f);
     rect.x = x - 1.0f;
     rect.h = 1.0f;
+    Hmx::Color borderColor3(1.0f, 1.0f, 1.0f, 1.0f);
     rect.w = ((float)mDists.mWidth + 1.0f) * 2.0f;
     TheRnd.DrawRect(rect, borderColor3, nullptr, nullptr, nullptr);
 
@@ -502,9 +503,9 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     // Tick marks along the bottom border at integer beats of clip A (the rect
     // keeps the bottom border's y and height; only x and w change).
     for (float beat = (float)ceil(BeatA(0)); beat < BeatA(mDists.mWidth); beat = beat + 1.0f) {
+        Hmx::Color gridColor1(0.0f, 0.0f, 0.0f, 1.0f);
         rect.x = (beat - mAStart) * (float)mSamplesPerBeat * 2.0f + x;
         rect.w = 2.0f;
-        Hmx::Color gridColor1(0.0f, 0.0f, 0.0f, 1.0f);
         TheRnd.DrawRect(rect, gridColor1, nullptr, nullptr, nullptr);
     }
 
@@ -512,8 +513,8 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     for (float beat = (float)ceil(BeatB(0)); beat < BeatB(mDists.mHeight); beat = beat + 1.0f) {
         float scaled = (float)mSamplesPerBeat * (beat - mBStart);
         rect.x = x - 1.0f;
-        rect.w = 1.0f;
         rect.h = 2.0f;
+        rect.w = 1.0f;
         rect.y = 2.0f * ((float)(mDists.mHeight - 1) - scaled) + y;
         Hmx::Color gridColor2(0.0f, 0.0f, 0.0f, 1.0f);
         TheRnd.DrawRect(rect, gridColor2, nullptr, nullptr, nullptr);
@@ -526,7 +527,7 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
         cellRect.x = (float)(col * 2) + x;
         for (int row = 0; row < mDists.mHeight; row++) {
             float err = mDists(col, row);
-            if (err != kHugeFloat) {
+            if (err != sLargeFloat) {
                 float c = (mWorstErr - err) / mWorstErr;
                 cellColor.red = c;
                 cellColor.green = c;
@@ -556,10 +557,9 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     }
 
     // Draw transition nodes
-    float dotX = x + 1.0f;
     for (unsigned int i = 0; i < mNodes.size(); i++) {
         Hmx::Color nodeColor(1.0f, 0.0f, 0.0f, 1.0f);
-        DrawDot(dotX, y - 1.0f, mNodes[i].curBeat, mNodes[i].nextBeat, nodeColor);
+        DrawDot(x + 1.0f, y - 1.0f, mNodes[i].curBeat, mNodes[i].nextBeat, nodeColor);
     }
 
     // Draw current playback position if driver is provided
