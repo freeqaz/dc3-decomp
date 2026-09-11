@@ -1153,8 +1153,10 @@ RndTex *LiveCameraInput::GetStreamTex(BufferType type) const {
 namespace {
 
 long GetColorCameraProperty(NUI_CAMERA_PROPERTY prop) {
+#ifdef HX_NATIVE
     long result = 0;
-#ifndef HX_NATIVE
+#else
+    long result; // not zeroed in the target; NuiCameraGetProperty writes it
     HRESULT hr = NuiCameraGetProperty(NUI_CAMERA_TYPE_COLOR, prop, &result);
     if (!SUCCEEDED(hr)) {
         TheDebug << MakeString(
