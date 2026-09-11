@@ -43,7 +43,7 @@ void InterpVertData(
     RndMesh::VertVector &verts,
     float blend
 ) {
-    MILO_ASSERT(a.size() == b.size(), 0x133);
+    MILO_ASSERT(a.size() == b.size(), 0x135);
     typename std::vector<T1>::const_iterator ait = a.begin();
     typename std::vector<T1>::const_iterator bit = b.begin();
     typename std::vector<T1>::const_iterator aend = a.end();
