@@ -339,11 +339,11 @@ BEGIN_LOADS(RndFont)
             float w, h;
             if (d.rev < 2) {
                 int iW, iH;
-                d.stream >> iW >> iH;
+                d >> iW >> iH;
                 w = iW;
                 h = iH;
             } else {
-                d.stream >> w >> h;
+                d >> w >> h;
             }
             RndTex *validTex = ValidTexture(0);
             if (validTex) {
@@ -401,7 +401,7 @@ BEGIN_LOADS(RndFont)
     }
     if (d.rev > 0xc) {
         int bw, bh;
-        d.stream >> bw >> bh;
+        d >> bw >> bh;
         RndTex *validTex = ValidTexture(0);
         if (validTex) {
             if (bw && validTex->Width()) {
