@@ -89,7 +89,16 @@ import sys
 import time
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from project_root import project_root  # noqa: E402
+
+#: The tree this invocation is ABOUT -- the one whose `scripts/` was named --
+#: never `Path(__file__).resolve()`, which follows a symlinked `scripts/` into
+#: another checkout and vouches for its objects instead.  That is not
+#: hypothetical: `measure_progress.sh` used to symlink its baseline worktree's
+#: `scripts/` at main, and this guard then failed a clean baseline tree while
+#: quoting main's 817 drifted objects.  See scripts/project_root.py.
+REPO = project_root(__file__)
 VERSION = os.environ.get("DC3_VERSION", "373307D9")
 
 #: In the order `configure.py` chains them.  Each accepts `--batch --check`.

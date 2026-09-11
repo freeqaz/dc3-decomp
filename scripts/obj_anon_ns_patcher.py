@@ -101,8 +101,12 @@ from pathlib import Path
 import sys as _sys, os as _os
 _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 from obj_patch_io import write_patched_obj  # mtime-preserving in-place write
+from project_root import project_root  # NEVER Path(__file__).resolve() here
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# The tree this invocation names, not the tree this file really lives in: a
+# worktree whose scripts/ is a symlink would otherwise have this patcher
+# rewrite the MAIN checkout's objects. See scripts/project_root.py.
+PROJECT_ROOT = project_root(__file__)
 OBJ_DIR = PROJECT_ROOT / "build" / "373307D9" / "obj"
 SRC_DIR = PROJECT_ROOT / "build" / "373307D9" / "src"
 

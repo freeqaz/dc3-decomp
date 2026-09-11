@@ -245,7 +245,14 @@ def ensure_patched_tree(project_dir: Path | str, *, build: bool = True) -> str:
 
     try:
         proc = subprocess.run(
-            [sys.executable, str(verify), "--verify-manifest", "--quiet"],
+            # --repo is passed EXPLICITLY, never left to the script's default:
+            # if `project_dir`'s scripts/ is a symlink into another checkout,
+            # the default used to resolve through it and vouch for that other
+            # tree's objects. scripts/project_root.py now derives the default
+            # from the invocation path too, so this is belt and braces -- but
+            # the caller knows which tree it means, so it should say so.
+            [sys.executable, str(verify), "--repo", str(project_dir),
+             "--verify-manifest", "--quiet"],
             cwd=str(project_dir), capture_output=True, text=True,
             timeout=_VERIFY_TIMEOUT,
         )

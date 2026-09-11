@@ -163,7 +163,11 @@ import shlex
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from project_root import project_root  # noqa: E402
+
+# The tree this invocation names; see scripts/project_root.py.
+REPO_ROOT = project_root(__file__)
 
 CONFIG_NAME = "objdiff.json"
 
