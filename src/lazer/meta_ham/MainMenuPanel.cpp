@@ -565,7 +565,13 @@ BEGIN_HANDLERS(MainMenuPanel)
     HANDLE_ACTION(
         update_main_menu_provider, unk44.UpdateList(_msg->Obj<UIListProvider>(2))
     )
-    HANDLE_EXPR(get_main_menu_provider, &unk44) // not a perfect match for some reason
+    {
+        _NEW_STATIC_SYMBOL(get_main_menu_provider)
+        if (sym == _s) {
+            MainMenuProvider *provider = &unk44;
+            return provider;
+        }
+    }
     HANDLE_EXPR(dlc_image, mDownloadedTexture1)
     HANDLE_EXPR(utility_image, mDownloadedTexture2)
     HANDLE_ACTION(update_icon_state, UpdateIconState(_msg->Sym(2)))
