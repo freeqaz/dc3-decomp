@@ -81,12 +81,16 @@ int _strnicmp(const char *, const char *, unsigned int) { return 0; }
 int strnicmp(const char *, const char *, int) { return 0; }
 char *itoa(int, char *, int) { return 0; }
 long long _64time(long *) { return 0; }
-// wmemcpy: absent from ham_xbox_r.map (the original inlined it), but SpeechMgr
-// instantiates basic_string<wchar_t>, and STLport's char_traits<wchar_t>::copy
-// is a straight `return wmemcpy(...)`.  Aliased to __link_glue_noop, every
-// wide-string copy, assign and range-construct in SpeechMgr silently copied
-// nothing and returned its own destination pointer, so the caller could not
-// tell.  A real body, not a stub: this one has a correct answer.
+// wmemcpy: absent from ham_xbox_r.map -- and the reason is NOT that "the
+// original inlined it" (that guess is retracted).  The original never called
+// it: char_traits<wchar_t>::copy in the shipping image is `memcpy` with a BYTE
+// count, which is what src/system/stlport/stl/char_traits.h now spells, and
+// wmemmove/wmemcmp/wmemset/wmemchr are likewise absent from the map.
+// Our build no longer references wmemcpy from any object; this definition is
+// now dead and can be deleted once nothing in the native or web link wants it.
+// It stays a real body rather than a __link_glue_noop alias: when it WAS
+// referenced, the noop alias made every wide-string copy, assign and
+// range-construct in SpeechMgr silently copy nothing.
 wchar_t *wmemcpy(wchar_t *dest, const wchar_t *src, unsigned int count) {
     return (wchar_t *)memcpy(dest, src, count * sizeof(wchar_t));
 }
