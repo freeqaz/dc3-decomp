@@ -731,13 +731,11 @@ float HamNavList::EndFrame() {
 void HamNavList::SendHighlightSettledMsg(int i) {
     UIListProvider *provider = mListState.Provider();
     MILO_ASSERT(provider, 0x327);
-    auto active = provider->IsActive(i);
     bool canSel = provider->CanSelect(i);
-    if (active) {
-        Symbol dataSym = provider->DataSymbol(i);
-        NavHighlightSettledMsg msg(dataSym, i, this, canSel);
+    if (provider->NumData() != 0) {
+        NavHighlightSettledMsg msg(provider->DataSymbol(i), i, this, canSel);
         TheUI->Handle(msg, false);
-        Handle(msg, true);
+        Export(msg, true);
         TheHamProvider->Handle(msg, false);
     }
 }
@@ -1209,15 +1207,16 @@ void HamNavList::Update() {
         mDirectionGestureFilter->SetHighButtonMode(mHighButtonMode);
     }
 
-    int numDisplay = (mNavInputType != kNavInput_RightHand) ? 2 : 10;
-    mListState.SetNumDisplay(numDisplay, true);
+    if (mNavInputType == kNavInput_RightHand) {
+        mListState.SetNumDisplay(10, true);
+    } else {
+        mListState.SetNumDisplay(2, true);
+    }
 
-    HamListRibbonDrawState defaultState;
-    mRibbonDrawStates.resize(mListState.NumShowing(), defaultState);
+    mRibbonDrawStates.resize(mListState.NumDisplay(), HamListRibbonDrawState());
 
     if (mListDirResource) {
-        int numSh = mListState.NumShowing();
-        mListDirResource->CreateElements(nullptr, mListWidgets, numSh);
+        mListDirResource->CreateElements(nullptr, mListWidgets, mListState.NumDisplay());
     }
     mRefreshPending = true;
 }
