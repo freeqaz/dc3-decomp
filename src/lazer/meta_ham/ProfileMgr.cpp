@@ -1074,6 +1074,12 @@ float ProfileMgr::GetPadExtraLag(int padNum, LagContext ctx) const {
         break;
     case 0x10:
     case 0x17:
+        // Same shape as the 0xc/0x19 case below, but both values are 10.0f;
+        // the image keeps the ctx compare as a dead cmpwi after tail-merging
+        // the two returns.
+        if (ctx == kVCal) {
+            return 10.0f;
+        }
         lag = 10.0f;
         break;
     case 0xc:
