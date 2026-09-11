@@ -123,7 +123,8 @@ BEGIN_LOADS(RndGroup)
             ObjPtr<RndEnviron> env(this);
             bs >> env;
             if (env) {
-                mObjects.push_back(env);
+                // The image inserts at begin(): the legacy environ leads the list.
+                mObjects.push_front(env);
             }
         }
         if (d.rev > 0xC) {
@@ -136,8 +137,7 @@ BEGIN_LOADS(RndGroup)
     if (d.rev > 0xB && d.rev < 0xF) {
         String str;
         float x;
-        bs >> str;
-        bs >> x;
+        d >> str >> x;
     }
     if (d.rev > 0xD) {
         d >> mSortInWorld;
