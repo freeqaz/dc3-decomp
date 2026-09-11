@@ -278,13 +278,19 @@ void MetaMaterial::SetEditAction(MatProp propNum, MatPropEditAction action) {
             DataNode var(*val);
             const DataNode *node = Property(propName);
             MILO_ASSERT(node, 0xAC);
+            // action is kPropForce here; the target merges both compares into one
+            // bool and masks action with it (subic/subfe/and r24, r11, r24): a value
+            // that EQUALS its default becomes kPropDefault, otherwise the incoming
+            // kPropForce stands. The earlier decomp had this the other way round.
+            bool same;
             if (propNum == kMatPropTexXfm) {
                 Transform xfm;
                 xfm.Reset();
-                action = mTexXfm == xfm ? kPropForce : kPropDefault;
+                same = mTexXfm == xfm;
             } else {
-                action = var.Equal(*node, nullptr, true) ? kPropForce : kPropDefault;
+                same = var.Equal(*node, nullptr, true);
             }
+            action = same ? kPropDefault : action;
         }
     }
     mMatPropEditActions[propNum] = action;
