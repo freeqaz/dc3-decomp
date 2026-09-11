@@ -541,20 +541,17 @@ void HollaBackMinigame::SetState(State s) {
         mState = s;
         mSubStateIndex = -1;
         switch (mState) {
-        case -1:
         case 0:
             theMoveDir->ResetDetection();
             TheHamProvider->SetProperty(game_stage, title);
             mHUDPanel->Find<RndPropAnim>("song_overlay.anim", true)
                 ->Animate(0, false, 0, nullptr, kEaseLinear, 0, false);
             TheHamProvider->SetProperty(holla_back_stage, enter_title);
-            OnBeat();
             break;
         case 1:
             TheHamProvider->SetProperty(game_stage, playing);
             mHUDPanel->Find<Flow>("unset_flashcards_mystery.flow", true)->Activate();
             TheHamProvider->SetProperty(holla_back_stage, enter_instruction);
-            OnBeat();
             break;
         case 2: {
             TheHamProvider->SetProperty("game_stage", Symbol("outro"));
@@ -563,13 +560,10 @@ void HollaBackMinigame::SetState(State s) {
             MidiParser *p = TheMidiParserMgr->GetParser("count_in_player");
             p->SetProperty("active", 0);
             TheMaster->GetAudio()->SetLoop(0, mWinLoopBeat * 4.0f);
-            OnBeat();
             break;
         }
-        default:
-            OnBeat();
-            break;
         }
+        OnBeat();
     }
 }
 

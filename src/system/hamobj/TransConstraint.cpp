@@ -256,19 +256,19 @@ void TransConstraint::Poll() {
 
             for (int i = 0; i < 3; i++) {
                 if (mTracks[i]) {
-                    float ps = parentScale[i];
-                    if (childWorldScale[i] < ps
-                        || childWorldScale[i] > ps) {
+                    float lo = parentScale[i];
+                    float hi = parentScale[i];
+                    if (childWorldScale[i] < lo || childWorldScale[i] > hi) {
                         float step = scaleDir[i] * scaleSpeed;
 
-                        if (childWorldScale[i] < ps) {
+                        if (childWorldScale[i] < lo) {
                             childWorldScale[i] += step * dt;
                             float &cws = childWorldScale[i];
-                            cws = Min(cws, ps);
-                        } else if (childWorldScale[i] > ps) {
+                            cws = Min(cws, lo);
+                        } else if (childWorldScale[i] > hi) {
                             childWorldScale[i] += step * dt;
                             float &cws = childWorldScale[i];
-                            cws = Max(cws, ps);
+                            cws = Max(cws, hi);
                         }
                     }
                 } else {

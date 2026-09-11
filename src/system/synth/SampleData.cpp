@@ -124,7 +124,7 @@ void SampleData::LoadWAV(BinStream &bs, const FilePath &fp, bool bigEndian) {
         // pass it in a register. Adding a user-declared CRC copy constructor
         // reproduces that here but costs 5 functions / 756 bytes binary-wide
         // (measured), so it is not the mechanism.
-        if (!TheWavMgr->CreateSample(mCRC, mData, mSizeBytes)) {
+        if (!TheWavMgr->CreateSample(mCRC.mCRC, mData, mSizeBytes)) {
             WaveFileData wavdata(wav);
             wavdata.Read(mData, mSizeBytes);
         }
@@ -206,7 +206,7 @@ void SampleData::Load(BinStream &bs, const FilePath &fp) {
     }
     if (hasData) {
         if (mCRC.mCRC != 0) {
-            TheWavMgr->CreateSample(mCRC, mData, mSizeBytes);
+            TheWavMgr->CreateSample(mCRC.mCRC, mData, mSizeBytes);
         } else {
 #ifdef HX_NATIVE
             if (sAlloc)

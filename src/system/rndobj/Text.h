@@ -352,10 +352,10 @@ public:
     Alignment GetAlignment() const { return mAlignment; }
     void SetAlignment(Alignment a) { mAlignment = a; }
 #endif
-    float BoundsLeft() const { return mBoundsLeft; }
-    float BoundsTop() const { return mBoundsTop; }
-    float BoundsRight() const { return mBoundsRight; }
-    float BoundsBottom() const { return mBoundsBottom; }
+    float BoundsLeft() const { return mBounds.x; }
+    float BoundsTop() const { return mBounds.y; }
+    float BoundsRight() const { return mBounds.w; }
+    float BoundsBottom() const { return mBounds.h; }
 
     friend class UIFontImporter;
     friend class LabelShrinkWrapper;
@@ -453,10 +453,7 @@ protected:
     /** "The different styles this text can have" */
     ObjVector<Style> mStyles; // 0x98
     std::vector<FontMapBase *> mFontMaps; // 0xa8
-    float mBoundsLeft;
-    float mBoundsTop;
-    float mBoundsRight;
-    float mBoundsBottom;
+    Hmx::Rect mBounds; // 0xb4
     int mNumLinesRendered; // 0xc4
     float mConstructScale; // 0xc8
 };

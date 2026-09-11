@@ -83,6 +83,9 @@ public:
     void SetReverbEnable(bool);
     void SetSend(FxSend *);
     NoteVoiceInst *MakeNoteInst(SampleZone *, unsigned char, unsigned char, int, int);
+    void PlayNote(unsigned char note, unsigned char vel, int durFramesLeft) {
+        StartSample(note, vel, durFramesLeft, -1);
+    }
 
     OBJ_MEM_OVERLOAD(0x71);
     NEW_OBJ(MidiInstrument)

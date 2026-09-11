@@ -113,7 +113,7 @@ RndText::RndText()
       mBasicMarkup(true), mScrollDelay(0), mScrollRate(1), mScrollPause(0), mWrapEnabled(0),
       mLineHeight(0), mScrollCopies(0), mNumLines(0), mIndentation(0),
       mAltStyle(nullptr), mScrollOffset(0), mCurScrollChars(-1), mScrollOutIndex(-1),
-      mStyles(this), mBoundsLeft(0), mBoundsTop(0), mBoundsRight(0), mBoundsBottom(0),
+      mStyles(this), mBounds(0, 0, 0, 0),
       mNumLinesRendered(0), mConstructScale(0) {
     mStyles.resize(1);
     mFontMaps.reserve(1);
@@ -1979,14 +1979,14 @@ void RndText::ConstructMeshes(
 
     // Copy bounds using integer word copies (matching target codegen)
 #ifdef HX_NATIVE
-    mBoundsLeft = bounds.x;
-    mBoundsTop = bounds.y;
-    mBoundsRight = bounds.w;
-    mBoundsBottom = bounds.h;
+    mBounds.x = bounds.x;
+    mBounds.y = bounds.y;
+    mBounds.w = bounds.w;
+    mBounds.h = bounds.h;
 #else
     {
         const int *bsrc = (const int *)&bounds;
-        int *bdst = (int *)&mBoundsLeft;
+        int *bdst = (int *)&mBounds.x;
         bdst[0] = bsrc[0];
         bdst[1] = bsrc[1];
         bdst[2] = bsrc[2];

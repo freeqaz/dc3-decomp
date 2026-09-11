@@ -671,9 +671,7 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     }
 #endif
     if (mFootFsmState == 0) {
-        const Transform &wt = mFinger->WorldXfm();
-        tf.v.x = wt.v.x;
-        tf.v.y = wt.v.y;
+        *(Vector2 *)&tf.v = *(const Vector2 *)&mFinger->WorldXfm().v;
         if (b2) {
             mFootPosition = tf.v;
             mFootFsmState = 1;
@@ -695,14 +693,14 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     }
     if (mFootFsmState == 2) {
         Vector3 delta;
-        Subtract(mFinger->WorldXfm().v, mFootPosition, delta);
+        Subtract(mFinger->WorldXfm().v, tf.v, delta);
         float len = Length(delta);
         mFootBlendTime = Min(-(deltasecs * 25.0f - mFootBlendTime), len);
         if (mFootBlendTime <= 0.0f)
             mFootFsmState = 0;
         else
             delta *= (len - mFootBlendTime) / len;
-        Add(mFootPosition, delta, tf.v);
+        tf.v += delta;
         if (b2) {
             mFootPosition = tf.v;
             mFootFsmState = 1;
