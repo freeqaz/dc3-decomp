@@ -651,9 +651,7 @@ void BustAMovePanel::OnBeat() {
     // Beat 4: advance flashcard columns and handle countdown VO
     if (currentBeat == 4) {
         for (int i = 0; i < 2; i++) {
-            RndPropAnim *anim =
-                mBAMColumns[i]->Find<RndPropAnim>("advance.anim", true);
-            anim->Animate(0.0f, false, 0.0f);
+            mBAMColumns[i]->Find<RndPropAnim>("advance.anim", true)->Animate(0.0f, false, 0.0f);
         }
 
         if (mState == kBAMState_Recording) {
@@ -1315,9 +1313,9 @@ void BustAMovePanel::OnBeat() {
                     "num_players.anim", true
                 );
             vizNumPlayers->SetFrame(2, 1);
-            RndAnimatable *crowdAudio =
-                DataDir()->Find<RndAnimatable>("finalsequence_crowdaudio.anim", true);
-            crowdAudio->Animate(0, false, 0);
+            DataDir()
+                ->Find<RndAnimatable>("finalsequence_crowdaudio.anim", true)
+                ->Animate(0.0f, false, 0.0f);
         }
         if (mBeatCount < 16) {
             for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
