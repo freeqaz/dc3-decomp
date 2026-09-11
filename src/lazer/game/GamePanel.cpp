@@ -881,9 +881,9 @@ DataNode GamePanel::OnMsg(const EndGameMsg &msg) {
         MILO_ASSERT(pPlayerData, 0x3F5);
         HamProfile *profile = TheProfileMgr.GetProfileFromPad(pPlayerData->PadNum());
         FitnessFilter *filter = GetFitnessFilter(i);
-        float f1, f2;
-        if (filter && filter->GetFitnessDataAndReset(f2, f1)) {
-            profile->SetFitnessStats(i, f1, f2);
+        float calories, time;
+        if (filter && filter->GetFitnessDataAndReset(calories, time)) {
+            profile->SetFitnessStats(i, calories, time);
         }
     }
     EndGameResult r = msg.Result();
