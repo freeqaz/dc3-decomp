@@ -137,11 +137,12 @@ void DxParticleSys::DrawShowing() {
     stretchParams.w = mStretchScale * 2.0f;
     TheShaderMgr.SetVConstant((VShaderConstant)0x31, stretchParams);
 
+    int noPerspectiveStretch = !(fancy && aligned && stretched && mPerspectiveStretch);
     Vector4 xAxis;
     xAxis.x = mtx.x.x;
     xAxis.y = mtx.x.y;
     xAxis.z = mtx.x.z;
-    xAxis.w = !(fancy && aligned && stretched && mPerspectiveStretch);
+    xAxis.w = noPerspectiveStretch;
     TheShaderMgr.SetVConstant((VShaderConstant)0x2f, xAxis);
 
     Vector4 zAxis;
