@@ -217,7 +217,16 @@ instead of **60** (`cdea2f9e…` vs `ccde57e8…`).
 
 ### How a degraded tree announces itself
 
-`scripts/verify_objs_patched.py` runs as the last post-compile edge:
+`scripts/verify_data_symbol_spelling.py --check` runs first (edge
+`data_symbol_spelling_checked.stamp`, ~9 s): it refuses the tree if our object
+and the target object spell one file-scope variable with different linkage
+(bare `gFoo` = MSVC's static, `?gFoo@@3..` = a global), which `name_check`
+charges at every relocation. It is a check and not a rewrite because each
+disagreement is a defect in `symbols.txt` or in the source's `static`, and the
+message names which. See
+[relocation-names-are-unmetered.md](../decomp/patterns/relocation-names-are-unmetered.md#bare-vs-mangled-statics-a-linkage-claim-not-a-spelling).
+
+`scripts/verify_objs_patched.py` then runs as the last post-compile edge:
 
 - `--check` re-runs all five patchers in dry-run and **fails the build** unless
   the object tree is a fixed point of them. If it ever fires during a full

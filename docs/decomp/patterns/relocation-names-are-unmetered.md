@@ -608,3 +608,71 @@ Whole-binary A/B over all three: `matched_functions` 29,885 → 29,885,
 `matched_code` 5,048,168 → 5,048,168 B, **2 functions up, 0 down**. Both winning
 rows are far from 100%, so neither crosses and neither pays bytes — expected for
 this class, and the reason to report functions-up/down alongside the headline.
+
+## Bare vs mangled statics: a linkage claim, not a spelling
+
+*(dc3-decomp, lane `w3-t`, 2026-09-11, worktree at `85d2ca315`.)*
+
+MSVC/Xenon names a file-scope `static` datum with its **bare** identifier in
+the COFF symbol table (storage class 3: `gSystemConfig`, `sCompressDone`), and
+a datum with external linkage with the global-scope mangling (storage class 2:
+`?gNumHeaps@@3HA`). The dtk-split target objects take every name from
+`config/373307D9/symbols.txt`, so when that file says `?gRndThread@@3PAXA` and
+`src/system/rndobj/Rnd.cpp` says `static HANDLE gRndThread`, every access is a
+charged `name_check` row for a variable whose section and offset are right —
+`Rnd::Init` (99.74) and `Rnd::Terminate` (99.67) had nothing else left, and
+`run_objdiff` filed the four rows as `ADDRESS_RELOCATION_NOISE … no source
+mutation can close them`, which was wrong on both counts.
+
+**Measured, two independent ways.** Over the 980 paired units, by COFF symbol
+table: **786** bare statics on our side, **370** `?x@@3` globals (plain
+identifier) on the target side, **2** bare-vs-mangled disagreements, both in
+`Rnd.obj`, reaching **3 functions / 9 relocation sites**; **0** in the mirror
+direction (ours mangled, target bare). Of the 786, 554 are not defined in the
+target object at all and `symbols.txt` spells them bare, 146 have no
+`symbols.txt` entry, 84 the target also spells bare. The `reloc_gate.json` this
+lane was handed (2026-09-10 23:29) lists the same two functions but with `12`
+in the `base` column — it predates `186b0038d`, which reconstructed the
+`Rnd.cpp` access pattern, so it describes an older source shape; on the current
+tree objdiff's JSON renders our side as `gRndThread` at all four sites. **Count
+this class from the objects, not from a gate run you did not make yourself.**
+The gate's other bare-looking rows are not this class: `gUsingCD` vs `gSystemConfig`
+(`PreInitSystem`/`InitSystem`) and `?gNumHeaps@@3HA` vs `gInitted`
+(`MemPopHeap`/`MemPopTemp`/`MemPushTemp`) are our code reading a *different*
+variable than the target — real leads, wrong bucket.
+
+**The linker map lists no static data at all** (`ham_xbox_r.map`'s "Static
+symbols" section is 25,565 rows, every one a function), so for a static the
+`symbols.txt` spelling is hand-authored, and **114 of the 478 `?x@@3` object
+entries in `symbols.txt` are absent from the map**. Those 114 are the population
+at risk: each is a linkage claim the map cannot confirm, and it holds only while
+our source happens to declare the variable non-`static`. The two `Rnd` entries
+had in fact been corrected to bare upstream in `3dbdf45a3` (2026-03-13); the
+merge `5660129ad`/`5ecac7b59` resolved the conflict back to the mangled form.
+
+**Mechanism chosen: a check, not a seventh patcher.** A rename pass over our
+object (the brief's preferred design) would close the rows and hide exactly the
+two defects that produce them: a `symbols.txt` entry the map cannot confirm
+(fix: spell it bare), or a `static` the original did not have (the map carries
+the mangled name; fix: drop the `static`, which then matches storage class and
+all). `scripts/verify_data_symbol_spelling.py --check` runs in `post-compile`
+before the manifest is emitted, so an unfixed tree is never vouched for and
+`run_objdiff` refuses it; its message names which of the two fixes applies,
+from the map. Its target-side enumeration is done twice — COFF symbol table and
+dtk's own `.s` `.obj` directives — and a disagreement is exit 4, a refusal,
+never a "clean" over a subset. `--selftest` plants seven defects that must go
+red (both COFF name encodings, both directions, an undefined-external target,
+both cross-check directions) and exits 5 if none did; `tests/test_data_symbol_spelling.py`
+pins each reason, and `tests/sabotage_objs_patched.py` M26–M31 edit the script
+and require those cases to fail.
+
+**Whole-binary delta**, same worktree, full `ninja` before and after the
+`symbols.txt` fix: `matched_functions` **30,746 → 30,748**, `matched_code`
+**5,293,956 → 5,294,444 B**; 3 functions up (`Rnd::Init` → 100.0,
+`Rnd::Terminate` → 100.0, `Rnd::DrawPreClear` 99.43 → 99.48), **0 down**.
+`PreInitSystem` is unchanged at 97.5, as expected — it is not this class.
+
+Expected side effect of any `symbols.txt` edit, not a regression: the split
+rewrites the target objects, so the next `pattern_census.py` run will read
+every unit as target-stale against its recorded object baseline
+(`pattern_scan_units`); re-derive rather than trust the old scan.
