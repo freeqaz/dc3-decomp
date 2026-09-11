@@ -14,10 +14,9 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 692 total = 4 GAP + 688 EXT
+# counts: 694 total = 3 GAP + 691 EXT
 
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
-GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_recursive@@YAHPAMKJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 
@@ -142,6 +141,7 @@ EXT D3DDevice_EndIndexedVertices
 EXT D3DDevice_EndTiling
 EXT D3DDevice_EndVertices
 EXT D3DDevice_GetDepthStencilSurface
+EXT D3DDevice_GetDeviceCaps
 EXT D3DDevice_GetRenderTarget
 EXT D3DDevice_GetSamplerState_MipMapLodBias
 EXT D3DDevice_InsertFence
@@ -376,10 +376,12 @@ EXT XGCompressSurface
 EXT XGEstimateIdealShaderCost
 EXT XGGetTextureDesc
 EXT XGGetTextureLayout
+EXT XGOffsetBaseTextureAddress
 EXT XGOffsetResourceAddress
 EXT XGRegisterPixelShader
 EXT XGRegisterVertexShader
 EXT XGSetTextureHeader
+EXT XGSetTextureHeaderEx
 EXT XGTileTextureLevel
 EXT XGUntileSurface
 EXT XGUntileTextureLevel
