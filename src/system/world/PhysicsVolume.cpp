@@ -322,7 +322,7 @@ void PhysicsVolume::DrawShowing() {
     } else {
         Vector3 scale;
         MakeScale(WorldXfm().m, scale);
-        scale /= 2;
+        Scale(scale, 0.5f, scale);
         float radius = Length(scale);
         UtilDrawSphere(WorldXfm().v, radius, col, nullptr);
     }
