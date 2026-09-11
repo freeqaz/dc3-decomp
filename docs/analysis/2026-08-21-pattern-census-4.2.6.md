@@ -241,6 +241,47 @@ measurement in the third column of §1: **10 of 25 detectors report a structural
 **145 findings across 143 functions** (`WRONG_CALLEE` 127, `TEMPLATE_INSTANTIATION_MISMATCH`
 18; two functions carry both), ruler `name_check`.
 
+> ### ⭐ Update 2026-09-11 — every count in this section is GROSS. Read the NET column.
+>
+> Tier 3 below ("60 of the 143 rows have a splitter placeholder as their ENCLOSING symbol")
+> called this a **gap in the new detector**, and it is now closed on both sides:
+>
+> * **objdiff 4.2.7+ declares it itself**, per function, as `UNVERIFIABLE_PAIRING` — so this is
+>   the tool's statement, not our inference.
+> * **The tooling subtracts it.** `pattern_census.py`'s populations table prints a
+>   `net of pairing` column beside the gross count (`n/a`, never `0`, for classes where the
+>   subtraction is undefined), and `query_functions(objdiff_pattern=…)` serves the callee-name
+>   classes NET by default, always rendering `N rows hidden: enclosing symbol is a
+>   byte-signature-paired funclet`. `include_unverifiable=True` returns the gross set.
+>
+> **Measured on scan 18** (`name_check`, objdiff 4.2.8, whole binary, 48,290 examined):
+>
+> | class | gross | net of pairing |
+> |---|---|---|
+> | `WRONG_CALLEE` | 62 | **6** |
+> | `MAKESTRING_TEMPLATE_MISMATCH` | 14 | **14** |
+> | `TEMPLATE_INSTANTIATION_MISMATCH` | 2 | **0** |
+>
+> 56 of 62 — **90%** — of the `WRONG_CALLEE` rows are pairing artifacts, and both surviving
+> `TEMPLATE_INSTANTIATION_MISMATCH` rows are. A worklist derived from `function_patterns`
+> without that subtraction is mostly rows a lane cannot adjudicate; the callee-13 lane spent a
+> pass establishing that the hard way.
+>
+> **Unverifiable ≠ uninformative.** A funclet row still answers one falsifiable question —
+> *does our tree emit that callee ANYWHERE?* (our COFF objects, resolved through
+> `symbol_aliases.json` and `ham_xbox_r.map` fold groups). Asked of all 58 by the callee-13
+> lane it flagged **7, all real source defects, 0 false positives**: a fabricated `MemTemp`
+> duplicate of `MemDoTempAllocations` that appears 0× in the retail map and pinned a function
+> at 0.0%, a missing `aligned_vector<float>`, and an `MMRESULT` typedef'd signed so every mmio
+> return test compiled `cmpwi` against the image's `cmplwi`. That check is now a script:
+> `scripts/analysis/callee_emitted_anywhere.py --scan-id 18` (`--selftest` is a built-in
+> negative control that exits 5 rather than answer vacuously). Re-run on scan 18 at
+> `6d8a765d4`: **63 pairs, 63 EMITTED, 0 flagged** — the seven are closed.
+>
+> ⚠ These numbers move as work lands. Re-derive with
+> `python3 scripts/analysis/pattern_census.py --ruler name_check --apply`, and read the table's
+> own two columns rather than quoting this one.
+
 ### Ranking
 
 "Recoverable bytes" needs a discriminator, because a wrong callee on an otherwise-perfect
