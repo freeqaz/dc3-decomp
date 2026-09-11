@@ -664,11 +664,15 @@ DataNode EventTrigger::Cleanup(DataArray *arr) {
         FOREACH (anim, it->mAnims) {
             RndAnimFilter *filter = dynamic_cast<RndAnimFilter *>(anim->mAnim.Ptr());
             if (filter) {
-                ObjRef::iterator ref;
-                for (ref = filter->Refs().begin(); ref != filter->Refs().end(); ++ref) {
+                ObjRef::iterator ref = filter->Refs().begin();
+                // The ring's end() is the ObjRef header itself; testing the raw
+                // pointer keeps the loop test at the top the way the target has it
+                // (an iterator temporary here homes a dead copy to the stack).
+                while ((ObjRef *)ref != &filter->Refs()) {
                     if (ref->RefOwner() && ref->RefOwner() != it) {
                         break;
                     }
+                    ++ref;
                 }
                 if (ref == filter->Refs().end()
                     && filter->GetType() != RndAnimFilter::kShuttle) {
