@@ -850,14 +850,7 @@ void Character::DrawShowing() {
         lod = Clamp<int>(0, mLods.size() - 1, mForceLod);
     }
     bool doSelfShadow = mSelfShadow && TheRnd.DrawMode() == 0 && lod <= 1 && (mDrawMode & 1);
-    if (doSelfShadow) {
-        if (GetGfxMode() == kNewGfx) {
-            if (TheNgRnd.Offscreen())
-                doSelfShadow = false;
-        } else {
-            doSelfShadow = false;
-        }
-    }
+    doSelfShadow = doSelfShadow && GetGfxMode() == kNewGfx && !TheNgRnd.Offscreen();
     if (doSelfShadow) {
         int savedForceLod = mForceLod;
         mForceLod = (LODType)lod;
