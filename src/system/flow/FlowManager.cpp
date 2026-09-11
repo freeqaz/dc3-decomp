@@ -65,7 +65,11 @@ void FlowManager::AddEventTime(Symbol s, float f1) {
 }
 
 void FlowManager::Poll() {
+    float lastFrameAtEntry = mLastFrameTime;
+    int numCommands = mFlowQueue.size();
     mLastFrameTime = 0;
+    float eventTimeSum = 0.0f;
+    float releaseMs = mFrameTimeAccumulator;
     Timer timer;
     timer.Reset();
     timer.Start();
@@ -88,17 +92,16 @@ void FlowManager::Poll() {
 
     mExecuting = false;
     timer.Stop();
+    float taskMs = mLastFrameTime + lastFrameAtEntry;
     unk2c = false;
     float timerMs = timer.Ms() - mLastFrameTime;
 
-    float eventTimeSum = 0.0f;
     Symbol peakSym(NULL);
     Symbol peakElapsedSym(NULL);
-    float maxElapsedTime = -1.0f;
     float maxEventTime = -1.0f;
+    float maxElapsedTime = -1.0f;
 
     if (!mEventTimes.empty()) {
-        maxEventTime = maxElapsedTime;
         if (mFlowEventOverlay->Showing()) {
             *mFlowEventOverlay << "\n\n\n\n\n\n\n\n\n\n";
         }
@@ -106,6 +109,7 @@ void FlowManager::Poll() {
         for (std::map<Symbol, DataNode>::iterator it = mEventTimes.begin();
              it != mEventTimes.end();
              ++it) {
+            Symbol eventSym = it->first;
             DataNode node(it->second);
             float eventTime = node.Array()->Float(0);
             float elapsedTime = node.Array()->Float(2);
@@ -114,11 +118,11 @@ void FlowManager::Poll() {
 
             if (eventTime >= maxEventTime) {
                 maxEventTime = eventTime;
-                peakSym = it->first;
+                peakSym = eventSym;
             }
             if (elapsedTime >= maxElapsedTime) {
                 maxElapsedTime = elapsedTime;
-                peakElapsedSym = it->first;
+                peakElapsedSym = eventSym;
             }
 
             if (mFlowEventOverlay->Showing()) {
@@ -126,7 +130,7 @@ void FlowManager::Poll() {
                 float f0 = node.Array()->Float(0);
                 int count = node.Array()->Int(1);
                 *mFlowEventOverlay
-                    << MakeString("%s    count: %i   time: %.3f ms   task: %.3f ms\n", it->first.Str(), count, f0, f2);
+                    << MakeString("%s    count: %i   time: %.3f ms   task: %.3f ms\n", eventSym.Str(), count, f0, f2);
             }
         }
 
@@ -141,16 +145,17 @@ void FlowManager::Poll() {
         }
     }
 
-    float total = timerMs + eventTimeSum + mFrameTimeAccumulator;
+    float total = timerMs + eventTimeSum;
+    total += mFrameTimeAccumulator;
 
     if (mFlowOverlay->Showing()) {
         *mFlowOverlay << MakeString(
             "Events: %.3f ms  %i Commands in %.3f ms  Release: %.3f ms  Tasks: %.3f ms\n",
-            total,
-            (int)mEventTimes.size(),
-            maxEventTime,
-            maxElapsedTime,
-            timerMs
+            eventTimeSum,
+            numCommands,
+            timerMs,
+            releaseMs,
+            taskMs
         );
     }
 
@@ -164,6 +169,7 @@ void FlowManager::Poll() {
         mPeakFrameInfo = dn;
     }
 
+    float peakFrameTime = mPeakFrameTime;
     if (mFrameCounterModulo >= 60) {
         mAvgFrameTime = 0;
         for (int i = 0; i < 60; i++) {
@@ -178,25 +184,22 @@ void FlowManager::Poll() {
             float peakTime = arr->Float(1);
             if (peakTime > 0 && mFlowPeakOverlay->Showing()) {
                 float pt = arr->Float(1);
-                Symbol s = arr->Sym(0);
-                *mFlowPeakOverlay << MakeString("%s %.3f ms\n", s, pt);
+                *mFlowPeakOverlay << MakeString("%s %.3f ms\n", arr->Sym(0), pt);
             }
             float peakElapsed = arr->Float(3);
             if (peakElapsed > 0 && mFlowTaskOverlay->Showing()) {
                 float pe = arr->Float(3);
-                Symbol s2 = arr->Sym(2);
-                *mFlowTaskOverlay << MakeString("%s %.3f ms\n", s2, pe);
+                *mFlowTaskOverlay << MakeString("%s %.3f ms\n", arr->Sym(2), pe);
             }
         }
     }
 
     if (mFlowOverlay->Showing()) {
         *mFlowOverlay
-            << MakeString("Average: %.3f ms   Peak: %.3f ms    Frame: %.3f ms\n", mAvgFrameTime, mPeakFrameTime, total);
+            << MakeString("Average: %.3f ms   Peak: %.3f ms    Frame: %.3f ms\n", mAvgFrameTime, peakFrameTime, total);
     }
 
-    const Symbol& flowSym = ("flow");
-    Timer *autoTimer = AutoTimer::GetTimer(flowSym);
+    Timer *autoTimer = AutoTimer::GetTimer(Symbol("flow"));
     if (autoTimer) {
         autoTimer->SetLastMs(total);
     }
