@@ -1465,7 +1465,7 @@ void BustAMovePanel::Poll() {
         skelIdx = skel->SkeletonIndex();
     }
     int forceSkelIdx = skelIdx;
-    mRecorder->mSkeletonIndex = skelIdx;
+    mRecorder->SetVal44(skelIdx);
     if (mState == kBAMState_Recording || kBAMState_CountIn == mState) {
         mRecordSkelIdx = skelIdx;
     }
@@ -1557,7 +1557,7 @@ void BustAMovePanel::Poll() {
         mDepthBufPlayer = activePlayer;
     }
 
-    bool forceShow = !(mState == kBAMState_Recording || mState == kBAMState_End);
+    bool forceShow = mState != kBAMState_Recording && mState != kBAMState_End;
     for (ObjDirItr<DepthBuffer3D> it(mBAMVisualizerPanel->DataDir(), true);
          it != nullptr; ++it) {
         it->ForceDrawSkeletonIndex(forceSkelIdx, forceShow);
@@ -1565,21 +1565,14 @@ void BustAMovePanel::Poll() {
 
     PollCaptureFlashcard();
 
-    float streamMs = TheMaster->StreamMs();
-    float beat = MsToBeat(streamMs);
-    int currentBeat;
-    if (beat > 0.0f) {
-        currentBeat = (int)(beat + 0.5f);
-    } else {
-        currentBeat = (int)(beat - 0.5f);
-    }
+    int currentBeat = Round(MsToBeat(TheMaster->StreamMs()));
     if (currentBeat == mFailureEndBeat) {
         mFailureEndBeat = -1;
         static Message hideTransitionMsg("bustamove_hide_transition");
         TheHamProvider->Handle(hideTransitionMsg, false);
     }
 
-    if (!(mNextVOTime > TheTaskMgr.Seconds(TaskMgr::kRealTime))) {
+    if (mNextVOTime <= TheTaskMgr.Seconds(TaskMgr::kRealTime)) {
         PlayMovePromptVO();
         mNextVOTime = FLT_MAX;
     }
