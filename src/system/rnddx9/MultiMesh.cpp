@@ -8,6 +8,12 @@
 #include "xdk\d3d9i\d3d9types.h"
 #include "utl\Symbol.h"
 #include "os\Debug.h"
+#include "rndobj\Rnd.h"
+#include "rndobj\Shader.h"
+#include "rndobj\ShaderMgr.h"
+#include "rndobj\Spline.h"
+#include "rndobj\Stats_NG.h"
+#include "math\Mtx.h"
 #include "Memory.h"
 
 // Target: MultiMesh.obj .bss:0x0/0x4 (0x830A182C/30), both zero, in this order.
@@ -190,4 +196,122 @@ void DxMultiMesh::UpdateGeometryBuffers() {
     }
 
     D3DVertexBuffer_Unlock((D3DVertexBuffer *)*(void **)((char *)this + temp_r28_2));
+}
+
+void DxMultiMesh::DrawBatchedNewGfx() {
+    unsigned int numInstances = mInstances.size();
+    if (numInstances == 0)
+        return;
+    RndMesh *mesh = mMesh;
+    DxMesh *owner = static_cast<DxMesh *>(mesh->GetGeomOwner());
+    bool fastBillboard = mesh->TransConstraint() == RndTransformable::kConstraintFastBillboardXYZ;
+    RndMat *mat = mesh->Mat();
+    MILO_ASSERT(!owner->IsSkinned(), 0x251);
+    if (owner->Mutable()) {
+        UpdateGeometryBuffers();
+    }
+    int numFaces;
+    if (owner->Mutable()) {
+        // The cycle index is reduced twice, once per stream, and reduced as
+        // UNSIGNED (divwu): a shared local or a signed % costs 4 rows.
+        D3DDevice_SetStreamSource(
+            TheDxRnd.Device(),
+            0,
+            mVertexBuffers[(unsigned int)mBufferCycleIndex % 3],
+            0,
+            0x60,
+            1
+        );
+        D3DDevice_SetStreamSource(
+            TheDxRnd.Device(), 1, mIndexBuffers[(unsigned int)mBufferCycleIndex % 3], 0, 4, 1
+        );
+        D3DDevice_SetVertexDeclaration(TheDxRnd.Device(), sMutableVertexDecl);
+        numFaces = owner->Faces().size();
+    } else {
+        D3DVertexBuffer *verts = owner->unk1a4.buffer;
+        D3DDevice_SetStreamSource(
+            TheDxRnd.Device(), 0, verts, 0, owner->VertSize(), 1
+        );
+        D3DDevice_SetStreamSource(
+            TheDxRnd.Device(), 1, owner->GetMultimeshFaces(), 0, 4, 1
+        );
+        D3DDevice_SetVertexDeclaration(TheDxRnd.Device(), sVertexDecl);
+        numFaces = owner->mNumFaces;
+    }
+    int vertsPerInstance = numFaces * 3;
+    Vector4 instanceVerts;
+    instanceVerts.x = vertsPerInstance;
+    instanceVerts.y = vertsPerInstance;
+    instanceVerts.z = vertsPerInstance;
+    instanceVerts.w = vertsPerInstance;
+    TheShaderMgr.SetVConstant((VShaderConstant)0x56, instanceVerts);
+
+    ShaderType shader = fastBillboard ? kMultimeshBBShader : kMultimeshShader;
+    // Last vertex-shader constant register available for instance transforms.
+    // The global default spline, when one exists, owns the top 48 of them.
+    int lastRegister = RndSpline::GlobalDefaultSpline() ? 0xAD : 0xDD;
+    do {
+        int totalDrawn = 0;
+        int batches = 0;
+        TheShaderMgr.SetTransform(Transform::IDXfm());
+        RndShader::SelectConfig(mat, shader, false);
+        InstanceList::iterator it = mInstances.begin();
+        while (it != mInstances.end()) {
+            int inBatch = 0;
+            for (int reg = 0x5C; reg < lastRegister;) {
+                if (it == mInstances.end())
+                    break;
+                Instance &inst = *it;
+                ++it;
+                if (inst.mIsVisible) {
+                    // Local reference, as in DxRnd::DrawRect: it keeps the
+                    // manager's pointer in a callee-saved register across the
+                    // Matrix4 temporary's constructor instead of reloading the
+                    // global afterwards.
+                    RndShaderMgr &shaderMgr = TheShaderMgr;
+                    shaderMgr.SetVConstant4x3(
+                        (VShaderConstant)reg, Hmx::Matrix4(inst.mXfm)
+                    );
+                    reg += 3;
+                    inBatch++;
+                }
+            }
+            if (inBatch > 0) {
+                D3DDevice_DrawVertices(
+                    TheDxRnd.Device(), D3DPT_TRIANGLELIST, 0, inBatch * vertsPerInstance
+                );
+                totalDrawn += inBatch;
+                batches++;
+            }
+        }
+        if (mat) {
+            mat = mat->NextPass();
+        }
+        TheNgStats->mMultiMeshInsts += totalDrawn;
+        TheNgStats->mMultiMeshBatches += batches;
+        TheNgStats->mFaces = mesh->NumFaces() * totalDrawn + TheNgStats->mFaces;
+    } while (mat);
+    mBufferCycleIndex++;
+}
+
+void DxMultiMesh::DrawShowing() {
+    if (mInstances.empty())
+        return;
+    RndMesh *mesh = mMesh;
+    if (!mMesh)
+        return;
+    // NumBones() != 0, not IsSkinned(): the target divides by sizeof(RndBone)
+    // (a size() computation), where ObjVector::empty() compares begin to end.
+    if (mesh->NumBones() != 0) {
+        MILO_LOG("MultiMesh: mesh can't be skinned\n");
+        return;
+    }
+    if (!static_cast<DxMesh *>(mesh->GetGeomOwner())->CanDraw())
+        return;
+    Rnd::Mode mode = TheRnd.DrawMode();
+    if (mode == Rnd::kDrawOcclusionDepth)
+        return;
+    if (mode != Rnd::kDrawNormal)
+        return;
+    DrawBatchedNewGfx();
 }

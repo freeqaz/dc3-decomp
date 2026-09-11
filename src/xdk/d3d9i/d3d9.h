@@ -880,7 +880,24 @@ D3DDevice_CreateVertexDeclaration(const D3DVERTEXELEMENT9 *pVertexElements);
 
 void D3DDevice_SetVertexDeclaration(D3DDevice *pDevice, D3DVertexDeclaration *pDecl);
 
+// Xbox 360 "inline draw" pair: BeginVertices reserves VertexCount vertices of
+// VertexStreamZeroStride bytes in the command buffer and hands back a write
+// pointer; EndVertices closes the batch and issues the draw.
+void *D3DDevice_BeginVertices(
+    D3DDevice *pDevice,
+    D3DPRIMITIVETYPE PrimitiveType,
+    UINT VertexCount,
+    UINT VertexStreamZeroStride
+);
+void D3DDevice_EndVertices(D3DDevice *pDevice);
+
 void D3DDevice_SetFVF(D3DDevice *pDevice, DWORD FVF);
+void D3DDevice_DrawVertices(
+    D3DDevice *pDevice,
+    D3DPRIMITIVETYPE PrimitiveType,
+    UINT StartVertex,
+    UINT VertexCount
+);
 void D3DDevice_DrawVerticesUP(
     D3DDevice *pDevice,
     D3DPRIMITIVETYPE PrimitiveType,
