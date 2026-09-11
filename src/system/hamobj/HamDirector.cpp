@@ -2825,7 +2825,7 @@ void HamDirector::OnPopulateMoves() {
             if ((*moveInstSymKeys)[i].value == "") continue;
 
             float keyFrame = (*moveInstSymKeys)[i].frame;
-            float beat = SecondsToBeat(keyFrame / 30.0f);
+            float beat = SecondsToBeat((*moveInstSymKeys)[i].frame / 30.0f);
             float roundedBeat = (float)floor(beat + 0.5f);
             if (i != 0) {
                 roundedBeat -= 1.0f;
