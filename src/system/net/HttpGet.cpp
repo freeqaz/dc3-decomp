@@ -110,36 +110,32 @@ namespace {
     unsigned int ParseStatusCode(std::vector<String> const &lines) {
         String status;
 
-        if (StrIStartsWith(lines[0], "HTTP/1.0") == 0) {
-            if (StrIStartsWith(lines[0], "HTTP/1.1") == 0) {
-                goto done;
-            }
+        if (StrIStartsWith(lines[0], "HTTP/1.0") == 0
+            && StrIStartsWith(lines[0], "HTTP/1.1") == 0) {
+            goto fail;
         }
 
         {
             const char *ptr = lines[0].c_str() + 8;
+            char c;
+            while (((c = *ptr) < '0' || c > '9') && c != '\0' && c != '\n') {
+                ptr++;
+            }
 
-            char c = *ptr;
-            while (((c < '0') || (c > '9')) && (c != '\0') && (c != '\n')) {
+            while ((c >= '0') && (c <= '9')) {
+                status += c;
                 ptr++;
                 c = *ptr;
             }
 
-            if (c >= '0') {
-                do {
-                    status += c;
-                    ptr++;
-                    c = *ptr;
-                } while ((c >= '0') && (c <= '9'));
-            }
-
             if (status.c_str()[0] != '\0') {
-                return atoi(status.c_str());
+                goto ok;
             }
         }
-
-    done:
+    fail:
         return 0;
+    ok:
+        return atoi(status.c_str());
     }
 
     int GetContentLength(std::vector<String> const &lines) {
@@ -198,9 +194,9 @@ void HttpGet::StartSending() {
     if (mSocket->Send(str.c_str(), len) != len) {
         mFailType = kHttpFail_Send;
         SetState(kHttpGet_FailedSend);
-    } else {
-        SetState(kHttpGet_ReceivingHeaders);
+        return;
     }
+    SetState(kHttpGet_ReceivingHeaders);
 }
 
 // Cleanup and free resources. Match: 99.2% (limited by __FILE__ path difference)
