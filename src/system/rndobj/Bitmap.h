@@ -232,6 +232,7 @@ public:
     u8 *Buffer() const { return mBuffer; }
     RndBitmap *nextMip() const { return mMip; }
     bool HasName() const { return mName.mCRC; }
+    const Hmx::CRC &Name() const { return mName; }
 
 private:
     bool SamePixelFormat(const RndBitmap &) const;

@@ -864,6 +864,7 @@ void D3DDevice_SetPixelShaderConstantI(
     D3DDevice *pDevice, DWORD StartRegister, const INT *pConstantData, DWORD Vector4iCount
 );
 D3DSurface *D3DDevice_GetRenderTarget(D3DDevice *pDevice, DWORD RenderTargetIndex);
+void D3DDevice_GetDeviceCaps(D3DDevice *pDevice, D3DCAPS9 *pCaps);
 D3DBaseTexture *D3DDevice_CreateTexture(
     UINT Width,
     UINT Height,

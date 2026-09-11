@@ -78,6 +78,10 @@ public:
     virtual void UpdateScalerParams();
 
     D3DDevice *Device() { return mD3DDevice; }
+    /** Base of the free EDRAM colour-tile region, in 5120-byte tiles. */
+    unsigned int EdramBase() const { return mEdramBase; }
+    /** Base of the free EDRAM hierarchical-Z region, in tiles. */
+    unsigned int EdramHzBase() const { return mEdramHzBase; }
     XVIDEO_MODE *VideoMode() { return &mVideoMode; }
     void AutoRelease(D3DResource *r) {
         if (r) {
