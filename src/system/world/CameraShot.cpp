@@ -59,10 +59,10 @@ AutoPrepTarget::AutoPrepTarget(CamShotFrame &frame)
     mFrame->mZoomFOV = 0;
     mShot->mFilter = 0.0f;
     mShot->mClampHeight = -1.0f;
-    mShot->mLastShakeOffset.Set(0.0f, 0.0f, 0.0f);
-    mShot->mLastShakeAngOffset.Set(0.0f, 0.0f, 0.0f);
     mShot->mLastDesiredShakeOffset.Set(0.0f, 0.0f, 0.0f);
     mShot->mLastDesiredShakeAngOffset.Set(0.0f, 0.0f, 0.0f);
+    mShot->mLastShakeOffset.Set(0.0f, 0.0f, 0.0f);
+    mShot->mLastShakeAngOffset.Set(0.0f, 0.0f, 0.0f);
     sChanging = true;
     mFrame->UpdateTarget();
     mShot->SetFrame(mFrame->mFrame, 1.0f);
@@ -918,9 +918,9 @@ CamShot::CamShot()
       mPlatform(kPlatformNone), mHideList(this), mShowList(this), mGenHideList(this),
       mDrawOverrides(this), mPostProcOverrides(this), mParentDir(this), mCrowds(this),
       mCrowdStateOverride(gNullStr), mPS3PerPixel(true), mGlowSpot(this), mFlags(0),
-      mEndHideList(this), mEndShowList(this), mLastDesiredShakeOffset(0, 0, 0),
-      mLastDesiredShakeAngOffset(0, 0, 0), mLastShakeOffset(0, 0, 0),
-      mLastShakeAngOffset(0, 0, 0), mShakeVelocity(0, 0, 0), mShakeAngVelocity(0, 0, 0), mLastNext(0),
+      mEndHideList(this), mEndShowList(this), mLastShakeOffset(0, 0, 0),
+      mLastShakeAngOffset(0, 0, 0), mLastDesiredShakeOffset(0, 0, 0),
+      mLastDesiredShakeAngOffset(0, 0, 0), mShakeVelocity(0, 0, 0), mShakeAngVelocity(0, 0, 0), mLastNext(0),
       mLastPrev(0), mDuration(0), mDisabled(0), mShotStarted(1), mShotOver(0), mHidden(0),
       mSetFrameActive(0) {}
 
@@ -1132,21 +1132,19 @@ BEGIN_LOADS(CamShot)
         mLooping = false;
         mLoopKeyframe = false;
 
-        float fov1, fov2;
-        d >> fov1;
-        d >> fov2;
+        float fov[2];
+        d >> fov[0];
+        d >> fov[1];
         if (d.rev < 9) {
-            fov1 = ConvertFov(fov1, 0.75f);
-            fov2 = ConvertFov(fov2, 0.75f);
+            fov[0] = ConvertFov(fov[0], 0.75f);
+            fov[1] = ConvertFov(fov[1], 0.75f);
         }
-        Transform tf1;
-        Transform tf2;
-        d >> tf1;
-        d >> tf2;
-        Vector2 vec1;
-        Vector2 vec2;
-        d >> vec1;
-        d >> vec2;
+        Transform tf[2];
+        d >> tf[0];
+        d >> tf[1];
+        Vector2 vec[2];
+        d >> vec[0];
+        d >> vec[1];
         if (d.rev < 0x28)
             d >> oldRevFloat;
 
@@ -1191,9 +1189,9 @@ BEGIN_LOADS(CamShot)
         if (blendDuration > 0.0f) {
             frame1.mDuration = 0.0f;
             frame1.mBlend = blendDuration;
-            frame1.mWorldOffset = tf1;
-            frame1.mScreenOffset = vec1;
-            frame1.mFOV = fov1;
+            frame1.mWorldOffset = tf[0];
+            frame1.mScreenOffset = vec[0];
+            frame1.mFOV = fov[0];
             frame1.mBlurDepth = blurDepth;
             frame1.mMaxBlur = 1;
             frame1.mMinBlur = 0;
@@ -1205,9 +1203,9 @@ BEGIN_LOADS(CamShot)
         }
         frame2.mDuration = 0.0f;
         frame2.mBlend = 0.0f;
-        frame2.mWorldOffset = tf2;
-        frame2.mScreenOffset = vec2;
-        frame2.mFOV = fov2;
+        frame2.mWorldOffset = tf[1];
+        frame2.mScreenOffset = vec[1];
+        frame2.mFOV = fov[1];
         frame2.mBlurDepth = blurDepth;
         frame2.mMaxBlur = 1;
         frame2.mMinBlur = 0;
@@ -1368,11 +1366,11 @@ void CamShot::StartAnim() {
     mLastNext = 0;
     mLastPrev = 0;
     mShotStarted = true;
-    mLastDesiredShakeOffset.Zero();
     mLastShakeOffset.Zero();
+    mLastDesiredShakeOffset.Zero();
     mShakeVelocity.Zero();
-    mLastDesiredShakeAngOffset.Zero();
     mLastShakeAngOffset.Zero();
+    mLastDesiredShakeAngOffset.Zero();
     mShakeAngVelocity.Zero();
     StartAnims(mAnims);
     for (int i = 0; i != mCrowds.size(); i++) {

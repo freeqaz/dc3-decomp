@@ -127,9 +127,12 @@ void FlowSequence::ChildFinished(FlowNode *node) {
         if (!mLooping && mRepeatCount >= mRepeats - 1) {
             MILO_ASSERT(mRunningNodes.empty(), 0xA1);
             FLOW_LOG("Releasing\n");
-        } else if (Activate()) {
-            mRepeatCount++;
-            goto ret;
+        } else {
+            int repeatCount = mRepeatCount;
+            if (Activate()) {
+                mRepeatCount = repeatCount + 1;
+                goto ret;
+            }
         }
     }
     mFlowParent->ChildFinished(this);

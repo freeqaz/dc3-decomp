@@ -1209,9 +1209,9 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                 if (isFancy && mBirthMomentum) {
                     RndFancyParticle *fp = (RndFancyParticle *)p;
                     float momentumScale = mBirthMomentumAmount * frameSpan * oneOverThirty;
-                    float bvX = fp->mRPMVelocity * momentumScale;
-                    float bvY = fp->mPitchAngularVel * momentumScale;
-                    float bvZ = fp->mBirthVelocityX * momentumScale;
+                    float bvX = fp->mBirthVel.x * momentumScale;
+                    float bvY = fp->mBirthVel.y * momentumScale;
+                    float bvZ = fp->mBirthVel.z * momentumScale;
                     pos.x += bvX;
                     pos.y += bvY;
                     pos.z += bvZ;
@@ -1653,7 +1653,7 @@ void RndParticleSys::InitParticle(
     }
     if (mType == kFancy) {
         RndFancyParticle *fancyParticle = (RndFancyParticle *)particle;
-        memcpy(&fancyParticle->mRPMVelocity, &mMotionParentDelta, 16);
+        fancyParticle->mBirthVel = mMotionParentDelta;
         if (mBubble) {
             fancyParticle->bubbleFreq =
                 (2 * PI) / RandomFloat(mBubblePeriod.x, mBubblePeriod.y);

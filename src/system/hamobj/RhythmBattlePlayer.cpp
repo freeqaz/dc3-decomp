@@ -827,11 +827,9 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
         }
         hpd->Provider()->Export(Message(rhythmbattle_inthezone), true);
     } else {
-        if (useBadFlow) {
-            if (mOutTheZoneBadFlow && !mSuppressRhythm) {
-                mOutTheZoneBadFlow->Activate();
-            }
-        } else if (mOutTheZoneOkFlow) {
+        if (useBadFlow && mOutTheZoneBadFlow && !mSuppressRhythm) {
+            mOutTheZoneBadFlow->Activate();
+        } else if (!useBadFlow && mOutTheZoneOkFlow) {
             mOutTheZoneOkFlow->Activate();
         }
         hpd->Provider()->Export(Message(rhythmbattle_outthezone), true);

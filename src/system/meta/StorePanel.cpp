@@ -700,8 +700,13 @@ void StorePanel::SetSource(Symbol src, bool backup) {
 }
 
 
+inline bool StorePanel::ToggleTestOffers() {
+    mShowTestOffers = !mShowTestOffers;
+    return mShowTestOffers;
+}
+
 BEGIN_HANDLERS(StorePanel)
-    HANDLE_EXPR(toggle_test_offers, mShowTestOffers = !mShowTestOffers)
+    HANDLE_EXPR(toggle_test_offers, ToggleTestOffers())
     HANDLE_EXPR(test_offers, mShowTestOffers)
     HANDLE_ACTION(load_art, LoadArt(_msg->Str(2), _msg->Obj<UIPanel>(3)))
     HANDLE_EXPR(album_tex, mAlbumTex)

@@ -493,7 +493,7 @@ DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
             Skeleton *skel = TheGestureMgr->GetSkeletonByEnrollmentIndex(enrollmentIdx);
             if (!TheSkeletonIdentifier->IsAssociatedWithProfile(enrollmentIdx) && skel
                 && skel->ProfileMatched()
-                && TheProfileMgr.GetSignedInProfiles().size() < 4) {
+                && TheProfileMgr.GetSignedIn().size() < 4) {
                 mIdentityStatus = kIdentityStatus_WaitingForSignIn;
             } else {
                 mIdentityStatus = kIdentityStatus_None;

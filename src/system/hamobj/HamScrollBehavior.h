@@ -19,6 +19,7 @@ public:
     void PlayScrollSound();
 
     float GetFirstVal() { return mSettleTimer; }
+    bool IsSettled() const { return mSettleTimer <= 0; }
 
     static void Init();
     static float mNeutralToSlowDownDelay;

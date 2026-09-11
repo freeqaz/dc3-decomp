@@ -94,6 +94,8 @@ public:
     int unk94;
     Job *mPostPurchaseJob;
 
+    bool ToggleTestOffers();
+
 protected:
     // UIPanel
     virtual void PopulateOffers(DataArray *, bool);
