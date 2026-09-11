@@ -16,13 +16,19 @@
 #   scripts/measure_progress.sh --authorable       # Print authorable-denominator metrics (no baseline needed)
 #   scripts/measure_progress.sh --refresh-baseline # Ignore + rebuild the cached baseline report
 #   scripts/measure_progress.sh --allow-stale      # Downgrade staleness/race errors to warnings
+#   scripts/measure_progress.sh --check-freshness  # Run ONLY the freshness gate and exit (0/1/2)
 #
 # Staleness safety: a report.json that is out of date (or that another agent
 # rebuilds underneath us) shows up as a pile of phantom regressions. Both
 # sides of the comparison are therefore gated: the "current" report must be
-# ninja-clean before it is read, cached baselines carry a provenance stamp
+# current before it is read, cached baselines carry a provenance stamp
 # that is re-verified on reuse, and both files are fingerprinted before and
 # after the diff to catch a concurrent rebuild. Use --allow-stale to override.
+#
+# The freshness gate lives in scripts/report_freshness.py and asks "would a
+# real build rewrite report.json", NOT "does ninja have nothing to run". Those
+# stopped being the same question on 2026-08-21 -- see the comment above
+# report_is_current() below, and that script's docstring.
 #
 set -euo pipefail
 
@@ -35,6 +41,7 @@ CREATED_WORKTREE=0
 CURRENT_DIR=""
 ALLOW_STALE=0
 REFRESH_BASELINE=0
+CHECK_ONLY=0
 # Config inputs whose content decides what dtk/objdiff measure against.
 # Recorded per baseline so a later config or toolchain change invalidates it.
 PROVENANCE_FILES=(
@@ -91,8 +98,12 @@ while [[ $# -gt 0 ]]; do
             REFRESH_BASELINE=1
             shift
             ;;
+        --check-freshness)
+            CHECK_ONLY=1
+            shift
+            ;;
         --help|-h)
-            sed -n '2,26p' "$0"
+            sed -n '2,31p' "$0"
             exit 0
             ;;
         *)
@@ -104,6 +115,13 @@ done
 
 WORKTREE="${WORKTREE_DIR}"
 CACHE_DIR="${MAIN_REPO}/build/373307D9/baselines"
+
+# --- --check-freshness: run only the gate, build nothing, exit with its code ---
+if [[ "${CHECK_ONLY}" -eq 1 ]]; then
+    check_dir="${CURRENT_DIR:-${MAIN_REPO}}"
+    check_dir="$(cd "${check_dir}" && pwd)"
+    exec python3 "${MAIN_REPO}/scripts/report_freshness.py" --project-dir "${check_dir}"
+fi
 
 # =============================================================================
 # Staleness / provenance guards
@@ -165,41 +183,55 @@ tool_from_ninja() {
 dtk_of_dir() { tool_from_ninja "$1" split '[^ ]+dtk xex split'; }
 objdiff_of_dir() { tool_from_ninja "$1" report '[^ ]+objdiff-cli report generate'; }
 
-# Is `dir`'s report.json fully up to date with respect to its ninja graph?
-# `ninja -n` is a pure dry run; "no work to do" is the only clean answer.
-ninja_is_clean() {
-    local dir="$1" out
-    [[ -f "${dir}/build.ninja" ]] || return 2
-    out="$(cd "${dir}" && ninja -n "${REPORT_REL}" 2>&1)" || return 3
-    [[ "${out}" == *"no work to do"* ]]
+# Is `dir`'s report.json current with respect to the objects and config?
+#
+# NOT "does ninja have nothing to run". That WAS the check here, written
+# 2026-08-04 (dca4a6ca0) as `ninja -n <report> | grep "no work to do"`, and it
+# was correct until 2026-08-21, when 6e1763aac gave report.json an `always`-
+# dirty implicit (the split-currency guard: the 2,223 target objects are an
+# undeclared build output, so no mtime can describe them). 7b4044fb7 then made
+# that edge always-DIRTY without being always-CHANGED, via `--stamp-out` +
+# `restat`, so a real `ninja` on a current tree is a ~0.4 s no-op -- but
+# `restat` is applied WHILE THE BUILD RUNS, and a dry run cannot apply it.
+# Nine more always-rooted guard/patcher edges have landed since, so today
+# `ninja -n build/373307D9/report.json` cannot print "no work to do" in ANY
+# tree, the main checkout included. This gate was therefore permanently red
+# (measured 2026-09-11 in a freshly and fully built worktree: 12 pending
+# edges), and it blamed a race that was not happening. Lanes routed around it.
+# A guard that is always red is a guard nobody runs.
+#
+# scripts/report_freshness.py asks the question the gate MEANT: it classifies
+# `ninja -n -d explain`'s root causes, discards the ones rooted in the `always`
+# phony, and separately runs the split-currency guard -- the one input ninja
+# genuinely cannot see. 0 current | 1 stale (reasons on stderr) | 2 cannot
+# verify (broken graph / unparseable explain output; never conflated with 0).
+report_is_current() {
+    local dir="$1"
+    python3 "${MAIN_REPO}/scripts/report_freshness.py" --project-dir "${dir}" --quiet
 }
 
 # Gate a report we are about to read. Rebuilds it once if stale, then insists.
 require_fresh_report() {
     local dir="$1" label="$2" rc=0
 
-    ninja_is_clean "${dir}" || rc=$?
+    report_is_current "${dir}" || rc=$?
     case "${rc}" in
         0) return 0 ;;
         2)
-            stale_fail "${label} (${dir}) has no build.ninja — cannot verify its report is current."
-            return 0
-            ;;
-        3)
-            stale_fail "${label} (${dir}): 'ninja -n ${REPORT_REL}' failed — the build graph is broken."
+            stale_fail "${label} (${dir}): cannot verify that ${REPORT_REL} is current (reason above)."
             return 0
             ;;
     esac
 
-    echo "  ${label} report is STALE (ninja has pending work). Rebuilding..."
+    echo "  ${label} report is STALE (reasons above). Rebuilding..."
     if ! ninja -C "${dir}" "${REPORT_REL}" -j"$(nproc)" >/dev/null 2>&1; then
         stale_fail "${label} (${dir}): rebuild of ${REPORT_REL} failed."
         return 0
     fi
     rc=0
-    ninja_is_clean "${dir}" || rc=$?
+    report_is_current "${dir}" || rc=$?
     if [[ "${rc}" -ne 0 ]]; then
-        stale_fail "${label} (${dir}) is still stale after a rebuild — another process is probably building there concurrently."
+        stale_fail "${label} (${dir}) is still stale after a rebuild — another process is probably building there concurrently, or an input's mtime is in the future."
     fi
 }
 

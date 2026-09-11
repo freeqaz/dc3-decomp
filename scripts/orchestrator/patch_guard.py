@@ -50,10 +50,17 @@ makes an object newer than a stamp mean "this one needs patching again" instead
 of an endless recompile/repatch oscillation.
 
 Cost, measured on this tree: `ninja post-compile` after touching one `.cpp` is
-~12 s and leaves the tree verified; on an already-consistent tree it is
-`ninja: no work to do.` in ~0.05 s.  `--verify-manifest` over 989 objects is
-~0.4 s.  So the guard costs nothing on the repeat calls that dominate a lane
-and buys back the one-way-low bias on the calls that follow an edit.
+~12 s and leaves the tree verified; on an already-consistent tree it runs the
+one `always`-dirty split-currency edge and `restat` prunes the other nine, in
+~0.05 s.  `--verify-manifest` over 989 objects is ~0.4 s.  So the guard costs
+nothing on the repeat calls that dominate a lane and buys back the one-way-low
+bias on the calls that follow an edit.
+
+(This paragraph used to say that edge prints `ninja: no work to do.`, which it
+has not since 2026-08-21 -- `post-compile` is always-rooted.  Nothing depended
+on the claim here, but the same sentence WAS a gate in measure_progress.sh and
+had been failing every measurement for three weeks; see
+scripts/report_freshness.py.)
 """
 
 from __future__ import annotations
