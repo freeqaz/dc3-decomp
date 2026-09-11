@@ -255,7 +255,7 @@ void VoiceInputPanel::ActivateVoiceContext(Symbol sym) {
             if (it != end)
                 goto found;
         }
-        MILO_NOTIFY("Couldn't find voice context %s", sym);
+        MILO_NOTIFY("Couldn't find voice context %s", sym.Str());
         return;
     }
 found:
