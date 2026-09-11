@@ -494,28 +494,18 @@ DataNode RndAnimatable::OnConvertFrames(DataArray *arr) {
 }
 
 DataNode RndAnimatable::OnAnimate(DataArray *arr) {
-    float local_blend; // 0x88
-    float local_ease_power; // 0x84
-    EaseType local_ease; // 0x80
-    TaskUnits local_units; // 0x7c
-    const char *local_name; // 0x78
-    float local_delay; // 0x74
-    bool local_wait; // 0x72
-    bool local_wrap; // 0x71
-    bool animTaskLoop; // 0x70
-
-    local_blend = 0.0f;
+    float local_blend = 0.0f; // 0x88
     float animTaskStart = StartFrame();
     float animTaskEnd = EndFrame();
-    animTaskLoop = Loop();
+    bool animTaskLoop = Loop(); // 0x70
     float p = FramesPerUnit();
-    local_units = Units();
-    local_delay = 0.0f;
-    local_name = nullptr;
-    local_wait = false;
-    local_wrap = false;
-    local_ease_power = 2;
-    local_ease = kEaseLinear;
+    TaskUnits local_units = Units(); // 0x7c
+    float local_delay = 0.0f; // 0x74
+    const char *local_name = nullptr; // 0x78
+    bool local_wait = false; // 0x72
+    bool local_wrap = false; // 0x71
+    float local_ease_power = 2; // 0x84
+    EaseType local_ease = kEaseLinear; // 0x80
     Hmx::Object *local_listener = nullptr;
 
     static Symbol blend("blend");
@@ -592,7 +582,7 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
         MILO_ASSERT(DataThis(), 0x1CD);
         taskPtr->SetName(local_name, DataThis()->DataDir());
     }
-    if (local_wait && taskPtr->BlendTask()) {
+    if (local_wait && taskPtr && taskPtr->BlendTask()) {
         if (taskPtr->BlendTask()->Anim()->GetRate() != GetRate()) {
             MILO_NOTIFY("%s: need same rate to wait", Name());
         } else
