@@ -30,6 +30,9 @@ public:
 
     StorePurchaser(Symbol s, unsigned int i) : mSource(s), mUserIndex(i) {}
 
+    Symbol Source() const { return mSource; }
+    int UserIndex() const { return mUserIndex; }
+
     Symbol mSource;
     int mUserIndex;
 };

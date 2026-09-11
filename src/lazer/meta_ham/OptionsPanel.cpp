@@ -28,8 +28,7 @@ void OptionsPanel::Poll() {
                         if (mPurchaseProfile) {
                             PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
                                 this, mPurchaseProfile->GetPadNum(), mOfferID,
-                                mXboxPurchaser->mSource,
-                                static_cast<StorePurchaser *>(mXboxPurchaser)->mUserIndex
+                                mXboxPurchaser->Source(), mXboxPurchaser->UserIndex()
                             );
                             ThePlatformMgr.QueueEnumJob(job);
                         }
