@@ -493,20 +493,20 @@ Symbol ChallengeSortNode::Select() {
     }
     static Symbol should_back_to_challenges("should_back_to_challenges");
     switch (mChallengeRecord->GetSongContentLockState()) {
-    case 4:
-        if (screen == store_loading_screen) {
-            static Symbol advertised_songid("advertised_songid");
-            UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
-            storeScreen->SetProperty(advertised_songid, DataNode(mChallengeRecord->GetChallengeRow().mSongID));
-            storeScreen->SetProperty(should_back_to_challenges, DataNode(1));
-        }
-        return screen;
     case 2:
     case 3:
         if (screen == store_loading_screen) {
             static Symbol redirect_to_code_redemption("redirect_to_code_redemption");
             UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
             storeScreen->SetProperty(redirect_to_code_redemption, DataNode(1));
+            storeScreen->SetProperty(should_back_to_challenges, DataNode(1));
+        }
+        return screen;
+    case 4:
+        if (screen == store_loading_screen) {
+            static Symbol advertised_songid("advertised_songid");
+            UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
+            storeScreen->SetProperty(advertised_songid, DataNode(mChallengeRecord->GetChallengeRow().mSongID));
             storeScreen->SetProperty(should_back_to_challenges, DataNode(1));
         }
         return screen;
