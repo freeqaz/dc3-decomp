@@ -55,13 +55,17 @@ typedef struct _XSTORAGE_ENUMERATE_RESULTS { /* Size=0xc */
     /* 0x0008 */ XSTORAGE_FILE_INFO *pItems;
 } XSTORAGE_ENUMERATE_RESULTS;
 
-/* Size 0x14, confirmed by PlatformMgr::Poll passing cbResults = 0x14 alongside
-   `anonymous namespace'::mResults, whose symbols.txt size is 0x14. */
+/* Size 0x14, confirmed twice over: PlatformMgr::Poll passes cbResults = 0x14,
+   and the anon-namespace mResults it points at is 0x14 in symbols.txt.  That
+   only holds under pack(4) -- natural alignment would push xuidOwner to +0x8
+   and the whole struct to 0x18. */
+#pragma pack(push, 4)
 typedef struct _XSTORAGE_DOWNLOAD_TO_MEMORY_RESULTS { /* Size=0x14 */
     /* 0x0000 */ DWORD dwBytesTotal;
     /* 0x0004 */ XUID xuidOwner;
     /* 0x000c */ FILETIME ftCreated;
 } XSTORAGE_DOWNLOAD_TO_MEMORY_RESULTS;
+#pragma pack(pop)
 
 enum XSTORAGE_FACILITY {
     XSTORAGE_FACILITY_INVALID = 0,

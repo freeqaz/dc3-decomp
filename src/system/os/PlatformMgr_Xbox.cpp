@@ -1211,15 +1211,13 @@ void PlatformMgr::Poll() {
             break;
         }
         case XN_SYS_NUI_HARDWARE_STATUS_CHANGED: {
-            int status;
+            int status = kKinectInitializing;
             if (param & XNOTIFY_NUI_HARDWARE_STATUS_INITIALIZING) {
                 status = kKinectInitializing;
             } else if (param & XNOTIFY_NUI_HARDWARE_STATUS_READY) {
                 status = kKinectReady;
-            } else {
-                status = (param & XNOTIFY_NUI_HARDWARE_STATUS_NOT_READY)
-                    ? kKinectNotReady
-                    : kKinectInitializing;
+            } else if (param & XNOTIFY_NUI_HARDWARE_STATUS_NOT_READY) {
+                status = kKinectNotReady;
             }
             KinectHardwareStatusMsg msg(status);
             Handle(msg, false);
@@ -1322,18 +1320,20 @@ void PlatformMgr::Poll() {
     } else if (!mFriendEnumRequests.empty() && mFriendEnumRequests.size() != 0) {
         FriendEnumRequest *request = mFriendEnumRequests.front();
         unsigned long bufSize;
-        bool failed = XFriendsCreateEnumerator(
-                          request->mPadNum, 0, 100, &bufSize, &mFriendsEnum
-                      ) != ERROR_SUCCESS;
-        if (!failed) {
+        bool failed = false;
+        if (XFriendsCreateEnumerator(request->mPadNum, 0, 100, &bufSize, &mFriendsEnum)
+            != ERROR_SUCCESS) {
+            failed = true;
+        } else {
             MILO_ASSERT(!mFriendsBuffer, 0x503);
             mFriendsBuffer = new char[bufSize];
             mFriendsAsync = new XOVERLAPPED;
             memset(mFriendsAsync, 0, sizeof(XOVERLAPPED));
-            failed = XEnumerate(
-                         mFriendsEnum, mFriendsBuffer, bufSize, 0,
-                         (XOVERLAPPED *)mFriendsAsync
-                     ) != ERROR_IO_PENDING;
+            if (XEnumerate(
+                    mFriendsEnum, mFriendsBuffer, bufSize, 0, (XOVERLAPPED *)mFriendsAsync
+                ) != ERROR_IO_PENDING) {
+                failed = true;
+            }
         }
         if (failed) {
             if (mFriendsEnum) {
