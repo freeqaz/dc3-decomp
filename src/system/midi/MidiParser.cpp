@@ -592,7 +592,7 @@ DataNode MidiParser::OnInsertIdle(DataArray *arr) {
         fp = &mFirstEnd;
     else
         fp = mEvents->EndPtr(mBefore);
-    MILO_ASSERT(mIdleParser, 0x38C);
+    MILO_ASSERT(mIdleParser, 0x383);
     f4 = *fp + f4;
     float sub = mStart - f5;
     if (sub - f4 >= f3) {

@@ -305,7 +305,7 @@ void UIListDir::StartScroll(
     UIListState const &state, std::vector<UIListWidget *> &widgets, int i, bool b
 ) {
     mDirection = i;
-    MILO_ASSERT(mDirection, 499);
+    MILO_ASSERT(mDirection, 0x1ED);
     FOREACH (it, widgets) {
         (*it)->StartScroll(mDirection, b);
     }
