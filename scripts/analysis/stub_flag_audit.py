@@ -405,7 +405,8 @@ def load_rows(conn: sqlite3.Connection) -> list[dict]:
 # ---------------------------------------------------------------------- main
 
 def run(project_dir: Path, db_path: Path, apply: bool,
-        json_out: Path | None, quiet: bool = False) -> dict:
+        json_out: Path | None, quiet: bool = False,
+        skip: frozenset[str] = frozenset()) -> dict:
     conn = open_db(db_path, write=apply)
     rows = load_rows(conn)
 
@@ -424,7 +425,10 @@ def run(project_dir: Path, db_path: Path, apply: bool,
     for r in results:
         counts[r["klass"]] += 1
 
-    clears = [r for r in results if r["klass"] != "REAL_STUB"]
+    clears = [r for r in results
+              if r["klass"] != "REAL_STUB" and r["symbol"] not in skip]
+    held = [r for r in results
+            if r["klass"] != "REAL_STUB" and r["symbol"] in skip]
 
     if not quiet:
         print(f"stub_flag_audit -- {len(rows)} rows with is_stub=1")
@@ -437,6 +441,9 @@ def run(project_dir: Path, db_path: Path, apply: bool,
         print()
         print(f"  would clear is_stub on {len(clears)} rows "
               f"({'APPLIED' if apply else 'dry-run, nothing written'})")
+        if held:
+            print(f"  held back (--skip-symbol, owned elsewhere): "
+                  f"{', '.join(r['symbol'] for r in held)}")
 
     if apply:
         for r in clears:
@@ -467,6 +474,10 @@ def main(argv=None) -> int:
                     help="clear is_stub on every non-REAL_STUB row "
                          "(MAIN checkout only)")
     ap.add_argument("--json", default=None, help="write the full table here")
+    ap.add_argument("--skip-symbol", action="append", default=[],
+                    metavar="SYMBOL",
+                    help="classify but never WRITE this row -- for a symbol "
+                         "another lane is holding.  Repeatable.")
     ap.add_argument("--list", action="store_true",
                     help="print every row, grouped by class")
     args = ap.parse_args(argv)
@@ -484,7 +495,8 @@ def main(argv=None) -> int:
         return 2
 
     out = run(project_dir, db_path, args.apply,
-              Path(args.json) if args.json else None)
+              Path(args.json) if args.json else None,
+              skip=frozenset(args.skip_symbol))
 
     if args.list:
         for c in CLASSES:
