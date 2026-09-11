@@ -402,7 +402,7 @@ DataNode VoiceControlPanel::OnMsg(const SpeechRecoMessage &msg) {
                 CycleTip();
                 return 0;
             } else if (rulename == "mode" && mActive && mSong != gNullStr) {
-                Symbol arrSym = tags->Sym(0);
+                mGameMode = tags->Sym(0);
                 float frame = 0;
                 if (mGameMode == "practice") {
                     frame = 1;
