@@ -113,7 +113,7 @@ void *DxTex::StartCompress(AlphaCompress alpha) {
     }
     CompressDesc *desc;
     {
-        MemTemp tmp;
+        MemDoTempAllocations tmp;
         desc = (CompressDesc *)MemAlloc(0x594, __FILE__, 0x14B, "CompressDesc");
     }
     desc->alpha = alpha;
@@ -136,7 +136,7 @@ void *DxTex::StartCompress(AlphaCompress alpha) {
         D3DSurface_GetDesc(desc->levels[i].textureSurface, &desc->levels[i].textureDesc);
     }
     {
-        MemTemp tmp;
+        MemDoTempAllocations tmp;
         desc->tiledBuffer = MemAlloc(
             desc->levels[0].scratchDesc.Height * (desc->levels[0].scratchDesc.Width * 4),
             __FILE__,

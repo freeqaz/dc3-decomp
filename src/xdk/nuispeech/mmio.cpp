@@ -156,19 +156,20 @@ MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuff
         UINT fuFlush = 0;
         LONG cchNext;
         LONG cchEndRead;
-        for (;;) {
+        HPSTR pchOld;
+        for (;; fuFlush = MMIO_EMPTYBUF) {
             MMRESULT flushRet = mmioFlush(hmmio, fuFlush);
             if (flushRet != 0) {
                 return flushRet;
             }
-            cchNext = info->pchNext - info->pchBuffer;
-            cchEndRead = info->pchEndRead - info->pchBuffer;
+            pchOld = info->pchBuffer;
+            cchNext = info->pchNext - pchOld;
+            cchEndRead = info->pchEndRead - pchOld;
             if (cchBuffer >= cchNext) {
                 break;
             }
-            fuFlush = MMIO_EMPTYBUF;
         }
-        HPSTR pchNew = (HPSTR)LocalReAlloc(info->pchBuffer, cchBuffer, LMEM_MOVEABLE);
+        HPSTR pchNew = (HPSTR)LocalReAlloc(pchOld, cchBuffer, LMEM_MOVEABLE);
         if (pchNew == nullptr) {
             return MMIOERR_OUTOFMEMORY;
         }
@@ -193,12 +194,13 @@ MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuff
     }
     MMRESULT ret = 0;
     if (pchBuffer == nullptr && cchBuffer > 0) {
-        pchBuffer = (LPSTR)LocalAlloc(LMEM_FIXED, cchBuffer);
-        if (pchBuffer == nullptr) {
+        HPSTR pchNew = (HPSTR)LocalAlloc(LMEM_FIXED, cchBuffer);
+        if (pchNew != nullptr) {
+            info->dwFlags |= MMIO_ALLOCBUF;
+            pchBuffer = pchNew;
+        } else {
             ret = MMIOERR_OUTOFMEMORY;
             cchBuffer = 0;
-        } else {
-            info->dwFlags |= MMIO_ALLOCBUF;
         }
     }
     info->pchBuffer = pchBuffer;

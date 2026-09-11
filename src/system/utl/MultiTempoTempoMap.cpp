@@ -198,7 +198,7 @@ bool MultiTempoTempoMap::AddTempoInfoPoint(int tick, int tempo) {
         return false;
     }
 
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     mTempoPoints.push_back(TempoInfoPoint(TickToTime(tick), tick, tempo));
     return true;
 }

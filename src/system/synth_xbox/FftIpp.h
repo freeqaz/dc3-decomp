@@ -49,6 +49,15 @@ public:
     void destroy(pointer ptr) { ptr->~T(); }
 };
 
+// `aligned_vector<T>` is the image's own name for this container, not a
+// std::vector spelling: ham_xbox_r.map defines ??1?$aligned_vector@M@@QAA@XZ at
+// 0x82e4a160 (synth_xbox:PitchDetector.obj) alongside the ordinary
+// ?$vector@MV?$XboxAllocator@M@@@stlpmtx_std@@ members in SpectralAnalysis.obj,
+// so both types are live in the build.  The allocator's own file literal names
+// the header it came from -- common_vector.h.
+template <class T>
+class aligned_vector : public std::vector<T, XboxAllocator<T> > {};
+
 class FftIpp {
 public:
     void FftRealCcs(const float *__restrict, float *__restrict);
@@ -59,9 +68,9 @@ public:
 
     int mSize;
     int mOrder;
-    std::vector<float, XboxAllocator<float> > mBuf1;   // 0x08
-    std::vector<float, XboxAllocator<float> > mBuf2;   // 0x14
-    std::vector<float, XboxAllocator<float> > mBuf3;   // 0x20
-    std::vector<float, XboxAllocator<float> > mBuf4;   // 0x2C
-    std::vector<float, XboxAllocator<float> > mSinCos; // 0x38
+    aligned_vector<float> mBuf1;   // 0x08
+    aligned_vector<float> mBuf2;   // 0x14
+    aligned_vector<float> mBuf3;   // 0x20
+    aligned_vector<float> mBuf4;   // 0x2C
+    aligned_vector<float> mSinCos; // 0x38
 };

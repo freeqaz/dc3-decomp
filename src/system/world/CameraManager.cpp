@@ -181,7 +181,7 @@ struct NameSort {
 void CameraManager::RandomizeCategory(ObjPtrList<CamShot> &camlist) {
     std::vector<CamShot *> camshots;
     {
-        MemTemp m;
+        MemDoTempAllocations m;
         camshots.resize(camlist.size());
     }
     int idx = 0;

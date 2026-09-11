@@ -54,18 +54,20 @@ MemHeapStack &ThreadMemStack(bool);
 void MemPushTemp();
 void MemPopTemp();
 
-struct MemTemp {
-    MemTemp() { MemPushTemp(); }
-    ~MemTemp() { MemPopTemp(); }
+// The image's name for this RAII pair, and it really is this trivial: the
+// retail ~MemDoTempAllocations COMDAT (ham_xbox_r.map 0x823616b8, landed in
+// char:CharClipGroup.obj) is four bytes, `b ?MemPopTemp@@YAXXZ`.  A COMDAT in
+// that object means the dtor is defined inline in a header, as below.
+struct MemDoTempAllocations {
+    MemDoTempAllocations() { MemPushTemp(); }
+    ~MemDoTempAllocations() { MemPopTemp(); }
 };
 
-class MemDoTempAllocations {
-public:
-    MemDoTempAllocations(bool, bool);
-    ~MemDoTempAllocations();
-
-    int mOld;
-};
+// The shared native engine (../milo-native-engine, Rnd_Wgpu.cpp) spells this
+// MemTemp, and it is also consumed by rb3, whose MemDoTempAllocations takes
+// (bool, bool) -- so the engine cannot simply be renamed.  A typedef emits no
+// symbol, so the PPC build is byte-identical with or without this line.
+typedef MemDoTempAllocations MemTemp;
 
 struct MemHeapTracker {
     MemHeapTracker(int x) { MemPushHeap(x); }

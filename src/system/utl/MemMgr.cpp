@@ -441,7 +441,7 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
 }
 
 void *_MemAllocTemp(int size, const char *file, int line, const char *name, int align) {
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     return MemAlloc(size, file, line, name, align);
 }
 
@@ -452,7 +452,7 @@ void *MemOrPoolAllocSTL(int size, const char *file, int line, const char *name) 
     return malloc(size);
 #else
     else if (size > 0x80) {
-        MemTemp tmp;
+        MemDoTempAllocations tmp;
         return MemAlloc(size, file, line, name, 0);
     } else {
         return PoolAlloc(size, size, file, line, name);
@@ -688,19 +688,6 @@ void MemPopTemp() {
         MemHeapStack &s = ThreadMemStack(true);
         MILO_ASSERT(s.mTempRefs > 0, 0x209);
         s.mTempRefs--;
-    }
-}
-
-MemDoTempAllocations::MemDoTempAllocations(bool b1, bool b2) {
-    mOld = gNumHeaps;
-    if (b1 && gNumHeaps > 0) {
-        MemPushTemp();
-    }
-}
-
-MemDoTempAllocations::~MemDoTempAllocations() {
-    if (gNumHeaps > mOld) {
-        MemPopTemp();
     }
 }
 

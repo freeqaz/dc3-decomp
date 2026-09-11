@@ -40,7 +40,7 @@ MidiParserMgr::~MidiParserMgr() {
 }
 
 void MidiParserMgr::OnNewTrack(int) {
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     MILO_ASSERT(!mSongName.Null(), 0x7C);
     FreeAllData();
     mNoteOns.resize(128, -1);
@@ -104,7 +104,7 @@ void MidiParserMgr::OnText(int tick, const char *text, unsigned char type) {
     if (type == kTrackname)
         OnTrackName(text);
     else if (type == kLyricEvent || type == kTextEvent) {
-        MemTemp tmp;
+        MemDoTempAllocations tmp;
         MidiParser::VocalEvent vocEv;
         vocEv.mTick = tick;
         if (*text == '[') {
