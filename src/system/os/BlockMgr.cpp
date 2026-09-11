@@ -34,9 +34,9 @@ namespace {
     }
 }
 
-static int gReadCount;
-static int gSeekCount;
-static float gAccumSeekTime;
+static int gReadCount = 0;
+static int gSeekCount = 0;
+static float gAccumSeekTime = 0;
 static int gLastBlockNum = -1;
 static int gLastArkFileNum = -1;
 
