@@ -260,7 +260,7 @@ void Locale::Init() {
                 prevSym = curSym;
                 chunkIdx++;
             } else
-                TheDebug << MakeString("Locale symbol '%s' redefined\n", curSym);
+                TheDebug << MakeString("Locale symbol '%s' redefined\n", curSym.Str());
         }
         delete[] chunks;
     }

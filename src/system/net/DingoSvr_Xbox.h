@@ -4,6 +4,16 @@
 #include "utl/JobMgr.h"
 #include "utl\Str.h"
 
+// The state of the XLSP connection handshake DingoSvrXbox drives in Poll().
+// The retail image instantiates MakeString<XboxAuthStateT> from this TU (fold
+// group 0x8255a0a0 in ham_xbox_r.map), so mXLSPState is an enum there, not an
+// int; the enumerator names are ours.
+enum XboxAuthStateT {
+    kXboxAuthDisconnected = 0,
+    kXboxAuthConnecting = 1,
+    kXboxAuthConnected = 2,
+};
+
 class DingoSvrXbox : public DingoServer {
 public:
     DingoSvrXbox();
@@ -39,7 +49,7 @@ protected:
     virtual bool FillAuthParamsFromPadNum(DataPoint &pt, int padnum);
     virtual void OnAuthSuccess();
 
-    int mXLSPState;
+    XboxAuthStateT mXLSPState;
     int unkb4;
     XUID mXUID; // 0xb8
     String mUserName; // 0xc0

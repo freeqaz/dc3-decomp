@@ -15,7 +15,7 @@ DingoSvrXbox gDingoSvrXbox;
 DingoServer &TheServer = gDingoSvrXbox;
 
 DingoSvrXbox::DingoSvrXbox()
-    : mXLSPState(0), mXUID(0), mDingoServiceId(0), mJobMgr(this), mJobState(0), mScoreXUID(0), mCareerScore(0),
+    : mXLSPState(kXboxAuthDisconnected), mXUID(0), mDingoServiceId(0), mJobMgr(this), mJobState(0), mScoreXUID(0), mCareerScore(0),
       mSessionHandle(0), mMsBetweenReconnDingo(0), mLeaderboardID(-1),
       mLeaderboardScorePropID(-1) {}
 
@@ -36,7 +36,7 @@ void DingoSvrXbox::Init() {
 }
 
 bool DingoSvrXbox::Authenticate(int i1) {
-    if (mXLSPState != 2) {
+    if (mXLSPState != kXboxAuthConnected) {
         SendDebugDataPoint(
             "no_xlsp_connection",
             "location",
@@ -60,7 +60,7 @@ void DingoSvrXbox::Logout() {
 }
 
 void DingoSvrXbox::Disconnect() {
-    mXLSPState = 0;
+    mXLSPState = kXboxAuthDisconnected;
     mXLSPConnection.Disconnect();
 }
 
@@ -142,7 +142,7 @@ void DingoSvrXbox::Poll() {
     }
     mJobMgr.Poll();
     switch (mXLSPState) {
-    case 0: {
+    case kXboxAuthDisconnected: {
         bool found;
         {
             String svc("dingo");
@@ -152,22 +152,29 @@ void DingoSvrXbox::Poll() {
             if (*mXLSPFilter.c_str() == '\0') {
                 MILO_NOTIFY("DingoSvrXbox: Empty XLSP filter string.");
             } else if ((unsigned int)mDingoServiceId == 0U) {
+                // FIXME: the target reaches ?Notify@Debug@@ here too -- it
+                // cross-jumps both messages into the block above, so its Poll
+                // contains one MakeString/Notify tail and no ?Warn@Debug@@ at
+                // all. Spelling this MILO_NOTIFY is behaviourally right but
+                // MSVC then lays the merged tail out after the SECOND string
+                // instead of the first, costing 5.6pp (94.5 -> 88.9). Left as
+                // MILO_WARN until someone finds the layout lever.
                 MILO_WARN("DingoSvrXbox: Invalid Dingo service ID.");
             } else {
                 mXLSPConnection.Connect(mXLSPFilter.c_str(), mDingoServiceId);
-                mXLSPState = 1;
+                mXLSPState = kXboxAuthConnecting;
             }
         }
         break;
     }
-    case 1:
+    case kXboxAuthConnecting:
         if (mXLSPConnection.GetState() == 3) {
-            mXLSPState = 2;
+            mXLSPState = kXboxAuthConnected;
             mIPAddr = mXLSPConnection.GetServiceIP();
             mHostName.erase();
         }
         break;
-    case 2:
+    case kXboxAuthConnected:
         break;
     default:
         MILO_FAIL("DingoSvrXbox: State %d unhandled.", mXLSPState);

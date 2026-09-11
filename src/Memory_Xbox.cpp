@@ -209,7 +209,11 @@ namespace {
     }
 
     int AllocAlign(unsigned long attrs) {
-        unsigned int alignField = (attrs >> 24) & 0xf;
+        // int, not unsigned: the target's two MILO_FAILs share one tail and one
+        // stack slot at 0x50(r1), and the instantiation they call is
+        // MakeString<int> (fold group 0x82610090, credited to Memory_Xbox.obj).
+        // The three range tests below stay unsigned (`cmplwi`) via the U suffixes.
+        int alignField = (attrs >> 24) & 0xf;
         if (attrs & 0x80000000) {
             // Physical allocation alignment
             switch (alignField) {
@@ -235,13 +239,13 @@ namespace {
             }
         } else {
             // Heap allocation alignment
-            if (alignField < 1) {
+            if (alignField < 1U) {
                 return 0x10;
             }
-            if (alignField < 3) {
+            if (alignField < 3U) {
                 return 8;
             }
-            if (alignField != 4) {
+            if (alignField != 4U) {
                 MILO_FAIL("Invalid heap alignment (%d)", alignField);
                 return 0;
             }

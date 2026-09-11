@@ -1320,7 +1320,7 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
                 for (unsigned int i = 0; i < missingFonts.size(); i++) {
                     fontNames += MakeString("%s ", PathName(missingFonts[i]));
                 }
-                msg += MakeString(") missing from font(s) (%s) in string \"", fontNames.c_str());
+                msg += MakeString(") missing from font(s) (%s) in string \"", fontNames);
                 const unsigned short *q = wideChars;
                 tmp[1] = 0;
                 while (*q != 0) {
