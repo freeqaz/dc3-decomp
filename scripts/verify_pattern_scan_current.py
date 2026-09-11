@@ -195,6 +195,13 @@ def main(argv=None) -> int:
             print(f"  tree      : {scan['project_dir']} @ {scan['build_rev']} "
                   f"(tree_verified={scan['tree_verified']})")
             print(f"  examined  : {scan['examined']} of {scan['universe']}")
+            # NULL is not 1.  A row written before schema v19 does not record
+            # how the sweep was sharded, so its started_at/finished_at span is
+            # uninterpretable -- say so rather than implying -j 1.
+            jobs = scan.get("jobs")
+            print(f"  jobs      : "
+                  f"{jobs if jobs is not None else 'unrecorded (pre-v19 scan)'}")
+            print(f"  started   : {scan['started_at']}")
             print(f"  finished  : {scan['finished_at']}")
             if not a.check_objects:
                 print("  objects   : NOT CHECKED (--no-check-objects): this says "

@@ -15,7 +15,7 @@ from typing import Any
 DEFAULT_DB_PATH = "decomp.db"
 
 # Schema version for migrations
-SCHEMA_VERSION = 18
+SCHEMA_VERSION = 19
 
 # Default maximum attempts before deprioritizing a function
 # Functions with >= this many attempts are excluded from normal queries
@@ -839,6 +839,44 @@ def _run_migrations(conn: sqlite3.Connection, from_version: int, to_version: int
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_pattern_scan_units_scan "
                      "ON pattern_scan_units(scan_id)")
+
+    if from_version < 19 <= to_version:
+        # Migration v18 -> v19: record the census's SHARD COUNT on the scan.
+        #
+        # (Developed as v18 and renumbered on landing: the object-baseline
+        # migration took 18 first.  Two lanes adding a migration in the same
+        # week is normal here; a silently duplicated version number would
+        # not be, so the collision is recorded rather than smoothed over.)
+        #
+        # `pattern_scans` records the ruler, the binary, the tree and the
+        # denominator -- everything about the measurement except how it was
+        # PARALLELISED.  That omission made a real question unfalsifiable: two
+        # scans of the same binary and the same tree came back 15 s and ~6 min
+        # apart, and the obvious hypothesis (one ran with -j 1 and starved, or
+        # one ran against a machine already saturated by the build fleet) could
+        # not be checked against anything, because no row says.  A wall-clock
+        # difference with no recorded shard count is not evidence of anything.
+        #
+        # `finished_at - started_at` is only interpretable next to `jobs`, so
+        # the column is the thing that makes the two timestamps mean something.
+        # NULL is honest and distinguishable: it means the row predates this
+        # migration, not that the sweep ran single-threaded.
+        print("  Migration v19: Adding pattern_scans.jobs (census shard count)...")
+        try:
+            conn.execute("ALTER TABLE pattern_scans ADD COLUMN jobs INTEGER")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+        # `v_latest_pattern_scan` is `SELECT s.*`; recreate it so the new column
+        # is unambiguously in the view rather than relying on when SQLite
+        # happens to expand the star.
+        conn.execute("DROP VIEW IF EXISTS v_latest_pattern_scan")
+        conn.execute("""
+            CREATE VIEW v_latest_pattern_scan AS
+            SELECT s.* FROM pattern_scans s
+            WHERE s.id = (SELECT MAX(s2.id) FROM pattern_scans s2
+                          WHERE s2.ruler = s.ruler)
+        """)
 
     # Update schema version
     conn.execute("UPDATE schema_version SET version = ?", (to_version,))

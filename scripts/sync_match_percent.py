@@ -279,7 +279,52 @@ def promote_units(
     return len(promoted)
 
 
-def sync(args: argparse.Namespace) -> None:
+def check_db_writable(db: Path) -> None:
+    """Prove the destination can take a write, BEFORE `--build` runs ninja.
+
+    `args.db.exists()` was the only check and it sat AFTER the build.  Two holes,
+    both measured in this repo:
+
+      * a worktree has a deliberate NON-SQLite tripwire file at `decomp.db`, so
+        `.exists()` is satisfied by exactly the file that must not be used, and
+        `sqlite3.connect()` does not read the header until the first statement;
+      * a whole `ninja build/373307D9/report.json` ran first, so the refusal
+        arrived after the expensive part -- the same shape as pattern_census's
+        `--apply` validation, which cost a lane 7.5 minutes.
+
+    `check_not_shadow_db` is the project's own rule and it RAISES; the header
+    read and `BEGIN IMMEDIATE` cover the non-worktree cases it says nothing
+    about (wrong file, read-only mount).
+    """
+    import orchestrator.database as db_mod
+    if not db.exists():
+        print(f"Error: Database not found: {db}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        db_mod.check_not_shadow_db(db)
+    except db_mod.ShadowDatabaseError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    if not db.open("rb").read(16).startswith(b"SQLite format 3"):
+        print(f"Error: {db} is not a SQLite database (a worktree plants a "
+              f"tripwire file at that path -- `cat` it).", file=sys.stderr)
+        sys.exit(1)
+    try:
+        con = sqlite3.connect(str(db), timeout=10.0)
+        con.execute("SELECT version FROM schema_version").fetchone()
+        con.execute("BEGIN IMMEDIATE")
+        con.execute("ROLLBACK")
+        con.close()
+    except sqlite3.Error as e:
+        print(f"Error: {db} cannot be written: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def sync(args: argparse.Namespace) -> int:
+    # The destination first, before ninja: a promote that cannot land must not
+    # cost a build to discover.
+    check_db_writable(args.db)
+
     # Optionally rebuild report first
     if args.build:
         print("Building report.json...")
@@ -296,10 +341,6 @@ def sync(args: argparse.Namespace) -> None:
     if not args.report.exists():
         print(f"Error: Report not found: {args.report}", file=sys.stderr)
         print("Run 'ninja build/373307D9/report.json' or pass --build.", file=sys.stderr)
-        sys.exit(1)
-
-    if not args.db.exists():
-        print(f"Error: Database not found: {args.db}", file=sys.stderr)
         sys.exit(1)
 
     # Load report
@@ -548,4 +589,7 @@ def sync(args: argparse.Namespace) -> None:
 
 
 if __name__ == "__main__":
-    sync(parse_args())
+    # `sync(parse_args())` discarded the return value, so this script exited 0
+    # whatever happened inside it.  A --promote that promoted nothing and a
+    # --promote that promoted 300 units were the same exit code.
+    sys.exit(sync(parse_args()) or 0)

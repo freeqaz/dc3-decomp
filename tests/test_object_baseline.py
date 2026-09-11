@@ -460,7 +460,12 @@ def test_census_write_scan_records_the_baseline_it_measured(tmp_path: Path):
     con.close()
 
     measured = object_baseline.fingerprint_units(root)
-    args = argparse.Namespace(ruler="all", notes="fixture", db=str(db))
+    # `jobs` is not optional in write_scan, deliberately: it is read as
+    # `args.jobs`, not `getattr(args, "jobs", None)`, so a caller that forgets
+    # it raises instead of recording NULL.  NULL on that column means "the row
+    # predates schema v19", and a sharded scan quietly writing NULL would make
+    # that claim false for every future reader.
+    args = argparse.Namespace(ruler="all", notes="fixture", db=str(db), jobs=8)
     res = {"objdiff_version": "objdiff-cli 4.2.8 (deadbeef, xxh3 0123456789abcdef)",
            "_coverage": {"examined": 0}, "patterns_checked": []}
     pattern_census.write_scan(db, args, res, [], {}, 3, 3, 1, root,

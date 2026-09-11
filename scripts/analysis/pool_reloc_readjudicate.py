@@ -203,6 +203,16 @@ def main() -> int:
     con.commit()
     con.close()
     print(f"\nwrote {written} rows to {args.db}")
+    if written != len(plan):
+        # "wrote 0 rows" and "wrote 200 rows" used to be the same exit 0.  An
+        # UPDATE ... WHERE symbol = ? that matches nothing is not an error to
+        # sqlite, so a plan built against one database and applied to another --
+        # or applied after the symbol was renamed -- succeeded silently.
+        print(f"REFUSING to report success: planned {len(plan)} rows, "
+              f"{written} matched. An UPDATE that matches no row is not an "
+              f"error to sqlite; it is a wrong --db or a stale plan.",
+              file=sys.stderr)
+        return 1
     return 0
 
 
