@@ -299,6 +299,11 @@ INIT_REVS(0x11, 2)
 BEGIN_LOADS(RndFont)
     LOAD_REVS(bs)
     ASSERT_REVS(0x11, 2)
+    // Function scope on purpose: the target keeps this rev-10/11 buffer and the
+    // rev<=1 theChars[] in separate frame slots, which MSVC only does when their
+    // scopes overlap (sibling-scope arrays are packed onto one slot). See
+    // docs/decomp/patterns/stack-slot-sharing.md.
+    char buf[0x80];
     if (d.altRev < 2) {
         if (d.rev > 7) {
             Hmx::Object::Load(d.stream);
@@ -320,7 +325,6 @@ BEGIN_LOADS(RndFont)
             ObjPtr<RndMat> mat(this);
             d >> mat;
             if (d.rev > 9 && d.rev < 0xc) {
-                char buf[0x80];
                 d.stream.ReadString(buf, 0x80);
                 if (!mat && buf[0] != '\0') {
                     mat = LookupOrCreateMat(buf, Dir());
@@ -335,11 +339,11 @@ BEGIN_LOADS(RndFont)
             float w, h;
             if (d.rev < 2) {
                 int iW, iH;
-                d.stream >> iW >> iH;
+                d >> iW >> iH;
                 w = iW;
                 h = iH;
             } else {
-                d.stream >> w >> h;
+                d >> w >> h;
             }
             RndTex *validTex = ValidTexture(0);
             if (validTex) {
@@ -363,7 +367,7 @@ BEGIN_LOADS(RndFont)
     if (d.rev > 1) {
         if (d.rev < 0x11) {
             String str;
-            d.stream >> str;
+            d >> str;
             ASCIItoWideVector(mChars, str.c_str());
         } else if (d.altRev < 2) {
             d >> mChars;
@@ -397,7 +401,7 @@ BEGIN_LOADS(RndFont)
     }
     if (d.rev > 0xc) {
         int bw, bh;
-        d.stream >> bw >> bh;
+        d >> bw >> bh;
         RndTex *validTex = ValidTexture(0);
         if (validTex) {
             if (bw && validTex->Width()) {

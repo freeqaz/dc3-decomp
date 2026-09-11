@@ -279,6 +279,18 @@ void UILabel::Load(BinStream &bs) {
 
 INIT_REVS(0x21, 1)
 
+// Reads a font-resource name off the stream and points the resource at it.
+// Inlined (/O1 is /Ob1): being an inline callee that dereferences `res` is what
+// gives its `name` buffer a frame slot of its own next to PreLoad's, and the
+// right-to-left argument evaluation is what loads d.stream before LStyle(1) is
+// called -- both are in the target. See docs/decomp/patterns/stack-slot-sharing.md.
+static inline void
+ReadFontResourceName(ResourceDirPtr<UILabelDir> &res, BinStream &bs) {
+    char name[256];
+    bs.ReadString(name, 256);
+    res.SetName(name, true);
+}
+
 void UILabel::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(0x21, 1)
@@ -367,14 +379,15 @@ void UILabel::PreLoad(BinStream &bs) {
         }
         if (d.rev < 4) {
             Transform &xfm = DirtyLocalXfm();
-            if (mAlignment & 1) {
+            int align = mAlignment;
+            if (align & 1) {
                 xfm.v.x -= mWidth / 2.0f;
-            } else if (mAlignment & 4) {
+            } else if (align & 4) {
                 xfm.v.x += mWidth / 2.0f;
             }
-            if (mAlignment & 0x10) {
+            if (align & 0x10) {
                 xfm.v.z += mHeight / 2.0f;
-            } else if (mAlignment & 0x40) {
+            } else if (align & 0x40) {
                 xfm.v.z -= mHeight / 2.0f;
             }
         }
@@ -442,9 +455,7 @@ void UILabel::PreLoad(BinStream &bs) {
         if (d.rev > 0x15) {
             char name[256];
             if (mLabelStyles.size() == 2) {
-                LabelStyle &style = LStyle(1);
-                d.stream.ReadString(name, 256);
-                style.mFontResource.SetName(name, true);
+                ReadFontResourceName(LStyle(1).mFontResource, d.stream);
             } else {
                 d.stream.ReadString(name, 256);
             }
