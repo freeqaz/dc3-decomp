@@ -637,17 +637,15 @@ void StreamRenderer::DrawToTexture() {
             TheShaderMgr.SetPConstant((PShaderConstant)0x52, center5);
         }
 
-        float width = targetRT->Width();
-        float height = targetRT->Height();
-        Hmx::Rect drawRect(0, 0, width, height);
+        Hmx::Rect drawRect(0, 0, targetRT->Width(), targetRT->Height());
         TheNgRnd.DrawRect(drawRect, workMat, shaderType, Hmx::Color(), nullptr, nullptr);
 
         mCam->SetTargetTex(nullptr);
 
         RndMat *blurMat = TheShaderMgr.GetWork();
-        blurMat->SetTexWrap(kTexWrapClamp);
-        blurMat->SetBlend(BaseMaterial::kBlendSrc);
         blurMat->SetZMode(kZModeDisable);
+        blurMat->SetBlend(BaseMaterial::kBlendSrc);
+        blurMat->SetTexWrap(kTexWrapClamp);
 
         for (int blurIdx = 0; blurIdx < mNumBlurs; blurIdx++) {
             bool odd = blurIdx & 1;
@@ -664,9 +662,11 @@ void StreamRenderer::DrawToTexture() {
             }
             dstTex->MakeDrawTarget();
             blurMat->SetDiffuseTex(srcTex);
-            Hmx::Rect blurRect(0, 0, dstTex->Width(), dstTex->Height());
+            float blurWidth = dstTex->Width();
+            float blurHeight = dstTex->Height();
+            Hmx::Rect blurRect(0, 0, blurWidth, blurHeight);
             if (primaryTex) {
-                SetBloomBlurWeights(odd, dstTex->Width(), dstTex->Height());
+                SetBloomBlurWeights(odd, blurWidth, blurHeight);
                 TheNgRnd.DrawRect(
                     blurRect, blurMat, kBlurShader, Hmx::Color(), nullptr, nullptr
                 );
@@ -680,7 +680,6 @@ void StreamRenderer::DrawToTexture() {
             if (streamTex) {
                 void *streamData = camInput->StreamBufferData(bufType);
                 if (streamData) {
-                    void *srcData = nullptr;
                     void *lagData = nullptr;
                     bool newIdx = unk154 == 0;
                     if (newIdx) {
@@ -689,8 +688,10 @@ void StreamRenderer::DrawToTexture() {
                         unk154 = 0;
                     }
                     mLaggedPrimaryTexture[unk154]->TexelsLock(lagData);
+                    void *dst = lagData;
+                    void *srcData = nullptr;
                     streamTex->TexelsLock(srcData);
-                    memcpy(lagData, srcData, 0x2D000);
+                    memcpy(dst, srcData, 0x2D000);
                     streamTex->TexelsUnlock();
                     mLaggedPrimaryTexture[unk154]->TexelsUnlock();
                 }
