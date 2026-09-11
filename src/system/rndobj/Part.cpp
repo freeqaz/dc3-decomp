@@ -657,10 +657,9 @@ BEGIN_LOADS(RndParticleSys)
             d.stream >> (Hmx::Color &)p150;
         } else {
             Vector3 v1;
-            float f1, f2, f3;
             d.stream >> v1;
-            d.stream >> f1 >> f2 >> f3;
-            p150.Set(f1, f2, f3, -(v1.x * f1 + v1.y * f2 + v1.z * f3));
+            d.stream >> p150.a >> p150.b >> p150.c;
+            p150.d = -(p150.a * v1.x + p150.b * v1.y + p150.c * v1.z);
         }
         if (ba7) {
             bool old = TheLoadMgr.EditMode();
