@@ -382,8 +382,12 @@ void CacheMgrXbox::PollSearch() {
     if (mOverlapped.InternalLow != 0x3E5) {
         numFound = 0;
         res = XGetOverlappedResult(&mOverlapped, &numFound, false);
-        if (res != 0 && res != 0x65B) {
-            MILO_FAIL("CacheMgrXbox::PollSearch() encountered unknown error %u.\n", res);
+        // res == ERROR_NO_MORE_FILES (0x65B) goes straight to EndSearch in the
+        // target -- it does not fall into the numFound check.
+        if (res != 0) {
+            if (res != 0x65B) {
+                MILO_FAIL("CacheMgrXbox::PollSearch() encountered unknown error %u.\n", res);
+            }
         } else if (numFound != 0) {
             MILO_ASSERT(numFound == 1, 0x1FB);
             mContentData.szFileName[0] &= 0x7F;
