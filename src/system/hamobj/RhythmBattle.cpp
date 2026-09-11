@@ -832,23 +832,24 @@ void RhythmBattle::OnBeat() {
         if (mFullKTB && !mFinale) {
             if (!b22) {
                 mMoveRecorder->StopRecording();
-                bool zoneActive;
-                if (!mJackCooldown && (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone())) {
-                    zoneActive = true;
-                } else {
-                    zoneActive = false;
-                }
+                bool zoneActive =
+                    !mJackCooldown && (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone());
                 float f48 = 0;
                 if (zoneActive && mMoveRecorder->GetCurrentMoveNumFrames() != 0
                     && (unsigned int)mMoveRecorder->GetCurrentMoveNumFrames()
                         <= mSkeletonHistory.size()) {
                     float f45 = 0.10f;
                     for (int i = 0; i < mSkeletonHistory.size(); i++) {
-                        int iPrev = Max(i - 1, 0);
+                        // Max(i - 1, 0); the target compares against a register-held zero,
+                        // which neither Max() nor this spelling reproduces yet.
+                        int iPrev = (i - 1 > 0) ? (i - 1) : 0;
                         ArchiveSkeleton &current = mSkeletonHistory[i];
                         ArchiveSkeleton &previous = mSkeletonHistory[iPrev];
                         DancerSkeleton dancerSkeleton;
                         if (i > 0) {
+                            // The target calls ElapsedMs() twice here and discards the first
+                            // result (two consecutive vtable slot 0x1c calls on `current`).
+                            current.ElapsedMs();
                             f45 += (float)current.ElapsedMs() / 1000.0f;
                         }
                         for (int j = 0; j < kNumJoints; j++) {
@@ -914,15 +915,17 @@ void RhythmBattle::OnBeat() {
     int i6b4 = (i16 > i19)
         ? (p1Update ? mPlayerOne->GetZoneLevel() : -1)
         : (p2Update ? mPlayerTwo->GetZoneLevel() : -1);
-    int i28 = Max(mPlayerOne->GetZoneLevel(), mPlayerTwo->GetZoneLevel());
+    int i28 = mPlayerOne->GetZoneLevel() > mPlayerTwo->GetZoneLevel()
+        ? mPlayerOne->GetZoneLevel()
+        : mPlayerTwo->GetZoneLevel();
     bool i35 = mPlayerTwo->GetZoneLevel() == i6b4;
     bool i27 = mPlayerOne->GetZoneLevel() == i6b4;
     bool b6f0 = i35;
     if (goofy) {
-        b6f0 = i27;
-        int tmp = i35;
-        i35 = i27;
-        i27 = tmp;
+        bool tmp = i27;
+        i27 = i35;
+        i35 = tmp;
+        b6f0 = i35;
     }
     if (b40) {
         mSwagJackCounter++;
@@ -935,23 +938,26 @@ void RhythmBattle::OnBeat() {
                 if (first->InTheZone()
                     && (!second->InTheZone()
                         || (second->InTheZone() && first->GetScore() > second->GetScore()))) {
+                    RhythmBattlePlayer *tmp = first;
+                    first = second;
+                    second = tmp;
                     b36 = false;
-                    first = mPlayerTwo;
-                    second = mPlayerOne;
                 }
                 if (goofy) {
                     b36 = !b36;
                 }
                 mSwagJackState = b36 ? 5 : 6;
-                first->SwagJackedBonus(
-                    focusPanel,
-                    (RhythmBattleJackState)mSwagJackState,
-                    second->SwagJacked(focusPanel, (RhythmBattleJackState)mSwagJackState)
-                );
+                int jacked = second->SwagJacked(focusPanel, (RhythmBattleJackState)mSwagJackState);
+                first->SwagJackedBonus(focusPanel, (RhythmBattleJackState)mSwagJackState, jacked);
                 i6b4 = (int)mSwagJackState;
-                b6f0 = !b36;
-                i27 = b36;
-                i35 = b6f0;
+                if (b36) {
+                    i35 = false;
+                    i27 = true;
+                } else {
+                    i35 = true;
+                    i27 = false;
+                }
+                b6f0 = i35;
                 mSwagJackState = -1;
             }
         }
@@ -1151,8 +1157,8 @@ void RhythmBattle::OnBeat() {
             static Symbol inzone_warning("inzone_warning");
             if ((mPlayerOne->ZoneValue() && !mPlayerOne->GetPrevInTheZone())
                 || (mPlayerTwo->ZoneValue() && !mPlayerTwo->GetPrevInTheZone())) {
-                bool b43 = false;
                 bool b42 = false;
+                bool b43 = false;
                 if (mPlayerOne->InTheZone() || mPlayerTwo->InTheZone()) {
                     if (!mPlayerOne->InTheZone() || !mPlayerTwo->InTheZone()) {
                         play_vo[0] = inzone_warning;
@@ -1162,14 +1168,14 @@ void RhythmBattle::OnBeat() {
                     b42 = mPlayerOne->InTheZone();
                     b43 = mPlayerTwo->InTheZone();
                 }
-                bool b5 = b42;
                 if (goofy) {
-                    b5 = b43;
-                    b43 = b42;
+                    bool tmp = b42;
+                    b42 = b43;
+                    b43 = tmp;
                 }
-                if (b5 && b43) {
+                if (b42 && b43) {
                     play_vo[1] = both;
-                } else if (b5) {
+                } else if (b42) {
                     play_vo[1] = right;
                 } else {
                     play_vo[1] = left;
@@ -1212,14 +1218,14 @@ void RhythmBattle::OnBeat() {
                 b42 = mPlayerOne->InTheZone();
                 b43 = mPlayerTwo->InTheZone();
             }
-            bool b5 = b42;
             if (goofy) {
-                b5 = b43;
-                b43 = b42;
+                bool tmp = b42;
+                b42 = b43;
+                b43 = tmp;
             }
-            if (b5 && b43) {
+            if (b42 && b43) {
                 play_vo[1] = both;
-            } else if (b5) {
+            } else if (b42) {
                 play_vo[1] = right;
             } else {
                 play_vo[1] = left;
@@ -1236,9 +1242,10 @@ void RhythmBattle::OnBeat() {
         s14bc = false;
     }
     if ((onMeasure && !mBattleFinished) || b22) {
-        float beatF = (float)beat;
-        mPlayerOne->SetWindow(beatF, beatF + 4.0f);
-        mPlayerTwo->SetWindow(beatF, beatF + 4.0f);
+        float windowStart = beat;
+        float windowEnd = windowStart + 4.0f;
+        mPlayerOne->SetWindow(windowStart, windowEnd);
+        mPlayerTwo->SetWindow(windowStart, windowEnd);
     }
     if (mBattleFinished) {
         End();
@@ -1360,7 +1367,8 @@ void RhythmBattle::OnBeat() {
                         QueueFinaleVO(finale_phaseout_03);
                         QueueFinaleVO(finale_phaseout_03b);
                         static Symbol tan_destroyed("tan_destroyed");
-                        TheUI->FocusPanel()->SetProperty(tan_destroyed, true);
+                        UIPanel *panel = TheUI->FocusPanel();
+                        panel->SetProperty(tan_destroyed, true);
                         mFinaleSequenceTimer = 0x1c;
                     } else {
                         static Message game_outro_mind_control("game_outro_mind_control");
