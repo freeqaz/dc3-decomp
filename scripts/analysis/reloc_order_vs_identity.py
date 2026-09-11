@@ -47,22 +47,55 @@ ORDER.  Restricting by class matters: a function can hoist its floats in a
 different order *and* save a different register count, and a whole-function
 comparison would let the register-save difference mask the float ordering.
 
-    ORDER      the same symbols, scheduled differently -- no naming content
-    IDENTITY   one side names a symbol the other never does -- a real lead
+    ORDER                the same symbols, scheduled differently -- no naming content
+    ANCHOR_DISPLACEMENT  one lis/addi anchor, the other side's global reached by
+                         a displacement on the load/store -- same byte of memory
+    IDENTITY             one side names a symbol the other never reaches -- a lead
+
+ANCHOR_DISPLACEMENT (added 2026-09-11)
+======================================
+The IDENTITY verdict used to fire on a `named_symbol` pair whenever the target
+relocation named one global and ours named a different one.  But MSVC
+materialises ONE `lis/addi` anchor for a pair of same-section globals and
+reaches the neighbour by a compile-time displacement on the load/store; the
+relocation names only the anchor, and the anchor choice does not follow layout
+or any source lever.  Two rows handed to a lane as real wrong-variable bugs were
+both this:
+
+    MemPushTemp    target  lis/addi ?gNumHeaps@@3HA ; lbz r10, -0x13(r11)
+                   0x830E56EC - 0x13 = 0x830E56D9 = gInitted (internal linkage,
+                   present only as lbl_830E56D9 in symbols.txt, never in the map)
+                   control: MemPushHeap in the same object anchors the other way
+    PreInitSystem  target anchors on gUsingCD (0x82F652E8) and reads
+                   gSystemConfig at -0x8(r30); ours anchors on gSystemConfig
+
+The gate now records, per charged pair, the displacements the anchor's
+consumers apply on each side (`target_disps` / `base_disps`, from
+`reloc_name_gate.anchor_displacements`).  With at least one non-zero
+displacement in play, `anchor + displacement` is resolved in
+`config/373307D9/symbols.txt` (and the linker map for named globals): if the
+two sides reach a common address, or the resolvable side's displaced address
+lands exactly on an unnamed `lbl_` where the other side's name is
+unresolvable, the pair is ANCHOR_DISPLACEMENT.  A displacement resolving to a
+NAMED third symbol, or to nothing, stays IDENTITY.  Measured on this tree
+2026-09-11: 36 named_symbol IDENTITY pairs -> see the doc section for the
+before/after table.
 
 WHAT IT IS NOT
 ==============
 IDENTITY is **not** a bug verdict.  `__savegprlr_28` vs `__savegprlr_29` is
 IDENTITY and is regalloc; objdiff folds that class so it costs zero canonical
 points (see `--headroom`).  IDENTITY means "the two sides disagree about which
-symbol, not merely about when" -- it removes the scheduling explanation, nothing
-more.
+symbol, not merely about when or via which anchor" -- it removes the scheduling
+and the anchor explanations, nothing more.
 
 USAGE
 =====
     python3 scripts/analysis/reloc_name_gate.py --project . --json-out rows.json
     python3 scripts/analysis/reloc_order_vs_identity.py --rows rows.json --project .
     python3 scripts/analysis/reloc_order_vs_identity.py --rows rows.json --leads-out leads.json
+    python3 scripts/analysis/reloc_order_vs_identity.py --rows rows.json --list-identity --anchor-out anchors.json
+    python3 scripts/analysis/reloc_order_vs_identity.py --rows rows.json --no-anchor   # pre-2026-09-11 verdicts
     python3 scripts/analysis/reloc_order_vs_identity.py --selftest
 """
 
@@ -78,6 +111,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from scripts.analysis import reloc_name_gate as gate_mod  # noqa: E402
 from scripts.analysis import ruler as ruler_mod  # noqa: E402
 
 
@@ -110,8 +144,33 @@ def pair_class(target: str, base: str) -> tuple[str, set]:
     return f"cross:{'+'.join(sorted({ct, cb}))}", {ct, cb}
 
 
+def pair_displacements(instrs):
+    """(target, base) -> (target_disps, base_disps) for every charged Symbol pair.
+
+    Fallback for a rows.json written before the gate carried `target_disps` /
+    `base_disps`; the same walk the gate does, over the diff this tool already
+    fetches for the multisets.
+    """
+    out: dict[tuple, tuple[set, set]] = collections.defaultdict(lambda: (set(), set()))
+    for i, ins in enumerate(instrs):
+        if ins.get("match_type") != "diff_arg":
+            continue
+        t, b = ins.get("target") or {}, ins.get("base") or {}
+        kinds, sp = set(), None
+        for x, y in zip(t.get("typed_args", []) or [], b.get("typed_args", []) or []):
+            if x.get("value") != y.get("value"):
+                kinds.add(x.get("type"))
+                if x.get("type") == "Symbol":
+                    sp = (x.get("value"), y.get("value"))
+        if kinds == {"Symbol"} and sp:
+            td, bd = out[sp]
+            td.update(gate_mod.anchor_displacements(instrs, "target", i))
+            bd.update(gate_mod.anchor_displacements(instrs, "base", i))
+    return {p: (sorted(td), sorted(bd)) for p, (td, bd) in out.items()}
+
+
 def relocation_multisets(cli, project, ruler, unit, syms, timeout=600):
-    """(unit, sym) -> (target Counter, base Counter) of relocation target names."""
+    """(unit, sym) -> (target Counter, base Counter, pair_displacements)."""
     cmd = [cli, "diff", "-p", str(project), "-u", unit, "--batch",
            "-f", "json", "-o", "-", "--include-instructions"] + ruler.args
     try:
@@ -135,18 +194,111 @@ def relocation_multisets(cli, project, ruler, unit, syms, timeout=600):
         if sym not in syms:
             continue
         t, b = collections.Counter(), collections.Counter()
-        for ins in rec.get("instructions", []) or []:
+        instrs = rec.get("instructions", []) or []
+        for ins in instrs:
             for side, bag in (("target", t), ("base", b)):
                 for a in ((ins.get(side) or {}).get("typed_args") or []):
                     if a.get("type") == "Symbol" and isinstance(a.get("value"), str):
                         bag[a["value"]] += 1
-        out[(unit, sym)] = (t, b)
+        out[(unit, sym)] = (t, b, pair_displacements(instrs))
     return out
 
 
-def adjudicate(row, tset, bset):
-    """-> (row_verdict, [(pair_label, verdict, target_only, base_only), ...])"""
-    details, any_identity = [], False
+class AddressIndex:
+    """name -> address and address -> [names], from symbols.txt (+ linker map).
+
+    `symbols.txt` is the primary source because it is the only one that lists
+    the file-static globals this class is about (`ham_xbox_r.map` omits .data
+    statics entirely); the map fills in named globals the config lacks.
+    """
+
+    def __init__(self, by_name: dict[str, int], map_idx: dict | None = None):
+        self.by_name = dict(by_name)
+        self.by_addr: dict[int, list[str]] = collections.defaultdict(list)
+        for n, a in self.by_name.items():
+            self.by_addr[a].append(n)
+        self.map_idx = map_idx or {}
+
+    def resolve(self, name: str) -> int | None:
+        a = self.by_name.get(name)
+        if a is None and name in self.map_idx:
+            addrs = self.map_idx[name]
+            a = int(addrs[0], 16) if len(addrs) == 1 else None
+        return a
+
+    def names_at(self, addr: int) -> list[str]:
+        return sorted(self.by_addr.get(addr, []))
+
+
+def anchor_displacement_note(p: dict, addr: AddressIndex | None) -> str | None:
+    """Explain a pair as one anchor reaching the other side's global, or None.
+
+    MSVC materialises ONE lis/addi anchor for a pair of same-section globals
+    and reaches the neighbour by a compile-time displacement on the load or
+    store; the relocation names only the anchor, and the anchor choice does
+    not follow layout or any source lever.  So a positional pair of two
+    different names can address the same byte:
+
+        target  lis/addi r11, ?gNumHeaps@@3HA ; lbz r10, -0x13(r11)   (gInitted)
+        ours    lis r11, gInitted@ha           ; lbz r11, gInitted@l(r11)
+
+    The pair is ANCHOR_DISPLACEMENT when, with at least one NON-ZERO
+    displacement in play, the set of addresses the target's anchor reaches
+    intersects the set ours reaches -- or, when one side's name is unresolvable
+    (an internal-linkage static dtk could only call `lbl_<addr>`), when the
+    resolvable side's displaced address lands exactly on an `lbl_` in
+    symbols.txt.  A displaced address that resolves to a NAMED third symbol,
+    or to nothing, is left alone: that is a real disagreement.
+
+    `target_disps`/`base_disps` come from `reloc_name_gate.anchor_displacements`
+    via the gate's `--json-out`.  With no address index, or no displacement
+    data on the pair, nothing is reclassified.
+    """
+    if addr is None:
+        return None
+    td, bd = p.get("target_disps"), p.get("base_disps")
+    if td is None and bd is None:
+        return None
+    td, bd = list(td or []), list(bd or [])
+    if not any(d != 0 for d in td + bd):
+        return None
+    at, ab = addr.resolve(p["target"]), addr.resolve(p["base"])
+    reach_t = {at + d for d in (td or [0])} if at is not None else set()
+    reach_b = {ab + d for d in (bd or [0])} if ab is not None else set()
+    if at is not None and ab is not None:
+        common = reach_t & reach_b
+        if not common:
+            return None
+        a = min(common)
+        return (f"both anchors reach 0x{a:08X} ({', '.join(addr.names_at(a)) or '?'}): "
+                f"target {p['target']}{td} / ours {p['base']}{bd}")
+    # One side unresolvable: the resolvable side's displaced address must land
+    # exactly on an lbl_ (a static the splitter could not name).
+    known, disps, other = ((reach_t, td, p["base"]) if at is not None
+                           else (reach_b, bd, p["target"]))
+    base_addr = at if at is not None else ab
+    for d in disps:
+        if d == 0:
+            continue
+        names = addr.names_at(base_addr + d)
+        if names and all(n.startswith("lbl_") for n in names):
+            return (f"displacement {d:+#x} off "
+                    f"{p['target'] if at is not None else p['base']} lands on "
+                    f"{'/'.join(names)}; {other} is unresolvable (internal linkage)")
+    return None
+
+
+def adjudicate(row, tset, bset, addr: AddressIndex | None = None):
+    """-> (row_verdict, [(pair_label, verdict, target_only, base_only, note), ...])
+
+    Pair verdicts, in the order they are tried:
+        ORDER                same symbol multiset (per class) -- scheduling
+        ANCHOR_DISPLACEMENT  one anchor, the other side's global by displacement
+        IDENTITY             one side names a symbol the other never reaches
+    Row verdict is the strongest pair verdict: IDENTITY > ANCHOR_DISPLACEMENT
+    > ORDER_ONLY.
+    """
+    details, any_identity, any_anchor = [], False, False
     for p in row["pairs"]:
         label, classes = pair_class(p["target"], p["base"])
         tc = collections.Counter({k: v for k, v in tset.items()
@@ -155,11 +307,19 @@ def adjudicate(row, tset, bset):
                                   if symbol_class(k) in classes})
         only_t, only_b = tc - bc, bc - tc
         if not only_t and not only_b:
-            details.append((label, "ORDER", [], []))
+            details.append((label, "ORDER", [], [], ""))
+            continue
+        note = anchor_displacement_note(p, addr)
+        if note is not None:
+            any_anchor = True
+            details.append((label, "ANCHOR_DISPLACEMENT",
+                            sorted(only_t), sorted(only_b), note))
         else:
             any_identity = True
-            details.append((label, "IDENTITY", sorted(only_t), sorted(only_b)))
-    return ("IDENTITY" if any_identity else "ORDER_ONLY"), details
+            details.append((label, "IDENTITY", sorted(only_t), sorted(only_b), ""))
+    verdict = ("IDENTITY" if any_identity
+               else "ANCHOR_DISPLACEMENT" if any_anchor else "ORDER_ONLY")
+    return verdict, details
 
 
 # ── Negative control ─────────────────────────────────────────────────────────
@@ -220,6 +380,112 @@ def _selftest() -> int:
     v, d = adjudicate(row, t, b)
     check("wrong float VALUE adjudicates IDENTITY", d[0][1] == "IDENTITY", d[0][1])
 
+    # ── ANCHOR_DISPLACEMENT ──────────────────────────────────────────────────
+    # Addresses are the live ones from config/373307D9/symbols.txt.  gInitted
+    # is internal-linkage and present there only as lbl_830E56D9; gUsingCD and
+    # gSystemConfig are both named.
+    addr = AddressIndex({
+        "?gNumHeaps@@3HA": 0x830E56EC,
+        "lbl_830E56D9": 0x830E56D9,
+        "lbl_830E56D8": 0x830E56D8,
+        "gUsingCD": 0x82F652E8,
+        "gSystemTitles": 0x82F652E4,
+        "gSystemConfig": 0x82F652E0,
+        "?gHeaps@@3PAVMemHeap@@A": 0x830E5458,
+        "?gElsewhere@@3HA": 0x830F0000,
+    })
+
+    # MemPushTemp: target `lis/addi ?gNumHeaps@@3HA; lbz r10, -0x13(r11)`
+    # = 0x830E56D9 = gInitted, which the target could only name lbl_.  Ours
+    # anchors on gInitted directly.  Same byte of memory: ANCHOR_DISPLACEMENT.
+    row = {"pairs": [{"target": "?gNumHeaps@@3HA", "base": "gInitted",
+                      "target_disps": [-19, 0], "base_disps": [0]}]}
+    t = collections.Counter({"?gNumHeaps@@3HA": 2})
+    b = collections.Counter({"gInitted": 2, "?gNumHeaps@@3HA": 2})
+    v, d = adjudicate(row, t, b, addr)
+    check("MemPushTemp shape (displacement -> lbl_ at the other side's static) "
+          "adjudicates ANCHOR_DISPLACEMENT",
+          d[0][1] == "ANCHOR_DISPLACEMENT", d[0][1])
+    check("  ...and the row verdict is ANCHOR_DISPLACEMENT, not IDENTITY",
+          v == "ANCHOR_DISPLACEMENT", v)
+
+    # PreInitSystem/InitSystem: target anchors on gUsingCD and reads
+    # gSystemConfig at -0x8(r30); ours anchors on gSystemConfig.  The
+    # displaced address IS the symbol the other side names.
+    row = {"pairs": [{"target": "gUsingCD", "base": "gSystemConfig",
+                      "target_disps": [-8, 0], "base_disps": [0, 8]}]}
+    t = collections.Counter({"gUsingCD": 2})
+    b = collections.Counter({"gSystemConfig": 2})
+    v, d = adjudicate(row, t, b, addr)
+    check("PreInitSystem shape (displacement -> the other side's named global) "
+          "adjudicates ANCHOR_DISPLACEMENT",
+          d[0][1] == "ANCHOR_DISPLACEMENT", d[0][1])
+    # ...and it must be symmetric: OUR side displaced, target direct.
+    row = {"pairs": [{"target": "gSystemConfig", "base": "gUsingCD",
+                      "target_disps": [0], "base_disps": [-8]}]}
+    v, d = adjudicate(row, b, t, addr)
+    check("  ...symmetrically when OUR side carries the displacement",
+          d[0][1] == "ANCHOR_DISPLACEMENT", d[0][1])
+
+    # A genuine identity pair must survive the filter.  Two shapes: a `bl`
+    # pair has no anchor at all, and a data pair whose anchors are consumed
+    # at +0 on both sides names two different globals, full stop.
+    row = {"pairs": [{"target": "??$MakeString@E@@YAPBDPBDABE@Z",
+                      "base": "??$MakeString@D@@YAPBDPBDABD@Z",
+                      "target_disps": [], "base_disps": []}]}
+    t = collections.Counter({"??$MakeString@E@@YAPBDPBDABE@Z": 1})
+    b = collections.Counter({"??$MakeString@D@@YAPBDPBDABD@Z": 1})
+    v, d = adjudicate(row, t, b, addr)
+    check("genuine identity (wrong callee, no anchor) stays IDENTITY",
+          d[0][1] == "IDENTITY", d[0][1])
+    row = {"pairs": [{"target": "?gNumHeaps@@3HA", "base": "?gElsewhere@@3HA",
+                      "target_disps": [0], "base_disps": [0]}]}
+    t = collections.Counter({"?gNumHeaps@@3HA": 2})
+    b = collections.Counter({"?gElsewhere@@3HA": 2})
+    v, d = adjudicate(row, t, b, addr)
+    check("genuine identity (two named globals, both consumed at +0) stays IDENTITY",
+          d[0][1] == "IDENTITY", d[0][1])
+
+    # The displacement resolves to a THIRD symbol: the target reads
+    # gNumHeaps-0x13 (gInitted) but OURS names gElsewhere, a named global at a
+    # different address.  That is a real disagreement and must stay IDENTITY.
+    row = {"pairs": [{"target": "?gNumHeaps@@3HA", "base": "?gElsewhere@@3HA",
+                      "target_disps": [-19], "base_disps": [0]}]}
+    v, d = adjudicate(row, t, b, addr)
+    check("displacement resolving to a THIRD symbol stays IDENTITY",
+          d[0][1] == "IDENTITY", d[0][1])
+    # ...also when OUR name is unresolvable but the displaced address holds a
+    # NAMED symbol rather than an lbl_: the lbl_ fallback is for statics dtk
+    # could not name, never for a named global we happen not to reference.
+    addr3 = AddressIndex({"?gNumHeaps@@3HA": 0x830E56EC,
+                          "?gNamedThird@@3_NA": 0x830E56D9})
+    row = {"pairs": [{"target": "?gNumHeaps@@3HA", "base": "gInitted",
+                      "target_disps": [-19], "base_disps": [0]}]}
+    b = collections.Counter({"gInitted": 2})
+    v, d = adjudicate(row, t, b, addr3)
+    check("unresolvable base + displacement onto a NAMED third symbol stays IDENTITY",
+          d[0][1] == "IDENTITY", d[0][1])
+    # ...and when the displaced address resolves to nothing at all.
+    addr4 = AddressIndex({"?gNumHeaps@@3HA": 0x830E56EC})
+    v, d = adjudicate(row, t, b, addr4)
+    check("unresolvable base + displacement onto NOTHING stays IDENTITY",
+          d[0][1] == "IDENTITY", d[0][1])
+
+    # Vacuity: with no address index nothing may be reclassified.
+    row = {"pairs": [{"target": "gUsingCD", "base": "gSystemConfig",
+                      "target_disps": [-8], "base_disps": [0]}]}
+    t = collections.Counter({"gUsingCD": 2})
+    b = collections.Counter({"gSystemConfig": 2})
+    v, d = adjudicate(row, t, b, None)
+    check("no address index => never ANCHOR_DISPLACEMENT",
+          d[0][1] == "IDENTITY", d[0][1])
+    # ...and a pair whose rows.json predates the gate's disps fields (no
+    # displacement data at all) must not be reclassified either.
+    row = {"pairs": [{"target": "gUsingCD", "base": "gSystemConfig"}]}
+    v, d = adjudicate(row, t, b, addr)
+    check("no displacement data on the pair => IDENTITY (never guessed)",
+          d[0][1] == "IDENTITY", d[0][1])
+
     print("\nSELFTEST", "PASS" if ok else "FAIL")
     return 0 if ok else 1
 
@@ -230,7 +496,18 @@ def main() -> int:
     ap.add_argument("--rows", help="JSON written by reloc_name_gate.py --json-out")
     ap.add_argument("--project", default=".")
     ap.add_argument("--cli", default="bin/objdiff-cli")
+    ap.add_argument("--config", default=None,
+                    help="dtk symbols.txt (default: config/<title>/symbols.txt); "
+                         "resolves anchor+displacement for ANCHOR_DISPLACEMENT")
+    ap.add_argument("--map", default=None,
+                    help="MSVC linker map (default: orig/<title>/ham_xbox_r.map)")
+    ap.add_argument("--no-anchor", action="store_true",
+                    help="disable the ANCHOR_DISPLACEMENT verdict (every such "
+                         "pair then reads IDENTITY, as before 2026-09-11)")
     ap.add_argument("--leads-out", help="write the IDENTITY rows here")
+    ap.add_argument("--anchor-out", help="write the ANCHOR_DISPLACEMENT rows here")
+    ap.add_argument("--list-identity", action="store_true",
+                    help="list every surviving IDENTITY row (unit, symbol, size, pairs)")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
 
@@ -239,10 +516,30 @@ def main() -> int:
     if not args.rows:
         ap.error("--rows is required (or --selftest)")
 
+    project = Path(args.project).resolve()
     rows = [r for r in json.load(open(args.rows)) if r.get("pairs")]
     ruler = ruler_mod.resolve_ruler(args.project, ruler_mod.RULER_GRADED)
     print(f"ruler: {' '.join(ruler.args)}")
     print(f"standing rows: {len(rows)}  bytes: {sum(r['size'] for r in rows)}")
+
+    # ── address index for ANCHOR_DISPLACEMENT ────────────────────────────────
+    addr = None
+    if not args.no_anchor:
+        cfgfile = args.config or next(
+            (str(p) for p in sorted(project.glob("config/*/symbols.txt"))), None)
+        mapfile = args.map or next(
+            (str(p) for p in sorted(project.glob("orig/*/ham_xbox_r.map"))), None)
+        if cfgfile:
+            cfg = gate_mod.load_config_symbols(cfgfile)
+            midx = gate_mod.load_map_index(mapfile) if mapfile else {}
+            addr = AddressIndex(cfg, midx)
+            print(f"address index: {len(cfg)} config symbols ({cfgfile})"
+                  f" + {len(midx)} map names ({mapfile or '-'})")
+        else:
+            print("address index: NO config/*/symbols.txt -- ANCHOR_DISPLACEMENT "
+                  "DISABLED, every anchor pair will read IDENTITY")
+    else:
+        print("address index: --no-anchor, ANCHOR_DISPLACEMENT DISABLED")
 
     by_unit = collections.defaultdict(list)
     for r in rows:
@@ -252,44 +549,79 @@ def main() -> int:
     for unit, syms in sorted(by_unit.items()):
         sets.update(relocation_multisets(args.cli, args.project, ruler, unit, syms))
 
-    pair_tot, pair_order = collections.Counter(), collections.Counter()
-    verdicts, leads, no_data = collections.Counter(), [], 0
+    # A rows.json written before the gate carried displacement data gets it
+    # from the diff fetched above; counted so the provenance is visible.
+    filled = 0
+    for r in rows:
+        k = (r["unit"], r["symbol"])
+        if k not in sets:
+            continue
+        pd = sets[k][2]
+        for p in r["pairs"]:
+            if "target_disps" not in p and "base_disps" not in p:
+                td, bd = pd.get((p["target"], p["base"]), ([], []))
+                p["target_disps"], p["base_disps"] = td, bd
+                filled += 1
+    if filled:
+        print(f"displacements filled from the diff (rows.json lacked them): {filled} pairs")
+
+    VERDICTS = ("ORDER", "ANCHOR_DISPLACEMENT", "IDENTITY")
+    pair_tot = collections.Counter()
+    pair_v = {v: collections.Counter() for v in VERDICTS}
+    verdicts, verdict_bytes = collections.Counter(), collections.Counter()
+    leads, anchors, no_data = [], [], 0
     for r in rows:
         k = (r["unit"], r["symbol"])
         if k not in sets:
             no_data += 1
             continue
-        t, b = sets[k]
-        v, details = adjudicate(r, t, b)
+        t, b, _pd = sets[k]
+        v, details = adjudicate(r, t, b, addr)
         verdicts[v] += 1
-        for label, pv, only_t, only_b in details:
+        verdict_bytes[v] += r["size"]
+        for label, pv, only_t, only_b, note in details:
             pair_tot[label] += 1
-            if pv == "ORDER":
-                pair_order[label] += 1
+            pair_v[pv][label] += 1
+        rec = {"unit": r["unit"], "symbol": r["symbol"],
+               "size": r["size"], "other_charges": r["other_charges"],
+               "verdict": v,
+               "pairs": [{"class": c, "verdict": pv, "target_only": ot,
+                          "base_only": ob, "note": note}
+                         for c, pv, ot, ob, note in details]}
         if v == "IDENTITY":
-            leads.append({"unit": r["unit"], "symbol": r["symbol"],
-                          "size": r["size"], "other_charges": r["other_charges"],
-                          "pairs": [{"class": c, "verdict": pv,
-                                     "target_only": ot, "base_only": ob}
-                                    for c, pv, ot, ob in details]})
+            leads.append(rec)
+        elif v == "ANCHOR_DISPLACEMENT":
+            anchors.append(rec)
 
     print("\n=== per-charged-pair adjudication, by symbol class ===")
-    print(f"{'class':36s} {'pairs':>6s} {'ORDER':>7s} {'IDENTITY':>9s}")
+    print(f"{'class':36s} {'pairs':>6s} {'ORDER':>7s} {'ANCHOR_DISP':>12s} {'IDENTITY':>9s}")
     for c in sorted(pair_tot, key=lambda c: -pair_tot[c]):
-        print(f"{c:36s} {pair_tot[c]:6d} {pair_order[c]:7d} "
-              f"{pair_tot[c] - pair_order[c]:9d}")
-    tot, to = sum(pair_tot.values()), sum(pair_order.values())
-    print(f"{'TOTAL':36s} {tot:6d} {to:7d} {tot - to:9d}")
+        print(f"{c:36s} {pair_tot[c]:6d} {pair_v['ORDER'][c]:7d} "
+              f"{pair_v['ANCHOR_DISPLACEMENT'][c]:12d} {pair_v['IDENTITY'][c]:9d}")
+    tot = sum(pair_tot.values())
+    print(f"{'TOTAL':36s} {tot:6d} {sum(pair_v['ORDER'].values()):7d} "
+          f"{sum(pair_v['ANCHOR_DISPLACEMENT'].values()):12d} "
+          f"{sum(pair_v['IDENTITY'].values()):9d}")
 
-    print(f"\n=== rows === {dict(verdicts)}   (no diff data: {no_data})")
-    ob = sum(r["size"] for r in rows
-             if (r["unit"], r["symbol"]) in sets
-             and adjudicate(r, *sets[(r["unit"], r["symbol"])])[0] == "ORDER_ONLY")
-    print(f"ORDER_ONLY bytes: {ob}")
+    print(f"\n=== rows ===   (no diff data: {no_data})")
+    for v in ("IDENTITY", "ANCHOR_DISPLACEMENT", "ORDER_ONLY"):
+        print(f"  {v:20s} {verdicts[v]:5d} rows  {verdict_bytes[v]:8d} B")
+
+    if args.list_identity:
+        print("\n=== surviving IDENTITY rows ===")
+        for rec in sorted(leads, key=lambda r: -r["size"]):
+            print(f"{rec['size']:>7} B  {rec['unit']} :: {rec['symbol']}")
+            for p in rec["pairs"]:
+                if p["verdict"] == "IDENTITY":
+                    print(f"           [{p['class']}] target-only {p['target_only']}"
+                          f"  ours-only {p['base_only']}")
 
     if args.leads_out:
         json.dump(leads, open(args.leads_out, "w"), indent=1)
         print(f"wrote {len(leads)} IDENTITY leads -> {args.leads_out}")
+    if args.anchor_out:
+        json.dump(anchors, open(args.anchor_out, "w"), indent=1)
+        print(f"wrote {len(anchors)} ANCHOR_DISPLACEMENT rows -> {args.anchor_out}")
     return 0
 
 

@@ -293,8 +293,85 @@ def index_report(path: Path) -> dict:
     return out
 
 
+#: Opcodes that end an anchor register's live range without consuming it as a
+#: base address.  A call clobbers every volatile register.
+_ANCHOR_KILL = {"bl", "b", "blr", "bctr", "bctrl", "bdnz"}
+#: Ops that write `args[0]` as a destination; a store's args[0] is a SOURCE.
+_ANCHOR_STORE_PREFIX = ("st",)
+ANCHOR_SCAN_LIMIT = 16
+
+
+def _reg(a) -> str | None:
+    return a.get("value") if isinstance(a, dict) and a.get("type") == "Register" else None
+
+
+def anchor_displacements(instrs, side: str, index: int, max_scan: int = ANCHOR_SCAN_LIMIT):
+    """Displacements applied to the anchor register defined at `instrs[index]`.
+
+    MSVC materialises ONE `lis/addi` (or `lis` + `@l`-displaced load) anchor for
+    a pair of same-section globals and reaches the neighbour by a compile-time
+    displacement on the load/store -- `lis/addi r11, ?gNumHeaps@@3HA; lbz r10,
+    -0x13(r11)` reads gInitted, not gNumHeaps.  The relocation names only the
+    anchor, so a positional pair of two *different* anchors can still address
+    the same byte of memory.  This returns every displacement the consumers of
+    that anchor apply, so the caller can resolve `anchor + disp` against
+    `symbols.txt` and tell the two cases apart.
+
+    `side` is "target" or "base".  Returned displacements: an `@l`-form
+    memory operand (`Symbol` in the displacement slot) is 0; a plain `Signed`
+    displacement is its value; `addi rD, rA, imm` off the anchor is `imm`.
+    The scan stops at a call, a branch, or a redefinition of the register, and
+    after `max_scan` rows.  Returns [] when the row does not define a register
+    (a `bl` pair has no anchor).
+    """
+    ins0 = (instrs[index].get(side) or {}) if 0 <= index < len(instrs) else {}
+    ta0 = ins0.get("typed_args") or []
+    reg = _reg(ta0[0]) if ta0 else None
+    if reg is None:
+        return []
+    disps: list[int] = []
+    for ins in instrs[index + 1: index + 1 + max_scan]:
+        s = ins.get(side)
+        if not s:
+            continue
+        op, args = s.get("opcode") or "", s.get("typed_args") or []
+        if op in _ANCHOR_KILL:
+            break
+        # `addi reg, reg, sym@l` completes a lis/addi anchor: keep scanning.
+        if (op == "addi" and len(args) == 3 and _reg(args[0]) == reg
+                and _reg(args[1]) == reg and args[2].get("type") == "Symbol"):
+            continue
+        # Memory operand `rD, disp(reg)`.
+        if (len(args) == 3 and _reg(args[2]) == reg
+                and args[1].get("type") in ("Signed", "Symbol")):
+            disps.append(int(args[1]["value"]) if args[1]["type"] == "Signed" else 0)
+            if _reg(args[0]) == reg and not op.startswith(_ANCHOR_STORE_PREFIX):
+                break  # load into the anchor register itself: live range ends
+            continue
+        # Address arithmetic off the anchor: `addi rD, reg, imm`.
+        if (op in ("addi", "subi") and len(args) == 3 and _reg(args[1]) == reg
+                and args[2].get("type") == "Signed"):
+            imm = int(args[2]["value"])
+            disps.append(-imm if op == "subi" else imm)
+            if _reg(args[0]) == reg:
+                break
+            continue
+        # Any other write to the register ends its live range.
+        if args and _reg(args[0]) == reg and not op.startswith(_ANCHOR_STORE_PREFIX) \
+                and not op.startswith("cmp"):
+            break
+    return disps
+
+
 def charged_pairs(cli, project, ruler, population, timeout):
-    """(unit, sym) -> {'pairs': [...], 'other': n} for the population rows."""
+    """(unit, sym) -> {'pairs': [...], 'other': n, 'disps': {...}} for the population.
+
+    `disps` maps each (target, base) pair to `(target_disps, base_disps)`: the
+    union over every charged row of that pair of the displacements its anchor's
+    consumers apply on each side (see `anchor_displacements`).  It is what lets
+    `reloc_order_vs_identity.py` file an ANCHOR_DISPLACEMENT verdict instead of
+    IDENTITY.
+    """
     by_unit = collections.defaultdict(list)
     for u, s in population:
         by_unit[u].append(s)
@@ -322,7 +399,10 @@ def charged_pairs(cli, project, ruler, population, timeout):
             if sym not in syms:
                 continue
             pairs, other = set(), 0
-            for ins in rec.get("instructions", []) or []:
+            disps: dict[tuple, tuple[set, set]] = collections.defaultdict(
+                lambda: (set(), set()))
+            instrs = rec.get("instructions", []) or []
+            for i, ins in enumerate(instrs):
                 mt = ins.get("match_type")
                 if mt == "equal":
                     continue
@@ -336,10 +416,15 @@ def charged_pairs(cli, project, ruler, population, timeout):
                             sp = (x.get("value"), y.get("value"))
                 if mt == "diff_arg" and kinds == {"Symbol"} and sp:
                     pairs.add(sp)
+                    td, bd = disps[sp]
+                    td.update(anchor_displacements(instrs, "target", i))
+                    bd.update(anchor_displacements(instrs, "base", i))
                 else:
                     other += 1
             out[(unit, sym)] = {"pairs": sorted(pairs, key=lambda p: (str(p[0]), str(p[1]))),
-                                "other": other}
+                                "other": other,
+                                "disps": {p: (sorted(td), sorted(bd))
+                                          for p, (td, bd) in disps.items()}}
     return out
 
 
@@ -438,6 +523,70 @@ def _selftest() -> int:
     # Vacuity control: with no map, nothing may be forgiven silently.
     check("no map index => MAP_NOT_CONSULTED, never FOLD",
           map_verdict({}, "??_7A@@6B@", "??_7B@@6B@") == "NEITHER_IN_MAP")
+
+    # ── anchor-displacement extraction, on rows recorded from this tree ──────
+    # `?MemPushTemp@@YAXXZ`, objdiff 4.2.8, name_check, 2026-09-11.  The target
+    # anchors on ?gNumHeaps@@3HA and reads gInitted at -0x13; ours anchors on
+    # gInitted directly with an @l-form lbz.  If the walker stops returning
+    # -19 for the target side, the ANCHOR_DISPLACEMENT verdict downstream is
+    # starved and every such row reads IDENTITY again.
+    R = lambda v: {"type": "Register", "value": v}  # noqa: E731
+    S = lambda v: {"type": "Symbol", "value": v}    # noqa: E731
+    I = lambda v: {"type": "Signed", "value": v}    # noqa: E731
+    _rows = [
+        {"target": {"opcode": "lis", "typed_args": [R("r11"), S("?gNumHeaps@@3HA")]},
+         "base": {"opcode": "lis", "typed_args": [R("r11"), S("gInitted")]},
+         "match_type": "diff_arg"},
+        {"target": {"opcode": "addi", "typed_args": [R("r11"), R("r11"), S("?gNumHeaps@@3HA")]},
+         "match_type": "delete"},
+        {"target": {"opcode": "lbz", "typed_args": [R("r10"), I(-19), R("r11")]},
+         "base": {"opcode": "lbz", "typed_args": [R("r11"), S("gInitted"), R("r11")]},
+         "match_type": "diff_arg"},
+        {"target": {"opcode": "cmplwi", "typed_args": [R("r10"), {"type": "Unsigned", "value": 0}]},
+         "base": {"opcode": "cmplwi", "typed_args": [R("r11"), {"type": "Unsigned", "value": 0}]},
+         "match_type": "diff_arg"},
+        {"target": {"opcode": "beq", "typed_args": [{"type": "BranchDest", "value": 1}]},
+         "base": {"opcode": "beq", "typed_args": [{"type": "BranchDest", "value": 1}]},
+         "match_type": "equal"},
+        {"base": {"opcode": "lis", "typed_args": [R("r11"), S("?gNumHeaps@@3HA")]},
+         "match_type": "insert"},
+        {"target": {"opcode": "lwz", "typed_args": [R("r11"), I(0), R("r11")]},
+         "base": {"opcode": "lwz", "typed_args": [R("r11"), S("?gNumHeaps@@3HA"), R("r11")]},
+         "match_type": "equal"},
+    ]
+    # The target reaches BOTH globals off one anchor: gInitted at -0x13 and
+    # gNumHeaps itself at +0 (the `lwz r11, 0x0(r11)` after the branch).
+    check("MemPushTemp target anchor: lbz -0x13(r11) + lwz 0x0(r11) yield [-19, 0]",
+          anchor_displacements(_rows, "target", 0) == [-19, 0],
+          str(anchor_displacements(_rows, "target", 0)))
+    # Ours: `lbz r11, gInitted@l(r11)` reloads the anchor register, so the
+    # walk ends there with the @l form's 0 and never reaches the later lis.
+    check("MemPushTemp base anchor: @l-form lbz yields [0] and ends the walk",
+          anchor_displacements(_rows, "base", 0) == [0],
+          str(anchor_displacements(_rows, "base", 0)))
+    # A load INTO the anchor register ends its live range: the displacement
+    # on the next row is applied to the loaded value, not to the anchor.
+    _reload = [
+        {"target": {"opcode": "lis", "typed_args": [R("r11"), S("X")]}},
+        {"target": {"opcode": "lwz", "typed_args": [R("r11"), S("X"), R("r11")]}},
+        {"target": {"opcode": "lwz", "typed_args": [R("r10"), I(8), R("r11")]}},
+    ]
+    check("walker stops at a load into the anchor register",
+          anchor_displacements(_reload, "target", 0) == [0],
+          str(anchor_displacements(_reload, "target", 0)))
+    # ...and at a call, which clobbers every volatile register.
+    _call = [
+        {"target": {"opcode": "lis", "typed_args": [R("r11"), S("X")]}},
+        {"target": {"opcode": "bl", "typed_args": [S("f")]}},
+        {"target": {"opcode": "lwz", "typed_args": [R("r10"), I(8), R("r11")]}},
+    ]
+    check("walker stops at a call",
+          anchor_displacements(_call, "target", 0) == [],
+          str(anchor_displacements(_call, "target", 0)))
+    check("a `bl` pair has no anchor",
+          anchor_displacements([{"target": {"opcode": "bl", "typed_args": [S("f")]},
+                                 "base": {"opcode": "bl", "typed_args": [S("g")]}}],
+                               "target", 0) == [])
 
     print("PASS" if ok else "FAIL")
     return 0 if ok else 1
@@ -567,7 +716,7 @@ def main(argv=None) -> int:
     buckets = collections.Counter()
     rows = []
     for key in sorted(pop, key=lambda k: -N[k][1]):
-        d = detail.get(key, {"pairs": [], "other": 0})
+        d = detail.get(key, {"pairs": [], "other": 0, "disps": {}})
         kept, exempted = [], collections.Counter()
         for t, b in d["pairs"]:
             bucket = None if args.no_exempt else classify_exempt(t, b)
@@ -577,10 +726,14 @@ def main(argv=None) -> int:
                 continue
             ts, bs = (t if isinstance(t, str) else repr(t),
                       b if isinstance(b, str) else repr(b))
+            td, bd = d.get("disps", {}).get((t, b), ([], []))
             kept.append({"target": ts, "base": bs,
                          "verdict": map_verdict(idx, ts, bs),
                          "target_addrs": idx.get(ts, []),
-                         "base_addrs": idx.get(bs, [])})
+                         "base_addrs": idx.get(bs, []),
+                         # displacements the anchor's consumers apply on each
+                         # side -- consumed by reloc_order_vs_identity.py
+                         "target_disps": td, "base_disps": bd})
         if not d["pairs"]:
             buckets["no_symbol_pair_extracted"] += 1
         rows.append({"unit": key[0], "symbol": key[1], "size": N[key][1],
