@@ -45,17 +45,17 @@ bool ClipPlayer::Init(RndPropAnim *anim) {
             mMasterClipKeys = masterKeys->AsSymbolKeys();
         }
         if (mClipKeys && mMasterClipKeys && mClipDir) {
-            Key<Symbol> *k1;
-            Key<Symbol> *k2;
-            if (TheHamDirector->GetPracticeFrames(k2, k1)) {
-                mPracticeStart = Round(FrameToBeat(k1->frame));
-                mPracticeEnd = Round(FrameToBeat(k2->frame)) - 1.0f;
-                String str(k1->value.Str());
+            Key<Symbol> *endKey;
+            Key<Symbol> *startKey;
+            if (TheHamDirector->GetPracticeFrames(startKey, endKey)) {
+                mPracticeStart = Round(FrameToBeat(startKey->frame));
+                mPracticeEnd = Round(FrameToBeat(endKey->frame)) - 1.0f;
+                String str(startKey->value.Str());
                 str.ReplaceAll('*', '\0');
-                auto _tmp4 = mClipDir->Find<CharClip>(MakeString("%s_in", str.c_str()), false);
-                mInClip =
-                    _tmp4;
-                str = k2->value;
+                mInClip = mClipDir->Find<CharClip>(MakeString("%s_in", str.c_str()), false);
+                // The out clip is named by the key before the practice end key.
+                endKey--;
+                str = endKey->value;
                 str.ReplaceAll('*', '\0');
                 mOutClip =
                     mClipDir->Find<CharClip>(MakeString("%s_out", str.c_str()), false);
