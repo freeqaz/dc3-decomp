@@ -28999,6 +28999,15 @@
    "n_map_names_at_addr": 2,
    "kind": "code",
    "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8278aed0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (?GetListState@UIList@@QAAAAVUIListState@@XZ), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted."
+  },
+  {
+   "name": "retailmap:??0bad_cast@std@@QAA@ABV01@@Z",
+   "survivor": "??0bad_cast@std@@QAA@ABV01@@Z",
+   "address": "0x8299e190",
+   "folded": [
+    "??0bad_typeid@std@@QAA@ABV01@@Z"
+   ],
+   "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address -- lines 68237/68238 put ??0bad_cast@std@@QAA@ABV01@@Z and ??0bad_typeid@std@@QAA@ABV01@@Z both at 8299e190 (LIBCMT:rtti.obj), and no third name sits there. build/373307D9/obj/xdk/LIBCMT/rtti.obj defines only the bad_cast spelling, so bad_cast is the survivor."
   }
  ]
 }
