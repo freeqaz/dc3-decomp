@@ -79,8 +79,8 @@ XGHierarchicalZSize(UINT Width, UINT Height, D3DMULTISAMPLE_TYPE MultiSample) {
     if ((int)MultiSample == 2) {
         width = Width * 2;
     }
-    UINT alignedWidth = (width + 31) & ~31;
-    UINT alignedHeight = (height + 15) & ~15;
+    UINT alignedWidth = ((width + 31) / 32) * 32;
+    UINT alignedHeight = ((height + 15) / 16) * 16;
     return alignedWidth * alignedHeight / 0x200;
 }
 
