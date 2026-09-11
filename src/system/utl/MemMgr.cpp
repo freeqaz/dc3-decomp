@@ -836,7 +836,7 @@ void MemPrintOverview(int heapId, char *const buf) {
         int usageKB = usage >> 10;
         const char *str = MakeString(
             " [%5s] KB free:%7u(%7u) usage:%5i\n",
-            "physical", availKB, minFreeKB, usageKB
+            (const char *)"physical", availKB, minFreeKB, usageKB
         );
         strcpy(p, str);
         auto _tmp0 = strlen(p);
