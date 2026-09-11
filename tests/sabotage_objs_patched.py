@@ -24,9 +24,11 @@ ROOT = Path(__file__).resolve().parents[1]
 VOP = ROOT / "scripts" / "verify_objs_patched.py"
 META = ROOT / "scripts" / "obj_build_metadata_patcher.py"
 IO = ROOT / "scripts" / "obj_patch_io.py"
+DSS = ROOT / "scripts" / "verify_data_symbol_spelling.py"
 TESTS = ROOT / "tests" / "test_objs_patched.py"
+DSS_TESTS = ROOT / "tests" / "test_data_symbol_spelling.py"
 
-# (label, file, old, new, [tests that MUST fail])
+# (label, file, old, new, [tests that MUST fail][, test file -- default TESTS])
 MUTATIONS = [
     ("M1  emit records a constant hash", VOP,
      '"sha256": sha256(p), "size": st.st_size,',
@@ -159,31 +161,76 @@ MUTATIONS = [
      '    out = []\n    for praw, size in []:',
      ["SyntheticObjectSanityTest::test_fixture_carries_both_field_kinds",
       "ObjModeTest::test_obj_zeroes_both_fields_preserves_mtime_and_is_idempotent"]),
+
+    # -- scripts/verify_data_symbol_spelling.py (the static-vs-global check) --
+    ("M26 static-vs-mangled direction is never charged", DSS,
+     '        if t is not None and t != ident:            # ours bare, target ?x@@3',
+     '        if False:            # ours bare, target ?x@@3',
+     ["DisagreementTest::test_static_vs_mangled_target_is_red_and_names_the_variable",
+      "DisagreementTest::test_the_inline_short_name_path_is_scanned_too",
+      "RefusalTest::test_selftest_is_not_vacuous"], DSS_TESTS),
+
+    ("M27 mangled-vs-bare direction is never charged", DSS,
+     '        if t is not None and t == ident:            # ours ?x@@3, target bare',
+     '        if False:            # ours ?x@@3, target bare',
+     ["DisagreementTest::test_global_ours_vs_bare_target_is_red",
+      "RefusalTest::test_selftest_is_not_vacuous"], DSS_TESTS),
+
+    ("M28 inline (<=8 byte) COFF names are dropped", DSS,
+     '                name = e[:8].rstrip(b"\\0").decode("latin1")',
+     '                name = ""',
+     ["DisagreementTest::test_the_inline_short_name_path_is_scanned_too",
+      "SyntheticObjectSanityTest::test_fixture_parses_back_with_both_name_encodings"],
+     DSS_TESTS),
+
+    ("M29 the .s cross-check is disabled", DSS,
+     '    return coff - lst, lst - coff',
+     '    return set(), set()',
+     ["CrossCheckTest::test_listing_naming_a_datum_the_coff_table_lacks_is_refused",
+      "CrossCheckTest::test_coff_table_naming_a_datum_the_listing_lacks_is_refused",
+      "CrossCheckTest::test_a_refusal_outranks_a_disagreement"], DSS_TESTS),
+
+    ("M30 a disagreement exits 0", DSS,
+     '    return EXIT_DISAGREEMENT\n\n\n# ── --selftest',
+     '    return 0\n\n\n# ── --selftest',
+     ["DisagreementTest::test_static_vs_mangled_target_is_red_and_names_the_variable",
+      "DisagreementTest::test_global_ours_vs_bare_target_is_red"], DSS_TESTS),
+
+    ("M31 an empty universe exits 0", DSS,
+     '              f"0 units is not a pass. Run a full `ninja` first.", file=err)\n        return EXIT_EMPTY_UNIVERSE',
+     '              f"0 units is not a pass. Run a full `ninja` first.", file=err)\n        return 0',
+     ["RefusalTest::test_an_empty_universe_is_a_refusal_not_a_pass"], DSS_TESTS),
 ]
 
 
-def failing_tests() -> set:
+def failing_tests(tests: Path = TESTS) -> set:
     p = subprocess.run(
-        [sys.executable, "-m", "pytest", str(TESTS), "-q", "--no-header",
+        [sys.executable, "-m", "pytest", str(tests), "-q", "--no-header",
          "-p", "no:cacheprovider", "--tb=no"],
         cwd=str(ROOT), capture_output=True, text=True)
     out = p.stdout + p.stderr
     fails = set(re.findall(r"^(?:FAILED|ERROR|SUBFAILED)(?:\([^)]*\))? [^ ]*::(\S+)", out, re.M))
     if not fails:
-        fails = set(re.findall(r"^\S*tests/test_objs_patched\.py::(\S+)", out, re.M))
+        fails = set(re.findall(r"^\S*tests/test_[a-z_]+\.py::(\S+)", out, re.M))
     return fails, p.returncode, out
 
 
 def main() -> int:
-    base_fails, base_rc, base_out = failing_tests()
-    if base_rc != 0 or base_fails:
-        print("BASELINE IS NOT GREEN -- refusing to interpret any mutation.")
-        print(base_out[-3000:])
-        return 1
-    print(f"baseline: green\n")
+    test_files = sorted({(m[5] if len(m) > 5 else TESTS) for m in MUTATIONS},
+                        key=str)
+    for tf in test_files:
+        base_fails, base_rc, base_out = failing_tests(tf)
+        if base_rc != 0 or base_fails:
+            print(f"BASELINE IS NOT GREEN ({tf.name}) -- refusing to interpret "
+                  f"any mutation.")
+            print(base_out[-3000:])
+            return 1
+    print(f"baseline: green ({', '.join(t.name for t in test_files)})\n")
 
     bad = []
-    for label, path, old, new, must_fail in MUTATIONS:
+    for mutation in MUTATIONS:
+        label, path, old, new, must_fail = mutation[:5]
+        tests = mutation[5] if len(mutation) > 5 else TESTS
         original = path.read_text()
         if original.count(old) != 1:
             print(f"[{label}] SKIP-ERROR: anchor appears "
@@ -192,7 +239,7 @@ def main() -> int:
             continue
         path.write_text(original.replace(old, new, 1))
         try:
-            fails, rc, out = failing_tests()
+            fails, rc, out = failing_tests(tests)
         finally:
             path.write_text(original)
         missed = [t for t in must_fail
@@ -206,10 +253,11 @@ def main() -> int:
               f"{' ...' if len(fails) > 6 else ''}")
 
     # Final control: the tree must be back to green after all restores.
-    fails, rc, out = failing_tests()
-    print(f"\nafter restore: rc={rc}, failing={sorted(fails)}")
-    if rc != 0:
-        bad.append(("RESTORE", "tree not green after restore"))
+    for tf in test_files:
+        fails, rc, out = failing_tests(tf)
+        print(f"\nafter restore ({tf.name}): rc={rc}, failing={sorted(fails)}")
+        if rc != 0:
+            bad.append(("RESTORE", f"{tf.name} not green after restore"))
 
     print(f"\n{len(MUTATIONS) - len([b for b in bad if b[0] != 'RESTORE'])}"
           f"/{len(MUTATIONS)} mutations detected")
