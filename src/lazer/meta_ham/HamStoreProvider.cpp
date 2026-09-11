@@ -190,6 +190,8 @@ Symbol HamStoreProvider::CurrentSort() const {
     return gNullStr;
 }
 
+std::list<StoreOffer *> *HamStoreProvider::GetOffersInCart() { return &mCartOffers; }
+
 // action: 0 = add to cart, 1 = remove from cart, 2 = clear cart
 void HamStoreProvider::UpdateOffersInCart(StoreOffer *offer, int i) {
     switch (i) {

@@ -203,61 +203,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
             static_cast<CampaignPerformer *>(MetaPerformer::Current());
         campaignPerf->SetCampaignMindControlComplete(true);
     }
-    if (++mCurrentIndex < (int)mEntries.size() && !b2) {
-        Entry &nextEntry = mEntries[mCurrentIndex];
-        bool loadCrew = false;
-        if (*nextEntry.mCrew1Symbol.Str() != '\0') {
-            loadCrew = true;
-            HamPlayerData *hpd = TheGameData->Player(0);
-            hpd->SetOutfit("");
-            hpd->SetCrew(nextEntry.mCrew1Symbol);
-            if (nextEntry.mGameplayMode == Symbol("mind_control")) {
-                hpd->SetOutfit("lima06");
-            }
-        }
-        if (*nextEntry.mCrew2Symbol.Str() != '\0') {
-            loadCrew = true;
-            HamPlayerData *hpd = TheGameData->Player(1);
-            hpd->SetOutfit("");
-            hpd->SetCrew(nextEntry.mCrew2Symbol);
-            if (nextEntry.mGameplayMode == Symbol("mind_control")) {
-                hpd->SetOutfit("rasa06");
-            }
-        }
-        if (loadCrew && isLoaded) {
-            TheHamDirector->LoadCrew(
-                TheGameData->Player(0)->Crew(), TheGameData->Player(1)->Crew()
-            );
-        }
-        static Symbol hud_panel("hud_panel");
-        static Symbol clear_flash_cards("clear_flash_cards");
-        static Symbol clear_all_flashcard_campaign_status(
-            "clear_all_flashcard_campaign_status"
-        );
-        TheMidiParserMgr->GetParser(midi_player)->SetProperty(active, 0);
-        TheHamProvider->SetProperty(holla_back_config, nextEntry.mModeConfig);
-        if (isLoaded) {
-            ObjectDir *hudPanel = DataVariable(hud_panel).Obj<ObjectDir>();
-            if (hudPanel) {
-                hudPanel->Handle(Message(clear_flash_cards, 0), true);
-                hudPanel->Handle(Message(clear_flash_cards, 1), true);
-                hudPanel->Handle(Message(clear_all_flashcard_campaign_status), true);
-            }
-        }
-        if (nextEntry.mGameplayMode == "holla_back") {
-            TheHamDirector->StartStopVisualizer(true, 0);
-        }
-        TheGameMode->SetGameplayMode(nextEntry.mGameplayMode, nextEntry.mGameplayMode == perform);
-        TheGame->LoadNewSong(nextEntry.mSongLongName, nextEntry.mSongShortName);
-        mCurrentPlaybackPosition = TheTaskMgr.UISeconds();
-        static Symbol deinit("deinit");
-        UIPanel *gamePanel = ObjectDir::Main()->Find<UIPanel>("game_panel");
-        gamePanel->Handle(Message(deinit), true);
-        if (nextEntry.mGameplayMode == "holla_back") {
-            TheHamProvider->SetProperty("hide_venue", true);
-        }
-        return false;
-    } else {
+    if (++mCurrentIndex >= (int)mEntries.size() || b2) {
         MILO_LOG("SongSequence::DoNext: terminating. forced=%s\n", b2 ? "T" : "F");
         static Symbol holla_back("holla_back");
         Symbol mode = TheGameMode->Property(gameplay_mode)->Sym();
@@ -278,6 +224,59 @@ bool SongSequence::DoNext(bool b1, bool b2) {
         mCurrentIndex = -1;
         return true;
     }
+    Entry &nextEntry = mEntries[mCurrentIndex];
+    bool loadCrew = false;
+    if (*nextEntry.mCrew1Symbol.Str() != '\0') {
+        loadCrew = true;
+        HamPlayerData *hpd = TheGameData->Player(0);
+        hpd->SetOutfit("");
+        hpd->SetCrew(nextEntry.mCrew1Symbol);
+        if (nextEntry.mGameplayMode == Symbol("mind_control")) {
+            hpd->SetOutfit("lima06");
+        }
+    }
+    if (*nextEntry.mCrew2Symbol.Str() != '\0') {
+        loadCrew = true;
+        HamPlayerData *hpd = TheGameData->Player(1);
+        hpd->SetOutfit("");
+        hpd->SetCrew(nextEntry.mCrew2Symbol);
+        if (nextEntry.mGameplayMode == Symbol("mind_control")) {
+            hpd->SetOutfit("rasa06");
+        }
+    }
+    if (loadCrew && isLoaded) {
+        TheHamDirector->LoadCrew(
+            TheGameData->Player(0)->Crew(), TheGameData->Player(1)->Crew()
+        );
+    }
+    static Symbol hud_panel("hud_panel");
+    static Symbol clear_flash_cards("clear_flash_cards");
+    static Symbol clear_all_flashcard_campaign_status(
+        "clear_all_flashcard_campaign_status"
+    );
+    TheMidiParserMgr->GetParser(midi_player)->SetProperty(active, 0);
+    TheHamProvider->SetProperty(holla_back_config, nextEntry.mModeConfig);
+    if (isLoaded) {
+        ObjectDir *hudPanel = DataVariable(hud_panel).Obj<ObjectDir>();
+        if (hudPanel) {
+            hudPanel->Handle(Message(clear_flash_cards, 0), true);
+            hudPanel->Handle(Message(clear_flash_cards, 1), true);
+            hudPanel->Handle(Message(clear_all_flashcard_campaign_status), true);
+        }
+    }
+    if (nextEntry.mGameplayMode == "holla_back") {
+        TheHamDirector->StartStopVisualizer(true, 0);
+    }
+    TheGameMode->SetGameplayMode(nextEntry.mGameplayMode, nextEntry.mGameplayMode == perform);
+    TheGame->LoadNewSong(nextEntry.mSongLongName, nextEntry.mSongShortName);
+    mCurrentPlaybackPosition = TheTaskMgr.UISeconds();
+    static Symbol deinit("deinit");
+    UIPanel *gamePanel = ObjectDir::Main()->Find<UIPanel>("game_panel");
+    gamePanel->Handle(Message(deinit), true);
+    if (nextEntry.mGameplayMode == "holla_back") {
+        TheHamProvider->SetProperty("hide_venue", true);
+    }
+    return false;
 }
 
 void SongSequence::OnSongLoaded() {

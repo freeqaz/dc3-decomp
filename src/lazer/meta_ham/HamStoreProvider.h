@@ -57,7 +57,7 @@ public:
 
     PackSongListProvider GetPackProvider() { return mPackProvider; }
     HamStoreFilterProvider *GetFilterProvider() { return mFilterProvider; }
-    std::list<StoreOffer *> *GetCartOffers() { return &mCartOffers; }
+    std::list<StoreOffer *> *GetOffersInCart();
 
 protected:
     std::vector<StoreOffer *> *mAllOffers;
