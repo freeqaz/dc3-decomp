@@ -87,7 +87,7 @@ public:
     bool mNeedsReEnum;
     StorePurchaser *mPurchaser; // 0x74
     StorePurchaseable *mCheckoutItem;
-    int mCheckoutProfile;
+    Profile *mCheckoutProfile;
     std::vector<std::pair<StorePurchaseable *, const Profile *>> mCartOffers;
     Symbol mPurchaseSource;
     Symbol mBackupPurchaseSource;
