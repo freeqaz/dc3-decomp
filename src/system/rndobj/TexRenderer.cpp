@@ -240,12 +240,11 @@ END_LOADS
 void RndTexRenderer::DrawToTexture() {
     if (TheRnd.DrawMode() != 0)
         return;
-    ObjPtr<RndDrawable> &_ref0 = mDrawable;
-    if (((Hmx::Object *)Dir() == (Hmx::Object *)_ref0) || !Showing())
+    if (((Hmx::Object *)Dir() == (Hmx::Object *)mDrawable) || !Showing())
         return;
     if (mDrawWorldOnly && !(TheRnd.ProcCmds() & kProcessWorld))
         return;
-    if (mDirty && _ref0 && mOutputTexture) {
+    if (mDirty && mDrawable && mOutputTexture) {
         if (!(mOutputTexture->GetType() & kProcessPost)) {
             MILO_NOTIFY_ONCE("%s not renderable", mOutputTexture->Name());
             return;
@@ -258,7 +257,7 @@ void RndTexRenderer::DrawToTexture() {
             HandleType(preRender);
         }
         RndCam *cam;
-        RndDir *rdir = dynamic_cast<RndDir *>((RndDrawable *)_ref0);
+        RndDir *rdir = dynamic_cast<RndDir *>((RndDrawable *)mDrawable);
         if (mImpostorHeight != 0.0f && rdir) {
             cam = RndCam::Current();
             tf98 = cam->WorldXfm();
@@ -285,7 +284,7 @@ void RndTexRenderer::DrawToTexture() {
         } else {
             cam = mCamera;
             if (!cam)
-                cam = _ref0->CamOverride();
+                cam = mDrawable->CamOverride();
             if (rdir && !cam)
                 cam = dynamic_cast<RndCam *>(rdir->CurCam());
             if (!cam)
@@ -376,10 +375,8 @@ void RndTexRenderer::DrawToTexture() {
             Hmx::Matrix3 m1a8;
             Hmx::Matrix3 m1cc;
             for (int i = 0; i < 3; i++) {
-                m1cc[i] = vertVectors[i];
-            }
-            for (int i = 0; i < 3; i++) {
                 m1a8[i].Set(verts[i]->tex.x, verts[i]->tex.y, 1.0f);
+                m1cc[i] = vertVectors[i];
             }
             Hmx::Matrix3 m1f0;
             Invert(m1a8, m1a8);
@@ -436,17 +433,13 @@ void RndTexRenderer::DrawToTexture() {
         if (mClearBuffer)
             TheRnd.Clear(1, mClearColor);
         int cap = (mFirstDraw && mPrimeDraw) ? 2 : 1;
-        if (cap > 0) {
-            int j = cap;
-            do {
-                DrawBefore();
-                if (rdir && rdir->ClassName() == "WorldDir") {
-                    rdir->RndDir::DrawShowing();
-                } else
-                    _ref0->DrawShowing();
-                DrawAfter();
-                j--;
-            } while (j != 0);
+        for (int i = 0; i < cap; i++) {
+            DrawBefore();
+            if (rdir && rdir->ClassName() == "WorldDir") {
+                rdir->RndDir::DrawShowing();
+            } else
+                mDrawable->DrawShowing();
+            DrawAfter();
         }
         cam->SetTargetTex(nullptr);
         if (!mMirrorCam) {

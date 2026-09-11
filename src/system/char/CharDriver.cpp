@@ -693,7 +693,7 @@ BEGIN_HANDLERS(CharDriver)
     HANDLE(set_first_beat_offset, OnSetFirstBeatOffset)
     HANDLE_ACTION(clear, Clear())
     HANDLE(get_clip_or_group_list, OnGetClipOrGroupList)
-    HANDLE_EXPR(get_last_played_group, mDefaultClip.Ptr())
+    HANDLE_EXPR(get_last_played_group, mClipGroup.Ptr())
     HANDLE_SUPERCLASS(RndPollable)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS

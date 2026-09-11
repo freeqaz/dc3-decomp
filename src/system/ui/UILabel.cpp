@@ -413,7 +413,7 @@ void UILabel::PreLoad(BinStream &bs) {
             d >> color;
             bool b2c4;
             d >> b2c4;
-            int i9 = (b2c4 == 0) ? 2 : 1;
+            int i9 = b2c4 ? 2 : 1;
             if (b2c4) {
                 FilePath fp = mLabelStyles[0].mFontResource.GetFile();
                 mLabelStyles.resize(i9);
