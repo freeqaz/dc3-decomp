@@ -251,8 +251,8 @@ void XboxContentMgr::StartRefresh() {
                     param = 0xff;
                 } else if (i == 6) {
                     handle = &mEnumHandles[6];
-                    flags = 0x7000;
                     param = 0xff;
+                    flags = 0x7000;
                 } else {
                     handle = &mEnumHandles[i];
                     param = i;
