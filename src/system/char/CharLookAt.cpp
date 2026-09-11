@@ -332,13 +332,14 @@ void CharLookAt::Poll() {
 }
 
 static void DrawBounds(Vector3 lookDir, const Hmx::Matrix3 &rotMat, const Vector3 &pos, RndGraph *graph) {
+    // No separate result local: the target multiplies back into lookDir's own
+    // parameter home (0xa0) and passes that to AddLine.
     Normalize(lookDir, lookDir);
-    Vector3 result;
-    Multiply(lookDir, rotMat, result);
+    Multiply(lookDir, rotMat, lookDir);
     Hmx::Color green(0, 1, 0, 1);
-    result *= 10.0f;
-    result += pos;
-    graph->AddLine(pos, result, green, false);
+    lookDir *= 10.0f;
+    lookDir += pos;
+    graph->AddLine(pos, lookDir, green, false);
 }
 
 void CharLookAt::Highlight() {
