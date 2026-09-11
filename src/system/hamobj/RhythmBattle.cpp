@@ -566,11 +566,12 @@ void RhythmBattle::Begin() {
             PropKeys *keys = TheHamDirector->GetPropKeys(kDifficultyExpert, "move");
             if (keys) {
                 Keys<Symbol, Symbol> *symKeys = keys->AsSymbolKeys();
+                int i = 0;
                 Symbol Rest("Rest.move");
                 Symbol rest("rest.move");
                 float f26 = 0;
                 Symbol startSym = Rest;
-                for (int i = 0; i < symKeys->size(); i++) {
+                for (; i < symKeys->size(); i++) {
                     if (startSym == Rest || startSym == rest) {
                         startSym = (*symKeys)[i].value;
                         f26 = (*symKeys)[i].frame;
@@ -591,23 +592,24 @@ void RhythmBattle::Begin() {
                 }
                 mEndBeat = FrameToBeat(f26);
                 MILO_ASSERT(mEndBeat > 0, 0xEF);
-                float f27 = 0;
+                float skipStart = 0;
+                float skipEnd = 0;
                 DataArray *arr = SystemConfig()->FindArray("party_jumps", false);
                 if (arr) {
                     arr = arr->FindArray(TheGameData->GetSong(), false);
                     if (arr && gShortenSong) {
-                        f26 = arr->Int(1) * 4.0f;
-                        f27 = (arr->Int(2) - 1) * 4.0f;
+                        skipStart = arr->Int(1) * 4.0f;
+                        skipEnd = (arr->Int(2) - 1) * 4.0f;
                     }
                 }
-                float diff = f27 - f26;
+                float diff = skipEnd - skipStart;
                 float f28 = mEndBeat - mStartBeat - diff;
                 mHalftimeBeat = (f28 / 2.0f) + mStartBeat;
                 mAlmostOverBeat = (f28 * 0.8f) + mStartBeat;
-                if (mHalftimeBeat > f26) {
+                if (mHalftimeBeat > skipStart) {
                     mHalftimeBeat += diff;
                 }
-                if (mAlmostOverBeat > f26) {
+                if (mAlmostOverBeat > skipStart) {
                     mAlmostOverBeat += diff;
                 }
             }
