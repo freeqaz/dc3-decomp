@@ -1294,17 +1294,16 @@ void PlatformMgr::Poll() {
         if (res != ERROR_IO_INCOMPLETE) {
             static PlatformMgrOpCompleteMsg msg(false);
             if (res == ERROR_SUCCESS) {
-                XONLINE_FRIEND *friends = (XONLINE_FRIEND *)mFriendsBuffer;
-                for (unsigned long i = 0; i < numFriends; i++) {
+                XONLINE_FRIEND *xf = (XONLINE_FRIEND *)mFriendsBuffer;
+                for (unsigned long i = 0; i < numFriends; i++, xf++) {
                     // Pending requests in either direction are not friends yet.
-                    if (!(friends[i].dwFriendState
-                          & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
-                        && !(friends[i].dwFriendState
+                    if (!(xf->dwFriendState & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
+                        && !(xf->dwFriendState
                              & XONLINE_FRIENDSTATE_FLAG_RECEIVEDREQUEST)) {
                         Friend *f = new Friend();
-                        String name(friends[i].szGamertag);
+                        String name(xf->szGamertag);
                         f->SetName(name);
-                        f->mXUID = friends[i].xuid;
+                        f->mXUID = xf->xuid;
                         mFriendsList->push_back(f);
                     }
                 }
@@ -1323,20 +1322,18 @@ void PlatformMgr::Poll() {
     } else if (!mFriendEnumRequests.empty() && mFriendEnumRequests.size() != 0) {
         FriendEnumRequest *request = mFriendEnumRequests.front();
         unsigned long bufSize;
-        bool failed = false;
-        if (XFriendsCreateEnumerator(request->mPadNum, 0, 100, &bufSize, &mFriendsEnum)
-            != ERROR_SUCCESS) {
-            failed = true;
-        } else {
+        bool failed = XFriendsCreateEnumerator(
+                          request->mPadNum, 0, 100, &bufSize, &mFriendsEnum
+                      ) != ERROR_SUCCESS;
+        if (!failed) {
             MILO_ASSERT(!mFriendsBuffer, 0x503);
             mFriendsBuffer = new char[bufSize];
             mFriendsAsync = new XOVERLAPPED;
             memset(mFriendsAsync, 0, sizeof(XOVERLAPPED));
-            if (XEnumerate(
-                    mFriendsEnum, mFriendsBuffer, bufSize, 0, (XOVERLAPPED *)mFriendsAsync
-                ) != ERROR_IO_PENDING) {
-                failed = true;
-            }
+            failed = XEnumerate(
+                         mFriendsEnum, mFriendsBuffer, bufSize, 0,
+                         (XOVERLAPPED *)mFriendsAsync
+                     ) != ERROR_IO_PENDING;
         }
         if (failed) {
             if (mFriendsEnum) {
@@ -1355,6 +1352,10 @@ void PlatformMgr::Poll() {
         }
         delete request;
         mFriendEnumRequests.erase(mFriendEnumRequests.begin());
+    }
+
+    if (mServiceIdState == kServiceIdDone) {
+        return;
     }
 
     switch (mServiceIdState) {
@@ -1408,10 +1409,10 @@ void PlatformMgr::Poll() {
             mServiceIdState = kServiceIdWaitingToRetry;
         }
         break;
-    case kServiceIdWaitingForEnumerate:
-        if (XGetOverlappedResult(mServiceIDOverlapped, &mResult, false)
-            != ERROR_IO_INCOMPLETE) {
-            if (mResult == ERROR_SUCCESS && mStorageList->dwNumItemsReturned != 0) {
+    case kServiceIdWaitingForEnumerate: {
+        unsigned long res = XGetOverlappedResult(mServiceIDOverlapped, &mResult, false);
+        if (res != ERROR_IO_INCOMPLETE) {
+            if (res == ERROR_SUCCESS && mStorageList->dwNumItemsReturned != 0) {
                 for (unsigned long i = 0; i < mStorageList->dwNumItemsReturned; i++) {
                     swprintf_s(
                         mStrStorageFiles[i], L"%s", mStorageList->pItems[i].pwszPathName
@@ -1420,13 +1421,14 @@ void PlatformMgr::Poll() {
                 mServiceIdState = kServiceIdDownloading;
                 mListSize = mStorageList->dwNumItemsReturned;
             } else {
-                mRetryTime = mTime.Ms() + kServiceIdRetryMs;
                 mServiceIdState = kServiceIdWaitingToRetry;
+                mRetryTime = mTime.Ms() + kServiceIdRetryMs;
             }
             RELEASE(mStorageList);
             RELEASE(mServiceIDOverlapped);
         }
         break;
+    }
     case kServiceIdDownloading:
         mServiceIDOverlapped = new XOVERLAPPED();
         mResult = XStorageDownloadToMemory(
@@ -1446,10 +1448,10 @@ void PlatformMgr::Poll() {
             mServiceIdState = kServiceIdWaitingForDownload;
         }
         break;
-    case kServiceIdWaitingForDownload:
-        if (XGetOverlappedResult(mServiceIDOverlapped, &mResult, false)
-            != ERROR_IO_INCOMPLETE) {
-            if (mResult == ERROR_SUCCESS) {
+    case kServiceIdWaitingForDownload: {
+        unsigned long res = XGetOverlappedResult(mServiceIDOverlapped, &mResult, false);
+        if (res != ERROR_IO_INCOMPLETE) {
+            if (res == ERROR_SUCCESS) {
                 static Symbol sServiceIds("service_ids");
                 DataArray *ids = DataReadString((char *)mFileReadBuffer)
                                      ->FindArray(sServiceIds, true);
@@ -1468,12 +1470,11 @@ void PlatformMgr::Poll() {
             Handle(msg, false);
         }
         break;
+    }
     case kServiceIdWaitingToRetry:
         if (mTime.Ms() >= mRetryTime) {
             mServiceIdState = kServiceIdIdle;
         }
-        break;
-    case kServiceIdDone:
         break;
     default:
         MILO_FAIL("Invalid state!");
