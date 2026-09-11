@@ -602,9 +602,9 @@ void DxTex::SyncBitmap() {
     );
 
     bool isRendered = (mType & kRendered) != 0;
-    bool isRegular = mType == kRegular;
     bool isMovie = (mType & kMovie) != 0;
     bool isScratch = (mType & kScratch) != 0;
+    bool isRegular = mType == kRegular;
 
     if (isRendered) {
         if (mWidth == 0 || mHeight == 0) {
@@ -632,7 +632,11 @@ void DxTex::SyncBitmap() {
                 edramFormat = D3DFMT_G16R16_EDRAM;
                 break;
             }
-            D3DSURFACE_PARAMETERS params = { 0, 0xFFFFFFFF, 0, D3DHIZFUNC_DEFAULT };
+            D3DSURFACE_PARAMETERS params = { 0 };
+            params.Base = 0;
+            params.HierarchicalZBase = -1;
+            params.ColorExpBias = 0;
+            params.HiZFunc = D3DHIZFUNC_DEFAULT;
             colorTiles = XGSurfaceSize(mWidth, mHeight, edramFormat, D3DMULTISAMPLE_NONE);
             if (colorTiles < 0x800) {
                 if (sEDRamChecksEnabled && colorTiles > TheDxRnd.EdramBase()) {
@@ -679,7 +683,11 @@ void DxTex::SyncBitmap() {
             if (mType == kShadowMap) {
                 depthFormat = D3DFMT_D24S8;
             }
-            D3DSURFACE_PARAMETERS depthParams = { colorTiles, 0, 0, D3DHIZFUNC_DEFAULT };
+            D3DSURFACE_PARAMETERS depthParams = { 0 };
+            depthParams.Base = colorTiles;
+            depthParams.HierarchicalZBase = 0;
+            depthParams.ColorExpBias = 0;
+            depthParams.HiZFunc = D3DHIZFUNC_DEFAULT;
             UINT depthTiles =
                 XGSurfaceSize(mWidth, mHeight, depthFormat, D3DMULTISAMPLE_NONE)
                 + colorTiles;
@@ -719,17 +727,18 @@ void DxTex::SyncBitmap() {
         if (!mBitmap.Pixels()) {
             return;
         }
-        mFormat = TheDxRnd.D3DFormatForBitmap(mBitmap);
-        int numLevels = mBitmap.NumMips() + 1;
+        RndBitmap &bitmap = mBitmap;
+        mFormat = TheDxRnd.D3DFormatForBitmap(bitmap);
+        int numLevels = bitmap.NumMips() + 1;
         if (numLevels > 2) {
             numLevels = 2;
         }
-        RndBitmap *bmp = &mBitmap;
+        RndBitmap *bmp = &bitmap;
         bool usedLowestMip = false;
         bool fromTexMgr = false;
-        unk2c = mBitmap.Name();
+        unk2c = bitmap.Name();
         if (MemUseLowestMip() && !MemUseLowestMipException(mFilepath.c_str())) {
-            RndBitmap *mip = mBitmap.nextMip();
+            RndBitmap *mip = bitmap.nextMip();
             if (mip) {
                 numLevels = 1;
                 usedLowestMip = true;
@@ -757,10 +766,11 @@ void DxTex::SyncBitmap() {
         if (!fromTexMgr) {
             XGTEXTURE_DESC desc;
             XGGetTextureDesc(mTexture, 0, &desc);
-            RndBitmap converted;
             DWORD gpuFormat = desc.Format & 0x3f;
-            bmp = &mBitmap;
-            if (mBitmap.Palette() || mBitmap.Bpp() == 0x18) {
+            RndBitmap converted;
+            D3DLOCKED_RECT rect;
+            bmp = &bitmap;
+            if (bitmap.Palette() || bitmap.Bpp() == 0x18) {
                 converted.Create(*bmp, 0x20, bmp->Order(), nullptr);
                 bmp = &converted;
             }
@@ -773,7 +783,6 @@ void DxTex::SyncBitmap() {
             }
             for (int level = 0; level < numLevels; level++) {
                 MILO_ASSERT(bmp, 1332);
-                D3DLOCKED_RECT rect;
                 D3DTexture_LockRect(mTexture, level, &rect, nullptr, 0);
                 XGTileTextureLevel(
                     desc.Width, desc.Height, level, gpuFormat, numLevels == 1, rect.pBits,
@@ -783,7 +792,7 @@ void DxTex::SyncBitmap() {
                 bmp = bmp->nextMip();
             }
         }
-        mBitmap.Reset();
+        bitmap.Reset();
     } else if (!isScratch && !(mType & (kDeviceTexture | kRegularLinear))
                && !(mType & 0x20)) {
         // Movie double-buffer.  The format is DXT1 with GPUENDIAN_NONE; this
