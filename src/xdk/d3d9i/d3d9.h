@@ -892,6 +892,12 @@ void *D3DDevice_BeginVertices(
 void D3DDevice_EndVertices(D3DDevice *pDevice);
 
 void D3DDevice_SetFVF(D3DDevice *pDevice, DWORD FVF);
+void D3DDevice_DrawVertices(
+    D3DDevice *pDevice,
+    D3DPRIMITIVETYPE PrimitiveType,
+    UINT StartVertex,
+    UINT VertexCount
+);
 void D3DDevice_DrawVerticesUP(
     D3DDevice *pDevice,
     D3DPRIMITIVETYPE PrimitiveType,
