@@ -99,7 +99,7 @@ BEGIN_LOADS(CharCuff)
     if (d.rev > 5)
         d >> mCategory;
     else
-        mCategory = Symbol("");
+        mCategory = ""; // implicit conversion: the target reads the temp back from its slot
     if (d.rev > 7)
         d >> mIgnore;
     if (d.rev < 7)
