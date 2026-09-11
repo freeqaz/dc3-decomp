@@ -92,8 +92,8 @@ private:
     int mMoveIndex; // 0x84 - current freestyle move slot (0-3)
     int unk88; // 0x88
     int unk8c; // 0x8c
-    int mPlayerScoreLeft; // 0x90 - reinterpreted as float for final sequence scoring
-    int mPlayerScoreRight; // 0x94 - reinterpreted as float for final sequence scoring
+    float mPlayerScoreLeft; // 0x90 - final sequence score, left player
+    float mPlayerScoreRight; // 0x94 - final sequence score, right player
     RndDir *mBAMColumns[kNumSkeletonSides]; // 0x98
     int mCreatorSide; // 0xa0 - side of the move creator (SkeletonSide)
     DancerSkeleton mCapturePoses[3]; // 0xa4 - skeleton poses for flashcard capture
@@ -102,8 +102,7 @@ private:
     int mCaptureFrames; // 0x934 - frames left to render flashcard capture
     HamPanel *mBAMVisualizerPanel; // 0x938
     int mMoveNameIndices[4]; // 0x93c - indices into shuffled move names per slot
-    int mRetryCount0; // 0x94c - retry count for player 0
-    int mRetryCount1; // 0x950 - retry count for player 1
+    int mRetryCounts[2]; // 0x94c - retry count per player
     int mMaxRetries; // 0x954 - maximum allowed retries
     float mLoopStartBeat; // 0x958 - audio loop start (-1 = none)
     float mLoopEndBeat; // 0x95c - audio loop end (-1 = none)
