@@ -28988,6 +28988,17 @@
      "what_would_drop_it": "our objects ceasing to emit the IMAGE_WEAK_EXTERN_SEARCH_ALIAS record, or the retail map ceasing to place both names at 0x82e44360"
     }
    ]
+  },
+  {
+   "name": "retailmap-fn:?GetListState@UIList@@QAAAAVUIListState@@0x8278aed0",
+   "address": "0x8278aed0",
+   "survivor": "?GetListState@UIList@@QAAAAVUIListState@@XZ",
+   "folded": [
+    "?GetOffersInCart@HamStoreProvider@@QAAPAV?$list@PAVStoreOffer@@V?$StlNodeAlloc@PAVStoreOffer@@@stlpmtx_std@@@stlpmtx_std@@XZ"
+   ],
+   "n_map_names_at_addr": 2,
+   "kind": "code",
+   "evidence": "orig/373307D9/ham_xbox_r.map: 2 public name(s) share 0x8278aed0; /OPT:ICF folds byte-identical COMDATs, so the linker that made the image states this fold set. The target objects define exactly one member (?GetListState@UIList@@QAAAAVUIListState@@XZ), which is therefore the survivor. Every name added here additionally passed the byte-identity gate: our COMDAT equals the survivor's with relocation-patched fields masked and relocation targets equal by name (both sides cut at their first EH funclet). Names our objects do not DEFINE were dropped, not admitted."
   }
  ]
 }
