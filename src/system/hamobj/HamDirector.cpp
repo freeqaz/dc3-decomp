@@ -2881,8 +2881,7 @@ void HamDirector::OnPopulateMoves() {
                     merger.mDir = clipsDir;
                     merger.mSubdirs = MergeFilter::kAllSubdirs;
                     merger.mPreClear = true;
-                    merger.mSelected = fp;
-                    merger.mForceReload = true;
+                    merger.SetSelected(fp, true);
                     MergerList(mMoveMerger.Ptr()).push_back(merger);
                     gMoveMergeMap[transName]++;
                 }
@@ -2898,8 +2897,7 @@ void HamDirector::OnPopulateMoves() {
                 merger.mDir = clipsDir;
                 merger.mSubdirs = MergeFilter::kAllSubdirs;
                 merger.mPreClear = true;
-                merger.mSelected = fp;
-                merger.mForceReload = true;
+                merger.SetSelected(fp, true);
                 MergerList(mMoveMerger.Ptr()).push_back(merger);
                 gMoveMergeMap[clipName]++;
             }
@@ -2916,8 +2914,7 @@ void HamDirector::OnPopulateMoves() {
                 merger.mDir = movesDir;
                 merger.mSubdirs = MergeFilter::kAllSubdirs;
                 merger.mPreClear = true;
-                merger.mSelected = fp;
-                merger.mForceReload = true;
+                merger.SetSelected(fp, true);
                 MergerList(mMoveMerger.Ptr()).push_back(merger);
                 gMoveMergeMap[hamMiloName]++;
             }
