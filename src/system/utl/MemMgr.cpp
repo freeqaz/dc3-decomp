@@ -52,7 +52,18 @@ extern String gMemLogType;
 // outside MemMgr.cpp refers to them.
 std::vector<String> gUseLowestMipExceptions;
 CriticalSection *gMemLock;
-bool gStlAllocNameLookup = false;
+// No `= false` on the three bools in this TU (here, and gInsideMemFunc /
+// gbUseLowestMip below).  A zero initialiser does not change the value -- a
+// namespace-scope bool is zero-initialised either way -- but it moves the
+// object into a different .bss emission group, and MSVC lays that group out
+// AFTER the uninitialised one.  Measured: with `= false` our object put
+// gbUseLowestMip at +0xbee and gInsideMemFunc at +0xbed, i.e. past gNumHeaps;
+// without it they land on +0xbd2 / +0xbd3, which is where the map has them
+// (0x830E56DA / 0x830E56DB).  Same for gStlAllocNameLookup: +0xbec with the
+// initialiser, +0xbe4 without, and only the latter reproduces the target's
+// gNewOperatorAlign / gStlAllocNameLookup / gMemLock / gMemStackLock /
+// gUseLowestMipExceptions run.
+bool gStlAllocNameLookup;
 int gNewOperatorAlign;
 int gNumHeaps;
 // The target's gThreadIds is not in this TU's .bss at all -- ThreadMemStack
@@ -65,12 +76,31 @@ int gNumHeaps;
 static int gThreadIds[MAX_BUF_THREADS] = { -1 };
 static int gNumThreads;
 static int gThreadBufCurrentIndex;
-bool gInsideMemFunc = false; // +0xbd3
-bool gbUseLowestMip = false; // +0xbd2
+bool gInsideMemFunc; // +0xbd3
+bool gbUseLowestMip; // +0xbd2
 // The target packs four byte-sized globals into +0xbd0..+0xbd3, two of them
 // unnamed. gInitted is one: it lives at 0x830E56D9, proved by the three
 // functions whose relocations point there -- MemInit, MemPushHeap and
 // MemFindHeap, exactly the three that read or write it.
+//
+// ⚠ objdiff rows in MemPushHeap / MemPopHeap / MemPushTemp / MemPopTemp that
+// look like "we read gInitted where the target reads ?gNumHeaps@@3HA" are NOT
+// a wrong-variable read.  The target materialises ONE address register for
+// this pair and reaches the other member by a compile-time displacement, and
+// the relocation names only the anchor.  It anchors in BOTH directions,
+// within this one TU: MemPushTemp/MemPopTemp/MemPopHeap do
+// `addi r11, r11, ?gNumHeaps@@3HA@l` then `lbz r10, -0x13(r11)` (gInitted),
+// while MemPushHeap holds r30 = &gInitted and does `lwz r11, 0x13(r30)`
+// (gNumHeaps) plus `addi r5, r30, 0x13` for the MILO_ASSERT_FMT argument.
+// 0x13 is exactly gNumHeaps(+0xbe4) - gInitted(+0xbd1).  Our build reaches
+// each global through its own lis/addi, and 2026-09-11 measurement says that
+// choice does NOT follow the .bss layout: flipping the layout in System.cpp's
+// equivalent pair left MSVC anchoring on the same variable as before.  So the
+// residual rows here are codegen, not a source bug -- do not "fix" them by
+// renaming a global.  (Closing them would additionally need the three
+// unidentified int-sized globals the target has at +0xbdc, +0xbe0 and +0xbe8,
+// which are what make its gInitted->gNumHeaps distance 0x13 where ours is
+// 0xb.)
 static bool gInitted; // +0xbd1
 // +0xbd0. The fourth byte is NOT padding and it is not unrecoverable -- nothing
 // forms its address because nothing needs to: both of its users reach it by a
