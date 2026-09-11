@@ -439,7 +439,7 @@ void FlowSetProperty::ReActivate() {
 }
 
 void FlowSetProperty::Execute(QueueState qs) {
-    FLOW_LOG("Execute: state = %i\n", qs);
+    FLOW_LOG("Execute: state = %i\n", (int)qs);
 
     if (IsRunning()) {
         if (qs == kIgnore) {
@@ -459,15 +459,9 @@ void FlowSetProperty::Execute(QueueState qs) {
         if (mChangePerUnit && !unk_0xE8) {
             const DataNode *prop = mTarget->Property(unk_0x98.Array());
             if (prop->Type() == kDataFloat) {
-                time = (mValue.Node().Float() - prop->Float()) / mChangePerUnit;
-                if (time < 0.0f) {
-                    time = -time;
-                }
+                time = Abs<float>((mValue.Node().Float() - prop->Float()) / mChangePerUnit);
             } else if (prop->Type() == kDataInt) {
-                time = (float)(mValue.Node().Int() - prop->Int()) / mChangePerUnit;
-                if (time < 0.0f) {
-                    time = -time;
-                }
+                time = Abs<float>((float)(mValue.Node().Int() - prop->Int()) / mChangePerUnit);
             } else {
                 StackString<32> str;
                 mValue.Node().Print(str, false, 0);
