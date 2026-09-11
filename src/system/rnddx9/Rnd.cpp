@@ -367,8 +367,13 @@ void DxRnd::PopClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
 //   Whoever picks this up needs the slot-colouring lever, not another guess at
 //   the assert text.
 D3DFORMAT DxRnd::D3DFormatForBitmap(const RndBitmap &bitmap) {
-    int fmt = bitmap.Order() & 0x38;
-    int bpp = bitmap.Bpp();
+    // Both MILO_FAILs pass a D3DFORMAT, not an int: rnddx9:Rnd.obj contributes
+    // exactly ONE single-argument MakeString instantiation to the shipping
+    // image and it is MakeString<_D3DFORMAT> (ham_xbox_r.map, ICF group
+    // 0x82610090 -- MakeString<int> in that same group is credited to
+    // Memory_Xbox.obj).  Score-neutral, since the group folds; correct anyway.
+    D3DFORMAT fmt = (D3DFORMAT)(bitmap.Order() & 0x38);
+    D3DFORMAT bpp = (D3DFORMAT)bitmap.Bpp();
     D3DFORMAT result = (D3DFORMAT)-1;
     if (fmt != 0) {
         switch (fmt) {

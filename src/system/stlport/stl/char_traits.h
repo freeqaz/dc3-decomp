@@ -269,7 +269,11 @@ public:
   
   static wchar_t* _STLP_CALL copy(wchar_t* __dest, const wchar_t* __src, size_t __n) {
 #    ifndef N_PLAT_NLM
-    return wmemcpy(__dest, __src, __n);
+    // The shipping image calls memcpy with a BYTE count here, not wmemcpy --
+    // `wmemcpy` appears nowhere in ham_xbox_r.map (nor do wmemmove/wmemcmp/
+    // wmemset/wmemchr), and SpeechMgr's three wchar_t basic_string bodies all
+    // show `slwi rN, rN, 1` + `bl memcpy` on the target side.
+    return (wchar_t *)memcpy((char *)__dest, (const char *)__src, __n * sizeof(wchar_t));
 #    else
     wchar_t *tmp = __dest;
     while ( __n-- != 0 ) {

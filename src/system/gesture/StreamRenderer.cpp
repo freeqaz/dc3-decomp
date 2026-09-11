@@ -331,6 +331,7 @@ namespace {
     }
 
     bool CheckTexType(RndTex *tex) {
+        MILO_ASSERT(tex, 0x45);
         if (!(tex->GetType() & 2)) {
             MILO_NOTIFY_ONCE("%s not renderable", tex->Name());
             return false;
