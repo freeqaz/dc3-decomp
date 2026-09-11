@@ -263,17 +263,18 @@ void CharIKHand::PollDeps(
 
 void CharIKHand::Poll() {
     float charWeight = Weight();
-    static const float kMinWeight = 0.001f;
-
     static const float kMaxWeight = 144.0f;
     RndTransformable *hand = mHand;
     if (!hand || mTargets.empty())
         return;
+    // Poll() is entered through the CharPollable sub-object; naming the full
+    // object once keeps the adjusted pointer in a callee-saved register.
+    CharIKHand *self = this;
     Vector3 destPos(0.0f, 0.0f, 0.0f);
     Hmx::Quat destQuat(0.0f, 0.0f, 0.0f, 0.0f);
-    if (mScalable || mHandChanged) {
-        MeasureLengths();
-        mHandChanged = false;
+    if (mScalable || self->mHandChanged) {
+        self->MeasureLengths();
+        self->mHandChanged = false;
     }
     if (mTargets.size() == 1) {
         RndTransformable *frontTarget = mTargets.front().mTarget;
@@ -288,44 +289,44 @@ void CharIKHand::Poll() {
     } else {
         float totalWeight = 0.0f;
         float localWeights[16];
-        float *weightPtr = localWeights;
-        auto endIt = mTargets.end();
-        for (ObjVector<IKTarget>::iterator it = mTargets.begin(); it != endIt;
-             ++it, weightPtr++) {
+        int i = 0;
+        for (ObjVector<IKTarget>::iterator it = mTargets.begin(); it != mTargets.end();
+             ++it, i++) {
             RndTransformable *targetTrans = it->mTarget;
             float extent = it->mExtent;
             if (targetTrans) {
-                Vector3 targetVec(targetTrans->WorldXfm().v);
-                if (extent <= 0.0f) {
-                    *weightPtr = kMaxWeight / Max(kMinWeight, LengthSquared(targetVec));
-                } else if (extent < -targetVec.z) {
-                    *weightPtr = kMinWeight;
+                Vector3 targetVec(targetTrans->LocalXfm().v);
+                if (extent > 0.0f) {
+                    if (-targetVec.z <= extent) {
+                        targetVec.z = 0.0f;
+                        localWeights[i] = kMaxWeight / Max(0.001f, LengthSquared(targetVec));
+                    } else {
+                        localWeights[i] = 0.001f;
+                    }
                 } else {
-                    targetVec.z = 0.0f;
-                    *weightPtr = kMaxWeight / Max(kMinWeight, LengthSquared(targetVec));
+                    localWeights[i] = kMaxWeight / Max(0.001f, LengthSquared(targetVec));
                 }
-                totalWeight += *weightPtr;
+                totalWeight += localWeights[i];
             }
         }
         if (totalWeight < 1.0f) {
             charWeight = charWeight - (charWeight * (1.0f - totalWeight));
         }
-        weightPtr = localWeights;
+        i = 0;
         for (ObjVector<IKTarget>::iterator it = mTargets.begin(); it != mTargets.end();
-             ++it) {
+             ++it, i++) {
             RndTransformable *targetTrans = it->mTarget;
             if (targetTrans) {
-                float curWeight = *weightPtr;
+                float curWeight = localWeights[i] / totalWeight;
                 const Transform &worldXfm = targetTrans->WorldXfm();
-                ScaleAdd(destPos, worldXfm.v, curWeight / totalWeight, destPos);
+                ScaleAdd(destPos, worldXfm.v, curWeight, destPos);
                 if (mOrientation) {
                     Hmx::Matrix3 normMat;
                     Normalize(worldXfm.m, normMat);
                     Hmx::Quat q(normMat);
-                    ScaleAddEq(destQuat, q, curWeight / totalWeight);
+                    ScaleAddEq(destQuat, q, curWeight);
                 }
             }
-            weightPtr++;
         }
         if (mOrientation)
             Normalize(destQuat, destQuat);
@@ -362,7 +363,7 @@ void CharIKHand::Poll() {
             if (!elbowParent)
                 shoulderParent = 0;
         }
-        IKElbow(shoulderParent, elbowParent);
+        self->IKElbow(shoulderParent, elbowParent);
     }
 #ifdef HX_NATIVE
     if (Dc3FeetPlantFix() && shoulderParent) {
@@ -425,8 +426,10 @@ void CharIKHand::Poll() {
         Vector3 handY(handMat.y);
         Vector3 handZ(handMat.z);
         float acosDot = acosf(Dot(elbowMat.x, handZ)) - PI * 0.5f;
-        float absAcosDot = acosDot;
-        if (acosDot <= 0.0f)
+        float absAcosDot;
+        if (acosDot > 0.0f)
+            absAcosDot = acosDot;
+        else
             absAcosDot = -acosDot;
         float maxRads = mWristRadians;
         if (absAcosDot > maxRads) {
