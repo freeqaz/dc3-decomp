@@ -95,7 +95,7 @@ SuperFormatString::SuperFormatString(
                         state = 2;
                         continue;
                     }
-                    MILO_FAIL("bad SuperFormatString placeholder type '%s'", phInfoPos);
+                    MILO_FAIL("bad SuperFormatString placeholder type '%s'", phInfo);
                 } else {
                     *phInfoPos++ = *p;
                 }
