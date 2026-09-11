@@ -546,7 +546,7 @@ void NgMat::RefreshState() {
     case kTexGenProjected: {
         FastInvert(mTexXfm, xfmTmp);
         Transform projXfm = sProjectedXfm;
-        projXfm.v.z = -1.0f;
+        projXfm.m.z.y = -1.0f;
         Multiply(xfmTmp, projXfm, xfmTmp);
         mTexGenMatrix = Hmx::Matrix4(xfmTmp);
         break;
@@ -563,6 +563,14 @@ void NgMat::RefreshState() {
     case kBlendSrc:
         unk2d4 = 0;
         break;
+    case kBlendSrcAlpha:
+    case kPreMultAlpha:
+        unk2d8 = 0.0f;
+        unk2dc = 0.0f;
+        unk2e0 = 0.0f;
+        unk2e4 = 0.0f;
+        unk2d4 = 1;
+        break;
     case kBlendAdd:
     case kBlendSrcAlphaAdd:
     case kBlendSubtract:
@@ -573,14 +581,6 @@ void NgMat::RefreshState() {
         unk2e0 = 0.0f;
         unk2e4 = 0.0f;
         unk2d4 = 2;
-        break;
-    case kBlendSrcAlpha:
-    case kPreMultAlpha:
-        unk2d8 = 0.0f;
-        unk2dc = 0.0f;
-        unk2e0 = 0.0f;
-        unk2e4 = 0.0f;
-        unk2d4 = 1;
         break;
     case kBlendMultiply:
     case kDarken:
