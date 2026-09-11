@@ -9,7 +9,7 @@
 #include "stl\_vector.h"
 
 DECLARE_MESSAGE(PlatformMgrOpCompleteMsg, "platform_mgr_op_complete_msg")
-PlatformMgrOpCompleteMsg(int i) : Message(Type(), i) {}
+PlatformMgrOpCompleteMsg(bool success) : Message(Type(), success) {}
 bool Success() const { return mData->Int(2) != 0; }
 END_MESSAGE
 

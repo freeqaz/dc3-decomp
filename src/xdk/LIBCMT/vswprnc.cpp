@@ -100,4 +100,8 @@ int _vswprintf_s_l(
     return retvalue;
 }
 
+int vswprintf_s(wchar_t *string, size_t sizeInWords, const wchar_t *format, va_list ap) {
+    return _vswprintf_s_l(string, sizeInWords, format, NULL, ap);
+}
+
 }

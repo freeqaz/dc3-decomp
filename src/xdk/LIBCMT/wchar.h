@@ -67,6 +67,7 @@ int swprintf(wchar_t *buffer, size_t bufsz, const wchar_t *format, ...);
 int vwprintf(const wchar_t *format, va_list vlist);
 int vfwprintf(FILE *stream, const wchar_t *format, va_list vlist);
 int vswprintf(wchar_t *buffer, size_t bufsz, const wchar_t *format, va_list vlist);
+int vswprintf_s(wchar_t *buffer, size_t bufsz, const wchar_t *format, va_list vlist);
 
 int wscanf(const wchar_t *format, ...);
 int fwscanf(FILE *stream, const wchar_t *format, ...);
@@ -114,5 +115,16 @@ size_t wcsrtombs(char * dst, const wchar_t ** src, size_t len, struct mbstate_t 
 /* clang-format on */
 
 #ifdef __cplusplus
+}
+
+// The secure-CRT array overload.  The shipped binary instantiates it at
+// _Size = 0x100 (??$swprintf_s@$0BAA@@@YAHAAY0BAA@_WPB_WZZ, a COMDAT in
+// PlatformMgr_Xbox.obj) and its body is exactly this forward to vswprintf_s
+// with the deduced element count.
+template <size_t _Size>
+inline int swprintf_s(wchar_t (&_Buffer)[_Size], const wchar_t *_Format, ...) {
+    va_list _ArgList;
+    va_start(_ArgList, _Format);
+    return vswprintf_s(_Buffer, _Size, _Format, _ArgList);
 }
 #endif

@@ -14,6 +14,7 @@
 #include "utl\Str.h"
 
 DECLARE_MESSAGE(TmsDownloadedMsg, "tms_downloaded")
+TmsDownloadedMsg() : Message(Type()) {}
 END_MESSAGE
 
 DECLARE_MESSAGE(UserLoginMsg, "user_login")
