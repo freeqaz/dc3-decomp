@@ -30,6 +30,30 @@
 # stopped being the same question on 2026-08-21 -- see the comment above
 # report_is_current() below, and that script's docstring.
 #
+# EXIT CODES (branch on these; same idiom as scripts/native_test.sh)
+#
+#    0  OK -- a COMPLETE comparison table was printed.
+#    1  Usage / precondition / STALENESS refusal. No table, or (for the
+#       staleness class) a refusal instead of one. --allow-stale downgrades
+#       the staleness and race members of this class to warnings.
+#    2  --check-freshness only: the freshness gate could not verify (passthrough
+#       of scripts/report_freshness.py's own 0/1/2).
+#   10  BASELINE BUILD FAILED. The baseline worktree could not be created,
+#       reset, split, configured or built, so there is no baseline to compare
+#       against. NOTHING was measured and no table is printed.
+#   11  CURRENT TREE BUILD FAILED. Same, for the "current" side.
+#   12  COMPARISON STEP FAILED. compare_progress.py died; whatever it had
+#       written is suppressed rather than printed, so a partial table can
+#       never be read as a complete one.
+#
+# ⚠ --allow-stale does NOT downgrade 10/11/12. It exists to let you compare a
+# report that may be out of date; a build that FAILED produced no numbers to
+# be stale about. Swallowing a build failure is how a run that measured
+# nothing reads as a clean run to a caller checking $? -- which is exactly
+# what happened before 2026-09-11: a failing rebuild under --allow-stale
+# printed one WARNING line and then a full, authoritative-looking table, and
+# exited 0.
+#
 set -euo pipefail
 
 MAIN_REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -51,6 +75,18 @@ PROVENANCE_FILES=(
     "config/373307D9/objects.json"
     "config/373307D9/link_order.txt"
 )
+
+# Exit codes. See the table in the header; keep the two in sync.
+EXIT_BASELINE_BUILD=10
+EXIT_CURRENT_BUILD=11
+EXIT_COMPARE=12
+
+usage() {
+    # Print the WHOLE leading comment block. This used to be `sed -n '2,31p'`,
+    # a hardcoded line range that silently truncated the header the moment it
+    # grew -- which it did, on 2026-09-11, when the exit-code table landed.
+    awk 'NR == 1 { next } /^#/ { sub(/^#[[:space:]]?/, ""); print; next } { exit }' "$0"
+}
 
 # --- Parse arguments ---
 while [[ $# -gt 0 ]]; do
@@ -103,7 +139,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help|-h)
-            sed -n '2,31p' "$0"
+            usage
             exit 0
             ;;
         *)
@@ -122,6 +158,92 @@ if [[ "${CHECK_ONLY}" -eq 1 ]]; then
     check_dir="$(cd "${check_dir}" && pwd)"
     exec python3 "${MAIN_REPO}/scripts/report_freshness.py" --project-dir "${check_dir}"
 fi
+
+# =============================================================================
+# Build-failure reporting
+#
+# Every build this script runs used to report failure the same way: either a
+# bare `exit 1` (indistinguishable from a usage error), or -- through
+# require_fresh_report() under --allow-stale -- a single WARNING line followed
+# by a full comparison table and exit 0. Measured 2026-09-11 in wt/mp-exit with
+# a `ninja` shim that fails only for the tree being built:
+#
+#   scripts/measure_progress.sh --allow-stale HEAD~1   ->  exit 0, full table
+#
+# The table was real but it was computed from a report the failed build never
+# refreshed, and `$?` said the run was clean. A build failure now gets its own
+# code, its own banner, and no table at all.
+# =============================================================================
+
+FAIL_STEP=""
+FAIL_TREE=""
+WORKTREE_ACTIVE=0
+ORIGINAL_COMMIT=""
+COMPARE_OUT=""
+
+# build_fail <exit-code> <step> <tree> [logfile]
+#
+# Loud, attributed, terminal. NOT downgradable by --allow-stale: --allow-stale
+# is about trusting numbers that may be out of date, and a build that failed
+# produced no numbers at all.
+build_fail() {
+    local code="$1" step="$2" tree="$3" log="${4:-}"
+    FAIL_STEP="${step}"
+    FAIL_TREE="${tree}"
+    {
+        echo ""
+        echo "=============================================================================="
+        case "${code}" in
+            "${EXIT_BASELINE_BUILD}") echo "BASELINE BUILD FAILED — nothing was compared" ;;
+            "${EXIT_CURRENT_BUILD}")  echo "CURRENT TREE BUILD FAILED — nothing was compared" ;;
+            *)                        echo "BUILD FAILED — nothing was compared" ;;
+        esac
+        echo "  failing step : ${step}"
+        echo "  tree         : ${tree}"
+        echo "  exit code    : ${code}"
+        echo "=============================================================================="
+        if [[ -n "${log}" && -f "${log}" ]]; then
+            echo "--- last 100 lines of ${log} ---"
+            tail -100 "${log}" || true
+            echo "--- end of ${log} ---"
+        fi
+        echo ""
+        echo "NO COMPARISON TABLE WAS PRINTED. This run measured nothing: do not read"
+        echo "the absence of regressions as a clean result. --allow-stale does not"
+        echo "downgrade this — it downgrades staleness, not a build that did not run."
+    } >&2
+    exit "${code}"
+}
+
+worktree_cleanup() {
+    [[ "${WORKTREE_ACTIVE}" -eq 1 ]] || return 0
+    WORKTREE_ACTIVE=0
+    echo ""
+    if [[ "${CREATED_WORKTREE}" -eq 1 ]]; then
+        echo "Removing temporary worktree..."
+        git -C "${MAIN_REPO}" worktree remove --force "${WORKTREE}" 2>/dev/null || true
+    else
+        echo "Restoring worktree to ${ORIGINAL_COMMIT:0:7}..."
+        git -C "${WORKTREE}" reset --hard --quiet "${ORIGINAL_COMMIT}" 2>/dev/null || true
+    fi
+}
+
+# The EXIT trap has to leave the verdict as the LAST thing written, because a
+# refusal that is not the last line does not read as a refusal -- the cleanup
+# chatter above used to be the final word on a failed run. Bash preserves the
+# triggering status across an EXIT trap that does not itself call `exit`
+# (verified: a trap whose last command is `|| true` still exits 7 on `exit 7`).
+on_exit() {
+    local rc=$?
+    [[ -z "${COMPARE_OUT}" ]] || rm -f "${COMPARE_OUT}" 2>/dev/null || true
+    worktree_cleanup
+    if [[ "${rc}" -ne 0 ]]; then
+        echo "" >&2
+        echo "measure_progress.sh FAILED — exit ${rc}${FAIL_STEP:+ (step: ${FAIL_STEP})}${FAIL_TREE:+ in ${FAIL_TREE}}" >&2
+    fi
+    return 0
+}
+trap on_exit EXIT
 
 # =============================================================================
 # Staleness / provenance guards
@@ -211,8 +333,14 @@ report_is_current() {
 }
 
 # Gate a report we are about to read. Rebuilds it once if stale, then insists.
+#
+# The rebuild's failure used to go through stale_fail(), so --allow-stale
+# turned "the build did not run" into a warning and the run continued to print
+# a table and exit 0. It goes through build_fail() now: a failed build is not a
+# staleness judgement call, and its log is kept instead of being sent to
+# /dev/null, where the reason for the failure used to die.
 require_fresh_report() {
-    local dir="$1" label="$2" rc=0
+    local dir="$1" label="$2" code="${3:-${EXIT_CURRENT_BUILD}}" rc=0 log
 
     report_is_current "${dir}" || rc=$?
     case "${rc}" in
@@ -224,10 +352,12 @@ require_fresh_report() {
     esac
 
     echo "  ${label} report is STALE (reasons above). Rebuilding..."
-    if ! ninja -C "${dir}" "${REPORT_REL}" -j"$(nproc)" >/dev/null 2>&1; then
-        stale_fail "${label} (${dir}): rebuild of ${REPORT_REL} failed."
-        return 0
+    log="$(mktemp -t measure_progress_refresh.XXXXXX.log)"
+    if ! ninja -C "${dir}" "${REPORT_REL}" -j"$(nproc)" >"${log}" 2>&1; then
+        build_fail "${code}" "ninja ${REPORT_REL} (stale-report rebuild of the ${label} side)" \
+                   "${dir}" "${log}"
     fi
+    rm -f "${log}" 2>/dev/null || true
     rc=0
     report_is_current "${dir}" || rc=$?
     if [[ "${rc}" -ne 0 ]]; then
@@ -240,7 +370,19 @@ if [[ -n "${CURRENT_DIR}" ]]; then
     CURRENT_DIR="$(cd "${CURRENT_DIR}" && pwd)"
     if [[ ! -f "${CURRENT_DIR}/${REPORT_REL}" ]]; then
         echo "Current report not found in worktree, building..."
-        ninja -C "${CURRENT_DIR}" "${REPORT_REL}" -j"$(nproc)" 2>&1 | tail -1
+        # This was `ninja ... 2>&1 | tail -1`. `set -o pipefail` is on, so the
+        # status did survive -- but as a bare 1, with the single line
+        # "ninja: build stopped: subcommand failed" as the entire output and
+        # nothing saying which tree or which step. Measured 2026-09-11.
+        CUR_BUILD_LOG="$(mktemp -t measure_progress_current.XXXXXX.log)"
+        if ninja -C "${CURRENT_DIR}" "${REPORT_REL}" -j"$(nproc)" >"${CUR_BUILD_LOG}" 2>&1; then
+            tail -1 "${CUR_BUILD_LOG}" || true
+            rm -f "${CUR_BUILD_LOG}" 2>/dev/null || true
+        else
+            build_fail "${EXIT_CURRENT_BUILD}" \
+                       "ninja ${REPORT_REL} (initial build of the current tree)" \
+                       "${CURRENT_DIR}" "${CUR_BUILD_LOG}"
+        fi
     fi
     CURRENT_REPORT="${CURRENT_DIR}/${REPORT_REL}"
     CURRENT_LABEL="worktree:$(basename "${CURRENT_DIR}")"
@@ -392,24 +534,22 @@ else
         # make `worktree add` refuse; prune those first.
         git -C "${MAIN_REPO}" worktree prune >/dev/null 2>&1 || true
         echo "Creating worktree at ${WORKTREE}..."
-        git -C "${MAIN_REPO}" worktree add --detach "${WORKTREE}" HEAD --quiet
+        WT_LOG="$(mktemp -t measure_progress_worktree.XXXXXX.log)"
+        if ! git -C "${MAIN_REPO}" worktree add --detach "${WORKTREE}" HEAD --quiet \
+             >"${WT_LOG}" 2>&1; then
+            build_fail "${EXIT_BASELINE_BUILD}" "git worktree add --detach" \
+                       "${WORKTREE}" "${WT_LOG}"
+        fi
+        rm -f "${WT_LOG}" 2>/dev/null || true
         CREATED_WORKTREE=1
     fi
 
     # --- Save worktree state for restoration ---
+    # The cleanup itself lives in worktree_cleanup(), called from the single
+    # on_exit trap installed near the top, so that the failure verdict is the
+    # LAST line of a failed run rather than being buried under this chatter.
     ORIGINAL_COMMIT=$(git -C "${WORKTREE}" rev-parse HEAD)
-
-    cleanup() {
-        echo ""
-        if [[ "${CREATED_WORKTREE}" -eq 1 ]]; then
-            echo "Removing temporary worktree..."
-            git -C "${MAIN_REPO}" worktree remove --force "${WORKTREE}" 2>/dev/null || true
-        else
-            echo "Restoring worktree to ${ORIGINAL_COMMIT:0:7}..."
-            git -C "${WORKTREE}" reset --hard --quiet "${ORIGINAL_COMMIT}" 2>/dev/null || true
-        fi
-    }
-    trap cleanup EXIT
+    WORKTREE_ACTIVE=1
 
     # --- The baseline worktree must own its own scripts/ ---------------------
     #
@@ -445,7 +585,12 @@ else
 
     # --- Reset worktree to baseline commit ---
     echo "Resetting worktree to baseline ${BASELINE_SHORT}..."
-    git -C "${WORKTREE}" reset --hard --quiet "${BASELINE_COMMIT}"
+    RESET_LOG="$(mktemp -t measure_progress_reset.XXXXXX.log)"
+    if ! git -C "${WORKTREE}" reset --hard --quiet "${BASELINE_COMMIT}" >"${RESET_LOG}" 2>&1; then
+        build_fail "${EXIT_BASELINE_BUILD}" "git reset --hard ${BASELINE_SHORT}" \
+                   "${WORKTREE}" "${RESET_LOG}"
+    fi
+    rm -f "${RESET_LOG}" 2>/dev/null || true
 
     # The reset restores scripts/ from the baseline commit. Insist on it: a
     # build whose guards are missing is a build whose guards do not run.
@@ -453,7 +598,8 @@ else
         echo "Error: ${WORKTREE}/scripts is not a real directory after reset." >&2
         echo "       The baseline build's guards and patchers would act on" >&2
         echo "       whatever tree that path resolves to. Refusing." >&2
-        exit 1
+        build_fail "${EXIT_BASELINE_BUILD}" "scripts/ is not a real directory after reset" \
+                   "${WORKTREE}"
     fi
 
     # Clean untracked source files but preserve build artifacts and symlinks.
@@ -484,6 +630,9 @@ else
     # case-insensitive path components (373307D9). cl.exe can overwrite existing files fine.
     touch "${WORKTREE}/build/373307D9/pch/system.pch"
     for tool in "${MAIN_REPO}/build/tools"/*; do
+        # An unmatched glob stays literal here (nullglob is off), which used to
+        # plant a broken symlink named `*` in the baseline worktree.
+        [[ -e "$tool" ]] || continue
         dest="${WORKTREE}/build/tools/$(basename "$tool")"
         [[ -e "$dest" ]] || ln -sf "$tool" "$dest"
     done
@@ -574,14 +723,28 @@ else
             else
                 echo "Hint: the selected baseline may require a different dtk version or a cached baseline report."
             fi
-            exit 1
+            build_fail "${EXIT_BASELINE_BUILD}" "dtk xex split (baseline config)" \
+                       "${WORKTREE}" "${SPLIT_LOG}"
         fi
         rm -f "${SPLIT_LOG}" 2>/dev/null || true
+    else
+        build_fail "${EXIT_BASELINE_BUILD}" \
+                   "dtk binary '${DTK_BIN:-<unresolved>}' is missing or not executable" \
+                   "${WORKTREE}"
     fi
 
     # --- Reconfigure for baseline's file set ---
+    # configure.py's output went to /dev/null, so `set -e` killed the run with
+    # a bare 1 and the reason -- which configure.py prints on stdout -- was
+    # gone. Keep it.
     echo "Reconfiguring baseline..."
-    (cd "${WORKTREE}" && python3 configure.py "${CONFIGURE_ARGS[@]}") >/dev/null
+    CONFIGURE_LOG="$(mktemp -t measure_progress_configure.XXXXXX.log)"
+    if ! (cd "${WORKTREE}" && python3 configure.py "${CONFIGURE_ARGS[@]}") \
+         >"${CONFIGURE_LOG}" 2>&1; then
+        build_fail "${EXIT_BASELINE_BUILD}" "python3 configure.py (baseline)" \
+                   "${WORKTREE}" "${CONFIGURE_LOG}"
+    fi
+    rm -f "${CONFIGURE_LOG}" 2>/dev/null || true
 
     # Ninja can loop on "manifest 'build.ninja' still dirty" when the reused
     # worktree/build artifacts have coarse or future mtimes (common with cached
@@ -618,20 +781,21 @@ else
     if ninja -C "${WORKTREE}" "${REPORT_REL}" -j"$(nproc)" >"${BUILD_LOG}" 2>&1; then
         tail -1 "${BUILD_LOG}" || true
     else
-        tail -100 "${BUILD_LOG}" || true
         if grep -q "manifest 'build.ninja' still dirty" "${BUILD_LOG}" && \
            grep -q "output build/373307D9/config.json doesn't exist" "${BUILD_LOG}"; then
-            echo ""
-            echo "Hint: ninja's manifest-dirty loop is usually a secondary symptom."
-            echo "      The baseline split step failed, so build/373307D9/config.json was never created."
+            echo "" >&2
+            echo "Hint: ninja's manifest-dirty loop is usually a secondary symptom." >&2
+            echo "      The baseline split step failed, so build/373307D9/config.json was never created." >&2
         fi
-        exit 1
+        build_fail "${EXIT_BASELINE_BUILD}" "ninja ${REPORT_REL} (baseline build)" \
+                   "${WORKTREE}" "${BUILD_LOG}"
     fi
     rm -f "${BUILD_LOG}" 2>/dev/null || true
 
     if [[ ! -f "${WORKTREE}/${REPORT_REL}" ]]; then
-        echo "Error: Baseline report was not generated."
-        exit 1
+        build_fail "${EXIT_BASELINE_BUILD}" \
+                   "ninja reported success but ${REPORT_REL} was never produced" \
+                   "${WORKTREE}"
     fi
 
     # --- Cache the baseline report + its provenance stamp ---
@@ -649,15 +813,46 @@ BASELINE_FP_BEFORE="$(fingerprint_of "${BASELINE_REPORT}")"
 CURRENT_FP_BEFORE="$(fingerprint_of "${CURRENT_REPORT}")"
 
 # --- Compare ---
-echo ""
+#
+# The table is BUFFERED and only printed once the comparison has succeeded AND
+# the race check has passed. compare_progress.py used to write straight to the
+# terminal, so a crash partway through left a truncated table on screen that
+# looks exactly like a complete one, and a report rewritten mid-diff was
+# reported only AFTER its numbers had already been read.
+COMPARE_OUT="$(mktemp -t measure_progress_table.XXXXXX.txt)"
+COMPARE_RC=0
 python3 "${MAIN_REPO}/scripts/analysis/compare_progress.py" \
     "${COMPARE_FLAGS[@]}" \
     "${BASELINE_REPORT}" \
-    "${CURRENT_REPORT}"
+    "${CURRENT_REPORT}" >"${COMPARE_OUT}" 2>&1 || COMPARE_RC=$?
+
+if [[ "${COMPARE_RC}" -ne 0 ]]; then
+    FAIL_STEP="compare_progress.py"
+    {
+        echo ""
+        echo "=============================================================================="
+        echo "COMPARISON FAILED — compare_progress.py exited ${COMPARE_RC}"
+        echo "  baseline : ${BASELINE_REPORT}"
+        echo "  current  : ${CURRENT_REPORT}"
+        echo "  exit code: ${EXIT_COMPARE}"
+        echo "=============================================================================="
+        echo "--- last 60 lines of its output (SUPPRESSED as a table: it is incomplete) ---"
+        tail -60 "${COMPARE_OUT}" || true
+        echo "--- end ---"
+    } >&2
+    rm -f "${COMPARE_OUT}" 2>/dev/null || true
+    exit "${EXIT_COMPARE}"
+fi
 
 if [[ "$(fingerprint_of "${BASELINE_REPORT}")" != "${BASELINE_FP_BEFORE}" ]]; then
-    stale_fail "the baseline report ${BASELINE_REPORT} was rewritten while it was being compared — the numbers above are from a racing build."
+    stale_fail "the baseline report ${BASELINE_REPORT} was rewritten while it was being compared — the numbers are from a racing build and have been WITHHELD."
 fi
 if [[ "$(fingerprint_of "${CURRENT_REPORT}")" != "${CURRENT_FP_BEFORE}" ]]; then
-    stale_fail "the current report ${CURRENT_REPORT} was rewritten while it was being compared — the numbers above are from a racing build."
+    stale_fail "the current report ${CURRENT_REPORT} was rewritten while it was being compared — the numbers are from a racing build and have been WITHHELD."
 fi
+
+echo ""
+cat "${COMPARE_OUT}"
+rm -f "${COMPARE_OUT}" 2>/dev/null || true
+echo ""
+echo "--- end of comparison (measure_progress.sh completed: baseline ${BASELINE_SHORT} -> ${CURRENT_LABEL}) ---"

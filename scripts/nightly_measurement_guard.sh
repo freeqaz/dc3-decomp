@@ -151,10 +151,28 @@ if [[ $STRICT -eq 1 ]]; then
 
     # Regenerate report_strict.json with NameOnly mode.
     # This uses the same project dir as the standard report but overrides functionRelocDiffs.
-    "${OBJDIFF_FORK}" report generate \
-        -c "functionRelocDiffs=name_only" \
-        -o "${STRICT_REPORT}" \
-        2>&1 | grep -v "^$"
+    #
+    # NOT `... 2>&1 | grep -v "^$"`. `grep` exits 1 when it prints nothing, and
+    # `set -o pipefail` is on, so that pipeline killed the guard with exit 1 on
+    # a SUCCESSFUL, quiet report generate -- and the caller could not tell that
+    # from the real failure. Verified: `set -euo pipefail; printf "" | grep -v
+    # "^$"` exits 1. Log it and read the generator's own status instead.
+    STRICT_LOG="$(mktemp -t nightly_strict_report.XXXXXX.log)"
+    if ! "${OBJDIFF_FORK}" report generate \
+            -c "functionRelocDiffs=name_only" \
+            -o "${STRICT_REPORT}" >"${STRICT_LOG}" 2>&1; then
+        echo "ERROR: report generate (name_only) FAILED — no strict report to classify." >&2
+        echo "       ${OBJDIFF_FORK} report generate -c functionRelocDiffs=name_only -o ${STRICT_REPORT}" >&2
+        tail -40 "${STRICT_LOG}" >&2 || true
+        exit 2
+    fi
+    grep -v "^$" "${STRICT_LOG}" || true
+    rm -f "${STRICT_LOG}" 2>/dev/null || true
+
+    if [[ ! -f "${STRICT_REPORT}" ]]; then
+        echo "ERROR: report generate reported success but ${STRICT_REPORT} does not exist." >&2
+        exit 2
+    fi
 
     echo "[strict] report_strict.json written to ${STRICT_REPORT}"
 
