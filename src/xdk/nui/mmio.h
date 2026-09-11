@@ -7,7 +7,10 @@ extern "C" {
 
 typedef HANDLE HMMIO;
 typedef LPSTR HPSTR;
-typedef LRESULT MMRESULT;
+// MMRESULT is UINT in mmsystem.h, not a signed LRESULT.  The image compares
+// every mmio* return against zero with cmplwi (unsigned); a signed typedef
+// lowers the same source to cmpwi.
+typedef UINT MMRESULT;
 
 typedef LRESULT (*LPMMIOPROC)(LPVOID lpmmioinfo, UINT uMsg, LONG lParam1, LONG lParam2);
 
