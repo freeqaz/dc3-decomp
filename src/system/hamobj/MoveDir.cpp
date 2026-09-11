@@ -1614,7 +1614,7 @@ void MoveDir::DetectRange(
 
 void MoveDir::DrawShowing() {
     ObjectDir *dir = this;
-    if (dir != Dir()) {
+    if (dir != dir->Dir()) {
         if (mDebugCollision) {
             SongCollision *songCol = dir->Find<SongCollision>("SongCollision", false);
             if (songCol) {
@@ -1649,12 +1649,15 @@ void MoveDir::DrawShowing() {
                 unsigned int beatIdx = 0;
                 for (size_t i = 0; i < outputs.size(); i++) {
                     const SongCollisionOutput &out = outputs[i];
-
-                    Hmx::Color color;
+                    Hmx::Color color(gray, gray, gray, 1.0f);
+                    Hmx::Color altColor;
+                    altColor.blue = zero;
                     if (out.Colliding()) {
-                        color.Set(gray, gray, gray, 1.0f);
+                        altColor.red = 1.0f;
+                        altColor.green = zero;
                     } else {
-                        color.Set(1.0f, zero, 1.0f, 1.0f);
+                        altColor.red = zero;
+                        altColor.green = 1.0f;
                     }
 
                     int playerIdx = 0;
@@ -1678,8 +1681,6 @@ void MoveDir::DrawShowing() {
                         const Vector3 &worldPos = out.WorldPos(playerIdx);
                         Vector3 offsetPos;
                         Add(worldPos, out.Offset(playerIdx + 4), offsetPos);
-                        Hmx::Color altColor;
-                        altColor.Set(zero, 1.0f, zero, 1.0f);
                         TheRnd.DrawLine(worldPos, offsetPos, altColor, false);
                         UtilDrawSphere(offsetPos, radius2, altColor, nullptr);
 
