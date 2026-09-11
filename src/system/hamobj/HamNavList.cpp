@@ -106,13 +106,21 @@ bool HamNavList::Replace(ObjRef *ref, Hmx::Object *obj) {
 BEGIN_HANDLERS(HamNavList)
     HANDLE_ACTION(set_provider, SetProvider(_msg->Obj<UIListProvider>(2)))
     HANDLE_ACTION(set_highlight, SetHighlight(_msg->Int(2)))
-    HANDLE_ACTION(set_selected, mListState.SetSelected(_msg->Int(2), -1, true))
+    {
+        _NEW_STATIC_SYMBOL(set_selected)
+        if (sym == _s) {
+            // explicit local: the original evaluated the index before the call
+            int i = _msg->Int(2);
+            mListState.SetSelected(i, -1, true);
+            return 0;
+        }
+    }
     HANDLE_ACTION(set_swelling, SetSwelling())
     HANDLE_ACTION(set_sliding, SetSliding(_msg->Float(2)))
     HANDLE_ACTION(set_selecting, SetSelecting(false))
     HANDLE_EXPR(get_selected, mListState.Selected())
     HANDLE_EXPR(get_selected_sym, GetSelectedSym())
-    HANDLE_EXPR(is_scrolling_settled, mScrollSettleTime <= 0)
+    HANDLE_EXPR(is_scrolling_settled, mScrollBehavior.IsSettled())
     HANDLE_ACTION(scroll_to_index, ScrollToIndex(_msg->Int(2), _msg->Int(3)))
     HANDLE_EXPR(get_top_index, mListState.FirstShowing())
     HANDLE_ACTION(refresh, mRefreshPending = true)
@@ -282,7 +290,7 @@ void HamNavList::PostLoad(BinStream &bs) {
 }
 
 void HamNavList::SetControllerFocus(int i1) {
-    if (TheGestureMgr && TheGestureMgr->InControllerMode()) {
+    if (InControllerMode()) {
         SetHighlight(i1);
     }
 }
