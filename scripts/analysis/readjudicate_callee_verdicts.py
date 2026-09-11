@@ -174,6 +174,29 @@ def main(argv=None) -> int:
     ap.add_argument("--apply", action="store_true", help="write verdict changes to --db")
     args = ap.parse_args(argv)
 
+    # BEFORE the two sweeps below, not after the second one.  `--db` defaults to
+    # `REPO_ROOT / "decomp.db"` and REPO_ROOT is derived from __file__, so in a
+    # worktree the default IS the tripwire -- and the first statement against it
+    # was ~2 whole-binary sweeps away.  Same defect class as pattern_census's
+    # late --apply validation, which cost a lane 7.5 minutes.
+    if args.apply:
+        import orchestrator.database as db_mod
+        try:
+            db_mod.check_not_shadow_db(args.db)
+        except db_mod.ShadowDatabaseError as e:
+            print(f"--apply refused before measuring anything: {e}",
+                  file=sys.stderr)
+            return 2
+        if not Path(args.db).exists():
+            print(f"--apply refused: no such database: {args.db}",
+                  file=sys.stderr)
+            return 2
+        if not Path(args.db).open("rb").read(16).startswith(b"SQLite format 3"):
+            print(f"--apply refused: {args.db} is not a SQLite database "
+                  f"(a worktree plants a tripwire file there -- `cat` it).",
+                  file=sys.stderr)
+            return 2
+
     project = Path(args.project_dir).resolve()
     addr, byaddr = load_map(project)
     wl = json.loads(Path(args.worklist).read_text())

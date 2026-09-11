@@ -410,7 +410,13 @@ def main():
             return 1
         open(p, 'w').write(''.join(lines))
         print('\nrewrote %d placeholder names in %s' % (done, p))
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    # `main()` bare DISCARDED the `return 1` above: the REFUSING-to-write branch
+    # printed its refusal and the process still exited 0.  Same defect class as
+    # pattern_census's late --apply validation and the same consequence -- the
+    # caller reads a refusal as a success -- but here it was the exit code
+    # itself, not the ordering.  See the commit that added this line.
+    sys.exit(main())
