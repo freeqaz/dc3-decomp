@@ -583,13 +583,15 @@ void DirLoader::AddTypeObjectMemDelta(
         const char *name = object->ClassName().Str();
         if (!name || !*name)
             name = "Unknown";
-        std::map<String, MemPointDelta>::iterator it = sMemPointMap.find(name);
+        // Explicit temporaries: the target hands the String ctor's return register
+        // straight to _M_find / the pair ctor instead of re-taking the slot address.
+        std::map<String, MemPointDelta>::iterator it = sMemPointMap.find(String(name));
         MemPointDelta *target;
         if (it != sMemPointMap.end()) {
             target = &it->second;
         } else {
             std::pair<std::map<String, MemPointDelta>::iterator, bool> result =
-                sMemPointMap.insert(std::pair<String, MemPointDelta>(name, MemPointDelta()));
+                sMemPointMap.insert(std::pair<String, MemPointDelta>(String(name), MemPointDelta()));
             target = &result.first->second;
         }
         *target += memDelta;
