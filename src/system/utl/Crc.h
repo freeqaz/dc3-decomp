@@ -5,6 +5,7 @@ namespace Hmx {
     class CRC {
     public:
         CRC() : mCRC(0) {}
+        CRC(int crc) : mCRC(crc) {}
         CRC(const char *cstr) : mCRC(ComputeHash(cstr, strlen(cstr))) {
             MILO_ASSERT(ValidateCRC(mCRC, cstr), 0x20);
         }
