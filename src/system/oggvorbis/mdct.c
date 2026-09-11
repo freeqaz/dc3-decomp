@@ -59,7 +59,7 @@ void mdct_init(mdct_lookup *lookup,int n){
   int log2n=lookup->log2n=rint(log((float)n)/log(2.f));
   lookup->n=n;
   lookup->trig=T;
-  lookup->unknown_ptr=T2;
+  lookup->trig_conj=T2;
   lookup->bitrev=bitrev;
 
 /* trig lookups... */
@@ -347,6 +347,7 @@ STIN void mdct_butterflies(mdct_lookup *init,
 void mdct_clear(mdct_lookup *l){
   if(l){
     if(l->trig)_ogg_free(l->trig);
+    if(l->trig_conj)_ogg_free(l->trig_conj);
     if(l->bitrev)_ogg_free(l->bitrev);
     memset(l,0,sizeof(*l));
   }
