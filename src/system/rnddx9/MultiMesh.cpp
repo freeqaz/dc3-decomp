@@ -212,16 +212,25 @@ void DxMultiMesh::DrawBatchedNewGfx() {
     }
     int numFaces;
     if (owner->Mutable()) {
-        int buf = mBufferCycleIndex % 3;
+        // The cycle index is reduced twice, once per stream, and reduced as
+        // UNSIGNED (divwu): a shared local or a signed % costs 4 rows.
         D3DDevice_SetStreamSource(
-            TheDxRnd.Device(), 0, mVertexBuffers[buf], 0, 0x60, 1
+            TheDxRnd.Device(),
+            0,
+            mVertexBuffers[(unsigned int)mBufferCycleIndex % 3],
+            0,
+            0x60,
+            1
         );
-        D3DDevice_SetStreamSource(TheDxRnd.Device(), 1, mIndexBuffers[buf], 0, 4, 1);
+        D3DDevice_SetStreamSource(
+            TheDxRnd.Device(), 1, mIndexBuffers[(unsigned int)mBufferCycleIndex % 3], 0, 4, 1
+        );
         D3DDevice_SetVertexDeclaration(TheDxRnd.Device(), sMutableVertexDecl);
         numFaces = owner->Faces().size();
     } else {
+        D3DVertexBuffer *verts = owner->unk1a4.buffer;
         D3DDevice_SetStreamSource(
-            TheDxRnd.Device(), 0, owner->unk1a4.buffer, 0, owner->VertSize(), 1
+            TheDxRnd.Device(), 0, verts, 0, owner->VertSize(), 1
         );
         D3DDevice_SetStreamSource(
             TheDxRnd.Device(), 1, owner->GetMultimeshFaces(), 0, 4, 1
@@ -242,9 +251,9 @@ void DxMultiMesh::DrawBatchedNewGfx() {
     // The global default spline, when one exists, owns the top 48 of them.
     int lastRegister = RndSpline::GlobalDefaultSpline() ? 0xAD : 0xDD;
     do {
-        TheShaderMgr.SetTransform(Transform::IDXfm());
         int totalDrawn = 0;
         int batches = 0;
+        TheShaderMgr.SetTransform(Transform::IDXfm());
         RndShader::SelectConfig(mat, shader, false);
         InstanceList::iterator it = mInstances.begin();
         while (it != mInstances.end()) {
@@ -255,7 +264,12 @@ void DxMultiMesh::DrawBatchedNewGfx() {
                 Instance &inst = *it;
                 ++it;
                 if (inst.mIsVisible) {
-                    TheShaderMgr.SetVConstant4x3(
+                    // Local reference, as in DxRnd::DrawRect: it keeps the
+                    // manager's pointer in a callee-saved register across the
+                    // Matrix4 temporary's constructor instead of reloading the
+                    // global afterwards.
+                    RndShaderMgr &shaderMgr = TheShaderMgr;
+                    shaderMgr.SetVConstant4x3(
                         (VShaderConstant)reg, Hmx::Matrix4(inst.mXfm)
                     );
                     reg += 3;
@@ -275,7 +289,7 @@ void DxMultiMesh::DrawBatchedNewGfx() {
         }
         TheNgStats->mMultiMeshInsts += totalDrawn;
         TheNgStats->mMultiMeshBatches += batches;
-        TheNgStats->mFaces += mesh->NumFaces() * totalDrawn;
+        TheNgStats->mFaces = mesh->NumFaces() * totalDrawn + TheNgStats->mFaces;
     } while (mat);
     mBufferCycleIndex++;
 }
