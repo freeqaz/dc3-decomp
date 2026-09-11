@@ -1720,34 +1720,31 @@ void ResetNormals(RndMesh *m) {
     int numVerts = m->Verts().size();
     std::vector<int> repVerts(numVerts);
     for (int i = 0; i < m->Verts().size(); i++) {
-        const Vector3 &pos = m->Verts()[i].pos;
-        int rep = i;
-        for (int j = 0; j < i; j++) {
+        int j;
+        for (j = 0; j < i; j++) {
+            const Vector3 &pos = m->Verts()[i].pos;
             const Vector3 &otherPos = m->Verts()[j].pos;
             if (fabs(pos.x - otherPos.x) <= 0.001f && fabs(pos.y - otherPos.y) <= 0.001f
                 && fabs(pos.z - otherPos.z) <= 0.001f) {
-                rep = j;
                 break;
             }
         }
-        repVerts[i] = rep;
+        repVerts[i] = j;
     }
 
     for (int i = 0; i < m->Verts().size(); i++) {
-        RndMesh::Vert &v = m->Verts()[i];
-        Vector3 *pNorm = &v.norm;
-        Vector4 *pTangent = &v.tangent;
-        pNorm->Zero();
+        Vector4 *pTangent = &m->Verts()[i].tangent;
+        m->Verts()[i].norm.Zero();
         ((Vector3 *)pTangent)->Zero();
 
         int rep = repVerts[i];
         for (int f = 0; f < m->Faces().size(); f++) {
             RndMesh::Face &face = m->Faces()[f];
-            for (int k = 0; k <= 2; k++) {
+            for (int k = 0; k < 3; k++) {
                 if (repVerts[face[k]] != rep)
                     continue;
 
-                const RndMesh::Vert &v0 = m->Verts()[face[k]];
+                const RndMesh::Vert &v0 = m->Verts()[face[k % 3]];
                 const RndMesh::Vert &v1 = m->Verts()[face[(k + 1) % 3]];
                 const RndMesh::Vert &v2 = m->Verts()[face[(k + 2) % 3]];
 
@@ -1776,12 +1773,9 @@ void ResetNormals(RndMesh *m) {
                     (double)(d2.x * d1.x + d2.y * d1.y + d2.z * d1.z)
                 );
 
-                crossProd.x *= angle;
-                crossProd.y *= angle;
-                crossProd.z *= angle;
-                pNorm->x = pNorm->x + crossProd.x;
-                pNorm->y = pNorm->y + crossProd.y;
-                pNorm->z = pNorm->z + crossProd.z;
+                Vector3 weighted;
+                Scale(crossProd, angle, weighted);
+                Add(m->Verts()[i].norm, weighted, m->Verts()[i].norm);
 
                 Vector4 ft = faceTangents[f];
                 ft.x *= angle;
@@ -1792,25 +1786,19 @@ void ResetNormals(RndMesh *m) {
                 pTangent->z = pTangent->z + ft.z;
             }
         }
-        Normalize(*pNorm, *pNorm);
+        Normalize(m->Verts()[i].norm, m->Verts()[i].norm);
         Normalize(*(Vector3 *)pTangent, *(Vector3 *)pTangent);
 
         if (leftHanded) {
-            pNorm->x = -pNorm->x;
-            pNorm->y = -pNorm->y;
-            pNorm->z = -pNorm->z;
-            pTangent->x = -pTangent->x;
-            pTangent->y = -pTangent->y;
-            pTangent->z = -pTangent->z;
+            Negate(m->Verts()[i].norm, m->Verts()[i].norm);
+            Negate(*(Vector3 *)pTangent, *(Vector3 *)pTangent);
         }
 
         Vector4 tangCopy = *pTangent;
-        float tDotN = pNorm->x * tangCopy.x + pNorm->z * tangCopy.z + pNorm->y * tangCopy.y;
-        Vector3 ortho(
-            tangCopy.x - pNorm->x * tDotN,
-            tangCopy.y - pNorm->y * tDotN,
-            tangCopy.z - pNorm->z * tDotN
-        );
+        const Vector3 &norm = m->Verts()[i].norm;
+        float tDotN = norm.x * tangCopy.x + (norm.y * tangCopy.y + norm.z * tangCopy.z);
+        Vector3 scaled(norm.x * tDotN, norm.y * tDotN, norm.z * tDotN);
+        Vector3 ortho(tangCopy.x - scaled.x, tangCopy.y - scaled.y, tangCopy.z - scaled.z);
         Normalize(ortho, *(Vector3 *)pTangent);
     }
     m->Sync(0x1F);
