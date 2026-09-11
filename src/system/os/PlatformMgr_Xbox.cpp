@@ -32,9 +32,12 @@
 static bool DefaultXShowCallback(unsigned long &) { return false; }
 XCallbackFunc *PlatformMgr::sXShowCallback = DefaultXShowCallback;
 
-enum ServiceIdState {};
-
 namespace {
+    // Lives inside the anonymous namespace: the target mangles the variable
+    // as ?mServiceIdState@?A0x...@@3W4ServiceIdState@1@A (enum scoped to the
+    // same namespace), not W4ServiceIdState@@.
+    enum ServiceIdState {};
+
     DWORD gSmartGlassClientIDs[4];
     XUID mXuidCache[4];
     unsigned long mResult;

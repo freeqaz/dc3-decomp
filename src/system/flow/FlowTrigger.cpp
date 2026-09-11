@@ -140,9 +140,9 @@ bool FlowTrigger::ActivateWithParams(Hmx::Object *o, DataArray *a) {
     Symbol sym("anon");
     if (mTriggerEvents.size() > 0) {
         if (mTriggerEvents.size() > 1) {
-            sym = MakeString("Event:%s...", mTriggerEvents.front());
+            sym = MakeString("Event:%s...", mTriggerEvents.front().Str());
         } else {
-            sym = MakeString("Event:%s", mTriggerEvents.front());
+            sym = MakeString("Event:%s", mTriggerEvents.front().Str());
         }
     } else {
         if (mTriggerProperties.size() != 0) {

@@ -188,12 +188,13 @@ bool DingoServer::InitAndAddJob(DingoJob *job, bool immediate, bool delay) {
 
 DataNode DingoServer::OnMsg(const DingoJobCompleteMsg &msg) {
     if (mAuthState != kServerAuthenticating) {
-        AuthState state = mAuthState;
+        int state = mAuthState;
         MILO_NOTIFY("Got auth response in wrong state: %d.", state);
         return DataNode(1);
     } else {
         if (msg.Data()->Int(3) != 0) {
-            AuthenticateReqJob *job = dynamic_cast<AuthenticateReqJob *>(msg.Data()->Obj<DingoJob>(2));
+            DingoJob *dingoJob = msg.Data()->Obj<DingoJob>(2);
+            AuthenticateReqJob *job = dynamic_cast<AuthenticateReqJob *>(dingoJob);
             MILO_ASSERT(job, 0x14e);
             job->ParseResponse();
             if (job->mResult == 1) {

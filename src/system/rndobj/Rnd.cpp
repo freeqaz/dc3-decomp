@@ -82,30 +82,38 @@
 #include "os\PlatformMgr.h"
 #include "xdk\XAPILIB.h"
 
-int Rnd::sPostProcPanelCount;
-
 // Rnd & TheRnd;
-bool gNotifyKeepGoing;
-bool gFailKeepGoing;
+
+// The order of this block is load bearing. The target's Rnd.obj .bss run is
+//
+//   sPostProcPanelCount 0x830A3FA8  gNotifyKeepGoing    0x830A3FB1
+//   sTexture            0x830A3FAC  gFailKeepGoing      0x830A3FB2
+//   sCompressDone       0x830A3FB0  gFailRestartConsole 0x830A3FB3
+//                                   sCompressData       0x830A3FB4
+//                                   gRndThread          0x830A3FB8
+//                                   gRndTextureEvent    0x830A3FBC
+//
+// and Init/Terminate/DrawPreClear/CompressThread reach the compression
+// hand-off variables through one base register with baked-in displacements
+// (Init stores gRndTextureEvent as gRndThread + 4, DrawPreClear reads
+// sTexture as gRndTextureEvent - 0x10). MSVC lays .bss out in reverse
+// declaration order, so this block is written back-to-front.
+// Internal linkage on purpose: MSVC only folds same-TU statics into one
+// base register (anonymous-namespace and extern globals each get their own
+// relocation), and the target reaches gRndTextureEvent as gRndThread + 4.
+static HANDLE gRndTextureEvent;
+static HANDLE gRndThread;
+static void *sCompressData;
 bool gFailRestartConsole;
-
-struct {
+bool gFailKeepGoing;
+bool gNotifyKeepGoing;
+static bool sCompressDone;
 #ifdef HX_NATIVE
-    void* sTexture;
+static void *sTexture;
 #else
-    DxTex* sTexture;
+static DxTex *sTexture;
 #endif
-    bool sCompressDone;
-    void* sCompressData;
-    HANDLE mThread;
-    HANDLE mTextureEvent;
-} gRndHandles;
-
-#define sTexture gRndHandles.sTexture
-#define sCompressDone gRndHandles.sCompressDone
-#define sCompressData gRndHandles.sCompressData
-#define gRndThread gRndHandles.mThread
-#define gRndTextureEvent gRndHandles.mTextureEvent
+int Rnd::sPostProcPanelCount;
 
 extern int lbl_82F14008;
 extern DataArray *lbl_830A4100;
@@ -1183,93 +1191,73 @@ void Rnd::DrawPreClear() {
         unk150();
     }
 #ifndef HX_NATIVE
-    unsigned int event = 0;
-    if (!(!(!((unsigned char)gRndTextureEvent)))) {
-        event = (unsigned int)gRndTextureEvent;
-    } else {
-        sTexture->FinishCompress(gRndTextureEvent);
-        unsigned int eventVal = (unsigned int)gRndTextureEvent;
-        gRndTextureEvent = 0;
-        if (0 == eventVal) {
-            MILO_ASSERT(sTexture, 0x481);
-            eventVal = (unsigned int)gRndTextureEvent;
-        }
-        CompressTexDesc *desc = (CompressTexDesc *)mCompressTexQueue.front();
+    // Texture compression hand-off with CompressThread: when the worker has
+    // finished (sCompressDone), swap the compressed DxTex in for the queued
+    // RndTex it was built from and delete the original, then start the next
+    // queued texture on the thread.
+    if (sCompressDone) {
+        sTexture->FinishCompress(sCompressData);
+        sCompressData = nullptr;
+        MILO_ASSERT(sTexture, 0x481);
+        CompressTexDesc *desc = mCompressTexQueue.front();
         RndTex *tex = desc->tex;
         if (tex) {
-            ReplaceObject(tex, (Hmx::Object *)eventVal, false, false, false);
-            gRndTextureEvent = tex;
+            ReplaceObject(desc->tex, sTexture, false, false, false);
+            sTexture = static_cast<DxTex *>(tex);
         }
-        auto it = mCompressTexQueue.begin();
-        mCompressTexQueue.erase(it);
+        mCompressTexQueue.erase(mCompressTexQueue.begin());
         delete desc;
-        if (gRndTextureEvent) {
-            CompressTextureCallback *cb = (CompressTextureCallback *)gRndTextureEvent;
-            cb->TextureCompressed((intptr_t)gRndTextureEvent);
-        }
-        event = 0;
-        gRndTextureEvent = 0;
-        gRndTextureEvent = 0;
+        delete sTexture;
+        sTexture = nullptr;
+        sCompressDone = false;
     }
-    if (event == 0) {
-        auto it_end = mCompressTexQueue.end();
-        auto it_begin = mCompressTexQueue.begin();
-        if (it_end != it_begin) {
-            auto it = it_begin;
-            do {
+    if (!sTexture) {
+        // Drop queue entries whose texture went away or that lost their callback.
+        if (!mCompressTexQueue.empty()) {
+            std::list<CompressTexDesc *>::iterator it = mCompressTexQueue.begin();
+            while (it != mCompressTexQueue.end()) {
                 CompressTexDesc *desc = *it;
-                if ((desc->tex) && ((unsigned int)desc->alpha > 0U)) {
+                if (desc->tex && desc->callback) {
                     ++it;
                 } else {
                     it = mCompressTexQueue.erase(it);
                     delete desc;
                 }
-            } while (it_end != it);
-            it_begin = mCompressTexQueue.begin();
-            unsigned int count = 0;
-            if (it_begin != it_end) {
-                auto it2 = it_begin;
-                do {
-                    count++;
-                    ++it2;
-                } while (it2 != it_end);
-                if (count > 0) {
-                    CompressTexDesc *first = *mCompressTexQueue.begin();
-                    gRndTextureEvent = (void *)first->tex;
-                    MemPushTemp();
-                    RndTex *newTex = Hmx::Object::New<RndTex>();
-                    MemPopTemp();
-                    ReplaceObject((Hmx::Object *)gRndTextureEvent, newTex, false, false, false);
-                    gRndTextureEvent = sTexture->StartCompress(first->alpha);
-                    if ((unsigned char)gRndTextureEvent != 0) {
-                        MILO_ASSERT(!sCompressDone, 0x4C3);
-                    }
-                    SetEvent((HANDLE)(unsigned int)gRndTextureEvent);
-                }
             }
+        }
+        if (mCompressTexQueue.size() != 0) {
+            CompressTexDesc *first = mCompressTexQueue.front();
+            sTexture = static_cast<DxTex *>((RndTex *)first->tex);
+            RndTex *newTex;
+            {
+                MemTemp tmp;
+                newTex = Hmx::Object::New<RndTex>();
+            }
+            ReplaceObject(sTexture, newTex, false, false, false);
+            sCompressData = sTexture->StartCompress(first->alpha);
+            MILO_ASSERT(!sCompressDone, 0x4C3);
+            SetEvent(gRndTextureEvent);
         }
     }
 #endif // !HX_NATIVE
-    ObjPtrList<RndDrawable> *drawList;
-    drawList = mReleaseImmediate ? &mDraws : &mPreClearDraws;
-    if (drawList->size() > 0) {
-        mWorldCamCopied = true;
+    ObjPtrList<RndDrawable> *drawList = mReleaseImmediate ? &mPreClearDraws : &mDraws;
+    if (drawList->size() != 0) {
+        unk148 = true;
         RndCam *prevCam = RndCam::Current();
         for (ObjPtrList<RndDrawable>::iterator it = drawList->begin();
              it != drawList->end();
              ++it) {
-#ifdef HX_NATIVE
-            // NullifyAllRefs (cascade Phase 0) nullifies ObjPtrList nodes
-            // without erasing them, leaving null entries in the list.
-            // Guard against dereferencing null after splash dir teardown.
-            if (!*it) continue;
-#endif
-            (*it)->DrawPreClear();
+            // The target null-checks each entry: NullifyAllRefs can leave
+            // nulled nodes in the list without erasing them.
+            RndDrawable *drawable = *it;
+            if (drawable) {
+                drawable->DrawPreClear();
+            }
         }
         if ((prevCam != nullptr) && (prevCam != RndCam::Current())) {
             prevCam->Select();
         }
-        mWorldCamCopied = false;
+        unk148 = false;
     }
 }
 
