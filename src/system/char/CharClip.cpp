@@ -551,11 +551,7 @@ INIT_REVS(0x16, 0)
 BEGIN_LOADS(CharClip)
     static int _x = MemFindHeap("char");
     MemHeapTracker temp(_x);
-    int revs;
-    bs >> revs;
-    int dRev = getHmxRev(revs);
-    int dAltRev = getAltRev(revs);
-    BinStreamRev d(bs, dRev, dAltRev);
+    LOAD_REVS(bs)
     ASSERT_REVS(0x16, 0)
     int oldRev = 0;
     if (d.rev < 0x10) {
