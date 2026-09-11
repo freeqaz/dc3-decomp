@@ -1227,21 +1227,13 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
 
                     // Create 4 new faces
                     RndMesh::Face f1;
-                    f1.v1 = face.v1;
-                    f1.v2 = edge01.midpoint;
-                    f1.v3 = edge20.midpoint;
+                    f1.Set(face.v1, edge01.midpoint, edge20.midpoint);
                     RndMesh::Face f2;
-                    f2.v1 = edge20.midpoint;
-                    f2.v2 = edge01.midpoint;
-                    f2.v3 = edge12.midpoint;
+                    f2.Set(edge20.midpoint, edge01.midpoint, edge12.midpoint);
                     RndMesh::Face f3;
-                    f3.v1 = edge01.midpoint;
-                    f3.v2 = face.v2;
-                    f3.v3 = edge12.midpoint;
+                    f3.Set(edge01.midpoint, face.v2, edge12.midpoint);
                     RndMesh::Face f4;
-                    f4.v1 = edge12.midpoint;
-                    f4.v2 = face.v3;
-                    f4.v3 = edge20.midpoint;
+                    f4.Set(edge12.midpoint, face.v3, edge20.midpoint);
                     newFaces.push_back(f1);
                     newFaces.push_back(f2);
                     newFaces.push_back(f3);
@@ -1335,21 +1327,13 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                     } else if (splitCount == 3) {
                         // All 3 edges split: 4 new faces
                         RndMesh::Face fa;
-                        fa.v1 = face.v1;
-                        fa.v2 = mids[0];
-                        fa.v3 = mids[2];
+                        fa.Set(face.v1, mids[0], mids[2]);
                         RndMesh::Face fb;
-                        fb.v1 = mids[0];
-                        fb.v2 = face.v2;
-                        fb.v3 = mids[1];
+                        fb.Set(mids[0], face.v2, mids[1]);
                         RndMesh::Face fc;
-                        fc.v1 = mids[1];
-                        fc.v2 = face.v3;
-                        fc.v3 = mids[2];
+                        fc.Set(mids[1], face.v3, mids[2]);
                         RndMesh::Face fd;
-                        fd.v1 = mids[0];
-                        fd.v2 = mids[1];
-                        fd.v3 = mids[2];
+                        fd.Set(mids[0], mids[1], mids[2]);
                         newFaces.push_back(fa);
                         newFaces.push_back(fb);
                         newFaces.push_back(fc);
@@ -1360,36 +1344,24 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         RndMesh::Face fa, fb;
                         if (lastSplitEdge == 0) {
                             RndMesh::Face tA;
-                            tA.v1 = face.v3;
-                            tA.v2 = face.v1;
-                            tA.v3 = mid;
+                            tA.Set(face.v3, face.v1, mid);
                             fa = tA;
                             RndMesh::Face tB;
-                            tB.v1 = face.v3;
-                            tB.v2 = mid;
-                            tB.v3 = face.v2;
+                            tB.Set(face.v3, mid, face.v2);
                             fb = tB;
                         } else if (lastSplitEdge == 1) {
                             RndMesh::Face tA;
-                            tA.v1 = face.v1;
-                            tA.v2 = face.v2;
-                            tA.v3 = mid;
+                            tA.Set(face.v1, face.v2, mid);
                             fa = tA;
                             RndMesh::Face tB;
-                            tB.v1 = face.v1;
-                            tB.v2 = mid;
-                            tB.v3 = face.v3;
+                            tB.Set(face.v1, mid, face.v3);
                             fb = tB;
                         } else {
                             RndMesh::Face tA;
-                            tA.v1 = face.v2;
-                            tA.v2 = face.v3;
-                            tA.v3 = mid;
+                            tA.Set(face.v2, face.v3, mid);
                             fa = tA;
                             RndMesh::Face tB;
-                            tB.v1 = face.v2;
-                            tB.v2 = mid;
-                            tB.v3 = face.v1;
+                            tB.Set(face.v2, mid, face.v1);
                             fb = tB;
                         }
                         newFaces.push_back(fa);
@@ -1417,60 +1389,42 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                         // Edge 0 (v0-v1)
                         if (mids[0] == 0xffff) {
                             RndMesh::Face tmpA;
-                            tmpA.v1 = blendIdx;
-                            tmpA.v2 = face.v1;
-                            tmpA.v3 = face.v2;
+                            tmpA.Set(blendIdx, face.v1, face.v2);
                             newFaces.push_back(tmpA);
                         } else {
                             RndMesh::Face tmpA;
-                            tmpA.v1 = blendIdx;
-                            tmpA.v2 = face.v1;
-                            tmpA.v3 = mids[0];
+                            tmpA.Set(blendIdx, face.v1, mids[0]);
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
-                            tmpB.v1 = blendIdx;
-                            tmpB.v2 = mids[0];
-                            tmpB.v3 = face.v2;
+                            tmpB.Set(blendIdx, mids[0], face.v2);
                             newFaces.push_back(tmpB);
                         }
 
                         // Edge 1 (v1-v2)
                         if (mids[1] == 0xffff) {
                             RndMesh::Face tmpA;
-                            tmpA.v1 = blendIdx;
-                            tmpA.v2 = face.v2;
-                            tmpA.v3 = face.v3;
+                            tmpA.Set(blendIdx, face.v2, face.v3);
                             newFaces.push_back(tmpA);
                         } else {
                             RndMesh::Face tmpA;
-                            tmpA.v1 = blendIdx;
-                            tmpA.v2 = face.v2;
-                            tmpA.v3 = mids[1];
+                            tmpA.Set(blendIdx, face.v2, mids[1]);
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
-                            tmpB.v1 = blendIdx;
-                            tmpB.v2 = mids[1];
-                            tmpB.v3 = face.v3;
+                            tmpB.Set(blendIdx, mids[1], face.v3);
                             newFaces.push_back(tmpB);
                         }
 
                         // Edge 2 (v2-v0)
                         if (mids[2] == 0xffff) {
                             RndMesh::Face tmpA;
-                            tmpA.v1 = blendIdx;
-                            tmpA.v2 = face.v3;
-                            tmpA.v3 = face.v1;
+                            tmpA.Set(blendIdx, face.v3, face.v1);
                             newFaces.push_back(tmpA);
                         } else {
                             RndMesh::Face tmpA;
-                            tmpA.v1 = blendIdx;
-                            tmpA.v2 = face.v3;
-                            tmpA.v3 = mids[2];
+                            tmpA.Set(blendIdx, face.v3, mids[2]);
                             newFaces.push_back(tmpA);
                             RndMesh::Face tmpB;
-                            tmpB.v1 = blendIdx;
-                            tmpB.v2 = mids[2];
-                            tmpB.v3 = face.v1;
+                            tmpB.Set(blendIdx, mids[2], face.v1);
                             newFaces.push_back(tmpB);
                         }
 
@@ -1557,7 +1511,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
     timer.Restart();
 
     // Clear tessellate list
-    mObjectsTessellate.erase(mObjectsTessellate.begin(), mObjectsTessellate.end());
+    mObjectsTessellate.clear();
 }
 
 DataNode RndAmbientOcclusion::OnGetRecvMeshes(DataArray *) {
