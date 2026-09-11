@@ -449,10 +449,7 @@ void StreamRenderer::DrawToTexture() {
             primaryTex = camInput->GetStreamTex(bufType);
         }
 
-        RndTex *targetRT = mBlurRT[0];
-        if (mNumBlurs == 0) {
-            targetRT = mOutputTex;
-        }
+        RndTex *targetRT = mNumBlurs ? mBlurRT[0] : mOutputTex;
         RndCam *currentCam = RndCam::Current();
 
         RndTex *existingTarget = currentCam->TargetTex();
@@ -640,39 +637,38 @@ void StreamRenderer::DrawToTexture() {
             TheShaderMgr.SetPConstant((PShaderConstant)0x52, center5);
         }
 
-        Hmx::Rect drawRect(0, 0, (float)targetRT->Width(), (float)targetRT->Height());
+        float width = targetRT->Width();
+        float height = targetRT->Height();
+        Hmx::Rect drawRect(0, 0, width, height);
         TheNgRnd.DrawRect(drawRect, workMat, shaderType, Hmx::Color(), nullptr, nullptr);
 
         mCam->SetTargetTex(nullptr);
 
         RndMat *blurMat = TheShaderMgr.GetWork();
-        blurMat->SetDiffuseTex(nullptr);
+        blurMat->SetTexWrap(kTexWrapClamp);
         blurMat->SetBlend(BaseMaterial::kBlendSrc);
         blurMat->SetZMode(kZModeDisable);
-        blurMat->MarkDirty(2);
 
-        for (unsigned int blurIdx = 0; (int)blurIdx < mNumBlurs; blurIdx++) {
+        for (int blurIdx = 0; blurIdx < mNumBlurs; blurIdx++) {
+            bool odd = blurIdx & 1;
             RndTex *srcTex = mBlurRT[1];
-            if ((blurIdx & 1) == 0) {
+            if (!odd) {
                 srcTex = mBlurRT[0];
             }
-            RndTex *dstTex = mBlurRT[0];
-            if ((blurIdx & 1) == 0) {
-                dstTex = mBlurRT[1];
+            RndTex *dstTex = mBlurRT[1];
+            if (odd) {
+                dstTex = mBlurRT[0];
             }
-            if ((unsigned int)(mNumBlurs - 1) == blurIdx) {
+            if (mNumBlurs - 1 == blurIdx) {
                 dstTex = mOutputTex;
             }
             dstTex->MakeDrawTarget();
             blurMat->SetDiffuseTex(srcTex);
-            blurMat->MarkDirty(2);
+            Hmx::Rect blurRect(0, 0, dstTex->Width(), dstTex->Height());
             if (primaryTex) {
-                Hmx::Rect blurRect(0, 0, (float)dstTex->Width(), (float)dstTex->Height());
-                SetBloomBlurWeights(
-                    (bool)(blurIdx & 1), (float)dstTex->Width(), (float)dstTex->Height()
-                );
+                SetBloomBlurWeights(odd, dstTex->Width(), dstTex->Height());
                 TheNgRnd.DrawRect(
-                    blurRect, blurMat, kDrawRectShader, Hmx::Color(), nullptr, nullptr
+                    blurRect, blurMat, kBlurShader, Hmx::Color(), nullptr, nullptr
                 );
                 TheShaderMgr.SetNumTaps(1);
             }
@@ -684,6 +680,7 @@ void StreamRenderer::DrawToTexture() {
             if (streamTex) {
                 void *streamData = camInput->StreamBufferData(bufType);
                 if (streamData) {
+                    void *srcData = nullptr;
                     void *lagData = nullptr;
                     bool newIdx = unk154 == 0;
                     if (newIdx) {
@@ -692,7 +689,6 @@ void StreamRenderer::DrawToTexture() {
                         unk154 = 0;
                     }
                     mLaggedPrimaryTexture[unk154]->TexelsLock(lagData);
-                    void *srcData = nullptr;
                     streamTex->TexelsLock(srcData);
                     memcpy(lagData, srcData, 0x2D000);
                     streamTex->TexelsUnlock();
