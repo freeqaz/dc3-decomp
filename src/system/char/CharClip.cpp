@@ -551,19 +551,22 @@ INIT_REVS(0x16, 0)
 BEGIN_LOADS(CharClip)
     static int _x = MemFindHeap("char");
     MemHeapTracker temp(_x);
-    int oldRev, x, y, oldVer, tv;
     LOAD_REVS(bs)
     ASSERT_REVS(0x16, 0)
-    oldRev = 0;
-    if (d.rev < 0x10)
+    int oldRev = 0;
+    if (d.rev < 0x10) {
         d >> oldRev;
-    else
+    } else {
         oldRev = 0xD;
+    }
     MILO_ASSERT(oldRev > 1, 0x531);
     LOAD_SUPERCLASS(Hmx::Object)
+    // pre-rev-0x12 clips store their start/end beats here; they seed
+    // mBeatTrack below instead of being read from the stream.
+    float startBeat, endBeat;
     if (d.rev < 0x12) {
-        d >> x;
-        d >> y;
+        d >> startBeat;
+        d >> endBeat;
     }
     d >> mFramesPerSec;
     d >> mFlags;
@@ -620,8 +623,8 @@ BEGIN_LOADS(CharClip)
         if (!eventName.empty()) {
             MILO_NOTIFY("%s has old exit event %s, must port", PathName(this), eventName);
         }
-        int count;
         float lastFrame = -kHugeFloat;
+        int count;
         d >> count;
         for (int i = 0; i < count; i++) {
             float frameNum;
@@ -633,13 +636,13 @@ BEGIN_LOADS(CharClip)
                 );
             }
             if (frameNum < lastFrame) {
-                MILO_NOTIFY("Keyframes in %s are out of order.", (char *)Name());
+                MILO_NOTIFY("Keyframes in %s are out of order.", Name());
             }
             lastFrame = frameNum;
         }
     }
     mDirty = false;
-    tv = TransitionVersion();
+    int tv = TransitionVersion();
     if (tv != mOldVer) {
         // The assert `MILO_ASSERT(tv < 0x7FFF, 0x5A3)` was removed to match retail behavior
         mOldVer = tv;
@@ -667,14 +670,11 @@ BEGIN_LOADS(CharClip)
     } else {
         if (NumFrames() > 1) {
             mBeatTrack.resize(2);
-            Key<float> &key0 = mBeatTrack[0];
-            key0 = Key<float>(key0.value, 0);
-            Key<float> &key1 = mBeatTrack[1];
-            key1 = Key<float>(key1.value, NumFrames() - 1);
+            mBeatTrack[0] = Key<float>(startBeat, 0);
+            mBeatTrack[1] = Key<float>(endBeat, NumFrames() - 1);
         } else {
             mBeatTrack.resize(1);
-            Key<float> &key0 = mBeatTrack[0];
-            key0 = Key<float>(key0.value, 0);
+            mBeatTrack[0] = Key<float>(startBeat, 0);
         }
         if (d.rev < 0x11) {
             float oldFPS = mFramesPerSec;

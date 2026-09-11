@@ -119,9 +119,11 @@ void StorePanel::Poll() {
         return;
 
     mStorePreviewMgr->Poll();
-    NetCacheMgrFailType failType;
-    if (mStorePreviewMgr->GetLastFailure(failType)) {
-        HandleNetCacheLoaderFailure((int)failType);
+    {
+        NetCacheMgrFailType failType;
+        if (mStorePreviewMgr->GetLastFailure(failType)) {
+            HandleNetCacheLoaderFailure((int)failType);
+        }
     }
 
     // Iterate NetCacheLoaders
@@ -180,10 +182,10 @@ void StorePanel::Poll() {
                         }
                         MultipleItemsPostPurchaseEnumJob *job = new MultipleItemsPostPurchaseEnumJob(
                                 this,
-                                mCheckoutProfile,
+                                mCartOffers[0].second->GetPadNum(),
                                 songIds,
-                                mPurchaser->mSource,
-                                mPurchaser->mUserIndex
+                                mPurchaser->Source(),
+                                mPurchaser->UserIndex()
                             );
                         mPostPurchaseJob = job;
                         purchaseMade = true;
@@ -200,10 +202,10 @@ void StorePanel::Poll() {
                         } else if (mPurchaser->NeedsEnum() && mCheckoutProfile != 0) {
                             PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
                                     this,
-                                    mCheckoutProfile,
+                                    mCheckoutProfile->GetPadNum(),
                                     mCheckoutItem->songID,
-                                    mPurchaser->mSource,
-                                    mPurchaser->mUserIndex
+                                    mPurchaser->Source(),
+                                    mPurchaser->UserIndex()
                                 );
                             mPostPurchaseJob = job;
                             purchaseMade = true;
@@ -275,7 +277,7 @@ void StorePanel::CheckOut(StorePurchaseable *p) {
     MILO_ASSERT(profile, 0x2c4);
 
     mCheckoutItem = p;
-    mCheckoutProfile = (int)profile;
+    mCheckoutProfile = profile;
     mPurchaser =
         new XboxPurchaser(profile->GetPadNum(), p->SongID(), 0, 0, mPurchaseSource, 0);
     mPurchaser->Initiate();

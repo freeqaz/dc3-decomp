@@ -97,24 +97,28 @@ float FlowMathOp::Apply(float val) {
         if (mLhs.Type() == kDataString) {
             String str = mLhs.Str(0);
             DataNode n;
-            if (!str.empty()) {
-                DataVariable("val") = val;
-                MILO_TRY {
-                    n = DataReadString(str.c_str());
-                    n.Array(0)->Release();
-                    if (n.Array(0)->Type(0) == kDataCommand && n.Array(0)->Size() == 1) {
-                        val = n.Array(0)->Command(0)->Execute().Float(0);
-                    } else {
-                        val = n.Array(0)->Execute().Float(0);
-                    }
-                }
-                MILO_CATCH(msg) {
-                    MILO_NOTIFY(
-                        "Bad script expression in mathop : %s, expression is: %s", n.Str(0)
-                    );
+            if (str.empty()) {
+                return val;
+            }
+            DataVariable("val") = val;
+            float result = val;
+            MILO_TRY {
+                n = DataReadString(str.c_str());
+                n.Array(0)->Release();
+                if (n.Array(0)->Type(0) == kDataCommand && n.Array(0)->Size() == 1) {
+                    result = n.Array(0)->Command(0)->Execute().Float(0);
+                } else {
+                    result = n.Array(0)->Execute().Float(0);
                 }
             }
-            return val;
+            MILO_CATCH(msg) {
+                MILO_NOTIFY(
+                    "Bad script expression in mathop : %s, expression is: %s",
+                    msg,
+                    mLhs.Str(0)
+                );
+            }
+            return result;
         }
         // fall through to lookup
     case 100: {
@@ -129,7 +133,8 @@ float FlowMathOp::Apply(float val) {
             DataVariable("prop_val") = DataNode(rhs);
             return script->Node(1).Float(script);
         }
-        break;
+        // no such mathop: the input passes through unchanged (not mDefault)
+        return val;
     }
     case kMathOp_Add:
         return rhs + val;

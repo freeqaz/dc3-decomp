@@ -1112,7 +1112,9 @@ extern DataArray *SystemConfig(Symbol, Symbol, Symbol);
 #define LOAD_REVS(bs)                                                                    \
     int revs;                                                                            \
     bs >> revs;                                                                          \
-    BinStreamRev d(bs, revs);
+    int dRev = getHmxRev(revs);                                                          \
+    int dAltRev = getAltRev(revs);                                                       \
+    BinStreamRev d(bs, dRev, dAltRev);
 
 #ifdef HX_NATIVE
 #define ASSERT_REVS(rev1, rev2)                                                          \

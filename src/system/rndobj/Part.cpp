@@ -512,9 +512,13 @@ BEGIN_COPYS(RndParticleSys)
             if (!mPreserveParticles) {
                 SetPool(c->mMaxParticles, c->mType);
             }
-            RndTransformable *parent =
-                c->mMotionParent.Ptr() ? c->mMotionParent.Ptr() : this;
-            SetRelativeMotion(c->mRelativeMotion, parent);
+            // A source that is its own motion parent copies as "relative to
+            // self"; the identity test is on the Hmx::Object, not the
+            // RndTransformable subobject.
+            const Hmx::Object *srcParent = c->mMotionParent.Ptr();
+            SetRelativeMotion(
+                c->mRelativeMotion, srcParent == c ? this : c->mMotionParent.Ptr()
+            );
             SetSubSamples(c->mSubSamples);
         }
     END_COPYING_MEMBERS
