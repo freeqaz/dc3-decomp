@@ -8,6 +8,18 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
 
 ## Corrections — read before trusting an older section
 
+- **2026-09-11 — sibling-scope locals share a frame slot, on BOTH sides, unless an *inlined*
+  callee receives the local's address.** See **[stack-slot-sharing.md](stack-slot-sharing.md)**.
+  The wave-3 reading "our build packs sibling-scope PODs into one slot, the target never does" is
+  refuted by five 100%-matched functions that share (two `char block[256]` in
+  `ByteGrinder::GrindArray`, four 68-byte locals in `DirLoader::LoadObjs`); the discriminator is not
+  vptr/dtor/POD-ness but whether the address reaches inlined code (ctor, dtor, member, ptr/ref
+  param, or the `d >>` forwarding template — `d.stream >>` does not). Measured on a 30-probe matrix
+  and applied: `UILabel::PreLoad` 99.1 → 99.8, `RndFont::Load` 98.2 → 99.7,
+  `HamDirector::OnPopulateMoves` frame 0x1260 → 0x1350. Not a compiler flag; do not touch `/O1`.
+  Affects [Lever 4](fixable-liveness.md#lever-4--scope-a-declaration-into-the-block-that-uses-it-stack-lever-not-a-register-lever)
+  (scoping *narrows* to pack; this page is the converse) and the `artifact:stack_layout` AT_LIMIT class.
+
 - **2026-08-19 — a redundant `virtual` override is not free: MSVC slots overloaded
   virtuals as one name-group at the name's *first* declaration.** One `virtual void
   SetADSR(int, const ADSR &) {}` in `StandardStream` — an override whose body is identical
@@ -507,6 +519,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [fixable-control-flow.md](fixable-control-flow.md) — Max/Min explicit, ternary vs if/else, loop structure
 - [fixable-declarations.md](fixable-declarations.md) — Variable extraction, declaration order, destructor
 - [fixable-liveness.md](fixable-liveness.md) — **Register-swap levers**: live-range shortening, call-through-the-cached-local, schedule-then-polarity, scope-into-using-block; negative-result table; strengthened floor-evidence standard
+- [stack-slot-sharing.md](stack-slot-sharing.md) — **Frame-slot packing**: MSVC packs sibling-scope locals onto one slot (target too) unless an inlined callee gets the local's address (ctor/dtor/member/ptr-ref param/`d >>` forwarding); overlap-the-scopes and pin-it levers with the 30-probe matrix, the negative results, and the whole-TU census tool
 - [fixable-fsel-fma.md](fixable-fsel-fma.md) — fsel intrinsic, Clamp templates, #pragma fp_contract
 - [fixable-operators.md](fixable-operators.md) — FMA order, operator overload, inline assignment
 - [fixable-bool-mask.md](fixable-bool-mask.md) — Bool mask (`clrlwi`) fixes

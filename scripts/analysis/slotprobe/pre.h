@@ -1,0 +1,10 @@
+extern void Read(char *, int);
+extern void Use(const char *);
+extern void UseI(int *);
+extern int Cond();
+struct Pod { int x; int y; char c[24]; };
+extern void UsePod(Pod *);
+struct Dtor { int x; char c[28]; Dtor(); ~Dtor(); };
+extern void UseD(Dtor *);
+struct Virt { virtual ~Virt(); int x; char c[24]; Virt(); };
+extern void UseV(Virt *);
