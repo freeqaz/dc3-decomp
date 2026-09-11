@@ -1211,6 +1211,10 @@ void PlatformMgr::Poll() {
             break;
         }
         case XN_SYS_NUI_HARDWARE_STATUS_CHANGED: {
+            // The first arm looks redundant against the initialiser and is
+            // not: the target materialises 2 twice, once into the variable's
+            // register (r10, which the last arm masks against) and once as a
+            // fresh `li r4, 0x2` inside the branch.
             int status = kKinectInitializing;
             if (param & XNOTIFY_NUI_HARDWARE_STATUS_INITIALIZING) {
                 status = kKinectInitializing;
