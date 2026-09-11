@@ -2,8 +2,13 @@
 
 **Established 2026-09-11** (lane w3-s) with a 30-probe minimal-TU matrix compiled under the
 project's exact command line, a whole-TU slot census cross-referenced against `report.json`, and
-three functions moved: `HamDirector::OnPopulateMoves` 99.6 → 99.6 (107 → 48 rows, frame fixed),
-`UILabel::PreLoad` 99.1 → **99.8**, `RndFont::Load` 98.2 → **99.7**.
+three functions moved (exact `report.json` `match_percent_normalized`, rounded headline in bold):
+`HamDirector::OnPopulateMoves` 99.55015 → 99.63717 (**99.6**, 107 → 48 rows, frame fixed),
+`UILabel::PreLoad` 99.0766 → 99.77305 (**99.8**), `RndFont::Load` 98.18632 → 99.69578 (**99.7**).
+Regression check: the three touched TUs hold 525 functions; a per-function diff of the worktree's
+`report.json` against main's shows exactly those three rows changed, all upward. (The whole-tree
+`measure_progress.sh` run did not complete — its temporary baseline worktree failed the
+post-compile verify step against the main checkout's build dir — so that is the check on record.)
 
 **This is a source lever, not a flag.** The wave-3 description that started the lane — *"our build
 packs sibling-scope PODs and vtable-less objects into ONE stack slot; the target NEVER does"* — is
