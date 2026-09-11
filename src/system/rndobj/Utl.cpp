@@ -1706,7 +1706,7 @@ void ResetNormals(RndMesh *m) {
         Hmx::Matrix3 basis;
         ComputeFaceTangentBasis(m, i, basis);
 
-        float crossX = basis.x.y * basis.z.x - basis.z.y * basis.x.x;
+        float crossX = basis.z.x * basis.x.y - basis.x.x * basis.z.y;
         float crossY = basis.z.z * basis.x.x - basis.x.z * basis.z.x;
         float crossZ = basis.x.z * basis.z.y - basis.z.z * basis.x.y;
         Normalize(basis.x, *(Vector3 *)&faceTangents[i]);
@@ -1722,8 +1722,8 @@ void ResetNormals(RndMesh *m) {
     for (int i = 0; i < m->Verts().size(); i++) {
         int j;
         for (j = 0; j < i; j++) {
-            const Vector3 &pos = m->Verts()[i].pos;
             const Vector3 &otherPos = m->Verts()[j].pos;
+            const Vector3 &pos = m->Verts()[i].pos;
             if (fabs(pos.x - otherPos.x) <= 0.001f && fabs(pos.y - otherPos.y) <= 0.001f
                 && fabs(pos.z - otherPos.z) <= 0.001f) {
                 break;
@@ -1737,11 +1737,10 @@ void ResetNormals(RndMesh *m) {
         m->Verts()[i].norm.Zero();
         ((Vector3 *)pTangent)->Zero();
 
-        int rep = repVerts[i];
         for (int f = 0; f < m->Faces().size(); f++) {
             RndMesh::Face &face = m->Faces()[f];
             for (int k = 0; k < 3; k++) {
-                if (repVerts[face[k]] != rep)
+                if (repVerts[face[k]] != repVerts[i])
                     continue;
 
                 const RndMesh::Vert &v0 = m->Verts()[face[k % 3]];
@@ -1781,9 +1780,9 @@ void ResetNormals(RndMesh *m) {
                 ft.x *= angle;
                 ft.y *= angle;
                 ft.z *= angle;
-                pTangent->x = pTangent->x + ft.x;
-                pTangent->y = pTangent->y + ft.y;
-                pTangent->z = pTangent->z + ft.z;
+                pTangent->x += ft.x;
+                pTangent->y += ft.y;
+                pTangent->z += ft.z;
             }
         }
         Normalize(m->Verts()[i].norm, m->Verts()[i].norm);
@@ -1796,7 +1795,7 @@ void ResetNormals(RndMesh *m) {
 
         Vector4 tangCopy = *pTangent;
         const Vector3 &norm = m->Verts()[i].norm;
-        float tDotN = norm.x * tangCopy.x + (norm.y * tangCopy.y + norm.z * tangCopy.z);
+        float tDotN = norm.x * tangCopy.x + (norm.z * tangCopy.z + norm.y * tangCopy.y);
         Vector3 scaled(norm.x * tDotN, norm.y * tDotN, norm.z * tDotN);
         Vector3 ortho(tangCopy.x - scaled.x, tangCopy.y - scaled.y, tangCopy.z - scaled.z);
         Normalize(ortho, *(Vector3 *)pTangent);
