@@ -21,18 +21,6 @@ inline void Multiply(const Hmx::Matrix3 &m, const Vector3 &v, Vector3 &out) {
     out.Set(Dot(v, m.x), Dot(v, m.y), Dot(v, m.z));
 }
 
-// Same product as Mtx.h's Multiply(Vector3, Matrix3, Vector3), but with each
-// term written VECTOR-first (v.x * m.x.x) rather than Mtx.h's matrix-first
-// (m.x.x * v.x); MSVC keeps that operand order and the target is vector-first
-// at this one inlined site.
-inline void MultiplyVM(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
-    vout.Set(
-        v.x * m.x.x + v.y * m.y.x + v.z * m.z.x,
-        v.x * m.x.y + v.y * m.y.y + v.z * m.z.y,
-        v.x * m.x.z + v.y * m.y.z + v.z * m.z.z
-    );
-}
-
 const float sMaxThreshold = 80;
 bool CharLookAt::sDisableJitter = false;
 
@@ -262,7 +250,7 @@ void CharLookAt::Poll() {
                     Subtract(mTarget->WorldXfm().v, source->WorldXfm().v, lookDir);
                     MakeRotQuat(source->WorldXfm().m.y, lookDir, rotQuat);
                     MakeRotMatrix(rotQuat, rotMat);
-                    MultiplyVM(pivotXfm.m.y, rotMat, lookDir);
+                    Multiply(pivotXfm.m.y, rotMat, lookDir);
                 } else
                     Normalize(lookDir, lookDir);
                 Multiply(mPivot->TransParent()->WorldXfm().m, lookDir, lookDir);
