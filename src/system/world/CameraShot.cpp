@@ -59,10 +59,10 @@ AutoPrepTarget::AutoPrepTarget(CamShotFrame &frame)
     mFrame->mZoomFOV = 0;
     mShot->mFilter = 0.0f;
     mShot->mClampHeight = -1.0f;
-    mShot->mLastShakeOffset.Set(0.0f, 0.0f, 0.0f);
-    mShot->mLastShakeAngOffset.Set(0.0f, 0.0f, 0.0f);
     mShot->mLastDesiredShakeOffset.Set(0.0f, 0.0f, 0.0f);
     mShot->mLastDesiredShakeAngOffset.Set(0.0f, 0.0f, 0.0f);
+    mShot->mLastShakeOffset.Set(0.0f, 0.0f, 0.0f);
+    mShot->mLastShakeAngOffset.Set(0.0f, 0.0f, 0.0f);
     sChanging = true;
     mFrame->UpdateTarget();
     mShot->SetFrame(mFrame->mFrame, 1.0f);
@@ -918,9 +918,9 @@ CamShot::CamShot()
       mPlatform(kPlatformNone), mHideList(this), mShowList(this), mGenHideList(this),
       mDrawOverrides(this), mPostProcOverrides(this), mParentDir(this), mCrowds(this),
       mCrowdStateOverride(gNullStr), mPS3PerPixel(true), mGlowSpot(this), mFlags(0),
-      mEndHideList(this), mEndShowList(this), mLastDesiredShakeOffset(0, 0, 0),
-      mLastDesiredShakeAngOffset(0, 0, 0), mLastShakeOffset(0, 0, 0),
-      mLastShakeAngOffset(0, 0, 0), mShakeVelocity(0, 0, 0), mShakeAngVelocity(0, 0, 0), mLastNext(0),
+      mEndHideList(this), mEndShowList(this), mLastShakeOffset(0, 0, 0),
+      mLastShakeAngOffset(0, 0, 0), mLastDesiredShakeOffset(0, 0, 0),
+      mLastDesiredShakeAngOffset(0, 0, 0), mShakeVelocity(0, 0, 0), mShakeAngVelocity(0, 0, 0), mLastNext(0),
       mLastPrev(0), mDuration(0), mDisabled(0), mShotStarted(1), mShotOver(0), mHidden(0),
       mSetFrameActive(0) {}
 
@@ -1366,11 +1366,11 @@ void CamShot::StartAnim() {
     mLastNext = 0;
     mLastPrev = 0;
     mShotStarted = true;
-    mLastDesiredShakeOffset.Zero();
     mLastShakeOffset.Zero();
+    mLastDesiredShakeOffset.Zero();
     mShakeVelocity.Zero();
-    mLastDesiredShakeAngOffset.Zero();
     mLastShakeAngOffset.Zero();
+    mLastDesiredShakeAngOffset.Zero();
     mShakeAngVelocity.Zero();
     StartAnims(mAnims);
     for (int i = 0; i != mCrowds.size(); i++) {

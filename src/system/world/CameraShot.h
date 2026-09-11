@@ -271,10 +271,10 @@ protected:
     int mFlags; // 0x1e4
     ObjPtrList<RndDrawable> mEndHideList; // 0x1e8
     ObjPtrList<RndDrawable> mEndShowList; // 0x1fc
-    Vector3 mLastDesiredShakeOffset; // 0x210
-    Vector3 mLastDesiredShakeAngOffset; // 0x220
-    Vector3 mLastShakeOffset; // 0x230
-    Vector3 mLastShakeAngOffset; // 0x240
+    Vector3 mLastShakeOffset; // 0x210
+    Vector3 mLastShakeAngOffset; // 0x220
+    Vector3 mLastDesiredShakeOffset; // 0x230
+    Vector3 mLastDesiredShakeAngOffset; // 0x240
     Vector3 mShakeVelocity; // 0x250
     Vector3 mShakeAngVelocity; // 0x260
     CamShotFrame *mLastNext; // 0x270
