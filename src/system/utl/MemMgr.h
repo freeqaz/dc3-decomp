@@ -63,6 +63,12 @@ struct MemDoTempAllocations {
     ~MemDoTempAllocations() { MemPopTemp(); }
 };
 
+// The shared native engine (../milo-native-engine, Rnd_Wgpu.cpp) spells this
+// MemTemp, and it is also consumed by rb3, whose MemDoTempAllocations takes
+// (bool, bool) -- so the engine cannot simply be renamed.  A typedef emits no
+// symbol, so the PPC build is byte-identical with or without this line.
+typedef MemDoTempAllocations MemTemp;
+
 struct MemHeapTracker {
     MemHeapTracker(int x) { MemPushHeap(x); }
     ~MemHeapTracker() { MemPopHeap(); }
