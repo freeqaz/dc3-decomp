@@ -21,6 +21,14 @@
 #include "xdk\NUI.h"
 #include "xdk\xapilibi\winerror.h"
 #include "xdk\xapilibi\xbox.h"
+#include "gesture\GestureMgr.h"
+#include "meta\ConnectionStatusPanel.h"
+#include "os\ContentMgr.h"
+#include "ui\UI.h"
+#include "lazer\meta_ham\HamUI.h"
+#include "lazer\meta_ham\MetaPanel.h"
+#include "lazer\net_ham\FriendsListJobs.h"
+#include "lazer\net_ham\RockCentral.h"
 
 // PlatformMgr_Xbox.obj .data:0x0 (0x82F11F58) holds a relocation to 0x82AEAE70,
 // whose whole body is `li r3, 0x0; blr` -- a `return false` stub that the linker
@@ -33,10 +41,44 @@ static bool DefaultXShowCallback(unsigned long &) { return false; }
 XCallbackFunc *PlatformMgr::sXShowCallback = DefaultXShowCallback;
 
 namespace {
-    // Lives inside the anonymous namespace: the target mangles the variable
-    // as ?mServiceIdState@?A0x...@@3W4ServiceIdState@1@A (enum scoped to the
-    // same namespace), not W4ServiceIdState@@.
-    enum ServiceIdState {};
+    // The mangled name of `anonymous namespace'::mServiceIdState is
+    // ...3W4ServiceIdState@1@A -- the @1@ back-reference says the enum is
+    // declared inside the anonymous namespace, not at file scope.
+    //
+    // service_ids.dta lives in per-title Live storage.  Poll drives one
+    // download of it through this state machine, one step per frame.
+    enum ServiceIdState {
+        kServiceIdIdle,
+        kServiceIdEnumerating,
+        kServiceIdWaitingForEnumerate,
+        kServiceIdDownloading,
+        kServiceIdWaitingForDownload,
+        kServiceIdWaitingToRetry,
+        kServiceIdDone
+    };
+
+    // Five minutes between attempts once a step has failed.
+    const float kServiceIdRetryMs = 300000.0f;
+    // Byte size handed to XStorageEnumerate as cbResults: the header plus room
+    // for the single XSTORAGE_FILE_INFO and its inline path.
+    const int kServiceIdEnumBufSize = 0x24B;
+
+    // Hardware state carried by KinectHardwareStatusMsg.  Only kKinectReady is
+    // confirmed: GestureMgr::OnMsg turns the camera's autoexposure on for 1 and
+    // ignores every other value.  The other two names follow the bit each one
+    // is produced from below; no value 2 is distinguishable from "no bit set",
+    // which is why the fall-through answer is also 2.
+    enum KinectHardwareStatus {
+        kKinectNotReady,
+        kKinectReady,
+        kKinectInitializing
+    };
+
+    // Bits of the XN_SYS_NUI_HARDWARE_STATUS_CHANGED parameter.  Only the
+    // three the shipped code tests are recovered, and only by position.
+    const unsigned long XNOTIFY_NUI_HARDWARE_STATUS_INITIALIZING = 0x4;
+    const unsigned long XNOTIFY_NUI_HARDWARE_STATUS_READY = 0x2;
+    const unsigned long XNOTIFY_NUI_HARDWARE_STATUS_NOT_READY = 0x1;
 
     DWORD gSmartGlassClientIDs[4];
     XUID mXuidCache[4];
@@ -44,6 +86,13 @@ namespace {
     unsigned long mUserID;
     unsigned long mPathLen;
     unsigned long mListSize;
+    // service_ids.dta is downloaded whole into this buffer and parsed in place.
+    unsigned long mFileReadBuffer[0x400];
+    // mPathLen starts at 0x200, the element count of this buffer.
+    wchar_t mStrServerPath[0x200];
+    // Only one row: the enumeration asks XStorageEnumerate for a single result.
+    wchar_t mStrStorageFiles[1][0x100];
+    XSTORAGE_DOWNLOAD_TO_MEMORY_RESULTS mResults;
     XSTORAGE_ENUMERATE_RESULTS *mStorageList;
     XOVERLAPPED *mServiceIDOverlapped;
     XOVERLAPPED *mServiceIDOverlapped2;
@@ -109,7 +158,7 @@ PlatformMgr::PlatformMgr() : mSigninMask(0) {
     mServiceIDOverlapped2 = nullptr;
     mStorageList = nullptr;
     mPathLen = 0x200;
-    mServiceIdState = (ServiceIdState)0;
+    mServiceIdState = kServiceIdIdle;
     mListSize = 0;
     mUserID = -1;
     mResult = 0;
@@ -135,6 +184,8 @@ void PlatformMgr::Init() {
     mTime.Start();
     mRetryTime = mTime.Ms() + 300000.0f;
 }
+
+Friend::Friend() {}
 
 bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus() != 0; }
 
@@ -1118,4 +1169,319 @@ unsigned long long MultipleItemsEnumCompleteMsg::OfferID(int index) const {
 
 void MultipleItemsEnumCompleteMsg::SetPurchased(int index, bool b) {
     mData->Node(6).Array(mData)->Node(index) = b;
+}
+
+void PlatformMgr::Poll() {
+    SmartGlassPoll();
+    mJobMgr->Poll();
+    mTime.Split();
+
+    // Live drops the connection before it drops the sign-in, so a
+    // disconnect seen while nobody is signed in is held back until the
+    // following sign-in change re-announces it.
+    static bool sConnectPending;
+
+    unsigned long param;
+    unsigned long id;
+    while (XNotifyGetNext(mListener, 0, &id, &param)) {
+        switch (id) {
+        case XN_SYS_UI:
+            mGuideShowing = param != 0;
+            {
+                UIChangedMsg msg(mGuideShowing);
+                Handle(msg, false);
+            }
+            break;
+        case XN_SYS_SIGNINCHANGED:
+            UpdateSigninState();
+            if (sConnectPending && mSigninMask != 0) {
+                mConnected = true;
+                sConnectPending = false;
+                ConnectionStatusChangedMsg msg(true);
+                Handle(msg, false);
+            }
+            {
+                SigninChangedMsg msg(mSigninMask, mSigninChangeMask);
+                Handle(msg, false);
+            }
+            break;
+        case XN_SYS_STORAGEDEVICESCHANGED: {
+            StorageChangedMsg msg;
+            Handle(msg, false);
+            break;
+        }
+        case XN_SYS_NUI_HARDWARE_STATUS_CHANGED: {
+            // The first arm looks redundant against the initialiser and is
+            // not: the target materialises 2 twice, once into the variable's
+            // register (r10, which the last arm masks against) and once as a
+            // fresh `li r4, 0x2` inside the branch.
+            int status = kKinectInitializing;
+            if (param & XNOTIFY_NUI_HARDWARE_STATUS_INITIALIZING) {
+                status = kKinectInitializing;
+            } else if (param & XNOTIFY_NUI_HARDWARE_STATUS_READY) {
+                status = kKinectReady;
+            } else if (param & XNOTIFY_NUI_HARDWARE_STATUS_NOT_READY) {
+                status = kKinectNotReady;
+            }
+            KinectHardwareStatusMsg msg(status);
+            Handle(msg, false);
+            break;
+        }
+        case XN_SYS_NUI_GUIDE_GESTURE: {
+            static KinectGuideGestureMsg msg(0);
+            msg[0] = param;
+            Handle(msg, false);
+            break;
+        }
+        case XN_SYS_NUI_BINDING_CHANGED: {
+            static KinectUserBindingChangedMsg msg(0);
+            msg[0] = param;
+            Handle(msg, false);
+            break;
+        }
+        case XN_LIVE_CONNECTIONCHANGED: {
+            bool wasConnected = mConnected;
+            sConnectPending = false;
+            mConnected = param == XONLINE_S_LOGON_CONNECTION_ESTABLISHED;
+            if (wasConnected != mConnected) {
+                if (mConnected && mSigninMask == 0) {
+                    mConnected = false;
+                    sConnectPending = true;
+                } else {
+                    ConnectionStatusChangedMsg msg(mConnected);
+                    Handle(msg, false);
+                }
+            }
+            break;
+        }
+        case XN_LIVE_INVITE_ACCEPTED: {
+            InviteAcceptedMsg msg(param, 0, false);
+            Handle(msg, false);
+            break;
+        }
+        case XN_LIVE_CONTENT_INSTALLED: {
+            ContentInstalledMsg msg;
+            Handle(msg, false);
+            break;
+        }
+        case XN_FRIENDS_FRIEND_ADDED:
+        case XN_FRIENDS_FRIEND_REMOVED: {
+            FriendsListChangedMsg msg(param);
+            Handle(msg, false);
+            break;
+        }
+        case XN_XMP_STATECHANGED: {
+            XMPStateChangedMsg msg(param);
+            Handle(msg, false);
+            break;
+        }
+        case XN_PARTY_MEMBERS_CHANGED: {
+            PartyMembersChangedMsg msg;
+            Handle(msg, false);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    if (mFriendsEnum) {
+        MILO_ASSERT(mFriendsBuffer, 0x4BE);
+        MILO_ASSERT(mFriendsCallback, 0x4BF);
+        MILO_ASSERT(mFriendsAsync, 0x4C0);
+        MILO_ASSERT(mFriendsList, 0x4C1);
+        unsigned long numFriends;
+        unsigned long res =
+            XGetOverlappedResult((XOVERLAPPED *)mFriendsAsync, &numFriends, false);
+        if (res != ERROR_IO_INCOMPLETE) {
+            static PlatformMgrOpCompleteMsg msg(false);
+            if (res == ERROR_SUCCESS) {
+                XONLINE_FRIEND *xf = (XONLINE_FRIEND *)mFriendsBuffer;
+                for (unsigned long i = 0; i < numFriends; i++, xf++) {
+                    // Pending requests in either direction are not friends yet.
+                    if (!(xf->dwFriendState & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
+                        && !(xf->dwFriendState
+                             & XONLINE_FRIENDSTATE_FLAG_RECEIVEDREQUEST)) {
+                        Friend *f = new Friend();
+                        String name(xf->szGamertag);
+                        f->SetName(name);
+                        f->mXUID = xf->xuid;
+                        mFriendsList->push_back(f);
+                    }
+                }
+                msg[0] = true;
+            } else {
+                msg[0] = false;
+            }
+            mFriendsCallback->Handle(msg, true);
+            mFriendsCallback = nullptr;
+            mFriendsList = nullptr;
+            RELEASE(mFriendsBuffer);
+            RELEASE(mFriendsAsync);
+            CloseHandle(mFriendsEnum);
+            mFriendsEnum = nullptr;
+        }
+    } else if (!mFriendEnumRequests.empty() && mFriendEnumRequests.size() != 0) {
+        FriendEnumRequest *request = mFriendEnumRequests.front();
+        unsigned long bufSize;
+        bool failed = false;
+        if (XFriendsCreateEnumerator(request->mPadNum, 0, 100, &bufSize, &mFriendsEnum)
+            != ERROR_SUCCESS) {
+            failed = true;
+        } else {
+            MILO_ASSERT(!mFriendsBuffer, 0x503);
+            mFriendsBuffer = new char[bufSize];
+            XOVERLAPPED *async = new XOVERLAPPED;
+            mFriendsAsync = async;
+            memset(async, 0, sizeof(XOVERLAPPED));
+            if (XEnumerate(mFriendsEnum, mFriendsBuffer, bufSize, 0, async)
+                != ERROR_IO_PENDING) {
+                failed = true;
+            }
+        }
+        if (failed) {
+            if (mFriendsEnum) {
+                CloseHandle(mFriendsEnum);
+                mFriendsEnum = nullptr;
+            }
+            RELEASE(mFriendsBuffer);
+            RELEASE(mFriendsAsync);
+            static PlatformMgrOpCompleteMsg msg(false);
+            request->mCallback->Handle(msg, true);
+        } else {
+            MILO_ASSERT(!mFriendsCallback, 0x52D);
+            MILO_ASSERT(!mFriendsList, 0x52E);
+            mFriendsCallback = request->mCallback;
+            mFriendsList = request->mList;
+        }
+        delete request;
+        mFriendEnumRequests.erase(mFriendEnumRequests.begin());
+    }
+
+    if (mServiceIdState == kServiceIdDone) {
+        return;
+    }
+
+    switch (mServiceIdState) {
+    case kServiceIdIdle:
+        mUserID = -1;
+        for (int i = 0; i < 4; i++) {
+            if (XUserGetSigninState(i) == eXUserSigninState_SignedInToLive) {
+                mUserID = i;
+                mResult = XStorageBuildServerPath(
+                    i,
+                    XSTORAGE_FACILITY_PER_TITLE,
+                    nullptr,
+                    0,
+                    L"service_ids.dta",
+                    mStrServerPath,
+                    &mPathLen
+                );
+                if (mResult == ERROR_SUCCESS) {
+                    mServiceIdState = kServiceIdEnumerating;
+                } else {
+                    mRetryTime = mTime.Ms() + kServiceIdRetryMs;
+                    mServiceIdState = kServiceIdWaitingToRetry;
+                }
+                break;
+            }
+        }
+        break;
+    case kServiceIdEnumerating:
+        mStorageList = (XSTORAGE_ENUMERATE_RESULTS *)new char[kServiceIdEnumBufSize];
+        if (mStorageList) {
+            mServiceIDOverlapped = new XOVERLAPPED();
+            mResult = XStorageEnumerate(
+                mUserID,
+                mStrServerPath,
+                0,
+                1,
+                kServiceIdEnumBufSize,
+                mStorageList,
+                mServiceIDOverlapped
+            );
+            if (mResult != ERROR_SUCCESS && mResult != ERROR_IO_PENDING) {
+                RELEASE(mStorageList);
+                RELEASE(mServiceIDOverlapped);
+                mServiceIdState = kServiceIdWaitingToRetry;
+                mRetryTime = mTime.Ms() + kServiceIdRetryMs;
+            } else {
+                mServiceIdState = kServiceIdWaitingForEnumerate;
+            }
+        } else {
+            mRetryTime = mTime.Ms() + kServiceIdRetryMs;
+            mServiceIdState = kServiceIdWaitingToRetry;
+        }
+        break;
+    case kServiceIdWaitingForEnumerate: {
+        unsigned long res = XGetOverlappedResult(mServiceIDOverlapped, &mResult, false);
+        if (res != ERROR_IO_INCOMPLETE) {
+            if (res == ERROR_SUCCESS && mStorageList->dwNumItemsReturned != 0) {
+                for (unsigned long i = 0; i < mStorageList->dwNumItemsReturned; i++) {
+                    swprintf_s(
+                        mStrStorageFiles[i], L"%s", mStorageList->pItems[i].pwszPathName
+                    );
+                }
+                mServiceIdState = kServiceIdDownloading;
+                mListSize = mStorageList->dwNumItemsReturned;
+            } else {
+                mServiceIdState = kServiceIdWaitingToRetry;
+                mRetryTime = mTime.Ms() + kServiceIdRetryMs;
+            }
+            RELEASE(mStorageList);
+            RELEASE(mServiceIDOverlapped);
+        }
+        break;
+    }
+    case kServiceIdDownloading:
+        mServiceIDOverlapped = new XOVERLAPPED();
+        mResult = XStorageDownloadToMemory(
+            mUserID,
+            mStrStorageFiles[0],
+            sizeof(mFileReadBuffer),
+            mFileReadBuffer,
+            sizeof(mResults),
+            &mResults,
+            mServiceIDOverlapped
+        );
+        if (mResult != ERROR_SUCCESS && mResult != ERROR_IO_PENDING) {
+            RELEASE(mServiceIDOverlapped);
+            mServiceIdState = kServiceIdWaitingToRetry;
+            mRetryTime = mTime.Ms() + kServiceIdRetryMs;
+        } else {
+            mServiceIdState = kServiceIdWaitingForDownload;
+        }
+        break;
+    case kServiceIdWaitingForDownload: {
+        unsigned long res = XGetOverlappedResult(mServiceIDOverlapped, &mResult, false);
+        if (res != ERROR_IO_INCOMPLETE) {
+            if (res == ERROR_SUCCESS) {
+                static Symbol sServiceIds("service_ids");
+                DataArray *ids = DataReadString((char *)mFileReadBuffer)
+                                     ->FindArray(sServiceIds, true);
+                int size = ids->Size();
+                mServiceIdMap.clear();
+                for (int i = 1; i < size; i++) {
+                    DataArray *entry = ids->Node(i).Array(ids);
+                    String name(entry->Node(0).Str(entry));
+                    unsigned int id = entry->Node(1).Int(entry);
+                    mServiceIdMap.insert(std::make_pair(name, id));
+                }
+            }
+            mServiceIdState = kServiceIdDone;
+            RELEASE(mServiceIDOverlapped);
+            TmsDownloadedMsg msg;
+            Handle(msg, false);
+        }
+        break;
+    }
+    case kServiceIdWaitingToRetry:
+        if (mTime.Ms() >= mRetryTime) {
+            mServiceIdState = kServiceIdIdle;
+        }
+        break;
+    default:
+        MILO_FAIL("Invalid state!");
+        break;
+    }
 }

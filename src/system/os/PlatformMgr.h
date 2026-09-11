@@ -164,6 +164,17 @@ int GetChangedMask() const { return mData->Int(3); }
 END_MESSAGE
 
 DECLARE_MESSAGE(StorageChangedMsg, "storage_changed")
+StorageChangedMsg() : Message(Type()) {}
+END_MESSAGE
+
+DECLARE_MESSAGE(PartyMembersChangedMsg, "party_members_changed")
+PartyMembersChangedMsg() : Message(Type()) {}
+END_MESSAGE
+
+DECLARE_MESSAGE(InviteAcceptedMsg, "invite_accepted")
+InviteAcceptedMsg(int padNum, unsigned int sessionID, bool fromGuide)
+    : Message(Type(), padNum, (int)sessionID, fromGuide) {}
+int PadNum() const { return mData->Int(2); }
 END_MESSAGE
 
 DECLARE_MESSAGE(ControllerReqOpCompleteMsg, "controller_req_op_complete")

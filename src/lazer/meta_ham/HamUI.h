@@ -19,6 +19,7 @@
 #include "ui\UIScreen.h"
 
 DECLARE_MESSAGE(KinectGuideGestureMsg, "kinect_guide_gesture")
+KinectGuideGestureMsg(int trackingID) : Message(Type(), trackingID) {}
 DWORD TrackingID() const { return mData->Int(2); }
 END_MESSAGE
 

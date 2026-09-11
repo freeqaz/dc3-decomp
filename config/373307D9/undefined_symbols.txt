@@ -14,9 +14,8 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 694 total = 3 GAP + 691 EXT
+# counts: 697 total = 2 GAP + 695 EXT
 
-GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 GAP ?fft_recursive@@YAHPAMKJ0@Z  # target defines it in system/synth_xbox/FFT.obj
 
@@ -372,6 +371,7 @@ EXT XContentGetDeviceState
 EXT XEnableScreenSaver
 EXT XEnumerate
 EXT XEnumerateCrossTitle
+EXT XFriendsCreateEnumerator
 EXT XGCompressSurface
 EXT XGEstimateIdealShaderCost
 EXT XGGetTextureDesc
@@ -485,6 +485,9 @@ EXT XShowSocialNetworkImagePostUI
 EXT XShowSocialNetworkLinkPostUI
 EXT XShowTokenRedemptionUI
 EXT XSocialGetCapabilities
+EXT XStorageBuildServerPath
+EXT XStorageDownloadToMemory
+EXT XStorageEnumerate
 EXT XTLGetLanguage
 EXT XTitleServerCreateEnumerator
 EXT XUserAreUsersFriends
