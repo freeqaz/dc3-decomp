@@ -14,11 +14,8 @@
 # entry points and middleware the decomp calls but does not contain. The
 # classification is for the reader; --check ignores it and compares names only.
 #
-# counts: 692 total = 7 GAP + 685 EXT
+# counts: 692 total = 4 GAP + 688 EXT
 
-GAP ?DrawRect@DxRnd@@UAAXABVRect@Hmx@@PAVRndMat@@W4ShaderType@@ABVColor@3@PBV63@4@Z  # target defines it in system/rnddx9/Rnd.obj
-GAP ?DrawShowing@DxMultiMesh@@UAAXXZ  # target defines it in system/rnddx9/MultiMesh.obj
-GAP ?DrawShowing@DxParticleSys@@UAAXXZ  # target defines it in system/rnddx9/Part.obj
 GAP ?Poll@PlatformMgr@@QAAXXZ  # target defines it in system/os/PlatformMgr_Xbox.obj
 GAP ?SyncBitmap@DxTex@@MAAXXZ  # target defines it in system/rnddx9/Tex.obj
 GAP ?fft_altivec@@YAHPAM0KJ0@Z  # target defines it in system/synth_xbox/FFT.obj
@@ -124,6 +121,7 @@ EXT D3DCubeTexture_LockRect
 EXT D3DCubeTexture_UnlockRect
 EXT D3DDevice_BeginIndexedVertices
 EXT D3DDevice_BeginTiling
+EXT D3DDevice_BeginVertices
 EXT D3DDevice_BlockOnFence
 EXT D3DDevice_BlockUntilIdle
 EXT D3DDevice_Clear
@@ -137,10 +135,12 @@ EXT D3DDevice_CreateVertexBuffer
 EXT D3DDevice_CreateVertexDeclaration
 EXT D3DDevice_CreateVertexShader
 EXT D3DDevice_DrawIndexedVertices
+EXT D3DDevice_DrawVertices
 EXT D3DDevice_DrawVerticesUP
 EXT D3DDevice_EnablePerfCounters
 EXT D3DDevice_EndIndexedVertices
 EXT D3DDevice_EndTiling
+EXT D3DDevice_EndVertices
 EXT D3DDevice_GetDepthStencilSurface
 EXT D3DDevice_GetRenderTarget
 EXT D3DDevice_GetSamplerState_MipMapLodBias
