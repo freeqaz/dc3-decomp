@@ -122,8 +122,7 @@ void RndFlare::DrawShowing() {
     float depth = cam->WorldToScreen(worldXfm.v, screenPos);
 
     float scale;
-    Hmx::Rect &rect = CalcRect(screenPos, scale);
-    Hmx::Rect localRect = rect;
+    Hmx::Rect localRect = CalcRect(screenPos, scale);
 
     float visibility = 0.0f;
     if (RectOffscreen(localRect) || depth <= 0.0f) {
@@ -133,10 +132,7 @@ void RndFlare::DrawShowing() {
         mOcclusionPending = false;
     } else {
         bool useOccResult = false;
-        if (!mPointTest || TheHiResScreen.IsActive()) {
-            mOcclusionResult = scale;
-            mVisible = true;
-        } else {
+        if (mPointTest && !TheHiResScreen.IsActive()) {
             if (mOcclusionPending || (useOccResult = true, !mOcclusionReady)) {
                 useOccResult = false;
             }
@@ -147,9 +143,7 @@ void RndFlare::DrawShowing() {
             const Transform &flareXfm = WorldXfm();
             const Transform &camXfm = cam->WorldXfm();
             Vector3 dir;
-            dir.z = camXfm.v.z - flareXfm.v.z;
-            dir.y = camXfm.v.y - flareXfm.v.y;
-            dir.x = camXfm.v.x - flareXfm.v.x;
+            Subtract(camXfm.v, flareXfm.v, dir);
             Normalize(dir, dir);
 
             const Transform &flareXfm2 = WorldXfm();
@@ -158,6 +152,9 @@ void RndFlare::DrawShowing() {
             dir.y = dir.y * offset + flareXfm2.v.y;
             dir.z = dir.z * offset + flareXfm2.v.z;
             TheRnd.TestPoint(dir, this);
+        } else {
+            mOcclusionResult = scale;
+            mVisible = true;
         }
 
         if (useOccResult) {
@@ -180,9 +177,11 @@ void RndFlare::DrawShowing() {
             float alpha = 1.0f;
             if (mMat) {
                 float rangeX = mRange.x;
-                float t = 1.0f;
+                float t;
                 if (rangeX != mRange.y) {
                     t = (depth - mRange.y) / (rangeX - mRange.y);
+                } else {
+                    t = 1.0f;
                 }
                 alpha = Clamp(0.0f, 1.0f, t * ratio);
 
@@ -200,8 +199,9 @@ void RndFlare::DrawShowing() {
                 Hmx::Matrix3 texMat;
                 memcpy(&texMat, &mMat->TexXfm(), 0x40);
                 MakeRotMatrixZ(screenPos.x - 0.5f, texMat);
-                memcpy(&mMat->TexXfm(), &texMat, 0x40);
-                mMat->MarkDirty(2);
+                RndMat *mat = mMat;
+                memcpy(&mat->TexXfm(), &texMat, 0x40);
+                mat->MarkDirty(2);
             }
 
             Hmx::Rect *drawRect;
@@ -210,10 +210,9 @@ void RndFlare::DrawShowing() {
             } else {
                 drawRect = &CalcRect(screenPos, scale);
             }
-            localRect = *drawRect;
-
+            Hmx::Rect drawRectCopy = *drawRect;
             Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
-            TheRnd.DrawRect(localRect, white, mMat, nullptr, nullptr);
+            TheRnd.DrawRect(drawRectCopy, white, mMat, nullptr, nullptr);
         }
     }
 }
