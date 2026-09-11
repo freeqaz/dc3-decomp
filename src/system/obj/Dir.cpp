@@ -752,7 +752,7 @@ DataNode OnInitObject(DataArray *a) {
 }
 
 void ObjectDir::Reserve(int hashSize, int stringSize) {
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     if (mHashTable.Size() < hashSize) {
         mHashTable.Resize(hashSize, 0);
     }

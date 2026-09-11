@@ -43,9 +43,9 @@ template <class T1, class T2>
 template <class S>
 void ObjPtrVec<T1, T2>::sort(const S &cmp) {
     // The image calls MemPushTemp()/MemPopTemp() directly here, not the
-    // MemDoTempAllocations ctor/dtor pair: MemTemp is the RAII wrapper that
+    // MemDoTempAllocations ctor/dtor pair: MemDoTempAllocations is the RAII wrapper that
     // inlines to exactly those two bl's.
-    MemTemp doTemp;
+    MemDoTempAllocations doTemp;
     std::vector<T1 *> ptrs;
     ptrs.resize(size());
     for (unsigned int i = 0; i < size(); i++) {

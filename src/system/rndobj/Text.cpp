@@ -1047,7 +1047,7 @@ void RndText::SetText(const char *str) {
 String RndText::TextASCII() const {
     String str;
     {
-        MemTemp tmp;
+        MemDoTempAllocations tmp;
         str.resize(UTF8StrLen(mText.c_str()) + 1);
     }
     UTF8toASCIIs((char *)str.c_str(), str.capacity(), mText.c_str(), '*');
@@ -1080,7 +1080,7 @@ void RndText::BuildFontMaps(bool b1) {
 void RndText::SetTextASCII(const char *cstr) {
     String str;
     {
-        MemTemp tmp;
+        MemDoTempAllocations tmp;
         std::vector<unsigned short> vec;
         ASCIItoWideVector(vec, cstr);
         WideVectorToUTF8(vec, str);

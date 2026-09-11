@@ -44,7 +44,7 @@ void StringTable::Reserve(int i) {
         } else {
             Buf buf;
             buf.size = (i - size) + 0x40;
-            MemTemp tmp;
+            MemDoTempAllocations tmp;
             buf.chars = (char *)MemAlloc(buf.size, __FILE__, 0x38, "string table");
             mBuffers.push_back(buf);
         }
@@ -54,7 +54,7 @@ void StringTable::Reserve(int i) {
 void StringTable::AddBuf(int i) {
     Buf buf;
     buf.size = i;
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     buf.chars = (char *)MemAlloc(i, __FILE__, 0x1D, "string table");
     mCurChar = buf.chars;
     mCurBuf = mBuffers.size();

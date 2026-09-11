@@ -214,7 +214,7 @@ void MidiParser::Poll() {
 
 void MidiParser::ParseNote(int startTick, int endTick, unsigned char data1) {
     if (mNoteParser && AllowedNote(data1)) {
-        MemTemp tmp;
+        MemDoTempAllocations tmp;
         if (mNotes.size() == 0)
             mNotes.reserve(20000);
         int idx;
@@ -451,7 +451,7 @@ void MidiParser::PushIdle(float start, float end, int at, Symbol idleMessage) {
         node = arr;
         arr->Release();
     }
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     mEvents->InsertEvent(start, end, node, at);
 }
 
@@ -525,7 +525,7 @@ void MidiParser::InsertDataEvent(float start, float end, const DataNode &ev) {
         FixGap(mBefore < 0 ? &mFirstEnd : mEvents->EndPtr(mBefore));
     }
     float clamped = Clamp(mProcess.minLength, mProcess.maxLength, end - f7) + f7;
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     mEvents->InsertEvent(f7, clamped, ev, back + 1);
 }
 

@@ -27,7 +27,7 @@ void RndShaderProgram::SaveShaderBuffer(const char *file, RndShaderBuffer &buffe
 void RndShaderProgram::LoadShaderBuffer(
     BinStream &bs, int size, RndShaderBuffer *&buffer
 ) {
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     buffer = NewBuffer(size);
     bs.Read(buffer->Storage(), size);
 }

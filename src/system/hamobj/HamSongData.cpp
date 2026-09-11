@@ -123,7 +123,7 @@ void HamSongData::Load(const SongInfo *info, bool b2, HamSongDataValidate v) {
 #endif
     mStream = new MemStream();
     {
-        MemTemp tmp;
+        MemDoTempAllocations tmp;
         mStream->Resize(fStream.Size());
         fStream.Read((void *)mStream->Buffer(), fStream.Size());
         if (v == 2 || v == 1) {

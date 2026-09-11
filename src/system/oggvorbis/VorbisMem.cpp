@@ -22,7 +22,7 @@ void *OggCalloc(int i1, int i2) {
 }
 
 void *OggRealloc(void *v, int i) {
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     return MemRealloc(v, i, __FILE__, 0x2B, sVorbisMemName, 0);
 }
 

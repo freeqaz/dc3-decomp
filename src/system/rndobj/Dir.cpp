@@ -516,7 +516,7 @@ void RndDir::SyncDrawables() {
 }
 
 void RndDir::HarvestPollables(std::vector<RndPollable *> &polls) {
-    MemTemp tmp;
+    MemDoTempAllocations tmp;
     std::list<RndPollable *> pollchildren;
     for (ObjDirItr<RndPollable> it(this, true); it != nullptr; ++it) {
         if (it != this) {

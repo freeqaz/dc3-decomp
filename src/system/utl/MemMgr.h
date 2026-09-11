@@ -54,17 +54,13 @@ MemHeapStack &ThreadMemStack(bool);
 void MemPushTemp();
 void MemPopTemp();
 
-struct MemTemp {
-    MemTemp() { MemPushTemp(); }
-    ~MemTemp() { MemPopTemp(); }
-};
-
-class MemDoTempAllocations {
-public:
-    MemDoTempAllocations(bool, bool);
-    ~MemDoTempAllocations();
-
-    int mOld;
+// The image's name for this RAII pair, and it really is this trivial: the
+// retail ~MemDoTempAllocations COMDAT (ham_xbox_r.map 0x823616b8, landed in
+// char:CharClipGroup.obj) is four bytes, `b ?MemPopTemp@@YAXXZ`.  A COMDAT in
+// that object means the dtor is defined inline in a header, as below.
+struct MemDoTempAllocations {
+    MemDoTempAllocations() { MemPushTemp(); }
+    ~MemDoTempAllocations() { MemPopTemp(); }
 };
 
 struct MemHeapTracker {
