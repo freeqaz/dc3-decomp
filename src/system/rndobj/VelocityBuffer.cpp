@@ -191,7 +191,7 @@ void RndVelocityBuffer::DrawMesh(RndMesh *mesh) const {
                     auto _tmp3 = PathName(mesh->Mat());
                     MILO_NOTIFY_ONCE(
                         "%s (%s): Has too many bones to apply object motion blur (%d bones of max %d)",
-                        (char *)PathName(mesh), _tmp3, numBonesActual, 40
+                        PathName(mesh), _tmp3, numBonesActual, 40
                     );
                 }
             }
