@@ -530,6 +530,30 @@ config.custom_build_steps = {
             },
         },
         {
+            # A CHECK, not a seventh rewrite pass: refuse the tree if our
+            # object and the target object spell one file-scope variable with
+            # different linkage (bare `gFoo` = MSVC's static, `?gFoo@@3..` =
+            # a global).  The linker map lists no static data, so a mangled
+            # symbols.txt entry the map cannot confirm is hand-authored, and
+            # every access to it costs a `name_check` row that no source
+            # change can close (Rnd::Init / Rnd::Terminate at 99.7, 2026-09-11).
+            # Renaming the symbol in our object would hide exactly the two
+            # defects this catches -- a wrong symbols.txt spelling, or a
+            # `static` the original did not have -- so the fix is demanded at
+            # the source or the config, and the message names which.  Reads
+            # the patched objects (after the anon-ns/guard renames), and the
+            # manifest edge below depends on it so an unfixed tree is never
+            # vouched for.  Its target-side enumeration is cross-checked
+            # against dtk's own .s listing and refuses on disagreement.
+            "outputs": str(stamp_dir / "data_symbol_spelling_checked.stamp"),
+            "rule": "run_script",
+            "implicit": [str(stamp_dir / "build_metadata_normalized.stamp"), "all_source"],
+            "variables": {
+                "cmd": "python3 scripts/verify_data_symbol_spelling.py --check",
+                "desc": "VERIFY our objects and the target agree on static vs global spelling",
+            },
+        },
+        {
             # The patch passes are only half of the fix: a build that omits
             # one has to SAY SO.  This re-runs every patcher in dry-run and
             # fails the build unless the object tree is a fixed point of all
@@ -544,7 +568,7 @@ config.custom_build_steps = {
             # back to measuring the wall clock.
             "outputs": str(stamp_dir / "objs_patched_verified.stamp"),
             "rule": "run_script",
-            "implicit": [str(stamp_dir / "build_metadata_normalized.stamp"), "all_source"],
+            "implicit": [str(stamp_dir / "data_symbol_spelling_checked.stamp"), "all_source"],
             "variables": {
                 "cmd": "python3 scripts/verify_objs_patched.py "
                        "--check-compile-edge --check --emit",
