@@ -169,12 +169,9 @@ BEGIN_PROPSYNCS(RndText)
     SYNC_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
-RndText::Style::Style(Hmx::Object *owner)
-    : mSize(30), mTextColor(1, 1, 1), mFontColorOverride(false), mFontColor(1, 1, 1),
-      mItalics(0), mKerning(0), mZOffset(0), mFont(owner), mBlacklight(false) {}
+RndText::Style::Style(Hmx::Object *owner) : mFont(owner), mBlacklight(false) {}
 
-RndText::Style::Style(const Style &s)
-    : mFont((memcpy(this, &s, 0x34), s.mFont)) {
+RndText::Style::Style(const Style &s) : StyleData(s), mFont(s.mFont) {
     mBlacklight = s.mBlacklight;
 }
 
@@ -270,8 +267,9 @@ INIT_REVS(28, 1)
 BEGIN_LOADS(RndText)
     LOAD_REVS(bs)
     ASSERT_REVS(28, 1)
-    Style style(this);
     TEXT_REV = d.rev;
+    StyleData style;
+    ObjPtr<RndFontBase> font(this);
     if (d.rev > 15) {
         Hmx::Object::Load(bs);
     }
@@ -286,7 +284,7 @@ BEGIN_LOADS(RndText)
         RndTransformable::Load(bs);
     }
     if (d.rev < 22) {
-        bs >> style.mFont;
+        bs >> font;
     }
     if (d.rev < 3) {
         int idx;
@@ -329,12 +327,12 @@ BEGIN_LOADS(RndText)
     if (d.rev > 4 && d.rev < 11) {
         bool b;
         d >> b;
-        if (style.mFont) {
-            RndFont *oldfont2d = dynamic_cast<RndFont *>(style.mFont.Ptr());
+        if (font) {
+            RndFont *oldfont2d = dynamic_cast<RndFont *>(font.Ptr());
             MILO_ASSERT(oldfont2d, 0xBC1);
             if (oldfont2d->NumMats() != 0 && oldfont2d->Mat(0)) {
                 int zMode = b ? 2 : 0;
-                style.mFont->Mat()->SetZMode((ZMode)zMode);
+                font->Mat()->SetZMode((ZMode)zMode);
             }
         }
     }
@@ -360,8 +358,8 @@ BEGIN_LOADS(RndText)
     if (d.rev < 22) {
         if (d.rev > 12) {
             bs >> style.mSize;
-        } else if (style.mFont) {
-            RndFont *oldfont2d = dynamic_cast<RndFont *>(style.mFont.Ptr());
+        } else if (font) {
+            RndFont *oldfont2d = dynamic_cast<RndFont *>(font.Ptr());
             MILO_ASSERT(oldfont2d, 0xBE9);
             style.mSize = oldfont2d->DeprecatedSize();
         }
@@ -409,8 +407,8 @@ BEGIN_LOADS(RndText)
         d >> mStyles;
     } else {
         mStyles.resize(1);
-        memcpy(&mStyles[0], &style, 0x34);
-        mStyles[0].mFont = style.mFont;
+        memcpy(&mStyles[0], &style, sizeof(StyleData));
+        mStyles[0].mFont = font;
     }
     if (d.rev >= 26) {
         bs >> mScrollDelay;

@@ -77,20 +77,18 @@ public:
         kFitScrollMarqueeWrapAlways = 7
     };
 
-    class Style {
+    /** The plain-data part of a Style: the 0x34 bytes that Style copies with
+        memcpy and that RndText::Load builds up before it knows the font.
+        (Load keeps one of these plus a separate ObjPtr for the font.) */
+    class StyleData {
     public:
-        Style(Hmx::Object *owner);
-        Style(const Style &s);
-        Style &operator=(const Style &s) {
-            mFont = s.mFont;
-            mBlacklight = s.mBlacklight;
-            memcpy(this, &s, 0x34);
-            return *this;
-        }
+        StyleData()
+            : mSize(30), mTextColor(1, 1, 1), mFontColorOverride(false),
+              mFontColor(1, 1, 1), mItalics(0), mKerning(0), mZOffset(0) {}
+
         float GetAlpha() const { return mFontColor.alpha; }
         void SetAlpha(float alpha) { mFontColor.alpha = alpha; }
 
-        // perhaps the memory from 0x0 to 0x34 is another struct
         /** "Size of the text" */
         float mSize; // 0x0
         /** "Color of the text, put into mesh verts.
@@ -110,6 +108,19 @@ public:
         float mKerning; // 0x2c
         /** "vertical offset as fraction of size" */
         float mZOffset; // 0x30
+    };
+
+    class Style : public StyleData {
+    public:
+        Style(Hmx::Object *owner);
+        Style(const Style &s);
+        Style &operator=(const Style &s) {
+            mFont = s.mFont;
+            mBlacklight = s.mBlacklight;
+            memcpy(this, &s, 0x34);
+            return *this;
+        }
+
         /** "Font to use for this style" */
         ObjPtr<RndFontBase> mFont; // 0x34
         /** "draw in blacklight pass?" */
