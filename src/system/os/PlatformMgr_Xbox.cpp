@@ -1331,11 +1331,11 @@ void PlatformMgr::Poll() {
         } else {
             MILO_ASSERT(!mFriendsBuffer, 0x503);
             mFriendsBuffer = new char[bufSize];
-            mFriendsAsync = new XOVERLAPPED;
-            memset(mFriendsAsync, 0, sizeof(XOVERLAPPED));
-            if (XEnumerate(
-                    mFriendsEnum, mFriendsBuffer, bufSize, 0, (XOVERLAPPED *)mFriendsAsync
-                ) != ERROR_IO_PENDING) {
+            XOVERLAPPED *async = new XOVERLAPPED;
+            mFriendsAsync = async;
+            memset(async, 0, sizeof(XOVERLAPPED));
+            if (XEnumerate(mFriendsEnum, mFriendsBuffer, bufSize, 0, async)
+                != ERROR_IO_PENDING) {
                 failed = true;
             }
         }
