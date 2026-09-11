@@ -1174,6 +1174,45 @@ class DecompMCPServer:
                                 "type": "boolean",
                                 "description": "Filter by stub status: true = only unimplemented stubs, false = only non-stubs. Omit to return all.",
                             },
+                            "objdiff_pattern": {
+                                "type": "string",
+                                "description": (
+                                    "Only rows carrying this objdiff pattern in the LATEST pattern "
+                                    "scan for `pattern_ruler` -- e.g. 'WRONG_CALLEE', "
+                                    "'TEMPLATE_INSTANTIATION_MISMATCH' (both LikelyFixable), "
+                                    "'LINKER_MERGED', 'REGISTER_SAVE_HELPER_MISMATCH'. This is NOT a "
+                                    "`has_*` column: it joins the measured `function_patterns` table, "
+                                    "so a row only appears if a scan under that ruler actually "
+                                    "examined it and the detector fired. If no scan exists for the "
+                                    "ruler, this ERRORS rather than returning an empty list -- an "
+                                    "empty list reads exactly like 'this class is exhausted'."
+                                ),
+                            },
+                            "pattern_ruler": {
+                                "type": "string",
+                                "description": (
+                                    "functionRelocDiffs value the pattern was measured under "
+                                    "(default 'name_check', the graded ruler and report.json's). "
+                                    "'none' is REFUSED with an error: the callee, prologue, "
+                                    "MakeString and scope detectors cannot fire under it, so every "
+                                    "bucket would come back empty. Only consulted with "
+                                    "`objdiff_pattern`."
+                                ),
+                                "enum": ["name_check", "all", "none", "data_value"],
+                            },
+                            "stale_units": {
+                                "type": "string",
+                                "description": (
+                                    "What to do with rows whose UNIT's objects have moved since the "
+                                    "scan measured them. 'flag' (default) renders "
+                                    "`objects: stale (target|base|both|...)` on the row; 'exclude' "
+                                    "drops those rows -- ask for it deliberately, a shrunken result "
+                                    "set reads like an exhausted class; 'ignore' does not check. "
+                                    "Only consulted with `objdiff_pattern`, because only then is a "
+                                    "STORED finding being served as a current fact."
+                                ),
+                                "enum": ["flag", "exclude", "ignore"],
+                            },
                         },
                     },
                 ),
@@ -1627,6 +1666,17 @@ class DecompMCPServer:
         unicorn_confidence = args.get("unicorn_confidence")
         min_unicorn_harness_version = args.get("min_unicorn_harness_version")
         is_stub = args.get("is_stub")
+        # The pattern trio.  These three were documented in CLAUDE.md as MCP
+        # arguments and implemented on `database.query_functions`, but the tool
+        # schema never declared them and this handler never read them -- so
+        # `objdiff_pattern='WRONG_CALLEE'` came back as EVERY workable function
+        # in the range, silently unfiltered, and `pattern_ruler='none'` (which
+        # the database layer refuses outright) came back the same way instead of
+        # erroring.  A wrong superset is worse than an empty set: nothing about
+        # the answer says the filter was dropped.
+        objdiff_pattern = args.get("objdiff_pattern")
+        pattern_ruler = args.get("pattern_ruler", "name_check")
+        stale_units = args.get("stale_units", "flag")
 
         # Map status filter to database query params
         if status == "all":
@@ -1661,7 +1711,16 @@ class DecompMCPServer:
             unicorn_confidence=unicorn_confidence,
             min_unicorn_harness_version=min_unicorn_harness_version,
             is_stub=is_stub,
+            objdiff_pattern=objdiff_pattern,
+            pattern_ruler=pattern_ruler,
+            stale_units=stale_units,
         )
+        # NOTE: `database.query_functions` RAISES ValueError for
+        # pattern_ruler='none' and for a pattern whose ruler has no recorded
+        # scan.  That exception is deliberately NOT caught: the mcp lowlevel
+        # server turns it into a CallToolResult(isError=True) carrying the
+        # message, which is the only rendering an agent cannot mistake for
+        # "measured, and the class is empty".
 
         # When filtering by unit, check if there are hidden functions
         hidden_note = ""
@@ -1679,15 +1738,32 @@ class DecompMCPServer:
             )
             total = len(all_results)
             if total > len(results):
+                filters = f"status='{status}'"
+                if objdiff_pattern:
+                    # Say so: the denominator below is the WHOLE unit, not the
+                    # pattern's population, so without this the note reads as
+                    # "the pattern hid 3,997 functions".
+                    filters += f" AND objdiff_pattern='{objdiff_pattern}'"
                 hidden_note = (
                     f"\n---\n"
                     f"Note: Showing {len(results)} of {total} functions "
-                    f"(filtered by status='{status}'). "
+                    f"(filtered by {filters}). "
                     f"Use status='all' to see all functions in this unit."
                 )
 
         if not results:
             msg = "No functions found matching criteria."
+            if objdiff_pattern:
+                msg += (
+                    f"\nThis IS a measurement: some scan under ruler "
+                    f"'{pattern_ruler}' examined these functions and "
+                    f"'{objdiff_pattern}' did not fire on any of them. "
+                    f"(An unmeasured ruler errors instead of answering.)"
+                )
+                if stale_units == "exclude":
+                    msg += (" Rows whose unit's objects moved since that scan "
+                            "were DROPPED -- re-run with stale_units='flag' "
+                            "before reading this as an exhausted class.")
             if hidden_note:
                 msg += hidden_note
             return [TextContent(type="text", text=msg)]
@@ -1714,8 +1790,17 @@ class DecompMCPServer:
             verdict_str = f" | Verdict: {verdict}" if verdict else ""
             if verdict_reason:
                 verdict_str += f" ({verdict_reason})"
+            # `unit_objects_stale` is present only when an objdiff_pattern was
+            # asked for, because only then is a STORED finding being served.
+            # None means the unit's two objects still hash to what the scan
+            # measured; any other value names the side that moved. Rendering it
+            # is the difference between "this function has WRONG_CALLEE" and
+            # "some scan of some earlier objects said so".
+            stale = func.get("unit_objects_stale")
+            stale_str = f" | objects: STALE ({stale}) vs scan" if stale else ""
             output += f"- `{func['symbol']}` ({func.get('demangled', 'N/A')})\n"
-            output += f"  Unit: {func.get('unit', 'unknown')} | Match: {pct_str}{verdict_str}\n"
+            output += (f"  Unit: {func.get('unit', 'unknown')} | "
+                       f"Match: {pct_str}{verdict_str}{stale_str}\n")
 
         if len(results) > max_display:
             output += f"\n... and {len(results) - max_display} more (use a narrower unit_pattern or limit to see specific results)\n"
