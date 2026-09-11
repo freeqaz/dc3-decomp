@@ -220,8 +220,9 @@ void RndBitmap::Create(
 
 void RndBitmap::Create(const RndBitmap &bm, int bpp, int order, void *palette) {
     Create(bm.Width(), bm.Height(), 0, bpp, order, palette, NULL, NULL);
+    mName = bm.mName;
     if (mPalette && !palette) {
-        MILO_ASSERT(bm.Palette(), 0x1EE);
+        MILO_ASSERT(bm.Palette(), 0x188);
         for (int i = 0; i < bm.NumPaletteColors(); i++) {
             unsigned char r, g, b, a;
             bm.PaletteColor(i, r, g, b, a);
