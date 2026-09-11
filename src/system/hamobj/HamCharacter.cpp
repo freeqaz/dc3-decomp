@@ -979,9 +979,9 @@ void HamCharacter::ApplyBlendedSkeletons(
     HamDriver *driver, CharClip *clip, float weight
 ) {
     if (clip->NumBlendSamples() != 0) {
-        std::list<HamDriver::Layer *> &layers = driver->Layers().mLayers;
-        for (std::list<HamDriver::Layer *>::iterator it = layers.begin();
-             it != layers.end();
+        HamDriver::LayerArray &layers = driver->Layers();
+        for (std::list<HamDriver::Layer *>::iterator it = layers.mLayers.begin();
+             it != layers.mLayers.end();
              ++it) {
             HamDriver::LayerClip *layerClip;
             if ((*it)->FirstClip() == clip && (*it)->mWeight == weight
