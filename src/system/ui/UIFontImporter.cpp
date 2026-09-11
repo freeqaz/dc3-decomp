@@ -88,12 +88,10 @@ BEGIN_PROPSYNCS(UIFontImporter)
     )
     SYNC_PROP_SET(
         font_pixel_size,
-        std::abs(
-            mLastGenWasNG ? ConvertPctHeightToHeightNG(mFontPctSize)
-                          : ConvertPctHeightToHeightOG(mFontPctSize)
-        ),
-        mFontPctSize = mLastGenWasNG ? ConvertHeightNGToPctHeight(_val.Int())
-                                     : ConvertHeightOGToPctHeight(_val.Int())
+        mLastGenWasNG ? std::abs(ConvertPctHeightToHeightNG(mFontPctSize))
+                      : std::abs(ConvertPctHeightToHeightOG(mFontPctSize)),
+        mFontPctSize = mLastGenWasNG ? ConvertHeightNGToPctHeight(-_val.Int())
+                                     : ConvertHeightOGToPctHeight(-_val.Int())
     )
     SYNC_PROP_MODIFY(weight, mFontWeight, GenerateBitmapFilename())
     SYNC_PROP_SET(
