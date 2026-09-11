@@ -139,14 +139,14 @@ void UsbMidiGuitar::Poll() {
                     RGSwingMsg swMsg(uVar9, i);
                     SendMessage(swMsg);
                 }
-                int axisVal11 = proData->mAccelX;
-                int axisVal10 = proData->mAccelZ;
-                int axisVal12 = proData->mAccelY;
-                if (axisVal11 != TheGuitar->CurrentAccelAxisVal(i, 0)
-                    || axisVal12 != TheGuitar->CurrentAccelAxisVal(i, 1)
-                    || axisVal10 != TheGuitar->CurrentAccelAxisVal(i, 2)) {
-                    TheGuitar->SetAccelerometer(i, axisVal11, axisVal12, axisVal10);
-                    RGAccelerometerMsg accelMsg(axisVal11, axisVal12, axisVal10, i);
+                int accelX = proData->mAccelX;
+                int accelY = proData->mAccelY;
+                int accelZ = proData->mAccelZ;
+                if (accelX != TheGuitar->CurrentAccelAxisVal(i, 0)
+                    || accelY != TheGuitar->CurrentAccelAxisVal(i, 1)
+                    || accelZ != TheGuitar->CurrentAccelAxisVal(i, 2)) {
+                    TheGuitar->SetAccelerometer(i, accelX, accelY, accelZ);
+                    RGAccelerometerMsg accelMsg(accelX, accelY, accelZ, i);
                     SendMessage(accelMsg);
                 }
                 int connAcc = proData->mPitchBend;

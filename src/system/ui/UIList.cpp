@@ -36,8 +36,8 @@ UIList::UIList()
       mNumData(100), mPaginate(0), mUser(0), mParent(0), mExtendedLabelEntries(this),
       mExtendedMeshEntries(this), mExtendedCustomEntries(this), mAutoScrollPause(2),
       mAutoScrollSendMsgs(0), mAutoScrollDir(1), mAutoScrolling(0), mAutoScrollTimer(-1),
-      mDrawManuallyControlledWidgets(0), mAllowHighlight(1),
-      mUncappedNumDisplay(1), mScrolling(0) {}
+      mScrollPending(0), mDrawManuallyControlledWidgets(0), mUncappedNumDisplay(1),
+      mAllowHighlight(1) {}
 
 UIList::~UIList() {
     DeleteAll(mWidgets);
@@ -229,7 +229,7 @@ void UIList::CalcBoundingBox(Box &box) {
     mListDir->BuildDrawState(drawState, mListState, DrawState(this), offset, true);
     mListDir->DrawWidgets(
         drawState, mListState, mWidgets, WorldXfm(), DrawState(this), &box,
-        mAllowHighlight
+        mDrawManuallyControlledWidgets
     );
 }
 
@@ -243,7 +243,7 @@ Symbol UIList::SelectedSym(bool fail) const {
 }
 
 void UIList::Scroll(int i) {
-    mDrawManuallyControlledWidgets = true;
+    mScrollPending = true;
     mListState.Scroll(i, false);
 }
 
@@ -296,7 +296,7 @@ void UIList::Poll() {
     }
     mListState.Poll(TheTaskMgr.UISeconds());
     mListDir->PollWidgets(mWidgets);
-    mDrawManuallyControlledWidgets = false;
+    mScrollPending = false;
     UpdateHandler();
 }
 
@@ -854,14 +854,14 @@ DataNode UIList::OnSetData(DataArray *da) {
 }
 
 void UIList::DrawShowing() {
-    if (mDrawManuallyControlledWidgets) {
+    if (mScrollPending) {
         mListState.Poll(TheTaskMgr.UISeconds());
-        mDrawManuallyControlledWidgets = false;
+        mScrollPending = false;
     }
-    bool b = mAllowHighlight;
+    bool b = mDrawManuallyControlledWidgets;
     if (mParent) {
         if (mParent->ChildList() == this) {
-            b = mParent->mAllowHighlight;
+            b = mParent->mDrawManuallyControlledWidgets;
         }
     }
     float offset;
@@ -874,7 +874,7 @@ void UIList::DrawShowing() {
         offset = 0.0f;
     }
     UIListWidgetDrawState drawState;
-    mListDir->BuildDrawState(drawState, mListState, DrawState(this), offset, mScrolling);
+    mListDir->BuildDrawState(drawState, mListState, DrawState(this), offset, mAllowHighlight);
     mListDir->DrawWidgets(drawState, mListState, mWidgets, WorldXfm(), DrawState(this), 0, b);
 }
 

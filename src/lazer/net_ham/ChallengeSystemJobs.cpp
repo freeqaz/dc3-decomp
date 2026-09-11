@@ -255,16 +255,16 @@ void GetBadgeInfo(
         MILO_LOG("***********************************\n");
         auto it = badgeInfos.find(gamerTag);
         if (it != badgeInfos.end()) {
-            it->second.mMedalCounts[kBadgeBronze] = dlcBronze + hmxBronze;
             it->second.mMedalCounts[kBadgeGold] = dlcGold + hmxGold;
             it->second.mMedalCounts[kBadgeSilver] = dlcSilver + hmxSilver;
+            it->second.mMedalCounts[kBadgeBronze] = dlcBronze + hmxBronze;
         } else {
             ChallengeBadgeInfo value;
             value.mMedalCounts[kBadgeGold] = 0;
             value.mMedalCounts[kBadgeSilver] = 0;
             value.mMedalCounts[kBadgeBronze] = 0;
-            value.mMedalCounts[kBadgeSilver] = dlcSilver + hmxSilver;
             value.mMedalCounts[kBadgeGold] = dlcGold + hmxGold;
+            value.mMedalCounts[kBadgeSilver] = dlcSilver + hmxSilver;
             value.mMedalCounts[kBadgeBronze] = dlcBronze + hmxBronze;
             badgeInfos[gamerTag] = value;
         }

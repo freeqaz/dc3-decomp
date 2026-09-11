@@ -492,31 +492,27 @@ Symbol ChallengeSortNode::Select() {
         }
     }
     static Symbol should_back_to_challenges("should_back_to_challenges");
-    int lockState = mChallengeRecord->GetSongContentLockState();
-    if (lockState != 1) {
-        if (lockState > 1) {
-            if (lockState > 3) {
-                if (lockState == 4) {
-                    if (screen == store_loading_screen) {
-                        static Symbol advertised_songid("advertised_songid");
-                        UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
-                        storeScreen->SetProperty(advertised_songid, DataNode(mChallengeRecord->GetChallengeRow().mSongID));
-                        storeScreen->SetProperty(should_back_to_challenges, DataNode(1));
-                    }
-                    return screen;
-                }
-            } else {
-                if (screen == store_loading_screen) {
-                    static Symbol redirect_to_code_redemption("redirect_to_code_redemption");
-                    UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
-                    storeScreen->SetProperty(redirect_to_code_redemption, DataNode(1));
-                    storeScreen->SetProperty(should_back_to_challenges, DataNode(1));
-                }
-                return screen;
-            }
+    switch (mChallengeRecord->GetSongContentLockState()) {
+    case 4:
+        if (screen == store_loading_screen) {
+            static Symbol advertised_songid("advertised_songid");
+            UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
+            storeScreen->SetProperty(advertised_songid, DataNode(mChallengeRecord->GetChallengeRow().mSongID));
+            storeScreen->SetProperty(should_back_to_challenges, DataNode(1));
         }
-    } else {
+        return screen;
+    case 2:
+    case 3:
+        if (screen == store_loading_screen) {
+            static Symbol redirect_to_code_redemption("redirect_to_code_redemption");
+            UIScreen *storeScreen = ObjectDir::Main()->Find<UIScreen>("store_loading_screen", true);
+            storeScreen->SetProperty(redirect_to_code_redemption, DataNode(1));
+            storeScreen->SetProperty(should_back_to_challenges, DataNode(1));
+        }
+        return screen;
+    case 1:
         MILO_ASSERT(false, 0x1a9);
+        break;
     }
     Symbol token = GetToken();
     HamProfile *profile = TheProfileMgr.GetActiveProfile(true);

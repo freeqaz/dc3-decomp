@@ -1260,7 +1260,7 @@ BEGIN_HANDLERS(Automator)
     HANDLE_ACTION(set_record_script, (mRecordPath = _msg->Str(2)))
     HANDLE_ACTION(add_message_type, (AddMessageType(_msg->GetObj(2), _msg->Sym(3))))
     if (!mScreenScripts && !mRecord)
-        return DataNode(kDataUnhandled);
+        return DATA_UNHANDLED;
     HANDLE_MESSAGE(UITransitionCompleteMsg)
     HANDLE_MESSAGE(ButtonDownMsg)
     HANDLE_MESSAGE(UIComponentSelectMsg)

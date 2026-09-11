@@ -170,11 +170,11 @@ void VoiceInputPanel::CreateSongSelectGrammar(Symbol language) const {
             TheSpeechMgr->UnloadGrammar("song_select_grammar");
         }
         TheSpeechMgr->CreateGrammar("song_select_grammar");
-        void *va0;
         void *v98;
         void *v94;
         TheSpeechMgr->AddDynamicRule("song_select_grammar", "select_song", &v98);
         if (!TheHamUI.IsBlacklightMode()) {
+            void *va0;
             static Symbol voice_command_xbox("voice_command_xbox");
             TheSpeechMgr->AddDynamicRuleWord(
                 "song_select_grammar",
