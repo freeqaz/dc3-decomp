@@ -317,19 +317,19 @@ void GetRows(
         std::sort(it->second.begin(), it->second.end(), TimeStampCmp);
         if (!bref) {
             auto rowIt = rows.find(it->first);
-            if (!(rowIt != rows.end())) {
-                bref = true;
-            } else {
-                std::vector<ChallengeRow> &rowItRows = rowIt->second;
+            if (rowIt != rows.end()) {
                 std::vector<ChallengeRow> &itRows = it->second;
+                std::vector<ChallengeRow> &rowItRows = rowIt->second;
                 if (rowItRows.size() == itRows.size()) {
                     for (int i = 0; i < it->second.size(); i++) {
-                        if (itRows[i] != rowItRows[i]) {
+                        if (rowItRows[i] != itRows[i]) {
                             bref = true;
                             break;
                         }
                     }
                 }
+            } else {
+                bref = true;
             }
         }
     }
