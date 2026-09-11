@@ -138,6 +138,27 @@ scripts/measure_progress.sh --refresh-baseline       # discard + rebuild the cac
 scripts/measure_progress.sh --allow-stale            # downgrade staleness/race errors to warnings
 ```
 
+### Exit codes — branch on these, and never on the absence of regressions
+
+| Code | Meaning |
+|------|---------|
+| `0` | A **complete** table was printed; its last line says so. |
+| `1` | Usage / precondition / **staleness** refusal. `--allow-stale` downgrades the staleness and race members to warnings. |
+| `2` | `--check-freshness` only: the gate could not verify (passthrough of `scripts/report_freshness.py`). |
+| `10` | **Baseline build failed** (worktree add/reset, `dtk xex split`, `configure.py`, `ninja`, or `report.json` never produced). No table. |
+| `11` | **Current tree build failed** (initial build, or the stale-report rebuild). No table. |
+| `12` | `compare_progress.py` died. Its partial output is **suppressed** rather than printed, so a truncated table can never read as a complete one. |
+
+⚠ **`--allow-stale` does NOT downgrade 10/11/12.** It exists to let you compare
+numbers that may be out of date; a build that *failed* produced no numbers to be
+stale about. Before 2026-09-11 it downgraded both: measured in `wt/mp-exit` with
+a `ninja` shim failing only the tree being built, `--allow-stale HEAD~1` printed
+one `WARNING` line, then a full `Overall normalized-weighted: 55.11% -> 55.11%`
+table, and **exited 0** over a report the failed rebuild never refreshed. The
+contract is locked down by `tests/test_measure_progress_exit.py`, which runs the
+real script against a stubbed throwaway repo and then re-runs each case against
+six mutations that restore the old code, requiring every one to redden.
+
 ### The staleness gate, and why it exists
 
 **Before this gate existed, a stale baseline silently produced wrong numbers.** A
