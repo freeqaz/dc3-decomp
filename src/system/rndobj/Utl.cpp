@@ -2136,6 +2136,7 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
     }
     RndParticleSys *partsys = dynamic_cast<RndParticleSys *>(obj);
     if (partsys) {
+        Vector3 vb = partsys->ForceDir();
         partsys->SetEmitRate(
             partsys->EmitRate().x / fovScale, partsys->EmitRate().y / fovScale
         );
@@ -2146,7 +2147,6 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
             partsys->BubblePeriod().x * fovScale, partsys->BubblePeriod().y * fovScale
         );
         partsys->SetLife(partsys->Life().x * fovScale, partsys->Life().y * fovScale);
-        Vector3 vb = partsys->ForceDir();
         vb *= (scale / fovScale) / fovScale;
         partsys->SetForceDir(vb);
         Vector3 box1, box2;

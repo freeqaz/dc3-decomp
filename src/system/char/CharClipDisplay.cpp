@@ -136,23 +136,29 @@ void CharClipDisplay::DrawTrack() {
     float nameY = -(halfEm - drawY);
 
     // Draw track background rect
-    float startX = GetX(startBeat);
-    float endX = GetX(endBeat);
-    Hmx::Rect trackRect(startX, drawY, endX - startX, 3.0f);
+    Hmx::Rect trackRect;
+    trackRect.x = GetX(startBeat);
+    trackRect.y = drawY;
+    trackRect.w = GetX(endBeat) - trackRect.x;
+    trackRect.h = 3.0f;
     TheRnd.DrawRect(trackRect, white, nullptr, nullptr, nullptr);
 
     // Draw integer beat markers
     float firstBeat = (float)std::ceil(startBeat);
     float lastBeat = (float)std::floor(endBeat);
-    if (firstBeat + 1.0f != firstBeat && firstBeat <= lastBeat) {
+    if (firstBeat + 1.0f != firstBeat) {
         float markerY = drawY - 3.0f;
         float markerH = 9.0f;
         float beat = firstBeat;
-        do {
-            Hmx::Rect markerRect(GetX(beat), markerY, 1.0f, markerH);
+        Hmx::Rect markerRect;
+        while (beat <= lastBeat) {
+            markerRect.y = markerY;
+            markerRect.h = markerH;
+            markerRect.x = GetX(beat);
+            markerRect.w = 1.0f;
             TheRnd.DrawRect(markerRect, green, nullptr, nullptr, nullptr);
             beat += 1.0f;
-        } while (beat <= lastBeat);
+        }
     }
 
     if (mClip == nullptr)
@@ -162,33 +168,26 @@ void CharClipDisplay::DrawTrack() {
     {
         bool firstEvent = true;
         int idx = 0;
+        float eventAlpha = 0.2f;
         float eventLabelOffset = 10.0f;
-        if (mClip->NumBeatEvents() != 0) {
-            float eventAlpha = 0.2f;
-            do {
-                const CharClip::BeatEvent &ev = mClip->BeatEvents()[idx];
-                float eventX = GetX(ev.beat);
-                float halfEmVal = sEm * 0.5f;
-                Hmx::Rect eventRect(eventX, drawY - halfEmVal, halfEmVal, 1.0f);
-                Hmx::Color eventColor(eventAlpha, eventAlpha, 1.0f, 1.0f);
-                TheRnd.DrawRect(eventRect, eventColor, nullptr, nullptr, nullptr);
+        while ((unsigned int)idx < (unsigned int)mClip->NumBeatEvents()) {
+            const CharClip::BeatEvent &ev = mClip->BeatEvents()[idx];
+            float eventX = GetX(ev.beat);
+            Vector2 labelPos(eventX, drawY);
+            float halfEmVal = sEm * 0.5f;
+            Hmx::Rect eventRect(eventX, drawY - halfEmVal, 1.0f, halfEmVal);
+            Hmx::Color eventColor(eventAlpha, eventAlpha, 1.0f, 1.0f);
+            TheRnd.DrawRect(eventRect, eventColor, nullptr, nullptr, nullptr);
 
-                if (firstEvent
-                    && (ev.beat > mCursorBeat
-                        || (idx == 0
-                            && mCursorBeat > mClip->BeatEvents().back().beat))) {
-                    Hmx::Color eventLabelColor(eventAlpha, eventAlpha, 1.0f, 1.0f);
-                    firstEvent = false;
-                    float labelY = drawY - (halfEmVal + eventLabelOffset);
-                    TheRnd.DrawString(
-                        ev.event.Str(),
-                        Vector2(eventX, labelY),
-                        eventLabelColor,
-                        true
-                    );
-                }
-                idx += 1;
-            } while ((unsigned int)idx < (unsigned int)mClip->NumBeatEvents());
+            if (firstEvent
+                && (ev.beat > mCursorBeat
+                    || (idx == 0 && mCursorBeat > mClip->BeatEvents().back().beat))) {
+                Hmx::Color eventLabelColor(eventAlpha, eventAlpha, 1.0f, 1.0f);
+                firstEvent = false;
+                labelPos.y -= (halfEmVal + eventLabelOffset);
+                TheRnd.DrawString(ev.event.Str(), labelPos, eventLabelColor, true);
+            }
+            idx += 1;
         }
     }
 

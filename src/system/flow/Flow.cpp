@@ -269,7 +269,7 @@ void Flow::PreLoad(BinStream &bs) {
 
 void Flow::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
-    ObjectDir::PostLoad(d.stream);
+    ObjectDir::PostLoad(bs);
     if (IsProxy()) {
         int numDynProps = 0;
         d.stream.ReadEndian(&numDynProps, 4);
@@ -294,18 +294,20 @@ void Flow::PostLoad(BinStream &bs) {
                 d.stream >> propName;
 
                 DataNode node;
-                int nodeType = 0;
+                int nodeType;
                 d.stream.ReadEndian(&nodeType, 4);
                 if (nodeType == kDataObject) {
-                    ObjectDir *dir = Dir();
-                    if (dir) {
-                        if (dir->Loader()) {
-                            dir = dir->Loader()->GetDir();
-                        } else {
-                            dir = dir->Dir();
-                        }
+                    Flow *owner = GetOwnerFlow();
+                    if (!owner)
+                        owner = this;
+                    DirLoader *loader = owner->Loader();
+                    ObjectDir *dir;
+                    if (loader) {
+                        dir = loader->ProxyDir();
+                    } else {
+                        dir = owner->Dir();
                     }
-                    node = FlowNode::LoadObjectFromMainOrDir(d.stream, dir);
+                    node = FlowNode::LoadObjectFromMainOrDir(bs, dir);
                 } else {
                     DataNode tmpNode;
                     tmpNode.Load(d.stream);
@@ -318,14 +320,11 @@ void Flow::PostLoad(BinStream &bs) {
                         SetProperty(propName, node);
                     }
                 }
-                if (node.Type() == kDataArray) {
-                    node.UncheckedArray()->Release();
-                }
             }
         }
     } else {
         if (d.rev < 3) {
-            int oldRev = 0;
+            int oldRev;
             d.stream.ReadEndian(&oldRev, 4);
             FlowQueueable::Load(d.stream);
             if (oldRev < 1) {
@@ -382,10 +381,8 @@ void Flow::PostLoad(BinStream &bs) {
         mPrivate = true;
     }
     RefreshPortLabelLists();
-    if (Loader() && Loader()->ProxyDir()) {
-        if (Loader()->ProxyDir()->InlineProxyType() == kInlineAlways) {
-            mStartMode = 5;
-        }
+    if (!ProxyFile().empty()) {
+        mInterrupt = kPassThrough;
     }
 }
 

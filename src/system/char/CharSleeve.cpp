@@ -71,7 +71,8 @@ void CharSleeve::Poll() {
     if (mSleeve && _tmp1) {
         float deltasecs = TheTaskMgr.DeltaSeconds();
         float dvar12 = deltasecs * 60.0f;
-        float gravity_z = (mGravity * (deltasecs * (dvar12 * -3.8582677f)));
+        float dv2 = deltasecs * dvar12;
+        float gravity_z = (mGravity * dv2) * -3.8582677f;
         auto _tmp0 = powf(1.0f - mStiffness, dvar12 * dvar12);
         RndTransformable *sleeveparent = mSleeve->TransParent();
         float absed = fabsf(mSleeve->LocalXfm().v.z);
@@ -81,9 +82,17 @@ void CharSleeve::Poll() {
         if (me && me->Teleported()) {
             mPos = mSleeve->WorldXfm().v;
             Vector3 v9c(0.0f, 0.0f, -(absed + mPosLength));
-            float dotted = Dot(v9c, sleeveparent->WorldXfm().m.x);
+            // Written out rather than Dot(): with v9c.x/.y both literal 0.0f the
+            // left-associated Dot() lets the compiler factor x*0 + y*0 into
+            // (x+y)*0, reordering the FMA chain to y,x,z. The target keeps the
+            // plain y,z,x chain, which this right-nested form reproduces.
+            // dotted_orig is computed first so the clamped copy lands in the
+            // register the target uses (declaring dotted first inverts the pair).
+            const Vector3 &pmx = sleeveparent->WorldXfm().m.x;
+            float dotted_orig = v9c.x * pmx.x + (v9c.y * pmx.y + v9c.z * pmx.z);
+            float dotted = dotted_orig;
             ClampEq(dotted, -mRange, mRange);
-            ScaleAddEq(v9c, sleeveparent->WorldXfm().m.x, dotted);
+            ScaleAddEq(v9c, sleeveparent->WorldXfm().m.x, dotted - dotted_orig);
             mPos += v9c;
             Vector3 va8;
             ScaleAdd(sleeveparent->WorldXfm().v, sleeveparent->WorldXfm().m.x, dotted, va8);
