@@ -59,9 +59,25 @@ bool gHostConfig;
 bool gHostLogging;
 bool gHostCached;
 
-static DataArray *gSystemConfig;
-static DataArray *gSystemTitles;
+// MSVC emits this TU's .bss in REVERSE declaration order, so these three are
+// declared backwards on purpose: the target has gSystemConfig at 0x82F652E0,
+// gSystemTitles at 0x82F652E4 and gUsingCD at 0x82F652E8, and declared the
+// other way round our object put gUsingCD 8 bytes BELOW gSystemConfig instead
+// of 8 above.
+//
+// ⚠ An objdiff row in InitSystem / PreInitSystem reading "we reference
+// gUsingCD where the target references gSystemConfig" is NOT a wrong-variable
+// read.  Both functions materialise ONE address register (r30) for this pair
+// and reach the other member at ±0x8; the relocation names only the anchor.
+// The target anchors on gUsingCD and reads gSystemConfig at -0x8(r30); we
+// anchor on gSystemConfig.  Measured 2026-09-11: that choice is NOT driven by
+// the layout (it survived this reorder unchanged), nor by reading gUsingCD
+// directly instead of through UsingCD(), nor by binding a `int &` to gUsingCD
+// to force its address temp.  The residual rows are codegen -- do not "fix"
+// them by renaming a global.
 static int gUsingCD;
+static DataArray *gSystemTitles;
+static DataArray *gSystemConfig;
 static float gSystemFrac;
 static int gSystemMs;
 const char *gHostFile;
