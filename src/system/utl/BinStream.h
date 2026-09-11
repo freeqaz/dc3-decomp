@@ -203,6 +203,7 @@ class BinStreamRev {
 public:
     BinStreamRev(BinStream &bs, int revs)
         : rev(getHmxRev(revs)), altRev(getAltRev(revs)), stream(bs) {}
+    BinStreamRev(BinStream &bs, int r, int ar) : rev(r), altRev(ar), stream(bs) {}
 
     BinStreamRev &operator>>(bool &b) {
         unsigned char uc;

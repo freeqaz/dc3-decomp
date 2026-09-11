@@ -1249,23 +1249,27 @@ FilePath ObjectDir::GetSubDirPath(const FilePath &fp, const BinStream &bs) {
 INIT_REVS(0x1C, 0)
 
 void ObjectDir::PreLoad(BinStream &bs) {
-    LOAD_REVS(bs)
+    int revs;
+    bs >> revs;
+    int rev = getHmxRev(revs);
+    int altRev = getAltRev(revs);
+    BinStreamRev d(bs, rev, altRev);
     ASSERT_REVS(0x1C, 0)
 
-    if (d.rev > 0x15) {
+    if (rev > 0x15) {
         LoadType(bs);
-    } else if (d.rev > 1 && d.rev < 17) {
+    } else if (rev > 1 && rev < 17) {
         Hmx::Object::Load(bs);
     }
 
-    if (d.rev < 3) {
+    if (rev < 3) {
         int hashSize, strSize;
         bs >> hashSize >> strSize;
         Reserve(hashSize, strSize);
     }
 
-    if (d.rev > 0x19) {
-        if (d.rev < 0x1B) {
+    if (rev > 0x19) {
+        if (rev < 0x1B) {
             bool b;
             d >> b;
             mAlwaysInlined = b != 0;
@@ -1275,26 +1279,25 @@ void ObjectDir::PreLoad(BinStream &bs) {
         int hashLen;
         d >> hashLen;
         if (hashLen) {
-            char *hash = (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x30A, "Always Inline CDB");
-            mAlwaysInlineHash = hash;
-            bs.Read(hash, hashLen);
-            char *ptr = (char *)mAlwaysInlineHash;
-            ptr[hashLen] = '\0';
+            mAlwaysInlineHash =
+                (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x30A, "Always Inline CDB");
+            bs.Read((void *)mAlwaysInlineHash, hashLen);
+            ((char *)mAlwaysInlineHash)[hashLen] = '\0';
         }
     }
 
-    if (d.rev > 1) {
+    if (rev > 1) {
         d >> mViewports;
         d >> (int &)mCurViewportID;
-        if (d.rev == 3 && mCurViewportID > 6) {
+        if (rev == 3 && mCurViewportID > 6) {
             mCurViewportID = (ViewportId)6;
         }
     }
 
-    if (d.rev > 0xC) {
-        if (d.rev > 0x13) {
+    if (rev > 0xC) {
+        if (rev > 0x13) {
             InlineDirType proxyType;
-            if (d.rev > 0x1B) {
+            if (rev > 0x1B) {
                 d >> proxyType;
             } else {
                 bool b;
@@ -1326,28 +1329,28 @@ void ObjectDir::PreLoad(BinStream &bs) {
         }
     }
 
-    if (d.rev > 1 && d.rev < 11) {
-        char buf[0x80];
+    char buf[0x80];
+    char camBuf[0x80];
+    char unusedBuf[0x80];
+    if (rev > 1 && rev < 11) {
         bs.ReadString(buf, 0x80);
         unk8c = FindObject(buf, false, true);
     }
-    if (d.rev > 3 && d.rev < 11) {
-        char buf[0x80];
-        bs.ReadString(buf, 0x80);
-        mCurCam = FindObject(buf, false, true);
+    if (rev > 3 && rev < 11) {
+        bs.ReadString(camBuf, 0x80);
+        mCurCam = FindObject(camBuf, false, true);
         if (mCurCam == nullptr && (int)mCurViewportID == 7) {
             mCurViewportID = (ViewportId)0;
         }
     }
-    if (d.rev == 5) {
-        char buf[0x80];
-        bs.ReadString(buf, 0x80);
+    if (rev == 5) {
+        bs.ReadString(unusedBuf, 0x80);
     }
 
     static std::vector<FilePath> inlinedSubDirs;
     static std::vector<FilePath> notInlinedSubDirs;
 
-    if (d.rev > 2) {
+    if (rev > 2) {
         d >> notInlinedSubDirs;
         {
             std::vector<FilePath>::iterator endIter = notInlinedSubDirs.end();
@@ -1359,10 +1362,10 @@ void ObjectDir::PreLoad(BinStream &bs) {
             }
         }
         std::vector<int> intVec;
-        if (d.rev == 0x17) {
+        if (rev == 0x17) {
             d >> intVec;
         }
-        if (d.rev > 0x14) {
+        if (rev > 0x14) {
             d >> mInlineSubDirType;
             d >> inlinedSubDirs;
             {
@@ -1406,12 +1409,12 @@ void ObjectDir::PreLoad(BinStream &bs) {
             }
         }
 
-        if (d.rev > 0x17) {
+        if (rev > 0x17) {
             int numNotInlined = notInlinedSubDirs.size();
             for (int i = 0; i < inlinedSubDirs.size(); i++) {
                 bool getfileres = mSubDirs[i + numNotInlined].GetFile() != inlinedSubDirs[i];
                 InlineDirType dType;
-                if (d.rev > 0x18) {
+                if (rev > 0x18) {
                     unsigned char b;
                     d >> b;
                     MILO_ASSERT_RANGE_EQ(b, kInlineCached, kInlineCachedShared, 0x3BE);
@@ -1432,16 +1435,16 @@ void ObjectDir::PreLoad(BinStream &bs) {
         }
     }
 
-    if (d.rev > 11 && d.rev < 14) {
-        OldLoadProxies(bs, d.rev);
+    if (rev > 11 && rev < 14) {
+        OldLoadProxies(bs, rev);
     }
 
-    if (d.rev < 0x13) {
-        if (d.rev > 0xF) {
+    if (rev < 0x13) {
+        if (rev > 0xF) {
             int inlineProxy;
             d >> inlineProxy;
             MILO_ASSERT(inlineProxy != 1, 0x3DC);
-        } else if (d.rev > 0xE) {
+        } else if (rev > 0xE) {
             bool inlineProxy;
             d >> inlineProxy;
             MILO_ASSERT(!inlineProxy, 0x3E1);
@@ -1451,7 +1454,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
     std::vector<bool> boolVec;
     boolVec.resize(mInlinedDirs.size());
     for (int i = 0; i < mInlinedDirs.size(); i++) {
-        if (d.rev < 0x19 && !bs.Cached()) {
+        if (rev < 0x19 && !bs.Cached()) {
             boolVec[i] = true;
         } else {
             bool b;
@@ -1478,7 +1481,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
         }
     }
 
-    if (d.rev > 20 && d.rev < 24) {
+    if (rev > 20 && rev < 24) {
         int offset = notInlinedSubDirs.size();
         MILO_ASSERT(mSubDirs.capacity() >= offset + inlinedSubDirs.size(), 0x415);
         for (int i = 0; i < inlinedSubDirs.size(); i++) {
@@ -1491,7 +1494,7 @@ void ObjectDir::PreLoad(BinStream &bs) {
     }
 
     mIsSubDir = false;
-    bs.PushRev(packRevs(d.altRev, d.rev), this);
+    bs.PushRev(packRevs(altRev, rev), this);
 }
 
 void ObjectDir::PostLoad(BinStream &bs) {
