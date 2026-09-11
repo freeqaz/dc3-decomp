@@ -517,6 +517,10 @@ void MetagameRank::UpdateScore(
     int i4,
     int stars
 ) {
+    // Binding a reference to the member here (before the static Symbol
+    // guards) is what rotates the allocator's reload order for the six
+    // spilled static-address temps into the target's order.
+    bool &firstTimePlayed = mFirstTimePlayed;
     if (!TheHamProvider->Property("is_in_party_mode")->Int()
         && !TheHamProvider->Property("is_in_infinite_party_mode")->Int()) {
         static Symbol double_xp_weekend("double_xp_weekend");
@@ -585,8 +589,8 @@ void MetagameRank::UpdateScore(
         static Symbol campaign_completed_on_hard("campaign_completed_on_hard");
         static Symbol five_star_a_characters_songlist("five_star_a_characters_songlist");
 
-        if (mFirstTimePlayed) {
-            mFirstTimePlayed = false;
+        if (firstTimePlayed) {
+            firstTimePlayed = false;
             AwardPointsForTask(play_first_time);
         }
 
