@@ -66,6 +66,24 @@ XGSurfaceSize(UINT Width, UINT Height, D3DFORMAT Format, D3DMULTISAMPLE_TYPE Mul
     return alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
 }
 
+// Size of a surface's hierarchical-Z allocation in EDRAM tiles.  Written the
+// same shape as XGSurfaceSize above; MSVC collapses the two alignment masks
+// and the /0x200 into "(w+31)>>5 * (h+15)>>4, truncated to 23 bits".
+extern "C" UINT
+XGHierarchicalZSize(UINT Width, UINT Height, D3DMULTISAMPLE_TYPE MultiSample) {
+    UINT width = Width;
+    UINT height = Height;
+    if ((int)MultiSample >= 1) {
+        height = Height * 2;
+    }
+    if ((int)MultiSample == 2) {
+        width = Width * 2;
+    }
+    UINT alignedWidth = (width + 31) & ~31;
+    UINT alignedHeight = (height + 15) & ~15;
+    return alignedWidth * alignedHeight / 0x200;
+}
+
 DxTex::DxTex()
     : mFormat((D3DFORMAT)-1), mTexture(0), unk84(0), mRenderTarget(0), mDepthRT(0),
       mMovieBufIdx(0), mLockedRect(), unka4(0), unka8(0), unkac(0) {
@@ -568,4 +586,242 @@ void DxTex::ResetSurfaces() {
     mRenderTarget = nullptr;
     TheDxRnd.AutoRelease(mDepthRT);
     mDepthRT = nullptr;
+}
+
+void DxTex::SyncBitmap() {
+    PhysMemTypeTracker tracker("D3D(phys):Tex");
+    PreDeviceReset();
+
+    D3DCAPS9 d3dcaps;
+    D3DDevice_GetDeviceCaps(TheDxRnd.Device(), &d3dcaps);
+    MILO_ASSERT(
+        (mWidth <= d3dcaps.MaxTextureWidth) && (mHeight <= d3dcaps.MaxTextureHeight), 941
+    );
+    MILO_ASSERT(
+        !(d3dcaps.TextureCaps & D3DPTEXTURECAPS_SQUAREONLY) || mWidth == mHeight, 942
+    );
+
+    bool isRendered = (mType & kRendered) != 0;
+    bool isRegular = mType == kRegular;
+    bool isMovie = (mType & kMovie) != 0;
+    bool isScratch = (mType & kScratch) != 0;
+
+    if (isRendered) {
+        if (mWidth == 0 || mHeight == 0) {
+            return;
+        }
+        if (mType == kShadowMap) {
+            mFormat = D3DFMT_D24S8;
+        } else {
+            mFormat = D3DFMT_A8R8G8B8;
+        }
+        unkac = false;
+        UINT colorTiles = 0;
+        if (mType == kShadowMap) {
+            mRenderTarget = nullptr;
+        } else {
+            D3DFORMAT edramFormat = mFormat;
+            switch (edramFormat) {
+            case D3DFMT_A16B16G16R16:
+                edramFormat = D3DFMT_A16B16G16R16_EDRAM;
+                break;
+            case D3DFMT_A2B10G10R10:
+                edramFormat = D3DFMT_A2B10G10R10F_EDRAM;
+                break;
+            case D3DFMT_G16R16:
+                edramFormat = D3DFMT_G16R16_EDRAM;
+                break;
+            }
+            D3DSURFACE_PARAMETERS params = { 0, 0xFFFFFFFF, 0, D3DHIZFUNC_DEFAULT };
+            colorTiles = XGSurfaceSize(mWidth, mHeight, edramFormat, D3DMULTISAMPLE_NONE);
+            if (colorTiles < 0x800) {
+                if (sEDRamChecksEnabled && colorTiles > TheDxRnd.EdramBase()) {
+                    unkac = true;
+                }
+                mRenderTarget = D3DDevice_CreateSurface(
+                    mWidth, mHeight, edramFormat, D3DMULTISAMPLE_NONE, &params
+                );
+                DX_ASSERT(mRenderTarget, 1026);
+            } else {
+                MILO_FAIL(
+                    "Render target '%s' exceeds available\nEDRAM area (requested %d of %d color tiles)\n",
+                    PathName(this), colorTiles, 0x800
+                );
+                mRenderTarget = nullptr;
+            }
+        }
+
+        if (mNumMips != 0) {
+            mTexture = new D3DTexture;
+            UINT dwTextureSize = XGSetTextureHeaderEx(
+                mWidth, mHeight, mNumMips, 0, mFormat, 0, 1, 0, -1, 0, mTexture, nullptr,
+                nullptr
+            );
+            MILO_ASSERT(dwTextureSize != 0, 1059);
+            BeginMemTrackFileName(mFilepath.c_str());
+            void *textureBuffer =
+                PhysicalAllocTracked(dwTextureSize, 0x404, __FILE__, 1063, "Tex(phys)");
+            EndMemTrackFileName();
+            MILO_ASSERT(textureBuffer != NULL, 1065);
+            XGOffsetBaseTextureAddress(mTexture, textureBuffer, textureBuffer);
+        } else {
+            BeginMemTrackFileName(mFilepath.c_str());
+            mTexture = (D3DTexture *)D3DDevice_CreateTexture(
+                mWidth, mHeight, 1, 1, 0, mFormat, 0, (D3DRESOURCETYPE)3
+            );
+            DX_ASSERT(mTexture, 1073);
+            EndMemTrackFileName();
+        }
+
+        bool wantsDepth = (mType & kRendered) && !(mType & 0x20);
+        if (wantsDepth || mType == kDepthVolumeMap) {
+            D3DFORMAT depthFormat = D3DFMT_D24FS8;
+            if (mType == kShadowMap) {
+                depthFormat = D3DFMT_D24S8;
+            }
+            D3DSURFACE_PARAMETERS depthParams = { colorTiles, 0, 0, D3DHIZFUNC_DEFAULT };
+            UINT depthTiles =
+                XGSurfaceSize(mWidth, mHeight, depthFormat, D3DMULTISAMPLE_NONE)
+                + colorTiles;
+            UINT hzTiles = XGHierarchicalZSize(mWidth, mHeight, D3DMULTISAMPLE_NONE);
+            if (depthTiles < 0x800 && hzTiles < 0xe10) {
+                if (sEDRamChecksEnabled
+                    && (depthTiles > TheDxRnd.EdramBase()
+                        || hzTiles > TheDxRnd.EdramHzBase())) {
+                    unkac = true;
+                }
+                BeginMemTrackFileName(mFilepath.c_str());
+                mDepthRT = D3DDevice_CreateSurface(
+                    mWidth, mHeight, depthFormat, D3DMULTISAMPLE_NONE, &depthParams
+                );
+                DX_ASSERT(mDepthRT, 1114);
+                EndMemTrackFileName();
+            } else {
+                MILO_NOTIFY_ONCE(
+                    "Depth surface '%s' exceeds available EDRAM or hi-z area\n(requested %d of %d color tiles and %d of %d hi-z tiles)\nDepth surface creation failed.",
+                    PathName(this), depthTiles, 0x800, hzTiles, 0xe10
+                );
+                mDepthRT = nullptr;
+            }
+        } else {
+            mDepthRT = nullptr;
+        }
+    } else if (mType & kBackBuffer) {
+        mFormat = D3DFMT_A8R8G8B8;
+        BeginMemTrackFileName(mFilepath.c_str());
+        mTexture = (D3DTexture *)D3DDevice_CreateTexture(
+            mWidth, mHeight, 1, 1, 0, mFormat, 0, (D3DRESOURCETYPE)3
+        );
+        DX_ASSERT(mTexture, 1161);
+        EndMemTrackFileName();
+    } else if (!isMovie && !isScratch && !(mType & (kDeviceTexture | kRegularLinear))) {
+        MILO_ASSERT(isRegular, 1240);
+        if (!mBitmap.Pixels()) {
+            return;
+        }
+        mFormat = TheDxRnd.D3DFormatForBitmap(mBitmap);
+        int numLevels = mBitmap.NumMips() + 1;
+        if (numLevels > 2) {
+            numLevels = 2;
+        }
+        RndBitmap *bmp = &mBitmap;
+        bool usedLowestMip = false;
+        bool fromTexMgr = false;
+        unk2c = mBitmap.Name();
+        if (MemUseLowestMip() && !MemUseLowestMipException(mFilepath.c_str())) {
+            RndBitmap *mip = mBitmap.nextMip();
+            if (mip) {
+                numLevels = 1;
+                usedLowestMip = true;
+                do {
+                    bmp = mip;
+                    mip = mip->nextMip();
+                } while (mip);
+            }
+            mWidth = bmp->Width();
+            mHeight = bmp->Height();
+        }
+        if (unk2c.mCRC != 0) {
+            fromTexMgr = TheDxTexMgr.CreateSurface(
+                mFilepath.c_str(), unk2c, mWidth, mHeight, numLevels, 0, mFormat, 0,
+                &mTexture, nullptr
+            );
+        } else {
+            BeginMemTrackFileName(mFilepath.c_str());
+            mTexture = (D3DTexture *)D3DDevice_CreateTexture(
+                mWidth, mHeight, 1, numLevels, 0, mFormat, 0, (D3DRESOURCETYPE)3
+            );
+            DX_ASSERT(mTexture, 1299);
+            EndMemTrackFileName();
+        }
+        if (!fromTexMgr) {
+            XGTEXTURE_DESC desc;
+            XGGetTextureDesc(mTexture, 0, &desc);
+            RndBitmap converted;
+            DWORD gpuFormat = desc.Format & 0x3f;
+            bmp = &mBitmap;
+            if (mBitmap.Palette() || mBitmap.Bpp() == 0x18) {
+                converted.Create(*bmp, 0x20, bmp->Order(), nullptr);
+                bmp = &converted;
+            }
+            if (usedLowestMip) {
+                RndBitmap *mip = bmp->nextMip();
+                while (mip) {
+                    bmp = mip;
+                    mip = mip->nextMip();
+                }
+            }
+            for (int level = 0; level < numLevels; level++) {
+                MILO_ASSERT(bmp, 1332);
+                D3DLOCKED_RECT rect;
+                D3DTexture_LockRect(mTexture, level, &rect, nullptr, 0);
+                XGTileTextureLevel(
+                    desc.Width, desc.Height, level, gpuFormat, numLevels == 1, rect.pBits,
+                    nullptr, bmp->Pixels(), bmp->DxtRowBytes(), nullptr
+                );
+                D3DTexture_UnlockRect(mTexture, level);
+                bmp = bmp->nextMip();
+            }
+        }
+        mBitmap.Reset();
+    } else if (!isScratch && !(mType & (kDeviceTexture | kRegularLinear))
+               && !(mType & 0x20)) {
+        // Movie double-buffer.  The format is DXT1 with GPUENDIAN_NONE; this
+        // repo's d3d9types.h names the 8in16-endian spelling (D3DFMT_LIN_DXT1,
+        // 0x1a200052) but not this one.
+        mFormat = (D3DFORMAT)0x1a200012;
+        if (mWidth == 0 || mHeight == 0) {
+            return;
+        }
+        for (int i = 0; i < 2; i++) {
+            BeginMemTrackFileName(mFilepath.c_str());
+            mMovieTextures[i] = (D3DTexture *)D3DDevice_CreateTexture(
+                mWidth, mHeight, 1, 1, 0, mFormat, 1, (D3DRESOURCETYPE)3
+            );
+            DX_ASSERT(mMovieTextures[i], 1231);
+            EndMemTrackFileName();
+        }
+        mTexture = mMovieTextures[(mMovieBufIdx + 1) % 2];
+    } else {
+        if (isMovie) {
+            mFormat = D3DFMT_LIN_R5G6B5;
+            mBpp = 0x10;
+        } else if (mType & 0x20) {
+            mFormat = D3DFMT_LIN_L8;
+            mBpp = 8;
+        } else {
+            mFormat = D3DFMT_LIN_D16;
+            mBpp = 0x10;
+        }
+        mTexture = new D3DTexture;
+        UINT size = XGSetTextureHeader(
+            mWidth, mHeight, 1, 4, mFormat, 0, 0, -1, 0, mTexture, nullptr, nullptr
+        );
+        size = (size + 0xfff) & ~0xfff;
+        BeginMemTrackFileName(mFilepath.c_str());
+        void *ptr = PhysicalAllocTracked(size, 4, __FILE__, 1196, "Tex(phys)");
+        EndMemTrackFileName();
+        MILO_ASSERT(ptr, 1198);
+        XGOffsetResourceAddress(mTexture, ptr);
+    }
 }

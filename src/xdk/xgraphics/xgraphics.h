@@ -135,7 +135,18 @@ UINT XGSetTextureHeader(
     D3DFORMAT Format, UINT ExpBias, UINT Flags, INT BaseOffset,
     INT MipOffset, D3DTexture *pTexture, UINT *pBaseSize, UINT *pMipSize
 );
+// Same as XGSetTextureHeader but with an extra Pitch argument between
+// MipOffset and pTexture -- DxTex::SyncBitmap passes 13 arguments (8 in
+// r3-r10, five in the parameter save area at r1+0x54..0x74).
+UINT XGSetTextureHeaderEx(
+    UINT Width, UINT Height, UINT Levels, DWORD Usage,
+    D3DFORMAT Format, DWORD ExpBias, DWORD Flags, INT BaseOffset,
+    INT MipOffset, UINT Pitch, D3DTexture *pTexture, UINT *pBaseSize, UINT *pMipSize
+);
 void XGOffsetResourceAddress(D3DBaseTexture *pResource, void *pBaseAddress);
+void XGOffsetBaseTextureAddress(
+    D3DBaseTexture *pTexture, void *pBaseAddress, void *pMipAddress
+);
 
 #ifdef __cplusplus
 }
