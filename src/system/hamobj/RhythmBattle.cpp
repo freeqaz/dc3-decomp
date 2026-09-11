@@ -93,9 +93,12 @@ BEGIN_HANDLERS(RhythmBattle)
     HANDLE_ACTION(reset_combo, ResetCombo())
     HANDLE_ACTION(set_jump, SetJump(_msg->Int(2), _msg->Int(3)))
     HANDLE_ACTION(clear_jump, ClearJump())
+    // The image returns 1 as soon as player one's InTheZone() is nonzero
+    // (bne straight to li r11,1), i.e. it evaluates an OR of the two calls,
+    // not an AND of their negations.
     HANDLE_EXPR(
         both_players_dancing_bad,
-        !mPlayerOne->InTheZone() && !mPlayerTwo->InTheZone()
+        mPlayerOne->InTheZone() || mPlayerTwo->InTheZone()
     )
     HANDLE_SUPERCLASS(RndPollable)
     HANDLE_SUPERCLASS(Hmx::Object)
