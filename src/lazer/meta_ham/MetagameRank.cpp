@@ -1103,23 +1103,24 @@ int MetagameRank::ComputeRankNumber(bool forceAward) {
 void MetagameRank::AwardForRankUp(int i1) {
     std::vector<const Unlockable *> unlocks;
     for (; i1 > 0; i1--) {
-        auto it = unlocks.rbegin();
         if (unlocks.empty()) {
             BuildUnlockablesList(unk79, unlocks);
-            it = unlocks.rbegin();
             if (unlocks.empty()) {
                 return;
             }
         }
-        const Unlockable *cur = *++it;
+        // The image reads *(finish-1) and stores finish-1 back into the
+        // vector: back() then pop_back(). *++rbegin() read the second-to-last
+        // element and never consumed it.
+        const Unlockable *cur = unlocks.back();
+        unlocks.pop_back();
         DeferredAward award;
         if (mProfile && mProfile->GetHamUser()) {
             award.unk0 = mProfile->GetHamUser()->UserName();
         }
         award.unk8 = cur;
         unk79[cur->unk0] = true;
-        char buffer[16];
-        memcpy(buffer, "no_unlock_", 11);
+        char buffer[] = "no_unlock_";
         if (strncmp(cur->unk4.Str(), buffer, strlen(buffer))) {
             gDeferredAwardQueue.push_back(award);
 #ifdef HX_NATIVE
