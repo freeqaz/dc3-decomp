@@ -138,6 +138,84 @@ def _is_skippable_stub(symbol: str, unit: str) -> bool:
     return False
 
 
+# --------------------------------------------------------------- stub guards
+#
+# `is_stub` means exactly one thing: the TARGET has a body here and WE wrote
+# none.  Two populations were being swept into it that cannot mean that, and
+# because the clear side of the rule only fires on rows objdiff MEASURED, the
+# flag they picked up was permanent.  Re-derived 2026-09-11 over all 675 rows
+# carrying it (`scripts/analysis/stub_flag_audit.py`): 26 EH funclets, 9
+# unnamed `fn_<addr>` target symbols, 123 retired spellings and 324 functions
+# we demonstrably define -- 482 of 675 wrong, and 82 of the survivors were
+# real sub-100% work that read as "stub" and so was never picked up.
+#
+#  (a) An EH FUNCLET is not a function anyone authors.  objdiff pairs
+#      `fn_<addr>` by MASKED BYTE SIGNATURE, so "we emit no body for it" is a
+#      statement about a pairing objdiff invented, not about our source.  The
+#      enclosing function has a body; the funclet follows from it.
+#  (b) A symbol objdiff cannot FIND is not measured at all.  The commonest
+#      cause here is a retired spelling -- the /OPT:ICF fold-survivor rename
+#      (e5b1e3ce7, 2026-08-21) retired a name, dtk stopped emitting it, and
+#      the row fell out of report.json.  A row nothing measures must not keep
+#      asserting a measurement.
+
+FUNCLET_NAME_PREFIXES = ("__unwind$", "__catch$", "__ehhandler$",
+                         "__tryblocktable$")
+_FN_ADDR_RE = re.compile(r"^fn_[0-9A-Fa-f]{8}$")
+
+
+def is_funclet_symbol(symbol: str) -> bool:
+    """True for a symbol that can never be a stub because nobody authors it.
+
+    Covers both spellings the splitter produces: the named EH funclets
+    (`__unwind$NNN`, `__catch$NNN`) and the unnamed `fn_<addr>` placeholders
+    that objdiff pairs by byte signature.
+    """
+    return symbol.startswith(FUNCLET_NAME_PREFIXES) or bool(
+        _FN_ADDR_RE.match(symbol))
+
+
+# The four things a sync pass can decide about one row's `is_stub`.
+STUB_SET = "set"      # target has a body, we emit none -> is_stub = 1
+STUB_VOID = "void"    # the flag cannot MEAN anything here -> 0, with a reason
+STUB_CLEAR = "clear"  # we measured a body -> 0
+STUB_NONE = "none"    # leave it alone
+
+
+def stub_action(error: str | None, symbol: str, was_stub: bool) -> str:
+    """What this measurement says about `is_stub`, as a pure decision.
+
+    Extracted so the two guards are testable rather than grep-able; the
+    pre-fix behaviour is exactly this function with the two
+    ``is_funclet_symbol`` / ``not_found`` arms deleted, which is what
+    ``tests/test_stub_flag_audit.py`` implements inline and asserts disagrees.
+
+    ``error`` is the objdiff outcome for the row: ``None`` (measured),
+    ``"not_found"``, ``"skipped"``, ``"unimplemented"``, or an error string.
+    """
+    if error is None:
+        return STUB_CLEAR if was_stub else STUB_NONE
+    if error == "not_found":
+        # Nothing measured this row.  A flag set by a measurement must not
+        # outlive every chance to unset it.
+        return STUB_VOID if was_stub else STUB_NONE
+    if error in ("skipped", "unimplemented"):
+        if is_funclet_symbol(symbol):
+            return STUB_VOID if was_stub else STUB_NONE
+        return STUB_SET
+    return STUB_NONE
+
+
+def _void_reason(error: str | None) -> str:
+    if error == "not_found":
+        return ("sync_objdiff: is_stub voided -- objdiff cannot find this "
+                "symbol (retired spelling / absent from report.json), so "
+                "nothing measures it")
+    return ("sync_objdiff: is_stub voided -- EH funclet / unnamed fn_<addr>, "
+            "byte-signature paired; not authorable source, so it cannot be "
+            "a stub")
+
+
 # Itanium ABI mangled name pattern: MethodName__<N><ClassName><params>
 _ITANIUM_PATTERN = re.compile(r'^(.+?)__(\d+)(\w+)')
 
@@ -874,6 +952,10 @@ def main():
     demotions: list[int] = []  # COMPLETE/AT_LIMIT -> NULL
     stub_updates: list[int] = []
     stub_clears: list[int] = []  # is_stub 1 -> 0 (now has base code)
+    # is_stub 1 -> 0 because the row can never MEAN "stub": an EH funclet, or a
+    # symbol objdiff could not find (so nothing measured it).  Carries a reason
+    # because, unlike the clear above, there is no percentage to explain it.
+    stub_voids: list[tuple[int, str]] = []
 
     # Build set of symbols that have base code somewhere (for COMDAT detection).
     # If a symbol is "unimplemented" in one unit but compiled in another,
@@ -884,12 +966,19 @@ def main():
             compiled_symbols.add(r.symbol)
 
     for r in results:
+        was_stub = function_meta.get(r.db_id, {}).get("is_stub")
+        action = stub_action(r.error, r.symbol, bool(was_stub))
+        if action == STUB_VOID:
+            stats["stub_voided"] = stats.get("stub_voided", 0) + 1
+            if not args.dry_run:
+                stub_voids.append((r.db_id, _void_reason(r.error)))
+
         if r.error == "not_found":
             stats["not_found"] += 1
             continue
         if r.error == "skipped":
             stats["skipped"] += 1
-            if not args.dry_run:
+            if not args.dry_run and action == STUB_SET:
                 stub_updates.append(r.db_id)
             continue
         if r.error == "unimplemented":
@@ -900,7 +989,7 @@ def main():
                 unit_key = (r.unit or "unknown").removeprefix("default/")
                 name = r.demangled or r.symbol
                 unimplemented_by_unit.setdefault(unit_key, []).append(name)
-            if not args.dry_run:
+            if not args.dry_run and action == STUB_SET:
                 stub_updates.append(r.db_id)
             continue
         if r.error:
@@ -1078,7 +1167,7 @@ def main():
                         stats["auto_at_limit"] = stats.get("auto_at_limit", 0) + 1
 
     # Apply to DB
-    if not args.dry_run and (pct_updates or enrich_updates or promotions or at_limit_promotions or demotions or stub_updates or stub_clears):
+    if not args.dry_run and (pct_updates or enrich_updates or promotions or at_limit_promotions or demotions or stub_updates or stub_clears or stub_voids):
         conn = sqlite3.connect(str(args.db))
         conn.execute("PRAGMA journal_mode = WAL")
 
@@ -1184,6 +1273,19 @@ def main():
                 [(fid,) for fid in stub_clears],
             )
 
+        if stub_voids:
+            # Provenance lives in verdict_reason: the row is being cleared
+            # because the flag could never have MEANT anything here, which a
+            # bare 0 cannot say and a later reader would otherwise re-guess.
+            conn.executemany(
+                """UPDATE functions
+                   SET is_stub = 0,
+                       verdict_reason = ?,
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ?""",
+                [(reason, fid) for fid, reason in stub_voids],
+            )
+
         conn.commit()
         conn.close()
 
@@ -1223,6 +1325,7 @@ def main():
     print(f"  COMDAT elsewhere:   {stats.get('comdat_elsewhere', 0)} (compiled in different TU)")
     print(f"  Unimplemented:      {stats['unimplemented']}")
     print(f"  Stub cleared:       {stats.get('stub_cleared', 0)} (was stub, now has base code)")
+    print(f"  Stub voided:        {stats.get('stub_voided', 0)} (funclet / not in report.json -- flag could never apply)")
     print(f"  Errors:             {stats['errors']}")
     bucket_sum = (stats["matched"] + stats["not_found"] + stats["skipped"]
                   + stats.get("comdat_elsewhere", 0) + stats["unimplemented"]
