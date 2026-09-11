@@ -426,8 +426,8 @@ void InitSystem(const char *config) {
 }
 
 void PreInitSystem(const char *config) {
-    Archive *oldArchive = TheArchive;
     bool oldCD = UsingCD();
+    Archive *oldArchive = TheArchive;
     if (gHostConfig) {
         gUsingCD = false;
         TheArchive = nullptr;

@@ -617,9 +617,9 @@ RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
 // on a 13.5 x 18 pixel grid.  Returns a reference to a shared cursor holding
 // the end of the string, which DrawStringScreen scales back to 0..1.
 Vector2 &DxRnd::DrawString(
-    const char *str, const Vector2 &pos, const Hmx::Color &color, bool drawGlyphs
+    const char *s, const Vector2 &pos, const Hmx::Color &color, bool drawGlyphs
 ) {
-    MILO_ASSERT(str, 0x11F);
+    MILO_ASSERT(s, 0x11F);
     D3DDevice_SetFVF(mD3DDevice, 0x42);
     Transform screenXfm;
     screenXfm.Reset();
@@ -630,11 +630,11 @@ Vector2 &DxRnd::DrawString(
     static Vector2 cursor;
     cursor = pos;
     float widest = pos.x;
-    while (*str) {
-        char c = *str;
+    while (*s) {
+        char c = *s;
         if (c == '\n') {
-            str++;
-            if (*str) {
+            s++;
+            if (*s) {
                 widest = Max(widest, cursor.x);
                 cursor.y += 18.0f;
                 cursor.x = pos.x;
@@ -663,7 +663,7 @@ Vector2 &DxRnd::DrawString(
             }
         }
         cursor.x += 13.5f;
-        str++;
+        s++;
     }
     D3DDevice_SetRenderState_ViewportEnable(TheDxRnd.Device(), 1);
     if (RndCam::Current()) {
