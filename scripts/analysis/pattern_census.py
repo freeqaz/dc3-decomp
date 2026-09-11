@@ -125,6 +125,12 @@ from scripts.orchestrator import object_baseline, symbol_sweep  # noqa: E402
 from scripts.orchestrator.patch_guard import (  # noqa: E402
     UnpatchedTreeError, ensure_patched_tree,
 )
+# ONE definition of "which classes a guessed symbol pair can contaminate",
+# shared with `query_functions`. Duplicating the set here is how the query
+# surface and the census would come to disagree about the same scan.
+from scripts.orchestrator.database import (  # noqa: E402
+    PAIRING_SENSITIVE_PATTERNS, UNVERIFIABLE_PAIRING,
+)
 
 
 #: Exit code for "--apply cannot possibly land", raised before any work.
@@ -437,6 +443,55 @@ def report_universe(project_dir: Path) -> dict[str, dict]:
     }
 
 
+def render_pattern_table(by_pattern: dict[str, list[str]], examined: int) -> str:
+    """The populations table: GROSS and NET-OF-PAIRING, side by side.
+
+    A callee-name finding is of the shape "the target calls X here and we call
+    Y", which objdiff can only state about a symbol PAIR.  When the enclosing
+    symbol has no name (``fn_<addr>``, an MSVC EH funclet) objdiff pairs it by
+    MASKED BYTE SIGNATURE, and byte-identical funclets pair arbitrarily -- so the
+    differing ``bl`` is a fact about objdiff's guess, not about our source.
+    objdiff declares exactly that, per function, as ``UNVERIFIABLE_PAIRING``.
+
+    Printing only the GROSS number is what handed the callee-13 lane 56 rows it
+    could not adjudicate out of 62.  Printing only the NET number would hide a
+    class that, while unverifiable AS A NAME, still answers one falsifiable
+    question -- "does our tree emit that callee anywhere?" -- which found 7 real
+    source defects in 58 rows with 0 false positives
+    (``scripts/analysis/callee_emitted_anywhere.py``).  So: both, always.
+    """
+    paired = set(by_pattern.get(UNVERIFIABLE_PAIRING, ()))
+    out = [f"{'pattern':38s} {'functions':>9s} {'% of examined':>14s} "
+           f"{'net of pairing':>14s}"]
+    for name, syms in sorted(by_pattern.items(), key=lambda kv: -len(set(kv[1]))):
+        uniq = set(syms)
+        n = len(uniq)
+        if name in PAIRING_SENSITIVE_PATTERNS:
+            net = f"{len(uniq - paired):14d}"
+        else:
+            # Neither "0" nor the gross count: pairing is not a defined
+            # subtraction for this class, and a number here would be read as one.
+            net = f"{'n/a':>14s}"
+        out.append(f"{name:38s} {n:9d} "
+                   f"{100.0 * n / max(examined, 1):13.3f}% {net}")
+    if UNVERIFIABLE_PAIRING in by_pattern:
+        out.append(
+            f"\n'net of pairing' subtracts the {len(paired)} functions objdiff "
+            f"flagged {UNVERIFIABLE_PAIRING} in THIS scan -- symbol pairs it "
+            f"matched by byte signature, i.e. unnamed EH funclets. The NET "
+            f"column is the adjudicable worklist; the GROSS column is the "
+            f"measured population and still answers 'does our tree emit that "
+            f"callee anywhere?'. query_functions(objdiff_pattern=...) serves NET "
+            f"by default (include_unverifiable=True for gross).")
+    elif PAIRING_SENSITIVE_PATTERNS & set(by_pattern):
+        out.append(
+            f"\n'net of pairing' == gross here: {UNVERIFIABLE_PAIRING} fired on "
+            f"ZERO functions under this ruler. If this binary's vocabulary lacks "
+            f"the detector entirely (objdiff < 4.2.7, see the checked list "
+            f"above), the net column is not a measurement.")
+    return "\n".join(out)
+
+
 def git_rev(project_dir: Path) -> str | None:
     try:
         p = subprocess.run(["git", "-C", str(project_dir), "rev-parse", "--short", "HEAD"],
@@ -611,10 +666,7 @@ def main() -> int:
           f"{res['objdiff_version']}")
     print(f"# denominator: {examined} functions examined of {universe} in "
           f"report.json ({universe - examined} dropped, see COVERAGE above)")
-    print(f"{'pattern':38s} {'functions':>9s} {'% of examined':>14s}")
-    for name, syms in sorted(by_pattern.items(), key=lambda kv: -len(set(kv[1]))):
-        n = len(set(syms))
-        print(f"{name:38s} {n:9d} {100.0 * n / max(examined, 1):13.3f}%")
+    print(render_pattern_table(by_pattern, examined))
     silent = sorted(set(res.get("patterns_checked") or []) - set(by_pattern))
     if silent:
         print(f"\n{len(silent)} of {len(res.get('patterns_checked') or [])} "
