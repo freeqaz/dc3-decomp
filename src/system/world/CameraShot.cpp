@@ -884,7 +884,7 @@ void CamShotCrowd::AddCrowdChars(
                      mmit != mmesh->Instances().end() && mmit != it->second;
                      ++mmit, ++ki)
                     ;
-                MILO_ASSERT(ki != mmesh->Instances().size(), 0xBE1);
+                MILO_ASSERT(ki != mmesh->Instances().size(), 0xA58);
                 std::pair<int, int> iPair = std::make_pair(charIdx, ki);
                 if (std::find(m3DCharIndices.begin(), m3DCharIndices.end(), iPair)
                     == m3DCharIndices.end()) {
