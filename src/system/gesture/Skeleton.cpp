@@ -462,17 +462,20 @@ int Skeleton::IdentityCallback(void *pvContext, NUI_IDENTITY_MESSAGE *pMessage) 
     MILO_ASSERT(pvContext != NULL, 0x280);
     MILO_ASSERT(pMessage != NULL, 0x281);
 
-    if ((unsigned int)pMessage->MessageId < NUI_IDENTITY_MESSAGE_ID_COMPLETE) {
-        // frame processed
-    } else if (!(pMessage->MessageId == NUI_IDENTITY_MESSAGE_ID_COMPLETE)) {
-        MILO_ASSERT(false, 0x297);
-    } else {
+    switch (pMessage->MessageId) {
+    case NUI_IDENTITY_MESSAGE_ID_FRAME_PROCESSED:
+        break;
+    case NUI_IDENTITY_MESSAGE_ID_COMPLETE:
         info->SetIdentified(true);
         info->SetProfileMatched(pMessage->Data.Complete.bProfileMatched != 0);
         if ((unsigned int)info->EnrollmentIndex()
             != pMessage->Data.Complete.dwEnrollmentIndex) {
             info->SetEnrollmentIndex(pMessage->Data.Complete.dwEnrollmentIndex);
         }
+        break;
+    default:
+        MILO_ASSERT(false, 0x297);
+        break;
     }
 
     if (!TheGestureMgr->IDEnabled()) {

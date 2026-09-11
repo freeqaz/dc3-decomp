@@ -173,7 +173,7 @@ void PropertyTask::Poll(float ms) {
             delete this;
         }
     } else {
-        float easedRatio = mEaseFunc(ratio, mEasePower, 0.0f);
+        float easedRatio = mEaseFunc(ratio, mEasePower, 1.0f);
         if (mIsColorInterp) {
             int startColor = mStartValue.Int(nullptr);
 

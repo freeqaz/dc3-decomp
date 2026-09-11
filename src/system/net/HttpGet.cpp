@@ -292,9 +292,7 @@ void HttpGet::AddRequiredHeaders() {
 }
 
 void HttpGet::SetState(State newState) {
-    if (mState == newState) return;
-
-    do {
+    while (mState != newState) {
         switch (mState) {
         case kHttpGet_Connecting:
             if ((int)newState == kHttpGet_Sending) break;
@@ -356,7 +354,7 @@ void HttpGet::SetState(State newState) {
             }
             break;
         }
-    } while (mState != newState);
+    }
 }
 
 void HttpGet::Poll() {

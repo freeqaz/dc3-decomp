@@ -91,6 +91,16 @@ public:
     void SetDisengageFrame(float);
 
     Sound *SlideSound() const { return mSlideSound; }
+    // The target checks and dereferences mSlideSound as an ObjPtr in one
+    // expression (same shape as ~SampleInst); a raw Sound* local does not.
+    void PlaySlideSound() {
+        if (mSlideSound)
+            mSlideSound->Play(0, 0, 0, nullptr, 0);
+    }
+    void StopSlideSound() {
+        if (mSlideSound)
+            mSlideSound->Stop(nullptr, false);
+    }
     const ObjPtr<RndAnimatable> &SlideSoundAnim() const { return mSlideSoundAnim; }
     Sound *ScrollSound() const { return mScrollSound; }
     RndAnimatable *ScrollSoundAnim() const { return mScrollSoundAnim; }

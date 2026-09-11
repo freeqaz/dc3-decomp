@@ -157,8 +157,9 @@ Ham1EuclideanNode::Ham1EuclideanNode(ErrorNodeType e, const DataArray *cfg)
     DataArray *weightArr = cfg->FindArray(component_weight_ranges);
     for (int i = 1; i < 4; i++) {
         DataArray *arr = weightArr->Array(i);
-        mComponentWeightRanges[i - 1][0] = arr->Float(0);
-        mComponentWeightRanges[i - 1][1] = arr->Float(1);
+        float *range = mComponentWeightRanges[i - 1];
+        range[0] = arr->Float(0);
+        range[1] = arr->Float(1);
     }
 }
 
