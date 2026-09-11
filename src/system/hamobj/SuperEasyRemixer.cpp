@@ -172,7 +172,7 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
         if (data->mRoutine.size() != mTotalMeasures) {
             MILO_FAIL(
                 "HamSuperEasyData has wrong number of measures in routine in song '%s'",
-                TheGameData->GetSong()
+                TheGameData->GetSong().Str()
             );
         }
         for (int i = 0; i < data->mRoutine.size(); i++) {
