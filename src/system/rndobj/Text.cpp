@@ -1022,11 +1022,11 @@ void RndText::WrapText(
 #undef BRKWIDE_BASE
 
 void RndText::SetText(const char *str) {
+    unsigned short us;
     if (mFixedLength != 0) {
         MILO_ASSERT(mText.capacity() >= mFixedLength, 0x75E);
         const char *p = str;
         for (int newLen = 0; *p != '\0' && newLen < mFixedLength; newLen++) {
-            unsigned short us;
             p += DecodeUTF8(us, p);
         }
         int newLen = p - str;

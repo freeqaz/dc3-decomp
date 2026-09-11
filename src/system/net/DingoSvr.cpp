@@ -126,7 +126,10 @@ void DingoServer::AddDelayedCalls() {
             delete job;
         }
     }
-    mDelayedJobs.erase(mDelayedJobs.end(), mDelayedJobs.begin());
+    // The image erases [begin, end) with both ends read off the vector's own
+    // this (r25): that is the inlined clear(). The old erase(end(), begin())
+    // spelling was undefined behaviour that happened to look similar.
+    mDelayedJobs.clear();
 }
 
 DataNode DingoServer::OnMsg(const ConnectionStatusChangedMsg &msg) {

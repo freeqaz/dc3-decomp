@@ -150,9 +150,11 @@ int AllocInfo::Compare(const AllocInfo &info) const {
 void AllocInfo::FillStackTrace() {
     int stack[20];
     DmCaptureStackBackTrace(20, stack);
+    // The image copies from stack[4] (addi r10, r1, 0x60), skipping the four
+    // innermost frames (this function, the allocator, ...).
     for (int i = 0; i < 16; i++) {
-        mStackTrace[i] = stack[i];
-        if (stack[i] == 0U)
+        mStackTrace[i] = stack[i + 4];
+        if (stack[i + 4] == 0U)
             break;
     }
     mStackTrace[15] = 0;

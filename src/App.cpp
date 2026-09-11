@@ -1377,6 +1377,11 @@ void App::RunWithoutDebugging() {
 
 DWORD KinectGuideThread(void *) {
     HRESULT hr;
+    // dwId/param live at function scope in the image: they take the two
+    // lowest slots (0x50/0x54) and the MILO_ASSERT line-number temp sits
+    // above them at 0x58. Declared inside the loop they would come after it.
+    DWORD dwId;
+    ULONG_PTR param;
     hr = NuiSkeletonTrackingDisable();
     if (hr < 0) {
         MILO_FAIL("NuiSkeletonTrackingDisable failed");
@@ -1388,8 +1393,6 @@ DWORD KinectGuideThread(void *) {
     HANDLE kinect_listener = XNotifyCreateListener(1);
     MILO_ASSERT(kinect_listener, 0xa2);
     while (gListenForKinectGuide) {
-        DWORD dwId;
-        ULONG_PTR param;
         while (XNotifyGetNext(kinect_listener, 0, &dwId, &param)) {
             if (dwId == 0x6001a) {
                 XShowNuiGuideUI(param);

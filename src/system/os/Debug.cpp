@@ -141,6 +141,9 @@ void Debug::Exit(int exitCode, bool call_exit) {
 }
 
 void Debug::Warn(const char *msg) {
+    // Declared here, assigned in the else: the slot (0x50) is reserved for the
+    // whole function, so the MILO_LOG temporary in the other branch takes 0x54.
+    ModalType type;
     if (!mNoDebug) {
         if (!MainThread()) {
             MILO_LOG("THREAD-NOTIFY: %s\n", msg);
@@ -150,13 +153,16 @@ void Debug::Warn(const char *msg) {
                 gNotifyThreadSync.Wait(200);
             }
         } else {
-            ModalType type = kModalWarn;
+            type = kModalWarn;
             Modal(type, msg, nullptr);
         }
     }
 }
 
 void Debug::Notify(const char *msg) {
+    // Declared here, assigned in the else: the slot (0x50) is reserved for the
+    // whole function, so the MILO_LOG temporary in the other branch takes 0x54.
+    ModalType type;
     if (!mNoDebug) {
         if (!MainThread()) {
             MILO_LOG("THREAD-NOTIFY: %s\n", msg);
@@ -166,7 +172,7 @@ void Debug::Notify(const char *msg) {
                 gNotifyThreadSync.Wait(200);
             }
         } else {
-            ModalType type = kModalNotify;
+            type = kModalNotify;
             Modal(type, msg, nullptr);
         }
     }
@@ -290,7 +296,9 @@ void Debug::Init() {
     (void)pad;
     sysInfo.SizeOfStruct = 0x20;
     if (DmGetSystemInfo(&sysInfo) >= 0) {
-        mKernelVersion = MakeString("%d.%d", sysInfo.KernelVersion.Major, sysInfo.KernelVersion.Minor);
+        // The image formats sysInfo+0x18/+0x1a -- XDKVersion.Build/Qfe -- into
+        // mKernelVersion, not KernelVersion.Major/Minor (+0xc/+0xe).
+        mKernelVersion = MakeString("%d.%d", sysInfo.XDKVersion.Build, sysInfo.XDKVersion.Qfe);
     }
     mHostName = NetworkSocket::GetHostName();
 }

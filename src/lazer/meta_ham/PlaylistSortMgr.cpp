@@ -194,8 +194,9 @@ void PlaylistSortMgr::QueueCmdGetPlaylistFromRC(int i) {
 }
 
 void PlaylistSortMgr::QueueCmdChangeProfileOnlineID(String s) {
-    CmdChangeProfileOnlineID *cmd = new CmdChangeProfileOnlineID(s);
-    mCommandQueue.push_back(cmd);
+    // One full expression: the String copy for the ctor is still alive during
+    // push_back, so it gets its own slot (0x60) above the insert temporaries.
+    mCommandQueue.push_back(new CmdChangeProfileOnlineID(s));
     if (!mProcessingCommand) {
         ProcessNextCommand();
     }

@@ -222,8 +222,9 @@ void FitnessGoalMgr::QueueCmdDeleteFitnessGoalFromRC(HamProfile *profile) {
 }
 
 void FitnessGoalMgr::QueueCmdChangeProfileOnlineID(String str) {
-    CmdChangeProfileOnlineID *cmd = new CmdChangeProfileOnlineID(str);
-    mCommands.push_back(cmd);
+    // One full expression: the String copy for the ctor is still alive during
+    // push_back, so it gets its own slot (0x60) above the insert temporaries.
+    mCommands.push_back(new CmdChangeProfileOnlineID(str));
     if (!mIsProcessingCommand) {
         ProcessNextCommand();
     }
