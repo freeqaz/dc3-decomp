@@ -235,7 +235,7 @@ static inline float RecipSqrtAccurate(float x) {
 #else
     float est = __frsqrte(x);
 #endif
-    return -(est * est * x - 3.0f) * est * 0.5f;
+    return (3.0f - est * est * x) * est * 0.5f;
 }
 
 void CharHair::SimulateInternal(float fps) {
@@ -243,15 +243,14 @@ void CharHair::SimulateInternal(float fps) {
     float recipFps = 1.0f / fps;
     float gravity = (1.0f / (fps * fps)) * mGravity * gUnitsPerMeter * -9.8f;
     float stiffPow = std::pow(1.0f - mStiffness, sixtyOver * sixtyOver);
+    float stiffFriction = 1.0f - stiffPow;
     float halfWeight = mWeight * -0.5f;
-    Vector3 windForce;
-    windForce.Zero();
-    auto& _ref0 = mWindObj;
-    if (_ref0) {
-        auto& _sub0 = mStrands[0];
-        if (_sub0.Root()) {
-            float secs = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-            _ref0->GetWind(_sub0.Root()->WorldXfm().v, secs, windForce);
+    Vector3 windForce(0.0f, 0.0f, 0.0f);
+    if (mWindObj) {
+        RndTransformable *root = mStrands[0].Root();
+        if (root) {
+            const Transform &rootXfm = root->WorldXfm();
+            mWindObj->GetWind(rootXfm.v, TheTaskMgr.Seconds(TaskMgr::kRealTime), windForce);
             windForce.x *= recipFps;
             windForce.y *= recipFps;
             windForce.z *= recipFps;
@@ -284,14 +283,14 @@ void CharHair::SimulateInternal(float fps) {
                     if (lensq < minLenSq) {
                         vRes *= (minLenSq / (minLenSq + lensq) - 0.5f);
                         pt.pos += vRes;
-                        modPt.pos -= vRes;
+                        modPt.force -= vRes;
                     } else {
                         float maxLen = pt.sideLength + mMaxSlack;
                         float maxLenSq = maxLen * maxLen;
                         if (lensq > maxLenSq) {
                             vRes *= (maxLenSq / (maxLenSq + lensq) - 0.5f);
                             pt.pos += vRes;
-                            modPt.pos -= vRes;
+                            modPt.force -= vRes;
                         }
                     }
                 }
@@ -309,9 +308,7 @@ void CharHair::SimulateInternal(float fps) {
 
                 if (pt.collides.size() != 0) {
                     float diffRad = pt.outerRadius - pt.radius;
-                    float maxRad;
-                    if (pt.radius < pt.outerRadius) maxRad = pt.outerRadius;
-                    else maxRad = pt.radius;
+                    float maxRad = Max(pt.radius, pt.outerRadius);
                     for (ObjPtrList<CharCollide>::iterator it = pt.collides.begin();
                          it != pt.collides.end();
                          ++it) {
@@ -395,7 +392,7 @@ void CharHair::SimulateInternal(float fps) {
                 Vector3 frictionDiff;
                 Subtract(pt.lastFriction, pt.force, frictionDiff);
                 pt.lastFriction = pt.force;
-                pt.force *= stiffPow = 1.0f - stiffPow;
+                pt.force *= stiffFriction;
                 ScaleAddEq(pt.force, frictionDiff, -mFriction);
                 Vector3 movement;
                 Subtract(pt.pos, oldPos, movement);
