@@ -173,9 +173,16 @@ DataNode SetBSPParams(DataArray *da) {
 
 void GeoInit() {
     DataArray *cfg = SystemConfig("math");
-    auto _tmp4 = cfg->FindArray("bsp_check_scale")->Float(1);
-    auto _tmp2 = cfg->FindArray("bsp_max_candidates")->Int(1);
-    SetBSPParams(cfg->FindArray("bsp_pos_tol")->Float(1), cfg->FindArray("bsp_dir_tol")->Float(1), _tmp2, cfg->FindArray("bsp_max_depth")->Int(1), _tmp4);
+    // One full expression: MSVC evaluates the arguments right to left, which is
+    // the order the target calls FindArray in, and all five Symbol temporaries
+    // live to the end of the statement so each gets its own frame slot.
+    SetBSPParams(
+        cfg->FindArray("bsp_pos_tol")->Float(1),
+        cfg->FindArray("bsp_dir_tol")->Float(1),
+        cfg->FindArray("bsp_max_depth")->Int(1),
+        cfg->FindArray("bsp_max_candidates")->Int(1),
+        cfg->FindArray("bsp_check_scale")->Float(1)
+    );
     DataRegisterFunc("set_bsp_params", SetBSPParams);
 }
 
