@@ -166,6 +166,7 @@ public:
 
     class FontMapBase {
     public:
+        FontMapBase() : mBlacklight(false) {}
         virtual ~FontMapBase() {}
         virtual Symbol ClassName() const = 0;
         virtual void SetFont(RndFontBase *) = 0;
@@ -217,6 +218,7 @@ public:
             int mSyncFlags; // 0xc
         };
 
+        FontMap() : mFont(nullptr) {}
         virtual ~FontMap();
         virtual Symbol ClassName() const { return StaticClassName(); }
         virtual void SetFont(RndFontBase *);
@@ -255,6 +257,7 @@ public:
     // size 0x20
     class FontMap3d : public FontMapBase {
     public:
+        FontMap3d() : mFont(nullptr), mDisplayableChars(0) {}
         virtual ~FontMap3d();
         virtual Symbol ClassName() const { return StaticClassName(); }
         virtual void SetFont(RndFontBase *);

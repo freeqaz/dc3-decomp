@@ -1962,10 +1962,8 @@ RndText::FontMapBase *RndText::AcquireFontMap(RndFontBase *font) {
         }
     }
 
-    if (result) {
-        result->SetFont(font);
-        result->ResetDisplayableChars();
-    }
+    result->SetFont(font);
+    result->ResetDisplayableChars();
 
     return result;
 }
