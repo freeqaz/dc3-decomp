@@ -1497,10 +1497,9 @@ void MakeTangentsLate(RndMesh *m) {
                     first = false;
                     *pTangent = faceTangents[f];
                 } else {
-                    Vector4 &ft = faceTangents[f];
                     // fcmpu against a single-precision 0.0f -- there is no
                     // double promotion here.
-                    if (ft.w * pTangent->w < 0.0f) {
+                    if (faceTangents[f].w * pTangent->w < 0.0f) {
                         TheDebug << MakeString(
                             "NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n",
                             PathName(m)
@@ -1511,7 +1510,7 @@ void MakeTangentsLate(RndMesh *m) {
                         // x, y, z -- Add()'s Set() with MSVC's right-to-left
                         // argument evaluation.
                         Add(*(Vector3 *)pTangent,
-                            *(Vector3 *)&ft,
+                            *(Vector3 *)&faceTangents[f],
                             *(Vector3 *)pTangent);
                     }
                 }
@@ -1522,9 +1521,10 @@ void MakeTangentsLate(RndMesh *m) {
         // Retail copies the whole tangent into a stack temp (lwz/stw x4 into
         // r31+0x70) and reads tx/ty/tz back out of that temp, then builds the
         // orthogonalised result as a Vector3 at r31+0x80.
+        const Vector3 &norm = v.norm;
         Vector4 t = *pTangent;
-        float tDotN = v.norm.x * t.x + (v.norm.z * t.z + v.norm.y * t.y);
-        Vector3 scaled(v.norm.x * tDotN, v.norm.y * tDotN, v.norm.z * tDotN);
+        float tDotN = norm.x * t.x + (norm.z * t.z + norm.y * t.y);
+        Vector3 scaled(norm.x * tDotN, norm.y * tDotN, norm.z * tDotN);
         Vector3 ortho(t.x - scaled.x, t.y - scaled.y, t.z - scaled.z);
         Normalize(ortho, *(Vector3 *)pTangent);
     }
