@@ -374,11 +374,17 @@ void CharLookAt::Highlight() {
         // delta).
         Hmx::Matrix3 parentMtx(parent->WorldXfm().m);
         const Vector3 &pivotPos = mPivot->WorldXfm().v;
-        auto _tmp0 = Vector3(mLookLimits.mMin.x, mLookLimits.mMin.y, 0);
+        auto _tmp0 = Vector3(mLookLimits.mMin[0], mLookLimits.mMin[1], 0);
         DrawBounds(_tmp0, parentMtx, pivotPos, graph);
-        DrawBounds(Vector3(mLookLimits.mMax.x, mLookLimits.mMin.y, 0), parentMtx, pivotPos, graph);
-        DrawBounds(Vector3(0, mLookLimits.mMin.y, mLookLimits.mMin.z), parentMtx, pivotPos, graph);
-        DrawBounds(Vector3(0, mLookLimits.mMin.y, mLookLimits.mMax.z), parentMtx, pivotPos, graph);
+        DrawBounds(
+            Vector3(mLookLimits.mMax[0], mLookLimits.mMin[1], 0), parentMtx, pivotPos, graph
+        );
+        DrawBounds(
+            Vector3(0, mLookLimits.mMin[1], mLookLimits.mMin[2]), parentMtx, pivotPos, graph
+        );
+        DrawBounds(
+            Vector3(0, mLookLimits.mMin[1], mLookLimits.mMax[2]), parentMtx, pivotPos, graph
+        );
     }
 }
 
