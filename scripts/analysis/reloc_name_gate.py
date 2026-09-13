@@ -323,12 +323,24 @@ def anchor_displacements(instrs, side: str, index: int, max_scan: int = ANCHOR_S
     The scan stops at a call, a branch, or a redefinition of the register, and
     after `max_scan` rows.  Returns [] when the row does not define a register
     (a `bl` pair has no anchor).
+
+    The `addi` that completes a `lis`/`addi` anchor may write a DIFFERENT
+    register than the `lis` did -- `lis r11, s@ha ; addi r19, r11, s@l` is as
+    ordinary as the same-register form -- and the anchor then lives in that
+    register.  The walk follows the move.  It did not until 2026-09-13, and
+    the consequence was not a missing displacement but NO displacements at
+    all for that side: every later consumer reads off the new register, so
+    the walk fell through to "some other instruction wrote the anchor
+    register" and stopped.  `?MakeBSPTree@@…` reported `[]` against a target
+    that plainly reads `0x4(r19)`, and the pair was charged IDENTITY.
     """
     ins0 = (instrs[index].get(side) or {}) if 0 <= index < len(instrs) else {}
     ta0 = ins0.get("typed_args") or []
     reg = _reg(ta0[0]) if ta0 else None
     if reg is None:
         return []
+    anchor_sym = next((a.get("value") for a in ta0
+                       if a.get("type") == "Symbol"), None)
     disps: list[int] = []
     for ins in instrs[index + 1: index + 1 + max_scan]:
         s = ins.get(side)
@@ -337,9 +349,17 @@ def anchor_displacements(instrs, side: str, index: int, max_scan: int = ANCHOR_S
         op, args = s.get("opcode") or "", s.get("typed_args") or []
         if op in _ANCHOR_KILL:
             break
-        # `addi reg, reg, sym@l` completes a lis/addi anchor: keep scanning.
-        if (op == "addi" and len(args) == 3 and _reg(args[0]) == reg
-                and _reg(args[1]) == reg and args[2].get("type") == "Symbol"):
+        # `addi rD, reg, sym@l` completes a lis/addi anchor: keep scanning.
+        # When rD is a different register the anchor MOVES there and the walk
+        # has to follow it, or every consumer downstream is invisible.  The
+        # symbol is required to match the one the `lis` carried, so an
+        # unrelated `addi rD, reg, other@l` cannot capture the walk.
+        if (op == "addi" and len(args) == 3 and _reg(args[1]) == reg
+                and args[2].get("type") == "Symbol"
+                and (anchor_sym is None or args[2].get("value") == anchor_sym)):
+            moved = _reg(args[0])
+            if moved is not None:
+                reg = moved
             continue
         # Memory operand `rD, disp(reg)`.
         if (len(args) == 3 and _reg(args[2]) == reg
@@ -583,6 +603,30 @@ def _selftest() -> int:
     check("walker stops at a call",
           anchor_displacements(_call, "target", 0) == [],
           str(anchor_displacements(_call, "target", 0)))
+    # The completing `addi` may write a DIFFERENT register: `?MakeBSPTree@@…`
+    # emits `lis r11, ?gBSPDirTol@@3MA@ha ; addi r19, r11, @l ; lwz r11,
+    # 0x4(r19)`.  Until 2026-09-13 the walk only followed `addi reg, reg` and
+    # returned [] here -- not a missing displacement but ALL of them, since
+    # every consumer reads the new register.  Downstream that starved
+    # ANCHOR_DISPLACEMENT of its only input and the pair read IDENTITY.
+    _moved = [
+        {"target": {"opcode": "lis", "typed_args": [R("r11"), S("?gBSPDirTol@@3MA")]}},
+        {"target": {"opcode": "addi", "typed_args": [R("r16"), R("r5"), I(1)]}},
+        {"target": {"opcode": "addi",
+                    "typed_args": [R("r19"), R("r11"), S("?gBSPDirTol@@3MA")]}},
+        {"target": {"opcode": "lwz", "typed_args": [R("r11"), I(4), R("r19")]}},
+    ]
+    check("MakeBSPTree: `addi r19, r11, @l` moves the anchor and the walk follows",
+          anchor_displacements(_moved, "target", 0) == [4],
+          str(anchor_displacements(_moved, "target", 0)))
+    # Negative control: the move is only taken when the `addi` names the same
+    # symbol the `lis` did, so an unrelated @l cannot hijack the walk.
+    _hijack = list(_moved)
+    _hijack[2] = {"target": {"opcode": "addi",
+                             "typed_args": [R("r19"), R("r11"), S("?gSomethingElse@@3HA")]}}
+    check("  ...but an `addi` naming a DIFFERENT symbol does not move it",
+          anchor_displacements(_hijack, "target", 0) == [],
+          str(anchor_displacements(_hijack, "target", 0)))
     check("a `bl` pair has no anchor",
           anchor_displacements([{"target": {"opcode": "bl", "typed_args": [S("f")]},
                                  "base": {"opcode": "bl", "typed_args": [S("g")]}}],

@@ -284,6 +284,17 @@ def anchor_displacement_note(p: dict, addr: AddressIndex | None) -> str | None:
     reach_t = {at + d for d in (td or [0])} if at is not None else set()
     reach_b = {ab + d for d in (bd or [0])} if ab is not None else set()
     if at is not None and ab is not None:
+        # An anchor's OWN address is always reached by the side that emits it:
+        # `lis/addi X` materialises &X whether or not the bounded forward walk
+        # captured a +0 consumer.  Without this the intersection is a claim
+        # about which consumers the walk happened to see, so a pair where each
+        # side's displacement lands on the OTHER side's anchor -- target X+4
+        # == Y, ours Y-4 == X -- reads as two disjoint reach sets and is
+        # charged IDENTITY, while the same shape with one incidental +0 in the
+        # displacement list (PreInitSystem: gUsingCD-8 == gSystemConfig+0)
+        # is forgiven.  The two paths have to agree.
+        reach_t |= {at}
+        reach_b |= {ab}
         common = reach_t & reach_b
         if not common:
             return None
