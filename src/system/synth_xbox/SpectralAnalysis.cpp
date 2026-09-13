@@ -19,18 +19,17 @@ void SpectralAnalysis::Analyze(const float *in, float *out) {
 
     // Magnitude spectrum back into mData0.
     unsigned int bins = (unsigned int)mHalfPlusOne;
+    float *mag = &mData0[0];
+    float *im = &mData5[0];
+    float *re = &mData4[0];
     if (bins != 0) {
-        float *mag = &mData0[0];
-        float *im = &mData5[0];
-        float *re = &mData4[0];
-        long reBias = (char *)re - (char *)im;
-        long magBias = (char *)mag - (char *)im;
         do {
             float acc = im[0] * im[0];
-            float rp = *(float *)((char *)im + reBias);
-            acc = rp * rp + acc;
-            *(float *)((char *)im + magBias) = sqrtf(acc);
-            im += 1;
+            acc = re[0] * re[0] + acc;
+            mag[0] = sqrtf(acc);
+            im++;
+            re++;
+            mag++;
         } while (--bins != 0);
     }
 
@@ -76,19 +75,16 @@ void SpectralAnalysis::Analyze(const float *in, float *out) {
     mFft2.FftRealCcs(&mData0[0], &mData1[0]);
 
     // Emit the result: real parts directly, imaginary derivative from mAccum.
-    if (mWindowSize > 0) {
-        int j = 0;
-        for (int k = 0; k < mWindowSize; k += 2) {
-            float *d1 = &mData1[0];
-            out[j] = d1[j];
-            double acc = mAccum;
-            float imag = d1[j + 1];
-            mAccum = acc - (double)imag;
-            if (k + 1 < mWindowSize) {
-                out[j + 1] = (float)mAccum;
-            }
-            j += 2;
+    int j = 0;
+    for (unsigned int k = 0; k < (unsigned int)mWindowSize; k += 2) {
+        out[j] = mData1[j];
+        double acc = mAccum;
+        float imag = mData1[j + 1];
+        mAccum = acc - (double)imag;
+        if (k + 1 < (unsigned int)mWindowSize) {
+            out[j + 1] = (float)mAccum;
         }
+        j += 2;
     }
 }
 

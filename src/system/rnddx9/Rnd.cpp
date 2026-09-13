@@ -299,7 +299,7 @@ void DxRnd::PushClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
             Vector4 planeClip(nx, ny, nz, d);
             Vector4 planeObj(nx, ny, nz, d);
             Multiply(planeObj, RndCam::Current()->GetInvViewProjMatrix(), planeObj);
-            planeClip = planeObj;
+            planeClip.Set(planeObj.x, planeObj.y, planeObj.z, planeObj.w);
             D3DDevice_SetClipPlane(mD3DDevice, unk408, &planeClip.x);
             enableMask |= 1 << unk408;
             unk408++;

@@ -354,10 +354,9 @@ DxMat *DxMesh::DrawFur(DxMat *mat) {
 
 void DxMesh::OnSync(int flags) {
     PhysMemTypeTracker tracker("D3D(phys):Mesh");
-    RndMesh *geom = GetGeomOwner();
-    if (this != geom) {
+    if (this != mGeomOwner) {
         if (Mutable() & 0x1f) {
-            geom->Sync(flags);
+            mGeomOwner->Sync(flags);
         }
         return;
     }
@@ -365,13 +364,16 @@ void DxMesh::OnSync(int flags) {
     if (mMutable) {
         return;
     }
-    geom = GetGeomOwner();
+    RndMesh *geom = GetGeomOwner();
+    VertVector &verts = Verts();
     if (flags & 0x1f) {
-        int numVerts = Verts().size();
-        mNumVerts = numVerts;
-        unsigned int vertSize;
+        unsigned int numVerts = 0;
+        unsigned int vertSize = 0;
         bool fromCompressed = false;
-        if (numVerts != 0) {
+        int n = verts.size();
+        mNumVerts = n;
+        if (n != 0) {
+            numVerts = n;
             vertSize = VertSize();
         } else if (mNumCompressedVerts != 0) {
             mNumVerts = numVerts = mNumCompressedVerts;
@@ -379,7 +381,6 @@ void DxMesh::OnSync(int flags) {
             fromCompressed = true;
         } else {
             unk1a4.Release();
-            vertSize = 0;
         }
         if (unk1a4.buffer == NULL || unk1a4.size != vertSize * numVerts) {
             unk1a4.Release();
@@ -393,21 +394,21 @@ void DxMesh::OnSync(int flags) {
             if (fromCompressed) {
                 FillCompressedVerts();
             } else {
-                Fill(Verts().begin(), Verts().end());
+                Fill(verts.begin(), verts.end());
             }
         }
     }
     if (flags & 0x20) {
         TheDxRnd.AutoRelease(unk1ac);
         unk1ac = NULL;
-        mNumFaces = Faces().size();
+        mNumFaces = geom->mFaces.size();
         if (mNumFaces != 0) {
             MILO_ASSERT(mNumFaces <= 0xFFFF, 0x17e);
             unk1ac = (D3DResource *)MakeIndexBuffer(mNumFaces, 6, D3DFMT_INDEX16);
             IBLock<> lock((D3DIndexBuffer *)unk1ac, 0);
             unsigned short *dst = (unsigned short *)lock.mDataAddr;
             for (int i = 0; i < mNumFaces; i++) {
-                RndMesh::Face &face = Faces()[i];
+                RndMesh::Face &face = geom->mFaces[i];
                 dst[0] = face.v1;
                 dst[1] = face.v2;
                 dst[2] = face.v3;
@@ -417,11 +418,11 @@ void DxMesh::OnSync(int flags) {
     }
     if ((flags & 0x200) == 0) {
         if ((mMutable & 0x1f) == 0) {
-            Verts().resize(0);
+            mVerts.resize(0);
             ClearCompressedVerts();
         }
         if ((mMutable & 0x20) == 0) {
-            std::vector<RndMesh::Face>().swap(Faces());
+            std::vector<RndMesh::Face>().swap(mFaces);
         }
     }
 }
