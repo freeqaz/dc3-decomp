@@ -142,7 +142,23 @@ wrote three of six players' colours. A nav setter called with its index and its
 on/off flag transposed. A directory-terminator scan that accepted a partial marker
 followed by arbitrary bytes.
 
-Several were committed at a **deliberate canonical loss** where the target's own
-bytes said the behaviour was wrong: the collision reaction, the content-mount state
-machine, the nav setter, the terminator scan. The metric is the instrument, not the
-goal.
+## Committed at a deliberate canonical LOSS — named, so a census can find them
+
+Each of these went **down** on the ruler to fix behaviour the target's own bytes
+prove wrong. A future pattern scan will see regressions here with no way to
+distinguish them from rot, and a commit body is not where anyone looks first.
+Values as of `1b54119e5`:
+
+| symbol | before → after | what it bought |
+|---|---|---|
+| `?ReactToCollision@HamDirector@@IAA_NM@Z` | 88.86 → **88.47** | inverted comparison; a round-up that had lost its `* 4.0f`, dividing the beat count by four instead of rounding to a measure; two calls passing the wrong beat |
+| `?Poll@XboxContent@@UAAXXZ` | 91.49 → **90.98** | backup-complete states 0/1 where the target uses 7/8, which re-armed the mount state machine |
+| `?ReadEditorDirDead@@YAXAAVBinStream@@@Z` | 96.0 → **91.5** | the 20-byte terminator must arrive *consecutively*; ours matched each index independently, so a partial marker plus arbitrary bytes plus the rest was accepted |
+| `?OnSetEnabled@…` / `?OnSetHidden@HamNavProvider@…` | 92.00 → **88.00** | `SetEnabled(int index, bool enabled)` was called with the DTA flag as the index and the label index as the flag |
+
+`?SetCrossfadeJump@HamAudio@@QAAXMMM@Z` (86.15) belongs with them: its inverted
+"begins before start of song" test was fixed at a flat score, and the three
+`HamAudioCrossfade` tests that then failed were themselves asserting the pre-fix
+semantics — see the `__LINE__`/test-adjudication note above.
+
+The metric is the instrument, not the goal.
