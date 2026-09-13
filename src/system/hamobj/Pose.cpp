@@ -15,8 +15,7 @@ void Pose::Update(const Skeleton &skeleton) {
     for (std::vector<PoseElement *>::iterator it = mElements.begin(); it != mElements.end();
          ++it) {
         PoseElement *elem = *it;
-        float score = elem->Score(skeleton);
-        weightedSum += score * elem->unk4;
+        weightedSum += elem->Score(skeleton) * elem->unk4;
         totalWeight += elem->unk4;
     }
     MILO_ASSERT(totalWeight != 0.0f, 0x95);
@@ -26,7 +25,7 @@ void Pose::Update(const Skeleton &skeleton) {
     for (std::list<float>::iterator it = unk10.begin(); it != unk10.end(); ++it) {
         count++;
     }
-    if ((unsigned int)unk18 < count) {
+    if (count > (unsigned int)unk18) {
         unk10.erase(unk10.begin());
     }
 }
