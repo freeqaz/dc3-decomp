@@ -85,6 +85,16 @@ ModalCallbackFunc *Debug::SetModalCallback(ModalCallbackFunc *func) {
     return oldFunc;
 }
 
+// UNMEASURED BY CONSTRUCTION.  ham_xbox_r.map lists
+// ?DebugModal@@YAXAAW4ModalType@Debug@@AAVFixedString@@_N@Z at two addresses --
+// App.obj 0x82331FA8 (App.cpp's own static, 0x1D0 bytes, which report.json
+// scores) and os:Debug.obj 0x825CCF20 (this one, 0xA0 bytes).  Two genuinely
+// different functions sharing a mangled name, one per TU; symbols.txt can only
+// bind the name once, so dtk carves this address as `fn_825CCF20` and nothing
+// ever pairs it with the definition below.  Adjudicate it by hand against
+// build/373307D9/asm/system/os/Debug.s.
+// Audited 2026-09-13: 40/40 instructions equal, relocations included.
+// Tool: scripts/analysis/map_multiplicity_census.py
 void DebugModal(Debug::ModalType &ty, FixedString &str, bool b3) {
     if (ty == Debug::kModalFail) {
         str += "\n\n-- Program ended --\n";
