@@ -1579,18 +1579,27 @@ void HamNavList::DrawDebug() const {
         return;
 
     float h = mHandHeightFilter->mHandHeight;
+    Hmx::Color lineColor(0.0f, 1.0f, 0.0f, 1.0f);
     Vector2 p1(1.0f, h);
     Vector2 p0(0.0f, h);
-    UtilDrawLine(p0, p1, Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f));
+    UtilDrawLine(p0, p1, lineColor);
 
     static Hmx::Color sRectColor(0.2f, 0.2f, 0.2f, 0.7f);
     static Hmx::Color sTextColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-    static float sRectX = 0.0f;
-    static float sRectY = 0.1f;
-    static float sRectW = 0.95f;
-    static float sRectH = 0.95f;
-    Hmx::Rect rect(sRectX, 0.05f - sRectY, sRectW, sRectH + 0.05f);
+    // Six mutable `static float`s, not four: the target reads them from
+    // writable .data (lbl_82F0C790..7A4) with a relocation apiece, which is
+    // what MSVC emits for a function-local static -- an inline literal would
+    // be a `__real@<hex>` COMDAT in .rdata.  Declaration order below is the
+    // target's .data order.  Identical debug-overlay idiom to
+    // SkeletonChooser::DrawDebug, whose six agree with the target already.
+    static float sTextRowStep = 0.03f; // lbl_82F0C790
+    static float sTextColStep = 0.37f; // lbl_82F0C794
+    static float sRectX = 0.1f; // lbl_82F0C798
+    static float sRectW = 0.8f; // lbl_82F0C79C
+    static float sRectY = 0.1f; // lbl_82F0C7A0
+    static float sRectH = 0.25f; // lbl_82F0C7A4
+    Hmx::Rect rect(sRectX, sRectY - 0.05f, sRectW, sRectH + 0.05f);
     TheRnd.DrawRectScreen(rect, sRectColor, nullptr, nullptr, nullptr);
 
     char buf[50];
@@ -1614,7 +1623,7 @@ void HamNavList::DrawDebug() const {
             sprintf_s(buf, "Num selectable items: %d", NumItems());
             break;
         }
-        Vector2 pos(0.0f, sRectY + (int)i * 0.05f);
+        Vector2 pos(0.0f * sTextColStep + sRectX, (int)i * sTextRowStep + sRectY);
         TheRnd.DrawStringScreen(buf, pos, sTextColor, true);
         i++;
     } while ((int)i < 5);
