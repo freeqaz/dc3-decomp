@@ -44,6 +44,15 @@ VOID D3DLineTexture_UnlockRect(struct D3DLineTexture * /*pTexture*/, UINT /*Leve
     // Nothing to release: a NuiImageSurface points at caller-owned memory.
 }
 
+// LiveCameraInput's four Update*Buffer* paths release the locked stream through
+// D3DTexture_UnlockRect (the two-argument spelling the target calls; the linker
+// ICF-folds it with D3DCubeTexture_UnlockRect, see src/link_glue.cpp). The
+// generated stub table only carries the D3DCubeTexture name, so this one needs a
+// body of its own -- same no-op contract as above.
+VOID D3DTexture_UnlockRect(struct D3DTexture * /*pTexture*/, UINT /*Level*/) {
+    // Nothing to release: a NuiImageSurface points at caller-owned memory.
+}
+
 } // extern "C"
 
 #endif

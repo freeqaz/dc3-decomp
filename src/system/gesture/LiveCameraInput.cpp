@@ -126,6 +126,7 @@ bool g_startMetering;
 void CamTexClip::StoreTextureClip(RndTex *tex, float clipLeft, float clipTop, float, float) {
     const float scaleX = 132.0f / 640.0f;
     const float scaleY = 160.0f / 480.0f;
+    const float scaleZ = 1.0f;
     const float minX = 66.0f / 640.0f;
     const float maxX = 574.0f / 640.0f;
     const float minY = 80.0f / 480.0f;
@@ -140,7 +141,7 @@ void CamTexClip::StoreTextureClip(RndTex *tex, float clipLeft, float clipTop, fl
     mXfm.v.x = clampedX;
     mXfm.v.y = clampedY;
     mXfm.m.y *= scaleY;
-    mXfm.m.z.Set(mXfm.m.z.x, mXfm.m.z.y, mXfm.m.z.z);
+    mXfm.m.z *= scaleZ;
 }
 
 #pragma region TextureStore
@@ -243,10 +244,11 @@ update:
 void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) {
     void *texels = nullptr;
     mTex->TexelsLock(texels);
-    // uintptr_t, not unsigned int: on the PPC target these are the same 32-bit
-    // type (src/types.h) so the codegen is unchanged, but the native LP64 build
-    // was truncating every texel and source pointer to its low 32 bits.
-    uintptr_t destPtr = (uintptr_t)texels;
+    // A real unsigned short* rather than an integer address: the target's inner
+    // loop is `sth 0(dst)` + `sthu 2(dst)` + `addi dst, 2`, which is what MSVC
+    // emits for two `*dst++ = ...` stores, and it also keeps the native LP64
+    // build from truncating the texel pointer to 32 bits.
+    unsigned short *destPtr = (unsigned short *)texels;
     g_colorBufferUpdate1++;
     void *bufferData = cam->StreamBufferData(kBufferColor);
     if (bufferData) {
@@ -261,9 +263,8 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
                 unsigned int pixel = *srcPtr;
                 int cr = (pixel >> 24) - 0x80;
                 int cb = (pixel >> 8 & 0xff) - 0x80;
-                *(unsigned short *)destPtr = YUVtoRGB(pixel >> 16 & 0xff, cr, cb);
-                ((unsigned short *)destPtr)[1] = YUVtoRGB(pixel & 0xff, cr, cb);
-                destPtr += 4;
+                *destPtr++ = YUVtoRGB(pixel >> 16 & 0xff, cr, cb);
+                *destPtr++ = YUVtoRGB(pixel & 0xff, cr, cb);
             }
             // (int) casts, matching UpdateFromColorBufferClip's destStride
             // below. Both right-hand sides are `unsigned int` subtractions: if
@@ -273,10 +274,10 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
             // correctly backwards, so this is codegen-neutral there; on the
             // LP64 native build it zero-extends and jumps ~8 GB / ~16 GB
             // forward.
-            destPtr += (int)((pitch >> 1) - 640) * 2;
+            destPtr += (int)((pitch >> 1) - 640);
             srcPtr += (int)((lockedRect.mPitch >> 2) - 320);
         }
-        D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
+        D3DTexture_UnlockRect((D3DTexture *)bufferData, 0);
     }
 }
 
@@ -337,7 +338,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
             }
             rowIdx++;
         } while ((int)rowIdx < 480);
-        D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
+        D3DTexture_UnlockRect((D3DTexture *)bufferData, 0);
     }
 }
 
@@ -397,7 +398,7 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
             destPtr += destStride;
             srcPtr += (int)(srcPitch - 320);  // same unsigned-wrap hazard as line 267
         }
-        D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
+        D3DTexture_UnlockRect((D3DTexture *)bufferData, 0);
     }
 }
 
@@ -445,7 +446,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
                 rowIdx++;
             } while (rowIdx < mTex->Height());
         }
-        D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
+        D3DTexture_UnlockRect((D3DTexture *)bufferData, 0);
     }
 }
 
