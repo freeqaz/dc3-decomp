@@ -1479,6 +1479,11 @@ void MakeTangentsLate(RndMesh *m) {
 
     for (int i = 0; i < (int)m->Verts().size(); i++) {
         RndMesh::Vert &v = m->Verts()[i];
+        // Retail pins &v.tangent in a callee-saved register (addi r30, r27, 0x50)
+        // before the face loop and addresses every component off it; without the
+        // pointer MSVC re-derives v+0x50 inside the loop and needs one register
+        // fewer overall (__savegprlr_20 instead of the target's _19).
+        Vector4 *pTangent = &v.tangent;
         bool first = true;
         for (unsigned int f = 0; f < m->Faces().size(); f++) {
             RndMesh::Face &face = m->Faces()[f];
@@ -1488,17 +1493,14 @@ void MakeTangentsLate(RndMesh *m) {
                     break;
             }
             if (3 != k) {
-                // Retail keeps &faceTangents[f] in one register across all three
-                // component adds; re-subscripting reloads the vector base
-                // (lwz 0x58(r31) + add) between each one.
-                Vector4 &ft = faceTangents[f];
                 if (first) {
                     first = false;
-                    v.tangent = ft;
+                    *pTangent = faceTangents[f];
                 } else {
+                    Vector4 &ft = faceTangents[f];
                     // fcmpu against a single-precision 0.0f -- there is no
                     // double promotion here.
-                    if (ft.w * v.tangent.w < 0.0f) {
+                    if (ft.w * pTangent->w < 0.0f) {
                         TheDebug << MakeString(
                             "NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n",
                             PathName(m)
@@ -1508,23 +1510,23 @@ void MakeTangentsLate(RndMesh *m) {
                         // z, y, x are summed in that order and written back
                         // x, y, z -- Add()'s Set() with MSVC's right-to-left
                         // argument evaluation.
-                        Add(*(Vector3 *)&v.tangent,
+                        Add(*(Vector3 *)pTangent,
                             *(Vector3 *)&ft,
-                            *(Vector3 *)&v.tangent);
+                            *(Vector3 *)pTangent);
                     }
                 }
             }
         }
-        Normalize(*(Vector3 *)&v.tangent, *(Vector3 *)&v.tangent);
+        Normalize(*(Vector3 *)pTangent, *(Vector3 *)pTangent);
 
         // Retail copies the whole tangent into a stack temp (lwz/stw x4 into
         // r31+0x70) and reads tx/ty/tz back out of that temp, then builds the
         // orthogonalised result as a Vector3 at r31+0x80.
-        Vector4 t = v.tangent;
+        Vector4 t = *pTangent;
         float tDotN = v.norm.x * t.x + (v.norm.z * t.z + v.norm.y * t.y);
         Vector3 scaled(v.norm.x * tDotN, v.norm.y * tDotN, v.norm.z * tDotN);
         Vector3 ortho(t.x - scaled.x, t.y - scaled.y, t.z - scaled.z);
-        Normalize(ortho, *(Vector3 *)&v.tangent);
+        Normalize(ortho, *(Vector3 *)pTangent);
     }
     TheDebug
         << MakeString("NOTIFY: %s MakingTangentsLate, resave this file!", PathName(m));
