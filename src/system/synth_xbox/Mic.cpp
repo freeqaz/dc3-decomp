@@ -488,15 +488,15 @@ void MicManagerXbox::Init() {
     processingModes[1] = _xhv_loopback_mode;
 
     memset(&init, 0, sizeof(init));
-    init.MaxRemoteTalkers = 5;
     init.MaxLocalTalkers = 4;
+    init.MaxRemoteTalkers = 5;
     init.LocalProcessingModes = processingModes;
-    init.NumLocalProcessingModes = 2;
     init.RemoteProcessingModes = processingModes;
+    init.NumLocalProcessingModes = 2;
     init.NumRemoteProcessingModes = 1;
+    init.pfnMicrophoneRawDataReady = DataReadyCallback;
     init.MaxNumPackets = 1;
     init.Unk1c = 1;
-    init.pfnMicrophoneRawDataReady = DataReadyCallback;
     init.Unk30 = TheXboxSynth->unkec;
 
     HRESULT hr = XHV2CreateEngine(&init, (DWORD *)&unk2c, &mXHVEngine);
@@ -519,7 +519,8 @@ void MicManagerXbox::Init() {
         desc.OutputChannels = 1;
         chain.EffectCount = 1;
         chain.pEffectDescriptors = &desc;
-        AddRemoteMic(0x00DEADBEEFFACEF0ULL, &chain);
+        static const u64 kRemoteMicId = 0x00DEADBEEFFACEF0ULL;
+        AddRemoteMic(kRemoteMicId, &chain);
     }
 
     for (int i = 0; i < 4; i++) {
