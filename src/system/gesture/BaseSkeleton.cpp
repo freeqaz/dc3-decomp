@@ -164,46 +164,54 @@ void BaseSkeleton::MakeCameraToPlayerXfm(
 
     const PaddedJointPos *pj = (const PaddedJointPos *)joints;
 
-    Vector3 nearJoint;
+    // Two working vectors, each used for two things in turn: limbDir starts out
+    // holding the far joint and becomes (far - near) in place, and crossDir
+    // starts out holding the near joint and is then overwritten by the cross
+    // product.  The shipped code has exactly four Vector3 frame slots here.
+    Vector3 limbDir;
     Vector3 upDir = floorNormal;
     Normalize(upDir, upDir);
 
-    Vector3 farJoint;
-    Vector3 limbDir;
+    Vector3 crossDir;
     Vector3 origin;
 
     if (cs == kCoordLeftArm || cs == kCoordRightArm) {
         int originIdx = (cs == kCoordLeftArm) ? kJointShoulderLeft : kJointShoulderRight;
-        nearJoint = pj[kJointShoulderLeft];
-        farJoint = pj[kJointShoulderRight];
+        crossDir = pj[kJointShoulderLeft];
+        limbDir = pj[kJointShoulderRight];
         origin = pj[originIdx];
-        bool isLeft = cs == kCoordLeftArm;
-        if (isLeft) farJoint.z = nearJoint.z;
-        limbDir.x = farJoint.x - nearJoint.x;
-        limbDir.y = farJoint.y - nearJoint.y;
-        limbDir.z = farJoint.z - nearJoint.z;
+        // Both shoulders are forced to a common depth, so the limb direction is
+        // always flat in z; which joint's z wins depends on the side.
+        if (cs == kCoordLeftArm)
+            limbDir.z = crossDir.z;
+        else
+            crossDir.z = limbDir.z;
+        limbDir.x -= crossDir.x;
+        limbDir.y -= crossDir.y;
+        limbDir.z -= crossDir.z;
     } else if (cs == kCoordLeftLeg || cs == kCoordRightLeg) {
         int originIdx = (cs == kCoordLeftLeg) ? kJointHipLeft : kJointHipRight;
-        nearJoint = pj[kJointHipLeft];
-        farJoint = pj[kJointHipRight];
+        crossDir = pj[kJointHipLeft];
+        limbDir = pj[kJointHipRight];
         origin = pj[originIdx];
-        bool isLeft = cs == kCoordLeftLeg;
-        if (isLeft) farJoint.z = nearJoint.z;
-        limbDir.x = farJoint.x - nearJoint.x;
-        limbDir.y = farJoint.y - nearJoint.y;
-        limbDir.z = farJoint.z - nearJoint.z;
+        if (cs == kCoordLeftLeg)
+            limbDir.z = crossDir.z;
+        else
+            crossDir.z = limbDir.z;
+        limbDir.x -= crossDir.x;
+        limbDir.y -= crossDir.y;
+        limbDir.z -= crossDir.z;
     } else if (cs == kUnk5) {
-        nearJoint = pj[kJointHipLeft];
-        farJoint = pj[kJointHipRight];
+        crossDir = pj[kJointHipLeft];
+        limbDir = pj[kJointHipRight];
         origin = pj[kJointHipCenter];
-        limbDir.x = farJoint.x - nearJoint.x;
-        limbDir.y = farJoint.y - nearJoint.y;
-        limbDir.z = farJoint.z - nearJoint.z;
+        limbDir.x -= crossDir.x;
+        limbDir.y -= crossDir.y;
+        limbDir.z -= crossDir.z;
     }
 
     Normalize(limbDir, limbDir);
 
-    Vector3 crossDir;
     Cross(upDir, limbDir, crossDir);
     Normalize(crossDir, crossDir);
 
