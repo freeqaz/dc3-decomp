@@ -1010,25 +1010,32 @@ void UtilDrawCigar(
     do {
         float latVal = (float)iIdx * anglePi6;
         float sinLatPi2 = FastSin(latVal + anglePiHalf);
-        double r0 = (double)(radii[0] * sinLatPi2);
+        // These radii and the two sines below are single-precision in retail
+        // (fmuls, no frsp).  Holding them as double makes MSVC emit a `fmul`
+        // plus a `frsp` at every use.
+        float r0 = radii[0] * sinLatPi2;
         float sinLat = FastSin(latVal);
         float h0 = sinLat * radii[0];
         float sinLatPi2b = FastSin(latVal + anglePiHalf);
-        double r1 = (double)(sinLatPi2b * radii[1]);
+        float r1 = sinLatPi2b * radii[1];
         float sinLatb = FastSin(latVal);
         float h0b = sLen0 - h0;
         int iLon = 0;
-        float h1 = sinLatb * radii[1] + sLen1;
+        // Separate statements: folding these into one expression lets MSVC
+        // contract the pair into a single fmadds, which retail does not do.
+        float h1raw = sinLatb * radii[1];
+        float h1 = h1raw + sLen1;
         do {
             float lonVal = (float)iLon * angle2Pi;
             float sinLon = FastSin((float)iLon * angle2Pi);
-            double sinLonD = (double)sinLon;
             float sinLonPi2 = FastSin(lonVal + anglePiHalf);
-            double sinLonPi2D = (double)sinLonPi2;
             int idx = (iLatSum + iLon) * 4;
-            Vector3 v1(h0b, (float)(sinLonPi2D * r0), (float)(sinLonD * r0));
+            Vector3 v1(h0b, sinLonPi2 * r0, sinLon * r0);
             Multiply(v1, basis, *(Vector3 *)&verts1c0[idx]);
-            Vector3 v2(h1, (float)(sinLonD * r1), (float)(sinLonPi2D * r1));
+            // y takes the cos-phase sine and z the sin-phase one, the same way
+            // round as v1 -- retail's stores at 0x74/0x78 read f22 (the
+            // lonVal+pi/2 result) then f21 (the plain lonVal result).
+            Vector3 v2(h1, sinLonPi2 * r1, sinLon * r1);
             Multiply(v2, basis, *(Vector3 *)&verts2e0[idx]);
             iLon = iLon + 1;
         } while (iLon < 6);
@@ -1048,10 +1055,8 @@ void UtilDrawCigar(
     do {
         int iJ = 0;
         int iK = 5;
-        int iJcur;
         do {
-            iJcur = iJ;
-            int p1 = (iRing * 6 + iJcur) * 4;
+            int p1 = (iRing * 6 + iJ) * 4;
             int p2 = (iRing * 6 + iK) * 4;
             TheRnd.DrawLine(
                 *(Vector3 *)&verts2e0[p1], *(Vector3 *)&verts2e0[p2], col, false
@@ -1073,9 +1078,11 @@ void UtilDrawCigar(
                 pBottom = (Vector3 *)&verts1c0[p1 + 6 * 4];
             }
             TheRnd.DrawLine(*(Vector3 *)&verts1c0[p1], *pBottom, col, false);
-            iJ = iJcur + 1;
-            iK = iJcur;
-        } while (iJcur + 1 < 6);
+            // iK trails iJ by one; retail keeps both in place (mr iK, iJ then
+            // addi iJ, iJ, 1) rather than staging the old value in a temp.
+            iK = iJ;
+            iJ = iJ + 1;
+        } while (iJ < 6);
         iRing = iRing + 1;
     } while (iRing < 3);
 }
