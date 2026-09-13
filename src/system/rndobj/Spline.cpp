@@ -217,40 +217,48 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int iStartIndex, int iEndIndex) cons
     MILO_ASSERT_RANGE(iEndIndex, 0, (int)mDeformedCtrlPoints.size(), 0x2C6);
     MILO_ASSERT(iStartIndex <= iEndIndex, 0x2C7);
     if ((unsigned int)mDeformedCtrlPoints.size() >= 2) {
+        // NOTE (matching): the dummy points live in `this`, so every store below
+        // may alias the vector's own begin pointer as far as the compiler is
+        // concerned. The original re-subscripts `mDeformedCtrlPoints` after each
+        // group of stores rather than holding one cached element pointer; the
+        // compiler then does the caching within each store-free run. Keeping a
+        // pointer alive across the stores loses those reloads.
         if (unk144 && iStartIndex == 0) {
-            float *p0 = (float *)&mDeformedCtrlPoints[0];
+            const CtrlPoint &pt0 = mDeformedCtrlPoints[0];
+            const CtrlPoint &pt1 = mDeformedCtrlPoints[1];
             unk144 = false;
-            float p0y = p0[1];
-            float p0z = p0[2];
-            float p1y = p0[0x17];
-            float p1z = p0[0x18];
-            mDummyBefore.mPos.x = p0[0] + (p0[0] - p0[0x16]);
-            mDummyBefore.mPos.z = p0z + (p0z - p1z);
-            mDummyBefore.mPos.y = p0y + (p0y - p1y);
-            mDummyBefore.mRoll = p0[4];
+            float y0 = pt0.mPos.y;
+            float z0 = pt0.mPos.z;
+            float y1 = pt1.mPos.y;
+            float z1 = pt1.mPos.z;
+            mDummyBefore.mPos.x = pt0.mPos.x + (pt0.mPos.x - pt1.mPos.x);
+            mDummyBefore.mPos.z = z0 + (z0 - z1);
+            mDummyBefore.mPos.y = y0 + (y0 - y1);
+            mDummyBefore.mRoll = pt0.mRoll;
             mDeformedCtrlPoints[0].mDirtyConstants = true;
         }
-        int numPts = (int)mDeformedCtrlPoints.size();
-        if (unk145 && iEndIndex >= numPts - 2) {
-            int lastOff = (numPts - 1) * 0x58;
+        int lastIdx = (int)mDeformedCtrlPoints.size() - 1;
+        if (unk145 && iEndIndex >= lastIdx - 1) {
+            const CtrlPoint &last = mDeformedCtrlPoints[lastIdx];
+            const CtrlPoint &prev = mDeformedCtrlPoints[lastIdx - 1];
             unk145 = false;
-            float *pLast = (float *)(lastOff + (intptr_t)&mDeformedCtrlPoints[0]);
-            float lastX = pLast[0];
-            float prevX = pLast[-0x16];
-            float lastZ = pLast[2];
-            float prevZ = pLast[-0x14];
-            mDummyAfter.mPos.y = pLast[1] + (pLast[1] - pLast[-0x15]);
+            float lastX = last.mPos.x;
+            float prevX = prev.mPos.x;
+            float lastZ = last.mPos.z;
+            float prevZ = prev.mPos.z;
+            mDummyAfter.mPos.y = last.mPos.y + (last.mPos.y - prev.mPos.y);
             mDummyAfter.mPos.x = lastX + (lastX - prevX);
             mDummyAfter.mPos.z = lastZ + (lastZ - prevZ);
-            mDummyAfter.mRoll = pLast[4];
-            float lastZ2 = pLast[2];
-            float lastX2 = pLast[0];
-            mDummyAfterEnd.mPos.y = mDummyAfter.mPos.y + (mDummyAfter.mPos.y - pLast[1]);
-            mDummyAfterEnd.mPos.x = mDummyAfter.mPos.x + (mDummyAfter.mPos.x - lastX2);
-            mDummyAfterEnd.mPos.z = mDummyAfter.mPos.z + (mDummyAfter.mPos.z - lastZ2);
+            mDummyAfter.mRoll = last.mRoll;
+
+            float endZ = last.mPos.z;
+            float endX = last.mPos.x;
+            mDummyAfterEnd.mPos.y = mDummyAfter.mPos.y + (mDummyAfter.mPos.y - last.mPos.y);
+            mDummyAfterEnd.mPos.x = mDummyAfter.mPos.x + (mDummyAfter.mPos.x - endX);
+            mDummyAfterEnd.mPos.z = mDummyAfter.mPos.z + (mDummyAfter.mPos.z - endZ);
             mDummyAfterEnd.mRoll = mDummyAfter.mRoll;
-            *(bool *)(lastOff + (intptr_t)&mDeformedCtrlPoints[0] - 0x43) = true;
-            *(bool *)(lastOff + (intptr_t)&mDeformedCtrlPoints[0] + 0x15) = true;
+            mDeformedCtrlPoints[lastIdx - 1].mDirtyConstants = true;
+            mDeformedCtrlPoints[lastIdx].mDirtyConstants = true;
         }
     }
 }
