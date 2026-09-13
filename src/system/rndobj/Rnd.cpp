@@ -1039,9 +1039,9 @@ void Rnd::UpdateRate() {
     if (gsTimer && cpuTimer) {
         if (gsTimer->GetLastMs() > 16.7f) {
             if (!(gsTimer->GetLastMs() <= cpuTimer->GetLastMs() + 0.1f)) {
-                mRateGate = "gs";
+                mRateGate = " gs ";
             } else {
-                mRateGate = "cpu";
+                mRateGate = " cpu";
             }
         }
     }

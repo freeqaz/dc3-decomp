@@ -232,7 +232,7 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
                 mesh->Verts().resize(4);
                 mesh->Faces().resize(2);
                 for (int i = 0; i < 4; i++) {
-                    float f4 = i == 1 || i == 2 ? 0.0f : 1.0f;
+                    float f4 = i == 1 || i == 2 ? 1.0f : 0.0f;
                     float f5 = i < 2 ? 1.0f : 0.0f;
                     float floats[2] = { f5, f4 };
                     mesh->Verts()[i].pos.Set(

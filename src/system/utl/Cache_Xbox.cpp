@@ -192,7 +192,7 @@ bool CacheXbox::GetFreeSpaceSync(u64 *u) {
             }
         } else {
             XDEVICE_DATA deviceData;
-            DWORD err = XContentGetDeviceData(mCacheID.DeviceID(), &deviceData);
+            unsigned int err = XContentGetDeviceData(mCacheID.DeviceID(), &deviceData);
             if (err != ERROR_SUCCESS) {
                 if (err != 5 && err != 0x15 && err != 0x456 && err != 0x48F
                     && err != 0x651 && IsDeviceConnected(mCacheID.DeviceID())) {
@@ -303,7 +303,7 @@ bool CacheXbox::WriteAsync(const char *cc, void *v, unsigned int ui, Hmx::Object
 int CacheXbox::ThreadGetFileSize() {
     HANDLE file = CreateFileA(mThreadStr.c_str(), 0, 1, nullptr, 3, 0x80, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
-        DWORD err = GetLastError();
+        unsigned int err = GetLastError();
         if (!IsDeviceConnected(mCacheID.DeviceID())) {
             return 8;
         } else if (err == 2) {
@@ -318,7 +318,7 @@ int CacheXbox::ThreadGetFileSize() {
     } else {
         int ret = 0;
         DWORD fileSize = 0;
-        DWORD err;
+        unsigned int err;
         DWORD res = GetFileSize(file, &fileSize);
         if (res == -1 && (err = GetLastError()) != 0) {
             MILO_NOTIFY(
@@ -370,7 +370,7 @@ int CacheXbox::ThreadWrite() {
     }
 
     if (hFile == (HANDLE)-1) {
-        DWORD err = GetLastError();
+        unsigned int err = GetLastError();
         if (err < 2 || (err > 3 && err != 0x15)) {
             if (IsDeviceConnected(mCacheID.DeviceID())) {
                 MILO_NOTIFY("CacheXbox::WriteAsync() - Unhandled error from CreateFile(): %d\n", err);
@@ -388,7 +388,7 @@ int CacheXbox::ThreadWrite() {
         return 0;
     }
 
-    DWORD err = GetLastError();
+    unsigned int err = GetLastError();
     CloseHandle(hFile);
     XContentFlush(mCacheID.Name(), nullptr);
 
@@ -408,15 +408,15 @@ int CacheXbox::ThreadRead() {
         FILE_ATTRIBUTE_NORMAL, nullptr
     );
     if (hFile == INVALID_HANDLE_VALUE) {
-        DWORD err = GetLastError();
-        if (err < 2 || (err > 3 && err != 0x15)) {
-            if (IsDeviceConnected(mCacheID.DeviceID())) {
-                MILO_NOTIFY(
-                    "CacheXbox::ReadAsync() - Unhandled error from CreateFile(): %d\n",
-                    err
-                );
-                return -1;
-            }
+        unsigned int err = GetLastError();
+        if (err >= 2 && (err <= 3 || err == 0x15)) {
+            return 8;
+        }
+        if (IsDeviceConnected(mCacheID.DeviceID())) {
+            MILO_NOTIFY(
+                "CacheXbox::ReadAsync() - Unhandled error from CreateFile(): %d\n", err
+            );
+            return -1;
         }
         return 8;
     }
@@ -427,7 +427,7 @@ int CacheXbox::ThreadRead() {
     CloseHandle(hFile);
 
     if (!success) {
-        DWORD err = GetLastError();
+        unsigned int err = GetLastError();
         if (!IsDeviceConnected(mCacheID.DeviceID())) {
             return 8;
         }
@@ -446,7 +446,7 @@ bool CacheXbox::DeleteParentDirs(String path) {
         return true;
     }
     if (RemoveDirectoryA(path.c_str()) == 0) {
-        DWORD err = GetLastError();
+        unsigned int err = GetLastError();
         if (err == 0x91) {
             return true;
         }
@@ -464,7 +464,7 @@ int CacheXbox::ThreadDelete() {
         result = DeleteParentDirs(String(mThreadStr));
     }
     if (!result) {
-        DWORD err = GetLastError();
+        unsigned int err = GetLastError();
         if (!IsDeviceConnected(mCacheID.DeviceID())) {
             return 8;
         }
@@ -481,7 +481,7 @@ int CacheXbox::ThreadGetDir(String searchPath, String basePath) {
     memset(&findData, 0, sizeof(findData));
     HANDLE hFind = FindFirstFileA(searchPath.c_str(), &findData);
     CacheDirEntry entry;
-    DWORD err;
+    unsigned int err;
 
     if (hFind == INVALID_HANDLE_VALUE) {
         err = GetLastError();
