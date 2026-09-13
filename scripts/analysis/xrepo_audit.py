@@ -66,13 +66,35 @@ USAGE
 import argparse
 import difflib
 import json
+import subprocess
 import os
 import re
 import sys
 from collections import Counter
 
 DC3_ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
-SIBLING_PARENT = os.path.dirname(DC3_ROOT)
+
+
+def _sibling_parent():
+    """Directory the sibling decomp trees live in.
+
+    NOT `dirname(DC3_ROOT)`: inside a git worktree that resolves to
+    `<repo>/.claude/worktrees`, and every `--sibling rb3-xenon` then fails with
+    "no such sibling tree" from a path nobody would recognise.  `git rev-parse
+    --git-common-dir` points at the MAIN checkout's .git in a worktree and at
+    the local one otherwise -- the same idiom that fixed MILO_ENGINE_PATH."""
+    try:
+        out = subprocess.run(['git', '-C', DC3_ROOT, 'rev-parse', '--git-common-dir'],
+                             capture_output=True, text=True, timeout=10)
+        if out.returncode == 0 and out.stdout.strip():
+            common = os.path.abspath(os.path.join(DC3_ROOT, out.stdout.strip()))
+            return os.path.dirname(os.path.dirname(common))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return os.path.dirname(DC3_ROOT)
+
+
+SIBLING_PARENT = _sibling_parent()
 
 # --------------------------------------------------------------------------
 # preprocessing
@@ -480,7 +502,8 @@ def selftest(verbose=True):
         for f in failures:
             print('  ' + f)
         return 5
-    print(f'\nSELFTEST OK: {len(_CASES)} detectors fire, negative control silent.')
+    if verbose:
+        print(f'\nSELFTEST OK: {len(_CASES)} detectors fire, negative control silent.')
     return 0
 
 
@@ -505,6 +528,7 @@ def main():
     ap.add_argument('--selftest', action='store_true',
                     help='run the detector controls and exit (5 if any is vacuous)')
     ap.add_argument('--sibling', help='sibling tree name under %s' % SIBLING_PARENT)
+    ap.add_argument('--sibling-root', help='explicit sibling tree path (overrides --sibling)')
     ap.add_argument('--subdir', default='src/system')
     ap.add_argument('--min-sim', type=float, default=0.6)
     ap.add_argument('--out', help='write full JSON results here')
@@ -520,7 +544,7 @@ def main():
     if selftest(verbose=False) != 0:
         return 5
 
-    sibroot = os.path.join(SIBLING_PARENT, args.sibling)
+    sibroot = args.sibling_root or os.path.join(SIBLING_PARENT, args.sibling)
     if not os.path.isdir(sibroot):
         print(f'no such sibling tree: {sibroot}', file=sys.stderr)
         return 2
