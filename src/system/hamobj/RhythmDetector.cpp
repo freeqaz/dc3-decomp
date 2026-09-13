@@ -307,14 +307,13 @@ namespace {
             ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
         DataArray *typeDef = panel->TypeDef();
         if (data.empty()) {
-            static Symbol jointWeightSym("joint_weight");
-            DataArray *minJoints = typeDef->FindArray(jointWeightSym, true);
-            MILO_ASSERT(minJoints->Size() == kNumJoints + 1, 0x4b4);
+            DataArray *minJoints = typeDef->FindArray(Symbol("joint_weight"), true);
+            MILO_ASSERT(minJoints->Size() == kNumJoints + 1, 0x104);
             for (int i = 1; i < minJoints->Size(); i++) {
                 float val = minJoints->Node(i).Float(minJoints);
                 data.push_back(val);
             }
-            MILO_ASSERT(data.size() == kNumJoints, 0x4bc);
+            MILO_ASSERT(data.size() == kNumJoints, 0x112);
         }
         return data;
     }
@@ -325,14 +324,13 @@ namespace {
             ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
         DataArray *typeDef = panel->TypeDef();
         if (data.empty()) {
-            static Symbol minJointSpeedSym("min_joint_speed");
-            DataArray *minJoints = typeDef->FindArray(minJointSpeedSym, true);
-            MILO_ASSERT(minJoints->Size() == kNumJoints + 1, 0x4c3);
+            DataArray *minJoints = typeDef->FindArray(Symbol("min_joint_speed"), true);
+            MILO_ASSERT(minJoints->Size() == kNumJoints + 1, 0xe4);
             for (int i = 1; i < minJoints->Size(); i++) {
                 float val = minJoints->Node(i).Float(minJoints);
                 data.push_back(val);
             }
-            MILO_ASSERT(data.size() == kNumJoints, 0x4cb);
+            MILO_ASSERT(data.size() == kNumJoints, 0xf2);
         }
         return data;
     }
