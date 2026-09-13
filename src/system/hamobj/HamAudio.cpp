@@ -337,19 +337,17 @@ DataNode HamAudio::OnSetCrossfadeJump(DataArray *a) {
 }
 
 void HamAudio::FinishLoad() {
-    auto& stream0 = mStreams[0];
-
     if (mFileLoader) {
         mRawBuffer = mFileLoader->GetBuffer(&mRawBufferSize);
         delete mFileLoader;
         mFileLoader = NULL;
         const char *mogg = "mogg";
-        stream0 = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, true);
-        mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, false);
-        mSongStream = stream0;
+        mStreams[0] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, true);
+        mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, true);
+        mSongStream = mStreams[0];
 #ifdef HX_WEB
         const char *baseName = mSongInfo ? mSongInfo->GetBaseFileName() : "<no-song>";
-        StandardStream *primary = dynamic_cast<StandardStream *>(stream0);
+        StandardStream *primary = dynamic_cast<StandardStream *>(mStreams[0]);
         if (primary) {
             primary->SetDebugTag(MakeString("HamAudio[%s] primary", baseName));
         }
@@ -360,7 +358,7 @@ void HamAudio::FinishLoad() {
 #endif
     }
     unsigned int counter = 2;
-    Stream **pStream = &stream0;
+    Stream **pStream = &mStreams[0];
     do {
         if (*pStream) {
             (*pStream)->Faders()->Add(mMasterFader);
