@@ -425,7 +425,9 @@ BEGIN_LOADS(SkeletonClip)
         d >> mDefaultRating;
     }
     if (d.altRev > 0) {
-        bs >> mWeighted;
+        int weighted;
+        bs >> weighted;
+        mWeighted = weighted;
     } else if (d.rev > 8) {
         static Symbol weighted("weighted");
         Symbol s;

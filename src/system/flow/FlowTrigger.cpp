@@ -104,26 +104,28 @@ BEGIN_LOADS(FlowTrigger)
         d >> mStopProperties;
     }
     if (d.rev == 0) {
-        // Manual do-while (not FOREACH) — matches target codegen via the
-        // hoisted end() iterator + explicit advancement (permuter-found).
-        auto end = mTriggerEvents.end();
+        // `next` trails one node ahead of `it` and is advanced before the body
+        // runs, so erase(it) below cannot invalidate the iterator we resume
+        // from.  The two stay in lockstep: `it = next` closes every iteration,
+        // so on entry to the body `next == it` always holds and `++next` alone
+        // is enough to re-establish next == it + 1.
         auto it = mTriggerEvents.begin();
-        if (it != end) {
-            do {
-                String cur = it->Str();
-                if (cur.contains("on_") && cur.contains("_change")) {
-                    cur.erase(cur.length() - 7, 7);
-                    cur.erase(0, 3);
-                    PropTriggerDefn defn(this);
-                    defn.mProvider = mEventProvider;
-                    DataArrayPtr ptr(new DataArray(1));
-                    ptr->Node(0) = Symbol(cur.c_str());
-                    defn.mProperty = ptr;
-                    mTriggerProperties.push_back(defn);
-                    mTriggerEvents.erase(it);
-                }
-                ++it;
-            } while (it != mTriggerEvents.end());
+        auto next = it;
+        while (it != mTriggerEvents.end()) {
+            String str = it->Str();
+            ++next;
+            if (str.contains("on_") && str.contains("_change")) {
+                str.erase(str.length() - 7, 7);
+                str.erase(0, 3);
+                PropTriggerDefn defn(this);
+                defn.mProvider = mEventProvider;
+                DataArrayPtr ptr(new DataArray(1));
+                ptr->Node(0) = Symbol(str.c_str());
+                defn.mProperty = ptr;
+                mTriggerProperties.push_back(defn);
+                mTriggerEvents.erase(it);
+            }
+            it = next;
         }
     }
 END_LOADS
