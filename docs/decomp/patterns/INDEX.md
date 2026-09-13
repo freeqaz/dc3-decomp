@@ -209,6 +209,21 @@ Run the **count comparison**, not the double-definition test. Instrument:
 control population is empty). Full write-up:
 **[unmeasured-symbol-multiplicity.md](unmeasured-symbol-multiplicity.md)**.
 
+### Adding a comment to a .cpp is INERT — the assert-line-shift story is false here
+
+`MILO_ASSERT` and friends take the line number as an **explicit argument**
+(`MILO_ASSERT(ret, 0x19)`), not `__LINE__`, so a comment cannot shift an assert
+constant. Only a literal `__LINE__` surviving preprocessing in a `.cpp` is
+sensitive, and it costs the function **containing** it, not everything below it.
+Whole-binary probe (one comment line prepended to all 1,188 `src/` sources, full
+`ninja`, 48,365 functions compared): **exactly 1 function moves** —
+`?SampleFree@@YAXPAXPBDH1@Z`, 36 B, from `synth_xbox/SynthSample.cpp:33` (whose
+16 blank lines at 9–24 are deliberate padding — do not tidy them).
+`curl/lib/transfer.c:1034` is a **false grep hit**: its `__LINE__` is inside
+`DEBUGF()` and `DEBUGBUILD` is undefined. Negative control: 9 comment lines above
+68 assert sites in `Mesh.cpp`+`Dir.cpp` moved 0 functions. Full write-up:
+**[comments-are-inert-except-at-__LINE__.md](comments-are-inert-except-at-__LINE__.md)**.
+
 ### A per-function number below `report.json`'s was, until 2026-08-31, often the tool
 
 `objdiff-cli diff` and `objdiff-cli report generate` carry **different hardcoded
