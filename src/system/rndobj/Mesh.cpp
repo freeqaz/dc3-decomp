@@ -935,18 +935,12 @@ void RndMesh::ClearCompressedVerts() {
 
 bool RndMesh::Replace(ObjRef *from, Hmx::Object *to) {
     if (&mGeomOwner == from) {
-        RndMesh *replace;
-        if (mGeomOwner == this) {
-            replace = this;
+        RndMesh *mesh;
+        if (mGeomOwner == this || !(mesh = dynamic_cast<RndMesh *>(to))) {
+            mGeomOwner.SetObjConcrete(this);
         } else {
-            RndMesh *mesh = dynamic_cast<RndMesh *>(to);
-            if (mesh) {
-                replace = mesh->mGeomOwner;
-            } else {
-                replace = this;
-            }
+            mGeomOwner.SetObjConcrete(mesh->mGeomOwner.Ptr());
         }
-        mGeomOwner = replace;
         return true;
     } else {
         return RndTransformable::Replace(from, to);

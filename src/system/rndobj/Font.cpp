@@ -166,18 +166,12 @@ bool RndFont::BitmapFont() const { return true; }
 
 bool RndFont::Replace(ObjRef *from, Hmx::Object *to) {
     if (&mTextureOwner == from) {
-        RndFont *replace;
-        if (mTextureOwner == this) {
-            replace = this;
+        RndFont *f;
+        if (mTextureOwner == this || !(f = dynamic_cast<RndFont *>(to))) {
+            mTextureOwner.SetObjConcrete(this);
         } else {
-            RndFont *f = dynamic_cast<RndFont *>(to);
-            if (f) {
-                replace = f->mTextureOwner;
-            } else {
-                replace = this;
-            }
+            mTextureOwner.SetObjConcrete(f->mTextureOwner.Ptr());
         }
-        mTextureOwner = replace;
         return true;
     } else
         return Hmx::Object::Replace(from, to);
