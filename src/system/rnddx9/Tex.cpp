@@ -352,9 +352,21 @@ void DxTex::UnlockBitmap() {
                 unka4 = nullptr;
             }
             if ((unka8 & 0x4) > 0) {
-                DX_ASSERT_CODE(D3DXFilterTexture(mTexture, nullptr, -1, -1), 0x618);
+                // DX_ASSERT_CODE expands its argument TWICE (once for the test,
+                // once inside DxRnd::Error), so passing the call directly filtered
+                // the texture a second time on the failure path. The image calls it
+                // once -- 0x8267... `bl D3DXFilterTexture; cmpwi r3, 0x0;
+                // beq <skip>; bl ?Error@DxRnd@@SAPBDJ@Z` -- Error reads the HRESULT
+                // still live in r3. Bind it first, which is what all twelve other
+                // DX_ASSERT_CODE sites already do.
+                HRESULT hr = D3DXFilterTexture(mTexture, nullptr, -1, -1);
+                DX_ASSERT_CODE(hr, 0x618);
             }
         }
+        // Residual: the image also materializes `addi r11, r31, 0x9c`
+        // (&mLockedRect) here and never uses it. `memset(&mLockedRect, 0,
+        // sizeof(mLockedRect))` is byte-inert against this spelling (measured),
+        // so the dead address comes from something else.
         mLockedRect.Pitch = 0;
         mLockedRect.pBits = nullptr;
         unka4 = nullptr;
