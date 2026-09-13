@@ -376,14 +376,15 @@ MCResult MemcardMgr::ThreadCall_SaveGame() {
         break;
     }
     case kMCCorrupt:
-        if (mSaveCreateType == 0) {
-            return res;
+        // One shared `return res` for both failure exits -- with two
+        // different values reaching it MSVC cannot fold the kMCCorrupt case
+        // constant in, and returns whatever is already in r3.
+        if (mSaveCreateType != 0) {
+            res = TheMC.DeleteContainer(container->Cid());
+            if (res == kMCNoError)
+                break;
         }
-        res = TheMC.DeleteContainer(container->Cid());
-        if (res != kMCNoError) {
-            return res;
-        }
-        break;
+        return res;
     case kMCFileNotFound:
         break;
     default:
