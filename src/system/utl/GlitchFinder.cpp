@@ -72,7 +72,6 @@ void GlitchPoker::PrintNestedStartTimes(TextStream &stream, float f1) {
 }
 
 void GlitchPoker::Dump(TextStream &stream, int i1) {
-    float f1 = 0.0049999999f;
     if (mTime > smLastDumpTime + 0.005f) {
         PrintNestedStartTimes(stream, smLastDumpTime);
         float timeDelta = mTime - smLastDumpTime;
@@ -84,87 +83,85 @@ void GlitchPoker::Dump(TextStream &stream, int i1) {
                 stream << " : " << p->mName;
             }
             stream << "\n";
+            smTotalLeafTime = (mTime - smLastDumpTime) + smTotalLeafTime;
         }
-        smTotalLeafTime = (mTime - smLastDumpTime) + smTotalLeafTime;
     }
     PrintNestedStartTimes(stream, mTime);
-    if (!smDumpLeaves && mChildren.size() == 0 && mTimeEnd - mTime < f1) {
+    if (!smDumpLeaves && mChildren.size() == 0 && mTimeEnd - mTime < 0.005f) {
         stream << "[ " << mName << " ]";
         if (mAvg) {
             stream << " (" << mAvg->mAvg << " avg)";
         }
-        stream << "\n";
-        smLastDumpTime = mTimeEnd;
-        return;
-    }
-    if (mParent) {
-        f1 = smThreshold;
-        if (mTimeEnd - mTime > f1) {
-            if (mChildren.size() != 0) {
-                float temp_f30 = smLastDumpTime;
-                smLastDumpTime = mTime;
-                for (int i = 0; i < mChildren.size(); i++) {
-                    mChildren[i]->Dump(stream, i1 + 1);
+    } else {
+        if (smDumpLeaves && mParent) {
+            if (mTimeEnd - mTime > smThreshold) {
+                if (mChildren.size() != 0) {
+                    float savedLastDump = smLastDumpTime;
+                    smLastDumpTime = mTime;
+                    for (int i = 0; i < mChildren.size(); i++) {
+                        mChildren[i]->Dump(stream, i1 + 1);
+                    }
+                    if (mTimeEnd - smLastDumpTime > smThreshold) {
+                        stream << "   TIME GAP (" << mTimeEnd - smLastDumpTime
+                               << ") at end of " << mName;
+                        for (GlitchPoker *p = mParent; p; p = p->mParent) {
+                            stream << " : " << p->mName;
+                        }
+                        stream << "\n";
+                        smTotalLeafTime = (mTimeEnd - smLastDumpTime) + smTotalLeafTime;
+                    }
+                    smLastDumpTime = savedLastDump;
+                } else {
+                    stream << "   ";
+                    PrintResult(stream);
+                    stream << "}";
+                    for (GlitchPoker *p = mParent; p; p = p->mParent) {
+                        stream << " : " << p->mName;
+                    }
+                    stream << "\n";
+                    smTotalLeafTime = (mTimeEnd - mTime) + smTotalLeafTime;
                 }
-                if (mTimeEnd - smLastDumpTime > f1) {
+            }
+            smLastDumpTime = mTimeEnd;
+            return;
+        }
+        PrintResult(stream);
+        if (mChildren.size() != 0) {
+            stream << "\n";
+            float savedLastDump = smLastDumpTime;
+            smLastDumpTime = mTime;
+            smNestedStartTimes.push_back(mTime);
+            for (int i = 0; i < mChildren.size(); i++) {
+                mChildren[i]->Dump(stream, i1 + 1);
+            }
+            if (mTimeEnd > smLastDumpTime + 0.005f) {
+                PrintNestedStartTimes(stream, smLastDumpTime);
+                if (!smDumpLeaves) {
+                    stream << "TIME GAP (" << mTimeEnd - smLastDumpTime << ")\n";
+                } else if (mTime - smLastDumpTime > smThreshold) {
                     stream << "   TIME GAP (" << mTimeEnd - smLastDumpTime
                            << ") at end of " << mName;
                     for (GlitchPoker *p = mParent; p; p = p->mParent) {
                         stream << " : " << p->mName;
                     }
                     stream << "\n";
-                    smTotalLeafTime = (mTimeEnd - smLastDumpTime) + smTotalLeafTime;
                 }
-                smLastDumpTime = temp_f30;
-            } else {
-                stream << "   ";
-                PrintResult(stream);
-                stream << "}";
-                for (GlitchPoker *p = mParent; p; p = p->mParent) {
-                    stream << " : " << p->mName;
-                }
-                stream << "\n";
-                smTotalLeafTime = (mTimeEnd - mTime) + smTotalLeafTime;
             }
+            smLastDumpTime = savedLastDump;
             smNestedStartTimes.pop_back();
             PrintNestedStartTimes(stream, mTimeEnd);
         }
-        return;
-    }
-    PrintResult(stream);
-    if (mChildren.size() != 0) {
-        stream << "\n";
-    }
-    float savedLastDump = smLastDumpTime;
-    smLastDumpTime = mTime;
-    smNestedStartTimes.push_back(mTime);
-    for (int i = 0; i < mChildren.size(); i++) {
-        mChildren[i]->Dump(stream, i1 + 1);
-    }
-    if (mTimeEnd > smLastDumpTime + f1) {
-        PrintNestedStartTimes(stream, smLastDumpTime);
-        if (!smDumpLeaves) {
-            stream << "TIME GAP (" << mTimeEnd - smLastDumpTime << ")\n";
-        } else if (mTime - smLastDumpTime > smThreshold) {
-            stream << "   TIME GAP (" << mTimeEnd - smLastDumpTime << ") at end of "
-                   << mName;
-            for (GlitchPoker *p = mParent; p; p = p->mParent) {
-                stream << " : " << p->mName;
-            }
-            stream << "\n";
+        if (smDumpLeaves) {
+            float totalTime = smTotalLeafTime;
+            float pct = totalTime / (mTimeEnd - mTime);
+            stream << "} total leaf time: " << totalTime << " (" << pct * 100.0f
+                   << "pct)";
+        } else if (mChildren.size() != 0 || !(mTimeEnd - mTime < 0.005f)) {
+            stream << "}";
         }
     }
-    smLastDumpTime = savedLastDump;
-    smNestedStartTimes.pop_back();
-    PrintNestedStartTimes(stream, mTimeEnd);
-    if (smDumpLeaves) {
-        float totalTime = smTotalLeafTime;
-        float pct = totalTime / (mTimeEnd - mTime);
-        stream << "} total leaf time: " << totalTime << " (" << pct * 100.0f << "pct)";
-    } else if (mChildren.size() != 0 || !(mTimeEnd - mTime < f1)) {
-        stream << "}" << "\n";
-        smLastDumpTime = mTimeEnd;
-    }
+    stream << "\n";
+    smLastDumpTime = mTimeEnd;
 }
 
 GlitchAverager::GlitchAverager()
