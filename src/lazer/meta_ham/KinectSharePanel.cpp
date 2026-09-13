@@ -186,7 +186,8 @@ void KinectSharePanel::ConvertImagesForLinkPost() {
         if (mLinkPostParams.PreviewImage.Format == D3DFMT_A8R8G8B8) {
             mLinkPostParams.PreviewImage.Format = D3DFMT_LIN_A8R8G8B8;
         }
-        int mult = bitmap90.RowBytes() * bitmap90.Height();
+        int rowBytes = bitmap90.RowBytes();
+        int mult = rowBytes * bitmap90.Height();
         mPreviewBuf = MemAlloc(mult, __FILE__, 0xA8, "FB_Preview");
         MILO_ASSERT(mPreviewBuf != NULL, 0xA9);
         if (mPreviewBuf) {
