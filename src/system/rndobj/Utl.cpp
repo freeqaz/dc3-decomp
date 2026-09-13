@@ -1962,12 +1962,12 @@ void SetBloomBlurWeightsStreak(
         Vector4 texOffset;
         if (horizontal) {
             float off = offsets[idx] * invWidth;
+            texOffset.x = off * cosA * yRatio;
             texOffset.y = off * sinA;
-            texOffset.x = (float)((double)(off * cosA) * (double)yRatio);
         } else {
             float off = offsets[idx] * invHeight;
+            texOffset.x = -(off * sinA * yRatio);
             texOffset.y = off * cosA;
-            texOffset.x = -(float)((double)(off * sinA) * (double)yRatio);
         }
         texOffset.z = one;
         texOffset.w = one;
