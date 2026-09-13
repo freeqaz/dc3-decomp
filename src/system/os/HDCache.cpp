@@ -61,7 +61,9 @@ int HDCache::HdrSize() {
 
 bool HDCache::ReadFail() {
     File *file = mReadArkFiles[mReadFileIdx];
-    if (file && file->Fail()) {
+    // (int) cast, as in ReadDone just below: the target compares the pointer
+    // with a signed `cmpwi`, which is what MSVC emits for an integer zero-test.
+    if ((int)file != 0 && file->Fail()) {
         MILO_LOG("HDCache Read %d failed\n", mReadFileIdx);
         return true;
     } else

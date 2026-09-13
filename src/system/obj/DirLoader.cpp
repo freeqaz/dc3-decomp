@@ -378,19 +378,25 @@ void ReadDead(BinStream &bs) {
 
 void ReadEditorDirDead(BinStream &bs) {
     unsigned char buf;
-    for (unsigned int i = 0; i < 20; i++) {
-        while (true) {
+    // The terminator must arrive as 20 CONSECUTIVE bytes: on a mismatch the
+    // target resets the match index to 0 (`li r25, 0` on the failing arm) and
+    // goes back to the top.  The previous spelling matched each index
+    // independently, so "%#@" followed by anything then "EndOfEditorDir@#%"
+    // would have been accepted.
+    for (unsigned int i = 0; i < 20;) {
 #ifdef HX_NATIVE
-            bs.WaitUntilReady();
+        bs.WaitUntilReady();
 #else
-            EofType t;
-            while ((t = bs.Eof()) != NotEof) {
-                MILO_ASSERT(t == TempEof, 0x470);
-            }
+        EofType t;
+        while ((t = bs.Eof()) != NotEof) {
+            MILO_ASSERT(t == TempEof, 0x470);
+        }
 #endif
-            bs >> buf;
-            if (((const unsigned char *)"%#@EndOfEditorDir@#%")[i] == buf)
-                break;
+        bs >> buf;
+        if (((const unsigned char *)"%#@EndOfEditorDir@#%")[i] == buf) {
+            i++;
+        } else {
+            i = 0;
         }
     }
 }

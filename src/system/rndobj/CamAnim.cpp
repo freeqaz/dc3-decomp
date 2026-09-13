@@ -12,13 +12,11 @@ RndCamAnim::~RndCamAnim() {}
 
 bool RndCamAnim::Replace(ObjRef *from, Hmx::Object *to) {
     if (&mKeysOwner == from) {
-        if (mKeysOwner == this) {
-            RndCamAnim *camTo = dynamic_cast<RndCamAnim *>(to);
-            if (camTo) {
-                mKeysOwner = camTo->KeysOwner();
-            }
+        RndCamAnim *camTo;
+        if (mKeysOwner == this || !(camTo = dynamic_cast<RndCamAnim *>(to))) {
+            mKeysOwner.SetObjConcrete(this);
         } else {
-            mKeysOwner = this;
+            mKeysOwner.SetObjConcrete(camTo->mKeysOwner.Ptr());
         }
         return true;
     } else

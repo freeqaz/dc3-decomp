@@ -106,13 +106,11 @@ RndWind::~RndWind() {}
 
 bool RndWind::Replace(ObjRef *from, Hmx::Object *to) {
     if (&mWindOwner == from) {
-        if (mWindOwner != this) {
-            RndWind *wind = dynamic_cast<RndWind *>(to);
-            if (wind) {
-                mWindOwner = wind;
-            }
+        RndWind *wind;
+        if (mWindOwner == this || !(wind = dynamic_cast<RndWind *>(to))) {
+            mWindOwner.SetObjConcrete(this);
         } else {
-            mWindOwner = this;
+            mWindOwner.SetObjConcrete(wind->mWindOwner.Ptr());
         }
         return true;
     } else {

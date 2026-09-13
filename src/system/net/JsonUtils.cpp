@@ -81,7 +81,7 @@ JsonObject *JsonConverter::LoadFromString(const String &str) {
     jObj->Set(obj);
     printbuf_free(buf);
     JsonObject *temp = jObj;
-    json_object_get(obj);
+    jObj->AddRef();
     mObjects.push_back(temp);
     return jObj;
 }
