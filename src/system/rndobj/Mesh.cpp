@@ -792,6 +792,11 @@ RndDrawable *RndMesh::CollideShowing(const Segment &seg, float &f, Plane &pl) {
         if (GetVolume() == kVolumeTriangles) {
             bool b1 = false;
             f = 1.0f;
+            // Backface culling for the ray test comes from the material: a
+            // mesh whose material culls must not report a hit on a back face.
+            // This was previously hard-coded `false`, which made every mesh
+            // collide through its own back faces.
+            bool cull = Mat() && Mat()->GetCull();
             FOREACH (it, Faces()) {
                 const Vert &vert0 = Verts(it->v1);
                 const Vert &vert1 = Verts(it->v2);
@@ -806,10 +811,18 @@ RndDrawable *RndMesh::CollideShowing(const Segment &seg, float &f, Plane &pl) {
                 } else
                     tri.Set(vert0.pos, vert1.pos, vert2.pos);
                 float fintersect;
-                if (Intersect(sega0, tri, false, fintersect)) {
+                if (Intersect(sega0, tri, cull, fintersect)) {
                     Interp(sega0.start, sega0.end, fintersect, sega0.end);
                     f *= fintersect;
-                    pl = Plane(tri.origin, tri.frame.z);
+                    // Written through Plane::Set rather than `pl = Plane(o, n)`:
+                    // `pl` is a reference parameter that could alias `tri`, so
+                    // constructing a temporary forces MSVC to build the plane
+                    // in a stack slot and copy it.  Retail stores a/b/c/d
+                    // straight into `pl`, which means all four values were
+                    // computed before the first store.
+                    const Vector3 &n = tri.frame.z;
+                    const Vector3 &o = tri.origin;
+                    pl.Set(n.x, n.y, n.z, -(o.x * n.x + (o.z * n.z + o.y * n.y)));
                     b1 = true;
                     sLastCollide = (it - Faces().begin());
                 }
