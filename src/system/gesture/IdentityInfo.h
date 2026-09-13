@@ -17,12 +17,13 @@ public:
             unk9 = true;
         }
     }
+    // Inlined into Skeleton::Poll (its only caller), where retail emits exactly
+    // two stores: `stb 0, 0x8(r31)` and `stw -1, 0x4(r31)`.  The decomp used to
+    // clear mIdentified/unk9 and stash skeletonIdx as well; the shipped code
+    // does not, so skeletonIdx is unused here.
     void Reset(int skeletonIdx) {
-        mIdentified = false;
-        mEnrollmentIdx = -1;
         mProfileMatched = false;
-        unk9 = false;
-        unkc = skeletonIdx;
+        mEnrollmentIdx = -1;
     }
 
 private:
