@@ -227,8 +227,11 @@ namespace {
             BeginCmd(Holmes::kReadFile, false);
             ReadRequest &cur = *it;
             int i2 = gHolmesStream->ReadAsync(cur.mBuffer, cur.mBytes);
-            char *buffer = (char *)cur.mBuffer;
-            buffer += i2;
+            // The advanced pointer is STORED BACK (image: `stw r11, 0xc(r31)`
+            // right beside the mBytes store). We had it in a dead local, so a
+            // short read would restart the next chunk at the start of the
+            // caller's buffer instead of after what was already read.
+            cur.mBuffer = (char *)cur.mBuffer + i2;
             cur.mBytes -= i2;
             EndCmd(Holmes::kReadFile);
             if (i2 <= 0) {
