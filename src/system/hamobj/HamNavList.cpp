@@ -1264,13 +1264,10 @@ void HamNavList::SetSelecting(bool selecting) {
     UIList *sublist = mListDirResource->SubList(selected, mListWidgets);
     if (!(sublist == nullptr)) {
         HamNavProvider *navProvider = mNavProvider;
-        int subSelected = sublist->Selected();
-        int subSelPlusOne = subSelected + 1;
-        int wrapped = sublist->GetListState().WrapShowing(subSelPlusOne);
-        sym = navProvider->DataSymbol(wrapped, selected);
+        int wrapped = sublist->GetListState().WrapShowing(sublist->Selected() + 1);
+        sym = navProvider->DataSymbol(selected, wrapped);
     } else {
-        Symbol dataSym = provider->DataSymbol(selected);
-        sym = dataSym;
+        sym = provider->DataSymbol(selected);
     }
 #ifdef HX_NATIVE
     static int sSelectDiag = 0;
@@ -1301,7 +1298,7 @@ void HamNavList::SetSelecting(bool selecting) {
     NavSelectMsg navSelectMsg(sym, selected, this, canSelect);
     TheHamProvider->Handle(navSelectMsg, false);
     DataNode result = TheUI->Handle(navSelectMsg, false);
-    Handle(navSelectMsg, true);
+    Export(navSelectMsg, true);
     if (!mDisableSelectSound) {
         bool skipSound = ShouldSkipSelectSound(result);
         if (!skipSound && mListRibbonResource) {

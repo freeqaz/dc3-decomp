@@ -2,9 +2,12 @@
 #include "math\Utl.h"
 #include "rndobj\Rnd.h"
 
-static const float _kFloat2_0 = 2.0f;
+// Reloaded from memory after every call in the shipped code, so it is a
+// mutable file-scope float, not a literal. Nothing ever stores to it.
+static float sLeftEdge = 5.0f;
+
 float DisplayEvents(DataEventList *events, float f1, float f2) {
-    float f9 = f1 + _kFloat2_0;
+    float f9 = f1 + 2.0f;
     int min = Min(events->CurIndex(), events->Size() - 1);
     MaxEq(min, 0);
     while (min > 0 && events->Event(min - 1).end > f2)
@@ -15,16 +18,16 @@ float DisplayEvents(DataEventList *events, float f1, float f2) {
     float fsum = f2 + (float)TheRnd.Width() / 200.0f;
     while (min < events->Size() && events->Event(min).start < fsum) {
         DataEvent curEvent(events->Event(min));
-        float start14c = (curEvent.start - f2) * 200.0f + 5.0f;
-        float start150 = (curEvent.end - f2) * 200.0f + 5.0f;
+        float start14c = (curEvent.start - f2) * 200.0f + sLeftEdge;
+        float start150 = (curEvent.end - f2) * 200.0f + sLeftEdge;
         String str108;
         str108 << curEvent.Msg();
-        MaxEq(start14c, 5.0f);
-        MinEq(start150, (float)TheRnd.Width() + 5.0f);
+        MaxEq(start14c, sLeftEdge);
+        MinEq(start150, (float)TheRnd.Width() + sLeftEdge);
         if (min < events->Size() - 1) {
-            MinEq(start150, ((events->Event(min + 1).start - f2) * 200.0f + 5.0f) - 1.0f);
+            MinEq(start150, ((events->Event(min + 1).start - f2) * 200.0f + sLeftEdge) - 1.0f);
         }
-        auto eventRect = Hmx::Rect(start14c, f1 + _kFloat2_0, Max(1.0f, start150 - start14c), 12.0f);
+        auto eventRect = Hmx::Rect(start14c, f1 + 2.0f, Max(1.0f, start150 - start14c), 12.0f);
         TheRnd.DrawRect(
             eventRect,
             Hmx::Color(0, 0, 1),
@@ -46,7 +49,7 @@ float DisplayEvents(DataEventList *events, float f1, float f2) {
         }
         min++;
     }
-    auto cursorRect = Hmx::Rect(5.0f, f9 - _kFloat2_0, 1.0f, 14.0f);
+    auto cursorRect = Hmx::Rect(sLeftEdge, f9 - 2.0f, 1.0f, 14.0f);
     TheRnd.DrawRect(cursorRect, Hmx::Color(1, 0, 0), 0, 0, 0);
     return f9 + f10;
 }

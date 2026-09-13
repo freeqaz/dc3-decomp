@@ -25,19 +25,19 @@ bool FlowSequence::Activate() {
         PushDrivenProperties();
     }
     mRepeatCount = 0;
+    if (mChildNodes.empty())
+        return false;
+    mIsAdvancing = true;
     mItr = mChildNodes.begin();
-    if (!mChildNodes.empty()) {
-        mIsAdvancing = true;
-        while (mItr != mChildNodes.end()) {
-            if (!mRunningNodes.empty())
-                break;
-            ActivateChild(mItr->Obj());
-            if (mStopRequested || !mRunningNodes.empty())
-                break;
-            ++mItr;
-        }
-        mIsAdvancing = false;
+    while (mItr != mChildNodes.end()) {
+        if (!mRunningNodes.empty())
+            break;
+        ActivateChild(mItr->Obj());
+        if (mStopRequested || !mRunningNodes.empty())
+            break;
+        ++mItr;
     }
+    mIsAdvancing = false;
     MILO_ASSERT(mRunningNodes.size() < 2, 0x50);
     if (mItr == mChildNodes.end()) {
         if (mRunningNodes.size() != 0)

@@ -47,8 +47,9 @@ void Bloom_Downsample(ShaderType shader, RndTex *texSrc, RndTex *texDst) {
     workMat->SetDiffuseTex(texSrc);
     workMat->MarkDirty(2);
 
+    Hmx::Color color;
     Hmx::Rect rect(0, 0, (float)texDst->Width(), (float)texDst->Height());
-    TheNgRnd.DrawRect(rect, workMat, shader, Hmx::Color(1, 1, 1), nullptr, nullptr);
+    TheNgRnd.DrawRect(rect, workMat, shader, color, nullptr, nullptr);
 
     texDst->FinishDrawTarget();
 }

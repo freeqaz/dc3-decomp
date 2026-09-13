@@ -653,6 +653,7 @@ bool RndFont::CharDefined(unsigned short c) const {
 
 void RndFont::Print() const {
     TheDebug << "   pages: " << mMats.size() << "\n";
+    TheDebug << "   mats: \n";
     FOREACH (it, mMats) {
         TheDebug << "         " << *it << "\n";
     }

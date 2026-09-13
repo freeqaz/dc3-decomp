@@ -481,9 +481,11 @@ void HamStorePanel::FinishSpecialOfferEnum(std::vector<bool> const &vec, bool b)
         MILO_LOG("Store: failed to enum our special offers.\n");
     } else {
         for (int i = 0; i < mSpecialOffers.size(); i++) {
-            if (!mSpecialOffers[i].mOwned) {
-                mSpecialOffers[i].mOwned = vec[i];
-            }
+            // The target stores unconditionally: both arms of the mOwned test
+            // converge on one `stb` of a normalised 0/1, and the `li r11, 1`
+            // arm is the already-owned branch.  That is `a = a || b`, not
+            // `if (!a) a = b`.
+            mSpecialOffers[i].mOwned = mSpecialOffers[i].mOwned || vec[i];
 
             if (mSpecialOffers[i].mOwned) {
                 MILO_LOG(

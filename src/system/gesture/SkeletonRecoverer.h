@@ -1,14 +1,12 @@
 #pragma once
+#include "math\\Vec.h"
 #include <list>
 
 class SkeletonRecoverer {
 public:
     struct TrackingIDHistory {
         int mTrackingID; // 0x0
-        float unk4; // 0x4
-        float unk8; // 0x8
-        float unkC; // 0xc
-        float unk10; // 0x10
+        PaddedJointPos mPos; // 0x4
         float mUntrackedTime; // 0x14
     };
     SkeletonRecoverer();

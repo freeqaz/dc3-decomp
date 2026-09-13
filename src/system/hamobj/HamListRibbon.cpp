@@ -448,13 +448,14 @@ void HamListRibbon::DrawRibbon(
         UIListElementDrawState *elem = (UIListElementDrawState *)state.mElemDrawState;
 #endif
         if (elem) {
-            // Target uses 4-arg ctor with alpha=0.0f. BSS zero-elision: target
-            // compiler skips storing 0.0f to BSS statics (already zero-initialized),
-            // our compiler doesn't — causes 2 extra stfs instructions (unfixable).
-            // Confirmed: Color 3-arg ctor DOES set alpha=1.0f (verified via RB3 ref,
-            // RndMat ctor, RndLight ctor), so these intentionally use 4-arg with 0.0f.
-            static Hmx::Color sBigColor(1.3f, 1.0f, 1.3f, 0.0f);
-            static Hmx::Color sNormalColor(1.0f, 1.0f, 1.0f, 0.0f);
+            // These are per-axis SCALE factors, not colours: the target's two
+            // statics each take exactly three stores and never touch +0xc, which
+            // Hmx::Color cannot do (both its 3- and 4-arg ctors write alpha).
+            // Vector3's 3-arg ctor writes three floats, and a Vector3 assignment
+            // in this build copies four words -- which is also why unk20 below
+            // gets written.
+            static Vector3 sBigScale(1.3f, 1.0f, 1.3f);
+            static Vector3 sNormalScale(1.0f, 1.0f, 1.0f);
 
             const Transform &labelXfm = mLabelPlaceholder->WorldXfm();
             Vector3 pos = labelXfm.v;
@@ -464,11 +465,11 @@ void HamListRibbon::DrawRibbon(
             float alpha = GetLabelTotalAlpha();
             memcpy(&elem->mData, &alpha, sizeof(float));
 
-            Hmx::Color *color = &sBigColor;
+            Vector3 *scale = &sBigScale;
             if (state.mBigScale == 0.0f) {
-                color = &sNormalColor;
+                scale = &sNormalScale;
             }
-            *(Hmx::Color *)&elem->mScaleX = *color;
+            *(Vector3 *)&elem->mScaleX = *scale;
         }
     }
 

@@ -840,8 +840,9 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
 
     BeginCmd(Holmes::kCacheFile, true);
 
+    bool result = false;
     String str(arg1);
-    HolmesToLocal(arg0, arg1);
+    HolmesToLocal(arg0, str.c_str());
 
     if (*arg0 == 0) {
         EndCmd(Holmes::kCacheFile);
@@ -850,8 +851,8 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
 
     u8 fileInfo[0x20];
     int attrResult = GetFileAttributesExA(arg0, (GET_FILEEX_INFO_LEVELS)0, fileInfo);
-    bool result = false;
     bool fileExists = (attrResult - 1) != (-1);
+    s64 writeTime = *(s64 *)(fileInfo + 0x14);
     // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.
     // rb3-xenon spells this `!=`; dc3's target settles it. The target calls
     // ??8String@@QBA_NABVFixedString@@@Z (operator==) at this site. The branch
@@ -867,21 +868,17 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
         return true;
     }
 
-    u8 cmd = Holmes::kCacheFile;
-    gStreamBuffer->Write(&cmd, 1);
-    *gStreamBuffer << str;
-
-    u8 hasFileFlag = fileExists;
-    gStreamBuffer->Write(&hasFileFlag, 1);
+    *gStreamBuffer << (u8)Holmes::kCacheFile << str;
+    *gStreamBuffer << fileExists;
 
     if (fileExists) {
-        gStreamBuffer->WriteEndian(&*(s64*)(fileInfo + 0x14), 8);
+        gStreamBuffer->WriteEndian(&writeTime, 8);
     }
 
     HolmesFlushStreamBuffer();
     WaitForResponse(Holmes::kCacheFile);
 
-    bool response = false;
+    bool response;
     *gHolmesStream >> response;
     gPendingResponse = Holmes::kInvalidOpcode;
 

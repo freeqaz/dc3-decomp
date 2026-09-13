@@ -411,8 +411,16 @@ Loader *LoadMgr::AddLoader(const FilePath &file, LoaderPos pos) {
     return new FileLoader(file, file.c_str(), pos, 0, false, true, nullptr, nullptr);
 }
 
+// Re-entrance token. PollUntilLoaded stamps ldr1 with the next value before it
+// starts polling; if a nested PollUntilLoaded re-stamps the same loader, the
+// outer loop's token no longer matches and it bails out instead of spinning on
+// a loader somebody else is now driving. Target: lbl_82F189F8 in Loader.obj's
+// .data -- a file-local counter, distinct from gLoadCount.
+static int gPollToken;
+
 void LoadMgr::PollUntilLoaded(Loader *ldr1, Loader *ldr2) {
     AutoGlitchReport hang(50.0f, __FUNCTION__);
+    int myToken = ldr1->mLoadCount = ++gPollToken;
     float saved_period = mCurrentPeriod;
 #ifdef HX_WEB
     int maxIter = 10000; // Safety valve: don't block browser event loop forever
@@ -436,6 +444,8 @@ void LoadMgr::PollUntilLoaded(Loader *ldr1, Loader *ldr2) {
         }
         PollFrontLoader();
         if (!ListFind(mLoading, ldr1))
+            break;
+        if (ldr1->mLoadCount != myToken)
             break;
         if (mLoading.front()->IsLoaded()) {
             mLoading.pop_front();

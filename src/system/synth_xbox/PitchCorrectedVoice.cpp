@@ -36,20 +36,21 @@ float DSP::Synapse::PitchCorrectedVoice::GetCorrection() {
 
     // Back to a log-frequency-ratio deviation.
     float deviation = semitones * 0.0577622652053833f;
-    mAbsPitchDeviation = fabsf(deviation);
+    float absDeviation = fabsf(deviation);
+    mAbsPitchDeviation = absDeviation;
 
     if (mProximityEffect != 0.0f) {
         // Proximity window half-width (ln-ratio units).
         float halfWidth = (12.0f - mProximityEffect * 11.5f) * 0.0577622652053833f;
-        if (fabsf(deviation) >= halfWidth) {
-            amount = 0.0f;
-        } else {
-            float norm = fabsf(deviation) / halfWidth;
+        if (absDeviation < halfWidth) {
+            float norm = absDeviation / halfWidth;
             float k = mProximityFocus * 2.0f - 1.0f;
             k = (k * 2.0f) / (1.0f - k);
             float shaped = (k + 1.0f) * norm / (fabsf(norm) * k + 1.0f);
             float win = (float)cos((double)(shaped * 3.1415927410125732f));
             amount = (win + 1.0f) * 0.5f * amount;
+        } else {
+            amount = 0.0f;
         }
     }
 
@@ -76,7 +77,11 @@ float DSP::Synapse::PitchCorrectedVoice::GetCorrection() {
 
     // Smooth toward the target correction.
     mSmoothedCorrection += (amount * deviation - mSmoothedCorrection) * coeff;
-    if (fabsf(mSmoothedCorrection) < 9.999999974752427e-07f) {
+    float absCorr = mSmoothedCorrection;
+    if (absCorr < 0.0f) {
+        absCorr = -absCorr;
+    }
+    if (absCorr < 9.999999974752427e-07f) {
         mSmoothedCorrection = 0.0f;
     }
 

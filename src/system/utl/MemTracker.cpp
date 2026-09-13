@@ -61,13 +61,12 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
     curTable.SortByName();
     prevTable.SortByName();
 
-    int curNum = curTable.GetNumStats();
-    int prevNum = prevTable.GetNumStats();
-    std::vector<MemDiffEntry> diffs;
-    diffs.reserve(curNum + prevNum);
-
     int curIdx = 0;
     int prevIdx = 0;
+    std::vector<MemDiffEntry> diffs;
+    int curNum = curTable.GetNumStats();
+    int prevNum = prevTable.GetNumStats();
+    diffs.reserve(curNum + prevNum);
 
     while (curIdx < curNum) {
         if (prevIdx >= prevNum)
@@ -80,7 +79,7 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
 
         int numAllocs1, numAllocs2;
         int size1, size2;
-        unsigned char heap;
+        int heap;
         const char *entryName;
 
         if (cmp < 0) {
@@ -484,50 +483,48 @@ void MemTracker::DiffDump(TextStream &ts) {
     if (mTimeSlice) {
         ts << "(executable " << TheSystemArgs.front() << ")\n";
         ts << "(data\n";
-        short curTimeSlice = mTimeSlice;
-        int count = 0;
-        for (AllocInfo **it = mHashTable->Begin(); it; it = mHashTable->Next(it)) {
-            if (curTimeSlice == (*it)->mTimeSlice) {
-                count++;
+        {
+            int count = 0;
+            for (AllocInfo **it = mHashTable->Begin(); it; it = mHashTable->Next(it)) {
+                if (mTimeSlice == (*it)->mTimeSlice) {
+                    count++;
+                }
             }
-        }
-        AllocInfo **allocVec = (AllocInfo **)DebugHeapAlloc(count * sizeof(AllocInfo *));
-        AllocInfo **allocEnd = allocVec + count;
-        AllocInfo **allocBegin = allocVec;
-        for (AllocInfo **it = mHashTable->Begin(); it; it = mHashTable->Next(it)) {
-            if (curTimeSlice == (*it)->mTimeSlice) {
-                *allocVec = *it;
-                allocVec++;
+            AllocInfoVec allocVec(count);
+            for (AllocInfo **it = mHashTable->Begin(); it; it = mHashTable->Next(it)) {
+                if (mTimeSlice == (*it)->mTimeSlice) {
+                    allocVec.push_back(*it);
+                }
             }
-        }
-        std::sort(allocBegin, allocEnd, StackLess);
-        std::sort(mFreedInfos.begin(), mFreedInfos.end(), StackLess);
+            std::sort(allocVec.begin(), allocVec.end(), StackLess);
+            std::sort(mFreedInfos.begin(), mFreedInfos.end(), StackLess);
 
-        AllocInfo **freedIt = mFreedInfos.begin();
-        AllocInfo **allocIt = allocBegin;
+            AllocInfo **freedIt = mFreedInfos.begin();
+            AllocInfo **allocIt = allocVec.begin();
+            AllocInfo **allocEnd = allocVec.end();
 
-        for (; allocIt != allocEnd || freedIt != mFreedInfos.end();) {
-            if (allocIt == allocEnd) {
-                ColatedPrint(ts, *freedIt, "alloc");
-                freedIt++;
-            } else if (freedIt == mFreedInfos.end()) {
-                ColatedPrint(ts, *allocIt, "free");
-                allocIt++;
-            } else {
-                int cmp = (*allocIt)->StackCompare(**freedIt);
-                if (cmp < 0) {
-                    ColatedPrint(ts, *allocIt, "free");
-                    allocIt++;
-                } else if (cmp > 0) {
+            for (; allocIt != allocEnd || freedIt != mFreedInfos.end();) {
+                if (allocIt == allocEnd) {
                     ColatedPrint(ts, *freedIt, "alloc");
                     freedIt++;
-                } else {
+                } else if (freedIt == mFreedInfos.end()) {
+                    ColatedPrint(ts, *allocIt, "free");
                     allocIt++;
-                    freedIt++;
+                } else {
+                    int cmp = (*allocIt)->StackCompare(**freedIt);
+                    if (cmp < 0) {
+                        ColatedPrint(ts, *allocIt, "free");
+                        allocIt++;
+                    } else if (cmp > 0) {
+                        ColatedPrint(ts, *freedIt, "alloc");
+                        freedIt++;
+                    } else {
+                        allocIt++;
+                        freedIt++;
+                    }
                 }
             }
         }
-        DebugHeapFree(allocBegin);
         ts << ")\n";
     }
     mFreedInfos.delete_and_clear();

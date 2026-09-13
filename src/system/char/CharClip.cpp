@@ -99,21 +99,17 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
     NodeVector *resized;
     if (nodes) {
         int bytes = BytesInMemory();
-        NodeVector *next = nodes->Next();
-        NodeVector *end = mNodeEnd;
+        intptr_t moved = (intptr_t)mNodeEnd - (intptr_t)nodes->Next();
         resized = Resize(bytes + 8, nodes);
-        memmove(
-            (char *)resized->Next() + 8,
-            resized->Next(),
-            (intptr_t)end - (intptr_t)next
-        );
+        memmove((char *)resized->Next() + 8, resized->Next(), moved);
     } else {
         resized = Resize(BytesInMemory() + 0x20, mNodeEnd);
-        new (&resized->clip) ObjOwnerPtr<CharClip>(mOwner, (CharClip *)NULL);
-        resized->clip = clip;
+        ObjOwnerPtr<CharClip> *newClip =
+            new (&resized->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
+        *newClip = clip;
         resized->size = 0;
     }
-    int size = resized->size;
+    int &size = resized->size;
     int i = 0;
     if (size > 0) {
         for (; i < size; i++) {
@@ -127,15 +123,15 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
         }
     }
     resized->nodes[i] = node;
-    resized->size++;
+    size++;
     // Fix up ObjRef ring pointers after potential reallocation.
     // ObjRef layout: vtable (sizeof(void*)) | next (sizeof(void*)) | prev (sizeof(void*))
     // Original code used hardcoded offsets 4/8 which are only correct on 32-bit PPC.
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {
         ObjRef *clipRef = (ObjRef *)&it->clip;
-        ObjRef *clipNext = *(ObjRef **)((char *)clipRef + sizeof(void *));
         ObjRef *clipPrev = *(ObjRef **)((char *)clipRef + sizeof(void *) * 2);
         *(ObjRef **)((char *)clipPrev + sizeof(void *)) = clipRef;
+        ObjRef *clipNext = *(ObjRef **)((char *)clipRef + sizeof(void *));
         *(ObjRef **)((char *)clipNext + sizeof(void *) * 2) = clipRef;
     }
 }

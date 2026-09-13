@@ -153,23 +153,27 @@ void HamRegulate::Poll() {
     float rotDelta = 0.0f;
     Regulate(posDelta, rotDelta);
 
+    float moveZ = 0.0f;
     float dt = TheTaskMgr.DeltaSeconds();
+    float moveX = posDelta.x;
+    float moveY = posDelta.y;
     int footState = 0;
     float absDt = Max(0.0f, dt);
+    float moveRot;
     Character *character = mCharacter;
 
     if (!mCharacter->Teleported()) {
         float maxMove = mMaxSpeed * absDt;
-        float posMag = sqrtf(posDelta.x * posDelta.x + posDelta.y * posDelta.y);
-        float fRotDelta = rotDelta;
+        float posMag = sqrtf(moveX * moveX + moveY * moveY);
         if (posMag > 0.0f && posMag > maxMove) {
             float scale = maxMove / posMag;
-            posDelta.x *= scale;
-            posDelta.y *= scale;
-            posDelta.z *= scale;
-            fRotDelta = rotDelta * scale;
+            moveX = moveX * scale;
+            moveY = moveY * scale;
+            moveZ = scale * moveZ;
+            moveRot = scale * rotDelta;
+        } else {
+            moveRot = rotDelta;
         }
-        rotDelta = fRotDelta;
 
         if (mLeftFoot && mRightFoot) {
             int leftState = (mLeftFoot->mFootFsmState == 1) ? 1 : 0;
@@ -178,24 +182,29 @@ void HamRegulate::Poll() {
 
             if (footState == 3) {
                 mAccumVelocity.Zero();
-                rotDelta = 0.0f;
-                posDelta.Zero();
+                moveZ = 0.0f;
+                moveY = 0.0f;
+                moveX = 0.0f;
+                moveRot = 0.0f;
             } else {
                 if ((mFootState ^ footState) & footState) {
                     mAccumVelocity.Zero();
                 }
-                mAccumVelocity.x += posDelta.x;
-                mAccumVelocity.y += posDelta.y;
-                mAccumVelocity.z += posDelta.z;
-                if (mAccumVelocity.x * mAccumVelocity.x
-                    + mAccumVelocity.z * mAccumVelocity.z
-                    + mAccumVelocity.y * mAccumVelocity.y > 16.0f) {
-                    mAccumVelocity.Zero();
-                    rotDelta = 0.0f;
-                    posDelta.Zero();
+                float accumX = mAccumVelocity.x + moveX;
+                float accumY = mAccumVelocity.y + moveY;
+                float accumZ = mAccumVelocity.z + moveZ;
+                posDelta.Set(accumX, accumY, accumZ);
+                if (accumY * accumY + accumZ * accumZ + accumX * accumX > 16.0f) {
+                    moveZ = 0.0f;
+                    moveY = 0.0f;
+                    moveX = 0.0f;
+                    moveRot = 0.0f;
                 }
+                mAccumVelocity = posDelta;
             }
         }
+    } else {
+        moveRot = rotDelta;
     }
 
     mFootState = footState;
@@ -204,10 +213,10 @@ void HamRegulate::Poll() {
 
     auto teleported = mCharacter->Teleported();
     if (!TheLoadMgr.EditMode() || teleported || absDt != 0.0f) {
-        RotateAboutZ(xfm.m, rotDelta, xfm.m);
-        xfm.v.x += posDelta.x;
-        xfm.v.y += posDelta.y;
-        xfm.v.z += posDelta.z;
+        RotateAboutZ(xfm.m, moveRot, xfm.m);
+        xfm.v.x += moveX;
+        xfm.v.y += moveY;
+        xfm.v.z += moveZ;
         mWaypoint->Constrain(xfm);
     }
 }

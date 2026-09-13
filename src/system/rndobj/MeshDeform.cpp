@@ -82,9 +82,9 @@ BEGIN_LOADS(RndMeshDeform)
                 float f74;
                 bs >> f74;
                 if (f74 != 0) {
+                    i150[weightIdx] = j;
+                    f250[weightIdx] = f74;
                     weightIdx++;
-                    i150[j] = j;
-                    f250[j] = f74;
                 }
             }
             mVerts.AppendWeights(weightIdx, i150, f250);
@@ -132,12 +132,12 @@ void RndMeshDeform::Print() {
     auto it = mVerts.begin();
     for (; it < mVerts.end(); ++it, ++i) {
         TheDebug << "weights" << i << ": ";
-        char *cData = (char *)it.Data();
-        int num = (int)*cData++;
-        int j = 0;
-        for (; (unsigned int)j < num; j++) {
-            TheDebug << "(" << (unsigned char)*cData++ << " " << (float)*cData++ * 0.003921568859368563f
-                     << ") ";
+        unsigned char *cData = (unsigned char *)it.Data();
+        unsigned char *w = cData;
+        for (int j = 0; j < *cData; j++) {
+            unsigned char bone = *++w;
+            float weight = *++w * 0.003921568859368563f;
+            TheDebug << "(" << bone << " " << weight << ") ";
         }
         TheDebug << "\n";
     }

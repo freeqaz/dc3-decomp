@@ -630,24 +630,27 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 mesh->SetMat(fontMat);
             }
             mesh->SetShowing(page.displayableChars > 0);
-            if ((unsigned int)fixedLength == 0) {
+            if (fixedLength == 0) {
+                int numFaces = page.displayableChars * 2;
                 mesh->SetMutable(0);
-                ResetFontMapPageMeshFaces(mesh, page.displayableChars * 2);
+                ResetFontMapPageMeshFaces(mesh, numFaces);
                 page.mSyncFlags |= 0xA0;
-                mesh->Verts().resize(page.displayableChars * 4);
-            } else if (mesh->Mutable() == 0 || mesh->Verts().size() != fixedLength * 4) {
+                mesh->Verts().resize(numFaces * 2);
+            } else if ((mesh->Mutable() & 0x1F) == 0
+                       || mesh->Verts().size() != fixedLength * 4) {
                 mesh->SetMutable(0x1F);
-                ResetFontMapPageMeshFaces(mesh, page.displayableChars * 2);
+                ResetFontMapPageMeshFaces(mesh, fixedLength * 2);
                 page.mSyncFlags |= 0xA0;
-                mesh->Verts().resize(page.displayableChars * 4);
+                mesh->Verts().resize(fixedLength * 4);
             }
-#ifndef HX_NATIVE
-            MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
-#else
+#ifdef HX_NATIVE
             // Clamp to available verts in native builds
             if (mesh->Verts().size() < page.displayableChars * 4)
                 page.displayableChars = mesh->Verts().size() / 4;
+#endif
             page.mVertStart = mesh->Verts().begin();
+#ifndef HX_NATIVE
+            MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
 #endif
         }
 #ifndef HX_NATIVE
@@ -1755,19 +1758,16 @@ void RndText::FitTextEllipsis() {
 #endif
 
         // Binary search for how many chars fit
+        int hi = numChars;
         int lo = 1;
         if (numChars > 2) {
-            int hi = numChars;
             do {
-                int tmpLo = lo;
-                int mid = ((int)tmpLo + (int)hi) >> 1;
-                lo = mid;
-                if (charWidths[mid] >= mWidth) {
+                int mid = (lo + hi) >> 1;
+                if (charWidths[mid] >= mWidth)
                     hi = mid;
-                    lo = tmpLo;
-                }
-                tmpLo = lo;
-            } while ((int)lo + 1 < (int)hi);
+                else
+                    lo = mid;
+            } while (hi > lo + 1);
         }
 
         // Total length = truncated text + ellipsis
@@ -1779,7 +1779,7 @@ void RndText::FitTextEllipsis() {
         memcpy(buf, &wideChars[0], lo * sizeof(unsigned short));
 
         // Respect mFixedLength if set
-        if (ellipsisLen + 1 < mFixedLength && mFixedLength < totalLen) {
+        if (mFixedLength > ellipsisLen + 1 && totalLen > mFixedLength) {
             totalLen = mFixedLength;
         }
 
@@ -1796,21 +1796,21 @@ void RndText::FitTextEllipsis() {
         WrapText(buf, totalLen, charWidths, lines, bounds, 1.0f);
 
         // Iteratively shrink if text still doesn't fit
-#ifdef HX_NATIVE
-        auto breakChar = u16chr(kBreakCharsU16, buf[truncPos - 1]);
-#else
-        auto breakChar = wcschr(L" .,", (wchar_t)buf[truncPos - 1]);
-#endif
         while (truncPos > 1
-            && (lines.size() > 1 || mWidth <= bounds.w
-                || breakChar != 0)) {
-            totalLen = totalLen - 1;
+               && (lines.size() > 1 || bounds.w >= mWidth
+#ifdef HX_NATIVE
+                   || u16chr(kBreakCharsU16, buf[truncPos - 1]) != 0
+#else
+                   || wcschr(L" .,", (wchar_t)buf[truncPos - 1]) != 0
+#endif
+                   )) {
             // Try to find a space to break at (within ~87.5% of current length)
             int minPos = (int)totalLen * 0xe >> 4;
-            if (minPos <= (int)totalLen - 1) {
-                int searchPos = totalLen - 1;
+            totalLen = totalLen - 1;
+            int searchPos = totalLen;
+            if (searchPos >= minPos) {
                 unsigned short *searchPtr = &buf[searchPos];
-                while (true) {
+                do {
                     if (*searchPtr == 0x20) {
                         // Found a space — break here
                         totalLen = searchPos + ellipsisLen;
@@ -1818,9 +1818,7 @@ void RndText::FitTextEllipsis() {
                     }
                     searchPos--;
                     searchPtr--;
-                    if (minPos > searchPos)
-                        break;
-                }
+                } while (searchPos >= minPos);
             }
 
             truncPos = totalLen - ellipsisLen;
@@ -1964,10 +1962,8 @@ RndText::FontMapBase *RndText::AcquireFontMap(RndFontBase *font) {
         }
     }
 
-    if (result) {
-        result->SetFont(font);
-        result->ResetDisplayableChars();
-    }
+    result->SetFont(font);
+    result->ResetDisplayableChars();
 
     return result;
 }
@@ -2253,7 +2249,8 @@ void RndText::UpdateText() {
             || mFitType == kFitScrollMarqueeWrap
             || mFitType == kFitScrollMarqueeWrapAlways) {
             for (unsigned int i = 0; i < (unsigned int)mStyles.size(); i++) {
-                RndFontBase *font = mStyles[i].mFont;
+                RndFontBase *font =
+                    mStyles[i].mFont ? mStyles[i].mFont : mStyles[0].mFont;
                 const char *fontName;
                 if (font != 0) {
                     if (font->ClassName() != RndFont::StaticClassName()) {

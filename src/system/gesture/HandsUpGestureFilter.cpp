@@ -16,8 +16,8 @@ BEGIN_PROPSYNCS(HandsUpGestureFilter)
 END_PROPSYNCS
 
 void HandsUpGestureFilter::Update(Skeleton const &skeleton, int elapsed) {
-    static float sHandsUpXThresh = -0.1f;
-    static bool sForceHandsUp = false;
+    static float sHandsUpXThresh;
+    static bool sForceHandsUp;
     if (sForceHandsUp) {
         mHandsUp = true;
         mRaisedMs = 1;
@@ -32,7 +32,7 @@ void HandsUpGestureFilter::Update(Skeleton const &skeleton, int elapsed) {
 
     SkeletonQualityFilter &qualityFilter = TheGestureMgr->GetSkeletonQualityFilter(idx);
     if (!skeleton.IsTracked() || qualityFilter.Sitting() || !qualityFilter.IsConfident()) {
-        goto reset;
+        goto notRaised;
     }
 
     {
@@ -40,13 +40,13 @@ void HandsUpGestureFilter::Update(Skeleton const &skeleton, int elapsed) {
         const TrackedJoint &rShoulder = skeleton.ShoulderJoint(kSkeletonRight);
 
         Vector3 shoulderDiff;
-        shoulderDiff.x = lShoulder.mJointPos[kCoordCamera].x - rShoulder.mJointPos[kCoordCamera].x;
-        shoulderDiff.y = lShoulder.mJointPos[kCoordCamera].y - rShoulder.mJointPos[kCoordCamera].y;
-        shoulderDiff.z = lShoulder.mJointPos[kCoordCamera].z - rShoulder.mJointPos[kCoordCamera].z;
+        shoulderDiff.x = rShoulder.mJointPos[kCoordCamera].x - lShoulder.mJointPos[kCoordCamera].x;
+        shoulderDiff.y = rShoulder.mJointPos[kCoordCamera].y - lShoulder.mJointPos[kCoordCamera].y;
+        shoulderDiff.z = rShoulder.mJointPos[kCoordCamera].z - lShoulder.mJointPos[kCoordCamera].z;
         Normalize(shoulderDiff, shoulderDiff);
 
         if (fabsf((shoulderDiff.y + shoulderDiff.x) * 0.0f + shoulderDiff.z) > 0.8f)
-            goto reset;
+            goto notRaised;
 
         const TrackedJoint &rHand = skeleton.HandJoint(kSkeletonRight);
         const TrackedJoint &rElbow = skeleton.ElbowJoint(kSkeletonRight);
@@ -64,31 +64,40 @@ void HandsUpGestureFilter::Update(Skeleton const &skeleton, int elapsed) {
         bool leftValid = leftScreenPos.x > sScreenBoundary && leftScreenPos.x < 1.0f - sScreenBoundary;
 
         if (!rightValid || !leftValid)
-            goto reset;
+            goto resetTimer;
 
         static float sHandsUpYThresh = 0.1f;
         if (rHand.mJointPos[kCoordCamera].y <= rShoulderR.mJointPos[kCoordCamera].y + sHandsUpYThresh)
-            goto reset;
+            goto resetTimer;
         if (rHand.mJointPos[kCoordCamera].y <= rElbow.mJointPos[kCoordCamera].y)
-            goto reset;
-        if (rHand.mJointPos[kCoordCamera].x > rShoulderR.mJointPos[kCoordCamera].x + sHandsUpXThresh) {
-            if (lHand.mJointPos[kCoordCamera].x <= lShoulderL.mJointPos[kCoordCamera].x + sHandsUpXThresh)
-                goto reset;
-        }
+            goto resetTimer;
+        // Both hands pulled in toward the body midline: not a hands-up pose.
+        if (rHand.mJointPos[kCoordCamera].x
+                <= rShoulderR.mJointPos[kCoordCamera].x - sHandsUpXThresh
+            && lHand.mJointPos[kCoordCamera].x
+                >= lShoulderL.mJointPos[kCoordCamera].x + sHandsUpXThresh)
+            goto resetTimer;
         if (lHand.mJointPos[kCoordCamera].y <= lShoulderL.mJointPos[kCoordCamera].y + sHandsUpYThresh)
-            goto reset;
+            goto resetTimer;
         if (lHand.mJointPos[kCoordCamera].y <= lElbow.mJointPos[kCoordCamera].y)
-            goto reset;
+            goto resetTimer;
 
         mRaisedMs += elapsed;
-        if (mRaisedMs >= mRequiredMs) {
-            mHandsUp = true;
-        }
-        return;
+        goto checkRaised;
     }
 
+resetTimer:
     mRaisedMs = 0;
-reset:
+checkRaised:
+    if (mRaisedMs > mRequiredMs) {
+        mHandsUp = true;
+        return;
+    }
+    mHandsUp = false;
+    return;
+
+notRaised:
+    mRaisedMs = 0;
     mHandsUp = false;
 }
 

@@ -70,6 +70,7 @@ public:
     int SkeletonIndex() const { return mSkeletonIdx; }
     SkeletonTrackingState TrackingState() const { return mTracking; }
     const Vector3 &GetUnkab0() const { return unkab0; }
+    const PaddedJointPos &GetUnkab0Padded() const { return unkab0; }
 
     static int IdentityCallback(void *, NUI_IDENTITY_MESSAGE *);
 

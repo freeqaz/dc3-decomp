@@ -95,16 +95,12 @@ MoveVariant::MoveVariant(MoveGraph *graph, const MoveVariant *other, MoveParent 
     mGenre = other->mGenre;
     mEra = other->mEra;
     mFlags = other->mFlags & ~1;
-    if (other->mLinkedTo.mVariant) {
-        mLinkedTo.mVariantName = other->mLinkedTo.mVariant->mVariantName.Str();
-    } else {
-        mLinkedTo.mVariant = nullptr;
-    }
-    if (other->mLinkedFrom.mVariant) {
-        mLinkedFrom.mVariantName = other->mLinkedFrom.mVariant->mVariantName.Str();
-    } else {
-        mLinkedFrom.mVariant = nullptr;
-    }
+    mLinkedTo.mVariantName = other->mLinkedTo.mVariant
+        ? other->mLinkedTo.mVariant->mVariantName.Str()
+        : nullptr;
+    mLinkedFrom.mVariantName = other->mLinkedFrom.mVariant
+        ? other->mLinkedFrom.mVariant->mVariantName.Str()
+        : nullptr;
     mPositionOffset = other->mPositionOffset;
     graph->mMoveVariants[mVariantName] = this;
 }

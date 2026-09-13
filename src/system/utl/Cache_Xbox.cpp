@@ -352,8 +352,9 @@ int CacheXbox::ThreadWrite() {
                     break;
                 }
             }
+            nextPos++;
         }
-        nextPos = mThreadStr.find('\\', nextPos + 1);
+        nextPos = mThreadStr.find('\\', nextPos);
     }
 
     HANDLE hFile = (HANDLE)-1;

@@ -632,7 +632,9 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
             );
         } else {
             if (offer->OfferType() == song_sym) {
-                song_offers.push_back(offer);
+                // push_back(*it), not push_back(offer): the named local gets a
+                // home slot of its own and shifts every Sym() sret slot by 4.
+                song_offers.push_back(*it);
             }
             song_names.push_back(offer->StoreOfferData()->Sym(0));
         }

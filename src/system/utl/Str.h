@@ -154,7 +154,7 @@ bool SearchReplace(const char *, const char *, const char *, char *);
 bool StrNCopy(char *, const char *, int);
 void RemoveSpaces(char *, int, const char *);
 
-inline TextStream &operator<<(TextStream &ts, const String &str) {
+inline TextStream &operator<<(TextStream &ts, const FixedString &str) {
     ts.Print(str.c_str());
     return ts;
 }
