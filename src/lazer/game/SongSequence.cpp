@@ -324,9 +324,13 @@ void SongSequence::OnSongLoaded() {
         if (curEntry.mIntroLoopMeasure >= 0 && curEntry.mOutroLoopMeasure >= 0) {
             float introBeat = curEntry.mIntroLoopMeasure * 4.0f;
             float outroBeat = curEntry.mOutroLoopMeasure * 4.0f;
-            float introMs = BeatToMs(introBeat);
-            float outroMs = BeatToMs(outroBeat);
-            TheMaster->GetAudio()->SetLoop(introMs, outroMs);
+            // HamAudio::SetLoop(float, float) converts both arguments with
+            // BeatToMs itself, so these two conversions are dead in the
+            // original too -- it keeps the calls and passes the raw beats,
+            // outro first (SetLoop's first argument is the jump destination).
+            BeatToMs(introBeat);
+            BeatToMs(outroBeat);
+            TheMaster->GetAudio()->SetLoop(outroBeat, introBeat);
         }
         if (0 <= curEntry.mEventStartMeasure && curEntry.mEventEndMeasure >= 1) {
             TheMaster->GetAudio()->SetLoop(curEntry.mEventStartMeasure * 4.0f, curEntry.mEventEndMeasure * 4.0f);
