@@ -97,36 +97,29 @@ void RhythmDetectorGroup::RemoveDebugGraphs() {
 }
 
 void RhythmDetectorGroup::AddDebugGraphs() {
-    // Simplified version focusing on core logic
-    float f6 = 1.0f / (float)(mDetectors.size() + 1);
-    float f10 = f6;
-    float f7 = f6 * 0.9f;
+    float rowPitch = 1.0f / (float)(mDetectors.size() + 1);
+    float rowHeight = rowPitch * 0.9f;
 
-    auto& debugGraph = mDebugGraph;
-    delete debugGraph;
-    float f29 = f10;
-    debugGraph = new DebugGraph(
+    delete mDebugGraph;
+    mDebugGraph = new DebugGraph(
         0.1f,
         0.0f,
         0.8f,
-        0.9f,
+        rowHeight,
+        Hmx::Color(1, 1, 1, 1),
         Hmx::Color(0.4, 0.4, 0.4, 0.8),
-        Hmx::Color(0.4, 0.4, 0.4, 0.8),
-        null,
+        120,
         0.0,
         2.0,
         ""
     );
-    debugGraph->SetThresholdValue(1);
+    mDebugGraph->SetThresholdValue(1);
 
-    float f28 = 0.8f;
-    float f27 = 0.4f;
-    float f31 = 1.0f;
-
+    float rowY = rowPitch;
     FOREACH (it, mDetectors) {
         RhythmDetector *cur = *it;
         cur->RemoveDebugGraphs();
-        cur->AddDebugGraph(0.1f, f29, f28, f27, Hmx::Color(1, 0, 1, 0));
-        f29 += f6;
+        cur->AddDebugGraph(0.1f, rowY, 0.8f, rowHeight, Hmx::Color(0, 1, 0, 1));
+        rowY += rowPitch;
     }
 }

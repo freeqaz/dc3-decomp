@@ -407,6 +407,28 @@ void DxRnd::FinishPostProcess() {
     D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), 0xD, 1);
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, mWorldDepth);
+    // ADJUDICATED AND REFUSED -- do not "fix" the MakeColor row here.  Retail
+    // CALLS MakeColor out of line at this one site (`bl ?MakeColor@@YAKABV
+    // Color@Hmx@@@Z` at 0x82617DF4, after storing 0,0,0.3,1.0 to a Color temp);
+    // we inline it and constant-fold the whole thing to 0xff00004c.  That
+    // single `bl` is the ONLY one in the image -- 1 across all 2,223 target
+    // objects -- while the ARGB pack sequence appears inlined in eight target
+    // functions, so it is a per-site inliner decision, not a linkage one.
+    // Measured, whole report, name_check:
+    //   * three call-site spellings (temporary / named Color local / Rect via
+    //     Set() / Rect via member stores) are INERT -- byte-identical 29
+    //     mismatch rows at identical offsets, 83.608696 every time;
+    //   * `__declspec(noinline)` on MakeColor buys this function +10.90pp
+    //     (83.91304 -> 94.81739) and costs EIGHT neighbours: BeginTiling
+    //     99.96 -> 29.72, Clear 100.0 -> 42.89, DrawRect 100.0 -> 57.67,
+    //     DrawLine 98.64 -> 54.98, DrawParticles 99.98 -> 71.14, DrawString
+    //     96.75 -> 84.81, ModalDraw 89.78 -> 66.19; matched_functions -1,
+    //     matched_code -220 B;
+    //   * `#pragma inline_depth(0)` around this function takes it to 39.65 --
+    //     it also un-inlines DxRnd::Device() and the D3D setters.
+    // All 29 residual rows have this one cause; the two `lwa 0x40/0x44` order
+    // rows and the 0x68/0x6c store swap are downstream scheduling, not a
+    // wrong field (both sides put mWidth in .w and mHeight in .h).
     D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(Hmx::Color(0, 0, 0.3f)), 0, 0, 0);
     Hmx::Rect rect(0, 0, (float)mWidth, (float)mHeight);
     RndMat *mat = TheShaderMgr.GetPostProcMat();

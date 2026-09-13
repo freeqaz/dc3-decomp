@@ -220,24 +220,23 @@ void NetCacheMgr::SetState(NetCacheMgrState state) {
             );
         }
         mState = state;
-        if (state == kNCMS_Nil) {
+        switch (state) {
+        case kNCMS_Nil:
             MILO_ASSERT(mNetLoaderRefs.empty(), 0x28B);
-            if (mLoadCount > 0 && mState != kNCMS_Load)
+            if (mLoadCount > 0)
                 SetState(kNCMS_Load);
-        } else {
-            switch (state) {
-            case kNCMS_Load:
-                EnterLoadState();
-                break;
-            case kNCMS_Ready:
-                ReadyInit();
-                break;
-            case kNCMS_UnloadWaitForWrite:
-                EnterUnloadState();
-                break;
-            default:
-                break;
-            }
+            break;
+        case kNCMS_Load:
+            EnterLoadState();
+            break;
+        case kNCMS_Ready:
+            ReadyInit();
+            break;
+        case kNCMS_UnloadWaitForWrite:
+            EnterUnloadState();
+            break;
+        default:
+            break;
         }
     }
 }

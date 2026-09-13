@@ -368,6 +368,11 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
     if (mShowing && !mShadow.empty()) {
         Vector3 worldPos = WorldXfm().v;
 
+        // The target builds the shadow plane through Plane(point, normal), not
+        // Plane::Set(a,b,c,d): idx 40-47 are `x*0`, `y*0 + that`, `+(z+planeD)`,
+        // `fneg` -- the constructor's
+        // `d = -(n.x*p.x + n.y*p.y + n.z*p.z)` with n = (0,0,1) and the point's
+        // z already offset by planeD (n.z*p.z folds away, n.x/n.y do not).
         Plane pl70(
             Vector3(worldPos.x, worldPos.y, worldPos.z + planeD), Vector3(0, 0, 1)
         );
@@ -380,6 +385,8 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
 
         Transform tf90;
         float scale = -1.0f / plb0.b;
+        // Operand order here is inert: `plb0.a * scale` and `scale * plb0.a`
+        // compile to the identical `fmuls f13, f13, f0` (measured both ways).
         tf90.m.Set(1, plb0.a * scale, 0, 0, 0, 0, 0, plb0.c * scale, 1);
         tf90.v.Set(0, plb0.d * scale, 0);
 
