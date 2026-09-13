@@ -95,11 +95,10 @@ void CamShotVOData(
             }
         } else if (hasOutros) {
             auto numSubStrings = subStrings.size();
-            auto& _sub2 = subStrings[1];
             if (numSubStrings > 0 && subStrings[0] == "BATTLE") {
                 s1 = battle_outro_crew;
                 crewSym = StrToCrewSym(subStrings[2]);
-            } else if (subStrings.size() > 1 && _sub2 == "CAMP") {
+            } else if (subStrings.size() > 1 && subStrings[1] == "CAMP") {
                 if (subStrings[0] == "WIN") {
                     s1 = win_camp_crew;
                     charSym = all;
@@ -117,7 +116,7 @@ void CamShotVOData(
                 } else {
                     MILO_NOTIFY("Could not determine cam_type for %s", s);
                 }
-            } else if (subStrings.size() > 1 && _sub2 == "HYPE") {
+            } else if (subStrings.size() > 1 && subStrings[1] == "HYPE") {
                 static Symbol WIN_HYPE_SOLO("WIN_HYPE_SOLO");
                 static Symbol WIN_HYPE_DIFF_CREW("WIN_HYPE_DIFF_CREW");
                 if (s == WIN_HYPE_SOLO) {
@@ -130,13 +129,19 @@ void CamShotVOData(
                     s1 = win_hype_crew;
                     charSym = all;
                 }
-            } else if (subStrings.size() > 2)
-                if (subStrings[2] == "DLG")
+            } else if (subStrings.size() > 2) {
+                // One address for the two comparisons: the target computes
+                // `addi r29, r3, 0x10` once and reuses it (82518.. `mr r3, r29`
+                // before each String::operator==), unlike subStrings[1] above
+                // which it recomputes at every use.
+                String &camType = subStrings[2];
+                if (camType == "DLG")
                     s1 = win_dlg_char;
-                else if (subStrings[2] == "MOV")
+                else if (camType == "MOV")
                     s1 = win_mov_char;
                 else
                     MILO_NOTIFY("Could not find cam_type for %s", s);
+            }
 
             if (subStrings.size() > 1) {
                 String strd0(subStrings[1]);
