@@ -688,6 +688,12 @@ void RndTransformable::ApplyDynamicConstraint() {
         if (mTarget) {
             Transpose(mTarget->WorldXfm(), tf);
             Multiply(mWorldXfm, tf, mWorldXfm);
+        } else {
+            // Without a target there is nothing to transpose, so the shadow
+            // plane is projected through the identity.  Retail emits the
+            // twelve identity stores here; leaving `tf` uninitialised fed
+            // stack garbage into the Multiply below.
+            tf.Reset();
         }
         Plane pl;
         Multiply(sShadowPlane, tf, pl);
