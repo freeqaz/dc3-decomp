@@ -195,6 +195,25 @@ float Det(const Hmx::Matrix4 &m) {
 // r30,r31,0x30` matching the row1/row2/row3 references below.
 // The residual is register allocation and spill scheduling inside expressions
 // that exceed the FPR file. Do not permute operand order here.
+//
+// MEASURED NEGATIVE (2026-09-13, lane w3-m), read off
+// build/373307D9/asm/system/math/mtx.s directly. The target really does hold all
+// twelve column-1/2/3 cofactors live across the ~250 `bl ??AVector4@@QBAABMH@Z`
+// calls and write ALL SIXTEEN results to `out` only at the very end: eight
+// survive in callee-saved FPRs (f22-f30), the four `w` values are spilled to
+// 0x5c/0x60/0xb8/0xbc(r1), and the sixteen `stfs ..(r27)` sit at 82539B4C-82539B9C
+// after the last call. That accounts for the -0x30 frame delta and the twelve
+// TGT_ONLY stack slots. Hoisting the three `out.?.Set(...)` calls out of the
+// middle into twelve named `float` locals and Set-ing at the end -- which is
+// exactly that shape -- makes MSVC do the OPPOSITE: with no store between them,
+// it schedules the whole operator[] call block FIRST (first `bl` at index 53 of
+// 647) and the cofactor math after it, because that keeps 4 values live across
+// the calls instead of 12. 70.67 -> 32.8. Reordering the four Sets so `out.x`
+// comes last (use order y,z,w,x) does not change that: 33.0. The early
+// `out.y/z/w.Set` stores are what pins the region order in our build; there is
+// no construct found so far that keeps the target's order without them, so the
+// twelve mid-function stores are the price of the correct region order.
+// Do not retry either variant without a new idea for pinning the schedule.
 void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     float det = Det(m);
     bool small = std::fabs(det) < 0.0001f;
