@@ -292,8 +292,7 @@ void FlowNode::UpdateIntensity() {
 FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
     Flow *childFlow = dynamic_cast<Flow *>(child);
     if (!(!childFlow)) {
-        Symbol flowSym = Flow::StaticClassName();
-        Hmx::Object *newObj = Hmx::Object::NewObject(flowSym);
+        Hmx::Object *newObj = Hmx::Object::NewObject(Flow::StaticClassName());
         Flow *newFlow = dynamic_cast<Flow *>(newObj);
 
         // Copy the proxy file from old flow to new flow
@@ -318,14 +317,14 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
         FOREACH (it, childFlow->mChildNodes) {
             if ((*it)->ClassName() == FlowLabel::StaticClassName()
                 && (*it)->Dir() != static_cast<ObjectDir *>(childFlow)) {
-                Symbol labelSym = FlowLabel::StaticClassName();
-                Hmx::Object *labelObj = Hmx::Object::NewObject(labelSym);
+                Hmx::Object *labelObj =
+                    Hmx::Object::NewObject(FlowLabel::StaticClassName());
                 FlowLabel *newLabel = dynamic_cast<FlowLabel *>(labelObj);
                 newLabel->InitObject();
                 newLabel->Copy((FlowNode *)(*it), kCopyDeep);
                 newLabel->SetParent(newFlow, true);
                 Hmx::Object *labelBase = newLabel;
-                ObjectDir *dir = child->Dir();
+                ObjectDir *dir = childFlow->Dir();
                 const char *name = NextName("l", dir);
                 labelBase->SetName(name, dir);
             }
@@ -333,8 +332,7 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
 
         return newFlow;
     } else {
-        Symbol sym = child->ClassName();
-        Hmx::Object *newObj = Hmx::Object::NewObject(sym);
+        Hmx::Object *newObj = Hmx::Object::NewObject(child->ClassName());
         newObj->InitObject();
         FlowNode *newNode = dynamic_cast<FlowNode *>(newObj);
         newNode->Copy(child, kCopyDeep);

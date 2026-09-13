@@ -1130,7 +1130,7 @@ void SkeletonChooser::ChoosePlayerSides() {
             }
         }
     } else {
-        if ((id0 > 0) != (id1 > 0)) {
+        if ((id0 > 0) ^ (id1 > 0)) {
             if (locked) {
                 int activeID = (id0 > 0) ? id0 : id1;
                 Skeleton *pPlayerSkeleton = TheGestureMgr->GetSkeletonByTrackingID(activeID);
