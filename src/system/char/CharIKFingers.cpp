@@ -330,7 +330,7 @@ void CharIKFingers::CalculateFingerDest(FingerNum num) {
                 Vector3 f1z(f1Xfm.m.z);
                 float angle03 = std::acos(
                     ((len02 * len02 + lenTip * lenTip) - (toTargetLen - len03) * (toTargetLen - len03))
-                    / (len02 * 2.0f * lenTip)
+                    / (len02 * lenTip * 2.0f)
                 );
                 if (angle03 < 0.87f)
                     angle03 = 0.87f;
