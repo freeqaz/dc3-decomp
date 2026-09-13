@@ -2204,10 +2204,15 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
     // notify), so declaring a Vert here emits a constructor the retail code
     // never runs.
     char tmp[sizeof(RndMesh::Vert)];
+    // Retail zeroes i before the srcCount guard, not inside it.
+    unsigned int i = 0;
     if (srcCount > 0) {
-        unsigned int i = 0;
         do {
             unsigned int j = 0;
+            // Retail keeps the search counter and the result in SEPARATE
+            // registers -- the hit path is an out-of-line 'mr r11, r10; b' --
+            // so the match index is its own variable, not a reused j.
+            int matchIdx;
             // Retail copies the whole Vector2 into a stack temp with an integer
             // ld/std pair and reads the two floats back out of it; two separate
             // float loads do not produce that shape.
@@ -2215,16 +2220,18 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
             if (dstVerts.mNumVerts > 0) {
                 do {
                     if (fabsf(srcTex.x - dstVerts.mVerts[j].tex.x) < tolerance
-                        && fabsf(srcTex.y - dstVerts.mVerts[j].tex.y) < tolerance)
+                        && fabsf(srcTex.y - dstVerts.mVerts[j].tex.y) < tolerance) {
+                        matchIdx = (int)j;
                         goto found;
+                    }
                     j++;
                 } while ((int)j < dstVerts.mNumVerts);
             }
-            j = (unsigned int)-1;
+            matchIdx = -1;
         found:
-            if (!((int)j == -1)) {
+            if (!(matchIdx == -1)) {
                 unsigned short ii = (unsigned short)i;
-                unsigned short js = (unsigned short)j;
+                unsigned short js = (unsigned short)matchIdx;
                 if (js != ii) {
                     memcpy(&tmp, &dstVerts.mVerts[js], sizeof(RndMesh::Vert));
                     memcpy(
