@@ -347,7 +347,8 @@ bool PropSync(
             }
             if (op == kPropInsert) {
                 MILO_ASSERT(i == prop->Size() && op <= kPropInsert, 0x66);
-                vec.insert(it, dynamic_cast<T *>(node.GetObj()));
+                T *objToInsert = dynamic_cast<T *>(node.GetObj());
+                vec.insert(it, objToInsert);
                 return true;
             }
             return false;
