@@ -111,11 +111,7 @@ void StreamReceiver360::Poll() {
 void StreamReceiver360::SetSlipOffset(float f) {
     MILO_ASSERT(mSlipEnabled, 0xC5);
     SlipStop();
-    Voice *v = (Voice *)PoolAlloc(0x7c, 0x7c, "e:\\lazer_build_gmc1\\system\\src\\synth360\\Voice.h", 0x28, "Voice");
-    if (v) {
-        v = new (v) Voice(false, 1, false);
-    }
-    mSlipVoice = v;
+    mSlipVoice = new Voice(false, 1, false);
     if (mTagged) {
         Tag();
     }
