@@ -252,7 +252,7 @@ bool CacheXbox::DeleteSync(const char *cc) {
         }
         XContentFlush(mCacheID.Name(), nullptr);
         if (!res) {
-            DWORD err = GetLastError();
+            unsigned int err = GetLastError();
             if (!IsDeviceConnected(mCacheID.DeviceID())) {
                 mLastResult = kCache_ErrorStorageDeviceMissing;
             } else {
