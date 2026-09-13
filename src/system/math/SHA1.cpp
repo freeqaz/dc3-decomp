@@ -67,6 +67,32 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
 // The "Source accesses 'm_reserved1'/'m_buffer' but target accesses ..."
 // notes objdiff prints for this function are false positives -- those loads
 // are indexed off m_block, not off `this`.
+//
+// MEASURED NEGATIVES (2026-09-13, lane w3-m), all read off
+// build/373307D9/asm/system/math/SHA1.s and all reverted. Baseline 61.99.
+//
+// 1. ROUND ACCUMULATION ORDER IS NOT SOURCE-CONTROLLABLE. The target's round 0
+//    accumulates `(rol(v,5) + f) + e + w[0] + K` -- it adds `e` at index 22,
+//    BEFORE `m_block->l` is even addressed (the `lwz r22, 0xc0(r24)` is index
+//    29) -- which is the FIPS-180 grouping, not Reid's `z += f + w + K + rol`.
+//    Rewriting all five macros as `z = rol(v,5) + f + z + blk(i) + K` (exact
+//    for unsigned 32-bit) emits a BYTE-IDENTICAL round 0: still `add r8,r7,r8`
+//    (+w) then `add r8,r8,r29` (+e). MSVC canonicalises the add chain before
+//    scheduling, so the 27 `diff_op` rows attributed to the `rol(v,5)` /
+//    `w = rol(w,30)` pair are a scheduling artifact, not a source shape. Net
+//    61.99 -> 61.1 from unrelated downstream drift.
+// 2. PROLOGUE + EPILOGUE ORDER: the target loads pState[0..4] into a,b,c,d,e in
+//    index order (r28,r27,r31,r30,r29) and its epilogue loads 0x0,0x4,0x8,0xc,
+//    0x10 in order too, so the original source really is `a = pState[0]; ...`
+//    and `pState[0] += a; ...` forward, where ours is `c,b,a,d,e` and a reversed
+//    epilogue. Making BOTH forward does exactly what it should locally --
+//    instructions 0-19 become fully equal and the r27/r28 naming of a and b
+//    matches -- and still costs 0.6pp overall (61.99 -> 61.4), because the
+//    80-round body reschedules around it. Reordering the five declarations to
+//    a,b,c,d,e on top of that is inert (61.4, identical row set). This is worth
+//    revisiting ONLY together with a fix for the body's r9/r11 scratch
+//    allocation (88 of the 104 swap pairs), which is what actually costs the
+//    ~230 extra instructions.
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 #ifdef HX_NATIVE
     // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap
