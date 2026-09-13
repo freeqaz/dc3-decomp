@@ -254,7 +254,6 @@ void SongCollision::Init() {
     DataArray *tolerance = DataGetMacro("SONG_COLLISION_TOLERANCE");
     if (tolerance) {
         sCollisionTolerance = tolerance->Float(0);
-        sCollisionToleranceValue = sCollisionTolerance;
     }
     sCollisionUsefulBoneNames.clear();
     DataArray *bones = DataGetMacro("SONG_COLLISION_BONES");
