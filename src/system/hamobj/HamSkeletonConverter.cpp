@@ -196,15 +196,12 @@ void HamSkeletonConverter::SetPosBoneValue(String s, Vector3 v) {
 void HamSkeletonConverter::CalcQuatBone(
     SkeletonJoint joint, SkeletonJoint from, SkeletonJoint to
 ) {
-    auto& _mBoneMeshes = this->mBoneMeshes;
-    auto& _mJointPositions = this->mJointPositions;
-    auto& _mBoneTransforms = this->mBoneTransforms;
     Hmx::Quat q;
     Vector3 dir;
-    Subtract(_mJointPositions[to], _mJointPositions[from], dir);
+    Subtract(mJointPositions[to], mJointPositions[from], dir);
     Normalize(dir, dir);
 
-    RndTransformable *mesh = _mBoneMeshes[from];
+    RndTransformable *mesh = mBoneMeshes[from];
     Transform xfm = mesh->LocalXfm();
 
     Transform parentXfm;
@@ -220,16 +217,18 @@ void HamSkeletonConverter::CalcQuatBone(
     Normalize(boneXfm.m, boneXfm.m);
     boneXfm.v = xfm.v;
 
-    memcpy(&_mBoneTransforms[from].m, &boneXfm.m, sizeof(Hmx::Matrix3));
-    _mBoneTransforms[from].v = xfm.v;
+    Transform &boneTransform = mBoneTransforms[from];
+    memcpy(&boneTransform.m, &boneXfm.m, sizeof(Hmx::Matrix3));
+    boneTransform.v = xfm.v;
 
     Transform invParentXfm;
     Invert(parentXfm, invParentXfm);
     Transform finalXfm;
     Multiply(boneXfm, invParentXfm, finalXfm);
 
-    q.Set(finalXfm.m);
-    SetQuatBoneValue(String(CharBoneName(from)), q);
+    Hmx::Quat boneQuat;
+    boneQuat.Set(finalXfm.m);
+    SetQuatBoneValue(String(CharBoneName(from)), boneQuat);
 }
 
 void HamSkeletonConverter::CalcRotzBone(
