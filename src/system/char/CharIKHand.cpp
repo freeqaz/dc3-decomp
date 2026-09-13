@@ -529,11 +529,17 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 Scale(axisDir, midAxisDot, sphereToMid);
                 Add(sphereCenter, sphereToMid, sphereToMid);
                 float a = Distance(sphereToMid, sphereCenter);
-                MILO_ASSERT(a <= sphereRadius, 0x1A1);
+                MILO_ASSERT(a <= sphereRadius, 0x1A2);
                 float sPerpDist = std::sqrt(sphereRadius * sphereRadius - a * a);
                 sphereCenter.Set(sphereToMid.x, sphereToMid.y, sphereToMid.z);
                 float sphereToAxisDist = Distance(sphereCenter, axisProj);
-                float d = (sphereToAxisDist * sphereToAxisDist + -(a * a - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
+                // The subtracted square is the ELBOW LENGTH, not `a`. `a` is
+                // already consumed by sPerpDist above; the target's
+                // `fnmsubs fX, f28, f28, f12` names a different register from the
+                // one holding `a` (f24, the operand of the sphereRadius^2 - a^2
+                // fmsubs), and rb3's CharIKHand carries the same expression with
+                // v164len (the elbow length) in this slot.
+                float d = (sphereToAxisDist * sphereToAxisDist + -(elbowLen * elbowLen - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
                 float sqrtTerm = std::sqrt(-(d * d - sPerpDist * sPerpDist));
                 float tiltAngle = std::asin(sqrtTerm / elbowLen);
                 bool _cond = IsNaN(tiltAngle);
