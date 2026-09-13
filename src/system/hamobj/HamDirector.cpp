@@ -2274,8 +2274,9 @@ void HamDirector::MoveKeys(
 DataNode HamDirector::OnClipSafeToAdd(DataArray *a) {
     if (a->Int(2)) {
         for (int i = 0; i < kNumDifficultiesDC2; i++) {
-            if (mSongAnims[(Difficulty)i]) {
-                PropKeys *propKeys = mSongAnims[(Difficulty)i]->GetKeys(
+            Difficulty difficulty = (Difficulty)i;
+            if (mSongAnims[difficulty]) {
+                PropKeys *propKeys = mSongAnims[difficulty]->GetKeys(
                     this, DataArrayPtr(Symbol("clip"))
                 );
                 if (propKeys) {
@@ -2289,14 +2290,15 @@ DataNode HamDirector::OnClipSafeToAdd(DataArray *a) {
             }
         }
     }
-    return 0;
+    return DataNode(kDataInt, 0);
 }
 
 DataNode HamDirector::OnPracticeSafeToAdd(DataArray *a) {
     if (a->Int(2)) {
         for (int i = 0; i < kNumDifficultiesDC2; i++) {
-            if (mSongAnims[(Difficulty)i]) {
-                PropKeys *propKeys = mSongAnims[(Difficulty)i]->GetKeys(
+            Difficulty difficulty = (Difficulty)i;
+            if (mSongAnims[difficulty]) {
+                PropKeys *propKeys = mSongAnims[difficulty]->GetKeys(
                     this, DataArrayPtr(Symbol("practice"))
                 );
                 if (propKeys) {
@@ -2310,7 +2312,7 @@ DataNode HamDirector::OnPracticeSafeToAdd(DataArray *a) {
             }
         }
     }
-    return 0;
+    return DataNode(kDataInt, 0);
 }
 
 void HamDirector::HandleDifficultyChange() {
