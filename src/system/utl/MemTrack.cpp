@@ -167,8 +167,7 @@ void StartLog(const char *base) {
     }
     MILO_ASSERT(!gLog, 0x5B);
     int num = gNumDiffs;
-    bool _cond = strstr(base, "diff");
-    if (_cond) {
+    if (strstr(base, "diff")) {
         gNumDiffs++;
     }
     while (true) {
