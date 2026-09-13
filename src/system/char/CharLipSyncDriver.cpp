@@ -166,22 +166,21 @@ bool CharLipSyncDriver::SetLipSync(CharLipSync *sync) {
         mMainBlendAlpha = 1;
     }
 
-    if (sync) {
-        if (!streq(sync->Name(), "player1_cam.lipsync")
-            && !streq(sync->Name(), "player2_cam.lipsync")
-            && !streq(sync->Name(), "dancer_face.lipsync")) {
-            RELEASE(mOverridePlayback);
-            mOverridePlayback = new CharLipSync::PlayBack();
-            mOverridePlayback->Set(sync, mClips);
-            mOverridePlayback->Reset();
-            return true;
-        } else if (sync != mLipSync) {
-            mLipSync = sync;
-            mLoop = false;
-            mSongOffset = 0;
-            Sync();
-            return true;
-        }
+    if (sync
+        && (streq(sync->Name(), "player1_cam.lipsync")
+            || streq(sync->Name(), "player2_cam.lipsync")
+            || streq(sync->Name(), "dancer_face.lipsync"))) {
+        RELEASE(mOverridePlayback);
+        mOverridePlayback = new CharLipSync::PlayBack();
+        mOverridePlayback->Set(sync, mClips);
+        mOverridePlayback->Reset();
+        return true;
+    } else if (sync != mLipSync) {
+        mLipSync = sync;
+        mLoop = false;
+        mSongOffset = 0;
+        Sync();
+        return true;
     }
     return false;
 }
