@@ -2231,26 +2231,26 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
                         &dstVerts.mVerts[js], &dstVerts.mVerts[ii], sizeof(RndMesh::Vert)
                     );
                     memcpy(&dstVerts.mVerts[ii], &tmp, sizeof(RndMesh::Vert));
+                }
+                // Retail tests js != ii a second time here: cr6 does not
+                // survive the three memcpy calls, and the face re-indexing is
+                // its own guarded block (beq at .L_8262E020).
+                if (js != ii) {
                     int numFaces = (int)dstFaces.size();
-                    if (numFaces > 0) {
-                        unsigned short *faceData = &dstFaces[0].v1;
-                        int n = numFaces;
-                        do {
-                            if (faceData[0] == js)
-                                faceData[0] = ii;
-                            else if (faceData[0] == ii)
-                                faceData[0] = js;
-                            if (faceData[1] == js)
-                                faceData[1] = ii;
-                            else if (faceData[1] == ii)
-                                faceData[1] = js;
-                            if (faceData[2] == js)
-                                faceData[2] = ii;
-                            else if (faceData[2] == ii)
-                                faceData[2] = js;
-                            faceData += 3;
-                            n--;
-                        } while (n != 0);
+                    for (int k = 0; k < numFaces; k++) {
+                        RndMesh::Face &face = dstFaces[k];
+                        if (face.v1 == js)
+                            face.v1 = ii;
+                        else if (face.v1 == ii)
+                            face.v1 = js;
+                        if (face.v2 == js)
+                            face.v2 = ii;
+                        else if (face.v2 == ii)
+                            face.v2 = js;
+                        if (face.v3 == js)
+                            face.v3 = ii;
+                        else if (face.v3 == ii)
+                            face.v3 = js;
                     }
                 }
             } else {
