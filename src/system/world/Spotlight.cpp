@@ -1371,7 +1371,7 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     float topRadius = radii.x;
     float bottomRadius = radii.y;
 
-    static float kSheetFade = 0.3f;
+    static float kSheetFade = 1.0f; // lbl_82F1987C
 
     int iVert = 0;
     for (int row = 0; row < numRows; row++) {

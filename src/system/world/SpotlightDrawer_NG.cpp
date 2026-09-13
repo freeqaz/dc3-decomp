@@ -176,8 +176,8 @@ void NgSpotlightDrawer::RenderCone(Spotlight *sl) {
 }
 
 void NgSpotlightDrawer::RenderSphere(Spotlight *sl) {
-    static float sBeamBrighten = 2.0f;
-    static float sSphereScale = 0.5f;
+    static float sBeamBrighten = 0.1f; // lbl_82F197C8
+    static float sSphereScale = 1.0f; // lbl_82F197CC
     MILO_ASSERT(sl->HasBeam(), 0x470);
     float zero = 0.0f;
     Vector4 sphereParams(zero, zero, 0.625f, sl->mBeam.mTopRadius * sSphereScale);
@@ -579,7 +579,7 @@ void NgSpotlightDrawer::BlurRT(float amountX, float amountY) {
 }
 
 void NgSpotlightDrawer::RenderScene() {
-    static float sFogScale = 1.0f;
+    static float sFogScale = 0.125f; // lbl_82F19828
     START_AUTO_TIMER("world_draw");
 
     sActiveFrame = false;
