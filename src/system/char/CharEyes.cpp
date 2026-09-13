@@ -1158,7 +1158,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
                     (upperBlinkPos.z - lowerBlinkPos.z) * 0.5f + lowerBlinkPos.z
                 );
                 graph->AddSphere(
-                    mid2, 0.03125f, Hmx::Color(1.0f, 0.0f, 1.0f, 1.0f)
+                    mid2, 0.03f, Hmx::Color(1.0f, 0.0f, 1.0f, 1.0f)
                 );
             }
         }
