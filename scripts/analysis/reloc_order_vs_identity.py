@@ -79,11 +79,22 @@ lands exactly on an unnamed `lbl_` where the other side's name is
 unresolvable, the pair is ANCHOR_DISPLACEMENT.  A displacement resolving to a
 NAMED third symbol, or to nothing, stays IDENTITY; so does a pair whose "name"
 on one side is not a symbol at all (repr of an int: that instruction has NO
-relocation, the loudest form of the bug).  Measured on this tree 2026-09-11
-(269 standing rows, 571 pairs): named_symbol 47 pairs = 11 ORDER / 6
-ANCHOR_DISPLACEMENT / 30 IDENTITY (was 36); rows 239 IDENTITY / 6
-ANCHOR_DISPLACEMENT (1,624 B) / 24 ORDER_ONLY.  The six are exactly the
-MemMgr/System family; no other class moved.  Table and the surviving list:
+relocation, the loudest form of the bug).
+
+Tightened 2026-09-13 after MakeBSPTree -- two same-section globals 4 bytes
+apart, the target reading 0x4(r19) off the neighbour's anchor -- was handed to
+a lane as a wrong-variable bug.  Two causes, and the "named third symbol" rule
+was neither (both names resolve, so that branch is never reached):
+`anchor_displacements` did not follow `lis rA, s@ha ; addi rD, rA, s@l` when
+rD != rA and therefore reported NO displacements for that side; and the reach
+sets omitted each anchor's OWN address, so the intersection described which
+consumers the bounded walk happened to see rather than which bytes each side
+addresses.  Measured on this tree 2026-09-13 (255 standing rows, 542 pairs):
+named_symbol 44 pairs = 12 ORDER / 7 ANCHOR_DISPLACEMENT / 25 IDENTITY (was 6
+/ 26); no other class moved and no ROW verdict moved -- 224 IDENTITY / 6
+ANCHOR_DISPLACEMENT (1,624 B) / 25 ORDER_ONLY -- because MakeBSPTree's other
+charged pair is a real one.  0 of the 7 anchor pairs depend on the reach-set
+widening on its own.  Table and the surviving list:
 docs/decomp/patterns/relocation-names-are-unmetered.md section 4.
 
 WHAT IT IS NOT
