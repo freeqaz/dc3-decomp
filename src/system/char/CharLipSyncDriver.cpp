@@ -468,8 +468,7 @@ void CharLipSyncDriver::Poll() {
     if (!mMainPlayback || !mMainPlayback->mLipSync || !cam) {
         skipOverride = 0;
     } else {
-        const char *name = cam->Name();
-        if (name && strncmp(name, "battle_", 7) == 0) {
+        if (cam->Name() && strncmp(cam->Name(), "battle_", 7) == 0) {
             skipOverride = 1;
         } else {
             skipOverride = 0;
