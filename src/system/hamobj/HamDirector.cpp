@@ -1343,7 +1343,7 @@ DataNode HamDirector::OnFileLoaded(DataArray *a) {
             }
         }
     }
-    return 0;
+    return DataNode(kDataInt, 0);
 }
 
 DataNode HamDirector::OnPostProcInterp(DataArray *a) {
