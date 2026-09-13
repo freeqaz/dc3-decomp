@@ -479,9 +479,10 @@ int *MemHeap::Truncate(int *ptr, int newSizeWords, int &allocSize) {
         InsertFreeBlock(newFree, truncWords, prev, next, ts);
         if (1 <= mDebugLevel) {
             int *end = (int *)newFree + newFree->mSizeWords;
-            if ((int *)newFree + 3 < end) {
-                int *cur = (int *)newFree + 2;
-                for (unsigned int count = (((unsigned int)end - (unsigned int)((int *)newFree + 3)) - 1) / 4 + 1; count != 0; count--) {
+            int *limit = (int *)newFree + 3;
+            if (limit < end) {
+                int *cur = limit - 1;
+                for (unsigned int count = (((unsigned int)end - (unsigned int)limit) - 1) / 4 + 1; count != 0; count--) {
                     cur++;
                     *cur = 0xDEADDEAD;
                 }
