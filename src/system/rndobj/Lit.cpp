@@ -82,13 +82,19 @@ bool RndLight::Replace(ObjRef *ref, Hmx::Object *obj) {
     return RndTransformable::Replace(ref, obj);
 }
 
+// Built as a Matrix3 plus a Vector3 and handed to Transform's two-argument
+// constructor: retail's static initialiser runs that ctor with `this` ==
+// &sBias, so the rotation arrives as one 0x30 memcpy out of a Matrix3 local
+// and the translation as a four-word copy out of a separate Vector3 local.
+// A `Transform bias;` built field-wise would be NRVO'd straight into the
+// static and lose both copies.
 static Transform MakeShadowBias() {
-    Transform bias;
-    bias.m.x.Set(0.5f, 0.0f, 0.0f);
-    bias.m.y.Set(0.0f, 0.5f, 0.0f);
-    bias.m.z.Set(0.5f, 0.5f, 1.0f);
-    bias.v.Set(0.0f, 0.0f, 0.0f);
-    return bias;
+    Hmx::Matrix3 m;
+    m.x.Set(0.5f, 0.0f, 0.0f);
+    m.y.Set(0.0f, 0.5f, 0.0f);
+    m.z.Set(0.5f, 0.5f, 1.0f);
+    Vector3 v(0.0f, 0.0f, 0.0f);
+    return Transform(m, v);
 }
 
 Transform RndLight::Projection() {
