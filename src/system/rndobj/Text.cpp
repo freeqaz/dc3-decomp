@@ -1759,18 +1759,15 @@ void RndText::FitTextEllipsis() {
 
         // Binary search for how many chars fit
         int lo = 1;
+        int hi = numChars;
         if (numChars > 2) {
-            int hi = numChars;
             do {
-                int tmpLo = lo;
-                int mid = ((int)tmpLo + (int)hi) >> 1;
-                lo = mid;
-                if (charWidths[mid] >= mWidth) {
+                int mid = (lo + hi) >> 1;
+                if (charWidths[mid] < mWidth)
+                    lo = mid;
+                else
                     hi = mid;
-                    lo = tmpLo;
-                }
-                tmpLo = lo;
-            } while ((int)lo + 1 < (int)hi);
+            } while (hi > lo + 1);
         }
 
         // Total length = truncated text + ellipsis
@@ -1782,7 +1779,7 @@ void RndText::FitTextEllipsis() {
         memcpy(buf, &wideChars[0], lo * sizeof(unsigned short));
 
         // Respect mFixedLength if set
-        if (ellipsisLen + 1 < mFixedLength && mFixedLength < totalLen) {
+        if (mFixedLength > ellipsisLen + 1 && totalLen > mFixedLength) {
             totalLen = mFixedLength;
         }
 
@@ -1799,19 +1796,19 @@ void RndText::FitTextEllipsis() {
         WrapText(buf, totalLen, charWidths, lines, bounds, 1.0f);
 
         // Iteratively shrink if text still doesn't fit
-#ifdef HX_NATIVE
-        auto breakChar = u16chr(kBreakCharsU16, buf[truncPos - 1]);
-#else
-        auto breakChar = wcschr(L" .,", (wchar_t)buf[truncPos - 1]);
-#endif
         while (truncPos > 1
-            && (lines.size() > 1 || mWidth <= bounds.w
-                || breakChar != 0)) {
-            totalLen = totalLen - 1;
+               && (lines.size() > 1 || bounds.w >= mWidth
+#ifdef HX_NATIVE
+                   || u16chr(kBreakCharsU16, buf[truncPos - 1]) != 0
+#else
+                   || wcschr(L" .,", (wchar_t)buf[truncPos - 1]) != 0
+#endif
+                   )) {
             // Try to find a space to break at (within ~87.5% of current length)
             int minPos = (int)totalLen * 0xe >> 4;
-            if (minPos <= (int)totalLen - 1) {
-                int searchPos = totalLen - 1;
+            totalLen = totalLen - 1;
+            int searchPos = totalLen;
+            if (searchPos >= minPos) {
                 unsigned short *searchPtr = &buf[searchPos];
                 while (true) {
                     if (*searchPtr == 0x20) {
