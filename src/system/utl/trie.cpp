@@ -137,6 +137,11 @@ void Trie::remove(unsigned int index) {
             check_index(curIdx);
             unsigned int parentIdx = Parent(curNode);
             if (parentIdx != 0) {
+                // Retail range-checks the node again and re-reads the parent
+                // link inside the guard rather than reusing the value it just
+                // tested (bl check_index / lwz 0x8(node) / bl check_index).
+                check_index(curIdx);
+                parentIdx = Parent(curNode);
                 check_index(parentIdx);
                 unsigned int parentFirstChild = FirstChild(NodePtr(this, parentIdx));
                 check_index(parentFirstChild);
@@ -199,18 +204,21 @@ void Trie::remove(unsigned int index) {
         if (curIdx == 1) {
             // Root level special handling
             unsigned int scanCount = 0;
+            // The root sibling count is re-read from the header on every trip
+            // (lbz 0x20(this) sits inside the loop), not hoisted into a local.
 #ifdef HX_NATIVE
-            unsigned char rootCount = SiblingCount(NodePtr(this, 1));
+#define TRIE_ROOT_SIBLING_COUNT SiblingCount(NodePtr(this, 1))
 #else
-            unsigned char rootCount = *(unsigned char *)((char *)this + 0x20);
+#define TRIE_ROOT_SIBLING_COUNT (*(unsigned char *)((char *)this + 0x20))
 #endif
 
-            while (scanCount < rootCount - 1) {
+            while (scanCount < TRIE_ROOT_SIBLING_COUNT - 1) {
                 check_index(curIdx);
                 scanCount++;
                 curIdx = NextSibling(curNode);
                 curNode = NodePtr(this, curIdx);
             }
+#undef TRIE_ROOT_SIBLING_COUNT
 
             if (curIdx == 1) {
                 delete_node(1);
