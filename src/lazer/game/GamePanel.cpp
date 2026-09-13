@@ -1005,7 +1005,15 @@ void GamePanel::UpdateNowBar() {
     if (0.0f < songDuration) {
         val = 100.0f;
         float secondsval = seconds * 100.0f;
-        float eq = secondsval / songDuration * 0.001f;
+        // The divisor is the song duration in SECONDS: the target multiplies
+        // songDuration by the 0.001f constant (fmuls) and then divides (fdivs),
+        // so this is a real percentage.  Dividing by the MILLISECOND duration
+        // and then scaling the quotient by 0.001f, as we had it, is a million
+        // times too small.
+        // Spelled `/ 1000.0f` rather than `* 0.001f` on purpose: /fp:fast turns
+        // it into the same multiply in the backend, but written as a multiply it
+        // becomes a common subexpression with durVal above and costs the fmsubs.
+        float eq = secondsval / (songDuration / 1000.0f);
         if (eq <= 100.0f) {
             val = eq;
         }
