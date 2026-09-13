@@ -189,12 +189,12 @@ void AsyncFileWin::_ReadAsync(void *buf, int count) {
         return;
     mReadInProgress = true;
     memset(&mOverlapped, 0, sizeof(OVERLAPPED));
-    unk64 = count;
     unk5c = buf;
+    unk64 = count;
     unsigned char aligned = 0;
     if (((int)buf & 3) == 0) {
         if (Tell() % mSectorBytes == 0) {
-            if (count % mSectorBytes == 0) {
+            if (unk64 % mSectorBytes == 0) {
                 aligned = 1;
             }
         }
@@ -203,16 +203,15 @@ void AsyncFileWin::_ReadAsync(void *buf, int count) {
     int bytesToRead;
     if (aligned) {
         mOverlapped.Offset = Tell();
-        bytesToRead = count;
-        unk60 = buf;
+        bytesToRead = unk64;
+        unk60 = unk5c;
     } else {
-        int alignedStart = (Tell() / mSectorBytes) * mSectorBytes;
-        mOverlapped.Offset = alignedStart;
-        int alignedEnd = ((Tell() + count + mSectorBytes - 1) / mSectorBytes) * mSectorBytes;
-        bytesToRead = alignedEnd - alignedStart;
+        mOverlapped.Offset = (Tell() / mSectorBytes) * mSectorBytes;
+        int alignedEnd = ((Tell() + unk64 + mSectorBytes - 1) / mSectorBytes) * mSectorBytes;
+        bytesToRead = alignedEnd - mOverlapped.Offset;
         MILO_ASSERT(bytesToRead%mSectorBytes == 0, 0x16a);
         unk60 = _MemAllocTemp(bytesToRead, "AsyncFile_Win.cpp", 0x16d, "AsyncFileTempBuf", 0);
-        unk68 = Tell() - alignedStart;
+        unk68 = Tell() - mOverlapped.Offset;
     }
     if (!ReadFile(mFile, unk60, bytesToRead, 0, &mOverlapped)) {
         if (GetLastError() != 0x3e5) {
