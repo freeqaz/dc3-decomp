@@ -368,8 +368,9 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
     if (mShowing && !mShadow.empty()) {
         Vector3 worldPos = WorldXfm().v;
 
-        Plane pl70;
-        pl70.Set(0, 0, 1, -(worldPos.z + planeD));
+        Plane pl70(
+            Vector3(worldPos.x, worldPos.y, worldPos.z + planeD), Vector3(0, 0, 1)
+        );
 
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
         Transform tf40;
