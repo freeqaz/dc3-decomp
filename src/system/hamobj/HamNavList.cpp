@@ -1264,13 +1264,10 @@ void HamNavList::SetSelecting(bool selecting) {
     UIList *sublist = mListDirResource->SubList(selected, mListWidgets);
     if (!(sublist == nullptr)) {
         HamNavProvider *navProvider = mNavProvider;
-        int subSelected = sublist->Selected();
-        int subSelPlusOne = subSelected + 1;
-        int wrapped = sublist->GetListState().WrapShowing(subSelPlusOne);
+        int wrapped = sublist->GetListState().WrapShowing(sublist->Selected() + 1);
         sym = navProvider->DataSymbol(selected, wrapped);
     } else {
-        Symbol dataSym = provider->DataSymbol(selected);
-        sym = dataSym;
+        sym = provider->DataSymbol(selected);
     }
 #ifdef HX_NATIVE
     static int sSelectDiag = 0;
