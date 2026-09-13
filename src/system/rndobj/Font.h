@@ -167,7 +167,7 @@ protected:
 class RndFont3d : public RndFontBase {
 public:
     struct CharInfo {
-        CharInfo() : mMesh(nullptr) {}
+        CharInfo(Hmx::Object *owner) : mMesh(owner) {}
         ~CharInfo() {}
 
         Box unk0; // 0x0

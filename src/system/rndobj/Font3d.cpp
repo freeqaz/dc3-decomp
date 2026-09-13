@@ -60,7 +60,7 @@ BEGIN_COPYS(RndFont3d)
     }
     mCharInfoMap.clear();
     FOREACH (it2, f->mCharInfoMap) {
-        CharInfo *info = new CharInfo();
+        CharInfo *info = new CharInfo(this);
         *info = *it2->second;
         mCharInfoMap[it2->first] = info;
     }
@@ -86,9 +86,8 @@ BEGIN_LOADS(RndFont3d)
     for (unsigned int i = 0; i < (unsigned int)size; i++) {
         unsigned short key;
         d >> key;
-        CharInfo *info = new CharInfo();
-        if (info)
-            d >> info->unk0;
+        CharInfo *info = new CharInfo(this);
+        d >> info->unk0;
         d >> info->advance;
 #ifdef HX_NATIVE
         // On native, CharInfo::mMesh has no owner (constructed with nullptr),
