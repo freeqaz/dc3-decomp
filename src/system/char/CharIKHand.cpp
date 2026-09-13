@@ -539,7 +539,7 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 // one holding `a` (f24, the operand of the sphereRadius^2 - a^2
                 // fmsubs), and rb3's CharIKHand carries the same expression with
                 // v164len (the elbow length) in this slot.
-                float d = (sphereToAxisDist * sphereToAxisDist + -(elbowLen * elbowLen - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
+                float d = (sphereToAxisDist * sphereToAxisDist + (sPerpDist * sPerpDist - elbowLen * elbowLen)) / (sphereToAxisDist * 2.0f);
                 float sqrtTerm = std::sqrt(-(d * d - sPerpDist * sPerpDist));
                 float tiltAngle = std::asin(sqrtTerm / elbowLen);
                 bool _cond = IsNaN(tiltAngle);
@@ -549,9 +549,12 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 tiltDir -= axisProj;
                 Normalize(tiltDir, tiltDir);
                 Scale(tiltDir, elbowLen, tiltDir);
-                double halfAngle = tiltAngle / 2.0;
-                float sinHalf = sin(halfAngle);
-                float cosHalf = cos(halfAngle);
+                // No named half-angle local: the target loads 0.5 once and emits
+                // `fmul f1, f27, f26` TWICE, once before `bl sin` and once
+                // before `bl cos`, where a named double would have been a single
+                // multiply plus two `fmr`.
+                float sinHalf = sin(tiltAngle / 2.0);
+                float cosHalf = cos(tiltAngle / 2.0);
                 Hmx::Quat quatDir(tiltDir.x, tiltDir.y, tiltDir.z, 0.0f);
                 Hmx::Quat quatRot(axisDir.x * sinHalf, axisDir.y * sinHalf, axisDir.z * sinHalf, cosHalf);
                 Hmx::Quat quatResult;
