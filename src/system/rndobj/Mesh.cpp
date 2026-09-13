@@ -935,14 +935,18 @@ void RndMesh::ClearCompressedVerts() {
 
 bool RndMesh::Replace(ObjRef *from, Hmx::Object *to) {
     if (&mGeomOwner == from) {
+        RndMesh *replace;
         if (mGeomOwner == this) {
+            replace = this;
+        } else {
             RndMesh *mesh = dynamic_cast<RndMesh *>(to);
             if (mesh) {
-                mGeomOwner = mesh;
+                replace = mesh->mGeomOwner;
+            } else {
+                replace = this;
             }
-        } else {
-            mGeomOwner = this;
         }
+        mGeomOwner = replace;
         return true;
     } else {
         return RndTransformable::Replace(from, to);
