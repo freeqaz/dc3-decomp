@@ -349,8 +349,9 @@ bool JoypadIsConnectedPadNum(int);
 bool JoypadTypeHasLeftyFlip(Symbol type);
 
 inline bool MovedLeftStick(JoypadButton btn) {
-    return btn == kPad_LStickUp || btn == kPad_LStickRight || btn == kPad_LStickDown
-        || btn == kPad_LStickLeft;
+    // Compare order is load-bearing: the target tests 0x10, 0x12, 0x13, 0x11.
+    return btn == kPad_LStickUp || btn == kPad_LStickDown || btn == kPad_LStickLeft
+        || btn == kPad_LStickRight;
 }
 
 inline bool DirectionalAction(JoypadAction a) {
