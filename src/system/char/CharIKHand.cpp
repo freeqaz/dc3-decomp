@@ -466,9 +466,8 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
     Transform shoulderXfm(shoulder->WorldXfm());
     shoulderXfm.v += shoulderAdj;
     shoulder->SetWorldXfm(shoulderXfm);
-    Vector3 shoulderToWrist;
-    Subtract(shoulder->WorldXfm().v, mWorldDst, shoulderToWrist);
-    float cosAngle = mInv2ab * (LengthSquared(shoulderToWrist) - mAABB);
+    float cosAngle =
+        mInv2ab * (DistanceSquared(shoulder->WorldXfm().v, mWorldDst) - mAABB);
     ClampEq(cosAngle, -1.0f, 1.0f);
     float sinAngle = -std::sqrt(-(cosAngle * cosAngle - 1.0f));
     elbow->DirtyLocalXfm().m.Set(cosAngle, sinAngle, 0, -sinAngle, cosAngle, 0, 0, 0, 1);
@@ -529,11 +528,17 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 Scale(axisDir, midAxisDot, sphereToMid);
                 Add(sphereCenter, sphereToMid, sphereToMid);
                 float a = Distance(sphereToMid, sphereCenter);
-                MILO_ASSERT(a <= sphereRadius, 0x1A1);
+                MILO_ASSERT(a <= sphereRadius, 0x1A2);
                 float sPerpDist = std::sqrt(sphereRadius * sphereRadius - a * a);
                 sphereCenter.Set(sphereToMid.x, sphereToMid.y, sphereToMid.z);
                 float sphereToAxisDist = Distance(sphereCenter, axisProj);
-                float d = (sphereToAxisDist * sphereToAxisDist + -(a * a - sPerpDist * sPerpDist)) / (sphereToAxisDist * 2.0f);
+                // The subtracted square is the ELBOW LENGTH, not `a`. `a` is
+                // already consumed by sPerpDist above; the target's
+                // `fnmsubs fX, f28, f28, f12` names a different register from the
+                // one holding `a` (f24, the operand of the sphereRadius^2 - a^2
+                // fmsubs), and rb3's CharIKHand carries the same expression with
+                // v164len (the elbow length) in this slot.
+                float d = (sphereToAxisDist * sphereToAxisDist + (sPerpDist * sPerpDist - elbowLen * elbowLen)) / (sphereToAxisDist * 2.0f);
                 float sqrtTerm = std::sqrt(-(d * d - sPerpDist * sPerpDist));
                 float tiltAngle = std::asin(sqrtTerm / elbowLen);
                 bool _cond = IsNaN(tiltAngle);
@@ -543,9 +548,12 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 tiltDir -= axisProj;
                 Normalize(tiltDir, tiltDir);
                 Scale(tiltDir, elbowLen, tiltDir);
-                double halfAngle = tiltAngle / 2.0;
-                float sinHalf = sin(halfAngle);
-                float cosHalf = cos(halfAngle);
+                // No named half-angle local: the target loads 0.5 once and emits
+                // `fmul f1, f27, f26` TWICE, once before `bl sin` and once
+                // before `bl cos`, where a named double would have been a single
+                // multiply plus two `fmr`.
+                float sinHalf = sin(tiltAngle / 2.0);
+                float cosHalf = cos(tiltAngle / 2.0);
                 Hmx::Quat quatDir(tiltDir.x, tiltDir.y, tiltDir.z, 0.0f);
                 Hmx::Quat quatRot(axisDir.x * sinHalf, axisDir.y * sinHalf, axisDir.z * sinHalf, cosHalf);
                 Hmx::Quat quatResult;

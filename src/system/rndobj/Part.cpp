@@ -1337,7 +1337,10 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                         cg = fp->midcolVel.green * colorScale;
                         cr = colorScale * fp->midcolVel.red;
                     } else {
-                        float t = (dt - fp->midcolFrame) * fp->bubblePhase;
+                        // bubbleDir.w (0xa4), NOT bubblePhase (0xac): the target
+                        // reads `lfs f13, 0xa4(r29)` here. bubbleDir is a Vector4
+                        // at 0x98, so +0xc is its w. rb3's matched Part.cpp agrees.
+                        float t = (dt - fp->midcolFrame) * fp->bubbleDir.w;
                         colorScale = (1.0f - t) * t * frameSpan * sixf;
                         ca = p->colVel.alpha * colorScale;
                         cb = p->colVel.blue * colorScale;

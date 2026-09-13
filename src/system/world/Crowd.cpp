@@ -1042,9 +1042,11 @@ static const char *sCollideNames[] = {
 };
 
 void WorldCrowd::DrawShowing() {
-    auto& _ref0 = mPlacementMesh;
+    // No cached reference to mPlacementMesh: the target never forms
+    // `addi rX, r3, 0x48`, it re-reads `lwz r11, 0x54(this)` (the ObjPtr's raw
+    // slot) at each use.
     START_AUTO_TIMER("crowd_draw");
-    if (!_ref0) return;
+    if (!mPlacementMesh) return;
     Draw3DChars();
     if (Rnd::kDrawOcclusionDepth == TheRnd.DrawMode()) return;
     MILO_ASSERT(!gImpostorMat->NextPass(), 0x3A0);
@@ -1086,7 +1088,7 @@ void WorldCrowd::DrawShowing() {
                     float halfHeight = charIt->mDef.mHeight * 0.5f;
 
                     // Position impostor camera at distance along camera's -Y axis
-                    const Transform &placementXfm = _ref0->WorldXfm();
+                    const Transform &placementXfm = mPlacementMesh->WorldXfm();
                     const Transform &curCamXfm = curCam->WorldXfm();
                     float dx = curCamXfm.v.x - placementXfm.v.x;
                     float dy = curCamXfm.v.y - placementXfm.v.y;
@@ -1107,9 +1109,9 @@ void WorldCrowd::DrawShowing() {
                     // Orient character based on crowd rotation mode
                     Transform charXfm;
                     if (mCrowdRotate == kCrowdRotateNone) {
-                        memcpy(&charXfm, &_ref0->WorldXfm(), 0x30);
+                        memcpy(&charXfm, &mPlacementMesh->WorldXfm(), 0x30);
                     } else {
-                        const Transform &meshXfm = _ref0->WorldXfm();
+                        const Transform &meshXfm = mPlacementMesh->WorldXfm();
                         float upX = meshXfm.m.z.x;
                         float upY = meshXfm.m.z.y;
                         float upZ = meshXfm.m.z.z;
@@ -1193,7 +1195,7 @@ void WorldCrowd::DrawShowing() {
                 float halfWidth = halfHeight * 0.5f;
 
                 // --- Set up impostor camera: position at -dist along camera's Y axis ---
-                const Transform &placementXfm = _ref0->WorldXfm();
+                const Transform &placementXfm = mPlacementMesh->WorldXfm();
                 const Transform &curCamXfm = curCam->WorldXfm();
                 float dx = curCamXfm.v.x - placementXfm.v.x;
                 float dy = curCamXfm.v.y - placementXfm.v.y;
@@ -1215,22 +1217,25 @@ void WorldCrowd::DrawShowing() {
                 // --- Compute character orientation based on crowd rotation mode ---
                 Transform charXfm;
                 if (mCrowdRotate == kCrowdRotateNone) {
-                    const Transform &meshXfm = _ref0->WorldXfm();
+                    const Transform &meshXfm = mPlacementMesh->WorldXfm();
                     memcpy(&charXfm, &meshXfm, 0x30);
                 } else {
                     // Copy the mesh up-row straight into the char transform's
                     // up-row member, then re-read its components from the stack.
                     // This keeps the up vector in memory rather than pinning
                     // three nonvolatile FPRs across the whole block.
-                    const Transform &meshXfm2 = _ref0->WorldXfm();
+                    const Transform &meshXfm2 = mPlacementMesh->WorldXfm();
                     charXfm.m.z = meshXfm2.m.z;
 
                     // Cross product of camera Y-axis with mesh up vector,
                     // component swaps determine Face vs Away rotation.
-                    // Only two WorldXfm() expansions: reuse the reference.
+                    // The reference is declared INSIDE each arm, not hoisted:
+                    // the target tests mCrowdRotate FIRST (`lwz r9, 0x6c(r24)` /
+                    // `cmpwi cr6, r9, 0x1` at 82838608/82838614, before any
+                    // `lbz r11, 0xbd(r26)`) and expands WorldXfm() twice.
                     float camA, upA, camB, upB;
-                    const Transform &camWXfm = curCam->WorldXfm();
                     if (mCrowdRotate == kCrowdRotateFace) {
+                        const Transform &camWXfm = curCam->WorldXfm();
                         charXfm.m.x.z = camWXfm.m.y.y * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.y;
                         charXfm.m.x.y = camWXfm.m.y.x * charXfm.m.z.z - camWXfm.m.y.z * charXfm.m.z.x;
                         camA = camWXfm.m.y.z;
@@ -1238,6 +1243,7 @@ void WorldCrowd::DrawShowing() {
                         camB = camWXfm.m.y.y;
                         upB = charXfm.m.z.z;
                     } else {
+                        const Transform &camWXfm = curCam->WorldXfm();
                         charXfm.m.x.y = camWXfm.m.y.z * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.z;
                         charXfm.m.x.z = camWXfm.m.y.x * charXfm.m.z.y - camWXfm.m.y.y * charXfm.m.z.x;
                         camA = camWXfm.m.y.y;
@@ -1301,24 +1307,31 @@ void WorldCrowd::DrawShowing() {
                 if (numRects != 0) {
                     unsigned int ri = 0;
                     do {
+                        // The maxima take the rect's OWN y/x, not the running
+                        // minimum. The target adds before it selects:
+                        //   lfs f9, 0xc(r11)   ; rects[ri].y (raw)
+                        //   lfs f6, 0x14(r11)  ; rects[ri].h
+                        //   fadds f6, f9, f6   ; y + h   <- BEFORE any fsel
+                        //   fsel f0, f7, f9, f0
+                        // We were feeding the already-minimised value into the
+                        // sum, so every iteration that did not lower the running
+                        // minimum contributed min_so_far + h instead of y + h.
                         float ry = rects[ri].y;
                         float rx = rects[ri].x;
-                        ry = (float)__fsel(minX - ry, ry, minX);
-                        rx = (float)__fsel(minY - rx, rx, minY);
-                        float ryh = ry + rects[ri].h;
-                        maxX = (float)__fsel(maxX - ryh, maxX, ryh);
-                        float rxw = rx + rects[ri].w;
-                        maxY = (float)__fsel(maxY - rxw, maxY, rxw);
-                        minX = ry;
-                        minY = rx;
+                        maxX = Max(maxX, ry + rects[ri].h);
+                        maxY = Max(maxY, rects[ri].w + rx);
+                        minX = Min(minX, ry);
+                        minY = Min(minY, rx);
                         ri++;
                     } while (ri != numRects);
                 }
-                // Clamp bounds to [0,1] screen space
-                float clampedMinY = (float)__fsel(-minY, 0.0f, minY);
-                float clampedMaxY = (float)__fsel(maxY - 1.0f, 1.0f, maxY);
-                float clampedMinX = (float)__fsel(-minX, 0.0f, minX);
-                float clampedMaxX = (float)__fsel(maxX - 1.0f, 1.0f, maxX);
+                // Clamp bounds to [0,1] screen space. Constant FIRST on the Min
+                // side: the target's `fsubs f9, f26, f11` / `fsel f29, f9, f11, f26`
+                // is Min(1.0f, maxY), i.e. x = 1.0f.
+                float clampedMinY = Max(0.0f, minY);
+                float clampedMaxY = Min(1.0f, maxY);
+                float clampedMinX = Max(0.0f, minX);
+                float clampedMaxX = Min(1.0f, maxX);
 
                 // --- Render character to impostor texture ---
                 if (TheRnd.DrawMode() == Rnd::kDrawNormal) {
@@ -1328,15 +1341,20 @@ void WorldCrowd::DrawShowing() {
                             PathName(this)
                         );
                     }
-                    RndEnviron *env = mEnviron;
+                    // No cached `RndEnviron *env`: the target re-reads
+                    // `lwz r11, 0x9c(r24)` (mEnviron's ObjPtr raw slot) at every
+                    // use, each time with the `clrrwi` + two `stw ..., 0x50(r31)`
+                    // inlined-`this` homes that only appear on a member access,
+                    // and passes `lwz r4, 0x9c(r24)` to the tracker ctor rather
+                    // than a register copy.
                     bool savedApprox = true;
-                    if (env) {
-                        savedApprox = env->UsesApproxGlobal();
-                        env->SetUseApproxGlobal(false);
+                    if (mEnviron) {
+                        savedApprox = mEnviron->UsesApproxGlobal();
+                        mEnviron->SetUseApproxGlobal(false);
                     }
                     {
                         const Transform &charWorldXfm = curChar->WorldXfm();
-                        RndEnvironTracker tracker(env, &charWorldXfm.v);
+                        RndEnvironTracker tracker(mEnviron, &charWorldXfm.v);
                         gImpostorCamera->Select();
                         curChar->SetShowing(true);
                         if (mCharForceLod != kLODPerFrame) {
@@ -1346,11 +1364,14 @@ void WorldCrowd::DrawShowing() {
                         if (mCharForceLod != kLODPerFrame) {
                             curChar->SetLodType(kLODPerFrame);
                         }
-                        if (env) {
-                            env->SetUseApproxGlobal(savedApprox);
+                        if (mEnviron) {
+                            mEnviron->SetUseApproxGlobal(savedApprox);
                         }
+                        // INSIDE the tracker scope: the target runs the virtual
+                        // Select() at 82838AE8 and only then `bl ~RndEnvironTracker`
+                        // at 82838B00.
+                        curCam->Select();
                     }
-                    curCam->Select();
                 }
 
                 // --- Update billboard quad vertices ---
@@ -1359,29 +1380,25 @@ void WorldCrowd::DrawShowing() {
                 float uvBottom = -(clampedMaxX * charIt->mDef.mHeight - halfHeight);
                 float posRight = clampedMaxY * halfHeight - halfWidth;
 
-                RndMesh *billboardMesh = mmesh->Mesh();
-                RndMesh::Vert *verts = billboardMesh->Verts().begin();
-                verts[0].pos.x = posLeft;
-                verts[0].pos.y = 0;
-                verts[0].pos.z = uvLeft;
-                verts[1].pos.x = posLeft;
-                verts[1].pos.y = 0;
-                verts[1].pos.z = uvBottom;
-                verts[2].pos.x = posRight;
-                verts[2].pos.y = 0;
-                verts[2].pos.z = uvLeft;
-                verts[3].pos.x = posRight;
-                verts[3].pos.y = 0;
-                verts[3].pos.z = uvBottom;
-                verts[0].tex.x = clampedMinY;
-                verts[0].tex.y = clampedMinX;
-                verts[1].tex.x = clampedMinY;
-                verts[1].tex.y = clampedMaxX;
-                verts[2].tex.x = clampedMaxY;
-                verts[2].tex.y = clampedMinX;
-                verts[3].tex.x = clampedMaxY;
-                verts[3].tex.y = clampedMaxX;
-                billboardMesh->Sync(0x1F);
+                // Through Verts() and Vector3::Set / Vector2::Set, and with the
+                // mesh re-read rather than cached. Verts() is
+                // `{ return mGeomOwner->mVerts; }`, which is the target's
+                // `lwz r11, 0x148(r11)` (mGeomOwner raw ptr) followed by
+                // `addi r10, r11, 0x100` + `lwz r11, 0x100(r11)`; we were
+                // loading 0x100 straight off the mesh. Each Set() then homes its
+                // inlined `this` with an `addi`+`stw ..., 0x50(r31)` pair at
+                // vert+0x00 and vert+0x40 -- nine such homes the target has and
+                // we did not.
+                RndMesh::VertVector &verts = charIt->mMMesh->Mesh()->Verts();
+                verts[0].pos.Set(posLeft, 0.0f, uvLeft);
+                verts[1].pos.Set(posLeft, 0.0f, uvBottom);
+                verts[2].pos.Set(posRight, 0.0f, uvLeft);
+                verts[3].pos.Set(posRight, 0.0f, uvBottom);
+                verts[0].tex.Set(clampedMinY, clampedMinX);
+                verts[1].tex.Set(clampedMinY, clampedMaxX);
+                verts[2].tex.Set(clampedMaxY, clampedMinX);
+                verts[3].tex.Set(clampedMaxY, clampedMaxX);
+                charIt->mMMesh->Mesh()->Sync(0x1F);
 
                 // --- Draw billboarded multimesh instances ---
                 DrawMultiMeshWithEnviron(mmesh);
