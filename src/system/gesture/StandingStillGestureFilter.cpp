@@ -34,13 +34,18 @@ void StandingStillGestureFilter::RestoreDefaultForwardFacingCutoff() {
 }
 
 void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
+    // Two file-local mutable floats, read from memory rather than folded as
+    // literals: .data 0x2c/0x30 of this TU.  The first is a DISTANCE (0.5),
+    // squared at the comparison site -- the decomp previously baked in
+    // 0.0625f, i.e. a radius of 0.25, half the real standing-still tolerance.
+    static float sStandingStillRadius = 0.5f;
+    static float sLegStraightDot = -0.75f;
     int idx = skeleton.SkeletonIndex();
     if (idx < 0 || idx >= 6)
         return;
 
     SkeletonQualityFilter &filter = TheGestureMgr->GetSkeletonQualityFilter(idx);
-    if (TheGestureMgr)
-        filter.Update(skeleton, TheGestureMgr->mInShellMode);
+    filter.Update(skeleton, TheGestureMgr->mInShellMode);
 
     if (!skeleton.IsTracked() && !TheGestureMgr->IsTrackingAllSkeletons()) {
         TheGestureMgr->unk30[idx] = 2;
@@ -91,27 +96,29 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
                         v1.x = joints[kJointKneeRight].mJointPos[0].x - joints[kJointHipRight].mJointPos[0].x;
                         v1.y = joints[kJointKneeRight].mJointPos[0].y - joints[kJointHipRight].mJointPos[0].y;
                         v1.z = joints[kJointKneeRight].mJointPos[0].z - joints[kJointHipRight].mJointPos[0].z;
+                        Normalize(v1, v1);
+
                         v2.x = joints[kJointKneeRight].mJointPos[0].x - joints[kJointAnkleRight].mJointPos[0].x;
                         v2.y = joints[kJointKneeRight].mJointPos[0].y - joints[kJointAnkleRight].mJointPos[0].y;
                         v2.z = joints[kJointKneeRight].mJointPos[0].z - joints[kJointAnkleRight].mJointPos[0].z;
-                        Normalize(v1, v1);
                         Normalize(v2, v2);
 
                         v3.x = joints[kJointKneeLeft].mJointPos[0].x - joints[kJointHipLeft].mJointPos[0].x;
                         v3.y = joints[kJointKneeLeft].mJointPos[0].y - joints[kJointHipLeft].mJointPos[0].y;
                         v3.z = joints[kJointKneeLeft].mJointPos[0].z - joints[kJointHipLeft].mJointPos[0].z;
+                        Normalize(v3, v3);
+
                         v4.x = joints[kJointKneeLeft].mJointPos[0].x - joints[kJointAnkleLeft].mJointPos[0].x;
                         v4.y = joints[kJointKneeLeft].mJointPos[0].y - joints[kJointAnkleLeft].mJointPos[0].y;
                         v4.z = joints[kJointKneeLeft].mJointPos[0].z - joints[kJointAnkleLeft].mJointPos[0].z;
-                        Normalize(v3, v3);
                         Normalize(v4, v4);
 
                         float dotR = v2.x * v1.x + v2.y * v1.y + v2.z * v1.z;
-                        if (dotR > -0.75f) {
+                        if (dotR > sLegStraightDot) {
                             state = 9;
                         } else {
                             float dotL = v4.x * v3.x + v4.y * v3.y + v4.z * v3.z;
-                            if (dotL > -0.75f) {
+                            if (dotL > sLegStraightDot) {
                                 state = 9;
                             } else {
                                 goto StandingStillLogic;
@@ -136,7 +143,7 @@ StandingStillLogic:
     float dx = savedPos.x - pos.x;
     float dy = savedPos.y - pos.y;
     float dz = savedPos.z - pos.z;
-    if (dx * dx + dy * dy + dz * dz < 0.0625f) {
+    if (dx * dx + dy * dy + dz * dz < sStandingStillRadius * sStandingStillRadius) {
         mRaisedMs += ms;
     } else {
         TheGestureMgr->unk30[idx] = 10;
