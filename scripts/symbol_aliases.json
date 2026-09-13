@@ -29018,6 +29018,36 @@
    ],
    "kind": "data",
    "evidence": "/OPT:ICF fold of two byte-identical .rdata constants, neither of which the retail linker map can list (both are FUNCTION-LOCAL statics, and ham_xbox_r.map's static section is functions only). Established from the split target objects instead. config/373307D9/symbols.txt names ?Component@?1??GetSwizzleVectorSrc@@YA?AU__vector4@@W4_D3DFORMAT@@@Z@4QBIB at .rdata:0x820C4FE0 size 0x18, and build/373307D9/asm/xdk/xgraphics/convert.s renders its 0x18 bytes as 00 01 02 .. 17. src/system/synth/tomcrypt/aes.c:383 declares `static const unsigned char key192[24]` with exactly those 24 bytes, so the two COMDATs are byte-identical with no relocations on either side -- the condition /OPT:ICF actually tests. The target's rijndael_test then materialises 0x820C4FE0 (lis/addi, idx 177/178) at precisely the site where ours materialises key192, and dtk resolves that address to the convert.obj name because that is where the surviving COMDAT landed. Survivor is the name the TARGET objects define; key192 is the folded-away spelling. Installed by hand (lane w3-e2, 2026-09-13): the retailmap-data tier's gates all key on map residency, which no function-local static can satisfy."
+  },
+  {
+   "name": "altname-vmx:__vmx_00000000000000000000000000000000@0x82142500",
+   "survivor": "__vmx@00000000000000000000000000000000",
+   "address": "0x82142500",
+   "folded": [
+    "__vmx_00000000000000000000000000000000"
+   ],
+   "kind": "data",
+   "evidence": "COFF weak external declared by a /ALTERNATENAME linker directive, the same relation the 962-group `weakalias:` tier models -- missed by that scan because the directive lives in a .drectve in src/link_glue.cpp, not as a weak external in the referencing object (FFT.obj). MSVC spells a VMX literal-pool constant `__vmx@<hex>`; `@` is not a valid identifier character, so src/system/synth_xbox/FFT.cpp:340-342 declares the three it needs with `_` and link_glue.cpp aliases each spelling onto the real .rdata symbol. The two names therefore denote one 0x10-byte object at 0x82142500 (config/373307D9/symbols.txt). objdiff sees only the OBJECT's relocation name, so the underscore spelling charged a name_check row at every site (fft_matrix_inverse_columnwise idx 44/45/48/49). Not a wrong constant: the hex IS the value and both sides' hex agree exactly."
+  },
+  {
+   "name": "altname-vmx:__vmx_3f800000bf8000003f800000bf800000@0x822639a0",
+   "survivor": "__vmx@3f800000bf8000003f800000bf800000",
+   "address": "0x822639a0",
+   "folded": [
+    "__vmx_3f800000bf8000003f800000bf800000"
+   ],
+   "kind": "data",
+   "evidence": "COFF weak external declared by a /ALTERNATENAME linker directive, the same relation the 962-group `weakalias:` tier models -- missed by that scan because the directive lives in a .drectve in src/link_glue.cpp, not as a weak external in the referencing object (FFT.obj). MSVC spells a VMX literal-pool constant `__vmx@<hex>`; `@` is not a valid identifier character, so src/system/synth_xbox/FFT.cpp:340-342 declares the three it needs with `_` and link_glue.cpp aliases each spelling onto the real .rdata symbol. The two names therefore denote one 0x10-byte object at 0x822639a0 (config/373307D9/symbols.txt). objdiff sees only the OBJECT's relocation name, so the underscore spelling charged a name_check row at every site (fft_matrix_inverse_columnwise idx 44/45/48/49). Not a wrong constant: the hex IS the value and both sides' hex agree exactly."
+  },
+  {
+   "name": "altname-vmx:__vmx_bf8000003f800000bf8000003f800000@0x822639b0",
+   "survivor": "__vmx@bf8000003f800000bf8000003f800000",
+   "address": "0x822639b0",
+   "folded": [
+    "__vmx_bf8000003f800000bf8000003f800000"
+   ],
+   "kind": "data",
+   "evidence": "COFF weak external declared by a /ALTERNATENAME linker directive, the same relation the 962-group `weakalias:` tier models -- missed by that scan because the directive lives in a .drectve in src/link_glue.cpp, not as a weak external in the referencing object (FFT.obj). MSVC spells a VMX literal-pool constant `__vmx@<hex>`; `@` is not a valid identifier character, so src/system/synth_xbox/FFT.cpp:340-342 declares the three it needs with `_` and link_glue.cpp aliases each spelling onto the real .rdata symbol. The two names therefore denote one 0x10-byte object at 0x822639b0 (config/373307D9/symbols.txt). objdiff sees only the OBJECT's relocation name, so the underscore spelling charged a name_check row at every site (fft_matrix_inverse_columnwise idx 44/45/48/49). Not a wrong constant: the hex IS the value and both sides' hex agree exactly."
   }
  ]
 }
