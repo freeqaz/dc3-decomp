@@ -626,10 +626,12 @@ void MemTracker::ReportMemoryUsageOverview(const char *name) {
         "PhysPeak,PhysAlloc,PhysLargest\n"
     );
     *ts << hdr.Str();
-    int numHeaps = MemNumHeaps();
+    // +1 folded into the call's result (image: `addi r26, r3, 0x1` immediately
+    // after `bl MemNumHeaps`, before the two stream writes), so there is no
+    // separate numHeaps local.
+    int loopMax = MemNumHeaps() + 1;
     *ts << "overview,";
     *ts << name;
-    int loopMax = numHeaps + 1;
     for (int i = 0; i < loopMax; i++) {
         int biggest;
         if (i == MemNumHeaps()) {
@@ -638,6 +640,16 @@ void MemTracker::ReportMemoryUsageOverview(const char *name) {
             if (used < freeMem) {
                 used = freeMem;
             }
+            // RESIDUAL (88.06%): the image's physical-heap arm does NOT write
+            // the `biggest` that gets printed. Its zero goes to r1+0x58 -- the
+            // slot MemFreeBlockStats' FIRST out-param occupies in the sibling
+            // else branch -- while the printed value is read from r1+0x54, that
+            // call's LAST out-param, so PhysLargest prints an uninitialised
+            // slot. It also keeps the `used` arithmetic alive (stw to 0x50,
+            // shared with `free`) where MSVC dead-codes ours away.
+            // MEASURED NEGATIVE: spelling that as a shadowing
+            // `int biggest = 0; (void)biggest;` here costs 2.25pp (88.06 ->
+            // 85.81) and scrambles the callee-saved allocation.
             biggest = 0;
         } else {
             int lfrags, i2, free, i4;
