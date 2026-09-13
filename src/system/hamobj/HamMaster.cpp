@@ -49,44 +49,47 @@ void HamMaster::Poll(float f1) {
     if (IsLoaded() && mAudio->GetSongStream()) {
         mSongMs = f1;
         mSongPos = mSongData->CalcSongPos(this, mSongMs);
-        float f8 = mAudio->GetSongStream()->GetJumpBackTotalTime(f1);
+        float f8 = mAudio->GetSongStream()->GetJumpBackTotalTime(mSongMs);
         float f9 = f8 + mSongMs;
         mStreamJumped = f9 < mStreamMs;
-        Marker marker1, marker2;
-        bool jp = mAudio->GetSongStream()->CurrentJumpPoints(marker1, marker2);
-        if (!mStreamJumped && jp && marker1.posMS <= marker2.posMS) {
-            if (mStreamMs <= marker2.posMS && marker2.posMS < f9) {
-                mStreamJumped = true;
-            } else {
-                mStreamJumped = false;
-            }
+        // Declaration order is the target's stack-slot order: jumpEnd occupies the
+        // lower slot and is constructed first.
+        Marker jumpEnd, jumpStart;
+        bool jp = mAudio->GetSongStream()->CurrentJumpPoints(jumpStart, jumpEnd);
+        if (!mStreamJumped && jp && jumpStart.posMS <= jumpEnd.posMS) {
+            mStreamJumped = mStreamMs <= jumpEnd.posMS && jumpEnd.posMS < f9;
         }
         if (mStreamJumped) {
             float f10;
             if (jp) {
-                f10 = MsToTick(marker2.posMS) - 1.0f;
+                f10 = MsToTick(jumpEnd.posMS) - 1.0f;
             } else {
                 f10 = mSongPos.GetTotalTick();
             }
             if (mMidiParserMgr) {
                 mMidiParserMgr->Reset((int)f10);
             }
-            mStreamMsAtJump = mStreamMs;
+            mPreJumpMs = mStreamMs;
+            mPostJumpMs = jumpStart.posMS;
+            mStreamMsAtJump = jumpEnd.posMS;
             static Message msg("stream_jump");
             Export(msg, true);
+        }
+        mStreamMs = f9;
+        if (mMidiParserMgr) {
+            mMidiParserMgr->Poll();
         }
         CheckBeat();
         CheckLevels();
         mAudio->Poll();
     }
 #ifdef HX_NATIVE
-    // TODO(native): The original decomp is missing this call. RB3's
-    // BeatMaster::Poll() has mMidiParserMgr->Poll() here, which
-    // dispatches MIDI events (including the "end" event that triggers
-    // SetGameOver). Needs verification against the DC3 target binary.
-    // Placed outside the GetSongStream() guard so it runs even when
-    // audio is unavailable (e.g. web/Emscripten with no mogg files).
-    if (IsLoaded() && mMidiParserMgr) {
+    // The matching path above polls mMidiParserMgr only when a song stream
+    // exists, which is what the target binary does. On native -- notably web,
+    // where the .mogg files are absent -- there is no stream, so MIDI events
+    // (including the "end" event that drives SetGameOver) would never dispatch.
+    // Cover only that case; the streamed case is handled above.
+    else if (IsLoaded() && mMidiParserMgr) {
         mMidiParserMgr->Poll();
     }
 #endif

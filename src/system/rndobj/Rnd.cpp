@@ -1260,18 +1260,17 @@ void Rnd::DrawPreClear() {
 }
 
 DataNode Rnd::OnToggleHeap(const DataArray *) {
-    int numHeaps = MemNumHeaps();
+    int numHeaps = MemNumHeaps() + 1;
     RndOverlay *overlay = mHeapOverlay;
-    if (overlay->Showing()) {
-        lbl_82F14008++;
-        if (lbl_82F14008 >= numHeaps + 1) {
-            lbl_82F14008 = -1;
-            overlay->SetShowing(false);
-        }
+    if (overlay->Showing() && ++lbl_82F14008 >= numHeaps) {
+        // SetShowingOnly, not SetShowing: turning the overlay off does not
+        // restart the timer in the target (only one Restart is emitted, in
+        // the inlined SetShowing(true) below).
+        overlay->SetShowingOnly(false);
+        lbl_82F14008 = -1;
     } else {
         overlay->SetShowing(true);
     }
-    overlay->TimerRef().Restart();
     return 0;
 }
 

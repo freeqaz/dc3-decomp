@@ -243,7 +243,7 @@ void StorePanel::Unload() {
     mCheckoutItem = 0;
     mCheckoutProfile = 0;
     mCartOffers.clear();
-    RemoveSink(mStorePreviewMgr, gNullStr);
+    mStorePreviewMgr->RemoveSink(this);
     RELEASE(mStorePreviewMgr);
     FOREACH (it, mNetCacheLoaders) {
         TheNetCacheMgr->DeleteNetCacheLoader(*it);
