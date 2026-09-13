@@ -94,17 +94,18 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
     float z1 = unkc;
     float z2 = unk10;
     unsigned int samps = size >> 1;
+    unsigned int i = 0;
     if (samps != 0) {
         short *p = (short *)data - 1;
-        for (unsigned int i = 0; i != samps; i++) {
+        do {
             float in = (float)p[1];
             float out = (in - z1) * gain * 2.0f + z2 * coef;
             z1 = in;
             out = Clamp(-32767.0f, 32767.0f, out);
-            p++;
-            *p = (short)out;
+            *++p = (short)out;
             z2 = (float)(short)out;
-        }
+            i++;
+        } while (i < samps);
     }
     unk10 = z2;
     unkc = z1;
@@ -113,9 +114,10 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
     short minSamp = 0;
     *flag = 1;
     float localRatio = DbToRatio(gLocalGain);
+    unsigned int j = 0;
     if (samps != 0) {
         short *p = (short *)data - 1;
-        for (unsigned int i = 0; i < samps; i++) {
+        do {
             short s = p[1];
             if (s >= maxSamp) {
                 maxSamp = s;
@@ -123,9 +125,9 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
             if (s < minSamp) {
                 minSamp = s;
             }
-            p++;
-            p[0] = (short)((float)s * localRatio);
-        }
+            *++p = (short)((float)s * localRatio);
+            j++;
+        } while (j < samps);
     }
 
     int newCount;
