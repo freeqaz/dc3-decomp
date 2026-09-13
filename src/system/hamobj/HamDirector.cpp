@@ -2473,6 +2473,7 @@ bool HamDirector::ReactToCollision(float frame) {
         cat = symAt;
     }
     float frame2;
+    float frame3;
     Symbol symAt2;
     bool idxExists = propKeys->FrameFromIndex(keyIdx, frame2);
     if (!idxExists)
@@ -2494,15 +2495,14 @@ bool HamDirector::ReactToCollision(float frame) {
         static float sSongCollisionForXBeatsSuppressNextShot =
             DataGetMacro("SONG_COLLISION_FOR_X_BEATS_SUPPRESS_NEXT_SHOT")->Float(0);
         float beatSum = sSongCollisionForXBeatsSuppressNextShot + beat;
-        if (beat2 < beatSum) {
+        if (beatSum < beat2) {
             ReactToCollision_InsertRealShot(cat, beat);
         } else {
             static bool sSongCollisionRoundUpSuppressedShotToMeasure =
                 DataGetMacro("SONG_COLLISION_ROUND_UP_SUPPRESSED_SHOT_TO_MEASURE")->Int(0);
             if (sSongCollisionRoundUpSuppressedShotToMeasure) {
-                beatSum = ceil(beatSum / 4.0f);
+                beatSum = ceil(beatSum / 4.0f) * 4.0f;
             }
-            float frame3;
             if (!propKeys->FrameFromIndex(keyIdx2 + 1, frame3)) {
                 return false;
             }
@@ -2514,9 +2514,10 @@ bool HamDirector::ReactToCollision(float frame) {
                     ->Float(0);
             if (beatSum
                 < beat3 - sSongCollisionAbortSuppressedShotIfAnotherWithinXBeats) {
-                ReactToCollision_MoveShot(keyIdx2, beat3);
+                ReactToCollision_MoveShot(keyIdx2, beatSum);
+                ReactToCollision_InsertRealShot(cat, beat);
             } else {
-                ReactToCollision_MoveShot(keyIdx2, beat2);
+                ReactToCollision_MoveShot(keyIdx2, beat);
             }
         }
     }
