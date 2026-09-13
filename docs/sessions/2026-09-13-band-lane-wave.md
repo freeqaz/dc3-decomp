@@ -155,6 +155,7 @@ Values as of `1b54119e5`:
 | `?Poll@XboxContent@@UAAXXZ` | 91.49 → **90.98** | backup-complete states 0/1 where the target uses 7/8, which re-armed the mount state machine |
 | `?ReadEditorDirDead@@YAXAAVBinStream@@@Z` | 96.0 → **91.5** | the 20-byte terminator must arrive *consecutively*; ours matched each index independently, so a partial marker plus arbitrary bytes plus the rest was accepted |
 | `?OnSetEnabled@…` / `?OnSetHidden@HamNavProvider@…` | 92.00 → **88.00** | `SetEnabled(int index, bool enabled)` was called with the DTA flag as the index and the label index as the flag |
+| `?BuildBeam@Spotlight@@IAAXAAUBeamDef@1@@Z` | 71.403 → **68.767** (equal instructions 82 → 92) | retail's two `fsel` have OPPOSITE senses — the left inner column clamps `<= 0`, the right `>= 0`. Clamping both `<= 0` collapsed the right inner column onto x=0 whenever the border is narrower than the half-width, i.e. normally, so the right half of every spotlight beam built degenerate. The ternary-on-the-negated-value spelling is what emits retail's `fneg`+`fsel`; of three spellings built and diffed, the higher-scoring one is the wrong one. (From a sibling session's lane.) |
 
 `?SetCrossfadeJump@HamAudio@@QAAXMMM@Z` (86.15) belongs with them: its inverted
 "begins before start of song" test was fixed at a flat score, and the three
