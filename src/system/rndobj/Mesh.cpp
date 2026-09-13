@@ -1588,41 +1588,12 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 }
 
 
-static inline unsigned short FloatToHalf(float value) {
-    unsigned int raw;
-    memcpy(&raw, &value, sizeof(float));
-    unsigned int iValue = raw & 0x7FFFFFFF;
-    unsigned int sign = (raw >> 16) & 0x8000;
-    if (iValue > 0x47FFEFFF) {
-        return (unsigned short)(sign | 0x7FFF);
-    }
-    if (iValue < 0x38800000) {
-        unsigned int shift = 113 - (iValue >> 23);
-        iValue = (0x800000 | (iValue & 0x7FFFFF)) >> shift;
-    } else {
-        iValue -= 0x38000000;
-    }
-    return (unsigned short)(sign | ((((iValue >> 13) & 1) + iValue + 0xFFF) >> 13));
-}
-
-void FillCompressedVertex(CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool b3) {
-    compressed.mColor = vert.color.PackAlpha();
-    PackVector(compressed.mBoneIndices, vert.boneWeights, 10, 10, 10, 2, false);
-    compressed.mPosX = vert.pos.x;
-    compressed.mPosY = vert.pos.y;
-    compressed.mPosZ = vert.pos.z;
-    unsigned short texX = vert.tex.x;
-    unsigned short texY = vert.tex.y;
-    compressed.mNormal = (texX << 0x10) | texY;
-    Vector4 norm(vert.norm.x, vert.norm.y, vert.norm.z, 0);
-    PackVector(compressed.mTangent, norm, 10, 10, 10, 2, true);
-    PackVector(compressed.mBinormal, vert.tangent, 10, 10, 10, 2, true);
-    // pack bone indices
-    compressed.mBoneWeights = (((int)vert.boneIndices[3] * 0x100
-        + (int)vert.boneIndices[2]) * 0x100
-        + (int)vert.boneIndices[1]) * 0x100
-        + (int)vert.boneIndices[0];
-}
+// FloatToHalf and FillCompressedVertex now live in MeshVertCompress.h as statics.
+// The body that used to be here diverged from the rnddx9 one (it truncated the
+// UVs with a float->unsigned short conversion instead of half-encoding them, and
+// packed the colour through Hmx::Color::PackAlpha) even though both TUs must emit
+// the SAME function: ham_xbox_r.map lists the mangled name at 826204d8 and
+// 8263a360 and the two shipped bodies are instruction-identical.
 
 void RndMesh::LoadVertices(BinStreamRev &d) {
     int numVerts;

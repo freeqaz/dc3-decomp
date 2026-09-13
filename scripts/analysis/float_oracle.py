@@ -57,6 +57,12 @@ WHAT IT CANNOT SEE  (say all of this before quoting a clean run)
     through another TU's pool.
   * WHICH TREE IS RIGHT.  A cross-repo divergence is a hypothesis; only this
     binary's own bytes settle it for this binary.
+  * Its FUNCTION ATTRIBUTION is approximate.  The brace-matcher in
+    `xrepo_audit.extract_functions` sometimes clips the first character of a
+    qualified name and disambiguates overloads as `f#N`, so the row label tells
+    you roughly where in the file to look, not exactly which overload.  The
+    literal, its bytes and the section hit are exact; the name beside them is a
+    signpost.
 
 PORTABILITY -- THE METHOD TRAVELS, THE PATHS DO NOT
 ---------------------------------------------------
@@ -353,8 +359,9 @@ def selftest(objs, verbose=True):
         for f in failures:
             print('  ' + f)
         return 5
-    print('\nSELFTEST OK: endianness pinned, sections resolvable, present and absent'
-          ' both demonstrable.')
+    if verbose:
+        print('\nSELFTEST OK: endianness pinned, sections resolvable, present and absent'
+              ' both demonstrable.')
     return 0
 
 
