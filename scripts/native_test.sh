@@ -128,6 +128,46 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${MILO_TEST_BUILD_DIR:-$REPO_ROOT/native/build}"
 BUDGET_FILE="$REPO_ROOT/native/tests/skip_budget.txt"
 
+# ---------------------------------------------------------------------------
+# Exit 11: another gate already holds this build directory.
+#
+# Two concurrent runs against one native/build corrupt each other: one rebuilds
+# milo-tests while the other is exec'ing it, and ctest reports BAD_COMMAND for
+# every test still to run. Measured twice on 2026-09-13 in one session -- 41
+# failures the first time, 270 the second -- and both read exactly like a mass
+# regression. The re-run was clean both times, which is the tell, but only after
+# someone spent the afternoon establishing that.
+#
+# This is a LOCK, not a policy: it refuses to start rather than producing a
+# wrong answer. The holder's PID and age are printed so a stale lock is
+# obviously stale. flock is advisory and per-inode, so it costs nothing when no
+# one else is running.
+LOCK_FILE="$BUILD_DIR/.native_test.lock"
+if [ -z "${MILO_TEST_NO_LOCK:-}" ]; then
+    mkdir -p "$BUILD_DIR" 2>/dev/null || true
+    exec 9>"$LOCK_FILE" 2>/dev/null || true
+    if command -v flock >/dev/null 2>&1 && ! flock -n 9; then
+        holder="$(cat "$LOCK_FILE" 2>/dev/null || echo '?')"
+        echo "=============================================================="
+        echo " NATIVE GATE DID NOT RUN -- another gate holds this build dir"
+        echo "--------------------------------------------------------------"
+        echo "   build dir : $BUILD_DIR"
+        echo "   held by   : ${holder:-unknown}"
+        echo ""
+        echo " Two gates against one native/build corrupt each other: one"
+        echo " rebuilds milo-tests while the other execs it, and ctest reports"
+        echo " BAD_COMMAND for every remaining test. That looks like a mass"
+        echo " regression and is not one."
+        echo ""
+        echo " Wait for the other run, or point MILO_TEST_BUILD_DIR at your own"
+        echo " build directory. MILO_TEST_NO_LOCK=1 overrides -- but a result"
+        echo " produced that way is not a gate."
+        echo "=============================================================="
+        exit 11
+    fi
+    echo "pid $$ started $(date -u +%Y-%m-%dT%H:%M:%SZ)" >&9 2>/dev/null || true
+fi
+
 CTEST_ARGS=()
 ALL_GATES=0
 DO_BUILD=1
