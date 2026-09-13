@@ -120,7 +120,15 @@ const char *TransitionStateString(UIManager::TransitionState s) {
     }
 }
 
-void TerminateCallback() {
+// ham_xbox_r.map lists ?TerminateCallback@@YAXXZ twice -- 0x8265EA60 in
+// rndobj:Rnd.obj and 0x8277AFC0 here in ui:UI.obj -- so symbols.txt can only
+// name one of them and dtk carves this one as `fn_8277AFC0`.  Nothing scores it
+// and nothing ever will; adjudicate it by reading
+// build/373307D9/asm/system/ui/UI.s.  Both retail sites that touch it
+// (UIManager::Init's AddExitCallback, UIManager::Terminate's
+// RemoveExitCallback) reference fn_8277AFC0, i.e. THIS function.  `static` to
+// match the map, where it sits under "Static symbols".
+static void TerminateCallback() {
     MILO_ASSERT(TheUI, 0x1CE);
     TheUI->Terminate();
 }
@@ -173,8 +181,6 @@ void FailAppendCallback(FixedString &str) {
         }
     }
 }
-
-void UITerminateCallback() { TheUI->Terminate(); }
 
 #pragma region UIManager
 
@@ -923,7 +929,7 @@ void UIManager::Init() {
     REGISTER_OBJ_FACTORY(Screenshot)
     LabelNumberTicker::Init();
     LabelShrinkWrapper::Init();
-    TheDebug.AddExitCallback(UITerminateCallback);
+    TheDebug.AddExitCallback(TerminateCallback);
 
     std::vector<ObjDirPtr<ObjectDir> > dirPtrs;
     DataArray *frontloadArr = cfg->FindArray("frontload_subdirs", false);

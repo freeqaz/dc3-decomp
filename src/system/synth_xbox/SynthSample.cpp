@@ -77,3 +77,19 @@ SampleInst *SynthSample360::NewInst(bool b, int i1, int i2) {
     }
     return nullptr;
 }
+
+// NOTE ON ?SampleAlloc@@YAPAXHPBDH0H@Z ABOVE -- kept at end-of-file on purpose:
+// SampleFree() a few lines below it passes __LINE__, so ANY comment inserted
+// above these functions shifts that immediate and costs real bytes.  Measured
+// 2026-09-13: a 9-line note above SampleAlloc moved
+// ?SampleFree@@YAXPAXPBDH1@Z from 100.0 to 99.888885 (-36 B).
+//
+// UNMEASURED BY CONSTRUCTION.  ham_xbox_r.map lists ?SampleAlloc@@YAPAXHPBDH0H@Z
+// at two addresses -- synth:SynthSample.obj 0x8273B818 (the portable one, which
+// report.json scores) and synth_xbox:SynthSample.obj 0x82E42D48 (this one).
+// symbols.txt can only bind the name once, so dtk carves this address as
+// fn_82E42D48 and nothing ever pairs it with the definition above.  Adjudicate
+// it against build/373307D9/asm/system/synth_xbox/SynthSample.s.
+// Audited 2026-09-13: 33/33 instructions equal, the only textual difference an
+// ICF fold survivor name (both MakeString instantiations -> 0x824D1870).
+// Tool: scripts/analysis/map_multiplicity_census.py

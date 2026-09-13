@@ -179,6 +179,23 @@ a template. Standing check: `scripts/analysis/reloc_name_gate.py` (with a
 its "Check the instrument first" section before triaging a row, because three of
 the loudest findings there were config defects rather than source bugs.
 
+### A symbol the report scores FEWER TIMES than the map lists is unmeasured by construction
+
+`symbols.txt` can bind a mangled name to exactly one address, so a second
+definition is carved as `fn_<addr>`, never pairs, and is absent from numerator
+and denominator alike. dc3, whole binary: **1,393 of 77,927 CODE names sit at
+more than one distinct map address and every one is under-scored**; 1,388 are
+benign (EH ordinal collisions, `??__E`/`??__F` per-TU thunks, `operator delete`,
+LIBCMT/xaudio2), **5 are real**. The exposure **compounds**: `name_check`
+exempts placeholder relocation names, so a call site passing a *fabricated*
+function pointer reads `100.0%, all equal` — measured on
+`?Init@UIManager@@UAAXXZ`, which registered a `UITerminateCallback` that appears
+nowhere in the map while `UIManager::Terminate` removed a different function.
+Run the **count comparison**, not the double-definition test. Instrument:
+`scripts/analysis/map_multiplicity_census.py` (refuses a null while its benign
+control population is empty). Full write-up:
+**[unmeasured-symbol-multiplicity.md](unmeasured-symbol-multiplicity.md)**.
+
 ### A per-function number below `report.json`'s was, until 2026-08-31, often the tool
 
 `objdiff-cli diff` and `objdiff-cli report generate` carry **different hardcoded
