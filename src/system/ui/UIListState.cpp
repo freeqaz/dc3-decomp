@@ -400,9 +400,13 @@ void UIListState::Scroll(int direction, bool skipActive) {
         if (!skipActive) {
             do {
                 curSel = state.mSelected;
-                int sel = curSel;
+                // A real if/ELSE: the target branches over the `sel = curSel`
+                // arm (`b 0x124c`) rather than initialising and overwriting.
+                int sel;
                 if (mCircular)
                     sel = mMinDisplay;
+                else
+                    sel = curSel;
                 curFirst = state.mFirstShowing;
                 if (mScrollPastMinDisplay)
                     sel -= mMinDisplay;
@@ -424,9 +428,13 @@ void UIListState::Scroll(int direction, bool skipActive) {
         int curSel = state.mSelected;
         if (!skipActive) {
             while (true) {
-                int sel = curSel;
+                // A real if/ELSE: the target branches over the `sel = curSel`
+                // arm (`b 0x124c`) rather than initialising and overwriting.
+                int sel;
                 if (mCircular)
                     sel = mMinDisplay;
+                else
+                    sel = curSel;
                 if (mScrollPastMinDisplay)
                     sel -= mMinDisplay;
                 int data = Showing2Data(sel + curFirst);
@@ -435,9 +443,9 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 if (hitBoundary)
                     return;
 
-                int step = 1;
-                if (direction <= 0)
-                    step = -1;
+                // Ternary: the target emits `li 1` AFTER the compare, as it
+                // already does in the mCircular arm.
+                int step = direction > 0 ? 1 : -1;
                 auto _tmp0 = BuildScroll(step, curFirst, curSel, state);
                 changed = _tmp0;
 
@@ -476,9 +484,7 @@ void UIListState::Scroll(int direction, bool skipActive) {
         mTargetShowing = curFirst;
         mSelectedDisplay = curSel;
         if (!skipActive && !changed) {
-            int dir = 1;
-            if (direction <= 0)
-                dir = -1;
+            int dir = direction > 0 ? 1 : -1;
             mCallback->StartScroll(*this, dir, false);
             mCallback->CompleteScroll(*this);
         }
