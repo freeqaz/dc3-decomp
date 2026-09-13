@@ -18,14 +18,9 @@ SpectralAnalysis::~SpectralAnalysis() {
 namespace Synapse {
 
 PitchDetector::PitchDetector(const stlpmtx_std::vector<float, stlpmtx_std::StlNodeAlloc<float> > &input,
-                             unsigned int windowSize, unsigned int hop) {
-    mInput = &input;
-    mWindowSize = windowSize;
-    mHop = hop;
-    mFrequency = (float)windowSize;
-    mConfidence = 0.0f;
-    mClarity = 0.0f;
-
+                             unsigned int windowSize, unsigned int hop)
+    : mInput(&input), mWindowSize(windowSize), mHop(hop), mFrequency((float)windowSize),
+      mConfidence(0.0f), mClarity(0.0f) {
     mSpectral.SetMode((unsigned int)((float)mHop * 1.7999999523162842f), mHop);
 
     mSpectrum.resize(mSpectral.mWindowSize, 0.0f);
