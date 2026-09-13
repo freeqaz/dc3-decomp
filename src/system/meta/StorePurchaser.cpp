@@ -80,7 +80,10 @@ DataNode XboxPurchaser::OnMsg(UIChangedMsg const &msg) {
             mState = kSuccess;
         }
     }
-    return DataNode();
+    // The target writes mType before mValue into the sret slot; only the
+    // DataNode(DataType, int) ctor assigns in that order (DataNode() and
+    // DataNode(int) do mValue first).
+    return DataNode(kDataInt, 0);
 }
 
 BEGIN_HANDLERS(XboxPurchaser)
@@ -159,7 +162,10 @@ DataNode XboxMultipleItemsPurchaser::OnMsg(UIChangedMsg const &msg) {
             mState = kSuccess;
         }
     }
-    return DataNode();
+    // The target writes mType before mValue into the sret slot; only the
+    // DataNode(DataType, int) ctor assigns in that order (DataNode() and
+    // DataNode(int) do mValue first).
+    return DataNode(kDataInt, 0);
 }
 
 BEGIN_HANDLERS(XboxMultipleItemsPurchaser)
