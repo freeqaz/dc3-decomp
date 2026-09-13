@@ -487,7 +487,7 @@ const char *FileMakePathBuf(const char *iRoot, const char *iFilepath, char *oBuf
     if (*fileDrive != '\0') {
         iFilepath += strlen(fileDrive) + 1;
     }
-    char *c = oBuf;
+    char *c;
     if (*iFilepath == '/' || *iFilepath == '\\' || *iFilepath == '\0') {
         if (*fileDrive != '\0') {
             sprintf(oBuf, "%s:%s", fileDrive, iFilepath);
@@ -499,6 +499,7 @@ const char *FileMakePathBuf(const char *iRoot, const char *iFilepath, char *oBuf
                 c = oBuf + strlen(rootDrive) + 1;
             } else {
                 strcpy(oBuf, iFilepath);
+                c = oBuf;
             }
         }
     } else {
@@ -506,6 +507,8 @@ const char *FileMakePathBuf(const char *iRoot, const char *iFilepath, char *oBuf
         const char *rootDrive = FileGetDriveBuf(iRoot, driveBuf);
         if (*rootDrive != '\0') {
             c = oBuf + strlen(rootDrive) + 1;
+        } else {
+            c = oBuf;
         }
     }
     FileNormalizePath(oBuf);
@@ -525,24 +528,25 @@ const char *FileMakePathBuf(const char *iRoot, const char *iFilepath, char *oBuf
         p = strtok(nullptr, "/");
     }
     MILO_ASSERT(endDir - dirs <= 32, 0x35c);
+    char *out = c;
     if (endDir == dirs) {
         if (curSlash) {
-            *c++ = '/';
+            *out++ = '/';
         } else {
-            *c++ = '.';
+            *out++ = '.';
         }
     } else {
         for (const char **dir = (const char **)&dirs[0]; dir != endDir; dir++) {
             if (dir != dirs || curSlash) {
-                *c++ = '/';
+                *out++ = '/';
             }
             for (char *p = (char *)*dir; *p != '\0'; p++) {
-                *c++ = *p;
+                *out++ = *p;
             }
         }
     }
-    MILO_ASSERT(c - oBuf < File::MaxFileNameLen, 0x372);
-    *c = '\0';
+    MILO_ASSERT(out - oBuf < File::MaxFileNameLen, 0x372);
+    *out = '\0';
     return oBuf;
 }
 
