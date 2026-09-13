@@ -2439,62 +2439,48 @@ void BuildVisit(BSPNode *node) {
         return;
 
     BuildPoly newPoly;
-    gParentPolys.push_back(newPoly);
+    gParentPolys.push_front(newPoly);
 
-    std::list<BuildPoly>::iterator lastIt = gParentPolys.end();
-    --lastIt;
-    BuildPoly &poly = *lastIt;
+    std::list<BuildPoly>::iterator lastIt = gParentPolys.begin();
 
     Plane &plane = node->plane;
-    float lenSq = plane.b * plane.b + plane.a * plane.a + plane.c * plane.c;
+    float lenSq = plane.a * plane.a + plane.b * plane.b + plane.c * plane.c;
     float invDist = -(plane.d / lenSq);
 
     Vector3 origin;
     origin.y = plane.b * invDist;
     origin.x = plane.a * invDist;
     origin.z = plane.c * invDist;
-    poly.mTransform.v = origin;
+    lastIt->mTransform.v = origin;
 
-    poly.mTransform.m.z = *(Vector3 *)&plane;
+    lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
-    poly.mTransform.m.y.Set(0, 1, 0);
+    lastIt->mTransform.m.y.Set(0, 1, 0);
 
     if (fabsf(
-            poly.mTransform.m.z.x * 0.0f
-            + (poly.mTransform.m.z.z * 0.0f + poly.mTransform.m.z.y * 1.0f)
+            lastIt->mTransform.m.z.y * lastIt->mTransform.m.y.y
+            + lastIt->mTransform.m.z.z * lastIt->mTransform.m.y.z
+            + lastIt->mTransform.m.z.x * lastIt->mTransform.m.y.x
         )
         > 0.9f) {
-        poly.mTransform.m.y.Set(1, 0, 0);
+        lastIt->mTransform.m.y.Set(1, 0, 0);
     }
 
     // x = y cross z
-    poly.mTransform.m.x.x = poly.mTransform.m.y.y * poly.mTransform.m.z.z
-        - poly.mTransform.m.y.z * poly.mTransform.m.z.y;
-    poly.mTransform.m.x.y = poly.mTransform.m.z.x * poly.mTransform.m.y.z
-        - poly.mTransform.m.z.z * poly.mTransform.m.y.x;
-    poly.mTransform.m.x.z = poly.mTransform.m.y.x * poly.mTransform.m.z.y
-        - poly.mTransform.m.y.y * poly.mTransform.m.z.x;
+    Cross(lastIt->mTransform.m.y, lastIt->mTransform.m.z, lastIt->mTransform.m.x);
 
-    Normalize(poly.mTransform.m.x, poly.mTransform.m.x);
+    Normalize(lastIt->mTransform.m.x, lastIt->mTransform.m.x);
 
     // y = z cross x
-    poly.mTransform.m.y.x = poly.mTransform.m.z.y * poly.mTransform.m.x.z
-        - poly.mTransform.m.z.z * poly.mTransform.m.x.y;
-    poly.mTransform.m.y.y = poly.mTransform.m.x.x * poly.mTransform.m.z.z
-        - poly.mTransform.m.x.z * poly.mTransform.m.z.x;
-    poly.mTransform.m.y.z = poly.mTransform.m.z.x * poly.mTransform.m.x.y
-        - poly.mTransform.m.z.y * poly.mTransform.m.x.x;
+    Cross(lastIt->mTransform.m.z, lastIt->mTransform.m.x, lastIt->mTransform.m.y);
 
-    // Add large quad
-    Vector2 pt;
-    pt.Set(-10000.0f, 10000.0f);
-    poly.mPoly.points.push_back(pt);
-    pt.Set(-10000.0f, -10000.0f);
-    poly.mPoly.points.push_back(pt);
-    pt.Set(10000.0f, -10000.0f);
-    poly.mPoly.points.push_back(pt);
-    pt.Set(10000.0f, 10000.0f);
-    poly.mPoly.points.push_back(pt);
+    // Add large quad.  Retail materialises each corner immediately before its
+    // push_back, so +/-10000.0f stay live in callee-saved f30/f31 across the
+    // four calls instead of being spilled into four separate stack slots.
+    lastIt->mPoly.points.push_back(Vector2(-10000.0f, 10000.0f));
+    lastIt->mPoly.points.push_back(Vector2(-10000.0f, -10000.0f));
+    lastIt->mPoly.points.push_back(Vector2(10000.0f, -10000.0f));
+    lastIt->mPoly.points.push_back(Vector2(10000.0f, 10000.0f));
 
     if (node->left == NULL) {
         // Leaf: clip parents against plane (front), recurse right
@@ -2553,11 +2539,8 @@ void BuildVisit(BSPNode *node) {
         }
 
         // Splice saved lists back
-        gParentPolys.splice(gParentPolys.end(), savedParents);
-        gChildPolys.splice(gChildPolys.end(), tempChildren);
-
-        tempChildren.clear();
-        savedParents.clear();
+        gParentPolys.splice(gParentPolys.begin(), savedParents);
+        gChildPolys.splice(gChildPolys.begin(), tempChildren);
     }
 
     // Move polys whose normal matches this node's plane from parents to children
