@@ -892,11 +892,14 @@ void UtilDrawCylinder(
     else {
         Transform tf58;
         tf58 = tf;
-        Scale(Vector3(radius, height, radius), tf58.m, tf58.m);
+        // The cylinder mesh runs along X: the target scales row x by the
+        // second float and rows y and z by the first.
+        Scale(Vector3(height, radius, radius), tf58.m, tf58.m);
         sCylinderMesh->Mat()->SetColor(col.red, col.green, col.blue);
         sCylinderMesh->Mat()->SetAlpha(0.2f);
         sCylinderMesh->Mat()->SetCull(kCullNone);
         sCylinderMesh->SetLocalXfm(tf58);
+        sCylinderMesh->SetSphere(Sphere(Vector3(0, 0, 0), radius));
         sCylinderMesh->Draw();
     }
 }
