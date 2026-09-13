@@ -11,8 +11,10 @@
 // SetReleaseSmoothing.
 namespace {
 float Time2IirA(float time, float sampleRate) {
-    if (time <= 0.0f) return 1.0f;
-    return 1.0f - expf(-1.0f / (time * sampleRate));
+    if (time > 0.0f) {
+        return 1.0f - expf(-1.0f / (time * sampleRate));
+    }
+    return 1.0f;
 }
 }
 
