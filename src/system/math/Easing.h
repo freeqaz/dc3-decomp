@@ -145,7 +145,11 @@ inline float EaseElasticIn(float t, float power, float f3) {
         float sub6 = t - 1;
         float powed = pow(2.0, sub6 * 10.0f);
         float sined = FastSin(((sub6 - f7) / f3) * 2 * PI);
-        return -(sined * powed * f3);
+        // Scaled by `power` (the amplitude), NOT by f3 (the period). The target
+        // ends `fmuls f0, f1, f31` (sin * pow2) then `fmuls f0, f0, f28`, and
+        // f28 is the second argument -- the same register the `power < 1` arm
+        // overwrites with 1.0f -- while f3 lives in f30 and is never used here.
+        return -(sined * powed * power);
     } else {
         return t;
     }
