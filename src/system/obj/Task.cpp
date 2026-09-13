@@ -256,16 +256,20 @@ ThreadTask::ThreadTask(DataArray *script, DataArray *updateVarsObjs)
     : ScriptTask(script, false, updateVarsObjs), mWait(false), mCurrent(1), mTime(0),
       mExecuting(false), mTimeout(-1) {}
 
-bool ThreadTask::Replace(ObjRef *from, Hmx::Object *to) {
+bool ThreadTask::Replace(ObjRef *ref, Hmx::Object *obj) {
     if (mExecuting) {
-        if (&mObjects == from->Parent() && from) {
+        // The image selects the ref with a mask (subf/subic/subfe/and) and then
+        // tests the SELECTED pointer, rather than branching on the compare.
+        // Keeping the select as a value is what reproduces that lowering.
+        ObjRef *listRef = (ref->Parent() == &mObjects) ? ref : 0;
+        if (listRef) {
             mObjects.erase(ObjPtrList<Hmx::Object>::iterator(
-                static_cast<ObjPtrList<Hmx::Object>::Node *>(from)
+                static_cast<ObjPtrList<Hmx::Object>::Node *>(listRef)
             ));
             return true;
         }
     }
-    return ScriptTask::Replace(from, to);
+    return ScriptTask::Replace(ref, obj);
 }
 
 BEGIN_HANDLERS(ThreadTask)
