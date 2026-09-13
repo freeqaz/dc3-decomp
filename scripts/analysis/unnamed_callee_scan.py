@@ -280,6 +280,63 @@ def parse_obj(path: Path):
                 sizes=sizes, bodies=bodies)
 
 
+def count_rel24(path: Path):
+    """REL24 relocations in every code section, counted straight from the COFF
+    relocation table with no symbol attribution and no disassembly.
+
+    This is the CONTROL denominator for the whole scan.  The scan itself is
+    relocation-table driven -- it never linear-disassembles, so it cannot be
+    truncated the way a capstone walk is when it meets one undecodable word (a
+    sibling session's sweep reported 0 callees in a 4,260-byte function whose
+    object declared nrel=127, because the decoder halted before offset 0x52c).
+    But the scan DOES drop a relocation whose offset falls outside every
+    DT_FUNCTION symbol's extent, and that silent drop is what this counts."""
+    d = path.read_bytes()
+    if len(d) < 20:
+        return 0
+    _m, nsec, _t, symptr, nsym, opt, _c = struct.unpack_from('<HHIIIHH', d, 0)
+    so, n = 20 + opt, 0
+    for i in range(nsec):
+        b = so + i * 40
+        if b + 40 > len(d):
+            break
+        _vs, _va, _rs, _rp, relp, _lp, nrel, _nl, ch = struct.unpack_from('<IIIIIIHHI', d, b + 8)
+        if not (ch & 0x20):
+            continue
+        for r in range(nrel):
+            o = relp + r * 10
+            if o + 10 > len(d):
+                break
+            if struct.unpack_from('<IIH', d, o)[2] == REL24:
+                n += 1
+    return n
+
+
+def reloc_accounting(sc, units, limit=None):
+    """Per side: REL24 present vs REL24 the scan attributed to a function."""
+    tot = Counter()
+    drops = []
+    seen = 0
+    for u in units:
+        for side in ('base_path', 'target_path'):
+            rel = u.get(side)
+            if not rel or not (sc.root / rel).exists():
+                continue
+            o = sc.obj(rel)
+            if not o:
+                continue
+            attributed = sum(len(v) for v in o['calls'].values())
+            total = count_rel24(sc.root / rel)
+            tot[side + '.total'] += total
+            tot[side + '.attributed'] += attributed
+            if total != attributed:
+                drops.append((total - attributed, u['name'], side, total, attributed))
+        seen += 1
+        if limit and seen >= limit:
+            break
+    return tot, sorted(drops, reverse=True)
+
+
 def is_bare_blr(body):
     return body is not None and len(body) == 4 and struct.unpack('>I', body)[0] == BLR
 
@@ -530,10 +587,21 @@ def selftest(root: Path):
     print(f'  [PASS] base size index: {len(bidx)} defined functions, '
           f'{len(blrset)} of them a bare blr')
 
+    # ---- relocation accounting: the scan must see EVERY call relocation -----
+    tot, drops = reloc_accounting(sc, units, limit=120)
+    bt_, ba_ = tot['base_path.total'], tot['base_path.attributed']
+    okr = bt_ > 0 and bt_ == ba_
+    print(f'  [{"PASS" if okr else "FAIL"}] reloc accounting (120-unit sample): base '
+          f'{ba_}/{bt_} REL24 attributed, target '
+          f'{tot["target_path.attributed"]}/{tot["target_path.total"]}')
+
     st, ha, hb, bt = sc.scan(bidx)
 
     # ---- the three control populations -------------------------------------
     fails = []
+    if not okr:
+        fails.append('the scan did not attribute every base-side REL24 to a function; call '
+                     'sites are being dropped silently and any null result understates')
     for label, n, why in (
             ('agreeing sites', st['ctl_agree'],
              'ordinal pairing is broken; no null result from this run means anything'),
@@ -603,6 +671,8 @@ def main():
     ap.add_argument('--size-ratio', type=float, default=3.0)
     ap.add_argument('--json-out')
     ap.add_argument('--show', type=int, default=40)
+    ap.add_argument('--reloc-accounting', action='store_true',
+                    help='whole-tree REL24 present-vs-attributed audit and exit')
     ap.add_argument('--empty-extrn', action='store_true',
                     help='Query C only: the empty-EXTRN population with its control')
     args = ap.parse_args()
@@ -617,6 +687,13 @@ def main():
     sc = Scanner(root, args.trivial_bytes, args.size_ratio)
     units = json.load(open(root / 'objdiff.json'))['units']
     bidx, blrset = build_base_size_index(sc, units)
+    if args.reloc_accounting:
+        tot, drops = reloc_accounting(sc, units)
+        print(json.dumps(dict(tot), indent=1))
+        print(f'objects with unattributed REL24: {len(drops)}')
+        for d in drops[:args.show]:
+            print(f'  -{d[0]:4} {d[1]:46} {d[2]:12} {d[4]}/{d[3]}')
+        return 0 if tot['base_path.total'] == tot['base_path.attributed'] else 1
     if args.empty_extrn:
         return report_query_c(query_c(sc, units, blrset), args.show)
     st, ha, hb, bt = sc.scan(bidx)
