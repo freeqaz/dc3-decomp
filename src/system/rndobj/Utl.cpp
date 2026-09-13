@@ -1623,28 +1623,29 @@ void MakeNormals(RndMesh *m) {
     int numVerts = m->Verts().size();
     std::vector<int> repVerts(numVerts);
     for (int i = 0; i < m->Verts().size(); i++) {
-        const Vector3 &pos = m->Verts()[i].pos;
-        int rep = i;
-        for (int j = 0; j < i; j++) {
+        // The target re-derives Verts() for both vertices inside the j loop: there
+        // is no hoisted `pos` reference and no `rep` local (the loop counter itself
+        // is what gets stored). Caching either costs an extra callee-saved GPR.
+        int j;
+        for (j = 0; j < i; j++) {
             const Vector3 &otherPos = m->Verts()[j].pos;
-            if (fabsf(pos.x - otherPos.x) <= 0.001f && fabs(pos.y - otherPos.y) <= 0.001f
+            const Vector3 &pos = m->Verts()[i].pos;
+            if (fabs(pos.x - otherPos.x) <= 0.001f && fabs(pos.y - otherPos.y) <= 0.001f
                 && fabs(pos.z - otherPos.z) <= 0.001f) {
-                rep = j;
                 break;
             }
         }
-        repVerts[i] = rep;
+        repVerts[i] = j;
     }
 
     for (int i = 0; i < m->Verts().size(); i++) {
         m->Verts()[i].norm.Zero();
 
-        int rep = repVerts[i];
         for (int f = 0; f < m->Faces().size(); f++) {
             RndMesh::Face &face = m->Faces()[f];
             int k;
             for (k = 0; k < 3; k++) {
-                if (repVerts[face[k]] == rep)
+                if (repVerts[face[k]] == repVerts[i])
                     break;
             }
             if (k != 3) {
