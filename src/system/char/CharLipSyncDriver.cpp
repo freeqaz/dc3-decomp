@@ -431,9 +431,9 @@ void CharLipSyncDriver::Poll() {
                 float duration = mMainPlayback->mLipSync->Duration();
                 float songTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + mSongOffset;
                 if (songTime >= duration) {
-                    char *lsName = mMainPlayback->mLipSync
-                        ? (char *)mMainPlayback->mLipSync->Name()
-                        : (char *)"";
+                    const char *lsName = mMainPlayback->mLipSync
+                        ? mMainPlayback->mLipSync->Name()
+                        : "";
                     MILO_LOG(
                         "CharLipSyncDriver::Poll() - Triggering VO Lip Sync FadeOut - Name:%s\n",
                         lsName
@@ -446,9 +446,9 @@ void CharLipSyncDriver::Poll() {
 
     if (mIsOverrideActive) {
         if (mMainBlendAlpha < 0.001f) {
-            char *lsName2 = mMainPlayback->mLipSync
-                ? (char *)mMainPlayback->mLipSync->Name()
-                : (char *)"";
+            const char *lsName2 = mMainPlayback->mLipSync
+                ? mMainPlayback->mLipSync->Name()
+                : "";
             MILO_LOG(
                 "CharLipSyncDriver::Poll() - Deleting VO Lip Sync track because it finished and faded out - Name:%s\n",
                 lsName2
