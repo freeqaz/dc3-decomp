@@ -978,10 +978,10 @@ void LightPreset::SetFrameEx(float frame, float blend, bool b) {
                 sManualEvents.pop_front();
             }
             if (!sManualEvents.empty()) {
-                float fadeTime = kfCur->mFadeOutTime;
+                float fadeTime = kfCur->mFadeOutTime / 480.0f;
                 float eventBeat = sManualEvents.front().second;
                 float beat = TheTaskMgr.Beat();
-                if (eventBeat - fadeTime / 480.0f <= beat) {
+                if (eventBeat - fadeTime <= beat) {
                     AdvanceManual(sManualEvents.front().first);
                     beat = TheTaskMgr.Beat();
                     if (eventBeat > beat) {
@@ -996,8 +996,9 @@ void LightPreset::SetFrameEx(float frame, float blend, bool b) {
             }
             if (mLastManualFrame != -1) {
                 kfPrev = &mKeyframes[mLastManualFrame];
+                float elapsed = frame - mManualFrameStart;
                 if (mManualFadeTime > 0) {
-                    f = Min((frame - mManualFrameStart) / mManualFadeTime, 1.0f);
+                    f = Min(elapsed / mManualFadeTime, 1.0f);
                     f = Max(0.0f, f);
                 } else {
                     f = 0;
@@ -1011,22 +1012,20 @@ void LightPreset::SetFrameEx(float frame, float blend, bool b) {
                 kfPrev = &mKeyframes[iPrev];
         }
 
-        bool same = false;
-        Keyframe *last = mLastKeyframe;
-        if (kfCur == last && mLastBlend == f)
-            same = true;
+        bool different = mLastKeyframe != kfCur;
+        bool same = !different && mLastBlend == f;
         if (!same) {
             ApplyState(*kfCur);
             if (kfPrev) {
                 AnimateState(*kfPrev, *kfCur, 1.0f - f);
             }
-            mLastKeyframe = kfCur;
             mLastBlend = f;
+            mLastKeyframe = kfCur;
         }
         if (!same || !b) {
             Animate(blend);
         }
-        if (kfCur != last) {
+        if (different) {
             FOREACH (it, mLastKeyframe->mTriggers) {
                 (*it)->Trigger();
             }
