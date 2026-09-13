@@ -29008,6 +29008,16 @@
     "??0bad_typeid@std@@QAA@ABV01@@Z"
    ],
    "evidence": "orig/373307D9/ham_xbox_r.map: /OPT:ICF survivors share an address -- lines 68237/68238 put ??0bad_cast@std@@QAA@ABV01@@Z and ??0bad_typeid@std@@QAA@ABV01@@Z both at 8299e190 (LIBCMT:rtti.obj), and no third name sits there. build/373307D9/obj/xdk/LIBCMT/rtti.obj defines only the bad_cast spelling, so bad_cast is the survivor."
+  },
+  {
+   "name": "rdata-const-pool:key192@0x820c4fe0",
+   "survivor": "?Component@?1??GetSwizzleVectorSrc@@YA?AU__vector4@@W4_D3DFORMAT@@@Z@4QBIB",
+   "address": "0x820c4fe0",
+   "folded": [
+    "?key192@?1??rijndael_test@@9@4QBEB"
+   ],
+   "kind": "data",
+   "evidence": "/OPT:ICF fold of two byte-identical .rdata constants, neither of which the retail linker map can list (both are FUNCTION-LOCAL statics, and ham_xbox_r.map's static section is functions only). Established from the split target objects instead. config/373307D9/symbols.txt names ?Component@?1??GetSwizzleVectorSrc@@YA?AU__vector4@@W4_D3DFORMAT@@@Z@4QBIB at .rdata:0x820C4FE0 size 0x18, and build/373307D9/asm/xdk/xgraphics/convert.s renders its 0x18 bytes as 00 01 02 .. 17. src/system/synth/tomcrypt/aes.c:383 declares `static const unsigned char key192[24]` with exactly those 24 bytes, so the two COMDATs are byte-identical with no relocations on either side -- the condition /OPT:ICF actually tests. The target's rijndael_test then materialises 0x820C4FE0 (lis/addi, idx 177/178) at precisely the site where ours materialises key192, and dtk resolves that address to the convert.obj name because that is where the surviving COMDAT landed. Survivor is the name the TARGET objects define; key192 is the folded-away spelling. Installed by hand (lane w3-e2, 2026-09-13): the retailmap-data tier's gates all key on map residency, which no function-local static can satisfy."
   }
  ]
 }
