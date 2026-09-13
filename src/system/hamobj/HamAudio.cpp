@@ -276,9 +276,10 @@ void HamAudio::SetCrossfadeJump(float startTime, float endTime, float fadeDurati
     mCrossfade.mDuration = fadeDuration;
     mCrossfade.mFlag = 1;
 
-    float halfFade = 0.5f;
-    bool crossfadeInvalid = startTime - fadeDuration * halfFade > 0.0f;
-
+    // The fade is centred on startTime, so it reaches back to
+    // startTime - fadeDuration/2; if that is at or before zero the crossfade
+    // would start before the song does.
+    bool crossfadeInvalid = startTime - fadeDuration * 0.5f <= 0.0f;
     if (crossfadeInvalid) {
         MILO_NOTIFY(
             "Crossfade begins before start of song. Setting up hard jump instead of crossfade."
@@ -287,7 +288,7 @@ void HamAudio::SetCrossfadeJump(float startTime, float endTime, float fadeDurati
 
     // Check if crossfade overlaps with existing crossfade
     if (mActiveCrossfade.mFlag > 1) {
-        if (-(mCrossfade.mDuration * halfFade - mCrossfade.mStart) <= (mActiveCrossfade.mDuration * halfFade) + mActiveCrossfade.mEnd) {
+        if (-(mCrossfade.mDuration * 0.5f - mCrossfade.mStart) <= (mActiveCrossfade.mDuration * 0.5f) + mActiveCrossfade.mEnd) {
             MILO_NOTIFY(
                 "Crossfade begins before existing crossfade ends. Setting up hard jump instead of crossfade."
             );
