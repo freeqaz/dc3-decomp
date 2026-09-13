@@ -476,24 +476,21 @@ void XboxContentMgr::PollRefresh() {
                         bool discovered = false;
                         if (xdata->dwContentType == 0x7000) {
                             FOREACH (it, mCallbacks) {
-                                Symbol sym(filename);
-                                if (!(*it)->ContentTitleDiscovered(
-                                        xdata->dwTitleId, sym
-                                    )
-                                    || discovered) {
-                                    discovered = true;
-                                } else {
-                                    discovered = false;
-                                }
+                                // Unnamed temporary: the target reads the Symbol
+                                // back through the ctor's return register
+                                // (`mr r10, r3` / `lwz r5, 0x0(r10)`), not out of
+                                // a pinned frame slot, and it assigns `discovered`
+                                // once at the merge point (`clrlwi r28, r11, 24`).
+                                discovered = !(*it)->ContentTitleDiscovered(
+                                                 xdata->dwTitleId, Symbol(filename)
+                                             )
+                                    || discovered;
                             }
                         } else {
                             FOREACH (it, mCallbacks) {
-                                Symbol sym(filename);
-                                if (!(*it)->ContentDiscovered(sym) || discovered) {
-                                    discovered = true;
-                                } else {
-                                    discovered = false;
-                                }
+                                discovered =
+                                    !(*it)->ContentDiscovered(Symbol(filename))
+                                    || discovered;
                             }
                         }
 
@@ -501,8 +498,11 @@ void XboxContentMgr::PollRefresh() {
                             unk938++;
                         }
 
-                        Content *newContent = new XboxContent(*xdata, unk934, i, discovered);
-                        unk934++;
+                        // The target stores unk934+1 BEFORE the ctor call, so the
+                        // increment is a side effect of the argument, not a
+                        // following statement.
+                        Content *newContent =
+                            new XboxContent(*xdata, unk934++, i, discovered);
                         std::list<Content *>::iterator end = mContents.end();
                         mContents.insert(end, newContent);
                     }
