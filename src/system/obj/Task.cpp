@@ -176,20 +176,46 @@ ScriptTask::ScriptTask(DataArray *script, bool once, DataArray *updateVarsObjs)
 ScriptTask::~ScriptTask() { mScript->Release(); }
 
 bool ScriptTask::Replace(ObjRef *from, Hmx::Object *to) {
-    if (from == &mThis) {
-        mThis = to;
-        if (mThis) {
+    // The image pins &mThis in a callee-saved register (r29, set by the very
+    // first `addi r29, r3, 0x48`) and reuses it for the compare, the assign and
+    // the `lwz r11, 0xc(r29)` re-read.
+    ObjOwnerPtr<Hmx::Object> &thisRef = mThis;
+    if (from == &thisRef) {
+        thisRef = to;
+        // Written out here rather than shared with a tail at the bottom of the
+        // function: the image PLACES the delete block at .L_825A8854, directly
+        // after this branch and before the `li r3, 1` at .L_825A8874, and the
+        // second site below branches BACKWARD into it (825A88B0).
+        if (!thisRef) {
+            delete this;
+        }
+        return true;
+    }
+    // The image selects the node branchlessly -- mask = (Parent() ==
+    // &mObjects) ? -1 : 0, ANDed with the incoming ObjRef -- exactly as
+    // DefaultPhysicsManager::Replace does:
+    //   825A8890  addi   r11, r30, 0x34   ; &mObjects
+    //   825A8894  subf   r11, r3, r11     ; Parent() result in r3
+    //   825A8898  subic  r11, r11, 0x1
+    //   825A889C  subfe  r11, r11, r11    ; -1 when equal, 0 otherwise
+    //   825A88A0  and    r3, r11, r31
+    ObjRefConcrete<Hmx::Object> *node = from->Parent() == &mObjects
+        ? static_cast<ObjRefConcrete<Hmx::Object> *>(from)
+        : nullptr;
+    if (node) {
+        if (!to) {
+            delete this;
             return true;
         }
+        // This is the assignment that was commented out, and the polarity was
+        // inverted with it: the image rewrites the node on the OURS branch and
+        // defers to Hmx::Object::Replace on the not-ours branch, which it lays
+        // out LAST at 825A88C0.
+        node->SetObjConcrete(to);
+        return true;
     } else {
-        if (from->Parent() != &mObjects) {
-            // mObjects = to;
-            return true;
-        } else
-            return Hmx::Object::Replace(from, to);
+        return Hmx::Object::Replace(from, to);
     }
-    delete this;
-    return true;
 }
 
 void ScriptTask::Poll(float f1) {
