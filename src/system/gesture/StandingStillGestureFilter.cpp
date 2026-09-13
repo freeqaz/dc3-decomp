@@ -33,14 +33,13 @@ void StandingStillGestureFilter::RestoreDefaultForwardFacingCutoff() {
     mForwardFacingCutoff = 0.4f;
 }
 
-// Two file-local mutable floats, read from memory rather than folded as
-// literals: .data 0x2c/0x30 of this TU.  The first is a DISTANCE (0.5), squared
-// at the comparison site -- the decomp previously baked in 0.0625f, i.e. a
-// radius of 0.25, half the real standing-still tolerance.
-static float sStandingStillRadius = 0.5f;
-static float sLegStraightDot = -0.75f;
-
 void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
+    // Two file-local mutable floats, read from memory rather than folded as
+    // literals: .data 0x2c/0x30 of this TU.  The first is a DISTANCE (0.5),
+    // squared at the comparison site -- the decomp previously baked in
+    // 0.0625f, i.e. a radius of 0.25, half the real standing-still tolerance.
+    static float sStandingStillRadius = 0.5f;
+    static float sLegStraightDot = -0.75f;
     int idx = skeleton.SkeletonIndex();
     if (idx < 0 || idx >= 6)
         return;
