@@ -89,25 +89,42 @@ bool RunCrossfade(float startTime, float endTime, float fadeDuration) {
 
 }  // namespace
 
-// At the boundary startTime == fadeDuration*0.5, the crossfade is still valid
-// (strict >). The pre-fix `>=` cancelled it here.
-// fadeDuration = 4 -> half = 2. startTime exactly 2.0 is the boundary; with the
-// strict `>` it stays a valid crossfade. The pre-fix `>=` cancelled it here.
-TEST_F(HamAudioCrossfade, BoundaryKeepsCrossfadePending) {
-    EXPECT_TRUE(RunCrossfade(/*startTime=*/2.0f, /*endTime=*/10.0f,
-                             /*fadeDuration=*/4.0f))
-        << "startTime == fadeDuration*0.5 must remain a valid crossfade (> not >=)";
+// These three previously asserted the INVERTED semantics, and were written
+// against a source state whose comparison was backwards. The retail listing
+// settles it (build/373307D9/asm/system/hamobj/HamAudio.s, ?SetCrossfadeJump@):
+//
+//     fmr      f13, f31              ; f13 = fadeDuration
+//     lfs      f31, __real@3f000000  ; 0.5
+//     fnmsubs  f13, f13, f31, f30    ; f13 = startTime - fadeDuration*0.5
+//     lfs      f0,  __real@00000000
+//     fcmpu    cr6, f13, f0
+//     bgt      cr6, .L_8252A354      ; > 0 SKIPS the notify
+//
+// So the fade reaches back to `startTime - fadeDuration*0.5`, and the crossfade
+// is downgraded to a hard jump when that lead-in is at or before zero — i.e.
+// when the fade would have to begin before the song does. A LARGER startTime is
+// what keeps it valid; a small one is what cancels it. The old names had that
+// backwards: a fade at startTime 0.5 with duration 4 begins 1.5 s before the
+// song and cannot possibly stay pending.
+
+// Lead-in exactly zero. `<= 0` cancels, so the boundary is NOT pending.
+TEST_F(HamAudioCrossfade, ZeroLeadInCancelsCrossfade) {
+    EXPECT_FALSE(RunCrossfade(/*startTime=*/2.0f, /*endTime=*/10.0f,
+                              /*fadeDuration=*/4.0f))
+        << "startTime - fadeDuration*0.5 == 0 is cancelled: retail skips the "
+           "notify only on a strictly positive lead-in (bgt)";
 }
 
-// Just above the boundary, the crossfade is invalid and must be cancelled.
-TEST_F(HamAudioCrossfade, AboveBoundaryCancelsCrossfade) {
-    EXPECT_FALSE(RunCrossfade(/*startTime=*/2.5f, /*endTime=*/10.0f,
-                              /*fadeDuration=*/4.0f))  // 2.5 > 2.0
-        << "startTime > fadeDuration*0.5 begins before the song -> hard jump";
+// Positive lead-in: the fade fits inside the song and stays pending.
+TEST_F(HamAudioCrossfade, PositiveLeadInKeepsCrossfadePending) {
+    EXPECT_TRUE(RunCrossfade(/*startTime=*/2.5f, /*endTime=*/10.0f,
+                             /*fadeDuration=*/4.0f))  // lead-in +0.5
+        << "a strictly positive lead-in is a valid crossfade";
 }
 
-// Well below the boundary the crossfade stays valid.
-TEST_F(HamAudioCrossfade, BelowBoundaryKeepsCrossfadePending) {
-    EXPECT_TRUE(RunCrossfade(/*startTime=*/0.5f, /*endTime=*/10.0f,
-                             /*fadeDuration=*/4.0f));
+// Negative lead-in: the fade would start before the song, so it is downgraded.
+TEST_F(HamAudioCrossfade, NegativeLeadInCancelsCrossfade) {
+    EXPECT_FALSE(RunCrossfade(/*startTime=*/0.5f, /*endTime=*/10.0f,
+                              /*fadeDuration=*/4.0f))  // lead-in -1.5
+        << "a fade beginning before the song is a hard jump, not a crossfade";
 }
