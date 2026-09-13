@@ -31,7 +31,11 @@ public:
     void PollClient() { Poll(); }
     void SetRepeatMask(int);
 
-    LocalUser *mUser; // 0x2c
+    // A User*, not a LocalUser*: OnMsg/OnMsg(ButtonUpMsg) compare it against
+    // ButtonDownMsg::GetUser()'s LocalUser* through a virtual-base upcast
+    // (`lwz r11,4(u)` vbptr / `lwz r11,4(r11)` / `add` / `addi 4`), which only
+    // exists if the left-hand side is the virtual base.
+    User *mUser; // 0x2c
     Hmx::Object *mSink; // 0x30
     int mBtnMask; // 0x34
     float mHoldMs; // 0x38
