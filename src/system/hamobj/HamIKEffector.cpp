@@ -1139,7 +1139,10 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
             float remaining = 0.0f;
 
             if (totalWeight < 1.0f) {
+                // The leftover weight is given to the identity quaternion, whose
+                // only non-zero component is w.
                 remaining = 1.0f - totalWeight;
+                accum.q.w = remaining;
                 totalWeight += remaining;
             }
 
