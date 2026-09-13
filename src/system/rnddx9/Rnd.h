@@ -267,6 +267,14 @@ inline HRESULT DxCheck(void *v) { return v ? ERROR_SUCCESS : E_OUTOFMEMORY; }
     }
 
 // check that the thing allocated successfully (e.g. no E_OUTOFMEMORY)
+//
+// ⚠ `code` is EXPANDED TWICE — once in the test and once in the DxRnd::Error()
+// call on the failure path. Pass a plain HRESULT variable, never an expression
+// with side effects. DxTex::UnlockBitmap did pass the D3DXFilterTexture() call
+// inline, so the failure path re-filtered the entire mip chain and then
+// reported the SECOND call's HRESULT (fixed 2026-09-13; the image has one
+// `bl`). All 13 live call sites now pass an already-assigned `hr`/`code`/`res`,
+// verified by grep — keep it that way rather than relying on the check.
 #define DX_ASSERT_CODE(code, line)                                                       \
     {                                                                                    \
         ((code)                                                                          \
