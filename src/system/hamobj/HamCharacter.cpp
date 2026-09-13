@@ -906,14 +906,13 @@ void HamCharacter::Poll() {
             QuatXfm boneXfm(boneProp->WorldXfm());
             QuatXfm spotXfm(spotProp->WorldXfm());
 
-            Vector3 interpPos;
-            Interp(spotXfm.v, boneXfm.v, blendWeight, interpPos);
-            Hmx::Quat interpRot;
-            Interp(spotXfm.q, boneXfm.q, blendWeight, interpRot);
+            QuatXfm interpXfm;
+            Interp(spotXfm.v, boneXfm.v, blendWeight, interpXfm.v);
+            Interp(spotXfm.q, boneXfm.q, blendWeight, interpXfm.q);
 
             Transform result;
-            result.v = interpPos;
-            MakeRotMatrix(interpRot, result.m);
+            result.v = interpXfm.v;
+            MakeRotMatrix(interpXfm.q, result.m);
             boneProp->SetWorldXfm(result);
         }
     }

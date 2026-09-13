@@ -656,39 +656,38 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
     DataType secondType = second.Type();
     DataType firstType = first.Type();
     if (firstType == secondType) {
-        bool res;
         if (firstType == kDataString) {
-            res = streq(first.mValue.var->mValue.symbol, second.mValue.var->mValue.symbol);
+            return streq(
+                first.mValue.var->mValue.symbol, second.mValue.var->mValue.symbol
+            );
+        }
 #ifdef HX_NATIVE
-        } else if (firstType == kDataSymbol) {
+        if (firstType == kDataSymbol) {
             // On 64-bit, UncheckedInt() truncates the 8-byte symbol pointer to 4 bytes.
             // Compare the full pointers instead.
-            res = first.UncheckedStr() == second.UncheckedStr();
-#endif
-        } else {
-            res = first.UncheckedInt() == second.UncheckedInt();
+            return first.UncheckedStr() == second.UncheckedStr();
         }
-        return res;
+#endif
+        return first.UncheckedInt() == second.UncheckedInt();
     } else {
-        if (firstType == kDataInt && secondType == kDataFloat) {
-            return (float)first.UncheckedInt() == second.UncheckedFloat();
-        } else {
-            if (firstType == kDataObject) {
-                Hmx::Object *obj = first.UncheckedObj();
-                const char *objName = obj ? obj->Name() : "";
-                if (secondType == kDataSymbol) {
-                    return streq(objName, second.UncheckedStr());
-                } else if (secondType == kDataString) {
-                    return streq(objName, second.mValue.var->mValue.symbol);
-                }
+        if (firstType == kDataInt) {
+            if (secondType == kDataFloat) {
+                return (float)first.UncheckedInt() == second.UncheckedFloat();
             }
-            if (firstType == kDataSymbol) {
-                if (secondType == kDataString) {
-                    return streq(first.UncheckedStr(), second.mValue.var->mValue.symbol);
-                }
-            } else if (secondType != kDataString && secondType != kDataSymbol) {
-                warn &= secondType != kDataObject; // i dunno lol
+        } else if (firstType == kDataObject) {
+            Hmx::Object *obj = first.UncheckedObj();
+            const char *objName = obj ? obj->Name() : "";
+            if (secondType == kDataSymbol) {
+                return streq(objName, second.UncheckedStr());
+            } else if (secondType == kDataString) {
+                return streq(objName, second.mValue.var->mValue.symbol);
             }
+        } else if (firstType == kDataSymbol) {
+            if (secondType == kDataString) {
+                return streq(first.UncheckedStr(), second.mValue.var->mValue.symbol);
+            }
+        } else if (secondType != kDataString && secondType != kDataSymbol) {
+            warn &= secondType != kDataObject;
         }
         if (firstType == kDataUnhandled || secondType == kDataUnhandled) {
             warn = false;

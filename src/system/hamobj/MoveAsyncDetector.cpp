@@ -63,8 +63,8 @@ void MoveDetector::Poll(int moveIdx, int beat, MoveDir *dir) {
                     frac = frac - oldVal;
                 }
                 // Shift thresholds: [1] -> [0], [2] -> [1], [3] -> [2]
-                for (int i = 0; i < 3; i++) {
-                    mDetectThresholds[p][i] = mDetectThresholds[p][i + 1];
+                for (int i = 1; i < 4; i++) {
+                    mDetectThresholds[p][i - 1] = mDetectThresholds[p][i];
                 }
                 // Store new frac at end
                 mDetectThresholds[p][3] = frac;
@@ -86,12 +86,11 @@ void MoveDetector::Poll(int moveIdx, int beat, MoveDir *dir) {
 
         // Update all dancer frames' move index
         std::vector<DancerFrame>::iterator it = mDancerFrames.begin();
-        std::vector<DancerFrame>::iterator end = mDancerFrames.end();
-        if (it != end) {
+        if (it != mDancerFrames.end()) {
             do {
                 it->mMoveIdx = (short)moveIdx;
                 ++it;
-            } while (it != end);
+            } while (it != mDancerFrames.end());
         }
 
         // Reset all detect frames with new timing
