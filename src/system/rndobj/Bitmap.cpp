@@ -1198,19 +1198,19 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
     } else {
         bitsPerRow = infoheader.biBitCount * infoheader.biWidth;
     }
-    int rowBytes = (bitsPerRow / 8 + 3) & ~3;
+    int rowBytes = ((bitsPerRow >> 3) + 3) & ~3;
     int pixelBytes = infoheader.biHeight * rowBytes;
     void *buf = MemAlloc(pixelBytes + paletteBytes, __FILE__, 0x481, "Bitmap_buf", 0);
     void *palette = nullptr;
     if (paletteBytes != 0) {
-        int readSize = paletteBytes;
-        if (infoheader.biClrUsed != 0
-            && infoheader.biClrUsed < (unsigned int)(1 << infoheader.biBitCount)) {
-            memset(buf, 0, paletteBytes);
-            readSize = infoheader.biClrUsed * 4;
-        }
-        bs->Read(buf, readSize);
         palette = buf;
+        if (infoheader.biClrUsed == 0
+            || infoheader.biClrUsed > (unsigned int)(1 << infoheader.biBitCount)) {
+            bs->Read(buf, paletteBytes);
+        } else {
+            memset(buf, 0, paletteBytes);
+            bs->Read(buf, infoheader.biClrUsed * 4);
+        }
     }
     void *pixels = (void *)((char *)buf + paletteBytes);
     bs->Seek(offbits, BinStream::kSeekBegin);
@@ -1222,13 +1222,14 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
         }
     }
     if (infoheader.biBitCount == 4) {
-        for (int k = pixelBytes; k > 0; k--) {
-            unsigned char *p = (unsigned char *)pixels;
+        unsigned char *p = (unsigned char *)pixels;
+        unsigned char *pEnd = p + pixelBytes;
+        while (p != pEnd) {
             *p = (*p << 4) | (*p >> 4);
             p++;
         }
     }
-    if ((int)infoheader.biSize != 0xB11) {
+    if ((int)infoheader.biXPelsPerMeter != 0xB11) {
         for (int i = paletteBytes - 4; i >= 0; i -= 4) {
             *((unsigned char *)palette + i + 3) = 0xFF;
         }

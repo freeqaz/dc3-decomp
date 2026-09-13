@@ -251,7 +251,8 @@ void *MemTruncate(void *mem, int size, const char *file, int line, const char *n
         void *truncated = nullptr;
         int i;
         for (i = 0; i < gNumHeaps; i++) {
-            if (gHeaps[i].Truncate((int *)mem, allocSize, i60))
+            truncated = gHeaps[i].Truncate((int *)mem, allocSize, i60);
+            if (truncated)
                 break;
         }
         if (i == gNumHeaps) {

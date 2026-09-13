@@ -835,12 +835,12 @@ HamCamShot *HamDirector::FindNextDircut() {
     if (!entry)
         return nullptr;
     HamCamShot *shot = nullptr;
-    if (mNumPlayersFailed || (entry->mForced && mExcitement >= 3)) {
-            shot = entry->mShot;
-            if (shot) {
-                mPickNewShot = true;
-            }
-        };
+    if (!mNumPlayersFailed && (!entry->mForced || mExcitement >= 3)) {
+        shot = entry->mShot;
+        if (shot)
+            return shot;
+    }
+    mPickNewShot = true;
     return shot;
 }
 
