@@ -8,9 +8,22 @@ sibling lane, usually in a more developed form.** "Committed but never merged"
 is not the same as "unlanded work", and an audit that counts branches cannot
 tell the two apart.
 
-Measured against `main` at `e8fb81efc`, ruler `functionRelocDiffs=name_check`,
-`objdiff-cli 4.2.8 (032122696555, xxh3 14ac591a0814e6c9)`. Every number below is
-from a full `ninja` in a worktree, not from `decomp.db`.
+Ruler `functionRelocDiffs=name_check`, `objdiff-cli 4.2.8 (032122696555, xxh3
+14ac591a0814e6c9)`. Every number below is from a full `ninja` in a worktree,
+never from `decomp.db`.
+
+**Two different baselines, because `main` moved mid-task** — stated rather than
+smoothed over, since the reflog is the only reason it was noticed:
+
+* the `cert-near100` numbers are against **`e8fb81efc`**;
+* the `harvest` numbers are against **`9fea5f811`**, which landed 10 commits
+  later.
+
+Eight of the nine harvest TUs are byte-identical across that move, so those
+baselines are unaffected. The ninth is not, and it matters: `37cd16a2d`
+("`UpdateFromDepthBufferClip`: the clip coords are int, not unsigned — 87.8 →
+97.3") is the rewrite that makes the harvest edit for that function stale, and
+it landed *inside* the window. The 97.27273 quoted below is post-rewrite.
 
 ## Verdicts
 
