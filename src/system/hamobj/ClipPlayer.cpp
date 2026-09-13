@@ -446,7 +446,8 @@ bool ClipPlayer::PushRoutineBuilderClip(int idx, HamDriver::LayerArray *arr) {
     if (c2 == c1) {
         if (mBeat >= beat && (nextTrans == nullptr || mBeat <= nextBeat)) {
             blend = pushed ? blendStart : hugeNeg;
-            goto playClipC1;
+            PlayClip(c1, beat, blend, arr);
+            pushed = true;
         }
     } else {
         if (mBeat >= beat && mBeat <= crossoverBeatPlusOne) {
@@ -456,7 +457,6 @@ bool ClipPlayer::PushRoutineBuilderClip(int idx, HamDriver::LayerArray *arr) {
         }
         if (mBeat >= crossoverBeat && (nextTrans == nullptr || mBeat <= nextBeat)) {
             blend = pushed ? crossoverBeat : hugeNeg;
-        playClipC1:
             PlayClip(c1, beat, blend, arr);
             pushed = true;
         }
