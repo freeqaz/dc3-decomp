@@ -1342,9 +1342,17 @@ void RndMesh::InstanceGeomOwnerBones() {
     for (RndTransformable *parent = mGeomOwner->mBones[0].mBone; nullptr != parent;
          parent = parent->TransParent()) {
         RndDir *transParent = dynamic_cast<RndDir *>(parent->TransParent());
-        oldRoot = parent;
-        if (transParent)
+        // The assignment belongs INSIDE the break, not hoisted above it. In the
+        // image `mr r29, r31` at 0x82643088 is the only write to oldRoot and it
+        // sits on the break path; the loop's NULL exit falls straight into the
+        // MILO_ASSERT body at 0x82642FD8 with no test on r29 at all. Hoisting it
+        // made oldRoot always non-null, which is why our build had to emit a
+        // `cmplwi cr6, r29, 0x0 / bne` the image does not have -- and which
+        // silently disarmed the assert.
+        if (transParent) {
+            oldRoot = parent;
             break;
+        }
     }
     MILO_ASSERT(oldRoot, 0x5e9);
 
