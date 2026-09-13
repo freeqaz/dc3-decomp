@@ -1335,15 +1335,20 @@ void WorldCrowd::DrawShowing() {
                             PathName(this)
                         );
                     }
-                    RndEnviron *env = mEnviron;
+                    // No cached `RndEnviron *env`: the target re-reads
+                    // `lwz r11, 0x9c(r24)` (mEnviron's ObjPtr raw slot) at every
+                    // use, each time with the `clrrwi` + two `stw ..., 0x50(r31)`
+                    // inlined-`this` homes that only appear on a member access,
+                    // and passes `lwz r4, 0x9c(r24)` to the tracker ctor rather
+                    // than a register copy.
                     bool savedApprox = true;
-                    if (env) {
-                        savedApprox = env->UsesApproxGlobal();
-                        env->SetUseApproxGlobal(false);
+                    if (mEnviron) {
+                        savedApprox = mEnviron->UsesApproxGlobal();
+                        mEnviron->SetUseApproxGlobal(false);
                     }
                     {
                         const Transform &charWorldXfm = curChar->WorldXfm();
-                        RndEnvironTracker tracker(env, &charWorldXfm.v);
+                        RndEnvironTracker tracker(mEnviron, &charWorldXfm.v);
                         gImpostorCamera->Select();
                         curChar->SetShowing(true);
                         if (mCharForceLod != kLODPerFrame) {
@@ -1353,11 +1358,14 @@ void WorldCrowd::DrawShowing() {
                         if (mCharForceLod != kLODPerFrame) {
                             curChar->SetLodType(kLODPerFrame);
                         }
-                        if (env) {
-                            env->SetUseApproxGlobal(savedApprox);
+                        if (mEnviron) {
+                            mEnviron->SetUseApproxGlobal(savedApprox);
                         }
+                        // INSIDE the tracker scope: the target runs the virtual
+                        // Select() at 82838AE8 and only then `bl ~RndEnvironTracker`
+                        // at 82838B00.
+                        curCam->Select();
                     }
-                    curCam->Select();
                 }
 
                 // --- Update billboard quad vertices ---
