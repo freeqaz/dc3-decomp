@@ -353,16 +353,16 @@ bool Intersect(const Vector3 &origin, const Vector3 &dir, const Box &box, float 
 }
 
 bool Intersect(const Plane &plane, const Box &box) {
-    float hx = (box.mMax.x - box.mMin.x) * 0.5f;
-    float hy = (box.mMax.y - box.mMin.y) * 0.5f;
-    float hz = (box.mMax.z - box.mMin.z) * 0.5f;
-    float cx = box.mMin.x + hx;
-    float cy = box.mMin.y + hy;
-    float cz = box.mMin.z + hz;
+    // Scale() writes through a reference that may alias its source, so the
+    // three multiplies all land before the three adds and MSVC cannot fuse
+    // them into fmadds -- which is what the target does.
+    Vector3 half;
+    Subtract(box.mMax, box.mMin, half);
+    Scale(half, 0.5f, half);
+    Vector3 center;
+    Add(box.mMin, half, center);
     Vector3 halfExtent;
-    halfExtent.x = box.mMax.x - cx;
-    halfExtent.y = box.mMax.y - cy;
-    halfExtent.z = box.mMax.z - cz;
+    Subtract(box.mMax, center, halfExtent);
 
     Vector3 pMin, pMax;
     for (unsigned int i = 0; i < 3; i++) {
