@@ -1118,7 +1118,7 @@ void Spotlight::BuildCone(BeamDef &def) {
 
     float len = def.mLength;
     float bottomBorderLen = def.mBottomBorder * len;
-    bottomBorderLen = (float)__fsel(bottomBorderLen - len, bottomBorderLen, len);
+    bottomBorderLen = (float)__fsel(len - bottomBorderLen, bottomBorderLen, len);
     float borderY = len - bottomBorderLen;
     float borderRadius = (borderY / len) * (def.mBottomRadius - def.mTopRadius) + def.mTopRadius;
 
@@ -1126,26 +1126,25 @@ void Spotlight::BuildCone(BeamDef &def) {
     float uvStep = 1.0f / 15.0f;
     float angleStep = 2.0f * PI / 15.0f;
 
-    for (unsigned int i = 0; i - 15; i++) {
+    for (unsigned int s = 17; s - 17 != 15; s++) {
         float cosA = std::cos(angle);
         float sinA = std::sin(angle);
 
-        float uvX = (float)i * uvStep;
+        float uvX = (float)(s - 17) * uvStep;
 
-        verts[i].pos.Set(def.mTopRadius * cosA, 0.0f, def.mTopRadius * sinA);
-        verts[i].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
-        verts[i].tex.Set(uvX, 0.0f);
+        verts[s - 17].pos.Set(def.mTopRadius * cosA, 0.0f, def.mTopRadius * sinA);
+        verts[s - 17].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+        verts[s - 17].tex.Set(uvX, 0.0f);
 
-        verts[i + 16].pos.Set(borderRadius * cosA, borderY, borderRadius * sinA);
-        verts[i + 16].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
-        verts[i + 16].tex.Set(uvX, borderY / len);
+        verts[s - 1].pos.Set(borderRadius * cosA, borderY, borderRadius * sinA);
+        verts[s - 1].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+        verts[s - 1].tex.Set(uvX, borderY / len);
 
-        verts[i + 32].pos.Set(def.mBottomRadius * cosA, len, def.mBottomRadius * sinA);
-        verts[i + 32].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
-        verts[i + 32].tex.Set(uvX, 1.0f);
+        verts[s + 15].pos.Set(def.mBottomRadius * cosA, len, def.mBottomRadius * sinA);
+        verts[s + 15].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
+        verts[s + 15].tex.Set(uvX, 1.0f);
 
-        short s = (short)(i + 17);
-        int fi = i * 4;
+        int fi = (s - 17) * 4;
         faces[fi].Set(s - 17, s - 1, s);
         faces[fi + 1].Set(s - 17, s, s - 16);
         faces[fi + 2].Set(s - 1, s + 15, s + 16);
