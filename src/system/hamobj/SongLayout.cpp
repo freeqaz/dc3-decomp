@@ -292,8 +292,7 @@ void SongLayout::SetDefaultReplacer() {
         } else {
             hamObj = static_cast<Hmx::Object *>(TheHamDirector);
         }
-        DataArrayPtr moveProp(moveNode);
-        keys = songAnim->GetKeys(hamObj, moveProp);
+        keys = songAnim->GetKeys(hamObj, DataArrayPtr(moveNode));
     }
     Symbol restMove("Rest.move");
     Symbol restMoveLower("rest.move");
