@@ -475,9 +475,10 @@ void RhythmBattlePlayer::UpdateScore(int points) {
 
 void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
     static Symbol none("none");
+    Symbol trick = none;
     mRhythmBattle = rb;
     mGrooveCooldown = 0;
-    mTrickSymbol = none;
+    mTrickSymbol = trick;
     mZoneLevel = 0;
     mMoveConsistencyScore = 0;
     mPrevZoneLevel = 0;
