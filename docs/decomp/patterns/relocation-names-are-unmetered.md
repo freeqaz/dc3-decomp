@@ -607,6 +607,28 @@ with at least one **non-zero** displacement in play, resolves `anchor ± disp` i
 * the displaced address resolves to a **named third symbol**, or to nothing, or
   every displacement is zero, or there is no address index → stays `IDENTITY`.
 
+**Tightened 2026-09-13**, after `MakeBSPTree` was handed to a lane as a
+wrong-variable bug and turned out to be this shape. Two things were wrong, and
+the defect report named neither — both names resolve in `symbols.txt`, so the
+"named third symbol" rule was never reached:
+
+* `anchor_displacements` only recognised the completing `addi reg, reg, sym@l` —
+  the **same** destination register. MSVC also emits `lis r11, s@ha ; addi r19,
+  r11, s@l`, and the anchor then lives in r19: every consumer reads the new
+  register, the walk fell through to *"something else wrote r11"* and stopped, so
+  that side reported **no displacements at all** and the pair was rejected before
+  any address was resolved. The walk now follows the move, gated on the `addi`
+  naming the same symbol the `lis` did.
+* the reach-set intersection did not include each **anchor's own address**. A side
+  that emits `lis/addi X` has materialised `&X` whether or not the 16-row forward
+  walk captured a `+0` consumer, so the test was a claim about which consumers the
+  walk saw. `{at}` and `{ab}` are now unioned in, which is exactly *"the displaced
+  address equals the other side's anchor address"* and nothing wider — the rule
+  `PreInitSystem` was already getting for free from an incidental `0` in its
+  displacement list. **Measured: 0 of the 7 live `ANCHOR_DISPLACEMENT` pairs on
+  this tree depend on it**; it is a consistency fix so the two paths agree, not a
+  reclassifier.
+
 The verdict has its own column next to ORDER and IDENTITY; `--no-anchor` restores
 the pre-2026-09-11 reading; `--anchor-out` dumps the reclassified rows with the
 resolved address in each pair's `note`. The `--selftest` carries both fixtures
@@ -615,54 +637,85 @@ two-globals-at-`+0` pair (expect `IDENTITY`), a displacement onto a named third
 symbol and onto nothing (expect `IDENTITY`), and no-index / no-data vacuity
 controls; it exits non-zero on any failed expectation, and the four
 `ANCHOR_DISPLACEMENT` expectations were watched failing before the filter existed.
+The 2026-09-13 tightening added four more (25 checks total), three of them watched
+failing first, plus a negative control — displacements that reach **neither**
+anchor stay `IDENTITY` — and two in `reloc_name_gate --selftest` for the
+register-move walk (21 there), one of which is a control that an `addi` naming a
+*different* symbol must not hijack the walk. The `MakeBSPTree` fixture is driven
+through `pair_displacements()` over verbatim instruction rows rather than
+hand-written `target_disps`, because a hand-written `[4]` would have passed
+against the broken walker.
 
-**Sweep, this tree at `519f9fc82`, objdiff 4.2.8, one full `ninja`** (269 standing
-rows / 219,896 B, 571 charged pairs):
+**Sweep, this tree at `f7a9ae81e` (branch `w3-u2`, from `d3dcc6fcd`), objdiff
+4.2.8, one full `ninja`** (255 standing rows / 202,924 B, 542 charged pairs).
+Before = the filter as it stood on 2026-09-11; after = with the tightening:
 
-| class | pairs | ORDER | ANCHOR_DISP | IDENTITY before → after |
+| class | pairs | ORDER | ANCHOR_DISP before → after | IDENTITY before → after |
 |---|---:|---:|---:|---:|
-| `named_symbol` | 47 | 11 | **6** | 36 → **30** |
-| every other class (13) | 524 | 69 | 0 | 455 → 455 |
-| TOTAL | 571 | 80 | 6 | 491 → 485 |
+| `named_symbol` | 44 | 12 | 6 → **7** | 26 → **25** |
+| every other class (13) | 498 | 68 | 0 → 0 | 430 → 430 |
+| TOTAL | 542 | 80 | 6 → 7 | 456 → 455 |
 
-Rows: 245 IDENTITY / 24 ORDER_ONLY before → **239 IDENTITY / 6 ANCHOR_DISPLACEMENT
-(1,624 B) / 24 ORDER_ONLY** after. The six reclassified rows are exactly the
-MemMgr/System family a lane had been handed: `PreInitSystem`, `InitSystem`
-(`gUsingCD[0]` vs `gSystemConfig[8]`, both reach `0x82F652E8`), `MemPushTemp`,
-`MemPopTemp`, `MemPopHeap` (`gNumHeaps − 0x13 = lbl_830E56D9`, ours `gInitted`
-unresolvable) and `MemFindAddrHeap` (`gHeaps[4, 660]` reaches `gNumHeaps`, the
-section-3 row). The same six come out whether the displacements are read from the
-gate's JSON or re-derived from the diff (the fallback path for an older
-`rows.json`).
+**Exactly one pair moves: `MakeBSPTree`'s** `?gBSPDirTol@@3MA[4]` vs
+`?gBSPMaxDepth@@3HA[0]`, *"both anchors reach 0x82F0F698"*. Row counts do **not**
+move — 224 IDENTITY (186,824 B) / 6 ANCHOR_DISPLACEMENT (1,624 B) / 25 ORDER_ONLY
+before and after — because `MakeBSPTree` carries a *second* charged pair
+(`_List_base<BSPFace>::clear` vs `27088`, no relocation on our side) and the row
+verdict is the strongest pair verdict. A row can be mostly artifact and still be
+a lead; read the pair list, not the row.
 
-Two things the filter deliberately did **not** take, both live rows: `BlurShadowRT`
-(ours anchors the local static `kWeights` and reads `−4` — `kWeights - 1` pointer
-arithmetic; the target's `0x82001214` is a named string literal, so it is not the
-same byte) and `CharDebug::DisplayObject`, where our side's "name" is the literal
-`328` — **no relocation at all** on our instruction — and `target + 0x148` happens
-to be an `lbl_`. The first cut of the filter laundered that one; a missing
-relocation is the loudest form of the bug, and it is now guarded and sabotage-tested.
+The six `ANCHOR_DISPLACEMENT` **rows** are still exactly the MemMgr/System family:
+`PreInitSystem`, `InitSystem` (`gUsingCD[0]` vs `gSystemConfig[8]`, both reach
+`0x82F652E8`), `MemPushTemp`, `MemPopTemp`, `MemPopHeap` (`gNumHeaps − 0x13 =
+lbl_830E56D9`, ours `gInitted` unresolvable) and `MemFindAddrHeap`
+(`gHeaps[4, 660]` reaches `gNumHeaps`, the section-3 row). The same set comes out
+whether the displacements are read from the gate's JSON or re-derived from the
+diff (the fallback path for an older `rows.json`).
 
-**The 24 surviving `named_symbol` IDENTITY rows (26,656 B)**, which are what a lane
-should be looking at now — and nine of them are one shape:
+⚠ The population also **shrank** between 2026-09-11 and 2026-09-13 for reasons
+unrelated to this filter (269 → 255 rows, 571 → 542 pairs): `rijndael_test`,
+`fft_matrix_inverse_columnwise` and the `XinputJoypadThreadStart` pair left the
+list when `w3-e2`'s config work landed. Re-derive before quoting.
+
+Two things the filter deliberately does **not** take, both live rows:
+`BlurShadowRT` (ours anchors the local static `kWeights` and reads `−4` —
+`kWeights - 1` pointer arithmetic; the target's `0x82001214` is a named string
+literal, so it is not the same byte) and `CharDebug::DisplayObject`, where our
+side's "name" is the literal `328` — **no relocation at all** on our instruction —
+and `target + 0x148` happens to be an `lbl_`. The first cut of the filter
+laundered that one; a missing relocation is the loudest form of the bug, and it is
+now guarded and sabotage-tested. That guard is right, and it is also the **next**
+noise class: see the note under the table.
+
+**The 21 surviving `named_symbol` IDENTITY rows (26,732 B)**, which are what a lane
+should be looking at now — and **10 of them are one shape**. Five entries that a
+previous lane refuted by hand are marked ✗ and are kept in the table on purpose,
+so the next reader does not re-chase them:
 
 | B | function | pair (target vs ours) |
 |---:|---|---|
 | 5072 | `MoveDir::UpdateOverlay` | `?ClosestMoveFrame@MoveDir@@` vs `?CurrentMoveMode@@` — and the reverse (both directions charged = order, but the multisets differ elsewhere) |
 | 2228 | `Locale::Init` | `??$FastSort@$02@LocaleChunkSort@@` vs `?LocaleChunkSortFunc@@` |
 | 2160 | `ArcDetector::UpdateOverlay` | `MakeString<float>` vs `MakeString<float,float>` |
-| 1644 | `MakeBSPTree` | `_List_base<BSPFace>::clear` vs `27088` (no relocation on our side); `?gBSPDirTol@@3MA` vs `?gBSPMaxDepth@@3HA` |
-| 1608 | `rijndael_test` | `?Component@?1??GetSwizzleVectorSrc@@…` vs `?key192@?1??rijndael_test@@…` — the target symbol is 0x18 B, exactly `key192[24]`; almost certainly an rdata ICF fold the map cannot show (function-local statics are not in it) |
+| 1644 | `MakeBSPTree` | `_List_base<BSPFace>::clear` vs `27088` (no relocation on our side). ✗ **The second pair is gone** — `?gBSPDirTol@@3MA` vs `?gBSPMaxDepth@@3HA` is now `ANCHOR_DISPLACEMENT` (removed by the filter, 2026-09-13): they are 4 bytes apart at `0x82F0F694`/`0x82F0F698` and the target reads `0x4(r19)` off a `gBSPDirTol` anchor. Not a wrong variable. |
 | 1584 | `RndShaderProgram::Cache` | `?MakeString@@YAPBDPBD@Z` vs `MakeString<const char*, u64, const char*, const char*, const char*>` |
-| 1168 | `StartVoiceThreadEntry` | `?TheXboxSynth@@` vs `?gCommitTag@@`; `GetTickCount` vs `CriticalSection::Enter` |
-| 1160 | `fft_matrix_inverse_columnwise` | `__vmx@0000…` vs `__vmx_0000…` (×2) — a *spelling* of the VMX constant pool symbol, not a value |
+| 1168 | `StartVoiceThreadEntry` | `?TheXboxSynth@@` vs `?gCommitTag@@`; `GetTickCount` vs `CriticalSection::Enter`. ✗ **Refuted by hand**: a 12-symbol hoist cascade — the two sides materialise the same pool of addresses in a different order, and the positional pairing charges the seam. Not a wrong callee and not a wrong global. |
 | 656 | `XboxEnumeration::Poll` | `MakeString<unsigned>` vs `MakeString<ulong,ulong,ulong>`; and vs `TextStream::operator<<` |
 | 648 | `CacheResource` | `?MovieExtension@@` vs `??1String@@` |
-| 644 | `CharDebug::DisplayObject` | `?mesh@?8??DisplayObject…` vs `328` (no relocation on our side) |
-| 588 | `FreestyleMoveRecorder::DrawDebug` | `lbl_82F0F2E0` vs `8`; `lbl_82F620A4` vs `-4` (no relocation on our side, twice) |
-| 176 / 80 | `XinputJoypadThreadStart` / `…Destruction` | `?sThreadData@?A@@3U<unnamed-type-sThreadData>@1@A` vs `sThreadData` — the target's static is in an anonymous namespace, ours is not; a one-line source fix |
+| 644 | `CharDebug::DisplayObject` | `?mesh@?8??DisplayObject…` vs `328` (no relocation on our side). ✗ **Refuted by hand**: a **liveness** difference, not a hardcoded constant — the target keeps the static's address live in `r31` and names it in the `@l`, we re-reach it as `0x148(r31)`. Same byte. |
+| 588 | `FreestyleMoveRecorder::DrawDebug` | `lbl_82F0F2E0` vs `8`; `lbl_82F620A4` vs `-4` (no relocation on our side, twice). ✗ **Refuted by hand, and the folded side is the opposite of what this table used to imply: OURS is the folded one.** The target emits `lwz r11, lbl_82F620A4@l(r30)` — a separate `lis`/`addi` naming each global — while we reach the neighbour by a plain `-0x4(r30)`. The mirror of `MakeBSPTree`. |
 | 104 | `operator<<(BinStream&, vector<TransformCrowd>)` | `TransformCrowd::Save` vs `operator<<(…ObjRefConcrete<WorldCrowd>…)` |
-| 1524, 1388, 732, 704, 660, 592, 536, 508, 492 | `CharEyes::Load`, `CharIKHand::Load`, `HamNavList::PreLoad`, `SkeletonViz::PreLoad`, `RhythmBattlePlayer::Load`, `HamDirector::Load`, `RndSpline::Load`, `RndAmbientOcclusion::Load`, `CharIKFoot::Load` | `?TheDebug@@3VDebug@@A` vs `gRev` (`gAltRev` once) — **nine rows, one shape**: a hoist-order swap the multiset test cannot forgive because the target's copy of our file-static `gRev` is an unnamed `lbl_` (e.g. `lbl_820108F8`), so the two sides' symbol sets differ by a *name*, not a variable. The next noise class to close; not a wrong variable. |
+| 3100, 1524, 1388, 732, 704, 660, 592, 536, 508, 492 (**10,236 B**) | `RndParticleSys::Load`, `CharEyes::Load`, `CharIKHand::Load`, `HamNavList::PreLoad`, `SkeletonViz::PreLoad`, `RhythmBattlePlayer::Load`, `HamDirector::Load`, `RndSpline::Load`, `RndAmbientOcclusion::Load`, `CharIKFoot::Load` | `?TheDebug@@3VDebug@@A` vs `gRev` (`gAltRev` once) — **ten rows, one shape** (`RndParticleSys::Load` joined since 2026-09-11): a hoist-order swap the multiset test cannot forgive because the target's copy of our file-static `gRev` is an unnamed `lbl_` (e.g. `lbl_820108F8`), so the two sides' symbol sets differ by a *name*, not a variable. ✗ **Refuted by hand**: it is MSVC's **CSE anchor pick** for the `ASSERT_REVS` block, and it follows no source lever — **613 of the 645 sibling `Load`s are already at 100% with our exact spelling**, so the only change that reaches all ten breaks those 613. Not a wrong variable; do not "fix" it. |
+
+**The next noise class, and why the filter cannot take it yet.** Both
+`FreestyleMoveRecorder::DrawDebug` and `CharDebug::DisplayObject` are the
+`MakeBSPTree` shape with the sides swapped: **we** fold, the target names. The
+filter refuses them because our instruction carries no relocation at all, and that
+guard has to stay — a missing relocation really is the loudest form of the bug.
+Closing them needs a different input: resolve **our** base register back to the
+`lis`/`addi` that defined it (a different instruction from the charged row) and
+compare that anchor's address plus the literal displacement. Nothing does that
+today.
 
 Reproduce: `python3 scripts/analysis/reloc_name_gate.py --project . --json-out rows.json --limit 0`
 then `python3 scripts/analysis/reloc_order_vs_identity.py --rows rows.json --project . --list-identity --anchor-out anchors.json`.

@@ -79,11 +79,22 @@ lands exactly on an unnamed `lbl_` where the other side's name is
 unresolvable, the pair is ANCHOR_DISPLACEMENT.  A displacement resolving to a
 NAMED third symbol, or to nothing, stays IDENTITY; so does a pair whose "name"
 on one side is not a symbol at all (repr of an int: that instruction has NO
-relocation, the loudest form of the bug).  Measured on this tree 2026-09-11
-(269 standing rows, 571 pairs): named_symbol 47 pairs = 11 ORDER / 6
-ANCHOR_DISPLACEMENT / 30 IDENTITY (was 36); rows 239 IDENTITY / 6
-ANCHOR_DISPLACEMENT (1,624 B) / 24 ORDER_ONLY.  The six are exactly the
-MemMgr/System family; no other class moved.  Table and the surviving list:
+relocation, the loudest form of the bug).
+
+Tightened 2026-09-13 after MakeBSPTree -- two same-section globals 4 bytes
+apart, the target reading 0x4(r19) off the neighbour's anchor -- was handed to
+a lane as a wrong-variable bug.  Two causes, and the "named third symbol" rule
+was neither (both names resolve, so that branch is never reached):
+`anchor_displacements` did not follow `lis rA, s@ha ; addi rD, rA, s@l` when
+rD != rA and therefore reported NO displacements for that side; and the reach
+sets omitted each anchor's OWN address, so the intersection described which
+consumers the bounded walk happened to see rather than which bytes each side
+addresses.  Measured on this tree 2026-09-13 (255 standing rows, 542 pairs):
+named_symbol 44 pairs = 12 ORDER / 7 ANCHOR_DISPLACEMENT / 25 IDENTITY (was 6
+/ 26); no other class moved and no ROW verdict moved -- 224 IDENTITY / 6
+ANCHOR_DISPLACEMENT (1,624 B) / 25 ORDER_ONLY -- because MakeBSPTree's other
+charged pair is a real one.  0 of the 7 anchor pairs depend on the reach-set
+widening on its own.  Table and the surviving list:
 docs/decomp/patterns/relocation-names-are-unmetered.md section 4.
 
 WHAT IT IS NOT
@@ -284,6 +295,17 @@ def anchor_displacement_note(p: dict, addr: AddressIndex | None) -> str | None:
     reach_t = {at + d for d in (td or [0])} if at is not None else set()
     reach_b = {ab + d for d in (bd or [0])} if ab is not None else set()
     if at is not None and ab is not None:
+        # An anchor's OWN address is always reached by the side that emits it:
+        # `lis/addi X` materialises &X whether or not the bounded forward walk
+        # captured a +0 consumer.  Without this the intersection is a claim
+        # about which consumers the walk happened to see, so a pair where each
+        # side's displacement lands on the OTHER side's anchor -- target X+4
+        # == Y, ours Y-4 == X -- reads as two disjoint reach sets and is
+        # charged IDENTITY, while the same shape with one incidental +0 in the
+        # displacement list (PreInitSystem: gUsingCD-8 == gSystemConfig+0)
+        # is forgiven.  The two paths have to agree.
+        reach_t |= {at}
+        reach_b |= {ab}
         common = reach_t & reach_b
         if not common:
             return None
@@ -504,6 +526,73 @@ def _selftest() -> int:
                       "base": "328", "target_disps": [328], "base_disps": [0]}]}
     v, d = adjudicate(row, t, b, addr6)
     check("  ...even when the displacement lands exactly on an lbl_ (guard is live)",
+          d[0][1] == "IDENTITY", d[0][1])
+
+    # ── MakeBSPTree: the two-register lis/addi anchor ────────────────────────
+    # `?MakeBSPTree@@…` (src/system/math/Geo.cpp), rows 18-22 of the live diff,
+    # objdiff 4.2.8 / name_check, transcribed verbatim.  The target anchors
+    # ?gBSPDirTol@@3MA (0x82F0F694) in r11, MOVES it to r19 with
+    # `addi r19, r11, @l`, and reads `0x4(r19)` = 0x82F0F698 = ?gBSPMaxDepth@@3HA
+    # -- which is exactly what OUR side anchors.  Same byte of memory, a
+    # different anchor: ANCHOR_DISPLACEMENT, the section-3 shape.
+    #
+    # Driven through `pair_displacements()` rather than hand-written disps on
+    # purpose: the defect this case was written for is in the anchor WALK, not
+    # in the adjudicator.  `anchor_displacements` only recognised
+    # `addi reg, reg, sym@l` (same destination register), so the r11 -> r19
+    # move was dropped, the target side reported NO displacements at all, and
+    # the pair never reached the address arithmetic.  A hand-written
+    # `target_disps=[4]` would have passed against the broken walker.
+    R = lambda v: {"type": "Register", "value": v}   # noqa: E731
+    S = lambda v: {"type": "Symbol", "value": v}     # noqa: E731
+    I = lambda v: {"type": "Signed", "value": v}     # noqa: E731
+    _bsp = [
+        {"target": {"opcode": "lis", "typed_args": [R("r11"), S("?gBSPDirTol@@3MA")]},
+         "base": {"opcode": "lis", "typed_args": [R("r11"), S("?gBSPMaxDepth@@3HA")]},
+         "match_type": "diff_arg"},
+        {"target": {"opcode": "addi", "typed_args": [R("r16"), R("r5"), I(1)]},
+         "base": {"opcode": "addi", "typed_args": [R("r15"), R("r5"), I(1)]},
+         "match_type": "diff_arg"},
+        {"target": {"opcode": "addi",
+                    "typed_args": [R("r19"), R("r11"), S("?gBSPDirTol@@3MA")]},
+         "match_type": "delete"},
+        {"target": {"opcode": "lwz", "typed_args": [R("r11"), I(4), R("r19")]},
+         "base": {"opcode": "lwz",
+                  "typed_args": [R("r11"), S("?gBSPMaxDepth@@3HA"), R("r11")]},
+         "match_type": "diff_arg"},
+        {"target": {"opcode": "cmpw", "typed_args": [R("cr6"), R("r16"), R("r11")]},
+         "base": {"opcode": "cmpw", "typed_args": [R("cr6"), R("r15"), R("r11")]},
+         "match_type": "diff_arg"},
+    ]
+    addr_bsp = AddressIndex({"?gBSPDirTol@@3MA": 0x82F0F694,
+                             "?gBSPMaxDepth@@3HA": 0x82F0F698})
+    _bsp_pair = ("?gBSPDirTol@@3MA", "?gBSPMaxDepth@@3HA")
+    _td, _bd = pair_displacements(_bsp).get(_bsp_pair, ([], []))
+    check("MakeBSPTree: the walk follows `addi rD, rA, sym@l` into rD",
+          _td == [4], f"target_disps={_td}")
+    row = {"pairs": [{"target": _bsp_pair[0], "base": _bsp_pair[1],
+                      "target_disps": _td, "base_disps": _bd}]}
+    t = collections.Counter({"?gBSPDirTol@@3MA": 2})
+    b = collections.Counter({"?gBSPMaxDepth@@3HA": 2})
+    v, d = adjudicate(row, t, b, addr_bsp)
+    check("MakeBSPTree shape (two-register anchor, +4 onto the OTHER side's "
+          "global) adjudicates ANCHOR_DISPLACEMENT",
+          d[0][1] == "ANCHOR_DISPLACEMENT", f"{d[0][1]} td={_td} bd={_bd}")
+    # ...and it must survive our side recording no +0 consumer of its own: an
+    # anchor's OWN address is reached by the side that materialises it,
+    # whatever the bounded walk happened to capture downstream.
+    row = {"pairs": [{"target": _bsp_pair[0], "base": _bsp_pair[1],
+                      "target_disps": [4], "base_disps": [-4]}]}
+    v, d = adjudicate(row, t, b, addr_bsp)
+    check("  ...and when NEITHER side records a 0 displacement (each anchor "
+          "reaches the other's) it is still ANCHOR_DISPLACEMENT",
+          d[0][1] == "ANCHOR_DISPLACEMENT", d[0][1])
+    # Negative control for that widening: displacements that reach neither
+    # anchor are still two different variables.
+    row = {"pairs": [{"target": _bsp_pair[0], "base": _bsp_pair[1],
+                      "target_disps": [12], "base_disps": [12]}]}
+    v, d = adjudicate(row, t, b, addr_bsp)
+    check("  ...but displacements that reach NEITHER anchor stay IDENTITY",
           d[0][1] == "IDENTITY", d[0][1])
 
     # A genuine identity pair must survive the filter.  Two shapes: a `bl`
