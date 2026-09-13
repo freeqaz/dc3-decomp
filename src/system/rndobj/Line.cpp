@@ -432,12 +432,18 @@ void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
         Vector2 &side2 = *(Vector2 *)&pt2->unk[8];
         Vector2 perp;
 
-        float invY1 = 1.0f / viewPos1.y;
-        proj1.y = viewPos1.z * invY1;
-        proj1.x = viewPos1.x * invY1;
-        float invY2 = 1.0f / viewPos2.y;
-        proj2.x = viewPos2.x * invY2;
-        proj2.y = viewPos2.z * invY2;
+        // All three components are read before either projected value is
+        // stored: retail has the x load up with the y/z pair rather than
+        // after the store of proj.y, which only happens if the source read
+        // them into locals first.
+        float vy1 = viewPos1.y, vz1 = viewPos1.z, vx1 = viewPos1.x;
+        float invY1 = 1.0f / vy1;
+        proj1.y = vz1 * invY1;
+        proj1.x = vx1 * invY1;
+        float vy2 = viewPos2.y, vz2 = viewPos2.z, vx2 = viewPos2.x;
+        float invY2 = 1.0f / vy2;
+        proj2.x = vx2 * invY2;
+        proj2.y = vz2 * invY2;
 
         float dirZ = proj2.y - proj1.y;
         dir1.y = dirZ;
