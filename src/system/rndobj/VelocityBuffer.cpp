@@ -206,12 +206,24 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
     float scale = 41.666668f / (splitMs + 1.0f);
         unk36be8 = scale = Min(2.0f, scale);
 
-    if (cam != nullptr & cam == mCam) {
+    // Short-circuit, not bitwise: retail emits two independent branches to the
+    // same label (`cmplwi cr6, r29, 0` / `beq`, then `lwz r11, 0xa8(r31)` /
+    // `cmplw` / `bne`).  The `&` spelling lowers branchless through
+    // subic/subfe/subf/cntlzw/extrwi/and., which is ~40 instructions of noise.
+    if (cam != nullptr && cam == mCam) {
         mMat->SetBlend(BaseMaterial::kBlendSrc);
         mMat->SetZMode(kZModeDisable);
 
+        // Both cache slots are addressed BEFORE the memcpy: retail shifts the
+        // index twice (`slwi r11,r10,6` / `slwi r10,r10,6`) and materialises
+        // `add r25, r11, r8` for the previous frame's matrix up front, keeping
+        // it in a callee-saved register across AdvanceFrame and five virtual
+        // calls.  Referencing it only at the SetPConstant site recomputes the
+        // address there instead.
         int cacheIdx = mActiveXfmCacheIndex;
-        memcpy(&unk36bec[cacheIdx], &mViewProjXfm, 0x40);
+        ViewProjXfm &curXfm = unk36bec[cacheIdx];
+        ViewProjXfm &prevXfm = unk36bec[cacheIdx ^ 1];
+        memcpy(&curXfm, &mViewProjXfm, 0x40);
 
         // AdvanceFrame must run unconditionally here (before PreDepthTexture),
         // not inside the if(depthTex) block: the frame counter / cache-index swap
@@ -226,7 +238,7 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
             TheRenderState.SetTextureFilter(9, (RndRenderState::FilterMode)0, false);
             TheRenderState.SetTextureClamp(9, (RndRenderState::ClampMode)2);
             TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, mViewProjXfm);
-            TheShaderMgr.SetPConstant((PShaderConstant)0x86, unk36bec[cacheIdx ^ 1]);
+            TheShaderMgr.SetPConstant((PShaderConstant)0x86, prevXfm);
             TheNgRnd.DrawRectDepth(
                 mFrustumNear,
                 (Vector3 (&)[4])mFrustumCorners,
@@ -244,7 +256,11 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
                 auto _tmp1 = drawList.end();
                 for (ObjPtrList<RndDrawable>::iterator it = drawList.begin();
                      it != _tmp1; ++it) {
-                    (*it)->DrawShowing();
+                    // Draw(), not DrawShowing(): retail dispatches vtable slot
+                    // 0x14 (?Draw@RndDrawable@@UAAXXZ); DrawShowing() is slot
+                    // 0x18.  The velocity pass draws every entry of the list it
+                    // is handed without re-testing Showing().
+                    (*it)->Draw();
                 }
                 TheRnd.SetDrawMode(savedDrawMode);
             }
