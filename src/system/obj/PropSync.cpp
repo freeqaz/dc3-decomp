@@ -152,7 +152,7 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
                         oldLen = 1.0f;
                     }
                     float ratio = len / oldLen;
-                    Scale(_m.y, ratio, _m.y);
+                    _m.y *= ratio;
                 }
             }
         }
@@ -168,7 +168,7 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
                         oldLen = 1.0f;
                     }
                     float ratio = len / oldLen;
-                    Scale(_m.z, ratio, _m.z);
+                    _m.z *= ratio;
                 }
             }
         }
