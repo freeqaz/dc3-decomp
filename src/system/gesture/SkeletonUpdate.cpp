@@ -357,23 +357,23 @@ void SkeletonUpdate::UpdateCallbacks() {
 
     if (unk538c > 0) {
         UpdateFakeArmPos();
-        unsigned revBit = 1;
-        unsigned i = 0;
+        int i = 0;
+        int revBit = 1;
         SkeletonData *sd2 = &mSkeletonFrame.mSkeletonDatas[0];
         do {
-            if (((1u << i) & (unsigned)unk538c) != 0) {
-                unsigned side;
+            if (((1 << i) & unk538c) != 0) {
+                float spacing = lbl_82F0BECC;
+                float halfSpacing = spacing * 0.5f;
+                int side;
                 if (i >= 2 || !mSwapSides) {
                     side = i;
                 } else {
                     side = revBit;
                 }
-                Vector3 offset(
-                    -((float)(int)side * lbl_82F0BECC - lbl_82F0BECC * 0.5f), 0.0f, 0.0f
-                );
+                Vector3 offset(halfSpacing - (float)side * spacing, 0.0f, 0.0f);
                 StubCameraInput::StubSkeletonData(*sd2, offset);
                 sd2->mTrackingID = i + 1;
-                if ((int)i == unk5394) {
+                if (i == unk5394) {
                     InsertFakeArmPos(*sd2);
                 }
             } else {
@@ -382,7 +382,7 @@ void SkeletonUpdate::UpdateCallbacks() {
             revBit--;
             i++;
             sd2++;
-        } while ((int)revBit > -5);
+        } while (revBit > -5);
     }
 
 
@@ -396,9 +396,10 @@ void SkeletonUpdate::UpdateCallbacks() {
     }
 
     for (int i = 0; i < 2; i++) {
-        mSkeletonsLeft[i] = nullptr;
+        int j = 0;
         Skeleton *skel = &mSkeletons[0];
-        for (int j = 0; j < NUM_SKELETONS; j++, skel++) {
+        mSkeletonsLeft[i] = nullptr;
+        for (; j < NUM_SKELETONS; j++, skel++) {
             if (mSkeletonTrackingIDs[i] == skel->TrackingID()) {
                 mSkeletonsLeft[i] = skel;
                 break;
