@@ -1758,15 +1758,15 @@ void RndText::FitTextEllipsis() {
 #endif
 
         // Binary search for how many chars fit
-        int lo = 1;
         int hi = numChars;
+        int lo = 1;
         if (numChars > 2) {
             do {
                 int mid = (lo + hi) >> 1;
-                if (charWidths[mid] < mWidth)
-                    lo = mid;
-                else
+                if (charWidths[mid] >= mWidth)
                     hi = mid;
+                else
+                    lo = mid;
             } while (hi > lo + 1);
         }
 
@@ -1810,7 +1810,7 @@ void RndText::FitTextEllipsis() {
             int searchPos = totalLen;
             if (searchPos >= minPos) {
                 unsigned short *searchPtr = &buf[searchPos];
-                while (true) {
+                do {
                     if (*searchPtr == 0x20) {
                         // Found a space — break here
                         totalLen = searchPos + ellipsisLen;
@@ -1818,9 +1818,7 @@ void RndText::FitTextEllipsis() {
                     }
                     searchPos--;
                     searchPtr--;
-                    if (minPos > searchPos)
-                        break;
-                }
+                } while (searchPos >= minPos);
             }
 
             truncPos = totalLen - ellipsisLen;
