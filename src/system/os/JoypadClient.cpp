@@ -104,34 +104,45 @@ int JoypadClient::OnMsg(const ButtonDownMsg &msg) {
     if (mFilterAllButStart && msg.GetAction() != kAction_Start)
         return 0;
     LocalUser *btnUser = msg.GetUser();
-    if (mUser && mUser != btnUser)
+    if (mUser && btnUser != mUser)
         return 0;
 
     JoypadButton btn = msg.GetButton();
     if (mVirtualDpad && MovedLeftStick(btn)) {
-        JoypadButton dpadbtn = LeftStickToDpad(btn);
+        // Reassigned, not a second local: the target keeps the dpad button in
+        // btn's register and it is what the later (1 << btn) mask test uses.
+        btn = LeftStickToDpad(btn);
         mSink->Handle(
-            ButtonDownMsg(btnUser, dpadbtn, msg.GetAction(), msg.GetPadNum()), false
+            ButtonDownMsg(btnUser, btn, msg.GetAction(), msg.GetPadNum()), false
         );
     } else {
         mSink->Handle(msg, false);
     }
-    if (!btnUser)
-        return 0;
+    // No early-out on a null user: the target's `cmplwi cr6, r28, 0x0` branches
+    // PAST the virtual GetPadNum() into the mask test, with the message's own
+    // pad number already computed as the fallback.
+    int padNum = msg.GetPadNum();
+    if (btnUser)
+        padNum = btnUser->GetPadNum();
 
     if (((1 << btn) & mBtnMask)) {
-        int padNum = btnUser->GetPadNum();
         mRepeats[padNum].Start(btn, msg.GetAction(), msg.GetPadNum());
         JoypadAction act = msg.GetAction();
-        if (!((act != kAction_Up) && (act != kAction_Right)
-           && (act != kAction_Down) && (act != kAction_Left))) {
+        // Order is load-bearing (target: 0x8, 0x6, 0x9, 0x7), and it is NOT
+        // DirectionalAction()'s order -- this test is spelled out inline.
+        if (!((act != kAction_Down) && (act != kAction_Up)
+           && (act != kAction_Left) && (act != kAction_Right))) {
             for (int i = 0; i < 4; i++) {
                 if (i != padNum) {
                     JoypadAction otherAct = ButtonToAction(
                             mRepeats[i].mLastBtn, JoypadControllerTypePadNum(i)
                         );
-                    if (!((otherAct != kAction_Up) && (otherAct != kAction_Right)
-                       && (otherAct != kAction_Down) && (otherAct != kAction_Left))) {
+                    // ...and this one is in DirectionalAction's order
+                    // (0x6, 0x8, 0x7, 0x9) but still spelled out: calling the
+                    // helper materialises a bool (li 0 / bne / li 1 / clrlwi.)
+                    // where the target branches straight out.
+                    if (!((otherAct != kAction_Up) && (otherAct != kAction_Down)
+                       && (otherAct != kAction_Right) && (otherAct != kAction_Left))) {
                         mRepeats[i].mHoldTimer.Reset();
                         mRepeats[i].mRepeatTimer.Reset();
                     }

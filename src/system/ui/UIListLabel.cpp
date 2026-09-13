@@ -111,10 +111,17 @@ void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *b
     auto& label = mLabel;
     label->SetWorldXfm(tf);
     if (box) {
-        Vector3 minPt(label->mBounds.x, 0.0f, label->mBounds.y);
+        // The target copies the Box first (eight stw into 0x70/0x80), then
+        // builds each corner and grows with it straight away -- the two
+        // GrowToContain calls are not adjacent.
         Box localbox(box->mMin, box->mMax);
-        Vector3 maxPt(label->mBounds.x + label->mBounds.w, 0.0f, label->mBounds.y + label->mBounds.h);
+        Vector3 minPt(label->mBounds.x, 0.0f, label->mBounds.y);
         localbox.GrowToContain(minPt, false);
+        Vector3 maxPt(
+            label->mBounds.x + label->mBounds.w,
+            0.0f,
+            label->mBounds.y + label->mBounds.h
+        );
         localbox.GrowToContain(maxPt, false);
         box->GrowToContain(localbox.mMin, false);
         box->GrowToContain(localbox.mMax, false);
@@ -130,7 +137,11 @@ void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *b
             }
         }
         for (unsigned int i = 0; i < label->NumStyles(); i++) {
-            label->Style(i).SetAlpha(f * savedAlphas[i]);
+            // Re-read rather than reuse savedAlphas[i]: the target makes ONE
+            // Style() call and does `lfs f0, 0x0(r11)` / `fmuls` /
+            // `stfs f0, 0x0(r11)` through that one pointer.
+            RndText::Style &style = label->Style(i);
+            style.SetAlpha(f * style.GetAlpha());
         }
         label->DrawShowing();
         for (unsigned int i = 0; i < label->NumStyles(); i++) {

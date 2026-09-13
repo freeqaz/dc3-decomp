@@ -59,7 +59,10 @@ bool FlowPickOne::Activate() {
     switch (mChoiceType) {
     case kChoiceOrdered: {
         int numChildren = (int)mChildNodes.size();
-        if (mIndex < 0 || mIndex >= numChildren)
+        // The target materialises this as a bool (li 1 / blt / li 0 / clrlwi. /
+        // bne), not as two direct branches, so the original held it in a local.
+        bool inRange = mIndex >= 0 && mIndex < numChildren;
+        if (!inRange)
             mIndex = 0;
         ActivateChild(mChildNodes[mIndex]);
         mIndex++;
@@ -87,18 +90,12 @@ bool FlowPickOne::Activate() {
     }
     case kChoiceRandomJukeBox: {
         int numChildren = (int)mChildNodes.size();
-        if (numChildren <= 1) {
-            if (numChildren == 1)
-                chosen = mChildNodes[0];
-            break;
-        }
-        if (mIndex < 0) {
-            goto jukebox_shuffle;
-        }
-        {
-            int historySize = (int)mChoiceHistory.size();
-            if (mIndex >= historySize) {
-                jukebox_shuffle:
+        // The >1 arm is the fall-through one in the target (`ble` to an
+        // out-of-line block), so it is the `if` body, not the `else`.
+        if (numChildren > 1) {
+            // Same bool-in-a-local shape as kChoiceOrdered.
+            bool haveHistory = mIndex >= 0 && mIndex < (int)mChoiceHistory.size();
+            if (!haveHistory) {
                 FlowNode *lastChosen = nullptr;
                 if (!mChoiceHistory.empty()) {
                     lastChosen = mChoiceHistory[(int)mChoiceHistory.size() - 1];
@@ -122,16 +119,27 @@ bool FlowPickOne::Activate() {
                     }
                 }
             }
+            ActivateChild(mChoiceHistory[mIndex]);
+            mIndex++;
+            return !mRunningNodes.empty();
         }
-        ActivateChild(mChoiceHistory[mIndex]);
-        mIndex++;
-        return !mRunningNodes.empty();
+        if (numChildren == 1)
+            chosen = mChildNodes[0];
+        break;
     }
     case kChoiceUseIndex: {
         int numChildren = (int)mChildNodes.size();
         int adjustedIndex = mIndex % numChildren;
         mIndex = adjustedIndex;
-        ActivateChild(mChildNodes[adjustedIndex]);
+        // Unlike the other cases (which index mNodes directly), this one walks
+        // from begin(): the target calls ObjPtrVec::begin() -- the
+        // empty()?nullptr: ternary is right there -- and then steps the
+        // iterator 0x14 at a time, re-reading mIndex as the loop bound.
+        ObjPtrVec<FlowNode>::iterator it = mChildNodes.begin();
+        for (int i = 0; i < mIndex; i++) {
+            ++it;
+        }
+        ActivateChild(it->Obj());
         mIndex++;
         return !mRunningNodes.empty();
     }

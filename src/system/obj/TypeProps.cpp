@@ -377,6 +377,8 @@ void TypeProps::Save(BinStream &bs) {
         if (mMap && owner->DataDir() == owner && owner->Dir() != owner
             || gLoadingProxyFromDisk) {
             DataArray *typeDef = owner->TypeDef();
+            DataArray *arrToWrite = nullptr;
+            int keyIdx = 0;
             std::list<Symbol> classnames;
             ObjectDir *ownerDir = dynamic_cast<ObjectDir *>(owner);
             if (ownerDir) {
@@ -388,8 +390,6 @@ void TypeProps::Save(BinStream &bs) {
                 }
             }
             if (mMap->Size() > 0) {
-                DataArray *arrToWrite = nullptr;
-                int keyIdx = 0;
                 for (int i = 0; i < mMap->Size(); i += 2) {
                     Symbol key = mMap->Sym(i);
                     if (typeDef) {
@@ -402,8 +402,12 @@ void TypeProps::Save(BinStream &bs) {
                         GetSaveFlags(arrToWrite, proxy, none);
                         isProxy = proxy;
                     }
-                    if (!none && !isProxy && classnames.empty()) {
-                        // something
+                    // A key that some sub-dir exposes as a property is written on the
+                    // side opposite to the one we are currently saving.
+                    if (!none && !isProxy
+                        && std::find(classnames.begin(), classnames.end(), key)
+                            != classnames.end()) {
+                        isProxy = !gLoadingProxyFromDisk;
                     }
                     if (!none && isProxy != gLoadingProxyFromDisk) {
                         if (!arrToWrite) {
