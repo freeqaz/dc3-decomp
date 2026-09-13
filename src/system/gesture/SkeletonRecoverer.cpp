@@ -44,9 +44,9 @@ int SkeletonRecoverer::GetTrackingIDWithRecovery(int id, int exclude) {
         Skeleton &candidate = TheGestureMgr->GetSkeleton(i);
         if (candidate.TrackingState() != kSkeletonNotTracked
             && candidate.TrackingID() != exclude) {
-            float dy = candidate.GetUnkab0().y - found->unk8;
-            float dz = candidate.GetUnkab0().z - found->unkC;
-            float dx = candidate.GetUnkab0().x - found->unk4;
+            float dy = candidate.GetUnkab0().y - found->mPos.y;
+            float dz = candidate.GetUnkab0().z - found->mPos.z;
+            float dx = candidate.GetUnkab0().x - found->mPos.x;
             float dist = dx * dx + (dz * dz + dy * dy);
             if (dist < bestDist) {
                 bestDist = dist;
@@ -95,26 +95,12 @@ void SkeletonRecoverer::Poll() {
         check_found:
         if (found) {
             found->mUntrackedTime = 0.0f;
-            const int *src = reinterpret_cast<const int *>(&skel.GetUnkab0());
-            int *dst = reinterpret_cast<int *>(&found->unk4);
-            dst[0] = src[0];
-            dst[1] = src[1];
-            dst[2] = src[2];
-            dst[3] = src[3];
+            found->mPos = skel.GetUnkab0Padded();
         } else {
             TrackingIDHistory history;
-            const int *src = reinterpret_cast<const int *>(&skel.GetUnkab0());
-            int w0 = src[0];
-            int w1 = src[1];
-            int w2 = src[2];
-            int w3 = src[3];
             history.mUntrackedTime = 0.0f;
             history.mTrackingID = trackingID;
-            int *dst = reinterpret_cast<int *>(&history.unk4);
-            dst[0] = w0;
-            dst[1] = w1;
-            dst[2] = w2;
-            dst[3] = w3;
+            history.mPos = skel.GetUnkab0Padded();
             mIDHistory.insert(mIDHistory.begin(), history);
         }
     }
@@ -126,9 +112,9 @@ void SkeletonRecoverer::Poll() {
             it = mIDHistory.erase(it);
             continue;
         }
+        ++it;
         if (!IsSkeletonTracked(data->mTrackingID)) {
             data->mUntrackedTime = deltaSeconds + data->mUntrackedTime;
         }
-        ++it;
     }
 }
