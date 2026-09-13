@@ -104,20 +104,20 @@ CharClip *CharClipGroup::GetClip(int flags) {
 
     {
         int sz = (int)mClips.size() - 1;
-        if (sz < mWhich) mWhich = sz;
+        if (sz < mWhich)
+            mWhich = sz;
     }
     unk24 = Min((int)mClips.size() - 1, unk24);
 
     int origWhich = mWhich;
-    int origUnk24 = unk24;
 
     int pos = mWhich + 1;
     pos -= (pos >= mClips.size()) ? mClips.size() : 0;
     mWhich = pos;
 
-    if (pos != origUnk24) {
+    if (pos != unk24) {
         do {
-            int swapIdx = QueueRandom(pos, origUnk24);
+            int swapIdx = QueueRandom(pos, unk24);
             mClips.swap(pos, swapIdx);
             CharClip *clip = mClips[pos];
             if ((clip->Flags() & flags) == flags) {
@@ -126,7 +126,7 @@ CharClip *CharClipGroup::GetClip(int flags) {
             }
             pos++;
             pos -= (pos >= mClips.size()) ? mClips.size() : 0;
-        } while (pos != origUnk24);
+        } while (pos != unk24);
     }
 
     CharClip *clip = nullptr;
