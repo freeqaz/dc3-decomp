@@ -120,12 +120,15 @@ void GranularSynth::ExtractGranules() {
             }
             gr.mDelay = (unsigned int)delay;
 
-            float life = (float)(gr.mWindowLen + span) - gr.mPhase + gr.mOffset - 1.0f +
+            float life = (float)(span + gr.mWindowLen) - gr.mPhase + gr.mOffset - 1.0f +
                          (float)(unsigned int)gr.mStartOffset;
             if (life < 0.0f) {
                 life = 0.0f;
             }
-            gr.mLifetime = (int)(life + (life >= 0.0f ? 0.5f : -0.5f));
+            // Rounded through unsigned, not int: retail's `fctidz` is the
+            // 64-bit convert MSVC emits for a float->unsigned cast, where an
+            // (int) cast would be `fctiwz`.
+            gr.mLifetime = (unsigned int)(life + (life >= 0.0f ? 0.5f : -0.5f));
             break;
         }
     }
