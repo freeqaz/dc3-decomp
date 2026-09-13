@@ -280,11 +280,12 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
     const Hmx::Color& color = spot->Color();
     float intensity = spot->Intensity();
 
-    float baseR = color.red * intensity * 255.0f;
-    float baseG = color.green * intensity * 255.0f;
-    float baseB = color.blue * intensity * 255.0f;
+    float scaledR = color.red * intensity;
+    float scaledG = color.green * intensity;
+    float scaledB = color.blue * intensity;
 
-    uint packedColor = ((int)baseB & 0xff) << 16 | ((int)baseG & 0xff) << 8 | ((int)baseR & 0xff);
+    uint packedColor = ((int)(scaledB * 255.0f) & 0xff) << 16
+        | ((int)(scaledG * 255.0f) & 0xff) << 8 | ((int)(scaledR * 255.0f) & 0xff);
 
     unsigned char byteR = packedColor;
     unsigned char byteG = packedColor >> 8;
@@ -303,7 +304,7 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
 
         sHaveAdditionals = sHaveAdditionals || (int)spot->GetAdditionalObjects().size() > 0;
 
-        sHaveFlares = sHaveFlares || (spot->mFlareEnabled && spot->mFlare);
+        sHaveFlares = sHaveFlares || (spot->IsFlareEnabled() && spot->GetFlare());
 
         sHaveLenses = sHaveLenses || spot->LensMesh();
 
@@ -314,8 +315,8 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
         sNeedDraw = true;
     }
 
-    RndMesh *canMesh = spot->mLightCanMesh;
-    if (canMesh && !spot->mLightCanSort) {
+    if (spot->mLightCanMesh && !spot->mLightCanSort) {
+        RndMesh *canMesh = spot->mLightCanMesh;
         const Transform &canXfm = spot->mLightCanXfm;
         bool visible;
         if (!canMesh->Showing()) {
