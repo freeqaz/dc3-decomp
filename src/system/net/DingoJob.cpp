@@ -109,13 +109,25 @@ bool DingoJob::CheckReqResult() {
     JsonObject *response = nullptr;
     ParseResponse(&converter, &response, nullptr);
     if (mResult == -3) {
+        // Authenticate()'s return value gates the retry -- we were discarding it.
+        // Image, 0x8255F430 onwards: `bne .L_8255F468` (already authenticating)
+        // sets r3 = 1; otherwise r3 is the result of the vtable+0x64 call
+        // (Authenticate). Both paths join at 0x8255F46C `clrlwi. r11, r3, 24;
+        // beq .L_8255F498`, and .L_8255F498 sets r30 = 1 and skips DelayJob
+        // entirely -- i.e. a FAILED re-authentication returns true.
+        bool authOk;
         if (!TheServer.IsAuthenticating()) {
             int padnum = TheServer.mAuthedPadNum;
             TheServer.Logout();
-            TheServer.Authenticate(padnum);
+            authOk = TheServer.Authenticate(padnum);
+        } else {
+            authOk = true;
         }
-        TheServer.DelayJob(this);
-        return false;
+        if (authOk) {
+            TheServer.DelayJob(this);
+            return false;
+        }
+        return true;
     }
     return true;
 }
