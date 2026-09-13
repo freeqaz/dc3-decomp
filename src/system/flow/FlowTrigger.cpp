@@ -104,13 +104,15 @@ BEGIN_LOADS(FlowTrigger)
         d >> mStopProperties;
     }
     if (d.rev == 0) {
-        // The iterator is advanced *before* the body so that erase() does not
-        // invalidate it -- the target keeps the current node and the next node
-        // in two separate registers.
+        // `next` trails one node ahead of `it` and is advanced before the body
+        // runs, so erase(it) below cannot invalidate the iterator we resume
+        // from.  The two stay in lockstep: `it = next` closes every iteration,
+        // so on entry to the body `next == it` always holds and `++next` alone
+        // is enough to re-establish next == it + 1.
         auto it = mTriggerEvents.begin();
+        auto next = it;
         while (it != mTriggerEvents.end()) {
             String str = it->Str();
-            auto next = it;
             ++next;
             if (str.contains("on_") && str.contains("_change")) {
                 str.erase(str.length() - 7, 7);
