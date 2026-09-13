@@ -2249,7 +2249,8 @@ void RndText::UpdateText() {
             || mFitType == kFitScrollMarqueeWrap
             || mFitType == kFitScrollMarqueeWrapAlways) {
             for (unsigned int i = 0; i < (unsigned int)mStyles.size(); i++) {
-                RndFontBase *font = mStyles[i].mFont;
+                RndFontBase *font =
+                    mStyles[i].mFont ? mStyles[i].mFont : mStyles[0].mFont;
                 const char *fontName;
                 if (font != 0) {
                     if (font->ClassName() != RndFont::StaticClassName()) {
