@@ -317,6 +317,12 @@ int CacheXbox::ThreadGetFileSize() {
         }
     } else {
         int ret = 0;
+        // MEASURED NEUTRAL (2026-09-13), both together and separately: swapping
+        // the err/fileSize declarations to chase the image's slot pair (err at
+        // r1+0x50, fileSize at r1+0x54) and inverting the test to
+        // `res != -1 || (err = GetLastError()) == 0` to chase the image's block
+        // order (0x827FF420 before the notify at 0x827FF42C) leaves this at
+        // exactly 87.375 -- MSVC canonicalises both.
         DWORD fileSize = 0;
         unsigned int err;
         DWORD res = GetFileSize(file, &fileSize);
