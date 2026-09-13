@@ -336,6 +336,22 @@ void ObjPtrVec<T1, T2>::operator=(const ObjPtrVec &other) {
         // the split is exactly 13 operator= (folded) vs 19 insert (kept), i.e.
         // per source shape, not per element type.
         //
+        // AND IT IS NOT A LEVER ON THE REST OF THE ObjPtr/ObjRef FAMILY. Census
+        // over all 69,307 functions of the image
+        // (`scripts/analysis/objref_dtor_fold_census.py`): of the 94 ObjPtr<T> /
+        // ObjOwnerPtr<T> / ObjPtrVec::Node / ObjPtrList::Node / ObjRefConcrete<T>
+        // stack locals whose ctor AND base-vptr reset are both inlined, 81 carry
+        // the test and 13 do not -- and the 13 are exactly these operator=
+        // instantiations. Closing this is worth 3,848 B and nothing else.
+        // ⚠ Do not re-derive that with a grep. MSVC reuses one register (usually
+        // r11) for many `addi rX, rY, "??_7...@l"` materialisations per function,
+        // so a sweep that does not kill each register's binding at its next
+        // definition attributes unrelated stores to the slot: looser variants of
+        // this same sweep reported 268, then 102, then 20 third-state slots. The
+        // 7 survivors at 20 (Character::PostLoad, Flow::PostLoad x2,
+        // EventTrigger::Load x2, a UILabel PropSync, LightPreset::Load) all read
+        // as reachable-and-already-100% and were purely register-reuse artifacts.
+        //
         // WHEN MSVC FOLDS THIS DESTRUCTOR -- measured 2026-09-13 in this tree,
         // three builds, each read off our own generated assembly:
         //   (a) ZERO calls between the ctor and the dtor  -> the WHOLE dtor is
