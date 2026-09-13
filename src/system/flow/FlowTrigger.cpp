@@ -104,26 +104,26 @@ BEGIN_LOADS(FlowTrigger)
         d >> mStopProperties;
     }
     if (d.rev == 0) {
-        // Manual do-while (not FOREACH) — matches target codegen via the
-        // hoisted end() iterator + explicit advancement (permuter-found).
-        auto end = mTriggerEvents.end();
+        // The iterator is advanced *before* the body so that erase() does not
+        // invalidate it -- the target keeps the current node and the next node
+        // in two separate registers.
         auto it = mTriggerEvents.begin();
-        if (it != end) {
-            do {
-                String cur = it->Str();
-                if (cur.contains("on_") && cur.contains("_change")) {
-                    cur.erase(cur.length() - 7, 7);
-                    cur.erase(0, 3);
-                    PropTriggerDefn defn(this);
-                    defn.mProvider = mEventProvider;
-                    DataArrayPtr ptr(new DataArray(1));
-                    ptr->Node(0) = Symbol(cur.c_str());
-                    defn.mProperty = ptr;
-                    mTriggerProperties.push_back(defn);
-                    mTriggerEvents.erase(it);
-                }
-                ++it;
-            } while (it != mTriggerEvents.end());
+        while (it != mTriggerEvents.end()) {
+            String str = it->Str();
+            auto next = it;
+            ++next;
+            if (str.contains("on_") && str.contains("_change")) {
+                str.erase(str.length() - 7, 7);
+                str.erase(0, 3);
+                PropTriggerDefn defn(this);
+                defn.mProvider = mEventProvider;
+                DataArrayPtr ptr(new DataArray(1));
+                ptr->Node(0) = Symbol(str.c_str());
+                defn.mProperty = ptr;
+                mTriggerProperties.push_back(defn);
+                mTriggerEvents.erase(it);
+            }
+            it = next;
         }
     }
 END_LOADS
