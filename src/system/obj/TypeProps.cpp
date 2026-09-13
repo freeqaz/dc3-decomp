@@ -402,8 +402,12 @@ void TypeProps::Save(BinStream &bs) {
                         GetSaveFlags(arrToWrite, proxy, none);
                         isProxy = proxy;
                     }
-                    if (!none && !isProxy && classnames.empty()) {
-                        // something
+                    // A key that some sub-dir exposes as a property is written on the
+                    // side opposite to the one we are currently saving.
+                    if (!none && !isProxy
+                        && std::find(classnames.begin(), classnames.end(), key)
+                            != classnames.end()) {
+                        isProxy = !gLoadingProxyFromDisk;
                     }
                     if (!none && isProxy != gLoadingProxyFromDisk) {
                         if (!arrToWrite) {
