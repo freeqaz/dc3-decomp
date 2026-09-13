@@ -60,10 +60,8 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
             float dot = -(diff.x * zAxis.x + diff.y * zAxis.y + diff.z * zAxis.z);
             Vector3 proj(diff.x + zAxis.x * dot, diff.y + zAxis.y * dot,
                 diff.z + zAxis.z * dot);
-            Vector3 cross(
-                zAxis.y * proj.z - zAxis.z * proj.y,
-                zAxis.z * proj.x - zAxis.x * proj.z,
-                zAxis.x * proj.y - zAxis.y * proj.x);
+            Vector3 cross;
+            Cross(zAxis, proj, cross);
             Normalize(cross, cross);
             float ry = result.y;
             float rz = result.z;

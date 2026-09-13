@@ -65,20 +65,21 @@ namespace {
             return false;
         {
             const Transform &xfm = light.WorldXfm();
-            float posX = xfm.v.x;
-            float posY = xfm.v.y;
-            float posZ = xfm.v.z;
-            float range = light.Range();
-            float falloff = light.FalloffStart();
-            float invRange, rangeScale;
-            if (range <= falloff) {
-                rangeScale = 1.0f;
-                invRange = 0.0f;
+            // The w component of the shader constant IS the local: retail
+            // stores it from inside both arms of the falloff test, so there is
+            // no separate `invRange` temporary.
+            Vector4 pos;
+            pos.x = xfm.v.x;
+            pos.y = xfm.v.y;
+            pos.z = xfm.v.z;
+            float rangeScale;
+            if (light.FalloffStart() < light.Range()) {
+                pos.w = 1.0f / (light.FalloffStart() - light.Range());
+                rangeScale = -(light.Range() * pos.w);
             } else {
-                invRange = 1.0f / (falloff - range);
-                rangeScale = -(range * invRange);
+                rangeScale = 1.0f;
+                pos.w = 0.0f;
             }
-            Vector4 pos(posX, posY, posZ, invRange);
             TheShaderMgr.SetVConstant((VShaderConstant)(lightIdx + 0x3e), pos);
             TheShaderMgr.SetPConstant((PShaderConstant)(lightIdx + 0x3e), pos);
             Vector4 colorVec(color.red, color.green, color.blue, rangeScale);
