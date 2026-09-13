@@ -432,12 +432,13 @@ void BustAMovePanel::PollCaptureFlashcard() {
                     mRecorder->CompareSkeletonPositions(&mCapturePoses[0], &mCapturePoses[1], 1.0f);
                 float score2 =
                     mRecorder->CompareSkeletonPositions(&mCapturePoses[0], &mCapturePoses[2], 1.0f);
-                if (score2 < 0.5f) {
+                static float sPoseMatchThreshold = 0.4f; // lbl_82F1A754
+                if (score2 < sPoseMatchThreshold) {
                     mCapturePoses[1].SetTracked(false);
                 } else {
                     mCapturePoses[2].SetTracked(false);
                 }
-                if (score1 >= 0.5f) {
+                if (score1 >= sPoseMatchThreshold) {
                     mCapturePoses[1].SetTracked(false);
                 }
                 mCaptureFrames = 4;

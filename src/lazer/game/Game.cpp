@@ -398,7 +398,7 @@ void Game::SetMusicVolume(float vol) {
 }
 
 void Game::Poll() {
-    static float sLastBeat;
+    static float sLastBeat = -1.0f; // lbl_82F1A524 (.data, written below)
 
     if (!HandleWait()) {
         if (!TheSongSequence.Done()) {

@@ -978,7 +978,9 @@ float HamNavList::CalculateSwell(int pos) const {
     float slideVal = Max(0.0f, mHandHeight);
     float clamped = Min(slideVal, 1.0f);
     float diff = clamped - (float)pos / (float)(numItems - 1);
-    float swell = sqrtf(fabsf(diff)) * sqrtf((float)numItems) * 0.15f;
+    // lbl_82F0C860: a mutable .data float, not a literal -- and 0.8, not 0.15
+    static float sSwellFalloff = 0.8f;
+    float swell = sqrtf(fabsf(diff)) * sqrtf((float)numItems) * sSwellFalloff;
     swell = Clamp(0.0f, 1.0f, swell);
     return 1.0f - swell;
 }
@@ -1181,22 +1183,29 @@ void HamNavList::Update() {
     delete mDirectionGestureFilter;
     delete mHandHeightFilter;
 
+    // lbl_82F0C4B8: the target re-loads this from writable .data at all four
+    // construction sites, so it is a mutable static -- and it is 0.1, not 0.5.
+    static float sNavGestureThreshold = 0.1f;
     if (mNavInputType == kNavInput_RightHand) {
         if (!TheGestureMgr->InDoubleUserMode()) {
-            mDirectionGestureFilter =
-                new DirectionGestureFilterSingleUser(kSkeletonRight, kSkeletonLeft, 0.5f, -0.2f);
+            mDirectionGestureFilter = new DirectionGestureFilterSingleUser(
+                kSkeletonRight, kSkeletonLeft, sNavGestureThreshold, -0.2f
+            );
         } else {
-            mDirectionGestureFilter =
-                new DirectionGestureFilterDoubleUser(kSkeletonRight, kSkeletonLeft, 0.5f, -0.2f);
+            mDirectionGestureFilter = new DirectionGestureFilterDoubleUser(
+                kSkeletonRight, kSkeletonLeft, sNavGestureThreshold, -0.2f
+            );
         }
         mHandHeightFilter = new HandHeightGestureFilter(kSkeletonRight);
     } else {
         if (!TheGestureMgr->InDoubleUserMode()) {
-            mDirectionGestureFilter =
-                new DirectionGestureFilterSingleUser(kSkeletonLeft, kSkeletonRight, 0.5f, -0.1f);
+            mDirectionGestureFilter = new DirectionGestureFilterSingleUser(
+                kSkeletonLeft, kSkeletonRight, sNavGestureThreshold, -0.1f
+            );
         } else {
-            mDirectionGestureFilter =
-                new DirectionGestureFilterDoubleUser(kSkeletonLeft, kSkeletonRight, 0.5f, -0.1f);
+            mDirectionGestureFilter = new DirectionGestureFilterDoubleUser(
+                kSkeletonLeft, kSkeletonRight, sNavGestureThreshold, -0.1f
+            );
         }
         mHandHeightFilter = new HandHeightGestureFilter(kSkeletonLeft);
     }
@@ -1579,18 +1588,27 @@ void HamNavList::DrawDebug() const {
         return;
 
     float h = mHandHeightFilter->mHandHeight;
+    Hmx::Color lineColor(0.0f, 1.0f, 0.0f, 1.0f);
     Vector2 p1(1.0f, h);
     Vector2 p0(0.0f, h);
-    UtilDrawLine(p0, p1, Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f));
+    UtilDrawLine(p0, p1, lineColor);
 
     static Hmx::Color sRectColor(0.2f, 0.2f, 0.2f, 0.7f);
     static Hmx::Color sTextColor(1.0f, 1.0f, 1.0f, 1.0f);
 
-    static float sRectX = 0.0f;
-    static float sRectY = 0.1f;
-    static float sRectW = 0.95f;
-    static float sRectH = 0.95f;
-    Hmx::Rect rect(sRectX, 0.05f - sRectY, sRectW, sRectH + 0.05f);
+    // Six mutable `static float`s, not four: the target reads them from
+    // writable .data (lbl_82F0C790..7A4) with a relocation apiece, which is
+    // what MSVC emits for a function-local static -- an inline literal would
+    // be a `__real@<hex>` COMDAT in .rdata.  Declaration order below is the
+    // target's .data order.  Identical debug-overlay idiom to
+    // SkeletonChooser::DrawDebug, whose six agree with the target already.
+    static float sTextRowStep = 0.03f; // lbl_82F0C790
+    static float sTextColStep = 0.37f; // lbl_82F0C794
+    static float sRectX = 0.1f; // lbl_82F0C798
+    static float sRectW = 0.8f; // lbl_82F0C79C
+    static float sRectY = 0.1f; // lbl_82F0C7A0
+    static float sRectH = 0.25f; // lbl_82F0C7A4
+    Hmx::Rect rect(sRectX, sRectY - 0.05f, sRectW, sRectH + 0.05f);
     TheRnd.DrawRectScreen(rect, sRectColor, nullptr, nullptr, nullptr);
 
     char buf[50];
@@ -1614,7 +1632,7 @@ void HamNavList::DrawDebug() const {
             sprintf_s(buf, "Num selectable items: %d", NumItems());
             break;
         }
-        Vector2 pos(0.0f, sRectY + (int)i * 0.05f);
+        Vector2 pos(0.0f * sTextColStep + sRectX, (int)i * sTextRowStep + sRectY);
         TheRnd.DrawStringScreen(buf, pos, sTextColor, true);
         i++;
     } while ((int)i < 5);

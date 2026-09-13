@@ -1720,14 +1720,13 @@ namespace {
     };
 
     BeatLineData gBeatLineData = { 0.05f, 0.95f, 0.25f, 0.25f };
-    float gFourPointZero = 4.0f;
     static float sOverlayWidth = gBeatLineData.maxValue - gBeatLineData.minValue;
 
     void DrawBeatLine(float x, float y, float z, const Hmx::Color &color) {
         float sum = x + y;
         float numerator = gBeatLineData.rangeOffset + z;
         float denominator =
-            gBeatLineData.rangeScale + gBeatLineData.rangeOffset + gFourPointZero;
+            gBeatLineData.rangeScale + gBeatLineData.rangeOffset + 4.0f;
         float t = numerator / denominator;
         float linePos = t * (gBeatLineData.maxValue - gBeatLineData.minValue)
             + gBeatLineData.minValue;
@@ -1830,7 +1829,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     }
 
     // Draw 4 rating state threshold lines
-    float beatScale4 = gFourPointZero;
+    float beatScale4 = 4.0f;
     for (int i = 0; i < 4; i++) {
         Symbol ratingName;
         float thresh;

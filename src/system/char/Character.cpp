@@ -877,21 +877,23 @@ void Character::DrawShowing() {
 
     if (sShowName->Int()) {
         static Symbol sCrowd("crowd");
-        if (Type() != sCrowd) {
-            RndTransformable *bone = CharUtlFindBoneTrans("bone_head", this);
-            if (bone) {
-                const Transform &xfm = bone->WorldXfm();
-                Vector3 worldPos = xfm.v;
-                worldPos.z += 24.0f;
-                Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
-                Vector2 screenPos;
-                RndCam::Current()->WorldToScreen(worldPos, screenPos);
-                screenPos.x *= TheRnd.Width();
-                screenPos.y *= TheRnd.Height();
-                const Vector2 &extent = TheRnd.DrawString(Name(), screenPos, white, false);
-                screenPos.x = screenPos.x - (extent.x - screenPos.x) * 0.5f;
-                TheRnd.DrawString(Name(), screenPos, white, true);
-            }
+        if (Type() == sCrowd)
+            return;
+        RndTransformable *bone = CharUtlFindBoneTrans("bone_head", this);
+        if (bone) {
+            const Transform &xfm = bone->WorldXfm();
+            Vector3 worldPos = xfm.v;
+            // lbl_82F09244 (.data, mutable) -- not a literal, and not 24
+            static float sShowNameZOffset = 6.0f;
+            worldPos.z = sShowNameZOffset + worldPos.z;
+            Hmx::Color white(1.0f, 1.0f, 1.0f, 1.0f);
+            Vector2 screenPos;
+            RndCam::Current()->WorldToScreen(worldPos, screenPos);
+            screenPos.x *= TheRnd.Width();
+            screenPos.y *= TheRnd.Height();
+            const Vector2 &extent = TheRnd.DrawString(Name(), screenPos, white, false);
+            screenPos.x = screenPos.x - (extent.x - screenPos.x) * 0.5f;
+            TheRnd.DrawString(Name(), screenPos, white, true);
         }
     }
 }

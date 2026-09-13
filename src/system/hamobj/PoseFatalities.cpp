@@ -409,7 +409,8 @@ void PoseFatalities::Poll() {
             TheHamProvider->SetProperty("in_fatalities", 0);
         }
     }
-    int deltaBeat = TheTaskMgr.Beat() + 0.2f;
+    static float sBeatRoundOffset = 0.2f; // lbl_82F0D7E0
+    int deltaBeat = TheTaskMgr.Beat() + sBeatRoundOffset;
     if (deltaBeat > mCurrentBeat) {
         mCurrentBeat = deltaBeat;
         if (mCurrentBeat == mJumpStart) {
@@ -723,7 +724,15 @@ void PoseFatalities::DrawDebug() {
     }
 
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    float screenScale = 0.25f / TheRnd.YRatio();
+    // The target reaches these three through writable `.data` labels
+    // (lbl_82F0D7D8/D4/DC), each with its own relocation -- that is a
+    // mutable function-local `static float`, not an inline literal, which
+    // MSVC would have put in .rdata as a `__real@<hex>` COMDAT.
+    static float sDebugRectX = 0.1f; // lbl_82F0D7D8
+    static float sDebugRectY = 0.3f; // lbl_82F0D7D4
+    static float sDebugRectW = 0.3f; // lbl_82F0D7DC
+
+    float screenScale = sDebugRectW / TheRnd.YRatio();
 
     // Player 0
     bool player0Active = false;
@@ -760,7 +769,7 @@ void PoseFatalities::DrawDebug() {
             meterB.DrawBar(0.0f, weightedCompare, blueColor, 1.0f, 0.0f);
 
             static DebugMeter meterC(
-                0.5f + 0.25f + 0.1f, 0.0f, 0.25f, 0.03f,
+                sDebugRectX + sDebugRectW + 0.1f, sDebugRectY, sDebugRectW, 0.03f,
                 Hmx::Color(0, 0, 0, 1)
             );
             meterC.Draw();
@@ -775,7 +784,7 @@ void PoseFatalities::DrawDebug() {
 
         if (TheOSCMessenger.GetInt("/posefatalitiesdrawdebugskel", 0)) {
             Hmx::Rect rect(
-                0.25f + 0.1f, 0.0f, 0.25f, screenScale
+                sDebugRectX + sDebugRectW + 0.1f, sDebugRectY, sDebugRectW, screenScale
             );
             Hmx::Color bgColor(0, 0, 0, 0.4f);
             TheRnd.DrawRectScreen(rect, bgColor, nullptr, nullptr, nullptr);
@@ -796,7 +805,7 @@ void PoseFatalities::DrawDebug() {
     if (player1Active) {
         if (DataVariable("fatal_debug").Int()) {
             static DebugMeter meterD(
-                0.5f, 0.0f, 0.25f, 0.03f,
+                sDebugRectX, sDebugRectY, sDebugRectW, 0.03f,
                 Hmx::Color(0, 0, 0, 1)
             );
             meterD.Draw();
@@ -811,7 +820,7 @@ void PoseFatalities::DrawDebug() {
 
         if (TheOSCMessenger.GetInt("/posefatalitiesdrawdebugskel", 0)) {
             Hmx::Rect rect1(
-                0.5f, 0.0f, 0.25f, screenScale
+                sDebugRectX, sDebugRectY, sDebugRectW, screenScale
             );
             Hmx::Color bgColor1(0, 0, 0, 0.4f);
             TheRnd.DrawRectScreen(rect1, bgColor1, nullptr, nullptr, nullptr);
