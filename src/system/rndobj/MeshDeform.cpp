@@ -82,9 +82,9 @@ BEGIN_LOADS(RndMeshDeform)
                 float f74;
                 bs >> f74;
                 if (f74 != 0) {
+                    i150[weightIdx] = j;
+                    f250[weightIdx] = f74;
                     weightIdx++;
-                    i150[j] = j;
-                    f250[j] = f74;
                 }
             }
             mVerts.AppendWeights(weightIdx, i150, f250);
