@@ -1776,26 +1776,34 @@ void PartyModeMgr::UpdateScores() {
         mJustWonSide = 2;
     }
     switch (mJustWonSide) {
-    case 1:
+    case 1: {
+        float leftPoints = GetPointsForLoss();
         mLeftTeamPrevScore = mLeftTeamScore;
-        mLeftTeamScore += GetPointsForLoss();
+        mLeftTeamScore += leftPoints;
+        float rightPoints = GetPointsForWin();
         mRightTeamPrevScore = mRightTeamScore;
-        mRightTeamScore += GetPointsForWin();
+        mRightTeamScore += rightPoints;
         break;
+    }
     default:
         if ((unsigned)mJustWonSide < 3) {
+            float leftPoints = GetPointsForWin();
             mLeftTeamPrevScore = mLeftTeamScore;
-            mLeftTeamScore += GetPointsForWin();
+            mLeftTeamScore += leftPoints;
+            float rightPoints = GetPointsForWin();
             mRightTeamPrevScore = mRightTeamScore;
-            mRightTeamScore += GetPointsForWin();
+            mRightTeamScore += rightPoints;
         }
         break;
-    case 0:
+    case 0: {
+        float leftPoints = GetPointsForWin();
         mLeftTeamPrevScore = mLeftTeamScore;
-        mLeftTeamScore += GetPointsForWin();
+        mLeftTeamScore += leftPoints;
+        float rightPoints = GetPointsForLoss();
         mRightTeamPrevScore = mRightTeamScore;
-        mRightTeamScore += GetPointsForLoss();
+        mRightTeamScore += rightPoints;
         break;
+    }
     }
     SetLeftTeamStarBonus();
     SetRightTeamStarBonus();
@@ -1814,31 +1822,37 @@ void PartyModeMgr::UpdateScores() {
         static Symbol right("right");
         static Symbol random("random");
         switch (mWinningSide) {
-        case 1:
+        case 1: {
+            float points = GetPointsForWin();
             mRightTeamPrevScore = mRightTeamScore;
-            mRightTeamScore += GetPointsForWin();
+            mRightTeamScore += points;
             SendDataPoint("crew_throwdown/tiebreaker", side, right, random, 0);
             break;
+        }
         default:
             if ((unsigned)mWinningSide < 3) {
                 if (rand() % 2) {
                     mWinningSide = 0;
+                    float points = GetPointsForWin();
                     mLeftTeamPrevScore = mLeftTeamScore;
-                    mLeftTeamScore += GetPointsForWin();
+                    mLeftTeamScore += points;
                     SendDataPoint("crew_throwdown/tiebreaker", side, left, random, 1);
                 } else {
                     mWinningSide = 1;
+                    float points = GetPointsForWin();
                     mRightTeamPrevScore = mRightTeamScore;
-                    mRightTeamScore += GetPointsForWin();
+                    mRightTeamScore += points;
                     SendDataPoint("crew_throwdown/tiebreaker", side, right, random, 1);
                 }
             }
             break;
-        case 0:
+        case 0: {
+            float points = GetPointsForWin();
             mLeftTeamPrevScore = mLeftTeamScore;
-            mLeftTeamScore += GetPointsForWin();
+            mLeftTeamScore += points;
             SendDataPoint("crew_throwdown/tiebreaker", side, left, random, 0);
             break;
+        }
         }
     } else {
         mWinningSide = 2;
