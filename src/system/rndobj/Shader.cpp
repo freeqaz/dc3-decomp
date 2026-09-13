@@ -696,150 +696,74 @@ u64 RndShaderMultimesh::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
 
 u64 RndShaderStandard::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     NgEnviron *env = (NgEnviron *)RndEnviron::Current();
-    u64 skinned = (u64)(TheShaderMgr.BoneCount() != 0) << 0xc;
-    if (TheRnd.DrawMode() == Rnd::kDrawOcclusion) return skinned;
+    ShaderOptions opts((u64)(TheShaderMgr.BoneCount() != 0) << 0xc);
+    if (TheRnd.DrawMode() == Rnd::kDrawOcclusion)
+        return opts.flags;
     if (TheRnd.DrawMode() == Rnd::kDrawShadowDepth) {
-        u64 base = (((u64)(mat->Prelit() & 1) << 4
-            | (u64)(mat->GetDiffuseTex() != nullptr)) << 4) | skinned;
-        if (!mat->UseEnviron()) return base;
-        return base | 0x2000000000000000;
+        opts.mDiffuseMap = mat->GetDiffuseTex() != nullptr;
+        opts.mPrelit = mat->Prelit();
+        if (mat->UseEnviron()) {
+            opts.mFastCheapLighting = 1;
+        }
+        return opts.flags;
     }
     bool fadeOut;
-    if (!b) {
-        if (!env->FadeOut() || env->FadeEnd() == env->FadeStart()) {
-            fadeOut = false;
-        } else {
-            fadeOut = true;
-        }
-    } else {
+    if (b) {
         fadeOut = mat->FadeOut();
+    } else {
+        fadeOut = env->FadeOut() && env->FadeEnd() != env->FadeStart();
     }
-    bool allowHDR = mat->AllowHDR();
-    u64 pseudoHDR;
-    if (allowHDR && !fadeOut) {
+    bool pseudoHDR;
+    if (mat->AllowHDR() && !fadeOut) {
         bool offscreen;
-        if (!b) {
-            offscreen = TheNgRnd.Offscreen();
-        } else {
+        if (b) {
             offscreen = TheShaderMgr.GetUnk41();
-        }
-        if (!offscreen) {
-            pseudoHDR = 1;
         } else {
-            pseudoHDR = 0;
+            offscreen = TheNgRnd.Offscreen();
         }
+        pseudoHDR = !offscreen;
     } else {
-        pseudoHDR = 0;
+        pseudoHDR = false;
     }
-    int hasDiffuse = mat->GetDiffuseTex() != nullptr;
-    bool prelit = mat->Prelit();
-    u64 hasRealLights;
-    if (!mat->UseEnviron()) {
-        hasRealLights = 0;
-    } else {
-        hasRealLights = (env->NumLights_Real() >= 1) ? 1 : 0;
-    }
-    u64 hasApproxLights;
-    if (!mat->UseEnviron()) {
-        hasApproxLights = 0;
-    } else {
-        hasApproxLights = (env->NumLights_Approx() >= 1) ? 1 : 0;
-    }
-    u64 opts = hasApproxLights << 0x11
-        | hasRealLights << 0x10
-        | ((pseudoHDR << 0xe | (u64)(prelit & 1)) << 4 | (u64)hasDiffuse) << 4 | skinned;
-    if (hasRealLights || hasApproxLights) {
-        u64 hasSpecular = ((int)(mat->GetSpecularRGB().blue * 255.0f) & 0xff) != 0
-            || ((int)(mat->GetSpecularRGB().green * 255.0f) & 0xff) != 0
-            || ((int)(mat->GetSpecularRGB().red * 255.0f) & 0xff) != 0;
-        opts |= hasSpecular << 2;
-        double dZero = 0.0;
+    opts.mDiffuseMap = mat->GetDiffuseTex() != nullptr;
+    opts.mPrelit = mat->Prelit();
+    opts.mPseudoHDR = pseudoHDR;
+    opts.mRealLights = mat->UseEnviron() && env->NumLights_Real() > 0;
+    opts.mApproxLights = mat->UseEnviron() && env->NumLights_Approx() > 0;
+    if (opts.mRealLights || opts.mApproxLights) {
+        opts.mSpecular = mat->GetSpecularRGB().Pack() != 0;
         if (TheShaderMgr.AllowPerPixel() && mat->GetPerPixelLit()) {
-            int hasNormal = mat->NormalMap() != nullptr;
-            u64 hasNormDetail;
-            if (mat->GetNormDetailMap() == nullptr || mat->GetNormDetailStrength() <= 0.0f) {
-                hasNormDetail = 0;
-            } else {
-                hasNormDetail = 1;
-            }
-            int cull = mat->GetCull();
-            u64 hasSpecMap;
-            if (!hasSpecular || mat->GetSpecularMap() == nullptr) {
-                hasSpecMap = 0;
-            } else {
-                hasSpecMap = 1;
-            }
-            u64 hasRim = ((int)(mat->GetRimRGB().blue * 255.0f) & 0xff) != 0
-                || ((int)(mat->GetRimRGB().green * 255.0f) & 0xff) != 0
-                || ((int)(mat->GetRimRGB().red * 255.0f) & 0xff) != 0;
-            u64 rimLightUnder;
-            if (!hasRim || !mat->GetRimLightUnder()) {
-                rimLightUnder = 0;
-            } else {
-                rimLightUnder = 1;
-            }
-            u64 hasRimMap;
-            if (!hasRim || mat->GetRimMap() == nullptr) {
-                hasRimMap = 0;
-            } else {
-                hasRimMap = 1;
-            }
-            u64 shadowMap = TheRnd.GetShadowMap() != nullptr;
-            opts = ((s64)(int)(uint)(shadowMap != 0) << 4 | hasRimMap) << 0xf
-                | rimLightUnder << 0xe
-                | hasRim << 0x25
-                | hasSpecMap << 1
-                | (((u64)(cull == kCullBackwards) << 0x1e | hasNormDetail) << 0x18
-                | (s64)(int)(uint)(hasNormal != 0) << 5 | opts
-                | 1);
+            opts.mNormalMap = mat->NormalMap() != nullptr;
+            opts.mPerPixelLighting = 1;
+            opts.mNormDetail = mat->GetNormDetailMap() != nullptr
+                && mat->GetNormDetailStrength() > 0.0f;
+            opts.mFlipNormal = mat->GetCull() == kCullBackwards;
+            opts.mSpecularMap = opts.mSpecular && mat->GetSpecularMap() != nullptr;
+            opts.mRimLight = mat->GetRimRGB().Pack() != 0;
+            opts.mRimLightUnder = opts.mRimLight && mat->GetRimLightUnder();
+            opts.mRimLightMap = opts.mRimLight && mat->GetRimMap() != nullptr;
+            opts.mShadowBuffer = TheRnd.GetShadowMap() != nullptr;
         }
         if (mat->GetEnvironMap() != nullptr) {
-            u64 environSpecMask;
-            if (!(opts & 2) || !mat->GetEnvironMapSpecMask()) {
-                environSpecMask = 0;
-            } else {
-                environSpecMask = 1;
-            }
-            opts = environSpecMask << 0x31
-                | ((u64)(mat->GetEnvironMapFalloff() & 1)) << 0x2b
-                | opts | 8;
+            opts.mEnvironMapFalloff = mat->GetEnvironMapFalloff();
+            opts.mEnvironMap = 1;
+            opts.mEnvironMapSpecMask = opts.mSpecularMap && mat->GetEnvironMapSpecMask();
         }
-        bool hasRecvProjLights;
-        if (!mat->GetRecvProjLights()) {
-            hasRecvProjLights = false;
-        } else {
-            hasRecvProjLights = (env->NumLights_Proj() >= 1);
-        }
-        u64 hasPointCubeTex;
-        if (!mat->GetRecvPointCubeTex() || env->NumLights_Point() < 1) {
-            hasPointCubeTex = 0;
-        } else {
-            hasPointCubeTex = env->HasPointCubeTex() ? 1 : 0;
-        }
-        float aniso = mat->GetAnisotropy();
-        int numPointLights = env->NumLights_Point();
-        int numProjLights;
-        if (hasRecvProjLights) {
-            numProjLights = env->NumLights_Proj();
-        } else {
-            numProjLights = 0;
-        }
-        u64 projBlend;
-        if (hasRecvProjLights) {
-            projBlend = (env->GetProjectedBlend() == 1) ? 1 : 0;
-        } else {
-            projBlend = 0;
-        }
-        opts = (hasPointCubeTex << 4 | projBlend) << 0x2c
-            | ((s64)numProjLights & 3U) << 0x1c
-            | (((s64)numPointLights & 3U) << 0x14 | (u64)(dZero < (double)aniso)) << 0x14 | opts;
+        bool recvProjLights = mat->GetRecvProjLights() && env->NumLights_Proj() > 0;
+        bool pointCubeTex = mat->GetRecvPointCubeTex() && env->NumLights_Point() > 0
+            && env->HasPointCubeTex();
+        opts.mAnisotropic = mat->GetAnisotropy() > 0.0f;
+        opts.mNumPoint = env->NumLights_Point();
+        opts.mNumProj = recvProjLights ? env->NumLights_Proj() : 0;
+        opts.mProjLightMultiply = recvProjLights && env->GetProjectedBlend() == 1;
+        opts.mPointCubeTex = pointCubeTex;
     }
     if (mat->GetRefractEnabled(b) && mat->GetRefractNormalMap() != nullptr) {
-        opts |= 0x400000000000;
+        opts.mRefractWorld = 1;
     }
-    int emissiveMap = mat->GetEmissiveMap() != nullptr;
-    bool screenAligned = mat->GetScreenAligned();
-    bool intensify = mat->GetIntensify();
+    opts.mGlowMap = mat->GetEmissiveMap() != nullptr;
+    opts.mScreenAligned = mat->GetScreenAligned();
+    opts.mIntensify = mat->GetIntensify();
     int texGen = mat->GetTexGen();
     uint texGenVal;
     if (texGen == kTexGenSphere) {
@@ -849,40 +773,32 @@ u64 RndShaderStandard::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     } else {
         texGenVal = -(uint)(texGen == kTexGenEnviron) & 3;
     }
-    bool fog;
-    if (mat->AllowFog() && mat->GetFog()) {
-        fog = true;
-    } else {
-        fog = false;
-    }
+    opts.mTexGen = texGenVal;
+    opts.mFog = mat->AllowFog() && mat->GetFog();
+    opts.mBillboard = s == kStandardBBShader;
     bool colorAdjust;
-    if (!b) {
-        colorAdjust = env->UseColorAdjust();
-    } else {
+    if (b) {
         colorAdjust = mat->ColorAdjust();
+    } else {
+        colorAdjust = env->UseColorAdjust();
     }
-    u64 shaderOpts = ((((s64)mat->GetColorModFlags() & 3U) << 2
-        | (u64)(uint)mat->GetShaderVariation() & 0xffffffff00000003) << 9
-        | (u64)(colorAdjust & 1)) << 0x15
-        | (u64)(s == kStandardBBShader) << 0x19
-        | (u64)fog << 0x12
-        | (s64)(int)texGenVal << 10
-        | ((((u64)(intensify & 1) << 0x28 | (u64)(screenAligned & 1)) << 6 | (u64)(emissiveMap != 0))
-        << 7 | opts);
-    if (!(opts & 0x100) && TheShaderMgr.UseAO()
-        && env->AOEnabled() && 0.003f < env->AOStrength()) {
-        shaderOpts |= 0x4000000000;
+    opts.mColorXfm = colorAdjust;
+    opts.mCustomVariation = mat->GetShaderVariation();
+    opts.mColorMod = mat->GetColorModFlags();
+    if (!opts.mPrelit && TheShaderMgr.UseAO() && env->AOEnabled()
+        && env->AOStrength() > 0.003f) {
+        opts.mEnableAO = 1;
     }
-    shaderOpts |= ((u64)env->UseToneMapping() & 1) << 0x27;
-    if (fadeOut && !(shaderOpts & 0x40000)) {
+    opts.mToneMapping = env->UseToneMapping();
+    if (fadeOut && !opts.mFog) {
         Vector4 fadeParams(mat->unk2d8, mat->unk2dc, mat->unk2e0, mat->unk2e4);
         TheShaderMgr.SetPConstant((PShaderConstant)0x68, fadeParams);
-        shaderOpts |= ((s64)mat->unk2d4 & 3U) << 0x1a;
+        opts.mFadeOut = mat->unk2d4;
     }
-    CheckDistortionOpts((RndMat *)mat, (ShaderOptions &)shaderOpts);
-    return (((u64)(TheHiResScreen.IsActive() & 1) << 2
-        | (u64)(TheRnd.ResourceCached() & 1)) << 0x32)
-        | (shaderOpts & 0xffebffffffffffff);
+    CheckDistortionOpts((RndMat *)mat, opts);
+    opts.mShowShaderCost = TheRnd.ResourceCached();
+    opts.mHiResScreen = TheHiResScreen.IsActive();
+    return opts.flags;
 }
 
 u64 RndShaderPostProc::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
