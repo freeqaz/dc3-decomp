@@ -650,17 +650,21 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
     int songAnim = SongAnimation();
 #ifdef HX_NATIVE
     // On native, compute bones once up front. The goto zero_and_scale below
-    // jumps past the else-branch's local declaration, which is UB on Clang
-    // (bones is uninitialized). PPC/MSVC keeps the earlier local in the same
-    // register so it "works" there, but we must hoist the cast for native.
+    // jumps between branches, which is UB on Clang if the assignment on the
+    // taken path has not run yet.
     CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
+#else
+    // One function-scope variable, assigned on each path. Two separate
+    // block-scope `bones` force MSVC to unify them through a stack slot at
+    // zero_and_scale; the target carries the value in r3 across the goto.
+    CharBones *bones;
 #endif
     if (songAnim != -1) {
         HamDriver *hamDriver = Find<HamDriver>("song.hdrv", false);
         if (hamDriver == nullptr || hamDriver->FirstClip() == nullptr) {
             CharClip *clip = Driver()->FirstPlayingClip();
 #ifndef HX_NATIVE
-            CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
+            bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
 #endif
             if (clip == nullptr) {
                 goto zero_and_scale;
@@ -688,13 +692,15 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
                 return this;
             }
 #ifndef HX_NATIVE
-            CharBones *bones = static_cast<CharBones *>(mSkeletonBones);
+            bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
 #endif
             bones->Zero();
             for (std::map<CharClip *, float>::iterator it = clipMap.begin();
                  it != clipMap.end(); ++it) {
-                if (it->first != nullptr) {
-                    ApplyBlendedSkeletons(hamDriver, it->first, it->second);
+                CharClip *timedClip = it->first;
+                float timedWeight = it->second;
+                if (timedClip != nullptr) {
+                    ApplyBlendedSkeletons(hamDriver, timedClip, timedWeight);
                 }
             }
             mSkeletonBones->Poll();
@@ -708,7 +714,7 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
             return this;
         }
 #ifndef HX_NATIVE
-        CharBones *bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
+        bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
 #endif
 zero_and_scale:
         bones->Zero();
