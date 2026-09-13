@@ -75,14 +75,15 @@ public:
         case 0:
             idx = 0;
             break;
-        case 2: {
-            int s = Size();
-            idx = rand() % (s - mNumGets % s);
-            break;
-        }
         case 3:
             idx = rand() % Size();
             break;
+        case 2: {
+            int s = Size();
+            int range = s - mNumGets % s;
+            idx = rand() % range;
+            break;
+        }
         default: {
             int i1 = mSeed * (float)Size() + 1.01f;
             idx = rand() % i1;
