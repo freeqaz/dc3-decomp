@@ -219,9 +219,9 @@ bool RndGroup::MakeWorldSphere(Sphere &s, bool b) {
 
 void RndGroup::DrawShowing() {
     RndEnvironTracker tracker(nullptr, nullptr);
-    std::vector<RndDrawable *> &_ref0 = mDraws;
     if (!mSortInWorld) {
-        for (std::vector<RndDrawable *>::iterator it = _ref0.begin(); it != _ref0.end();
+        for (std::vector<RndDrawable *>::iterator it = mDraws.begin();
+             it != mDraws.end();
              ++it) {
             (*it)->Draw();
         }
@@ -229,10 +229,10 @@ void RndGroup::DrawShowing() {
         mDrawOnly->Draw();
     } else {
         std::vector<GroupDrawDist> sorted;
-        int _tmp0 = _ref0.size();
-        sorted.reserve(_tmp0);
+        sorted.reserve(mDraws.size());
         const Transform &camXfm = RndCam::Current()->WorldXfm();
-        for (std::vector<RndDrawable *>::iterator it = _ref0.begin(); it != _ref0.end();
+        for (std::vector<RndDrawable *>::iterator it = mDraws.begin();
+             it != mDraws.end();
              ++it) {
             RndTransformable *trans = dynamic_cast<RndTransformable *>(*it);
             Vector3 zero(0.0f, 0.0f, 0.0f);
