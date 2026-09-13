@@ -56,7 +56,13 @@ BEGIN_COPYS(RndLight)
     COPY_MEMBER_FROM(l, mCubeTexture)
     COPY_MEMBER_FROM(l, mShadowOverride)
     COPY_MEMBER_FROM(l, mShadowObjects)
-    COPY_MEMBER_FROM(l, mTextureXfm)
+    // NOT mTextureXfm. The image goes straight from the mShadowObjects
+    // ObjPtrList::operator= at 0x826BD890 to `lwz r11, 0x17c(r30)` (the
+    // mProjectedBlend load) at 0x826BD894 -- no memcpy, no _blkmov, and no
+    // reference to any source offset in 0x130..0x16f anywhere in the whole
+    // function. RndLight::Copy simply does not copy the texture transform,
+    // even though Save/Load both do. Adding it emitted an extra
+    // `memcpy(this-0x50, l+0x134, 0x40)`.
     COPY_MEMBER_FROM(l, mProjectedBlend)
     if (ty == kCopyShallow || (ty == kCopyFromMax && l->mColorOwner != l)) {
         COPY_MEMBER_FROM(l, mColorOwner)
