@@ -2582,7 +2582,9 @@ void BuildVisit(BSPNode *node) {
 
 void BuildFromBSP(RndMesh *mesh) {
     RndMesh *geomOwner = mesh->GetGeomOwner();
-    BuildVisit(geomOwner->GetBSPTree());
+    // GetBSPTree() already reads through mGeomOwner, so retail reaches it
+    // straight off `mesh` -- one lwz, not two.
+    BuildVisit(mesh->GetBSPTree());
 
     int totalVerts = 0;
 
