@@ -405,7 +405,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
     LiveCameraInput *cam, float clipLeft, float clipTop
 ) {
     void *texels = nullptr;
-    unsigned int clippedX = (1 - (int)(clipLeft * -640.0f)) & 0xfffe;
+    int clippedX = (1 - (int)(clipLeft * -640.0f)) & 0xfffe;
     clippedX = clippedX % 640;
     mTex->TexelsLock(texels);
     uintptr_t destBase = (uintptr_t)texels;
@@ -414,28 +414,28 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
         LockedRect lockedRect;
         cam->LockStream(bufferData, lockedRect);
         unsigned int srcPitch = lockedRect.mPitch >> 1;
-        unsigned int clippedY = (1 - (int)(clipTop * -480.0f)) & 0xfffe;
+        int clippedY = (1 - (int)(clipTop * -480.0f)) & 0xfffe;
         clippedY = clippedY % 480;
-        uintptr_t srcBase = (clippedY >> 1) * srcPitch * 2 + (uintptr_t)lockedRect.mBits;
-        unsigned int rowIdx = 0;
+        uintptr_t srcBase = (clippedY / 2) * srcPitch * 2 + (uintptr_t)lockedRect.mBits;
+        int rowIdx = 0;
         if (mTex->Height() > 0) {
             do {
                 int texWidth = mTex->Width();
-                if ((int)clippedX < (int)(texWidth + clippedX)) {
+                if (clippedX < texWidth + clippedX) {
                     unsigned short *destRow = (unsigned short *)(destBase - 2);
-                    unsigned int x = clippedX;
+                    int x = clippedX;
                     do {
                         unsigned short color = 0;
                         unsigned short depthPixel =
-                            *(unsigned short *)(((int)(x >> 1) + (unsigned int)((int)x < 0 & (x & 1) != 0)) * 2 + srcBase);
+                            *(unsigned short *)((x / 2) * 2 + srcBase);
                         if (depthPixel & 3) {
                             int depth = 0x1f - ((depthPixel >> 10) & 0x1f);
-                            color = ((depth * 0x20 | depth) << 6) | depth;
+                            color = (((depth << 5) | depth) << 6) | depth;
                         }
                         destRow++;
                         *destRow = color;
                         x++;
-                    } while ((int)x < (int)(mTex->Width() + clippedX));
+                    } while (x < mTex->Width() + clippedX);
                 }
                 unsigned int pitch = mTex->TexelsPitch();
                 destBase += (pitch & 0xfffffffe);
@@ -443,7 +443,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
                     srcBase += srcPitch * 2;
                 }
                 rowIdx++;
-            } while ((int)rowIdx < mTex->Height());
+            } while (rowIdx < mTex->Height());
         }
         D3DCubeTexture_UnlockRect((D3DCubeTexture *)bufferData, (D3DCUBEMAP_FACES)0, 0);
     }
