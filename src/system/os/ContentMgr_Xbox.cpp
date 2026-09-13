@@ -75,8 +75,7 @@ ContentLocT XboxContent::Location() {
 
 void XboxContent::Poll() {
     if (mState == 1) {
-        Symbol name = FileName();
-        MILO_LOG("Mounting content '%s'\n", name);
+        MILO_LOG("Mounting content '%s'\n", FileName());
         int pad = mPadNum;
         if (pad == 4 || pad == 5) {
             pad = 0xFF;
@@ -124,7 +123,7 @@ void XboxContent::Poll() {
         DWORD res = XGetOverlappedResult(mOverlapped, nullptr, false);
         if (res != 0x3E4) {
             RELEASE(mOverlapped);
-            mState = (State)(res == 0);
+            mState = res == 0 ? kBackingUp : kContentDeleting;
         }
     }
 }
