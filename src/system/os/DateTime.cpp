@@ -281,7 +281,12 @@ void DateTime::FromUtcToLocal() {
     auto& _mSec = this->mSec;
     long bias;
     GetTimeZoneBias(bias);
-    unsigned int secs = ToSeconds() - bias * 60;
+    // The image folds the minutes-to-seconds multiply BEFORE the ToSeconds()
+    // call and parks it in a callee-saved register (mulli r30, r11, 0x3c at
+    // 0x8261..., subf r10, r30, r3 after the bl), so the product is its own
+    // subexpression rather than the right operand of the subtraction.
+    bias *= 60;
+    unsigned int secs = ToSeconds() - bias;
     int days = secs / 86400;
     secs -= days * 86400;
     _mHour = secs / 3600;
