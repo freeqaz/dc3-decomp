@@ -23,18 +23,15 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
     const TrackedJoint &rightShoulder = skel.ShoulderJoint(kSkeletonRight);
     const TrackedJoint &leftShoulder = skel.ShoulderJoint(kSkeletonLeft);
 
-    bool valid = false;
     float dx = leftShoulder.mJointPos[0].x - rightShoulder.mJointPos[0].x;
     float dy = leftShoulder.mJointPos[0].y - rightShoulder.mJointPos[0].y;
     float dz = leftShoulder.mJointPos[0].z - rightShoulder.mJointPos[0].z;
 
-    if (skel.ShoulderJoint(kSkeletonLeft).mJointConf != kConfidenceNotTracked
-        && skel.ShoulderJoint(kSkeletonRight).mJointConf != kConfidenceNotTracked
-        && dx * dx + dy * dy + dz * dz > 0.0f) {
-        valid = true;
-    }
-
     bool _result = false;
+    bool valid = skel.ShoulderJoint(kSkeletonLeft).mJointConf != kConfidenceNotTracked
+        && skel.ShoulderJoint(kSkeletonRight).mJointConf != kConfidenceNotTracked
+        && dx * dx + dy * dy + dz * dz > 0.0f;
+
     if (valid) {
         // Cross(yAxis, shoulderVec) = body forward normal in XZ plane
         Vector3 bodyNormal(dz - dy * 0.0f, dx * 0.0f - dz * 0.0f, dy * 0.0f - dx);
@@ -42,13 +39,12 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
         unk4.Smooth(bodyNormal, dt, true);
 
         // Compute body "side" vector as Cross(yAxis, smoothedBodyNormal)
-        Vector3 smoothed = unk4.Value();
-        float sx = smoothed.x;
-        float sy = smoothed.y;
-        float sz = smoothed.z;
-        unk40.y = sx * 0.0f - sz * 0.0f;
-        unk40.z = sy * 0.0f - sx;
-        unk40.x = sz - sy * 0.0f;
+        {
+            Vector3 smoothed = unk4.Value();
+            unk40.y = smoothed.x * 0.0f - smoothed.z * 0.0f;
+            unk40.z = smoothed.y * 0.0f - smoothed.x;
+            unk40.x = smoothed.z - smoothed.y * 0.0f;
+        }
         Normalize(unk40, unk40);
 
         // Check body orientation angle: project bodyNormal to XZ plane and get angle
