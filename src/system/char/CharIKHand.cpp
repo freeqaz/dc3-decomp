@@ -466,9 +466,8 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
     Transform shoulderXfm(shoulder->WorldXfm());
     shoulderXfm.v += shoulderAdj;
     shoulder->SetWorldXfm(shoulderXfm);
-    Vector3 shoulderToWrist;
-    Subtract(shoulder->WorldXfm().v, mWorldDst, shoulderToWrist);
-    float cosAngle = mInv2ab * (LengthSquared(shoulderToWrist) - mAABB);
+    float cosAngle =
+        mInv2ab * (DistanceSquared(shoulder->WorldXfm().v, mWorldDst) - mAABB);
     ClampEq(cosAngle, -1.0f, 1.0f);
     float sinAngle = -std::sqrt(-(cosAngle * cosAngle - 1.0f));
     elbow->DirtyLocalXfm().m.Set(cosAngle, sinAngle, 0, -sinAngle, cosAngle, 0, 0, 0, 1);
