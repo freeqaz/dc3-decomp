@@ -276,6 +276,13 @@ void HamMaster::CheckBeat() {
     mPrevSongPos = mSongPos;
 }
 
+// .data:0x82F0F1C0 (dtk names it lbl_82F0F1C0, `.float 40`). It is a MUTABLE
+// file-scope float -- it lives in .data, not .rdata, and CheckLevels reloads it
+// from memory before each of its two divisions. That reload is also what stops
+// /fp:fast from folding the pair into one reciprocal and two multiplies, which
+// is exactly what our `/ 96.0f` spelling was doing.
+static float sLevelDbRange = 40.0f;
+
 void HamMaster::CheckLevels() {
     if (!TheSynth)
         return;
@@ -297,8 +304,8 @@ void HamMaster::CheckLevels() {
         leftRMS = rightRMS;
     }
 
-    float rightLevel = (RatioToDb(rightRMS) + 96.0f) / 96.0f;
-    float leftLevel = (RatioToDb(leftRMS) + 96.0f) / 96.0;
+    float rightLevel = (RatioToDb(rightRMS) + sLevelDbRange) / sLevelDbRange;
+    float leftLevel = (RatioToDb(leftRMS) + sLevelDbRange) / sLevelDbRange;
 
     float rClamped = Clamp(0.0f, 1.0f, rightLevel);
     float lClamped = Clamp(0.0f, 1.0f, leftLevel);
