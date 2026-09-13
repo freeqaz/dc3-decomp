@@ -9,12 +9,13 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
 ## Corrections — read before trusting an older section
 
 - **2026-09-13 — "a comment shifts `__LINE__` in every MILO assert below it" is FALSE here; the
-  class is structurally closed to two files.** See
-  **[comment-line-shift-is-structurally-closed.md](comment-line-shift-is-structurally-closed.md)**.
+  class is ONE function binary-wide.** See
+  **[comments-are-inert-except-at-__LINE__.md](comments-are-inert-except-at-__LINE__.md)**.
   Every `MILO_ASSERT`/`_EXPR`/`_IF`/`_RANGE` and `OBJ_MEM_OVERLOAD` takes the line number as an
   explicit **argument**; `MILO_FAIL`/`WARN`/`NOTIFY`/`LOG` carry no line number at all. Only
-  **4 of 1,188** `.cpp`/`.c` files under `src/` contain a literal `__LINE__`, and only
-  `synth_xbox/SynthSample.cpp` and `net/curl/lib/transfer.c` are compiled. Audit of 89
+  **4 of 1,188** `.cpp`/`.c` files under `src/` contain a literal `__LINE__`, and the only one
+  that reaches codegen is `synth_xbox/SynthSample.cpp` (`net/curl/lib/transfer.c` compiles, but
+  its hit is inside a disabled `DEBUGF()`). Audit of 89
   comment-only lines across 13 files and 6 merges: **0 of 48,365 functions moved**, with a
   positive control that does (`?SampleFree@@YAXPAXPBDH1@Z` 100.0 → 99.888885, −36 B). Also: a
   comment move can renumber MSVC's COMDAT/`$T`/`$M`/`__unwind$` ordinals and change an `.obj`

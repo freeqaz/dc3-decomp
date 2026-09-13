@@ -20,6 +20,21 @@ number at all. A comment cannot shift a constant that is written in the source.
 `utl/Std.h`, where `container_##__LINE__` is a **token paste** that produces the
 identifier `container___LINE__` — not a number.
 
+The full census of `src/system/os/Debug.h`, macro by macro:
+
+| macro | line source |
+|---|---|
+| `MILO_ASSERT(cond, line)` (`Debug.h:93`) | explicit **argument** — `MILO_ASSERT(ret, 0x19)` |
+| `MILO_ASSERT_EXPR` / `MILO_ASSERT_IF` (`:118`, `:148`) | explicit argument |
+| `MILO_ASSERT_RANGE` / `_RANGE_EQ` (`:196`, `:200`) | explicit argument (forwarded) |
+| `MILO_FAIL` / `MILO_WARN` / `MILO_NOTIFY` / `_BETA` / `MILO_LOG` / `MILO_ASSERT_FMT` / `MILO_PRINT_ONCE` / `MILO_NOTIFY_ONCE` / `MILO_WARN_ONCE` | `__VA_ARGS__` only — **no line number at all** |
+| `OBJ_MEM_OVERLOAD(line_num)` (`utl/MemMgr.h:110`) | explicit argument |
+
+`__COUNTER__` appears 0 times in `src/`. A `__LINE__` in a *header* is fixed by
+that header's own layout and is immune to any edit in the including `.cpp`.
+`src/system/net/curl/lib/ldap.c` and `src/system/stlport/stl/_alloc.c` hold the
+only other literal hits, and neither is compiled.
+
 ## The real mechanism, stated correctly
 
 Only a **literal `__LINE__` written in a `.cpp`, that survives preprocessing**,
@@ -93,6 +108,42 @@ independent `git log --no-merges --numstat` walk, with **0** files in the walk s
 missing from it. (A two-point `git diff A..B` was used throughout — `git show
 <merge>` returns an empty diff for a merge commit and would have read as a clean
 wave.)
+
+## Second, independent audit — relocating comments rather than adding them
+
+A separate lane (worktree at `13f4091b5`, base report built in the same tree)
+probed the *inverse* edit over a different wave. Six merges (`239d4da7e`,
+`61052f31b`, `a132abde2`, `c6eaa4afc`, `18ff480a9`, `fcb2aebe7`) had inserted **89
+comment-only lines across 13 files**; the probe relocated all 89 to end-of-file
+*and* deleted the 9 blank lines they came with — a strictly larger line shift than
+the comments themselves cause.
+
+**0 of 48,365 functions changed**, on `match_percent_normalized` *and*
+`fuzzy_match_percent`; `matched_code` 5,400,816 both ways. 10 of the 12 rebuilt
+objects were byte-identical, and the tree restored to the exact base hashes when
+reverted. Its positive control is the same one: 9 comment lines above
+`SynthSample.cpp:33` move `SampleFree` −36 B and move exactly one function
+binary-wide.
+
+## Secondary mechanism: MSVC internal ordinals shift, and cost nothing
+
+The two objects that *did* change bytes with no `__LINE__` anywhere in them:
+
+- `rndobj/Mesh.obj` — the `(section name, size, body, symbolic relocations)`
+  multiset is **identical**; 6 of 2,323 sections merely sit at a different index.
+  Pure COMDAT renumbering.
+- `flow/FlowTrigger.obj` — same, except MSVC's per-TU EH/temp ordinals advanced
+  (`__unwind$48720` → `__unwind$48785`, `$T48746` → `$T48811`, `$M4874x` →
+  `$M4881x`). Section **bodies are byte-identical**; only the generated names and
+  the symbol indices inside relocation records differ.
+
+So a comment move *can* perturb an object without touching one instruction.
+Measured cost: zero.
+
+> **Corollary for object-byte A/B testing:** a changed `.obj` hash is not evidence
+> that codegen moved. Compare the section multiset with relocations resolved to
+> **symbol names**, not indices — a section-order shift renumbers every relocation
+> and makes an inert edit look real.
 
 ## What to do
 
