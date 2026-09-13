@@ -1072,6 +1072,68 @@ implement it.
 
 ---
 
+## `Symbol` Must NOT Declare a Copy Constructor (NEGATIVE RESULT, 2026-09-11)
+
+`src/system/utl/Symbol.h` carries a commented-out
+`Symbol(const Symbol &rhs) : mStr(rhs.mStr) {}`. It was commented out by
+upstream commit `28a413bae` ("possibly fix symbol entropy", 2025-08-04) with no
+measurement in the message, and `../og-dc3-decomp` and `../rb3-xenon` carry the
+same comment-out. Two codegen tells looked like evidence the original *had*
+one — `GetSystemLanguage` keeps its `Symbol s` parameter memory-resident and
+reloads it for `return s`, and `RndMat::UpdatePropertiesFromMetaMat` lowers
+`cond ? Symbol("alpha_cut") : cur` as an address select followed by one load.
+Since `Symbol` is used by thousands of functions, this was measured rather than
+guessed (lane w3-v, worktree at `c616cfc7d`, objdiff-cli 4.2.8, full `ninja`
+both sides, `scripts/analysis/report_ab.py` on `match_percent_normalized`).
+
+**Whole-binary A/B, copy ctor enabled (`: mStr(rhs.mStr) {}`):**
+
+| | functions | bytes |
+|---|---:|---:|
+| up | 9 | 10,096 |
+| DOWN | **3,409** | **1,747,576** |
+| crossed to 100 | 2 | 276 |
+| LEFT 100 | **3,181** | **1,482,668** |
+| matched_functions | 30,838 → 27,659 | |
+| matched_code_percent | 47.017 → 34.482 (**−12.54 pp**) | |
+
+Both tell functions got *worse*: `GetSystemLanguage` 98.48 → 90.95,
+`RndMat::UpdatePropertiesFromMetaMat` 98.39 → 86.99. Alternate body
+`{ mStr = rhs.mStr; }` — see the line below the table in the commit that
+recorded this (variant B); the effect is declaration-level, not body-level.
+
+**Why: it is an ABI change, not a codegen hint.** Under the Xbox 360 MSVC ABI a
+class with a *user-declared* copy constructor is never passed or returned in
+registers — the caller copies it into its own frame and passes the address
+(hidden reference), and the callee dereferences on entry. `Symbol` is 4 bytes
+and is passed by value in ~1,150 of the regressed signatures alone. Measured on
+`GameMode::MaxPlayers(Symbol)`: the target does `mr r28, r4` (the argument is
+in r4) and passes a stack-constructed `Symbol("modes")` with `lwz r3, 0(r3)`
+(by value); with the copy ctor we emit
+`lwz r11, 0(r30); stw r11, 0x50(r31); addi r4, r31, 0x50` at every call and
+`lwz r11, 0(r30)` on entry. The second half of the damage is transitive: every
+class that *contains* a `Symbol` loses trivial copyability. `__linear_insert<
+CameraManager::Category>` (8-byte struct = Symbol + int) is moved by the target
+as one doubleword (`ldu`/`stdu`, `std r5, 0(r3)`) and passed in r5; ours
+becomes memberwise `lwz/stw` pairs and a by-reference parameter.
+
+**What the two tells actually are.** `GetSystemLanguage`'s target prologue is
+`stw r4, 0x11c(r31)` — the parameter arrives *in r4 by value*, which is itself
+proof that the original had **no** user-declared copy ctor. The home-slot
+residency comes from returning a class type through the hidden return pointer
+(r3, kept in r26) — `Symbol` has a user-declared *default* ctor and is
+therefore non-POD and returned via memory — combined with `s` being assigned
+inside a `switch`. The address-select in `RndMat` is the ternary's lvalue
+lowering, not a copy-ctor call. Neither is evidence for the copy ctor.
+
+**Rule.** Do not add a user-declared copy constructor (or destructor) to
+`Symbol`, nor to any other small class that is passed by value binary-wide,
+without a whole-binary A/B. The class must stay trivially copyable. The
+commented-out `operator=` is a separate question (a user-declared assignment
+operator does not change the passing convention) and was not measured here.
+
+---
+
 ## See Also
 
 - [RB3_REFERENCE.md](RB3_REFERENCE.md) - Using RB3 as reference
