@@ -61,13 +61,12 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
     curTable.SortByName();
     prevTable.SortByName();
 
-    int curNum = curTable.GetNumStats();
-    int prevNum = prevTable.GetNumStats();
-    std::vector<MemDiffEntry> diffs;
-    diffs.reserve(curNum + prevNum);
-
     int curIdx = 0;
     int prevIdx = 0;
+    std::vector<MemDiffEntry> diffs;
+    int curNum = curTable.GetNumStats();
+    int prevNum = prevTable.GetNumStats();
+    diffs.reserve(curNum + prevNum);
 
     while (curIdx < curNum) {
         if (prevIdx >= prevNum)
@@ -80,7 +79,7 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
 
         int numAllocs1, numAllocs2;
         int size1, size2;
-        unsigned char heap;
+        int heap;
         const char *entryName;
 
         if (cmp < 0) {
