@@ -389,44 +389,48 @@ void TypeProps::Save(BinStream &bs) {
                     }
                 }
             }
-            if (mMap->Size() > 0) {
-                for (int i = 0; i < mMap->Size(); i += 2) {
-                    Symbol key = mMap->Sym(i);
-                    if (typeDef) {
-                        arrToWrite = typeDef->FindArray(key, false);
-                    }
-                    bool isProxy = false;
-                    bool none = false;
-                    bool proxy = false;
-                    if (arrToWrite) {
-                        GetSaveFlags(arrToWrite, proxy, none);
-                        isProxy = proxy;
-                    }
-                    // A key that some sub-dir exposes as a property is written on the
-                    // side opposite to the one we are currently saving.
-                    if (!none && !isProxy
-                        && std::find(classnames.begin(), classnames.end(), key)
-                            != classnames.end()) {
-                        isProxy = !gLoadingProxyFromDisk;
-                    }
-                    if (!none && isProxy != gLoadingProxyFromDisk) {
-                        if (!arrToWrite) {
-                            arrToWrite = new DataArray(mMap->Size());
-                        }
-                        arrToWrite->Node(keyIdx) = key;
-                        arrToWrite->Node(keyIdx + 1) = mMap->Node(i + 1);
-                        keyIdx += 2;
-                    }
+            // The type-def lookup and the array we are building are TWO different
+            // arrays (target keeps them in r3 and r28 respectively). Reusing one
+            // variable for both wrote the key/value pairs into the shared TypeDef
+            // array and then Resize()d and Release()d it.
+            for (int i = 0; i < mMap->Size(); i += 2) {
+                Symbol key = mMap->Sym(i);
+                DataArray *keyDef = nullptr;
+                if (typeDef) {
+                    keyDef = typeDef->FindArray(key, false);
                 }
-                if (arrToWrite && keyIdx > 0) {
-                    arrToWrite->Resize(keyIdx);
-                    bs << arrToWrite;
-                    arrToWrite->Release();
-                } else {
-                    bs << arrToWrite;
+                bool isProxy = false;
+                bool none = false;
+                bool proxy = false;
+                if (keyDef) {
+                    GetSaveFlags(keyDef, proxy, none);
+                    isProxy = proxy;
                 }
+                // A key that some sub-dir exposes as a property is written on the
+                // side opposite to the one we are currently saving.
+                if (!none && !isProxy
+                    && std::find(classnames.begin(), classnames.end(), key)
+                        != classnames.end()) {
+                    isProxy = !gLoadingProxyFromDisk;
+                }
+                if (!none && isProxy != gLoadingProxyFromDisk) {
+                    if (!arrToWrite) {
+                        arrToWrite = new DataArray(mMap->Size());
+                    }
+                    arrToWrite->Node(keyIdx) = key;
+                    arrToWrite->Node(keyIdx + 1) = mMap->Node(i + 1);
+                    keyIdx += 2;
+                }
+            }
+            // An empty map (or one where nothing qualified) writes a NULL
+            // DataArray*, not the empty mMap -- the target's `ble` at 0x825C7814
+            // lands on the same `bs << arrToWrite` with r28 still zero.
+            if (arrToWrite && keyIdx > 0) {
+                arrToWrite->Resize(keyIdx);
+                bs << arrToWrite;
+                arrToWrite->Release();
             } else {
-                bs << mMap;
+                bs << arrToWrite;
             }
             return;
         }

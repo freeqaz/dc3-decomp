@@ -1349,7 +1349,22 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
                     hexMsg += MakeString("0x%02x ", negWidthChars[i]);
                 }
                 msg += MakeString("' (%s", hexMsg);
-                if (styleState.mFontMapIdx != -1) {
+                // The image indexes mFontMaps[mFontMapIdx] here with NO -1 test:
+                // 826954AC lwz r11,0xf8(r31) / lwz r10,0xa8(r25) / slwi / lwzx.
+                // Compare the main-loop site at 82694EE4, which loads the same
+                // slot and DOES `cmpwi cr6, r11, -1 / beq`. The guard is only
+                // missing on this notify path, so mFontMaps[-1] is what the
+                // original reads when a run of negative widths is reported for
+                // text with no active font map.
+                // Native keeps the guard: this function is compiled for the
+                // native port, mFontMaps[-1] is a genuine out-of-bounds read
+                // followed by a virtual call, and MILO_ASSERT is non-fatal
+                // there, so the PPC-faithful spelling would corrupt rather than
+                // trap.
+#ifdef HX_NATIVE
+                if (styleState.mFontMapIdx != -1)
+#endif
+                {
                     RndFontBase *font = mFontMaps[styleState.mFontMapIdx]->Font();
                     msg += MakeString(") have negative widths from %s in string \"", PathName(font));
                 }

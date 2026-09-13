@@ -103,13 +103,16 @@ JoypadType ReadSingleXinputJoypad(
     }
     unsigned char setup_flag = 0;
 
-    if (!JoypadGetCachedXInputCaps(user_idx, &caps, false)) {
-        return kJoypadNone;
-    }
-
-    unsigned char caps_type = ((unsigned char *)&caps)[1];
-
-    if (caps_type != 0) {
+    // A caps lookup that fails, and a SubType the switch does not name, both
+    // fall THROUGH to the stick handling at .L_825FCEE4 with joypad_type still
+    // kJoypadAnalog -- they are not early returns. 0x825FCE40 `beq .L_825FCEE4`
+    // is the caps-failure edge and 0x825FCE7C `bne cr6, .L_825FCEE4` is the
+    // switch default; the only `return kJoypadNone` inside the switch is
+    // SetupHXGuitar's zero result at 0x825FCED4, which branches back to
+    // .L_825FCE20. There is also no `caps_type != 0` test in the image: 0 is
+    // simply an unnamed SubType and takes the default edge.
+    if (JoypadGetCachedXInputCaps(user_idx, &caps, false)) {
+        unsigned char caps_type = ((unsigned char *)&caps)[1];
         switch (caps_type) {
         case 6:
         case 11:
@@ -137,8 +140,6 @@ JoypadType ReadSingleXinputJoypad(
         case 25:
             joypad_type = SetupHXRealGuitar(pad, caps);
             break;
-        default:
-            return kJoypadNone;
         }
     }
 
