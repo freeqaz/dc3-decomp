@@ -460,34 +460,39 @@ bool Intersect(const Triangle &tri, const Box &box) {
     float e1x = v2x - v1x, e1y = v2y - v1y, e1z = v2z - v1z;
     float e2x = v0x - v2x, e2y = v0y - v2y, e2z = v0z - v2z;
 
-    // Cross products with box axes — 4-float stride (ax, ay, az, pad)
-    float axes[9][4] = {
-        { 0, -e0z, e0y, 0 },
-        { e0z, 0, -e0x, 0 },
-        { -e0y, e0x, 0, 0 },
-        { 0, -e1z, e1y, 0 },
-        { e1z, 0, -e1x, 0 },
-        { -e1y, e1x, 0, 0 },
-        { 0, -e2z, e2y, 0 },
-        { e2z, 0, -e2x, 0 },
-        { -e2y, e2x, 0, 0 },
-    };
+    // The nine edge-cross axes, grouped by BOX axis (all three edges crossed with
+    // X, then with Y, then with Z) -- not by edge.  They are Vector3s, which carry
+    // a 4-byte SIMD pad, so the array has a 16-byte stride whose fourth word is
+    // never written; a `float[9][4]` with an explicit trailing 0 makes MSVC store
+    // nine extra zeros retail does not.
+    Vector3 axes[9];
+    axes[0].Set(0.0f, -e0z, e0y);
+    axes[1].Set(0.0f, -e1z, e1y);
+    axes[2].Set(0.0f, -e2z, e2y);
+    axes[3].Set(e0z, 0.0f, -e0x);
+    axes[4].Set(e1z, 0.0f, -e1x);
+    axes[5].Set(e2z, 0.0f, -e2x);
+    axes[6].Set(-e0y, e0x, 0.0f);
+    axes[7].Set(-e1y, e1x, 0.0f);
+    axes[8].Set(-e2y, e2x, 0.0f);
 
     float radii[9];
-    float *pfAxis = &axes[0][1];
+    float *pfAxis = &axes[0].y;
     float *pfR = radii;
     unsigned int i = 0;
     do {
-        float ax = pfAxis[-1], ay = pfAxis[0], az = pfAxis[1];
-        float absx = ax; if (absx <= 0.0f) absx = -absx;
-        float absy = ay; if (absy <= 0.0f) absy = -absy;
-        float absz = az; if (absz <= 0.0f) absz = -absz;
-        float r = absx * halfX + absy * halfY + absz * halfZ;
+        // Each component is read twice: once for the |.| that builds the box's
+        // projected radius, and again for the dot products.  Caching them in
+        // three locals removes retail's second set of loads.
+        float absx = pfAxis[-1]; if (absx <= 0.0f) absx = -absx;
+        float absy = pfAxis[0];  if (absy <= 0.0f) absy = -absy;
+        float absz = pfAxis[1];  if (absz <= 0.0f) absz = -absz;
+        float r = absy * halfY + absz * halfZ + absx * halfX;
         *pfR = r;
 
-        float p0 = ax * v0x + ay * v0y + az * v0z;
-        float p1 = ax * v1x + ay * v1y + az * v1z;
-        float p2 = ax * v2x + ay * v2y + az * v2z;
+        float p0 = pfAxis[-1] * v0x + pfAxis[1] * v0z + pfAxis[0] * v0y;
+        float p1 = pfAxis[-1] * v1x + pfAxis[1] * v1z + pfAxis[0] * v1y;
+        float p2 = pfAxis[-1] * v2x + pfAxis[1] * v2z + pfAxis[0] * v2y;
 
         float diff = p1 - p2;
         float mx = diff >= 0.0f ? p1 : p2;
@@ -495,7 +500,7 @@ bool Intersect(const Triangle &tri, const Box &box) {
         mx = p0 - mx >= 0.0f ? p0 : mx;
         if (mx < -r) return false;
         mn = p0 - mn >= 0.0f ? mn : p0;
-        if (r < mn) return false;
+        if (mn > r) return false;
 
         i++;
         pfAxis += 4;

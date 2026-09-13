@@ -299,15 +299,19 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
     TheShaderMgr.mCullModeOverride = 3;
     TheShaderMgr.unk24 = 0;
 
-    RndMesh *beam = sl->mBeam.mBeam;
-    if (beam && sl->mBeam.mLength > 0.0f) {
-        float brighten = sl->mBeam.mBrighten;
+    // Retail keeps a pointer to the BeamDef sub-object in a callee-saved GPR for
+    // the whole body (`lfs f13, 0x8(r28)` = def.mLength), rather than re-deriving
+    // it from `sl` at every use (`lfs f13, 0x1fc(r30)`).
+    const Spotlight::BeamDef &def = sl->mBeam;
+    RndMesh *beam = def.mBeam;
+    if (beam && def.mLength > 0.0f) {
+        float brighten = def.mBrighten;
         Vector4 colorVec(
             color.red * brighten, color.green * brighten, color.blue * brighten, 1.0f
         );
         TheShaderMgr.SetPConstant((PShaderConstant)0x5a, colorVec);
 
-        SetupXSection(sl, sl->mBeam);
+        SetupXSection(sl, def);
 
         const Transform &camXfm = mSpotCam->WorldXfm();
         Vector3 camPos = camXfm.v;
@@ -323,9 +327,14 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
 
         float farPlane = mSpotCam->FarPlane();
         float zero = 0.0f;
-        float invFarPlane = zero;
+        // if/else, not a pre-initialised local: retail materialises the 0.0f
+        // through an explicit else arm (`b`/`fmr f0, f19`), which a
+        // `x = 0; if (..) x = ..;` spelling folds away.
+        float invFarPlane;
         if (zero < farPlane) {
             invFarPlane = 1.0f / farPlane;
+        } else {
+            invFarPlane = zero;
         }
 
         Vector4 fogParams(mParams.mHalfDistance, invFarPlane, zero, zero);
@@ -334,28 +343,36 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
         Vector3 lightPos;
         GetLightPosition(sl, lightPos);
 
+        // Whole-vector copy, not three scalar reads: retail lifts all four words
+        // of the world transform's +Y row into a stack local and reads the
+        // components back from it.
         const Transform &slXfm = sl->WorldXfm();
-        float dirX = slXfm.m.y.x;
-        float dirY = slXfm.m.y.y;
-        float dirZ = slXfm.m.y.z;
+        Vector3 dir = slXfm.m.y;
 
-        Vector2 radii = sl->mBeam.NGRadii();
+        Vector2 radii = def.NGRadii();
         float topRad = radii.x;
         float botRad = radii.y;
         float minRad = (topRad - botRad) < 0.0f ? topRad : botRad;
 
-        float offset = 0.0f;
+        float offset;
         if (0.0f < botRad) {
-            offset = (minRad * sl->mBeam.mLength) / (botRad - minRad);
+            offset = (minRad * def.mLength) / (botRad - minRad);
+        } else {
+            offset = zero;
         }
 
         float negOffset = -offset;
-        float totalLength = offset + sl->mBeam.mLength;
+        float totalLength = offset + def.mLength;
         float invTotalLength = 1.0f / totalLength;
 
-        float apexX = lightPos.x + dirX * negOffset;
-        float apexY = lightPos.y + dirY * negOffset;
-        float apexZ = lightPos.z + dirZ * negOffset;
+        // The apex offset is a scaled copy of `dir`, so the products are plain
+        // fmuls followed by fadds; folding them into the addend expression makes
+        // MSVC contract each pair into a single fmadds, which retail does not do.
+        Vector3 apexOffset = dir;
+        apexOffset *= negOffset;
+        float apexX = lightPos.x + apexOffset.x;
+        float apexY = lightPos.y + apexOffset.y;
+        float apexZ = lightPos.z + apexOffset.z;
 
         Vector4 apex(apexX, apexY, apexZ, invTotalLength);
         TheShaderMgr.SetPConstant((PShaderConstant)0x19, apex);
@@ -376,13 +393,13 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
 
         Vector4 radiiVec(
             minRad, botRad,
-            dirX * apexX + dirY * apexY + dirZ * apexZ,
-            dirX * apexX + dirY * apexY + dirZ * apexZ + totalLength
+            dir.x * apexX + dir.y * apexY + dir.z * apexZ,
+            dir.x * apexX + dir.y * apexY + dir.z * apexZ + totalLength
         );
         TheShaderMgr.SetPConstant((PShaderConstant)0x1d, radiiVec);
 
         float radiusDiff = botRad - minRad;
-        float dotRelDir = dirX * relX + dirY * relY + dirZ * relZ;
+        float dotRelDir = dir.x * relX + dir.y * relY + dir.z * relZ;
         float tanSlope = invTotalLength * radiusDiff;
 
         float shift = 0.0f;

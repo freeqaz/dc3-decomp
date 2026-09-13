@@ -1010,25 +1010,32 @@ void UtilDrawCigar(
     do {
         float latVal = (float)iIdx * anglePi6;
         float sinLatPi2 = FastSin(latVal + anglePiHalf);
-        double r0 = (double)(radii[0] * sinLatPi2);
+        // These radii and the two sines below are single-precision in retail
+        // (fmuls, no frsp).  Holding them as double makes MSVC emit a `fmul`
+        // plus a `frsp` at every use.
+        float r0 = radii[0] * sinLatPi2;
         float sinLat = FastSin(latVal);
         float h0 = sinLat * radii[0];
         float sinLatPi2b = FastSin(latVal + anglePiHalf);
-        double r1 = (double)(sinLatPi2b * radii[1]);
+        float r1 = sinLatPi2b * radii[1];
         float sinLatb = FastSin(latVal);
         float h0b = sLen0 - h0;
         int iLon = 0;
-        float h1 = sinLatb * radii[1] + sLen1;
+        // Separate statements: folding these into one expression lets MSVC
+        // contract the pair into a single fmadds, which retail does not do.
+        float h1raw = sinLatb * radii[1];
+        float h1 = h1raw + sLen1;
         do {
             float lonVal = (float)iLon * angle2Pi;
             float sinLon = FastSin((float)iLon * angle2Pi);
-            double sinLonD = (double)sinLon;
             float sinLonPi2 = FastSin(lonVal + anglePiHalf);
-            double sinLonPi2D = (double)sinLonPi2;
             int idx = (iLatSum + iLon) * 4;
-            Vector3 v1(h0b, (float)(sinLonPi2D * r0), (float)(sinLonD * r0));
+            Vector3 v1(h0b, sinLonPi2 * r0, sinLon * r0);
             Multiply(v1, basis, *(Vector3 *)&verts1c0[idx]);
-            Vector3 v2(h1, (float)(sinLonD * r1), (float)(sinLonPi2D * r1));
+            // y takes the cos-phase sine and z the sin-phase one, the same way
+            // round as v1 -- retail's stores at 0x74/0x78 read f22 (the
+            // lonVal+pi/2 result) then f21 (the plain lonVal result).
+            Vector3 v2(h1, sinLonPi2 * r1, sinLon * r1);
             Multiply(v2, basis, *(Vector3 *)&verts2e0[idx]);
             iLon = iLon + 1;
         } while (iLon < 6);
@@ -1048,10 +1055,8 @@ void UtilDrawCigar(
     do {
         int iJ = 0;
         int iK = 5;
-        int iJcur;
         do {
-            iJcur = iJ;
-            int p1 = (iRing * 6 + iJcur) * 4;
+            int p1 = (iRing * 6 + iJ) * 4;
             int p2 = (iRing * 6 + iK) * 4;
             TheRnd.DrawLine(
                 *(Vector3 *)&verts2e0[p1], *(Vector3 *)&verts2e0[p2], col, false
@@ -1073,9 +1078,11 @@ void UtilDrawCigar(
                 pBottom = (Vector3 *)&verts1c0[p1 + 6 * 4];
             }
             TheRnd.DrawLine(*(Vector3 *)&verts1c0[p1], *pBottom, col, false);
-            iJ = iJcur + 1;
-            iK = iJcur;
-        } while (iJcur + 1 < 6);
+            // iK trails iJ by one; retail keeps both in place (mr iK, iJ then
+            // addi iJ, iJ, 1) rather than staging the old value in a temp.
+            iK = iJ;
+            iJ = iJ + 1;
+        } while (iJ < 6);
         iRing = iRing + 1;
     } while (iRing < 3);
 }
@@ -2439,62 +2446,48 @@ void BuildVisit(BSPNode *node) {
         return;
 
     BuildPoly newPoly;
-    gParentPolys.push_back(newPoly);
+    gParentPolys.push_front(newPoly);
 
-    std::list<BuildPoly>::iterator lastIt = gParentPolys.end();
-    --lastIt;
-    BuildPoly &poly = *lastIt;
+    std::list<BuildPoly>::iterator lastIt = gParentPolys.begin();
 
     Plane &plane = node->plane;
-    float lenSq = plane.b * plane.b + plane.a * plane.a + plane.c * plane.c;
+    float lenSq = plane.a * plane.a + plane.b * plane.b + plane.c * plane.c;
     float invDist = -(plane.d / lenSq);
 
     Vector3 origin;
     origin.y = plane.b * invDist;
     origin.x = plane.a * invDist;
     origin.z = plane.c * invDist;
-    poly.mTransform.v = origin;
+    lastIt->mTransform.v = origin;
 
-    poly.mTransform.m.z = *(Vector3 *)&plane;
+    lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
-    poly.mTransform.m.y.Set(0, 1, 0);
+    lastIt->mTransform.m.y.Set(0, 1, 0);
 
     if (fabsf(
-            poly.mTransform.m.z.x * 0.0f
-            + (poly.mTransform.m.z.z * 0.0f + poly.mTransform.m.z.y * 1.0f)
+            lastIt->mTransform.m.z.y * lastIt->mTransform.m.y.y
+            + lastIt->mTransform.m.z.z * lastIt->mTransform.m.y.z
+            + lastIt->mTransform.m.z.x * lastIt->mTransform.m.y.x
         )
         > 0.9f) {
-        poly.mTransform.m.y.Set(1, 0, 0);
+        lastIt->mTransform.m.y.Set(1, 0, 0);
     }
 
     // x = y cross z
-    poly.mTransform.m.x.x = poly.mTransform.m.y.y * poly.mTransform.m.z.z
-        - poly.mTransform.m.y.z * poly.mTransform.m.z.y;
-    poly.mTransform.m.x.y = poly.mTransform.m.z.x * poly.mTransform.m.y.z
-        - poly.mTransform.m.z.z * poly.mTransform.m.y.x;
-    poly.mTransform.m.x.z = poly.mTransform.m.y.x * poly.mTransform.m.z.y
-        - poly.mTransform.m.y.y * poly.mTransform.m.z.x;
+    Cross(lastIt->mTransform.m.y, lastIt->mTransform.m.z, lastIt->mTransform.m.x);
 
-    Normalize(poly.mTransform.m.x, poly.mTransform.m.x);
+    Normalize(lastIt->mTransform.m.x, lastIt->mTransform.m.x);
 
     // y = z cross x
-    poly.mTransform.m.y.x = poly.mTransform.m.z.y * poly.mTransform.m.x.z
-        - poly.mTransform.m.z.z * poly.mTransform.m.x.y;
-    poly.mTransform.m.y.y = poly.mTransform.m.x.x * poly.mTransform.m.z.z
-        - poly.mTransform.m.x.z * poly.mTransform.m.z.x;
-    poly.mTransform.m.y.z = poly.mTransform.m.z.x * poly.mTransform.m.x.y
-        - poly.mTransform.m.z.y * poly.mTransform.m.x.x;
+    Cross(lastIt->mTransform.m.z, lastIt->mTransform.m.x, lastIt->mTransform.m.y);
 
-    // Add large quad
-    Vector2 pt;
-    pt.Set(-10000.0f, 10000.0f);
-    poly.mPoly.points.push_back(pt);
-    pt.Set(-10000.0f, -10000.0f);
-    poly.mPoly.points.push_back(pt);
-    pt.Set(10000.0f, -10000.0f);
-    poly.mPoly.points.push_back(pt);
-    pt.Set(10000.0f, 10000.0f);
-    poly.mPoly.points.push_back(pt);
+    // Add large quad.  Retail materialises each corner immediately before its
+    // push_back, so +/-10000.0f stay live in callee-saved f30/f31 across the
+    // four calls instead of being spilled into four separate stack slots.
+    lastIt->mPoly.points.push_back(Vector2(-10000.0f, 10000.0f));
+    lastIt->mPoly.points.push_back(Vector2(-10000.0f, -10000.0f));
+    lastIt->mPoly.points.push_back(Vector2(10000.0f, -10000.0f));
+    lastIt->mPoly.points.push_back(Vector2(10000.0f, 10000.0f));
 
     if (node->left == NULL) {
         // Leaf: clip parents against plane (front), recurse right
@@ -2553,11 +2546,8 @@ void BuildVisit(BSPNode *node) {
         }
 
         // Splice saved lists back
-        gParentPolys.splice(gParentPolys.end(), savedParents);
-        gChildPolys.splice(gChildPolys.end(), tempChildren);
-
-        tempChildren.clear();
-        savedParents.clear();
+        gParentPolys.splice(gParentPolys.begin(), savedParents);
+        gChildPolys.splice(gChildPolys.begin(), tempChildren);
     }
 
     // Move polys whose normal matches this node's plane from parents to children
