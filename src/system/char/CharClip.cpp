@@ -239,7 +239,10 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
             d.stream.ReadString(buf2, 0x100);
             CharClip *clip = mOwner->Dir()->Find<CharClip>(buf2, false);
             if (clip) {
-                new (&it->clip) ObjOwnerPtr<CharClip>(mOwner, (CharClip *)NULL);
+                // Owner is the Transitions container, not mOwner: the target
+                // passes `this` (823D5830 `mr r4, r25`, r25 being the same
+                // register 0xc(r25) is loaded from for mOwner->Dir()).
+                new (&it->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
                 it->clip = clip;
                 d >> it->size;
                 for (int j = 0; j < it->size; j++) {
