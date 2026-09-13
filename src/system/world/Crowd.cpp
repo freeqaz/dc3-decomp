@@ -1366,29 +1366,25 @@ void WorldCrowd::DrawShowing() {
                 float uvBottom = -(clampedMaxX * charIt->mDef.mHeight - halfHeight);
                 float posRight = clampedMaxY * halfHeight - halfWidth;
 
-                RndMesh *billboardMesh = mmesh->Mesh();
-                RndMesh::Vert *verts = billboardMesh->Verts().begin();
-                verts[0].pos.x = posLeft;
-                verts[0].pos.y = 0;
-                verts[0].pos.z = uvLeft;
-                verts[1].pos.x = posLeft;
-                verts[1].pos.y = 0;
-                verts[1].pos.z = uvBottom;
-                verts[2].pos.x = posRight;
-                verts[2].pos.y = 0;
-                verts[2].pos.z = uvLeft;
-                verts[3].pos.x = posRight;
-                verts[3].pos.y = 0;
-                verts[3].pos.z = uvBottom;
-                verts[0].tex.x = clampedMinY;
-                verts[0].tex.y = clampedMinX;
-                verts[1].tex.x = clampedMinY;
-                verts[1].tex.y = clampedMaxX;
-                verts[2].tex.x = clampedMaxY;
-                verts[2].tex.y = clampedMinX;
-                verts[3].tex.x = clampedMaxY;
-                verts[3].tex.y = clampedMaxX;
-                billboardMesh->Sync(0x1F);
+                // Through Verts() and Vector3::Set / Vector2::Set, and with the
+                // mesh re-read rather than cached. Verts() is
+                // `{ return mGeomOwner->mVerts; }`, which is the target's
+                // `lwz r11, 0x148(r11)` (mGeomOwner raw ptr) followed by
+                // `addi r10, r11, 0x100` + `lwz r11, 0x100(r11)`; we were
+                // loading 0x100 straight off the mesh. Each Set() then homes its
+                // inlined `this` with an `addi`+`stw ..., 0x50(r31)` pair at
+                // vert+0x00 and vert+0x40 -- nine such homes the target has and
+                // we did not.
+                RndMesh::VertVector &verts = charIt->mMMesh->Mesh()->Verts();
+                verts[0].pos.Set(posLeft, 0.0f, uvLeft);
+                verts[1].pos.Set(posLeft, 0.0f, uvBottom);
+                verts[2].pos.Set(posRight, 0.0f, uvLeft);
+                verts[3].pos.Set(posRight, 0.0f, uvBottom);
+                verts[0].tex.Set(clampedMinY, clampedMinX);
+                verts[1].tex.Set(clampedMinY, clampedMaxX);
+                verts[2].tex.Set(clampedMaxY, clampedMinX);
+                verts[3].tex.Set(clampedMaxY, clampedMaxX);
+                charIt->mMMesh->Mesh()->Sync(0x1F);
 
                 // --- Draw billboarded multimesh instances ---
                 DrawMultiMeshWithEnviron(mmesh);
