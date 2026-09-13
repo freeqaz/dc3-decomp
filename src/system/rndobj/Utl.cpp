@@ -1457,10 +1457,15 @@ void MakeTangentsLate(RndMesh *m) {
     for (unsigned int i = 0; i < m->Faces().size(); i++) {
         Hmx::Matrix3 basis;
         ComputeFaceTangentBasis(m, i, basis);
-        float w = ((basis.x.z * basis.z.y - basis.z.z * basis.x.y) * basis.y.x
-                       + basis.y.y * (basis.z.z * basis.x.x - basis.x.z * basis.z.x)
-                       + basis.y.z * (basis.x.y * basis.z.x - basis.z.y * basis.x.x)
-                   < 0.0f)
+        // The three cofactors are named, and both products of each one are
+        // commuted relative to the formula as written -- that is what
+        // reproduces retail's fmuls/fmsubs operand order (same spelling as
+        // ResetNormals). The sum associates as t1 + (t2 + t3).
+        float crossX = basis.z.x * basis.x.y - basis.x.x * basis.z.y;
+        float crossY = basis.z.z * basis.x.x - basis.x.z * basis.z.x;
+        float crossZ = basis.x.z * basis.z.y - basis.z.z * basis.x.y;
+        float w =
+            ((crossZ * basis.y.x + (basis.y.y * crossY + basis.y.z * crossX)) < 0.0f)
             ? -1.0f
             : 1.0f;
         // Retail normalizes into a STACK TEMP (r31+0x80), copies all four words
@@ -1472,7 +1477,6 @@ void MakeTangentsLate(RndMesh *m) {
         faceTangents[i].w = w;
     }
 
-    double zeroThresh = 0.0;
     for (int i = 0; i < (int)m->Verts().size(); i++) {
         RndMesh::Vert &v = m->Verts()[i];
         bool first = true;
@@ -1492,15 +1496,21 @@ void MakeTangentsLate(RndMesh *m) {
                     first = false;
                     v.tangent = ft;
                 } else {
-                    if ((double)(ft.w * v.tangent.w) < zeroThresh) {
+                    // fcmpu against a single-precision 0.0f -- there is no
+                    // double promotion here.
+                    if (ft.w * v.tangent.w < 0.0f) {
                         TheDebug << MakeString(
                             "NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n",
                             PathName(m)
                         );
                     } else {
-                        v.tangent.x += ft.x;
-                        v.tangent.y += ft.y;
-                        v.tangent.z += ft.z;
+                        // Retail reads all six components before storing any:
+                        // z, y, x are summed in that order and written back
+                        // x, y, z -- Add()'s Set() with MSVC's right-to-left
+                        // argument evaluation.
+                        Add(*(Vector3 *)&v.tangent,
+                            *(Vector3 *)&ft,
+                            *(Vector3 *)&v.tangent);
                     }
                 }
             }
@@ -1511,14 +1521,9 @@ void MakeTangentsLate(RndMesh *m) {
         // r31+0x70) and reads tx/ty/tz back out of that temp, then builds the
         // orthogonalised result as a Vector3 at r31+0x80.
         Vector4 t = v.tangent;
-        float tDotN = v.norm.y * t.y + v.norm.z * t.z + v.norm.x * t.x;
-        float scaleX = v.norm.x * tDotN;
-        float scaleY = v.norm.y * tDotN;
-        float scaleZ = v.norm.z * tDotN;
-        Vector3 ortho;
-        ortho.x = t.x - scaleX;
-        ortho.y = t.y - scaleY;
-        ortho.z = t.z - scaleZ;
+        float tDotN = v.norm.x * t.x + (v.norm.z * t.z + v.norm.y * t.y);
+        Vector3 scaled(v.norm.x * tDotN, v.norm.y * tDotN, v.norm.z * tDotN);
+        Vector3 ortho(t.x - scaled.x, t.y - scaled.y, t.z - scaled.z);
         Normalize(ortho, *(Vector3 *)&v.tangent);
     }
     TheDebug
