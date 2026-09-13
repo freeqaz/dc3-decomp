@@ -318,11 +318,17 @@ void HamMaster::CheckLevels() {
     float sumX = 0.0f;
     for (std::list<Vector2>::iterator it = mLevelHistory.begin();
          it != mLevelHistory.end(); ++it) {
-        sumX += it->x;
-        sumY += it->y;
+        // Named reference, not `it->x`: the target homes the dereferenced
+        // address (node + 8) into the stack slot on every iteration.
+        Vector2 &v = *it;
+        sumX += v.x;
+        sumY += v.y;
     }
 
     unsigned int histCount = 0;
+    // One row remains here: the target homes begin() into the shared stack
+    // slot (`stw r11, 0x54(r31)`) before this loop. Hoisting the iterator out
+    // of the for-init and assigning it separately does not reproduce it.
     for (std::list<Vector2>::iterator it = mLevelHistory.begin();
          it != mLevelHistory.end(); ++it) {
         histCount++;
