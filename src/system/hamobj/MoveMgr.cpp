@@ -902,12 +902,12 @@ void MoveMgr::FillInRoutineAt(int player, int measure) {
     const MoveVariant *preferred = GetRoutinePreferredVariant(player, measure);
     std::pair<const MoveVariant *, const MoveVariant *> *routinePair =
         &mRoutineMeasures[player].at(measure);
-    routinePair->first = nullptr;
-    routinePair->second = nullptr;
+    *routinePair = std::pair<const MoveVariant *, const MoveVariant *>();
 
     // Try to find variant pair with previous measure
     if (measure > 0) {
-        std::pair<const MoveVariant *, const MoveVariant *> *prevPair = routinePair - 1;
+        std::pair<const MoveVariant *, const MoveVariant *> *prevPair =
+            &mRoutineMeasures[player][measure - 1];
         const MoveParent *prevParent = mMoveParents[player][measure - 1];
         const MoveVariant *prevPreferred = GetRoutinePreferredVariant(player, measure - 1);
         if (!prevPreferred) {
@@ -932,7 +932,8 @@ void MoveMgr::FillInRoutineAt(int player, int measure) {
 
     // Try to find variant pair with next measure
     if ((unsigned int)measure < (unsigned int)(mMoveParents[player].size() - 1)) {
-        std::pair<const MoveVariant *, const MoveVariant *> *nextPair = routinePair + 1;
+        std::pair<const MoveVariant *, const MoveVariant *> *nextPair =
+            &mRoutineMeasures[player][measure + 1];
         const MoveParent *nextParent = mMoveParents[player][measure + 1];
         const MoveVariant *nextPreferred = GetRoutinePreferredVariant(player, measure + 1);
         if (!mMoveGraph.FindVariantPair(
