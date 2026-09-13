@@ -630,24 +630,27 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 mesh->SetMat(fontMat);
             }
             mesh->SetShowing(page.displayableChars > 0);
-            if ((unsigned int)fixedLength == 0) {
+            if (fixedLength == 0) {
+                int numFaces = page.displayableChars * 2;
                 mesh->SetMutable(0);
-                ResetFontMapPageMeshFaces(mesh, page.displayableChars * 2);
+                ResetFontMapPageMeshFaces(mesh, numFaces);
                 page.mSyncFlags |= 0xA0;
-                mesh->Verts().resize(page.displayableChars * 4);
-            } else if (mesh->Mutable() == 0 || mesh->Verts().size() != fixedLength * 4) {
+                mesh->Verts().resize(numFaces * 2);
+            } else if ((mesh->Mutable() & 0x1F) == 0
+                       || mesh->Verts().size() != fixedLength * 4) {
                 mesh->SetMutable(0x1F);
-                ResetFontMapPageMeshFaces(mesh, page.displayableChars * 2);
+                ResetFontMapPageMeshFaces(mesh, fixedLength * 2);
                 page.mSyncFlags |= 0xA0;
-                mesh->Verts().resize(page.displayableChars * 4);
+                mesh->Verts().resize(fixedLength * 4);
             }
-#ifndef HX_NATIVE
-            MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
-#else
+#ifdef HX_NATIVE
             // Clamp to available verts in native builds
             if (mesh->Verts().size() < page.displayableChars * 4)
                 page.displayableChars = mesh->Verts().size() / 4;
+#endif
             page.mVertStart = mesh->Verts().begin();
+#ifndef HX_NATIVE
+            MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
 #endif
         }
 #ifndef HX_NATIVE
