@@ -324,6 +324,18 @@ void ObjPtrVec<T1, T2>::operator=(const ObjPtrVec &other) {
     mNodes.clear();
     mNodes.reserve(other.mNodes.size());
     for (const_iterator it = other.begin(); it != other.end(); ++it) {
+        // The only residual on this function (13 instantiations, 87.84%) is this
+        // local's destructor. Every other instruction lines up, including the
+        // ctor's three stores and the base-vptr store at the bottom of the loop.
+        // The image's per-iteration ~Node emits ONLY that vptr store -- no
+        // `if (mObject) Release(this)` ring unlink -- while ours emits all nine
+        // instructions of it. Contrast ObjPtrVec::insert, whose Node temp DOES
+        // emit the unlink in the image (0x8236335C), so it is not that
+        // ~ObjRefConcrete is out of line here.
+        // MEASURED NEGATIVE (2026-09-13): `const Node newNode(this);`, on the
+        // theory that const would let MSVC keep the ctor's mObject == 0 across
+        // push_back's const& and fold the test, is byte-inert -- all 13 stay at
+        // 87.83784.
         Node newNode(this);
         mNodes.push_back(newNode);
         Set(--end(), *it);

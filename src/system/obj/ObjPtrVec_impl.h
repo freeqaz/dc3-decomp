@@ -61,7 +61,11 @@ template <class T1, class T2>
 void ObjPtrVec<T1, T2>::merge(const ObjPtrVec<T1, T2> &other) {
     for (const_iterator it = other.begin(); it != other.end(); ++it) {
         T1 *obj = it->Obj();
-        if (obj != NULL && find(obj) == end()) {
+        // No `obj != NULL &&` guard here: the image calls find() unconditionally
+        // (0x82358B9C falls into `bl find` from BOTH sides of the null test, which
+        // is only the vbase adjustment MSVC emits for T1* -> Hmx::Object*). A null
+        // entry is harmless because insert() drops a null in kObjListNoNull mode.
+        if (find(obj) == end()) {
             push_back(obj);
         }
     }

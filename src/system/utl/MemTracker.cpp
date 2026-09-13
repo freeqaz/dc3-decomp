@@ -446,14 +446,24 @@ void MemTracker::Report(int threshold, TextStream &ts) {
 int MemTracker::SpitAllocInfo(TextStream *ts) {
     int ret = 1;
     if (gMemTracker != nullptr && gMemTracker->mHashTable != nullptr) {
-        FormatString begin_fmt("----------------BEGIN MemTracker::SpitAllocInfo\n");
-        *ts << begin_fmt.Str() << "\n";
+        // Identical in shape to the _iobuf overload below, and it has to be:
+        // the image sends both banners to TheDebug (r29 holds &TheDebug across
+        // the loop), NOT to `ts`, with a single operator<< each and no trailing
+        // "\n" -- the format string already ends in one. The two FormatStrings
+        // also share the stack slot at r1+0x50 (frame 0x1090, not 0x20b0), so
+        // each lives in its own scope.
+        {
+            FormatString fmt("----------------BEGIN MemTracker::SpitAllocInfo\n");
+            TheDebug << fmt.Str();
+        }
         for (auto it = gMemTracker->mHashTable->Begin(); it != nullptr; it = gMemTracker->mHashTable->Next(it)) {
             AllocInfo *info = *it;
             info->PrintForReport(*ts);
         }
-        FormatString end_fmt("----------------END MemTracker::SpitAllocInfo\n");
-        *ts << end_fmt.Str() << "\n";
+        {
+            FormatString fmt("----------------END MemTracker::SpitAllocInfo\n");
+            TheDebug << fmt.Str();
+        }
         ret = 0;
     }
     return ret;
@@ -616,10 +626,12 @@ void MemTracker::ReportMemoryUsageOverview(const char *name) {
         "PhysPeak,PhysAlloc,PhysLargest\n"
     );
     *ts << hdr.Str();
-    int numHeaps = MemNumHeaps();
+    // +1 folded into the call's result (image: `addi r26, r3, 0x1` immediately
+    // after `bl MemNumHeaps`, before the two stream writes), so there is no
+    // separate numHeaps local.
+    int loopMax = MemNumHeaps() + 1;
     *ts << "overview,";
     *ts << name;
-    int loopMax = numHeaps + 1;
     for (int i = 0; i < loopMax; i++) {
         int biggest;
         if (i == MemNumHeaps()) {
@@ -628,6 +640,16 @@ void MemTracker::ReportMemoryUsageOverview(const char *name) {
             if (used < freeMem) {
                 used = freeMem;
             }
+            // RESIDUAL (88.06%): the image's physical-heap arm does NOT write
+            // the `biggest` that gets printed. Its zero goes to r1+0x58 -- the
+            // slot MemFreeBlockStats' FIRST out-param occupies in the sibling
+            // else branch -- while the printed value is read from r1+0x54, that
+            // call's LAST out-param, so PhysLargest prints an uninitialised
+            // slot. It also keeps the `used` arithmetic alive (stw to 0x50,
+            // shared with `free`) where MSVC dead-codes ours away.
+            // MEASURED NEGATIVE: spelling that as a shadowing
+            // `int biggest = 0; (void)biggest;` here costs 2.25pp (88.06 ->
+            // 85.81) and scrambles the callee-saved allocation.
             biggest = 0;
         } else {
             int lfrags, i2, free, i4;

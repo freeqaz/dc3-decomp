@@ -317,6 +317,12 @@ int CacheXbox::ThreadGetFileSize() {
         }
     } else {
         int ret = 0;
+        // MEASURED NEUTRAL (2026-09-13), both together and separately: swapping
+        // the err/fileSize declarations to chase the image's slot pair (err at
+        // r1+0x50, fileSize at r1+0x54) and inverting the test to
+        // `res != -1 || (err = GetLastError()) == 0` to chase the image's block
+        // order (0x827FF420 before the notify at 0x827FF42C) leaves this at
+        // exactly 87.375 -- MSVC canonicalises both.
         DWORD fileSize = 0;
         unsigned int err;
         DWORD res = GetFileSize(file, &fileSize);
@@ -461,8 +467,14 @@ int CacheXbox::ThreadDelete() {
     mThreadStr.ReplaceAll('/', '\\');
     bool result = DeleteFileA(mThreadStr.c_str());
     if (result) {
-        mThreadStr.erase(mThreadStr.find_last_of('\\'));
-        result = DeleteParentDirs(String(mThreadStr));
+        // Two statements: the image materialises erase()'s object pointer
+        // (this+0x150) only AFTER find_last_of returns, where writing it as one
+        // expression makes MSVC hoist it into a callee-saved register first.
+        unsigned int lastSep = mThreadStr.find_last_of('\\');
+        // The String temp is copy-constructed from erase()'s RETURN reference,
+        // not re-derived from mThreadStr: the image feeds erase's r3 straight
+        // into ??0String@@QAA@ABV0@@Z.
+        result = DeleteParentDirs(mThreadStr.erase(lastSep));
     }
     if (!result) {
         unsigned int err = GetLastError();

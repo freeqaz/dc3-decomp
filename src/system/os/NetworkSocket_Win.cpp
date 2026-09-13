@@ -109,7 +109,10 @@ bool WinSockSocket::Fail() const {
     switch (select(0, nullptr, nullptr, &set, &val)) {
     case -1:
         MILO_LOG("select returned SOCKET_ERROR %d\n", WSAGetLastError());
-        break;
+        // FALLTHROUGH -- deliberate, and it is what the image does: the
+        // SOCKET_ERROR arm has no `break`, so a failed select() also latches
+        // mFail. (Target 0x825EEA50 falls straight into the `stb` at
+        // 0x825EEA78 with no intervening branch.)
     case 1:
         const_cast<WinSockSocket *>(this)->mFail = true;
         break;
@@ -197,26 +200,23 @@ bool WinSockSocket::CanRead() const {
 }
 
 int WinSockSocket::Send(const void *data, unsigned int len) {
-    if (!mFail) {
-        int ret = send(mSocket, (const char *)data, len, 0);
-        if (ret != -1) {
-            return ret;
-        }
+    if (mFail)
+        return 0;
+    int ret = send(mSocket, (const char *)data, len, 0);
+    if (ret == -1) {
         int err = WSAGetLastError();
-        switch (err) {
-        case 0x2733:
-            break;
-        case 0x2746:
-        case 0x2749:
+        if (err == 0x2733)
+            return 0;
+        if (err == 0x2746 || err == 0x2749) {
             mFail = true;
-            break;
-        default:
-            MILO_FAIL("error in Send: %i", err);
-            return -1;
-            break;
+            return 0;
         }
+        // The image falls out of the error handling into the common
+        // `return ret` (0x825EEBD8 `mr r3, r30`) rather than materialising a
+        // fresh -1, so this is `return ret`, not `return -1`.
+        MILO_FAIL("error in Send: %i", err);
     }
-    return 0;
+    return ret;
 }
 
 int WinSockSocket::Recv(void *data, unsigned int len) {
@@ -240,19 +240,19 @@ int WinSockSocket::SendTo(
     int res = sendto(mSocket, (const char *)data, len, 0, &addr, 16);
     if (res == -1) {
         int err = WSAGetLastError();
-        if (err != 0x2733) {
-            if (err != 0x2751) {
-                MILO_FAIL("error in Send: %i", err);
-                return -1;
-            }
+        if (err == 0x2733)
+            return 0;
+        if (err == 0x2751) {
             if (mStreaming) {
                 mFail = true;
             }
+            return 0;
         }
-        return 0;
-    } else {
-        return res;
+        // Same shape as Send(): the image drops out of the MILO_FAIL arm into
+        // the shared `mr r3, r30` at 0x825EECAC, i.e. `return res`.
+        MILO_FAIL("error in Send: %i", err);
     }
+    return res;
 }
 
 int WinSockSocket::BroadcastTo(const void *data, unsigned int len, unsigned short port) {

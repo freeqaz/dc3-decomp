@@ -227,8 +227,11 @@ namespace {
             BeginCmd(Holmes::kReadFile, false);
             ReadRequest &cur = *it;
             int i2 = gHolmesStream->ReadAsync(cur.mBuffer, cur.mBytes);
-            char *buffer = (char *)cur.mBuffer;
-            buffer += i2;
+            // The advanced pointer is STORED BACK (image: `stw r11, 0xc(r31)`
+            // right beside the mBytes store). We had it in a dead local, so a
+            // short read would restart the next chunk at the start of the
+            // caller's buffer instead of after what was already read.
+            cur.mBuffer = (char *)cur.mBuffer + i2;
             cur.mBytes -= i2;
             EndCmd(Holmes::kReadFile);
             if (i2 <= 0) {
@@ -630,13 +633,22 @@ bool HolmesClientOpen(const char *filename, int mode, unsigned int &fileSize, in
         BeginCmd(Holmes::kOpenFile, true);
         unsigned char val = 3;
         *gStreamBuffer << val << filename;
-        val = (mode >> 1) & 1;
-        *gStreamBuffer << val;
-        *gStreamBuffer << (unsigned char)((mode >> 0x12) & 1); // truncate flag
-        if (val == 0) {
-            *gStreamBuffer << (unsigned char)((mode >> 8) & 1); // write mode
-            val = (mode >> 9) & 1; // create flag
-            *gStreamBuffer << val;
+        // All four flag bits are extracted up front and parked in callee-saved
+        // registers (image: four consecutive `extrwi` at 0x825F1... for bits
+        // 1, 8, 9 and 18, in that order, before the first operator<<), and the
+        // extraction is UNSIGNED -- `extrwi`, not the `srawi`+mask an `int`
+        // shift produces.
+        unsigned int umode = mode;
+        unsigned char isWriteMode = (umode >> 1) & 1;
+        unsigned char writeFlag = (umode >> 8) & 1;
+        unsigned char createFlag = (umode >> 9) & 1;
+        unsigned char truncFlag = (umode >> 0x12) & 1;
+        // Chained, not two statements: the image gives each flag its own byte
+        // slot (0x50, 0x51, ...), which only happens while both operator<<
+        // reference arguments are alive inside one full expression.
+        *gStreamBuffer << isWriteMode << truncFlag;
+        if (isWriteMode == 0) {
+            *gStreamBuffer << writeFlag << createFlag;
         }
         HolmesFlushStreamBuffer();
         WaitForResponse(Holmes::kOpenFile);

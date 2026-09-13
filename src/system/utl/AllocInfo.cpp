@@ -104,14 +104,19 @@ void AllocInfo::PrintForReport(TextStream &ts) const {
     MILO_ASSERT(s_pTrie, 0xD1);
     char buf1d[0x80];
     char buf21[0x80];
-    s_pTrie->get(unk1d, buf1d, 0x80);
-    s_pTrie->get(unk21, buf21, 0x80);
+    // Trie::get's RETURN value is what gets printed, not the buffer that was
+    // handed to it -- the image parks both results in callee-saved registers
+    // across the second call -- and the unk1d result is the FIRST of the two
+    // %s arguments (image stores r30, the first get's result, at the lower
+    // stack-arg slot). We had the two buffers the other way round.
+    const char *name1d = s_pTrie->get(unk1d, buf1d, 0x80);
+    const char *name21 = s_pTrie->get(unk21, buf21, 0x80);
     char buf[0x140];
     Hx_snprintf(
         buf, 0x140,
         "addr\t0x%lX\t%s\tbytes\t%d\tactual\t%d\theap\t%d\t%s\t%d\t%s\t%s\t%s\n",
         (unsigned long)mMem, mType, mReqSize, mActSize, (int)mHeap,
-        mFile, mLine, buf21, buf1d, mPooled ? "pooled" : ""
+        mFile, mLine, name1d, name21, mPooled ? "pooled" : ""
     );
     ts << buf;
 }
@@ -120,13 +125,15 @@ void AllocInfo::PrintForReport(struct _iobuf *f) const {
     MILO_ASSERT(s_pTrie, 0xDE);
     char buf1d[0x80];
     char buf21[0x80];
-    s_pTrie->get(unk1d, buf1d, 0x80);
-    s_pTrie->get(unk21, buf21, 0x80);
+    // Same as the TextStream overload above: print the get() results, in
+    // first-call-first order.
+    const char *name1d = s_pTrie->get(unk1d, buf1d, 0x80);
+    const char *name21 = s_pTrie->get(unk21, buf21, 0x80);
     fprintf(
         (FILE *)f,
         "addr\t0x%lX\t%s\tbytes\t%d\tactual\t%d\theap\t%d\t%s\t%d\t%s\t%s\t%s\n",
         (unsigned long)mMem, mType, mReqSize, mActSize, (int)mHeap,
-        mFile, mLine, buf21, buf1d, mPooled ? "pooled" : ""
+        mFile, mLine, name1d, name21, mPooled ? "pooled" : ""
     );
 }
 
