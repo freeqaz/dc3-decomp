@@ -1042,9 +1042,11 @@ static const char *sCollideNames[] = {
 };
 
 void WorldCrowd::DrawShowing() {
-    auto& _ref0 = mPlacementMesh;
+    // No cached reference to mPlacementMesh: the target never forms
+    // `addi rX, r3, 0x48`, it re-reads `lwz r11, 0x54(this)` (the ObjPtr's raw
+    // slot) at each use.
     START_AUTO_TIMER("crowd_draw");
-    if (!_ref0) return;
+    if (!mPlacementMesh) return;
     Draw3DChars();
     if (Rnd::kDrawOcclusionDepth == TheRnd.DrawMode()) return;
     MILO_ASSERT(!gImpostorMat->NextPass(), 0x3A0);
@@ -1086,7 +1088,7 @@ void WorldCrowd::DrawShowing() {
                     float halfHeight = charIt->mDef.mHeight * 0.5f;
 
                     // Position impostor camera at distance along camera's -Y axis
-                    const Transform &placementXfm = _ref0->WorldXfm();
+                    const Transform &placementXfm = mPlacementMesh->WorldXfm();
                     const Transform &curCamXfm = curCam->WorldXfm();
                     float dx = curCamXfm.v.x - placementXfm.v.x;
                     float dy = curCamXfm.v.y - placementXfm.v.y;
@@ -1107,9 +1109,9 @@ void WorldCrowd::DrawShowing() {
                     // Orient character based on crowd rotation mode
                     Transform charXfm;
                     if (mCrowdRotate == kCrowdRotateNone) {
-                        memcpy(&charXfm, &_ref0->WorldXfm(), 0x30);
+                        memcpy(&charXfm, &mPlacementMesh->WorldXfm(), 0x30);
                     } else {
-                        const Transform &meshXfm = _ref0->WorldXfm();
+                        const Transform &meshXfm = mPlacementMesh->WorldXfm();
                         float upX = meshXfm.m.z.x;
                         float upY = meshXfm.m.z.y;
                         float upZ = meshXfm.m.z.z;
@@ -1193,7 +1195,7 @@ void WorldCrowd::DrawShowing() {
                 float halfWidth = halfHeight * 0.5f;
 
                 // --- Set up impostor camera: position at -dist along camera's Y axis ---
-                const Transform &placementXfm = _ref0->WorldXfm();
+                const Transform &placementXfm = mPlacementMesh->WorldXfm();
                 const Transform &curCamXfm = curCam->WorldXfm();
                 float dx = curCamXfm.v.x - placementXfm.v.x;
                 float dy = curCamXfm.v.y - placementXfm.v.y;
@@ -1215,22 +1217,25 @@ void WorldCrowd::DrawShowing() {
                 // --- Compute character orientation based on crowd rotation mode ---
                 Transform charXfm;
                 if (mCrowdRotate == kCrowdRotateNone) {
-                    const Transform &meshXfm = _ref0->WorldXfm();
+                    const Transform &meshXfm = mPlacementMesh->WorldXfm();
                     memcpy(&charXfm, &meshXfm, 0x30);
                 } else {
                     // Copy the mesh up-row straight into the char transform's
                     // up-row member, then re-read its components from the stack.
                     // This keeps the up vector in memory rather than pinning
                     // three nonvolatile FPRs across the whole block.
-                    const Transform &meshXfm2 = _ref0->WorldXfm();
+                    const Transform &meshXfm2 = mPlacementMesh->WorldXfm();
                     charXfm.m.z = meshXfm2.m.z;
 
                     // Cross product of camera Y-axis with mesh up vector,
                     // component swaps determine Face vs Away rotation.
-                    // Only two WorldXfm() expansions: reuse the reference.
+                    // The reference is declared INSIDE each arm, not hoisted:
+                    // the target tests mCrowdRotate FIRST (`lwz r9, 0x6c(r24)` /
+                    // `cmpwi cr6, r9, 0x1` at 82838608/82838614, before any
+                    // `lbz r11, 0xbd(r26)`) and expands WorldXfm() twice.
                     float camA, upA, camB, upB;
-                    const Transform &camWXfm = curCam->WorldXfm();
                     if (mCrowdRotate == kCrowdRotateFace) {
+                        const Transform &camWXfm = curCam->WorldXfm();
                         charXfm.m.x.z = camWXfm.m.y.y * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.y;
                         charXfm.m.x.y = camWXfm.m.y.x * charXfm.m.z.z - camWXfm.m.y.z * charXfm.m.z.x;
                         camA = camWXfm.m.y.z;
@@ -1238,6 +1243,7 @@ void WorldCrowd::DrawShowing() {
                         camB = camWXfm.m.y.y;
                         upB = charXfm.m.z.z;
                     } else {
+                        const Transform &camWXfm = curCam->WorldXfm();
                         charXfm.m.x.y = camWXfm.m.y.z * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.z;
                         charXfm.m.x.z = camWXfm.m.y.x * charXfm.m.z.y - camWXfm.m.y.y * charXfm.m.z.x;
                         camA = camWXfm.m.y.y;
