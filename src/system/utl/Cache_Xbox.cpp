@@ -461,8 +461,14 @@ int CacheXbox::ThreadDelete() {
     mThreadStr.ReplaceAll('/', '\\');
     bool result = DeleteFileA(mThreadStr.c_str());
     if (result) {
-        mThreadStr.erase(mThreadStr.find_last_of('\\'));
-        result = DeleteParentDirs(String(mThreadStr));
+        // Two statements: the image materialises erase()'s object pointer
+        // (this+0x150) only AFTER find_last_of returns, where writing it as one
+        // expression makes MSVC hoist it into a callee-saved register first.
+        unsigned int lastSep = mThreadStr.find_last_of('\\');
+        // The String temp is copy-constructed from erase()'s RETURN reference,
+        // not re-derived from mThreadStr: the image feeds erase's r3 straight
+        // into ??0String@@QAA@ABV0@@Z.
+        result = DeleteParentDirs(mThreadStr.erase(lastSep));
     }
     if (!result) {
         unsigned int err = GetLastError();
