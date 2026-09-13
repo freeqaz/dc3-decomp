@@ -30,7 +30,8 @@ PitchDetector::PitchDetector(const stlpmtx_std::vector<float, stlpmtx_std::StlNo
     for (unsigned int i = 0; i < mWindow.size(); i++) {
         float size = (float)mWindow.size();
         float angle = ((float)i + 0.5f) * 6.2831854820251465f;
-        mWindow[i] = 1.0f - (float)cos((double)(angle / size));
+        float c = 1.0f - (float)cos((double)(angle / size));
+        mWindow[i] = c;
     }
 
     mWeight.resize(mHop + 1, 0.0f);
