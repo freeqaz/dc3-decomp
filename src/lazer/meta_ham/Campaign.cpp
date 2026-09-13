@@ -506,7 +506,7 @@ bool Campaign::UpdateEraSongUnlockInstructions(
         static Symbol era02("era02");
         static Symbol era03("era03");
         static Symbol era04("era04");
-        if ((int)era == era01) {
+        if (era == era01) {
             static Symbol campaign_song_hint_70s("campaign_song_hint_70s");
             i_pInstructionsLabel->SetTextToken(campaign_song_hint_70s);
         } else if (era == era02) {
@@ -573,7 +573,7 @@ bool Campaign::UpdateEraSongUnlockInstructions(
             return true;
         }
     } else if (i8 == 0) {
-        if (i9 >= 2) {
+        if (i9 > 1) {
             static Symbol campaign_song_hint_moves("campaign_song_hint_moves");
             i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_moves, i9);
             return true;
