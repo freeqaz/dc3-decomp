@@ -1,7 +1,7 @@
 # Band-lane wave, 2026-09-10 to 09-13
 
-36 lane merges. `matched_functions` 30,677 → 30,886, `matched_code_percent`
-45.988 → 47.357 (+209 functions, ~155 KB). Native gate green on a settled tree
+~50 lane merges. `matched_functions` 30,677 → **30,944**, `matched_code_percent`
+45.988 → **47.567** (+267 functions, ~179 KB). Native gate green on a settled tree
 after every behaviour-changing merge (437 executed / 437 passed / 69 skipped
 against a budget of 69).
 
@@ -107,6 +107,21 @@ including an `artifact:orig_error` on a function that then reached 100 and a
   to ~68% permanently, because MSVC at `/O1` refuses to inline that template where
   the target inlines it. **Refused.**
 
+## Two instrument facts established late, both worth more than a crossing
+
+- **Comments are inert here.** `MILO_ASSERT` takes its line as an *explicit
+  argument*; `__LINE__` survives in 4 of 1,188 source files. Whole-binary probe (one
+  comment line prepended to every `.cpp`/`.c`): **one** function moves, 36 bytes. See
+  [comments-are-inert-except-at-__LINE__.md](../decomp/patterns/comments-are-inert-except-at-__LINE__.md).
+  I had briefed a lane on the opposite and edited the standing brief before checking;
+  the grep that settles it takes ten seconds.
+- **Enumerations over history fail open.** `git show <merge>` yields an EMPTY diff for
+  a merge commit; a bad pathspec matches nothing; `git log --grep` in a shell loop
+  mangles subjects containing quotes. All three return a clean-looking zero. Measured
+  here: asking "which source files did this wave touch" through merge commits returns
+  **0**, while the control returns **202**. Run a does-this-match-anything control
+  before believing any count, above all a zero.
+
 ## A sample of the real bugs
 
 Every finger curled twice as far as retail (doubled curl-quaternion angle). Every
@@ -118,4 +133,16 @@ integer 6 instead of `DATA_UNHANDLED`. A voice command that never stored the spo
 mode. Outro songs read from the intro array. Hair stiffness toggling every point. A
 use-after-erase in a flow-trigger loader. A crossfade audio stream constructed with
 a different flag than the primary. `*++rbegin()` where the original had
-`back()+pop_back()`. A `DataNode*` passed as a `char*`.
+`back()+pop_back()`. A `DataNode*` passed as a `char*`. An unreachable timer reset
+every path jumped over, so a gesture's raise timer never reset. A loader poll with
+no re-entrance guard at all. A progress bar divided by a millisecond duration *and*
+scaled, a million times too small. Editor picking that reported a hit only when a
+new proxy was allocated, so it worked once and went dead. A save path that never
+wrote three of six players' colours. A nav setter called with its index and its
+on/off flag transposed. A directory-terminator scan that accepted a partial marker
+followed by arbitrary bytes.
+
+Several were committed at a **deliberate canonical loss** where the target's own
+bytes said the behaviour was wrong: the collision reaction, the content-mount state
+machine, the nav setter, the terminator scan. The metric is the instrument, not the
+goal.
