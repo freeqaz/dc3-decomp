@@ -145,7 +145,7 @@ BEGIN_SAVES(StreamRenderer)
     bs << mPlayerOtherDepthPalette << mPlayerOtherDepthPaletteOffset;
     bs << mDrawPreClear << mForceDraw;
     bs << mLagPrimaryTexture;
-    bs << mPlayer1DepthColor << mPlayer2DepthColor << mPlayer3DepthColor;
+    bs << mPlayer4DepthColor << mPlayer5DepthColor << mPlayer6DepthColor;
     bs << mStaticColorIndices;
     bs << mCrewPhotoEdgeIterations;
     bs << mCrewPhotoEdgeOffset;
