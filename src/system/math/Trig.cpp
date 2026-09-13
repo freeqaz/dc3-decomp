@@ -17,14 +17,13 @@ void TrigTableInit() {
         }
         tablePtr += 2;
         i++;
-    } while (i < 256);
+    } while (tablePtr < &gBigSinTable[511]);
     float sineValue = std::sin(0.024543693f * i);
-#ifdef HX_NATIVE
-    // Original code writes past array end (i=256, index=513 in 512-element array)
-    // Benign on Xbox (overwrites adjacent global), but ASan catches it on native
-    if (i * 2 + 1 < 0x200) // guard against OOB write
-#endif
-    gBigSinTable[i * 2 + 1] = sineValue - gBigSinTable[i * 2 - 1];
+    // Peeled last half-iteration: writes the odd (delta) slot 2i-1 and reads the
+    // even (sine) slot 2i-2, exactly as the loop body does.  Spelled through two
+    // separate bases because that is what the target emits -- `gBigSinTable[i*2-1]`
+    // lets MSVC CSE them into one base and costs four rows.
+    (gBigSinTable + 1)[i * 2 - 2] = sineValue - gBigSinTable[i * 2 - 2];
 }
 
 void TrigTableTerminate() {}
