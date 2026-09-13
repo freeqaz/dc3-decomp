@@ -1673,12 +1673,9 @@ void MakeNormals(RndMesh *m) {
                             float angle = (float)acos((double)(e2.x * e1.x + e2.y * e1.y
                                                                + e2.z * e1.z));
 
-                            crossProd.x *= angle;
-                            crossProd.y *= angle;
-                            crossProd.z *= angle;
-                            m->Verts()[i].norm.x += crossProd.x;
-                            m->Verts()[i].norm.y += crossProd.y;
-                            m->Verts()[i].norm.z += crossProd.z;
+                            Vector3 weighted;
+                            Scale(crossProd, angle, weighted);
+                            Add(m->Verts()[i].norm, weighted, m->Verts()[i].norm);
                         }
                     }
                 }
@@ -1687,10 +1684,7 @@ void MakeNormals(RndMesh *m) {
         Normalize(m->Verts()[i].norm, m->Verts()[i].norm);
 
         if (leftHanded) {
-            Vector3 &norm = m->Verts()[i].norm;
-            norm.x = -norm.x;
-            norm.y = -norm.y;
-            norm.z = -norm.z;
+            Negate(m->Verts()[i].norm, m->Verts()[i].norm);
         }
     }
     m->Sync(0x1F);
