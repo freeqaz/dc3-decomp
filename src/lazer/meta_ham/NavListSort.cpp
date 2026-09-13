@@ -152,12 +152,15 @@ bool NavListSort::SetHighlightID(DataArray *a) {
         auto ggIt = std::find_if(
             greatGrandChildren.begin(), greatGrandChildren.end(), NodeFind(token3)
         );
-        if (ggIt == greatGrandChildren.end()) {
-            return false;
-        } else {
-            mHighlightNode = *gIt;
+        // The target dereferences the iterator from THIS search, not the
+        // grandchild one: its tail is shared with the aSize==1 arm
+        // (`lwz r11, 0x8(found); stw r11, 0x50(this)`), and the value it
+        // loads is the result slot the last __find_if wrote.
+        if (ggIt != greatGrandChildren.end()) {
+            mHighlightNode = *ggIt;
             return true;
         }
+        return false;
     }
 }
 
