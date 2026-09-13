@@ -1301,24 +1301,31 @@ void WorldCrowd::DrawShowing() {
                 if (numRects != 0) {
                     unsigned int ri = 0;
                     do {
+                        // The maxima take the rect's OWN y/x, not the running
+                        // minimum. The target adds before it selects:
+                        //   lfs f9, 0xc(r11)   ; rects[ri].y (raw)
+                        //   lfs f6, 0x14(r11)  ; rects[ri].h
+                        //   fadds f6, f9, f6   ; y + h   <- BEFORE any fsel
+                        //   fsel f0, f7, f9, f0
+                        // We were feeding the already-minimised value into the
+                        // sum, so every iteration that did not lower the running
+                        // minimum contributed min_so_far + h instead of y + h.
                         float ry = rects[ri].y;
                         float rx = rects[ri].x;
-                        ry = (float)__fsel(minX - ry, ry, minX);
-                        rx = (float)__fsel(minY - rx, rx, minY);
-                        float ryh = ry + rects[ri].h;
-                        maxX = (float)__fsel(maxX - ryh, maxX, ryh);
-                        float rxw = rx + rects[ri].w;
-                        maxY = (float)__fsel(maxY - rxw, maxY, rxw);
-                        minX = ry;
-                        minY = rx;
+                        maxX = Max(maxX, ry + rects[ri].h);
+                        maxY = Max(maxY, rects[ri].w + rx);
+                        minX = Min(minX, ry);
+                        minY = Min(minY, rx);
                         ri++;
                     } while (ri != numRects);
                 }
-                // Clamp bounds to [0,1] screen space
-                float clampedMinY = (float)__fsel(-minY, 0.0f, minY);
-                float clampedMaxY = (float)__fsel(maxY - 1.0f, 1.0f, maxY);
-                float clampedMinX = (float)__fsel(-minX, 0.0f, minX);
-                float clampedMaxX = (float)__fsel(maxX - 1.0f, 1.0f, maxX);
+                // Clamp bounds to [0,1] screen space. Constant FIRST on the Min
+                // side: the target's `fsubs f9, f26, f11` / `fsel f29, f9, f11, f26`
+                // is Min(1.0f, maxY), i.e. x = 1.0f.
+                float clampedMinY = Max(0.0f, minY);
+                float clampedMaxY = Min(1.0f, maxY);
+                float clampedMinX = Max(0.0f, minX);
+                float clampedMaxX = Min(1.0f, maxX);
 
                 // --- Render character to impostor texture ---
                 if (TheRnd.DrawMode() == Rnd::kDrawNormal) {
