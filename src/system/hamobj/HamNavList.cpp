@@ -978,7 +978,9 @@ float HamNavList::CalculateSwell(int pos) const {
     float slideVal = Max(0.0f, mHandHeight);
     float clamped = Min(slideVal, 1.0f);
     float diff = clamped - (float)pos / (float)(numItems - 1);
-    float swell = sqrtf(fabsf(diff)) * sqrtf((float)numItems) * 0.15f;
+    // lbl_82F0C860: a mutable .data float, not a literal -- and 0.8, not 0.15
+    static float sSwellFalloff = 0.8f;
+    float swell = sqrtf(fabsf(diff)) * sqrtf((float)numItems) * sSwellFalloff;
     swell = Clamp(0.0f, 1.0f, swell);
     return 1.0f - swell;
 }
@@ -1181,22 +1183,29 @@ void HamNavList::Update() {
     delete mDirectionGestureFilter;
     delete mHandHeightFilter;
 
+    // lbl_82F0C4B8: the target re-loads this from writable .data at all four
+    // construction sites, so it is a mutable static -- and it is 0.1, not 0.5.
+    static float sNavGestureThreshold = 0.1f;
     if (mNavInputType == kNavInput_RightHand) {
         if (!TheGestureMgr->InDoubleUserMode()) {
-            mDirectionGestureFilter =
-                new DirectionGestureFilterSingleUser(kSkeletonRight, kSkeletonLeft, 0.5f, -0.2f);
+            mDirectionGestureFilter = new DirectionGestureFilterSingleUser(
+                kSkeletonRight, kSkeletonLeft, sNavGestureThreshold, -0.2f
+            );
         } else {
-            mDirectionGestureFilter =
-                new DirectionGestureFilterDoubleUser(kSkeletonRight, kSkeletonLeft, 0.5f, -0.2f);
+            mDirectionGestureFilter = new DirectionGestureFilterDoubleUser(
+                kSkeletonRight, kSkeletonLeft, sNavGestureThreshold, -0.2f
+            );
         }
         mHandHeightFilter = new HandHeightGestureFilter(kSkeletonRight);
     } else {
         if (!TheGestureMgr->InDoubleUserMode()) {
-            mDirectionGestureFilter =
-                new DirectionGestureFilterSingleUser(kSkeletonLeft, kSkeletonRight, 0.5f, -0.1f);
+            mDirectionGestureFilter = new DirectionGestureFilterSingleUser(
+                kSkeletonLeft, kSkeletonRight, sNavGestureThreshold, -0.1f
+            );
         } else {
-            mDirectionGestureFilter =
-                new DirectionGestureFilterDoubleUser(kSkeletonLeft, kSkeletonRight, 0.5f, -0.1f);
+            mDirectionGestureFilter = new DirectionGestureFilterDoubleUser(
+                kSkeletonLeft, kSkeletonRight, sNavGestureThreshold, -0.1f
+            );
         }
         mHandHeightFilter = new HandHeightGestureFilter(kSkeletonLeft);
     }
