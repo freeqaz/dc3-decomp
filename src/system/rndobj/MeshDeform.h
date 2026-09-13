@@ -47,7 +47,7 @@ public:
             // void *operator->() const { return data; }
 
             iterator operator++() {
-                char *cData = (char *)data;
+                unsigned char *cData = (unsigned char *)data;
                 cData += (*cData * 2) + 1;
                 data = cData;
                 return *this;
