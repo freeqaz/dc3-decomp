@@ -365,9 +365,9 @@ void StreamRenderer::SetCrewPhotoPlayerCenters() {
     for (int i = 0; i < 6; i++) {
         Skeleton *skel =
             TheGestureMgr->GetSkeletonByTrackingID(TheGestureMgr->GetSkeleton(i).TrackingID());
+        float minX = 1.0f, minY = 1.0f, minZ = 1.0f;
+        float maxX = -1.0f, maxY = -1.0f, maxZ = -1.0f;
         if (skel) {
-            float minX = 1.0f, minY = 1.0f, minZ = 1.0f;
-            float maxX = -1.0f, maxY = -1.0f, maxZ = -1.0f;
             for (int j = 0; j < kNumJoints; j++) {
                 Vector2 screenPos;
                 skel->ScreenPos((SkeletonJoint)j, screenPos);
