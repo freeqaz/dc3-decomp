@@ -190,7 +190,7 @@ distinct tips remain; the whole Kinect/stub-shadow family adjudicates once.
 | `verify/scanner-truthfulness` | 15 | **ALREADY LANDED** | 15/15 commit subjects have exact twins on `main`; `main` then added 38 more commits to the same files |
 | `verify/mcp-gaps` | 11 | **ALREADY LANDED** | 11/11 exact twins (landed via the `mcp-gaps` branch) |
 | `verify/compose-both` | 14 | **ALREADY LANDED** | 11/14 twins; the 3 others are 2 merge commits + one **message-only** commit (zero file changes) |
-| `verify/kinect-camera` | 13 | **ALREADY LANDED** (code) / **WOULD REVERT NEWER WORK** | 10/13 twins; `main` moved 19 commits ahead on the three `src/` files it carries |
+| `verify/kinect-camera` | 13 | **ALREADY LANDED** (code) / **WOULD REVERT NEWER WORK** | 10/13 twins; `main` moved 22 commits ahead on the three `src/` files it carries |
 | `verify/kinect-pixel` = `verify/kinect-reloc` | 10 | same, subset | strict prefix of `verify/kinect-camera` |
 | `fix/native-stub-shadow` = `verify/kinect-base` = `verify/stub-shadow` | 5 | **ALREADY LANDED** | 5/5 twins; strict prefix of the above |
 | `harvest-threadtask-replace` | 1 | **GENUINELY UNLANDED → LANDED TODAY** | `ThreadTask::Replace` 82.34375 → 100.0, 32/32 equal |
@@ -241,7 +241,7 @@ does not exist on `main`. That doc is the only genuinely unlanded artifact in
 the whole Kinect family.
 
 Merging the branch to get it would be actively harmful. `main` has moved
-**19 commits** across the three `src/` files the branch also carries:
+**22 commits** across the three `src/` files the branch also carries:
 
 | file | branch vs `main` | what `main` gained |
 |---|---|---|
