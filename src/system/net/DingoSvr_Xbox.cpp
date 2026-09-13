@@ -239,10 +239,12 @@ bool DingoSvrXbox::FillAuthParamsFromPadNum(DataPoint &pt, int padnum) {
                 static Symbol username("username");
                 pt.AddPair(username, str70.c_str());
                 static Symbol platform_uid("platform_uid");
-                String str80;
-                MILO_ASSERT(xuid, 0x101);
-                str80 << xuid;
-                pt.AddPair(platform_uid, str80.c_str());
+                {
+                    String str80;
+                    MILO_ASSERT(xuid, 0x101);
+                    str80 << xuid;
+                    pt.AddPair(platform_uid, str80.c_str());
+                }
                 ret = true;
             } else {
                 ret = false;
