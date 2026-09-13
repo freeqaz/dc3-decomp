@@ -96,14 +96,16 @@ void HamMaster::Poll(float f1) {
 }
 
 void HamMaster::Jump(float f1) {
-    SongPos calcedPos = mSongData->CalcSongPos(this, f1);
-    const SongPos &tmp = mSongPos;
-    mSongPos = calcedPos;
-    mPrevSongPos = tmp;
+    mSongPos = mSongData->CalcSongPos(this, f1);
+    // Not a typo, and not a lost value: the target's second memcpy copies
+    // this+0x34 (mSongPos, just overwritten) into this+0x4c (mPrevSongPos).
+    // The previous spelling read the same new value through a reference that
+    // aliased mSongPos; this says it outright.
+    mPrevSongPos = mSongPos;
     mLastBeatIndex = -1;
     mBeatCount = 0;
     if (mMidiParserMgr) {
-        mMidiParserMgr->Reset(tmp.GetTotalTick());
+        mMidiParserMgr->Reset(mSongPos.GetTotalTick());
     }
     mAudio->Jump(f1);
 }
