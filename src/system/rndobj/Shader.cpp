@@ -696,7 +696,7 @@ u64 RndShaderStandard::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
             opts.mRimLight = mat->GetRimRGB().Pack() != 0;
             opts.mRimLightUnder = opts.mRimLight && mat->GetRimLightUnder();
             opts.mRimLightMap = opts.mRimLight && mat->GetRimMap() != nullptr;
-            int hasShadowMap = TheRnd.GetShadowMap() != nullptr;
+            int hasShadowMap = TheRnd.GetShadowCam() != nullptr;
             opts.mShadowBuffer = hasShadowMap;
         }
         if (mat->GetEnvironMap() != nullptr) {
@@ -835,7 +835,7 @@ u64 RndShaderFur::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
         if (TheShaderMgr.AllowPerPixel() && mat->GetPerPixelLit()) {
             // fur is never per-pixel lit; the target clears the bit here anyway
             opts.mPerPixelLighting = 0;
-            int hasShadowMap = TheRnd.GetShadowMap() != nullptr;
+            int hasShadowMap = TheRnd.GetShadowCam() != nullptr;
             opts.mShadowBuffer = hasShadowMap;
         }
         bool recvProjLights = mat->GetRecvProjLights() && env->NumLights_Proj() > 0;
@@ -928,7 +928,7 @@ u64 RndShaderSyncTrack::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
             opts.mRimLight = mat->GetRimRGB().Pack() != 0;
             opts.mRimLightUnder = opts.mRimLight && mat->GetRimLightUnder();
             opts.mRimLightMap = opts.mRimLight && mat->GetRimMap() != nullptr;
-            int hasShadowMap = TheRnd.GetShadowMap() != nullptr;
+            int hasShadowMap = TheRnd.GetShadowCam() != nullptr;
             opts.mShadowBuffer = hasShadowMap;
         }
         if (mat->GetEnvironMap() != nullptr) {
@@ -993,8 +993,9 @@ u64 RndShaderSyncTrack::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     opts.mShowShaderCost = TheRnd.ResourceCached();
     opts.mHiResScreen = TheHiResScreen.IsActive();
     opts.mFitToSpline = 1;
-    if (RndSpline::sGlobalDefaultSpline != nullptr) {
-        opts.mSplinePulse = RndSpline::sGlobalDefaultSpline->mPulseDrawing;
+    RndSpline *spline = RndSpline::sGlobalDefaultSpline;
+    if (spline) {
+        opts.mSplinePulse = spline->mPulseDrawing;
     }
     opts.mSyncTrackChargeEffect = s == kSyncTrackChargeEffectShader;
     return opts.flags;
