@@ -1026,6 +1026,10 @@ DataNode DataArray::ExecuteScript(
 
     int numVars = 0;
     int size = mSize;
+    // A separate local, not `index++`: the target initialises it from the
+    // parameter in the prologue (`mr r30, r29`) and writes the bumped value
+    // into it (`addi r30, r29, 0x1`), leaving `index` itself live.
+    int blockIndex = index;
 
     if (index < (size - 1) && mNodes[index].Type() == kDataArray) {
         DataArray *arr = mNodes[index].UncheckedArray();
@@ -1038,15 +1042,15 @@ DataNode DataArray::ExecuteScript(
             *var = _args->Evaluate(i + _argStart);
         }
 
-        index++;
+        blockIndex = index + 1;
     }
 
     DataNode ret;
-    if (index >= size) {
+    if (blockIndex >= size) {
         ret = DataNode(0);
     } else {
         Hmx::Object *setThis = DataSetThis(obj);
-        ret = ExecuteBlock(index);
+        ret = ExecuteBlock(blockIndex);
         DataSetThis(setThis);
     }
 

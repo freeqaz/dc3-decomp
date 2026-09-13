@@ -33,15 +33,21 @@ bool FlowSequence::Activate() {
         if (!mRunningNodes.empty())
             break;
         ActivateChild(mItr->Obj());
-        if (mStopRequested || !mRunningNodes.empty())
+        if (mStopRequested)
             break;
-        ++mItr;
+        // Not `|| !mRunningNodes.empty()` above: when the child started running
+        // the target jumps back to the loop CONDITION (which then breaks on the
+        // empty() test at the top) rather than leaving the loop directly, so the
+        // running-nodes test is a guard on the increment, not a second break.
+        if (mRunningNodes.empty())
+            ++mItr;
     }
     mIsAdvancing = false;
     MILO_ASSERT(mRunningNodes.size() < 2, 0x50);
-    if (mItr == mChildNodes.end()) {
-        if (mRunningNodes.size() != 0)
-            return true;
+    // One common tail: the target branches BOTH the "still have children" and
+    // the "something is running" cases to the same `return !mRunningNodes.empty()`
+    // epilogue rather than materialising a `true`.
+    if (mItr == mChildNodes.end() && mRunningNodes.empty()) {
         if (!mLooping) {
             if (mRepeats == 0)
                 return false;
@@ -49,9 +55,8 @@ bool FlowSequence::Activate() {
         MILO_NOTIFY_ONCE(
             "Instant looping sequence in %s! Stopping Sequence", GetOwnerFlow()->Name()
         );
-        return !mRunningNodes.empty();
     }
-    return true;
+    return !mRunningNodes.empty();
 }
 
 BEGIN_HANDLERS(FlowSequence)

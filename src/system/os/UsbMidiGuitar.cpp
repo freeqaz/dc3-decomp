@@ -173,6 +173,13 @@ void UsbMidiGuitar::Poll() {
                     RGStompBoxMsg sbMsg(stompBox, i);
                     SendMessage(sbMsg);
                 }
+                // The three program-change bits are the top bit of bytes
+                // 0xa/0xb/0xc (mProgramChangeBit0..2, the MSB of each
+                // accelerometer byte). The target loads them 0xb, 0xc, 0xa; we
+                // load 0xc, 0xb, 0xa -- the only two rows left in this function.
+                // Measured inert: swapping the two terms, parenthesising as
+                // a + (b + c), and spelling them as the named bitfields (which
+                // also costs a fused rlwinm, srwi+slwi instead).
                 unsigned char *pgRaw = (unsigned char *)proData;
                 int programChange = (pgRaw[0xb] >> 6 & 2)
                     + (pgRaw[0xc] >> 5 & 4) + (pgRaw[0xa] >> 7);
