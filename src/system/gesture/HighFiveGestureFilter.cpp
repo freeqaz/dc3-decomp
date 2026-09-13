@@ -30,9 +30,9 @@ bool HighFiveGestureFilter::CheckHighFive() {
 extern float kShoulderOffset;
 extern float kCloseThreshold;
 extern float kFarThreshold;
-float kShoulderOffset = 0.2f;
-float kCloseThreshold = 0.25f;
-float kFarThreshold = 0.3f;
+float kShoulderOffset = -0.05f;
+float kCloseThreshold = 0.15f;
+float kFarThreshold = 0.6f;
 
 void HighFiveGestureFilter::Update(Skeleton const *skeleton1, Skeleton const *skeleton2) {
     if (skeleton1 && skeleton2) {
