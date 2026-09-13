@@ -9,6 +9,11 @@
 
 RndSpline *RndSpline::sGlobalDefaultSpline;
 
+/** Y separation given to a freshly added control point on a two-point spline.
+ *  The target reloads this from .data inside the loop (lbl_8209F850), which is
+ *  the tell for a mutable file-scope float rather than a literal. */
+static float gNewCtrlPointYOffset = 10.0f;
+
 RndSpline::CtrlPoint::CtrlPoint()
     : mPos(Vector3::ZeroVec()), mRoll(0), mDirtyPosition(1), mDirtyConstants(1),
       mCoeff0(Vector4::ZeroVec()), mCoeff1(Vector4::ZeroVec()), mCoeff2(Vector4::ZeroVec()),
@@ -165,10 +170,10 @@ void RndSpline::SyncPristineCtrlPoints() {
             if (mCtrlPoints.size() == 2) {
                 if (i == 0) {
                     pt = mCtrlPoints[1];
-                    pt.mPos.y -= 10.0f;
+                    pt.mPos.y -= gNewCtrlPointYOffset;
                 } else {
                     pt = mCtrlPoints[i - 1];
-                    pt.mPos.y += 10.0f;
+                    pt.mPos.y += gNewCtrlPointYOffset;
                 }
             } else if (mCtrlPoints.size() > 2) {
                 if (i == 0) {
@@ -199,8 +204,8 @@ void RndSpline::SyncPristineCtrlPoints() {
             int maxStart = mEndCtrlPoint - 1;
             if (mStartCtrlPoint > maxStart) {
                 mStartCtrlPoint = maxStart;
-            } else if (mStartCtrlPoint < 0) {
-                mStartCtrlPoint = 0;
+            } else {
+                mStartCtrlPoint = Max(0, mStartCtrlPoint);
             }
         }
     } else {
