@@ -563,7 +563,9 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
             *(float *)dest = val;
             return;
         }
-        short comp = mCompression;
+        // mCompression is a 4-byte CompressionType; reading it through a
+        // `short` local cost two `extsh` the target does not have.
+        int comp = mCompression;
         if (byteOffset >= mOffsets[TYPE_QUAT]) {
             if (comp >= kCompressQuats) {
                 ((const ByteQuat *)src)->ToQuat(*(Hmx::Quat *)dest);
@@ -577,9 +579,14 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
             short *sv = (short *)src;
             float *out = (float *)dest;
             float scale = 1300.0f / 32767.0f;
-            out[0] = (float)sv[0] * scale;
-            out[1] = (float)sv[1] * scale;
-            out[2] = (float)sv[2] * scale;
+            // Retail reads all three shorts before converting any of them --
+            // the fcfid block is one batch, not three load/convert/store runs.
+            int v0 = sv[0];
+            int v1 = sv[1];
+            int v2 = sv[2];
+            out[0] = (float)v0 * scale;
+            out[1] = (float)v1 * scale;
+            out[2] = (float)v2 * scale;
             return;
         }
         int *out = (int *)dest;
