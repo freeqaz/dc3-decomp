@@ -1457,10 +1457,15 @@ void MakeTangentsLate(RndMesh *m) {
     for (unsigned int i = 0; i < m->Faces().size(); i++) {
         Hmx::Matrix3 basis;
         ComputeFaceTangentBasis(m, i, basis);
-        float w = ((basis.x.z * basis.z.y - basis.z.z * basis.x.y) * basis.y.x
-                       + basis.y.y * (basis.z.z * basis.x.x - basis.x.z * basis.z.x)
-                       + basis.y.z * (basis.x.y * basis.z.x - basis.z.y * basis.x.x)
-                   < 0.0f)
+        // The three cofactors are named, and both products of each one are
+        // commuted relative to the formula as written -- that is what
+        // reproduces retail's fmuls/fmsubs operand order (same spelling as
+        // ResetNormals). The sum associates as t1 + (t2 + t3).
+        float crossX = basis.z.x * basis.x.y - basis.x.x * basis.z.y;
+        float crossY = basis.z.z * basis.x.x - basis.x.z * basis.z.x;
+        float crossZ = basis.x.z * basis.z.y - basis.z.z * basis.x.y;
+        float w =
+            ((crossZ * basis.y.x + (basis.y.y * crossY + basis.y.z * crossX)) < 0.0f)
             ? -1.0f
             : 1.0f;
         // Retail normalizes into a STACK TEMP (r31+0x80), copies all four words
@@ -1472,9 +1477,13 @@ void MakeTangentsLate(RndMesh *m) {
         faceTangents[i].w = w;
     }
 
-    double zeroThresh = 0.0;
     for (int i = 0; i < (int)m->Verts().size(); i++) {
         RndMesh::Vert &v = m->Verts()[i];
+        // Retail pins &v.tangent in a callee-saved register (addi r30, r27, 0x50)
+        // before the face loop and addresses every component off it; without the
+        // pointer MSVC re-derives v+0x50 inside the loop and needs one register
+        // fewer overall (__savegprlr_20 instead of the target's _19).
+        Vector4 *pTangent = &v.tangent;
         bool first = true;
         for (unsigned int f = 0; f < m->Faces().size(); f++) {
             RndMesh::Face &face = m->Faces()[f];
@@ -1484,42 +1493,40 @@ void MakeTangentsLate(RndMesh *m) {
                     break;
             }
             if (3 != k) {
-                // Retail keeps &faceTangents[f] in one register across all three
-                // component adds; re-subscripting reloads the vector base
-                // (lwz 0x58(r31) + add) between each one.
-                Vector4 &ft = faceTangents[f];
                 if (first) {
                     first = false;
-                    v.tangent = ft;
+                    *pTangent = faceTangents[f];
                 } else {
-                    if ((double)(ft.w * v.tangent.w) < zeroThresh) {
+                    // fcmpu against a single-precision 0.0f -- there is no
+                    // double promotion here.
+                    if (faceTangents[f].w * pTangent->w < 0.0f) {
                         TheDebug << MakeString(
                             "NOTIFY: %s has previously welded vertex tangents with opposite handedness; re-export from Max for more accurate normal mapping.\n",
                             PathName(m)
                         );
                     } else {
-                        v.tangent.x += ft.x;
-                        v.tangent.y += ft.y;
-                        v.tangent.z += ft.z;
+                        // Retail reads all six components before storing any:
+                        // z, y, x are summed in that order and written back
+                        // x, y, z -- Add()'s Set() with MSVC's right-to-left
+                        // argument evaluation.
+                        Add(*(Vector3 *)pTangent,
+                            *(Vector3 *)&faceTangents[f],
+                            *(Vector3 *)pTangent);
                     }
                 }
             }
         }
-        Normalize(*(Vector3 *)&v.tangent, *(Vector3 *)&v.tangent);
+        Normalize(*(Vector3 *)pTangent, *(Vector3 *)pTangent);
 
         // Retail copies the whole tangent into a stack temp (lwz/stw x4 into
         // r31+0x70) and reads tx/ty/tz back out of that temp, then builds the
         // orthogonalised result as a Vector3 at r31+0x80.
-        Vector4 t = v.tangent;
-        float tDotN = v.norm.y * t.y + v.norm.z * t.z + v.norm.x * t.x;
-        float scaleX = v.norm.x * tDotN;
-        float scaleY = v.norm.y * tDotN;
-        float scaleZ = v.norm.z * tDotN;
-        Vector3 ortho;
-        ortho.x = t.x - scaleX;
-        ortho.y = t.y - scaleY;
-        ortho.z = t.z - scaleZ;
-        Normalize(ortho, *(Vector3 *)&v.tangent);
+        const Vector3 &norm = v.norm;
+        Vector4 t = *pTangent;
+        float tDotN = norm.x * t.x + (norm.z * t.z + norm.y * t.y);
+        Vector3 scaled(norm.x * tDotN, norm.y * tDotN, norm.z * tDotN);
+        Vector3 ortho(t.x - scaled.x, t.y - scaled.y, t.z - scaled.z);
+        Normalize(ortho, *(Vector3 *)pTangent);
     }
     TheDebug
         << MakeString("NOTIFY: %s MakingTangentsLate, resave this file!", PathName(m));
@@ -1623,28 +1630,29 @@ void MakeNormals(RndMesh *m) {
     int numVerts = m->Verts().size();
     std::vector<int> repVerts(numVerts);
     for (int i = 0; i < m->Verts().size(); i++) {
-        const Vector3 &pos = m->Verts()[i].pos;
-        int rep = i;
-        for (int j = 0; j < i; j++) {
+        // The target re-derives Verts() for both vertices inside the j loop: there
+        // is no hoisted `pos` reference and no `rep` local (the loop counter itself
+        // is what gets stored). Caching either costs an extra callee-saved GPR.
+        int j;
+        for (j = 0; j < i; j++) {
             const Vector3 &otherPos = m->Verts()[j].pos;
-            if (fabsf(pos.x - otherPos.x) <= 0.001f && fabs(pos.y - otherPos.y) <= 0.001f
+            const Vector3 &pos = m->Verts()[i].pos;
+            if (fabs(pos.x - otherPos.x) <= 0.001f && fabs(pos.y - otherPos.y) <= 0.001f
                 && fabs(pos.z - otherPos.z) <= 0.001f) {
-                rep = j;
                 break;
             }
         }
-        repVerts[i] = rep;
+        repVerts[i] = j;
     }
 
     for (int i = 0; i < m->Verts().size(); i++) {
         m->Verts()[i].norm.Zero();
 
-        int rep = repVerts[i];
         for (int f = 0; f < m->Faces().size(); f++) {
             RndMesh::Face &face = m->Faces()[f];
             int k;
             for (k = 0; k < 3; k++) {
-                if (repVerts[face[k]] == rep)
+                if (repVerts[face[k]] == repVerts[i])
                     break;
             }
             if (k != 3) {
@@ -1672,12 +1680,9 @@ void MakeNormals(RndMesh *m) {
                             float angle = (float)acos((double)(e2.x * e1.x + e2.y * e1.y
                                                                + e2.z * e1.z));
 
-                            crossProd.x *= angle;
-                            crossProd.y *= angle;
-                            crossProd.z *= angle;
-                            m->Verts()[i].norm.x += crossProd.x;
-                            m->Verts()[i].norm.y += crossProd.y;
-                            m->Verts()[i].norm.z += crossProd.z;
+                            Vector3 weighted;
+                            Scale(crossProd, angle, weighted);
+                            Add(m->Verts()[i].norm, weighted, m->Verts()[i].norm);
                         }
                     }
                 }
@@ -1686,10 +1691,7 @@ void MakeNormals(RndMesh *m) {
         Normalize(m->Verts()[i].norm, m->Verts()[i].norm);
 
         if (leftHanded) {
-            Vector3 &norm = m->Verts()[i].norm;
-            norm.x = -norm.x;
-            norm.y = -norm.y;
-            norm.z = -norm.z;
+            Negate(m->Verts()[i].norm, m->Verts()[i].norm);
         }
     }
     m->Sync(0x1F);
