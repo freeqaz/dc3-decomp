@@ -97,6 +97,7 @@ void CamShotVOData(
             auto numSubStrings = subStrings.size();
             if (numSubStrings > 0 && subStrings[0] == "BATTLE") {
                 s1 = battle_outro_crew;
+                charSym = all;
                 crewSym = StrToCrewSym(subStrings[2]);
             } else if (subStrings.size() > 1 && subStrings[1] == "CAMP") {
                 if (subStrings[0] == "WIN") {
