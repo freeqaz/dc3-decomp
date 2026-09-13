@@ -8,6 +8,16 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
 
 ## Corrections — read before trusting an older section
 
+- **2026-09-13 — a `DataNode`-returning function whose only rows are an `OFFSET_SWAP (0x0,0x4)`
+  on the sret pointer is `return DataNode(kDataInt, 0);`, not `return 0;`.** See
+  **[datanode-return-ctor-order.md](datanode-return-ctor-order.md)**. `DataNode(int)` and
+  `DataNode()` assign `mValue` then `mType`; only `DataNode(DataType, int)` assigns `mType`
+  first, and MSVC emits the two zero stores in the ctor's source order. Both orders occur in
+  one TU under one compiler invocation, so it is a source difference and not scheduling.
+  Four crossings: `HamDirector::On{FileLoaded,ClipSafeToAdd,PracticeSafeToAdd}` and both
+  `StorePurchaser` `OnMsg`s. The accompanying callee-saved register permutation is a symptom
+  and clears with it.
+
 - **2026-09-11 — sibling-scope locals share a frame slot, on BOTH sides, unless an *inlined*
   callee receives the local's address.** See **[stack-slot-sharing.md](stack-slot-sharing.md)**.
   The wave-3 reading "our build packs sibling-scope PODs into one slot, the target never does" is

@@ -1520,104 +1520,106 @@ void RndText::UpdateScrollOffsets() {
     float fVar1 = TheTaskMgr.DeltaUISeconds();
     mScrollTimer += fVar1;
 
-    if (mScrollTimer < mScrollState) {
-        return;
-    }
+    if (!(mScrollTimer < mScrollState)) {
+        float fVar2 = mScrollSpeed;
+        int iVar9 = mFitType;
+        float fVar3 = mTotalWidth;
+        bool bVar10 = false;
+        float dVar12 = fVar2 * fVar1 * 1000.0f;
+        float fVar13 = mScrollPos + dVar12;
+        mScrollPos = fVar13;
+        float widthDiff = fVar3 - mWidth;
 
-    float fVar2 = mScrollSpeed;
-    int iVar9 = mFitType;
-    float fVar3 = mTotalWidth;
-    bool bVar10 = false;
-    float dVar12 = fVar2 * fVar1 * 1000.0f;
-    float fVar13 = mScrollPos + dVar12;
-    mScrollPos = fVar13;
-    float widthDiff = fVar3 - mWidth;
+        switch (iVar9) {
+        default:
+            mScrollPos = 0.0f;
+            break;
 
-    switch (iVar9) {
-    default:
-        mScrollPos = 0.0f;
-        break;
+        case kFitScrollMarqueeWrapAlways: {
+            static Message textScrolledIn("text_scrolled_in", -1);
+            static Message textScrolledOut("text_scrolled_out", -1);
 
-    case kFitScrollMarqueeWrapAlways: {
-        static Message textScrolledIn("text_scrolled_in", -1);
-        static Message textScrolledOut("text_scrolled_out", -1);
+            mScrollOffset += dVar12;
 
-        mScrollOffset += dVar12;
+            // One local reused for both halves: the target keeps a single 4-byte
+            // frame slot (0x50) for the width and then the offset, with the list
+            // iterator temporaries on 0x54.  Two named locals give them a slot
+            // each and swap the second pair.
+            float first = *mLineWidths.begin();
+            if (!((mWidth - mScrollOffset) < first)) {
+                mCurScrollChars++;
+                if (mCurScrollChars >= mNumLines) {
+                    mCurScrollChars = 0;
+                }
+                textScrolledIn[0] = DataNode(mCurScrollChars);
+                if (first == mTotalWidth) {
+                    mScrollOffset = mWidth;
+                }
+                unsigned int count = 0;
+                for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
+                    count++;
+                }
+                if ((unsigned int)mNumLines == count) {
+                    mLineWidths.insert(mLineWidths.end(), first);
+                }
+                mLineWidths.erase(mLineWidths.begin());
+                if (mAltStyle != nullptr) {
+                    mAltStyle->Handle(textScrolledIn, false);
+                }
+            }
 
-        float firstWidth = *mLineWidths.begin();
-        if (!((mWidth - mScrollOffset) < firstWidth)) {
-            mCurScrollChars++;
-            if (mCurScrollChars >= mNumLines) {
-                mCurScrollChars = 0;
+            first = *mLineOffsets.begin();
+            if (!(mScrollPos > -first)) {
+                mScrollOutIndex++;
+                textScrolledOut[0] = DataNode(mScrollOutIndex);
+                if (first == mTotalWidth) {
+                    mScrollPos = 0.0f;
+                    mScrollOutIndex = -1;
+                }
+                mLineOffsets.insert(mLineOffsets.end(), first);
+                mLineOffsets.erase(mLineOffsets.begin());
+                if (mAltStyle != nullptr) {
+                    mAltStyle->Handle(textScrolledOut, false);
+                }
             }
-            textScrolledIn[0] = DataNode(mCurScrollChars);
-            if (firstWidth == mTotalWidth) {
-                mScrollOffset = mWidth;
-            }
-            unsigned int count = 0;
-            for (auto it = mLineWidths.begin(); it != mLineWidths.end(); ++it) {
-                count++;
-            }
-            if ((unsigned int)mNumLines == count) {
-                mLineWidths.insert(mLineWidths.end(), firstWidth);
-            }
-            mLineWidths.erase(mLineWidths.begin());
-            if (mAltStyle != nullptr) {
-                mAltStyle->Handle(textScrolledIn, false);
-            }
+            break;
         }
 
-        float firstOffset = *mLineOffsets.begin();
-        if (!(mScrollPos > -firstOffset)) {
-            mScrollOutIndex++;
-            textScrolledOut[0] = DataNode(mScrollOutIndex);
-            if (firstOffset == mTotalWidth) {
+        case kFitScrollPingPong:
+            if (mScrollPos < -(fVar3 + 20.0f)) {
                 mScrollPos = 0.0f;
-                mScrollOutIndex = -1;
-            }
-            mLineOffsets.insert(mLineOffsets.end(), firstOffset);
-            mLineOffsets.erase(mLineOffsets.begin());
-            if (mAltStyle != nullptr) {
-                mAltStyle->Handle(textScrolledOut, false);
-            }
-        }
-        break;
-    }
-
-    case kFitScrollPingPong:
-        if (mScrollPos < -(fVar3 + 20.0f)) {
-            mScrollPos = 0.0f;
-            bVar10 = true;
-        }
-        break;
-
-    case kFitScrollMarqueeReset:
-        if (mScrollPos < -fVar3) {
-            mScrollPos = 0.0f;
-            bVar10 = true;
-        }
-        mLineHeight = fVar3;
-        break;
-
-    case kFitScrollMarqueeWrap: {
-        if (fVar2 < 0.0f) {
-            float fVar13_2 = -widthDiff;
-            if (fVar13 < fVar13_2) {
-                mScrollPos = fVar13_2;
-                mScrollSpeed = -fVar2;
                 bVar10 = true;
             }
-        } else if ((fVar2 > 0.0f) && (!(fVar13 < 0.0f))) {
-            mScrollSpeed = -fVar2;
-            mScrollPos = 0.0f;
-            bVar10 = true;
-        }
-        break;
-    }
-    }
+            break;
 
-    if (bVar10) {
-        mScrollTimer = 0.0f;
+        case kFitScrollMarqueeReset:
+            if (mScrollPos < -fVar3) {
+                mScrollPos = 0.0f;
+                bVar10 = true;
+            }
+            mLineHeight = fVar3;
+            break;
+
+        case kFitScrollMarqueeWrap: {
+            if (fVar2 < 0.0f) {
+                float fVar13_2 = -widthDiff;
+                if (fVar13 < fVar13_2) {
+                    mScrollPos = fVar13_2;
+                    mScrollSpeed = -fVar2;
+                    bVar10 = true;
+                }
+            } else if ((fVar2 > 0.0f) && (!(fVar13 < 0.0f))) {
+                mScrollSpeed = -fVar2;
+                mScrollPos = 0.0f;
+                bVar10 = true;
+            }
+            break;
+        }
+        }
+
+        if (bVar10) {
+            mScrollTimer = 0.0f;
+        }
     }
 
     for (auto puVar7 = mFontMaps.begin(); puVar7 != mFontMaps.end(); ++puVar7) {
