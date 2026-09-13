@@ -190,7 +190,7 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
             int rowCount = rowIdx + 1;
             do {
                 float currentError = node.err;
-                float cellError = mDists(rowIdx, startCol);
+                float cellError = mDists(startCol, rowIdx);
                 float newError = (currentError - cellError >= 0.0f) ? cellError : currentError;
                 node.err = newError;
                 bool foundBetter = newError != currentError;
