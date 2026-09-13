@@ -308,11 +308,11 @@ void MicXbox::Poll() {
         } else if (lead > (unkc ? 2700.0f : 1800.0f) + 150.0f) {
             unk9054 = 1.0002f;
         } else if (lead < (unkc ? 2700.0f : 1800.0f) - 150.0f) {
-            unk9054 = 0.99979f;
+            unk9054 = 0.9998f;
         } else if (lead > (unkc ? 2700.0f : 1800.0f) + 300.0f) {
-            unk9054 = 1.00059f;
+            unk9054 = 1.0006f;
         } else if (lead < (unkc ? 2700.0f : 1800.0f) - 300.0f) {
-            unk9054 = 0.99941f;
+            unk9054 = 0.9994f;
         } else if ((unk9054 > 1.0f && lead < (unkc ? 2700.0f : 1800.0f) * 0.5f)
                    || (unk9054 < 1.0f && lead > (unkc ? 2700.0f : 1800.0f) * 0.5f)) {
             unk9054 = 1.0f;
