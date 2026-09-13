@@ -566,11 +566,7 @@ void MicManagerXbox::Poll() {
     }
     FOREACH (it, unkc) {
         ChatReceiver *receiver = *it;
-        if (receiver->unk18 >= 2) {
-            receiver->unk18--;
-        } else {
-            receiver->unk18 = 0;
-        }
+        receiver->unk18 = receiver->unk18 < 2 ? 0 : receiver->unk18 - 1;
     }
     FOREACH (it, unk20) {
         ChatBuffer &cb = *it;
@@ -583,8 +579,7 @@ void MicManagerXbox::Poll() {
                    *(UINT64 *)&cb == 0x00DEADBEEFFACEF0ULL) {
             unk38.Split();
             if (!unk38.Running() || unk38.Ms() > 2000.0f) {
-                unsigned char buf[0x14];
-                memset(buf, 0, sizeof(buf));
+                unsigned char buf[0x14] = { 0 };
                 UINT32 count = sizeof(buf);
                 mXHVEngine->SubmitIncomingChatData(*(UINT64 *)&cb, buf, &count);
                 unk38.Restart();

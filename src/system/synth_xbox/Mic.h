@@ -132,7 +132,7 @@ public:
     public:
         int unk0;
         int unk4;
-        int unk8[252];
+        unsigned int unk8[252];
     };
 
     void RequirePushToTalk(bool, int);
