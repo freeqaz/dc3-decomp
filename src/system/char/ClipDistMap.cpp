@@ -14,6 +14,7 @@
 #include "utl\Std.h"
 #include <cmath>
 
+
 extern "C" void OnlyReturns() {}
 
 static const float sLargeFloat = kHugeFloat;
@@ -486,9 +487,9 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     TheRnd.DrawRect(rect, borderColor2, nullptr, nullptr, nullptr);
 
     // Draw top border
-    Hmx::Color borderColor3(1.0f, 1.0f, 1.0f, 1.0f);
     rect.x = x - 1.0f;
     rect.h = 1.0f;
+    Hmx::Color borderColor3(1.0f, 1.0f, 1.0f, 1.0f);
     rect.w = ((float)mDists.mWidth + 1.0f) * 2.0f;
     TheRnd.DrawRect(rect, borderColor3, nullptr, nullptr, nullptr);
 
@@ -497,38 +498,34 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     rect.y = (float)(mDists.mHeight * 2) + y;
     TheRnd.DrawRect(rect, borderColor4, nullptr, nullptr, nullptr);
 
-    // Draw vertical grid lines at integer beats for clip A
-    Hmx::Color gridColor1(0.0f, 0.0f, 0.0f, 1.0f);
-    float beat = (float)ceil((double)mAStart);
-    for (; (float)beat < (float)((float)mDists.mWidth / (float)mSamplesPerBeat + mAStart); beat = (float)((float)beat + 1.0f)) {
+    // Tick marks along the bottom border at integer beats of clip A (the rect
+    // keeps the bottom border's y and height; only x and w change).
+    for (float beat = (float)ceil(BeatA(0)); beat < BeatA(mDists.mWidth); beat = beat + 1.0f) {
+        Hmx::Color gridColor1(0.0f, 0.0f, 0.0f, 1.0f);
         rect.x = (beat - mAStart) * (float)mSamplesPerBeat * 2.0f + x;
-        rect.y = y;
-        rect.w = 1.0f;
-        rect.h = (float)(mDists.mHeight * 2);
+        rect.w = 2.0f;
         TheRnd.DrawRect(rect, gridColor1, nullptr, nullptr, nullptr);
     }
 
-    // Draw horizontal grid lines at integer beats for clip B
-    Hmx::Color gridColor2(0.0f, 0.0f, 0.0f, 1.0f);
-    beat = (float)ceil((double)mBStart);
-    for (; (float)beat < (float)((float)mDists.mHeight / (float)mSamplesPerBeat + mBStart); beat = (float)((float)beat + 1.0f)) {
-        rect.x = x;
-        rect.y = ((beat - mBStart) * (float)mSamplesPerBeat - (float)(mDists.mHeight - 1)) * 2.0f + y;
-        rect.w = (float)(mDists.mWidth * 2);
-        rect.h = 1.0f;
+    // Tick marks along the left border at integer beats of clip B.
+    for (float beat = (float)ceil(BeatB(0)); beat < BeatB(mDists.mHeight); beat = beat + 1.0f) {
+        float scaled = (float)mSamplesPerBeat * (beat - mBStart);
+        rect.x = x - 1.0f;
+        rect.h = 2.0f;
+        rect.w = 1.0f;
+        rect.y = 2.0f * ((float)(mDists.mHeight - 1) - scaled) + y;
+        Hmx::Color gridColor2(0.0f, 0.0f, 0.0f, 1.0f);
         TheRnd.DrawRect(rect, gridColor2, nullptr, nullptr, nullptr);
     }
 
     // Draw distance map cells
+    Hmx::Rect cellRect(0, 0, 2.0f, 2.0f);
     Hmx::Color cellColor;
-    Hmx::Rect cellRect;
-    cellRect.w = 2.0f;
-    cellRect.h = 2.0f;
     for (int col = 0; col < mDists.mWidth; col++) {
         cellRect.x = (float)(col * 2) + x;
         for (int row = 0; row < mDists.mHeight; row++) {
             float err = mDists(col, row);
-            if (err != kHugeFloat) {
+            if (err != sLargeFloat) {
                 float c = (mWorstErr - err) / mWorstErr;
                 cellColor.red = c;
                 cellColor.green = c;

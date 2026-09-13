@@ -56,6 +56,11 @@ public:
     void FindDists(float, DataArray *);
     CharClip *ClipA() { return mClipA; }
     CharClip *ClipB() { return mClipB; }
+    // Sample index -> beat on each clip's axis. Inlined in the target: Draw()
+    // starts its grid loops at ceil(BeatA(0)) and bounds them with
+    // BeatA(mDists.mWidth), which is where the 0.0f / mSamplesPerBeat comes from.
+    float BeatA(int sample) const { return (float)sample / (float)mSamplesPerBeat + mAStart; }
+    float BeatB(int sample) const { return (float)sample / (float)mSamplesPerBeat + mBStart; }
 
     CharClip *mClipA; // 0x0
     CharClip *mClipB; // 0x4

@@ -439,7 +439,7 @@ CharClip *CharDriver::FindClip(const DataNode &node, bool warn) {
 
 float CharDriver::Display(float f) {
     CharClipDisplay::Init(Dir());
-    float lineSpacing = CharClipDisplay::LineSpacing();
+    Vector2 curPos;
     std::vector<CharClipDisplay> displays;
     for (CharClipDriver *it = mFirst; it != nullptr; it = it->Next()) {
         displays.push_back(CharClipDisplay());
@@ -447,23 +447,24 @@ float CharDriver::Display(float f) {
         displays.back().SetClip(it->mClip, false);
         displays.back().mBlendWeight = it->mBlendFrac;
     }
+    float lineSpacing = CharClipDisplay::LineSpacing();
     unsigned int displayCount = displays.size();
     float y = f * (float)TheRnd.Height() + (float)displayCount * lineSpacing;
 
+    int posIdx = 0;
     if (displayCount > 0) {
-        int i = 0;
         do {
-            displays[i].mDrawPosY = y - (float)i * lineSpacing;
-            i++;
-        } while ((unsigned int)i < displayCount);
+            displays[posIdx].mDrawPosY = y - (float)posIdx * lineSpacing;
+            posIdx++;
+        } while ((unsigned int)posIdx < displayCount);
     }
 
     Hmx::Object *source = CharClipDisplay::FindSource(this);
     int headerLines = 1 + (source != nullptr);
-    float origF = f;
-    Hmx::Rect rect(0, origF, 1.0f, f = (y + (float)headerLines * lineSpacing) / (float)TheRnd.Height() - origF);
-    Hmx::Color bgColor(0, 0, 0, 0.5f);
-    TheRnd.DrawRectScreen(rect, bgColor, nullptr, nullptr, nullptr);
+    float bottom = (y + (float)headerLines * lineSpacing) / (float)TheRnd.Height();
+    TheRnd.DrawRectScreen(
+        Hmx::Rect(0, f, 1.0f, bottom - f), Hmx::Color(0, 0, 0, 0.5f), nullptr, nullptr, nullptr
+    );
 
     float oldBeat = mOldBeat;
     const char *pathName = PathName(this);
@@ -473,81 +474,70 @@ float CharDriver::Display(float f) {
     Hmx::Color textColor(1, 1, 1, 1);
     TheRnd.DrawString(
         MakeString("%s %s, beat: %.2f", dirName, pathName, oldBeat),
-        Vector2(sEm + textOfs, y + lineSpacing),
+        Vector2(sEm, f * (float)TheRnd.Height() + textOfs),
         textColor,
         true
     );
 
+    unsigned int trackIdx = 0;
     if (displayCount > 0) {
-        unsigned int i = 0;
         do {
-            displays[i].DrawTrack();
-            i++;
-        } while (i < displayCount);
+            displays[trackIdx].DrawTrack();
+            trackIdx++;
+        } while (trackIdx < displayCount);
     }
 
-    CharClipDisplay *nextDisplay = &displays[0] + 1;
-    for (CharClipDriver *it = mFirst; it != nullptr; it = it->Next()) {
-        CharClipDriver *next = it->Next();
-        if (!next) break;
-
-        CharClipDisplay *prevDisplay = nextDisplay - 1;
+    int idx = 0;
+    CharClipDriver *prev = mFirst;
+    CharClipDriver *next;
+    while (prev && (next = prev->Next()) != nullptr) {
+        CharClipDisplay *prevDisplay = &displays[idx];
+        CharClipDisplay *nextDisplay = &displays[idx + 1];
         CharClip::NodeVector *nodes =
-            next->GetClip()->GetTransitions().FindNodes(it->GetClip());
-        if (nodes != nullptr && nodes->size > 0) {
-            int curOfs = 0;
-            int nextOfs = 0;
-            int i = 0;
-            do {
-                float xCur = nextDisplay->GetX(nodes->nodes[i].curBeat);
+            next->GetClip()->GetTransitions().FindNodes(prev->GetClip());
+        if (nodes) {
+            for (int i = 0; i < nodes->size; i++) {
+                int curOfs = 0;
+                int nextOfs = 0;
+                curPos.x = nextDisplay->GetX(nodes->nodes[i].curBeat);
                 for (int j = 0; j < i; j++) {
-                    float xj = nextDisplay->GetX(nodes->nodes[j].curBeat);
-                    if (std::fabs(xCur - xj) < 8.0f) {
+                    if (std::fabs(curPos.x - nextDisplay->GetX(nodes->nodes[j].curBeat))
+                        < 8.0f) {
                         curOfs += 11;
                     }
                 }
-                Hmx::Color redColor(1, 0, 0);
-                TheRnd.DrawString(
-                    MakeString("%d", (const CamShotFrame::BlendEaseMode &)i),
-                    Vector2(xCur, nextDisplay->mDrawPosY + (float)curOfs + 1.0f),
-                    redColor,
-                    true
-                );
+                curPos.y = nextDisplay->mDrawPosY + (float)curOfs + 1.0f;
+                Hmx::Color curColor(1, 0, 0);
+                TheRnd.DrawString(MakeString("%d", i), curPos, curColor, true);
 
-                float xNext = prevDisplay->GetX(nodes->nodes[i].nextBeat);
+                curPos.x = prevDisplay->GetX(nodes->nodes[i].nextBeat);
                 for (int j = 0; j < i; j++) {
-                    float xj = prevDisplay->GetX(nodes->nodes[j].nextBeat);
-                    if (std::fabs(xNext - xj) < 8.0f) {
+                    if (std::fabs(curPos.x - prevDisplay->GetX(nodes->nodes[j].nextBeat))
+                        < 8.0f) {
                         nextOfs += 11;
                     }
                 }
-                Hmx::Color greenColor(0, 1, 0);
-                TheRnd.DrawString(
-                    MakeString("%d", (const CamShotFrame::BlendEaseMode &)i),
-                    Vector2(xNext, prevDisplay->mDrawPosY - 14.0f - (float)nextOfs),
-                    greenColor,
-                    true
-                );
-
-                i++;
-            } while (i < nodes->size);
+                curPos.y = prevDisplay->mDrawPosY - 14.0f - (float)nextOfs;
+                Hmx::Color nextColor(1, 0, 0);
+                TheRnd.DrawString(MakeString("%d", i), curPos, nextColor, true);
+            }
         }
 
-        nextDisplay->DrawBlend(next->mBeat + it->mRampIn, it->mBlendWidth);
-        float rampIn = it->mRampIn;
+        nextDisplay->DrawBlend(next->mBeat + prev->mRampIn, prev->mBlendWidth);
+        float rampIn = prev->mRampIn;
         float negRampIn = -rampIn;
         rampIn = negRampIn >= 0.0f ? rampIn : 0.0f;
-        prevDisplay->DrawBlend(rampIn + it->mBeat, it->mBlendWidth);
-
-        nextDisplay = nextDisplay + 1;
+        prevDisplay->DrawBlend(prev->mBeat + rampIn, prev->mBlendWidth);
+        prev = prev->Next();
+        idx++;
     }
 
+    unsigned int cursorIdx = 0;
     if (displayCount > 0) {
-        unsigned int i = 0;
         do {
-            displays[i].DrawCursor();
-            i++;
-        } while (i < displayCount);
+            displays[cursorIdx].DrawCursor();
+            cursorIdx++;
+        } while (cursorIdx < displayCount);
     }
 
     if (source) {
@@ -557,7 +547,7 @@ float CharDriver::Display(float f) {
         source->Handle(msg, false);
     }
 
-    return f;
+    return bottom;
 }
 
 void CharDriver::PollDeps(
