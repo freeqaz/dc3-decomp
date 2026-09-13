@@ -35,6 +35,9 @@ def main():
     ap.add_argument('base')
     ap.add_argument('new')
     ap.add_argument('--max-list', type=int, default=40)
+    ap.add_argument('--dump', metavar='JSON',
+                    help='write the up/down/crossed/left100 lists '
+                         '([unit, symbol, base%%, new%%, size]) to this file')
     a = ap.parse_args()
     if os.path.abspath(a.base) == os.path.abspath(a.new):
         print('REFUSING: both paths resolve to the same file')
@@ -66,6 +69,25 @@ def main():
           % (len(new), sum(fn[k][2] for k in new)))
     print('rows present in both that MOVED on normalized: %d  (up %d, DOWN %d)'
           % (len(moved), len(up), len(down)))
+    # Byte-weighted view: every crossing pays the function's full size into the
+    # headline, so "N up / M down" understates a change that moves big rows.
+    crossed = [k for k in up if fn[k][0] >= 100.0 and fb[k][0] < 100.0]
+    left100 = [k for k in down if fb[k][0] >= 100.0 and fn[k][0] < 100.0]
+    sz = lambda ks: sum(fb[k][2] for k in ks)
+    print('  up      : %6d fns  %9d B' % (len(up), sz(up)))
+    print('  DOWN    : %6d fns  %9d B' % (len(down), sz(down)))
+    print('  crossed to 100 : %6d fns  %9d B' % (len(crossed), sz(crossed)))
+    print('  LEFT 100       : %6d fns  %9d B' % (len(left100), sz(left100)))
+    if a.dump:
+        rows = {
+            'up': [[k[0], k[1], fb[k][0], fn[k][0], fb[k][2]] for k in up],
+            'down': [[k[0], k[1], fb[k][0], fn[k][0], fb[k][2]] for k in down],
+            'crossed': [[k[0], k[1], fb[k][0], fn[k][0], fb[k][2]] for k in crossed],
+            'left100': [[k[0], k[1], fb[k][0], fn[k][0], fb[k][2]] for k in left100],
+        }
+        with open(a.dump, 'w') as fh:
+            json.dump(rows, fh, indent=1)
+        print('  per-function lists written to %s' % a.dump)
     print()
     if down:
         print('REGRESSIONS on match_percent_normalized:')
