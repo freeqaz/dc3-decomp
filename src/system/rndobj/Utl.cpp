@@ -2259,8 +2259,10 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
             i++;
         } while ((int)i < srcCount);
         if (mismatchCount != 0) {
+            // Retail names the DESTINATION mesh and reads mName inline
+            // (lwz 0x24 off the virtual base), not PathName(src).
             TheDebug << MakeString(
-                "%s has %d mismatched verts\n", PathName(src), mismatchCount
+                "%s has %d mismatched verts\n", dst->Name(), mismatchCount
             );
         }
     }
