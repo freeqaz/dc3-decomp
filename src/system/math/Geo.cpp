@@ -692,9 +692,9 @@ void Sphere::GrowToContain(const Sphere &s) {
         return;
     }
     float dy = s.center.y - center.y;
-    float dz = s.center.z - center.z;
     float dx = s.center.x - center.x;
-    float dist = std::sqrt((dy * dy + (dz * dz + dx * dx)));
+    float dz = s.center.z - center.z;
+    float dist = std::sqrt(dx * dx + dz * dz + dy * dy);
     if (s.radius + dist > radius) {
         if (radius + dist < s.radius) {
             center = s.center;
