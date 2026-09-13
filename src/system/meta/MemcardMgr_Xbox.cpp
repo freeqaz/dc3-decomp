@@ -348,28 +348,33 @@ MCResult MemcardMgr::ThreadCall_SaveGame() {
     ULONGLONG freeSpace = 0;
     MCResult res = container->Mount((CreateType)0);
     switch (res) {
-    case kMCNoError:
-        if (mSaveCreateType == 0)
-            goto unmount_return;
-        {
-            u64 pathFree = 0;
-            if (container->GetPathFreeSpace("", &pathFree) != kMCNoError || (freeSpace = pathFree, mSaveCreateType != 0)) {
-                int existingSize = -1;
-                container->GetSize(kSaveFilename, &existingSize);
-                if (existingSize > 0) {
-                    if ((ULONGLONG)existingSize < sizeNeeded) {
-                        sizeNeeded = sizeNeeded - (ULONGLONG)existingSize;
-                    } else {
-                        sizeNeeded = 0;
-                    }
-                }
-                break;
+    case kMCNoError: {
+        // The container already exists.  Unless we were asked to overwrite it
+        // the save fails outright -- the target returns here rather than
+        // falling through to the free-space check.
+        if (mSaveCreateType == 0) {
+            container->Unmount();
+            return kMCFileExists;
+        }
+        u64 pathFree = 0;
+        if (container->GetPathFreeSpace("", &pathFree) == kMCNoError) {
+            if (mSaveCreateType == 0) {
+                container->Unmount();
+                return kMCFileExists;
+            }
+            freeSpace = pathFree;
+        }
+        int existingSize = -1;
+        container->GetSize(kSaveFilename, &existingSize);
+        if (existingSize > 0) {
+            if ((ULONGLONG)existingSize < sizeNeeded) {
+                sizeNeeded = sizeNeeded - (ULONGLONG)existingSize;
+            } else {
+                sizeNeeded = 0;
             }
         }
-    unmount_return:
-        container->Unmount();
-        res = kMCFileExists;
         break;
+    }
     case kMCCorrupt:
         if (mSaveCreateType == 0) {
             return res;
