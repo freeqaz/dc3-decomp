@@ -311,23 +311,14 @@ void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float weight, 
 void CharLipSyncDriver::Poll() {
     START_AUTO_TIMER("lipsyncdriver");
 
-    if (mClips) {
-        if (mBones) {
-            if (mTestClip) {
-                if (TheLoadMgr.EditMode()) {
-                    CharClip *relative = mTestClip->Relative();
-                    if (relative && mTestWeight >= 0.0f) {
-                        mBones.Ptr()->ScaleAdd(
-                            mTestClip, mTestWeight, mTestClip->StartBeat(), 0.0f
-                        );
-                    }
-                    return;
-                }
-            }
-        } else
-            return;
-    } else
+    if (!mClips || !mBones)
         return;
+    if (mTestClip && TheLoadMgr.EditMode()) {
+        if (!mTestClip->Relative() || mTestWeight < 0.0f)
+            return;
+        mBones->ScaleAdd(mTestClip, mTestWeight, mTestClip->StartBeat(), 0.0f);
+        return;
+    }
 
     float timeMs = TheTaskMgr.Seconds(TaskMgr::kRealTime) * 1000.0f;
 
