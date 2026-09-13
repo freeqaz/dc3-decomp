@@ -35,11 +35,33 @@ WHAT IT CAN SEE
   Pass D  ARG_SWAP
           a two-argument call appearing with its arguments in the other order.
 
+THE `--min-sim` FLOOR IS A CUT, AND IT WAS HIDING REAL DEFECTS
+---------------------------------------------------------------
+`--min-sim` DEFAULTED TO 0.6 AND STILL DOES, for continuity with the runs that
+are already recorded.  **That default is not a recommendation.**  Measured
+2026-09-13 over all three siblings with the repaired extractor
+(`xrepo_floor_sweep.py --floors 0.6 0.4 0.3 0.2 --noise`), high-precision
+candidates admitted, and the marginal band each step adds:
+
+    sibling          0.60   0.40   0.30   0.20     decoy noise rate per band
+    og-dc3-decomp     169   +26     +6     +4      1.4% / 2.6% / 4.7%
+    rb3-xenon         134   +28     +2     +2      1.3% / 2.6% / 5.0%
+    rb3               208   +37     +8     +6      1.4% / 2.4% / 4.4%
+
+The [0.40, 0.60) band is not the dregs -- it is the CLEANEST band in the sweep.
+Its findings-per-comparable-pair runs 7-16x the shuffled-pairing decoy rate,
+against 2.5-4.9x for everything above 0.60, because a genuine semantic defect
+DEPRESSES similarity.  Cutting at 0.60 removed the highest-signal slice.  Below
+0.40 the enrichment falls to 1.8-5.5x and the marginal yield collapses to 2-8
+functions, so 0.40 is the recommended floor and 0.30 is defensible when working
+a single sibling exhaustively.  Real defects do live below 0.40 -- `TrigTableInit`,
+which wrote index 513 of a 512-float table, sits at sim 0.394 against og-dc3.
+
 WHAT IT CANNOT SEE  (state this before quoting a clean sweep)
 -------------------------------------------------------------
   * Anything in a function that exists in only one tree, or whose token
-    similarity falls below `--min-sim` (default 0.6).  Those are counted as
-    `too_different` in the stats block, NOT as clean.
+    similarity falls below `--min-sim`.  Those are counted as `too_different`
+    in the stats block, NOT as clean.  Quote the floor with the population.
   * Anything in a file not shared by both trees.
   * Semantics carried by names rather than tokens (calling a different function
     of the same arity reads as a rename, not a divergence).
@@ -51,12 +73,55 @@ WHAT IT CANNOT SEE  (state this before quoting a clean sweep)
     instrument `float_oracle.py` reads the 4 bytes out of dc3's own target
     object and is the only thing that settles the value.
 
+EXTRACTOR ARTIFACTS  (fixed 2026-09-13 -- what the old extractor was reporting)
+-------------------------------------------------------------------------------
+`extract_functions` was mis-parsing on a scale that dominated its own output.
+Over the 678 files shared with og-dc3-decomp it returned **25,869** "functions"
+on the dc3 side, of which **15,828 were artifacts**; the repaired extractor
+returns **10,267**, none of them artifact-shaped.  Four distinct defects:
+
+  1. THE SIGNATURE PREFIX ATE THE FIRST CHARACTER.  `(?P<sig>[A-Za-z_~]...)` was
+     mandatory, so the name group had to start at the SECOND character of a
+     line: `if (` parsed as name `f`, `while` as `hile`, `switch` as `witch`,
+     `FOREACH` as `OREACH`.  `_NOT_A_FUNCTION` never saw the keyword it was
+     written to reject, and **13,958 `f` bodies** -- every `if` block in
+     src/system -- entered the population as functions.  The SAME bite hit every
+     real definition with no return type: `CharBones::CharBones()` at line start
+     was recorded as `harBones::CharBones`, a real function under a name that
+     joins to nothing.  Fixed by making the prefix optional and LAZY.
+  2. FILE-SCOPE MACRO TABLES were admitted as functions (`BEGIN_HANDLERS`,
+     `DEF_DATA_FUNC`, `INIT_REVS`, ...).  They pair across trees by ordinal
+     coincidence, never by identity.
+  3. THE ARGUMENT GROUP SWALLOWED THE NEXT DEFINITION.  `args` is `[^;{}]*` and
+     crosses newlines, so `PropSync(a, b)` on one line and `void Bar::Sync(int i)
+     {` on the next parsed as ONE call -- and Bar::Sync vanished from the
+     population entirely.  Now rejected by `_args_well_formed`.
+  4. OVERLOAD KEYS WERE POSITIONAL.  `name#{len(res)}` numbers by order of
+     appearance, so `Foo#3` here and `Foo#3` there were the same overload only
+     by luck.  Keys are now `name#a{arity}`, which is order-independent.
+
+Effect on the joinability of the population, same floor (0.60), same trees:
+**87 high-precision keys could not be joined to report.json before (65 of them
+artifact-named); 18 after, 0 artifact-named.**  The 18 that remain are real
+names the report genuinely does not score (internal-linkage statics, free
+`operator<<`).  The union population itself moved 471 -> 430, because the
+artifacts left and 37 previously-hidden real functions arrived.
+
 CONTROL
 -------
 `--selftest` runs each detector against a synthetic pair engineered to trip it,
 and an identical pair that must trip nothing.  It exits 5 if any detector fails
 to fire (the tool would then report a clean sweep it did not earn) or if the
 negative pair produces a finding.  A sweep that cannot fail is not a measurement.
+
+It ALSO runs `extractor_selftest`, whose seven cases are the four defects above
+plus in-class ctor/dtor keying and overload-order stability.  Each expectation
+is exact (`==`), so a regression that ADDS a phantom fails as loudly as one that
+drops a definition.  `tests/sabotage_xrepo_extractor.py` reverts each guard in
+turn and requires the suite to go red: **7 of 7 detected.**  Two guards that
+scored SURVIVED there were REMOVED rather than kept as decoration -- a
+`(?<![\w~])` lookbehind and an `m.start() < consumed_to` containment test, both
+unreachable once the lazy prefix and the end-of-body resume were in place.
 
 USAGE
 -----
@@ -177,21 +242,112 @@ def drop_native_blocks(src):
 # --------------------------------------------------------------------------
 # function extraction
 # --------------------------------------------------------------------------
+# Two quantifier choices carry the extraction fix; the sabotage harness proves
+# each one independently (see EXTRACTOR ARTIFACTS in the module docstring).
+#   `(?P<sig>...)??`  the return-type/storage-class prefix is OPTIONAL and LAZY,
+#                     so the SHORTEST parse is tried first and a keyword head is
+#                     seen whole (`switch`) instead of decapitated (`witch`).
+#                     This alone closes the keyword class AND the eaten first
+#                     character of a return-type-less `CharBones::CharBones()`.
+#   `(?P<args>...?)`  LAZY: greedy, it swallows a constructor's `) : mInit(0`,
+#                     which `_args_well_formed` then rejects as a swallow.
+#   `~[A-Za-z_]\w*`   an in-class inline `~Foo()` must key as `~Foo`, never as
+#                     `Foo` -- otherwise a destructor pairs with a constructor.
+# A `(?<![\w~])` lookbehind was tried here and REMOVED: with the lazy prefix and
+# the `~` alternative in place it cannot change any parse, and the sabotage
+# harness scored it SURVIVED.  A guard that cannot fail is not a guard.
 FUNC_RE = re.compile(
-    r'(?:^|\n)[ \t]*(?P<sig>[A-Za-z_~][\w\s:*&<>,\[\]()~]*?'
-    r'(?P<name>(?:[A-Za-z_]\w*(?:<[^;{}()]*>)?::)+~?[A-Za-z_]\w*|operator[^\s(]*|[A-Za-z_]\w*)'
-    r'\s*\((?P<args>[^;{}]*)\)\s*(?:const\s*)?(?::[^;{}]*?)?)\{'
+    r'(?:^|\n)[ \t]*(?P<sig>(?:[A-Za-z_~][\w\s:*&<>,\[\]()~]*?)??'
+    r'(?P<name>(?:[A-Za-z_]\w*(?:<[^;{}()]*>)?::)+~?[A-Za-z_]\w*'
+    r'|~[A-Za-z_]\w*|operator[^\s(]*|[A-Za-z_]\w*)'
+    r'\s*\((?P<args>[^;{}]*?)\)\s*(?:const\s*)?(?::[^;{}]*?)?)\{'
 )
 _NOT_A_FUNCTION = {'if', 'for', 'while', 'switch', 'catch', 'return', 'else', 'do',
-                   'sizeof', 'new', 'delete'}
+                   'sizeof', 'new', 'delete', 'try', 'case', 'default', 'throw',
+                   'and', 'or', 'not', 'struct', 'class', 'union', 'enum', 'namespace',
+                   'extern', 'static', 'inline', 'const', 'typedef', 'template'}
+
+# A file-scope ALL-CAPS "call" followed by a brace-balanced run is a MACRO
+# invocation (BEGIN_HANDLERS, BEGIN_PROPSYNCS, DEF_DATA_FUNC, INIT_REVS, ...),
+# not a function definition.  It has no stable identity to pair on -- two trees
+# emit N of them per file and the Nth of one is not the Nth of the other -- so
+# admitting them manufactures pairings out of ordinal coincidence.
+# ALL-CAPS, three or more characters.  An underscore is NOT required: `FOREACH`
+# has none and leaked through the underscore-only form of this rule.  Every Milo
+# function name is CamelCase, so this costs nothing -- verified by extracting
+# all of src/system and confirming no SHOUTING name is a real definition.
+_MACROISH_RE = re.compile(r'^[A-Z][A-Z0-9_]{2,}$')
+
+
+def _is_macro_invocation(name):
+    return bool(_MACROISH_RE.match(name))
+
+
+def _args_well_formed(args):
+    """True iff `args` is a self-contained argument list.
+
+    `FUNC_RE`'s `args` group is `[^;{}]*`, which crosses newlines, so it will
+    happily run past the real `)` of a preceding macro line and close on a
+    LATER function's `)` -- swallowing that function's definition whole.  A
+    depth that goes negative is the signature of exactly that."""
+    depth = 0
+    for c in args:
+        if c == '(':
+            depth += 1
+        elif c == ')':
+            depth -= 1
+            if depth < 0:
+                return False
+    return depth == 0
+
+
+def _arity(args):
+    """Comma count at paren/angle/bracket depth 0, as an overload discriminator.
+
+    Positional ordinals (the old `name#len(res)`) are NOT a discriminator: they
+    number by order of appearance, so `Foo#3` in one tree and `Foo#3` in another
+    are the same overload only by luck.  Arity is a property of the declaration
+    and travels between trees."""
+    args = args.strip()
+    if not args or args == 'void':
+        return 0
+    depth, n = 0, 1
+    for c in args:
+        if c in '(<[':
+            depth += 1
+        elif c in ')>]':
+            depth -= 1
+        elif c == ',' and depth == 0:
+            n += 1
+    return n
 
 
 def extract_functions(src):
-    """Return {qualname: body_text} for brace-balanced definitions in `src`."""
-    res = {}
-    for m in FUNC_RE.finditer(src):
+    """Return {qualname: body_text} for brace-balanced TOP-LEVEL definitions.
+
+    Three artifact classes are excluded by construction -- see EXTRACTOR
+    ARTIFACTS in the module docstring for what each one used to cost."""
+    found = []
+    consumed_to, pos, srclen = -1, 0, len(src)
+    while pos < srclen:
+        m = FUNC_RE.search(src, pos)
+        if not m:
+            break
         name = m.group('name')
-        if name in _NOT_A_FUNCTION:
+        args = m.group('args')
+        # Rejected heads resume ONE LINE on, never past the match: `args` is
+        # `[^;{}]*` and spans newlines, so a rejected macro line's match can
+        # reach over the real definition beneath it and swallow it whole.
+        # `BEGIN_HANDLERS(C) ... END_HANDLERS \n void C::Poll(` ... `) {`
+        # parses as one "call", and skipping to m.end() loses C::Poll.
+        if (name in _NOT_A_FUNCTION or _is_macro_invocation(name)
+                # a `)` at depth 0 inside `args` means the regex ran PAST the
+                # real closing paren to find a later one -- the same swallow
+                # without an ALL-CAPS head to recognise it by.  Counting parens
+                # is not enough: `PropSync(a, b)\nvoid Bar::Sync(int i` is
+                # perfectly balanced and still a swallow.
+                or not _args_well_formed(args)):
+            pos = m.start() + 1
             continue
         start = m.end() - 1
         depth, i, n = 0, m.end() - 1, len(src)
@@ -215,9 +371,30 @@ def extract_functions(src):
                     break
             i += 1
         if depth != 0:
+            pos = m.start() + 1
             continue
-        key = name if name not in res else f'{name}#{len(res)}'
-        res[key] = src[start:i + 1]
+        # Resuming at the END of the accepted body is what keeps extraction
+        # TOP-LEVEL: every control-flow head and macro invocation inside the
+        # body is stepped over, so none of them is recorded as a function whose
+        # "body" is a fragment of one we already have.  (An explicit
+        # `m.start() < consumed_to` containment test was tried here and removed
+        # -- `search` never starts before `pos`, so it was unreachable and the
+        # sabotage harness scored it SURVIVED.)
+        consumed_to = pos = i + 1
+        found.append((name, _arity(args), src[start:i + 1]))
+
+    # Key in a SECOND pass, so a name's key does not depend on how many later
+    # definitions happen to share it.  Unique name -> bare name (the form that
+    # joins to report.json).  Overloaded -> `name#aN`, which is the same string
+    # in both trees whatever order the overloads are declared in.
+    seen = Counter(nm for nm, _, _ in found)
+    res, used = {}, Counter()
+    for name, ar, body in found:
+        key = name if seen[name] == 1 else f'{name}#a{ar}'
+        used[key] += 1
+        if used[key] > 1:
+            key = f'{key}@{used[key]}'
+        res[key] = body
     return res
 
 
@@ -474,6 +651,118 @@ _NEGATIVES = [
 ]
 
 
+# --------------------------------------------------------------------------
+# CONTROL -- the EXTRACTOR.  Every case here was a live artifact in the
+# 2026-09-13 population; each is written so that reverting the corresponding
+# guard makes it fail, and the expected sets are exact (`==`, not `<=`) so a
+# regression that ADDS a phantom is caught as well as one that drops a real
+# definition.
+# --------------------------------------------------------------------------
+_EXTRACT_CASES = [
+    # keyword heads: the sig prefix used to eat the first character, so
+    # `if`->`f`, `while`->`hile`, `switch`->`witch` all became "functions"
+    # and `_NOT_A_FUNCTION` never saw them.  13,958 `f` bodies in src/system.
+    ('keyword_heads', """
+void Foo::Bar(int x) {
+    if (x > 0) { doIt(); }
+    while (x) { y(); }
+    switch (x) { case 1: break; }
+    for (int i = 0; i < 3; i++) { z(); }
+    do { w(); } while (x);
+}
+""", {'Foo::Bar'}),
+    # same bite on a definition with NO return type: the leading `C` was eaten
+    # and the function was recorded as `harBones::CharBones` -- a REAL function
+    # under a name that joins to nothing.
+    ('no_return_type', """
+CharBones::CharBones() : mA(0) {
+    mB = 1;
+}
+CharBones::~CharBones() {
+    Cleanup();
+}
+""", {'CharBones::CharBones', 'CharBones::~CharBones'}),
+    # a file-scope ALL-CAPS macro with a BRACE-BALANCED body parses as a
+    # perfectly well-formed "function"; nothing but the macro filter rejects it
+    ('macro_with_body', """
+DEF_DATA_FUNC(Foo) { return DataNode(1); }
+DEF_DATA_FUNC(Bar) { return DataNode(2); }
+void A::B() { mX = 1; }
+""", {'A::B'}),
+    # file-scope macro tables pair by ordinal coincidence, never by identity
+    ('macro_tables', """
+BEGIN_HANDLERS(CharBones)
+    HANDLE_ACTION(foo, Foo())
+END_HANDLERS
+void CharBones::Poll() { mX++; }
+""", {'CharBones::Poll'}),
+    # a macro invocation INSIDE a body is not a nested definition
+    ('nested_macro', """
+void Char::Update() {
+    FOREACH (it, mList) { it->Poll(); }
+    mDone = true;
+}
+""", {'Char::Update'}),
+    # ... and a LOWERCASE one is caught by nothing but the top-level scoping:
+    # it is not a keyword and not ALL-CAPS, so the head passes every name
+    # filter.  Resuming at the accepted body's END is the only thing that
+    # stops it becoming a "function" whose body is a slice of Char::Update.
+    ('nested_lowercase_macro', """
+void Char::Update() {
+    foreach (it, mList) { it->Poll(); }
+    mDone = true;
+}
+""", {'Char::Update'}),
+    # an in-class inline dtor must NOT be recorded under the ctor's name --
+    # dropping the `~` pairs a destructor against a constructor
+    ('inclass_ctor_dtor', """
+class NullLoader : public Loader {
+public:
+    NullLoader(const FilePath &fp, LoaderPos pos)
+        : Loader(fp, pos) { mDone = true; }
+    virtual ~NullLoader() { Cleanup(); }
+};
+""", {'NullLoader', '~NullLoader'}),
+    # a non-ALL-CAPS macro line has the same swallow shape but no ALL-CAPS head
+    # to recognise it by; the unbalanced-paren check is what catches it
+    ('swallow_lowercase_macro', """
+PropSync(mFoo, prop, i, PROP_SET)
+void Bar::Sync(int i) { mN = i; }
+""", {'Bar::Sync'}),
+    # overloads must key identically regardless of declaration ORDER
+    ('overload_order', """
+void A::Set(int a) { mI = a; }
+void A::Set(int a, int b) { mI = a; mJ = b; }
+""", {'A::Set#a1', 'A::Set#a2'}),
+    ('overload_order_reversed', """
+void A::Set(int a, int b) { mI = a; mJ = b; }
+void A::Set(int a) { mI = a; }
+""", {'A::Set#a1', 'A::Set#a2'}),
+]
+
+
+def extractor_selftest(verbose=True):
+    failures = []
+    for label, src, expect in _EXTRACT_CASES:
+        got = set(extract_functions(strip_comments(src)))
+        ok = got == expect
+        if not ok:
+            failures.append(f'extract:{label}: got {sorted(got)}, expected {sorted(expect)}')
+        if verbose:
+            print(f'  [{"PASS" if ok else "FAIL"}] {"extract:" + label:24} -> {sorted(got)}')
+    # Cross-tree stability: the two overload_order cases must produce the SAME
+    # key set.  Without it `#a{arity}` could degenerate to a positional ordinal
+    # again and this suite would still pass case-by-case.
+    _src = {lb: s for lb, s, _ in _EXTRACT_CASES}
+    a = set(extract_functions(strip_comments(_src['overload_order'])))
+    b = set(extract_functions(strip_comments(_src['overload_order_reversed'])))
+    if a != b:
+        failures.append(f'extract:overload keys are ORDER-DEPENDENT: {sorted(a)} vs {sorted(b)}')
+    if verbose:
+        print(f'  [{"PASS" if a == b else "FAIL"}] {"extract:order-stable":24} -> {sorted(a)}')
+    return failures
+
+
 def _prepare(body):
     """The exact pipeline a real file goes through, so the controls exercise the
     preprocessing (native-guard elision) and not just the detectors."""
@@ -481,7 +770,7 @@ def _prepare(body):
 
 
 def selftest(verbose=True):
-    failures = []
+    failures = extractor_selftest(verbose)
     for kind, a, b in _CASES:
         kinds = {k for k, _ in compare_bodies(_prepare(a), _prepare(b))}
         ok = kind in kinds
