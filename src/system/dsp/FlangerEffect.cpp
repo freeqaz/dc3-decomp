@@ -74,7 +74,12 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     temp_f21 = (mRateRadians - curRate) / rampSteps2;
 
     if (numSamples > 0) {
-        int var_r22 = 0;
+        // Retail keeps TWO outer-loop variables: `frame` counts frames (+1 per
+        // iteration, and is what the loop bound and the mWritePos offsets use)
+        // and `sampleIdx` walks buf in units of numChans.  Folding them into
+        // one counter incremented by 1 + numChans is wrong for both.
+        int frame = 0;
+        int sampleIdx = 0;
         float temp_f23 = 2.0f;
         float temp_f24 = 4799.0f;
         float temp_f31 = 1.0f;
@@ -84,11 +89,11 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
             float temp_f13 = (float)mDelaySamples;
             int var_r28 = 0;
             if (numChans > 0) {
-                int temp_r25 = ((mWritePos + var_r22) % 9600) * 4;
+                int temp_r25 = ((mWritePos + frame) % 9600) * 4;
                 float **var_r29 = mDelayBuffers;
                 do {
                     float temp_f0_3 = sinf(phaseOffset[var_r28] + var_f26);
-                    int temp_r11 = var_r22 + var_r28;
+                    int temp_r11 = sampleIdx + var_r28;
                     intptr_t temp_r9 = (intptr_t)*var_r29;
                     var_r28++;
                     int temp_r11_2 = temp_r11 * 4;
@@ -112,11 +117,11 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
                     }
                     int temp_r10 = (int)temp_f0_6;
                     float temp_f10 = temp_f0_6 * temp_f23;
-                    int temp_r10_2 = (temp_r8 - temp_r10) + var_r22;
+                    int temp_r10_2 = (temp_r8 - temp_r10) + frame;
                     int temp_r3 = (int)temp_f10;
                     float temp_f0_7 = temp_f0_6 - (float)temp_r10;
                     float temp_f11 = temp_f10 - (float)temp_r3;
-                    int temp_r10_3 = (temp_r8 - temp_r3) + var_r22;
+                    int temp_r10_3 = (temp_r8 - temp_r3) + frame;
                     *(float *)((intptr_t)buf + temp_r11_2) =
                         *(float *)((((temp_r10_2 + 0x2580) % 9600) * 4) + temp_r9) * (temp_f31 - temp_f0_7) + *(float *)((intptr_t)buf + temp_r11_2);
                     float temp_f0_8 =
@@ -131,12 +136,12 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
                     *(float *)((intptr_t)buf + temp_r11_2) = *(float *)((intptr_t)buf + temp_r11_2) * temp_f23 - temp_f13_2;
                 } while (var_r28 < numChans);
             }
-            var_r22++;
+            frame++;
             var_f26 += var_f25;
             var_f25 += temp_f21;
-            var_r22 += numChans;
+            sampleIdx += numChans;
             var_f30 += temp_f22;
-        } while (var_r22 < numSamples);
+        } while (frame < numSamples);
     }
     unk1c = var_f30;
     unk2c = var_f25;
