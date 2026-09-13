@@ -70,7 +70,12 @@ void PeakDetector::Detect(unsigned int pos) {
             mPeakPos = pos;
             mTracking = true;
         }
-    } else if ((float)(unwrapped - mOrigin) > mCurWidth * 1.2f) {
+    } else if ((float)(unwrapped - mOrigin) <= mCurWidth * 1.2f) {
+        if (w > mPeakValue) {
+            mPeakValue = w;
+            mPeakPos = pos;
+        }
+    } else {
         unsigned int peakUnwrapped = (mPeakPos > mOrigin) ? mPeakPos : mPeakPos + Size();
 
         float prev = gaussianWindow((mPeakPos + Size() - 1) % Size());
@@ -107,9 +112,6 @@ void PeakDetector::Detect(unsigned int pos) {
         while (mNextCenter >= (float)Size()) {
             mNextCenter = mNextCenter - (float)Size();
         }
-    } else if (w > mPeakValue) {
-        mPeakValue = w;
-        mPeakPos = pos;
     }
 }
 
