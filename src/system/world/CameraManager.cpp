@@ -282,12 +282,10 @@ void CameraManager::Poll() {
                     Cross(localXfm.m.x, localXfm.m.y, localXfm.m.z);
                     Normalize(localXfm.m.z, localXfm.m.z);
                     Cross(localXfm.m.y, localXfm.m.z, localXfm.m.x);
-                    cam->SetFrustum(
-                        Interp(oldNear, cam->NearPlane(), frame),
-                        Interp(oldFar, cam->FarPlane(), frame),
-                        Interp(oldYFov, cam->YFov(), frame),
-                        1.0f
-                    );
+                    float newYFov = Interp(oldYFov, cam->YFov(), frame);
+                    float newNear = Interp(oldNear, cam->NearPlane(), frame);
+                    float newFar = Interp(oldFar, cam->FarPlane(), frame);
+                    cam->SetFrustum(newNear, newFar, newYFov, 1.0f);
                 } else if (mBlendRatio < 1.0f) {
                     static Message msg("blend_finished", DataNode(0));
                     msg[0] = DataNode(mCurrentShot.Ptr());
