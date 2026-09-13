@@ -379,7 +379,13 @@ void DepthBuffer3D::DrawShowing() {
             const unsigned short *px = (const unsigned short *)bits;
             for (int row = 0; row < 0x3c; ++row) {
                 for (int col = 0; col < 0x50; ++col) {
-                    unsigned short v = px ? px[(row * 0x180 + col) * 4] : 0;
+                    // No null test on px: the image's lhzx at 0x82DEFB34 is
+                    // unconditional (r24 is the TexelsLock result loaded once at
+                    // 0x82DEFB1C and never compared). This whole function body is
+                    // inside the #else of the HX_NATIVE guard at line 220 -- the
+                    // native build compiles the empty DrawShowing stub instead --
+                    // so removing the guard cannot fault the native port.
+                    unsigned short v = px[(row * 0x180 + col) * 4];
                     int player = v & 7;
                     int depthVal = v >> 3;
                     if (player == p1idx || player == p2idx) {
