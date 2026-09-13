@@ -95,9 +95,7 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
         static Symbol pitch("pitch");
         if (sym == pitch) {
             MakeEulerScale(_m, euler, scale);
-            euler.z *= RAD2DEG;
-            euler.x *= RAD2DEG;
-            euler.y *= RAD2DEG;
+            Scale(euler, RAD2DEG, euler);
             ret = PropSync(euler.x, _val, _prop, _i + 1, _op);
         }
     }
@@ -105,9 +103,7 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
         static Symbol roll("roll");
         if (sym == roll) {
             MakeEulerScale(_m, euler, scale);
-            euler.z *= RAD2DEG;
-            euler.x *= RAD2DEG;
-            euler.y *= RAD2DEG;
+            Scale(euler, RAD2DEG, euler);
             ret = PropSync(euler.y, _val, _prop, _i + 1, _op);
         }
     }
@@ -115,9 +111,7 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
         static Symbol yaw("yaw");
         if (sym == yaw) {
             MakeEulerScale(_m, euler, scale);
-            euler.z *= RAD2DEG;
-            euler.x *= RAD2DEG;
-            euler.y *= RAD2DEG;
+            Scale(euler, RAD2DEG, euler);
             ret = PropSync(euler.z, _val, _prop, _i + 1, _op);
         }
     }
@@ -173,9 +167,7 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
             }
         }
     } else {
-        euler.x *= DEG2RAD;
-        euler.y *= DEG2RAD;
-        euler.z *= DEG2RAD;
+        Scale(euler, DEG2RAD, euler);
         MakeRotMatrix(euler, _m, true);
         Scale(scale, _m, _m);
     }
