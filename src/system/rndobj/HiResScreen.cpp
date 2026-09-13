@@ -23,18 +23,21 @@ int HiResScreen::GetPaddingY() const { return 270; }
 HiResScreen::BmpCache::BmpCache(unsigned int ui1, unsigned int ui2) {
     mPixelsPerRow = ui1;
     mTotalRows = ui2;
+    // The cache line has to divide the image evenly *and* fit in the 6.9 MB
+    // budget; the target tests the divisibility first and only then computes
+    // the byte size, so both live in the loop condition.
+    mRowsPerCacheLine = mTotalRows + 1;
     mDirtyStart = 0;
     mDirtyEnd = 0;
 
-    unsigned int rows_per = ui2 + 1;
-    unsigned int byte_size;
+    unsigned int rowsPer = mRowsPerCacheLine;
     do {
-        rows_per--;
-        byte_size = rows_per * ui1 * 4;
-    } while (byte_size > 0x6DDD00);
+        rowsPer--;
+    } while (mTotalRows - mTotalRows / rowsPer * rowsPer != 0
+             || rowsPer * mPixelsPerRow * 4 > 0x6DDD00);
 
-    mRowsPerCacheLine = rows_per;
-    mByteSize = byte_size;
+    mRowsPerCacheLine = rowsPer;
+    mByteSize = rowsPer * mPixelsPerRow * 4;
     MILO_ASSERT(mTotalRows % mRowsPerCacheLine == 0, 0x3B);
     mTotalNumCacheLines = mTotalRows / mRowsPerCacheLine;
     mFileNames = new String[mTotalNumCacheLines];

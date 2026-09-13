@@ -365,10 +365,9 @@ void StreamRenderer::SetCrewPhotoPlayerCenters() {
     for (int i = 0; i < 6; i++) {
         Skeleton *skel =
             TheGestureMgr->GetSkeletonByTrackingID(TheGestureMgr->GetSkeleton(i).TrackingID());
+        float minX = 1.0f, minY = 1.0f, minZ = 1.0f;
+        float maxX = -1.0f, maxY = -1.0f, maxZ = -1.0f;
         if (skel) {
-            float minX = 1.0f, maxX = -1.0f;
-            float minY = 1.0f, maxY = -1.0f;
-            float minZ = 1.0f, maxZ = -1.0f;
             for (int j = 0; j < kNumJoints; j++) {
                 Vector2 screenPos;
                 skel->ScreenPos((SkeletonJoint)j, screenPos);
@@ -388,7 +387,12 @@ void StreamRenderer::SetCrewPhotoPlayerCenters() {
             Vector3 val = mSmoothers[i].Value();
             *(Vector4 *)&mCrewPhotoPlayerCenters[i] = *(Vector4 *)&val;
         } else {
-            mCrewPhotoPlayerCenters[i].Set(0, 0, 0, 0);
+            // Retail zeroes a Vector3 on the stack and copies it out as a
+            // Vector4, the same shape as the smoothed branch above -- the
+            // fourth word is whatever follows the vector.
+            Vector3 zero;
+            zero.Set(0, 0, 0);
+            *(Vector4 *)&mCrewPhotoPlayerCenters[i] = *(Vector4 *)&zero;
         }
     }
 }

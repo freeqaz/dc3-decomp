@@ -761,8 +761,7 @@ void MoveMgr::InitSong() {
         *it = nullptr;
     }
     FOREACH (it, mRoutineMeasures[0]) {
-        it->first = nullptr;
-        it->second = nullptr;
+        *it = std::pair<const MoveVariant *, const MoveVariant *>();
     }
     FOREACH (it, mChoiceSets) {
         it->mChoices[0] = 0;
@@ -773,9 +772,14 @@ void MoveMgr::InitSong() {
     ComputeRandomChoiceSet(0);
     ComputeLoadedMoveSet();
     TheHamDirector->CleanOriginalMoveData();
-    if (mMovesDir) {
-        LoadMoveData(mMovesDir->Find<ObjectDir>("move_data", false));
-    }
+#ifdef HX_NATIVE
+    // SongInit() asserts mMovesDir and, on native only, returns early when it
+    // is null -- so on native we can reach here without one.  The target has
+    // no test at all here.
+    if (!mMovesDir)
+        return;
+#endif
+    LoadMoveData(mMovesDir->Find<ObjectDir>("move_data", false));
 }
 
 void MoveMgr::LoadSubCategoryData() {

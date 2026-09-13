@@ -892,11 +892,14 @@ void UtilDrawCylinder(
     else {
         Transform tf58;
         tf58 = tf;
-        Scale(Vector3(radius, height, radius), tf58.m, tf58.m);
+        // The cylinder mesh runs along X: the target scales row x by the
+        // second float and rows y and z by the first.
+        Scale(Vector3(height, radius, radius), tf58.m, tf58.m);
         sCylinderMesh->Mat()->SetColor(col.red, col.green, col.blue);
         sCylinderMesh->Mat()->SetAlpha(0.2f);
         sCylinderMesh->Mat()->SetCull(kCullNone);
         sCylinderMesh->SetLocalXfm(tf58);
+        sCylinderMesh->SetSphere(Sphere(Vector3(0, 0, 0), radius));
         sCylinderMesh->Draw();
     }
 }
@@ -2204,10 +2207,15 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
     // notify), so declaring a Vert here emits a constructor the retail code
     // never runs.
     char tmp[sizeof(RndMesh::Vert)];
+    // Retail zeroes i before the srcCount guard, not inside it.
+    unsigned int i = 0;
     if (srcCount > 0) {
-        unsigned int i = 0;
         do {
             unsigned int j = 0;
+            // Retail keeps the search counter and the result in SEPARATE
+            // registers -- the hit path is an out-of-line 'mr r11, r10; b' --
+            // so the match index is its own variable, not a reused j.
+            int matchIdx;
             // Retail copies the whole Vector2 into a stack temp with an integer
             // ld/std pair and reads the two floats back out of it; two separate
             // float loads do not produce that shape.
@@ -2215,42 +2223,44 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
             if (dstVerts.mNumVerts > 0) {
                 do {
                     if (fabsf(srcTex.x - dstVerts.mVerts[j].tex.x) < tolerance
-                        && fabsf(srcTex.y - dstVerts.mVerts[j].tex.y) < tolerance)
+                        && fabsf(srcTex.y - dstVerts.mVerts[j].tex.y) < tolerance) {
+                        matchIdx = (int)j;
                         goto found;
+                    }
                     j++;
                 } while ((int)j < dstVerts.mNumVerts);
             }
-            j = (unsigned int)-1;
+            matchIdx = -1;
         found:
-            if (!((int)j == -1)) {
+            if (!(matchIdx == -1)) {
                 unsigned short ii = (unsigned short)i;
-                unsigned short js = (unsigned short)j;
+                unsigned short js = (unsigned short)matchIdx;
                 if (js != ii) {
                     memcpy(&tmp, &dstVerts.mVerts[js], sizeof(RndMesh::Vert));
                     memcpy(
                         &dstVerts.mVerts[js], &dstVerts.mVerts[ii], sizeof(RndMesh::Vert)
                     );
                     memcpy(&dstVerts.mVerts[ii], &tmp, sizeof(RndMesh::Vert));
+                }
+                // Retail tests js != ii a second time here: cr6 does not
+                // survive the three memcpy calls, and the face re-indexing is
+                // its own guarded block (beq at .L_8262E020).
+                if (js != ii) {
                     int numFaces = (int)dstFaces.size();
-                    if (numFaces > 0) {
-                        unsigned short *faceData = &dstFaces[0].v1;
-                        int n = numFaces;
-                        do {
-                            if (faceData[0] == js)
-                                faceData[0] = ii;
-                            else if (faceData[0] == ii)
-                                faceData[0] = js;
-                            if (faceData[1] == js)
-                                faceData[1] = ii;
-                            else if (faceData[1] == ii)
-                                faceData[1] = js;
-                            if (faceData[2] == js)
-                                faceData[2] = ii;
-                            else if (faceData[2] == ii)
-                                faceData[2] = js;
-                            faceData += 3;
-                            n--;
-                        } while (n != 0);
+                    for (int k = 0; k < numFaces; k++) {
+                        RndMesh::Face &face = dstFaces[k];
+                        if (face.v1 == js)
+                            face.v1 = ii;
+                        else if (face.v1 == ii)
+                            face.v1 = js;
+                        if (face.v2 == js)
+                            face.v2 = ii;
+                        else if (face.v2 == ii)
+                            face.v2 = js;
+                        if (face.v3 == js)
+                            face.v3 = ii;
+                        else if (face.v3 == ii)
+                            face.v3 = js;
                     }
                 }
             } else {
@@ -2259,8 +2269,10 @@ void FixVertOrder(const RndMesh *src, RndMesh *dst) {
             i++;
         } while ((int)i < srcCount);
         if (mismatchCount != 0) {
+            // Retail names the DESTINATION mesh and reads mName inline
+            // (lwz 0x24 off the virtual base), not PathName(src).
             TheDebug << MakeString(
-                "%s has %d mismatched verts\n", PathName(src), mismatchCount
+                "%s has %d mismatched verts\n", dst->Name(), mismatchCount
             );
         }
     }
@@ -2570,7 +2582,9 @@ void BuildVisit(BSPNode *node) {
 
 void BuildFromBSP(RndMesh *mesh) {
     RndMesh *geomOwner = mesh->GetGeomOwner();
-    BuildVisit(geomOwner->GetBSPTree());
+    // GetBSPTree() already reads through mGeomOwner, so retail reaches it
+    // straight off `mesh` -- one lwz, not two.
+    BuildVisit(mesh->GetBSPTree());
 
     int totalVerts = 0;
 

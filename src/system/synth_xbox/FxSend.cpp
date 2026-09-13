@@ -129,11 +129,6 @@ void FxSend360::CreateInputVoice() {
     int stage = mThis->mStage * 2;
     XAUDIO2_VOICE_SENDS voiceSends;
     switch (mThis->GetChannels()) {
-    case kSendAll:
-    case kSendAllXMix:
-        voiceSends.SendCount = 4;
-        voiceSends.pSends = sendsAll;
-        break;
     case kSendCenter:
         voiceSends.SendCount = 2;
         voiceSends.pSends = sendsCenter;
@@ -144,6 +139,11 @@ void FxSend360::CreateInputVoice() {
         break;
     default:
         MILO_FAIL("FxSend: Unknown Channels");
+        // falls through -- an unrecognised layout gets the full send list
+    case kSendAll:
+    case kSendAllXMix:
+        voiceSends.SendCount = 4;
+        voiceSends.pSends = sendsAll;
         break;
     }
 

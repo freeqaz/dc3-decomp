@@ -144,7 +144,10 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
     Symbol out(gNullStr);
     String str88(_tmp0);
     String str90(str88);
-    str90 = str90.substr(0, str90.length() - 2);
+    // The two-character suffix stripped here is put back on the crew
+    // character's name below, so retail keeps this length live (r22).
+    unsigned int outfitLen = str90.length();
+    str90 = str90.substr(0, outfitLen - 2);
     unsigned int i = 1;
     if (charArr->Size() > 1) {
         Symbol s;
@@ -157,7 +160,7 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
             do { _c = *p++; } while (_c);
             unsigned int crewCharLen = (unsigned int)(p - 1 - cStr);
             MILO_ASSERT(crewCharLen < 30, 0x13c);
-            char buf[30];
+            char buf[32];
             {
                 const char *p2 = cStr;
                 char _c2;
@@ -167,9 +170,12 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
                     p2++;
                 } while (_c2);
             }
-            buf[crewCharLen] = 0;
-            buf[crewCharLen - 1] = str88[crewCharLen - 1];
-            buf[crewCharLen - 2] = str88[crewCharLen - 2];
+            // Retail's three stbx go to buf + crewCharLen + {2,1,0} and read
+            // str88 at outfitLen-1 / outfitLen-2: the outfit suffix is
+            // APPENDED to the crew character's name, not written over it.
+            buf[crewCharLen + 2] = 0;
+            buf[crewCharLen + 1] = str88[outfitLen - 1];
+            buf[crewCharLen] = str88[outfitLen - 2];
             out = GetOutfitRemap(Symbol(buf), false);
             break;
         }

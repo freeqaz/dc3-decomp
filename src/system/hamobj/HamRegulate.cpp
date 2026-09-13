@@ -109,16 +109,14 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
             posDelta.x = wpXfm.v.x - character->LocalXfm().v.x;
         } else {
             const Transform &wpXfm = waypoint->WorldXfm();
-            dz = wpXfm.v.z;
-            float pdz = mPosDelta.z;
-            float pdy = mPosDelta.y;
-            dy = wpXfm.v.y;
+            dz = wpXfm.v.z - mPosDelta.z;
+            dy = wpXfm.v.y - mPosDelta.y;
             float dx = wpXfm.v.x - mPosDelta.x;
             posDelta.x = dx;
             float factor = Min(absDt * invRadius * 1.1f, 1.0f);
             posDelta.x = dx * factor;
-            dy = (dy - pdy) * factor;
-            dz = (dz - pdz) * factor;
+            dy = dy * factor;
+            dz = dz * factor;
         }
         posDelta.y = dy;
         posDelta.z = dz;
