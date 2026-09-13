@@ -105,64 +105,9 @@ void ScaleAddEq(Transform &tf1, const Transform &tf2, float f) {
 }
 
 
-static inline unsigned short FloatToHalf(float value) {
-    unsigned int raw = *(unsigned int *)&value;
-    unsigned int iValue = raw & 0x7FFFFFFF;
-    unsigned int sign = (raw >> 16) & 0x8000;
-    if (iValue > 0x47FFEFFF) {
-        return (unsigned short)(sign | 0x7FFF);
-    }
-    if (iValue < 0x38800000) {
-        unsigned int shift = 113 - (iValue >> 23);
-        iValue = (0x800000 | (iValue & 0x7FFFFF)) >> shift;
-    } else {
-        iValue -= 0x38000000;
-    }
-    return (unsigned short)(sign | ((((iValue >> 13) & 1) + iValue + 0xFFF) >> 13));
-}
-
-void FillCompressedVertex(
-    CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool normalize
-) {
-    // Pack color (ARGB D3DCOLOR format)
-    u32 green = (u32)(vert.color.green * 255.0f);
-    u32 blue = (u32)(vert.color.blue * 255.0f);
-    u32 alpha = (u32)(vert.color.alpha * 255.0f);
-    u32 red = (u32)(vert.color.red * 255.0f);
-    compressed.mColor = ((((alpha << 8) | (red & 0xFF)) << 8) | (green & 0xFF))
-            << 8
-        | (blue & 0xFF);
-
-    // Pack bone weights as UDEC4N
-    PackVector(
-        (unsigned int &)compressed.mBoneIndices, vert.boneWeights, 10, 10, 10, 2, false
-    );
-
-    // Copy position as float bit patterns
-    *(f32 *)(&compressed.mPosX) = vert.pos.x;
-    *(f32 *)(&compressed.mPosY) = vert.pos.y;
-    *(f32 *)(&compressed.mPosZ) = vert.pos.z;
-
-    // Pack UV as float16_2
-    unsigned short halfU = FloatToHalf(vert.tex.x);
-    unsigned short halfV = FloatToHalf(vert.tex.y);
-    compressed.mNormal = (halfU << 16) | halfV;
-
-    // Pack normal as DEC4N
-    float normZ = vert.norm.z;
-    float normY = vert.norm.y;
-    Vector4 normVec(vert.norm.x, normY, normZ, 0.0f);
-    PackVector((unsigned int &)compressed.mTangent, normVec, 10, 10, 10, 2, true);
-
-    // Pack tangent as DEC4N
-    PackVector((unsigned int &)compressed.mBinormal, vert.tangent, 10, 10, 10, 2, true);
-
-    // Pack bone indices as UBYTE4
-    compressed.mBoneWeights = (((int)vert.boneIndices[3] * 0x100
-        + (int)vert.boneIndices[2]) * 0x100
-        + (int)vert.boneIndices[1]) * 0x100
-        + (int)vert.boneIndices[0];
-}
+// FloatToHalf and FillCompressedVertex now live in rndobj/MeshVertCompress.h as
+// statics, matching the two map rows that prove retail emitted one header
+// definition into both this TU and rndobj:Mesh.obj.
 
 void DxMesh::VertexBufferData::Release() {
     TheDxRnd.AutoRelease((D3DResource *)buffer);

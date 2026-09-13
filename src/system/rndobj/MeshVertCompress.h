@@ -71,5 +71,72 @@ static void PackVector(
     output = (pw << kOffsetW) | (pz << offsetZ) | (py << offsetY) | px;
 }
 
-void FillCompressedVertex(CompressedVertex_Xbox &, const RndMesh::Vert &, bool);
+static inline unsigned short FloatToHalf(float value) {
+    unsigned int raw = *(unsigned int *)&value;
+    unsigned int iValue = raw & 0x7FFFFFFF;
+    unsigned int sign = (raw >> 16) & 0x8000;
+    if (iValue > 0x47FFEFFF) {
+        return (unsigned short)(sign | 0x7FFF);
+    }
+    if (iValue < 0x38800000) {
+        unsigned int shift = 113 - (iValue >> 23);
+        iValue = (0x800000 | (iValue & 0x7FFFFF)) >> shift;
+    } else {
+        iValue -= 0x38000000;
+    }
+    return (unsigned short)(sign | ((((iValue >> 13) & 1) + iValue + 0xFFF) >> 13));
+}
+
+// Same story as PackVector above, and the same evidence.  ham_xbox_r.map lists
+// ?FillCompressedVertex@@YAXAAUCompressedVertex_Xbox@@ABVVert@RndMesh@@_N@Z
+// TWICE -- 826204d8 from rnddx9:Mesh.obj and 8263a360 from rndobj:Mesh.obj,
+// both bare `f`, both 0x22C bytes -- so it was one definition in this header,
+// not two out-of-line definitions.  Decoding both shipped bodies: 139
+// instructions each, differing only in 8 branch displacements and the
+// PackVector callee each TU resolves to its own copy of.  config/symbols.txt
+// can only carry one symbol per name, so it names 826204d8 and leaves the
+// rndobj copy as the placeholder `fn_8263A360`.
+static void FillCompressedVertex(
+    CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool normalize
+) {
+    // Pack color (ARGB D3DCOLOR format)
+    u32 green = (u32)(vert.color.green * 255.0f);
+    u32 blue = (u32)(vert.color.blue * 255.0f);
+    u32 alpha = (u32)(vert.color.alpha * 255.0f);
+    u32 red = (u32)(vert.color.red * 255.0f);
+    compressed.mColor = ((((alpha << 8) | (red & 0xFF)) << 8) | (green & 0xFF))
+            << 8
+        | (blue & 0xFF);
+
+    // Pack bone weights as UDEC4N
+    PackVector(
+        (unsigned int &)compressed.mBoneIndices, vert.boneWeights, 10, 10, 10, 2, false
+    );
+
+    // Copy position as float bit patterns
+    *(f32 *)(&compressed.mPosX) = vert.pos.x;
+    *(f32 *)(&compressed.mPosY) = vert.pos.y;
+    *(f32 *)(&compressed.mPosZ) = vert.pos.z;
+
+    // Pack UV as float16_2
+    unsigned short halfU = FloatToHalf(vert.tex.x);
+    unsigned short halfV = FloatToHalf(vert.tex.y);
+    compressed.mNormal = (halfU << 16) | halfV;
+
+    // Pack normal as DEC4N
+    float normZ = vert.norm.z;
+    float normY = vert.norm.y;
+    Vector4 normVec(vert.norm.x, normY, normZ, 0.0f);
+    PackVector((unsigned int &)compressed.mTangent, normVec, 10, 10, 10, 2, true);
+
+    // Pack tangent as DEC4N
+    PackVector((unsigned int &)compressed.mBinormal, vert.tangent, 10, 10, 10, 2, true);
+
+    // Pack bone indices as UBYTE4
+    compressed.mBoneWeights = (((int)vert.boneIndices[3] * 0x100
+        + (int)vert.boneIndices[2]) * 0x100
+        + (int)vert.boneIndices[1]) * 0x100
+        + (int)vert.boneIndices[0];
+}
+
 void SaveCompressedVertex(const CompressedVertex_Xbox &, BinStream &);
