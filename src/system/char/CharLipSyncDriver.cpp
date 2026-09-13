@@ -458,7 +458,12 @@ void CharLipSyncDriver::Poll() {
         CameraManager *camMgr = TheWorld->GetCameraManager();
         if (camMgr) {
             cam = camMgr->CurrentShot();
-            if (!cam) {
+            // Tested on the accessor, not on `cam`: the original null-checks
+            // the inlined call's own temporary (823B81C4 stores it into the
+            // 0x50 temp slot), which a test on the named local does not
+            // produce. CurrentShot() is a pure accessor, so this is the same
+            // test.
+            if (!camMgr->CurrentShot()) {
                 cam = camMgr->MiloCamera();
             }
         }
