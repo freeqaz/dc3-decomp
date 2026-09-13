@@ -308,9 +308,52 @@ def main():
         print()
         return
 
+    # ---- named-symbol join --------------------------------------------
+    # dtk only invents a `lbl_*` name for a datum symbols.txt does NOT name.
+    # Everything it DOES name is a `.data` float static too, and joining those
+    # by NAME is an exact match with no pairing inference at all -- strictly
+    # stronger evidence than the lbl_* path.  Leaving them out understated the
+    # denominator and hid three real defects (HighFiveGestureFilter's three
+    # thresholds, one of them sign-flipped).
+    tgt_named = {}
+    for b in all_blobs:
+        if b.section != ".data" or b.name.startswith("lbl_") or is_xdk(b.file):
+            continue
+        if not b.floats:
+            continue
+        n = b.name.strip('"')
+        if MANGLED_FLOAT.search(n) or MANGLED_DOUBLE.search(n):
+            tgt_named[n] = (float(b.floats[0]), b.file, b.addr)
+    ours_named = {}
+    for p in glob.glob(os.path.join(args.obj_root, "**", "*.obj"), recursive=True):
+        try:
+            _o, st = our_float_statics(p)
+        except Exception:  # noqa: BLE001
+            continue
+        for v, n, _c in st.values():
+            ours_named.setdefault(n, (v, p))
+    both = sorted(set(tgt_named) & set(ours_named))
+    named_dis = [
+        n for n in both
+        if abs(tgt_named[n][0] - ours_named[n][0])
+        > 1e-6 * max(1.0, abs(tgt_named[n][0]))
+    ]
+    den["target_NAMED_data_float_statics_nonxdk"] = len(tgt_named)
+    den["our_NAMED_data_float_statics"] = len(ours_named)
+    den["named_present_on_both_sides"] = len(both)
+    den["named_target_only_we_emit_none"] = len(set(tgt_named) - set(ours_named))
+    den["named_exact_name_VALUE_DISAGREEMENTS"] = len(named_dis)
+
     print("== DENOMINATORS ==")
     for k, v in den.items():
         print(f"  {k:52} {v}")
+
+    print(f"\n== NAMED-SYMBOL VALUE DISAGREEMENTS ({len(named_dis)}) ==")
+    print("   exact name match on both sides -- no pairing inference")
+    for n in named_dis:
+        tv, tf, ta = tgt_named[n]
+        ov, op = ours_named[n]
+        print(f"-- {n}\n   TGT {tv:g} @ 0x{ta:08X} [{tf}]\n   OURS {ov:g} [{op}]")
 
     def show(title, recs):
         print(f"\n== {title} ({len(recs)}) ==")
