@@ -446,14 +446,24 @@ void MemTracker::Report(int threshold, TextStream &ts) {
 int MemTracker::SpitAllocInfo(TextStream *ts) {
     int ret = 1;
     if (gMemTracker != nullptr && gMemTracker->mHashTable != nullptr) {
-        FormatString begin_fmt("----------------BEGIN MemTracker::SpitAllocInfo\n");
-        *ts << begin_fmt.Str() << "\n";
+        // Identical in shape to the _iobuf overload below, and it has to be:
+        // the image sends both banners to TheDebug (r29 holds &TheDebug across
+        // the loop), NOT to `ts`, with a single operator<< each and no trailing
+        // "\n" -- the format string already ends in one. The two FormatStrings
+        // also share the stack slot at r1+0x50 (frame 0x1090, not 0x20b0), so
+        // each lives in its own scope.
+        {
+            FormatString fmt("----------------BEGIN MemTracker::SpitAllocInfo\n");
+            TheDebug << fmt.Str();
+        }
         for (auto it = gMemTracker->mHashTable->Begin(); it != nullptr; it = gMemTracker->mHashTable->Next(it)) {
             AllocInfo *info = *it;
             info->PrintForReport(*ts);
         }
-        FormatString end_fmt("----------------END MemTracker::SpitAllocInfo\n");
-        *ts << end_fmt.Str() << "\n";
+        {
+            FormatString fmt("----------------END MemTracker::SpitAllocInfo\n");
+            TheDebug << fmt.Str();
+        }
         ret = 0;
     }
     return ret;
