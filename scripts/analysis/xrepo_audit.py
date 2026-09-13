@@ -72,6 +72,21 @@ WHAT IT CANNOT SEE  (state this before quoting a clean sweep)
   * It reads SOURCE, never object bytes.  For a float literal the companion
     instrument `float_oracle.py` reads the 4 bytes out of dc3's own target
     object and is the only thing that settles the value.
+  * ⚠ ARG_SWAP CANNOT TELL A CALL FROM A DECLARATION, and this has produced a
+    real false positive.  Measured 2026-09-13: the pass flagged
+    rb3-xenon's `rndobj/AmbientOcclusion.cpp` as `std::sort(priEnd, priBegin)`
+    with the arguments reversed against dc3's `(priBegin, priEnd)`.  The CALL is
+    correct on both sides; lines 1233-1234 are the two ITERATOR DECLARATIONS,
+    written `end` before `begin`, and the token differ tripped on those.
+    Before reporting an ARG_SWAP, read the flagged line itself -- a hit whose
+    "arguments" are declared on the preceding lines is a declaration-order
+    difference, which is inert.  rb3-xenon's own roadmap predicted this class of
+    re-flag before it happened.
+  * A FIX THAT HAS ALREADY LANDED IN THE SIBLING READS EXACTLY LIKE A LIVE
+    DEFECT.  Four of five leads forwarded to rb3-xenon on 2026-09-13 were
+    already fixed there (`135f6a9e`, `2a531e2f`, `810c716b`); the audit's
+    checkout predated the fixes.  Re-pull the sibling, or state the sibling
+    revision the sweep read, before forwarding anything.
 
 EXTRACTOR ARTIFACTS  (fixed 2026-09-13 -- what the old extractor was reporting)
 -------------------------------------------------------------------------------
