@@ -184,11 +184,11 @@ void NgSpotlightDrawer::RenderSphere(Spotlight *sl) {
     TheShaderMgr.SetPConstant((PShaderConstant)0x5b, sphereParams);
 
     Spotlight *colorOwner = sl->mColorOwner;
-    float intensity = (colorOwner->mIntensity * (sl->mBeam.mBrighten * sBeamBrighten));
+    float intensity = colorOwner->mIntensity * sl->mBeam.mBrighten * sBeamBrighten;
+    float r = intensity * colorOwner->mColor.red;
     float g = colorOwner->mColor.green * intensity;
-    float a = colorOwner->mColor.alpha * intensity;
-    float r = colorOwner->mColor.red * intensity;
     float b = colorOwner->mColor.blue * intensity;
+    float a = colorOwner->mColor.alpha * intensity;
 
     if (!sl->mAnimateColorFromPreset && sl->mBeam.mMat) {
         const Hmx::Color &matColor = sl->mBeam.mMat->GetColor();
