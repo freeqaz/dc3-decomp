@@ -26,15 +26,16 @@ HiResScreen::BmpCache::BmpCache(unsigned int ui1, unsigned int ui2) {
     mDirtyStart = 0;
     mDirtyEnd = 0;
 
-    unsigned int rows_per = ui2 + 1;
-    unsigned int byte_size;
+    // The cache line has to divide the image evenly *and* fit in the 6.9 MB
+    // budget; the target tests the divisibility first and only then computes
+    // the byte size, so both live in the loop condition.
+    mRowsPerCacheLine = mTotalRows + 1;
     do {
-        rows_per--;
-        byte_size = rows_per * ui1 * 4;
-    } while (byte_size > 0x6DDD00);
+        mRowsPerCacheLine--;
+    } while (mTotalRows - mTotalRows / mRowsPerCacheLine * mRowsPerCacheLine != 0
+             || mRowsPerCacheLine * mPixelsPerRow * 4 > 0x6DDD00);
 
-    mRowsPerCacheLine = rows_per;
-    mByteSize = byte_size;
+    mByteSize = mRowsPerCacheLine * mPixelsPerRow * 4;
     MILO_ASSERT(mTotalRows % mRowsPerCacheLine == 0, 0x3B);
     mTotalNumCacheLines = mTotalRows / mRowsPerCacheLine;
     mFileNames = new String[mTotalNumCacheLines];
