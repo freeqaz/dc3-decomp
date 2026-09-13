@@ -311,8 +311,7 @@ void SongSequence::OnSongLoaded() {
             }
         }
         if (mCurrentIndex != 0 || !inHollaback) {
-            auto resetMsg = Message(reset);
-            gamePanel->Handle(resetMsg, true);
+            gamePanel->Handle(Message(reset), true);
         }
         if (!inMindControl) {
             TheHamProvider->SetProperty("game_stage", Symbol("intro"));
@@ -344,13 +343,18 @@ void SongSequence::OnSongLoaded() {
                 char buffer[256];
                 mFileCache->StartSet(0);
                 Symbol s0 = mEntries[mCurrentIndex + 1].mSongShortName;
-                int s0len = strlen(s0.Str());
+                // One named `const char *` for the short name: MakeString's third
+                // parameter is `const char *const &`, so the target binds both the
+                // .milo and the .mogg call to a single home slot rather than
+                // materialising a fresh temporary per call site.
+                const char *shortName = s0.Str();
+                int s0len = strlen(shortName);
                 strcpy(buffer, TheHamSongMgr.SongPath(s0, 0));
                 buffer[strlen(buffer) - s0len] = 0;
-                const char *milo = MakeString("%s%s.milo", buffer, s0.Str());
+                const char *milo = MakeString("%s%s.milo", buffer, shortName);
                 const char *moves = MakeString("%s%s.milo", buffer, "moves");
                 const char *clips = MakeString("%s%s.milo", buffer, "clips");
-                const char *mogg = MakeString("%s%s.mogg", buffer, s0.Str());
+                const char *mogg = MakeString("%s%s.mogg", buffer, shortName);
                 mFileCache->Add(milo, 1, milo);
                 mFileCache->Add(moves, 1, moves);
                 mFileCache->Add(clips, 1, clips);
