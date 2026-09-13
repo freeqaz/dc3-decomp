@@ -399,6 +399,12 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
 
 float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
     static std::list<Vector3> jointPathCopy;
+    // lbl_82F44758 (.data, .float 0.1) is a MUTABLE function-local static, not a
+    // __real@ literal: the target hoists `lis r24, lbl_82F44758@ha` into a
+    // callee-saved GPR before the loop and reloads it every iteration. Its
+    // neighbour lbl_82F44754 (.float 0.5) is IsPathAcceptable's
+    // sSlopeRatioThreshold, which is already spelled as a static there.
+    static float sPathColorStep = 0.1f;
     int numPts = mJointPath.size();
     if (numPts > 1) {
         jointPathCopy.clear();
@@ -406,13 +412,19 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
             jointPathCopy.insert(jointPathCopy.end(), *it);
         }
     }
-    if (jointPathCopy.begin() != jointPathCopy.end()) {
+    // Early return, not a wrapping if: the target has TWO returns loading two
+    // different source registers (`fmr f1, f17` = the y parameter at 82E01E5C,
+    // `fmr f1, f18` = the drawY accumulator at 82E025E4).
+    if (jointPathCopy.begin() == jointPathCopy.end())
+        return y;
+    {
         // The shipped build loads mWidth (TheRnd+0x40) first; MSVC evaluates the
         // operands right to left, so Width() is the *divisor*.  Cross-checked against
         // rb3-xenon's ArcDetector::UpdateOverlay, which spells Height() / Width().
         float aspectRatio = (float)TheRnd.Height() / (float)TheRnd.Width();
         float halfArcScale = aspectRatio / (mSwipeExtentX * 2.0f);
         float drawY = y;
+        float fade = 0.0f;
 
         Vector2 prevScaled;
         for (std::list<Vector3>::const_iterator it = jointPathCopy.begin(); it != jointPathCopy.end(); ++it) {
@@ -421,50 +433,69 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
             if (mSide == kSkeletonRight) {
                 dx = dx * -1.0f;
             }
-            float scaledX = dx * halfArcScale;
-            float comp = mSwipeExtentX * dx * 2.0f - dx * dx;
-            float arcY = 0.0f;
-            if (comp > 0.0f) {
-                arcY = sqrtf(comp);
-            }
-
+            float zd = mArcOffset.z - pt.z;
             TheRnd.DrawStringScreen(
-                MakeString("%f %f", dx, (mArcOffset.z - pt.z)),
+                MakeString("%f %f", dx, zd),
                 Vector2(0.6f, drawY),
                 Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
                 true
             );
+
+            float scaledX = dx * halfArcScale;
+            // One named Vector2, used for circle 2, as the polyline's far end,
+            // and as next iteration's near end: the target stores it once at
+            // 0x80(r1) (82E01FD8/82E01FE4) and passes &0x80(r1) to both draws,
+            // then `ld/std` copies it to 0x1f0(r1) for the next pass.
+            Vector2 zPt(scaledX, zd);
+            float comp = mSwipeExtentX * dx * 2.0f - dx * dx;
+            // if/else with the zero in the THEN arm: the target's `bgt` jumps to
+            // the fsqrts and falls through to `fmr f27, f30`.
+            float arcY;
+            if (comp <= 0.0f) {
+                arcY = 0.0f;
+            } else {
+                arcY = sqrtf(comp);
+            }
             TheRnd.DrawStringScreen(
                 MakeString("%f", arcY),
                 Vector2(0.8f, drawY),
                 Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
                 true
             );
-            UtilDrawCircle2D(Vector2(scaledX, arcY), 0.01f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
-            UtilDrawCircle2D(Vector2(pt.x, pt.y), 0.004f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
 
-            if (pt.x != jointPathCopy.front().x || pt.y != jointPathCopy.front().y || pt.z != jointPathCopy.front().z) {
-                UtilDrawLine(prevScaled, Vector2(scaledX, arcY), Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f));
+            // Each successive path point is drawn dimmer:
+            // `fnmsubs f29, f25, f21, f31` with f21 = __real@3eb33333 (0.35).
+            float c = 1.0f - fade * 0.35f;
+            UtilDrawCircle2D(Vector2(scaledX, arcY), 0.01f, Hmx::Color(c, 0.0f, c, 1.0f), 37);
+            UtilDrawCircle2D(zPt, 0.004f, Hmx::Color(c, c, 0.0f, 1.0f), 37);
+            if (pt != jointPathCopy.front()) {
+                UtilDrawLine(prevScaled, zPt, Hmx::Color(c, c, 0.0f, 1.0f));
             }
+            UtilDrawCircle2D(
+                Vector2(scaledX, 0.75f), 0.01f, Hmx::Color(0.0f, 0.0f, c, 1.0f), 37
+            );
+            UtilDrawCircle2D(
+                Vector2(scaledX, (mArcOffset.y - pt.y) + 0.75f), 0.01f,
+                Hmx::Color(0.0f, c, 0.0f, 1.0f), 37
+            );
 
-            Vector2 refPt(scaledX, 0.75f);
-            UtilDrawCircle2D(refPt, 0.01f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
-
-            Vector2 errPt(scaledX, (mArcOffset.y - pt.y) + 0.75f);
-            UtilDrawCircle2D(errPt, 0.01f, Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f), 4);
-
-            prevScaled = Vector2(scaledX, arcY);
+            prevScaled = zPt;
             drawY = drawY + 0.03125f;
+            fade = Min(1.0f, fade + sPathColorStep);
         }
 
-        const Vector3 &front = *jointPathCopy.begin();
+        // The LIVE list, and by value: `lwz r11, 0x0(r27)` with r27 = this+0x10
+        // (&mJointPath). r31 holds &jointPathCopy and is not read here.
+        Vector3 front = *mJointPath.begin();
         Skeleton *skel = TheGestureMgr->GetActiveSkeleton();
         float handX, handY, handZ;
         if (skel != NULL) {
             const TrackedJoint *joints = skel->TrackedJoints();
-            handX = joints[mPrimaryJoint].mJointPos[0].x - joints[mSecondaryJoint].mJointPos[0].x;
-            handY = joints[mPrimaryJoint].mJointPos[0].y - joints[mSecondaryJoint].mJointPos[0].y;
-            handZ = joints[mPrimaryJoint].mJointPos[0].z - joints[mSecondaryJoint].mJointPos[0].z;
+            const TrackedJoint &secondary = joints[mSecondaryJoint];
+            const TrackedJoint &primary = joints[mPrimaryJoint];
+            handX = primary.mJointPos[0].x - secondary.mJointPos[0].x;
+            handY = primary.mJointPos[0].y - secondary.mJointPos[0].y;
+            handZ = primary.mJointPos[0].z - secondary.mJointPos[0].z;
         } else {
             handX = front.x;
             handY = front.y;
@@ -477,11 +508,13 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
         }
         float curScaledX = curDx * halfArcScale;
         float curScaledY = mArcOffset.z - handZ;
-        UtilDrawCircle2D(Vector2(curScaledX, curScaledY), 0.015f, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 4);
+        UtilDrawCircle2D(Vector2(curScaledX, curScaledY), 0.015f, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 37);
         UtilDrawLine(Vector2(curScaledX, curScaledY), Vector2(aspectRatio * 0.5f, 0.0f), Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f));
 
-        Vector2 curErrPt(curScaledX, (mArcOffset.y - handY) + 0.75f);
-        UtilDrawCircle2D(curErrPt, 0.015f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f), 4);
+        UtilDrawCircle2D(
+            Vector2(curScaledX, (mArcOffset.y - handY) + 0.75f), 0.015f,
+            Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f), 37
+        );
 
         float pathErr = GetPathError();
         TheRnd.DrawStringScreen(
@@ -530,7 +563,6 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
         hoverMeter.Draw();
         hoverMeter.DrawBar(0.0f, (float)mHoverTimer / (float)sDefaultHoverTimer, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f), 1.0f, 0.0f);
 
-        y = drawY;
+        return drawY;
     }
-    return y;
 }
