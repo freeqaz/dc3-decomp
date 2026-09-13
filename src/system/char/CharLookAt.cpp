@@ -10,6 +10,17 @@
 #include "rndobj\Graph.h"
 #include "rndobj\Poll.h"
 
+// Poll() rotates lookDir/sourceFilter by the pivot parent's world matrix with
+// out.i = Dot(v, m.i) -- each output component is a dot of one matrix ROW with
+// v. Mtx.h only supplies the transposed (Vector3, Matrix3) form, whose out.x
+// reads the matrix COLUMN {0x0,0x10,0x20}; the target reads rows {0x0,0x4,0x8}
+// / {0x10,0x14,0x18} / {0x20,0x24,0x28} at both call sites (and spilled the
+// row address to a stack slot, which only the Dot() spelling reproduces).
+// Same overload rb3-xenon's CharLookAt carries; kept TU-local like there.
+inline void Multiply(const Hmx::Matrix3 &m, const Vector3 &v, Vector3 &out) {
+    out.Set(Dot(v, m.x), Dot(v, m.y), Dot(v, m.z));
+}
+
 const float sMaxThreshold = 80;
 bool CharLookAt::sDisableJitter = false;
 
@@ -214,7 +225,14 @@ void CharLookAt::Poll() {
                         Interp(unka4, source->WorldXfm().m.y, 0.1f, unka4);
                     }
                     Subtract(source->WorldXfm().m.y, unka4, sourceFilter);
-                    float filterSq = LengthSquared(sourceFilter);
+                    // LengthSquared(sourceFilter), spelled with the component
+                    // temporaries the target's schedule needs: the three loads
+                    // come out rotated one position left of the declaration
+                    // order, so (y, z, x) here reproduces the target's (z, x, y).
+                    float fsy = sourceFilter.y;
+                    float fsz = sourceFilter.z;
+                    float fsx = sourceFilter.x;
+                    float filterSq = fsx * fsx + fsy * fsy + fsz * fsz;
                     float srcRad = mSourceRadius * DEG2RAD;
                     if (filterSq > srcRad * srcRad) {
                         float sqrtFilter = std::sqrt(filterSq);
@@ -235,7 +253,7 @@ void CharLookAt::Poll() {
                     Multiply(pivotXfm.m.y, rotMat, lookDir);
                 } else
                     Normalize(lookDir, lookDir);
-                Multiply(lookDir, mPivot->TransParent()->WorldXfm().m, lookDir);
+                Multiply(mPivot->TransParent()->WorldXfm().m, lookDir, lookDir);
                 Normalize(lookDir, lookDir);
                 mDisableRoll = mLookLimits.Clamp(lookDir);
                 Normalize(lookDir, lookDir);
@@ -255,7 +273,10 @@ void CharLookAt::Poll() {
                         lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, mLookLimits.mMin.z);
                         break;
                     case 1:
-                        lookDir.Set(0.0f, mLookLimits.mMin.z, mLookLimits.mMax.x);
+                        // RB3 has (0, mMin.z, mMax.x) here; DC3's target loads
+                        // mMin.y into y and mMin.z into z (it shares case 0's
+                        // tail), so DC3 fixed that typo.
+                        lookDir.Set(0.0f, mLookLimits.mMin.y, mLookLimits.mMin.z);
                         break;
                     case 2:
                         lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, mLookLimits.mMin.z);
@@ -281,17 +302,13 @@ void CharLookAt::Poll() {
                 }
                 static DataNode &disable = DataVariable("cheat.disable_eye_jitter");
                 if (mEnableJitter && !sDisableJitter && !disable && deltasecs > 0.0f) {
-                    auto _tmp4 = RandomFloat(-mPitchJitterLimit, mPitchJitterLimit);
-                    lookDir.Set(
-                        lookDir[0]
-                            + _tmp4
-                                * DEG2RAD,
-                        lookDir[1],
-                        lookDir[2] + RandomFloat(-mYawJitterLimit, mYawJitterLimit) * DEG2RAD
-                    );
+                    float yawJitter = RandomFloat(-mYawJitterLimit, mYawJitterLimit);
+                    float pitchJitter = RandomFloat(-mPitchJitterLimit, mPitchJitterLimit);
+                    lookDir.x += pitchJitter * DEG2RAD;
+                    lookDir.z += yawJitter * DEG2RAD;
                 }
                 if (mSourceRadius > 0.0f) {
-                    Multiply(sourceFilter, mPivot->TransParent()->WorldXfm().m, sourceFilter);
+                    Multiply(mPivot->TransParent()->WorldXfm().m, sourceFilter, sourceFilter);
                     lookDir -= sourceFilter;
                 }
                 if (mAllowRoll) {
@@ -300,7 +317,7 @@ void CharLookAt::Poll() {
                     FastInterp(Hmx::Quat(0, 0, 0, 1.0f), rotQuat, charWeight, rotQuat);
                     Hmx::Matrix3 rotMat;
                     MakeRotMatrix(rotQuat, rotMat);
-                    if (rotMat.x.x < -2.0f || rotMat.x.x > 2.0f) {
+                    if (rotMat.x.x < -2.0f || rotMat.x.x > 2.0f || IsNaN(rotMat.x.x)) {
                         MILO_NOTIFY_ONCE(
                             "%s has m.x.x %g, character or target scaled or NAN",
                             PathName(this),
@@ -317,7 +334,7 @@ void CharLookAt::Poll() {
                     Cross(dirtyMat.y, dirtyMat.z, dirtyMat.x);
                     Normalize(dirtyMat.x, dirtyMat.x);
                     Cross(dirtyMat.x, dirtyMat.y, dirtyMat.z);
-                    if (dirtyMat.x.x < -2.0f || dirtyMat.x.x > 2.0f) {
+                    if (dirtyMat.x.x < -2.0f || dirtyMat.x.x > 2.0f || IsNaN(dirtyMat.x.x)) {
                         MILO_NOTIFY_ONCE(
                             "%s has m.x.x %g, character or target scaled or NAN",
                             PathName(this),

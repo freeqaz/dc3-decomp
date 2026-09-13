@@ -361,7 +361,8 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     rsrcA->StuffBones(meshes, mClipA->GetContext());
     std::vector<RndTransformable *> transes;
     for (ObjDirItr<RndTransformable> it(rsrcA, true); it != nullptr; ++it) {
-        if (strnicmp(it->Name(), "bone_", 5) == 0) {
+        // The literal is "bone_" but the target compares only 4 chars (li r5, 4).
+        if (strnicmp(it->Name(), "bone_", 4) == 0) {
             transes.push_back(it);
         }
     }
@@ -393,12 +394,11 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     float interpB = Interp(mClipB->StartBeat(), mClipB->EndBeat(), 0.5f);
     mWorstErr = 0;
 
-    int _width = mDists.mWidth;
-    for (int i = 0; i < _width; i++) {
+    for (int i = 0; i < mDists.mWidth; i++) {
         float beatA = (float)i / (float)mSamplesPerBeat + mAStart;
         DistEntry newDistEntry;
         for (int j = 0; j < mDists.mHeight; j++) {
-            mDists(i, j) = kHugeFloat;
+            mDists(i, j) = sLargeFloat;
             float beatB = (float)j / (float)mSamplesPerBeat + mBStart;
             if (mBeatAlign == 0.0f || BeatAligned(i, j)) {
                 if (arr) {
@@ -420,23 +420,21 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                 GenerateDistEntry(meshes, newDistEntry, (float)i / (float)mSamplesPerBeat + mAStart, mClipA, transes);
 
                 if (maxFacing > 0.0f) {
-                    float *curFacing = curDistEntry.facing;
-                    float *newFacing = newDistEntry.facing;
-                    float facing = newFacing[0];
+                    // Integrate the facing curve: the NEW entry's delta is
+                    // weighted (1 - w) and the CUR entry's delta w, and the new
+                    // delta is the first LimitAng call. The target walks one
+                    // pointer through cur and addresses new relative to it.
+                    float facing = newDistEntry.facing[0];
                     float weight = 0.33333334f;
-                    int k = 3;
-                    do {
-                        float angleDiff1 = LimitAng(curFacing[1] - curFacing[0]);
-                        float angleDiff2 = LimitAng(newFacing[1] - newFacing[0]);
-                        curFacing++;
-                        facing += (1.0f - weight) * angleDiff1 + weight * angleDiff2;
-                        newFacing++;
+                    for (int k = 0; k < 3; k++) {
+                        float newDiff = LimitAng(newDistEntry.facing[k + 1] - newDistEntry.facing[k]);
+                        float curDiff = LimitAng(curDistEntry.facing[k + 1] - curDistEntry.facing[k]);
+                        facing += (1.0f - weight) * newDiff + weight * curDiff;
                         weight += 0.33333334f;
-                        k--;
-                    } while (k != 0);
+                    }
                     facing = LimitAng(facing - curDistEntry.facing[3]);
                     if (fabsf(facing) > maxFacing) {
-                        mDists(i, j) = kHugeFloat;
+                        mDists(i, j) = sLargeFloat;
                         continue;
                     }
                 }
