@@ -193,13 +193,35 @@ void PlatformMgr::UpdateSigninState() {
     XUID oldCache[4] = { mXuidCache[0], mXuidCache[1], mXuidCache[2], mXuidCache[3] };
     int i;
     mSigninMask = 0;
+    // The image zeroes 0x54 too, at 825D3E18, right beside the 0x50 store --
+    // without it mSigninChangeMask is sticky and every later SigninChangedMsg
+    // reports every pad that has ever changed.
+    mSigninChangeMask = 0;
     mSigninSameGuest = 0;
     for (i = 0; i < 4; i++) {
         if (XUserGetSigninState(i) != 0) {
             XUSER_SIGNIN_INFO info = {};
             mSigninMask |= (1 << i);
-            XUserGetSigninInfo(i, 2, &info);
-            XUserGetXUID(i, &info.xuid);
+            // Both XUSER results are consumed in the image, as a branchless
+            // "zero the xuid if the call failed" select:
+            //   825D3E68  bl     XUserGetSigninInfo
+            //   825D3E6C  subic  r11, r3, 0x1     ; CA = (hr != 0)
+            //   825D3E70  ld     r10, 0x70(r1)    ; info.xuid
+            //   825D3E74  subfe  r11, r11, r11    ; -1 when hr == 0
+            //   825D3E78  and    r11, r11, r10
+            // and XUserGetXUID is only called when that left the xuid ZERO
+            // (825D3E80 cmpldi / 825D3E84 bne skips it), with the same select
+            // applied to its own result. Discarding the codes cached whatever
+            // the failed call left in the struct, which then compared unequal
+            // to oldCache and fabricated a signin-change event.
+            if (XUserGetSigninInfo(i, 2, &info) != 0) {
+                info.xuid = 0;
+            }
+            if (info.xuid == 0) {
+                if (XUserGetXUID(i, &info.xuid) != 0) {
+                    info.xuid = 0;
+                }
+            }
             mXuidCache[i] = info.xuid;
         } else {
             mXuidCache[i] = 0;
