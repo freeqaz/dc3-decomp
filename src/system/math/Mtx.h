@@ -348,7 +348,7 @@ public:
         a = normal.x;
         b = normal.y;
         c = normal.z;
-        d = -(a * point.x + b * point.y + c * point.z);
+        d = -(normal.x * point.x + normal.y * point.y + normal.z * point.z);
     }
 
     void Set(const Vector3 &, const Vector3 &, const Vector3 &);
