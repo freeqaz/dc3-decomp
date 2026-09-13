@@ -155,6 +155,16 @@ float DirectionGestureFilterSingleUser::UpdateOverlay(RndOverlay *overlay, float
     return mArcDetector.UpdateOverlay(overlay, f1);
 }
 
+// .data:0x82F4453C / 0x40 / 0x44 / 0x48 -- four MUTABLE file-scope floats. The
+// target loads each from memory (`lis`/`lfs` on a .data label) instead of
+// materialising a literal, so they cannot be `const` and cannot be written
+// inline. They are the half-axes, in shoulder-widths, of the torso exclusion
+// ellipse the hand must be OUTSIDE of for the pose to count as a valid swipe.
+static float sSwipeEllipseWidth = 0.9f;
+static float sSwipeEllipseHeight = 1.3f;
+static float sSwipeEllipseWidthEngaged = 0.8f;
+static float sSwipeEllipseHeightEngaged = 1.1f;
+
 bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skeleton) const {
     const TrackedJoint *joints = skeleton.TrackedJoints();
 
@@ -230,11 +240,11 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
 
     float width, height;
     if (mEngaged) {
-        height = 0.4f;
-        width = 0.35f;
+        height = sSwipeEllipseHeightEngaged;
+        width = sSwipeEllipseWidthEngaged;
     } else {
-        height = 0.3f;
-        width = 0.25f;
+        height = sSwipeEllipseHeight;
+        width = sSwipeEllipseWidth;
     }
 
     height *= shoulderDist;
