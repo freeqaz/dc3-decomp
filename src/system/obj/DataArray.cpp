@@ -539,8 +539,11 @@ void DataArray::Load(BinStream &bs) {
     for (int i = 0; i < size;) {
         DataNode &node = mNodes[i];
         bs >> node;
-        if (DataArrayDefined() || node.Type() == kDataIfdef || node.Type() == kDataElse
-            || node.Type() == kDataEndif || node.Type() == kDataIfndef) {
+        // Order matters and is not the enum's: the target tests 7, 0x23, 8, 9
+        // (825A1C18-825A1C40), i.e. Ifdef, Ifndef, Else, Endif.
+        if (DataArrayDefined() || node.Type() == kDataIfdef
+            || node.Type() == kDataIfndef || node.Type() == kDataElse
+            || node.Type() == kDataEndif) {
             // process
         } else {
             size--;

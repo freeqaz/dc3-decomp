@@ -417,13 +417,15 @@ void FlowSetProperty::ReActivate() {
     Timer t;
     t.Restart();
     PushDrivenProperties();
-    auto& target = mTarget;
+    // No local alias for mTarget: FlowPtr::operator-> is inlined, so each use
+    // recomputes `addi r3, r30, 0x78` in the target rather than holding the
+    // sub-object address in a callee-saved register.
     if (0.0f == mBlendTime && mChangePerUnit == 0.0f) {
-        FLOW_LOG("Setting Value on %s\n", target->Name())
-        target->SetProperty(unk_0x98.Array(), mValue.Node());
+        FLOW_LOG("Setting Value on %s\n", mTarget->Name())
+        mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
         return;
     }
-    if (target->Property(unk_0x98.Array(), true)->Evaluate()
+    if (mTarget->Property(unk_0x98.Array(), true)->Evaluate()
         != mValue.Node().Evaluate()) {
         FLOW_LOG("Queueing\n")
         TheFlowMgr->QueueCommand(this, kQueue);

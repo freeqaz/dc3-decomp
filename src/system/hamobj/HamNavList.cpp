@@ -1306,7 +1306,11 @@ void HamNavList::SetSelecting(bool selecting) {
         }
     }
     if (mListRibbonResource) {
-        RndAnimatable *sla = mListRibbonResource->SlideSoundAnim();
+        // Held as the ObjPtr reference SlideSoundAnim() actually returns, not
+        // decayed to a raw pointer: the `if` then runs ObjPtr's inlined
+        // conversion on a computed sub-object (+0x384), which is what puts the
+        // result in the 0x50 temp slot at 824487C4.
+        const ObjPtr<RndAnimatable> &sla = mListRibbonResource->SlideSoundAnim();
         if (sla) {
             sla->SetFrame(1.0f, 1.0f);
         }
@@ -1314,7 +1318,7 @@ void HamNavList::SetSelecting(bool selecting) {
         mListRibbonResource->SetSelectToggle(skipSelectAnim);
     }
     if (mHeaderRibbonResource) {
-        RndAnimatable *sla = mHeaderRibbonResource->SlideSoundAnim();
+        const ObjPtr<RndAnimatable> &sla = mHeaderRibbonResource->SlideSoundAnim();
         if (sla) {
             sla->SetFrame(1.0f, 1.0f);
         }

@@ -993,9 +993,12 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
     }
 
     float eyeRot = (1.0f - blinkWeight) * source->LocalXfm().m.y.x;
-    float negEyeRot = -eyeRot;
 
     if (upperLid) {
+        // The negation is scoped to each block that needs it: the target emits
+        // one `fneg` here and a second inside the lower-lid rotate arm, rather
+        // than one hoisted copy at function scope.
+        float negEyeRot = -eyeRot;
         float angle =
             (0.0f <= eyeRot ? mUpperLidTrackUp : mUpperLidTrackDown) * negEyeRot;
         bool isNaN = (angle != angle);
@@ -1007,6 +1010,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
 
     if (lowerLid) {
         if (mLowerLidTrackRotate) {
+            float negEyeRot = -eyeRot;
             float angle =
                 (eyeRot >= 0.0f ? mLowerLidTrackUp : mLowerLidTrackDown) * negEyeRot;
             bool isNaN = (angle != angle);

@@ -311,23 +311,14 @@ void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float weight, 
 void CharLipSyncDriver::Poll() {
     START_AUTO_TIMER("lipsyncdriver");
 
-    if (mClips) {
-        if (mBones) {
-            if (mTestClip) {
-                if (TheLoadMgr.EditMode()) {
-                    CharClip *relative = mTestClip->Relative();
-                    if (relative && mTestWeight >= 0.0f) {
-                        mBones.Ptr()->ScaleAdd(
-                            mTestClip, mTestWeight, mTestClip->StartBeat(), 0.0f
-                        );
-                    }
-                    return;
-                }
-            }
-        } else
-            return;
-    } else
+    if (!mClips || !mBones)
         return;
+    if (mTestClip && TheLoadMgr.EditMode()) {
+        if (!mTestClip->Relative() || mTestWeight < 0.0f)
+            return;
+        mBones->ScaleAdd(mTestClip, mTestWeight, mTestClip->StartBeat(), 0.0f);
+        return;
+    }
 
     float timeMs = TheTaskMgr.Seconds(TaskMgr::kRealTime) * 1000.0f;
 
@@ -431,9 +422,9 @@ void CharLipSyncDriver::Poll() {
                 float duration = mMainPlayback->mLipSync->Duration();
                 float songTime = TheTaskMgr.Seconds(TaskMgr::kRealTime) + mSongOffset;
                 if (songTime >= duration) {
-                    char *lsName = mMainPlayback->mLipSync
-                        ? (char *)mMainPlayback->mLipSync->Name()
-                        : (char *)"";
+                    const char *lsName = mMainPlayback->mLipSync
+                        ? mMainPlayback->mLipSync->Name()
+                        : "";
                     MILO_LOG(
                         "CharLipSyncDriver::Poll() - Triggering VO Lip Sync FadeOut - Name:%s\n",
                         lsName
@@ -446,9 +437,9 @@ void CharLipSyncDriver::Poll() {
 
     if (mIsOverrideActive) {
         if (mMainBlendAlpha < 0.001f) {
-            char *lsName2 = mMainPlayback->mLipSync
-                ? (char *)mMainPlayback->mLipSync->Name()
-                : (char *)"";
+            const char *lsName2 = mMainPlayback->mLipSync
+                ? mMainPlayback->mLipSync->Name()
+                : "";
             MILO_LOG(
                 "CharLipSyncDriver::Poll() - Deleting VO Lip Sync track because it finished and faded out - Name:%s\n",
                 lsName2
@@ -467,7 +458,12 @@ void CharLipSyncDriver::Poll() {
         CameraManager *camMgr = TheWorld->GetCameraManager();
         if (camMgr) {
             cam = camMgr->CurrentShot();
-            if (!cam) {
+            // Tested on the accessor, not on `cam`: the original null-checks
+            // the inlined call's own temporary (823B81C4 stores it into the
+            // 0x50 temp slot), which a test on the named local does not
+            // produce. CurrentShot() is a pure accessor, so this is the same
+            // test.
+            if (!camMgr->CurrentShot()) {
                 cam = camMgr->MiloCamera();
             }
         }
@@ -477,8 +473,7 @@ void CharLipSyncDriver::Poll() {
     if (!mMainPlayback || !mMainPlayback->mLipSync || !cam) {
         skipOverride = 0;
     } else {
-        const char *name = cam->Name();
-        if (name && strncmp(name, "battle_", 7) == 0) {
+        if (cam->Name() && strncmp(cam->Name(), "battle_", 7) == 0) {
             skipOverride = 1;
         } else {
             skipOverride = 0;
