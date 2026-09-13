@@ -50,16 +50,22 @@ void StorePanel::Load() {
     mLoadOk = true;
     mNeedsCacheLoad = true;
     ThePlatformMgr.AddSink(this);
-    if (StoreProfile() == 0) {
+    Profile *profile = StoreProfile();
+    if (profile == 0) {
         ExitError(kStoreErrorLiveServer);
-    } else if (ThePlatformMgr.IsSignedIntoLive(0) == 0) {
+        // The image reaches IsSignedIntoLive with the profile's OWN pad number,
+        // not 0: at 0x82E138E4 it calls ?GetPadNum@Profile@@QBAHXZ (the listing
+        // names its ICF group leader at 0x82378970) on the still-live r3 and
+        // passes the result as r4. Enter() below already spells it this way.
+    } else if (ThePlatformMgr.IsSignedIntoLive(profile->GetPadNum()) == 0) {
         ExitError(kStoreErrorCacheNoSpace);
     }
     TheContentMgr.StartRefresh();
-#ifdef HX_NATIVE
-    if (TheNetCacheMgr)
-#endif
-    TheNetCacheMgr->Load((NetCacheMgr::CacheSize)1);
+    // NO TheNetCacheMgr->Load() here. The image runs ContentMgr::StartRefresh
+    // (the `bctrl` at 0x82E13938) and lands directly on the MILO_ASSERT block at
+    // 0x82E1393C; ?Load@NetCacheMgr@@QAAXW4CacheSize@1@@Z appears nowhere in the
+    // function. The cache load is deferred to Enter(), which is exactly what the
+    // mNeedsCacheLoad flag set two lines above exists to schedule.
     MILO_ASSERT(!mStorePreviewMgr, 0xAD);
     mStorePreviewMgr = new StorePreviewMgr();
     mStorePreviewMgr->AddSink(this);
