@@ -1244,7 +1244,7 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
         MILO_NOTIFY("%s: Unsupported bit depth %d", bs->Name(), infoheader.biBitCount);
         return false;
     }
-    if (infoheader.biCompression != 0) {
+    if ((unsigned long)infoheader.biCompression != 0) {
         // The target binds MakeString's `const long &` straight to the field's
         // own stack slot: 0x82672CAC `addi r5, r1, 0x80`, and infoheader lives
         // at 0x70(r1). A `(long)` value cast spills a second copy at 0x60(r1)
@@ -1291,9 +1291,11 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
     if (infoheader.biBitCount == 4) {
         unsigned char *p = (unsigned char *)pixels;
         unsigned char *pEnd = p + pixelBytes;
-        while (p != pEnd) {
-            *p = (*p << 4) | (*p >> 4);
-            p++;
+        if (p != pEnd) {
+            do {
+                *p = (*p << 4) | (*p >> 4);
+                p++;
+            } while (p != pEnd);
         }
     }
     if ((int)infoheader.biXPelsPerMeter != 0xB11) {

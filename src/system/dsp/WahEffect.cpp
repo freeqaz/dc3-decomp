@@ -46,6 +46,15 @@ void WahEffect::SetParameters(WahEffect::Params const &params) {
     mStaticSweep = params.mStaticSweep;
 }
 
+// w7-bh: the one remaining Function Call Diff row here is a benign ICF fold,
+// not a wrong callee.  The image calls
+// `MakeString<char[19], int, char[5]>` and we emit
+// `MakeString<char[18], int, char[14]>`; both names resolve to 0x824D1870 in
+// build/373307D9/icf_aliases.map, because MakeString's array-bound template
+// parameters never reach the generated code and every instantiation of that
+// shape is byte-identical.  The name objdiff shows is just whichever
+// instantiation won the fold.  (The indexed-vs-auto-update addressing floor at
+// 93.29% is recorded in-body below and in d23473cc4; not re-attempted.)
 void WahEffect::Process(float *buf, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x34);
 

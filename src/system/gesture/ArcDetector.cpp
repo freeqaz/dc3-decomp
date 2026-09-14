@@ -156,54 +156,49 @@ void ArcDetector::DrawPath(
 }
 
 float ArcDetector::GetPathLength() const {
-    std::list<Vector3>::const_iterator it = mJointPath.begin();
-    unsigned int count = 0;
-    if (it != mJointPath.end()) {
-        do {
-            ++it;
-            count++;
-        } while (it != mJointPath.end());
-    }
-    if (count <= 1) {
+    if (mJointPath.size() <= 1) {
         return 0.0f;
     }
-    it = mJointPath.begin();
+    std::list<Vector3>::const_iterator it = mJointPath.begin();
     float length = 0.0f;
     Vector3 prev = *it;
     ++it;
-    if (it == mJointPath.end()) {
-        return length;
+    if (it != mJointPath.end()) {
+        do {
+            float dx = mArcOffset.x - it->x;
+            if (mSide == kSkeletonRight) {
+                dx = dx * -1.0f;
+            }
+            float prevDx = mArcOffset.x - prev.x;
+            if (mSide == kSkeletonRight) {
+                prevDx = prevDx * -1.0f;
+            }
+            if (dx > 0.0f && prevDx > 0.0f) {
+                float comp1 = mSwipeExtentX * prevDx * 2.0f - prevDx * prevDx;
+                float arcY1;
+                if (!(comp1 > 0.0f)) {
+                    arcY1 = 0.0f;
+                } else {
+                    arcY1 = sqrtf(comp1);
+                }
+                Vector3 p1(prevDx, arcY1, mSwipeExtentY);
+                float comp2 = mSwipeExtentX * dx * 2.0f - dx * dx;
+                float arcY2;
+                if (!(comp2 > 0.0f)) {
+                    arcY2 = 0.0f;
+                } else {
+                    arcY2 = sqrtf(comp2);
+                }
+                Vector3 p2(dx, arcY2, mSwipeExtentY);
+                float ex = p2.x - p1.x;
+                float ey = p2.y - p1.y;
+                float ez = p2.z - p1.z;
+                length = sqrtf(ez * ez + ey * ey + ex * ex) + length;
+            }
+            prev = *it;
+            ++it;
+        } while (it != mJointPath.end());
     }
-    do {
-        float dx = mArcOffset.x - it->x;
-        if (mSide == kSkeletonRight) {
-            dx = dx * -1.0f;
-        }
-        float prevDx = mArcOffset.x - prev.x;
-        if (mSide == kSkeletonRight) {
-            prevDx = prevDx * -1.0f;
-        }
-        if (dx > 0.0f && prevDx > 0.0f) {
-            float comp1 = mSwipeExtentX * prevDx * 2.0f - prevDx * prevDx;
-            float arcY1;
-            if (comp1 > 0.0f) {
-                arcY1 = sqrtf(comp1);
-            } else {
-                arcY1 = 0.0f;
-            }
-            float comp2 = mSwipeExtentX * dx * 2.0f - dx * dx;
-            float arcY2;
-            if (comp2 > 0.0f) {
-                arcY2 = sqrtf(comp2);
-            } else {
-                arcY2 = 0.0f;
-            }
-            float dz = mSwipeExtentY - mSwipeExtentY;
-            length = sqrtf(dz * dz + (arcY2 - arcY1) * (arcY2 - arcY1) + (dx - prevDx) * (dx - prevDx)) + length;
-        }
-        prev = *it;
-        ++it;
-    } while (it != mJointPath.end());
     return length;
 }
 

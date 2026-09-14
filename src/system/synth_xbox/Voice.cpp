@@ -842,6 +842,12 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
     }
 }
 
+// w7-bh: the MakeString template-instantiation row objdiff reports here is a
+// benign ICF fold, not a wrong callee -- both the image's and our instantiation
+// resolve to 0x824D1870 in build/373307D9/icf_aliases.map.  MakeString's array
+// bounds are template parameters that never reach the code, so all such
+// instantiations are byte-identical and the linker folds them.  The real
+// residual at 90.7% / 1168 B is a prologue hoist-set permutation.
 unsigned long StartVoiceThreadEntry(void *) {
     rolling++;
     WaitForSingleObject(gEvent, INFINITE);
