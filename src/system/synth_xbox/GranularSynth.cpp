@@ -168,6 +168,16 @@ void GranularSynth::Synthesize(unsigned int count, float *const *out) {
 
         for (unsigned int k = gr.mStartOffset; k < limit; k++) {
             gr.mPhase = gr.mPhase + 1.0f;
+            // Read once, at the TOP of the body: the image loads mFadeIn as the
+            // second instruction of the loop (`lwz r6, 0x30(r11)` at 0x82E4B6A8)
+            // and keeps it live in r6 all the way to `subf r9, r6, r8` at
+            // 0x82E4B79C.  That extra live value is what pushes &mGranules out of
+            // the volatile range into r31 and the whole allocation up one, so the
+            // image needs __savegprlr_20 and a 0xe0 frame.  Reading gr.mFadeIn
+            // inline in the `if` below instead let MSVC sink the load to the
+            // compare, kept &mGranules in r3, and cost __savegprlr_21 / 0xd0 --
+            // 88.5 canonical.  This one line is the whole 88.5 -> 100 crossing.
+            unsigned int fadeIn = gr.mFadeIn;
 
             float t = gr.mPhase - gr.mOffset;
             unsigned int pos = (unsigned int)(t + (t >= 0.0f ? 0.5f : -0.5f));
@@ -186,12 +196,18 @@ void GranularSynth::Synthesize(unsigned int count, float *const *out) {
             float a = mInput->begin()[i0];
             float s = (mInput->begin()[i1] - a) * frac + a;
 
-            if (pos >= gr.mFadeIn) {
-                s = mWindows[window][pos - gr.mFadeIn] * s;
+            if (pos >= fadeIn) {
+                s = mWindows[window][pos - fadeIn] * s;
             } else if (pos < windowLen) {
                 s = (1.0f - mWindows[window][pos]) * s;
             }
 
+            // RESIDUAL (raw only; canonical is 100.0).  The image's accumulate is
+            // `fadds f0, f10, f0` at 0x82E4B7E8 (loaded sample first); we emit
+            // `fadds f0, f0, f10`.  NEGATIVE: `+=` and `s + out[...][k]` are both
+            // inert -- the operand order is chosen after the expression is
+            // scheduled, not from the source order.  Commutative-operand-order
+            // floor, costs 0 canonical points.
             out[gr.mVoice][k] = out[gr.mVoice][k] + s;
         }
 
