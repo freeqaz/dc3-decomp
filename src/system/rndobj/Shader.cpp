@@ -766,10 +766,15 @@ u64 RndShaderStandard::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
 u64 RndShaderPostProc::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     bool v2e = TheShaderMgr.unk2e;
     bool v25 = TheShaderMgr.unk25;
-    bool v2a = TheShaderMgr.unk2a;
     bool v39 = TheShaderMgr.unk39;
     bool v3d = TheShaderMgr.unk3d;
     bool v3f = TheShaderMgr.unk3f;
+    // v2a is declared SIXTH, not third, even though the image issues its load
+    // first: MSVC hands out r29..r24 in declaration order, and the image's
+    // assignment is r29=0x2e r28=0x25 r27=0x39 r26=0x3d r25=0x3f r24=0x2a.
+    // With v2a third the whole group rotates by one and drags the 0x34/0x38/
+    // 0x3a/0x3e reuses with it (24 register rows).
+    bool v2a = TheShaderMgr.unk2a;
     bool v29 = TheShaderMgr.unk29;
     bool v2d = TheShaderMgr.unk2d;
     bool v26 = TheShaderMgr.unk26;
