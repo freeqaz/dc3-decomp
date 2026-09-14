@@ -153,8 +153,14 @@ float CharInterest::ComputeScore(
     int filterFlags,
     bool b
 ) {
-    if (!IsMatchingFilterFlags(filterFlags) && !(b && mCategoryFlags == 0)) {
-        return -1.0f;
+    if (!IsMatchingFilterFlags(filterFlags)) {
+        // The image MATERIALISES this subexpression into a bool (li 0 / b /
+        // li 1 / clrlwi. / bne) inside the short-circuit, rather than
+        // branching straight out of the && -- hence the nested if.
+        bool categoryOverride = b && mCategoryFlags == 0;
+        if (!categoryOverride) {
+            return -1.0f;
+        }
     }
 
     Vector3 v7c(WorldXfm().v);
