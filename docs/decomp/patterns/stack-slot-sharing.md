@@ -210,6 +210,49 @@ object, ~20 s, no ninja, prints both sides' store-slot sequences and the differi
 `slot_table.py` prints the `name$ = offset` table for one PROC (its regex accepts the
 unnumbered `goofy$ = 140` form that `tu_census.py` skips).
 
+#### `HamDirector::OnPopulateMoves`: the "48 rows left" decoded to a 24-slot map (w6-a)
+
+The `fp -8` remark above is the visible corner of a permutation worth writing down, because the
+function is 2,712 B at **99.63717** and the *frame sizes already agree* (0x1350 both sides) --
+so there is nothing structural left, only temp ordering. 46 `diff_arg` + one `mr r3, r14`
+scheduled two slots early (base idx 380 vs target 382).
+
+Everything at or below `0x9c` matches. Everything at or above `0x120` (the three `merger`s,
+`fs`) matches. **All 24 permuted slots live in `0xa0..0x118`**, and both sides use the same
+count there (27 slots, with the 8-byte `FilePath`s leaving different gaps). Base-side names are
+from `/FAs`; target offsets are from the aligned diff rows:
+
+| our slot | our name | target slot | delta |
+|---|---|---|---|
+| `0xa0` | (temp) | `0xb8` | +0x18 |
+| `0xa4` | (temp) | `0xa0` | -4 |
+| `0xa8` | (temp) | `0xa4` | -4 |
+| `0xac` | (temp) | `0xb0` | +4 |
+| `0xb0` | `movesDir` | `0xc0` | +0x10 |
+| `0xb4` | `moveSymKeys` | `0xb4` | **match** |
+| `0xb8` | `clipKeys` | `0xc8` | +0x10 |
+| `0xbc` | `hamMoveName` | `0xbc` | **match** |
+| `0xc0` | (temp) | `0xd0` | +0x10 |
+| `0xc8` | (temp) | `0xd8` | +0x10 |
+| `0xcc` | (temp) | `0xa8` | -0x24 |
+| `0xd0` | `moveKeys` | `0xac` | -0x24 |
+| `0xd4` | (temp) | `0xcc` | -8 |
+| `0xd8` | (temp) | `0xd4` | -4 |
+| `0xdc` | (temp) | `0xe0` | +4 |
+| `0xe0` | `clipSymKeys` | `0xdc` | -4 |
+| `0xe4` | (temp) | `0xe8` | +4 |
+| `0xe8` `0xf0` `0xf8` | `fp` x3 | `0xf0` `0xf8` `0x100` | **+8 each** |
+| `0x100` `0x104` `0x108` `0x10c` `0x110` `0x114` | (temps) | `0x114` `0x110` `0xe4` `0x118` `0x108` `0x10c` | scrambled |
+
+The `fp +8` has a concrete cause visible in the map: the target fits **one more word slot below
+the `FilePath` block** (word slots at `0xdc 0xe0 0xe4 0xe8`, then `fp` 8-aligned at `0xf0`; ours
+has only `0xdc 0xe0 0xe4`, so `fp` lands at `0xe8`). That extra word is not an extra
+*variable* -- it is our `0x108` temp, which the target places at `0xe4`. So this is squarely the
+"highest free slot / full-expression lifetime" rule above, and it should be **decodable** from the
+target's store sequence rather than guessed: the lever is which reads are chained into one
+full-expression and which are separate statements. `store_seq_probe.py` is the instrument.
+Not attempted here for want of lane time; recorded so the next lane starts from the map.
+
 Two more levers the same session confirmed on this class, both on named locals:
 
 - **Implicit conversion vs explicit temporary** (`CharCuff::Load` 99.99 -> 100, `DirLoader::AddTypeObjectMemDelta` 95.4 -> 99.9): `mCategory = "";` reads the temp back from its slot, `mCategory = Symbol("")` reads it through the ctor's return register; `find(String(name))` hands the ctor return straight to `_M_find`, `find(name)` re-materialises the slot address. Which one the target used is visible in the row after the ctor call (`lwz r11, 0x54(r1)` vs `lwz r11, 0x0(r3)`, `mr r4, r3` vs `addi r4, r31, ..`).
