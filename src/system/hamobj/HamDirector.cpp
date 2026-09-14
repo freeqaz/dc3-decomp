@@ -2484,18 +2484,20 @@ bool HamDirector::ReactToCollision(float frame) {
     if (strncmp(cat.Str(), "Area", 4) != 0) {
         return false;
     }
-    Symbol symAt;
     static Symbol shot("shot");
     PropKeys *propKeys = GetPropKeysByPlayer(0, shot);
     if (!propKeys)
         return false;
+    // Both Symbol temps are default-constructed (a store of gNullStr) right
+    // before the SymbolAt call that fills them -- 0x8247A268/0x8247A26C for
+    // symAt and 0x8247A2C8/0x8247A2D8 for symAt2 -- not up front.
+    Symbol symAt;
     int keyIdx = propKeys->SymbolAt(frame, symAt);
     if (keyIdx >= 0 && strncmp(symAt.Str(), "Area", 4) == 0) {
         cat = symAt;
     }
     float frame2;
     float frame3;
-    Symbol symAt2;
     // Retail asks for the frame of the NEXT key (addi r4,r28,0x1 at 0x8247A2AC,
     // r28 being keyIdx) and then resolves the symbol AT that frame
     // (lfs f1,0x58(r31) at 0x8247A2D4, 0x58 being frame2).  We were passing
@@ -2506,6 +2508,7 @@ bool HamDirector::ReactToCollision(float frame) {
     bool idxExists = propKeys->FrameFromIndex(keyIdx + 1, frame2);
     if (!idxExists)
         return false;
+    Symbol symAt2;
     int keyIdx2 = propKeys->SymbolAt(frame2, symAt2);
     if (keyIdx2 == -1 || keyIdx2 == propKeys->NumKeys() - 1
         || strncmp(symAt2.Str(), "Area", 4) != 0) {
