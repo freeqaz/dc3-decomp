@@ -724,15 +724,14 @@ float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
 ) const {
     // Clamped prev-frame index: max(frameIdx - 1, 0)
     int clampedPrev = frameIdx - 1 > 0 ? frameIdx - 1 : 0;
-    const std::vector<SkeletonJoint> &trackedJoints = mTrackedJoints;
     float totalScore = 0.0f;
     float totalWeight = 0.0f;
-    if (trackedJoints.end() - trackedJoints.begin() != 0) {
+    if (mTrackedJoints.size() != 0) {
         const FreestyleMoveFrame *curFrame = &frames[frameIdx];
         const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
         unsigned int i = 0;
         do {
-            SkeletonJoint joint = trackedJoints[i];
+            SkeletonJoint joint = mTrackedJoints[i];
             Vector3 curJointPos, prevJointPos;
             curFrame->skeleton.JointPos(kCoordCamera, joint, curJointPos);
             prevFrame->skeleton.JointPos(kCoordCamera, joint, prevJointPos);
@@ -766,7 +765,7 @@ float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
                 i++;
             }
 #endif
-        } while (i < (unsigned int)(trackedJoints.end() - trackedJoints.begin()));
+        } while (i < mTrackedJoints.size());
         if (0.0f < totalWeight) {
             totalScore /= totalWeight;
         }
