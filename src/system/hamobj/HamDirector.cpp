@@ -1709,9 +1709,10 @@ Symbol HamDirector::ClosestMove() {
                             if (*candidate != '\0') {
                                 const char *p = candidate;
                                 do {
-                                    if (buf[p - candidate] == '\0')
+                                    unsigned char bufCh = buf[p - candidate];
+                                    if (bufCh == '\0')
                                         break;
-                                    int bufLower = tolower(buf[p - candidate]);
+                                    int bufLower = tolower((char)bufCh);
                                     // 0x824744BC is `cmpw cr6, r3, r22`:
                                     // tolower(*p) is the left operand.
                                     if (tolower(*p) != bufLower)
