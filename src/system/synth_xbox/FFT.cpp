@@ -28,6 +28,31 @@ static FftScratch g_fftScratch;
 // Real-input forward FFT (scalar). Computes a half-length complex FFT then
 // recombines the bins. data holds size real samples (treated as size/2 complex
 // pairs); context is FFTComplex scratch.
+//
+// Three spellings in here are load-bearing (w7-an, 80.9 -> 83.7 canonical):
+//  * the loop bound is `size >> 2` written INLINE.  Lifted into a
+//    `unsigned int count` local it becomes a provable trip count and MSVC
+//    converts the loop to CTR (`mtctr` / `bdnz`); the image keeps an explicit
+//    `k` against `size >> 2` in r8 (`addi r9, r9, 0x1` / `cmplw cr6, r9, r8` /
+//    `blt`, 0x82E50A4C-0x82E50ABC).  Same lever as CalculateSinCosTable below.
+//  * `hi` is `data + size - 2`, indexed `hi[1]` / `hi[0]`, NOT `data + size`
+//    with `hi[-1]` / `hi[-2]`.  The image computes `subi r10, r30, 0x2` /
+//    `slwi` / `add` and then biases `+0x8` inside the loop preheader
+//    (0x82E509D4, 0x82E50A18) -- the bias is MSVC's, so the source value it
+//    started from is data+size-2.
+//  * the low half is subscripted off `data`, not walked with a `float* lo`.
+//    A source-level `lo += 2` makes MSVC keep the pointer's own induction
+//    variable; the image's low-half base is a compiler-created one.
+//
+// RESIDUAL (w7-an, 83.7 canonical): 51 rows, all register numbering plus the
+// preheader schedule it drives.  The image puts `c` in f13 / `s` in f0 and
+// `hi_im` in f7 / `lo_im` in f8; we get each pair the other way round, which is
+// 19 of the 51.  Swapping the two declarations is byte-for-byte inert (tried).
+// The remaining lo-side rows are one bias: the image stores `lo[1]` with a
+// plain `stfs 0x4(r11)` and advances with two `addi`, we merge the advance into
+// `stfsu f9, 0x8(r11)` and bias the base -4.  Walking `lo` by hand, advancing
+// it before the stores, and subscripting off `data` all produce the merged
+// form; only the image's register colouring would avoid it.
 int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
     if (size < 2) {
         return 0;
@@ -44,23 +69,21 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
             // DC / Nyquist bins.
             float re0 = data[0];
             float im0 = data[1];
+            data[1] = re0 - im0;
             double c = 1.0;
             double s = 0.0;
             float ss = (float)sin_2a;
-            data[1] = re0 - im0;
             data[0] = im0 + re0;
 
-            cc = cc * 2.0;
+            float* hi = data + size - 2;
 
-            unsigned int count = size >> 2;
-            float* lo = data + 2;
-            float* hi = data + size;
-            for (unsigned int k = 0; k < count; ++k) {
-                float hi_im = hi[-1];
-                float lo_im = lo[1];
+            cc = cc * 2.0;
+            for (unsigned int k = 0; k < (size >> 2); ++k) {
+                float hi_im = hi[1];
+                float lo_im = data[k * 2 + 3];
                 float diff_im = lo_im - hi_im;
-                float lo_re = lo[0];
-                float hi_re = hi[-2];
+                float lo_re = data[k * 2 + 2];
+                float hi_re = hi[0];
                 float sum_im = hi_im + lo_im;
                 float sum_re = hi_re + lo_re;
                 float diff_re = lo_re - hi_re;
@@ -82,12 +105,11 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
                 d = d - (double)sum_im * s;
                 e = e + (double)diff_re * s;
 
-                lo[0] = (float)a * 0.5f;
-                lo[1] = (float)b * 0.5f;
-                hi[-1] = (float)d * 0.5f;
-                hi[-2] = (float)e * 0.5f;
+                data[k * 2 + 2] = (float)a * 0.5f;
+                data[k * 2 + 3] = (float)b * 0.5f;
+                hi[1] = (float)d * 0.5f;
+                hi[0] = (float)e * 0.5f;
 
-                lo += 2;
                 hi -= 2;
             }
         }
