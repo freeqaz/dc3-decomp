@@ -323,10 +323,10 @@ extern "C" void *__RTDynamicCast(
 
     __try {
         pCompleteLocator = (const _s_RTTICompleteObjectLocator *)((*((void ***)inptr))[-1]);
+        unsigned long cdOffset = pCompleteLocator->cdOffset;
         pCompleteObject = (char *)inptr - pCompleteLocator->offset;
-        if (pCompleteLocator->cdOffset != 0) {
-            pCompleteObject =
-                (char *)pCompleteObject - *(int *)((char *)inptr - pCompleteLocator->cdOffset);
+        if (cdOffset != 0) {
+            pCompleteObject = (char *)pCompleteObject - *(int *)((char *)inptr - cdOffset);
         }
 
         char *pvfptr = (char *)inptr - VfDelta;
@@ -351,11 +351,11 @@ extern "C" void *__RTDynamicCast(
         if (pBaseClass) {
             int adj = 0;
             if (pBaseClass->where.pdisp >= 0) {
-                adj = pBaseClass->where.pdisp +
-                    *(int *)(*(char **)((char *)pCompleteObject + pBaseClass->where.pdisp) +
-                             pBaseClass->where.vdisp);
+                adj = *(int *)(*(char **)((char *)pCompleteObject + pBaseClass->where.pdisp) +
+                               pBaseClass->where.vdisp) +
+                    pBaseClass->where.pdisp;
             }
-            pResult = (char *)pCompleteObject + pBaseClass->where.mdisp + adj;
+            pResult = (char *)pCompleteObject + (pBaseClass->where.mdisp + adj);
         } else {
             pResult = 0;
             if (isReference) {
