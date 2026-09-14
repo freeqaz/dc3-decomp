@@ -334,9 +334,21 @@ void ArcDetector::TryToStartSwipe(const Vector3 &pos, const Skeleton &skeleton) 
     }
     if (tracked) {
         mJointPath.insert(mJointPath.begin(), pos);
-        const TrackedJoint *joints = skeleton.TrackedJoints();
-        float dz = joints[mPrimaryJoint].mJointPos[0].z - joints[mSecondaryJoint].mJointPos[0].z;
-        float dx = joints[mPrimaryJoint].mJointPos[0].x - joints[mSecondaryJoint].mJointPos[0].x;
+        // No `const TrackedJoint *joints` base local -- the image keeps &skeleton
+        // itself as the base (`add r11, r11, r30` at 0x82E01078 with r30 == the
+        // Skeleton) and folds TrackedJoints()'s 0x4 into the float displacements
+        // (0xc = .z, 0x4 = .x).  What it DOES materialise is the address of each
+        // mJointPos[0], twice: the two dead `addi r9, r11, 0x4` / `addi r9, r10,
+        // 0x4` at 0x82E01080-0x82E01084 -- both into the same scratch, both
+        // immediately overwritten, which is what a pair of references that the
+        // loads then fold away leaves behind.  SECONDARY is evaluated first
+        // (`lwz r11, 0xc(r31)` precedes `lwz r10, 0x8(r31)`).
+        const PaddedJointPos &secondaryPos =
+            skeleton.TrackedJoints()[mSecondaryJoint].mJointPos[0];
+        const PaddedJointPos &primaryPos =
+            skeleton.TrackedJoints()[mPrimaryJoint].mJointPos[0];
+        float dz = primaryPos.z - secondaryPos.z;
+        float dx = primaryPos.x - secondaryPos.x;
         mSwipeExtentX = sqrtf(dx * dx + dz * dz);
     }
 }
