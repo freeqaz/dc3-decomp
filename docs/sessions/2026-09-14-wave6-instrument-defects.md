@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-14
 **Method:** nine lanes (`w6-a`..`w6-i`) in CoW worktrees, coordinator rebases, merges `--no-ff`, gates natively.
-**Headline:** 30,962 → 30,964 functions, 5,419,160 → 5,424,728 B, 47.641537% → 47.690487%.
+**Headline:** 30,962 → **30,967** functions, 5,419,160 → **5,427,300** B, 47.641537% → **47.713097%** — +5 functions, **+8,140 bytes**, +0.07156 pp.
 
 > **Read the headline last.** The wave's actual output is a set of behavioural
 > defects that no ruler in this project can see, and three defects in the
@@ -18,6 +18,17 @@
 | `Campaign::ConfigureCampaignData` | `meta_ham/Campaign` | 2,572 | 99.751 → **100.0** (643/643 equal, `name_check` too) | w6-h |
 | `Spotlight::UpdateTransforms` | `world/Spotlight` | 1,456 | 91.956 → **100.0** (3 register rows) | w6-i |
 | `RndShadowMap::PrepShadow` | `rndobj/ShadowMap` | 1,072 | 93.388 → **100.0** | w6-i |
+
+⚠ **The five crossings total 10,668 bytes of function size, but `matched_code`
+moved only +8,140.** The difference is exactly the last two rows (1,456 + 1,072 =
+2,528). This is the **ruler split**: `matched_functions` is credited on
+`match_percent_normalized` (canonical), while `matched_code` is credited on
+`fuzzy_match_percent`. `Spotlight::UpdateTransforms` reads canonical 100.0 with
+fuzzy 99.94505, and `RndShadowMap::PrepShadow` canonical 100.0 with fuzzy
+99.88806 — their residual register-permutation and commutative-operand rows are
+forgiven by the canonical ruler and charged by the fuzzy one. **A function can
+cross to 100 and add zero bytes.** Quote the measured report delta, never the sum
+of function sizes.
 
 ⚠ The first three are **zero-mismatch** hundreds. The last two are **canonical**
 hundreds carrying register-permutation and commutative-operand rows, which the
