@@ -146,6 +146,18 @@ void HamRibbon::SetActive(bool active) {
 }
 
 #pragma fp_contract(off)
+// RESIDUAL (w7-an, 98.0 canonical): what is left is register permutation plus
+// two addressing-fusion rows.  (a) `numKeys` lands in a callee-saved r26 in our
+// build and in a volatile r11 in the image, which rotates ~60 register numbers
+// downstream; (b) the image splits &back() out as `subi r30, r11, 0x44` and then
+// addresses the key positively (0x30/0x34/0x38/0x40 off r30) while MSVC fuses
+// ours into `subi r3, r11, 0x14` off _M_finish.
+// NEGATIVE RESULT (w7-an, 2026-09-14): binding that as a named
+// `Key<Transform> &last = mChaseKeys.back();` at the top of the while body DOES
+// reproduce the image's dual-base addressing (frame read off _M_finish, frame
+// write off &back()), but MSVC then keeps _M_finish loop-carried in r30 where the
+// image reloads 0x90(r23) at the top of every iteration, and the resulting
+// scheduling rotation costs more than the addressing gains: 98.0 -> 96.8.
 void HamRibbon::UpdateChase() {
     if (!mFollowA) {
         return;
