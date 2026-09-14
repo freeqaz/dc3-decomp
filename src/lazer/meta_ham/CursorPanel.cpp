@@ -54,7 +54,7 @@ void CursorPanel::Poll() {
         if (check && sCrownPlayerIndex == -1) {
             sCrownPlayerIndex = i;
         }
-        if (i == sCrownPlayerIndex ? !check : check) {
+        if ((i == sCrownPlayerIndex && !check) || (i != sCrownPlayerIndex && check)) {
             MILO_LOG("player %d lost his crown\n", sCrownPlayerIndex);
             sCrownPlayerIndex = -1;
             TheHamProvider->SetProperty(ui_crown_player, -1);
