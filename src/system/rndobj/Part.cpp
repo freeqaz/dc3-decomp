@@ -1529,11 +1529,17 @@ void RndParticleSys::UpdateParticles() {
 
                     int count = mSubSamples;
                     f32 stepSize = frameUpdate / (f32)mSubSamples;
-                    Vector3 interpOffset;
                     if (count != 0) {
                         do {
                             CreateParticles(currentFrame, stepSize, locToRel);
-                            Interp(interpOffset, baseVel, 1.0f / (f32)count, interpOffset);
+                            // The sub-sample walk advances the emitter's own
+                            // translation toward baseVel, so each sub-sample is
+                            // emitted at an interpolated position.  The image
+                            // passes r1+0xa0 as both source and destination at
+                            // 826C4D64/826C4D7C, and r1+0x70 is locToRel (the
+                            // memcpy into mSubSampleXfm at 826C4D10 names it) --
+                            // 0xa0 is locToRel.v, not a separate local.
+                            Interp(locToRel.v, baseVel, 1.0f / (f32)count, locToRel.v);
                             count--;
                         } while (count != 0);
                     }
