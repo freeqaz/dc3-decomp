@@ -112,16 +112,9 @@ void StreamReceiver360::SetSlipOffset(float f) {
     int cursor = GetPlayCursor();
     int halfCursor = cursor / 2;
     int halfBuf = (mNumBufs << 14) / 2;
-    int startSamp;
-    if (halfBuf == 0) {
-        startSamp = 0;
-    } else {
-        float fOff = f * 0.001f;
-        int offset = (int)(fOff * (float)mSampleRate);
-        startSamp = (offset + halfCursor) % halfBuf;
-        if (startSamp < 0) startSamp += halfBuf;
-    }
-    mSlipVoice->SetStartSamp(startSamp);
+    float fOff = f * 0.001f;
+    int offset = (int)(fOff * (float)mSampleRate);
+    mSlipVoice->SetStartSamp(Mod(offset + halfCursor, halfBuf));
     mSlipVoice->SetVolume(mVolume);
     mSlipVoice->SetPan(mPan);
     mSlipVoice->SetSpeed(mSpeed);
