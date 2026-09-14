@@ -1094,12 +1094,22 @@ void RndText::BuildFontMaps(bool b1) {
     if (b1) {
         for (auto it = mFontMaps.begin(); it != mFontMaps.end();
              it = mFontMaps.erase(it)) {
-            sFontMapCache.push_back(*it);
+            // The image copies the element out first and passes the address of
+            // that copy to list::insert -- `lwz r11,0x0(r31)` / `stw
+            // r11,0x58(r1)` / `addi r6,r1,0x58` -- rather than binding the
+            // const& straight to the vector slot (`mr r6, r31`).
+            FontMapBase *map = *it;
+            sFontMapCache.push_back(map);
         }
     }
     if (mFontMaps.empty()) {
         for (int i = 0; i < mStyles.size(); i++) {
-            RndFontBase *font = mStyles[i].mFont;
+            // The image falls back to style 0's font when style i has none:
+            // `lwz r9,0x40(r10)` / `addi r10,r10,0x34` / `cmpwi cr6,r9,0x0` /
+            // `bne` / `addi r10,r11,0x34` / `lwz r29,0xc(r10)` -- the ternary
+            // selects between the two ObjPtr objects (at +0x34) and only then
+            // reads the raw pointer out of the selected one (+0xc).
+            RndFontBase *font = mStyles[i].mFont ? mStyles[i].mFont : mStyles[0].mFont;
             if (font) {
                 if (FontMapIndex(font, mStyles[i].mBlacklight) == -1) {
                     FontMapBase *map = AcquireFontMap(font);
