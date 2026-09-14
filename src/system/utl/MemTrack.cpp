@@ -299,6 +299,15 @@ void MemTrackInit(int heap, int numAllocs, bool heapOnly) {
     if (heapOnly) {
         numAllocs = 1;
     }
+    // Residual (96.40%, 9 rows, 20 B): the image keeps the `new` result in r11
+    // (`mr r11, r3` / `li r11, 0` on the null arm), computes the 0x18195
+    // SetHeapOnly displacement in r10, stores gMemTracker AFTER that, and sets
+    // up malloc's argument (`mr r3, r29`) BEFORE the inlined
+    // `stbx r24, r11, r10`.  We keep the pointer in r3, store gMemTracker
+    // first, and set up r3 last -- an r10<->r11 scheduling permutation.
+    // REFUTED: naming the new result (`MemTracker *t = new ...; gMemTracker = t;
+    // t->SetHeapOnly(...)`), which is exactly the image's data flow, is
+    // byte-inert -- same 9 rows.
     gMemTracker = new MemTracker(heap, numAllocs);
     gMemTracker->SetHeapOnly(heapOnly);
     gAllocInfoHeap = (AllocInfo *)malloc(numAllocs * sizeof(AllocInfo));
