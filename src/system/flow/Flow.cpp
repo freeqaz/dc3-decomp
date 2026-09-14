@@ -269,16 +269,17 @@ void Flow::PreLoad(BinStream &bs) {
 
 void Flow::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
-    // Both declared at function scope, assigned inside their own arm. The target
-    // gives each of these three ints its own frame slot -- numDynProps 0x70,
-    // oldRev 0xc0, nodeType 0xd8 -- and with any of them declared block-locally
-    // MSVC coalesces it with one of the others, because they are sibling-scope
-    // ints (docs/decomp/patterns/lexical-scope-controls-msvc-stack-slots.md).
+    // All three declared at function scope, each assigned inside its own block.
+    // The target gives each its own frame slot -- numDynProps 0x70, oldRev 0xc0,
+    // nodeType 0xd8 -- and with any of them declared block-locally MSVC coalesces
+    // it with one of the others, because they are sibling-scope ints
+    // (docs/decomp/patterns/lexical-scope-controls-msvc-stack-slots.md).
     // Splitting the declaration from the initialisation keeps each store where
-    // the target puts it; hoisting `= 0` too would move it above
+    // the target puts it; hoisting numDynProps's `= 0` too would move it above
     // ObjectDir::PostLoad.
     int numDynProps;
     int oldRev;
+    int nodeType;
     ObjectDir::PostLoad(bs);
     if (IsProxy()) {
         numDynProps = 0;
@@ -304,7 +305,6 @@ void Flow::PostLoad(BinStream &bs) {
                 d.stream >> propName;
 
                 DataNode node;
-                int nodeType;
                 d.stream.ReadEndian(&nodeType, 4);
                 if (nodeType == kDataObject) {
                     Flow *owner = GetOwnerFlow();
