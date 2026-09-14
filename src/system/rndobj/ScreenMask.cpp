@@ -69,6 +69,20 @@ void RndScreenMask::DrawShowing() {
     float height = (float)TheRnd.Height();
     RndCam *cam = RndCam::Current();
     RndTex *targetTex = cam->TargetTex();
+    // Residual in the targetTex branch (~5 rows) is a frame-size delta, not a
+    // source shape: the image keeps a SECOND int->float scratch slot here
+    //   build/373307D9/asm/system/rndobj/ScreenMask.s @82712A68
+    //     clrrwi r10, r11, 0          ; we address off r11 directly
+    //     lwa  r9, 0x5c(r10) / std r9, 0x60(r1)    ; height -> slot 0x60
+    //     lwa r10, 0x58(r10) / std r10, 0x50(r1)   ; width  -> slot 0x50
+    //     lfd f0, 0x50 / fcfid / frsp f31          ; width
+    //     lfd f13, 0x60 / fcfid / frsp f30         ; height
+    // i.e. both ints are stored before either is converted, so 0x50 cannot be
+    // reused and the frame is 0xd0 instead of our 0xc0.  We store/convert/
+    // store/convert through 0x50 twice.  Swapping the two assignments to
+    // `height` then `width` DOES move the first lwa to 0x5c and kills the
+    // OFFSET_SWAP, but it flips the conversion order too (new frsp f31<->f30
+    // swaps) and the row count goes 54 -> 64, raw 97.0 -> 96.8.  Refuted.
     if ((int)targetTex) {
         width = (float)targetTex->Width();
         height = (float)targetTex->Height();
@@ -84,12 +98,23 @@ void RndScreenMask::DrawShowing() {
         }
     }
 
-    // Deliberately RndCam::Current() and not the `cam` local above: the image
-    // re-loads ?sCurrent@RndCam@@1PAV1@A here, after the MILO_NOTIFY_ONCE block
-    // (`lwz r29, ?sCurrent@RndCam@@1PAV1@A@l(r27)`), i.e. the current camera is
-    // re-read for this test rather than kept live in a callee-saved register.
-    // Spelling it `cam->TargetTex()` scores 97.44505; this scores 97.51099.
-    if (!mUseCamRect && !RndCam::Current()->TargetTex()) {
+    // The image re-loads ?sCurrent@RndCam@@1PAV1@A here, after the
+    // MILO_NOTIFY_ONCE block (`lwz r29, ?sCurrent@RndCam@@1PAV1@A@l(r27)`) --
+    // but it re-loads it INTO THE SAME VARIABLE, and then uses that variable
+    // for the Select() at the bottom of the branch too:
+    //   build/373307D9/asm/system/rndobj/ScreenMask.s
+    //     lwz r29, ?sCurrent@...@l(r27)   ; re-read
+    //     lwz r11, 0x2f4(r29)             ; cam->TargetTex()
+    //     ...
+    //     lwz r11, 0x0(r29) / lwz r11, 0x4(r11) / mr r3, r29   ; cam->Select()
+    // Writing `RndCam::Current()->Select()` at the bottom made MSVC re-read the
+    // global a third time (TheRnd.DrawRect intervenes and may write it), which
+    // is 3 rows the image does not have.  A fresh `RndCam *curCam` local closes
+    // those but costs a register; reassigning `cam` scores the same and keeps
+    // the image's one-variable shape.  (Spelling the TEST as `cam->TargetTex()`
+    // without the re-read scores 97.44505 -- refuted earlier.)
+    cam = RndCam::Current();
+    if (!mUseCamRect && !cam->TargetTex()) {
         TheRnd.GetDefaultCam()->Select();
         Hmx::Rect hiRes = TheHiResScreen.InvScreenRect();
         Hmx::Rect drawRect;
@@ -98,7 +123,7 @@ void RndScreenMask::DrawShowing() {
         drawRect.w = (mRect.w * hiRes.w) * width;
         drawRect.h = (mRect.h * hiRes.h) * height;
         TheRnd.DrawRect(drawRect, mColor, mMat, nullptr, nullptr);
-        RndCam::Current()->Select();
+        cam->Select();
     } else {
         Hmx::Rect hiRes = TheHiResScreen.InvScreenRect();
         Hmx::Rect drawRect;
