@@ -142,6 +142,17 @@ void AsyncFileWin::_Close() {
     mFile = INVALID_HANDLE_VALUE;
 }
 
+// COLLATERAL (w7-bg): 99.29% -> 97.84% canonical when _ReadAsync below was fixed
+// (unk58 bool -> unsigned char, its `aligned` local unsigned char -> int).  The
+// code SHAPE here improved -- the `mr r28, r11` insert that copied the memset
+// zero into a callee-saved register is gone -- but MSVC then allocates one
+// fewer callee-saved register for this function (r23..r30 vs the image's
+// r22..r30), which renumbers every row, and objdiff's section-relative branch
+// rendering charges one `bne` displacement (82605xxx `bne 0x754` vs `bne 0xa00`)
+// that had previously coincided.  Every other row here is register permutation,
+// which the canonical ruler forgives.  Moving `int aligned` above the memset was
+// measured and is INERT.  Do not undo the _ReadAsync fix for this: it is worth
+// +1.35pp on a 768 B row against -1.45pp on a 564 B one.
 void AsyncFileWin::_WriteAsync(const void *buf, int count) {
     if (mFd >= 0) {
         int written = _write(mFd, buf, count);
@@ -158,11 +169,11 @@ void AsyncFileWin::_WriteAsync(const void *buf, int count) {
             return;
         mWriteInProgress = true;
         memset(&mOverlapped, 0, sizeof(OVERLAPPED));
-        bool aligned = false;
+        int aligned = 0;
         if (((int)buf & 3) == 0) {
             if (Tell() % mSectorBytes == 0) {
                 if (count % mSectorBytes == 0) {
-                    aligned = true;
+                    aligned = 1;
                 }
             }
         }
@@ -191,7 +202,7 @@ void AsyncFileWin::_ReadAsync(void *buf, int count) {
     memset(&mOverlapped, 0, sizeof(OVERLAPPED));
     unk5c = buf;
     unk64 = count;
-    unsigned char aligned = 0;
+    int aligned = 0;
     if (((int)buf & 3) == 0) {
         if (Tell() % mSectorBytes == 0) {
             if (unk64 % mSectorBytes == 0) {
@@ -199,9 +210,14 @@ void AsyncFileWin::_ReadAsync(void *buf, int count) {
             }
         }
     }
+    // `aligned` is an int and `unk58` an unsigned char: the image narrows once and
+    // reuses the narrowed value for both the store and the test --
+    // 82605440 `clrlwi. r11, r30, 24` / 82605444 `stb r11, 0x58(r31)`.  A `bool`
+    // unk58 forces a subic/subfe normalisation there; an `unsigned char` local
+    // makes the store use the raw register and sink past the `mr r3, r31`.
     unk58 = aligned;
     int bytesToRead;
-    if (aligned) {
+    if (unk58) {
         mOverlapped.Offset = Tell();
         bytesToRead = unk64;
         unk60 = unk5c;
