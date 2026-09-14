@@ -353,20 +353,28 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
     }
 }
 
+// Two source shapes are load-bearing here:
+//   * the math-op vector is reached as `entry.mMathOps` (FlowNode is a friend),
+//     NOT through a `ObjVector<FlowMathOp> &mathOps = const_cast<...>(
+//     entry.MathOps())` reference.  The reference costs one extra callee-saved
+//     register -- our prologue was `bl __savegprlr_23` against the image's
+//     `__savegprlr_24` -- and materialises `addi r26, r29, 0xc` once, after
+//     which every mMathOps access goes through r26 at -0xc instead of through
+//     r29 as the image does.  That one local was 18 of the 25 residual rows.
+//   * `drivenObj->Property(op->Rhs().Array(NULL), false)` is ONE expression.
+//     Splitting the array out into a `DataArray *propPath` local moves the
+//     `li r5, 0x0` (the `false`) two slots earlier, ahead of `mr r3, r27`.
 void FlowNode::PushDrivenProperties() {
     sPushDrivenProperties = true;
     FOREACH (it, mDrivenPropEntries) {
         DrivenPropertyEntry &entry = *it;
-        ObjVector<FlowMathOp> &mathOps =
-            const_cast<ObjVector<FlowMathOp> &>(entry.MathOps());
         DataNode targetValue(0);
 
-        FlowMathOp *op = &mathOps[0];
+        FlowMathOp *op = &entry.mMathOps[0];
         Hmx::Object *drivenObj = op->DrivenObj();
 
         if (drivenObj) {
-            DataArray *propPath = op->Rhs().Array(NULL);
-            const DataNode *prop = drivenObj->Property(propPath, false);
+            const DataNode *prop = drivenObj->Property(op->Rhs().Array(NULL), false);
             if (prop) {
                 targetValue = *prop;
             } else {
@@ -377,12 +385,12 @@ void FlowNode::PushDrivenProperties() {
         }
 
         op++;
-        if (op == mathOps.end()) {
+        if (op == entry.mMathOps.end()) {
             SetProperty(entry.Node().Array(NULL), targetValue);
         } else {
             if (targetValue.CompatibleType(kDataFloat)) {
                 float val = targetValue.LiteralFloat(NULL);
-                while (op != mathOps.end()) {
+                while (op != entry.mMathOps.end()) {
                     val = op->Apply(val);
                     op++;
                 }
