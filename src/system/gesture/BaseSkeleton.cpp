@@ -154,6 +154,34 @@ void BaseSkeleton::LimbNormPos(
     }
 }
 
+// RESIDUAL (w7-bl, 95.70 canonical, 45 of 220 rows, was 95.00/48): two
+// scheduling residuals, both inside the joint-copy blocks.
+//  (1) The kUnk5 branch is 3 instructions SHORT because MSVC cross-jumps our
+//      `limbDir.x -= nearJoint.x` into the arm/leg tail (our `b` lands on the
+//      shared `lfs 0x60 / lfs 0x80 / fsubs f13` pair instead of on the store
+//      block).  It merges because our two branches assign the same FPRs to x;
+//      the image's do not (kUnk5 `fsubs f13, f10, f13` vs arm/leg
+//      `fsubs f13, f12, f13`), so it emits all three subtractions inline and
+//      jumps straight to the stfs triple.  No source spelling reached that.
+//  (2) The image loads nearJoint's three components BEFORE limbDir's and
+//      round-robins the three 16-byte joint copies limb/near/origin; we
+//      complete near+origin first.  Pure store scheduling -- same set, same
+//      slots (limbDir 0x60, upDir 0x70, nearJoint/crossDir 0x80, origin 0x90).
+// Lever that DID pay (0.7pp, 3 rows): the kUnk5 subtraction is written z,y,x
+// below -- that order is what the image emits, and writing it x,y,z made MSVC
+// spill two intermediates to 0x60/0x68 inside the branch (2 extra stfs).
+// Failed spellings, all measured in this worktree:
+//   - `Subtract(limbDir, nearJoint, limbDir)` in all three branches: byte-inert
+//     (95.00, identical 37/1/6/4 row split) -- MSVC canonicalises Set() back to
+//     three component subtractions.
+//   - assigning limbDir before nearJoint in all three branches: same 95.70 but
+//     48->63 rows, and it moves nearJoint off the 0x80 slot (`addi r4, r31,
+//     0xc0` picks up a +48 offset diff at index 48).
+//   - arm/leg subtraction reordered z,x,y to match the image's emission order
+//     there: same 95.70, 45->48 rows.
+// The MakeString<char const(&)[13], int const&, char const(&)[5]> vs our
+// <[11], int const&, [49]> in the Function Call Diff is an ICF fold -- both
+// sides load the SAME two string symbols at indices 14/15 -- not a wrong callee.
 void BaseSkeleton::MakeCameraToPlayerXfm(
     SkeletonCoordSys cs,
     Transform &xfm,
@@ -207,9 +235,9 @@ void BaseSkeleton::MakeCameraToPlayerXfm(
         Vector3 nearJoint = pj[kJointHipLeft];
         limbDir = pj[kJointHipRight];
         origin = pj[kJointHipCenter];
-        limbDir.x -= nearJoint.x;
-        limbDir.y -= nearJoint.y;
         limbDir.z -= nearJoint.z;
+        limbDir.y -= nearJoint.y;
+        limbDir.x -= nearJoint.x;
     }
 
     Normalize(limbDir, limbDir);
