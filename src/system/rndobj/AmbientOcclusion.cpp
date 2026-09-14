@@ -828,13 +828,18 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
     for (int i = 0; (unsigned int)i < numSamples; i++) {
         const Vector3 &sampleDir = mSampleDirs[i];
         float dot = norm.x * sampleDir.x + sampleDir.z * norm.z + sampleDir.y * norm.y;
-        occlusion = 1.0f;
         if (dot > 0.0f) {
             float hitDist;
+            // 826A0158 `fmr f29, f31` sits between the mTree load and the
+            // Intersect call, i.e. INSIDE the dot>0 arm, not above the test.
+            occlusion = 1.0f;
             bool hit = mTree->Intersect(rayOrigin, sampleDir, maxDist, hitDist);
             if (hit && hitDist <= maxDist) {
-                float t = hitDist * invMaxDist;
-                occlusion = t * t;
+                // 826A0190 `stfs f0, 0x50(r1)` writes the scaled value back
+                // into hitDist's own slot: the image mutates hitDist rather
+                // than naming a new local for the normalised distance.
+                hitDist *= invMaxDist;
+                occlusion = hitDist * hitDist;
             }
             BuildSHCoeff(sampleDir, shCoeffs);
             for (int j = 0; j <= 3; j++) {
@@ -855,7 +860,8 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
             // __real@3fe0000000000000 is a DOUBLE 0.5, so the rescale happens in
             // double.  Spelled `val * 0.5f + 0.5f` MSVC reassociates it to
             // `(val + 1.0f) * 0.5f` in single precision and the fmadd is lost.
-            shAccum[k] = (double)Clamp(-1.0f, 1.0f, (float)shAccum[k]) * 0.5 + 0.5;
+            float val = Clamp(-1.0f, 1.0f, (float)shAccum[k]);
+            shAccum[k] = val * 0.5 + 0.5;
         }
     }
 
