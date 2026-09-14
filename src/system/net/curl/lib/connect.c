@@ -953,24 +953,26 @@ singleipconnect(struct connectdata *conn,
   if(-1 == rc) {
     /* Check for retryable connection errors (would-block/in-progress).
        EAGAIN may or may not be distinct from EWOULDBLOCK depending on platform. */
-    if(error == EWOULDBLOCK || error == EINPROGRESS
+    switch(error) {
 #if defined(EAGAIN)
 #if (EAGAIN) != (EWOULDBLOCK)
-       || error == EAGAIN
+    case EAGAIN:
 #endif
 #endif
-       ) {
+    case EWOULDBLOCK:
+    case EINPROGRESS:
       rc = waitconnect(conn, sockfd, timeout_ms);
       if(WAITCONN_ABORTED == rc) {
         Curl_closesocket(conn, sockfd);
         return CURLE_ABORTED_BY_CALLBACK;
       }
-    }
-    else {
+      break;
+    default:
       /* unknown error, fallthrough and try another address! */
       failf(data, "Failed to connect to %s: %s",
             conn->ip_addr_str, Curl_strerror(conn,error));
       data->state.os_errno = error;
+      break;
     }
   }
 
