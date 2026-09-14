@@ -136,7 +136,29 @@ BEGIN_LOADS(DancerSequence)
                     }
                 }
                 if (skeletonRev < 3) {
-                    Key<float> unusedKey;
+                    // The image does NOT construct this key.  Its slot
+                    // (0x100(r31)) is read straight into by
+                    // operator>><float>(BinStream&, Key<float>&) at 0x8249B898
+                    // with no preceding store, and the whole function contains
+                    // zero floating-point instructions -- so `Key<float> k;`
+                    // here, whose ctor zeroes value and frame, costs six
+                    // instructions the image never pays (an f31 save/restore
+                    // pair, the __real@00000000 load, and two stfs).
+                    //
+                    // Skipping the ctor is behaviour-preserving: operator>>
+                    // overwrites both fields before anything reads them, and
+                    // the key is discarded.  The shared ctor itself must stay
+                    // as it is -- `Key() {}` buys this function +2.00 and
+                    // regresses 25 others by up to 25.1pp
+                    // (docs/sessions/2026-09-13-band-lane-wave.md).
+                    //
+                    // The storage is four floats, not two, because that is the
+                    // slot width the image gave it: 0x100 sits on a 16-byte
+                    // boundary inside the Vector3 block (0xf0 disp, 0x110 v1).
+                    // A two-float array lets MSVC pack the slot and shrinks the
+                    // frame by 0x10 against the image's 0x490.
+                    float unusedKeyStorage[4];
+                    Key<float> &unusedKey = *(Key<float> *)unusedKeyStorage;
                     d.stream >> unusedKey;
                     int unusedVal;
                     d >> unusedVal;
