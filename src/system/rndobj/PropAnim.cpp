@@ -850,6 +850,32 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
 #pragma endregion
 #pragma region Handlers
 
+// RESIDUAL (w7-ai, 92.8%).  Every instruction of the body pairs; what is left
+// is one EH-model difference and the uniform frame shift it causes.
+//
+//   - Our build allocates an EH STATE VARIABLE at 0x50(r31): zeroed at entry
+//     and set to 1 (li r11,1 / stw r11,0x50(r31)) immediately after the copy
+//     constructor that fills the sret, once in each branch.  The image has no
+//     such variable -- its 0x50 is the new'd-pointer slot, zeroed at entry
+//     (stw r28,0x50) and overwritten with the PoolAlloc result (stw r3,0x50).
+//     Ours puts that pointer at 0x54 and never zeroes it.
+//   - Because the image does not register the returned DataNode for unwinding,
+//     it also does not have to home the sret pointer; we emit an extra
+//     stw r3, 0xd4(r31) at entry and keep it in r26 as the image does.
+//   - Those two cost 0x10 of frame (0xc0 vs 0xb0) and shift every body slot by
+//     +4 or +8, which is all 26 of the diff_arg rows.
+//
+// Two spellings measured, byte-identical to each other:
+//   (a) DataNode ret = flowArr;   (as written)
+//   (b) DataNode ret(flowArr);    (the explicit two-arg ctor, which is what
+//       RndTransformable::OnGetChildren -- same idiom, single return -- uses
+//       at 100.0%)
+// The registration is therefore not coming from how the DataNode is spelled.
+// The remaining hypothesis is that the image reaches this shape with one fewer
+// EH scope than a two-branch, two-return body can produce, which is not
+// something the call sites here can steer; a single-return rewrite is refused
+// because the image plainly has TWO DataNode slots (0x68 and 0x70), one per
+// branch.
 DataNode RndPropAnim::OnListFlowLabels(DataArray *arr) {
     if (mFlowLabels.size() != 0) {
         DataArray *flowArr = new DataArray(mFlowLabels.size());
