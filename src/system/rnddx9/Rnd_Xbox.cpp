@@ -664,15 +664,16 @@ Vector2 &DxRnd::DrawString(
     D3DDevice_SetFVF(mD3DDevice, 0x42);
     Transform screenXfm;
     screenXfm.Reset();
-    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(screenXfm));
+    RndShaderMgr &shaderMgr = TheShaderMgr;
+    shaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(screenXfm));
     TheShaderMgr.SetTransform(screenXfm);
     RndShader::SelectConfig(nullptr, kLineNozShader, false);
     D3DDevice_SetRenderState_ViewportEnable(TheDxRnd.Device(), 0);
     static Vector2 cursor;
     cursor = pos;
     float widest = pos.x;
-    while (*s) {
-        char c = *s;
+    char c;
+    while ((c = *s) != 0) {
         if (c == '\n') {
             s++;
             if (*s) {
