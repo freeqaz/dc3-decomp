@@ -26,6 +26,18 @@ void SpectralAnalysis::Analyze(const float *in, float *out) {
     mFft1.FftReal(&mData0[0], &mData4[0], &mData5[0]);
 
     // Magnitude spectrum back into mData0.
+    // NEGATIVE RESULT (w7-ap, 2026-09-14, 85.9 canonical): the image's
+    // magnitude loop is ONE induction pointer plus two byte biases --
+    // 0x82E4D4AC `subf r10, r11, r8` / 0x82E4D4B0 `subf r9, r11, r9` off the
+    // mData5 walker, then `lfs f0, 0x0(r11)` / `lfsx f13, r10, r11` /
+    // `stfsx f0, r9, r11` / `addi r11, r11, 0x4` -- exactly the idiom the
+    // recombination loop below uses.  Writing it that way (with the biases as
+    // char* differences so no srawi/slwi rescale appears, in either
+    // declaration order) costs 4.9pp: 85.9 -> 81.0.  The image emits the
+    // zero-trip `beq cr6` and the `mtctr` BEFORE the two `subf`s; MSVC puts
+    // the biases first whenever they are named locals, which reorders the
+    // whole preheader and re-colours r7/r8/r9/r11.  Three walking pointers
+    // and the lfsu/lfsu/stfsu update forms remain the better source.
     unsigned int bins = (unsigned int)mHalfPlusOne;
     float *mag = &mData0[0];
     float *im = &mData5[0];
@@ -53,34 +65,45 @@ void SpectralAnalysis::Analyze(const float *in, float *out) {
     data[0] = sum0 * 0.5f;
 
     unsigned int quarter = (unsigned int)half >> 1;
+    // Both tables and the counter are materialised ABOVE the guard in the
+    // image: 0x82E4D4E0 `li r9, 0x1`, 0x82E4D4E8 `lwz r8, 0xac(r31)` and
+    // 0x82E4D4EC `lwz r7, 0xb8(r31)` all sit before 0x82E4D524 `ble cr6`.
+    // The biases are BYTE differences fed straight to `lfsx` (0x82E4D52C /
+    // 0x82E4D530 `subf`); a float-element difference makes MSVC emit a
+    // srawi/slwi pair to scale it back.
+    float *sinT = &mSinTable[0];
+    float *cosT = &mCosTable[0];
+    unsigned int i = 1;
     if (quarter > 1) {
-        float *sinT = &mSinTable[0];
-        float *cosT = &mCosTable[0];
-        long sinBias = sinT - data;
-        long cosBias = cosT - data;
+        long sinBias = (const char *)sinT - (const char *)data;
+        long cosBias = (const char *)cosT - (const char *)data;
         float *lo = data + 1;
         float *hi = data + half;
-        for (unsigned int i = 1; i < quarter; ++i) {
+        do {
             float a = lo[0];
             float b = hi[-1];
             float diff = a - b;
-            float s = lo[sinBias];
+            float s = *(const float *)((const char *)lo + sinBias);
             float sum = b + a;
-            float c = lo[cosBias];
+            float c = *(const float *)((const char *)lo + cosBias);
             double acc = mAccum;
             float ps = s * diff;
             sum = sum * 0.5f;
             float pc = c * diff;
             lo[0] = sum - ps;
-            --hi;
-            hi[0] = ps + sum;
+            // fused decrement-and-store: 0x82E4D570 `stfsu f13, -0x4(r10)`
+            *--hi = ps + sum;
             mAccum = (double)pc + acc;
             ++lo;
-        }
+            ++i;
+        } while (i < quarter);
     }
 
     // Inverse-CCS transform of the recombined spectrum into mData1.
-    mFft2.FftRealCcs(&mData0[0], &mData1[0]);
+    // 0x82E4D584/0x82E4D588 emit only `addi r3, r31, 0x50` and
+    // `lwz r5, 0xa0(r31)`: r4 still holds &mData0[0] from 0x82E4D4DC and is
+    // never clobbered, so the second argument is the only pointer reloaded.
+    mFft2.FftRealCcs(data, &mData1[0]);
 
     // Emit the result: real parts directly, imaginary derivative from mAccum.
     int j = 0;
