@@ -99,6 +99,25 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
 // swaps, 17 commutative rows. Both leads above still read exactly as recorded,
 // so neither was re-derived. The class that remains is the body's scratch
 // allocation, which is register permutation and is not source-reachable.
+//
+// MEASURED NEGATIVES (2026-09-14, lane w7-bm), baseline 62.0 canonical:
+// 3. blk() XOR OPERAND ORDER IS INERT. Parsing every blk round of both sides
+//    (64 rounds, 8253A4C0..8253B680) shows the target's XOR tree is ALWAYS
+//    `(((hi ^ next) ^ next) ^ lo)` by folded index -- round 79 is
+//    (l[15]^l[12])^l[7]^l[1] -- while ours is scheduling-dependent whenever an
+//    index wraps (round 24 and round 40 order the same four words differently).
+//    Respelling the macro in Dominik Reichl's CSHA1 SHABLK order
+//    (l[i+13]^l[i+8]^l[i+2]^l[i]) emits the IDENTICAL tree in all 64 rounds
+//    (MSVC canonicalises the chain), 62.0 -> 61.0 from downstream drift.
+// 4. WORD TYPE IS INERT: reading/writing the block words as `unsigned int&`
+//    and declaring a..e `unsigned int` (Reichl's UINT_32) gives 62.0 with the
+//    identical 1698-row set (910/27/47/234/291).
+// 5. The 57 extra instructions the target carries are 57 `mr` copies of the
+//    block pointer, one per blk round (e.g. 8253A4CC `lwz r31,0xc0(r24)` /
+//    `mr r30,r31`, then the LAST operand load clobbers r31 and the store goes
+//    through r30). That is a live-range split under one more callee-saved
+//    register (__savegprlr_17 vs our _18), i.e. allocation, not a source
+//    shape: there is exactly one m_block load per round on both sides (66).
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 #ifdef HX_NATIVE
     // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap
