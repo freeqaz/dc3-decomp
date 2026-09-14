@@ -248,6 +248,14 @@ void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
             // `sideOffsetBase`; we emit x, y, z. That term order lives in
             // math/Mtx.h, a PCH-reached header, so it is out of this lane's
             // scope -- and `Multiply` there is on the wave DO-NOT-WORK list.
+            // NEGATIVE RESULT (w7-ba, 2026-09-14): the cluster is not "x, y, z
+            // order" -- it is FACTORING.  Ours emits `(m.y + m.z) * zero +
+            // m.x * x` (one fadds per component, then fmadds), because y and z
+            // are the same opaque literal value; the image keeps three
+            // separate products (z*0 first at 823827A4, +x*x, +y*0 last).
+            // Neither `Zero(); x = ...; x *= -1` nor hoisting the scalar
+            // (`float off; if (!right) off *= -1; Vector3(off, 0, 0)`) moved a
+            // row (93.53 both).  The lever is not the assignment order here.
             // NEGATIVE RESULT (w7-ao, 2026-09-14): two reorderings of the
             // Scale/Add pair in the loop below were measured against the
             // hypothesis that the fmuls/fadds cluster at idx 48-53 was ours:
