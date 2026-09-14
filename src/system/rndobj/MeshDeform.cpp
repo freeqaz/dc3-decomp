@@ -191,8 +191,23 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
         ptr += (*ptr * 2) + 1;
     }
     float sum = 0.0f;
+    // RESIDUAL (w7-as, 71.2 canonical, was 70.0): `vertIdx` is hoisted above the
+    // dedup loop because the image stores it into the MakeString slot there
+    // (`stw r18, 0x54(r1)` at 0x8264F4E0, before the loop, not between the two
+    // loops), and the dedup loop counts from 0 rather than 1 because the image's
+    // zero-trip guard is `cmpwi cr6, r31, 0x0` -- and it is the ONLY such guard:
+    // retail proves num >= 1 on exit (num-- can only run when i >= 1, so
+    // num >= 2 going in) and elides the second loop's test entirely, which we
+    // still emit.  What is left is the inner loop's addressing: retail keeps
+    // `boneIndices[j]` as an indexed load (`lwzx r4, r8, r28`) with four
+    // base-relative offsets computed per outer iteration, where our build
+    // strength-reduces it to a walking pointer, and it hoists the
+    // "negative weight" string anchor and the loop-2 weights pointer above the
+    // dedup loop instead of between the loops.
+    int vertIdx = vertCount;
+    int i;
     // deduplicate bone entries: if two entries share the same bone index, merge them
-    for (int i = 1; i < num; i++) {
+    for (i = 0; i < num; i++) {
         for (int j = 0; j < i; j++) {
             if (boneIndices[i] == boneIndices[j]) {
                 weights[j] += weights[i];
@@ -206,8 +221,7 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
         }
     }
     // validate weights
-    int vertIdx = vertCount;
-    for (int i = 0; i < num; i++) {
+    for (i = 0; i < num; i++) {
         if (!(weights[i] > 0.0f)) {
             auto _tmp0 = PathName(mParent);
             MILO_NOTIFY(
