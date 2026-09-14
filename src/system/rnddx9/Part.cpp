@@ -75,6 +75,20 @@ void DxParticleSys::DrawParticles(const Hmx::Color &color) {
             vert++;
         }
     } else {
+        // Known residual for this function, 8 rows (99.980 canonical), every
+        // one of them an ordering the backend picked and not a value.  Four of
+        // them (rows 133/134/139/140) are the red and alpha products of THIS
+        // loop's colour being issued in the opposite order: the image computes
+        // red, green, alpha, blue; we compute alpha, green, red, blue.  The
+        // other loop above is identical source and the image issues it green,
+        // blue, red, alpha there -- so the image's own two expansions of one
+        // statement disagree, which rules out an argument-order lever.
+        // Refuted by build: hoisting the four products into named floats
+        // written in the image's order (red, green, alpha, blue) and passing
+        // them to the ctor is byte-inert, 8 rows before and after.  The
+        // remaining four rows are a commutative fmuls (row 80), an r7/r9
+        // volatile swap in the MakeColor byte packing (166/168) and a
+        // commutative `add` in the NgStats update (193).
         for (RndParticle *part = mActiveParticles; part; part = part->next) {
             Hmx::Color c(
                 part->col.red * color.red,

@@ -22,7 +22,11 @@ void MakeDir(const char *path) {
 }
 
 bool BinkMovieImpl::PlatformCacheFile(const char *filename) {
-    if (UsingCD() || unk26) {
+    // The image tests unk18 (`lbz r11, 0x18(r28)`), the preload flag that
+    // BeginFromFile assigns immediately BEFORE calling us -- not unk26, which
+    // BeginFromFile only assigns after we return, so reading it here would see
+    // the previous movie's value.
+    if (UsingCD() || unk18) {
         return true;
     }
 

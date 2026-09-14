@@ -28,6 +28,22 @@ D3DVertexDeclaration *DxMesh::sMutableVertexDecl;
 D3DVertexDeclaration *DxMesh::sMutableSkinnedVertexDecl;
 
 DxMesh::DxMesh() : mNumVerts(0), mNumFaces(0), unk1ac(0), unk1b0(0) {
+    // Known residual, one row: the image's third CreateVertexDeclaration reads
+    // `addi r3, r29, 0xb8`, we emit +0xb4.  r29 is the array base (the first
+    // call is a bare `mr r3, r29`), and the target data at 0x82F13518 -- a
+    // 0x10C-byte unnamed block the map assigns to rnddx9:Mesh.obj -- really
+    // does hold FOUR zero bytes at +0xb4, so the image's array is 268 bytes
+    // where ours is 264.  0xb8 is not a multiple of sizeof(D3DVERTEXELEMENT9)
+    // (12), so no single-array spelling can reach it.  Splitting into separate
+    // statics does not help either, and that is measured, not assumed:
+    //   three arrays -> 95.5% (MSVC emits a fresh lis/addi per array; the image
+    //                   has exactly one lis for the whole block)
+    //   two arrays (group3 split off) -> 99.4%, 5 rows, incl. an inserted
+    //                   `lis ?sMutableSkinnedVertexElements@...`
+    // So this MSVC does not anchor one static array off another, and whatever
+    // produced the internal 4-byte hole is not reachable by moving the brace.
+    // Leave it as one array; the one-row form below is the best known.
+    // Behaviour is unaffected -- [15] is group 3 in OUR layout.
     // clang-format off
     static D3DVERTEXELEMENT9 sVertexElements[] = {
         { 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },

@@ -377,11 +377,16 @@ void CacheMgrXbox::PollDelete() {
 }
 
 void CacheMgrXbox::PollSearch() {
-    DWORD res;
-    DWORD numFound;
+    // Known residual, 14 rows, all one slot apart and all the SAME decision:
+    // the image puts `res` -- and every MakeString temp that shares the temp
+    // pool with it -- at 0x50(r31), and the address-taken `numFound` at 0x54.
+    // We allocate them the other way round.  Both levers are refuted here:
+    // swapping the two declarations is byte-inert (14 rows before and after),
+    // and so is scoping them into this block instead of the function body.
+    // Nothing else in the frame moves, so it is a single one-slot tie.
     if (mOverlapped.InternalLow != 0x3E5) {
-        numFound = 0;
-        res = XGetOverlappedResult(&mOverlapped, &numFound, false);
+        DWORD numFound = 0;
+        DWORD res = XGetOverlappedResult(&mOverlapped, &numFound, false);
         // res == ERROR_NO_MORE_FILES (0x65B) goes straight to EndSearch in the
         // target -- it does not fall into the numFound check.
         if (res != 0) {

@@ -339,6 +339,11 @@ bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
                 TheGameData->GetSong()
             );
             if (pAcc->HasAward()) {
+                // `award` is a NAMED local in the image, not an inline
+                // temporary, and that is measured rather than assumed:
+                // collapsing this to `AddAward(pAcc->GetAward(), s)` regresses
+                // the function 99.989 -> 99.4 (2 rows -> 6), because the
+                // temporary loses its own stack slot.  Leave it named.
                 Symbol award = pAcc->GetAward();
                 AddAward(award, s);
             }

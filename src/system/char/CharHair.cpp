@@ -754,6 +754,22 @@ void CharHair::Strand::SetRoot(RndTransformable *trans) {
             len = gUnitsPerMeter * 0.127f;
         }
         lastPt.length = len;
+        // Known residual for this function, 4 rows (99.987 canonical), all of
+        // them inside this one inlined ScaleAdd, and there is NO source
+        // spelling that closes them -- the image's own three lines disagree
+        // with each other where our three agree:
+        //   x: fmadds f0, f12, f0,  f13   ->  f * v2.x + v1.x   (loads v1,v2)
+        //   y: fmadds f0, f0,  f12, f13   ->  v2.y * f + v1.y   (loads v2,v1)
+        //   z: fmadds f0, f0,  f12, f13   ->  v2.z * f + v1.z   (loads v2,v1)
+        // We emit (v2, f) for all three, matching the image on y's multiply
+        // and on z entirely.  Rewriting Vec.h's ScaleAdd as `f * v2.x` would
+        // have to break the y and z lines to fix the x line, since one
+        // statement template generates all three; likewise the y load pair
+        // (rows 143/144) is the image loading v1 before v2 on x and v2 before
+        // v1 on y and z, from three textually identical statements.  That is
+        // the backend choosing per-line, so it is a scheduling/regalloc floor
+        // and not a lever -- and ScaleAdd is PCH-reached (math/Vec.h), so a
+        // speculative edit there would move many currently-matching callers.
         ScaleAdd(lastPt.bone->WorldXfm().v, lastPt.bone->WorldXfm().m.y, lastPt.length, lastPt.pos);
     }
 }
