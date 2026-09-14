@@ -128,6 +128,39 @@ void RndRibbon::ExposeMesh() {
     }
 }
 
+/** SURVEYED w7-aj, 75.3% canonical, 408 B.  The STATEMENT ORDER already
+ *  matches the image one for one: ns -> nextVertOff -> v0 -> rem -> vNextRaw
+ *  -> v0PlusNS -> vNextWrapRaw -> facePtr -> the three u16 truncations ->
+ *  side++ -> the first face triple -> the SECOND `mMesh->Faces().begin()`
+ *  reload -> the second triple -> faceOff += 12 -> the loop-tail mNumSides
+ *  reload.  Every arithmetic instruction in 0x8265F5C0-0x8265F73C is
+ *  accounted for, including the two division traps (`twllei` for ns == 0 and
+ *  `twi 5` for the INT_MIN/-1 overflow) that the `% ns` emits.
+ *
+ *  The 25-point gap is a single register-allocation cascade.  The image calls
+ *  __savegprlr_26 (six callee-saved GPRs) where we call __savegprlr_27
+ *  (five): it parks `1 - baseVert2` in r30, a CALLEE-SAVED register, even
+ *  though the inner loop contains no calls, and that one extra live register
+ *  shifts r26-r30 by one on our side and re-schedules the three `sth` stores
+ *  of the first face triple from after the truncations (image 0x86-0x90) to
+ *  before them.  We are CHEAPER than the image; no re-spelling of these
+ *  statements makes MSVC need a register it does not need.  This is the same
+ *  floor recorded for the HamRibbon/RndRibbon ConstructMesh pair in
+ *  docs/sessions/2026-06-10-asm-archaeology-wave1.md, re-confirmed here at
+ *  75.3 (the note there was written at 73.3).
+ *
+ *  Two variants measured, both EXACTLY neutral -- do not re-derive:
+ *    (1) moving `int oneMinusBV2 = 1 - baseVert2;` inside the do-loop, which
+ *        is where the image computes it (its loop-top label 0xdc IS the
+ *        `subfic r30, r3, 0x1`): 75.3.
+ *    (2) commutative operand order on `vertIdx + ns` and `ns + vNextRaw`,
+ *        both of which MSVC emits reversed from the source: 75.3.  MSVC
+ *        normalises both, so the operand order is not the lever.
+ *
+ *  NOTE for anyone reading run_objdiff on this function: the "[56] lwz
+ *  target 0x4c (mNumSides) vs base 0x50 (mMesh) -- wrong field?" row is a
+ *  false positive of the offset resolver.  Both loads exist on both sides;
+ *  the regalloc shift merely pairs them against each other. */
 void RndRibbon::ConstructMesh() {
 #ifndef HX_NATIVE
     if (mNumSegments <= 0)
