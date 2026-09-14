@@ -550,14 +550,17 @@ void SetSystemArgs(const char *commandLine) {
     strncpy(sCommandLineBuffer, commandLine, kCommandLineSz - 1);
     sCommandLineBuffer[kCommandLineSz - 1] = 0;
 
+    char *ptr = sCommandLineBuffer;
+    // ptr and newToken are initialised OUTSIDE the emptiness test: 0x...
+    // stores the slot (`stw r29, 0x50(r1)`) and sets newToken (`li r9, 0x1`)
+    // before the `lbz`/`cmplwi`/`beq` that tests sCommandLineBuffer[0].
+    // newToken is a BYTE: 0x...  tests it with `clrlwi. r11, r9, 24`, while
+    // inQuotes is tested with a full-word `cmplwi cr6, r28, 0x0` and toggled
+    // with `cntlzw`/`extrwi.` -- the lowering of `!x` on an int, not the `xori`
+    // MSVC emits for a bool.
+    bool newToken = true;
     if (sCommandLineBuffer[0] != 0) {
-        char *ptr = sCommandLineBuffer;
-        // newToken is a BYTE: 0x...  tests it with `clrlwi. r11, r9, 24`, while
-        // inQuotes is tested with a full-word `cmplwi cr6, r28, 0x0` and
-        // toggled with `cntlzw`/`extrwi.` -- the lowering of `!x` on an int,
-        // not the `xori` MSVC emits for a bool.
-        bool newToken = true;
-        int inQuotes = 0;
+        unsigned int inQuotes = 0;
 
         for (;;) {
             // The space test was MISSING here: the image's loop head is
@@ -573,6 +576,13 @@ void SetSystemArgs(const char *commandLine) {
             } else if (*ptr == '"') {
                 *ptr = 0;
                 ptr++;
+                // RESIDUAL (w7-al, 96.7 canonical): 19 rows.  16 are one
+                // callee-saved ranking -- the image puts the literal zero in
+                // r30 and the sCommandLineBuffer address in r29, we do the
+                // reverse -- and the other 3 are the scheduler hoisting
+                // `cntlzw` above `stb` and materialising the toggle through an
+                // extra `mr r28, r11` that we fold into the `extrwi.` itself.
+                // Moving this assignment above the `*ptr = 0` is byte-inert.
                 inQuotes = !inQuotes;
                 if (inQuotes) {
                     TheSystemArgs.push_back(ptr);
