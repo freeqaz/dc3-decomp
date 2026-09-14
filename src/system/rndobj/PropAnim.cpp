@@ -455,7 +455,13 @@ static inline bool SameObject(const Hmx::Object *a, const Hmx::Object *b) {
 std::list<PropKeys *>::iterator RndPropAnim::FindKeys(Hmx::Object *obj, DataArray *prop) {
     FOREACH (it, mPropKeys) {
         PropKeys *cur = *it;
-        if (!prop && !cur->Prop()) {
+        // `cur->mProp` (RndPropAnim is a friend of PropKeys), NOT the `Prop()`
+        // accessor: the image's second `&&` operand is `cmplwi cr6, r10, 0x0`
+        // at 0x8267CCE4, and only a DIRECT member access lowers to the unsigned
+        // compare. Through the inline accessor MSVC emits `cmpwi`, and an
+        // explicit `(unsigned int)cur->Prop() == 0` there is inert (98.12), as
+        // is splitting the `&&` into nested ifs (98.12).
+        if (!prop && !cur->mProp) {
             return it;
         }
         if (SameObject(cur->Target(), obj) && PathCompare(prop, cur->Prop())) {
