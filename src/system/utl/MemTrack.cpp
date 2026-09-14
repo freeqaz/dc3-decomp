@@ -38,7 +38,7 @@ class HeapTracker; // only ever referenced through the pointer below
 // bytes and both MemTrackStacks land at the wrong displacement.
 static MemTrackStack s_MemTrackFileNameStack;   // CharArrayArray + s_MemTrackFileNameStackPos
 static MemTrackStack s_MemTrackObjectNameStack; // MemTrackObjectName + s_MemTrackObjectNameStackPos
-TextFileStream *gLog;
+static TextFileStream *gLog;
 // gNumDiffs and gAllocInfoHeap are `static`: the linker map named every other
 // global in this block but left 0x830E57E8 and 0x830E57D8 as bare lbl_
 // addresses, i.e. they were never public. Internal linkage is also what lets
