@@ -138,10 +138,14 @@ UINT XGSetTextureHeader(
 // Same as XGSetTextureHeader but with an extra Pitch argument between
 // MipOffset and pTexture -- DxTex::SyncBitmap passes 13 arguments (8 in
 // r3-r10, five in the parameter save area at r1+0x54..0x74).
+// BaseOffset/MipOffset are UINT as in the XDK (XGHEADER_CONTIGUOUS_MIP_OFFSET
+// is (UINT)-1): with INT here the -1 SyncBitmap passes is a different
+// constant from params.HierarchicalZBase = -1 and the image's shared
+// prologue li r28,-1 is not reproduced (w7-bm, 94.7 -> 95.0).
 UINT XGSetTextureHeaderEx(
     UINT Width, UINT Height, UINT Levels, DWORD Usage,
-    D3DFORMAT Format, DWORD ExpBias, DWORD Flags, INT BaseOffset,
-    INT MipOffset, UINT Pitch, D3DTexture *pTexture, UINT *pBaseSize, UINT *pMipSize
+    D3DFORMAT Format, DWORD ExpBias, DWORD Flags, UINT BaseOffset,
+    UINT MipOffset, UINT Pitch, D3DTexture *pTexture, UINT *pBaseSize, UINT *pMipSize
 );
 void XGOffsetResourceAddress(D3DBaseTexture *pResource, void *pBaseAddress);
 void XGOffsetBaseTextureAddress(
