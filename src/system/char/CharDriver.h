@@ -45,6 +45,7 @@ public:
     ObjectDir *ClipDir() const { return mClips; }
     CharBonesObject *GetBones() const { return mBones; }
     CharClipDriver *First() { return mFirst; }
+    bool Starved();
     CharClipGroup *GetClipGroup() const { return mClipGroup; }
     CharClip *FirstClip();
     CharClipDriver *FirstPlaying();
