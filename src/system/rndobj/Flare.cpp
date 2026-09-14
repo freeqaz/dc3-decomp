@@ -133,6 +133,14 @@ void RndFlare::DrawShowing() {
     } else {
         bool useOccResult = false;
         if (mPointTest && !TheHiResScreen.IsActive()) {
+            // Semantically this is `useOccResult = !mOcclusionPending && mOcclusionReady`,
+            // and the image agrees: it computes 0/1 into a scratch GPR and narrows it with
+            // `clrlwi r28,r11,24`. Spelling it that way DOES reproduce that clrlwi and even
+            // makes our frame 0x130 like the target's -- but it stops MSVC sharing slot 0x50
+            // between `scale` and the int->float conversion scratch, shifting every body
+            // offset by +0x10 and costing 98.9 -> 97.8 canonical (w7-n, 2026-09-14).
+            // Keep the comma-operator form until someone finds a spelling that gets the
+            // clrlwi without moving the slots.
             if (mOcclusionPending || (useOccResult = true, !mOcclusionReady)) {
                 useOccResult = false;
             }
