@@ -41,17 +41,19 @@ namespace {
     ) {
         float depth = (pos.y - 256.0f) * (1.0f / 4096.0f);
         pos.y = depth;
-        depth = 1.0f - (depth - depthRange.x) / (depthRange.y - depthRange.x);
-        pos.y = depth;
-        depth = Clamp(0.0f, 1.0f, depth);
-        pos.y = depth;
-        float y = (float)pow((double)depth, (double)stretchNearCamera) * -200.0f;
-        pos.y = y;
-        float x = pos.x;
-        float z = pos.z;
-        pos.x = xfm.m.x.x * x + xfm.m.y.x * y + xfm.m.z.x * z;
-        pos.y = xfm.m.x.y * x + xfm.m.y.y * y + xfm.m.z.y * z;
-        pos.z = xfm.m.x.z * x + xfm.m.y.z * y + xfm.m.z.z * z;
+        pos.y = 1.0f - (depth - depthRange.x) / (depthRange.y - depthRange.x);
+        // Clamp reads pos.y back rather than a local: the image keeps the store
+        // at 0x82DED8E0, which is dead-store-eliminated if the clamp takes a
+        // register temp instead.
+        pos.y = Clamp(0.0f, 1.0f, pos.y);
+        pos.y = (float)pow((double)pos.y, (double)stretchNearCamera) * -200.0f;
+        // Multiply(v, Matrix3, out) -- not three open-coded assignments.  Its
+        // Vector3::Set computes all three components before ANY store, which is
+        // what lets the image hoist all nine xfm loads above the first
+        // `stfs ..., 0x0(r31)` (0x82DED918..0x82DED93C, all before 0x82DED958).
+        // Written out, the store to pos.x may alias xfm and pins every later
+        // load below it.
+        Multiply(pos, xfm.m, pos);
     }
 
     RndMat *SetUpWorkingMat() {
