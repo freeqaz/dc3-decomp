@@ -581,10 +581,12 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
         // NEGATIVE RESULT: retail loads mCompression with a bare
         // `lwz r11, 0x4(r11)` at 0x823E1248 and compares it with cmpwi -- no
         // sign extension -- so this `short` local costs us two extsh the image
-        // does not have.  Widening it to `int` does remove both, but objdiff's
-        // aligner then re-locks the kCompressVects block below and the
-        // canonical score is a wash (87.2 -> 87.1), so the spelling is left
-        // alone rather than booked as a regression.
+        // does not have.  Widening it to `int` does delete both, but objdiff's
+        // aligner then re-locks the kCompressVects block below and turns a
+        // `replace` pair into a separate insert+delete: 88.0 -> 87.1.  The
+        // `short` here and the `int` in the frac != 0 arm below are the pairing
+        // that measures highest; making them agree in either direction loses
+        // ~0.9pp.
         short comp = mCompression;
         if (byteOffset >= mOffsets[TYPE_QUAT]) {
             if (comp >= kCompressQuats) {
@@ -634,7 +636,7 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
             }
             return;
         }
-        short comp = mCompression;
+        int comp = mCompression;
         if (byteOffset >= mOffsets[TYPE_QUAT]) {
             float *out = (float *)dest;
             Hmx::Quat q0, q1;
