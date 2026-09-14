@@ -145,6 +145,20 @@ void KinectSharePanel::ConvertImages() {
             EndianSwapBitmap(bitmapa0);
             auto bitmapPixels = bitmapa0.Pixels();
             memcpy(mPreviewBuf, bitmapPixels, mult);
+            // NEGATIVE RESULT (w7-bg): floor at 99.03% canonical, and the ONLY
+            // charged rows are one instruction's schedule.  The image computes
+            // the stbu pre-bias INSIDE the guarded loop --
+            //   82953738 lwz    r10, 0x0(r29)   ; mPreviewBuf
+            //   8295373C mullw. r11, r11, r9
+            //   82953740 ble    .L_82953758
+            //   82953744 mtctr  r11
+            //   82953748 subi   r11, r10, 0x4
+            // -- while we emit the `subi` immediately after the load, above the
+            // trip-count test.  Refuted, each a full ninja in the worktree:
+            //   * `area` declared before `previewPtr`                -> INERT (99.03)
+            //   * no named pointer, `((unsigned char *)mPreviewBuf)[i*4]` -> 97.00
+            // Everything else in this function already matches modulo an r10/r11
+            // volatile swap, which the canonical ruler forgives.
             unsigned char *previewPtr = (unsigned char *)mPreviewBuf;
             int area = bitmapa0.Height() * bitmapa0.Width();
             for (int i = 0; i < area; i++) {
