@@ -430,14 +430,28 @@ void MicXbox::AddData(void *data, int bytes) {
 }
 
 void MicXbox::ReadChatBuffer(void *data, unsigned int size) {
-    MILO_ASSERT(size < DIM(mPlaybackBuffer), 0x2d6);
+    // `size` is a BYTE count (it is halved to get samples just below), so the
+    // bound is the buffer's byte size, not its element count: the image compares
+    // against 0x3000 (`cmplwi cr6, r5, 0x3000`, 0x82E3F65C), and 6144 elements of
+    // short are exactly that.  DIM() here rejected every legal size in
+    // [0x1800, 0x3000).
+    MILO_ASSERT(size < sizeof(mPlaybackBuffer), 0x2d6);
     if (ExternalMicClientMgr::ConnectedForClient(this)) {
         unsigned int samps = size / 2;
         if ((int)(unk3020.size()) >= samps * 3) {
             short *out = (short *)data;
+            // The source pointer is named: indexing unk3020 directly makes MSVC
+            // reload the vector's _M_start on every iteration (the store through
+            // `out` may alias it), which costs the image's hoisted `lhzu`/`sthu`
+            // pointer pair.
+            const short *src = &unk3020[0];
             for (unsigned int i = 0; i < samps; i++) {
-                out[i] = unk3020[i * 3];
+                out[i] = src[i * 3];
             }
+            // RESIDUAL (90.3 canonical): the image keeps an explicit counter
+            // (`addi r8,r8,1` / `cmplw cr6,r8,r11` / `blt`, 0x82E3F6E0) where MSVC
+            // gives us `mtctr`/`bdnz`.  A signed counter is WORSE (89.1 -- it turns
+            // the zero-trip guard into `cmpwi`/`ble`).
             unk3020.erase(unk3020.begin(), unk3020.begin() + samps * 3);
         }
     }
