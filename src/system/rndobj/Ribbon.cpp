@@ -242,8 +242,12 @@ void RndRibbon::UpdateMesh() {
                         float posX = sinA * taperScale * halfWidth;
                         Vector3 pos(posX, 0.0f, posZ);
                         Multiply(pos, *xfm, pos);
-                        RndMesh::Vert &vert = verts[vertIdx];
-                        vert.pos = pos;
+                        // NOT a named Vert reference: the image re-reads the
+                        // vertex array's data pointer (0x100) and re-adds the
+                        // byte offset before each of the three field writes,
+                        // where a named reference would compute the element
+                        // address once and keep it in a callee-saved register.
+                        verts[vertIdx].pos = pos;
                         if (row == 0) {
                             norm.x = pos.x - xfm->v.x;
                             norm.y = pos.y - xfm->v.y;
@@ -251,9 +255,9 @@ void RndRibbon::UpdateMesh() {
                             Normalize(norm, norm);
                         }
                         row++;
-                        vert.norm = norm;
-                        vert.tex.x = 1.0f - (latestFrame - segFrame) / mDecay;
-                        vert.tex.y = uFrac;
+                        verts[vertIdx].norm = norm;
+                        verts[vertIdx].tex.x = 1.0f - (latestFrame - segFrame) / mDecay;
+                        verts[vertIdx].tex.y = uFrac;
                     } while (row < 2);
                     numSides = mNumSides;
                     side++;
