@@ -89,15 +89,15 @@ void CharIKHead::Poll() {
                 // Multiply(const Vector3&, const Hmx::Matrix3&, Vector3&) in
                 // math/Mtx.h for the measurement that established this lever.
                 const Vector3 &parentLocal = mPoints[i - 1].mBone->LocalXfm().v;
-                float localX = boneXfm.m.z.x * parentLocal.z;
-                localX += boneXfm.m.x.x * parentLocal.x;
+                float localX = boneXfm.m.x.x * parentLocal.x;
+                localX += boneXfm.m.z.x * parentLocal.z;
                 localX += boneXfm.m.y.x * parentLocal.y;
-                float localY = boneXfm.m.z.y * parentLocal.z;
-                localY += boneXfm.m.x.y * parentLocal.x;
-                localY += boneXfm.m.y.y * parentLocal.y;
-                float localZ = boneXfm.m.z.z * parentLocal.z;
-                localZ += boneXfm.m.x.z * parentLocal.x;
+                float localZ = boneXfm.m.x.z * parentLocal.x;
+                localZ += boneXfm.m.z.z * parentLocal.z;
                 localZ += boneXfm.m.y.z * parentLocal.y;
+                float localY = boneXfm.m.x.y * parentLocal.x;
+                localY += boneXfm.m.z.y * parentLocal.z;
+                localY += boneXfm.m.y.y * parentLocal.y;
                 localVec.Set(localX, localY, localZ);
                 Vector3 targetVec;
                 Subtract(mPoints[i - 1].mPos, mPoints[i].mPos, targetVec);
