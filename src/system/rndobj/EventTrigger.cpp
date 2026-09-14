@@ -674,7 +674,22 @@ DataNode EventTrigger::Cleanup(DataArray *arr) {
                     }
                     ++ref;
                 }
-                if (ref == filter->Refs().end()
+                // Same reason as the loop test above: end() returns an
+                // iterator BY VALUE, and MSVC hoists that loop-invariant
+                // temporary to before the loop and homes a dead copy of it to
+                // the stack.  Testing the ring header as a raw pointer leaves
+                // nothing to home.
+                //
+                // ⚠ That change took the diff from 10 rows to 1 and moved the
+                // canonical score by EXACTLY ZERO: report.json reads 99.73822
+                // before and after.  Nine of the ten rows were the r10<->r11
+                // permutation in the MILO_NOTIFY argument setup 150 instructions
+                // away, and the canonical ruler forgives register permutation --
+                // the whole 99.73822 is the ONE surviving row, a dead
+                // `stw r10, 0x60(r31)` at index 92 that the image does not emit.
+                // Do not read a row-count drop here as progress against the
+                // headline; only that store is worth anything.
+                if ((ObjRef *)ref == &filter->Refs()
                     && filter->GetType() != RndAnimFilter::kShuttle) {
                     anim->mAnim = filter->Anim();
                     anim->mEnable = true;

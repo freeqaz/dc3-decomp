@@ -293,6 +293,24 @@ void RndRibbon::UpdateChase() {
         unsigned int i = 0;
         if (numKeys != 0) {
             float cutoff = now - mDecay;
+            // 15-row residual (lane w7-j, 2026-09-14).  The one structural row is
+            // a target-only `lwz r8, 0x0(r31)` at the top of this loop body: the
+            // shipped build RE-READS mTransforms.mBegin through r31 (= &mTransforms)
+            // on every iteration, where we CSE it with the mBegin load that
+            // `mTransforms.size()` already did two instructions earlier.  Everything
+            // else in rows 67..95 is the register cascade that follows from having
+            // one extra value live across the loop.
+            //
+            // MEASURED AND REVERTED: indexing through a container pointer --
+            //     Keys<Transform, Transform> *xf = &mTransforms;  ... (*xf)[i].frame
+            // -- does produce the target's `lwz r8, 0x0(r31)` / `add r8, r10, r8`
+            // addressing AND closes the entire cascade (rows 67..78 all become
+            // equal, 15 rows -> 10).  But MSVC still LICM-hoists the load into the
+            // loop preheader instead of leaving it in the body, so the one row
+            // becomes an insert/delete PAIR, which the canonical ruler charges more
+            // than the diff_arg rows it removed: 99.757 -> 99.032.  The remaining
+            // gap is loop-invariant code motion, not the addressing form, and no
+            // behaviour-preserving spelling found here defeats it.
             do {
                 if (mTransforms[i].frame >= cutoff) {
                     break;

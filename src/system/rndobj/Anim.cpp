@@ -493,6 +493,28 @@ DataNode RndAnimatable::OnConvertFrames(DataArray *arr) {
     return conv;
 }
 
+// The offsets in the comments below are the SHIPPED IMAGE's stack slots, and we
+// do not currently land on them: our build permutes them as
+//   blend 0x84, delay 0x78, units 0x88, name 0x74, wait 0x71, wrap 0x72,
+//   ease_power 0x80, ease 0x7c
+// against the image's 0x88 / 0x74 / 0x7c / 0x78 / 0x72 / 0x71 / 0x84 / 0x80.
+// Same slot SET, same frame size (0x160), same store order, same FindData call
+// order -- only the assignment of variables to slots differs.  That is the whole
+// residual: 25 rows, every one of them a displacement, 99.95220 canonical.
+//
+// Two levers measured and REFUTED here (lane w7-j, 2026-09-14):
+//   1. Declaration order is INERT.  Permuting all thirteen declarations (both
+//      the six 4-byte address-taken locals and the two bools) reproduced the
+//      identical slot assignment -- the stack-layout table came back with the
+//      same four SWAPPED and two DIFFER rows -- while perturbing instruction
+//      scheduling enough to drop the function to 97.1%.  Whatever orders these
+//      slots, it is not the order they are written in.
+//   2. The `(int &)` reinterpret casts are INERT.  Declaring local_units and
+//      local_ease as plain `int` and dropping both casts (casting back at the
+//      two consumers instead) rebuilt BYTE-IDENTICALLY to this spelling: same
+//      99.95220, same 25 rows, same offsets.
+// Neither the FindData call order nor the initialiser store order can be the
+// input either -- both already agree with the image instruction for instruction.
 DataNode RndAnimatable::OnAnimate(DataArray *arr) {
     float local_blend = 0.0f; // 0x88
     float animTaskStart = StartFrame();
