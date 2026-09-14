@@ -674,7 +674,12 @@ DataNode EventTrigger::Cleanup(DataArray *arr) {
                     }
                     ++ref;
                 }
-                if (ref == filter->Refs().end()
+                // Same reason as the loop test above: end() returns an
+                // iterator BY VALUE, and MSVC hoists that loop-invariant
+                // temporary to before the loop and homes a dead copy of it to
+                // the stack.  Testing the ring header as a raw pointer leaves
+                // nothing to home.
+                if ((ObjRef *)ref == &filter->Refs()
                     && filter->GetType() != RndAnimFilter::kShuttle) {
                     anim->mAnim = filter->Anim();
                     anim->mEnable = true;
