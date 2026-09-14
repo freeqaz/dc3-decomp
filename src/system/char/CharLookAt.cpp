@@ -250,7 +250,28 @@ void CharLookAt::Poll() {
                     Subtract(mTarget->WorldXfm().v, source->WorldXfm().v, lookDir);
                     MakeRotQuat(source->WorldXfm().m.y, lookDir, rotQuat);
                     MakeRotMatrix(rotQuat, rotMat);
-                    Multiply(pivotXfm.m.y, rotMat, lookDir);
+                    // Multiply(pivotXfm.m.y, rotMat, lookDir), spelled as
+                    // per-component accumulators.  The header's single
+                    // expression makes MSVC seed all three rows from the
+                    // z-term; the image seeds X from the y-term (it defers the
+                    // m.z.x load to last) and only Y and Z from the z-term.
+                    // A `+=` is a reassociation barrier, and MSVC emits the
+                    // first two of whatever order is written SWAPPED -- both
+                    // for the terms inside a row and for the rows themselves --
+                    // so the orders below are the image's orders pre-swapped.
+                    // See the note above Multiply(const Vector3 &, const
+                    // Hmx::Matrix3 &, Vector3 &) in math/Mtx.h.
+                    const Vector3 &pivotFwd = pivotXfm.m.y;
+                    float dirZ = rotMat.y.z * pivotFwd.y;
+                    dirZ += rotMat.z.z * pivotFwd.z;
+                    dirZ += rotMat.x.z * pivotFwd.x;
+                    float dirY = rotMat.y.y * pivotFwd.y;
+                    dirY += rotMat.z.y * pivotFwd.z;
+                    dirY += rotMat.x.y * pivotFwd.x;
+                    float dirX = rotMat.x.x * pivotFwd.x;
+                    dirX += rotMat.y.x * pivotFwd.y;
+                    dirX += rotMat.z.x * pivotFwd.z;
+                    lookDir.Set(dirX, dirY, dirZ);
                 } else
                     Normalize(lookDir, lookDir);
                 Multiply(mPivot->TransParent()->WorldXfm().m, lookDir, lookDir);

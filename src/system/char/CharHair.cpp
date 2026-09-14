@@ -247,7 +247,11 @@ void CharHair::SimulateInternal(float fps) {
     float halfWeight = mWeight * -0.5f;
     Vector3 windForce(0.0f, 0.0f, 0.0f);
     if (mWindObj) {
-        RndTransformable *root = mStrands[0].Root();
+        // Test the ObjPtr, not a raw RndTransformable *.  The two spellings are
+        // not the same instruction: `if (objPtr)` emits a signed `cmpwi` (see
+        // the `if (mWindObj)` above, which matches) and `if (rawPtr)` emits
+        // `cmplwi`.  The image uses `cmpwi` for both tests.
+        const ObjPtr<RndTransformable> &root = mStrands[0].RootRef();
         if (root) {
             const Transform &rootXfm = root->WorldXfm();
             mWindObj->GetWind(rootXfm.v, TheTaskMgr.Seconds(TaskMgr::kRealTime), windForce);
@@ -278,6 +282,17 @@ void CharHair::SimulateInternal(float fps) {
                     Point &modPt = modStrand.Points()[j];
                     Vector3 vRes;
                     Subtract(pt.pos, modPt.pos, vRes);
+                    // REFUTED (lane w7-a, 2026-09-14): spelling this as an
+                    // accumulator chain seeded from vRes.z -- the image's term
+                    // order, and the lever that closed CharBones::ScaleAdd and
+                    // both CharIK/LookAt Polls in this same lane -- REGRESSES
+                    // this site, 99.4775 -> 98.3, and makes the function three
+                    // instructions LONGER.  vRes is a real Vector3 that is
+                    // mutated and stored afterwards, so forcing the sum's
+                    // association also pins vRes into its stack slot instead of
+                    // letting the three differences stay in f0/f12/f13.  The
+                    // accumulator lever only pays where the vector is dead
+                    // after the reduction.
                     float lensq = LengthSquared(vRes);
                     float minLenSq = minLen * minLen;
                     if (lensq < minLenSq) {
@@ -303,6 +318,20 @@ void CharHair::SimulateInternal(float fps) {
                 }
                 ScaleAddEq(pt.pos, m128.y, rsalen);
                 Vector3 idealPos;
+                // REFUTED (lane w7-a, 2026-09-14): spelling this ScaleAdd as
+                // three per-component statements in the image's emission order
+                // (y, x, z -- the image's three fmadds land in f24, f25, f23
+                // in that order, ours in f24, f23, f25) does NOT close the
+                // cluster.  Canonical does not move (99.6 either way) and raw
+                // drops 99.0 -> 98.9: the three [291]-[296] offset rows survive
+                // with merely different offsets, and twelve NEW rows appear
+                // hundreds of instructions away ([468], [488], [500]-[502],
+                // [520], [525], [552]).  idealPos is live across the Interp
+                // call and the entire collide loop, so all three components sit
+                // in callee-saved FPRs with no stores at all; there is no store
+                // order to shape, and forcing the emission order only perturbs
+                // the allocator's choices downstream.  This cluster is
+                // scheduler-owned, not source-owned.
                 ScaleAdd(t100.v, t100.m.y, pt.length, idealPos);
                 Interp(pt.lastZ, t100.m.z, mTorsion, m128.z);
 

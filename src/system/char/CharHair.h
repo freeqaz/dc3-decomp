@@ -49,6 +49,10 @@ public:
         void Save(BinStream &) const;
         void Load(BinStreamRev &);
         RndTransformable *Root() { return mRoot; }
+        /** The reference itself, not the pointer it holds.  Testing the ObjPtr
+            compiles to a SIGNED `cmpwi` while testing a raw `RndTransformable *`
+            compiles to `cmplwi`; SimulateInternal needs the former. */
+        const ObjPtr<RndTransformable> &RootRef() const { return mRoot; }
         Hmx::Matrix3 &RootMat() { return mRootMat; }
         ObjVector<Point> &Points() { return mPoints; }
         int NumPoints() const { return mPoints.size(); }

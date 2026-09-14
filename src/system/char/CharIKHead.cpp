@@ -78,7 +78,27 @@ void CharIKHead::Poll() {
             if (i > 0) {
                 Vector3 localVec;
                 Hmx::Quat rotQuat;
-                Multiply(mPoints[i - 1].mBone->LocalXfm().v, boneXfm.m, localVec);
+                // Multiply(parentLocal, boneXfm.m, localVec), spelled as
+                // per-component accumulators.  Under /fp:fast MSVC reassociates
+                // each row of the header's single-expression form on its own,
+                // and it does not do it uniformly: from the header we get
+                // y-term, z-term, x-term for the X row while the image (and our
+                // own Y and Z rows) accumulate z-term, x-term, y-term.  A `+=`
+                // is a reassociation barrier, so the statement order below pins
+                // all three rows to the image's order.  See the long note above
+                // Multiply(const Vector3&, const Hmx::Matrix3&, Vector3&) in
+                // math/Mtx.h for the measurement that established this lever.
+                const Vector3 &parentLocal = mPoints[i - 1].mBone->LocalXfm().v;
+                float localX = boneXfm.m.x.x * parentLocal.x;
+                localX += boneXfm.m.z.x * parentLocal.z;
+                localX += boneXfm.m.y.x * parentLocal.y;
+                float localZ = boneXfm.m.x.z * parentLocal.x;
+                localZ += boneXfm.m.z.z * parentLocal.z;
+                localZ += boneXfm.m.y.z * parentLocal.y;
+                float localY = boneXfm.m.x.y * parentLocal.x;
+                localY += boneXfm.m.z.y * parentLocal.z;
+                localY += boneXfm.m.y.y * parentLocal.y;
+                localVec.Set(localX, localY, localZ);
                 Vector3 targetVec;
                 Subtract(mPoints[i - 1].mPos, mPoints[i].mPos, targetVec);
                 MakeRotQuat(localVec, targetVec, rotQuat);
