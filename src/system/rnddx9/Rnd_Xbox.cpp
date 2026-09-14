@@ -818,6 +818,13 @@ void DxRnd::InitBuffers() {
         // half height) over the default vertical one (side-by-side tiles,
         // half width, full height).  The loop re-reads mNumTiles from the
         // member every iteration (`lwz r8, 0x3b0(r30)`).
+        // w7-bl RESIDUAL (95.2%): the image computes `offset + tile` TWICE in
+        // each of the two rect loops (0x82619110 `add r8, r10, r23` and
+        // 0x82619124 `add r10, r10, r23`), where MSVC CSEs ours into one add
+        // (loop 1) or an add plus `mr` (loop 2).  The rest is a uniform
+        // renumbering of the callee-saved set: the image gets by with
+        // __savegprlr_19 and we need _18, i.e. one more simultaneously-live
+        // value, which is what shifts r25->r22, r27->r24, r24->r25, r26->r27.
         int i = 0;
         int offset = 0;
         if (mFlags & 2) {
@@ -925,8 +932,13 @@ void DxRnd::InitBuffers() {
     // 32, not an arithmetic shift.  With `>> 5` MSVC fuses one of them into a
     // single `extlwi` and the addze pair disappears.
     int temp27 = ((((mHeight + 0x1F) / 32) * ((mWidth + 0x1F) / 32)) << 0xC);
+    // w7-bl: `rect` is hoisted OUT of the loop on purpose.  Scoped inside the
+    // body it shares r1+0x58 with the MakeString scratch slot; the image keeps
+    // the two apart (Symbol temp at 0x5c, D3DLOCKED_RECT at 0x60), and hoisting
+    // reproduces that (-3 rows).  Swapping the mullw operands above to match
+    // the image's mHeight/mWidth LOAD order is inert (measured, 0 rows).
+    D3DLOCKED_RECT rect;
     for (int i = 0; i < 2; i++) {
-        D3DLOCKED_RECT rect;
         D3DTexture_LockRect(mFrontBuffers[i], 0, &rect, nullptr, 0);
         memset(rect.pBits, 0, temp27);
         D3DTexture_UnlockRect(mFrontBuffers[i], 0);
