@@ -170,6 +170,15 @@ void FlowSlider::UpdateActivations() {
     auto prev = mChildNodes.begin();
     auto next = mChildNodes.begin();
 
+    // NEGATIVE RESULT (w7-ap, 2026-09-14, 97.9 canonical): swapping these two
+    // declarations is BYTE-IDENTICAL.  The residual f30/f31 swap (image
+    // f31 = 1.0f, f30 = 0.0f; ours reversed, 10 rows) is a live-range
+    // assignment, not a declaration-order effect -- both sides already issue
+    // the two lfs in the same order.  The other 4 rows are the image's third
+    // range test in the FIRST helper (`fcmpu` + `bgt` against hi at
+    // 0x8242145C): MSVC proves `mValue > nextPos` false from the enclosing
+    // `mValue <= nextPos` and folds it away, so recovering it needs the outer
+    // test to be spelled differently, not the inner one.
     float one = 1.0f;
     float zero = 0.0f;
 
