@@ -449,6 +449,18 @@ void HamListRibbon::DrawRibbon(
         }
         mLabelPlaceholder->SetShowing(showLabel);
         mLabelPlaceholder->mCanHaveFocus = true;
+        // RESIDUAL (w7-as, 4 rows): the image does NOT pass the bool straight
+        // through here.  It materialises the enumerator with a real BRANCH --
+        //   li r4, 0x1 / lbz r11, 0x14(r24) / cmplwi r11, 0x0 /
+        //   ... / bne <bctrl> / li r4, 0x0
+        // -- with the compare and its branch scheduled around the three vtable
+        // loads.  NEGATIVE RESULT (2026-09-14): neither source form that
+        // *should* produce that branch does.  MSVC if-converts both:
+        //   `state.mSelected ? kFocused : kNormal`        -> subic/subfe, 92.5
+        //   `State s = kFocused; if (!sel) s = kNormal;`  -> subfic/subfe/and, 93.4
+        // The plain cast below leaves the four target instructions unpaired but
+        // scores 94.3, and is the only spelling of the three that does not also
+        // rotate the callee-saved set.
         mLabelPlaceholder->SetState((UIComponent::State)(int)state.mSelected);
 
         // Re-read through the cast at every use rather than caching a named
@@ -498,8 +510,13 @@ void HamListRibbon::DrawRibbon(
     float savedAlpha;
     if (TheLoadMgr.EditMode() && mLabelPlaceholder) {
         savedAlpha = ((const UILabel *)(HamLabel *)mLabelPlaceholder)->Style(0).GetAlpha();
-        float totalAlpha = GetLabelTotalAlpha();
-        mLabelPlaceholder->Style(0).SetAlpha(totalAlpha);
+        // The label pointer is read BEFORE GetLabelTotalAlpha() clobbers the
+        // volatiles -- `lwz r30, 0x31c(r31)` at 0x82483334 sits above the call,
+        // and the call site is then just `mr r3, r30`.  Written as
+        // `mLabelPlaceholder->Style(0).SetAlpha(t)` MSVC evaluates the argument
+        // first (right to left) and re-loads 0x31c afterwards.
+        HamLabel *label = mLabelPlaceholder;
+        label->Style(0).SetAlpha(GetLabelTotalAlpha());
     }
 
     SetWorldXfm(tempXfm);
