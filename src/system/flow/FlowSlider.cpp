@@ -183,30 +183,39 @@ void FlowSlider::UpdateActivations() {
         float t;
         float intensity;
 
+        // The original called an inlined range-fraction helper that guards all
+        // three degenerate cases, so the range test is issued a SECOND time
+        // inside the fraction: the image emits `fcmpu cr6, f0, f13` / blt,
+        // `fcmpu cr6, f0, f12` / bgt and `fcmpu cr6, f13, f12` / beq at
+        // 0x82421454-0x82421474 after the outer test has already passed.
         if (next != mChildNodes.end()) {
-            float curPos = curCase->Value();
-            if (mValue >= curPos) {
+            if (mValue >= curCase->Value()) {
                 float nextPos = nextCase->Value();
                 if (mValue <= nextPos) {
-                    if (curPos != nextPos) {
-                        t = (mValue - curPos) / (nextPos - curPos);
+                    float f;
+                    if (mValue < curCase->Value() || mValue > nextPos
+                        || curCase->Value() == nextPos) {
+                        f = zero;
                     } else {
-                        t = zero;
+                        f = (mValue - curCase->Value()) / (nextPos - curCase->Value());
                     }
-                    t = one - t;
+                    t = one - f;
                     goto ease;
                 }
             }
         }
 
         {
-            if (mValue <= curCase->Value() && (bool)(mValue >= prevCase->Value())) {
-                float curPos = curCase->Value();
-                float prevPos = prevCase->Value();
-                if (curPos != prevPos) {
-                    t = (mValue - prevPos) / (curPos - prevPos);
-                } else {
+            // Same helper, lo = prevCase, hi = curCase (0x824214A4-0x824214C4).
+            // No (bool) cast: the image branches straight out of cr6 twice
+            // (bgt then blt) rather than materialising a 0/1 GPR.
+            if (mValue <= curCase->Value() && mValue >= prevCase->Value()) {
+                float lo = prevCase->Value();
+                float hi = curCase->Value();
+                if (mValue < lo || mValue > hi || lo == hi) {
                     t = zero;
+                } else {
+                    t = (mValue - lo) / (hi - lo);
                 }
                 goto ease;
             }
