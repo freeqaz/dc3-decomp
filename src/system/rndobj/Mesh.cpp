@@ -1741,12 +1741,16 @@ void RndMesh::SaveVertices(BinStream &bs) {
     bool fillOk = true;
     bs << doCompress;
     if (doCompress) {
+        // The image zeroes BOTH scalars before the platform test -- `li r31,
+        // 0x0` / `li r30, 0x0` at 8263B104/8263B108 sit above `cmpwi cr6, r11,
+        // 0x2`, and the XBox arm is an out-of-line block (.L_8263B23C: li
+        // r31,0x24 ; li r30,0x1 ; b) -- so isXBox carries its 0 from its
+        // declaration, it is not assigned inside the failure arm.
         int compressedSize = 0;
-        int isXBox;
+        int isXBox = 0;
         if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
             FormatString str("Unsupported platform for vertex compression");
             int line;
-            isXBox = 0;
             TheDebug.Fail(str.Str(), 0);
             line = 0x339;
             TheDebug.Fail(MakeString(kAssertStr, "Mesh.cpp", line, "compressedSize > 0"), 0);
