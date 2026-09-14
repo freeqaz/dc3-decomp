@@ -356,7 +356,13 @@ void HamVisDir::CalcArmLengths(std::vector<float> &armLengths, const Skeleton &s
 
 void HamVisDir::SetGrooviness(float groove) {
     mGrooviness = (groove - 0.5f) * (2.0f / 3.0f);
-    mGrooviness = Clamp<float>(0.0f, 1.0f, mGrooviness);
+    // ClampEq, not `mGrooviness = Clamp<float>(0.0f, 1.0f, mGrooviness)`.
+    // Both lower to the same Min(Max(min,v),max) fsel pair, but the image
+    // keeps the INTERMEDIATE store `stfs f13, 0x334(r11)` at 0x824BAD8C --
+    // taking mGrooviness by `float &` makes the first assignment's store
+    // escape, so MSVC forwards the value in f13 instead of dead-storing it.
+    // ClampEq's `tmp != value` result is unused and is eliminated.
+    ClampEq(mGrooviness, 0.0f, 1.0f);
     for (ObjDirItr<DepthBuffer3D> it(this, true); it != nullptr; ++it) {
         it->SetGrooviness(groove);
     }

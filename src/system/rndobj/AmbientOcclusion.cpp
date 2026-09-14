@@ -453,6 +453,23 @@ void RndAmbientOcclusion::TransformNormal(
     Normalize(vin, vtmp);
     Hmx::Matrix3 mtmp;
     Invert(min, mtmp);
+    // Declaration order z,x,y is the ONLY one of the four that reproduces the
+    // image's 46-instruction shape; every other order gains two instructions
+    // (a duplicated `lfs`/`fmuls` pair) and loses ~6pp:
+    //   z,x,y  97.30  46 instr  <- this
+    //   y,z,x  91.2   48 instr
+    //   y,x,z  91.2   48 instr
+    //   x,y,z  91.1   48 instr
+    // `Dot(mtmp.y, vtmp)` (operand swap) is inert -- byte-identical to
+    // `Dot(vtmp, mtmp.y)`.  Writing vout.y out by hand as
+    // `mtmp.y.x*vtmp.x + vtmp.y*mtmp.y.y + vtmp.z*mtmp.y.z` to force the
+    // image's x,y,z association reads 91.0: /fp:fast picks the association
+    // per Dot() CALL SITE, and spelling the arithmetic inline takes that
+    // decision away from it rather than steering it.
+    // Residual at 97.30: 15 diff_arg rows that are register-permutation only
+    // (f7<->f9, f0<->f13) plus one 2-row scheduling swap -- the image issues
+    // `mr r3, r30` (vout for the trailing Normalize) one slot later, after an
+    // fmuls.  Backend scheduling, no source lever left.
     // Compute dot products with inverted matrix rows
     float z = Dot(vtmp, mtmp.z);
     float x = Dot(vtmp, mtmp.x);

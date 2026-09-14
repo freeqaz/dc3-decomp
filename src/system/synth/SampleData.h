@@ -61,9 +61,9 @@ public:
     int GetSizeBytes() const { return mSizeBytes; }
     bool HasData() const { return mData != nullptr; }
     unsigned int DataAddr() const { return (unsigned int)(uintptr_t)mData; }
-#ifdef HX_NATIVE
+    // Was behind #ifdef HX_NATIVE; unguarded because the PPC build needs it
+    // too -- SynthSample360::LengthMs tests the raw pointer, not HasData().
     void *DataPtr() const { return mData; }
-#endif
     std::vector<SampleMarker> &AccessMarkers() { return mMarkers; }
 
     static void SetAllocator(SampleDataAllocFunc, SampleDataFreeFunc);

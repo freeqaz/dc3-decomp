@@ -13,11 +13,11 @@
 // Triangle::Set is defined in-class in Geo.h -- see the note there.
 
 float gUnitsPerMeter = 39.370079f;
-float gBSPPosTol = 0.01f;
-float gBSPDirTol = 0.985f;
-int gBSPMaxDepth = 20;
-int gBSPMaxCandidates = 40;
-float gBSPCheckScale = 1.1f;
+static float gBSPPosTol = 0.01f;
+static float gBSPDirTol = 0.985f;
+static int gBSPMaxDepth = 20;
+static int gBSPMaxCandidates = 40;
+static float gBSPCheckScale = 1.1f;
 
 void NumNodes(const BSPNode *node, int &num, int &maxDepth) {
     static int depth = 0;
@@ -158,12 +158,14 @@ void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
     d = -::Dot(cross, v1);
 }
 
-void SetBSPParams(float f1, float f2, int r3, int r4, float f3) {
-    gBSPPosTol = f1;
-    gBSPCheckScale = f3;
-    gBSPMaxCandidates = r4;
-    gBSPDirTol = f2;
-    gBSPMaxDepth = r3;
+void SetBSPParams(
+    float posTol, float dirTol, int maxDepth, int maxCandidates, float checkScale
+) {
+    gBSPDirTol = dirTol;
+    gBSPCheckScale = checkScale;
+    gBSPMaxDepth = maxDepth;
+    gBSPMaxCandidates = maxCandidates;
+    gBSPPosTol = posTol;
 }
 
 DataNode SetBSPParams(DataArray *da) {
@@ -685,31 +687,14 @@ namespace stlpmtx_std {
 #endif // HX_NATIVE
 
 void Multiply(const Box &box, float f, Box &out) {
-    const Box& _ref0 = box;
     Vector3 center;
-    Interp(_ref0.mMin, _ref0.mMax, 0.5f, center);
-    Vector3 *pMax = &out.mMax;
-    float hsz = _ref0.mMax.z - center.z;
-    float hsy = _ref0.mMax.y - center.y;
-    float hsx = _ref0.mMax.x - center.x;
-    pMax->y = hsy;
-    pMax->z = hsz;
-    pMax->x = hsx;
-    float hsxf = out.mMax.x * f;
-    float hsyf = out.mMax.y * f;
-    pMax->y = hsyf;
-    float hszf = hsz * f;
-    pMax->x = hsxf;
-    pMax->z = hszf;
-    pMax->y = hsyf + center.y;
-    pMax->x = hsxf + center.x;
-    pMax->z = hszf + center.z;
-    float dmx = _ref0.mMin.x - center.x;
-    float dmy = _ref0.mMin.y - center.y;
-    float dmz = _ref0.mMin.z - center.z;
-    out.mMin.z = dmz * f + center.z;
-    out.mMin.x = dmx * f + center.x;
-    out.mMin.y = dmy * f + center.y;
+    Interp(box.mMin, box.mMax, 0.5f, center);
+    Subtract(box.mMax, center, out.mMax);
+    Scale(out.mMax, f, out.mMax);
+    Add(out.mMax, center, out.mMax);
+    Subtract(box.mMin, center, out.mMin);
+    out.mMin *= f;
+    out.mMin += center;
 }
 
 void Multiply(const Plane &p, const Transform &t, Plane &out) {
@@ -815,29 +800,19 @@ bool operator>(const Sphere &s, const Frustum &f) {
 }
 
 bool Intersect(const Segment &seg, const Sphere &sphere) {
-    float dir_z = seg.end.z - seg.start.z;
-    float dir_x = seg.end.x - seg.start.x;
-    float center_z = sphere.center.z;
-    float dir_y = seg.end.y - seg.start.y;
-    float center_x = sphere.center.x;
-    float center_y = sphere.center.y;
+    // `closest` holds the segment direction until Interp overwrites it -- the
+    // image uses ONE Vector3 slot (0x50) for both, and re-using the variable is
+    // what reproduces that.  Both Subtracts must precede the zero-length
+    // early-out: the image interleaves all six fsubs ahead of
+    // `fcmpu cr6, f11, f10` at 0x825356B0.
     Vector3 closest;
-    closest.x = dir_x;
-    closest.y = dir_y;
-    closest.z = dir_z;
-    // NEGATIVE RESULT.  The image emits the three `center - start` fsubs
-    // (Geo.s 0x82536E..: f7, f9, f8) BEFORE the `fcmpu cr6, f11, f10` zero-length
-    // early-out, interleaved one-per-component with the direction fsubs; ours
-    // land after the branch.  Two variants were tried and both are neutral:
-    // naming them as locals (toCenter_x/y/z) in the interleaved declaration
-    // positions gave 80.930 raw vs 80.944 baseline, and reordering the
-    // `closest` component stores to z,x,y was byte-neutral.  The residual is
-    // 37 register-swap instructions over 5 pairs (f0<->f13 alone is 16 of 37),
-    // i.e. scheduling, not a source shape.
-    float a = dir_z * dir_z + dir_x * dir_x + dir_y * dir_y;
+    Subtract(seg.end, seg.start, closest);
+    Vector3 toCenter;
+    Subtract(sphere.center, seg.start, toCenter);
+    float a = LengthSquared(closest);
     if (a == 0.0f)
         return false;
-    float t = ((center_z - seg.start.z) * dir_z + (center_x - seg.start.x) * dir_x + (center_y - seg.start.y) * dir_y) / a;
+    float t = Dot(toCenter, closest) / a;
     float zero = 0.0f;
     float neg_t = -t;
     t = (neg_t >= 0.0f) ? zero : t;
@@ -845,13 +820,9 @@ bool Intersect(const Segment &seg, const Sphere &sphere) {
     float t_minus_one = t - one;
     t = (t_minus_one >= 0.0f) ? one : t;
     Interp(seg.start, seg.end, t, closest);
-    float dz = closest.z - center_z;
-    float dx = closest.x - center_x;
-    float dy = closest.y - center_y;
     float r = sphere.radius;
     float r2 = r * r;
-    float dist2 = dz * dz + dx * dx + dy * dy;
-    if (dist2 > r2)
+    if (DistanceSquared(closest, sphere.center) > r2)
         return false;
     return true;
 }
@@ -1075,20 +1046,25 @@ void BSPFace::Update() {
 }
 
 #ifndef HX_NATIVE
-// DIAGNOSIS (90.2 canonical, frame 0x10 larger than the image's).
+// DIAGNOSIS (90.9 canonical, was 90.2).
 //
-// The residual is one extra callee-saved GPR, and it comes from how the two
-// tuning globals are addressed.  gBSPPosTol .. gBSPCheckScale are laid out
-// contiguously at +0, +4, +8, +0xc, +0x10 (Geo.cpp:16-20), and the image
-// materialises ONE anchor -- `lis`/`addi` on &gBSPDirTol -- then reads its
-// neighbours off it as `0x4(rN)` (gBSPMaxDepth) and `0x8(rN)`
-// (gBSPMaxCandidates).  We emit a separate `lis` + `@l`-in-displacement for
-// each global, which costs a second page-base register for the whole
-// function and renames every callee-saved GPR by one (r17->r16, r23->r24,
-// ... 130 register-swap rows over 16 pairs).  There is no source spelling
-// that forces the anchor: the two globals are already read through their own
-// names, and `&gBSPDirTol`-relative access would be UB the compiler is free
-// to undo.  See docs/decomp/patterns/anchor-displacement-*.
+// The anchor half of this note is SOLVED and the conclusion it drew is
+// RETRACTED.  It used to read "there is no source spelling that forces the
+// anchor".  There was: the five gBSP* tuning globals are `static` in the
+// original, and MSVC gives file statics one shared section contribution, so
+// it can materialise ONE `lis`/`addi` base and reach the rest as
+// displacements.  Evidence: orig/373307D9/ham_xbox_r.map lists
+// `?gUnitsPerMeter@@3MA` at 0x82f0f68c (the non-static global immediately
+// below them) and lists NONE of gBSPPosTol..gBSPCheckScale at
+// 0x82f0f690..0x82f0f6a0 -- the map carries non-static data, so their
+// absence is the signature of internal linkage.  Making them static (and
+// respelling the five entries in config/373307D9/symbols.txt bare, which is
+// MSVC's spelling for a static) took SetBSPParams 89.0 -> 100.0, GeoInit
+// 95.3 -> 100.0 and this function 90.2 -> 90.9, with 0 regressions
+// binary-wide.
+//
+// The residual here is now the remaining register-swap cascade, not the
+// addressing mode.
 //
 // NEGATIVE RESULT: rotating the inner plane loop to
 // `if (planeIt != end) do { ... } while (++planeIt != end);` REGRESSES

@@ -670,8 +670,11 @@ int Voice::GetAddr() {
     ((void (*)(int *, XAUDIO2_VOICE_STATE *, int))(*(int *)(*(int *)pVoice + 0x64)))(pVoice, &state, 0);
 
     int addr = mStartSamp + (unsigned int)state.SamplesPlayed;
-    const void *buf = mBuffer;
-    if (buf != 0) {
+    // UNSIGNED test: the image compares with `cmplwi cr6, r9, 0x0`, not
+    // `cmpwi`.  `const void *buf = mBuffer; if (buf)` gives the signed form --
+    // MSVC/Xenon picks cmpwi for a pointer-typed equality-with-zero and
+    // cmplwi only for an unsigned integer one.
+    if ((unsigned int)mBuffer != 0) {
         int bytesPerSample = mChannels * 2;
         int samplesInBuffer = mAudioBytes / bytesPerSample;
         unsigned int uaddr = (unsigned int)addr;

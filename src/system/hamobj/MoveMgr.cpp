@@ -357,7 +357,14 @@ void MoveMgr::Init(const char *filename) {
 const MoveVariant *MoveMgr::GetRoutinePreferredVariant(int i1, int i2) const {
     if (i2 < mPreferredVariants[i1].size()) {
         const MoveVariant *var = mPreferredVariants[i1][i2];
-        if (var && var->Parent() == mMoveParents[i1].at(i2)) {
+        // `||` returning var, not `if (var && ...)` falling through to a
+        // separate `return nullptr`.  The image's null test is `beqlr cr6`
+        // (0x8...): it RETURNS var, which is already 0 in r3.  Written as an
+        // &&, MSVC tail-merges that exit into the trailing `li r3, 0; blr`
+        // and emits a `beq` to it instead -- same 28 instructions, same 112
+        // bytes, one different branch.  Same result either way: var is null
+        // on that path.
+        if (var == nullptr || var->Parent() == mMoveParents[i1].at(i2)) {
             return var;
         }
     }

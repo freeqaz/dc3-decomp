@@ -117,6 +117,13 @@ bool HasOfferID() const { return mData->Int(3); }
 unsigned long long OfferID() const;
 void SetSuccess(bool b) { mData->Node(2) = b; }
 void SetPurchaseMade(bool b) { mData->Node(3) = b; }
-void SetOfferID(const String &s) { mData->Node(4) = DataNode(s); }
+void SetOfferID(const String &s) {
+    // A NAMED local, not an unnamed temp: the image re-addresses the slot
+    // (`addi r4, r31, 0x50` at 0x82BF2EF4) instead of holding the DataNode
+    // ctor's return value, which costs a third callee-saved GPR and swaps
+    // the inline r30/r31 saves for `bl __savegprlr_29`.
+    DataNode dn(s);
+    mData->Node(4) = dn;
+}
 END_MESSAGE
 
