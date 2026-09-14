@@ -2806,7 +2806,31 @@ void RndText::FontMap3d::SetupCharacter(
             Multiply(xfm, circleXfm, xfm);
         }
 
-        memcpy(&mesh->mWorldXfm, &xfm, sizeof(Transform));
+        // mLocalXfm, NOT mWorldXfm.  The image materialises the mesh's
+        // RndTransformable base once and addresses both uses off it:
+        //     addi r31, r28, 0x40      ; (RndTransformable*)mesh
+        //     addi r3,  r31, 0x8       ; &mLocalXfm  (mesh + 0x48)
+        //     li   r5,  0x40
+        //     bl   memcpy
+        //     lbz  r11, 0xfd(r28)      ; mesh->mDirty
+        //     bne  ...
+        //     mr   r3,  r31            ; SetDirty_Force on the same base
+        // We were writing mWorldXfm (RndTransformable + 0x48 = mesh + 0x88),
+        // which the very next WorldXfm_Force() recomputes from the local
+        // transform -- so the glyph placement this function computes was being
+        // thrown away on the next sync.  Confirmed at the instruction level:
+        // we now emit `addi r3, r29, 0x48` (mesh + 0x48) where we used to emit
+        // `addi r3, r29, 0x88`; target's `addi r31, r28, 0x40` + `addi r3, r31,
+        // 0x8` is the same address.
+        //
+        // NEGATIVE RESULT on the r31 hoist itself: naming the upcast so the
+        // base is materialised once -- either `RndTransformable *t = mesh;` or
+        // `RndTransformable &t = *mesh;` -- REGRESSES 84.1 -> 83.2 (158 -> 161
+        // instructions, +3 inserts).  The named upcast makes MSVC keep the
+        // pointer in a frame slot across the XfmOnCircleEdge/Multiply calls
+        // instead of folding it into the two addressing modes.  Both spellings
+        // measured, both identical; lever exhausted, leave the two-row residual.
+        memcpy(&mesh->mLocalXfm, &xfm, sizeof(Transform));
         if (!mesh->mDirty) {
             mesh->SetDirty_Force();
         }
