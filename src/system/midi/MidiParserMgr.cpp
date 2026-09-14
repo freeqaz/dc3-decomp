@@ -158,6 +158,21 @@ DataArray *MidiParserMgr::ParseText(const char *str, int tick) {
     MILO_ASSERT(strlen(str) < 256, 0xF3);
     char buf[256];
     StripEndBracket(buf, str + 1);
+    // RESIDUAL (w7-ak, 99.98 canonical): exactly ONE row, idx 57
+    // `lwz r30, 0x54(r31)` vs our `lwz r30, 0x50(r31)` -- the slot `parsed`
+    // lives in for the catch-resume path.  The image's scalar frame is
+    // [0x50 = a POOLED TEMP (the MILO_ASSERT line int, and in the catch funclet
+    // the `const char*` temp that binds TheMidiParserMgr->mFilename to
+    // MakeString's `PBD&` parameter), 0x54 = parsed, 0x58 = errMsg]; ours pools
+    // `parsed` with the assert int at 0x50 and puts the mFilename temp at 0x54.
+    // So it is a temp-vs-named-local pooling order, not a missing local.
+    // NEGATIVE RESULTS, both exactly inert (still 1 row, same offsets):
+    //   1. hoisting this declaration above the MILO_ASSERT so `parsed` would be
+    //      live across it -- MSVC dead-stores the nullptr init away, so the live
+    //      range still starts at the try and the pooling is unchanged.
+    //   2. dropping the initializer (`DataArray *parsed;`).
+    // The single remaining instruction is the catch funclet's resume load; the
+    // 244-byte body is otherwise instruction-identical.
     DataArray *parsed = nullptr;
     MILO_TRY { parsed = DataReadString(buf); }
     MILO_CATCH(errMsg) {
