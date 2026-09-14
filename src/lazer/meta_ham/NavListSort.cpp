@@ -102,10 +102,13 @@ void NavListSort::DeleteTree() {
 }
 
 bool NavListSort::SetHighlightID(DataArray *a) {
+    // Retail clears mHighlightNode BEFORE reading a->Size(): the
+    // stw r10,0x50(r3) sits between the load of the old value and the
+    // stw r11,0x54(r3) that saves it, ahead of the lha r24,0x8(r4).
     NavListSortNode *tmp = mHighlightNode;
+    mHighlightNode = nullptr;
     mPrevHighlightNode = tmp;
     int aSize = a->Size();
-    mHighlightNode = nullptr;
     if (aSize == 0) {
         return false;
     }
