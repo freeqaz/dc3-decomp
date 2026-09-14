@@ -394,8 +394,11 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     int clippedY = ((startY + 1) & 0xfffe) % 480;
     g_colorBufferUpdate3++;
     if (!g_startMetering) {
-        g_startMetering = true;
+        // The image materialises 0 FIRST (0x82430970 `li r10, 0x0`, then
+        // 0x82430974 `li r9, 0x1`), i.e. the zeroed counter is the first
+        // statement even though its `stw` is emitted second.
         g_ColorNoFrameDataCnt = 0;
+        g_startMetering = true;
     }
     void *texels = nullptr;
     mTex->TexelsLock(texels);
@@ -407,9 +410,16 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
         LockedRect lockedRect;
         cam->LockStream(bufferData, lockedRect);
         g_colorBufferUpdate4++;
+        // mBits gets its OWN statement so its load lands before the
+        // TexelsPitch() vcall: the image reads both LockedRect fields
+        // (0x824309C8 `lwz r10, 0x5c(r1)`, 0x824309DC `lwz r11, 0x58(r1)`)
+        // and computes srcOffset (0x824309FC `add r30, r11, r10`) BEFORE the
+        // `bctrl` at 0x82430A00.  Left inside the srcOffset expression, mBits
+        // sinks past the call and drags the add with it.
         int destWidth = mTex->Width();
         unsigned int srcPitch = lockedRect.mPitch >> 2;
-        uintptr_t srcOffset = srcPitch * clippedY * 4 + (uintptr_t)lockedRect.mBits;
+        uintptr_t srcBits = (uintptr_t)lockedRect.mBits;
+        uintptr_t srcOffset = srcPitch * clippedY * 4 + srcBits;
         unsigned int destPitch = mTex->TexelsPitch();
         int destStride = (int)((destPitch >> 1) - destWidth) * 2;
         unsigned int *srcPtr = (unsigned int *)(srcOffset - 4);
