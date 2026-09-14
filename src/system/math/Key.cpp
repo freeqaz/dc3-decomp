@@ -154,7 +154,7 @@ void QuatSpline(
             // Catmull-Rom, evaluated as a flat sum (cubic, quadratic, linear,
             // constant) -- the nested/right-associated spelling costs 2.6pp.
             qout[i] = 0.5f
-                * (fcubed * (nn - (3.0f * n - (3.0f * p - pp)))
+                * (fcubed * (3.0f * p - pp - 3.0f * n + nn)
                    + fsq * ((4.0f * n + (2.0f * pp - 5.0f * p)) - nn) + ref * (n - pp)
                    + 2.0f * p);
             i++;
