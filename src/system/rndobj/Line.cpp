@@ -398,6 +398,17 @@ inline void Subtract(const Vector3 &v, const Vector2 &d, Vector3 &dst) {
     dst.Set(v.x - d.x, v.y, v.z - d.y);
 }
 
+// 80.6% canonical (w7-ay: floor held). Tried, each measured against the
+// image at 82678AF8-82678BE8: `if (len != 0) invLen = 1/len; else invLen = 0;`
+// matches the image's `b`/`fmr f0, f11` join (82678B34/82678B38) but shifts
+// the FPR assignment of the eight cap/body vertex writes so that the cap
+// helpers re-read pos.y/pos.z instead of forwarding them (79.8); spelling
+// the start-cap perp as `perp.x = -side1.y; perp.y = side1.x` reorders the
+// mHasCaps test the way the image has it (82678B94-82678BA8) but the same
+// cascade lands the caps at 77.9. The dir/side stage in the image forwards
+// dir1.y and proj2.x but reloads dir1.x and proj2.y (82678B18, 82678AFC) --
+// the mirror of what our spelling forwards -- and the residual is that
+// register-allocation cascade, not a missing statement.
 void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
     VertsMap vmap;
     MapVerts((pt1 - &mPoints[0]), vmap);
