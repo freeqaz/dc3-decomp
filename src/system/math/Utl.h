@@ -176,11 +176,16 @@ inline bool IsNaN(float f) { return !(f == f); }
 inline int Mod(int num, int modbase) {
     if (modbase == 0)
         return 0;
+    // The negative correction MUTATES div and falls into one shared return; it is
+    // not two returns. Inlined into CharHair::SetCloth the image emits
+    // `subf. r10, r10, r9` / `bge .L_823932B0` / `add r10, r10, r11` (0x8239329C),
+    // i.e. the add is the fall-through of a single-sided test. Spelling it as
+    // `return div + modbase; else return div;` inverts that branch to `blt` and
+    // costs an extra `mr` in the not-taken arm.
     int div = num % modbase;
     if (div < 0)
-        return div + modbase;
-    else
-        return div;
+        div += modbase;
+    return div;
 }
 
 inline bool NearlyOne(float f) { return fabs(f - 1.0f) < 0.0001f; }

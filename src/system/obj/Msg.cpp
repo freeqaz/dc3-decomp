@@ -8,22 +8,35 @@
 
 Symbol MsgSinks::sCurrentExportEvent(gNullStr);
 
+// Inlined by MSVC into GetPropSyncHandler below. This has to be a HELPER with two
+// `return false` sites rather than a `bool ret` flag written in both arms: the image
+// shares ONE `li r11, 0x0` block (0x825C35FC, `b .L_825C3650`) between the
+// size-mismatch path and the inner-loop break, and sinks `li r11, 0x1` to
+// .L_825C364C *after* the loop. A flag spelling puts `ret = true` before the loop and
+// `ret = false` at the tail, which costs an extra callee-saved register, 0x10 of
+// frame, and a beq/bne inversion (96.6 canonical vs 100 here).
+static bool PropSyncPathMatches(DataArray *array, DataArray *arr) {
+    if (array->Size() != arr->Size())
+        return false;
+    for (int j = 0; j < array->Size(); j++) {
+        if (array->UncheckedInt(j) != arr->UncheckedInt(j))
+            return false;
+    }
+    return true;
+}
+
 Symbol MsgSinks::GetPropSyncHandler(DataArray *arr) {
     if (mPropSyncHandlers) {
-        int size = mPropSyncHandlers->Size();
-        for (int i = 0; i < size; i += 2) {
+        // mPropSyncHandlers->Size() is RE-READ every iteration: the image
+        // reloads both the member and its size at the bottom of the loop
+        // (0x825C3658 `lwz r31, 0x0(r27)` + 0x825C3660 `lha r11, 0x8(r31)`).
+        // Caching it in a local costs two extra callee-saved registers
+        // (__savegprlr_23 instead of _25) and 0x10 more stack.
+        for (int i = 0; i < mPropSyncHandlers->Size(); i += 2) {
             DataArray *array = mPropSyncHandlers->Array(i);
-            if (array->Size() == arr->Size()) {
-                bool ret = true;
-                for (int j = 0; j < array->Size(); j++) {
-                    if (array->UncheckedInt(j) != arr->UncheckedInt(j)) {
-                        ret = false;
-                        break;
-                    }
-                }
-                if (ret)
-                    return mPropSyncHandlers->Sym(i + 1);
-            }
+            bool ret = PropSyncPathMatches(array, arr);
+            if (ret)
+                return mPropSyncHandlers->Sym(i + 1);
         }
     }
     return 0;

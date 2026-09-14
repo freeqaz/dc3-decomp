@@ -532,6 +532,21 @@ void BustAMovePanel::AdvanceFlashcards() {
     }
 }
 
+// RESIDUAL (w7-ar, 91.57 canonical, unchanged): every branch and every branch
+// TARGET already matches -- 0 diff_op, 0 branch-dest rows. What is left is two
+// induction-variable choices plus the register cascade they drag along:
+//   * first loop: the image walks a BYTE OFFSET off a live base
+//     (`li r11, 0` / `lwzx r8, r11, r7`, 0x82880DC0); MSVC gives us a walking
+//     POINTER (`mr r11, r5` / `lwz r8, 0x0(r11)`) for the same `data[count]`.
+//   * second loop: MSVC hoists `(nextIdx - size) + 1` into a THIRD induction
+//     variable incremented alongside nextIdx (the extra `addi r8, r8, 0x1`);
+//     the image recomputes `subf r10, r6, r11` / `addi r10, r10, 1` inside the
+//     loop each iteration (0x82880E18).
+// Refuted here, all measured: splitting the wrap into `wrappedIdx = nextIdx -
+// size; wrappedIdx++;` (inert, 91.57); indexing `mSongStructure[count]` instead
+// of `data[count]` (91.8 canonical but 89.5 -> 88.8 raw, adds a `clrrwi` and
+// reloads the vector base, and swaps the 0x97c/0x980 loads). objdiff classes the
+// residual RarelyHandFixable and asks for the permuter; this lane agrees.
 int BustAMovePanel::RepsToNextPhrase() {
     int beat = (int)(TheTaskMgr.Beat() + 0.5f);
     if (mStreamJumped) {
@@ -539,9 +554,8 @@ int BustAMovePanel::RepsToNextPhrase() {
         TheMaster->GetAudio()->GetCurrLoopBeats(beat, loopEnd);
     }
 
-    auto songStructureBegin = mSongStructure.begin();
-    int size = (int)((mSongStructure.end() - songStructureBegin));
-    int *data = &mSongStructure[0];
+    int *data = mSongStructure.begin();
+    int size = mSongStructure.end() - data;
     unsigned int count = 0;
     int repsInPhrase;
 

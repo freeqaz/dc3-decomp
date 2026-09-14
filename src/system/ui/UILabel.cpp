@@ -795,11 +795,26 @@ void UILabel::CenterWithLabel(UILabel *label, bool b, float f) {
         0x400
     );
     int num = b ? -1 : 1;
-    Transform thisXfm = LocalXfm();
-    Transform otherXfm = label->LocalXfm();
+    // otherXfm is declared FIRST so it lands in the lower frame slot: the image
+    // copies this->LocalXfm() to r1+0xa0 and label->LocalXfm() to r1+0x60
+    // (0x82793AD4 / 0x82793B00), in that call order, so the this-side temporary
+    // is the later declaration.
+    Transform otherXfm;
+    Transform thisXfm;
+    thisXfm = LocalXfm();
+    otherXfm = label->LocalXfm();
     float halfF = f * 0.5f;
-    thisXfm.v.x = -((mBounds.w * 0.5f + halfF) * (float)num - thisXfm.v.x);
-    otherXfm.v.x = (label->mBounds.w * 0.5f + halfF) * (float)num + otherXfm.v.x;
+    // Both labels are placed relative to the OTHER label's original centre, and
+    // each one is offset by the OTHER's half-width. We had the two width terms
+    // and the two centres swapped: we read this->mBounds.w and thisXfm.v.x for
+    // the this-side store, where the image reads label->mBounds.w (0xbc(r31))
+    // and otherXfm.v.x (0x90(r1)) for it -- target 0x82793B20/0x82793B24, then
+    // `fmadds f12, f12, f11, f13` / `stfs f12, 0xd0(r1)` at 0x82793B5C. The
+    // mis-decomp moved both labels by the wrong distance whenever the two had
+    // different widths or the label was not already centred on us.
+    float centerX = otherXfm.v.x;
+    thisXfm.v.x = (label->mBounds.w * 0.5f + halfF) * (float)num + centerX;
+    otherXfm.v.x = centerX - (mBounds.w * 0.5f + halfF) * (float)num;
     SetLocalXfm(thisXfm);
     label->SetLocalXfm(otherXfm);
 }

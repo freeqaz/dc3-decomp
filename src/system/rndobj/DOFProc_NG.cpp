@@ -32,6 +32,24 @@ NgDOFProc::NgDOFProc()
 
 bool NgDOFProc::Enabled() const { return mEnabled; }
 
+// Inlined at both use sites in NgDOFProc::Set below. Reading it as one helper is
+// what explains the image's two DIFFERENT lowerings of the same test: at the
+// first site the zero arm needs a real block (`fmr f11, f31` + `b`, 0x826AC170),
+// so MSVC branches `bge` INTO the computation; at the second site the result
+// register already holds 0.0f (f31), so the zero arm is empty and MSVC branches
+// `blt` PAST the computation (0x826AC1B0). It also explains why the near/far
+// planes are re-read rather than cached across the two -- they land in f13/f0 at
+// 0x826AC160 and in the opposite FPRs, f0/f13, at 0x826AC1A4.
+static float DepthToZRange(const RndCam *cam, float depth) {
+    float nearPlane = cam->NearPlane();
+    float farPlane = cam->FarPlane();
+    if (depth < nearPlane) {
+        return 0.0f;
+    }
+    return (farPlane - farPlane / depth * nearPlane) / (farPlane - nearPlane)
+        * (cam->ZRange().y - cam->ZRange().x) + cam->ZRange().x;
+}
+
 void NgDOFProc::Set(const RndCam *cam, float focalPlane, float blurDepth, float maxBlur, float minBlur) {
     MILO_ASSERT(cam, 0xBF);
 
@@ -39,6 +57,14 @@ void NgDOFProc::Set(const RndCam *cam, float focalPlane, float blurDepth, float 
 
     DOFOverrideParams &dof = RndPostProc::DOFOverrides();
 
+    // RESIDUAL (w7-ar, 99.14 canonical): 3 of 116 rows, all register allocation.
+    // The image's Clamp result for mMaxBlur lands in f13, is clobbered by the
+    // mMinBlur computation and is RELOADED from 0x48(r31) for the test below
+    // (0x826AC110); ours lands in f11, survives, and needs no reload -- so the
+    // reload is a delete row and the two producing instructions are reg diffs.
+    // The fourth row, `fnmsubs f12, f30, f0, f30` vs our f0/f30 operand order on
+    // farFocal, follows the same allocation. Refuted: writing farFocal as
+    // `focalPlane - mBlurDepth * focalPlane` (inert, byte-identical result).
     mBlurDepth = Max(dof.mDepthScale * blurDepth + dof.mDepthOffset, 0.0f);
     mMaxBlur = Clamp(0.0f, 1.0f, dof.mMaxBlurScale * maxBlur + dof.mMaxBlurOffset);
     mMinBlur = Clamp(0.0f, 1.0f, dof.mMinBlurScale * minBlur + dof.mMinBlurOffset);
@@ -51,23 +77,12 @@ void NgDOFProc::Set(const RndCam *cam, float focalPlane, float blurDepth, float 
         mBlurDepth = 0.001f;
     }
 
-    float nearPlane = cam->NearPlane();
-    float farPlane = cam->FarPlane();
-
-    float scale = 0.0f;
-    if (nearPlane <= focalPlane) {
-        scale = (farPlane - farPlane / focalPlane * nearPlane) / (farPlane - nearPlane)
-            * (cam->ZRange().y - cam->ZRange().x) + cam->ZRange().x;
-    }
+    float scale = DepthToZRange(cam, focalPlane);
     mDepthOfFieldScale = scale;
 
     float farFocal = focalPlane - focalPlane * mBlurDepth;
 
-    float bias = 0.0f;
-    if (farFocal >= nearPlane) {
-        bias = (farPlane - farPlane / farFocal * nearPlane) / (farPlane - nearPlane)
-            * (cam->ZRange().y - cam->ZRange().x) + cam->ZRange().x;
-    }
+    float bias = DepthToZRange(cam, farFocal);
     mDepthOfFieldBias = bias;
 
     if (scale < bias + 0.001f) {

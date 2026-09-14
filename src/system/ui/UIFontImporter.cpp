@@ -537,11 +537,19 @@ void UIFontImporter::HandmadeFontChanged() {
                 delete font;
                 delete text;
             }
-            // <?>
-            RndFontBase *next = *mGennedFonts.begin();
-            next = mHandmadeFont;
-            // </?>
-            FOREACH (it, mGennedFonts) {
+            // This OVERWRITES the list's first slot; it is not a local. The image
+            // calls ObjRef::SetObjConcrete on the head node itself at 0x827ACFC4
+            // (`lwz r3, 0x9c(r31)` = mGennedFonts.mNodes, `lwz r4, 0xdc(r31)` =
+            // mHandmadeFont). We assigned a stack copy, so the handmade font was
+            // never promoted to the front of mGennedFonts.
+            mGennedFonts.Set(mGennedFonts.begin(), mHandmadeFont);
+            // ...and the de-dup scan below therefore starts at ++begin(), not at
+            // begin(): the image reloads mNodes and takes ->next at 0x827ACFC8 /
+            // 0x827ACFCC before the loop. Starting at begin() would immediately
+            // match the entry we just wrote and erase it again.
+            for (ObjPtrList<RndFontBase>::iterator it = ++mGennedFonts.begin();
+                 it != mGennedFonts.end();
+                 ++it) {
                 if (*it == mHandmadeFont) {
                     mGennedFonts.erase(it);
                     break;
@@ -564,9 +572,15 @@ void UIFontImporter::HandmadeFontChanged() {
         mMinus.clear();
         mPlus = mHandmadeFont->Chars();
     }
-    if (mHandmadeFont) {
-        RndFont3d::StaticClassName();
-        mHandmadeFont->ClassName();
+    // mHandmadeFont is read ONCE into a register that survives the call (target
+    // 0x827AD078 `lwz r31, 0xdc(r31)`, then `mr r4, r31` at 0x827AD090); and the
+    // two Symbol results occupy two distinct frame slots (r1+0x50 and r1+0x54),
+    // so they are two live temporaries, not one reused return slot.
+    RndFontBase *handmade = mHandmadeFont;
+    if ((int)handmade) { // signed cmpwi, as the image (0x827AD07C); a bare pointer
+                         // test on a raw T* gives cmplwi here
+        Symbol ngClass = RndFont3d::StaticClassName();
+        Symbol fontClass = handmade->ClassName();
     }
 }
 
