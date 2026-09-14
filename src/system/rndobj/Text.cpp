@@ -534,10 +534,16 @@ bool RndText::MakeWorldSphere(Sphere &s, bool b) {
                 Sphere localSphere;
                 if (b) {
                     mesh->MakeWorldSphere(localSphere, true);
-                } else {
-                    if (mesh->GetSphere().GetRadius() != 0.0f) {
-                        Multiply(mesh->GetSphere(), mesh->WorldXfm(), localSphere);
-                    }
+                } else if (GetSphere().GetRadius() != 0.0f) {
+                    // NOT a typo and NOT `mesh->`: the image reads THIS RndText's
+                    // own sphere and world transform here, through its own
+                    // vbtable (`lwz r11, -0x108(r31)` / `add r10, r10, r31` /
+                    // `lfs f0, -0xec(r10)` at 0x8269089C, r31 = this), so every
+                    // glyph mesh is grown by the same text-level sphere.  RB3's
+                    // shared-engine source spells it `mSphere` / `WorldXfm()`
+                    // too.  Decompiling it as `mesh->GetSphere()` /
+                    // `mesh->WorldXfm()` "fixed" a bug the engine really has.
+                    Multiply(GetSphere(), WorldXfm(), localSphere);
                 }
                 s.GrowToContain(localSphere);
             }
@@ -1791,27 +1797,36 @@ static int u16_scan_ints(const unsigned short *s, int *vals, int max_vals) {
 void RndText::FitTextJust() {
     BuildFontMaps(true);
 
-    HX_VECTOR(unsigned short) wideChars;
+    // Declaration order is load-bearing: the image constructs `lines`
+    // (r31+0x60) before `wideChars` (r31+0x50) at 0x8269A22C..0x8269A244 and
+    // destroys wideChars first at 0x8269A3E0, so `lines` must be declared
+    // first even though wideChars gets the lower slot.
     HX_VECTOR(Line) lines;
+    HX_VECTOR(unsigned short) wideChars;
+    // `scale` is declared here, not beside the WrapText call: the image loads
+    // its 1.0f into f29 at 0x8269A258, BEFORE the ConvertTextToWide call.
+    float scale = 1.0f;
     int numChars = ConvertTextToWide(mText.c_str(), wideChars);
     float *charWidths = (float *)_alloca(sizeof(float) * (numChars + 2));
     OnComputeCharWidths(&wideChars[0], charWidths, false);
 
     Hmx::Rect bounds;
-    float scale = 1.0f;
     WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
 
     float hi = mStyles[0].mSize;
     float lo = 0.2f;
-    float cur = hi;
+    float cur;
 
-    if ((mWidth != 0.0f && mWidth < bounds.w) || (mHeight != 0.0f && mHeight < bounds.h)) {
+    if ((mWidth != 0.0f && bounds.w > mWidth) || (mHeight != 0.0f && bounds.h > mHeight)) {
+        // `cur = hi` belongs inside the if: the image emits `fmr f31, f30` at
+        // 0x8269A308, between the `hi - 0.2f` subtract and its compare.
+        cur = hi;
         if (hi - lo > 0.2f) {
             do {
                 cur = (lo + hi) * 0.5f;
                 scale = cur / mStyles[0].mSize;
                 WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
-                if ((mWidth != 0.0f && mWidth < bounds.w) || (mHeight != 0.0f && mHeight < bounds.h)) {
+                if ((mWidth != 0.0f && bounds.w > mWidth) || (mHeight != 0.0f && bounds.h > mHeight)) {
                     hi = cur;
                 } else {
                     lo = cur;
@@ -2470,28 +2485,34 @@ void RndText::DrawShowing() {
     // Save material colors
     int vlaIdx = 0;
     for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
-        FontMapBase *fontMap = *it;
-        for (int i = 0; i < fontMap->NumMaterials(); i++) {
-            RndMat *mat = fontMap->Material(i);
-            savedColors[vlaIdx].red = mat->GetColor().red;
-            savedColors[vlaIdx].green = mat->GetColor().green;
-            savedColors[vlaIdx].blue = mat->GetColor().blue;
+        for (int i = 0; i < (*it)->NumMaterials(); i++) {
+            RndMat *mat = (*it)->Material(i);
+            // Whole-Color copy, alpha included: the image moves all four words
+            // with lwz/stw (0x826992F0..0x82699330) and leaves one dead
+            // `addi r11, r3, 0x2c` -- the CSE'd &GetColor() -- at 0x82699308.
+            // NEGATIVE RESULT (w7-ax): spelling it as four per-field float
+            // assignments turns those lwz/stw into lfs/stfs and costs 0.1pp;
+            // the image's copy is a struct assignment.  The only residual here
+            // is that MSVC INTERLEAVES the four load/store pairs through one
+            // temp register (r11) while we batch four loads into r11/r8/r7/r10
+            // first -- a scheduling choice, not a spelling one, and it survived
+            // both spellings.  The RESTORE loop below is deliberately
+            // asymmetric and puts back only red/green/blue.
+            savedColors[vlaIdx] = mat->GetColor();
             vlaIdx++;
         }
     }
 
     // Apply font color overrides from styles
     bool hasOverride = false;
-    auto stylesEnd = mStyles.end();
-    for (auto it = mStyles.begin(); it != stylesEnd; ++it) {
+    for (auto it = mStyles.begin(); it != mStyles.end(); ++it) {
         Style &style = *it;
         if (style.mFont && style.mFontColorOverride) {
             int fmIdx = FontMapIndex(style.mFont, style.mBlacklight);
             if (fmIdx != -1) {
                 hasOverride = true;
                 FontMapBase *fontMap = mFontMaps[fmIdx];
-                int numMats = fontMap->NumMaterials();
-                for (int i = 0; i < numMats; i++) {
+                for (int i = 0; i < fontMap->NumMaterials(); i++) {
                     RndMat *mat = fontMap->Material(i);
                     mat->GetColor() = style.mFontColor;
                     mat->MarkDirty(1);
@@ -2508,10 +2529,8 @@ void RndText::DrawShowing() {
     // Draw each mesh — text inherits the current camera (PanelDir's CamOverride).
     // On Xbox, text was drawn in 3D world space under the active camera.
     for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
-        FontMapBase *fontMap = *it;
-        int numMeshes = fontMap->NumMeshes();
-        for (int i = 0; i < numMeshes; i++) {
-            RndMesh *mesh = fontMap->Mesh(i);
+        for (int i = 0; i < (*it)->NumMeshes(); i++) {
+            RndMesh *mesh = (*it)->Mesh(i);
             if (mesh) {
 #ifdef HX_NATIVE
                 if (getenv("DC3_TEXT_DIAG")) {
@@ -2545,11 +2564,22 @@ void RndText::DrawShowing() {
                     }
                 }
 #endif
-                if (!(!sBlacklightModeEnabled || !fontMap->mBlacklight ||
+                // mLineHeight / mScrollCopies, NOT mStyles[0].mSize / 0.  The
+                // image loads `lfs f1, -0xb4(r28)` and `lwz r5, -0xb0(r28)`
+                // straight off `this` at 0x826994E4 and 0x826994F4 (object
+                // offsets 0x58 and 0x5c, since the body's `this` is
+                // object+0x10c).  Those are the marquee repeat spacing and copy
+                // count that FitTextScroll sets -- mLineHeight is a misnomer,
+                // it is assigned mTotalWidth for a wrapping marquee and 0.0f
+                // otherwise, right beside mScrollCopies.  Passing a literal 0
+                // copy count meant DrawMesh's repeat loop never ran, so a
+                // marquee drew exactly one copy and left a gap instead of
+                // tiling across the label.
+                if (!(!sBlacklightModeEnabled || !(*it)->mBlacklight ||
                     TheUI->DisableScreenBlacklight())) {
-                    QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
+                    QueueBlacklightPacket(mesh, mLineHeight, mScrollCopies);
                 } else {
-                    DrawMesh(mesh, mStyles[0].mSize, 0);
+                    DrawMesh(mesh, mLineHeight, mScrollCopies);
                 }
             }
         }
@@ -2560,10 +2590,8 @@ void RndText::DrawShowing() {
         vlaIdx = 0;
         auto fontMapsEnd = mFontMaps.end();
         for (auto it = mFontMaps.begin(); fontMapsEnd != it; ++it) {
-            FontMapBase *fontMap = *it;
-            auto numMaterials = fontMap->NumMaterials();
-            for (int i = 0; i < numMaterials; i++) {
-                RndMat *mat = fontMap->Material(i);
+            for (int i = 0; i < (*it)->NumMaterials(); i++) {
+                RndMat *mat = (*it)->Material(i);
                 Hmx::Color &color = mat->GetColor();
                 color.red = savedColors[vlaIdx].red;
                 color.green = savedColors[vlaIdx].green;

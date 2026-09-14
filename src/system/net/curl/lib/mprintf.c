@@ -85,6 +85,10 @@
 #define mp_uintmax_t unsigned long
 #endif
 
+/* src/macros.h defines `null` as 0, which collides with curl's own
+   `static const char null[] = "(nil)"` inside dprintf_formatf. */
+#undef null
+
 #define BUFFSIZE 256 /* buffer for long-to-str and float-to-str calcs */
 #define MAX_PARAMETERS 128 /* lame static limit */
 
@@ -620,6 +624,24 @@ dprintf_Pass1(const char *format, va_stack_t *vto, char **endpos, va_list arglis
     return max_param;
 }
 
+/* RESIDUAL at 98.2 canonical / 98.2 raw (w7-ax, 2026-09-14), 19 of 675 rows.
+   ONE cause: which of this TU's four .rdata statics MSVC picks as the
+   address anchor.  The image materialises the address of the LAST one --
+   `lis r11, lbl_8206C224@ha` / `addi r18, r11, lbl_8206C224@l` at
+   0x825864CC/0x825864D4 -- and reaches the rest with NEGATIVE displacements:
+   `subi r10, r18, 0x58` = lower_digits (0x825864E4), `subi r11, r18, 0x30` =
+   upper_digits, `mr r30, r18` = null[].  We anchor on lower_digits instead and
+   use `addi` (+0x28 upper, +0x50 strnil, +0x58 null), so the two
+   `digits = FLAGS_UPPER ? upper_digits : lower_digits` sites get a FREE else
+   arm (the value is already in the anchor register) -- MSVC then splits the
+   `stw` into both arms and inverts the branch, which is the 10 rows at diff idx
+   354-359 and 373-378, and the rest is the prologue scheduling around that one
+   `subi`.  The DATA layout itself already matches the image exactly (lower +0,
+   upper +0x28, strnil +0x50, null +0x58); only the anchor differs.
+   NEGATIVE (measured here): hoisting `static const char null[] = "(nil)";` from
+   the FORMAT_STRING block to the top of the function body is byte-identical --
+   MSVC emits function-local statics in reverse declaration order regardless, so
+   neither the layout nor the anchor moves. */
 static int dprintf_formatf(
     void *data, /* untouched by format(), just sent to the stream() function in
                    the second argument */
@@ -851,49 +873,49 @@ static int dprintf_formatf(
             }
             break;
 
-            // case FORMAT_STRING:
-            //     /* String.  */
-            //     {
-            //         static const char null[] = "(nil)";
-            //         const char *str;
-            //         size_t len;
-            //
-            //        str = (char *)p->data.str;
-            //        if (str == NULL) {
-            //            /* Write null[] if there's space.  */
-            //            if (prec == -1 || prec >= (long)sizeof(null) - 1) {
-            //                str = null;
-            //                len = sizeof(null) - 1;
-            //                /* Disable quotes around (nil) */
-            //                p->flags &= (~FLAGS_ALT);
-            //            } else {
-            //                str = "";
-            //                len = 0;
-            //            }
-            //        } else
-            //            len = strlen(str);
-            //
-            //        if (prec != -1 && (size_t)prec < len)
-            //            len = (size_t)prec;
-            //        width -= (long)len;
-            //
-            //        if (p->flags & FLAGS_ALT)
-            //            OUTCHAR('"');
-            //
-            //        if (!(p->flags & FLAGS_LEFT))
-            //            while (width-- > 0)
-            //                OUTCHAR(' ');
-            //
-            //        while (len-- > 0)
-            //            OUTCHAR(*str++);
-            //        if (p->flags & FLAGS_LEFT)
-            //            while (width-- > 0)
-            //                OUTCHAR(' ');
-            //
-            //        if (p->flags & FLAGS_ALT)
-            //            OUTCHAR('"');
-            //    }
-            //    break;
+        case FORMAT_STRING:
+            /* String.  */
+            {
+                static const char null[] = "(nil)";
+                const char *str;
+                size_t len;
+
+                str = (char *)p->data.str;
+                if (str == NULL) {
+                    /* Write null[] if there's space.  */
+                    if (prec == -1 || prec >= (long)sizeof(null) - 1) {
+                        str = null;
+                        len = sizeof(null) - 1;
+                        /* Disable quotes around (nil) */
+                        p->flags &= (~FLAGS_ALT);
+                    } else {
+                        str = "";
+                        len = 0;
+                    }
+                } else
+                    len = strlen(str);
+
+                if (prec != -1 && (size_t)prec < len)
+                    len = (size_t)prec;
+                width -= (long)len;
+
+                if (p->flags & FLAGS_ALT)
+                    OUTCHAR('"');
+
+                if (!(p->flags & FLAGS_LEFT))
+                    while (width-- > 0)
+                        OUTCHAR(' ');
+
+                while (len-- > 0)
+                    OUTCHAR(*str++);
+                if (p->flags & FLAGS_LEFT)
+                    while (width-- > 0)
+                        OUTCHAR(' ');
+
+                if (p->flags & FLAGS_ALT)
+                    OUTCHAR('"');
+            }
+            break;
 
         case FORMAT_PTR:
             /* Generic pointer.  */

@@ -23,10 +23,15 @@
 #include "utl/Loader.h"
 #include <algorithm>
 
+// mLineWidthScale defaults to 1.0f, not 0: the image stores f13 --
+// `lfs f13, "__real@3f800000"@l(r6)` at 0x824431D8 -- into 0x214(r30) at
+// 0x82443268, beside the `stb r4, 0x218(r30)` that sets unk218 to 1.  A zero
+// there scales every skeleton bone line to zero width.  Fixing the constant
+// took the whole constructor from 80.29 to 100.0 on its own.
 SkeletonViz::SkeletonViz()
     : mUsePhysicalCam(0), mPhysicalCamRotation(0), mCurrentCamRotation(0),
       mAxesCoordSys(kCoordCamera), mUtlLine(0), mSkeletonEnv(0), mCamMesh(0),
-      mJointMesh(0), mJointMat(0), mPhysicalCam(0), mLineWidthScale(0),
+      mJointMesh(0), mJointMat(0), mPhysicalCam(0), mLineWidthScale(1),
       unk218(true) {
     unk194.Reset();
     Hmx::Matrix3 rot(Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0));
@@ -284,18 +289,35 @@ void SkeletonViz::SetCamera(
             mCamMesh->DrawShowing();
             Vector3 normal;
             Multiply(frame.mFloorNormal, unk1d4.m, normal);
-            normal.x += worldXfm.v.x;
-            normal.y += worldXfm.v.y;
-            normal.z += worldXfm.v.z;
+            Add(worldXfm.v, normal, normal);
+            // The image stores 0.0f into the blue channel of this colour
+            // (`stfs f30, 0x78(r1)` at 0x824408C8, f30 = __real@00000000, and
+            // 0x70(r1) is the Hmx::Color passed as r6 to DrawLine at
+            // 0x82440878 `addi r6, r1, 0x70`): the floor-normal debug line is
+            // YELLOW, the same colour as the floor plane drawn below -- not
+            // white. We had (1,1,1,1).
             TheRnd.DrawLine(
-                worldXfm.v, normal, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), false
+                worldXfm.v, normal, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), false
             );
         }
     }
 
+    // RESIDUAL (SetCamera, 95.1 canonical / 95.0 raw): frame delta +0x10.
+    // The image shares ONE 16-byte slot at r1+0x50 between the `pos` of the
+    // mUsePhysicalCam branch (stores at 0x82440650..0x8244065C, re-read as a
+    // 16-byte copy at 0x82440690..0x824406AC) and `plane` here (stores at
+    // 0x82440938..0x82440948, `addi r3, r1, 0x50` at 0x8244096C).  We give
+    // plane 0x50 and pos 0x60, which pushes every later slot up by 0x10 and
+    // costs 30 offset rows plus the 6I/6D schedule cluster inside the inlined
+    // SetLocalPos.  NEGATIVES, both measured at exactly 95.1/95.0 (inert):
+    //   - wrapping this block's body in an extra `{ }` to match pos's lexical
+    //     depth;
+    //   - hoisting `Vector3 pos` out to the `if (mUsePhysicalCam)` scope so the
+    //     two locals sit at the same depth.
+    // Vector3 is 12 bytes and Plane is 16 (math/Vec.h, math/Mtx.h:357), so the
+    // packer may simply refuse to merge unequal sizes; needs the permuter.
     if (unk218) {
-        Plane plane;
-        memcpy(&plane, &frame.mFloorClipPlane, sizeof(Plane));
+        Plane plane = *(const Plane *)&frame.mFloorClipPlane;
         Transform localXfm = unk1d4;
         localXfm.v = worldXfm.v;
         Multiply(plane, localXfm, plane);
@@ -362,8 +384,8 @@ void SkeletonViz::DrawJoints(
     RndLine **lineIt = mBoneLines - 1;
     while (jointPair < &BaseSkeleton::sBones[kNumBones].joint2) {
         // Endpoint 0 receives the unscaled tint; only endpoint 1 is depth-shaded.
-        shadedColor.alpha = shadedColor.alpha * tintColor.alpha;
         float c0 = (camPos[jointPair[-1]].z - maxDepth) * invRange;
+        shadedColor.alpha *= tintColor.alpha;
         c0 = Clamp(0.0f, 1.0f, c0);
         c0 = c0 * 0.8f + 0.2f;
         shadedColor.red = tintColor.red * c0;
@@ -371,8 +393,8 @@ void SkeletonViz::DrawJoints(
         shadedColor.blue = tintColor.blue * c0;
         lineIt[1]->SetPointColor(0, tintColor, true);
 
-        shadedColor.alpha = shadedColor.alpha * tintColor.alpha;
         float c1 = (camPos[jointPair[0]].z - maxDepth) * invRange;
+        shadedColor.alpha *= tintColor.alpha;
         c1 = Clamp(0.0f, 1.0f, c1);
         c1 = c1 * 0.8f + 0.2f;
         shadedColor.red = tintColor.red * c1;
@@ -385,11 +407,25 @@ void SkeletonViz::DrawJoints(
         float baseWidth = lineIt[1]->GetWidth();
         lineIt[1]->SetWidth(mLineWidthScale * baseWidth);
         lineIt[1]->DrawShowing();
+        lineIt[1]->SetWidth(baseWidth);
         lineIt++;
-        lineIt[0]->SetWidth(baseWidth);
         jointPair = (const SkeletonJoint *)((const char *)jointPair + sizeof(BoneJoints));
     }
 
+    // RESIDUAL (DrawJoints, 98.4 canonical / 97.8 raw). Remaining rows, all
+    // measured, none closed:
+    //   - `addi r24, r27, 0x114` + `mr r30, r24` where the image writes r30
+    //     directly (0x824412xx); declaring lineIt before jointPair is inert.
+    //   - `cmpw cr6, r31, r10` (SIGNED) on the loop bound where we emit
+    //     `cmplw`; the source compares two pointers, which MSVC lowers
+    //     unsigned.
+    //   - `fadds f30, f30, f1` (boneSum) where we emit `fadds f30, f1, f30`;
+    //     writing `len3 + len4` instead of `len4 + len3` is INERT.
+    //   - the three `fmuls` of the SECOND colour block come out (c1, tint)
+    //     where the image has (tint, c1); the first block already matches with
+    //     the identical spelling, and writing `c1 * tintColor.red` is INERT.
+    //   - the baseScale/scaledScale store schedule below (x,y,z vs y,x,z and
+    //     y,z,x vs x,y,z) and one extra saved FPR (f23).
     float baseScaleZ = mJointMesh->LocalXfm().m.z.z;
     float baseScaleY = mJointMesh->LocalXfm().m.y.y;
     float baseScaleX = mJointMesh->LocalXfm().m.x.x;
