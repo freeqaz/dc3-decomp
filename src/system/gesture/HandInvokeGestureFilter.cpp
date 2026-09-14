@@ -120,8 +120,8 @@ bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
     // Project the arm directions onto the body side vector (unk40) and onto
     // the body normal.
     float rightElevation = -Dot(unk40, rightArmDir);
-    float leftElevation = -Dot(unk40, leftArmDir);
     float rightForward = Dot(rightArmDir, unk4.Value());
+    float leftElevation = -Dot(unk40, leftArmDir);
     float leftForward = Dot(unk4.Value(), leftArmDir);
 
     float negZero = -0.0f;
