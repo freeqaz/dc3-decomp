@@ -418,6 +418,33 @@ void CharHair::SimulateInternal(float fps) {
                 if (pt.bone)
                     pt.bone->SetWorldXfm(t100);
                 Subtract(idealPos, pt.pos, pt.force);
+                // FLOOR (lane w7-bb, 2026-09-14), 99.57076 canonical.  After
+                // w7-a's three refutations above, every remaining CHARGED row in
+                // SimulateInternal is here, and there are exactly three: idx 531
+                // (target-only `lwz r10, 0xc(r30)`), idx 533 (ours-only
+                // `lfs f10, 0x20(r31)`) and idx 540 (`lfs f13, 0xe0(r1)` vs
+                // `lwz r8, 0x4(r30)`).  All 48 other rows are register
+                // permutation, which the canonical ruler forgives.
+                //
+                // The two sides emit the IDENTICAL instruction multiset across
+                // 531-540 -- the four `lwz` of this 16-byte Vector3 copy (r30 =
+                // &pt.force, dest r31+0x20 = pt.lastFriction) interleaved with
+                // the three `fsubs` operands of the Subtract above and three
+                // stack `lfs`.  Only the interleave differs: the image issues
+                // the copy's loads in the order 0xc, 0x4, 0x8, 0x0 starting one
+                // slot earlier, we issue 0x8, 0xc, 0x0, 0x4 -- and the four
+                // `stw` that consume them (0x28, 0x2c, 0x20, 0x24) are in the
+                // SAME order on both sides, so it is not the copy's expansion
+                // that differs, only where the scheduler placed each load.
+                //
+                // That makes this a floor rather than a spelling: both sides are
+                // 644 instructions, so any rewrite that reaches a different
+                // interleave has to add or remove instructions and loses more
+                // than the three rows it could win.  A `Vector3
+                // frictionDiff(pt.lastFriction);` copy-ctor form, which is the
+                // only way to move the 16-byte copy ahead of the subtraction
+                // without changing semantics, adds a second 16-byte copy for
+                // exactly that reason and was not pursued.
                 Vector3 frictionDiff;
                 Subtract(pt.lastFriction, pt.force, frictionDiff);
                 pt.lastFriction = pt.force;

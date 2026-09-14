@@ -314,6 +314,17 @@ float DanceRemixer::JumpedBeat(float beat) const {
     if (toBeat >= fromBeat) {
         return beat;
     }
+    // w7-bb FLOOR at 90.89% (4 rows, 824F02AC-824F02CC).  Everything through
+    // 824F02A8 matches; the residual is that the image reuses the SINGLE
+    // conversion scratch slot -0x10(r1) for both int->float conversions
+    // (std r11,-0x10 / lfd f0,-0x10 / std r10,-0x10 / lfd f13,-0x10) where we
+    // spill the second one to -0x8(r1), which also flips the fcfid/frsp
+    // scheduling into an f0<->f13 swap.  That is a frame-temp allocation
+    // decision, not an expression shape: three spellings were all byte-inert
+    // at 90.88636 -- splitting into two statements (float shifted = beat -
+    // (float)fromBeat; return shifted + (float)toBeat), reversing the fadds
+    // operands ((float)toBeat + (beat - (float)fromBeat)), and hoisting
+    // (int)beat into a named local used by all three compares.
     return (beat - (float)fromBeat) + (float)toBeat;
 }
 

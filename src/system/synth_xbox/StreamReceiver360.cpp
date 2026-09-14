@@ -20,10 +20,7 @@ StreamReceiver360::StreamReceiver360(int sampleRate, int numBuffers, bool slip)
     mStreamBuf = (unsigned char *)_MemAllocTemp(
         numBuffers << 14, "StreamReceiver.cpp", 0x33, "StreamBuffer", 0);
 
-    Voice *mem = (Voice *)PoolAlloc(
-        0x7c, 0x7c, "e:\\lazer_build_gmc1\\system\\src\\synth360\\Voice.h", 0x28, "Voice"
-    );
-    mVoice = mem ? new (mem) Voice(false, 1, false) : 0;
+    mVoice = new Voice(false, 1, false);
 
     mVoice->SetData(mStreamBuf, numBuffers << 14, 0);
     mVoice->SetLoopRegion(0, -1);
@@ -37,10 +34,8 @@ StreamReceiver360::StreamReceiver360(int sampleRate, int numBuffers, bool slip)
 }
 
 StreamReceiver360::~StreamReceiver360() {
-    if (mVoice != 0) {
-        delete mVoice;
-    }
-    if (mSlipEnabled && mSlipVoice != 0) {
+    delete mVoice;
+    if (mSlipEnabled) {
         delete mSlipVoice;
     }
     DeleteAll(mPendingVoices);
@@ -117,16 +112,9 @@ void StreamReceiver360::SetSlipOffset(float f) {
     int cursor = GetPlayCursor();
     int halfCursor = cursor / 2;
     int halfBuf = (mNumBufs << 14) / 2;
-    int startSamp;
-    if (halfBuf == 0) {
-        startSamp = 0;
-    } else {
-        float fOff = f * 0.001f;
-        int offset = (int)(fOff * (float)mSampleRate);
-        startSamp = (offset + halfCursor) % halfBuf;
-        if (startSamp < 0) startSamp += halfBuf;
-    }
-    mSlipVoice->SetStartSamp(startSamp);
+    float fOff = f * 0.001f;
+    int offset = (int)(fOff * (float)mSampleRate);
+    mSlipVoice->SetStartSamp(Mod(offset + halfCursor, halfBuf));
     mSlipVoice->SetVolume(mVolume);
     mSlipVoice->SetPan(mPan);
     mSlipVoice->SetSpeed(mSpeed);
