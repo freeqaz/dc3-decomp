@@ -1050,13 +1050,17 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         Cross(lowerDir, upperDir, cross);
 
         const Transform &srcXfm = source->WorldXfm();
-        bool lidsOK =
+        // The target tests the dot product POSITIVE (`fcmpu; bgt`) and keeps the
+        // result as "the lids are crossed", so every use below is the plain
+        // variable rather than a negation.  Spelling this the other way round
+        // (`<= 0.0f` plus `!lidsOK` at each use) inverts four branches.
+        bool notLidsOK =
             cross.x * srcXfm.m.x.x + cross.y * srcXfm.m.x.y + cross.z * srcXfm.m.x.z
-            <= 0.0f;
+            > 0.0f;
 
         if (!sDisableEyeClamping) {
             DataNode &clampCheat = DataVariable("eyes.disable_clamping");
-            if (!clampCheat.Int(0) && !lidsOK) {
+            if (!clampCheat.Int(0) && notLidsOK) {
                 float midX =
                     (upperBlinkPos.x - lowerBlinkPos.x) * 0.5f + lowerBlinkPos.x;
                 float midY =
@@ -1107,43 +1111,45 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         if (drawCheat.Int(0)) {
             RndGraph *graph = RndGraph::GetOneFrame();
 
-            if (graph && !(lidsOK)) {
-                graph->AddSphere(
-                    upperBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
-                );
-            } else {
-                graph->AddSphere(
-                    upperBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
-                );
-            }
-            if (graph && !(lidsOK)) {
-                graph->AddSphere(
-                    lowerBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
-                );
-            } else {
-                graph->AddSphere(
-                    lowerBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
-                );
-            }
+            // The target does NOT null-check `graph`: it calls GetOneFrame() and
+            // uses the result immediately.  The colour is a TERNARY of two
+            // unnamed temporaries (the image builds each arm into its own stack
+            // slot and lands `addi r6, r1, <slot>` in both arms), not an
+            // if/else around two whole calls.
+            graph->AddSphere(
+                upperBlinkPos,
+                0.05f,
+                notLidsOK ? Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
+                          : Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
+            );
+            graph->AddSphere(
+                lowerBlinkPos,
+                0.05f,
+                notLidsOK ? Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
+                          : Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
+            );
             graph->AddSphere(sourcePos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f));
 
-            Hmx::Color cyanColor(0.0f, 1.0f, 1.0f, 1.0f);
-            graph->AddLine(sourcePos, upperBlinkPos, cyanColor, false);
-            graph->AddLine(sourcePos, lowerBlinkPos, cyanColor, false);
+            // Two separate cyan temporaries, not one named local: the target
+            // stores (0,1,1,1) into two different stack slots.
+            graph->AddLine(
+                sourcePos, upperBlinkPos, Hmx::Color(0.0f, 1.0f, 1.0f, 1.0f), false
+            );
+            graph->AddLine(
+                sourcePos, lowerBlinkPos, Hmx::Color(0.0f, 1.0f, 1.0f, 1.0f), false
+            );
 
             Normalize(cross, cross);
             Vector3 normalEnd(
                 cross.x + sourcePos.x, cross.y + sourcePos.y, cross.z + sourcePos.z
             );
-            if (graph && !(lidsOK)) {
-                graph->AddLine(
-                    sourcePos, normalEnd, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f), false
-                );
-            } else {
-                graph->AddLine(
-                    sourcePos, normalEnd, Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f), false
-                );
-            }
+            graph->AddLine(
+                sourcePos,
+                normalEnd,
+                notLidsOK ? Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
+                          : Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f),
+                false
+            );
 
             const Transform &srcXfm2 = source->WorldXfm();
             Vector3 facingEnd(
@@ -1155,7 +1161,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
                 sourcePos, facingEnd, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), false
             );
 
-            if (!lidsOK) {
+            if (notLidsOK) {
                 Vector3 mid2(
                     (upperBlinkPos.x - lowerBlinkPos.x) * 0.5f + lowerBlinkPos.x,
                     (upperBlinkPos.y - lowerBlinkPos.y) * 0.5f + lowerBlinkPos.y,
