@@ -92,8 +92,20 @@ WebSvcMgr::ResolveHostname(const char *hostname, const char *domain, unsigned sh
         str += ".";
         str += domain;
     }
-    auto it = mHostCache.find(str.c_str());
-    if (it != mHostCache.end()) {
+    // The find and the end() comparison are ONE full-expression on purpose.
+    // find() builds a temporary String from the char* (the map's key type), and
+    // that temporary is destroyed at the end of the full expression.  The image
+    // computes the comparison FIRST and carries it across the destructor as a
+    // materialised bool:
+    //   8255BA80  subf  r11, r3, r23     find result vs end
+    //   8255BA88  subic r10, r11, 0x1
+    //   8255BA8C  subfe r26, r10, r11    r26 = (result == end)
+    //   8255BA94  bl    ??1String@@UAA@XZ   <- temp dies here
+    //   8255BA98  clrlwi. r11, r26, 24
+    // Split into `auto it = find(...); if (it != end())` the destructor runs
+    // first and the comparison becomes a plain cmplw afterwards.
+    std::map<String, NetAddress>::iterator it;
+    if ((it = mHostCache.find(str.c_str())) != mHostCache.end()) {
         ret = it->second;
     } else {
         ret = NetworkSocket::SetIPPortFromHostPort(hostname, domain, port);
