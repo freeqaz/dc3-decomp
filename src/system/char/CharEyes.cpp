@@ -58,9 +58,20 @@ CharEyes::~CharEyes() {}
 void CharEyes::Enter() {
     mLastFacing.Zero();
     mLastLook = 0;
+    // The image stores a third float zero, to 0xcc, that this function never
+    // wrote. Realigning the header's (uniformly 0x28-stale) offset comments
+    // against the store set puts mAvDelta there, and the `stateReset:` block in
+    // NextLook() resets it on exactly this adjacency: `mLastLook = 0.0f;
+    // mAvDelta = 0.0f;`. Without it, Enter() leaked the previous take's
+    // angular-velocity accumulator into a freshly entered character.
+    mAvDelta = 0.0f;
     mLastBlinkWeight = -1.0f;
     mLastCang = 1.0f;
     mBlinkDetect = false;
+    // NOT a lever: moving mBlinkActive after mBlinkCount -- which is where the
+    // image's `li r11, 0` store group puts it, and same-value-register groups do
+    // otherwise preserve source order on both sides -- scores 85.8%, down from
+    // 87.3%. The residual here is MSVC's store scheduling, not statement order.
     mBlinkActive = false;
     mDartEnabled = false;
     mDartInterval = -1.0f;
@@ -73,10 +84,8 @@ void CharEyes::Enter() {
     mInterestFilterFlags = mDefaultFilterFlags;
     mDartTimer = 0.0f;
     mEnabled = false;
-    auto& _ref1 = mNeedRecalc;
-    _ref1 = false;
+    mNeedRecalc = false;
     RndTransformable *head = GetHead();
-    _ref1 = false;
     if (head) {
         mLastFacing = head->WorldXfm().m.y;
         Normalize(mLastFacing, mLastFacing);

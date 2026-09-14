@@ -255,6 +255,13 @@ void ThreeDSound::CalculateFaderVolume() {
     } else if (unk20c <= mMinFalloffDistance) {
         vol = 0.0f;
     } else {
+        // The image dispatches mShape ONCE: `blt` (mShape == 0) goes straight to
+        // the falloff computation, `beq` (mShape == 1) goes to the unk210/mRadius
+        // test, and the default falls into MILO_FAIL and then rejoins. Hoisting
+        // the radius test out of the switch -- as this read before -- makes MSVC
+        // re-test `mShape == 1` after the FAIL (3 extra instructions) and sinks
+        // the shared `vol = -96.0f` block to the end of the function instead of
+        // leaving it inline after the first `if`.
         switch (mShape) {
         case 0:
             break;
@@ -265,19 +272,18 @@ void ThreeDSound::CalculateFaderVolume() {
         }
         if (mShape == 1 && unk210 > mRadius) {
             vol = -96.0f;
-            goto done;
+        } else {
+            float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
+            float t = invRange * unk20c + (1.0f - mMinFalloffDistance * invRange);
+            // The assert and the gEaseFuncs load are GetEaseFunction()'s, from
+            // math/Easing.h; open-coding them here put ThreeDSound.cpp in the
+            // image's __FILE__ slot where the original has Easing.h.
+            float eased = GetEaseFunction(mFalloffType)(t, mFalloffParameter, 0);
+            eased = Clamp(0.0f, 1.0f, eased);
+            vol = RatioToDb(eased);
+            vol = Max(vol, -96.0f);
         }
-        float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
-        float t = invRange * unk20c + (1.0f - mMinFalloffDistance * invRange);
-        // The assert and the gEaseFuncs load are GetEaseFunction()'s, from
-        // math/Easing.h; open-coding them here put ThreeDSound.cpp in the
-        // image's __FILE__ slot where the original has Easing.h.
-        float eased = GetEaseFunction(mFalloffType)(t, mFalloffParameter, 0);
-        eased = Clamp(0.0f, 1.0f, eased);
-        vol = RatioToDb(eased);
-        vol = Max(vol, -96.0f);
     }
-done:
     mDistanceFader->SetVolume(vol);
 }
 
