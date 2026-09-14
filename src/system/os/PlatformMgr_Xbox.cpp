@@ -727,40 +727,55 @@ namespace {
         ThePlatformMgr.Handle(msg, true);
     }
 
+    // The two error arms must be written as early returns, not as an
+    // if / else-if chain: MSVC then lays the merged TheDebug::Notify tail
+    // immediately after the FIRST arm (825??? -- `bl MakeString` / `lis
+    // TheDebug@ha` / `bl Notify` / `b end`, with the second arm branching
+    // back up to it), which is what the image does.  The chained form puts
+    // the tail after the SECOND arm instead and costs 8 rows.
+    // RESIDUAL (w7-am, 100.0 canonical, all 94 equal): the image instantiates
+    // MakeString<unsigned int> for the first message and
+    // MakeString<int *, int> for the second, where we get MakeString<long>
+    // and MakeString<unsigned long, XBC_EVENT_TYPE>.  Both pairs are ICF-
+    // folded, so they cost nothing here; reproducing them would need casts at
+    // the call sites (the `int *` one implies the image's XBC_EVENT_PARAMS
+    // declared the field at +0x4 as a pointer, which our XDK header does not).
     void XbcCallback(HRESULT err, XBC_EVENT_PARAMS *params, void *) {
         if (err != 0) {
             MILO_NOTIFY("SmartGlass: Error in cb: 0x%08x", err);
-        } else if (params->nUserIndex >= 4) {
+            return;
+        }
+        if (params->nUserIndex >= 4) {
             MILO_NOTIFY(
                 "SmartGlass: Error in cb: user index %d (event: %d)",
                 params->nUserIndex,
                 params->Type
             );
-        } else {
-            switch (params->Type) {
-            case XBC_EVENT_CLIENT_CONNECTED: {
-                gSmartGlassClientIDs[params->nUserIndex] = params->nClientId;
-                gNumSmartGlassClients++;
-                MILO_ASSERT(gNumSmartGlassClients <= XBC_MAX_CLIENTS, 0x20C);
-                break;
-            }
-            case XBC_EVENT_CLIENT_DISCONNECTED: {
-                gSmartGlassClientIDs[params->nUserIndex] = 0;
-                gNumSmartGlassClients--;
-                MILO_ASSERT(gNumSmartGlassClients >= 0, 0x214);
-                break;
-            }
-            case XBC_EVENT_JSON_SEND_COMPLETE: {
-                gNumSmartGlassSendsInProgress--;
-                break;
-            }
-            case XBC_EVENT_JSON_RECEIVE_COMPLETE: {
-                XbcRecieveMsg(params->nClientId, params->hReader);
-                break;
-            }
-            default:
-                break;
-            }
+            return;
+        }
+        switch (params->Type) {
+        case XBC_EVENT_CLIENT_CONNECTED: {
+            gSmartGlassClientIDs[params->nUserIndex] = params->nClientId;
+            gNumSmartGlassClients++;
+            MILO_ASSERT(gNumSmartGlassClients <= XBC_MAX_CLIENTS, 0x20C);
+            break;
+        }
+        case XBC_EVENT_CLIENT_DISCONNECTED: {
+            gSmartGlassClientIDs[params->nUserIndex] = 0;
+            gNumSmartGlassClients--;
+            MILO_ASSERT(gNumSmartGlassClients >= 0, 0x214);
+            break;
+        }
+        case XBC_EVENT_JSON_SEND_COMPLETE: {
+            gNumSmartGlassSendsInProgress--;
+            break;
+        }
+        case XBC_EVENT_JSON_RECEIVE_COMPLETE: {
+            XbcRecieveMsg(params->nClientId, params->hReader);
+            break;
+        }
+        default:
+            break;
         }
     }
 
