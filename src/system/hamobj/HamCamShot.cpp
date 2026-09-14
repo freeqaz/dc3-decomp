@@ -214,18 +214,10 @@ void HamCamShot::UpdateTargetsFlipped() {
                         }
                     }
 
-                    const char *clipsDirName;
-                    if (clipsDir != NULL) {
-                        clipsDirName = clipsDir->ProxyFile().c_str();
-                    } else {
-                        clipsDirName = "NULL";
-                    }
-                    const char *charName;
-                    if (character != NULL) {
-                        charName = character->Name();
-                    } else {
-                        charName = "NULL";
-                    }
+                    const char *clipsDirName =
+                        clipsDir != NULL ? clipsDir->ProxyFile().c_str() : "NULL";
+                    const char *charName =
+                        character != NULL ? character->Name() : "NULL";
                     TheDebug << MakeString(
                         "   Target %d: character = '%s' clips = '%s' animGroup = '%s'\n",
                         targetIdx,
