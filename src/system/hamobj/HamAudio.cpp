@@ -477,8 +477,17 @@ void HamAudio::PollCrossfade() {
         }
         bool shouldActivate
             = currentTime > (-(cf.mDuration * halfFade - cf.mStart) - kEpsilon);
-        if (cf.mStart < cf.mEnd) {
-            shouldActivate = shouldActivate && currentTime < mCrossfade.mEnd;
+        // Each of the three windowing tests in this function MATERIALISES its
+        // ordering comparison into a byte and then branches on the byte, and
+        // combines the two halves with a bitwise `and` rather than short-circuiting
+        // -- 0x82529F70-0x82529F80 (`li r11,1` / `blt` / `li r11,0` / `clrlwi.` /
+        // `beq`) and 0x82529F9C `and r10, r10, r11`; likewise 0x8252A058-0x8252A068
+        // + 0x8252A088, and 0x8252A0F0-0x8252A104 + 0x8252A128.  Written as a bare
+        // `if (a < b) x = x && y;` MSVC branches straight off the fcmpu and
+        // short-circuits on x, which costs both the two `li`s and the `and`.
+        bool startBeforeEnd = cf.mStart < cf.mEnd;
+        if (startBeforeEnd) {
+            shouldActivate = shouldActivate & (currentTime < mCrossfade.mEnd);
         }
         // The copy is written off the MEMBERS, not off `cf`: 0x82529FAC-0x82529FB8
         // batches all four loads into r10/r11/r9/r8 and only then stores them.
@@ -504,9 +513,10 @@ void HamAudio::PollCrossfade() {
         }
         float halfFade = mActiveCrossfade.mDuration * 0.5f;
         bool ready = currentTime > (mActiveCrossfade.mEnd + halfFade);
-        if (mActiveCrossfade.mStart >= mActiveCrossfade.mEnd) {
+        bool startBeforeEnd = mActiveCrossfade.mStart < mActiveCrossfade.mEnd;
+        if (!startBeforeEnd) {
             ready = ready
-                && currentTime < (mActiveCrossfade.mStart - halfFade) - kEpsilon;
+                & (currentTime < (mActiveCrossfade.mStart - halfFade) - kEpsilon);
         }
         if (!ready) {
             goto done;
@@ -517,10 +527,12 @@ void HamAudio::PollCrossfade() {
         state = 0;
     } else {
         bool ready = currentTime >= mActiveCrossfade.mEnd;
-        if (mActiveCrossfade.mStart >= mActiveCrossfade.mEnd) {
+        bool startBeforeEnd = mActiveCrossfade.mStart < mActiveCrossfade.mEnd;
+        if (!startBeforeEnd) {
             ready = ready
-                && currentTime
-                    < (mActiveCrossfade.mStart - mActiveCrossfade.mDuration * 0.5f) - kEpsilon;
+                & (currentTime
+                   < (mActiveCrossfade.mStart - mActiveCrossfade.mDuration * 0.5f)
+                       - kEpsilon);
         }
         if (!ready) {
             goto done;
