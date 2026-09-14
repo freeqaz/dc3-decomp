@@ -1111,43 +1111,45 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         if (drawCheat.Int(0)) {
             RndGraph *graph = RndGraph::GetOneFrame();
 
-            if (graph && notLidsOK) {
-                graph->AddSphere(
-                    upperBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
-                );
-            } else {
-                graph->AddSphere(
-                    upperBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
-                );
-            }
-            if (graph && notLidsOK) {
-                graph->AddSphere(
-                    lowerBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
-                );
-            } else {
-                graph->AddSphere(
-                    lowerBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
-                );
-            }
+            // The target does NOT null-check `graph`: it calls GetOneFrame() and
+            // uses the result immediately.  The colour is a TERNARY of two
+            // unnamed temporaries (the image builds each arm into its own stack
+            // slot and lands `addi r6, r1, <slot>` in both arms), not an
+            // if/else around two whole calls.
+            graph->AddSphere(
+                upperBlinkPos,
+                0.05f,
+                notLidsOK ? Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
+                          : Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
+            );
+            graph->AddSphere(
+                lowerBlinkPos,
+                0.05f,
+                notLidsOK ? Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
+                          : Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
+            );
             graph->AddSphere(sourcePos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f));
 
-            Hmx::Color cyanColor(0.0f, 1.0f, 1.0f, 1.0f);
-            graph->AddLine(sourcePos, upperBlinkPos, cyanColor, false);
-            graph->AddLine(sourcePos, lowerBlinkPos, cyanColor, false);
+            // Two separate cyan temporaries, not one named local: the target
+            // stores (0,1,1,1) into two different stack slots.
+            graph->AddLine(
+                sourcePos, upperBlinkPos, Hmx::Color(0.0f, 1.0f, 1.0f, 1.0f), false
+            );
+            graph->AddLine(
+                sourcePos, lowerBlinkPos, Hmx::Color(0.0f, 1.0f, 1.0f, 1.0f), false
+            );
 
             Normalize(cross, cross);
             Vector3 normalEnd(
                 cross.x + sourcePos.x, cross.y + sourcePos.y, cross.z + sourcePos.z
             );
-            if (graph && notLidsOK) {
-                graph->AddLine(
-                    sourcePos, normalEnd, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f), false
-                );
-            } else {
-                graph->AddLine(
-                    sourcePos, normalEnd, Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f), false
-                );
-            }
+            graph->AddLine(
+                sourcePos,
+                normalEnd,
+                notLidsOK ? Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
+                          : Hmx::Color(0.0f, 1.0f, 0.0f, 1.0f),
+                false
+            );
 
             const Transform &srcXfm2 = source->WorldXfm();
             Vector3 facingEnd(
