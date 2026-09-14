@@ -570,7 +570,12 @@ void HamListRibbon::Draw(
     int visibleCount = scrollable ? sNumListSelectable - 1 : numItems;
 
     // Calculate padding per side
-    int paddingPerSide = Max((mPaddedSize - numItems + 1) / 2, 0);
+    // Argument order matters: `Max(0, x)` expands to `(0 < x) ? x : 0`, whose
+    // mask is a full two-register signed compare against the zero MSVC already
+    // holds in r14 (0x82483694 srwi r9,r14,31 / 0x824836A4 subfc r10,r11,r10 /
+    // 0x824836AC subfe r10,r9,r8).  `Max(x, 0)` is `(x < 0) ? 0 : x`, a
+    // three-instruction sign-bit mask that is a row shorter and mismatches.
+    int paddingPerSide = Max(0, (mPaddedSize - numItems + 1) / 2);
 
     // Build padded draw states vector
     std::vector<HamListRibbonDrawState> paddedStates;
@@ -585,7 +590,17 @@ void HamListRibbon::Draw(
 
     // Handle scrollable vs non-scrollable
     int startOffset = 0;
-    if (!scrollable) {
+    // BUG FIX (w7-as, 2026-09-14): the two arms were swapped.  The image tests
+    // `scrollable` and takes the half-2 / clamp-mTestSelectedIndex path when it
+    // is TRUE, and only resets the scroll animation when it is FALSE:
+    //   0x82483738  cmplwi cr6, r25, 0x0      ; r25 = (numItems > 6)
+    //   0x8248373C  beq    cr6, .L_8248376C   ; NOT scrollable -> mScrollAnim
+    //   0x82483740  srawi  r11, r23, 1        ; scrollable -> numItems/2 - 2
+    //   ...
+    //   0x8248376C  lwz    r3, 0x208(r28)     ; mScrollAnims.mScrollAnim
+    // We clamped the selected index for short lists and reset the scroll anim
+    // for long ones -- exactly backwards.
+    if (scrollable) {
         int half = numItems / 2;
         startOffset = half - 2;
         if (mTestSelectedIndex < startOffset || mTestSelectedIndex > startOffset + 4) {
