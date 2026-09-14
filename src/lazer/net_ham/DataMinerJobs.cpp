@@ -32,7 +32,9 @@
 const char *GameEndedDataPointJob::GetXUIDStrFromProfile(HamProfile *profile) {
     int padNum = profile->GetPadNum();
     XUID xuid = 0;
-    DWORD result = XUserGetXUID(padNum, &xuid);
+    // Not DWORD: the shipped build instantiates MakeString<unsigned int> for the
+    // notify below (??$MakeString@I@@), and DWORD is unsigned long (??$MakeString@K@@).
+    unsigned int result = XUserGetXUID(padNum, &xuid);
     if (result != 0) {
         TheDebug.Notify(MakeString("XUserGetXUID returned %u", result));
     }
@@ -98,7 +100,11 @@ GameEndedDataPointJob::GameEndedDataPointJob(
             int num_steps = section->Steps().size();
             unsigned long num_scores = perf->GetMoveScores().size();
             if (num_scores > num_steps) {
-                String str(MakeString("(%d/%d)", num_scores, num_steps));
+                // The shipped build calls MakeString<int *, int>
+                // (??$MakeString@PAHH@@YAPBDPBDABQAHABH@Z), not <unsigned long, int>:
+                // the first argument's static type there is a pointer, which %d
+                // prints as the same 32 bits the count occupies.
+                String str(MakeString("(%d/%d)", (int *)num_scores, num_steps));
                 dataP.AddPair(custom_session, DataNode(str));
             }
         }
