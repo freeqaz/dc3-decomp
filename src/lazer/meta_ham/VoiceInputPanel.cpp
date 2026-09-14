@@ -244,6 +244,17 @@ void VoiceInputPanel::CreatePlaylistEditorGrammar() const {
 void VoiceInputPanel::ActivateVoiceContext(Symbol sym) {
     VoiceContext **it;
     if (!sym.Null()) {
+        // RESIDUAL (w7-ab, 93.4 canonical).  Two row classes left:
+        //  a) the image emits the begin() load before the end() load; we emit
+        //     them the other way round.  Swapping the two declarations is
+        //     byte-for-byte INERT, so it is scheduling, not declaration order.
+        //  b) the image re-loads TheSpeechMgr->Overlay() at each of the three
+        //     uses in the deactivate block (0x48(r11) three times) and keeps
+        //     only the vtable pointer across the MakeString call; we CSE the
+        //     overlay pointer into a callee-saved register, which costs one
+        //     extra callee-saved GPR and shifts TheSpeechMgr's anchor r29->r28
+        //     (the 10-row r28<->r29 swap).  Both sides already spell the two
+        //     Overlay() calls separately in source.
         it = mVoiceContexts.begin();
         VoiceContext **end = mVoiceContexts.end();
         if (it != end) {
