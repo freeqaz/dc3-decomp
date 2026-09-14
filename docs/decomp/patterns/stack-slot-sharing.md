@@ -210,6 +210,49 @@ object, ~20 s, no ninja, prints both sides' store-slot sequences and the differi
 `slot_table.py` prints the `name$ = offset` table for one PROC (its regex accepts the
 unnumbered `goofy$ = 140` form that `tu_census.py` skips).
 
+#### `HamDirector::OnPopulateMoves`: the "48 rows left" decoded to a 24-slot map (w6-a)
+
+The `fp -8` remark above is the visible corner of a permutation worth writing down, because the
+function is 2,712 B at **99.63717** and the *frame sizes already agree* (0x1350 both sides) --
+so there is nothing structural left, only temp ordering. 46 `diff_arg` + one `mr r3, r14`
+scheduled two slots early (base idx 380 vs target 382).
+
+Everything at or below `0x9c` matches. Everything at or above `0x120` (the three `merger`s,
+`fs`) matches. **All 24 permuted slots live in `0xa0..0x118`**, and both sides use the same
+count there (27 slots, with the 8-byte `FilePath`s leaving different gaps). Base-side names are
+from `/FAs`; target offsets are from the aligned diff rows:
+
+| our slot | our name | target slot | delta |
+|---|---|---|---|
+| `0xa0` | (temp) | `0xb8` | +0x18 |
+| `0xa4` | (temp) | `0xa0` | -4 |
+| `0xa8` | (temp) | `0xa4` | -4 |
+| `0xac` | (temp) | `0xb0` | +4 |
+| `0xb0` | `movesDir` | `0xc0` | +0x10 |
+| `0xb4` | `moveSymKeys` | `0xb4` | **match** |
+| `0xb8` | `clipKeys` | `0xc8` | +0x10 |
+| `0xbc` | `hamMoveName` | `0xbc` | **match** |
+| `0xc0` | (temp) | `0xd0` | +0x10 |
+| `0xc8` | (temp) | `0xd8` | +0x10 |
+| `0xcc` | (temp) | `0xa8` | -0x24 |
+| `0xd0` | `moveKeys` | `0xac` | -0x24 |
+| `0xd4` | (temp) | `0xcc` | -8 |
+| `0xd8` | (temp) | `0xd4` | -4 |
+| `0xdc` | (temp) | `0xe0` | +4 |
+| `0xe0` | `clipSymKeys` | `0xdc` | -4 |
+| `0xe4` | (temp) | `0xe8` | +4 |
+| `0xe8` `0xf0` `0xf8` | `fp` x3 | `0xf0` `0xf8` `0x100` | **+8 each** |
+| `0x100` `0x104` `0x108` `0x10c` `0x110` `0x114` | (temps) | `0x114` `0x110` `0xe4` `0x118` `0x108` `0x10c` | scrambled |
+
+The `fp +8` has a concrete cause visible in the map: the target fits **one more word slot below
+the `FilePath` block** (word slots at `0xdc 0xe0 0xe4 0xe8`, then `fp` 8-aligned at `0xf0`; ours
+has only `0xdc 0xe0 0xe4`, so `fp` lands at `0xe8`). That extra word is not an extra
+*variable* -- it is our `0x108` temp, which the target places at `0xe4`. So this is squarely the
+"highest free slot / full-expression lifetime" rule above, and it should be **decodable** from the
+target's store sequence rather than guessed: the lever is which reads are chained into one
+full-expression and which are separate statements. `store_seq_probe.py` is the instrument.
+Not attempted here for want of lane time; recorded so the next lane starts from the map.
+
 Two more levers the same session confirmed on this class, both on named locals:
 
 - **Implicit conversion vs explicit temporary** (`CharCuff::Load` 99.99 -> 100, `DirLoader::AddTypeObjectMemDelta` 95.4 -> 99.9): `mCategory = "";` reads the temp back from its slot, `mCategory = Symbol("")` reads it through the ctor's return register; `find(String(name))` hands the ctor return straight to `_M_find`, `find(name)` re-materialises the slot address. Which one the target used is visible in the row after the ctor call (`lwz r11, 0x54(r1)` vs `lwz r11, 0x0(r3)`, `mr r4, r3` vs `addi r4, r31, ..`).
@@ -222,3 +265,45 @@ and 30+ variants through `slot_table.py` (six declaration orders, provably byte-
 const; a Symbol local; direct-init; every deref spelling; a const-ref inline pin) either did
 nothing or packed the bools while adding another slot. Same for `CacheMgrXbox::PollSearch`'s
 `numFound`/`res` swap (declaration order, both scopings, the type, renaming: inert).
+
+### `RhythmBattle::OnBeat`, re-derived independently (lane w6-a, 2026-09-14)
+
+Worth recording because the *arithmetic* makes this the single largest prize on the board and
+the diagnosis is now exact rather than suggestive. 16,508 bytes at 99.44997; second lane, same
+conclusion, reached without reading the paragraph above first.
+
+What is measured, not inferred:
+
+- Both sides reference **exactly 203 distinct `r31`-relative slots**. There is no extra
+  *variable* on our side -- only an extra *word*: target **202 words**, base **203**.
+- The target's **only** multi-byte word is `0x8c`, holding `{0x8c, 0x8d}`. Our build has
+  **zero** multi-byte words. `/FAs` names them `inMindControl` and `goofy`.
+- That one word *is* the entire 470-row offset residual, and the cascade is arithmetic:
+  base pads `0xe4` to 8-align the `DataNode` pair the target puts at `0xe0` (+4 -> +8), then
+  pads again to 16-align the `Vector3` block at `0x350` (+8 -> +16). That is the
+  `0x760`-vs-`0x750` frame delta. Offset-delta histogram: `+8 x327, +4 x71, +16 x41, 0 x117`.
+- `/FAs` also shows **`0x90` holds both `i` and `beat`** (disjoint scopes, shared slot) and sits
+  *between* `goofy` (`0x8c`) and `inMindControl` (`0x94`). The target has both bools *below*
+  `0x90`. So the question is only "why is `inMindControl` above `0x90` here".
+
+Seven further variants, each compiled and each **inert** -- same slot table, same
+`this@0x774`, and for the two measured end-to-end the same canonical/`diff_score`/histogram
+to the digit:
+
+| variant | result |
+|---|---|
+| `bool inMindControl;` hoisted above `UIPanel *focusPanel` | inert |
+| `bool inMindControl;` immediately after `bool goofy`, assigned at the original site | inert |
+| **both bools computed lexically adjacent**, after the early return | inert |
+| the two `static Symbol`s hoisted above `goofy` (nothing separating the bools) | inert |
+| `const int beat` / `const int i6cc` (narrowing `0x90`'s occupant) | inert |
+| `UIPanel *const focusPanel` | inert |
+| `mind_control == ...Sym()` (operand order) | inert |
+
+The third row is the one that settles it: **making the two bools lexically adjacent does not
+pack them.** An uninitialised declaration does not move a slot either -- MSVC is not using
+declaration position for the byte class in this function. Combined with the 30+ variants above,
+this lever is refused by ~37 distinct spellings. Treat `OnBeat`'s remaining 0.55% as a
+byte-class placement floor unless someone finds the actual discriminator; the probe to use is
+`slot_table.py` (~40 s, no ninja), and the pass/fail signal is `goofy`/`inMindControl` sharing a
+word **without** the total slot count rising.

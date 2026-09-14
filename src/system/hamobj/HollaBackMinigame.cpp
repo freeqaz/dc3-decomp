@@ -574,6 +574,12 @@ void HollaBackMinigame::OnBeat() {
     static Symbol exit_win("exit_win");
 
     HamMaster *master = TheMaster;
+    // Our build spills this pointer into the 0x50 temp slot (`stw r10, 0x50(r31)`)
+    // and never reloads it -- the one extra instruction in this function.  It is the
+    // dead home-slot store (see memory: pattern_dead_home_slot_store).  Refuted here:
+    // reference binding, `const`, declaring it after `songPos`/`theMoveDir`, and
+    // dropping the local entirely (that last one also drops the `addi r10, r30, 0x78`
+    // the target does emit, so it scores worse: 99.856 -> 99.855).
     SongPos *prevSongPos = &master->SongPos2();
     SongPos *songPos = &master->SongPos1();
     MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
@@ -613,6 +619,10 @@ void HollaBackMinigame::OnBeat() {
     int currentBeatInMeasure = beatInt % 4;
 
     if (subStateIdx >= 0 && subBeatInMeasure != currentBeatInMeasure) {
+        // Target has `add r11, r11, r10`, ours `add r11, r10, r11`.  MSVC canonicalises
+        // the commutative operands: `= subStateIdx + (...)`, a named delta local, and
+        // `-= subBeatInMeasure - currentBeatInMeasure` all emit byte-identical code.
+        // Plain 2-term same-register swap = backend floor.
         subStateIdx += currentBeatInMeasure - subBeatInMeasure;
         mSubStateIndex = subStateIdx;
     }
