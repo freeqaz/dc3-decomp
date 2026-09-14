@@ -73,29 +73,33 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
             SetProperty(name, *prop);
         }
         mStartMode = c->mStartMode;
-        // Deactivate existing child nodes
-        while (mChildNodes.begin() != mChildNodes.end()) {
-            FlowNode *child = mChildNodes.begin()->Obj();
+        // Deactivate existing child nodes. empty(), not begin() != end(): the
+        // target compares the two raw pointers (0x823F70BC-C8) instead of
+        // recomputing end() through the size division ObjVector::end() needs.
+        while (!mChildNodes.empty()) {
+            FlowNode *child = mChildNodes.front();
             if (child) {
                 child->Deactivate(true);
             }
         }
-        // Copy child nodes from source
+        // Copy child nodes from source. it->Obj() is re-read at every use --
+        // the target reloads it from the iterator four times (0x823F713C,
+        // 0x823F7158, 0x823F7168, 0x823F71E0) and strength-reduces the
+        // iterator to point straight at the ObjPtr's object word.
         FOREACH (it, c->mChildNodes) {
-            FlowNode *srcChild = it->Obj();
             FlowNode *newChild;
-            if (dynamic_cast<Flow *>(srcChild)) {
-                newChild = FlowNode::DuplicateChild(srcChild);
+            if (dynamic_cast<Flow *>(it->Obj())) {
+                newChild = FlowNode::DuplicateChild(it->Obj());
             } else {
-                Symbol sym = srcChild->ClassName();
+                Symbol sym = it->Obj()->ClassName();
                 Hmx::Object *newObj = Hmx::Object::NewObject(sym);
                 newObj->InitObject();
                 newChild = dynamic_cast<FlowNode *>(newObj);
                 newChild->SetParent(this, true);
-                newChild->Copy(srcChild, kCopyShallow);
+                newChild->Copy(it->Obj(), kCopyDeep);
             }
             newChild->SetParent(this, true);
-            newChild->MoveIntoDir(Dir(), c->Dir());
+            newChild->MoveIntoDir(this, const_cast<Flow *>(c));
         }
         mPrivate = c->mPrivate;
         mHardStop = c->mHardStop;
