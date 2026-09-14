@@ -354,28 +354,32 @@ void TypeProps::Save(BinStream &bs) {
             for (int j = 0; j < mMap->Size();) {
                 Symbol key = mMap->Sym(j);
                 DataNode &value = mMap->Node(j + 1);
-                if (value.Type() == kDataObject) {
-                    Hmx::Object *valObj = value.GetObj();
-                    if (valObj) {
-                        ObjectDir *valObjDir = valObj->Dir();
-                        if (valObjDir) {
-                            if (valObjDir->ClassName() == "EditorDir") {
-                                keys.push_back(key);
-                                values.push_back(valObj);
-                                mMap->Remove(j);
-                                mMap->Remove(j);
-                            } else {
-                                j += 2;
-                            }
-                        }
-                    }
+                Hmx::Object *valObj;
+                ObjectDir *valObjDir;
+                // Every failing test in the image falls through to `j += 2`
+                // (0x825C79EC). Nested as separate `if`s without an else, a
+                // kDataObject holding a null object -- or an object with no Dir
+                // -- never advanced j and spun on the same index forever.
+                if (value.Type() == kDataObject && (valObj = value.GetObj()) != nullptr
+                    && (valObjDir = valObj->Dir()) != nullptr
+                    && valObjDir->ClassName() == "EditorDir") {
+                    keys.push_back(key);
+                    values.push_back(valObj);
+                    mMap->Remove(j);
+                    mMap->Remove(j);
                 } else {
                     j += 2;
                 }
             }
         }
-        if (mMap && owner->DataDir() == owner && owner->Dir() != owner
-            || gLoadingProxyFromDisk) {
+        // Not the grouping it looks like: the image tests `DataDir() == owner`
+        // first and only consults gLoadingProxyFromDisk once `Dir() == owner`
+        // (0x825C76E4..0x825C76F8), so gLoadingProxyFromDisk can never by itself
+        // force the proxy arm for an object whose DataDir is not itself. RB3's
+        // `if (!mMap || DataDir() != ref || ref == ref->Dir() && !gLoadingProxyFromDisk)`
+        // is the same predicate negated.
+        if (mMap && owner->DataDir() == owner
+            && (owner->Dir() != owner || gLoadingProxyFromDisk)) {
             DataArray *typeDef = owner->TypeDef();
             DataArray *arrToWrite = nullptr;
             int keyIdx = 0;
@@ -438,9 +442,13 @@ void TypeProps::Save(BinStream &bs) {
         bs << mMap;
         auto keysIt = keys.begin();
         auto valsIt = values.begin();
+        // Insert(0, ...) prepends, so the VALUE goes in first and the key lands
+        // in front of it: the image writes the kDataObject node (type 4) before
+        // the kDataSymbol node (type 5) at 0x825C7A14/0x825C7A50. The other way
+        // round restored every extracted pair with its key and value transposed.
         for (; keysIt != keys.end(); ++keysIt, ++valsIt) {
-            mMap->Insert(0, *keysIt);
             mMap->Insert(0, *valsIt);
+            mMap->Insert(0, *keysIt);
         }
     }
 }

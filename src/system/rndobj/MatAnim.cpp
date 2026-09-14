@@ -115,6 +115,18 @@ BEGIN_LOADS(RndMatAnim)
         // picks the generic operator>>(BinStream&, Key<TexPtr>&) rather than the
         // BinStreamRev specialization below, which is the one that does the deferred
         // TexPtr::Load(s, true, nullptr). Same spelling as LoadStage().
+        // Residual, 6 rows, 97.90393 canonical: the image computes all four
+        // member addresses BEFORE the first call, right-to-left, parking three
+        // of them in callee-saved registers (0x826EC53C-0x826EC544:
+        // `subi r29, r30, 0x14` / `subi r28, r30, 0x20` / `subi r30, r30, 0x2c`,
+        // then `mr r4, r30` / `mr r4, r28` / `mr r4, r29` at each call).  We
+        // recompute `subi r4, r30, N` inline at each call instead.  Everything
+        // else in this expression already matches, r3 included -- the chain is
+        // right and threads the returned BinStreamRev& exactly as the image does.
+        // REFUTED: binding the last three operands to named references first
+        // (`Keys<TexPtr, RndTex *> &texKeys = mTexKeys;` etc., declared in the
+        // image's right-to-left order) is byte-for-byte inert -- MSVC folds the
+        // references away before scheduling.
         d >> mTransKeys >> mScaleKeys >> mRotKeys >> (Keys<TexPtr, RndTex *> &)mTexKeys;
     }
 END_LOADS
