@@ -444,6 +444,14 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                     FindWeights(transes, floatVec, mWeightData);
                 }
                 float dist = 0;
+                // The bone count is materialised BEFORE the loop and only the
+                // division below reads it; the loop condition keeps calling
+                // size(). Both halves matter: using numBones as the loop bound
+                // too lets MSVC form a `bdnz` counted loop (the target uses
+                // cmplw/blt), and dropping it entirely makes MSVC spill the
+                // count into the inline-call home slot, which rotates the
+                // 0x50/0x54 temp pair and the r5/r6/r7 assignment.
+                unsigned int numBones = newDistEntry.bones.size();
                 for (int k = 0; k < newDistEntry.bones.size(); k++) {
                     float curFloat = floatVec[k % floatVec.size()];
                     const Vector3 &curBone = curDistEntry.bones[k];
@@ -452,7 +460,7 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                     float dx = newDistEntry.bones[k].x - curBone.x;
                     dist += (dx * dx + dy * dy + dz * dz) * curFloat;
                 }
-                float err = std::sqrt(dist / (float)newDistEntry.bones.size());
+                float err = std::sqrt(dist / (float)numBones);
                 MaxEq(mWorstErr, err);
                 mDists(i, j) = err;
             }

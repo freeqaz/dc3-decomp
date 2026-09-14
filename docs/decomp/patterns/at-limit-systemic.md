@@ -135,6 +135,42 @@ arg6 is created before arg5; the good ordering gives the lower slot to arg5
 - **Register pressure / frame growth** — frame size, callee-saved GPR count
   (11) and FPR count (7) are identical in all variants.
 - **Declaration reorder** — inert here as everywhere else.
+- **`int` intermediate** (2026-09-14, w7-d) — `int player0Pink = 1; if (!A || !B)
+  player0Pink = 0; bool isPlayer0Pink = player0Pink;` scores **99.5%, 6 rows**,
+  i.e. *worse* than the 99.6011 baseline, but it is the experiment that
+  **isolates the mechanism**: it produces the target's `li 1` / `mr rX, r21`
+  branch-to-value shape **and leaves both `Hmx::Color` slots at 0xb0/0xc0**.
+  That proves the 250-instruction-away rotation is caused specifically by the
+  anonymous temp the `&&` short-circuit introduces, not by the branch-to-value
+  lowering and not by register pressure. What the `int` form cannot do is close
+  the residual: an `int`→`bool` narrowing emits an `!= 0` normalization
+  (`subic r10, rX, 0x1` / `subfe r28, r10, rX`) where the target has a plain
+  byte truncation `clrlwi r28, r10, 24`, and it materialises `li 1` early
+  (idx 319) instead of inside the else-path (idx 332). Residual:
+
+  | idx | target | ours (`int` form) |
+  |----|--------|------|
+  | 319 | *(absent)* | `li r29, 0x1` |
+  | 332 | `li r10, 0x1` | *(absent)* |
+  | 334 | `mr r10, r21` | `mr r29, r21` |
+  | 336 | `clrlwi r28, r10, 24` | `subic r10, r29, 0x1` |
+  | 337 | *(absent)* | `subfe r28, r10, r29` |
+  | 730 | `add r4, r11, r28` | `add r4, r28, r11` |
+
+- **Naming an unrelated temp as a counter neutralizer** (2026-09-14, w7-d) — the
+  follow-on idea to the above: if the `&&` bumps the anonymous-temp counter by
+  one, hoist *another* anonymous temp into a named local to bump it back. The
+  only candidate outside the static guard is the `DataVariable("bam_debug")`
+  `Symbol` temp. `Symbol bamDebug("bam_debug"); if (DataVariable(bamDebug).Int())`
+  together with the `&&` form scores **97.7%** — worse than the plain `&&`
+  (97.74%) and far below baseline, and it **grows the frame by 0x10** (12 slots
+  SWAPPED, 5 SHIFTED, 16 DIFFER, 11 PERMUTED). The lever is refuted for a
+  structural reason worth recording: every 4-byte `Symbol` temp in this function
+  (the `GetPlayerColor` return, the hide-transition symbol, the `bam_debug`
+  symbol) **coalesces onto the single slot `r31+0x80`** in the target, so a
+  `Symbol` is not in the same pool as the 16-byte `Hmx::Color` temps at
+  0xb0/0xc0 and cannot perturb their tie-break; naming it only adds a named
+  local and enlarges the frame.
 
 ### Why it is not repairable from source (currently)
 
@@ -146,5 +182,7 @@ construction outside the guard and run it on every call — a behaviour change,
 not a formulation change. There is no source position that is both inside the
 guard and able to hold a name.
 
-Retried at four independent baselines; cost identical every time.
+Retried at four independent baselines; cost identical every time. Re-confirmed
+2026-09-14 (w7-d) at `d27301d3c` with the two further probes above: baseline
+remeasured at exactly **99.6011** canonical, 5 rows, unchanged.
 **Verdict: accept the 4-instruction bool residual. AT_LIMIT.**
