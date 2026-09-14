@@ -622,9 +622,16 @@ void GestureMgr::DrawSkeletonKinectData() {
                         skel.JointPos(
                             kCoordCamera, kJointShoulderRight, rightShoulder
                         );
-                        Vector3 diff;
-                        Subtract(rightShoulder, leftShoulder, diff);
-                        rotation = (float)std::atan(diff.z / diff.x) * RAD2DEG;
+                        // In-place: the image has only TWO Vector3 slots here
+                        // (0x90 and 0xc0) and the Subtract destination aliases
+                        // its first operand -- 0x8242A2D0-0x8242A2FC loads
+                        // 0x90/0xc0, subtracts, and stores all three components
+                        // BACK into 0x90, including the .y lane whose value is
+                        // dead.  A separate `Vector3 diff` gives MSVC a third
+                        // local and lets it dead-code that store.
+                        Subtract(rightShoulder, leftShoulder, rightShoulder);
+                        rotation =
+                            (float)std::atan(rightShoulder.z / rightShoulder.x) * RAD2DEG;
                     }
 
                     RndAnimatable *rotAnim = marker->Find<RndAnimatable>(
