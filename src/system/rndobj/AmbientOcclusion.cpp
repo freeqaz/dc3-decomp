@@ -211,6 +211,15 @@ INIT_REVS(4, 0)
 BEGIN_LOADS(RndAmbientOcclusion)
     LOAD_REVS(bs)
     ASSERT_REVS(4, 0)
+    // 7-row residual, 97.82%: the documented ASSERT_REVS gRev/gAltRev CSE
+    // anchor family (docs/decomp/patterns/relocation-names-are-unmetered.md,
+    // which names this function by hand).  `subi r7, r29, 0x4` vs `mr r7, r28`
+    // plus the addi reorder and the paired `mr r3, r28/r29`.  Also refuted here
+    // (byte-identical, same 7 rows): spelling the superclass call as
+    // `Hmx::Object::Load(bs)` instead of LOAD_SUPERCLASS's `d.stream`, the
+    // lever that took SynthSample::PreLoad 99.54 -> 100.  It does not
+    // generalise to this family -- the stream argument is not what these rows
+    // are about.
     LOAD_SUPERCLASS(Hmx::Object)
     d >> mDontReceiveAO;
     d >> mDontCastAO;
