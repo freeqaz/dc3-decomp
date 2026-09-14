@@ -202,6 +202,23 @@ long Voice::createOrReuse(
     return result;
 }
 
+// RESIDUAL (w7-an, 92.4 canonical): 75 of 454 rows, all one register-allocation
+// cascade plus what MSVC's block layout does with it.  (a) In the STEREO arm we
+// partially-redundancy-eliminate the `*TheXboxSynth` load out of the two
+// `mFxSend ? ... : TheXboxSynth->OutputVoice()` ternaries into r8 and reload it
+// after each call; the image reloads the global inside each arm
+// (0x82E37474/0x82E37494).  The textually identical MONO copy of the same
+// ternary pair (0x82E375C0 on) matches exactly, so this is contextual, not a
+// spelling.  (b) loChannel/hiChannel/&TheDebug are a 3-way rotation of
+// r30/r29/r28 against the image's r28/r30/r29.
+// NEGATIVE RESULT (w7-an, 2026-09-14): the 6 `fmuls` commutative operand rows
+// are NOT reachable from the source -- writing `(float)cos(angle) * mVolume`
+// instead of `mVolume * (float)cos(angle)` at all six sites is byte-for-byte
+// inert (MSVC normalises the order).  So is inverting the
+// `destChannels == 6 || destChannels == 2` if/else into
+// `!= 6 && != 2` with the arms swapped: the image falls through into the
+// cos/sin arm (`bne cr6` at 0x82E374F8), we fall through into the fill-1.0
+// arm, and neither spelling of the condition moves that.
 void Voice::UpdateMix() {
     if (mPoolVoice.sourceVoice == 0)
         return;
