@@ -104,6 +104,15 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
     // (`addi r28, r3, 0xf4`) before the mRegulateMode branch and never keeps
     // `character` itself alive past the load -- both arms use the transform.
     const Transform &charXfm = character->LocalXfm();
+    // RESIDUAL (w7-ab, 89.2 canonical).  Two rows remain, both measured:
+    //  1) We emit an extra anchor `addi r30, r29, 0x14` for the `waypoint`
+    //     alias, so mWaypoint is reached as 0xc(r30) where the image uses
+    //     0x20(this) -- one extra callee-saved GPR.  Dropping the alias is
+    //     WORSE both with the charXfm hoist (89.2 -> 88.2) and without it
+    //     (86.5 -> 83.2), so the alias is not the defect it looks like.
+    //  2) The image evaluates the three components z, y, x in BOTH arms; we
+    //     evaluate x, z, y from the same source order.  Pure scheduling: both
+    //     sides store posDelta.x last, only the subtraction order differs.
     if (mRegulateMode == 1) {
         float dy, dz;
         if (character->Teleported()) {
