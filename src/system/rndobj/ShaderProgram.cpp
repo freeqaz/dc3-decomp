@@ -196,6 +196,17 @@ bool RndShaderProgram::Cache(
                 return false;
             }
             AutoSlowFrame slowFrame("RndShaderProgram::Cache", 5.0f);
+            // w7-al: one 64-bit local, not four re-reads of opts.flags. The
+            // image loads it ONCE into a callee-saved register and homes it in
+            // a stack temp immediately after the AutoSlowFrame ctor
+            // (`ld r30, 0x0(r27)` / `std r30, 0x90(r31)` at 0x82732280), passes
+            // the REGISTER to both ShaderCachedPath calls (`mr r4, r30`) and
+            // the SLOT's address to both MILO_LOG MakeStrings
+            // (`addi r5, r31, 0x90`). It is s64, not u64: MakeString is
+            // instantiated as `AB_J` (const __int64 &), and the s64 -> u64
+            // conversion into ShaderCachedPath's `_K` parameter is free, so one
+            // signed local serves both without a second temp.
+            s64 shaderFlags = opts.flags;
             // Buffer sizes and declaration order are read off the image's frame:
             // it is 0x410 with the three buffers at 0x2d0 (source), 0x1d0 and
             // 0xd0, and __savegprlr_26's save area starting at 0x3f4 -- so
@@ -210,8 +221,8 @@ bool RndShaderProgram::Cache(
             char cachedVsPath[256];
             char cachedPsPath[256];
             strcpy(sourcePath, ShaderSourcePath(ShaderTypeName(shaderType)));
-            strcpy(cachedVsPath, ShaderCachedPath(sourcePath, opts.flags, false));
-            strcpy(cachedPsPath, ShaderCachedPath(sourcePath, opts.flags, true));
+            strcpy(cachedVsPath, ShaderCachedPath(sourcePath, shaderFlags, false));
+            strcpy(cachedPsPath, ShaderCachedPath(sourcePath, shaderFlags, true));
             FileStat stat;
             unsigned int vsModTime = 0;
             if (FileGetStat(cachedVsPath, &stat) == 0) {
@@ -240,7 +251,7 @@ bool RndShaderProgram::Cache(
                     MILO_LOG(
                         "Compiling shader: %s_%llx (%s) (compile options: %s)\n",
                         ShaderTypeName(shaderType),
-                        (s64)opts.flags,
+                        shaderFlags,
                         PlatformSymbol(platform),
                         optsStr.c_str()
                     );
@@ -248,7 +259,7 @@ bool RndShaderProgram::Cache(
                     MILO_LOG(
                         "Compiling shader: %s_%llx (%s)\n",
                         ShaderTypeName(shaderType),
-                        (s64)opts.flags,
+                        shaderFlags,
                         PlatformSymbol(platform)
                     );
                 }
