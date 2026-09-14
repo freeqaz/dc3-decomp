@@ -10,20 +10,38 @@
 # non-CoW filesystems like tmpfs/ext4).
 #
 # Usage:
-#   scripts/setup_worktree.sh [path] [branch-name] [base-ref] [--cold-cache]
+#   scripts/setup_worktree.sh [name|path] [branch-name] [base-ref] [--cold-cache]
 #
 # Arguments:
-#   path       - Where to create the worktree (default: .claude/worktrees/wt-<timestamp>)
-#   branch     - Branch name for the worktree (default: wt-<basename of path>)
+#   name|path  - A BARE NAME (no "/") is created under the worktree root, which is
+#                the one place this repo's worktrees belong: $DC3_WORKTREE_ROOT if
+#                set, else ~/tmp. Anything CONTAINING "/" is used as a path exactly
+#                as given (absolute, or relative to $PWD) — unchanged behaviour.
+#                Default with no argument: <root>/wt-<timestamp>.
+#   branch     - Branch name (default: the bare name you passed; for a path form,
+#                the historical "wt-<basename>").
 #   base-ref   - Git ref to branch from (default: current HEAD)
 #   --cold-cache - Do NOT warm-start the object cache. Use for a guaranteed-clean A/B
 #                  test or if a warm cache triggers a full rebuild on your setup.
 #
 # Examples:
-#   scripts/setup_worktree.sh /tmp/claude/my-feature my-feature
-#   scripts/setup_worktree.sh /tmp/claude/test test-branch dev
-#   scripts/setup_worktree.sh                                # auto-generates path/branch
-#   scripts/setup_worktree.sh .claude/worktrees/perf perf --cold-cache
+#   scripts/setup_worktree.sh w6-a                           # -> ~/tmp/w6-a, branch w6-a
+#   scripts/setup_worktree.sh w6-a w6-a main                 # explicit branch + base
+#   scripts/setup_worktree.sh /tmp/claude/my-feature my-feature   # path form, as before
+#   scripts/setup_worktree.sh                                # auto-generates name/branch
+#   DC3_WORKTREE_ROOT=/mnt/fast scripts/setup_worktree.sh w6-a
+#
+# ⚠ WHY A BARE NAME DOES NOT MEAN "$PWD/<name>" (2026-09-14)
+# ----------------------------------------------------------
+# It used to, and the default root was INSIDE the repo (.claude/worktrees/). Both
+# halves scattered worktrees: a bare name landed wherever the caller happened to
+# be `cd`'d, and every wave picked its own root by hand. This repo's own history
+# shows FIVE roots in use — /home/free/code/milohax/wt/, wt-wave<N>-<lane>,
+# .claude/worktrees/, /home/free/scratch/ and /home/free/tmp/ — with 36 live
+# worktrees spread over three of them at the time of this fix. A worktree under
+# .claude/worktrees/ is also NESTED INSIDE the main checkout, so every tool that
+# walks the tree can see a second copy of the whole source (it is gitignored, so
+# git itself is fine; grep, find and the analysis scripts are not).
 #
 # What gets shared, and WHY symlink vs reflink-copy per directory
 # ----------------------------------------------------------------
@@ -71,9 +89,57 @@ for arg in "$@"; do
     esac
 done
 
-WORKTREE_PATH="${POSITIONAL[0]:-$MAIN_REPO/.claude/worktrees/wt-$(date +%s)}"
-BRANCH="${POSITIONAL[1]:-wt-$(basename "$WORKTREE_PATH")}"
+# Worktree root: where a BARE NAME lands. Explicit env wins; otherwise ~/tmp,
+# which is where this project's worktrees have actually been kept. The in-repo
+# .claude/worktrees/ is the last resort so the script still works on a box with
+# no $HOME/tmp, but it is not the preferred home -- see the header note.
+if [ -n "${DC3_WORKTREE_ROOT:-}" ]; then
+    WORKTREE_ROOT="$DC3_WORKTREE_ROOT"
+    WORKTREE_ROOT_WHY="DC3_WORKTREE_ROOT"
+elif [ -d "$HOME/tmp" ]; then
+    WORKTREE_ROOT="$HOME/tmp"
+    WORKTREE_ROOT_WHY="default (\$HOME/tmp)"
+else
+    WORKTREE_ROOT="$MAIN_REPO/.claude/worktrees"
+    WORKTREE_ROOT_WHY="fallback (no \$HOME/tmp); consider mkdir ~/tmp"
+fi
+
+RAW_PATH="${POSITIONAL[0]:-wt-$(date +%s)}"
+case "$RAW_PATH" in
+    */*)
+        # Path form (absolute or relative): honoured exactly as given, as before.
+        WORKTREE_PATH="$RAW_PATH"
+        DEFAULT_BRANCH="wt-$(basename "$WORKTREE_PATH")"
+        ;;
+    *)
+        # Bare name: goes under the worktree root, and names its own branch.
+        mkdir -p "$WORKTREE_ROOT"
+        WORKTREE_PATH="$WORKTREE_ROOT/$RAW_PATH"
+        DEFAULT_BRANCH="$RAW_PATH"
+        echo "==> worktree root: $WORKTREE_ROOT  [$WORKTREE_ROOT_WHY]"
+        ;;
+esac
+
+BRANCH="${POSITIONAL[1]:-$DEFAULT_BRANCH}"
 BASE_REF="${POSITIONAL[2]:-HEAD}"
+
+# A worktree nested inside the main checkout is legal but makes every
+# tree-walking tool see a second copy of the source. Say so rather than
+# silently producing one.
+#
+# ⚠ Resolve WITHOUT requiring the path to exist. The first version of this
+# check used `cd "$(dirname …)" && pwd`, which fails for a path whose parent
+# has not been created yet -- and then fell back to the raw relative string,
+# which never matches "$MAIN_REPO"/*. It printed nothing for the exact case it
+# exists to catch. `realpath -m` canonicalises a non-existent path.
+WORKTREE_ABS="$(realpath -m "$WORKTREE_PATH" 2>/dev/null || echo "$WORKTREE_PATH")"
+case "$WORKTREE_ABS" in
+    "$MAIN_REPO"|"$MAIN_REPO"/*)
+        echo "WARN: $WORKTREE_PATH is INSIDE the main checkout ($MAIN_REPO)." >&2
+        echo "      grep/find/analysis scripts will see a second copy of the tree." >&2
+        echo "      Prefer a bare name (lands in $WORKTREE_ROOT) unless you meant this." >&2
+        ;;
+esac
 
 # Resolve the base ref to a concrete commit for clarity
 BASE_COMMIT="$(git -C "$MAIN_REPO" rev-parse --short "$BASE_REF" 2>/dev/null)" || {

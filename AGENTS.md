@@ -46,7 +46,7 @@ For a complete collection of patterns, find then under ./docs/decomp/patterns/ -
 
 ## Git Worktrees
 
-Use `scripts/setup_worktree.sh <path> <branch>` to create worktrees with a working build system (configures ninja, symlinks tools/compilers/target objects).
+Use `scripts/setup_worktree.sh <name>` to create worktrees with a working build system (configures ninja, symlinks tools/compilers/target objects). Pass a **bare name**: it lands in the worktree root (`$DC3_WORKTREE_ROOT`, else `~/tmp`) and names its own branch. A path containing `/` is still used verbatim, as before.
 
 ## Project Structure
 
