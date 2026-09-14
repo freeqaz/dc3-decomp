@@ -349,6 +349,16 @@ extern "C" void *__RTDynamicCast(
         }
 
         if (pBaseClass) {
+            // RESIDUAL w7-at, 87.7 canonical.  Three rows left, none of them
+            // arithmetic: two dead home-slot stores `stw r11, 0x58(r31)`
+            // (0x8299E274 spilling the locator, 0x8299E300 spilling pdisp --
+            // both values stay live in r11 across the store), the 8-byte frame
+            // shift those imply (the image builds the thrown exception object
+            // at r31+0x60, we at r31+0x58), and the 9-instruction __except
+            // filter, which the image carries as its own symbol fn_8299E398
+            // and MSVC emits inside our COMDAT.  Moving pCompleteLocator and
+            // pBaseClass into the __try scope -- the obvious way to make the
+            // two spills share one slot -- is byte-identical, measured.
             int pdisp = pBaseClass->where.pdisp;
             int adj = 0;
             if (pdisp >= 0) {
