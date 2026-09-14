@@ -110,12 +110,12 @@ namespace {
     unsigned int ParseStatusCode(std::vector<String> const &lines) {
         String status;
 
-        if (StrIStartsWith(lines[0], "HTTP/1.0") == 0
-            && StrIStartsWith(lines[0], "HTTP/1.1") == 0) {
-            goto fail;
-        }
-
-        {
+        // Retail tests the POSITIVE case: `bne` at the two StrIStartsWith tests,
+        // so the "not an HTTP/1.x status line" exit is the fall-through block laid
+        // out LAST rather than a forward `goto fail`. Identical predicate --
+        // (A == 0 && B == 0) is exactly !(A || B) -- and identical exit values.
+        if (StrIStartsWith(lines[0], "HTTP/1.0")
+            || StrIStartsWith(lines[0], "HTTP/1.1")) {
             const char *ptr = lines[0].c_str() + 8;
             char c;
             while (((c = *ptr) < '0' || c > '9') && c != '\0' && c != '\n') {
@@ -129,13 +129,10 @@ namespace {
             }
 
             if (status.c_str()[0] != '\0') {
-                goto ok;
+                return atoi(status.c_str());
             }
         }
-    fail:
         return 0;
-    ok:
-        return atoi(status.c_str());
     }
 
     int GetContentLength(std::vector<String> const &lines) {

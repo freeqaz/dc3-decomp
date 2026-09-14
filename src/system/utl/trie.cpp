@@ -220,6 +220,18 @@ void Trie::remove(unsigned int index) {
             }
 #undef TRIE_ROOT_SIBLING_COUNT
 
+            // NOTE (measured 2026-09-14, name_check ruler): this call site is why
+            // `Trie::remove` carries a WRONG_CALLEE row naming target
+            // `check_index` against base `delete_node`.  It is NOT a wrong symbol.
+            // Callee counts are otherwise identical (29 check_index, 2 dec_count,
+            // 1 dec_dup_count both sides); the only asymmetry is delete_node --
+            // 5 call sites here, 4 `bl`s in the image.  Retail TAIL-MERGED this
+            // one into the shared `delete_node(curIdx)` at the bottom of the
+            // function: at .L_827FE664 it emits `li r4, 0x1` and branches
+            // straight to the `bl` at .L_827FE708, skipping that path's
+            // CountField update.  Same callee, same argument (curIdx == 1 here),
+            // same behaviour -- a block-layout difference, not a defect.  Do not
+            // "fix" this by changing which function is called.
             if (curIdx == 1) {
                 delete_node(1);
                 return;
