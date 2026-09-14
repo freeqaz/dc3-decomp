@@ -1238,6 +1238,14 @@ void WorldCrowd::DrawShowing() {
                 memcpy(&camXfmCopy, &curCam->WorldXfm(), sizeof(Transform) - sizeof(Vector3));
 
                 float halfHeight = charIt->mDef.mHeight * 0.5f;
+                // halfWidth is a NAMED local and sits at f23 in the image with
+                // the hoisted 0.5f at f24; ours allocates them the other way
+                // round (7 register-only rows, forgiven by the canonical
+                // ruler). Tried and refuted: writing `halfHeight * 0.5f` at
+                // both use sites instead of naming it (MSVC then does NOT
+                // hoist it -- frees an FPR, shifts f19..f26, 44 rows); the
+                // author's `/ 2` idiom for all four half-size sites (inert
+                // under /fp:fast, byte-identical).
                 float halfWidth = halfHeight * 0.5f;
 
                 // --- Set up impostor camera: position at -dist along camera's Y axis ---
@@ -1256,9 +1264,14 @@ void WorldCrowd::DrawShowing() {
                 dist = (float)__fsel(dist - minDist, dist, minDist);
                 float negDist = -dist;
                 // NOTE: 0.0f multiplications are dead math required for codegen match (fmul)
-                camXfmCopy.v.x = camXfmCopy.m.x.x * 0.0f + (camXfmCopy.m.y.x * negDist + camXfmCopy.m.z.x * 0.0f);
-                camXfmCopy.v.y = camXfmCopy.m.z.y * 0.0f + (camXfmCopy.m.y.y * negDist + camXfmCopy.m.x.y * 0.0f);
-                camXfmCopy.v.z = (camXfmCopy.m.z.z * 0.0f + (camXfmCopy.m.y.z * negDist + camXfmCopy.m.x.z * 0.0f)) + halfHeight;
+                // One Set(): its arguments evaluate right to left, which is the
+                // image's z-inner, y-inner, x-inner order at 82838550..82838558
+                // and its v.y-before-v.x stores at 82838564/8283856C.
+                camXfmCopy.v.Set(
+                    camXfmCopy.m.x.x * 0.0f + (camXfmCopy.m.y.x * negDist + camXfmCopy.m.z.x * 0.0f),
+                    camXfmCopy.m.z.y * 0.0f + (camXfmCopy.m.y.y * negDist + camXfmCopy.m.x.y * 0.0f),
+                    (camXfmCopy.m.z.z * 0.0f + (camXfmCopy.m.y.z * negDist + camXfmCopy.m.x.z * 0.0f)) + halfHeight
+                );
                 gImpostorCamera->SetLocalXfm(camXfmCopy);
                 float yFov = (float)std::atan((double)(halfHeight / dist)) * 2.0f;
                 gImpostorCamera->SetFrustum(
@@ -1345,13 +1358,19 @@ void WorldCrowd::DrawShowing() {
                 }
 
                 // --- Compute bounding rect (branchless fsel min/max) ---
+                // Declared minX, maxX, minY, maxY: the image's fmr order
+                // (f0 <- f22, f12 <- f21, f13 <- f22, f11 <- f21 at
+                // 828388EC..82838904).
                 float minX = FLT_MAX;
                 float maxX = -FLT_MAX;
-                float maxY = -FLT_MAX;
+                // The index is zeroed between the second and third fmr
+                // (`mr r10, r21` at 828388F8), i.e. it is declared here,
+                // between maxX and minY, not inside the `if`.
+                unsigned int ri = 0;
                 float minY = FLT_MAX;
+                float maxY = -FLT_MAX;
                 int numRects = (int)rects.size();
                 if (numRects != 0) {
-                    unsigned int ri = 0;
                     do {
                         // The maxima take the rect's OWN y/x, not the running
                         // minimum. The target adds before it selects:
@@ -1362,12 +1381,24 @@ void WorldCrowd::DrawShowing() {
                         // We were feeding the already-minimised value into the
                         // sum, so every iteration that did not lower the running
                         // minimum contributed min_so_far + h instead of y + h.
-                        float ry = rects[ri].y;
-                        float rx = rects[ri].x;
-                        maxX = Max(maxX, ry + rects[ri].h);
-                        maxY = Max(maxY, rects[ri].w + rx);
-                        minX = Min(minX, ry);
-                        minY = Min(minY, rx);
+                        // `rects[ri].y` / `.x` are written out at both uses
+                        // rather than named: the CSE'd re-read is what homes
+                        // each loaded value into the temp slot (`stfs f9,
+                        // 0x50(r31)` / `stfs f8, 0x50(r31)` at
+                        // 82838938/8283893C), the same shape NgDOFProc::DoPost
+                        // (100%) gets from spelling mMaxBlur three times.
+                        // Naming them as locals (or passing them through
+                        // MinEq's const float&) drops both home stores.
+                        // Minima before maxima: the image's fsel order is
+                        // minX, minY, maxX, maxY (82838944..82838958). The
+                        // `y + h` sum lands as `fadds f6, f6, f9` here against
+                        // the image's `fadds f6, f9, f6` (82838930) whichever
+                        // way the operands are written -- one commutative row,
+                        // forgiven by the canonical ruler.
+                        minX = Min(minX, rects[ri].y);
+                        minY = Min(minY, rects[ri].x);
+                        maxX = Max(maxX, rects[ri].y + rects[ri].h);
+                        maxY = Max(maxY, rects[ri].w + rects[ri].x);
                         ri++;
                     } while (ri != numRects);
                 }
