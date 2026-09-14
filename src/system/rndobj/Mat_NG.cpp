@@ -507,9 +507,11 @@ void NgMat::RefreshState() {
     case kTexGenXfm:
     case kTexGenXfmOrigin:
         MakeTex3(mTexXfm, mTexGen == kTexGenXfm, mTexGenMatrix);
-        xfmTmp.v.x = 0.0f;
-        xfmTmp.v.y = 0.0f;
+        // z, y, x: the image stores 0xd8 / 0xd4 / 0xd0 in that order
+        // (0x8269D5C8-D0), i.e. the translation is cleared back-to-front.
         xfmTmp.v.z = 0.0f;
+        xfmTmp.v.y = 0.0f;
+        xfmTmp.v.x = 0.0f;
         Normalize(mTexXfm.m, xfmTmp.m);
         MakeTex3(xfmTmp, mTexGen == kTexGenXfm, mTexGenMatrix2);
         break;
@@ -567,7 +569,15 @@ void NgMat::RefreshState() {
         break;
     }
     default:
-        MILO_ASSERT(0x139, false);
+        // The image's mTexGen default is EMPTY: the compare tree at
+        // 0x8269D1E0-0x8269D1FC sends anything outside 0..5 straight to the
+        // join at 0x8269D6F8, and the function's only Debug::Fail is the one
+        // in the second mBlend switch below (0x8269D694).  What used to sit
+        // here was `MILO_ASSERT(0x139, false)` -- the two arguments swapped,
+        // so the condition was the constant 0x139 and the assert could never
+        // fire.  It compiled to nothing, which is why it was invisible; it is
+        // removed rather than "fixed", because fixing the order would add a
+        // Fail call the image does not have.
         break;
     }
 
