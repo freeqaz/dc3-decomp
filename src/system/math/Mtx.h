@@ -486,6 +486,40 @@ inline void Multiply(const Hmx::Quat &q1, const Hmx::Quat &q2, Hmx::Quat &qres) 
 // out of the unparenthesised form and the target does not.  Whatever those two
 // sites called in the original, it was not this overload spelled this way --
 // chase it there, not here.
+//
+// RESOLVED 2026-09-14 (lane w6-i, same worktree).  Both of those sites are now
+// at 100.0 canonical, fixed AT THE CALL SITE, with this overload untouched:
+// Spotlight::UpdateTransforms 91.956 -> 100.0 (1456 B) and
+// RndShadowMap::PrepShadow 93.388 -> 100.0 (1072 B).  Whole-binary check after
+// both: 0 regressions, 2 improvements, 48371 unchanged.
+//
+//   * The control that settles WHERE the lever lives: spelling this overload's
+//     own left-associated tree out at the Spotlight call site scores 91.95605,
+//     the baseline to five decimals.  Call-site context is irrelevant; only the
+//     expression TREE shape matters.  So a site that needs a different tree can
+//     have one locally, and the four callers that are already at 100% are safe.
+//
+//   * The defect is not the association, it is MSVC's `a*K + b*K -> (a+b)*K`
+//     factoring.  Read the target of either function: it emits the two zero
+//     terms as plain `fmuls fN,fN,f31` and folds them in with `fmadds`, with no
+//     leading `fadds` of two matrix elements.  PrepShadow's target is the proof
+//     that association is a red herring -- its y and z components are LEFT
+//     associated (they seed from m.x.c at 0x94/0x98) and are still not factored.
+//     Right-association merely happens to break the factoring pattern.
+//
+//   * What actually works is the ACCUMULATOR form -- `float a = ...; a += ...;
+//     a += ...;` -- because statement order pins the association and MSVC does
+//     not reassociate across the `+=`.  That lets each component seed from the
+//     element the target seeds from.  Same shape as Hmx::Dot4 above, which a
+//     previous lane also had to write as a reversed accumulator.  On PrepShadow:
+//     uniform right-association 99.98508 (4 charged seed-offset rows left),
+//     left-associated y/z as one expression 94.66418 (factoring comes back),
+//     per-component accumulators seeded like the target 100.0.
+//
+//   * REFUTED here, one full ninja, 7 probe functions: swapping the multiply
+//     operand order in this body to v-first (`v.x * m.x.x + ...`).  All seven
+//     scored byte-identical -- MSVC canonicalises the commutative multiply, so
+//     operand order in the SOURCE is not a lever on this overload at all.
 inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
     vout.Set(
         m.x.x * v.x + m.y.x * v.y + m.z.x * v.z,
