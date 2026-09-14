@@ -299,6 +299,19 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
         newFlow->SetProxyFile(childFlow->ProxyFile(), false);
 
         // Copy dynamic property values from old flow to new flow
+        // Residual, 24 rows, 99.9 canonical: the image's frame is 0xe0 and ours
+        // 0xd0.  Every row is an offset.  Per-slot diff (run_diff_inspect
+        // mode=stack-layout) says the image keeps FIVE four-byte user slots
+        // where we have four --
+        //   0x50 arr, 0x54 Flow::StaticClassName() Symbol temp,
+        //   0x58 the PoolAlloc result for `new DataArray(1)`,
+        //   0x5c/0x60 the two Symbol(it2->mName.c_str()) temps,
+        //   0x68 the DataNode temp
+        // -- while our build colours the StaticClassName temp onto arr's slot
+        // (base 0x50 is accessed at idx 16 AND idx 64..164; the image's 0x50 only
+        // at 64..164).  Refuted lever: rewriting this while+inner-block as a
+        // plain for loop, which moves arr out of its own block scope and the
+        // it2++ into the loop header -- bit-identical output, same 24 rows.
         Flow::DynamicPropertyEntry *it2 = newFlow->mDynamicProperties.begin();
         while (it2 != newFlow->mDynamicProperties.end()) {
             {
