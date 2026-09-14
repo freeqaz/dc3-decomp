@@ -128,9 +128,16 @@ namespace {
                 c = *ptr;
             }
 
-            if (status.c_str()[0] != '\0') {
-                return atoi(status.c_str());
+            // 0x8...AC4 `bne` jumps to the atoi block, so the empty-status
+            // `return 0` is the FALL-THROUGH and the atoi return comes after
+            // it.  That also gives the function its two ??1String call sites:
+            // the outer "not an HTTP status line" exit branches into this
+            // inner `return 0`'s destructor (0xABC), while the atoi path holds
+            // its result in r30 across a destructor of its own.
+            if (status.c_str()[0] == '\0') {
+                return 0;
             }
+            return atoi(status.c_str());
         }
         return 0;
     }
