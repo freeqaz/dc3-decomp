@@ -708,7 +708,12 @@ void RndTransformable::ApplyDynamicConstraint() {
         Multiply(mWorldXfm, tf, mWorldXfm);
         Multiply(mWorldXfm, mTarget->WorldXfm(), mWorldXfm);
     } else if (RndCam::Current()) {
-        const Transform &refWorld = mTarget ? mTarget->WorldXfm() : RndCam::Current()->WorldXfm();
+        // The image selects the OBJECT first and inlines a single WorldXfm() on
+        // it (0x82646C84: `lwz r11,0xb0(r31); cmpwi; beq; mr r3,r11` re-using the
+        // sCurrent already in r3), rather than inlining WorldXfm() twice.
+        RndTransformable *refObj =
+            mTarget ? (RndTransformable *)mTarget : (RndTransformable *)RndCam::Current();
+        const Transform &refWorld = refObj->WorldXfm();
         Vector3 scaleVec;
         if (mPreserveScale) {
             MakeScale(mWorldXfm.m, scaleVec);
@@ -743,13 +748,16 @@ void RndTransformable::ApplyDynamicConstraint() {
                 Normalize(mWorldXfm.m, mWorldXfm.m);
             }
             break;
-        case kConstraintSkyBox: {
-            Vector3 offset;
-            Add(mLocalXfm.v, refWorld.v, offset);
-            mWorldXfm.v.Set(offset.x, offset.y, mWorldXfm.v.z);
+        case kConstraintSkyBox:
+            // All three components come from the sum.  It is kConstraintSkyBoxXY
+            // below that overrides z (with mLocalXfm.v.z, not with the previous
+            // mWorldXfm.v.z).  The image proves it: at 0x82646D4C case 0xb stores
+            // f12/f13 to 0x78/0x7c and falls into the shared tail 0x82646D40,
+            // whose `stfs f0, 0x80(r31)` writes the *sum* f0; case 0xc reloads
+            // `lfs f0, 0x40(r31)` (mLocalXfm.v.z) first.
+            Add(mLocalXfm.v, refWorld.v, mWorldXfm.v);
             mWorldXfm.m = mLocalXfm.m;
             break;
-        }
         case kConstraintSkyBoxXY:
             Add(mLocalXfm.v, refWorld.v, mWorldXfm.v);
             mWorldXfm.v.z = mLocalXfm.v.z;

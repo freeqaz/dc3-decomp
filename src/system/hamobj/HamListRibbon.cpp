@@ -513,13 +513,16 @@ void HamListRibbon::Draw(
 
     // Set up selectAllAnim
     if (mSelectAllAnim) {
-        float frame;
+        // The call is written out in BOTH arms: the image duplicates the
+        // vtable load (`lwz r11, 0x0(r3) / lwz r11, 0xc(r11) / mtctr` at
+        // 0x824835D4 and again at 0x824835EC) and shares only the `bctrl`
+        // at 0x82483600, which a single call site with a merged `frame`
+        // temp cannot produce.
         if (mMode == kRibbonSelect && !mTestEntering && !mSelectToggle) {
-            frame = GetFrame();
+            mSelectAllAnim->SetFrame(GetFrame(), 1.0f);
         } else {
-            frame = 0.0f;
+            mSelectAllAnim->SetFrame(0.0f, 1.0f);
         }
-        mSelectAllAnim->SetFrame(frame, 1.0f);
     }
 
     // Set up enterAnim
@@ -530,7 +533,11 @@ void HamListRibbon::Draw(
     // Calculate sizes
     int numItems = (int)drawStates.size();
     bool scrollable = numItems > 6;
-    int visibleCount = scrollable ? numItems : sNumListSelectable;
+    // The image keeps `li r17, 0x4` (0x82483648) when numItems > 6, and only
+    // assigns `mr r17, r23` (= numItems) on the fall-through when it is not
+    // (the `bne` at 0x8248366C skips that assignment).  We had the two arms
+    // the other way round, and 5 where the image has 4.
+    int visibleCount = scrollable ? sNumListSelectable - 1 : numItems;
 
     // Calculate padding per side
     int paddingPerSide = Max((mPaddedSize - numItems + 1) / 2, 0);

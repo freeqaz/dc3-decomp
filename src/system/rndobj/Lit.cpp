@@ -130,13 +130,20 @@ Transform RndLight::Projection() {
         float _fpr3 = pos.z;
         float _fpr4 = pos.y;
         float _fpr5 = pos.x;
-        result.m.y.z = _fpr0 * slope;
-        result.m.z.z = _fpr1 * slope;
-        result.m.x.z = _fpr2 * slope;
+        // The image reuses the three scaled column entries it has just stored
+        // (f10/f8/f7) for v.z, and accumulates them in y, z, x order:
+        //   fmuls f0, pos.y, yzCol ; fmadds pos.z, zzCol ; fmadds pos.x, xzCol
+        //   fsubs f0, topR, f0
+        float yzCol = _fpr0 * slope;
+        float zzCol = _fpr1 * slope;
+        float xzCol = _fpr2 * slope;
+        result.m.y.z = yzCol;
+        result.m.z.z = zzCol;
+        result.m.x.z = xzCol;
 
         result.v.x = -((_fpr3 * xRow.z + (_fpr4 * xRow.y + _fpr5 * xRow.x)));
         result.v.y = -((_fpr5 * nzx + (_fpr4 * nzy + _fpr3 * nzz)));
-        result.v.z = topR - _fpr5 * _fpr2 * slope - _fpr4 * _fpr0 * slope - _fpr3 * _fpr1 * slope;
+        result.v.z = topR - (_fpr4 * yzCol + _fpr3 * zzCol + _fpr5 * xzCol);
 
         result.m.x.x = xRow.x;
         result.m.y.x = xRow.y;

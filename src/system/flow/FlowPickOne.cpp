@@ -98,7 +98,7 @@ bool FlowPickOne::Activate() {
             if (!haveHistory) {
                 FlowNode *lastChosen = nullptr;
                 if (!mChoiceHistory.empty()) {
-                    lastChosen = mChoiceHistory[(int)mChoiceHistory.size() - 1];
+                    lastChosen = mChoiceHistory.back();
                 }
                 mChoiceHistory.clear();
                 std::vector<FlowNode *> items;

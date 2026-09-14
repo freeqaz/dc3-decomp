@@ -396,10 +396,10 @@ void UIListState::Scroll(int direction, bool skipActive) {
 
     if (mCircular) {
         int curFirst = state.mFirstShowing;
-        int curSel = state.mSelected;
         if (!skipActive) {
+            int prevFirst;
             do {
-                curSel = state.mSelected;
+                int curSel = state.mSelected;
                 // A real if/ELSE: the target branches over the `sel = curSel`
                 // arm (`b 0x124c`) rather than initialising and overwriting.
                 int sel;
@@ -407,7 +407,6 @@ void UIListState::Scroll(int direction, bool skipActive) {
                     sel = mMinDisplay;
                 else
                     sel = curSel;
-                curFirst = state.mFirstShowing;
                 if (mScrollPastMinDisplay)
                     sel -= mMinDisplay;
                 int data = Showing2Data(sel + curFirst);
@@ -415,11 +414,18 @@ void UIListState::Scroll(int direction, bool skipActive) {
                     goto accept_circ;
                 if (mTargetShowing == curFirst)
                     return;
+                prevFirst = curFirst;
                 int step = direction > 0 ? 1 : -1;
                 BuildScroll(step, curFirst, curSel, state);
-            } while (curFirst != state.mFirstShowing);
+                curFirst = state.mFirstShowing;
+            } while (prevFirst != curFirst);
         }
-        accept_circ:
+        // Both `skipActive` and a do-while that made no progress leave WITHOUT
+        // touching mTargetShowing: 0x8287..`bne 0x12d4` (skipActive) and the
+        // loop fallthrough both land on `b 0x14b0`, the epilogue, one
+        // instruction short of the 0x12d8 accept block below.
+        return;
+    accept_circ:
         mTargetShowing = curFirst;
         MILO_ASSERT(state.mSelected == mSelectedDisplay, 0x1d6);
     } else {
@@ -429,7 +435,7 @@ void UIListState::Scroll(int direction, bool skipActive) {
         if (!skipActive) {
             while (true) {
                 // A real if/ELSE: the target branches over the `sel = curSel`
-                // arm (`b 0x124c`) rather than initialising and overwriting.
+                // arm (`b 0x1354`) rather than initialising and overwriting.
                 int sel;
                 if (mCircular)
                     sel = mMinDisplay;
@@ -443,42 +449,31 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 if (hitBoundary)
                     return;
 
-                // Ternary: the target emits `li 1` AFTER the compare, as it
-                // already does in the mCircular arm.
-                int step = direction > 0 ? 1 : -1;
-                auto _tmp0 = BuildScroll(step, curFirst, curSel, state);
-                changed = _tmp0;
+                // The image reuses the `direction` parameter's register (r25)
+                // for the normalised step rather than taking a fresh local:
+                // `cmpwi cr6,r25,0 / li r25,1 / bgt / li r25,-1` at 0x82784170,
+                // then `cmpwi cr6,r25,0x1` at 0x8278419C selects the arm and
+                // the epilogue at 0x8278423C re-tests the same r25.
+                direction = direction > 0 ? 1 : -1;
+                changed = BuildScroll(direction, curFirst, curSel, state);
 
-                if (step == 1) {
-                    auto _tmp1 = MaxFirstShowing();
-                    if (state.mFirstShowing == _tmp1) {
-                        if (state.mSelected == ScrollMaxDisplay()) {
-                            hitBoundary = true;
-                            goto retry;
-                        }
-                    }
-                } else {
-                    bool atZero = state.mFirstShowing == 0;
+                // One boolean expression per arm, not an assignment per path:
+                // the target materialises 1/0 into r11 and ends both arms with
+                // a shared `clrlwi r30, r11, 24`.
+                if (direction == 1) {
+                    int maxFirst = MaxFirstShowing();
                     curFirst = state.mFirstShowing;
                     curSel = state.mSelected;
-                    if (mScrollPastMinDisplay) {
-                        if (atZero) {
-                            if (curSel == mMinDisplay) {
-                                hitBoundary = true;
-                                continue;
-                            }
-                        }
-                    } else {
-                        if (atZero && curSel == 0) {
-                            hitBoundary = true;
-                            continue;
-                        }
-                    }
+                    hitBoundary = curFirst == maxFirst && curSel == ScrollMaxDisplay();
+                } else {
+                    curFirst = state.mFirstShowing;
+                    bool atZero = curFirst == 0;
+                    curSel = state.mSelected;
+                    if (mScrollPastMinDisplay)
+                        hitBoundary = atZero && curSel == mMinDisplay;
+                    else
+                        hitBoundary = atZero && curSel == 0;
                 }
-                hitBoundary = false;
-                retry:
-                curFirst = state.mFirstShowing;
-                curSel = state.mSelected;
             }
         }
         mTargetShowing = curFirst;

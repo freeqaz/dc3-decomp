@@ -50,11 +50,6 @@ static const float kE = 2.71828f;
 DancerSkeleton sLastComparedDancerSkel;
 static int sLastBeatMod;
 #ifndef HX_NATIVE
-static SkeletonViz *sVizRecorded = nullptr;
-static SkeletonViz *sVizLive = nullptr;
-static float sDebugRectX = 0.1f;
-static float sDebugRectY = 0.3f;
-static float sDebugRectW = 0.3f;
 #endif // !HX_NATIVE
 
 FreestyleMoveRecorder *FreestyleMoveRecorder::sInstance = nullptr;
@@ -186,17 +181,27 @@ void FreestyleMoveRecorder::Poll() {
             streamTex->TexelsLock(texels);
             if (texels) {
                 int playerIdx = mSkeletonIndex;
-                unsigned short *src = (unsigned short *)texels;
+                unsigned short *colSrc = (unsigned short *)texels;
                 mTakes[mCurrentTakeIndex].unkc = playerIdx;
-                char *dst = depthDst - 0x50;
                 int col = 0;
                 do {
+                    // dst is REBUILT from depthDst every column
+                    // (0x82524DB4 `add r10, r8, r28` / 0x82524DBC
+                    // `subi r5, r10, 0x50`, inside the outer loop).  We used to
+                    // hoist it out, so the `stbu r11, 0x50(r5)` walked
+                    // 0x50 * 0x3c * 0x50 bytes instead of filling the single
+                    // 0x50-wide by 0x3c-tall (= 0x12c0 byte) frame column-major.
+                    unsigned short *src = colSrc;
+                    char *dst = (depthDst + col) - 0x50;
                     for (int row = 0x3c; row != 0; row--) {
                         int pixelPlayer = (*src & 7) - 1;
                         unsigned long depth;
-                        if (pixelPlayer == playerIdx) {
-                            depth = (*src >> 7) & 0xFF;
-                        } else if (playerIdx >= 0) {
+                        // Both tests have to pass: 0x82524DD4 `bne cr6` on the
+                        // player compare and 0x82524DE0 `bge cr6` on
+                        // playerIdx >= 0 BOTH fall into `mr r11, r26` (r26 = 0).
+                        // Our if/else-if wrote the sampled depth whenever
+                        // playerIdx >= 0, even for another player's pixels.
+                        if (pixelPlayer == playerIdx && playerIdx >= 0) {
                             depth = (*src >> 7) & 0xFF;
                         } else {
                             depth = 0;
@@ -205,8 +210,7 @@ void FreestyleMoveRecorder::Poll() {
                         *(unsigned char *)(dst += 0x50) = (unsigned char)depth;
                     }
                     col++;
-                    texels = (char *)texels + 8;
-                    src = (unsigned short *)texels;
+                    colSrc += 4;
                 } while (col < 0x50);
             }
             streamTex->TexelsUnlock();
@@ -321,6 +325,13 @@ void FreestyleMoveRecorder::Poll() {
 void FreestyleMoveRecorder::DrawDebug() {}
 #else
 void FreestyleMoveRecorder::DrawDebug() {
+    // Function-local, as in PoseFatalities::DrawDebug: the target holds a
+    // separate lis @ha anchor for each (r30 = lbl_82F620A4 at 0x825253CC,
+    // r29 = lbl_82F620A0 at 0x825253D0).  As file-scope statics MSVC proves
+    // the pair adjacent and collapses them to one base register plus -4/0,
+    // which costs a callee-saved register and shifts the whole allocation.
+    static SkeletonViz *sVizRecorded = nullptr; // lbl_82F620A4
+    static SkeletonViz *sVizLive = nullptr; // lbl_82F620A0
     if (DataVariable("bam_debug").Int()) {
         if (sVizRecorded == nullptr) {
             sVizRecorded = Hmx::Object::New<SkeletonViz>();
@@ -333,6 +344,16 @@ void FreestyleMoveRecorder::DrawDebug() {
 
         std::vector<SkeletonCallback *> callbacks;
         callbacks.push_back(this);
+
+        // Function-local statics, as in PoseFatalities::DrawDebug: the target
+        // reaches all three through their OWN lis @ha anchor (r24/r25/r26 at
+        // 0x82525448/4C and 0x82525438), which is why it saves r24-r31 while a
+        // file-scope trio lets MSVC prove adjacency and collapse them to one
+        // base register plus +4/+8.  The emitted order is Y, X, W
+        // (lbl_82F0F2D8/DC/E0), which file-scope decls cannot produce either.
+        static float sDebugRectX = 0.1f; // lbl_82F0F2DC
+        static float sDebugRectY = 0.3f; // lbl_82F0F2D8
+        static float sDebugRectW = 0.3f; // lbl_82F0F2E0
 
         float screenScale = sDebugRectW / TheRnd.YRatio();
 

@@ -466,21 +466,29 @@ void DxShaderMgr::LoadShaderFile(FileStream &fs) {
             ShaderType shaderType = ShaderTypeFromName(name.Str());
             unsigned int alloc;
             fs >> alloc;
-            void *bases[4];
+            // TWO arrays of 2, not one of 4: the target holds their two
+            // addresses in separate registers and indexes both with the SAME
+            // scaled counter -- `addi r11, r31, 0x80` / `addi r7, r31, 0x88`
+            // then `lwzx r8, r30, r11` / `lwzx r11, r30, r7` at 0x8261B8xx.
+            // A single bases[4] indexed by k and k+2 gives one base register
+            // and lets MSVC turn the whole thing into a pointer induction
+            // variable (stwu/stw -0x4) instead.
+            void *bases[2];
+            void *physBases[2];
             bases[0] = nullptr;
             bases[1] = nullptr;
-            bases[2] = nullptr;
-            bases[3] = nullptr;
+            physBases[0] = nullptr;
+            physBases[1] = nullptr;
             for (unsigned int j = 0; j < 2; j++) {
                 SIZE_T size1, size2;
                 fs >> size1;
                 fs >> size2;
                 BeginMemTrackFileName(fs.Name());
                 bases[j] = XMemAlloc(size1, 0x20800000);
-                bases[j + 2] = XMemAlloc(size2, 0xB5800000);
+                physBases[j] = XMemAlloc(size2, 0xB5800000);
                 EndMemTrackFileName();
                 fs.Read(bases[j], size1);
-                fs.Read(bases[j + 2], size2);
+                fs.Read(physBases[j], size2);
             }
             ShaderPoolAlloc(alloc);
             RndSplasherSuspend();
@@ -489,14 +497,25 @@ void DxShaderMgr::LoadShaderFile(FileStream &fs) {
                 fs >> shaderOptsMask;
                 D3DPixelShader *pPS = nullptr;
                 D3DVertexShader *pVS = nullptr;
-                for (int k = 0; k < 2; k++) {
+                // k is unsigned: the loop bound is `cmplwi cr6, r30, 0x8`.
+                for (unsigned int k = 0; k < 2; k++) {
                     unsigned int ic0;
                     unsigned int ibc;
                     fs >> ic0;
                     fs >> ibc;
                     void *addr = (void *)((unsigned int)bases[k] + ic0);
-                    void *physAddr = (void *)((unsigned int)bases[k + 2] + ibc);
-                    if (k - 1) {
+                    void *physAddr = (void *)((unsigned int)physBases[k] + ibc);
+                    // `!(k - 1)`, i.e. the SECOND record is the vertex shader.
+                    // The image builds the condition as a boolean VALUE --
+                    // `subi r8, r28, 0x1` / `cntlzw r6, r8` /
+                    // `extrwi. r7, r6, 1, 26` -- which is 1 exactly when
+                    // k - 1 == 0, and then `beq` branches away on k == 0.  We
+                    // had the bare `if (k - 1)`, whose `subic.` tests the
+                    // subtraction itself and therefore selects the OPPOSITE
+                    // arm: we were registering record 0 as the vertex shader
+                    // and record 1 as the pixel shader.
+                    bool isVertexShader = !(k - 1);
+                    if (isVertexShader) {
                         pVS = (D3DVertexShader *)addr;
                         XGRegisterVertexShader(pVS, physAddr);
                     } else {

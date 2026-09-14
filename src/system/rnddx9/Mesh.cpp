@@ -374,6 +374,13 @@ void DxMesh::OnSync(int flags) {
             unk1ac = (D3DResource *)MakeIndexBuffer(mNumFaces, 6, D3DFMT_INDEX16);
             IBLock<> lock((D3DIndexBuffer *)unk1ac, 0);
             unsigned short *dst = (unsigned short *)lock.mDataAddr;
+            // w7-z: the image runs this loop off a single induction variable --
+            // the dst pointer, biased by +4 -- and rederives &mFaces[i] from it
+            // (`addi r11,r10,4` / `subfic r8,r10,-4` in the preheader, then
+            // `add r10,r11,r10; add r10,r10,r8` per iteration).  Our build keeps a
+            // separate byte-offset IV and uses `lhzx`/`sthu`.  Refuted spellings:
+            // `*dst++ = face.vN;` x3 (moves the `lwz r10,0x68(r31)` reload of
+            // lock.mDataAddr INTO the loop, 95.08 -> 94.2).
             for (int i = 0; i < mNumFaces; i++) {
                 RndMesh::Face &face = geom->mFaces[i];
                 dst[0] = face.v1;

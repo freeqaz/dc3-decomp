@@ -1183,8 +1183,13 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
         return false;
     }
     if (infoheader.biCompression != 0) {
+        // The target binds MakeString's `const long &` straight to the field's
+        // own stack slot: 0x82672CAC `addi r5, r1, 0x80`, and infoheader lives
+        // at 0x70(r1). A `(long)` value cast spills a second copy at 0x60(r1)
+        // and pushes bs->Name() out to 0x64; a `(const long &)` cast does the
+        // same. Only a `long` member binds the reference to the field itself.
         MILO_NOTIFY(
-            "%s: Unsupported compression %d", bs->Name(), (long)infoheader.biCompression
+            "%s: Unsupported compression %d", bs->Name(), infoheader.biCompression
         );
         return false;
     }

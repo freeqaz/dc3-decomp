@@ -194,11 +194,15 @@ bool MoveGraph::FindVariantPair(
 
     if (p1) {
         if (p2) {
-            // Both parents specified: find best connected pair via scoring
-            const std::vector<MoveVariant *> &variants = p1->Variants();
+            // Both parents specified: find best connected pair via scoring.
+            // No named reference: the image reaches the vector straight off p1
+            // every iteration (`lwz r6, 0x10(r29)` at 0x824F91F4 and
+            // `lwz r11, 0x14(r29)` at .L_824F92DC, both p1-relative).  Binding
+            // `variants` to a local reference materialises `addi r4, r30, 0x10`
+            // and turns the bound reload into `lwz r11, 0x4(r4)`.
             int bestScore = 0;
-            for (MoveVariant *const *var1 = &*variants.begin();
-                 var1 != &*variants.end(); ++var1) {
+            for (MoveVariant *const *var1 = &*p1->Variants().begin();
+                 var1 != &*p1->Variants().end(); ++var1) {
                 const MoveVariant *curVar = *var1;
                 for (std::vector<MoveCandidate>::const_iterator cand =
                          curVar->mNextCandidates.begin();
@@ -251,24 +255,28 @@ bool MoveGraph::FindVariantPair(
             return bestScore != 0;
         }
         // Only p1 set
+        // Nothing here is cached in a local: the image re-derives the vector
+        // every time.  `vref1 = *variants.begin()` is two loads at 0x824F931C
+        // (`lwz r10, 0x0(r11)` then `lwz r10, 0x0(r10)`), and the indexed read
+        // reloads _M_start at the TOP OF THE LOOP each iteration
+        // (`lwz r9, 0x0(r11)` at .L_824F9354).  A cached `vbegin` collapses
+        // both.  The hit also `break`s rather than returning: 0x824F937C
+        // branches to the same `li r3, 0x1` at .L_824F9314 the fall-through
+        // and the s.Null() and empty-size exits all reach.
         const std::vector<MoveVariant *> &variants = p1->Variants();
-        MoveVariant *const *vbegin = &*variants.begin();
-        MoveVariant *const *vend = &*variants.end();
-        if (vbegin == vend) {
+        if (variants.empty()) {
             return false;
         }
         if (v1) {
             vref1 = v1;
         } else {
-            vref1 = *vbegin;
+            vref1 = *variants.begin();
             if (!s.Null()) {
                 unsigned int count = variants.size();
-                if (count > 0) {
-                    for (unsigned int i = 0; i < count; i++) {
-                        if (variants[i]->Song() == s) {
-                            vref1 = variants[i];
-                            return true;
-                        }
+                for (unsigned int i = 0; i < count; i++) {
+                    if (variants[i]->Song() == s) {
+                        vref1 = variants[i];
+                        break;
                     }
                 }
             }
@@ -277,24 +285,21 @@ bool MoveGraph::FindVariantPair(
     } else {
         if (p2) {
             // Only p2 set
+            // Mirror of the p1-only block above; same shape at 0x824F93AC.
             const std::vector<MoveVariant *> &variants = p2->Variants();
-            MoveVariant *const *vbegin = &*variants.begin();
-            MoveVariant *const *vend = &*variants.end();
-            if (vbegin == vend) {
+            if (variants.empty()) {
                 return false;
             }
             if (v2) {
                 vref2 = v2;
             } else {
-                vref2 = *vbegin;
+                vref2 = *variants.begin();
                 if (!s.Null()) {
                     unsigned int count = variants.size();
-                    if (count > 0) {
-                        for (unsigned int i = 0; i < count; i++) {
-                            if (variants[i]->Song() == s) {
-                                vref2 = variants[i];
-                                return true;
-                            }
+                    for (unsigned int i = 0; i < count; i++) {
+                        if (variants[i]->Song() == s) {
+                            vref2 = variants[i];
+                            break;
                         }
                     }
                 }

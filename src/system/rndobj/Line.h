@@ -22,6 +22,8 @@ public:
         /** "Color of point" */
         Hmx::Color color; // 0x10
         int unk[10];
+        /** View-space position, filled in by RndLine::UpdateLine. */
+        Vector3 &ViewPos() { return *(Vector3 *)&unk[0]; }
     };
 
     class VertsMap {

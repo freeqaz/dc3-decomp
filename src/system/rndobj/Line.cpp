@@ -736,9 +736,8 @@ void RndLine::UpdateLine(const Transform &camXfm, float nearPlane) {
     numPts = (int)mPoints.size();
     for (i = 0; i < numPts; i++) {
         Point *pt = &mPoints[i];
-        float *viewPos = (float *)&pt->unk[0];
-        Multiply(pt->point, viewXfm, *(Vector3 *)viewPos);
-        if (viewPos[1] < clipDist) {
+        Multiply(pt->point, viewXfm, pt->ViewPos());
+        if (pt->ViewPos().y < clipDist) {
             lastClipped = i;
             if (firstClipped == -1) {
                 firstClipped = i;
@@ -755,23 +754,27 @@ void RndLine::UpdateLine(const Transform &camXfm, float nearPlane) {
             if (firstClipped > (numPts - 1) - lastClipped) {
                 Point *prevPt = &mPoints[firstClipped - 1];
                 Point *pt = &mPoints[firstClipped];
-                float *prevView = (float *)&prevPt->unk[0];
-                float *curView = (float *)&pt->unk[0];
-                Interp(*(Vector3 *)prevView, *(Vector3 *)curView,
-                       (clipDist - prevView[1]) / (curView[1] - prevView[1]),
-                       *(Vector3 *)curView);
+                // Each `->ViewPos()` is re-formed at its use: the image reads
+                // the near-plane component off the POINT base (0x82679068
+                // `lfs f0, -0x24(r11)`) and only builds the +0x20 argument
+                // pointers at the call (0x8267906C `addi r3, r10, 0x20`).
+                Interp(prevPt->ViewPos(), pt->ViewPos(),
+                       (clipDist - prevPt->ViewPos().y)
+                           / (pt->ViewPos().y - prevPt->ViewPos().y),
+                       pt->ViewPos());
                 endIdx = firstClipped;
                 startIdx = 0;
             } else {
                 Point *pt = &mPoints[lastClipped];
                 Point *nextPt = &mPoints[lastClipped + 1];
-                float *curView = (float *)&pt->unk[0];
-                float *nextView = (float *)&nextPt->unk[0];
-                Interp(*(Vector3 *)curView, *(Vector3 *)nextView,
-                       (clipDist - curView[1]) / (nextView[1] - curView[1]),
-                       *(Vector3 *)curView);
-                endIdx = numPts - 1;
+                Interp(pt->ViewPos(), nextPt->ViewPos(),
+                       (clipDist - pt->ViewPos().y)
+                           / (nextPt->ViewPos().y - pt->ViewPos().y),
+                       pt->ViewPos());
+                // startIdx before endIdx: 0x826790BC `mr r11, r29` precedes
+                // 0x826790C0 `subi r10, r31, 0x1`.
                 startIdx = lastClipped;
+                endIdx = numPts - 1;
             }
         } else {
             startIdx = 0;
@@ -783,23 +786,25 @@ void RndLine::UpdateLine(const Transform &camXfm, float nearPlane) {
         while (i < numPts - 1) {
             Point *pt1 = &mPoints[i];
             Point *pt2 = &mPoints[i + 1];
-            float dist1 = ((float *)&pt1->unk[0])[1];
-            if (dist1 < clipDist) {
-                float dist2 = ((float *)&pt2->unk[0])[1];
-                if (dist2 < clipDist) {
+            // No `dist1`/`dist2` locals: the image re-reads the near-plane
+            // component at every use (0x8267912C reloads pt1's from memory
+            // after 0x82679118 has overwritten f0 with pt2's), and it
+            // tail-merges the two Interp calls into one shared block at
+            // 0x82679150.
+            if (pt1->ViewPos().y < clipDist) {
+                if (pt2->ViewPos().y < clipDist) {
                     pt2 = pt1;
                 } else {
-                    Interp(*(Vector3 *)&pt1->unk[0], *(Vector3 *)&pt2->unk[0],
-                           (clipDist - dist1) / (dist2 - dist1),
-                           *(Vector3 *)&pt1->unk[0]);
+                    Interp(pt1->ViewPos(), pt2->ViewPos(),
+                           (clipDist - pt1->ViewPos().y)
+                               / (pt2->ViewPos().y - pt1->ViewPos().y),
+                           pt1->ViewPos());
                 }
-            } else {
-                float dist2 = ((float *)&pt2->unk[0])[1];
-                if (dist2 < clipDist) {
-                    Interp(*(Vector3 *)&pt2->unk[0], *(Vector3 *)&pt1->unk[0],
-                           (clipDist - dist2) / (dist1 - dist2),
-                           *(Vector3 *)&pt2->unk[0]);
-                }
+            } else if (pt2->ViewPos().y < clipDist) {
+                Interp(pt2->ViewPos(), pt1->ViewPos(),
+                       (clipDist - pt2->ViewPos().y)
+                           / (pt1->ViewPos().y - pt2->ViewPos().y),
+                       pt2->ViewPos());
             }
             UpdateLinePair(pt1, pt2);
             i += 2;

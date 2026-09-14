@@ -516,6 +516,12 @@ public:
     int size() const { return mNodes.size(); }
     bool empty() const { return mNodes.empty(); }
     T1 *front() const { return *begin(); }
+    /** The image reaches the last node through the underlying vector, not
+     *  through operator[](size() - 1): FlowPickOne::Activate at 0x82405ED8 is
+     *  `lwz r11, 0x64(r30)` (mNodes._M_finish) then `lwz r25, -0x8(r11)`, with
+     *  no size() division at all.  That is STLport's `back()` = `*(end() - 1)`
+     *  on mNodes, reading Node::mObject at +0xc of the 0x14-byte node. */
+    T1 *back() const { return mNodes.back().Obj(); }
     T1 *operator[](int idx) { return mNodes[idx].Obj(); }
     const T1 *operator[](int idx) const { return mNodes[idx].Obj(); }
 
