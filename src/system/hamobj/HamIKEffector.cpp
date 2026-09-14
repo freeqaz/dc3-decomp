@@ -1284,6 +1284,20 @@ void HamIKEffector::ComputeElbowPullAndQuat(
     MultiplyTranspose(v, xfm, v40);
     const Vector3 &effectorV = mEffector->TransParent()->LocalXfm().v;
     MakeRotQuat(effectorV, v40, q.q);
+    // w7-bb: 96.43%, 5 real rows.  Two coupled residuals, both traced, neither
+    // reachable from source: (1) the image RELOADS q.v.x (stfs f12,0x0(r31) at
+    // 824BF90C then lfs f11,0x0(r31) at 824BF918) where MSVC forwards our
+    // store; and
+    // because the middle term of the sum is then anchored in memory, the image
+    // cannot reassociate and emits the chain in source order (dy*dy, then
+    // fmadds q.v.x, then fmadds dz*dz).  We get all three terms in registers,
+    // so /fp:fast reverses the chain to dz*dz, dx*dx, dy*dy -- which is the
+    // whole f11<->f12 swap set and both (0x4,0x8)/(0x34,0x38) offset swaps.
+    // Measured, all WORSE than this spelling: dropping the dx local and
+    // assigning q.v.x directly = 95.13%; additionally hoisting effectorV.x
+    // into a local (which is what the image's load order at idx 24, BEFORE the
+    // store, seems to ask for) = 94.31% and makes MSVC sink the q.v.x store
+    // out of the block entirely.  Keep the faithful spelling.
     float dy = v.y - xfm.v.y;
     float dx = v.x - xfm.v.x;
     float dz = v.z - xfm.v.z;
