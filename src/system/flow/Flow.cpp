@@ -269,9 +269,16 @@ void Flow::PreLoad(BinStream &bs) {
 
 void Flow::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
+    // Declared at function scope, assigned inside the IsProxy() arm. The target
+    // gives this count its own frame slot (0x70) and `oldRev` in the non-proxy
+    // arm another (0xc0); a sibling-scope declaration lets MSVC coalesce the two
+    // into one slot, which is what shifts most of this frame. The zero store stays
+    // where the target puts it (first instruction of the arm) because only the
+    // assignment lives inside.
+    int numDynProps;
     ObjectDir::PostLoad(bs);
     if (IsProxy()) {
-        int numDynProps = 0;
+        numDynProps = 0;
         d.stream.ReadEndian(&numDynProps, 4);
         if (d.rev < 5) {
             for (int i = 0; i < numDynProps; i++) {
