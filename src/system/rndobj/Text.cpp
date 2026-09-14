@@ -1797,8 +1797,12 @@ static int u16_scan_ints(const unsigned short *s, int *vals, int max_vals) {
 void RndText::FitTextJust() {
     BuildFontMaps(true);
 
-    HX_VECTOR(unsigned short) wideChars;
+    // Declaration order is load-bearing: the image constructs `lines`
+    // (r31+0x60) before `wideChars` (r31+0x50) at 0x8269A22C..0x8269A244 and
+    // destroys wideChars first at 0x8269A3E0, so `lines` must be declared
+    // first even though wideChars gets the lower slot.
     HX_VECTOR(Line) lines;
+    HX_VECTOR(unsigned short) wideChars;
     int numChars = ConvertTextToWide(mText.c_str(), wideChars);
     float *charWidths = (float *)_alloca(sizeof(float) * (numChars + 2));
     OnComputeCharWidths(&wideChars[0], charWidths, false);
@@ -1811,13 +1815,13 @@ void RndText::FitTextJust() {
     float lo = 0.2f;
     float cur = hi;
 
-    if ((mWidth != 0.0f && mWidth < bounds.w) || (mHeight != 0.0f && mHeight < bounds.h)) {
+    if ((mWidth != 0.0f && bounds.w > mWidth) || (mHeight != 0.0f && bounds.h > mHeight)) {
         if (hi - lo > 0.2f) {
             do {
                 cur = (lo + hi) * 0.5f;
                 scale = cur / mStyles[0].mSize;
                 WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
-                if ((mWidth != 0.0f && mWidth < bounds.w) || (mHeight != 0.0f && mHeight < bounds.h)) {
+                if ((mWidth != 0.0f && bounds.w > mWidth) || (mHeight != 0.0f && bounds.h > mHeight)) {
                     hi = cur;
                 } else {
                     lo = cur;
