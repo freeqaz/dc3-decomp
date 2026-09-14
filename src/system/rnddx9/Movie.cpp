@@ -82,10 +82,14 @@ void DxMovie::SetFile(const FilePath &file, bool stream) {
             int size;
             if (fl) {
                 buffer = fl->GetBuffer(&size);
-                delete fl;
             } else {
                 buffer = nullptr;
             }
+            // `delete fl` sits OUTSIDE the null test on purpose: the image
+            // emits its own `cmplwi r27, 0 / beq` before the vcall'd
+            // destructor at 8261F59C, which it could not do if the delete
+            // were inside the `if (fl)` block.
+            delete fl;
             if (!buffer)
                 return;
             BufStream bStream(buffer, size, true);

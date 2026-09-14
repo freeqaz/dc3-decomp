@@ -599,6 +599,26 @@ void UILabel::DrawShowing() {
             }
 #endif
             for (int i = 0; i < mLabelStyles.size(); i++) {
+                // Residual (96.03%, 9 rows, 20 B): a liveness difference across
+                // the Style() call.  The image keeps the ELEMENT POINTER in a
+                // callee-saved register over the call and reads the member
+                // afterwards --
+                //   add  r27, r28, r11      element addr, callee-saved
+                //   bl   ?Style@UILabel@@...
+                //   ...  mFontColorOverride = true
+                //   lwz  r11, 0xc(r27)      mColorOverride, read AFTER
+                //   cmpwi cr6, r11, 0x0
+                // -- while we compute the element address in volatile r11 and
+                // hoist mColorOverride into callee-saved r28 before the call.
+                // REFUTED, and a warning about the metric: moving the
+                // mColorOverride read below the mFontColorOverride store (the
+                // image's own order) reads 96.9 canonical, BETTER than 96.03,
+                // but it is worse in every other respect -- 29 mismatch rows
+                // instead of 9, raw 94.8 vs 95.5, and it displaces the bl Style
+                // itself by one slot (insert at 67 / delete at 69), which the
+                // image does not do.  The canonical gain is the ruler forgiving
+                // ~20 new register-permutation rows in exchange for 5 charged
+                // structural ones.  Keeping the faithful spelling.
                 LabelStyle &curLabelStyle = mLabelStyles[i];
                 UIColor *curColor = curLabelStyle.mColorOverride;
                 RndText::Style &curStyle = Style(i);

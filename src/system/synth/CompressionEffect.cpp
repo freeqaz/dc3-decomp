@@ -81,7 +81,11 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
                         mDCBlock = ((1.0f - ratio) * 0.002f) + ratio;
                     }
 
-                    float abs_sample = fabsf(sample);
+                    // NOT fabsf() here: the image emits `fneg f0, f13` +
+                    // `fsel f0, f13, f13, f0` at 0x8263xxxx (offset 0x13c in
+                    // the function), i.e. a /fp:fast ternary, where the two
+                    // fabsf() calls above it really do lower to `fabs`.
+                    float abs_sample = sample < 0.0f ? -sample : sample;
                     if (peak_level < abs_sample) {
                         peak_level = abs_sample;
                     }
@@ -139,7 +143,9 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
             int channel2 = 0;
             for (int ch_idx2 = 0; ch_idx2 < numChannels; ch_idx2++) {
                 int idx = frame * numChannels + channel2;
-                samples[idx] = (mOutputGainRatio * (envelope * (mDCBlock * samples[idx])));
+                // Left-to-right: the image multiplies the SAMPLE by mDCBlock
+                // (`fmuls f0, f12, f0`), then by envelope, then by the gain.
+                samples[idx] = samples[idx] * mDCBlock * envelope * mOutputGainRatio;
                 channel2 += 1;
             }
         }

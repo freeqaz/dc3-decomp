@@ -48,6 +48,21 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
     float diffGreen = (mEndsTint.green - mRootsTint.green);
     float diffBlue = (mEndsTint.blue - mRootsTint.blue);
     float diffAlpha = (mEndsTint.alpha - mRootsTint.alpha);
+    // Residual (96.86%, 9 rows, 16 B): the image does NOT contract these four
+    // multiply-adds.  It emits four grouped `fmuls fN, fN, f31` and then four
+    // separate `fadds` (827329 7C..A8); we emit four `fmadds fN*f31+roots`.
+    // The same function contracts in TWO other places and the image agrees
+    // there -- `fnmsubs f2, f13, f0, f30` (shellExponent) and
+    // `fmadds f2, f13, f0, f30` (alphaExp) -- so this is per-expression, which
+    // is what docs/decomp/patterns/fixable-fsel-fma.md already records for
+    // NgFur::Shell.
+    // REFUTED: `#pragma fp_contract(off)` bracketing the whole function is
+    // BYTE-INERT here -- identical 96.9%, identical 9 rows, and the two
+    // expressions that SHOULD have de-fused if the pragma were honoured did
+    // not move either.  This Xenon cl silently accepts and ignores the pragma
+    // (no C4068), so the doc's "Category 1: pure OFF" fix does not exist on
+    // this toolchain; only a volatile intermediate (which would add the stack
+    // traffic the image does not have) or a c2.dll patch would separate them.
     diffRed = diffRed * fShell;
     diffGreen = diffGreen * fShell;
     diffBlue = diffBlue * fShell;
@@ -65,6 +80,10 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
     float shellExponent = -(mShellOut * 0.7f - oneVal);
     float shellThickness;
     if (layerIdx != 0) {
+        // Residual row [101]: image `fmuls f13, f13, f0` (thickness first), we
+        // emit `fmuls f13, f0, f13`.  REFUTED: writing it as
+        // `(float)pow(...) * mThickness` is byte-inert -- a plain two-term
+        // same-register commutative swap, the known backend floor.
         shellThickness = mThickness * (float)pow((double)fShell, (double)shellExponent);
     } else {
         shellThickness = mThickness / (float)mLayers;

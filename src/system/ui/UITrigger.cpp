@@ -61,21 +61,38 @@ void UITrigger::Trigger() {
     mStartTime = TheTaskMgr.UISeconds();
     mEndTime = 0;
     FOREACH (it, mAnims) {
-        Anim &curAnim = *it;
-        if (curAnim.mAnim) {
-            float f4 = 0;
-            if (curAnim.mEnable) {
-                if (!(curAnim.mPeriod * 30.0f)) {
-                    f4 = curAnim.mScale;
+        if (it->mAnim) {
+            // BEHAVIOURAL FIX: f4 is NOT pre-set to 0 and the period product is
+            // NOT discarded.  The image keeps mPeriod * 30.0f in f4 and only
+            // replaces it when it is zero:
+            //   827B26B8  lfs   f0, 0x38(r30)     mPeriod
+            //   827B26BC  fmuls f0, f0, f31       * 30.0f   -> f4 lives in f0
+            //   827B26C0  fcmpu cr6, f0, f29      vs 0.0f
+            //   827B26C4  bne   cr6, .L_827B2728  keep it, go straight to MaxEq
+            // Written with `float f4 = 0;` and the product thrown away inside
+            // the test, a non-zero period contributed 0 to mEndTime instead of
+            // mPeriod*30.  Natively that shortens every UITrigger end time for
+            // enabled anims with a period set.
+            float f4;
+            if (it->mEnable) {
+                f4 = it->mPeriod * 30.0f;
+                if (!f4) {
+                    f4 = it->mScale;
                     if (!f4) {
                         f4 = 1.0f;
                     }
-                    f4 = std::fabs(curAnim.mStart - curAnim.mEnd) / f4;
+                    // fabsf, not std::fabs: std::fabs takes and returns
+                    // DOUBLE, so the divide below came out as `fdiv` + `frsp`
+                    // where the image has a single `fdivs f0, f13, f0`
+                    // (827B26E8).  Both sides emit the same `fabs` instruction
+                    // -- it is the divide's precision that the double round
+                    // trip changed.
+                    f4 = fabsf(it->mStart - it->mEnd) / f4;
                 }
             } else {
-                f4 = std::fabs(curAnim.mAnim->StartFrame() - curAnim.mAnim->EndFrame());
+                f4 = fabsf(it->mAnim->StartFrame() - it->mAnim->EndFrame());
             }
-            MaxEq(mEndTime, (curAnim.mDelay * 30.0f + f4) / 30.0f);
+            MaxEq(mEndTime, (it->mDelay * 30.0f + f4) / 30.0f);
         }
     }
     if (mBlockTransition && mEndTime > 5.0f) {

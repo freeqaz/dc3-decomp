@@ -66,18 +66,47 @@ void Vector2DESmoother::Smooth(Vector2 v, float dt, bool normalize) {
 }
 
 void Vector3DESmoother::Smooth(Vector3 v, float dt, bool normalize) {
-    mX.Smooth(v.x, dt);
-    mY.Smooth(v.y, dt);
-    mZ.Smooth(v.z, dt);
+    // Naming the three sub-smoothers as references is what makes the image's
+    // register allocation reproduce.  The image keeps THREE base pointers alive
+    // across the Normalize() call -- r31 = mX (this+0), r30 = mY (this+0x14),
+    // r29 = mZ (this+0x28) -- left over from the three Smooth() expansions, and
+    // addresses the whole tail off them.  Written as bare `mX.` / `mY.` / `mZ.`
+    // MSVC drops the sub-object bases at the call and re-addresses everything
+    // off r31 with 0x18/0x1c/0x2c/0x30 displacements (96.4% -> 98.2%).
+    //
+    // The chained assignments below are `mLevel = mPrevLevel = norm.c` and not
+    // the other way round because a chain evaluates right-to-left: this spells
+    // the image's store order, mPrevLevel (0x4) before mLevel (0x0).  Purely a
+    // store-order question -- both fields receive the same value.
+    //
+    // Residual (98.2% canonical / 97.4% raw, 16 rows, 4 B): all FPR-only.
+    //   - rows 61/63 are the known plain commutative two-term same-register
+    //     swaps inside the inlined DoubleExponentialSmoother::Smooth
+    //     (`fmadds f13,f13,f11,f9` vs `f13,f11,f13,f9`) -- documented backend
+    //     floor, see docs/decomp/patterns (stream3 commutative operand order).
+    //   - rows 70/72: in the mZ expansion ONLY, the image loads mTrend (0x30)
+    //     before mPrevLevel (0x2c); the mX and mY expansions of the same inline
+    //     already match, so this is scheduling, not a source order to fix.
+    //     Reordering the inline's `oldPrev`/`mTrend` reads would also reshape
+    //     Vector2DESmoother::Smooth in the same TU.
+    //   - rows 83-98: an f0/f12/f13 permutation plus one extra `lfs f12,
+    //     0x0(r29)` the image issues (it RELOADS mZ.mLevel for the Vector3 val
+    //     ctor instead of reusing the value it just stored).
+    DoubleExponentialSmoother &sx = mX;
+    DoubleExponentialSmoother &sy = mY;
+    DoubleExponentialSmoother &sz = mZ;
+    sx.Smooth(v.x, dt);
+    sy.Smooth(v.y, dt);
+    sz.Smooth(v.z, dt);
     if (normalize) {
-        Vector3 val(mX.mLevel, mY.mLevel, mZ.mLevel);
+        Vector3 val(sx.mLevel, sy.mLevel, sz.mLevel);
         Vector3 norm;
         Normalize(val, norm);
-        mX.mTrend = 0;
-        mX.mLevel = mX.mPrevLevel = norm.x;
-        mY.mPrevLevel = mY.mLevel = norm.y;
-        mY.mTrend = 0;
-        mZ.mPrevLevel = mZ.mLevel = norm.z;
-        mZ.mTrend = 0;
+        sx.mTrend = 0;
+        sx.mLevel = sx.mPrevLevel = norm.x;
+        sy.mLevel = sy.mPrevLevel = norm.y;
+        sy.mTrend = 0;
+        sz.mLevel = sz.mPrevLevel = norm.z;
+        sz.mTrend = 0;
     }
 }

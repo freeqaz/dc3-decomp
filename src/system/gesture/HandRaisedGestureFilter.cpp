@@ -59,7 +59,8 @@ void HandRaisedGestureFilter::Update(const Skeleton &skel, int deltaMs) {
     int skelIdx = skel.SkeletonIndex();
     TheGestureMgr->unk30[skelIdx] = 1;
     mStandingStillFilter.Update(skel, deltaMs);
-    if ((float)mStandingStillFilter.RaisedMs() <= 0.0f) {
+    bool stillActive = (float)mStandingStillFilter.RaisedMs() > 0.0f;
+    if (!stillActive) {
         mRaisedMs = 0;
     } else {
         if (mRaisedMs == 0) {

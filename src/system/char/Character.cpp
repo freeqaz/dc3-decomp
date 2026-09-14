@@ -377,6 +377,21 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
             Vector3(worldPos.x, worldPos.y, worldPos.z + planeD), Vector3(0, 0, 1)
         );
 
+        // Residual here, 8 rows / 8 B at 97.32 canonical = 97.32 raw: the
+        // image does NOT reassociate the two zero-weighted terms of the plane
+        // constant.  With normal = (0,0,1) constant-propagated, f31 = 0.0f:
+        //   image  fmuls f12, f12, f31 / fmadds f0, f0, f31, f12 / fadds f13,
+        //          f13, f29 / fadds f0, f0, f13 / fneg f0, f0
+        //   ours   fadds f0, f0, f29 / fadds f13, f12, f13 /
+        //          fnmadds f0, f13, f31, f0
+        // i.e. we factor x*0 + y*0 into (x+y)*0 and fuse the negate.  It is a
+        // /fp:fast reassociation inside the INLINED Plane(point, normal) ctor
+        // in the shared header math/Mtx.h, which is also what fixes the load
+        // order (image y,z,x vs ours x,y,z).
+        // REFUTED: commuting the ctor's products to `point.x * normal.x + ...`
+        // (the operand order the image's fmuls literally shows) is byte-inert
+        // here, so the shared-header edit was reverted rather than landed on a
+        // guess.
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
         Transform tf40;
         Transpose(xfm, tf40);
@@ -384,11 +399,19 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
         Multiply(pl70, tf40, plb0);
 
         Transform tf90;
-        float scale = -1.0f / plb0.b;
-        // Operand order here is inert: `plb0.a * scale` and `scale * plb0.a`
-        // compile to the identical `fmuls f13, f13, f0` (measured both ways).
-        tf90.m.Set(1, plb0.a * scale, 0, 0, 0, 0, 0, plb0.c * scale, 1);
-        tf90.v.Set(0, plb0.d * scale, 0);
+        // Write the three DIVISIONS, exactly as RB3's copy of this function
+        // does -- do not hoist a reciprocal into a named `scale` local.  This
+        // Xenon cl defaults to /fp:fast and folds the three divisions by the
+        // same denominator into one reciprocal and three multiplies itself
+        // (`lfs f0, __real@bf800000` / `fdivs f0, f0, f13` = -1.0f/plb0.b),
+        // and when IT forms the product the reciprocal is the LEFT operand:
+        // `fmuls f13, f0, f13`.  Hoisting the reciprocal by hand produces the
+        // same fdivs but writes the product the other way round
+        // (`fmuls f13, f13, f0`), and that operand order is NOT recoverable by
+        // commuting the source -- a plain two-term same-register swap is a
+        // backend floor.
+        tf90.m.Set(1, -plb0.a / plb0.b, 0, 0, 0, 0, 0, -plb0.c / plb0.b, 1);
+        tf90.v.Set(0, -plb0.d / plb0.b, 0);
 
         Transform tfa0;
         Multiply(tf40, tf90, tfa0);

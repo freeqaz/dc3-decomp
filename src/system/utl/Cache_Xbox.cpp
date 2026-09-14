@@ -378,13 +378,14 @@ int CacheXbox::ThreadWrite() {
 
     if (hFile == (HANDLE)-1) {
         unsigned int err = GetLastError();
-        if (err < 2 || (err > 3 && err != 0x15)) {
-            if (IsDeviceConnected(mCacheID.DeviceID())) {
-                MILO_NOTIFY("CacheXbox::WriteAsync() - Unhandled error from CreateFile(): %d\n", err);
-                return -1;
-            }
+        if (err >= 2 && (err <= 3 || err == 0x15)) {
+            return 8;
         }
-        return 8;
+        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+            return 8;
+        }
+        MILO_NOTIFY("CacheXbox::WriteAsync() - Unhandled error from CreateFile(): %d\n", err);
+        return -1;
     }
 
     DWORD bytesWritten = 0;
@@ -399,12 +400,11 @@ int CacheXbox::ThreadWrite() {
     CloseHandle(hFile);
     XContentFlush(mCacheID.Name(), nullptr);
 
-    if (IsDeviceConnected(mCacheID.DeviceID())) {
-        MILO_NOTIFY("CacheXbox::ThreadWrite() - Unhandled error %d from WriteFile()\n", err);
-        return -1;
+    if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        return 8;
     }
-
-    return 8;
+    MILO_NOTIFY("CacheXbox::ThreadWrite() - Unhandled error %d from WriteFile()\n", err);
+    return -1;
 }
 
 CacheDirEntry::CacheDirEntry(const CacheDirEntry &o) : mName(o.mName), mDateTime(o.mDateTime), mSize(o.mSize) {}

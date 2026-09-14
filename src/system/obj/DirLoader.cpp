@@ -533,8 +533,38 @@ void DirLoader::WriteTypeMemDump(TextFileStream *file) {
          it != sMemPointMap.end();
          ++it) {
         MemPointDelta pt = it->second;
-        if (file)
-            file->Print((*it).first.c_str());
+        // `it->first`, not `(*it).first`: String has TextStream at +0 and
+        // FixedString (which owns mStr and c_str()) at +4, so calling c_str()
+        // on a String reached through a POINTER expression makes MSVC emit the
+        // null-guarded base adjustment the image has --
+        //   825A4500  addic. r11, r31, 0x10    <- operator->() result, tested
+        //   825A4504  addi   r11, r11, 0x4     <- String* -> FixedString*
+        //   825A4508  bne    .L_825A4510
+        //   825A450C  li     r11, 0x0
+        //   825A4518  lwz    r4, 0x0(r11)      <- mStr
+        // Through the reference `(*it).first` MSVC folds it to one
+        // `lwz r4, 0x14(r31)` and the guard disappears.
+        // REFUTED, both byte-identical to the folded form: `it->first.c_str()`
+        // instead of `(*it).first.c_str()`, and an explicit
+        // `const String *key = &it->first; key->c_str();`.  MSVC proves the
+        // address-of non-null in every spelling reachable from here, so the
+        // four-instruction guarded conversion stays unreproduced (4 rows).
+        //
+        // LOSS NAMED: dropping the `if (file)` costs 0.7pp on the ruler
+        // (95.94 -> 94.94 canonical, 95.62 -> 94.62 raw, 7 rows either way) --
+        // objdiff charges a target-only instruction more than a substituted
+        // one, so the two `cmplwi`/`beq` rows that USED to pair with two of the
+        // image's guard instructions now read as deletes.  Taken anyway: the
+        // guard is not in the image.
+        //
+        // BEHAVIOURAL: there is no `if (file)` here.  The image goes straight
+        // from that address computation into the virtual Print call with no
+        // test of r30 anywhere in the loop.  The guard was ours, and it was
+        // already inconsistent -- the very next statement dereferences `file`
+        // unconditionally, and MILO_ASSERT(file) at the top of the function
+        // says the argument is required -- so removing it changes no reachable
+        // behaviour.
+        file->Print(it->first.c_str());
         *file << "," << pt.ToString(1) << "\n";
     }
     file->File().Flush();

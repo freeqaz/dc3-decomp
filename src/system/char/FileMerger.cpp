@@ -120,6 +120,23 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
                 mergerDir->RemoveSubDir(curSubdir);
             }
         } else {
+            // Residual (97.85%, 4 rows, 12 B): the image computes BOTH guards
+            // before either branch --
+            //   cmplwi r28, 0    (cr0, mergerDir)
+            //   cmpwi  cr6, r11, 0 (mLoadedSubdirs.mSize, loaded at 0x54(r29))
+            //   beq    -> else     (cr0)
+            //   beq    cr6 -> exit
+            // so the else arm's zero-trip guard is a bare `beq cr6` reusing the
+            // hoisted compare, and the pop_back loop is guard + fall-through
+            // do-while.  We emit `cmplwi cr6, r28, 0 / beq cr6 -> else` first
+            // and only then compute the size compare, so the else arm has to
+            // jump to its own bottom test (`b 0x6f0c`).  REFUTED, both worse
+            // (97.85 -> 97.25): spelling this arm as an explicit
+            // `while (!empty()) pop_back();`, and as an explicit
+            // `if (!empty()) do { pop_back(); } while (!empty());`.  Both gave
+            // the else arm its own top-of-block `cmpwi cr6` which MSVC still
+            // did not CSE with the if arm's, and additionally sank the
+            // `addi r30, r29, 0x50`.  clear() is the best spelling found.
             mLoadedSubdirs.clear();
         }
     }
