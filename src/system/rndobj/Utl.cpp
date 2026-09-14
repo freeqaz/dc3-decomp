@@ -2736,9 +2736,12 @@ void BuildVisit(BSPNode *node) {
 }
 
 void BuildFromBSP(RndMesh *mesh) {
-    RndMesh *geomOwner = mesh->GetGeomOwner();
-    // GetBSPTree() already reads through mGeomOwner, so retail reaches it
-    // straight off `mesh` -- one lwz, not two.
+    // No `geomOwner` local: RndMesh::GetBSPTree(), Verts() and Faces() all read
+    // through mGeomOwner themselves, so retail keeps the PARAMETER in r26 and
+    // re-reads 0x148(r26) at each use (target idx 43/47/96/129).  Binding
+    // `RndMesh *geomOwner = mesh->GetGeomOwner()` costs a third extra
+    // callee-saved GPR -- __savegprlr_21 against the image's __savegprlr_24 --
+    // and 0x20 of frame.
     BuildVisit(mesh->GetBSPTree());
 
     int totalVerts = 0;
@@ -2746,31 +2749,36 @@ void BuildFromBSP(RndMesh *mesh) {
     // First pass: count vertices and faces, erase polys with < 3 points
     std::list<BuildPoly>::iterator it = gChildPolys.begin();
     unsigned int totalFaces = 0;
-    while (gChildPolys.end() != it) {
-        unsigned int numPoints = (unsigned int)it->mPoly.points.size();
-        if (numPoints < 3U) {
+    while (it != gChildPolys.end()) {
+        // size() spelled THREE times, deliberately.  The image computes
+        // (end - begin) >> 3 once for the test, off the node pointer
+        // (0x8/0xc(r10)), and then TWICE more in the else arm off a CSE'd
+        // `&points` (0x0/0x4(r11), target idx 29-37) -- two `subf`/`srawi`
+        // pairs from the same two loaded pointers.  Binding `numPoints` folds
+        // them into one and deletes eight instructions the image has.
+        if (it->mPoly.points.size() < 3U) {
             it = gChildPolys.erase(it);
         } else {
-            totalVerts += (int)numPoints;
-            totalFaces += numPoints - 2;
+            totalVerts += (int)it->mPoly.points.size();
+            totalFaces += (unsigned int)it->mPoly.points.size() - 2;
             ++it;
         }
     }
 
     // Resize vertex array
-    geomOwner->Verts().resize(totalVerts);
+    mesh->Verts().resize(totalVerts);
 
-    // Handle face array
-    unsigned int currentFaces = (unsigned int)geomOwner->Faces().size();
-    if (totalFaces < currentFaces) {
-        geomOwner->Faces().erase(
-            geomOwner->Faces().begin() + totalFaces, geomOwner->Faces().end()
-        );
+    // Handle face array.  emptyFace is declared BEFORE the branch -- the image
+    // sinks its three zero `sth`s into the entry block alongside `li r10, 0x6`
+    // and the single `addi r3, r11, 0x110` that serves as `this` for both
+    // erase() and _M_fill_insert() (target idx 48-52).  Faces().size() is
+    // spelled twice, once per use, which is the image's two `divw`s.
+    RndMesh::Face emptyFace;
+    std::vector<RndMesh::Face> &faces = mesh->Faces();
+    if (totalFaces < (unsigned int)faces.size()) {
+        faces.erase(faces.begin() + totalFaces, faces.end());
     } else {
-        RndMesh::Face emptyFace;
-        geomOwner->Faces().insert(
-            geomOwner->Faces().end(), totalFaces - currentFaces, emptyFace
-        );
+        faces.insert(faces.end(), totalFaces - (unsigned int)faces.size(), emptyFace);
     }
 
     int vertIdx = 0;
@@ -2780,38 +2788,37 @@ void BuildFromBSP(RndMesh *mesh) {
     // Second pass: transform vertices and create faces
     std::list<BuildPoly>::iterator pit = gChildPolys.begin();
     while (pit != gChildPolys.end()) {
-        std::vector<Vector2> &points = pit->mPoly.points;
-
-        if (!points.empty()) {
-            int vertOffset = vertIdx * 0x60;
-            Vector2 *p = &points[0];
-            Vector2 *pEnd = &points[0] + points.size();
-
-            do {
-                Vector3 pt(p->x, p->y, z);
-                Multiply(
-                    pt,
-                    pit->mTransform,
-                    *(Vector3 *)((char *)geomOwner->Verts().mVerts + vertOffset)
-                );
-                p++;
-                vertIdx++;
-                vertOffset += 0x60;
-            } while (p != pEnd);
+        // No `points` reference: the image reads begin/end straight off the
+        // list node (0x8/0xc(r28)) at every use, and RE-READS end() on every
+        // iteration of the inner loop (target idx 106) -- that is a plain
+        // begin()/end() iterator loop, not a precomputed pEnd.  Binding
+        // `std::vector<Vector2> &points` materialises `addi r25, r28, 0x8` and
+        // then addresses everything off it.
+        int vertOffset = vertIdx * 0x60;
+        for (std::vector<Vector2>::iterator p = pit->mPoly.points.begin();
+             p != pit->mPoly.points.end();
+             ++p) {
+            Vector3 pt(p->x, p->y, z);
+            Multiply(
+                pt,
+                pit->mTransform,
+                *(Vector3 *)((char *)mesh->Verts().mVerts + vertOffset)
+            );
+            vertIdx++;
+            vertOffset += 0x60;
         }
 
-        unsigned int numPoints = (unsigned int)points.size();
-        int firstVert = vertIdx - (int)numPoints;
+        int firstVert = vertIdx - (int)pit->mPoly.points.size();
         int v2 = firstVert + 2;
         if (v2 < vertIdx) {
             int triCount = vertIdx - v2;
             int faceOffset = faceIdx * 6;
-            int v1 = firstVert + 1;
+            int v1 = v2 - 1;
             faceIdx += triCount;
 
             do {
                 unsigned short *facePtr =
-                    (unsigned short *)((char *)&geomOwner->Faces()[0] + faceOffset);
+                    (unsigned short *)((char *)&mesh->Faces()[0] + faceOffset);
                 facePtr[0] = (unsigned short)firstVert;
                 facePtr[1] = (unsigned short)v1;
                 facePtr[2] = (unsigned short)v2;
