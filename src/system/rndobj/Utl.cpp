@@ -510,11 +510,17 @@ void UtilDrawCircle2D(
     std::vector<Vector2> pts(segments + 1);
     float aspect = TheRnd.YRatio();
     for (int i = 0; i <= segments; i++) {
+        // Retail binds the element ONCE, before the two FastSin calls, and keeps
+        // its address in a callee-saved register across them (add r27,r28,r11 at
+        // the top of the body; stfs f0,0x0(r27) / stfs f0,0x4(r27) after). Writing
+        // pts[i].x / pts[i].y re-loads the data pointer from 0x60(r31) twice and
+        // stores with stfsx.
+        Vector2 &pt = pts[i];
         float angle = (float)i * 6.2831854820251465f / (float)segments;
         float cosVal = FastSin(angle + 1.5707963705062866f);
         float sinVal = FastSin(angle);
-        pts[i].x = cosVal * aspect * radius + center.x;
-        pts[i].y = sinVal * radius + center.y;
+        pt.x = cosVal * aspect * radius + center.x;
+        pt.y = sinVal * radius + center.y;
     }
     for (int i = 0; i < segments; i++) {
         UtilDrawLine(pts[i], pts[i + 1], color);
