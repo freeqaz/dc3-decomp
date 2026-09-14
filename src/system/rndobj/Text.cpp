@@ -1382,6 +1382,25 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
 #endif
     StyleState styleState(this, 1.0f);
     unsigned short prevChar = 0;
+    // RESIDUAL (w7-bf, 92.7 canonical after the control-flow/precision fixes
+    // below).  What is left is frame shaping: TGT frame 0x11d0 vs ours 0x11e0,
+    // with the three vectors' slot block sitting 8 bytes low on our side and an
+    // 18-row (0x50,0x54) offset swap -- the image puts the `const char *`
+    // MakeString temp at 0x50 and the `unsigned short` find/push_back temp at
+    // 0x54, we do the reverse.  The image also gives each of the two notify
+    // blocks' Strings its own slot where we share one, which is where the extra
+    // 0x10 comes from.
+    //
+    // REFUTED, both measured in this worktree:
+    //  - Reordering these three declarations to missingChars / missingFonts /
+    //    negWidthChars: 92.7 -> 90.7 (28 inserts instead of 22).  The order
+    //    below is the better one; do not "tidy" it.
+    //  - Hoisting the two `float charWidth;` declarations into a single one
+    //    above the `mFitType == kFitScrollMarqueeWrapAlways` test: canonical
+    //    unchanged at 92.7 (184 diff_arg instead of 185, but 22 offset swaps
+    //    instead of 20).  It does tighten the slot table (10 DIFFER/7 PERMUTED
+    //    -> 8 DIFFER/1 PERMUTED), so it is the right starting point for anyone
+    //    attacking the frame delta -- it just does not pay on its own.
     std::vector<unsigned short> negWidthChars;
     std::vector<unsigned short> missingChars;
     std::vector<RndFontBase *> missingFonts;
