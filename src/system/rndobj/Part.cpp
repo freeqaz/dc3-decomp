@@ -665,12 +665,14 @@ BEGIN_LOADS(RndParticleSys)
             // `>>` into the next (it parks it in r29 across the calls) rather
             // than re-deriving d.stream per statement.
             d.stream >> v1 >> p150.a >> p150.b >> p150.c;
-            // The target accumulates this dot product from the Z term
-            // outwards -- fmuls c*z, fmadds b*y, then one fnmadds that folds
-            // the a*x term and the negation together. That is the
-            // right-associated tree; the default left-to-right grouping needs
-            // a separate negate. Parenthesise to say so.
-            p150.d = -(p150.a * v1.x + (p150.b * v1.y + p150.c * v1.z));
+            // Term order is deliberate. The target seeds this dot product with
+            // the C term (`lfs 0xc8` / `lfs 0x88` / `fmuls` = c*z), folds B in
+            // with an fmadds, and folds A and the negation together into a
+            // single fnmadds. MSVC seeds the chain with the left-most product
+            // of the innermost sum, so naming C first is what puts c*z in the
+            // fmuls; the parentheses on their own do nothing, /fp:fast
+            // reassociates them away.
+            p150.d = -(p150.a * v1.x + (p150.c * v1.z + p150.b * v1.y));
         }
         if (ba7) {
             bool old = TheLoadMgr.EditMode();
