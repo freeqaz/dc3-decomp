@@ -157,6 +157,7 @@ void Locale::Init() {
     mSize = 0;
     int totalStrLen = 0;  // Total length of all unique localized strings
     int numChunks = 0;     // Number of locale entries loaded from files
+    DataArray *cfg = 0;
     LocaleChunkSort::OrderedLocaleChunk *chunks = 0;
     Symbol prevSym;        // Tracks previous symbol to deduplicate
 
@@ -176,7 +177,6 @@ void Locale::Init() {
     // return value directly rather than through `cfg`: `cfg` is zeroed up front
     // (`mr r16, r14` at 827E98E0) and only written by the SystemConfig("locale")
     // call inside the branch.
-    DataArray *cfg = 0;
     if (SystemConfig()) {
         cfg = SystemConfig("locale");
 
