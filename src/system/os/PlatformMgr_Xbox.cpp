@@ -1327,6 +1327,13 @@ void PlatformMgr::Poll() {
                     if (!(xf->dwFriendState & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
                         && !(xf->dwFriendState
                              & XONLINE_FRIENDSTATE_FLAG_RECEIVEDREQUEST)) {
+                        // NOTE: the target's loop induction pointer is biased
+                        // +8, i.e. it IS &xf->szGamertag (disps 0x10 for
+                        // dwFriendState, -0x8 for xuid, 0 for the String arg).
+                        // Hoisting the gamertag address into a local ahead of
+                        // `new Friend()` to force it live across the calls is
+                        // byte-for-byte inert; MSVC sinks it back. Six rows
+                        // (528/533/550-553/562) are still owed to that.
                         Friend *f = new Friend();
                         String name(xf->szGamertag);
                         f->SetName(name);
