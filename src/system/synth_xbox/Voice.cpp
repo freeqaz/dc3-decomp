@@ -876,7 +876,18 @@ unsigned long StartVoiceThreadEntry(void *) {
             CritSecTracker lock(&gVoiceGC);
             int gcCount = 0;
             unsigned int now = GetTickCount() - 500000;
-            while (s_voiceGC.begin() != s_voiceGC.end()) {
+            // `begin()` is bound to a NAMED iterator, not left an unnamed temporary
+            // inside the loop condition.  0x82E394D8-0x82E39510 copies all four
+            // words of _M_start into the 16-byte slot at 0x90(r31) and then reloads
+            // `0x90(r31)` to compare against `_M_finish._M_cur` read straight off
+            // the deque at 0x10(r26); the same four-word copy is repeated at the
+            // bottom of the loop, 0x82E39560-0x82E39590.  An unnamed temporary is
+            // folded away and only `_M_start._M_cur` is read.
+            for (;;) {
+                std::deque<PoolVoice>::iterator front = s_voiceGC.begin();
+                if (front == s_voiceGC.end()) {
+                    break;
+                }
                 // The tick difference is computed and tested in 64 bits, with an
                 // explicit wraparound fixup -- 0x82E39520 `subf r11, r11, r29`
                 // over two zero-extended 32-bit ticks (0x82E39514
