@@ -78,15 +78,21 @@ void JoypadResetXboxPC(int pad) {
     }
 }
 
-// The drum-pedal curve constants, read straight out of the image's literal
-// pool: __real@41d80000 = 27.0f, __real@42f40000 = 122.0f,
-// __real@3c2c7692 = 0.010526316f (= 1/95, the width of the 27..122 window)
-// and __real@c6cf5600 = -26539.0f.  All four are loaded ONCE, before the
-// drums test at 0x825FCF1C, and shared by both clamp blocks.
-static const float kPedalLo = 27.0f;
-static const float kPedalHi = 122.0f;
-static const float kPedalScale = 0.010526316f;
-static const float kPedalRange = -26539.0f;
+// The drum-pedal curve constants are LITERALS, not file-scope statics: the
+// image loads them out of the literal pool (__real@41d80000 = 27.0f,
+// __real@42f40000 = 122.0f, __real@3c2c7692 = 0.010526316f = 1/95, the width
+// of the 27..122 window, and __real@c6cf5600 = -26539.0f), all four hoisted
+// above the drums test at 0x825FCF1C and shared by both clamp blocks.  Named
+// `static const float`s made us reference the data symbols instead
+// (`lfs f10, 0x4(r9)` is literally kPedalLo + 4), which is five [sym]
+// relocation-name rows.
+//
+// NEGATIVE RESULT (w7-ap, 2026-09-14, 92.5 canonical): writing the scale as
+// `/ 95.0f * -26539.0f` does NOT split the multiply.  The image keeps two
+// (0x825FCF78 `fmuls f0, f0, f9` then 0x825FCF7C `fmuls f0, f0, f8`); our
+// /fp:fast build rewrites the division to a reciprocal and then folds it into
+// the following constant, giving one `fmuls` against -279.3578.  Two rows per
+// clamp block remain on that account.
 
 JoypadType ReadSingleXinputJoypad(
     int pad,
@@ -136,7 +142,11 @@ JoypadType ReadSingleXinputJoypad(
             if (joypad_type == kJoypadNone) {
                 return kJoypadNone;
             }
-            if (joypad_type != kJoypadXboxButtonGuitar) {
+            // 0x825FCED8 `cmpwi cr6, r30, 0x20` -- the image compares against
+            // 32, NOT kJoypadXboxButtonGuitar (30).  SetupHXGuitar only ever
+            // returns 5, 6 or 0x1d, so neither spelling is ever true at
+            // runtime; the constant is written as the image has it.
+            if (joypad_type != (JoypadType)32) {
                 setup_flag = 1;
             }
             break;
@@ -160,7 +170,11 @@ JoypadType ReadSingleXinputJoypad(
     }
 
     short lx = state.Gamepad.sThumbLX;
-    unsigned char deadzone_apply = (setup_flag == 0) ? 1 : 0;
+    // bool, not unsigned char: 0x825FCEF0 `cntlzw r11, r31` /
+    // 0x825FCEF8 `extrwi r8, r11, 1, 26` feeds TranslateStick's bool argument
+    // DIRECTLY.  An unsigned char makes MSVC re-normalise it at every call
+    // site with the `subic`/`subfe` pair.
+    bool deadzone_apply = (setup_flag == 0);
     TranslateStick(stick_lx, lx, 0, deadzone_apply);
 
     // The drum-pedal remap is applied to sThumbLY and sThumbRX, and stick_ry
@@ -175,11 +189,26 @@ JoypadType ReadSingleXinputJoypad(
     short ly = state.Gamepad.sThumbLY;
     if ((joypad_type == kJoypadXboxDrums) && (ly > 0) && (ly < 0x100)) {
         float f = (float)ly;
-        float f2 = (kPedalLo - f >= 0.0f) ? kPedalLo : f;
-        float f3 = (f2 - kPedalHi >= 0.0f) ? kPedalHi : f2;
-        int scaled = (int)((f3 - kPedalLo) * kPedalScale * kPedalRange);
-        short result = (short)(-0x8000 - scaled);
-        TranslateStick(stick_ly, result, 1, 0);
+        float f2 = (27.0f - f >= 0.0f) ? 27.0f : f;
+        float f3 = (f2 - 122.0f >= 0.0f) ? 122.0f : f2;
+        // A DIVISION by 95.0f, not a multiply by 0.010526316f: /fp:fast
+        // rewrites the division in the code generator, AFTER constant folding,
+        // so the reciprocal can never merge with the -26539.0f that follows.
+        // The image keeps both multiplies (0x825FCF78 `fmuls f0, f0, f9` then
+        // 0x825FCF7C `fmuls f0, f0, f8`); a folded literal gives one.
+        // 95 is exactly 122 - 27, the width of the clamp window.
+        //
+        // The result is narrowed to an UNSIGNED SHORT and fed straight to the
+        // call: 0x825FD000 `lhz r11, 0x56(r1)` takes only the low halfword of
+        // the fctiwz word at 0x54(r1), zero-extended, and 0x825FD004
+        // `subfic r4, r11, -0x8000` is the argument.  A named `short result`
+        // local adds the `extsh` we used to emit.
+        TranslateStick(
+            stick_ly,
+            -0x8000 - (unsigned short)(int)((f3 - 27.0f) / 95.0f * -26539.0f),
+            1,
+            0
+        );
     } else {
         TranslateStick(stick_ly, ly, 1, deadzone_apply);
     }
@@ -187,13 +216,24 @@ JoypadType ReadSingleXinputJoypad(
     short rx = state.Gamepad.sThumbRX;
     if (joypad_type == kJoypadXboxDrums && (rx > 0) && (rx < 0x100)) {
         float f = (float)rx;
-        float f2 = (kPedalLo - f >= 0.0f) ? kPedalLo : f;
-        float f3 = (f2 - kPedalHi >= 0.0f) ? kPedalHi : f2;
-        int scaled = (int)((f3 - kPedalLo) * kPedalScale * kPedalRange);
-        short result = (short)(-0x8000 - scaled);
-        TranslateStick(stick_rx, result, 1, 0);
+        float f2 = (27.0f - f >= 0.0f) ? 27.0f : f;
+        float f3 = (f2 - 122.0f >= 0.0f) ? 122.0f : f2;
+        TranslateStick(
+            stick_rx,
+            -0x8000 - (unsigned short)(int)((f3 - 27.0f) / 95.0f * -26539.0f),
+            1,
+            0
+        );
     } else {
-        TranslateStick(stick_rx, rx, 1, 0);
+        // The image's fallback passes param_a = 0 and param_b = deadzone_apply
+        // (0x825FD014 `li r5, 0x0`, 0x825FD01C `mr r6, r8`), not 1 and 0 --
+        // so a plain analog pad had its right-stick X deadzone SKIPPED and an
+        // unwanted flag set.  RESIDUAL: on the drums-but-out-of-range edge the
+        // image reaches 0x825FD00C `li r5, 0x1` / `bgt cr6` with cr6 still
+        // holding `rx vs 0x100`, i.e. param_a there is `rx > 0x100`; that does
+        // not reduce to a sane source expression and is most likely the
+        // cross-jump sharing the `mr r4, r7` / `mr r6, r8` tail at 0x825FD018.
+        TranslateStick(stick_rx, rx, 0, deadzone_apply);
     }
 
     unsigned char deadzone_apply2;
@@ -205,7 +245,10 @@ JoypadType ReadSingleXinputJoypad(
     short ry = state.Gamepad.sThumbRY;
     TranslateStick(stick_ry, ry, 1, deadzone_apply2);
 
-    if ((joypad_type == kJoypadXboxMidiBoxKeyboard) || (joypad_type == kJoypadXboxMidiBoxDrums)) {
+    // 0x825FD058 `cmpwi cr6, r30, 0x22` -- 34, kJoypadXboxKeytar, not
+    // kJoypadXboxMidiBoxDrums (33).  UsbMidiKeyboard.cpp:48 groups the same
+    // two types.
+    if ((joypad_type == kJoypadXboxMidiBoxKeyboard) || (joypad_type == kJoypadXboxKeytar)) {
         // A NAMED global and a DIRECT call, not a raw address and a vtable
         // slot: 0x825FD064 `lwz r3, "?TheKeyboard@@3PAVUsbMidiKeyboard@@A"@l(r11)`
         // and 0x825FD074 `bl "?GetSustain@UsbMidiKeyboard@@QAA_NH@Z"`.  The
