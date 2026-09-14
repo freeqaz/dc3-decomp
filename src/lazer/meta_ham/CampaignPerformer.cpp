@@ -220,6 +220,19 @@ void CampaignPerformer::OnMovePassed(int player, HamMove *move, int i3, float f4
                 CampaignEra *pEra = TheCampaign->GetCampaignEra(mEra);
                 MILO_ASSERT(pEra, 0x2F6);
                 bool found = false;
+                // NEGATIVE RESULT (w7-bg): floor at 99.98% canonical, 6 of 327
+                // rows, all pure stack-offset deltas (+12 at idx 224/230, +4 at
+                // 227/252/261/294).  The image OVERLAYS `songname` onto
+                // `moveVariantName`'s slot at 0x54 (that slot shows 2 loads in the
+                // target, 1 in ours) and so needs only three user slots
+                // (0x50/0x54/0x60); we give `songname` its own 0x60 and push the
+                // address-taken temp to 0x64.  Frame size, callee-saved GPR count
+                // and FPR count all already agree (0xe0 / 12 / 1).
+                // Refuted, each a full ninja in the worktree:
+                //   * unnamed temp (`if (GetSong() == pEra->GetSongName(i))`) -> 99.69
+                //   * `Symbol songname;` hoisted above the loop              -> 99.08
+                // MSVC's slot overlay is not reachable from the source spelling
+                // here; do not re-permute without a new lever.
                 for (int i = 0; i < pEra->GetNumSongs(); i++) {
                     Symbol songname = pEra->GetSongName(i);
                     if (GetSong() == songname) {
