@@ -47,8 +47,17 @@ void DxMultiMesh::Init() {
         D3DDECL_END()
     };
     sVertexDecl = D3DDevice_CreateVertexDeclaration(sVertexElement);
+    // BRANCHLESS, and spelled as a -1/0 mask: the image computes the HRESULT
+    // with `subic r9, r3, 0x1` / `subfe r9, r9, r9` / `and. r3, r9, r31`
+    // (0x82623F78-90 and 0x82623FEC-FFC) and branches on the `and.`'s own
+    // CR0.  A plain `ptr != nullptr ? 0 : 0x8007000E` lets MSVC const-fold
+    // 0x8007000E into the taken arm and branch on a `cmplwi` instead, which
+    // costs eight rows; `-(ptr == nullptr)` gets the mask but via
+    // cntlzw/extrwi, and `(ptr != nullptr) - 1` gets subic/subfe but with a
+    // trailing `subi`.  Measured on ?Init@DxMultiMesh@@SAXXZ: ternary 71.2,
+    // -(==) 73.8, (!=)-1 74.4, this form 76.6.
     {
-        HRESULT hr = sVertexDecl != nullptr ? 0 : 0x8007000E;
+        HRESULT hr = ((sVertexDecl == nullptr) ? -1 : 0) & 0x8007000E;
         if (hr) {
             MILO_FAIL("File: %s Line: %d Error: %s\n", __FILE__, 0x97, DxRnd::Error(hr));
         }
@@ -66,7 +75,8 @@ void DxMultiMesh::Init() {
     };
     sMutableVertexDecl = D3DDevice_CreateVertexDeclaration(sMutableVertexElement);
     {
-        HRESULT hr = sMutableVertexDecl != nullptr ? 0 : 0x8007000E;
+        // Same -1/0 mask as above; see the note on sVertexDecl.
+        HRESULT hr = ((sMutableVertexDecl == nullptr) ? -1 : 0) & 0x8007000E;
         if (hr) {
             MILO_FAIL("File: %s Line: %d Error: %s\n", __FILE__, 0x9A, DxRnd::Error(hr));
         }
