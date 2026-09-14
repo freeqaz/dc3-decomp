@@ -21,6 +21,16 @@ public:
 
 class MoveChoiceSet {
 public:
+    // The default ctor is USER-DECLARED in the image, not compiler-supplied.
+    // A value-initialised POD gets a 16-byte memset, which MSVC lowers to
+    // two `std`s on the 8-aligned stack temp; the image instead writes four
+    // `stw`s through a materialised `this` (`addi r8, r31, 0x70` at
+    // 82464B8C, then stw at 0x0/0x4/0x8/0xc(r8)) -- an inlined constructor.
+    MoveChoiceSet() {
+        for (int i = 0; i < kNumDifficulties; i++) {
+            mChoices[i] = nullptr;
+        }
+    }
     const MoveParent *mChoices[kNumDifficulties];
 };
 
