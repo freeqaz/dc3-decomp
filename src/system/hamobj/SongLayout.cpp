@@ -297,25 +297,30 @@ void SongLayout::SetDefaultReplacer() {
     Symbol restMove("Rest.move");
     Symbol restMoveLower("rest.move");
     Symbol finishingMove("Finishing_Move.move");
-    int measure = 0;
+    // The loop counter IS the measure the image pushes: there is no second
+    // variable.  push_back takes a const int &, so MSVC homes i at 0x50(r31)
+    // and keeps that slot in sync right after the increment (addi r25, r25, 1 /
+    // stw r25, 0x50).  A separate `measure = i + 1` at the foot of the body
+    // costs a second callee-saved register and strength-reduces the element
+    // address into a walking byte cursor instead of the image's slwi r10,
+    // r25, 3 recomputed each iteration.
     for (int i = 0; i < keys->NumKeys(); i++) {
         Symbol val = keys->AsSymbolKeys()->operator[](i).value;
         if (val != restMove && val != restMoveLower && val != finishingMove) {
             std::vector<MoveReplacer>::iterator it;
             for (it = mMoveReplacers.begin(); it != mMoveReplacers.end(); ++it) {
                 if (it->mFrom == val) {
-                    it->mMeasures.push_back(measure);
+                    it->mMeasures.push_back(i);
                     break;
                 }
             }
             if (it == mMoveReplacers.end()) {
                 MoveReplacer replacer;
                 replacer.mFrom = val;
-                replacer.mMeasures.push_back(measure);
+                replacer.mMeasures.push_back(i);
                 mMoveReplacers.push_back(replacer);
             }
         }
-        measure = i + 1;
     }
 }
 
