@@ -369,21 +369,24 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
             }
         }
 
+        // No cached `TrackedJoint&` for mTrackedJoints[i]: a reference lets MSVC
+        // strength-reduce the whole row into one walking pointer, and the image
+        // re-forms the address from `this` every time -- `slwi r11, r31, 4` /
+        // `add r11, r11, r29` (i*0x74) / `add r11, r11, r30` (this) /
+        // `addi r5, r11, 0x4` at the inner-loop head, Skeleton.s 0x1580.
         for (int i = 0; i < kNumJoints; i++) {
-            auto& _sub0 = mTrackedJoints[i];
             for (int j = 0; j < kNumCoordSys; j++) {
+                Vector3 &dst = mTrackedJoints[i].mJointPos[j];
                 if (j == 0) {
-                    _sub0.mJointPos[0] = data.mJointPositions[i];
+                    dst = data.mJointPositions[i];
                 } else {
                     MultiplyTranspose(
-                        data.mJointPositions[i],
-                        mPlayerXfms[j - 1],
-                        _sub0.mJointPos[j]
+                        data.mJointPositions[i], mPlayerXfms[j - 1], dst
                     );
                 }
             }
-            _sub0.mJointConf = (JointConfidence)data.mJointTrackingState[i];
-            _sub0.mSmoothedPos = data.mRawPositions[i];
+            mTrackedJoints[i].mJointConf = (JointConfidence)data.mJointTrackingState[i];
+            mTrackedJoints[i].mSmoothedPos = data.mRawPositions[i];
         }
 
         for (int i = 0; i < kNumBones; i++) {
