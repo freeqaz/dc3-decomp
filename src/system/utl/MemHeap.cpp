@@ -165,31 +165,37 @@ void MemHeap::Init(
     bool allowTemp
 ) {
     MILO_ASSERT_FMT(start, "Could not allocate %d bytes for heap %s\n", size * 4, name);
-    auto& _ref0 = mStart;
-    _ref0 = start;
+    // RESIDUAL (w7-aq, 83.013 canonical): the image writes mStart TWICE --
+    // 827F87BC stores the raw `start`, 827F87E8 overwrites it with the
+    // 16-byte-aligned pointer -- and also carries a `clrrwi r10, r30, 0` copy
+    // of `start` (827F87C0).  Our build dead-store-eliminates the first write,
+    // and the two missing instructions drag the whole store-scheduling window
+    // (idx 27-56) out of alignment; the rest of the function is exact.
+    // REFUTED (w7-aq): `auto &ref = mStart` around both writes (the spelling
+    // that was here before), computing the aligned pointer from `mStart`
+    // rather than from `start`, and routing it through an `int *rawStart =
+    // mStart;` local -- all three still DSE the first store, all three read
+    // 83.013 to five decimals.
+    mStart = start;
     mName = name;
     mNum = num;
     mIsHandleHeap = handle;
-    int *i7 = (int *)(((uintptr_t)start - 4 & ~(uintptr_t)0xFU) + 0x10);
+    int *alignedStart = (int *)(((uintptr_t)start - 4 & ~(uintptr_t)0xFU) + 0x10);
     mStrategy = strat;
-    _ref0 = i7;
+    mStart = alignedStart;
     mAllowTemp = allowTemp;
     mMinFreeBytes = -1;
     mDebugLevel = debugLevel;
-    gTimeStamp++;
-        int time = gTimeStamp;
-    InsertFreeBlock((FreeBlock *)_ref0, mSizeWords = size - (i7 - start), nullptr, nullptr, time);
+    mSizeWords = size - (alignedStart - start);
+    // POST-increment: 827F8814 reads gTimeStamp into r8, 827F8818/1C store
+    // r8+1 back, and r8 -- the OLD value -- is what reaches InsertFreeBlock.
+    InsertFreeBlock((FreeBlock *)mStart, mSizeWords, nullptr, nullptr, gTimeStamp++);
     if (1 <= mDebugLevel) {
         FreeBlock *blockStart = mFreeBlockChain;
         int *blockStartInt = (int *)blockStart;
-        int *start3 = blockStartInt + 3;
         int *blockEnd = blockStartInt + blockStart->mSizeWords;
-        if (start3 < blockEnd) {
-            int *ptr = start3 - 1;
-            for (unsigned int count = (((unsigned int)blockEnd - (unsigned int)start3) - 1) / 4 + 1; count != 0; count--) {
-                ptr++;
-                *ptr = 0xDEADDEAD;
-            }
+        for (int *ptr = blockStartInt + 3; ptr < blockEnd; ptr++) {
+            *ptr = 0xDEADDEAD;
         }
     }
 }
