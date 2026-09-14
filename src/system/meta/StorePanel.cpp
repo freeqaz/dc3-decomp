@@ -568,13 +568,11 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
     Profile *profile = StoreProfile();
     if (profile != 0) {
         // Check if this profile's pad number is in the signin change mask
-        int changedMask;
-        int padNum;
-        changedMask = bool(msg.mData->Node(3).Int(msg.mData));
-        padNum = profile->GetPadNum();
+        int changedMask = msg.mData->Node(3).Int(msg.mData);
+        int padNum = profile->GetPadNum();
         // If this pad's bit is not set in the change mask, ignore the message
         if (((1 << padNum) & changedMask) == 0) {
-            return 0;
+            return 1;
         }
     }
     // Signin changed for this profile - exit the store
@@ -582,7 +580,7 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
         mLoadOk = false;
         ExitStore(kStoreErrorLiveServer);
     }
-    return 0;
+    return 1;
 }
 
 // Folded with MetaPerformer::OnMsg(RCJobCompleteMsg) at 0x82E13DD8, which
