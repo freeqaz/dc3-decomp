@@ -815,29 +815,19 @@ bool operator>(const Sphere &s, const Frustum &f) {
 }
 
 bool Intersect(const Segment &seg, const Sphere &sphere) {
-    float dir_z = seg.end.z - seg.start.z;
-    float dir_x = seg.end.x - seg.start.x;
-    float center_z = sphere.center.z;
-    float dir_y = seg.end.y - seg.start.y;
-    float center_x = sphere.center.x;
-    float center_y = sphere.center.y;
+    // `closest` holds the segment direction until Interp overwrites it -- the
+    // image uses ONE Vector3 slot (0x50) for both, and re-using the variable is
+    // what reproduces that.  Both Subtracts must precede the zero-length
+    // early-out: the image interleaves all six fsubs ahead of
+    // `fcmpu cr6, f11, f10` at 0x825356B0.
     Vector3 closest;
-    closest.x = dir_x;
-    closest.y = dir_y;
-    closest.z = dir_z;
-    // NEGATIVE RESULT.  The image emits the three `center - start` fsubs
-    // (Geo.s 0x82536E..: f7, f9, f8) BEFORE the `fcmpu cr6, f11, f10` zero-length
-    // early-out, interleaved one-per-component with the direction fsubs; ours
-    // land after the branch.  Two variants were tried and both are neutral:
-    // naming them as locals (toCenter_x/y/z) in the interleaved declaration
-    // positions gave 80.930 raw vs 80.944 baseline, and reordering the
-    // `closest` component stores to z,x,y was byte-neutral.  The residual is
-    // 37 register-swap instructions over 5 pairs (f0<->f13 alone is 16 of 37),
-    // i.e. scheduling, not a source shape.
-    float a = dir_z * dir_z + dir_x * dir_x + dir_y * dir_y;
+    Subtract(seg.end, seg.start, closest);
+    Vector3 toCenter;
+    Subtract(sphere.center, seg.start, toCenter);
+    float a = LengthSquared(closest);
     if (a == 0.0f)
         return false;
-    float t = ((center_z - seg.start.z) * dir_z + (center_x - seg.start.x) * dir_x + (center_y - seg.start.y) * dir_y) / a;
+    float t = Dot(toCenter, closest) / a;
     float zero = 0.0f;
     float neg_t = -t;
     t = (neg_t >= 0.0f) ? zero : t;
@@ -845,13 +835,9 @@ bool Intersect(const Segment &seg, const Sphere &sphere) {
     float t_minus_one = t - one;
     t = (t_minus_one >= 0.0f) ? one : t;
     Interp(seg.start, seg.end, t, closest);
-    float dz = closest.z - center_z;
-    float dx = closest.x - center_x;
-    float dy = closest.y - center_y;
     float r = sphere.radius;
     float r2 = r * r;
-    float dist2 = dz * dz + dx * dx + dy * dy;
-    if (dist2 > r2)
+    if (DistanceSquared(closest, sphere.center) > r2)
         return false;
     return true;
 }
