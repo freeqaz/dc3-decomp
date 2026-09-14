@@ -134,8 +134,11 @@ namespace {
                         mean = Mean(raw, tailStart, midEnd + 5);
                         var = Variance(raw, mean, tailStart, midEnd + 5);
 
+                        // `idx` is live before the guard in the image: `mr
+                        // r10, r30` at 824D341C sits between the two
+                        // raw.begin/raw.end loads and the compare.
+                        int idx = midEnd;
                         if ((unsigned)midEnd < raw.size() - 1) {
-                            int idx = midEnd;
                             do {
                                 normalized[idx] = (raw[idx] - mean) * (1.0f / var);
                                 idx++;
@@ -143,10 +146,13 @@ namespace {
                         }
 
                         // Sum of absolute normalized values
+                        // Same shape: `li r11, 0x0` at 824D3484 is emitted
+                        // before `srawi. r5, r10, 2` / `beq`, so the counter
+                        // is declared outside the guard.
                         float absNormSum = 0.0f;
+                        unsigned int i = 0;
                         unsigned int normCount = normalized.size();
                         if (normCount != 0) {
-                            unsigned int i = 0;
                             float *normIter = &normalized[0] - 1;
                             do {
                                 float nv = *++normIter;
