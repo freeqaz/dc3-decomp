@@ -2476,13 +2476,19 @@ void RndText::DrawShowing() {
     // Save material colors
     int vlaIdx = 0;
     for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
-        FontMapBase *fontMap = *it;
-        for (int i = 0; i < fontMap->NumMaterials(); i++) {
-            RndMat *mat = fontMap->Material(i);
-            // Whole-Color copy, alpha included: the image stores all four words
-            // (0x2c/0x30/0x34/0x38 of the mat) at 0x826992F0..0x82699330.  The
-            // RESTORE loop below is deliberately asymmetric and puts back only
-            // red/green/blue.
+        for (int i = 0; i < (*it)->NumMaterials(); i++) {
+            RndMat *mat = (*it)->Material(i);
+            // Whole-Color copy, alpha included: the image moves all four words
+            // with lwz/stw (0x826992F0..0x82699330) and leaves one dead
+            // `addi r11, r3, 0x2c` -- the CSE'd &GetColor() -- at 0x82699308.
+            // NEGATIVE RESULT (w7-ax): spelling it as four per-field float
+            // assignments turns those lwz/stw into lfs/stfs and costs 0.1pp;
+            // the image's copy is a struct assignment.  The only residual here
+            // is that MSVC INTERLEAVES the four load/store pairs through one
+            // temp register (r11) while we batch four loads into r11/r8/r7/r10
+            // first -- a scheduling choice, not a spelling one, and it survived
+            // both spellings.  The RESTORE loop below is deliberately
+            // asymmetric and puts back only red/green/blue.
             savedColors[vlaIdx] = mat->GetColor();
             vlaIdx++;
         }
@@ -2490,8 +2496,7 @@ void RndText::DrawShowing() {
 
     // Apply font color overrides from styles
     bool hasOverride = false;
-    auto stylesEnd = mStyles.end();
-    for (auto it = mStyles.begin(); it != stylesEnd; ++it) {
+    for (auto it = mStyles.begin(); it != mStyles.end(); ++it) {
         Style &style = *it;
         if (style.mFont && style.mFontColorOverride) {
             int fmIdx = FontMapIndex(style.mFont, style.mBlacklight);
@@ -2576,9 +2581,8 @@ void RndText::DrawShowing() {
         vlaIdx = 0;
         auto fontMapsEnd = mFontMaps.end();
         for (auto it = mFontMaps.begin(); fontMapsEnd != it; ++it) {
-            FontMapBase *fontMap = *it;
-            for (int i = 0; i < fontMap->NumMaterials(); i++) {
-                RndMat *mat = fontMap->Material(i);
+            for (int i = 0; i < (*it)->NumMaterials(); i++) {
+                RndMat *mat = (*it)->Material(i);
                 Hmx::Color &color = mat->GetColor();
                 color.red = savedColors[vlaIdx].red;
                 color.green = savedColors[vlaIdx].green;
