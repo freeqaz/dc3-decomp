@@ -1233,8 +1233,8 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                 && !font->CharDefined(curChar)) {
                 missingMap[font].insert(curChar);
 
-                unsigned short replacements[] = {0x25a1, 0x3f, 0x23, 0x2a, 0x21, 0x39};
                 curChar = 0;
+                unsigned short replacements[] = {0x25a1, 0x3f, 0x23, 0x2a, 0x21, 0x39};
                 int i = 0;
                 unsigned short *rp = replacements;
                 do {
@@ -1304,10 +1304,7 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
             // time round the inner loop.
             std::set<unsigned short> &missing = mapIt->second;
             RndFontBase *font = mapIt->first;
-            const char *pluralS = "s";
-            if (missing.size() <= 1) {
-                pluralS = "";
-            }
+            const char *pluralS = missing.size() > 1 ? "s" : "";
             auto headerMsg = MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS);
             {
                 String msg(headerMsg);
@@ -1331,8 +1328,16 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                     } else {
                         displayChar = '?';
                     }
+                    // w7-bj: `missing.begin()`, not `mapIt->second.begin()`.
+                    // Re-deriving the set from the iterator here made MSVC anchor
+                    // a second pointer (`addi r28, r15, 0x10` = &*mapIt) for the
+                    // begin load, which cost a callee-saved register and evicted
+                    // the function-wide zero register the image keeps in r14
+                    // (0x82699818): 97.51 -> 98.27; with `curChar = 0` ahead of
+                    // the replacements array, pluralS as a conditional expression
+                    // and qp taken inside the size test, 100.0 (regperm only).
                     const char *sep = "";
-                    if (setIt != mapIt->second.begin()) {
+                    if (setIt != missing.begin()) {
                         sep = ", ";
                     }
                     msg += MakeString("%s\'%c\' 0x%02X", sep, displayChar, ch);
@@ -1341,8 +1346,8 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                 msg += MakeString(") missing from %s in string \"", PathName(font));
 
                 unsigned int k = 0;
-                unsigned short *qp = &origChars[0];
                 if (origSize != 0) {
+                    unsigned short *qp = &origChars[0];
                     do {
                         unsigned short qch = *qp;
                         if (qch == 0)
