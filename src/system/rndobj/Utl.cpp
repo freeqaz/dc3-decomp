@@ -1621,6 +1621,10 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
             float du31 = uv3.x - uv1.x;
             float dv31 = uv3.y - uv1.y;
 
+            // These two must be declared HERE, above the four zero tests, not
+            // next to the Matrix3 they feed: sinking them into the innermost
+            // block costs 10.5pp (94.13 -> 83.6, measured 2026-09-14) by
+            // shuffling every stack slot from 0x50 up.
             Vector3 edge21(dx21, dy21, dz21);
             Vector3 edge31(dx31, dy31, dz31);
 
