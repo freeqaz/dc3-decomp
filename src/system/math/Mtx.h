@@ -366,6 +366,20 @@ public:
 
     void Set(const Vector3 &, const Vector3 &, const Vector3 &);
 
+    // Same body as the (point, normal) constructor, for a Plane declared
+    // before it can be populated (RndParticleSys::MoveParticles declares its
+    // bounce plane outside the `if (mBounce)` that fills it; the image reads
+    // the unpopulated frame slots on the else path, 826BF620-826BF62C). RB3's
+    // Plane has this exact Set and its ctor delegates to it. Keep the d
+    // expression unnamed: a `float dot = ...; d = -dot;` spelling blocks the
+    // fnmadds the image fuses at 826BF618.
+    void Set(const Vector3 &point, const Vector3 &normal) {
+        a = normal.x;
+        b = normal.y;
+        c = normal.z;
+        d = -(normal.x * point.x + normal.y * point.y + normal.z * point.z);
+    }
+
     void Set(float nx, float ny, float nz, float dist) {
         a = nx;
         b = ny;
