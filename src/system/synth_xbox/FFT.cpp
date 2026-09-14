@@ -581,6 +581,17 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
                 // The gather loop's pointers survive because they are STORE
                 // destinations; the merge here is a load-side decision the
                 // pointer's spelling and its increment's position do not reach.
+                //   3. (w7-ay) indexing both loads off temp/temp2 by k
+                //      (`__lvx(temp + k * 4, 0)`, no source pointers at all):
+                //      WORSE, 86.6 -- strength reduction rebuilds the same
+                //      merged pair.
+                //   4. (w7-ay) outside the loop: assigning sv.f[] / w_re1 /
+                //      w_re2 / w_im2 straight from the sin()/__vspltw/__vmrglw
+                //      expressions instead of via the sin2_1/v_cos_splat/
+                //      v_cos_merged/v_sin_merged locals: byte-for-byte inert
+                //      (the `vor128 v62, v63, v63` copy of v_cos_vec and the
+                //      `fmul f0, f1, f1` square-before-copy at the first sin
+                //      return are scheduling, not spelling).
                 char* src1 = (char*)temp;
                 char* src2 = (char*)temp2;
                 char* out = (char*)data_ptr;
