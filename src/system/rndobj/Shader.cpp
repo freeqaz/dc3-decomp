@@ -529,6 +529,15 @@ u64 RndShaderParticles::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
         opts.mSoftDepthBlend = 1;
     }
     int drawDiff = TheRnd.DrawMode() - Rnd::kDrawOcclusion;
+    // RESIDUAL w7-at, 96.38 canonical.  The last cluster is the 0/-1 mask
+    // idiom.  The image builds it in two instructions straight off the
+    // subtraction -- `subfic r11, r11, 0x0` then `subfe r8, r7, r7`
+    // (0x8269EBA4/0x8269EBB0), never materialising a 0/1 bool.  We
+    // materialise one and widen it: subic/subfe/extsw/neg.  Four spellings
+    // measured, none reached it: `drawDiff != 0 ? opts.flags : (u64)0`
+    // (93.9, becomes a branch), `-(u64)(drawDiff != 0)` (94.2, branch),
+    // a named `u64 drawing = (drawDiff != 0)` (94.2, branch), and swapping
+    // the `&` operands (96.38, byte-identical -- MSVC canonicalises).
     ShaderOptions result(-(u64)(bool)drawDiff & opts.flags);
     result.mShowShaderCost = TheRnd.ResourceCached();
     result.mHiResScreen = TheHiResScreen.IsActive();
