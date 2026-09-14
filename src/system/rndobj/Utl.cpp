@@ -2394,6 +2394,11 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
     Hmx::Matrix3 normalMat;
     Invert(xfm.m, normalMat);
 
+    // Transpose order is inert here: retail saves the three transposed-away
+    // components as y.z, x.z, x.y (lfs f0,0x68 / f13,0x58 / f12,0x54 at
+    // 0x8262E17C) and reversing the three swaps to match moves three offset
+    // rows around without changing the 46-row total (measured 2026-09-14), so
+    // this keeps the same spelling ComputeFaceTangentBasis uses.
     float xy = normalMat.x.y;
     normalMat.x.y = normalMat.y.x;
     normalMat.y.x = xy;
@@ -2410,27 +2415,35 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
         Multiply(it->pos, xfm, it->pos);
         Multiply(it->norm, normalMat, it->norm);
         Normalize(it->norm, it->norm);
-        Vector3 tangent(it->tangent.x, it->tangent.y, it->tangent.z);
+        // Retail rotates the tangent IN PLACE on the vertex: it loads
+        // 0x38/0x3c/0x40 off the vert cursor, stores the three fmadds results
+        // straight back there and hands `addi r4,r31,0x38` to Normalize
+        // (0x8262E24C-0x8262E2B4).  There is no Vector3 temp and no copy-back
+        // pair -- those were seven extra instructions and a 16-byte slot.  The
+        // w component is untouched either way.
+        Vector3 &tangent = *(Vector3 *)&it->tangent;
         Multiply(tangent, normalMat, tangent);
         Normalize(tangent, tangent);
-        it->tangent.x = tangent.x;
-        it->tangent.y = tangent.y;
-        it->tangent.z = tangent.z;
     }
     mesh->Sync(0x1F);
-    if (mesh->GetBSPTree()) {
-        MultiplyEq(mesh->GetBSPTree(), xfm);
-    }
+    // No null guard: retail loads the tree and calls straight through
+    // (lwz r3,0x168(r11) / bl MultiplyEq at 0x8262E2E8), and MultiplyEq's own
+    // loop header already tests for null.  The `if` was ours.
+    MultiplyEq(mesh->GetBSPTree(), xfm);
     Sphere s;
     Multiply(mesh->GetSphere(), xfm, s);
     mesh->SetSphere(s);
 
-    Transform ident;
-    ident.Reset();
+    // Retail's identity transform lives in `xfm`'s own slot at 0x80 -- the
+    // frame is 0x110 and there is no second 0x40 block -- because by this point
+    // xfm is dead and MSVC colours the two together.  Reusing the variable is
+    // the only way to spell that; a separate `Transform ident;` gets its own
+    // slot and makes the frame 0x150.
+    xfm.Reset();
     if (keepTranslation) {
-        ident.v = mesh->LocalXfm().v;
+        xfm.v = mesh->LocalXfm().v;
     }
-    mesh->SetLocalXfm(ident);
+    mesh->SetLocalXfm(xfm);
 }
 
 void TessellateMesh(RndMesh *mesh) {
