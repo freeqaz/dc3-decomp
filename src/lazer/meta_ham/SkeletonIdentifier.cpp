@@ -485,6 +485,22 @@ DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
             }
         } else if (mIdentityStatus == kIdentityStatus_Enrolling
                    || mIdentityStatus == kIdentityStatus_Correcting) {
+            // MEASURED, 2026-09-14 (lane w7-aa).  99.83 canonical; the only two
+            // residual rows are idx 320 and 327, and they are ONE fact: the bit
+            // index MSVC gives the conditionally-destructed GetSignedIn() vector
+            // temp below.  The image emits `li r28, 0x2` / `rlwinm. r10, r28, 0,
+            // 30, 30` (bit 1); we emit `li r28, 0x1` / `clrlwi. r10, r28, 31`
+            // (bit 0).  Same flag, same register, same guarded deallocate at
+            // 0x88/0x90 -- the image simply numbers one more destructible temp
+            // before this one.  Every function-local-static scope ordinal in the
+            // function already agrees with the image ($S7@?BN@,
+            // identificationCompleteMsg@?BN@, identificationFailedMsg@?CC@,
+            // p1/p2/identification_failed/identification@?CC@), so the lexical
+            // scope structure is not the difference.  Refuted, both bit-identical:
+            //   spelling the TriggerStringMsg argument as an explicit
+            //     String(Localize(...)) temp rather than an implicit conversion;
+            //   turning this `else if` into `else { if (...) }` to add one
+            //     lexical scope around the temp.
             mWaitingPlayerIndex = enrollmentIdx;
             UpdateEnrolledPlayers();
             TheGameData->SetAssociatedPadNum(
