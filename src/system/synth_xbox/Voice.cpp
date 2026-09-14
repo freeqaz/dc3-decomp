@@ -877,7 +877,20 @@ unsigned long StartVoiceThreadEntry(void *) {
             int gcCount = 0;
             unsigned int now = GetTickCount() - 500000;
             while (s_voiceGC.begin() != s_voiceGC.end()) {
-                unsigned int elapsed = now - s_voiceGC.front().disposeTick;
+                // The tick difference is computed and tested in 64 bits, with an
+                // explicit wraparound fixup -- 0x82E39520 `subf r11, r11, r29`
+                // over two zero-extended 32-bit ticks (0x82E39514
+                // `rldicl r29, r10, 0, 32` and the `lwz` of disposeTick), then
+                // 0x82E39524 `cmpdi cr6, r11, 0x0` / 0x82E3952C-0x82E39534
+                // `li r12, 1` / `rldicr r12, r12, 32, 63` / `add r11, r11, r12`.
+                // All three compares are `cmpdi` (signed doubleword), so the
+                // variable is a 64-bit signed one; an `unsigned int` elapsed gives
+                // `cmplwi` throughout and no fixup at all.
+                long long elapsed =
+                    (long long)now - (long long)(unsigned int)s_voiceGC.front().disposeTick;
+                if (elapsed < 0) {
+                    elapsed += 1LL << 32;
+                }
                 if (elapsed < 50 && elapsed != 0) {
                     break;
                 }
