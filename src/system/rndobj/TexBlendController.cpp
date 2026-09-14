@@ -125,13 +125,20 @@ RndTexBlendController::GetBlendState(float &blend, float influence) const {
             }
             float t2 = blend * blend;
             float t3 = blend * t2;
-            blend = t3 * (-2.0f) + t2 * 3.0f;
+            // Smoothstep. The term order is load-bearing: MSVC forms the FMA
+            // from the SECOND multiply and computes the first into the addend,
+            // so `t3*-2 + t2*3` becomes `fmuls 2*t3` + `fmsubs t2*3 - that`,
+            // while this order keeps -2.0f as a literal and emits `fmadds`.
+            blend = t2 * 3.0f + t3 * (-2.0f);
         }
     }
 
     blend *= influence;
     blend = Clamp(0.0f, 1.0f, blend);
-    blend = (float)((long long)(blend * 255.0f) & 0xFF) * (1.0f / 255.0f);
+    // Quantise to 8 bits. The image narrows with a byte load out of the fctidz
+    // spill slot (`lbz r11, 0x57(r1)`), which is an `unsigned char` conversion;
+    // a `& 0xFF` on the 64-bit value spells `ld` + `rldicl` instead.
+    blend = (float)(unsigned char)(blend * 255.0f) * (1.0f / 255.0f);
     if (blend < 1.0f / 255.0f) {
         state = kBlendNone;
     }
