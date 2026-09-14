@@ -1243,10 +1243,15 @@ void WorldCrowd::DrawShowing() {
                 // --- Set up impostor camera: position at -dist along camera's Y axis ---
                 const Transform &placementXfm = mPlacementMesh->WorldXfm();
                 const Transform &curCamXfm = curCam->WorldXfm();
-                float dx = curCamXfm.v.x - placementXfm.v.x;
-                float dy = curCamXfm.v.y - placementXfm.v.y;
-                float dz = curCamXfm.v.z - placementXfm.v.z - halfHeight;
-                float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+                // Through Subtract(): the image homes BOTH source refs
+                // (`addi r10, r30, 0x30` / `addi r11, r3, 0x30` stored to
+                // 0x50(r31) at 82838528/82838534) the way an inlined helper
+                // taking two `const Vector3 &` does; a hand-written per-component
+                // subtraction homes nothing.
+                Vector3 delta;
+                Subtract(curCamXfm.v, placementXfm.v, delta);
+                delta.z -= halfHeight;
+                float dist = Length(delta);
                 float minDist = curCam->NearPlane() + halfHeight;
                 dist = (float)__fsel(dist - minDist, dist, minDist);
                 float negDist = -dist;
@@ -1279,38 +1284,28 @@ void WorldCrowd::DrawShowing() {
                     // the target tests mCrowdRotate FIRST (`lwz r9, 0x6c(r24)` /
                     // `cmpwi cr6, r9, 0x1` at 82838608/82838614, before any
                     // `lbz r11, 0xbd(r26)`) and expands WorldXfm() twice.
-                    float camA, upA, camB, upB;
+                    // Each arm is one Cross() of the camera's Y row with the up
+                    // vector (Face: up x camY, Away: camY x up). The x.x term
+                    // lands after the join (`fmuls f6, f9, f12` / `fmsubs f0,
+                    // f10, f0, f6` at 828386CC/828386E0) because MSVC
+                    // cross-jumps the identical tails; the image also homes
+                    // `&camWXfm.m.y` there (`addi r11, r3, 0x10` / `stw r11,
+                    // 0x50(r31)`), which is Cross()'s ref param.
                     if (mCrowdRotate == kCrowdRotateFace) {
                         const Transform &camWXfm = curCam->WorldXfm();
-                        charXfm.m.x.z = camWXfm.m.y.y * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.y;
-                        charXfm.m.x.y = camWXfm.m.y.x * charXfm.m.z.z - camWXfm.m.y.z * charXfm.m.z.x;
-                        camA = camWXfm.m.y.z;
-                        upA = charXfm.m.z.y;
-                        camB = camWXfm.m.y.y;
-                        upB = charXfm.m.z.z;
+                        Cross(charXfm.m.z, camWXfm.m.y, charXfm.m.x);
                     } else {
                         const Transform &camWXfm = curCam->WorldXfm();
-                        charXfm.m.x.y = camWXfm.m.y.z * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.z;
-                        charXfm.m.x.z = camWXfm.m.y.x * charXfm.m.z.y - camWXfm.m.y.y * charXfm.m.z.x;
-                        camA = camWXfm.m.y.y;
-                        upA = charXfm.m.z.z;
-                        camB = camWXfm.m.y.z;
-                        upB = charXfm.m.z.y;
+                        Cross(camWXfm.m.y, charXfm.m.z, charXfm.m.x);
                     }
 
                     // Forward (x-row): normalize cross product result
-                    charXfm.m.x.x = camA * upA - camB * upB;
                     Normalize(charXfm.m.x, charXfm.m.x);
 
-                    // Right (y-row): the cross product up x forward, i.e.
-                    //   y.x = upY*x.z - upZ*x.y
-                    //   y.y = upZ*x.x - upX*x.z
-                    //   y.z = upX*x.y - upY*x.x
-                    // The image stores them in that order at 0x88, 0x84, 0x80
-                    // (82838714/1C/24), i.e. z first, then y, then x.
-                    charXfm.m.y.z = charXfm.m.x.y * charXfm.m.z.x - charXfm.m.z.y * charXfm.m.x.x;
-                    charXfm.m.y.y = charXfm.m.z.z * charXfm.m.x.x - charXfm.m.x.z * charXfm.m.z.x;
-                    charXfm.m.y.x = charXfm.m.x.z * charXfm.m.z.y - charXfm.m.x.y * charXfm.m.z.z;
+                    // Right (y-row): up x forward. Set() evaluates right to
+                    // left, which is the image's z, y, x store order at
+                    // 0x88, 0x84, 0x80 (82838714/1C/24).
+                    Cross(charXfm.m.z, charXfm.m.x, charXfm.m.y);
                 }
                 charXfm.v.x = 0;
                 charXfm.v.y = 0;
