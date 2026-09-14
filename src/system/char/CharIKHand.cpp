@@ -135,6 +135,11 @@ INIT_REVS(0xC, 0)
 
 BEGIN_LOADS(CharIKHand)
     LOAD_REVS(bs)
+    // AT LIMIT at 99.216 -- same 7 rows, same cause, as CharEyes::Load. Every
+    // mismatch is inside this macro's two MakeString calls and is the gRev /
+    // gAltRev CSE anchor pick (target anchors gAltRev and reaches gRev by
+    // `subi r7, r29, 0x4`; we anchor gRev). Shared-macro bound, not source
+    // shape: docs/decomp/patterns/relocation-names-are-unmetered.md:708.
     ASSERT_REVS(0xD, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(CharWeightable)
