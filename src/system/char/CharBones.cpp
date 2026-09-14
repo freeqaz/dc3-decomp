@@ -1219,6 +1219,72 @@ void CharBones::RotateBy(CharBones &bones) const {
     }
 }
 
+// Hmx::Quat's Multiply(q1, q2, out) in math/Mtx.h is the right expression tree
+// for every other caller in the binary, but under /fp:fast MSVC reassociates it
+// per call site, and RotateTo's three quat arms all want a different order from
+// the one the header's nested Set() produces (ours comes out z, x, w, y; the
+// image emits w, z, y, x and interleaves the four accumulations).  Per-component
+// accumulator statements pin the association -- a `+=` is a reassociation
+// barrier -- so the order is spelled out here once and shared by all three arms.
+// Same lever as Multiply(Vector3, Matrix3) at the CharIKHead/CharLookAt Poll
+// call sites; see the note above Multiply(const Vector3 &, const Hmx::Matrix3 &,
+// Vector3 &) in math/Mtx.h for the measurement that established it.
+//
+// Both orders below are PRE-SWAPPED: MSVC emits the first two of whatever order
+// is written transposed, independently in each dimension (the same rule that
+// closed CharIKHead::Poll and CharBones::ScaleAdd).  The image emits the
+// components w, z, y, x and seeds z from a.x*b.y, y from a.z*b.x and x from
+// a.x*b.w -- so the accumulators are declared w, y, z, x and each one's first
+// two terms are written the other way round.  The w component is anchored
+// first in both builds; it is a single expression, not an accumulator chain.
+static void RotateToMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out) {
+    float rw = a.w * b.w - a.x * b.x;
+    rw -= a.y * b.y;
+    rw -= a.z * b.z;
+    float rz = a.z * b.w;
+    rz += a.x * b.y;
+    rz += a.w * b.z;
+    rz -= a.y * b.x;
+    float ry = a.y * b.w;
+    ry += a.z * b.x;
+    ry += a.w * b.y;
+    ry -= a.x * b.z;
+    float rx = a.y * b.z;
+    rx += a.x * b.w;
+    rx += a.w * b.x;
+    rx -= a.z * b.y;
+    out.Set(rx, ry, rz, rw);
+}
+
+// ...and the uncompressed arm needs its OWN order.  MSVC's reassociation of the
+// header's Multiply(Quat, Quat, Quat) is per call site, not per function: in the
+// two compressed arms `q` round-trips through the stack (ByteQuat/ShortQuat both
+// build it component by component), while here it is already live in FPRs, so
+// the scheduler has different slack and picks a different association.  The
+// image's uncompressed arm emits the components z, w, y, x -- not w, z, y, x --
+// and seeds each of z, y and x from what is the THIRD term in the arms above.
+// Same pre-swap of each accumulator's first two terms as in RotateToMultiply.
+static void RotateToMultiplyUncompressed(
+    const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out
+) {
+    float rz = a.x * b.y;
+    rz += a.w * b.z;
+    rz += a.z * b.w;
+    rz -= a.y * b.x;
+    float rw = a.w * b.w - a.x * b.x;
+    rw -= a.y * b.y;
+    rw -= a.z * b.z;
+    float ry = a.z * b.x;
+    ry += a.w * b.y;
+    ry += a.y * b.w;
+    ry -= a.x * b.z;
+    float rx = a.y * b.z;
+    rx += a.w * b.x;
+    rx += a.x * b.w;
+    rx -= a.z * b.y;
+    out.Set(rx, ry, rz, rw);
+}
+
 // MARK: RotateTo
 void CharBones::RotateTo(CharBones &bones, float f2) const {
     if (!mBones.empty()) {
@@ -1306,7 +1372,7 @@ void CharBones::RotateTo(CharBones &bones, float f2) const {
                     } else {
                         q.w = (q.w * f2) + (1 - f2);
                     }
-                    Multiply(*otherQuatItr, q, *otherQuatItr);
+                    RotateToMultiply(*otherQuatItr, q, *otherQuatItr);
                     myBonesItr++;
                     if (myBonesItr == myBonesEnd) {
                         break;
@@ -1340,7 +1406,7 @@ void CharBones::RotateTo(CharBones &bones, float f2) const {
                     } else {
                         q.w = (q.w * f2) + (1 - f2);
                     }
-                    Multiply(*otherQuatItr, q, *otherQuatItr);
+                    RotateToMultiply(*otherQuatItr, q, *otherQuatItr);
                     myBonesItr++;
                     if (myBonesItr == myBonesEnd) {
                         break;
@@ -1376,7 +1442,7 @@ void CharBones::RotateTo(CharBones &bones, float f2) const {
                     } else {
                         q.w += (1 - f2);
                     }
-                    Multiply(*otherQuatItr, q, *otherQuatItr);
+                    RotateToMultiplyUncompressed(*otherQuatItr, q, *otherQuatItr);
                     myBonesItr++;
                     if (myBonesItr == myBonesEnd) {
                         break;

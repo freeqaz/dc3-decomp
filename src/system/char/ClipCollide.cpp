@@ -267,9 +267,18 @@ void ClipCollide::Collide() {
                 mClip->ScaleAdd(*b, delta, f, blend);
                 b->Poll();
 
+                // `p` is declared OUTSIDE the loop on purpose.  Under /O1 MSVC
+                // colours stack slots by live range, and `names` (dead after
+                // the bone lookup above) has its 16-byte slot recycled by
+                // whichever later local sorts first.  With `p` declared inside
+                // the loop it sorted after `names` and grabbed that slot, which
+                // pushed dist/c/pos each one slot up and cost 15 offset rows.
+                // Hoisted, `p` sorts before `names`, gets 0x50 of its own, and
+                // `pos` recycles `names` at 0x60 -- exactly the image's frame.
+                Vector3 p;
                 for (i = 0; i < 3; i++) {
                     const Transform &xfm = meshes[i]->WorldXfm();
-                    Vector3 p = xfm.v;
+                    p = xfm.v;
 
                     if (i == 2) {
                         const Transform &gxfm = meshes[2]->WorldXfm();

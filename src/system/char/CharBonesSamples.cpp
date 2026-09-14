@@ -402,13 +402,28 @@ void CharBonesSamples::Relativize(CharClip *clip) {
                 void *channel = clip->GetChannel(bone->name);
                 Vector3 evalPos;
                 clip->EvaluateChannel(&evalPos, channel, startBeat);
-                float sx = (float)pos->x * (1300.0 / 32767.0f);
-                float sz = (float)pos->z * (1300.0f / 32767.0f);
-                float sy = (float)pos->y * (1300.0f / 32767.0f);
                 Vector3 v;
-                v.x = sx - evalPos.x;
-                v.y = sy - evalPos.y;
-                v.z = sz - evalPos.z;
+                // ShortVector3::ToVector3 (Vec.h) decodes all three components in
+                // single precision against one shared constant, __real@3d228145 =
+                // 1300.0f/32767.0f, which is exactly what the image does: one lfs
+                // into f31, three fcfid/frsp/fmuls, three fsubs, then Set().
+                //
+                // History, so nobody re-derives it: this used to be spelled as three
+                // float temps, with a DOUBLE literal (1300.0) on the x line. The
+                // double lived in f30 across the loop, cost a fourth callee-saved
+                // FPR (bl __savefpr_28 where the image has three inline stfd) and
+                // double-rounded x -- a real, if tiny, numeric divergence kept
+                // because the all-single temp spelling scored WORSE (94.2 vs 97.1:
+                // /fp:fast contracted one multiply-subtract into an fmsubs). The
+                // inline ToVector3 + operator-= spelling is both faithful and
+                // higher (99.7), with no fmsubs. The 16 f28<->f29 rows and the
+                // prologue pair that an earlier investigation filed as an
+                // "unfixable FPR regswap floor" were that one literal's type.
+                //
+                // Inert, measured: declaring v before/after evalPos; spelling the
+                // subtraction per component in the image's x,z,y store order.
+                pos->ToVector3(v);
+                v -= evalPos;
                 pos->Set(v);
                 bone++;
             }

@@ -449,7 +449,19 @@ float CharDriver::Display(float f) {
     }
     float lineSpacing = CharClipDisplay::LineSpacing();
     unsigned int displayCount = displays.size();
-    float y = f * (float)TheRnd.Height() + (float)displayCount * lineSpacing;
+    // TheRnd.Height() returns an int, so this expression carries an int->float
+    // conversion (fcfid/frsp) feeding a multiply-add chain.  Naming the
+    // converted value in its own local pins where that conversion is scheduled;
+    // written inline, MSVC sinks it into the fmuls/fmadds cluster and the whole
+    // group comes out in a different order than the image.  Two cheaper
+    // spellings were measured and are BOTH byte-identical to the inline form,
+    // so neither is the lever here: swapping the two operands of the `+` (MSVC
+    // canonicalises commutative operands), and splitting into an accumulator
+    // (`float y = f * screenHeight; y += ...;`) -- with only two terms the `+=`
+    // reassociation barrier has nothing to pin, and MSVC still picks the
+    // fmuls/fmadds split itself.
+    float screenHeight = TheRnd.Height();
+    float y = f * screenHeight + (float)displayCount * lineSpacing;
 
     int posIdx = 0;
     if (displayCount > 0) {

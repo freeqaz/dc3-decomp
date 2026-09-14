@@ -274,6 +274,21 @@ void CharIKHand::Poll() {
         return;
     // Poll() is entered through the CharPollable sub-object; naming the full
     // object once keeps the adjusted pointer in a callee-saved register.
+    //
+    // 99.797 canonical, and the remaining 2 rows are a TRANSPOSITION, not a
+    // missing instruction: the image emits `subi r27, r3, 0x28` then
+    // `li r28, 0x0` at indices 18/19 and we emit them the other way round.
+    // r28's only consumer is the `stb r28, 0x72(r27)` that clears
+    // mHandChanged, so the pair is genuinely order-free to the compiler and
+    // nothing downstream disambiguates it.  Five spellings measured, none
+    // reaches it -- do not re-derive these:
+    //   * an extra bool local for mHandChanged            exactly inert
+    //   * this declaration hoisted to the top of Poll()   exactly inert
+    //   * this declaration moved below destPos/destQuat   exactly inert
+    //   * reference form, `CharIKHand &self = *this;`     regressed
+    //   * removing the local entirely                     99.797 -> 99.4
+    //     (48 r29<->r30 rows and a -0x10 frame delta -- the local is load
+    //     bearing, it is what pins the adjusted `this` in a callee-saved reg)
     CharIKHand *self = this;
     Vector3 destPos(0.0f, 0.0f, 0.0f);
     Hmx::Quat destQuat(0.0f, 0.0f, 0.0f, 0.0f);
