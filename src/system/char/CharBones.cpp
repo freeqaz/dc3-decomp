@@ -874,7 +874,21 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
                         myQuatItr->z * absConstant,
                         myQuatItr->w * notAbsConstant
                     );
-                    if (q * *otherQuatItr < 0) {
+                    // Hmx::Quat::operator* spelled out with the image's term
+                    // order.  Every component here arrives via lha + fcfid +
+                    // frsp, so the dot's term order is what drives the whole
+                    // block's schedule: the lha order, and which component the
+                    // sign branch gets to store before the join.  The header's
+                    // x,y,z,w expression gives us y,x,z,w here; the image
+                    // accumulates z, y, w, x.  (The ByteQuat arm above and the
+                    // uncompressed arm below both match with the header form --
+                    // their components are ready in one instruction, so the
+                    // scheduler has nothing to reorder around.)
+                    float quatDot = q.y * otherQuatItr->y;
+                    quatDot += q.z * otherQuatItr->z;
+                    quatDot += q.w * otherQuatItr->w;
+                    quatDot += q.x * otherQuatItr->x;
+                    if (quatDot < 0) {
                         otherQuatItr->x -= q.x;
                         otherQuatItr->y -= q.y;
                         otherQuatItr->z -= q.z;
