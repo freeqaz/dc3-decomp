@@ -54,6 +54,10 @@ void CursorPanel::Poll() {
         if (check && sCrownPlayerIndex == -1) {
             sCrownPlayerIndex = i;
         }
+        // NOT the ternary `i == sCrownPlayerIndex ? !check : check`: 8292F8FC
+        // branches through the test in BOTH arms, which is a short-circuited ||.
+        // The ternary makes MSVC materialise the flag (cntlzw/extrwi) instead and
+        // costs 4 rows.  Same truth table either way.
         if ((i == sCrownPlayerIndex && !check) || (i != sCrownPlayerIndex && check)) {
             MILO_LOG("player %d lost his crown\n", sCrownPlayerIndex);
             sCrownPlayerIndex = -1;
@@ -73,6 +77,12 @@ void CursorPanel::Poll() {
             float angle = tanned + (PI / 2);
             Vector3 v110(0, 0, angle);
             MakeRotMatrix(v110, trans.m, true);
+            // 18 rows of residual live here and neither obvious lever moves them:
+            // `Scale(trans.m.x, 4, trans.m.x)` x3 (Vector3::Set batched form) is
+            // byte-identical, and reversing the three statements to z,y,x measures
+            // 95.5.  The image loads 0xa8,0xa4,0x90,0xb8,0x94,0xb4,0x98,0xa0,0xb0
+            // and stores 0x90,0x94,0x98,0xa0,0xb0,0xa8,0xa4,0xb8,0xb4 -- neither
+            // sequence is a program order, so this reads as MSVC scheduling.
             trans.m.x *= 4;
             trans.m.y *= 4;
             trans.m.z *= 4;
