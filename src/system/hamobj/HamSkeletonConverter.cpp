@@ -383,6 +383,13 @@ void HamSkeletonConverter::SetLeg(
             // 0x824C97D0 `lfs f13, 0x6f0(r31)`) and we evaluate a*xdiff first
             // under BOTH spellings -- MSVC picks the operand by which
             // difference it scheduled, not by source order.
+            // NEGATIVE RESULT (w7-an, 2026-09-14): binding the three differences
+            // to locals declared ydiff, xdiff, zdiff -- the reverse of the
+            // image's emission order zdiff, xdiff, ydiff, which is the lever
+            // that worked on ArcDetector::Update -- is byte-identical here.
+            // Each difference is used exactly once, so MSVC folds the local
+            // away before scheduling and the decl order never reaches the
+            // scheduler.  89.3 canonical / 81 rows both ways.
             plane.d = -(plane.b * (_sub0.y - kneePos.y) + (plane.c * (_sub0.z - kneePos.z) + plane.a * (_sub0.x - kneePos.x)));
         }
         PaddedJointPos *hipZAxisInit = &mLeftHipZAxisInit + side;
