@@ -889,23 +889,34 @@ CharClip::FindNode(CharClip *clip, float f1, int iii, float f2) const {
     unsigned int blendMode = iii & 0xFu;
     const CharGraphNode *n = nullptr;
 
-    if (blendMode >= kPlayNoBlend) {
-        if (blendMode != kPlayNoBlend) {
-            if (blendMode >= kPlayLast) {
-                if (blendMode != kPlayLast) {
-                    if (blendMode != kPlayDirty) {
-                        MILO_NOTIFY(
-                            "Unknown mode flags %x, default to kPlayNow",
-                            (const CamShotFrame::BlendEaseMode &)iii
-                        );
-                    }
-                } else {
-                    n = FindLastNode(clip, f1);
-                }
-            } else {
-                n = FindFirstNode(clip, f1);
-            }
-        }
+    // The shipped build RETURNS null for kPlayNoBlend (target 0x823D281C:
+    // `li r3, 0x0; b <epilogue>`); it does not fall through to the shared
+    // static node below. We used to fall through, which handed the caller a
+    // synthesised node where the image hands it null.
+    // kPlayNoDefault and kPlayNow MUST share one label: the image's jump tree is a
+    // linear scan over five case RANGES (`blt 2` / `beq 2` / `blt 4` / `beq 4` /
+    // `beq 8`). Giving them separate labels makes it six ranges and MSVC picks the
+    // pivots 1/3/5 instead.
+    switch (blendMode) {
+    case kPlayNoDefault:
+    case kPlayNow:
+        break;
+    case kPlayDirty:
+        break;
+    case kPlayNoBlend:
+        return nullptr;
+    case kPlayFirst:
+        n = FindFirstNode(clip, f1);
+        break;
+    case kPlayLast:
+        n = FindLastNode(clip, f1);
+        break;
+    default:
+        MILO_NOTIFY(
+            "Unknown mode flags %x, default to kPlayNow",
+            (const CamShotFrame::BlendEaseMode &)iii
+        );
+        break;
     }
 
     if (!n) {
