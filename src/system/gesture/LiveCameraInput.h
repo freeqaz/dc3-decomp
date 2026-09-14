@@ -38,6 +38,7 @@ public:
     };
     class TextureStore {
     public:
+        TextureStore() : mTex(nullptr) {}
         ~TextureStore() { RELEASE(mTex); }
         void StoreTexture(RndTex *);
         void StoreColorBuffer(LiveCameraInput *);
