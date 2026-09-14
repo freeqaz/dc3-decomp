@@ -738,9 +738,13 @@ float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
             int beatDiff = (int)(curFrame->mBeat - prevFrame->mBeat);
             // Build displacement vector (y=0.0 zeroed — ignore vertical component)
             Vector3 dispOffset;
-            dispOffset.x = curJointPos.x - prevJointPos.x;
-            dispOffset.y = 0.0f;
-            dispOffset.z = curJointPos.z - prevJointPos.z;
+            // MSVC evaluates arguments right-to-left, so Set() subtracts z
+            // BEFORE x (target idx 66-69) and only then stores x, y, z in
+            // declaration order (idx 70/62/71).  Three separate assignments
+            // cannot produce that split.
+            dispOffset.Set(
+                curJointPos.x - prevJointPos.x, 0.0f, curJointPos.z - prevJointPos.z
+            );
             Vector3 liveDisp;
             int liveCount = 0;
             // The handle is a temporary: it dies at the end of this full
