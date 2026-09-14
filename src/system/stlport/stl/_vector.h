@@ -177,6 +177,28 @@ public:
   reverse_iterator rend()                { return reverse_iterator(begin()); }
   const_reverse_iterator rend() const    { return const_reverse_iterator(begin()); }
 
+  // w7-bk (2026-09-14): REFUTED -- do not "fix" the (0x0,0x4) OFFSET_SWAP here.
+  // Four near-perfect callers (SuperEasyRemixer::LoadAllVariants 99.57,
+  // SuperEasyRemixer::SaveSuperEasyMoveParents 98.44, ChallengeSystemJobs GetRows
+  // 98.97, MoveGraph::FindVariantPair 98.10) show the image loading _M_start (+0)
+  // before _M_finish (+4) inside this inlined size(), while the spelling below makes
+  // MSVC load _M_finish first. Forcing _M_start into a named local was measured
+  // binary-wide (full ninja, all 48,365 rows, report.json match_percent_normalized,
+  // threshold 0.001) and is a large NET LOSS -- the extra local changes register
+  // pressure at every one of the thousands of inlined size() sites:
+  //   baseline                                                  31171 matched fns / 5,513,112 B / 48.4675%
+  //   (a) pointer __s = _M_start; return size_type(_M_finish-__s);
+  //                                        UP 4 / DOWN 388  ->  30851 matched fns / 5,281,516 B / 46.4315%
+  //   (c) const pointer __s = _M_start, __f = _M_finish; return size_type(__f-__s);
+  //                                        UP 4 / DOWN 720  ->  30554 matched fns / 5,205,912 B / 45.7668%
+  // Neither spelling helped the four target callers meaningfully: (a) moved
+  // LoadAllVariants +0.0084 and cost ChallengeSystemJobs GetRows -0.01; (c) crossed
+  // SaveSuperEasyMoveParents to 100.0 but pushed LoadAllVariants DOWN to 99.16 and
+  // broke 720 other rows (?RMaxSort@MessageTimer 100.0 -> 0.91). The load order is
+  // decided by MSVC scheduling per call site, not by how size() is spelled here --
+  // note LoadAllVariants already emits _M_start-first at its OTHER size() site
+  // (offsets 0x2c/0x30) with the original spelling. Lane w7-bg separately refuted
+  // the call-site form (`i < v.end() - v.begin()`, measured worse at 98.46).
   size_type size() const        { return size_type(this->_M_finish - this->_M_start); }
   size_type max_size() const {
     size_type __vector_max_size = size_type(-1) / sizeof(_Tp);
