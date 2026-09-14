@@ -561,6 +561,12 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     float vec3AX = seg.start.x - tri.origin.x;
     float vec3AY = seg.start.y - tri.origin.y;
 
+    // NEGATIVE RESULT.  The image spells this dot product plane-component-first
+    // and so do we, yet the image emits `fmuls f10, f8, f10` (Geo.s idx 36) and
+    // we emit `fmuls f10, f10, f8` -- and writing it the OTHER way round,
+    // vec3AZ * triFrameZ.z, is byte-for-byte inert.  MSVC canonicalises the
+    // operand order of a commutative float multiply here; the three charged rows
+    // at idx 36-38 are not source-reachable.
     float tempDot = -((triFrameZ.z * vec3AZ + triFrameZ.x * vec3AX) + triFrameZ.y * vec3AY);
     float t = tempDot / segDirDot;
     out = t;
@@ -569,6 +575,10 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
         return false;
     }
 
+    // Spelling the scale out component-by-component (x, y, z, matching the
+    // image's emission order) instead of calling Scale() is also byte-for-byte
+    // inert: the residual x/z/y emission order at idx 47-58 comes from the
+    // scheduler, not from the source.
     Vector3 segDir(segDirX, segDirY, segDirZ);
     Vector3 hitPoint;
     Scale(segDir, t, hitPoint);
