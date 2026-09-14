@@ -142,8 +142,10 @@ void SpectralAnalysis::SetMode(unsigned int windowSize, unsigned int hop) {
     // assign/resize calls AND for the two int64->double converts in this loop.
     for (unsigned int i = 0; i < ((unsigned int)mFftSize >> 1); i++) {
         double angle = (i * kPi) / (double)((unsigned int)mFftSize >> 1);
-        mSinTable[i] = (float)sin(angle);
-        mCosTable[i] = (float)cos(angle);
+        double s = sin(angle);
+        mSinTable[i] = (float)s;
+        double c = cos(angle);
+        mCosTable[i] = (float)c;
     }
 }
 
