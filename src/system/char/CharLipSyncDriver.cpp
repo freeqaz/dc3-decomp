@@ -158,7 +158,13 @@ bool CharLipSyncDriver::SetLipSync(CharLipSync *sync) {
     if (mIsOverrideActive) {
         MILO_LOG(
             "CharLipSyncDriver::SetLipSync() - previous VO Lipsync was fading out.  Deleting now - Name:%s\n",
-            SafeName(mLipSync)
+            // Spelled out rather than `SafeName(mLipSync)`: the image home-stores
+            // mLipSync into the argument slot 0x50(r31) TWICE, once before the
+            // null test and once inside the taken arm, which is the signature of
+            // the member being written twice in the expression.  The inline
+            // SafeName() helper emits only the one store of the result. 95.07 ->
+            // 98.2.
+            mLipSync ? mLipSync->Name() : "NULL"
         );
         RELEASE(mMainPlayback);
         mLipSync = nullptr;
@@ -170,6 +176,12 @@ bool CharLipSyncDriver::SetLipSync(CharLipSync *sync) {
         && (streq(sync->Name(), "player1_cam.lipsync")
             || streq(sync->Name(), "player2_cam.lipsync")
             || streq(sync->Name(), "dancer_face.lipsync"))) {
+        // RESIDUAL (w7-ak, 98.2 canonical): 5 rows. (1) The image home-stores the
+        // old pointer into 0x50(r31) between the null test and the scalar-deleting
+        // destructor call inside this RELEASE, which our expansion does not emit.
+        // (2) At the Set() call below the image loads mOverridePlayback back out
+        // of 0x94(r30) BEFORE moving the last argument into r5; we schedule the
+        // load after.
         RELEASE(mOverridePlayback);
         mOverridePlayback = new CharLipSync::PlayBack();
         mOverridePlayback->Set(sync, mClips);
