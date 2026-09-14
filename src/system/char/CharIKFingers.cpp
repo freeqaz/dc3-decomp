@@ -343,37 +343,27 @@ void CharIKFingers::CalculateFingerDest(FingerNum num) {
 
                 Vector3 toTarget;
                 Subtract(targetPos, f1Xfm.v, toTarget);
+                // The two 16-byte copies out of f1Xfm are DIFFERENT KINDS of copy,
+                // and MSVC lowers them differently.  f1z is default-constructed
+                // and then ASSIGNED: copy-assignment is emitted as lwz/stw pairs
+                // that the scheduler interleaves with the Subtract above
+                // (82381D34 `addi r11, r1, 0xa0` sits between the Subtract's
+                // loads and its fsubs).  f1x is copy-CONSTRUCTED: that lowers to
+                // a block copy that stays below the toTarget stores (82381D7C).
+                // Both as copy-ctors (w7-ak) read 90.4 -- the f1z loads were
+                // hoisted into the f1x block copy and the eight words needed
+                // r28/r30 (`__savegprlr_28` vs the image's `_29`); declaring f1z
+                // after the Length() calls did not stop that hoist.  Both as
+                // assignments reads 91.0 (the copies interleave with each other
+                // and float above the Subtract).  This spelling: 100.0.
+                Vector3 f1z;
+                f1z = f1Xfm.m.z;
                 Vector3 f1x(f1Xfm.m.x);
 
-                // RESIDUAL (w7-ak, 90.4 canonical): 69 rows, all in idx 124-202,
-                // and they have ONE cause -- the two 16-byte copies here are
-                // INTERLEAVED word-by-word in the image and BATCHED in ours.  The
-                // image emits `lwz r9,0x0(r11) / stw r9,0x0(r10)` one word at a
-                // time (0x827.. f1z at 0xa0->0x120, then f1x at 0x80->0x70), using
-                // nothing but the volatile r4-r11; we emit all four `lwz` and then
-                // all four `stw`, which needs two extra live registers and takes
-                // them from the callee-saved bank -- hence `bl __savegprlr_28`
-                // against the image's `__savegprlr_29`, and with it the `stfd f31`
-                // / `lfd f31` offset rows at idx 2 and 284.  The 37 register-swap
-                // rows (f11<->f12 x12, f12<->f13 x5, ...) are the float work that
-                // has to schedule around those copies.
-                //
-                // NEGATIVE RESULT 1: hoisting `Vector3 f1z(f1Xfm.m.z);` to just
-                // after f1x -- which is where the image copies it -- costs
-                // 90.4 -> 89.1 AND grows the frame by 0x10: the longer live range
-                // stops f1z sharing its slot.  The image's early copy is a
-                // SCHEDULE, not a declaration position.
-                // NEGATIVE RESULT 2: reordering the four Length() calls to the
-                // image's emission order (mFinger02 0x48, mFinger03 0x5c,
-                // mFingertip 0x70 -- ours is 02, tip, 03) is canonically inert at
-                // 90.4 and slightly worse raw (89.2 -> 89.1, 37 -> 40 regswap
-                // rows), so the load grouping at idx 171-179 is downstream of the
-                // copy schedule too, not an independent lever.
                 float len02 = Length(finger.mFinger02->LocalXfm().v);
                 float lenTip = Length(finger.mFingertip->LocalXfm().v);
                 float toTargetLen = Length(toTarget);
                 float len03 = Length(finger.mFinger03->LocalXfm().v);
-                Vector3 f1z(f1Xfm.m.z);
                 float angle03 = std::acos(
                     ((len02 * len02 + lenTip * lenTip) - (toTargetLen - len03) * (toTargetLen - len03))
                     / (len02 * lenTip * 2.0f)
