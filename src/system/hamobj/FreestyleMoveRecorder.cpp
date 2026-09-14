@@ -186,17 +186,27 @@ void FreestyleMoveRecorder::Poll() {
             streamTex->TexelsLock(texels);
             if (texels) {
                 int playerIdx = mSkeletonIndex;
-                unsigned short *src = (unsigned short *)texels;
+                unsigned short *colSrc = (unsigned short *)texels;
                 mTakes[mCurrentTakeIndex].unkc = playerIdx;
-                char *dst = depthDst - 0x50;
                 int col = 0;
                 do {
+                    // dst is REBUILT from depthDst every column
+                    // (0x82524DB4 `add r10, r8, r28` / 0x82524DBC
+                    // `subi r5, r10, 0x50`, inside the outer loop).  We used to
+                    // hoist it out, so the `stbu r11, 0x50(r5)` walked
+                    // 0x50 * 0x3c * 0x50 bytes instead of filling the single
+                    // 0x50-wide by 0x3c-tall (= 0x12c0 byte) frame column-major.
+                    unsigned short *src = colSrc;
+                    char *dst = (depthDst + col) - 0x50;
                     for (int row = 0x3c; row != 0; row--) {
                         int pixelPlayer = (*src & 7) - 1;
                         unsigned long depth;
-                        if (pixelPlayer == playerIdx) {
-                            depth = (*src >> 7) & 0xFF;
-                        } else if (playerIdx >= 0) {
+                        // Both tests have to pass: 0x82524DD4 `bne cr6` on the
+                        // player compare and 0x82524DE0 `bge cr6` on
+                        // playerIdx >= 0 BOTH fall into `mr r11, r26` (r26 = 0).
+                        // Our if/else-if wrote the sampled depth whenever
+                        // playerIdx >= 0, even for another player's pixels.
+                        if (pixelPlayer == playerIdx && playerIdx >= 0) {
                             depth = (*src >> 7) & 0xFF;
                         } else {
                             depth = 0;
@@ -205,8 +215,7 @@ void FreestyleMoveRecorder::Poll() {
                         *(unsigned char *)(dst += 0x50) = (unsigned char)depth;
                     }
                     col++;
-                    texels = (char *)texels + 8;
-                    src = (unsigned short *)texels;
+                    colSrc += 4;
                 } while (col < 0x50);
             }
             streamTex->TexelsUnlock();
