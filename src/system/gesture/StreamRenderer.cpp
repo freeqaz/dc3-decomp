@@ -382,10 +382,9 @@ void StreamRenderer::SetCrewPhotoPlayerCenters() {
             Vector3 center(
                 (maxX + minX) * 0.5f, (maxY + minY) * 0.5f, (maxZ + minZ) * 0.5f
             );
-            float dt = TheTaskMgr.DeltaUISeconds();
-            mSmoothers[i].Smooth(center, dt, false);
-            Vector3 val = mSmoothers[i].Value();
-            *(Vector4 *)&mCrewPhotoPlayerCenters[i] = *(Vector4 *)&val;
+            mSmoothers[i].Smooth(center, TheTaskMgr.DeltaUISeconds(), false);
+            *(Vector4 *)&mCrewPhotoPlayerCenters[i] =
+                *(Vector4 *)&mSmoothers[i].Value();
         } else {
             // Retail zeroes a Vector3 on the stack and copies it out as a
             // Vector4, the same shape as the smoothed branch above -- the
