@@ -646,6 +646,28 @@ void JoypadPollCommon() {
                 Symbol type = JoypadControllerTypePadNum(i);
             }
 
+            // RESIDUAL ROOT CAUSE (w7-bf, 96.72617 canonical, 125 rows -- ONE
+            // cause).  We hold the literal 0.0f in a THIRD callee-saved FPR for
+            // the whole function; the image does not, and every other row falls
+            // out of that.  Prologue: image `stfd f30,-0xa8 / stfd f31,-0xa0`
+            // (two FPRs), ours adds `stfd f31,-0xa0` for a third, so our frame
+            // is 0x12e0 against the image's 0x12d0 (^/* 825E6B94) and ~90 rows
+            // are the resulting +-0x10 stack-offset shift plus the f29/f30/f31
+            // and r18/r19 renumbering.
+            // The image materialises __real@00000000 THREE separate times and
+            // lets each copy die immediately -- ^/* 825E6BEC into f0 (the
+            // `pressures[] = {0}` initialiser), ^/* 825E6D1C into f0 (the
+            // `pressures[p] = 0.0f` loop) and ^/* 825E7030 into f12, a VOLATILE
+            // register hoisted only into this loop's preheader, right after
+            // `mtctr` -- while 127.0f (f30) and 1/127 (f31) are the only two
+            // values it parks in callee-saved FPRs.  Our build CSEs all four
+            // 0.0f uses into one value spanning the outer loop, which crosses
+            // calls, so it has to be callee-saved.
+            // REFUTED (measured 2026-09-14, bit-identical to this spelling):
+            // hoisting `float zero = 0.0f;` above this loop and writing
+            // `x = zero; y = zero;` -- MSVC CSEs the local straight back into
+            // the same function-wide literal.  The image's f12 copy is a
+            // rematerialisation decision, not a second source variable.
             for (int k = 0; k < kNumAnalogSticks; k++) {
                 float x;
                 float y;
