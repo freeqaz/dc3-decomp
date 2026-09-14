@@ -236,23 +236,23 @@ CharSignalApplier::BoneOp* __uninitialized_fill_n<CharSignalApplier::BoneOp*, un
     const CharSignalApplier::BoneOp& value,
     __false_type const&
 ) {
+    // Plain copy-CONSTRUCTION, not hand-poked offsets.  BoneOp's copy ctor
+    // already has the image's exact shape -- `mBone(op.mBone.Owner())` then
+    // `*this = op` -- which is the vtable store at 0x0, the 0 at 0xc, the
+    // `lwz 0x10(value)` / `stw 0x10(cur)` owner copy, and the
+    // `bl ??4BoneOp@CharSignalApplier@@QAAAAU01@ABU01@@Z` at 0x823AB80C.
+    // The `if (cur != NULL)` guard the old body wrote by hand is MSVC's own
+    // null check for placement new (0x823AB7E8), not something the algorithm
+    // asks for; and the 0x10000000 vtable literal was simply wrong -- the
+    // image stores &??_7?$ObjPtr@VRndTransformable@@@@6B@, hoisted out of the
+    // loop into r28.
     CharSignalApplier::BoneOp* cur = first;
-    unsigned int remaining = count;
     if (count != 0U) {
         do {
-            if (cur != NULL) {
-                // Set vtable pointer
-                *(void**)cur = (void*)0x10000000;
-                // Set mOp to 0
-                *(int*)((char*)cur + 0x14) = 0;
-                // Copy mApplyPercent
-                *(float*)((char*)cur + 0x18) = *(float*)((char*)&value + 0x18);
-                // Initialize remaining members with assignment
-                *cur = value;
-            }
-            remaining--;
-            cur = (CharSignalApplier::BoneOp*)((char*)cur + 0x24);
-        } while (remaining != 0U);
+            _Copy_Construct(cur, value);
+            count--;
+            cur++;
+        } while (count != 0U);
     }
     return cur;
 }
