@@ -283,13 +283,15 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
     DataNode result = mLipSync->Handle(viseme_list, false);
 
     if (result.Type() == kDataArray) {
-        DataArray *arr = result.Array(0);
-        int arrSize = arr->Size();
-        int newSize = numVisemes + arrSize;
+        // The image re-fetches result.Array(0) inside the loop rather than
+        // holding the DataArray* in a callee-saved register across it, so
+        // there is no cached local here -- and the loop bound is a signed
+        // compare against newSize, not a strength-reduced trip count.
+        int newSize = result.Array(0)->Size() + numVisemes;
         if (_ref2.size() != newSize) {
             _ref2.resize(newSize);
-            for (int i = numVisemes; (unsigned int)i < newSize; i++) {
-                Symbol visemeSym = arr->Sym(i - numVisemes);
+            for (int i = numVisemes; i < newSize; i++) {
+                Symbol visemeSym = result.Array(0)->Sym(i - numVisemes);
                 ObjPtr<CharClip> &clip = _ref2[i].mClip;
                 clip = mClips->Find<CharClip>(visemeSym.Str(), false);
             }
