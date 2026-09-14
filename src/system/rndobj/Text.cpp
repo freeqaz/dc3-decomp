@@ -1803,19 +1803,24 @@ void RndText::FitTextJust() {
     // first even though wideChars gets the lower slot.
     HX_VECTOR(Line) lines;
     HX_VECTOR(unsigned short) wideChars;
+    // `scale` is declared here, not beside the WrapText call: the image loads
+    // its 1.0f into f29 at 0x8269A258, BEFORE the ConvertTextToWide call.
+    float scale = 1.0f;
     int numChars = ConvertTextToWide(mText.c_str(), wideChars);
     float *charWidths = (float *)_alloca(sizeof(float) * (numChars + 2));
     OnComputeCharWidths(&wideChars[0], charWidths, false);
 
     Hmx::Rect bounds;
-    float scale = 1.0f;
     WrapText(&wideChars[0], numChars, charWidths, lines, bounds, scale);
 
     float hi = mStyles[0].mSize;
     float lo = 0.2f;
-    float cur = hi;
+    float cur;
 
     if ((mWidth != 0.0f && bounds.w > mWidth) || (mHeight != 0.0f && bounds.h > mHeight)) {
+        // `cur = hi` belongs inside the if: the image emits `fmr f31, f30` at
+        // 0x8269A308, between the `hi - 0.2f` subtract and its compare.
+        cur = hi;
         if (hi - lo > 0.2f) {
             do {
                 cur = (lo + hi) * 0.5f;
