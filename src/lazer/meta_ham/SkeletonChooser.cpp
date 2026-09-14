@@ -1135,14 +1135,17 @@ void SkeletonChooser::ChoosePlayerSides() {
                 int activeID = (id0 > 0) ? id0 : id1;
                 Skeleton *pPlayerSkeleton = TheGestureMgr->GetSkeletonByTrackingID(activeID);
                 MILO_ASSERT(pPlayerSkeleton, 0x1fb);
-                bool present0 = GetPlayerPresent(0);
-                int otherIdx;
-                if (present0) {
-                    otherIdx = 0;
+                // Two GetPlayerSide calls that MSVC cross-jumps into one, with
+                // the argument register set by the branch (li r4,0 / bne /
+                // li r4,1).  Folding the choice into a ternary instead lets
+                // MSVC compute !present with cntlzw+extrwi, which the image
+                // does not do.
+                SkeletonSide side;
+                if (GetPlayerPresent(0)) {
+                    side = GetPlayerSide(0);
                 } else {
-                    otherIdx = 1;
+                    side = GetPlayerSide(1);
                 }
-                SkeletonSide side = GetPlayerSide(otherIdx);
                 bool xGtThresh = pPlayerSkeleton->GetUnkab0().x > 0.15f;
                 bool xLtNegThresh = pPlayerSkeleton->GetUnkab0().x < -0.15f;
                 if (side == kSkeletonRight) {
