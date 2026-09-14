@@ -451,7 +451,10 @@ bool XboxContentMgr::MountContent(Symbol name) {
 void XboxContentMgr::PollRefresh() {
     if (mState == kDiscoveryMounting) {
         mState = kDiscoveryLoading;
-        unk938 = 0;
+        // No `unk938 = 0;` here: the image never stores zero to 0x938 in this
+        // function (whole-body grep of ContentMgr_Xbox.s 0x825EB898-0x825EBC80
+        // finds only lwz/stw of the running counter at 0x825EBA38/0x825EBA40 and
+        // the read at 0x825EBB7C).  The counter is reset in Refresh() instead.
         for (int i = 0; i < kNumberOfBuffers; i++) {
             if (mOverlappeds[i]) {
                 DWORD numItems = 0;
