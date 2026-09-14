@@ -202,7 +202,14 @@ void HiResScreen::TakeShot(const char *c, int i) {
     }
 }
 
-void HiResScreen::GetBorderForTile(int x, int y, int &left, int &right, int &top, int &bottom)
+// The out-parameters are (left, TOP, RIGHT, bottom), not (left, right, top,
+// bottom).  The image stores the horizontal border 480 into r8 -- the THIRD
+// reference argument (idx 17 `stw r11, 0x0(r8)` and idx 25 `stw r11, 0x0(r6)`,
+// the two 0x1e0 arms) -- and the vertical 270 into r7, the SECOND (idx 43
+// `stw r11, 0x0(r7)`, idx 35 `stw r11, 0x0(r9)`).  With the old order our
+// build wrote 480 to r7 and 270 to r8, so BOTH callers received the top
+// border where they expected the right one and vice versa.
+void HiResScreen::GetBorderForTile(int x, int y, int &left, int &top, int &right, int &bottom)
     const {
     left = 0;
     top = 0;
@@ -243,16 +250,15 @@ void HiResScreen::Accumulate() {
     // Residual 95.94% canonical / 95.64% raw, 11 rows / 8 B.
     // Four of them are DEAD STORES the image emits and we do not: two
     // `stw r10, 0x6c(r31)` back to back before the RndTex work, and two
-    // `stw r5, 0x6c(r31)` back to back after it, none ever read.  0x6c is the
-    // slot the image also gives `left`; we give it `right`, which is the
-    // OFFSET_SWAP in rows 64/65 (`addi r7, r31, 0x60` / `addi r6, r31, 0x6c`
-    // against our 0x6c / 0x60).  REFUTED: declaring these as
-    // `int right, left, top, bottom;` is byte-inert -- identical 11 rows --
-    // so MSVC is not taking the slot order from the declaration.  The other
-    // five rows are a plain volatile r7<->r8 swap in the Merge() argument
-    // set-up that follows from the same choice.
+    // `stw r5, 0x6c(r31)` back to back after it, none ever read.
+    //
+    // The OFFSET_SWAP in rows 64/65 and the volatile r7<->r8 swap in the
+    // Merge() argument set-up were NOT a slot-allocation choice, which is why
+    // reordering this declaration was byte-inert when it was tried: the cause
+    // was GetBorderForTile's own parameter list, whose 2nd and 3rd references
+    // are (top, right) and not (right, top).  See the note on its definition.
     int left, right, top, bottom;
-    GetBorderForTile(tileX, tileY, left, right, top, bottom);
+    GetBorderForTile(tileX, tileY, left, top, right, bottom);
     int xOff = (TheRnd.Width() - 480) * tileX;
     int yOff = (TheRnd.Height() - 270) * tileY;
     Merge(bm, xOff, yOff, left, right, bm.Width(), bm.Height(), top, bottom);
@@ -457,29 +463,45 @@ Hmx::Rect HiResScreen::ScreenRect(const RndCam *cam, const Hmx::Rect &r) const {
     int tiling = mTiling;
     int tileX = mCurrTile % tiling;
     int tileY = mCurrTile / tiling;
-    float invTiling = 1.0 / (float)tiling;
+    // 1.0f, not 1.0: the image loads __real@3f800000 and divides with `fdivs`
+    // (idx 37/42).  A double literal here costs a `lfd __real@3ff00000...`,
+    // a double `fdiv` and a trailing `frsp`.
+    float invTiling = 1.0f / (float)tiling;
+    // RESIDUAL (w7-aq, 96.801 canonical): our frame is 0x10 bigger than the
+    // image's (0xc0 vs 0xb0) and all three Rects sit 0x10 higher, because the
+    // image coalesces the dead `tileRect` with the fourth GetBorderForTile
+    // out-param -- both live at 0x60(r1) there.  REFUTED: scoping tileRect
+    // into its own block around the CurrentTileRect call, which is the
+    // documented stack-slot lever, is byte-inert here (identical 20 rows).
     Hmx::Rect tileRect, accumRect;
     CurrentTileRect(r, tileRect, accumRect);
-    int left, right, top, bottom;
-    GetBorderForTile(tileX, tileY, left, right, top, bottom);
-    float screenH = (float)TheRnd.Height();
+    int left, top, right, bottom;
+    GetBorderForTile(tileX, tileY, left, top, right, bottom);
     float screenW = (float)TheRnd.Width();
+    float screenH = (float)TheRnd.Height();
     float leftF = (float)left;
-    float rightF = (float)right;
     float topF = (float)top;
+    float rightF = (float)right;
     float bottomF = (float)bottom;
-    float xScale = screenH / (screenH - leftF);
-    float yScale = screenW / (screenW - topF);
-    float xShift = screenH / (screenH - rightF);
-    float yShift = screenW / (screenW - bottomF);
-    float xOffset = (xScale - invTiling) - invTiling;
-    xShift = (xShift - invTiling) - invTiling;
-    float yOffset = yScale - invTiling;
-    yShift = yShift - invTiling;
-    ret.x = accumRect.x - xOffset;
-    ret.w = (accumRect.w + (xOffset + xShift));
-    ret.y = accumRect.y - yOffset;
-    ret.h = accumRect.h + yOffset + yShift;
+    // Each border offset is the tile-relative overshoot: the screen scaled to
+    // tile units, divided by the visible span, minus the tile size --
+    //     (screen * invTiling) / (screen - border) - invTiling
+    // which reduces to invTiling * border / (screen - border).  The image
+    // hoists the two numerators (`fmuls f8, f13, f1` and `fmuls f7, f0, f1`,
+    // idx 101/102), divides four times (110/113/114/117) and subtracts
+    // invTiling once per offset (116/119/120/124).  The width-derived pair
+    // uses left/right and the height-derived pair uses top/bottom, which is
+    // what pins GetBorderForTile's argument order above.
+    float widthScaled = screenW * invTiling;
+    float heightScaled = screenH * invTiling;
+    float leftOffset = widthScaled / (screenW - leftF) - invTiling;
+    float rightOffset = widthScaled / (screenW - rightF) - invTiling;
+    float topOffset = heightScaled / (screenH - topF) - invTiling;
+    float bottomOffset = heightScaled / (screenH - bottomF) - invTiling;
+    ret.x = accumRect.x - leftOffset;
+    ret.w = rightOffset + accumRect.w + leftOffset;
+    ret.y = accumRect.y - topOffset;
+    ret.h = bottomOffset + accumRect.h + topOffset;
     return ret;
 }
 
