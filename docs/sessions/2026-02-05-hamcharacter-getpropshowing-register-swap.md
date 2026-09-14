@@ -163,3 +163,82 @@ The 5% loss from register allocation is acceptable technical debt.
 - `docs/decomp/patterns/unfixable-compiler.md#register-allocation`
 - `docs/decomp/patterns/fixable-bool-mask.md`
 - Prior session: `docs/sessions/2026-02-04-characterTest-ctor-regression.md`
+
+## 2026-09-14 addendum (wave 7, lane w7-k): two new refutations, and the caller that pays for them
+
+`HamCharacter::GetPropShowing` is not just a 2324-byte-free 95.2% row. It is
+inlined **four times** into `HamCharacter::SyncProperty`
+(`?SyncProperty@HamCharacter@@UAA_NAAVDataNode@@PAVDataArray@@HW4PropOp@@@Z`,
+97.935 canonical, 2324 B) at the four `SYNC_PROP_SET(prop_N_showing, ...)`
+lines, and the *same single instruction* accounts for the whole residual there.
+
+### What the target does at each of the four sites
+
+```
+lwz     r10, 0xN(r11)
+cmplwi  cr6, r10, 0x0
+beq     cr6, 0x334c        ; shared "false" tail
+clrrwi  r3, r10, 0         ; re-materialise the pointer into r3
+b       0x3834             ; shared Showing() tail
+```
+
+Our build loads straight into `r3` and then **cross-jumps** the null test, so
+all four sites share one physical copy. That is 12 instructions / 48 bytes of
+`delete` rows ([386-388], [440-443], [495-497], and the fourth site), plus
+`[340] delete clrlwi r11, r11, 24` from the neighbouring `crew_card_showing`
+getter. `name_check` is otherwise clean: every callee name and every
+function-local-static scope ordinal is already right.
+
+So it is one root cause and two functions: produce the `clrrwi` in
+`GetPropShowing` and SyncProperty's 12 deletes are expected to resolve with it.
+
+### Refutation 13 -- repeated subscript (95.2% -> 92.4%, REGRESSION)
+
+Motivated by line 123 of the same file, which *does* use the repeated-read
+spelling (`mCrewCardMesh && mCrewCardMesh->Showing()`):
+
+```cpp
+return mShowableProps.size() > prop && mShowableProps[prop]
+    && mShowableProps[prop]->Showing();
+```
+
+New row: `[11] replace: cmplwi cr6, r10, 0x0  vs  cmpwi cr6, r11, 0x0`.
+**A bare subscript expression in boolean context emits a SIGNED compare**;
+only the `(d = ...)` assignment form yields the unsigned `cmplwi` the target
+has. This is the same lever wave 7 recorded as "an `ObjPtr<T>` test is
+`cmpwi`, a raw `T*` test is `cmplwi`", seen from the other side: the
+assignment materialises a raw `RndDrawable *`, the bare subscript is tested
+as the `ObjPtr` expression it came from.
+
+### Refutation 14 -- hybrid: assignment for the test, subscript for the call (95.2% -> 92.4%)
+
+```cpp
+RndDrawable *d;
+auto _tmp0 = mShowableProps.size();
+return _tmp0 > prop && (d = mShowableProps[prop])
+    && mShowableProps[prop]->Showing();
+```
+
+Identical 3-row set to refutation 13 (`[10] lwz [reg:r10->r11]`,
+`[11] replace cmplwi/cmpwi`, `[13] delete clrrwi r11, r10, 0`). Keeping the
+assignment form for the *test* does not rescue the signedness once a second
+subscript exists in the expression -- MSVC re-reads through the `ObjPtr` and
+the signed compare comes back. Both variants reverted.
+
+### Standing
+
+The committed body stays the best known spelling:
+
+```cpp
+bool HamCharacter::GetPropShowing(int prop) {
+    RndDrawable *d;
+    auto _tmp0 = mShowableProps.size();
+    return _tmp0 > prop && (d = mShowableProps[prop]) && d->Showing();
+}
+```
+
+14 refuted variants. The `clrrwi` is a pointer re-materialisation our side
+never needs because our value is already in `r3`; nothing in source reach has
+produced a spelling that both keeps the unsigned test and forces the extra
+copy. Anyone attacking `SyncProperty` should attack `GetPropShowing` -- and
+should know that the two obvious remaining spellings are now refuted too.
