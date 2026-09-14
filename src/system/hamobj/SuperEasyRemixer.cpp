@@ -233,16 +233,25 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
 
 void SuperEasyRemixer::LoadAllVariants() {
     std::set<const MoveVariant *> vars;
-    const char *song = TheGameData->GetSong().Str();
+    // `Symbol song`, and `song.Str()` at each use -- NOT a `const char *`
+    // local.  Str() returns by value, so every MakeString argument (which
+    // binds `const char *const &`) gets its OWN materialised temporary; the
+    // image stores the cached symbol word into a fresh frame slot right
+    // before each call (`stw r21, 0x5c/0x60/0x64(r31)` in
+    // build/373307D9/asm/system/hamobj/SuperEasyRemixer.s) and its frame is
+    // 0x10 larger than ours for exactly those extra slots.  A named
+    // `const char *` local is an lvalue: MSVC homes it once and passes that
+    // one address everywhere, which is what we used to emit.
+    Symbol song = TheGameData->GetSong();
     if (TheMoveMgr->MoveParents().size() == 0) {
-        MILO_FAIL("Failed to load move graph for: %s\n", (char *)song);
+        MILO_FAIL("Failed to load move graph for: %s\n", song.Str());
 #ifdef HX_NATIVE
         return; // No move graph — skip variant loading to avoid null deref
 #endif
     }
     DataArray *layout = TheMoveMgr->Graph().Layout();
     if (!layout) {
-        MILO_FAIL("couldn't load layout for: %s", (char *)song);
+        MILO_FAIL("couldn't load layout for: %s", song.Str());
 #ifdef HX_NATIVE
         return; // No layout — skip to avoid null deref on layout->FindArray()
 #endif
@@ -252,7 +261,7 @@ void SuperEasyRemixer::LoadAllVariants() {
         DataArray *a = layout->FindArray(diffSym, true)->Array(1);
         if (a->Size() == 0) {
             MILO_FAIL(
-                "%s's %s layout is not stored in its move graph", song, diffSym.Str()
+                "%s's %s layout is not stored in its move graph", song.Str(), diffSym.Str()
             );
         }
         for (int j = 0; j < a->Size(); j++) {
@@ -260,7 +269,7 @@ void SuperEasyRemixer::LoadAllVariants() {
             if (!InsertVariants(vars, s)) {
                 MILO_NOTIFY(
                     "%s's %s layout, at index %d, (%s) not found in move graph",
-                    song,
+                    song.Str(),
                     diffSym.Str(),
                     j,
                     s.Str()
@@ -275,13 +284,28 @@ void SuperEasyRemixer::LoadAllVariants() {
     HamSupereasyData *data = ObjDirItr<HamSupereasyData>(hamMoves, false);
     if (data) {
         for (int i = 0; i < data->mRoutine.size(); i++) {
-            Symbol name = data->mRoutine[i].second;
+            // BEHAVIOURAL FIX 2026-09-14 (w7-q): this read `.second` (offset
+            // 0x4, "MoveVariant to use for transition OUT of measure").  The
+            // image reads offset 0x8 -- `.preferred`, "Preferred MoveVariant
+            // for this measure".  build/373307D9/asm/system/hamobj/
+            // SuperEasyRemixer.s, inside the mRoutine loop (element stride
+            // 0xc, so the three Symbols are at 0x0/0x4/0x8):
+            //     mulli r10, r29, 0xc
+            //     add   r8,  r10, r11
+            //     lwz   r30, 0x8(r8)      ; .preferred   <-- not 0x4
+            //     cmplw cr6, r30, r9      ; vs gNullStr
+            //     bne   cr6, ...
+            //     lwzx  r30, r10, r11     ; .first  (offset 0x0) fallback
+            // This is the same preferred -> first order the sibling loader
+            // above documents for this very function.  Reading `.second` made
+            // every supereasy measure request the transition-out variant.
+            Symbol name = data->mRoutine[i].preferred;
             if (name.Null())
                 name = data->mRoutine[i].first;
             if (!InsertVariants(vars, name)) {
                 MILO_NOTIFY(
                     "%s's supereasy layout, at index %d, (%s) not found in move graph",
-                    song,
+                    song.Str(),
                     i,
                     name.Str()
                 );
