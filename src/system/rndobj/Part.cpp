@@ -1276,7 +1276,10 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
 
                 // Attractors. Target recomputes mAttractors.size() each iteration
                 // (loop condition calls .size() rather than caching it).
-                for (unsigned int i = 0; i < mAttractors.size(); i++) {
+                // The image's back-edge at 826BF9F0 is `cmplw cr6, r22, r10` +
+                // `bne` -- an inequality test, not `blt`. Same spelling as the
+                // mAttractors walk in Copy().
+                for (unsigned int i = 0; i != mAttractors.size(); i++) {
                     Attractor &a = mAttractors[i];
                     if (a.mAttractor != NULL) {
                         const Transform &axf = a.mAttractor->WorldXfm();
@@ -1285,11 +1288,12 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                         float strength = a.mStrength;
                         float dx = axf.v.x - pos.x;
 
-                        // TODO: target uses beq (to special case) + dead code after,
-                        // ours uses bne (skip special case). diff_op at idx 340.
-                        // Target dead code: li r11,0; clrlwi. r11,r11,24; beq (always taken).
-                        // Suggests original may have used a bool for this condition.
-                        if (strength == magicStrength) {
+                        // The image MATERIALISES this test into a byte before
+                        // branching on it (826BF8CC `li r11, 1` / 826BF8D8
+                        // `fcmpu` / `li r11, 0` / `clrlwi. r11, r11, 24` /
+                        // `beq`), which only a named bool produces.
+                        bool isTetherAttractor = strength == magicStrength;
+                        if (isTetherAttractor) {
                             dz = 0.0f;
                             auto _tmp0 = a.mAttractor.Owner();
                             RndParticleSys *ps =
