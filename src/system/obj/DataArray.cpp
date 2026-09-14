@@ -560,6 +560,26 @@ void DataArray::Load(BinStream &bs) {
             }
             continue;
         }
+        // This chain must stay an if/else-if chain in SOURCE ORDER. The target
+        // tests 0x24, 0x20, 0x25, 0x7, 0x23, 0x8, 0x9, 0x21, 0x22 in exactly that
+        // sequence, which is declaration order, not numeric order.
+        // REFUTED (w7-l, 2026-09-14): rewriting this as `switch (node.Type())`
+        // with the same case order -- the shape ../og-dc3-decomp and ../rb3 both
+        // use -- makes MSVC sort the cases and emit a binary search (`bgt` on
+        // 0x21 first). 97.863 -> 55.5 canonical, 10 mismatch rows -> 172. Do not
+        // retry.
+        //
+        // Open residual on this function (ours 97.863; og-dc3-decomp is at
+        // 97.91186 with a differently-shaped body, so it is not a spelling either
+        // tree has found): the target stores the type into the temp slot 0x58
+        // before EVERY comparison in this chain -- 14 stores against our 7. We
+        // emit them for the four Type() calls in the DataArrayDefined() test above
+        // and for the first two arms here (kDataAutorun, kDataDefine) and then
+        // stop; the target keeps going for kDataUndef, kDataIfdef, kDataIfndef,
+        // kDataElse, kDataEndif, kDataInclude and kDataMerge. They are dead
+        // stores to a slot whose address escapes into the MILO_FAIL MakeString
+        // below, and the 7 we lose are exactly the function's remaining 7 rows
+        // plus the 0x10 of frame the extra temp costs.
         if (node.Type() == kDataAutorun) {
             DataNode command;
             bs >> command;
