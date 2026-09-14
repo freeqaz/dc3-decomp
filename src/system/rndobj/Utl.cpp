@@ -2600,6 +2600,16 @@ void BuildVisit(BSPNode *node) {
     origin.z = plane.c * invDist;
     lastIt->mTransform.v = origin;
 
+    // Retail's prologue reserves one more callee-saved GPR than ours
+    // (__savegprlr_23 vs __savegprlr_24), which is why every register in the
+    // body reads one number off, and it emits eleven dead home stores of
+    // &m.x/&m.y/&m.z into the first local-temp slot (0x60(r31), the slot
+    // `origin` and insert()'s returned iterator also share) that we do not.
+    // Binding `Vector3 &axisX/&axisY/&axisZ` to the three rows and using those
+    // throughout does NOT reproduce either: it materialises &m.x at
+    // `addi r26,r29,0x14` right after the node load, where retail computes it
+    // only at the first Cross, and costs 2.4pp (95.0 -> 92.6, measured
+    // 2026-09-14).  Member access through the iterator stays.
     lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
     lastIt->mTransform.m.y.Set(0, 1, 0);
