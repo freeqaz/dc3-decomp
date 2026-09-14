@@ -45,6 +45,26 @@ void PatchVerts::Clear() {
     mCentroid.Set(0, 0, 0);
 }
 
+// RESIDUAL (w7-az, 96.78, 23 rows) -- SAME CLASS as the HasVert note below,
+// and the same callee.  The image treats GreaterEq as an opaque call and
+// therefore parks everything it needs afterwards in non-volatiles: five of
+// them, `bl __savegprlr_27` at 0x8263F23C, with `addi r29, r3, 0x10`
+// (&mPatchVerts) at 0x8263F258 BEFORE the call and `mr r3, r29` at 0x8263F268
+// after it, and the vertIdx home slot address `addi r6, r1, 0xac` computed
+// AFTER the call at 0x8263F274.  We keep both in VOLATILE registers across
+// the call (r7 and r6) and save only four non-volatiles, which only
+// type-checks because MSVC propagated GreaterEq's clobber set into this
+// caller -- exactly the propagation the HasVert note describes.  Every one of
+// the 23 rows is downstream of that: the prologue helper, the 0x10 frame
+// delta, and the r27<->r29 rotation.
+// NEGATIVE (w7-az): the object-expression lever that took
+// DefaultPhysicsManager::AddCollidable to 100 -- binding the member to a
+// named reference and calling through it,
+// `std::vector<int> &patchVerts = mPatchVerts;
+//  patchVerts.insert(patchVerts.begin() + GreaterEq(vertIdx), vertIdx);` --
+// does NOT work here: 96.78 canonical unchanged (raw 95.03 -> 94.92), same
+// prologue, same rotation.  It reorders the two `addi`s and nothing else.
+// Do not retry the source reorder either; see the REFUTED EXPERIMENT below.
 void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid) {
     int idx = GreaterEq(vertIdx);
     mPatchVerts.insert(mPatchVerts.begin() + idx, vertIdx);
