@@ -222,6 +222,13 @@ bool RndShaderProgram::Cache(
             // instantiated as `AB_J` (const __int64 &), and the s64 -> u64
             // conversion into ShaderCachedPath's `_K` parameter is free, so one
             // signed local serves both without a second temp.
+            // RESIDUAL (w7-al, 98.72 canonical): slots 0x88 and 0x90 are
+            // swapped against the image in BOTH scopes that share them -- the
+            // image homes shaderFlags at 0x90 and the MILO_NOTIFY's
+            // optsStr.c_str() temp at 0x88, we do the reverse -- 7 rows. Moving
+            // this declaration below the three char buffers is byte-for-byte
+            // inert (measured: identical 29-row mismatch list), so the pair is
+            // not being ordered by declaration.
             s64 shaderFlags = opts.flags;
             // Buffer sizes and declaration order are read off the image's frame:
             // it is 0x410 with the three buffers at 0x2d0 (source), 0x1d0 and
