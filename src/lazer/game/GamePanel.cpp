@@ -620,8 +620,14 @@ void GamePanel::UpdateLatency() {
     static DataNode &latency_test = DataVariable("latency_test");
     static DataNode &pad_button = DataVariable("pad_button");
     if (latency_test.Int(nullptr) == 0) {
+        // TimerRef() is named BEFORE SetShowingOnly: the image computes
+        // `addi r3, r11, 0x40` off the same mLatencyOverlay load the inlined
+        // SetShowingOnly store uses.  Written the other way round MSVC must
+        // re-load 0x70(this) after the store (it may alias the member), which
+        // is an extra `lwz r11, 0x70(rN)` the image does not have.
+        Timer &timer = mLatencyOverlay->TimerRef();
         mLatencyOverlay->SetShowingOnly(false);
-        mLatencyOverlay->TimerRef().Restart();
+        timer.Restart();
         return;
     }
     bool bFlash = false;
@@ -668,8 +674,10 @@ void GamePanel::UpdateLatency() {
     int idx = sToggle;
     sToggle = 1 - sToggle;
     sMs[idx] = TheRnd.DrawMs();
+    // Same reload as the early-return path above; see the comment there.
+    Timer &timer = mLatencyOverlay->TimerRef();
     mLatencyOverlay->SetShowingOnly(true);
-    mLatencyOverlay->TimerRef().Restart();
+    timer.Restart();
     mLatencyOverlay->Clear();
     float beat = TheTaskMgr.Beat();
     *mLatencyOverlay << MakeString("Joy %d Beat %.3f\nms %.2f last %.2f", joyNum, beat, sMs[0], sMs[1]);

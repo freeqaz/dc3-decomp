@@ -104,7 +104,6 @@ void KinectSharePanel::Poll() {
 }
 
 void KinectSharePanel::ConvertImages() {
-    int iref;
     MILO_ASSERT(mTex.Ptr(), 0x2B);
     RndBitmap bitmapa0;
     RndBitmap bitmap80;
@@ -114,9 +113,14 @@ void KinectSharePanel::ConvertImages() {
     int w = bitmap80.Width();
     int h = bitmap80.Height();
     int bpp = bitmap80.Bpp() >> 3;
+    // ONE variable, not two: the image stores PixelBytes()'s result into the
+    // same stack slot it later hands to LoadBitmapIntoJpeg as the `iref`
+    // out-param (`stw r3, 0x50(r31)` at 8295358C, `addi r8, r31, 0x50` at
+    // 829535F4, `lwz r11, 0x50(r31)` at 8295360C).  A separate `pixelBytes`
+    // local costs a second slot and shifts every MILO_ASSERT temp by 4.
+    int iref = bitmap80.PixelBytes();
     char *pixels = (char *)bitmap80.Pixels();
-    int pixelBytes = bitmap80.PixelBytes();
-    mBuf = MemAlloc(pixelBytes, __FILE__, 0x3B, "JpegWriter");
+    mBuf = MemAlloc(iref, __FILE__, 0x3B, "JpegWriter");
     MILO_ASSERT(mBuf != NULL, 0x3C);
     if (mBuf) {
         LoadBitmapIntoJpeg(pixels, w, h, bpp, mBuf, iref);

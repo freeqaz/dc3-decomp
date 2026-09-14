@@ -249,15 +249,19 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
         } while (j < (unsigned int)((int)mVoices.size()));
     }
 
-    // Biquad filters
-    float coeffs[5];
-    LowpassCoefficients(coeffs, mTargetPitch, kBiquadParams[0], kBiquadParams[1]);
-    Biquad *lpf = new Biquad(coeffs);
-    mScratchBuffer1.reset(lpf);
+    // Biquad filters.  The coefficient array shares the target's stack block
+    // with the ChannelBuffer prototype above (both live at r31+0x60), so it
+    // has to be lexically scoped -- a function-scope array gets its own slot.
+    {
+        float coeffs[5];
+        LowpassCoefficients(coeffs, mTargetPitch, kBiquadParams[0], kBiquadParams[1]);
+        Biquad *lpf = new Biquad(coeffs);
+        mScratchBuffer1.reset(lpf);
 
-    HighpassCoefficients(coeffs, mTargetPitch * 0.25f, kBiquadParams[2], kBiquadParams[1]);
-    Biquad *hpf = new Biquad(coeffs);
-    mScratchBuffer2.reset(hpf);
+        HighpassCoefficients(coeffs, mTargetPitch * 0.25f, kBiquadParams[2], kBiquadParams[1]);
+        Biquad *hpf = new Biquad(coeffs);
+        mScratchBuffer2.reset(hpf);
+    }
 
     mIirSmooth = 0.0f;
     mIirCoeff = Time2IirA(0.00811767578125f, mTargetPitch * 0.25f);

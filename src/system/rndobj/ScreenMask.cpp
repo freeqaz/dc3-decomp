@@ -66,13 +66,12 @@ void RndScreenMask::DrawShowing() {
         return;
 
     float width = (float)TheRnd.Width();
-    RndCam *cam = RndCam::Current();
-
     float height = (float)TheRnd.Height();
+    RndCam *cam = RndCam::Current();
     RndTex *targetTex = cam->TargetTex();
     if ((int)targetTex) {
-        height = (float)targetTex->Height();
         width = (float)targetTex->Width();
+        height = (float)targetTex->Height();
     }
 
     if (!mUseCamRect && (int)targetTex) {
@@ -80,12 +79,17 @@ void RndScreenMask::DrawShowing() {
         if (!(cam->GetScreenRect() == defaultRect)) {
             MILO_NOTIFY_ONCE(
                 "%s: Overriding camera screen_rect not supported with render texture",
-                (char *)Name()
+                Name()
             );
         }
     }
 
-    if (!mUseCamRect && !cam->TargetTex()) {
+    // Deliberately RndCam::Current() and not the `cam` local above: the image
+    // re-loads ?sCurrent@RndCam@@1PAV1@A here, after the MILO_NOTIFY_ONCE block
+    // (`lwz r29, ?sCurrent@RndCam@@1PAV1@A@l(r27)`), i.e. the current camera is
+    // re-read for this test rather than kept live in a callee-saved register.
+    // Spelling it `cam->TargetTex()` scores 97.44505; this scores 97.51099.
+    if (!mUseCamRect && !RndCam::Current()->TargetTex()) {
         TheRnd.GetDefaultCam()->Select();
         Hmx::Rect hiRes = TheHiResScreen.InvScreenRect();
         Hmx::Rect drawRect;
@@ -94,7 +98,7 @@ void RndScreenMask::DrawShowing() {
         drawRect.w = (mRect.w * hiRes.w) * width;
         drawRect.h = (mRect.h * hiRes.h) * height;
         TheRnd.DrawRect(drawRect, mColor, mMat, nullptr, nullptr);
-        cam->Select();
+        RndCam::Current()->Select();
     } else {
         Hmx::Rect hiRes = TheHiResScreen.InvScreenRect();
         Hmx::Rect drawRect;

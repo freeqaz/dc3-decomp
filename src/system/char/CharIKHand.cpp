@@ -628,14 +628,21 @@ void CharIKHand::Highlight() {
     else {
         if (mTargets.size() != 1) {
             float leftover = 0;
-            float *fp = &localWeights[0];
+            // Both loops walk localWeights by INDEX, not by a running
+            // `float *fp` set up before the loop.  A pointer initialised ahead
+            // of the loop sinks its `addi rN, r1, 0x100` ABOVE the zero-trip
+            // guard; the image emits it in the loop preheader, after the guard
+            // (823857A0..823857A8 and 823858D4..823858E4).  Indexing lets MSVC
+            // strength-reduce to the same `addi rN, rN, 0x4` inside the
+            // preheader.
+            int i = 0;
             for (ObjVector<IKTarget>::iterator it = mTargets.begin();
                  it != mTargets.end();
-                 ++it, fp++) {
+                 ++it, i++) {
                 RndTransformable *curTarget = it->mTarget;
                 if (curTarget) {
                     float w = 144.0f / LengthSquared(curTarget->LocalXfm().v);
-                    *fp = w;
+                    localWeights[i] = w;
                     leftover += w;
                 }
             }
@@ -656,12 +663,11 @@ void CharIKHand::Highlight() {
                 Hmx::Color(1, 1, 1),
                 true
             );
-            fp = &localWeights[0];
             int idx = 0;
             for (ObjVector<IKTarget>::iterator it = mTargets.begin();
                  it != mTargets.end();
-                 ++it, fp++, idx++) {
-                float w = *fp;
+                 ++it, idx++) {
+                float w = localWeights[idx];
                 float normalized = w / leftover;
                 if (it->mTarget) {
                     const Transform &curWorld = it->mTarget->WorldXfm();

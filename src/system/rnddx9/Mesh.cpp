@@ -284,7 +284,13 @@ DxMat *DxMesh::DrawFur(DxMat *mat) {
         numBones = 1;
     MILO_ASSERT(mTransformCache.size() == numBones, 0x22A);
     for (int i = 0; i < numBones; i++) {
-        TheShaderMgr.SetVConstant4x3(
+        // The shader manager is named INSIDE the loop: MSVC then hoists the
+        // global load into the loop preheader (after the zero-trip guard, where
+        // the image has it) and keeps it in a callee-saved register, instead of
+        // re-loading it after every Matrix4 construction.  Naming it before the
+        // loop instead sinks the load ABOVE the guard and scores worse (96.9).
+        RndShaderMgr &shaderMgr = TheShaderMgr;
+        shaderMgr.SetVConstant4x3(
             (VShaderConstant)(kVS_WorldTransform + (numBones + i) * 3),
             Hmx::Matrix4(mTransformCache[i])
         );
