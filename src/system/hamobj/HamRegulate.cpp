@@ -166,6 +166,13 @@ void HamRegulate::Poll() {
     float rotDelta = 0.0f;
     Regulate(posDelta, rotDelta);
 
+    // REFUTED (w7-ag): hoisting moveX/moveY above the DeltaSeconds() call
+    // (declaration order moveX, moveY, moveZ, dt) schedules both lfs BEFORE the
+    // call instead of after it -- 98.8 -> 97.6.  The two remaining charged rows
+    // are our extra `fmr f28, f0` / `fmr f29, f29` pair: the image loads
+    // posDelta.x/.y straight into the callee-saved f29/f30
+    // (build/373307D9/asm/system/hamobj/HamRegulate.s, `lfs f29, 0x60(r1)` /
+    // `lfs f30, 0x64(r1)`) where we land them in scratch and copy.
     float moveZ = 0.0f;
     float dt = TheTaskMgr.DeltaSeconds();
     float moveX = posDelta.x;
@@ -173,7 +180,6 @@ void HamRegulate::Poll() {
     int footState = 0;
     float absDt = Max(0.0f, dt);
     float moveRot;
-    Character *character = mCharacter;
 
     if (!mCharacter->Teleported()) {
         float maxMove = mMaxSpeed * absDt;
@@ -222,14 +228,12 @@ void HamRegulate::Poll() {
 
     mFootState = footState;
 
-    Transform &xfm = character->DirtyLocalXfm();
+    Transform &xfm = mCharacter->DirtyLocalXfm();
 
     auto teleported = mCharacter->Teleported();
     if (!TheLoadMgr.EditMode() || teleported || absDt != 0.0f) {
         RotateAboutZ(xfm.m, moveRot, xfm.m);
-        xfm.v.x += moveX;
-        xfm.v.y += moveY;
-        xfm.v.z += moveZ;
+        xfm.v += Vector3(moveX, moveY, moveZ);
         mWaypoint->Constrain(xfm);
     }
 }
