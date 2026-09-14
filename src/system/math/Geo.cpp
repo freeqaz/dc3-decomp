@@ -419,6 +419,15 @@ bool Intersect(const Triangle &tri, const Box &box) {
 
     // Translate triangle to box center
     float v0x = v0.x - cx;
+    // NEGATIVE RESULT (component grouping is right, vertex grouping is not).
+    // The image's fadds order is v1y, v1z, v2z, v2y, which reads like the three
+    // vertices are declared as units; spelling it that way -- v0x/v0y/v0z,
+    // v1x/v1y/v1z, v2x/v2z/v2y -- REGRESSES 87.30 -> 82.61 canonical (18 inserts
+    // and 18 deletes instead of 13 and 13), because it also splits the single
+    // twelve-load block the image emits before the first fsubs.  Likewise the
+    // commutative spelling of the two x adds is inert: writing them origin-first
+    // to match `fadds f10, f11, f0` at Geo.s idx 13 leaves rows 13 and 21
+    // unchanged, so MSVC canonicalises the operand order here.
     float v1x = (tri.frame.x.x + tri.origin.x) - cx;
     float v2x = (tri.frame.y.x + tri.origin.x) - cx;
 
@@ -499,13 +508,17 @@ bool Intersect(const Triangle &tri, const Box &box) {
     axes[8].Set(-e2y, e2x, 0.0f);
 
     float radii[9];
-    float *pfAxis = &axes[0].y;
-    float *pfR = radii;
     unsigned int i = 0;
+    float *pfR = radii;
+    float *pfAxis = &axes[0].y;
     do {
-        // Each component is read twice: once for the |.| that builds the box's
-        // projected radius, and again for the dot products.  Caching them in
-        // three locals removes retail's second set of loads.
+        // CORRECTION to an earlier note here: the image does NOT fold the second
+        // set of loads away.  Geo.s reloads all three components after the abs
+        // test (`lfs f10, -0x4(r11)` / `lfs f8, 0x4(r11)` / `lfs f6, 0x0(r11)`
+        // at idx 182/185/187) because the negation clobbered the first copy in
+        // place.  Our build instead keeps the originals alive in registers and
+        // emits three `fmr` copies before negating -- the same source, a
+        // different CSE decision, and no spelling found so far moves it.
         float absx = pfAxis[-1]; if (absx <= 0.0f) absx = -absx;
         float absy = pfAxis[0];  if (absy <= 0.0f) absy = -absy;
         float absz = pfAxis[1];  if (absz <= 0.0f) absz = -absz;
