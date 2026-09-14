@@ -473,12 +473,18 @@ void HamNavList::Poll() {
         if (mRibbonMode == HamListRibbon::kRibbonSlide
             && !mListRibbonResource->TestEntering()) {
             float level = mSlideSmoother.Level();
-            RndAnimatable *slideSoundAnim = mListRibbonResource->SlideSoundAnim();
+            // The target null-tests the ObjPtr itself (unsigned compare on cr0
+            // plus the conversion temp's home-slot store at 0x50(r31)); a raw
+            // `RndAnimatable *` local gets a register and neither. Spelled the
+            // same way as the SkipPoll site above, which is byte-exact.
+            const ObjPtr<RndAnimatable> &slideSoundAnim =
+                mListRibbonResource->SlideSoundAnim();
             if (slideSoundAnim) {
                 slideSoundAnim->SetFrame(level, 1.0f);
             }
         } else {
-            RndAnimatable *slideSoundAnim = mListRibbonResource->SlideSoundAnim();
+            const ObjPtr<RndAnimatable> &slideSoundAnim =
+                mListRibbonResource->SlideSoundAnim();
             if (slideSoundAnim) {
                 slideSoundAnim->SetFrame(0.0f, 1.0f);
             }
