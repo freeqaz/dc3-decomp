@@ -442,34 +442,58 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
         farRatio = farPlane / (farPlane - nearPlane);
     }
 
-    Hmx::Rect screenRect = mScreenRect;
-    Hmx::Rect hiRect = TheHiResScreen.ScreenRect(this, screenRect);
+    // ONE Rect local, ASSIGNED (not a second one initialised): the image seeds
+    // r1+0x50 from mScreenRect, hands ScreenRect a return slot at r1+0x60, and
+    // then copies 0x60 back down to 0x50 word by word (0x82628D10-0x82628D60).
+    // Initialising a distinct `hiRect` lets MSVC construct the return value
+    // straight into it and the copy disappears.
+    Hmx::Rect hiRect = mScreenRect;
+    hiRect = TheHiResScreen.ScreenRect(this, hiRect);
 
-    float cx = mScreenRect.w * 0.5f + mScreenRect.x;
+    // cy before cx: the image fuses cy first (`fmadds f11, f11, f13, f10` at
+    // 0x82628D24 with f11 = mScreenRect.h) and cx second (`fmadds f8, f0, f13,
+    // f12` at 0x82628D38).
     float cy = mScreenRect.h * 0.5f + mScreenRect.y;
+    // mLocalProjectXfm.m.z.y holds the vertical FOV factor:
+    //   perspective: m.z.y = -1/tan(yFov/2)   -> y.y = +1/tan(yFov/2)
+    //   orthographic: m.z.y = -1/ratio         -> y.y = +1/ratio
+    // (was incorrectly mLocalProjectXfm.v.x, which is always zero)
+    // Computed here, next to cy, because the image does: it reads
+    // mScreenRect.h once into f11, copies it to f9 (`fmr f9, f11`,
+    // 0x82628CFC) and issues the cy fmadds and the h*m.z.y fmuls back to back
+    // before it has even copied hiRect out of the return slot.
+    float projYNum = -(mScreenRect.h * mLocalProjectXfm.m.z.y) * 2.0f;
+    float cx = mScreenRect.w * 0.5f + mScreenRect.x;
+    float projXNum = mScreenRect.w * mLocalProjectXfm.m.x.x * 2.0f;
 
+    // The far edges are SIZE + ORIGIN, not origin + size: the image's adds are
+    // `fadds f13, f5, f13` (w + x) and `fadds f6, f6, f12` (h + y) at
+    // 0x82628D7C-80.
     float left = Max(hiRect.x, 0.0f);
     float bottom = Max(hiRect.y, 0.0f);
-    float right = Min(hiRect.x + hiRect.w, 1.0f);
-    float top = Min(hiRect.y + hiRect.h, 1.0f);
+    float right = Min(hiRect.w + hiRect.x, 1.0f);
+    float top = Min(hiRect.h + hiRect.y, 1.0f);
 
     float l = (left - cx) * 2.0f;
     float b = (bottom - cy) * 2.0f;
     float r = (right - cx) * 2.0f;
     float t = (top - cy) * 2.0f;
 
-    float width = r - l;
-    float height = t - b;
-
+    // (r - l) and (t - b) are spelled OUT at each division rather than held in
+    // `width`/`height` locals.  Xenon MSVC defaults to /fp:fast and
+    // strength-reduces two divisions by the same NAMED variable into
+    // `1.0f/x` plus multiplies -- with the locals we emitted
+    // `fdivs f12, f31, f12` / `fdivs f11, f31, f11` against 1.0 and four
+    // fmuls.  The image emits four real fdivs (0x82628DCC, DD0, DD8, DE0) all
+    // sharing the two CSE'd subtractions in f11 and f8, which is what an
+    // expression divisor gives: the backend still CSEs the subtract, but the
+    // reciprocal transform keys on source-level variable identity and does not
+    // fire.  See docs/decomp/patterns/fixable-fsel-fma.md.
     projMtx.z.z = farRatio;
-    projMtx.x.x = (mScreenRect.w * mLocalProjectXfm.m.x.x * 2.0f) / width;
-    // mLocalProjectXfm.m.z.y holds the vertical FOV factor:
-    //   perspective: m.z.y = -1/tan(yFov/2)   -> y.y = +1/tan(yFov/2)
-    //   orthographic: m.z.y = -1/ratio         -> y.y = +1/ratio
-    // (was incorrectly mLocalProjectXfm.v.x, which is always zero)
-    projMtx.y.y = (-(mScreenRect.h * mLocalProjectXfm.m.z.y) * 2.0f) / height;
-    projMtx.z.y = (t + b) / height;
-    projMtx.z.x = -((r + l) / width);
+    projMtx.x.x = projXNum / (r - l);
+    projMtx.y.y = projYNum / (t - b);
+    projMtx.z.y = (t + b) / (t - b);
+    projMtx.z.x = -((r + l) / (r - l));
     // The Xbox build reloads mNearPlane here (a member reload forced after the
     // ScreenRect call) rather than caching it in a callee-saved FPR; matching
     // that keeps FPR pressure down (f29-f31, no __savefpr_28). Native keeps the
