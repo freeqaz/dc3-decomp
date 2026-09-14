@@ -247,8 +247,14 @@ void kdTree<T>::kdTreeNode::Pack(
     kdTreeNode *pBase,
     unsigned char uc
 ) {
+    // One function-scope iterator, shared by the split pass and the leaf pass.
+    // The image homes it into its stack slot the moment it is first assigned --
+    // `stw r11, 0x5c(r31)` right after `lwz r11, 0x0(r6)` (items.begin()) and
+    // before the end() compare -- which only happens if the variable outlives
+    // the `if (uc < 0xF)` block.
+    typename std::list<Triangle *>::iterator it;
     if (uc < 0xF) {
-        typename std::list<Triangle *>::iterator it = items.begin();
+        it = items.begin();
         unsigned int uCount = 0;
         if (it != items.end()) {
             do {
@@ -286,15 +292,23 @@ void kdTree<T>::kdTreeNode::Pack(
                 } else {
                     Box minBox(inDimensions.mMin, inDimensions.mMax);
                     Box maxBox(inDimensions.mMin, inDimensions.mMax);
-                    minBox.mMax[mData.index & 3] = mData.real;
-                    maxBox.mMin[mData.index & 3] = mData.real;
+                    // Each assignment re-reads the member into its own temp,
+                    // and the temp is what makes the image's `lfs f31,
+                    // 0x0(r28)` land AHEAD of the Vector3::operator[] call
+                    // rather than after it: a bare
+                    // `minBox.mMax[...] = mData.real;` evaluates the subscript
+                    // call first and only then loads, which is two extra
+                    // instructions in the wrong order each time.
+                    float fMaxPlane = mData.real;
+                    minBox.mMax[mData.index & 3] = fMaxPlane;
+                    float fMinPlane = mData.real;
+                    maxBox.mMin[mData.index & 3] = fMinPlane;
 
                     std::list<Triangle *> leftList;
                     std::list<Triangle *> rightList;
                     bool bContinue = true;
                     for (it = items.begin(); it != items.end();) {
                         Triangle *pCurr = *it;
-                        ++it;
 
                         MILO_ASSERT(::Intersect(*pCurr, inDimensions), 0x166);
                         bool bLeftIntersect = ::Intersect(*pCurr, minBox);
@@ -303,6 +317,14 @@ void kdTree<T>::kdTreeNode::Pack(
                             bContinue = false;
                             break;
                         }
+                        // The advance happens AFTER the both-missed early-out,
+                        // not before the Intersect calls: the image's
+                        // `lwz r30, 0x0(r30)` sits between the `beq` that takes
+                        // the break and the `cmplwi cr6, r11, 0x0` that tests
+                        // bLeftIntersect.  (Equivalent either way -- the break
+                        // abandons the split and the leaf path re-seeds `it`
+                        // from items.begin() -- but the emission order differs.)
+                        ++it;
                         if (bLeftIntersect) {
                             leftList.push_back(pCurr);
                         }
@@ -320,15 +342,16 @@ void kdTree<T>::kdTreeNode::Pack(
                         kdTreeNode *pNode0 = pBase + ((unsigned short)mFlags * 2 + 1);
                         kdTreeNode *pNode1 = pNode0 + 1;
 #else
-                        kdTreeNode *pNode1 = reinterpret_cast<kdTreeNode *>(
-                            reinterpret_cast<char *>(pBase)
-                            + (((unsigned short)mFlags + 1) << 4)
-                        );
-                        reinterpret_cast<kdTreeNode *>(
-                            reinterpret_cast<char *>(pBase)
-                            + (((unsigned short)mFlags) << 4) + 8
-                        )
-                            ->Pack(s, minBox, leftList, pBase, ucNext);
+                        // `mFlags & 0x7fff`, not `(unsigned short)mFlags`: the
+                        // image masks with `clrlwi rN, rN, 17` (15 bits), and it
+                        // re-reads mFlags with a second `lhz r10, 0x4(r28)` for
+                        // the right child rather than deriving it from the left
+                        // child's address.  The `(unsigned short)` spelling
+                        // masked 16 bits and let MSVC fold the second address
+                        // into `left + 0x10`, deleting four image instructions.
+                        kdTreeNode *pNode0 = &pBase[(mFlags & 0x7fff) * 2 + 1];
+                        kdTreeNode *pNode1 = &pBase[((mFlags & 0x7fff) + 1) * 2];
+                        pNode0->Pack(s, minBox, leftList, pBase, ucNext);
 #endif
 #ifdef HX_NATIVE
                         pNode0->Pack(s, minBox, leftList, pBase, ucNext);
@@ -343,7 +366,7 @@ void kdTree<T>::kdTreeNode::Pack(
     }
 
     MILO_ASSERT(GetIsLeaf(), 0x19F);
-    typename std::list<Triangle *>::iterator it = items.begin();
+    it = items.begin();
     if (it == items.end()) {
         SetTriList(nullptr);
     } else {
