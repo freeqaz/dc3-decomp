@@ -68,30 +68,21 @@ void PhotoSpotlightPositioner::Poll() {
 
 Vector3 PhotoSpotlightPositioner::GetImagePos(Vector2 v2) const {
     RndMesh *mesh = mRefImage;
-    const Transform *xfm;
-
-#ifdef HX_NATIVE
-    if (!mesh->Dirty()) {
-        xfm = &mesh->LocalXfm();
-#else
-    // Check mDirty flag at offset 0xfd in RndMesh
-    // Due to virtual inheritance, accessing directly via offset
-    if (*((unsigned char *)mesh + 0xfd) == 0) {
-        // Use mLocalXfm (part of RndTransformable subobject)
-        xfm = (const Transform *)((char *)mesh + 0x88);
-#endif
-    } else {
-        // mDirty is set, must compute world transform
-        xfm = &mesh->WorldXfm();
-    }
+    // Plain WorldXfm(), no outer dirty test of our own.  WorldXfm() is itself
+    // `!mDirty ? mWorldXfm : WorldXfm_Force()`, so hand-rolling the check
+    // around it made MSVC emit the `lbz 0xfd / cmplwi / bne` diamond TWICE;
+    // the image has exactly one, and its non-dirty arm is `addi r4, r3, 0x48`
+    // off the single `addi r3, r11, 0x40` RndTransformable base at 0x8250988C.
+    const Transform &xfm = mesh->WorldXfm();
 
     Transform localCopy;
-    memcpy(&localCopy, xfm, sizeof(Transform));
+    memcpy(&localCopy, &xfm, sizeof(Transform));
 
     Vector3 result;
     result.y = 0.0f;
     result.x = -((1.0f - v2.x) * localCopy.m.x.x - (localCopy.m.x.x * 0.5f + localCopy.v.x));
-    result.z = -(localCopy.m.x.y * v2.y - (localCopy.m.x.y * 0.5f + localCopy.v.z));
-
+    // m.z.z, not m.x.y: the image loads 0x78(r1) at 0x825098CC -- the mesh's
+    // Z-axis scale.  0x54(r1) is m.x.y, an off-diagonal shear term.
+    result.z = -(v2.y * localCopy.m.z.z - (localCopy.m.z.z * 0.5f + localCopy.v.z));
     return result;
 }
