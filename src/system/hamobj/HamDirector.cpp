@@ -1738,8 +1738,17 @@ Symbol HamDirector::ClosestMove() {
                                 penalty = bufRem;
 
                             int score = matchCount - penalty;
-                            if (maxScore < score) {
-                                maxScore = score;
+                            // 0x8247... the image saves the OLD maxScore
+                            // (`mr r10, r25`) before the `cmpw cr6, r25, r11`
+                            // and then, after `mr r25, r11`, tests
+                            // `cmpw cr6, r11, r10` / `beq cr6` -- a provably
+                            // dead second comparison. That is the MaxEq shape
+                            // written in its float-specialization form
+                            // (tmp = x; x = Max(x, y); return x != tmp),
+                            // not a plain `if (maxScore < score)`.
+                            int oldMaxScore = maxScore;
+                            maxScore = Max(maxScore, score);
+                            if (maxScore != oldMaxScore) {
                                 out = candidate;
                             }
                             i++;
