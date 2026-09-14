@@ -676,6 +676,7 @@ void DxTex::SyncBitmap() {
         }
         unkac = false;
         UINT colorTiles = 0;
+        UINT tiles;
         D3DSURFACE_PARAMETERS params;
         if (mType == kShadowMap) {
             mRenderTarget = nullptr;
@@ -693,9 +694,9 @@ void DxTex::SyncBitmap() {
                 break;
             }
             memset(&params, 0, sizeof(params));
+            params.ColorExpBias = 0;
             params.Base = 0;
             params.HierarchicalZBase = -1;
-            params.ColorExpBias = 0;
             params.HiZFunc = D3DHIZFUNC_DEFAULT;
             {
                 int gpuFormat = edramFormat & 0x3f;
@@ -705,10 +706,11 @@ void DxTex::SyncBitmap() {
                 if (gpuFormat == 0x15 || gpuFormat == 0x20 || gpuFormat == 0x25) {
                     bytesPerPixel = 8;
                 }
-                colorTiles = alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
+                tiles = alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
             }
-            if (colorTiles < 0x800) {
-                if (sEDRamChecksEnabled && colorTiles > TheDxRnd.EdramBase()) {
+            colorTiles = tiles;
+            if (tiles < 0x800) {
+                if (sEDRamChecksEnabled && tiles > TheDxRnd.EdramBase()) {
                     unkac = true;
                 }
                 mRenderTarget = CreateEdramSurface(
@@ -718,7 +720,7 @@ void DxTex::SyncBitmap() {
             } else {
                 MILO_FAIL(
                     "Render target '%s' exceeds available\nEDRAM area (requested %d of %d color tiles)\n",
-                    PathName(this), colorTiles, 0x800
+                    PathName(this), tiles, 0x800
                 );
                 mRenderTarget = nullptr;
             }
@@ -755,8 +757,8 @@ void DxTex::SyncBitmap() {
             D3DSURFACE_PARAMETERS depthParams;
             memset(&depthParams, 0, sizeof(depthParams));
             depthParams.Base = colorTiles;
-            depthParams.HierarchicalZBase = 0;
             depthParams.ColorExpBias = 0;
+            depthParams.HierarchicalZBase = 0;
             depthParams.HiZFunc = D3DHIZFUNC_DEFAULT;
             UINT hzTiles;
             {
@@ -767,12 +769,12 @@ void DxTex::SyncBitmap() {
                 if (gpuFormat == 0x15 || gpuFormat == 0x20 || gpuFormat == 0x25) {
                     bytesPerPixel = 8;
                 }
-                colorTiles += alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
+                tiles = colorTiles + alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
                 hzTiles = (((UINT)mWidth + 31) & ~31) * alignedHeight / 0x200;
             }
-            if (colorTiles < 0x800 && hzTiles < 0xe10) {
+            if (tiles < 0x800 && hzTiles < 0xe10) {
                 if (sEDRamChecksEnabled
-                    && (colorTiles > TheDxRnd.EdramBase()
+                    && (tiles > TheDxRnd.EdramBase()
                         || hzTiles > TheDxRnd.EdramHzBase())) {
                     unkac = true;
                 }
@@ -785,7 +787,7 @@ void DxTex::SyncBitmap() {
             } else {
                 MILO_NOTIFY_ONCE(
                     "Depth surface '%s' exceeds available EDRAM or hi-z area\n(requested %d of %d color tiles and %d of %d hi-z tiles)\nDepth surface creation failed.",
-                    PathName(this), colorTiles, 0x800, hzTiles, 0xe10
+                    PathName(this), tiles, 0x800, hzTiles, 0xe10
                 );
                 mDepthRT = nullptr;
             }
