@@ -67,28 +67,45 @@ END_HANDLERS
 
 void DanceRemixer::SetJump(int from, int to) {
     ClearJump();
-    auto& fromMeasure = mFromMeasure;
-    fromMeasure = from - 1;
-    mToMeasure = to - 1;
+    // Plain int locals, not references to the members: the image compares the
+    // two just-computed REGISTER values (cmpw r11, r10 between the two stores)
+    // and forms fromBeat from the same register, where a reference makes every
+    // read reload 0x4c(r31).  The else arm below does read the members back --
+    // it is spelled with mFromMeasure/mToMeasure for exactly that reason.
+    int fromMeasure = from - 1;
+    int toMeasure = to - 1;
+    mFromMeasure = fromMeasure;
+    mToMeasure = toMeasure;
     int fromBeat = fromMeasure * 4;
-    if (fromMeasure == mToMeasure) {
-        TheMaster->GetAudio()->SetLoop((float)(mToMeasure * 4), (float)fromBeat);
+    if (fromMeasure == toMeasure) {
+        TheMaster->GetAudio()->SetLoop((float)(toMeasure * 4), (float)fromBeat);
     } else {
         float fromMs = BeatToMs((float)fromBeat);
         float toMs = BeatToMs((float)(mToMeasure * 4));
         float jumpOffset = SystemConfig("synth", "crossfade_beats")->Float(1);
-        float crossfadeMs = BeatToMs((float)(fromMeasure * 4) + jumpOffset);
+        float crossfadeMs = BeatToMs((float)(mFromMeasure * 4) + jumpOffset);
         TheMaster->GetAudio()->SetCrossfadeJump(fromMs, toMs, crossfadeMs - fromMs);
 
-        mJumpMap[mToMeasure] = fromMeasure;
-        if (fromMeasure > 0 && mToMeasure > 0) {
-            mJumpMap[fromMeasure - 1] = mToMeasure - 1;
+        mJumpMap[mToMeasure] = mFromMeasure;
+        if (mFromMeasure > 0 && mToMeasure > 0) {
+            mJumpMap[mFromMeasure - 1] = mToMeasure - 1;
         }
 
         float curBeat = TheTaskMgr.Beat();
-        int moveIdx = fromMeasure - 1;
-        int count = (int)curBeat / 4 - moveIdx + 5;
+        // The +4 and the +1 are NOT folded in the image (addi r11, r11, 0x4 then
+        // a separate addic. r11, r11, 0x1): the end index is its own named
+        // quantity and the count is an inclusive end - start + 1.
+        int endIdx = (int)curBeat / 4 + 4;
+        int count = endIdx - (mFromMeasure - 1) + 1;
         if (count > 0 && 0 < (int)count) {
+            // Block-scoped: the image keeps the start index in a volatile
+            // register and copies it into a callee-saved one INSIDE the guard
+            // (mr r25, r10 between the two ble's), which is what a local
+            // declared in the guarded block gets; a function-scope local is
+            // computed straight into r29 and renumbers every later callee-saved
+            // register by one.  The load of mFromMeasure is CSE'd with the one
+            // the count above needs, so there is still only one lwz 0x4c(r31).
+            int moveIdx = mFromMeasure - 1;
             do {
                 MILO_ASSERT(ValidMoveIdx(moveIdx), 0x16d);
                 for (int p = 0; p < 2; p++) {
