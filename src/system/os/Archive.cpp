@@ -314,6 +314,16 @@ void Archive::Merge(Archive &shadow) {
             fileIt->mUCSize = it->mUCSize;
         } else {
             FileEntry toAdd;
+            // Residual (5 rows): the image schedules `ld r11, 0x0(r29)` AFTER
+            // both push_back address operands (`addi r4, r31, 0x70`,
+            // `addi r3, r31, 0x58`); we emit the load first.  REFUTED (wave 7,
+            // lane w7-y): sinking this statement to the END of the block, so
+            // the store order becomes exactly the image's
+            // name/path/UCSize/Size/Offset, makes it WORSE -- 96.47 -> 95.55
+            // and one instruction longer, because MSVC then keeps the 64-bit
+            // add live across the four stores instead of interleaving it.
+            // The image's store order already matches this source order; only
+            // the load is scheduled differently, which is below the source.
             toAdd.mOffset = it->mOffset + totalSize;
             toAdd.mHashedName = entry.HashedName();
             toAdd.mHashedPath = entry.HashedPath();
