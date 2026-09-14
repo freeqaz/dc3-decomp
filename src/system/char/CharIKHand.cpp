@@ -466,8 +466,17 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
     Transform shoulderXfm(shoulder->WorldXfm());
     shoulderXfm.v += shoulderAdj;
     shoulder->SetWorldXfm(shoulderXfm);
+    // Not `DistanceSquared()`: that inline is `LengthSquared(v1 - v2)`, i.e.
+    // `x*x + y*y + z*z`, and MSVC emits its three subtractions in the order the
+    // SUM consumes them -- y, z, x.  The target's chain is
+    //   fmuls f13,dz,dz ; fmadds f13,dx,dx,f13 ; fmadds f13,dy,dy,f13
+    // which is `dy*dy + (dx*dx + dz*dz)`, loading z, x, y.  CharEyes'
+    // LidTrackAndClampingUpdate already carries the same spelling for the same
+    // reason.
+    Vector3 toDst;
+    Subtract(shoulder->WorldXfm().v, mWorldDst, toDst);
     float cosAngle =
-        mInv2ab * (DistanceSquared(shoulder->WorldXfm().v, mWorldDst) - mAABB);
+        mInv2ab * ((toDst.y * toDst.y + (toDst.z * toDst.z + toDst.x * toDst.x)) - mAABB);
     ClampEq(cosAngle, -1.0f, 1.0f);
     float sinAngle = -std::sqrt(-(cosAngle * cosAngle - 1.0f));
     elbow->DirtyLocalXfm().m.Set(cosAngle, sinAngle, 0, -sinAngle, cosAngle, 0, 0, 0, 1);
