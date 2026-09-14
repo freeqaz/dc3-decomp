@@ -357,6 +357,16 @@ void ReadFunc(BINKIO *bink, bool startRead) {
             // image spends one more callee-saved register (r24-r31 vs our
             // r25-r31, the whole frame delta) on the loop.  No source spelling
             // tried reaches it.
+            //
+            // NEGATIVE RESULT (w7-ap, 2026-09-14, 89.21 canonical): naming the
+            // two OUTPUTS instead -- `unsigned long long d0 = EndianSwap(
+            // block->mData[0]); ... block->mData[0] = d0;`, on the theory that
+            // the image's adjacent `std r11, 0x0(r29)` / `std r10, 0x8(r29)`
+            // at 0x82E5D43C-44 means both results are live at once and that is
+            // what buys the extra callee-saved register -- costs 1.2pp
+            // (89.21 -> 88.0) and widens the r29<->r30 permutation from 53
+            // instructions to 79.  Naming the INPUTS was already known to be
+            // neutral; naming the outputs is worse than either.
             XTEABlock *block = (XTEABlock *)bf->pBufBack;
             while (block < (XTEABlock *)((unsigned char *)bf->pBufBack + bytesRead)) {
                 block->mData[0] = EndianSwap(block->mData[0]);
