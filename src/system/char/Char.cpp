@@ -239,11 +239,12 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
                     // Vert::tex -- NOT boneIndices at +0x48.  The quad's UVs
                     // were being written over the bone indices.
                     Vector2 uv(v, u);
-                    mesh->Verts()[i].pos.Set((uv.x + 1) * 20, 0, -(uv.y * 20 - 60));
-                    mesh->Verts()[i].tex = uv;
-                    mesh->Verts()[i].norm.Set(0, -1, 0);
-                    mesh->Verts()[i].boneWeights.Set(0, 0, 0, 0);
-                    mesh->Verts()[i].color.Set(1, 1, 1, 1);
+                    RndMesh::Vert &vert = mesh->Verts()[i];
+                    vert.pos.Set((uv.x + 1) * 20, 0, -(uv.y * 20 - 60));
+                    vert.tex = uv;
+                    vert.norm.Set(0, -1, 0);
+                    vert.boneWeights.Set(0, 0, 0, 0);
+                    vert.color.Set(1, 1, 1, 1);
                 }
                 mesh->Faces()[0].Set(0, 1, 2);
                 mesh->Faces()[1].Set(0, 2, 3);
