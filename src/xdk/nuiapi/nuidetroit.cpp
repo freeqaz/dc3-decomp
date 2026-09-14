@@ -358,11 +358,10 @@ DWORD NuipCameraAdjustTilt(
     NuipDetroitRuntimeState.TiltInProgress = dwTiltState;
 
 Unlock:
-    XMVECTOR Zero = { 0.0f, 0.0f, 0.0f, 0.0f };
     NuipDetroitRuntimeState.LastTiltFlags = TiltFlags;
     NuipDetroitRuntimeState.Unk5c = 0;
     NuipDetroitRuntimeState.Unk58 = 5;
-    NuipDetroitRuntimeState.FloorPlane = Zero;
+    NuipDetroitRuntimeState.FloorPlane = __vspltisw(0);
     KfReleaseSpinLock(&NuipDetroitRuntimeState.SpinLock, OldIrql);
 
     // ONE `return dwResult`.  The image's two epilogues (0xd34 `mr r3, r31`
