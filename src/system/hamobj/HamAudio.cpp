@@ -452,6 +452,13 @@ void HamAudio::FinishLoad() {
 }
 
 void HamAudio::PollCrossfade() {
+    // NEGATIVE RESULT on the residual f29<->f30 permutation (26 of the 45 rows
+    // left at 97.1%): the image holds currentTime in f29 and 0.5 in f30, ours the
+    // other way round.  Neither declaring kEpsilon/halfFade ahead of the
+    // GetInSongTime() call nor dropping the `halfFade` local for a bare 0.5f
+    // literal moves it -- both produced byte-identical output (97.1 / 96.3, same
+    // 45 rows).  Callee-saved FPR numbering here is regalloc, not declaration
+    // order.
     float currentTime = mSongStream->GetInSongTime();
     float kEpsilon = 1.0f / 120.0f;
     float halfFade = 0.5f;
