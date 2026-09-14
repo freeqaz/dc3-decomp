@@ -101,6 +101,21 @@ void NavListSort::DeleteTree() {
     mShortcutNodes.clear();
 }
 
+// NOTE (w7-ai): residual at 89.8%.  Two items, neither source-reachable from
+// here.  (1) Slot colouring: retail's first Symbol temp sits at 0x58(r1) and
+// ours at 0x54, shifting ten rows by -4, because retail reserves 0x54 for an
+// int that only lives in the deep else arm; our build also spills one extra
+// 4-byte slot at 0x6c.  Collapsing token/token1/token2/token3 into a single
+// reused Symbol -- the obvious way to drop a slot -- costs 0.4pp and adds a
+// 0x10 frame delta (measured 2026-09-14), so the four named locals stand.
+// (2) Retail materialises `li r3,0` at the aSize==0 site and branches to the
+// epilogue, and duplicates the epilogue inline at the aSize==1 success site;
+// our build funnels every return through one shared tail.  That is MSVC's
+// tail-merge choice, not a spelling.
+// The MakeString rows in the Function Call Diff are an ICF fold, not a bug:
+// both sides pass the SAME ??_C@ string data (NavListSort.cpp [16] and the two
+// condition strings [0x22]/[0x20]); only the instantiation name differs, and
+// MakeString's body is identical for every array-size triple.
 bool NavListSort::SetHighlightID(DataArray *a) {
     // Retail clears mHighlightNode BEFORE reading a->Size(): the
     // stw r10,0x50(r3) sits between the load of the old value and the
