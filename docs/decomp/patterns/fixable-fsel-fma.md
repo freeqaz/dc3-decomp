@@ -517,3 +517,28 @@ shape matters**, so a site that needs a different tree can have one locally.
   are forgiven by the canonical ruler — do not spend budget on them.
 
 Full accounting: the comment block above the overload in `src/system/math/Mtx.h`.
+
+**Write the zeros LITERALLY — do not seed the accumulators off a named
+`Vector3` temp.** *Measured 2026-09-14, lane w7-b, `RndTexRenderer::DrawToTexture`
+(4312 B), one full `ninja` per row.*
+
+| spelling of `Multiply(Vector3(0, -f34, 0), tfc8.m, tfc8.v)` | canonical | score |
+|---|---|---|
+| baseline — shared `Multiply(Vector3, Matrix3, Vector3)` inline | 98.82838 | 1893 |
+| accumulators seeded off `const Vector3 pullBack(0, -f34, 0)` | 98.68646 | 1981 |
+| same, wrapped in a tighter lexical scope | 98.68646 | 1981 |
+| accumulators, zeros written as `0.0f` | **99.42579** | **1104** |
+
+Both accumulator spellings fix the factoring *identically* — the multiply block
+itself comes out instruction-for-instruction correct either way. The named
+`Vector3` is nevertheless a **net loss against the unfixed baseline**: it
+perturbs the scheduling of the `Subtract`/`Length` immediately above it *and* of
+an unrelated 16-byte `Transform` copy ~300 instructions later, for +88 score
+points. **A local that only exists to spell the constant vector is not free**,
+and the damage shows up nowhere near the edit — measure the whole function, not
+the block you were aiming at.
+
+Component declaration order is a second, much smaller lever on the same site:
+`y, x, z` scores 1104 against `x, y, z`'s 1112. Read the order off the target —
+it is the order the per-component `fmadds` chains are emitted in, not the order
+of the `Set()` arguments.

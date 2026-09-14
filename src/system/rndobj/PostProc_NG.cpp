@@ -204,6 +204,13 @@ void NgPostProc::DoBloom() {
     } else {
         s_BloomSetter = nullptr;
         s_prevBloomIntensity = -1.0f;
+        // NOTE (w7-b, 2026-09-14): the only residual on this function is the
+        // SCHEDULE of the 16-byte copy out of this temporary. The image loads
+        // w1,w0,w3,w2 (clobbering the source pointer r10 with the last load) and
+        // then stores w1,w2,w3; we load w1,w0,w2,w3 and recycle r11 for w3, which
+        // forces `stw r11,0x4(r7)` two slots earlier. Refuted: naming the temporary
+        // as a local, and swapping this statement with the s_prevBloomIntensity
+        // store -- both left all 6 rows byte-identical.
         s_prevBloomColor = Hmx::Color(-1, -1, -1, -1);
     }
 

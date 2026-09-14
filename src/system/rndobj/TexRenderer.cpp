@@ -274,8 +274,40 @@ void RndTexRenderer::DrawToTexture() {
                 Length(tfc8.v),
                 mImpostorHeight / 2.0f + cam->NearPlane()
             );
-            Multiply(Vector3(0, -f34, 0), tfc8.m, tfc8.v);
-            tfc8.v.z += mImpostorHeight / 2.0f;
+            // Pull the camera back along the impostor's -Y by f34.  This is
+            // Multiply(Vector3(0, -f34, 0), tfc8.m, tfc8.v), but it cannot be
+            // spelled that way: two of the three vector components are 0.0f, so
+            // /fp:fast applies the distributive law to the shared inline's
+            // left-associated sum and folds `m.x.c * 0 + m.z.c * 0` into
+            // `(m.x.c + m.z.c) * 0`, opening the block with an fadds of two
+            // matrix elements.  The image does not factor -- it emits
+            // `fmuls fN, fN, f31` (f31 = the function's shared 0.0f) per zero
+            // term and folds each in with fmadds, seeding every row from
+            // m.z.c * v.z.  MSVC does not reassociate across a `+=`, so the
+            // accumulator statements pin the tree.  See
+            // docs/decomp/patterns/fixable-fsel-fma.md, "Zero-term factoring".
+            //
+            // Measured, one full ninja each (canonical, report.json ruler):
+            //   shared Multiply() inline                       98.82838
+            //   accumulators seeded off a `Vector3(0,-f34,0)`  98.68646
+            //   accumulators with the zeros written literally  99.42579
+            // The Vector3 temp is what costs: naming it perturbs the scheduling
+            // of the Subtract/Length above and of an unrelated Transform copy
+            // 300 instructions later, for +88 score points net, even though the
+            // multiply block itself comes out identical either way.  The
+            // component order (y, x, z) is measured too -- x, y, z scores 1112
+            // against this order's 1104.
+            float negDist = -f34;
+            float outY = tfc8.m.z.y * 0.0f;
+            outY += tfc8.m.y.y * negDist;
+            outY += tfc8.m.x.y * 0.0f;
+            float outX = tfc8.m.z.x * 0.0f;
+            outX += tfc8.m.y.x * negDist;
+            outX += tfc8.m.x.x * 0.0f;
+            float outZ = tfc8.m.z.z * 0.0f;
+            outZ += tfc8.m.y.z * negDist;
+            outZ += tfc8.m.x.z * 0.0f;
+            tfc8.v.Set(outX, outY, outZ + mImpostorHeight / 2.0f);
             cam->SetWorldXfm(tfc8);
             float atanned = atanf(mImpostorHeight / 2.0f / f34);
             cam->SetFrustum(
