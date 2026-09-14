@@ -426,6 +426,14 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
     // 0x2c4) REGRESSES 83.8 -> 77.4: both plane loads migrate inside the
     // mYFov branch and drag `stfs f31, 0x3c(r30)` with them.  Measured
     // w7-aj; do not retry.
+    //
+    // NEGATIVE RESULT (w7-ap, 2026-09-14): hoisting the test into a named
+    // `bool ortho = mYFov == 0;` between the two copies (to sink the mFarPlane
+    // load past the `fcmpu` the way the image does at 0x82628C88/94, where far
+    // reuses f0 because yFov is dead) REGRESSES 83.8 -> 79.7: MSVC materialises
+    // the bool as `li r11, 1` / `li r11, 0` / `clrlwi.` / `beq` instead of
+    // keeping the result in cr6, and that costs 4 inserts plus the 1.0f
+    // constant being re-materialised on both sides of the branch.
     float nearPlane = mNearPlane;
     float farPlane = mFarPlane;
 
@@ -469,6 +477,20 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
     // mScreenRect.h once into f11, copies it to f9 (`fmr f9, f11`,
     // 0x82628CFC) and issues the cy fmadds and the h*m.z.y fmuls back to back
     // before it has even copied hiRect out of the return slot.
+    //
+    // NEGATIVE RESULT (w7-ap, 2026-09-14, 83.80 canonical): the residual here
+    // is that /fp:fast folds this `-(x) * 2.0f` into `x * -2.0f`, so we
+    // materialise a SECOND pooled constant `__real@c0000000` with its own
+    // lis/lfs where the image emits `fneg f12, f9` (0x82628D50) and multiplies
+    // by the same `__real@40000000` in f0 (0x82628D4C) that projXNum and all
+    // four of the l/b/r/t scalings reuse.  The expression SHAPE is already
+    // right -- image order is fmuls(h, m.z.y) -> fneg -> fmuls(2.0), which is
+    // exactly `-(h * m.z.y) * 2.0f`.  Splitting the fold apart does not help
+    // and costs 2.3pp: both `float projY = h*m.z.y; float projYNum = -projY;
+    // projYNum *= 2.0f;` and the two-statement `float projYNum = -(h*m.z.y);
+    // projYNum *= 2.0f;` measure 81.5 -- identical to each other, so the
+    // regression is the statement split resequencing the surrounding loads,
+    // not the constant.  Leave the fused spelling.
     float projYNum = -(mScreenRect.h * mLocalProjectXfm.m.z.y) * 2.0f;
     float cx = mScreenRect.w * 0.5f + mScreenRect.x;
     float projXNum = mScreenRect.w * mLocalProjectXfm.m.x.x * 2.0f;
