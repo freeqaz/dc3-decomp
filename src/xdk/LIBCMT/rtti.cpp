@@ -60,19 +60,41 @@ struct _s_RTTICompleteObjectLocator {
 extern "C" unsigned long __cdecl _exception_code(void);
 #define GetExceptionCode() _exception_code()
 
+// RESIDUAL w7-ax, 80.9 canonical, 188 B -- but the BODY is instruction-for-
+// instruction identical to the image (47 of 47 real instructions equal).  The
+// only 9 rows objdiff charges are the __except filter, which the image carries
+// as its own 0x24-byte symbol fn_8299DD7C at 0x8299DD7C (immediately after
+// __RTtypeid's 0xBC extent) and MSVC emits inside our COMDAT.  Same shape as
+// the fn_8299E398 row recorded on __RTDynamicCast below; it is a symbols.txt
+// extent question, not a source one.
+//
+// The lever that closed the body (78.53 -> 80.9): the image's single dead home
+// store `stw r3, 0x50(r31)` at 0x8299DCF8, plus the 8-byte frame shift it
+// implies (0x80 frame / exception object at r31+0x58, against our 0x70 / 0x50),
+// is MSVC homing a CSE temp -- `pCompleteLocator->pTypeDescriptor` is read
+// TWICE in the image's source (once for the null test, once for the return),
+// not read once into a named local.  Naming the local costs the store and the
+// slot.  MEASURED NEGATIVES on the same function: routing the return through a
+// `void *pResult` assigned inside the __try does create the slot but un-sinks
+// the NULL-inptr throw block to the top (78.53 -> 41.4), in both the
+// `if (!p) throw;` and `if (p) ... else throw;` spellings; and moving the
+// declarations into the __try scope is byte-identical, reproducing w7-at's
+// result for __RTDynamicCast.
+//
+// The `bl ??0bad_cast@std@@QAA@PBD@Z` at 0x8299DD54 is NOT a wrong callee: the
+// throw info beside it is _TI2?AVbad_typeid@std@@, and the two ctors are an ICF
+// fold (icf_aliases.map), so name_check charges no row for it.
 extern "C" void *__RTtypeid(void *inptr) {
     if (!inptr) {
         throw std::bad_typeid("Attempted a typeid of NULL pointer!");
     }
 
-    const _s_RTTICompleteObjectLocator *pCompleteLocator;
-    TypeDescriptor *pTypeDescriptor;
-
     __try {
-        pCompleteLocator = (const _s_RTTICompleteObjectLocator *)((*((void ***)inptr))[-1]);
-        pTypeDescriptor = pCompleteLocator->pTypeDescriptor;
-        if (pTypeDescriptor) {
-            return (void *)pTypeDescriptor;
+        const _s_RTTICompleteObjectLocator *pCompleteLocator =
+            (const _s_RTTICompleteObjectLocator *)((*((void ***)inptr))[-1]);
+        // Read twice on purpose -- see the note above.
+        if (pCompleteLocator->pTypeDescriptor) {
+            return (void *)pCompleteLocator->pTypeDescriptor;
         }
         throw std::__non_rtti_object("Bad read pointer - no RTTI data!");
     } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION) {
