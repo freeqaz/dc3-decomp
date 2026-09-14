@@ -1089,6 +1089,10 @@ float Rnd::DrawTimers(float f) {
     float bgLeft = 0.025f;
     float rowSpacing = 0.045f;
     float totalHeight = numTimers * rowSpacing;
+    // The image copies f into its callee-saved row cursor inside the argument
+    // block of the FIRST DrawRectScreen (fmr f24, f23), so y is already live
+    // there; declaring it after that call costs a scheduling row.
+    float y = f;
 
     Hmx::Rect rect(bgLeft, f, 0.95f, totalHeight);
     Hmx::Color bgColor(0.0f, 0.0f, 0.0f, 0.5f);
@@ -1100,7 +1104,6 @@ float Rnd::DrawTimers(float f) {
 
     float scale = 0.019f;
     float barHeight = 0.0268f;
-    float y = f;
 
     rect.h = barHeight;
 
