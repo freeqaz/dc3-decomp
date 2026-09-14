@@ -102,6 +102,14 @@ void GranularSynth::ExtractGranules() {
             gr.mStartOffset = mBlock;
             gr.mPhase = (float)((double)mFrame - gr.mStartTime + gr.mOffset);
 
+            // RESIDUAL (ExtractGranules, 92.2 canonical / 91.6 raw).  The
+            // placement of this local is load-bearing and already tuned:
+            // HERE = 92.2; before the gr.mGain store = 91.5 (adds an
+            // `fmr f0, f13`); after the window loop with the 0.7 compare on
+            // gr.mLength = 87.3; removed entirely = 87.3.  The last row of
+            // this cluster is the image's `lfs f0, 0x8(r11)` feeding BOTH the
+            // fsel and the fadds out of one register where we still emit a
+            // copy.
             float length = gr.mLength;
             // Pick the largest window that still fits inside 0.7 of the grain.
             gr.mWindow = mWindows.size() - 1;
