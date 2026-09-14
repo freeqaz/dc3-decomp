@@ -258,7 +258,22 @@ void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &viewProj) {
         float zero = 0.0f;
         do {
             Spotlight *sl = it->mSpotlight;
-            if (sl->mBeam.mLength > zero) {
+            // The image MATERIALISES this test as a byte bool rather than
+            // branching on the compare: 82821C58 `li r11, 0x1` above the
+            // `lfs`/`fcmpu`, 82821C64 `bgt cr6, .L_82821C6C` skipping
+            // `mr r11, r22` (the hoisted zero), then 82821C6C
+            // `clrlwi. r11, r11, 24` / `beq .L_82821D34`.  A bare
+            // `if (len > zero)` compiles to a single `ble`.
+            bool hasBeam = sl->mBeam.mLength > zero;
+            // RESIDUAL (w7-am, 99.8 canonical): the only rows left are the
+            // three loop-invariant MILO_ASSERT address constants.  The image
+            // parks "false" in r27, TheDebug in r26 and the __FILE__ string in
+            // r25 (82821C44-82821C50); we get the same three registers in a
+            // 3-cycle rotation.  Both sides hoist the same four `lis` and the
+            // same three `addi` out of the loop, so this is allocation order
+            // inside the shared MILO_ASSERT expansion, not anything this
+            // function spells.
+            if (hasBeam) {
                 unsigned int shape = sl->mBeam.mShape;
                 int shaderShape;
                 // The assert arm is the fall-through and it lands on the SAME
