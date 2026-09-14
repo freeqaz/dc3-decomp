@@ -185,6 +185,17 @@ bool SongSequence::DoNext(bool b1, bool b2) {
             mEntries[mCurrentIndex].mStarCount = stars;
             PropertyEventProvider *p0 = TheGameData->Player(0)->Provider();
             PropertyEventProvider *p1 = TheGameData->Player(1)->Provider();
+            // The residual r28/r29 swap on p0/p1 (diff rows 195/201) is NOT
+            // operand order -- REFUTED 2026-09-14 (w7-q).  Rows 206-230 are
+            // byte-identical on both sides: whichever provider the allocator
+            // parked in r29 gets its Property() call first.  The image holds
+            // p0 in r29, we hold p0 in r28.  Writing this as
+            //     p1->Property("score")->Int() + p0->Property("score")->Int()
+            // (MSVC evaluates `+` right-to-left, so that should evaluate p0
+            // first) produced a BYTE-IDENTICAL object -- MSVC normalises the
+            // two call operands and the source order does not reach the
+            // allocator.  Verified with a sabotage control on the same object,
+            // so the null result is not a stale build.
             mEntries[mCurrentIndex].mTotalScore =
                 p0->Property("score")->Int() + p1->Property("score")->Int();
             CampaignPerformer *campaignPerf =
@@ -203,6 +214,14 @@ bool SongSequence::DoNext(bool b1, bool b2) {
             static_cast<CampaignPerformer *>(MetaPerformer::Current());
         campaignPerf->SetCampaignMindControlComplete(true);
     }
+    // The size() load-order residual (diff rows 271-273) is not reachable from
+    // here.  The image loads _M_start (0x0) then _M_finish (0x4) and lets the
+    // begin register die in the `subf`, then RELOADS _M_start for the
+    // mEntries[mCurrentIndex] below (`lwz r10, 0x0(r30)` @8288D9D4).  We load
+    // _M_finish first, so begin survives in r9 and gets reused -- one
+    // instruction shorter, and the source cannot ask for the longer form.
+    // Splitting this into `++mCurrentIndex;` + a separate `if` is BYTE-
+    // IDENTICAL (measured 2026-09-14, w7-q, with a sabotage control).
     if (++mCurrentIndex >= (int)mEntries.size() || b2) {
         MILO_LOG("SongSequence::DoNext: terminating. forced=%s\n", b2 ? "T" : "F");
         static Symbol holla_back("holla_back");
