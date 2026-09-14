@@ -1006,24 +1006,38 @@ bool Game::IsLoaded() {
 }
 
 DataNode Game::OnSetShuttle(DataArray *arr) {
-    auto& _ref0 = mShuttle;
     if (arr->Size() > 3) {
-        _ref0->SetController(arr->Int(3));
+        mShuttle->SetController(arr->Int(3));
     }
     bool active = arr->Int(2);
     if (active) {
-        auto _tmp0 = mMaster->GetAudio()->GetTime();
-        _ref0->SetMs(_tmp0);
-        _ref0->SetEndMs(mSongDB->GetSongDurationMs());
-        if (_ref0)
-            _ref0->SetActive(active);
+        mShuttle->SetMs(mMaster->GetAudio()->GetTime());
+        mShuttle->SetEndMs(mSongDB->GetSongDurationMs());
     } else {
-        Jump(_ref0->Ms(), true);
-        do {
+        Jump(mShuttle->Ms(), true);
+        // Top-tested, NOT do/while: 0x828685D4 is the loop head, reached by
+        // fall-through from the Jump() block, and the image runs the IsLoaded()
+        // test BEFORE the first Poll (`bne .L_8286859C` straight out to the
+        // SetActive tail).  A do/while polls the synth once even when the song
+        // is already loaded.
+        // REFUTED here as well as at Game::Poll (w7-ag), five spellings, all
+        // producing a byte-identical 81-instruction body: `while (!IsLoaded())`,
+        // `for(;;){ if (IsLoaded()) break; ... }`, a named `bool loaded`, an
+        // `(int)` cast, an explicit int->bool two-step, and a `goto` loop.  MSVC
+        // peels the first IsLoaded() test and bottom-tests the loop in every one
+        // of them, while the image keeps the test at the loop head with an
+        // unconditional `b` back-edge and normalises the bool
+        // (clrlwi / subic / subfe / clrlwi.) that we test with a bare `clrlwi.`.
+        // The two are one fact: the image's condition is 6 instructions, ours 4,
+        // and the peel heuristic is downstream of that.  Not reachable from
+        // source spelling in this TU.
+        while (!IsLoaded()) {
             TheSynth->Poll();
-        } while (!IsLoaded());
-        _ref0->SetActive(active);
+        }
     }
+    // Both arms fall into one shared SetActive tail at 0x8286859C; there is no
+    // null test on mShuttle anywhere in the image.
+    mShuttle->SetActive(active);
     return 0;
 }
 
