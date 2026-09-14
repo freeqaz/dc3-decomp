@@ -2496,10 +2496,17 @@ bool HamDirector::ReactToCollision(float frame) {
     float frame2;
     float frame3;
     Symbol symAt2;
-    bool idxExists = propKeys->FrameFromIndex(keyIdx, frame2);
+    // Retail asks for the frame of the NEXT key (addi r4,r28,0x1 at 0x8247A2AC,
+    // r28 being keyIdx) and then resolves the symbol AT that frame
+    // (lfs f1,0x58(r31) at 0x8247A2D4, 0x58 being frame2).  We were passing
+    // keyIdx and the CURRENT frame, so keyIdx2 came back equal to keyIdx and
+    // beat2 was the beat of the shot already playing, not of the next one --
+    // which made "is the next shot within X beats" always compare against the
+    // current shot.
+    bool idxExists = propKeys->FrameFromIndex(keyIdx + 1, frame2);
     if (!idxExists)
         return false;
-    int keyIdx2 = propKeys->SymbolAt(frame, symAt2);
+    int keyIdx2 = propKeys->SymbolAt(frame2, symAt2);
     if (keyIdx2 == -1 || keyIdx2 == propKeys->NumKeys() - 1
         || strncmp(symAt2.Str(), "Area", 4) != 0) {
         mShot = cat;
@@ -2522,7 +2529,12 @@ bool HamDirector::ReactToCollision(float frame) {
             static bool sSongCollisionRoundUpSuppressedShotToMeasure =
                 DataGetMacro("SONG_COLLISION_ROUND_UP_SUPPRESSED_SHOT_TO_MEASURE")->Int(0);
             if (sSongCollisionRoundUpSuppressedShotToMeasure) {
-                beatSum = ceil(beatSum / 4.0f) * 4.0f;
+                // Retail narrows ceil()'s double result with frsp BEFORE the
+                // multiply and multiplies by the FLOAT 4.0f (__real@40800000 at
+                // 0x8247A498); leaving the expression in double promotes 4.0f
+                // and emits an fmul against __real@4010000000000000.
+                float rounded = ceil(beatSum / 4.0f);
+                beatSum = rounded * 4.0f;
             }
             if (!propKeys->FrameFromIndex(keyIdx2 + 1, frame3)) {
                 return false;
