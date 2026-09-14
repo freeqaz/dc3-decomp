@@ -1058,16 +1058,23 @@ MultipleItemsEnumJob::~MultipleItemsEnumJob() {
 void MultipleItemsEnumJob::Poll() {
     if (mStatus == 1 && mOverlapped.InternalLow != 0x3e5) {
         DWORD resultVal;
-        void *result = (void *)XGetOverlappedResult(&mOverlapped, &resultVal, 0);
+        // The image instantiates MakeString<unsigned int> for the error path
+        // (`bl ??$MakeString@I@@YAPBDPBDABI@Z`); casting the result to void*
+        // gave us MakeString<void *> and, on a 64-bit host, a %d fed an
+        // 8-byte argument.
+        unsigned int result = XGetOverlappedResult(&mOverlapped, &resultVal, 0);
         if (result == 0) {
             mStatus = 2;
             u64 *enumEntry = (u64 *)mEnumBuffer;
             u64 *itemIt = &mItemIDs[0];
             unsigned int i = 0;
             auto purchasedIt = mPurchased.begin();
-            unsigned int bitOffset = purchasedIt._M_offset;
-            unsigned int *bitChunk = purchasedIt._M_p;
             if (mItemIDs.size() > 0) {
+                // The image unpacks the bit iterator INSIDE the size guard --
+                // `std r10,0x50(r1)` before the `beq`, then `lwz r29,0x54(r1)`
+                // and `lwz r31,0x50(r1)` after it.
+                unsigned int bitOffset = purchasedIt._M_offset;
+                unsigned int *bitChunk = purchasedIt._M_p;
                 do {
                     if (*enumEntry == *itemIt) {
                         unsigned int mask = 1 << bitOffset;
@@ -1081,7 +1088,9 @@ void MultipleItemsEnumJob::Poll() {
                         enumEntry += 0xd;
                         mSuccess = success;
                     } else {
-                        TheDebug.Notify(MakeString("Could not enumerate offerId %016llX", *itemIt));
+                        const char *msg =
+                            MakeString("Could not enumerate offerId %016llX", *itemIt);
+                        TheDebug.Notify(msg);
                         *bitChunk &= ~(1 << bitOffset);
                     }
                     if (bitOffset++ == 31) {
