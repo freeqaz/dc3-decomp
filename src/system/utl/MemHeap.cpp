@@ -311,6 +311,16 @@ int MemHeap::GetAlignWords(int bytes) {
     }
 }
 
+// RESIDUAL (w7-aq, 90.007 canonical): the remaining rows are one register
+// assignment, not a missing statement.  The image puts `this` in r26 and
+// sizeWords in r27 (827F88A4/827F88AC); we get the pair the other way round,
+// which charges 15 rows across the four Fit calls and the three later `this`
+// uses.  Consequences of the same choice: the image loads info.mBlock straight
+// into r31 and updates it in place with `stwux` (827F89A8), while we load into
+// r30, copy to r31 and use `add`+`stwx`; and MSVC tail-merges the two
+// `return nullptr` sites the other way (the image's default arm branches
+// FORWARD into the null check's `li r3, 0`, ours branches back).  Declaration
+// order is not a lever here -- both are parameters.
 int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     FreeBlockInfo info;
     info.mBlock = nullptr;
@@ -340,15 +350,19 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     int blockSize;
 
     if (padWords > 8) {
-        int remaining = info.mSizeWords - padWords;
-        FreeBlock *newBlock = (FreeBlock *)((int *)block + padWords);
-        newBlock->mSizeWords = remaining;
-        newBlock->mNextBlock = block->mNextBlock;
-        newBlock->mTimeStamp = block->mTimeStamp;
-        InsertFreeBlock(block, padWords, prevBlock, newBlock, block->mTimeStamp);
-        prevBlock = block;
-        block = newBlock;
-        blockSize = remaining;
+        // `block` itself is advanced -- there is no separate newBlock local.
+        // That is what lets the image fuse the advance and the mSizeWords
+        // store into a single `stwux r28, r31, r10` (827F89A8).
+        blockSize = info.mSizeWords - padWords;
+        FreeBlock *oldBlock = block;
+        FreeBlock *nextBlock = oldBlock->mNextBlock;
+        unsigned int timeStamp = oldBlock->mTimeStamp;
+        block = (FreeBlock *)((int *)block + padWords);
+        block->mSizeWords = blockSize;
+        block->mNextBlock = nextBlock;
+        block->mTimeStamp = timeStamp;
+        InsertFreeBlock(oldBlock, padWords, prevBlock, block, timeStamp);
+        prevBlock = oldBlock;
         padWords = 0;
     } else {
         blockSize = info.mSizeWords;
@@ -372,9 +386,15 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     }
 
     unsigned int *header = (unsigned int *)block + padWords;
-    *header = (totalUsed << 8) | (padWords << 4) | (*header & 0xF);
+    // The `& 0xF` is what makes MSVC fold the pad nibble in with `rlwimi`
+    // (827F8A20) instead of a shift-and-or: without it the compiler has to
+    // assume padWords can overflow the field.
+    *header = (totalUsed << 8) | ((padWords & 0xF) << 4) | (*header & 0xF);
 
-    unsigned int *ptr = (unsigned int *)block;
+    // The image re-derives the start of the pad run from the nibble it just
+    // wrote (827F8A30 `rlwinm r9, r10, 30, 26, 29`, then `subf r10, r9, r11`)
+    // rather than reusing the block pointer it still has in r31.
+    unsigned int *ptr = header - ((*header >> 4) & 0xF);
     for (; ptr != header; ptr++) {
         *ptr = 0;
     }
