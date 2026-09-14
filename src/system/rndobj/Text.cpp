@@ -534,10 +534,16 @@ bool RndText::MakeWorldSphere(Sphere &s, bool b) {
                 Sphere localSphere;
                 if (b) {
                     mesh->MakeWorldSphere(localSphere, true);
-                } else {
-                    if (mesh->GetSphere().GetRadius() != 0.0f) {
-                        Multiply(mesh->GetSphere(), mesh->WorldXfm(), localSphere);
-                    }
+                } else if (GetSphere().GetRadius() != 0.0f) {
+                    // NOT a typo and NOT `mesh->`: the image reads THIS RndText's
+                    // own sphere and world transform here, through its own
+                    // vbtable (`lwz r11, -0x108(r31)` / `add r10, r10, r31` /
+                    // `lfs f0, -0xec(r10)` at 0x8269089C, r31 = this), so every
+                    // glyph mesh is grown by the same text-level sphere.  RB3's
+                    // shared-engine source spells it `mSphere` / `WorldXfm()`
+                    // too.  Decompiling it as `mesh->GetSphere()` /
+                    // `mesh->WorldXfm()` "fixed" a bug the engine really has.
+                    Multiply(GetSphere(), WorldXfm(), localSphere);
                 }
                 s.GrowToContain(localSphere);
             }
