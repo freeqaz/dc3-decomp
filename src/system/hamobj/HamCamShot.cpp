@@ -176,7 +176,7 @@ void HamCamShot::UpdateTargetsFlipped() {
 
         if (isDanceBattle && flipped) {
             if (TheHamProvider->Property(game_stage, true)->Sym(NULL) == intro) {
-                TheDebug << MakeString("Camshot %s\n", (char *)Name());
+                TheDebug << MakeString("Camshot %s\n", Name());
                 int targetIdx = 0;
                 for (ObjList<Target>::iterator it = mTargets.begin();
                      it != mTargets.end();
@@ -215,7 +215,7 @@ void HamCamShot::UpdateTargetsFlipped() {
 
                     const char *clipsDirName;
                     if (clipsDir != NULL) {
-                        clipsDirName = clipsDir->Name();
+                        clipsDirName = clipsDir->ProxyFile().c_str();
                     } else {
                         clipsDirName = "NULL";
                     }
@@ -256,7 +256,7 @@ void HamCamShot::UpdateTargetsFlipped() {
                      ++tit) {
                     RndTransformable *target = *tit;
                     const char *name = target->Name();
-                    char buf[240];
+                    char buf[256];
                     const char *p = name;
                     char c;
                     do {
