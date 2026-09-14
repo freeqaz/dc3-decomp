@@ -475,50 +475,63 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffs
         unsigned int blockOff = 0;
         if ((int)seekPos != -1 && seekPos != bink->io.iFileBufPos) {
             bytesReturned = 0;
-            if (seekPos > bink->io.iFileBufPos) {
-                // Target is ahead — can we satisfy from buffered data?
-                int fileTell = bf->pFile->Tell();
-                if ((int)seekPos <= fileTell) {
-                    // Advance buffer read position to skip data
-                    unsigned int advance = seekPos - bink->io.iFileBufPos;
-                    bink->io.pBufPos += advance;
-                    if (bink->io.pBufPos > bink->io.pBufEnd) {
-                        bink->io.pBufPos -= bink->BufSize;
-                    }
-                    bink->io.iBufEmpty += advance;
-                    bink->bytesAvail -= advance;
-                } else {
-                    // Need full seek — flush buffer state
-                    while (bink->DoingARead != 0) {
-                        ReadFunc(bink, false);
-                    }
-                    // NEGATIVE RESULT: this block's four stores are already
-                    // written in the image's order (0x6c bytesAvail, 0x98
-                    // iBufEmpty, 0x90 pBufPos, 0x94 pBufBack) yet MSVC emits
-                    // 0x94, 0x90, 0x98 and loads pBuffer (0x88) before BufSize
-                    // (0x60) where the image loads BufSize first.  Dropping
-                    // this named local and spelling `bink->io.pBuffer` at all
-                    // three use sites is BYTE-NEUTRAL -- MSVC CSEs the load
-                    // back into one `lwz` at the same place, 95.6 and the same
-                    // 62 rows either way.  The store order is a scheduler
-                    // decision downstream of the r25/r26 colouring, not a
-                    // source-reachable one.
-                    unsigned char *pBuf = bink->io.pBuffer;
-                    bink->bytesAvail = 0;
-                    bink->io.iBufEmpty = bink->BufSize;
-                    bink->io.pBufPos = pBuf;
-                    bink->io.pBufBack = pBuf;
-                    if (bf->mEncHeader.mVersion == 2) {
-                        // Align to XTEA block boundary
-                        unsigned int rawOff = seekPos - bf->iHeaderSize - 0x38;
-                        blockOff = rawOff & 0xf;
-                        bink->io.pBufPos = pBuf + blockOff;
-                        seekPos = (rawOff & 0xfffffff0) + bf->iHeaderSize + 0x38;
-                        bf->pXTEADecrypter->SetNonce(bf->mEncHeader.mNonce, rawOff >> 4);
-                    }
-                    bf->pFile->Seek((int)seekPos, FILE_SEEK_SET);
-                    bink->DoingARead = 0;
+            // ONE `&&`, not a nested `if` with an empty else.  The image tests
+            // seekPos against iFileBufPos at 0x82E5D6EC and takes BOTH the
+            // `beq` (skip everything, 0x82E5D6F0) and the `ble` (0x82E5D6F8)
+            // out of that one compare: `ble` -- seekPos BELOW iFileBufPos --
+            // lands on .L_82E5D76C, the flush-and-seek block, exactly where
+            // the `bgt cr6` at 0x82E5D714 (seekPos above Tell()) lands.  We
+            // used to spell this as `if (seekPos > iFileBufPos) { if (<=Tell)
+            // ... else <full seek> }` with no else on the outer test, so a
+            // BACKWARDS seek fell straight through to the iFileBufPos update
+            // below without ever draining DoingARead, resetting pBufPos /
+            // pBufBack / iBufEmpty / bytesAvail, or calling File::Seek --
+            // it advertised the new position over a stale buffer.
+            //
+            // The image also never materialises a `fileTell` local: the
+            // `cmpw cr6, r29, r3` at 0x82E5D710 consumes Tell()'s result in
+            // r3 directly.
+            if (seekPos > bink->io.iFileBufPos
+                && (int)seekPos <= bf->pFile->Tell()) {
+                // Advance buffer read position to skip data
+                unsigned int advance = seekPos - bink->io.iFileBufPos;
+                bink->io.pBufPos += advance;
+                if (bink->io.pBufPos > bink->io.pBufEnd) {
+                    bink->io.pBufPos -= bink->BufSize;
                 }
+                bink->io.iBufEmpty += advance;
+                bink->bytesAvail -= advance;
+            } else {
+                // Need full seek — flush buffer state
+                while (bink->DoingARead != 0) {
+                    ReadFunc(bink, false);
+                }
+                // NEGATIVE RESULT: this block's four stores are already
+                // written in the image's order (0x6c bytesAvail, 0x98
+                // iBufEmpty, 0x90 pBufPos, 0x94 pBufBack) yet MSVC emits
+                // 0x94, 0x90, 0x98 and loads pBuffer (0x88) before BufSize
+                // (0x60) where the image loads BufSize first.  Dropping
+                // this named local and spelling `bink->io.pBuffer` at all
+                // three use sites is BYTE-NEUTRAL -- MSVC CSEs the load
+                // back into one `lwz` at the same place, 95.6 and the same
+                // 62 rows either way.  The store order is a scheduler
+                // decision downstream of the r25/r26 colouring, not a
+                // source-reachable one.
+                unsigned char *pBuf = bink->io.pBuffer;
+                bink->bytesAvail = 0;
+                bink->io.iBufEmpty = bink->BufSize;
+                bink->io.pBufPos = pBuf;
+                bink->io.pBufBack = pBuf;
+                if (bf->mEncHeader.mVersion == 2) {
+                    // Align to XTEA block boundary
+                    unsigned int rawOff = seekPos - bf->iHeaderSize - 0x38;
+                    blockOff = rawOff & 0xf;
+                    bink->io.pBufPos = pBuf + blockOff;
+                    seekPos = (rawOff & 0xfffffff0) + bf->iHeaderSize + 0x38;
+                    bf->pXTEADecrypter->SetNonce(bf->mEncHeader.mNonce, rawOff >> 4);
+                }
+                bf->pFile->Seek((int)seekPos, FILE_SEEK_SET);
+                bink->DoingARead = 0;
             }
             bink->io.iFileBufPos = blockOff + seekPos;
         }
