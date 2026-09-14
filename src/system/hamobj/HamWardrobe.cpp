@@ -352,26 +352,51 @@ void HamWardrobe::UpdateOverlay() {
 
         *mOverlay << cur->Name() << ": ";
         CharDriver *driver = cur->Driver();
-        if (!driver) goto output_newline;
-        {
-            CharClipGroup *clipGroup = driver->GetClipGroup();
-            if (!clipGroup) goto output_newline;
-            *mOverlay << clipGroup->Name() << "    [ ";
-            std::set<String> seen;
-            for (CharClipDriver *cd = driver->First(); cd != nullptr; cd = cd->mNext) {
-                CharClip *clip = cd->mClip;
-                const char *name = clip ? clip->Name() : "<NULL>";
-                String s(name);
-                if (seen.find(s) == seen.end()) {
-                    seen.insert(s);
-                    *mOverlay << s.c_str() << " ";
-                }
-            }
-            *mOverlay << "]\n";
+        // The image tests the driver and the clip group in two separate `cmplwi`s
+        // and lets BOTH fall into one shared `*mOverlay << "\n"` block that it
+        // places physically between them (`bne` over it from the driver test,
+        // `beq` back into it from the group test), with `lwz r3, 0x54(r28)`
+        // hoisted ABOVE the driver test so the one mOverlay load serves both
+        // arms.  A `goto output_newline` out of the two guards puts that block
+        // at the bottom instead and reloads mOverlay twice.
+        if (!driver) {
+            *mOverlay << "\n";
             continue;
         }
-    output_newline:
-        *mOverlay << "\n";
+        {
+            CharClipGroup *clipGroup = driver->GetClipGroup();
+            if (!clipGroup) {
+                *mOverlay << "\n";
+                continue;
+            }
+            {
+                *mOverlay << clipGroup->Name() << "    [ ";
+                std::set<String> seen;
+                for (CharClipDriver *cd = driver->First(); cd != nullptr;
+                     cd = cd->mNext) {
+                    // `cd->mClip` is spelled TWICE on purpose: the image stores it
+                    // into one stack slot on both sides of the single `lwz` of
+                    // Name() (`stw r11, 0x54(r31)` before the `beq` and again in
+                    // the taken arm), which is the signature of a repeated call
+                    // expression that MSVC CSE'd -- a named `CharClip *clip` local
+                    // emits only one of those stores.
+                    const char *name = cd->mClip ? cd->mClip->Name() : "<NULL>";
+                    String s(name);
+                    // RESIDUAL (w7-ak, 99.1 canonical): 2 rows.  The image spells
+                    // this test as a branch DIAMOND -- `beq cr6, <insert>` then
+                    // `b <dtor>` -- where we emit the single inverted `bne`.
+                    // NEGATIVE RESULTS: a `bool isNew =` local lowers the compare
+                    // to subf/cntlzw/extrwi. (96.5), and an empty then-arm with the
+                    // body moved into an `else` is normalised back to this exact
+                    // `bne` (99.1, byte-identical rows).
+                    if (seen.find(s) == seen.end()) {
+                        seen.insert(s);
+                        *mOverlay << s.c_str() << " ";
+                    }
+                }
+                *mOverlay << "]\n";
+            }
+        }
     }
 }
 
