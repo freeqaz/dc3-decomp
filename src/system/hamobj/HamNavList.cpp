@@ -477,6 +477,24 @@ void HamNavList::Poll() {
             // plus the conversion temp's home-slot store at 0x50(r31)); a raw
             // `RndAnimatable *` local gets a register and neither. Spelled the
             // same way as the SkipPoll site above, which is byte-exact.
+            //
+            // Re-measured 2026-09-14 (w7-q).  THREE raw-pointer spellings --
+            // a plain local, `if (RndAnimatable *p = ...)`, and one local
+            // declared in the enclosing scope and assigned in both arms --
+            // produce BYTE-IDENTICAL code and all three score 98.98901 vs
+            // this spelling's 99.05180.  They do remove the surplus
+            // `addi r11, r3, 0x384` / `stw r11, 0x50(r31)` pair (the
+            // reference's own home slot, +16 B over the target), but they
+            // lose MORE: the image's `cmplwi r3, 0x0` on cr0 becomes
+            // `cmplwi cr6, r3, 0x0`, and `stw r3, 0x50(r31)` disappears
+            // entirely, at BOTH sites.  Net 2 inserts -> 6 replace/delete
+            // rows.  No spelling found that gives cr0 + the pointer home
+            // store without the reference's own home store.
+            //
+            // NOTE the two sites are genuinely different in the original:
+            // SkipPoll above compares SIGNED (`cmpwi cr6`) -- the ObjPtr
+            // shape -- and these two compare UNSIGNED on cr0.  Whatever the
+            // original wrote here, it is not the SkipPoll spelling.
             const ObjPtr<RndAnimatable> &slideSoundAnim =
                 mListRibbonResource->SlideSoundAnim();
             if (slideSoundAnim) {
@@ -1069,13 +1087,21 @@ void HamNavList::RealRefresh() {
                 mListState.SetMinDisplay(minDisplayVal);
                 mListState.SetScrollPastMinDisplay(true);
                 mListState.SetMaxDisplay(maxDisplay);
-                mListState.SetScrollPastMaxDisplay(
-                    (unsigned long)maxDisplay >= numShowing
-                );
+                // SIGNED, and the OTHER WAY ROUND.  The image builds the bool
+                // with (asm/system/hamobj/HamNavList.s @824481CC)
+                //   subfc  r11, r29, r30      ; maxDisplay - numShowing, sets CA
+                //   eqv    r10, r29, r30      ; bit31 = operands have same sign
+                //   srwi   r11, r10, 31
+                //   addze  r11, r11
+                //   clrlwi r4,  r11, 31       ; (sameSign + CA) & 1
+                // For equal signs that is (1 + CA) & 1 = !CA = !(maxDisplay >=
+                // numShowing), i.e. `numShowing > maxDisplay` -- the exact
+                // negation of what this passed before, which compiled to the
+                // unsigned carry-only form `li r10, -1; subfze r4, r10`.
+                mListState.SetScrollPastMaxDisplay(numShowing > maxDisplay);
             } else {
                 mListState.SetScrollPastMinDisplay(false);
-                int sel = mListState.Selected();
-                mListState.SetSelected(sel, -1, true);
+                mListState.SetSelected(mListState.Selected(), -1, true);
             }
         }
     }
@@ -1744,7 +1770,19 @@ auto& _ref0 = mListState;
 }
 
 void HamNavList::DrawShowing() {
-    if (!mListRibbonResource || unkc8)
+    // BOTH of these tested the wrong member until 2026-09-14.  In the image
+    // (build/373307D9/asm/system/hamobj/HamNavList.s @8244FA4C) r30 is
+    // `this + 0x258` -- pinned by `stfs f1, -0x6c(r30)` for mScrollSettleTime
+    // @0x1ec -- and the two early-out loads are:
+    //     lwz r11, -0x150(r3)   ->  0x108 = mListDirResource's ObjPtr slot
+    //     lbz r11, -0x68(r3)    ->  0x1f0 = mRefreshPending
+    // We were reading -0x180 (0xd8, mListRibbonResource) and -0x190 (0xc8,
+    // unkc8).  mListRibbonResource is separately tested further down, and
+    // unkc8 is the engage flag set in UpdateGestures -- neither gates the draw.
+    // Note mListDirResource is dereferenced unconditionally a few lines below
+    // (BuildDrawState / DrawWidgets), so guarding on mListRibbonResource left
+    // a real null deref whenever the list dir resource had not loaded.
+    if (!mListDirResource || mRefreshPending)
         return;
 #ifdef HX_NATIVE
     if (!mListState.Provider())
@@ -1774,8 +1812,17 @@ void HamNavList::DrawShowing() {
 
     if (mListState.ScrollPastMinDisplay()) {
         for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
-            int first = mListState.FirstShowing();
-            if ((int)i < first || (int)i >= first + HamListRibbon::sNumListSelectable) {
+            // MinDisplay(), not FirstShowing(), and called twice with no local.
+            // The image issues two `bl` on &mListState to a body that is
+            // `lwz r3, 0x10(r3); blr` (ICF-folded onto
+            // ?Parent@Node@?$ObjPtrList@VCharLookAt@@VObjectDir@@@@...).
+            // UIListState+0x10 is mMinDisplay; mFirstShowing is +0x30, and
+            // FirstShowing() is an inline accessor that would have produced a
+            // plain `lwz`, which is what we emitted.  MinDisplay() is declared
+            // without a body in UIListState.h, hence the out-of-line call.
+            if ((int)i < mListState.MinDisplay()
+                || (int)i
+                    >= mListState.MinDisplay() + HamListRibbon::sNumListSelectable) {
                 mRibbonDrawStates[i].mSwellSmoother.SetParams(0.0f, 0.0f, 0.0f);
             }
         }
@@ -1785,7 +1832,13 @@ void HamNavList::DrawShowing() {
         mListRibbonResource->SetFrame(GetFrame(), 1.0f);
         mListRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
         mListRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
-        mListRibbonResource->mMode = mRibbonMode;
+        // Named local: the image loads mRibbonMode into CALLEE-SAVED r27
+        // BEFORE the ObjDirPtr::operator-> call and stores it after
+        // (`lwz r27, -0x194(r30)` / `bl` / `stw r27, 0x25c(r3)`).
+        // Assigning the member expression directly lets the scheduler
+        // sink the load past the call into volatile r11.
+        HamListRibbon::RibbonMode ribbonMode = mRibbonMode;
+        mListRibbonResource->mMode = ribbonMode;
         mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, false, false);
     }
 
@@ -1793,7 +1846,13 @@ void HamNavList::DrawShowing() {
         mHeaderRibbonResource->SetFrame(GetFrame(), 1.0f);
         mHeaderRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
         mHeaderRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
-        mHeaderRibbonResource->mMode = mRibbonMode;
+        // Named local: the image loads mRibbonMode into CALLEE-SAVED r27
+        // BEFORE the ObjDirPtr::operator-> call and stores it after
+        // (`lwz r27, -0x194(r30)` / `bl` / `stw r27, 0x25c(r3)`).
+        // Assigning the member expression directly lets the scheduler
+        // sink the load past the call into volatile r11.
+        HamListRibbon::RibbonMode ribbonMode = mRibbonMode;
+        mHeaderRibbonResource->mMode = ribbonMode;
         mHeaderRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, true, false);
     }
 

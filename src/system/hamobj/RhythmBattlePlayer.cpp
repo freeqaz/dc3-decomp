@@ -170,11 +170,16 @@ void RhythmBattlePlayer::Poll() {
                     if (ShouldAutoPass() && 1 < recordData.unk14) {
                         mRhythmSuccessFraction = 1;
                     }
-                                        if (ShouldAutoPass()) {
-                        mFreshnessScore = 1;
-                    } else {
-                        mFreshnessScore = rd->Freshness();
-                    }
+                    // Ternary, not if/else: the image computes the VALUE in
+                    // both arms and stores ONCE.  RhythmBattlePlayer.s:
+                    //   fmr  f1, f30          ; 1.0f
+                    //   b    .L_824D9A9C
+                    //   mr   r3, r25 / bl ?Freshness@RhythmDetector@@QBAMXZ
+                    //  .L_824D9A9C:
+                    //   stfs f1, 0x248(r30)   ; one shared store
+                    // The if/else spelling emits `stfs f30, 0x248(r30)` inside
+                    // the first arm and a second store in the other.
+                    mFreshnessScore = ShouldAutoPass() ? 1.0f : rd->Freshness();
                 }
                 Symbol autoplay = TheGameData->Player(mPlayer)->Autoplay();
                 if (!autoplay.Null()) {
@@ -197,20 +202,50 @@ void RhythmBattlePlayer::Poll() {
                 f17 = 0;
             }
             float f13 = mRhythmSuccessFraction <= 0 && mFreshnessScore <= 0 ? 0.0f : 1.0f;
-            if (mMaxRhythmInWindow <= mRhythmSuccessFraction) {
-                mMaxRhythmInWindow = mRhythmSuccessFraction;
-            }
+            // Ternary with an UNCONDITIONAL store, same shape as the
+            // mFreshnessScore site above.  The image branches over only the
+            // `fmr`, never over the store:
+            //   lfs   f0, 0x24c(r30)      ; mMaxRhythmInWindow
+            //   fcmpu cr6, f0, f13        ; vs mRhythmSuccessFraction
+            //   bgt   cr6, .L_824D9AA4
+            //   fmr   f0, f13
+            //  .L_824D9AA4:
+            //   stfs  f0, 0x24c(r30)
+            // The `if (a <= b) a = b;` spelling sinks the store into the arm.
+            mMaxRhythmInWindow = mMaxRhythmInWindow > mRhythmSuccessFraction
+                ? mMaxRhythmInWindow
+                : mRhythmSuccessFraction;
             if (mSuppressRhythm) {
                 mMaxRhythmInWindow = 0;
             }
+            // Statement order is already correct -- swapping these two costs
+            // 0.7pp (99.1 -> 98.4) and introduces a (0x250,0x254) offset swap.
             mFreshnessAccumulator += mFreshnessScore * f17;
             mMovePresenceAccumulator += f13 * f17;
             mWindowElapsedTime += f17;
-            f13 = mMaxRhythmInWindow > 1.0f ? 1.0f : mMaxRhythmInWindow;
-            float f16 = 4.0f - mWindowElapsedTime - f17;
+            // Residual row [261] is `fmr f1, f0`: the image loads
+            // mMaxRhythmInWindow straight into f1 (SetRatingFrac's first
+            // argument register) and conditionally overwrites it with 1.0f,
+            // where we compute into f0 and copy.  Giving this its own name and
+            // feeding the call directly is BYTE-IDENTICAL -- the copy is a
+            // register-allocation choice, not a spelling.
+            float ratingFrac = mMaxRhythmInWindow > 1.0f ? 1.0f : mMaxRhythmInWindow;
+            // BEHAVIOURAL FIX 2026-09-14 (w7-q): this used to read
+            //     4.0f - mWindowElapsedTime - f17
+            // which subtracts the frame delta TWICE -- `mWindowElapsedTime`
+            // was already advanced by f17 on the line above.  The image
+            // issues exactly ONE fsubs against the just-stored accumulator
+            // (RhythmBattlePlayer.s):
+            //     fadds f0, f11, f31        ; mWindowElapsedTime + f17
+            //     stfs  f0, 0x258(r30)      ; mWindowElapsedTime =
+            //     lfs   f13, __real@40800000@l(r11)   ; 4.0f
+            //     fsubs f0, f13, f0         ; 4.0f - mWindowElapsedTime
+            // The extra term made the phrase-meter countdown handed to
+            // SetRatingFrac run one frame-delta short every frame.
+            float f16 = 4.0f - mWindowElapsedTime;
             if (mPhraseMeter) {
                 f16 = Max(f16, 0.0f);
-                mPhraseMeter->SetRatingFrac(f13, f16);
+                mPhraseMeter->SetRatingFrac(ratingFrac, f16);
             }
             if (mInTheZone == 1 && mRhythmBattle && mRhythmBattle->InFullKTB()) {
                 mComboMeter -= f17 * 1.125f;
