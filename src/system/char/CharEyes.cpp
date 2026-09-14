@@ -824,6 +824,28 @@ void CharEyes::NextLook() {
         }
     } else {
         const Vector3 &lastFacing = mLastFacing;
+        // NEGATIVE RESULT -- the one unexplained STRUCTURE left in this function.
+        // The image makes a SECOND 16-byte Vector3 local here, a copy of
+        // facingDir: `addi r10, r31, 0x70` (facingDir) / four `lwz` off r10 /
+        // `addi r11, r31, 0x60` / four `stw` off r11, interleaved with the three
+        // `facingDir - mLastFacing` fsubs below (CharEyes.s, the ten
+        // instructions at diff idx 91-105).  It then reads the extrapolated
+        // facing's y and z back out of THAT copy after the tan() call --
+        // `lfs f0, 0x64(r31)` / `lfs f13, 0x68(r31)` -- while taking x from the
+        // register f27 that still holds facingDir.x.  That reload is why the
+        // image only saves f26-f31 where we save f24-f31: we keep all three
+        // facingDir components pinned in callee-saved FPRs across tan() and
+        // RandomFloat() instead.
+        //
+        // Spelling it as `Vector3 newFacing = facingDir;` and reading the three
+        // components out of `newFacing` is BYTE-FOR-BYTE INERT: MSVC copy-
+        // propagates the local-to-local copy away (510 instructions, 91.0
+        // canonical, identical row set), even though facingDir's address has
+        // already escaped into Normalize().  Whatever the image is copying from
+        // is reached through a pointer MSVC cannot see through -- note that both
+        // sides of that copy use computed address registers, where the other two
+        // Vector3 copies in this function (oldTarget at 0x90, facingDir at 0x70)
+        // use a computed address only for the destination.
         float dz = (facingDir.z - lastFacing.z) * 45.0f;
         float dx = (facingDir.x - lastFacing.x) * 45.0f;
         float dy = (facingDir.y - lastFacing.y) * 45.0f;
