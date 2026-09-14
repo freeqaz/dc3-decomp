@@ -182,14 +182,24 @@ DataNode PreloadPanel::OnMsg(const ContentReadFailureMsg &msg) {
 }
 
 DataNode PreloadPanel::OnMsg(const UITransitionCompleteMsg &msg) {
-    MILO_ASSERT(mPreloadResult != kPreloadInProgress, 0x153);
+    // Both asserts in this function are the 3-scope spelling in the image, not
+    // the 5-scope do/while one.  MSVC stamps "scopes opened so far" into every
+    // function-local static's mangled name, and this function has three of
+    // them, so the image states its own brace structure outright:
+    //   target  ??__Fmsg  scopes  8, 10, 16
+    //   do/while MILO_ASSERT gives 2 +5 +if{}3 = 10, +else{}2 = 12,
+    //                              +if{}3 +5 = 20   -- what we used to emit
+    //   MILO_ASSERT_IF gives       2 +3 +if{}3 =  8, +else{}2 = 10,
+    //                              +if{}3 +3 = 16   -- the image, exactly
+    // See docs/decomp/patterns/fixable-scope-index.md for the cost table.
+    MILO_ASSERT_IF(mPreloadResult != kPreloadInProgress, 0x153);
     if (mPreloadResult == kPreloadSuccess) {
         static Message msg("on_preload_ok");
         HandleType(msg);
     } else {
         static Message msg("on_preload_failed");
         if (HandleType(msg).Equal(DATA_UNHANDLED, nullptr, true)) {
-            MILO_ASSERT(mAppReadFailureHandler, 0x15F);
+            MILO_ASSERT_IF(mAppReadFailureHandler, 0x15F);
             static ContentReadFailureMsg msg(false, gNullStr);
             msg[0] = mContentCorrupt;
             msg[1] = mCorruptContentName;
