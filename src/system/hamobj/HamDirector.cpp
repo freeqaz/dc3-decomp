@@ -2473,6 +2473,15 @@ void HamDirector::Reteleport() {
     }
 }
 
+// NOTE (w7-ai): residual at 99.2%.  What is left is 22 rows of one
+// callee-saved swap -- retail puts propKeys in r29 (recycling the register
+// that held the `shot` static's address) and keyIdx in r28, we do the
+// opposite -- plus the cross-jump direction of the two
+// ReactToCollision_InsertRealShot call sites (retail branches BACKWARD from
+// the second to the first at 0x8247A550; we branch forward) and the two
+// argument-setup instructions of the second FrameFromIndex, which are the
+// same scheduling decision.  Splitting `int keyIdx;` from its initialiser to
+// reorder the allocation is byte-identical, measured 2026-09-14.
 bool HamDirector::ReactToCollision(float frame) {
     if (TheLoadMgr.EditMode()) {
         return false;
