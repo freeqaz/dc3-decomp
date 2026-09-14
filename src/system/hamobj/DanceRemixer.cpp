@@ -76,11 +76,13 @@ void DanceRemixer::SetJump(int from, int to) {
     int toMeasure = to - 1;
     mFromMeasure = fromMeasure;
     mToMeasure = toMeasure;
-    int fromBeat = fromMeasure * 4;
+    // No named fromBeat: the image hoists the slwi AND its extsw above the
+    // branch and leaves only std/lfd/fcfid/frsp in each arm, which is the CSE
+    // of the conversion's 64-bit input, not a named int.
     if (fromMeasure == toMeasure) {
-        TheMaster->GetAudio()->SetLoop((float)(toMeasure * 4), (float)fromBeat);
+        TheMaster->GetAudio()->SetLoop((float)(toMeasure * 4), (float)(fromMeasure * 4));
     } else {
-        float fromMs = BeatToMs((float)fromBeat);
+        float fromMs = BeatToMs((float)(fromMeasure * 4));
         float toMs = BeatToMs((float)(mToMeasure * 4));
         float jumpOffset = SystemConfig("synth", "crossfade_beats")->Float(1);
         float crossfadeMs = BeatToMs((float)(mFromMeasure * 4) + jumpOffset);
@@ -98,23 +100,25 @@ void DanceRemixer::SetJump(int from, int to) {
         int endIdx = (int)curBeat / 4 + 4;
         int startIdx = mFromMeasure - 1;
         int count = endIdx - startIdx + 1;
-        if (count > 0 && 0 < (int)count) {
-            // Block-scoped: the image keeps the start index in a volatile
-            // register and copies it into a callee-saved one INSIDE the guard
-            // (mr r25, r10 between the two ble's), which is what a local
-            // declared in the guarded block gets; a function-scope local is
-            // computed straight into r29 and renumbers every later callee-saved
-            // register by one.  The load of mFromMeasure is CSE'd with the one
-            // the count above needs, so there is still only one lwz 0x4c(r31).
+        if (count > 0) {
+            // moveIdx's copy into a callee-saved register sits BETWEEN the two
+            // guards in the image (ble / mr r25, r10 / cmpwi / ble / mr r24,
+            // r11), so its declaration sits between the two tests.  The tests
+            // are not written as one && : MSVC folds a second identical test
+            // away (measured -- a for-loop entry test disappears entirely),
+            // and the outer one is free, being the addic. that forms count.
             int moveIdx = startIdx;
-            do {
-                MILO_ASSERT(ValidMoveIdx(moveIdx), 0x16d);
-                for (int p = 0; p < 2; p++) {
-                    SelectMove(p, moveIdx);
-                }
-                moveIdx = JumpedMeasureAdd(moveIdx + 1, 1) - 1;
-                count--;
-            } while (count != 0);
+            if (0 < (int)count) {
+                int remaining = count;
+                do {
+                    MILO_ASSERT(ValidMoveIdx(moveIdx), 0x16d);
+                    for (int p = 0; p < 2; p++) {
+                        SelectMove(p, moveIdx);
+                    }
+                    moveIdx = JumpedMeasureAdd(moveIdx + 1, 1) - 1;
+                    remaining--;
+                } while (remaining != 0);
+            }
         }
     }
 }
