@@ -267,15 +267,21 @@ void FreestyleMoveRecorder::Poll() {
 
         int prevFrame = playbackFrame - 1;
         int lastFrame = mFrameIndex - 1;
-        if (prevFrame <= lastFrame) {
-            lastFrame = prevFrame;
-            if (prevFrame < 0) {
-                lastFrame = 0;
-            }
+        // The image writes the result through a THIRD variable: the else arm
+        // is a real `mr r11, r10` + `b` (target idx 213/214), which only
+        // happens when neither input register already holds the answer.
+        // ...and the test is written the other way round, so the `lastFrame`
+        // arm is the fall-through and the clamp is the branched-to block
+        // (target `ble` at idx 212 jumps INTO the clamp).
+        int showFrame;
+        if (prevFrame > lastFrame) {
+            showFrame = lastFrame;
+        } else {
+            showFrame = prevFrame < 0 ? 0 : prevFrame;
         }
 
         int takeIdx = mCurrentTakeIndex;
-        char *depthBase = (char *)mTakes[takeIdx].mDepthFrames + lastFrame * 0x12c0;
+        char *depthBase = (char *)mTakes[takeIdx].mDepthFrames + showFrame * 0x12c0;
         int centerX = mTakes[takeIdx].unk10 << 2;
         int minDepth = mTakes[takeIdx].unk14 - 0x7a;
 
