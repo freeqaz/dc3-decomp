@@ -221,6 +221,20 @@ int FFTComplex(float* data, long size, long inverse, float* context) {
     return fft_recursive(data, (unsigned long)size, inverse, context);
 }
 
+// RESIDUAL (w7-ay, 82.5 canonical, floor held): every butterfly loop below
+// differs from the image in ONE address decision.  Two operands are read
+// twice per iteration -- src[1] and the high imaginary at src+stride4+4 --
+// and MSVC materialises exactly one of the two addresses for the reload.
+// The image materialises the high one (`add r4, r3, r10` at 0x82E4F8C0,
+// reload `lfs f9, 0x0(r4)`) and keeps src[1] as `lfs 0x4(r10)` both times;
+// we materialise src+4 (`addi r8, r10, 0x4`), reload src[1] through it, and
+// then re-express the high REAL load off it with a -4 bias (`subi r30,
+// r27, 0x4` / `lfsx f9, r30, r8`), which also flips the load order and the
+// FPR numbering behind every fadds/fsubs.  Tried: loading the high imaginary
+// into a named local before t_im (inert -- the load order is a consequence of
+// the materialisation, not of source order); reading it twice through one
+// `const float* hp` (76.1, MSVC then walks hp as a second induction variable).
+// The `hi` pointer form was already worse (b54e87b6d).
 int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle) {
     float* src = a;
     float* dst = b;
@@ -581,6 +595,17 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
                 // The gather loop's pointers survive because they are STORE
                 // destinations; the merge here is a load-side decision the
                 // pointer's spelling and its increment's position do not reach.
+                //   3. (w7-ay) indexing both loads off temp/temp2 by k
+                //      (`__lvx(temp + k * 4, 0)`, no source pointers at all):
+                //      WORSE, 86.6 -- strength reduction rebuilds the same
+                //      merged pair.
+                //   4. (w7-ay) outside the loop: assigning sv.f[] / w_re1 /
+                //      w_re2 / w_im2 straight from the sin()/__vspltw/__vmrglw
+                //      expressions instead of via the sin2_1/v_cos_splat/
+                //      v_cos_merged/v_sin_merged locals: byte-for-byte inert
+                //      (the `vor128 v62, v63, v63` copy of v_cos_vec and the
+                //      `fmul f0, f1, f1` square-before-copy at the first sin
+                //      return are scheduling, not spelling).
                 char* src1 = (char*)temp;
                 char* src2 = (char*)temp2;
                 char* out = (char*)data_ptr;
@@ -775,22 +800,40 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
             sv.f[3] = (float)cos(angle2);
 
             XMVECTOR v_cos_vec = __lvx(&sv, 0);
-            XMVECTOR v_cos_splat = __vspltw(v_cos_vec, 0);
+
+            // Initialize running twiddle factors.  w_re1/w_re2 are formed
+            // from v_cos_vec around the two sv stores, in the image's order
+            // (0x82E4E97C / 0x82E4E984 straddle the `stfs 0x68(r1)`).  MSVC
+            // still sinks the w_re2 merge below the sin-vector load and pays
+            // a `vor128` copy of v_cos_vec for it, exactly as in the forward
+            // transform; spelling it through v_cos_merged, or after the sin
+            // load, is inert or worse.
+            XMVECTOR w_im2 = v_sign;
+            XMVECTOR w_im1 = v_zero;
+            XMVECTOR w_re1 = __vspltw(v_cos_vec, 0);
 
             // Phase 3: Overwrite with sin values, load it
             sv.f[2] = (float)s1d;
+            XMVECTOR w_re2 = __vmrglw(v_cos_vec, v_cos_vec);
             sv.f[3] = (float)s2d;
 
             XMVECTOR v_sin_vec = __lvx(&sv, 0);
             XMVECTOR v_sin_merged = __vmrglw(v_sin_vec, v_sin_vec);
+            w_im2 = __vmaddfp(w_im2, v_sin_merged, v_zero);
 
-            // Initialize running twiddle factors
-            XMVECTOR v_cos_merged = __vmrglw(v_cos_vec, v_cos_vec);
-            XMVECTOR w_re1 = v_cos_splat;
-            XMVECTOR w_im1 = v_zero;
-            XMVECTOR w_re2 = v_cos_merged;
-            XMVECTOR w_im2 = __vmaddfp(v_sign, v_sin_merged, v_zero);
-
+            // BEHAVIOURAL FIX (w7-ay): the gather loop below walks COPIES of
+            // temp/temp2 -- the image's `mr r9, r28` / `mr r8, r27` at
+            // 0x82E4E970-74 -- and r28 (temp) is what the two FFTComplex
+            // calls, the deinterleave and free() then use (0x82E4EA78,
+            // 0x82E4EAA8, 0x82E4EB1C).  The permuter harvest fb98fec2e had
+            // replaced them with `temp += 4` / `temp2 += 4`, which scored
+            // 3pp higher (89.0 vs 86.0) and handed FFTComplex, the second
+            // loop and free() a pointer half_cols*16 bytes past the malloc.
+            // Keep the copies; the score is not the point.  Declared here,
+            // before src_data, like the forward transform; scoping them
+            // inside the guard is worse (85.6).
+            float *dst1 = temp;
+            float *dst2 = temp2;
             char *src_data = (char *)data_ptr;
             int k = 0;
 
@@ -826,9 +869,9 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
                     XMVECTOR p_im2 = __vnmsubfp(w_im2, sp_sin2_3, w_im2);
                     new_re1 = __vnmsubfp(w_im1, v_im_init, new_re1);
                     XMVECTOR r1 = __vmaddfp(w_im1, d_swap0, t1);
+                    new_re2 = __vnmsubfp(w_im2, v_im_init, new_re2);
                     XMVECTOR new_im1 = __vmaddfp(w_re1, v_im_init, p_im1);
                     XMVECTOR r2 = __vmaddfp(w_im2, d_swap1, t2);
-                    new_re2 = __vnmsubfp(w_im2, v_im_init, new_re2);
                     XMVECTOR new_im2 = __vmaddfp(w_re2, v_im_init, p_im2);
 
                     w_re1 = new_re1;
@@ -842,10 +885,10 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
                     XMVECTOR out_lo = __vperm(r1, r2, pm_lo_v);
                     XMVECTOR out_hi = __vperm(r1, r2, pm_hi_v);
 
-                    __stvx(out_lo, temp, 0);
-                    temp += 4;
-                    __stvx(out_hi, temp2, 0);
-                    temp2 += 4;
+                    __stvx(out_lo, dst1, 0);
+                    dst1 += 4;
+                    __stvx(out_hi, dst2, 0);
+                    dst2 += 4;
                     src_data += data_stride;
                 } while (k < half_cols);
             }

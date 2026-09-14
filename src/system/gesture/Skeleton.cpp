@@ -68,6 +68,22 @@ static const int sJointTrackingMap[] = { 0, 1, 2 };
 // produce a BYTE-IDENTICAL diff (74.0 canonical, same 45/14/16/24 row
 // counts).  MSVC fully forwards the inlined parameter back to the local, so
 // the loads are provably invariant whatever the indirection.
+// NEGATIVE RESULT (w7-ay, 2026-09-14, floor 74.0 held): two more spellings
+// aimed at the same hoist were byte-for-byte inert (74.0, same 45/14/16/24
+// rows): (1) `const XMMATRIX M` BY VALUE -- XNAMath's Xbox CXMMATRIX -- the
+// 64-byte copy is elided and the loads still hoist; (2) reading the rows
+// through the `__lvx(&M.r[i], 0)` intrinsic -- MSVC hoists the intrinsic
+// loads exactly like the field reads.  Since even an intrinsic load hoists,
+// the image's per-iteration `lvx128 v63, r0, r5` (0x82435B54) and the
+// per-skeleton reload at 0x82435C94 are not an aliasing effect of any
+// spelling of the transform; they are consistent with the allocator
+// rematerialising the four rows from their stack slots (which is also why
+// they land in v59-v63 and force the `vmaddcfp128`/`vmaddfp128` encodings at
+// 0x82435B84 rather than our 4-operand `vmaddfp` on v0-v13).  The hip-centre
+// store order below (y, x, z -- the joint loop's order) is the one of the
+// three tried (z,y,x / x,y,z / y,x,z) that reproduces the image's z, y, x
+// stores at 0x82435CDC-0x82435CF0; the remaining rows there are which
+// element is held in f13 across the other two, scheduling only.
 static XMVECTOR XMVector3Transform(XMVECTOR V, const XMMATRIX &M) {
     XMVECTOR Z = __vspltw(V, 2);
     XMVECTOR Y = __vspltw(V, 1);
@@ -140,9 +156,9 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 
         // Transform hip center by gravity matrix
         XMVECTOR hipResult = XMVector3Transform(nuiSkel.Position, mat);
-        data.mHipCenter.z = hipResult.z;
         data.mHipCenter.y = hipResult.y;
         data.mHipCenter.x = hipResult.x;
+        data.mHipCenter.z = hipResult.z;
     }
 }
 

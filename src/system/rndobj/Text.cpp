@@ -1381,26 +1381,6 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
     }
 #endif
     StyleState styleState(this, 1.0f);
-    unsigned short prevChar = 0;
-    // RESIDUAL (w7-bf, 92.7 canonical after the control-flow/precision fixes
-    // below).  What is left is frame shaping: TGT frame 0x11d0 vs ours 0x11e0,
-    // with the three vectors' slot block sitting 8 bytes low on our side and an
-    // 18-row (0x50,0x54) offset swap -- the image puts the `const char *`
-    // MakeString temp at 0x50 and the `unsigned short` find/push_back temp at
-    // 0x54, we do the reverse.  The image also gives each of the two notify
-    // blocks' Strings its own slot where we share one, which is where the extra
-    // 0x10 comes from.
-    //
-    // REFUTED, both measured in this worktree:
-    //  - Reordering these three declarations to missingChars / missingFonts /
-    //    negWidthChars: 92.7 -> 90.7 (28 inserts instead of 22).  The order
-    //    below is the better one; do not "tidy" it.
-    //  - Hoisting the two `float charWidth;` declarations into a single one
-    //    above the `mFitType == kFitScrollMarqueeWrapAlways` test: canonical
-    //    unchanged at 92.7 (184 diff_arg instead of 185, but 22 offset swaps
-    //    instead of 20).  It does tighten the slot table (10 DIFFER/7 PERMUTED
-    //    -> 8 DIFFER/1 PERMUTED), so it is the right starting point for anyone
-    //    attacking the frame delta -- it just does not pay on its own.
     std::vector<unsigned short> negWidthChars;
     std::vector<unsigned short> missingChars;
     std::vector<RndFontBase *> missingFonts;
@@ -1408,160 +1388,77 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
     widths[0] = 0.0f;
     const unsigned short *p = wideChars;
     float *w = widths + 1;
-    for (;;) {
-        if (*p == 0) {
-            if (missingChars.size()) {
-                auto pathStr = PathName(this);
-                String msg = MakeString("%s:%s '", pathStr, ClassName());
-                FilePath hexMsg;
-                unsigned short tmp[2];
-                tmp[1] = 0;
-                for (unsigned int i = 0; i < missingChars.size(); i++) {
-                    tmp[0] = missingChars[i];
-                    msg += MakeString("%s", WideCharToChar(tmp));
-                    hexMsg += MakeString("0x%02x ", missingChars[i]);
-                }
-                msg += MakeString("' (%s", hexMsg);
-                String fontNames;
-                for (unsigned int i = 0; i < missingFonts.size(); i++) {
-                    fontNames += MakeString("%s ", PathName(missingFonts[i]));
-                }
-                msg += MakeString(") missing from font(s) (%s) in string \"", fontNames);
-                const unsigned short *q = wideChars;
-                tmp[1] = 0;
-                while (*q != 0) {
-                    tmp[0] = *q;
-                    msg += MakeString("%s", WideCharToChar(tmp));
-                    q++;
-                }
-                msg += "\"";
-                for (unsigned int i = 0; i < msg.length(); i++) {
-                    if (msg[i] == '%') {
-                        msg.replace(i, 1, "<PCNT>");
-                        i++;
-                    }
-                }
-                MILO_NOTIFY(msg.c_str());
-            }
-            if (negWidthChars.size()) {
-                String msg = MakeString("%s: '", PathName(this));
-                FilePath hexMsg;
-                unsigned short tmp[2];
-                tmp[1] = 0;
-                for (unsigned int i = 0; i < negWidthChars.size(); i++) {
-                    tmp[0] = negWidthChars[i];
-                    msg += MakeString("%s", WideCharToChar(tmp));
-                    hexMsg += MakeString("0x%02x ", negWidthChars[i]);
-                }
-                msg += MakeString("' (%s", hexMsg);
-                // The image indexes mFontMaps[mFontMapIdx] here with NO -1 test:
-                // 826954AC lwz r11,0xf8(r31) / lwz r10,0xa8(r25) / slwi / lwzx.
-                // Compare the main-loop site at 82694EE4, which loads the same
-                // slot and DOES `cmpwi cr6, r11, -1 / beq`. The guard is only
-                // missing on this notify path, so mFontMaps[-1] is what the
-                // original reads when a run of negative widths is reported for
-                // text with no active font map.
-                // Native keeps the guard: this function is compiled for the
-                // native port, mFontMaps[-1] is a genuine out-of-bounds read
-                // followed by a virtual call, and MILO_ASSERT is non-fatal
-                // there, so the PPC-faithful spelling would corrupt rather than
-                // trap.
-#ifdef HX_NATIVE
-                if (styleState.mFontMapIdx != -1)
-#endif
-                {
-                    RndFontBase *font = mFontMaps[styleState.mFontMapIdx]->Font();
-                    msg += MakeString(") have negative widths from %s in string \"", PathName(font));
-                }
-                const unsigned short *q = wideChars;
-                tmp[1] = 0;
-                while (*q != 0) {
-                    tmp[0] = *q;
-                    msg += MakeString("%s", WideCharToChar(tmp));
-                    q++;
-                }
-                msg += "\"";
-                MILO_NOTIFY(msg.c_str());
-            }
-            *w = cumWidth;
-            return (int)(w - widths) - 1;
-        }
+    unsigned short prevChar = 0;
+    while (*p != 0) {
         unsigned short ch = *p;
         if (ch == '<' && mMarkup) {
             unsigned short replaceChar = 0;
             const unsigned short *next = ParseMarkup(p, styleState, replaceChar);
-            if (p < next) {
-                *w = cumWidth;
-                int numSkipped = (int)(next - p);
-                for (int i = 1; i < numSkipped; i++) {
-                    *(w + i) = cumWidth;
-                }
-                w += numSkipped;
-                p = next;
+            // A rotated `while`, not `if (p < next) for (i = 1; ...)`: the image
+            // has one guard (82694E84 cmplw/bge) and a do/while trip count
+            // (82694E98..82694EA4 `subi 1 / srwi 1 / addi 1`) feeding _blkmov,
+            // with p and w themselves advanced by the count afterwards.
+            while (p < next) {
+                *w++ = cumWidth;
+                p++;
             }
-            if (replaceChar != 0) {
-                w--;
-                p--;
-                ch = replaceChar;
-                goto process_char;
-            }
-        } else {
-process_char:
-            if (ch != 0 && styleState.mFontMapIdx != -1) {
+            if (replaceChar == 0)
+                continue;
+            w--;
+            p--;
+            ch = replaceChar;
+        }
+        // `ch == 0` skips the advance too (82694EE0 beq -> the loop-bottom
+        // test at 8269511C), where `mFontMapIdx == -1` (82694EEC) and a null
+        // font (82694F18) fall to the advance at 8269510C.
+        if (ch != 0) {
+            if (styleState.mFontMapIdx != -1) {
                 FontMapBase *fontMap = mFontMaps[styleState.mFontMapIdx];
                 RndFontBase *font = fontMap->Font();
                 if (font) {
+                    // The image homes a copy of ch at 0x54 here (82694F20
+                    // `sth r28, 0x54`), after font's slot (0x50) and before
+                    // the mFitType test; that slot is what find/push_back
+                    // take the address of. ch itself (r28) is never stored.
+                    unsigned short curChar = ch;
+                    float charWidth;
                     if (mFitType == kFitScrollMarqueeWrapAlways && ch == '\n') {
-                        // Arm order is load-bearing: the image falls THROUGH to the
-                        // marqueeWrap body -- 82694F3C `beq .L_82694F48` skips over
-                        // `fadds f31, f0, f31` to the mNumLines block -- rather than
-                        // branching to it.  Written the other way round MSVC sinks
-                        // the one-instruction arm out of line and adds a `b` back.
+                        // The wrap arm is the fall-through (82694F3C beq to the
+                        // insert block), and the line width is single-precision:
+                        // 82694F78 frsp then 82694F7C fmadds, no double round-trip.
                         if (marqueeWrap) {
                             cumWidth = mIndentation + cumWidth;
                         } else {
                             mNumLines++;
-                            float lw = mNumLines * mIndentation + cumWidth;
+                            float lw = (float)mNumLines * mIndentation + cumWidth;
                             mLineWidths.insert(mLineWidths.end(), lw);
-                            float lo = mNumLines * mIndentation + cumWidth;
+                            float lo = (float)mNumLines * mIndentation + cumWidth;
                             mLineOffsets.insert(mLineOffsets.end(), lo);
                         }
-                        float charWidth;
-                        if (font->CharAdvance(prevChar, (unsigned short)'\n', charWidth)) {
-                            fontMap->IncrementDisplayableChars('\n');
+                        // Both calls pass ch (82694FC8 / 82694FEC `mr r5/r4, r28`),
+                        // not a '\n' literal.
+                        if (font->CharAdvance(prevChar, ch, charWidth)) {
+                            fontMap->IncrementDisplayableChars(ch);
                         }
                     } else {
-                        float charWidth;
-                        bool found = font->CharAdvance(prevChar, ch, charWidth);
-                        // Same again: 82695028 `beq .L_826950A8` sends the NOT-found
-                        // case away to the missing-char bookkeeping and falls through
-                        // to the width accumulation, so `found` is the inline arm --
-                        // that one inversion moves the whole 26-instruction
-                        // find/push_back block to the right side of the branch.
-                        // And 82695048 `blt cr6, .L_82695054` does it once more for
-                        // the negative-width test, so `!(charWidth < 0.0f)` -- not
-                        // `charWidth < 0.0f` -- is the arm that stays inline.
-                        if (found) {
-                            charWidth = (charWidth + styleState.mKerning) * styleState.mSize;
-                            if (!(charWidth < 0.0f)) {
+                        if (font->CharAdvance(prevChar, ch, charWidth)) {
+                            charWidth = (styleState.mKerning + charWidth) * styleState.mSize;
+                            // Non-negative arm is the fall-through (82695048 blt).
+                            if (charWidth >= 0.0f) {
                                 cumWidth = charWidth + cumWidth;
-                            } else {
-                                if (ch != '\n') {
-                                    if (std::find(negWidthChars.begin(), negWidthChars.end(), ch) == negWidthChars.end()) {
-                                        negWidthChars.push_back(ch);
-                                    }
+                            } else if (ch != '\n') {
+                                if (std::find(negWidthChars.begin(), negWidthChars.end(), curChar) == negWidthChars.end()) {
+                                    negWidthChars.push_back(curChar);
                                 }
                             }
                             fontMap->IncrementDisplayableChars(ch);
                             prevChar = ch;
-                        } else {
-                            if (ch != '\n') {
-                                if (std::find(missingChars.begin(), missingChars.end(), ch) == missingChars.end()) {
-                                    missingChars.push_back(ch);
-                                }
-                                if (std::find(missingFonts.begin(), missingFonts.end(), font) == missingFonts.end()) {
-                                    missingFonts.push_back(font);
-                                }
+                        } else if (ch != '\n') {
+                            if (std::find(missingChars.begin(), missingChars.end(), curChar) == missingChars.end()) {
+                                missingChars.push_back(curChar);
+                            }
+                            if (std::find(missingFonts.begin(), missingFonts.end(), font) == missingFonts.end()) {
+                                missingFonts.push_back(font);
                             }
                         }
                     }
@@ -1570,9 +1467,91 @@ process_char:
             *w = cumWidth;
             w++;
             p++;
-            continue;
         }
     }
+    if (missingChars.size()) {
+        auto pathStr = PathName(this);
+        // Slot 0 of ??_7RndText@@6B0@@ (8269518C..82695198, hidden Symbol
+        // return in r3, this in r4) is TextToken(), not ClassName().
+        String msg = MakeString("%s:%s '", pathStr, TextToken());
+        // A plain String: the image constructs it with ??0String@@QAA@XZ and
+        // stores no FilePath vtable (826951C0). MakeString<String> folds
+        // with MakeString<FilePath> (icf_aliases.map).
+        String hexMsg;
+        unsigned short tmp[2];
+        tmp[1] = 0;
+        for (unsigned int i = 0; i < missingChars.size(); i++) {
+            tmp[0] = missingChars[i];
+            msg += MakeString("%s", WideCharToChar(tmp));
+            hexMsg += MakeString("0x%02x ", missingChars[i]);
+        }
+        msg += MakeString("' (%s", hexMsg);
+        String fontNames;
+        for (unsigned int i = 0; i < missingFonts.size(); i++) {
+            fontNames += MakeString("%s ", PathName(missingFonts[i]));
+        }
+        msg += MakeString(") missing from font(s) (%s) in string \"", fontNames);
+        const unsigned short *q = wideChars;
+        while (*q != 0) {
+            tmp[0] = *q;
+            msg += MakeString("%s", WideCharToChar(tmp));
+            q++;
+        }
+        msg += "\"";
+        for (unsigned int i = 0; i < msg.length(); i++) {
+            if (msg[i] == '%') {
+                msg.replace(i, 1, "<PCNT>");
+                i++;
+            }
+        }
+        MILO_NOTIFY(msg.c_str());
+    }
+    if (negWidthChars.size()) {
+        String msg = MakeString("%s: '", PathName(this));
+        String hexMsg;
+        unsigned short tmp[2];
+        tmp[1] = 0;
+        for (unsigned int i = 0; i < negWidthChars.size(); i++) {
+            tmp[0] = negWidthChars[i];
+            msg += MakeString("%s", WideCharToChar(tmp));
+            hexMsg += MakeString("0x%02x ", negWidthChars[i]);
+        }
+        msg += MakeString("' (%s", hexMsg);
+        // The image indexes mFontMaps[mFontMapIdx] here with NO -1 test:
+        // 826954AC lwz r11,0xf8(r31) / lwz r10,0xa8(r25) / slwi / lwzx.
+        // Compare the main-loop site at 82694EE4, which loads the same
+        // slot and DOES `cmpwi cr6, r11, -1 / beq`. The guard is only
+        // missing on this notify path, so mFontMaps[-1] is what the
+        // original reads when a run of negative widths is reported for
+        // text with no active font map.
+        // Native keeps the guard: this function is compiled for the
+        // native port, mFontMaps[-1] is a genuine out-of-bounds read
+        // followed by a virtual call, and MILO_ASSERT is non-fatal
+        // there, so the PPC-faithful spelling would corrupt rather than
+        // trap.
+#ifdef HX_NATIVE
+        if (styleState.mFontMapIdx != -1)
+#endif
+        {
+            RndFontBase *font = mFontMaps[styleState.mFontMapIdx]->Font();
+            msg += MakeString(") have negative widths from %s in string \"", PathName(font));
+        }
+        // ORIGINAL BUG, reproduced: this loop's body reads *wideChars
+        // (826954FC `lhz r11, 0x0(r18)`, r18 = wideChars), not *q, so the
+        // quoted string is the FIRST character repeated strlen times. The
+        // missing-glyph loop above reads *q (826952F0 `lhzu r11, 0x2(r30)`
+        // feeds the sth directly). Diagnostic text only; kept faithful.
+        const unsigned short *q = wideChars;
+        while (*q != 0) {
+            tmp[0] = *wideChars;
+            msg += MakeString("%s", WideCharToChar(tmp));
+            q++;
+        }
+        msg += "\"";
+        MILO_NOTIFY(msg.c_str());
+    }
+    *w = cumWidth;
+    return (int)(w - widths) - 1;
 }
 
 void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {

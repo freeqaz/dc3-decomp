@@ -18,6 +18,17 @@
 #include "rndobj\Mat.h"
 #include "os\File.h"
 #include "utl/BinStream.h"
+
+// Matrix-times-column-vector, out.i = Dot(m.i, v): the same TU-local overload
+// char/CharLookAt.cpp carries (Mtx.h's (Vector3, Matrix3) form is the
+// transpose). MoveParticles rotates the scaled force this way -- the image
+// seeds each row from the z term and folds y then x (826BF58C `fmadds f13,
+// f5(0x22c=m.y.x), f9(v.x), f12`), and homes &m.z / &m.y but never &m.x
+// (offset 0 of the reference is not homed), so the argument is the matrix
+// reference itself, not three row references.
+inline void Multiply(const Hmx::Matrix3 &m, const Vector3 &v, Vector3 &out) {
+    out.Set(Dot(v, m.x), Dot(v, m.y), Dot(v, m.z));
+}
 #include "utl/Loader.h"
 #include <cmath>
 
@@ -1136,18 +1147,19 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     if (mActiveParticles == NULL || frameSpan == 0.0f)
         return;
 
-    float dragFactor;
-
     float oneOverThirty = 1.0f / 30.0f;
+    float dragFactor;
     if (mDrag > 0.0f) {
-        float powResult = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
-        dragFactor = powResult;
+        dragFactor = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
     } else {
         dragFactor = 1.0f;
     }
 
     float rpmDragFactor;
     if (mRotate && mRPMDrag > 0.0f) {
+        // Second pow evaluates the base before the exponent (826BF4D0 fsubs,
+        // 826BF4D4 fmuls); the first does the reverse. A hoisted `exponent`
+        // local is kept in f31 and passed by fmr on both calls (2 -> 3 rows).
         rpmDragFactor = std::pow(1.0f - mRPMDrag, frameSpan * oneOverThirty);
     } else {
         rpmDragFactor = 1.0f;
@@ -1157,34 +1169,18 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     bool isRotate = mRotate;
     bool isBubble = mBubble;
 
-    // Force direction scaled by frameSpan, then transformed through the
-    // relative-space matrix. Target emits the addi+stw pointer-passing pattern
-    // characteristic of the inlined Multiply(Vector3, Matrix3, Vector3 &) call.
-    Vector3 deltaForce;
-    deltaForce.x = mForceDir.x * frameSpan;
-    deltaForce.y = mForceDir.y * frameSpan;
-    deltaForce.z = mForceDir.z * frameSpan;
+    // The image rotates the scaled force by mRelativeXfm.m as a COLUMN
+    // vector: relForce.i = Dot(m.i, force) (826BF58C..826BF59C seed the
+    // y/x/z rows from 0x22c/0x21c/0x23c). Multiply(Vector3, Matrix3, Vector3&)
+    // is the transpose of that and was a behavioural bug here.
     Vector3 relForce;
-    Multiply(deltaForce, mRelativeXfm.m, relForce);
-    float relForceRow0 = relForce.x;
-    float relForceRow1 = relForce.y;
-    float relForceRow2 = relForce.z;
+    Scale(mForceDir, frameSpan, relForce);
+    Multiply(mRelativeXfm.m, relForce, relForce);
 
-    // Bounce plane is a stack-allocated Plane in the target binary; matches
-    // RB3 source layout (Plane bouncePlane local, populated from mBounce->WorldXfm()).
-    // Use Plane constructor with Vector3 refs — target emits addi+stw at idx 138/144
-    // to compute &bxf.v and &bxf2.m.z, then passes them via address.
     Plane bouncePlane;
     bool bounce = (mBounce != NULL);
     if (bounce) {
-        const Transform &bxf = mBounce->WorldXfm();
-        const Transform &bxf2 = mBounce->WorldXfm();
-        bouncePlane.a = bxf2.m.z.x;
-        bouncePlane.b = bxf2.m.z.y;
-        bouncePlane.c = bxf2.m.z.z;
-        float dot = bouncePlane.a * bxf.v.x + bouncePlane.b * bxf.v.y
-                    + bouncePlane.c * bxf.v.z;
-        bouncePlane.d = -dot;
+        bouncePlane.Set(mBounce->WorldXfm().v, mBounce->WorldXfm().m.z);
     }
 
     int endTile = mNumTilesTotal + mStartingTile;
@@ -1222,54 +1218,44 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                                 p->mCurrentTileIndex = endTile - 1;
                             }
                         }
+                        // The image homes tileTime (`stfs f1, 0x64(r31)`,
+                        // 826BF720) before `bl fmod`; nothing in the stlport
+                        // float wrapper takes it by reference. 1 row, unexplained.
                         p->mTileTime = std::fmod(tileTime, mTileHoldTime);
                     }
                 }
 
-                // Hoist references to p->pos / p->vel so the compiler keeps
-                // their addresses in callee-saved registers across the loop body.
-                Vector4 &pos = p->pos;
-                Vector4 &vel = p->vel;
-
-                // Birth momentum (fancy only). Route through scalar temps so
-                // the compiler emits fmuls+fadds (separate) rather than fmadds.
                 if (isFancy && mBirthMomentum) {
                     RndFancyParticle *fp = (RndFancyParticle *)p;
-                    float momentumScale = mBirthMomentumAmount * frameSpan * oneOverThirty;
-                    float bvX = fp->mBirthVel.x * momentumScale;
-                    float bvY = fp->mBirthVel.y * momentumScale;
-                    float bvZ = fp->mBirthVel.z * momentumScale;
-                    pos.x += bvX;
-                    pos.y += bvY;
-                    pos.z += bvZ;
+                    Vector3 birthDelta;
+                    Scale(
+                        fp->mBirthVel,
+                        mBirthMomentumAmount * frameSpan * oneOverThirty,
+                        birthDelta
+                    );
+                    Add(p->Pos3(), birthDelta, p->Pos3());
                 }
 
-                // Position integration. Route through temps to force fmuls+fadds.
-                float dx_pos = frameSpan * vel.x;
-                float dy_pos = vel.y * frameSpan;
-                float dz_pos = frameSpan * vel.z;
-                pos.x += dx_pos;
-                pos.y += dy_pos;
-                pos.z += dz_pos;
+                ScaleAddEq(p->Pos3(), p->Vel3(), frameSpan);
+
+                Vector3 &pos = p->Pos3();
+                Vector3 &vel = p->Vel3();
 
                 // Bounce plane reflection
                 if (bounce) {
-                    float dist = bouncePlane.a * pos.x + bouncePlane.b * pos.y
-                        + bouncePlane.c * pos.z + bouncePlane.d;
-                    if (dist < 0.0f) {
-                        float velDotN =
-                            bouncePlane.b * vel.y + vel.x * bouncePlane.a
-                            + bouncePlane.c * vel.z;
+                    if (!(pos <= bouncePlane)) {
+                        float velDotN = bouncePlane.b * vel.y + bouncePlane.c * vel.z
+                            + bouncePlane.a * vel.x;
                         if (velDotN < 0.0f) {
-                            // Route through scalar temps to emit fmuls+fsubs
-                            // (separate) rather than the fused fnmsubs.
+                            // Named products: the image subtracts three
+                            // separate fmuls (826BF830-826BF84C), not fnmsubs.
                             float reflect = velDotN * two;
+                            float rz = bouncePlane.c * reflect;
                             float rx = bouncePlane.a * reflect;
                             float ry = bouncePlane.b * reflect;
-                            float rz = bouncePlane.c * reflect;
+                            vel.z -= rz;
                             vel.x -= rx;
                             vel.y -= ry;
-                            vel.z -= rz;
                         }
                     }
                 }
@@ -1283,10 +1269,9 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                     Attractor &a = mAttractors[i];
                     if (a.mAttractor != NULL) {
                         const Transform &axf = a.mAttractor->WorldXfm();
-                        float dz = axf.v.z - pos.z;
-                        float dy = axf.v.y - pos.y;
+                        Vector3 d;
+                        Subtract(axf.v, pos, d);
                         float strength = a.mStrength;
-                        float dx = axf.v.x - pos.x;
 
                         // The image MATERIALISES this test into a byte before
                         // branching on it (826BF8CC `li r11, 1` / 826BF8D8
@@ -1294,36 +1279,34 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                         // `beq`), which only a named bool produces.
                         bool isTetherAttractor = strength == magicStrength;
                         if (isTetherAttractor) {
-                            dz = 0.0f;
+                            d.z = 0.0f;
                             auto _tmp0 = a.mAttractor.Owner();
                             RndParticleSys *ps =
                                 dynamic_cast<RndParticleSys *>(_tmp0);
                             if (ps != NULL) {
                                 const Transform &t1xf = a.mAttractor->WorldXfm();
                                 const Transform &t2xf = ps->WorldXfm();
-                                float relY = t2xf.v.y - t1xf.v.y;
-                                float relX = t2xf.v.x - t1xf.v.x;
-                                strength *= (relX * relX + relY * relY) + epsilon;
+                                Vector3 rel;
+                                Subtract(t2xf.v, t1xf.v, rel);
+                                strength *= (rel.x * rel.x + rel.y * rel.y) + epsilon;
                             }
                         }
 
-                        float distSq =
-                            dy * dy + (dx * dx + dz * dz) + epsilon;
+                        float distSq = d.y * d.y + (d.x * d.x + d.z * d.z) + epsilon;
                         float scale = (strength * frameSpan) / distSq;
-                        // Force compiler to emit fmuls + fadds (separate) like target,
-                        // not fmadds (fused) — by routing through scalar temps.
-                        float vx_inc = scale * dx;
-                        float vy_inc = scale * dy;
-                        float vz_inc = scale * dz;
-                        vel.x += vx_inc;
-                        vel.z += vz_inc;
-                        vel.y += vy_inc;
+                        Vector3 delta;
+                        Scale(d, scale, delta);
+                        Add(vel, delta, vel);
                     }
                 }
 
-                vel.x += relForceRow0;
-                vel.z += relForceRow2;
-                vel.y += relForceRow1;
+                // Residual (5 rows): the image loads vel.z, vel.y, adds z, THEN
+                // loads vel.x (826BF9F4-826BFA00), and the drag block below
+                // re-reads vel.z after storing it (`fmr f0, f12` / `lfs f12,
+                // 0x8(r26)`, 826BFA28-826BFA2C). Add(vel, relForce, vel),
+                // Add(relForce, vel, vel) and three explicit `+=` in z, y, x
+                // order all load x first and keep z in a register.
+                Add(relForce, vel, vel);
 
                 if (isFancy) {
                     vel.y *= dragFactor;
@@ -1332,99 +1315,76 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
 
                     RndFancyParticle *fp = (RndFancyParticle *)p;
 
-                    // Bubble oscillation effect — uses bubbleFreq/bubblePhase
-                    // and bubbleDir.xyz (matches RB3 idiom and target field offsets).
                     if (isBubble) {
                         float sinVal =
                             FastSin(fp->bubbleFreq * dt + fp->bubblePhase + halfPi);
                         float bubbleScale = fp->bubbleFreq * sinVal * frameSpan;
-                        pos.x += fp->bubbleDir.x * bubbleScale;
-                        pos.y += fp->bubbleDir.y * bubbleScale;
-                        pos.z += fp->bubbleDir.z * bubbleScale;
+                        ScaleAddEq(pos, fp->Bubble3(), bubbleScale);
                     }
 
-                    // RPM rotation and swing arm — uses RPF/swingArmVel
-                    // (matches RB3 idiom and target field offsets 0xb0/0xb4).
                     if (isRotate) {
                         p->angle += fp->RPF * frameSpan;
                         fp->RPF *= rpmDragFactor;
                         p->swingArm += fp->swingArmVel * frameSpan;
                     }
 
-                    // Fancy color: 2-phase Hermite-like blend (before/after midcolFrame).
-                    // Blend formula: colorScale = (1-t)*t*frameSpan*6 where t is normalized
+                    // Fancy color: 2-phase blend (before/after midcolFrame).
+                    // colorScale = (1-t)*t*frameSpan*6 where t is normalized
                     // time within the current phase. Phase 1 uses midcolVel, phase 2 uses colVel.
-                    float colorScale;
                     float cr, cg, cb, ca;
                     if (dt < fp->midcolFrame) {
-                        float t = (dt - p->birthFrame) * vel.w;
-                        colorScale = (1.0f - t) * t * frameSpan * sixf;
-                        ca = fp->midcolVel.alpha * colorScale;
-                        cb = fp->midcolVel.blue * colorScale;
-                        cg = fp->midcolVel.green * colorScale;
-                        cr = colorScale * fp->midcolVel.red;
+                        float t = (dt - p->birthFrame) * p->vel.w;
+                        float colorScale = (1.0f - t) * t * frameSpan * sixf;
+                        Hmx::Color colorDelta;
+                        Multiply(fp->midcolVel, colorScale, colorDelta);
+                        ca = colorDelta.alpha;
+                        cb = colorDelta.blue;
+                        cg = colorDelta.green;
+                        cr = colorDelta.red;
                     } else {
                         // bubbleDir.w (0xa4), NOT bubblePhase (0xac): the target
                         // reads `lfs f13, 0xa4(r29)` here. bubbleDir is a Vector4
                         // at 0x98, so +0xc is its w. rb3's matched Part.cpp agrees.
                         float t = (dt - fp->midcolFrame) * fp->bubbleDir.w;
-                        colorScale = (1.0f - t) * t * frameSpan * sixf;
+                        float colorScale = (1.0f - t) * t * frameSpan * sixf;
                         ca = p->colVel.alpha * colorScale;
                         cb = p->colVel.blue * colorScale;
                         cg = p->colVel.green * colorScale;
                         cr = p->colVel.red * colorScale;
                     }
+                    p->col.red = Clamp(0.0f, 1.0f, cr + p->col.red);
+                    p->col.alpha = Clamp(0.0f, 1.0f, ca + p->col.alpha);
+                    p->col.blue = Clamp(0.0f, 1.0f, cb + p->col.blue);
+                    p->col.green = Clamp(0.0f, 1.0f, cg + p->col.green);
 
-                    // Clamp color channels to [0, 1] using fneg+fsel pattern
-                    float newR = cr + p->col.red;
-                    float newA = ca + p->col.alpha;
-                    float newB = cb + p->col.blue;
-                    float newG = cg + p->col.green;
-
-                    newR = (-newR >= 0.0f) ? 0.0f : newR;
-                    newA = (-newA >= 0.0f) ? 0.0f : newA;
-                    newB = (-newB >= 0.0f) ? 0.0f : newB;
-                    newG = (-newG >= 0.0f) ? 0.0f : newG;
-
-                    p->col.red = (newR - 1.0f >= 0.0f) ? 1.0f : newR;
-                    p->col.alpha = (newA - 1.0f >= 0.0f) ? 1.0f : newA;
-                    p->col.blue = (newB - 1.0f >= 0.0f) ? 1.0f : newB;
-                    p->col.green = (newG - 1.0f >= 0.0f) ? 1.0f : newG;
-
-                    // Fancy size: 3-phase (grow / sustain / shrink)
-                    float sizeVelRate, timeSince, invDuration;
+                    // Fancy size: 3-phase (grow / sustain / shrink). Each arm
+                    // carries the whole update: the compiler merges the common
+                    // tail itself, stopping at the per-arm `dt - X` subtraction
+                    // (826BFBFC / 826BFC18 / 826BFC24 stay in their arms) and
+                    // hoists the shared p->size load to the end of the fork
+                    // block (826BFBE8). A shared tail written in source merges
+                    // the subtraction too. Residual (4 rows): our allocator puts
+                    // shrinkFrame in f0 where the image has f13, so arms 1 and 3
+                    // both end `fsubs f0, f24, f0` and get cross-jumped into the
+                    // tail; swapping the product's operand order is byte-inert.
                     if (dt < fp->growFrame) {
-                        invDuration = fp->beginGrow;
-                        timeSince = dt - p->birthFrame;
-                        sizeVelRate = fp->growVel;
+                        float st = (dt - p->birthFrame) * fp->beginGrow;
+                        p->size += fp->growVel * ((1.0f - st) * st * frameSpan * sixf);
                     } else if (dt < fp->shrinkFrame) {
-                        invDuration = fp->midGrow;
-                        timeSince = dt - fp->growFrame;
-                        sizeVelRate = p->sizeVel;
+                        float st = (dt - fp->growFrame) * fp->midGrow;
+                        p->size += p->sizeVel * ((1.0f - st) * st * frameSpan * sixf);
                     } else {
-                        timeSince = dt - fp->shrinkFrame;
-                        invDuration = fp->endGrow;
-                        sizeVelRate = fp->shrinkVel;
+                        float st = (dt - fp->shrinkFrame) * fp->endGrow;
+                        p->size += fp->shrinkVel * ((1.0f - st) * st * frameSpan * sixf);
                     }
-                    float st = timeSince * invDuration;
-                    p->size +=
-                        sizeVelRate * ((1.0f - st) * st * frameSpan * sixf);
                 } else {
                     // Basic particle: single-phase color/size update.
-                    // Route through scalar temps so the compiler emits
-                    // fmuls+fadds (separate) rather than fmadds.
-                    float t = (dt - p->birthFrame) * pos.w;
+                    float t = (dt - p->birthFrame) * p->pos.w;
                     float scale = (1.0f - t) * t * frameSpan * sixf;
-                    float dr = p->colVel.red * scale;
-                    float dg = p->colVel.green * scale;
-                    float db = p->colVel.blue * scale;
-                    float da = p->colVel.alpha * scale;
-                    float ds = p->sizeVel * scale;
-                    p->size += ds;
-                    p->col.red += dr;
-                    p->col.green += dg;
-                    p->col.blue += db;
-                    p->col.alpha += da;
+                    Hmx::Color colorDelta;
+                    Multiply(p->colVel, scale, colorDelta);
+                    p->size += p->sizeVel * scale;
+                    Add(p->col, colorDelta, p->col);
                 }
                 p = p->next;
             }

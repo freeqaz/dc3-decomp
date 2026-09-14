@@ -59,34 +59,36 @@ bool BoxMapLighting::QueueLight(RndLight *light, float colorScale) {
     return false;
 }
 
-/** SURVEYED w7-aj, 62.8% canonical, 648 B.  The ARITHMETIC below is exact --
- *  all eighteen fmadds at 0x826F12AC-F8 were matched one by one against these
- *  statements (accumulator FPR -> its `lfs off(r30)` at 0x826F11A0-E8 -> the
- *  color[i] member), and the six Max() calls lower to the fneg+fsel pairs at
- *  0x826F1224-8C exactly as Utl.h's `(x - y < 0) ? y : x` predicts, with
- *  Max(0.0f, -x1) producing the fneg-of-fneg chain (f24 = -x1, f14 = -f24).
- *  The loop induction is also exact: `lfs 0x8(r11)` / `lfs 0xc(r11)` /
- *  `lfsu 0x10(r11)` is the (float*)gLightBuffer1 - 2 walk.
+/** 97.5% canonical (w7-ay, from 62.8%), 648 B.  The w7-aj survey that used
+ *  to sit here concluded "we are CHEAPER than the image, so no rewriting of
+ *  these statements can reach it" -- that was WRONG.  Two spellings close
+ *  the 35-point gap, neither of which the survey tried:
  *
- *  The whole 37-point gap is FPR allocation, and the tell is in the prologue:
- *  the image calls __savefpr_14 (18 callee-saved FPRs) where we call
- *  __savefpr_15 (17), spills two accumulators to 0x50/0x54(r31) and
- *  stfd/lfd-spills two more across the loop body (0x58/0x60(r31), which is
- *  the whole 0x10 frame delta), and emits NINE fnegs where three of them are
- *  textually redundant -- `fneg f24, f26` and `fneg f18, f26` are the same
- *  expression, un-CSEd.  We are CHEAPER than the image, so no rewriting of
- *  these statements can reach it; we would have to make MSVC need a register
- *  it does not need.
+ *   (1) The loop is a count-UP `for (i = 0; i < gLightIndex; i++)`, not the
+ *       countdown `for (c = gLightIndex; c != 0; c--)`.  The count-up form
+ *       keeps its own `cmplwi cr6, r11, 0x0` / `beq` guard (0x826F11A4 /
+ *       0x826F11F4) even though the enclosing `if (gLightIndex != 0)` already
+ *       tested it; the countdown form got value-numbered into the outer test,
+ *       which moved the eighteen colour loads and the walker setup below
+ *       the guard and cost every register assignment downstream.
+ *   (2) The light direction is read THROUGH `const Hmx::Color &dir = *light1`
+ *       at each use (`Max(0.0f, dir.blue)` and `Max(0.0f, -dir.blue)`), not
+ *       into named locals x1/y1/z1.  Repeating the member read is what makes
+ *       MSVC emit the three dead home-slot stores `stfs f12/f26/f25, 0x54(r31)`
+ *       at 0x826F124C-54, the un-CSEd fneg pairs, and the 18th callee-saved
+ *       FPR (__savefpr_14, frame 0x140).  Named locals are cheaper and can
+ *       never reach that shape.
+ *   The walkers are `const Hmx::Color *` pointers (`light1++`), which give the
+ *   `subi r11, r11, 0x8` bias + `lfs 0x8/0xc` / `lfsu 0x10` walk; indexing
+ *   gLightBuffer1[i] gives lfsx (81.0%).
  *
- *  Two variants measured, both neutral (62.8 -> 62.9, i.e. noise):
- *    (1) hoisting `float mx1 = -x1, my1 = -y1, mz1 = -z1;` out of the Max()
- *        calls, to reproduce the un-CSEd second fneg;
- *    (2) (1) plus moving the c20r accumulation down to the image's emission
- *        position (between c12g and c16g).
- *  Do not re-derive these.  If this is picked up again, the lever is whatever
- *  makes the image load the eighteen colours ABOVE the loop guard (it has a
- *  duplicated `cmplwi cr6, r11, 0x0` at 0x826F11A4 and a second `beq` at
- *  0x826F11F4), not the expression order inside the loop. */
+ *  Residual 2.5% (66 diff_arg + 2 insert/2 delete, all FPR/slot allocation):
+ *  the image loads color[5].green/blue first and spills them to 0x50/0x54(r31)
+ *  where we spill the swapped pair; our light1 bias is -0xc with the red read
+ *  at 0x14(r11) vs the image's -0x8 / 0x8(r11); and the stfd f27/f29 spill
+ *  order.  Tried and neutral or worse: hoisting `-dir.red` etc. into locals
+ *  before the Max() calls (97.5, no change); declaring/reading c20g/c20b
+ *  before c0r (97.4, more offset diffs). */
 void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vector3 *v3) const {
     START_AUTO_TIMER("draw_light_approx");
     gLightIndex = 0;
@@ -116,28 +118,23 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
         float c20g = color[5].green;
         float c20b = color[5].blue;
 
-        float *lightBuf1 = (float *)gLightBuffer1 - 2;
-        float *lightBuf2 = (float *)gLightBuffer2 - 2;
-        for (unsigned int counter = gLightIndex; counter != 0; counter--) {
-            float x1 = lightBuf1[2];
-            float y1 = lightBuf1[3];
-            lightBuf1 += 4;
-            float z1 = *lightBuf1;
-
-            float x2 = lightBuf2[2];
-            float y2 = lightBuf2[3];
-            lightBuf2 += 4;
-            float z2 = *lightBuf2;
+        const Hmx::Color *light1 = gLightBuffer1;
+        const Hmx::Color *light2 = gLightBuffer2;
+        for (unsigned int i = 0; i < gLightIndex; i++, light1++, light2++) {
+            const Hmx::Color &dir = *light1;
+            float x2 = light2->red;
+            float y2 = light2->green;
+            float z2 = light2->blue;
 
             // Six box-map axes: +Z, +X, +Y, -X, -Y, -Z. Each face accumulates the
             // light colour weighted by the squared clamped projection of the light
             // direction onto that face's axis.
-            float posZ = Max(0.0f, z1);
-            float posX = Max(0.0f, x1);
-            float posY = Max(0.0f, y1);
-            float negX = Max(0.0f, -x1);
-            float negY = Max(0.0f, -y1);
-            float negZ = Max(0.0f, -z1);
+            float posZ = Max(0.0f, dir.blue);
+            float posX = Max(0.0f, dir.red);
+            float posY = Max(0.0f, dir.green);
+            float negX = Max(0.0f, -dir.red);
+            float negY = Max(0.0f, -dir.green);
+            float negZ = Max(0.0f, -dir.blue);
 
             float wPosZ = posZ * posZ;
             float wPosX = posX * posX;
