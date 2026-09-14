@@ -722,7 +722,14 @@ float FreestyleMoveRecorder::CompareSkeletonPositions(
 float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
     const FreestyleMoveFrame *frames, int frameIdx, const BaseSkeleton *liveSkel, float &outTotalWeight
 ) const {
-    // Clamped prev-frame index: max(frameIdx - 1, 0)
+    // Clamped prev-frame index: max(frameIdx - 1, 0).
+    // NEGATIVE RESULT (w7-aq, 2026-09-14): the image's branchless clamp keeps
+    // the constant 0 in a register and shifts it (`li r10,0` / `srwi r10,r10,31`
+    // / `subfc r3,r11,r10` / `subfe r10,r10,r6`, target idx 9/18/15/22) where we
+    // fold it (`subfic`/`addme`) -- 4 rows.  Neither `Max(frameIdx - 1, 0)` nor
+    // the inverted `frameIdx - 1 < 0 ? 0 : frameIdx - 1` recovers it: both drop
+    // to 87.3 by emitting a different sequence entirely.  `int zeroIdx = 0;`
+    // with the comparison against the variable is byte-inert (MSVC folds it).
     int clampedPrev = frameIdx - 1 > 0 ? frameIdx - 1 : 0;
     float totalScore = 0.0f;
     float totalWeight = 0.0f;
