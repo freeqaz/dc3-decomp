@@ -3346,9 +3346,12 @@ void HamDirector::Poll() {
             int p1anim = player1->SongAnimation();
             bool doSongAnim = SongAnimation();
             if (doSongAnim) {
-                ClipPlayer player0Clip, player1Clip;
-                Key<Symbol> *practiceEnd = nullptr;
-                Key<Symbol> *practiceStart = nullptr;
+                ClipPlayer player0Clip(0), player1Clip(1);
+                // Deliberately uninitialised: GetPracticeFrames writes both
+                // through references. The image emits no zero-store for either
+                // slot (0x50/0x58), and `= nullptr` adds two it does not have.
+                Key<Symbol> *practiceEnd;
+                Key<Symbol> *practiceStart;
                 if (p0anim != -1) {
                     bool clipInited = player0Clip.Init(0);
                     if (clipInited) {
@@ -3364,9 +3367,13 @@ void HamDirector::Poll() {
                         }
                     }
                 }
-                HamPlayerData *p0data = TheGameData->Player(0);
-                HamPlayerData *p1data = TheGameData->Player(1);
-                ClipPlayer *backupClipPlayer = IsEasierDifficulty(p0data->GetDifficulty(), p1data->GetDifficulty()) ? &player0Clip : &player1Clip;
+                // The image reads player 0's difficulty (`lwz r30, 0x58(r11)`)
+                // BEFORE the second Player() call, so the source binds the
+                // Difficulty, not the HamPlayerData pointer.
+                Difficulty p0diff = TheGameData->Player(0)->GetDifficulty();
+                Difficulty p1diff = TheGameData->Player(1)->GetDifficulty();
+                ClipPlayer *backupClipPlayer =
+                    IsEasierDifficulty(p0diff, p1diff) ? &player0Clip : &player1Clip;
                 bool hasPractice2 = GetPracticeFrames(practiceEnd, practiceStart);
                 if (!hasPractice2) {
                     const float sBackupDriftScale = 0.14f;
@@ -3381,7 +3388,8 @@ void HamDirector::Poll() {
                         backupIdx++;
                         if (!backup) break;
                         float noise = RndWind::GetWhiteNoise(
-                            (float)backupIdx * sBackupDriftFreq + songAnim->GetFrame() * sBackupDriftDt
+                            songAnim->GetFrame() * sBackupDriftDt
+                            + (float)backupIdx * sBackupDriftFreq
                         );
                         float drift = (noise - sBackupDriftOffset) * mBackupDrift * sBackupDriftScale;
                         if (0.0f < drift) {

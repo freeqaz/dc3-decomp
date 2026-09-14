@@ -11,10 +11,18 @@
 
 class ClipPlayer {
 public:
-    ClipPlayer()
+    // The player index is a CONSTRUCTOR argument, not something Init() sets.
+    // HamDirector::Poll's inlined ctor pair stores 0 at player0Clip+0x14 and
+    // *1* at player1Clip+0x14 (target `li r9, 0x1` / `stw r9, 0xd4(r1)` at
+    // 0x8249F0xx) -- two default-constructed objects cannot differ there.
+    // Without it every ClipPlayer ran as mPlayerIndex == 0, so PlayNormal's
+    // TheGameData->Player(mPlayerIndex)->GetDifficulty() and
+    // TheMoveMgr->GetRoutineMeasure(mPlayerIndex, ...) read player 0 for the
+    // player-1 clip.
+    ClipPlayer(int playerIndex = 0)
         : mClipKeys(nullptr), mClipCrossoverKeys(nullptr), mMasterClipKeys(nullptr),
-          mPlayerIndex(0), mPracticeStart(-kHugeFloat), mPracticeEnd(kHugeFloat), mInClip(nullptr),
-          mOutClip(nullptr), mTargetClip(0), mBeatOffset(0) {}
+          mPlayerIndex(playerIndex), mPracticeStart(-kHugeFloat), mPracticeEnd(kHugeFloat),
+          mInClip(nullptr), mOutClip(nullptr), mTargetClip(0), mBeatOffset(0) {}
 
     void PlayAnims(HamCharacter *, float, float, int);
     bool Init(int);
