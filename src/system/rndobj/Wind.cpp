@@ -66,12 +66,16 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
             float ry = result.y;
             float rz = result.z;
             float rx = result.x;
+            // The image right-associates the trailing two terms of each
+            // component: the final fmadds on each row takes the two non-`rx`
+            // terms already summed (e.g. `fmadds f13, f1, f13, f3` builds
+            // rz*zAxis.y + ry*cross.y before the rx term is folded in).
             result.y = rx * (cross.z * zAxis.x - zAxis.z * cross.x)
-                + rz * zAxis.y + ry * cross.y;
+                + (rz * zAxis.y + ry * cross.y);
             result.z = rz * zAxis.z
-                + rx * (zAxis.y * cross.x - cross.y * zAxis.x) + ry * cross.z;
+                + (rx * (zAxis.y * cross.x - cross.y * zAxis.x) + ry * cross.z);
             result.x = rz * zAxis.x
-                + ry * cross.x + rx * (cross.y * zAxis.z - cross.z * zAxis.y);
+                + (ry * cross.x + rx * (cross.y * zAxis.z - cross.z * zAxis.y));
         } else {
             Multiply(result, xfm.m, result);
         }
