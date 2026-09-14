@@ -349,11 +349,12 @@ extern "C" void *__RTDynamicCast(
         }
 
         if (pBaseClass) {
+            int pdisp = pBaseClass->where.pdisp;
             int adj = 0;
-            if (pBaseClass->where.pdisp >= 0) {
-                adj = *(int *)(*(char **)((char *)pCompleteObject + pBaseClass->where.pdisp) +
+            if (pdisp >= 0) {
+                adj = *(int *)(*(char **)((char *)pCompleteObject + pdisp) +
                                pBaseClass->where.vdisp) +
-                    pBaseClass->where.pdisp;
+                    pdisp;
             }
             pResult = (char *)pCompleteObject + (pBaseClass->where.mdisp + adj);
         } else {
