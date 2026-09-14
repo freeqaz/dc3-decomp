@@ -253,7 +253,16 @@ void NgMat::SetRegularShaderConst(bool perPixel) {
         TheRenderState.SetTextureFilter(2, (RndRenderState::FilterMode)1, false);
     }
 
-    // Rim light - copy to local
+    // Rim light - copy to local.
+    // NOTE (w7-b, 2026-09-14): the residual 4 charged rows on this function are the
+    // element ORDER of this 4-word struct copy.  The image loads
+    // 0x168,0x16c,0x170,0x164 and stores 0x4,0x8,0xc,0x0 (red handled last); we load
+    // 0x164,0x16c,0x170,0x168 and store 0x0,0x8,0xc,0x4 (green handled last).  Both
+    // are "rotated" relative to the natural 0,4,8,c that the mColor / mSpecularRGB /
+    // mSpecular2RGB copies above get on BOTH sides, so the spelling of the copy is
+    // not the lever.  Refuted here: reversing the rimRed/rimGreen/rimBlue declaration
+    // order, and splitting the copy into a default-construct plus assignment.  Both
+    // left all 31 rows byte-identical.
     Hmx::Color rimColor = mRimRGB;
 
     float rimRed = rimColor.red;
