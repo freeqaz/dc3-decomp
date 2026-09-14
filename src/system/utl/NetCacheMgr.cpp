@@ -399,6 +399,14 @@ NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoade
 
     if (!pNetLoaderRef) {
         switch ((unsigned int)type) {
+        // RESIDUAL (w7-as, 97.2 canonical): the image re-addresses the String
+        // argument with `addi r3, r31, 0x58` / `addi r5, r31, 0x68` instead of
+        // consuming String::String's return register, which is the named-local
+        // signature.  NEGATIVE RESULT (2026-09-14): both spellings of that lose
+        // a callee-saved register (prologue r17-r31 -> r18-r31) and 0x20 of
+        // frame -- `String cacheName(name);` as a plain local reads 87.1, and
+        // the same name inside its own braces (which is what the dtor placement
+        // at 0x825B7994 argues for) reads 90.2.  Kept the temp.
         case 0: {
             NetCacheLoader *ncl = new NetCacheLoader(mCache, String(name));
             String s(name);
