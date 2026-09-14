@@ -186,11 +186,6 @@ bool RndShaderProgram::Cache(
             // sourcePath is 0x100, not 0x140.  MSVC lays these out in REVERSE
             // declaration order, hence cachedPsPath is declared before
             // cachedVsPath to put the VS buffer at the lower address (0xd0).
-            // Buffer sizes are read off the image's frame: it is 0x410 with the
-            // three buffers at 0x2d0 (source), 0x1d0 and 0xd0, and
-            // __savegprlr_26's save area starting at 0x3f4 -- so sourcePath is
-            // 0x100, not the 0x140 this used to declare (that was the whole of
-            // the old +0x40 frame delta).
             // RESIDUAL: the image puts cachedVsPath at 0xd0 and cachedPsPath at
             // 0x1d0; we get them the other way round (OFFSET_SWAP (0xd0,0x1d0)
             // x4).  Swapping the two DECLARATIONS is byte-for-byte inert -- at
