@@ -904,9 +904,15 @@ void RhythmDetector::ProcessFrames() {
             DataArray *cfg = typeDef->FindArray(analyzeBeatFrequency, true);
             static Symbol analyzePeriodCount("analyze_period_count");
             DataArray *periodCfg = typeDef->FindArray(analyzePeriodCount, true);
-            int periodCount = periodCfg->Node(1).Int();
-            cfg->Node(cfg->Size() - 1).Int();
-            int beatFreq = cfg->Node(cfg->Size() - 1).Int();
+            // Every DataNode::Int here is passed its OWNING array as the
+            // evaluation source -- mr r4,r28 (periodCfg) at 0x8248A0C0 and
+            // mr r4,r30 (cfg) at 0x8248A0DC / 0x8248A0F4 -- not NULL.  The
+            // source argument is what lets Int() resolve a $variable or a
+            // property node against the array it came from; with NULL those
+            // node kinds evaluate wrongly.
+            int periodCount = periodCfg->Node(1).Int(periodCfg);
+            cfg->Node(cfg->Size() - 1).Int(cfg);
+            int beatFreq = cfg->Node(cfg->Size() - 1).Int(cfg);
             windowSize = (float)beatFreq * (float)(periodCount - 1) * 2.0f;
         } else {
             windowSize = 0.0f;
