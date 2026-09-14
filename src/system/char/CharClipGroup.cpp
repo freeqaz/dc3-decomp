@@ -102,6 +102,17 @@ CharClip *CharClipGroup::GetClip(int flags) {
         return nullptr;
     }
 
+    // RESIDUAL (w7-ak, 94.87 canonical): 61 rows, 39 of them one r30<->r31
+    // permutation -- the image holds `this` in r31 and `pos` in r30, we hold them
+    // the other way round, and every use of either register is charged. The only
+    // two non-regalloc rows are here: the image clamps with an UNCONDITIONAL store
+    // (`cmpw size-1, mWhich` / `blt` skips a `mr`, then one `stw`) where this
+    // conditional store emits `bge` around the store itself.
+    // NEGATIVE RESULT: `mWhich = Min((int)mClips.size() - 1, mWhich);` does emit
+    // the image's blt+mr+stw, and costs 94.87 -> 92.9: it pushes mWhich into the
+    // callee-saved r26 and shifts the whole r24..r31 assignment by one, trading
+    // 2 rows for 8. The clamp spelling is therefore NOT independently testable
+    // until the r30/r31 assignment is solved.
     {
         int sz = (int)mClips.size() - 1;
         if (sz < mWhich)
