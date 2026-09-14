@@ -92,6 +92,16 @@ namespace {
                         }
 
                         // Fill raw with absolute joint velocities
+                        // The 4th and last residual row of this function is the
+                        // `add` at ^/* 824D32E4: the image computes the
+                        // Vector3* for `operator[](comp)` as
+                        //     add r3, r10, r11   ; hoisted jointIdx offset + per-
+                        //                        ; iteration mJointVelocities base
+                        // and we emit the two operands the other way round.
+                        // The sibling `add r11, r11, r30` at ^/* 824D32DC (the
+                        // Frame stride) already matches, so this is MSVC's
+                        // operand order for one address sum, not a source `+`
+                        // that can be written backwards.
                         for (unsigned int f = 0; f < raw.size(); f++) {
                             float val = frames[f].mJointVelocities[jointIdx][comp];
                             float absVal = fabs(val);
@@ -116,6 +126,25 @@ namespace {
 
                         // Z-score middle section with sliding window
                         if (midEnd > 6) {
+                            // RESIDUAL (w7-bf, 99.70255 canonical, 4 rows in the
+                            // whole 1656-byte function, 3 of them here).  The
+                            // loop BODY is byte-identical to the image; only
+                            // the preheader's three independent `li`s are
+                            // rotated.  Image (^/* 824D33A4-824D33AC):
+                            //     li   r7, 0x18      ; rawOffset, byte-scaled
+                            //     li   r4, 0x1       ; windowStart
+                            //     subi r29, r30, 0x6 ; remaining
+                            // ours emits windowStart, remaining, rawOffset.
+                            // REFUTED, both bit-identical to this spelling:
+                            //   - declaring rawOffset before windowStart
+                            //     (plain decl reorder -- inert, as the
+                            //     project-wide note says);
+                            //   - one comma-declaration
+                            //     `int rawOffset = 6, windowStart = 1,
+                            //      remaining = midEnd - 6;`.
+                            // MSVC picks the preheader order after strength-
+                            // reducing rawOffset into the byte IV r7; nothing
+                            // in the source reaches that choice.
                             int windowStart = 1;
                             int rawOffset = 6;
                             int remaining = midEnd - 6;
