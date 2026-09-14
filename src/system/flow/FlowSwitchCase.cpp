@@ -21,6 +21,13 @@ FlowSwitchCase::~FlowSwitchCase() { TheFlowMgr->CancelCommand(this); }
 bool FlowSwitchCase::IsValidCase(
     FlowNode *node, DataNode *curValue, const DataNode *lastValue, bool hasLast
 ) {
+    // ONE result variable for the whole function, held in r30 and returned by the
+    // single `mr r3, r30` at 0x82408E8C.  Only the two hard `return false`s -- the
+    // type mismatch and the switch default -- bypass it, and they share the
+    // `li r3, 0` / `b` at 0x82408AE8 (the default case branches into it from
+    // 0x82408BD0).  Writing each arm as its own `return` duplicates the inlined
+    // ~DataNode into every false path instead of funnelling through one tail.
+    bool result;
     PushDrivenProperties();
     if (mOperator == kTransition) {
         if (mUseLastValue) {
@@ -29,63 +36,72 @@ bool FlowSwitchCase::IsValidCase(
         if (curValue->Type() != mToValue.Node().Type()
             || curValue->Type() != mFromValue.Node().Type()) {
             return false;
-        } else if (curValue->Equal(mToValue.Node(), nullptr, true)
-                   && lastValue->Equal(mFromValue.Node(), nullptr, true)) {
-            return true;
-        } else {
-            return false;
         }
+        result = curValue->Equal(mToValue.Node(), nullptr, true)
+            && lastValue->Equal(mFromValue.Node(), nullptr, true);
     } else {
         if (mUseLastValue) {
             mToValue = *lastValue;
         }
+        // Each comparison arm binds Node()'s return buffer to a REFERENCE, not to a
+        // by-value `DataNode to`.  0x82408BE0 `mr r30, r3` keeps the returned
+        // pointer and 0x82408C00 reads `lwz r11, 0x4(r30)` through it; a by-value
+        // local is addressed at a fixed r31 displacement instead, which lets MSVC
+        // hoist the load above the first type test and kills the pair of home
+        // stores at 0x82408C08/0x82408C10 that mark `to.Type()` being written
+        // twice in the source.
         switch (mOperator) {
-        case kEqual: {
-            return curValue->Equal(mToValue.Node(), nullptr, true);
-        }
-        case kNotEqual: {
-            return *curValue != mToValue.Node();
-        }
+        case kEqual:
+            result = curValue->Equal(mToValue.Node(), nullptr, true);
+            break;
+        case kNotEqual:
+            result = *curValue != mToValue.Node();
+            break;
         case kGreaterThan: {
-            DataNode to = mToValue.Node();
+            const DataNode &to = mToValue.Node();
             if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
                 && (to.Type() == kDataInt || to.Type() == kDataFloat)) {
-                return curValue->LiteralFloat() > to.LiteralFloat();
+                result = curValue->LiteralFloat() > to.LiteralFloat();
             } else {
-                return false;
+                result = false;
             }
+            break;
         }
         case kGreaterThanOrEqual: {
-            DataNode to = mToValue.Node();
+            const DataNode &to = mToValue.Node();
             if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
                 && (to.Type() == kDataInt || to.Type() == kDataFloat)) {
-                return curValue->LiteralFloat() >= to.LiteralFloat();
+                result = curValue->LiteralFloat() >= to.LiteralFloat();
             } else {
-                return false;
+                result = false;
             }
+            break;
         }
         case kLessThan: {
-            DataNode to = mToValue.Node();
+            const DataNode &to = mToValue.Node();
             if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
                 && (to.Type() == kDataInt || to.Type() == kDataFloat)) {
-                return curValue->LiteralFloat() < to.LiteralFloat();
+                result = curValue->LiteralFloat() < to.LiteralFloat();
             } else {
-                return false;
+                result = false;
             }
+            break;
         }
         case kLessThanOrEqual: {
-            DataNode to = mToValue.Node();
+            const DataNode &to = mToValue.Node();
             if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
                 && (to.Type() == kDataInt || to.Type() == kDataFloat)) {
-                return curValue->LiteralFloat() <= to.LiteralFloat();
+                result = curValue->LiteralFloat() <= to.LiteralFloat();
             } else {
-                return false;
+                result = false;
             }
+            break;
         }
         default:
             return false;
         }
     }
+    return result;
 }
 
 BEGIN_HANDLERS(FlowSwitchCase)
