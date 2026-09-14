@@ -980,17 +980,27 @@ int HamNavList::GetDisabledCount(int count) const {
 
 bool HamNavList::IsElementBig(int display) const {
     int numShowing = mListState.NumShowing();
+    // The image keeps the parameter in its own register and writes the adjusted
+    // value into a second one, with an explicit else arm (`mr r26, r31` at
+    // 0x2564); reassigning the parameter collapses both into one register and
+    // loses that arm.
+    int index;
     if (mListRibbonResource->IsScrollable(numShowing)) {
-        display = (mListState.FirstShowing() + display) - mListState.MinDisplay();
+        index = (mListState.FirstShowing() + display) - mListState.MinDisplay();
+    } else {
+        index = display;
     }
-    if (display >= 0 && display < mListState.NumShowing()) {
+    if (index >= 0 && index < mListState.NumShowing()) {
         for (unsigned int i = 0; i < mBigElements.size(); i++) {
-            Symbol sym = mListState.Provider()->DataSymbol(display);
-            if (sym == mBigElements[i])
+            // No named local: the image reads the Symbol back through the
+            // sret pointer the call returns in r3 (`lwz r10, 0x0(r3)`), and
+            // evaluates mBigElements[i] first -- its _M_start is loaded into a
+            // callee-saved r25 *before* the DataSymbol call.
+            if (mListState.Provider()->DataSymbol(index) == mBigElements[i])
                 return true;
         }
         for (unsigned int i = 0; i < mBigElementIndices.size(); i++) {
-            if (display == (int)mBigElementIndices[i])
+            if (index == (int)mBigElementIndices[i])
                 return true;
         }
     }
