@@ -335,16 +335,16 @@ void UIListDir::ListEntered() {
 void UIListDir::BuildDrawState(
     UIListWidgetDrawState &drawState, UIListState const &state, UIComponent::State compState, float subListOffset, bool allowHighlight
 ) const {
-    auto& _ref0 = mFadeOffset;
     int numDisplay = state.NumDisplay();
     int numDisplayWithData = state.NumDisplayWithData();
 
-    int fadeCountStart = numDisplay / 2;
-    if ((int)(unsigned long)(unsigned int)fadeCountStart >= _ref0) {
-        fadeCountStart = _ref0;
+    int halfDisplay = numDisplay / 2;
+    int fadeCountStart = halfDisplay;
+    if (halfDisplay >= mFadeOffset) {
+        fadeCountStart = mFadeOffset;
     }
     int fadeCountEnd = fadeCountStart;
-    if (_ref0 != 0) {
+    if (mFadeOffset != 0) {
         int fadeEndCalc;
         if (state.Circular()) {
             int selectedDisp = state.SelectedDisplay();
@@ -396,12 +396,15 @@ void UIListDir::BuildDrawState(
     drawState.mElements.reserve(numDisplayWithData);
     drawState.mHighlightElementState = kUIListWidgetActive;
 
+    // Declaration order is load-bearing: retail zeroes the four accumulators in
+    // the order firstGap, totalGap, lastPosBase, highlightBase (fmr f25/f29/f22/
+    // f23 from f31 at 0x82789234-0x82789240).
     int prevData = 0;
-    float lastPosBase = 0.0f;
-    float highlightBase = 0.0f;
+    Vector3 elemPos;
     float firstGap = 0.0f;
     float totalGap = 0.0f;
-    Vector3 elemPos;
+    float lastPosBase = 0.0f;
+    float highlightBase = 0.0f;
 
     float scrollOffset = (float)direction * state.StepPercent();
 
