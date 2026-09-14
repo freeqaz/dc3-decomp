@@ -298,6 +298,11 @@ DWORD NuipCameraAdjustTilt(
         // does remove the duplicate, but pins pRequest into a callee-saved
         // register for the whole body: one extra GPR saved, __savefpr shifted
         // by 8, and a 6-register renumbering downstream.  Net 85.8 -> 85.8.
+        // Re-tried at 96.4 in both remaining spellings -- the separate
+        // `pRequest = &LocalOverlapped;` statement kept here, and the chained
+        // `NuipDetroitRuntimeState.pOverlapped = pRequest = &LocalOverlapped;`
+        // -- and both are byte-inert: MSVC rematerialises the frame address per
+        // use rather than CSE-ing it, so the duplicate addi is a backend choice.
         LocalOverlapped.hEvent = CreateEventA(0, 1, 0, 0);
         pRequest = &LocalOverlapped;
         NuipDetroitRuntimeState.pOverlapped = pRequest;
@@ -370,6 +375,15 @@ Unlock:
     // rather than materialising a common register -- which is also why
     // dwResult survives in the callee-saved r30 (`li r30, 0x3e5` at 0xbd4)
     // instead of being rematerialised as `li r3, 0x3e5` at an early return.
+    // NEGATIVE RESULT (w7-al, 2026-09-14): the image's two epilogues return two
+    // DIFFERENT registers (0x829C4914 `mr r3, r31` for the waited-on
+    // LocalOverlapped.InternalLow, 0x829C4928 `mr r3, r30` for the pending
+    // 0x3e5), which reads as two returns of two separate locals.  Spelling it
+    // that way -- `if (pOverlapped != 0) return dwResult;` followed by a second
+    // local returned at the bottom -- costs 96.4 -> 90.1: the early return
+    // lengthens dwResult's live range past the whole tilt-state chain and
+    // renumbers r28/r29 through it (12 register rows), and MSVC still folds the
+    // two epilogues back into one.  The single `return dwResult` is kept.
     if (pOverlapped == 0) {
         while (WaitForSingleObjectEx(LocalOverlapped.hEvent, INFINITE, 1) == 0xc0) {
         }
