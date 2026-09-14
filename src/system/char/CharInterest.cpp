@@ -157,12 +157,26 @@ float CharInterest::ComputeScore(
         // The image MATERIALISES this subexpression into a bool (li 0 / b /
         // li 1 / clrlwi. / bne) inside the short-circuit, rather than
         // branching straight out of the && -- hence the nested if.
+        // Residual rows 25-28 (4 of 21): the image lays the diamond out with
+        // the FALSE arm first (li r11,0 / b / li r11,1), we emit li 1 then a
+        // conditional beq over li 0.  REFUTED: spelling it as an explicit
+        // if/else with the false arm written first
+        // (`if (!b || mCategoryFlags != 0) x = false; else x = true;`) is
+        // byte-inert -- MSVC canonicalises it back to the same shape.
         bool categoryOverride = b && mCategoryFlags == 0;
         if (!categoryOverride) {
             return -1.0f;
         }
     }
 
+    // Residual rows 45-91 (15 of 21): a Vector3 COMPONENT ORDER permutation.
+    // The image walks z,y,x throughout -- Subtract emits
+    // `lfs 0x8 / 0x4 / 0x0` off v2 and stores 0x68(z), 0x64(y), 0x60(x); the
+    // LengthSquared that follows accumulates z*z, then fmadds y, then x; and
+    // both Dot() calls do the same.  We walk x,z,y.  All three of Subtract,
+    // LengthSquared and Dot are inlines in the SHARED header math/Vec.h, and
+    // per-component reordering there is measured harmful binary-wide
+    // (4 functions up / 20 down), so this is deliberately NOT fixed here.
     Vector3 v7c(WorldXfm().v);
     Vector3 v88;
     Subtract(v7c, v2, v88);
