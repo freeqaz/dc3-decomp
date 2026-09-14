@@ -427,9 +427,19 @@ NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoade
                     break;
                 }
             }
-            std::list<NetLoaderRef>::iterator inserted = mNetLoaderRefs.insert(insertIt, newRef);
-            pNetLoaderRef = &*inserted;
+            // The returned iterator is consumed straight out of the call's
+            // return register (`lwz r11, 0x0(r3)` / `addi r26, r11, 0x8`);
+            // naming it as a local made MSVC re-load it from the frame slot.
+            pNetLoaderRef = &*mNetLoaderRefs.insert(insertIt, newRef);
         } else {
+            // NEGATIVE RESULT: the image's dispatch is one `cmplwi cr6, r17, 0x1`
+            // with `blt cr6` -> the pos==0 search-insert and `beq cr6` -> the
+            // append, with this MILO_FAIL block sitting BETWEEN the branch and
+            // the append.  Writing the arms in that order (pos == 0 first) is a
+            // REGRESSION, 88.9 -> 82.6: MSVC then emits the fail block inline
+            // and re-materialises the whole NetLoaderRef copy.  The residual is
+            // dominated by a register renaming (r20<->r22 12 rows, r27<->r28 10)
+            // plus the 0x50/0x58 frame-slot swap.
             MILO_FAIL("Unknown net loader pos %d.\n", pos);
         }
 
