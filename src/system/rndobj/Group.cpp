@@ -230,15 +230,22 @@ void RndGroup::DrawShowing() {
     } else {
         std::vector<GroupDrawDist> sorted;
         sorted.reserve(mDraws.size());
-        const Transform &camXfm = RndCam::Current()->WorldXfm();
+        // Bind the translation, not the Transform: the image materialises
+        // addi r28, r3, 0x30 immediately after the WorldXfm join, before the
+        // mDraws loads, where a reference to the whole Transform leaves the
+        // +0x30 to be hoisted later and renumbers the two RTTI pointers.
+        const Vector3 &camPos = RndCam::Current()->WorldXfm().v;
         for (std::vector<RndDrawable *>::iterator it = mDraws.begin();
              it != mDraws.end();
              ++it) {
             RndTransformable *trans = dynamic_cast<RndTransformable *>(*it);
-            Vector3 zero(0.0f, 0.0f, 0.0f);
-            Vector3 pos = trans ? trans->WorldXfm().v : zero;
+            // An unnamed temporary, not a named `zero` local: the image stores
+            // the three zeroes ONLY on the null-cast path (.L_826D1F2C), where
+            // a named local is initialised unconditionally at the top of the
+            // loop body.
+            Vector3 pos = trans ? trans->WorldXfm().v : Vector3(0.0f, 0.0f, 0.0f);
             Vector3 delta;
-            Subtract(camXfm.v, pos, delta);
+            Subtract(camPos, pos, delta);
             GroupDrawDist gdd;
             gdd.draw = *it;
             gdd.dist = LengthSquared(delta);

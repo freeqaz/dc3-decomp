@@ -107,7 +107,10 @@ CharClip *CharClipGroup::GetClip(int flags) {
         if (sz < mWhich)
             mWhich = sz;
     }
-    unk24 = Min((int)mClips.size() - 1, unk24);
+    // Min(x, y) is (y < x) ? y : x, and the image keeps the MEMBER in the result
+    // register here (cmpw size-1, unk24 / bge skips the move), so unk24 is the
+    // first argument.  The if-form (a conditional store) costs 2 points.
+    unk24 = Min(unk24, (int)mClips.size() - 1);
 
     int origWhich = mWhich;
 

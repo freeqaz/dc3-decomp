@@ -627,28 +627,40 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
 
     for (std::vector<StoreOffer *>::iterator it = offers.begin(); it != offers.end(); ++it) {
         StoreOffer *offer = *it;
-        // Sym(0) is re-evaluated at each use (four distinct sret slots 0x54,
-        // 0x58, 0x5c, 0x64), so it is not hoisted into a named local here.
-        if (offer->StoreOfferData()->Sym(0) != dummy_upsell_offer
-            && std::find(
-                   song_names.begin(), song_names.end(), offer->StoreOfferData()->Sym(0)
-               ) != song_names.end()) {
-            TheDebug.Notify(
-                MakeString("Duplicate offer short name: %s", offer->StoreOfferData()->Sym(0))
-            );
-        } else {
-            if (offer->OfferType() == song_sym) {
-                // push_back(*it), not push_back(offer): the named local gets a
-                // home slot of its own and shifts every Sym() sret slot by 4.
-                song_offers.push_back(*it);
+        // Every Sym(0) result is a NAMED local with a frame slot of its own --
+        // the image addresses each one as "addi rN, r31, <slot>" rather than
+        // reusing the sret pointer the call returned in r3, and it re-reads the
+        // first one back out of 0x54 instead of dereferencing r3.  Seven 4-byte
+        // temps in all (0x54 0x58 0x5c 0x60 0x64 0x68 0x6c), which is what puts
+        // both vectors at 0x70/0x80.
+        Symbol shortName = offer->StoreOfferData()->Sym(0);
+        if (shortName != dummy_upsell_offer) {
+            Symbol findName = offer->StoreOfferData()->Sym(0);
+            if (std::find(song_names.begin(), song_names.end(), findName)
+                != song_names.end()) {
+                Symbol dupName = offer->StoreOfferData()->Sym(0);
+                TheDebug.Notify(MakeString("Duplicate offer short name: %s", dupName));
+                continue;
             }
-            song_names.push_back(offer->StoreOfferData()->Sym(0));
         }
+        if (offer->OfferType() == song_sym) {
+            // A block-scoped copy, not `offer` itself: the store to 0x60 lands
+            // here next to the push_back rather than being hoisted to the top of
+            // the loop body where `offer` is first defined, and the word is then
+            // shared with cur_type below, whose first definition is later.
+            StoreOffer *songOffer = offer;
+            song_offers.push_back(songOffer);
+        }
+        Symbol pushName = offer->StoreOfferData()->Sym(0);
+        song_names.push_back(pushName);
     }
 
     static Symbol offer_types[2] = { "album", "pack" };
 
-    for (int i = 0; i < 2; i++) {
+    // Unsigned trip count: the image strength-reduces this into a walking
+    // pointer plus a down-counting "subic. r24, r24, 1 / bne", not a compare
+    // against a re-materialised offer_types+8 end address.
+    for (unsigned int i = 0; i < 2; i++) {
         Symbol cur_type = offer_types[i];
         for (std::vector<StoreOffer *>::iterator nit = song_offers.begin();
              nit != song_offers.end();
@@ -665,11 +677,10 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
                 }
             }
             if (count > 1) {
-                TheDebug.Notify(MakeString(
-                    "Song %s is in more than one %s",
-                    (*nit)->StoreOfferData()->Sym(0),
-                    cur_type
-                ));
+                Symbol songName = (*nit)->StoreOfferData()->Sym(0);
+                TheDebug.Notify(
+                    MakeString("Song %s is in more than one %s", songName, cur_type)
+                );
             }
         }
     }

@@ -39,27 +39,38 @@ void OSCMessenger::Poll() {
         value.mHasNewValue = 1;
         MILO_ASSERT(data[pos] == ',', 0x46);
         char c4 = data[pos + 1];
+        // The payload is reached through a running byte cursor, not through
+        // constants folded into the array base: the image computes
+        // "addi r11, pos, K" and adds the base separately, and in the vector
+        // arm it keeps ONE cursor and bumps it by 4 between loads.  Writing
+        // &data[pos + K] instead lets MSVC fold K into the base address.
         if (c4 == 's') {
             MILO_ASSERT(data[pos+2] == 0, 0x49);
             MILO_ASSERT(data[pos+3] == 0, 0x4A);
-            strncpy(value.buffer, &data[pos + 4], 0x80);
+            int payload = pos + 4;
+            strncpy(value.buffer, &data[payload], 0x80);
             value.mType = 's';
         } else if (c4 == 'i') {
             MILO_ASSERT(data[pos+2] == 0, 0x51);
             MILO_ASSERT(data[pos+3] == 0, 0x52);
             value.mType = 'i';
-            *(int *)value.buffer = *(int *)&data[pos + 4];
+            int payload = pos + 4;
+            *(int *)value.buffer = *(int *)&data[payload];
         } else if (c4 == 'f' && data[pos + 2] == 'f' && data[pos + 3] == 'f') {
             value.mType = 'v';
             int *valueBuffer = (int *)value.buffer;
-            valueBuffer[0] = *(int *)&data[pos + 8];
-            valueBuffer[1] = *(int *)&data[pos + 12];
-            valueBuffer[2] = *(int *)&data[pos + 16];
+            int payload = pos + 8;
+            valueBuffer[0] = *(int *)&data[payload];
+            payload += 4;
+            valueBuffer[1] = *(int *)&data[payload];
+            payload += 4;
+            valueBuffer[2] = *(int *)&data[payload];
         } else if (c4 == 'f') {
             MILO_ASSERT(data[pos+2] == 0, 0x67);
             MILO_ASSERT(data[pos+3] == 0, 0x68);
             value.mType = 'f';
-            *(int *)value.buffer = *(int *)&data[pos + 4];
+            int payload = pos + 4;
+            *(int *)value.buffer = *(int *)&data[payload];
         }
         bool found = false;
         FOREACH (it, mValues) {

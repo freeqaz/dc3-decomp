@@ -1089,6 +1089,10 @@ float Rnd::DrawTimers(float f) {
     float bgLeft = 0.025f;
     float rowSpacing = 0.045f;
     float totalHeight = numTimers * rowSpacing;
+    // The image copies f into its callee-saved row cursor inside the argument
+    // block of the FIRST DrawRectScreen (fmr f24, f23), so y is already live
+    // there; declaring it after that call costs a scheduling row.
+    float y = f;
 
     Hmx::Rect rect(bgLeft, f, 0.95f, totalHeight);
     Hmx::Color bgColor(0.0f, 0.0f, 0.0f, 0.5f);
@@ -1100,7 +1104,6 @@ float Rnd::DrawTimers(float f) {
 
     float scale = 0.019f;
     float barHeight = 0.0268f;
-    float y = f;
 
     rect.h = barHeight;
 
@@ -1111,24 +1114,29 @@ float Rnd::DrawTimers(float f) {
             continue;
         }
 
-        float budget = it->first.Budget();
+        // The image materialises &it->first once per iteration (addi r30, r28, 8)
+        // and reads every Timer member through it, so the timer is a named
+        // reference here rather than a repeated it->first.
+        Timer &timer = it->first;
 
-        bool overBudget = budget != 0.0f && it->first.GetLastMs() > budget;
+        float budget = timer.Budget();
+
+        bool overBudget = budget != 0.0f && timer.GetLastMs() > budget;
 
         if (overBudget) {
             rect.w = budget * scale;
             DrawRectScreen(rect, barColor, nullptr, nullptr, nullptr);
             rect.x += rect.w;
-            rect.w = (it->first.GetLastMs() - it->first.Budget()) * scale;
+            rect.w = (timer.GetLastMs() - timer.Budget()) * scale;
             DrawRectScreen(rect, budgetExcessColor, nullptr, nullptr, nullptr);
         } else {
-            rect.w = it->first.GetLastMs() * scale;
+            rect.w = timer.GetLastMs() * scale;
             DrawRectScreen(rect, barColor, nullptr, nullptr, nullptr);
         }
 
-        if (it->first.GetWorstMs() > it->first.GetLastMs()) {
+        if (timer.GetWorstMs() > timer.GetLastMs()) {
             rect.x += rect.w;
-            rect.w = (it->first.GetWorstMs() - it->first.GetLastMs()) * scale;
+            rect.w = (timer.GetWorstMs() - timer.GetLastMs()) * scale;
             DrawRectScreen(rect, worstExcessColor, nullptr, nullptr, nullptr);
         }
 

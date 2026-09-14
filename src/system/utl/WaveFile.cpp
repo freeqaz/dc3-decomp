@@ -76,17 +76,20 @@ void WaveFile::ReadMarkers() {
         for (i = 0; i < cuesize; i++) {
             iChunk.Next();
             IDataChunk dataChunk(iChunk);
-            ChunkHeader *hdr = dataChunk.Header();
-            if (strncmp((char*)hdr, (char*)&kWaveLabelChunkID, 4) == 0) {
-                int len = hdr->Length() - 4;
+            // The image compares through ChunkID::operator==, which is
+            // non-const, so each site copies the header's id into its own
+            // 4-byte stack temp (stw r11, 0xa4 / 0xac) and re-reads
+            // IDataChunk::mHeader; there is no cached header local.
+            if (ChunkID(dataChunk.Header()->ID()) == kWaveLabelChunkID) {
+                int len = dataChunk.Header()->Length() - 4;
                 int labelid;
                 dataChunk >> labelid;
                 String str;
                 str.resize(len);
                 dataChunk.Read((char *)str.c_str(), len);
                 labelvec.push_back(Label(str, labelid));
-            } else if (strncmp((char*)hdr, (char*)&kWaveTextChunkID, 4) == 0) {
-                int len = hdr->Length() - 0x14;
+            } else if (ChunkID(dataChunk.Header()->ID()) == kWaveTextChunkID) {
+                int len = dataChunk.Header()->Length() - 0x14;
                 int unk1, unk2, unk3;
                 short unk4, unk5, unk6, unk7;
                 dataChunk >> unk1 >> unk2 >> unk3;
