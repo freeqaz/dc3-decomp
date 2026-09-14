@@ -191,20 +191,30 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
                 float f13_gain = f21 + f31;
 
                 for (int ch = 0; ch < numChans; ch++) {
+                    // NEGATIVE RESULT (93.287%, unchanged to five figures).
+                    // These were `*(float *)((char *)stack50 + ch * 4)` -- a
+                    // decompiler artifact -- on the theory that the byte-offset
+                    // form would stop MSVC strength-reducing the walk. It does
+                    // not: plain subscripting scores identically, so the
+                    // readable spelling is kept. The image addresses both state
+                    // arrays with indexed loads and stores off a recomputed
+                    // `slwi r7, r8, 2` (`lfsx f12, r7, r28` / `stfsx f12, r7, r28`
+                    // in build/373307D9/asm/src/system/dsp/WahEffect.s) where
+                    // MSVC gives us an auto-updating `stfsu f12, 0x4(r10)` with
+                    // `add r30, r28, r30`; neither spelling of the subscript
+                    // reaches the indexed form.
                     float sample = buf[sampleIdx + ch];
-                    float *pA = (float *)((char *)stack50 + ch * 4);
-                    float *pB = (float *)((char *)stack58 + ch * 4);
                     mLastInput = sample;
-                    float state1 = *pA;
-                    float state2 = *pB;
+                    float state1 = stack50[ch];
+                    float state2 = stack58[ch];
 
-                    *pB = state1;
+                    stack58[ch] = state1;
 
                     // Biquad filter
                     float tmp1 = sample * feedback;
                     tmp1 = state1 * f28_scaled + tmp1;
                     tmp1 = tmp1 - state2 * f29;
-                    *pA = tmp1;
+                    stack50[ch] = tmp1;
 
                     // Soft clip
                     float out = sample * f30 + tmp1;
