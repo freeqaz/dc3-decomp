@@ -1460,6 +1460,13 @@ void PlatformMgr::Poll() {
                         mStrStorageFiles[i], L"%s", mStorageList->pItems[i].pwszPathName
                     );
                 }
+                // The image reuses the loop latch's `lwz r11, 0x4(r3)` for the
+                // mListSize store (`stw r11, mListSize@l(r9)`); we re-load it,
+                // because MSVC puts `li 0x3` in r11 and clobbers the live value.
+                // REFUTED (wave 7, lane w7-y): swapping these two statements so
+                // mListSize is written first does NOT keep the latch value --
+                // it repermutes the whole 0x50..0x88 stack-slot block and costs
+                // 2.5pp binary-visible here (99.17 -> 96.7, 21 rows -> 135).
                 mServiceIdState = kServiceIdDownloading;
                 mListSize = mStorageList->dwNumItemsReturned;
             } else {
