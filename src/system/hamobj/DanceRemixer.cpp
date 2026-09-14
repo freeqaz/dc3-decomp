@@ -202,9 +202,26 @@ DataNode DanceRemixer::OnMovePassed(DataArray *a) {
 }
 
 void DanceRemixer::PostMoveFinished() {
-    int moveIdx = (int)TheTaskMgr.Beat() / 4 + 1;
+    // The image keeps BOTH the quotient and the +1 alive in callee-saved
+    // registers (`addze r25, r10` then `addi r21, r25, 0x1`) and uses them at
+    // different sites: r21 (moveIdx) is the ScoredDanceMeasure key, r25
+    // (measure) is the mRoutineMeasures subscript -- `slwi r10, r25, 3`. The
+    // JumpedMoveIdx argument is spelled `moveIdx - 1` rather than `measure`,
+    // which is why the image also emits `subi r30, r21, 0x1` instead of
+    // reusing r25.
+    int measure = (int)TheTaskMgr.Beat() / 4;
+    int moveIdx = measure + 1;
     UpdateHamDirector();
-    MoveDir *moveDir = TheHamDirector ? TheHamDirector->GetMoveDir() : nullptr;
+#ifdef HX_NATIVE
+    // DECOMP-INTRODUCED GUARD, now correctly scoped (w7-ai). This used to be a
+    // `TheHamDirector ? ... : nullptr` ternary in the shipping path, which the
+    // image does not have: it loads TheHamDirector and dereferences it
+    // unconditionally (`lwz r11, TheHamDirector` then `lwz r28, 0x328(r11)`,
+    // no cmplwi/beq between them). The null test belongs on the native side
+    // only, where TheHamDirector really can be absent.
+    if (!TheHamDirector) return;
+#endif
+    MoveDir *moveDir = TheHamDirector->GetMoveDir();
 #ifdef HX_NATIVE
     if (!moveDir) return; // No move directory loaded (no Kinect)
 #endif
@@ -227,11 +244,11 @@ void DanceRemixer::PostMoveFinished() {
         // (mTotalMeasures). The unchecked [] then reads a garbage MoveVariant*
         // and Find() faults on its name — observed SIGSEGV on long headless
         // runs that idle at song end.
-        if (moveIdx < 0 || moveIdx >= (int)TheMoveMgr->mRoutineMeasures[i].size())
+        if (measure < 0 || measure >= (int)TheMoveMgr->mRoutineMeasures[i].size())
             continue;
 #endif
         if (ScoredDanceMeasure(i, moveIdx)) {
-            const MoveVariant *mv = TheMoveMgr->mRoutineMeasures[i][moveIdx].first;
+            const MoveVariant *mv = TheMoveMgr->mRoutineMeasures[i][measure].first;
             if (mv) {
                 const char *hamMoveName = mv->HamMoveName().Str();
                 HamMove *move = moveDir->Find<HamMove>(hamMoveName, false);
