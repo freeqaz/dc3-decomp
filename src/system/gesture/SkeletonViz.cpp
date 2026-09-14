@@ -302,6 +302,20 @@ void SkeletonViz::SetCamera(
         }
     }
 
+    // RESIDUAL (SetCamera, 95.1 canonical / 95.0 raw): frame delta +0x10.
+    // The image shares ONE 16-byte slot at r1+0x50 between the `pos` of the
+    // mUsePhysicalCam branch (stores at 0x82440650..0x8244065C, re-read as a
+    // 16-byte copy at 0x82440690..0x824406AC) and `plane` here (stores at
+    // 0x82440938..0x82440948, `addi r3, r1, 0x50` at 0x8244096C).  We give
+    // plane 0x50 and pos 0x60, which pushes every later slot up by 0x10 and
+    // costs 30 offset rows plus the 6I/6D schedule cluster inside the inlined
+    // SetLocalPos.  NEGATIVES, both measured at exactly 95.1/95.0 (inert):
+    //   - wrapping this block's body in an extra `{ }` to match pos's lexical
+    //     depth;
+    //   - hoisting `Vector3 pos` out to the `if (mUsePhysicalCam)` scope so the
+    //     two locals sit at the same depth.
+    // Vector3 is 12 bytes and Plane is 16 (math/Vec.h, math/Mtx.h:357), so the
+    // packer may simply refuse to merge unequal sizes; needs the permuter.
     if (unk218) {
         Plane plane = *(const Plane *)&frame.mFloorClipPlane;
         Transform localXfm = unk1d4;
