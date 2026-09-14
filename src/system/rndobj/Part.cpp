@@ -1504,8 +1504,16 @@ void RndParticleSys::UpdateParticles() {
                     Vector3 baseVel;
                     if (!mMeshEmitter) {
                         f32 halfSample = 0.5f;
-                        f32 pitchMid = LimitAng(mPitch.y - mPitch.x) * halfSample + mPitch.x;
-                        f32 yawMid = LimitAng(mYaw.y - mYaw.x) * halfSample + mYaw.x;
+                        // Naming the two low bounds keeps them live instead of
+                        // reloading 0x188/0x190 after each LimitAng, which is
+                        // what the image does.  Refuted on top of this: hoisting
+                        // the pitch delta into its own local (inert, identical
+                        // 14-row diff), so the residual load-order swap at
+                        // 0x188/0x18c is scheduling, not spelling.
+                        f32 pitchLo = mPitch.x;
+                        f32 yawLo = mYaw.x;
+                        f32 pitchMid = LimitAng(mPitch.y - pitchLo) * halfSample + pitchLo;
+                        f32 yawMid = LimitAng(mYaw.y - yawLo) * halfSample + yawLo;
                         f32 speedMid = (mSpeed.y - mSpeed.x) * halfSample + mSpeed.x;
 
                         f32 halfPi = 1.57079637f;
