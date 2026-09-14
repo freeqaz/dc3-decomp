@@ -918,6 +918,20 @@ HamCharacter *CharacterNameToCharacter(Symbol s) {
     return NULL;
 }
 
+// RESIDUAL (w7-az, 93.46, 19 rows).  Everything through the two static-Symbol
+// guards matches; the whole residual is that MSVC ROTATES our first search loop
+// and not the image's.  The image enters loop 1 with `b .L_824A3D40` at
+// 0x824A3D2C -- test at the top, one induction register (r10) -- and enters
+// loop 2 the same way at 0x824A3D50.  We emit an extra `mr r9, r11` plus a
+// peeled copy of the head test before the body and put the surviving test at
+// the bottom, so loop 1 costs two extra instructions and permutes r9/r10/r11
+// through the rest of the function.  Loop 2 already matches shape.
+// NEGATIVES, both byte-inert or worse: rewriting both loops as
+// `iterator p = mTargets.begin(); while (p != mTargets.end()) {...}` is
+// byte-identical to this `for` (0 rows moved); hoisting `mTargets.end()` into a
+// named `end` iterator used by both loops and both tail tests is WORSE (raw
+// 90.7 -> 90.2) -- it pins &mTargets in a callee-saved register and permutes
+// r28/r29 back through the Symbol constructors.
 void HamCamShot::FlipTargetAnimGroups() {
     static Symbol player0("player0");
     static Symbol player1("player1");
