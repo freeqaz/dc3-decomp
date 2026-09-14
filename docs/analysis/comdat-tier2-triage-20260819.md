@@ -264,6 +264,40 @@ Ordered by size. Everything here is real work, not an artifact.
   Residual there: MSVC promotes `0.0f` into a third callee-saved FPR where the target
   reloads it from `.rdata`; an `r18`/`r19` transposition; and a `JoypadData` copy the target
   takes before the EEPROM block that is reproduced but not explained.
+
+  **Re-examined 2026-09-14 (still 96.72617%). The `0.0f` residual is CONFIRMED and
+  now has a mechanism; two of the tool's "LikelyFixable" hints are REFUTED.**
+
+  * **CONFIRMED — the third FPR.** The target materialises `__real@00000000` three
+    separate times, each into a *volatile* register: at the declaration init
+    (`lfs f0`), again before the pressure/sensor zeroing (`lfs f0`, idx 106), and
+    again hoisted just outside the analog-stick loop (`lfs f12`, idx 305-306). We
+    keep one copy in a callee-saved FPR for the whole function. That is the entire
+    `frame Δ +0x10` and all four prologue/epilogue rows (`stfd f29/f30/f31` vs the
+    target's `stfd f30/f31`). It is MSVC rematerialisation policy; no source lever
+    found.
+  * **REFUTED — "the `= { 0 }` initializers are dead, remove them."** They look
+    redundant because `pressures` and `pro_guitar` are both re-zeroed at the top of
+    every pad iteration, and removing them is the obvious way to cut a `0.0f` use
+    and stop the FPR promotion. It is wrong and it is measured: **96.72617% ->
+    94.5%**, and the diff then grows eight *target-only* rows that are the
+    initializers themselves — `li r20, 0x0` / `stfs f0, 0x7c(r1)` (so
+    `kNumPressureButtons` is 1, one float store) and `stb r20, 0xd0(r1)` +
+    `addi r3, r1, 0xd1` + `li r5, 0xf` + `bl memset` (the classic MSVC
+    `unsigned char[16] = {0}`: store element 0, `memset` the other 15). Keep them.
+  * **REFUTED — objdiff's `OFFSET_SWAP (0x24,0x2c)` "LikelyFixable" hint.** It is not
+    a wrong field and not a swapped pair. Both sides write `buf[0]->0x24`,
+    `buf[1]->0x28`, `buf[2]->0x2c`; only the *order of the three stores* differs,
+    because the target forms a base pointer (`addi r10, r1, 0xf8`, then `0x0/0x4/0x8`
+    off it) where we index off `r1` directly. Reading the three rows together rather
+    than the two the hint names is what settles it.
+  * **Not a field bug either: the `mConnected` rows.** The target compares
+    `0x48(r23)` twice — `cmplwi 0x1` in the `padType == kJoypadNone` arm and
+    `cmplwi 0x0` in the other — which reads like a three-valued field. It is not:
+    that is just MSVC compiling `if (data.mConnected)` and `if (!data.mConnected)`
+    independently, each against the value that makes its branch fall through. We
+    emit one `cmplwi 0x0` hoisted above the split and reuse CR for both. Scheduling,
+    not logic; the source is already correct.
 - **New, found by that lane:** `ReadSingleJoypad` and `JoypadSendKeepAlive` (both
   `os/Joypad_Xbox.obj` in the target) are the same shape — declared, called, defined
   nowhere.
