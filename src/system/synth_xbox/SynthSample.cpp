@@ -63,7 +63,13 @@ const void *SynthSample360::GetData() const {
 }
 
 float SynthSample360::LengthMs() const {
-    if (mSampleData.HasData()) {
+    // A plain `void *` LOCAL tested with `!= 0`, not `mSampleData.HasData()`.
+    // The image compares SIGNED (`cmpwi cr6, r11, 0x0`); a bool-returning
+    // inline predicate gives MSVC the unsigned `cmplwi` instead, and that is
+    // true of `mData != nullptr` and `mData != 0` alike -- both spellings of
+    // HasData() were measured at 97.857.
+    void *data = mSampleData.DataPtr();
+    if (data != 0) {
         int numSamples = mSampleData.GetNumSamples();
         int sampleRate = GetSampleRate();
         return (float)numSamples * 1000.0f / (float)sampleRate;
