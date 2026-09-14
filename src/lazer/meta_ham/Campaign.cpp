@@ -508,7 +508,7 @@ bool Campaign::UpdateEraSongUnlockInstructions(
         return false;
     }
     int requiredStars = pEra->GetSongRequiredStars(song);
-    if ((int)(int)requiredStars == 0) {
+    if (requiredStars == 0) {
         static Symbol era01("era01");
         static Symbol era02("era02");
         static Symbol era03("era03");
