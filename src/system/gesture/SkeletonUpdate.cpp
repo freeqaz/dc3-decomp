@@ -474,6 +474,15 @@ void SkeletonUpdate::PostUpdate() {
     if (mHasNewFrame) {
         LiveCameraInput::sInstance->SetNewFrame(&mSkeletonFrame);
     }
+    // Known residual, 2 rows (99.988 canonical).  The image issues the five
+    // field stores as 0x6c(this), 0x60, 0x64, 0x68(&mSkeletonFrame),
+    // 0x70(mCameraInput); we issue 0x6c, 0x60, 0x64, 0x70, 0x68 -- the same
+    // five values into the same five slots, with only the last pair's issue
+    // order transposed.  Every instruction before and after matches, loads
+    // included, so this is a scheduler tie and not a value or slot bug.
+    // Refuted: transposing the source order of the mFrame and mCameraInput
+    // assignments here is byte-inert (2 rows before and after), so the store
+    // schedule is not derived from the order these lines are written in.
     SkeletonUpdateData updateData;
     updateData.mSkeletonsLeft = &mSkeletonsLeft[0];
     updateData.mSkeletonsRight = &mSkeletonsRight[0];
