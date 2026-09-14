@@ -457,7 +457,7 @@ void XboxContentMgr::PollRefresh() {
         // the read at 0x825EBB7C).  The counter is reset in Refresh() instead.
         for (int i = 0; i < kNumberOfBuffers; i++) {
             if (mOverlappeds[i]) {
-                DWORD numItems = 0;
+                DWORD numItems;
                 DWORD res = XGetOverlappedResult(mOverlappeds[i], &numItems, false);
                 if (res == 0x3E4) {
                     // RETURN, not `continue`.  The image's ERROR_IO_INCOMPLETE
