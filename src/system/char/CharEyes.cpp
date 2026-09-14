@@ -419,6 +419,14 @@ END_SAVES
 
 BEGIN_LOADS(CharEyes)
     LOAD_REVS(bs)
+    // AT LIMIT at 99.286. The only 7 mismatched rows in this function are inside
+    // the two MakeString calls this macro expands to, and all 7 are the CSE
+    // anchor pick: the target anchors the pair on gAltRev and reaches gRev as
+    // `subi r7, r29, 0x4`, we anchor on gRev and reach gAltRev as `+ 4`. Not
+    // source-reachable without editing the shared ASSERT_REVS macro in
+    // obj/Object.h, which 645 sibling Loads share and 613 of which are at 100%
+    // with this exact spelling. Refuted in full at
+    // docs/decomp/patterns/relocation-names-are-unmetered.md:708.
     ASSERT_REVS(18, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     if (d.rev > 5) {

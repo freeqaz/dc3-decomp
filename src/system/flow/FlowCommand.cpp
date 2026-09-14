@@ -51,13 +51,19 @@ BEGIN_LOADS(FlowCommand)
     LOAD_REVS(bs)
     ASSERT_REVS(3, 0)
 
-    std::list<Symbol> symbols;
     std::list<DataNode> datanodes;
+    std::list<Symbol> symbols;
     if (d.rev > 2) {
         int count;
         bs >> count;
         Flow *owner = GetOwnerFlow();
-        ObjectDir *dir = owner->Dir();
+        // The owner's *loading* dir, not its current one: while a proxy is being
+        // streamed in, DirLoader::ProxyDir() is where the objects these DataNodes
+        // name actually live. Same spelling as FlowIf::Load / Flow::PostLoad; the
+        // target inlines it here (lwz r11,0xb4(r3) = owner->Loader(), then 0xac =
+        // ProxyDir()) at all three DataNode-loading sites in this function.
+        DirLoader *loader = owner->Loader();
+        ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
         for (int i = 0; i < count; i += 2) {
             DataNode n;
             n.Load(bs, dir);
@@ -82,7 +88,8 @@ BEGIN_LOADS(FlowCommand)
     if (d.rev < 2) {
         DataNode n;
         Flow *owner = GetOwnerFlow();
-        ObjectDir *dir = owner->Dir();
+        DirLoader *loader = owner->Loader();
+        ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
         n.Load(bs, dir);
         if (n.Type() == kDataArray) {
             for (int i = 0; i < n.Array()->Size(); i++) {
@@ -90,10 +97,13 @@ BEGIN_LOADS(FlowCommand)
             }
         }
     } else if (d.rev < 3) {
-        int count;
+        // The `= 0` is the target's: it stores the zero constant into this slot
+        // before the ReadEndian, which the rev>2 arm above does not do.
+        int count = 0;
         bs >> count;
         Flow *owner = GetOwnerFlow();
-        ObjectDir *dir = owner->Dir();
+        DirLoader *loader = owner->Loader();
+        ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
         for (int i = 0; i < count; i += 2) {
             DataNode n1;
             n1.Load(bs, dir);
