@@ -488,9 +488,26 @@ void DxTex::MakeDrawTarget() {
         TheDxRnd.Resume();
         D3DDevice_SetPredication(TheDxRnd.Device(), 3);
         D3DDevice_SetRenderTarget_External(TheDxRnd.Device(), 0, mRenderTarget);
-        D3DDevice_SetDepthStencilSurface(
-            TheDxRnd.Device(), mType == kDepthVolumeMap ? nullptr : mDepthRT
-        );
+        // The depth surface is chosen by a real if/else, NOT a ternary: the target
+        // materialises the null in the taken arm and branches over it (`beq` to
+        // `li r4, 0` + `b`), where a `?:` lets MSVC hoist the `li` above the compare.
+        // The `dev` temporary is also load-bearing -- inline `TheDxRnd.Device()` is
+        // scheduled after the diamond (right-to-left argument evaluation), the target
+        // loads it before the compare.
+        D3DDevice *dev = TheDxRnd.Device();
+        D3DSurface *depth;
+        if (mType != kDepthVolumeMap) {
+            depth = mDepthRT;
+        } else {
+            depth = nullptr;
+        }
+        D3DDevice_SetDepthStencilSurface(dev, depth);
+        // RESIDUAL (w7-ak, 91.3 canonical): 8 instructions, same multiset, different
+        // schedule. The target hoists the whole `mType != kShadowMap` bool computation
+        // above the `sCurrent` store; we emit the store in the middle of it. Hoisting
+        // the bool into a named local moves the load but not the subi/subfe, and
+        // swapping the two statements puts the `stb` before the `stw`, which the
+        // target does not do.
         NgMat::SetCurrent(nullptr);
         TheDxRnd.SetReverseZ(mType != kShadowMap);
     }
