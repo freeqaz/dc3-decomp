@@ -23,10 +23,15 @@
 #include "utl/Loader.h"
 #include <algorithm>
 
+// mLineWidthScale defaults to 1.0f, not 0: the image stores f13 --
+// `lfs f13, "__real@3f800000"@l(r6)` at 0x824431D8 -- into 0x214(r30) at
+// 0x82443268, beside the `stb r4, 0x218(r30)` that sets unk218 to 1.  A zero
+// there scales every skeleton bone line to zero width.  Fixing the constant
+// took the whole constructor from 80.29 to 100.0 on its own.
 SkeletonViz::SkeletonViz()
     : mUsePhysicalCam(0), mPhysicalCamRotation(0), mCurrentCamRotation(0),
       mAxesCoordSys(kCoordCamera), mUtlLine(0), mSkeletonEnv(0), mCamMesh(0),
-      mJointMesh(0), mJointMat(0), mPhysicalCam(0), mLineWidthScale(0),
+      mJointMesh(0), mJointMat(0), mPhysicalCam(0), mLineWidthScale(1),
       unk218(true) {
     unk194.Reset();
     Hmx::Matrix3 rot(Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(0, 1, 0));
