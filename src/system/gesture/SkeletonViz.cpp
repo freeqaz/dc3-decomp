@@ -384,8 +384,8 @@ void SkeletonViz::DrawJoints(
     RndLine **lineIt = mBoneLines - 1;
     while (jointPair < &BaseSkeleton::sBones[kNumBones].joint2) {
         // Endpoint 0 receives the unscaled tint; only endpoint 1 is depth-shaded.
-        shadedColor.alpha *= tintColor.alpha;
         float c0 = (camPos[jointPair[-1]].z - maxDepth) * invRange;
+        shadedColor.alpha *= tintColor.alpha;
         c0 = Clamp(0.0f, 1.0f, c0);
         c0 = c0 * 0.8f + 0.2f;
         shadedColor.red = tintColor.red * c0;
@@ -393,8 +393,8 @@ void SkeletonViz::DrawJoints(
         shadedColor.blue = tintColor.blue * c0;
         lineIt[1]->SetPointColor(0, tintColor, true);
 
-        shadedColor.alpha *= tintColor.alpha;
         float c1 = (camPos[jointPair[0]].z - maxDepth) * invRange;
+        shadedColor.alpha *= tintColor.alpha;
         c1 = Clamp(0.0f, 1.0f, c1);
         c1 = c1 * 0.8f + 0.2f;
         shadedColor.red = tintColor.red * c1;
