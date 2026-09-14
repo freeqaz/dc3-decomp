@@ -247,7 +247,11 @@ void CharHair::SimulateInternal(float fps) {
     float halfWeight = mWeight * -0.5f;
     Vector3 windForce(0.0f, 0.0f, 0.0f);
     if (mWindObj) {
-        RndTransformable *root = mStrands[0].Root();
+        // Test the ObjPtr, not a raw RndTransformable *.  The two spellings are
+        // not the same instruction: `if (objPtr)` emits a signed `cmpwi` (see
+        // the `if (mWindObj)` above, which matches) and `if (rawPtr)` emits
+        // `cmplwi`.  The image uses `cmpwi` for both tests.
+        const ObjPtr<RndTransformable> &root = mStrands[0].RootRef();
         if (root) {
             const Transform &rootXfm = root->WorldXfm();
             mWindObj->GetWind(rootXfm.v, TheTaskMgr.Seconds(TaskMgr::kRealTime), windForce);
@@ -278,6 +282,17 @@ void CharHair::SimulateInternal(float fps) {
                     Point &modPt = modStrand.Points()[j];
                     Vector3 vRes;
                     Subtract(pt.pos, modPt.pos, vRes);
+                    // REFUTED (lane w7-a, 2026-09-14): spelling this as an
+                    // accumulator chain seeded from vRes.z -- the image's term
+                    // order, and the lever that closed CharBones::ScaleAdd and
+                    // both CharIK/LookAt Polls in this same lane -- REGRESSES
+                    // this site, 99.4775 -> 98.3, and makes the function three
+                    // instructions LONGER.  vRes is a real Vector3 that is
+                    // mutated and stored afterwards, so forcing the sum's
+                    // association also pins vRes into its stack slot instead of
+                    // letting the three differences stay in f0/f12/f13.  The
+                    // accumulator lever only pays where the vector is dead
+                    // after the reduction.
                     float lensq = LengthSquared(vRes);
                     float minLenSq = minLen * minLen;
                     if (lensq < minLenSq) {
