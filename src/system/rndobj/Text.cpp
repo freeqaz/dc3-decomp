@@ -1219,27 +1219,33 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
 
                 if (curChar == 0) {
                     std::vector<unsigned short> fontChars(font->mChars);
+                    // curChar is written ONLY on the break, and the counter is
+                    // zeroed before the emptiness test: the image sets j from its
+                    // zero register at .L_82699a00, ahead of the `srawi.`/`beq`,
+                    // and jumps PAST the `mr r26, r7` (.L_82699a4c `b .L_82699a54`)
+                    // when the loop runs out. Carrying the character in a local that
+                    // is re-seeded from curChar each iteration added a `mr r11, r26`
+                    // inside the loop and dropped that skip branch.
+                    unsigned int j = 0;
                     unsigned int count = fontChars.size();
-                    unsigned short c = curChar;
                     if (count != 0) {
-                        unsigned int j = 0;
                         unsigned short *fp = &fontChars[0];
                         do {
-                            c = *fp;
+                            unsigned short c = *fp;
                             bool skip;
                             if (c == 0x20 || c == 0xa0) {
                                 skip = true;
                             } else {
                                 skip = false;
                             }
-                            if (!skip)
+                            if (!skip) {
+                                curChar = c;
                                 break;
+                            }
                             j = j + 1;
                             fp = fp + 1;
-                            c = curChar;
                         } while (j < count);
                     }
-                    curChar = c;
                 }
 
                 if (curChar != 0) {
@@ -1260,21 +1266,34 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
         if (mapIt != missingMap.end()) {
         unsigned int origSize = origChars.size();
         do {
+            // The set reference and the font are both taken at the TOP of the loop
+            // body: the image emits `addi r29, r17, 0x14` (&mapIt->second) and
+            // `lwz r28, 0x10(r17)` (mapIt->first) at .L_82699b1c/.L_82699b20, ahead
+            // of the `cmplwi cr6, r11, 0x1` size test, and then addresses the set's
+            // begin/end as `0x8(r29)` / `r29` rather than recomputing r17+0x14 each
+            // time round the inner loop.
+            std::set<unsigned short> &missing = mapIt->second;
+            RndFontBase *font = mapIt->first;
             const char *pluralS = "s";
-            if (mapIt->second.size() <= 1) {
+            if (missing.size() <= 1) {
                 pluralS = "";
             }
             auto headerMsg = MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS);
             {
-                RndFontBase *font = mapIt->first;
                 String msg(headerMsg);
 
-                for (std::set<unsigned short>::iterator setIt = mapIt->second.begin();
-                     setIt != mapIt->second.end(); ++setIt) {
+                for (std::set<unsigned short>::iterator setIt = missing.begin();
+                     setIt != missing.end(); ++setIt) {
                     unsigned short ch = *setIt;
-                    bool printable = true;
+                    // if/else, not `= true` then a conditional `= false`: the image
+                    // materialises the 1 only on the fall-through of the four tests
+                    // (`li r11, 0x1` at .L_82699bcc, immediately before the last
+                    // `bne`), and copies its zero register on the other path.
+                    bool printable;
                     if (ch < 0x20 || ch >= 0xff || ch == 0x25 || ch == 0x7f) {
                         printable = false;
+                    } else {
+                        printable = true;
                     }
                     char displayChar;
                     if (printable) {
@@ -1298,9 +1317,11 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                         unsigned short qch = *qp;
                         if (qch == 0)
                             break;
-                        bool printable = true;
+                        bool printable;
                         if (qch < 0x20 || qch >= 0xff || qch == 0x25 || qch == 0x7f) {
                             printable = false;
+                        } else {
+                            printable = true;
                         }
                         if (printable) {
                             msg += MakeString("%c", (char)qch);
