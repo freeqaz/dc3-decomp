@@ -1333,6 +1333,34 @@ void CharEyes::ProceduralBlinkUpdate() {
     }
 }
 
+// RESIDUAL at 98.0 canonical / 97.1 raw (w7-ax, 2026-09-14).  53 of the 63
+// remaining rows are one register permutation the canonical ruler forgives.
+// The four real rows, each verified against build/373307D9/asm/system/char/CharEyes.s:
+//  - We CSE the `1.0f` of `Clamp(-1.0f, 1.0f, cang)` into the callee-saved f31
+//    and reuse it as the `: 1.0f` default of minLookTime; the image keeps only
+//    the literal-pool ANCHOR in a callee-saved GPR (`lis r30,
+//    "__real@3f800000"@ha` at 0x8237AB74) and issues a SECOND
+//    `lfs f30, "__real@3f800000"@l(r30)` at 0x8237ABFC for the default.
+//    Because our else-arm is then empty, MSVC fuses the minLookTime and
+//    maxLookTime diamonds into one, costing the image's `b .L_8237AC00`
+//    (0x8237ABF8), that `lfs`, and the second `cmpwi cr6, r10, 0x0` / `beq cr6`
+//    pair at 0x8237AC00/0x8237AC04 -- 4 rows.
+//  - `addi r24, r3, 0x8` (diff idx 8): we pin &mEyes in a callee-saved GPR for
+//    the whole function; the image re-derives it, as `r25 + 0x30` off the
+//    CharEyes* at the two interior sites and as `r31 + 0x8` at the final loop,
+//    and pays one extra `addi r11, r25, 0x30` (0x8237AE38) before re-reading
+//    begin() for mEyes[0].
+//  - The cam fallback chain: the image's first null test is SIGNED
+//    (`cmpwi cr6, r30, 0x0` at 0x8237AE90) and its second uses cr6; we emit
+//    `cmplwi cr6` and then `cmplwi r30, 0x0` on cr0.  Control flow is identical.
+// NEGATIVE RESULTS, all measured in this worktree, none of which moved canonical:
+//  - `float cang = Clamp(-1.0f, 1.0f, Dot(facingDir, targetDir));` as one
+//    statement: byte-inert.
+//  - minLookTime as an if/else statement pair instead of a ternary: inert.
+//  - `mEyes.begin()->mEye` instead of `mEyes[0].mEye` (both sites): inert.
+//  - `RndCam *cam = TheWorld ? TheWorld->Cam() : 0;` instead of the zero-init +
+//    `if (TheWorld)` block: 98.0 -> 97.2 (three extra inserts, one extra
+//    delete, and it moves the `lwz 0x0(r11)` reload onto the wrong register).
 void CharEyes::Poll() {
     if (mEyes.empty())
         return;
