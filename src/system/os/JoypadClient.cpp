@@ -162,17 +162,23 @@ int JoypadClient::OnMsg(const ButtonUpMsg &msg) {
 
     JoypadButton btn = msg.GetButton();
     if (mVirtualDpad && MovedLeftStick(btn)) {
-        JoypadButton dpadbtn = LeftStickToDpad(btn);
-        mSink->Handle(
-            ButtonUpMsg(btnUser, dpadbtn, msg.GetAction(), msg.GetPadNum()), false
-        );
+        // Reassigned, not a second local -- the target puts LeftStickToDpad's
+        // result back into btn's register (mr r30, r3 at 0x825F4AC0) and that
+        // is the value the (1 << btn) mask test at 0x825F4BC4 shifts by.  A
+        // separate `dpadbtn` local made the mask test use the raw stick button.
+        btn = LeftStickToDpad(btn);
+        mSink->Handle(ButtonUpMsg(btnUser, btn, msg.GetAction(), msg.GetPadNum()), false);
     } else {
         mSink->Handle(msg, false);
     }
-    if (!btnUser)
-        return 0;
+    // No early-out on a null user: the target reads the message's own pad
+    // number first (Node(5) at 0x825F4B8C) and its `cmplwi cr6, r28, 0x0` at
+    // 0x825F4BA0 branches PAST the virtual GetPadNum() into the mask test.
+    int padNum = msg.GetPadNum();
+    if (btnUser)
+        padNum = btnUser->GetPadNum();
     if (((1 << btn) & mBtnMask)) {
-        mRepeats[btnUser->GetPadNum()].Reset(btn);
+        mRepeats[padNum].Reset(btn);
     }
     return 0;
 }
