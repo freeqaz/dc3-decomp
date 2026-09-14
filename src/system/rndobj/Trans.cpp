@@ -708,7 +708,12 @@ void RndTransformable::ApplyDynamicConstraint() {
         Multiply(mWorldXfm, tf, mWorldXfm);
         Multiply(mWorldXfm, mTarget->WorldXfm(), mWorldXfm);
     } else if (RndCam::Current()) {
-        const Transform &refWorld = mTarget ? mTarget->WorldXfm() : RndCam::Current()->WorldXfm();
+        // The image selects the OBJECT first and inlines a single WorldXfm() on
+        // it (0x82646C84: `lwz r11,0xb0(r31); cmpwi; beq; mr r3,r11` re-using the
+        // sCurrent already in r3), rather than inlining WorldXfm() twice.
+        RndTransformable *refObj =
+            mTarget ? (RndTransformable *)mTarget : (RndTransformable *)RndCam::Current();
+        const Transform &refWorld = refObj->WorldXfm();
         Vector3 scaleVec;
         if (mPreserveScale) {
             MakeScale(mWorldXfm.m, scaleVec);
