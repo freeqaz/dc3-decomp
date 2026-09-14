@@ -86,11 +86,20 @@ BEGIN_LOADS(CharFeedback)
     }
     if (d.rev > 2) {
         if (d.rev < 6) {
-            ObjPtr<RndLine> line(this);
-            ObjPtr<UIColor> color(this);
-            d >> line;
-            d >> color;
-            d >> color;
+            // The two ObjPtrs are in their own scope on purpose: the target runs
+            // both destructors (0x80 then 0xe0) BEFORE the 4-byte read below, and
+            // then falls straight into the shared ReadEndian tail. With the read
+            // inside their scope MSVC emits its own `bl ReadEndian` ahead of the
+            // destructors instead (96.594 -> 95.2).
+            {
+                ObjPtr<RndLine> line(this);
+                ObjPtr<UIColor> color(this);
+                d >> line;
+                d >> color;
+                d >> color;
+            }
+            int x;
+            d >> x;
         } else if (d.rev < 8) {
             int x;
             d >> x;
