@@ -71,6 +71,18 @@ void GlitchPoker::PrintNestedStartTimes(TextStream &stream, float f1) {
     }
 }
 
+// 99.99507, 5 rows, and every one of them is a two-load scheduling tie with
+// the arithmetic already identical:
+//  * [33]/[34] -- `mTime - smLastDumpTime`. The target loads mTime (0x0(r29))
+//    first and smLastDumpTime second; we load them the other way round. The
+//    consuming `fsubs f31, f13, f0` is equal on both sides.
+//  * [90]/[91]/[92] -- `mTimeEnd - mTime` in the leaf test. Both sides compute
+//    (0x44(r30)) - (0x0(r29)); they differ only in which value lands in f0 and
+//    which in f13, which flips the (non-commutative) fsubs operand *registers*
+//    while leaving the subtraction the same.
+// Nothing in source selects which of two independent loads issues first, and
+// the expression order is already the target's, so there is no lever here --
+// this is register assignment, not a wrong field or a wrong operand.
 void GlitchPoker::Dump(TextStream &stream, int i1) {
     if (mTime > smLastDumpTime + 0.005f) {
         PrintNestedStartTimes(stream, smLastDumpTime);

@@ -1692,6 +1692,26 @@ void MakeNormals(RndMesh *m) {
 
                             Vector3 weighted;
                             Scale(crossProd, angle, weighted);
+                            // 99.98797, 9 rows, two clusters, both commutative
+                            // /scheduling ties with no source lever left:
+                            //  * [222]/[223] -- the crossProd fmuls/fmsubs
+                            //    multiply operands are the same two registers in
+                            //    the other order (f9/f13, f9/f0). The plain
+                            //    two-term same-register swap is the documented
+                            //    backend floor (stream3_fmuls_operand_order).
+                            //  * [249]/[250] + [265]..[270] -- the Add() below.
+                            //    The target adds and stores x, y, z; we add and
+                            //    store x, z, y, and the y/z halves of `weighted`
+                            //    land in the other FPR. The x row [265] is a bare
+                            //    commutative swap: the target emits
+                            //    norm.x + weighted.x (v1 first, as written), we
+                            //    emit weighted.x + norm.x.
+                            // Measured INERT (w7-m): swapping this call's first
+                            // two arguments to Add(weighted, norm, norm). The
+                            // object is byte-identical -- same 9 rows, same
+                            // registers -- which is the stop signal for the
+                            // commutative-order lever: the backend picks the
+                            // operand order here and source cannot reach it.
                             Add(m->Verts()[i].norm, weighted, m->Verts()[i].norm);
                         }
                     }

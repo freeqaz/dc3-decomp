@@ -481,6 +481,17 @@ bool VorbisReader::CheckHmxHeader() {
             mMagicHashA = mMagicHashB = 0;
             if (mVersion >= 0xC && mVersion <= 0x10) {
                 bs.Read(mNonce, sizeof(mNonce));
+                // The 2-row residual is a stack-temp assignment: the target
+                // reads the FIRST 8-byte value into 0x50 and the second and
+                // third into 0x58, while we use 0x58 for all three (and 0x50
+                // for the MILO_NOTIFY_ONCE static's temp, which the target puts
+                // at 0x58). Both sides use exactly two slots.
+                // Measured WORSE (w7-m, 99.98726 -> 99.9, frame +0x10): giving
+                // the first read its own named `s64 magic`, and the same again
+                // wrapped in a nested block. MSVC allocates a THIRD slot either
+                // way -- it does not overlay two named 8-byte locals whose live
+                // ranges are disjoint, so a second variable cannot be the shape
+                // the original used here.
                 s64 idx;
                 bs >> idx;
                 mMagicA = idx;

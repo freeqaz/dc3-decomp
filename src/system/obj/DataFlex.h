@@ -14,7 +14,7 @@ enum DataToken {
     kDataTokenNotRecognized,
 
     kDataTokenNewline,
-    kDataTokenCarriageReturn,
+    kDataTokenLineComment,
 
     kDataTokenComment,
     kDataTokenBlockCommentStart,

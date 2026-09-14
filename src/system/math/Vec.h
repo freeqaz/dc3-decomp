@@ -261,6 +261,20 @@ inline float Length(const Vector3 &v) {
 
 inline float Average(const Vector2 &v) { return (v.x + v.y) / 2; }
 
+// Do NOT rewrite this as a per-component accumulator. The lever that pins
+// /fp:fast association in Hmx::Dot4 (math/Mtx.h) is measured HARMFUL here.
+// Measured (w7-m, whole-binary A/B, full ninja both sides):
+//   float d = v1.z * v2.z; d += v1.y * v2.y; d += v1.x * v2.x; return d;
+// gives 4 functions improved / 20 regressed, 6 leave the matched set
+// (MakeScale 99.78->83.45, MakeRotQuat 90.31->77.31, CharGuitarString::Poll
+// 98.65->91.46, RndFlare::CalcScale and MultiplyTranspose and ClosestPoint
+// and FastInvert and ComputeAngle and RotateTowards all fall off 100.0),
+// headline 47.74566 -> 47.72928, matched functions 30974 -> 30968.
+// It does not even fix the function it was tried for: RndMesh::SetVolume's
+// 4-row residual (the inlined Dot there loads y/z into the opposite pair of
+// FPRs from the target) is byte-for-byte unchanged by it. MSVC's /fp:fast
+// reassociation of this expression is decided per call site, so a fixed
+// association in the inline cannot be right everywhere.
 inline float Dot(const Vector3 &v1, const Vector3 &v2) {
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }

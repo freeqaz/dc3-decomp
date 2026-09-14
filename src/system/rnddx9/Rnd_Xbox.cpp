@@ -1031,6 +1031,22 @@ void DxRnd::BeginDrawing() {
         0,
         0
     );
+    // 99.98771, 3 rows, and they are one rotation of the three argument loads
+    // for the D3DDevice_SetShaderGPRAllocation that this call inlines. Target
+    // [182]/[184]/[186] = mD3DDevice(0x224)->r3, mDefaultPSRegAlloc(0x400)->r6,
+    // mDefaultVSRegAlloc(0x3fc)->r5; ours is r6, r5, r3 -- MSVC's plain
+    // right-to-left argument order, with the target hoisting the device load
+    // above the other two. Same three registers, same call, same values: only
+    // the schedule differs, and the rest of the inlined block (the cmpwi, the
+    // beq, the li 1 and the stw to mRegAlloc at 0x3f8) is equal.
+    // Measured INERT (w7-m): spelling the block out here the way DoPostProcess
+    // and CopyPostProcess already do --
+    //   if (mRegAlloc != 1) { mRegAlloc = (RegisterAlloc)1;
+    //     D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, mDefaultVSRegAlloc,
+    //                                      mDefaultPSRegAlloc); }
+    // -- gives a byte-identical object, same three rows. The inlined call and
+    // the hand-written block are indistinguishable, so the call stays (it also
+    // keeps SetShaderRegisterAlloc, which is already 100%, untouched).
     SetShaderRegisterAlloc((RegisterAlloc)1);
     ResetStats();
     {

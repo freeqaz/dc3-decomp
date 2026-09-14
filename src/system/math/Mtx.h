@@ -156,7 +156,20 @@ namespace Hmx {
      * the Col4 call before taking the address of the row: MSVC evaluates
      * arguments right to left, and with the column first the `&a.x` computation
      * is hoisted above the call and has to live in a callee-saved register.
-     * The z term seeds the accumulator because MSVC swaps the leading pair. */
+     * The z term seeds the accumulator because MSVC swaps the leading pair.
+     *
+     * The x term's two operands are the last thing keeping Hmx::operator*
+     * (Matrix4 x Matrix4) off 100: it sits at 99.99296 with 4 rows, and two of
+     * them ([43], [116]) are `fmadds f0, f11, f8, f0` against our
+     * `fmadds f0, f8, f11, f0` -- the same two registers multiplied in the
+     * other order. The other two ([94], [95]) are the same tie showing up as a
+     * load-order swap, with the consuming fmadds identical.
+     * Measured INERT (w7-m, whole-binary A/B, full ninja both sides): writing
+     * that term as `d += row.x * col.x;` changes NOTHING -- 0 functions
+     * improved, 0 regressed, matched_code 5431004 and matched_functions 30974
+     * on both sides, i.e. every object in the binary is byte-identical. Source
+     * cannot reach this operand order; it is the documented plain two-term
+     * same-register commutative floor. Do not spend another pass on it. */
     inline float Dot4(const Vector4 &row, const Vector4 &col) {
         float d = col.z * row.z;
         d += col.w * row.w;

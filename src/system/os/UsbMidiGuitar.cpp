@@ -176,10 +176,22 @@ void UsbMidiGuitar::Poll() {
                 // The three program-change bits are the top bit of bytes
                 // 0xa/0xb/0xc (mProgramChangeBit0..2, the MSB of each
                 // accelerometer byte). The target loads them 0xb, 0xc, 0xa; we
-                // load 0xc, 0xb, 0xa -- the only two rows left in this function.
-                // Measured inert: swapping the two terms, parenthesising as
-                // a + (b + c), and spelling them as the named bitfields (which
-                // also costs a fused rlwinm, srwi+slwi instead).
+                // load 0xc, 0xb, 0xa -- the only two rows left in this function
+                // (plus the two rlwinm forms that follow from them). Both sides
+                // associate as (b + c) + a and emit the same two adds, so the
+                // residual is purely which of the two byte loads is scheduled
+                // first, and nothing said in source moves it.
+                //
+                // Measured inert (w3 lane): swapping the two terms,
+                // parenthesising as a + (b + c).
+                // Measured inert (w7-m): splitting into three accumulator
+                // statements (`int pc = b; pc += c; pc += a;`) -- the lever that
+                // pins /fp:fast float association does nothing for integers here.
+                // Measured WORSE (w7-m, 99.994 -> 99.5): the named-bitfield
+                // spelling `(mProgramChangeBit1 << 1) + (mProgramChangeBit2 << 2)
+                // + mProgramChangeBit0`. `<< 2` still fuses into one rlwinm but
+                // `<< 1` does not, costing srwi+slwi; the load order does NOT
+                // change, which is what rules the term order out as the cause.
                 unsigned char *pgRaw = (unsigned char *)proData;
                 int programChange = (pgRaw[0xb] >> 6 & 2)
                     + (pgRaw[0xc] >> 5 & 4) + (pgRaw[0xa] >> 7);
