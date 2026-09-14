@@ -83,6 +83,19 @@ void XboxContent::Poll() {
         mOverlapped = new XOVERLAPPED;
         memset(mOverlapped, 0, sizeof(XOVERLAPPED));
         ULARGE_INTEGER contentSize;
+        // RESIDUAL (w7-am, 90.98 canonical): 825EA4FC-825EA528 is a 15-row
+        // insert/delete cluster.  The image builds the by-value argument in
+        // memory -- `addi r11,r1,0x64` / `stw r29,0x60(r1)` / `stw r29,0x0(r11)`
+        // / `ld r10,0x60(r1)` -- which is MSVC's 64-bit register-PAIR store
+        // idiom (stw hi, d(b) / addi t,b,d+4 / stw lo, 0(t)), i.e. ONE 64-bit
+        // store of QuadPart, not two field stores.  Ours SROAs the union and
+        // passes the constant straight in r10.
+        // NEGATIVE RESULT (w7-am, 2026-09-14): spelling it as the two halves
+        // (`contentSize.HighPart = 0; contentSize.LowPart = 0;`) does defeat
+        // the SROA and restores all three memory instructions, but the second
+        // store comes out as `stw r29,0x64(r1)` (d-form, no addi) and the
+        // argument setup schedules differently: 87.0 canonical, both in
+        // HighPart-first and LowPart-first order.  Kept the QuadPart spelling.
         contentSize.QuadPart = 0;
         if (XContentCrossTitleCreate(
                 pad,
