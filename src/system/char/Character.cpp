@@ -384,11 +384,19 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
         Multiply(pl70, tf40, plb0);
 
         Transform tf90;
-        float scale = -1.0f / plb0.b;
-        // Operand order here is inert: `plb0.a * scale` and `scale * plb0.a`
-        // compile to the identical `fmuls f13, f13, f0` (measured both ways).
-        tf90.m.Set(1, plb0.a * scale, 0, 0, 0, 0, 0, plb0.c * scale, 1);
-        tf90.v.Set(0, plb0.d * scale, 0);
+        // Write the three DIVISIONS, exactly as RB3's copy of this function
+        // does -- do not hoist a reciprocal into a named `scale` local.  This
+        // Xenon cl defaults to /fp:fast and folds the three divisions by the
+        // same denominator into one reciprocal and three multiplies itself
+        // (`lfs f0, __real@bf800000` / `fdivs f0, f0, f13` = -1.0f/plb0.b),
+        // and when IT forms the product the reciprocal is the LEFT operand:
+        // `fmuls f13, f0, f13`.  Hoisting the reciprocal by hand produces the
+        // same fdivs but writes the product the other way round
+        // (`fmuls f13, f13, f0`), and that operand order is NOT recoverable by
+        // commuting the source -- a plain two-term same-register swap is a
+        // backend floor.
+        tf90.m.Set(1, -plb0.a / plb0.b, 0, 0, 0, 0, 0, -plb0.c / plb0.b, 1);
+        tf90.v.Set(0, -plb0.d / plb0.b, 0);
 
         Transform tfa0;
         Multiply(tf40, tf90, tfa0);
