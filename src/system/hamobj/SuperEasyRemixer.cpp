@@ -120,6 +120,18 @@ void SuperEasyRemixer::DumpSongLayout() {
 #endif
     MILO_LOG("\tSUPEREASY\t\tEASY\t\tMEDIUM\t\tHARD\n");
     String str;
+    // RESIDUAL (w7-ak, 93.79 canonical): 32 rows, two causes.
+    // (1) The image carries `(i-1)*4` as the loop's induction variable (`li r25,
+    //     -0x4` in the preheader, `addi r27, r25, 0x4` for the `[i]` index) and
+    //     derives the MakeString argument from it as `addi r11, r23, 0x2` after
+    //     `subi r23, r20, 0x1` -- i.e. `i - 1` is materialised FIRST. NEGATIVE
+    //     RESULT: hoisting it into a named `int prev = i - 1;` used for both
+    //     `prev + 2` and the two `[prev]` subscripts does NOT reproduce the
+    //     strength reduction (we still emit `slwi r26, r20, 2` and subtract) and
+    //     costs raw 93.07 -> 92.9 for a flat canonical.
+    // (2) The image keeps &TheDebug in r28 AND home-stores it to 0x58(r31),
+    //     reloading it for the final MILO_LOG; our MakeString temp takes 0x58 and
+    //     &TheDebug lives in r14 with no home store.
     for (int i = 0; i < mTotalMeasures; i++) {
         str = MakeString("%d", i + 1);
         for (Difficulty d = EasiestDifficulty(); d != kNumDifficulties;
