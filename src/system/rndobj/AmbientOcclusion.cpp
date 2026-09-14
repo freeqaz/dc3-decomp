@@ -861,7 +861,7 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
             // double.  Spelled `val * 0.5f + 0.5f` MSVC reassociates it to
             // `(val + 1.0f) * 0.5f` in single precision and the fmadd is lost.
             float val = Clamp(-1.0f, 1.0f, (float)shAccum[k]);
-            shAccum[k] = val * 0.5 + 0.5;
+            shAccum[k] = (val + 1.0) * 0.5;
         }
     }
 
