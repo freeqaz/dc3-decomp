@@ -282,16 +282,20 @@ void HamRibbon::UpdateChase() {
                     float invCos = 1.0f / cosHalf;
                     float c = std::cos(a * 2.0f);
                     float s = std::sin(a * 2.0f);
+                    // The bend is in the X-Z plane, NOT X-Y: the image writes the
+                    // off-diagonal s*(1-invCos)/2 terms to m02 (0x128) and m20
+                    // (0x140) and leaves row 1 as the identity row
+                    // (0, 1, 0) at 0x130-0x138.
                     Hmx::Matrix3 bend(
                         ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
                         0.0f,
                         (s * (1.0f - invCos)) * 0.5f,
-                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f,
                         0.0f,
+                        1.0f,
                         0.0f,
+                        (s * (1.0f - invCos)) * 0.5f,
                         0.0f,
-                        1.0f
+                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
                     );
                     Multiply(bend, result.m, result.m);
                 }
