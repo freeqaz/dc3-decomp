@@ -113,6 +113,11 @@ void ReverbConvertI3DL2ToNative(
         // The remaining 5 mismatches live here: the target loads DecayHFRatio before
         // DecayTime and emits `fmuls f0, f13, f0`. Operand swap and a lifted temp are
         // both byte-inert -- MSVC canonicalises this. Backend floor.
+        // Re-confirmed 2026-09-14 (lane w7-o) with a third spelling the note did
+        // not cover: TWO named temps, one per operand, declared in the image's
+        // load order and multiplied in the image's operand order.  Byte-inert as
+        // well -- still 5 rows, 99.989.  Three independent spellings now agree,
+        // so this is the backend and not the source.
         pNative->DecayTime = pI3DL2->DecayTime * pI3DL2->DecayHFRatio;
     } else {
         int gain = (int)((float)log10(pI3DL2->DecayHFRatio) * 4.0);
