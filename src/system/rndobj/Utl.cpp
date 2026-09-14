@@ -2196,9 +2196,17 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
     RndParticleSys *partsys = dynamic_cast<RndParticleSys *>(obj);
     if (partsys) {
         Vector3 vb = partsys->ForceDir();
-        partsys->SetEmitRate(
-            partsys->EmitRate().x / fovScale, partsys->EmitRate().y / fovScale
-        );
+        // /fp:fast folds every division by fovScale into a single reciprocal, so
+        // the ONLY thing the target's instruction order can still tell us is the
+        // association. It says: speed is (x / fovScale) * scale (fmuls by the
+        // reciprocal first, by scale second), and the force-dir factor is
+        // (1/fovScale * 1/fovScale) * scale -- fmuls f12,f0,f0 then fmuls f13,f12,f31
+        // at 0x82630064 / 0x82630088 -- not (scale/fovScale)/fovScale, which would
+        // multiply by scale first.
+        float invFov = 1.0f / fovScale;
+        // Retail's store order in this block is BubbleSize (0x150/0x154), Life
+        // (0x158), BubblePeriod (0x148/0x14c), then EmitRate (0x198/0x19c) --
+        // EmitRate last, matching RB3's spelling of the same function.
         partsys->SetBubbleSize(
             partsys->BubbleSize().x * scale, partsys->BubbleSize().y * scale
         );
@@ -2206,15 +2214,20 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
             partsys->BubblePeriod().x * fovScale, partsys->BubblePeriod().y * fovScale
         );
         partsys->SetLife(partsys->Life().x * fovScale, partsys->Life().y * fovScale);
-        vb *= (scale / fovScale) / fovScale;
+        partsys->SetEmitRate(
+            partsys->EmitRate().x * invFov, partsys->EmitRate().y * invFov
+        );
+        vb *= invFov * invFov * scale;
         partsys->SetForceDir(vb);
+        // Retail coalesces box2 into vb's dead stack slot (0x50) and gives box1
+        // its own (0x70); declaring box2 first does NOT reproduce that (measured
+        // 2026-09-14, byte-identical diff), so the readable order stays.
         Vector3 box1, box2;
         Scale(partsys->BoxExtent1(), scale, box1);
         Scale(partsys->BoxExtent2(), scale, box2);
         partsys->SetBoxExtent(box1, box2);
         partsys->SetSpeed(
-            (partsys->Speed().x * scale) / fovScale,
-            (partsys->Speed().y * scale) / fovScale
+            partsys->Speed().x * invFov * scale, partsys->Speed().y * invFov * scale
         );
         partsys->SetStartSize(
             partsys->StartSize().x * scale, partsys->StartSize().y * scale
