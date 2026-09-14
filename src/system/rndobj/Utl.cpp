@@ -510,11 +510,17 @@ void UtilDrawCircle2D(
     std::vector<Vector2> pts(segments + 1);
     float aspect = TheRnd.YRatio();
     for (int i = 0; i <= segments; i++) {
+        // Retail binds the element ONCE, before the two FastSin calls, and keeps
+        // its address in a callee-saved register across them (add r27,r28,r11 at
+        // the top of the body; stfs f0,0x0(r27) / stfs f0,0x4(r27) after). Writing
+        // pts[i].x / pts[i].y re-loads the data pointer from 0x60(r31) twice and
+        // stores with stfsx.
+        Vector2 &pt = pts[i];
         float angle = (float)i * 6.2831854820251465f / (float)segments;
         float cosVal = FastSin(angle + 1.5707963705062866f);
         float sinVal = FastSin(angle);
-        pts[i].x = cosVal * aspect * radius + center.x;
-        pts[i].y = sinVal * radius + center.y;
+        pt.x = cosVal * aspect * radius + center.x;
+        pt.y = sinVal * radius + center.y;
     }
     for (int i = 0; i < segments; i++) {
         UtilDrawLine(pts[i], pts[i + 1], color);
@@ -963,15 +969,22 @@ void UtilDrawCigar(
     const Hmx::Color &col,
     int segments
 ) {
-    float len2 = lengths[2];
-    float len1 = lengths[1];
-    float len0 = lengths[0];
-    float scale = sqrtf(len2 * len2 + len0 * len0 + len1 * len1);
-    float scaledLens[3];
+    // The scale factor comes out of the TRANSFORM, not out of `lengths`: retail
+    // loads 0x4/0x0/0x8 off r3 (= tf) here, and the memcpy that fills `basis`
+    // reads r11, which is the saved r3, not r5.  This is Length(tf.m.x), the
+    // uniform scale baked into the transform -- exactly what RB3's copy of this
+    // function spells as `lengths[i] * Length(tf.m.x)` and `Transform basis = tf`.
+    float mz = tf.m.x.z;
+    float my = tf.m.x.y;
+    float mx = tf.m.x.x;
+    float scale = sqrtf(mz * mz + mx * mx + my * my);
+    // Only two entries: retail's ctr for the scaling loop is a literal 2
+    // (li r9,0x2 / mtctr r9), and only [0] and [1] are ever read back.
+    float scaledLens[2];
     Transform basis;
 
     {
-        int cnt = 3;
+        int cnt = 2;
         float *dst = scaledLens;
         do {
 #ifdef HX_NATIVE
@@ -985,28 +998,47 @@ void UtilDrawCigar(
             cnt--;
         } while (cnt != 0);
     }
-    memcpy(&basis, lengths, 0x40);
+    memcpy(&basis, &tf, 0x40);
     Normalize(basis.m, basis.m);
 
     float sLen0 = scaledLens[0];
     float sLen1 = scaledLens[1];
 
+    // Two behavioural bugs fixed here, both visible in retail's stores:
+    //  1. The cap apex sits on the LOCAL X AXIS, not Y.  Retail writes the
+    //     computed value to 0x60(r1) -- offset 0 of the temp vector -- and zeroes
+    //     0x64/0x68, i.e. Set(value, 0, 0).  That is the same axis the ring
+    //     vertices use (v1/v2 take the axial coordinate as their x), so putting
+    //     it in y put both caps off the cigar's axis.
+    //  2. Retail transforms through a SEPARATE temp (in = 0x60, out = 0x90 /
+    //     0xa0); we were transforming in place.
+    // Retail's frame is 0x3d0 and ours is 0x3e0: retail coalesces the int->float
+    // conversion scratch double into the dead `scaledLens` slot (0x50, accessed
+    // again at the (float)i conversions), while MSVC gives us a fresh 0x90 and
+    // pushes top/bottom/basis/both vertex arrays up by 0x10.  Hoisting `end` out
+    // of a nested block recovered 0.1pp of that; swapping the declaration order of
+    // `end` and `scaledLens` to give scaledLens the lower slot was byte-identical
+    // (measured 2026-09-14, two consecutive neutral variants), so the readable
+    // order stays and the 0x10 is a deliberate residual.
+    Vector3 end;
     Vector3 top;
-    top.Set(0, sLen0 - radii[0], 0);
-    Multiply(top, basis, top);
-
     Vector3 bottom;
-    bottom.Set(0, sLen1 + radii[1], 0);
-    Multiply(bottom, basis, bottom);
+    end.Set(sLen0 - radii[0], 0, 0);
+    Multiply(end, basis, top);
+    end.Set(sLen1 + radii[1], 0, 0);
+    Multiply(end, basis, bottom);
 
     float angle2Pi = 1.0471975803375244f;
     float anglePiHalf = 1.5707963705062866f;
     float anglePi6 = 0.5235987901687622f;
 
-    // Arrays use 16-byte stride per element (4 floats per Vector3)
-    // 18 entries each (3 rings × 6 vertices)
-    float verts2e0[18 * 4];
-    float verts1c0[18 * 4];
+    // 18 entries each (3 rings x 6 vertices).  Vector3 carries its own 4-byte
+    // PAD member, so sizeof is 16 and indexing the array directly is what
+    // produces retail's `add r10,r28,r31` / `slwi r29,r10,4`; a float[18*4] with
+    // an index pre-multiplied by 4 lets MSVC fuse the two induction variables
+    // into one byte-stepping counter (addi r30,r30,0x10 / cmpwi r30,0x120).
+    Vector3 verts2e0[18];
+    Vector3 verts1c0[18];
 
     int iIdx = 0;
     int iLatSum = 0;
@@ -1032,14 +1064,14 @@ void UtilDrawCigar(
             float lonVal = (float)iLon * angle2Pi;
             float sinLon = FastSin((float)iLon * angle2Pi);
             float sinLonPi2 = FastSin(lonVal + anglePiHalf);
-            int idx = (iLatSum + iLon) * 4;
+            int idx = iLatSum + iLon;
             Vector3 v1(h0b, sinLonPi2 * r0, sinLon * r0);
-            Multiply(v1, basis, *(Vector3 *)&verts1c0[idx]);
+            Multiply(v1, basis, verts1c0[idx]);
             // y takes the cos-phase sine and z the sin-phase one, the same way
             // round as v1 -- retail's stores at 0x74/0x78 read f22 (the
             // lonVal+pi/2 result) then f21 (the plain lonVal result).
             Vector3 v2(h1, sinLonPi2 * r1, sinLon * r1);
-            Multiply(v2, basis, *(Vector3 *)&verts2e0[idx]);
+            Multiply(v2, basis, verts2e0[idx]);
             iLon = iLon + 1;
         } while (iLon < 6);
         iLatSum = iLatSum + 6;
@@ -1048,9 +1080,7 @@ void UtilDrawCigar(
 
     int i = 0;
     do {
-        TheRnd.DrawLine(
-            *(Vector3 *)&verts2e0[i * 4], *(Vector3 *)&verts1c0[i * 4], col, false
-        );
+        TheRnd.DrawLine(verts2e0[i], verts1c0[i], col, false);
         i = i + 1;
     } while (i < 6);
 
@@ -1059,28 +1089,29 @@ void UtilDrawCigar(
         int iJ = 0;
         int iK = 5;
         do {
-            int p1 = (iRing * 6 + iJ) * 4;
-            int p2 = (iRing * 6 + iK) * 4;
-            TheRnd.DrawLine(
-                *(Vector3 *)&verts2e0[p1], *(Vector3 *)&verts2e0[p2], col, false
-            );
-            Vector3 *pTop;
+            int p1 = iRing * 6 + iJ;
+            int p2 = iRing * 6 + iK;
+            TheRnd.DrawLine(verts2e0[p1], verts2e0[p2], col, false);
+            // Third behavioural bug: the caps were attached to the WRONG rings.
+            // verts2e0 is the radii[1]/sLen1 ring, so its last ring closes on
+            // `bottom` (retail: addi r5,r1,0xa0), and verts1c0 -- the
+            // radii[0]/sLen0 ring -- closes on `top` (addi r5,r1,0x90).  We had
+            // each ring reaching across to the other cap's apex.
+            Vector3 *pEnd2;
             if (iRing == 2) {
-                pTop = &top;
+                pEnd2 = &bottom;
             } else {
-                pTop = (Vector3 *)&verts2e0[p1 + 6 * 4];
+                pEnd2 = &verts2e0[p1 + 6];
             }
-            TheRnd.DrawLine(*(Vector3 *)&verts2e0[p1], *pTop, col, false);
-            TheRnd.DrawLine(
-                *(Vector3 *)&verts1c0[p1], *(Vector3 *)&verts1c0[p2], col, false
-            );
-            Vector3 *pBottom;
+            TheRnd.DrawLine(verts2e0[p1], *pEnd2, col, false);
+            TheRnd.DrawLine(verts1c0[p1], verts1c0[p2], col, false);
+            Vector3 *pEnd1;
             if (iRing == 2) {
-                pBottom = &bottom;
+                pEnd1 = &top;
             } else {
-                pBottom = (Vector3 *)&verts1c0[p1 + 6 * 4];
+                pEnd1 = &verts1c0[p1 + 6];
             }
-            TheRnd.DrawLine(*(Vector3 *)&verts1c0[p1], *pBottom, col, false);
+            TheRnd.DrawLine(verts1c0[p1], *pEnd1, col, false);
             // iK trails iJ by one; retail keeps both in place (mr iK, iJ then
             // addi iJ, iJ, 1) rather than staging the old value in a temp.
             iK = iJ;
@@ -1590,6 +1621,10 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
             float du31 = uv3.x - uv1.x;
             float dv31 = uv3.y - uv1.y;
 
+            // These two must be declared HERE, above the four zero tests, not
+            // next to the Matrix3 they feed: sinking them into the innermost
+            // block costs 10.5pp (94.13 -> 83.6, measured 2026-09-14) by
+            // shuffling every stack slot from 0x50 up.
             Vector3 edge21(dx21, dy21, dz21);
             Vector3 edge31(dx31, dy31, dz31);
 
@@ -2196,9 +2231,17 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
     RndParticleSys *partsys = dynamic_cast<RndParticleSys *>(obj);
     if (partsys) {
         Vector3 vb = partsys->ForceDir();
-        partsys->SetEmitRate(
-            partsys->EmitRate().x / fovScale, partsys->EmitRate().y / fovScale
-        );
+        // /fp:fast folds every division by fovScale into a single reciprocal, so
+        // the ONLY thing the target's instruction order can still tell us is the
+        // association. It says: speed is (x / fovScale) * scale (fmuls by the
+        // reciprocal first, by scale second), and the force-dir factor is
+        // (1/fovScale * 1/fovScale) * scale -- fmuls f12,f0,f0 then fmuls f13,f12,f31
+        // at 0x82630064 / 0x82630088 -- not (scale/fovScale)/fovScale, which would
+        // multiply by scale first.
+        float invFov = 1.0f / fovScale;
+        // Retail's store order in this block is BubbleSize (0x150/0x154), Life
+        // (0x158), BubblePeriod (0x148/0x14c), then EmitRate (0x198/0x19c) --
+        // EmitRate last, matching RB3's spelling of the same function.
         partsys->SetBubbleSize(
             partsys->BubbleSize().x * scale, partsys->BubbleSize().y * scale
         );
@@ -2206,15 +2249,20 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
             partsys->BubblePeriod().x * fovScale, partsys->BubblePeriod().y * fovScale
         );
         partsys->SetLife(partsys->Life().x * fovScale, partsys->Life().y * fovScale);
-        vb *= (scale / fovScale) / fovScale;
+        partsys->SetEmitRate(
+            partsys->EmitRate().x * invFov, partsys->EmitRate().y * invFov
+        );
+        vb *= invFov * invFov * scale;
         partsys->SetForceDir(vb);
+        // Retail coalesces box2 into vb's dead stack slot (0x50) and gives box1
+        // its own (0x70); declaring box2 first does NOT reproduce that (measured
+        // 2026-09-14, byte-identical diff), so the readable order stays.
         Vector3 box1, box2;
         Scale(partsys->BoxExtent1(), scale, box1);
         Scale(partsys->BoxExtent2(), scale, box2);
         partsys->SetBoxExtent(box1, box2);
         partsys->SetSpeed(
-            (partsys->Speed().x * scale) / fovScale,
-            (partsys->Speed().y * scale) / fovScale
+            partsys->Speed().x * invFov * scale, partsys->Speed().y * invFov * scale
         );
         partsys->SetStartSize(
             partsys->StartSize().x * scale, partsys->StartSize().y * scale
@@ -2346,6 +2394,11 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
     Hmx::Matrix3 normalMat;
     Invert(xfm.m, normalMat);
 
+    // Transpose order is inert here: retail saves the three transposed-away
+    // components as y.z, x.z, x.y (lfs f0,0x68 / f13,0x58 / f12,0x54 at
+    // 0x8262E17C) and reversing the three swaps to match moves three offset
+    // rows around without changing the 46-row total (measured 2026-09-14), so
+    // this keeps the same spelling ComputeFaceTangentBasis uses.
     float xy = normalMat.x.y;
     normalMat.x.y = normalMat.y.x;
     normalMat.y.x = xy;
@@ -2362,27 +2415,35 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
         Multiply(it->pos, xfm, it->pos);
         Multiply(it->norm, normalMat, it->norm);
         Normalize(it->norm, it->norm);
-        Vector3 tangent(it->tangent.x, it->tangent.y, it->tangent.z);
+        // Retail rotates the tangent IN PLACE on the vertex: it loads
+        // 0x38/0x3c/0x40 off the vert cursor, stores the three fmadds results
+        // straight back there and hands `addi r4,r31,0x38` to Normalize
+        // (0x8262E24C-0x8262E2B4).  There is no Vector3 temp and no copy-back
+        // pair -- those were seven extra instructions and a 16-byte slot.  The
+        // w component is untouched either way.
+        Vector3 &tangent = *(Vector3 *)&it->tangent;
         Multiply(tangent, normalMat, tangent);
         Normalize(tangent, tangent);
-        it->tangent.x = tangent.x;
-        it->tangent.y = tangent.y;
-        it->tangent.z = tangent.z;
     }
     mesh->Sync(0x1F);
-    if (mesh->GetBSPTree()) {
-        MultiplyEq(mesh->GetBSPTree(), xfm);
-    }
+    // No null guard: retail loads the tree and calls straight through
+    // (lwz r3,0x168(r11) / bl MultiplyEq at 0x8262E2E8), and MultiplyEq's own
+    // loop header already tests for null.  The `if` was ours.
+    MultiplyEq(mesh->GetBSPTree(), xfm);
     Sphere s;
     Multiply(mesh->GetSphere(), xfm, s);
     mesh->SetSphere(s);
 
-    Transform ident;
-    ident.Reset();
+    // Retail's identity transform lives in `xfm`'s own slot at 0x80 -- the
+    // frame is 0x110 and there is no second 0x40 block -- because by this point
+    // xfm is dead and MSVC colours the two together.  Reusing the variable is
+    // the only way to spell that; a separate `Transform ident;` gets its own
+    // slot and makes the frame 0x150.
+    xfm.Reset();
     if (keepTranslation) {
-        ident.v = mesh->LocalXfm().v;
+        xfm.v = mesh->LocalXfm().v;
     }
-    mesh->SetLocalXfm(ident);
+    mesh->SetLocalXfm(xfm);
 }
 
 void TessellateMesh(RndMesh *mesh) {
@@ -2556,6 +2617,16 @@ void BuildVisit(BSPNode *node) {
     origin.z = plane.c * invDist;
     lastIt->mTransform.v = origin;
 
+    // Retail's prologue reserves one more callee-saved GPR than ours
+    // (__savegprlr_23 vs __savegprlr_24), which is why every register in the
+    // body reads one number off, and it emits eleven dead home stores of
+    // &m.x/&m.y/&m.z into the first local-temp slot (0x60(r31), the slot
+    // `origin` and insert()'s returned iterator also share) that we do not.
+    // Binding `Vector3 &axisX/&axisY/&axisZ` to the three rows and using those
+    // throughout does NOT reproduce either: it materialises &m.x at
+    // `addi r26,r29,0x14` right after the node load, where retail computes it
+    // only at the first Cross, and costs 2.4pp (95.0 -> 92.6, measured
+    // 2026-09-14).  Member access through the iterator stays.
     lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
     lastIt->mTransform.m.y.Set(0, 1, 0);

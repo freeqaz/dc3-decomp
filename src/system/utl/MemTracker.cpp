@@ -158,6 +158,36 @@ template const char *MakeString<const char(&)[9], const char(&)[3], const char(&
     const char(&)[8]
 );
 
+// RESIDUAL (w7-ai, 93.1%): every remaining row lives in target rows 41-65, the
+// inlined AllocInfoVec(y) member init, and all of them are downstream of ONE
+// missing instruction pair:
+//
+//     [57] clrlwi r5, r27, 2      ; r5 = y & 0x3fffffff, i.e. (unsigned)(y*4)/4
+//     [65] stw    r5, 0x54(r31)   ; spilled before the first String ctor,
+//                                 ; then overwritten with 0 at row 100 -- DEAD
+//
+// 0x54 is the slot that later holds the `(AllocInfo *)0` const-ref temp for the
+// KeylessHash ctor, so MSVC coloured a dead scalar onto it. With that extra
+// post-call work absent from our stream, MSVC has nothing to fill the pre-call
+// slots with and hoists the `this + 0x18180` anchor ABOVE the DebugHeapAlloc
+// call into callee-saved r26 (rows 41/43), where the image recomputes it into
+// volatile r8 afterwards (rows 46/51) -- that scheduling difference is the
+// other 8 rows. One root cause, not two.
+//
+// MEASURED NEGATIVE: spelling the division into AllocInfoVec's ctor as
+// `mEndOfStorage(mStart + size * sizeof(AllocInfo *) / sizeof(AllocInfo *))`
+// is BYTE-IDENTICAL -- MSVC folds the round trip, and it would in any case have
+// had to show up in MemTracker::DiffDump's inlined copy of the same ctor, which
+// has no clrlwi on either side (checked). So the division is NOT in the shared
+// ctor; it is something in this function's own source that we are missing, and
+// it must be live across the three String member ctors to get spilled at all.
+//
+// Also adjudicated and NOT a bug: the MakeString instantiation pair
+// (`<const char(&)[19], int, const char(&)[5]>` target vs `<[15], int, [9]>`
+// ours) is an ICF fold -- rows 82-85 reference the SAME
+// ??_C@_0P@KDMJFNCI@MemTracker?4cpp and ??_C@_08LAKGMMIJ@mHashMem string
+// symbols on both sides, so the array-size triple is just the fold
+// representative's name.
 MemTracker::MemTracker(int x, int y)
     : mHashMem(nullptr), mHashTable(nullptr), mTimeSlice(0), mCurStatTable(0),
       mFreedInfos(y), mLog(0), mReport(0), mHeap(x) {
@@ -636,29 +666,35 @@ void MemTracker::ReportMemoryUsageOverview(const char *name) {
     // after `bl MemNumHeaps`, before the two stream writes), so there is no
     // separate numHeaps local.
     int loopMax = MemNumHeaps() + 1;
-    *ts << "overview,";
-    *ts << name;
+    // Chained, not two statements: the image feeds operator<<'s returned
+    // TextStream& straight into the second call (`mr r4, r30; bl` with no
+    // intervening `mr r3, r31`).
+    *ts << "overview," << name;
     for (int i = 0; i < loopMax; i++) {
-        int biggest;
+        // NOTE (w7-ai): the five locals share one declaration with the
+        // MemFreeBlockStats call precisely because the image's physical-heap
+        // arm writes into TWO OF THEM rather than into fresh locals. Slot map
+        // from the target listing -- the call passes r4=0x58, r5=0x60, r6=0x50,
+        // r7=0x5c, r8=0x54 -- so `free` is 0x50 and `lfrags` is 0x58, and those
+        // are exactly the two slots the physical arm stores to. Declaring
+        // `used` as a private local instead let MSVC dead-code the whole
+        // `mFreePhysMem - PhysicalUsage()` computation away (9 deleted
+        // instructions); it only survives because these locals have had their
+        // address taken in the sibling arm.
+        //
+        // BEHAVIOUR, faithful to the image and deliberately preserved: the
+        // physical arm never assigns `biggest`, so PhysLargest prints an
+        // uninitialised slot. The image reads r1+0x54 (the call's LAST
+        // out-param) having only written r1+0x50 and r1+0x58.
+        int lfrags, i2, free, i4, biggest;
         if (i == MemNumHeaps()) {
             int freeMem = _GetFreePhysicalMemory();
-            int used = mFreePhysMem - PhysicalUsage();
-            if (used < freeMem) {
-                used = freeMem;
+            free = mFreePhysMem - PhysicalUsage();
+            if (free < freeMem) {
+                free = freeMem;
             }
-            // RESIDUAL (88.06%): the image's physical-heap arm does NOT write
-            // the `biggest` that gets printed. Its zero goes to r1+0x58 -- the
-            // slot MemFreeBlockStats' FIRST out-param occupies in the sibling
-            // else branch -- while the printed value is read from r1+0x54, that
-            // call's LAST out-param, so PhysLargest prints an uninitialised
-            // slot. It also keeps the `used` arithmetic alive (stw to 0x50,
-            // shared with `free`) where MSVC dead-codes ours away.
-            // MEASURED NEGATIVE: spelling that as a shadowing
-            // `int biggest = 0; (void)biggest;` here costs 2.25pp (88.06 ->
-            // 85.81) and scrambles the callee-saved allocation.
-            biggest = 0;
+            lfrags = 0;
         } else {
-            int lfrags, i2, free, i4;
             MemFreeBlockStats(i, lfrags, i2, free, i4, biggest);
         }
         HeapStats &stats = mHeapStats[i];

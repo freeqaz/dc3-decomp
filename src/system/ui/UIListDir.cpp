@@ -335,16 +335,16 @@ void UIListDir::ListEntered() {
 void UIListDir::BuildDrawState(
     UIListWidgetDrawState &drawState, UIListState const &state, UIComponent::State compState, float subListOffset, bool allowHighlight
 ) const {
-    auto& _ref0 = mFadeOffset;
     int numDisplay = state.NumDisplay();
     int numDisplayWithData = state.NumDisplayWithData();
 
-    int fadeCountStart = numDisplay / 2;
-    if ((int)(unsigned long)(unsigned int)fadeCountStart >= _ref0) {
-        fadeCountStart = _ref0;
+    int halfDisplay = numDisplay / 2;
+    int fadeCountStart = halfDisplay;
+    if (halfDisplay >= mFadeOffset) {
+        fadeCountStart = mFadeOffset;
     }
     int fadeCountEnd = fadeCountStart;
-    if (_ref0 != 0) {
+    if (mFadeOffset != 0) {
         int fadeEndCalc;
         if (state.Circular()) {
             int selectedDisp = state.SelectedDisplay();
@@ -396,12 +396,15 @@ void UIListDir::BuildDrawState(
     drawState.mElements.reserve(numDisplayWithData);
     drawState.mHighlightElementState = kUIListWidgetActive;
 
+    // Declaration order is load-bearing: retail zeroes the four accumulators in
+    // the order firstGap, totalGap, lastPosBase, highlightBase (fmr f25/f29/f22/
+    // f23 from f31 at 0x82789234-0x82789240).
     int prevData = 0;
-    float lastPosBase = 0.0f;
-    float highlightBase = 0.0f;
+    Vector3 elemPos;
     float firstGap = 0.0f;
     float totalGap = 0.0f;
-    Vector3 elemPos;
+    float lastPosBase = 0.0f;
+    float highlightBase = 0.0f;
 
     float scrollOffset = (float)direction * state.StepPercent();
 
@@ -426,32 +429,43 @@ void UIListDir::BuildDrawState(
             break;
         }
 
+        // `prevData` carries the snapped index forward AND is what every
+        // consumer below reads: retail assigns it from `data` before the
+        // SnappedDataForDisplay call (mr r27,r29 at 0x827892F0, then mr r27,r3
+        // at 0x82789300) and never touches `data` again.  Writing `data =
+        // snapped; prevData = data;` instead costs an extra copy after the
+        // branch.
         int showing = state.Display2Showing(dispIndex);
+        prevData = data;
         int snapped = state.SnappedDataForDisplay(dispIndex);
         if (snapped >= 0) {
-            data = snapped;
+            prevData = snapped;
         }
-        prevData = data;
 
-        float gap = state.Provider()->GapSize(showing, data, selectedData, direction);
+        float gap = state.Provider()->GapSize(showing, prevData, selectedData, direction);
         if (i == 0) {
             firstGap = gap;
         }
-        float position;
-        float primaryBase;
+        float pos;
         if (state.ShouldHoldDisplayInPlace(dispIndex)) {
-            primaryBase = totalGap;
             if (direction == -1) {
-                position = (float)dispIndex + 1.0f;
+                pos = SetElementPos(
+                    elemPos, (float)dispIndex + 1.0f, state.GridSpan(), totalGap, 0.0f
+                );
             } else {
-                position = (float)dispIndex;
+                pos = SetElementPos(
+                    elemPos, (float)dispIndex, state.GridSpan(), totalGap, 0.0f
+                );
             }
         } else {
-            primaryBase = -((scrollOffset * firstGap) - totalGap);
-            position = (float)dispIndex - scrollOffset;
+            pos = SetElementPos(
+                elemPos,
+                (float)dispIndex - scrollOffset,
+                state.GridSpan(),
+                -((scrollOffset * firstGap) - totalGap),
+                0.0f
+            );
         }
-
-        float pos = SetElementPos(elemPos, position, state.GridSpan(), primaryBase, 0.0f);
 
         float alpha = 1.0f;
         if (!state.ShouldHoldDisplayInPlace(dispIndex)) {
@@ -468,7 +482,7 @@ void UIListDir::BuildDrawState(
         }
 
         UIListWidgetState elemState;
-        if (!state.Provider()->IsActive(data)) {
+        if (!state.Provider()->IsActive(prevData)) {
             elemState = kUIListWidgetInactive;
         } else if (showing == selected && allowHighlight) {
             elemState = kUIListWidgetHighlight;
@@ -476,30 +490,48 @@ void UIListDir::BuildDrawState(
             elemState = kUIListWidgetActive;
         }
 
-        UIListWidgetState widgetState = state.Provider()->ElementStateOverride(showing, data, elemState);
+        UIListWidgetState widgetState = state.Provider()->ElementStateOverride(showing, prevData, elemState);
         if (showing == selected) {
             drawState.mHighlightElementState = widgetState;
         }
 
+        UIComponent::State componentState =
+            state.Provider()->ComponentStateOverride(showing, prevData, compState);
+
+        // NOTE (w7-ai): residual at 97.9%.  Retail's frame is 0x220 and ours is
+        // 0x1e0 because MSVC gives the `data == -1` branch's UIListElementDrawState
+        // its own 0x40 slot at 0xe0(r1) while ours is coloured onto the main
+        // `elem` at 0xa0(r1).  Neither scoping the main `elem` up to loop-body
+        // level (so the two nest rather than sit in disjoint blocks) nor moving
+        // `Vector3 elemPos` into the loop changes a single byte -- two
+        // consecutive neutral variants, measured 2026-09-14 -- so the 0x40 and
+        // the 0x24c/0x25f parameter-home offsets that ride on it are deliberate.
+        // The other residual is one allocator choice: retail keeps
+        // numDisplayWithData in r28 AND spilled at 0x54(r1) and caches
+        // fadeCountStart in r15, where we put numDisplayWithData in r15 and spill
+        // fadeCountEnd instead.
         UIListElementDrawState elem;
 #ifdef HX_NATIVE
         memset(&elem, 0, sizeof(elem));
 #endif
         elem.mActive = true;
         *(Vector3 *)&elem.mPosX = elemPos;
+        // mAlpha before the three scales: retail stores 0xc4 (alpha) first and
+        // then interleaves the 1.0f scale stores with mElementState
+        // (0x827894FC-0x82789510).
+        elem.mAlpha = alpha;
         elem.mScaleX = 1.0f;
         elem.mScaleY = 1.0f;
         elem.mScaleZ = 1.0f;
-        elem.mAlpha = alpha;
         elem.mElementState = widgetState;
-        elem.mComponentState = state.Provider()->ComponentStateOverride(showing, data, compState);
+        elem.mComponentState = componentState;
         elem.mDisplay = dispIndex;
         elem.mShowing = showing;
-        elem.mData = data;
+        elem.mData = prevData;
         drawState.mElements.push_back(elem);
 
         totalGap += gap;
-        if (dispIndex > 0 && dispIndex < state.NumDisplay() - 1) {
+        if (dispIndex > 0 && dispIndex < numDisplay - 1) {
             lastPosBase += gap;
         }
         if (dispIndex < selectedDisplay) {

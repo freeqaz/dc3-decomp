@@ -302,7 +302,14 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                             float zn1 = mBand1DelayZ1[chan];
                             mBand1DelayXn[chan] = *s;
                             mBand1DelayZ1[chan] = zn;
-                            float y = zn1 * b0 + -(zn * cosCoeff - (-(x * b0) + xn * cosCoeff + xn2));
+                            // Spelled as one left-to-right chain, not as
+                            // `-(zn*cosCoeff - inner)`: retail negates x*b0 up
+                            // front (fneg f12 at 0x82E592A4) and then subtracts
+                            // zn*cosCoeff with fnmsubs, where the double
+                            // negation makes MSVC build the inner sum with the
+                            // opposite sign and fix it up at the fmadds.
+                            float y = zn1 * b0
+                                + (-(x * b0) + xn * cosCoeff + xn2 - zn * cosCoeff);
                             mBand1DelayZ[chan] = y;
                             *s = (x - y) * gainCur + x;
                         }
@@ -330,7 +337,12 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                             float zn1 = mBand3DelayZ[chan][1];
                             mBand3DelayX[chan][0] = *s;
                             mBand3DelayZ[chan][1] = zn;
-                            float out = -(a2 * zn1 - -(a1 * zn - (b1 * xn + b0 * x + b2 * xn1)));
+                            // Retail accumulates left to right and subtracts
+                            // the two poles with fnmsubs (0x82E59358 /
+                            // 0x82E5935C); the nested `-(a2*zn1 - -(...))`
+                            // spelling flips both into fmsubs.
+                            float out =
+                                b1 * xn + b0 * x + b2 * xn1 - a1 * zn - a2 * zn1;
                             mBand3DelayZ[chan][0] = out;
                             *s = out;
                         }
@@ -349,7 +361,11 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                             mBand4DelayX[chan][1] = xn;
                             mBand4DelayX[chan][0] = *s;
                             mBand4DelayZ[chan][1] = zn;
-                            float out = -(a2 * zn1 - -(a1 * zn - (b0 * x + b1 * xn + b2 * xn1)));
+                            // Same chain as band 3 (fnmsubs at 0x82E593B8 /
+                            // 0x82E593BC), but retail's first product here is
+                            // b0*x, not b1*xn.
+                            float out =
+                                b0 * x + b1 * xn + b2 * xn1 - a1 * zn - a2 * zn1;
                             mBand4DelayZ[chan][0] = out;
                             *s = out;
                         }

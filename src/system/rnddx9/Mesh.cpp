@@ -204,9 +204,9 @@ bool DxMesh::CanDraw() const {
 void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
     MILO_ASSERT(mTransformCache.size() > i, 0x1ee);
     Transform &cached = mTransformCache[i];
-    float dz = cached.v.z - xfm.v.z;
-    float dy = cached.v.y - xfm.v.y;
     float dx = cached.v.x - xfm.v.x;
+    float dy = cached.v.y - xfm.v.y;
+    float dz = cached.v.z - xfm.v.z;
     if (Dot(xfm.m.y, cached.m.y) >= 0.8660254f
         && dx * dx + dy * dy + dz * dz < 2500.0f) {
         float invWeight = 1.0f - weight;
@@ -224,9 +224,10 @@ void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
         Vector3 windForce;
         float windTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
         wind->GetWind(xfm.v, windTime, windForce);
-        cached.v.x += windForce.x * 0.05f;
-        cached.v.y += windForce.y * 0.05f;
-        cached.v.z += windForce.z * 0.05f;
+        Vector3 &cachedPos = cached.v;
+        cachedPos.x += windForce.x * 0.05f;
+        cachedPos.y += windForce.y * 0.05f;
+        cachedPos.z += windForce.z * 0.05f;
     }
 }
 
@@ -331,6 +332,26 @@ void DxMesh::OnSync(int flags) {
     if (mMutable) {
         return;
     }
+    // RESIDUAL (w7-ai, 95.1%): apart from the face loop below (w7-z's note),
+    // everything left follows from ONE missing dead home store. The image emits
+    // `stw r24, 0x54(r31)` TWICE around this pair of declarations -- rows 35 and
+    // 38, with `addi r25, r24, 0x100` (the verts reference) between them -- off a
+    // SINGLE `lwz r24, 0x148(r30)`. We emit only the second. Two dead stores of
+    // one value around one load is the "call written twice, CSE'd" signature:
+    // the image spells this as `GetGeomOwner()->Verts()` with an RndMesh::Verts()
+    // that returns `mVerts`, so GetGeomOwner and Verts are two inline levels and
+    // each materialises the receiver. Our RndMesh::Verts() is
+    // `return mGeomOwner->mVerts;`, which folds both into one level, and the
+    // missing level costs a callee-saved register, which is the whole r25<->r26
+    // renaming through rows 41-97.
+    //
+    // NOT ATTEMPTED, deliberately: the faithful spelling needs
+    // RndMesh::Verts() changed to `return mVerts;` in rndobj/Mesh.h and every
+    // caller switched to GetGeomOwner()->Verts(). That is a shared-header
+    // SEMANTIC change (Verts() on a non-owner mesh currently returns the
+    // owner's vector), owned by the rndobj/Mesh lane, with a binary-wide blast
+    // radius -- not something this call site can express, since `mVerts` is
+    // protected and unreachable through a RndMesh*.
     RndMesh *geom = GetGeomOwner();
     VertVector &verts = Verts();
     if (flags & 0x1f) {

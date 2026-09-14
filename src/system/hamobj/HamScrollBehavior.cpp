@@ -292,6 +292,20 @@ void HamScrollBehavior::Update(float input) {
     mNavList->SetScrollSoundFrame(mSmoother.Level());
 
     // Scroll speed anim
+    // NOTE (w7-ai): residual at 96.3%.  Retail loads mScrollSpeedAnim into the
+    // callee-saved r29 and tests it UNSIGNED (cmplwi cr6,r29,0x0 at
+    // 0x8248B928) where the ObjPtr expression below gives a volatile r11 and a
+    // SIGNED cmpwi.  Spelling it as a named `RndAnimatable *anim` DOES produce
+    // the cmplwi, but MSVC then allocates anim and &mSmoother to the opposite
+    // registers from retail and the resulting r28<->r29 swap plus one extra
+    // insert/delete costs more than the row it buys: 95.8% with the local vs
+    // 96.3% without (measured 2026-09-14).  The two spellings are
+    // indistinguishable at run time -- both branches are `beq` on == 0.
+    // The other residual here is the SetFrame tail: retail materialises the
+    // shift into f1 and the 1.0f into f2 INSIDE each switch arm and tail-merges
+    // two different join points (b 0x4f8 from case 0, b 0x4fc from case 1),
+    // which is the shape of the call being written out in every arm rather
+    // than once after a `float shift` local.
     if ((mNavList->mScrollSpeedAnim)) {
         float shift;
         switch (mSpeedState) {

@@ -842,13 +842,31 @@ RhythmDetector::GetRecord(float windowStart, float windowEnd, bool finalize, Sym
     return mRecordData;
 }
 
+// NOTE (w7-ai): residual at 94.4%.  Retail's frame is 0x140 and saves r18-r31
+// (bl __savegprlr_18); ours is 0x130 and saves r19-r31.  The extra register is
+// a SECOND pointer to mCurrentFrame.mJointVelocities, derived as
+// `addi r21,r29,0x4` from a base register holding &mCurrentFrame, while the
+// empty() test keeps its own independent this+0x20.  Binding `Frame &cur =
+// mCurrentFrame;` does reproduce all of that -- frame size, save count and the
+// derived addi all match -- but MSVC then schedules the `addi rN,this,0x1c`
+// ABOVE the loop-entry beq where retail keeps it in the preheader, and that one
+// insert/delete pair costs more on the canonical ruler than the whole structural
+// gain is worth: 93.4% with the reference vs 94.4% without, measured both with
+// the reference before the loop and with it inside the body (the latter is
+// coalesced away again and reads 93.7%).  Three placements measured 2026-09-14.
 void RhythmDetector::ProcessFrames() {
     std::list<Frame> localHistory;
     localHistory.swap(mFrameHistory);
 
     bool hadBlendedFrames = false;
     if (!localHistory.empty()) {
-        float lastTime = localHistory.back().mTime;
+        // The erase-window time is the FIRST frame of the batch, not the
+        // last: retail reuses the very r11 the !empty() test loaded from
+        // 0x88(r31) (_M_next == begin()) for the lfs f31,0x8(r11) at
+        // 0x82489C5C, and only ever touches _M_prev at 0x8c(r31) down at the
+        // bottom of the function.  Erasing everything newer than the OLDEST
+        // incoming frame is what makes the subsequent append non-overlapping.
+        float lastTime = localHistory.front().mTime;
         EraseNewerData(mRecordData.frames, lastTime);
         EraseNewerData(mAnalysisFrames1, lastTime);
 
@@ -863,8 +881,12 @@ void RhythmDetector::ProcessFrames() {
                 hadBlendedFrames = true;
                 for (int j = 0; j < tickDiff; j++) {
                     float beatTime = (float)(prevTick + j + 1) * 0.1f;
-                    Frame blended = BlendFrameDataToBeat(mCurrentFrame, *it, beatTime);
-                    mAnalysisFrames2.push_back(blended);
+                    // push_back takes the callee's sret buffer straight
+                    // through (mr r4,r3 at 0x82489D48); a named `blended`
+                    // local re-materialises its own address instead.
+                    mAnalysisFrames2.push_back(
+                        BlendFrameDataToBeat(mCurrentFrame, *it, beatTime)
+                    );
                 }
             }
 
@@ -878,7 +900,7 @@ void RhythmDetector::ProcessFrames() {
             count++;
         }
         if (count > 1) {
-            localHistory.erase(localHistory.begin());
+            localHistory.erase(--localHistory.end());
         }
 
         // Trim again (same logic - ensures only 1 entry)
@@ -887,7 +909,7 @@ void RhythmDetector::ProcessFrames() {
             count++;
         }
         if (count > 1) {
-            localHistory.erase(localHistory.begin());
+            localHistory.erase(--localHistory.end());
         }
 
         mCurrentFrame.mTime = localHistory.back().mTime;
@@ -904,9 +926,15 @@ void RhythmDetector::ProcessFrames() {
             DataArray *cfg = typeDef->FindArray(analyzeBeatFrequency, true);
             static Symbol analyzePeriodCount("analyze_period_count");
             DataArray *periodCfg = typeDef->FindArray(analyzePeriodCount, true);
-            int periodCount = periodCfg->Node(1).Int();
-            cfg->Node(cfg->Size() - 1).Int();
-            int beatFreq = cfg->Node(cfg->Size() - 1).Int();
+            // Every DataNode::Int here is passed its OWNING array as the
+            // evaluation source -- mr r4,r28 (periodCfg) at 0x8248A0C0 and
+            // mr r4,r30 (cfg) at 0x8248A0DC / 0x8248A0F4 -- not NULL.  The
+            // source argument is what lets Int() resolve a $variable or a
+            // property node against the array it came from; with NULL those
+            // node kinds evaluate wrongly.
+            int periodCount = periodCfg->Node(1).Int(periodCfg);
+            cfg->Node(cfg->Size() - 1).Int(cfg);
+            int beatFreq = cfg->Node(cfg->Size() - 1).Int(cfg);
             windowSize = (float)beatFreq * (float)(periodCount - 1) * 2.0f;
         } else {
             windowSize = 0.0f;

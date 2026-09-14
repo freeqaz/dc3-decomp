@@ -2473,6 +2473,15 @@ void HamDirector::Reteleport() {
     }
 }
 
+// NOTE (w7-ai): residual at 99.2%.  What is left is 22 rows of one
+// callee-saved swap -- retail puts propKeys in r29 (recycling the register
+// that held the `shot` static's address) and keyIdx in r28, we do the
+// opposite -- plus the cross-jump direction of the two
+// ReactToCollision_InsertRealShot call sites (retail branches BACKWARD from
+// the second to the first at 0x8247A550; we branch forward) and the two
+// argument-setup instructions of the second FrameFromIndex, which are the
+// same scheduling decision.  Splitting `int keyIdx;` from its initialiser to
+// reorder the allocation is byte-identical, measured 2026-09-14.
 bool HamDirector::ReactToCollision(float frame) {
     if (TheLoadMgr.EditMode()) {
         return false;
@@ -2480,26 +2489,42 @@ bool HamDirector::ReactToCollision(float frame) {
     float beat = FrameToBeat(frame);
     if (!mCurShot)
         return false;
-    Symbol cat = mCurShot->Category();
-    if (strncmp(cat.Str(), "Area", 4) != 0) {
+    // Retail holds the category in a short-lived register for the strncmp and
+    // only copies it into the long-lived `cat` register AFTER the early return
+    // (mr r24,r29 at 0x8247A1E8, past the bne at 0x8247A1E0).  A single local
+    // initialised from Category() is allocated straight into r24 and that copy
+    // never appears.
+    Symbol curCat = mCurShot->Category();
+    if (strncmp(curCat.Str(), "Area", 4) != 0) {
         return false;
     }
-    Symbol symAt;
+    Symbol cat = curCat;
     static Symbol shot("shot");
     PropKeys *propKeys = GetPropKeysByPlayer(0, shot);
     if (!propKeys)
         return false;
+    // Both Symbol temps are default-constructed (a store of gNullStr) right
+    // before the SymbolAt call that fills them -- 0x8247A268/0x8247A26C for
+    // symAt and 0x8247A2C8/0x8247A2D8 for symAt2 -- not up front.
+    Symbol symAt;
     int keyIdx = propKeys->SymbolAt(frame, symAt);
     if (keyIdx >= 0 && strncmp(symAt.Str(), "Area", 4) == 0) {
         cat = symAt;
     }
     float frame2;
     float frame3;
-    Symbol symAt2;
-    bool idxExists = propKeys->FrameFromIndex(keyIdx, frame2);
+    // Retail asks for the frame of the NEXT key (addi r4,r28,0x1 at 0x8247A2AC,
+    // r28 being keyIdx) and then resolves the symbol AT that frame
+    // (lfs f1,0x58(r31) at 0x8247A2D4, 0x58 being frame2).  We were passing
+    // keyIdx and the CURRENT frame, so keyIdx2 came back equal to keyIdx and
+    // beat2 was the beat of the shot already playing, not of the next one --
+    // which made "is the next shot within X beats" always compare against the
+    // current shot.
+    bool idxExists = propKeys->FrameFromIndex(keyIdx + 1, frame2);
     if (!idxExists)
         return false;
-    int keyIdx2 = propKeys->SymbolAt(frame, symAt2);
+    Symbol symAt2;
+    int keyIdx2 = propKeys->SymbolAt(frame2, symAt2);
     if (keyIdx2 == -1 || keyIdx2 == propKeys->NumKeys() - 1
         || strncmp(symAt2.Str(), "Area", 4) != 0) {
         mShot = cat;
@@ -2515,14 +2540,24 @@ bool HamDirector::ReactToCollision(float frame) {
     } else {
         static float sSongCollisionForXBeatsSuppressNextShot =
             DataGetMacro("SONG_COLLISION_FOR_X_BEATS_SUPPRESS_NEXT_SHOT")->Float(0);
-        float beatSum = sSongCollisionForXBeatsSuppressNextShot + beat;
-        if (beatSum < beat2) {
+        // beatSum only exists on the else side: retail keeps the sum in the
+        // volatile f0, compares, and only copies it into a callee-saved FPR
+        // once beat2 is dead (fmr f31,f0 at 0x8247A428).  Materialising it
+        // before the test keeps four FPRs live at once and turns the three
+        // inline stfd of the prologue into bl __savefpr_28.
+        if (sSongCollisionForXBeatsSuppressNextShot + beat < beat2) {
             ReactToCollision_InsertRealShot(cat, beat);
         } else {
+            float beatSum = sSongCollisionForXBeatsSuppressNextShot + beat;
             static bool sSongCollisionRoundUpSuppressedShotToMeasure =
                 DataGetMacro("SONG_COLLISION_ROUND_UP_SUPPRESSED_SHOT_TO_MEASURE")->Int(0);
             if (sSongCollisionRoundUpSuppressedShotToMeasure) {
-                beatSum = ceil(beatSum / 4.0f) * 4.0f;
+                // Retail narrows ceil()'s double result with frsp BEFORE the
+                // multiply and multiplies by the FLOAT 4.0f (__real@40800000 at
+                // 0x8247A498); leaving the expression in double promotes 4.0f
+                // and emits an fmul against __real@4010000000000000.
+                float rounded = ceil(beatSum / 4.0f);
+                beatSum = rounded * 4.0f;
             }
             if (!propKeys->FrameFromIndex(keyIdx2 + 1, frame3)) {
                 return false;
@@ -2669,7 +2704,15 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
                 songAnim->SetFrame(frame, blend);
             }
 
-            for (Difficulty d = (Difficulty)0; (int)d < kNumDifficultiesDC2; d = (Difficulty)((int)d + 1)) {
+            // The map is keyed by a reference, so the key has to live in a
+            // stack slot.  Retail writes 0x50(r31) once at the TOP of each
+            // iteration (stw r29,0x50(r31) at the loop head 0x8247AE44) --
+            // the shape of a fresh temporary per iteration.  A `Difficulty`
+            // loop variable whose address is taken keeps the slot in sync
+            // with the register instead, which costs a store before the loop
+            // and another at the latch.
+            for (int i = 0; i < kNumDifficultiesDC2; i++) {
+                Difficulty d = (Difficulty)i;
                 if ((int)mDancerFaceAnims[d].Ptr() &&
                     (!TheLoadMgr.EditMode() || frame != mDancerFaceAnims[d]->GetFrame())) {
                     mDancerFaceAnims[d]->SetFrame(frame, blend);
@@ -2697,8 +2740,13 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
                 AreCharactersColliding() &&
                 TheTaskMgr.Seconds(TaskMgr::kRealTime) >= mLastCollisionTime) {
                 if (ReactToCollision(frame)) {
-                    static Symbol collisionMacro("SONG_COLLISION_DONT_CUT_AGAIN_FOR_X_BEATS");
-                    DataArray *macro = DataGetMacro(collisionMacro);
+                    // Retail builds the macro name as a stack temporary
+                    // (addi r3,r31,0x50 / bl ??0Symbol / lwz r3,0x0(r3) at
+                    // 0x8247B0E8) -- there is no second function-local static
+                    // here, and the guard word is touched only once in the
+                    // whole function, for song_anim_timer.
+                    DataArray *macro =
+                        DataGetMacro("SONG_COLLISION_DONT_CUT_AGAIN_FOR_X_BEATS");
                     float collisionDelay = macro->Node(0).Float(macro);
                     float currentBeat = TheTaskMgr.Beat();
                     float futureMs = BeatToMs(currentBeat + collisionDelay);
