@@ -483,6 +483,18 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     dataVarDelta = varDelta;
 }
 
+// w7-bh floor note: 96.58% canonical / 1732 B.  13 of the 31 residual rows are
+// two instruction-scheduling groups and the rest are a forgiven register
+// permutation (r10/r11, r28-r30):
+//   * idx 263/265: `lfs f11, 0x20(r31)` moves two slots.
+//   * idx 272-282: the image emits the int-to-float triple
+//     `lfd f0, 0x58(r1)` / `fcfid f0, f0` / `frsp f11, f0` BEFORE the `lfs`
+//     that feeds the following `fadds`; we emit it after, into f13.  Every
+//     instruction is present on both sides -- this is the order MSVC picked,
+//     not a different expression.
+//   * idx 316/319: `cmpwi cr6, r11, 0x0` moves three slots.
+// No source spelling attempted moved any of these; recorded as a scheduling
+// floor rather than chased further.
 void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     Hmx::Rect rect;
 

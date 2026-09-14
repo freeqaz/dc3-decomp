@@ -109,6 +109,30 @@ void DxShader::EstimatedCost(float &min, float &max) {
 
 RndShaderBuffer *DxShader::NewBuffer(unsigned int ui) { return new DxShaderBuffer(ui); }
 
+// w7-bh floor note: 94.37% canonical / 1160 B.  All 27 residual rows sit in the
+// two D3DXCompileShaderExA argument-setup blocks (idx 137-159 and 176-203) and
+// are scheduling + register allocation only -- every instruction appears on both
+// sides, just in a different order or a different register:
+//   * vshader block (8 rows): `mr r11, r3`, `stw r28, 0x5c(r1)` and the
+//     `lis r7, "vshader"@ha` / `addi r7, r7, @l` pair each move 2-4 slots.
+//   * pshader block (19 rows): the image consumes the freshly-allocated buffer
+//     pointer out of r3 (`stw r3, 0x0(r21)` / `addi r10, r3, 0x4` at
+//     0x82406030-34) and then reuses r3 for `lwz r3, 0x74(r31)`; MSVC gives us
+//     an extra `mr r11, r3` and defers `addi r10, r11, 0x4` to just before the
+//     call.  The image's OWN vshader block does it the other way round
+//     (`mr r11, r3` at 0x8261D590), so this is not a consistent shape a source
+//     spelling could select.
+// The Function Call Diff row is NOT a wrong callee.  The three MILO_ASSERT
+// MakeStrings are `MakeString<char[19], int, char[5]>` (x3) in the image and
+// `MakeString<char[14], int, char[10]>` (x2, the two `!mVShader`/`!mPShader`
+// asserts) plus `MakeString<char[14], int, char[39]>` (the streq assert) on our
+// side -- yet the image loads the SAME literals we do into r4/r6 at
+// 0x8261D400 and 0x8261D41C (`??_C@_0O@NHAFBEE@ShaderMgr?4cpp` = char[14],
+// `??_C@_0CH@MBAAKJFN@streq...` = char[39]).  MakeString's array bounds are
+// template parameters that never reach the generated code, so every
+// instantiation of that shape is byte-identical: all four names above resolve
+// to 0x824D1870 in build/373307D9/icf_aliases.map.  The name objdiff shows is
+// whichever instantiation won the fold.
 bool DxShader::Compile(
     ShaderType s, const ShaderOptions &opts, RndShaderBuffer *&buf1, RndShaderBuffer *&buf2
 ) {

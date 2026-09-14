@@ -39,6 +39,22 @@ BEGIN_COPYS(FlowPickOne)
     END_COPYING_MEMBERS
 END_COPYS
 
+// w7-bh residual note: 95.80% canonical / 1284 B (was 95.19 before the
+// kChoiceUseIndex fix below).  Two residual clusters, neither reachable from
+// source so far:
+//   * The image materialises r26 = &mChoiceHistory.mNodes at 0x82405E90 -- one
+//     instruction BEFORE the `mIndex >= 0` test it is only used inside -- and
+//     then addresses the vector r26-relative (`lwz r10, 0x4(r26)`) for the
+//     size, empty and _M_erase sites, while still reloading _M_finish
+//     r30-relative for back() (`lwz r11, 0x64(r30)` at 0x82405ED8).  We defer
+//     the addi past the test and use r30+0x60/0x64 throughout, which also lets
+//     MSVC CSE the empty() load into back().  mNodes is private to ObjPtrVec,
+//     so there is no reference local that would force the base register.
+//   * The refill loop tests `srawi. r11, r11, 2` in the image (0x82405FAC and
+//     0x82405FD0); we get `clrrwi. r11, r11, 2`, MSVC's mask peephole for
+//     shift-then-test-eq.  FAILED spellings (all identical to five figures):
+//     `items.size() != 0`, `items.end() - items.begin() != 0`.  `empty()` is a
+//     pointer compare (`cmplw`) and is wrong outright.
 bool FlowPickOne::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
