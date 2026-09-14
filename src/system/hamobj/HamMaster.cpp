@@ -253,10 +253,12 @@ void HamMaster::CheckBeat() {
     if (prevTotalBeat != totalBeat) {
         int beat = mSongPos.GetBeat();
         TheHamProvider->SetProperty("beat", beat + 1);
-        if (mMetronome) {
-            if (beat == 0) {
+        if (beat == 0) {
+            if (mMetronome) {
                 TheSynth->PlaySound("metronome_measure", 0, 0, 0);
-            } else {
+            }
+        } else {
+            if (mMetronome) {
                 TheSynth->PlaySound("metronome_beat", 0, 0, 0);
             }
         }
