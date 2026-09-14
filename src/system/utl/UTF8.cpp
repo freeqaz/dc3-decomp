@@ -141,8 +141,22 @@ void ASCIItoUTF8(char *out, int len, const char *in) {
     memset(out, 0, len);
     String str;
     char *p = out;
-    for (int i = 0; (char)in[i] != '\0'; i++) {
-        int utf8 = EncodeUTF8(str, (unsigned char)in[i]);
+    // A named `char` loop variable, not an index: the image loads the
+    // character ONCE per iteration (`lbz r11, 0x0(r25)` on entry, `lbzu r11,
+    // 0x1(r25)` at the bottom), homes it in its own stack slot at 0x50 -- which
+    // is what pushes the MILO_ASSERT line slot to 0x54 -- and tests it with
+    // `extsb. r10, r11`, a SIGNED test.  Indexing re-loaded `in[i]` for the
+    // EncodeUTF8 argument and tested the zero-extended byte with `cmplwi`.
+    // Residual (99.0%, 7 rows, 4 B): the image also HOMES that char in its own
+    // stack slot -- `stb r11, 0x50(r31)` at 827E1B54 -- and never reads the
+    // slot back anywhere in the function (grepped the whole .fn: 0x50 appears
+    // once, as that store).  The dead home is what pushes the three MILO_ASSERT
+    // scratch ints from 0x50 to 0x54, so all 6 remaining `off:-4` rows are
+    // consequences of that one store, not independent faults.
+    // REFUTED: hoisting the declaration to `char c;` before the loop and
+    // assigning in the for-init is byte-for-byte inert (99.0%, same 7 rows).
+    for (char c = *in; c != '\0'; c = *++in) {
+        int utf8 = EncodeUTF8(str, (unsigned char)c);
         if ((p - out) + utf8 >= (unsigned int)len) {
             return;
         }
