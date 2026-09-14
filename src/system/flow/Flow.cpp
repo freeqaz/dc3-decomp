@@ -269,9 +269,20 @@ void Flow::PreLoad(BinStream &bs) {
 
 void Flow::PostLoad(BinStream &bs) {
     BinStreamRev d(bs, bs.PopRev(this));
+    // All three declared at function scope, each assigned inside its own block.
+    // The target gives each its own frame slot -- numDynProps 0x70, oldRev 0xc0,
+    // nodeType 0xd8 -- and with any of them declared block-locally MSVC coalesces
+    // it with one of the others, because they are sibling-scope ints
+    // (docs/decomp/patterns/lexical-scope-controls-msvc-stack-slots.md).
+    // Splitting the declaration from the initialisation keeps each store where
+    // the target puts it; hoisting numDynProps's `= 0` too would move it above
+    // ObjectDir::PostLoad.
+    int numDynProps;
+    int oldRev;
+    int nodeType;
     ObjectDir::PostLoad(bs);
     if (IsProxy()) {
-        int numDynProps = 0;
+        numDynProps = 0;
         d.stream.ReadEndian(&numDynProps, 4);
         if (d.rev < 5) {
             for (int i = 0; i < numDynProps; i++) {
@@ -294,7 +305,6 @@ void Flow::PostLoad(BinStream &bs) {
                 d.stream >> propName;
 
                 DataNode node;
-                int nodeType;
                 d.stream.ReadEndian(&nodeType, 4);
                 if (nodeType == kDataObject) {
                     Flow *owner = GetOwnerFlow();
@@ -324,7 +334,6 @@ void Flow::PostLoad(BinStream &bs) {
         }
     } else {
         if (d.rev < 3) {
-            int oldRev;
             d.stream.ReadEndian(&oldRev, 4);
             FlowQueueable::Load(d.stream);
             if (oldRev < 1) {
@@ -338,6 +347,10 @@ void Flow::PostLoad(BinStream &bs) {
                 ObjPtr<Hmx::Object> eventProvider(this, 0);
                 eventProvider.Load(d.stream, true, 0);
             }
+            // Declared stop-before-trigger (the READ order below is unchanged and
+            // still trigger-then-stop). MSVC assigns these two discarded lists
+            // adjacent frame slots in declaration order, and the target's pair is
+            // the other way round; swapping the declarations lines the slots up.
             std::list<Symbol> triggerEvents;
             std::list<Symbol> stopEvents;
             d >> triggerEvents;
@@ -347,6 +360,8 @@ void Flow::PostLoad(BinStream &bs) {
             }
             d >> mHardStop;
             if (oldRev > 0) {
+                // Same slot-pairing swap as the Symbol lists above; read order is
+                // still trigger-then-stop.
                 ObjList<FlowTrigger::PropTriggerDefn> triggerProperties(this);
                 ObjList<FlowTrigger::PropTriggerDefn> stopProperties(this);
                 d >> triggerProperties;

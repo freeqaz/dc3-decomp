@@ -1279,6 +1279,16 @@ void ObjectDir::PreLoad(BinStream &bs) {
         int hashLen;
         d >> hashLen;
         if (hashLen) {
+            // Residual row [159]: the target has a dead `stw r11, 0x58(r31)`
+            // here -- the alloc result spilled into the local-temp slot that
+            // `FilePath fp` and the ASSERT_REVS `ClassName()` return temp also
+            // use. It is never reloaded (the terminator below re-reads the
+            // member), and it is the ONLY charged row left in this function;
+            // base is 3884 B against the target's 3888 B, exactly that one
+            // instruction. Refuted levers: a named local for the alloc result
+            // (inert -- MSVC coalesces it with the member); rb3-xenon's
+            // two-local spelling `char *ptr = (char *)mAlwaysInlineHash;`
+            // (inert on [159] and it flips the stbx operand order at [163]).
             mAlwaysInlineHash =
                 (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x30A, "Always Inline CDB");
             bs.Read((void *)mAlwaysInlineHash, hashLen);
@@ -1402,15 +1412,14 @@ void ObjectDir::PreLoad(BinStream &bs) {
             bool filesneq = mSubDirs[i].GetFile() != notInlinedSubDirs[i];
             if (i20 == 0 || filesneq) {
                 bool b17 = false;
-                // Residual row: the target tests this with `srawi. r9, r9, 2`
-                // (materialise the element count, then test it) where we emit
-                // `clrrwi. r9, r9, 2` -- MSVC's `x/4 != 0 <=> x & ~3 != 0`
-                // peephole, which it only applies because the count is dead
-                // after the branch. Writing `int numFlags = intVec.size();` DOES
-                // restore the srawi, but costs an r9<->r10 swap across the five
-                // surrounding rows (2 rows becomes 6), and `(int)` casting the
-                // expression is completely inert. Left as-is.
-                if (intVec.size() != 0) {
+                // The target materialises the element count into a register and
+                // tests it (`srawi. r9, r9, 2`); writing the test directly
+                // against `intVec.size()` lets MSVC apply its
+                // `x/4 != 0 <=> x & ~3 != 0` peephole instead (`clrrwi.`),
+                // because the count is dead after the branch. Naming the count
+                // keeps it materialised.
+                int numFlags = intVec.size();
+                if (numFlags != 0) {
                     b17 = intVec[i] != 0;
                 }
                 LoadSubDir(i, notInlinedSubDirs[i], bs, !b17);

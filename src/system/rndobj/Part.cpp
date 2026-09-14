@@ -661,9 +661,18 @@ BEGIN_LOADS(RndParticleSys)
             d.stream >> (Hmx::Color &)p150;
         } else {
             Vector3 v1;
-            d.stream >> v1;
-            d.stream >> p150.a >> p150.b >> p150.c;
-            p150.d = -(p150.a * v1.x + p150.b * v1.y + p150.c * v1.z);
+            // One chain: the target carries the BinStream& returned by each
+            // `>>` into the next (it parks it in r29 across the calls) rather
+            // than re-deriving d.stream per statement.
+            d.stream >> v1 >> p150.a >> p150.b >> p150.c;
+            // Term order is deliberate. The target seeds this dot product with
+            // the C term (`lfs 0xc8` / `lfs 0x88` / `fmuls` = c*z), folds B in
+            // with an fmadds, and folds A and the negation together into a
+            // single fnmadds. MSVC seeds the chain with the left-most product
+            // of the innermost sum, so naming C first is what puts c*z in the
+            // fmuls; the parentheses on their own do nothing, /fp:fast
+            // reassociates them away.
+            p150.d = -(p150.a * v1.x + (p150.c * v1.z + p150.b * v1.y));
         }
         if (ba7) {
             bool old = TheLoadMgr.EditMode();
@@ -716,8 +725,11 @@ BEGIN_LOADS(RndParticleSys)
         d.stream >> mBubblePeriod >> mBubbleSize >> mBubble;
     }
     if (d.rev > 0x1D) {
-        d >> mRotate >> mRPM;
-        d >> mRPMDrag;
+        d >> mRotate;
+        // mRPM and mRPMDrag ride the same BinStream&: the target's ReadEndian
+        // for mRPMDrag reuses the stream returned by the Key<float> read
+        // instead of reloading bs from its spill slot.
+        d.stream >> mRPM >> mRPMDrag;
         if (d.rev > 0x24) {
             d >> mRandomDirection;
         }
@@ -1779,6 +1791,13 @@ void RndParticleSys::InitParticle(
         xfm = &tf;
     }
     Multiply(particle->Pos3(), *xfm, particle->Pos3());
+    // These two inlined Multiply()s carry most of this function's residual
+    // (~30 charged rows). The target seeds each output component's FMA chain
+    // from a different matrix row than we do -- Y for all three at this site,
+    // and Y/X/X at the Bubble3 site below, so it is /fp:fast scheduling rather
+    // than one rule. Open-coding either one with per-component accumulators
+    // (the lever math/Mtx.h documents) is REFUTED here: 99.2943 -> 98.5. See
+    // the note on Multiply(Vector3, Matrix3, Vector3&) in math/Mtx.h.
     Multiply(particle->Vel3(), xfm->m, particle->Vel3());
     if (mBubble && mType == kFancy) {
         RndFancyParticle *fancyParticle = (RndFancyParticle *)particle;
