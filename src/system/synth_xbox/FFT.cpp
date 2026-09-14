@@ -927,6 +927,27 @@ XMVECTOR __vsubfp(XMVECTOR vSrcA, XMVECTOR vSrcB);
 // through a stack XMVECTORF32 at the end of every iteration: cLo/sLo carry
 // bins (2i, 2i+1) and cHi/sHi bins (2i+2, 2i+1), each value duplicated across
 // the real and imaginary lane of its complex slot.
+//
+// The loop bound is `size / 8` written INLINE in the condition: lifted into a
+// local it is a provable trip count and MSVC converts the loop to CTR
+// (`mtctr` / `bdnz`), where the image keeps `addi r29, r29, 1` /
+// `cmpw cr6, r29, r10` / `blt cr6` (0x82E50858-0x82E50904).  72.4 -> 79.1.
+//
+// RESIDUAL (w7-an, 79.1 canonical): the rest is VMX/FPR allocation and the
+// schedule it drives.  (a) The image homes perm_d/perm_e on the stack and
+// keeps sLo in a register for the whole loop; we keep both perm controls in
+// registers and spill sLo instead, which costs three extra vector memory ops
+// per iteration.  (b) The image walks the low half with two induction
+// variables (`addi r9, r31, 0x10` in the preheader, then `addi r8/r9, .., 0x10`
+// separately); MSVC folds ours into one, recomputing loRead as `loWrite + 16`
+// and rotating with `mr`.  (c) The double trig recurrence is scheduled
+// s-chain-first in our build and c-chain-first in the image.
+// NEGATIVE RESULT (w7-an, 2026-09-14): reversing the four `sv.f[n]` stores is
+// byte-for-byte inert; so is reversing the uc/us declarations, and so is
+// swapping the perm_d/perm_e declarations.  Reversing the four
+// `c1 = c1 - uc1` / `s1 = s1 - us1` updates buys +0.5pp but SHRINKS the frame
+// by 0x10 and changes the callee-save helpers, so it is a step away from the
+// image's prologue -- not kept.
 int fft_real_forward_altivec(float* data, long size, float* context) {
     int ret = FFTComplex(data, size / 2, -1, context);
     if (ret == 0) {
