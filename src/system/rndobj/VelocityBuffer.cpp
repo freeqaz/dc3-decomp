@@ -24,6 +24,14 @@ RndVelocityBuffer RndVelocityBuffer::sSingleton;
 // which also shifts every other slot in the function by four.
 static const int kMaxMotionBlurBones = 40;
 
+// 41.666668f == 1000/24: the frame time, in ms, that scores a velocity scale of
+// 1.0.  It is a NAMED .rdata constant in the image, not a float literal --
+// 0x826B1A94 `lis r10, lbl_8209F7BC@ha` / 0x826B1AB0 `lfs f13, lbl_8209F7BC@l`
+// reaches a plain 4-byte .rdata object sitting between the two string literals
+// of this TU (build/373307D9/asm/system/rndobj/VelocityBuffer.s:41), where a
+// literal would have been emitted as a `__real@4226aaab` pick-any COMDAT.
+static const float kVelocityRefFrameMs = 41.666668f;
+
 bool RndXfmCache::GetXfms(
     const RndMesh * __restrict mesh,
     unsigned int startIndex,
@@ -247,7 +255,7 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
     mFrameAdvanced = false;
     float splitMs = mTimer.SplitMs();
     mTimer.Restart();
-    float scale = 41.666668f / (splitMs + 1.0f);
+    float scale = kVelocityRefFrameMs / (splitMs + 1.0f);
         unk36be8 = scale = Min(2.0f, scale);
 
     // Short-circuit, not bitwise: retail emits two independent branches to the
@@ -274,6 +282,13 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
         // `__savegprlr_15`, the frame from 0xe0 to 0xf0, and rotated every
         // callee-saved register in the function by one.  That single local was
         // worth 48.74 -> 99.0 canonical.
+        // RESIDUAL (w7-as, 99.0 canonical): the last 8 rows are the two address
+        // chains emitted in the opposite ORDER inside this one basic block.
+        // Image: cur.slwi, prev.slwi, cur.add(r31), prev.xori, cur.add(r8)->r3,
+        // prev.add(r31), prev.add(r8)->r25.  Ours starts with prev.slwi and
+        // finishes cur one slot later.  Swapping these two declarations is
+        // exactly byte-identical, so the order is the MSVC block scheduler's,
+        // not the source's.
         ViewProjXfm &curXfm = unk36bec[mActiveXfmCacheIndex];
         ViewProjXfm &prevXfm = unk36bec[mActiveXfmCacheIndex ^ 1];
         memcpy(&curXfm, &mViewProjXfm, 0x40);
