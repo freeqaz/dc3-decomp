@@ -218,10 +218,18 @@ void RhythmBattlePlayer::Poll() {
             if (mSuppressRhythm) {
                 mMaxRhythmInWindow = 0;
             }
+            // Statement order is already correct -- swapping these two costs
+            // 0.7pp (99.1 -> 98.4) and introduces a (0x250,0x254) offset swap.
             mFreshnessAccumulator += mFreshnessScore * f17;
             mMovePresenceAccumulator += f13 * f17;
             mWindowElapsedTime += f17;
-            f13 = mMaxRhythmInWindow > 1.0f ? 1.0f : mMaxRhythmInWindow;
+            // Residual row [261] is `fmr f1, f0`: the image loads
+            // mMaxRhythmInWindow straight into f1 (SetRatingFrac's first
+            // argument register) and conditionally overwrites it with 1.0f,
+            // where we compute into f0 and copy.  Giving this its own name and
+            // feeding the call directly is BYTE-IDENTICAL -- the copy is a
+            // register-allocation choice, not a spelling.
+            float ratingFrac = mMaxRhythmInWindow > 1.0f ? 1.0f : mMaxRhythmInWindow;
             // BEHAVIOURAL FIX 2026-09-14 (w7-q): this used to read
             //     4.0f - mWindowElapsedTime - f17
             // which subtracts the frame delta TWICE -- `mWindowElapsedTime`
@@ -237,7 +245,7 @@ void RhythmBattlePlayer::Poll() {
             float f16 = 4.0f - mWindowElapsedTime;
             if (mPhraseMeter) {
                 f16 = Max(f16, 0.0f);
-                mPhraseMeter->SetRatingFrac(f13, f16);
+                mPhraseMeter->SetRatingFrac(ratingFrac, f16);
             }
             if (mInTheZone == 1 && mRhythmBattle && mRhythmBattle->InFullKTB()) {
                 mComboMeter -= f17 * 1.125f;
