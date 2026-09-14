@@ -403,6 +403,11 @@ void HDCache::Init() {
             hashValid = !header->Fail() && memcmp(hash1, hash2, 256) == 0;
         }
         bool skipHdcache = OptionBool("skip_hdcache", false);
+        // Open residual (w7-r, 2026-09-14): the image spells `!skipHdcache` as a
+        // full MASK (`subic r11, r11, 1` / `subfe r11, r11, r11`) and then needs
+        // a `clrlwi.` to test the `and`; we spell it 0/1 (`cntlzw`/`extrwi`) and
+        // get away with `and.` plus one extra `clrlwi` of hashValid. 5 rows.
+        // Inlining the OptionBool call here (no named local) is exactly neutral.
         if (!skipHdcache & hashValid) {
             unk64 = true;
             TheDebug << MakeString("Using the archive cache\n");
