@@ -89,25 +89,39 @@ void DxCam::SetViewport() {
         height = TheDxRnd.Height();
     }
     Hmx::Rect r;
+    // Both arms leave the far corner in x2/y2 and the near corner in r.x/r.y;
+    // the conversion to a WIDTH and HEIGHT happens once, after the join.  That
+    // applies to the tiled path too: CurrentTileRect fills r with a min/max
+    // pair, and the image reloads 0x68/0x6c straight after the call and runs
+    // them through the same two fsubs.
+    float x2, y2;
     if (TheHiResScreen.IsActive()) {
         Hmx::Rect tileRect;
         TheHiResScreen.CurrentTileRect(mScreenRect, r, tileRect);
+        // Loaded high word first: the image reads 0x6c before 0x68.
+        y2 = r.h;
+        x2 = r.w;
     } else {
         float x = mScreenRect.x;
         float y = mScreenRect.y;
-        float x2 = mScreenRect.w + x;
-        float y2 = mScreenRect.h + y;
-        r.x = Max(0.0f, x);
-        r.y = Max(0.0f, y);
+        x2 = mScreenRect.w + x;
+        y2 = mScreenRect.h + y;
+        // The clamps run entirely in registers -- r.x and r.y are stored only
+        // once, after the Min, not between the Max and the Min.
+        x = Max(0.0f, x);
+        y = Max(0.0f, y);
         x2 = Max(0.0f, x2);
         y2 = Max(0.0f, y2);
-        r.x = Min(1.0f, r.x);
-        r.y = Min(1.0f, r.y);
-        x2 = Min(1.0f, x2);
-        y2 = Min(1.0f, y2);
-        r.w = x2 - r.x;
-        r.h = y2 - r.y;
+        // Min(value, 1.0f), not Min(1.0f, value): the image forms `value - 1.0`
+        // and selects the CONSTANT on the non-negative side, which is the
+        // argument order reversed from the Max clamps above.
+        r.x = Min(x, 1.0f);
+        r.y = Min(y, 1.0f);
+        x2 = Min(x2, 1.0f);
+        y2 = Min(y2, 1.0f);
     }
+    r.w = x2 - r.x;
+    r.h = y2 - r.y;
     MILO_ASSERT((r.x >= 0.f) && (r.x <= 1.f), 0x43);
     MILO_ASSERT((r.y >= 0.f) && (r.y <= 1.f), 0x44);
     MILO_ASSERT((r.w >= 0.f) && (r.w <= 1.f), 0x45);
