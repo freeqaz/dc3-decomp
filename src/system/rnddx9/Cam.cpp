@@ -82,6 +82,19 @@ void DxCam::Select() {
         // the reference to r1+<slot>. Copy-INITIALISING the Rect from the call
         // instead (`Hmx::Rect rect = ScreenRect();`) does not recover it -- MSVC
         // elides the copy outright and the function drops to 78.6.
+        //
+        // NEGATIVE RESULT (w7-ap, 2026-09-14, 84.130 canonical): three more
+        // spellings of the same four floats, all refuted.
+        //   `rect = tmp;` (whole-struct assignment)            81.6
+        //   `Vector4 rect; rect = Vector4(tmp.x,...);`         69.0 (the
+        //       unnamed Vector4 takes a 17th stack slot and grows the frame)
+        //   `Vector4 rect; rect.Set(tmp.x, tmp.y, tmp.w, tmp.h);`
+        //       BYTE-IDENTICAL to the four field assignments -- 84.130, same
+        //       55 rows, same pattern set.  Worth knowing: the image's load
+        //       order (0xc, 0x8, 0x4, 0x0, then stores ascending) looks like
+        //       MSVC's right-to-left argument evaluation for a 4-float Set(),
+        //       and it is NOT -- MSVC canonicalises the two spellings, so that
+        //       ordering cannot be used as evidence for either.
         {
             const Hmx::Rect &tmp = TheHiResScreen.ScreenRect();
             rect.x = tmp.x;
