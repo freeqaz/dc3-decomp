@@ -2794,25 +2794,43 @@ void BuildFromBSP(RndMesh *mesh) {
         // begin()/end() iterator loop, not a precomputed pEnd.  Binding
         // `std::vector<Vector2> &points` materialises `addi r25, r28, 0x8` and
         // then addresses everything off it.
-        int vertOffset = vertIdx * 0x60;
         for (std::vector<Vector2>::iterator p = pit->mPoly.points.begin();
              p != pit->mPoly.points.end();
              ++p) {
             Vector3 pt(p->x, p->y, z);
+            // vertIdx * 0x60 spelled here, not hoisted to a `vertOffset` local:
+            // MSVC strength-reduces it into an induction variable whose seed
+            // `mulli r29, r30, 0x60` lands in the LOOP PREHEADER, after the
+            // zero-trip guard (target idx 90).  A precomputed local puts the
+            // multiply before the guard instead.
             Multiply(
                 pt,
                 pit->mTransform,
-                *(Vector3 *)((char *)mesh->Verts().mVerts + vertOffset)
+                *(Vector3 *)((char *)mesh->Verts().mVerts + vertIdx * 0x60)
             );
             vertIdx++;
-            vertOffset += 0x60;
         }
 
+        // RESIDUAL (w7-aq, 97.8 canonical): the image loads begin (0x8(r28))
+        // before end (0xc(r28)) for this size(); we load them the other way
+        // round.  Two rows, pure scheduling -- the image itself loads end first
+        // for the identical expression in the FIRST pass (target idx 15/17), so
+        // there is no consistent source spelling to copy.  The other residual is
+        // a callee-saved permutation: the image parks `mesh` in r26 and faceIdx
+        // in r25, we do the reverse (10 rows).  Both survive at 97.8.
         int firstVert = vertIdx - (int)pit->mPoly.points.size();
         int v2 = firstVert + 2;
         if (v2 < vertIdx) {
             int triCount = vertIdx - v2;
             int faceOffset = faceIdx * 6;
+            // NEGATIVE RESULTS (w7-aq): the image seeds the second face index
+            // with a BIASED `addis r10, r11, 0x1 / subi r10, r10, 0x1`
+            // (= v2 + 0xFFFF, correct only because the value is masked to 16
+            // bits at every use) where we emit a plain `subi r10, r11, 0x1`.
+            // Spelling v1 `unsigned short` DOES produce the addis pair but then
+            // costs a `clrlwi` per increment -- 97.1%.  Dropping v1 entirely and
+            // writing `facePtr[1] = (unsigned short)(v2 - 1)` in the loop is
+            // worse again, 95.6%.  Plain int v1 is the best of the three.
             int v1 = v2 - 1;
             faceIdx += triCount;
 
