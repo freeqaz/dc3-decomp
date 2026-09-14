@@ -40,19 +40,38 @@ static FftScratch g_fftScratch;
 //    `slwi` / `add` and then biases `+0x8` inside the loop preheader
 //    (0x82E509D4, 0x82E50A18) -- the bias is MSVC's, so the source value it
 //    started from is data+size-2.
-//  * the low half is subscripted off `data`, not walked with a `float* lo`.
-//    A source-level `lo += 2` makes MSVC keep the pointer's own induction
-//    variable; the image's low-half base is a compiler-created one.
+//  * the low half IS walked with a `float* lo`, and the walk must be spelled
+//    as two separate `++lo` BETWEEN the two stores (w7-bl, 83.70 -> 85.70
+//    canonical; this REFUTES the earlier w7-an bullet that said to subscript
+//    off `data`).  Subscripting `data[k * 2 + 2]` / `data[k * 2 + 3]` makes
+//    MSVC fold the advance into one `stfsu fN, 0x8(r11)` with a -4 base bias;
+//    storing through `*lo` and stepping it twice reproduces the image's plain
+//    `stfs 0x0(r11)` / `stfs 0x4(r11)` pair plus `addi r7, r11, 0x4` /
+//    `addi r11, r7, 0x4` (0x82E50A5C, 0x82E50AB8).  Rows 92-110 are now equal.
 //
-// RESIDUAL (w7-an, 83.7 canonical): 51 rows, all register numbering plus the
-// preheader schedule it drives.  The image puts `c` in f13 / `s` in f0 and
-// `hi_im` in f7 / `lo_im` in f8; we get each pair the other way round, which is
-// 19 of the 51.  Swapping the two declarations is byte-for-byte inert (tried).
-// The remaining lo-side rows are one bias: the image stores `lo[1]` with a
-// plain `stfs 0x4(r11)` and advances with two `addi`, we merge the advance into
-// `stfsu f9, 0x8(r11)` and bias the base -4.  Walking `lo` by hand, advancing
-// it before the stores, and subscripting off `data` all produce the merged
-// form; only the image's register colouring would avoid it.
+// RESIDUAL (w7-bl, 85.70 canonical, 43 of 111 rows): one FPR colouring
+// decision in the DC/Nyquist preheader, and the schedule it drives.
+//  * f0 <-> f13 (15 rows): the image loads `c = 1.0` into f13 and `s = 0.0`
+//    into f0 -- i.e. c takes the register `im0` died in and s takes `re0`'s.
+//    We colour them the other way round, and the whole twiddle recurrence
+//    (idx 66-91, `fmadd`/`fnmsub` chain) inherits the swap.
+//  * f30 <-> f31 (4 rows): image holds `inv_n` in f31 and `sin_a` in f30; ours
+//    are reversed.
+//  * The 12 insert/delete rows are the same cause seen as scheduling: the
+//    image computes `fmul f10, f30, f30` (cc) immediately after the second
+//    `bl sin` (idx 35) so f10 is occupied before the DC/Nyquist loads, which
+//    forces the sum into f8 and stores `data[1]` before `data[0]`.  We compute
+//    cc after the loads and store `data[0]` first (the 1 OFFSET_SWAP row).
+// Measured-inert spellings, all four re-measured in this worktree at 85.70
+// with an identical 26/5/6/6 row split:
+//    - swapping the `data[0]` / `data[1]` store statements;
+//    - hoisting `double cc = sin_a * sin_a;` above the `sin_2a` call (hoping
+//      MSVC would sink the multiply to just after the call, as the image has);
+//    - routing both bins through named `float diff0` / `float sum0` temps so
+//      the subtraction is computed and stored first;
+//    - writing `sum_im` as `lo_im + hi_im` (the image's textual operand order
+//      for the idx-73 `fadds`) -- COMMUTATIVE_OP_ORDER stays at 1 either way.
+//  Swapping the `c` / `s` declarations was already measured inert by w7-an.
 int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
     if (size < 2) {
         return 0;
@@ -76,13 +95,14 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
             data[0] = im0 + re0;
 
             float* hi = data + size - 2;
+            float* lo = data + 2;
 
             cc = cc * 2.0;
             for (unsigned int k = 0; k < (size >> 2); ++k) {
                 float hi_im = hi[1];
-                float lo_im = data[k * 2 + 3];
+                float lo_im = lo[1];
                 float diff_im = lo_im - hi_im;
-                float lo_re = data[k * 2 + 2];
+                float lo_re = lo[0];
                 float hi_re = hi[0];
                 float sum_im = hi_im + lo_im;
                 float sum_re = hi_re + lo_re;
@@ -105,8 +125,10 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
                 d = d - (double)sum_im * s;
                 e = e + (double)diff_re * s;
 
-                data[k * 2 + 2] = (float)a * 0.5f;
-                data[k * 2 + 3] = (float)b * 0.5f;
+                *lo = (float)a * 0.5f;
+                ++lo;
+                *lo = (float)b * 0.5f;
+                ++lo;
                 hi[1] = (float)d * 0.5f;
                 hi[0] = (float)e * 0.5f;
 
