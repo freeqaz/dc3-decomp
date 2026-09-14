@@ -625,7 +625,11 @@ void JoypadPollCommon() {
                 data.mLastActivityMs = SystemMs() + 0x7FFFFFFF;
             }
             if (padType == kJoypadNone) {
-                if (data.mConnected) {
+                // `== true`, not `if (data.mConnected)`: the image compares the
+                // byte against 1 here (^/* 825E6FD4 `cmplwi cr6, r10, 0x1`) and
+                // against 0 in the else arm (825E6FF0); the plain test gave a
+                // cr0 `cmplwi r10, 0x0 / beq` and a CONTROL_FLOW row (w7-bn).
+                if (data.mConnected == true) {
                     currButtons = 0;
                     justDisconnected = true;
                     data.mConnected = false;
@@ -668,6 +672,29 @@ void JoypadPollCommon() {
             // `x = zero; y = zero;` -- MSVC CSEs the local straight back into
             // the same function-wide literal.  The image's f12 copy is a
             // rematerialisation decision, not a second source variable.
+            // w7-bn (96.73 -> 96.73, 125 -> 123 rows via the `== true` below):
+            // the hoist is NOT a CSE of several 0.0f sites.  Measured, full
+            // ninja each: with the entry `= { 0 }` removed and the pressures
+            // loop copying sensors[] (else-arm the ONLY 0.0f use) our build
+            // still parks it in a callee-saved FPR loaded at entry; with the
+            // else-arm reading data.mSticks (pressures store the ONLY use,
+            // one stfs per outer iteration) likewise.  Our MSVC hoists any
+            // loop-invariant float literal out of BOTH loops; the image
+            // hoists 127.0f and 1/127 that far but leaves 0.0f one level
+            // down (f12 after `mtctr`, 825E7034) and in place at the two
+            // stores.  Inert on the FPR: `x = 0` / `x = 0.0` / `x = y = 0.0f`
+            // (the last costs an lbz swap), `pressures[0] = 0.0f` without the
+            // loop, inverted `if (k >= mNumAnalogSticks)` (96.1), locals
+            // declared in the image's slot order (96.1), a shared outer-body
+            // `int k`, a while-form first stick loop.  Two more image facts
+            // no spelling here reproduces: `2` lives in callee-saved r30 from
+            // the first stick loop's count (825E6C78, with a dead `mr r11,
+            // r30` at 825E6C8C) through `mEepromWriteState = 2` (825E6DD0
+            // `stwx r30`), where we `li r11, 2` at the store -- so the image
+            // and our build each keep ONE extra constant across the calls,
+            // the image an int, ours the float.  CharClipSet::SetFrame (100%)
+            // shows this compiler materialising __real@00000000 per sibling
+            // arm (f29 twice), so the merge is loop hoisting, not global CSE.
             for (int k = 0; k < kNumAnalogSticks; k++) {
                 float x;
                 float y;
