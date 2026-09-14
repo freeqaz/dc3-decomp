@@ -551,29 +551,39 @@ void SetSystemArgs(const char *commandLine) {
     sCommandLineBuffer[kCommandLineSz - 1] = 0;
 
     if (sCommandLineBuffer[0] != 0) {
-        int inQuotes = 0;
         char *ptr = sCommandLineBuffer;
-        int newToken = 1;
+        // newToken is a BYTE: 0x...  tests it with `clrlwi. r11, r9, 24`, while
+        // inQuotes is tested with a full-word `cmplwi cr6, r28, 0x0` and
+        // toggled with `cntlzw`/`extrwi.` -- the lowering of `!x` on an int,
+        // not the `xori` MSVC emits for a bool.
+        bool newToken = true;
+        int inQuotes = 0;
 
         for (;;) {
-            if (!inQuotes) {
+            // The space test was MISSING here: the image's loop head is
+            // `cmplwi cr6, r28, 0x0 / bne` followed by
+            // `lbz r11, 0x0(r31) / cmplwi cr6, r11, 0x20 / bne`, so the
+            // terminator branch only fires on a SPACE outside quotes.  Without
+            // it every unquoted character was overwritten with NUL and the
+            // command line parsed to a single empty argument.
+            if (!inQuotes && *ptr == ' ') {
                 *ptr = 0;
-                newToken = 1;
+                newToken = true;
                 ptr++;
             } else if (*ptr == '"') {
                 *ptr = 0;
                 ptr++;
-                inQuotes ^= 1;
+                inQuotes = !inQuotes;
                 if (inQuotes) {
                     TheSystemArgs.push_back(ptr);
-                    newToken = 0;
+                    newToken = false;
                 } else {
-                    newToken = 1;
+                    newToken = true;
                 }
             } else {
                 if (newToken) {
                     TheSystemArgs.push_back(ptr);
-                    newToken = 0;
+                    newToken = false;
                 }
                 ptr++;
             }
