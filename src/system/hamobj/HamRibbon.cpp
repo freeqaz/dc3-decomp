@@ -204,12 +204,15 @@ void HamRibbon::UpdateChase() {
         }
         key.frame = 0.0f;
         mChaseKeys.resize(numKeys - removeCount, key);
-        key.value = Transform::IDXfm();
+        // `key.frame = 0.0f` precedes the IDXfm copy (stfs 0xd0(r1) at
+        // 0x824C7AD4, memcpy at 0x824C7ADC), and `key.frame = now` precedes
+        // the `followed` copy (stfs at 0x824C7AFC).
         key.frame = 0.0f;
+        key.value = Transform::IDXfm();
 #endif
         if (mChaseKeys.size() == 0) {
-            key.value.v = followed;
             key.frame = now;
+            key.value.v = followed;
             mChaseKeys.push_back(key);
         } else {
             float step = mDecay / mNumSegments;
