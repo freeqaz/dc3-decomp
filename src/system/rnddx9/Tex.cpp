@@ -125,6 +125,14 @@ void *DxTex::StartCompress(AlphaCompress alpha) {
     );
     DX_ASSERT(desc->texture, 0x16C);
     MILO_ASSERT(numLevels < 16, 0x16F);
+    // RESIDUAL (w7-ao, 99.87 canonical): the image anchors this loop's induction
+    // register on &levels[i].textureSurface (desc+0x40, `subi r28, r30, 0x20`
+    // for the scratch half) where we anchor on &levels[i] (desc+0x14). Same
+    // addresses either way -- it is a base-register bias, worth 6 offset rows.
+    // NEGATIVE RESULT (w7-ao, 2026-09-14): introducing `CompressLevel &level =
+    // desc->levels[i];` here, the spelling DoCompress and FinishCompress both
+    // use, moves the anchor to levels[i]+0x20 (closer) but costs a 16-byte frame
+    // shift and 12 more register rows: 99.87 -> 99.13. Left explicit.
     for (int i = 0; i < numLevels; i++) {
         desc->levels[i].scratchSurface = D3DTexture_GetSurfaceLevel(mTexture, i);
         DX_ASSERT(desc->levels[i].scratchSurface, 0x174);
