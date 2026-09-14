@@ -97,7 +97,9 @@ BEGIN_LOADS(FlowCommand)
             }
         }
     } else if (d.rev < 3) {
-        int count;
+        // The `= 0` is the target's: it stores the zero constant into this slot
+        // before the ReadEndian, which the rev>2 arm above does not do.
+        int count = 0;
         bs >> count;
         Flow *owner = GetOwnerFlow();
         DirLoader *loader = owner->Loader();
