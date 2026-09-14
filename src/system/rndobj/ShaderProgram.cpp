@@ -119,6 +119,14 @@ bool RndShaderProgram::Cache(
             psBuffer->Size() != 0) {
             CreateVertexShader(*vsBuffer);
             CreatePixelShader(*psBuffer, shaderType);
+            // w7-al: an EXPLICIT return, not a fall-through into the shared
+            // `return true` at the bottom. The image tail-merges this exit with
+            // the two `return false` exits into one destructor block
+            // (0x82732054: addi r3,r31,0x70 / bl ~PhysMemTypeTracker /
+            // mr r3, r30), while the function's own fall-off gets a SECOND,
+            // unmerged copy at 0x82732574 ending in `li r3, 1`. A fall-through
+            // here would give this path the second block, not the first.
+            return true;
         } else {
             if (!TheShaderMgr.CacheShaders()) {
                 CopyErrorShader(shaderType, opts);
