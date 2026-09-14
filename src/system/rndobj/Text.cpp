@@ -2479,9 +2479,11 @@ void RndText::DrawShowing() {
         FontMapBase *fontMap = *it;
         for (int i = 0; i < fontMap->NumMaterials(); i++) {
             RndMat *mat = fontMap->Material(i);
-            savedColors[vlaIdx].red = mat->GetColor().red;
-            savedColors[vlaIdx].green = mat->GetColor().green;
-            savedColors[vlaIdx].blue = mat->GetColor().blue;
+            // Whole-Color copy, alpha included: the image stores all four words
+            // (0x2c/0x30/0x34/0x38 of the mat) at 0x826992F0..0x82699330.  The
+            // RESTORE loop below is deliberately asymmetric and puts back only
+            // red/green/blue.
+            savedColors[vlaIdx] = mat->GetColor();
             vlaIdx++;
         }
     }
@@ -2496,8 +2498,7 @@ void RndText::DrawShowing() {
             if (fmIdx != -1) {
                 hasOverride = true;
                 FontMapBase *fontMap = mFontMaps[fmIdx];
-                int numMats = fontMap->NumMaterials();
-                for (int i = 0; i < numMats; i++) {
+                for (int i = 0; i < fontMap->NumMaterials(); i++) {
                     RndMat *mat = fontMap->Material(i);
                     mat->GetColor() = style.mFontColor;
                     mat->MarkDirty(1);
@@ -2514,10 +2515,8 @@ void RndText::DrawShowing() {
     // Draw each mesh — text inherits the current camera (PanelDir's CamOverride).
     // On Xbox, text was drawn in 3D world space under the active camera.
     for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
-        FontMapBase *fontMap = *it;
-        int numMeshes = fontMap->NumMeshes();
-        for (int i = 0; i < numMeshes; i++) {
-            RndMesh *mesh = fontMap->Mesh(i);
+        for (int i = 0; i < (*it)->NumMeshes(); i++) {
+            RndMesh *mesh = (*it)->Mesh(i);
             if (mesh) {
 #ifdef HX_NATIVE
                 if (getenv("DC3_TEXT_DIAG")) {
@@ -2551,11 +2550,22 @@ void RndText::DrawShowing() {
                     }
                 }
 #endif
-                if (!(!sBlacklightModeEnabled || !fontMap->mBlacklight ||
+                // mLineHeight / mScrollCopies, NOT mStyles[0].mSize / 0.  The
+                // image loads `lfs f1, -0xb4(r28)` and `lwz r5, -0xb0(r28)`
+                // straight off `this` at 0x826994E4 and 0x826994F4 (object
+                // offsets 0x58 and 0x5c, since the body's `this` is
+                // object+0x10c).  Those are the marquee repeat spacing and copy
+                // count that FitTextScroll sets -- mLineHeight is a misnomer,
+                // it is assigned mTotalWidth for a wrapping marquee and 0.0f
+                // otherwise, right beside mScrollCopies.  Passing a literal 0
+                // copy count meant DrawMesh's repeat loop never ran, so a
+                // marquee drew exactly one copy and left a gap instead of
+                // tiling across the label.
+                if (!(!sBlacklightModeEnabled || !(*it)->mBlacklight ||
                     TheUI->DisableScreenBlacklight())) {
-                    QueueBlacklightPacket(mesh, mStyles[0].mSize, 0);
+                    QueueBlacklightPacket(mesh, mLineHeight, mScrollCopies);
                 } else {
-                    DrawMesh(mesh, mStyles[0].mSize, 0);
+                    DrawMesh(mesh, mLineHeight, mScrollCopies);
                 }
             }
         }
@@ -2567,8 +2577,7 @@ void RndText::DrawShowing() {
         auto fontMapsEnd = mFontMaps.end();
         for (auto it = mFontMaps.begin(); fontMapsEnd != it; ++it) {
             FontMapBase *fontMap = *it;
-            auto numMaterials = fontMap->NumMaterials();
-            for (int i = 0; i < numMaterials; i++) {
+            for (int i = 0; i < fontMap->NumMaterials(); i++) {
                 RndMat *mat = fontMap->Material(i);
                 Hmx::Color &color = mat->GetColor();
                 color.red = savedColors[vlaIdx].red;
