@@ -364,7 +364,7 @@ void RndMultiMesh::CollideList(const Segment &seg, std::list<Collision> &colls) 
                             // if it is an unnamed temporary.  A named `p` lands
                             // in r31 directly and the whole found-block gets
                             // sunk to the end of the function.
-                            if (stamp != sit->second) {
+                            if (sit->second != stamp) {
                                 if (sit->first->Refs().empty()) {
                                     proxy = sit->first;
                                     sit->second = stamp;
