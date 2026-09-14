@@ -51,6 +51,9 @@ static const int kMaxLoopingSounds = 100;
 
 void ThreeDSoundManager::Poll() {
     START_AUTO_TIMER("sound_mgr_poll");
+    // Keep the ternary.  Splitting it into `p = Ptr(); if (!p) p = Cam();` measures
+    // 98.4 (vs 99.4): it moves the cr6 allocation onto the FIRST test instead of the
+    // second, which is the wrong way round, and costs 30 more rows of r26<->r27.
     RndTransformable *listener = mListener.Ptr() ? mListener.Ptr() : mParent->Cam();
     if (listener) {
         const Transform &listenerXfm = listener->WorldXfm();
