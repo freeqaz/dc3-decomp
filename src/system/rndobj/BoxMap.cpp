@@ -256,6 +256,30 @@ void BoxMapLighting::ApplyLight(
     }
 }
 
+/** RESIDUAL w7-at, 87.37 canonical / 83.4 raw, 360 B.  The arithmetic and the
+ *  store order are exact; what is left is FPR allocation, and the tell is the
+ *  prologue: the image saves TWO callee-saved FPRs (`stfd f30, -0x30(r1)` /
+ *  `stfd f31, -0x28(r1)` at 0x826F0E30-34) where we save only f31.  We are
+ *  CHEAPER than the image by one live float inside the loop, so no reordering
+ *  of these statements reaches it -- we would have to make MSVC need a register
+ *  it does not need.  One offset swap survives with it: the image loads
+ *  mDirection.z (0x4c(r11)) before mHalfLengthRecip (0x7c), we load 0x44 there.
+ *
+ *  Measured, all reverted:
+ *    - caching gLightIndex in a local across the loop and storing it back once:
+ *      87.37 -> 78.6.  The image ALREADY hoists the global load itself
+ *      (`lwz r7, lbl_830E0278@l(r31)` once, `stw r7` once after the loop) and
+ *      our unmodified source already reproduces that; a source-level local only
+ *      moves the load ABOVE the loop guard, where the image does not have it.
+ *    - the same with an explicit `if (arr.NumElements() > 0)` guard around it:
+ *      87.37 -> 76.3, and the guard is emitted twice.
+ *    - `cone` as a flat left-associated sum
+ *      (`dir.z*ndz + dir.x*ndx + dir.y*ndy`), which is what the fmadds chain
+ *      reads as: 87.37 -> 85.2.  The nested spelling below is the one that
+ *      matches.
+ *    - hoisting `-ndx/-ndy/-ndz` into named temps ahead of the clamp chain to
+ *      reproduce the image's early fnegs: byte-identical, MSVC already
+ *      schedules them there. */
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Spot, 50> &arr, const Vector3 &viewPos
 ) const {
@@ -266,12 +290,19 @@ void BoxMapLighting::ApplyLight(
         float dx = viewPos.x - light.mApex.x;
         float distSq = dz * dz + dx * dx + dy * dy;
         float invDist = RecipSqrtEst(distSq);
-        float dist = invDist * distSq * light.mHalfLengthRecip - light.mOffsetFactor;
         float ndz = dz * invDist;
         float ndx = dx * invDist;
         float ndy = dy * invDist;
-        float cone = light.mDirection.y * ndy
-            + (light.mDirection.x * ndx + light.mDirection.z * ndz);
+        float coneZ = light.mDirection.z * ndz;
+        // The image computes (invDist * distSq) as its own product and only then
+        // scales by mHalfLengthRecip -- `fmuls f3, f31, f3` then
+        // `fmsubs f6, f3, f5, f6` at the target's rows 49/53.  Written as the
+        // single expression `invDist * distSq * light.mHalfLengthRecip`, /fp:fast
+        // reassociates it to (mHalfLengthRecip * invDist) * distSq and the whole
+        // FPR assignment downstream shifts; the named temp pins the association.
+        float trueDist = invDist * distSq;
+        float dist = trueDist * light.mHalfLengthRecip - light.mOffsetFactor;
+        float cone = light.mDirection.y * ndy + (light.mDirection.x * ndx + coneZ);
         dist = Min(1.0f, dist);
         float coneClamped = Min(1.0f, cone) - light.mConeAngleFactor;
         float distAtten = Max(0.0f, 1.0f - dist);
