@@ -264,7 +264,7 @@ bool MoveGraph::FindVariantPair(
         // branches to the same `li r3, 0x1` at .L_824F9314 the fall-through
         // and the s.Null() and empty-size exits all reach.
         const std::vector<MoveVariant *> &variants = p1->Variants();
-        if (variants.begin() == variants.end()) {
+        if (variants.empty()) {
             return false;
         }
         if (v1) {
@@ -287,7 +287,7 @@ bool MoveGraph::FindVariantPair(
             // Only p2 set
             // Mirror of the p1-only block above; same shape at 0x824F93AC.
             const std::vector<MoveVariant *> &variants = p2->Variants();
-            if (variants.begin() == variants.end()) {
+            if (variants.empty()) {
                 return false;
             }
             if (v2) {
