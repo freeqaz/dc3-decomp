@@ -458,22 +458,33 @@ void HamAudio::PollCrossfade() {
 
     if (mCrossfade.mFlag == 1 && mActiveCrossfade.mFlag <= 1) {
         MILO_ASSERT_FMT(mStreams[1], "Crossfade requires 2 song streams");
-        float jumpPoint = mCrossfade.mEnd
-            - (mCrossfade.mStart - (-(mCrossfade.mDuration * halfFade - mCrossfade.mStart)));
+        // &mCrossfade is materialised ONCE into a callee-saved register and every
+        // later read goes through it: 0x82529EA4 `addi r30, r31, 0x5c`, then
+        // 0x0(r30)/0x4(r30)/0x8(r30) at 0x82529F14, 0x82529F44, 0x82529F4C,
+        // 0x82529F64 and the four-word copy at 0x82529FAC.  r30 stays live across
+        // the GetTime/IsReady/Resync/SetLoop calls, which is what makes it
+        // callee-saved and the prologue `bl __savegprlr_29`.
+        HamCrossfade &cf = mCrossfade;
+        float jumpPoint = cf.mEnd
+            - (cf.mStart - (-(cf.mDuration * halfFade - cf.mStart)));
         if (mStreams[1]->GetTime() != jumpPoint) {
             if (mStreams[1]->IsReady()) {
                 mStreams[1]->Resync(jumpPoint);
-                SetLoop(mCrossfade.mStart, mCrossfade.mEnd, mStreams[1]);
+                SetLoop(cf.mStart, cf.mEnd, mStreams[1]);
             } else {
                 MILO_NOTIFY("HamAudio::PollCrossFade() - almost tried to resync stream before it was ready");
             }
         }
         bool shouldActivate
-            = currentTime
-            > (-(mCrossfade.mDuration * halfFade - mCrossfade.mStart) - kEpsilon);
-        if (mCrossfade.mStart < mCrossfade.mEnd) {
+            = currentTime > (-(cf.mDuration * halfFade - cf.mStart) - kEpsilon);
+        if (cf.mStart < cf.mEnd) {
             shouldActivate = shouldActivate && currentTime < mCrossfade.mEnd;
         }
+        // The copy is written off the MEMBERS, not off `cf`: 0x82529FAC-0x82529FB8
+        // batches all four loads into r10/r11/r9/r8 and only then stores them.
+        // Spelling it `mActiveCrossfade = cf` makes the source a reference MSVC
+        // cannot prove disjoint from the destination, and it degrades to four
+        // interleaved load/store pairs through r11 (measured 88.0 -> 85.6).
         if (shouldActivate) {
             mActiveCrossfade = mCrossfade;
         }
