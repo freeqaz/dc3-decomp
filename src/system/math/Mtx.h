@@ -471,6 +471,21 @@ inline void Multiply(const Hmx::Quat &q1, const Hmx::Quat &q2, Hmx::Quat &qres) 
     );
 }
 
+// ⚠ Do NOT right-associate these three sums as `a + (b + c)`.  Measured
+// whole-binary A/B in worktree w5-f (2026-09-14, full ninja both sides):
+// 5 functions up, 14 down, matched_functions 30962 -> 30958, matched_code
+// -800 B, headline 47.6415 -> 47.6345.  The five small functions whose whole
+// body IS one inlined copy -- ?Multiply@@YAXABVTransform@@ABVMatrix3@Hmx@@AAV1@@Z
+// (100 B), MultiplyInverse (180 B), CharServoBone::MoveToDeltaFacing (216 B),
+// GetLightPosition (256 B), DrawBounds (264 B) -- are all at 100% with the
+// left-associated form and all fall to 91-96% with parentheses, so the
+// left-associated spelling is the original's.  The two functions that GAIN
+// from the parentheses (Spotlight::UpdateTransforms 91.956 -> 100.000 exactly,
+// RndShadowMap::PrepShadow 93.388 -> 99.985) both call this with a vector whose
+// x and z are literal 0.0f; under /fp:fast MSVC factors `(m.x.c + m.z.c) * 0`
+// out of the unparenthesised form and the target does not.  Whatever those two
+// sites called in the original, it was not this overload spelled this way --
+// chase it there, not here.
 inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
     vout.Set(
         m.x.x * v.x + m.y.x * v.y + m.z.x * v.z,
