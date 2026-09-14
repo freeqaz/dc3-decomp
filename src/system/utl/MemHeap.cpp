@@ -78,6 +78,11 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
         rFrags,
         freeBytes
     );
+    // RESIDUAL (w7-aq, 96.601 canonical): the only structural rows left are
+    // this read's placement -- we hoist `lwz mStart` and its `stw ..., 0x50(r1)`
+    // spill above the FormatString block (idx 57/58) where the image does both
+    // after it (idx 66/73), which shifts the four `li 0` initialisers by two
+    // slots.  Everything else is register permutation.
     // NEGATIVE RESULT (w7-aq, 2026-09-14): the image loads mSizeWords (0xc)
     // first and mStart (0x4) second, both AFTER this MakeString("\n") write
     // (`lwz r10, 0xc(r31)` / `lwz r11, 0x4(r31)` / `slwi` / `add r20, r10,
@@ -130,15 +135,20 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
                     curAllocCount++;
                 } else {
                     PrintAlloc(ts, curAllocPtr, curAllocSize, curAllocCount, curAllocInfo);
-                    curAllocCount = 1;
                     curAllocPtr = newPtr;
-                    curAllocInfo = newInfo;
                     curAllocSize = newSize;
+                    curAllocCount = 1;
+                    curAllocInfo = newInfo;
                 }
             }
         } else {
             // Free block
             PrintAlloc(ts, curAllocPtr, curAllocSize, curAllocCount, curAllocInfo);
+            // The image clears curAllocSize HERE, before freeStr is set up and
+            // before curAllocCount (idx 95 `li r29, 0x0`, 96 `stw r16, 0x54`,
+            // 98 `li r28, 0x0`) -- not at the bottom of the branch next to the
+            // blockSizeWords update.
+            curAllocSize = 0;
             const char *freeStr = " ; **** big free block!";
             curAllocCount = 0;
             unsigned int sizeWords = *curFreeBlock;
@@ -155,7 +165,6 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
                 freeStr
             );
             curFreeBlock = (unsigned int *)curFreeBlock[2];
-            curAllocSize = 0;
             blockSizeWords = sizeWords;
         }
     }
