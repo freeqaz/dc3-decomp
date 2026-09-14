@@ -114,6 +114,27 @@ return_zero:
     return 0;
 }
 
+// WRONG_CALLEE row on this function (target `check_index` vs base `delete_node`):
+// NOT settled as an artifact.  Emitted-callee multisets, measured 2026-09-14 with
+// scripts/analysis/callee_multiset.py (objdiff JSON, both sides counted
+// independently of row pairing):
+//
+//     delete_node   target 4  base 4   <- equal; no call is missing
+//     check_index   target 29 base 30  <- WE EMIT ONE EXTRA BOUNDS CHECK
+//     everything else identical (37 vs 38 calls total)
+//
+// The extra `check_index` is the function's ONLY count asymmetry and it is the
+// accused callee itself, so this row is a live lead, not alignment noise.  The
+// source has 29 textual `check_index(` sites and the object emits 30, so the
+// 30th is compiler-duplicated (loop rotation peeling a call out of a latch is
+// the likely shape) or comes from an inline in trie.h -- not yet run down.
+//
+// ⚠ An earlier revision of this note claimed "5 delete_node call sites here, 4
+// in the image" and blamed retail tail-merging for the row.  That was wrong: it
+// compared the image's EMITTED `bl` count against SOURCE call sites, which is
+// apples-to-oranges.  Our object emits 4 as well.  The tail-merge itself is
+// real (see the note at the `delete_node(1)` site) but it produces no count
+// difference and does not explain this row.
 void Trie::remove(unsigned int index) {
     unsigned int curIdx = index;
     check_index(curIdx);
@@ -220,18 +241,12 @@ void Trie::remove(unsigned int index) {
             }
 #undef TRIE_ROOT_SIBLING_COUNT
 
-            // NOTE (measured 2026-09-14, name_check ruler): this call site is why
-            // `Trie::remove` carries a WRONG_CALLEE row naming target
-            // `check_index` against base `delete_node`.  It is NOT a wrong symbol.
-            // Callee counts are otherwise identical (29 check_index, 2 dec_count,
-            // 1 dec_dup_count both sides); the only asymmetry is delete_node --
-            // 5 call sites here, 4 `bl`s in the image.  Retail TAIL-MERGED this
-            // one into the shared `delete_node(curIdx)` at the bottom of the
-            // function: at .L_827FE664 it emits `li r4, 0x1` and branches
-            // straight to the `bl` at .L_827FE708, skipping that path's
-            // CountField update.  Same callee, same argument (curIdx == 1 here),
-            // same behaviour -- a block-layout difference, not a defect.  Do not
-            // "fix" this by changing which function is called.
+            // Retail tail-merges this call: at .L_827FE664 it emits `li r4, 0x1`
+            // and branches straight to the shared `bl delete_node` at
+            // .L_827FE708, skipping that path's CountField update.  Recorded
+            // because it looks like a missing call in the listing and is not --
+            // our build emits `delete_node` 4 times too (see the note above
+            // Trie::remove for the corrected counts).
             if (curIdx == 1) {
                 delete_node(1);
                 return;
