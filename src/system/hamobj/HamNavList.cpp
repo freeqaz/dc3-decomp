@@ -1762,7 +1762,19 @@ auto& _ref0 = mListState;
 }
 
 void HamNavList::DrawShowing() {
-    if (!mListRibbonResource || unkc8)
+    // BOTH of these tested the wrong member until 2026-09-14.  In the image
+    // (build/373307D9/asm/system/hamobj/HamNavList.s @8244FA4C) r30 is
+    // `this + 0x258` -- pinned by `stfs f1, -0x6c(r30)` for mScrollSettleTime
+    // @0x1ec -- and the two early-out loads are:
+    //     lwz r11, -0x150(r3)   ->  0x108 = mListDirResource's ObjPtr slot
+    //     lbz r11, -0x68(r3)    ->  0x1f0 = mRefreshPending
+    // We were reading -0x180 (0xd8, mListRibbonResource) and -0x190 (0xc8,
+    // unkc8).  mListRibbonResource is separately tested further down, and
+    // unkc8 is the engage flag set in UpdateGestures -- neither gates the draw.
+    // Note mListDirResource is dereferenced unconditionally a few lines below
+    // (BuildDrawState / DrawWidgets), so guarding on mListRibbonResource left
+    // a real null deref whenever the list dir resource had not loaded.
+    if (!mListDirResource || mRefreshPending)
         return;
 #ifdef HX_NATIVE
     if (!mListState.Provider())
@@ -1792,8 +1804,17 @@ void HamNavList::DrawShowing() {
 
     if (mListState.ScrollPastMinDisplay()) {
         for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
-            int first = mListState.FirstShowing();
-            if ((int)i < first || (int)i >= first + HamListRibbon::sNumListSelectable) {
+            // MinDisplay(), not FirstShowing(), and called twice with no local.
+            // The image issues two `bl` on &mListState to a body that is
+            // `lwz r3, 0x10(r3); blr` (ICF-folded onto
+            // ?Parent@Node@?$ObjPtrList@VCharLookAt@@VObjectDir@@@@...).
+            // UIListState+0x10 is mMinDisplay; mFirstShowing is +0x30, and
+            // FirstShowing() is an inline accessor that would have produced a
+            // plain `lwz`, which is what we emitted.  MinDisplay() is declared
+            // without a body in UIListState.h, hence the out-of-line call.
+            if ((int)i < mListState.MinDisplay()
+                || (int)i
+                    >= mListState.MinDisplay() + HamListRibbon::sNumListSelectable) {
                 mRibbonDrawStates[i].mSwellSmoother.SetParams(0.0f, 0.0f, 0.0f);
             }
         }
@@ -1803,7 +1824,13 @@ void HamNavList::DrawShowing() {
         mListRibbonResource->SetFrame(GetFrame(), 1.0f);
         mListRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
         mListRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
-        mListRibbonResource->mMode = mRibbonMode;
+        // Named local: the image loads mRibbonMode into CALLEE-SAVED r27
+        // BEFORE the ObjDirPtr::operator-> call and stores it after
+        // (`lwz r27, -0x194(r30)` / `bl` / `stw r27, 0x25c(r3)`).
+        // Assigning the member expression directly lets the scheduler
+        // sink the load past the call into volatile r11.
+        HamListRibbon::RibbonMode ribbonMode = mRibbonMode;
+        mListRibbonResource->mMode = ribbonMode;
         mListRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, false, false);
     }
 
@@ -1811,7 +1838,13 @@ void HamNavList::DrawShowing() {
         mHeaderRibbonResource->SetFrame(GetFrame(), 1.0f);
         mHeaderRibbonResource->mScrollAnims.SetScrollFrame(mScrollBehavior.mScrollProgress);
         mHeaderRibbonResource->SetDisengageFrame(mDisengageSmoother.Level());
-        mHeaderRibbonResource->mMode = mRibbonMode;
+        // Named local: the image loads mRibbonMode into CALLEE-SAVED r27
+        // BEFORE the ObjDirPtr::operator-> call and stores it after
+        // (`lwz r27, -0x194(r30)` / `bl` / `stw r27, 0x25c(r3)`).
+        // Assigning the member expression directly lets the scheduler
+        // sink the load past the call into volatile r11.
+        HamListRibbon::RibbonMode ribbonMode = mRibbonMode;
+        mHeaderRibbonResource->mMode = ribbonMode;
         mHeaderRibbonResource->Draw(WorldXfm(), mRibbonDrawStates, true, false);
     }
 
