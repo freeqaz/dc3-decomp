@@ -386,7 +386,12 @@ void HDCache::Init() {
                 mBlockState[i] = NULL;
             }
         }
-        bool hashValid = false;
+        // `next` is REUSED as the hash-valid flag -- the image writes the memcmp
+        // result into the very register it tested for `next` two instructions
+        // earlier (`clrlwi. r11, r25, 24` at 0x82604894, then `clrlwi r25, r11,
+        // 24` at 0x826048B4) and has no `hashValid = false` initialiser at all.
+        // A separate local costs an extra `mr r30, r18` plus a second
+        // callee-saved register.
         if (next) {
             // Aggregate-initialised, NOT memset: the image stores the first
             // byte and memsets the remaining 0xff (826048 04-28,
@@ -400,15 +405,15 @@ void HDCache::Init() {
             // One short-circuit assignment, not a nested if: the image merges
             // the Fail() path into the SAME `mr r11, r18` / `clrlwi r25, r11, 24`
             // that the memcmp comparison falls through to (826048 98-A8).
-            hashValid = !header->Fail() && memcmp(hash1, hash2, 256) == 0;
+            next = !header->Fail() && memcmp(hash1, hash2, 256) == 0;
         }
         bool skipHdcache = OptionBool("skip_hdcache", false);
         // Open residual (w7-r, 2026-09-14): the image spells `!skipHdcache` as a
         // full MASK (`subic r11, r11, 1` / `subfe r11, r11, r11`) and then needs
         // a `clrlwi.` to test the `and`; we spell it 0/1 (`cntlzw`/`extrwi`) and
-        // get away with `and.` plus one extra `clrlwi` of hashValid. 5 rows.
+        // get away with `and.` plus one extra `clrlwi` of the flag. 5 rows.
         // Inlining the OptionBool call here (no named local) is exactly neutral.
-        if (!skipHdcache & hashValid) {
+        if (!skipHdcache & next) {
             unk64 = true;
             TheDebug << MakeString("Using the archive cache\n");
         } else {
