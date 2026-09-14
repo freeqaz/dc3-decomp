@@ -800,7 +800,7 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     EyeDesc *eyeBegin = mEyes.begin();
     int eyeCount = (int)((char *)desc - (char *)eyeBegin) / (int)sizeof(EyeDesc);
     if (eyeCount != 0) {
-        int eyeOff = (int)((char *)ref - (char *)_ref0.begin());
+        int eyeOff = (int)((char *)ref - (char *)(EyeDesc *)_ref0.begin());
         if (eyeOff >= 0) {
             int eyeTotal = eyeCount * (int)sizeof(EyeDesc);
             if ((unsigned)eyeOff < (unsigned)eyeTotal) {
@@ -811,7 +811,7 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
         }
         if (desc != mEyes.end()) {
             if (!desc->mEye.SetObj(obj))
-                _ref0.erase(desc);
+                _ref0.erase(ObjVector<EyeDesc>::iterator(desc));
             return true;
         }
     }
@@ -821,7 +821,7 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     int stateCount =
         (int)((char *)state - (char *)stateBegin) / (int)sizeof(CharInterestState);
     if (stateCount != 0) {
-        int stateOff = (int)((char *)ref - (char *)_ref1.begin());
+        int stateOff = (int)((char *)ref - (char *)(CharInterestState *)_ref1.begin());
         if (stateOff >= 0) {
             int stateTotal = stateCount * (int)sizeof(CharInterestState);
             if ((unsigned)stateOff < (unsigned)stateTotal) {
@@ -833,7 +833,7 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
         }
         if (state != mInterests.end()) {
             if (!state->mInterest.SetObj(obj))
-                _ref1.erase(state);
+                _ref1.erase(ObjVector<CharInterestState>::iterator(state));
             return true;
         }
     }
