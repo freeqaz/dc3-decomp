@@ -1087,9 +1087,18 @@ void HamNavList::RealRefresh() {
                 mListState.SetMinDisplay(minDisplayVal);
                 mListState.SetScrollPastMinDisplay(true);
                 mListState.SetMaxDisplay(maxDisplay);
-                mListState.SetScrollPastMaxDisplay(
-                    (unsigned long)maxDisplay >= numShowing
-                );
+                // SIGNED, and the OTHER WAY ROUND.  The image builds the bool
+                // with (asm/system/hamobj/HamNavList.s @824481CC)
+                //   subfc  r11, r29, r30      ; maxDisplay - numShowing, sets CA
+                //   eqv    r10, r29, r30      ; bit31 = operands have same sign
+                //   srwi   r11, r10, 31
+                //   addze  r11, r11
+                //   clrlwi r4,  r11, 31       ; (sameSign + CA) & 1
+                // For equal signs that is (1 + CA) & 1 = !CA = !(maxDisplay >=
+                // numShowing), i.e. `numShowing > maxDisplay` -- the exact
+                // negation of what this passed before, which compiled to the
+                // unsigned carry-only form `li r10, -1; subfze r4, r10`.
+                mListState.SetScrollPastMaxDisplay(numShowing > maxDisplay);
             } else {
                 mListState.SetScrollPastMinDisplay(false);
                 int sel = mListState.Selected();
