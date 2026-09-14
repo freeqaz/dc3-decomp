@@ -73,13 +73,21 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
             SetProperty(name, *prop);
         }
         mStartMode = c->mStartMode;
-        // Deactivate existing child nodes. empty(), not begin() != end(): the
-        // target compares the two raw pointers (0x823F70BC-C8) instead of
-        // recomputing end() through the size division ObjVector::end() needs.
+        // DELETE the existing child nodes, do not Deactivate them.  The target
+        // calls slot 0 of the child's VIRTUAL BASE (Hmx::Object) vtable with
+        // r4 = 1 (0x823F7098-B8: lwz r10,4(r11) / lwz r10,4(r10) / add / lwz
+        // r11,4(r11) / lwz r11,0(r11) / bctrl with `li r4, 1` hoisted above
+        // it) -- that is MSVC's scalar *deleting* destructor, reached through
+        // the vbtable exactly the way this function reaches Hmx::Object on its
+        // own `this` at 0x823F7044.  Deactivate is introduced by FlowNode and
+        // would dispatch through FlowNode's own vfptr at +0 with no vbase
+        // adjustment at all.  It is also the only reading that terminates:
+        // deleting the node erases its ObjPtr from mChildNodes, whereas
+        // Deactivate leaves the vector untouched and spins forever.
         while (!mChildNodes.empty()) {
             FlowNode *child = mChildNodes.front();
             if (child) {
-                child->Deactivate(true);
+                delete child;
             }
         }
         // Copy child nodes from source. it->Obj() is re-read at every use --
@@ -105,7 +113,11 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
         mHardStop = c->mHardStop;
         RefreshPortLabelLists();
         if (!ProxyFile().empty()) {
-            mStartMode = 5;
+            // mInterrupt, not mStartMode: the target stores 5 at -0x124(r30)
+            // (0x823F72B8), i.e. Flow + 0x5c, while mStartMode is Flow + 0x170
+            // and is the -0x10(r30) store at 0x823F7078.  5 is kPassThrough,
+            // which is a QueueState; mStartMode only ever holds 0, 1 or 2.
+            mInterrupt = kPassThrough;
         }
     }
 }
