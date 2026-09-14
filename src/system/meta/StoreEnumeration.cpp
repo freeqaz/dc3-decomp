@@ -120,18 +120,24 @@ void XboxEnumeration::Poll() {
             // separate `String str` cost an extra ctor/dtor pair and turned the
             // assignment into operator=(String const&).
             char buf[256];
-            EnumProduct prod;
-            u8 *entryPtr = (u8 *)mCurOffers + offset;
-            WideCharToMultiByte(0, 0, *(LPCWSTR *)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
-            prod.mName = buf;
+            // The EnumProduct gets its OWN scope: retail runs ~String
+            // (0x82E1D3E8) BEFORE the two induction increments at
+            // 0x82E1D3F0/0x82E1D3F4.  With prod at while-body scope MSVC hoists
+            // both increments above the dtor call.
+            {
+                EnumProduct prod;
+                u8 *entryPtr = (u8 *)mCurOffers + offset;
+                WideCharToMultiByte(0, 0, *(LPCWSTR *)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
+                prod.mName = buf;
 
-            prod.mOfferID = *(u64 *)entryPtr;
-            prod.mPurchased = *(int *)(entryPtr + 0x48);
-            // mPrice is written BEFORE the insert (0x82E1D3D8 stores to 0x74,
-            // then bl insert).  Setting it afterwards wrote to the dead local
-            // and every product in mContentList kept price 0.
-            prod.mPrice = *(int *)(entryPtr + 0x64);
-            mContentList.insert(it, prod);
+                prod.mOfferID = *(u64 *)entryPtr;
+                prod.mPurchased = *(int *)(entryPtr + 0x48);
+                // mPrice is written BEFORE the insert (0x82E1D3D8 stores to
+                // 0x74, then bl insert).  Setting it afterwards wrote to the
+                // dead local and every product in mContentList kept price 0.
+                prod.mPrice = *(int *)(entryPtr + 0x64);
+                mContentList.insert(it, prod);
+            }
 
             offset += 0x68;
             productCount++;
