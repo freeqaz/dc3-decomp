@@ -84,6 +84,15 @@ void FilterQueue::Poll(const SkeletonUpdateData &skelData) {
     std::vector<FilterOutputFrame> &oframes = mOutput.frames;
     for (std::vector<FilterOutputFrame>::iterator it = oframes.begin(); it != oframes.end(); ++it) {
         FilterInputFrame *inFrame = it->mInputFrame;
+        // REFUTED (wave 7, lane w7-y): the image reloads `lwz r3, 0x10(r30)`
+        // inside the node loop instead of holding mFilterVersion in a
+        // callee-saved register, and keeps only `&mErrorNodes[0]` (r25,
+        // materialised before the IsTracked test and bumped by 4 per
+        // iteration).  Dropping this local and spelling
+        // `inFrame->mFilterVersion->` at all three use sites does NOT reproduce
+        // that: MSVC then strength-reduces the mErrorNodes index into a `li
+        // r25, 0x18` running offset and loses the `addi r25, r3, 0x18`
+        // entirely.  98.40 -> 97.40.  Kept the local.
         const FilterVersion *filterVer = inFrame->mFilterVersion;
         BaseSkeleton *skel = skelData.mSkeletonsLeft[inFrame->mSlot];
 #ifdef HX_NATIVE
@@ -135,5 +144,20 @@ void FilterQueue::Poll(const SkeletonUpdateData &skelData) {
         }
     }
     mJobFinished = true;
-    mLastPollMs = Timer::CyclesToMs(timer.Stop());
+    // `timer.Stop(); timer.Ms();`, NOT `CyclesToMs(timer.Stop())`.  The image's
+    // not-taken arm of the inlined `--mRunning == 0` test is a bare
+    // `ld r11, 0x68(r1)` (mCycles), and its taken arm is `ld r9, 0x68(r1)` /
+    // `subf` / `rldicl` / `add r11, r11, r9` -- i.e. the value handed to
+    // CyclesToMs is mCycles, with Stop()'s store to mCycles dead because the
+    // Timer is a stack local.  Feeding Stop()'s RETURN value instead makes the
+    // not-taken arm `li r11, 0` and loses the `ld`/`add` pair entirely.
+    //
+    // Do NOT "fix" this by making Timer::Stop() return mCycles: measured
+    // binary-wide (full ninja + compare_progress), that spelling buys 20 bytes
+    // here and costs 217 across AutoTimer::~AutoTimer (100.0 -> 69.9),
+    // CameraTilt::Poll (100.0 -> 89.2) and FlowManager::Poll (100.0 -> 95.9),
+    // all three of which are at 100% precisely because Stop() returns the
+    // interval.
+    timer.Stop();
+    mLastPollMs = timer.Ms();
 }

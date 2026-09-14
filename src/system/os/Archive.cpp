@@ -293,12 +293,16 @@ void Archive::Merge(Archive &shadow) {
     for (size_t i = 0; i < mArkfileSizes.size(); i++) {
         totalSize += mArkfileSizes[i];
     }
-    // The target hoists SHADOW's hash table (`addi r25, r23, 0x34` before the
-    // loop) and recomputes `this->mHashTable` inside it, not the other way round.
-    auto& _ref1 = shadow.mHashTable;
-    FOREACH (it, shadow.mFileEntries) {
-        const char *name = _ref1[it->mHashedName];
-        const char *path = _ref1[it->mHashedPath];
+    // The target hoists BOTH of shadow's members into references before the
+    // loop, the file vector first: `addi r21, r23, 0x28` then
+    // `addi r25, r23, 0x34`.  It then reads the loop bound through the first of
+    // them (`lwz r11, 0x4(r21)`) rather than off the object (`lwz r11,
+    // 0x2c(r23)`), and recomputes `this->mHashTable` inside the loop.
+    std::vector<FileEntry> &shadowFiles = shadow.mFileEntries;
+    ArkHash &shadowHash = shadow.mHashTable;
+    FOREACH (it, shadowFiles) {
+        const char *name = shadowHash[it->mHashedName];
+        const char *path = shadowHash[it->mHashedPath];
         FileEntry entry;
         entry.mHashedName = mHashTable.AddString(name);
         entry.mHashedPath = mHashTable.AddString(path);
@@ -310,6 +314,16 @@ void Archive::Merge(Archive &shadow) {
             fileIt->mUCSize = it->mUCSize;
         } else {
             FileEntry toAdd;
+            // Residual (5 rows): the image schedules `ld r11, 0x0(r29)` AFTER
+            // both push_back address operands (`addi r4, r31, 0x70`,
+            // `addi r3, r31, 0x58`); we emit the load first.  REFUTED (wave 7,
+            // lane w7-y): sinking this statement to the END of the block, so
+            // the store order becomes exactly the image's
+            // name/path/UCSize/Size/Offset, makes it WORSE -- 96.47 -> 95.55
+            // and one instruction longer, because MSVC then keeps the 64-bit
+            // add live across the four stores instead of interleaving it.
+            // The image's store order already matches this source order; only
+            // the load is scheduled differently, which is below the source.
             toAdd.mOffset = it->mOffset + totalSize;
             toAdd.mHashedName = entry.HashedName();
             toAdd.mHashedPath = entry.HashedPath();

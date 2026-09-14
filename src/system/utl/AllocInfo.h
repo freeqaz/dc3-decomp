@@ -67,7 +67,16 @@ public:
     __forceinline AllocInfoVec(int size)
         : mStart((AllocInfo **)DebugHeapAlloc(size * sizeof(AllocInfo *))), mEnd(mStart),
           mEndOfStorage(mStart + size) {}
-    ~AllocInfoVec() { DebugHeapFree(mStart); }
+    // NO destructor.  The shipped MemTracker::DiffDump carries pdata flag
+    // 0x40008603 -- the exception-handler bit CLEAR -- while DiffTblReport in
+    // the same TU is 0xC000A404, so DiffDump has no unwind region at all.  It
+    // nevertheless holds an AllocInfoVec at 0x50(r1) (its address is passed to
+    // the out-of-line AllocInfoVec::push_back) and frees that buffer with a
+    // single `bl DebugHeapFree` at the one normal exit.  A destructor-bearing
+    // local would have forced an unwind region; an explicit Free() call does
+    // not.  MemTracker itself is a never-destroyed global, so mFreedInfos does
+    // not need one either.
+    void Free() { DebugHeapFree(mStart); }
 
     AllocInfo **begin() { return mStart; }
     AllocInfo **end() { return mEnd; }

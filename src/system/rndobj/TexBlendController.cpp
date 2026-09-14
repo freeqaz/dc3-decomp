@@ -108,30 +108,70 @@ RndTexBlendController::GetBlendState(float &blend, float influence) const {
             state = kBlendCustom;
         } else {
             float dist;
-            if (GetCurrentDistance(dist) && (bool)(mReferenceDistance > 0.0f)) {
-                if (dist < mReferenceDistance) {
-                    float denom = mReferenceDistance - mMinDistance;
-                    if (denom > 0.0f) {
-                        state = kBlendNear;
-                        blend = (mReferenceDistance - Max(dist, mMinDistance)) / denom;
-                    }
-                } else if (dist > mReferenceDistance) {
-                    float denom = mMaxDistance - mReferenceDistance;
-                    if (denom > 0.0f) {
-                        state = kBlendFar;
-                        blend = (Min(dist, mMaxDistance) - mReferenceDistance) / denom;
+            if (GetCurrentDistance(dist)) {
+                // The image assigns BOTH a float and a bool in the two arms of
+                // this test -- the false arm carries a dead `fmr f0, f31`
+                // (refDist = 0.0f) alongside `li r11, 0` -- which is why it
+                // branches here instead of using the preset-and-clear bool
+                // idiom.  Same shape as IsValid()'s `distValid` above.
+                float refDist;
+                bool refValid;
+                if (mReferenceDistance > 0.0f) {
+                    refDist = mReferenceDistance;
+                    refValid = true;
+                } else {
+                    refDist = 0.0f;
+                    refValid = false;
+                }
+                if (refValid) {
+                    if (dist < refDist) {
+                        float denom = refDist - mMinDistance;
+                        if (denom > 0.0f) {
+                            state = kBlendNear;
+                            blend = (refDist - Max(dist, mMinDistance)) / denom;
+                        }
+                    } else if (dist > refDist) {
+                        float denom = mMaxDistance - refDist;
+                        if (denom > 0.0f) {
+                            state = kBlendFar;
+                            blend = (Min(dist, mMaxDistance) - refDist) / denom;
+                        }
                     }
                 }
             }
             float t2 = blend * blend;
             float t3 = blend * t2;
+            // Smoothstep.  MSVC canonicalises this into `fmuls 2.0*t3` +
+            // `fmsubs t2*3.0 - that`; the image keeps -2.0f as a literal and
+            // emits `fmadds t3, -2.0, t2*3.0` (so -2.0f survives as a literal).
+            // Four spellings measured, ALL byte-for-byte identical to this one:
+            // this order; the swapped addition `t2*3.0f + t3*(-2.0f)`; a
+            // two-statement accumulator `float s = t2*3.0f; s += t3*(-2.0f);`;
+            // and constant-first multiplies `3.0f*t2 + -2.0f*t3`.  MSVC
+            // canonicalises the addition before forming the FMA and fuses the
+            // term whose multiplicand is defined FIRST (t2) -- the opposite of
+            // the image's choice.  2 rows, and 4 more under name_check.
+            //
+            // Wave 7, lane w7-y: that "defined FIRST" reading was tested both
+            // ways and does not hold.  Hoisting `float t3;` above t2's
+            // definition and assigning it afterwards is INERT (still 6 rows).
+            // Defining t3 outright first, `float t3 = blend*blend*blend;
+            // float t2 = blend*blend;`, is WORSE -- CSE still emits t2's
+            // multiply first but now swaps its operands, adding a seventh row
+            // (6 -> 7).  Reverted.  What the image actually keeps is -2.0f as a
+            // LITERAL: MSVC rewrites any `a*3 + b*(-2)` we write into the
+            // subtraction `a*3 - b*2` and loads 2.0f instead, so the constant
+            // pair is downstream of the fusion choice, not a separate lever.
             blend = t3 * (-2.0f) + t2 * 3.0f;
         }
     }
 
     blend *= influence;
     blend = Clamp(0.0f, 1.0f, blend);
-    blend = (float)((long long)(blend * 255.0f) & 0xFF) * (1.0f / 255.0f);
+    // Quantise to 8 bits. The image narrows with a byte load out of the fctidz
+    // spill slot (`lbz r11, 0x57(r1)`), which is an `unsigned char` conversion;
+    // a `& 0xFF` on the 64-bit value spells `ld` + `rldicl` instead.
+    blend = (float)(unsigned char)(blend * 255.0f) * (1.0f / 255.0f);
     if (blend < 1.0f / 255.0f) {
         state = kBlendNone;
     }

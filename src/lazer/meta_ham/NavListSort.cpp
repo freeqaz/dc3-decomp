@@ -201,6 +201,20 @@ void NavListSort::ChangeHighlightHeader(int dir) {
         }
     }
 
+    // The image reaches the inlined Mod at 0x8297689C from BOTH arms
+    // (`addi r10, r31, 1; b` and `subi r10, r31, 1` falling in) and BYPASSES
+    // it on every path that decides not to move (`.L_829768E0`), so the
+    // obvious reading is that the Mod lives inside the arms and the two copies
+    // were tail-merged.  Three spellings of that reading were measured (wave 7,
+    // lane w7-y) and ALL are worse than this unconditional one, which already
+    // reproduces the same block layout:
+    //   Mod(idx+1)/Mod(idx-1) written out in each arm  ->  83.52 (MSVC
+    //     duplicates the whole size computation instead of merging);
+    //   `int delta` + `if (delta) idx = Mod(idx + delta, size)`  ->  87.13
+    //     (right block shape, but the add sinks into the shared block, so the
+    //     arms become `li r10, 1` / `li r10, -1` instead of addi/subi);
+    //   `int nextIdx` + `bool changed`  ->  85.13 (the flag costs two more
+    //     callee-saved registers and 0x10 of frame).
     nextIdx = Mod(nextIdx, mShortcutNodes.size());
 
     while (!mShortcutNodes[nextIdx]->IsActive()) {

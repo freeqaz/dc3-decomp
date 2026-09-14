@@ -19,35 +19,69 @@ bool IsEastAsianChar(wchar_t ch) {
         || (ch >= 0xFF00 && ch <= 0xFFDC);
 }
 
-bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
+// Hypothesis under test (wave 7, lane w7-y): the three binary searches are one
+// pair of inlined bool-returning helpers, which is what gives the image its
+// masked tail (`li r11, 0/1` + `clrlwi r3, r11, 24`) while plain `return false;`
+// stays an unmasked `li r3, 0` in its own block.
+static bool CantStartLine(wchar_t c, unsigned int option) {
     unsigned char result;
+    if (option & 1) {
+        int lo = 0, hi = 0x91;
+        do {
+            int mid = (hi - lo) / 2 + lo;
+            if (c == g_LineBreakTable[mid].ch) {
+                result = g_LineBreakTable[mid].cantBreakBefore;
+                goto done;
+            }
+            if ((unsigned short)c < (unsigned short)g_LineBreakTable[mid].ch)
+                hi = mid - 1;
+            else
+                lo = mid + 1;
+        } while (lo <= hi);
+    }
+    result = 0;
+done:
+    return result != 0;
+}
 
+static bool CantEndLine(wchar_t c, unsigned int option) {
+    unsigned char result;
+    if (option & 1) {
+        int lo = 0, hi = 0x91;
+        do {
+            int mid = (hi - lo) / 2 + lo;
+            if (c == g_LineBreakTable[mid].ch) {
+                result = g_LineBreakTable[mid].cantBreakAfter;
+                goto done;
+            }
+            if ((unsigned short)c < (unsigned short)g_LineBreakTable[mid].ch)
+                hi = mid - 1;
+            else
+                lo = mid + 1;
+        } while (lo <= hi);
+    }
+    result = 0;
+done:
+    return result != 0;
+}
+
+bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
     if (cur == start)
         return false;
 
+    // Attempt 2, INERT (wave 7, lane w7-y): reading g_uOption before the
+    // character -- the image's `lis r10, g_uOption@h` sits one slot ahead of its
+    // `lhz r31, 0x0(r3)` -- changes nothing, 97.60 either way.  The residual is
+    // that the image loads the character STRAIGHT into its callee-saved register
+    // and leaves `cur` in r3 for the function's whole life, while we copy `cur`
+    // into r5 first (`mr r5, r3`, our only insert) and stage the character
+    // through r3.  Nothing in the statement order reaches that choice.
     wchar_t ch = *cur;
     unsigned int option = g_uOption;
 
     // If current char is whitespace, check if next char can't start a line
     if (ch == 0x9 || ch == 0xD || ch == 0x20 || ch == 0x3000) {
-        wchar_t next = cur[1];
-        if (option & 1) {
-            int lo = 0, hi = 0x91;
-            do {
-                int mid = (hi - lo) / 2 + lo;
-                if (next == g_LineBreakTable[mid].ch) {
-                    result = g_LineBreakTable[mid].cantBreakBefore;
-                    goto ws_check;
-                }
-                if ((unsigned short)next < (unsigned short)g_LineBreakTable[mid].ch)
-                    hi = mid - 1;
-                else
-                    lo = mid + 1;
-            } while (lo <= hi);
-        }
-        result = 0;
-    ws_check:
-        if (result != 0)
+        if (CantStartLine(cur[1], option))
             return false;
     }
 
@@ -79,45 +113,7 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
     // Check if this is a valid break position
     if (ch == 0x9 || ch == 0xD || ch == 0x20 || ch == 0x3000
         || IsEastAsianChar(ch) || IsEastAsianChar(prev) || prev == 0x2D) {
-        // Check if current char can't start a line
-        if (option & 1) {
-            int lo = 0, hi = 0x91;
-            do {
-                int mid = (hi - lo) / 2 + lo;
-                if (ch == g_LineBreakTable[mid].ch) {
-                    result = g_LineBreakTable[mid].cantBreakBefore;
-                    goto before_check;
-                }
-                if ((unsigned short)ch < (unsigned short)g_LineBreakTable[mid].ch)
-                    hi = mid - 1;
-                else
-                    lo = mid + 1;
-            } while (lo <= hi);
-        }
-        result = 0;
-    before_check:
-        if (result == 0) {
-            // Check if previous char can't end a line
-            if (option & 1) {
-                int lo = 0, hi = 0x91;
-                do {
-                    int mid = (hi - lo) / 2 + lo;
-                    if (prev == g_LineBreakTable[mid].ch) {
-                        result = g_LineBreakTable[mid].cantBreakAfter;
-                        goto after_check;
-                    }
-                    if ((unsigned short)prev < (unsigned short)g_LineBreakTable[mid].ch)
-                        hi = mid - 1;
-                    else
-                        lo = mid + 1;
-                } while (lo <= hi);
-            }
-            result = 0;
-        after_check:
-            if (result == 0)
-                return true;
-        }
-        return false;
+        return !CantStartLine(ch, option) && !CantEndLine(prev, option);
     }
 
     return false;

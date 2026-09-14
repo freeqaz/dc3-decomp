@@ -632,17 +632,18 @@ bool HolmesClientOpen(const char *filename, int mode, unsigned int &fileSize, in
     } else {
         BeginCmd(Holmes::kOpenFile, true);
         unsigned char val = 3;
-        *gStreamBuffer << val << filename;
         // All four flag bits are extracted up front and parked in callee-saved
-        // registers (image: four consecutive `extrwi` at 0x825F1... for bits
-        // 1, 8, 9 and 18, in that order, before the first operator<<), and the
-        // extraction is UNSIGNED -- `extrwi`, not the `srawi`+mask an `int`
-        // shift produces.
+        // registers -- the image's four consecutive `extrwi` at 0x825F1E4C..58
+        // (bits 1, 8, 9 and 18, in that order) sit BEFORE the `bl Write` that
+        // lowers `<< val`, so the declarations have to precede that statement
+        // in the source.  The extraction is UNSIGNED -- `extrwi`, not the
+        // `srawi`+mask an `int` shift produces.
         unsigned int umode = mode;
         unsigned char isWriteMode = (umode >> 1) & 1;
         unsigned char writeFlag = (umode >> 8) & 1;
         unsigned char createFlag = (umode >> 9) & 1;
         unsigned char truncFlag = (umode >> 0x12) & 1;
+        *gStreamBuffer << val << filename;
         // Chained, not two statements: the image gives each flag its own byte
         // slot (0x50, 0x51, ...), which only happens while both operator<<
         // reference arguments are alive inside one full expression.

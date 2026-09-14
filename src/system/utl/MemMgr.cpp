@@ -759,8 +759,8 @@ MemHeapStack &ThreadMemStack(bool createIfMissing) {
     int idx;
     CritSecTracker tracker(gMemStackLock);
     if (gNumThreads == 0) {
-        gNumThreads = 1;
         gThreadIds[0] = GetCurrentThreadId();
+        gNumThreads = 1;
         idx = gThreadBufCurrentIndex;
     } else {
         DWORD currentThreadId = GetCurrentThreadId();
@@ -785,8 +785,17 @@ MemHeapStack &ThreadMemStack(bool createIfMissing) {
                 int cur = 0;
                 int activeCount = gNumThreads;
                 if (gNumThreads > 0) {
+                    // The walking pointer is a FRESH copy taken here, not
+                    // `threadIdSlot` itself: the image re-materialises it with
+                    // `mr r28, r24` immediately before this loop (exactly as it
+                    // does before the search loop above) and leaves the base in
+                    // r24 for the `gThreadIds[cur] = ...` stores further down.
+                    // Incrementing threadIdSlot instead keeps a second copy live
+                    // across the whole assert block and costs one extra
+                    // callee-saved register (__savegprlr_22 vs the image's _23).
+                    unsigned long *validateSlot = threadIdSlot;
                     do {
-                        if (!ValidateThreadId(*threadIdSlot)) {
+                        if (!ValidateThreadId(*validateSlot)) {
                             MILO_ASSERT(gThreadBuf[cur].mSize == 0, 0x12e);
                             MILO_ASSERT(gThreadBuf[cur].mTempRefs == 0, 0x12f);
                             gThreadIds[cur] = GetCurrentThreadId();
@@ -794,7 +803,7 @@ MemHeapStack &ThreadMemStack(bool createIfMissing) {
                             break;
                         }
                         cur++;
-                        threadIdSlot++;
+                        validateSlot++;
                         activeCount = gNumThreads;
                     } while (cur < gNumThreads);
                 }

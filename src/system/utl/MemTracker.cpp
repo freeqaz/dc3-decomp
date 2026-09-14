@@ -66,6 +66,11 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
     std::vector<MemDiffEntry> diffs;
     int curNum = curTable.GetNumStats();
     int prevNum = prevTable.GetNumStats();
+    // Sole residual row (98.83%): the image emits `add r4, r20, r22` BEFORE
+    // `addi r3, r31, 0x58`, we emit the object address first.  Both operand
+    // orders (`prevNum + curNum`) and hoisting the sum into its own unsigned
+    // local are exactly INERT -- 98.8 / same two rows / same registers -- so
+    // the ordering is the scheduler's, not the source's.
     diffs.reserve(curNum + prevNum);
 
     while (curIdx < curNum) {
@@ -83,22 +88,23 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
         const char *entryName;
 
         if (cmp < 0) {
+            entryName = curStat.mName;
             numAllocs1 = curStat.mNumAllocs;
             size1 = curStat.mSizeReq;
             numAllocs2 = 0;
-            size2 = 0;
             heap = curStat.mHeap;
+            size2 = 0;
             curIdx++;
-            entryName = curStat.mName;
         } else if (cmp > 0) {
+            entryName = prevStat.mName;
             numAllocs1 = 0;
             size1 = 0;
             numAllocs2 = prevStat.mNumAllocs;
             size2 = prevStat.mSizeReq;
             heap = prevStat.mHeap;
             prevIdx++;
-            entryName = prevStat.mName;
         } else {
+            entryName = curStat.mName;
             numAllocs1 = curStat.mNumAllocs;
             size1 = curStat.mSizeReq;
             numAllocs2 = prevStat.mNumAllocs;
@@ -106,7 +112,6 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
             heap = prevStat.mHeap;
             curIdx++;
             prevIdx++;
-            entryName = curStat.mName;
         }
 
         int numDiff = numAllocs1 - numAllocs2;
@@ -515,18 +520,18 @@ void MemTracker::DiffDump(TextStream &ts) {
 
             for (; allocIt != allocEnd || freedIt != mFreedInfos.end();) {
                 if (allocIt == allocEnd) {
-                    ColatedPrint(ts, *freedIt, "alloc");
+                    ColatedPrint(ts, *freedIt, "free");
                     freedIt++;
                 } else if (freedIt == mFreedInfos.end()) {
-                    ColatedPrint(ts, *allocIt, "free");
+                    ColatedPrint(ts, *allocIt, "alloc");
                     allocIt++;
                 } else {
                     int cmp = (*allocIt)->StackCompare(**freedIt);
                     if (cmp < 0) {
-                        ColatedPrint(ts, *allocIt, "free");
+                        ColatedPrint(ts, *allocIt, "alloc");
                         allocIt++;
                     } else if (cmp > 0) {
-                        ColatedPrint(ts, *freedIt, "alloc");
+                        ColatedPrint(ts, *freedIt, "free");
                         freedIt++;
                     } else {
                         allocIt++;
@@ -534,6 +539,7 @@ void MemTracker::DiffDump(TextStream &ts) {
                     }
                 }
             }
+            allocVec.Free();
         }
         ts << ")\n";
     }

@@ -134,6 +134,24 @@ long Voice::createOrReuse(
 
     MemPushTemp();
 
+    // The image almost certainly holds this in a CritSecTracker, not a bare
+    // pointer: right after the `addic. r30, r11, 0xb0` that both forms &unkb0
+    // and tests it, the image does `stw r30, 0x50(r31)` -- a store we have no
+    // reason to emit, and exactly CritSecTracker::mCritSec being materialised --
+    // and createOrReuse carries an unwind region (pdata 0xC000AF05, bit31 set)
+    // that a plain pointer local would not need.  The tracker's scope would end
+    // before the success bookkeeping, with MSVC duplicating the inlined
+    // destructor into both arms of the following `if (hr)`, which is what the
+    // two `bl Exit` sites look like (error one after MILO_FAIL, success one
+    // before the counter/memcpy work).
+    //
+    // MEASURED AND REJECTED (wave 7, lane w7-y): writing it that way -- tracker
+    // scope around the call plus the error print, then `if (hr) result = hr;
+    // else {...}` outside -- fixes the whole 16-row r29/r30 permutation, but our
+    // MSVC does NOT merge the second `if (hr)` into the duplicated destructor.
+    // It emits a fresh `cmpwi cr6, r28, 0x0` and re-lays the tail, losing the
+    // shared `bl MemPopTemp` block: 96.19 -> 94.06 (39 mismatch rows -> 26, but
+    // 7 of them deletes).  Kept the explicit spelling and named the loss.
     CriticalSection *cs = &TheXboxSynth->unkb0;
     if (cs) {
         cs->Enter();

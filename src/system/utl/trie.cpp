@@ -24,9 +24,22 @@ int Trie::store(const char *str) {
         if (c == 0) break;
     }
     int strLen = (int)(p - str) - 1;
-    int i = 0;
+    int i;
 
-    do {
+    // A `for`, not a `do`: the image guards loop entry with `clrrwi. r21, r11, 0`
+    // / `blt <tail>` -- MSVC's zero-trip test for `i = 0; i <= strLen` -- before
+    // falling into a bottom-tested body.  A do/while emits no such guard at all
+    // (95.00 -> 95.31; 4 deletes/2 replaces -> 3/3).  Residual there: we fuse the
+    // decrement into the test (`subic. r21, r11, 0x1`) where the image keeps
+    // `subi r11, r11, 0x1` and a separate record-form copy `clrrwi. r21, r11, 0`.
+    //
+    // Attempt 2, REFUTED: moving `parentIdx`'s declaration below the length walk
+    // to break the r23..r28 rotation (image: str=r23, extsb(ch)=r24, j=r25,
+    // sibCount=r26, parentIdx=r28; ours: parentIdx=r23 and everything else one
+    // slot later).  It does not rotate the group, it splits `i` off into r25 and
+    // sinks `li r28, 0x0`: 95.31 -> 93.90.  The rotation is 40 of the 47 residual
+    // rows and is not reachable by declaration order.
+    for (i = 0; i <= strLen; i++) {
         unsigned int nodeIdx = curIdx;
         char ch = str[i];
         check_index(nodeIdx);
@@ -82,9 +95,8 @@ int Trie::store(const char *str) {
             if (str[i] != '\0') goto fast_path;
         }
 
-    found:
-        i++;
-    } while (i <= strLen);
+    found:;
+    }
 
     goto done;
 

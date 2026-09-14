@@ -300,14 +300,20 @@ void Synth::DestroyPitchShift(FxSendPitchShift *shift) { delete shift; }
 
 float Synth::UpdateOverlay(RndOverlay *o, float y) {
     Hmx::Color white(1, 1, 1, 1);
-    float f24 = (float)TheRnd.Height() * (y + 0.265f);
+    // The PARAMETER is reused, not copied into a local: the image stores the
+    // scaled value into `y`'s home slot in the CALLER's frame (`stfs f0,
+    // 0x124(r1)` with its own frame only 0x100 deep) and hands that same
+    // address to every DrawMeterScale/DrawMeter as the `float &`.  A separate
+    // local costs its own slot at 0x50, pushes the Vector2 temp to 0x54 and
+    // adds 0x20 of frame.
+    y = (float)TheRnd.Height() * (y + 0.265f);
     if (mDebugStream) {
-        DrawMeterScale(f24);
+        DrawMeterScale(y);
         float volume = mDebugStream->Faders()->GetVolume();
-        DrawMeter(f24, volume, 0, "stream");
+        DrawMeter(y, volume, 0, "stream");
         for (int i = 0; i < mDebugStream->GetNumChannels(); i++) {
             DrawMeter(
-                f24,
+                y,
                 mDebugStream->ChannelFaders(i).GetVolume(),
                 0,
                 MakeString("chan %i", i)
@@ -315,7 +321,7 @@ float Synth::UpdateOverlay(RndOverlay *o, float y) {
         }
     }
     if (!mLevelData.empty()) {
-        DrawMeterScale(f24);
+        DrawMeterScale(y);
     }
     for (int i = 0; i < mLevelData.size(); i++) {
         float rms = RatioToDb(mLevelData[i].mRMS);
@@ -323,13 +329,31 @@ float Synth::UpdateOverlay(RndOverlay *o, float y) {
         if (rms > 2) {
             rms = -30;
         }
-        DrawMeter(f24, rms, peakhold, mLevelData[i].mName.c_str());
+        DrawMeter(y, rms, peakhold, mLevelData[i].mName.c_str());
     }
-    char buf[64];
-    sprintf(buf, "Total active Sequences: %d", SynthPollable::Pollables().size());
-    TheRnd.DrawString(buf, Vector2(100, f24), white, true);
-    float f12 = f24 + 12.0f;
-    FOREACH (it, SynthPollable::Pollables()) {
+    // buf is 40 bytes, not 64: it sits at 0x80(r1) on BOTH sides and the image's
+    // frame is 0x100 where ours was 0x120.  The save area is 0x58 deep below the
+    // caller's r1, so the image's locals must end by 0xa8 -- i.e. 0x28 bytes of
+    // buffer.  (Any size in 0x19..0x28 rounds to the same 0x100 frame; 0x28 is
+    // the largest that fits, and still covers the 25-char prefix plus an int.)
+    char buf[40];
+    // ONE begin(), shared by the count and the walk.  The image loads
+    // `sPollables.begin()` into a callee-saved register (r31) before sprintf and
+    // still has it after DrawString -- which a `Pollables().size()` call
+    // followed by a separate FOREACH cannot produce, because the intervening
+    // sprintf/DrawString calls stop MSVC from CSEing a load out of a global.
+    // Same shape RB3's Synth::UpdateOverlay carries.
+    int count = 0;
+    std::list<SynthPollable *>::iterator it = SynthPollable::Pollables().begin();
+    for (std::list<SynthPollable *>::iterator it2 = it;
+         it2 != SynthPollable::Pollables().end();
+         ++it2) {
+        ++count;
+    }
+    sprintf(buf, "Total active Sequences: %d", count);
+    TheRnd.DrawString(buf, Vector2(100, y), white, true);
+    float f12 = y + 12.0f;
+    for (; it != SynthPollable::Pollables().end(); ++it) {
         const char *name = (*it)->GetSoundDisplayName();
         if (*name != '\0') {
             TheRnd.DrawString(name, Vector2(100, f12), white, true);
