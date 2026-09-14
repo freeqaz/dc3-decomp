@@ -1418,6 +1418,10 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     int numSections = defSections > 1 ? defSections : 5;
     int numSegments = def.mNumSegments > 2 ? def.mNumSegments : 10;
 
+    // NEGATIVE RESULT (w7-am, 2026-09-14): swapping these two declarations to
+    // try to flip the r23<->r24 / r26<->r27 cascade keeps the score at 96.3
+    // (95 rows either way) and is very slightly worse on the raw ruler
+    // (94.2 vs 94.3), so the residual is not a declaration-order effect.
     int numRows = numSections + 1;
     int numCols = numSegments + 1;
     int kNumVerts = numRows * numCols;
