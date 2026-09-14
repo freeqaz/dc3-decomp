@@ -1050,13 +1050,17 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         Cross(lowerDir, upperDir, cross);
 
         const Transform &srcXfm = source->WorldXfm();
-        bool lidsOK =
+        // The target tests the dot product POSITIVE (`fcmpu; bgt`) and keeps the
+        // result as "the lids are crossed", so every use below is the plain
+        // variable rather than a negation.  Spelling this the other way round
+        // (`<= 0.0f` plus `!lidsOK` at each use) inverts four branches.
+        bool notLidsOK =
             cross.x * srcXfm.m.x.x + cross.y * srcXfm.m.x.y + cross.z * srcXfm.m.x.z
-            <= 0.0f;
+            > 0.0f;
 
         if (!sDisableEyeClamping) {
             DataNode &clampCheat = DataVariable("eyes.disable_clamping");
-            if (!clampCheat.Int(0) && !lidsOK) {
+            if (!clampCheat.Int(0) && notLidsOK) {
                 float midX =
                     (upperBlinkPos.x - lowerBlinkPos.x) * 0.5f + lowerBlinkPos.x;
                 float midY =
@@ -1107,7 +1111,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         if (drawCheat.Int(0)) {
             RndGraph *graph = RndGraph::GetOneFrame();
 
-            if (graph && !(lidsOK)) {
+            if (graph && notLidsOK) {
                 graph->AddSphere(
                     upperBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
                 );
@@ -1116,7 +1120,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
                     upperBlinkPos, 0.05f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f)
                 );
             }
-            if (graph && !(lidsOK)) {
+            if (graph && notLidsOK) {
                 graph->AddSphere(
                     lowerBlinkPos, 0.05f, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f)
                 );
@@ -1135,7 +1139,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
             Vector3 normalEnd(
                 cross.x + sourcePos.x, cross.y + sourcePos.y, cross.z + sourcePos.z
             );
-            if (graph && !(lidsOK)) {
+            if (graph && notLidsOK) {
                 graph->AddLine(
                     sourcePos, normalEnd, Hmx::Color(1.0f, 0.0f, 0.0f, 1.0f), false
                 );
@@ -1155,7 +1159,7 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
                 sourcePos, facingEnd, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), false
             );
 
-            if (!lidsOK) {
+            if (notLidsOK) {
                 Vector3 mid2(
                     (upperBlinkPos.x - lowerBlinkPos.x) * 0.5f + lowerBlinkPos.x,
                     (upperBlinkPos.y - lowerBlinkPos.y) * 0.5f + lowerBlinkPos.y,
