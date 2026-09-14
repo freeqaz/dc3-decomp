@@ -372,7 +372,7 @@ void DxRnd::BeginTiling(const Hmx::Color &c, float f, unsigned int ui) {
         D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(c), f, ui, 0);
     } else {
         XMVECTOR v = {c.red, c.green, c.blue, c.alpha};
-        D3DDevice_BeginTiling(mD3DDevice, 0, mNumTiles, &mTileRect, &v, f, ui);
+        D3DDevice_BeginTiling(mD3DDevice, 0, mNumTiles, mTileRects, &v, f, ui);
         mTilingActive = true;
     }
 }
@@ -748,32 +748,58 @@ void DxRnd::InitBuffers() {
     static Symbol rnd("rnd");
     static Symbol low_res("low_res");
     static Symbol force_hd("force_hd");
-    auto& _ref0 = mVideoMode.fIsHiDef;
     if (SystemConfig(rnd)->FindInt(force_hd) != 0) {
-        _ref0 = true;
+        mVideoMode.fIsHiDef = true;
         mVideoMode.fIsWideScreen = true;
     } else if (SystemConfig(rnd)->FindInt(low_res) != 0) {
         mFlags |= 1;
     }
-    mLowRes = mFlags & 1;
-    mAspect = mLowRes ? kWidescreen : kRegular;
-    mHeight = mLowRes ? 540 : 720;
-    int i11, i10;
-    if (_ref0 != 0 || mLowRes != 0) {
-        i11 = (mHeight << 4) / 9;
-        i10 = (mHeight << 4) / 9;
+    // 0x82619060: the bool at 0x1f8 is loaded from mVideoMode.fIsWideScreen
+    // (0x328), NOT from mFlags (0x37c), and mAspect is kWidescreen/kLetterbox
+    // (`addi r11, r11, 0x2`), not kWidescreen/kRegular.  mHeight keys off the
+    // low_res bit in mFlags directly (the `clrlwi.` at 0x8261906C feeds the
+    // `beq` at 0x82619090).
+    mLowRes = mVideoMode.fIsWideScreen != 0;
+    mAspect = mLowRes ? kWidescreen : kLetterbox;
+    mHeight = (mFlags & 1) ? 540 : 720;
+    int tileHeight = mHeight;
+    int tileWidth;
+    int width;
+    if (mVideoMode.fIsHiDef != 0 || mLowRes != 0) {
+        width = (mHeight << 4) / 9;
+        tileWidth = (mHeight << 4) / 9;
     } else {
-        i11 = (mHeight << 2) / 3;
-        i10 = (mHeight << 2) / 3;
+        width = (mHeight << 2) / 3;
+        tileWidth = (mHeight << 2) / 3;
     }
-    mWidth = i11;
+    mWidth = width;
     if (!(mFlags & 1)) {
         mNumTiles = 2;
+        // 0x826190EC-0x8261916C: two tile rects covering the frame.  Bit 1 of
+        // mFlags picks a horizontal split line (stacked tiles, full width,
+        // half height) over the default vertical one (side-by-side tiles,
+        // half width, full height).  The loop re-reads mNumTiles from the
+        // member every iteration (`lwz r8, 0x3b0(r30)`).
+        int i = 0;
+        int offset = 0;
         if (mFlags & 2) {
-            i11 = i11 / 2;
-            i10 = i10 / 2;
+            tileHeight = tileHeight / 2;
+            for (; i < mNumTiles; i++) {
+                mTileRects[i].x1 = 0;
+                mTileRects[i].y1 = offset;
+                mTileRects[i].x2 = tileWidth;
+                mTileRects[i].y2 = offset + tileHeight;
+                offset += tileHeight;
+            }
         } else {
-            i10 = i10 / 2;
+            tileWidth = tileWidth / 2;
+            for (; i < mNumTiles; i++) {
+                mTileRects[i].x1 = offset;
+                mTileRects[i].y1 = 0;
+                mTileRects[i].x2 = offset + tileWidth;
+                mTileRects[i].y2 = tileHeight;
+                offset += tileWidth;
+            }
         }
     }
     mPresentParams.Windowed = 0;
@@ -783,6 +809,14 @@ void DxRnd::InitBuffers() {
     mPresentParams.BackBufferHeight = mHeight;
     mPresentParams.PresentationInterval = 0;
     mPresentParams.SwapEffect = D3DSWAPEFFECT_DISCARD;
+    mPresentParams.RingBufferParameters.SecondarySize = 0x600000;
+    mPresentParams.RingBufferParameters.SegmentCount = 12;
+    D3DVIDEO_SCALER_PARAMETERS &scaler = mPresentParams.VideoScalerParameters;
+    scaler.ScalerSourceRect.x1 = 0;
+    scaler.ScalerSourceRect.y1 = 0;
+    scaler.ScalerSourceRect.x2 = mWidth;
+    scaler.ScalerSourceRect.y2 = mHeight;
+    scaler.FilterProfile = 0;
     UpdateScalerParams();
     mRenderThreadId = GetCurrentThreadId();
     {
@@ -802,7 +836,7 @@ void DxRnd::InitBuffers() {
         EndMemTrackObjectName();
         BeginMemTrackObjectName("CreateBackBuffers:UI");
         CreateBackBuffers(
-            i10, i11, D3DMULTISAMPLE_2_SAMPLES, mEdramBase, mEdramHzBase, mOffscreenRT, mOffscreenDepth
+            tileWidth, tileHeight, D3DMULTISAMPLE_2_SAMPLES, mEdramBase, mEdramHzBase, mOffscreenRT, mOffscreenDepth
         );
     } else {
         MILO_ASSERT(mNumTiles == 0, 0x37E);
