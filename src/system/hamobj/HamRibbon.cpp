@@ -275,10 +275,9 @@ void HamRibbon::UpdateChase() {
                 if (angle != -1.0f) {
                     Hmx::Matrix3 inv;
                     Invert(result.m, inv);
-                    Vector3 localSmooth;
-                    Multiply(smoothDir, inv, localSmooth);
-                    float clamped = Clamp(0.0f, 1.0f, localSmooth.x);
-                    float a = std::acos(clamped);
+                    Multiply(smoothDir, inv, smoothDir);
+                    smoothDir.x = Clamp(0.0f, 1.0f, smoothDir.x);
+                    float a = std::acos(smoothDir.x);
                     float cosHalf = std::cos(angle * 0.5f);
                     float invCos = 1.0f / cosHalf;
                     float c = std::cos(a * 2.0f);
