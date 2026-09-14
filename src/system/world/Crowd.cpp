@@ -1045,6 +1045,24 @@ void WorldCrowd::DrawShowing() {
     // No cached reference to mPlacementMesh: the target never forms
     // `addi rX, r3, 0x48`, it re-reads `lwz r11, 0x54(this)` (the ObjPtr's raw
     // slot) at each use.
+    //
+    // Remaining at 94.9697 canonical (152 rows). The FPR permutation cascade is
+    // downstream of a STACK-SHAPE difference, so chase that first, not the
+    // registers:
+    //   - our frame is 0x270, the image's 0x290 -- we are 0x20 SHORT, and the
+    //     image has one stack object we do not emit at all (slot 0x170, the
+    //     RndEnvironTracker `tracker`; ours lives at 0x130). So this is a
+    //     missing/extra local, not spill shaping.
+    //   - `_at` (START_AUTO_TIMER) is at 0xd0 in the image and 0xe0 here, and
+    //     an 8-byte address object occupies the other slot on each side -- one
+    //     declaration-order swap at the top of the body.
+    //   - the `rects` vector is at 0x58 in the image (see __unwind$225663,
+    //     `addi r3, r31, 0x58` before ~vector<Hmx::Rect>) and 0x50 here.
+    // Two Function Call Diff rows here are ICF artifacts, NOT source bugs: the
+    // image's `erase` resolves to the vector<LightPreset::SpotlightDrawerEntry>
+    // instantiation and its MakeString to <char const[19],int,char const[5]>.
+    // Both are 16-byte-POD / any-4-byte-enum folds of our own instantiations --
+    // the same representative MakeString name appears in CamShotFrame::Interp.
     START_AUTO_TIMER("crowd_draw");
     if (!mPlacementMesh) return;
     Draw3DChars();
