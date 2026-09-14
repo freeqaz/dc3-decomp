@@ -136,10 +136,10 @@ void UsbMidiKeyboard::Poll() {
             // flat add chain (d<<2) + (c<<1) + (e<<3) + b; MSVC here reassociates
             // any spelling of this sum into a Horner chain instead. Tried '|',
             // explicit sub-grouping and term reordering -- all identical or worse.
+            int hhB = proData->unkbbool;
+            int hhE = proData->unkemiddle << 3;
             int hhD = proData->unkdbool << 2;
             int hhC = proData->unkcbool << 1;
-            int hhE = proData->unkemiddle << 3;
-            int hhB = proData->unkbbool;
             int highhand = hhD + hhC + hhE + hhB;
             if (highhand != TheKeyboard->GetHighHandPlacement(i)) {
                 TheKeyboard->SetHighHandPlacement(i, highhand);
