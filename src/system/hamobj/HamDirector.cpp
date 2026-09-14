@@ -3177,7 +3177,7 @@ CharClip *HamDirector::GetClipStartAndEndBeats(
     if (size != 0) {
         int byteOff = 0;
         do {
-            if ((*practiceSymbols)[foundIdx].value == clipName) goto found;
+            if (clipName == (*practiceSymbols)[foundIdx].value) goto found;
             foundIdx++;
             byteOff += 8;
         } while (foundIdx < size);
@@ -3185,8 +3185,18 @@ CharClip *HamDirector::GetClipStartAndEndBeats(
     foundIdx = 0xffffffff;
 found:
     if (foundIdx != 0xffffffff && (int)(foundIdx + 1) < (int)size) {
+        // Both practice keys are bound to references here.  The image forms
+        // &practiceSymbols[foundIdx] once (`slwi r10, r11, 3` / `add r28, r10,
+        // r9`, target idx 112/114, hoisted above the bounds branch) and
+        // &practiceSymbols[foundIdx+1] once (`addi r27, r28, 0x8`, target idx
+        // 119), then reads every later frame off `0x4(r28)` / `0x4(r27)`
+        // (target idx 176/187/199/205).  Re-spelling the subscript instead
+        // re-indexes at each of the four uses: `lwz r11, 0x0(r29)` +
+        // `add r11, r30, r11` per use, eight extra instructions.
+        Key<Symbol> &practiceKey = (*practiceSymbols)[foundIdx];
+        Key<Symbol> &nextPracticeKey = (*practiceSymbols)[foundIdx + 1];
         Keys<Symbol, Symbol> *clipSymbols = clipKeys->AsSymbolKeys();
-        int clipKeyIdx = clipSymbols->KeyLessEq((*practiceSymbols)[foundIdx].frame);
+        int clipKeyIdx = clipSymbols->KeyLessEq(practiceKey.frame);
         if ((unsigned int)clipKeyIdx >= clipSymbols->size()) {
 #ifndef HX_NATIVE
             stlpmtx_std::__stl_throw_out_of_range("vector");
@@ -3198,22 +3208,48 @@ found:
             return nullptr;
 #endif
         }
-        CharClip *clip = mClipDir->Find<CharClip>((*clipSymbols)[clipKeyIdx].value.Str(), true);
+        Key<Symbol> &clipKey = (*clipSymbols)[clipKeyIdx];
+        CharClip *clip = mClipDir->Find<CharClip>(clipKey.value.Str(), true);
         if (clip) {
-            float beat1 = SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f));
-            float clipStartBeat = clip->StartBeat();
-            int loopCount = (clip->PlayFlags() >> 12) & 0xF;
+            // BEHAVIOURAL FIX (w7-aq): this seeds from the CLIP key's frame,
+            // not the practice key's.  The image keeps &clipSymbols[clipKeyIdx]
+            // in r29 (`add r29, r10, r11`, target idx 141 -- the same r10/r11
+            // the adjacent `lwzx r4, r10, r11` uses for .value) and reads this
+            // frame as `lfs f0, 0x4(r29)` at idx 149.  The practice key's frame
+            // is read separately, off r28, at idx 176.  We wrote
+            // practiceSymbols[foundIdx].frame here, the image reads
+            // clipSymbols[clipKeyIdx].frame -- which is also what the maths
+            // wants: loopAdjust has to be measured from where the CLIP starts
+            // in the song, not from where the practice section starts.
+            float beat1 = SecondsToBeat(clipKey.frame * (1.0f / 30.0f));
+            // loopCount is a FLOAT, and the guard is a float compare.  The
+            // image converts unconditionally (`std`/`lfd`/`fcfid`/`frsp`,
+            // target idx 164-167), seeds loopAdjust with 0.0 (`fmr f30, f0`),
+            // and tests `fcmpu cr6, f2, f0` against that same 0.0 -- note the
+            // plain `clrlwi` at idx 158 with NO record bit, so there is no
+            // integer comparison anywhere.  An `int loopCount` with
+            // `loopCount > 0` gives `clrlwi.` + `ble` and sinks the conversion
+            // into the taken arm.
+            float loopCount = (float)((clip->PlayFlags() >> 12) & 0xF);
             float loopAdjust = 0.0f;
-            if (loopCount > 0) {
-                loopAdjust = Mod(beat1 - clipStartBeat, (float)loopCount);
+            if (loopCount != 0.0f) {
+                loopAdjust = Mod(beat1 - clip->StartBeat(), loopCount);
             }
             float adjust = beat1 - loopAdjust;
-            startBeat = clipStartBeat;
-            startBeat += SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f)) - adjust;
-            endBeat = SecondsToBeat((*practiceSymbols)[foundIdx + 1].frame * (1.0f / 30.0f)) - adjust + clipStartBeat;
+            // clip->StartBeat() is spelled at each of its three uses: the image
+            // reloads `lwz r11, 0x40(r30)` / `lfs 0x0(r11)` at target idx
+            // 171/180/191.  Binding a `clipStartBeat` local caches it in f30
+            // and deletes two of the three.  And startBeat is ONE store --
+            // `startBeat = x - adjust + clip->StartBeat()`, target idx 182-184;
+            // the `startBeat = clipStartBeat; startBeat += ...` form emits a
+            // dead first store the image does not have.
+            startBeat =
+                SecondsToBeat(practiceKey.frame * (1.0f / 30.0f)) - adjust + clip->StartBeat();
+            endBeat = SecondsToBeat(nextPracticeKey.frame * (1.0f / 30.0f)) - adjust
+                + clip->StartBeat();
             if (range) {
-                range->first = SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f));
-                range->second = SecondsToBeat((*practiceSymbols)[foundIdx + 1].frame * (1.0f / 30.0f));
+                range->first = SecondsToBeat(practiceKey.frame * (1.0f / 30.0f));
+                range->second = SecondsToBeat(nextPracticeKey.frame * (1.0f / 30.0f));
                 return clip;
             }
             return clip;
