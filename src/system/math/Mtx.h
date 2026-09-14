@@ -520,6 +520,21 @@ inline void Multiply(const Hmx::Quat &q1, const Hmx::Quat &q2, Hmx::Quat &qres) 
 //     operand order in this body to v-first (`v.x * m.x.x + ...`).  All seven
 //     scored byte-identical -- MSVC canonicalises the commutative multiply, so
 //     operand order in the SOURCE is not a lever on this overload at all.
+//
+//   * ⚠ The call-site accumulator lever does NOT generalise to every site, and
+//     the failure mode is not local.  Lane w7-e (2026-09-14) applied it to
+//     RndParticleSys::InitParticle's aliasing `Multiply(particle->Vel3(),
+//     xfm->m, particle->Vel3())`, seeded from the Y term exactly as that
+//     target does, and the function fell 99.2943 -> 98.5 canonical.  The
+//     rows it was aiming at did move, but the five extra named floats and the
+//     `Vector3 &`/`Matrix3 &` aliases changed the whole function's register
+//     assignment: a fresh r25<->r26 swap appears at index 49, ~600
+//     instructions BEFORE the call site, and the charged row count goes 73 ->
+//     106.  Spotlight::UpdateTransforms and RndShadowMap::PrepShadow are short
+//     functions whose body is essentially the one call; in a 2,700-byte
+//     function with 30 live floats the accumulators cost more than the tree
+//     shape buys.  Check the function's size and register pressure before
+//     reaching for this, and measure the WHOLE function, not the cluster.
 inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
     vout.Set(
         m.x.x * v.x + m.y.x * v.y + m.z.x * v.z,

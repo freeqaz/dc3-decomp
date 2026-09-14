@@ -1791,6 +1791,13 @@ void RndParticleSys::InitParticle(
         xfm = &tf;
     }
     Multiply(particle->Pos3(), *xfm, particle->Pos3());
+    // These two inlined Multiply()s carry most of this function's residual
+    // (~30 charged rows). The target seeds each output component's FMA chain
+    // from a different matrix row than we do -- Y for all three at this site,
+    // and Y/X/X at the Bubble3 site below, so it is /fp:fast scheduling rather
+    // than one rule. Open-coding either one with per-component accumulators
+    // (the lever math/Mtx.h documents) is REFUTED here: 99.2943 -> 98.5. See
+    // the note on Multiply(Vector3, Matrix3, Vector3&) in math/Mtx.h.
     Multiply(particle->Vel3(), xfm->m, particle->Vel3());
     if (mBubble && mType == kFancy) {
         RndFancyParticle *fancyParticle = (RndFancyParticle *)particle;
