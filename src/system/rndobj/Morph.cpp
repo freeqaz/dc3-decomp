@@ -108,6 +108,24 @@ float RndMorph::InterpWeight(const Keys<float, float> &keys, float frame) {
     const Key<float> *next;
     float ref;
     keys.AtFrame(frame, prev, next, ref);
+    // RESIDUAL (w7-az, 94.41, 17 rows).  The image reads prev->value ONCE,
+    // ahead of the mSpline test, and lets the one register feed both arms:
+    // `lfs f0, 0x0(r11)` at 0x82716DF8 sits ABOVE `cmplwi r10, 0x0` /
+    // `beq .L_82716E64` at 0x82716DFC-0x82716E00, and that same f0 is what the
+    // spline arm's closing `fmadds f1, f13, f12, f0` (0x82716E5C) and the Interp
+    // arm's `fsubs f12, f12, f0` (0x82716E70) both consume.  We load it
+    // separately in each arm, which also puts prevVal in f12 and next->value in
+    // f0 where the image has them the other way round -- that is the whole
+    // f0<->f13 cascade.
+    // NEGATIVE (a 3.7pp LOSS, 94.41 -> 90.74): hoisting `float prevVal =
+    // prev->value;` above `if (mSpline)` does move that load to the right slot,
+    // but it frees `prev`'s register early and MSVC then hoists the `next`
+    // pointer load with it -- `lwz r11, 0x50(r1)` jumps above the branch and the
+    // Interp arm stops reloading it, where the image loads that slot twice,
+    // 0x82716E08 in the spline arm and 0x82716E64 in the Interp arm.  Net 22
+    // rows instead of 17.  Writing the else arm as
+    // `Interp(prev->value, ...)` rather than `Interp(prevVal, ...)` makes no
+    // difference: 90.74 either way.
     if (prev) {
         if (mSpline) {
             float prevVal = prev->value;
