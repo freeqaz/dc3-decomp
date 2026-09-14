@@ -851,6 +851,23 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     const Transform &xfm = mesh->WorldXfm();
 
     // Phase 1: Compute AO at each face center
+    // SURVEY 2026-09-14 (w7-ae), 87.1% canonical, 209 mismatch rows, no edit made.
+    // The residual is NOT arithmetic -- every fadds chain below already matches the
+    // image term for term.  Two measured structural facts, both about the accessor
+    // calls, are what is left:
+    //   (a) the image emits SIX `mulli rX, rIdx, 0x60` for one face (v1,v2,v3 for
+    //       .pos and again for .norm, at Geo-relative .L_82694628/4648/4694/46b0/
+    //       46d4 and the `mr r9, r22` at .L_826946f8), where MSVC CSEs ours down to
+    //       three.  The image also homes each index with `sth rX, 0x50(r31)` --
+    //       six dead halfword stores into the SAME slot that also carries the
+    //       inlined accessors' `this` (mixed-width slot sharing, see
+    //       docs/decomp/patterns/stack-slot-sharing.md).  Caching the Vert
+    //       references, as this code does, is what lets MSVC fold them.
+    //   (b) our whole frame is shifted: the image's shared home slot is 0x50 and
+    //       ours is 0x54, which alone accounts for ~40 diff_arg rows.
+    // Both are reachable only by finding the accessor spelling whose address the
+    // image hands to an inlined callee; guessing at it (unrolled index temps,
+    // per-component Verts() calls) was not attempted here.
     Hmx::Color aoResult;
     std::vector<Hmx::Color> faceAO(mesh->Faces().size(), aoResult);
     unsigned int f = 0;

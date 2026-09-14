@@ -1533,6 +1533,31 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     float bottomRadius = def.mBottomRadius;
     float topRadius = def.mLength;
 
+    // SURVEY 2026-09-14 (w7-ae), 88.1% canonical, 145 mismatch rows, no edit.
+    // The pos matrix-multiply block (diff rows 113-127) is structurally IDENTICAL
+    // to the image, term for term and store for store: both sides load y,z,x,
+    // both multiply by the ZERO elements rather than folding them away, both
+    // associate the three-term dot product left to right, and both store z,y,x in
+    // that order.  Exactly ONE row differs, and it is instruction selection for
+    // the -1 element:
+    //     target  .L_82684f80  fmadds f4, f4, f9, f1     (f9 = -1.0, hoisted from
+    //                                                     __real@bf800000 at
+    //                                                     .L_82684edc/.L_82684ee4,
+    //                                                     BEFORE the loop)
+    //     ours    0x10fc8      fsubs  f5, f2, f5
+    // i.e. the image carries the nine matrix elements in REGISTERS across the
+    // whole loop (f0 = 0.0, f13 = 1.0, f9 = -1.0) and therefore multiplies by a
+    // register, while our build still knows the multiplier is literally -1.0 at
+    // the multiply site and strength-reduces `a + b * -1.0f` to `a - b`.  That
+    // one choice is what forces the image to hold TWO callee-saved FPRs where we
+    // hold one (`stfd f30`/`stfd f31` vs `stfd f31`) and one extra GPR
+    // (`bl __savegprlr_22` vs `__savegprlr_23`), which is the whole reported
+    // frame delta of -0x10 and nearly all 21 register-swap pairs -- so the single
+    // fsubs row is worth ~12pp of renaming behind it.
+    // NOT a spelling of Multiply(): the association and store order it produces
+    // already match.  What would have to change is whether MSVC can see the
+    // literal at the multiply, and no value-preserving source form of a
+    // Matrix3 built from literals was found that hides it.  Recorded, not fixed.
     Hmx::Matrix3 rot;
     rot.Set(1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f);
 
