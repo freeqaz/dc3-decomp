@@ -644,10 +644,12 @@ void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
             }
         }
         if (offer->OfferType() == song_sym) {
-            // push_back(offer), not push_back(*it): the image spills the named
-            // pointer to 0x60 and passes its address, where *it would have let
-            // the iterator itself serve as the const-reference argument.
-            song_offers.push_back(offer);
+            // A block-scoped copy, not `offer` itself: the store to 0x60 lands
+            // here next to the push_back rather than being hoisted to the top of
+            // the loop body where `offer` is first defined, and the word is then
+            // shared with cur_type below, whose first definition is later.
+            StoreOffer *songOffer = offer;
+            song_offers.push_back(songOffer);
         }
         Symbol pushName = offer->StoreOfferData()->Sym(0);
         song_names.push_back(pushName);
