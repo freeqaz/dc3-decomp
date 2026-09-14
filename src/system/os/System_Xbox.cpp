@@ -69,73 +69,79 @@ Symbol GetSystemLanguage(Symbol s) {
     unsigned long lang = ULSystemLanguage();
     unsigned long locale = ULSystemLocale();
 
+    // The image RETURNS out of both switches; it never assigns to `s`.  It
+    // spills the parameter once at entry (stw r4, 0x11c(r31), 0x825E0734) and
+    // reads that slot back in exactly one place -- the default arm at
+    // 0x825E0BCC -- while every other arm loads its Symbol and branches to the
+    // common return store at 0x825E0BD0 (stw r11, 0x0(r26); mr r3, r26).
+    //
+    // Two behavioural bugs this fixes, both invisible to the old `s = ...;
+    // break;` spelling:
+    //  * The locale switch's five Nordic arms returned immediately in the image
+    //    (0x825E0A74/78 swe, 0x825E0A90/94 nor, 0x825E0AAC/B0 dut,
+    //    0x825E0AC8/CC fin, 0x825E0AE4/E8 dan -- each `lwz r11, 0x0(rN)` then
+    //    `b .L_825E0BD0`).  Assigning and falling through let the language
+    //    switch below overwrite the choice, so e.g. a Swedish console reporting
+    //    XC_LANGUAGE_ENGLISH came out `eng` instead of `swe`.
+    //  * The Spanish arm returns `esl` for every locale that is not Chile,
+    //    Colombia or Mexico (0x825E0B74 `bne cr6, .L_825E0B94`, and
+    //    .L_825E0B94 is `lwz r11, 0x0(r15)` = esl).  We left `s` untouched
+    //    there, returning the caller's fallback instead of Spanish.
     switch (locale) {
     case XC_LOCALE_SWEDEN:
         if (IsSupportedLanguage(swe, false))
-            s = swe;
+            return swe;
         break;
     case XC_LOCALE_NORWAY:
         if (IsSupportedLanguage(nor, false))
-            s = nor;
+            return nor;
         break;
     case XC_LOCALE_NETHERLANDS:
         if (IsSupportedLanguage(dut, false))
-            s = dut;
+            return dut;
         break;
     case XC_LOCALE_FINLAND:
         if (IsSupportedLanguage(fin, false))
-            s = fin;
+            return fin;
         break;
     case XC_LOCALE_DENMARK:
         if (IsSupportedLanguage(dan, false))
-            s = dan;
+            return dan;
     default:
         break;
     }
 
     switch (lang) {
     case XC_LANGUAGE_ENGLISH:
-        s = dut;
         if (locale == XC_LOCALE_BELGIUM && IsSupportedLanguage(dut, false))
-            break;
+            return dut;
     case XC_LANGUAGE_SCHINESE:
-        s = eng;
-        break;
+        return eng;
     case XC_LANGUAGE_JAPANESE:
-        s = jpn;
-        break;
+        return jpn;
     case XC_LANGUAGE_GERMAN:
-        s = deu;
-        break;
+        return deu;
     case XC_LANGUAGE_FRENCH:
-        s = fre;
-        break;
+        return fre;
     case XC_LANGUAGE_SPANISH:
         if (locale == XC_LOCALE_CHILE || locale == XC_LOCALE_COLOMBIA
             || locale == XC_LOCALE_MEXICO) {
             if (IsSupportedLanguage(mex, false))
-                s = mex;
-            else
-                s = esl;
+                return mex;
         }
-        break;
+        return esl;
     case XC_LANGUAGE_ITALIAN:
-        s = ita;
-        break;
+        return ita;
     case XC_LANGUAGE_KOREAN:
-        s = kor;
-        break;
+        return kor;
     case XC_LANGUAGE_TCHINESE:
-        s = cht;
-        break;
+        return cht;
     case XC_LANGUAGE_PORTUGUESE:
-        s = ptb;
-        break;
+        return ptb;
     case XC_LANGUAGE_POLISH:
-        s = pol;
-        break;
+        return pol;
     case XC_LANGUAGE_RUSSIAN:
-        s = rus;
+        return rus;
     default:
         break;
     }
