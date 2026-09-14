@@ -449,13 +449,18 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 if (hitBoundary)
                     return;
 
-                int step = direction > 0 ? 1 : -1;
-                changed = BuildScroll(step, curFirst, curSel, state);
+                // The image reuses the `direction` parameter's register (r25)
+                // for the normalised step rather than taking a fresh local:
+                // `cmpwi cr6,r25,0 / li r25,1 / bgt / li r25,-1` at 0x82784170,
+                // then `cmpwi cr6,r25,0x1` at 0x8278419C selects the arm and
+                // the epilogue at 0x8278423C re-tests the same r25.
+                direction = direction > 0 ? 1 : -1;
+                changed = BuildScroll(direction, curFirst, curSel, state);
 
                 // One boolean expression per arm, not an assignment per path:
                 // the target materialises 1/0 into r11 and ends both arms with
                 // a shared `clrlwi r30, r11, 24`.
-                if (step == 1) {
+                if (direction == 1) {
                     int maxFirst = MaxFirstShowing();
                     curFirst = state.mFirstShowing;
                     curSel = state.mSelected;
