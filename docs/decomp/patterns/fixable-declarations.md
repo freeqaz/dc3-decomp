@@ -1380,6 +1380,22 @@ reaching for it.
   **30,963 → 30,533 matched functions and 5,421,732 → 5,242,120 bytes
   (-430 / -179,612)**. Reverted. The member-direct form is what this binary was
   built with; `DoNext`'s load order comes from somewhere else.
+  - **Four more spellings refuted at the `DoNext` call site itself (2026-09-14,
+    lane w7-d), so the "somewhere else" is still open.** The site is
+    `if (++mCurrentIndex >= (int)mEntries.size() || b2)`. Applying
+    `end() - begin()` *locally at this one site* — which is NOT the refuted
+    header change, and does produce right-to-left evaluation — is far worse
+    than the header change was on this function: **99.1405 → 98.4**, 140
+    mismatch rows, a whole-function GPR permutation dominated by r23↔r25 (29
+    rows) because the two inlined iterator temporaries take stack slots.
+    Splitting the increment out (`++mCurrentIndex;` then
+    `if (mCurrentIndex >= …)`) is **byte-identical**. So is deleting the
+    `p0`/`p1` locals in the same function in favour of one chained expression,
+    and so is swapping the operands of the `p0 + p1` score sum — MSVC
+    canonicalises the commutative add, so **operand order in the source does
+    not decide which provider lands in r28 vs r29**. Treat the 9-row `size()`
+    cluster and the 2-row provider swap as one unresolved allocator
+    divergence, not as four independent leads.
 - **`ObjectDir::Save`'s 2-row residual is not the swap receiver and not the
   statement order.** `unused.swap(mInlinedDirs)` instead of
   `mInlinedDirs.swap(unused)` is **byte-identical** (same 2 rows, same
