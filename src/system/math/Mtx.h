@@ -596,6 +596,19 @@ inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
 // because of the trailing PAD word -- that is why the target's tail moves four
 // words per row (lwz/stw at +0x0/+0x4/+0x8/+0xc) instead of three, and why it
 // writes garbage into out's pad slots.
+//
+// Floor 80.7 canonical (lane w7-ay, 2026-09-14), consistent with the notes
+// above: the residual is FPR scheduling of the 27 products (the target keeps
+// f24-f31 and r30-r31 live, we keep f25-f31 and r31) and the store order.
+// Read from the target without building: vy and vz share one stack slot
+// (target -0x70, ours -0x60) so a `Matrix3 tmp` is out, and the +0xc pad copy
+// rules out `Set()` copies.  Built and measured, each a full ninja:
+// `Vector3 vz, vy, vx;` is inert (80.7, same rows); copy-out order z,y,x is
+// 77.8 and y,x,z is 80.0, so x,y,z stays.  One real lever surfaced: the copy
+// order decides which b element MSVC hoists above the alias branch -- z,y,x
+// hoists b.y.x, x,y,z hoists nothing, and the target hoists b.y.y
+// (`lfs f7, 0x14(r4)` at 0x8236E970 in CharLookAt.s).  The remaining orders
+// were not built.
 inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
     if (&b != &out) {
         Multiply(a.x, b, out.x);
