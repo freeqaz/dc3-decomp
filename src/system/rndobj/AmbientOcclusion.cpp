@@ -1068,8 +1068,17 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
     timer.Restart();
     PreprocessMesh();
 
-    unsigned int lastPercent = 0;
+    // 826A0324 `li r24, 0x0` precedes `li r22, 0x0`: progress is initialised
+    // before lastPercent.
+    //
+    // RESIDUAL (w7-am, 99.98 canonical): 7 rows remain, all one register
+    // naming swap r28<->r29 between the two strength-reduced induction
+    // variables of the vertex loop (the 0x60 byte offset into mVerts and the
+    // 0x64-stepped progress*100), together with the order in which their three
+    // `addi`s are emitted at the bottom of the loop.  The instruction sequence
+    // is otherwise identical.
     unsigned int progress = 0;
+    unsigned int lastPercent = 0;
     for (std::vector<RndMesh *>::iterator it = mObjectsReceive.begin();
          it != mObjectsReceive.end(); ++it) {
         RndMesh *mesh = *it;
