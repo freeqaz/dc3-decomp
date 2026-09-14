@@ -267,14 +267,42 @@ bool SkeletonClip::PrevSkeleton(
 ) const {
     if (skeleton.SkeletonIndex() == 0) {
         int frameIdx, loopCount;
-        const RecordedFrame *curRecorded = CurRecordedFrame(frameIdx, loopCount);
-        if (curRecorded) {
-            float curTime =
-                mRecordedFrames->back().mSongSeconds * loopCount + curRecorded->mSongSeconds;
+        if (CurRecordedFrame(frameIdx, loopCount)) {
+            // The image does not dereference the pointer CurRecordedFrame
+            // returned: it recomputes the element from the vector base and the
+            // out-param index -- `lwz r8,0x50(r31)` / `mulli r10,r8,0x1c8` /
+            // `lwz r11,0x0(r3)` / `add r11,r10,r11` / `lfs f10,0x1c4(r11)` at
+            // 825??? (idx 21/36/44/49/52 of the listing).  Spelling it that way
+            // makes our object exactly the target's size (320 == 320), gives it
+            // the target's frame, and leaves the two sides with an IDENTICAL
+            // instruction multiset in this block -- 11 inserts against 11
+            // deletes of the same opcodes.
+            // RESIDUAL (w7-am, 71.0 canonical): what is left is slot colouring.
+            // The image gives frameIdx and the int->double conversion scratch
+            // the SAME slot (0x50) and puts loopCount at 0x58, so it is forced
+            // to reload frameIdx before `std r10,0x50(r31)` clobbers it; we get
+            // three disjoint slots (frameIdx 0x50, loopCount 0x54, scratch
+            // 0x58) and therefore schedule the FP conversions ahead of the
+            // element address computation.
+            // NEGATIVE RESULT (w7-am, 2026-09-14): keeping the shorter, less
+            // faithful `curRecorded->mSongSeconds` scores 88.2 canonical, but
+            // it is 304 bytes against the target's 320 and is missing the
+            // mulli/add entirely; the faithful spelling is kept.  Swapping the
+            // declaration order of frameIdx/loopCount is inert.
+            const std::vector<RecordedFrame> &frames = *mRecordedFrames;
+            float curTime = frames.back().mSongSeconds * loopCount
+                + frames[frameIdx].mSongSeconds;
             float prevTime = curTime - targetMs * 0.00100000005f;
 
+            // The image passes the two out-params to RecordedFrameAt in the
+            // OPPOSITE order to the one it passed them to CurRecordedFrame:
+            // `addi r4,r31,0x50` / `addi r5,r31,0x58` for the first call
+            // against `addi r5,r31,0x58` / `addi r6,r31,0x50` for this one,
+            // with 0x50 holding the index (it feeds the mulli) and 0x58 the
+            // loop count (it feeds the fcfid).  Both are dead after this
+            // point, so it only shows up in the argument registers.
             const RecordedFrame *prevRecorded =
-                RecordedFrameAt(*mRecordedFrames, prevTime, frameIdx, loopCount);
+                RecordedFrameAt(*mRecordedFrames, prevTime, loopCount, frameIdx);
             if (prevRecorded) {
                 elapsedMs = (curTime - prevTime) * 1000.0f;
                 SkeletonFrame frame;
