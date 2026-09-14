@@ -306,39 +306,39 @@ const char *XboxMapFile::GetFunction(unsigned int ui, bool b2) {
     char lineA[2048];
     char wantedAddr[1024];
     char lineB[2048];
-    char *cur = lineA;
+    // Retail initialises `cur` and `prevName` between the sprintf and the first
+    // Tell(): addi r30, r1, 0x50 and addi r28, ""@l both sit at 0x825FBF10 /
+    // 0x825FBF14, after the sprintf at 0x825FBF04 and before the Tell bctrl.
     sprintf(wantedAddr, "%8x", ui);
-    int prevTell = mFile->Tell();
+    char *cur = lineA;
     const char *prevName = "";
+    int prevTell = mFile->Tell();
     while (!mFile->Eof()) {
         cur = cur == lineA ? lineB : lineA;
         int curTell = mFile->Tell();
         ReadLine(cur, 0x800);
-        char *name = &cur[0x15];
-        char *pCur = name;
+        char *pCur = &cur[0x15];
+        char *name = pCur;
         char c2 = *pCur;
         while (c2 != 0x20) {
             pCur++;
             c2 = *pCur;
         }
         *pCur = 0;
-        while (*++pCur == 0x20)
-            ;
+        // Retail's skip-blanks loop is a single `lbzu` compared with `cmplwi`
+        // at 0x825FBFAC -- an UNSIGNED byte compare, so the character is never
+        // sign-extended here.
+        unsigned char c3;
+        do {
+            c3 = *(unsigned char *)++pCur;
+        } while (c3 == 0x20);
         pCur[8] = 0;
 
-        // String comparison
-        const char *cmpBuf = wantedAddr;
-        char b3 = *cmpBuf;
-        char b4_1 = *pCur;
-
-        while (b3 != 0 && b3 == b4_1) {
-            cmpBuf++;
-            pCur++;
-            b3 = *cmpBuf;
-            b4_1 = *pCur;
-        }
-
-        if ((int)((unsigned char)b3 - (unsigned char)b4_1) < 0) {
+        // Retail's comparison at 0x825FBFC4 is MSVC's inlined strcmp: two
+        // zero-extending lbz, `subf` of the raw bytes, `cmpwi r9, 0` for the
+        // terminator and a final `cmpwi / blt`.  Spelling it out by hand with
+        // `char` temporaries costs six extsb/clrlwi that retail does not have.
+        if (strcmp(wantedAddr, pCur) < 0) {
             // The map is address-sorted: this line is past `ui`, so the symbol
             // that contains it is the one on the previous line.
             TryDemangleFunc(sBuffer, prevName);
