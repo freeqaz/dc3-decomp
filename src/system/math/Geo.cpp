@@ -1224,6 +1224,10 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
         // of each `+` first and contracts the first into fmadds, so a flat sum
         // P+Q+R lowers as Q,P,R and the source order is readable off the listing.
         const Plane &plane = node->plane;
+        // NEUTRAL: the b-term's operand order is a backend floor.  The image's
+        // fmadds is `fmadds f0, f10, f11, f0` with f10 = v.y (0x64) and
+        // f11 = plane.b (0x4(r30)); spelling it `v.y * plane.b` changes nothing
+        // (96.2 either way, same 12 mismatch rows).
         float dot = plane.b * v.y + (plane.c * v.z + plane.a * v.x) + plane.d;
         if (0.0f < dot)
             front = true;
@@ -1262,6 +1266,20 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
         bool res = Intersect(tf, splitPoly, node->right);
         return res;
     }
+    // NEGATIVE RESULT (96.2 floor).  The image shares ONE `li r3, 0x1` block
+    // (Geo.s, the instruction at function+0x180) between the `!node->right`
+    // early exit and this call's true arm, and falls through to a shared
+    // `li r3, 0x0` at function+0xd0:
+    //     beq cr6, +0x180        ; if (!child) return true
+    //     mr r4, r28 / mr r3, r27 / bl Intersect
+    //     clrlwi. r11, r3, 24
+    //     bne +0x180             ; return true
+    //     b   +0xd0              ; return false
+    // We instead duplicate `li r3, 0x1; b epilogue` for the !child case and
+    // lower this test branchlessly (`clrlwi` without the dot, then
+    // `subic`/`subfe`).  Writing it as `if (!Intersect(...)) return false;
+    // return true;` is exactly neutral (96.2, same 12 rows), as is swapping
+    // the b-term's operands above.  Two neutral variants -- stopping.
     if (Intersect(tf, poly, child))
         return true;
     return false;
