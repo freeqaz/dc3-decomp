@@ -306,6 +306,13 @@ void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
     const Vector3 &normal = (const Vector3 &)plane.a;
     float dotX = Dot(trans.m.x, normal);
     float dotY = Dot(trans.m.y, normal);
+    // Declaring dotZ AFTER the ray.dir.Set() call -- which is where the image
+    // finishes it (fmadds f12,f8,f3,f11 at 0x82534E10, after both dir stores and
+    // after fabs(dotX)) -- is a REGRESSION, 90.7 -> 80.0 raw: it also splits the
+    // twelve-load block the image emits as one batch.  The residual five rows are
+    // MSVC's scheduling of that last fmadds plus a provably DEAD `fmr f12, f0`
+    // (a copy of dotX killed by the very next instruction), which is a register
+    // allocator artifact, not a source shape.
     float dotZ = Dot(trans.m.z, normal);
     ray.dir.Set(dotX, dotY);
     if (fabsf(dotY) > fabsf(dotX)) {
@@ -792,6 +799,15 @@ bool Intersect(const Segment &seg, const Sphere &sphere) {
     closest.x = dir_x;
     closest.y = dir_y;
     closest.z = dir_z;
+    // NEGATIVE RESULT.  The image emits the three `center - start` fsubs
+    // (Geo.s 0x82536E..: f7, f9, f8) BEFORE the `fcmpu cr6, f11, f10` zero-length
+    // early-out, interleaved one-per-component with the direction fsubs; ours
+    // land after the branch.  Two variants were tried and both are neutral:
+    // naming them as locals (toCenter_x/y/z) in the interleaved declaration
+    // positions gave 80.930 raw vs 80.944 baseline, and reordering the
+    // `closest` component stores to z,x,y was byte-neutral.  The residual is
+    // 37 register-swap instructions over 5 pairs (f0<->f13 alone is 16 of 37),
+    // i.e. scheduling, not a source shape.
     float a = dir_z * dir_z + dir_x * dir_x + dir_y * dir_y;
     if (a == 0.0f)
         return false;
