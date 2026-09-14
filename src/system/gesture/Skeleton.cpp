@@ -31,6 +31,53 @@ void SkeletonFrame::Init() {
     sUpVectorSmoother.ForceValue(Vector3(0, 1, 0));
 }
 
+// FILE scope, not function-local scope: the image materialises ONE base
+// (lbl_82F0BFD0 = sJointRemap) and reaches the other two tables by
+// displacement off it -- `addi r8, r3, 0xa0` (0xa0 == sizeof sJointRemap)
+// for sTrackingMap, `subi r7, r3, 0x4` for sJointTrackingMap -- which is
+// only possible if the three live contiguously in one .rdata section.
+// MSVC puts each FUNCTION-LOCAL static in its own COMDAT, so as locals they
+// emitted three separate lis/addi pairs against three mangled
+// `?sJointRemap@?1??Create@...` symbols and could never be folded.
+// NEGATIVE RESULT (w7-an, 2026-09-14): merely REORDERING the three
+// function-local statics to match the image's data order was byte-identical
+// inert (71.9 both ways, same 58/14/19/25 row counts) -- the COMDAT split is
+// what blocks the fold, not the order.  Moving them to file scope: 71.9 -> 74.0.
+static const int sJointRemap[kNumJoints][2] = {
+    {0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7},
+    {8, 8}, {9, 9}, {10, 10}, {11, 11}, {12, 12}, {13, 13}, {14, 14},
+    {18, 15}, {15, 16}, {16, 17}, {17, 18}, {19, 19}
+};
+static const SkeletonTrackingState sTrackingMap[] = {
+    kSkeletonNotTracked, kSkeletonPositionOnly, kSkeletonTracked
+};
+static const int sJointTrackingMap[] = { 0, 1, 2 };
+
+// XNAMath's XMVector3Transform, inlined.  The image's splat order (Z, Y, X)
+// and its multiply-add order (Z*r[2]+r[3], then Y*r[1], then X*r[0]) are that
+// function's body verbatim, in both of Create's loops, which is why it is
+// spelled as a helper here rather than open-coded twice.
+// RESIDUAL (w7-an, 74.0 canonical): the image RELOADS all four mat.r[] rows
+// inside each loop body -- `addi r5, r1, 0x90` / `lvx128 v63, r0, r5` and
+// three more, re-executed every iteration in the joint loop and again at the
+// top of the skeleton loop -- while MSVC hoists ours into the preheaders
+// (`lvx128 v0/v13/v12/v11`).  That is ~22 of the 99 remaining rows.
+// NEGATIVE RESULT (w7-an, 2026-09-14): neither passing the matrix by
+// `const XMMATRIX &` (this spelling) nor by `const XMMATRIX *` through a
+// named `const XMMATRIX *pmat = &mat;` blocks the hoist: all three spellings
+// produce a BYTE-IDENTICAL diff (74.0 canonical, same 45/14/16/24 row
+// counts).  MSVC fully forwards the inlined parameter back to the local, so
+// the loads are provably invariant whatever the indirection.
+static XMVECTOR XMVector3Transform(XMVECTOR V, const XMMATRIX &M) {
+    XMVECTOR Z = __vspltw(V, 2);
+    XMVECTOR Y = __vspltw(V, 1);
+    XMVECTOR X = __vspltw(V, 0);
+    XMVECTOR Result = __vmaddfp(Z, M.r[2], M.r[3]);
+    Result = __vmaddfp(Y, M.r[1], Result);
+    Result = __vmaddfp(X, M.r[0], Result);
+    return Result;
+}
+
 void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     mFrameNumber = nui_frame.dwFrameNumber;
     mElapsedMs = elapsed;
@@ -57,29 +104,14 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     gravVec.w = 0.0f;
     XMMATRIX mat = NuiTransformMatrixLevel(gravVec);
 
-    static const SkeletonTrackingState sTrackingMap[] = {
-        kSkeletonNotTracked, kSkeletonPositionOnly, kSkeletonTracked
-    };
-    static const int sJointTrackingMap[] = { 0, 1, 2 };
-    static const int sJointRemap[kNumJoints][2] = {
-        {0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7},
-        {8, 8}, {9, 9}, {10, 10}, {11, 11}, {12, 12}, {13, 13}, {14, 14},
-        {18, 15}, {15, 16}, {16, 17}, {17, 18}, {19, 19}
-    };
 
     // First pass: transform joint positions by gravity matrix
     XMVECTOR transformed[6 * kNumJoints];
     for (int s = 0; (unsigned int)s < 6; s++) {
         if (nui_frame.SkeletonData[s].eTrackingState == NUI_SKELETON_TRACKED) {
             for (int j = 0; j < kNumJoints; j++) {
-                XMVECTOR pos = nui_frame.SkeletonData[s].SkeletonPositions[j];
-                XMVECTOR sZ = __vspltw(pos, 2);
-                XMVECTOR sY = __vspltw(pos, 1);
-                XMVECTOR sX = __vspltw(pos, 0);
-                XMVECTOR result = __vmaddfp(sZ, mat.r[2], mat.r[3]);
-                result = __vmaddfp(sY, mat.r[1], result);
-                result = __vmaddfp(sX, mat.r[0], result);
-                transformed[s * kNumJoints + j] = result;
+                transformed[s * kNumJoints + j] =
+                    XMVector3Transform(nui_frame.SkeletonData[s].SkeletonPositions[j], mat);
             }
         }
     }
@@ -107,13 +139,7 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
         data.mClippedFlags = nuiSkel.dwEnrollmentIndex;
 
         // Transform hip center by gravity matrix
-        XMVECTOR hipPos = nuiSkel.Position;
-        XMVECTOR hZ = __vspltw(hipPos, 2);
-        XMVECTOR hY = __vspltw(hipPos, 1);
-        XMVECTOR hX = __vspltw(hipPos, 0);
-        XMVECTOR hipResult = __vmaddfp(hZ, mat.r[2], mat.r[3]);
-        hipResult = __vmaddfp(hY, mat.r[1], hipResult);
-        hipResult = __vmaddfp(hX, mat.r[0], hipResult);
+        XMVECTOR hipResult = XMVector3Transform(nuiSkel.Position, mat);
         data.mHipCenter.z = hipResult.z;
         data.mHipCenter.y = hipResult.y;
         data.mHipCenter.x = hipResult.x;

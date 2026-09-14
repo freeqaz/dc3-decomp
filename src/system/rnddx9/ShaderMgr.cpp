@@ -26,7 +26,11 @@
 
 DxShaderMgr TheDxShaderMgr;
 RndShaderMgr &TheShaderMgr = TheDxShaderMgr;
-DxShaderInclude &TheDxShaderInclude = DxShaderInclude();
+// A global OBJECT, not a reference: DxShader::Compile takes its address with a
+// bare `addi r25, r11, lbl_82F132BC@l` (0x8261D4C0) and reads the vptr straight
+// out of it (`lwz r11, lbl_82F132BC@l(r11)`).  A reference would be a pointer
+// variable and the image would have to load it first.
+DxShaderInclude TheDxShaderInclude;
 
 #pragma region DxShader
 
@@ -117,48 +121,63 @@ bool DxShader::Compile(
 
     LPCSTR data = nullptr;
     UINT bytes = 0;
-    if (TheDxShaderInclude.Open(
+    ID3DXInclude *include = &TheDxShaderInclude;
+    if (include->Open(
             D3DXINC_LOCAL, shaderName, nullptr, (LPCVOID *)&data, &bytes, nullptr, 0
         )
         < 0) {
         return false;
     }
 
-    buf1 = new DxShaderBuffer();
+    // The image compiles with ppConstantTable = NULL and a shared, zero-filled
+    // D3DXSHADER_COMPILE_PARAMETERS whose TempRegisterLimit is 36 -- it stores
+    // 0x24 into the struct at 0x824C.. (stw r9, 0xb0(r31), 0x8261D50C) and passes
+    // r31+0xa0 as the 11th argument of BOTH calls (stw at 0x64(r1)).  We used to
+    // pass &constantTable and a null parameter block.
+    const D3DXMACRO *macros = reinterpret_cast<const D3DXMACRO *>(defines.begin());
+    ID3DXBuffer *vError = nullptr;
+    ID3DXBuffer *pError = nullptr;
+    D3DXSHADER_COMPILE_PARAMETERS params;
+    memset(&params, 0, sizeof(params));
+    params.TempRegisterLimit = 36;
+
+    // The image reuses the pointer it just stored into buf1/buf2 rather than
+    // reloading it through the reference: `mr r11, r3` then `addi r10, r11, 0x4`
+    // at 0x8261D558, where we emitted `lwz r11, 0x0(r23)` first.
+    DxShaderBuffer *vBuf = new DxShaderBuffer();
+    buf1 = vBuf;
 
     defines[0].Value = "0";
-    ID3DXBuffer *vError = nullptr;
-    ID3DXConstantTable *constantTable = nullptr;
     HRESULT vRes = D3DXCompileShaderExA(
         data,
         bytes,
-        reinterpret_cast<const D3DXMACRO *>(defines.begin()),
+        macros,
         &TheDxShaderInclude,
         "vshader",
         "vs_3_0",
         0,
-        &static_cast<DxShaderBuffer *>(buf1)->mBuffer,
+        &vBuf->mBuffer,
         &vError,
-        &constantTable,
-        nullptr
+        nullptr,
+        &params
     );
 
-    buf2 = new DxShaderBuffer();
+    DxShaderBuffer *pBuf = new DxShaderBuffer();
+    buf2 = pBuf;
 
     defines[0].Value = "1";
-    ID3DXBuffer *pError = nullptr;
     HRESULT pRes = D3DXCompileShaderExA(
         data,
         bytes,
-        reinterpret_cast<const D3DXMACRO *>(defines.begin()),
+        macros,
         &TheDxShaderInclude,
         "pshader",
         "ps_3_0",
         0,
-        &static_cast<DxShaderBuffer *>(buf2)->mBuffer,
+        &pBuf->mBuffer,
         &pError,
-        &constantTable,
-        nullptr
+        nullptr,
+        &params
     );
 
     bool failed = vRes < 0 || pRes < 0;

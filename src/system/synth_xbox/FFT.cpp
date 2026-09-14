@@ -28,6 +28,31 @@ static FftScratch g_fftScratch;
 // Real-input forward FFT (scalar). Computes a half-length complex FFT then
 // recombines the bins. data holds size real samples (treated as size/2 complex
 // pairs); context is FFTComplex scratch.
+//
+// Three spellings in here are load-bearing (w7-an, 80.9 -> 83.7 canonical):
+//  * the loop bound is `size >> 2` written INLINE.  Lifted into a
+//    `unsigned int count` local it becomes a provable trip count and MSVC
+//    converts the loop to CTR (`mtctr` / `bdnz`); the image keeps an explicit
+//    `k` against `size >> 2` in r8 (`addi r9, r9, 0x1` / `cmplw cr6, r9, r8` /
+//    `blt`, 0x82E50A4C-0x82E50ABC).  Same lever as CalculateSinCosTable below.
+//  * `hi` is `data + size - 2`, indexed `hi[1]` / `hi[0]`, NOT `data + size`
+//    with `hi[-1]` / `hi[-2]`.  The image computes `subi r10, r30, 0x2` /
+//    `slwi` / `add` and then biases `+0x8` inside the loop preheader
+//    (0x82E509D4, 0x82E50A18) -- the bias is MSVC's, so the source value it
+//    started from is data+size-2.
+//  * the low half is subscripted off `data`, not walked with a `float* lo`.
+//    A source-level `lo += 2` makes MSVC keep the pointer's own induction
+//    variable; the image's low-half base is a compiler-created one.
+//
+// RESIDUAL (w7-an, 83.7 canonical): 51 rows, all register numbering plus the
+// preheader schedule it drives.  The image puts `c` in f13 / `s` in f0 and
+// `hi_im` in f7 / `lo_im` in f8; we get each pair the other way round, which is
+// 19 of the 51.  Swapping the two declarations is byte-for-byte inert (tried).
+// The remaining lo-side rows are one bias: the image stores `lo[1]` with a
+// plain `stfs 0x4(r11)` and advances with two `addi`, we merge the advance into
+// `stfsu f9, 0x8(r11)` and bias the base -4.  Walking `lo` by hand, advancing
+// it before the stores, and subscripting off `data` all produce the merged
+// form; only the image's register colouring would avoid it.
 int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
     if (size < 2) {
         return 0;
@@ -44,23 +69,21 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
             // DC / Nyquist bins.
             float re0 = data[0];
             float im0 = data[1];
+            data[1] = re0 - im0;
             double c = 1.0;
             double s = 0.0;
             float ss = (float)sin_2a;
-            data[1] = re0 - im0;
             data[0] = im0 + re0;
 
-            cc = cc * 2.0;
+            float* hi = data + size - 2;
 
-            unsigned int count = size >> 2;
-            float* lo = data + 2;
-            float* hi = data + size;
-            for (unsigned int k = 0; k < count; ++k) {
-                float hi_im = hi[-1];
-                float lo_im = lo[1];
+            cc = cc * 2.0;
+            for (unsigned int k = 0; k < (size >> 2); ++k) {
+                float hi_im = hi[1];
+                float lo_im = data[k * 2 + 3];
                 float diff_im = lo_im - hi_im;
-                float lo_re = lo[0];
-                float hi_re = hi[-2];
+                float lo_re = data[k * 2 + 2];
+                float hi_re = hi[0];
                 float sum_im = hi_im + lo_im;
                 float sum_re = hi_re + lo_re;
                 float diff_re = lo_re - hi_re;
@@ -82,12 +105,11 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
                 d = d - (double)sum_im * s;
                 e = e + (double)diff_re * s;
 
-                lo[0] = (float)a * 0.5f;
-                lo[1] = (float)b * 0.5f;
-                hi[-1] = (float)d * 0.5f;
-                hi[-2] = (float)e * 0.5f;
+                data[k * 2 + 2] = (float)a * 0.5f;
+                data[k * 2 + 3] = (float)b * 0.5f;
+                hi[1] = (float)d * 0.5f;
+                hi[0] = (float)e * 0.5f;
 
-                lo += 2;
                 hi -= 2;
             }
         }
@@ -102,6 +124,20 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
 // Builds a quarter-symmetric cos/sin twiddle table. table holds n/2 complex
 // (cos,sin) pairs; only the first quarter is computed via trig, the rest filled
 // by the (-sin, cos) symmetry. Small-n cases (n < 4) are special-cased.
+//
+// Two spellings carry this to 100 and neither is cosmetic (w7-an):
+//  * `n / 2` must be written INLINE in the subscript, not lifted into a
+//    `long half` local.  As a local it is an ordinary loop-invariant and MSVC
+//    strength-reduces `table[j + half]` into a second walking pointer
+//    (`stfs 0x4(rN)` / `stfsu 0x8(rN)`); written inline it is hoisted by the
+//    invariant pass instead and the address is rebuilt every iteration --
+//    `add r11, r29, r27` / `slwi` / `add r11, r11, r28`, which is what the
+//    image does.  75.0 -> 96.9 canonical on that change alone.
+//  * the `j` counter must be spelled `i * 2`, not carried as its own `long j`
+//    with `j += 2`.  A source-level `j` gets its `li 0` next to `i`'s, before
+//    the zero-trip guard; as a compiler-created induction variable its init
+//    lands in the loop PREHEADER after the invariant hoists, which is where
+//    the image's `li r29, 0x0` sits.  96.9 -> 100.0.
 int CalculateSinCosTable(long n, float* table) {
     if (n < 4) {
         table[0] = 1.0f;
@@ -114,23 +150,15 @@ int CalculateSinCosTable(long n, float* table) {
     }
 
     long count = n / 4;
-    if (count <= 0) {
-        return 0;
-    }
-    long half = n / 2;
     double twoPi = 6.2831854820251465;
-    float* p = table - 1;
-    long j = 0;
     for (long i = 0; i < count; ++i) {
         float angle = (float)((double)i * twoPi / (double)n);
         float cv = (float)cos(angle);
         float sv = (float)sin(angle);
-        p[1] = cv;
-        p += 2;
-        p[0] = sv;
-        table[j + half] = -sv;
-        table[j + half + 1] = cv;
-        j += 2;
+        table[i * 2] = cv;
+        table[i * 2 + 1] = sv;
+        table[i * 2 + n / 2] = -sv;
+        table[i * 2 + n / 2 + 1] = cv;
     }
     return 0;
 }
@@ -233,17 +261,16 @@ int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle
                     if (blk > 0) {
                         int ctr = blk;
                         do {
-                            float* hi = (float*)((char*)src + stride4);
-                            float t_im = src[1] - hi[1];
-                            float h_re = hi[0];
+                            float t_im = src[1] - *(float*)((char*)src + stride4 + 4);
+                            float h_re = *(float*)((char*)src + stride4);
                             float l_re = src[0];
                             float t_re = l_re - h_re;
                             dst[0] = h_re + l_re;
                             float l_im = src[1];
+                            dst[1] = l_im + *(float*)((char*)src + stride4 + 4);
                             src += 2;
-                            dst[1] = l_im + hi[1];
-                            *(float*)((char*)dst + blk8) = t_re * wr - t_im * wi;
-                            *(float*)((char*)dst + blk8 + 4) = t_re * wi + t_im * wr;
+                            dst[blk * 2] = t_re * wr - t_im * wi;
+                            dst[blk * 2 + 1] = t_re * wi + t_im * wr;
                             dst += 2;
                             ctr -= 1;
                         } while (ctr != 0);
@@ -280,18 +307,17 @@ int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle
                     int ctr = blk;
                     do {
                         float h_re = *(float*)((char*)src + stride4);
-                        float* hi = (float*)((char*)src + stride4);
                         float l_re = src[0];
                         float t_re = l_re - h_re;
-                        float t_im = src[1] - hi[1];
+                        float t_im = src[1] - *(float*)((char*)src + stride4 + 4);
                         float p_re = t_im * wi;
                         float p_im = t_im * wr;
                         dst[0] = (float)((double)(h_re + l_re) * scale);
                         float l_im = src[1];
+                        dst[1] = (float)((double)(l_im + *(float*)((char*)src + stride4 + 4)) * scale);
                         src += 2;
-                        dst[1] = (float)((double)(l_im + hi[1]) * scale);
-                        *(float*)((char*)dst + blk8) = (float)((double)(t_re * wr - p_re) * scale);
-                        *(float*)((char*)dst + blk8 + 4) = (float)((double)(t_re * wi + p_im) * scale);
+                        dst[blk * 2] = (float)((double)(t_re * wr - p_re) * scale);
+                        dst[blk * 2 + 1] = (float)((double)(t_re * wi + p_im) * scale);
                         dst += 2;
                         ctr -= 1;
                     } while (ctr != 0);
@@ -311,17 +337,16 @@ int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle
                 int stride4 = (int)size * 4;
                 int ctr = blk;
                 do {
-                    float* hi = (float*)((char*)src + stride4);
-                    float t_im = src[1] - hi[1];
+                    float t_im = src[1] - *(float*)((char*)src + stride4 + 4);
                     float h_re = *(float*)((char*)src + stride4);
                     float l_re = src[0];
                     float t_re = l_re - h_re;
                     dst[0] = h_re + l_re;
                     float l_im = src[1];
+                    dst[1] = l_im + *(float*)((char*)src + stride4 + 4);
                     src += 2;
-                    dst[1] = l_im + hi[1];
-                    *(float*)((char*)dst + blk8) = t_re * wr - t_im * wi;
-                    *(float*)((char*)dst + blk8 + 4) = t_re * wi + t_im * wr;
+                    dst[blk * 2] = t_re * wr - t_im * wi;
+                    dst[blk * 2 + 1] = t_re * wi + t_im * wr;
                     dst += 2;
                     ctr -= 1;
                 } while (ctr != 0);
@@ -902,6 +927,27 @@ XMVECTOR __vsubfp(XMVECTOR vSrcA, XMVECTOR vSrcB);
 // through a stack XMVECTORF32 at the end of every iteration: cLo/sLo carry
 // bins (2i, 2i+1) and cHi/sHi bins (2i+2, 2i+1), each value duplicated across
 // the real and imaginary lane of its complex slot.
+//
+// The loop bound is `size / 8` written INLINE in the condition: lifted into a
+// local it is a provable trip count and MSVC converts the loop to CTR
+// (`mtctr` / `bdnz`), where the image keeps `addi r29, r29, 1` /
+// `cmpw cr6, r29, r10` / `blt cr6` (0x82E50858-0x82E50904).  72.4 -> 79.1.
+//
+// RESIDUAL (w7-an, 79.1 canonical): the rest is VMX/FPR allocation and the
+// schedule it drives.  (a) The image homes perm_d/perm_e on the stack and
+// keeps sLo in a register for the whole loop; we keep both perm controls in
+// registers and spill sLo instead, which costs three extra vector memory ops
+// per iteration.  (b) The image walks the low half with two induction
+// variables (`addi r9, r31, 0x10` in the preheader, then `addi r8/r9, .., 0x10`
+// separately); MSVC folds ours into one, recomputing loRead as `loWrite + 16`
+// and rotating with `mr`.  (c) The double trig recurrence is scheduled
+// s-chain-first in our build and c-chain-first in the image.
+// NEGATIVE RESULT (w7-an, 2026-09-14): reversing the four `sv.f[n]` stores is
+// byte-for-byte inert; so is reversing the uc/us declarations, and so is
+// swapping the perm_d/perm_e declarations.  Reversing the four
+// `c1 = c1 - uc1` / `s1 = s1 - us1` updates buys +0.5pp but SHRINKS the frame
+// by 0x10 and changes the callee-save helpers, so it is a step away from the
+// image's prologue -- not kept.
 int fft_real_forward_altivec(float* data, long size, float* context) {
     int ret = FFTComplex(data, size / 2, -1, context);
     if (ret == 0) {
@@ -958,8 +1004,7 @@ int fft_real_forward_altivec(float* data, long size, float* context) {
         float* hiRead = data + (size / 4) * 4 - 4;
         float* hiWrite = hiRead;
 
-        long pairs = size / 8;
-        for (long i = 0; i < pairs; i++) {
+        for (long i = 0; i < size / 8; i++) {
             XMVECTOR hiNew = __lvx(hiRead, 0);
             XMVECTOR loNext = __lvx(loRead, 0);
             XMVECTOR hiPair = __vsel(hiNew, hiPrev, *(XMVECTOR*)&sel_hi);

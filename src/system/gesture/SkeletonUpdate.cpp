@@ -275,6 +275,14 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
     JoypadData *padData = JoypadGetPadData(0);
     float ry = padData->mSticks[1][0];
     if (ry > 0.5f) {
+        // RESIDUAL (w7-an, 82.1 canonical): the image RELOADS elbowRight.y
+        // (lfs f12, 0x1d8(r31)) and elbowRight.z (lfs f12, 0x1dc(r31)) to
+        // build the wrist, where MSVC forwards our just-stored values --
+        // which also drags the handRight = wristRight word copy forward into
+        // the middle of the shoulder loads.  Source order here already
+        // matches the image (z, x, y for the wrist); the divergence is
+        // MSVC's store-to-load forwarding, which no spelling of the reads
+        // reached.
         float shoulderX = data.mJointPositions[kJointShoulderRight].x;
         float shoulderY = data.mJointPositions[kJointShoulderRight].y;
         float shoulderZ = data.mJointPositions[kJointShoulderRight].z;
@@ -298,13 +306,29 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
         float rt = padData->mTriggers[1];
         float lt = padData->mTriggers[0];
         if (rt <= 0.5f || lt <= 0.5f) {
-            float rightZ = data.mJointPositions[kJointElbowRight].z - 0.5f;
-            float rightY = data.mJointPositions[kJointElbowRight].y + unk5398;
-            float rightX = -(rt * 0.5f - 0.1f) + data.mJointPositions[kJointElbowRight].x;
+            // The image computes each component and stores it before touching
+            // the next (fsubs -> stfs 0x58, fadds -> stfs 0x54, fnmsubs/fadds
+            // -> stfs 0x50), so this is written as direct field assignment
+            // rather than through rightZ/rightY/rightX locals.
+            // NEGATIVE RESULT (w7-an, 2026-09-14): that rewrite, `x + -(e)`
+            // vs `-(e) + x`, and flipping `elbow.y + unk5398` to
+            // `unk5398 + elbow.y` are ALL byte-identical here (82.1, same
+            // 52/6/10/13 rows).  MSVC normalises the temporaries away and
+            // still folds `x + -(rt*0.5f - 0.1f)` to fmsubs+fsubs where the
+            // image keeps fnmsubs+fadds, and still loads unk5398 before the
+            // joint field.  Kept for readability, not for score.
             PaddedJointPos rightPos;
-            rightPos.z = rightZ;
-            rightPos.y = rightY;
-            rightPos.x = rightX;
+            rightPos.z = data.mJointPositions[kJointElbowRight].z - 0.5f;
+            rightPos.y = data.mJointPositions[kJointElbowRight].y + unk5398;
+            rightPos.x =
+                data.mJointPositions[kJointElbowRight].x + -(rt * 0.5f - 0.1f);
+            // RESIDUAL (w7-an, 82.1 canonical): both sides assign handRight
+            // from the first materialised `addi rN, r1, 0x50` and wristRight
+            // from the second -- same registers, same eight words -- but the
+            // image schedules the two interleaved 16-byte copies in a
+            // different word order (0x200, 0x1f8, 0x1f4, 0x1fc, ... vs our
+            // 0x1f0, 0x200, 0x1f4, 0x1f8, ...).  That is backend scheduling,
+            // not a source shape: 39 of the 81 rows are the r9/r10 pairing.
             data.mJointPositions[kJointHandRight] = rightPos;
             data.mJointPositions[kJointWristRight] = rightPos;
         } else {
@@ -316,13 +340,13 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
 
     float lt = padData->mTriggers[0];
     if (lt > 0.0f && padData->mTriggers[1] == 0.0f) {
-        float leftZ = data.mJointPositions[kJointElbowLeft].z - 0.5f;
-        float leftY = data.mJointPositions[kJointElbowLeft].y + unk5398;
-        float leftX = data.mJointPositions[kJointElbowLeft].x + (lt * 0.5f - 0.25f);
+        // Direct field assignment, same reasoning (and same inertness) as the
+        // right-hand block above; the image's compute-and-store order here is
+        // y (0x54), z (0x58), x (0x50).
         PaddedJointPos leftPos;
-        leftPos.y = leftY;
-        leftPos.z = leftZ;
-        leftPos.x = leftX;
+        leftPos.y = data.mJointPositions[kJointElbowLeft].y + unk5398;
+        leftPos.z = data.mJointPositions[kJointElbowLeft].z - 0.5f;
+        leftPos.x = data.mJointPositions[kJointElbowLeft].x + (lt * 0.5f - 0.25f);
         data.mJointPositions[kJointWristLeft] = leftPos;
         data.mJointPositions[kJointHandLeft] = leftPos;
     }

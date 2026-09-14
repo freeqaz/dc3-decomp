@@ -67,17 +67,69 @@ void SkeletonExtentTracker::ApplyToMeshVerts(RndMesh *mesh, bool mirrored) const
     MILO_ASSERT(mesh->Verts().size() == 16, 0x43);
 
     int vertIdx = 0;
-    int direction = (-(unsigned int)mirrored & 0xFFFFFFFEu) + 1;
+    // A SELECT, not an arithmetic negation.  The image lowers `mirrored ? -1 : 1`
+    // to the 0/-1 mask idiom -- `subfic r11, r11, 0` + `subfe r11, r11, r11`
+    // (0x82624xxx), then `clrrwi r11, r11, 1` and `addi r11, r11, 1`.  Writing
+    // the mask out by hand as `(-(unsigned)mirrored & 0xFFFFFFFEu) + 1` gives a
+    // bare `neg` instead, because that negates the byte rather than testing it.
+    int direction = mirrored ? -1 : 1;
     float dir = (float)(long long)direction;
-    for (unsigned int i = 0; (int)i < 4; i++) {
-        float yFrac = i > 0 ? (i == 1 ? 0.2f : (i < 3 ? 0.8f : 1.0f)) : 0.0f;
-        float texY = (box.h * yFrac + box.y) * dir;
+    // Both fractions are 4-case SWITCHES with no default, not ternary chains.
+    // The image lowers each to MSVC's binary comparison tree for the dense
+    // range {0,1,2,3} -- `cmplwi rN, 1` / blt -> case 0, beq -> case 1,
+    // `cmplwi rN, 3` / blt -> case 2, `bne` -> past the whole chain, fall
+    // through to case 3 -- which lays the arms out in REVERSE source order
+    // (1.0, 0.8, 0.2, 0.0) with every branch forward.  A ternary chain lays
+    // them out in source order and has no bne-to-end arm at all.  The missing
+    // default is why the image seeds each fraction with a junk `lfs fN,
+    // 0x50(r1)` (the int64 scratch it just used for fcfid) before the tree.
+    // The counters are signed ints: the loop test is `cmpwi cr6, rN, 0x4`,
+    // while the switch's own range tests stay unsigned (`cmplwi`).
+    for (int i = 0; i < 4; i++) {
+        float yFrac;
+        switch (i) {
+        case 0:
+            yFrac = 0.0f;
+            break;
+        case 1:
+            yFrac = 0.2f;
+            break;
+        case 2:
+            yFrac = 0.8f;
+            break;
+        case 3:
+            yFrac = 1.0f;
+            break;
+        }
+        // Addend first: the image loads box.y (0x64(r1)) BEFORE box.h
+        // (0x6c(r1)) and folds with `fmadds f0, f6, f13, f0`.  Written as
+        // `box.h * yFrac + box.y` the loads come out in the other order.
+        float texY = (box.y + box.h * yFrac) * dir;
 
-        for (unsigned int j = 0; j < 4; j++) {
+        for (int j = 0; j < 4; j++) {
+            float xFrac;
+            switch (j) {
+            case 0:
+                xFrac = 0.0f;
+                break;
+            case 1:
+                xFrac = 0.2f;
+                break;
+            case 2:
+                xFrac = 0.8f;
+                break;
+            case 3:
+                xFrac = 1.0f;
+                break;
+            }
+            // Same addend-first rule: box.x (0x60(r1)) loads before box.w.
+            mesh->Verts()[vertIdx].tex.x = box.x + box.w * xFrac;
+            mesh->Verts()[vertIdx].tex.y = texY;
+            // Post-increment: the image computes `mulli r10, r9, 0x60` once in
+            // the preheader and bumps r9/r10 at the BOTTOM of the body, so the
+            // two stores use positive 0x40/0x44 displacements.  Incrementing
+            // first makes MSVC pre-bump the byte offset and store at -0x20/-0x1c.
             vertIdx++;
-            float xFrac = j < 1 ? 0.0f : (j == 1 ? 0.2f : (j < 3 ? 0.8f : 1.0f));
-            mesh->Verts()[vertIdx - 1].tex.x = box.w * xFrac + box.x;
-            mesh->Verts()[vertIdx - 1].tex.y = texY;
         }
     }
 }

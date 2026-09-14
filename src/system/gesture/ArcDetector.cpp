@@ -356,7 +356,14 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
         Vector3 boneVec(dx, dy, dz);
         unk40 = boneVec;
 
-        if (mJointPath.begin() == mJointPath.end()) {
+        // `empty()`, not `begin() == end()`.  STLport lowers both to the same
+        // compare, but spelling it as two iterator calls lets MSVC CSE the
+        // `lwz rN, 0x10(r31)` with the later `*mJointPath.begin()` and hoist it
+        // above the whole dx/dy/dz computation and the `unk40 = boneVec` copy.
+        // The image loads it twice -- once here and again as `lwz r11, 0x0(r30)`
+        // inside the mHadProgress arm -- which is what `empty()` produces.
+        // 79.1 -> 97.5 canonical on this one change.
+        if (mJointPath.empty()) {
             TryToStartSwipe(boneVec, skeleton);
         } else if (mHadProgress) {
             Vector3 frontPt = *mJointPath.begin();
@@ -372,8 +379,21 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             mArcOffset = GetCurveStart();
             Vector3 frontPt = *mJointPath.begin();
             float distX = dx - frontPt.x;
-            float distY = dy - frontPt.y;
             float distZ = dz - frontPt.z;
+            float distY = dy - frontPt.y;
+            // RESIDUAL (w7-an, 97.5 canonical): 19 rows in two clusters, both
+            // scheduling.  (1) The `Vector3 frontPt` 16-byte copy: the image
+            // issues all four `lwz` (w,y,x,z off the node) before all four
+            // `stw`, clobbering r11 -- the head-node pointer -- with the last
+            // load, so it must RELOAD `lwz r11, 0x0(r30)` for the insert()
+            // below.  We keep r11 live, CSE the second begin() away, and
+            // interleave one store into the loads.  (2) f11/f12 are swapped
+            // across the three fsubs and the image squares distY with `fmuls`
+            // immediately after its fsubs, while we defer and square distZ.
+            // NEGATIVE RESULT: `mJointPath.front()` for the copy is
+            // byte-identical to `*mJointPath.begin()`; hoisting `distY * distY`
+            // into its own local is byte-identical too.  Neither touches the
+            // r11 liveness that drives cluster (1).
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
                 mJointPath.insert(mJointPath.begin(), boneVec);
             }

@@ -146,6 +146,18 @@ void HamRibbon::SetActive(bool active) {
 }
 
 #pragma fp_contract(off)
+// RESIDUAL (w7-an, 98.0 canonical): what is left is register permutation plus
+// two addressing-fusion rows.  (a) `numKeys` lands in a callee-saved r26 in our
+// build and in a volatile r11 in the image, which rotates ~60 register numbers
+// downstream; (b) the image splits &back() out as `subi r30, r11, 0x44` and then
+// addresses the key positively (0x30/0x34/0x38/0x40 off r30) while MSVC fuses
+// ours into `subi r3, r11, 0x14` off _M_finish.
+// NEGATIVE RESULT (w7-an, 2026-09-14): binding that as a named
+// `Key<Transform> &last = mChaseKeys.back();` at the top of the while body DOES
+// reproduce the image's dual-base addressing (frame read off _M_finish, frame
+// write off &back()), but MSVC then keeps _M_finish loop-carried in r30 where the
+// image reloads 0x90(r23) at the top of every iteration, and the resulting
+// scheduling rotation costs more than the addressing gains: 98.0 -> 96.8.
 void HamRibbon::UpdateChase() {
     if (!mFollowA) {
         return;
@@ -204,12 +216,15 @@ void HamRibbon::UpdateChase() {
         }
         key.frame = 0.0f;
         mChaseKeys.resize(numKeys - removeCount, key);
-        key.value = Transform::IDXfm();
+        // `key.frame = 0.0f` precedes the IDXfm copy (stfs 0xd0(r1) at
+        // 0x824C7AD4, memcpy at 0x824C7ADC), and `key.frame = now` precedes
+        // the `followed` copy (stfs at 0x824C7AFC).
         key.frame = 0.0f;
+        key.value = Transform::IDXfm();
 #endif
         if (mChaseKeys.size() == 0) {
-            key.value.v = followed;
             key.frame = now;
+            key.value.v = followed;
             mChaseKeys.push_back(key);
         } else {
             float step = mDecay / mNumSegments;
@@ -238,7 +253,6 @@ void HamRibbon::UpdateChase() {
 
     int firstDirty = mChaseKeys.size() - added;
     if (firstDirty < mChaseKeys.size()) {
-        float prevAngle = -1.0f;
         for (int i = firstDirty; i < mChaseKeys.size(); ++i) {
             if (i != 0) {
                 Key<Transform> &cur = mChaseKeys[i];
@@ -251,11 +265,16 @@ void HamRibbon::UpdateChase() {
                 float angle = -1.0f;
                 if (2 < i) {
                     Vector3 prevDir;
-                    Subtract(prev.value.v, mChaseKeys[i - 2].value.v, prevDir);
+                    Subtract(prev.value.v, (&cur)[-2].value.v, prevDir);
                     float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
                     angle = std::acos(dot);
+                    // The scale is the LITERAL -1.0f (a negation of prevDir), not a
+                    // loop-carried previous angle: the image loads -1.0 once into
+                    // f29 (0x824C7C7C) and never rewrites it, using the same
+                    // register both for this multiply (0x824C7DB8/0x824C7DBC) and
+                    // for the `angle != -1.0f` compare (0x824C7E80).
                     Vector3 scaledPrev = prevDir;
-                    scaledPrev *= prevAngle;
+                    scaledPrev *= -1.0f;
                     Interp(dir, scaledPrev, 0.5f, smoothDir);
                     Normalize(smoothDir, smoothDir);
                 }
@@ -275,30 +294,32 @@ void HamRibbon::UpdateChase() {
                 if (angle != -1.0f) {
                     Hmx::Matrix3 inv;
                     Invert(result.m, inv);
-                    Vector3 localSmooth;
-                    Multiply(smoothDir, inv, localSmooth);
-                    float clamped = Clamp(0.0f, 1.0f, localSmooth.x);
-                    float a = std::acos(clamped);
+                    Multiply(smoothDir, inv, smoothDir);
+                    smoothDir.x = Clamp(0.0f, 1.0f, smoothDir.x);
+                    float a = std::acos(smoothDir.x);
                     float cosHalf = std::cos(angle * 0.5f);
                     float invCos = 1.0f / cosHalf;
                     float c = std::cos(a * 2.0f);
                     float s = std::sin(a * 2.0f);
+                    // The bend is in the X-Z plane, NOT X-Y: the image writes the
+                    // off-diagonal s*(1-invCos)/2 terms to m02 (0x128) and m20
+                    // (0x140) and leaves row 1 as the identity row
+                    // (0, 1, 0) at 0x130-0x138.
                     Hmx::Matrix3 bend(
                         ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
                         0.0f,
                         (s * (1.0f - invCos)) * 0.5f,
-                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f,
                         0.0f,
+                        1.0f,
                         0.0f,
+                        (s * (1.0f - invCos)) * 0.5f,
                         0.0f,
-                        1.0f
+                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
                     );
                     Multiply(bend, result.m, result.m);
                 }
 
                 cur.value.m = result.m;
-                prevAngle = angle;
             }
         }
     }
