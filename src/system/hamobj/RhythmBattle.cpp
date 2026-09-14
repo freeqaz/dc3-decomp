@@ -696,6 +696,9 @@ void RhythmBattle::OnBeat() {
         return;
     static Symbol gameplay_mode("gameplay_mode");
     static Symbol mind_control("mind_control");
+    // The whole residual of this function is one stack word: the target packs
+    // inMindControl at 0x8c and goofy at 0x8d into a single word, and our build
+    // gives each its own. See docs/decomp/patterns/stack-slot-sharing.md.
     bool inMindControl = TheHamProvider->Property(gameplay_mode)->Sym() == mind_control;
     if (mFullKTB && !mFinale && !inMindControl) {
         mPlayerOne->SetAutoPass(false);
