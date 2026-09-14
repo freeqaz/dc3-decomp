@@ -413,7 +413,12 @@ void UILabel::PreLoad(BinStream &bs) {
             d >> Style(0).mFontColor.alpha;
         }
         if (d.rev > 0xC) {
-            d >> LStyle(0).mColorOverride;
+            // The stream is bound to a local reference first: the target
+            // materialises it into a callee-saved register BEFORE the LStyle(0)
+            // call, which only happens when it is its own declaration rather
+            // than a subexpression of the operator>> call.
+            BinStream &stream = d.stream;
+            stream >> LStyle(0).mColorOverride;
         }
         if (d.rev > 0x10 && d.rev < 0x1D) {
             bool b;

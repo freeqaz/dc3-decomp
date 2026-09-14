@@ -1142,6 +1142,16 @@ BEGIN_LOADS(CamShot)
         Transform tf[2];
         d >> tf[0];
         d >> tf[1];
+        // The whole 88-row residual on this function is ONE cause: our frame is
+        // 0x490 where the target's is 0x470. The target merges this array's slot
+        // (0x90) with `tempDraws` far below -- disjoint scopes, so MSVC may
+        // overlap them -- and that in turn lets the seven dead floats pack
+        // contiguously at 0xf8..0x114. Ours puts vec at 0x110, which both costs
+        // its 0x10 and splits the float block, and every remaining row is a
+        // frame-slot offset shifted by the resulting +0x20. Splitting this into
+        // two Vector2 scalars was measured: 88 rows -> 87, and the scalars still
+        // do not merge with tempDraws, so it is not array-vs-scalar. The read
+        // order and every field offset already match the target exactly.
         Vector2 vec[2];
         d >> vec[0];
         d >> vec[1];
