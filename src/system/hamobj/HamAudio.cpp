@@ -499,33 +499,25 @@ void HamAudio::PollCrossfade() {
         }
     }
 
-    unsigned int state = mActiveCrossfade.mFlag;
-    if (state < 1) {
-        goto done;
-    }
-    if (state == 1) {
+    // A SWITCH, not an if/else chain, and each arm writes mActiveCrossfade.mFlag
+    // itself.  The dispatch at 0x82529FD4-0x82529FEC is MSVC's balanced compare
+    // tree with UNSIGNED compares (`cmplwi 1` / blt -> case 0 / beq -> case 1,
+    // `cmplwi 3` / blt -> case 2 / beq -> case 3, default falling through inline),
+    // and the case bodies are laid out in REVERSE source order -- default first
+    // at 0x82529FF0, then case 3 at 0x8252A02C, case 2 at 0x8252A0D0 and case 1
+    // last at 0x8252A13C, which is what lets case 1 fall through into the shared
+    // `stw r11, 0x78(r31)` at 0x8252A154 that the other two arms branch to.
+    // The `lwz r11, 0x78(r31)` immediately after it (0x8252A158) is the next
+    // statement re-reading the member; a `state` local carried in a register
+    // stores once and never reloads.
+    switch (mActiveCrossfade.mFlag) {
+    case 0:
+        break;
+    case 1:
         mStreams[1]->Play();
-        state = 2;
-    } else if (!(state < 3)) {
-        if (state != 3) {
-            MILO_ASSERT(0, 0x18E);
-            goto done;
-        }
-        float halfFade = mActiveCrossfade.mDuration * 0.5f;
-        bool ready = currentTime > (mActiveCrossfade.mEnd + halfFade);
-        bool startBeforeEnd = mActiveCrossfade.mStart < mActiveCrossfade.mEnd;
-        if (!startBeforeEnd) {
-            ready = ready
-                & (currentTime < (mActiveCrossfade.mStart - halfFade) - kEpsilon);
-        }
-        if (!ready) {
-            goto done;
-        }
-        mCrossFaders[0]->SetVolume(0);
-        mStreams[1]->Stop();
-        mStreams[1]->ClearJump();
-        state = 0;
-    } else {
+        mActiveCrossfade.mFlag = 2;
+        break;
+    case 2: {
         bool ready = currentTime >= mActiveCrossfade.mEnd;
         bool startBeforeEnd = mActiveCrossfade.mStart < mActiveCrossfade.mEnd;
         if (!startBeforeEnd) {
@@ -534,13 +526,32 @@ void HamAudio::PollCrossfade() {
                    < (mActiveCrossfade.mStart - mActiveCrossfade.mDuration * 0.5f)
                        - kEpsilon);
         }
-        if (!ready) {
-            goto done;
+        if (ready) {
+            mActiveCrossfade.mFlag = 3;
         }
-        state = 3;
+        break;
     }
-    done:
-    mActiveCrossfade.mFlag = state;
+    case 3: {
+        float halfFade = mActiveCrossfade.mDuration * 0.5f;
+        bool ready = currentTime > (mActiveCrossfade.mEnd + halfFade);
+        bool startBeforeEnd = mActiveCrossfade.mStart < mActiveCrossfade.mEnd;
+        if (!startBeforeEnd) {
+            ready = ready
+                & (currentTime < (mActiveCrossfade.mStart - halfFade) - kEpsilon);
+        }
+        if (ready) {
+            mCrossFaders[0]->SetVolume(0);
+            mStreams[1]->Stop();
+            mStreams[1]->ClearJump();
+            mActiveCrossfade.mFlag = 0;
+        }
+        break;
+    }
+    default:
+        MILO_ASSERT(0, 0x18E);
+        break;
+    }
+
     if (mActiveCrossfade.mFlag > 1) {
         float fadePos;
         if (mActiveCrossfade.mFlag == 2) {
