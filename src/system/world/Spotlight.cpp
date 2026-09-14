@@ -219,7 +219,19 @@ BEGIN_PROPSYNCS(Spotlight)
     SYNC_PROP_MODIFY(spot_height, mSpotHeight, UpdateBounds())
     SYNC_PROP_MODIFY(spot_material, mSpotMaterial, UpdateBounds())
     SYNC_PROP_SET(color, Color().Pack(), SetColor(_val.Int()))
-    SYNC_PROP_SET(intensity, Intensity(), SetIntensity(_val.Float())) // fix this line
+    // NOT a bug, despite how the inlined code reads. SetIntensity ->
+    // SetColorIntensity(Color(), f) expands to `mColorOwner->mColor =
+    // mColorOwner->mColor`, and the target really does emit that 16-byte
+    // self-copy. Two rewrites were measured and are both WORSE, so leave it:
+    //   SetColorIntensity(Color(), _val.Float())  -> 8 rows becomes 15
+    //   binding `const Hmx::Color &c = Color();` inside SetIntensity
+    //                                             -> 8 rows becomes 9 (adds a spill)
+    // The 8 residual rows are all anchoring: the target keeps mColorOwner in
+    // one register for the destination and mColorOwner+0x1b0 in another for the
+    // source, plus two dead address computations; our build CSEs them into a
+    // single anchor. Hmx::Color has no user-declared operator= in the target
+    // (`??4Color@Hmx@@` appears in 0 of the target objects), so that is not it.
+    SYNC_PROP_SET(intensity, Intensity(), SetIntensity(_val.Float()))
     SYNC_PROP(color_owner, mColorOwner)
     SYNC_PROP(damping_constant, mDampingConstant)
     SYNC_PROP_MODIFY(lens_size, mLensSize, UpdateBounds())
