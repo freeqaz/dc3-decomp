@@ -177,7 +177,8 @@ void DefaultPhysicsManager::AddCollidable(Hmx::Object *o, ObjectDir *dir, bool a
             } else {
                 mInactiveCollidables.insert(mInactiveCollidables.begin(), mesh);
             }
-            mCollidables.insert(mCollidables.begin(), o);
+            ObjPtrList<Hmx::Object, ObjectDir> &collidables = mCollidables;
+            collidables.insert(collidables.begin(), o);
         }
     }
 }
