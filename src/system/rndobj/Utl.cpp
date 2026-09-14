@@ -1897,7 +1897,12 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
     }
 }
 
-static const int kNumBloomTaps = 7;
+// UNSIGNED, not int: SetBloomBlurWeightsStreak's MILO_ASSERT compares
+// `(middle + i) < kNumBloomTaps` with `cmplwi cr6, r11, 0x7` at 8262EC44 -- an
+// unsigned compare. As an int it is `cmpwi`, and MSVC additionally folds
+// `middle + i` into its own induction variable (li r28, 4 / addi r28, r28, 1)
+// instead of recomputing `addi r11, r29, 0x3` off the live `i` each iteration.
+static const unsigned int kNumBloomTaps = 7;
 
 static float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
                                    0.0612547919f, 0.0815124959f, 0.0999667868f,
@@ -1958,10 +1963,14 @@ void SetBloomBlurWeightsStreak(
     float stepSize = (float)pow(4.0, (double)passF);
     float curOffset = stepSize;
 
+    // Plain array indexing, not pointer arithmetic: MSVC strength-reduces
+    // weights[middle - i] / weights[middle + i] into the two byte-offset
+    // induction registers itself (stfsx f0, r31, r11 with r11 = &weights[2] and
+    // r31 stepping 0/-4/-8 at 8262ECA0), and keeps `i` live purely so the assert
+    // can recompute `middle + i` as `addi r11, r29, 0x3`. Spelling the offsets by
+    // hand produced the same stores but eliminated `i`, so the assert compared a
+    // folded induction variable instead.
     int i = 1;
-    int iDown = 2;
-    int negIdx = 0;
-    int posIdx = 0;
     do {
         MILO_ASSERT((middle - i) >= 0 && (middle + i) < kNumBloomTaps, 0x11c5);
         float w = curWeight * initWeight;
@@ -1969,24 +1978,12 @@ void SetBloomBlurWeightsStreak(
         float offPos = curOffset + initOffset;
         curWeight = (float)(curWeight * atten);
         curOffset = (float)(curOffset + stepSize);
+        weights[middle - i] = w;
+        offsets[middle - i] = offNeg;
+        weights[middle + i] = w;
+        offsets[middle + i] = offPos;
         i = i + 1;
-#ifdef HX_NATIVE
-        *(float *)((intptr_t)weights + negIdx + 8) = w;
-        iDown = iDown - 1;
-        *(float *)((intptr_t)offsets + negIdx + 8) = offNeg;
-        negIdx = negIdx - 4;
-        *(float *)((intptr_t)weights + posIdx + 0x10) = w;
-        *(float *)((intptr_t)offsets + posIdx + 0x10) = offPos;
-#else
-        *(float *)((int)weights + negIdx + 8) = w;
-        iDown = iDown - 1;
-        *(float *)((int)offsets + negIdx + 8) = offNeg;
-        negIdx = negIdx - 4;
-        *(float *)((int)weights + posIdx + 0x10) = w;
-        *(float *)((int)offsets + posIdx + 0x10) = offPos;
-#endif
-        posIdx = posIdx + 4;
-    } while (negIdx >= -8);
+    } while (i <= middle);
 
     int count = 7;
     float angleRad = angle * 0.01745329238474369f;
