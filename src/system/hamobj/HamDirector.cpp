@@ -3184,19 +3184,28 @@ CharClip *HamDirector::GetClipStartAndEndBeats(
     }
     foundIdx = 0xffffffff;
 found:
-    if (foundIdx != 0xffffffff && (int)(foundIdx + 1) < (int)size) {
-        // Both practice keys are bound to references here.  The image forms
-        // &practiceSymbols[foundIdx] once (`slwi r10, r11, 3` / `add r28, r10,
-        // r9`, target idx 112/114, hoisted above the bounds branch) and
-        // &practiceSymbols[foundIdx+1] once (`addi r27, r28, 0x8`, target idx
-        // 119), then reads every later frame off `0x4(r28)` / `0x4(r27)`
-        // (target idx 176/187/199/205).  Re-spelling the subscript instead
-        // re-indexes at each of the four uses: `lwz r11, 0x0(r29)` +
-        // `add r11, r30, r11` per use, eight extra instructions.
-        Key<Symbol> &practiceKey = (*practiceSymbols)[foundIdx];
-        Key<Symbol> &nextPracticeKey = (*practiceSymbols)[foundIdx + 1];
+    if (foundIdx == 0xffffffff) return nullptr;
+    // The two tests are SEPARATE statements with the address computation
+    // between them: the image interleaves `slwi r10, r11, 3` / `add r28, r10,
+    // r9` (idx 111/113) with `addi r11, r11, 0x1` / `cmpw` / `bge` (112/114/
+    // 115), i.e. &practiceSymbols[foundIdx] is formed after the -1 test and
+    // before the size test.  Folded into one `&&` the address computation
+    // lands entirely after the branch.
+    //
+    // The keys are POINTERS, not references.  A named `Key<Symbol> &` gets an
+    // 8-byte stack home at 0x58 and a dead `stw` into it, which also pushes
+    // both DataArrayPtr temps up by 8 (measured: 92.6% against 93.2%).
+    Key<Symbol> *practiceKey = &(*practiceSymbols)[foundIdx];
+    if ((int)(foundIdx + 1) >= (int)size) return nullptr;
+    {
+        // The image forms &practiceSymbols[foundIdx+1] once (`addi r27, r28,
+        // 0x8`, target idx 121) and reads every later frame off `0x4(r28)` /
+        // `0x4(r27)` (target idx 176/187/199/205).  Re-spelling the subscript
+        // re-indexes at each of the four uses: `lwz` + `add` per use, eight
+        // extra instructions.
+        Key<Symbol> *nextPracticeKey = practiceKey + 1;
         Keys<Symbol, Symbol> *clipSymbols = clipKeys->AsSymbolKeys();
-        int clipKeyIdx = clipSymbols->KeyLessEq(practiceKey.frame);
+        int clipKeyIdx = clipSymbols->KeyLessEq(practiceKey->frame);
         if ((unsigned int)clipKeyIdx >= clipSymbols->size()) {
 #ifndef HX_NATIVE
             stlpmtx_std::__stl_throw_out_of_range("vector");
@@ -3235,7 +3244,6 @@ found:
             if (loopCount != 0.0f) {
                 loopAdjust = Mod(beat1 - clip->StartBeat(), loopCount);
             }
-            float adjust = beat1 - loopAdjust;
             // clip->StartBeat() is spelled at each of its three uses: the image
             // reloads `lwz r11, 0x40(r30)` / `lfs 0x0(r11)` at target idx
             // 171/180/191.  Binding a `clipStartBeat` local caches it in f30
@@ -3243,13 +3251,26 @@ found:
             // `startBeat = x - adjust + clip->StartBeat()`, target idx 182-184;
             // the `startBeat = clipStartBeat; startBeat += ...` form emits a
             // dead first store the image does not have.
+            // RESIDUAL (w7-aq, 95.2 canonical): the image computes
+            // `adjust = beat1 - loopAdjust` AFTER the first SecondsToBeat call
+            // (`fsubs f30, f29, f30` at target idx 169), which forces loopAdjust
+            // to live across that call in a callee-saved FPR and costs the image
+            // an extra `fmr f30, f1` at idx 164.  Our build sinks the subtraction
+            // in front of the call and keeps loopAdjust in f1, the Mod return
+            // register, so it is one instruction SHORTER there and then loads
+            // clip->StartBeat() before the call instead of after.  Measured
+            // BYTE-INERT: writing the subtraction inline at both use sites,
+            // `- (beat1 - loopAdjust)`, gives the identical 18 rows -- MSVC
+            // hoists the call-invariant subexpression either way.  Nine of the
+            // remaining rows are the resulting FPR permutation.
+            float adjust = beat1 - loopAdjust;
             startBeat =
-                SecondsToBeat(practiceKey.frame * (1.0f / 30.0f)) - adjust + clip->StartBeat();
-            endBeat = SecondsToBeat(nextPracticeKey.frame * (1.0f / 30.0f)) - adjust
+                SecondsToBeat(practiceKey->frame * (1.0f / 30.0f)) - adjust + clip->StartBeat();
+            endBeat = SecondsToBeat(nextPracticeKey->frame * (1.0f / 30.0f)) - adjust
                 + clip->StartBeat();
             if (range) {
-                range->first = SecondsToBeat(practiceKey.frame * (1.0f / 30.0f));
-                range->second = SecondsToBeat(nextPracticeKey.frame * (1.0f / 30.0f));
+                range->first = SecondsToBeat(practiceKey->frame * (1.0f / 30.0f));
+                range->second = SecondsToBeat(nextPracticeKey->frame * (1.0f / 30.0f));
                 return clip;
             }
             return clip;
