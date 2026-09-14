@@ -14,6 +14,24 @@
 #include "utl\DataPointMgr.h"
 #include "world\Dir.h"
 
+// The image computes `mRoutine.size()` by loading `_M_start` BEFORE
+// `_M_finish` (824F6FF0 lwz r11,0x0(r31) / 824F6FF8 lwz r10,0x4(r31) / subf
+// r10,r11,r10 / divw. r10,r10,r26) and keeps `_M_start` live in r11 for
+// `mRoutine[0].preferred` right after.  stlport's `size()` as spelled
+// (`_M_finish - _M_start`) makes MSVC load 0x4 first.  Naming both pointers in
+// declaration order reproduces the image's load order; this is the
+// function-scoped form of the header experiment w7-bk measured and refuted
+// tree-wide (720 regressions) -- do NOT move it into stlport.  Measured on
+// SaveSuperEasyMoveParents only (98.44 -> 100.0, 195/195 rows); the same
+// helper makes LoadAllVariants worse, see the note there.
+static inline unsigned int RoutineMeasureCount(const std::vector<HamSupereasyMeasure> &v) {
+    // const_iterator, not `const T *`: stlport's is the raw pointer, native's
+    // libstdc++ iterator has an explicit pointer ctor.
+    std::vector<HamSupereasyMeasure>::const_iterator first = v.begin();
+    std::vector<HamSupereasyMeasure>::const_iterator last = v.end();
+    return last - first;
+}
+
 SuperEasyRemixer::SuperEasyRemixer() {}
 
 BEGIN_HANDLERS(SuperEasyRemixer)
@@ -206,7 +224,7 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
         // (98.44%), GetRows in net_ham/ChallengeSystemJobs (98.97%) and
         // MoveGraph::FindVariantPair (98.10%), so it is a property of how
         // stlport's `size()` is spelled, not of this call site.
-        for (int i = 0; i < data->mRoutine.size(); i++) {
+        for (int i = 0; i < RoutineMeasureCount(data->mRoutine); i++) {
             HamSupereasyMeasure &curMeasure = data->mRoutine[i];
             // The image FALLS BACK from `preferred` to `first`.  At 0x824F6F08
             // it loads `preferred` (0x8) into r4 and compares it to gNullStr;
@@ -331,6 +349,11 @@ void SuperEasyRemixer::LoadAllVariants() {
         // (98.44%), GetRows in net_ham/ChallengeSystemJobs (98.97%) and
         // MoveGraph::FindVariantPair (98.10%), so it is a property of how
         // stlport's `size()` is spelled, not of this call site.
+        // w7-bm: RoutineMeasureCount (above) fixes this signature on
+        // SaveSuperEasyMoveParents (-> 100) but NOT here: it trades the 4 rows
+        // for 2 inserted `stw r11, 0x68(r31)` home stores of `_M_start` right
+        // after each size computation (99.57 -> 99.2), exactly the 99.16 the
+        // header experiment (c) recorded for this function.  Left as size().
         for (int i = 0; i < data->mRoutine.size(); i++) {
             // BEHAVIOURAL FIX 2026-09-14 (w7-q): this read `.second` (offset
             // 0x4, "MoveVariant to use for transition OUT of measure").  The
