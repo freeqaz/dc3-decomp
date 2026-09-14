@@ -154,9 +154,9 @@ void FlowNode::Load(BinStream &bs) {
         mDebugOutput = unk;
     }
     if (d.rev > 1) {
-        String debugComment;
-        d.stream >> debugComment;
-        mDebugComment = debugComment;
+        String comment;
+        d >> comment;
+        mDebugComment = comment;
     }
 }
 
