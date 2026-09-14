@@ -13,11 +13,11 @@
 // Triangle::Set is defined in-class in Geo.h -- see the note there.
 
 float gUnitsPerMeter = 39.370079f;
-float gBSPPosTol = 0.01f;
-float gBSPDirTol = 0.985f;
-int gBSPMaxDepth = 20;
-int gBSPMaxCandidates = 40;
-float gBSPCheckScale = 1.1f;
+static float gBSPPosTol = 0.01f;
+static float gBSPDirTol = 0.985f;
+static int gBSPMaxDepth = 20;
+static int gBSPMaxCandidates = 40;
+static float gBSPCheckScale = 1.1f;
 
 void NumNodes(const BSPNode *node, int &num, int &maxDepth) {
     static int depth = 0;
@@ -158,12 +158,14 @@ void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
     d = -::Dot(cross, v1);
 }
 
-void SetBSPParams(float f1, float f2, int r3, int r4, float f3) {
-    gBSPPosTol = f1;
-    gBSPCheckScale = f3;
-    gBSPMaxCandidates = r4;
-    gBSPDirTol = f2;
-    gBSPMaxDepth = r3;
+void SetBSPParams(
+    float posTol, float dirTol, int maxDepth, int maxCandidates, float checkScale
+) {
+    gBSPDirTol = dirTol;
+    gBSPCheckScale = checkScale;
+    gBSPMaxDepth = maxDepth;
+    gBSPMaxCandidates = maxCandidates;
+    gBSPPosTol = posTol;
 }
 
 DataNode SetBSPParams(DataArray *da) {
@@ -1044,20 +1046,25 @@ void BSPFace::Update() {
 }
 
 #ifndef HX_NATIVE
-// DIAGNOSIS (90.2 canonical, frame 0x10 larger than the image's).
+// DIAGNOSIS (90.9 canonical, was 90.2).
 //
-// The residual is one extra callee-saved GPR, and it comes from how the two
-// tuning globals are addressed.  gBSPPosTol .. gBSPCheckScale are laid out
-// contiguously at +0, +4, +8, +0xc, +0x10 (Geo.cpp:16-20), and the image
-// materialises ONE anchor -- `lis`/`addi` on &gBSPDirTol -- then reads its
-// neighbours off it as `0x4(rN)` (gBSPMaxDepth) and `0x8(rN)`
-// (gBSPMaxCandidates).  We emit a separate `lis` + `@l`-in-displacement for
-// each global, which costs a second page-base register for the whole
-// function and renames every callee-saved GPR by one (r17->r16, r23->r24,
-// ... 130 register-swap rows over 16 pairs).  There is no source spelling
-// that forces the anchor: the two globals are already read through their own
-// names, and `&gBSPDirTol`-relative access would be UB the compiler is free
-// to undo.  See docs/decomp/patterns/anchor-displacement-*.
+// The anchor half of this note is SOLVED and the conclusion it drew is
+// RETRACTED.  It used to read "there is no source spelling that forces the
+// anchor".  There was: the five gBSP* tuning globals are `static` in the
+// original, and MSVC gives file statics one shared section contribution, so
+// it can materialise ONE `lis`/`addi` base and reach the rest as
+// displacements.  Evidence: orig/373307D9/ham_xbox_r.map lists
+// `?gUnitsPerMeter@@3MA` at 0x82f0f68c (the non-static global immediately
+// below them) and lists NONE of gBSPPosTol..gBSPCheckScale at
+// 0x82f0f690..0x82f0f6a0 -- the map carries non-static data, so their
+// absence is the signature of internal linkage.  Making them static (and
+// respelling the five entries in config/373307D9/symbols.txt bare, which is
+// MSVC's spelling for a static) took SetBSPParams 89.0 -> 100.0, GeoInit
+// 95.3 -> 100.0 and this function 90.2 -> 90.9, with 0 regressions
+// binary-wide.
+//
+// The residual here is now the remaining register-swap cascade, not the
+// addressing mode.
 //
 // NEGATIVE RESULT: rotating the inner plane loop to
 // `if (planeIt != end) do { ... } while (++planeIt != end);` REGRESSES
