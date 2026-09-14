@@ -1022,6 +1022,105 @@ At project saturation (97%+ COMPLETE):
 
 ---
 
+## Block Placement: Two Levers for "the right instructions in the wrong order"
+
+**Impact:** +8 to +16pp
+**Success Rate:** HIGH where the residual is a pure block move
+
+### Symptom
+
+The instruction *multiset* is right and the *order* is wrong. objdiff shows a
+matched-size insert/delete pair -- the same N instructions deleted at one index
+and inserted at another -- usually with one `bne`/`beq` inversion and a handful
+of register `diff_arg` rows that are consequences, not causes. `diagnose`
+reports two clusters of equal size, e.g. `cluster: idx 52-54 (0I/3D)` and
+`cluster: idx 64-66 (3I/0D)`.
+
+MSVC's block-placement pass runs after everything else, so ordinary source
+rewrites -- swapping the arms, inverting the test, hoisting to an early return
+-- are frequently **byte-identical**. That is what makes this class look like a
+backend floor when it is not. Both levers below are about denying that pass
+something to work with, not about spelling the condition differently.
+
+### Lever 1 -- materialise the condition into a named local
+
+Use when the target keeps a small error/guard block **inline** as the
+fall-through and we **sink** it to the end behind a `b`.
+
+```c
+// BEFORE -- MSVC sinks the block past everything else
+if (format == NULL) { errno = EINVAL; _invalid_parameter_noinfo(); return -1; }
+
+// AFTER -- the block stays where the image has it
+{
+    int _Expr_val = !!(format != NULL);
+    if (!_Expr_val) { errno = EINVAL; _invalid_parameter_noinfo(); return -1; }
+}
+```
+
+This is not cosmetic and it is not a style preference: it is the shape the real
+CRT's `_VALIDATE_RETURN` macro wraps every guard in, which is *why* CRT
+functions in the image have their guards laid out this way. Reach for it on any
+`src/xdk/LIBCMT/**` guard first.
+
+`_vsprintf_s_l` and `_vswprintf_s_l`: **84.08 -> 100.0** each, 38/38
+instructions equal. Three other spellings measured byte-identical to each other
+at 84.08 first -- one three-way `||`, two separate `if`s, and explicit `goto`s.
+
+Secondary tell that you are in this case: the sunk block leaves a callee-saved
+copy unused. `_vsprintf_s_l`'s image compares `r31` where ours compared `r3`,
+purely because the inline `bl _errno` clobbers `r3` ahead of the compares and
+the sunk version has no such clobber. Those register rows close by themselves
+when the block moves -- do not chase them separately.
+
+### Lever 2 -- split one short-circuit into two `if`s with gotos
+
+Use when the two arms of a single `&&`/`||` expression are laid out in the wrong
+order.
+
+**Why the obvious fix fails:** MSVC canonicalises `if (a || b) B else A` into
+`if (!a && !b) A else B` by De Morgan, so *both polarities of one expression*
+emit the same block order. Swapping the arms cannot work, and a lane that
+measures only that will correctly record a negative and wrongly conclude the
+order is a floor.
+
+```c
+// BEFORE -- notify block lands first in BOTH polarities
+if (res == -1 && (err = GetLastError()) != 0) { notify; ret = -1; }
+else { *(int *)mData = res; }
+
+// AFTER -- two independent layout items, nothing left to canonicalise
+if (res != -1) goto store;
+err = GetLastError();
+if (err == 0) goto store;
+goto notify;
+store:   *(int *)mData = res;  goto closed;
+notify:  notify; ret = -1;
+closed:;
+```
+
+`CacheXbox::ThreadGetFileSize`: **87.43 -> 95.83**, both insert/delete clusters
+and the `bne`/`beq` inversion gone. This **supersedes** the 2026-09-14 w7-ap
+negative at that site, which tried only `||` spellings.
+
+### How to Tell Which Lever
+
+Lever 1 moves a block that is *small and guard-shaped* and currently sunk to
+the end. Lever 2 reorders the two *arms of one condition*. If swapping the arms
+is byte-inert, you are in lever 2's territory; if the block is sunk behind an
+unconditional `b` and has no sibling arm, you are in lever 1's.
+
+### What Does NOT Move It
+
+Measured byte-identical on the functions above, so do not re-derive them:
+declaration reorder, arm swapping, `!=` vs `==` polarity, early-return vs
+`else`, and -- for lever 1 specifically -- explicit `goto`s. Gotos work for
+lever 2 and not for lever 1, because there the two blocks are already separate
+statements.
+
+---
+
+
 ## See Also
 
 - [fixable-comparison.md](fixable-comparison.md) - Conditional expression patterns
