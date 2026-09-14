@@ -194,11 +194,15 @@ bool MoveGraph::FindVariantPair(
 
     if (p1) {
         if (p2) {
-            // Both parents specified: find best connected pair via scoring
-            const std::vector<MoveVariant *> &variants = p1->Variants();
+            // Both parents specified: find best connected pair via scoring.
+            // No named reference: the image reaches the vector straight off p1
+            // every iteration (`lwz r6, 0x10(r29)` at 0x824F91F4 and
+            // `lwz r11, 0x14(r29)` at .L_824F92DC, both p1-relative).  Binding
+            // `variants` to a local reference materialises `addi r4, r30, 0x10`
+            // and turns the bound reload into `lwz r11, 0x4(r4)`.
             int bestScore = 0;
-            for (MoveVariant *const *var1 = &*variants.begin();
-                 var1 != &*variants.end(); ++var1) {
+            for (MoveVariant *const *var1 = &*p1->Variants().begin();
+                 var1 != &*p1->Variants().end(); ++var1) {
                 const MoveVariant *curVar = *var1;
                 for (std::vector<MoveCandidate>::const_iterator cand =
                          curVar->mNextCandidates.begin();
