@@ -1125,61 +1125,75 @@ float CharClip::SampleToBeat(int sample) const {
     }
 }
 
-void CharClip::LockAndDelete(CharClip **const clips, int remaining, int maxToDelete) {
+// The assert's own text pins the parameter names. MILO_ASSERT stringifies its
+// condition, the image's string is "remaining >= 0", and the image compiles that
+// test against the THIRD parameter (`cmpwi cr6, r5, 0x0`). So `remaining` is the
+// delete budget, not the array extent -- this had the two int parameters named
+// the other way round and asserted on the wrong one.
+void CharClip::LockAndDelete(CharClip **const clips, int numClips, int remaining) {
     int loopIdx;
     CharClip *clip;
 
     MILO_ASSERT(remaining >= 0, 0x42A);
 
-    // Cap maxToDelete at remaining
-    if (remaining < maxToDelete) {
-        maxToDelete = remaining;
+    // Cap the delete budget at the number of clips we actually have.
+    if (numClips < remaining) {
+        remaining = numClips;
     }
 
     loopIdx = 0;
 
     // Phase 1: Partition clips with flag 0x10000 set
-    if (remaining > 0) {
-        CharClip **readPtr = &clips[0];
-        CharClip **writeBackPtr = &clips[remaining];
+    if (numClips > 0) {
+        // readPtr trails one PAST the element under test and is stepped at the
+        // bottom of the loop, which is what gives the image's
+        // `addi r11, r29, 4` ... `lwz r7, -4(r11)` ... `addi r11, r11, 4`.
+        // Stepping it at the top instead folds into a single `lwzu`.
+        CharClip **readPtr = &clips[1];
+        CharClip **writeBackPtr = &clips[numClips];
         do {
-            readPtr++;
             clip = readPtr[-1];
             if ((clip->mPlayFlags & 0x10000) != 0) {
                 writeBackPtr--;
+                numClips--;
                 remaining--;
-                maxToDelete--;
                 loopIdx--;
-                readPtr[-1] = *writeBackPtr;
+                // Folds to `stwu r8, -4(r11)`; splitting the decrement out into
+                // its own statement costs a separate `subi`.
+                *--readPtr = *writeBackPtr;
                 *writeBackPtr = clip;
-                readPtr--;
             }
             loopIdx++;
-        } while (loopIdx < remaining);
+            readPtr++;
+        } while (loopIdx < numClips);
     }
 
     // Phase 2: Mark additional clips with deletion flag
-    if (maxToDelete > 0) {
-        int cnt = maxToDelete;
-        CharClip **markPtr = &clips[remaining];
-        remaining -= maxToDelete;
+    if (remaining > 0) {
+        int cnt = remaining;
+        CharClip **markPtr = &clips[numClips];
+        numClips -= remaining;
         do {
-            markPtr--;
-            (*markPtr)->mPlayFlags |= 0x10000;
+            // Naming the loaded clip is what lets the flag read/write reuse the
+            // `lwzu` result; `(*--markPtr)->mPlayFlags |= ...` reloads it.
+            CharClip *marked = *--markPtr;
+            marked->mPlayFlags |= 0x10000;
             cnt--;
         } while (cnt != 0);
     }
 
-    // Phase 3: Release all marked clips
-    if (remaining > 0) {
-        CharClip **releasePtr = &clips[remaining];
+    // Phase 3: Delete all marked clips.
+    if (numClips > 0) {
+        CharClip **releasePtr = &clips[numClips];
         do {
-            releasePtr--;
-            CharClip *clip = *releasePtr;
-            remaining--;
-            if ((unsigned int)clip) {
-                clip->Release((ObjRef *)1);
-            }
-        } while (remaining > 0);
+            CharClip *toDelete = *--releasePtr;
+            numClips--;
+            // The image calls vtable slot 0 with r4 = 1 -- the scalar deleting
+            // destructor -- behind an UNSIGNED null test that MSVC generates for
+            // `delete` itself. The hand-written `if ((unsigned int)clip)
+            // clip->Release((ObjRef *)1);` produced a signed test and inlined a
+            // ring unlink instead of the call.
+            delete toDelete;
+        } while (numClips > 0);
     }
 }
