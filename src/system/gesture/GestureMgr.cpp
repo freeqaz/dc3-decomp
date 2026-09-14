@@ -229,6 +229,11 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
             // `&=`, not `=`: 8242C790 is `and r10, r11, r10`, folding the mask into the
             // register that still holds the `true` initialiser.  A plain assignment
             // normalises the mask with subic/subfe instead and loses the `and` row.
+            // Measured negatives on 8242C788's mask-and-`and` shape, all reverted:
+            // `updateSkeleton &= X` and `updateSkeleton = updateSkeleton && X` both
+            // measure 96.4, `X && updateSkeleton` 97.7, against 98.2 for the plain
+            // assignment.  None reproduces `subfic/subfe` + `and r10, r11, r10`;
+            // each adds a redundant clrlwi instead.
             updateSkeleton = data->mSkeletonsRight[i]->TrackingState() != kSkeletonPositionOnly;
         }
         if (updateSkeleton) {
