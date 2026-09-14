@@ -459,6 +459,18 @@ void HamSongMgr::InitializePlaylists() {
             mPlaylists.push_back(p);
         }
     }
+    // w7-bj: 99.86, all 63 rows are r31 frame-slot offsets (+0x4/+0x10/+0x20).
+    // The image shares 0x54 between the assert line temps and crewSym and
+    // parks the loop-2 `new Playlist()` home at 0x88 among the statement
+    // temps (0x828C9E48); ours puts that `new` home in 0x54, which pushes
+    // crewSym to 0x5c, the map from 0x60 to 0x70 and the buffers up 0x20.
+    // Refuted (all 99.857, slot map unchanged): unnamed `playlistMap[k] =
+    // new Playlist()`; the two char arrays moved into the loop body; one
+    // `Playlist *p` at loop-body scope; early `continue` instead of the
+    // nested if.  The MakeString<char[19],int,char[5]> vs <char[15],...>
+    // call-name rows are the per-TU MakeString ICF fold (the image loads the
+    // 15-byte "HamSongMgr.cpp" literal at 0x828C9AC8), charged 0 under
+    // name_check -- not a string bug.
     // The shipped image sprintf()s to TWO distinct stack addresses here
     // (r31+0x90 for "%d0s", r31+0xa0 for "%s_dynamic_playlist"), so the
     // original had two separate char arrays, not one shared scratch buffer.

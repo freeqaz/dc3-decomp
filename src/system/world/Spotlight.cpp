@@ -1243,6 +1243,22 @@ void Spotlight::BuildCone(BeamDef &def) {
     def.mBeam->SetMat(def.mMat);
 }
 
+// w7-bj (2026-09-14): 70.76 -> 77.78 canonical. Two behavioural fixes against
+// the image (csAngle reset per segment at 0x8282C510; cap faces at [4n+seg] /
+// [5n+seg], 0x8282C4B8/0x8282C7AC) plus two shape levers (own divisor temp for
+// segU, accumulator Multiply in the v==2 arm). Residual is a register/slot
+// cascade, not a single row: the image keeps halfAngle (0x50) and flip (0x54)
+// memory-resident, hoists only 8 matrix elements (x.x reloaded from 0xb0) and
+// gives f23/f24 to uvV/segU, spills numVerts to 0x80 and rematerialises it as
+// r29-2, and walks ONE vertex byte cursor (r30) across segments where we get an
+// extra outer IV (+0x120). Refuted here, each measured alone: capBase/topBase
+// declared after faces.resize (71.99), before the loop (72.52); arm-1 Set as
+// three explicit y/x/z stores (74.60, re-indexes verts per store); orientMtx
+// declared first (inert, slots do not follow declaration order); halfStep
+// declared inside the seg loop (inert); accumulator statement order X,Z,Y
+// (inert). Do not respell the face indices as short/unsigned short -- the
+// image's cur/nextRow arithmetic is untruncated int (add r6,r7,r11 at
+// 0x8282C6D4) and the wave-1 archaeology pass already measured that regression.
 void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
     Hmx::Matrix3 identMtx;
     identMtx.x.Set(1.0f, 0.0f, 0.0f);
@@ -1266,6 +1282,9 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
 
     def.mBeam = Hmx::Object::New<RndMesh>();
     int numVerts = numSegments * 3;
+    int baseVertIdx = numVerts + 1;
+    int capBase = numSegments * 4;
+    int topBase = capBase + numSegments;
     RndMesh *mesh = def.mBeam;
     RndMesh::VertVector &verts = mesh->Verts();
     std::vector<RndMesh::Face> &faces = mesh->Faces();
@@ -1285,14 +1304,17 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
 
     int flip = 0;
     int iVert = 0;
-    float csAngle = 0.0f;
     float xsAngle = 0.7853982f;
-    short baseIdx = 2;
+    int baseIdx = 2;
     int iFace = 0;
     for (int seg = 0; seg != numSegments; seg++) {
         float cosH = (float)std::cos((double)halfAngle);
         float sinH = (float)std::sin((double)halfAngle);
-        float segU = (float)seg / numSegsF;
+        float csAngle = 0.0f;
+        // Own divisor temp: naming numSegsF here too lets /fp:fast fold both
+        // divisions into one reciprocal (fdivs f31/x + fmuls), the image divides
+        // twice (0x8282C448, 0x8282C4F4).
+        float segU = (float)seg / (float)numSegments;
 
         for (unsigned int v = 0; v < 3; v++) {
             float uvV = (float)v * halfStep;
@@ -1300,48 +1322,49 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
                 float t = (float)v;
                 float radius = (bottomRadius - topRadius) * t + topRadius;
                 verts[iVert].pos.Set(radius * cosH, t * length, radius * sinH);
-
-                float px = verts[iVert].pos.x;
-                float py = verts[iVert].pos.y;
-                float pz = verts[iVert].pos.z;
-                verts[iVert].pos.x =
-                    orientMtx.y.x * py + orientMtx.z.x * pz + orientMtx.x.x * px;
-                verts[iVert].pos.z =
-                    orientMtx.y.z * py + (orientMtx.x.z * px + orientMtx.z.z * pz);
-                verts[iVert].pos.y =
-                    orientMtx.y.y * py + (orientMtx.x.y * px + orientMtx.z.y * pz);
+                Multiply(verts[iVert].pos, orientMtx, verts[iVert].pos);
             } else {
                 float cosCs = (float)std::cos((double)csAngle);
                 float sinCs = (float)std::sin((double)csAngle);
                 csAngle = csAngle + xsAngle;
-                verts[iVert].pos.y = sinCs * bottomRadius + length;
-                verts[iVert].pos.z = cosCs * sinH * bottomRadius;
-                verts[iVert].pos.x = cosCs * cosH * bottomRadius;
-
-                float px = verts[iVert].pos.x;
-                float pz = verts[iVert].pos.z;
-                float py = verts[iVert].pos.y;
-                verts[iVert].pos.x =
-                    orientMtx.x.x * px + (orientMtx.y.x * py + orientMtx.z.x * pz);
-                verts[iVert].pos.z =
-                    orientMtx.z.z * pz + (orientMtx.x.z * px + orientMtx.y.z * py);
-                verts[iVert].pos.y =
-                    orientMtx.z.y * pz + (orientMtx.x.y * px + orientMtx.y.y * py);
+                verts[iVert].pos.Set(
+                    cosCs * cosH * bottomRadius,
+                    sinCs * bottomRadius + length,
+                    cosCs * sinH * bottomRadius
+                );
+                {
+                    Vector3 &p = verts[iVert].pos;
+                    float px = p.x, py = p.y, pz = p.z;
+                    float rx = orientMtx.y.x * py;
+                    rx += orientMtx.z.x * pz;
+                    rx += orientMtx.x.x * px;
+                    float rz = orientMtx.x.z * px;
+                    rz += orientMtx.y.z * py;
+                    rz += orientMtx.z.z * pz;
+                    float ry = orientMtx.x.y * px;
+                    ry += orientMtx.y.y * py;
+                    ry += orientMtx.z.y * pz;
+                    p.Set(rx, ry, rz);
+                }
             }
             verts[iVert].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
             verts[iVert].tex.Set(segU, uvV);
             iVert++;
         }
 
-        short sideWidth;
-                sideWidth = seg < numSegments - 1 ? 3 : 3 - (short)numVerts;
+        int sideWidth;
+        if (seg < numSegments - 1) {
+            sideWidth = 3;
+        } else {
+            sideWidth = 3 - numVerts;
+        }
 
-        short cur = baseIdx - 1;
+        int cur = baseIdx - 1;
         int curFlip = flip;
         int fCount = 2;
         do {
             flip = curFlip + 1;
-            short nextRow = cur - 1 + sideWidth;
+            int nextRow = cur - 1 + sideWidth;
             // Bitwise, not logical: the target emits `clrlwi. rN, rM, 31`
             // (an explicit AND with 1), so the winding alternates every
             // iteration. `curFlip && 1` compiles to `cmpwi rM, 0` instead and
@@ -1360,27 +1383,22 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
         } while (fCount != 0);
 
         halfAngle = halfAngle + angleStep;
-        faces[iFace].Set(baseIdx - 2, baseIdx + sideWidth - 2, numVerts);
-        faces[iFace + 1].Set(baseIdx + sideWidth, baseIdx, numVerts + 1);
+        // The two cap faces of each segment live after ALL the side faces:
+        // bottom caps at [4n, 5n), top caps at [5n, 6n). The image walks
+        // two extra face cursors seeded at 4n*6 and 5n*6 (0x8282C4B8-C4C4)
+        // and the side-face cursor advances only 4 faces per segment
+        // (0x8282C7AC); interleaving them 4+2 per segment was wrong.
+        faces[capBase + seg].Set(baseIdx - 2, baseIdx + sideWidth - 2, numVerts);
+        faces[topBase + seg].Set(baseIdx + sideWidth, baseIdx, numVerts + 1);
         baseIdx = baseIdx + 3;
-        iFace += 2;
     }
 
     verts[numVerts].pos.Set(0.0f, 0.0f, 0.0f);
     verts[numVerts].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
     verts[numVerts].tex.Set(0.0f, 0.0f);
 
-    int baseVertIdx = numVerts + 1;
     verts[baseVertIdx].pos.Set(0.0f, length, 0.0f);
-    float px = verts[baseVertIdx].pos.x;
-    float py = verts[baseVertIdx].pos.y;
-    float pz = verts[baseVertIdx].pos.z;
-    verts[baseVertIdx].pos.z =
-        orientMtx.y.z * py + (orientMtx.x.z * px + orientMtx.z.z * pz);
-    verts[baseVertIdx].pos.y =
-        orientMtx.y.y * py + (orientMtx.x.y * px + orientMtx.z.y * pz);
-    verts[baseVertIdx].pos.x =
-        px * orientMtx.x.x + (orientMtx.z.x * pz + orientMtx.y.x * py);
+    Multiply(verts[baseVertIdx].pos, orientMtx, verts[baseVertIdx].pos);
     verts[baseVertIdx].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
     verts[baseVertIdx].tex.Set(0.0f, 1.0f);
 

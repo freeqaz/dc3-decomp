@@ -2266,6 +2266,12 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         // Retail coalesces box2 into vb's dead stack slot (0x50) and gives box1
         // its own (0x70); declaring box2 first does NOT reproduce that (measured
         // 2026-09-14, byte-identical diff), so the readable order stays.
+        // w7-bj (2026-09-14, 94.06): the image also sinks the eight box stw's
+        // (0x160-0x17c) below the Speed/StartSize/DeltaSize float work and
+        // multiplies StartSize/DeltaSize scale-first. Refuted: SetBoxExtent
+        // called after SetDeltaSize (93.36, 82 diff_arg rows vs 56); spelling
+        // `scale * X` on BubbleSize/BubblePeriod/StartSize/DeltaSize
+        // (byte-identical -- MSVC canonicalises the commutative fmuls).
         Vector3 box1, box2;
         Scale(partsys->BoxExtent1(), scale, box1);
         Scale(partsys->BoxExtent2(), scale, box2);

@@ -737,6 +737,15 @@ void PlaneEquation(Vector3 n, float inv, float d, Vector4 &out) {
 // Everything here is Vector3-valued: retail works with whole vectors, copies
 // them field-wise into the corner locals, and only drops to scalars for the
 // final shader constants.
+//
+// w7-bj (2026-09-14): still 79.24 canonical. The residual is 30 insert/delete
+// clusters spread over the corner block (rows ~118-330): the image keeps one
+// extra by-value copy of perp at 0x120 for the botR slides, reuses perp's slot
+// 0x60 for topLeft once perp is dead, and saves r17-r31 (15 GPRs, three more
+// than we do) because it keeps more 16-byte copies in flight at once. Refuted
+// here: hoisting all five corner copies above the slides (copies first, slides
+// after) drops the function to 67.9 with 76 inserts / 72 deletes. Interleaved
+// copy-then-slide, as written, is the closer shape.
 void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &def) {
     Vector3 lightPos;
     GetLightPosition(sl, lightPos);
