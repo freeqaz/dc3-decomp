@@ -345,6 +345,18 @@ void ReadFunc(BINKIO *bink, bool startRead) {
             XTEABlock temp;
             AutoTimer _at(_t, 50.0f, nullptr, nullptr);
             // Decrypt the buffer data in-place using XTEA block cipher
+            // NEGATIVE RESULT on the 53-instruction r29<->r30 permutation and
+            // the residual schedule of the two interleaved 64-bit swaps below:
+            // loading the two halves into named locals first
+            // (`unsigned long long d0 = block->mData[0]; ... EndianSwap(d0)`)
+            // is exactly neutral (89.2 either way).  The formula itself is
+            // right -- SwapData in utl/BinStream.cpp inlines the SAME
+            // EndianSwap(unsigned long long) at 100% -- so what differs here is
+            // only how MSVC reassociates the 8-step recurrence when TWO of them
+            // are interleaved, and that follows the register pressure: the
+            // image spends one more callee-saved register (r24-r31 vs our
+            // r25-r31, the whole frame delta) on the loop.  No source spelling
+            // tried reaches it.
             XTEABlock *block = (XTEABlock *)bf->pBufBack;
             while (block < (XTEABlock *)((unsigned char *)bf->pBufBack + bytesRead)) {
                 block->mData[0] = EndianSwap(block->mData[0]);
@@ -368,6 +380,12 @@ void ReadFunc(BINKIO *bink, bool startRead) {
         bf->iBufEmpty -= uBytesRead;
         bink->bytesAvail += uBytesRead;
         bink->BytesRead += uBytesRead;
+        // NEGATIVE RESULT: the image loads bytesAvail (0x82E5D4EC
+        // `lwz r11, 0x6c(r28)`) before BufHighUsed (0x82E5D4F0) and ours emits
+        // them the other way round, but spelling it
+        // `BufHighUsed < bytesAvail` does NOT swap them -- it keeps the same
+        // load order and inverts the branch polarity on top (ble -> bge), a
+        // net loss.  The load order is the scheduler's, not the source's.
         if (bink->bytesAvail > bink->BufHighUsed) {
             bink->BufHighUsed = bink->bytesAvail;
         }
@@ -380,12 +398,13 @@ void ReadFunc(BINKIO *bink, bool startRead) {
         }
     }
     if (startRead) {
-        // Size() and Tell() are adjacent, so MSVC CSEs the pFile load into one
-        // callee-saved register (0x82E5D534 `lwz r29, 0x0(r30)`); Eof() and
-        // ReadAsync sit past a branch and reload it (0x82E5D574, 0x82E5D5A8).
-        int fileSize = bf->pFile->Size();
-        int fileTell = bf->pFile->Tell();
-        unsigned int remaining = (unsigned int)(fileSize - fileTell);
+        // ONE statement: the image loads pFile once into a callee-saved
+        // register (0x82E5D534 `lwz r29, 0x0(r30)`) and reuses it for both
+        // virtual calls, reloading only the vtable at 0x82E5D54C.  Written as
+        // two statements with two locals MSVC will not CSE across the first
+        // call and re-reads pFile from bf.  Eof() and ReadAsync are separate
+        // statements and DO reload it (0x82E5D574, 0x82E5D5A8).
+        unsigned int remaining = (unsigned int)(bf->pFile->Size() - bf->pFile->Tell());
         if (bf->iBufEmpty < 0x8000 || bf->pFile->Eof()) {
             bink->CurBufSize = bink->bytesAvail;
         } else {
