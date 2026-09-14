@@ -822,7 +822,7 @@ void DxRnd::InitBuffers() {
     {
         BeginMemTrackObjectName("D3D->CreateDevice");
         HRESULT hr = Direct3D_CreateDevice(
-            0, mDeviceType, &mFocusWindow, 1, &mPresentParams, &mD3DDevice
+            0, mDeviceType, mFocusWindow, 1, &mPresentParams, &mD3DDevice
         );
         DX_ASSERT_CODE(hr, 0x367);
         EndMemTrackObjectName();
@@ -883,7 +883,10 @@ void DxRnd::InitBuffers() {
     DX_ASSERT(mFrontBufferDepth, 0x3A2);
     EndMemTrackObjectName();
     PostDeviceReset();
-    int temp27 = ((((mHeight + 0x1F) >> 5) * ((mWidth + 0x1F) >> 5)) << 0xC);
+    // 0x8261963C-0x82619658: srawi+addze on BOTH terms -- a signed divide by
+    // 32, not an arithmetic shift.  With `>> 5` MSVC fuses one of them into a
+    // single `extlwi` and the addze pair disappears.
+    int temp27 = ((((mHeight + 0x1F) / 32) * ((mWidth + 0x1F) / 32)) << 0xC);
     for (int i = 0; i < 2; i++) {
         D3DLOCKED_RECT rect;
         D3DTexture_LockRect(mFrontBuffers[i], 0, &rect, nullptr, 0);
