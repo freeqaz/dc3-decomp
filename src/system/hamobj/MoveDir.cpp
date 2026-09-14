@@ -1119,12 +1119,11 @@ void MoveDir::FinalPoseStateMachine() {
     float beatInMeasure = TheTaskMgr.TotalBeat() - songBeat;
     for (int i = 0; i < 2; i++) {
         int other_player = 1 - i;
-        MovePlayerData &mpd = mMovePlayerData[i];
-        HamMove *move = mpd.mCurMove;
+        HamMove *move = mMovePlayerData[i].mCurMove;
         HamPlayerData *playerData = TheGameData->Player(i);
         if (playerData->IsPlaying() && !InGracePeriod(i) && move && move->IsFinalPose()) {
             const FilterVersion *fv = move->FilterVer();
-            if (move->IsFinalPose() && mpd.mFeedbackMode != 2) {
+            if (move->IsFinalPose() && mMovePlayerData[i].mFeedbackMode != 2) {
                 float frac;
                 if (TheMoveMgr->HasRoutine()) {
                     frac = mAsyncDetector->MoveRatingFrac(
@@ -1135,9 +1134,10 @@ void MoveDir::FinalPoseStateMachine() {
                 }
                 const std::vector<MoveFrame> &moveFrames =
                     ((const HamMove *)move)->GetMoveFrames();
-                if (moveFrames.begin() != moveFrames.end()) {
-                    float lastFrameBeat = (moveFrames.end() - 1)->GetBeat();
-                    if (mpd.mFeedbackMode == 0 && lastFrameBeat <= beatInMeasure) {
+                if (!moveFrames.empty()) {
+                    float lastFrameBeat = moveFrames.back().GetBeat();
+                    if (mMovePlayerData[i].mFeedbackMode == 0
+                        && lastFrameBeat <= beatInMeasure) {
                         MILO_ASSERT(
                             (0) <= (other_player) && (other_player) < (2), 0x4ce
                         );
@@ -1145,34 +1145,34 @@ void MoveDir::FinalPoseStateMachine() {
                             static Message msg("final_pose_photo");
                             TheHamProvider->Export(msg, true);
                         }
-                        mpd.mFeedbackMode = 1;
+                        mMovePlayerData[i].mFeedbackMode = 1;
                     }
-                    if (mpd.mFeedbackMode == 1) {
+                    if (mMovePlayerData[i].mFeedbackMode == 1) {
                         float measureBeat = (float)(TheTaskMgr.CurrentMeasure() * 4);
                         float lastFrameSeconds =
                             BeatToSeconds(lastFrameBeat + measureBeat);
-                        float errorDist = ScaleFullErrorDist(fv->mScaleOp);
-                        float detectEndSeconds =
-                            errorDist + sLatencySeconds + lastFrameSeconds;
+                        float detectEndSeconds = ScaleFullErrorDist(fv->mScaleOp)
+                            + sLatencySeconds + lastFrameSeconds;
                         float detectEndBeat = SecondsToBeat(detectEndSeconds);
                         if ((float)(detectEndBeat - measureBeat) >= 4.0f) {
                             MILO_NOTIFY_ONCE(
                                 "%s last frame is too late, end pose won't be "
                                 "scored correctly",
-                                PathName(move)
+                                move->Name()
                             );
                         }
                         if (detectEndSeconds <= unk30c
                             || beatInMeasure
                                 >= (float)(4.0f - HamMove::sMinFrameDistBeats)) {
                             static Symbol final_pose_rating("final_pose_rating");
-                            const std::vector<float> *ratings = move->RatingOverride();
-                            DataNode ratingNode(
-                                DetectFracToRating(frac, ratings, nullptr)
-                            );
-                            HamPlayerData *pd = TheGameData->Player(i);
-                            pd->Provider()->SetProperty(final_pose_rating, ratingNode);
-                            mpd.mFeedbackMode = 2;
+                            {
+                                DataNode ratingNode(
+                                    DetectFracToRating(frac, move->RatingOverride(), nullptr)
+                                );
+                                HamPlayerData *pd = TheGameData->Player(i);
+                                pd->Provider()->SetProperty(final_pose_rating, ratingNode);
+                            }
+                            mMovePlayerData[i].mFeedbackMode = 2;
                         }
                     }
                 }
