@@ -175,9 +175,9 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     float prod2 = mTargetPitch * 0.0015384615f;
     float prod3 = mTargetPitch * 0.016666668f;
     unsigned int inputLen =
-        (unsigned int)(int)(prod1 + (prod1 >= 0.0f ? 0.5f : -0.5f)) & ~3u;
-    mDefaultPitch = (int)(prod2 + (prod2 >= 0.0f ? 0.5f : -0.5f));
-    mField_0x20 = (int)(prod3 + (prod3 >= 0.0f ? 0.5f : -0.5f));
+        (unsigned int)(prod1 + (prod1 >= 0.0f ? 0.5f : -0.5f)) & ~3u;
+    mDefaultPitch = (unsigned int)(prod2 + (prod2 >= 0.0f ? 0.5f : -0.5f));
+    mField_0x20 = (unsigned int)(prod3 + (prod3 >= 0.0f ? 0.5f : -0.5f));
 
     // The fill values are unnamed temporaries; the target reuses ONE stack
     // slot for all of them (and for the ChannelBuffer prototype / coeffs),
