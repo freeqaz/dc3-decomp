@@ -1381,7 +1381,6 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
     }
 #endif
     StyleState styleState(this, 1.0f);
-    unsigned short prevChar = 0;
     std::vector<unsigned short> negWidthChars;
     std::vector<unsigned short> missingChars;
     std::vector<RndFontBase *> missingFonts;
@@ -1389,6 +1388,7 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
     widths[0] = 0.0f;
     const unsigned short *p = wideChars;
     float *w = widths + 1;
+    unsigned short prevChar = 0;
     while (*p != 0) {
         unsigned short ch = *p;
         if (ch == '<' && mMarkup) {
@@ -1416,6 +1416,12 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
                 FontMapBase *fontMap = mFontMaps[styleState.mFontMapIdx];
                 RndFontBase *font = fontMap->Font();
                 if (font) {
+                    // The image homes a copy of ch at 0x54 here (82694F20
+                    // `sth r28, 0x54`), after font's slot (0x50) and before
+                    // the mFitType test; that slot is what find/push_back
+                    // take the address of. ch itself (r28) is never stored.
+                    unsigned short curChar = ch;
+                    float charWidth;
                     if (mFitType == kFitScrollMarqueeWrapAlways && ch == '\n') {
                         // The wrap arm is the fall-through (82694F3C beq to the
                         // insert block), and the line width is single-precision:
@@ -1431,27 +1437,25 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
                         }
                         // Both calls pass ch (82694FC8 / 82694FEC `mr r5/r4, r28`),
                         // not a '\n' literal.
-                        float charWidth;
                         if (font->CharAdvance(prevChar, ch, charWidth)) {
                             fontMap->IncrementDisplayableChars(ch);
                         }
                     } else {
-                        float charWidth;
                         if (font->CharAdvance(prevChar, ch, charWidth)) {
                             charWidth = (styleState.mKerning + charWidth) * styleState.mSize;
                             // Non-negative arm is the fall-through (82695048 blt).
                             if (charWidth >= 0.0f) {
                                 cumWidth = charWidth + cumWidth;
                             } else if (ch != '\n') {
-                                if (std::find(negWidthChars.begin(), negWidthChars.end(), ch) == negWidthChars.end()) {
-                                    negWidthChars.push_back(ch);
+                                if (std::find(negWidthChars.begin(), negWidthChars.end(), curChar) == negWidthChars.end()) {
+                                    negWidthChars.push_back(curChar);
                                 }
                             }
                             fontMap->IncrementDisplayableChars(ch);
                             prevChar = ch;
                         } else if (ch != '\n') {
-                            if (std::find(missingChars.begin(), missingChars.end(), ch) == missingChars.end()) {
-                                missingChars.push_back(ch);
+                            if (std::find(missingChars.begin(), missingChars.end(), curChar) == missingChars.end()) {
+                                missingChars.push_back(curChar);
                             }
                             if (std::find(missingFonts.begin(), missingFonts.end(), font) == missingFonts.end()) {
                                 missingFonts.push_back(font);
