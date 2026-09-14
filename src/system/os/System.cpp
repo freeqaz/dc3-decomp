@@ -442,6 +442,14 @@ void InitSystem(const char *config) {
 }
 
 void PreInitSystem(const char *config) {
+    // Residual (97.51%, 10 rows): 4 are the anchor rows the comment above
+    // gUsingCD already refutes; the other 6 are the prologue load order --
+    // the image reads gUsingCD through its OWN lis/reloc, then gHostConfig,
+    // then TheArchive, then compares, while we read gHostConfig first and
+    // reach gUsingCD through the r30 anchor.  REFUTED: hoisting gHostConfig
+    // into a named `bool hostConfig` read between UsingCD() and TheArchive --
+    // exactly the image's order -- is byte-inert (same 10 rows).  The order
+    // follows from which global r30 anchors, not from statement order.
     bool oldCD = UsingCD();
     Archive *oldArchive = TheArchive;
     if (gHostConfig) {
