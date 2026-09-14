@@ -568,11 +568,24 @@ void CharDriver::PollDeps(
     change.push_back(mBones);
 }
 
-static bool CharDriverStarved(CharClipDriver *first) {
-    if (!first) return true;
-    if (first->Next() || (first->mPlayFlags & 0xF0) == 0x10)
-        return false;
-    return true;
+// A member, as in RB3, inlined into Poll at all four sites.  Poll's `this`
+// (r29) is the CharPollable subobject at +0x28; the image materialises the
+// CharDriver pointer once (`subi r28, r29, 0x28` at 0x82368D18) and reads
+// mFirst through it inside every inlined check (`lwz r11, 0x58(r28)` at
+// 0x82368DDC) while Poll's own `mFirst &&` tests read 0x30(r29).  That CSE
+// only appears when the inlined body reads `mFirst` through the CharDriver
+// pointer as a value: a file-static helper taking `CharDriver *` that caches
+// `First()` in a local folds back to 0x30(r29) (90.9), and spelling
+// `driver->First()` three times gets the CSE but homes the repeated call
+// expression as twelve dead `stw` (93.7).  The `!(A || B)` return is the
+// computed-bool path the image zero-extends (`clrlwi` at 0x82368D50 before
+// the caller's `clrlwi.`); two constant returns and RB3's `bool ret` local
+// both lose those rows.  /OPT:REF drops the out-of-line copy, so there is no
+// ?Starved@CharDriver@ symbol in the image.
+bool CharDriver::Starved() {
+    if (!mFirst)
+        return true;
+    return !(mFirst->Next() || (mFirst->mPlayFlags & 0xF0) == 0x10);
 }
 
 void CharDriver::SetBeatScale(float beatscale, bool) {
@@ -627,18 +640,18 @@ void CharDriver::Poll() {
         }
     }
     mOldBeat = beat;
-    if (CharDriverStarved(mFirst) && !mStarvedHandler.Null()) {
+    if (Starved() && !mStarvedHandler.Null()) {
         Dir()->Handle(Message(mStarvedHandler), true);
     }
-    if (CharDriverStarved(mFirst) && mFirst && (mFirst->mPlayFlags & 0xF0) == 0x30) {
+    if (Starved() && mFirst && (mFirst->mPlayFlags & 0xF0) == 0x30) {
         int flags = mFirst->mPlayFlags;
         CharClip::SetDefaultBlendFlag(flags, 4);
         Play(mFirst->GetClip(), flags, -1, kHugeFloat, 0);
     }
-    if (CharDriverStarved(mFirst) && mFirst && (mFirst->mPlayFlags & 0xF0) == 0x40) {
+    if (Starved() && mFirst && (mFirst->mPlayFlags & 0xF0) == 0x40) {
         Play(mLastNode, 0x44, -1, kHugeFloat, 0);
     }
-    if (CharDriverStarved(mFirst) && mDefaultClip && mDefaultPlayStarved) {
+    if (Starved() && mDefaultClip && mDefaultPlayStarved) {
         Play(DataNode(mDefaultClip), 0x44, -1, kHugeFloat, 0);
     }
     if (mFirst) {
@@ -656,16 +669,20 @@ void CharDriver::Poll() {
                     mInternalBones->Enter();
                     mFirst->ScaleAdd(*mInternalBones, weight);
                     mInternalBones->Blend(*mBones);
-                    goto apply_end;
+                } else {
+                    mFirst->GetClip()->ScaleDown(*mBones, deltaBeat);
+                    mFirst->ScaleAdd(*mBones, weight);
                 }
-                mFirst->GetClip()->ScaleDown(*mBones, deltaBeat);
-            } else if (mApply != kApplyAdd) {
-                MILO_ASSERT(mApply == kApplyRotateTo, 0x22F);
+            } else if (mApply == kApplyAdd) {
+                // Its own call site, as in RB3: the image tail-merges only
+                // `lwz r3 / fmr f1 / bl` (kApplyAdd branches to 0x823690C0 with
+                // mBones still live in r4); a single shared ScaleAdd reached by
+                // goto puts the r4 reload inside the merged tail instead.
+                mFirst->ScaleAdd(*mBones, weight);
+            } else {
+                MILO_ASSERT(mApply == kApplyRotateTo, 0x232);
                 mFirst->RotateTo(*mBones, weight);
-                goto apply_end;
             }
-            mFirst->ScaleAdd(*mBones, weight);
-        apply_end:;
         }
     }
 }

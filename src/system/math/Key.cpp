@@ -137,45 +137,34 @@ void QuatSpline(
         float fsq = ref * ref;
         float fcubed = fsq * ref;
         int idx1 = idx + 1;
-        // NEGATIVE RESULT: defining q88 first (from prev->value, so its
-        // initialiser does not name prevQuat) to try to land it in the
-        // image's lowest Quat slot 0x60 costs 17pp -- the frame grows 0x10
-        // and the prologue goes r25 -> r22.  The image's slot order
-        // (q88 0x60, prevQuat 0x70, nextQuat 0x80, q58 0x90) is not
-        // reachable by reordering these four declarations; MSVC assigns
-        // them in order of first STORE regardless of declaration order
-        // (hoisting `Hmx::Quat q88;` above prevQuat is byte-neutral).
-        //
-        // NEGATIVE RESULT (w7-ap, 2026-09-14, 81.40 canonical): two further
-        // spellings, both refuted.
-        //   * RB3's shape verbatim (rb3 src/system/math/Key.cpp:174-181) --
-        //     four BARE declarations in the reverse of the image's slot order,
-        //     then four assignments: 81.5, i.e. noise, and
-        //     `run_diff_inspect mode=stack-layout` shows the slots still come
-        //     out prevQuat 0x60 / nextQuat 0x70 / q88 0x80 / q58 0x90.  That
-        //     is the positive confirmation the note above only asserted: for
-        //     BARE declarations the slot is claimed at first STORE and
-        //     declaration order is inert.
-        //   * q88 declared first but KEEPING its branch, reading prev->value /
-        //     next->value directly so neither ternary names another Quat:
-        //     64.4 -- the same cliff as the 17pp refutation above, so the cost
-        //     is q88 being first, not its initialiser naming prevQuat.
-        // The image stores 0x70, then 0x80, then 0x60, then 0x90, so its 0x60
-        // slot is NOT claimed at first store either; whatever produces that
-        // ordering is not reachable from the declaration/assignment axis.
-        Hmx::Quat prevQuat = prev->value;
-        Hmx::Quat nextQuat = next->value;
-        Hmx::Quat q88 = idx == 0 ? prevQuat : keys[idx - 1].value;
-        Hmx::Quat q58 = idx1 == keys.size() - 1 ? nextQuat : keys[idx1 + 1].value;
-        NormalizeTo(prevQuat, q88);
-        NormalizeTo(prevQuat, nextQuat);
-        NormalizeTo(prevQuat, q58);
+        // The four Catmull-Rom control quaternions are ONE array, not four
+        // locals.  That is what the image's slot order says: q[0] 0x60, q[1]
+        // 0x70, q[2] 0x80, q[3] 0x90 with the stores landing 0x70, 0x80, 0x60,
+        // 0x90 -- an order no set of separate declarations reaches (three
+        // lanes measured it: bare declarations claim a slot at first STORE,
+        // declaration order is inert, and putting the 0x60 quat first costs
+        // 17pp).  It also explains the two copy shapes: q[1]/q[2] from the
+        // key pointers are batched block copies (82E073CC..82E073E8), while
+        // q[0]/q[3] through the selected pointer are lwz/stw pairs (82E07404
+        // on), because the selected pointer may point INTO the array object.
+        // In the loop the second operand read picks the induction base
+        // (q[2] = 0x80, with 0x60/0x70/0x90 as -0x20/-0x10/+0x10 and qout
+        // reached as r27 - 0x80), and the read order pp, n, p, nn is the one
+        // that also gives p f8 / pp f9 / n f6 (154/154 rows equal).
+        Hmx::Quat q[4];
+        q[1] = prev->value;
+        q[2] = next->value;
+        q[0] = idx == 0 ? q[1] : keys[idx - 1].value;
+        q[3] = idx1 == keys.size() - 1 ? q[2] : keys[idx1 + 1].value;
+        NormalizeTo(q[1], q[0]);
+        NormalizeTo(q[1], q[2]);
+        NormalizeTo(q[1], q[3]);
         int i = 0;
         while (i < 4) {
-            float p = prevQuat[i];
-            float pp = q88[i];
-            float n = nextQuat[i];
-            float nn = q58[i];
+            float pp = q[0][i];
+            float n = q[2][i];
+            float p = q[1][i];
+            float nn = q[3][i];
             // Catmull-Rom, evaluated as a flat sum (cubic, quadratic, linear,
             // constant) -- the nested/right-associated spelling costs 2.6pp.
             qout[i] = 0.5f

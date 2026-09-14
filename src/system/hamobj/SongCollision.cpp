@@ -317,6 +317,27 @@ void SongCollision::Update(MoveDir *moveDir) {
     //    array base then lands in r14 instead of r29.
     // The r28/r29 rotation is therefore not reachable through the array base on
     // its own -- `dancer`'s allocation has to move with it.
+    //
+    // w7-ba (floor held at 94.2; four more spellings measured).  The image's
+    // shape is now pinned down further, and the knot is a single allocator
+    // choice:
+    //  - the dead `stw r29, 0x78(r31)` at 0x8251127C, right before the size()
+    //    loads, is a NAMED reference bound to `mData[0]` after the loop (a ref
+    //    bound to `data[0]` through the function-scope ref is folded away and
+    //    byte-identical to this spelling).  With `mData[i]` in the loop and
+    //    `std::vector<BeatCollisionData> &easy = mData[0];` at the end, that
+    //    store, the r15/r16 order, the 0xd0/0xf0 bcd slots and the 0x88/0x90
+    //    Timer::Ms temps all match (281/349 rows equal vs 265/345 here), but
+    //    canonical reads 92.8 because `dancer` is still evicted: the hoisted
+    //    `this + 0x2c` temp takes r14 and dancer takes r28, the register
+    //    TheHamDirector@ha freed, which is the one `beat` then steals inside
+    //    the inner loop (image: dancer r14, base r29 = the freed register,
+    //    base spilled to 0x50 and reloaded at 0x82511190/98).
+    //  - a pointer local after `Timer timer;` is byte-identical to w7-ak's
+    //    reference move (92.4); a per-difficulty reference inside the loop body
+    //    is byte-identical to the `mData[i]` spelling.
+    // What is left is which of {dancer, hoisted base} gets r14; nothing in the
+    // source order tried so far moves that.  Kept the higher-canonical spelling.
     auto& data = mData;
     if (moveDir) {
         MILO_ASSERT(TheGameData, 0xFB);

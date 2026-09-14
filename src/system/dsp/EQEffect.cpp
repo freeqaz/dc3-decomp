@@ -186,6 +186,16 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                     float *c2 = mXoverCoeffs[2];
                     float *s = &samples[chan];
                     for (int i = 0; i < numSamples; i++) {
+                        // NEGATIVE RESULTS (w7-ba): the image has a second dead
+                        // `addi r5, r11, 0x25c` beside xd's (82E58ECC), i.e. a
+                        // `yd = &mXoverOutputDelay[chan][0]` local folded onto the
+                        // this+chan*0x78 walker; declaring it here makes MSVC keep
+                        // xd as the walker and yd in its own spilled register
+                        // (88.9 vs 91.2).  Swapping the two middle c1[] terms of
+                        // the bandpass chains to chase the image's 3,2,1,0 product
+                        // order reorders the whole load block instead (87.5), and
+                        // `-x * b0` in band 1 still fuses to fmsubs, not the
+                        // image's fmuls/fneg/fmadds at 82E592A4.
                         float *xd = &mXoverInputDelay[chan][0];
 
                         // Stage 0 (lowpass), pass 1

@@ -99,21 +99,37 @@ namespace {
         Hmx::Color greenColor = sGreen;
         Hmx::Color textColor = sLightGray;
         if (mirrored) {
-            darkColor.red *= 0.5f;
-            darkColor.green *= 0.5f;
-            darkColor.blue *= 0.5f;
-            greenColor.red *= 0.5f;
-            greenColor.green *= 0.5f;
-            greenColor.blue *= 0.5f;
-            textColor.red *= 0.5f;
-            textColor.green *= 0.5f;
-            textColor.blue *= 0.5f;
+            // The image rebuilds each colour from its STATIC, not from the local
+            // it just copied (824FCE64.. loads off r11/r10/r7, the addresses of
+            // sDarkerGray/sGreen/sLightGray), scaling r/g/b and re-storing alpha
+            // (824FCEC8: 0xc(r11) straight to 0x7c).  `*= 0.5f` on the locals
+            // reads the copies back (86.8); a `Hmx::Color(...)` temporary
+            // assigned over the local costs a 16-byte copy (57.5).
+            // RESIDUAL (94.5): the image also parks each alpha in the temp slot
+            // 0x50(r31) before storing it (824FCEB0, 824FCEBC, 824FCEE4) and
+            // schedules the nine products b,g-first; binding alpha to a
+            // `const float &` through an inline helper is byte-identical to
+            // this spelling, so that home store is not a by-ref temp.
+            darkColor.Set(
+                sDarkerGray.red * 0.5f,
+                sDarkerGray.green * 0.5f,
+                sDarkerGray.blue * 0.5f,
+                sDarkerGray.alpha
+            );
+            greenColor.Set(sGreen.red * 0.5f, sGreen.green * 0.5f, sGreen.blue * 0.5f, sGreen.alpha);
+            textColor.Set(
+                sLightGray.red * 0.5f,
+                sLightGray.green * 0.5f,
+                sLightGray.blue * 0.5f,
+                sLightGray.alpha
+            );
         }
         String str(label);
-        if (!usePercent) {
-            str += MakeString(": %.2f", detected);
-        } else {
+        // The percent arm is the fall-through (824FCF04 `beq` skips it).
+        if (usePercent) {
             str += MakeString(": %.2f%%", detected * 100.0f);
+        } else {
+            str += MakeString(": %.2f", detected);
         }
         float detectedEnd = (max - min) * detected;
         DrawOverlayBar(y, min, (max - min) + min, darkColor, sCharWidth);
@@ -1117,14 +1133,19 @@ void MoveDir::LoadScoring(const DataArray *cfg) {
 void MoveDir::FinalPoseStateMachine() {
     float songBeat = (float)(TheTaskMgr.CurrentMeasure() * 4);
     float beatInMeasure = TheTaskMgr.TotalBeat() - songBeat;
+    // RESIDUAL (w7-ba, 99.95): the image updates the loop's three memory-homed
+    // walkers other_player, &mMovePlayerData[i].mFeedbackMode, &other.mFeedbackMode
+    // (82503FB0..82503FD0: 0x54, 0x50, 0x58); we update 0x54, 0x58, 0x50.  Inert:
+    // other_player declared after `move` or at its first use, `[1 - i]` in place
+    // of `[other_player]`.  Do NOT bind `mMovePlayerData[i]` to a reference --
+    // it then lives in a register and the walker base moves to 0x318 (95.6).
     for (int i = 0; i < 2; i++) {
         int other_player = 1 - i;
-        MovePlayerData &mpd = mMovePlayerData[i];
-        HamMove *move = mpd.mCurMove;
+        HamMove *move = mMovePlayerData[i].mCurMove;
         HamPlayerData *playerData = TheGameData->Player(i);
         if (playerData->IsPlaying() && !InGracePeriod(i) && move && move->IsFinalPose()) {
             const FilterVersion *fv = move->FilterVer();
-            if (move->IsFinalPose() && mpd.mFeedbackMode != 2) {
+            if (move->IsFinalPose() && mMovePlayerData[i].mFeedbackMode != 2) {
                 float frac;
                 if (TheMoveMgr->HasRoutine()) {
                     frac = mAsyncDetector->MoveRatingFrac(
@@ -1135,9 +1156,10 @@ void MoveDir::FinalPoseStateMachine() {
                 }
                 const std::vector<MoveFrame> &moveFrames =
                     ((const HamMove *)move)->GetMoveFrames();
-                if (moveFrames.begin() != moveFrames.end()) {
-                    float lastFrameBeat = (moveFrames.end() - 1)->GetBeat();
-                    if (mpd.mFeedbackMode == 0 && lastFrameBeat <= beatInMeasure) {
+                if (!moveFrames.empty()) {
+                    float lastFrameBeat = moveFrames.back().GetBeat();
+                    if (mMovePlayerData[i].mFeedbackMode == 0
+                        && lastFrameBeat <= beatInMeasure) {
                         MILO_ASSERT(
                             (0) <= (other_player) && (other_player) < (2), 0x4ce
                         );
@@ -1145,34 +1167,34 @@ void MoveDir::FinalPoseStateMachine() {
                             static Message msg("final_pose_photo");
                             TheHamProvider->Export(msg, true);
                         }
-                        mpd.mFeedbackMode = 1;
+                        mMovePlayerData[i].mFeedbackMode = 1;
                     }
-                    if (mpd.mFeedbackMode == 1) {
+                    if (mMovePlayerData[i].mFeedbackMode == 1) {
                         float measureBeat = (float)(TheTaskMgr.CurrentMeasure() * 4);
                         float lastFrameSeconds =
                             BeatToSeconds(lastFrameBeat + measureBeat);
-                        float errorDist = ScaleFullErrorDist(fv->mScaleOp);
-                        float detectEndSeconds =
-                            errorDist + sLatencySeconds + lastFrameSeconds;
+                        float detectEndSeconds = ScaleFullErrorDist(fv->mScaleOp)
+                            + sLatencySeconds + lastFrameSeconds;
                         float detectEndBeat = SecondsToBeat(detectEndSeconds);
                         if ((float)(detectEndBeat - measureBeat) >= 4.0f) {
                             MILO_NOTIFY_ONCE(
                                 "%s last frame is too late, end pose won't be "
                                 "scored correctly",
-                                PathName(move)
+                                move->Name()
                             );
                         }
                         if (detectEndSeconds <= unk30c
                             || beatInMeasure
                                 >= (float)(4.0f - HamMove::sMinFrameDistBeats)) {
                             static Symbol final_pose_rating("final_pose_rating");
-                            const std::vector<float> *ratings = move->RatingOverride();
-                            DataNode ratingNode(
-                                DetectFracToRating(frac, ratings, nullptr)
-                            );
-                            HamPlayerData *pd = TheGameData->Player(i);
-                            pd->Provider()->SetProperty(final_pose_rating, ratingNode);
-                            mpd.mFeedbackMode = 2;
+                            {
+                                DataNode ratingNode(
+                                    DetectFracToRating(frac, move->RatingOverride(), nullptr)
+                                );
+                                HamPlayerData *pd = TheGameData->Player(i);
+                                pd->Provider()->SetProperty(final_pose_rating, ratingNode);
+                            }
+                            mMovePlayerData[i].mFeedbackMode = 2;
                         }
                     }
                 }

@@ -73,21 +73,31 @@ BEGIN_LOADS(DancerSequence)
             d >> curFrame.mMoveFrameIdx;
         }
         DancerSkeleton &skeleton = curFrame.mSkeleton;
-        // RESIDUAL (w7-ak, 91.40 canonical). Two causes remain, both measured.
-        // (1) Block layout of the rev chain: the image lets the `d.rev < 2` arm fall
-        //     through into the shared `ms = -1` + SetDisplacementElapsedMs tail and
-        //     branches the other three arms BACKWARDS into it (cross-jumping the four
-        //     identical stores); we hoist the single store above the whole chain.
-        //     NEGATIVE RESULT: writing `ms = -1` in each of the four arms *before*
-        //     the `skeletonRev = N` assignment (to line the tails up for the merge)
-        //     does not merge them and costs the ms/numFrames/unusedBool slots again:
-        //     back to 90.48.
-        // (2) The nine Vector3-sized slots 0xb0..0x130 are the same SET on both
-        //     sides, permuted: image has pos(rev<7)=0xc0 disp(rev>=7)=0xd0
-        //     pos(rev>=7)=0xe0 disp(rev<7)=0xf0 Key=0x100 v1=0x110 v=0x120, we have
-        //     disp(rev<7)=0xc0 pos(rev>=7)=0xd0 pos(rev<7)=0xe0 disp(rev>=7)=0xf0
-        //     v1=0x100 v=0x110 Key=0x120. Neither side overlays the two rev branches,
-        //     so this is MSVC slot shaping and not a declaration-count difference.
+        // RESIDUAL (w7-ba, 99.96 canonical, 11 rows, all stack-slot addi operands).
+        // The 91.4 floor recorded here by w7-ak was two things, both now closed:
+        // (a) the Vector3 reads were chained on `d` (BinStreamRev's member
+        //     template re-materialises r3 per call) -- see the `bs >>` chains
+        //     below; and (b) the ms selection.  The image lets the `d.rev < 2`
+        //     arm fall through into ONE `stw ms` (8249B740) and straight into
+        //     SetDisplacementElapsedMs (8249B744), with the rev>=5 ReadEndian arm
+        //     out of line at 8249B7C8 jumping back to the call.  Hoisting
+        //     `int ms = -1` above the chain (91.9), or `ms = -1` in every arm
+        //     before/after `skeletonRev = N` (90.5 / 91.1), never merged.  What
+        //     does: leave the chain pure, then `if (skeletonRev >= 4) d >> ms;
+        //     else ms = -1;` -- MSVC jump-threads the test through the constant
+        //     arms.  The polarity matters: `if (skeletonRev < 4) ms = -1; else
+        //     d >> ms;` reproduces the shared stw but lays the ReadEndian arm
+        //     inline and branches forward to the call (91.6).
+        // What is left: the nine Vector3-sized slots 0xb0..0x130 are the same
+        // SET on both sides, permuted (image pos(rev<7)=0xc0 disp(rev>=7)=0xd0
+        // pos(rev>=7)=0xe0 disp(rev<7)=0xf0 Key=0x100 v1=0x110 v=0x120; ours
+        // disp(rev<7)=0xc0 pos(rev>=7)=0xd0 pos(rev<7)=0xe0 disp(rev>=7)=0xf0
+        // v1=0x100 v=0x110 Key=0x120).  Four spellings were byte-identical on
+        // this: swapping `pos, disp` to `disp, pos`; hoisting pos/disp out of
+        // the `dataIdx == 0` arm; renaming the rev>=7 pair; hoisting the key
+        // storage above the dataIdx loop.  Address-taken locals do not share
+        // slots here, and neither name, declaration order nor scope moves the
+        // order MSVC gives them.
         if (d.rev < 7) {
             int skeletonRev = 5;
             // The image funnels all five arms into a single
@@ -96,7 +106,6 @@ BEGIN_LOADS(DancerSequence)
             // arm and the rev>=6 arm. The rev>=6 arm reading the int is not
             // cosmetic -- without it a rev-6 DancerSequence desyncs the stream by
             // four bytes for the rest of the frame, and mElapsedMs is never set.
-            int ms = -1;
             if (d.rev < 2) {
                 skeletonRev = 0;
             } else if (d.rev < 3) {
@@ -105,11 +114,14 @@ BEGIN_LOADS(DancerSequence)
                 skeletonRev = 2;
             } else if (d.rev < 5) {
                 skeletonRev = 3;
-            } else {
-                if (d.rev < 6) {
-                    skeletonRev = 4;
-                }
+            } else if (d.rev < 6) {
+                skeletonRev = 4;
+            }
+            int ms;
+            if (skeletonRev >= 4) {
                 d >> ms;
+            } else {
+                ms = -1;
             }
             skeleton.SetDisplacementElapsedMs(ms);
             if (skeletonRev < 3) {
@@ -127,8 +139,13 @@ BEGIN_LOADS(DancerSequence)
                 }
                 for (int dataIdx = 0; dataIdx < count; dataIdx++) {
                     if (dataIdx >= 6) {
+                        // Chained on the raw stream, not on d: the image feeds
+                        // each operator>>(BinStream&, Vector3&) the previous
+                        // call's return (8249B808 `addi r4` straight into the
+                        // second bl with no `mr r3, r26`); BinStreamRev's
+                        // member template re-materialises r3 per call.
                         Vector3 v;
-                        d >> v >> v >> v;
+                        bs >> v >> v >> v;
                     } else {
                         if (dataIdx == 0) {
                             Vector3 pos, disp;
@@ -138,7 +155,7 @@ BEGIN_LOADS(DancerSequence)
                             skeleton.SetCamJointDisplacement((SkeletonJoint)jointIdx, disp);
                         } else {
                             Vector3 v1, v2;
-                            d >> v1 >> v2;
+                            bs >> v1 >> v2;
                         }
                         if (skeletonRev < 4) {
                             Vector3 v;

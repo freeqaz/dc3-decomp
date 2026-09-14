@@ -1238,22 +1238,40 @@ void WorldCrowd::DrawShowing() {
                 memcpy(&camXfmCopy, &curCam->WorldXfm(), sizeof(Transform) - sizeof(Vector3));
 
                 float halfHeight = charIt->mDef.mHeight * 0.5f;
+                // halfWidth is a NAMED local and sits at f23 in the image with
+                // the hoisted 0.5f at f24; ours allocates them the other way
+                // round (7 register-only rows, forgiven by the canonical
+                // ruler). Tried and refuted: writing `halfHeight * 0.5f` at
+                // both use sites instead of naming it (MSVC then does NOT
+                // hoist it -- frees an FPR, shifts f19..f26, 44 rows); the
+                // author's `/ 2` idiom for all four half-size sites (inert
+                // under /fp:fast, byte-identical).
                 float halfWidth = halfHeight * 0.5f;
 
                 // --- Set up impostor camera: position at -dist along camera's Y axis ---
                 const Transform &placementXfm = mPlacementMesh->WorldXfm();
                 const Transform &curCamXfm = curCam->WorldXfm();
-                float dx = curCamXfm.v.x - placementXfm.v.x;
-                float dy = curCamXfm.v.y - placementXfm.v.y;
-                float dz = curCamXfm.v.z - placementXfm.v.z - halfHeight;
-                float dist = std::sqrt(dx * dx + dy * dy + dz * dz);
+                // Through Subtract(): the image homes BOTH source refs
+                // (`addi r10, r30, 0x30` / `addi r11, r3, 0x30` stored to
+                // 0x50(r31) at 82838528/82838534) the way an inlined helper
+                // taking two `const Vector3 &` does; a hand-written per-component
+                // subtraction homes nothing.
+                Vector3 delta;
+                Subtract(curCamXfm.v, placementXfm.v, delta);
+                delta.z -= halfHeight;
+                float dist = Length(delta);
                 float minDist = curCam->NearPlane() + halfHeight;
                 dist = (float)__fsel(dist - minDist, dist, minDist);
                 float negDist = -dist;
                 // NOTE: 0.0f multiplications are dead math required for codegen match (fmul)
-                camXfmCopy.v.x = camXfmCopy.m.x.x * 0.0f + (camXfmCopy.m.y.x * negDist + camXfmCopy.m.z.x * 0.0f);
-                camXfmCopy.v.y = camXfmCopy.m.z.y * 0.0f + (camXfmCopy.m.y.y * negDist + camXfmCopy.m.x.y * 0.0f);
-                camXfmCopy.v.z = (camXfmCopy.m.z.z * 0.0f + (camXfmCopy.m.y.z * negDist + camXfmCopy.m.x.z * 0.0f)) + halfHeight;
+                // One Set(): its arguments evaluate right to left, which is the
+                // image's z-inner, y-inner, x-inner order at 82838550..82838558
+                // and its v.y-before-v.x stores at 82838564/8283856C.
+                camXfmCopy.v.Set(
+                    camXfmCopy.m.x.x * 0.0f + (camXfmCopy.m.y.x * negDist + camXfmCopy.m.z.x * 0.0f),
+                    camXfmCopy.m.z.y * 0.0f + (camXfmCopy.m.y.y * negDist + camXfmCopy.m.x.y * 0.0f),
+                    (camXfmCopy.m.z.z * 0.0f + (camXfmCopy.m.y.z * negDist + camXfmCopy.m.x.z * 0.0f)) + halfHeight
+                );
                 gImpostorCamera->SetLocalXfm(camXfmCopy);
                 float yFov = (float)std::atan((double)(halfHeight / dist)) * 2.0f;
                 gImpostorCamera->SetFrustum(
@@ -1279,38 +1297,28 @@ void WorldCrowd::DrawShowing() {
                     // the target tests mCrowdRotate FIRST (`lwz r9, 0x6c(r24)` /
                     // `cmpwi cr6, r9, 0x1` at 82838608/82838614, before any
                     // `lbz r11, 0xbd(r26)`) and expands WorldXfm() twice.
-                    float camA, upA, camB, upB;
+                    // Each arm is one Cross() of the camera's Y row with the up
+                    // vector (Face: up x camY, Away: camY x up). The x.x term
+                    // lands after the join (`fmuls f6, f9, f12` / `fmsubs f0,
+                    // f10, f0, f6` at 828386CC/828386E0) because MSVC
+                    // cross-jumps the identical tails; the image also homes
+                    // `&camWXfm.m.y` there (`addi r11, r3, 0x10` / `stw r11,
+                    // 0x50(r31)`), which is Cross()'s ref param.
                     if (mCrowdRotate == kCrowdRotateFace) {
                         const Transform &camWXfm = curCam->WorldXfm();
-                        charXfm.m.x.z = camWXfm.m.y.y * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.y;
-                        charXfm.m.x.y = camWXfm.m.y.x * charXfm.m.z.z - camWXfm.m.y.z * charXfm.m.z.x;
-                        camA = camWXfm.m.y.z;
-                        upA = charXfm.m.z.y;
-                        camB = camWXfm.m.y.y;
-                        upB = charXfm.m.z.z;
+                        Cross(charXfm.m.z, camWXfm.m.y, charXfm.m.x);
                     } else {
                         const Transform &camWXfm = curCam->WorldXfm();
-                        charXfm.m.x.y = camWXfm.m.y.z * charXfm.m.z.x - camWXfm.m.y.x * charXfm.m.z.z;
-                        charXfm.m.x.z = camWXfm.m.y.x * charXfm.m.z.y - camWXfm.m.y.y * charXfm.m.z.x;
-                        camA = camWXfm.m.y.y;
-                        upA = charXfm.m.z.z;
-                        camB = camWXfm.m.y.z;
-                        upB = charXfm.m.z.y;
+                        Cross(camWXfm.m.y, charXfm.m.z, charXfm.m.x);
                     }
 
                     // Forward (x-row): normalize cross product result
-                    charXfm.m.x.x = camA * upA - camB * upB;
                     Normalize(charXfm.m.x, charXfm.m.x);
 
-                    // Right (y-row): the cross product up x forward, i.e.
-                    //   y.x = upY*x.z - upZ*x.y
-                    //   y.y = upZ*x.x - upX*x.z
-                    //   y.z = upX*x.y - upY*x.x
-                    // The image stores them in that order at 0x88, 0x84, 0x80
-                    // (82838714/1C/24), i.e. z first, then y, then x.
-                    charXfm.m.y.z = charXfm.m.x.y * charXfm.m.z.x - charXfm.m.z.y * charXfm.m.x.x;
-                    charXfm.m.y.y = charXfm.m.z.z * charXfm.m.x.x - charXfm.m.x.z * charXfm.m.z.x;
-                    charXfm.m.y.x = charXfm.m.x.z * charXfm.m.z.y - charXfm.m.x.y * charXfm.m.z.z;
+                    // Right (y-row): up x forward. Set() evaluates right to
+                    // left, which is the image's z, y, x store order at
+                    // 0x88, 0x84, 0x80 (82838714/1C/24).
+                    Cross(charXfm.m.z, charXfm.m.x, charXfm.m.y);
                 }
                 charXfm.v.x = 0;
                 charXfm.v.y = 0;
@@ -1350,13 +1358,19 @@ void WorldCrowd::DrawShowing() {
                 }
 
                 // --- Compute bounding rect (branchless fsel min/max) ---
+                // Declared minX, maxX, minY, maxY: the image's fmr order
+                // (f0 <- f22, f12 <- f21, f13 <- f22, f11 <- f21 at
+                // 828388EC..82838904).
                 float minX = FLT_MAX;
                 float maxX = -FLT_MAX;
-                float maxY = -FLT_MAX;
+                // The index is zeroed between the second and third fmr
+                // (`mr r10, r21` at 828388F8), i.e. it is declared here,
+                // between maxX and minY, not inside the `if`.
+                unsigned int ri = 0;
                 float minY = FLT_MAX;
+                float maxY = -FLT_MAX;
                 int numRects = (int)rects.size();
                 if (numRects != 0) {
-                    unsigned int ri = 0;
                     do {
                         // The maxima take the rect's OWN y/x, not the running
                         // minimum. The target adds before it selects:
@@ -1367,12 +1381,24 @@ void WorldCrowd::DrawShowing() {
                         // We were feeding the already-minimised value into the
                         // sum, so every iteration that did not lower the running
                         // minimum contributed min_so_far + h instead of y + h.
-                        float ry = rects[ri].y;
-                        float rx = rects[ri].x;
-                        maxX = Max(maxX, ry + rects[ri].h);
-                        maxY = Max(maxY, rects[ri].w + rx);
-                        minX = Min(minX, ry);
-                        minY = Min(minY, rx);
+                        // `rects[ri].y` / `.x` are written out at both uses
+                        // rather than named: the CSE'd re-read is what homes
+                        // each loaded value into the temp slot (`stfs f9,
+                        // 0x50(r31)` / `stfs f8, 0x50(r31)` at
+                        // 82838938/8283893C), the same shape NgDOFProc::DoPost
+                        // (100%) gets from spelling mMaxBlur three times.
+                        // Naming them as locals (or passing them through
+                        // MinEq's const float&) drops both home stores.
+                        // Minima before maxima: the image's fsel order is
+                        // minX, minY, maxX, maxY (82838944..82838958). The
+                        // `y + h` sum lands as `fadds f6, f6, f9` here against
+                        // the image's `fadds f6, f9, f6` (82838930) whichever
+                        // way the operands are written -- one commutative row,
+                        // forgiven by the canonical ruler.
+                        minX = Min(minX, rects[ri].y);
+                        minY = Min(minY, rects[ri].x);
+                        maxX = Max(maxX, rects[ri].y + rects[ri].h);
+                        maxY = Max(maxY, rects[ri].w + rects[ri].x);
                         ri++;
                     } while (ri != numRects);
                 }
@@ -1452,7 +1478,23 @@ void WorldCrowd::DrawShowing() {
                 charIt->mMMesh->Mesh()->Sync(0x1F);
 
                 // --- Draw billboarded multimesh instances ---
-                DrawMultiMeshWithEnviron(mmesh);
+                // Written out at THIS scope, not through DrawMultiMeshWithEnviron:
+                // the image gives this tracker its own slot (0x170, `addi r3, r31,
+                // 0x170` at 82838BEC) beside the DrawNormal tracker's 0x150, i.e.
+                // the two are NOT sibling-scope siblings. An inlined helper puts its
+                // tracker in a nested sibling scope and MSVC packs both onto one slot
+                // (frame 0x270 vs 0x290).
+                RndEnviron *curEnv = RndEnviron::Current();
+                bool savedApprox2 = true;
+                if (curEnv) {
+                    savedApprox2 = curEnv->UsesApproxGlobal();
+                    curEnv->SetUseApproxGlobal(false);
+                }
+                RndEnvironTracker tracker(curEnv, nullptr);
+                mmesh->DrawShowing();
+                if (curEnv) {
+                    curEnv->SetUseApproxGlobal(savedApprox2);
+                }
             }
         }
     }

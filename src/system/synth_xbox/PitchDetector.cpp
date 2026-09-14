@@ -49,23 +49,20 @@ PitchDetector::~PitchDetector() {
 }
 
 void PitchDetector::Detect(unsigned int frame) {
-    unsigned int span = mSpectral.mWindowSize;
-
     // Locate the analysis window inside the circular input buffer.  The target
-    // re-derives the buffer length at each of its three uses rather than
-    // caching it, and divides unsigned.
-    unsigned int pos = (unsigned int)(mInput->end() - mInput->begin() - span + frame + 1)
-        % (unsigned int)(mInput->end() - mInput->begin());
-    unsigned int start = (unsigned int)(mInput->end() - mInput->begin()) - pos;
-    // Bound as a const reference, not a copy: both arms are unmodified lvalues of
-    // the same type, so this aliases span/start rather than materialising a new
-    // slot.  Measured -- the plain `unsigned int firstLen = ...` copy scores 81.5
-    // against this spelling's 82.5, so the alias is load-bearing, not incidental.
-    const unsigned int &firstLen = (start >= span) ? span : start;
+    // re-derives the buffer length at each of its three uses (three inlined
+    // size() calls; a spelled-out `end() - begin()` is CSE'd into one), and
+    // divides unsigned.  The window length is read from mSpectral at each use,
+    // not cached: after the first Mul the image re-reads 0x0(r29), not a local.
+    // min() takes the cast as a temporary (mWindowSize is an int), which is the
+    // 0x58(r1) home the image gives it; `start` is homed at 0x50 the same way.
+    unsigned int pos = (mInput->size() - mSpectral.mWindowSize + frame + 1) % mInput->size();
+    unsigned int start = mInput->size() - pos;
+    unsigned int firstLen = stlpmtx_std::min((unsigned int)mSpectral.mWindowSize, start);
 
     IPP::Mul(firstLen, &mInput->begin()[pos], &mWindow[0], &mSpectrum[0]);
-    if (firstLen != span) {
-        IPP::Mul(span - firstLen, &mWindow[firstLen], mInput->begin(), &mSpectrum[firstLen]);
+    if (firstLen != mSpectral.mWindowSize) {
+        IPP::Mul(mSpectral.mWindowSize - firstLen, &mWindow[firstLen], mInput->begin(), &mSpectrum[firstLen]);
     }
 
     mSpectral.Analyze(&mSpectrum[0], &mSpectrum[0]);
@@ -73,13 +70,11 @@ void PitchDetector::Detect(unsigned int frame) {
 
     // Skip the initial monotonically-decreasing region of the spectrum.
     unsigned int lo = 0;
-    unsigned int i = 1;
-    if (((mWindowSize + mHop) & ~1u) > 2) {
-        while (mSpectrum[i] < mSpectrum[i - 1]) {
-            lo = i;
-            i++;
-            if (i >= ((mHop + mWindowSize) >> 1)) break;
+    for (unsigned int i = 1; i < (mHop + mWindowSize) / 2; i++) {
+        if (mSpectrum[i] >= mSpectrum[i - 1]) {
+            break;
         }
+        lo = i;
     }
     if (lo < mWindowSize) {
         lo = mWindowSize;
@@ -88,13 +83,11 @@ void PitchDetector::Detect(unsigned int frame) {
     // Weighted peak search across the candidate band.
     unsigned int best = lo;
     float bestScore = 0.0f;
-    if (lo <= mHop) {
-        for (unsigned int j = lo; j <= mHop; j++) {
-            float score = mSpectrum[j] * 1.5f + (mSpectrum[j - 1] + mSpectrum[j + 1]);
-            if (bestScore < score) {
-                bestScore = score;
-                best = j;
-            }
+    for (unsigned int j = lo; j <= mHop; j++) {
+        float score = mSpectrum[j] * 1.5f + (mSpectrum[j - 1] + mSpectrum[j + 1]);
+        if (bestScore < score) {
+            bestScore = score;
+            best = j;
         }
     }
 

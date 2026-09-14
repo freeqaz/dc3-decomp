@@ -377,6 +377,14 @@ void HamRibbon::ConstructMesh() {
         mMesh->Verts().resize(mNumSides * mNumSegments * 2);
         mMesh->Faces().resize(mNumSides * mNumSegments * 2);
 
+        // NEGATIVE RESULTS (w7-ba, 90.2): the two residual regions are pure
+        // scheduling.  Face loop: the image computes idxUp, then andc/twllei,
+        // then nextIdxUp and all three clrlwi before any sth (824C8658..
+        // 824C868C); we store two shorts before the trap.  Declaring idxUp
+        // before nextIdxUp is byte-identical.  Vert loop: the image runs the
+        // (float)boneIdx extsw/std/lfd/fcfid chain first after Normalize
+        // (824C889C) and sign-extends the bone index with extsh (824C88A8)
+        // before the sth; a `short` local for the index is byte-identical.
         for (int seg = 0; seg < mNumSegments; seg++) {
             int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {

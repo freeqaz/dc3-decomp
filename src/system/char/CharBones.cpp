@@ -1017,6 +1017,67 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
     }
 }
 
+// RotateBy inlines Mtx.h's Multiply(Quat, Quat, Quat) in its three quat arms
+// exactly as RotateTo does, and under /fp:fast MSVC reassociates the header's
+// nested Set() per call site.  Same accumulator lever as RotateToMultiply
+// below, but RotateBy's product is q * other (RotateTo's is other * q) and
+// the image's association here is its own: the two compressed arms emit the
+// components w, z, y, x (0x823C6DB4..0x823C6DCC) seeded from a.x*b.x,
+// a.z*b.w, a.z*b.x and a.w*b.x; the uncompressed arm emits y, z, w, x
+// (0x823C6F44..0x823C6F5C) and seeds y from a.y*b.w and x from a.w*b.x
+// with a.x*b.w as the second term.  Each accumulator's first two terms are
+// written PRE-SWAPPED, as in the RotateTo helpers: MSVC seeds from the
+// second written term.
+//
+// RESIDUAL (w7-ba, 99.66 canonical, 330/357 rows; was 93.99): the two
+// compressed arms are row-for-row equal.  The uncompressed arm keeps the
+// image's seeds, fmadds sequence and store order, but the image loads a.z
+// before b.w and slots the hoisted `cmplw cr6, r26, r24` at 0x823C6EF8 before
+// the first fmuls, where ours issues the y seed as soon as its two operands
+// are loaded (25 register rows + the two-instruction cmplw/fmuls transposition).
+// Measured on that arm: source operand order inside the seeds is normalised
+// (byte-identical); declaring z before y re-orders the emission to y, w, x, z
+// (99.08, worse).  Not a source-visible knob that was found.
+static void RotateByMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out) {
+    float rw = a.w * b.w - a.x * b.x;
+    rw -= a.y * b.y;
+    rw -= a.z * b.z;
+    float rz = a.w * b.z;
+    rz += a.z * b.w;
+    rz += a.x * b.y;
+    rz -= a.y * b.x;
+    float ry = a.w * b.y;
+    ry += a.z * b.x;
+    ry += a.y * b.w;
+    ry -= a.x * b.z;
+    float rx = a.y * b.z;
+    rx += a.w * b.x;
+    rx += a.x * b.w;
+    rx -= a.z * b.y;
+    out.Set(rx, ry, rz, rw);
+}
+
+static void RotateByMultiplyUncompressed(
+    const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out
+) {
+    float ry = a.z * b.x;
+    ry += a.y * b.w;
+    ry += a.w * b.y;
+    ry -= a.x * b.z;
+    float rz = a.w * b.z;
+    rz += a.z * b.w;
+    rz += a.x * b.y;
+    rz -= a.y * b.x;
+    float rw = a.w * b.w - a.x * b.x;
+    rw -= a.y * b.y;
+    rw -= a.z * b.z;
+    float rx = a.x * b.w;
+    rx += a.w * b.x;
+    rx += a.y * b.z;
+    rx -= a.z * b.y;
+    out.Set(rx, ry, rz, rw);
+}
+
 // MARK: RotateBy
 void CharBones::RotateBy(CharBones &bones) const {
     if (!mBones.empty()) {
@@ -1096,7 +1157,7 @@ void CharBones::RotateBy(CharBones &bones) const {
                     }
                     Hmx::Quat q;
                     myQuatItr->ToQuat(q);
-                    Multiply(q, *otherQuatItr, *otherQuatItr);
+                    RotateByMultiply(q, *otherQuatItr, *otherQuatItr);
                     myBonesItr++;
                     if (myBonesItr == myBonesEnd) {
                         break;
@@ -1122,7 +1183,7 @@ void CharBones::RotateBy(CharBones &bones) const {
                     }
                     Hmx::Quat q;
                     myQuatItr->ToQuat(q);
-                    Multiply(q, *otherQuatItr, *otherQuatItr);
+                    RotateByMultiply(q, *otherQuatItr, *otherQuatItr);
                     myBonesItr++;
                     if (myBonesItr == myBonesEnd) {
                         break;
@@ -1146,7 +1207,7 @@ void CharBones::RotateBy(CharBones &bones) const {
                         }
                         otherQuatItr++;
                     }
-                    Multiply(*myQuatItr, *otherQuatItr, *otherQuatItr);
+                    RotateByMultiplyUncompressed(*myQuatItr, *otherQuatItr, *otherQuatItr);
                     myBonesItr++;
                     if (myBonesItr == myBonesEnd) {
                         break;
