@@ -407,6 +407,10 @@ BEGIN_LOADS(RndText)
         d >> mStyles;
     } else {
         mStyles.resize(1);
+        // The image re-zeroes mZOffset here, after resize() and before the
+        // memcpy, even though StyleData's constructor already did
+        // (`stfs f31, 0xf0(r31)` with style at r31+0xc0 and mZOffset at +0x30).
+        style.mZOffset = 0;
         memcpy(&mStyles[0], &style, sizeof(StyleData));
         mStyles[0].mFont = font;
     }
