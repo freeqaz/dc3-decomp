@@ -289,18 +289,21 @@ void SkeletonViz::SetCamera(
             mCamMesh->DrawShowing();
             Vector3 normal;
             Multiply(frame.mFloorNormal, unk1d4.m, normal);
-            normal.x += worldXfm.v.x;
-            normal.y += worldXfm.v.y;
-            normal.z += worldXfm.v.z;
+            Add(worldXfm.v, normal, normal);
+            // The image stores 0.0f into the blue channel of this colour
+            // (`stfs f30, 0x78(r1)` at 0x824408C8, f30 = __real@00000000, and
+            // 0x70(r1) is the Hmx::Color passed as r6 to DrawLine at
+            // 0x82440878 `addi r6, r1, 0x70`): the floor-normal debug line is
+            // YELLOW, the same colour as the floor plane drawn below -- not
+            // white. We had (1,1,1,1).
             TheRnd.DrawLine(
-                worldXfm.v, normal, Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f), false
+                worldXfm.v, normal, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), false
             );
         }
     }
 
     if (unk218) {
-        Plane plane;
-        memcpy(&plane, &frame.mFloorClipPlane, sizeof(Plane));
+        Plane plane = *(const Plane *)&frame.mFloorClipPlane;
         Transform localXfm = unk1d4;
         localXfm.v = worldXfm.v;
         Multiply(plane, localXfm, plane);
