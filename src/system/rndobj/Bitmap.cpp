@@ -919,6 +919,22 @@ void DecodeDxt3Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     alpha = ((i1 << 4) & 0xF0) | (i1 & 0xF);
 }
 
+// RESIDUAL (w7-am, 94.6 canonical): every remaining row is the array-init
+// store schedule.  Both 16-byte tables land in the right slots (-0x60(r1) and
+// -0x50(r1)) with the right values, and the 32 `stb`s are the same 32 stores
+// -- MSVC just interleaves them in a different order and therefore assigns the
+// eight constant-holding registers differently, which also drags the one
+// `addi rN, r3, 0x2` a few slots.  From 82671F00 to the epilogue our listing is
+// instruction-for-instruction the target's.  Nothing in the source picks that
+// interleave: the declaration order is already the one that produces the
+// matching slot assignment, and reordering the two arrays or the `uc[0]`/`uc[1]`
+// reads around them is inert (measured, see the 2026-09-14 negative result
+// below).
+// NEGATIVE RESULT (w7-am, 2026-09-14): moving both `a0`/`a1` reads below both
+// array declarations -- which is where the image reads them, 82671ED8/EDC,
+// after the whole init block -- produces a byte-identical object.  The reads
+// are already scheduled there; their source position does not reach the
+// scheduler.
 void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     // The two alpha endpoints live in the block's first 16-bit word, and the
     // Xbox 360 stores that word byte-swapped -- the same swizzle the index
