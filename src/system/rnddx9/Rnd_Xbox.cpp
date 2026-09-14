@@ -1311,6 +1311,13 @@ void DxRnd::DoPointTests() {
             verts[3].x = area.w + verts[0].x;
             verts[3].y = area.h + verts[3].y;
 
+            // w7-bl RESIDUAL (92.90%): what is left is a flat renumbering of
+            // the callee-saved set (`this` is r29 in the image, r30 for us;
+            // the iterator, the byte index and the two query-index addresses
+            // shift with it), four `fadds` whose operands MSVC canonicalises
+            // (writing `verts[0].y + area.h` is byte-identical), and the
+            // mFlare store at 0x8261B268, which the image does off the
+            // computed `&test` where we emit an indexed `stwx`.
             // 0x8261B430/0x8261B444: the manager is read ONCE into a
             // callee-saved register and reused for BeginQuery (`mr r3, r30`);
             // EndQuery at 0x8261B478 reloads the member.
