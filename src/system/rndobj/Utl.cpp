@@ -1416,22 +1416,27 @@ DataNode OnTestDrawGroups(DataArray *da) {
 }
 
 void TestTextureSize(ObjectDir *dir, int iType, int i3, int i4, int i5, int maxBpp) {
-    bool rendered = false;
-    if (iType == RndTex::kRendered || iType == RndTex::kRenderedNoZ)
-        rendered = true;
-    bool shouldCheckBpp = false;
-    if (GetGfxMode() == 0 || rendered)
-        shouldCheckBpp = true;
-    int scaleFactor = 1;
-    if (shouldCheckBpp)
-        scaleFactor = i5;
+    // Each bool is ONE initialisation from a boolean expression, not a
+    // false-then-if: the image materialises the value in a scratch register
+    // (`li r11, 0` / `li r11, 1`) and narrows it into the variable with a
+    // separate `clrlwi r22, r11, 24` (target idx 15-18).  Assigning through an
+    // `if` writes the final register directly and loses that narrowing.
+    bool rendered = (iType == RndTex::kRendered || iType == RndTex::kRenderedNoZ);
+    bool shouldCheckBpp = (GetGfxMode() == 0 || rendered);
+    // Ternary, i5 first: the image emits `mr r11, r27` (= i5) BEFORE the
+    // branch and overwrites it with `li r11, 0x1` on the false path.
+    int scaleFactor = shouldCheckBpp ? i5 : 1;
+    // Hoisted, and in this operand order: the image computes
+    // `mullw r11, r11, r29` (scaleFactor * i3) and `mullw r25, r11, r28`
+    // (* i4) before the ObjDirItr constructor call at target idx 37.
+    int sizeLimit = scaleFactor * i3 * i4;
     for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
-        if (iType == it->GetType()) {
+        if (it->GetType() == iType) {
             int local_bpp = shouldCheckBpp ? it->Bpp() : 1;
             if (rendered && GetGfxMode() == 1 && local_bpp == 0x10)
                 local_bpp = 0x20;
             int product = it->Width() * it->Height() * local_bpp;
-            if (product > i3 * i4 * scaleFactor) {
+            if (product > sizeLimit) {
                 MILO_NOTIFY(
                     "%s is too big w:%d h:%d bpp:%d",
                     PathName(it),
@@ -1586,6 +1591,10 @@ void MakeTangentsLate(RndMesh *m) {
 
 void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     MILO_ASSERT(m, 0x250);
+    // NEGATIVE RESULT (w7-aq, 2026-09-14): declaring `face` AFTER the identity
+    // fill -- which is how the image threads the mulli / lwz 0x110 / add
+    // through the identity stores -- costs 0.6pp (94.13 -> 93.5). The face
+    // reference belongs first.
     RndMesh::Face &face = m->Faces()[faceIdx];
     outBasis.x.x = 1.0f;
     outBasis.x.y = 0.0f;
@@ -2736,9 +2745,12 @@ void BuildVisit(BSPNode *node) {
 }
 
 void BuildFromBSP(RndMesh *mesh) {
-    RndMesh *geomOwner = mesh->GetGeomOwner();
-    // GetBSPTree() already reads through mGeomOwner, so retail reaches it
-    // straight off `mesh` -- one lwz, not two.
+    // No `geomOwner` local: RndMesh::GetBSPTree(), Verts() and Faces() all read
+    // through mGeomOwner themselves, so retail keeps the PARAMETER in r26 and
+    // re-reads 0x148(r26) at each use (target idx 43/47/96/129).  Binding
+    // `RndMesh *geomOwner = mesh->GetGeomOwner()` costs a third extra
+    // callee-saved GPR -- __savegprlr_21 against the image's __savegprlr_24 --
+    // and 0x20 of frame.
     BuildVisit(mesh->GetBSPTree());
 
     int totalVerts = 0;
@@ -2746,31 +2758,36 @@ void BuildFromBSP(RndMesh *mesh) {
     // First pass: count vertices and faces, erase polys with < 3 points
     std::list<BuildPoly>::iterator it = gChildPolys.begin();
     unsigned int totalFaces = 0;
-    while (gChildPolys.end() != it) {
-        unsigned int numPoints = (unsigned int)it->mPoly.points.size();
-        if (numPoints < 3U) {
+    while (it != gChildPolys.end()) {
+        // size() spelled THREE times, deliberately.  The image computes
+        // (end - begin) >> 3 once for the test, off the node pointer
+        // (0x8/0xc(r10)), and then TWICE more in the else arm off a CSE'd
+        // `&points` (0x0/0x4(r11), target idx 29-37) -- two `subf`/`srawi`
+        // pairs from the same two loaded pointers.  Binding `numPoints` folds
+        // them into one and deletes eight instructions the image has.
+        if (it->mPoly.points.size() < 3U) {
             it = gChildPolys.erase(it);
         } else {
-            totalVerts += (int)numPoints;
-            totalFaces += numPoints - 2;
+            totalVerts += (int)it->mPoly.points.size();
+            totalFaces += (unsigned int)it->mPoly.points.size() - 2;
             ++it;
         }
     }
 
     // Resize vertex array
-    geomOwner->Verts().resize(totalVerts);
+    mesh->Verts().resize(totalVerts);
 
-    // Handle face array
-    unsigned int currentFaces = (unsigned int)geomOwner->Faces().size();
-    if (totalFaces < currentFaces) {
-        geomOwner->Faces().erase(
-            geomOwner->Faces().begin() + totalFaces, geomOwner->Faces().end()
-        );
+    // Handle face array.  emptyFace is declared BEFORE the branch -- the image
+    // sinks its three zero `sth`s into the entry block alongside `li r10, 0x6`
+    // and the single `addi r3, r11, 0x110` that serves as `this` for both
+    // erase() and _M_fill_insert() (target idx 48-52).  Faces().size() is
+    // spelled twice, once per use, which is the image's two `divw`s.
+    RndMesh::Face emptyFace;
+    std::vector<RndMesh::Face> &faces = mesh->Faces();
+    if (totalFaces < (unsigned int)faces.size()) {
+        faces.erase(faces.begin() + totalFaces, faces.end());
     } else {
-        RndMesh::Face emptyFace;
-        geomOwner->Faces().insert(
-            geomOwner->Faces().end(), totalFaces - currentFaces, emptyFace
-        );
+        faces.insert(faces.end(), totalFaces - (unsigned int)faces.size(), emptyFace);
     }
 
     int vertIdx = 0;
@@ -2780,38 +2797,55 @@ void BuildFromBSP(RndMesh *mesh) {
     // Second pass: transform vertices and create faces
     std::list<BuildPoly>::iterator pit = gChildPolys.begin();
     while (pit != gChildPolys.end()) {
-        std::vector<Vector2> &points = pit->mPoly.points;
-
-        if (!points.empty()) {
-            int vertOffset = vertIdx * 0x60;
-            Vector2 *p = &points[0];
-            Vector2 *pEnd = &points[0] + points.size();
-
-            do {
-                Vector3 pt(p->x, p->y, z);
-                Multiply(
-                    pt,
-                    pit->mTransform,
-                    *(Vector3 *)((char *)geomOwner->Verts().mVerts + vertOffset)
-                );
-                p++;
-                vertIdx++;
-                vertOffset += 0x60;
-            } while (p != pEnd);
+        // No `points` reference: the image reads begin/end straight off the
+        // list node (0x8/0xc(r28)) at every use, and RE-READS end() on every
+        // iteration of the inner loop (target idx 106) -- that is a plain
+        // begin()/end() iterator loop, not a precomputed pEnd.  Binding
+        // `std::vector<Vector2> &points` materialises `addi r25, r28, 0x8` and
+        // then addresses everything off it.
+        for (std::vector<Vector2>::iterator p = pit->mPoly.points.begin();
+             p != pit->mPoly.points.end();
+             ++p) {
+            Vector3 pt(p->x, p->y, z);
+            // vertIdx * 0x60 spelled here, not hoisted to a `vertOffset` local:
+            // MSVC strength-reduces it into an induction variable whose seed
+            // `mulli r29, r30, 0x60` lands in the LOOP PREHEADER, after the
+            // zero-trip guard (target idx 90).  A precomputed local puts the
+            // multiply before the guard instead.
+            Multiply(
+                pt,
+                pit->mTransform,
+                *(Vector3 *)((char *)mesh->Verts().mVerts + vertIdx * 0x60)
+            );
+            vertIdx++;
         }
 
-        unsigned int numPoints = (unsigned int)points.size();
-        int firstVert = vertIdx - (int)numPoints;
+        // RESIDUAL (w7-aq, 97.8 canonical): the image loads begin (0x8(r28))
+        // before end (0xc(r28)) for this size(); we load them the other way
+        // round.  Two rows, pure scheduling -- the image itself loads end first
+        // for the identical expression in the FIRST pass (target idx 15/17), so
+        // there is no consistent source spelling to copy.  The other residual is
+        // a callee-saved permutation: the image parks `mesh` in r26 and faceIdx
+        // in r25, we do the reverse (10 rows).  Both survive at 97.8.
+        int firstVert = vertIdx - (int)pit->mPoly.points.size();
         int v2 = firstVert + 2;
         if (v2 < vertIdx) {
             int triCount = vertIdx - v2;
             int faceOffset = faceIdx * 6;
-            int v1 = firstVert + 1;
+            // NEGATIVE RESULTS (w7-aq): the image seeds the second face index
+            // with a BIASED `addis r10, r11, 0x1 / subi r10, r10, 0x1`
+            // (= v2 + 0xFFFF, correct only because the value is masked to 16
+            // bits at every use) where we emit a plain `subi r10, r11, 0x1`.
+            // Spelling v1 `unsigned short` DOES produce the addis pair but then
+            // costs a `clrlwi` per increment -- 97.1%.  Dropping v1 entirely and
+            // writing `facePtr[1] = (unsigned short)(v2 - 1)` in the loop is
+            // worse again, 95.6%.  Plain int v1 is the best of the three.
+            int v1 = v2 - 1;
             faceIdx += triCount;
 
             do {
                 unsigned short *facePtr =
-                    (unsigned short *)((char *)&geomOwner->Faces()[0] + faceOffset);
+                    (unsigned short *)((char *)&mesh->Faces()[0] + faceOffset);
                 facePtr[0] = (unsigned short)firstVert;
                 facePtr[1] = (unsigned short)v1;
                 facePtr[2] = (unsigned short)v2;

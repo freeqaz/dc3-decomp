@@ -33,54 +33,55 @@ DxMultiMesh::~DxMultiMesh() {
     }
 }
 
+// FILE-SCOPE, not function-local statics.  The image addresses BOTH arrays off
+// one base register -- `addi r30, r11, lbl_82F136C8@l` at 0x82623F68 for the
+// first, then `addi r3, r30, 0x70` at 0x82623FE4 for the second -- which means
+// the compiler knew their separation at compile time.  A function-local static
+// gets its OWN COMDAT .data section (measured: two `.data` sections, 0x6c each,
+// align 8, in our object), and MSVC cannot compute an offset between two
+// sections, so it emitted a second lis/addi pair instead.  At file scope both
+// land in the TU's single plain .data and the offset becomes a constant.  The
+// 0x70 is 108 bytes of array rounded up to the 8-byte section alignment, which
+// is exactly the 4 zero bytes the target data carries at lbl_82F136C8+0x6c.
+// (Declaring them adjacently while still function-local does NOT work: 76.6%,
+// still two lis/addi.)
+static D3DVERTEXELEMENT9 sVertexElement[] = {
+    { 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+    { 0, 12, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
+    { 0, 16, D3DDECLTYPE_FLOAT16_2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+    { 0, 20, D3DDECLTYPE_DEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+    { 0, 24, D3DDECLTYPE_DEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
+    { 0, 28, D3DDECLTYPE_UDEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
+    { 0, 32, D3DDECLTYPE_UBYTE4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
+    { 1, 0, D3DDECLTYPE_UINT1, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 1 },
+    D3DDECL_END()
+};
+static D3DVERTEXELEMENT9 sMutableVertexElement[] = {
+    { 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+    { 0, 16, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+    { 0, 32, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
+    { 0, 48, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
+    { 0, 64, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+    { 0, 72, D3DDECLTYPE_SHORT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
+    { 0, 80, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
+    { 1, 0, D3DDECLTYPE_UINT1, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 1 },
+    D3DDECL_END()
+};
+
 void DxMultiMesh::Init() {
     REGISTER_OBJ_FACTORY(DxMultiMesh);
-    static D3DVERTEXELEMENT9 sVertexElement[] = {
-        { 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-        { 0, 12, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
-        { 0, 16, D3DDECLTYPE_FLOAT16_2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-        { 0, 20, D3DDECLTYPE_DEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
-        { 0, 24, D3DDECLTYPE_DEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
-        { 0, 28, D3DDECLTYPE_UDEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
-        { 0, 32, D3DDECLTYPE_UBYTE4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
-        { 1, 0, D3DDECLTYPE_UINT1, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 1 },
-        D3DDECL_END()
-    };
+    // DX_ASSERT, not a hand-rolled MILO_FAIL: DxCheck()'s `v ? ERROR_SUCCESS :
+    // E_OUTOFMEMORY` is what gets MSVC to materialise 0x8007000E ONCE into a
+    // callee-saved register (`lis r8, 0x8007` / `ori r31, r8, 0xe` at
+    // 0x82623F7C, then `and. r3, r9, r31` at both 0x82623F90 and 0x82623FFC)
+    // and to save r27-r31 for a 0x90 frame.  Spelling the mask inline in this
+    // function re-materialised it per site into a volatile register, which cost
+    // one callee-saved register, the whole 0x10 of frame, and 21 register
+    // swaps.  Same idiom as DxMesh::DxMesh().
     sVertexDecl = D3DDevice_CreateVertexDeclaration(sVertexElement);
-    // BRANCHLESS, and spelled as a -1/0 mask: the image computes the HRESULT
-    // with `subic r9, r3, 0x1` / `subfe r9, r9, r9` / `and. r3, r9, r31`
-    // (0x82623F78-90 and 0x82623FEC-FFC) and branches on the `and.`'s own
-    // CR0.  A plain `ptr != nullptr ? 0 : 0x8007000E` lets MSVC const-fold
-    // 0x8007000E into the taken arm and branch on a `cmplwi` instead, which
-    // costs eight rows; `-(ptr == nullptr)` gets the mask but via
-    // cntlzw/extrwi, and `(ptr != nullptr) - 1` gets subic/subfe but with a
-    // trailing `subi`.  Measured on ?Init@DxMultiMesh@@SAXXZ: ternary 71.2,
-    // -(==) 73.8, (!=)-1 74.4, this form 76.6.
-    {
-        HRESULT hr = ((sVertexDecl == nullptr) ? -1 : 0) & 0x8007000E;
-        if (hr) {
-            MILO_FAIL("File: %s Line: %d Error: %s\n", __FILE__, 0x97, DxRnd::Error(hr));
-        }
-    }
-    static D3DVERTEXELEMENT9 sMutableVertexElement[] = {
-        { 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-        { 0, 16, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
-        { 0, 32, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
-        { 0, 48, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
-        { 0, 64, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-        { 0, 72, D3DDECLTYPE_SHORT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
-        { 0, 80, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
-        { 1, 0, D3DDECLTYPE_UINT1, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 1 },
-        D3DDECL_END()
-    };
+    DX_ASSERT(sVertexDecl, 0x97);
     sMutableVertexDecl = D3DDevice_CreateVertexDeclaration(sMutableVertexElement);
-    {
-        // Same -1/0 mask as above; see the note on sVertexDecl.
-        HRESULT hr = ((sMutableVertexDecl == nullptr) ? -1 : 0) & 0x8007000E;
-        if (hr) {
-            MILO_FAIL("File: %s Line: %d Error: %s\n", __FILE__, 0x9A, DxRnd::Error(hr));
-        }
-    }
+    DX_ASSERT(sMutableVertexDecl, 0x9A);
 }
 
 void DxMultiMesh::Shutdown() {

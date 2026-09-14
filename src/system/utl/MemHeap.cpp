@@ -65,6 +65,10 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
     ts << MakeString(";---------------------------------------\n");
     const char *heapInfo = MakeString("; HEAP: %i (%s), starts %p, %d bytes\n", mNum, mName, mStart, mSizeWords * 4);
     ts << heapInfo;
+    // REFUTED (w7-aq): swapping the lFrags/rFrags declaration order does not
+    // move the 0x54/0x58 slot pair the image uses (`addi r4, r1, 0x58` /
+    // `addi r5, r1, 0x54` at both FreeBlockStats call sites); the 4 offset rows
+    // are unchanged to five decimals either way.
     int rFrags, lFrags, freeBytes, maxFreeIdx, minFreeBytes;
     FreeBlockStats(lFrags, rFrags, freeBytes, maxFreeIdx, minFreeBytes);
     ts << MakeString("\n");
@@ -74,29 +78,54 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
         rFrags,
         freeBytes
     );
-    unsigned int *curPtr = (unsigned int *)mStart;
+    // RESIDUAL (w7-aq, 96.601 canonical): the only structural rows left are
+    // this read's placement -- we hoist `lwz mStart` and its `stw ..., 0x50(r1)`
+    // spill above the FormatString block (idx 57/58) where the image does both
+    // after it (idx 66/73), which shifts the four `li 0` initialisers by two
+    // slots.  Everything else is register permutation.
+    // NEGATIVE RESULT (w7-aq, 2026-09-14): the image loads mSizeWords (0xc)
+    // first and mStart (0x4) second, both AFTER this MakeString("\n") write
+    // (`lwz r10, 0xc(r31)` / `lwz r11, 0x4(r31)` / `slwi` / `add r20, r10,
+    // r11`), while we hoist the 0x4 load above the call into r28.  Sinking
+    // `curPtr = mStart` below the write costs 2pp (91.796 -> 89.8), with or
+    // without an `int sizeWords = mSizeWords;` temp to force the load order --
+    // it converts one insert/delete pair into two and re-splits the r10/r11
+    // pair across the whole loop.  Same result w7-z measured independently.
+    // curPtr is `int *`, not `unsigned int *`: MakeString takes every argument
+    // by const reference, so the image passes `&curPtr` itself (`addi r4, r1,
+    // 0x50`, idx 111) and therefore keeps the variable live in slot 0x50 --
+    // written on loop entry (idx 72) and after every increment (idx 152).  A
+    // `(int *)curPtr` cast at the call site materialises a *temporary* instead,
+    // which is why our build spilled once, just before the call.
+    int *curPtr = mStart;
 
     ts << MakeString("\n");
     int curAllocCount = 0;
     int *curAllocPtr = nullptr;
     int curAllocSize = 0;
-    unsigned int *endPtr = curPtr + mSizeWords;
+    int *endPtr = curPtr + mSizeWords;
     const AllocInfo *curAllocInfo = nullptr;
     unsigned int blockSizeWords = 0;
 
     unsigned int *curFreeBlock = (unsigned int *)mFreeBlockChain;
+    // `curPtr` itself is the pointer handed to the free-block MakeString, whose
+    // args are all `const&` -- so the image ADDRESS-TAKES curPtr and pins it to
+    // stack slot 0x50, writing it back on entry (827F8... `stw r11, 0x50(r1)`,
+    // idx 72) and after every increment (`stw r21, 0x50(r1)`, idx 152), while
+    // still caching it in r21.  A separate `savedCurPtr` copy would take the
+    // slot instead and leave curPtr purely in a register.
     for (; curPtr < endPtr; curPtr += blockSizeWords) {
-        unsigned int *savedCurPtr = curPtr;
-
-        if (curFreeBlock == nullptr || curPtr != curFreeBlock) {
+        if (curFreeBlock == nullptr || curPtr != (int *)curFreeBlock) {
             // Alloc block
-            unsigned int hdr = *curPtr;
-            unsigned int *headerPtr = curPtr;
-            while ((int)hdr == 0) {
+            unsigned int *headerPtr = (unsigned int *)curPtr;
+            // The image re-loads *headerPtr after the scan loop (idx 126
+            // `lwz r10, 0x0(r11)`) instead of reusing the value the loop's
+            // `lwzu` left in a register, so the shift reads the dereference
+            // directly rather than a `hdr` local carried out of the loop.
+            while ((int)*headerPtr == 0) {
                 headerPtr++;
-                hdr = *headerPtr;
             }
-            blockSizeWords = hdr >> 8;
+            blockSizeWords = *headerPtr >> 8;
 
             if (!verbose) {
                 int *newPtr = (int *)(headerPtr + 1);
@@ -106,15 +135,20 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
                     curAllocCount++;
                 } else {
                     PrintAlloc(ts, curAllocPtr, curAllocSize, curAllocCount, curAllocInfo);
-                    curAllocCount = 1;
                     curAllocPtr = newPtr;
-                    curAllocInfo = newInfo;
                     curAllocSize = newSize;
+                    curAllocCount = 1;
+                    curAllocInfo = newInfo;
                 }
             }
         } else {
             // Free block
             PrintAlloc(ts, curAllocPtr, curAllocSize, curAllocCount, curAllocInfo);
+            // The image clears curAllocSize HERE, before freeStr is set up and
+            // before curAllocCount (idx 95 `li r29, 0x0`, 96 `stw r16, 0x54`,
+            // 98 `li r28, 0x0`) -- not at the bottom of the branch next to the
+            // blockSizeWords update.
+            curAllocSize = 0;
             const char *freeStr = " ; **** big free block!";
             curAllocCount = 0;
             unsigned int sizeWords = *curFreeBlock;
@@ -125,13 +159,12 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
             unsigned int timeStamp = curFreeBlock[1];
             ts << MakeString(
                 "(%p FREE  (size %6d) (time %5d))%s\n",
-                (int *)savedCurPtr,
+                curPtr,
                 blockSize,
                 timeStamp,
                 freeStr
             );
             curFreeBlock = (unsigned int *)curFreeBlock[2];
-            curAllocSize = 0;
             blockSizeWords = sizeWords;
         }
     }
@@ -165,31 +198,37 @@ void MemHeap::Init(
     bool allowTemp
 ) {
     MILO_ASSERT_FMT(start, "Could not allocate %d bytes for heap %s\n", size * 4, name);
-    auto& _ref0 = mStart;
-    _ref0 = start;
+    // RESIDUAL (w7-aq, 83.013 canonical): the image writes mStart TWICE --
+    // 827F87BC stores the raw `start`, 827F87E8 overwrites it with the
+    // 16-byte-aligned pointer -- and also carries a `clrrwi r10, r30, 0` copy
+    // of `start` (827F87C0).  Our build dead-store-eliminates the first write,
+    // and the two missing instructions drag the whole store-scheduling window
+    // (idx 27-56) out of alignment; the rest of the function is exact.
+    // REFUTED (w7-aq): `auto &ref = mStart` around both writes (the spelling
+    // that was here before), computing the aligned pointer from `mStart`
+    // rather than from `start`, and routing it through an `int *rawStart =
+    // mStart;` local -- all three still DSE the first store, all three read
+    // 83.013 to five decimals.
+    mStart = start;
     mName = name;
     mNum = num;
     mIsHandleHeap = handle;
-    int *i7 = (int *)(((uintptr_t)start - 4 & ~(uintptr_t)0xFU) + 0x10);
+    int *alignedStart = (int *)(((uintptr_t)start - 4 & ~(uintptr_t)0xFU) + 0x10);
     mStrategy = strat;
-    _ref0 = i7;
+    mStart = alignedStart;
     mAllowTemp = allowTemp;
     mMinFreeBytes = -1;
     mDebugLevel = debugLevel;
-    gTimeStamp++;
-        int time = gTimeStamp;
-    InsertFreeBlock((FreeBlock *)_ref0, mSizeWords = size - (i7 - start), nullptr, nullptr, time);
+    mSizeWords = size - (alignedStart - start);
+    // POST-increment: 827F8814 reads gTimeStamp into r8, 827F8818/1C store
+    // r8+1 back, and r8 -- the OLD value -- is what reaches InsertFreeBlock.
+    InsertFreeBlock((FreeBlock *)mStart, mSizeWords, nullptr, nullptr, gTimeStamp++);
     if (1 <= mDebugLevel) {
         FreeBlock *blockStart = mFreeBlockChain;
         int *blockStartInt = (int *)blockStart;
-        int *start3 = blockStartInt + 3;
         int *blockEnd = blockStartInt + blockStart->mSizeWords;
-        if (start3 < blockEnd) {
-            int *ptr = start3 - 1;
-            for (unsigned int count = (((unsigned int)blockEnd - (unsigned int)start3) - 1) / 4 + 1; count != 0; count--) {
-                ptr++;
-                *ptr = 0xDEADDEAD;
-            }
+        for (int *ptr = blockStartInt + 3; ptr < blockEnd; ptr++) {
+            *ptr = 0xDEADDEAD;
         }
     }
 }
@@ -311,6 +350,16 @@ int MemHeap::GetAlignWords(int bytes) {
     }
 }
 
+// RESIDUAL (w7-aq, 90.007 canonical): the remaining rows are one register
+// assignment, not a missing statement.  The image puts `this` in r26 and
+// sizeWords in r27 (827F88A4/827F88AC); we get the pair the other way round,
+// which charges 15 rows across the four Fit calls and the three later `this`
+// uses.  Consequences of the same choice: the image loads info.mBlock straight
+// into r31 and updates it in place with `stwux` (827F89A8), while we load into
+// r30, copy to r31 and use `add`+`stwx`; and MSVC tail-merges the two
+// `return nullptr` sites the other way (the image's default arm branches
+// FORWARD into the null check's `li r3, 0`, ours branches back).  Declaration
+// order is not a lever here -- both are parameters.
 int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     FreeBlockInfo info;
     info.mBlock = nullptr;
@@ -328,23 +377,34 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
         return nullptr;
     }
 
-    if (info.mBlock == nullptr) return nullptr;
+    FreeBlock *block = info.mBlock;
+    if (block == nullptr) return nullptr;
 
     FreeBlock *prevBlock = info.mPrevBlock;
-    int blockSize = info.mSizeWords;
     int padWords = info.mPadWords;
+    // blockSize is assigned in BOTH arms, never before the branch: the image
+    // loads info.mSizeWords twice (827F8988 inside the split arm, 827F89D0 in
+    // the else arm). Hoisting it to a single initialiser above the `if` costs
+    // the second load and forces an extra live copy of padWords.
+    int blockSize;
 
     if (padWords > 8) {
-        FreeBlock *newBlock = (FreeBlock *)((int *)info.mBlock + padWords);
-        int remaining = blockSize - padWords;
-        newBlock->mSizeWords = remaining;
-        newBlock->mNextBlock = info.mBlock->mNextBlock;
-        newBlock->mTimeStamp = info.mBlock->mTimeStamp;
-        InsertFreeBlock(info.mBlock, padWords, prevBlock, newBlock, info.mBlock->mTimeStamp);
-        prevBlock = info.mBlock;
-        info.mBlock = newBlock;
-        blockSize = remaining;
+        // `block` itself is advanced -- there is no separate newBlock local.
+        // That is what lets the image fuse the advance and the mSizeWords
+        // store into a single `stwux r28, r31, r10` (827F89A8).
+        blockSize = info.mSizeWords - padWords;
+        FreeBlock *oldBlock = block;
+        FreeBlock *nextBlock = oldBlock->mNextBlock;
+        unsigned int timeStamp = oldBlock->mTimeStamp;
+        block = (FreeBlock *)((int *)block + padWords);
+        block->mSizeWords = blockSize;
+        block->mNextBlock = nextBlock;
+        block->mTimeStamp = timeStamp;
+        InsertFreeBlock(oldBlock, padWords, prevBlock, block, timeStamp);
+        prevBlock = oldBlock;
         padWords = 0;
+    } else {
+        blockSize = info.mSizeWords;
     }
 
     int totalUsed = padWords + sizeWords;
@@ -352,37 +412,44 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
 
     if (remainder > 8) {
         InsertFreeBlock(
-            (FreeBlock *)((int *)info.mBlock + totalUsed), remainder,
-            prevBlock, info.mBlock->mNextBlock, info.mBlock->mTimeStamp
+            (FreeBlock *)((int *)block + totalUsed), remainder,
+            prevBlock, block->mNextBlock, block->mTimeStamp
         );
     } else {
         if (prevBlock == nullptr) {
-            mFreeBlockChain = info.mBlock->mNextBlock;
+            mFreeBlockChain = block->mNextBlock;
         } else {
-            prevBlock->mNextBlock = info.mBlock->mNextBlock;
+            prevBlock->mNextBlock = block->mNextBlock;
         }
         totalUsed = blockSize;
     }
 
-    unsigned int *header = (unsigned int *)info.mBlock + padWords;
-    *header = (totalUsed << 8) | (padWords << 4) | (*header & 0xF);
+    unsigned int *header = (unsigned int *)block + padWords;
+    // The `& 0xF` is what makes MSVC fold the pad nibble in with `rlwimi`
+    // (827F8A20) instead of a shift-and-or: without it the compiler has to
+    // assume padWords can overflow the field.
+    *header = (totalUsed << 8) | ((padWords & 0xF) << 4) | (*header & 0xF);
 
-    int *ptr = (int *)info.mBlock;
-    int *headerPtr = (int *)header;
-    for (; ptr != headerPtr; ptr++) {
+    // The image re-derives the start of the pad run from the nibble it just
+    // wrote (827F8A30 `rlwinm r9, r10, 30, 26, 29`, then `subf r10, r9, r11`)
+    // rather than reusing the block pointer it still has in r31.
+    unsigned int *ptr = header - ((*header >> 4) & 0xF);
+    for (; ptr != header; ptr++) {
         *ptr = 0;
     }
 
     if (1 <= mDebugLevel) {
         unsigned int hdr = *header;
         unsigned int dataWords = (hdr >> 8) - ((hdr >> 4) & 0xF);
-        int *end = (int *)header + dataWords;
-        int *cur = (int *)header + 1;
-        if (cur < end) {
-            for (int count = ((end - cur - 1) >> 2) + 1; count != 0; count--) {
-                cur++;
-                *cur = 0xABCDABCD;
-            }
+        unsigned int *end = header + dataWords;
+        // The image's fill covers [header+1, end) one word at a time
+        // (827F8AA4 `stwu r9, 0x4(r8)` under `mtctr`). The previous spelling
+        // here computed `((end - cur - 1) >> 2) + 1` on an already
+        // word-scaled pointer difference -- a second divide by 4 -- and
+        // pre-incremented before storing, so it filled a quarter of the
+        // block starting one word late.
+        for (unsigned int *cur = header + 1; cur < end; cur++) {
+            *cur = 0xABCDABCD;
         }
     }
 

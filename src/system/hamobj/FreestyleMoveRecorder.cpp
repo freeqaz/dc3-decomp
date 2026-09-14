@@ -180,10 +180,16 @@ void FreestyleMoveRecorder::Poll() {
             void *texels = nullptr;
             streamTex->TexelsLock(texels);
             if (texels) {
-                int playerIdx = mSkeletonIndex;
+                // Through a reference: the image forms &mTakes[i] for real
+                // (`addi r10, r11, 0x48`, target idx 79) and then stores the
+                // member at a displacement off the array base (`stw r6,
+                // 0x54(r11)`, idx 80).  Subscripting inline instead lets MSVC
+                // fold 0x48 into the index (`addi r10, r10, 0x3` + `stwx`).
                 unsigned short *colSrc = (unsigned short *)texels;
-                mTakes[mCurrentTakeIndex].unkc = playerIdx;
+                int playerIdx = mSkeletonIndex;
                 int col = 0;
+                FreestyleMove &take = mTakes[mCurrentTakeIndex];
+                take.unkc = playerIdx;
                 do {
                     // dst is REBUILT from depthDst every column
                     // (0x82524DB4 `add r10, r8, r28` / 0x82524DBC
@@ -192,7 +198,7 @@ void FreestyleMoveRecorder::Poll() {
                     // 0x50 * 0x3c * 0x50 bytes instead of filling the single
                     // 0x50-wide by 0x3c-tall (= 0x12c0 byte) frame column-major.
                     unsigned short *src = colSrc;
-                    char *dst = (depthDst + col) - 0x50;
+                    unsigned char *dst = (unsigned char *)(depthDst + col);
                     for (int row = 0x3c; row != 0; row--) {
                         int pixelPlayer = (*src & 7) - 1;
                         unsigned long depth;
@@ -207,7 +213,8 @@ void FreestyleMoveRecorder::Poll() {
                             depth = 0;
                         }
                         src += 0x600;
-                        *(unsigned char *)(dst += 0x50) = (unsigned char)depth;
+                        *dst = (unsigned char)depth;
+                        dst += 0x50;
                     }
                     col++;
                     colSrc += 4;
@@ -230,15 +237,21 @@ void FreestyleMoveRecorder::Poll() {
                 mTakes[mCurrentTakeIndex].RecordSkeletonFrame(skel, recordFrame, beat);
             } else {
                 BaseSkeleton *skel = GetLiveSkeleton();
-                DancerSkeleton tempSkel;
-                tempSkel.Init();
-                float beat = mRecordPos * 1000.0f;
+                // The scratch is a whole FreestyleMoveFrame, not a bare
+                // DancerSkeleton: the beat lands in its own mBeat member at
+                // 0x60 + 0x2d8 = 0x338(r31) (target idx 161) and is reloaded
+                // from there after the skeleton copy (idx 179).  With a bare
+                // float local MSVC keeps it in f31 instead, which rotates the
+                // 0.0f constant out of f31 for the whole function.
+                FreestyleMoveFrame tempFrame;
+                tempFrame.skeleton.Init();
+                tempFrame.mBeat = mRecordPos * 1000.0f;
                 if (skel && skel->IsTracked()) {
-                    tempSkel.Set(*skel);
+                    tempFrame.skeleton.Set(*skel);
                 }
                 FreestyleMoveFrame *frame = &mFrameBuffer[recordFrame];
-                frame->skeleton = tempSkel;
-                frame->mBeat = beat;
+                frame->skeleton = tempFrame.skeleton;
+                frame->mBeat = tempFrame.mBeat;
                 mDancerTakeFrameCount = nextFrame;
             }
 
@@ -261,15 +274,21 @@ void FreestyleMoveRecorder::Poll() {
 
         int prevFrame = playbackFrame - 1;
         int lastFrame = mFrameIndex - 1;
-        if (prevFrame <= lastFrame) {
-            lastFrame = prevFrame;
-            if (prevFrame < 0) {
-                lastFrame = 0;
-            }
+        // The image writes the result through a THIRD variable: the else arm
+        // is a real `mr r11, r10` + `b` (target idx 213/214), which only
+        // happens when neither input register already holds the answer.
+        // ...and the test is written the other way round, so the `lastFrame`
+        // arm is the fall-through and the clamp is the branched-to block
+        // (target `ble` at idx 212 jumps INTO the clamp).
+        int showFrame;
+        if (prevFrame > lastFrame) {
+            showFrame = lastFrame;
+        } else {
+            showFrame = prevFrame < 0 ? 0 : prevFrame;
         }
 
         int takeIdx = mCurrentTakeIndex;
-        char *depthBase = (char *)mTakes[takeIdx].mDepthFrames + lastFrame * 0x12c0;
+        char *depthBase = (char *)mTakes[takeIdx].mDepthFrames + showFrame * 0x12c0;
         int centerX = mTakes[takeIdx].unk10 << 2;
         int minDepth = mTakes[takeIdx].unk14 - 0x7a;
 
@@ -285,7 +304,7 @@ void FreestyleMoveRecorder::Poll() {
         for (int col = 0; col < 0x140; col++) {
             int x = pixelX + centerX;
             unsigned int row = 0;
-            unsigned short *ptr = (unsigned short *)(texelPtr - 0x300);
+            unsigned short *ptr = (unsigned short *)texelPtr;
             for (int r = 0xf0; r != 0; r--) {
                 unsigned int depthVal = 0;
                 if ((int)x >= 0 && (int)x < 0x140) {
@@ -296,12 +315,19 @@ void FreestyleMoveRecorder::Poll() {
                     );
                 }
                 row++;
-                ptr += 0x180;
                 unsigned short depthU16 = (unsigned short)depthVal;
-                unsigned int diff = depthVal - minDepth;
+                // the image subtracts from the 16-bit-truncated value
+                // (`clrlwi r10, r10, 16` feeds `subf r10, r29, r10`, idx
+                // 258/261), not from the raw 32-bit load
+                unsigned int diff = depthU16 - minDepth;
                 unsigned int shifted = diff << 7;
-                unsigned int depthMask = (depthU16 > 0) ? 0xFFFFFFFF : 0;
-                *ptr = (unsigned short)(shifted | (depthMask & colorMask));
+                // The ternary selects colorMask itself -- MSVC lowers that to
+                // the subfic/subfe mask AND colorMask.  Selecting 0xFFFFFFFF
+                // and ANDing it separately emits a live `li r27, -0x1` and a
+                // redundant `and r8, r8, r27` inside the inner loop.
+                unsigned int colorBits = (depthU16 > 0) ? colorMask : 0;
+                *ptr = (unsigned short)(shifted | colorBits);
+                ptr += 0x180;
             }
             pixelX++;
             texelPtr += 2;
@@ -722,26 +748,44 @@ float FreestyleMoveRecorder::CompareSkeletonPositions(
 float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
     const FreestyleMoveFrame *frames, int frameIdx, const BaseSkeleton *liveSkel, float &outTotalWeight
 ) const {
-    // Clamped prev-frame index: max(frameIdx - 1, 0)
+    // Clamped prev-frame index: max(frameIdx - 1, 0).
+    // NEGATIVE RESULT (w7-aq, 2026-09-14): the image's branchless clamp keeps
+    // the constant 0 in a register and shifts it (`li r10,0` / `srwi r10,r10,31`
+    // / `subfc r3,r11,r10` / `subfe r10,r10,r6`, target idx 9/18/15/22) where we
+    // fold it (`subfic`/`addme`) -- 4 rows.  Neither `Max(frameIdx - 1, 0)` nor
+    // the inverted `frameIdx - 1 < 0 ? 0 : frameIdx - 1` recovers it: both drop
+    // to 87.3 by emitting a different sequence entirely.  `int zeroIdx = 0;`
+    // with the comparison against the variable is byte-inert (MSVC folds it).
     int clampedPrev = frameIdx - 1 > 0 ? frameIdx - 1 : 0;
-    const std::vector<SkeletonJoint> &trackedJoints = mTrackedJoints;
     float totalScore = 0.0f;
     float totalWeight = 0.0f;
-    if (trackedJoints.end() - trackedJoints.begin() != 0) {
+    unsigned int i = 0;
+    // RESIDUAL (w7-aq, 89.72 canonical): 19 of the 21 remaining rows are one
+    // prologue cluster.  The image loads _M_start (0xd8) before _M_finish
+    // (0xdc) and tests the count with `srawi.`; we load finish first and MSVC
+    // peepholes the test to `clrrwi.`.  `size() > 0`, `size() != 0` and
+    // `end() - begin() != 0` all produce the same `clrrwi.`, and `empty()` is a
+    // pointer compare with no shift at all.  The other 2 rows are the
+    // strength-reduced byte offset's `addi r27, r27, 0x4`, which the image
+    // issues after the fmadds (idx 109) and we issue before it (idx 107).
+    if (mTrackedJoints.size() != 0) {
         const FreestyleMoveFrame *curFrame = &frames[frameIdx];
         const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
-        unsigned int i = 0;
         do {
-            SkeletonJoint joint = trackedJoints[i];
+            SkeletonJoint joint = mTrackedJoints[i];
             Vector3 curJointPos, prevJointPos;
             curFrame->skeleton.JointPos(kCoordCamera, joint, curJointPos);
             prevFrame->skeleton.JointPos(kCoordCamera, joint, prevJointPos);
             int beatDiff = (int)(curFrame->mBeat - prevFrame->mBeat);
             // Build displacement vector (y=0.0 zeroed — ignore vertical component)
             Vector3 dispOffset;
-            dispOffset.x = curJointPos.x - prevJointPos.x;
-            dispOffset.y = 0.0f;
-            dispOffset.z = curJointPos.z - prevJointPos.z;
+            // MSVC evaluates arguments right-to-left, so Set() subtracts z
+            // BEFORE x (target idx 66-69) and only then stores x, y, z in
+            // declaration order (idx 70/62/71).  Three separate assignments
+            // cannot produce that split.
+            dispOffset.Set(
+                curJointPos.x - prevJointPos.x, 0.0f, curJointPos.z - prevJointPos.z
+            );
             Vector3 liveDisp;
             int liveCount = 0;
             // The handle is a temporary: it dies at the end of this full
@@ -766,7 +810,7 @@ float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
                 i++;
             }
 #endif
-        } while (i < (unsigned int)(trackedJoints.end() - trackedJoints.begin()));
+        } while (i < mTrackedJoints.size());
         if (0.0f < totalWeight) {
             totalScore /= totalWeight;
         }

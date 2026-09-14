@@ -1674,6 +1674,10 @@ void HamDirector::EnableFacialAnimation() {
     }
 }
 
+// RESIDUAL (w7-aq, 99.3 canonical): 3 of the 4 remaining rows are the frame
+// size alone -- retail reserves 0x1e0, we reserve 0x1d0. Every user slot pairs
+// MATCH (0x50 playerDiff/Symbol temp, 0x58 DataNode, 0x60 Symbol, 0x70 buf),
+// so the extra 0x10 is dead space above buf that no live local explains.
 Symbol HamDirector::ClosestMove() {
     char buf[256];
     Symbol out = mPrevMove;
@@ -1709,9 +1713,17 @@ Symbol HamDirector::ClosestMove() {
                             if (*candidate != '\0') {
                                 const char *p = candidate;
                                 do {
-                                    if (buf[p - candidate] == '\0')
+                                    unsigned char bufCh = buf[p - candidate];
+                                    if (bufCh == '\0')
                                         break;
-                                    int bufLower = tolower(buf[p - candidate]);
+                                    // RESIDUAL (w7-aq, 99.3 canonical): the
+                                    // image emits an extra, provably redundant
+                                    // `clrlwi r11, r11, 24` between the zero
+                                    // test and this sign-extension. Refuted:
+                                    // a named `char bufChar = bufCh;`
+                                    // intermediate, and widening bufCh to
+                                    // `unsigned int` -- both byte-inert.
+                                    int bufLower = tolower((char)bufCh);
                                     // 0x824744BC is `cmpw cr6, r3, r22`:
                                     // tolower(*p) is the left operand.
                                     if (tolower(*p) != bufLower)
@@ -1721,25 +1733,30 @@ Symbol HamDirector::ClosestMove() {
                                 } while (*p != '\0');
                             }
 
-                            const char *q0 = &buf[matchCount];
-                            const char *q = q0;
-                            do {
-                            } while (*q++ != '\0');
-                            int bufRem = q - q0 - 1;
-
-                            const char *r0 = &candidate[matchCount];
-                            const char *r = r0;
-                            do {
-                            } while (*r++ != '\0');
-                            int candRem = r - r0 - 1;
-
-                            int penalty = candRem;
+                            // The two tail loops are MSVC's inline strlen
+                            // expansion: the image's `clrrwi r10, r10, 0`
+                            // no-ops and its UNSIGNED `cmplw cr6, r11, r10`
+                            // over the two lengths are only emitted when both
+                            // quantities are size_t, i.e. strlen results fed
+                            // straight to Max.
+                            unsigned int bufRem = strlen(&buf[matchCount]);
+                            unsigned int candRem = strlen(&candidate[matchCount]);
+                            unsigned int penalty = candRem;
                             if (penalty < bufRem)
                                 penalty = bufRem;
 
                             int score = matchCount - penalty;
-                            if (maxScore < score) {
-                                maxScore = score;
+                            // 0x8247... the image saves the OLD maxScore
+                            // (`mr r10, r25`) before the `cmpw cr6, r25, r11`
+                            // and then, after `mr r25, r11`, tests
+                            // `cmpw cr6, r11, r10` / `beq cr6` -- a provably
+                            // dead second comparison. That is the MaxEq shape
+                            // written in its float-specialization form
+                            // (tmp = x; x = Max(x, y); return x != tmp),
+                            // not a plain `if (maxScore < score)`.
+                            int oldMaxScore = maxScore;
+                            maxScore = Max(maxScore, score);
+                            if (maxScore != oldMaxScore) {
                                 out = candidate;
                             }
                             i++;
@@ -3177,16 +3194,35 @@ CharClip *HamDirector::GetClipStartAndEndBeats(
     if (size != 0) {
         int byteOff = 0;
         do {
-            if ((*practiceSymbols)[foundIdx].value == clipName) goto found;
+            if (clipName == (*practiceSymbols)[foundIdx].value) goto found;
             foundIdx++;
             byteOff += 8;
         } while (foundIdx < size);
     }
     foundIdx = 0xffffffff;
 found:
-    if (foundIdx != 0xffffffff && (int)(foundIdx + 1) < (int)size) {
+    if (foundIdx == 0xffffffff) return nullptr;
+    // The two tests are SEPARATE statements with the address computation
+    // between them: the image interleaves `slwi r10, r11, 3` / `add r28, r10,
+    // r9` (idx 111/113) with `addi r11, r11, 0x1` / `cmpw` / `bge` (112/114/
+    // 115), i.e. &practiceSymbols[foundIdx] is formed after the -1 test and
+    // before the size test.  Folded into one `&&` the address computation
+    // lands entirely after the branch.
+    //
+    // The keys are POINTERS, not references.  A named `Key<Symbol> &` gets an
+    // 8-byte stack home at 0x58 and a dead `stw` into it, which also pushes
+    // both DataArrayPtr temps up by 8 (measured: 92.6% against 93.2%).
+    Key<Symbol> *practiceKey = &(*practiceSymbols)[foundIdx];
+    if ((int)(foundIdx + 1) >= (int)size) return nullptr;
+    {
+        // The image forms &practiceSymbols[foundIdx+1] once (`addi r27, r28,
+        // 0x8`, target idx 121) and reads every later frame off `0x4(r28)` /
+        // `0x4(r27)` (target idx 176/187/199/205).  Re-spelling the subscript
+        // re-indexes at each of the four uses: `lwz` + `add` per use, eight
+        // extra instructions.
+        Key<Symbol> *nextPracticeKey = practiceKey + 1;
         Keys<Symbol, Symbol> *clipSymbols = clipKeys->AsSymbolKeys();
-        int clipKeyIdx = clipSymbols->KeyLessEq((*practiceSymbols)[foundIdx].frame);
+        int clipKeyIdx = clipSymbols->KeyLessEq(practiceKey->frame);
         if ((unsigned int)clipKeyIdx >= clipSymbols->size()) {
 #ifndef HX_NATIVE
             stlpmtx_std::__stl_throw_out_of_range("vector");
@@ -3198,22 +3234,60 @@ found:
             return nullptr;
 #endif
         }
-        CharClip *clip = mClipDir->Find<CharClip>((*clipSymbols)[clipKeyIdx].value.Str(), true);
+        Key<Symbol> &clipKey = (*clipSymbols)[clipKeyIdx];
+        CharClip *clip = mClipDir->Find<CharClip>(clipKey.value.Str(), true);
         if (clip) {
-            float beat1 = SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f));
-            float clipStartBeat = clip->StartBeat();
-            int loopCount = (clip->PlayFlags() >> 12) & 0xF;
+            // BEHAVIOURAL FIX (w7-aq): this seeds from the CLIP key's frame,
+            // not the practice key's.  The image keeps &clipSymbols[clipKeyIdx]
+            // in r29 (`add r29, r10, r11`, target idx 141 -- the same r10/r11
+            // the adjacent `lwzx r4, r10, r11` uses for .value) and reads this
+            // frame as `lfs f0, 0x4(r29)` at idx 149.  The practice key's frame
+            // is read separately, off r28, at idx 176.  We wrote
+            // practiceSymbols[foundIdx].frame here, the image reads
+            // clipSymbols[clipKeyIdx].frame -- which is also what the maths
+            // wants: loopAdjust has to be measured from where the CLIP starts
+            // in the song, not from where the practice section starts.
+            float beat1 = SecondsToBeat(clipKey.frame * (1.0f / 30.0f));
+            // loopCount is a FLOAT, and the guard is a float compare.  The
+            // image converts unconditionally (`std`/`lfd`/`fcfid`/`frsp`,
+            // target idx 164-167), seeds loopAdjust with 0.0 (`fmr f30, f0`),
+            // and tests `fcmpu cr6, f2, f0` against that same 0.0 -- note the
+            // plain `clrlwi` at idx 158 with NO record bit, so there is no
+            // integer comparison anywhere.  An `int loopCount` with
+            // `loopCount > 0` gives `clrlwi.` + `ble` and sinks the conversion
+            // into the taken arm.
+            float loopCount = (float)((clip->PlayFlags() >> 12) & 0xF);
             float loopAdjust = 0.0f;
-            if (loopCount > 0) {
-                loopAdjust = Mod(beat1 - clipStartBeat, (float)loopCount);
+            if (loopCount != 0.0f) {
+                loopAdjust = Mod(beat1 - clip->StartBeat(), loopCount);
             }
+            // clip->StartBeat() is spelled at each of its three uses: the image
+            // reloads `lwz r11, 0x40(r30)` / `lfs 0x0(r11)` at target idx
+            // 171/180/191.  Binding a `clipStartBeat` local caches it in f30
+            // and deletes two of the three.  And startBeat is ONE store --
+            // `startBeat = x - adjust + clip->StartBeat()`, target idx 182-184;
+            // the `startBeat = clipStartBeat; startBeat += ...` form emits a
+            // dead first store the image does not have.
+            // RESIDUAL (w7-aq, 95.2 canonical): the image computes
+            // `adjust = beat1 - loopAdjust` AFTER the first SecondsToBeat call
+            // (`fsubs f30, f29, f30` at target idx 169), which forces loopAdjust
+            // to live across that call in a callee-saved FPR and costs the image
+            // an extra `fmr f30, f1` at idx 164.  Our build sinks the subtraction
+            // in front of the call and keeps loopAdjust in f1, the Mod return
+            // register, so it is one instruction SHORTER there and then loads
+            // clip->StartBeat() before the call instead of after.  Measured
+            // BYTE-INERT: writing the subtraction inline at both use sites,
+            // `- (beat1 - loopAdjust)`, gives the identical 18 rows -- MSVC
+            // hoists the call-invariant subexpression either way.  Nine of the
+            // remaining rows are the resulting FPR permutation.
             float adjust = beat1 - loopAdjust;
-            startBeat = clipStartBeat;
-            startBeat += SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f)) - adjust;
-            endBeat = SecondsToBeat((*practiceSymbols)[foundIdx + 1].frame * (1.0f / 30.0f)) - adjust + clipStartBeat;
+            startBeat =
+                SecondsToBeat(practiceKey->frame * (1.0f / 30.0f)) - adjust + clip->StartBeat();
+            endBeat = SecondsToBeat(nextPracticeKey->frame * (1.0f / 30.0f)) - adjust
+                + clip->StartBeat();
             if (range) {
-                range->first = SecondsToBeat((*practiceSymbols)[foundIdx].frame * (1.0f / 30.0f));
-                range->second = SecondsToBeat((*practiceSymbols)[foundIdx + 1].frame * (1.0f / 30.0f));
+                range->first = SecondsToBeat(practiceKey->frame * (1.0f / 30.0f));
+                range->second = SecondsToBeat(nextPracticeKey->frame * (1.0f / 30.0f));
                 return clip;
             }
             return clip;
@@ -3251,6 +3325,12 @@ void Dc3KneeLog(const char *evt) {
 }
 #endif
 
+// RESIDUAL (w7-aq, 98.3 canonical): 40 of the remaining 52 rows are one
+// callee-saved 4-cycle -- the image colours {0-const: r28, player1: r27,
+// songAnim: r25, p1anim: r26} where we get {r25, r28, r26, r27}, and it keeps
+// &TheTaskMgr in r26 where we reuse the TheHamWardrobe base register r24.
+// First-definition order is identical on both sides, so this is MSVC's
+// spill-weight ranking, not a source ordering we can spell.
 void HamDirector::Poll() {
 #ifdef HX_NATIVE
     Dc3KneeLog("HamDir-ENTRY");
@@ -3272,9 +3352,16 @@ void HamDirector::Poll() {
             int p1anim = player1->SongAnimation();
             bool doSongAnim = SongAnimation();
             if (doSongAnim) {
-                ClipPlayer player0Clip, player1Clip;
-                Key<Symbol> *practiceEnd = nullptr;
-                Key<Symbol> *practiceStart = nullptr;
+                ClipPlayer player0Clip(0), player1Clip(1);
+                // Deliberately uninitialised: GetPracticeFrames writes both
+                // through references. The image emits no zero-store for either
+                // slot (0x50/0x58), and `= nullptr` adds two it does not have.
+                // RESIDUAL (w7-aq, 98.3 canonical): the two slots are swapped
+                // relative to the image (4 rows).  Swapping the declaration
+                // order of these two is BYTE-INERT -- MSVC is not colouring
+                // them by declaration order here.
+                Key<Symbol> *practiceEnd;
+                Key<Symbol> *practiceStart;
                 if (p0anim != -1) {
                     bool clipInited = player0Clip.Init(0);
                     if (clipInited) {
@@ -3290,9 +3377,13 @@ void HamDirector::Poll() {
                         }
                     }
                 }
-                HamPlayerData *p0data = TheGameData->Player(0);
-                HamPlayerData *p1data = TheGameData->Player(1);
-                ClipPlayer *backupClipPlayer = IsEasierDifficulty(p0data->GetDifficulty(), p1data->GetDifficulty()) ? &player0Clip : &player1Clip;
+                // The image reads player 0's difficulty (`lwz r30, 0x58(r11)`)
+                // BEFORE the second Player() call, so the source binds the
+                // Difficulty, not the HamPlayerData pointer.
+                Difficulty p0diff = TheGameData->Player(0)->GetDifficulty();
+                Difficulty p1diff = TheGameData->Player(1)->GetDifficulty();
+                ClipPlayer *backupClipPlayer =
+                    IsEasierDifficulty(p0diff, p1diff) ? &player0Clip : &player1Clip;
                 bool hasPractice2 = GetPracticeFrames(practiceEnd, practiceStart);
                 if (!hasPractice2) {
                     const float sBackupDriftScale = 0.14f;
@@ -3306,8 +3397,16 @@ void HamDirector::Poll() {
                         HamCharacter *backup = TheHamWardrobe ? TheHamWardrobe->GetBackup(backupIdx) : nullptr;
                         backupIdx++;
                         if (!backup) break;
+                        // RESIDUAL (w7-aq, 98.3 canonical): the image makes
+                        // `(float)backupIdx * freq` the standalone fmuls and
+                        // `frame * dt` the fmadds multiply; we get the reverse,
+                        // which also swaps which constant lands in f29 vs f30
+                        // (3 rows).  Refuted: swapping the two terms, and
+                        // binding the idx product to its own local -- both
+                        // byte-inert.
                         float noise = RndWind::GetWhiteNoise(
-                            (float)backupIdx * sBackupDriftFreq + songAnim->GetFrame() * sBackupDriftDt
+                            (float)backupIdx * sBackupDriftFreq
+                            + songAnim->GetFrame() * sBackupDriftDt
                         );
                         float drift = (noise - sBackupDriftOffset) * mBackupDrift * sBackupDriftScale;
                         if (0.0f < drift) {
@@ -3427,11 +3526,15 @@ void HamDirector::Poll() {
                 }
                 if ((0.0f < mForcePostProcBlendRate && mForcePostProcBlend < 1.0f) ||
                     (mForcePostProcBlendRate < 0.0f && 0.0f < mForcePostProcBlend)) {
-                    float newBlend = TheTaskMgr.DeltaSeconds() * mForcePostProcBlendRate + mForcePostProcBlend;
-                    mForcePostProcBlend = newBlend;
-                    newBlend = -newBlend >= 0.0f ? 0.0f : newBlend;
-                    newBlend = newBlend - 1.0f >= 0.0f ? 1.0f : newBlend;
-                    mForcePostProcBlend = newBlend;
+                    // TWO stores to the member, not one: the image keeps
+                    // `stfs f0, 0x1a0(r31)` at 0x82479170 immediately after the
+                    // fmadds and again after the clamp.  Routing the
+                    // intermediate through a local lets MSVC drop the first
+                    // store as dead; writing the member twice does not, because
+                    // a member reachable through `this` may be aliased.
+                    mForcePostProcBlend =
+                        TheTaskMgr.DeltaSeconds() * mForcePostProcBlendRate + mForcePostProcBlend;
+                    ClampEq(mForcePostProcBlend, 0.0f, 1.0f);
                 }
             }
             UpdatePostProcOverlay(overlayName, overlayA, overlayB, blend);
@@ -3439,8 +3542,9 @@ void HamDirector::Poll() {
         // The image reads mPlayerFreestyle here, not mFreestyleEnabled:
         // `lbz r11, 0x2bc(r31)` at 0x8247919C (mFreestyleEnabled is 0x200).
         if (mPlayerFreestyle && mVisualizer && !mVisualizer->Showing()) {
-            float deltaSeconds = TheTaskMgr.DeltaSeconds();
-            mFreestyleTimer += deltaSeconds;
+            // `fadds f13, f1, f0` at 0x824791B4 -- the call result is the LEFT
+            // operand, so the accumulation is not spelled `+=`.
+            mFreestyleTimer = TheTaskMgr.DeltaSeconds() + mFreestyleTimer;
             if (mFreestyleTimer > 1.6f) {
                 StartStopVisualizer();
             }

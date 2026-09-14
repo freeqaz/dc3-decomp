@@ -157,7 +157,15 @@ typedef enum _D3DFORMAT {
     D3DFMT_LE_INDEX16 = 0x0000,
     D3DFMT_LE_INDEX32 = 0x0004,
     D3DFMT_VERTEXDATA = 0x0008,
-    D3DFMT_UNKNOWN = 0xff,
+    // -1, not 0xff: on Xenon every D3DFORMAT is a packed GPU format descriptor
+    // and 0 is a valid one, so the sentinel is all-ones.  Doubly evidenced by
+    // DxRnd::D3DFormatForBitmap in the image -- it initialises its result with
+    // `li r30, -0x1` (0x82610...+0x18), and it emits the
+    // `MILO_ASSERT(fmt != D3DFMT_UNKNOWN, 999)` fail block with NO comparison
+    // in front of it, which only happens if the condition folds to FALSE on a
+    // path where the result still holds its initialiser.  Kept as -1 rather
+    // than 0xffffffff so the enum's underlying type stays int.
+    D3DFMT_UNKNOWN = -1,
     D3DFMT_FORCE_DWORD = 0x7fffffff,
 } D3DFORMAT;
 
