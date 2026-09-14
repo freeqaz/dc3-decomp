@@ -163,8 +163,14 @@ void PropertyTask::Poll(float ms) {
         ObjPtr<PropertyTask> guard(this, nullptr);
         guard.SetObjConcrete(this);
         SetProperty(mValue);
-        if (!guard)
+        // The braces are load-bearing: MSVC stamps a running "scopes opened so
+        // far" counter into every function-local static's mangled name, and the
+        // image's `msg` is `?msg@?L@??Poll@...` -- scope 11. Dropping these two
+        // braces spells the same code but gives scope 9, which renames both the
+        // static and its atexit destructor and costs that 28 B COMDAT its match.
+        if (!guard) {
             return;
+        }
         if (mListener) {
             static Message msg("on_anim_event", DataNode(Symbol("ended")));
             Hmx::Object *listener = mListener;
