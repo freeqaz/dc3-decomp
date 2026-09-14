@@ -929,6 +929,12 @@ __declspec(noinline) bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
         return true;
     if (curTime >= mJumpFromMs)
         return false;
+    // NOTE (w7-av): 97.73 -- 2 rows, both from the LAST exit.  The image sends
+    // this `bge` to the same `li r3, 0x0` block as every other false exit (the
+    // one at the top, from `mState == kInit`); MSVC tail-DUPLICATES it for us,
+    // emitting a second `li r3, 0x0` and branching to the epilogue instead.
+    // Refuted: merging the two tests into one `||` -- that inverts the whole
+    // block layout (`bne` becomes `beq`, three bge/blt flip) and scores 86.02.
     if (mJumpFromMs >= fromTime)
         return false;
     return true;
