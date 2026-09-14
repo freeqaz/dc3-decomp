@@ -532,7 +532,7 @@ DataNode OnToggleSkeletalUpdateThread(DataArray *) {
 
 DataNode OnCycleNumStubSkeletons(DataArray *) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    int value = (handle.mInst->unk5388 + 1) % 3;
+    int value = Mod(handle.mInst->unk5388 + 1, 3);
     handle.mInst->unk5388 = value;
     return value;
 }
@@ -546,7 +546,7 @@ DataNode OnCycleFakeShellSkeletons(DataArray *a) {
 
 DataNode OnCycleActiveFakeShellSkeleton(DataArray *) {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-    int value = (handle.mInst->unk5394 + 1) % 2;
+    int value = Mod(handle.mInst->unk5394 + 1, 2);
     handle.mInst->unk5394 = value;
     return value;
 }
