@@ -106,6 +106,21 @@ END_COPYS
 
 INIT_REVS(1, 0)
 
+// Residual, 7 rows, 98.35152 canonical, entirely inside ASSERT_REVS: the
+// image anchors on gAltRev (`subi r7, r29, 0x4` reaches gRev at anchor-4) and
+// we anchor on gRev (`mr r7, r28`, `addi r7, r28, 0x4`).  That is the recorded
+// "MSVC's CSE anchor pick" refutation -- 613 of 645 sibling Load/PreLoad
+// functions are at 100 with our spelling (docs/sessions/2026-09-13-band-lane-wave.md).
+//
+// OPEN LEAD, measured but not taken here: hand-expanding ASSERT_REVS against a
+// `static const unsigned short gRevs[4] = {1, 0, 0, 0}` array instead of the
+// two INIT_REVS statics removes the two-row rotation in the SECOND MILO_FAIL's
+// MakeString argument setup (7 rows -> 5, 98.35152 -> 98.42424).  The anchor row
+// survives either way.  Not taken: +0.07pp does not justify one file spelling a
+// shared macro by hand, and the array form is NOT uniformly better -- on
+// SkeletonClip::Load the reverse experiment (array -> two statics) costs 2pp
+// because there only the array shares the anchor at all.  Settling this needs a
+// whole-binary A/B on INIT_REVS/ASSERT_REVS, not a per-file edit.
 BEGIN_LOADS(RhythmBattlePlayer)
     LOAD_REVS(bs)
     ASSERT_REVS(1, 0)

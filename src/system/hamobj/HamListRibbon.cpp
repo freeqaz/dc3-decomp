@@ -185,6 +185,15 @@ void HamListRibbon::PostLoad(BinStream &bs) {
     if (d.rev >= 3) {
         d >> mDisengageAnim;
     }
+    // Residual, 6 rows, 97.80540 canonical, and it is ONE instruction's
+    // placement: the image emits `lis r28, gNullStr@ha` at 0x82485BF4, i.e. in
+    // the same basic block as the `cmpwi r27, 0x4 / blt` below it, whereas we
+    // emit it after the branch at the top of this block.  Both sides have
+    // exactly the same three references to gNullStr (the anchor plus the two
+    // Symbol ctors at 0x54 and 0x58), so there is no third use pulling the
+    // anchor up -- it is MSVC placing the same CSE one dominator higher.
+    // REFUTED: swapping `Symbol s; int num;` to `int num; Symbol s;` in the
+    // rev < 9 arm is byte-for-byte inert.
     if (d.rev >= 4) {
         if (d.rev < 9) {
             Symbol s;
