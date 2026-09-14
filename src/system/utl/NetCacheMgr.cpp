@@ -417,10 +417,16 @@ NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoade
             MILO_FAIL("Unknown ref type %d.\n", type);
         }
 
-        if ((unsigned int)pos == 1) {
-            mNetLoaderRefs.insert(mNetLoaderRefs.end(), newRef);
-            pNetLoaderRef = &mNetLoaderRefs.back();
-        } else if ((unsigned int)pos == 0) {
+        // The image's dispatch is ONE `cmplwi cr6, r17, 0x1` with `blt cr6` ->
+        // the pos == 0 search-insert and `beq cr6` -> the append, and the
+        // MILO_FAIL block laid out BETWEEN the branch and the append
+        // (0x825B7A04..0x825B7A20).  That is a `switch`, not an if-chain: it is
+        // the same two-case + default shape MSVC gives the `type` switch above,
+        // right down to the default arm being emitted first.  An if-chain
+        // written pos == 0 first was measured at 82.6 by an earlier lane -- the
+        // lever is the switch, not the arm order.
+        switch ((unsigned int)pos) {
+        case 0: {
             std::list<NetLoaderRef>::iterator insertIt;
             for (insertIt = mNetLoaderRefs.begin(); insertIt != mNetLoaderRefs.end(); ++insertIt) {
                 if (!insertIt->IsDownloading() && !insertIt->IsLoadedOrFailed()) {
@@ -431,15 +437,13 @@ NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoade
             // return register (`lwz r11, 0x0(r3)` / `addi r26, r11, 0x8`);
             // naming it as a local made MSVC re-load it from the frame slot.
             pNetLoaderRef = &*mNetLoaderRefs.insert(insertIt, newRef);
-        } else {
-            // NEGATIVE RESULT: the image's dispatch is one `cmplwi cr6, r17, 0x1`
-            // with `blt cr6` -> the pos==0 search-insert and `beq cr6` -> the
-            // append, with this MILO_FAIL block sitting BETWEEN the branch and
-            // the append.  Writing the arms in that order (pos == 0 first) is a
-            // REGRESSION, 88.9 -> 82.6: MSVC then emits the fail block inline
-            // and re-materialises the whole NetLoaderRef copy.  The residual is
-            // dominated by a register renaming (r20<->r22 12 rows, r27<->r28 10)
-            // plus the 0x50/0x58 frame-slot swap.
+            break;
+        }
+        case 1:
+            mNetLoaderRefs.insert(mNetLoaderRefs.end(), newRef);
+            pNetLoaderRef = &mNetLoaderRefs.back();
+            break;
+        default:
             MILO_FAIL("Unknown net loader pos %d.\n", pos);
         }
 
