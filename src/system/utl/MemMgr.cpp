@@ -708,12 +708,7 @@ MemRealloc(void *mem, int size, const char *file, int line, const char *name, in
 MemHeapStack &ThreadMemStack(bool);
 
 void MemPushHeap(int iHeap) {
-    bool proceed = false;
-    if (gInitted) {
-        if (gNumHeaps > 0) {
-            proceed = true;
-        }
-    }
+    bool proceed = gInitted && gNumHeaps > 0;
     if (proceed) {
         MemHeapStack &s = ThreadMemStack(true);
         MILO_ASSERT_FMT(
@@ -729,12 +724,7 @@ void MemPushHeap(int iHeap) {
 }
 
 void MemPopHeap() {
-    bool proceed = false;
-    if (gInitted) {
-        if (gNumHeaps > 0) {
-            proceed = true;
-        }
-    }
+    bool proceed = gInitted && gNumHeaps > 0;
     if (proceed) {
         MemHeapStack &s = ThreadMemStack(true);
         MILO_ASSERT(s.mSize > 0, 0x1f6);
