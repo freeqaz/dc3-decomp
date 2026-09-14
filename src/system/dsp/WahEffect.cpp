@@ -241,13 +241,19 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
         mPhase = f27 - f12_twopi;
     }
 
-    // Copy state back from stack
+    // Copy state back from stack.  The two halves are NOT adjacent in the
+    // object: stack50 was loaded from mFilterState0/mFilterState1 (0x34/0x38)
+    // and stack58 from mFilterState2/mFilterState3 (0x3c/0x40), so the
+    // write-back walks one pointer and reaches TWO floats back for the stack50
+    // half.  The image does exactly that -- `subi r10, r26, 0x4` at 82E5A2A8
+    // with `addi r26, r31, 0x3c`, then `stfs f0, -0x4(r10)` / `stfsu f13,
+    // 0x4(r10)` at 82E5A2C8/CC, i.e. 0x34 then 0x3c, then 0x38 then 0x40.
     float *dest = &mFilterState2;
     for (int i = 0; i < 2; i++) {
         float s1 = stack50[i];
         float s2 = stack58[i];
-        dest[-1] = s1;  // Write to mFilterState0/unk38
-        *dest = s2;     // Write to unk3c/unk40
+        dest[-2] = s1;  // mFilterState0, then mFilterState1
+        *dest = s2;     // mFilterState2, then mFilterState3
         dest++;
     }
 }
