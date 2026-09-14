@@ -124,6 +124,15 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
             float out = (in - z1) * gain * 2.0f + z2 * coef;
             z1 = in;
             out = Clamp(-32767.0f, sMaxSample, out);
+            // Residual (97.60%, 5 charged rows, 636 B): the image fuses the
+            // pointer bump into the store -- `sthu r9, 0x2(r10)` at 82E3E538 --
+            // where we emit a separate `addi r10, r10, 0x2` plus `sth r9, 0x0(r10)`.
+            // Same in the second loop: the image keeps `lhz r11, 0x2(r8)` /
+            // `sthu r11, 0x2(r8)` off one biased pointer, we pre-increment at the
+            // loop head and read `lhz r9, 0x0(r11)`.  REFUTED: moving the counter
+            // increment ahead of the store (both loops) is completely inert.
+            // The rest is one callee-saved permutation, r31<->r30 (this vs samps)
+            // and r29<->r28 (&gNoiseThreshold vs maxSamp).
             *++p = (short)out;
             z2 = (float)(short)out;
             i++;
@@ -639,6 +648,17 @@ void MicManagerXbox::AddRemoteMic(unsigned long long const &xuid,
     DX_ASSERT_CODE(hr, 0x155);
 
     ChatBuffer chatBuffer;
+    // Residual (95.96%, 4 rows, 16 B): the image issues the xuid load FIRST in
+    // this five-instruction group --
+    //   ld   r11, 0x0(r26)      ; xuid
+    //   addi r4,  r31, 0x80     ; &chatBuffer
+    //   stw  r24, 0x470(r31)    ; unk8[250] = 0
+    //   addi r3,  r27, 0x20     ; &unk20
+    //   std  r11, 0x80(r31)
+    // -- where we issue the `stw` first and the `ld` third.  Everything else
+    // (both addis, the std, the push_back) is already in the image's order.
+    // REFUTED: swapping the two source statements does not move the load;
+    // the ordering is the scheduler's, not the statements'.
     *(unsigned long long *)&chatBuffer = xuid;
     chatBuffer.unk8[250] = 0;
     unk20.push_back(chatBuffer);
