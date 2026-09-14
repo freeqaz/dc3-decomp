@@ -1313,8 +1313,11 @@ void PlatformMgr::Poll() {
         MILO_ASSERT(mFriendsAsync, 0x4C0);
         MILO_ASSERT(mFriendsList, 0x4C1);
         unsigned long numFriends;
-        unsigned long res =
-            XGetOverlappedResult((XOVERLAPPED *)mFriendsAsync, &numFriends, false);
+        // The target keeps the asserted load of mFriendsAsync live into the call
+        // (it rematerialises it on both Fail tails and homes it to a stack slot),
+        // which is what a named local spells.
+        XOVERLAPPED *async = (XOVERLAPPED *)mFriendsAsync;
+        unsigned long res = XGetOverlappedResult(async, &numFriends, false);
         if (res != ERROR_IO_INCOMPLETE) {
             static PlatformMgrOpCompleteMsg msg(false);
             if (res == ERROR_SUCCESS) {
@@ -1324,6 +1327,13 @@ void PlatformMgr::Poll() {
                     if (!(xf->dwFriendState & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
                         && !(xf->dwFriendState
                              & XONLINE_FRIENDSTATE_FLAG_RECEIVEDREQUEST)) {
+                        // NOTE: the target's loop induction pointer is biased
+                        // +8, i.e. it IS &xf->szGamertag (disps 0x10 for
+                        // dwFriendState, -0x8 for xuid, 0 for the String arg).
+                        // Hoisting the gamertag address into a local ahead of
+                        // `new Friend()` to force it live across the calls is
+                        // byte-for-byte inert; MSVC sinks it back. Six rows
+                        // (528/533/550-553/562) are still owed to that.
                         Friend *f = new Friend();
                         String name(xf->szGamertag);
                         f->SetName(name);

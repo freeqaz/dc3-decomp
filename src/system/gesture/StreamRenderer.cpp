@@ -533,6 +533,13 @@ void StreamRenderer::DrawToTexture() {
         );
         TheShaderMgr.SetPConstant((PShaderConstant)0x44, paletteOffsets);
 
+        // NOTE: the four residual rows here are MSVC scheduling phase, not
+        // source shape. The target completes the components x,z,y,w; we
+        // complete w,x,z,y (the same chain rotated by one). Spelling this as
+        // four member assignments instead of the 4-arg ctor is byte-for-byte
+        // INERT -- MSVC lowers both identically -- so the "component-wise
+        // assignment defeats right-to-left argument evaluation" lever does not
+        // apply to Vector4 here.
         Vector4 playerIdx(
             (float)playerIndexes[0], (float)playerIndexes[1],
             (float)playerIndexes[2], (float)playerIndexes[3]
@@ -641,6 +648,11 @@ void StreamRenderer::DrawToTexture() {
             TheShaderMgr.SetPConstant((PShaderConstant)0x52, center5);
         }
 
+        // NOTE: the target runs the two int->float conversions through ONE
+        // temp slot (0x50, staged/reloaded alternately); we allocate a second
+        // at 0x58. Hoisting the two Width()/Height() results into named float
+        // locals first (the spelling blurRect below already uses) is
+        // byte-for-byte INERT, so that is not the lever.
         Hmx::Rect drawRect(0, 0, targetRT->Width(), targetRT->Height());
         TheNgRnd.DrawRect(drawRect, workMat, shaderType, Hmx::Color(), nullptr, nullptr);
 
