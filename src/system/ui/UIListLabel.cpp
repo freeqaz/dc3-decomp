@@ -115,13 +115,15 @@ void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *b
         // builds each corner and grows with it straight away -- the two
         // GrowToContain calls are not adjacent.
         Box localbox(box->mMin, box->mMax);
-        Vector3 minPt(label->mBounds.x, 0.0f, label->mBounds.y);
+        // A named reference to the bounds rect: the image materialises
+        // &label->mBounds once (addi r30, r11, 0xb4 -- `this` is dead in this
+        // arm, so the callee-saved register is free) and reads all four floats
+        // through it, instead of reloading mLabel out of `this` after the first
+        // GrowToContain and re-adding 0xb4..0xc0 each time.
+        Hmx::Rect &bounds = label->mBounds;
+        Vector3 minPt(bounds.x, 0.0f, bounds.y);
         localbox.GrowToContain(minPt, false);
-        Vector3 maxPt(
-            label->mBounds.x + label->mBounds.w,
-            0.0f,
-            label->mBounds.y + label->mBounds.h
-        );
+        Vector3 maxPt(bounds.x + bounds.w, 0.0f, bounds.y + bounds.h);
         localbox.GrowToContain(maxPt, false);
         box->GrowToContain(localbox.mMin, false);
         box->GrowToContain(localbox.mMax, false);
@@ -137,11 +139,12 @@ void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *b
             }
         }
         for (unsigned int i = 0; i < label->NumStyles(); i++) {
-            // Re-read rather than reuse savedAlphas[i]: the target makes ONE
-            // Style() call and does `lfs f0, 0x0(r11)` / `fmuls` /
-            // `stfs f0, 0x0(r11)` through that one pointer.
-            RndText::Style &style = label->Style(i);
-            style.SetAlpha(f * style.GetAlpha());
+            // Re-read rather than reuse savedAlphas[i], and bind the alpha FIELD
+            // rather than the style: the image makes one Style() call, forms
+            // `addi r11, r3, 0x24` and then reads and writes 0x0(r11).  A
+            // reference to the style itself keeps the 0x24 on each access.
+            float &alpha = label->Style(i).mFontColor.alpha;
+            alpha = f * alpha;
         }
         label->DrawShowing();
         for (unsigned int i = 0; i < label->NumStyles(); i++) {
