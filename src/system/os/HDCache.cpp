@@ -408,11 +408,17 @@ void HDCache::Init() {
             next = !header->Fail() && memcmp(hash1, hash2, 256) == 0;
         }
         bool skipHdcache = OptionBool("skip_hdcache", false);
-        // Open residual (w7-r, 2026-09-14): the image spells `!skipHdcache` as a
-        // full MASK (`subic r11, r11, 1` / `subfe r11, r11, r11`) and then needs
-        // a `clrlwi.` to test the `and`; we spell it 0/1 (`cntlzw`/`extrwi`) and
-        // get away with `and.` plus one extra `clrlwi` of the flag. 5 rows.
-        // Inlining the OptionBool call here (no named local) is exactly neutral.
+        // Open residual (w7-r, extended w7-y): the image spells `!skipHdcache` as
+        // a full MASK (`subic r11, r11, 1` / `subfe r11, r11, r11` = -(x == 0)),
+        // ANDs that with the flag byte and then tests with a separate
+        // `clrlwi.` -- which is MSVC's BRANCHLESS lowering of `&&`, not of `&`:
+        // a 0/1 value would clobber the second operand, so only a -1 mask is
+        // correct there.  Spelling it `&&` here does NOT reproduce that -- MSVC
+        // takes the short-circuit BRANCH instead (`clrlwi.` + `bne`), which the
+        // image does not have; it scores 99.3 against this spelling's 99.2, and
+        // the extra 0.1pp is bought with a branch the image contradicts, so the
+        // `&` stays.  5 rows.  Inlining the OptionBool call (no named local) is
+        // exactly neutral.
         if (!skipHdcache & next) {
             unk64 = true;
             TheDebug << MakeString("Using the archive cache\n");
