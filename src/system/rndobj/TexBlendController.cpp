@@ -108,28 +108,45 @@ RndTexBlendController::GetBlendState(float &blend, float influence) const {
             state = kBlendCustom;
         } else {
             float dist;
-            if (GetCurrentDistance(dist) && (bool)(mReferenceDistance > 0.0f)) {
-                if (dist < mReferenceDistance) {
-                    float denom = mReferenceDistance - mMinDistance;
-                    if (denom > 0.0f) {
-                        state = kBlendNear;
-                        blend = (mReferenceDistance - Max(dist, mMinDistance)) / denom;
-                    }
-                } else if (dist > mReferenceDistance) {
-                    float denom = mMaxDistance - mReferenceDistance;
-                    if (denom > 0.0f) {
-                        state = kBlendFar;
-                        blend = (Min(dist, mMaxDistance) - mReferenceDistance) / denom;
+            if (GetCurrentDistance(dist)) {
+                // The image assigns BOTH a float and a bool in the two arms of
+                // this test -- the false arm carries a dead `fmr f0, f31`
+                // (refDist = 0.0f) alongside `li r11, 0` -- which is why it
+                // branches here instead of using the preset-and-clear bool
+                // idiom.  Same shape as IsValid()'s `distValid` above.
+                float refDist;
+                bool refValid;
+                if (mReferenceDistance > 0.0f) {
+                    refDist = mReferenceDistance;
+                    refValid = true;
+                } else {
+                    refDist = 0.0f;
+                    refValid = false;
+                }
+                if (refValid) {
+                    if (dist < refDist) {
+                        float denom = refDist - mMinDistance;
+                        if (denom > 0.0f) {
+                            state = kBlendNear;
+                            blend = (refDist - Max(dist, mMinDistance)) / denom;
+                        }
+                    } else if (dist > refDist) {
+                        float denom = mMaxDistance - refDist;
+                        if (denom > 0.0f) {
+                            state = kBlendFar;
+                            blend = (Min(dist, mMaxDistance) - refDist) / denom;
+                        }
                     }
                 }
             }
             float t2 = blend * blend;
             float t3 = blend * t2;
-            // Smoothstep. The term order is load-bearing: MSVC forms the FMA
-            // from the SECOND multiply and computes the first into the addend,
-            // so `t3*-2 + t2*3` becomes `fmuls 2*t3` + `fmsubs t2*3 - that`,
-            // while this order keeps -2.0f as a literal and emits `fmadds`.
-            blend = t2 * 3.0f + t3 * (-2.0f);
+            // Smoothstep.  MSVC canonicalises this into `fmuls 2.0*t3` +
+            // `fmsubs t2*3.0 - that`; the image keeps -2.0f as a literal and
+            // emits `fmadds t3, -2.0, t2*3.0`.  Refuted spellings: swapped
+            // operand order, and a two-statement accumulator (`float s = t2*3;
+            // s += t3*-2;`).  Both are byte-for-byte identical to this one.
+            blend = t3 * (-2.0f) + t2 * 3.0f;
         }
     }
 
