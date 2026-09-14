@@ -2406,6 +2406,30 @@ void TessellateMesh(RndMesh *mesh) {
     // Retail declares the three probe edges once, outside the loop: only their
     // v0/v1 are re-stamped per face, and `midpoint` is seeded to -1 a single
     // time (it is never read before being overwritten on either path).
+    //
+    // Residual 95.46% canonical / 94.89% raw, 67 rows of 298.  ROOT CAUSE is a
+    // FOUR-BYTE SHIFT of the whole small-temp block, and it is an STL temp, not
+    // anything declared here.  Read the target prologue:
+    //   82637AB4  lbz  r10, 0x50(r31)      <- reads an UNINITIALISED byte
+    //   82637B0C  stb  r10, 0xa4(r31)      <- into the std::set's comparator
+    // i.e. `std::set<Edge> edges;` copy-constructs its stateless less<Edge>
+    // from a garbage stack temp.  The image parks that temp at 0x50, SHARING
+    // the slot MSVC also uses as the dead home slot (0x50 takes four dead
+    // `stw r8` and three dead `sth` of face.v1/v2/v3 that are never read back);
+    // we give it its own slot at 0x54.  Everything after it shifts by 4:
+    //   image   e23 @ 0x54, e12 @ 0x5c, e31 @ 0x64   (6-byte Edge, 8-byte pitch)
+    //   ours    e12 @ 0x58, e31 @ 0x60, e23 @ 0x68   (+ a 4th midpoint slot 0x6c)
+    // The Face locals inherit the same shaping: f4 @ 0xa8 / f2 @ 0xc0 in the
+    // image, f2 @ 0xa8 / f4 @ 0xc0 in ours, with 0xd0 <-> 0xd8 likewise.
+    // The big objects all agree already (newFaces @ 0x70, newVerts @ 0x80,
+    // edges @ 0x90).
+    //
+    // REFUTED, both byte-inert (identical 67 rows, identical 95.5/94.9):
+    //   - reordering this declaration to `Edge e23, e31, e12;`
+    //   - moving the declaration INSIDE the loop body
+    // MSVC does not take slot order for these from declaration order or from
+    // scope, so there is no spelling of THIS function that moves them; the
+    // allocation is decided by the STL temp above.
     Edge e12, e23, e31;
 
     for (unsigned int i = 0; i < (unsigned int)mesh->Faces().size(); i++) {
