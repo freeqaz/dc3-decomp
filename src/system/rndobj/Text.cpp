@@ -1493,14 +1493,19 @@ process_char:
                 RndFontBase *font = fontMap->Font();
                 if (font) {
                     if (mFitType == kFitScrollMarqueeWrapAlways && ch == '\n') {
-                        if (!marqueeWrap) {
-                            mNumLines++;
-                            float lw = (float)((double)cumWidth + (double)mNumLines * (double)mIndentation);
-                            mLineWidths.insert(mLineWidths.end(), lw);
-                            float lo = (float)((double)mNumLines * (double)mIndentation + (double)cumWidth);
-                            mLineOffsets.insert(mLineOffsets.end(), lo);
+                        // Arm order is load-bearing: the image falls THROUGH to the
+                        // marqueeWrap body -- 82694F3C `beq .L_82694F48` skips over
+                        // `fadds f31, f0, f31` to the mNumLines block -- rather than
+                        // branching to it.  Written the other way round MSVC sinks
+                        // the one-instruction arm out of line and adds a `b` back.
+                        if (marqueeWrap) {
+                            cumWidth = mIndentation + cumWidth;
                         } else {
-                            cumWidth = (float)((double)mIndentation + (double)cumWidth);
+                            mNumLines++;
+                            float lw = mNumLines * mIndentation + cumWidth;
+                            mLineWidths.insert(mLineWidths.end(), lw);
+                            float lo = mNumLines * mIndentation + cumWidth;
+                            mLineOffsets.insert(mLineOffsets.end(), lo);
                         }
                         float charWidth;
                         if (font->CharAdvance(prevChar, (unsigned short)'\n', charWidth)) {
@@ -1509,7 +1514,28 @@ process_char:
                     } else {
                         float charWidth;
                         bool found = font->CharAdvance(prevChar, ch, charWidth);
-                        if (!found) {
+                        // Same again: 82695028 `beq .L_826950A8` sends the NOT-found
+                        // case away to the missing-char bookkeeping and falls through
+                        // to the width accumulation, so `found` is the inline arm --
+                        // that one inversion moves the whole 26-instruction
+                        // find/push_back block to the right side of the branch.
+                        // And 82695048 `blt cr6, .L_82695054` does it once more for
+                        // the negative-width test, so `!(charWidth < 0.0f)` -- not
+                        // `charWidth < 0.0f` -- is the arm that stays inline.
+                        if (found) {
+                            charWidth = (charWidth + styleState.mKerning) * styleState.mSize;
+                            if (!(charWidth < 0.0f)) {
+                                cumWidth = charWidth + cumWidth;
+                            } else {
+                                if (ch != '\n') {
+                                    if (std::find(negWidthChars.begin(), negWidthChars.end(), ch) == negWidthChars.end()) {
+                                        negWidthChars.push_back(ch);
+                                    }
+                                }
+                            }
+                            fontMap->IncrementDisplayableChars(ch);
+                            prevChar = ch;
+                        } else {
                             if (ch != '\n') {
                                 if (std::find(missingChars.begin(), missingChars.end(), ch) == missingChars.end()) {
                                     missingChars.push_back(ch);
@@ -1518,19 +1544,6 @@ process_char:
                                     missingFonts.push_back(font);
                                 }
                             }
-                        } else {
-                            charWidth = (charWidth + styleState.mKerning) * styleState.mSize;
-                            if ((double)charWidth < 0.0) {
-                                if (ch != '\n') {
-                                    if (std::find(negWidthChars.begin(), negWidthChars.end(), ch) == negWidthChars.end()) {
-                                        negWidthChars.push_back(ch);
-                                    }
-                                }
-                            } else {
-                                cumWidth = (float)((double)charWidth + (double)cumWidth);
-                            }
-                            fontMap->IncrementDisplayableChars(ch);
-                            prevChar = ch;
                         }
                     }
                 }
