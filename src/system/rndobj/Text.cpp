@@ -2019,6 +2019,9 @@ void RndText::ConstructMeshes(
 ) {
     // Store scale and number of lines
     mConstructScale = scale;
+    // NEGATIVE RESULT: the image loads lines.mFinish (0x4) BEFORE lines.mStart
+    // (0x0) for this size computation; spelling it `lines.end() - lines.begin()`
+    // instead of `lines.size()` is exactly inert.  Two rows.
     mNumLinesRendered = lines.size();
 
     // Copy bounds using integer word copies (matching target codegen)
@@ -2039,6 +2042,16 @@ void RndText::ConstructMeshes(
 #endif
 
     // Allocate meshes for each font map
+    // NEGATIVE RESULT (loop rotation).  The image tests this loop once up front
+    // -- `lwz r30, 0xa8(r3)` / `lwz r10, 0xac(r3)` / `cmplw cr6, r30, r10` /
+    // `beq cr6, 0x826866c0`, all hoisted into the prologue -- and then falls
+    // into a body that reloads the end each iteration.  We emit the
+    // branch-to-bottom shape (`b` to the test).  Spelling the rotation out as
+    // `it = begin(); if (it != end()) do { ... } while (it != end());` is
+    // EXACTLY inert: MSVC un-rotates it straight back.  The SAME source shape
+    // gives the image both lowerings -- the CleanupSyncMeshes loop at the end of
+    // this function is branch-to-bottom on both sides -- so this is a scheduler
+    // heuristic, not a source difference.  Eight rows, left alone.
     for (std::vector<FontMapBase *>::iterator it = mFontMaps.begin(); it != mFontMaps.end();
          ++it) {
         (*it)->AllocateMeshes(this, mFixedLength);
@@ -2057,13 +2070,27 @@ void RndText::ConstructMeshes(
             unsigned short prevChar = 0;
             int charIdx = 0;
 
-            while (cur != line.mEnd && cur < line.mEnd) {
+            // `cur != line.mEnd`, NOT `cur < line.mEnd`.  The extra `&& cur <
+            // line.mEnd` was decomp-introduced: it is redundant with the `!=`
+            // and MSVC collapsed the pair to the signed `<`, which shows up as
+            // `bge cr6` where the image guards with `cmplw cr6, r30, r10` /
+            // `beq cr6` on the raw pointers (0x82686718).  The overshoot that
+            // guard was defending against is already handled by the explicit
+            // `if (cur > line.mEnd) break;` on the markup path below.
+            while (cur != line.mEnd) {
                 unsigned short ch = *cur;
 
                 if (ch == 0x3c && mMarkup) {
                     cur = ParseMarkup(cur, state, ch);
-                    if (cur > line.mEnd) break;
-                    cur--; // compensate for cur++ at end of loop
+                    // The `cur--` compensation is CONDITIONAL on ch, and there
+                    // is no `cur > line.mEnd` bail-out in the image -- that was
+                    // decomp-introduced.  0x82686758:
+                    //     mr.  r11, r29        ; ch
+                    //     beq  0x82686768      ; ch == 0 -> shared `if (ch)`
+                    //     subi r30, r30, 0x2   ; cur--
+                    if (ch != 0) {
+                        cur--; // compensate for the cur++ below
+                    }
                 }
 
                 if (ch != 0) {
@@ -2080,9 +2107,13 @@ void RndText::ConstructMeshes(
                     );
                     prevChar = ch;
                     charIdx++;
+                    // cur++ lives INSIDE this arm: `beq cr6, 0x826867b8` at
+                    // 0x8268676c jumps PAST the `addi r30, r30, 0x2` straight to
+                    // the loop test, so a ch of 0 (only reachable when
+                    // ParseMarkup consumed a tag and already advanced cur) does
+                    // not advance the cursor a second time.
+                    cur++;
                 }
-
-                cur++;
             }
         }
     }
