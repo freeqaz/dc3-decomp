@@ -531,6 +531,13 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
         }
         exePath.ReplaceAll('\\', '/');
         detailPoint.AddPair("path", DataNode(exePath.c_str()));
+        // INERT (lane w7-bb, 2026-09-14): folding this if/else into the ternary
+        // `DataNode(mCrucibleApp ? mCrucibleApp : exeBase.c_str())` -- the shape
+        // suggested by the image hoisting the DataNode temp's address
+        // (`addi r3, r31, 0x50`) ABOVE the `cmplwi`/`bne` at idx 278 where we
+        // emit it after -- is byte-identical.  DoCrucible stays at 99.53052 with
+        // the identical 22 rows, so the two-slot hoist is scheduler-owned, not
+        // a conditional-expression-vs-statement difference.
         const char *appName = mCrucibleApp;
         if (!mCrucibleApp) {
             appName = exeBase.c_str();
