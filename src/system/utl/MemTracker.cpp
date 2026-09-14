@@ -515,18 +515,18 @@ void MemTracker::DiffDump(TextStream &ts) {
 
             for (; allocIt != allocEnd || freedIt != mFreedInfos.end();) {
                 if (allocIt == allocEnd) {
-                    ColatedPrint(ts, *freedIt, "alloc");
+                    ColatedPrint(ts, *freedIt, "free");
                     freedIt++;
                 } else if (freedIt == mFreedInfos.end()) {
-                    ColatedPrint(ts, *allocIt, "free");
+                    ColatedPrint(ts, *allocIt, "alloc");
                     allocIt++;
                 } else {
                     int cmp = (*allocIt)->StackCompare(**freedIt);
                     if (cmp < 0) {
-                        ColatedPrint(ts, *allocIt, "free");
+                        ColatedPrint(ts, *allocIt, "alloc");
                         allocIt++;
                     } else if (cmp > 0) {
-                        ColatedPrint(ts, *freedIt, "alloc");
+                        ColatedPrint(ts, *freedIt, "free");
                         freedIt++;
                     } else {
                         allocIt++;
@@ -534,6 +534,7 @@ void MemTracker::DiffDump(TextStream &ts) {
                     }
                 }
             }
+            allocVec.Free();
         }
         ts << ")\n";
     }
