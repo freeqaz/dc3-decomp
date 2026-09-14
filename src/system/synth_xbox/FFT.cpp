@@ -786,22 +786,40 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
             sv.f[3] = (float)cos(angle2);
 
             XMVECTOR v_cos_vec = __lvx(&sv, 0);
-            XMVECTOR v_cos_splat = __vspltw(v_cos_vec, 0);
+
+            // Initialize running twiddle factors.  w_re1/w_re2 are formed
+            // from v_cos_vec around the two sv stores, in the image's order
+            // (0x82E4E97C / 0x82E4E984 straddle the `stfs 0x68(r1)`).  MSVC
+            // still sinks the w_re2 merge below the sin-vector load and pays
+            // a `vor128` copy of v_cos_vec for it, exactly as in the forward
+            // transform; spelling it through v_cos_merged, or after the sin
+            // load, is inert or worse.
+            XMVECTOR w_im2 = v_sign;
+            XMVECTOR w_im1 = v_zero;
+            XMVECTOR w_re1 = __vspltw(v_cos_vec, 0);
 
             // Phase 3: Overwrite with sin values, load it
             sv.f[2] = (float)s1d;
+            XMVECTOR w_re2 = __vmrglw(v_cos_vec, v_cos_vec);
             sv.f[3] = (float)s2d;
 
             XMVECTOR v_sin_vec = __lvx(&sv, 0);
             XMVECTOR v_sin_merged = __vmrglw(v_sin_vec, v_sin_vec);
+            w_im2 = __vmaddfp(w_im2, v_sin_merged, v_zero);
 
-            // Initialize running twiddle factors
-            XMVECTOR v_cos_merged = __vmrglw(v_cos_vec, v_cos_vec);
-            XMVECTOR w_re1 = v_cos_splat;
-            XMVECTOR w_im1 = v_zero;
-            XMVECTOR w_re2 = v_cos_merged;
-            XMVECTOR w_im2 = __vmaddfp(v_sign, v_sin_merged, v_zero);
-
+            // BEHAVIOURAL FIX (w7-ay): the gather loop below walks COPIES of
+            // temp/temp2 -- the image's `mr r9, r28` / `mr r8, r27` at
+            // 0x82E4E970-74 -- and r28 (temp) is what the two FFTComplex
+            // calls, the deinterleave and free() then use (0x82E4EA78,
+            // 0x82E4EAA8, 0x82E4EB1C).  The permuter harvest fb98fec2e had
+            // replaced them with `temp += 4` / `temp2 += 4`, which scored
+            // 3pp higher (89.0 vs 86.0) and handed FFTComplex, the second
+            // loop and free() a pointer half_cols*16 bytes past the malloc.
+            // Keep the copies; the score is not the point.  Declared here,
+            // before src_data, like the forward transform; scoping them
+            // inside the guard is worse (85.6).
+            float *dst1 = temp;
+            float *dst2 = temp2;
             char *src_data = (char *)data_ptr;
             int k = 0;
 
@@ -837,9 +855,9 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
                     XMVECTOR p_im2 = __vnmsubfp(w_im2, sp_sin2_3, w_im2);
                     new_re1 = __vnmsubfp(w_im1, v_im_init, new_re1);
                     XMVECTOR r1 = __vmaddfp(w_im1, d_swap0, t1);
+                    new_re2 = __vnmsubfp(w_im2, v_im_init, new_re2);
                     XMVECTOR new_im1 = __vmaddfp(w_re1, v_im_init, p_im1);
                     XMVECTOR r2 = __vmaddfp(w_im2, d_swap1, t2);
-                    new_re2 = __vnmsubfp(w_im2, v_im_init, new_re2);
                     XMVECTOR new_im2 = __vmaddfp(w_re2, v_im_init, p_im2);
 
                     w_re1 = new_re1;
@@ -853,10 +871,10 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
                     XMVECTOR out_lo = __vperm(r1, r2, pm_lo_v);
                     XMVECTOR out_hi = __vperm(r1, r2, pm_hi_v);
 
-                    __stvx(out_lo, temp, 0);
-                    temp += 4;
-                    __stvx(out_hi, temp2, 0);
-                    temp2 += 4;
+                    __stvx(out_lo, dst1, 0);
+                    dst1 += 4;
+                    __stvx(out_hi, dst2, 0);
+                    dst2 += 4;
                     src_data += data_stride;
                 } while (k < half_cols);
             }
