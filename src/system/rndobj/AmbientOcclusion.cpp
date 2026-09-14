@@ -46,6 +46,23 @@ void RndAmbientOcclusion::BlendVert(
     out.tex += v2.tex;
     Add(v2.color, out.color, out.color);
     Add(v2.norm, out.norm, out.norm);
+    // NEGATIVE RESULT 2026-09-14 (w7-ae), 85.7% canonical.  The interleaving
+    // below is load-bearing and two variants that tidy it up both REGRESS:
+    //   * hoisting `tang.z`/`tang.y` to sit right after `tang.x` (which is where
+    //     the image's `lfs 0x54(r30)` / `lfs 0x58(r30)` appear, at target
+    //     AmbientOcclusion.obj offsets 0x818 and 0x834, interleaved into the
+    //     `out.pos *= 0.5f` block) measures
+    //     85.7 -> 78.9.  The image hoists only the LOADS; the adds and the
+    //     stores back into the stack copy stay after the colour multiply, so the
+    //     current statement order is already the one that produces them.
+    //   * replacing the three `out.tangent.<c> = tang.<c>` stores with a single
+    //     `(Vector3&)out.tangent = (const Vector3&)tang;` measures 85.7 -> 82.7.
+    //     It does fix the one real ordering row (we sink the 0x50 store past the
+    //     colour zeroing, the image does not) but costs more elsewhere.
+    // What is left after those is ~90 rows of pure FPR renaming with identical
+    // opcodes on both sides, plus ~4 rows where MSVC defers the `lfs 0x44(r30)`
+    // of `out.tex += v2.tex` past the store to out.tex.x -- i.e. our build proved
+    // the two Vert& do not alias and the image's did not.
     Vector4 tang = out.tangent;
     tang.x = v2.tangent.x + tang.x;
     out.pos *= 0.5f;
