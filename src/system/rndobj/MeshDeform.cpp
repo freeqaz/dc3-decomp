@@ -185,22 +185,47 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
     auto& _ref0 = mData;
     u8 *ptr = (u8 *)_ref0;
     u8 *end = ptr + mSize;
-    int vertCount = 0;
+    int count = 0;
     while (ptr < end) {
-        vertCount++;
+        count++;
         ptr += (*ptr * 2) + 1;
     }
+    int vertCount = count;
     float sum = 0.0f;
-    // RESIDUAL (w7-bi, 91.8 canonical, was 71.2): 7 rows are the stack pair
-    // (0x50,0x54) -- the image gives 0x50 to `sum` (shared with the first
-    // PathName temp) and 0x54 to `vertCount`; we allocate them the other way.
-    // REFUTED, do not re-try: declaring `float sum;` above the counting loop
-    // (identical 91.8), and moving the whole `float sum = 0.0f;` there (82.5 --
-    // it drags the 0.0f anchor and the init store in front of the loop).
-    // Another 5 rows are r23<->r24 (`this` vs the outer index) and the counting
-    // loop's rotation: the image branches straight to the bottom test
-    // (`b .L_826D8D58` at 0x826D8D40) and homes `vertCount` once afterwards,
-    // where we peel a top test and home it eagerly.
+    // The counting loop's result reaches the two MILO_NOTIFYs by REFERENCE
+    // (MakeString<char const*,int,float> takes `const int&`), so `vertCount`
+    // needs a home slot.  The image homes it exactly ONCE, at 0x826D8D64 --
+    // after the loop -- and runs the loop itself on a register (r18).  Writing
+    // the loop directly into `vertCount` makes MSVC home it at its definition,
+    // i.e. eagerly before the loop, which cost an extra `stw` AND rotated the
+    // loop (we peeled a top test where the image branches straight to the
+    // bottom one, `b .L_826D8D58` at 0x826D8D40) AND flipped the (0x50,0x54)
+    // slot pair.  Splitting the loop counter out into `count` and defining
+    // `vertCount` after the loop fixes all three at once: 91.8 -> 95.2.
+    //
+    // RESIDUAL (w7-bi, 95.2 canonical, was 71.2): 18 of the 29 remaining rows
+    // are ONE register-pair inversion and its scheduling fallout.  The image
+    // gives the EARLIER-defined value the HIGHER callee-saved register in two
+    // pairs -- `this` r24 / outer index r23, and `&mData` r22 / the format
+    // string r21 -- and our build assigns both pairs the other way round.  Use
+    // counts are identical on both sides (8 and 5), so this is a tie-break
+    // inside MSVC's allocator, not a liveness difference.  It cascades into the
+    // MemResizeElem tail (rows 130-145), where the same two loads and the
+    // `num*2` shift are merely scheduled around the swapped registers.
+    // REFUTED, do not re-try (each measured, all byte-identical unless noted):
+    //   - `float sum;` declared above the counting loop (91.8, neutral);
+    //   - the whole `float sum = 0.0f;` moved above the counting loop (82.5 --
+    //     it drags the 0.0f anchor and the init store in front of the loop;
+    //     the image's anchor is at 0x826D8D60, AFTER the loop);
+    //   - `float sum;` declared BEFORE `vertCount` and assigned after the loop
+    //     (byte-identical, so the slot pair is a coloring result, not
+    //     declaration order -- the image reuses 0x50 for `sum` AND for the
+    //     first PathName temp, 0x826D8D70 vs 0x826D8E24, which only a
+    //     liveness-based coloring produces);
+    //   - `mSize + ptr` for `ptr + mSize` (row 33) and `weights[i] + sum` for
+    //     `sum += weights[i]` (row 74): MSVC normalises both commutative
+    //     orders, exactly 95.2 either way.
+    //
     // One fused loop: the dedup scan, the negative-weight report and the sum all
     // live in the same `for (i)` -- 0x826D8D98..0x826D8E68 is a single loop with
     // one `cmpwi cr6, r31, 0x0` zero-trip guard at 0x826D8D68.  The inner scan
