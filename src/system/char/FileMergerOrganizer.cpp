@@ -122,9 +122,12 @@ void FileMergerOrganizer::FailedLoading(Loader *l) {
         // materialised bool -- subf / cntlzw / extrwi. / bne -- rather than a
         // cmplw straight into the branch.
         OrganizedFileMerger *cur = &*it;
-        if (cur->merger->mCurLoader && (bool)(cur->merger->mCurLoader == l)) {
-            org = cur;
-            break;
+        if (cur->merger->mCurLoader) {
+            bool isCur = cur->merger->mCurLoader == l;
+            if (isCur) {
+                org = cur;
+                break;
+            }
         }
     }
     MILO_ASSERT(org, 0x173);
