@@ -182,6 +182,11 @@ DataNode ClipPlayer::AnnotateClip(float frame) {
         do_annotate:
             Annotate(arr, annotBeat, name);
         }
+        // `new DataArray(0)` goes through PoolAlloc, which can return null; the
+        // image tests it here (825 1EF08 `cmplwi cr6, r29, 0x0` / `bne`) and
+        // joins the shared `return 0` block, which is what sinks that block past
+        // the Annotate call.
+        if (!arr) goto fail;
         DataNode node(arr, kDataArray);
         arr->Release();
         return node;
