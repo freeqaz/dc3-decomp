@@ -426,14 +426,20 @@ void UIListDir::BuildDrawState(
             break;
         }
 
+        // `prevData` carries the snapped index forward AND is what every
+        // consumer below reads: retail assigns it from `data` before the
+        // SnappedDataForDisplay call (mr r27,r29 at 0x827892F0, then mr r27,r3
+        // at 0x82789300) and never touches `data` again.  Writing `data =
+        // snapped; prevData = data;` instead costs an extra copy after the
+        // branch.
         int showing = state.Display2Showing(dispIndex);
+        prevData = data;
         int snapped = state.SnappedDataForDisplay(dispIndex);
         if (snapped >= 0) {
-            data = snapped;
+            prevData = snapped;
         }
-        prevData = data;
 
-        float gap = state.Provider()->GapSize(showing, data, selectedData, direction);
+        float gap = state.Provider()->GapSize(showing, prevData, selectedData, direction);
         if (i == 0) {
             firstGap = gap;
         }
@@ -468,7 +474,7 @@ void UIListDir::BuildDrawState(
         }
 
         UIListWidgetState elemState;
-        if (!state.Provider()->IsActive(data)) {
+        if (!state.Provider()->IsActive(prevData)) {
             elemState = kUIListWidgetInactive;
         } else if (showing == selected && allowHighlight) {
             elemState = kUIListWidgetHighlight;
@@ -476,7 +482,7 @@ void UIListDir::BuildDrawState(
             elemState = kUIListWidgetActive;
         }
 
-        UIListWidgetState widgetState = state.Provider()->ElementStateOverride(showing, data, elemState);
+        UIListWidgetState widgetState = state.Provider()->ElementStateOverride(showing, prevData, elemState);
         if (showing == selected) {
             drawState.mHighlightElementState = widgetState;
         }
@@ -492,14 +498,14 @@ void UIListDir::BuildDrawState(
         elem.mScaleZ = 1.0f;
         elem.mAlpha = alpha;
         elem.mElementState = widgetState;
-        elem.mComponentState = state.Provider()->ComponentStateOverride(showing, data, compState);
+        elem.mComponentState = state.Provider()->ComponentStateOverride(showing, prevData, compState);
         elem.mDisplay = dispIndex;
         elem.mShowing = showing;
-        elem.mData = data;
+        elem.mData = prevData;
         drawState.mElements.push_back(elem);
 
         totalGap += gap;
-        if (dispIndex > 0 && dispIndex < state.NumDisplay() - 1) {
+        if (dispIndex > 0 && dispIndex < numDisplay - 1) {
             lastPosBase += gap;
         }
         if (dispIndex < selectedDisplay) {
