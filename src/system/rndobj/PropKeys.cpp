@@ -855,18 +855,20 @@ void __push_heap<Key<ObjectStage>*, int, Key<ObjectStage>, less<Key<ObjectStage>
     int topIndex,
     Key<ObjectStage> value,
     less<Key<ObjectStage> > comp) {
-    while (holeIndex > topIndex) {
-        int parent = (holeIndex - 1) >> 1;
-        Key<ObjectStage>* parent_ptr = first + parent;
-
-        if (comp(value, *parent_ptr)) {
-            break;
-        }
-
-        Key<ObjectStage>* current_ptr = first + holeIndex;
-        *current_ptr = *parent_ptr;
-
+    // Canonical STLport shape, and the deviations from it were REAL, not
+    // cosmetic.  (a) `/ 2`, not `>> 1`: the image emits srawi+addze
+    // (0x8268BF2C), the signed divide that rounds toward zero, where a shift
+    // rounds toward -inf.  (b) the test is comp(*parent, value) inside the
+    // while, not comp(value, *parent) with a break -- those disagree at
+    // equality, and the image breaks on equal (`blt` sets the flag, `beq`
+    // exits, 0x8268BEF4-0x8268BF04).  (c) `parent` is computed once before the
+    // loop and again at the END of the body, which is what lets the loop
+    // rotate with the test at the bottom.
+    int parent = (holeIndex - 1) / 2;
+    while (holeIndex > topIndex && comp(*(first + parent), value)) {
+        *(first + holeIndex) = *(first + parent);
         holeIndex = parent;
+        parent = (holeIndex - 1) / 2;
     }
 
     *(first + holeIndex) = value;
