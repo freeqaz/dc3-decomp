@@ -1063,7 +1063,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
          meshIt != mObjectsTessellate.end(); ++meshIt) {
         RndMesh *mesh = *meshIt;
         TheDebug << MakeString(
-            "RndAmbientOcclusion: Tessellating '%s'...\n", (char *)mesh->Name()
+            "RndAmbientOcclusion: Tessellating '%s'...\n", mesh->Name()
         );
         const Transform &xfm = mesh->WorldXfm();
 
