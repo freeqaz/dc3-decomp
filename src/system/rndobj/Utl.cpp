@@ -969,15 +969,22 @@ void UtilDrawCigar(
     const Hmx::Color &col,
     int segments
 ) {
-    float len2 = lengths[2];
-    float len1 = lengths[1];
-    float len0 = lengths[0];
-    float scale = sqrtf(len2 * len2 + len0 * len0 + len1 * len1);
-    float scaledLens[3];
+    // The scale factor comes out of the TRANSFORM, not out of `lengths`: retail
+    // loads 0x4/0x0/0x8 off r3 (= tf) here, and the memcpy that fills `basis`
+    // reads r11, which is the saved r3, not r5.  This is Length(tf.m.x), the
+    // uniform scale baked into the transform -- exactly what RB3's copy of this
+    // function spells as `lengths[i] * Length(tf.m.x)` and `Transform basis = tf`.
+    float mz = tf.m.x.z;
+    float my = tf.m.x.y;
+    float mx = tf.m.x.x;
+    float scale = sqrtf(mz * mz + mx * mx + my * my);
+    // Only two entries: retail's ctr for the scaling loop is a literal 2
+    // (li r9,0x2 / mtctr r9), and only [0] and [1] are ever read back.
+    float scaledLens[2];
     Transform basis;
 
     {
-        int cnt = 3;
+        int cnt = 2;
         float *dst = scaledLens;
         do {
 #ifdef HX_NATIVE
@@ -991,28 +998,47 @@ void UtilDrawCigar(
             cnt--;
         } while (cnt != 0);
     }
-    memcpy(&basis, lengths, 0x40);
+    memcpy(&basis, &tf, 0x40);
     Normalize(basis.m, basis.m);
 
     float sLen0 = scaledLens[0];
     float sLen1 = scaledLens[1];
 
+    // Two behavioural bugs fixed here, both visible in retail's stores:
+    //  1. The cap apex sits on the LOCAL X AXIS, not Y.  Retail writes the
+    //     computed value to 0x60(r1) -- offset 0 of the temp vector -- and zeroes
+    //     0x64/0x68, i.e. Set(value, 0, 0).  That is the same axis the ring
+    //     vertices use (v1/v2 take the axial coordinate as their x), so putting
+    //     it in y put both caps off the cigar's axis.
+    //  2. Retail transforms through a SEPARATE temp (in = 0x60, out = 0x90 /
+    //     0xa0); we were transforming in place.
+    // Retail's frame is 0x3d0 and ours is 0x3e0: retail coalesces the int->float
+    // conversion scratch double into the dead `scaledLens` slot (0x50, accessed
+    // again at the (float)i conversions), while MSVC gives us a fresh 0x90 and
+    // pushes top/bottom/basis/both vertex arrays up by 0x10.  Hoisting `end` out
+    // of a nested block recovered 0.1pp of that; swapping the declaration order of
+    // `end` and `scaledLens` to give scaledLens the lower slot was byte-identical
+    // (measured 2026-09-14, two consecutive neutral variants), so the readable
+    // order stays and the 0x10 is a deliberate residual.
+    Vector3 end;
     Vector3 top;
-    top.Set(0, sLen0 - radii[0], 0);
-    Multiply(top, basis, top);
-
     Vector3 bottom;
-    bottom.Set(0, sLen1 + radii[1], 0);
-    Multiply(bottom, basis, bottom);
+    end.Set(sLen0 - radii[0], 0, 0);
+    Multiply(end, basis, top);
+    end.Set(sLen1 + radii[1], 0, 0);
+    Multiply(end, basis, bottom);
 
     float angle2Pi = 1.0471975803375244f;
     float anglePiHalf = 1.5707963705062866f;
     float anglePi6 = 0.5235987901687622f;
 
-    // Arrays use 16-byte stride per element (4 floats per Vector3)
-    // 18 entries each (3 rings × 6 vertices)
-    float verts2e0[18 * 4];
-    float verts1c0[18 * 4];
+    // 18 entries each (3 rings x 6 vertices).  Vector3 carries its own 4-byte
+    // PAD member, so sizeof is 16 and indexing the array directly is what
+    // produces retail's `add r10,r28,r31` / `slwi r29,r10,4`; a float[18*4] with
+    // an index pre-multiplied by 4 lets MSVC fuse the two induction variables
+    // into one byte-stepping counter (addi r30,r30,0x10 / cmpwi r30,0x120).
+    Vector3 verts2e0[18];
+    Vector3 verts1c0[18];
 
     int iIdx = 0;
     int iLatSum = 0;
@@ -1038,14 +1064,14 @@ void UtilDrawCigar(
             float lonVal = (float)iLon * angle2Pi;
             float sinLon = FastSin((float)iLon * angle2Pi);
             float sinLonPi2 = FastSin(lonVal + anglePiHalf);
-            int idx = (iLatSum + iLon) * 4;
+            int idx = iLatSum + iLon;
             Vector3 v1(h0b, sinLonPi2 * r0, sinLon * r0);
-            Multiply(v1, basis, *(Vector3 *)&verts1c0[idx]);
+            Multiply(v1, basis, verts1c0[idx]);
             // y takes the cos-phase sine and z the sin-phase one, the same way
             // round as v1 -- retail's stores at 0x74/0x78 read f22 (the
             // lonVal+pi/2 result) then f21 (the plain lonVal result).
             Vector3 v2(h1, sinLonPi2 * r1, sinLon * r1);
-            Multiply(v2, basis, *(Vector3 *)&verts2e0[idx]);
+            Multiply(v2, basis, verts2e0[idx]);
             iLon = iLon + 1;
         } while (iLon < 6);
         iLatSum = iLatSum + 6;
@@ -1054,9 +1080,7 @@ void UtilDrawCigar(
 
     int i = 0;
     do {
-        TheRnd.DrawLine(
-            *(Vector3 *)&verts2e0[i * 4], *(Vector3 *)&verts1c0[i * 4], col, false
-        );
+        TheRnd.DrawLine(verts2e0[i], verts1c0[i], col, false);
         i = i + 1;
     } while (i < 6);
 
@@ -1065,28 +1089,29 @@ void UtilDrawCigar(
         int iJ = 0;
         int iK = 5;
         do {
-            int p1 = (iRing * 6 + iJ) * 4;
-            int p2 = (iRing * 6 + iK) * 4;
-            TheRnd.DrawLine(
-                *(Vector3 *)&verts2e0[p1], *(Vector3 *)&verts2e0[p2], col, false
-            );
-            Vector3 *pTop;
+            int p1 = iRing * 6 + iJ;
+            int p2 = iRing * 6 + iK;
+            TheRnd.DrawLine(verts2e0[p1], verts2e0[p2], col, false);
+            // Third behavioural bug: the caps were attached to the WRONG rings.
+            // verts2e0 is the radii[1]/sLen1 ring, so its last ring closes on
+            // `bottom` (retail: addi r5,r1,0xa0), and verts1c0 -- the
+            // radii[0]/sLen0 ring -- closes on `top` (addi r5,r1,0x90).  We had
+            // each ring reaching across to the other cap's apex.
+            Vector3 *pEnd2;
             if (iRing == 2) {
-                pTop = &top;
+                pEnd2 = &bottom;
             } else {
-                pTop = (Vector3 *)&verts2e0[p1 + 6 * 4];
+                pEnd2 = &verts2e0[p1 + 6];
             }
-            TheRnd.DrawLine(*(Vector3 *)&verts2e0[p1], *pTop, col, false);
-            TheRnd.DrawLine(
-                *(Vector3 *)&verts1c0[p1], *(Vector3 *)&verts1c0[p2], col, false
-            );
-            Vector3 *pBottom;
+            TheRnd.DrawLine(verts2e0[p1], *pEnd2, col, false);
+            TheRnd.DrawLine(verts1c0[p1], verts1c0[p2], col, false);
+            Vector3 *pEnd1;
             if (iRing == 2) {
-                pBottom = &bottom;
+                pEnd1 = &top;
             } else {
-                pBottom = (Vector3 *)&verts1c0[p1 + 6 * 4];
+                pEnd1 = &verts1c0[p1 + 6];
             }
-            TheRnd.DrawLine(*(Vector3 *)&verts1c0[p1], *pBottom, col, false);
+            TheRnd.DrawLine(verts1c0[p1], *pEnd1, col, false);
             // iK trails iJ by one; retail keeps both in place (mr iK, iJ then
             // addi iJ, iJ, 1) rather than staging the old value in a temp.
             iK = iJ;
