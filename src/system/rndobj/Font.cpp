@@ -709,7 +709,6 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         int top = (int)pos.y;
         int right = (int)(mCellSize.x + pos.x);
         int bottom = (int)(mCellSize.y + pos.y);
-        int dummy;
         // ONE cursor drives both scans -- r31 holds it across the whole body
         // (0x8270366C `mr r31, r30` for the left scan, 0x827036E8
         // `mr r31, r29` for the right one), which is why it outranks `left`
@@ -719,6 +718,7 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         // cursor (0x82703688 `cmpw r30, r29` is left vs right, while the loop
         // latch at 0x827036C4 is the cursor vs right).
         if (left != right) {
+            int dummy;
             auto _tmp0 = bmap.ColumnNonTransparent(col, top, bottom, &dummy);
             while (_tmp0 == 0) {
                 if (right > left) {
@@ -738,6 +738,7 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         left--;
         col = right;
         if (right != left) {
+            int dummy;
             auto _tmp1 = bmap.ColumnNonTransparent(col, top, bottom, &dummy);
             while (_tmp1 == 0) {
                 if (left > right) {
