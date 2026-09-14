@@ -87,21 +87,39 @@ void OSCMessenger::Poll() {
     }
 }
 
+// RESIDUAL (w7-ar, 91.8 canonical): every instruction and every register now
+// matches; the only diff is where MSVC puts the merged exit block. The image
+// emits it right after the val-found arm and branches BACK to it from the
+// placeholder arm (target 0x827E7D78..0x827E7D88, then `b .L_827E7D78` at
+// 0x827E7DD8); we emit the placeholder arm first and the exit last. Dropping the
+// `return` here for a single tail `return intValue;` reproduces the image's
+// instruction MULTISET exactly -- two ~String calls instead of our three -- but
+// MSVC then still orders the blocks our way, so it measures 86.9 instead. Both
+// spellings are behaviourally identical (str is destroyed exactly once on each
+// path either way); the higher-scoring one is kept. The same residual, and only
+// this residual, is what holds GetFloat below at 36.5.
 int OSCMessenger::GetInt(String str, int intValue) {
     OSCValue *val = GetValue(str);
     if (val) {
         MILO_ASSERT(val->mType == 'i', 0x131);
-        intValue = ((int *)val->buffer)[0];
+        intValue = *(int *)val->buffer;
         val->mHasNewValue = 0;
         return intValue;
-    } else {
+    }
+    {
         OSCValue newValue;
         newValue.mAddress = str;
         newValue.mHasNewValue = 0;
         newValue.mType = 'i';
+        // The image seeds the placeholder's buffer with the caller's default
+        // (target 0x827E7DA8: `stw r29, 0x68(r31)`; r31+0x60 is newValue and
+        // +0x8 is buffer). We left it uninitialised, so the OSCValue cached for
+        // an address nobody had sent yet held stack junk, and any later reader
+        // of that same entry saw it.
+        *(int *)newValue.buffer = intValue;
         mValues.push_front(newValue);
-        return intValue;
     }
+    return intValue;
 }
 
 OSCMessenger::OSCValue *OSCMessenger::GetValue(String str) {
@@ -135,6 +153,13 @@ int OSCMessenger::MakeOSCAddress(String str, char *buf) {
     return len - rem + 4;
 }
 
+// RESIDUAL (w7-ar, 36.5 canonical): the two 20-instruction blocks objdiff calls
+// insert/delete are now instruction-for-instruction IDENTICAL -- the whole
+// residual is the block-placement difference described above GetInt. Refuted
+// here: `if (!val) {...; return fValue;}` followed by the found-path
+// (36.4, flips the branch to `bne` and inlines the placeholder arm) and adding
+// a `return` to the found arm (36.5, but introduces an r28<->r29 swap because
+// fValue lives in f31 and one fewer GPR is needed). Do not re-derive those.
 float OSCMessenger::GetFloat(String str, float fValue) {
     OSCValue *val = GetValue(str);
     if (val) {
@@ -143,8 +168,8 @@ float OSCMessenger::GetFloat(String str, float fValue) {
         val->mHasNewValue = 0;
     } else {
         OSCValue newValue;
-        newValue.mHasNewValue = 0;
         newValue.mAddress = str;
+        newValue.mHasNewValue = 0;
         newValue.mType = 'f';
         *(float *)newValue.buffer = fValue;
         mValues.push_front(newValue);
