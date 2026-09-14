@@ -773,11 +773,16 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
             // into one and reshuffles r26/r27, 93.8 -> 91.3 and six instructions
             // longer. The extra walk is not reachable from source.
             if (instanceCount < targetInstances) {
+                // do/while, not a counted for: the enclosing `<` has already
+                // proved the count >= 1, so the image's loop carries no
+                // zero-trip guard (0x8283A058 `subf r10, r10, r9` straight
+                // into mtctr/bdnz).  A `for (i = 0; i < n; i++)` makes MSVC
+                // emit the record-form `subf.` plus a `ble` around it.
                 int toMove = targetInstances - instanceCount;
                 InstanceList::iterator backIt = it->mBackup.begin();
-                for (int i = 0; i < toMove; i++) {
+                do {
                     ++backIt;
-                }
+                } while (--toMove != 0);
                 // Spliced in at the FRONT. The image computes the transfer's
                 // `position` with `lwz r9, 0x54(r9)` -- mMMesh->mInstances's
                 // first word, i.e. begin() -- where end() would be `addi r9,
@@ -786,9 +791,9 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
             } else if (targetInstances < instanceCount) {
                 int toRemove = instanceCount - targetInstances;
                 InstanceList::iterator instIt = it->mMMesh->mInstances.begin();
-                for (int i = 0; i < toRemove; i++) {
+                do {
                     ++instIt;
-                }
+                } while (--toRemove != 0);
                 // Same here: `lwz r9, 0x44(r28)` is mBackup.begin(), not the
                 // `addi r9, r10, 0x3c` that end() would produce.
                 it->mBackup.splice(it->mBackup.begin(), it->mMMesh->mInstances, it->mMMesh->mInstances.begin(), instIt);
@@ -796,18 +801,24 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
             }
             unsigned int totalChars3D = it->m3DCharsCreated.size();
             int targetChars3D = (int)((float)totalChars3D * charFullness);
-            targetChars3D = Min(targetChars3D, (int)totalChars3D);
+            // Min(total, target), not Min(target, total).  Utl.h's Min is
+            // `(y < x) ? y : x`, so this expands to `(target < total) ?
+            // target : total` -- 0x8283A160 `cmpw cr6, r10, r11` with
+            // r10 = target, r11 = total, `blt` to keep, `mr r10, r11`
+            // otherwise.  The other order compares the same two values in the
+            // opposite registers and inverts the branch.
+            targetChars3D = Min((int)totalChars3D, targetChars3D);
             int currentChars3D = (int)it->m3DChars.size();
             if (currentChars3D < targetChars3D) {
                 int toAdd = targetChars3D - currentChars3D;
-                for (int i = 0; i < toAdd; i++) {
+                do {
                     it->m3DChars.push_back(it->m3DCharsCreated[(int)it->m3DChars.size()]);
-                }
+                } while (--toAdd != 0);
             } else if (targetChars3D < currentChars3D) {
                 int toRemove = currentChars3D - targetChars3D;
-                for (int i = 0; i < toRemove; i++) {
+                do {
                     it->m3DChars.pop_back();
-                }
+                } while (--toRemove != 0);
             }
         }
     }
