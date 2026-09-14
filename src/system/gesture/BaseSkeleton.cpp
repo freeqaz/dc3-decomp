@@ -96,6 +96,21 @@ void BaseSkeleton::NormPos(SkeletonCoordSys cs, SkeletonJoint joint, Vector3 &v)
     LimbNormPos(cs, joint, true, v40, v);
 }
 
+// RESIDUAL (w7-bl, 98.28 canonical, 5 of 175 rows): two register-allocator
+// decisions, both downstream of identical arithmetic.
+//  (1) `bone1` -- the image leaves the ternary's result in the scratch r7 in
+//      BOTH branches (`addi r7, r7, 0xb` / `addi r7, r7, 0x6`) and pays a
+//      `mr r4, r7` at the BoneLength call site; MSVC here coalesces that move
+//      into the addi (`addi r4, r7, 0xb`), so our code is ONE instruction
+//      shorter (692 vs 696 bytes).  r4 is only clobbered on the MILO_FAIL path,
+//      which branches away before the call, so the coalesce is legal for both.
+//      All six sibling ternaries land in the same registers as the image.
+//  (2) The second `xori rX, rY, 0x1` (bone3's negated side) is scheduled four
+//      slots later in the image, after the three clrlwi/clrrwi; MSVC packs the
+//      two xori adjacently.  Same instructions, same registers, same order of
+//      the seven `addi` results (indices 60-66).
+// Both MakeString rows in the Function Call Diff are ICF folds (the assert
+// format string and the "Unsupported joint %i" one), not wrong callees.
 void BaseSkeleton::LimbNormPos(
     SkeletonCoordSys cs,
     SkeletonJoint joint,
