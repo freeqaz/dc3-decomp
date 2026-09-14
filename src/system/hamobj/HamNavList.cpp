@@ -477,6 +477,24 @@ void HamNavList::Poll() {
             // plus the conversion temp's home-slot store at 0x50(r31)); a raw
             // `RndAnimatable *` local gets a register and neither. Spelled the
             // same way as the SkipPoll site above, which is byte-exact.
+            //
+            // Re-measured 2026-09-14 (w7-q).  THREE raw-pointer spellings --
+            // a plain local, `if (RndAnimatable *p = ...)`, and one local
+            // declared in the enclosing scope and assigned in both arms --
+            // produce BYTE-IDENTICAL code and all three score 98.98901 vs
+            // this spelling's 99.05180.  They do remove the surplus
+            // `addi r11, r3, 0x384` / `stw r11, 0x50(r31)` pair (the
+            // reference's own home slot, +16 B over the target), but they
+            // lose MORE: the image's `cmplwi r3, 0x0` on cr0 becomes
+            // `cmplwi cr6, r3, 0x0`, and `stw r3, 0x50(r31)` disappears
+            // entirely, at BOTH sites.  Net 2 inserts -> 6 replace/delete
+            // rows.  No spelling found that gives cr0 + the pointer home
+            // store without the reference's own home store.
+            //
+            // NOTE the two sites are genuinely different in the original:
+            // SkipPoll above compares SIGNED (`cmpwi cr6`) -- the ObjPtr
+            // shape -- and these two compare UNSIGNED on cr0.  Whatever the
+            // original wrote here, it is not the SkipPoll spelling.
             const ObjPtr<RndAnimatable> &slideSoundAnim =
                 mListRibbonResource->SlideSoundAnim();
             if (slideSoundAnim) {
