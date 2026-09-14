@@ -550,6 +550,13 @@ bool HamCharacter::GetPropShowing(int prop) {
 }
 
 void HamCharacter::SetPropShowing(int prop, bool show) {
+    // NOTE (w7-x): HamCharacter::SyncProperty inlines this four times and sits at
+    // 97.93% on exactly those four copies. The image keeps `cmplwi/beq/clrrwi`
+    // inline in each copy and cross-jumps only the shared `bl SetShowing`; our
+    // build cross-jumps one instruction deeper, merging the null test too (12
+    // target-only instructions, 2276 vs 2324 bytes). Refuted spelling: dropping
+    // the named local for `mShowableProps[prop] && mShowableProps[prop]->...`
+    // scores WORSE (97.93 -> 97.37) and shifts the bool materialisation.
     if (mShowableProps.size() > prop) {
         RndDrawable *drawable = mShowableProps[prop];
         if (drawable)
