@@ -1097,15 +1097,15 @@ void CharPollableSorter::AddDeps(
     FOREACH (it, odeps) {
         Hmx::Object *cur = *it;
         if (cur) {
-            Dep *mapDep = &mDeps[cur];
-            if (!mapDep->obj) {
-                mapDep->obj = cur;
-                toDo.push_back(mapDep);
+            Dep &mapDep = mDeps[cur];
+            if (!mapDep.obj) {
+                mapDep.obj = cur;
+                toDo.push_back(&mapDep);
             }
             if (changedBy) {
-                me->changedBy.push_back(mapDep);
+                me->changedBy.push_back(&mapDep);
             } else {
-                mapDep->changedBy.push_back(me);
+                mapDep.changedBy.push_back(me);
             }
         }
     }
