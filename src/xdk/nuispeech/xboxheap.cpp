@@ -61,6 +61,13 @@ NUISPEECH::CXboxHeap::_BLOCK_ENTRY *NUISPEECH::CXboxHeap::AllocatePageBlock(unsi
     mCount += pageBytes;
 
     _BLOCK_ENTRY *block = (_BLOCK_ENTRY *)(page + 1);
+    // NOTE (w7-av): 94.22 is a one-slot SCHEDULING residual and the statement
+    // order is already right.  The image loads the list tail at 0x82B1B9EC
+    // (`lwz r9, 0xc(r31)`) BETWEEN `addi r4, r11, 0x8` and `stw r10, 0x0(r11)`;
+    // MSVC hoists it two slots earlier here, ahead of the `addi`, and the whole
+    // r9/r10 volatile permutation in the block follows from that one position.
+    // Writing the load after `page->mNext = &mListHead;` moves it the other way
+    // -- the store lands before the load instead of after -- and scores 91.11.
     _PAGE_ENTRY *tail = mListHead.mPrev;
     page->mNext = &mListHead;
     page->mPrev = tail;
