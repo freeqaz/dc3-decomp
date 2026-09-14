@@ -62,9 +62,21 @@ void UITrigger::Trigger() {
     mEndTime = 0;
     FOREACH (it, mAnims) {
         if (it->mAnim) {
-            float f4 = 0;
+            // BEHAVIOURAL FIX: f4 is NOT pre-set to 0 and the period product is
+            // NOT discarded.  The image keeps mPeriod * 30.0f in f4 and only
+            // replaces it when it is zero:
+            //   827B26B8  lfs   f0, 0x38(r30)     mPeriod
+            //   827B26BC  fmuls f0, f0, f31       * 30.0f   -> f4 lives in f0
+            //   827B26C0  fcmpu cr6, f0, f29      vs 0.0f
+            //   827B26C4  bne   cr6, .L_827B2728  keep it, go straight to MaxEq
+            // Written with `float f4 = 0;` and the product thrown away inside
+            // the test, a non-zero period contributed 0 to mEndTime instead of
+            // mPeriod*30.  Natively that shortens every UITrigger end time for
+            // enabled anims with a period set.
+            float f4;
             if (it->mEnable) {
-                if (!(it->mPeriod * 30.0f)) {
+                f4 = it->mPeriod * 30.0f;
+                if (!f4) {
                     f4 = it->mScale;
                     if (!f4) {
                         f4 = 1.0f;
