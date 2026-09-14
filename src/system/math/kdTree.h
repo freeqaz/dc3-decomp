@@ -248,10 +248,13 @@ void kdTree<T>::kdTreeNode::Pack(
     unsigned char uc
 ) {
     // One function-scope iterator, shared by the split pass and the leaf pass.
-    // The image homes it into its stack slot the moment it is first assigned --
-    // `stw r11, 0x5c(r31)` right after `lwz r11, 0x0(r6)` (items.begin()) and
-    // before the end() compare -- which only happens if the variable outlives
-    // the `if (uc < 0xF)` block.
+    // NEGATIVE RESULT on the two target-only home stores (`stw r11, 0x5c(r31)`
+    // and `stw r11, 0x60(r31)`): the image uses TWO slots, so the obvious read
+    // is two separate declarations -- but splitting them back apart does NOT
+    // produce either store, leaves both deletes in place, and costs 0.2pp of
+    // raw by re-introducing an r20<->r21 swap across 15 instructions.  One
+    // declaration is the better-measuring shape even though it is the one that
+    // cannot explain the slots.
     typename std::list<Triangle *>::iterator it;
     if (uc < 0xF) {
         it = items.begin();
@@ -288,7 +291,12 @@ void kdTree<T>::kdTreeNode::Pack(
                 // a fresh `lfs f31, 0x0(r28)` in front of each of them.
                 float fSplit = mData.real;
                 if (fSplit < inDimensions.mMin[mData.index & 3]) {
-                } else if (fSplit > inDimensions.mMax[mData.index & 3]) {
+                    // The upper test re-reads the member: the image emits a
+                    // second `lfs f31, 0x0(r28)` between the first test's
+                    // branch and the second operator[] call.  Reusing the
+                    // value already in f31 leaves that load out.
+                } else if ((fSplit = mData.real)
+                           > inDimensions.mMax[mData.index & 3]) {
                 } else {
                     Box minBox(inDimensions.mMin, inDimensions.mMax);
                     Box maxBox(inDimensions.mMin, inDimensions.mMax);
