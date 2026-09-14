@@ -251,24 +251,28 @@ bool MoveGraph::FindVariantPair(
             return bestScore != 0;
         }
         // Only p1 set
+        // Nothing here is cached in a local: the image re-derives the vector
+        // every time.  `vref1 = *variants.begin()` is two loads at 0x824F931C
+        // (`lwz r10, 0x0(r11)` then `lwz r10, 0x0(r10)`), and the indexed read
+        // reloads _M_start at the TOP OF THE LOOP each iteration
+        // (`lwz r9, 0x0(r11)` at .L_824F9354).  A cached `vbegin` collapses
+        // both.  The hit also `break`s rather than returning: 0x824F937C
+        // branches to the same `li r3, 0x1` at .L_824F9314 the fall-through
+        // and the s.Null() and empty-size exits all reach.
         const std::vector<MoveVariant *> &variants = p1->Variants();
-        MoveVariant *const *vbegin = &*variants.begin();
-        MoveVariant *const *vend = &*variants.end();
-        if (vbegin == vend) {
+        if (variants.begin() == variants.end()) {
             return false;
         }
         if (v1) {
             vref1 = v1;
         } else {
-            vref1 = *vbegin;
+            vref1 = *variants.begin();
             if (!s.Null()) {
                 unsigned int count = variants.size();
-                if (count > 0) {
-                    for (unsigned int i = 0; i < count; i++) {
-                        if (variants[i]->Song() == s) {
-                            vref1 = variants[i];
-                            return true;
-                        }
+                for (unsigned int i = 0; i < count; i++) {
+                    if (variants[i]->Song() == s) {
+                        vref1 = variants[i];
+                        break;
                     }
                 }
             }
@@ -277,24 +281,21 @@ bool MoveGraph::FindVariantPair(
     } else {
         if (p2) {
             // Only p2 set
+            // Mirror of the p1-only block above; same shape at 0x824F93AC.
             const std::vector<MoveVariant *> &variants = p2->Variants();
-            MoveVariant *const *vbegin = &*variants.begin();
-            MoveVariant *const *vend = &*variants.end();
-            if (vbegin == vend) {
+            if (variants.begin() == variants.end()) {
                 return false;
             }
             if (v2) {
                 vref2 = v2;
             } else {
-                vref2 = *vbegin;
+                vref2 = *variants.begin();
                 if (!s.Null()) {
                     unsigned int count = variants.size();
-                    if (count > 0) {
-                        for (unsigned int i = 0; i < count; i++) {
-                            if (variants[i]->Song() == s) {
-                                vref2 = variants[i];
-                                return true;
-                            }
+                    for (unsigned int i = 0; i < count; i++) {
+                        if (variants[i]->Song() == s) {
+                            vref2 = variants[i];
+                            break;
                         }
                     }
                 }
