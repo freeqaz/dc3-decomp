@@ -3695,8 +3695,14 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         if not source_path:
             return [TextContent(type="text", text=f"Error: Symbol '{symbol}' not found in report.json. Cannot determine source file.")]
 
-        # 2. Derive the obj target from source path (src/foo/Bar.cpp -> build/<TITLE>/default/foo/Bar.obj)
-        obj_target = source_path.replace("src/", f"build/{title_id}/default/").rsplit(".", 1)[0] + ".obj"
+        # 2. Derive the obj target from the source path. The build tree MIRRORS
+        #    the source tree -- src/foo/Bar.cpp -> build/<TITLE>/src/foo/Bar.obj.
+        #    `default/` is objdiff's UNIT-name prefix (unit "default/foo/Bar"),
+        #    not a build-directory component, and using it here made every
+        #    asm_listing call die with ninja: unknown target. Prefix-join rather
+        #    than str.replace("src/", ...), which would also rewrite an interior
+        #    "src/" segment.
+        obj_target = f"build/{title_id}/{source_path}".rsplit(".", 1)[0] + ".obj"
 
         # 3. Extract compile command from ninja
         ninja_result = subprocess.run(

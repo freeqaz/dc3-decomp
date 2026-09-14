@@ -135,8 +135,13 @@ SuperFormatString::SuperFormatString(
                         bool nodeBad = false;
                         switch (phType) {
                         case 0:
-                            if (node.Type() != kDataString) {
-                                nodeBad = node.Type() != kDataSymbol;
+                            // Compound condition, not a nested boolean-valued
+                            // assignment: the target compares kDataSymbol with
+                            // cmpwi/branch here, and only boolean-ises (subic +
+                            // subfe) in case 3 below.
+                            if (node.Type() != kDataString
+                                && node.Type() != kDataSymbol) {
+                                nodeBad = true;
                             }
                             break;
                         case 1:

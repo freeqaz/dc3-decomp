@@ -466,6 +466,52 @@ if (!cond) {
 
 Takeaway: even when match% does not move, reducing `diff_op` is still progress toward a cleaner final state.
 
+### ⚠ First check whether the `diff_op` is a BLOCK-ORDER symptom — polarity steering cannot reach those
+
+Strategy 2 above ("invert condition and swap branch bodies") is the reflex move on a lone
+`beq`↔`bne`, and it is **inert** when the real divergence is *which arm the compiler laid out
+first*. MSVC canonicalises `if (C) A else B` and `if (!C) B else A` to the same block order, so
+the source spelling you flip is erased before layout happens.
+
+**The discriminator, from the objdiff table alone:** a block-order divergence pairs the `diff_op`
+with a **contiguous run of `insert` rows on one side and the identical run of `delete` rows on the
+other, a fixed distance apart**. Same mnemonics, same operands, two different indices. A genuine
+polarity divergence has no such displaced twin.
+
+Measured on `Voice::UpdateMix` (lane w7-g, 2026-09-14), 91.25799, `[83] diff_op: bne vs beq`:
+
+```
+ 83 diff_op  T: bne cr6, <fill>     B: beq cr6, <cos/sin>
+ 84 insert   T:                     B: li    r11, 0xc          <-- our fill loop,
+ 85 insert   T:                     B: addi  r10, r1, 0x8c          7 instructions,
+ 86 insert   T:                     B: lis   r9, 0x3f80             placed BEFORE cos/sin
+ ...
+105 delete   T: b     <join>        B:                         <-- the same 7 instructions
+106 delete   T: li    r11, 0xc      B:                             in the target, placed
+107 delete   T: addi  r10, r1, 0x8c B:                             AFTER cos/sin
+108 delete   T: lis   r9, 0x3f80    B:
+```
+
+The target falls through into the then-arm and puts the else-arm last (the textbook MSVC shape);
+ours falls through into the else-arm. **Three source spellings, each compiled and measured, each
+left the table byte-identical at 92 rows / 91.25799:**
+
+| spelling | result |
+|---|---|
+| `if (destChannels == 6 \|\| destChannels == 2) { cos/sin } else { fill }` (baseline) | — |
+| `if (destChannels != 6 && destChannels != 2) { fill } else { cos/sin }` (strategy 2) | inert, to the digit |
+| `switch (destChannels) { case 6: case 2: cos/sin; break; default: fill; break; }` | inert, **and worse in shape** |
+
+The `switch` is worth knowing about because the target's lowering *looks* exactly like a two-label
+switch — `cmpwi 6` / `beq` / `cmpwi 2` / `bne` / fall into the case body / default block last — so
+it is the natural second guess. MSVC sorts the case labels ascending regardless of how they are
+written, emitting `cmpwi 2` before `cmpwi 6`, which adds a fresh `OFFSET_SWAP (0x2,0x6)` the
+`if`-form does not have. Same score, strictly worse table. Refused.
+
+Treat an arm transposition as a scheduling/layout residual, not a polarity one, and spend the
+attempt elsewhere unless you can name something that changes block *creation* order (an early
+`return`/`continue` that removes an arm entirely, or a genuinely different statement structure).
+
 ---
 
 ## Multiple Early Returns to || Chain

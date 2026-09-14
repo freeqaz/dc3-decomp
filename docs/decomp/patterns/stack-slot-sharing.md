@@ -307,3 +307,59 @@ this lever is refused by ~37 distinct spellings. Treat `OnBeat`'s remaining 0.55
 byte-class placement floor unless someone finds the actual discriminator; the probe to use is
 `slot_table.py` (~40 s, no ninja), and the pass/fail signal is `goofy`/`inMindControl` sharing a
 word **without** the total slot count rising.
+
+## Frame size is a falsification test, and three w7-g refutations that used it (2026-09-14)
+
+Everything above is about *closing* a frame delta. The same number works in the other
+direction, and it is the cheapest guard a lane has against "tidying" a function backwards:
+**if a source edit shrinks our frame, the target materialised the thing you just deleted.**
+A shrinking frame is never neutral cleanup — it is evidence, and it costs match%.
+
+Three measurements from lane w7-g, all reverted, all with the frame delta as the discriminator:
+
+| function | edit | frame Δ | canonical |
+|---|---|---|---|
+| `RndAmbientOcclusion::Tessellate` | drop the `RndMesh::Face tA, tB` temporaries in the `splitCount == 1` chain, call `fa.Set(...)`/`fb.Set(...)` directly | **−0x40** | 91.45503 → 88.8 |
+| `RndAmbientOcclusion::Tessellate` | move `RndMesh::Vert &vert0/&vert1/&vert2 = mesh->Verts(face.vN);` from above the `Edge edge01, edge12, edge20;` block down to just before the `blendVert01/12/20` declarations | **−0x10** | 91.45503 → 90.5 |
+| `DxTex::SyncBitmap` | hoist `D3DSURFACE_PARAMETERS params = { 0 };` above `D3DFORMAT edramFormat = mFormat;` in the EDRAM branch | frame equal, +4 insns | 93.96613 → 93.0 |
+
+The first row is the useful one. The `stw`+`sth` rows on a 6-byte `RndMesh::Face` read exactly
+like a struct-copy lowering artefact — merged adjacent `unsigned short`s — so the obvious move is
+to delete the temporary and use the field-by-field `Set()`, which emits 3 × `sth`. The frame says
+no: the target allocates 0x40 of slots our edit removed, so those temporaries are **in the
+original source**, and the `stw`/`sth` split is the consequence of a copy the target really makes.
+Do not chase it.
+
+### An address-taken argument temp can be allocated BELOW a named local
+
+`DxTex::SyncBitmap`'s entire 190-row residual is one temp-ordering decision, visible at
+**instruction 10**: `addi r3, r31, 0x84` (target, `&tracker`) vs `addi r3, r31, 0x80` (ours).
+Decoded target slot map, bottom-up:
+
+```
+0x80  4-byte address-taken MakeString argument temp
+0x84  PhysMemTypeTracker tracker      <- ours puts this at 0x80
+0x88  8-byte _dw static-guard temp
+0x90 0x94 0x98   temps
+0xa0  depthParams        0xb0  params        0xc8  rect        0xd0  converted
+```
+
+Ours opens the temp region *above* `tracker` instead of below it. Everything downstream is
+arithmetic on that one shift: the −4/−12/−28/−40 offset deltas, 55 register-swap instructions,
+and the `std`-vs-`stw` rows — the last because `params` lands 4-aligned here and 8-aligned there,
+and MSVC only pairs two word stores into a 64-bit `std` on an 8-aligned slot. **Slot-class
+placement is not reachable from declaration order** (the §"OnBeat" byte-class result above is the
+same shape), and the one spelling that moves it — hoisting `params`, which does change *which*
+region opens first — buys the -4 and pays for it with a duplicate zero-fill (`addi r10, r31, 0xa4`
++ `stw r29, 0x0(r10)`, 818 → 822 instructions). Net loss. Refused.
+
+### Identical addresses, different register: a regalloc floor, not a declaration question
+
+`SuperFormatString::SuperFormatString(const char *, const DataArray *, bool, Locale &, Symbol)`
+has 30 instructions differing only by `r19`↔`r20`. Both sides put the three char arrays at the
+**same** frame addresses — `param@0x70`, `phInfo@0xb0`, `tempFmt@0x100` — so there is no slot
+question at all; only *which* callee-saved register holds `tempFmt` vs `phInfo` differs. Two
+independent declaration reorderings (swapping `int phType`/`int state`; permuting the four
+pointer declarations to `tempFmtPos, tempFmtEnd, phInfoPos, paramPos`) were both **inert to the
+digit**. When the addresses already agree, stop reordering declarations — the remaining signal is
+liveness, and the lever is §"Liveness/scheduling beat declaration reorder", not this doc.
