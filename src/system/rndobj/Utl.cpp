@@ -1591,6 +1591,10 @@ void MakeTangentsLate(RndMesh *m) {
 
 void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     MILO_ASSERT(m, 0x250);
+    // NEGATIVE RESULT (w7-aq, 2026-09-14): declaring `face` AFTER the identity
+    // fill -- which is how the image threads the mulli / lwz 0x110 / add
+    // through the identity stores -- costs 0.6pp (94.13 -> 93.5). The face
+    // reference belongs first.
     RndMesh::Face &face = m->Faces()[faceIdx];
     outBasis.x.x = 1.0f;
     outBasis.x.y = 0.0f;
