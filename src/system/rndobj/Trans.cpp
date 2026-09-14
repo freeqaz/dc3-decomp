@@ -706,6 +706,24 @@ const Transform &RndTransformable::WorldXfm_Force() {
 // commutative `fmuls f13, f12, f13` vs `fmuls f13, f13, f12` at 0x82647078.  The
 // image's three rows do NOT share a schedule with each other, so no single spelling
 // of Scale() reproduces all three.
+//
+// w7-bn (95.87871 -> 95.87871, 71 diff_arg / 7 insert / 8 delete unchanged): the
+// rotation is an allocation ORDER, not a use-count difference -- refWorld has 25 uses
+// on both sides once the image's reuse of r30 for &mWorldXfm.m (0x82646BE8,
+// 0x82646E30, 0x82646F08, after refWorld is dead) is excluded.  The image ranks
+// refWorld first (r30) and gives the two per-case address temps the SAME registers in
+// both billboard cases (&m.y -> r29 at 0x82646DEC and 0x82646EBC, &m.z -> r28 at
+// 0x82646E58 and 0x82646F10); ours ranks &m.y first (r30 in BillboardZ, r28 in
+// BillboardXZ) and splits &m.z (r28 / r29).  The one structural tell is a DEAD
+// `addi r11, r31, 0x68` at 0x82646D94 in the BillboardXYZ case -- the image
+// materialises the destination address of `mWorldXfm.m.z = refWorld.m.z` and then
+// folds the four lwz/stw onto r31 anyway; we never materialise it (the single
+// `delete` row outside the FPR schedule).  Refuted, full ninja each: switch cases in
+// ascending enum order (95.9, inert -- MSVC lays the blocks out descending 0xc, 0xb,
+// 8, 7, 6, 5, 3 whatever the source order); `Vector3 scaleVec` declared before
+// refObj/refWorld as RB3 has it (95.9, inert); `mWorldXfm.m[2] = refWorld.m.z`
+// through Matrix3::operator[] to force the address temp (95.9 with 73 diff_arg and 3
+// commutative rows -- strictly worse, and the FPR schedule did not move).
 void RndTransformable::ApplyDynamicConstraint() {
     if (mConstraint == kConstraintTargetWorld) {
         if (mTarget)
