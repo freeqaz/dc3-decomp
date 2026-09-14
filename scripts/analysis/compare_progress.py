@@ -540,7 +540,20 @@ def compare_functions(baseline: dict, current: dict, min_diff: float = 0.5,
             continue
 
         diff = curr["pct"] - base["pct"]
-        if abs(diff) < min_diff:
+        # A function ARRIVING AT or LEAVING 100 is categorical, not a magnitude,
+        # and must never be filtered by a threshold.  Crossing to 100 is the
+        # single event this whole project is scored on, and in the 99.5-100 band
+        # every crossing is smaller than the default min_diff BY CONSTRUCTION --
+        # so the tool bucketed them as "unchanged" and reported "0 improvements"
+        # over work that had just crossed two functions (5,568 B) to exactly
+        # 100.0.  Measured 2026-09-14, wave 6 lane w6-c: RndFont::Load
+        # 99.99418 -> 100.0 and UILabel::PreLoad 99.77305 -> 100.0 both read as
+        # unchanged, and the only trace was the coverage block's
+        # `unchanged_within_min_diff` count, which does not say a crossing
+        # happened.  A lane checking its own work with this tool would conclude
+        # it had achieved nothing.
+        crossed = (base["pct"] >= 100.0) != (curr["pct"] >= 100.0)
+        if abs(diff) < min_diff and not crossed:
             out["unchanged"] += 1
             continue
 
@@ -1146,6 +1159,18 @@ def main():
         help="Show function-level changes (most useful for finding regressions)",
     )
     parser.add_argument(
+        "--min-diff",
+        type=float,
+        default=0.5,
+        metavar="PP",
+        help="With --functions: report a function as changed only when its "
+             "match percent moved at least this many points (default: 0.5). "
+             "Crossings to or from 100%% are ALWAYS reported regardless of "
+             "this threshold. Use a small value (e.g. 0.001) to see the whole "
+             "99.5-100 band, where ordinary moves are smaller than the "
+             "default by construction.",
+    )
+    parser.add_argument(
         "--regressions", "-r",
         action="store_true",
         help="Only show regressions (negative changes) in all views",
@@ -1284,6 +1309,7 @@ def main():
     # Optionally show function-level breakdown
     if args.functions:
         populations = compare_functions(baseline, current,
+                                        min_diff=args.min_diff,
                                         merged_resolver=merged_resolver, cov=cov)
         print_function_table(populations, args.limit,
                              regressions_only=args.regressions)
