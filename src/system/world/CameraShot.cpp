@@ -596,6 +596,15 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
         ::Interp(mMinBlur, other.mMinBlur, blendT, minBlur);
         ::Interp(mFocusBlurMultiplier, other.mFocusBlurMultiplier, blendT, focusMult);
 
+        // Residual (99.687 canonical): the image spends ONE fmr here, we spend two.
+        // In the image the __real@00000000 register IS thisFocalDist (f30), so
+        // `thisFocalDist = 0` is a deleted self-move and only `otherFocalDist = 0`
+        // costs an instruction; our build colours the constant f28 and both inits
+        // become real moves, which also rotates f28/f29/f30 for the whole function.
+        // Refuted spellings (all measured, all neutral or worse): swapping the two
+        // declarations (neutral, 99.687); moving `otherFocalDist` below the focus
+        // block (99.0, +0x10 stack frame); `float otherFocalDist = thisFocalDist;`
+        // (constant-propagated back to `= 0`, bit-identical).
         float thisFocalDist = 0;
         float otherFocalDist = 0;
         if (focus) {
