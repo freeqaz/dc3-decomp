@@ -1452,7 +1452,23 @@ void WorldCrowd::DrawShowing() {
                 charIt->mMMesh->Mesh()->Sync(0x1F);
 
                 // --- Draw billboarded multimesh instances ---
-                DrawMultiMeshWithEnviron(mmesh);
+                // Written out at THIS scope, not through DrawMultiMeshWithEnviron:
+                // the image gives this tracker its own slot (0x170, `addi r3, r31,
+                // 0x170` at 82838BEC) beside the DrawNormal tracker's 0x150, i.e.
+                // the two are NOT sibling-scope siblings. An inlined helper puts its
+                // tracker in a nested sibling scope and MSVC packs both onto one slot
+                // (frame 0x270 vs 0x290).
+                RndEnviron *curEnv = RndEnviron::Current();
+                bool savedApprox2 = true;
+                if (curEnv) {
+                    savedApprox2 = curEnv->UsesApproxGlobal();
+                    curEnv->SetUseApproxGlobal(false);
+                }
+                RndEnvironTracker tracker(curEnv, nullptr);
+                mmesh->DrawShowing();
+                if (curEnv) {
+                    curEnv->SetUseApproxGlobal(savedApprox2);
+                }
             }
         }
     }
