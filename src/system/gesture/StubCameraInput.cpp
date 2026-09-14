@@ -61,7 +61,9 @@ void StubCameraInput::StubSkeletonData(SkeletonData &data, const Vector3 &vec) {
     data.mJointPositions[18].Set(-0.043792f, -0.917228f, 2.308891f);
     data.mJointPositions[19].Set(0.216633f, -0.932548f, 2.347959f);
     for (int i = 0; kNumJoints > i; i++) {
-        ((Vector3 &)data.mJointPositions[i]) += vec;
+        Add((Vector3 &)data.mJointPositions[i],
+            vec,
+            (Vector3 &)data.mJointPositions[i]);
         data.mJointTrackingState[i] = 2;
         data.mRawPositions[i] = data.mJointPositions[i];
     }

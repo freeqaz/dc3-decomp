@@ -242,9 +242,15 @@ void HamMaster::LoaderPoll() {
 }
 
 void HamMaster::CheckBeat() {
-    int totalbeat1 = mSongPos.GetTotalBeat();
-    int totalbeat2 = mPrevSongPos.GetTotalBeat();
-    if (totalbeat1 != totalbeat2) {
+    // Operand order is load-bearing AND the DataVariable takes the CURRENT beat.
+    // Target 82522670: `lfs f0, 0x64(r3)` (mSongPos.mTotalBeat) is loaded FIRST
+    // because MSVC evaluates the compare's RIGHT operand first, and the register
+    // it lands in (r27) is the one stored into the DataNode at 82522718
+    // (`stw r27, 0x60(r31)`).  We had the comparison the other way round, which
+    // published mPrevSongPos's total beat -- one beat stale -- as `$beat`.
+    int totalBeat = mSongPos.GetTotalBeat();
+    int prevTotalBeat = mPrevSongPos.GetTotalBeat();
+    if (prevTotalBeat != totalBeat) {
         int beat = mSongPos.GetBeat();
         TheHamProvider->SetProperty("beat", beat + 1);
         if (mMetronome) {
@@ -255,7 +261,7 @@ void HamMaster::CheckBeat() {
             }
         }
         static DataNode &n = DataVariable("beat");
-        n = totalbeat2;
+        n = totalBeat;
         static Message msg("beat");
         Export(msg, true);
     }

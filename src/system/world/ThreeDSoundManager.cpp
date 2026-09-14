@@ -41,16 +41,32 @@ void ThreeDSoundManager::HarvestSounds(ObjectDir *dir, ObjPtrList<ThreeDSound> &
     }
 }
 
+// The MILO_NOTIFY_ONCE below passes this by `const T&` (MakeString's parameter),
+// so the image has a real 4-byte .rdata object for it -- `lbl_820EE69C`, `.4byte
+// 0x00000064` -- whose address 82858... hoists into a callee-saved GPR (r25) OUTSIDE
+// the sound loop.  Spelled as a bare literal `100` MSVC builds the temporary on the
+// stack inside the loop instead, which costs the hoist and one callee-saved register
+// (the image saves from r18, we saved from r19).
+static const int kMaxLoopingSounds = 100;
+
 void ThreeDSoundManager::Poll() {
     START_AUTO_TIMER("sound_mgr_poll");
+    // Keep the ternary.  Splitting it into `p = Ptr(); if (!p) p = Cam();` measures
+    // 98.4 (vs 99.4): it moves the cr6 allocation onto the FIRST test instead of the
+    // second, which is the wrong way round, and costs 30 more rows of r26<->r27.
     RndTransformable *listener = mListener.Ptr() ? mListener.Ptr() : mParent->Cam();
     if (listener) {
         const Transform &listenerXfm = listener->WorldXfm();
         bool listenerMoved = listenerXfm != mLastListenerXfm;
         float dt = TheTaskMgr.DeltaSeconds();
-        float invDt = 0.0f;
+        // if/ELSE, not a pre-initialised accumulator: the image's zero arm is a
+        // separate `fmr f30, f0` reached by `b` over the division (82858E18),
+        // which only appears when both arms assign.
+        float invDt;
         if (dt != 0.0f) {
             invDt = 1.0f / dt;
+        } else {
+            invDt = 0.0f;
         }
         int loopCount = 0;
         FOREACH (it, mSounds) {
@@ -61,11 +77,11 @@ void ThreeDSoundManager::Poll() {
                 if (!(*it)->mLoop || distance > (*it)->mSilenceDistance) {
                     (*it)->SetDistance(distance, radius);
                 } else {
-                    if (loopCount == 100) {
+                    if (loopCount == kMaxLoopingSounds) {
                         MILO_NOTIFY_ONCE(
                             "Over %d looping 3D sounds are currently trying to play - "
                             "ignoring some",
-                            100
+                            kMaxLoopingSounds
                         );
                         (*it)->SetDistance(FLT_MAX, FLT_MAX);
                     } else {

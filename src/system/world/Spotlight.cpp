@@ -494,45 +494,58 @@ void Spotlight::DrawShowing() {
             }
         }
     }
+    // Two early returns, not an if/else-if chain.  82828C9C `bne cr6` skips the
+    // DrawLight arm, and 82828CB4 `bne` is followed by its OWN scope exit
+    // (`addi r3, r31, 0x80; b <~AutoTimer>`) rather than a branch into the
+    // common tail -- that second copy only appears for an explicit `return`.
     if (TheRnd.DrawMode() == Rnd::kDrawNormal) {
         SpotlightDrawer::DrawLight(this);
-    } else if (mTargetLoaded) {
-        UpdateTransforms();
-        Hmx::Color c(Color());
-        Multiply(c, Intensity(), c);
-        sEnviron->SetAmbientColor(c);
-        RndEnvironTracker tracker(sEnviron, nullptr);
-        FOREACH (it, mAdditionalObjects) {
-            MILO_ASSERT(*it != this, 0x3E3);
-            if (*it != this)
-                (*it)->DrawShowing();
+        return;
+    }
+    if (!mTargetLoaded)
+        return;
+    UpdateTransforms();
+    // Residual (21 rows, frame Δ +0x10): the image gives `tracker` the SAME
+    // frame word as `c` -- it builds the colour at r31+0x60 (82828D08..D18) and
+    // then passes r31+0x60 to ??0RndEnvironTracker (82828D44) and to
+    // ??1RndEnvironTracker (82828FB0).  Our build puts `c` at 0x60 and `tracker`
+    // at 0xa0, and that one extra word shifts `_at` 0x70->0x80 and the Sphere
+    // 0x80->0x90, which is every [off:-16] row.  Wrapping `c` in its own closing
+    // scope does NOT buy the reuse (measured: byte-identical, 97.60 both ways).
+    Hmx::Color c(Color());
+    Multiply(c, Intensity(), c);
+    sEnviron->SetAmbientColor(c);
+    RndEnvironTracker tracker(sEnviron, nullptr);
+    FOREACH (it, mAdditionalObjects) {
+        MILO_ASSERT(*it != this, 0x3E3);
+        if (*it != this)
+            (*it)->DrawShowing();
+    }
+    if (mLensMaterial) {
+        MILO_ASSERT(sDiskMesh, 0x3ED);
+        sDiskMesh->SetWorldXfm(mLensXfm);
+        sDiskMesh->SetMat(mLensMaterial);
+        sDiskMesh->DrawShowing();
+    }
+    auto& _ref3 = mBeam;
+    if (_ref3.mBeam && TheRnd.DrawMode() != 5) {
+        _ref3.mBeam->DrawShowing();
+    }
+    if (mFlare && mFlare->GetMat()) {
+        mFlare->Draw();
+    }
+    if (mTarget) {
+        if (mTargetShadow) {
+            RndDrawable *drawable = dynamic_cast<RndDrawable *>(mTarget.Ptr());
+            if (drawable) {
+                drawable->DrawShadow(WorldXfm(), 3.0f);
+            }
         }
-        if (mLensMaterial) {
-            MILO_ASSERT(sDiskMesh, 0x3ED);
-            sDiskMesh->SetWorldXfm(mLensXfm);
-            sDiskMesh->SetMat(mLensMaterial);
+        if (DoFloorSpot()) {
+            MILO_ASSERT(sDiskMesh, 0x40F);
+            sDiskMesh->SetWorldXfm(mFloorSpotXfm);
+            sDiskMesh->SetMat(mSpotMaterial);
             sDiskMesh->DrawShowing();
-        }
-        auto& _ref3 = mBeam;
-        if (_ref3.mBeam && TheRnd.DrawMode() != 5) {
-            _ref3.mBeam->DrawShowing();
-        }
-        if (mFlare && mFlare->GetMat()) {
-            mFlare->Draw();
-        }
-        if (mTarget) {
-            if (mTargetShadow) {
-                RndDrawable *drawable = dynamic_cast<RndDrawable *>(mTarget.Ptr());
-                if (drawable) {
-                    drawable->DrawShadow(WorldXfm(), 3.0f);
-                }
-            }
-            if (DoFloorSpot()) {
-                MILO_ASSERT(sDiskMesh, 0x40F);
-                sDiskMesh->SetWorldXfm(mFloorSpotXfm);
-                sDiskMesh->SetMat(mSpotMaterial);
-                sDiskMesh->DrawShowing();
-            }
         }
     }
 }
@@ -1423,6 +1436,9 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     for (int row = 0; row < numRows; row++) {
         float t = (float)row / (float)numSections;
         for (int col = 0; col < numCols; col++) {
+            // Stays INSIDE the col loop.  RB3's Spotlight.cpp has it in the row
+            // loop, but hoisting it here measures 93.7 against 96.3 and permutes
+            // a stack slot; DC3's codegen wants it recomputed per column.
             float oneMinusT = 1.0f - t;
             float segFrac = (float)col / (float)numSegments * 2.0f - 1.0f;
             float xTop = segFrac * topRadius;
@@ -1457,6 +1473,10 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     int rowStart = 0;
     for (int row = 0; row < numSections; row++) {
         for (int col = 0; col < numSegments; col++) {
+            // `base` really is a u16 here: measured, spelling all four indices as
+            // plain ints -- which is what 8282CD40's untruncated `add r9, r4, r3`
+            // looks like in isolation -- drops the function from 96.3 to 94.4 and
+            // adds 35 rows of GPR renumbering across the whole body.
             unsigned short base = (unsigned short)(rowStart + col);
             int next = base + 1;
             int baseNext = base + numCols;

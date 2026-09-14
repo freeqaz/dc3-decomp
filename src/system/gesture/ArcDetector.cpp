@@ -397,6 +397,30 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
     }
 }
 
+// Residual at 95.5 is ONE cause, measured 2026-09-14: our frame is 0x2e0+0x20 =
+// 0x300 (`stwu r1, -0x300` vs the image's `-0x2e0`) with the SAME callee-saved
+// counts (10 GPR / 18 FPR), and that +0x20 is exactly two extra 16-byte Hmx::Color
+// temporaries.  The image allocates 15 by-reference Color slots, 0x100 through
+// 0x1ec, and puts `prevScaled` immediately above them at 0x1f0; we allocate 17,
+// 0x100 through 0x20c, which pushes prevScaled to 0x210.  The body has exactly 15
+// `Hmx::Color(...)` arguments taken by const reference (7 in the point loop, 8
+// after it) -- the four passed BY VALUE (the two DebugMeter ctors and the two
+// DrawBar calls) are built in the shared low scratch at 0x50/0x70 on both sides,
+// so they are not the surplus.  170 of the 206 diff_arg rows are the resulting
+// uniform displacement shift, and the 33-row r29<->r30 swap is the same story in
+// registers: the image keeps `this` in r30 and the TheRnd@ha anchor in r29, we do
+// the reverse.  Close the two surplus slots and most of this function follows.
+//
+// Measured negatives, both reverted:
+//   - Naming the second head circle's Vector2 and declaring it before the first
+//     circle -- the image does store both halves of it (0xc0/0xc4) above the FIRST
+//     UtilDrawCircle2D call at 82E020F8, which an unnamed temporary in an argument
+//     list cannot do -- measures 95.0 (237 rows vs 229): the named local buys a
+//     THIRD surplus slot.
+//   - Binding `const Vector3 &` to joints[..].mJointPos[0] instead of
+//     `const TrackedJoint &` to the joint, to recover the two dead
+//     `addi r9, r11, 0x4` / `addi r9, r10, 0x4` at 82E0221C: byte-identical, 229
+//     rows either way.  Those two addis are still missing.
 float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
     static std::list<Vector3> jointPathCopy;
     // lbl_82F44758 (.data, .float 0.1) is a MUTABLE function-local static, not a

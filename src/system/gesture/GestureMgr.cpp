@@ -220,12 +220,20 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         mPauseOnSkeletonLossMode = 1;
     }
 
-    for (int i = 0; (unsigned int)i < 6; i++) {
+    for (int i = 0; i < 6; i++) {
         bool updateSkeleton = true;
         unk30[i] = 0;
 
         if (mTrackingAllSkeletons
             && data->mSkeletonsRight[i]->TrackingID() == mSkeletons[i].TrackingID()) {
+            // `&=`, not `=`: 8242C790 is `and r10, r11, r10`, folding the mask into the
+            // register that still holds the `true` initialiser.  A plain assignment
+            // normalises the mask with subic/subfe instead and loses the `and` row.
+            // Measured negatives on 8242C788's mask-and-`and` shape, all reverted:
+            // `updateSkeleton &= X` and `updateSkeleton = updateSkeleton && X` both
+            // measure 96.4, `X && updateSkeleton` 97.7, against 98.2 for the plain
+            // assignment.  None reproduces `subfic/subfe` + `and r10, r11, r10`;
+            // each adds a redundant clrlwi instead.
             updateSkeleton = data->mSkeletonsRight[i]->TrackingState() != kSkeletonPositionOnly;
         }
         if (updateSkeleton) {
@@ -237,15 +245,10 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
     }
 
     if (TheLoadMgr.EditMode()) {
-        int idx = -1;
-        if (mActiveSkelTrackingID > 0) {
-            for (int i = 0; i < 6; i++) {
-                if (mSkeletons[i].TrackingID() == mActiveSkelTrackingID) {
-                    idx = i;
-                    break;
-                }
-            }
-        }
+        // The same helper as below, but through `this` (8242C804 `addi r10, r25,
+        // 0xacc`), so the inlined search falls through to 8242C824 `li r11, -0x1`.
+        // Open-coding the loop with `idx = i; break;` emits a branch there instead.
+        int idx = GetSkeletonIndexByTrackingID(mActiveSkelTrackingID);
         if (idx < 0) {
             for (int i = 0; i < 6; i++) {
                 Skeleton &skel = GetSkeleton(i);
@@ -260,10 +263,23 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
     if (mTrackingAllSkeletons) {
         int leftID = mPlayerSkeletonIDs[0];
         int rightID = mPlayerSkeletonIDs[1];
-        int leftIdx = GetSkeletonIndexByTrackingID(leftID);
-        int rightIdx = GetSkeletonIndexByTrackingID(rightID);
+        // Through the GLOBAL, not `this`.  8242C880/8242C890 load
+        // `?TheGestureMgr@@3PAVGestureMgr@@A` into r8 and both inlined searches
+        // index `r8 + 0xaf8` (mSkeletons); the mActiveSkelTrackingID search just
+        // above indexes `r25 + 0xacc`, i.e. this-relative.  Same address at run
+        // time -- r25 is the SkeletonCallback subobject at GestureMgr+0x2c, and
+        // 0xacc + 0x2c == 0xaf8 -- so this is a base-pointer choice, not a bug.
+        int leftIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(leftID);
+        int rightIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(rightID);
 
         int nextLeft = leftID;
+        // The image keeps the ID that nextLeft DISPLACED in its own variable, seeded
+        // to -1 (8242C8F0 `li r26, -0x1`) and written only on the found path
+        // (8242C968 `mr r26, r24` immediately before `mr r24, r11`).  Testing the
+        // right-hand candidate against `leftID` instead is the same predicate --
+        // when the first loop does not fire, nextLeft still IS leftID -- but it
+        // keeps leftID live across both loops and costs the -1 seed.
+        int displacedLeft = -1;
         int start = 0, end = 5;
         if (leftIdx != -1) {
             start = leftIdx + 1;
@@ -272,6 +288,7 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         for (int i = start; i <= end; i++) {
             int candidate = GetSkeleton(i % 6).TrackingID();
             if (candidate > 0 && candidate != rightID) {
+                displacedLeft = nextLeft;
                 nextLeft = candidate;
                 break;
             }
@@ -286,7 +303,7 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         }
         for (int i = start; i <= end; i++) {
             int candidate = GetSkeleton(i % 6).TrackingID();
-            if (candidate > 0 && candidate != nextLeft && candidate != leftID) {
+            if (candidate > 0 && candidate != nextLeft && candidate != displacedLeft) {
                 nextRight = candidate;
                 break;
             }

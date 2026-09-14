@@ -1169,16 +1169,19 @@ void LightPreset::AnimateSpotFromPreset(
 static void AnimateSpotlightDrawerFromPreset(
     SpotlightDrawer *sd, const LightPreset::SpotlightDrawerEntry &e, float f
 ) {
-    SpotDrawParams &p = const_cast<SpotDrawParams &>(sd->Params());
+    // Each access goes through Params() on its own: the image folds mParams'
+    // 0x44 into every displacement (`lfs f13, 0x58(r7)`, 0x5c, 0x64, 0x44),
+    // where a `SpotDrawParams &p = ...` reference materialises the base once
+    // (`addi r11, r11, 0x44`) and then indexes it at 0x14/0x18/0x20/0x0.
     float val;
-    Interp(p.mBaseIntensity, e.mBaseIntensity, f, val);
-    p.mBaseIntensity = val;
-    Interp(p.mSmokeIntensity, e.mSmokeIntensity, f, val);
-    p.mSmokeIntensity = val;
-    Interp(p.mLightingInfluence, e.mLightInfluence, f, val);
-    p.mLightingInfluence = val;
-    Interp(p.mIntensity, e.mTotalIntensity, f, val);
-    p.mIntensity = val;
+    Interp(sd->Params().mBaseIntensity, e.mBaseIntensity, f, val);
+    const_cast<SpotDrawParams &>(sd->Params()).mBaseIntensity = val;
+    Interp(sd->Params().mSmokeIntensity, e.mSmokeIntensity, f, val);
+    const_cast<SpotDrawParams &>(sd->Params()).mSmokeIntensity = val;
+    Interp(sd->Params().mLightingInfluence, e.mLightInfluence, f, val);
+    const_cast<SpotDrawParams &>(sd->Params()).mLightingInfluence = val;
+    Interp(sd->Params().mIntensity, e.mTotalIntensity, f, val);
+    const_cast<SpotDrawParams &>(sd->Params()).mIntensity = val;
 }
 
 static float ComputeSpotBlend(int i, float f) {
@@ -1208,19 +1211,19 @@ void LightPreset::Animate(float f) {
             }
         }
     }
-    MILO_ASSERT(mEnvironments.size() == mEnvironmentState.size(), 0x364);
+    MILO_ASSERT(mEnvironments.size() == mEnvironmentState.size(), 0x36c);
     for (uint i = 0; i != mEnvironments.size(); i++) {
         if (mEnvironments[i]->GetAnimateFromPreset()) {
             AnimateEnvFromPreset(mEnvironments[i], mEnvironmentState[i], f);
         }
     }
-    MILO_ASSERT(mLights.size() == mLightState.size(), 0x36c);
+    MILO_ASSERT(mLights.size() == mLightState.size(), 0x375);
     for (uint i = 0; i != mLights.size(); i++) {
         if (mLights[i]->GetAnimateFromPreset()) {
             AnimateLightFromPreset(mLights[i], mLightState[i], f);
         }
     }
-    MILO_ASSERT(mSpotlightDrawers.size() == mSpotlightDrawerState.size(), 0x374);
+    MILO_ASSERT(mSpotlightDrawers.size() == mSpotlightDrawerState.size(), 0x37e);
     for (uint i = 0; i != mSpotlightDrawers.size(); i++) {
         AnimateSpotlightDrawerFromPreset(mSpotlightDrawers[i], mSpotlightDrawerState[i], f);
     }

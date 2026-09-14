@@ -153,9 +153,11 @@ void HamScrollBehavior::Update(float input) {
         bool settled = mSettleTimer <= 0.0f;
         if (settled) {
             static Message scrollingSettledMsg("scrolling_settled");
-            UIScreen *screen = TheUI->CurrentScreen();
-            if (screen) {
-                screen->Handle(scrollingSettledMsg, false);
+            // Not a named local: 8248B3F4 tests the loaded pointer with the SIGNED
+            // `cmpwi cr6, r4, 0x0`, in the argument register it was loaded into.
+            // A `UIScreen *screen = ...; if (screen)` local gives `cmplwi` instead.
+            if (TheUI->CurrentScreen()) {
+                TheUI->CurrentScreen()->Handle(scrollingSettledMsg, false);
             }
             if (mNavList) {
                 int data = mListState->SelectedData();
@@ -174,6 +176,8 @@ void HamScrollBehavior::Update(float input) {
             delay = mNeutralToSlowDownDelay;
         }
         float dt = TheTaskMgr.DeltaUISeconds();
+        // 8248B484 `fadds f0, f1, f0` puts dt LEFT; measured negative -- spelling it
+        // `mScrollTimeAccum = dt + mScrollTimeAccum` is byte-identical to `+=`.
         mScrollTimeAccum += dt;
         if ((!mAutoScrollActive && mScrollTimeAccum >= delay) || (mAutoScrollActive && mScrollTimeAccum >= mTickDelay)) {
             if (!mAutoScrollActive) {
@@ -190,6 +194,8 @@ void HamScrollBehavior::Update(float input) {
             }
         }
     } else {
+        // 8248B500 stores 0x1c before 0x1d; we emit 0x1d first whichever order the
+        // source uses (measured both ways, byte-identical).  MSVC picks the order.
         mScrollTimeAccum = 0.0f;
         mAutoScrollActive = false;
         mFirstTick = false;
@@ -208,14 +214,19 @@ void HamScrollBehavior::Update(float input) {
     }
 
     float absIntensity = fabsf(intensity);
-    float soundLevel = 0.0f;
     float speed;
+    // NOT pre-initialised: the image assigns soundLevel in every arm.  8248B704
+    // `fmr f31, f28` is a zero shared by the normal arm, switch case 1/3 and the
+    // switch default, and 8248B674 is the slow arm's own copy -- a single
+    // `= 0.0f` initialiser here hoists one `fmr` above the whole state machine.
+    float soundLevel;
 
     // Speed state machine
     if (TheGestureMgr == NULL || TheGestureMgr->InControllerMode() || !mAutoScrollActive) {
         speed = mNormalScrollSpeed;
         mSpeedState = 2;
         mTickDelay = 0.0f;
+        soundLevel = 0.0f;
     } else if (!(mScrollTimeAccum > 0.001f)) {
         if (absIntensity < mSlowFastThreshold || mSpeedState == 2) {
             speed = mSlowScrollSpeed;
@@ -236,6 +247,7 @@ void HamScrollBehavior::Update(float input) {
                 }
                 mTickDelay = delay;
             }
+            soundLevel = 0.0f;
             int state = 1;
             if (scrollDir != 1) {
                 state = 3;
@@ -264,11 +276,13 @@ void HamScrollBehavior::Update(float input) {
         case 1:
         case 3:
             speed = mSlowScrollSpeed;
+            soundLevel = 0.0f;
             break;
         case 4:
             goto fast_scroll;
         default:
             speed = 0.0f;
+            soundLevel = 0.0f;
             break;
         }
     }

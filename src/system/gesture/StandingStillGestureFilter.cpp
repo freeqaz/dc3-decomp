@@ -92,6 +92,12 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
                         state = 8;
                     } else {
                         const TrackedJoint *joints = skeleton.TrackedJoints();
+                        // Declaration ORDER here is a measured negative: the
+                        // image gives v1..v4 the stack slots 0x90/0x80/0x70/0x60
+                        // (reusing, in reverse, the three Vector2 slots above),
+                        // but reversing the declaration to `v4, v3, v2, v1`
+                        // measures 96.5 against 96.6 and turns 3 permuted slots
+                        // into 9.
                         Vector3 v1, v2, v3, v4;
                         v1.x = joints[kJointKneeRight].mJointPos[0].x - joints[kJointHipRight].mJointPos[0].x;
                         v1.y = joints[kJointKneeRight].mJointPos[0].y - joints[kJointHipRight].mJointPos[0].y;
