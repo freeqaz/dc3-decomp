@@ -667,6 +667,7 @@ void DxTex::SyncBitmap() {
         }
         unkac = false;
         UINT colorTiles = 0;
+        D3DSURFACE_PARAMETERS params;
         if (mType == kShadowMap) {
             mRenderTarget = nullptr;
         } else {
@@ -682,7 +683,7 @@ void DxTex::SyncBitmap() {
                 edramFormat = D3DFMT_G16R16_EDRAM;
                 break;
             }
-            D3DSURFACE_PARAMETERS params = { 0 };
+            memset(&params, 0, sizeof(params));
             params.Base = 0;
             params.HierarchicalZBase = -1;
             params.ColorExpBias = 0;
@@ -733,18 +734,17 @@ void DxTex::SyncBitmap() {
             if (mType == kShadowMap) {
                 depthFormat = D3DFMT_D24S8;
             }
-            D3DSURFACE_PARAMETERS depthParams = { 0 };
+            D3DSURFACE_PARAMETERS depthParams;
+            memset(&depthParams, 0, sizeof(depthParams));
             depthParams.Base = colorTiles;
             depthParams.HierarchicalZBase = 0;
             depthParams.ColorExpBias = 0;
             depthParams.HiZFunc = D3DHIZFUNC_DEFAULT;
-            UINT depthTiles =
-                XGSurfaceSize(mWidth, mHeight, depthFormat, D3DMULTISAMPLE_NONE)
-                + colorTiles;
+            colorTiles += XGSurfaceSize(mWidth, mHeight, depthFormat, D3DMULTISAMPLE_NONE);
             UINT hzTiles = XGHierarchicalZSize(mWidth, mHeight, D3DMULTISAMPLE_NONE);
-            if (depthTiles < 0x800 && hzTiles < 0xe10) {
+            if (colorTiles < 0x800 && hzTiles < 0xe10) {
                 if (sEDRamChecksEnabled
-                    && (depthTiles > TheDxRnd.EdramBase()
+                    && (colorTiles > TheDxRnd.EdramBase()
                         || hzTiles > TheDxRnd.EdramHzBase())) {
                     unkac = true;
                 }
@@ -757,14 +757,14 @@ void DxTex::SyncBitmap() {
             } else {
                 MILO_NOTIFY_ONCE(
                     "Depth surface '%s' exceeds available EDRAM or hi-z area\n(requested %d of %d color tiles and %d of %d hi-z tiles)\nDepth surface creation failed.",
-                    PathName(this), depthTiles, 0x800, hzTiles, 0xe10
+                    PathName(this), colorTiles, 0x800, hzTiles, 0xe10
                 );
                 mDepthRT = nullptr;
             }
         } else {
             mDepthRT = nullptr;
         }
-    } else if (mType & kBackBuffer) {
+    } else if (IsBackBuffer()) {
         mFormat = D3DFMT_A8R8G8B8;
         BeginMemTrackFileName(mFilepath.c_str());
         mTexture = (D3DTexture *)D3DDevice_CreateTexture(
@@ -788,14 +788,13 @@ void DxTex::SyncBitmap() {
         bool fromTexMgr = false;
         unk2c = bitmap.Name();
         if (MemUseLowestMip() && !MemUseLowestMipException(mFilepath.c_str())) {
-            RndBitmap *mip = bitmap.nextMip();
-            if (mip) {
+            // Written as one loop with the two invariant stores inside it: MSVC
+            // rotates it (test, hoisted li/li, body, test) and homes the CSE'd
+            // nextMip() at both tests, which an if + do/while does not reproduce.
+            while (bmp->nextMip()) {
                 numLevels = 1;
                 usedLowestMip = true;
-                do {
-                    bmp = mip;
-                    mip = mip->nextMip();
-                } while (mip);
+                bmp = bmp->nextMip();
             }
             mWidth = bmp->Width();
             mHeight = bmp->Height();
@@ -825,20 +824,18 @@ void DxTex::SyncBitmap() {
                 bmp = &converted;
             }
             if (usedLowestMip) {
-                RndBitmap *mip = bmp->nextMip();
-                while (mip) {
-                    bmp = mip;
-                    mip = mip->nextMip();
+                while (bmp->nextMip()) {
+                    bmp = bmp->nextMip();
                 }
             }
             for (int level = 0; level < numLevels; level++) {
                 MILO_ASSERT(bmp, 1332);
-                D3DTexture_LockRect(mTexture, level, &rect, nullptr, 0);
+                mTexture->LockRect(level, &rect, nullptr, 0);
                 XGTileTextureLevel(
                     desc.Width, desc.Height, level, gpuFormat, numLevels == 1, rect.pBits,
                     nullptr, bmp->Pixels(), bmp->DxtRowBytes(), nullptr
                 );
-                D3DTexture_UnlockRect(mTexture, level);
+                mTexture->UnlockRect(level);
                 bmp = bmp->nextMip();
             }
         }
