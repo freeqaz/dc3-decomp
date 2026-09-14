@@ -284,6 +284,26 @@ void RndBitmap::SetPixelIndex(int x, int y, unsigned char idx) {
     }
 }
 
+// RESIDUAL (w7-am, 83.2 canonical): the arithmetic of all four arms is the
+// target's instruction for instruction; what is left is schedule and the
+// register permutation that falls out of it.  The one structural group is the
+// 8bpp arm's table select: the image computes the whole subscript
+// `(y % 4) * 0x10 + (x % 16)` FIRST and only then branches to the lis/addi pair
+// (82671868 `beq .L_82671878` sits below the index, at index 38 of the
+// listing), where we emit the branch immediately after the `clrlwi.` at index
+// 22 -- 6 inserts + 6 deletes.
+// NEGATIVE RESULT (w7-am, 2026-09-14): hoisting that subscript into a named
+// local to make it "happen first" does the opposite -- it pins the value and
+// costs 1.9pp (83.2 -> 81.3), and it also flips the `lbzx` operand order away
+// from the target's index-first form.
+// NEGATIVE RESULT (w7-am, 2026-09-14): writing the subscript on the left,
+// `(idx)[cond ? bytes13 : bytes02]`, is byte-identical -- MSVC's operand
+// evaluation order here is not reachable from the source spelling.
+// NEGATIVE RESULT (w7-am, 2026-09-14): the mirror move on the nibble arm --
+// inlining `lookupIdx2` into its subscript, which is the spelling the 8bpp arm
+// uses and whose `lbzx r10, r10, r7` operand order matches the target -- costs
+// 4.6pp (83.2 -> 78.6).  Named-local vs inline is not the lever for the `lbzx`
+// operand order in either arm.
 int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
     static char bytes02[64] = {
         0x0,  0x4,  0x8,  0xC,  0x10, 0x14, 0x18, 0x1c, 0x2,  0x6,  0xa,  0xe,  0x12,
