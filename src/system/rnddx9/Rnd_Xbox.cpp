@@ -761,19 +761,24 @@ void DxRnd::InitBuffers() {
     // `beq` at 0x82619090).
     mLowRes = mVideoMode.fIsWideScreen != 0;
     mAspect = mLowRes ? kWidescreen : kLetterbox;
-    mHeight = (mFlags & 1) ? 540 : 720;
+    unsigned int lowResFlag = mFlags & 1;
+    if (!lowResFlag) {
+        mHeight = 720;
+    } else {
+        mHeight = 540;
+    }
     int tileHeight = mHeight;
     int tileWidth;
     int width;
     if (mVideoMode.fIsHiDef != 0 || mLowRes != 0) {
         width = (mHeight << 4) / 9;
-        tileWidth = (mHeight << 4) / 9;
+        tileWidth = (tileHeight << 4) / 9;
     } else {
         width = (mHeight << 2) / 3;
-        tileWidth = (mHeight << 2) / 3;
+        tileWidth = (tileHeight << 2) / 3;
     }
     mWidth = width;
-    if (!(mFlags & 1)) {
+    if (!lowResFlag) {
         mNumTiles = 2;
         // 0x826190EC-0x8261916C: two tile rects covering the frame.  Bit 1 of
         // mFlags picks a horizontal split line (stacked tiles, full width,
