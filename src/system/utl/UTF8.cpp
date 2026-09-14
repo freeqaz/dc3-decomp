@@ -41,10 +41,19 @@ unsigned short WToUpper(unsigned short us) {
 }
 
 int WStrniCmp(const unsigned short *str1, const unsigned short *str2, int n) {
+    // The p1/p2 copies are load-bearing, not redundant: mutating the parameters
+    // directly makes MSVC evaluate WToLower(*str2) FIRST, while the image calls
+    // it on *p1 first (`lhz r3, 0x0(r9)` / `bl` at 0x827E155C, before the
+    // `lhzx` of the second string).  Measured: 84.1 vs 89.66 canonical.
     const unsigned short *p1 = str1;
     const unsigned short *p2 = str2;
     for (; n != 0; n--) {
         unsigned short char1 = WToLower(*p1);
+        // RESIDUAL (w7-az, 89.66, 3 rows): the image loads *p2 into a scratch
+        // (`lhzx r11, r8, r9`), saves char1 out of r3, and only then does
+        // `mr r3, r11` -- 0x827E1564-0x827E156C.  We load straight into r3 and
+        // skip both moves.  Interposing `unsigned short raw2 = *p2;` is
+        // byte-inert: MSVC folds the temp.
         unsigned short char2 = WToLower(*p2);
         p1++;
         p2++;
