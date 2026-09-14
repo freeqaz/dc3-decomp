@@ -328,23 +328,30 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
         return nullptr;
     }
 
-    if (info.mBlock == nullptr) return nullptr;
+    FreeBlock *block = info.mBlock;
+    if (block == nullptr) return nullptr;
 
     FreeBlock *prevBlock = info.mPrevBlock;
-    int blockSize = info.mSizeWords;
     int padWords = info.mPadWords;
+    // blockSize is assigned in BOTH arms, never before the branch: the image
+    // loads info.mSizeWords twice (827F8988 inside the split arm, 827F89D0 in
+    // the else arm). Hoisting it to a single initialiser above the `if` costs
+    // the second load and forces an extra live copy of padWords.
+    int blockSize;
 
     if (padWords > 8) {
-        FreeBlock *newBlock = (FreeBlock *)((int *)info.mBlock + padWords);
-        int remaining = blockSize - padWords;
+        int remaining = info.mSizeWords - padWords;
+        FreeBlock *newBlock = (FreeBlock *)((int *)block + padWords);
         newBlock->mSizeWords = remaining;
-        newBlock->mNextBlock = info.mBlock->mNextBlock;
-        newBlock->mTimeStamp = info.mBlock->mTimeStamp;
-        InsertFreeBlock(info.mBlock, padWords, prevBlock, newBlock, info.mBlock->mTimeStamp);
-        prevBlock = info.mBlock;
-        info.mBlock = newBlock;
+        newBlock->mNextBlock = block->mNextBlock;
+        newBlock->mTimeStamp = block->mTimeStamp;
+        InsertFreeBlock(block, padWords, prevBlock, newBlock, block->mTimeStamp);
+        prevBlock = block;
+        block = newBlock;
         blockSize = remaining;
         padWords = 0;
+    } else {
+        blockSize = info.mSizeWords;
     }
 
     int totalUsed = padWords + sizeWords;
@@ -352,37 +359,38 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
 
     if (remainder > 8) {
         InsertFreeBlock(
-            (FreeBlock *)((int *)info.mBlock + totalUsed), remainder,
-            prevBlock, info.mBlock->mNextBlock, info.mBlock->mTimeStamp
+            (FreeBlock *)((int *)block + totalUsed), remainder,
+            prevBlock, block->mNextBlock, block->mTimeStamp
         );
     } else {
         if (prevBlock == nullptr) {
-            mFreeBlockChain = info.mBlock->mNextBlock;
+            mFreeBlockChain = block->mNextBlock;
         } else {
-            prevBlock->mNextBlock = info.mBlock->mNextBlock;
+            prevBlock->mNextBlock = block->mNextBlock;
         }
         totalUsed = blockSize;
     }
 
-    unsigned int *header = (unsigned int *)info.mBlock + padWords;
+    unsigned int *header = (unsigned int *)block + padWords;
     *header = (totalUsed << 8) | (padWords << 4) | (*header & 0xF);
 
-    int *ptr = (int *)info.mBlock;
-    int *headerPtr = (int *)header;
-    for (; ptr != headerPtr; ptr++) {
+    unsigned int *ptr = (unsigned int *)block;
+    for (; ptr != header; ptr++) {
         *ptr = 0;
     }
 
     if (1 <= mDebugLevel) {
         unsigned int hdr = *header;
         unsigned int dataWords = (hdr >> 8) - ((hdr >> 4) & 0xF);
-        int *end = (int *)header + dataWords;
-        int *cur = (int *)header + 1;
-        if (cur < end) {
-            for (int count = ((end - cur - 1) >> 2) + 1; count != 0; count--) {
-                cur++;
-                *cur = 0xABCDABCD;
-            }
+        unsigned int *end = header + dataWords;
+        // The image's fill covers [header+1, end) one word at a time
+        // (827F8AA4 `stwu r9, 0x4(r8)` under `mtctr`). The previous spelling
+        // here computed `((end - cur - 1) >> 2) + 1` on an already
+        // word-scaled pointer difference -- a second divide by 4 -- and
+        // pre-incremented before storing, so it filled a quarter of the
+        // block starting one word late.
+        for (unsigned int *cur = header + 1; cur < end; cur++) {
+            *cur = 0xABCDABCD;
         }
     }
 
