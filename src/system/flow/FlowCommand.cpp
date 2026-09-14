@@ -51,6 +51,15 @@ BEGIN_LOADS(FlowCommand)
     LOAD_REVS(bs)
     ASSERT_REVS(3, 0)
 
+    // MEASURED, 2026-09-14 (lane w7-aa).  The residual 6 rows of this function
+    // are these two lists sitting in each other's frame slot: the image has
+    // list<Symbol> at r31+0x70 and list<DataNode> at r31+0x80 (read the two
+    // insert() call sites at 0x8241D9DC / 0x8241DA08), we have them the other
+    // way round.  Swapping THESE TWO DECLARATIONS does not move the slots --
+    // it flips only the construction/destruction ORDER, taking the ctor block
+    // (idx 86-100) and the dtor block (408/410) with it: 6 rows -> 20 rows,
+    // 99.96619 -> 99.90.  So MSVC is not assigning these slots by declaration
+    // order here, and the lever is something else.  Do not re-try the swap.
     std::list<DataNode> datanodes;
     std::list<Symbol> symbols;
     if (d.rev > 2) {
