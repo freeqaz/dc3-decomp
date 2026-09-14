@@ -240,6 +240,20 @@ void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
             if (!mIsRightHand) {
                 Scale(sideOffsetBase, -1.0f, sideOffsetBase);
             }
+            // RESIDUAL (w7-ao, 93.53 canonical): the largest cluster is inside
+            // this inlined Multiply(Vector3, Matrix3, Vector3), not in this
+            // function. The image accumulates the three rows in z, x, y order
+            // (0x823827A4: `fmuls` off m.z, then `fmadds` off m.x, then off
+            // m.y) and reuses ONE register for the two zero components of
+            // `sideOffsetBase`; we emit x, y, z. That term order lives in
+            // math/Mtx.h, a PCH-reached header, so it is out of this lane's
+            // scope -- and `Multiply` there is on the wave DO-NOT-WORK list.
+            // NEGATIVE RESULT (w7-ao, 2026-09-14): two reorderings of the
+            // Scale/Add pair in the loop below were measured against the
+            // hypothesis that the fmuls/fadds cluster at idx 48-53 was ours:
+            // hoisting the Scale above the Add is inert on the cluster and adds
+            // 3 commutative rows; folding the target position into sideScaled
+            // costs 93.53 -> 92.04. The cluster is the header's.
             Multiply(sideOffsetBase, mKeyboardRefBone->WorldXfm().m, sideOffsetBase);
             Hmx::Matrix3 refRotMat;
             Multiply(mtx, mKeyboardRefBone->WorldXfm().m, refRotMat);

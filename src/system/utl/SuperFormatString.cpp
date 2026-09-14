@@ -20,14 +20,22 @@ SuperFormatString::SuperFormatString(
         InitializeWithFmt(cc, true);
         return;
     } else {
-        int phType = 0;
-        int state = 0;
+        // The image initialises the three walking pointers BEFORE the two
+        // ints (827F7... `addi r25, r31, 0x100` / `addi r19, r31, 0xb0` /
+        // `addi r21, r31, 0x70`, then `mr r22, r20` / `mr r23, r20` off the
+        // zero register), and that order is what puts phInfoPos in r19 and the
+        // zero in r20 rather than the other way round.
+        char *tempFmtPos = tempFmt;
         char *phInfoPos = phInfo;
         char *paramPos = param;
+        int phType = 0;
+        int state = 0;
         char *tempFmtEnd = tempFmt + 2048;
-        char *tempFmtPos = tempFmt;
-        bool sawPercent = false;
+        // The image zeroes 0x51 before 0x50 (and 0x50 is sawPercent -- it is
+        // the byte tested against '%' at 827F7C24), so sawDouble is the one
+        // initialised first.
         bool sawDouble = false;
+        bool sawPercent = false;
         for (const char *p = cc; *p != 0; p++) {
             switch (state) {
             case 0:

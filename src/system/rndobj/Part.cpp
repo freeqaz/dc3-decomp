@@ -1276,7 +1276,10 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
 
                 // Attractors. Target recomputes mAttractors.size() each iteration
                 // (loop condition calls .size() rather than caching it).
-                for (unsigned int i = 0; i < mAttractors.size(); i++) {
+                // The image's back-edge at 826BF9F0 is `cmplw cr6, r22, r10` +
+                // `bne` -- an inequality test, not `blt`. Same spelling as the
+                // mAttractors walk in Copy().
+                for (unsigned int i = 0; i != mAttractors.size(); i++) {
                     Attractor &a = mAttractors[i];
                     if (a.mAttractor != NULL) {
                         const Transform &axf = a.mAttractor->WorldXfm();
@@ -1285,11 +1288,12 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                         float strength = a.mStrength;
                         float dx = axf.v.x - pos.x;
 
-                        // TODO: target uses beq (to special case) + dead code after,
-                        // ours uses bne (skip special case). diff_op at idx 340.
-                        // Target dead code: li r11,0; clrlwi. r11,r11,24; beq (always taken).
-                        // Suggests original may have used a bool for this condition.
-                        if (strength == magicStrength) {
+                        // The image MATERIALISES this test into a byte before
+                        // branching on it (826BF8CC `li r11, 1` / 826BF8D8
+                        // `fcmpu` / `li r11, 0` / `clrlwi. r11, r11, 24` /
+                        // `beq`), which only a named bool produces.
+                        bool isTetherAttractor = strength == magicStrength;
+                        if (isTetherAttractor) {
                             dz = 0.0f;
                             auto _tmp0 = a.mAttractor.Owner();
                             RndParticleSys *ps =
@@ -1521,6 +1525,15 @@ void RndParticleSys::UpdateParticles() {
                         // the pitch delta into its own local (inert, identical
                         // 14-row diff), so the residual load-order swap at
                         // 0x188/0x18c is scheduling, not spelling.
+                        // NEGATIVE RESULT (w7-ao, 2026-09-14): inlining these
+                        // two bounds back into their expressions
+                        // (`LimitAng(mPitch.y - mPitch.x) * halfSample +
+                        // mPitch.x`) to reproduce the image's y-then-x load
+                        // order costs 1.1pp (94.43 -> 93.33): MSVC then
+                        // RELOADS 0x188/0x190 for the `+ lo` term instead of
+                        // keeping them in f29/f27 across the LimitAng calls,
+                        // which the image does. The load-order swap at
+                        // 0x188/0x18c is not worth the two reloads.
                         f32 pitchLo = mPitch.x;
                         f32 yawLo = mYaw.x;
                         f32 pitchMid = LimitAng(mPitch.y - pitchLo) * halfSample + pitchLo;
@@ -1533,6 +1546,17 @@ void RndParticleSys::UpdateParticles() {
                         f32 yVel = FastSin(yawMid + halfPi) * cosPitch * speedMid;
                         f32 sinPitch = FastSin(pitchMid);
 
+                        // RESIDUAL (w7-ao, 94.43 canonical): the last 10 of the
+                        // 14 rows are MSVC hoisting the x and y `* frameUpdate`
+                        // products ABOVE the final `bl FastSin`; the image
+                        // (826C4CBC..826C4CC8) emits all three after it, keeping
+                        // yVel in the callee-saved f27 across the call. Three
+                        // spellings produce BYTE-IDENTICAL code and the same
+                        // 14-row diff: (a) `baseVel.Set(a,b,c)` as below,
+                        // (b) three separate `baseVel.x/.y/.z =` assignments,
+                        // (c) folding `* speedMid` into the sinPitch local so
+                        // the z term reads `zVel * frameUpdate`. This is the
+                        // scheduler, not the spelling.
                         baseVel.Set(
                             negXVel * frameUpdate,
                             yVel * frameUpdate,
