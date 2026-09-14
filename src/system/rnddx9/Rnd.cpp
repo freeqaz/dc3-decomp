@@ -324,98 +324,93 @@ void DxRnd::PopClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
     D3DDevice_SetRenderState_ClipPlaneEnable(TheDxRnd.mD3DDevice, enableMask);
 }
 
-// 77.1%. Two things were investigated here on 2026-08-19; read this before
-// touching the MILO_ASSERTs, because one of them is a REFUTED lead and the
-// other is a real diagnosis that costs more than it buys.
+// 100.0% (w7-aq, 2026-09-14).  Two structural facts, both read off the target
+// listing rather than guessed:
 //
-// REFUTED -- "our assert expression text is wrong, find the 34-char one".
-//   The lead came from the target calling
-//     ??$MakeString@$$BY07$$CBDH$$BY0CD@$$CBD@@...     (expr array = 0x23 = 35)
-//   where we call
-//     ??$MakeString@$$BY07$$CBDH$$BY0BG@$$CBD@@...     (expr array = 0x16 = 22)
-//   That is pure ICF naming noise. Both symbols resolve to 824D1870 in
-//   build/373307D9/icf_aliases.map -- every MakeString<char[N], int, char[M]>
-//   in the binary folds to one body, and the linker's map happens to name it
-//   after a 35-char instantiation. The same diff shows the target "calling"
-//   MakeString<CamShotFrame::BlendEaseMode> where we call MakeString<int>
-//   (both fold to 82610090), which nobody would read as a real difference.
-//   The decisive evidence is the string literal itself: target and base both
-//   reference ??_C@_0BG@PPIAGPFI@fmt?5?$CB?$DN?5D3DFMT_UNKNOWN?$AA@ -- _0BG =
-//   0x16 = 22 bytes = "fmt != D3DFMT_UNKNOWN" + NUL. The text is CORRECT.
+// 1. D3DFMT_UNKNOWN is -1, not 0xff (fixed in src/xdk/d3d9i/d3d9types.h).  The
+//    image initialises the result with `li r30, -0x1`, and it emits the
+//    `fmt != D3DFMT_UNKNOWN` fail block with NO comparison in front of it --
+//    which only happens if the condition folds to compile-time FALSE on a path
+//    where the result still holds its initialiser.  With 0xff we emitted a
+//    spurious `cmpwi r31, 0xff; bne`, an extra callee-saved GPR and
+//    `bl __savegprlr_29` instead of the inline std/stwu prologue.
 //
-// REAL, but not landable as-is -- the missing `cmpwi r31,0xff; bne` guard.
-//   The target runs the second assert's fail block unconditionally, so its
-//   condition folds at compile time, and to FALSE (the block is emitted, not
-//   elided). That cannot happen with `fmt` bound to the masked bitmap order:
-//   in the dxt default arm MSVC only knows fmt is none of 0/8/0x10/0x18/0x20,
-//   and in the bpp arm it knows fmt == 0 -- neither folds against 0xff. It
-//   does happen if `fmt` is the RESULT, still holding its initialiser on both
-//   default paths. Rewriting it that way (order/bpp/fmt, `D3DFORMAT fmt =
-//   D3DFMT_UNKNOWN`) reproduces the target exactly where it counts: guard
-//   gone, prologue back to std r30/r31 + stwu -0x70 with no __savegprlr_29,
-//   inline epilogue, and it frees the third callee-saved GPR that only existed
-//   to keep the order value live across Debug::Fail.
-//   It still scored 3.4% (run_objdiff, worktree plane), because MSVC then
-//   cross-jumps the two default arms LATER than the target does: the target
-//   shares everything from `bl MakeString` onward, we duplicate ten
-//   instructions and only merge inside the assert block. The blocker is one
-//   stack slot -- the target parks the line-number temp at 0x54 in BOTH arms,
-//   we park it at 0x50 in the dxt arm and 0x54 in the bpp arm, so the tails
-//   are not identical. Base grows 340 -> 380 bytes. Reverted.
-//   The `return`-per-case shape (as in ../og-dc3-decomp) is worse again, 0.2%:
-//   it dissolves the r30 result register the target keeps.
-//   Whoever picks this up needs the slot-colouring lever, not another guess at
-//   the assert text.
+// 2. There is ONE MILO_ASSERT, after the if/else -- not one per default arm.
+//    MSVC constant-folds the check per predecessor: on the four dxt cases and
+//    the four bpp cases `fmt` is known non-negative so the check is true and
+//    the case bodies branch straight to the epilogue (`b 0xea0`, target idx
+//    96-107); on the two default paths `fmt` is still -1 so the check is false
+//    and they fall into the fail block.  The compare itself disappears.  That
+//    leaves a SINGLE addressable line-number temp, which is what lets the two
+//    default arms tail-merge: the bpp arm sets up `addi r4, r1, 0x54` and then
+//    `b 0xe4c` straight into the dxt arm's `bl MakeString<_D3DFORMAT>`.
+//    Writing MILO_ASSERT inside each `default:` gives TWO temps, coloured
+//    independently at 0x50 (reusing `order`'s home) and 0x54 (reusing `bpp`'s);
+//    the tails then differ by that one stack slot, MSVC refuses to cross-jump,
+//    and it duplicates 45 instructions -- 380 bytes vs the target's 340, 4.4%.
+//
+// NEGATIVE RESULTS recorded so they are not re-run:
+//   - Declaring `order`/`bpp` as `int` with the casts moved to the MILO_FAIL
+//     call sites: 16.4%.  The `const D3DFORMAT&` parameter is what forces both
+//     values into memory at 0x50/0x54 before the first branch; as ints they
+//     stay in registers and the two homing stores vanish.
+//   - "our assert expression text is wrong, find the 34-char one" is REFUTED.
+//     The target's MakeString instantiation names char[19]/char[5] where ours
+//     names char[8]/char[22], but every MakeString<char[N], int, char[M]> in
+//     the binary folds to one body (icf_aliases.map) and the literal both
+//     sides reference is ??_C@_0BG@PPIAGPFI@fmt?5?$CB?$DN?5D3DFMT_UNKNOWN?$AA@
+//     -- _0BG = 22 = "fmt != D3DFMT_UNKNOWN" + NUL.  The text is correct.
+//   - The `return`-per-case shape (as in ../og-dc3-decomp) is 0.2%: it
+//     dissolves the r30 result register the image keeps across both Fail calls.
 D3DFORMAT DxRnd::D3DFormatForBitmap(const RndBitmap &bitmap) {
     // Both MILO_FAILs pass a D3DFORMAT, not an int: rnddx9:Rnd.obj contributes
     // exactly ONE single-argument MakeString instantiation to the shipping
     // image and it is MakeString<_D3DFORMAT> (ham_xbox_r.map, ICF group
     // 0x82610090 -- MakeString<int> in that same group is credited to
     // Memory_Xbox.obj).  Score-neutral, since the group folds; correct anyway.
-    D3DFORMAT fmt = (D3DFORMAT)(bitmap.Order() & 0x38);
+    D3DFORMAT order = (D3DFORMAT)(bitmap.Order() & 0x38);
     D3DFORMAT bpp = (D3DFORMAT)bitmap.Bpp();
-    D3DFORMAT result = (D3DFORMAT)-1;
-    if (fmt != 0) {
-        switch (fmt) {
+    D3DFORMAT fmt = D3DFMT_UNKNOWN;
+    if (order != 0) {
+        switch (order) {
         case 8:
-            result = D3DFMT_DXT1;
+            fmt = D3DFMT_DXT1;
             break;
         case 0x10:
-            result = D3DFMT_DXT3;
+            fmt = D3DFMT_DXT3;
             break;
         case 0x18:
-            result = D3DFMT_DXT5;
+            fmt = D3DFMT_DXT5;
             break;
         case 0x20:
-            result = D3DFMT_DXN;
+            fmt = D3DFMT_DXN;
             break;
         default:
-            MILO_FAIL("Invalid dxt format: %d", fmt);
-            MILO_ASSERT(fmt != D3DFMT_UNKNOWN, 999);
+            MILO_FAIL("Invalid dxt format: %d", order);
             break;
         }
     } else {
         switch (bpp) {
         case 4:
         case 8:
-            result = D3DFMT_A8R8G8B8;
+            fmt = D3DFMT_A8R8G8B8;
             break;
         case 0x10:
-            result = D3DFMT_A1R5G5B5;
+            fmt = D3DFMT_A1R5G5B5;
             break;
         case 0x18:
-            result = D3DFMT_X8R8G8B8;
+            fmt = D3DFMT_X8R8G8B8;
             break;
         case 0x20:
-            result = D3DFMT_A8R8G8B8;
+            fmt = D3DFMT_A8R8G8B8;
             break;
         default:
             MILO_FAIL("Invalid bpp: %d", bpp);
-            MILO_ASSERT(fmt != D3DFMT_UNKNOWN, 999);
             break;
         }
     }
-    return result;
+    MILO_ASSERT(fmt != D3DFMT_UNKNOWN, 999);
+    return fmt;
 }
 
 int DxRnd::BitmapOrderForD3DFormat(D3DFORMAT fmt) {
