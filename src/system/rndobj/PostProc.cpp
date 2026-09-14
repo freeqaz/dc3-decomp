@@ -670,6 +670,14 @@ void RndPostProc::UpdateColorModulation() {
             mFlickerSeconds.y = RandomFloat(mFlickerTimeBounds.x, mFlickerTimeBounds.y);
             mFlickerSeconds.y = Max(mFlickerSeconds.x, mFlickerSeconds.y);
         }
+        // NOTE (w7-av): 97.94 is a 1-row floor.  At the merge point the image
+        // RELOADS mFlickerSeconds.x (`lfs f0, 0x11c(r31)` -- and that load is
+        // the `blt` target from the inner test, so it cannot be in a register on
+        // that path); we keep the value the outer comparison already loaded into
+        // f0 at 0x11c and only load mDeltaSecs, which costs one delete plus an
+        // f0/f13 permutation.  Refuted: a named temp for the RandomFloat result
+        // instead of the double write to mFlickerSeconds.y (97.94, identical
+        // rows); spelling the += out as `x = x + mDeltaSecs` (97.94, identical).
         mFlickerSeconds.x += mDeltaSecs;
     } else {
         mColorModulation = 1.0f;
@@ -686,7 +694,9 @@ void RndPostProc::UpdateTimeDelta() {
 void RndPostProc::UpdateBlendPrevious() {
     if (BlendPrevious()) {
         MILO_ASSERT(mTrailDuration > 0.f, 0x100);
-        mBlendVec.Set(mTrailThreshold, mDeltaSecs / mTrailDuration, 1.0f / 3.0f);
+        mBlendVec.y = mDeltaSecs / mTrailDuration;
+        mBlendVec.x = mTrailThreshold;
+        mBlendVec.z = 1.0f / 3.0f;
     }
 }
 
