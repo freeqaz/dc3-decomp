@@ -925,13 +925,11 @@ unsigned long StartVoiceThreadEntry(void *) {
                 PoolVoice &pv = *it;
                 // IXAudio2Voice::DestroyVoice() -- slot 0x48, no arguments, and the
                 // target calls it without a null check on sourceVoice.
-                int *pSv = (int *)pv.sourceVoice;
-                ((void (*)(int *))(*(int *)(*(int *)pSv + 0x48)))(pSv);
+                ((void (*)(int))(*(int *)(*(int *)pv.sourceVoice + 0x48)))(pv.sourceVoice);
                 // `delete`-shaped: the null check guards only the deleting destructor
                 // call; the field clears and the egParams free are unconditional.
                 if (pv.eg) {
-                    int *pEg = (int *)pv.eg;
-                    ((void (*)(int *, int))(*(int *)(*(int *)pEg + 0x38)))(pEg, 1);
+                    ((void (*)(void *, int))(*(int *)(*(int *)pv.eg + 0x38)))(pv.eg, 1);
                 }
                 pv.eg = 0;
                 PoolFree(0x10, pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
