@@ -734,6 +734,14 @@ float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
     float totalScore = 0.0f;
     float totalWeight = 0.0f;
     unsigned int i = 0;
+    // RESIDUAL (w7-aq, 89.72 canonical): 19 of the 21 remaining rows are one
+    // prologue cluster.  The image loads _M_start (0xd8) before _M_finish
+    // (0xdc) and tests the count with `srawi.`; we load finish first and MSVC
+    // peepholes the test to `clrrwi.`.  `size() > 0`, `size() != 0` and
+    // `end() - begin() != 0` all produce the same `clrrwi.`, and `empty()` is a
+    // pointer compare with no shift at all.  The other 2 rows are the
+    // strength-reduced byte offset's `addi r27, r27, 0x4`, which the image
+    // issues after the fmadds (idx 109) and we issue before it (idx 107).
     if (mTrackedJoints.size() != 0) {
         const FreestyleMoveFrame *curFrame = &frames[frameIdx];
         const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
