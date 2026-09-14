@@ -661,9 +661,16 @@ BEGIN_LOADS(RndParticleSys)
             d.stream >> (Hmx::Color &)p150;
         } else {
             Vector3 v1;
-            d.stream >> v1;
-            d.stream >> p150.a >> p150.b >> p150.c;
-            p150.d = -(p150.a * v1.x + p150.b * v1.y + p150.c * v1.z);
+            // One chain: the target carries the BinStream& returned by each
+            // `>>` into the next (it parks it in r29 across the calls) rather
+            // than re-deriving d.stream per statement.
+            d.stream >> v1 >> p150.a >> p150.b >> p150.c;
+            // The target accumulates this dot product from the Z term
+            // outwards -- fmuls c*z, fmadds b*y, then one fnmadds that folds
+            // the a*x term and the negation together. That is the
+            // right-associated tree; the default left-to-right grouping needs
+            // a separate negate. Parenthesise to say so.
+            p150.d = -(p150.a * v1.x + (p150.b * v1.y + p150.c * v1.z));
         }
         if (ba7) {
             bool old = TheLoadMgr.EditMode();
@@ -716,8 +723,11 @@ BEGIN_LOADS(RndParticleSys)
         d.stream >> mBubblePeriod >> mBubbleSize >> mBubble;
     }
     if (d.rev > 0x1D) {
-        d >> mRotate >> mRPM;
-        d >> mRPMDrag;
+        d >> mRotate;
+        // mRPM and mRPMDrag ride the same BinStream&: the target's ReadEndian
+        // for mRPMDrag reuses the stream returned by the Key<float> read
+        // instead of reloading bs from its spill slot.
+        d.stream >> mRPM >> mRPMDrag;
         if (d.rev > 0x24) {
             d >> mRandomDirection;
         }
