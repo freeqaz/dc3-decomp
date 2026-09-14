@@ -2525,10 +2525,15 @@ bool HamDirector::ReactToCollision(float frame) {
     } else {
         static float sSongCollisionForXBeatsSuppressNextShot =
             DataGetMacro("SONG_COLLISION_FOR_X_BEATS_SUPPRESS_NEXT_SHOT")->Float(0);
-        float beatSum = sSongCollisionForXBeatsSuppressNextShot + beat;
-        if (beatSum < beat2) {
+        // beatSum only exists on the else side: retail keeps the sum in the
+        // volatile f0, compares, and only copies it into a callee-saved FPR
+        // once beat2 is dead (fmr f31,f0 at 0x8247A428).  Materialising it
+        // before the test keeps four FPRs live at once and turns the three
+        // inline stfd of the prologue into bl __savefpr_28.
+        if (sSongCollisionForXBeatsSuppressNextShot + beat < beat2) {
             ReactToCollision_InsertRealShot(cat, beat);
         } else {
+            float beatSum = sSongCollisionForXBeatsSuppressNextShot + beat;
             static bool sSongCollisionRoundUpSuppressedShotToMeasure =
                 DataGetMacro("SONG_COLLISION_ROUND_UP_SUPPRESSED_SHOT_TO_MEASURE")->Int(0);
             if (sSongCollisionRoundUpSuppressedShotToMeasure) {
