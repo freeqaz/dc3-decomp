@@ -124,7 +124,13 @@ bool RndShaderProgram::Cache(
                 CopyErrorShader(shaderType, opts);
                 String optsStr;
                 ShaderMakeOptionsString(shaderType, opts, optsStr);
-                const char *matPath = PathName(NgMat::Current());
+                // w7-al: `matPath` used to be hoisted into a named local here.
+                // MSVC evaluates these arguments RIGHT-TO-LEFT, and the image
+                // does exactly that: optsStr.c_str() (0x82732?A4), then the
+                // RndEnviron ternary + PathName (0x827320D0), then
+                // PathName(NgMat::Current()) (0x827320E0), then
+                // ShaderTypeName (0x827320EC).  A local forced NgMat's PathName
+                // to run FIRST.  Inlined back into the argument list.
                 // BEHAVIOURAL GAP, not closable from this file (w7-ab).  The
                 // image builds this message with TWO MakeString calls back to
                 // back -- `bl ??$MakeString@PBD_KPBDPBDPBD@@...` at 0x82732110
@@ -147,7 +153,7 @@ bool RndShaderProgram::Cache(
                     "Missing shader %s_%llx\n(material: %s)\n(environment: %s)\n(compile options: %s)",
                     ShaderTypeName(shaderType),
                     opts.flags,
-                    matPath,
+                    PathName(NgMat::Current()),
                     RndEnviron::Current()
                         ? PathName(static_cast<Hmx::Object *>(RndEnviron::Current()))
                         : nullptr,
