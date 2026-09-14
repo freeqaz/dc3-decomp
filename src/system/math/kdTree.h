@@ -359,11 +359,8 @@ void kdTree<T>::kdTreeNode::Pack(
                         // into `left + 0x10`, deleting four image instructions.
                         kdTreeNode *pNode0 = &pBase[(mFlags & 0x7fff) * 2 + 1];
                         kdTreeNode *pNode1 = &pBase[((mFlags & 0x7fff) + 1) * 2];
-                        pNode0->Pack(s, minBox, leftList, pBase, ucNext);
 #endif
-#ifdef HX_NATIVE
                         pNode0->Pack(s, minBox, leftList, pBase, ucNext);
-#endif
                         pNode1->Pack(s, maxBox, rightList, pBase, ucNext);
                         return;
                     }
