@@ -963,7 +963,7 @@ float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerId
         int byteIdx = 0;
         do {
             i++;
-            total = *(float *)((char *)frameScores.unk0.begin() + byteIdx) * invNumFrames
+            total = *(float *)((char *)(float *)frameScores.unk0.begin() + byteIdx) * invNumFrames
                 + total;
             byteIdx += 4;
         } while (i < scoreCount);
