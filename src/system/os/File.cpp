@@ -557,49 +557,62 @@ const char *FileMakePath(const char *root, const char *file) {
 }
 
 const char *FileLocalize(const char *iFilename, char *buffer) {
+    // ONE scratch buffer shared by both loops: retail computes its address
+    // once, into r27, at 0x825D0AF8 (lbl_82F65BE8) and uses that same
+    // register at BOTH `if (!buffer)` sites (0x825D0B64 and 0x825D0C94).
+    // Two function-local statics would be two distinct .bss arrays.
+    static char mybuffer[256];
     GfxMode mode = GetGfxMode();
     bool isOg = (mode == kNewGfx);
     if (!SystemLanguage().Null() || isOg) {
-        Symbol lang2 = SystemLanguage();
-        if (!lang2.Null()) {
+        if (!SystemLanguage().Null()) {
             for (const char *p = iFilename; *p != '\0'; p++) {
                 if (*p == '/' && p[1] == 'e' && p[2] == 'n' && p[3] == 'g'
                     && p[4] == '/') {
-                    static char mybuffer[256];
                     if (!buffer)
                         buffer = mybuffer;
                     strcpy(buffer, iFilename);
+                    // Retail reads the three bytes OUT of the "eng" string
+                    // literal (lbz off ??_C@_03LKLGDMJI@eng at 0x825D0BD0);
+                    // it does not materialise 'e'/'n'/'g' as immediates, so
+                    // the pointer has to reach the stores as a value MSVC
+                    // cannot constant-fold -- i.e. through this join.
                     if (!HongKongExceptionMet()
                         || (strstr(iFilename, "sfx/loc/") == 0
                             && strstr(iFilename, "barks.milo") == 0)) {
-                        Symbol lang3 = SystemLanguage();
-                        const char *langStr = lang3.Str();
-                        buffer[p + 1 - iFilename] = langStr[0];
-                        buffer[p + 2 - iFilename] = langStr[1];
-                        buffer[p + 3 - iFilename] = langStr[2];
+                        char *dst = &buffer[p + 1 - iFilename];
+                        const char *langStr = SystemLanguage().Str();
+                        memcpy(dst, langStr, 3);
                     } else {
-                        buffer[p + 1 - iFilename] = 'e';
-                        buffer[p + 2 - iFilename] = 'n';
-                        buffer[p + 3 - iFilename] = 'g';
+                        memcpy(&buffer[p + 1 - iFilename], "eng", 3);
                     }
-                    return buffer;
+                    // NOT `return buffer`.  Retail sets r31 = buffer at
+                    // 0x825D0C20 and FALLS INTO the `isOg` test at
+                    // 0x825D0C24, so a localized path is still scanned for
+                    // "/og/" afterwards.
+                    iFilename = buffer;
+                    break;
                 }
             }
         }
         if (isOg) {
             for (const char *p = iFilename; *p != '\0'; p++) {
                 if (*p == '/' && p[1] == 'o' && p[2] == 'g' && p[3] == '/') {
+                    // Both arms converge on the function's single epilogue at
+                    // 0x825D0CC8; neither returns early.  The second one
+                    // reaches it by assigning r31 (`mr r31, r29`) at
+                    // 0x825D0CC0, i.e. iFilename = buffer.
                     if (buffer == iFilename) {
                         ((char *)p)[1] = 'n';
-                        return iFilename;
+                        break;
                     }
                     if (!buffer) {
-                        static char mybuffer[256];
                         buffer = mybuffer;
                     }
                     strcpy(buffer, iFilename);
                     buffer[p + 1 - iFilename] = 'n';
-                    return buffer;
+                    iFilename = buffer;
+                    break;
                 }
             }
         }
