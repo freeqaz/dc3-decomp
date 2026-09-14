@@ -149,8 +149,8 @@ MoveAsyncDetector::MoveAsyncDetector(MoveDir *md) : mDir(md) {
                         }
                     }
                     if (foundIdx == -1) {
-                        DancerSequence *seq = it->GetDancerSequence();
-                        if (seq) {
+                        if (it->GetDancerSequence()) {
+                            DancerSequence *seq = it->GetDancerSequence();
                             const DancerFrame *curFrame = seq->GetDancerFrames().begin();
                             const FilterVersion *curFv = it->FilterVer();
                             mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
