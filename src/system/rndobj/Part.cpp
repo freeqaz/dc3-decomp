@@ -1521,6 +1521,15 @@ void RndParticleSys::UpdateParticles() {
                         // the pitch delta into its own local (inert, identical
                         // 14-row diff), so the residual load-order swap at
                         // 0x188/0x18c is scheduling, not spelling.
+                        // NEGATIVE RESULT (w7-ao, 2026-09-14): inlining these
+                        // two bounds back into their expressions
+                        // (`LimitAng(mPitch.y - mPitch.x) * halfSample +
+                        // mPitch.x`) to reproduce the image's y-then-x load
+                        // order costs 1.1pp (94.43 -> 93.33): MSVC then
+                        // RELOADS 0x188/0x190 for the `+ lo` term instead of
+                        // keeping them in f29/f27 across the LimitAng calls,
+                        // which the image does. The load-order swap at
+                        // 0x188/0x18c is not worth the two reloads.
                         f32 pitchLo = mPitch.x;
                         f32 yawLo = mYaw.x;
                         f32 pitchMid = LimitAng(mPitch.y - pitchLo) * halfSample + pitchLo;
@@ -1533,6 +1542,17 @@ void RndParticleSys::UpdateParticles() {
                         f32 yVel = FastSin(yawMid + halfPi) * cosPitch * speedMid;
                         f32 sinPitch = FastSin(pitchMid);
 
+                        // RESIDUAL (w7-ao, 94.43 canonical): the last 10 of the
+                        // 14 rows are MSVC hoisting the x and y `* frameUpdate`
+                        // products ABOVE the final `bl FastSin`; the image
+                        // (826C4CBC..826C4CC8) emits all three after it, keeping
+                        // yVel in the callee-saved f27 across the call. Three
+                        // spellings produce BYTE-IDENTICAL code and the same
+                        // 14-row diff: (a) `baseVel.Set(a,b,c)` as below,
+                        // (b) three separate `baseVel.x/.y/.z =` assignments,
+                        // (c) folding `* speedMid` into the sinPitch local so
+                        // the z term reads `zVel * frameUpdate`. This is the
+                        // scheduler, not the spelling.
                         baseVel.Set(
                             negXVel * frameUpdate,
                             yVel * frameUpdate,
