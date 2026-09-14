@@ -356,7 +356,14 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
         Vector3 boneVec(dx, dy, dz);
         unk40 = boneVec;
 
-        if (mJointPath.begin() == mJointPath.end()) {
+        // `empty()`, not `begin() == end()`.  STLport lowers both to the same
+        // compare, but spelling it as two iterator calls lets MSVC CSE the
+        // `lwz rN, 0x10(r31)` with the later `*mJointPath.begin()` and hoist it
+        // above the whole dx/dy/dz computation and the `unk40 = boneVec` copy.
+        // The image loads it twice -- once here and again as `lwz r11, 0x0(r30)`
+        // inside the mHadProgress arm -- which is what `empty()` produces.
+        // 79.1 -> 97.5 canonical on this one change.
+        if (mJointPath.empty()) {
             TryToStartSwipe(boneVec, skeleton);
         } else if (mHadProgress) {
             Vector3 frontPt = *mJointPath.begin();
