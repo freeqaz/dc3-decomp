@@ -158,6 +158,36 @@ template const char *MakeString<const char(&)[9], const char(&)[3], const char(&
     const char(&)[8]
 );
 
+// RESIDUAL (w7-ai, 93.1%): every remaining row lives in target rows 41-65, the
+// inlined AllocInfoVec(y) member init, and all of them are downstream of ONE
+// missing instruction pair:
+//
+//     [57] clrlwi r5, r27, 2      ; r5 = y & 0x3fffffff, i.e. (unsigned)(y*4)/4
+//     [65] stw    r5, 0x54(r31)   ; spilled before the first String ctor,
+//                                 ; then overwritten with 0 at row 100 -- DEAD
+//
+// 0x54 is the slot that later holds the `(AllocInfo *)0` const-ref temp for the
+// KeylessHash ctor, so MSVC coloured a dead scalar onto it. With that extra
+// post-call work absent from our stream, MSVC has nothing to fill the pre-call
+// slots with and hoists the `this + 0x18180` anchor ABOVE the DebugHeapAlloc
+// call into callee-saved r26 (rows 41/43), where the image recomputes it into
+// volatile r8 afterwards (rows 46/51) -- that scheduling difference is the
+// other 8 rows. One root cause, not two.
+//
+// MEASURED NEGATIVE: spelling the division into AllocInfoVec's ctor as
+// `mEndOfStorage(mStart + size * sizeof(AllocInfo *) / sizeof(AllocInfo *))`
+// is BYTE-IDENTICAL -- MSVC folds the round trip, and it would in any case have
+// had to show up in MemTracker::DiffDump's inlined copy of the same ctor, which
+// has no clrlwi on either side (checked). So the division is NOT in the shared
+// ctor; it is something in this function's own source that we are missing, and
+// it must be live across the three String member ctors to get spilled at all.
+//
+// Also adjudicated and NOT a bug: the MakeString instantiation pair
+// (`<const char(&)[19], int, const char(&)[5]>` target vs `<[15], int, [9]>`
+// ours) is an ICF fold -- rows 82-85 reference the SAME
+// ??_C@_0P@KDMJFNCI@MemTracker?4cpp and ??_C@_08LAKGMMIJ@mHashMem string
+// symbols on both sides, so the array-size triple is just the fold
+// representative's name.
 MemTracker::MemTracker(int x, int y)
     : mHashMem(nullptr), mHashTable(nullptr), mTimeSlice(0), mCurStatTable(0),
       mFreedInfos(y), mLog(0), mReport(0), mHeap(x) {
