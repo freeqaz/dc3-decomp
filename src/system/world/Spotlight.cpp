@@ -494,45 +494,51 @@ void Spotlight::DrawShowing() {
             }
         }
     }
+    // Two early returns, not an if/else-if chain.  82828C9C `bne cr6` skips the
+    // DrawLight arm, and 82828CB4 `bne` is followed by its OWN scope exit
+    // (`addi r3, r31, 0x80; b <~AutoTimer>`) rather than a branch into the
+    // common tail -- that second copy only appears for an explicit `return`.
     if (TheRnd.DrawMode() == Rnd::kDrawNormal) {
         SpotlightDrawer::DrawLight(this);
-    } else if (mTargetLoaded) {
-        UpdateTransforms();
-        Hmx::Color c(Color());
-        Multiply(c, Intensity(), c);
-        sEnviron->SetAmbientColor(c);
-        RndEnvironTracker tracker(sEnviron, nullptr);
-        FOREACH (it, mAdditionalObjects) {
-            MILO_ASSERT(*it != this, 0x3E3);
-            if (*it != this)
-                (*it)->DrawShowing();
+        return;
+    }
+    if (!mTargetLoaded)
+        return;
+    UpdateTransforms();
+    Hmx::Color c(Color());
+    Multiply(c, Intensity(), c);
+    sEnviron->SetAmbientColor(c);
+    RndEnvironTracker tracker(sEnviron, nullptr);
+    FOREACH (it, mAdditionalObjects) {
+        MILO_ASSERT(*it != this, 0x3E3);
+        if (*it != this)
+            (*it)->DrawShowing();
+    }
+    if (mLensMaterial) {
+        MILO_ASSERT(sDiskMesh, 0x3ED);
+        sDiskMesh->SetWorldXfm(mLensXfm);
+        sDiskMesh->SetMat(mLensMaterial);
+        sDiskMesh->DrawShowing();
+    }
+    auto& _ref3 = mBeam;
+    if (_ref3.mBeam && TheRnd.DrawMode() != 5) {
+        _ref3.mBeam->DrawShowing();
+    }
+    if (mFlare && mFlare->GetMat()) {
+        mFlare->Draw();
+    }
+    if (mTarget) {
+        if (mTargetShadow) {
+            RndDrawable *drawable = dynamic_cast<RndDrawable *>(mTarget.Ptr());
+            if (drawable) {
+                drawable->DrawShadow(WorldXfm(), 3.0f);
+            }
         }
-        if (mLensMaterial) {
-            MILO_ASSERT(sDiskMesh, 0x3ED);
-            sDiskMesh->SetWorldXfm(mLensXfm);
-            sDiskMesh->SetMat(mLensMaterial);
+        if (DoFloorSpot()) {
+            MILO_ASSERT(sDiskMesh, 0x40F);
+            sDiskMesh->SetWorldXfm(mFloorSpotXfm);
+            sDiskMesh->SetMat(mSpotMaterial);
             sDiskMesh->DrawShowing();
-        }
-        auto& _ref3 = mBeam;
-        if (_ref3.mBeam && TheRnd.DrawMode() != 5) {
-            _ref3.mBeam->DrawShowing();
-        }
-        if (mFlare && mFlare->GetMat()) {
-            mFlare->Draw();
-        }
-        if (mTarget) {
-            if (mTargetShadow) {
-                RndDrawable *drawable = dynamic_cast<RndDrawable *>(mTarget.Ptr());
-                if (drawable) {
-                    drawable->DrawShadow(WorldXfm(), 3.0f);
-                }
-            }
-            if (DoFloorSpot()) {
-                MILO_ASSERT(sDiskMesh, 0x40F);
-                sDiskMesh->SetWorldXfm(mFloorSpotXfm);
-                sDiskMesh->SetMat(mSpotMaterial);
-                sDiskMesh->DrawShowing();
-            }
         }
     }
 }
