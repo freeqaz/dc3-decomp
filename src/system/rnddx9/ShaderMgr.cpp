@@ -497,14 +497,25 @@ void DxShaderMgr::LoadShaderFile(FileStream &fs) {
                 fs >> shaderOptsMask;
                 D3DPixelShader *pPS = nullptr;
                 D3DVertexShader *pVS = nullptr;
-                for (int k = 0; k < 2; k++) {
+                // k is unsigned: the loop bound is `cmplwi cr6, r30, 0x8`.
+                for (unsigned int k = 0; k < 2; k++) {
                     unsigned int ic0;
                     unsigned int ibc;
                     fs >> ic0;
                     fs >> ibc;
                     void *addr = (void *)((unsigned int)bases[k] + ic0);
                     void *physAddr = (void *)((unsigned int)physBases[k] + ibc);
-                    if (k - 1) {
+                    // `!(k - 1)`, i.e. the SECOND record is the vertex shader.
+                    // The image builds the condition as a boolean VALUE --
+                    // `subi r8, r28, 0x1` / `cntlzw r6, r8` /
+                    // `extrwi. r7, r6, 1, 26` -- which is 1 exactly when
+                    // k - 1 == 0, and then `beq` branches away on k == 0.  We
+                    // had the bare `if (k - 1)`, whose `subic.` tests the
+                    // subtraction itself and therefore selects the OPPOSITE
+                    // arm: we were registering record 0 as the vertex shader
+                    // and record 1 as the pixel shader.
+                    bool isVertexShader = !(k - 1);
+                    if (isVertexShader) {
                         pVS = (D3DVertexShader *)addr;
                         XGRegisterVertexShader(pVS, physAddr);
                     } else {
