@@ -498,16 +498,31 @@ void UIListDir::BuildDrawState(
         UIComponent::State componentState =
             state.Provider()->ComponentStateOverride(showing, prevData, compState);
 
+        // NOTE (w7-ai): residual at 97.9%.  Retail's frame is 0x220 and ours is
+        // 0x1e0 because MSVC gives the `data == -1` branch's UIListElementDrawState
+        // its own 0x40 slot at 0xe0(r1) while ours is coloured onto the main
+        // `elem` at 0xa0(r1).  Neither scoping the main `elem` up to loop-body
+        // level (so the two nest rather than sit in disjoint blocks) nor moving
+        // `Vector3 elemPos` into the loop changes a single byte -- two
+        // consecutive neutral variants, measured 2026-09-14 -- so the 0x40 and
+        // the 0x24c/0x25f parameter-home offsets that ride on it are deliberate.
+        // The other residual is one allocator choice: retail keeps
+        // numDisplayWithData in r28 AND spilled at 0x54(r1) and caches
+        // fadeCountStart in r15, where we put numDisplayWithData in r15 and spill
+        // fadeCountEnd instead.
         UIListElementDrawState elem;
 #ifdef HX_NATIVE
         memset(&elem, 0, sizeof(elem));
 #endif
         elem.mActive = true;
         *(Vector3 *)&elem.mPosX = elemPos;
+        // mAlpha before the three scales: retail stores 0xc4 (alpha) first and
+        // then interleaves the 1.0f scale stores with mElementState
+        // (0x827894FC-0x82789510).
+        elem.mAlpha = alpha;
         elem.mScaleX = 1.0f;
         elem.mScaleY = 1.0f;
         elem.mScaleZ = 1.0f;
-        elem.mAlpha = alpha;
         elem.mElementState = widgetState;
         elem.mComponentState = componentState;
         elem.mDisplay = dispIndex;
