@@ -505,6 +505,13 @@ void Spotlight::DrawShowing() {
     if (!mTargetLoaded)
         return;
     UpdateTransforms();
+    // Residual (21 rows, frame Δ +0x10): the image gives `tracker` the SAME
+    // frame word as `c` -- it builds the colour at r31+0x60 (82828D08..D18) and
+    // then passes r31+0x60 to ??0RndEnvironTracker (82828D44) and to
+    // ??1RndEnvironTracker (82828FB0).  Our build puts `c` at 0x60 and `tracker`
+    // at 0xa0, and that one extra word shifts `_at` 0x70->0x80 and the Sphere
+    // 0x80->0x90, which is every [off:-16] row.  Wrapping `c` in its own closing
+    // scope does NOT buy the reuse (measured: byte-identical, 97.60 both ways).
     Hmx::Color c(Color());
     Multiply(c, Intensity(), c);
     sEnviron->SetAmbientColor(c);
