@@ -319,7 +319,20 @@ void WorldInstance::SyncDir() {
             objPairs.push_back(ObjPair(mDir, this));
 
             for (ObjDirItr<Hmx::Object> it(mDir, false); it != nullptr; ++it) {
-                bool curMesh = dynamic_cast<RndMesh *>(&*it); // mismatch here
+                // Residual (99.4275 canonical, 5 rows, all here). The image spends
+                // ONE extra instruction we do not: `addi r11, r3, 0x0` right after
+                // `bl __RTDynamicCast`, i.e. it materialises the cast result into a
+                // scratch pointer and runs the bool conversion off that copy
+                // (`subic r10, r11, 1 / subfe r27, r10, r11`), where we run it
+                // straight off r3. That one extra instruction is also what moves
+                // `cmplwi cr6, r16, 0x0` (the `!grp` test) ahead of the subic/subfe
+                // pair, which is the delete/insert row pair -- one cause, five rows.
+                // Refuted spellings (measured, all bit-identical to this one):
+                //   RndMesh *p = dynamic_cast<...>(&*it); bool curMesh = p != nullptr;
+                //   dynamic_cast<RndMesh *>(it.Ptr()) != nullptr
+                //   dynamic_cast<RndMesh *>(it)  -- does not compile (C2682,
+                //     ObjDirItr is a class; the cast needs &*it or .Ptr()).
+                bool curMesh = dynamic_cast<RndMesh *>(&*it);
                 if (!grp || (it != grp && !GroupedUnder(grp, it))) {
                 lmao:
                     if (it->ClassName() != Tex && it->ClassName() != CubeTex

@@ -231,6 +231,16 @@ BEGIN_PROPSYNCS(Spotlight)
     // source, plus two dead address computations; our build CSEs them into a
     // single anchor. Hmx::Color has no user-declared operator= in the target
     // (`??4Color@Hmx@@` appears in 0 of the target objects), so that is not it.
+    //   SetColorIntensity(Hmx::Color(Color()), _val.Float()) -- RB3's spelling
+    //                                             -> 8 rows becomes 25, 98.9,
+    //                                                +0x10 stack frame
+    // Decoded fully at 8282EDD0: the image emits exactly two instructions we do
+    // not -- `mr r9, r11` (saving mColorOwner before the +0x1b0 clobbers it) and
+    // a DEAD `addi r10, r9, 0x1b0` that its stores then fold into their own
+    // displacements. That dead address computation is the tell: the image is
+    // materialising BOTH sides of `mColorOwner->mColor = c` as pointers, the way
+    // MSVC lowers an operator= call, while we lower it as one anchored struct
+    // copy. 4764 B at 99.8287 == those two instructions and nothing else.
     SYNC_PROP_SET(intensity, Intensity(), SetIntensity(_val.Float()))
     SYNC_PROP(color_owner, mColorOwner)
     SYNC_PROP(damping_constant, mDampingConstant)
@@ -657,6 +667,14 @@ void Spotlight::SetColor(int packed) {
     color.alpha = 1.0f;
     SetColorIntensity(color, Intensity());
 }
+// RB3's shared-engine spelling of this line is
+//   SetColorIntensity(Hmx::Color(Color()), f);
+// (../rb3/src/system/world/Spotlight.cpp:499). Do NOT port it: measured here it
+// materialises the temporary in a stack slot and takes SyncProperty from 99.829
+// to 98.9 with a +0x10 frame. RB3's SetColorIntensity body also differs from
+// DC3's (it Multiplies by f and round-trips through Hmx::Color32(col.Pack())),
+// and the DC3 target emits a plain 4-word copy with none of that -- so the two
+// games genuinely diverge here and RB3 is not a reference for this function.
 void Spotlight::SetIntensity(float f) { SetColorIntensity(Color(), f); }
 
 void Spotlight::SetColorIntensity(const Hmx::Color &c, float f) {
