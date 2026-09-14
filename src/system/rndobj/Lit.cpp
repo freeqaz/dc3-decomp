@@ -129,6 +129,20 @@ Transform RndLight::Projection() {
         // SuperFormatString -- init order deciding callee-saved assignment --
         // is inert on MSVC's 16-byte-aligned Vector3 slots, which it allocates
         // by first USE, not by declaration.
+        //
+        // NEGATIVE RESULT (w7-bi, 2026-09-14): the obvious follow-on to w7-ao's
+        // "allocates by first USE" -- moving the USES rather than the
+        // declarations, i.e. reading `_fpr3/_fpr4/_fpr5` (pos) before
+        // `_fpr0/_fpr1/_fpr2` (yRow) below -- is ALSO inert: 93.3 canonical
+        // either way, identical 197-row table (33 diff_arg / 1 replace / 6
+        // insert / 6 delete) and the same (0xa0,0xb0) OFFSET_SWAP at indices
+        // 69/85. MSVC normalises the load order, so neither declaration order
+        // nor use order reaches this slot pair. Both sides copy m.y first
+        // (target 0x826BAE0C region) and v second, so the ONLY difference is
+        // which local gets 0xa0 -- nothing in the source steers it. The rest of
+        // the residual is 20 instructions of pure REGISTER_SWAP (f4<->f5,
+        // f7<->f8, f0<->f11) plus two scheduling clusters (the `fneg f28`
+        // at index 58/60 and the 99-115 load/store cluster).
         float topR = mTopRadius;
         float slope = (mBotRadius - topR) / mRange;
 
