@@ -323,8 +323,9 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
                 newLabel->InitObject();
                 newLabel->Copy((FlowNode *)(*it), kCopyDeep);
                 newLabel->SetParent(newFlow, true);
-                ObjectDir *dir = childFlow->Dir();
-                newLabel->SetName(NextName("l", dir), dir);
+                newLabel->SetName(
+                    NextName("l", childFlow->Dir()), childFlow->Dir()
+                );
             }
         }
 
@@ -334,8 +335,7 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
         newObj->InitObject();
         FlowNode *newNode = dynamic_cast<FlowNode *>(newObj);
         newNode->Copy(child, kCopyDeep);
-        ObjectDir *dir = child->Dir();
-        newNode->SetName(NextName("n", dir), dir);
+        newNode->SetName(NextName("n", child->Dir()), child->Dir());
         return newNode;
     }
 }
