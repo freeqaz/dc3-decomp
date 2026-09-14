@@ -379,8 +379,8 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             mArcOffset = GetCurveStart();
             Vector3 frontPt = *mJointPath.begin();
             float distX = dx - frontPt.x;
-            float distY = dy - frontPt.y;
             float distZ = dz - frontPt.z;
+            float distY = dy - frontPt.y;
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
                 mJointPath.insert(mJointPath.begin(), boneVec);
             }
