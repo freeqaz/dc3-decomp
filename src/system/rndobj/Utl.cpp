@@ -1093,11 +1093,14 @@ void UtilDrawCigar(
 void UtilDrawPlane(
     const Plane &p, const Vector3 &v, const Hmx::Color &c, int i4, float f, bool
 ) {
+    // The image allocates mb0 at 0x60 and tf88 at 0x90 (contiguous, frame
+    // 0x150), and its Identity() stores precede both the ScaleAdd result and
+    // the m.y copy -- so mb0 is declared and initialised first.
+    Hmx::Matrix3 mb0;
+    mb0.Identity();
     Transform tf88;
     ScaleAdd(v, *(const Vector3 *)&p, -p.Dot(v), tf88.v);
     tf88.m.y = *(const Vector3 *)&p;
-    Hmx::Matrix3 mb0;
-    mb0.Identity();
     int minIdx = 0;
     int idx = 0;
     float minDotProduct = 10000.0f;
@@ -1110,6 +1113,14 @@ void UtilDrawPlane(
     Normalize(tf88.m.z, tf88.m.z);
     Cross(tf88.m.y, tf88.m.z, tf88.m.x);
     for (int i = 0; i < i4; i++) {
+        // NOTE (w7-x): the image gives these four vectors 0x90/0xa0/0xb0/0xc0 --
+        // exactly tf88's own m.x/m.y/m.z/v slots, which it has already hoisted
+        // into f23-f31 before the loop (lfs 0xa0..0xc8 at 8262F6B8-8262F700).
+        // That is MSVC stack-slot COLOURING over a dead local, not a
+        // declaration order we can spell: our build keeps tf88 at 0x50-0x90 and
+        // puts these at 0x90-0xd0, which is the whole +0x40 frame delta.
+        // Refuted: reversing the declaration order to vece0/vecd4/vecc8/vecbc
+        // is byte-for-byte inert (identical 80-row diff).
         Vector3 vecbc, vecc8, vecd4, vece0;
         float scalar = (float)(i + 1) * f;
         ScaleAdd(tf88.v, tf88.m.x, scalar, vece0);
