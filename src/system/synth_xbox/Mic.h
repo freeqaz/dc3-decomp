@@ -95,7 +95,12 @@ public:
     int unk10;
     bool mChangeNotify; // 0x14
     Voice *mPlaybackVoice;
-    short mPlaybackBuffer[6144];
+    // A BYTE buffer of 0x3000: the image's memset and Voice::SetData both pass
+    // 0x3000, and ReadChatBuffer's assert compares size < 0x3000 under the
+    // string "size < DIM(mPlaybackBuffer)" -- DIM only equals sizeof for a
+    // one-byte element type.  Declared short[6144] the same DIM rejected every
+    // legal size in [0x1800, 0x3000).
+    unsigned char mPlaybackBuffer[0x3000];
     short *unk301c;
     std::vector<short> unk3020;
     RingBuffer unk302c;

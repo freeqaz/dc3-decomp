@@ -180,7 +180,7 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
 #pragma region MicXbox
 
 MicXbox::MicXbox(int, float volume)
-    : mRunning(false), unk10(0), mChangeNotify(false), mPlaybackVoice(0), unk301c(mPlaybackBuffer),
+    : mRunning(false), unk10(0), mChangeNotify(false), mPlaybackVoice(0), unk301c((short *)mPlaybackBuffer),
       unk9054(1.0f), unk9058(0), unk905c(0), mFxSend(0), mVolume(volume), mMute(false),
       unk906c(0), mGain(1.0f), mOutputGain(1.0f), mSensitivity(1.0f), unk907c(0),
       mDroppedSamples(0), mDeviceName("generic_usb"), mClipping(false) {
@@ -240,7 +240,7 @@ bool MicXbox::IsPlaying() { return mPlaybackVoice; }
 
 void MicXbox::Start() {
     if (!mRunning) {
-        unk301c = mPlaybackBuffer;
+        unk301c = (short *)mPlaybackBuffer;
         MicManagerXbox *x = MicManagerXbox::GetInstance();
         x->AddMic(this);
         mRunning = true;
@@ -405,7 +405,7 @@ void MicXbox::AddData(void *data, int bytes) {
         }
     }
     if (mPlaybackVoice) {
-        short *bufEnd = mPlaybackBuffer + 6144;
+        short *bufEnd = (short *)(mPlaybackBuffer + sizeof(mPlaybackBuffer));
         if ((char *)unk301c + bytes <= (char *)bufEnd) {
             XMemCpy(unk301c, data, bytes);
             unk301c = (short *)((char *)unk301c + bytes);
@@ -430,12 +430,10 @@ void MicXbox::AddData(void *data, int bytes) {
 }
 
 void MicXbox::ReadChatBuffer(void *data, unsigned int size) {
-    // `size` is a BYTE count (it is halved to get samples just below), so the
-    // bound is the buffer's byte size, not its element count: the image compares
-    // against 0x3000 (`cmplwi cr6, r5, 0x3000`, 0x82E3F65C), and 6144 elements of
-    // short are exactly that.  DIM() here rejected every legal size in
-    // [0x1800, 0x3000).
-    MILO_ASSERT(size < sizeof(mPlaybackBuffer), 0x2d6);
+    // The image compares size < 0x3000 (cmplwi cr6, r5, 0x3000 at 0x82E3F650)
+    // under the assert string "size < DIM(mPlaybackBuffer)": the buffer is a
+    // byte array (see Mic.h), so DIM is its byte size.
+    MILO_ASSERT(size < DIM(mPlaybackBuffer), 0x2d6);
     if (ExternalMicClientMgr::ConnectedForClient(this)) {
         unsigned int samps = size / 2;
         if ((int)(unk3020.size()) >= samps * 3) {
