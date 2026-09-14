@@ -31,6 +31,28 @@ void SkeletonFrame::Init() {
     sUpVectorSmoother.ForceValue(Vector3(0, 1, 0));
 }
 
+// FILE scope, not function-local scope: the image materialises ONE base
+// (lbl_82F0BFD0 = sJointRemap) and reaches the other two tables by
+// displacement off it -- `addi r8, r3, 0xa0` (0xa0 == sizeof sJointRemap)
+// for sTrackingMap, `subi r7, r3, 0x4` for sJointTrackingMap -- which is
+// only possible if the three live contiguously in one .rdata section.
+// MSVC puts each FUNCTION-LOCAL static in its own COMDAT, so as locals they
+// emitted three separate lis/addi pairs against three mangled
+// `?sJointRemap@?1??Create@...` symbols and could never be folded.
+// NEGATIVE RESULT (w7-an, 2026-09-14): merely REORDERING the three
+// function-local statics to match the image's data order was byte-identical
+// inert (71.9 both ways, same 58/14/19/25 row counts) -- the COMDAT split is
+// what blocks the fold, not the order.  Moving them to file scope: 71.9 -> 74.0.
+static const int sJointRemap[kNumJoints][2] = {
+    {0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7},
+    {8, 8}, {9, 9}, {10, 10}, {11, 11}, {12, 12}, {13, 13}, {14, 14},
+    {18, 15}, {15, 16}, {16, 17}, {17, 18}, {19, 19}
+};
+static const SkeletonTrackingState sTrackingMap[] = {
+    kSkeletonNotTracked, kSkeletonPositionOnly, kSkeletonTracked
+};
+static const int sJointTrackingMap[] = { 0, 1, 2 };
+
 void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     mFrameNumber = nui_frame.dwFrameNumber;
     mElapsedMs = elapsed;
@@ -57,15 +79,6 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     gravVec.w = 0.0f;
     XMMATRIX mat = NuiTransformMatrixLevel(gravVec);
 
-    static const SkeletonTrackingState sTrackingMap[] = {
-        kSkeletonNotTracked, kSkeletonPositionOnly, kSkeletonTracked
-    };
-    static const int sJointTrackingMap[] = { 0, 1, 2 };
-    static const int sJointRemap[kNumJoints][2] = {
-        {0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5}, {6, 6}, {7, 7},
-        {8, 8}, {9, 9}, {10, 10}, {11, 11}, {12, 12}, {13, 13}, {14, 14},
-        {18, 15}, {15, 16}, {16, 17}, {17, 18}, {19, 19}
-    };
 
     // First pass: transform joint positions by gravity matrix
     XMVECTOR transformed[6 * kNumJoints];
