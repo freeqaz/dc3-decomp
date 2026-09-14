@@ -821,7 +821,7 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
     rayOrigin.z = norm.z * 0.001f + pos.z;
     double shAccum[4] = { 0, 0, 0, 0 };
     float invMaxDist = 1.0f / maxDist;
-    int numSamples = mSampleDirs.size();
+    unsigned int numSamples = mSampleDirs.size();
     float shCoeffs[4];
     float occlusion = 1.0f;
 
@@ -846,15 +846,16 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
     for (unsigned int k = 0; k < 4; k++) {
         shAccum[k] *= (double)(12.566371f / (float)numSamples);
         if (k == 0) {
-            float val = (float)shAccum[0];
-            val = val > 0.0f ? val : 0.0f;
-            val = val < 1.0f ? val : 1.0f;
-            shAccum[0] = val;
+            // 826A01E0 `fneg f10, f0` / `fsel f0, f10, f26, f0` then
+            // `fsubs f10, f0, f31` / `fsel f0, f10, f31, f0`: the image clamps
+            // branchlessly, which is exactly Clamp<float>'s Min(Max(..)) form.
+            shAccum[0] = Clamp(0.0f, 1.0f, (float)shAccum[0]);
         } else {
-            float val = (float)shAccum[k];
-            val = val > -1.0f ? val : -1.0f;
-            val = val < 1.0f ? val : 1.0f;
-            shAccum[k] = val * 0.5f + 0.5f;
+            // ...and `fmadd f0, f0, f12, f12` with f12 loaded from
+            // __real@3fe0000000000000 is a DOUBLE 0.5, so the rescale happens in
+            // double.  Spelled `val * 0.5f + 0.5f` MSVC reassociates it to
+            // `(val + 1.0f) * 0.5f` in single precision and the fmadd is lost.
+            shAccum[k] = (double)Clamp(-1.0f, 1.0f, (float)shAccum[k]) * 0.5 + 0.5;
         }
     }
 
