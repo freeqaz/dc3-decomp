@@ -85,7 +85,15 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
         // deleting the node erases its ObjPtr from mChildNodes, whereas
         // Deactivate leaves the vector untouched and spins forever.
         while (!mChildNodes.empty()) {
-            FlowNode *child = mChildNodes.front();
+            // [0], not front(): front() is *begin() and begin() carries the
+            // `empty() ? nullptr : ...` ternary, which shows up as a second
+            // _M_start/_M_finish compare plus an `li r11, 0` inside the loop
+            // body.  The target goes straight to the node: `lwz r11, 0x0(r31)`
+            // / `lwz r11, 0xc(r11)` at 0x823F7088, which is
+            // mNodes[0].Obj().  (front() itself must stay as it is --
+            // rewriting it in obj/Object.h regressed FlowNode::~FlowNode from
+            // 100.0% to 85.2% binary-wide.)
+            FlowNode *child = mChildNodes[0];
             if (child) {
                 delete child;
             }
@@ -99,8 +107,12 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
             if (dynamic_cast<Flow *>(it->Obj())) {
                 newChild = FlowNode::DuplicateChild(it->Obj());
             } else {
-                Symbol sym = it->Obj()->ClassName();
-                Hmx::Object *newObj = Hmx::Object::NewObject(sym);
+                // Unnamed temporary, not a named Symbol local: the target
+                // feeds NewObject from ClassName()'s RETURN pointer
+                // (`lwz r3, 0x0(r3)` at 0x823F7190) instead of re-loading the
+                // 0x50(r1) home slot a named local would pin.
+                Hmx::Object *newObj =
+                    Hmx::Object::NewObject(it->Obj()->ClassName());
                 newObj->InitObject();
                 newChild = dynamic_cast<FlowNode *>(newObj);
                 newChild->SetParent(this, true);
