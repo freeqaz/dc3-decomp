@@ -19,9 +19,53 @@ bool IsEastAsianChar(wchar_t ch) {
         || (ch >= 0xFF00 && ch <= 0xFFDC);
 }
 
-bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
+// Hypothesis under test (wave 7, lane w7-y): the three binary searches are one
+// pair of inlined bool-returning helpers, which is what gives the image its
+// masked tail (`li r11, 0/1` + `clrlwi r3, r11, 24`) while plain `return false;`
+// stays an unmasked `li r3, 0` in its own block.
+static bool CantStartLine(wchar_t c, unsigned int option) {
     unsigned char result;
+    if (option & 1) {
+        int lo = 0, hi = 0x91;
+        do {
+            int mid = (hi - lo) / 2 + lo;
+            if (c == g_LineBreakTable[mid].ch) {
+                result = g_LineBreakTable[mid].cantBreakBefore;
+                goto done;
+            }
+            if ((unsigned short)c < (unsigned short)g_LineBreakTable[mid].ch)
+                hi = mid - 1;
+            else
+                lo = mid + 1;
+        } while (lo <= hi);
+    }
+    result = 0;
+done:
+    return result != 0;
+}
 
+static bool CantEndLine(wchar_t c, unsigned int option) {
+    unsigned char result;
+    if (option & 1) {
+        int lo = 0, hi = 0x91;
+        do {
+            int mid = (hi - lo) / 2 + lo;
+            if (c == g_LineBreakTable[mid].ch) {
+                result = g_LineBreakTable[mid].cantBreakAfter;
+                goto done;
+            }
+            if ((unsigned short)c < (unsigned short)g_LineBreakTable[mid].ch)
+                hi = mid - 1;
+            else
+                lo = mid + 1;
+        } while (lo <= hi);
+    }
+    result = 0;
+done:
+    return result != 0;
+}
+
+bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
     if (cur == start)
         return false;
 
@@ -30,24 +74,7 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
 
     // If current char is whitespace, check if next char can't start a line
     if (ch == 0x9 || ch == 0xD || ch == 0x20 || ch == 0x3000) {
-        wchar_t next = cur[1];
-        if (option & 1) {
-            int lo = 0, hi = 0x91;
-            do {
-                int mid = (hi - lo) / 2 + lo;
-                if (next == g_LineBreakTable[mid].ch) {
-                    result = g_LineBreakTable[mid].cantBreakBefore;
-                    goto ws_check;
-                }
-                if ((unsigned short)next < (unsigned short)g_LineBreakTable[mid].ch)
-                    hi = mid - 1;
-                else
-                    lo = mid + 1;
-            } while (lo <= hi);
-        }
-        result = 0;
-    ws_check:
-        if (result != 0)
+        if (CantStartLine(cur[1], option))
             return false;
     }
 
@@ -79,55 +106,7 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
     // Check if this is a valid break position
     if (ch == 0x9 || ch == 0xD || ch == 0x20 || ch == 0x3000
         || IsEastAsianChar(ch) || IsEastAsianChar(prev) || prev == 0x2D) {
-        // Check if current char can't start a line
-        if (option & 1) {
-            int lo = 0, hi = 0x91;
-            do {
-                int mid = (hi - lo) / 2 + lo;
-                if (ch == g_LineBreakTable[mid].ch) {
-                    result = g_LineBreakTable[mid].cantBreakBefore;
-                    goto before_check;
-                }
-                if ((unsigned short)ch < (unsigned short)g_LineBreakTable[mid].ch)
-                    hi = mid - 1;
-                else
-                    lo = mid + 1;
-            } while (lo <= hi);
-        }
-        result = 0;
-    before_check:
-        if (result == 0) {
-            // Check if previous char can't end a line
-            if (option & 1) {
-                int lo = 0, hi = 0x91;
-                do {
-                    int mid = (hi - lo) / 2 + lo;
-                    if (prev == g_LineBreakTable[mid].ch) {
-                        result = g_LineBreakTable[mid].cantBreakAfter;
-                        goto after_check;
-                    }
-                    if ((unsigned short)prev < (unsigned short)g_LineBreakTable[mid].ch)
-                        hi = mid - 1;
-                    else
-                        lo = mid + 1;
-                } while (lo <= hi);
-            }
-            result = 0;
-        after_check:
-            // REFUTED (wave 7, lane w7-y): the image funnels every exit except
-            // the `cur == start` one through a masked tail -- `li r11, 0/1`,
-            // then `clrlwi r3, r11, 24` -- while we materialise 0/1 straight
-            // into r3 and let the early `cur == start` return tail-merge with
-            // it (rows 3-7 and 157-160). Both ways of asking MSVC for the
-            // widening here, `return result == 0;` and an explicit
-            // `bool canBreak; if (result == 0) canBreak = true; else
-            // canBreak = false; return canBreak;`, compile to the SAME 169
-            // instructions and drop the function 95.73 -> 91.86. Whatever
-            // produces the image's tail, it is not at this statement.
-            if (result == 0)
-                return true;
-        }
-        return false;
+        return !CantStartLine(ch, option) && !CantEndLine(prev, option);
     }
 
     return false;
