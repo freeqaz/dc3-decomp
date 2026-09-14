@@ -61,12 +61,11 @@ void UITrigger::Trigger() {
     mStartTime = TheTaskMgr.UISeconds();
     mEndTime = 0;
     FOREACH (it, mAnims) {
-        Anim &curAnim = *it;
-        if (curAnim.mAnim) {
+        if (it->mAnim) {
             float f4 = 0;
-            if (curAnim.mEnable) {
-                if (!(curAnim.mPeriod * 30.0f)) {
-                    f4 = curAnim.mScale;
+            if (it->mEnable) {
+                if (!(it->mPeriod * 30.0f)) {
+                    f4 = it->mScale;
                     if (!f4) {
                         f4 = 1.0f;
                     }
@@ -76,12 +75,12 @@ void UITrigger::Trigger() {
                     // (827B26E8).  Both sides emit the same `fabs` instruction
                     // -- it is the divide's precision that the double round
                     // trip changed.
-                    f4 = fabsf(curAnim.mStart - curAnim.mEnd) / f4;
+                    f4 = fabsf(it->mStart - it->mEnd) / f4;
                 }
             } else {
-                f4 = fabsf(curAnim.mAnim->StartFrame() - curAnim.mAnim->EndFrame());
+                f4 = fabsf(it->mAnim->StartFrame() - it->mAnim->EndFrame());
             }
-            MaxEq(mEndTime, (curAnim.mDelay * 30.0f + f4) / 30.0f);
+            MaxEq(mEndTime, (it->mDelay * 30.0f + f4) / 30.0f);
         }
     }
     if (mBlockTransition && mEndTime > 5.0f) {
