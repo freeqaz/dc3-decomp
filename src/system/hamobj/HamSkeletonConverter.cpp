@@ -354,8 +354,10 @@ void HamSkeletonConverter::SetLeg(
     Subtract(mJointPositions[ankle], kneePos, dir2);
     Normalize(dir2, dir2);
 
-    auto _tmp0 = Dot(dir, dir2);
-    float angle = acos(_tmp0);
+    // Accumulated y, z, x like CalcRotzBone's z, y, x: the image multiplies
+    // dir.y*dir2.y first (824C9718 `fmuls f0, f0, f11` off 0x54/0x64), then
+    // fmadds the z and x products.  Dot() is x, y, z and comes out z, y, x.
+    float angle = acos(Dot(dir, dir2));
     angle = -angle;
     int isNaN = (angle != angle) ? 1 : 0;
     if ((isNaN & 0xFF) == 0) {
@@ -374,31 +376,43 @@ void HamSkeletonConverter::SetLeg(
 
         int usePelvis = (angle < 0.2) ? 1 : 0;
         if (abs(usePelvis) != 0) {
-            plane.a = mPelvisTransform.m.z.x;
-            plane.b = mPelvisTransform.m.z.y;
-            plane.c = mPelvisTransform.m.z.z;
-            // NEGATIVE RESULT: swapping the two terms of the inner sum to
-            // `plane.a * (x) + plane.c * (z)` is byte-neutral.  The image
-            // evaluates c*zdiff first (0x824C97BC `lfs f0, 0x6f8(r31)` before
-            // 0x824C97D0 `lfs f13, 0x6f0(r31)`) and we evaluate a*xdiff first
-            // under BOTH spellings -- MSVC picks the operand by which
-            // difference it scheduled, not by source order.
-            // NEGATIVE RESULT (w7-an, 2026-09-14): binding the three differences
-            // to locals declared ydiff, xdiff, zdiff -- the reverse of the
-            // image's emission order zdiff, xdiff, ydiff, which is the lever
-            // that worked on ArcDetector::Update -- is byte-identical here.
-            // Each difference is used exactly once, so MSVC folds the local
-            // away before scheduling and the decl order never reaches the
-            // scheduler.  89.3 canonical / 81 rows both ways.
-            plane.d = -(plane.b * (_sub0.y - kneePos.y) + (plane.c * (_sub0.z - kneePos.z) + plane.a * (_sub0.x - kneePos.x)));
+            // One Plane::Set(nx, ny, nz, dist) with the Plane(point, normal)
+            // ctor's `d` expression, NOT three member assignments followed by
+            // `plane.d = -(...)` on the freshly stored members (89.4 -> 95.3,
+            // w7-ba).  The four-float Set stores a/b/c late and lets the merge
+            // at .L_824C97FC fall through instead of jumping over the else arm
+            // (the image runs 824C97F8 `stfs f0, 0x6c(r1)` straight into
+            // .L_824C97FC; the assignment spelling emits a `b` there, plus a
+            // dead `addi r11, r25, 0x71` hoisted above it).
+            // `plane = Plane(hipRel, pelvisZ)` is the same code plus a 4-word
+            // temporary copy (91.2).
+            // Still open: the image evaluates the products c*dz, a*dx, b*dy
+            // (824C97B0 `lfs f0, 0x8(r30)` first, 824C97C8 `stfs f0, 0x68(r1)`
+            // right after loading c) and we emit b*dy, c*dz, a*dx.  The sum is
+            // canonicalised under /fp:fast -- x,y,z and y,z,x term orders are
+            // byte-identical, and so were a*x+c*z vs c*z+a*x and ydiff/xdiff/
+            // zdiff locals under the old spelling (w7-an) -- and the
+            // three-assignment spelling only rotates it (statements b,c,a give
+            // a,c,b; a,b,c and c,a,b give b,c,a).  12 rows, all offset swaps
+            // between 0x60/0x64/0x68.
+            Vector3 hipRel;
+            Subtract(_sub0, kneePos, hipRel);
+            const Vector3 &pelvisZ = mPelvisTransform.m.z;
+            plane.Set(
+                pelvisZ.x,
+                pelvisZ.y,
+                pelvisZ.z,
+                -(pelvisZ.x * hipRel.x + pelvisZ.y * hipRel.y + pelvisZ.z * hipRel.z)
+            );
         }
         PaddedJointPos *hipZAxisInit = &mLeftHipZAxisInit + side;
+        const Vector3 &hipLocalPos = mBoneMeshes[hip]->LocalXfm().v;
         hipZAxisInit->x = plane.a * -1.0f;
         hipZAxisInit->y = plane.b * -1.0f;
         hipZAxisInit->z = plane.c * -1.0f;
 
         Vector3 worldPos;
-        Multiply(mBoneMeshes[hip]->LocalXfm().v, parentXfm, worldPos);
+        Multiply(hipLocalPos, parentXfm, worldPos);
 
         Subtract(kneePos, _sub0, dir);
         Normalize(dir, dir);
@@ -415,8 +429,20 @@ void HamSkeletonConverter::SetLeg(
         // local above it sits 0x10 higher in the image than in our build.
         Vector3 hipZ(hipZAxis->x, hipZAxis->y, hipZAxis->z);
 
+        // Cross(hipZ, dir), NOT Cross(dir, hipZ): the image's y row is
+        // hz.z*dir.x - hz.x*dir.z (824C98D0 `fmuls f8, f11, f0` = dir.z*hz.x,
+        // 824C98F0 `fmsubs f12, f10, f12, f8` = dir.x*hz.z - that), which is
+        // Vec.h's Cross with v1 = hipZ.  The other operand order negates all
+        // three rows of mat.y, i.e. mirrors the thigh bone's frame.
+        // NEGATIVE RESULT (w7-ba): Cross(*hipZAxis, dir, cross1) reading the
+        // member through its conversion operator drops the 0x80 copy's early
+        // `stfs f0, 0x80(r1)` and reorders the three fmsubs rows: 94.6 vs 95.3.
+        // The image loads hz.x through the RotateTowards pointer (824C98C0
+        // `lfs f0, 0x0(r30)`) but hz.y/hz.z through a re-derived
+        // `this + side*16` (824C98D8 `lfs f13, 0x734(r11)`); neither the local
+        // copy nor the direct read reproduces that split.
         Vector3 cross1;
-        Cross(dir, hipZ, cross1);
+        Cross(hipZ, dir, cross1);
         Normalize(cross1, cross1);
 
         Hmx::Matrix3 mat;
