@@ -1416,22 +1416,27 @@ DataNode OnTestDrawGroups(DataArray *da) {
 }
 
 void TestTextureSize(ObjectDir *dir, int iType, int i3, int i4, int i5, int maxBpp) {
-    bool rendered = false;
-    if (iType == RndTex::kRendered || iType == RndTex::kRenderedNoZ)
-        rendered = true;
-    bool shouldCheckBpp = false;
-    if (GetGfxMode() == 0 || rendered)
-        shouldCheckBpp = true;
-    int scaleFactor = 1;
-    if (shouldCheckBpp)
-        scaleFactor = i5;
+    // Each bool is ONE initialisation from a boolean expression, not a
+    // false-then-if: the image materialises the value in a scratch register
+    // (`li r11, 0` / `li r11, 1`) and narrows it into the variable with a
+    // separate `clrlwi r22, r11, 24` (target idx 15-18).  Assigning through an
+    // `if` writes the final register directly and loses that narrowing.
+    bool rendered = (iType == RndTex::kRendered || iType == RndTex::kRenderedNoZ);
+    bool shouldCheckBpp = (GetGfxMode() == 0 || rendered);
+    // Ternary, i5 first: the image emits `mr r11, r27` (= i5) BEFORE the
+    // branch and overwrites it with `li r11, 0x1` on the false path.
+    int scaleFactor = shouldCheckBpp ? i5 : 1;
+    // Hoisted, and in this operand order: the image computes
+    // `mullw r11, r11, r29` (scaleFactor * i3) and `mullw r25, r11, r28`
+    // (* i4) before the ObjDirItr constructor call at target idx 37.
+    int sizeLimit = scaleFactor * i3 * i4;
     for (ObjDirItr<RndTex> it(dir, true); it != 0; ++it) {
-        if (iType == it->GetType()) {
+        if (it->GetType() == iType) {
             int local_bpp = shouldCheckBpp ? it->Bpp() : 1;
             if (rendered && GetGfxMode() == 1 && local_bpp == 0x10)
                 local_bpp = 0x20;
             int product = it->Width() * it->Height() * local_bpp;
-            if (product > i3 * i4 * scaleFactor) {
+            if (product > sizeLimit) {
                 MILO_NOTIFY(
                     "%s is too big w:%d h:%d bpp:%d",
                     PathName(it),
