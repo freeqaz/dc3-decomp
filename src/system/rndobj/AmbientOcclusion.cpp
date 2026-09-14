@@ -46,6 +46,23 @@ void RndAmbientOcclusion::BlendVert(
     out.tex += v2.tex;
     Add(v2.color, out.color, out.color);
     Add(v2.norm, out.norm, out.norm);
+    // NEGATIVE RESULT 2026-09-14 (w7-ae), 85.7% canonical.  The interleaving
+    // below is load-bearing and two variants that tidy it up both REGRESS:
+    //   * hoisting `tang.z`/`tang.y` to sit right after `tang.x` (which is where
+    //     the image's `lfs 0x54(r30)` / `lfs 0x58(r30)` appear, at target
+    //     AmbientOcclusion.obj offsets 0x818 and 0x834, interleaved into the
+    //     `out.pos *= 0.5f` block) measures
+    //     85.7 -> 78.9.  The image hoists only the LOADS; the adds and the
+    //     stores back into the stack copy stay after the colour multiply, so the
+    //     current statement order is already the one that produces them.
+    //   * replacing the three `out.tangent.<c> = tang.<c>` stores with a single
+    //     `(Vector3&)out.tangent = (const Vector3&)tang;` measures 85.7 -> 82.7.
+    //     It does fix the one real ordering row (we sink the 0x50 store past the
+    //     colour zeroing, the image does not) but costs more elsewhere.
+    // What is left after those is ~90 rows of pure FPR renaming with identical
+    // opcodes on both sides, plus ~4 rows where MSVC defers the `lfs 0x44(r30)`
+    // of `out.tex += v2.tex` past the store to out.tex.x -- i.e. our build proved
+    // the two Vert& do not alias and the image's did not.
     Vector4 tang = out.tangent;
     tang.x = v2.tangent.x + tang.x;
     out.pos *= 0.5f;
@@ -717,7 +734,9 @@ bool kdTree<Triangle>::Intersect(
     bool boxHit = ::Intersect(origin, direction, mBounds, tNear, tFar);
     if (boxHit) {
         bool found = false;
-        int stackDepth = 0;
+        // unsigned: the image tests it with `cmplwi cr6, r27, 0x0`
+        // (AmbientOcclusion.s idx 132), not `cmpwi`.
+        unsigned int stackDepth = 0;
         hitDist = FLT_MAX;
         kdTreeNode *nodes = mNodes;
         tFar = (tFar - maxDist >= 0.0f) ? maxDist : tFar;
@@ -736,19 +755,34 @@ bool kdTree<Triangle>::Intersect(
                 children[0] = &nodes[(node->mFlags & 0x7FFF) * 2 + 1];
                 children[1] = &nodes[(node->mFlags & 0x7FFF) * 2 + 2];
 
-                bool isAbove = origin[axis] > splitVal;
+                // `int`, not `bool`: the image indexes with a plain 0/1 int and
+                // never re-masks it.  With a bool every use is preceded by a
+                // `clrlwi rN, rN, 24` byte-extend (AmbientOcclusion.s has none at
+                // the three index sites 0x11c4, 0x11f0, 0x1230; it emits a bare
+                // `slwi rN, rN, 2` each time).
+                int isAbove = origin[axis] > splitVal;
 
                 if (tSplit < 0.0f || tSplit > tFar) {
                     node = children[isAbove];
-                } else if (tSplit >= tNear) {
+                } else if (tSplit < tNear) {
+                    // `isAbove ^ 1`, not `!isAbove`.  The image gets the sibling
+                    // index by XOR-ing the scaled index: `slwi r11, r11, 2` then
+                    // `xori r11, r11, 0x4` (AmbientOcclusion.s idx 83/84, and
+                    // again at 86/90 in the push block).  `!isAbove` instead
+                    // lowers to cntlzw + rlwinm, which is what we used to emit.
+                    node = children[isAbove ^ 1];
+                } else {
                     nodeStack[stackDepth].tFar = tFar;
                     nodeStack[stackDepth].tNear = tSplit;
                     tFar = tSplit;
+                    // Stored at [stackDepth] BEFORE the increment: the image
+                    // emits `stw r10, 0x0(r30)` then `addi r30, r30, 0xc`, where
+                    // r30 is the running &nodeStack[].node pointer.  Writing it
+                    // as [stackDepth - 1] after the increment hoists the `addi`
+                    // above the store and costs the -0xc displacement.
+                    nodeStack[stackDepth].node = children[isAbove ^ 1];
                     stackDepth++;
                     node = children[isAbove];
-                    nodeStack[stackDepth - 1].node = children[!isAbove];
-                } else {
-                    node = children[!isAbove];
                 }
             } else {
                 kdTriList *triList = node->GetTriList();
@@ -834,6 +868,23 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     const Transform &xfm = mesh->WorldXfm();
 
     // Phase 1: Compute AO at each face center
+    // SURVEY 2026-09-14 (w7-ae), 87.1% canonical, 209 mismatch rows, no edit made.
+    // The residual is NOT arithmetic -- every fadds chain below already matches the
+    // image term for term.  Two measured structural facts, both about the accessor
+    // calls, are what is left:
+    //   (a) the image emits SIX `mulli rX, rIdx, 0x60` for one face (v1,v2,v3 for
+    //       .pos and again for .norm, at Geo-relative .L_82694628/4648/4694/46b0/
+    //       46d4 and the `mr r9, r22` at .L_826946f8), where MSVC CSEs ours down to
+    //       three.  The image also homes each index with `sth rX, 0x50(r31)` --
+    //       six dead halfword stores into the SAME slot that also carries the
+    //       inlined accessors' `this` (mixed-width slot sharing, see
+    //       docs/decomp/patterns/stack-slot-sharing.md).  Caching the Vert
+    //       references, as this code does, is what lets MSVC fold them.
+    //   (b) our whole frame is shifted: the image's shared home slot is 0x50 and
+    //       ours is 0x54, which alone accounts for ~40 diff_arg rows.
+    // Both are reachable only by finding the accessor spelling whose address the
+    // image hands to an inlined callee; guessing at it (unrolled index temps,
+    // per-component Verts() calls) was not attempted here.
     Hmx::Color aoResult;
     std::vector<Hmx::Color> faceAO(mesh->Faces().size(), aoResult);
     unsigned int f = 0;
@@ -1063,7 +1114,7 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
          meshIt != mObjectsTessellate.end(); ++meshIt) {
         RndMesh *mesh = *meshIt;
         TheDebug << MakeString(
-            "RndAmbientOcclusion: Tessellating '%s'...\n", (char *)mesh->Name()
+            "RndAmbientOcclusion: Tessellating '%s'...\n", mesh->Name()
         );
         const Transform &xfm = mesh->WorldXfm();
 

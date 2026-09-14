@@ -306,6 +306,13 @@ void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
     const Vector3 &normal = (const Vector3 &)plane.a;
     float dotX = Dot(trans.m.x, normal);
     float dotY = Dot(trans.m.y, normal);
+    // Declaring dotZ AFTER the ray.dir.Set() call -- which is where the image
+    // finishes it (fmadds f12,f8,f3,f11 at 0x82534E10, after both dir stores and
+    // after fabs(dotX)) -- is a REGRESSION, 90.7 -> 80.0 raw: it also splits the
+    // twelve-load block the image emits as one batch.  The residual five rows are
+    // MSVC's scheduling of that last fmadds plus a provably DEAD `fmr f12, f0`
+    // (a copy of dotX killed by the very next instruction), which is a register
+    // allocator artifact, not a source shape.
     float dotZ = Dot(trans.m.z, normal);
     ray.dir.Set(dotX, dotY);
     if (fabsf(dotY) > fabsf(dotX)) {
@@ -384,8 +391,16 @@ bool Intersect(const Plane &plane, const Box &box) {
     }
 
     const Vector3 &normal = *(const Vector3 *)&plane.a;
-    if (0.0f < normal.x * pMin.x + normal.y * pMin.y + normal.z * pMin.z + plane.d
-        || normal.x * pMax.x + normal.y * pMax.y + normal.z * pMax.z + plane.d < 0.0f) {
+    // /fp:fast contracts `p + q*r` into fmadds and evaluates the SECOND operand
+    // of each `+` first, so the association AND the term order of this dot
+    // product are both source-reachable.  The image (Geo.s .L_825365D0) emits
+    //   fmuls  ny*py ; fmadds nz*pz ; fmadds nx*px ; fadds d
+    // which is ((nx*px) + ((nz*pz) + (ny*py))) + d -- i.e. the x term folded in
+    // last, and z before y inside the sub-sum.  Written flat it comes out as
+    // fmuls ny*py / fmadds nx*px / fmadds nz*pz instead.  Not Plane::Dot: that
+    // helper is spelled flat and lowers to the flat order.
+    if (0.0f < normal.x * pMin.x + (normal.z * pMin.z + normal.y * pMin.y) + plane.d
+        || normal.x * pMax.x + (normal.z * pMax.z + normal.y * pMax.y) + plane.d < 0.0f) {
         return false;
     }
     return true;
@@ -404,6 +419,15 @@ bool Intersect(const Triangle &tri, const Box &box) {
 
     // Translate triangle to box center
     float v0x = v0.x - cx;
+    // NEGATIVE RESULT (component grouping is right, vertex grouping is not).
+    // The image's fadds order is v1y, v1z, v2z, v2y, which reads like the three
+    // vertices are declared as units; spelling it that way -- v0x/v0y/v0z,
+    // v1x/v1y/v1z, v2x/v2z/v2y -- REGRESSES 87.30 -> 82.61 canonical (18 inserts
+    // and 18 deletes instead of 13 and 13), because it also splits the single
+    // twelve-load block the image emits before the first fsubs.  Likewise the
+    // commutative spelling of the two x adds is inert: writing them origin-first
+    // to match `fadds f10, f11, f0` at Geo.s idx 13 leaves rows 13 and 21
+    // unchanged, so MSVC canonicalises the operand order here.
     float v1x = (tri.frame.x.x + tri.origin.x) - cx;
     float v2x = (tri.frame.y.x + tri.origin.x) - cx;
 
@@ -484,13 +508,17 @@ bool Intersect(const Triangle &tri, const Box &box) {
     axes[8].Set(-e2y, e2x, 0.0f);
 
     float radii[9];
-    float *pfAxis = &axes[0].y;
-    float *pfR = radii;
     unsigned int i = 0;
+    float *pfR = radii;
+    float *pfAxis = &axes[0].y;
     do {
-        // Each component is read twice: once for the |.| that builds the box's
-        // projected radius, and again for the dot products.  Caching them in
-        // three locals removes retail's second set of loads.
+        // CORRECTION to an earlier note here: the image does NOT fold the second
+        // set of loads away.  Geo.s reloads all three components after the abs
+        // test (`lfs f10, -0x4(r11)` / `lfs f8, 0x4(r11)` / `lfs f6, 0x0(r11)`
+        // at idx 182/185/187) because the negation clobbered the first copy in
+        // place.  Our build instead keeps the originals alive in registers and
+        // emits three `fmr` copies before negating -- the same source, a
+        // different CSE decision, and no spelling found so far moves it.
         float absx = pfAxis[-1]; if (absx <= 0.0f) absx = -absx;
         float absy = pfAxis[0];  if (absy <= 0.0f) absy = -absy;
         float absz = pfAxis[1];  if (absz <= 0.0f) absz = -absz;
@@ -533,6 +561,12 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     float vec3AX = seg.start.x - tri.origin.x;
     float vec3AY = seg.start.y - tri.origin.y;
 
+    // NEGATIVE RESULT.  The image spells this dot product plane-component-first
+    // and so do we, yet the image emits `fmuls f10, f8, f10` (Geo.s idx 36) and
+    // we emit `fmuls f10, f10, f8` -- and writing it the OTHER way round,
+    // vec3AZ * triFrameZ.z, is byte-for-byte inert.  MSVC canonicalises the
+    // operand order of a commutative float multiply here; the three charged rows
+    // at idx 36-38 are not source-reachable.
     float tempDot = -((triFrameZ.z * vec3AZ + triFrameZ.x * vec3AX) + triFrameZ.y * vec3AY);
     float t = tempDot / segDirDot;
     out = t;
@@ -541,6 +575,10 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
         return false;
     }
 
+    // Spelling the scale out component-by-component (x, y, z, matching the
+    // image's emission order) instead of calling Scale() is also byte-for-byte
+    // inert: the residual x/z/y emission order at idx 47-58 comes from the
+    // scheduler, not from the source.
     Vector3 segDir(segDirX, segDirY, segDirZ);
     Vector3 hitPoint;
     Scale(segDir, t, hitPoint);
@@ -784,6 +822,15 @@ bool Intersect(const Segment &seg, const Sphere &sphere) {
     closest.x = dir_x;
     closest.y = dir_y;
     closest.z = dir_z;
+    // NEGATIVE RESULT.  The image emits the three `center - start` fsubs
+    // (Geo.s 0x82536E..: f7, f9, f8) BEFORE the `fcmpu cr6, f11, f10` zero-length
+    // early-out, interleaved one-per-component with the direction fsubs; ours
+    // land after the branch.  Two variants were tried and both are neutral:
+    // naming them as locals (toCenter_x/y/z) in the interleaved declaration
+    // positions gave 80.930 raw vs 80.944 baseline, and reordering the
+    // `closest` component stores to z,x,y was byte-neutral.  The residual is
+    // 37 register-swap instructions over 5 pairs (f0<->f13 alone is 16 of 37),
+    // i.e. scheduling, not a source shape.
     float a = dir_z * dir_z + dir_x * dir_x + dir_y * dir_y;
     if (a == 0.0f)
         return false;
@@ -820,6 +867,12 @@ bool Intersect(const Vector3 &v, const BSPNode *n) {
 }
 
 bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
+    // The parameter is `n`, not `node`: the image's assert condition string is
+    // ??_C@_01EFFIKLCJ@n?$AA@ (Geo.s 0x82535338), a one-character literal.  The
+    // Function Call Diff's MakeString<char[19],int,char[5]> vs our
+    // MakeString<char[8],int,char[2]> is the documented benign ICF fold of the
+    // assert instantiations, NOT evidence of a longer name -- renaming to
+    // `node` to chase it changes the literal and ADDS two charged rows.
     MILO_ASSERT(n, 0x4e6);
 
     float startDot = n->plane.Dot(seg.start);
@@ -839,20 +892,21 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
         return Intersect(seg, n->right, t, p);
     }
 
+    // `t2` must be declared BEFORE denom: it owns the lowest local slot (0x50)
+    // in the image, and both alternatives cost ~1pp -- declaring it after `frac`
+    // and hoisting it above startDot each give 99.0 canonical (16 f28<->f29
+    // swaps plus a moved `stfs`) against 99.99 for this order.
     float t2 = 0.0f;
     float denom = startDot - endDot;
     if (denom == 0.0f)
         return false;
 
     float frac = startDot / denom;
-    Vector3 mid;
-    Interp(seg.start, seg.end, frac, mid);
-
     Segment seg1;
-    seg1.start = seg.start;
-    seg1.end = mid;
     Segment seg2;
-    seg2.start = mid;
+    Interp(seg.start, seg.end, frac, seg1.end);
+    seg1.start = seg.start;
+    seg2.start = seg1.end;
     seg2.end = seg.end;
 
     if (startDot > endDot) {
@@ -881,10 +935,13 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
             t = (1.0f - frac) * t2 + frac;
         }
         if (t2 == 0.0f && t != 0.0f) {
-            p.a = -n->plane.a;
-            p.b = -n->plane.b;
-            p.c = -n->plane.c;
-            p.d = -n->plane.d;
+            // One Set(), not four field assignments.  MSVC evaluates the
+            // arguments right to left, so the image loads d, c, b, a
+            // (Geo.s: lfs 0xc / 0x8 / 0x4 / 0x0 off r31), negates them in that
+            // order, and only then stores a, b, c, d in ascending order.  Four
+            // separate assignments interleave load/fneg/store per component.
+            const Plane &np = n->plane;
+            p.Set(-np.a, -np.b, -np.c, -np.d);
         }
     }
     return true;
@@ -1015,6 +1072,25 @@ void BSPFace::Update() {
 }
 
 #ifndef HX_NATIVE
+// DIAGNOSIS (90.2 canonical, frame 0x10 larger than the image's).
+//
+// The residual is one extra callee-saved GPR, and it comes from how the two
+// tuning globals are addressed.  gBSPPosTol .. gBSPCheckScale are laid out
+// contiguously at +0, +4, +8, +0xc, +0x10 (Geo.cpp:16-20), and the image
+// materialises ONE anchor -- `lis`/`addi` on &gBSPDirTol -- then reads its
+// neighbours off it as `0x4(rN)` (gBSPMaxDepth) and `0x8(rN)`
+// (gBSPMaxCandidates).  We emit a separate `lis` + `@l`-in-displacement for
+// each global, which costs a second page-base register for the whole
+// function and renames every callee-saved GPR by one (r17->r16, r23->r24,
+// ... 130 register-swap rows over 16 pairs).  There is no source spelling
+// that forces the anchor: the two globals are already read through their own
+// names, and `&gBSPDirTol`-relative access would be UB the compiler is free
+// to undo.  See docs/decomp/patterns/anchor-displacement-*.
+//
+// NEGATIVE RESULT: rotating the inner plane loop to
+// `if (planeIt != end) do { ... } while (++planeIt != end);` REGRESSES
+// 90.2 -> 90.0.  MSVC still emits the `b` to the bottom test and additionally
+// drops one home store.  Reverted.
 bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
     if (faces.empty()) {
         node = nullptr;
@@ -1092,7 +1168,12 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
         return false;
     }
 
-    std::list<BSPFace> backFaces, frontFaces;
+    // Declaration order and splice position are both read off the image.
+    // Construction order (Geo.s 0x825387B4..0x825387F0) builds the list at
+    // 0x68 first and the one at 0x58 second; the tail (0x82538A98/0x82538AC8)
+    // recurses into node->right (offset 0x14) with the 0x58 list, so 0x68 is
+    // frontFaces and 0x58 is backFaces, i.e. frontFaces is declared first.
+    std::list<BSPFace> frontFaces, backFaces;
     std::list<BSPFace>::iterator it = faces.begin();
     while (it != faces.end()) {
         bool back, front;
@@ -1101,10 +1182,17 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
             it = faces.erase(it);
         } else if (!back) {
             std::list<BSPFace>::iterator cur = it++;
-            frontFaces.splice(frontFaces.begin(), faces, cur);
+            // BEHAVIOURAL FIX: the image splices at end(), not begin().  The
+            // inlined _M_transfer at Geo.s 0x82538874 computes the position as
+            // `addi r10, r31, 0x68` -- the ADDRESS of the list, which is
+            // list::end(); begin() would be a `lwz` of its _M_next, which is
+            // what we used to emit.  With begin() every child list came out in
+            // reverse order, so the recursive split saw the faces back to front.
+            frontFaces.splice(frontFaces.end(), faces, cur);
         } else if (!front) {
             std::list<BSPFace>::iterator cur = it++;
-            backFaces.splice(backFaces.begin(), faces, cur);
+            // end(), not begin() -- same reading, Geo.s 0x825388D4.
+            backFaces.splice(backFaces.end(), faces, cur);
         } else {
             std::list<BSPFace>::iterator cur = it++;
             Hmx::Ray ray;
@@ -1114,21 +1202,23 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
             Clip(cur->p, ray, frontFace.p);
             if (frontFace.p.points.size() > 2) {
                 frontFace.Update();
-                frontFaces.insert(frontFaces.begin(), frontFace);
+                frontFaces.insert(frontFaces.end(), frontFace);
             }
             ray.dir.Set(-ray.dir.x, -ray.dir.y);
             Clip(cur->p, ray, cur->p);
             if (cur->p.points.size() > 2) {
                 cur->Update();
-                backFaces.splice(backFaces.begin(), faces, cur);
+                backFaces.splice(backFaces.end(), faces, cur);
             }
         }
     }
 
     bool ok = MakeBSPTree(node->left, frontFaces, nextDepth);
     if (!ok) {
-        frontFaces.clear();
+        // The image clears backFaces (0x58) before frontFaces (0x68) on BOTH
+        // the failure and the success path -- Geo.s 0x82538A98 and 0x82538AC8.
         backFaces.clear();
+        frontFaces.clear();
         return false;
     }
     ok = MakeBSPTree(node->right, backFaces, nextDepth);
@@ -1146,7 +1236,18 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
     for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
         Vector3 v(i->x, i->y, 0.0f);
         Multiply(v, tf, v);
-        float dot = node->plane.Dot(v);
+        // Not Plane::Dot: that inline is spelled flat (a*x + b*y + c*z + d) and
+        // lowers to fmuls b*y / fmadds a*x / fmadds c*z.  The image emits
+        // fmuls a*v.x / fmadds c*v.z / fmadds b*v.y / fadds d, which is the
+        // term order below -- under /fp:fast MSVC evaluates the second operand
+        // of each `+` first and contracts the first into fmadds, so a flat sum
+        // P+Q+R lowers as Q,P,R and the source order is readable off the listing.
+        const Plane &plane = node->plane;
+        // NEUTRAL: the b-term's operand order is a backend floor.  The image's
+        // fmadds is `fmadds f0, f10, f11, f0` with f10 = v.y (0x64) and
+        // f11 = plane.b (0x4(r30)); spelling it `v.y * plane.b` changes nothing
+        // (96.2 either way, same 12 mismatch rows).
+        float dot = plane.b * v.y + (plane.c * v.z + plane.a * v.x) + plane.d;
         if (0.0f < dot)
             front = true;
         if (dot < 0.0f)
@@ -1173,19 +1274,32 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
         Hmx::Polygon splitPoly;
         if (node->left) {
             Clip(poly, r, splitPoly);
-            bool res = Intersect(tf, splitPoly, node->left);
-            if (res) {
+            if (Intersect(tf, splitPoly, node->left)) {
                 return true;
             }
         }
-        r.dir.x = -r.dir.x;
-        r.dir.y = -r.dir.y;
+        // Set() evaluates its arguments right to left, so -y is negated before
+        // -x -- which is what the image does (lfs 0x6c, lfs 0x68, fneg, fneg).
+        r.dir.Set(-r.dir.x, -r.dir.y);
         Clip(poly, r, splitPoly);
         bool res = Intersect(tf, splitPoly, node->right);
         return res;
     }
-    bool res = Intersect(tf, poly, child);
-    if (res)
+    // NEGATIVE RESULT (96.2 floor).  The image shares ONE `li r3, 0x1` block
+    // (Geo.s, the instruction at function+0x180) between the `!node->right`
+    // early exit and this call's true arm, and falls through to a shared
+    // `li r3, 0x0` at function+0xd0:
+    //     beq cr6, +0x180        ; if (!child) return true
+    //     mr r4, r28 / mr r3, r27 / bl Intersect
+    //     clrlwi. r11, r3, 24
+    //     bne +0x180             ; return true
+    //     b   +0xd0              ; return false
+    // We instead duplicate `li r3, 0x1; b epilogue` for the !child case and
+    // lower this test branchlessly (`clrlwi` without the dot, then
+    // `subic`/`subfe`).  Writing it as `if (!Intersect(...)) return false;
+    // return true;` is exactly neutral (96.2, same 12 rows), as is swapping
+    // the b-term's operands above.  Two neutral variants -- stopping.
+    if (Intersect(tf, poly, child))
         return true;
     return false;
 }

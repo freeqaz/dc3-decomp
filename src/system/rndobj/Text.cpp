@@ -36,9 +36,13 @@ int RndText::sBlacklightPacketCount;
 bool RndText::sBlacklightModeEnabled;
 std::list<RndText::FontMapBase *> RndText::sFontMapCache;
 int TEXT_REV = 0;
-float gSuperscriptScale = 0.7f;
-float gGuitarScale = 0.7f;
-float gGuitarZOffset = 0.2f;
+// TU-local: the image's references to all three carry NO symbol name (dtk emits
+// placeholder `lbl_82F14D14` relocations), and ParseMarkup's gtr arm addresses
+// gGuitarScale/gGuitarZOffset as 0x4/0x8 off a single anchor at gSuperscriptScale
+// -- an offset the compiler can only know for internal-linkage data in one section.
+static float gSuperscriptScale = 0.7f;
+static float gGuitarScale = 0.7f;
+static float gGuitarZOffset = 0.2f;
 
 float SegmentLength(
     int start, int end, const float *widths, const unsigned short *chars, float scale
@@ -1215,27 +1219,33 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
 
                 if (curChar == 0) {
                     std::vector<unsigned short> fontChars(font->mChars);
+                    // curChar is written ONLY on the break, and the counter is
+                    // zeroed before the emptiness test: the image sets j from its
+                    // zero register at .L_82699a00, ahead of the `srawi.`/`beq`,
+                    // and jumps PAST the `mr r26, r7` (.L_82699a4c `b .L_82699a54`)
+                    // when the loop runs out. Carrying the character in a local that
+                    // is re-seeded from curChar each iteration added a `mr r11, r26`
+                    // inside the loop and dropped that skip branch.
+                    unsigned int j = 0;
                     unsigned int count = fontChars.size();
-                    unsigned short c = curChar;
                     if (count != 0) {
-                        unsigned int j = 0;
                         unsigned short *fp = &fontChars[0];
                         do {
-                            c = *fp;
+                            unsigned short c = *fp;
                             bool skip;
                             if (c == 0x20 || c == 0xa0) {
                                 skip = true;
                             } else {
                                 skip = false;
                             }
-                            if (!skip)
+                            if (!skip) {
+                                curChar = c;
                                 break;
+                            }
                             j = j + 1;
                             fp = fp + 1;
-                            c = curChar;
                         } while (j < count);
                     }
-                    curChar = c;
                 }
 
                 if (curChar != 0) {
@@ -1256,21 +1266,34 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
         if (mapIt != missingMap.end()) {
         unsigned int origSize = origChars.size();
         do {
+            // The set reference and the font are both taken at the TOP of the loop
+            // body: the image emits `addi r29, r17, 0x14` (&mapIt->second) and
+            // `lwz r28, 0x10(r17)` (mapIt->first) at .L_82699b1c/.L_82699b20, ahead
+            // of the `cmplwi cr6, r11, 0x1` size test, and then addresses the set's
+            // begin/end as `0x8(r29)` / `r29` rather than recomputing r17+0x14 each
+            // time round the inner loop.
+            std::set<unsigned short> &missing = mapIt->second;
+            RndFontBase *font = mapIt->first;
             const char *pluralS = "s";
-            if (mapIt->second.size() <= 1) {
+            if (missing.size() <= 1) {
                 pluralS = "";
             }
             auto headerMsg = MakeString("%s:%s char%s (", PathName(this), TextToken(), pluralS);
             {
-                RndFontBase *font = mapIt->first;
                 String msg(headerMsg);
 
-                for (std::set<unsigned short>::iterator setIt = mapIt->second.begin();
-                     setIt != mapIt->second.end(); ++setIt) {
+                for (std::set<unsigned short>::iterator setIt = missing.begin();
+                     setIt != missing.end(); ++setIt) {
                     unsigned short ch = *setIt;
-                    bool printable = true;
+                    // if/else, not `= true` then a conditional `= false`: the image
+                    // materialises the 1 only on the fall-through of the four tests
+                    // (`li r11, 0x1` at .L_82699bcc, immediately before the last
+                    // `bne`), and copies its zero register on the other path.
+                    bool printable;
                     if (ch < 0x20 || ch >= 0xff || ch == 0x25 || ch == 0x7f) {
                         printable = false;
+                    } else {
+                        printable = true;
                     }
                     char displayChar;
                     if (printable) {
@@ -1294,9 +1317,11 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                         unsigned short qch = *qp;
                         if (qch == 0)
                             break;
-                        bool printable = true;
+                        bool printable;
                         if (qch < 0x20 || qch >= 0xff || qch == 0x25 || qch == 0x7f) {
                             printable = false;
+                        } else {
+                            printable = true;
                         }
                         if (printable) {
                             msg += MakeString("%c", (char)qch);
@@ -2019,6 +2044,9 @@ void RndText::ConstructMeshes(
 ) {
     // Store scale and number of lines
     mConstructScale = scale;
+    // NEGATIVE RESULT: the image loads lines.mFinish (0x4) BEFORE lines.mStart
+    // (0x0) for this size computation; spelling it `lines.end() - lines.begin()`
+    // instead of `lines.size()` is exactly inert.  Two rows.
     mNumLinesRendered = lines.size();
 
     // Copy bounds using integer word copies (matching target codegen)
@@ -2039,6 +2067,16 @@ void RndText::ConstructMeshes(
 #endif
 
     // Allocate meshes for each font map
+    // NEGATIVE RESULT (loop rotation).  The image tests this loop once up front
+    // -- `lwz r30, 0xa8(r3)` / `lwz r10, 0xac(r3)` / `cmplw cr6, r30, r10` /
+    // `beq cr6, 0x826866c0`, all hoisted into the prologue -- and then falls
+    // into a body that reloads the end each iteration.  We emit the
+    // branch-to-bottom shape (`b` to the test).  Spelling the rotation out as
+    // `it = begin(); if (it != end()) do { ... } while (it != end());` is
+    // EXACTLY inert: MSVC un-rotates it straight back.  The SAME source shape
+    // gives the image both lowerings -- the CleanupSyncMeshes loop at the end of
+    // this function is branch-to-bottom on both sides -- so this is a scheduler
+    // heuristic, not a source difference.  Eight rows, left alone.
     for (std::vector<FontMapBase *>::iterator it = mFontMaps.begin(); it != mFontMaps.end();
          ++it) {
         (*it)->AllocateMeshes(this, mFixedLength);
@@ -2057,13 +2095,27 @@ void RndText::ConstructMeshes(
             unsigned short prevChar = 0;
             int charIdx = 0;
 
-            while (cur != line.mEnd && cur < line.mEnd) {
+            // `cur != line.mEnd`, NOT `cur < line.mEnd`.  The extra `&& cur <
+            // line.mEnd` was decomp-introduced: it is redundant with the `!=`
+            // and MSVC collapsed the pair to the signed `<`, which shows up as
+            // `bge cr6` where the image guards with `cmplw cr6, r30, r10` /
+            // `beq cr6` on the raw pointers (0x82686718).  The overshoot that
+            // guard was defending against is already handled by the explicit
+            // `if (cur > line.mEnd) break;` on the markup path below.
+            while (cur != line.mEnd) {
                 unsigned short ch = *cur;
 
                 if (ch == 0x3c && mMarkup) {
                     cur = ParseMarkup(cur, state, ch);
-                    if (cur > line.mEnd) break;
-                    cur--; // compensate for cur++ at end of loop
+                    // The `cur--` compensation is CONDITIONAL on ch, and there
+                    // is no `cur > line.mEnd` bail-out in the image -- that was
+                    // decomp-introduced.  0x82686758:
+                    //     mr.  r11, r29        ; ch
+                    //     beq  0x82686768      ; ch == 0 -> shared `if (ch)`
+                    //     subi r30, r30, 0x2   ; cur--
+                    if (ch != 0) {
+                        cur--; // compensate for the cur++ below
+                    }
                 }
 
                 if (ch != 0) {
@@ -2080,9 +2132,13 @@ void RndText::ConstructMeshes(
                     );
                     prevChar = ch;
                     charIdx++;
+                    // cur++ lives INSIDE this arm: `beq cr6, 0x826867b8` at
+                    // 0x8268676c jumps PAST the `addi r30, r30, 0x2` straight to
+                    // the loop test, so a ch of 0 (only reachable when
+                    // ParseMarkup consumed a tag and already advanced cur) does
+                    // not advance the cursor a second time.
+                    cur++;
                 }
-
-                cur++;
             }
         }
     }
@@ -2095,8 +2151,11 @@ void RndText::ConstructMeshes(
 }
 
 const unsigned short *
-RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned short &ch) {
-    const unsigned short *cur = str;
+RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned short &ch) {
+    // The cursor IS the parameter -- the image promotes r4 straight into r31
+    // (`mr r31, r4`) and folds the pre-increment into `lhzu r11, 0x2(r31)`.
+    // A separate `const unsigned short *cur = str;` local makes MSVC keep str in
+    // r4 and emit `lhz r11, 0x2(r4)` + a lazy `addi r31, r4, 0x2` instead.
     unsigned int isClosing = (unsigned int)(*++cur - 0x2f) == 0;
     if (isClosing) {
         cur++;
@@ -2110,12 +2169,15 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
 #else
     if (WStrniCmp(cur, (const unsigned short *)L"sup", 3) == 0) {
 #endif
-        cur += 3;
+        // The `cur += 3` lands AFTER the if/else in the image: target emits the
+        // `cmplwi cr6, r24, 0x0` / `beq` pair first and only reaches
+        // `addi r31, r31, 0x6` on the join block at .L_82695854.
         if (isClosing) {
             fVar12 = state.mStyle->mSize;
         } else {
             fVar12 = state.mStyle->mSize * gSuperscriptScale;
         }
+        cur += 3;
         goto set_size;
     }
 #ifdef HX_NATIVE
@@ -2132,9 +2194,15 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
             scale = style->mSize * gGuitarScale;
         }
         state.mSize = state.mBaseSize * scale;
-        float zOff = gGuitarZOffset;
+        // if/else, NOT `zOff = gGuitarZOffset; if (isClosing) zOff = ...`: the image
+        // branches on isClosing and loads exactly one of the two (target .L_826958b4
+        // `beq cr6, .L_826958c0` with `lfs f0, 0x30(r11)` on the fallthrough), where
+        // the seeded form loads gGuitarZOffset unconditionally before the branch.
+        float zOff;
         if (isClosing) {
             zOff = style->mZOffset;
+        } else {
+            zOff = gGuitarZOffset;
         }
         state.mZOffset = zOff;
     }
@@ -2159,7 +2227,10 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
         if (isClosing) {
                         state.mTextColor = state.mStyle->mTextColor;
         } else {
-            int r = 0, g = 0, b = 0;
+            // Declared blue-first: MSVC lays the three out in reverse declaration
+            // order, and the image's swscanf out-params are &r=0x58, &g=0x60,
+            // &b=0x68 (r5/r6/r7 at .L_82695998).
+            int b = 0, g = 0, r = 0;
             int a = (int)(state.mTextColor.alpha * 255.999f);
             cur++;
 #ifdef HX_NATIVE
@@ -2207,8 +2278,6 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
     else if (WStrniCmp(cur, (const unsigned short *)L"alt", 3) == 0) {
 #endif
         cur += 3;
-        bool bBlacklight = false;
-        unsigned int styleIdx = 1;
 
         if (isClosing) {
             unsigned short scanChar = *cur;
@@ -2219,12 +2288,20 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
         }
 
         unsigned short markupChar = *cur;
+        // Declared AFTER the closing scan and after markupChar is read: the image
+        // emits `mr r25, r23` / `li r26, 0x4c` / `li r30, 0x1` at .L_82695b0c, i.e.
+        // between the `lhz r11, 0x0(r31)` and the 0x32/0x39 range test.
+        bool bBlacklight = false;
+        unsigned int styleIdx = 1;
         if ((markupChar >= 0x32) && (markupChar <= 0x39)) {
             styleIdx = markupChar - 0x30;
             cur++;
         } else if ((markupChar == 0x62) || (markupChar == 0x42)) {
             bBlacklight = true;
-            styleIdx = (1 < (unsigned int)_ref0.size()) ? 1 : 0;
+            // `styleIdx &= ...`, not a ternary: the image emits `and r30, r10, r30`
+            // at .L_82695b60 (styleIdx AND the 0/1 size predicate), where the
+            // ternary lowers to `clrlwi r29, r10, 31`.
+            styleIdx &= (unsigned int)(1 < (unsigned int)_ref0.size());
             Style *fallback = &_ref0[0];
             Style *stylePtr = &_ref0[styleIdx];
             if (stylePtr->mFont != nullptr) {
@@ -2243,20 +2320,37 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
 
         styleIdx = styleIdx & -(isClosing == 0);
 
+        // The INDEX is clamped, not the pointer: the image computes the address
+        // once (`mulli r10, r10, 0x4c` / `add r4, r10, r11` at .L_82695c04) after a
+        // branchless `subfc`/`subfe`/`and` select of the index, where a
+        // pointer-valued if/else lowers to a real `cmplw`/`bge` and two addresses.
         unsigned int numStyles = (unsigned int)_ref0.size();
-        if (styleIdx < numStyles) {
-            state.mStyle = &_ref0[styleIdx];
-        } else {
-            state.mStyle = &_ref0[0];
+        if (styleIdx >= numStyles) {
+            styleIdx = 0;
         }
+        state.mStyle = &_ref0[styleIdx];
 
         memcpy(&state, state.mStyle, 0x34);
 
-        bool bFontColorOverride = state.mFontColorOverride || bBlacklight;
-        if (!state.mStyle->mFont) {
-            state.mStyle = &_ref0[0];
+        // BUG FIX: the blacklight flag comes from Style::mBlacklight (Style+0x48,
+        // Text.h:127), NOT StyleState::mFontColorOverride (StyleState+0x14). The
+        // image reloads state.mStyle after the memcpy and reads `lbz r10, 0x48(r11)`
+        // at .L_82695c18; we were reading `lbz r10, 0x14(r28)` off the freshly
+        // memcpy'd StyleState instead, so <alt=b> styles whose Style had
+        // mBlacklight set resolved to the wrong font map.
+        //
+        // BUG FIX: the no-font fallback does NOT write back to state.mStyle. The
+        // image keeps state.mStyle pointing at the selected style and only
+        // substitutes _ref0[0] for the FontMapIndex argument (.L_82695c40 loads
+        // mStyles.begin into r11 and falls into the shared `addi r11, r11, 0x34` /
+        // `lwz r4, 0xc(r11)`; there is no `stw` to 0x34(r28) on that path). We were
+        // clobbering state.mStyle, which changed every later tag in the same run.
+        Style *chosen = state.mStyle;
+        bool blacklight = chosen->mBlacklight || bBlacklight;
+        if (!chosen->mFont) {
+            chosen = &_ref0[0];
         }
-        state.mFontMapIdx = FontMapIndex(state.mStyle->mFont, bFontColorOverride);
+        state.mFontMapIdx = FontMapIndex(chosen->mFont, blacklight);
 
         fVar12 = state.mSize;
         goto set_size;
@@ -2268,12 +2362,15 @@ set_size:
     state.mSize = state.mBaseSize * fVar12;
 scan_close:
     {
-        short scanChar = *cur;
+        // UNSIGNED, and the post-loop test is `!= 0`, not `== 0x3e`: the image ends
+        // with `lhz`/`cmplwi` throughout (.L_82695c68 onward) and closes with
+        // `cmplwi cr6, r11, 0x0` + `beq`. A `short` here gave lha/lhau/cmpwi.
+        unsigned short scanChar = *cur;
         while (scanChar != 0x3e && scanChar != 0) {
             cur++;
             scanChar = *cur;
         }
-        if (scanChar == 0x3e) {
+        if (scanChar != 0) {
             cur++;
         }
     }
@@ -2677,24 +2774,35 @@ void RndText::FontMap::SetupCharacter(
 
     xPos += (mFont->Kerning(prevChar, charCode) + state.mKerning) * state.mSize;
 
-    float width = charW;
+    // charW is REUSED as the glyph width and then as the scaled width.  It is
+    // address-taken (the out-param above), so every assignment to it is a store
+    // to its frame slot and every read is a reload -- which is exactly what the
+    // image does:
+    //     stfs f0,  0x50(r1)   ; charW = advW        (0x25a4)
+    //     stfs f12, 0x50(r1)   ; charW *= state.mSize (0x25dc)
+    //     lfs  f13, 0x50(r1)   ; reload at vert[2].x  (0x266c)
+    //     lfs  f0,  0x50(r1)   ; reload at vert[3].x  (0x2680)
+    // Separate `width` / `scaledW` locals stay in FPRs and lose all four rows.
     if (charW <= 0.0f) {
-        width = advW;
+        charW = advW;
     }
 
     float centerOfs = 0.0f;
     if (mFont->IsMonospace()) {
-        centerOfs = Max((advW - width) * 0.5f, 0.0f);
+        centerOfs = Max((advW - charW) * 0.5f, 0.0f);
     }
 
     float scaledCenter = state.mSize * centerOfs;
-    float scaledW = state.mSize * width;
-    if (scaledW <= 0.0f) return;
+    charW = state.mSize * charW;
+    if (charW <= 0.0f) return;
 
     float z0 = yPos + state.mZOffset * state.mSize;
+    // The image parks state.mSize in a callee-saved FPR across the virtual
+    // AspectRatio() call (`fmr f26, f0` at 0x25f4) instead of reloading it
+    // afterwards; naming it here is what produces that copy.
+    float size = state.mSize;
     auto _tmp1 = mFont->AspectRatio();
-    float x = xPos;
-    float italics = state.mItalics * state.mSize;
+    float italics = state.mItalics * size;
     // NOTE (bug 1B fix): keep glyph height CONSTANT (z0 - z1 == aspect*size)
     // regardless of yPos. Permuter sweep f5f704d6 flipped this subtraction to
     // `_tmp1*state.mSize - z0`, which reflects the quad about aspect*size/2 and
@@ -2702,33 +2810,51 @@ void RndText::FontMap::SetupCharacter(
     // aspect*size/2 for a single centered line) — making all menu/HUD text
     // invisible. Subtraction is not commutative; the swap was match-neutral
     // (objdiff 83.8% either way) but behaviorally wrong. Reverted to og form.
-    float z1 = z0 - _tmp1 * state.mSize;
+    // NEGATIVE RESULT: the image keeps `_tmp1 * size` and the subtraction apart
+    // (`fmuls f12, f1, f26` at 0x261c, `fsubs f12, f27, f12` at 0x2638) where we
+    // contract to one fnmsubs.  Splitting it into a named `aspectH` temporary is
+    // exactly neutral -- MSVC re-fuses across the statement boundary.  Two rows.
+    float z1 = z0 - _tmp1 * size;
 
-    pg.mVertStart[0].pos.Set(italics + scaledCenter + x, 0.0f, z0);
-    pg.mVertStart[1].pos.Set(scaledCenter + x - italics, 0.0f, z1);
-    pg.mVertStart[2].pos.Set(scaledCenter + x - italics + scaledW, 0.0f, z1);
-    pg.mVertStart[3].pos.Set(italics + scaledCenter + scaledW + x, 0.0f, z0);
+    // xPos is read straight out of the reference each time (`lfs f13, 0x0(r29)`
+    // at 0x2618 / 0x2648 / 0x2660 / 0x2688); caching it in a local `x` folds
+    // those four reloads into one.
+    pg.mVertStart[0].pos.Set(italics + scaledCenter + xPos, 0.0f, z0);
+    pg.mVertStart[1].pos.Set(scaledCenter + xPos - italics, 0.0f, z1);
+    pg.mVertStart[2].pos.Set(scaledCenter + xPos - italics + charW, 0.0f, z1);
+    pg.mVertStart[3].pos.Set(italics + scaledCenter + charW + xPos, 0.0f, z0);
 
     if (circle != 0.0f) {
         float midX = (pg.mVertStart[3].pos.x - pg.mVertStart[1].pos.x) * 0.5f
             + pg.mVertStart[1].pos.x;
         Transform xfm = XfmOnCircleEdge(circle, midX);
-        xfm.v.x -= xfm.m.x.x * midX;
-        xfm.v.y -= xfm.m.x.y * midX;
-        xfm.v.z -= xfm.m.x.z * midX;
+        // Three separate `fmuls` followed by three `fsubs`, not three fused
+        // `fnmsubs` (0x26cc-0x2700): the image scales the whole basis row into
+        // a temporary first, then subtracts it componentwise.  Written as
+        // `xfm.v.x -= xfm.m.x.x * midX;` MSVC contracts each line into one
+        // fnmsubs and the row count drops by three.
+        Vector3 offset;
+        Scale(xfm.m.x, midX, offset);
+        Subtract(xfm.v, offset, xfm.v);
         Multiply(pg.mVertStart[0].pos, xfm, pg.mVertStart[0].pos);
         Multiply(pg.mVertStart[1].pos, xfm, pg.mVertStart[1].pos);
         Multiply(pg.mVertStart[2].pos, xfm, pg.mVertStart[2].pos);
         Multiply(pg.mVertStart[3].pos, xfm, pg.mVertStart[3].pos);
     }
 
-    pg.mVertStart[1].tex.y = pg.mVertStart[2].tex.y;
-    pg.mVertStart[1].tex.x = pg.mVertStart[0].tex.x;
-    pg.mVertStart[3].tex.x = pg.mVertStart[2].tex.x;
-    pg.mVertStart[3].tex.y = pg.mVertStart[0].tex.y;
+    // One `lwz r11, 0x8(r31)` at 0x82691240 serves all six statements below.
+    // Spelled `pg.mVertStart[...]` MSVC cannot prove the float stores miss the
+    // pointer member and reloads it before each one (four extra rows); the
+    // integer struct copies further down DO reload in the image too, so they
+    // deliberately keep the member spelling.
+    RndMesh::Vert *verts = pg.mVertStart;
+    verts[1].tex.y = verts[2].tex.y;
+    verts[1].tex.x = verts[0].tex.x;
+    verts[3].tex.y = verts[0].tex.y;
+    verts[3].tex.x = verts[2].tex.x;
 
-    pg.mVertStart[0].norm.Set(0.0f, -1.0f, 0.0f);
-    pg.mVertStart[3].norm = pg.mVertStart[0].norm;
+    verts[0].norm.Set(0.0f, -1.0f, 0.0f);
+    verts[3].norm = verts[0].norm;
     pg.mVertStart[2].norm = pg.mVertStart[3].norm;
     pg.mVertStart[1].norm = pg.mVertStart[2].norm;
 
@@ -2774,7 +2900,12 @@ void RndText::FontMap3d::SetupCharacter(
 
     float scaledCenter = state.mSize * centerOffset;
 
-    if ((state.mSize * width) <= _kFloat0_0)
+    // Same reuse as the 2d overload: `width` is the CharWidthAdvanceMesh
+    // out-param, so it lives in a frame slot and the scaled width is written
+    // back over it (`fmuls f12, f0, f12` / `stfs f12, 0x50(r1)` at 0x8268ffd4)
+    // and reloaded at the circle-edge midpoint (`lfs f13, 0x50(r1)`).
+    width = state.mSize * width;
+    if (width <= _kFloat0_0)
         return;
 
     yPos += state.mZOffset * state.mSize;
@@ -2784,29 +2915,69 @@ void RndText::FontMap3d::SetupCharacter(
         mMeshCursor++;
         mesh->SetGeomOwner(charMesh);
 
-        // Copy origin to transform position, then scale in-place
-        Vector3 origin = mFont->CharOriginOffset();
-
+        // The whole position vector is scaled (three `fmuls` by state.mSize,
+        // 0x8268ff58/5c/64), then z and x are adjusted; dead-store elimination
+        // leaves exactly one store per component, in the order y (0x94), z
+        // (0x98), x (0x90).  The CharOriginOffset() result is consumed straight
+        // out of the returned sret pointer (`lwz r9, 0x0(r3)` at 0x82690018) --
+        // naming it `Vector3 origin` makes MSVC address the buffer through its
+        // own `addi r11, r1, 0xa0` and forward origin.x past the copy.
         Transform xfm;
-        xfm.v = origin;
-        xfm.v.x = xfm.v.x * state.mSize + scaledCenter + xPos;
-        xfm.v.y *= state.mSize;
-        xfm.v.z = xfm.v.z * state.mSize + yPos;
+        xfm.v = mFont->CharOriginOffset();
+        xfm.v *= state.mSize;
+        // NEGATIVE RESULT: the image keeps z's scale and its +yPos apart
+        // (`fmuls f10, f0, f10` at 0x8268ff5c, `fadds f0, f10, f30` at
+        // 0x8268ff6c) where we contract to one fmadds.  Spelling the scale as
+        // Scale(xfm.v, state.mSize, xfm.v) instead of `*=` is exactly inert.
+        xfm.v.z += yPos;
+        xfm.v.x = xfm.v.x + scaledCenter + xPos;
 
         // Scale matrix by cell height
         float cellHeight = mFont->FontUnitInverse() * state.mSize;
+        // NEGATIVE RESULT: the image writes the three diagonal slots (0x60,
+        // 0x74, 0x88) BEFORE the six zeros, and materialises the zero as
+        // `fmuls f0, f0, f31` -- cellHeight times the 0.0 it already holds in a
+        // callee-saved FPR (0x82690064) -- rather than storing the literal.
+        // Writing the nine fields as individual assignments in the image's
+        // order is EXACTLY inert (96.0% and an identical row table): MSVC sinks
+        // and groups the stores by value, not by statement order.  The source
+        // shape that produces a multiply by zero here is still unidentified.
         xfm.m.x.Set(cellHeight, _kFloat0_0, _kFloat0_0);
         xfm.m.y.Set(_kFloat0_0, cellHeight, _kFloat0_0);
         xfm.m.z.Set(_kFloat0_0, _kFloat0_0, cellHeight);
 
         if (size != _kFloat0_0) {
-            float circlePos = (state.mSize * width) * 0.5f + xfm.v.x;
+            float circlePos = width * 0.5f + xfm.v.x;
             Transform circleXfm = XfmOnCircleEdge(size, circlePos);
             xfm.v.x -= circlePos;
             Multiply(xfm, circleXfm, xfm);
         }
 
-        memcpy(&mesh->mWorldXfm, &xfm, sizeof(Transform));
+        // mLocalXfm, NOT mWorldXfm.  The image materialises the mesh's
+        // RndTransformable base once and addresses both uses off it:
+        //     addi r31, r28, 0x40      ; (RndTransformable*)mesh
+        //     addi r3,  r31, 0x8       ; &mLocalXfm  (mesh + 0x48)
+        //     li   r5,  0x40
+        //     bl   memcpy
+        //     lbz  r11, 0xfd(r28)      ; mesh->mDirty
+        //     bne  ...
+        //     mr   r3,  r31            ; SetDirty_Force on the same base
+        // We were writing mWorldXfm (RndTransformable + 0x48 = mesh + 0x88),
+        // which the very next WorldXfm_Force() recomputes from the local
+        // transform -- so the glyph placement this function computes was being
+        // thrown away on the next sync.  Confirmed at the instruction level:
+        // we now emit `addi r3, r29, 0x48` (mesh + 0x48) where we used to emit
+        // `addi r3, r29, 0x88`; target's `addi r31, r28, 0x40` + `addi r3, r31,
+        // 0x8` is the same address.
+        //
+        // NEGATIVE RESULT on the r31 hoist itself: naming the upcast so the
+        // base is materialised once -- either `RndTransformable *t = mesh;` or
+        // `RndTransformable &t = *mesh;` -- REGRESSES 84.1 -> 83.2 (158 -> 161
+        // instructions, +3 inserts).  The named upcast makes MSVC keep the
+        // pointer in a frame slot across the XfmOnCircleEdge/Multiply calls
+        // instead of folding it into the two addressing modes.  Both spellings
+        // measured, both identical; lever exhausted, leave the two-row residual.
+        memcpy(&mesh->mLocalXfm, &xfm, sizeof(Transform));
         if (!mesh->mDirty) {
             mesh->SetDirty_Force();
         }
