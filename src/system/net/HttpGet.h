@@ -72,7 +72,11 @@ protected:
     String mPath; // 0xc - URL path for GET/POST requests
     unsigned short mPort; // 0x14
     State mState; // 0x18
-    bool mFlags;
+    // Two-bit option field, not a bool: the image stores `uc & 3` with a plain
+    // `clrlwi r10, r26, 30` + `stb` (0x82E2A298), and bit 1 is tested at
+    // HttpGet::Poll.  Declared `bool` it collapsed to 0/1, so `mFlags & 2` was
+    // dead code.
+    unsigned char mFlags; // 0x1c
     Timer mTimer; // 0x20
     float mTimeoutMs; // 0x50
     unsigned int mIP; // 0x54
