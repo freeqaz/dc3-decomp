@@ -64,12 +64,13 @@ MoveGraph &MoveGraph::operator=(const MoveGraph &graph) {
         FOREACH (v, cur->Variants()) {
             MoveVariant *variant = new MoveVariant(this, *v, parent);
             parent->AddVariant(variant);
-            Symbol genre = variant->Genre();
-            Symbol era = variant->Era();
-            parent->AddGenre(genre);
-            parent->AddEra(era);
-            Symbol varName = variant->Name();
-            mMoveVariants[varName] = variant;
+            if (!parent->HasGenre(variant->mGenre)) {
+                parent->mGenreFlags.push_back(variant->mGenre);
+            }
+            if (!parent->HasEra(variant->mEra)) {
+                parent->mEraFlags.push_back(variant->mEra);
+            }
+            mMoveVariants[variant->Name()] = variant;
         }
         if (parent->Variants().size() != 0) {
             mMoveParents[parent->Name()] = parent;
