@@ -22,6 +22,14 @@ CursorPanel::CursorPanel() {}
 CursorPanel::~CursorPanel() {}
 
 void CursorPanel::Poll() {
+    // RESIDUAL (w7-ao, 96.52 canonical): 3 of the remaining rows are one extra
+    // spill of `this`. The image keeps it in r14 for the whole function; we
+    // keep it in r29 AND store it to 0x1a4(r31), then reload it with an extra
+    // `b` + `lwz r29, 0x1a4(r31)` at the top of the loop. The image spends its
+    // one frame word on the ui_crown_player Symbol instead (`stw r30, 0x5c(r31)`
+    // / `lwz r15, 0x5c(r31)`), which we hold in r14 with no store -- so this is
+    // one register too few, not a missing statement. The rest is the r16..r21
+    // constant-pointer permutation and the `trans.m.x *= 4` scheduling below.
     PassiveMessagesPanel::Poll();
     static Symbol ui_crown_player("ui_crown_player");
     const DataNode *pCrownPlayerNode = TheHamProvider->Property(ui_crown_player);
