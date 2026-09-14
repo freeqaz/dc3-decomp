@@ -105,6 +105,13 @@ BEGIN_LOADS(RndMeshDeform)
     // it re-tests the accumulator and re-materialises 0/1 before the store,
     // which is the u8->bool conversion (96.152 -> 97.2). Behaviour is identical:
     // an `&&` chain yields 0 or 1 either way.
+    //
+    // REFUTED (measured, do not re-try): rewriting the three continuation lines
+    // as `if (isIdentity) isIdentity = ...;` to try to buy the target's
+    // jump-threading -- the target sends groups 1-3's false exits straight to
+    // the shared `li r11,0` while we walk each subsequent test. Identical
+    // canonical 97.2 and two MORE register rows (63 -> 65 diff_arg, a 5th swap
+    // pair). The threading is a backend choice here, not a source shape.
     unsigned char isIdentity =
         mMeshInverse.v.x == 0 && mMeshInverse.v.y == 0 && mMeshInverse.v.z == 0;
     isIdentity = isIdentity && mMeshInverse.m.x.x == 1 && mMeshInverse.m.x.y == 0
