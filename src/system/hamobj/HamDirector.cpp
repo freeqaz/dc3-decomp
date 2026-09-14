@@ -1674,6 +1674,10 @@ void HamDirector::EnableFacialAnimation() {
     }
 }
 
+// RESIDUAL (w7-aq, 99.3 canonical): 3 of the 4 remaining rows are the frame
+// size alone -- retail reserves 0x1e0, we reserve 0x1d0. Every user slot pairs
+// MATCH (0x50 playerDiff/Symbol temp, 0x58 DataNode, 0x60 Symbol, 0x70 buf),
+// so the extra 0x10 is dead space above buf that no live local explains.
 Symbol HamDirector::ClosestMove() {
     char buf[256];
     Symbol out = mPrevMove;
@@ -1712,6 +1716,13 @@ Symbol HamDirector::ClosestMove() {
                                     unsigned char bufCh = buf[p - candidate];
                                     if (bufCh == '\0')
                                         break;
+                                    // RESIDUAL (w7-aq, 99.3 canonical): the
+                                    // image emits an extra, provably redundant
+                                    // `clrlwi r11, r11, 24` between the zero
+                                    // test and this sign-extension. Refuted:
+                                    // a named `char bufChar = bufCh;`
+                                    // intermediate, and widening bufCh to
+                                    // `unsigned int` -- both byte-inert.
                                     int bufLower = tolower((char)bufCh);
                                     // 0x824744BC is `cmpw cr6, r3, r22`:
                                     // tolower(*p) is the left operand.
