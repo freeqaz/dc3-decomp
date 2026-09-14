@@ -98,13 +98,22 @@ bool RndEnviron::Replace(ObjRef *from, Hmx::Object *to) {
 INIT_REVS(0x10, 0)
 
 BEGIN_LOADS(RndEnviron)
-    LOAD_REVS(bs)
+    int revs;
+    bs >> revs;
+    BinStreamRev d(bs, revs);
     ASSERT_REVS(0x10, 0)
     if (d.rev > 1)
         LOAD_SUPERCLASS(Hmx::Object)
+    // NOT an if/else.  The image tests rev twice (0x82652F4C and
+    // 0x82652F60): `DumpLoad` on rev < 3, and the two base-class Loads only
+    // on rev > 0xF -- which is the rev DC3 bumped to when it started saving
+    // them.  As an else-branch we called RndDrawable::Load and
+    // RndTransformable::Load for every rev in 3..0xF, which desynchronises
+    // the stream by two whole objects for any environ saved at those revs.
     if (d.rev < 3) {
-        RndDrawable::DumpLoad(bs);
-    } else {
+        RndDrawable::DumpLoad(d.stream);
+    }
+    if (d.rev > 0xF) {
         LOAD_SUPERCLASS(RndDrawable)
         LOAD_SUPERCLASS(RndTransformable)
     }
@@ -114,9 +123,7 @@ BEGIN_LOADS(RndEnviron)
         d >> mLightsReal;
         d >> mLightsApprox;
     }
-    d >> mAmbientColor;
-    d >> mFogStart;
-    d >> mFogEnd;
+    d.stream >> mAmbientColor >> mFogStart >> mFogEnd;
     if (d.rev < 1) {
         int dummy;
         d >> dummy;
@@ -132,15 +139,12 @@ BEGIN_LOADS(RndEnviron)
     if (d.rev > 3)
         d >> mAnimateFromPreset;
     if (d.rev > 4) {
-        d >> mFadeOut;
-        d >> mFadeStart;
-        d >> mFadeEnd;
+        d >> mFadeOut >> mFadeStart >> mFadeEnd;
         if (d.rev > 5)
             d >> mFadeMax;
     }
     if (d.rev > 8) {
-        d >> mFadeRef;
-        d >> (Hmx::Color &)mLRFade;
+        d.stream >> mFadeRef >> (Hmx::Color &)mLRFade;
     }
     if (d.rev > 6) {
         d >> mAmbientFogOwner;
@@ -160,10 +164,7 @@ BEGIN_LOADS(RndEnviron)
         d >> mAOStrength;
     }
     if (d.rev > 0xA) {
-        d >> mIntensityRate;
-        d >> mExposure;
-        d >> mWhitePoint;
-        d >> mUseToneMapping;
+        d >> mIntensityRate >> mExposure >> mWhitePoint >> mUseToneMapping;
     }
     if (d.rev == 0xB) {
         int dummy;
