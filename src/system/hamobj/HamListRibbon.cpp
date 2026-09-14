@@ -513,13 +513,16 @@ void HamListRibbon::Draw(
 
     // Set up selectAllAnim
     if (mSelectAllAnim) {
-        float frame;
+        // The call is written out in BOTH arms: the image duplicates the
+        // vtable load (`lwz r11, 0x0(r3) / lwz r11, 0xc(r11) / mtctr` at
+        // 0x824835D4 and again at 0x824835EC) and shares only the `bctrl`
+        // at 0x82483600, which a single call site with a merged `frame`
+        // temp cannot produce.
         if (mMode == kRibbonSelect && !mTestEntering && !mSelectToggle) {
-            frame = GetFrame();
+            mSelectAllAnim->SetFrame(GetFrame(), 1.0f);
         } else {
-            frame = 0.0f;
+            mSelectAllAnim->SetFrame(0.0f, 1.0f);
         }
-        mSelectAllAnim->SetFrame(frame, 1.0f);
     }
 
     // Set up enterAnim
