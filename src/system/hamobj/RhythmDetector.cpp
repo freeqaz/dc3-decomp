@@ -43,11 +43,13 @@ namespace {
     ) {
         unsigned int numFrames = frames.size();
         float totalWeightedScore = 0.0f;
+        // Both accumulators are zeroed before the frame-count test in the
+        // image: `fmr f26, f29` and `fmr f28, f29` at 824D30AC/824D30B0 sit
+        // ahead of `cmplwi cr6, r11, 0xa` / `blt cr6` at 824D30B4.
+        float totalRaw = 0.0f;
         float timeScale = (float)numFrames * 0.025f;
 
         if (numFrames >= 10) {
-            float totalRaw = 0.0f;
-
             for (int jointIdx = 0; jointIdx < 20; jointIdx++) {
                 const std::vector<float> &weights = jointWeight();
                 float w = weights[jointIdx];
@@ -169,12 +171,12 @@ namespace {
                                 const char *conv = *convPtr;
                                 for (int offset = 0; offset < kConvLen; offset++) {
                                     float convSum = 0.0f;
+                                    unsigned int ci = 0;
                                     if (normCount != 0) {
                                         float *normPtr = &normalized[0];
-                                        unsigned int i = 0;
                                         do {
                                             float val = *normPtr;
-                                            int idx = (int)(i + offset) % kConvLen;
+                                            int idx = (int)(ci + offset) % kConvLen;
                                             if (conv[idx] == '-') {
                                                 val = val * -1.0f;
                                             } else if (conv[idx] == '0') {
@@ -182,8 +184,8 @@ namespace {
                                             }
                                             convSum += val;
                                             normPtr++;
-                                            i++;
-                                        } while (i < normCount);
+                                            ci++;
+                                        } while (ci < normCount);
                                     }
                                     if (convSum > bestConv) {
                                         bestConv = convSum;
@@ -225,7 +227,10 @@ namespace {
 
             outScore = (totalWeightedScore / clampedRaw) * timeScale;
 
-            outEnergy = totalRaw >= 200.0f ? totalRaw : 0.0f;
+            // Polarity is the image's: `fcmpu cr6, f28, f0` / `bge cr6,
+            // .L_824D3658` at 824D3634/824D364C falls THROUGH to `fmr f0,
+            // f29` (0.0f) and branches to `fmr f0, f28` (totalRaw).
+            outEnergy = totalRaw < 200.0f ? 0.0f : totalRaw;
 
             // Debug summary
             if (stream) {
