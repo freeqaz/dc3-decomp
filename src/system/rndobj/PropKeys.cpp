@@ -916,18 +916,27 @@ void SymbolKeys::SetFrame(float frame, float blend, float) {
             case kStep: {
                 int loc8c = -1;
                 int loc90 = -1;
+                // The image zeroes three words at 0xb8..0xc0 here and carries
+                // 16 more bytes of frame for them; nothing ever reads them.
+                // That is an empty std::vector<Symbol> whose destructor folds
+                // away because MSVC can prove it never allocates.  RB3's
+                // decomp of the same function has the same dead local.
+                std::vector<Symbol> unusedSymbols;
                 KeysLessEq(frame, loc8c, loc90);
                 if (loc8c != -1) {
-                    int i = loc8c;
                     if (mClampToPrevRange) {
                         MinEq(loc8c, mPrevRangeLast + 1);
-                        i = loc8c;
                     }
-                    for (; i <= loc90; i++) {
+                    for (int i = loc8c; i <= loc90; i++) {
                         Key<Symbol> &cur = (*this)[i];
                         if (i < mPrevRangeFirst || i > mPrevRangeLast) {
                             mTarget->SetProperty(mProp, cur.value);
                         }
+                        // The image copies the loop index into idx on every
+                        // iteration (mr r24, r30 at the loop tail), so the
+                        // step arm leaves mLastKeyFrameIndex at the last key
+                        // index it applied, not at 0.
+                        idx = i;
                     }
                 }
                 mPrevRangeFirst = loc8c;
