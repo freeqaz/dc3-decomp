@@ -1101,8 +1101,7 @@ void HamNavList::RealRefresh() {
                 mListState.SetScrollPastMaxDisplay(numShowing > maxDisplay);
             } else {
                 mListState.SetScrollPastMinDisplay(false);
-                int sel = mListState.Selected();
-                mListState.SetSelected(sel, -1, true);
+                mListState.SetSelected(mListState.Selected(), -1, true);
             }
         }
     }
