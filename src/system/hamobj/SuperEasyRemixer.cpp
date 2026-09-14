@@ -190,6 +190,22 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
                 TheGameData->GetSong().Str()
             );
         }
+        // NEGATIVE RESULT (w7-bg): LoadAllVariants floors at 99.57% canonical,
+        // 4 charged rows of 239.  Two of them are the vector-size load order:
+        // the image loads `_M_start` (0x0) and then `_M_finish` (0x4)
+        //   824F6D5C lwz r11, 0x0(r28) / 824F6D64 lwz r10, 0x4(r28)
+        //           / subf r10, r11, r10 / divw r10, r10, r25
+        // while `size()` as spelled in stl/_vector.h (`_M_finish - _M_start`)
+        // makes MSVC load 0x4 first.  The third is an extra `lwz r11, 0x0(r29)`
+        // at the top of the loop body: the image keeps `_M_start` live in r11
+        // from the bottom-of-loop size computation and reuses it for
+        // `mRoutine[i]`, we reload it.
+        // Refuted: `i < data->mRoutine.end() - data->mRoutine.begin()`,
+        // which was the obvious way to flip the operand order -> 98.46%, worse.
+        // The SAME (0x0,0x4) signature shows up on SaveSuperEasyMoveParents
+        // (98.44%), GetRows in net_ham/ChallengeSystemJobs (98.97%) and
+        // MoveGraph::FindVariantPair (98.10%), so it is a property of how
+        // stlport's `size()` is spelled, not of this call site.
         for (int i = 0; i < data->mRoutine.size(); i++) {
             HamSupereasyMeasure &curMeasure = data->mRoutine[i];
             // The image FALLS BACK from `preferred` to `first`.  At 0x824F6F08
@@ -299,6 +315,22 @@ void SuperEasyRemixer::LoadAllVariants() {
     MILO_ASSERT(hamMoves, 0x12D);
     HamSupereasyData *data = ObjDirItr<HamSupereasyData>(hamMoves, false);
     if (data) {
+        // NEGATIVE RESULT (w7-bg): LoadAllVariants floors at 99.57% canonical,
+        // 4 charged rows of 239.  Two of them are the vector-size load order:
+        // the image loads `_M_start` (0x0) and then `_M_finish` (0x4)
+        //   824F6D5C lwz r11, 0x0(r28) / 824F6D64 lwz r10, 0x4(r28)
+        //           / subf r10, r11, r10 / divw r10, r10, r25
+        // while `size()` as spelled in stl/_vector.h (`_M_finish - _M_start`)
+        // makes MSVC load 0x4 first.  The third is an extra `lwz r11, 0x0(r29)`
+        // at the top of the loop body: the image keeps `_M_start` live in r11
+        // from the bottom-of-loop size computation and reuses it for
+        // `mRoutine[i]`, we reload it.
+        // Refuted: `i < data->mRoutine.end() - data->mRoutine.begin()`,
+        // which was the obvious way to flip the operand order -> 98.46%, worse.
+        // The SAME (0x0,0x4) signature shows up on SaveSuperEasyMoveParents
+        // (98.44%), GetRows in net_ham/ChallengeSystemJobs (98.97%) and
+        // MoveGraph::FindVariantPair (98.10%), so it is a property of how
+        // stlport's `size()` is spelled, not of this call site.
         for (int i = 0; i < data->mRoutine.size(); i++) {
             // BEHAVIOURAL FIX 2026-09-14 (w7-q): this read `.second` (offset
             // 0x4, "MoveVariant to use for transition OUT of measure").  The

@@ -40,7 +40,7 @@ protected:
     bool mReadInProgress; // 0x40
     bool mWriteInProgress; // 0x41
     OVERLAPPED mOverlapped; // 0x44
-    bool unk58;
+    unsigned char unk58;
     void *unk5c;
     void *unk60;
     int unk64;

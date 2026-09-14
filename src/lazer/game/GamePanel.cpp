@@ -688,10 +688,9 @@ void GamePanel::UpdateLatency() {
         static bool sLastBtn = false;
         JoypadData *pad = JoypadGetPadData(joyNum);
         if (pad != nullptr) {
-            bool pressed = ((1 << pad_button.Int(nullptr)) & pad->mButtons) != 0;
-            bFlash = pressed;
-            bJustPressed = pressed && !sLastBtn;
-            sLastBtn = pressed;
+            bFlash = ((1 << pad_button.Int(nullptr)) & pad->mButtons) != 0;
+            bJustPressed = bFlash && !sLastBtn;
+            sLastBtn = bFlash;
         }
     }
     gGamePanelCallback.unk4 = bFlash;

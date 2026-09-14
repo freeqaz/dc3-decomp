@@ -214,6 +214,17 @@ DataArray *FlowTrigger::GetEventEditorDef(Symbol s) {
             return a;
     }
     return nullptr;
+    // NEGATIVE RESULT (w7-bg): floor at 99.35% canonical, 2 of 184 rows.
+    // The image tests the two pointers in DIFFERENT condition-register fields --
+    // 82424B38 `cmplwi cr6, r3, 0x0` / `beq cr6` for eval->Array(1), then
+    // 82424B4C `cmplwi r3, 0x0` (cr0) / `bne` for FindArray's result -- while we
+    // emit cr0 for both. Refuted spellings, all built full-ninja in the worktree:
+    //   * a separate `DataArray *found = a->FindArray(s, false);` local  -> INERT (99.35, same 2 rows)
+    //   * flattened early returns (`if (!a) return nullptr;` twice)      -> WORSE (98.5, 4 rows)
+    //   * short-circuit `if (a && (a = a->FindArray(s, false)))`         -> INERT (99.35, same 2 rows)
+    // Nothing in the source spelling steers MSVC's CR-field choice here; this is
+    // condition-register allocation, not control-flow shape. Do not re-permute
+    // without a new lever.
 }
 
 void FlowTrigger::RegisterEvents() {

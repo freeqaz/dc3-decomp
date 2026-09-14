@@ -272,6 +272,21 @@ void XboxContentMgr::StartRefresh() {
                 }
                 // The `== 0` and `!= 0 { continue; }` spellings compile
                 // byte-identically here; the readable one is kept.
+                // NEGATIVE RESULT (w7-bg): StartRefresh floors at 99.12%
+                // canonical, 5 of 252 rows, from two causes, neither reachable
+                // from the source spelling:
+                //  (1) TAIL-MERGE DIRECTION.  The image hosts the shared
+                //      `li r3, 0xff` (param = 0xff) at the END of the i==5 arm
+                //      and branches BACKWARD into it from i==6
+                //      (825EC03C `li r5, 0x1` / 825EC040 `li r3, 0xff` /
+                //       825EC054 `li r5, 0x7000` / 825EC058 `b .L_825EC040`).
+                //      We host it in the i==6 arm and branch forward from i==5.
+                //      Writing the i==6 arm flags-first, so both arms end in
+                //      `param = 0xff` exactly as the image's do, only MIRRORS
+                //      the merge -- measured 98.73%, one row WORSE.
+                //  (2) CR-FIELD SELECTION on the enumerator result:
+                //      825EC0xx `cmplwi cr6, r3, 0x0` where we emit cr0.  Same
+                //      class as FlowTrigger::GetEventEditorDef; see its note.
                 if (XContentCreateCrossTitleEnumerator(param, 0, flags, 0, 1, 0, handle)
                     == 0) {
                     mOverlappeds[i] = new XOVERLAPPED;
