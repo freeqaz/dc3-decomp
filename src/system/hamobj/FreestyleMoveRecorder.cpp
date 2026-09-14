@@ -180,10 +180,16 @@ void FreestyleMoveRecorder::Poll() {
             void *texels = nullptr;
             streamTex->TexelsLock(texels);
             if (texels) {
-                int playerIdx = mSkeletonIndex;
+                // Through a reference: the image forms &mTakes[i] for real
+                // (`addi r10, r11, 0x48`, target idx 79) and then stores the
+                // member at a displacement off the array base (`stw r6,
+                // 0x54(r11)`, idx 80).  Subscripting inline instead lets MSVC
+                // fold 0x48 into the index (`addi r10, r10, 0x3` + `stwx`).
                 unsigned short *colSrc = (unsigned short *)texels;
-                mTakes[mCurrentTakeIndex].unkc = playerIdx;
+                int playerIdx = mSkeletonIndex;
                 int col = 0;
+                FreestyleMove &take = mTakes[mCurrentTakeIndex];
+                take.unkc = playerIdx;
                 do {
                     // dst is REBUILT from depthDst every column
                     // (0x82524DB4 `add r10, r8, r28` / 0x82524DBC
