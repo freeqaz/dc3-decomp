@@ -130,6 +130,18 @@ const _s_RTTIBaseClassDescriptor *FindSITargetTypeInstance(
 // Multiple (non-virtual) inheritance: the same type can occur more than once,
 // so a candidate is only accepted when the source sub-object it was found
 // alongside actually lives at SrcOffset within the complete object.
+//
+// RESIDUAL w7-at, 93.77 canonical, 440 B.  The arithmetic and the control
+// flow are already the image's; what is left is block placement plus a
+// volatile r8/r9 naming swap through the whole scan loop.  Two placement
+// rows: (a) the image falls out of the `i < numBaseClasses` loop into a
+// SHARED `return 0` epilogue at 0x8299DF50, where we tail-duplicate
+// `li r3, 0x0` + `b __restgprlr_25` inline; (b) at 0x8299DF04 it tests
+// `iTarget != 0` with `bne` straight to the return and falls through to
+// the pBase NOTVISIBLE check, where we emit `beq` to the check plus an
+// unconditional `b`.  Hoisting the BCD_HASPCHD arm to a positive early
+// return (so the `iTarget != 0` test becomes the fallthrough) was measured
+// and is WORSE: 93.77 -> 88.3.
 const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
     void *pCompleteObject, const _s_RTTICompleteObjectLocator *pCompleteLocator,
     TypeDescriptor *pSrcType, int SrcOffset, TypeDescriptor *pTargetType
