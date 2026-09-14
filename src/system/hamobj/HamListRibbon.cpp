@@ -449,14 +449,28 @@ void HamListRibbon::DrawRibbon(
         }
         mLabelPlaceholder->SetShowing(showLabel);
         mLabelPlaceholder->mCanHaveFocus = true;
+        // RESIDUAL (w7-as, 4 rows): the image does NOT pass the bool straight
+        // through here.  It materialises the enumerator with a real BRANCH --
+        //   li r4, 0x1 / lbz r11, 0x14(r24) / cmplwi r11, 0x0 /
+        //   ... / bne <bctrl> / li r4, 0x0
+        // -- with the compare and its branch scheduled around the three vtable
+        // loads.  NEGATIVE RESULT (2026-09-14): neither source form that
+        // *should* produce that branch does.  MSVC if-converts both:
+        //   `state.mSelected ? kFocused : kNormal`        -> subic/subfe, 92.5
+        //   `State s = kFocused; if (!sel) s = kNormal;`  -> subfic/subfe/and, 93.4
+        // The plain cast below leaves the four target instructions unpaired but
+        // scores 94.3, and is the only spelling of the three that does not also
+        // rotate the callee-saved set.
         mLabelPlaceholder->SetState((UIComponent::State)(int)state.mSelected);
 
-#ifdef HX_NATIVE
-        UIListElementDrawState *elem = state.mElemDrawState;
-#else
-        UIListElementDrawState *elem = (UIListElementDrawState *)state.mElemDrawState;
-#endif
-        if (elem) {
+        // Re-read through the cast at every use rather than caching a named
+        // `elem` local: the image reloads `lwz r11, 0x18(r24)` THREE times
+        // (0x8248329C, 0x824832C8, 0x824832E8) and keeps nothing in a
+        // callee-saved register for it.  A named local pins r31 for the whole
+        // block, which pushed `this` out of r31 into r30 and rotated 23 rows.
+        // (The cast is an identity cast on native, where mElemDrawState is
+        // already the pointer, so the old #ifdef is not needed.)
+        if ((UIListElementDrawState *)state.mElemDrawState) {
             // These are per-axis SCALE factors, not colours: the target's two
             // statics each take exactly three stores and never touch +0xc, which
             // Hmx::Color cannot do (both its 3- and 4-arg ctors write alpha).
@@ -469,24 +483,40 @@ void HamListRibbon::DrawRibbon(
             const Transform &labelXfm = mLabelPlaceholder->WorldXfm();
             Vector3 pos = labelXfm.v;
             pos.z += ribbonXfm.v.z;
-            *(Vector3 *)&elem->mPosX = pos;
+            *(Vector3 *)&((UIListElementDrawState *)state.mElemDrawState)->mPosX = pos;
 
-            float alpha = GetLabelTotalAlpha();
-            memcpy(&elem->mData, &alpha, sizeof(float));
+            // BUG FIX (w7-as, 2026-09-14): this wrote the label alpha into
+            // `mData` (offset 0x38, an int) via memcpy.  The image stores it as
+            // a FLOAT into offset 0x24, which is `mAlpha`:
+            //   0x824832C8  lwz  r11, 0x18(r24)
+            //   0x824832CC  stfs f1,  0x24(r11)
+            // -- a bare `stfs`, so the destination is a float, and 0x24 is the
+            // only float at that offset.  We wrote 0x38 and had to round-trip
+            // the value through a stack slot (`stfs f1, 0x50(r1)` /
+            // `lwz r10, 0x50(r1)` / `stw r10, 0x38(r31)`), which is also where
+            // our extra 0x10 of frame came from.
+            ((UIListElementDrawState *)state.mElemDrawState)->mAlpha =
+                GetLabelTotalAlpha();
 
             Vector3 *scale = &sBigScale;
             if (state.mBigScale == 0.0f) {
                 scale = &sNormalScale;
             }
-            *(Vector3 *)&elem->mScaleX = *scale;
+            *(Vector3 *)&((UIListElementDrawState *)state.mElemDrawState)->mScaleX =
+                *scale;
         }
     }
 
     float savedAlpha;
     if (TheLoadMgr.EditMode() && mLabelPlaceholder) {
         savedAlpha = ((const UILabel *)(HamLabel *)mLabelPlaceholder)->Style(0).GetAlpha();
-        float totalAlpha = GetLabelTotalAlpha();
-        mLabelPlaceholder->Style(0).SetAlpha(totalAlpha);
+        // The label pointer is read BEFORE GetLabelTotalAlpha() clobbers the
+        // volatiles -- `lwz r30, 0x31c(r31)` at 0x82483334 sits above the call,
+        // and the call site is then just `mr r3, r30`.  Written as
+        // `mLabelPlaceholder->Style(0).SetAlpha(t)` MSVC evaluates the argument
+        // first (right to left) and re-loads 0x31c afterwards.
+        HamLabel *label = mLabelPlaceholder;
+        label->Style(0).SetAlpha(GetLabelTotalAlpha());
     }
 
     SetWorldXfm(tempXfm);
@@ -540,7 +570,12 @@ void HamListRibbon::Draw(
     int visibleCount = scrollable ? sNumListSelectable - 1 : numItems;
 
     // Calculate padding per side
-    int paddingPerSide = Max((mPaddedSize - numItems + 1) / 2, 0);
+    // Argument order matters: `Max(0, x)` expands to `(0 < x) ? x : 0`, whose
+    // mask is a full two-register signed compare against the zero MSVC already
+    // holds in r14 (0x82483694 srwi r9,r14,31 / 0x824836A4 subfc r10,r11,r10 /
+    // 0x824836AC subfe r10,r9,r8).  `Max(x, 0)` is `(x < 0) ? 0 : x`, a
+    // three-instruction sign-bit mask that is a row shorter and mismatches.
+    int paddingPerSide = Max(0, (mPaddedSize - numItems + 1) / 2);
 
     // Build padded draw states vector
     std::vector<HamListRibbonDrawState> paddedStates;
@@ -555,7 +590,17 @@ void HamListRibbon::Draw(
 
     // Handle scrollable vs non-scrollable
     int startOffset = 0;
-    if (!scrollable) {
+    // BUG FIX (w7-as, 2026-09-14): the two arms were swapped.  The image tests
+    // `scrollable` and takes the half-2 / clamp-mTestSelectedIndex path when it
+    // is TRUE, and only resets the scroll animation when it is FALSE:
+    //   0x82483738  cmplwi cr6, r25, 0x0      ; r25 = (numItems > 6)
+    //   0x8248373C  beq    cr6, .L_8248376C   ; NOT scrollable -> mScrollAnim
+    //   0x82483740  srawi  r11, r23, 1        ; scrollable -> numItems/2 - 2
+    //   ...
+    //   0x8248376C  lwz    r3, 0x208(r28)     ; mScrollAnims.mScrollAnim
+    // We clamped the selected index for short lists and reset the scroll anim
+    // for long ones -- exactly backwards.
+    if (scrollable) {
         int half = numItems / 2;
         startOffset = half - 2;
         if (mTestSelectedIndex < startOffset || mTestSelectedIndex > startOffset + 4) {
@@ -591,6 +636,19 @@ void HamListRibbon::Draw(
     unsigned int selectedIdx = 0xFFFFFFFF;
     Transform selectedXfm;
 
+    // RESIDUAL (w7-as, 96.2 canonical): what is left is one block-placement
+    // difference plus its register knock-on.  The image parks the
+    // `inRange ? mSpacing : mPaddedSpacing` select at 0x82483890, i.e. BELOW the
+    // `if (!mSelected)` body at 0x824838A0, and branches back up to it from all
+    // three predecessors (`b 0x360` at 0x8248389C and 0x824838C4); it also keeps
+    // `ribbonXfm.v.z` cached in f30 across the loop, reloading it only after the
+    // DrawRibbon call (`lfs f30, 0xb8(r31)`).  We lay the select out after the
+    // body and reload v.z into f13 at the subtraction.  The `stb r26, 0x74(r31)`
+    // at index 70 is a base-only home store for `scrollable` (no target
+    // instruction references 0x74(r31) at all); `int scrollable` instead of
+    // `bool` removes it but costs 5.6pp of register allocation -- 96.2 -> 90.6.
+    // The (0xb0, 0xb4) store swap is inside the inlined Transform::Reset(), in
+    // PCH-reached math/Mtx.h, which this lane may not touch.
     unsigned int totalPadded = paddedStates.size();
     for (unsigned int i = 0; i < totalPadded; i++) {
         bool inRange = ((int)i >= startOffset + paddingPerSide)
@@ -605,6 +663,10 @@ void HamListRibbon::Draw(
             }
         }
 
+        // NEGATIVE RESULT (w7-as, 2026-09-14): inlining this as
+        // `ribbonXfm.v.z -= inRange ? mSpacing : mPaddedSpacing;` keeps the same
+        // 96.2 canonical but adds a commutative-operand row at the
+        // `add r29, r11` index computation -- kept the named `step`.
         float step = inRange ? mSpacing : mPaddedSpacing;
         ribbonXfm.v.z -= step;
     }

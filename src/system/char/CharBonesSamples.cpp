@@ -565,6 +565,20 @@ int CharBonesSamples::FracToSample(float *frac) const {
     }
 }
 
+// RESIDUAL (w7-as, 88.0 canonical): 46 of the 89 rows are one fact -- the two
+// callee-saved GPRs carry the OPPOSITE variables.  Retail puts `dest` in r31
+// (`mr r31, r4` at 0x823E1224) and `srcNext` in r30 (`add r30, r10, r3` at
+// 0x823E1378); we put `dest` in r30 and `srcNext` in r31.  Prologue, frame size
+// (0xd0), saved-register set (r30/r31/f31) and every live range are otherwise
+// identical, so this is the allocator walking its callee-saved list in the other
+// direction, not a liveness difference we can spell.  NEGATIVE RESULT
+// (2026-09-14): joining the frac != 0 ROTX arm into a single `val` temporary and
+// one store -- which is what retail's shared tail at 0x823E1504 looks like -- is
+// byte-for-byte inert (89 rows before and after).  The remaining insert/delete
+// pairs are the physical placement of that shared store (retail keeps the copy
+// in the frac != 0 block and jumps to it from the frac == 0 arms; we keep it in
+// the frac == 0 block) and the interleaving of the six `lha`s in the
+// kCompressVects arms, which the notes below already cover.
 void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, float frac) {
     char *src = mRawData + mTotalSize * sample + byteOffset;
     if (frac == 0.0f) {

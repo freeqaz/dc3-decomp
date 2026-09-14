@@ -57,6 +57,20 @@ RndTex *NgLight::CreateShadowTex() {
     return tex;
 }
 
+// RESIDUAL (w7-as, 63.1 canonical): instructions 5..62 match EXACTLY -- both
+// WorldXfm() expansions, `sc -= xfm1.v`, the three fmuls and both early
+// returns.  Everything after that is one problem: we keep too much alive.
+// Target prologue saves r27-r31 + f30/f31 with `stwu r1, -0x100`; ours saves
+// r24-r31 + f26-f31 with `stwu r1, -0x140`.  The STACK SLOT SET is identical
+// (0x50..0xb8, seven 16-byte Vector3 slots, all of them reused two or three
+// times) -- `run_diff_inspect mode=stack-layout` reports 10 DIFFER / 11
+// PERMUTED and 0 target-only / 0 base-only slots -- so this is not a
+// declaration-count problem.  The image materialises every `addi rN, r1,
+// <slot>` into a VOLATILE register next to the copy that uses it; we hoist
+// four of them into r24/r25/r27/r31 and five float loads into f26-f30, which
+// is the whole +0x38 of callee-saved area plus the register permutation that
+// dominates the row count (90 instructions across 20 pairs).  Fixing it needs
+// the copies re-ordered so each address dies immediately, not a slot removed.
 bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     const Transform &xfm1 = WorldXfm();
     const Transform &xfm2 = WorldXfm();
@@ -93,8 +107,14 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     float botR = mBotRadius;
 
     Vector3 topPoint = xfm1.v;
-    Vector3 dirBot = dir;
+    // dirTop is declared first because the image claims its slot first: the
+    // two 16-byte copies out of `dir` go 0x70 -> 0xa0 (dirTop, the one later
+    // scaled by mTopRadius at 0xa4/0xa8) and only then 0x70 -> 0xb0 (dirBot).
+    // Worth one callee-saved FPR and 0x10 of frame: with this order the
+    // prologue is __savefpr_26 and the frame Δ is +0x40, the other way round
+    // it is __savefpr_25 and +0x50.
     Vector3 dirTop = dir;
+    Vector3 dirBot = dir;
     Vector3 axisRange = xfm2.m.y;
     Vector3 botPoint = xfm1.v;
     Vector3 toSphere = sphereCenter;
@@ -116,7 +136,27 @@ bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     Vector3 edgeDir = conePoint;
     edgeDir -= topPoint;
 
-    float t = Dot(toSphere, edgeDir) / Dot(edgeDir, edgeDir);
+    // The image divides ONE into the squared length and multiplies; it does
+    // NOT divide numerator by denominator.  0x826B9414 `lis r8,
+    // __real@3f800000@ha` / 0x826B9424 `lfs f7, __real@3f800000@l(r8)`, then
+    // `fdivs f12, f7, f12` and `fmuls f12, f12, f13`.  A plain `a / b` emits a
+    // single `fdivs f12, f12, f13` here and the 1.0f literal never appears at
+    // all -- /fp:fast does NOT introduce the reciprocal on its own (we are
+    // built with it, and it did not), so the reciprocal is in the source.
+    // Different arithmetic, not just different instructions.
+    //
+    // NEGATIVE RESULT (w7-as, 2026-09-14): this is a deliberate LOSS.  Faithful
+    // reciprocal + faithful dirTop/dirBot order = 63.1 canonical; the unfaithful
+    // `Dot(a,b) / Dot(b,b)` + reversed order scored 65.6.  Measured 4 ways:
+    //   plain divide, dirBot first  65.6   (single fdivs, no 1.0f -- unfaithful)
+    //   plain divide, dirTop first  62.3
+    //   reciprocal,   dirBot first  61.9
+    //   reciprocal,   dirTop first  63.1   <- kept
+    // The reciprocal row itself MATCHES in the kept spelling; the 2.5pp is
+    // paid in where MSVC schedules the `lis`/`lfs` pair and the regalloc that
+    // follows it.
+    float invEdgeLenSq = 1.0f / Dot(edgeDir, edgeDir);
+    float t = Dot(toSphere, edgeDir) * invEdgeLenSq;
 
     Vector3 scaled = edgeDir;
     scaled *= t;
