@@ -993,15 +993,18 @@ int SymbolKeys::SymbolAt(float frame, Symbol &sym) {
     return AtFrame(frame, sym);
 }
 
-void ObjRefRelinkRing(ObjRef *ref) {
-    if (ref->next != ref) {
-        ref->next->prev = ref;
-        ref->prev->next = ref;
-    }
-}
-
 #ifndef HX_NATIVE
-// swap specialization for Key<ObjectStage>
+// swap specialization for Key<ObjectStage>.
+//
+// `temp` is destroyed on the way out and ~ObjPtr UNLINKS it from the ObjRef
+// ring -- that is the whole tail block, inlined:
+//     lwz r11, 0x5c(r1)      ; temp.value.mObj
+//     cmplwi cr6, r11, 0x0
+//     beq   cr6, .L_8268BEA4
+//     next->prev = prev; prev->next = next
+// There is nothing to relink by hand, and the ObjRefRelinkRing helper that
+// used to be called here was a decomp invention: it appears nowhere in the
+// target listing and nowhere in symbols.txt.
 template<>
 void stlpmtx_std::swap<class Key<class ObjectStage> >(class Key<class ObjectStage> &a, class Key<class ObjectStage> &b) {
     Key<ObjectStage> temp(a);
@@ -1009,7 +1012,6 @@ void stlpmtx_std::swap<class Key<class ObjectStage> >(class Key<class ObjectStag
     a.frame = b.frame;
     b.value.CopyRef(temp.value);
     b.frame = temp.frame;
-    ObjRefRelinkRing(&temp.value);
 }
 #endif
 

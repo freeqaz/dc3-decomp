@@ -80,14 +80,11 @@ public:
     virtual bool Replace(ObjRef *from, Hmx::Object *to) = 0;
 };
 
-void ObjRefRelinkRing(ObjRef *ref);
-
 // ObjRef size: 0xc
 /** A circular doubly linked list to track an Object's refs. */
 class ObjRef {
     friend class Hmx::Object;
     friend void ::MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
-    friend void ::ObjRefRelinkRing(ObjRef *);
 
 protected:
     ObjRef *next; // 0x4
