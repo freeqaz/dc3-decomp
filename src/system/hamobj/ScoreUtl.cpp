@@ -38,9 +38,10 @@ int RatingStateToIndex(Symbol s) {
 
 float RatingToRatingFrac(Symbol rating) {
     unsigned int numRatings = sRatingStates.size();
+    int lastIdx = numRatings - 1;
     for (unsigned int i = 0; i < numRatings; i++) {
         if (rating == sRatingStates[i]) {
-            return (float)(int)(numRatings - 1 - i) / (float)(int)(numRatings - 1);
+            return (float)(int)(lastIdx - i) / (float)lastIdx;
         }
     }
     MILO_NOTIFY("Could not find rating (%s)", rating);
