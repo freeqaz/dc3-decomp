@@ -31,10 +31,25 @@ AllocInfo::AllocInfo(
     int line,
     String &str1,
     String &str2
-)
-    : mReqSize(requestedSize), mActSize(actualSize), mType(type), mMem(mem), mHeap(heap),
-      mPooled(pooled), mStrat(strat), mFile(file), mLine(line),
-      unk1d(s_pTrie->store(str1.c_str())), unk21(s_pTrie->store(str2.c_str())) {
+) {
+    // Body assignments, NOT a member-init list, and mFile HOISTED above the
+    // three byte members: MSVC forces an init list into DECLARATION order, and
+    // the image's store order is not declaration order -- it runs
+    // 0x0, 0x4, 0x8, 0xc, 0x15, then the bytes 0x10/0x11/0x14, then 0x19.
+    // Putting `mFile = file` ahead of the bytes here is worth 6.3pp
+    // (88.66 -> 95.0); an init list, or body assignments in declaration
+    // order, both read 88.66 and hoist mStrat/mPooled to the very front.
+    mReqSize = requestedSize;
+    mActSize = actualSize;
+    mType = type;
+    mMem = mem;
+    mFile = file;
+    mHeap = heap;
+    mPooled = pooled;
+    mStrat = strat;
+    mLine = line;
+    unk1d = s_pTrie->store(str1.c_str());
+    unk21 = s_pTrie->store(str2.c_str());
 #ifdef HX_NATIVE
     // On LP64, mHashMem(8) + mHashTable(8) = mTimeSlice at 0x10
     mTimeSlice = *(short *)((char *)gMemTracker + 0x10);
