@@ -914,23 +914,31 @@ DataNode GamePanel::OnMsg(const EndGameMsg &msg) {
     } else {
         mState = kGameOver;
         mEndGameResult = msg.Result();
+        // The three arms are 8287D4F0-8287D508: `cmpwi cr6, r3, 0x1` /
+        // `beq .L_8287D588` (game_won), `cmpwi 0x2` / `beq .L_8287D534`
+        // (game_won_finale), `cmpwi 0x3` / `beq .L_8287D5DC`.  .L_8287D5DC is
+        // the game_over export, and it is NOT a case body: the default arm
+        // branches to it (8287D530 `b .L_8287D5DC`) and both the game_won and
+        // game_won_finale arms fall into it after their Message destructor's
+        // `bl Release` at 8287D5D8.  So game_over is exported unconditionally
+        // after the switch, case 3 is empty, and game_won/game_won_finale are
+        // 1 and 2 -- we had all three case labels shifted by one.
         switch (mEndGameResult) {
         case 1: {
-            Export(Message("game_over"), true);
-            break;
-        }
-        case 2: {
             Export(Message("game_won"), true);
             break;
         }
-        case 3: {
+        case 2: {
             Export(Message("game_won_finale"), true);
             break;
         }
+        case 3:
+            break;
         default:
             MILO_NOTIFY("bad game over state");
             break;
         }
+        Export(Message("game_over"), true);
     }
     return 1;
 }
