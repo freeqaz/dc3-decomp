@@ -443,21 +443,26 @@ void UIListDir::BuildDrawState(
         if (i == 0) {
             firstGap = gap;
         }
-        float position;
-        float primaryBase;
+        float pos;
         if (state.ShouldHoldDisplayInPlace(dispIndex)) {
-            primaryBase = totalGap;
             if (direction == -1) {
-                position = (float)dispIndex + 1.0f;
+                pos = SetElementPos(
+                    elemPos, (float)dispIndex + 1.0f, state.GridSpan(), totalGap, 0.0f
+                );
             } else {
-                position = (float)dispIndex;
+                pos = SetElementPos(
+                    elemPos, (float)dispIndex, state.GridSpan(), totalGap, 0.0f
+                );
             }
         } else {
-            primaryBase = -((scrollOffset * firstGap) - totalGap);
-            position = (float)dispIndex - scrollOffset;
+            pos = SetElementPos(
+                elemPos,
+                (float)dispIndex - scrollOffset,
+                state.GridSpan(),
+                -((scrollOffset * firstGap) - totalGap),
+                0.0f
+            );
         }
-
-        float pos = SetElementPos(elemPos, position, state.GridSpan(), primaryBase, 0.0f);
 
         float alpha = 1.0f;
         if (!state.ShouldHoldDisplayInPlace(dispIndex)) {
