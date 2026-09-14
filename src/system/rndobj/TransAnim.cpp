@@ -95,6 +95,16 @@ BEGIN_LOADS(RndTransAnim)
     }
     d >> mTrans;
     if (d.rev != 2) {
+        // 2-row residual (lane w7-j, 2026-09-14): the shipped build keeps
+        // &mTransKeys in the callee-saved r30 across the mRotKeys call
+        //     subi r30, r31, 0x34 / bl >>Key<Quat> / mr r4, r30
+        // where we rematerialise it afterwards as `subi r4, r31, 0x34`.  The
+        // other 394 instructions are equal, so this is a register-allocator
+        // rematerialise-vs-keep tie, not a source-shape difference we have
+        // found.  REFUTED: naming a `Keys<Vector3, Vector3> &transKeys =
+        // mTransKeys;` before the statement (MSVC folds the reference, output
+        // byte-identical) and spelling the chain as explicit
+        // `operator>>(operator>>(d, mRotKeys), mTransKeys)` (also identical).
         d >> mRotKeys >> mTransKeys;
     }
     d >> mKeysOwner;
