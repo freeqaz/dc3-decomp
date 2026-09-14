@@ -131,36 +131,47 @@ void CharSignalApplier::Poll() {
     mSmoothedSignal *= Weight();
     if (cur != mBoneOps.end()) {
         do {
-            BoneOp op(0);
-            op = *cur;
+            BoneOp op = *cur;
             RndTransformable *bone = op.mBone;
             if (bone) {
                 Transform boneTf;
                 memcpy(&boneTf, &bone->WorldXfm(), sizeof(Transform));
-                float t = 1.0f;
+                float t;
                 if (mSignalMax != mSignalMin) {
                     t = (mSmoothedSignal * op.mApplyPercent - mSignalMin)
                         / (mSignalMax - mSignalMin);
+                } else {
+                    t = 1.0f;
                 }
                 float angle
                     = ((op.mMaxAngle - op.mMinAngle) * t + op.mMinAngle) * DEG2RAD;
-                Hmx::Matrix3 rotMatX, rotMatY, rotMatZ;
-                Hmx::Matrix3 *rotMat = &rotMatZ;
+                // The Multiply lives INSIDE each case, and MSVC cross-jumps the
+                // three identical tails into the one at 0x823AB2DC -- which is
+                // why `cmplwi r11, 0x3 / bge .L_823AB2EC` (0x823AB2A8) skips the
+                // Multiply entirely for an out-of-range mOp instead of jumping
+                // to it.  Writing it as one call after the switch composes an
+                // UNINITIALISED rotation matrix into the bone transform whenever
+                // mOp >= 3.
                 switch ((unsigned int)op.mOp) {
-                case 0:
+                case 0: {
+                    Hmx::Matrix3 rotMatX;
                     MakeRotMatrixX(angle, rotMatX);
-                    rotMat = &rotMatX;
-                    break;
-                case 1:
-                    MakeRotMatrixY(angle, rotMatY);
-                    rotMat = &rotMatY;
-                    break;
-                case 2:
-                    MakeRotMatrixZ(angle, rotMatZ);
-                    rotMat = &rotMatZ;
+                    Multiply(rotMatX, boneTf.m, boneTf.m);
                     break;
                 }
-                Multiply(*rotMat, boneTf.m, boneTf.m);
+                case 1: {
+                    Hmx::Matrix3 rotMatY;
+                    MakeRotMatrixY(angle, rotMatY);
+                    Multiply(rotMatY, boneTf.m, boneTf.m);
+                    break;
+                }
+                case 2: {
+                    Hmx::Matrix3 rotMatZ;
+                    MakeRotMatrixZ(angle, rotMatZ);
+                    Multiply(rotMatZ, boneTf.m, boneTf.m);
+                    break;
+                }
+                }
                 RndTransformable *parent = bone->TransParent();
                 if (parent) {
                     Transform invParent;
