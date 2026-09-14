@@ -412,6 +412,20 @@ void SkeletonViz::DrawJoints(
         jointPair = (const SkeletonJoint *)((const char *)jointPair + sizeof(BoneJoints));
     }
 
+    // RESIDUAL (DrawJoints, 98.4 canonical / 97.8 raw). Remaining rows, all
+    // measured, none closed:
+    //   - `addi r24, r27, 0x114` + `mr r30, r24` where the image writes r30
+    //     directly (0x824412xx); declaring lineIt before jointPair is inert.
+    //   - `cmpw cr6, r31, r10` (SIGNED) on the loop bound where we emit
+    //     `cmplw`; the source compares two pointers, which MSVC lowers
+    //     unsigned.
+    //   - `fadds f30, f30, f1` (boneSum) where we emit `fadds f30, f1, f30`;
+    //     writing `len3 + len4` instead of `len4 + len3` is INERT.
+    //   - the three `fmuls` of the SECOND colour block come out (c1, tint)
+    //     where the image has (tint, c1); the first block already matches with
+    //     the identical spelling, and writing `c1 * tintColor.red` is INERT.
+    //   - the baseScale/scaledScale store schedule below (x,y,z vs y,x,z and
+    //     y,z,x vs x,y,z) and one extra saved FPR (f23).
     float baseScaleZ = mJointMesh->LocalXfm().m.z.z;
     float baseScaleY = mJointMesh->LocalXfm().m.y.y;
     float baseScaleX = mJointMesh->LocalXfm().m.x.x;
