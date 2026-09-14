@@ -572,13 +572,15 @@ void CreateBackBuffers(
     edramBase = 0x800;
     edramHzBase = 0xE10;
 
+    D3DSURFACE_PARAMETERS params;
+    memset(&params, 0, sizeof(params));
+
     edramBase -= depthSize;
+    params.Base = edramBase;
 
     edramHzBase -= (((adjustedWidth + 0x1F) >> 5) * ((adjustedHeight + 0xF) >> 4)) & 0x7FFFFF;
-
-    D3DSURFACE_PARAMETERS params = {0};
-    params.Base = edramBase;
     params.HierarchicalZBase = edramHzBase;
+
     depthSurface = D3DDevice_CreateSurface(width, height, D3DFMT_D24FS8, multisample, &params);
     DX_ASSERT(depthSurface, 0x2CE);
 
