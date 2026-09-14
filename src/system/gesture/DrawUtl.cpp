@@ -33,7 +33,11 @@ namespace {
         r = r > 255 ? 255 : (r < 0 ? 0 : r);
         g = g > 255 ? 255 : (g < 0 ? 0 : g);
         b = b > 255 ? 255 : (b < 0 ? 0 : b);
-        return (unsigned short)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+        // Pack mask-then-shift, not shift-then-shift.  `((r >> 3) << 11) |
+        // ((g >> 2) << 5)` makes MSVC factor the common << 3 out and merge with
+        // extlwi + or (96.36); the masked form lets it see a field insert and
+        // emit `rlwimi r10, r7, 5, 11, 23` as the image does.
+        return (unsigned short)(((r << 8) & 0xf800) | ((g << 3) & 0x7e0) | (b >> 3));
     }
 
     /** Blit the 320x240 Kinect depth stream into an RGB565 scratch texture as a
@@ -104,6 +108,14 @@ namespace {
     }
 
     void ScreenSpace(Hmx::Rect &rect) {
+        // NOTE (w7-av): 94.42 is a one-slot scheduling floor.  The image stores
+        // rect.x immediately after loading DrawUtlVec3.x (`lfs f0` / `stfs f0,
+        // 0x0(r3)`) and only then loads y and z; we hoist all three loads.  Do
+        // NOT try to fix it by writing the x store earlier: both
+        // `rect.x = DrawUtlVec3.x;` as the first statement and `float vx = ...;
+        // rect.x = vx;` as the first two score 83.33, because moving the store
+        // ahead of the other loads also pushes the `__real@3faaaaab` anchor
+        // materialisation past the DrawUtlVec3 anchor and costs an extra `lis`.
         float vx = DrawUtlVec3.x;
         float vy = DrawUtlVec3.y;
         float vz = DrawUtlVec3.z;
