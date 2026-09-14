@@ -40,6 +40,16 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
 
         // Compute body "side" vector as Cross(yAxis, smoothedBodyNormal)
         {
+            // NEGATIVE RESULT (w7-ap, 2026-09-14, 91.44 canonical): the image
+            // keeps Value()'s sret pointer (`mr r11, r3` at 0x82DFDF54) and
+            // reads the three components straight off it (`lfs f0, 0x8(r11)`
+            // / `0x4(r11)` / `0x0(r11)` at 0x82DFDF60-70), and it materialises
+            // &unk40 into a callee-saved GPR BEFORE the call
+            // (`addi r31, r30, 0x40` at 0x82DFDF4C) where we do it after.
+            // Binding the result as `const Vector3 &smoothed = unk4.Value();`
+            // -- the spelling CalcInPose below documents -- is BYTE-IDENTICAL:
+            // MSVC reads the same sret slot through r1 rather than keeping r3,
+            // so the six-row cluster at idx 69-83 is not reachable this way.
             Vector3 smoothed = unk4.Value();
             unk40.y = smoothed.x * 0.0f - smoothed.z * 0.0f;
             unk40.z = smoothed.y * 0.0f - smoothed.x;
