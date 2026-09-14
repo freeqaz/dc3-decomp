@@ -104,6 +104,12 @@
 static HANDLE gRndTextureEvent;
 static HANDLE gRndThread;
 static void *sCompressData;
+// These three are static for the same reason as the block above: Rnd::Modal
+// reaches all three through ONE base register (gFailRestartConsole as the
+// anchor, gFailKeepGoing at -1, gNotifyKeepGoing at -2). With external
+// linkage MSVC emits a separate lis/addi pair per global, which costs two
+// extra callee-saved registers and 16 bytes of frame. Nothing outside this
+// TU references them.
 bool gFailRestartConsole;
 bool gFailKeepGoing;
 bool gNotifyKeepGoing;
@@ -1393,8 +1399,11 @@ void Rnd::Modal(Debug::ModalType &type, FixedString &str, bool bb) {
             RndSplasherSuspend();
         }
         ModalDraw(type, buf);
-        bool oldScreenSaver = ThePlatformMgr.ScreenSaver();
         if (bb) {
+            // Read inside the `if`: the target reuses the register that held
+            // `bb` for &ThePlatformMgr immediately after the branch, so the
+            // screen-saver state is never live across the test.
+            bool oldScreenSaver = ThePlatformMgr.ScreenSaver();
             ThePlatformMgr.SetScreenSaver(false);
             ThePlatformMgr.SetScreenSaver(oldScreenSaver);
             gFailKeepGoing = false;
@@ -1414,10 +1423,14 @@ void Rnd::Modal(Debug::ModalType &type, FixedString &str, bool bb) {
                         type = Debug::kModalNotify;
                         break;
                     }
-                } else {
-                    if (gNotifyKeepGoing) break;
-                    if (type != Debug::kModalFail) continue;
+                } else if (gNotifyKeepGoing) {
+                    break;
                 }
+                // Top level, NOT inside the else: the target still emits the
+                // redundant `cmpwi r11, 2 / bne` on the type != kModalFail
+                // path (0x82662280), which only survives if the test is not
+                // dominated by the else branch.
+                if (type != Debug::kModalFail) continue;
                 if (gFailRestartConsole) {
                     XLaunchNewImage(TheSystemArgs.front(), 0);
                     return;
