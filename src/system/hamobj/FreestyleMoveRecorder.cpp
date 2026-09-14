@@ -304,10 +304,17 @@ void FreestyleMoveRecorder::Poll() {
                 row++;
                 ptr += 0x180;
                 unsigned short depthU16 = (unsigned short)depthVal;
-                unsigned int diff = depthVal - minDepth;
+                // the image subtracts from the 16-bit-truncated value
+                // (`clrlwi r10, r10, 16` feeds `subf r10, r29, r10`, idx
+                // 258/261), not from the raw 32-bit load
+                unsigned int diff = depthU16 - minDepth;
                 unsigned int shifted = diff << 7;
-                unsigned int depthMask = (depthU16 > 0) ? 0xFFFFFFFF : 0;
-                *ptr = (unsigned short)(shifted | (depthMask & colorMask));
+                // The ternary selects colorMask itself -- MSVC lowers that to
+                // the subfic/subfe mask AND colorMask.  Selecting 0xFFFFFFFF
+                // and ANDing it separately emits a live `li r27, -0x1` and a
+                // redundant `and r8, r8, r27` inside the inner loop.
+                unsigned int colorBits = (depthU16 > 0) ? colorMask : 0;
+                *ptr = (unsigned short)(shifted | colorBits);
             }
             pixelX++;
             texelPtr += 2;
