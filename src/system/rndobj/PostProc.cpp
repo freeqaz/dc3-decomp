@@ -361,11 +361,31 @@ BEGIN_LOADS(RndPostProc)
         int dRev;
         d >> dRev;
         MILO_ASSERT(dRev == 3, 0x2A8);
-        float f30 = 0;
         bool b70;
         Vector3 v40;
+        // `f30` lives in the 16-BYTE-ALIGNED local region in the image, not in
+        // the packed 4-byte block: the target's frame is 0xc0 to our 0xb0 and
+        // the dead zero-store lands at a 16-aligned slot right beside the
+        // Vector3.  Spelling it as a second Vector3's `.x` (same bytes read off
+        // the stream -- the value is discarded either way) took this function
+        // 99.80 -> 99.97.  REFUTED for the last 3 rows, all of them the two
+        // aligned slots swapped (target v40@0x80/v30@0x90, ours the reverse):
+        // declaring v30 before v40 (inert), making it a Vector4 (inert), and
+        // giving it its own nested scope (92.4 -- the scope sinks the whole
+        // `d >> b70` restart into the block).  MSVC's ordering of the aligned
+        // region here is not driven by declaration order or first-use order.
+        Vector3 v30;
+        float &f30 = v30.x;
+        f30 = 0;
         int i5c;
-        d >> b70 >> v40 >> f30 >> i5c;
+        // The image converts to the underlying BinStream once, on the reference the
+        // bool overload returns, and holds it in a callee-saved register across the
+        // remaining reads (one `lwz r30, 0x8(r3)`, then `mr r3, r30` at each restart).
+        // Reading straight off `d` calls BinStreamRev::operator>>(T&) instead, which
+        // reloads `.stream` every time.
+        BinStream &s = (d >> b70).stream;
+        s >> v40 >> f30;
+        s >> i5c;
     } else {
         LOAD_SUPERCLASS(Hmx::Object)
     }

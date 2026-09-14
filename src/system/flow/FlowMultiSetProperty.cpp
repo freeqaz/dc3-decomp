@@ -2,6 +2,7 @@
 #include "flow\DrivenPropertyEntry.h"
 #include "obj\ObjPtrVec_impl.h"
 #include "flow\FlowNode.h"
+#include "flow\Flow.h"
 #include "obj\Data.h"
 #include "obj\Dir.h"
 #include "obj/DirLoader.h"
@@ -46,8 +47,12 @@ BEGIN_LOADS(FlowMultiSetProperty)
     LOAD_REVS(bs)
     ASSERT_REVS(0, 0)
     LOAD_SUPERCLASS(FlowNode)
-    DirLoader *dl = Dir()->Loader();
-    ObjectDir *dir = dl ? dl->ProxyDir() : Dir()->Dir();
+    // The image casts the owning dir to Flow* before asking for the loader: the
+    // null-checked `subi r11, r11, 0x68` is MSVC's ObjectDir* -> Flow* adjustment
+    // (Flow's ObjectDir base sits at +0x68), and mLoader is then read at 0xb4.
+    Flow *flow = static_cast<Flow *>(Dir());
+    DirLoader *dl = flow->Loader();
+    ObjectDir *dir = dl ? dl->ProxyDir() : flow->Dir();
     mTargets.Load(d.stream, true, dir);
     d >> mProperty >> mPropertyValue;
 END_LOADS

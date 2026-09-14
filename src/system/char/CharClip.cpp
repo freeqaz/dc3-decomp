@@ -242,8 +242,22 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
                 // Owner is the Transitions container, not mOwner: the target
                 // passes `this` (823D5830 `mr r4, r25`, r25 being the same
                 // register 0xc(r25) is loaded from for mOwner->Dir()).
-                new (&it->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
-                it->clip = clip;
+                // Assign through the NEW-EXPRESSION's result, not through
+                // `it->clip`.  MSVC guards a placement new with
+                //     stw p,tmp / cmplwi p,0 / beq / bl ctor / b / li p,0
+                // and the image's assignment reads that guarded value; naming
+                // `it->clip` instead discards it and cost 25 register rows
+                // (r27<->r29 through the whole loop body), 99.1 -> 99.5.
+                // Two rows remain: the image keeps the guarded value in r27 and
+                // moves it to r3, we materialise `li r3, 0` in place.  REFUTED:
+                // feeding the result back into `it` itself
+                // (`it = (NodeVector *)new (&it->clip) ...`, legal since clip is
+                // NodeVector's first member) makes it WORSE -- 29 rows, raw
+                // 99.4 -> 99.1, and adds an `mr r27, r3` reload of the ctor
+                // return.
+                ObjOwnerPtr<CharClip> *clipPtr =
+                    new (&it->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
+                *clipPtr = clip;
                 d >> it->size;
                 for (int j = 0; j < it->size; j++) {
                     d >> it->nodes[j].curBeat;
