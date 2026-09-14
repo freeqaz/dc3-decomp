@@ -69,10 +69,10 @@ void HiResScreen::BmpCache::FlushCache() {
         MILO_ASSERT(cacheFile, 0xA2);
         cacheFile->Seek(mDirtyStart, 0);
         unsigned int nStart = mDirtyStart;
-        unsigned int nEnd = mDirtyEnd;
-        unsigned int nBuffRange = nEnd - nStart;
+        unsigned char *pStart = mBuffer + nStart;
+        unsigned int nBuffRange = mDirtyEnd - nStart;
         MILO_ASSERT(nBuffRange <= mByteSize, 0xAA);
-        unsigned int numWritten = cacheFile->Write(mBuffer + nStart, nBuffRange);
+        unsigned int numWritten = cacheFile->Write(pStart, nBuffRange);
         MILO_ASSERT(numWritten == nBuffRange, 0xAE);
         cacheFile->Flush();
         delete cacheFile;
