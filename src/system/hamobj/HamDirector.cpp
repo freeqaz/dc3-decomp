@@ -2704,7 +2704,15 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
                 songAnim->SetFrame(frame, blend);
             }
 
-            for (Difficulty d = (Difficulty)0; (int)d < kNumDifficultiesDC2; d = (Difficulty)((int)d + 1)) {
+            // The map is keyed by a reference, so the key has to live in a
+            // stack slot.  Retail writes 0x50(r31) once at the TOP of each
+            // iteration (stw r29,0x50(r31) at the loop head 0x8247AE44) --
+            // the shape of a fresh temporary per iteration.  A `Difficulty`
+            // loop variable whose address is taken keeps the slot in sync
+            // with the register instead, which costs a store before the loop
+            // and another at the latch.
+            for (int i = 0; i < kNumDifficultiesDC2; i++) {
+                Difficulty d = (Difficulty)i;
                 if ((int)mDancerFaceAnims[d].Ptr() &&
                     (!TheLoadMgr.EditMode() || frame != mDancerFaceAnims[d]->GetFrame())) {
                     mDancerFaceAnims[d]->SetFrame(frame, blend);
