@@ -70,10 +70,16 @@ void UITrigger::Trigger() {
                     if (!f4) {
                         f4 = 1.0f;
                     }
-                    f4 = std::fabs(curAnim.mStart - curAnim.mEnd) / f4;
+                    // fabsf, not std::fabs: std::fabs takes and returns
+                    // DOUBLE, so the divide below came out as `fdiv` + `frsp`
+                    // where the image has a single `fdivs f0, f13, f0`
+                    // (827B26E8).  Both sides emit the same `fabs` instruction
+                    // -- it is the divide's precision that the double round
+                    // trip changed.
+                    f4 = fabsf(curAnim.mStart - curAnim.mEnd) / f4;
                 }
             } else {
-                f4 = std::fabs(curAnim.mAnim->StartFrame() - curAnim.mAnim->EndFrame());
+                f4 = fabsf(curAnim.mAnim->StartFrame() - curAnim.mAnim->EndFrame());
             }
             MaxEq(mEndTime, (curAnim.mDelay * 30.0f + f4) / 30.0f);
         }
