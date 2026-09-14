@@ -405,7 +405,14 @@ void Campaign::ConfigureCampaignData(DataArray *i_pConfig) {
             new CampaignEra(pEraArray->Array(i), pLookupEraArray->Array(i));
         MILO_ASSERT(pCampaignEra, 0xd8);
         Symbol name = pCampaignEra->GetName();
-        if (GetCampaignEra(name)) {
+        // The explicit `Symbol(...)` temporary is load-bearing, not decoration.
+        // `GetCampaignEra` takes Symbol BY VALUE.  Passing the named local
+        // `name` directly lets MSVC hand it straight over in r4; passing an
+        // unnamed temporary makes it materialise the copy in the function's
+        // first local-temp slot as well (`stw r4, 0x50(r31)` before the call,
+        // never reloaded).  That one dead store is the whole difference between
+        // 99.751% and 100.0% here -- our build was 4 bytes SHORT of the target.
+        if (GetCampaignEra(Symbol(name))) {
             MILO_NOTIFY("%s campaign era already exists, skipping", name.Str());
             RELEASE(pCampaignEra);
         } else {
