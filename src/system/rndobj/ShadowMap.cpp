@@ -85,7 +85,31 @@ found:
     float nearPlane = dist - sphere.radius;
 
     Vector3 offset;
-    Multiply(Vector3(0.0f, -dist, 0.0f), lightXfm.m, offset);
+    // This is Multiply(Vector3(0.0f, -dist, 0.0f), lightXfm.m, offset) written
+    // out, and it has to be, because x and z of that vector are literal 0.0f.
+    // Fed to the shared overload in Mtx.h, /fp:fast lets MSVC reassociate
+    // `m.x.c*0 + m.y.c*(-dist) + m.z.c*0` into `(m.x.c + m.z.c)*0 + ...` and
+    // emit a leading `fadds` of two matrix elements; the target emits the two
+    // zero terms straight as `fmuls fN,fN,f31`.  Accumulator statements pin the
+    // association -- MSVC does not reassociate across a `+=` -- so each row can
+    // seed from the element the target seeds from: m.z.x for x, m.x.c for y and
+    // z.  Do NOT fold these back into three expressions; measured 94.66 that
+    // way (the factoring returns) and 99.985 with uniform right-association.
+    // The full accounting is in the comment above the overload in Mtx.h.
+    {
+        const Vector3 v(0.0f, -dist, 0.0f);
+        const Hmx::Matrix3 &m = lightXfm.m;
+        float ox = m.z.x * v.z;
+        ox += m.y.x * v.y;
+        ox += m.x.x * v.x;
+        float oy = m.x.y * v.x;
+        oy += m.y.y * v.y;
+        oy += m.z.y * v.z;
+        float oz = m.x.z * v.x;
+        oz += m.y.z * v.y;
+        oz += m.z.z * v.z;
+        offset.Set(ox, oy, oz);
+    }
     Add(lightXfm.v, offset, lightXfm.v);
 
     sLightCam->SetWorldXfm(lightXfm);

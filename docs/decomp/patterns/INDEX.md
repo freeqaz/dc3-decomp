@@ -365,6 +365,7 @@ These patterns resist simple source-level fixes. Each documents what would be ne
 | fsel Register Pressure | float clamp | 5-20% | [unfixable-compiler.md](unfixable-compiler.md#fsel-register-pressure) — needs c2.dll patch |
 | Boolean Negation (subfic/subic) | ptr→bool sites | 3-8% | [unfixable-compiler.md](unfixable-compiler.md#boolean-negation-subfic-vs-subic) |
 | Commutative Register Swap | float ops | <1% | [unfixable-compiler.md](unfixable-compiler.md#commutative-register-swap) |
+| Zero-Term Factoring (leading `fadds` of two matrix elements) | `/fp:fast` + a vector with literal `0.0f` components | +6.6-8.0% | [fixable-fsel-fma.md](fixable-fsel-fma.md#zero-term-factoring-a-leading-fadds-of-two-matrix-elements) |
 | 64-bit Extraction | rare | ~5% | [unfixable-compiler.md](unfixable-compiler.md#64-bit-extraction) |
 | Stack Spill Scheduling | high register pressure | ~1-2% | [unfixable-compiler.md](unfixable-compiler.md#stack-spill-scheduling) |
 | Store-then-Reload Scheduling | global store sites | 0.5-1% | [unfixable-compiler.md](unfixable-compiler.md#store-then-reload-scheduling) |

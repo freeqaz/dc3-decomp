@@ -909,7 +909,23 @@ void Spotlight::UpdateTransforms() {
     );
     if (mLensMaterial) {
         Vector3 vd8(0.0f, mLensOffset, 0.0f);
-        Multiply(vd8, thetf.m, vd8);
+        // Multiply(vd8, thetf.m, vd8) written out with the sums right
+        // associated.  vd8's x and z are literal 0.0f, and fed to the shared
+        // overload in Mtx.h that lets /fp:fast reassociate
+        // `m.x.c*0 + m.y.c*off + m.z.c*0` into `(m.x.c + m.z.c)*0 + ...`,
+        // emitting a leading `fadds` of two matrix elements.  The target emits
+        // the three products straight and seeds each accumulator from the z
+        // term.  The parentheses are load-bearing; without them this function
+        // reads 91.96.  See the comment above the overload in Mtx.h for why the
+        // fix belongs here and not there.
+        {
+            const Hmx::Matrix3 &m = thetf.m;
+            vd8.Set(
+                m.x.x * vd8.x + (m.y.x * vd8.y + m.z.x * vd8.z),
+                m.x.y * vd8.x + (m.y.y * vd8.y + m.z.y * vd8.z),
+                m.x.z * vd8.x + (m.y.z * vd8.y + m.z.z * vd8.z)
+            );
+        }
         Add(vd8, thetf.v, vd8);
         Hmx::Matrix3 m48;
         m48.Set(

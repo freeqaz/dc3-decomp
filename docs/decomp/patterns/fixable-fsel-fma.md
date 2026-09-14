@@ -451,3 +451,69 @@ has to be source-level.
 |----------|--------|-------|-------|-----|
 | `NgMat::RefreshState` (DC3) | 93.25% | 96.8% | +3.5% | Four distinct float temps; assign in X, Y, NegX, NegY order |
 | `NgMat::RefreshState` (RB3) | 92.2% | 96.4% | +4.2% | Same fix, same file |
+
+## Zero-term factoring: a leading `fadds` of two *matrix elements*
+
+*Measured 2026-09-14, lane w6-i, two crossings worth 2,528 B.*
+
+**Signature.** Our build opens a vector/matrix multiply with `fadds fA, fA, fB`
+where **both operands are matrix elements** — nothing has been multiplied yet.
+The target instead emits the products straight: `fmuls fN, fN, f31` (f31 = the
+function's shared `0.0f`) for each zero term, folded in with `fmadds`.
+
+**Cause.** The call site passes a vector with two components that are literal
+`0.0f`, e.g. the "pull back along −Y" idiom
+`Multiply(Vector3(0.0f, -dist, 0.0f), m, out)`. `/fp:fast` then lets MSVC apply
+the distributive law to the left-associated sum:
+
+```
+m.x.c * 0 + m.y.c * v.y + m.z.c * 0    ->    (m.x.c + m.z.c) * 0 + m.y.c * v.y
+```
+
+The original build does not do this. **It is not an association difference** —
+that is the trap. `RndShadowMap::PrepShadow`'s target has its **y and z
+components left-associated** (they seed from `m.x.c`) and they are still not
+factored, while only its x component seeds from `m.z.c`. Association is merely
+the thing that happens to break the factoring pattern.
+
+**Fix — accumulator statements, at the CALL SITE.**
+
+```cpp
+float ox = m.z.x * v.z;   // seed from whichever element the target seeds from
+ox += m.y.x * v.y;
+ox += m.x.x * v.x;
+```
+
+Statement order pins the association and MSVC does not reassociate across a
+`+=`, so each row can seed independently. (Same shape as `Hmx::Dot4` in
+`Mtx.h`, which an earlier lane also had to write as a reversed accumulator.)
+
+Measured on `RndShadowMap::PrepShadow`, one full `ninja` each:
+
+| spelling | canonical |
+|---|---|
+| baseline — shared `Multiply(Vector3, Matrix3, Vector3)` inline | 93.38806 |
+| uniform right-association `a + (b + c)` | 99.98508 |
+| right-assoc x, left-assoc y/z as one expression | 94.66418 *(factoring returns)* |
+| per-component accumulators, seeded as the target does | **100.0** |
+
+**Fix it at the call site, not in the shared inline.** Right-associating
+`Mtx.h`'s `Multiply(Vector3, Matrix3, Vector3)` is a whole-binary **loss**
+(−800 B, 14 functions down / 5 up): five functions whose entire body is one
+inlined copy are at 100% with the left-associated spelling. The control that
+settles this — spelling the header's own left-associated tree out at the
+`Spotlight::UpdateTransforms` call site — scores `91.95605`, the baseline to
+five decimals. **Call-site context is irrelevant; only the expression tree
+shape matters**, so a site that needs a different tree can have one locally.
+
+**Two refuted levers**, each a full `ninja` with a 7-function probe set:
+
+- **Source multiply operand order is inert.** Swapping the header body to
+  v-first (`v.x * m.x.x + …`) left all 7 probe functions byte-identical, and
+  writing the middle term v-first in the accumulators left `PrepShadow` at
+  `fuzzy 99.88806` with the same 3 rows. MSVC canonicalises the commutative
+  multiply and picks `fmadds` operand order itself.
+- **Residual `fmadds`/`fadds` operand-order rows are not source-reachable** and
+  are forgiven by the canonical ruler — do not spend budget on them.
+
+Full accounting: the comment block above the overload in `src/system/math/Mtx.h`.
