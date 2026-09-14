@@ -733,9 +733,19 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(mD3DDevice);
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, 0);
-    Hmx::Color color(0, 0.1, 0.5, 0);
+    // BUG FIX (w7-bl).  0x82618DAC-0x82618DB4 packs the clear colour as
+    // A=0xff (a CONSTANT -- `lis r8, 0xffff`, so alpha is a compile-time
+    // 1.0f), R=f13, G=f12, B=f11, and 0x82618D34/0x82618D3C load f12=0.5f
+    // and f11=0.1f with f13=0.0f; the kModalFail arm at 0x82618D48-0x82618D50
+    // sets f13=0.25f and zeroes f12/f11.  So the image clears to an OPAQUE
+    // (0, 0.5, 0.1) green for a normal modal and an OPAQUE (0.25, 0, 0) red
+    // for a failure.  We had green/blue swapped, alpha 0 instead of 1, and
+    // the failure arm writing 0.25 into ALPHA instead of RED -- our modal
+    // cleared to 0x0000197f (fully transparent blue) and our failure screen
+    // to 0x3f000000 instead of 0xff3f0000.
+    Hmx::Color color(0, 0.5f, 0.1f);
     if (t == Debug::kModalFail) {
-        color.alpha = 0.25f;
+        color.red = 0.25f;
         color.green = 0;
         color.blue = 0;
     }
@@ -749,6 +759,12 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
         mRegAlloc = (RegisterAlloc)0;
         D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
     }
+    // w7-bl RESIDUAL (89.7%): the image keeps the `__real@00000000` PAGE BASE
+    // in a callee-saved GPR (r30 at 0x82618D20) and issues two `lfs` -- one
+    // for the colour components, one for this Resolve's ClearZ -- where MSVC
+    // gives us one `lfs` into a callee-saved f31 that spans D3DDevice_Clear.
+    // That is the whole r25..r31 vs r26..r31 renumbering: the image spends a
+    // GPR where we spend an FPR.  Allocator choice, no source lever found.
     Present();
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, savedRenderTarget);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, savedStencilSurface);
