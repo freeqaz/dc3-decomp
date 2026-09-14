@@ -859,9 +859,23 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
             // ...and `fmadd f0, f0, f12, f12` with f12 loaded from
             // __real@3fe0000000000000 is a DOUBLE 0.5, so the rescale happens in
             // double.  Spelled `val * 0.5f + 0.5f` MSVC reassociates it to
-            // `(val + 1.0f) * 0.5f` in single precision and the fmadd is lost.
+            // `(val + 1.0f) * 0.5f` in SINGLE precision and the fmadd is lost
+            // entirely; in double it keeps the shape below.
+            //
+            // RESIDUAL (w7-am, 97.5 canonical): the last real row is that MSVC
+            // still lowers this affine rescale as `fadd (x, 1.0)` + `fmul 0.5`
+            // rather than the image's single `fmadd x, 0.5, 0.5`, and the extra
+            // live `__real@3ff0000000000000` (double 1.0) is what shifts the
+            // volatile FPRs f9<->f10 / f10<->f11 across the whole k loop.
+            // NEGATIVE RESULT (w7-am, 2026-09-14): four spellings compile to
+            // BYTE-IDENTICAL code (97.5, 15 diff_arg / 1 replace / 3 insert
+            // each time) -- `val * 0.5 + 0.5`, `0.5 + val * 0.5`,
+            // `(val + 1.0) * 0.5`, and assigning the clamp back into
+            // shAccum[k] first and rescaling that double in place.  MSVC
+            // canonicalises the form before contraction, so the image's fmadd
+            // is not reachable from source here; the faithful spelling is kept.
             float val = Clamp(-1.0f, 1.0f, (float)shAccum[k]);
-            shAccum[k] = (val + 1.0) * 0.5;
+            shAccum[k] = val * 0.5 + 0.5;
         }
     }
 
