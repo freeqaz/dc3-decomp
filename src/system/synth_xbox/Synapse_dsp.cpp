@@ -166,18 +166,33 @@ void Synapse::SetReleaseSmoothing(float val) {
     }
 }
 
+// Rounds a duration to a sample count.  The rate comes in by const reference
+// and the ctor hands it an RVALUE copy of mTargetPitch: binding the prvalue
+// materialises a stack temp, which is the three dead `stfs f12, 0x58(r31)`
+// in the image (0x82E47120/0x82E47150/0x82E47158).  w7-bj: this took the ctor
+// 97.83 -> 99.21.  `float(mTargetPitch)` alone is NOT enough -- MSVC binds the
+// reference straight to the member and emits no store (measured 97.83, inert);
+// the prvalue has to come out of an inlined by-value helper.
+static inline float AsRvalue(float f) { return f; }
+static inline unsigned int RoundToSamples(const float &sampleRate, float seconds) {
+    float prod = sampleRate * seconds;
+    return (unsigned int)(prod + (prod >= 0.0f ? 0.5f : -0.5f));
+}
+
 Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sampleRate) {
     // The 0.4 s ring-buffer length is a LOCAL, rounded down to a multiple of
     // four (the downsampled buffer is a quarter of it).  Only the two period
     // limits -- 1/650 s and 1/60 s -- reach members 0x1c and 0x20; 0x24 keeps
     // the 64 from the initialiser list.
-    float prod1 = mTargetPitch * 0.4f;
-    float prod2 = mTargetPitch * 0.0015384615f;
-    float prod3 = mTargetPitch * 0.016666668f;
-    unsigned int inputLen =
-        (unsigned int)(prod1 + (prod1 >= 0.0f ? 0.5f : -0.5f)) & ~3u;
-    mDefaultPitch = (unsigned int)(prod2 + (prod2 >= 0.0f ? 0.5f : -0.5f));
-    mField_0x20 = (unsigned int)(prod3 + (prod3 >= 0.0f ? 0.5f : -0.5f));
+    // w7-bj residual (99.21): the image coalesces the vector-ctor pointer
+    // scratch and these rate temps onto the 8-byte fctidz slot at 0x58(r31)
+    // and leaves 0x50 to the resize fill temp; ours packs them onto 0x50 with
+    // the fill temp (14 `stw ..., 0x58` rows + these 3 stfs, 0x82E4700C..).
+    // The rest is commutative add/lwzx/stwx/stfsx operand order and the
+    // mInputBuffer begin/end load order in the byte-offset loops.
+    unsigned int inputLen = RoundToSamples(AsRvalue(mTargetPitch), 0.4f) & ~3u;
+    mDefaultPitch = RoundToSamples(AsRvalue(mTargetPitch), 0.0015384615f);
+    mField_0x20 = RoundToSamples(AsRvalue(mTargetPitch), 0.016666668f);
 
     // The fill values are unnamed temporaries; the target reuses ONE stack
     // slot for all of them (and for the ChannelBuffer prototype / coeffs),
