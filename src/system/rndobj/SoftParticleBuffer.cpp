@@ -62,6 +62,28 @@ void RndSoftParticleBuffer::BlurSurface() {
         float invH = 1.0f / texH;
         float invW = 1.0f / texW;
 
+        // Open residual (wave 7, lane w7-y), 95.7 canonical, 82 rows, all of
+        // them one allocation difference plus two structural rows:
+        //
+        //  * The image does NOT hold 0.5f in a callee-saved FPR.  It keeps the
+        //    literal's page in a callee-saved GPR (`lis r20, __real@3f000000@h`)
+        //    and RE-LOADS `lfs f0, ...@l(r20)` twice -- once before the
+        //    static-guard test and once at the top of the tap loop, entered via
+        //    a `b` that skips the second copy on the first trip.  That is why
+        //    the image opens `__savegprlr_17` / `__savefpr_20` where we open
+        //    `_18` / `_19`: one more GPR, one fewer FPR, and a frame 8 bytes
+        //    shallower.  Every f19..f31 and r17..r30 row follows from it.
+        //    `invW / 2.0f` instead of `invW * 0.5f` is INERT (still 95.7) --
+        //    /fp:fast folds it to the same multiply by the same literal.
+        //  * The image emits only NINE stores into kBlurTaps, 0x4 through 0x24:
+        //    it elides the `0.0f` store to element [0].x because the static
+        //    already reads zero in .bss.  We emit ten.
+        //
+        // The SetObjConcrete row (target ObjRefConcrete<AnimTask,ObjectDir>, we
+        // ObjRefConcrete<RndTex,ObjectDir>) is an ICF fold, and kBlurTaps
+        // (0x82F16D28) and its guard (0x830E1CE8) are unnamed lbl_* on the
+        // target side, i.e. missing from config/373307D9/symbols.txt.
+        //
         // (weight, offset) pairs for the five taps.
         static Vector2 kBlurTaps[5] = {
             Vector2(0.0f, -1.5f),
