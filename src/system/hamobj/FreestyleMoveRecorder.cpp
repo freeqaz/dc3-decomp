@@ -733,10 +733,10 @@ float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
     int clampedPrev = frameIdx - 1 > 0 ? frameIdx - 1 : 0;
     float totalScore = 0.0f;
     float totalWeight = 0.0f;
+    unsigned int i = 0;
     if (mTrackedJoints.size() != 0) {
         const FreestyleMoveFrame *curFrame = &frames[frameIdx];
         const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
-        unsigned int i = 0;
         do {
             SkeletonJoint joint = mTrackedJoints[i];
             Vector3 curJointPos, prevJointPos;
