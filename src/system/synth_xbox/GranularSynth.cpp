@@ -86,22 +86,23 @@ void GranularSynth::ExtractGranules() {
             float loose = reach / (vo.mRate + 3.0f);
             gr.mLength = (loose - tight) * mLengthMix + tight;
 
-            float shortest = (float)mWindows[0].size();
             float longest = (float)mMaxLength * 1.5f;
+            float shortest = (float)mWindows[0].size();
             if (gr.mLength < shortest) {
                 gr.mLength = shortest;
             } else if (gr.mLength > longest) {
                 gr.mLength = longest;
             }
 
-            float length = gr.mLength;
             gr.mGain = vo.mGain;
             gr.mActive = true;
             gr.mVoice = v;
-            gr.mFadeIn = (unsigned int)(length + (length >= 0.0f ? 0.5f : -0.5f));
+            gr.mFadeIn =
+                (unsigned int)(gr.mLength + (gr.mLength >= 0.0f ? 0.5f : -0.5f));
             gr.mStartOffset = mBlock;
             gr.mPhase = (float)((double)mFrame - gr.mStartTime + gr.mOffset);
 
+            float length = gr.mLength;
             // Pick the largest window that still fits inside 0.7 of the grain.
             gr.mWindow = mWindows.size() - 1;
             while (gr.mWindow != 0) {
