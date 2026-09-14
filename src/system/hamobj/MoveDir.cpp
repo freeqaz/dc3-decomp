@@ -702,9 +702,10 @@ void MoveDir::Enter() {
     if (!TheLoadMgr.EditMode()) {
         mGamePanel = ObjectDir::Main()->Find<Hmx::Object>("game_panel", false);
         mErrorNodeInfo = 0;
+        MoveDir *self = this;
         mFiltersEnabled = true;
         if (TheLoadMgr.EditMode()) {
-            MiloInit();
+            self->MiloInit();
         }
         mDebugLoopMarker = -1;
     } else {
@@ -853,6 +854,9 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
             songSpeed
         );
         ErrorNode **nodePtr = mFilterVer->mErrorNodes;
+        // REFUTED (w7-i): hoisting `node` above the loop is byte-identical. The
+        // residual is a target-only `mr r27, r29` -- the image splits nodePtr's
+        // live range between the loop guard and the loop body; we coalesce it.
         for (int i = 0; i < mFilterVer->NumNodes(); i++, nodePtr++) {
             ErrorNode *node = *nodePtr;
             if (node->IsTypeJointMatch(mErrorNodeInfo)) {
@@ -1652,8 +1656,9 @@ void MoveDir::DrawShowing() {
                     const SongCollisionOutput &out = outputs[i];
                     Hmx::Color color(gray, gray, gray, 1.0f);
                     Hmx::Color altColor;
+                    bool colliding = out.Colliding();
                     altColor.blue = zero;
-                    if (out.Colliding()) {
+                    if (colliding) {
                         altColor.red = 1.0f;
                         altColor.green = zero;
                     } else {
