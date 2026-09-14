@@ -1154,7 +1154,14 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
     for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
         Vector3 v(i->x, i->y, 0.0f);
         Multiply(v, tf, v);
-        float dot = node->plane.Dot(v);
+        // Not Plane::Dot: that inline is spelled flat (a*x + b*y + c*z + d) and
+        // lowers to fmuls b*y / fmadds a*x / fmadds c*z.  The image emits
+        // fmuls a*v.x / fmadds c*v.z / fmadds b*v.y / fadds d, which is the
+        // term order below -- under /fp:fast MSVC evaluates the second operand
+        // of each `+` first and contracts the first into fmadds, so a flat sum
+        // P+Q+R lowers as Q,P,R and the source order is readable off the listing.
+        const Plane &plane = node->plane;
+        float dot = plane.b * v.y + (plane.c * v.z + plane.a * v.x) + plane.d;
         if (0.0f < dot)
             front = true;
         if (dot < 0.0f)
@@ -1181,19 +1188,18 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
         Hmx::Polygon splitPoly;
         if (node->left) {
             Clip(poly, r, splitPoly);
-            bool res = Intersect(tf, splitPoly, node->left);
-            if (res) {
+            if (Intersect(tf, splitPoly, node->left)) {
                 return true;
             }
         }
-        r.dir.x = -r.dir.x;
-        r.dir.y = -r.dir.y;
+        // Set() evaluates its arguments right to left, so -y is negated before
+        // -x -- which is what the image does (lfs 0x6c, lfs 0x68, fneg, fneg).
+        r.dir.Set(-r.dir.x, -r.dir.y);
         Clip(poly, r, splitPoly);
         bool res = Intersect(tf, splitPoly, node->right);
         return res;
     }
-    bool res = Intersect(tf, poly, child);
-    if (res)
+    if (Intersect(tf, poly, child))
         return true;
     return false;
 }
