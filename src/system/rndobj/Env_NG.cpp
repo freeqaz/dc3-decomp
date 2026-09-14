@@ -273,13 +273,11 @@ void NgEnviron::Select(const Vector3 *pos) {
         ClearLightRegisters(i);
     }
 
-    int projLightIdx = 3;
-    for (int i = 0; i != numProj; i++) {
+    for (int i = 0, projLightIdx = 3; i != numProj; i++, projLightIdx--) {
         if (SetProjLightRegisters(projLightIdx, projLightIdx - 3, *projLights[i])) {
             mNumLightsProj++;
             mNumLightsReal++;
         }
-        projLightIdx--;
     }
 
     for (int i = 0; i != numPoint; i++) {
@@ -358,7 +356,11 @@ void NgEnviron::Select(const Vector3 *pos) {
 
     if (mUseColorAdjust) {
         const Transform &colorXfm = ColorXfm();
-        TheShaderMgr.SetPConstant4x3((PShaderConstant)0x6d, Hmx::Matrix4(colorXfm));
+        // The image holds the RndShaderMgr object (and its vtable) in callee-saved
+        // registers across the Hmx::Matrix4 constructor call rather than reloading
+        // the global afterwards, so name the object expression.
+        RndShaderMgr &shaderMgr = TheShaderMgr;
+        shaderMgr.SetPConstant4x3((PShaderConstant)0x6d, Hmx::Matrix4(colorXfm));
     }
 
     if (mAOEnabled) {
