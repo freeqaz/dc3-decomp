@@ -231,6 +231,15 @@ float ArcDetector::GetPathError() const {
         float errY = arcZBase - arcY;
         float errZ = (1.0f / sZErrorScale) * (pt.y - mSwipeExtentY);
         float dz = 0.0f;
+        // RESIDUAL (w7-az, 93.55 canonical, 3 rows): 0x82E00B98 spends a DEAD
+        // `fmr f4, f13` (f4 = 0.0f) that `fmuls f4, f8, f3` overwrites two
+        // instructions later, and schedules `cmplw cr6, r11, r10` three
+        // instructions later than we do.  Writing errZ as `float errZ = 0.0f;`
+        // followed by the assignment is byte-inert -- MSVC deletes the dead
+        // store -- so the zero comes from somewhere else in the original.
+        // Also charged under name_check: the image loads sZErrorScale as
+        // `lbl_82F446F8`, a .data float (value 2.0f, verified) that dtk
+        // attributes to the StandingStillGestureFilter TU, not this one.
         error = errZ * errZ + (errY * errY + dz * dz) + error;
         ++it;
     } while (it != pathEnd);
