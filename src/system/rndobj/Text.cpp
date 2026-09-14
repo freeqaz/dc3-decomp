@@ -782,6 +782,11 @@ void RndText::WrapText(
     StyleState style(this, scale);
     auto& _ref0 = mWidth;
     auto& _ref1 = mAlignment;
+    // NOTE: the image materialises `this + 0xa8` into a register and homes it
+    // at 0x78(r31) before testing emptiness (rows 31/33). Spelling that as a
+    // reference local `auto& _ref2 = mFontMaps;` is byte-for-byte INERT --
+    // MSVC folds the reference back into the member access -- so the
+    // _ref0/_ref1 lever that works for mWidth/mAlignment does not extend here.
     if (mFontMaps.empty() || wLen == 0 || mStyles[0].mFont == 0) {
         Line emptyLine;
         emptyLine.mStart = 0;
@@ -811,7 +816,6 @@ void RndText::WrapText(
         bool activeMarkup = style.brk;
         int numWp = 1;
         int cCount = 0;
-        const unsigned short *cur = wideChars;
         wps[0].lineWidth = 0.0f;
         wps[0].charIdx = 0;
         wps[0].cost = 0;
@@ -853,6 +857,11 @@ void RndText::WrapText(
 #define BRKWIDE_BASE ((const wchar_t *)brkChars)
 #endif
 
+        // Declared HERE, after the markup strip: the image reuses the same
+        // callee-saved register for the strip loop's `s` and for `cur`, and
+        // emits an explicit `mr r21, r15` reset between them. That only
+        // happens if `cur` is not live across the strip block.
+        const unsigned short *cur = wideChars;
         int wpI = 0;
         for (;;) {
             unsigned short ch = *cur;
@@ -982,6 +991,11 @@ void RndText::WrapText(
         if (wps[0].nextIdx != -1) {
         WrapPoint *wp = &wps[0];
         do {
+            // NOTE: hoisting `ol.mStart = wideChars + wp->charIdx;` above the
+            // `nx` computation (which is the image's emission order) is
+            // byte-for-byte INERT, and re-deriving the successor as
+            // `wp = &wps[wp->nextIdx]` instead of `wp = nx` at the bottom of
+            // this loop is a REGRESSION (94.5 -> 93.9, +5 instructions).
             WrapPoint *nx = &wps[wp->nextIdx];
             ol.mWidth = nx->lineWidth;
             ol.mEnd = wideChars + nx->charIdx;
