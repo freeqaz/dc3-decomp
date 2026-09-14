@@ -198,7 +198,7 @@ void FreestyleMoveRecorder::Poll() {
                     // 0x50 * 0x3c * 0x50 bytes instead of filling the single
                     // 0x50-wide by 0x3c-tall (= 0x12c0 byte) frame column-major.
                     unsigned short *src = colSrc;
-                    char *dst = (depthDst + col) - 0x50;
+                    unsigned char *dst = (unsigned char *)(depthDst + col);
                     for (int row = 0x3c; row != 0; row--) {
                         int pixelPlayer = (*src & 7) - 1;
                         unsigned long depth;
@@ -213,7 +213,8 @@ void FreestyleMoveRecorder::Poll() {
                             depth = 0;
                         }
                         src += 0x600;
-                        *(unsigned char *)(dst += 0x50) = (unsigned char)depth;
+                        *dst = (unsigned char)depth;
+                        dst += 0x50;
                     }
                     col++;
                     colSrc += 4;
