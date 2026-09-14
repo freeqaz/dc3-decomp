@@ -543,6 +543,20 @@ bool Campaign::UpdateEraSongUnlockInstructions(
         eraMovesMastered = movesRequired;
     }
     int i9 = Max(movesRequired - eraMovesMastered, 0);
+    // MEASURED, 2026-09-14 (lane w7-aa).  99.52 canonical, 6 residual rows, and
+    // all six are ONE cause: which of the four one-int SetTokenFmt call sites
+    // below physically holds the cross-jumped (tail-merged) `bl`.  There is
+    // exactly one `bl ??$SetTokenFmt@H@UILabel@@QAAXVSymbol@@H@Z` on each side
+    // and the other three arms branch to it; the image keeps it in the LAST arm
+    // (campaign_song_hint_moves, idx 388) and branches forward from the other
+    // three, we keep it in the FIRST arm (campaign_song_hint_both_singular_move,
+    // idx 290) and branch backward.  Instruction counts are identical (430/430)
+    // and rows 0-289, 292-308, 310-328, 330-387 and 390-429 all match, so the
+    // arm bodies and the branch structure are already faithful.
+    // Checked and NOT the cause: the two same-named function-local statics.
+    // `campaign_song_hint_singular` is declared twice here (i8==1/i9==0 arm and
+    // the fallthrough at the end); the image carries both, with the same scope
+    // ordinals we emit -- ?EJ@ and ?FD@ -- so the duplication is the image's.
     if (i8 > 1) {
         if (i9 > 1) {
             static Symbol campaign_song_hint_both("campaign_song_hint_both");

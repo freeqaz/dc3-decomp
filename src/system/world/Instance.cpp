@@ -332,6 +332,13 @@ void WorldInstance::SyncDir() {
                 //   dynamic_cast<RndMesh *>(it.Ptr()) != nullptr
                 //   dynamic_cast<RndMesh *>(it)  -- does not compile (C2682,
                 //     ObjDirItr is a class; the cast needs &*it or .Ptr()).
+                //   RndMesh *p declared OUTSIDE the loop, assigned here, then
+                //     `bool curMesh = p != nullptr;` -- lengthening the pointer's
+                //     live range past the loop body does NOT buy the `mr`
+                //     (lane w7-aa, 2026-09-14; also bit-identical).
+                // Also checked: the 7 `ObjDirPtr<ObjectDir>::operator->` vs
+                // `ObjDirPtr<WorldInstance>::operator->` rows in the Function Call
+                // Diff are ICF folds -- the name_check ruler charges 0 of them.
                 bool curMesh = dynamic_cast<RndMesh *>(&*it);
                 if (!grp || (it != grp && !GroupedUnder(grp, it))) {
                 lmao:

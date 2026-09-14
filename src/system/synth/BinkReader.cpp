@@ -155,6 +155,23 @@ void BinkReader::Poll(float) {
             unsigned char *mem = (unsigned char *)MemAlloc(
                 hBinkTrack->MaxSize, __FILE__, 0x78, "Bink Audio", 0x80
             );
+            // MEASURED, 2026-09-14 (lane w7-aa).  98.05195, 17 rows, and every
+            // one of them is scheduling or register naming:
+            //   idx 285-298: both sides compute the 0x14 index first and the
+            //     0x24 index second, store in that order, and increment `i`
+            //     before the stores.  Only the two scratch GPRs are swapped
+            //     (r10<->r11) and our `clrlwi` of the incremented `i` lands one
+            //     slot earlier, in r4 instead of r11.  Swapping THESE TWO
+            //     STATEMENTS does not renumber the registers -- it only adds an
+            //     offset swap (0x14,0x24), 98.05195 -> 98.0.  Do not re-try it.
+            //   idx 217/218 vs 225/230: `li r28, 0x0` (i = 0) and `mr r4, r28`
+            //     sit before the four loop-invariant `lis` of the MILO_ASSERT
+            //     message strings on our side and after them in the image.
+            // Separately, and NOT charged by the canonical ruler: the image
+            // reaches one MakeString<char[19], int, char[5]> instantiation from
+            // all five assert sites while we emit five per-site instantiations
+            // sized from the real strings.  That is the known per-TU MakeString
+            // /ICF class, not a defect in this function.
             mPCMOffsets[i] = mem;
             mPCMBuffers[i] = mem;
         }

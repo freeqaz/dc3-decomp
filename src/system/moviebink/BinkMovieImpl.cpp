@@ -134,6 +134,13 @@ MovieInternalBuffers *MovieInternalBuffers::New(std::vector<BINK *> binks) {
             // `addi r4, r30, 0x44` and stores through r4, adding four stw rows
             // on top of the eight; the load order does not change. So the
             // target addresses mBuffers off `ret` directly, as written here.
+            // Measured WORSE (w7-aa, 2026-09-14, 99.97846 -> 99.9, 8 rows ->
+            // 16): swapping the Max() arguments on the four unsigned fields to
+            // Max(acc, cur).  The two lwz stay in OUR order -- the load
+            // schedule is invariant to the argument order -- and the swap only
+            // flips the cmplw operands and the branch polarity (blt -> bge),
+            // adding 8 rows on top of the 8.  That settles it: the residual is
+            // a scheduler tie, not an evaluation order the source can state.
             ret->mBuffers.TotalFrames =
                 Max(curBuffers.TotalFrames, ret->mBuffers.TotalFrames);
             ret->mBuffers.YABufferWidth =
