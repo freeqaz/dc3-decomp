@@ -759,8 +759,8 @@ MemHeapStack &ThreadMemStack(bool createIfMissing) {
     int idx;
     CritSecTracker tracker(gMemStackLock);
     if (gNumThreads == 0) {
-        gNumThreads = 1;
         gThreadIds[0] = GetCurrentThreadId();
+        gNumThreads = 1;
         idx = gThreadBufCurrentIndex;
     } else {
         DWORD currentThreadId = GetCurrentThreadId();
