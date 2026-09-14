@@ -19,6 +19,23 @@ public:
         typedef XboxAllocator<T2> other;
     };
 
+    // NEGATIVE RESULT (w7-as, 2026-09-14): the sibling
+    // vector<float,XboxAllocator<float> >::_M_fill_assign sits at 94.4 canonical
+    // on exactly one fact -- the image does NOT call get_allocator() there.  It
+    // passes an UNINITIALISED r1+0x50 straight to _Vector_base(n, const alloc&)
+    // (target `addi r5, r1, 0x50` / `addi r3, r1, 0x58` / `bl _Vector_base`),
+    // i.e. get_allocator() was inlined to nothing; our build emits
+    // `mr r4, r3` / `bl get_allocator` / `mr r5, r3` / `mr r4, r30`.  Stripping
+    // the user-provided copy ctor here (so the empty class copies trivially) is
+    // byte-for-byte inert -- 94.4 with the same four insert rows.  Stripping the
+    // default ctor and dtor as well does not compile: stlport/stl/_vector.h:204
+    // needs `allocator_type()` for the 3-arg vector ctor's default argument.
+    // The remaining levers are both outside this header: stlport's _vector.c
+    // spells `__tmp(__n, __val, get_allocator())` faithfully to upstream STLport
+    // (and StlNodeAlloc -- structurally identical to this class, also empty with
+    // the same three ctors -- DOES get an out-of-line get_allocator in the image,
+    // 63 ICF-folded copies at 0x829526b0), so the divergence is an inlining
+    // decision made in synth360's own TU, not a spelling this class controls.
     XboxAllocator() {}
     XboxAllocator(const XboxAllocator &) {}
     template <class T2>
