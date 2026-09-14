@@ -1504,8 +1504,16 @@ void RndParticleSys::UpdateParticles() {
                     Vector3 baseVel;
                     if (!mMeshEmitter) {
                         f32 halfSample = 0.5f;
-                        f32 pitchMid = LimitAng(mPitch.y - mPitch.x) * halfSample + mPitch.x;
-                        f32 yawMid = LimitAng(mYaw.y - mYaw.x) * halfSample + mYaw.x;
+                        // Naming the two low bounds keeps them live instead of
+                        // reloading 0x188/0x190 after each LimitAng, which is
+                        // what the image does.  Refuted on top of this: hoisting
+                        // the pitch delta into its own local (inert, identical
+                        // 14-row diff), so the residual load-order swap at
+                        // 0x188/0x18c is scheduling, not spelling.
+                        f32 pitchLo = mPitch.x;
+                        f32 yawLo = mYaw.x;
+                        f32 pitchMid = LimitAng(mPitch.y - pitchLo) * halfSample + pitchLo;
+                        f32 yawMid = LimitAng(mYaw.y - yawLo) * halfSample + yawLo;
                         f32 speedMid = (mSpeed.y - mSpeed.x) * halfSample + mSpeed.x;
 
                         f32 halfPi = 1.57079637f;
@@ -1529,11 +1537,17 @@ void RndParticleSys::UpdateParticles() {
 
                     int count = mSubSamples;
                     f32 stepSize = frameUpdate / (f32)mSubSamples;
-                    Vector3 interpOffset;
                     if (count != 0) {
                         do {
                             CreateParticles(currentFrame, stepSize, locToRel);
-                            Interp(interpOffset, baseVel, 1.0f / (f32)count, interpOffset);
+                            // The sub-sample walk advances the emitter's own
+                            // translation toward baseVel, so each sub-sample is
+                            // emitted at an interpolated position.  The image
+                            // passes r1+0xa0 as both source and destination at
+                            // 826C4D64/826C4D7C, and r1+0x70 is locToRel (the
+                            // memcpy into mSubSampleXfm at 826C4D10 names it) --
+                            // 0xa0 is locToRel.v, not a separate local.
+                            Interp(locToRel.v, baseVel, 1.0f / (f32)count, locToRel.v);
                             count--;
                         } while (count != 0);
                     }

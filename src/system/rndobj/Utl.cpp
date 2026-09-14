@@ -1093,11 +1093,14 @@ void UtilDrawCigar(
 void UtilDrawPlane(
     const Plane &p, const Vector3 &v, const Hmx::Color &c, int i4, float f, bool
 ) {
+    // The image allocates mb0 at 0x60 and tf88 at 0x90 (contiguous, frame
+    // 0x150), and its Identity() stores precede both the ScaleAdd result and
+    // the m.y copy -- so mb0 is declared and initialised first.
+    Hmx::Matrix3 mb0;
+    mb0.Identity();
     Transform tf88;
     ScaleAdd(v, *(const Vector3 *)&p, -p.Dot(v), tf88.v);
     tf88.m.y = *(const Vector3 *)&p;
-    Hmx::Matrix3 mb0;
-    mb0.Identity();
     int minIdx = 0;
     int idx = 0;
     float minDotProduct = 10000.0f;
@@ -1110,6 +1113,14 @@ void UtilDrawPlane(
     Normalize(tf88.m.z, tf88.m.z);
     Cross(tf88.m.y, tf88.m.z, tf88.m.x);
     for (int i = 0; i < i4; i++) {
+        // NOTE (w7-x): the image gives these four vectors 0x90/0xa0/0xb0/0xc0 --
+        // exactly tf88's own m.x/m.y/m.z/v slots, which it has already hoisted
+        // into f23-f31 before the loop (lfs 0xa0..0xc8 at 8262F6B8-8262F700).
+        // That is MSVC stack-slot COLOURING over a dead local, not a
+        // declaration order we can spell: our build keeps tf88 at 0x50-0x90 and
+        // puts these at 0x90-0xd0, which is the whole +0x40 frame delta.
+        // Refuted: reversing the declaration order to vece0/vecd4/vecc8/vecbc
+        // is byte-for-byte inert (identical 80-row diff).
         Vector3 vecbc, vecc8, vecd4, vece0;
         float scalar = (float)(i + 1) * f;
         ScaleAdd(tf88.v, tf88.m.x, scalar, vece0);
@@ -1897,7 +1908,12 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
     }
 }
 
-static const int kNumBloomTaps = 7;
+// UNSIGNED, not int: SetBloomBlurWeightsStreak's MILO_ASSERT compares
+// `(middle + i) < kNumBloomTaps` with `cmplwi cr6, r11, 0x7` at 8262EC44 -- an
+// unsigned compare. As an int it is `cmpwi`, and MSVC additionally folds
+// `middle + i` into its own induction variable (li r28, 4 / addi r28, r28, 1)
+// instead of recomputing `addi r11, r29, 0x3` off the live `i` each iteration.
+static const unsigned int kNumBloomTaps = 7;
 
 static float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
                                    0.0612547919f, 0.0815124959f, 0.0999667868f,
@@ -1943,14 +1959,16 @@ void SetBloomBlurWeightsStreak(
     MILO_ASSERT(pass >= 0 && pass < 3, 0x11aa);
 
     float passF = (float)pass;
-    float scale = (float)pow(4.0, (double)passF);
-    float initOffset = 0.5f;
 
     float weights[kNumBloomTaps];
     float offsets[kNumBloomTaps];
     int middle = 3;
+    // Before the first pow(): the image loads 0.333333f and stores weights[3] at
+    // 8262EBD8/8262EBE0, between the passF conversion and the first `bl pow`.
     float initWeight = 0.333333f;
     weights[middle] = initWeight;
+    float scale = (float)pow(4.0, (double)passF);
+    float initOffset = 0.5f;
     float atten = (float)pow((double)attenuation, (double)scale);
     offsets[middle] = initOffset;
 
@@ -1958,10 +1976,14 @@ void SetBloomBlurWeightsStreak(
     float stepSize = (float)pow(4.0, (double)passF);
     float curOffset = stepSize;
 
+    // Plain array indexing, not pointer arithmetic: MSVC strength-reduces
+    // weights[middle - i] / weights[middle + i] into the two byte-offset
+    // induction registers itself (stfsx f0, r31, r11 with r11 = &weights[2] and
+    // r31 stepping 0/-4/-8 at 8262ECA0), and keeps `i` live purely so the assert
+    // can recompute `middle + i` as `addi r11, r29, 0x3`. Spelling the offsets by
+    // hand produced the same stores but eliminated `i`, so the assert compared a
+    // folded induction variable instead.
     int i = 1;
-    int iDown = 2;
-    int negIdx = 0;
-    int posIdx = 0;
     do {
         MILO_ASSERT((middle - i) >= 0 && (middle + i) < kNumBloomTaps, 0x11c5);
         float w = curWeight * initWeight;
@@ -1969,24 +1991,12 @@ void SetBloomBlurWeightsStreak(
         float offPos = curOffset + initOffset;
         curWeight = (float)(curWeight * atten);
         curOffset = (float)(curOffset + stepSize);
+        weights[middle - i] = w;
+        offsets[middle - i] = offNeg;
+        weights[middle + i] = w;
+        offsets[middle + i] = offPos;
         i = i + 1;
-#ifdef HX_NATIVE
-        *(float *)((intptr_t)weights + negIdx + 8) = w;
-        iDown = iDown - 1;
-        *(float *)((intptr_t)offsets + negIdx + 8) = offNeg;
-        negIdx = negIdx - 4;
-        *(float *)((intptr_t)weights + posIdx + 0x10) = w;
-        *(float *)((intptr_t)offsets + posIdx + 0x10) = offPos;
-#else
-        *(float *)((int)weights + negIdx + 8) = w;
-        iDown = iDown - 1;
-        *(float *)((int)offsets + negIdx + 8) = offNeg;
-        negIdx = negIdx - 4;
-        *(float *)((int)weights + posIdx + 0x10) = w;
-        *(float *)((int)offsets + posIdx + 0x10) = offPos;
-#endif
-        posIdx = posIdx + 4;
-    } while (negIdx >= -8);
+    } while (i <= middle);
 
     int count = 7;
     float angleRad = angle * 0.01745329238474369f;
@@ -2003,15 +2013,22 @@ void SetBloomBlurWeightsStreak(
     int idx = 0;
     do {
         Vector4 texOffset;
+        // The image holds both components in registers across the join and does
+        // all four stores once, after it (stfs f13, 0x60 / f0, 0x64 / f31, 0x68 /
+        // f31, 0x6c at 8262ED80); storing into texOffset inside each arm emits a
+        // duplicate `stfs f0, 0x64(r1)` in both of them.
+        float offX, offY;
         if (horizontal) {
             float off = offsets[idx] * invWidth;
-            texOffset.x = off * cosA * yRatio;
-            texOffset.y = off * sinA;
+            offX = off * cosA * yRatio;
+            offY = off * sinA;
         } else {
             float off = offsets[idx] * invHeight;
-            texOffset.x = -(off * sinA * yRatio);
-            texOffset.y = off * cosA;
+            offX = -(off * sinA * yRatio);
+            offY = off * cosA;
         }
+        texOffset.x = offX;
+        texOffset.y = offY;
         texOffset.z = one;
         texOffset.w = one;
         TheShaderMgr.SetPConstant((PShaderConstant)(reg - 0x10), texOffset);
