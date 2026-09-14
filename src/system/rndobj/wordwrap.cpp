@@ -69,6 +69,13 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
     if (cur == start)
         return false;
 
+    // Attempt 2, INERT (wave 7, lane w7-y): reading g_uOption before the
+    // character -- the image's `lis r10, g_uOption@h` sits one slot ahead of its
+    // `lhz r31, 0x0(r3)` -- changes nothing, 97.60 either way.  The residual is
+    // that the image loads the character STRAIGHT into its callee-saved register
+    // and leaves `cur` in r3 for the function's whole life, while we copy `cur`
+    // into r5 first (`mr r5, r3`, our only insert) and stage the character
+    // through r3.  Nothing in the statement order reaches that choice.
     wchar_t ch = *cur;
     unsigned int option = g_uOption;
 
