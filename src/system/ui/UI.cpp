@@ -409,6 +409,7 @@ bool UIManager::IsGameScreenActive() {
     // lowers the equality with cntlzw/extrwi instead of the subic/subfe mask, but
     // the mask form could not be recovered: `if (cur != BottomScreen()) ret = false;`
     // (nested or as one `&&`) is if-converted differently and scores 89.2.
+    // Coordinator: `ret &= BottomScreen() == cur` (operand order) is inert, 95.00.
     UIScreen *cur = mCurrentScreen;
     if (cur != nullptr)
         ret &= cur == BottomScreen();
