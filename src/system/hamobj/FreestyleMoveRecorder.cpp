@@ -230,15 +230,21 @@ void FreestyleMoveRecorder::Poll() {
                 mTakes[mCurrentTakeIndex].RecordSkeletonFrame(skel, recordFrame, beat);
             } else {
                 BaseSkeleton *skel = GetLiveSkeleton();
-                DancerSkeleton tempSkel;
-                tempSkel.Init();
-                float beat = mRecordPos * 1000.0f;
+                // The scratch is a whole FreestyleMoveFrame, not a bare
+                // DancerSkeleton: the beat lands in its own mBeat member at
+                // 0x60 + 0x2d8 = 0x338(r31) (target idx 161) and is reloaded
+                // from there after the skeleton copy (idx 179).  With a bare
+                // float local MSVC keeps it in f31 instead, which rotates the
+                // 0.0f constant out of f31 for the whole function.
+                FreestyleMoveFrame tempFrame;
+                tempFrame.skeleton.Init();
+                tempFrame.mBeat = mRecordPos * 1000.0f;
                 if (skel && skel->IsTracked()) {
-                    tempSkel.Set(*skel);
+                    tempFrame.skeleton.Set(*skel);
                 }
                 FreestyleMoveFrame *frame = &mFrameBuffer[recordFrame];
-                frame->skeleton = tempSkel;
-                frame->mBeat = beat;
+                frame->skeleton = tempFrame.skeleton;
+                frame->mBeat = tempFrame.mBeat;
                 mDancerTakeFrameCount = nextFrame;
             }
 
