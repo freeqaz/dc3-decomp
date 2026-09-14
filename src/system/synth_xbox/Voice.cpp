@@ -232,7 +232,8 @@ void Voice::UpdateMix() {
                 levels[i] = 1.0f;
             }
         }
-        HRESULT hr = GetVoice()->SetOutputMatrix(
+        IXAudio2SourceVoice *voice = GetVoice();
+        HRESULT hr = voice->SetOutputMatrix(
             mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice(),
             mChannels,
             destChannels,
@@ -309,11 +310,13 @@ void Voice::UpdateMix() {
 
     if ((mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice()) == nullptr) {
         if (unk54) {
-            HRESULT hr = GetVoice()->SetOutputMatrix(nullptr, 1, 6, levels, 0);
+            IXAudio2SourceVoice *voice = GetVoice();
+            HRESULT hr = voice->SetOutputMatrix(nullptr, 1, 6, levels, 0);
             MILO_ASSERT(SUCCEEDED(hr), 0x3d9);
         }
     } else {
-        HRESULT hr = GetVoice()->SetOutputMatrix(
+        IXAudio2SourceVoice *voice = GetVoice();
+        HRESULT hr = voice->SetOutputMatrix(
             mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice(),
             1,
             destChannels,
