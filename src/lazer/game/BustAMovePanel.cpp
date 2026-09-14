@@ -1528,6 +1528,24 @@ void BustAMovePanel::Poll() {
             mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_pink.tex", true);
         RndTex *blueTex =
             mBAMVisualizerPanel->DataDir()->Find<RndTex>("gradient_blue.tex", true);
+        // MEASURED, 2026-09-14 (lane w7-aa).  The image's shape at THIS site is
+        // a single short-circuit initialiser, not the if-guard below:
+        //     li r10, 0x1            <- the `true` is materialised AFTER the
+        //     bne .L_82884BC8           Symbol compare, in a VOLATILE register
+        //   .L_82884BC4: mr r10, r21   <- both false arms join here (r21 == 0)
+        //   .L_82884BC8: clrlwi r28, r10, 24
+        // Spelling it
+        //     bool isPlayer0Pink = TheGameData->Player(0)->Side() == kSkeletonLeft
+        //                          && GetPlayerColor(0) == "pink";
+        // closes all four of those rows (idx 319/332/334/336) exactly -- and
+        // costs 24 NEW rows ~250 instructions downstream, in the
+        // `static DebugGraph scoreGraph(...)` argument block at L1583-1589,
+        // whose two Hmx::Color temporaries rotate between the 0xb0/0xc0 slot
+        // pair (stack reported as "10 PERMUTED -- same slot SET").  Net
+        // 99.60107 -> 97.642.  Adding a nested lexical scope back around the
+        // initialiser is EXACTLY inert, so the coupling is not scope count.
+        // Whatever third spelling gives both, it is not one of these three;
+        // the if-guard below is kept only because it scores higher.
         bool isPlayer0Pink = true;
         if (TheGameData->Player(0)->Side() != kSkeletonLeft
             || GetPlayerColor(0) != "pink") {
