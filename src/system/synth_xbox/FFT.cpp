@@ -261,17 +261,16 @@ int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle
                     if (blk > 0) {
                         int ctr = blk;
                         do {
-                            float* hi = (float*)((char*)src + stride4);
-                            float t_im = src[1] - hi[1];
-                            float h_re = hi[0];
+                            float t_im = src[1] - *(float*)((char*)src + stride4 + 4);
+                            float h_re = *(float*)((char*)src + stride4);
                             float l_re = src[0];
                             float t_re = l_re - h_re;
                             dst[0] = h_re + l_re;
                             float l_im = src[1];
+                            dst[1] = l_im + *(float*)((char*)src + stride4 + 4);
                             src += 2;
-                            dst[1] = l_im + hi[1];
-                            *(float*)((char*)dst + blk8) = t_re * wr - t_im * wi;
-                            *(float*)((char*)dst + blk8 + 4) = t_re * wi + t_im * wr;
+                            dst[blk * 2] = t_re * wr - t_im * wi;
+                            dst[blk * 2 + 1] = t_re * wi + t_im * wr;
                             dst += 2;
                             ctr -= 1;
                         } while (ctr != 0);
@@ -308,18 +307,17 @@ int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle
                     int ctr = blk;
                     do {
                         float h_re = *(float*)((char*)src + stride4);
-                        float* hi = (float*)((char*)src + stride4);
                         float l_re = src[0];
                         float t_re = l_re - h_re;
-                        float t_im = src[1] - hi[1];
+                        float t_im = src[1] - *(float*)((char*)src + stride4 + 4);
                         float p_re = t_im * wi;
                         float p_im = t_im * wr;
                         dst[0] = (float)((double)(h_re + l_re) * scale);
                         float l_im = src[1];
+                        dst[1] = (float)((double)(l_im + *(float*)((char*)src + stride4 + 4)) * scale);
                         src += 2;
-                        dst[1] = (float)((double)(l_im + hi[1]) * scale);
-                        *(float*)((char*)dst + blk8) = (float)((double)(t_re * wr - p_re) * scale);
-                        *(float*)((char*)dst + blk8 + 4) = (float)((double)(t_re * wi + p_im) * scale);
+                        dst[blk * 2] = (float)((double)(t_re * wr - p_re) * scale);
+                        dst[blk * 2 + 1] = (float)((double)(t_re * wi + p_im) * scale);
                         dst += 2;
                         ctr -= 1;
                     } while (ctr != 0);
@@ -339,17 +337,16 @@ int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle
                 int stride4 = (int)size * 4;
                 int ctr = blk;
                 do {
-                    float* hi = (float*)((char*)src + stride4);
-                    float t_im = src[1] - hi[1];
+                    float t_im = src[1] - *(float*)((char*)src + stride4 + 4);
                     float h_re = *(float*)((char*)src + stride4);
                     float l_re = src[0];
                     float t_re = l_re - h_re;
                     dst[0] = h_re + l_re;
                     float l_im = src[1];
+                    dst[1] = l_im + *(float*)((char*)src + stride4 + 4);
                     src += 2;
-                    dst[1] = l_im + hi[1];
-                    *(float*)((char*)dst + blk8) = t_re * wr - t_im * wi;
-                    *(float*)((char*)dst + blk8 + 4) = t_re * wi + t_im * wr;
+                    dst[blk * 2] = t_re * wr - t_im * wi;
+                    dst[blk * 2 + 1] = t_re * wi + t_im * wr;
                     dst += 2;
                     ctr -= 1;
                 } while (ctr != 0);
