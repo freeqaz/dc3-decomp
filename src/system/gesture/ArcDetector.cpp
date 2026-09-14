@@ -496,7 +496,7 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
             }
             float zd = mArcOffset.z - pt.z;
             TheRnd.DrawStringScreen(
-                MakeString("%f %f", dx, zd),
+                MakeString("%f %f", +dx, zd),
                 Vector2(0.6f, drawY),
                 Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
                 true
@@ -532,13 +532,10 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
             if (pt != jointPathCopy.front()) {
                 UtilDrawLine(prevScaled, zPt, Hmx::Color(c, c, 0.0f, 1.0f));
             }
-            UtilDrawCircle2D(
-                Vector2(scaledX, 0.75f), 0.01f, Hmx::Color(0.0f, 0.0f, c, 1.0f), 37
-            );
-            UtilDrawCircle2D(
-                Vector2(scaledX, (mArcOffset.y - pt.y) + 0.75f), 0.01f,
-                Hmx::Color(0.0f, c, 0.0f, 1.0f), 37
-            );
+            Vector2 basePt(scaledX, 0.75f);
+            Vector2 heightPt(scaledX, (mArcOffset.y - pt.y) + 0.75f);
+            UtilDrawCircle2D(basePt, 0.01f, Hmx::Color(0.0f, 0.0f, c, 1.0f), 37);
+            UtilDrawCircle2D(heightPt, 0.01f, Hmx::Color(0.0f, c, 0.0f, 1.0f), 37);
 
             prevScaled = zPt;
             drawY = drawY + 0.03125f;
@@ -551,9 +548,8 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
         Skeleton *skel = TheGestureMgr->GetActiveSkeleton();
         float handX, handY, handZ;
         if (skel != NULL) {
-            const TrackedJoint *joints = skel->TrackedJoints();
-            const TrackedJoint &secondary = joints[mSecondaryJoint];
-            const TrackedJoint &primary = joints[mPrimaryJoint];
+            const TrackedJoint &secondary = skel->TrackedJoints()[mSecondaryJoint];
+            const TrackedJoint &primary = skel->TrackedJoints()[mPrimaryJoint];
             handX = primary.mJointPos[0].x - secondary.mJointPos[0].x;
             handY = primary.mJointPos[0].y - secondary.mJointPos[0].y;
             handZ = primary.mJointPos[0].z - secondary.mJointPos[0].z;
@@ -569,8 +565,9 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
         }
         float curScaledX = curDx * halfArcScale;
         float curScaledY = mArcOffset.z - handZ;
-        UtilDrawCircle2D(Vector2(curScaledX, curScaledY), 0.015f, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 37);
-        UtilDrawLine(Vector2(curScaledX, curScaledY), Vector2(aspectRatio * 0.5f, 0.0f), Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f));
+        Vector2 curPt(curScaledX, curScaledY);
+        UtilDrawCircle2D(curPt, 0.015f, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 37);
+        UtilDrawLine(curPt, Vector2(aspectRatio * 0.5f, 0.0f), Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f));
 
         UtilDrawCircle2D(
             Vector2(curScaledX, (mArcOffset.y - handY) + 0.75f), 0.015f,
