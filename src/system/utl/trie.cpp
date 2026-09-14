@@ -245,11 +245,16 @@ void Trie::remove(unsigned int index) {
 #define TRIE_ROOT_SIBLING_COUNT (*(unsigned char *)((char *)this + 0x20))
 #endif
 
+            // Retail does NOT carry `curNode` across this loop: the body
+            // recomputes NodePtr from the *current* index (mulli r30,0x11 /
+            // add r11,r31 at 827FE550) and reads NextSibling out of that, and
+            // curNode is rebuilt from scratch after the loop at 827FE5C8.
+            // Keeping a loop-carried curNode forces MSVC to rotate the loop
+            // and peel the zero-trip test.
             while (scanCount < TRIE_ROOT_SIBLING_COUNT - 1) {
                 check_index(curIdx);
                 scanCount++;
-                curIdx = NextSibling(curNode);
-                curNode = NodePtr(this, curIdx);
+                curIdx = NextSibling(NodePtr(this, curIdx));
             }
 #undef TRIE_ROOT_SIBLING_COUNT
 
@@ -266,6 +271,7 @@ void Trie::remove(unsigned int index) {
 
             // Move last sibling to position 1
             check_index(curIdx);
+            curNode = NodePtr(this, curIdx);
             FirstChild(NodePtr(this, 1)) = FirstChild(curNode);
             check_index(curIdx);
 #ifdef HX_NATIVE
@@ -306,14 +312,21 @@ void Trie::remove(unsigned int index) {
 
         // Update sibling count
         check_index(curIdx);
-        unsigned char newSibCount = SiblingCount(curNode) - 1;
+        // Retail loads the raw sibling byte here (lbz r28, 0xf(r29) at
+        // 827FE6B4) and does the decrement at the point of use as a 32-bit
+        // `subi r9, r28, 0x1` (827FE6E8).  Writing it as
+        // `unsigned char n = SiblingCount(..) - 1` truncates the result to a
+        // byte (addi 0xff / clrlwi 24), which is both two extra instructions
+        // and a different value if the count is ever 0.
+        unsigned int sibCountBefore = SiblingCount(curNode);
         check_index(curIdx);
         unsigned int parentIdx3 = Parent(curNode);
         check_index(parentIdx3);
         unsigned int newFirstChild = FirstChild(NodePtr(this, parentIdx3));
         check_index(newFirstChild);
         char *newFirstChildNode = NodePtr(this, newFirstChild);
-        CountField(newFirstChildNode) = (CountField(newFirstChildNode) & 0xFFFFFF00) | newSibCount;
+        CountField(newFirstChildNode) =
+            (CountField(newFirstChildNode) & 0xFFFFFF00) | (sibCountBefore - 1);
 
         delete_node(curIdx);
         return;
