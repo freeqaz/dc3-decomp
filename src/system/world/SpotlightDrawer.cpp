@@ -620,7 +620,7 @@ void SpotlightDrawer::DrawWorld() {
                     // back through sLights.begin() keeps &sLights live across the
                     // whole loop, which costs one extra callee-saved register and
                     // 16 bytes of frame.
-                    it = const_cast<SpotlightEntry *>(e2);
+                    it = std::vector<SpotlightEntry>::iterator(const_cast<SpotlightEntry *>(e2));
                 } while (it != itEnd);
             }
             if (cur) {
