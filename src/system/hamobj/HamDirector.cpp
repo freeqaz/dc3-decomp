@@ -2732,8 +2732,13 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
                 AreCharactersColliding() &&
                 TheTaskMgr.Seconds(TaskMgr::kRealTime) >= mLastCollisionTime) {
                 if (ReactToCollision(frame)) {
-                    static Symbol collisionMacro("SONG_COLLISION_DONT_CUT_AGAIN_FOR_X_BEATS");
-                    DataArray *macro = DataGetMacro(collisionMacro);
+                    // Retail builds the macro name as a stack temporary
+                    // (addi r3,r31,0x50 / bl ??0Symbol / lwz r3,0x0(r3) at
+                    // 0x8247B0E8) -- there is no second function-local static
+                    // here, and the guard word is touched only once in the
+                    // whole function, for song_anim_timer.
+                    DataArray *macro =
+                        DataGetMacro("SONG_COLLISION_DONT_CUT_AGAIN_FOR_X_BEATS");
                     float collisionDelay = macro->Node(0).Float(macro);
                     float currentBeat = TheTaskMgr.Beat();
                     float futureMs = BeatToMs(currentBeat + collisionDelay);
