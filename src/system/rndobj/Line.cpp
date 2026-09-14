@@ -502,132 +502,126 @@ void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
     }
 }
 
-template <class _T>
-__declspec(noinline) auto _outline_back(_T* _obj) -> decltype(_obj->back()) {
-    return _obj->back();
-}
-
+// 85.3% canonical (w7-ay, from 76.9). Residuals, all tried and consistent
+// with the phase notes below: the phase-1 IV is derived from &start->ViewPos()
+// and then biased (82678404 `addi r11, r4, 0x20`, then `subi r9, r11, 0x34`)
+// where we bias start directly; phase 2 reloads dir.y for the normalisation
+// multiply and side.x for the width scale but forwards dirX and side.y
+// (partial store-forwarding -- spelling the re-reads as `dir.y * invLen` /
+// `side.x * mWidth` forwarded MORE, not less, 81.8); the last-point copy
+// batches its four loads into r7/r6/r9/r8 before storing; the two phase-4
+// copy loops count with `subic.`/`bne` (82678694, 826786F0) and `stw`+`addi`
+// where every counted spelling here (for, do/while, hoisted bound) gives
+// `mtctr`/`bdnz` with `stwu`; the end cap re-reads pos.x after the Subtract
+// where the image keeps it in f0.
 void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
-    // Phase 1: Project all points (divide x,z by y in view space)
+    // Phase 1: project every point (x, z over y in view space). The three
+    // view-space components are read before either projected value is
+    // stored (826783F8-82678438), as in UpdateLinePair.
     for (Point *pt = start; pt <= end; pt++) {
-        float *viewPos = (float *)&pt->unk[0];
-        float *proj = (float *)&pt->unk[4];
-        float invY = 1.0f / viewPos[1];
-        proj[0] = viewPos[0] * invY;
-        proj[1] = viewPos[2] * invY;
+        Vector3 &viewPos = pt->ViewPos();
+        Vector2 &proj = *(Vector2 *)(&viewPos + 1);
+        float vy = viewPos.y, vz = viewPos.z, vx = viewPos.x;
+        float invY = 1.0f / vy;
+        proj.x = vx * invY;
+        proj.y = vz * invY;
     }
 
-    // Phase 2: Compute direction and side vectors between adjacent points
-    Point *lastPt = start;
-    if (start != end) {
-        for (Point *pt = start; pt != end; pt++) {
-            float *proj = (float *)&pt->unk[4];
-            float *dir = (float *)&pt->unk[6];
-            Point *next = pt + 1;
-            float *nextProj = (float *)&next->unk[4];
+    // Phase 2: direction and side vectors between adjacent points. Same
+    // spelling as UpdateLinePair: dir is re-read after it is stored
+    // (82678494 reloads dir.y), side.x is re-read for the width scale.
+    Point *pt = start;
+    for (; pt != end; pt++) {
+        Vector2 &proj = *(Vector2 *)&pt->unk[4];
+        Vector2 &dir = *(Vector2 *)&pt->unk[6];
+        Vector2 &side = *(Vector2 *)&pt->unk[8];
+        Vector2 &nextProj = *(Vector2 *)&(pt + 1)->unk[4];
 
-            float dirZ = nextProj[1] - proj[1];
-            dir[1] = dirZ;
-            float dirX = nextProj[0] - proj[0];
-            dir[0] = dirX;
-
-            float len = std::sqrt(dirX * dirX + dirZ * dirZ);
-            float invLen = 0.0f;
-            if (len != 0.0f) {
-                invLen = 1.0f / len;
-            }
-            float normDirZ = dirZ * invLen;
-            float normDirX = dirX * invLen;
-            dir[1] = normDirZ;
-            dir[0] = normDirX;
-
-            lastPt = pt + 1;
-
-            // Side vector: perpendicular to direction, scaled by width
-            float *side = (float *)&pt->unk[8];
-            side[1] = normDirX;
-            side[0] = -normDirZ;
-            float width = mWidth;
-            side[1] = normDirX * width;
-            side[0] = side[0] * width;
+        float dirZ = nextProj.y - proj.y;
+        dir.y = dirZ;
+        float dirX = nextProj.x - proj.x;
+        dir.x = dirX;
+        dirZ = dir.y;
+        dirX = dir.x;
+        float len = std::sqrt(dirX * dirX + dirZ * dirZ);
+        float invLen;
+        if (len != 0.0f) {
+            invLen = 1.0f / len;
+        } else {
+            invLen = 0.0f;
         }
+        dir.y = invLen * dir.y;
+        dir.x = invLen * dirX;
+
+        side.y = dir.x;
+        side.x = -dir.y;
+        float width = mWidth;
+        side.y = width * side.y;
+        side.x = side.x * width;
     }
 
-    // Copy direction/side from second-to-last point to last point (integer copy)
-    int *lastWords = &lastPt->unk[6];
-    int *prevWords = &(lastPt - 1)->unk[6];
-    lastWords[1] = prevWords[1];
-    lastWords[2] = prevWords[2];
-    lastWords[3] = prevWords[3];
-    lastWords[0] = prevWords[0];
+    // The last point takes the direction and side of the one before it.
+    {
+        Point *prev = pt - 1;
+        pt->unk[7] = prev->unk[7];
+        pt->unk[8] = prev->unk[8];
+        pt->unk[9] = prev->unk[9];
+        pt->unk[6] = prev->unk[6];
+    }
 
-    // Phase 3: Handle fold angles at interior points
-    Point *secondPt = start + 1;
+    // Phase 3: fold the side vector at sharp interior corners.
     bool flipped = false;
-
-    // Initialize prevRay: base = projected pos + side, dir = direction
-    float *startProj = (float *)&start->unk[4];
-    float *startDir = (float *)&start->unk[6];
-    float *startSide = (float *)&start->unk[8];
-
     Hmx::Ray prevRay;
-    prevRay.base.Set(startSide[0] + startProj[0], startSide[1] + startProj[1]);
-    prevRay.dir.Set(startDir[0], startDir[1]);
+    {
+        Vector2 &startProj = *(Vector2 *)&start->unk[4];
+        Vector2 &startDir = *(Vector2 *)&start->unk[6];
+        Vector2 &startSide = *(Vector2 *)&start->unk[8];
+        prevRay.dir = startDir;
+        prevRay.base.Set(startSide.x + startProj.x, startSide.y + startProj.y);
+    }
 
-    if (secondPt != end) {
-        for (Point *pt = secondPt; pt != end; pt++) {
-            float *dir = (float *)&pt->unk[6];
-            float *side = (float *)&pt->unk[8];
-            float *proj = (float *)&pt->unk[4];
-            Point *prevP = pt - 1;
-            float *prevDir2 = (float *)&prevP->unk[6];
+    for (Point *cur = start + 1; cur != end; cur++) {
+        Vector2 &proj = *(Vector2 *)&cur->unk[4];
+        Vector2 &dir = *(Vector2 *)&cur->unk[6];
+        Vector2 &side = *(Vector2 *)&cur->unk[8];
+        Vector2 &prevDir = *(Vector2 *)&(cur - 1)->unk[6];
 
-            // Dot product of adjacent direction vectors
-            float dot = prevDir2[0] * dir[0] + prevDir2[1] * dir[1];
+        float dot = prevDir.x * dir.x + prevDir.y * dir.y;
+        if (dot < mFoldCos) {
+            flipped = !flipped;
+        }
+        if (flipped) {
+            side.y = -side.y;
+            side.x = -side.x;
+        }
 
-            // Check if fold angle exceeded
-            if (dot < mFoldCos) {
-                flipped = !flipped;
-            }
+        Hmx::Ray oldPrevRay = prevRay;
+        prevRay.base.Set(proj.x + side.x, proj.y + side.y);
+        prevRay.dir = dir;
 
-            // If flipped, negate the side vector
-            if (flipped) {
-                side[1] = -side[1];
-                side[0] = -side[0];
-            }
-
-            // Save old prevRay, then update prevRay with current data
-            Hmx::Ray oldPrevRay = prevRay;
-            prevRay.base.Set(proj[0] + side[0], proj[1] + side[1]);
-            *(long long *)&prevRay.dir = *(long long *)dir;
-
-            // If angle is sharp enough, intersect adjacent rays for smooth corner
-            if (dot < 0.9998499751091003f) {
-                Intersect(prevRay, oldPrevRay, *(Vector2 *)side);
-                side[1] = side[1] - proj[1];
-                side[0] = side[0] - proj[0];
-            }
+        if (dot < 0.9998499751091003f) {
+            Intersect(prevRay, oldPrevRay, side);
+            side.Set(side.x - proj.x, side.y - proj.y);
         }
     }
 
-    // If still flipped at the end, negate the last point's side vector
     if (flipped) {
-        float *endSide = (float *)&end->unk[8];
-        endSide[0] = -endSide[0];
-        endSide[1] = -endSide[1];
+        Vector2 &endSide = *(Vector2 *)&end->unk[8];
+        endSide.y = -endSide.y;
+        endSide.x = -endSide.x;
     }
 
-    // Phase 4: Copy side vectors for points outside the visible range
-    Point *pointsBegin = &mPoints[0];
-    Point *pointsEnd = &_outline_back(&mPoints);
-
-    if (pointsBegin == start) {
-        // Start is at the beginning; copy end's data to points after end
-        if (end + 1 <= pointsEnd) {
+    // Phase 4: points outside [start, end] copy the side vector and view
+    // position of the nearest visible point. `mPoints.back()` is evaluated
+    // once per block (the image hoists the bound out of the first loop and
+    // counts with divwu, then re-evaluates it before MapVerts).
+    if (&mPoints[0] == start) {
+        Point *last = &mPoints.back();
+        if (end + 1 <= last) {
             int *endSide = &end->unk[8];
             int *endView = &end->unk[0];
-            for (Point *pt = end + 1; pt <= pointsEnd; pt++) {
-                int *ptData = &pt->unk[0];
+            for (Point *p = end + 1; p <= last; p++) {
+                int *ptData = &p->unk[0];
                 ptData[8] = endSide[0];
                 ptData[9] = endSide[1];
                 ptData[0] = endView[0];
@@ -636,14 +630,13 @@ void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
                 ptData[3] = endView[3];
             }
         }
-    } else if (pointsBegin < start) {
-        // Copy start's side/view data to points before start
-        int *startSide2 = &start->unk[8];
+    } else if (&mPoints[0] < start) {
+        int *startSide = &start->unk[8];
         int *startView = &start->unk[0];
-        for (Point *pt = pointsBegin; pt < start; pt++) {
-            int *ptData = &pt->unk[0];
-            ptData[8] = startSide2[0];
-            ptData[9] = startSide2[1];
+        for (Point *p = &mPoints[0]; p < start; p++) {
+            int *ptData = &p->unk[0];
+            ptData[8] = startSide[0];
+            ptData[9] = startSide[1];
             ptData[0] = startView[0];
             ptData[1] = startView[1];
             ptData[2] = startView[2];
@@ -651,69 +644,59 @@ void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
         }
     }
 
-    // Phase 5: Write vertex positions
+    // Phase 5: vertex positions. Each cap is TWO vertices, each written as
+    // the body vertex and then offset by the quarter-turned side vector on
+    // the same destination (the doubled pos.y store at 8267878C/82678790),
+    // exactly as UpdateLinePair does. The previous body wrote four cap
+    // vertices with the unoffset pair as their own vertices and offset the
+    // start cap by (-side.y, -side.x); the image offsets it by
+    // (-side.y, +side.x) (82678794-826787A0) and the unflipped end cap by
+    // (+side.y, -side.x) (8267888C). The first point, the last point and
+    // the start-cap offset are all formed BEFORE MapVerts and survive the
+    // call in registers (82678744-8267874C `lfs f13, 0x44(r7); lfs f0,
+    // 0x40(r7); fneg f13, f13`, then `bl MapVerts`), unconditionally.
+    Point *first = &mPoints[0];
+    Point *last = &mPoints.back();
+    Vector2 &firstSide = *(Vector2 *)&first->unk[8];
+    Vector2 startPerp;
+    startPerp.x = -firstSide.y;
+    startPerp.y = firstSide.x;
     VertsMap vmap;
     MapVerts(0, vmap);
 
-    // Start cap
     if (mHasCaps) {
-        float *viewPos = (float *)&pointsBegin->unk[0];
-        float *sideV = (float *)&pointsBegin->unk[8];
-        float capSideX = -sideV[0];
-        float capSideZ = -sideV[1];
-
-        float x1 = viewPos[0] - sideV[0];
-        float y1 = viewPos[1];
-        float z1 = viewPos[2] - sideV[1];
-        vmap.v->pos.Set(x1, y1, z1);
+        Vector3 &viewPos = first->ViewPos();
+        Subtract(viewPos, firstSide, *(Vector3 *)&vmap.v->pos);
+        Add(*(Vector3 *)&vmap.v->pos, startPerp, *(Vector3 *)&vmap.v->pos);
         vmap.v++;
-        vmap.v->pos.Set(x1 + capSideZ, y1, z1 + capSideX);
-        vmap.v++;
-
-        float x2 = viewPos[0] + sideV[0];
-        float z2 = viewPos[2] + sideV[1];
-        vmap.v->pos.Set(x2, y1, z2);
-        vmap.v++;
-        vmap.v->pos.Set(x2 + capSideZ, y1, z2 + capSideX);
+        Add(viewPos, firstSide, *(Vector3 *)&vmap.v->pos);
+        Add(*(Vector3 *)&vmap.v->pos, startPerp, *(Vector3 *)&vmap.v->pos);
         vmap.v++;
     }
 
-    // Main line vertices
-    for (Point *pt = pointsBegin; pt <= pointsEnd; pt++) {
-        float *viewPos = (float *)&pt->unk[0];
-        float *sideV = (float *)&pt->unk[8];
-        vmap.v->pos.Set(viewPos[0] - sideV[0], viewPos[1], viewPos[2] - sideV[1]);
-        vmap.v++;
-        vmap.v->pos.Set(viewPos[0] + sideV[0], viewPos[1], viewPos[2] + sideV[1]);
-        vmap.v++;
+    for (Point *p = first; p <= last; p++) {
+        Vector3 &viewPos = p->ViewPos();
+        Vector2 &side = *(Vector2 *)&p->unk[8];
+        Subtract(viewPos, side, *(Vector3 *)&(vmap.v++)->pos);
+        Add(viewPos, side, *(Vector3 *)&(vmap.v++)->pos);
     }
 
-    // End cap
     if (mHasCaps) {
-        float *viewPos = (float *)&pointsEnd->unk[0];
-        float *sideV = (float *)&pointsEnd->unk[8];
-        float capSideZ, capSideX;
+        Vector3 &viewPos = last->ViewPos();
+        Vector2 &side = *(Vector2 *)&last->unk[8];
+        Vector2 perp;
         if (flipped) {
-            capSideZ = -sideV[1];
-            capSideX = sideV[0];
+            perp.y = side.x;
+            perp.x = -side.y;
         } else {
-            capSideZ = -sideV[0];
-            capSideX = sideV[1];
+            perp.x = side.y;
+            perp.y = -side.x;
         }
-
-        float x1 = viewPos[0] - sideV[0];
-        float y1 = viewPos[1];
-        float z1 = viewPos[2] - sideV[1];
-        vmap.v->pos.Set(x1, y1, z1);
+        Subtract(viewPos, side, *(Vector3 *)&vmap.v->pos);
+        Add(*(Vector3 *)&vmap.v->pos, perp, *(Vector3 *)&vmap.v->pos);
         vmap.v++;
-        vmap.v->pos.Set(x1 + capSideZ, y1, z1 + capSideX);
-        vmap.v++;
-
-        float x2 = viewPos[0] + sideV[0];
-        float z2 = viewPos[2] + sideV[1];
-        vmap.v->pos.Set(x2, y1, z2);
-        vmap.v++;
-        vmap.v->pos.Set(x2 + capSideZ, y1, z2 + capSideX);
+        Add(viewPos, side, *(Vector3 *)&vmap.v->pos);
+        Add(*(Vector3 *)&vmap.v->pos, perp, *(Vector3 *)&vmap.v->pos);
     }
 }
 
