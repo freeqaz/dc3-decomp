@@ -304,7 +304,7 @@ void FreestyleMoveRecorder::Poll() {
         for (int col = 0; col < 0x140; col++) {
             int x = pixelX + centerX;
             unsigned int row = 0;
-            unsigned short *ptr = (unsigned short *)(texelPtr - 0x300);
+            unsigned short *ptr = (unsigned short *)texelPtr;
             for (int r = 0xf0; r != 0; r--) {
                 unsigned int depthVal = 0;
                 if ((int)x >= 0 && (int)x < 0x140) {
@@ -315,7 +315,6 @@ void FreestyleMoveRecorder::Poll() {
                     );
                 }
                 row++;
-                ptr += 0x180;
                 unsigned short depthU16 = (unsigned short)depthVal;
                 // the image subtracts from the 16-bit-truncated value
                 // (`clrlwi r10, r10, 16` feeds `subf r10, r29, r10`, idx
@@ -328,6 +327,7 @@ void FreestyleMoveRecorder::Poll() {
                 // redundant `and r8, r8, r27` inside the inner loop.
                 unsigned int colorBits = (depthU16 > 0) ? colorMask : 0;
                 *ptr = (unsigned short)(shifted | colorBits);
+                ptr += 0x180;
             }
             pixelX++;
             texelPtr += 2;
