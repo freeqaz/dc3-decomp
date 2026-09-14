@@ -339,10 +339,7 @@ void UIListDir::BuildDrawState(
     int numDisplayWithData = state.NumDisplayWithData();
 
     int halfDisplay = numDisplay / 2;
-    int fadeCountStart = halfDisplay;
-    if (halfDisplay >= mFadeOffset) {
-        fadeCountStart = mFadeOffset;
-    }
+    int fadeCountStart = halfDisplay < mFadeOffset ? halfDisplay : mFadeOffset;
     int fadeCountEnd = fadeCountStart;
     if (mFadeOffset != 0) {
         int fadeEndCalc;
@@ -399,7 +396,6 @@ void UIListDir::BuildDrawState(
     // Declaration order is load-bearing: retail zeroes the four accumulators in
     // the order firstGap, totalGap, lastPosBase, highlightBase (fmr f25/f29/f22/
     // f23 from f31 at 0x82789234-0x82789240).
-    int prevData = 0;
     Vector3 elemPos;
     float firstGap = 0.0f;
     float totalGap = 0.0f;
@@ -407,6 +403,7 @@ void UIListDir::BuildDrawState(
     float highlightBase = 0.0f;
 
     float scrollOffset = (float)direction * state.StepPercent();
+    int prevData = 0;
 
     for (int i = 0; i < numDisplayWithData; i++) {
         int dispIndex = i;
@@ -498,18 +495,26 @@ void UIListDir::BuildDrawState(
         UIComponent::State componentState =
             state.Provider()->ComponentStateOverride(showing, prevData, compState);
 
-        // NOTE (w7-ai): residual at 97.9%.  Retail's frame is 0x220 and ours is
-        // 0x1e0 because MSVC gives the `data == -1` branch's UIListElementDrawState
-        // its own 0x40 slot at 0xe0(r1) while ours is coloured onto the main
-        // `elem` at 0xa0(r1).  Neither scoping the main `elem` up to loop-body
-        // level (so the two nest rather than sit in disjoint blocks) nor moving
-        // `Vector3 elemPos` into the loop changes a single byte -- two
-        // consecutive neutral variants, measured 2026-09-14 -- so the 0x40 and
-        // the 0x24c/0x25f parameter-home offsets that ride on it are deliberate.
-        // The other residual is one allocator choice: retail keeps
-        // numDisplayWithData in r28 AND spilled at 0x54(r1) and caches
-        // fadeCountStart in r15, where we put numDisplayWithData in r15 and spill
-        // fadeCountEnd instead.
+        // NOTE (w7-ai, 97.90): retail's frame is 0x220 and ours is 0x1e0 because
+        // MSVC gives the `data == -1` branch's UIListElementDrawState its own
+        // 0x40 slot at 0xe0(r1) while ours is coloured onto the main `elem` at
+        // 0xa0(r1).  Scoping the main `elem` up to loop-body level or moving
+        // `Vector3 elemPos` into the loop changes nothing.
+        // w7-bj (98.88, 4 rows): declaring `elem` at FUNCTION scope does give
+        // frame parity (0x220, 1476/1476 bytes, the 0x24c/0x25f homes) but the
+        // canonical ruler charges it (97.90 -> 97.40; with the Min shape below
+        // 97.67) because it also flips a pair of fnmsubs and the loop-guard
+        // placement, so the 0x1e0 frame is kept.  What did pay: spelling
+        // fadeCountStart as `halfDisplay < mFadeOffset ? halfDisplay :
+        // mFadeOffset` (reproduces `mr r15,r10 / mr r15,r11` at 0x82789088,
+        // 97.90 -> 98.17) and defining `prevData = 0` AFTER the StepPercent call
+        // (the `mr r27, r23` lands at 0x8278924C, 98.17 -> 98.88).  A named
+        // `scrollGap` local and `totalGap - scrollOffset * firstGap` were inert.
+        // Residual: one allocator choice -- retail splits numDisplayWithData
+        // (homed at 0x54(r1) at 0x82789080/0x827891E8, r28 time-shared with
+        // `showing`, reloaded at 0x82789554) and keeps fadeCountEnd in r17,
+        // where we keep numDisplayWithData in r15 and split fadeCountEnd (r14,
+        // freed for the Vector3-copy scratch) onto 0x54(r1) instead.
         UIListElementDrawState elem;
 #ifdef HX_NATIVE
         memset(&elem, 0, sizeof(elem));
