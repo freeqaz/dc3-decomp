@@ -96,7 +96,8 @@ void DanceRemixer::SetJump(int from, int to) {
         // a separate addic. r11, r11, 0x1): the end index is its own named
         // quantity and the count is an inclusive end - start + 1.
         int endIdx = (int)curBeat / 4 + 4;
-        int count = endIdx - (mFromMeasure - 1) + 1;
+        int startIdx = mFromMeasure - 1;
+        int count = endIdx - startIdx + 1;
         if (count > 0 && 0 < (int)count) {
             // Block-scoped: the image keeps the start index in a volatile
             // register and copies it into a callee-saved one INSIDE the guard
@@ -105,7 +106,7 @@ void DanceRemixer::SetJump(int from, int to) {
             // computed straight into r29 and renumbers every later callee-saved
             // register by one.  The load of mFromMeasure is CSE'd with the one
             // the count above needs, so there is still only one lwz 0x4c(r31).
-            int moveIdx = mFromMeasure - 1;
+            int moveIdx = startIdx;
             do {
                 MILO_ASSERT(ValidMoveIdx(moveIdx), 0x16d);
                 for (int p = 0; p < 2; p++) {
