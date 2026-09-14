@@ -104,10 +104,13 @@ namespace {
                             normalized[i] = (raw[i] - mean) * (1.0f / var);
                         }
 
-                        // Compute midpoint
-                        int rawSz = raw.size();
-                        int midEnd = rawSz - 6;
-                        if ((unsigned)(rawSz - 6) <= 6) midEnd = 6;
+                        // Compute midpoint.  The image subtracts once --
+                        // `subi r30, r11, 0x6` at 824D338C is the only `- 6`
+                        // before the compare, and `cmplwi cr6, r30, 0x6`
+                        // tests that same register -- so the guard reads
+                        // `midEnd`, not a second `rawSz - 6`.
+                        int midEnd = (int)raw.size() - 6;
+                        if ((unsigned)midEnd <= 6) midEnd = 6;
 
                         // Z-score middle section with sliding window
                         if (midEnd > 6) {
