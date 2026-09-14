@@ -477,6 +477,14 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
             mCrucibleHostname = DevHostname("crucible");
         }
     }
+    // MEASURED, 2026-09-14 (lane w7-aa).  The residual 22 rows here are a single
+    // r27<->r28 rotation (16 of 21 swap rows) between these two DataPoints, plus
+    // one insert/delete pair at idx 278/282 (`addi r3, r31, 0x50` scheduled four
+    // rows apart) and 3 PERMUTED stack slots.  Swapping THESE TWO DECLARATIONS
+    // does NOT move the registers -- it keeps the whole r27<->r28 rotation and
+    // ADDS 9 offset swaps of (0x70,0x90), i.e. it moves the frame slots instead:
+    // 22 rows -> 40 rows, 99.53052 -> 99.5 (worse).  Do not re-try the swap; the
+    // lever is liveness across the Directory()/DataPointGetter calls, not order.
     DataPoint mainPoint;
     DataPoint detailPoint;
     mainPoint.AddPair("message", DataNode(msg));
