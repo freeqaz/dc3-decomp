@@ -38,6 +38,15 @@ namespace {
     }
 }
 
+// Open residual (w7-r, 2026-09-14): the image and we disagree about which of the
+// two incoming pointers gets a home slot. The image spills the by-value param
+// (`stw r4, 0x11c(r31)`) and keeps the hidden sret pointer in callee-saved r26,
+// so every `s = <sym>` arm loads into scratch r11 and branches to one merge
+// point; we spill the sret pointer (`stw r3, 0x114(r31)`) and keep `s` itself in
+// callee-saved r17, so the arms load into r17 and branch to a different merge.
+// Everything else in the 61 rows is a straight permutation of the callee-saved
+// registers holding the 17 function-local `static Symbol`s (r17..r29), which the
+// canonical ruler already forgives -- hence 98.48 with 61 raw rows.
 Symbol GetSystemLanguage(Symbol s) {
     static Symbol eng("eng");
     static Symbol fre("fre");

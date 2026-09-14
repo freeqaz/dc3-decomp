@@ -526,6 +526,13 @@ void DataArray::Save(BinStream &bs) const {
     }
 }
 
+// Mechanism behind the residual (w7-r, 2026-09-14), on top of the note below:
+// the seven missing `stw r11, 0x58(r31)` dead stores are not arbitrary. 0x58 is
+// the ADDRESS-ESCAPING temp for `mFile.Str()`, handed to
+// ??$MakeString@PBDPBDF@@YAPBDPBDABQBD1ABF@Z at 825A1F0C as `addi r5, r31, 0x58`.
+// Because its address escapes, MSVC's DSE may not remove the `node.Type()`
+// temporaries it coalesced into that same slot, so the image keeps 14 of them
+// and we keep 7 -- which is also the whole of our frame delta (-0x10).
 void DataArray::Load(BinStream &bs) {
     mFile = gFile;
     short size;
