@@ -65,6 +65,20 @@ void ObjPtrVec<T1, T2>::merge(const ObjPtrVec<T1, T2> &other) {
         // (0x82358B9C falls into `bl find` from BOTH sides of the null test, which
         // is only the vbase adjustment MSVC emits for T1* -> Hmx::Object*). A null
         // entry is harmless because insert() drops a null in kObjListNoNull mode.
+        // NEGATIVE RESULT (w7-al, 2026-09-14): 83.7 canonical, and 20 of the 34
+        // rows are one callee-saved renumbering caused by ONE extra register.
+        // The image holds the whole `end()` in r31 across the `bl find`
+        // (0x...  `mulli r11, r11, 0x14` / `add r31, r11, r10` both BEFORE the
+        // call, six callee-saved regs, `bl __savegprlr_26`); we keep size() in
+        // r30 and begin() in r31 and sink the `mulli`/`add` past the call, which
+        // costs a seventh register (`__savegprlr_25`) and 0x10 more frame.  That
+        // is a scheduler choice, not a source one: hoisting it into a named
+        // `iterator e = end();` materialises the iterator on the stack and costs
+        // 83.7 -> 60.7, and writing the test as `end() == find(obj)` is
+        // byte-inert.  The remaining two rows are the image biasing the loop
+        // induction variable to the node's object field (`addi r27, r11, 0xc`,
+        // un-biased again with `subi r10, r27, 0xc` for the end compare), which
+        // is MSVC strength reduction with no source lever.
         if (find(obj) == end()) {
             push_back(obj);
         }
