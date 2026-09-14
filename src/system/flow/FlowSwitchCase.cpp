@@ -76,6 +76,7 @@ bool FlowSwitchCase::IsValidCase(
         //     the eight slot rows stay at [off:+32].
         //   * a redundant `{ }` around the switch instead: also byte-neutral.
         // Scope depth does not reach this colouring in either direction.
+        switch (mOperator) {
         case kEqual:
             result = curValue->Equal(mToValue.Node(), nullptr, true);
             break;
