@@ -209,6 +209,20 @@ void MemHeap::Init(
     // rather than from `start`, and routing it through an `int *rawStart =
     // mStart;` local -- all three still DSE the first store, all three read
     // 83.013 to five decimals.
+    // NEGATIVE RESULT (w7-bi, 2026-09-14): a fourth spelling, aimed at the
+    // OTHER missing instruction.  `clrrwi r10, r30, 0` (827F87C0) is a
+    // zero-extended COPY of `start`, and its only consumer is the mSizeWords
+    // subtraction at 827F87EC -- so it is the SIZE, not the alignment, that
+    // the image computes from a value which went through a 32-bit conversion.
+    // Routing only that subtraction through a read-back (`int *rawStart =
+    // mStart;` placed after `mStrategy` and before the aligned store, with the
+    // alignment still taken from `start` so 827F87B8 `subi r11, r30, 0x4`
+    // keeps pairing) is ALSO dead-store-eliminated: identical 83.0 canonical,
+    // identical 83-row table, same 2-instruction deficit (312 B target vs
+    // 304 B base).  MSVC forwards the store to the read and then removes it,
+    // so no read-back spelling can keep it alive.  The entire residual is
+    // those 2 absent instructions plus the member-store reshuffle they cause
+    // (idx 27-56); idx 0-26 and 57-82 are exact on both sides.
     mStart = start;
     mName = name;
     mNum = num;
