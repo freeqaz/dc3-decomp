@@ -301,9 +301,15 @@ bool CacheXbox::WriteAsync(const char *cc, void *v, unsigned int ui, Hmx::Object
 }
 
 int CacheXbox::ThreadGetFileSize() {
+    // `err` is a FUNCTION-scope local in the image, not two block-scope ones.
+    // Both arms spill it to r1+0x50 (0x827FF334 in the CreateFile arm,
+    // 0x827FF414 in the GetFileSize arm) and `fileSize`, declared inside the
+    // else arm, takes the NEXT word 0x54 -- which only happens if `err`'s slot
+    // was already claimed by an enclosing scope.
+    unsigned int err;
     HANDLE file = CreateFileA(mThreadStr.c_str(), 0, 1, nullptr, 3, 0x80, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
-        unsigned int err = GetLastError();
+        err = GetLastError();
         if (!IsDeviceConnected(mCacheID.DeviceID())) {
             return 8;
         } else if (err == 2) {
@@ -317,14 +323,21 @@ int CacheXbox::ThreadGetFileSize() {
         }
     } else {
         int ret = 0;
-        // MEASURED NEUTRAL (2026-09-13), both together and separately: swapping
-        // the err/fileSize declarations to chase the image's slot pair (err at
-        // r1+0x50, fileSize at r1+0x54) and inverting the test to
-        // `res != -1 || (err = GetLastError()) == 0` to chase the image's block
-        // order (0x827FF420 before the notify at 0x827FF42C) leaves this at
-        // exactly 87.375 -- MSVC canonicalises both.
+        // The slot half of the 2026-09-13 note is now FIXED, by hoisting `err`
+        // to function scope (see above) rather than by reordering the two
+        // declarations in this block -- a reorder here really is inert, because
+        // `err` has no initialiser and MSVC places it at first use, which is
+        // after `&fileSize`.  Both stack rows (r1+0x50 / r1+0x54) are equal now.
+        //
+        // NEGATIVE RESULT (w7-ap, 2026-09-14), on top of that fix: the block
+        // half does not move.  The image lays the store block out FIRST as the
+        // fall-through (0x827FF420, `bne .L_827FF42C` steering err != 0 away to
+        // the notify at 0x827FF42C); we lay the notify block first whichever
+        // way the test is spelt.  `res != -1 || (err = GetLastError()) == 0`
+        // with the arms swapped, and dropping the `else` for an early-return
+        // shape, both measure byte-identical to this spelling -- 21 rows, diff
+        // score 970.  MSVC canonicalises the short-circuit either way.
         DWORD fileSize = 0;
-        unsigned int err;
         DWORD res = GetFileSize(file, &fileSize);
         if (res == -1 && (err = GetLastError()) != 0) {
             MILO_NOTIFY(
