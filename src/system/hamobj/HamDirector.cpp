@@ -3329,43 +3329,59 @@ void HamDirector::Poll() {
             if (mCamPostProc) {
                 mWorldPostProc->Copy(mCamPostProc, Hmx::Object::kCopyDeep);
                 mActivePostProc.CopyRef(mCamPostProc);
-                overlayA = mCamPostProc;
                 overlayName = "camera";
+                overlayA = mCamPostProc;
             } else if (mForcePostProc && !(mForcePostProcBlend < 1.0f)) {
                 mWorldPostProc->Copy(mForcePostProc, Hmx::Object::kCopyDeep);
                 mActivePostProc.CopyRef(mForcePostProc);
-                overlayA = mForcePostProc;
                 overlayName = "force";
-            } else if (mPostProcInterpA == mPostProcInterpB) {
-                mWorldPostProc->Copy(mPostProcInterpA, Hmx::Object::kCopyDeep);
-                mActivePostProc.CopyRef(mPostProcInterpA);
-                overlayName = "song authoring - 2 equiv";
+                overlayA = mForcePostProc;
             } else {
-                mWorldPostProc->Interp(mPostProcInterpA, mPostProcInterpB, mPostProcInterpBlend);
-                mActivePostProc.CopyRef(mPostProcInterpB);
-                overlayName = "song authoring";
-                blend = mPostProcInterpBlend;
+                // Both authoring arms share the overlay assignment: they join at
+                // 0x824790E0, which is `lwz r28, 0x1c8(r31)` (mPostProcInterpB)
+                // then `lwz r29, 0x1b4(r31)` (mPostProcInterpA) -- reached both by
+                // the `b 0x824790E0` that ends the equal arm and by fallthrough
+                // from the interp arm.  We used to leave both overlays null here.
+                if (mPostProcInterpA == mPostProcInterpB) {
+                    mWorldPostProc->Copy(mPostProcInterpA, Hmx::Object::kCopyDeep);
+                    mActivePostProc.CopyRef(mPostProcInterpA);
+                    overlayName = "song authoring - 2 equiv";
+                } else {
+                    mWorldPostProc->Interp(mPostProcInterpA, mPostProcInterpB, mPostProcInterpBlend);
+                    mActivePostProc.CopyRef(mPostProcInterpB);
+                    overlayName = "song authoring";
+                    blend = mPostProcInterpBlend;
+                }
+                overlayB = mPostProcInterpB;
+                overlayA = mPostProcInterpA;
             }
             if (mForcePostProc && !mCamPostProc) {
-                float forceBlend = mForcePostProcBlend;
-                if (forceBlend > 0.0f && forceBlend < blend) {
-                    mWorldPostProc->Interp(mWorldPostProc, mForcePostProc, forceBlend);
-                    overlayB = mForcePostProc;
+                // The image compares mForcePostProcBlend against the literal 1.0f
+                // held in f31, never against the running `blend` in f30:
+                // `fcmpu cr6, f1, f31 / bge` at 0x8247910C and 0x82479140, and the
+                // final clamp is `fsubs f13, f0, f31 / fsel f0, f13, f31, f0` into
+                // mForcePostProcBlend -- `blend` is not written by the clamp at all.
+                if (mForcePostProcBlend > 0.0f && mForcePostProcBlend < 1.0f) {
+                    mWorldPostProc->Interp(mWorldPostProc, mForcePostProc, mForcePostProcBlend);
                     overlayName = "force";
-                    blend = forceBlend;
+                    blend = mForcePostProcBlend;
+                    overlayA = mWorldPostProc;
+                    overlayB = mForcePostProc;
                 }
-                if ((0.0f < mForcePostProcBlendRate && forceBlend < blend) ||
-                    (mForcePostProcBlendRate < 0.0f && 0.0f < forceBlend)) {
+                if ((0.0f < mForcePostProcBlendRate && mForcePostProcBlend < 1.0f) ||
+                    (mForcePostProcBlendRate < 0.0f && 0.0f < mForcePostProcBlend)) {
                     float newBlend = TheTaskMgr.DeltaSeconds() * mForcePostProcBlendRate + mForcePostProcBlend;
                     mForcePostProcBlend = newBlend;
                     newBlend = -newBlend >= 0.0f ? 0.0f : newBlend;
-                    blend = newBlend - blend >= 0.0f ? blend : newBlend;
-                    mForcePostProcBlend = blend;
+                    newBlend = newBlend - 1.0f >= 0.0f ? 1.0f : newBlend;
+                    mForcePostProcBlend = newBlend;
                 }
             }
             UpdatePostProcOverlay(overlayName, overlayA, overlayB, blend);
         }
-        if (mFreestyleEnabled && mVisualizer && !mVisualizer->Showing()) {
+        // The image reads mPlayerFreestyle here, not mFreestyleEnabled:
+        // `lbz r11, 0x2bc(r31)` at 0x8247919C (mFreestyleEnabled is 0x200).
+        if (mPlayerFreestyle && mVisualizer && !mVisualizer->Showing()) {
             float deltaSeconds = TheTaskMgr.DeltaSeconds();
             mFreestyleTimer += deltaSeconds;
             if (mFreestyleTimer > 1.6f) {
