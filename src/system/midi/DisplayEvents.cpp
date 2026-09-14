@@ -16,7 +16,8 @@ float DisplayEvents(DataEventList *events, float f1, float f2) {
         min++;
     float f10 = -1.0f;
     float fsum = f2 + (float)TheRnd.Width() / 200.0f;
-    while (min < events->Size() && events->Event(min).start < fsum) {
+    Hmx::Rect rect;
+    for (; min < events->Size() && events->Event(min).start < fsum; min++) {
         DataEvent curEvent(events->Event(min));
         float start14c = (curEvent.start - f2) * 200.0f + sLeftEdge;
         float start150 = (curEvent.end - f2) * 200.0f + sLeftEdge;
@@ -27,20 +28,18 @@ float DisplayEvents(DataEventList *events, float f1, float f2) {
         if (min < events->Size() - 1) {
             MinEq(start150, ((events->Event(min + 1).start - f2) * 200.0f + sLeftEdge) - 1.0f);
         }
-        // NEGATIVE RESULT (w7-bg): floor at 98.96% canonical.  Frame 0x190 vs
-        // the image's 0x180 -- callee-saved GPR (8) and FPR (14) counts already
-        // agree, so the whole 0x10 is one extra 16-byte temp.  The image gets
-        // by with THREE Rect/Color-sized slot groups because it OVERLAYS the
-        // loop's first group with the tail's: its 0x80..0x8c carries two stores
-        // each, one inside the loop (rows 132..146) and one after it
-        // (rows 194..206).  We allocate a fourth group at 0xc0..0xcc.
-        // Refuted: dropping both named Rect locals and passing
-        // `Hmx::Rect(...)` straight into DrawRect -> 98.05%, worse.  Same MSVC
-        // slot-overlay class as CampaignPerformer::OnMovePassed; not reachable
-        // from the source spelling.
-        auto eventRect = Hmx::Rect(start14c, f1 + 2.0f, Max(1.0f, start150 - start14c), 12.0f);
+        // ONE Rect for the whole function (w7-bn, 98.96 -> 100.0): the image's
+        // 0x80..0x8c is stored both inside the loop and after it because it
+        // is the same function-scope local, not two sibling-scope temps being
+        // overlaid.  `min++` lives in the for-increment so it lands after the
+        // String/DataEvent dtors (82552C6C), and the tail assigns the four
+        // fields in x, w, y, h order -- that order is what schedules the
+        // image's `stfs f31, 0x88` ahead of `stfs f13, 0x84` at 82552C8C/94.
+        // (Named `auto eventRect`/`cursorRect` in sibling scopes: 98.96;
+        //  block-scoping the tail: inert; `rect = Hmx::Rect(...)`: 94.2.)
+        rect.Set(start14c, f1 + 2.0f, Max(1.0f, start150 - start14c), 12.0f);
         TheRnd.DrawRect(
-            eventRect,
+            rect,
             Hmx::Color(0, 0, 1),
             0,
             0,
@@ -58,9 +57,11 @@ float DisplayEvents(DataEventList *events, float f1, float f2) {
                         )
                         .y);
         }
-        min++;
     }
-    auto cursorRect = Hmx::Rect(sLeftEdge, f9 - 2.0f, 1.0f, 14.0f);
-    TheRnd.DrawRect(cursorRect, Hmx::Color(1, 0, 0), 0, 0, 0);
+    rect.x = sLeftEdge;
+    rect.w = 1.0f; // stored before y: see the note above
+    rect.y = f9 - 2.0f;
+    rect.h = 14.0f;
+    TheRnd.DrawRect(rect, Hmx::Color(1, 0, 0), 0, 0, 0);
     return f9 + f10;
 }
