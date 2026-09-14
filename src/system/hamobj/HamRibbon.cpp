@@ -238,7 +238,6 @@ void HamRibbon::UpdateChase() {
 
     int firstDirty = mChaseKeys.size() - added;
     if (firstDirty < mChaseKeys.size()) {
-        float prevAngle = -1.0f;
         for (int i = firstDirty; i < mChaseKeys.size(); ++i) {
             if (i != 0) {
                 Key<Transform> &cur = mChaseKeys[i];
@@ -254,8 +253,13 @@ void HamRibbon::UpdateChase() {
                     Subtract(prev.value.v, mChaseKeys[i - 2].value.v, prevDir);
                     float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
                     angle = std::acos(dot);
+                    // The scale is the LITERAL -1.0f (a negation of prevDir), not a
+                    // loop-carried previous angle: the image loads -1.0 once into
+                    // f29 (0x824C7C7C) and never rewrites it, using the same
+                    // register both for this multiply (0x824C7DB8/0x824C7DBC) and
+                    // for the `angle != -1.0f` compare (0x824C7E80).
                     Vector3 scaledPrev = prevDir;
-                    scaledPrev *= prevAngle;
+                    scaledPrev *= -1.0f;
                     Interp(dir, scaledPrev, 0.5f, smoothDir);
                     Normalize(smoothDir, smoothDir);
                 }
@@ -301,7 +305,6 @@ void HamRibbon::UpdateChase() {
                 }
 
                 cur.value.m = result.m;
-                prevAngle = angle;
             }
         }
     }
