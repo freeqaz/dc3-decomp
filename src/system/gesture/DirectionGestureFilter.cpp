@@ -194,7 +194,11 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
 
     float shoulderDist = sqrtf(dx * dx + dz * dz + dy * dy);
 
-    // Build corners with reassignments (operand order matters for codegen)
+    // Build corners with reassignments. NEGATIVE RESULT (w7-af): the image's
+    // `fadds f12, f11, f9` puts the hip term first, but writing `hipX + deltaX`
+    // is byte-identical -- /fp:fast normalises the operand order of a plain
+    // two-term fadds, so all three of these are a backend floor (97.2 either
+    // way).
     Vector3 corner1, corner2;
     corner1.x = shoulderX - deltaX;
     deltaX = deltaX + hipX;  // reassign (swap operands)
@@ -259,7 +263,14 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     if (!mAllowAboveShoulder || mHighButtonMode) {
         // Call HandJoint AGAIN for Y-test
         const TrackedJoint &handJoint3 = skeleton.HandJoint(mHandSide);
-        float shoulderYFresh = joints[kJointShoulderCenter].mJointPos[0].y;
+        // Re-derived from `skeleton`, NOT from the `joints` local: the image
+        // reads this through the skeleton pointer it already keeps in r31
+        // (`lfs f0, 0xf0(r31)`). Reusing `joints` here is its only use after the
+        // calls, so MSVC pins it in a third callee-saved GPR for the whole
+        // function -- that is the `bl __savegprlr_29` / +0x10 frame we emit
+        // where the image inlines `std r30`/`std r31`.
+        float shoulderYFresh =
+            skeleton.TrackedJoints()[kJointShoulderCenter].mJointPos[0].y;
         float yTest = handJoint3.mJointPos[0].y - shoulderYFresh;
         if (mHighButtonMode) {
             if (yTest < 0.0f) {
