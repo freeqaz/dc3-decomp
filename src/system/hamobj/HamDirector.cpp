@@ -3350,6 +3350,10 @@ void HamDirector::Poll() {
                 // Deliberately uninitialised: GetPracticeFrames writes both
                 // through references. The image emits no zero-store for either
                 // slot (0x50/0x58), and `= nullptr` adds two it does not have.
+                // RESIDUAL (w7-aq, 98.3 canonical): the two slots are swapped
+                // relative to the image (4 rows).  Swapping the declaration
+                // order of these two is BYTE-INERT -- MSVC is not colouring
+                // them by declaration order here.
                 Key<Symbol> *practiceEnd;
                 Key<Symbol> *practiceStart;
                 if (p0anim != -1) {
@@ -3509,11 +3513,15 @@ void HamDirector::Poll() {
                 }
                 if ((0.0f < mForcePostProcBlendRate && mForcePostProcBlend < 1.0f) ||
                     (mForcePostProcBlendRate < 0.0f && 0.0f < mForcePostProcBlend)) {
-                    float newBlend = TheTaskMgr.DeltaSeconds() * mForcePostProcBlendRate + mForcePostProcBlend;
-                    mForcePostProcBlend = newBlend;
-                    newBlend = -newBlend >= 0.0f ? 0.0f : newBlend;
-                    newBlend = newBlend - 1.0f >= 0.0f ? 1.0f : newBlend;
-                    mForcePostProcBlend = newBlend;
+                    // TWO stores to the member, not one: the image keeps
+                    // `stfs f0, 0x1a0(r31)` at 0x82479170 immediately after the
+                    // fmadds and again after the clamp.  Routing the
+                    // intermediate through a local lets MSVC drop the first
+                    // store as dead; writing the member twice does not, because
+                    // a member reachable through `this` may be aliased.
+                    mForcePostProcBlend =
+                        TheTaskMgr.DeltaSeconds() * mForcePostProcBlendRate + mForcePostProcBlend;
+                    ClampEq(mForcePostProcBlend, 0.0f, 1.0f);
                 }
             }
             UpdatePostProcOverlay(overlayName, overlayA, overlayB, blend);
@@ -3521,8 +3529,9 @@ void HamDirector::Poll() {
         // The image reads mPlayerFreestyle here, not mFreestyleEnabled:
         // `lbz r11, 0x2bc(r31)` at 0x8247919C (mFreestyleEnabled is 0x200).
         if (mPlayerFreestyle && mVisualizer && !mVisualizer->Showing()) {
-            float deltaSeconds = TheTaskMgr.DeltaSeconds();
-            mFreestyleTimer += deltaSeconds;
+            // `fadds f13, f1, f0` at 0x824791B4 -- the call result is the LEFT
+            // operand, so the accumulation is not spelled `+=`.
+            mFreestyleTimer = TheTaskMgr.DeltaSeconds() + mFreestyleTimer;
             if (mFreestyleTimer > 1.6f) {
                 StartStopVisualizer();
             }
