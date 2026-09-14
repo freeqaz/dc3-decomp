@@ -30,6 +30,14 @@ void SampleInst360::SetFXCore(FXCore core) {}
 float SampleInst360::GetProgress() {
     XAUDIO2_VOICE_STATE state;
     ((IXAudio2SourceVoice *)mVoice->mPoolVoice.sourceVoice)->GetState(&state, 0);
+    // RESIDUAL (w7-ak, 89.55 canonical): the residual is one extra instruction plus
+    // the regalloc cascade it drives. The target re-materialises `voice` inside the
+    // `if` with a no-op truncating move (`clrrwi r10, r10, 0` at 0x82...+20) that we
+    // do not emit, and keeps `pos` in r11 where we keep it in r9; the `%` operator's
+    // two traps (`twllei` / `twi 5`) are scheduled either side of the remainder
+    // subtraction instead of before and after it. NEGATIVE RESULT: moving this
+    // declaration inside the `if` (testing `mVoice->mLoopStart` in the condition),
+    // which is what would produce that re-materialisation, drops it to 88.13.
     Voice *voice = mVoice;
     int pos = (unsigned int)state.SamplesPlayed;
     if (voice->mLoopStart >= 0) {
