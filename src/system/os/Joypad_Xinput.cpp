@@ -8,6 +8,21 @@
 #include "xdk\XAPILIB.h"
 #include "xdk\xapilibi\winerror.h"
 
+// This TU's anonymous namespace is a measured FLOOR for two functions, and it
+// is not a source problem.  config/373307D9/symbols.txt spells gXboxDeadzone
+// `?gXboxDeadzone@?A@@3MA` -- retail's HASHLESS anonymous-namespace form, used
+// by only 2 of the 526 anon-namespace entries in the whole config (the other
+// is ?sDepthRectVerts in rnddx9/Rnd).  MSVC emits `?A0xf503845b@@` here, and
+// obj_anon_ns_patcher.py cannot reconcile the two: it rewrites hashes in place
+// over exactly 8 hex characters so nothing in the object moves, and `?A0x<h>@@`
+// is 12 bytes against `?A@@`'s 4.  The patcher documents the case and reports
+// it rather than dropping it silently.
+//
+// Consequence: JoypadInitXboxPCDeadzone (99.29) and TranslateStick (99.767)
+// are INSTRUCTION-IDENTICAL to the image -- 28/28 and 43/43 equal -- and every
+// charged row is a relocation NAME on this one symbol.  No source spelling
+// closes them; a named namespace or a file `static` produces a third
+// mangling, not `?A@@`.
 namespace {
     XINPUT_CAPABILITIES gCaps[kNumJoypads];
     float gXboxDeadzone;
