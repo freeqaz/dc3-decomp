@@ -43,11 +43,13 @@ namespace {
     ) {
         unsigned int numFrames = frames.size();
         float totalWeightedScore = 0.0f;
+        // Both accumulators are zeroed before the frame-count test in the
+        // image: `fmr f26, f29` and `fmr f28, f29` at 824D30AC/824D30B0 sit
+        // ahead of `cmplwi cr6, r11, 0xa` / `blt cr6` at 824D30B4.
+        float totalRaw = 0.0f;
         float timeScale = (float)numFrames * 0.025f;
 
         if (numFrames >= 10) {
-            float totalRaw = 0.0f;
-
             for (int jointIdx = 0; jointIdx < 20; jointIdx++) {
                 const std::vector<float> &weights = jointWeight();
                 float w = weights[jointIdx];
@@ -104,10 +106,13 @@ namespace {
                             normalized[i] = (raw[i] - mean) * (1.0f / var);
                         }
 
-                        // Compute midpoint
-                        int rawSz = raw.size();
-                        int midEnd = rawSz - 6;
-                        if ((unsigned)(rawSz - 6) <= 6) midEnd = 6;
+                        // Compute midpoint.  The image subtracts once --
+                        // `subi r30, r11, 0x6` at 824D338C is the only `- 6`
+                        // before the compare, and `cmplwi cr6, r30, 0x6`
+                        // tests that same register -- so the guard reads
+                        // `midEnd`, not a second `rawSz - 6`.
+                        int midEnd = (int)raw.size() - 6;
+                        if ((unsigned)midEnd <= 6) midEnd = 6;
 
                         // Z-score middle section with sliding window
                         if (midEnd > 6) {
@@ -117,10 +122,11 @@ namespace {
                             do {
                                 float m = Mean(raw, windowStart, windowStart + 10);
                                 float diff = raw[rawOffset] - m;
-                                float v = Variance(raw, m, windowStart, windowStart + 10);
+                                float quotient =
+                                    diff / Variance(raw, m, windowStart, windowStart + 10);
                                 remaining--;
                                 windowStart++;
-                                normalized[rawOffset] = diff / v;
+                                normalized[rawOffset] = quotient;
                                 rawOffset++;
                             } while (remaining != 0);
                         }
@@ -130,8 +136,11 @@ namespace {
                         mean = Mean(raw, tailStart, midEnd + 5);
                         var = Variance(raw, mean, tailStart, midEnd + 5);
 
+                        // `idx` is live before the guard in the image: `mr
+                        // r10, r30` at 824D341C sits between the two
+                        // raw.begin/raw.end loads and the compare.
+                        int idx = midEnd;
                         if ((unsigned)midEnd < raw.size() - 1) {
-                            int idx = midEnd;
                             do {
                                 normalized[idx] = (raw[idx] - mean) * (1.0f / var);
                                 idx++;
@@ -139,10 +148,13 @@ namespace {
                         }
 
                         // Sum of absolute normalized values
+                        // Same shape: `li r11, 0x0` at 824D3484 is emitted
+                        // before `srawi. r5, r10, 2` / `beq`, so the counter
+                        // is declared outside the guard.
                         float absNormSum = 0.0f;
+                        unsigned int i = 0;
                         unsigned int normCount = normalized.size();
                         if (normCount != 0) {
-                            unsigned int i = 0;
                             float *normIter = &normalized[0] - 1;
                             do {
                                 float nv = *++normIter;
@@ -159,12 +171,12 @@ namespace {
                                 const char *conv = *convPtr;
                                 for (int offset = 0; offset < kConvLen; offset++) {
                                     float convSum = 0.0f;
+                                    unsigned int ci = 0;
                                     if (normCount != 0) {
                                         float *normPtr = &normalized[0];
-                                        unsigned int i = 0;
                                         do {
                                             float val = *normPtr;
-                                            int idx = (int)(i + offset) % kConvLen;
+                                            int idx = (int)(ci + offset) % kConvLen;
                                             if (conv[idx] == '-') {
                                                 val = val * -1.0f;
                                             } else if (conv[idx] == '0') {
@@ -172,8 +184,8 @@ namespace {
                                             }
                                             convSum += val;
                                             normPtr++;
-                                            i++;
-                                        } while (i < normCount);
+                                            ci++;
+                                        } while (ci < normCount);
                                     }
                                     if (convSum > bestConv) {
                                         bestConv = convSum;
@@ -215,7 +227,10 @@ namespace {
 
             outScore = (totalWeightedScore / clampedRaw) * timeScale;
 
-            outEnergy = totalRaw >= 200.0f ? totalRaw : 0.0f;
+            // Polarity is the image's: `fcmpu cr6, f28, f0` / `bge cr6,
+            // .L_824D3658` at 824D3634/824D364C falls THROUGH to `fmr f0,
+            // f29` (0.0f) and branches to `fmr f0, f28` (totalRaw).
+            outEnergy = totalRaw < 200.0f ? 0.0f : totalRaw;
 
             // Debug summary
             if (stream) {

@@ -747,10 +747,14 @@ void PoseFatalities::DrawDebug() {
             static DebugMeter meterA(0.1f, 0.1f, 0.5f, 0.1f, Hmx::Color(0, 0, 0, 1));
             meterA.Draw();
 
+            // The image builds the colour BEFORE the compare call -- the four
+            // `stfs f31/f30, 0x60..0x6c(r31)` at 824934E0..824934F8 sit between
+            // `bl Draw@DebugMeter` and `bl CompareSkeletonPositions`, and the
+            // DrawBar argument is then two `ld`s off the same slot.
+            Hmx::Color whiteColor(0, 1, 0, 1);
             float rawCompare = mRecorder.CompareSkeletonPositions(
                 playerSkel, &mPlayerSkeletons[0], 1.0f
             );
-            Hmx::Color whiteColor(0, 1, 0, 1);
             meterA.DrawBar(0.0f, rawCompare, whiteColor, 1.0f, 0.0f);
 
             float errorWeight = TheOSCMessenger.GetFloat("/fatalposeerrorweight", 0.0f);
@@ -759,6 +763,13 @@ void PoseFatalities::DrawDebug() {
             );
             float thresh = TheOSCMessenger.GetFloat("/fatalposethresh", 0.0f);
             float normalizedScore = weightedCompare / thresh;
+            // A zero /fatalposethresh makes that division NaN.  The image guards
+            // it -- `fcmpu cr6, f0, f0` / `beq` / `fmr f0, f31` at 8249357C --
+            // and only then clamps.  Neither of the other two Clamp sites in this
+            // function carries the guard, so it is not part of Clamp itself.
+            if (normalizedScore != normalizedScore) {
+                normalizedScore = 0.0f;
+            }
             normalizedScore = Clamp(0.0f, 1.0f, normalizedScore);
 
             static DebugMeter meterB(0.1f, 0.3f, 0.5f, 0.1f, Hmx::Color(0, 0, 0, 1));

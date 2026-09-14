@@ -27,6 +27,28 @@
 
 extern "C" void XMemCpy(void *, const void *, int);
 
+// The image reaches 32767 / 2700 / 1800 / 300 through ONE .rdata anchor.
+// Poll() does `addi r29, r10, lbl_82260F40@l` at 82E3E9CC and then reads
+// 1800 at 0x0(r29), 2700 at -0xc(r29) and 300 at 0x4(r29); AddData() anchors
+// lbl_82260F30 in r27 and reloads 32767 from it inside the scaling loop.
+// A compile-time DISPLACEMENT between two constants is only possible when the
+// compiler laid them out itself, so these are file-scope constants of this TU,
+// not the per-value `__real@` literal COMDATs a bare 2700.0f would produce.
+static const float sMaxSample = 32767.0f;
+static const float sWirelessLeadSamples = 2700.0f;
+// The image's .rdata run is 32767 | 2700 | <8 bytes> | 1800 | 300 | 100, and
+// the eight bytes are this XUID: `addi r4, r11, lbl_82260F38@l` at 82E4155C
+// passes its ADDRESS as the `unsigned __int64 const &` argument of
+// MicManagerXbox::AddRemoteMic.  It has to be declared here, between the two
+// lead constants, for Poll's -0xc / 0x0 / +0x4 displacements to come out right.
+static const u64 kRemoteMicId = 0x00DEADBEEFFACEF0ULL;
+// 1800/300/100 are ONE aggregate, not three scalars: Poll anchors r29 at the
+// base of this object (`addi r29, r10, lbl_82260F40@l`, 82E3E9CC) and reads
+// [0] at 0x0 and [1] at 0x4, while [2] = 100.0f is emitted into the image and
+// referenced by NOTHING anywhere in the binary -- which only survives the
+// linker as part of a larger object.
+static const float sWiredLeadParams[3] = { 1800.0f, 300.0f, 100.0f };
+
 // Target: Mic.obj .bss:0x0 (0x8316C854), zero.  This was a file-scope global that
 // no code could reach: every use is inside a MicManagerXbox member, where
 // unqualified lookup finds the class member first -- which was declared and
@@ -101,7 +123,7 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
             float in = (float)p[1];
             float out = (in - z1) * gain * 2.0f + z2 * coef;
             z1 = in;
-            out = Clamp(-32767.0f, 32767.0f, out);
+            out = Clamp(-32767.0f, sMaxSample, out);
             *++p = (short)out;
             z2 = (float)(short)out;
             i++;
@@ -297,26 +319,26 @@ void MicXbox::Poll() {
         }
 
         float lead = ModRange(
-            (unkc ? 2700.0f : 1800.0f) - 600.0f,
-            (unkc ? 2700.0f : 1800.0f) - 600.0f + 12288.0f, unk9058
+            (unkc ? sWirelessLeadSamples : sWiredLeadParams[0]) - 600.0f,
+            (unkc ? sWirelessLeadSamples : sWiredLeadParams[0]) - 600.0f + 12288.0f, unk9058
         );
         float volume = mMute ? 0.0f : mVolume;
 
-        if (lead > (unkc ? 2700.0f : 1800.0f) + 600.0f) {
+        if (lead > (unkc ? sWirelessLeadSamples : sWiredLeadParams[0]) + 600.0f) {
             // Far out of range: jump hard in whichever direction we are already
             // heading and mute until it settles.
             unk9054 = unk9054 > 1.0f ? 1.08f : 0.92f;
             volume = 0.0f;
-        } else if (lead > (unkc ? 2700.0f : 1800.0f) + 150.0f) {
+        } else if (lead > (unkc ? sWirelessLeadSamples : sWiredLeadParams[0]) + 150.0f) {
             unk9054 = 1.0002f;
-        } else if (lead < (unkc ? 2700.0f : 1800.0f) - 150.0f) {
+        } else if (lead < (unkc ? sWirelessLeadSamples : sWiredLeadParams[0]) - 150.0f) {
             unk9054 = 0.9998f;
-        } else if (lead > (unkc ? 2700.0f : 1800.0f) + 300.0f) {
+        } else if (lead > (unkc ? sWirelessLeadSamples : sWiredLeadParams[0]) + sWiredLeadParams[1]) {
             unk9054 = 1.0006f;
-        } else if (lead < (unkc ? 2700.0f : 1800.0f) - 300.0f) {
+        } else if (lead < (unkc ? sWirelessLeadSamples : sWiredLeadParams[0]) - sWiredLeadParams[1]) {
             unk9054 = 0.9994f;
-        } else if ((unk9054 > 1.0f && lead < (unkc ? 2700.0f : 1800.0f) * 0.5f)
-                   || (unk9054 < 1.0f && lead > (unkc ? 2700.0f : 1800.0f) * 0.5f)) {
+        } else if ((unk9054 > 1.0f && lead < (unkc ? sWirelessLeadSamples : sWiredLeadParams[0]) * 0.5f)
+                   || (unk9054 < 1.0f && lead > (unkc ? sWirelessLeadSamples : sWiredLeadParams[0]) * 0.5f)) {
             unk9054 = 1.0f;
         }
 
@@ -368,7 +390,7 @@ void MicXbox::AddData(void *data, int bytes) {
             do {
                 float prod = (float)*p * mOutputGain;
                 float rounded = (float)floor(prod + 0.5f);
-                *p = (short)Clamp(-32767.0f, 32767.0f, rounded);
+                *p = (short)Clamp(-32767.0f, sMaxSample, rounded);
                 p++;
             } while (--n);
         }
@@ -379,9 +401,12 @@ void MicXbox::AddData(void *data, int bytes) {
             XMemCpy(unk301c, data, bytes);
             unk301c = (short *)((char *)unk301c + bytes);
         } else {
+            // `remaining` is live across the first copy in the image: `subf
+            // r27, r29, r26` at 82E40AE4 sits BEFORE `bl XMemCpy` at
+            // 82E40AE8, not after it.
             int firstPart = (char *)bufEnd - (char *)unk301c;
-            XMemCpy(unk301c, data, firstPart);
             int remaining = bytes - firstPart;
+            XMemCpy(unk301c, data, firstPart);
             XMemCpy(mPlaybackBuffer, (char *)data + firstPart, remaining);
             unk301c = (short *)((char *)mPlaybackBuffer + remaining);
         }
@@ -521,7 +546,6 @@ void MicManagerXbox::Init() {
         desc.OutputChannels = 1;
         chain.EffectCount = 1;
         chain.pEffectDescriptors = &desc;
-        static const u64 kRemoteMicId = 0x00DEADBEEFFACEF0ULL;
         AddRemoteMic(kRemoteMicId, &chain);
     }
 

@@ -363,3 +363,30 @@ independent declaration reorderings (swapping `int phType`/`int state`; permutin
 pointer declarations to `tempFmtPos, tempFmtEnd, phInfoPos, paramPos`) were both **inert to the
 digit**. When the addresses already agree, stop reordering declarations — the remaining signal is
 liveness, and the lever is §"Liveness/scheduling beat declaration reorder", not this doc.
+
+### A reference bound to a member sub-object is NOT free — it costs a frame word
+
+`HamSkeletonConverter::Set(const BaseSkeleton *)` (hamobj, 1928 B) is pinned at **94.98%** by a
+single callee-saved-GPR delta: the target opens with `bl __savegprlr_17` (15 saved GPRs), our
+build with `bl __savegprlr_18` (14). Frames are the **same size on both sides (0x4c0)** and the
+slot set is identical — the six `Vector3` locals sit at 16-byte spacing (`axisX` 0x50, `axisZ`
+0x60, `axisY` 0x70, `axisZ2` 0x80, `axisNegY` 0x90, `axisNegX` 0xa0), `matB` 0xc0, `matA` 0xf0,
+`worldJoints` 0x160 — so this is *not* a slot-placement question. The target keeps one more value
+in a register across the whole body.
+
+The obvious reading of the listing is that it holds `&this->unk40` there: `addi r31, r30, 0x40`
+right after `mr r30, r3` / `mr r23, r4`, with `r31` later re-pointed to `0x700` and `0x6d0`. The
+tempting source spelling is therefore a reference:
+
+```cpp
+Transform &camXfm = unk40;   // replaces 16 `unk40` uses
+```
+
+**Refuted.** That regressed the function **94.98 → 92.4** canonical and *grew* the frame by 0x10
+(0x4c0 → 0x4d0). MSVC materialises the reference as its own addressable frame word rather than
+folding it into the existing `this`-relative addressing, so the edit buys nothing in registers and
+pays a slot. Frame growth is the falsification test from §"Frame size is a falsification test"
+firing exactly as advertised: the target's frame did not have room for the thing we added, so the
+target never materialised it. `r31` in the image is the compiler's own reuse of a callee-saved
+register for three successive base pointers, which is a regalloc decision and not addressable
+from source. Reverted; no edits spent chasing further spellings.

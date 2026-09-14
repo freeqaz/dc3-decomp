@@ -299,16 +299,21 @@ unsigned long ExternalMic::sampleProcessThread() {
         unk9 = false;
         ExternalMicClientMgr::OnMicDisconnected(mDeviceId);
         mLastGain = -1.0f;
+        // Both zeroing pairs live INSIDE their guard in the image: `stw
+        // r25, 0xb0(r31)` / `stw r25, 0xb4(r31)` at 82E3AF80/AF84 sit
+        // between the `bl` and `.L_82E3AF88`, and the second pair likewise
+        // at 82E3AF98/AF9C.  Equivalent, because the loop head memsets both
+        // structures and pData is only ever written where pAlloc is.
         if (first.pAlloc) {
             delete[] first.pAlloc;
+            first.pData = 0;
+            first.pAlloc = 0;
         }
-        first.pData = 0;
-        first.pAlloc = 0;
         if (second.pAlloc) {
             delete[] second.pAlloc;
+            second.pData = 0;
+            second.pAlloc = 0;
         }
-        second.pData = 0;
-        second.pAlloc = 0;
     }
     return 0;
 }

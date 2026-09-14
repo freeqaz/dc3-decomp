@@ -1731,22 +1731,46 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
 
 void RndMesh::SaveVertices(BinStream &bs) {
     VertVector &verts = mVerts;
-    bool cached = bs.Cached()
-        && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox);
-    bool hasMeshData = (mMutable & 0x1F) > 0 || mKeepMeshData == true;
-    bool doCompress = IsVertexCompressionSupported(TheLoadMgr.GetPlatform())
-        && cached == true && !hasMeshData;
+    // The image writes each of these three flags STRAIGHT into its final
+    // register -- `li r27, 0x1` / `li r27, 0x0` at 8263B048/8263B050 for
+    // cached, `li r10, 0x0` / `li r10, 0x1` for hasMeshData, `li r31, ...` for
+    // doCompress -- with no normalising `clrlwi rX, rY, 24` at the definition;
+    // the mask shows up only at each USE (8263B0A0, 8263B0AC, 8263B0F0,
+    // 8263B1F0).  `bool b = <&& expression>;` makes MSVC materialise the 0/1
+    // in a scratch register and then mask-and-move it into b, one extra
+    // instruction per flag.
+    bool cached;
+    if (bs.Cached()
+        && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox))
+        cached = true;
+    else
+        cached = false;
+    bool hasMeshData;
+    if ((mMutable & 0x1F) > 0 || mKeepMeshData == true)
+        hasMeshData = true;
+    else
+        hasMeshData = false;
+    bool doCompress;
+    if (IsVertexCompressionSupported(TheLoadMgr.GetPlatform()) && cached == true
+        && !hasMeshData)
+        doCompress = true;
+    else
+        doCompress = false;
 
     bs << verts.size();
     bool fillOk = true;
     bs << doCompress;
     if (doCompress) {
+        // The image zeroes BOTH scalars before the platform test -- `li r31,
+        // 0x0` / `li r30, 0x0` at 8263B104/8263B108 sit above `cmpwi cr6, r11,
+        // 0x2`, and the XBox arm is an out-of-line block (.L_8263B23C: li
+        // r31,0x24 ; li r30,0x1 ; b) -- so isXBox carries its 0 from its
+        // declaration, it is not assigned inside the failure arm.
         int compressedSize = 0;
-        int isXBox;
+        int isXBox = 0;
         if (TheLoadMgr.GetPlatform() != kPlatformXBox) {
             FormatString str("Unsupported platform for vertex compression");
             int line;
-            isXBox = 0;
             TheDebug.Fail(str.Str(), 0);
             line = 0x339;
             TheDebug.Fail(MakeString(kAssertStr, "Mesh.cpp", line, "compressedSize > 0"), 0);

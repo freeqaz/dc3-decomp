@@ -189,9 +189,16 @@ void NgDOFProc::DoPost() {
             TheShaderMgr.SetPConstant((PShaderConstant)0x18, dofParams);
 
             RndMat *workMat = TheShaderMgr.GetWork();
-            Hmx::Color colorPass1(1, 1, 1);
-            Hmx::Color colorPass2(1, 1, 1);
-            Hmx::Color colorPass3(1, 1, 1);
+            // The image never writes the three colour slots it hands to
+            // DrawRect -- `addi r7, r31, 0xc0` / `0xd0` / `0xe0` at
+            // 826AC858/826AC8DC/826AC95C are the only references to those
+            // sixteen-byte slots in the whole function, and Hmx::Color's
+            // default constructor is `Color() {}`.  Each DrawRect call
+            // therefore gets its own DEFAULT-CONSTRUCTED (uninitialised)
+            // colour, not white.
+            Hmx::Color colorPass1;
+            Hmx::Color colorPass2;
+            Hmx::Color colorPass3;
 
             // Pass 1: Downsample with DOF shader
             mBlurTex[0]->MakeDrawTarget();
