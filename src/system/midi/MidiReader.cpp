@@ -301,6 +301,19 @@ void MidiReader::ReadMetaEvent(int tick, unsigned char type, BinStream &bs) {
     }
     case kTimeSignature: {
         unsigned char ts_num, ts_den;
+        // ts_m/ts_b/ts_t are declared at CASE scope, not inside the else branch
+        // where they are used, and that is load-bearing: it is the whole 106-row
+        // residual this function used to carry.  Declared in the inner scope they
+        // are dead while `pow()` runs, so MSVC overlays the float->int conversion
+        // temp (stfd/lwz for `int powed = pow(...)`) onto ts_b's 8-byte slot.  At
+        // case scope they are live across the call, the conversion temp needs its
+        // own word, and -- cascading through the allocator -- `a` from the
+        // kTempoSetting case stops sharing a word with ts_den.  Two extra words
+        // push `buf` from 0x80 to 0x90 and the frame from 0x1d0 to 0x1e0, which is
+        // exactly the shipped layout.  Declaration ORDER is inert here (measured:
+        // splitting the `c, b, a` and `ts_num, ts_den` declarations, and reversing
+        // `c, b, a` to `a, b, c`, are both byte-identical); declaration SCOPE is not.
+        int ts_m, ts_b, ts_t;
         bs >> ts_num >> ts_den;
         if (ts_den > 6) {
             MILO_NOTIFY(
@@ -323,7 +336,6 @@ void MidiReader::ReadMetaEvent(int tick, unsigned char type, BinStream &bs) {
                     ts_num
                 );
             }
-            int ts_m, ts_b, ts_t;
             mMeasureMap->TickToMeasureBeatTick(tick, ts_m, ts_b, ts_t);
             if (mMeasureMap->AddTimeSignature(ts_m, ts_num, powed, true)) {
                 mRcvr.OnTimeSig(tick, ts_num, powed);
