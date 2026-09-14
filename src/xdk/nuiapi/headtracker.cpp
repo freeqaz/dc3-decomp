@@ -90,22 +90,21 @@ long CreateRegressor(LDARegressor **outRegressor, ANGLE_TYPE type,
                      const char *basePath, const char *pcaFile, const char *knnFile) {
     LDARegressor *regressor = FaceCommon::XMemNew<LDARegressor>(0x209c0000, 1);
     LDARegressor *local = regressor;
+    long hr;
     if (regressor == 0) {
-        long hr = (long)0x8007000E;
-        FaceCommon::XMemDelete<LDARegressor>(local, 0x209c0000);
-        return hr;
-    }
-
-    char path[260];
-    sprintf_s(path, "%s%s", basePath, pcaFile);
-    long hr = regressor->LoadLDA(path);
-    if (hr >= 0) {
-        sprintf_s(path, "%s%s", basePath, knnFile);
-        hr = regressor->LoadKNN(path);
+        hr = (long)0x8007000E;
+    } else {
+        char path[260];
+        sprintf_s(path, "%s%s", basePath, pcaFile);
+        hr = regressor->LoadLDA(path);
         if (hr >= 0) {
-            regressor->mAngleType = type;
-            *outRegressor = regressor;
-            return hr;
+            sprintf_s(path, "%s%s", basePath, knnFile);
+            hr = regressor->LoadKNN(path);
+            if (hr >= 0) {
+                regressor->mAngleType = type;
+                *outRegressor = regressor;
+                return hr;
+            }
         }
     }
 
