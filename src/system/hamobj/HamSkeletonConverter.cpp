@@ -359,9 +359,15 @@ void HamSkeletonConverter::SetLeg(
     angle = -angle;
     int isNaN = (angle != angle) ? 1 : 0;
     if ((isNaN & 0xFF) == 0) {
-        RndTransformable *mesh = mBoneMeshes[hip];
+        // NOT bound to a local.  The image caches only the INDEX -- 0x824C975C
+        // `slwi r24, r26, 2` puts hip*4 in a callee-saved register -- and
+        // re-indexes mBoneMeshes at each use: 0x824C976C `lwzx r4, r24, r11`
+        // straight into GetParentWorldXfm's argument register, and again at
+        // 0x824C9814/0x824C9838 (`lwz r9, 0x6c0(r31)` / `lwzx r11, r24, r9`)
+        // for the LocalXfm() read below.  A named `mesh` local makes MSVC keep
+        // the POINTER callee-saved instead and adds an `mr r4, r24`.
         Transform parentXfm;
-        GetParentWorldXfm(mesh, parentXfm, parent);
+        GetParentWorldXfm(mBoneMeshes[hip], parentXfm, parent);
 
         Plane plane;
         plane.Set(_sub0, kneePos, mJointPositions[ankle]);
@@ -371,6 +377,12 @@ void HamSkeletonConverter::SetLeg(
             plane.a = mPelvisTransform.m.z.x;
             plane.b = mPelvisTransform.m.z.y;
             plane.c = mPelvisTransform.m.z.z;
+            // NEGATIVE RESULT: swapping the two terms of the inner sum to
+            // `plane.a * (x) + plane.c * (z)` is byte-neutral.  The image
+            // evaluates c*zdiff first (0x824C97BC `lfs f0, 0x6f8(r31)` before
+            // 0x824C97D0 `lfs f13, 0x6f0(r31)`) and we evaluate a*xdiff first
+            // under BOTH spellings -- MSVC picks the operand by which
+            // difference it scheduled, not by source order.
             plane.d = -(plane.b * (_sub0.y - kneePos.y) + (plane.c * (_sub0.z - kneePos.z) + plane.a * (_sub0.x - kneePos.x)));
         }
         PaddedJointPos *hipZAxisInit = &mLeftHipZAxisInit + side;
@@ -379,7 +391,7 @@ void HamSkeletonConverter::SetLeg(
         hipZAxisInit->z = plane.c * -1.0f;
 
         Vector3 worldPos;
-        Multiply(mesh->LocalXfm().v, parentXfm, worldPos);
+        Multiply(mBoneMeshes[hip]->LocalXfm().v, parentXfm, worldPos);
 
         Subtract(kneePos, _sub0, dir);
         Normalize(dir, dir);
@@ -387,14 +399,23 @@ void HamSkeletonConverter::SetLeg(
         PaddedJointPos *hipZAxis = &mLeftHipZAxis + side;
         RotateTowards(*hipZAxis, *hipZAxisInit, 1000.0f, *hipZAxis);
 
+        // The axis is COPIED into a Vector3 local before use.  The image
+        // writes it to its own 16-byte frame slot at 0x80 (0x824C9768
+        // `stfs f0, 0x80(r1)`, 0x824C9788 `stfs f13, 0x84(r1)`, 0x824C9784
+        // `stfs f12, 0x88(r1)`) and then builds `mat` by block-copying three
+        // 16-byte locals -- 0x50 (dir), 0x70 (cross1) and 0x80 -- into
+        // 0xb0/0xc0/0xd0.  That slot is the whole 0x10 frame shift: every
+        // local above it sits 0x10 higher in the image than in our build.
+        Vector3 hipZ(hipZAxis->x, hipZAxis->y, hipZAxis->z);
+
         Vector3 cross1;
-        Cross(dir, *hipZAxis, cross1);
+        Cross(dir, hipZ, cross1);
         Normalize(cross1, cross1);
 
         Hmx::Matrix3 mat;
         mat.x = dir;
         mat.y = cross1;
-        mat.z = *hipZAxis;
+        mat.z = hipZ;
 
         Transform xfm;
         memcpy(&xfm.m, &mat, sizeof(Hmx::Matrix3));
