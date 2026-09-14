@@ -50,6 +50,18 @@ bool FlowSwitchCase::IsValidCase(
         // hoist the load above the first type test and kills the pair of home
         // stores at 0x82408C08/0x82408C10 that mark `to.Type()` being written
         // twice in the source.
+        //
+        // NEGATIVE RESULT: spelling this as a POINTER instead -- `const DataNode
+        // *to = &mToValue.Node();` with `to->Type()`/`to->LiteralFloat()` -- is a
+        // large REGRESSION (88.10 -> 77.90 canonical): it re-colours r26/r27/r28
+        // across all four relational arms (17 instructions of r26<->r28 swap) and
+        // inverts six branch polarities.  The reference binding above is the best
+        // of the three spellings.  What remains after it is the frame-slot
+        // COLOURING: the target allocates the kTransition branch's four Node()
+        // return buffers LOW (0x58/0x60/0x68/0x70) and the switch cases' six HIGH
+        // (0x78..0xa0), ours the other way round, which charges every switch-case
+        // slot row `[off:-32]` and every transition row `[off:+32]`.  That is
+        // colouring, not source structure, and no declaration order reaches it.
         switch (mOperator) {
         case kEqual:
             result = curValue->Equal(mToValue.Node(), nullptr, true);
