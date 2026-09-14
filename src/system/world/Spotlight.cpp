@@ -1436,6 +1436,9 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     for (int row = 0; row < numRows; row++) {
         float t = (float)row / (float)numSections;
         for (int col = 0; col < numCols; col++) {
+            // Stays INSIDE the col loop.  RB3's Spotlight.cpp has it in the row
+            // loop, but hoisting it here measures 93.7 against 96.3 and permutes
+            // a stack slot; DC3's codegen wants it recomputed per column.
             float oneMinusT = 1.0f - t;
             float segFrac = (float)col / (float)numSegments * 2.0f - 1.0f;
             float xTop = segFrac * topRadius;
@@ -1470,6 +1473,10 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     int rowStart = 0;
     for (int row = 0; row < numSections; row++) {
         for (int col = 0; col < numSegments; col++) {
+            // `base` really is a u16 here: measured, spelling all four indices as
+            // plain ints -- which is what 8282CD40's untruncated `add r9, r4, r3`
+            // looks like in isolation -- drops the function from 96.3 to 94.4 and
+            // adds 35 rows of GPR renumbering across the whole body.
             unsigned short base = (unsigned short)(rowStart + col);
             int next = base + 1;
             int baseNext = base + numCols;
