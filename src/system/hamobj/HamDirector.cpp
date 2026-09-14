@@ -2044,13 +2044,23 @@ void HamDirector::PoseIconMan(
         meshes.SetName("preview_anim", mIconManChar);
         clip1->StuffBones(meshes);
         meshes.Zero();
-        float fOne = 1.0f;
-        float fZero = 0.0f;
+        // Spell the weights as literals, NOT as named `float` locals.  Two
+        // measurements (2026-09-14, w7-q):
+        //   * `float fOne/fZero` declared above the `if` -- the spelling that
+        //     used to be here -- also cost a commutative-operand row on the
+        //     `curXfm.v += *pos` 130 instructions further down (idx 198,
+        //     `fadds f0,f13,f0` where the image has `fadds f0,f0,f13`).
+        //   * Scoping those same locals INTO the blend arm does not move the
+        //     constant anchors either, and brings that distant row back.
+        // Literals close idx 198.  The remaining residual is the two `lis`
+        // anchor loads: the image re-materialises `__real@3f800000` /
+        // `__real@00000000` inside each arm, our build CSEs them into the
+        // branch-delay window above `beq`.  Not source-controlled here.
         if (clip2) {
-            clip1->ScaleAdd(meshes, fOne - blendFrac, frame1, fZero);
-            clip2->ScaleAdd(meshes, blendFrac, frame2, fZero);
+            clip1->ScaleAdd(meshes, 1.0f - blendFrac, frame1, 0.0f);
+            clip2->ScaleAdd(meshes, blendFrac, frame2, 0.0f);
         } else {
-            clip1->ScaleAdd(meshes, fOne, frame1, fZero);
+            clip1->ScaleAdd(meshes, 1.0f, frame1, 0.0f);
         }
         meshes.PoseMeshes();
         if (applyFacing) {
