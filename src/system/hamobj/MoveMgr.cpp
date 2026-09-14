@@ -386,8 +386,8 @@ void MoveMgr::ComputePotentialMoves(std::set<const MoveParent *> &moves, int i2)
             }
         } else {
             if (i2 > 0) {
-                const MoveParent *last = moveParents[0][i2 - 1];
-                if (last) {
+                if (moveParents[0][i2 - 1]) {
+                    const MoveParent *last = moveParents[0][i2 - 1];
                     FOREACH (adj, last->NextAdjacents()) {
                         if ((*adj)->IsValidForMiniGame()) {
                             moves.insert(*adj);
