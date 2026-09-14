@@ -139,7 +139,34 @@ return_zero:
 // accused callee itself, so this row is a live lead, not alignment noise.  The
 // source has 29 textual `check_index(` sites and the object emits 30, so the
 // 30th is compiler-duplicated (loop rotation peeling a call out of a latch is
-// the likely shape) or comes from an inline in trie.h -- not yet run down.
+// the likely shape) or comes from an inline in trie.h.
+//
+// SETTLED 2026-09-14 (lane w7-bh): it is the LOOP-ROTATION LATCH COPY, not a
+// source defect, and the listing pins it exactly.  The 30th call is the one we
+// emit at diff index 195, in the "update parent pointers of children" loop.
+// The image keeps ONE top-tested copy of that loop's header and an
+// unconditional back-edge:
+//     827FE60C  lwz r28, 0x11(r31)      <- childIdx = FirstChild(NodePtr(this,1))
+//     827FE618  bl check_index          <- the ONLY check_index(childIdx)
+//     827FE624  lbz r11, 0xf(r11)       <- SiblingCount
+//     827FE628  cmplw cr6, r29, r11  /  827FE62C bge  -> exit
+//     ...body (2 more check_index)...
+//     827FE660  b .L_827FE60C           <- unconditional back-edge
+// Ours rotates it: the entry test is PEELED and constant-folded (`cmplwi
+// r11, 0x0` / `beq`, because updateCount is provably 0 there, so
+// `0 >= n` collapses to `n == 0`), and the whole header -- `lwz 0x11(r31)`,
+// `bl check_index`, `mulli`, `add`, `lbz 0xf`, `cmplw`, `blt` -- is DUPLICATED
+// into the latch at diff indices 192-200.  That duplicate `bl` is the 30th.
+// Same class as the already-recorded root-scan rotation below, and the same
+// class the wave-7 brief records as refuted across six spellings.  Nothing in
+// the source is missing a call and nothing emits one too many.
+//
+// MEASURED NEGATIVE (w7-bh, 2026-09-14): dropping the `auto _tmp2 =
+// NodePtr(this, 1);` temp and writing `unsigned int updateIdx =
+// FirstChild(NodePtr(this, 1));` inline -- on the theory that it is the CSE of
+// that preheader read against the loop's first read (`mr r30, r28` where the
+// image emits a second `lwz r30, 0x11(r31)` at 827FE608) that lets MSVC peel --
+// costs 88.61 -> 88.20.  Reverted.
 //
 // ⚠ An earlier revision of this note claimed "5 delete_node call sites here, 4
 // in the image" and blamed retail tail-merging for the row.  That was wrong: it
