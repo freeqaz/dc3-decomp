@@ -117,8 +117,13 @@ void FileMergerOrganizer::FailedLoading(Loader *l) {
     for (std::list<OrganizedFileMerger>::iterator it = mOrganizedFileMergers.begin();
          it != mOrganizedFileMergers.end();
          ++it) {
-        if (it->merger->mCurLoader && it->merger->mCurLoader == l) {
-            org = &*it;
+        // The element address is materialised at the TOP of the body
+        // (addi r9, r11, 0x8), not at the break, and the equality is a
+        // materialised bool -- subf / cntlzw / extrwi. / bne -- rather than a
+        // cmplw straight into the branch.
+        OrganizedFileMerger *cur = &*it;
+        if (cur->merger->mCurLoader && (bool)(cur->merger->mCurLoader == l)) {
+            org = cur;
             break;
         }
     }
