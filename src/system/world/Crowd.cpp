@@ -764,20 +764,34 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
             int instanceCount = (int)it->mMMesh->mInstances.size();
             int backupCount = (int)it->mBackup.size();
             int targetInstances = (int)((float)(instanceCount + backupCount) * mFlatFullness);
+            // NEGATIVE RESULT (w7-af): the image walks mInstances TWICE here --
+            // three count loops back to back before the fctiwz (mInstances into
+            // r7, mBackup into r8, mInstances again into r10), and it is that
+            // third result r10 which `cmpw cr6, r9, r10` and `subf r10, r10, r9`
+            // consume. Writing `it->mMMesh->mInstances.size()` a second time at
+            // the comparison does NOT reproduce it: MSVC CSEs the two walks back
+            // into one and reshuffles r26/r27, 93.8 -> 91.3 and six instructions
+            // longer. The extra walk is not reachable from source.
             if (instanceCount < targetInstances) {
                 int toMove = targetInstances - instanceCount;
                 InstanceList::iterator backIt = it->mBackup.begin();
                 for (int i = 0; i < toMove; i++) {
                     ++backIt;
                 }
-                it->mMMesh->mInstances.splice(it->mMMesh->mInstances.end(), it->mBackup, it->mBackup.begin(), backIt);
+                // Spliced in at the FRONT. The image computes the transfer's
+                // `position` with `lwz r9, 0x54(r9)` -- mMMesh->mInstances's
+                // first word, i.e. begin() -- where end() would be `addi r9,
+                // r9, 0x54`, the address of the list header itself.
+                it->mMMesh->mInstances.splice(it->mMMesh->mInstances.begin(), it->mBackup, it->mBackup.begin(), backIt);
             } else if (targetInstances < instanceCount) {
                 int toRemove = instanceCount - targetInstances;
                 InstanceList::iterator instIt = it->mMMesh->mInstances.begin();
                 for (int i = 0; i < toRemove; i++) {
                     ++instIt;
                 }
-                it->mBackup.splice(it->mBackup.end(), it->mMMesh->mInstances, it->mMMesh->mInstances.begin(), instIt);
+                // Same here: `lwz r9, 0x44(r28)` is mBackup.begin(), not the
+                // `addi r9, r10, 0x3c` that end() would produce.
+                it->mBackup.splice(it->mBackup.begin(), it->mMMesh->mInstances, it->mMMesh->mInstances.begin(), instIt);
                 it->mMMesh->InvalidateProxies();
             }
             unsigned int totalChars3D = it->m3DCharsCreated.size();
