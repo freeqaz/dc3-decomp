@@ -1382,6 +1382,25 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
 #endif
     StyleState styleState(this, 1.0f);
     unsigned short prevChar = 0;
+    // RESIDUAL (w7-bf, 92.7 canonical after the control-flow/precision fixes
+    // below).  What is left is frame shaping: TGT frame 0x11d0 vs ours 0x11e0,
+    // with the three vectors' slot block sitting 8 bytes low on our side and an
+    // 18-row (0x50,0x54) offset swap -- the image puts the `const char *`
+    // MakeString temp at 0x50 and the `unsigned short` find/push_back temp at
+    // 0x54, we do the reverse.  The image also gives each of the two notify
+    // blocks' Strings its own slot where we share one, which is where the extra
+    // 0x10 comes from.
+    //
+    // REFUTED, both measured in this worktree:
+    //  - Reordering these three declarations to missingChars / missingFonts /
+    //    negWidthChars: 92.7 -> 90.7 (28 inserts instead of 22).  The order
+    //    below is the better one; do not "tidy" it.
+    //  - Hoisting the two `float charWidth;` declarations into a single one
+    //    above the `mFitType == kFitScrollMarqueeWrapAlways` test: canonical
+    //    unchanged at 92.7 (184 diff_arg instead of 185, but 22 offset swaps
+    //    instead of 20).  It does tighten the slot table (10 DIFFER/7 PERMUTED
+    //    -> 8 DIFFER/1 PERMUTED), so it is the right starting point for anyone
+    //    attacking the frame delta -- it just does not pay on its own.
     std::vector<unsigned short> negWidthChars;
     std::vector<unsigned short> missingChars;
     std::vector<RndFontBase *> missingFonts;
@@ -1493,14 +1512,19 @@ process_char:
                 RndFontBase *font = fontMap->Font();
                 if (font) {
                     if (mFitType == kFitScrollMarqueeWrapAlways && ch == '\n') {
-                        if (!marqueeWrap) {
-                            mNumLines++;
-                            float lw = (float)((double)cumWidth + (double)mNumLines * (double)mIndentation);
-                            mLineWidths.insert(mLineWidths.end(), lw);
-                            float lo = (float)((double)mNumLines * (double)mIndentation + (double)cumWidth);
-                            mLineOffsets.insert(mLineOffsets.end(), lo);
+                        // Arm order is load-bearing: the image falls THROUGH to the
+                        // marqueeWrap body -- 82694F3C `beq .L_82694F48` skips over
+                        // `fadds f31, f0, f31` to the mNumLines block -- rather than
+                        // branching to it.  Written the other way round MSVC sinks
+                        // the one-instruction arm out of line and adds a `b` back.
+                        if (marqueeWrap) {
+                            cumWidth = mIndentation + cumWidth;
                         } else {
-                            cumWidth = (float)((double)mIndentation + (double)cumWidth);
+                            mNumLines++;
+                            float lw = mNumLines * mIndentation + cumWidth;
+                            mLineWidths.insert(mLineWidths.end(), lw);
+                            float lo = mNumLines * mIndentation + cumWidth;
+                            mLineOffsets.insert(mLineOffsets.end(), lo);
                         }
                         float charWidth;
                         if (font->CharAdvance(prevChar, (unsigned short)'\n', charWidth)) {
@@ -1509,7 +1533,28 @@ process_char:
                     } else {
                         float charWidth;
                         bool found = font->CharAdvance(prevChar, ch, charWidth);
-                        if (!found) {
+                        // Same again: 82695028 `beq .L_826950A8` sends the NOT-found
+                        // case away to the missing-char bookkeeping and falls through
+                        // to the width accumulation, so `found` is the inline arm --
+                        // that one inversion moves the whole 26-instruction
+                        // find/push_back block to the right side of the branch.
+                        // And 82695048 `blt cr6, .L_82695054` does it once more for
+                        // the negative-width test, so `!(charWidth < 0.0f)` -- not
+                        // `charWidth < 0.0f` -- is the arm that stays inline.
+                        if (found) {
+                            charWidth = (charWidth + styleState.mKerning) * styleState.mSize;
+                            if (!(charWidth < 0.0f)) {
+                                cumWidth = charWidth + cumWidth;
+                            } else {
+                                if (ch != '\n') {
+                                    if (std::find(negWidthChars.begin(), negWidthChars.end(), ch) == negWidthChars.end()) {
+                                        negWidthChars.push_back(ch);
+                                    }
+                                }
+                            }
+                            fontMap->IncrementDisplayableChars(ch);
+                            prevChar = ch;
+                        } else {
                             if (ch != '\n') {
                                 if (std::find(missingChars.begin(), missingChars.end(), ch) == missingChars.end()) {
                                     missingChars.push_back(ch);
@@ -1518,19 +1563,6 @@ process_char:
                                     missingFonts.push_back(font);
                                 }
                             }
-                        } else {
-                            charWidth = (charWidth + styleState.mKerning) * styleState.mSize;
-                            if ((double)charWidth < 0.0) {
-                                if (ch != '\n') {
-                                    if (std::find(negWidthChars.begin(), negWidthChars.end(), ch) == negWidthChars.end()) {
-                                        negWidthChars.push_back(ch);
-                                    }
-                                }
-                            } else {
-                                cumWidth = (float)((double)charWidth + (double)cumWidth);
-                            }
-                            fontMap->IncrementDisplayableChars(ch);
-                            prevChar = ch;
                         }
                     }
                 }

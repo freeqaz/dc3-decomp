@@ -679,6 +679,33 @@ const Transform &RndTransformable::WorldXfm_Force() {
     return mWorldXfm;
 }
 
+// RESIDUAL (w7-bf, 95.87871 canonical, 1484 B): ONE register-allocation rotation,
+// no source lever found.  The image parks `refWorld` in r30 (0x82646CA8
+// `addi r30, r3, 0x48` / 0x82646CB4 `mr r30, r3`); we park it in r29 and shift the
+// two &mWorldXfm.m.* address temporaries down with it (0x82646DEC target
+// `addi r29, r31, 0x58` vs our r30; 0x82646EBC target `addi r29, r31, 0x58` vs our
+// r28).  That rotation is 22 of the 88 register-swap rows, and it drags the FPR
+// numbering (f13->f11, f12->f13, f11->f10) and the load SCHEDULE with it: for every
+// Add/Subtract in the switch the image interleaves one mLocalXfm/mWorldXfm load with
+// one refWorld load per component (0x82646D0C..0x82646D2C: local.z/ref.z/fadds,
+// local.y/ref.y/fadds, local.x/ref.x/fadds), while we hoist BOTH refWorld loads off
+// the single base register first and add afterwards.  Component evaluation order is
+// already right on both sides (z, then y, then x -- MSVC evaluates Set()'s arguments
+// right to left), so the fadds/fsubs operand order is NOT the cause; only the
+// interleave is, and the interleave follows the base register, not the source.
+//
+// REFUTED (bit-for-bit, 95.87871 -> 95.87871 with 73 diff_arg instead of 71 and 3
+// commutative rows instead of 1, i.e. strictly worse): collapsing the two named
+// locals into one, `const Transform &refWorld = (mTarget ? (RndTransformable *)mTarget
+// : (RndTransformable *)RndCam::Current())->WorldXfm();`.  Keep the two-local
+// spelling below -- it is also the one the image's block layout matches.
+//
+// The tail `Scale(scaleVec, mWorldXfm.m, mWorldXfm.m)` (0x82647000..0x82647080) is
+// the same class: row 0 of the matrix matches instruction for instruction, rows 1 and
+// 2 differ only in which of the three components is loaded first and in one
+// commutative `fmuls f13, f12, f13` vs `fmuls f13, f13, f12` at 0x82647078.  The
+// image's three rows do NOT share a schedule with each other, so no single spelling
+// of Scale() reproduces all three.
 void RndTransformable::ApplyDynamicConstraint() {
     if (mConstraint == kConstraintTargetWorld) {
         if (mTarget)

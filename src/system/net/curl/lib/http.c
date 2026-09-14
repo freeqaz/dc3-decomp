@@ -2725,6 +2725,24 @@ static CURLcode header_append(struct SessionHandle *data,
 /*
  * Read any HTTP header lines from the server and pass them to the client app.
  */
+/* 99.98558 canonical, 3 rows, ALL THREE ARE TARGET-SIDE LISTING ARTIFACTS -- the
+ * bytes already match and no source change can close them.  objdiff (name_check)
+ * reports:
+ *     [61] `subi r8, r8, 0x6f2c`   vs `addi r8, r8, ??_C@_07KCKHAHHI@chunked@l`
+ *     [87] `subi r22, r26, 0x6ee0` vs `addi r22, r26, ??_C@_0M@HJBFCNNB@Connection?3@l`
+ *     [94] `subi r26, r26, 0x6cd4` vs `addi r26, r26, ??_C@_0CG@GBJOIAPM@HTTP?11?41?5proxy...@l`
+ * Those are the SAME instruction.  The image materialises the string page with a
+ * bare `lis rX, 0x8207` (^/* 82573500, ^/* 8257351C, ^/* 825734E8), spills the
+ * anchor to the frame (`stw r8, 0x60(r1)`) and reloads it, which defeats dtk's
+ * relocation attribution, so the carved target object carries a plain immediate
+ * where ours carries an @l relocation.  Checked against orig/373307D9/ham_xbox_r.map:
+ *     ??_C@_07KCKHAHHI@chunked                 = 0x820690d4 = 0x82070000 - 0x6f2c
+ *     ??_C@_0M@HJBFCNNB@Connection?3           = 0x82069120 = 0x82070000 - 0x6ee0
+ *     ??_C@_0CG@GBJOIAPM@HTTP?11?41?5proxy...  = 0x8206932c = 0x82070000 - 0x6cd4
+ * i.e. every one is exactly the @ha(0x8207)/@l pair for the symbol we already
+ * emit.  Do not "fix" this and do not permute it: it is a carve artifact of the
+ * 4160-byte row, not a divergence.  (Lane w7-bf, 2026-09-14.)
+ */
 CURLcode Curl_http_readwrite_headers(struct SessionHandle *data,
                                        struct connectdata *conn,
                                        ssize_t *nread,
