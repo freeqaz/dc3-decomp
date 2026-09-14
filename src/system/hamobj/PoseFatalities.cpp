@@ -97,24 +97,28 @@ Symbol PoseFatalities::GetFatalityFace() {
 
 bool PoseFatalities::InFatality(int player) const {
     int max = mCurrentBeat;
-    const int *starts = mFatalStartBeats;
+    // No `const int *starts = mFatalStartBeats;` local: the image indexes the
+    // array off `this` in the player arm -- `addi r11, r31, 0xc` / `slwi r11,
+    // r11, 2` / `lwzx r11, r11, r30` at 0x824931AC, i.e. (player + 0x30/4) * 4
+    // added to `this`, with no base pointer held anywhere.  Naming the base
+    // costs a whole extra callee-saved register (__savegprlr_28 vs _29).
     if (player == -1) {
         bool b1 = false;
         for (int i = 0; i < 2; i++) {
-            if (max >= starts[i]) {
+            if (max >= mFatalStartBeats[i]) {
                 b1 = true;
             }
         }
         if (b1) {
             return FatalActive();
         }
-    } else {
-        MILO_ASSERT_RANGE(player, 0, 2, 0x391);
-        if (max >= starts[player]) {
-            return mInFatality[player];
-        }
+        return false;
     }
-    return false;
+    MILO_ASSERT_RANGE(player, 0, 2, 0x391);
+    if (max < mFatalStartBeats[player]) {
+        return false;
+    }
+    return mInFatality[player];
 }
 
 bool PoseFatalities::InStrikeAPose() {
