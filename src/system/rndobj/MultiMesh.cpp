@@ -357,11 +357,17 @@ void RndMultiMesh::CollideList(const Segment &seg, std::list<Collision> &colls) 
                                  sit = sProxyPool.begin();
                              sit != sProxyPool.end();
                              ++sit) {
+                            // No named local for sit->first: the image holds it
+                            // in a VOLATILE register (r11) across Refs().empty()
+                            // and then copies it into proxy's callee-saved r31
+                            // (`mr r31, r11` at 0x826B72CC), which only happens
+                            // if it is an unnamed temporary.  A named `p` lands
+                            // in r31 directly and the whole found-block gets
+                            // sunk to the end of the function.
                             if (stamp != sit->second) {
-                                RndMultiMeshProxy *p = sit->first;
-                                if (p->Refs().empty()) {
+                                if (sit->first->Refs().empty()) {
+                                    proxy = sit->first;
                                     sit->second = stamp;
-                                    proxy = p;
                                     break;
                                 }
                             }
