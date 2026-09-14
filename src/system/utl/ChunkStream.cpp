@@ -334,10 +334,10 @@ EofType ChunkStream::Eof() {
         // temp as at every scalar swap site, instead of the reversed pair we
         // emitted.  24 rows -> 20, raw 96.993 -> 97.093, nothing regressed.
         File *file = mFile;
-        mCurChunk = chunks - 1;
-        mChunkEnd = chunks + mChunkInfo.mNumChunks;
-        mCurBufOffset = mChunkInfo.mMaxChunkSize & kChunkSizeMask;
         mCurBufferIdx = 2;
+        mCurBufOffset = mChunkInfo.mMaxChunkSize & kChunkSizeMask;
+        mChunkEnd = chunks + mChunkInfo.mNumChunks;
+        mCurChunk = chunks - 1;
         file->Seek(mChunkInfo.mChunkInfoSize, 0);
         ReadChunkAsync();
     }

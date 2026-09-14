@@ -244,20 +244,26 @@ void VoiceInputPanel::CreatePlaylistEditorGrammar() const {
 void VoiceInputPanel::ActivateVoiceContext(Symbol sym) {
     VoiceContext **it;
     if (!sym.Null()) {
-        // RESIDUAL (w7-ab, 93.4 canonical).  Two row classes left:
-        //  a) the image emits the begin() load before the end() load; we emit
-        //     them the other way round.  Swapping the two declarations is
-        //     byte-for-byte INERT, so it is scheduling, not declaration order.
-        //  b) the image re-loads TheSpeechMgr->Overlay() at each of the three
-        //     uses in the deactivate block (0x48(r11) three times) and keeps
-        //     only the vtable pointer across the MakeString call; we CSE the
-        //     overlay pointer into a callee-saved register, which costs one
-        //     extra callee-saved GPR and shifts TheSpeechMgr's anchor r29->r28
-        //     (the 10-row r28<->r29 swap).  Both sides already spell the two
-        //     Overlay() calls separately in source.
+        // RESIDUAL (w7-ab, then w7-ak 2026-09-14).  Class (a) below is CLOSED:
+        //  a) FIXED (w7-ak).  w7-ab read this as "the image emits the begin()
+        //     load before the end() load and swapping the two declarations is
+        //     inert, so it is scheduling".  It is not scheduling -- it was the
+        //     named `VoiceContext **end` local.  Deleting it and spelling
+        //     `mVoiceContexts.end()` at all three test sites puts the two loads
+        //     in the image's order (0x4c then 0x50) and removes the
+        //     (0x4c,0x50) OFFSET_SWAP entirely: 39 -> 37 rows.
+        //  b) STILL OPEN: the image re-loads TheSpeechMgr->Overlay() at each of
+        //     the three uses in the deactivate block (`lwz 0x48(r11)` at the
+        //     Showing() test, again to fetch the vtable before the MakeString
+        //     call, and a third time for `this` after it -- and it re-reads
+        //     TheSpeechMgr itself in between).  We CSE the overlay pointer into
+        //     callee-saved r30 and hold it across the call.  Both sides already
+        //     spell the two Overlay() calls separately in source, so this is
+        //     MSVC choosing to spill where the image rematerialises; the knock-on
+        //     is that TheSpeechMgr's anchor lands in r28 for us and r29 for the
+        //     image, which is the whole 10-row r28<->r29 swap.
         it = mVoiceContexts.begin();
-        VoiceContext **end = mVoiceContexts.end();
-        if (it != end) {
+        if (it != mVoiceContexts.end()) {
             do {
                 if ((*it)->mName == sym)
                     break;
@@ -265,10 +271,13 @@ void VoiceInputPanel::ActivateVoiceContext(Symbol sym) {
                 // The image reloads mVoiceContexts.end() for the loop-back
                 // test (`lwz r10, 0x50(r31)` inside the body) and keeps the
                 // pre-loop copy only for the zero-trip guard and the post-loop
-                // found/not-found test -- the `(*it)->mName` load may alias the
-                // vector, so MSVC cannot hoist the end pointer.
+                // found/not-found test.  Naming a `VoiceContext **end` local for
+                // the outer two tests is what lets MSVC CSE the latch load away
+                // as well: all three sites have to be spelled
+                // `mVoiceContexts.end()` for the extra `lwz r10, 0x50(r31)` to
+                // appear.
             } while (it != mVoiceContexts.end());
-            if (it != end)
+            if (it != mVoiceContexts.end())
                 goto found;
         }
         MILO_NOTIFY("Couldn't find voice context %s", sym.Str());

@@ -297,6 +297,26 @@ void SongCollision::GatherUsefulBones(
 
 void SongCollision::Update(MoveDir *moveDir) {
 
+    // RESIDUAL (w7-ak, 94.2 canonical): 80 rows, 41 of them one r28<->r29
+    // rotation plus an r15<->r16 rotation.  The visible cause is here: the image
+    // keeps `this` in r30 (`mr r30, r3`) and only forms `this + 0x2c` AFTER the
+    // Timer constructor returns (`addi r29, r30, 0x2c`), home-storing it into the
+    // 0x50(r31) slot the early MILO_ASSERT argument buffers have just finished
+    // with; binding `data` at function scope emits `addi r28, r3, 0x2c` as the
+    // second instruction of the body and gives it a slot of its own at 0x64.
+    // BOTH ways of expressing that are REFUTED, and both lose more than the 4
+    // rows they win, because whatever holds the array base also decides where
+    // `dancer` lives:
+    //  - moving `auto &data = mData;` down to just after `Timer timer;` costs
+    //    94.2 -> 92.4: `dancer` is evicted from r14 into r28 and picks up a home
+    //    store of its own;
+    //  - dropping the reference entirely and spelling `mData[i]` / `mData[0]` at
+    //    the four use sites costs 94.2 -> 92.8.  It DOES close the (0xd0,0xf0)
+    //    BeatCollisionData offset swap and takes the stack diff from 4/6 to 2/2,
+    //    but `dancer` is evicted the same way (`stw r28, 0x64(r31)`), and the
+    //    array base then lands in r14 instead of r29.
+    // The r28/r29 rotation is therefore not reachable through the array base on
+    // its own -- `dancer`'s allocation has to move with it.
     auto& data = mData;
     if (moveDir) {
         MILO_ASSERT(TheGameData, 0xFB);

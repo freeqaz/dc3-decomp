@@ -427,6 +427,19 @@ void UIListState::Scroll(int direction, bool skipActive) {
         return;
     accept_circ:
         mTargetShowing = curFirst;
+        // RESIDUAL (w7-ak, 96.2 canonical): this is the ONE genuine instruction-count
+        // difference in the whole function (target 728 B, ours 724 B -- everything
+        // else is a move).  The image re-loads `state.mSelected` here
+        // (`lwz r28, 0x54(r1)` at 0x82784224, the first instruction of the accept
+        // block) even though the same slot is already live in r28 from the loop
+        // top; MSVC CSEs the two reads for us.  Both spellings are present in the
+        // source already -- `curSel` above and `state.mSelected` here -- so there is
+        // no second expression left to add, and writing `curSel` here would only
+        // make the CSE explicit.  The remaining two rows are the guard at 0x827840F4:
+        // the image schedules `lwz r30, 0x50(r1)` BETWEEN the skipActive test and
+        // its branch and then branches to the loop-exit's own `b <epilogue>`, where
+        // we sink the load past the branch and go straight to the epilogue -- i.e.
+        // MSVC simplified a branch-to-branch the image left in place.
         MILO_ASSERT(state.mSelected == mSelectedDisplay, 0x1d6);
     } else {
         bool hitBoundary = false;
@@ -460,6 +473,22 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 // One boolean expression per arm, not an assignment per path:
                 // the target materialises 1/0 into r11 and ends both arms with
                 // a shared `clrlwi r30, r11, 24`.
+                //
+                // RESIDUAL (w7-ak, 96.2 canonical): 4 of the 9 remaining rows are
+                // here, and they are a CROSS-JUMP DIRECTION, not a source shape.
+                // Both this arm and the mScrollPastMinDisplay arm below end in the
+                // identical three-instruction tail
+                // `bne cr6,<li 0> / li r11,0x1 / b <clrlwi>`; MSVC merges the two
+                // copies either way.  The image keeps the FIRST copy (hosted here at
+                // .L_827841C8, 0x827841C8) and has the later arm jump BACKWARD into
+                // it with `b .L_827841C8` at 0x82784200; we keep the LATER copy and
+                // branch forward into it.  Nothing about the two expressions is
+                // asymmetric -- both are `<bool> && curSel == <int>` and both lower
+                // to `cmpw cr6, r29, X` -- so there is no operand to reorder.  Note
+                // the third arm (`curSel == 0`) is NOT part of the merge in either
+                // build: its `cmpwi` frees a slot for `li r11,0x1` before the branch,
+                // so it lowers to `li 1 / beq <done> / li 0` instead, and that arm
+                // already matches instruction for instruction.
                 if (direction == 1) {
                     int maxFirst = MaxFirstShowing();
                     curFirst = state.mFirstShowing;

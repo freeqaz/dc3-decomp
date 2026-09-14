@@ -440,7 +440,7 @@ RndDrawable *Character::CollideShowing(const Segment &s, float &fl, Plane &pl) {
             }
             ret = lodShowing;
             float oldX = v70.x;
-            Interp(mySegment.start, mySegment.end, v70.x, v70);
+            Interp(mySegment.start, mySegment.end, v70.x, mySegment.end);
             fl *= oldX;
         }
     }

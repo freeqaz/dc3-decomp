@@ -12,9 +12,15 @@ void TextFile::SetName(const char *name, class ObjectDir *dir) {
         if (s) {
             char buf[256];
             strcpy(buf, name);
-            char *ptr = &buf[s - name];
+            // The target evaluates strlen(s) FIRST and only then forms the offset, and
+            // forms `buf` / `buf + 7` as two bases that each get `off` added. A single
+            // `char *ptr = &buf[s - name]` local (what we had) computes the offset before
+            // the inlined strlen loop and costs 8 rows; spelling `s - name` twice inside
+            // the call makes MSVC emit the subtraction twice. Both locals are required.
             int tokLen = sizeof("_append") - 1;
-            strncpy(ptr, ptr + tokLen, strlen(s) - (tokLen - 1));
+            int tailLen = strlen(s);
+            int off = s - name;
+            strncpy(buf + off, buf + off + tokLen, tailLen - (tokLen - 1));
             mFile = NewFile(buf, 0x109);
         } else {
             mFile = NewFile(name, 0x301);

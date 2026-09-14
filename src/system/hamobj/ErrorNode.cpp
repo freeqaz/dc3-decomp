@@ -400,6 +400,16 @@ void PositionNode::CalcError(
     float base_bone_len;
     Vector3 scaledBaseDiff;
 
+    // RESIDUAL (w7-ak, 99.98 canonical): all 14 rows come from ONE thing --
+    // which of the two joint indices lands in r11 and which in r10.  The image
+    // loads mJoint (0xc) into r11 and mBaseJoint (0x1c) into r10; we load them
+    // the other way round, and every other row follows: the six `lfs` register
+    // swaps and the `fsubs`/`fmuls` operand orders are the SAME ARITHMETIC on
+    // both sides (target `f0 - f13` with f0=joint, ours `f13 - f0` with
+    // f13=joint), verified component by component against the target listing.
+    // This is NOT the "wrong field" the resolved-offset block reports.
+    // NEGATIVE RESULT: reordering these two Subtract statements to match the
+    // emission order (jointDiff first) makes it WORSE, 14 rows -> 15.
     Subtract(
         frame_input.mBaseJointPositions[mJoint],
         frame_input.mBaseJointPositions[mBaseJoint],

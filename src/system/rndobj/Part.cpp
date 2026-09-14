@@ -1081,6 +1081,17 @@ void RndParticleSys::UpdateRelativeXfm() {
         Multiply(mRelativeXfm, mLastWorldXfm.m, mRelativeXfm);
         Normalize(mRelativeXfm.m, mRelativeXfm.m);
         Interp(mLastWorldXfm.v, worldXfm.v, mRelativeMotion, mLastWorldXfm.v);
+        // RESIDUAL (w7-ak, 99.98 canonical): the only 2 rows in this 524-byte
+        // function are idx 88/90, the two Y-component loads of this Add --
+        // the image loads 0x290 (mLastWorldXfm.v.y) before 0x250
+        // (mRelativeXfm.v.y), we load them the other way round.  Pure
+        // scheduling of two loads around the intervening 0x28c load: the X and
+        // Z components are instruction-identical on both sides, and the
+        // `fadds` register order is a consequence, not a source operand order
+        // (the image is b+a on all three components, ours is b+a on X and Z
+        // and a+b on Y from the SAME source expression).
+        // NEGATIVE RESULT: swapping the first two arguments (Add is
+        // commutative, and the out param aliases either way) is exactly inert.
         Add(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
     }
     Subtract(mMotionParent->WorldXfm().v, mLastWorldXfm.v, mMotionParentDelta);

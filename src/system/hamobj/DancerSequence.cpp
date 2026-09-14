@@ -73,6 +73,21 @@ BEGIN_LOADS(DancerSequence)
             d >> curFrame.mMoveFrameIdx;
         }
         DancerSkeleton &skeleton = curFrame.mSkeleton;
+        // RESIDUAL (w7-ak, 91.40 canonical). Two causes remain, both measured.
+        // (1) Block layout of the rev chain: the image lets the `d.rev < 2` arm fall
+        //     through into the shared `ms = -1` + SetDisplacementElapsedMs tail and
+        //     branches the other three arms BACKWARDS into it (cross-jumping the four
+        //     identical stores); we hoist the single store above the whole chain.
+        //     NEGATIVE RESULT: writing `ms = -1` in each of the four arms *before*
+        //     the `skeletonRev = N` assignment (to line the tails up for the merge)
+        //     does not merge them and costs the ms/numFrames/unusedBool slots again:
+        //     back to 90.48.
+        // (2) The nine Vector3-sized slots 0xb0..0x130 are the same SET on both
+        //     sides, permuted: image has pos(rev<7)=0xc0 disp(rev>=7)=0xd0
+        //     pos(rev>=7)=0xe0 disp(rev<7)=0xf0 Key=0x100 v1=0x110 v=0x120, we have
+        //     disp(rev<7)=0xc0 pos(rev>=7)=0xd0 pos(rev<7)=0xe0 disp(rev>=7)=0xf0
+        //     v1=0x100 v=0x110 Key=0x120. Neither side overlays the two rev branches,
+        //     so this is MSVC slot shaping and not a declaration-count difference.
         if (d.rev < 7) {
             int skeletonRev = 5;
             // The image funnels all five arms into a single
@@ -81,19 +96,15 @@ BEGIN_LOADS(DancerSequence)
             // arm and the rev>=6 arm. The rev>=6 arm reading the int is not
             // cosmetic -- without it a rev-6 DancerSequence desyncs the stream by
             // four bytes for the rest of the frame, and mElapsedMs is never set.
-            int ms;
+            int ms = -1;
             if (d.rev < 2) {
                 skeletonRev = 0;
-                ms = -1;
             } else if (d.rev < 3) {
                 skeletonRev = 1;
-                ms = -1;
             } else if (d.rev < 4) {
                 skeletonRev = 2;
-                ms = -1;
             } else if (d.rev < 5) {
                 skeletonRev = 3;
-                ms = -1;
             } else {
                 if (d.rev < 6) {
                     skeletonRev = 4;
