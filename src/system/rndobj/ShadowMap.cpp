@@ -85,7 +85,16 @@ found:
     float nearPlane = dist - sphere.radius;
 
     Vector3 offset;
-    Multiply(Vector3(0.0f, -dist, 0.0f), lightXfm.m, offset);
+    // EXPERIMENT w6-i: right-associated sum spelled at the call site.
+    {
+        const Vector3 v(0.0f, -dist, 0.0f);
+        const Hmx::Matrix3 &m = lightXfm.m;
+        offset.Set(
+            m.x.x * v.x + (m.y.x * v.y + m.z.x * v.z),
+            m.x.y * v.x + (m.y.y * v.y + m.z.y * v.z),
+            m.x.z * v.x + (m.y.z * v.y + m.z.z * v.z)
+        );
+    }
     Add(lightXfm.v, offset, lightXfm.v);
 
     sLightCam->SetWorldXfm(lightXfm);
