@@ -143,9 +143,14 @@ RndTexBlendController::GetBlendState(float &blend, float influence) const {
             float t3 = blend * t2;
             // Smoothstep.  MSVC canonicalises this into `fmuls 2.0*t3` +
             // `fmsubs t2*3.0 - that`; the image keeps -2.0f as a literal and
-            // emits `fmadds t3, -2.0, t2*3.0`.  Refuted spellings: swapped
-            // operand order, and a two-statement accumulator (`float s = t2*3;
-            // s += t3*-2;`).  Both are byte-for-byte identical to this one.
+            // emits `fmadds t3, -2.0, t2*3.0` (so -2.0f survives as a literal).
+            // Four spellings measured, ALL byte-for-byte identical to this one:
+            // this order; the swapped addition `t2*3.0f + t3*(-2.0f)`; a
+            // two-statement accumulator `float s = t2*3.0f; s += t3*(-2.0f);`;
+            // and constant-first multiplies `3.0f*t2 + -2.0f*t3`.  MSVC
+            // canonicalises the addition before forming the FMA and fuses the
+            // term whose multiplicand is defined FIRST (t2) -- the opposite of
+            // the image's choice.  2 rows, and 4 more under name_check.
             blend = t3 * (-2.0f) + t2 * 3.0f;
         }
     }
