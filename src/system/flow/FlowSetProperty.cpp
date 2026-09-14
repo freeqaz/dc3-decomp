@@ -163,15 +163,15 @@ void PropertyTask::Poll(float ms) {
         ObjPtr<PropertyTask> guard(this, nullptr);
         guard.SetObjConcrete(this);
         SetProperty(mValue);
-        if (guard) {
-            if (mListener) {
-                static Message msg("on_anim_event", DataNode(Symbol("ended")));
-                Hmx::Object *listener = mListener;
-                mListener = nullptr;
-                listener->Handle(msg, false);
-            }
-            delete this;
+        if (!guard)
+            return;
+        if (mListener) {
+            static Message msg("on_anim_event", DataNode(Symbol("ended")));
+            Hmx::Object *listener = mListener;
+            mListener = nullptr;
+            listener->Handle(msg, false);
         }
+        delete this;
     } else {
         float easedRatio = mEaseFunc(ratio, mEasePower, 1.0f);
         if (mIsColorInterp) {
