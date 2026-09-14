@@ -521,8 +521,16 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             SetPosBoneValue(String("bone_pelvis.mesh"), pelvisLocal);
 
             const PaddedJointPos &hipCenterWorld = worldJoints[kJointHipCenter];
+            // Index first, then the worldJoints walker, then the joint walker:
+            // the image inits them in that order (824CB238 `li r28, 0x0`,
+            // 824CB240 `addi r26, r1, 0x160`, 824CB244 `mr r27, r25`).  The
+            // index inside the for-init came out after the pointers, and
+            // curJoint declared before worldJoint costs an extra `mr`.  What
+            // is left is r26<->r27 on those two walkers (4 rows, forgiven).
+            int j = 0;
+            const PaddedJointPos *worldJoint = worldJoints;
             PaddedJointPos *curJoint = mJointPositions;
-            for (int j = 0; j < kNumJoints; j++, curJoint++) {
+            for (; j < kNumJoints; j++, worldJoint++, curJoint++) {
                 int parentJoint = JointParent((SkeletonJoint)j);
                 if (parentJoint == -1) {
                     float dist = Distance(pelvisV, worldJoints[kJointHipCenter]);
@@ -531,9 +539,15 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
                     Vector3 diff;
                     Subtract(hipCenterWorld, pelvisV, diff);
                     Scale(diff, scale, diff);
-                    Add(pelvisV, diff, *curJoint);
+                    // The root joint is written by NAME, not through the
+                    // running pointer: 824CB324 `stfs f13, 0x0(r25)` with r25 =
+                    // &mJointPositions[0] (824CB118 `addi r25, r30, 0x80`),
+                    // while curJoint is the r27 that only the ScaleBone arm
+                    // reads.  JointParent() returns -1 only for kJointHipCenter,
+                    // so the two spellings store to the same joint.
+                    Add(pelvisV, diff, mJointPositions[kJointHipCenter]);
                 } else {
-                    ScaleBone((SkeletonJoint)parentJoint, (SkeletonJoint)j, kUnk5, worldJoints[parentJoint], worldJoints[j], mJointPositions[parentJoint], *curJoint);
+                    ScaleBone((SkeletonJoint)parentJoint, (SkeletonJoint)j, kUnk5, worldJoints[parentJoint], *worldJoint, mJointPositions[parentJoint], *curJoint);
                 }
             }
 
@@ -550,9 +564,10 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             Cross(hipAxis, pelvisLateral, pelvisFwd);
             Normalize(pelvisFwd, pelvisFwd);
 
-            mPelvisTransform.m.x = pelvisLateral;
-            mPelvisTransform.m.y = pelvisFwd;
-            mPelvisTransform.m.z = hipAxis;
+            // One Matrix3::Set, not three row assignments: the image takes
+            // &mPelvisTransform.m once (824CB444 `addi r31, r30, 0x6d0`) and
+            // derives the dead &m.y from it (824CB44C `addi r7, r31, 0x10`).
+            mPelvisTransform.m.Set(pelvisLateral, pelvisFwd, hipAxis);
             Normalize(mPelvisTransform.m, mPelvisTransform.m);
 
             Transform pelvisLocalXfm;
