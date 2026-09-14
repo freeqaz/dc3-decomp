@@ -281,9 +281,19 @@ bool XboxMapFile::ParseStack(
         do {
             int origIdx = *pKey;
             int nameOff = origIdx * 0x80;
-            const char *name =
-                mapFile.GetFunction(*(unsigned int *)((int)pKey + offset), false);
-            strncpy(&funcNames[nameOff], name, 0x7f);
+            // The GetFunction call must be nested in the strncpy argument list,
+            // not hoisted into a named `const char *name`.  Both spellings are
+            // behaviourally identical, but a named local makes MSVC materialise
+            // the length constant before the destination pointer
+            // (`li r5, 0x7f` / `add r3, r28, r11`), while retail emits
+            // `add r3, r28, r11` at 0x825FC18C and `li r5, 0x7f` at
+            // 0x825FC190 -- destination first, length last.  Nesting the call
+            // pins that order and takes the function from 97.3 to 100.
+            strncpy(
+                &funcNames[nameOff],
+                mapFile.GetFunction(*(unsigned int *)((int)pKey + offset), false),
+                0x7f
+            );
             funcNames[nameOff + 0x7f] = '\0';
             remaining--;
             pKey++;

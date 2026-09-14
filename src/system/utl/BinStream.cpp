@@ -268,6 +268,25 @@ bool BinStream::WaitUntilReady(int sleepMs) {
 }
 #endif
 
+// RESIDUAL (w7-az, 94.74, 3 rows).  Our build emits one extra instruction,
+// `stw r30, 0x50(r31)` -- a dead zero-store to a compiler temp -- ahead of the
+// `if`, and that forces `li r30, 0x0` up with it.  The image has no such store:
+// slot 0x50 is written exactly once, by `stw r11, 0x50(r31)` at 0x827DE9CC
+// (r11 = r3+8, the homed `this` of the inlined _STLP_alloc_proxy ctor), inside
+// the new-succeeded arm, and its `li r30, 0x0` sits at 0x827DE9A0 immediately
+// before `cmplwi cr6, r11, 0x0` at 0x827DE9A4.  A /FAs listing names our extra
+// slot `$T38365 = 80 ; size = 4`, a temp distinct from `$T38376` (the proxy
+// this, same offset), written once and never read, attributed to the `if` line.
+// NEGATIVES, all three byte-inert (94.74 unchanged, same 3 rows):
+//   * `new std::vector<ObjVersion>` without the `()`.
+//   * hoisting the allocation into a named local
+//     (`std::vector<ObjVersion> *revStack = new ...; mRevStack = revStack;`).
+//   * deleting `~ObjVersion() {}` from obj/Object.h:1861 (RB3's ObjVersion has
+//     no user destructor, so this was worth testing as a lineage question --
+//     it changes nothing here, and the header is PCH-reached, so it was
+//     reverted rather than landed unverified).
+// The temp is manufactured inside STLport's `_VECTOR_IMPL(const allocator_type&
+// __a = allocator_type())` default-argument expansion, not at this call site.
 void BinStream::PushRev(int revs, Hmx::Object *obj) {
     if (!mRevStack) {
         mRevStack = new std::vector<ObjVersion>();

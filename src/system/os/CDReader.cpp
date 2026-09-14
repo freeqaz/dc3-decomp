@@ -101,15 +101,17 @@ int CDRead(int arkFile, int offset, int size, void *buffer) {
         gOverlapped.Offset = pos;
         if (!ReadFile(gArkFiles[arkFile], buffer, size << 0xB, nullptr, &gOverlapped)) {
             DWORD err = GetLastError();
-            gErrorCode = err;
-            if (err == ERROR_IO_PENDING || err == ERROR_IO_INCOMPLETE) {
-                MILO_NOTIFY("Disc error: ERROR_IO_INCOMPLETE, ignoring");
-                gPendingFile = arkFile;
-                return 0;
+            if (err != ERROR_IO_PENDING) {
+                if (err == ERROR_IO_INCOMPLETE) {
+                    MILO_NOTIFY("Disc error: ERROR_IO_INCOMPLETE, ignoring");
+                } else {
+                    gErrorCode = err;
+                    DiskErrorLoop();
+                    return 1;
+                }
             }
-            DiskErrorLoop();
-            return 1;
         }
+        gPendingFile = arkFile;
         return 0;
     }
 }
@@ -119,8 +121,20 @@ bool CDReadExternal(void *&v, int i, u64 u) {
         return false;
     } else {
         v = gExternalArkFiles[i];
-        LONG l = u;
-        SetFilePointer(v, u, &l, 0);
+        // The local the high-dword pointer points at is 64 bits wide, not a
+        // truncated LONG: 0x82602C9C is `std r29, 0x50(r1)`, a full 8-byte store
+        // of the offset, and r5 (= r1+0x50) is what SetFilePointer gets as
+        // lpDistanceToMoveHigh.  On big-endian that pointer lands on the HIGH
+        // dword of the offset, which is what the API wants.  Written as
+        // `LONG l = u;` we stored the truncated LOW 32 bits there instead and
+        // handed the API the low half twice.  The `u64` parameter is also homed
+        // (`std r5, 0xa0(r1)`) and the LONG argument reloaded out of it
+        // (`lwz r4, 0xa4(r1)`) -- RESIDUAL (w7-az, 88.46, 3 rows): we keep the
+        // offset in a callee-saved register and truncate with `clrrwi` instead,
+        // so the two home instructions are missing.  An explicit `(LONG)` cast on
+        // the second argument is byte-inert.
+        u64 offset = u;
+        SetFilePointer(v, (LONG)u, (LONG *)&offset, 0);
         return true;
     }
 }

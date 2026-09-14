@@ -281,23 +281,39 @@ void KeylessHash<T1, T2>::Clear() {
 
 template <>
 inline void KeylessHash<void *, AllocInfo *>::Remove(AllocInfo **entry) {
-    unsigned int idx = (unsigned int)((int)(entry - mEntries) >> 2) >> 2;
-    int i = (int)idx;
+    // ONE shift past the pointer difference, not two.  0x827DA5A0-0x827DA5A8 is
+    // `subf r11, r11, r4` / `srawi r11, r11, 2` / `srwi. r30, r11, 2`: the first
+    // srawi IS the ptrdiff scaling that C++ applies for a 4-byte element, so the
+    // only source-level shift is the logical `>> 2`.  We used to write both
+    // shifts by hand, which MSVC folded to `srawi r11, r11, 4` and left our
+    // index a further factor of four too small.
+    int i = (int)((unsigned int)(entry - mEntries) >> 2);
     MILO_ASSERT(i >= 0 && i < mSize, 0xCF);
 
-    int next = idx + 1;
     *entry = mRemoved;
-    int subVal = 0 - (mSize - next);
-
-    if (mEntries[(subVal & next)] == mEmpty) {
-        int cur = idx;
-        do {
-            cur--;
-            mEntries[cur] = mEmpty;
+    // Advance()'s wrap.  MSVC if-converts it to the `subfic`/`subfe`/`and` mask
+    // at 0x827DA614-0x827DA61C; spelling the mask by hand is not needed.
+    int next = i + 1;
+    if (next == mSize) {
+        next = 0;
+    }
+    if (mEntries[next] == mEmpty) {
+        // Backward-shift cleanup, and the image tests FIRST: the loop is entered
+        // by `b .L_827DA664` at 0x827DA630, whose head reloads mEntries[cur] and
+        // compares it against mRemoved before the body runs, and the body's
+        // `stwx r9, r11, r10` at 0x827DA644 uses the index computed BEFORE the
+        // `subi r30, r30, 0x1` -- i.e. it clears the slot it just tested and only
+        // then steps back.  Written as a do/while that decrements first, this
+        // cleared the slot below the one it tested and, when i was 0, executed
+        // `mEntries[-1] = mEmpty` -- an out-of-bounds write one word below the
+        // table -- because the `cur == -1` wrap ran after the store, not before.
+        while (mEntries[i] == mRemoved) {
+            mEntries[i] = mEmpty;
             mNumEntries--;
-            if (cur == -1) {
-                cur = mSize - 1;
+            i--;
+            if (i == -1) {
+                i = mSize - 1;
             }
-        } while (mEntries[cur] == mRemoved);
+        }
     }
 }

@@ -606,11 +606,10 @@ void MemTracker::DiffDump(TextStream &ts) {
 #include "hamobj\HamPlayerData.h"
 
 void MemTracker::ReportMemoryAlloc(const char *name) {
-    Symbol venue = TheGameData->Venue();
+    const char *venueStr = TheGameData->Venue().Str();
     const char *char0 = 0;
     const char *char1 = 0;
     Symbol song = TheGameData->GetSong();
-    const char *venueStr = venue.Str();
     HamPlayerData *p0 = TheGameData->Player(0);
     if (p0) {
         char0 = p0->Char().Str();

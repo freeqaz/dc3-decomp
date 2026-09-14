@@ -383,7 +383,21 @@ void ReadEditorDirDead(BinStream &bs) {
     // goes back to the top.  The previous spelling matched each index
     // independently, so "%#@" followed by anything then "EndOfEditorDir@#%"
     // would have been accepted.
-    for (unsigned int i = 0; i < 20;) {
+    //
+    // The loop must be `while (true)` with the bound tested only on the MATCH
+    // arm, not `for (i = 0; i < 20;)`.  Retail tests the bound exactly once,
+    // after the increment (`addi r25, r25, 0x1` at 0x825A3B54,
+    // `cmplwi cr6, r25, 0x14` at 0x825A3B58, `blt cr6` back to the top at
+    // 0x825A3B5C), and sinks the reset out of line PAST the epilogue
+    // (`li r25, 0x0` at 0x825A3B68, `b` to the loop top at 0x825A3B6C), reached
+    // by `bne cr6` at 0x825A3B50 -- so the reset path never re-tests i < 20.
+    // With the bound in the `for` header MSVC instead speculates the increment
+    // ahead of the compare and clobbers it with 0 inline (91.5); putting the
+    // reset in the `else` and the bound behind `break` reproduces retail
+    // exactly (100).  Inverting the two arms is NOT equivalent for the
+    // compiler: it sinks whichever arm is the `else` (90.7).
+    unsigned int i = 0;
+    while (true) {
 #ifdef HX_NATIVE
         bs.WaitUntilReady();
 #else
@@ -394,7 +408,9 @@ void ReadEditorDirDead(BinStream &bs) {
 #endif
         bs >> buf;
         if (((const unsigned char *)"%#@EndOfEditorDir@#%")[i] == buf) {
-            i++;
+            if (++i >= 20) {
+                break;
+            }
         } else {
             i = 0;
         }

@@ -611,6 +611,20 @@ void EventTrigger::UnregisterEvents() {
     }
 }
 
+// RESIDUAL (w7-az, 89.66, 14 rows).  The image materialises &*it into its own
+// callee-saved register and a dead 4-byte local: 0x82727888 is
+// `addi r30, r29, 0x8`, and 0x82727894 / 0x827278AC are two `stw r30, 0x54(r31)`
+// that nothing ever reloads, one immediately before each of `bl strstr`
+// (0x82727898) and `bl ??0String@@QAA@PBD@Z` (0x827278B0).  That costs the
+// target a fifth callee-saved GPR -- `bl __savegprlr_27` at 0x82727864 and
+// `b __restgprlr_27` at 0x827278E8, against our _28 -- and lets it address the
+// Symbol as `lwz r4, 0x0(r30)` / `stw r11, 0x0(r30)` where we use `0x8(r30)`
+// off the node.  Note the FIRST use still goes through the node
+// (`lwz r3, 0x8(r29)` at 0x8272788C), so &*it is computed before it is needed.
+// NEGATIVES, all byte-inert, none reproduce the 0x54 local: naming the element
+// (`Symbol &sym = *it;` and using sym throughout); an explicit pointer local
+// (`Symbol *sym = it.operator->();`); and spelling the second access as a
+// second `it.operator->()->Str()` so the call expression appears twice.
 void EventTrigger::CleanupEventCase(std::list<Symbol> &syms) {
     FOREACH (it, syms) {
         if (strstr(it->Str(), "lighting_")) {

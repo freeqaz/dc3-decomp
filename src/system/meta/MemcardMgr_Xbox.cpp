@@ -68,6 +68,30 @@ int MemcardMgr::ThreadStart() {
         ret = ThreadCall_LoadGame();
         break;
     case kS_DeleteSaves:
+        // RESIDUAL (w7-az, 94.18, 15 rows).  Identical arithmetic, different
+        // addressing form.  The image MATERIALISES the adjusted this and adds
+        // the array's displacement last: `subi r11, r3, 0x2c` (0x82E0D0D0),
+        // `lwz r10, 0x94(r11)` (0x82E0D0DC), `mulli r10, r10, 0xc`,
+        // `add r11, r10, r11`, `addi r4, r11, 0x44` (0x82E0D0E8) -- and it
+        // schedules the `lis`/`addi` of &TheMC (0x82E0D0D4-0x82E0D0D8) between
+        // the subi and the index load.  We keep the UNADJUSTED this, read
+        // mPadNum as 0x68(r3), and fold 0x44 - 0x2c = 0x18 into the index as
+        // `addi r10, r10, 0x2` -- legal only because 0x18 happens to be 2 * the
+        // 0xc element size.  That forces a `mr r11, r3` hoisted above the whole
+        // switch and turns the other four arms' `subi r3, r3, 0x2c`
+        // (0x82E0D0F4 and on) into `subi r3, r11, 0x2c`.
+        // NEGATIVES:
+        //   - `const ContainerId &id = mContainerIDs[mPadNum];` on its own line:
+        //     byte-inert, 94.18.
+        //   - `MemcardMgr *mgr = this; ... mgr->mContainerIDs[mgr->mPadNum]`
+        //     DOES recover the materialised form -- `subi r11, r3, 0x2c` and
+        //     `addi r4, r11, 0x44` both appear and the row count falls 15 -> 6 --
+        //     but MSVC still reads the index as `lwz r10, 0x68(r3)` and hoists
+        //     it above the subi, and the surviving rows are inserts/deletes
+        //     rather than register renames, so canonical DROPS to 92.71.
+        //   - additionally naming `MemcardXbox &mc = TheMC;` is far worse
+        //     (86.21): the call through the reference stops being a direct call
+        //     and goes through the vtable.
         ret = TheMC.DeleteContainer(mContainerIDs[mPadNum]);
         break;
     }

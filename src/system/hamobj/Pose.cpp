@@ -55,12 +55,17 @@ float Pose::CurrentScore() const {
     case (ScoreMode)0:
         return sum / (float)unk18;
     case (ScoreMode)1: {
-        unsigned int count = 0;
-        for (std::list<float>::const_iterator it = unk10.begin(); it != unk10.end(); ++it) {
-            count++;
-        }
+        // The image's second count loop reloads begin() through the END pointer
+        // (`lwz r10, 0x0(r11)` where r11 == &unk10 == end()), i.e. the list's own
+        // `this`, not `0x10(r3)`.  That is `size()`'s inlined `distance(begin(),
+        // end())`, not a hand-written loop over `unk10.begin()`; spelling it by
+        // hand lets MSVC CSE the two begin() loads and costs the extra `mr`.
+        unsigned int count = unk10.size();
+        // ONE return, not an early `return 0.0f`: the image's short-count arm is
+        // `fmr f0, f31` (minVal = 0.0f) falling into the shared `fmr f1, f0`
+        // / `b` epilogue at 0x82528EE0-0x82528EE4.
         if (count < (unsigned int)unk18) {
-            return 0.0f;
+            minVal = 0.0f;
         }
         return minVal;
     }
