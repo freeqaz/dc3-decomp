@@ -256,8 +256,14 @@ void RndRibbon::UpdateMesh() {
                         }
                         row++;
                         verts[vertIdx].norm = norm;
-                        verts[vertIdx].tex.x = 1.0f - (latestFrame - segFrame) / mDecay;
-                        verts[vertIdx].tex.y = uFrac;
+                        // The tex pair is written through a member call on the
+                        // sub-object: the image materialises &verts[i].tex once
+                        // (addi r10, r11, 0x40, then folds both stores back onto
+                        // r11+0x40/0x44), where two separate field assignments
+                        // re-read the array's data pointer for the second store.
+                        verts[vertIdx].tex.Set(
+                            1.0f - (latestFrame - segFrame) / mDecay, uFrac
+                        );
                     } while (row < 2);
                     numSides = mNumSides;
                     side++;
