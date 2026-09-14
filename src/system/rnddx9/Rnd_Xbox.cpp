@@ -653,6 +653,20 @@ RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
     return PostProcessTexture();
 }
 
+// RESIDUAL (w7-bl, 99.99 canonical, 15 rows, all register/operand ORDER and
+// no value): (a) a flat r22<->r23 permutation -- the image gives r22 to the
+// `?TheShaderMgr@@...@h` page base and r23 to `s`, we give them the other way
+// round, 10 rows; (b) inside the inlined MakeColor at 0x38C4/0x38D8 the image
+// issues the red (0x0) and alpha (0xc) `lfs` in that order and we issue alpha
+// then red, which cascades into the r9/r10 naming of the three `rlwimi`s --
+// the packed ARGB word is bit-identical either way (verified by hand from the
+// rlwimi masks).  Failed spellings: reordering MakeColor's four |-terms in
+// Rnd.h so red precedes alpha is BYTE-INERT here (15 rows before and after),
+// so it is not an argument-order lever, matching the negative already recorded
+// for the same packing in rnddx9/Part.cpp; hoisting `RndShaderMgr &shaderMgr`
+// to the top of the function costs 2.8pp (it pulls the `lis`/`lwz` pair ahead
+// of D3DDevice_SetFVF and grows the frame by 0x10).
+//
 // Debug text: each glyph is a list of polylines held in the `font` DataArray,
 // indexed by character code, each point a pair of floats scaled to a 9x12 cell
 // on a 13.5 x 18 pixel grid.  Returns a reference to a shared cursor holding
@@ -678,8 +692,8 @@ Vector2 &DxRnd::DrawString(
             s++;
             if (*s) {
                 widest = Max(widest, cursor.x);
-                cursor.y += 18.0f;
                 cursor.x = pos.x;
+                cursor.y += 18.0f;
             }
             continue;
         }
