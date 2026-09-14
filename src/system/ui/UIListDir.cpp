@@ -487,6 +487,9 @@ void UIListDir::BuildDrawState(
             drawState.mHighlightElementState = widgetState;
         }
 
+        UIComponent::State componentState =
+            state.Provider()->ComponentStateOverride(showing, prevData, compState);
+
         UIListElementDrawState elem;
 #ifdef HX_NATIVE
         memset(&elem, 0, sizeof(elem));
@@ -498,7 +501,7 @@ void UIListDir::BuildDrawState(
         elem.mScaleZ = 1.0f;
         elem.mAlpha = alpha;
         elem.mElementState = widgetState;
-        elem.mComponentState = state.Provider()->ComponentStateOverride(showing, prevData, compState);
+        elem.mComponentState = componentState;
         elem.mDisplay = dispIndex;
         elem.mShowing = showing;
         elem.mData = prevData;
