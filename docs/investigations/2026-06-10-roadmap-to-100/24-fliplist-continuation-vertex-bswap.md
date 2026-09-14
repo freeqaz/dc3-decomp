@@ -120,7 +120,7 @@ experiment to confirm real-vs-artifact.
 
 | Fn | Unit | norm% | diff_op | Verdict |
 |---|---|---|---|---|
-| `CharBonesSamples::Relativize` | char/CharBonesSamples | 97.2 | none | FALSE — FPR f28↔f29 + `__savefpr_28`/`__restfpr_28` inline-vs-call prologue floor |
+| `CharBonesSamples::Relativize` | char/CharBonesSamples | 97.2 | none | ~~FALSE — FPR f28↔f29 + `__savefpr_28`/`__restfpr_28` inline-vs-call prologue floor~~ **RETRACTED 2026-09-14 (wave 7):** not a floor. The fourth FPR was a `double` literal (`1300.0`) on the x line that the image never holds; the faithful `ShortVector3::ToVector3` + `operator-=` spelling drops the prologue pair and all 16 f28↔f29 rows, 97.1 → 99.7. It was also a real (1-ULP) numeric divergence. |
 | `CharDriverMidi::OnMidiParserGroup` | char/CharDriverMidi | 98.2 | none | FALSE — r28↔r29 GPR regswap floor |
 | `CharLookAt::Highlight` | char/CharLookAt | 92.1 | none | FALSE — GPR regswap + scheduling |
 | `FlowRun::OnTargetDirChange` | flow/FlowRun | 96.0 | none | FALSE — 1 regswap + 1 stack-slot, near-trivial floor |

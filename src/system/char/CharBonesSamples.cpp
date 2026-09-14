@@ -402,49 +402,28 @@ void CharBonesSamples::Relativize(CharClip *clip) {
                 void *channel = clip->GetChannel(bone->name);
                 Vector3 evalPos;
                 clip->EvaluateChannel(&evalPos, channel, startBeat);
-                // ⚠ BEHAVIOURAL DIVERGENCE, deliberately left in place -- read
-                // this before "fixing" the inconsistent literal on the sx line.
-                //
-                // The image computes all THREE components in single precision
-                // against one shared constant: three fcfid / frsp / fmuls f31
-                // triples, f31 = __real@3d228145, which is exactly float
-                // 1300.0f/32767.0f (and also exactly 1300.0f*(1.0f/32767.0f) --
-                // both spellings round to the same word, checked).  It holds no
-                // double anywhere.
-                //
-                // `1300.0` here is a double, so sx is computed as
-                // (double)pos->x * (1300.0/32767.0) and then rounded once more
-                // to float.  That is double rounding: it can differ from the
-                // image by an ULP.  It is nevertheless worth +2.9pp, because the
-                // double forces MSVC to keep the three terms unfused, and the
-                // image's shape is three separate fmuls followed by three
-                // separate fsubs.  Spelled in pure single precision, /fp:fast
-                // contracts one of the three multiply-subtract pairs into an
-                // `fmsubs` that the image never emits.  Measured, canonical:
-                //
-                //   1300.0  double on sx only (this spelling)        97.136
-                //   1300.0f, i.e. all three single                   94.212
-                //   all single + temps inlined into v.x/v.z/v.y      89.3
-                //
-                // The cost of the double is a fourth callee-saved FPR: it lives
-                // in f30 across the loop, which pushes the loop temp from f29 to
-                // f28 and turns the image's three inline `stfd` prologue saves
-                // into `bl __savefpr_28` / `bl __restfpr_28`.  That accounts for
-                // the whole 55-row residual -- the prologue pair, the 16 f28<->f29
-                // rows, and the constant-load rows at the top.  So this function
-                // cannot reach 100% while the double is here, and cannot be
-                // numerically faithful while it is not.  Closing it needs a
-                // single-precision spelling that also blocks the fmsubs
-                // contraction; statement order is NOT that lever (swapping the
-                // v.x/v.y/v.z assignment order is exactly inert in both the
-                // double and the all-single spellings -- measured both ways).
-                float sx = (float)pos->x * (1300.0 / 32767.0f);
-                float sz = (float)pos->z * (1300.0f / 32767.0f);
-                float sy = (float)pos->y * (1300.0f / 32767.0f);
                 Vector3 v;
-                v.x = sx - evalPos.x;
-                v.y = sy - evalPos.y;
-                v.z = sz - evalPos.z;
+                // ShortVector3::ToVector3 (Vec.h) decodes all three components in
+                // single precision against one shared constant, __real@3d228145 =
+                // 1300.0f/32767.0f, which is exactly what the image does: one lfs
+                // into f31, three fcfid/frsp/fmuls, three fsubs, then Set().
+                //
+                // History, so nobody re-derives it: this used to be spelled as three
+                // float temps, with a DOUBLE literal (1300.0) on the x line. The
+                // double lived in f30 across the loop, cost a fourth callee-saved
+                // FPR (bl __savefpr_28 where the image has three inline stfd) and
+                // double-rounded x -- a real, if tiny, numeric divergence kept
+                // because the all-single temp spelling scored WORSE (94.2 vs 97.1:
+                // /fp:fast contracted one multiply-subtract into an fmsubs). The
+                // inline ToVector3 + operator-= spelling is both faithful and
+                // higher (99.7), with no fmsubs. The 16 f28<->f29 rows and the
+                // prologue pair that an earlier investigation filed as an
+                // "unfixable FPR regswap floor" were that one literal's type.
+                //
+                // Inert, measured: declaring v before/after evalPos; spelling the
+                // subtraction per component in the image's x,z,y store order.
+                pos->ToVector3(v);
+                v -= evalPos;
                 pos->Set(v);
                 bone++;
             }
