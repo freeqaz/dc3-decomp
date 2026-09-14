@@ -1256,10 +1256,15 @@ void WorldCrowd::DrawShowing() {
                     charXfm.m.x.x = camA * upA - camB * upB;
                     Normalize(charXfm.m.x, charXfm.m.x);
 
-                    // Right (y-row): forward × up using normalized forward values
-                    charXfm.m.y.x = charXfm.m.x.y * charXfm.m.z.x - charXfm.m.z.y * charXfm.m.x.x;
+                    // Right (y-row): the cross product up x forward, i.e.
+                    //   y.x = upY*x.z - upZ*x.y
+                    //   y.y = upZ*x.x - upX*x.z
+                    //   y.z = upX*x.y - upY*x.x
+                    // The image stores them in that order at 0x88, 0x84, 0x80
+                    // (82838714/1C/24), i.e. z first, then y, then x.
+                    charXfm.m.y.z = charXfm.m.x.y * charXfm.m.z.x - charXfm.m.z.y * charXfm.m.x.x;
                     charXfm.m.y.y = charXfm.m.z.z * charXfm.m.x.x - charXfm.m.x.z * charXfm.m.z.x;
-                    charXfm.m.y.z = charXfm.m.x.z * charXfm.m.z.y - charXfm.m.x.y * charXfm.m.z.z;
+                    charXfm.m.y.x = charXfm.m.x.z * charXfm.m.z.y - charXfm.m.x.y * charXfm.m.z.z;
                 }
                 charXfm.v.x = 0;
                 charXfm.v.y = 0;
