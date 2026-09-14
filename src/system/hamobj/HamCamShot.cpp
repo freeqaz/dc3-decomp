@@ -182,6 +182,7 @@ void HamCamShot::UpdateTargetsFlipped() {
                      it != mTargets.end();
                      ++it) {
                     HamCharacter *character = CharacterNameToCharacter(it->mTarget);
+                    Target &target = *it;
                     ObjectDir *clipsDir;
                     if (character != NULL) {
                         clipsDir = character->Find<ObjectDir>("clips", true);
@@ -196,17 +197,17 @@ void HamCamShot::UpdateTargetsFlipped() {
                             Hmx::Object *found =
                                 clipsDir->Find<Hmx::Object>("crewbattle_intro", false);
                             if (found != NULL) {
-                                it->mAnimGroup = crewbattle_intro;
+                                target.mAnimGroup = crewbattle_intro;
                             } else {
                                 found = clipsDir->Find<Hmx::Object>("BattleIntro", false);
                                 if (found != NULL) {
-                                    it->mAnimGroup = BattleIntro;
+                                    target.mAnimGroup = BattleIntro;
                                 } else {
                                     found = clipsDir->Find<Hmx::Object>(
                                         "crew_battle_intro", false
                                     );
                                     if (found != NULL) {
-                                        it->mAnimGroup = crew_battle_intro;
+                                        target.mAnimGroup = crew_battle_intro;
                                     }
                                 }
                             }
@@ -230,7 +231,7 @@ void HamCamShot::UpdateTargetsFlipped() {
                         targetIdx,
                         charName,
                         clipsDirName,
-                        it->mAnimGroup
+                        target.mAnimGroup
                     );
                     targetIdx++;
                 }
