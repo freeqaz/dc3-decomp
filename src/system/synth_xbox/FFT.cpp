@@ -102,6 +102,20 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
 // Builds a quarter-symmetric cos/sin twiddle table. table holds n/2 complex
 // (cos,sin) pairs; only the first quarter is computed via trig, the rest filled
 // by the (-sin, cos) symmetry. Small-n cases (n < 4) are special-cased.
+//
+// Two spellings carry this to 100 and neither is cosmetic (w7-an):
+//  * `n / 2` must be written INLINE in the subscript, not lifted into a
+//    `long half` local.  As a local it is an ordinary loop-invariant and MSVC
+//    strength-reduces `table[j + half]` into a second walking pointer
+//    (`stfs 0x4(rN)` / `stfsu 0x8(rN)`); written inline it is hoisted by the
+//    invariant pass instead and the address is rebuilt every iteration --
+//    `add r11, r29, r27` / `slwi` / `add r11, r11, r28`, which is what the
+//    image does.  75.0 -> 96.9 canonical on that change alone.
+//  * the `j` counter must be spelled `i * 2`, not carried as its own `long j`
+//    with `j += 2`.  A source-level `j` gets its `li 0` next to `i`'s, before
+//    the zero-trip guard; as a compiler-created induction variable its init
+//    lands in the loop PREHEADER after the invariant hoists, which is where
+//    the image's `li r29, 0x0` sits.  96.9 -> 100.0.
 int CalculateSinCosTable(long n, float* table) {
     if (n < 4) {
         table[0] = 1.0f;
@@ -114,23 +128,15 @@ int CalculateSinCosTable(long n, float* table) {
     }
 
     long count = n / 4;
-    if (count <= 0) {
-        return 0;
-    }
-    long half = n / 2;
     double twoPi = 6.2831854820251465;
-    float* p = table - 1;
-    long j = 0;
     for (long i = 0; i < count; ++i) {
         float angle = (float)((double)i * twoPi / (double)n);
         float cv = (float)cos(angle);
         float sv = (float)sin(angle);
-        p[1] = cv;
-        p += 2;
-        p[0] = sv;
-        table[j + half] = -sv;
-        table[j + half + 1] = cv;
-        j += 2;
+        table[i * 2] = cv;
+        table[i * 2 + 1] = sv;
+        table[i * 2 + n / 2] = -sv;
+        table[i * 2 + n / 2 + 1] = cv;
     }
     return 0;
 }
