@@ -477,10 +477,17 @@ void HamCharacter::SetUseCameraSkeleton(bool use) {
 
 Symbol HamCharacter::GetFaceOverrideClip() {
     CharLipSyncDriver *driver = Find<CharLipSyncDriver>("face.lipdrv", false);
-    if (driver && driver->OverrideClip()) {
-        return driver->OverrideClip()->Name();
-    } else
-        return Symbol();
+    // NESTED ifs with a named local, not `if (driver && driver->OverrideClip())`.
+    // The image tests the clip with `cmplwi cr6, r11, 0x0` -- UNSIGNED, the same
+    // form it uses for the `driver` test one row earlier.  Inside an && chain
+    // MSVC gives the SECOND operand the signed `cmpwi`, and an explicit
+    // `(unsigned int)driver->OverrideClip() != 0` there does not move it.
+    if (driver) {
+        CharClip *clip = driver->OverrideClip();
+        if (clip)
+            return clip->Name();
+    }
+    return Symbol();
 }
 
 void HamCharacter::ResetFaceOverrideBlending() {
