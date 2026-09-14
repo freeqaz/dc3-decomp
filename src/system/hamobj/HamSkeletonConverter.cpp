@@ -475,10 +475,7 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             Vector3 axisNegX;
             axisNegX.Set(-1.0f, 0.0f, 0.0f);
 
-            unk40.m.x.Set(1.0f, 0.0f, 0.0f);
-            unk40.m.y.Set(0.0f, 1.0f, 0.0f);
-            unk40.m.z.Set(0.0f, 0.0f, 1.0f);
-            unk40.v.Zero();
+            unk40.Reset();
 
             Hmx::Matrix3 matA(axisX, axisZ, axisY);
             Hmx::Matrix3 matB(axisNegX, axisNegY, axisZ2);
@@ -487,10 +484,7 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             // target binary emits both passes, and the position of this one
             // (between the matrix decls and the Multiply calls) is load-bearing
             // for instruction scheduling. Do not remove.
-            unk40.m.x.Set(1.0f, 0.0f, 0.0f);
-            unk40.m.y.Set(0.0f, 1.0f, 0.0f);
-            unk40.m.z.Set(0.0f, 0.0f, 1.0f);
-            unk40.v.Zero();
+            unk40.Reset();
 
             Multiply(matB, unk40.m, unk40.m);
             Multiply(matA, unk40.m, unk40.m);
