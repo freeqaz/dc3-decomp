@@ -420,13 +420,15 @@ void FlowSetProperty::ReActivate() {
     // No local alias for mTarget: FlowPtr::operator-> is inlined, so each use
     // recomputes `addi r3, r30, 0x78` in the target rather than holding the
     // sub-object address in a callee-saved register.
+    // NOT an early return: the image's zero-blend-time branch falls through into
+    // the timing tail below, so t.Stop() and TheFlowMgr->AddEventTime() run on
+    // this path too. (A `return;` here jumps straight to the epilogue, which is
+    // the only thing the two `b`/`beq` rows at the join were reporting.)
     if (0.0f == mBlendTime && mChangePerUnit == 0.0f) {
         FLOW_LOG("Setting Value on %s\n", mTarget->Name())
         mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
-        return;
-    }
-    if (mTarget->Property(unk_0x98.Array(), true)->Evaluate()
-        != mValue.Node().Evaluate()) {
+    } else if (mTarget->Property(unk_0x98.Array(), true)->Evaluate()
+               != mValue.Node().Evaluate()) {
         FLOW_LOG("Queueing\n")
         TheFlowMgr->QueueCommand(this, kQueue);
     }
