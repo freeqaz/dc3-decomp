@@ -476,12 +476,12 @@ void RndBitmap::ConvertColor(
     } else if (mBpp == 0x10) {
         unsigned short swapped = SwapBytes(*(unsigned short *)uc);
         if (mOrder & 1) {
-            a = -(swapped >> 0xF & 1);
+            a = (swapped & 0x8000) ? 0xFF : 0;
             b = swapped >> 7 & 0xF8;
             g = swapped >> 2 & 0xF8;
             r = swapped << 3;
         } else {
-            a = -(swapped >> 0xF & 1);
+            a = (swapped & 0x8000) ? 0xFF : 0;
             r = swapped >> 7 & 0xF8;
             g = swapped >> 2 & 0xF8;
             b = swapped << 3;
