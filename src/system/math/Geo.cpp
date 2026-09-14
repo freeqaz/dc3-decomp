@@ -1116,7 +1116,12 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
         return false;
     }
 
-    std::list<BSPFace> backFaces, frontFaces;
+    // Declaration order and splice position are both read off the image.
+    // Construction order (Geo.s 0x825387B4..0x825387F0) builds the list at
+    // 0x68 first and the one at 0x58 second; the tail (0x82538A98/0x82538AC8)
+    // recurses into node->right (offset 0x14) with the 0x58 list, so 0x68 is
+    // frontFaces and 0x58 is backFaces, i.e. frontFaces is declared first.
+    std::list<BSPFace> frontFaces, backFaces;
     std::list<BSPFace>::iterator it = faces.begin();
     while (it != faces.end()) {
         bool back, front;
@@ -1125,10 +1130,17 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
             it = faces.erase(it);
         } else if (!back) {
             std::list<BSPFace>::iterator cur = it++;
-            frontFaces.splice(frontFaces.begin(), faces, cur);
+            // BEHAVIOURAL FIX: the image splices at end(), not begin().  The
+            // inlined _M_transfer at Geo.s 0x82538874 computes the position as
+            // `addi r10, r31, 0x68` -- the ADDRESS of the list, which is
+            // list::end(); begin() would be a `lwz` of its _M_next, which is
+            // what we used to emit.  With begin() every child list came out in
+            // reverse order, so the recursive split saw the faces back to front.
+            frontFaces.splice(frontFaces.end(), faces, cur);
         } else if (!front) {
             std::list<BSPFace>::iterator cur = it++;
-            backFaces.splice(backFaces.begin(), faces, cur);
+            // end(), not begin() -- same reading, Geo.s 0x825388D4.
+            backFaces.splice(backFaces.end(), faces, cur);
         } else {
             std::list<BSPFace>::iterator cur = it++;
             Hmx::Ray ray;
@@ -1138,21 +1150,23 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
             Clip(cur->p, ray, frontFace.p);
             if (frontFace.p.points.size() > 2) {
                 frontFace.Update();
-                frontFaces.insert(frontFaces.begin(), frontFace);
+                frontFaces.insert(frontFaces.end(), frontFace);
             }
             ray.dir.Set(-ray.dir.x, -ray.dir.y);
             Clip(cur->p, ray, cur->p);
             if (cur->p.points.size() > 2) {
                 cur->Update();
-                backFaces.splice(backFaces.begin(), faces, cur);
+                backFaces.splice(backFaces.end(), faces, cur);
             }
         }
     }
 
     bool ok = MakeBSPTree(node->left, frontFaces, nextDepth);
     if (!ok) {
-        frontFaces.clear();
+        // The image clears backFaces (0x58) before frontFaces (0x68) on BOTH
+        // the failure and the success path -- Geo.s 0x82538A98 and 0x82538AC8.
         backFaces.clear();
+        frontFaces.clear();
         return false;
     }
     ok = MakeBSPTree(node->right, backFaces, nextDepth);
