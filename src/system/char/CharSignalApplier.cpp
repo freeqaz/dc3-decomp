@@ -109,6 +109,12 @@ void CharSignalApplier::Poll() {
         return;
     float clamped = Clamp(mSignalMin, mSignalMax, mSignal);
     mSignal = clamped;
+    // NEGATIVE RESULT (w7-al, 2026-09-14): 0x823AB164 is `bne` over a `b`,
+    // which looks like `if (mDoSmoothing) A else B`, but spelling it that way
+    // costs more than it buys -- it flips the inner `fabs(...) < inc` branch
+    // (0x823AB18C `bge`) the wrong way and drops the shared
+    // `stfs f13, 0x3c(r28)` tail.  95.7 -> 94.6.  The `!mDoSmoothing` form is
+    // kept; the branch-around-branch at 0x823AB164 is an MSVC peephole miss.
     if (!mDoSmoothing) {
         mSmoothedSignal = clamped;
     } else {
@@ -129,8 +135,8 @@ void CharSignalApplier::Poll() {
     }
     BoneOp *cur = mBoneOps.begin();
     mSmoothedSignal *= Weight();
-    if (cur != mBoneOps.end()) {
-        do {
+    for (; cur != mBoneOps.end(); cur++) {
+        {
             BoneOp op = *cur;
             RndTransformable *bone = op.mBone;
             if (bone) {
@@ -184,8 +190,7 @@ void CharSignalApplier::Poll() {
                     bone->DirtyLocalXfm() = localTf;
                 }
             }
-            cur++;
-        } while (cur != mBoneOps.end());
+        }
     }
 }
 
