@@ -65,26 +65,37 @@ long random(long l) {
 
 // could even be a class, see: https://decomp.me/scratch/3ZAu1
 #define NEEDS_BYTESWAP(p, v) (*(((unsigned char *)(p)) + 3) == (v))
-#define BYTESWAP_32BIT(v)                                                                \
+// The macro copies its argument into its OWN pointer local and uses a SINGLE
+// byte temp.  Both are read off the /Od target listing (0x82330240): the swap
+// block reaches the buffer through a second slot at 0x64(r1) that is loaded
+// from masher_p's slot at 0x50(r1) once per iteration, and it spills only one
+// byte, to 0x68(r1), four times -- a `t1` would have had a slot of its own.
+#define BYTESWAP_32BIT(p)                                                                \
     do {                                                                                 \
-        unsigned char t0, t1;                                                            \
-        t0 = *((unsigned char *)(v) + 0);                                                \
-        t1 = *((unsigned char *)(v) + 3);                                                \
-        *((unsigned char *)(v) + 0) = t1;                                                \
-        *((unsigned char *)(v) + 3) = t0;                                                \
-        t0 = *((unsigned char *)(v) + 1);                                                \
-        t1 = *((unsigned char *)(v) + 2);                                                \
-        *((unsigned char *)(v) + 1) = t1;                                                \
-        *((unsigned char *)(v) + 2) = t0;                                                \
+        unsigned char *v = (unsigned char *)(p);                                         \
+        unsigned char t0;                                                                \
+        t0 = v[0];                                                                       \
+        v[0] = v[3];                                                                     \
+        v[3] = t0;                                                                       \
+        t0 = v[1];                                                                       \
+        v[1] = v[2];                                                                     \
+        v[2] = t0;                                                                       \
     } while (0);
 
 void KeyChain::getMasher(unsigned char *uc) {
     unsigned int m = 1;
-    int needs_byteswap = NEEDS_BYTESWAP(&m, 1);
+    // A BYTE slot (`stb r11, 0x54(r1)` at 0x823301CC) tested with a plain
+    // `cmpwi r11, 0x0` against cr0 -- an `int` here is a word store and a
+    // `cmpwi cr6`.
+    bool needs_byteswap = NEEDS_BYTESWAP(&m, 1);
+    // 0xEB is a NAMED local, initialised at 0x823301D0 into its own slot at
+    // 0x5c(r1) before the loop; the ternary then loads it (0x82330210) instead
+    // of materialising the literal.
+    unsigned int seed = 0xEB;
     unsigned int *masher_p = reinterpret_cast<unsigned int *>(uc);
 
     for (int i = 0; i < 8; i++) {
-        *masher_p = random((0 == i) ? 0xEB : 0);
+        *masher_p = random((0 == i) ? seed : 0);
 
         if (needs_byteswap) {
             BYTESWAP_32BIT(masher_p);
@@ -92,6 +103,16 @@ void KeyChain::getMasher(unsigned char *uc) {
 
         masher_p++;
     }
+    // RESIDUAL (w7-al, 98.1 canonical): all 70 instructions are present and in
+    // order -- no inserts, no deletes, no opcode diffs.  What is left is one
+    // /Od allocator artifact: the image reuses r11 (and r10) for every
+    // statement's temp, while our build hands each statement a fresh volatile
+    // and counts down r10..r3 before wrapping, which repaints 48 rows; the four
+    // outer locals then land in a permuted slot order (image
+    // masher_p/needs_byteswap/m/seed at 0x50/0x54/0x58/0x5c, ours
+    // needs_byteswap/seed/masher_p/m), and the two `replace` rows are the same
+    // test compiled against cr0 in the image and cr6 here.  Neither `int` nor
+    // `bool` for needs_byteswap changes the cr field.
 }
 
 void mash(unsigned char *uc1, unsigned char *uc2) {

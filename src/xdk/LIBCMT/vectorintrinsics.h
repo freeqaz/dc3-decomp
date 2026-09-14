@@ -135,6 +135,19 @@ XMVECTOR __vmrghw(XMVECTOR vSrcA, XMVECTOR vSrcB);
 // Vector128 Permute
 XMVECTOR __vperm(XMVECTOR vSrcA, XMVECTOR vSrcB, XMVECTOR vPerm);
 
+// Vector128 Splat Immediate Signed Word.  The only way to get the image's
+// `vspltisw128 vN, v0, 0x0` for a zero vector -- an XMVECTOR aggregate
+// initialiser lowers to a __vmx@0.. constant pool entry plus an lvx128.
+#ifdef HX_NATIVE
+static inline XMVECTOR __vspltisw(int simm) {
+    XMVECTOR v;
+    v.u[0] = v.u[1] = v.u[2] = v.u[3] = (unsigned int)simm;
+    return v;
+}
+#else
+XMVECTOR __vspltisw(int simm);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

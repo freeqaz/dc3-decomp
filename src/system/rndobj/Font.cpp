@@ -697,9 +697,20 @@ RndTex *RndFont::ValidTexture(int idx) const {
         return nullptr;
 }
 
+// RESIDUAL (w7-al, 95.9 canonical): 55 rows, and 50 of them are one
+// consistent callee-saved permutation.  The image ranks the nine live values
+// cursor > left > right > info > this > bmap > top > bottom > pos (r31..r23);
+// we get left > right > cursor > info > top > bottom > this > pos > bmap.
+// Every instruction is otherwise in the same order with the same opcode, so
+// the cause is MSVC's spill-weight ordering, not the source shape -- merging
+// the two cursors into one (which is what the image does) moved the structure
+// but not the ranking.  The last five rows are the scheduler placing
+// bmap.Width()'s `lhz` before the cursor's `extsw` instead of between the
+// `fcfid` and the `frsp`, which duplicates one `frsp` and one `lfs pos.x` out
+// of the cross-jumped tail.
 void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, int page) {
     info->mPage = page;
-    if (!(!(!(!(mMonospace))))) {
+    if (mMonospace) {
         int width = bmap.Width();
         info->mAdvance = 1.0f;
         info->charWidth = 1.0f;
@@ -709,49 +720,66 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         int top = (int)pos.y;
         int right = (int)(mCellSize.x + pos.x);
         int bottom = (int)(mCellSize.y + pos.y);
-        int dummy;
-        int leftCol = left;
-        if (right != leftCol) {
-            auto _tmp0 = bmap.ColumnNonTransparent(leftCol, top, bottom, &dummy);
+        // ONE cursor drives both scans -- r31 holds it across the whole body
+        // (0x8270366C `mr r31, r30` for the left scan, 0x827036E8
+        // `mr r31, r29` for the right one), which is why it outranks `left`
+        // and `right` for the top callee-saved register.
+        int col = left;
+        // The first compare in each scan is against the RAW bound, not the
+        // cursor (0x82703688 `cmpw r30, r29` is left vs right, while the loop
+        // latch at 0x827036C4 is the cursor vs right).
+        if (left != right) {
+            int dummy;
+            auto _tmp0 = bmap.ColumnNonTransparent(col, top, bottom, &dummy);
             while (_tmp0 == 0) {
                 if (right > left) {
-                    leftCol++;
+                    col++;
                 } else {
-                    leftCol--;
+                    col--;
                 }
-                if (right == leftCol)
+                if (col == right)
                     break;
             }
         }
-        float leftColF = (float)(long long)leftCol;
-        int rightCol = right - 1;
-        if (left - 1 != rightCol) {
-            auto _tmp1 = bmap.ColumnNonTransparent(rightCol, top, bottom, &dummy);
+        float leftColF = (float)(long long)col;
+        // 0x827036D0 / 0x827036E0 decrement IN PLACE (`subi r29, r29, 1` and
+        // `subi r30, r30, 1`), so the bounds are the same two variables walked
+        // down by one, not two fresh `x - 1` temporaries.
+        right--;
+        left--;
+        col = right;
+        if (right != left) {
+            int dummy;
+            auto _tmp1 = bmap.ColumnNonTransparent(col, top, bottom, &dummy);
             while (_tmp1 == 0) {
-                if (right - 1 < left - 1) {
-                    rightCol++;
+                if (left > right) {
+                    col++;
                 } else {
-                    rightCol--;
+                    col--;
                 }
-                if (rightCol == left - 1)
+                if (col == left)
                     break;
             }
         }
+        float charW = (float)(long long)col + 1.0f - leftColF;
         int width = bmap.Width();
-        float charW = (float)(long long)rightCol + 1.0f - leftColF;
-        if (0.0f < charW) {
-            info->mU = leftColF / (float)width;
-            float widthFrac = charW / mCellSize.x;
-            info->mAdvance = widthFrac;
-            info->charWidth = widthFrac;
-        } else {
-            info->mU = pos.x / (float)width;
+        // 0x82703760 `bgt` jumps to the measured arm, so the degenerate arm is
+        // the fall-through -- and it is written mAdvance/charWidth/mU, the same
+        // order as the monospace arm above, because MSVC cross-jumps the two
+        // into the single tail at 0x82703778.
+        if (charW <= 0.0f) {
             info->mAdvance = 0.25f;
             info->charWidth = 0.25f;
+            info->mU = pos.x / (float)width;
+        } else {
+            info->mU = leftColF / (float)width;
+            float widthFrac = charW / mCellSize.x;
+            info->charWidth = widthFrac;
+            info->mAdvance = widthFrac;
         }
     }
     info->mV = pos.y / (float)bmap.Height();
-    MILO_ASSERT(info->charWidth >= 0, 0x422);
+    MILO_ASSERT(info->charWidth >= 0, 422);
 }
 
 void RndFont::SetBitmapSize(const Vector2 &cs) {

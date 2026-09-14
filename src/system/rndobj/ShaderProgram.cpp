@@ -119,12 +119,26 @@ bool RndShaderProgram::Cache(
             psBuffer->Size() != 0) {
             CreateVertexShader(*vsBuffer);
             CreatePixelShader(*psBuffer, shaderType);
+            // w7-al: an EXPLICIT return, not a fall-through into the shared
+            // `return true` at the bottom. The image tail-merges this exit with
+            // the two `return false` exits into one destructor block
+            // (0x82732054: addi r3,r31,0x70 / bl ~PhysMemTypeTracker /
+            // mr r3, r30), while the function's own fall-off gets a SECOND,
+            // unmerged copy at 0x82732574 ending in `li r3, 1`. A fall-through
+            // here would give this path the second block, not the first.
+            return true;
         } else {
             if (!TheShaderMgr.CacheShaders()) {
                 CopyErrorShader(shaderType, opts);
                 String optsStr;
                 ShaderMakeOptionsString(shaderType, opts, optsStr);
-                const char *matPath = PathName(NgMat::Current());
+                // w7-al: `matPath` used to be hoisted into a named local here.
+                // MSVC evaluates these arguments RIGHT-TO-LEFT, and the image
+                // does exactly that: optsStr.c_str() (0x82732?A4), then the
+                // RndEnviron ternary + PathName (0x827320D0), then
+                // PathName(NgMat::Current()) (0x827320E0), then
+                // ShaderTypeName (0x827320EC).  A local forced NgMat's PathName
+                // to run FIRST.  Inlined back into the argument list.
                 // BEHAVIOURAL GAP, not closable from this file (w7-ab).  The
                 // image builds this message with TWO MakeString calls back to
                 // back -- `bl ??$MakeString@PBD_KPBDPBDPBD@@...` at 0x82732110
@@ -147,21 +161,39 @@ bool RndShaderProgram::Cache(
                     "Missing shader %s_%llx\n(material: %s)\n(environment: %s)\n(compile options: %s)",
                     ShaderTypeName(shaderType),
                     opts.flags,
-                    matPath,
-                    RndEnviron::Current()
-                        ? PathName(static_cast<Hmx::Object *>(RndEnviron::Current()))
-                        : nullptr,
+                    PathName(NgMat::Current()),
+                    // BEHAVIOURAL FIX (w7-al): this was
+                    // `Current() ? PathName(Current()) : nullptr`, which skips
+                    // the call entirely when there is no environ. The image
+                    // calls PathName UNCONDITIONALLY -- the null test at
+                    // 0x827320B0 selects between `li r3, 0` and the vbtable
+                    // adjustment and then falls into the single
+                    // `bl PathName` at 0x827320D0, i.e. the test IS the
+                    // virtual-base conversion of RndEnviron* to Hmx::Object*,
+                    // not a user ternary. PathName(nullptr) does not return
+                    // nullptr, so the notify text differed.
+                    PathName(RndEnviron::Current()),
                     optsStr.c_str()
                 );
                 if (UsingCD()) {
+                    // w7-al: the virtual-base conversion of RndEnviron::Current()
+                    // to Hmx::Object* (the null test + vbtable load + addi 4) is
+                    // the FIRST thing the image does in this block -- 0x82732134,
+                    // immediately after the UsingCD branch and before
+                    // ShaderTypeName -- and it keeps the converted pointer in a
+                    // callee-saved register across SystemConfig/Node/Str. Writing
+                    // the conversion at the point of `envPath` sank it below
+                    // Str(), which is nine rows out of place.
+                    Hmx::Object *envObj = RndEnviron::Current();
                     const char *shaderTypeName = ShaderTypeName(shaderType);
                     DataArray *cfg = SystemConfig("rnd", "title");
-                    char *dataRoot = (char *)cfg->Node(1).Str(nullptr);
-                    const char *envPath = PathName(
-                        RndEnviron::Current()
-                            ? static_cast<Hmx::Object *>(RndEnviron::Current())
-                            : nullptr
-                    );
+                    // BEHAVIOURAL FIX (w7-al): the image passes the array itself
+                    // as DataNode::Str's parent, not null -- `mr r4, r26` at
+                    // 0x827321A0, where r26 is SystemConfig's return value saved
+                    // by `mr r26, r3` at 0x82732198. We passed nullptr, which
+                    // changes how a variable/property node resolves.
+                    char *dataRoot = (char *)cfg->Node(1).Str(cfg);
+                    const char *envPath = PathName(envObj);
                     const char *matPath2 = PathName(NgMat::Current());
                     const char *shaderHex = MakeString("%s_%llx", shaderTypeName, opts.flags);
                     const char *flagsHex = MakeString("%llx", opts.flags);
@@ -180,6 +212,24 @@ bool RndShaderProgram::Cache(
                 return false;
             }
             AutoSlowFrame slowFrame("RndShaderProgram::Cache", 5.0f);
+            // w7-al: one 64-bit local, not four re-reads of opts.flags. The
+            // image loads it ONCE into a callee-saved register and homes it in
+            // a stack temp immediately after the AutoSlowFrame ctor
+            // (`ld r30, 0x0(r27)` / `std r30, 0x90(r31)` at 0x82732280), passes
+            // the REGISTER to both ShaderCachedPath calls (`mr r4, r30`) and
+            // the SLOT's address to both MILO_LOG MakeStrings
+            // (`addi r5, r31, 0x90`). It is s64, not u64: MakeString is
+            // instantiated as `AB_J` (const __int64 &), and the s64 -> u64
+            // conversion into ShaderCachedPath's `_K` parameter is free, so one
+            // signed local serves both without a second temp.
+            // RESIDUAL (w7-al, 98.72 canonical): slots 0x88 and 0x90 are
+            // swapped against the image in BOTH scopes that share them -- the
+            // image homes shaderFlags at 0x90 and the MILO_NOTIFY's
+            // optsStr.c_str() temp at 0x88, we do the reverse -- 7 rows. Moving
+            // this declaration below the three char buffers is byte-for-byte
+            // inert (measured: identical 29-row mismatch list), so the pair is
+            // not being ordered by declaration.
+            s64 shaderFlags = opts.flags;
             // Buffer sizes and declaration order are read off the image's frame:
             // it is 0x410 with the three buffers at 0x2d0 (source), 0x1d0 and
             // 0xd0, and __savegprlr_26's save area starting at 0x3f4 -- so
@@ -194,8 +244,8 @@ bool RndShaderProgram::Cache(
             char cachedVsPath[256];
             char cachedPsPath[256];
             strcpy(sourcePath, ShaderSourcePath(ShaderTypeName(shaderType)));
-            strcpy(cachedVsPath, ShaderCachedPath(sourcePath, opts.flags, false));
-            strcpy(cachedPsPath, ShaderCachedPath(sourcePath, opts.flags, true));
+            strcpy(cachedVsPath, ShaderCachedPath(sourcePath, shaderFlags, false));
+            strcpy(cachedPsPath, ShaderCachedPath(sourcePath, shaderFlags, true));
             FileStat stat;
             unsigned int vsModTime = 0;
             if (FileGetStat(cachedVsPath, &stat) == 0) {
@@ -210,17 +260,21 @@ bool RndShaderProgram::Cache(
                 psModTime = 0;
             }
             if (gModTime > psModTime) {
-                static DataNode *sCompileVerbose;
-                if (!sCompileVerbose) {
-                    sCompileVerbose = &DataVariable("shader_compile_print_opts");
-                }
-                if (sCompileVerbose->Int(nullptr) != 0) {
+                // w7-al: a REFERENCE-typed function-local static, not a pointer
+                // with a hand-rolled null check. The image tests MSVC's own
+                // one-bit init guard (`lwz lbl_830E1CDC; clrlwi. r9, r11, 31;
+                // bne; ori r11, r11, 1; stw` at 0x82732?--) and, on the
+                // freshly-initialised path, skips the reload of the slot because
+                // DataVariable's return is already in r3. A pointer + `if (!p)`
+                // compiles to a null test and no guard word.
+                static DataNode &sCompileVerbose = DataVariable("shader_compile_print_opts");
+                if (sCompileVerbose.Int(nullptr) != 0) {
                     String optsStr;
                     ShaderMakeOptionsString(shaderType, opts, optsStr);
                     MILO_LOG(
                         "Compiling shader: %s_%llx (%s) (compile options: %s)\n",
                         ShaderTypeName(shaderType),
-                        (s64)opts.flags,
+                        shaderFlags,
                         PlatformSymbol(platform),
                         optsStr.c_str()
                     );
@@ -228,7 +282,7 @@ bool RndShaderProgram::Cache(
                     MILO_LOG(
                         "Compiling shader: %s_%llx (%s)\n",
                         ShaderTypeName(shaderType),
-                        (s64)opts.flags,
+                        shaderFlags,
                         PlatformSymbol(platform)
                     );
                 }
@@ -244,12 +298,14 @@ bool RndShaderProgram::Cache(
             }
             CreateVertexShader(*vsBuffer);
             CreatePixelShader(*psBuffer, shaderType);
-            if (vsBuffer) {
-                vsBuffer->~RndShaderBuffer();
-            }
-            if (psBuffer) {
-                psBuffer->~RndShaderBuffer();
-            }
+            // BEHAVIOURAL FIX (w7-al): `delete`, not an explicit destructor
+            // call. Both sites dispatch through vtable slot 0 -- the scalar
+            // DELETING destructor ??_E -- and the image passes 1 in r4
+            // (0x8273253C and 0x8273255C), the flag that makes it call
+            // operator delete. We were passing 0, so every compiled shader
+            // ran the destructor and leaked the RndShaderBuffer allocation.
+            delete vsBuffer;
+            delete psBuffer;
         }
     }
     return true;

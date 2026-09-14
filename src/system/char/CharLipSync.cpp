@@ -290,9 +290,21 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
         int newSize = result.Array(0)->Size() + numVisemes;
         if (_ref2.size() != newSize) {
             _ref2.resize(newSize);
-            for (int i = numVisemes; i < newSize; i++) {
-                Symbol visemeSym = result.Array(0)->Sym(i - numVisemes);
-                ObjPtr<CharClip> &clip = _ref2[i].mClip;
+            // numVisemes IS the loop variable: the image reuses the register
+            // that held it (r27, from `srawi r27, r11, 3`) as `i` and keeps a
+            // separate Sym index counting up from 0 in r29, which is why the
+            // latch is `addi r27, r27, 1 / cmpw r27, r26 / blt` instead of a
+            // strength-reduced `subic.`/`bne` trip count.  RESIDUAL (w7-al,
+            // 97.7 canonical): MSVC still replaces our latch with a trip count
+            // (`subf r29, r22, r29` before the loop, `subic.`/`bne` at the
+            // bottom) even though `newSize` is loop-invariant on both sides, and
+            // that is what demotes numVisemes from r27 to r22 and permutes the
+            // eight callee-saved registers above.  Moving the visemeIdx
+            // increment out of the comma expression into the body is byte-inert.
+            int visemeIdx = 0;
+            for (; numVisemes < newSize; numVisemes++, visemeIdx++) {
+                Symbol visemeSym = result.Array(0)->Sym(visemeIdx);
+                ObjPtr<CharClip> &clip = _ref2[numVisemes].mClip;
                 clip = mClips->Find<CharClip>(visemeSym.Str(), false);
             }
         }

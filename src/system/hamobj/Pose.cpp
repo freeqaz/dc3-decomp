@@ -33,12 +33,23 @@ void Pose::Update(const Skeleton &skeleton) {
 float Pose::CurrentScore() const {
     float minVal = 1.0f;
     float sum = 0.0f;
+    // RESIDUAL (w7-al, 87.5 canonical): the image enters this loop with a bare
+    // `b` to the bottom test (0x...  `b 0x9dc`), i.e. unrotated; MSVC rotates it
+    // for us and pays a guard -- `mr r9, r10` / `cmplw cr6, r10, r11` / `beq` --
+    // which is the whole insert cluster, and the copy into r9 is what repaints
+    // the FPR/GPR ranking below.  Byte-inert here: writing the loop as a `for`
+    // with an empty increment clause, and hoisting the iterator's declaration
+    // above minVal/sum.
     std::list<float>::const_iterator it = unk10.begin();
     while (it != unk10.end()) {
         float val = *it;
         ++it;
         sum += val;
-        minVal = minVal - val < 0.0 ? minVal : val;
+        // Min<float> from math/Utl.h, whose fsel specialisation is exactly the
+        // image's `fsubs f11, f0, f12` / `fsel f0, f11, f12, f0`.  Spelled out
+        // as `minVal - val < 0.0 ? minVal : val` the `0.0` is a DOUBLE literal,
+        // which blocks the fsel and leaves a real `fcmpu`/`blt`/`fmr`.
+        minVal = Min(minVal, val);
     }
     switch (mScoreMode) {
     case (ScoreMode)0:

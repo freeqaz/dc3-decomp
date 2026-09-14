@@ -700,14 +700,31 @@ inline void Scale(const Vector3 &vec, const Hmx::Matrix3 &mtx, Hmx::Matrix3 &res
     Scale(mtx.z, vec.z, res.z);
 }
 
+// The three products are NAMED LOCALS rather than one `p.Dot(s.center)` call,
+// and the sum starts at `p.d`.  Both are read off RndDrawable::CollidePlane
+// (0x82659494), the only caller of either operator: the image computes all three
+// `fmuls` first and then three plain `fadds` starting from d
+// (`fadds f9, f13, f0` / `f9, f12` / `f9, f11`), and it CSEs the three PRODUCTS
+// -- not the whole sum -- across the >= and the < (the second test re-adds them
+// at 0x826594EC).  Spelling either operator as `p.Dot(s.center)` lets MSVC
+// contract the sum into two `fmadds` and CSE it whole, which is 83.6 canonical;
+// merely reordering Dot's terms to `d + a*x + c*z + b*y` is byte-inert, because
+// /fp:fast reassociates it back.  Naming the products is what blocks the
+// contraction: 83.6 -> 100.0.
 // is the sphere in front of or on the plane?
 inline bool operator>=(const Sphere &s, const Plane &p) {
-    return p.Dot(s.center) >= s.GetRadius();
+    float ax = p.a * s.center.x;
+    float cz = p.c * s.center.z;
+    float by = p.b * s.center.y;
+    return p.d + ax + cz + by >= s.GetRadius();
 }
 
 // is the sphere behind the plane?
 inline bool operator<(const Sphere &s, const Plane &p) {
-    return p.Dot(s.center) < -s.GetRadius();
+    float ax = p.a * s.center.x;
+    float cz = p.c * s.center.z;
+    float by = p.b * s.center.y;
+    return p.d + ax + cz + by < -s.GetRadius();
 }
 
 void ScaleAddEq(Hmx::Matrix3 &, const Hmx::Matrix3 &, float);

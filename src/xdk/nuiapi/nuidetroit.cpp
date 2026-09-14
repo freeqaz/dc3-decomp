@@ -290,6 +290,19 @@ DWORD NuipCameraAdjustTilt(
     OldIrql = KfAcquireSpinLock(&NuipDetroitRuntimeState.SpinLock);
 
     if (pOverlapped == 0) {
+        // NEGATIVE RESULT (w7-al, 2026-09-14): 0xb84 computes &LocalOverlapped
+        // ONCE (`addi r11, r1, 0x60`) and uses it for both the hEvent store and
+        // the runtime-state store, where we emit the addi twice.  Hoisting it
+        // into pRequest and writing through the pointer
+        // (`pRequest = &LocalOverlapped; pRequest->hEvent = CreateEventA(...)`)
+        // does remove the duplicate, but pins pRequest into a callee-saved
+        // register for the whole body: one extra GPR saved, __savefpr shifted
+        // by 8, and a 6-register renumbering downstream.  Net 85.8 -> 85.8.
+        // Re-tried at 96.4 in both remaining spellings -- the separate
+        // `pRequest = &LocalOverlapped;` statement kept here, and the chained
+        // `NuipDetroitRuntimeState.pOverlapped = pRequest = &LocalOverlapped;`
+        // -- and both are byte-inert: MSVC rematerialises the frame address per
+        // use rather than CSE-ing it, so the duplicate addi is a backend choice.
         LocalOverlapped.hEvent = CreateEventA(0, 1, 0, 0);
         pRequest = &LocalOverlapped;
         NuipDetroitRuntimeState.pOverlapped = pRequest;
@@ -317,6 +330,11 @@ DWORD NuipCameraAdjustTilt(
                && (NuipDetroitRuntimeState.TiltXConfig.Flags & 2) == 0) {
         NuipDetroitRuntimeState.LastTiltTime = dwNow;
         NuipDetroitRuntimeState.LastElevationTime = GetTickCount();
+    BeginFloorSearch:
+        // There is ONE `bl NuipDetroitBeginFloorSearch` in the image, at
+        // 0xc14, and the Unk3c/floor-height arm below branches back into it
+        // (`beq cr6, 0xc14` at 0xcb8) rather than getting its own copy --
+        // MSVC does not cross-jump the two identical two-instruction tails.
         NuipDetroitBeginFloorSearch();
         goto Unlock;
     } else if ((TiltFlags & 8) != 0) {
@@ -333,12 +351,12 @@ DWORD NuipCameraAdjustTilt(
     } else if (NuipDetroitRuntimeState.Unk3c == 0
                && NuipDetroitRuntimeState.FloorHeightMillimeters == 0.0f) {
         NuipDetroitRuntimeState.LastTiltTime = dwNow;
-        if ((NuipDetroitRuntimeState.TiltXConfig.Flags & 2) == 0) {
-            NuipDetroitBeginFloorSearch();
-            goto Unlock;
+        if ((NuipDetroitRuntimeState.TiltXConfig.Flags & 2) != 0) {
+            NuipCameraElevationSetAngle(NuipDetroitRuntimeState.TargetElevationDegrees);
+            dwTiltState = 3;
+        } else {
+            goto BeginFloorSearch;
         }
-        NuipCameraElevationSetAngle(NuipDetroitRuntimeState.TargetElevationDegrees);
-        dwTiltState = 3;
     } else {
         NuipDetroitRuntimeState.LastTiltTime = dwNow;
         dwTiltState = 3;
@@ -346,22 +364,34 @@ DWORD NuipCameraAdjustTilt(
     NuipDetroitRuntimeState.TiltInProgress = dwTiltState;
 
 Unlock:
-    XMVECTOR Zero = { 0.0f, 0.0f, 0.0f, 0.0f };
     NuipDetroitRuntimeState.LastTiltFlags = TiltFlags;
     NuipDetroitRuntimeState.Unk5c = 0;
     NuipDetroitRuntimeState.Unk58 = 5;
-    NuipDetroitRuntimeState.FloorPlane = Zero;
+    NuipDetroitRuntimeState.FloorPlane = __vspltisw(0);
     KfReleaseSpinLock(&NuipDetroitRuntimeState.SpinLock, OldIrql);
 
-    if (pOverlapped != 0) {
-        return dwResult;
-    }
-
-    while (WaitForSingleObjectEx(LocalOverlapped.hEvent, INFINITE, 1) == 0xc0) {
-    }
-    dwResult = LocalOverlapped.InternalLow;
-    if (LocalOverlapped.hEvent != 0 && LocalOverlapped.hEvent != INVALID_HANDLE_VALUE) {
-        CloseHandle(LocalOverlapped.hEvent);
+    // ONE `return dwResult`.  The image's two epilogues (0xd34 `mr r3, r31`
+    // and 0xd48 `mr r3, r30`) are MSVC duplicating the epilogue for the phi
+    // rather than materialising a common register -- which is also why
+    // dwResult survives in the callee-saved r30 (`li r30, 0x3e5` at 0xbd4)
+    // instead of being rematerialised as `li r3, 0x3e5` at an early return.
+    // NEGATIVE RESULT (w7-al, 2026-09-14): the image's two epilogues return two
+    // DIFFERENT registers (0x829C4914 `mr r3, r31` for the waited-on
+    // LocalOverlapped.InternalLow, 0x829C4928 `mr r3, r30` for the pending
+    // 0x3e5), which reads as two returns of two separate locals.  Spelling it
+    // that way -- `if (pOverlapped != 0) return dwResult;` followed by a second
+    // local returned at the bottom -- costs 96.4 -> 90.1: the early return
+    // lengthens dwResult's live range past the whole tilt-state chain and
+    // renumbers r28/r29 through it (12 register rows), and MSVC still folds the
+    // two epilogues back into one.  The single `return dwResult` is kept.
+    if (pOverlapped == 0) {
+        while (WaitForSingleObjectEx(LocalOverlapped.hEvent, INFINITE, 1) == 0xc0) {
+        }
+        dwResult = LocalOverlapped.InternalLow;
+        if (LocalOverlapped.hEvent != 0
+            && LocalOverlapped.hEvent != INVALID_HANDLE_VALUE) {
+            CloseHandle(LocalOverlapped.hEvent);
+        }
     }
     return dwResult;
 }
@@ -432,7 +462,7 @@ DWORD NuiCameraAdjustTilt(
                 if (pTiltObjects->Objects[i].Flags & 0x40000000) {
                     tracked++;
                     if (tracked > 1)
-                        goto InvalidParameter;
+                        return 0x57;
                 }
             }
         }
@@ -443,11 +473,9 @@ DWORD NuiCameraAdjustTilt(
         // unless the caller asks to bypass the throttle.
         elapsed = now - NuipDetroitRuntimeState.LastTiltTime;
         if (elapsed > 20000) {
-            requests = 0;
-            NuipDetroitRuntimeState.TiltCount = requests;
-        } else {
-            requests = NuipDetroitRuntimeState.TiltCount;
+            NuipDetroitRuntimeState.TiltCount = 0;
         }
+        requests = NuipDetroitRuntimeState.TiltCount;
 
         if (NuipRuntimeState.DeviceState == 0) {
             if (NuipDetroitRuntimeState.CalibrationValid != 0) {

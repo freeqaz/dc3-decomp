@@ -128,9 +128,16 @@ namespace {
                 c = *ptr;
             }
 
-            if (status.c_str()[0] != '\0') {
-                return atoi(status.c_str());
+            // 0x8...AC4 `bne` jumps to the atoi block, so the empty-status
+            // `return 0` is the FALL-THROUGH and the atoi return comes after
+            // it.  That also gives the function its two ??1String call sites:
+            // the outer "not an HTTP status line" exit branches into this
+            // inner `return 0`'s destructor (0xABC), while the atoi path holds
+            // its result in r30 across a destructor of its own.
+            if (status.c_str()[0] == '\0') {
+                return 0;
             }
+            return atoi(status.c_str());
         }
         return 0;
     }
@@ -533,17 +540,26 @@ bool HttpPost::CanRetry() {
 }
 
 void HttpPost::StartSending() {
-    auto mSocket = this->mSocket;
     MILO_ASSERT(mSocket, 0x3CD);
-    if (mSocket->CanSend()) {
-        mHeaderLength = mRequestHeaders.length();
-        if (mSocket->Send(mRequestHeaders.c_str(), mHeaderLength) == mHeaderLength) {
-            SetState(kHttpGet_SendingBody);
-            return;
-        }
+    // mSocket is RELOADED at both call sites (0x8...FD0 `lwz r3, 0x8(r31)` and
+    // again before the Send), so there is no cached local here -- caching it
+    // costs a whole extra callee-saved register and its save/restore pair.
+    // The two failure tails are cross-jumped: 0x8...FEC is the only
+    // `mFailType = kHttpFail_Send`, and the length-mismatch test branches
+    // BACKWARD into it, which only happens when each failure is spelled as its
+    // own early return rather than as one fall-through at the bottom.
+    if (!mSocket->CanSend()) {
+        mFailType = kHttpFail_Send;
+        SetState(kHttpGet_FailedSend);
+        return;
     }
-    mFailType = kHttpFail_Send;
-    SetState(kHttpGet_FailedSend);
+    mHeaderLength = mRequestHeaders.length();
+    if (mSocket->Send(mRequestHeaders.c_str(), mHeaderLength) != mHeaderLength) {
+        mFailType = kHttpFail_Send;
+        SetState(kHttpGet_FailedSend);
+        return;
+    }
+    SetState(kHttpGet_SendingBody);
 }
 
 void HttpPost::Sending() {

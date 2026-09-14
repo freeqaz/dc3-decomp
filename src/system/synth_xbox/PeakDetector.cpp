@@ -78,6 +78,24 @@ void PeakDetector::Detect(unsigned int pos) {
     } else {
         unsigned int peakUnwrapped = (mPeakPos > mOrigin) ? mPeakPos : mPeakPos + Size();
 
+        // RESIDUAL (w7-al, 97.62 canonical): 10 charged rows, all regalloc /
+        // scheduling, none reachable from source. Semantics were re-verified
+        // instruction-by-instruction against 0x82E4ABC8 and are exact (the
+        // unsigned rldicl widenings, the 1.2f / 2.0f / 0.5f / 0.4f constants,
+        // the fsel round-half-away-from-zero, fnmsubs for mNextCenter, and the
+        // gaussianWindow call order prev/center/next all agree).
+        //  * rows 73-86, the `(mPeakPos + Size() - 1) % Size()` site: the image
+        //    emits `mr r7, r9` to keep `end` live because its scheduler puts the
+        //    `add` BETWEEN the two `srawi`s; ours emits the two `subf`s adjacent
+        //    into distinct registers and needs no copy. Splitting the expression
+        //    into two statements (`unsigned prevIdx = mPeakPos + Size() - 1;`
+        //    then `prevIdx % Size()`) is byte-inert -- measured, still 97.62.
+        //  * rows 139/140 + 224/225, (0x0,0x4) offset swaps: `Size()` is
+        //    `end() - begin()` and the image loads begin first at all six
+        //    `(float)Size()` sites. We already load begin first at four of the
+        //    six; forcing it globally (a `const float *b = begin();` temp) would
+        //    flip the six integer-context sites the wrong way, which currently
+        //    all match. Per-site scheduler noise, not a spelling.
         float prev = gaussianWindow((mPeakPos + Size() - 1) % Size());
         float center = gaussianWindow(mPeakPos);
         float next = gaussianWindow((mPeakPos + 1) % Size());

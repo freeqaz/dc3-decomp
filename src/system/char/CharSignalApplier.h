@@ -12,7 +12,13 @@ class CharSignalApplier : public CharPollable, public CharWeightable {
 public:
     struct BoneOp {
         BoneOp(Hmx::Object *o);
-        BoneOp(const BoneOp &op) : mBone(0) { *this = op; }
+        // The copy carries the SOURCE's ref owner, not a null one: 0x823AB460
+        // (PollDeps) and 0x823AB1F4 (Poll) both load `0x10(src)` -- the source
+        // ObjPtr's mOwner -- and store it into the fresh BoneOp's mOwner before
+        // calling operator=.  With mBone(0) the copy reports RefOwner()==0,
+        // which breaks ObjRefConcrete::Load's `refOwner && dir` path and trips
+        // MILO_ASSERT(f.RefOwner()) in operator<<.
+        BoneOp(const BoneOp &op) : mBone(op.mBone.Owner()) { *this = op; }
         BoneOp &operator=(const BoneOp &);
 
         ObjPtr<RndTransformable> mBone; // 0x00

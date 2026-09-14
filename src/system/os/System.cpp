@@ -550,30 +550,50 @@ void SetSystemArgs(const char *commandLine) {
     strncpy(sCommandLineBuffer, commandLine, kCommandLineSz - 1);
     sCommandLineBuffer[kCommandLineSz - 1] = 0;
 
+    char *ptr = sCommandLineBuffer;
+    // ptr and newToken are initialised OUTSIDE the emptiness test: 0x...
+    // stores the slot (`stw r29, 0x50(r1)`) and sets newToken (`li r9, 0x1`)
+    // before the `lbz`/`cmplwi`/`beq` that tests sCommandLineBuffer[0].
+    // newToken is a BYTE: 0x...  tests it with `clrlwi. r11, r9, 24`, while
+    // inQuotes is tested with a full-word `cmplwi cr6, r28, 0x0` and toggled
+    // with `cntlzw`/`extrwi.` -- the lowering of `!x` on an int, not the `xori`
+    // MSVC emits for a bool.
+    bool newToken = true;
     if (sCommandLineBuffer[0] != 0) {
-        int inQuotes = 0;
-        char *ptr = sCommandLineBuffer;
-        int newToken = 1;
+        unsigned int inQuotes = 0;
 
         for (;;) {
-            if (!inQuotes) {
+            // The space test was MISSING here: the image's loop head is
+            // `cmplwi cr6, r28, 0x0 / bne` followed by
+            // `lbz r11, 0x0(r31) / cmplwi cr6, r11, 0x20 / bne`, so the
+            // terminator branch only fires on a SPACE outside quotes.  Without
+            // it every unquoted character was overwritten with NUL and the
+            // command line parsed to a single empty argument.
+            if (!inQuotes && *ptr == ' ') {
                 *ptr = 0;
-                newToken = 1;
+                newToken = true;
                 ptr++;
             } else if (*ptr == '"') {
                 *ptr = 0;
                 ptr++;
-                inQuotes ^= 1;
+                // RESIDUAL (w7-al, 96.7 canonical): 19 rows.  16 are one
+                // callee-saved ranking -- the image puts the literal zero in
+                // r30 and the sCommandLineBuffer address in r29, we do the
+                // reverse -- and the other 3 are the scheduler hoisting
+                // `cntlzw` above `stb` and materialising the toggle through an
+                // extra `mr r28, r11` that we fold into the `extrwi.` itself.
+                // Moving this assignment above the `*ptr = 0` is byte-inert.
+                inQuotes = !inQuotes;
                 if (inQuotes) {
                     TheSystemArgs.push_back(ptr);
-                    newToken = 0;
+                    newToken = false;
                 } else {
-                    newToken = 1;
+                    newToken = true;
                 }
             } else {
                 if (newToken) {
                     TheSystemArgs.push_back(ptr);
-                    newToken = 0;
+                    newToken = false;
                 }
                 ptr++;
             }

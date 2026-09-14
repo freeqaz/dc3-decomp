@@ -107,10 +107,26 @@ END_LOADS
 void CharSignalApplier::Poll() {
     if (0 == mBoneOps.size())
         return;
-    float clamped = Clamp(mSignalMin, mSignalMax, mSignal);
-    mSignal = clamped;
+    // RESIDUAL (w7-al, 96.7 canonical): 13 rows, all inside the 20-instruction
+    // clamp/mDoSmoothing region.  The image loads mSignalMin (0x2c) before
+    // mSignal (0x28), keeps the clamp result in f0 (we use f13), reads
+    // mDoSmoothing only AFTER `stfs f0, 0x28`, and reaches the smoothing block
+    // with `bne` over a `b` instead of one `beq`.  Refuted spellings, each
+    // byte-inert or worse: `Min(Max(mSignalMin, mSignal), mSignalMax)` written
+    // out longhand (inert); dropping the `clamped` local so both arms re-read
+    // mSignal (inert, kept -- the image does reload it at 0x823AB16C);
+    // `if (mDoSmoothing) A else B` (96.7 -> 94.6, see below).  The remainder is
+    // the scheduler filling the fsel dependence stalls with the lbz, plus the
+    // r3/r28 `this` copy switching over one block later than the image's.
+    mSignal = Clamp(mSignalMin, mSignalMax, mSignal);
+    // NEGATIVE RESULT (w7-al, 2026-09-14): 0x823AB164 is `bne` over a `b`,
+    // which looks like `if (mDoSmoothing) A else B`, but spelling it that way
+    // costs more than it buys -- it flips the inner `fabs(...) < inc` branch
+    // (0x823AB18C `bge`) the wrong way and drops the shared
+    // `stfs f13, 0x3c(r28)` tail.  95.7 -> 94.6.  The `!mDoSmoothing` form is
+    // kept; the branch-around-branch at 0x823AB164 is an MSVC peephole miss.
     if (!mDoSmoothing) {
-        mSmoothedSignal = clamped;
+        mSmoothedSignal = mSignal;
     } else {
         float target = mSignal;
         float smoothed = mSmoothedSignal;
@@ -129,38 +145,49 @@ void CharSignalApplier::Poll() {
     }
     BoneOp *cur = mBoneOps.begin();
     mSmoothedSignal *= Weight();
-    if (cur != mBoneOps.end()) {
-        do {
-            BoneOp op(0);
-            op = *cur;
+    for (; cur != mBoneOps.end(); cur++) {
+        {
+            BoneOp op = *cur;
             RndTransformable *bone = op.mBone;
             if (bone) {
                 Transform boneTf;
                 memcpy(&boneTf, &bone->WorldXfm(), sizeof(Transform));
-                float t = 1.0f;
+                float t;
                 if (mSignalMax != mSignalMin) {
                     t = (mSmoothedSignal * op.mApplyPercent - mSignalMin)
                         / (mSignalMax - mSignalMin);
+                } else {
+                    t = 1.0f;
                 }
                 float angle
                     = ((op.mMaxAngle - op.mMinAngle) * t + op.mMinAngle) * DEG2RAD;
-                Hmx::Matrix3 rotMatX, rotMatY, rotMatZ;
-                Hmx::Matrix3 *rotMat = &rotMatZ;
+                // The Multiply lives INSIDE each case, and MSVC cross-jumps the
+                // three identical tails into the one at 0x823AB2DC -- which is
+                // why `cmplwi r11, 0x3 / bge .L_823AB2EC` (0x823AB2A8) skips the
+                // Multiply entirely for an out-of-range mOp instead of jumping
+                // to it.  Writing it as one call after the switch composes an
+                // UNINITIALISED rotation matrix into the bone transform whenever
+                // mOp >= 3.
                 switch ((unsigned int)op.mOp) {
-                case 0:
+                case 0: {
+                    Hmx::Matrix3 rotMatX;
                     MakeRotMatrixX(angle, rotMatX);
-                    rotMat = &rotMatX;
-                    break;
-                case 1:
-                    MakeRotMatrixY(angle, rotMatY);
-                    rotMat = &rotMatY;
-                    break;
-                case 2:
-                    MakeRotMatrixZ(angle, rotMatZ);
-                    rotMat = &rotMatZ;
+                    Multiply(rotMatX, boneTf.m, boneTf.m);
                     break;
                 }
-                Multiply(*rotMat, boneTf.m, boneTf.m);
+                case 1: {
+                    Hmx::Matrix3 rotMatY;
+                    MakeRotMatrixY(angle, rotMatY);
+                    Multiply(rotMatY, boneTf.m, boneTf.m);
+                    break;
+                }
+                case 2: {
+                    Hmx::Matrix3 rotMatZ;
+                    MakeRotMatrixZ(angle, rotMatZ);
+                    Multiply(rotMatZ, boneTf.m, boneTf.m);
+                    break;
+                }
+                }
                 RndTransformable *parent = bone->TransParent();
                 if (parent) {
                     Transform invParent;
@@ -173,8 +200,7 @@ void CharSignalApplier::Poll() {
                     bone->DirtyLocalXfm() = localTf;
                 }
             }
-            cur++;
-        } while (cur != mBoneOps.end());
+        }
     }
 }
 
@@ -182,17 +208,20 @@ DataNode CharSignalApplier::Handle(DataArray *d, bool b) {
     return Hmx::Object::Handle(d, b);
 }
 
-void CharSignalApplier::PollDeps(std::list<Hmx::Object *> &a, std::list<Hmx::Object *> &b) {
-    BoneOp *cur = mBoneOps.begin();
-    if (cur != mBoneOps.end()) {
-        do {
-            BoneOp op = *cur;
-            Hmx::Object *bone = op.mBone;
-            if (bone) {
-                b.insert(b.end(), bone);
-            }
-            cur++;
-        } while (cur != mBoneOps.end());
+void CharSignalApplier::PollDeps(
+    std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
+) {
+    // 0x823AB420: the bones go into the FIRST list (r4 -> r25, and
+    // `stw r4, 0x54(r31)` hoisted out of the loop is that list's end()
+    // iterator), not the second, and the push is UNCONDITIONAL -- the
+    // `bne / stw 0 / b` at 0x823AB484 is MSVC's null-safe
+    // RndTransformable* -> Hmx::Object* virtual-base adjustment
+    // (vbptr at +4, vbtable[1], +4), not a user-written `if (bone)`.
+    // Both halves were wrong here: we pushed into `change` and we dropped
+    // null bones on the floor.
+    for (BoneOp *cur = mBoneOps.begin(); cur != mBoneOps.end(); cur++) {
+        BoneOp op = *cur;
+        changedBy.push_back(op.mBone);
     }
 }
 

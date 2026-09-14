@@ -88,9 +88,22 @@ void FixedSizeAlloc::Free(void *v) {
     mNumAllocs--;
 }
 
+// RESIDUAL (w7-al, 93.6 canonical): 27 rows, and every one of them is the
+// same single fact -- which PAIR of globals gets the shared `addi` anchor.
+// The image anchors the .data pair (0x...  `addi r31, r11, ?gBigHunk@@3HA@l`,
+// then gBigHunk at 0x0(r31) and gSmallHunk at 0x4(r31)) and reaches the two
+// .bss statics through their own `lis`+`@l` pairs; our build anchors the .bss
+// pair (`addi r31, r11, sPoolBuf@l`, sPoolEnd at 0x4(r31)) and spells
+// gBigHunk/gSmallHunk individually.  Both pairs are referenced six times, so
+// the choice is an MSVC tie-break, not a source shape: reversing the
+// sPoolEnd/sPoolBuf declaration order moves the anchor onto sPoolEnd and
+// costs 93.6 -> 87.5, and hoisting the two statics above the globals is
+// byte-inert.  Instruction ORDER and opcodes are otherwise identical from
+// idx 0 to idx 57; the lone `mr r3, r11` insert is the same anchor choice
+// leaving `buf` in r11 instead of loading it straight into r3.
 int *FixedSizeAlloc::RawAlloc(int size) {
     int *buf = sPoolBuf;
-    int alignedSize = (size >> 2) << 2;
+    int alignedSize = (size >> 2) * 4;
     gPoolCapacity += size;
 
     if ((unsigned int)((char *)buf + alignedSize) > (unsigned int)sPoolEnd) {
@@ -109,7 +122,7 @@ int *FixedSizeAlloc::RawAlloc(int size) {
 
         int hunkSize = gBigHunk;
         buf = (int *)((char *)sPoolBuf + 0x40);
-        sPoolEnd = (int *)((char *)sPoolBuf + ((hunkSize >> 2) << 2));
+        sPoolEnd = (int *)((char *)sPoolBuf + (hunkSize >> 2) * 4);
         gBigHunk = gSmallHunk;
     }
 
