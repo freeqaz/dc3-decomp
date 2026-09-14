@@ -1040,6 +1040,34 @@ stateReset:
     }
 }
 
+// RESIDUAL at 98.35 canonical (w7-at, 2026-09-14). ~100 of the 111 diff_arg rows
+// are ONE frame-slot permutation, not 100 causes. Both sides allocate the same eight
+// 16-byte slots at 0x50..0xc0 and the same sharing groups; only the order differs:
+//   target  0x50 srcPos  0x60 lidPos  0x70 Symbol-temp  0x80 upperDir
+//           0x90 upperBlinkPos  0xa0 sourcePos  0xb0 lowerBlinkPos  0xc0 lowerDir
+//   ours    0x50 srcPos  0x60 Symbol-temp  0x70 upperDir  0x80 lidPos
+//           0x90 lowerDir  0xa0 upperBlinkPos  0xb0 sourcePos  0xc0 lowerBlinkPos
+// i.e. exactly two moves: lidPos up two places, lowerDir to the top. The relative
+// order of the (lowerBlinkPos, sourcePos, upperBlinkPos) trio ALREADY matches. The
+// slots are shared with later variables (newLowerPos / origDir / newDir / the debug
+// Color temps), so this is a graph-colouring result, not a declaration-order one.
+//
+// NEGATIVE RESULTS, all measured in this worktree, none of which moved canonical:
+//  - `Vector3 lidPos;` as a bare declaration ahead of srcPos, assigned in place:
+//    98.3 -> 98.3 (and two extra rows at idx 644-650). Confirms the brief's "a bare
+//    declaration claims its slot at first STORE" -- it does not claim it earlier.
+//  - flipping the fmuls operand order in BOTH lid-rotate arms
+//    (`negEyeRot * (cond ? up : down)`): byte-identical output, MSVC canonicalises it.
+//  - RB3's per-arm spelling (`if (eyeRot >= 0) angle = -eyeRot * up; else ...`):
+//    98.3 -> 98.0, one extra insert/delete pair and a second FPR swap pair. The
+//    current scoped-negation spelling is the better of the two.
+// Remaining non-slot rows: idx 100/102 (our `fneg` lands before the `fcmpu`, the
+// image's between the `fcmpu` and the `blt`, with f0/f13 roles swapped), idx 179-209
+// (we hoist `lbz 0xbd(rN)` -- RndTransformable's WorldXfm dirty flag -- ~10
+// instructions earlier than the image in both blink-position blocks), and idx 627-650
+// (a 16-byte Transform copy whose three word loads/stores are scheduled in a rotated
+// order; the "wrong field" story in the resolved-offsets block is the base-register
+// defect noted in CLAUDE.md, not a finding).
 void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
     if (DataVariable("no_lids").Int(0))
         return;
