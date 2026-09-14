@@ -1696,8 +1696,13 @@ Symbol HamDirector::ClosestMove() {
                     int maxScore = -1;
                     if (0 < listArr->Size()) {
                         do {
-                            DataNode *node = &listArr->Node(i);
-                            const char *candidate = node->Str();
+                            // listArr->Str(i), not Node(i).Str(): the image
+                            // passes the owning array as DataNode::Str's
+                            // `source` (0x8247446C `mr r4, r26` right before
+                            // the call), which is what resolves a $var or
+                            // property node against its own array. We were
+                            // passing the default nullptr.
+                            const char *candidate = listArr->Str(i);
                             int matchCount = 0;
                             if (*candidate != '\0') {
                                 const char *p = candidate;
