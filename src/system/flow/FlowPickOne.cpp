@@ -152,9 +152,14 @@ bool FlowPickOne::Activate() {
         for (int i = 0; i < mIndex; i++) {
             ++it;
         }
-        ActivateChild(it->Obj());
-        mIndex++;
-        return !mRunningNodes.empty();
+        // No mIndex++ here: the image branches this arm to the *non*-
+        // incrementing tail at 0x824060A0 (`bl ActivateChild` then straight to
+        // the `!mRunningNodes.empty()` epilogue at 0x82406108).  The
+        // incrementing tail is 0x824060E4, and only kChoiceOrdered and the
+        // jukebox history path reach it.  Semantically right too: "use index"
+        // means the driven property owns mIndex.
+        chosen = it->Obj();
+        break;
     }
     default:
         MILO_NOTIFY_ONCE("FlowPickOne: bad picking type");
