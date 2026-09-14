@@ -111,8 +111,7 @@ void DxMultiMesh::UpdateGeometryBuffers() {
     void *temp_r11_4;
     s32 temp_r3_2;
     void *temp_r27;
-    Symbol sym("D3D(phys):Mesh");
-    PhysMemTypeTracker tracker(sym);
+    PhysMemTypeTracker tracker(Symbol("D3D(phys):Mesh"));
     s32 temp_r8;
     void *var_r3;
     s32 temp_r23;
@@ -161,23 +160,32 @@ void DxMultiMesh::UpdateGeometryBuffers() {
         }
     }
 
-    void *bufPtr = *(void **)((char *)this + temp_r28);
-    D3DVertexBuffer *vertBuf = (D3DVertexBuffer *)bufPtr;
-    BufLock<D3DVertexBuffer> bufLock(vertBuf, 0);
+    // The vertex BufLock is a SCOPED temporary: the image runs its dtor
+    // (`lwz r3, 0x64(r31)` / `bl D3DVertexBuffer_Unlock`) immediately after the
+    // memcpy and before it reloads mGeomOwner for the index buffer, so the
+    // lock cannot live to the end of the function.
+    {
+        void *bufPtr = *(void **)((char *)this + temp_r28);
+        D3DVertexBuffer *vertBuf = (D3DVertexBuffer *)bufPtr;
+        BufLock<D3DVertexBuffer> bufLock(vertBuf, 0);
 
-    temp_r3 = *(s32 *)((char *)temp_r27 + 0x104);
-    void *srcData = *(void **)((char *)temp_r27 + 0x100);
-    void *dstData = bufLock.mDataAddr;
+        temp_r3 = *(s32 *)((char *)temp_r27 + 0x104);
+        void *srcData = *(void **)((char *)temp_r27 + 0x100);
+        void *dstData = bufLock.mDataAddr;
 
-    memcpy(dstData, srcData, temp_r3 * 0x60);
+        memcpy(dstData, srcData, temp_r3 * 0x60);
+    }
 
     temp_r11_2 = *(void **)((char *)temp_r30 + 0x148);
     temp_r28_2 = (temp_r24 + 0x1C) * 4;
     temp_r11 = (void *)((char *)temp_r11_2 + 0x110);
 
+    // Computed BEFORE the null test: the image emits the whole
+    // (end - begin) / 6 * 3 chain at 0x82622F10-24 and only then takes the
+    // `bne` that skips the allocation.
+    s32 indexCount = ((*(s32 *)((char *)temp_r11 + 4) -
+                      *(s32 *)((char *)temp_r11 + 0)) / 6) * 3;
     if (*(void **)((char *)this + temp_r28_2) == nullptr) {
-        s32 indexCount = ((*(s32 *)((char *)temp_r11_2 + 0x114) -
-                          *(s32 *)((char *)temp_r11_2 + 0x110)) / 6) * 3;
         void *vb2Ptr = D3DDevice_CreateVertexBuffer(indexCount * 4, 0, (D3DPOOL)0);
         *(void **)((char *)this + temp_r28_2) = vb2Ptr;
     }
@@ -191,6 +199,13 @@ void DxMultiMesh::UpdateGeometryBuffers() {
     if ((*(s32 *)((char *)temp_r11_3 + 0x114) -
                      *(s32 *)((char *)temp_r11_3 + 0x110)) / 6 != 0) {
         var_r10 = 0;
+        // NEGATIVE RESULT (w7-aj): re-evaluating this bound in the loop tail,
+        // which is literally what the image does (`lwz r11, 0x148(r30)` /
+        // 0x114 - 0x110 / divw at 0x82622FC4-D8), REGRESSES the function --
+        // measured twice, 88.4 -> 86.0 before the index-count hoist and
+        // 91.5 -> 90.3 after it.  MSVC then keeps the reloaded pointer in a
+        // different register than the body wants and the 0x110/0x114 loads
+        // swap, which costs more than the six tail rows it buys.  Do not retry.
         u32 indexCount = (u32)((*(s32 *)((char *)temp_r11_3 + 0x114) -
                                   *(s32 *)((char *)temp_r11_3 + 0x110)) / 6);
         do {
@@ -199,12 +214,20 @@ void DxMultiMesh::UpdateGeometryBuffers() {
             temp_r11_4 = (void *)(var_r10 + temp_r8);
             temp_r8_2 = *(u16 *)((char *)temp_r11_4 + 0);
             var_r10 += 6;
-            *(s32 *)((char *)var_r3 + 0) = (s32)temp_r8_2;
-            temp_r3_3 = (void *)((char *)var_r3 + 4);
-            *(s32 *)((char *)var_r3 + 4) = (s32)*(u16 *)((char *)temp_r11_4 + 2);
-            *(s32 *)((char *)temp_r3_3 + 4) = (s32)*(u16 *)((char *)temp_r11_4 + 4);
+            // Pre-increment stores: the image walks the destination with
+            // `stw r8, 0x0(r3)` / `stwu r8, 0x4(r3)` / `stwu r11, 0x4(r3)` /
+            // `addi r3, r3, 0x4` (0x82622FA4-C0).  `stwu` is store-with-update,
+            // i.e. `*++dst = x`.  MSVC still lowers this to plain `stw` at
+            // 0x4/0x8, but the pre-increment spelling is nonetheless worth
+            // +0.7 over plain `dst[0]/dst[1]/dst[2]` indexing (94.0 vs 92.9),
+            // which also loses the loop's register assignment.  Do not
+            // "simplify" it back.
+            s32 *dst = (s32 *)var_r3;
+            *dst = (s32)temp_r8_2;
+            *++dst = (s32)*(u16 *)((char *)temp_r11_4 + 2);
+            *++dst = (s32)*(u16 *)((char *)temp_r11_4 + 4);
             temp_r11_3 = *(void **)((char *)temp_r30 + 0x148);
-            var_r3 = (void *)((char *)temp_r3_3 + 8);
+            var_r3 = (void *)(dst + 1);
         } while (var_r9 != indexCount);
     }
 
