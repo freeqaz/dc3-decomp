@@ -553,21 +553,28 @@ void SpotlightDrawer::DrawWorld() {
             if (GetGfxMode() == kOldGfx) {
                 DrawShadow();
             }
+            std::vector<SpotlightEntry>::iterator it = sLights.begin();
             std::vector<SpotlightEntry>::iterator itEnd = sLights.end();
-            if (sLights.begin() != itEnd) {
-                std::vector<SpotlightEntry>::iterator it = sLights.begin();
+            if (it != itEnd) {
                 do {
                     Spotlight *spot = it->mSpotlight;
+                    const SpotlightEntry *e1 = &(*it);
+                    const SpotlightEntry *e2 = &(*it) + 1;
                     Hmx::Color c;
                     float intensity = spot->Intensity();
+                    // RESIDUAL (w7-am, 98.5 canonical): the image multiplies
+                    // blue, then green, then red -- Set()'s arguments evaluated
+                    // right-to-left -- and we emit red, green, blue.  Refuted:
+                    // inlining spot->Intensity() into all three arguments (no
+                    // change), and writing the three products as separate
+                    // member assignments in blue/green/red order (94.1, it
+                    // splits the Color() base load in two).
                     c.Set(
                         spot->Color().red * intensity,
                         spot->Color().green * intensity,
                         spot->Color().blue * intensity,
                         1.0f
                     );
-                    const SpotlightEntry *e1 = &(*it);
-                    const SpotlightEntry *e2 = &(*it) + 1;
                     for (; e2 != &(*itEnd); ++e2) {
                         if (e2->mColorKey != it->mColorKey)
                             break;
@@ -598,8 +605,12 @@ void SpotlightDrawer::DrawWorld() {
                             const_cast<SpotlightEntry *const &>(e2)
                         );
                     }
-                    it = sLights.begin()
-                        + (e2 - &(*sLights.begin()));
+                    // The image reloads e2 straight out of its stack slot and
+                    // assigns it to `it` (lwz r11,0x50(r1); mr r31,r11).  Going
+                    // back through sLights.begin() keeps &sLights live across the
+                    // whole loop, which costs one extra callee-saved register and
+                    // 16 bytes of frame.
+                    it = const_cast<SpotlightEntry *>(e2);
                 } while (it != itEnd);
             }
             if (cur) {
