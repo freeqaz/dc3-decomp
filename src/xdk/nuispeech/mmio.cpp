@@ -157,7 +157,12 @@ MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuff
         LONG cchNext;
         LONG cchEndRead;
         HPSTR pchOld;
-        for (;; fuFlush = MMIO_EMPTYBUF) {
+        // Bottom-tested: 82AA3830 is `blt cr6, .L_82AA3804`, a back edge onto
+        // the `li r4, 0x10` that re-arms MMIO_EMPTYBUF, with the LocalReAlloc
+        // as the fall-through.  Spelled as a `for (;; fuFlush = MMIO_EMPTYBUF)`
+        // with a `break`, MSVC rotates the other way: it hoists the
+        // compute-and-test above the flush and the exit becomes `bge`.
+        do {
             MMRESULT flushRet = mmioFlush(hmmio, fuFlush);
             if (flushRet != 0) {
                 return flushRet;
@@ -165,10 +170,8 @@ MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuff
             pchOld = info->pchBuffer;
             cchNext = info->pchNext - pchOld;
             cchEndRead = info->pchEndRead - pchOld;
-            if (cchBuffer >= cchNext) {
-                break;
-            }
-        }
+            fuFlush = MMIO_EMPTYBUF;
+        } while (cchBuffer < cchNext);
         HPSTR pchNew = (HPSTR)LocalReAlloc(pchOld, cchBuffer, LMEM_MOVEABLE);
         if (pchNew == nullptr) {
             return MMIOERR_OUTOFMEMORY;
@@ -184,6 +187,20 @@ MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuff
         return 0;
     }
 
+    // RESIDUAL (w7-am, 88.4 canonical), three groups:
+    //   * 82AA3800 `b .L_82AA3808` / 82AA3804 `li r4, 0x10`: the image puts the
+    //     MMIO_EMPTYBUF re-arm in a block reached ONLY by the back edge, so the
+    //     preheader has to jump over it.  Our do/while leaves the assignment in
+    //     the body (executed, dead, on the last trip).  `for (;; fuFlush =
+    //     MMIO_EMPTYBUF)` puts it on the back edge but rotates the whole loop
+    //     the other way -- compute-and-test above the flush, exit on `bge` --
+    //     and that spelling measured 79.4.
+    //   * 82AA3840 `clrrwi r3, r11, 0`: the image keeps pchOld in r11 across
+    //     the loop test and zero-extends it into r3 at the LocalReAlloc call;
+    //     we load straight into r3.
+    //   * 82AA3918: the LocalAlloc failure block is sunk PAST the epilogue
+    //     (`beq .L_82AA3918`, and the success arm falls through into the common
+    //     tail).  We emit it inline with a `b` over it -- MSVC block sinking.
     MMRESULT flushRet = mmioFlush(hmmio, MMIO_EMPTYBUF);
     if (flushRet != 0) {
         return flushRet;
