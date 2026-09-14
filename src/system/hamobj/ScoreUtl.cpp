@@ -110,16 +110,23 @@ float GetScoreBonus(float detect_frac, const std::vector<float> *ratings) {
         ratings = &sDefaultRatingThresholds;
     MILO_ASSERT(detect_frac >= 0 && detect_frac <= 1.0f, 0x8d);
     unsigned int size = ratings->size();
-    float upperThresh = 0.0f;
     float lowerThresh = 0.0f;
-    unsigned int i = 0;
+    float upperThresh = 0.0f;
+    int i = 0;
     if (size != 0) {
         do {
             if (detect_frac >= (*ratings)[i]) {
                 lowerThresh = (*ratings)[i];
-                upperThresh = 1.0f;
-                if (i != 0) {
+                // The image tests the PREVIOUS INDEX AS A FLOAT, not as an int:
+                // target 0x82528124 does subi/extsw/std/lfd/fcfid/frsp on i-1 and
+                // then `fcmpu cr6, f0, f31` against 0.0f. An `if (i != 0)` integer
+                // test compiles to a bare `cmplwi cr6, r11, 0x0` and loses the
+                // whole int->float round trip.
+                float prevIndex = i - 1;
+                if (prevIndex >= 0.0f) {
                     upperThresh = (*ratings)[i - 1];
+                } else {
+                    upperThresh = 1.0f;
                 }
                 break;
             }
