@@ -848,7 +848,13 @@ void RhythmDetector::ProcessFrames() {
 
     bool hadBlendedFrames = false;
     if (!localHistory.empty()) {
-        float lastTime = localHistory.back().mTime;
+        // The erase-window time is the FIRST frame of the batch, not the
+        // last: retail reuses the very r11 the !empty() test loaded from
+        // 0x88(r31) (_M_next == begin()) for the lfs f31,0x8(r11) at
+        // 0x82489C5C, and only ever touches _M_prev at 0x8c(r31) down at the
+        // bottom of the function.  Erasing everything newer than the OLDEST
+        // incoming frame is what makes the subsequent append non-overlapping.
+        float lastTime = localHistory.front().mTime;
         EraseNewerData(mRecordData.frames, lastTime);
         EraseNewerData(mAnalysisFrames1, lastTime);
 
