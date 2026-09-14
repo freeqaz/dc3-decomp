@@ -429,7 +429,6 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffs
     // guard object at 0x82E5D64C `stw r22, 0x50(r31)` BEFORE calling Enter, so
     // the Exit runs from a destructor on every path.  CritSecTracker's null
     // check folds away because &gCrit is provably non-null.
-    unsigned int bytesReturned = 0;
     CritSecTracker _cs(&gCrit);
     // 0x82E5D660 `addi r26, r30, 0x80`, emitted BETWEEN the ReadError load and
     // its branch -- so it is declared before the early return, not after it.
@@ -454,9 +453,21 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffs
     unsigned int fileSize = (unsigned int)bf->pFile->Size();
     if (adjOffset + length > fileSize) {
         bink->ReadError = 1;
-        bytesReturned = 0;
-        return bytesReturned;
+        return 0;
     }
+    // Declared HERE, after both early returns: the image has no zero register
+    // live across Enter, it builds one lazily (0x82E5D6C0 `li r30, 0x0` for the
+    // size-check return, 0x82E5D6DC `li r27, 0x0` for blockOff, which the seek
+    // branch then shares at 0x82E5D6F4 `mr r28, r27`).  Initialised at the top
+    // of the function all four zeros CSE into one hoisted `li` before Enter.
+    //
+    // NEGATIVE RESULT: hoisting `bytesReturned` out of this inner block and
+    // declaring it AFTER `blockOff` at function scope -- so that blockOff's
+    // `li` is the one MSVC creates and bytesReturned shares it -- measured
+    // 95.0, i.e. 0.6pp WORSE.  MSVC then keeps blockOff's zero in a
+    // callee-saved register across the whole body and our `stw` of the
+    // bytesAvail flush picks up r24 rather than a freshly created zero.
+    unsigned int bytesReturned = 0;
     {
         int startTimer = RADTimerRead();
         unsigned int seekPos = adjOffset;
@@ -481,6 +492,17 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffs
                     while (bink->DoingARead != 0) {
                         ReadFunc(bink, false);
                     }
+                    // NEGATIVE RESULT: this block's four stores are already
+                    // written in the image's order (0x6c bytesAvail, 0x98
+                    // iBufEmpty, 0x90 pBufPos, 0x94 pBufBack) yet MSVC emits
+                    // 0x94, 0x90, 0x98 and loads pBuffer (0x88) before BufSize
+                    // (0x60) where the image loads BufSize first.  Dropping
+                    // this named local and spelling `bink->io.pBuffer` at all
+                    // three use sites is BYTE-NEUTRAL -- MSVC CSEs the load
+                    // back into one `lwz` at the same place, 95.6 and the same
+                    // 62 rows either way.  The store order is a scheduler
+                    // decision downstream of the r25/r26 colouring, not a
+                    // source-reachable one.
                     unsigned char *pBuf = bink->io.pBuffer;
                     bink->bytesAvail = 0;
                     bink->io.iBufEmpty = bink->BufSize;
