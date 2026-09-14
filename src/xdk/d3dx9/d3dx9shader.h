@@ -155,7 +155,16 @@ typedef struct D3DXMACRO {
     LPCSTR Definition;
 } D3DXMACRO, *LPD3DXMACRO;
 
-typedef struct _D3DXSHADER_COMPILE_PARAMETERS { /* Size=0x30 */
+// Size is 0x44, not 0x30.  Two independent readings of the target image:
+//   * XGRAPHICS::ShaderPDBBuilder::AddCommonArguments reads fields at 0x30
+//     (lwz r31, 0x30(r5), 0x82CAD7E0) and 0x34 (0x82CAD7F4) off the same
+//     pointer, so the struct reaches at least 0x38;
+//   * DxShader::Compile zero-fills its local parameter block with eight
+//     `stdu` of 8 bytes plus one trailing `stw` (0x8261D4F4-0x8261D510),
+//     i.e. exactly 0x44 bytes, and the next stack slot sits 0x50 above it.
+// The five trailing DWORDs are unnamed because nothing in the image names
+// them; they exist only so that sizeof() and the zero-fill are right.
+typedef struct _D3DXSHADER_COMPILE_PARAMETERS { /* Size=0x44 */
     /* 0x0000 */ DWORD Flags;
     /* 0x0004 */ DWORD UPDBTimestamp;
     /* 0x0008 */ LPCSTR UPDBPath;
@@ -168,6 +177,11 @@ typedef struct _D3DXSHADER_COMPILE_PARAMETERS { /* Size=0x30 */
     /* 0x0024 */ DWORD PixelShaderSamplerRegisterCount;
     /* 0x0028 */ DWORD VertexShaderSamplerRegisterBase;
     /* 0x002c */ DWORD VertexShaderSamplerRegisterCount;
+    /* 0x0030 */ DWORD Unknown0x30;
+    /* 0x0034 */ DWORD Unknown0x34;
+    /* 0x0038 */ DWORD Unknown0x38;
+    /* 0x003c */ DWORD Unknown0x3c;
+    /* 0x0040 */ DWORD Unknown0x40;
 } D3DXSHADER_COMPILE_PARAMETERS;
 
 HRESULT D3DXCompileShaderExA(

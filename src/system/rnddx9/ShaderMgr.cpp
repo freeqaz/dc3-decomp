@@ -136,7 +136,8 @@ bool DxShader::Compile(
     const D3DXMACRO *macros = reinterpret_cast<const D3DXMACRO *>(defines.begin());
     ID3DXBuffer *vError = nullptr;
     ID3DXBuffer *pError = nullptr;
-    D3DXSHADER_COMPILE_PARAMETERS params = { 0 };
+    D3DXSHADER_COMPILE_PARAMETERS params;
+    memset(&params, 0, sizeof(params));
     params.TempRegisterLimit = 36;
 
     buf1 = new DxShaderBuffer();
