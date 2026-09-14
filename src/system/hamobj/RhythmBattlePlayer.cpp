@@ -523,12 +523,23 @@ void RhythmBattlePlayer::UpdateScore(int points) {
     }
 }
 
+// The `mTrickSymbol = trick;` store comes FIRST, and the named `trick` local is
+// load-bearing.  The image stores 0x27c before 0x23c/0x29c
+// (build/373307D9/asm/system/hamobj/RhythmBattlePlayer.s, OnReset: `stw r11,
+// 0x27c(r30)` immediately after `lfs f31, __real@00000000@l`), and with the
+// assignment written third MSVC sank that one store to the END of the
+// straight-line init block and also swapped the mComboMeter/mFreshnessAccumulator
+// pair -- 12 rows, 97.875.  Two refuted variants:
+//   * `mTrickSymbol = none;` (drop the local) -- 97.0, and it costs a callee-saved
+//     register: the named local is what pins the `none` address in r29.
+//   * swapping the mComboMeter/mFreshnessAccumulator source lines -- bit-identical
+//     output, so the float half of that block does not respond to source order.
 void RhythmBattlePlayer::OnReset(RhythmBattle *rb) {
     static Symbol none("none");
     Symbol trick = none;
+    mTrickSymbol = trick;
     mRhythmBattle = rb;
     mGrooveCooldown = 0;
-    mTrickSymbol = trick;
     mZoneLevel = 0;
     mMoveConsistencyScore = 0;
     mPrevZoneLevel = 0;
