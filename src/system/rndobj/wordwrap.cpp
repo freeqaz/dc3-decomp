@@ -114,6 +114,16 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
             }
             result = 0;
         after_check:
+            // REFUTED (wave 7, lane w7-y): the image funnels every exit except
+            // the `cur == start` one through a masked tail -- `li r11, 0/1`,
+            // then `clrlwi r3, r11, 24` -- while we materialise 0/1 straight
+            // into r3 and let the early `cur == start` return tail-merge with
+            // it (rows 3-7 and 157-160). Both ways of asking MSVC for the
+            // widening here, `return result == 0;` and an explicit
+            // `bool canBreak; if (result == 0) canBreak = true; else
+            // canBreak = false; return canBreak;`, compile to the SAME 169
+            // instructions and drop the function 95.73 -> 91.86. Whatever
+            // produces the image's tail, it is not at this statement.
             if (result == 0)
                 return true;
         }
