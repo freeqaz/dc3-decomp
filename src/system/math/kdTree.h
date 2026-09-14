@@ -249,8 +249,8 @@ void kdTree<T>::kdTreeNode::Pack(
 ) {
     if (uc < 0xF) {
         typename std::list<Triangle *>::iterator it = items.begin();
+        unsigned int uCount = 0;
         if (it != items.end()) {
-            unsigned int uCount = 0;
             do {
                 ++it;
                 uCount++;
@@ -269,15 +269,25 @@ void kdTree<T>::kdTreeNode::Pack(
             }
 
             if (bFound) {
-                unsigned int iAxis = mData.index & 3;
+                // The AXIS is never cached: the image re-reads it from `this`
+                // at all four use sites -- `lwz r11, 0x0(r28)` + `clrlwi r4,
+                // r11, 30` immediately before each Vector3::operator[] call.
+                // An `iAxis` local instead pins it in a callee-saved register
+                // and deletes those eight instructions.
+                //
+                // The split VALUE is cached for the two range tests (the image
+                // loads it into f31 once, ahead of the first operator[] call,
+                // and compares `fcmpu cr6, f31, f0`), but the two box
+                // assignments below read `mData.real` again -- the image emits
+                // a fresh `lfs f31, 0x0(r28)` in front of each of them.
                 float fSplit = mData.real;
-                if (fSplit < inDimensions.mMin[iAxis]) {
-                } else if (fSplit > inDimensions.mMax[iAxis]) {
+                if (fSplit < inDimensions.mMin[mData.index & 3]) {
+                } else if (fSplit > inDimensions.mMax[mData.index & 3]) {
                 } else {
                     Box minBox(inDimensions.mMin, inDimensions.mMax);
                     Box maxBox(inDimensions.mMin, inDimensions.mMax);
-                    minBox.mMax[iAxis] = fSplit;
-                    maxBox.mMin[iAxis] = fSplit;
+                    minBox.mMax[mData.index & 3] = mData.real;
+                    maxBox.mMin[mData.index & 3] = mData.real;
 
                     std::list<Triangle *> leftList;
                     std::list<Triangle *> rightList;
