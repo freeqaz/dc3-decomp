@@ -510,7 +510,16 @@ void SkeletonViz::Visualize(
             skeleton.JointPos(kCoordCamera, (SkeletonJoint)i, camJointPos[i]);
             Multiply(camJointPos[i], unk194, drawJointPos[i]);
         }
-        SetCamera(cachedFrame, worldXfm, drawJointPos[kJointShoulderCenter].z);
+        // The image loads `lfs f1, 0xc4(r31)`.  drawJointPos is the Multiply
+        // output array based at r31+0xc0 with a 16-byte stride (the loop above
+        // steps 0x10 and stops at 0x140 = kNumJoints * 16), so 0xc4 is element
+        // 0 field +4 -- kJointHipCenter's y, not kJointShoulderCenter's z
+        // (which is 0xc0 + 2*16 + 8 = 0xe8, what we used to load).  y is the
+        // right axis too: SetCamera's `distance` parameter is a forward
+        // distance (`pos.y = -distance; ... pos.y += distance;`), and y is
+        // depth in this space, so the old spelling fed it the shoulder's
+        // height.
+        SetCamera(cachedFrame, worldXfm, drawJointPos[kJointHipCenter].y);
         DrawJoints(skeleton, camJointPos, drawJointPos, faded);
 
         if (callbacks) {
