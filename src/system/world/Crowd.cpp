@@ -763,15 +763,18 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
         if (it->mMMesh) {
             int instanceCount = (int)it->mMMesh->mInstances.size();
             int backupCount = (int)it->mBackup.size();
+            int curInstances = (int)it->mMMesh->mInstances.size();
             int targetInstances = (int)((float)(instanceCount + backupCount) * mFlatFullness);
-            // NEGATIVE RESULT (w7-af): the image walks mInstances TWICE here --
+            // The image walks mInstances TWICE here --
             // three count loops back to back before the fctiwz (mInstances into
             // r7, mBackup into r8, mInstances again into r10), and it is that
             // third result r10 which `cmpw cr6, r9, r10` and `subf r10, r10, r9`
-            // consume. Writing `it->mMMesh->mInstances.size()` a second time at
-            // the comparison does NOT reproduce it: MSVC CSEs the two walks back
-            // into one and reshuffles r26/r27, 93.8 -> 91.3 and six instructions
-            // longer. The extra walk is not reachable from source.
+            // consume. Writing `it->mMMesh->mInstances.size()` a second time AT
+            // THE COMPARISON does not reproduce it (w7-af: MSVC CSEs the two
+            // walks back into one, 93.8 -> 91.3, six instructions longer) --
+            // but a THIRD NAMED LOCAL declared here, before any float work,
+            // does: 96.0 -> 96.3 and the instruction count goes 191 -> 195,
+            // exactly the target's.
             if (instanceCount < targetInstances) {
                 // do/while, not a counted for: the enclosing `<` has already
                 // proved the count >= 1, so the image's loop carries no
@@ -788,8 +791,8 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
                 // first word, i.e. begin() -- where end() would be `addi r9,
                 // r9, 0x54`, the address of the list header itself.
                 it->mMMesh->mInstances.splice(it->mMMesh->mInstances.begin(), it->mBackup, it->mBackup.begin(), backIt);
-            } else if (targetInstances < instanceCount) {
-                int toRemove = instanceCount - targetInstances;
+            } else if (targetInstances < curInstances) {
+                int toRemove = curInstances - targetInstances;
                 InstanceList::iterator instIt = it->mMMesh->mInstances.begin();
                 do {
                     ++instIt;
