@@ -897,17 +897,13 @@ float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerId
         numFrames = mTakes[mCurrentTakeIndex].mNumFrames;
     }
     // Compute maxIdx = max(0, numFrames-1)
-    unsigned int maxIdx = (unsigned int)(numFrames - 1);
-    maxIdx = maxIdx & (unsigned int)(~((int)maxIdx >> 31));
+    unsigned int maxIdx = Max(0, numFrames - 1);
     // Compute raw frame index: int(mDefaultTimeout * beat) - 2
     int frameIdxRaw = (int)(mDefaultTimeout * beat) - 2;
     // frameIdx defaults to maxIdx (used when frameIdxRaw > maxIdx)
     unsigned int frameIdx = maxIdx;
     if (frameIdxRaw <= (int)maxIdx) {
-        // clamp negative to 0: srwi/subi/and pattern
-        unsigned int r10 = (unsigned int)frameIdxRaw >> 31;
-        r10 = r10 - 1;
-        frameIdx = r10 & (unsigned int)frameIdxRaw;
+        frameIdx = Max(frameIdxRaw, 0);
     }
     // Copy reference frame skeleton into debug global
     sLastComparedDancerSkel.Set(frames[frameIdx].skeleton);
@@ -919,16 +915,16 @@ float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerId
     // Accumulate scores: sum(scores[i] / numFrames) for i in 0..unkc
     int scoreCount = frameScores.unkc;
     float total = initScore;
+    int i = 0;
     if (scoreCount > 0) {
         float invNumFrames = 1.0f / (float)(long long)(int)numFrames;
-        float *scoresData = frameScores.unk0.begin();
         int byteIdx = 0;
-        int j = 0;
         do {
-            j++;
-            total = *(float *)((char *)scoresData + byteIdx) * invNumFrames + total;
+            i++;
+            total = *(float *)((char *)frameScores.unk0.begin() + byteIdx) * invNumFrames
+                + total;
             byteIdx += 4;
-        } while (j < scoreCount);
+        } while (i < scoreCount);
     }
     return total;
 }
