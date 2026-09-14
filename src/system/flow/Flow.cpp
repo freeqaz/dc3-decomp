@@ -193,8 +193,7 @@ BinStreamRev &operator>>(BinStreamRev &d, Flow::DynamicPropertyEntry &entry) {
     d.stream >> (int &)entry.mType;
     BinStream &bs = d.stream;
     entry.mDefaultVal.Load(bs);
-    bs >> entry.mHelp;
-    bs >> entry.mObjectClass;
+    bs >> entry.mHelp >> entry.mObjectClass;
     if (d.rev > 1) {
         BinStreamRev &d2 = (d >> entry.mExposed);
         entry.mSymbolList.Load(d2.stream);
@@ -506,7 +505,15 @@ void Flow::Enter() {
         }
     }
 #endif
-    if (ProxyFile().empty() && mStartMode > 0) {
+    // NOTE (w7-av): 94.70 residual is one address derivation.  The image
+    // materialises `q` FIRST (`subi r31, r3, 0x104` at 0x823ED320) and then
+    // reaches the ObjectDir subobject as `addi r3, r31, 0x68` -- same address,
+    // derived from q rather than from `this` -- while MSVC here loads the
+    // ObjectDir vptr off r3 before q exists and does `subi r3, r3, 0x9c`.
+    // Naming the ObjectDir subobject (`ObjectDir *dir = this;`) is 90.72: a
+    // pointer conversion is null-checked (`subic.`/`bne`/`li r3, 0`), where the
+    // reference the call expression uses is not.
+    if (ProxyFile().empty() && mStartMode != 0) {
         if (mStartMode == 1) {
             q->Execute(kQueue);
         } else {
