@@ -94,22 +94,33 @@ void RndRenderState::SetStencilOp(StencilOp fail, StencilOp zfail, StencilOp pas
 void RndRenderState::SetTextureFilter(uint sampler, FilterMode filter, bool) {
     D3DDevice_SetSamplerState_MinFilter(TheDxRnd.Device(), sampler, filter);
     D3DDevice_SetSamplerState_MagFilter(TheDxRnd.Device(), sampler, filter);
-    DWORD *pWord = &TheDxRnd.Device()->m_Constants.TextureFetch[sampler].dword[3];
+    // One device read for the fetch-constant write AND the dirty-mask write: the
+    // image loads 0x224(r29) once and copies it (`mr r7, r10`) so the pointer
+    // survives the `stw`, where two TheDxRnd.Device() expressions make MSVC
+    // reload it (the store may alias TheDxRnd's own member).
+    D3DDevice *dev = TheDxRnd.Device();
+    DWORD *pWord = &dev->m_Constants.TextureFetch[sampler].dword[3];
     *pWord = (*pWord & ~0x01800000) | ((filter & 3) << 23);
-    TheDxRnd.Device()->m_Pending.m_Mask[3] |= 0x8000000000000000ull >> (sampler + 0x20);
+    dev->m_Pending.m_Mask[3] |= 0x8000000000000000ull >> (sampler + 0x20);
 }
 
 void RndRenderState::SetTextureClamp(uint sampler, ClampMode clamp) {
     UINT64 mask = 0x8000000000000000ull >> (sampler + 0x20);
-    DWORD *pWord = &TheDxRnd.Device()->m_Constants.TextureFetch[sampler].dword[0];
+    // Three groups, one device read each (the image has three `lwz 0x224(r9)` and
+    // three `mr` copies, not six loads): the fetch-constant store and the mask
+    // store in a group go through the SAME pointer.
+    D3DDevice *dev = TheDxRnd.Device();
+    DWORD *pWord = &dev->m_Constants.TextureFetch[sampler].dword[0];
     *pWord = (*pWord & ~0x00001C00) | ((clamp & 7) << 10);
-    TheDxRnd.Device()->m_Pending.m_Mask[3] |= mask;
-    pWord = &TheDxRnd.Device()->m_Constants.TextureFetch[sampler].dword[0];
+    dev->m_Pending.m_Mask[3] |= mask;
+    dev = TheDxRnd.Device();
+    pWord = &dev->m_Constants.TextureFetch[sampler].dword[0];
     *pWord = (*pWord & ~0x0000E000) | ((clamp & 7) << 13);
-    TheDxRnd.Device()->m_Pending.m_Mask[3] |= mask;
-    pWord = &TheDxRnd.Device()->m_Constants.TextureFetch[sampler].dword[0];
+    dev->m_Pending.m_Mask[3] |= mask;
+    dev = TheDxRnd.Device();
+    pWord = &dev->m_Constants.TextureFetch[sampler].dword[0];
     *pWord = (*pWord & ~0x00070000) | ((clamp & 7) << 16);
-    TheDxRnd.Device()->m_Pending.m_Mask[3] |= mask;
+    dev->m_Pending.m_Mask[3] |= mask;
 }
 
 // dword[5] bits 0-1 of the fetch constant select the border-colour source
