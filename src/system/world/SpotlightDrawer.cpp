@@ -371,18 +371,28 @@ void SpotlightDrawer::ApplyLightingApprox(BoxMapLighting &boxMap, float f2) cons
     MILO_ASSERT(boxMap.NumQueuedLights() == 0, 0x20b);
     std::vector<SpotlightEntry>::iterator it = sLights.begin();
     std::vector<SpotlightEntry>::iterator itEnd = sLights.end();
+    // The image materialises `params` once before the loop (lwz r31,0x50(r1)
+    // reads its still-uninitialised slot at 0x82823BCC), so it is loop-carried,
+    // not a fresh declaration per iteration.
+    BoxMapLighting::LightParams_Spot *params;
     for (; it != itEnd; ++it) {
         Spotlight *curSpotlight = it->mSpotlight;
         const Transform &xfm = curSpotlight->WorldXfm();
         Hmx::Color c50(curSpotlight->Color());
         Multiply(c50, f2, c50);
         Multiply(c50, curSpotlight->Intensity(), c50);
-        BoxMapLighting::LightParams_Spot *params;
         if (!boxMap.ParamsAt(params))
             break;
         params->mPosition = xfm.v;
         params->mDirection = xfm.m.y;
         params->mColor = c50;
+        // RESIDUAL (w7-am, 94.2 canonical): MSVC hoists this 2.0f out of the
+        // loop into a second callee-saved FPR (f30, plus the extra stfd), where
+        // the image keeps only `lis r26, __real@40000000@ha` live and reloads
+        // the literal every iteration at 0x82823CAC.  That is a register-
+        // allocation heuristic, not a spelling: hoisting `params` out of the
+        // loop (which the image's pre-loop `lwz r31,0x50(r1)` shows it does)
+        // is byte-for-byte inert.
         params->mTopRadius = curSpotlight->mBeam.mTopRadius;
         params->mBottomRadius = curSpotlight->mBeam.mBottomRadius * 2.0f;
         params->mBeamLength = curSpotlight->mBeam.mLength * 2.0f;
