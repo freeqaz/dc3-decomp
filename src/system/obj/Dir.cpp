@@ -1279,6 +1279,16 @@ void ObjectDir::PreLoad(BinStream &bs) {
         int hashLen;
         d >> hashLen;
         if (hashLen) {
+            // Residual row [159]: the target has a dead `stw r11, 0x58(r31)`
+            // here -- the alloc result spilled into the local-temp slot that
+            // `FilePath fp` and the ASSERT_REVS `ClassName()` return temp also
+            // use. It is never reloaded (the terminator below re-reads the
+            // member), and it is the ONLY charged row left in this function;
+            // base is 3884 B against the target's 3888 B, exactly that one
+            // instruction. Refuted levers: a named local for the alloc result
+            // (inert -- MSVC coalesces it with the member); rb3-xenon's
+            // two-local spelling `char *ptr = (char *)mAlwaysInlineHash;`
+            // (inert on [159] and it flips the stbx operand order at [163]).
             mAlwaysInlineHash =
                 (char *)MemOrPoolAlloc(hashLen + 1, __FILE__, 0x30A, "Always Inline CDB");
             bs.Read((void *)mAlwaysInlineHash, hashLen);
