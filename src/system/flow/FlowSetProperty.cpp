@@ -163,23 +163,29 @@ void PropertyTask::Poll(float ms) {
         ObjPtr<PropertyTask> guard(this, nullptr);
         guard.SetObjConcrete(this);
         SetProperty(mValue);
-        if (guard) {
-            if (mListener) {
-                static Message msg("on_anim_event", DataNode(Symbol("ended")));
-                Hmx::Object *listener = mListener;
-                mListener = nullptr;
-                listener->Handle(msg, false);
-            }
-            delete this;
+        // The braces are load-bearing: MSVC stamps a running "scopes opened so
+        // far" counter into every function-local static's mangled name, and the
+        // image's `msg` is `?msg@?L@??Poll@...` -- scope 11. Dropping these two
+        // braces spells the same code but gives scope 9, which renames both the
+        // static and its atexit destructor and costs that 28 B COMDAT its match.
+        if (!guard) {
+            return;
         }
+        if (mListener) {
+            static Message msg("on_anim_event", DataNode(Symbol("ended")));
+            Hmx::Object *listener = mListener;
+            mListener = nullptr;
+            listener->Handle(msg, false);
+        }
+        delete this;
     } else {
         float easedRatio = mEaseFunc(ratio, mEasePower, 1.0f);
         if (mIsColorInterp) {
             int startColor = mStartValue.Int(nullptr);
 
             float inv255 = 1.0f / 255.0f;
-            float startG = (float)(unsigned char)(startColor >> 8) * inv255;
             float startB = (float)(unsigned char)(startColor) * inv255;
+            float startG = (float)(unsigned char)(startColor >> 8) * inv255;
             float startR = (float)(unsigned char)(startColor >> 16) * inv255;
 
             int endColor = mValue.Int(nullptr);
@@ -420,13 +426,15 @@ void FlowSetProperty::ReActivate() {
     // No local alias for mTarget: FlowPtr::operator-> is inlined, so each use
     // recomputes `addi r3, r30, 0x78` in the target rather than holding the
     // sub-object address in a callee-saved register.
+    // NOT an early return: the image's zero-blend-time branch falls through into
+    // the timing tail below, so t.Stop() and TheFlowMgr->AddEventTime() run on
+    // this path too. (A `return;` here jumps straight to the epilogue, which is
+    // the only thing the two `b`/`beq` rows at the join were reporting.)
     if (0.0f == mBlendTime && mChangePerUnit == 0.0f) {
         FLOW_LOG("Setting Value on %s\n", mTarget->Name())
         mTarget->SetProperty(unk_0x98.Array(), mValue.Node());
-        return;
-    }
-    if (mTarget->Property(unk_0x98.Array(), true)->Evaluate()
-        != mValue.Node().Evaluate()) {
+    } else if (mTarget->Property(unk_0x98.Array(), true)->Evaluate()
+               != mValue.Node().Evaluate()) {
         FLOW_LOG("Queueing\n")
         TheFlowMgr->QueueCommand(this, kQueue);
     }
