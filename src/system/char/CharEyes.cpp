@@ -1408,15 +1408,17 @@ void CharEyes::Poll() {
                 goto storeState;
             if (!blinkDetected) {
                 if (canSeeTarget) {
-                    bool anyEyeClamped = false;
+                    bool anyEyeClamped;
                     auto eyesEnd = mEyes.end();
                     for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != eyesEnd;
                          ++it) {
                         if (it->mEye && it->mEye->mDisableRoll) {
                             anyEyeClamped = true;
-                            break;
+                            goto haveClamped;
                         }
                     }
+                    anyEyeClamped = false;
+                haveClamped:
                     if (!anyEyeClamped)
                         goto storeState;
                 }
