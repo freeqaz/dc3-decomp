@@ -1058,7 +1058,10 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
             mesh->CopyGeometry(mesh->GetGeomOwner(), true);
             mesh->Sync(0x3f);
         }
-        totalVerts += mesh->GetGeomOwner()->NumVerts();
+        // 826A02E4 `lwz r11, 0x148(r29)` then `lwz r11, 0x104(r11)`: the image
+        // reads mGeomOwner->mVerts.mNumVerts inline, i.e. Verts().size(), not
+        // the VIRTUAL NumVerts() (vtable slot 0x48) we were dispatching to.
+        totalVerts += mesh->Verts().size();
     }
 
     MILO_LOG("RndAmbientOcclusion: Calculating ambient occlusion...\n");
