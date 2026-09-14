@@ -218,6 +218,17 @@ void HiResScreen::Accumulate() {
     delete tex;
     int tileX = prevTile % mTiling;
     int tileY = prevTile / mTiling;
+    // Residual 95.94% canonical / 95.64% raw, 11 rows / 8 B.
+    // Four of them are DEAD STORES the image emits and we do not: two
+    // `stw r10, 0x6c(r31)` back to back before the RndTex work, and two
+    // `stw r5, 0x6c(r31)` back to back after it, none ever read.  0x6c is the
+    // slot the image also gives `left`; we give it `right`, which is the
+    // OFFSET_SWAP in rows 64/65 (`addi r7, r31, 0x60` / `addi r6, r31, 0x6c`
+    // against our 0x6c / 0x60).  REFUTED: declaring these as
+    // `int right, left, top, bottom;` is byte-inert -- identical 11 rows --
+    // so MSVC is not taking the slot order from the declaration.  The other
+    // five rows are a plain volatile r7<->r8 swap in the Merge() argument
+    // set-up that follows from the same choice.
     int left, right, top, bottom;
     GetBorderForTile(tileX, tileY, left, right, top, bottom);
     int xOff = (TheRnd.Width() - 480) * tileX;
