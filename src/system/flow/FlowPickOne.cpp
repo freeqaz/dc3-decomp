@@ -54,7 +54,10 @@ bool FlowPickOne::Activate() {
     if (mChildNodes.empty())
         return false;
 
-    FlowNode *chosen = nullptr;
+    // No initialiser: the target never initialises the merge register, and
+    // every reachable break path assigns it (mChildNodes.empty() has already
+    // returned).
+    FlowNode *chosen;
 
     switch (mChoiceType) {
     case kChoiceOrdered: {
@@ -106,17 +109,27 @@ bool FlowPickOne::Activate() {
                     items.push_back(it->Obj());
                 }
                 RandomShuffle(items.begin(), items.end());
-                mIndex = 0;
-                FlowNode **p = items.end();
-                if (p - items.begin() != 0) {
-                    do {
-                        mChoiceHistory.push_back(*--p);
-                    } while (p - items.begin() != 0);
+                // back() + pop_back(), not a walking pointer: the image's loop
+                // body at 0x82405FB8 writes items._M_finish back to memory
+                // after the push_back (`stw r29, 0x64(r31)`) and re-derives the
+                // count with `subf r11, r27, r29` / `srawi. r11, r11, 2` -- a
+                // signed shift, i.e. size() != 0, not empty().
+                while (items.size() != 0) {
+                    mChoiceHistory.push_back(items.back());
+                    items.pop_back();
                 }
-                if (lastChosen) {
-                    if (mChoiceHistory[0] == lastChosen) {
-                        mIndex = 1;
-                    }
+                // mIndex is cleared AFTER the refill, in the middle of the
+                // comparison below: `stw r24, 0x7c(r30)` at 0x82405FDC sits
+                // between the `lwz r11, 0x0(r26)` that loads mChoiceHistory[0]
+                // and the `lwz r11, 0xc(r11)` that derefs it.
+                mIndex = 0;
+                // No null guard on lastChosen: the image compares
+                // unconditionally at 0x82405FE4 (`cmplw cr6, r25, r11` / `bne`)
+                // with lastChosen still 0 when the history was empty.  The
+                // `if (lastChosen)` we used to wrap this in was
+                // decompilation-introduced.
+                if (mChoiceHistory[0] == lastChosen) {
+                    mIndex = 1;
                 }
             }
             ActivateChild(mChoiceHistory[mIndex]);

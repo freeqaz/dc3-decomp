@@ -577,14 +577,32 @@ const char *FileLocalize(const char *iFilename, char *buffer) {
                     // it does not materialise 'e'/'n'/'g' as immediates, so
                     // the pointer has to reach the stores as a value MSVC
                     // cannot constant-fold -- i.e. through this join.
-                    if (!HongKongExceptionMet()
-                        || (strstr(iFilename, "sfx/loc/") == 0
-                            && strstr(iFilename, "barks.milo") == 0)) {
+                    // The "eng" arm is the THEN arm.  0x825D0B8C
+                    // `beq .L_825D0BF0` sends !HongKongExceptionMet FORWARD
+                    // past the eng block to the language block, 0x825D0BA4
+                    // `bne .L_825D0BC0` takes the first strstr hit INTO it
+                    // (the `||` short-circuit), and 0x825D0BBC `beq
+                    // .L_825D0BF0` takes the second miss out; the block at
+                    // 0x825D0BC0 is the fallthrough and ends `b .L_825D0C20`.
+                    //
+                    // NEGATIVE RESULT (w7-ap, 2026-09-14, 91.62 canonical):
+                    // writing it the other way round -- `!HongKongExceptionMet
+                    // || (strstr == 0 && strstr == 0)` with the language arm
+                    // first -- is BYTE-IDENTICAL, same 24 rows.  MSVC
+                    // normalises the two spellings and still emits the
+                    // language arm at the fallthrough (idx 79 is `stb r8,
+                    // 0x1(r11)` vs `bl SystemLanguage` either way), so the
+                    // block order in this region is not reachable from the
+                    // condition's polarity.  The form below is kept because it
+                    // is the one the listing's branches describe.
+                    if (HongKongExceptionMet()
+                        && (strstr(iFilename, "sfx/loc/") != 0
+                            || strstr(iFilename, "barks.milo") != 0)) {
+                        memcpy(&buffer[p + 1 - iFilename], "eng", 3);
+                    } else {
                         char *dst = &buffer[p + 1 - iFilename];
                         const char *langStr = SystemLanguage().Str();
                         memcpy(dst, langStr, 3);
-                    } else {
-                        memcpy(&buffer[p + 1 - iFilename], "eng", 3);
                     }
                     // NOT `return buffer`.  Retail sets r31 = buffer at
                     // 0x825D0C20 and FALLS INTO the `isOg` test at

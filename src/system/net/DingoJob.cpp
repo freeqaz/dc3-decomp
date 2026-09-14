@@ -150,48 +150,23 @@ void DingoJob::AddContent(HttpReq *httpReq) {
     mDataPoint->ToJSON(str1);
     URLEncode(str1.c_str(), str2, false);
 
-    // The scan POST-increments, so it stops one past the terminator
-    // (lbz / addi / cmplwi / bne at 8255EFC4, then subf+subi at 8255EFD4).
-    // A `for (; *scan; scan++)` form stops ON the terminator and makes the
-    // size one byte short -- the image's arithmetic is (end - start - 1) + 7
-    // with `end` already past the NUL, i.e. strlen + 7.
-    const char *scan = str2.c_str();
-    while (*scan++ != '\0') {
-    }
-
-    // Calculate total size: "params=" (7 bytes) + encoded string length.
-    // Negative result: splitting this into `int size = scan - c_str() - 1;
-    // size += 7;` to reproduce the image's 32-bit truncation (clrrwi r11, r11,
-    // 0 at 8255EFDC) does NOT un-fold it -- MSVC still emits addi r29, r11, 0x6
-    // -- and cost 2.2pp elsewhere.
-    int size = (scan - str2.c_str() - 1) + 7;
-
-    // Allocate buffer for the complete request body
-    char *buf = new char[size + 1];
-    mContentBuffer = buf;
-
-    // Copy the "params=" prefix into the buffer. Residual: the image LOADS the
-    // eight bytes out of the literal pool (ld r11, ??_C@_07MOHLFAJ@params...)
-    // where we materialise them as lis/ori immediates; routing the literal
-    // through a `const char *prefix` local does not stop the fold.
-    *(s64 *)buf = *(s64 *)"params=";
-
-    // Find the end of the prefix, then back up onto its terminator.
-    // Negative result: the image reads str2's buffer pointer BEFORE this scan
-    // (lwz r10, 0x5c(r31) at 8255F000); hoisting `data` above the loop to match
-    // makes MSVC re-shape both loops onto lbzu/stbu update forms and costs
-    // 2.2pp (86.2 -> 84.0), so the load stays where the scan leaves it.
-    char *end = (char *)mContentBuffer;
-    while (*end++ != '\0') {
-    }
-    end--;
-    const char *data = str2.c_str();
-
-    // Append the encoded data, terminator included: the image stores the
-    // loaded byte BEFORE testing it (stb r9, 0x0(r11) at 8255F024 ahead of
-    // the bne), so the NUL is copied and the buffer ends terminated.
-    while ((*end++ = *data++) != '\0') {
-    }
+    // The whole tail is three C library intrinsics, not hand-rolled loops.
+    // strlen: 8255EFBC keeps str2's base in r10, scans with a POST-increment
+    // (8255EFC4 lbz/addi/cmplwi cr6/bne -- an UNSIGNED compare into cr6),
+    // then 8255EFD4 subf / 8255EFD8 subi 1 / 8255EFDC `clrrwi r11, r11, 0` /
+    // 8255EFE0 `addi r29, r11, 0x7`.  The clrrwi is a zero-extend to size_t;
+    // it is what sits between the -1 and the +7 and stops MSVC folding them
+    // into the `addi 0x6` we used to emit.
+    // strcpy of an 8-byte constant: 8255EFF4 `ld` out of the literal pool +
+    // 8255EFF8 `std`, never lis/ori immediates.
+    // strcat: 8255EFFC re-reads mContentBuffer, 8255F000 loads str2's pointer
+    // BEFORE the destination scan (it is the second ARGUMENT), then a
+    // post-increment scan and a post-increment copy loop with separate addis
+    // -- not the lbzu/stbu update forms a hand-written loop produces.
+    int size = strlen(str2.c_str()) + 7;
+    mContentBuffer = new char[size + 1];
+    strcpy((char *)mContentBuffer, "params=");
+    strcat((char *)mContentBuffer, str2.c_str());
 
     httpReq->SetContent((const char *)mContentBuffer);
     httpReq->SetContentLength(size);

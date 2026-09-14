@@ -325,8 +325,14 @@ void Trie::remove(unsigned int index) {
         unsigned int newFirstChild = FirstChild(NodePtr(this, parentIdx3));
         check_index(newFirstChild);
         char *newFirstChildNode = NodePtr(this, newFirstChild);
-        CountField(newFirstChildNode) =
-            (CountField(newFirstChildNode) & 0xFFFFFF00) | (sibCountBefore - 1);
+        // Through an explicit POINTER to the count field: the image emits a
+        // dead `addi r10, r11, 0xc` at 0x827FE6EC -- the address is
+        // materialised and then immediately overwritten by the `lwz r10,
+        // 0xc(r11)` at 0x827FE6F8 -- which is the signature of `&CountField(..)`
+        // being taken, exactly as Trie::dec_count / dec_dup_count do in
+        // trie.h.  The member-expression form never materialises it.
+        unsigned int *cf = &CountField(newFirstChildNode);
+        *cf = (*cf & 0xFFFFFF00) | (sibCountBefore - 1);
 
         delete_node(curIdx);
         return;

@@ -570,6 +570,18 @@ void GestureMgr::DrawSkeletonKinectData() {
                     Vector3 markerPos(root.x, -root.z, 0.0f);
                     marker->SetLocalPos(markerPos);
 
+                    // NEGATIVE RESULT (w7-ap, 2026-09-14, 96.0 canonical): the
+                    // residual 4 rows here (image `addi r3, r3, 0x110` then
+                    // `lwz r11, 0x0(r3)` with the int argument loaded first;
+                    // ours folds the TextHolder base adjust into
+                    // `lwz r11, 0x110(r3)`) are NOT reachable by naming the
+                    // adjusted pointer -- `TextHolder *th = idLabel;` at both
+                    // SetInt sites is byte-identical.  Likewise swapping the
+                    // leftShoulder/rightShoulder declarations to chase the one
+                    // remaining PERMUTED slot (image right@0x90, left@0xc0) is
+                    // byte-identical.  The rest is the constant-pool lis
+                    // shuffle, one register wide, downstream of nothing we can
+                    // name from source.
                     UILabel *idLabel =
                         marker->Find<UILabel>("id.lbl", false);
                     if (idLabel) {
@@ -622,9 +634,16 @@ void GestureMgr::DrawSkeletonKinectData() {
                         skel.JointPos(
                             kCoordCamera, kJointShoulderRight, rightShoulder
                         );
-                        Vector3 diff;
-                        Subtract(rightShoulder, leftShoulder, diff);
-                        rotation = (float)std::atan(diff.z / diff.x) * RAD2DEG;
+                        // In-place: the image has only TWO Vector3 slots here
+                        // (0x90 and 0xc0) and the Subtract destination aliases
+                        // its first operand -- 0x8242A2D0-0x8242A2FC loads
+                        // 0x90/0xc0, subtracts, and stores all three components
+                        // BACK into 0x90, including the .y lane whose value is
+                        // dead.  A separate `Vector3 diff` gives MSVC a third
+                        // local and lets it dead-code that store.
+                        Subtract(rightShoulder, leftShoulder, rightShoulder);
+                        rotation =
+                            (float)std::atan(rightShoulder.z / rightShoulder.x) * RAD2DEG;
                     }
 
                     RndAnimatable *rotAnim = marker->Find<RndAnimatable>(

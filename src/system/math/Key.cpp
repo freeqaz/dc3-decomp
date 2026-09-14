@@ -145,6 +145,24 @@ void QuatSpline(
         // reachable by reordering these four declarations; MSVC assigns
         // them in order of first STORE regardless of declaration order
         // (hoisting `Hmx::Quat q88;` above prevQuat is byte-neutral).
+        //
+        // NEGATIVE RESULT (w7-ap, 2026-09-14, 81.40 canonical): two further
+        // spellings, both refuted.
+        //   * RB3's shape verbatim (rb3 src/system/math/Key.cpp:174-181) --
+        //     four BARE declarations in the reverse of the image's slot order,
+        //     then four assignments: 81.5, i.e. noise, and
+        //     `run_diff_inspect mode=stack-layout` shows the slots still come
+        //     out prevQuat 0x60 / nextQuat 0x70 / q88 0x80 / q58 0x90.  That
+        //     is the positive confirmation the note above only asserted: for
+        //     BARE declarations the slot is claimed at first STORE and
+        //     declaration order is inert.
+        //   * q88 declared first but KEEPING its branch, reading prev->value /
+        //     next->value directly so neither ternary names another Quat:
+        //     64.4 -- the same cliff as the 17pp refutation above, so the cost
+        //     is q88 being first, not its initialiser naming prevQuat.
+        // The image stores 0x70, then 0x80, then 0x60, then 0x90, so its 0x60
+        // slot is NOT claimed at first store either; whatever produces that
+        // ordering is not reachable from the declaration/assignment axis.
         Hmx::Quat prevQuat = prev->value;
         Hmx::Quat nextQuat = next->value;
         Hmx::Quat q88 = idx == 0 ? prevQuat : keys[idx - 1].value;

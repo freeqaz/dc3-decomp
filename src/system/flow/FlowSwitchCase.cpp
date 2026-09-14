@@ -62,6 +62,20 @@ bool FlowSwitchCase::IsValidCase(
         // (0x78..0xa0), ours the other way round, which charges every switch-case
         // slot row `[off:-32]` and every transition row `[off:+32]`.  That is
         // colouring, not source structure, and no declaration order reaches it.
+        //
+        // NEGATIVE RESULT (w7-ap, 2026-09-14, 88.08 canonical): three more
+        // spellings, all refuted.
+        //   * ONE pointer declared before the switch and ASSIGNED in each of
+        //     the four relational arms (`const DataNode *to;` + `to = &...`),
+        //     on the theory that a pointer with four definitions cannot have
+        //     its address folded at any use: 77.9 -- the SAME figure as the
+        //     per-arm pointer spelling refuted above, so the regression is the
+        //     pointer itself, not where it is declared.
+        //   * a redundant `{ }` around the kTransition branch's whole body,
+        //     to push its four Node() buffers one scope deeper: byte-neutral,
+        //     the eight slot rows stay at [off:+32].
+        //   * a redundant `{ }` around the switch instead: also byte-neutral.
+        // Scope depth does not reach this colouring in either direction.
         switch (mOperator) {
         case kEqual:
             result = curValue->Equal(mToValue.Node(), nullptr, true);
