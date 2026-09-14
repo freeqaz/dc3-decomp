@@ -173,6 +173,18 @@ void XboxEnumeration::Poll() {
         // extended-error / winsock block.  And the FALLTHROUGH at 0x82E1D458 is
         // the "overlapped failed with ... extended ..." message, where our
         // source called XGetOverlappedExtendedError and threw the result away.
+        // NEGATIVE RESULT (w7-bi, 88.7 canonical): the image's dispatch is two
+        // FORWARD beq's with the bodies laid out default / 0x65b /
+        // check_more_offers / error_no_more (0x82E1D444-0x82E1D518), where we
+        // invert the 0x12 test and inline the error_no_more body at the test
+        // site.  Two spellings that should produce that layout were measured
+        // and BOTH collapse to 45.0 (210 instructions against the image's 173 --
+        // MSVC duplicates the continue_enum tail):
+        //   * `switch (overlappedResult) { default: ...; case 0x65b: ...;
+        //      case 0x12: ...; }` with default written first;
+        //   * nested inverted ifs, `if (r != 0x12) { if (r != 0x65b) {...} ... }`
+        //     with the error_no_more body as the outer fall-through.
+        // Both emit byte-identical objects, so they are one experiment, not two.
         if (overlappedResult == 0x12) {
             goto error_no_more;
         }
