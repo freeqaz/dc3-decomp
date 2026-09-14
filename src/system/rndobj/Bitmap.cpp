@@ -284,6 +284,26 @@ void RndBitmap::SetPixelIndex(int x, int y, unsigned char idx) {
     }
 }
 
+// RESIDUAL (w7-am, 83.2 canonical): the arithmetic of all four arms is the
+// target's instruction for instruction; what is left is schedule and the
+// register permutation that falls out of it.  The one structural group is the
+// 8bpp arm's table select: the image computes the whole subscript
+// `(y % 4) * 0x10 + (x % 16)` FIRST and only then branches to the lis/addi pair
+// (82671868 `beq .L_82671878` sits below the index, at index 38 of the
+// listing), where we emit the branch immediately after the `clrlwi.` at index
+// 22 -- 6 inserts + 6 deletes.
+// NEGATIVE RESULT (w7-am, 2026-09-14): hoisting that subscript into a named
+// local to make it "happen first" does the opposite -- it pins the value and
+// costs 1.9pp (83.2 -> 81.3), and it also flips the `lbzx` operand order away
+// from the target's index-first form.
+// NEGATIVE RESULT (w7-am, 2026-09-14): writing the subscript on the left,
+// `(idx)[cond ? bytes13 : bytes02]`, is byte-identical -- MSVC's operand
+// evaluation order here is not reachable from the source spelling.
+// NEGATIVE RESULT (w7-am, 2026-09-14): the mirror move on the nibble arm --
+// inlining `lookupIdx2` into its subscript, which is the spelling the 8bpp arm
+// uses and whose `lbzx r10, r10, r7` operand order matches the target -- costs
+// 4.6pp (83.2 -> 78.6).  Named-local vs inline is not the lever for the `lbzx`
+// operand order in either arm.
 int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
     static char bytes02[64] = {
         0x0,  0x4,  0x8,  0xC,  0x10, 0x14, 0x18, 0x1c, 0x2,  0x6,  0xa,  0xe,  0x12,
@@ -919,32 +939,74 @@ void DecodeDxt3Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     alpha = ((i1 << 4) & 0xF0) | (i1 & 0xF);
 }
 
+// RESIDUAL (w7-am, 94.6 canonical): every remaining row is the array-init
+// store schedule.  Both 16-byte tables land in the right slots (-0x60(r1) and
+// -0x50(r1)) with the right values, and the 32 `stb`s are the same 32 stores
+// -- MSVC just interleaves them in a different order and therefore assigns the
+// eight constant-holding registers differently, which also drags the one
+// `addi rN, r3, 0x2` a few slots.  From 82671F00 to the epilogue our listing is
+// instruction-for-instruction the target's.  Nothing in the source picks that
+// interleave: the declaration order is already the one that produces the
+// matching slot assignment, and reordering the two arrays or the `uc[0]`/`uc[1]`
+// reads around them is inert (measured, see the 2026-09-14 negative result
+// below).
+// NEGATIVE RESULT (w7-am, 2026-09-14): moving both `a0`/`a1` reads below both
+// array declarations -- which is where the image reads them, 82671ED8/EDC,
+// after the whole init block -- produces a byte-identical object.  The reads
+// are already scheduled there; their source position does not reach the
+// scheduler.
 void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
-    unsigned char a0 = uc[0];
+    // The two alpha endpoints live in the block's first 16-bit word, and the
+    // Xbox 360 stores that word byte-swapped -- the same swizzle the index
+    // bytes below get.  So a0 is uc[1] and a1 is uc[0]: 82671ED8
+    // `lbz r28, 0x1(r3)` is the value stored for code 0 (82671F84
+    // `stb r28, 0x0(r6)`) and 82671EDC `lbz r27, 0x0(r3)` the one for code 1,
+    // and 82671FA4 `cmplw cr6, r9, r10` / `bgt` selects the 8-value mode when
+    // uc[1] > uc[0], which is DXT5's `a0 > a1`.  We had the two the wrong way
+    // round, which inverted the endpoint-order test and swapped the two
+    // endpoint colours.
+    unsigned char a0 = uc[1];
     int code;
     unsigned char byteOffsets[16] = {
         0, 0, 0, 1, 1, 1, 2, 2,
         3, 3, 3, 4, 4, 4, 5, 5,
     };
-    unsigned char a1 = uc[1];
-    unsigned int byte = byteOffsets[i + (j << 2)];
+    unsigned char a1 = uc[0];
+    unsigned char byte = byteOffsets[i + (j << 2)];
     unsigned char bitOffsets[16] = {
         0, 3, 6, 1, 4, 7, 2, 5,
         0, 3, 6, 1, 4, 7, 2, 5,
     };
-    unsigned int bit = bitOffsets[i + (j << 2)];
+    unsigned char bit = bitOffsets[i + (j << 2)];
+    // The three-byte index field starts at uc[2] and the image holds a pointer
+    // to it: 82671E8C `addi r9, r3, 0x2` in the prologue, then `lbzx` off it at
+    // every one of the three reads.  Spelled `uc[swizByte + 2]` we instead
+    // emitted an `add` plus `lbz 0x2(rN)` per read.
+    unsigned char *indices = uc + 2;
     // Xbox 360 stores the DXT5 alpha index bytes byte-swapped within each
     // 16-bit word, so even/odd byte indices are swapped before the read.
-    unsigned int swizByte = (byte & 1) ? byte - 1 : byte + 1;
-    if (bit < 6) {
-        code = (uc[swizByte + 2] >> bit) & 7;
+    // The image copies and then mutates in place -- 82671EEC `mr r10, r11`
+    // above the test, `addi r10, r10, 0xff` / `addi r10, r10, 0x1` in the two
+    // arms -- rather than selecting between two fresh `byte +- 1` values.
+    unsigned char swizByte = byte;
+    if (byte & 1) {
+        swizByte--;
     } else {
-        unsigned int next = byte + 1;
-        unsigned int nextSwizByte = (next & 1) ? next - 1 : next + 1;
-        if (bit == 6) {
-            code = ((uc[nextSwizByte + 2] & 1) << 2) | ((uc[swizByte + 2] >> 6) & 3);
+        swizByte++;
+    }
+    if (bit < 6) {
+        code = (indices[swizByte] >> bit) & 7;
+    } else {
+        unsigned char next = byte + 1;
+        if (next & 1) {
+            next--;
         } else {
-            code = ((uc[nextSwizByte + 2] & 3) << 1) | ((uc[swizByte + 2] >> 7) & 1);
+            next++;
+        }
+        if (bit == 6) {
+            code = ((indices[next] & 1) << 2) | (indices[swizByte] >> 6);
+        } else {
+            code = ((indices[next] & 3) << 1) | (indices[swizByte] >> 7);
         }
     }
     if (code == 0) {

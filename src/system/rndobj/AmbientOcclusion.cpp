@@ -821,20 +821,25 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
     rayOrigin.z = norm.z * 0.001f + pos.z;
     double shAccum[4] = { 0, 0, 0, 0 };
     float invMaxDist = 1.0f / maxDist;
-    int numSamples = mSampleDirs.size();
+    unsigned int numSamples = mSampleDirs.size();
     float shCoeffs[4];
     float occlusion = 1.0f;
 
     for (int i = 0; (unsigned int)i < numSamples; i++) {
         const Vector3 &sampleDir = mSampleDirs[i];
         float dot = norm.x * sampleDir.x + sampleDir.z * norm.z + sampleDir.y * norm.y;
-        occlusion = 1.0f;
         if (dot > 0.0f) {
             float hitDist;
+            // 826A0158 `fmr f29, f31` sits between the mTree load and the
+            // Intersect call, i.e. INSIDE the dot>0 arm, not above the test.
+            occlusion = 1.0f;
             bool hit = mTree->Intersect(rayOrigin, sampleDir, maxDist, hitDist);
             if (hit && hitDist <= maxDist) {
-                float t = hitDist * invMaxDist;
-                occlusion = t * t;
+                // 826A0190 `stfs f0, 0x50(r1)` writes the scaled value back
+                // into hitDist's own slot: the image mutates hitDist rather
+                // than naming a new local for the normalised distance.
+                hitDist *= invMaxDist;
+                occlusion = hitDist * hitDist;
             }
             BuildSHCoeff(sampleDir, shCoeffs);
             for (int j = 0; j <= 3; j++) {
@@ -846,15 +851,31 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
     for (unsigned int k = 0; k < 4; k++) {
         shAccum[k] *= (double)(12.566371f / (float)numSamples);
         if (k == 0) {
-            float val = (float)shAccum[0];
-            val = val > 0.0f ? val : 0.0f;
-            val = val < 1.0f ? val : 1.0f;
-            shAccum[0] = val;
+            // 826A01E0 `fneg f10, f0` / `fsel f0, f10, f26, f0` then
+            // `fsubs f10, f0, f31` / `fsel f0, f10, f31, f0`: the image clamps
+            // branchlessly, which is exactly Clamp<float>'s Min(Max(..)) form.
+            shAccum[0] = Clamp(0.0f, 1.0f, (float)shAccum[0]);
         } else {
-            float val = (float)shAccum[k];
-            val = val > -1.0f ? val : -1.0f;
-            val = val < 1.0f ? val : 1.0f;
-            shAccum[k] = val * 0.5f + 0.5f;
+            // ...and `fmadd f0, f0, f12, f12` with f12 loaded from
+            // __real@3fe0000000000000 is a DOUBLE 0.5, so the rescale happens in
+            // double.  Spelled `val * 0.5f + 0.5f` MSVC reassociates it to
+            // `(val + 1.0f) * 0.5f` in SINGLE precision and the fmadd is lost
+            // entirely; in double it keeps the shape below.
+            //
+            // RESIDUAL (w7-am, 97.5 canonical): the last real row is that MSVC
+            // still lowers this affine rescale as `fadd (x, 1.0)` + `fmul 0.5`
+            // rather than the image's single `fmadd x, 0.5, 0.5`, and the extra
+            // live `__real@3ff0000000000000` (double 1.0) is what shifts the
+            // volatile FPRs f9<->f10 / f10<->f11 across the whole k loop.
+            // NEGATIVE RESULT (w7-am, 2026-09-14): four spellings compile to
+            // BYTE-IDENTICAL code (97.5, 15 diff_arg / 1 replace / 3 insert
+            // each time) -- `val * 0.5 + 0.5`, `0.5 + val * 0.5`,
+            // `(val + 1.0) * 0.5`, and assigning the clamp back into
+            // shAccum[k] first and rescaling that double in place.  MSVC
+            // canonicalises the form before contraction, so the image's fmadd
+            // is not reachable from source here; the faithful spelling is kept.
+            float val = Clamp(-1.0f, 1.0f, (float)shAccum[k]);
+            shAccum[k] = val * 0.5 + 0.5;
         }
     }
 
@@ -1029,15 +1050,17 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
         return;
 
     unsigned int totalVerts = 0;
-    auto receiveEnd = mObjectsReceive.end();
     for (std::vector<RndMesh *>::iterator it = mObjectsReceive.begin();
-         receiveEnd != it; ++it) {
+         it != mObjectsReceive.end(); ++it) {
         RndMesh *mesh = *it;
         if (mesh->GetGeomOwner() != mesh) {
             mesh->CopyGeometry(mesh->GetGeomOwner(), true);
             mesh->Sync(0x3f);
         }
-        totalVerts += mesh->GetGeomOwner()->NumVerts();
+        // 826A02E4 `lwz r11, 0x148(r29)` then `lwz r11, 0x104(r11)`: the image
+        // reads mGeomOwner->mVerts.mNumVerts inline, i.e. Verts().size(), not
+        // the VIRTUAL NumVerts() (vtable slot 0x48) we were dispatching to.
+        totalVerts += mesh->Verts().size();
     }
 
     MILO_LOG("RndAmbientOcclusion: Calculating ambient occlusion...\n");
@@ -1045,15 +1068,27 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
     timer.Restart();
     PreprocessMesh();
 
-    unsigned int lastPercent = 0;
+    // 826A0324 `li r24, 0x0` precedes `li r22, 0x0`: progress is initialised
+    // before lastPercent.
+    //
+    // RESIDUAL (w7-am, 99.98 canonical): 7 rows remain, all one register
+    // naming swap r28<->r29 between the two strength-reduced induction
+    // variables of the vertex loop (the 0x60 byte offset into mVerts and the
+    // 0x64-stepped progress*100), together with the order in which their three
+    // `addi`s are emitted at the bottom of the loop.  The instruction sequence
+    // is otherwise identical.
     unsigned int progress = 0;
+    unsigned int lastPercent = 0;
     for (std::vector<RndMesh *>::iterator it = mObjectsReceive.begin();
          it != mObjectsReceive.end(); ++it) {
         RndMesh *mesh = *it;
         const Transform &xfm = mesh->WorldXfm();
-        RndMesh *geomOwner = mesh->GetGeomOwner();
-        for (unsigned int v = 0; v < (unsigned int)geomOwner->Verts().size(); v++) {
-            RndMesh::Vert &vert = geomOwner->Verts(v);
+        // The image re-derives mesh->Verts() here too: 826A0388 is a single
+        // `lwz r11, 0x148(r25)` off the MESH.  Caching GetGeomOwner() in a
+        // local adds a second 0x148 hop (Verts() already goes through
+        // mGeomOwner) and pins the owner in a callee-saved GPR.
+        for (unsigned int v = 0; v < (unsigned int)mesh->Verts().size(); v++) {
+            RndMesh::Vert &vert = mesh->Verts(v);
             Vector3 worldPos;
             Multiply(vert.pos, xfm, worldPos);
             Vector3 worldNorm;

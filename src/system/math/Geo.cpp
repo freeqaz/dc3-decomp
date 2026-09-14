@@ -749,14 +749,17 @@ void Sphere::GrowToContain(const Sphere &s) {
         if (dist == 0.0f)
             return;
         float invDist = 1.0f / dist;
-        Vector3 a, b;
-        float _fpr0 = s.radius;
-        a.x = center.x - (radius * (invDist * dx));
-        a.z = center.z - dz * invDist * radius;
-        b.x = _fpr0 * (dx * invDist) + s.center.x;
-        b.y = s.center.y + _fpr0 * (invDist * dy);
-        a.y = center.y - radius * (invDist * dy);
-        b.z = s.center.z + dz * invDist * _fpr0;
+        // The image computes all six scaled offsets as their own fmuls and only
+        // then does the six adds/subs -- it never contracts them into fmadds /
+        // fnmsubs the way a single `center.x - radius * (invDist * dx)`
+        // expression does under /fp:fast. Routing the products through Vector3
+        // aggregates is what reproduces that.
+        Vector3 dir, p, q, a, b;
+        dir.Set(dx * invDist, dy * invDist, dz * invDist);
+        Scale(dir, radius, p);
+        Scale(dir, s.radius, q);
+        Subtract(center, p, a);
+        Add(s.center, q, b);
         Interp(a, b, 0.5f, center);
         radius = (dist + s.radius + radius) * 0.5f;
         return;

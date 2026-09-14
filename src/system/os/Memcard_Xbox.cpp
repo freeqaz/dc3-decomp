@@ -450,12 +450,28 @@ void MemcardXbox::ShowDeviceSelector(
     if (b4) {
         i1 = 0x200;
     }
+    // The image keeps the parameter and the chosen index in two separate
+    // registers -- `cmpwi cr6,r27,-1` / `mr r4,r27` / `bne` / `lwz r4,0x0(r26)`
+    // at 825F7174 -- i.e. it writes the argument register in both arms rather
+    // than reassigning the parameter.
+    int userIndex = i3;
     if (i3 == -1) {
-        i3 = c.mUserIndex;
+        userIndex = c.mUserIndex;
     }
     ULARGE_INTEGER u;
+    // RESIDUAL (w7-am, 88.1 canonical): as in XboxContent::Poll, the image
+    // builds the by-value ULARGE_INTEGER in memory with MSVC's 64-bit
+    // register-pair store idiom -- `addi r11,r31,0x54` / `stw r28,0x50(r31)` /
+    // `stw r28,0x0(r11)` / `ld r7,0x50(r31)` at 825F7148..825F7188 -- while we
+    // SROA the union and pass the constant in r7.
+    // NEGATIVE RESULT (w7-am, 2026-09-14): spelling the zeroing as the two
+    // halves defeats the SROA but schedules the stores differently and drops
+    // this to 81.9 canonical.  `userIndex = i3 == -1 ? c.mUserIndex : i3;`
+    // as a ternary instead of the if below: 86.6.
     u.QuadPart = 0;
-    if (ThePlatformMgr.ShowDeviceSelectorUI(i3, 1, i1, u, &mSelectedDevice, &mXOverlapped)
+    if (ThePlatformMgr.ShowDeviceSelectorUI(
+            userIndex, 1, i1, u, &mSelectedDevice, &mXOverlapped
+        )
         == 0x3E5) {
         mSelectorPending = true;
     } else if (mSelectorCallback) {

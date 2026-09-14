@@ -1226,21 +1226,47 @@ DataNode OnCycleTestDancer(DataArray *) {
     MILO_ASSERT(player_data, 0xaf);
     String name(player_data->CurrentDancer());
     std::vector<String> &dancers = player_data->AvailableDancers();
-    int i = 0;
     if (!dancers.empty()) {
+        // `li r29, 0x0` sits at 82865D4C, i.e. after the empty test, so `i` is
+        // scoped to the loop rather than declared alongside `name`.
+        int i = 0;
+        // RESIDUAL (w7-am, 98.9 canonical): the one non-register row left is
+        // 82865D84 `mr r29, r10` -- the image computes `i + 1` into a scratch,
+        // compares THAT against the size and only then copies it back into the
+        // callee-saved `i`, where we increment r29 in place.  Everything else
+        // in the diff is register permutation, which the canonical ruler
+        // forgives.
         for (; (unsigned)i < (unsigned)dancers.size(); i++) {
             if (dancers[i] == name) {
                 break;
             }
         }
         int size = (int)dancers.size();
-        if (size != 0) {
-            i = (i + 1) % size;
-        } else {
+        // `i + 1` is computed BEFORE the size test -- 82865D9C `addi r10, r29,
+        // 0x1` sits between the two `lwz`s of the size computation, above the
+        // `srawi.`/`bne` -- so it is a separate value, not an expression inside
+        // the modulo arm.
+        int next = i + 1;
+        // Zero arm first: 82865DAC is `bne .L_82865DB8` INTO the divw block,
+        // with `li r10, 0x0` as the fall-through, so the image tests
+        // `size == 0` and MSVC lays that arm first.
+        if (size == 0) {
             i = 0;
+        } else {
+            i = next % size;
+            // 82865DD0 `subf. r10, r7, r10` / 82865DD8 `bge .L_82865DE0` /
+            // 82865DDC `add r10, r11, r10`: the image folds the remainder back
+            // into [0, size) rather than trusting C's sign rule.
+            if (i < 0) {
+                i = size + i;
+            }
         }
+        // The re-read of the vector is INSIDE the empty guard: 82865D44
+        // `beq cr6, .L_82865DF4` jumps the whole body, landing directly on the
+        // `CurrentDancer() = name` assignment, so an empty dancer list leaves
+        // the name unchanged instead of indexing element 0 of an empty vector.
+        name = dancers[i];
     }
-    name = dancers[i];
     player_data->CurrentDancer() = name;
     return DataNode(name);
 }

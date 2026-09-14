@@ -117,6 +117,39 @@ void LoopVizCallback::DrawHashMarks(
     }
 }
 
+// RESIDUAL (w7-am, 93.5 canonical): the whole remaining gap is ONE stack
+// allocator decision, and it is not reachable from this source.
+//
+//   * Frame: target 0x1a0, ours 0x190.  Every local from 0xa0 up sits 0x10
+//     lower in our build, which is what ~100 of the 138 `diff_arg` rows are
+//     (`off:-16` on `stfs`/`addi`).  The slot SET is otherwise identical
+//     (0x50..0x9c used byte-for-byte the same on both sides).
+//   * The target keeps TWO 16-byte by-value `Hmx::Color` staging temps: 0x80
+//     for the ones loaded into (r5,r6)/(r6,r7) by DrawBar/DrawLine, and 0x90
+//     for the ones loaded into (r7,r8) by DrawText (82... `addi r28, r31,
+//     0x90`).  We coalesce both onto 0x80 and reuse 0x80 for the `fctiwz`
+//     double staging as well (index 308: target `stfd f0, 0x80(r31)`, ours
+//     `stfd f0, 0x60(r31)`, folded onto the `int` slot).
+//   * Downstream of that we burn one extra callee-saved FPR (`__savefpr_19`
+//     vs the image's `__savefpr_20`) because MSVC CSE'd
+//     `loopStartNorm + loopRangeNorm * loopProgress` into f27 and held it
+//     across two calls (`fmuls f28, f26, f24` + `fadds f27, f28, f29`),
+//     where the image re-derives it at each of the three use sites with a
+//     single `fmadds f1, f28, f27, f29`.  Contraction to fmadds only fires
+//     when the multiply has one use, so the CSE is what suppresses it --
+//     but the multiply is shared because line "DrawBar(loopStartNorm,
+//     loopRangeNorm * loopProgress, ...)" legitimately needs it, exactly as
+//     the image does.  Both sides compile the same expressions.
+//
+// NEGATIVE RESULT (w7-am, 2026-09-14): swapping the commutative operand order
+// to `loopStartNorm + loopProgress * loopRangeNorm` at all five sites, to try
+// to break that CSE, is byte-identical -- 93.5 canonical, 138/10/16/14 rows
+// before and after.  MSVC canonicalises the multiply before CSE.
+//
+// The five `MakeString` rows (indices 278/298/317/540/566) are ICF folds:
+// the image's `MakeString<_D3DFORMAT>` / `MakeString<int, SaveLoadManager::
+// State>` are the same machine code as our `MakeString<int>` /
+// `MakeString<int,int>` and the linker merged them.
 float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     if (!TheMaster || !TheMaster->GetAudio() || !TheMaster->GetAudio()->GetSongStream())
         return y;
@@ -914,23 +947,31 @@ DataNode GamePanel::OnMsg(const EndGameMsg &msg) {
     } else {
         mState = kGameOver;
         mEndGameResult = msg.Result();
+        // The three arms are 8287D4F0-8287D508: `cmpwi cr6, r3, 0x1` /
+        // `beq .L_8287D588` (game_won), `cmpwi 0x2` / `beq .L_8287D534`
+        // (game_won_finale), `cmpwi 0x3` / `beq .L_8287D5DC`.  .L_8287D5DC is
+        // the game_over export, and it is NOT a case body: the default arm
+        // branches to it (8287D530 `b .L_8287D5DC`) and both the game_won and
+        // game_won_finale arms fall into it after their Message destructor's
+        // `bl Release` at 8287D5D8.  So game_over is exported unconditionally
+        // after the switch, case 3 is empty, and game_won/game_won_finale are
+        // 1 and 2 -- we had all three case labels shifted by one.
         switch (mEndGameResult) {
         case 1: {
-            Export(Message("game_over"), true);
-            break;
-        }
-        case 2: {
             Export(Message("game_won"), true);
             break;
         }
-        case 3: {
+        case 2: {
             Export(Message("game_won_finale"), true);
             break;
         }
+        case 3:
+            break;
         default:
             MILO_NOTIFY("bad game over state");
             break;
         }
+        Export(Message("game_over"), true);
     }
     return 1;
 }

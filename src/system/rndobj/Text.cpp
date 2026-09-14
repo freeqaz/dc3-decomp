@@ -1094,12 +1094,22 @@ void RndText::BuildFontMaps(bool b1) {
     if (b1) {
         for (auto it = mFontMaps.begin(); it != mFontMaps.end();
              it = mFontMaps.erase(it)) {
-            sFontMapCache.push_back(*it);
+            // The image copies the element out first and passes the address of
+            // that copy to list::insert -- `lwz r11,0x0(r31)` / `stw
+            // r11,0x58(r1)` / `addi r6,r1,0x58` -- rather than binding the
+            // const& straight to the vector slot (`mr r6, r31`).
+            FontMapBase *map = *it;
+            sFontMapCache.push_back(map);
         }
     }
     if (mFontMaps.empty()) {
         for (int i = 0; i < mStyles.size(); i++) {
-            RndFontBase *font = mStyles[i].mFont;
+            // The image falls back to style 0's font when style i has none:
+            // `lwz r9,0x40(r10)` / `addi r10,r10,0x34` / `cmpwi cr6,r9,0x0` /
+            // `bne` / `addi r10,r11,0x34` / `lwz r29,0xc(r10)` -- the ternary
+            // selects between the two ObjPtr objects (at +0x34) and only then
+            // reads the raw pointer out of the selected one (+0xc).
+            RndFontBase *font = mStyles[i].mFont ? mStyles[i].mFont : mStyles[0].mFont;
             if (font) {
                 if (FontMapIndex(font, mStyles[i].mBlacklight) == -1) {
                     FontMapBase *map = AcquireFontMap(font);
@@ -1132,6 +1142,20 @@ int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideC
 
     // Manual strlen to match target inline loop
     const char *s = str;
+    // RESIDUAL (w7-am, 91.9 canonical): this function is instruction-for-
+    // instruction the image's -- same blocks, same order, same seven live
+    // values (this, 0, 0x53, limit, str, &wideChars, out) -- with ONE
+    // difference that renames every register: 8269A004 `subi r31, r1, 0xb0`
+    // dedicates r31 to a frame pointer and addresses every local off it, so
+    // the image saves r24-r31 and its frame is 0xb0.  We get no frame pointer,
+    // address the same locals off r1, save r25-r31 and use r31 for `out`, so
+    // all seven values sit one register lower.  Nothing in this function's
+    // source chooses that; the other structural rows are the image's two spills
+    // of `_M_finish` to 0x54 around the resize.
+    // NEGATIVE RESULT (w7-am, 2026-09-14): reducing the manual strlen to an
+    // `int len` BEFORE MemPushTemp(), which is what 8269A030-8269A034 do (the
+    // count, not the walking pointer, lives across the call), is inert -- MSVC
+    // already sinks it.  Identical 79-row profile, still 91.9.
     while ('\0' != *s++) {}
     MemPushTemp();
     wideChars.resize(((s - str) - 1) * 2 + 1, (0));
