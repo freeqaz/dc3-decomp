@@ -377,6 +377,21 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
             Vector3(worldPos.x, worldPos.y, worldPos.z + planeD), Vector3(0, 0, 1)
         );
 
+        // Residual here, 8 rows / 8 B at 97.32 canonical = 97.32 raw: the
+        // image does NOT reassociate the two zero-weighted terms of the plane
+        // constant.  With normal = (0,0,1) constant-propagated, f31 = 0.0f:
+        //   image  fmuls f12, f12, f31 / fmadds f0, f0, f31, f12 / fadds f13,
+        //          f13, f29 / fadds f0, f0, f13 / fneg f0, f0
+        //   ours   fadds f0, f0, f29 / fadds f13, f12, f13 /
+        //          fnmadds f0, f13, f31, f0
+        // i.e. we factor x*0 + y*0 into (x+y)*0 and fuse the negate.  It is a
+        // /fp:fast reassociation inside the INLINED Plane(point, normal) ctor
+        // in the shared header math/Mtx.h, which is also what fixes the load
+        // order (image y,z,x vs ours x,y,z).
+        // REFUTED: commuting the ctor's products to `point.x * normal.x + ...`
+        // (the operand order the image's fmuls literally shows) is byte-inert
+        // here, so the shared-header edit was reverted rather than landed on a
+        // guess.
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
         Transform tf40;
         Transpose(xfm, tf40);
