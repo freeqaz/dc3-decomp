@@ -146,39 +146,47 @@ Symbol GetDanceBattleBackupOutfit(Symbol s1, Symbol s2) {
     String str90(str88);
     // The two-character suffix stripped here is put back on the crew
     // character's name below, so retail keeps this length live (r22).
-    unsigned int outfitLen = str90.length();
-    str90 = str90.substr(0, outfitLen - 2);
-    unsigned int i = 1;
-    if (charArr->Size() > 1) {
-        Symbol s;
-        while (i < charArr->Size()) {
-            s = charArr->Sym(i);
-            const char *cStr = s.Str();
-            if (!(str90 != cStr)) { i++; continue; }
-            const char *p = cStr;
-            char _c;
-            do { _c = *p++; } while (_c);
-            unsigned int crewCharLen = (unsigned int)(p - 1 - cStr);
-            MILO_ASSERT(crewCharLen < 30, 0x13c);
-            char buf[32];
-            {
-                const char *p2 = cStr;
-                char _c2;
-                do {
-                    _c2 = *p2;
-                    buf[p2 - cStr] = _c2;
-                    p2++;
-                } while (_c2);
-            }
-            // Retail's three stbx go to buf + crewCharLen + {2,1,0} and read
-            // str88 at outfitLen-1 / outfitLen-2: the outfit suffix is
-            // APPENDED to the crew character's name, not written over it.
-            buf[crewCharLen + 2] = 0;
-            buf[crewCharLen + 1] = str88[outfitLen - 1];
-            buf[crewCharLen] = str88[outfitLen - 2];
-            out = GetOutfitRemap(Symbol(buf), false);
-            break;
+    int outfitLen = str90.length();
+    // Retail GUARDS the strip: `cmpwi cr6, r22, 0x2 / blt cr6` at
+    // 0x8245406C skips the substr, the assignment and the temporary's
+    // destructor whenever the outfit name is shorter than the two-character
+    // suffix.  It also keeps outfitLen itself (r22) live rather than the
+    // difference, and recomputes `outfitLen - 2` for the str88 read below.
+    if (outfitLen >= 2) {
+        str90 = str90.substr(0, outfitLen - 2);
+    }
+    for (int i = 1; i < charArr->Size(); i++) {
+        const char *cStr = charArr->Sym(i).Str();
+        if (!(str90 != cStr))
+            continue;
+        unsigned int crewCharLen = strlen(cStr);
+        // Retail falls THROUGH from `bl Debug::Fail` at 0x82454148 straight
+        // into the loop-increment block at 0x8245414C, so a failed assert
+        // here CONTINUES the loop; it does not go on to build `buf` from an
+        // over-long name.  Plain MILO_ASSERT cannot express that -- its
+        // failure path falls into the body -- and MSVC then has to park the
+        // increment block ahead of the whole body instead of between the
+        // Fail call and it.
+        if (!MILO_ASSERT_EXPR(crewCharLen < 30, 0x13c))
+            continue;
+        char buf[32];
+        {
+            const char *p2 = cStr;
+            char _c2;
+            do {
+                _c2 = *p2;
+                buf[p2 - cStr] = _c2;
+                p2++;
+            } while (_c2);
         }
+        // Retail's three stbx go to buf + crewCharLen + {2,1,0} and read
+        // str88 at outfitLen-1 / outfitLen-2: the outfit suffix is
+        // APPENDED to the crew character's name, not written over it.
+        buf[crewCharLen + 2] = 0;
+        buf[crewCharLen + 1] = str88[outfitLen - 1];
+        buf[crewCharLen] = str88[outfitLen - 2];
+        out = GetOutfitRemap(Symbol(buf), false);
+        break;
     }
     return out;
 }
