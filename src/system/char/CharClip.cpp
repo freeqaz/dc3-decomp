@@ -1158,9 +1158,15 @@ void CharClip::LockAndDelete(CharClip **const clips, int numClips, int remaining
                 numClips--;
                 remaining--;
                 loopIdx--;
-                // Folds to `stwu r8, -4(r11)`; splitting the decrement out into
-                // its own statement costs a separate `subi`.
-                *--readPtr = *writeBackPtr;
+                // The image fuses this rewind and store into one
+                // `stwu r8, -0x4(r11)`. We do not: MSVC precomputes
+                // `subi r9, r10, 0x4` before the `if`, because `readPtr[-1]` at
+                // the top of the loop needs the same address and it CSEs the
+                // two. Spelling this `*--readPtr = *writeBackPtr;` instead of
+                // the two statements below is byte-for-byte INERT (96.53% both
+                // ways) -- the hoist is a scheduling choice, not a syntax one.
+                readPtr--;
+                *readPtr = *writeBackPtr;
                 *writeBackPtr = clip;
             }
             loopIdx++;
