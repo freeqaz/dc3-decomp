@@ -1647,6 +1647,23 @@ void BustAMovePanel::Poll() {
                 break;
             currentPhrase++;
         }
+        // RESIDUAL (lane w7-bb, 2026-09-14), 99.60107.  The FIFTH and last row of
+        // Poll -- the four others are the bool-mask block noted at L1544 -- is
+        // idx 729, a commutative operand swap in the address of the element
+        // below: the image has `add r4, r11, r28` at 0x828851F0 (base first,
+        // r11 = mSongStructure.begin() reloaded each iteration, r28 = 4*i), we
+        // emit `add r4, r28, r11`.  INERT: spelling the argument as
+        // `*(mSongStructure.begin() + i)`, which puts the pointer on the left of
+        // the source-level addition, is byte-identical -- same 753 instructions,
+        // same 5 rows, still 99.60107.  Reverted to `mSongStructure[i]` (the
+        // native-safe spelling; begin() is a raw int* under stlport but an
+        // iterator class under libstdc++).
+        // NOT a wrong callee: objdiff's Function Call Diff pairs the target's
+        // `??$MakeString@W4_D3DFORMAT@@@@YAPBDPBDABW4_D3DFORMAT@@@Z` against our
+        // `??$MakeString@H@@YAPBDPBDABH@Z`, but icf_aliases.map has BOTH at
+        // 0x82610090 -- one ICF fold of every 4-byte-scalar instantiation, so
+        // the name is the linker's pick, not evidence that mSongStructure holds
+        // an enum.  The row is not charged.
         for (int i = 0; i < mSongStructure.size(); i++) {
             graph->AddScreenString(
                 MakeString("%d", mSongStructure[i]),
