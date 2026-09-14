@@ -419,6 +419,13 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
 #endif
 
     projMtx.Zero();
+    // COPIES, not `const float &` references.  Rewriting these two as
+    // references (so the members are read at point of use, which is what the
+    // image's load order at 0x82628C80-A0 superficially suggests -- mYFov
+    // 0x2c8, mNearPlane 0x2c0, __real@00000000, __real@3f800000, mFarPlane
+    // 0x2c4) REGRESSES 83.8 -> 77.4: both plane loads migrate inside the
+    // mYFov branch and drag `stfs f31, 0x3c(r30)` with them.  Measured
+    // w7-aj; do not retry.
     float nearPlane = mNearPlane;
     float farPlane = mFarPlane;
 
