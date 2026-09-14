@@ -1290,6 +1290,14 @@ DataNode Rnd::OnToggleHeap(const DataArray *) {
         overlay->SetShowingOnly(false);
         lbl_82F14008 = -1;
     } else {
+        // NOTE (w7-av): 93.55 is a scheduling floor.  14 of the 16 rows are a
+        // pure r9/r10/r11 permutation (the image parks `overlay` in r11 and the
+        // gCurHeap anchor in r10; we do the reverse), which the canonical ruler
+        // forgives.  The whole 6.45pp is one insert/delete pair inside this
+        // inlined SetShowing: the image stores mShowing and only then forms
+        // `addi r3, r11, 0x40` for Timer::Restart, while we compute the Timer
+        // address first.  Refuted: spelling the body out as SetShowingOnly(true)
+        // + TimerRef().Restart() -- 93.55, byte-identical row set.
         overlay->SetShowing(true);
     }
     return 0;
