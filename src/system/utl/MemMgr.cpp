@@ -501,6 +501,21 @@ void MemInit() {
     gMemLock = new CriticalSection();
     gMemStackLock = new CriticalSection();
     CritSecTracker tracker(gMemLock);
+    // Open residual (w7-r, 2026-09-14): the image packs the five byte locals as
+    // 0x54=disableMgr, 0x55=enableTracking, 0x56=<heapOnly/spew>, 0x57=
+    // noTrackImmediate, 0x58=<the other>; we get 0x54=enableTracking,
+    // 0x55=<later bool>, 0x56=noTrackImmediate, 0x57=disableMgr, 0x58=<other>.
+    // Ten of the 49 rows are that permutation (the stb inits at 46/47/49/203/214,
+    // the FindData out-param addi at 75/85/107/221, and the lbz reads at
+    // 227/285). REFUTED: reversing these three declarations
+    // (noTrackImmediate/enableTracking/disableMgr) moves 0x54 onto disableMgr and
+    // lands row 46, but pushes enableTracking from 0x54 to 0x57 and loses row 47
+    // -- 49 rows and 97.2 before and after. The byte-slot order is not a function
+    // of declaration order here.
+    // The anchor rows (62/64 `addi r5, r21, 0x17` vs `subi r5, r18, 0x285`, and
+    // 333/337 `stw r11, 0x13(r21)` vs a separate lis/@l for gNumHeaps) are the
+    // .bss anchor+displacement pattern already documented at the top of this file
+    // -- codegen, not a wrong global.
     bool disableMgr = false;
     bool enableTracking = false;
     bool noTrackImmediate = true;

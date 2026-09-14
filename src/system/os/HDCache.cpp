@@ -388,17 +388,26 @@ void HDCache::Init() {
         }
         bool hashValid = false;
         if (next) {
-            char hash1[256], hash2[256];
-            memset(hash1, 0, 256);
-            memset(hash2, 0, 256);
+            // Aggregate-initialised, NOT memset: the image stores the first
+            // byte and memsets the remaining 0xff (826048 04-28,
+            // `stb r18, 0x160(r31)` / `memset(r31+0x161, 0, 0xff)`), which is
+            // MSVC's lowering of `char a[N] = ""`. A literal memset(a, 0, 256)
+            // emits one `memset(a, 0, 0x100)` instead.
+            char hash1[256] = "";
+            char hash2[256] = "";
             sha.Final().ReportHash(hash1, 0);
             header->Read(hash2, 0x100);
-            if (!header->Fail()) {
-                auto _tmp0 = memcmp(hash1, hash2, 256);
-                hashValid = _tmp0 == 0;
-            }
+            // One short-circuit assignment, not a nested if: the image merges
+            // the Fail() path into the SAME `mr r11, r18` / `clrlwi r25, r11, 24`
+            // that the memcmp comparison falls through to (826048 98-A8).
+            hashValid = !header->Fail() && memcmp(hash1, hash2, 256) == 0;
         }
         bool skipHdcache = OptionBool("skip_hdcache", false);
+        // Open residual (w7-r, 2026-09-14): the image spells `!skipHdcache` as a
+        // full MASK (`subic r11, r11, 1` / `subfe r11, r11, r11`) and then needs
+        // a `clrlwi.` to test the `and`; we spell it 0/1 (`cntlzw`/`extrwi`) and
+        // get away with `and.` plus one extra `clrlwi` of hashValid. 5 rows.
+        // Inlining the OptionBool call here (no named local) is exactly neutral.
         if (!skipHdcache & hashValid) {
             unk64 = true;
             TheDebug << MakeString("Using the archive cache\n");

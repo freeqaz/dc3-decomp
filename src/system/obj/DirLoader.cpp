@@ -633,8 +633,13 @@ void DirLoader::SaveObjects(BinStream &bs, ObjectDir *dir) {
             objects.push_back(it);
         }
     }
-    auto _tmp2 = ClassAndNameSort();
-    objects.sort(_tmp2);
+    // The comparator must be a NAMED local, not a temporary: the image reads it
+    // with `lbz r4, 0x50(r31)` and never constructs one. `sort(ClassAndNameSort())`
+    // adds a real `stb r24, 0x0(r11)` zero-init the image does not have
+    // (98.53 -> 97.8, w7-r 2026-09-14). This spelling is byte-identical to the
+    // older `auto _tmp2 = ClassAndNameSort();` it replaces.
+    ClassAndNameSort sorter;
+    objects.sort(sorter);
     bs << objects.size();
     for (std::list<Hmx::Object *>::const_iterator it = objects.begin();
          it != objects.end();

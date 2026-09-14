@@ -143,6 +143,18 @@ void CharClipDisplay::DrawTrack() {
     trackRect.h = 3.0f;
     TheRnd.DrawRect(trackRect, white, nullptr, nullptr, nullptr);
 
+    // Open residual (w7-r, 2026-09-14): the image never keeps 3.0f in a
+    // register. It pins the literal-pool ANCHOR in a callee-saved GPR
+    // (`lis r25, __real@40400000@ha`) and re-issues `lfs f, __real@40400000@l(r25)`
+    // at all four use sites (823DF544 / 823DF5A0 / 823DF9E0 / 823DFA40:
+    // trackRect.h, markerY, and the two `sEm * 3.0f` label offsets). We CSE the
+    // value into callee-saved f21 instead, which is exactly the
+    // GPR -1 / FPR +1 prologue delta (TGT 9/12 vs ours 8/13) and drags the
+    // f-register numbering with it. REFUTED: moving `beat`/`markerRect` ahead of
+    // markerY/markerH so the sub is scheduled after the loop-entry `bgt` (the
+    // image's order) is exactly neutral -- 97.31, same 11 insert/delete rows.
+    // The separate `lbl_82020B54` vs `__real@40000000` row is benign: that
+    // .rdata word IS 2.0f, it is just pooled in CharacterTest's object.
     // Draw integer beat markers
     float firstBeat = (float)std::ceil(startBeat);
     float lastBeat = (float)std::floor(endBeat);
