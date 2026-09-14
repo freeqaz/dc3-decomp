@@ -178,13 +178,15 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
 
     int startCol = (int)((startBeat - mAStart) * mSamplesPerBeat);
     int endCol = (int)((endBeat - mAStart) * mSamplesPerBeat);
-    startCol = startCol & ~(startCol >> 31);
-    int maxCol = endCol;
-    if (mDists.mWidth < endCol) {
-        maxCol = mDists.mWidth;
+    // The image clamps the low column with an unsigned sign-bit mask
+    // (srwi/subi/and), which is MSVC's branchless lowering of `if (x < 0) x = 0`.
+    // The `x & ~(x >> 31)` spelling lowers to srawi/andc instead.
+    if (startCol < 0) {
+        startCol = 0;
     }
+    int maxCol = Min(endCol, mDists.mWidth);
     while (startCol < maxCol) {
-        float curBeat = mAStart + (float)startCol / (float)mSamplesPerBeat;
+        float curBeat = BeatA(startCol);
         int rowIdx = mDists.mHeight - 1;
         if (rowIdx >= 0) {
             int rowCount = rowIdx + 1;
@@ -196,7 +198,10 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
                 bool foundBetter = newError != currentError;
                 if (foundBetter) {
                     node.curBeat = curBeat;
-                    node.nextBeat = mBStart + (float)rowIdx / (float)mSamplesPerBeat;
+                    // Residual (6 rows, 93.4%): MSVC schedules the `mBStart` load and
+                    // the curBeat store two slots apart from the image. Hoisting
+                    // BeatB into a local reads 90.5 -- worse. Scheduler residual.
+                    node.nextBeat = BeatB(rowIdx);
                 }
                 rowIdx--;
                 rowCount--;
