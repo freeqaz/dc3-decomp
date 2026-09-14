@@ -27,62 +27,63 @@ D3DVertexDeclaration *DxMesh::sVertexDecl;
 D3DVertexDeclaration *DxMesh::sMutableVertexDecl;
 D3DVertexDeclaration *DxMesh::sMutableSkinnedVertexDecl;
 
+// FILE-SCOPE, split into the image's THREE groups.  The image addresses all
+// three off ONE base register: `mr r3, r29` (0x826216E8), `addi r3, r29, 0x60`
+// (0x82621748) and `addi r3, r29, 0xb8`.  A single 21-element array gets group
+// 3 at +0xb4, and no single-array spelling can reach 0xb8 because 0xb8 is not a
+// multiple of sizeof(D3DVERTEXELEMENT9) (12) -- the image's 4-byte hole at
+// +0xb4 is SECTION ALIGNMENT between two separate statics, not array padding.
+// Splitting into three FUNCTION-LOCAL statics does not work either (measured
+// 95.5%: each gets its own COMDAT .data section, so MSVC cannot compute a
+// cross-section offset and emits a fresh lis/addi per array).  At file scope
+// all three land in the TU's one plain .data, each 8-byte aligned, and the
+// offsets become compile-time constants: 96 -> 0x60, 96+84=180 -> aligned 184
+// = 0xb8.  Same fix as DxMultiMesh::Init.
+// clang-format off
+static D3DVERTEXELEMENT9 sVertexElements[] = {
+    { 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+    { 0, 12, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
+    { 0, 16, D3DDECLTYPE_FLOAT16_2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+    { 0, 20, D3DDECLTYPE_DEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+    { 0, 24, D3DDECLTYPE_DEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
+    { 0, 28, D3DDECLTYPE_UDEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
+    { 0, 32, D3DDECLTYPE_UBYTE4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
+    D3DDECL_END()
+};
+
+static D3DVERTEXELEMENT9 sMutableVertexElements[] = {
+    { 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+    { 0, 16, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+    { 0, 48, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
+    { 0, 64, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+    { 0, 72, D3DDECLTYPE_SHORT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
+    { 0, 80, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
+    D3DDECL_END()
+};
+
+static D3DVERTEXELEMENT9 sMutableSkinnedVertexElements[] = {
+    { 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+    { 0, 16, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+    { 0, 32, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
+    { 0, 64, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+    { 0, 72, D3DDECLTYPE_SHORT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
+    { 0, 80, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
+    D3DDECL_END()
+};
+// clang-format on
+
 DxMesh::DxMesh() : mNumVerts(0), mNumFaces(0), unk1ac(0), unk1b0(0) {
-    // Known residual, one row: the image's third CreateVertexDeclaration reads
-    // `addi r3, r29, 0xb8`, we emit +0xb4.  r29 is the array base (the first
-    // call is a bare `mr r3, r29`), and the target data at 0x82F13518 -- a
-    // 0x10C-byte unnamed block the map assigns to rnddx9:Mesh.obj -- really
-    // does hold FOUR zero bytes at +0xb4, so the image's array is 268 bytes
-    // where ours is 264.  0xb8 is not a multiple of sizeof(D3DVERTEXELEMENT9)
-    // (12), so no single-array spelling can reach it.  Splitting into separate
-    // statics does not help either, and that is measured, not assumed:
-    //   three arrays -> 95.5% (MSVC emits a fresh lis/addi per array; the image
-    //                   has exactly one lis for the whole block)
-    //   two arrays (group3 split off) -> 99.4%, 5 rows, incl. an inserted
-    //                   `lis ?sMutableSkinnedVertexElements@...`
-    // So this MSVC does not anchor one static array off another, and whatever
-    // produced the internal 4-byte hole is not reachable by moving the brace.
-    // Leave it as one array; the one-row form below is the best known.
-    // Behaviour is unaffected -- [15] is group 3 in OUR layout.
-    // clang-format off
-    static D3DVERTEXELEMENT9 sVertexElements[] = {
-        { 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-        { 0, 12, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
-        { 0, 16, D3DDECLTYPE_FLOAT16_2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-        { 0, 20, D3DDECLTYPE_DEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
-        { 0, 24, D3DDECLTYPE_DEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
-        { 0, 28, D3DDECLTYPE_UDEC4N, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
-        { 0, 32, D3DDECLTYPE_UBYTE4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
-        D3DDECL_END(),
-
-        { 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-        { 0, 16, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
-        { 0, 48, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0 },
-        { 0, 64, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-        { 0, 72, D3DDECLTYPE_SHORT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
-        { 0, 80, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
-        D3DDECL_END(),
-
-        { 0, 0, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-        { 0, 16, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
-        { 0, 32, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDWEIGHT, 0 },
-        { 0, 64, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-        { 0, 72, D3DDECLTYPE_SHORT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_BLENDINDICES, 0 },
-        { 0, 80, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TANGENT, 0 },
-        D3DDECL_END()
-    };
-    // clang-format on
     if (!sVertexDecl) {
-        sVertexDecl = D3DDevice_CreateVertexDeclaration(&sVertexElements[0]);
+        sVertexDecl = D3DDevice_CreateVertexDeclaration(sVertexElements);
         DX_ASSERT(sVertexDecl, 0xA8);
     }
     if (!sMutableVertexDecl) {
-        sMutableVertexDecl = D3DDevice_CreateVertexDeclaration(&sVertexElements[8]);
+        sMutableVertexDecl = D3DDevice_CreateVertexDeclaration(sMutableVertexElements);
         DX_ASSERT(sMutableVertexDecl, 0xAF);
     }
     if (!sMutableSkinnedVertexDecl) {
         sMutableSkinnedVertexDecl =
-            D3DDevice_CreateVertexDeclaration(&sVertexElements[15]);
+            D3DDevice_CreateVertexDeclaration(sMutableSkinnedVertexElements);
         DX_ASSERT(sMutableSkinnedVertexDecl, 0xB5);
     }
 }
