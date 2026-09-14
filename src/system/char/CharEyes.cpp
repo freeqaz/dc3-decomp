@@ -777,46 +777,64 @@ Vector3 CharEyes::GenerateDartOffset() {
     return vout;
 }
 
+// The target does NOT loop over the vectors (RB3's shape): because EyeDesc::mEye and
+// CharInterestState::mInterest sit at offset 0 of their elements, an incoming ObjRef*
+// IS an element address, so the image recovers the element by pointer arithmetic.
+// The recovered element pointer starts life as end() and is only overwritten when the
+// offset is in range and element-aligned; the != end() test is the single join point
+// all the failure branches fall into (target 8237D218 / 8237D2A4), which is why it
+// cannot be nested inside the range checks.
+//
+// LEVER (new, 2026-09-14): the image reads begin() TWICE and end() TWICE off the same
+// vector with no intervening store, and MSVC will happily CSE the second load of each
+// pair away -- which is what kept this at 91.4 with two `delete` rows. Spelling the two
+// reads of one member through TWO DIFFERENT LVALUES -- the member itself (`mEyes`) for
+// one and a bound reference (`_ref0`) for the other -- defeats the CSE and reproduces
+// both loads. Which of the pair gets the reference decides the base register MSVC picks,
+// and it is not free: end() wants the REFERENCE first and the member at the test (the
+// other way round leaves a base+displacement row at idx 24/59), begin() wants the
+// member first and the reference at the offset computation. 91.40 -> 100.00.
 bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     auto& _ref0 = mEyes;
-    EyeDesc *eyeEnd = _ref0.end();
-    EyeDesc *eyeBegin = _ref0.begin();
-    int eyeCount = (int)((char *)eyeEnd - (char *)eyeBegin) / (int)sizeof(EyeDesc);
+    EyeDesc *desc = _ref0.end();
+    EyeDesc *eyeBegin = mEyes.begin();
+    int eyeCount = (int)((char *)desc - (char *)eyeBegin) / (int)sizeof(EyeDesc);
     if (eyeCount != 0) {
-        int eyeOff = (int)((char *)ref - (char *)eyeBegin);
+        int eyeOff = (int)((char *)ref - (char *)_ref0.begin());
         if (eyeOff >= 0) {
             int eyeTotal = eyeCount * (int)sizeof(EyeDesc);
             if ((unsigned)eyeOff < (unsigned)eyeTotal) {
-                int eyeIdx = eyeOff / (int)sizeof(EyeDesc);
-                if (eyeOff == eyeIdx * (int)sizeof(EyeDesc)) {
-                    EyeDesc *desc = eyeBegin + eyeIdx;
-                    if (desc != _ref0.end()) {
-                        if (!desc->mEye.SetObj(obj))
-                            _ref0.erase(_ref0.begin() + eyeIdx);
-                        return true;
-                    }
-                }
+                int eyeRounded = (eyeOff / (int)sizeof(EyeDesc)) * (int)sizeof(EyeDesc);
+                if (eyeRounded == eyeOff)
+                    desc = (EyeDesc *)((char *)eyeBegin + eyeRounded);
             }
         }
+        if (desc != mEyes.end()) {
+            if (!desc->mEye.SetObj(obj))
+                _ref0.erase(desc);
+            return true;
+        }
     }
-    CharInterestState *stateEnd = mInterests.end();
+    auto& _ref1 = mInterests;
+    CharInterestState *state = _ref1.end();
     CharInterestState *stateBegin = mInterests.begin();
-    int stateCount = (int)((char *)stateEnd - (char *)stateBegin) / (int)sizeof(CharInterestState);
+    int stateCount =
+        (int)((char *)state - (char *)stateBegin) / (int)sizeof(CharInterestState);
     if (stateCount != 0) {
-        int stateOff = (int)((char *)ref - (char *)stateBegin);
+        int stateOff = (int)((char *)ref - (char *)_ref1.begin());
         if (stateOff >= 0) {
             int stateTotal = stateCount * (int)sizeof(CharInterestState);
             if ((unsigned)stateOff < (unsigned)stateTotal) {
-                int stateIdx = stateOff / (int)sizeof(CharInterestState);
-                if (stateOff == stateIdx * (int)sizeof(CharInterestState)) {
-                    CharInterestState *state = stateBegin + stateIdx;
-                    if (state != mInterests.end()) {
-                        if (!state->mInterest.SetObj(obj))
-                            mInterests.erase(mInterests.begin() + stateIdx);
-                        return true;
-                    }
-                }
+                int stateRounded = (stateOff / (int)sizeof(CharInterestState))
+                    * (int)sizeof(CharInterestState);
+                if (stateRounded == stateOff)
+                    state = (CharInterestState *)((char *)stateBegin + stateRounded);
             }
+        }
+        if (state != mInterests.end()) {
+            if (!state->mInterest.SetObj(obj))
+                _ref1.erase(state);
+            return true;
         }
     }
     return CharWeightable::Replace(ref, obj);
