@@ -578,6 +578,13 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
             *(float *)dest = val;
             return;
         }
+        // NEGATIVE RESULT: retail loads mCompression with a bare
+        // `lwz r11, 0x4(r11)` at 0x823E1248 and compares it with cmpwi -- no
+        // sign extension -- so this `short` local costs us two extsh the image
+        // does not have.  Widening it to `int` does remove both, but objdiff's
+        // aligner then re-locks the kCompressVects block below and the
+        // canonical score is a wash (87.2 -> 87.1), so the spelling is left
+        // alone rather than booked as a regression.
         short comp = mCompression;
         if (byteOffset >= mOffsets[TYPE_QUAT]) {
             if (comp >= kCompressQuats) {
@@ -592,6 +599,15 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
             short *sv = (short *)src;
             float *out = (float *)dest;
             float scale = 1300.0f / 32767.0f;
+            // NEGATIVE RESULT: retail hoists all three lha above the three
+            // stores (sv[2] first, at 0x823E1284), bounces them through three
+            // distinct int->double slots (0x60/0x50/0x58 rather than the one
+            // slot we reuse) and leaves a dead `mr r11, r8` -- the signature of
+            // one inlined Vector3::Set.  Two spellings were measured and both
+            // grow the frame 0xd0 -> 0xe0 for a 16-byte temporary retail never
+            // materialises, costing 10pp each: `((Vector3 *)dest)->Set(...)`,
+            // and three named `float x/y/z = (float)sv[i];` temporaries
+            // consumed by the stores below.
             out[0] = (float)sv[0] * scale;
             out[1] = (float)sv[1] * scale;
             out[2] = (float)sv[2] * scale;
@@ -618,7 +634,7 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
             }
             return;
         }
-        int comp = mCompression;
+        short comp = mCompression;
         if (byteOffset >= mOffsets[TYPE_QUAT]) {
             float *out = (float *)dest;
             Hmx::Quat q0, q1;
