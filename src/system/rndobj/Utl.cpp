@@ -1948,14 +1948,16 @@ void SetBloomBlurWeightsStreak(
     MILO_ASSERT(pass >= 0 && pass < 3, 0x11aa);
 
     float passF = (float)pass;
-    float scale = (float)pow(4.0, (double)passF);
-    float initOffset = 0.5f;
 
     float weights[kNumBloomTaps];
     float offsets[kNumBloomTaps];
     int middle = 3;
+    // Before the first pow(): the image loads 0.333333f and stores weights[3] at
+    // 8262EBD8/8262EBE0, between the passF conversion and the first `bl pow`.
     float initWeight = 0.333333f;
     weights[middle] = initWeight;
+    float scale = (float)pow(4.0, (double)passF);
+    float initOffset = 0.5f;
     float atten = (float)pow((double)attenuation, (double)scale);
     offsets[middle] = initOffset;
 
@@ -2000,15 +2002,22 @@ void SetBloomBlurWeightsStreak(
     int idx = 0;
     do {
         Vector4 texOffset;
+        // The image holds both components in registers across the join and does
+        // all four stores once, after it (stfs f13, 0x60 / f0, 0x64 / f31, 0x68 /
+        // f31, 0x6c at 8262ED80); storing into texOffset inside each arm emits a
+        // duplicate `stfs f0, 0x64(r1)` in both of them.
+        float offX, offY;
         if (horizontal) {
             float off = offsets[idx] * invWidth;
-            texOffset.x = off * cosA * yRatio;
-            texOffset.y = off * sinA;
+            offX = off * cosA * yRatio;
+            offY = off * sinA;
         } else {
             float off = offsets[idx] * invHeight;
-            texOffset.x = -(off * sinA * yRatio);
-            texOffset.y = off * cosA;
+            offX = -(off * sinA * yRatio);
+            offY = off * cosA;
         }
+        texOffset.x = offX;
+        texOffset.y = offY;
         texOffset.z = one;
         texOffset.w = one;
         TheShaderMgr.SetPConstant((PShaderConstant)(reg - 0x10), texOffset);
