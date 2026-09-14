@@ -35,16 +35,17 @@ GranularSynth::GranularSynth(const FloatVec &input, unsigned int numVoices, unsi
     mWindows.resize(4);
 
     for (unsigned int i = 0; i < mWindows.size(); i++) {
+        FloatVec &window = mWindows[i];
         float shortest = (float)mHop;
         float longest = (float)mMaxLength;
         float step = (Util::Log(longest) - Util::Log(shortest)) * (float)i / (float)mWindows.size();
         float length = (float)exp(Util::Log(shortest) + step);
         unsigned int n = (unsigned int)(length + (length >= 0.0f ? 0.5f : -0.5f));
-        FloatVec &window = mWindows[i];
         window.resize(n);
 
         for (unsigned int j = 0; j < window.size(); j++) {
-            float angle = ((float)j + 0.5f) * 3.1415927410125732f;
+            static const float sPi = 3.1415927410125732f;
+            float angle = ((float)j + 0.5f) * sPi;
             window[j] = ((float)cos(angle / (float)window.size()) + 1.0f) * 0.5f;
         }
     }
