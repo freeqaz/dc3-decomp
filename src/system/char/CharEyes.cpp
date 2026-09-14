@@ -855,7 +855,7 @@ void CharEyes::NextLook() {
         mCurrentInterest = mFocusInterest;
         const CharEyeDartRuleset *dartOverride = mCurrentInterest->GetDartRulesetOverride();
         if (dartOverride) {
-            memcpy(&mData, &dartOverride->mData, sizeof(mData));
+            mData = dartOverride->mData;
         } else {
             mData.ClearToDefaults();
         }
@@ -883,6 +883,22 @@ void CharEyes::NextLook() {
         // sides of that copy use computed address registers, where the other two
         // Vector3 copies in this function (oldTarget at 0x90, facingDir at 0x70)
         // use a computed address only for the destination.
+        //
+        // w7-ay addendum (2026-09-14, at 96.7 canonical): `memcpy(&newFacing,
+        // &facingDir, sizeof)` with y/z read from the copy is ALSO inert (same
+        // 76/4/1/13 rows), and so is the plain copy re-tested on top of the
+        // levers below.  The residual is exactly this copy (`addi r11, r31,
+        // 0x60` at 0x823799FC, reloads at 0x82379A6C/0x82379A74), the f26-vs-
+        // f24 save (`bl __savefpr_26` at 0x8237989C) and the frame it implies
+        // (`stwu r1, -0x130(r1)` at 0x823798A4 vs our -0x140), plus register
+        // naming.  What moved 91.0 -> 96.7 was spelling, not structure:
+        // `Set(...)` for the two projected targets (loads all three sources
+        // before any store, as the image does), `mData = dartOverride->mData`
+        // instead of memcpy (no pre-hoisted `addi &mData` above the null test),
+        // the direct-member tail copies `mHeadForward = mTarget; mTarget =
+        // oldTarget` (a reference there made the copy word-serialised), a named
+        // `headPos` reference so the loop loads go through the pointer register,
+        // and a Transform reference for Dir()'s WorldXfm().
         float dz = (facingDir.z - lastFacing.z) * 45.0f;
         float dx = (facingDir.x - lastFacing.x) * 45.0f;
         float dy = (facingDir.y - lastFacing.y) * 45.0f;
@@ -908,22 +924,19 @@ void CharEyes::NextLook() {
         float projY = newFacingY * dist;
         float projZ = newFacingZ * dist;
 
-        _ref0.x = headXfm.v.x + projX;
-        _ref0.y = projY + headXfm.v.y;
-        _ref0.z = headXfm.v.z + projZ;
+        _ref0.Set(headXfm.v.x + projX, projY + headXfm.v.y, headXfm.v.z + projZ);
+        const Vector3 &headPos = headXfm.v;
 
         auto _tmp0 = Dir();
         RndTransformable *dirTrans = dynamic_cast<RndTransformable *>(_tmp0);
         if (dirTrans) {
-            const Vector3 &dirPos = dirTrans->WorldXfm().v;
-            if (_ref0.z < dirPos.z) {
-                float scale = (dirPos.z - headXfm.v.z) / (_ref0.z - headXfm.v.z);
+            const Transform &dirXfm = dirTrans->WorldXfm();
+            if (mTarget.z < dirXfm.v.z) {
+                float scale = (dirXfm.v.z - headXfm.v.z) / (mTarget.z - headXfm.v.z);
                 float sx = projX * scale;
                 float sy = projY * scale;
                 float sz = projZ * scale;
-                _ref0.x = headXfm.v.x + sx;
-                _ref0.y = sy + headXfm.v.y;
-                _ref0.z = headXfm.v.z + sz;
+                _ref0.Set(headPos.x + sx, sy + headPos.y, headPos.z + sz);
             }
         }
 
@@ -937,9 +950,9 @@ void CharEyes::NextLook() {
                      it != mInterests.end();
                      ++it) {
                     const Vector3 &intPos = it->mInterest->WorldXfm().v;
-                    float fy = intPos.y - headXfm.v.y;
-                    float fx = intPos.x - headXfm.v.x;
-                    float fz = intPos.z - headXfm.v.z;
+                    float fy = intPos.y - headPos.y;
+                    float fx = intPos.x - headPos.x;
+                    float fz = intPos.z - headPos.z;
                     float distSq = (fz * fz + (fx * fx + fy * fy));
                     if (distSq > maxDistSq)
                         maxDistSq = distSq;
@@ -948,7 +961,7 @@ void CharEyes::NextLook() {
                 if (maxDistSq > 0.0f) {
                     CharInterestState *bestState = 0;
                     Vector3 targetDir;
-                    Subtract(_ref0, headXfm.v, targetDir);
+                    Subtract(_ref0, headPos, targetDir);
                     Normalize(targetDir, targetDir);
 
                     float inverseDist = 1.0f / maxDistSq;
@@ -960,7 +973,7 @@ void CharEyes::NextLook() {
                             if (!it->IsInRefractoryPeriod()) {
                                 float score = it->mInterest->ComputeScore(
                                     headXfm.m.y,
-                                    headXfm.v,
+                                    headPos,
                                     targetDir,
                                     inverseDist,
                                     mInterestFilterFlags,
@@ -980,7 +993,7 @@ void CharEyes::NextLook() {
                         const CharEyeDartRuleset *dartOverride =
                             mCurrentInterest->GetDartRulesetOverride();
                         if (dartOverride) {
-                            memcpy(&mData, &dartOverride->mData, sizeof(mData));
+                            mData = dartOverride->mData;
                         } else {
                             mData.ClearToDefaults();
                         }
@@ -1034,8 +1047,8 @@ stateReset:
         auto _tmp1 = Dot(newDir, oldDir);
         if (_tmp1 < 0.984808f) {
             ForceBlink();
-            mHeadForward = _ref0;
-            _ref0 = oldTarget;
+            mHeadForward = mTarget;
+            mTarget = oldTarget;
         }
     }
 }
