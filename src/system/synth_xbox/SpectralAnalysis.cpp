@@ -5,6 +5,14 @@
 
 namespace DSP {
 
+// The image reloads pi from an unnamed .rdata double (lbl_82263898) on EVERY
+// iteration of the sin/cos table loop rather than pinning it in a callee-saved
+// FPR, and the symbol is NOT one of MSVC's `__real@...` literal-pool entries --
+// so it is a file-scope constant in the original, not a literal in the
+// expression.  Spelling it as a literal costs f31 to the hoisted constant and
+// pushes the angle into f30.
+static const double kPi = 3.141592653589793;
+
 void SpectralAnalysis::Analyze(const float *in, float *out) {
     // Copy the input window into the analysis buffer and zero-pad the rest.
     if ((unsigned int)mWindowSize != 0) {
@@ -97,6 +105,13 @@ void SpectralAnalysis::SetMode(unsigned int windowSize, unsigned int hop) {
 
     // Grow the FFT size (power of two) until it spans the window plus hop.
     if (windowSize + hop > 8) {
+        // RESIDUAL (w7-ak, 94.2 canonical): the image copies the doubled value into
+        // a second register with a no-op `clrrwi r10, r11, 0` and RE-LOADS
+        // mWindowSize from 0x0(r31) inside the loop; we fold both away. NEGATIVE
+        // RESULTS: `mFftSize = mFftSize * 2;` with the compare on
+        // `(unsigned int)mFftSize`, and the same with a trailing
+        // `doubled = mFftSize;`, both compile to the SAME worse code (93.6) --
+        // MSVC re-derives the shift instead of copying the stored value.
         unsigned int doubled;
         do {
             doubled = (unsigned int)mFftSize * 2;
@@ -116,8 +131,17 @@ void SpectralAnalysis::SetMode(unsigned int windowSize, unsigned int hop) {
     mCosTable.resize((unsigned int)mFftSize >> 1, 0.0f);
 
     // Precompute the analysis-window sin/cos table over [0, pi).
+    // RESIDUAL (w7-ak, 94.2 canonical): 7 of the remaining 22 rows are the
+    // schedule inside this loop.  The image loads mSinTable._M_start AFTER sin()
+    // returns (`fmr f0, f1` to park the result, then `lwz r11, 0x0(r27)` and
+    // `fmr f1, f31` to set up cos, then `frsp`/`stfsx`), where we pin the base in
+    // r25 before the call and store before setting up cos.  Dropping the explicit
+    // `(float)` casts is exactly inert (same 22 rows).  The other structural row
+    // is a frame 0x10 larger than the image's 0xa0: the image reuses the one
+    // 0x50(r1) temp for the `const float&` 0.0f argument of all six
+    // assign/resize calls AND for the two int64->double converts in this loop.
     for (unsigned int i = 0; i < ((unsigned int)mFftSize >> 1); i++) {
-        double angle = (i * 3.141592653589793) / (double)((unsigned int)mFftSize >> 1);
+        double angle = (i * kPi) / (double)((unsigned int)mFftSize >> 1);
         mSinTable[i] = (float)sin(angle);
         mCosTable[i] = (float)cos(angle);
     }
