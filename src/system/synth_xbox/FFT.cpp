@@ -221,6 +221,20 @@ int FFTComplex(float* data, long size, long inverse, float* context) {
     return fft_recursive(data, (unsigned long)size, inverse, context);
 }
 
+// RESIDUAL (w7-ay, 82.5 canonical, floor held): every butterfly loop below
+// differs from the image in ONE address decision.  Two operands are read
+// twice per iteration -- src[1] and the high imaginary at src+stride4+4 --
+// and MSVC materialises exactly one of the two addresses for the reload.
+// The image materialises the high one (`add r4, r3, r10` at 0x82E4F8C0,
+// reload `lfs f9, 0x0(r4)`) and keeps src[1] as `lfs 0x4(r10)` both times;
+// we materialise src+4 (`addi r8, r10, 0x4`), reload src[1] through it, and
+// then re-express the high REAL load off it with a -4 bias (`subi r30,
+// r27, 0x4` / `lfsx f9, r30, r8`), which also flips the load order and the
+// FPR numbering behind every fadds/fsubs.  Tried: loading the high imaginary
+// into a named local before t_im (inert -- the load order is a consequence of
+// the materialisation, not of source order); reading it twice through one
+// `const float* hp` (76.1, MSVC then walks hp as a second induction variable).
+// The `hi` pointer form was already worse (b54e87b6d).
 int fft_scalar(float* a, float* b, unsigned long size, long sign, float* twiddle) {
     float* src = a;
     float* dst = b;
