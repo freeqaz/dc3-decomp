@@ -857,6 +857,12 @@ bool Intersect(const Vector3 &v, const BSPNode *n) {
 }
 
 bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
+    // The parameter is `n`, not `node`: the image's assert condition string is
+    // ??_C@_01EFFIKLCJ@n?$AA@ (Geo.s 0x82535338), a one-character literal.  The
+    // Function Call Diff's MakeString<char[19],int,char[5]> vs our
+    // MakeString<char[8],int,char[2]> is the documented benign ICF fold of the
+    // assert instantiations, NOT evidence of a longer name -- renaming to
+    // `node` to chase it changes the literal and ADDS two charged rows.
     MILO_ASSERT(n, 0x4e6);
 
     float startDot = n->plane.Dot(seg.start);
@@ -876,20 +882,21 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
         return Intersect(seg, n->right, t, p);
     }
 
+    // `t2` must be declared BEFORE denom: it owns the lowest local slot (0x50)
+    // in the image, and both alternatives cost ~1pp -- declaring it after `frac`
+    // and hoisting it above startDot each give 99.0 canonical (16 f28<->f29
+    // swaps plus a moved `stfs`) against 99.99 for this order.
     float t2 = 0.0f;
     float denom = startDot - endDot;
     if (denom == 0.0f)
         return false;
 
     float frac = startDot / denom;
-    Vector3 mid;
-    Interp(seg.start, seg.end, frac, mid);
-
     Segment seg1;
-    seg1.start = seg.start;
-    seg1.end = mid;
     Segment seg2;
-    seg2.start = mid;
+    Interp(seg.start, seg.end, frac, seg1.end);
+    seg1.start = seg.start;
+    seg2.start = seg1.end;
     seg2.end = seg.end;
 
     if (startDot > endDot) {
@@ -918,10 +925,13 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
             t = (1.0f - frac) * t2 + frac;
         }
         if (t2 == 0.0f && t != 0.0f) {
-            p.a = -n->plane.a;
-            p.b = -n->plane.b;
-            p.c = -n->plane.c;
-            p.d = -n->plane.d;
+            // One Set(), not four field assignments.  MSVC evaluates the
+            // arguments right to left, so the image loads d, c, b, a
+            // (Geo.s: lfs 0xc / 0x8 / 0x4 / 0x0 off r31), negates them in that
+            // order, and only then stores a, b, c, d in ascending order.  Four
+            // separate assignments interleave load/fneg/store per component.
+            const Plane &np = n->plane;
+            p.Set(-np.a, -np.b, -np.c, -np.d);
         }
     }
     return true;
