@@ -216,6 +216,24 @@ void CharDebug::SetObjects(DataArray *msg) {
     mOverlay->SetShowing(!mObjects.empty() || !mOnce.empty());
 }
 
+// RESIDUAL (w7-bl, 88.89 canonical, 54 rows): the entire gap is ONE MSVC
+// decision -- we hoist the function-local static `mesh` POINTER into a
+// callee-saved register and the image re-loads it at every use.  The image
+// emits `lwz r11, ?mesh@?8??DisplayObject@...@l(r31)` before each
+// `lwz r11, 0x148(r11)` (0x82340C24, 0x82340CC0 inside the vertex loop,
+// 0x82340D18, 0x82340D30, 0x82340D40, 0x82340D64), i.e. it treats the
+// vertex stores as possibly aliasing the static; we prove they do not and
+// cache it in r30.  That single extra live value is the whole cascade: a
+// 5th callee-saved GPR (`__savegprlr_27` vs the image's `_28`), frame 0x90
+// vs 0x80, and the flat r27..r31 renumbering that accounts for 21 of the
+// 54 rows.  Failed spellings (both measured in this worktree): writing the
+// loop body as `mesh->Verts()[i].pos.Set(...)` etc. with no `vert`
+// reference is WORSE (86.31, 170 rows -- MSVC then rematerialises the
+// vector base five times); hoisting `Vector2 uv` out of the loop and using
+// `uv.Set(v, u)` is byte-inert (88.89, same 35/3/6/10 rows).
+// The `SetObjConcrete<AnimTask>` vs `SetObjConcrete<RndTex>` name in the
+// Function Call Diff is an ICF fold -- ObjRefConcrete<T,ObjectDir>::
+// SetObjConcrete is the same machine code for every T -- not a wrong callee.
 void CharDebug::DisplayObject(Hmx::Object *obj) {
     RndHighlightable *rh = dynamic_cast<RndHighlightable *>(obj);
     if (rh)
