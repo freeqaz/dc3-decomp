@@ -350,7 +350,7 @@ void DxShaderMgr::SetVConstant4x3(VShaderConstant vsc, const Hmx::Matrix4 &mtx) 
     float c00 = mtx.x.x, c01 = mtx.y.x, c02 = mtx.z.x, c03 = mtx.w.x;
     float c10 = mtx.x.y, c11 = mtx.y.y, c12 = mtx.z.y, c13 = mtx.w.y;
     float c20 = mtx.x.z, c21 = mtx.y.z, c22 = mtx.z.z, c23 = mtx.w.z;
-    float *dst = (float *)&dev->m_Constants.VertexShaderF[vsc];
+    float *__restrict dst = (float *)&dev->m_Constants.VertexShaderF[vsc];
     dev->m_Pending.m_Mask[0] |= ShaderConstantDirtyMask(vsc, 3);
     dst[0] = c00;
     dst[1] = c01;
@@ -371,7 +371,7 @@ void DxShaderMgr::SetPConstant4x3(PShaderConstant psc, const Hmx::Matrix4 &mtx) 
     float c00 = mtx.x.x, c01 = mtx.y.x, c02 = mtx.z.x, c03 = mtx.w.x;
     float c10 = mtx.x.y, c11 = mtx.y.y, c12 = mtx.z.y, c13 = mtx.w.y;
     float c20 = mtx.x.z, c21 = mtx.y.z, c22 = mtx.z.z, c23 = mtx.w.z;
-    float *dst = (float *)&dev->m_Constants.PixelShaderF[psc];
+    float *__restrict dst = (float *)&dev->m_Constants.PixelShaderF[psc];
     dev->m_Pending.m_Mask[1] |= ShaderConstantDirtyMask(psc, 3);
     dst[0] = c00;
     dst[1] = c01;
@@ -393,7 +393,7 @@ void DxShaderMgr::SetVConstant(VShaderConstant vsc, const Hmx::Matrix4 &mtx) {
     float c10 = mtx.x.y, c11 = mtx.y.y, c12 = mtx.z.y, c13 = mtx.w.y;
     float c20 = mtx.x.z, c21 = mtx.y.z, c22 = mtx.z.z, c23 = mtx.w.z;
     float c30 = mtx.x.w, c31 = mtx.y.w, c32 = mtx.z.w, c33 = mtx.w.w;
-    float *dst = (float *)&dev->m_Constants.VertexShaderF[vsc];
+    float *__restrict dst = (float *)&dev->m_Constants.VertexShaderF[vsc];
     dev->m_Pending.m_Mask[0] |= ShaderConstantDirtyMask(vsc, 4);
     dst[0] = c00;
     dst[1] = c01;
@@ -419,7 +419,7 @@ void DxShaderMgr::SetPConstant(PShaderConstant psc, const Hmx::Matrix4 &mtx) {
     float c10 = mtx.x.y, c11 = mtx.y.y, c12 = mtx.z.y, c13 = mtx.w.y;
     float c20 = mtx.x.z, c21 = mtx.y.z, c22 = mtx.z.z, c23 = mtx.w.z;
     float c30 = mtx.x.w, c31 = mtx.y.w, c32 = mtx.z.w, c33 = mtx.w.w;
-    float *dst = (float *)&dev->m_Constants.PixelShaderF[psc];
+    float *__restrict dst = (float *)&dev->m_Constants.PixelShaderF[psc];
     dev->m_Pending.m_Mask[1] |= ShaderConstantDirtyMask(psc, 4);
     dst[0] = c00;
     dst[1] = c01;

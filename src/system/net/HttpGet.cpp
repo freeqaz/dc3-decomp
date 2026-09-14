@@ -158,7 +158,7 @@ namespace {
 };
 
 HttpGet::HttpGet(unsigned int ip, unsigned short port, const char *c1, const char *c2)
-    : mSocket(nullptr), mPath(c1), mPort(port), mState(kHttpGet_Nil), mFlags(false),
+    : mSocket(nullptr), mPath(c1), mPort(port), mState(kHttpGet_Nil), mFlags(0),
       mTimeoutMs(kDefaultTimeoutMs), mIP(ip), mHeaders(c2), mRecvBuf(nullptr), mRecvBufPos(0),
       mFileBuf(nullptr), mFileBufSize(0), mFileBufRecvPos(0), mRetryCount(0), mFailType(),
       mPrevState(kHttpGet_Nil) {
@@ -172,7 +172,13 @@ HttpGet::HttpGet(
     : mSocket(nullptr), mPath(c1), mPort(port), mState(kHttpGet_Nil), mFlags(uc & 3),
       mTimeoutMs(kDefaultTimeoutMs), mIP(ip), mHeaders(c2), mRecvBuf(nullptr), mRecvBufPos(0),
       mFileBuf(nullptr), mFileBufSize(0), mFileBufRecvPos(0), mRetryCount(0), mFailType() {
-    SetState((uc & 4) == 0 ? kHttpGet_Pending : kHttpGet_Connecting);
+    // Two SetState calls tail-merged onto one `bl` (0x82E2A2F0-0x82E2A308), not a
+    // ternary: a ternary lets MSVC compute 8-or-0 branchlessly out of ~uc.
+    if (uc & 4) {
+        SetState(kHttpGet_Connecting);
+    } else {
+        SetState(kHttpGet_Pending);
+    }
     AddRequiredHeaders();
 }
 

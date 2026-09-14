@@ -69,25 +69,21 @@ void StreamReceiver360::SetADSR(const ADSRImpl &adsr) {
     UpdateADSR();
 }
 
+// An else-if chain, not a nested if with a cached `target`: the image re-tests
+// mSlipVoice at 0x82E41DFC even though the enclosing branch already proved it
+// non-null, and the failing edge of that test jumps into the `else if (mVoice)`
+// block at 0x82E41E10 rather than returning.  Only a third arm of one chain
+// produces that edge.
 void StreamReceiver360::Tag() {
     mTagged = true;
-    if (mSlipVoice) {
-        int val;
-        Voice *target;
-        if (mVoice != 0) {
-            mSlipVoice->mTagState = 1;
-            val = 2;
-            target = mVoice;
-        } else {
-            if (mSlipVoice == 0) return;
-            val = 3;
-            target = mSlipVoice;
-        }
-        target->mTagState = val;
-        return;
+    if (mSlipVoice && mVoice) {
+        mSlipVoice->mTagState = 1;
+        mVoice->mTagState = 2;
+    } else if (mSlipVoice) {
+        mSlipVoice->mTagState = 3;
+    } else if (mVoice) {
+        mVoice->mTagState = 4;
     }
-    if (mVoice == 0) return;
-    mVoice->mTagState = 4;
 }
 
 void StreamReceiver360::Poll() {

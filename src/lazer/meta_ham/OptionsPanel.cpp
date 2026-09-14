@@ -8,9 +8,10 @@
 #include "xdk\xapilibi\xbox.h"
 
 OptionsPanel::OptionsPanel() {
-    mOfferID = 0;
-    mPurchaseProfile = nullptr;
+    mOffer.Clear();
     mXboxPurchaser = nullptr;
+    mOffer.mID = 0;
+    mOffer.mProfile = nullptr;
     mRedeemTokenJob = nullptr;
     mGetWebLinkCodeJob = nullptr;
 }
@@ -25,9 +26,9 @@ void OptionsPanel::Poll() {
             if (mXboxPurchaser->IsSuccess()) {
                 if (!mXboxPurchaser->PurchaseMade()) {
                     if (mXboxPurchaser->NeedsEnum()) {
-                        if (mPurchaseProfile) {
+                        if (mOffer.mProfile) {
                             PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
-                                this, mPurchaseProfile->GetPadNum(), mOfferID,
+                                this, mOffer.mProfile->GetPadNum(), mOffer.mID,
                                 mXboxPurchaser->Source(), mXboxPurchaser->UserIndex()
                             );
                             ThePlatformMgr.QueueEnumJob(job);
@@ -50,8 +51,8 @@ bool OptionsPanel::OnRedeemToken(int pad, char const *token) {
 void OptionsPanel::OnPurchaseOfferByOfferString(int pad, char const *offer) {
     unsigned long long id = StorePurchaseable::OfferStringToID(offer);
     mXboxPurchaser = new XboxPurchaser(pad, id, 0, 0, gNullStr, 0);
-    mOfferID = id;
-    mPurchaseProfile = TheProfileMgr.GetProfileFromPad(pad);
+    mOffer.mID = id;
+    mOffer.mProfile = TheProfileMgr.GetProfileFromPad(pad);
     mXboxPurchaser->Initiate();
 }
 

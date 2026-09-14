@@ -219,9 +219,12 @@ unsigned int BinkFileIdle(BINKIO *bink) {
     if (*(unsigned int *)(p + 0x70) != 0)
         return 0;
     if (*(unsigned int *)(p + 0x44) != 0) {
-        gCrit.Enter();
+        // A scoped CritSecTracker, not a bare Enter/Exit pair: the image spills
+        // &gCrit into a stack slot (`stw r29, 0x50(r31)`, 0x82E5DA50) and carries a
+        // frame pointer, both of which come from the guard object's destructor.
+        // Its two null tests fold away because &gCrit is provably non-null.
+        CritSecTracker lock(&gCrit);
         ReadFunc(bink, false);
-        gCrit.Exit();
     }
     return *(unsigned int *)(p + 0x44);
 }

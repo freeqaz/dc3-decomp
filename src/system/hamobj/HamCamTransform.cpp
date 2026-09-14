@@ -157,6 +157,25 @@ BinStream &operator<<(BinStream &bs, const TransformCrowd &c) {
     return bs;
 }
 
+// CHAINED, and that is established rather than assumed: after the first
+// `bl ??$?6VRndCamAnim@@...`, the image's WriteEndian call takes its BinStream
+// from r3 -- operator<<'s RETURNED reference (0x824AC148 -> 0x824AC158).  Only
+// chaining lets r3 carry over like that; written as two statements MSVC must
+// preserve `bs` itself across the call, which costs a second callee-saved
+// register (measured: r30, and Save falls 77.67 -> 71.0).
+//
+// MEASURED TRADE, left un-taken deliberately.  Two statements make this body
+// big enough (22 instrs, 2 callee-saved) that MSVC stops inlining it into
+// operator<<(BinStream&, vector<TransformCrowd>), which then goes
+// 72.115 -> 100.0 (104 B) -- byte-weighted a clear net win over the 72 B lost
+// here.  Not taken: the r3 reuse above proves two statements are NOT what the
+// original wrote, and buying a template's bytes with source known to differ
+// from the image is the wrong trade for this project.
+//
+// The real lever for that template is whatever kept Save out-of-line in the
+// original while it stayed chained.  Definition order is NOT it -- moving this
+// definition below TransformArea::Save (the `bs << mCrowds` that instantiates
+// the template) is byte-inert, because MSVC instantiates at end of TU.
 void TransformCrowd::Save(BinStream &bs) const { bs << mCrowd << mCrowdRotate; }
 
 BinStream &operator>>(BinStream &bs, TransformCrowd &c) {

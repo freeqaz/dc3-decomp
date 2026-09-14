@@ -74,15 +74,26 @@ int _vswprintf_s_l(
 ) {
     int retvalue;
 
-    if (format == NULL) {
-        errno = EINVAL;
-        _invalid_parameter_noinfo();
-        return -1;
+    // The `_Expr_val` temp is _VALIDATE_RETURN's own shape and it is NOT cosmetic:
+    // materialising the condition as a value keeps the EINVAL block inline as the
+    // fall-through of the first test (the image's layout), where the plain
+    // `if (format == NULL)` spelling lets MSVC's block-placement pass SINK it past
+    // the ERANGE block.  Measured on the narrow twin: 84.08 -> 100.0.
+    {
+        int _Expr_val = !!(format != NULL);
+        if (!_Expr_val) {
+            errno = EINVAL;
+            _invalid_parameter_noinfo();
+            return -1;
+        }
     }
-    if (!(string != NULL && sizeInWords > 0)) {
-        errno = EINVAL;
-        _invalid_parameter_noinfo();
-        return -1;
+    {
+        int _Expr_val = !!(string != NULL && sizeInWords > 0);
+        if (!_Expr_val) {
+            errno = EINVAL;
+            _invalid_parameter_noinfo();
+            return -1;
+        }
     }
 
     retvalue = _vswprintf_helper(_woutput_s_l, string, sizeInWords, format, plocinfo, ap);

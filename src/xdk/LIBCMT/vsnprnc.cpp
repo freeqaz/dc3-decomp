@@ -71,30 +71,46 @@ int _vsnprintf_helper(
 
 int _vsprintf_s_l(char *buffer, size_t sizeInBytes, const char *format, void *locale, va_list argptr) {
     int result;
-    int *err_ptr;
-    int err_val;
 
-    if (format == NULL || buffer == NULL || sizeInBytes == 0) {
-        err_ptr = _errno();
-        err_val = EINVAL;
-    } else {
-        result = _vsnprintf_helper(_output_s_l, buffer, sizeInBytes, format, locale, argptr);
-
-        if (result < 0) {
-            buffer[0] = '\0';
+    // The `_Expr_val` temp is _VALIDATE_RETURN's own shape and it is NOT cosmetic.
+    // Materialising the condition as a value keeps the EINVAL block inline as the
+    // fall-through of the first test -- the image's layout, error block at
+    // 0x829A1A48 with both later tests branching BACKWARD into it.  Spelled as a
+    // plain `if (format == NULL)` (or as one three-way `||`, or with explicit
+    // gotos -- all three measured byte-identical) MSVC's block-placement pass
+    // SINKS that block past the ERANGE block instead, which also forces `buffer`
+    // to stay in r3 rather than the image's r31, since a sunk block no longer has
+    // `bl _errno` clobbering r3 ahead of the compares.  84.08 -> 100.0.
+    {
+        int _Expr_val = !!(format != NULL);
+        if (!_Expr_val) {
+            errno = EINVAL;
+            _invalid_parameter_noinfo();
+            return -1;
         }
-
-        if (result != -2) {
-            return result;
+    }
+    {
+        int _Expr_val = !!(buffer != NULL && sizeInBytes > 0);
+        if (!_Expr_val) {
+            errno = EINVAL;
+            _invalid_parameter_noinfo();
+            return -1;
         }
-
-        err_ptr = _errno();
-        err_val = ERANGE;
     }
 
-    *err_ptr = err_val;
-    _invalid_parameter_noinfo();
-    return -1;
+    result = _vsnprintf_helper(_output_s_l, buffer, sizeInBytes, format, locale, argptr);
+
+    if (result < 0) {
+        buffer[0] = '\0';
+    }
+
+    if (result == -2) {
+        errno = ERANGE;
+        _invalid_parameter_noinfo();
+        return -1;
+    }
+
+    return result;
 }
 
 int vsprintf_s(char *buffer, size_t sizeInBytes, const char *format, va_list argptr) {

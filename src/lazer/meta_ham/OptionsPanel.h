@@ -31,12 +31,25 @@ public:
 protected:
     DataNode OnMsg(RCJobCompleteMsg const &);
 
+    // The offer id and the profile that bought it are ONE sub-object with an
+    // inline Clear(), not two loose members: the ctor computes `this + 0x48`
+    // and homes it (0x829461B8-0x829461C0), which is the inlined callee's
+    // `this` and names 0x48 as the receiver.  unk54 is folded in so the
+    // struct's trailing padding does not push mGetWebLinkCodeJob off 0x58.
+    struct OfferInfo {
+        unsigned long long mID; // 0x48
+        HamProfile *mProfile; // 0x50
+        int unk54; // 0x54
+        void Clear() {
+            mID = 0;
+            mProfile = nullptr;
+        }
+    };
+
     RedeemTokenJob *mRedeemTokenJob;
     XboxPurchaser *mXboxPurchaser;
     int unk44;
-    unsigned long long mOfferID;
-    HamProfile *mPurchaseProfile;
-    int unk54;
+    OfferInfo mOffer; // 0x48
     GetWebLinkCodeJob *mGetWebLinkCodeJob;
     int unk5c;
 

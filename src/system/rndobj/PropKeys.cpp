@@ -855,18 +855,20 @@ void __push_heap<Key<ObjectStage>*, int, Key<ObjectStage>, less<Key<ObjectStage>
     int topIndex,
     Key<ObjectStage> value,
     less<Key<ObjectStage> > comp) {
-    while (holeIndex > topIndex) {
-        int parent = (holeIndex - 1) >> 1;
-        Key<ObjectStage>* parent_ptr = first + parent;
-
-        if (comp(value, *parent_ptr)) {
-            break;
-        }
-
-        Key<ObjectStage>* current_ptr = first + holeIndex;
-        *current_ptr = *parent_ptr;
-
+    // Canonical STLport shape, and the deviations from it were REAL, not
+    // cosmetic.  (a) `/ 2`, not `>> 1`: the image emits srawi+addze
+    // (0x8268BF2C), the signed divide that rounds toward zero, where a shift
+    // rounds toward -inf.  (b) the test is comp(*parent, value) inside the
+    // while, not comp(value, *parent) with a break -- those disagree at
+    // equality, and the image breaks on equal (`blt` sets the flag, `beq`
+    // exits, 0x8268BEF4-0x8268BF04).  (c) `parent` is computed once before the
+    // loop and again at the END of the body, which is what lets the loop
+    // rotate with the test at the bottom.
+    int parent = (holeIndex - 1) / 2;
+    while (holeIndex > topIndex && comp(*(first + parent), value)) {
+        *(first + holeIndex) = *(first + parent);
         holeIndex = parent;
+        parent = (holeIndex - 1) / 2;
     }
 
     *(first + holeIndex) = value;
@@ -993,15 +995,18 @@ int SymbolKeys::SymbolAt(float frame, Symbol &sym) {
     return AtFrame(frame, sym);
 }
 
-void ObjRefRelinkRing(ObjRef *ref) {
-    if (ref->next != ref) {
-        ref->next->prev = ref;
-        ref->prev->next = ref;
-    }
-}
-
 #ifndef HX_NATIVE
-// swap specialization for Key<ObjectStage>
+// swap specialization for Key<ObjectStage>.
+//
+// `temp` is destroyed on the way out and ~ObjPtr UNLINKS it from the ObjRef
+// ring -- that is the whole tail block, inlined:
+//     lwz r11, 0x5c(r1)      ; temp.value.mObj
+//     cmplwi cr6, r11, 0x0
+//     beq   cr6, .L_8268BEA4
+//     next->prev = prev; prev->next = next
+// There is nothing to relink by hand, and the ObjRefRelinkRing helper that
+// used to be called here was a decomp invention: it appears nowhere in the
+// target listing and nowhere in symbols.txt.
 template<>
 void stlpmtx_std::swap<class Key<class ObjectStage> >(class Key<class ObjectStage> &a, class Key<class ObjectStage> &b) {
     Key<ObjectStage> temp(a);
@@ -1009,7 +1014,6 @@ void stlpmtx_std::swap<class Key<class ObjectStage> >(class Key<class ObjectStag
     a.frame = b.frame;
     b.value.CopyRef(temp.value);
     b.frame = temp.frame;
-    ObjRefRelinkRing(&temp.value);
 }
 #endif
 

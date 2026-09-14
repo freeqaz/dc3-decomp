@@ -165,14 +165,26 @@ T *XMemNew(unsigned long allocAttrs, unsigned int count) {
 
 template <typename T>
 void XMemDelete(T *&ptr, unsigned long freeAttrs) {
+    // Index through the REFERENCE, do not cache a cursor: the image reloads
+    // `ptr` from 0x0(r28) on every iteration (0x829EB4A0) and adds a running
+    // byte offset, which is what `ptr[i]` compiles to when a call in the body
+    // may alias the reference.  A `T *cur` walked with `cur++` keeps it in a
+    // register and never reloads.
+    //
+    // No separate `count != 0` guard either -- `divwu.` at 0x829EB494 sets CR0
+    // and the loop's own entry test uses it, so the zero case costs nothing.
+    //
+    // RESIDUAL (88.6, 4 rows): MSVC strength-reduces this into a DOWN-counter
+    // (`subic. r31, r31, 0x1` / `bne`) and drops `i` entirely, where the image
+    // keeps two induction variables -- `i` in r31 and the byte offset in r30 --
+    // and tests `cmplw cr6, r31, r29` / `blt` against count.  Hoisting `i` above
+    // the `if (ptr != 0)` so its init is scheduled before the divide (the image
+    // has `li r31, 0x0` at 0x829EB490, one instruction BEFORE divwu.) is
+    // byte-inert; measured, still 88.6.
     if (ptr != 0) {
         unsigned int count = XMemSize(ptr, freeAttrs) / sizeof(T);
-        if (count != 0) {
-            T *cur = ptr;
-            for (unsigned int i = 0; i < count; i++) {
-                cur->~T();
-                cur++;
-            }
+        for (unsigned int i = 0; i < count; i++) {
+            ptr[i].~T();
         }
         XMemFree(ptr, freeAttrs);
         ptr = 0;
