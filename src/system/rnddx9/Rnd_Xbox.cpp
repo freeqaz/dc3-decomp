@@ -1114,8 +1114,7 @@ void DxRnd::DoPointTests() {
     }
 
     // Early out if no occlusion query manager or hi-res screen is active
-    auto& _ref0 = mOcclusionQueryMgr;
-    if (!_ref0)
+    if (!mOcclusionQueryMgr)
         return;
     if (TheHiResScreen.IsActive())
         return;
@@ -1123,21 +1122,30 @@ void DxRnd::DoPointTests() {
     // Process query results from previous frame
     for (std::vector<RndPointTest>::iterator it = mPointTestQueries.begin(); it !=mPointTestQueries.end(); ++it) {
         unsigned int result;
-        if (_ref0->GetQueryResults(it->mPointQueryIdx, result)) {
-            it->mFlare->SetOcclusionReady(true);
-            it->mFlare->SetVisible(result != 0);
+        // 0x8261AFD8-0x8261AFE8 and 0x8261B008-0x8261B020 each load
+        // `it->mFlare` ONCE and use it for both stores; writing
+        // `it->mFlare->` twice makes MSVC reload it, because the store to
+        // 0x144/0x102 may alias the pointer.
+        if (mOcclusionQueryMgr->GetQueryResults(it->mPointQueryIdx, result)) {
+            // 0x8261AFD0: the result is loaded and bool-ified BEFORE the flare
+            // pointer is loaded, so the visibility value is a local of its own.
+            bool visible = result != 0;
+            RndFlare *flare = it->mFlare;
+            flare->SetOcclusionReady(true);
+            flare->SetVisible(visible);
         }
-        if (_ref0->GetQueryResults(it->mAreaQueryIdx, result)) {
-            it->mFlare->SetOcclusionResult((float)(int)result);
-            it->mFlare->SetOcclusionReady(true);
+        if (mOcclusionQueryMgr->GetQueryResults(it->mAreaQueryIdx, result)) {
+            RndFlare *flare = it->mFlare;
+            flare->SetOcclusionResult((float)(int)result);
+            flare->SetOcclusionReady(true);
         }
     }
 
     // Update frame index - both direct manipulation and virtual call
-    _ref0->ToggleFrameIndex();
-    _ref0->OnBeginFrame();
-    _ref0->IncrementFrameCounter();
-    _ref0->OnEndFrame();
+    mOcclusionQueryMgr->ToggleFrameIndex();
+    mOcclusionQueryMgr->OnBeginFrame();
+    mOcclusionQueryMgr->IncrementFrameCounter();
+    mOcclusionQueryMgr->OnEndFrame();
 
     // Count point tests needed
     int numTests = 0;
@@ -1157,9 +1165,10 @@ void DxRnd::DoPointTests() {
     xfm.Reset();
     TheShaderMgr.SetTransform(xfm);
 
-    // Setup view matrix
-    Hmx::Matrix4 viewMtx(xfm);
-    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, viewMtx);
+    // Setup view matrix.  0x8261B160-0x8261B16C passes the Matrix4
+    // CONSTRUCTOR'S return value (`mr r5, r3`) straight to SetVConstant -- an
+    // unnamed temporary, not a named local whose address is re-taken.
+    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
 
     // Setup shader state
     RndShader::SelectConfig(nullptr, kStandardShader, false);
@@ -1173,8 +1182,15 @@ void DxRnd::DoPointTests() {
     D3DDevice_SetRenderState_ZWriteEnable(TheDxRnd.Device(), 0);
     D3DDevice_SetRenderState_ZEnable(TheDxRnd.Device(), 1);
 
-    // Set z-compare function based on mReverseZ
-    D3DDevice_SetRenderState_ZFunc(TheDxRnd.Device(), (D3DCMPFUNC)(mReverseZ ? 3 : 1));
+    // Set z-compare function based on mReverseZ.  0x8261B1A4-0x8261B1B4
+    // bool-ifies mReverseZ, masks with 3 (`clrlwi r11, r11, 30`) and adds 1 --
+    // so the two values are 4 and 1.  On the Xbox 360 the D3DCMPFUNC enum is
+    // shifted down by one from desktop D3D9, making those D3DCMP_GREATER and
+    // D3DCMP_LESS.  We had 3 (D3DCMP_LESSEQUAL) on the reverse-Z arm, which
+    // masks with 2 (`rlwinm r11, r11, 0, 30, 30`) instead.
+    D3DDevice_SetRenderState_ZFunc(
+        TheDxRnd.Device(), (D3DCMPFUNC)(mReverseZ ? D3DCMP_GREATER : D3DCMP_LESS)
+    );
 
     // Set point size
     float pointSize = 1.0f;
@@ -1189,9 +1205,10 @@ void DxRnd::DoPointTests() {
 
         RndFlare *flare = it->mFlare;
         RndPointTest &test = mPointTestQueries[idx];
+        // 0x8261B268-0x8261B284: mFlare is stored FIRST, then the two -1s.
+        test.mFlare = flare;
         test.mPointQueryIdx = -1;
         test.mAreaQueryIdx = -1;
-        test.mFlare = flare;
 
         // Point test
         if (flare->GetPointTest()) {
@@ -1207,51 +1224,66 @@ void DxRnd::DoPointTests() {
             vtx.w = 1.0f;
             vtx.color = 0;
 
-            unsigned int queryIdx;
-            if (_ref0->CreateQuery(queryIdx)) {
-                test.mPointQueryIdx = queryIdx;
-                _ref0->BeginQuery(test.mPointQueryIdx);
+            // 0x8261B2D8-0x8261B32C: CreateQuery is handed the MEMBER by
+            // reference (`addi r27, r30, 0x4` / `mr r4, r27`), not a local
+            // temp, and its result gates TWO separate `if`s -- BeginQuery
+            // under the first, DrawVerticesUP+EndQuery under the second, each
+            // reloading the index from 0x0(r27).
+            bool ok = mOcclusionQueryMgr->CreateQuery(test.mPointQueryIdx);
+            if (ok) {
+                mOcclusionQueryMgr->BeginQuery(test.mPointQueryIdx);
+            }
+            if (ok) {
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_POINTLIST, 1, &vtx, sizeof(PointVertex));
-                _ref0->EndQuery(test.mPointQueryIdx);
+                mOcclusionQueryMgr->EndQuery(test.mPointQueryIdx);
             }
         }
 
-        // Area test
-        if (flare->GetAreaTest()) {
+        // Area test.  0x8261B330 reloads the flare from `test.mFlare`
+        // (`lwz r11, 0x0(r30)`), not from the `flare` local.
+        if (test.mFlare->GetAreaTest()) {
             struct QuadVertex {
                 float x, y, z;
                 float w;
                 DWORD color;
             };
-            float z = (float)it->z * 5.9604651881e-08f;
             QuadVertex verts[4];
 
-            // Initialize vertices
-            verts[0].x = flare->GetArea().x;
-            verts[0].y = flare->GetArea().y;
-            verts[0].z = z;
+            // 0x8261B33C `addi r10, r11, 0x134`: the rect is held BY
+            // REFERENCE, so w/h are read as 0x8(r10)/0xc(r10) rather than
+            // 0x13c/0x140 off the flare.
+            verts[0].x = test.mFlare->GetArea().x;
+            verts[0].y = test.mFlare->GetArea().y;
+            verts[0].z = (float)it->z * 5.9604651881e-08f;
             verts[0].w = 1.0f;
             verts[0].color = 0;
 
+            // 0x8261B388-0x8261B40C: every one of the three copies is
+            // `verts[n] = verts[0]` (a 5-word lwzu/stwu loop off r1+0x8c),
+            // and the adjusted components are read back from verts[0], not
+            // from the copy -- except verts[3].y, which reloads its own slot
+            // at 0xd0(r1).  Every `fadds` takes the RECT term first.
             verts[1] = verts[0];
-            verts[1].y += flare->GetArea().h;
+            verts[1].y = test.mFlare->GetArea().h + verts[0].y;
 
             verts[2] = verts[0];
-            verts[2].x += flare->GetArea().w;
+            verts[2].x = test.mFlare->GetArea().w + verts[0].x;
 
-            verts[3] = verts[1];
-            verts[3].x += flare->GetArea().w;
+            verts[3] = verts[0];
+            verts[3].x = test.mFlare->GetArea().w + verts[0].x;
+            verts[3].y = test.mFlare->GetArea().h + verts[3].y;
 
-            unsigned int queryIdx;
-            if (_ref0->CreateQuery(queryIdx)) {
-                test.mAreaQueryIdx = queryIdx;
-                _ref0->BeginQuery(test.mAreaQueryIdx);
+            bool ok = mOcclusionQueryMgr->CreateQuery(test.mAreaQueryIdx);
+            if (ok) {
+                mOcclusionQueryMgr->BeginQuery(test.mAreaQueryIdx);
+            }
+            if (ok) {
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_TRIANGLESTRIP, 4, verts, sizeof(QuadVertex));
-                _ref0->EndQuery(test.mAreaQueryIdx);
+                mOcclusionQueryMgr->EndQuery(test.mAreaQueryIdx);
             }
         } else {
-            flare->SetOcclusionReady(true);
-            flare->SetVisible(true);
+            test.mFlare->SetOcclusionReady(true);
+            test.mFlare->SetVisible(true);
         }
     }
 
