@@ -475,10 +475,7 @@ void HamAudio::PollCrossfade() {
             shouldActivate = shouldActivate && currentTime < mCrossfade.mEnd;
         }
         if (shouldActivate) {
-            mActiveCrossfade.mStart = mCrossfade.mStart;
-            mActiveCrossfade.mEnd = mCrossfade.mEnd;
-            mActiveCrossfade.mDuration = mCrossfade.mDuration;
-            mActiveCrossfade.mFlag = mCrossfade.mFlag;
+            mActiveCrossfade = mCrossfade;
         }
     }
 
