@@ -304,18 +304,30 @@ void HamCamShot::UpdateTargetsFlipped() {
 }
 
 void HamCamShot::Reteleport(const Vector3 &offset, bool teleport, Symbol sym) {
+    // 0x824A6B6C `lbz r11, 0x388(r3)`: the flip test reads mFlipActive
+    // (0x388), NOT mTargetsFlipped (0x2dd) -- and it is read ONCE, before the
+    // loop, into a local.
+    bool flipped = mFlipActive;
     for (ObjList<Target>::iterator it = mTargets.begin(); it != mTargets.end(); ++it) {
         Target &target = *it;
-        Target *flipTarget = &target;
-        if (mTargetsFlipped) {
+        // 0x824A6C44-0x824A6C5C is an if/ELSE (the `mr r28, r29` sits in the
+        // not-taken arm), not an initialise-then-overwrite.
+        Target *flipTarget;
+        if (flipped) {
             flipTarget = GetFlipTarget(&target);
+        } else {
+            flipTarget = &target;
         }
 
         if (target.mTarget.Null())
             continue;
         if (teleport && !target.mTeleport)
             continue;
-        if (!sym.Null() & sym != target.mTarget)
+        // 0x824A6C88-0x824A6CA4: `sym == gNullStr` is an out-of-line call to
+        // Symbol::operator==(const char *) and it SHORT-CIRCUITS the second
+        // test -- not the branchless `&` we had, which inlines Null() to a
+        // pointer compare and emits subic/subfe/and.
+        if (!(sym == gNullStr) && sym != target.mTarget)
             continue;
 
         std::list<TargetCache>::iterator cacheIt = CreateTargetCache(target.mTarget);
@@ -338,22 +350,35 @@ void HamCamShot::Reteleport(const Vector3 &offset, bool teleport, Symbol sym) {
                 static Symbol AUTHORED_CAM_CATS("AUTHORED_CAM_CATS");
                 DataArray *cats = DataGetMacro(AUTHORED_CAM_CATS);
 
-                bool doSwap = false;
-                if (cats != NULL) {
-                    DataNode catNode(mCategory);
-                    if (cats->Contains(catNode)) {
-                        doSwap = true;
-                    }
-                }
-                if (!doSwap) {
-                    if (mCategory == DC_PLAYER_FREESTYLE || mCategory == INTRO_QUICK
-                        || mCategory == INTRO_PLAYLIST) {
-                        doSwap = true;
-                    }
-                }
+                // 0x824A6F1C-0x824A6F94: ONE boolean expression.  The
+                // DataNode is a temporary built inside the `&&` (hence MSVC's
+                // conditional-destructor bitfield at 0x50(r31), set with
+                // `ori r29, r11, 0x1` and tested afterwards), and the three
+                // category tests run whenever Contains did not already say
+                // yes -- including when cats is null.
+                bool doSwap = (cats != NULL && cats->Contains(DataNode(mCategory)))
+                    || mCategory == DC_PLAYER_FREESTYLE || mCategory == INTRO_QUICK
+                    || mCategory == INTRO_PLAYLIST;
 
                 if (doSwap) {
-                    Symbol otherName = GetFlipTarget(flipTarget->mTarget);
+                    // 0x824A6FA4-0x824A6FE8: the flip-name mapping is written
+                    // out HERE against this function's own statics (r27/r25/
+                    // r24/r26 are Reteleport's player0/player1/backup0/
+                    // backup1), not fetched from GetFlipTarget(Symbol) -- and
+                    // the no-match result is a NULL Symbol (r10 starts at
+                    // gNullStr), where GetFlipTarget returns its argument.
+                    // With GetFlipTarget the inner loop would match the target
+                    // itself on any non-player/backup name.
+                    Symbol otherName;
+                    if (flipTarget->mTarget == player0) {
+                        otherName = player1;
+                    } else if (flipTarget->mTarget == player1) {
+                        otherName = player0;
+                    } else if (flipTarget->mTarget == backup0) {
+                        otherName = backup1;
+                    } else if (flipTarget->mTarget == backup1) {
+                        otherName = backup0;
+                    }
                     for (ObjList<Target>::iterator it2 = mTargets.begin();
                          it2 != mTargets.end();
                          ++it2) {

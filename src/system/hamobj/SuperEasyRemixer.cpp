@@ -165,7 +165,10 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
     mSuperEasyParents.clear();
     mSuperEasyVariants.reserve(mTotalMeasures);
     mSuperEasyParents.reserve(mTotalMeasures);
-    int i7 = 1;
+    // `bool`, not `int`: the image tests it with `clrlwi. r11, r19, 24` at
+    // 0x824F6FB4 and 0x824F7070 -- a byte extract -- and materialises it with
+    // `li r19, 0x1` / `li r19, 0x0`.
+    bool ok = true;
     HamSupereasyData *data =
         ObjDirItr<HamSupereasyData>(TheHamDirector->GetMoveDir(), false);
     if (data) {
@@ -177,39 +180,40 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
         }
         for (int i = 0; i < data->mRoutine.size(); i++) {
             HamSupereasyMeasure &curMeasure = data->mRoutine[i];
-            if (curMeasure.preferred.Null() && curMeasure.first.Null()) {
+            // The image FALLS BACK from `preferred` to `first`.  At 0x824F6F08
+            // it loads `preferred` (0x8) into r4 and compares it to gNullStr;
+            // on the null path 0x824F6F18 loads `first` (0x0) into the SAME r4
+            // and compares it the same way; and FindMoveByVariantName at
+            // 0x824F6F3C is then handed whatever r4 holds -- it never re-reads
+            // 0x8(r11).  Only when both are null does it take the
+            // push_back(nullptr) path at 0x824F6F28.
+            //
+            // We used to pass `preferred` unconditionally, so every altRev-0
+            // song (whose `preferred` is never written during load) MILO_FAILed
+            // on an empty symbol.  The HX_NATIVE guard that used to sit here --
+            // a three-level preferred/first/second fallback -- was a workaround
+            // for exactly this missing branch, and is now redundant: the
+            // image's own two-level fallback covers it, and a measure with
+            // neither symbol set legitimately has no move.
+            Symbol name = curMeasure.preferred;
+            if (name.Null() && (name = curMeasure.first).Null()) {
                 mSuperEasyVariants.push_back(nullptr);
             } else {
-#ifdef HX_NATIVE
-                // altRev-0 songs (e.g. macarena) never read `preferred` during load,
-                // so it stays empty even for measures with a real move. The original
-                // would MILO_FAIL on FindMoveByVariantName("") here; mirror the
-                // sibling LoadAllVariants() fallback (preferred -> first -> second).
-                Symbol lookupName = curMeasure.preferred;
-                if (lookupName.Null())
-                    lookupName = curMeasure.first;
-                if (lookupName.Null())
-                    lookupName = curMeasure.second;
-                const MoveVariant *mv =
-                    TheMoveMgr->Graph().FindMoveByVariantName(lookupName);
-#else
-                const MoveVariant *mv =
-                    TheMoveMgr->Graph().FindMoveByVariantName(curMeasure.preferred);
-#endif
+                const MoveVariant *mv = TheMoveMgr->Graph().FindMoveByVariantName(name);
                 if (!mv) {
                     MILO_FAIL(
                         "'%s' HamSupereasyData has move '%s' at index %d not found in move graph",
                         TheGameData->GetSong().Str(),
-                        curMeasure.preferred,
+                        name,
                         i
                     );
-                    i7 = 0;
+                    ok = false;
                     break;
                 }
                 mSuperEasyVariants.push_back(mv);
             }
         }
-        if (i7 != 0) {
+        if (ok) {
             for (int i = 0; i < mSuperEasyVariants.size(); i++) {
                 MoveParent *parent = nullptr;
                 if (mSuperEasyVariants[i]) {
@@ -220,15 +224,15 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
             BridgeGapsInMoveParents(3);
         }
     } else {
-        i7 = 0;
+        ok = false;
         MILO_NOTIFY("No HamSupereasyData found for song '%s'", TheGameData->GetSong());
     }
-    if (i7 == 0) {
+    if (!ok) {
         MILO_NOTIFY("Supereasy will use the easy track for '%s'", TheGameData->GetSong());
         mSuperEasyParents = GetMoveParentsByDifficulty(kDifficultyEasy);
         mSuperEasyVariants = GetMoveVariantsByDifficulty(kDifficultyEasy);
     }
-    mDataError = i7 == 0;
+    mDataError = !ok;
 }
 
 void SuperEasyRemixer::LoadAllVariants() {

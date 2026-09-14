@@ -58,84 +58,101 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
     }
     return _result;
 }
-
 bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
-    // Smooth hand and shoulder positions
-    const TrackedJoint &rightHand = skel.HandJoint(kSkeletonRight);
-    unk50.Smooth(rightHand.mJointPos[0], dt, false);
-    const TrackedJoint &rightShoulder = skel.ShoulderJoint(kSkeletonRight);
-    unk8c.Smooth(rightShoulder.mJointPos[0], dt, false);
-    const TrackedJoint &leftHand = skel.HandJoint(kSkeletonLeft);
-    unkc8.Smooth(leftHand.mJointPos[0], dt, false);
-    const TrackedJoint &leftShoulder = skel.ShoulderJoint(kSkeletonLeft);
-    unk104.Smooth(leftShoulder.mJointPos[0], dt, false);
+    // 0x82DFE038 `li r25, 0x0` seeds the result in a callee-saved register and
+    // 0x82DFE514 `mr r3, r25` returns it -- one result variable, not two
+    // `return` statements.  (r25 is also why the prologue is __savegprlr_25.)
+    bool inPose = false;
 
-    // Right arm direction: shoulder - hand, normalized
-    Vector3 rightHandVal = unk50.Value();
-    Vector3 rightShoulderVal = unk8c.Value();
-    Vector3 rightArmDir(
-        rightShoulderVal.x - rightHandVal.x,
-        rightShoulderVal.y - rightHandVal.y,
-        rightShoulderVal.z - rightHandVal.z
-    );
+    // Smooth hand and shoulder positions.  Right (kSkeletonSide 1) first:
+    // 0x82DFE034 `li r4, 0x1`.
+    unk50.Smooth(skel.HandJoint(kSkeletonRight).mJointPos[0], dt, false);
+    unk8c.Smooth(skel.ShoulderJoint(kSkeletonRight).mJointPos[0], dt, false);
+    unkc8.Smooth(skel.HandJoint(kSkeletonLeft).mJointPos[0], dt, false);
+    unk104.Smooth(skel.ShoulderJoint(kSkeletonLeft).mJointPos[0], dt, false);
+
+    // Arm direction: shoulder - hand, normalized.
+    //
+    // Every Vector3DESmoother::Value() result stays an unnamed TEMPORARY here.
+    // 0x82DFE0E8/0x82DFE0F8 hand the two calls the stack temps at r1+0x70 and
+    // r1+0x60, read the components straight off the returned pointer, and then
+    // let MSVC colour those slots for the next user -- r1+0x60 becomes
+    // leftArmDir at 0x82DFE184 and r1+0x70 becomes `lateral` at 0x82DFE21C.
+    // The whole function owns just FIVE 16-byte vector slots (0x50, 0x60,
+    // 0x70, 0x80, 0x90) in a 0x130 frame; a named `Vector3` per Value() pins
+    // six more and costs 0x60 of frame.
+    Vector3 rightArmDir;
+    Subtract(unk8c.Value(), unk50.Value(), rightArmDir);
     Normalize(rightArmDir, rightArmDir);
 
-    // Left arm direction: shoulder - hand, normalized
-    Vector3 leftHandVal = unkc8.Value();
-    Vector3 leftShoulderVal = unk104.Value();
-    Vector3 leftArmDir(
-        leftShoulderVal.x - leftHandVal.x,
-        leftShoulderVal.y - leftHandVal.y,
-        leftShoulderVal.z - leftHandVal.z
-    );
+    Vector3 leftArmDir;
+    Subtract(unk104.Value(), unkc8.Value(), leftArmDir);
     Normalize(leftArmDir, leftArmDir);
 
-    // Spine vector: shoulderCenter - hipCenter
-    float spineX = skel.TrackedJoints()[kJointShoulderCenter].mJointPos[0].x
-        - skel.TrackedJoints()[kJointHipCenter].mJointPos[0].x;
-    float spineY = skel.TrackedJoints()[kJointShoulderCenter].mJointPos[0].y
-        - skel.TrackedJoints()[kJointHipCenter].mJointPos[0].y;
-    float spineZ = skel.TrackedJoints()[kJointShoulderCenter].mJointPos[0].z
-        - skel.TrackedJoints()[kJointHipCenter].mJointPos[0].z;
+    // Spine vector: shoulderCenter - hipCenter.  0x82DFE198-0x82DFE1C4 reads
+    // 0xec/0xf0/0xf4 and 0x4/0x8/0xc off the Skeleton -- mTrackedJoints[2] and
+    // mTrackedJoints[0].  It never reaches memory: `spine` and `proj` below are
+    // only ever handed to INLINE helpers, so MSVC keeps all six components in
+    // FPRs and the frame stays at five vector slots.
+    Vector3 spine;
+    Subtract(
+        skel.TrackedJoints()[kJointShoulderCenter].mJointPos[0],
+        skel.TrackedJoints()[kJointHipCenter].mJointPos[0],
+        spine
+    );
 
-    // Project spine onto body normal direction, remove that component to get lateral
-    Vector3 bodyNormalVal = unk4.Value();
-    float spineDot = bodyNormalVal.x * spineX + bodyNormalVal.y * spineY + bodyNormalVal.z * spineZ;
+    // Project the spine onto the smoothed body normal and subtract that
+    // component off to get the lateral (near-vertical) axis.  unk4.Value() is
+    // called FOUR separate times (0x82DFE1C8, 0x82DFE1F0, 0x82DFE264,
+    // 0x82DFE2B0); each result is consumed straight off the returned pointer
+    // (`mr r11, r3`), never bound to a named object.
+    float spineDot = Dot(unk4.Value(), spine);
 
-    Vector3 bodyNormalVal2 = unk4.Value();
-    float projX = bodyNormalVal2.x * spineDot;
-    float projY = bodyNormalVal2.y * spineDot;
-    float projZ = bodyNormalVal2.z * spineDot;
-    Vector3 lateral(spineX - projX, spineY - projY, spineZ - projZ);
+    // 0x82DFE1D8-0x82DFE22C is three `fmuls` and then three `fsubs`, never an
+    // `fnmsubs`: the scale and the subtraction are two separate inline calls,
+    // so /fp:fast has no single `a - b*c` tree to contract.
+    Vector3 proj;
+    Scale(unk4.Value(), spineDot, proj);
+    Vector3 lateral;
+    Subtract(spine, proj, lateral);
     Normalize(lateral, lateral);
 
-    // Project arm directions onto body vectors
-    float rightElevation = -(unk40.x * rightArmDir.x + unk40.y * rightArmDir.y + unk40.z * rightArmDir.z);
-    Vector3 bodyNormalVal3 = unk4.Value();
-    float leftElevation = -(unk40.x * leftArmDir.x + unk40.y * leftArmDir.y + unk40.z * leftArmDir.z);
-    float rightForward = rightArmDir.x * bodyNormalVal3.x + rightArmDir.y * bodyNormalVal3.y + rightArmDir.z * bodyNormalVal3.z;
-    Vector3 bodyNormalVal4 = unk4.Value();
+    // Project the arm directions onto the body side vector (unk40) and onto
+    // the body normal.
+    float rightElevation = -Dot(unk40, rightArmDir);
+    float rightForward = Dot(rightArmDir, unk4.Value());
+    float leftElevation = -Dot(unk40, leftArmDir);
+    float leftForward = Dot(unk4.Value(), leftArmDir);
+
     float negZero = -0.0f;
-    float leftForward = bodyNormalVal4.x * leftArmDir.x + bodyNormalVal4.y * leftArmDir.y + bodyNormalVal4.z * leftArmDir.z;
 
-    // Compute angles for right arm
-    float rightAngle1 = std::atan2(rightElevation, (rightArmDir.z + rightArmDir.x) * negZero - rightArmDir.y);
+    // Compute angles for the right arm
+    float rightAngle1 = std::atan2(
+        rightElevation, (rightArmDir.z + rightArmDir.x) * negZero - rightArmDir.y
+    );
     float rightAngle2 = std::atan2(rightElevation, rightForward);
-    const TrackedJoint &rHand = skel.HandJoint(kSkeletonRight);
-    const TrackedJoint &rElbow = skel.ElbowJoint(kSkeletonRight);
-    const TrackedJoint &rShoulder = skel.ShoulderJoint(kSkeletonRight);
-    float rightBend = GetBend(rShoulder.mJointPos[0], rElbow.mJointPos[0], rHand.mJointPos[0]);
+    float rightBend = GetBend(
+        skel.ShoulderJoint(kSkeletonRight).mJointPos[0],
+        skel.ElbowJoint(kSkeletonRight).mJointPos[0],
+        skel.HandJoint(kSkeletonRight).mJointPos[0]
+    );
 
-    // Compute angles for left arm
-    float leftAngle1 = std::atan2(leftElevation, (leftArmDir.z + leftArmDir.x) * negZero - leftArmDir.y);
+    // Compute angles for the left arm
+    float leftAngle1 = std::atan2(
+        leftElevation, (leftArmDir.z + leftArmDir.x) * negZero - leftArmDir.y
+    );
     float leftAngle2 = std::atan2(leftElevation, leftForward);
-    const TrackedJoint &lHand = skel.HandJoint(kSkeletonLeft);
-    const TrackedJoint &lElbow = skel.ElbowJoint(kSkeletonLeft);
-    const TrackedJoint &lShoulder = skel.ShoulderJoint(kSkeletonLeft);
-    float leftBend = GetBend(lShoulder.mJointPos[0], lElbow.mJointPos[0], lHand.mJointPos[0]);
+    float leftBend = GetBend(
+        skel.ShoulderJoint(kSkeletonLeft).mJointPos[0],
+        skel.ElbowJoint(kSkeletonLeft).mJointPos[0],
+        skel.HandJoint(kSkeletonLeft).mJointPos[0]
+    );
 
-    // Lateral body tilt angle
-    float tiltAngle = std::acos((lateral.x + lateral.y) * 0.0f + lateral.z);
+    // Lean of the lateral axis away from vertical: Dot(lateral, yAxis), which
+    // /fp:fast folds to `(x + z) * 0 + y`.  0x82DFE3A0-0x82DFE3BC loads
+    // 0x70(r1) and 0x78(r1) (x and z) into the fadds and 0x74(r1) (y) into the
+    // fmadds addend -- the axis is Y, not Z.
+    float tiltAngle = std::acos((lateral.x + lateral.z) * 0.0f + lateral.y);
 
     // Wrap negative angles to [0, 2*PI]
     if (rightAngle1 < 0.0f) {
@@ -151,23 +168,19 @@ bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
         leftAngle2 += 2.0f * PI;
     }
 
-    // Check right arm pose
-    bool rightInPose = true;
-    if (rightAngle1 >= 155.0f * DEG2RAD || rightAngle1 <= 115.0f * DEG2RAD
-        || rightAngle2 >= 110.0f * DEG2RAD || rightAngle2 <= 70.0f * DEG2RAD
-        || rightBend >= 35.0f * DEG2RAD) {
-        rightInPose = false;
-    }
+    // 0x82DFE410-0x82DFE458: every failing test branches to one shared
+    // `li r11, 0`, and the last test falls through to a `li r11, 0x1` that is
+    // set up before it -- the positive `&&` chain, not an initialise-true /
+    // conditionally-clear pair (which inverts all five branch polarities).
+    bool rightInPose = rightAngle1 < 155.0f * DEG2RAD
+        && rightAngle1 > 115.0f * DEG2RAD && rightAngle2 < 110.0f * DEG2RAD
+        && rightAngle2 > 70.0f * DEG2RAD && rightBend < 35.0f * DEG2RAD;
 
-    // Check left arm pose
-    bool leftInPose = true;
-    if (leftAngle1 >= 200.0f * DEG2RAD || leftAngle1 <= 160.0f * DEG2RAD
-        || leftAngle2 >= 2.0f * PI || leftAngle2 <= 0.0f
-        || leftBend >= 110.0f * DEG2RAD) {
-        leftInPose = false;
-    }
+    bool leftInPose = leftAngle1 < 200.0f * DEG2RAD && leftAngle1 > 160.0f * DEG2RAD
+        && leftAngle2 < 2.0f * PI && leftAngle2 > 0.0f && leftBend < 110.0f * DEG2RAD;
 
-    // If left arm not in pose, check joint tracking confidence
+    // If the left arm is not in pose, an untracked left hand or shoulder
+    // excuses it (0x82DFE4A4-0x82DFE4D8).
     if (!leftInPose) {
         if (skel.HandJoint(kSkeletonLeft).mJointConf != kConfidenceNotTracked
             && skel.ShoulderJoint(kSkeletonLeft).mJointConf != kConfidenceNotTracked) {
@@ -177,10 +190,15 @@ bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
         }
     }
 
-    if (leftInPose && rightInPose && tiltAngle < 9.0f * DEG2RAD) {
-        return true;
+    // 0x82DFE4DC-0x82DFE4F4 materialises the tilt test into its own byte
+    // (`li r11, 0x1` / `fcmpu` / `blt` / `li r11, 0x0`) BEFORE the three
+    // `clrlwi.`+`beq` tests at 0x82DFE4F8-0x82DFE50C.  Written inline in the
+    // `&&`, the compare short-circuits behind the two bools instead.
+    bool tiltOk = tiltAngle < 9.0f * DEG2RAD;
+    if (leftInPose && rightInPose && tiltOk) {
+        inPose = true;
     }
-    return false;
+    return inPose;
 }
 
 void HandInvokeGestureFilter::Update(const Skeleton &skel, int ms) {

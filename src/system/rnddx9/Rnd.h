@@ -213,19 +213,10 @@ private:
     unsigned int mEdramBase;
     unsigned int mEdramHzBase;
     int mNumTiles; // 0x3b0
-    D3DRECT mTileRect; // 0x3b4
-    int unk3c4;
-    int unk3c8;
-    int unk3cc;
-    int unk3d0;
-    int unk3d4;
-    int unk3d8;
-    int unk3dc;
-    int unk3e0;
-    int unk3e4;
-    int unk3e8;
-    int unk3ec;
-    int unk3f0;
+    // InitBuffers fills this with mNumTiles rects (a horizontal or vertical
+    // 2-way split of the frame); BeginTiling hands the whole array to
+    // D3DDevice_BeginTiling.  0x3b4..0x3f4 is exactly four D3DRECTs.
+    D3DRECT mTileRects[4]; // 0x3b4
     bool mSuspended;
     bool mPrintGlitches;
     bool mCaptureNextFrame;

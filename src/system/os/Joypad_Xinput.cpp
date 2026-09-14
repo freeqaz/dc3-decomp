@@ -4,6 +4,7 @@
 #include "os\CritSec.h"
 #include "os\Joypad.h"
 #include "os\UserMgr.h"
+#include "os\UsbMidiKeyboard.h"
 #include "xdk\XAPILIB.h"
 #include "xdk\xapilibi\winerror.h"
 
@@ -77,6 +78,16 @@ void JoypadResetXboxPC(int pad) {
     }
 }
 
+// The drum-pedal curve constants, read straight out of the image's literal
+// pool: __real@41d80000 = 27.0f, __real@42f40000 = 122.0f,
+// __real@3c2c7692 = 0.010526316f (= 1/95, the width of the 27..122 window)
+// and __real@c6cf5600 = -26539.0f.  All four are loaded ONCE, before the
+// drums test at 0x825FCF1C, and shared by both clamp blocks.
+static const float kPedalLo = 27.0f;
+static const float kPedalHi = 122.0f;
+static const float kPedalScale = 0.010526316f;
+static const float kPedalRange = -26539.0f;
+
 JoypadType ReadSingleXinputJoypad(
     int pad,
     int user_idx,
@@ -93,10 +104,15 @@ JoypadType ReadSingleXinputJoypad(
 ) {
     XINPUT_STATE state;
     XINPUT_CAPABILITIES caps;
-    unsigned int unused;
     JoypadType joypad_type = kJoypadAnalog;
 
-    GetXinputSinceLastFrame(user_idx, &state, &unused);
+    // The third argument is `buttons` itself, not a scratch local -- this is
+    // where the button word gets filled in.  The image never materialises an
+    // address for it: r5 arrives holding `buttons`, is copied to the
+    // callee-saved r24 at 0x825FCDF4 `mr r24, r5`, and is left UNTOUCHED
+    // through the `bl` at 0x825FCE10, so it is still the third argument.  Ours
+    // passed `&unused` and threw the result away.
+    GetXinputSinceLastFrame(user_idx, &state, buttons);
 
     if (-1 == state.dwPacketNumber) {
         return kJoypadNone;
@@ -147,49 +163,58 @@ JoypadType ReadSingleXinputJoypad(
     unsigned char deadzone_apply = (setup_flag == 0) ? 1 : 0;
     TranslateStick(stick_lx, lx, 0, deadzone_apply);
 
-    short ry = state.Gamepad.sThumbRY;
-    if ((joypad_type == kJoypadXboxDrums) && (ry > 0) && (ry < 0x100)) {
-        float f = (float)ry;
-        float f2 = (248.0f - f >= 0.0f) ? 248.0f : f;
-        float f3 = (244.0f - f2 >= 0.0f) ? 244.0f : f2;
-        int scaled = (int)((f3 - 248.0f) * 0.03054f * -55001.0f);
+    // The drum-pedal remap is applied to sThumbLY and sThumbRX, and stick_ry
+    // gets the plain call -- we had LY and RY swapped.  In
+    // build/373307D9/asm/system/os/Joypad_Xinput.s the four TranslateStick
+    // calls are, in order: 0x825FCF00 r3=r29 (arg 6, stick_lx) with
+    // `lhz r4, 0x68(r1)` = sThumbLX; 0x825FCF90/0x825FCFA4 r3=r28 (arg 7,
+    // stick_ly) with `lhz r4, 0x6a(r1)` = sThumbLY and the drums clamp;
+    // 0x825FD024 r3=r27 (arg 8, stick_rx) with `lhz r7, 0x6c(r1)` =
+    // sThumbRX and the same clamp; 0x825FD04C r3=r25 (arg 9, stick_ry)
+    // with `lhz r4, 0x6e(r1)` = sThumbRY and the setup_flag||drums deadzone.
+    short ly = state.Gamepad.sThumbLY;
+    if ((joypad_type == kJoypadXboxDrums) && (ly > 0) && (ly < 0x100)) {
+        float f = (float)ly;
+        float f2 = (kPedalLo - f >= 0.0f) ? kPedalLo : f;
+        float f3 = (f2 - kPedalHi >= 0.0f) ? kPedalHi : f2;
+        int scaled = (int)((f3 - kPedalLo) * kPedalScale * kPedalRange);
         short result = (short)(-0x8000 - scaled);
-        TranslateStick(stick_ry, result, 1, 0);
+        TranslateStick(stick_ly, result, 1, 0);
     } else {
-        TranslateStick(stick_ry, 1, 1, deadzone_apply);
+        TranslateStick(stick_ly, ly, 1, deadzone_apply);
     }
 
     short rx = state.Gamepad.sThumbRX;
     if (joypad_type == kJoypadXboxDrums && (rx > 0) && (rx < 0x100)) {
-            float f = (float)rx;
-            float f2 = (248.0f - f >= 0.0f) ? 248.0f : f;
-            float f3 = ((int)244.0f - f2 >= 0.0f) ? 244.0f : f2;
-            int scaled = (int)((f3 - 248.0f) * 0.03054f * -55001.0f);
-            short result = (short)(-0x8000 - scaled);
-            TranslateStick(stick_rx, result, 1, 0);
-        } else {
+        float f = (float)rx;
+        float f2 = (kPedalLo - f >= 0.0f) ? kPedalLo : f;
+        float f3 = (f2 - kPedalHi >= 0.0f) ? kPedalHi : f2;
+        int scaled = (int)((f3 - kPedalLo) * kPedalScale * kPedalRange);
+        short result = (short)(-0x8000 - scaled);
+        TranslateStick(stick_rx, result, 1, 0);
+    } else {
         TranslateStick(stick_rx, rx, 1, 0);
     }
 
-        unsigned char deadzone_apply2;
+    unsigned char deadzone_apply2;
     if ((setup_flag != 0 || joypad_type == kJoypadXboxDrums)) {
         deadzone_apply2 = 0;
     } else {
         deadzone_apply2 = 1;
     }
-    short ly = state.Gamepad.sThumbLY;
-    TranslateStick(stick_ly, ly, 1, deadzone_apply2);
+    short ry = state.Gamepad.sThumbRY;
+    TranslateStick(stick_ry, ry, 1, deadzone_apply2);
 
     if ((joypad_type == kJoypadXboxMidiBoxKeyboard) || (joypad_type == kJoypadXboxMidiBoxDrums)) {
-        void *keyboard = *(void **)0x83099D18;
-        if (keyboard != 0) {
-            void **vtbl = *(void ***)keyboard;
-            unsigned char sustain = ((unsigned char (*)(void *, int))(vtbl[7]))(keyboard, pad);
-            if (sustain != 0) {
-                *buttons |= 4;
-            } else {
-                *buttons &= 0xFFFFFFFB;
-            }
+        // A NAMED global and a DIRECT call, not a raw address and a vtable
+        // slot: 0x825FD064 `lwz r3, "?TheKeyboard@@3PAVUsbMidiKeyboard@@A"@l(r11)`
+        // and 0x825FD074 `bl "?GetSustain@UsbMidiKeyboard@@QAA_NH@Z"`.  The
+        // null case falls into the SAME test with a materialised 0
+        // (0x825FD07C `li r3, 0x0`), and `*buttons` is loaded once for both
+        // arms at 0x825FD084.
+        bool sustain = TheKeyboard != nullptr ? TheKeyboard->GetSustain(pad) : false;
+        if (sustain) {
+            *buttons |= 4;
         } else {
             *buttons &= 0xFFFFFFFB;
         }

@@ -823,19 +823,28 @@ unsigned long StartVoiceThreadEntry(void *) {
     rolling++;
     WaitForSingleObject(gEvent, INFINITE);
     while (!gShutdownVoiceThread) {
-        gLockPendingLists.Enter();
-        gInProgressVoices = gPendingVoices;
-        gPendingVoices.clear();
+        // Scoped CritSecTracker, not a bare Enter()/Exit() pair.  The target
+        // stores &gLockPendingLists TWICE before the loop (0x82E392AC
+        // `stw r11, 0x54(r31)` and 0x82E392B4 `stw r11, 0x78(r31)`) and
+        // &gVoiceGC twice as well (0x50 and 0x7c): one copy is the hoisted
+        // anchor, the other is the guard object's `mCritSec` member, which has
+        // to stay in memory for the unwind funclet.  That EH state is also what
+        // buys the target's `subi r31, r1, 0x140` frame pointer (0x82E39258)
+        // and its 0x140 frame -- see the same lever in dispose() above.
+        {
+            CritSecTracker lock(&gLockPendingLists);
+            gInProgressVoices = gPendingVoices;
+            gPendingVoices.clear();
 
-        gWasCommitSyncVoices = false;
-        if (gCommitSyncVoices) {
-            gCommitSyncVoices = false;
-            gWasCommitSyncVoices = true;
-            gWasCommitTag = gCommitTag;
-            gInProgressSyncVoices = gPendingSyncVoices;
-            gPendingSyncVoices.clear();
+            gWasCommitSyncVoices = false;
+            if (gCommitSyncVoices) {
+                gCommitSyncVoices = false;
+                gWasCommitSyncVoices = true;
+                gWasCommitTag = gCommitTag;
+                gInProgressSyncVoices = gPendingSyncVoices;
+                gPendingSyncVoices.clear();
+            }
         }
-        gLockPendingLists.Exit();
 
         if (gInProgressVoices.size() > 0) {
             for (std::list<Voice *>::iterator it = gInProgressVoices.begin();
@@ -863,50 +872,69 @@ unsigned long StartVoiceThreadEntry(void *) {
         }
 
         // Process voice garbage collection
-        gVoiceGC.Enter();
-        int gcCount = 0;
-        unsigned int now = GetTickCount() - 500000;
-        while (s_voiceGC.begin() != s_voiceGC.end()) {
-            unsigned int elapsed = now - s_voiceGC.front().disposeTick;
-            if (elapsed < 50 && elapsed != 0) {
-                break;
-            }
-            s_voiceGCInProgress.push_back(s_voiceGC.front());
-            s_voiceGC.pop_front();
-            gVoiceCounters[1]--;
-            if (++gcCount >= 4) {
-                break;
+        {
+            CritSecTracker lock(&gVoiceGC);
+            int gcCount = 0;
+            unsigned int now = GetTickCount() - 500000;
+            // `begin()` is bound to a NAMED iterator, not left an unnamed temporary
+            // inside the loop condition.  0x82E394D8-0x82E39510 copies all four
+            // words of _M_start into the 16-byte slot at 0x90(r31) and then reloads
+            // `0x90(r31)` to compare against `_M_finish._M_cur` read straight off
+            // the deque at 0x10(r26); the same four-word copy is repeated at the
+            // bottom of the loop, 0x82E39560-0x82E39590.  An unnamed temporary is
+            // folded away and only `_M_start._M_cur` is read.
+            for (;;) {
+                std::deque<PoolVoice>::iterator front = s_voiceGC.begin();
+                if (front == s_voiceGC.end()) {
+                    break;
+                }
+                // The tick difference is computed and tested in 64 bits, with an
+                // explicit wraparound fixup -- 0x82E39520 `subf r11, r11, r29`
+                // over two zero-extended 32-bit ticks (0x82E39514
+                // `rldicl r29, r10, 0, 32` and the `lwz` of disposeTick), then
+                // 0x82E39524 `cmpdi cr6, r11, 0x0` / 0x82E3952C-0x82E39534
+                // `li r12, 1` / `rldicr r12, r12, 32, 63` / `add r11, r11, r12`.
+                // All three compares are `cmpdi` (signed doubleword), so the
+                // variable is a 64-bit signed one; an `unsigned int` elapsed gives
+                // `cmplwi` throughout and no fixup at all.
+                long long elapsed =
+                    (long long)now - (long long)(unsigned int)s_voiceGC.front().disposeTick;
+                if (elapsed < 0) {
+                    elapsed += 1LL << 32;
+                }
+                if (elapsed < 50 && elapsed != 0) {
+                    break;
+                }
+                s_voiceGCInProgress.push_back(s_voiceGC.front());
+                s_voiceGC.pop_front();
+                gVoiceCounters[1]--;
+                if (++gcCount >= 4) {
+                    break;
+                }
             }
         }
-        gVoiceGC.Exit();
 
         // NOT `if (TheXboxSynth) { ... }`: the target computes &TheXboxSynth->unkb0
         // unconditionally (addic. r29, r11, 0xb0) and guards only the Enter()/Exit()
         // pair on the resulting pointer -- the same idiom createOrReuse() uses above.
         // The drain loop itself runs even with no synth.
-        CriticalSection *cs = &TheXboxSynth->unkb0;
-        if (cs) {
-            cs->Enter();
-        }
-        for (std::deque<PoolVoice>::iterator it = s_voiceGCInProgress.begin();
-             it != s_voiceGCInProgress.end(); ++it) {
-            PoolVoice &pv = *it;
-            // IXAudio2Voice::DestroyVoice() -- slot 0x48, no arguments, and the
-            // target calls it without a null check on sourceVoice.
-            int *pSv = (int *)pv.sourceVoice;
-            ((void (*)(int *))(*(int *)(*(int *)pSv + 0x48)))(pSv);
-            // `delete`-shaped: the null check guards only the deleting destructor
-            // call; the field clears and the egParams free are unconditional.
-            if (pv.eg) {
-                int *pEg = (int *)pv.eg;
-                ((void (*)(int *, int))(*(int *)(*(int *)pEg + 0x38)))(pEg, 1);
+        {
+            CritSecTracker lock(&TheXboxSynth->unkb0);
+            for (std::deque<PoolVoice>::iterator it = s_voiceGCInProgress.begin();
+                 it != s_voiceGCInProgress.end(); ++it) {
+                PoolVoice &pv = *it;
+                // IXAudio2Voice::DestroyVoice() -- slot 0x48, no arguments, and the
+                // target calls it without a null check on sourceVoice.
+                ((void (*)(int))(*(int *)(*(int *)pv.sourceVoice + 0x48)))(pv.sourceVoice);
+                // `delete`-shaped: the null check guards only the deleting destructor
+                // call; the field clears and the egParams free are unconditional.
+                if (pv.eg) {
+                    ((void (*)(void *, int))(*(int *)(*(int *)pv.eg + 0x38)))(pv.eg, 1);
+                }
+                pv.eg = 0;
+                PoolFree(0x10, pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
+                pv.egParams = 0;
             }
-            pv.eg = 0;
-            PoolFree(0x10, pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
-            pv.egParams = 0;
-        }
-        if (cs) {
-            cs->Exit();
         }
         s_voiceGCInProgress.clear();
 

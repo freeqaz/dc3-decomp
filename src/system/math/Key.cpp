@@ -137,10 +137,17 @@ void QuatSpline(
         float fsq = ref * ref;
         float fcubed = fsq * ref;
         int idx1 = idx + 1;
-        Hmx::Quat q88;
+        // NEGATIVE RESULT: defining q88 first (from prev->value, so its
+        // initialiser does not name prevQuat) to try to land it in the
+        // image's lowest Quat slot 0x60 costs 17pp -- the frame grows 0x10
+        // and the prologue goes r25 -> r22.  The image's slot order
+        // (q88 0x60, prevQuat 0x70, nextQuat 0x80, q58 0x90) is not
+        // reachable by reordering these four declarations; MSVC assigns
+        // them in order of first STORE regardless of declaration order
+        // (hoisting `Hmx::Quat q88;` above prevQuat is byte-neutral).
         Hmx::Quat prevQuat = prev->value;
         Hmx::Quat nextQuat = next->value;
-        q88 = idx == 0 ? prevQuat : keys[idx - 1].value;
+        Hmx::Quat q88 = idx == 0 ? prevQuat : keys[idx - 1].value;
         Hmx::Quat q58 = idx1 == keys.size() - 1 ? nextQuat : keys[idx1 + 1].value;
         NormalizeTo(prevQuat, q88);
         NormalizeTo(prevQuat, nextQuat);
@@ -154,7 +161,7 @@ void QuatSpline(
             // Catmull-Rom, evaluated as a flat sum (cubic, quadratic, linear,
             // constant) -- the nested/right-associated spelling costs 2.6pp.
             qout[i] = 0.5f
-                * (fcubed * (nn - (3.0f * n - (3.0f * p - pp)))
+                * (fcubed * (3.0f * p - pp - 3.0f * n + nn)
                    + fsq * ((4.0f * n + (2.0f * pp - 5.0f * p)) - nn) + ref * (n - pp)
                    + 2.0f * p);
             i++;

@@ -452,75 +452,113 @@ void HamAudio::FinishLoad() {
 }
 
 void HamAudio::PollCrossfade() {
+    // NEGATIVE RESULT on the residual f29<->f30 permutation (26 of the 45 rows
+    // left at 97.1%): the image holds currentTime in f29 and 0.5 in f30, ours the
+    // other way round.  Neither declaring kEpsilon/halfFade ahead of the
+    // GetInSongTime() call nor dropping the `halfFade` local for a bare 0.5f
+    // literal moves it -- both produced byte-identical output (97.1 / 96.3, same
+    // 45 rows).  Callee-saved FPR numbering here is regalloc, not declaration
+    // order.
     float currentTime = mSongStream->GetInSongTime();
     float kEpsilon = 1.0f / 120.0f;
     float halfFade = 0.5f;
 
     if (mCrossfade.mFlag == 1 && mActiveCrossfade.mFlag <= 1) {
         MILO_ASSERT_FMT(mStreams[1], "Crossfade requires 2 song streams");
-        float jumpPoint = mCrossfade.mEnd
-            - (mCrossfade.mStart - (-(mCrossfade.mDuration * halfFade - mCrossfade.mStart)));
+        // &mCrossfade is materialised ONCE into a callee-saved register and every
+        // later read goes through it: 0x82529EA4 `addi r30, r31, 0x5c`, then
+        // 0x0(r30)/0x4(r30)/0x8(r30) at 0x82529F14, 0x82529F44, 0x82529F4C,
+        // 0x82529F64 and the four-word copy at 0x82529FAC.  r30 stays live across
+        // the GetTime/IsReady/Resync/SetLoop calls, which is what makes it
+        // callee-saved and the prologue `bl __savegprlr_29`.
+        HamCrossfade &cf = mCrossfade;
+        float jumpPoint = cf.mEnd
+            - (cf.mStart - (-(cf.mDuration * halfFade - cf.mStart)));
         if (mStreams[1]->GetTime() != jumpPoint) {
             if (mStreams[1]->IsReady()) {
                 mStreams[1]->Resync(jumpPoint);
-                SetLoop(mCrossfade.mStart, mCrossfade.mEnd, mStreams[1]);
+                SetLoop(cf.mStart, cf.mEnd, mStreams[1]);
             } else {
                 MILO_NOTIFY("HamAudio::PollCrossFade() - almost tried to resync stream before it was ready");
             }
         }
         bool shouldActivate
-            = currentTime
-            > (-(mCrossfade.mDuration * halfFade - mCrossfade.mStart) - kEpsilon);
-        if (mCrossfade.mStart < mCrossfade.mEnd) {
-            shouldActivate = shouldActivate && currentTime < mCrossfade.mEnd;
+            = currentTime > (-(cf.mDuration * halfFade - cf.mStart) - kEpsilon);
+        // Each of the three windowing tests in this function MATERIALISES its
+        // ordering comparison into a byte and then branches on the byte, and
+        // combines the two halves with a bitwise `and` rather than short-circuiting
+        // -- 0x82529F70-0x82529F80 (`li r11,1` / `blt` / `li r11,0` / `clrlwi.` /
+        // `beq`) and 0x82529F9C `and r10, r10, r11`; likewise 0x8252A058-0x8252A068
+        // + 0x8252A088, and 0x8252A0F0-0x8252A104 + 0x8252A128.  Written as a bare
+        // `if (a < b) x = x && y;` MSVC branches straight off the fcmpu and
+        // short-circuits on x, which costs both the two `li`s and the `and`.
+        bool startBeforeEnd = cf.mStart < cf.mEnd;
+        if (startBeforeEnd) {
+            shouldActivate = shouldActivate & (currentTime < mCrossfade.mEnd);
         }
+        // The copy is written off the MEMBERS, not off `cf`: 0x82529FAC-0x82529FB8
+        // batches all four loads into r10/r11/r9/r8 and only then stores them.
+        // Spelling it `mActiveCrossfade = cf` makes the source a reference MSVC
+        // cannot prove disjoint from the destination, and it degrades to four
+        // interleaved load/store pairs through r11 (measured 88.0 -> 85.6).
         if (shouldActivate) {
-            mActiveCrossfade.mStart = mCrossfade.mStart;
-            mActiveCrossfade.mEnd = mCrossfade.mEnd;
-            mActiveCrossfade.mDuration = mCrossfade.mDuration;
-            mActiveCrossfade.mFlag = mCrossfade.mFlag;
+            mActiveCrossfade = mCrossfade;
         }
     }
 
-    unsigned int state = mActiveCrossfade.mFlag;
-    if (state < 1) {
-        goto done;
-    }
-    if (state == 1) {
+    // A SWITCH, not an if/else chain, and each arm writes mActiveCrossfade.mFlag
+    // itself.  The dispatch at 0x82529FD4-0x82529FEC is MSVC's balanced compare
+    // tree with UNSIGNED compares (`cmplwi 1` / blt -> case 0 / beq -> case 1,
+    // `cmplwi 3` / blt -> case 2 / beq -> case 3, default falling through inline),
+    // and the case bodies are laid out in REVERSE source order -- default first
+    // at 0x82529FF0, then case 3 at 0x8252A02C, case 2 at 0x8252A0D0 and case 1
+    // last at 0x8252A13C, which is what lets case 1 fall through into the shared
+    // `stw r11, 0x78(r31)` at 0x8252A154 that the other two arms branch to.
+    // The `lwz r11, 0x78(r31)` immediately after it (0x8252A158) is the next
+    // statement re-reading the member; a `state` local carried in a register
+    // stores once and never reloads.
+    switch (mActiveCrossfade.mFlag) {
+    case 0:
+        break;
+    case 1:
         mStreams[1]->Play();
-        state = 2;
-    } else if (!(state < 3)) {
-        if (state != 3) {
-            MILO_ASSERT(0, 0x18E);
-            goto done;
+        mActiveCrossfade.mFlag = 2;
+        break;
+    case 2: {
+        bool ready = currentTime >= mActiveCrossfade.mEnd;
+        bool startBeforeEnd = mActiveCrossfade.mStart < mActiveCrossfade.mEnd;
+        if (!startBeforeEnd) {
+            ready = ready
+                & (currentTime
+                   < (mActiveCrossfade.mStart - mActiveCrossfade.mDuration * 0.5f)
+                       - kEpsilon);
         }
+        if (ready) {
+            mActiveCrossfade.mFlag = 3;
+        }
+        break;
+    }
+    case 3: {
         float halfFade = mActiveCrossfade.mDuration * 0.5f;
         bool ready = currentTime > (mActiveCrossfade.mEnd + halfFade);
-        if (mActiveCrossfade.mStart >= mActiveCrossfade.mEnd) {
+        bool startBeforeEnd = mActiveCrossfade.mStart < mActiveCrossfade.mEnd;
+        if (!startBeforeEnd) {
             ready = ready
-                && currentTime < (mActiveCrossfade.mStart - halfFade) - kEpsilon;
+                & (currentTime < (mActiveCrossfade.mStart - halfFade) - kEpsilon);
         }
-        if (!ready) {
-            goto done;
+        if (ready) {
+            mCrossFaders[0]->SetVolume(0);
+            mStreams[1]->Stop();
+            mStreams[1]->ClearJump();
+            mActiveCrossfade.mFlag = 0;
         }
-        mCrossFaders[0]->SetVolume(0);
-        mStreams[1]->Stop();
-        mStreams[1]->ClearJump();
-        state = 0;
-    } else {
-        bool ready = currentTime >= mActiveCrossfade.mEnd;
-        if (mActiveCrossfade.mStart >= mActiveCrossfade.mEnd) {
-            ready = ready
-                && currentTime
-                    < (mActiveCrossfade.mStart - mActiveCrossfade.mDuration * 0.5f) - kEpsilon;
-        }
-        if (!ready) {
-            goto done;
-        }
-        state = 3;
+        break;
     }
-    done:
-    mActiveCrossfade.mFlag = state;
+    default:
+        MILO_ASSERT(0, 0x18E);
+        break;
+    }
+
     if (mActiveCrossfade.mFlag > 1) {
         float fadePos;
         if (mActiveCrossfade.mFlag == 2) {

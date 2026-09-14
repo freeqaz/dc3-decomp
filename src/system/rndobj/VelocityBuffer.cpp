@@ -17,6 +17,13 @@
 
 RndVelocityBuffer RndVelocityBuffer::sSingleton;
 
+// The bone cap reaches MakeString as a const reference to a POOLED .rdata
+// constant (0x826B2158 `lis r10, lbl_8209F810@ha` / 0x826B2222
+// `addi r7, r10, lbl_8209F810@l`), not as a stack temporary -- a bare `40`
+// literal in the argument list is materialised into its own frame slot instead,
+// which also shifts every other slot in the function by four.
+static const int kMaxMotionBlurBones = 40;
+
 bool RndXfmCache::GetXfms(
     const RndMesh * __restrict mesh,
     unsigned int startIndex,
@@ -160,38 +167,75 @@ void RndVelocityBuffer::DrawMesh(RndMesh *mesh) const {
     MILO_ASSERT(TheRnd.DrawMode() == Rnd::kDrawVelocity, 0x125);
 
     RndMat *mat = mesh->Mat();
-    if (mesh && mat != nullptr && mat->GetZMode() != kZModeTransparent) {
-        auto _val0 = mXfmCaches;
+    if (mat != nullptr && mat->GetZMode() != kZModeTransparent) {
         mesh->mMotionCache.mShouldCache = true;
-        unsigned int cacheIdx = mActiveXfmCacheIndex;
-        int numBones = mesh->NumBones();
-        if (numBones <= 0) numBones = 1;
 
-        unsigned int prevKey = mesh->mMotionCache.mCacheKey[cacheIdx ^ 1];
-        unsigned int currKey = mesh->mMotionCache.mCacheKey[cacheIdx];
+        // NumBones() is called ONCE (0x826B1FB4 `subf` over 0x150/0x154,
+        // 0x826B1FE0 `divw` by 0x54) and the raw value is spilled to 0x60(r1) at
+        // 0x826B1FEC because the notify below takes it by const reference.  It
+        // must be declared BEFORE the two cache references and the two keys: the
+        // divw is scheduled between the key ADDRESS arithmetic (0x826B1FE4/E8
+        // `slwi`) and the key LOADS (0x826B1FF0/F8 `lwzx`), which only happens
+        // when the division is already in flight by then.
+        int rawBones = mesh->NumBones();
 
-        const float *prevFloats = nullptr;
-        unsigned char prevOk = (unsigned char)(_val0[cacheIdx ^ 1].GetXfms(mesh, prevKey, numBones, prevFloats));
-        if (prevOk) {
-            int numBonesActual = mesh->NumBones();
-            const float *currFloats = nullptr;
-            unsigned char currOk = (unsigned char)(_val0[cacheIdx].GetXfms(mesh, currKey, numBones, currFloats));
-            if (currOk) {
-                if (numBonesActual <= 40) {
-                    TheShaderMgr.SetMeshInfo(numBonesActual, false);
+        // The index is xor'd TWICE: 0x826B1FBC `xori r28, r10, 0x1` off the
+        // member read, then 0x826B1FC0 `xori r27, r28, 0x1` off THAT.  The
+        // current-frame index is derived from the previous-frame one, not read
+        // back from mActiveXfmCacheIndex.
+        unsigned int prevIdx = mActiveXfmCacheIndex ^ 1;
+        unsigned int currIdx = prevIdx ^ 1;
+
+        // Both cache element addresses and both cache keys are materialised
+        // BEFORE the clamp and the first GetXfms -- 0x826B1FF4 `addi r3, r11,
+        // 0xac` and 0x826B1FFC `addi r8, r10, 0xac` for the two RndXfmCache
+        // pointers (element stride 0x1b584, base 0xac), 0x826B1FF0
+        // `lwzx r5, r7, r31` and 0x826B1FF8 `lwzx r26, r6, r31` for the keys.
+        // Declared after the clamp they are sunk past the first call and
+        // recomputed.  The CACHES MUST BE DECLARED FIRST: with the keys first
+        // MSVC hoists both `lwzx` above the divw and colours currKey into the
+        // callee-saved r26 and currCache into r8, exactly the other way round
+        // from the image (95.20 vs 100.0).
+        const RndXfmCache &prevCache = mXfmCaches[prevIdx];
+        const RndXfmCache &currCache = mXfmCaches[currIdx];
+        unsigned int prevKey = mesh->mMotionCache.mCacheKey[prevIdx];
+        unsigned int currKey = mesh->mMotionCache.mCacheKey[currIdx];
+
+        // The clamp is `Max(1, n)`: 0x826B1F94 `li r29, 0x1` (shared with the
+        // mShouldCache store two instructions later), 0x826B2000
+        // `cmpwi cr6, r9, 0x1`, `ble` keeps the 1, `mr r29, r9` otherwise.
+        // `if (n <= 0) n = 1;` compares against 0 instead.
+        int numBones = Max(1, rawBones);
+
+        // NOT initialised: GetXfms writes the out-parameter on every path, and the
+        // image has no zero store -- 0x826B200C hands it `addi r7, r1, 0x50` cold.
+        const float *prevFloats;
+        if (prevCache.GetXfms(mesh, prevKey, numBones, prevFloats)) {
+            const float *currFloats;
+            if (currCache.GetXfms(mesh, currKey, numBones, currFloats)) {
+                if (rawBones <= kMaxMotionBlurBones) {
+                    TheShaderMgr.SetMeshInfo(rawBones, false);
                     RndShader::SelectConfig(mMat, kVelocityObjectShader, false);
                     TheShaderMgr.SetVConstant((VShaderConstant)9, prevFloats, numBones * 3);
-                    TheShaderMgr.SetVConstant((VShaderConstant)0x81, currFloats, numBones * 3);
-                    TheShaderMgr.SetVConstant((VShaderConstant)0, unk36bec[cacheIdx ^ 1]);
-                    TheShaderMgr.SetVConstant((VShaderConstant)4, unk36bec[cacheIdx]);
-                    TheShaderMgr.SetPConstant((PShaderConstant)8, (const Vector4 &)mDepthRangeValues);
+                    TheShaderMgr.SetVConstant(
+                        (VShaderConstant)0x81, currFloats, numBones * 3
+                    );
+                    TheShaderMgr.SetVConstant((VShaderConstant)0, unk36bec[prevIdx]);
+                    TheShaderMgr.SetVConstant((VShaderConstant)4, unk36bec[currIdx]);
+                    TheShaderMgr.SetPConstant(
+                        (PShaderConstant)8, (const Vector4 &)mDepthRangeValues
+                    );
                     mesh->GetGeomOwner()->DrawFacesInRange(0, -1);
                     TheNgStats->mMotionBlurs++;
                 } else {
-                    auto _tmp3 = PathName(mesh->Mat());
+                    // First %s is the mesh's NAME, not its path: 0x826B21C8
+                    // reads 0x24 off the virtual-base-adjusted pointer, which is
+                    // Hmx::Object::mName at +0x20, and stores it into the FIRST
+                    // argument slot 0x50(r1).  The single PathName() call at
+                    // 0x826B21AC fills the SECOND slot, 0x58(r1).
                     MILO_NOTIFY_ONCE(
                         "%s (%s): Has too many bones to apply object motion blur (%d bones of max %d)",
-                        PathName(mesh), _tmp3, numBonesActual, 40
+                        mesh->Name(), PathName(mesh), rawBones, kMaxMotionBlurBones
                     );
                 }
             }

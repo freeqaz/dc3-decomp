@@ -232,24 +232,28 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
                 mesh->Verts().resize(4);
                 mesh->Faces().resize(2);
                 for (int i = 0; i < 4; i++) {
-                    float f4 = i == 1 || i == 2 ? 1.0f : 0.0f;
-                    float f5 = i < 2 ? 1.0f : 0.0f;
-                    float floats[2] = { f5, f4 };
-                    mesh->Verts()[i].pos.Set(
-                        (floats[0] + 1) * 20, 0, -(floats[1] * 20 - 60)
-                    );
-                    memcpy(mesh->Verts()[i].boneIndices, floats, sizeof(floats));
-                    mesh->Verts()[i].norm.Set(0, -1, 0);
-                    mesh->Verts()[i].boneWeights.Set(0, 0, 0, 0);
-                    mesh->Verts()[i].color.Set(1, 1, 1, 1);
+                    float u = i == 1 || i == 2 ? 1.0f : 0.0f;
+                    float v = i < 2 ? 1.0f : 0.0f;
+                    // Retail's 8-byte copy in this loop goes to +0x40 of the
+                    // vertex (`std r8, 0x40(r11)` at 0x82340CF0), which is
+                    // Vert::tex -- NOT boneIndices at +0x48.  The quad's UVs
+                    // were being written over the bone indices.
+                    Vector2 uv(v, u);
+                    RndMesh::Vert &vert = mesh->Verts()[i];
+                    vert.pos.Set((uv.x + 1) * 20, 0, -(uv.y * 20 - 60));
+                    vert.tex = uv;
+                    vert.norm.Set(0, -1, 0);
+                    vert.boneWeights.Set(0, 0, 0, 0);
+                    vert.color.Set(1, 1, 1, 1);
                 }
                 mesh->Faces()[0].Set(0, 1, 2);
                 mesh->Faces()[1].Set(0, 2, 3);
                 mesh->Sync(0x13F);
                 mesh->SetMat(mat);
             }
-            if (mat)
-                mat->SetDiffuseTex(tex);
+            // Retail has no null test on `mat` here: 0x82340D80 loads the
+            // static and goes straight into the inlined SetDiffuseTex.
+            mat->SetDiffuseTex(tex);
             CreateAndSetMetaMat(mat);
             mesh->DrawShowing();
         }

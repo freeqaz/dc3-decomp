@@ -372,7 +372,7 @@ void DxRnd::BeginTiling(const Hmx::Color &c, float f, unsigned int ui) {
         D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(c), f, ui, 0);
     } else {
         XMVECTOR v = {c.red, c.green, c.blue, c.alpha};
-        D3DDevice_BeginTiling(mD3DDevice, 0, mNumTiles, &mTileRect, &v, f, ui);
+        D3DDevice_BeginTiling(mD3DDevice, 0, mNumTiles, mTileRects, &v, f, ui);
         mTilingActive = true;
     }
 }
@@ -748,32 +748,63 @@ void DxRnd::InitBuffers() {
     static Symbol rnd("rnd");
     static Symbol low_res("low_res");
     static Symbol force_hd("force_hd");
-    auto& _ref0 = mVideoMode.fIsHiDef;
     if (SystemConfig(rnd)->FindInt(force_hd) != 0) {
-        _ref0 = true;
+        mVideoMode.fIsHiDef = true;
         mVideoMode.fIsWideScreen = true;
     } else if (SystemConfig(rnd)->FindInt(low_res) != 0) {
         mFlags |= 1;
     }
-    mLowRes = mFlags & 1;
-    mAspect = mLowRes ? kWidescreen : kRegular;
-    mHeight = mLowRes ? 540 : 720;
-    int i11, i10;
-    if (_ref0 != 0 || mLowRes != 0) {
-        i11 = (mHeight << 4) / 9;
-        i10 = (mHeight << 4) / 9;
+    // 0x82619060: the bool at 0x1f8 is loaded from mVideoMode.fIsWideScreen
+    // (0x328), NOT from mFlags (0x37c), and mAspect is kWidescreen/kLetterbox
+    // (`addi r11, r11, 0x2`), not kWidescreen/kRegular.  mHeight keys off the
+    // low_res bit in mFlags directly (the `clrlwi.` at 0x8261906C feeds the
+    // `beq` at 0x82619090).
+    mLowRes = mVideoMode.fIsWideScreen != 0;
+    mAspect = mLowRes ? kWidescreen : kLetterbox;
+    unsigned int lowResFlag = mFlags & 1;
+    if (!lowResFlag) {
+        mHeight = 720;
     } else {
-        i11 = (mHeight << 2) / 3;
-        i10 = (mHeight << 2) / 3;
+        mHeight = 540;
     }
-    mWidth = i11;
-    if (!(mFlags & 1)) {
+    int tileHeight = mHeight;
+    int tileWidth;
+    int width;
+    if (mVideoMode.fIsHiDef != 0 || mLowRes != 0) {
+        width = (mHeight << 4) / 9;
+        tileWidth = (tileHeight << 4) / 9;
+    } else {
+        width = (mHeight << 2) / 3;
+        tileWidth = (tileHeight << 2) / 3;
+    }
+    mWidth = width;
+    if (!lowResFlag) {
         mNumTiles = 2;
+        // 0x826190EC-0x8261916C: two tile rects covering the frame.  Bit 1 of
+        // mFlags picks a horizontal split line (stacked tiles, full width,
+        // half height) over the default vertical one (side-by-side tiles,
+        // half width, full height).  The loop re-reads mNumTiles from the
+        // member every iteration (`lwz r8, 0x3b0(r30)`).
+        int i = 0;
+        int offset = 0;
         if (mFlags & 2) {
-            i11 = i11 / 2;
-            i10 = i10 / 2;
+            tileHeight = tileHeight / 2;
+            for (; i < mNumTiles; i++) {
+                mTileRects[i].x1 = 0;
+                mTileRects[i].y1 = offset;
+                mTileRects[i].x2 = tileWidth;
+                mTileRects[i].y2 = offset + tileHeight;
+                offset += tileHeight;
+            }
         } else {
-            i10 = i10 / 2;
+            tileWidth = tileWidth / 2;
+            for (; i < mNumTiles; i++) {
+                mTileRects[i].x1 = offset;
+                mTileRects[i].y1 = 0;
+                mTileRects[i].x2 = offset + tileWidth;
+                mTileRects[i].y2 = tileHeight;
+                offset += tileWidth;
+            }
         }
     }
     mPresentParams.Windowed = 0;
@@ -783,12 +814,20 @@ void DxRnd::InitBuffers() {
     mPresentParams.BackBufferHeight = mHeight;
     mPresentParams.PresentationInterval = 0;
     mPresentParams.SwapEffect = D3DSWAPEFFECT_DISCARD;
+    mPresentParams.RingBufferParameters.SecondarySize = 0x600000;
+    mPresentParams.RingBufferParameters.SegmentCount = 12;
+    D3DVIDEO_SCALER_PARAMETERS &scaler = mPresentParams.VideoScalerParameters;
+    scaler.ScalerSourceRect.x1 = 0;
+    scaler.ScalerSourceRect.y1 = 0;
+    scaler.ScalerSourceRect.x2 = mWidth;
+    scaler.ScalerSourceRect.y2 = mHeight;
+    scaler.FilterProfile = 0;
     UpdateScalerParams();
     mRenderThreadId = GetCurrentThreadId();
     {
         BeginMemTrackObjectName("D3D->CreateDevice");
         HRESULT hr = Direct3D_CreateDevice(
-            0, mDeviceType, &mFocusWindow, 1, &mPresentParams, &mD3DDevice
+            0, mDeviceType, mFocusWindow, 1, &mPresentParams, &mD3DDevice
         );
         DX_ASSERT_CODE(hr, 0x367);
         EndMemTrackObjectName();
@@ -802,7 +841,7 @@ void DxRnd::InitBuffers() {
         EndMemTrackObjectName();
         BeginMemTrackObjectName("CreateBackBuffers:UI");
         CreateBackBuffers(
-            i10, i11, D3DMULTISAMPLE_2_SAMPLES, mEdramBase, mEdramHzBase, mOffscreenRT, mOffscreenDepth
+            tileWidth, tileHeight, D3DMULTISAMPLE_2_SAMPLES, mEdramBase, mEdramHzBase, mOffscreenRT, mOffscreenDepth
         );
     } else {
         MILO_ASSERT(mNumTiles == 0, 0x37E);
@@ -849,7 +888,10 @@ void DxRnd::InitBuffers() {
     DX_ASSERT(mFrontBufferDepth, 0x3A2);
     EndMemTrackObjectName();
     PostDeviceReset();
-    int temp27 = ((((mHeight + 0x1F) >> 5) * ((mWidth + 0x1F) >> 5)) << 0xC);
+    // 0x8261963C-0x82619658: srawi+addze on BOTH terms -- a signed divide by
+    // 32, not an arithmetic shift.  With `>> 5` MSVC fuses one of them into a
+    // single `extlwi` and the addze pair disappears.
+    int temp27 = ((((mHeight + 0x1F) / 32) * ((mWidth + 0x1F) / 32)) << 0xC);
     for (int i = 0; i < 2; i++) {
         D3DLOCKED_RECT rect;
         D3DTexture_LockRect(mFrontBuffers[i], 0, &rect, nullptr, 0);
@@ -1072,8 +1114,7 @@ void DxRnd::DoPointTests() {
     }
 
     // Early out if no occlusion query manager or hi-res screen is active
-    auto& _ref0 = mOcclusionQueryMgr;
-    if (!_ref0)
+    if (!mOcclusionQueryMgr)
         return;
     if (TheHiResScreen.IsActive())
         return;
@@ -1081,21 +1122,30 @@ void DxRnd::DoPointTests() {
     // Process query results from previous frame
     for (std::vector<RndPointTest>::iterator it = mPointTestQueries.begin(); it !=mPointTestQueries.end(); ++it) {
         unsigned int result;
-        if (_ref0->GetQueryResults(it->mPointQueryIdx, result)) {
-            it->mFlare->SetOcclusionReady(true);
-            it->mFlare->SetVisible(result != 0);
+        // 0x8261AFD8-0x8261AFE8 and 0x8261B008-0x8261B020 each load
+        // `it->mFlare` ONCE and use it for both stores; writing
+        // `it->mFlare->` twice makes MSVC reload it, because the store to
+        // 0x144/0x102 may alias the pointer.
+        if (mOcclusionQueryMgr->GetQueryResults(it->mPointQueryIdx, result)) {
+            // 0x8261AFD0: the result is loaded and bool-ified BEFORE the flare
+            // pointer is loaded, so the visibility value is a local of its own.
+            bool visible = result != 0;
+            RndFlare *flare = it->mFlare;
+            flare->SetOcclusionReady(true);
+            flare->SetVisible(visible);
         }
-        if (_ref0->GetQueryResults(it->mAreaQueryIdx, result)) {
-            it->mFlare->SetOcclusionResult((float)(int)result);
-            it->mFlare->SetOcclusionReady(true);
+        if (mOcclusionQueryMgr->GetQueryResults(it->mAreaQueryIdx, result)) {
+            RndFlare *flare = it->mFlare;
+            flare->SetOcclusionResult((float)(int)result);
+            flare->SetOcclusionReady(true);
         }
     }
 
     // Update frame index - both direct manipulation and virtual call
-    _ref0->ToggleFrameIndex();
-    _ref0->OnBeginFrame();
-    _ref0->IncrementFrameCounter();
-    _ref0->OnEndFrame();
+    mOcclusionQueryMgr->ToggleFrameIndex();
+    mOcclusionQueryMgr->OnBeginFrame();
+    mOcclusionQueryMgr->IncrementFrameCounter();
+    mOcclusionQueryMgr->OnEndFrame();
 
     // Count point tests needed
     int numTests = 0;
@@ -1115,9 +1165,10 @@ void DxRnd::DoPointTests() {
     xfm.Reset();
     TheShaderMgr.SetTransform(xfm);
 
-    // Setup view matrix
-    Hmx::Matrix4 viewMtx(xfm);
-    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, viewMtx);
+    // Setup view matrix.  0x8261B160-0x8261B16C passes the Matrix4
+    // CONSTRUCTOR'S return value (`mr r5, r3`) straight to SetVConstant -- an
+    // unnamed temporary, not a named local whose address is re-taken.
+    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
 
     // Setup shader state
     RndShader::SelectConfig(nullptr, kStandardShader, false);
@@ -1131,8 +1182,15 @@ void DxRnd::DoPointTests() {
     D3DDevice_SetRenderState_ZWriteEnable(TheDxRnd.Device(), 0);
     D3DDevice_SetRenderState_ZEnable(TheDxRnd.Device(), 1);
 
-    // Set z-compare function based on mReverseZ
-    D3DDevice_SetRenderState_ZFunc(TheDxRnd.Device(), (D3DCMPFUNC)(mReverseZ ? 3 : 1));
+    // Set z-compare function based on mReverseZ.  0x8261B1A4-0x8261B1B4
+    // bool-ifies mReverseZ, masks with 3 (`clrlwi r11, r11, 30`) and adds 1 --
+    // so the two values are 4 and 1.  On the Xbox 360 the D3DCMPFUNC enum is
+    // shifted down by one from desktop D3D9, making those D3DCMP_GREATER and
+    // D3DCMP_LESS.  We had 3 (D3DCMP_LESSEQUAL) on the reverse-Z arm, which
+    // masks with 2 (`rlwinm r11, r11, 0, 30, 30`) instead.
+    D3DDevice_SetRenderState_ZFunc(
+        TheDxRnd.Device(), (D3DCMPFUNC)(mReverseZ ? D3DCMP_GREATER : D3DCMP_LESS)
+    );
 
     // Set point size
     float pointSize = 1.0f;
@@ -1147,9 +1205,10 @@ void DxRnd::DoPointTests() {
 
         RndFlare *flare = it->mFlare;
         RndPointTest &test = mPointTestQueries[idx];
+        // 0x8261B268-0x8261B284: mFlare is stored FIRST, then the two -1s.
+        test.mFlare = flare;
         test.mPointQueryIdx = -1;
         test.mAreaQueryIdx = -1;
-        test.mFlare = flare;
 
         // Point test
         if (flare->GetPointTest()) {
@@ -1165,51 +1224,66 @@ void DxRnd::DoPointTests() {
             vtx.w = 1.0f;
             vtx.color = 0;
 
-            unsigned int queryIdx;
-            if (_ref0->CreateQuery(queryIdx)) {
-                test.mPointQueryIdx = queryIdx;
-                _ref0->BeginQuery(test.mPointQueryIdx);
+            // 0x8261B2D8-0x8261B32C: CreateQuery is handed the MEMBER by
+            // reference (`addi r27, r30, 0x4` / `mr r4, r27`), not a local
+            // temp, and its result gates TWO separate `if`s -- BeginQuery
+            // under the first, DrawVerticesUP+EndQuery under the second, each
+            // reloading the index from 0x0(r27).
+            bool ok = mOcclusionQueryMgr->CreateQuery(test.mPointQueryIdx);
+            if (ok) {
+                mOcclusionQueryMgr->BeginQuery(test.mPointQueryIdx);
+            }
+            if (ok) {
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_POINTLIST, 1, &vtx, sizeof(PointVertex));
-                _ref0->EndQuery(test.mPointQueryIdx);
+                mOcclusionQueryMgr->EndQuery(test.mPointQueryIdx);
             }
         }
 
-        // Area test
-        if (flare->GetAreaTest()) {
+        // Area test.  0x8261B330 reloads the flare from `test.mFlare`
+        // (`lwz r11, 0x0(r30)`), not from the `flare` local.
+        if (test.mFlare->GetAreaTest()) {
             struct QuadVertex {
                 float x, y, z;
                 float w;
                 DWORD color;
             };
-            float z = (float)it->z * 5.9604651881e-08f;
             QuadVertex verts[4];
 
-            // Initialize vertices
-            verts[0].x = flare->GetArea().x;
-            verts[0].y = flare->GetArea().y;
-            verts[0].z = z;
+            // 0x8261B33C `addi r10, r11, 0x134`: the rect is held BY
+            // REFERENCE, so w/h are read as 0x8(r10)/0xc(r10) rather than
+            // 0x13c/0x140 off the flare.
+            verts[0].x = test.mFlare->GetArea().x;
+            verts[0].y = test.mFlare->GetArea().y;
+            verts[0].z = (float)it->z * 5.9604651881e-08f;
             verts[0].w = 1.0f;
             verts[0].color = 0;
 
+            // 0x8261B388-0x8261B40C: every one of the three copies is
+            // `verts[n] = verts[0]` (a 5-word lwzu/stwu loop off r1+0x8c),
+            // and the adjusted components are read back from verts[0], not
+            // from the copy -- except verts[3].y, which reloads its own slot
+            // at 0xd0(r1).  Every `fadds` takes the RECT term first.
             verts[1] = verts[0];
-            verts[1].y += flare->GetArea().h;
+            verts[1].y = test.mFlare->GetArea().h + verts[0].y;
 
             verts[2] = verts[0];
-            verts[2].x += flare->GetArea().w;
+            verts[2].x = test.mFlare->GetArea().w + verts[0].x;
 
-            verts[3] = verts[1];
-            verts[3].x += flare->GetArea().w;
+            verts[3] = verts[0];
+            verts[3].x = test.mFlare->GetArea().w + verts[0].x;
+            verts[3].y = test.mFlare->GetArea().h + verts[3].y;
 
-            unsigned int queryIdx;
-            if (_ref0->CreateQuery(queryIdx)) {
-                test.mAreaQueryIdx = queryIdx;
-                _ref0->BeginQuery(test.mAreaQueryIdx);
+            bool ok = mOcclusionQueryMgr->CreateQuery(test.mAreaQueryIdx);
+            if (ok) {
+                mOcclusionQueryMgr->BeginQuery(test.mAreaQueryIdx);
+            }
+            if (ok) {
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_TRIANGLESTRIP, 4, verts, sizeof(QuadVertex));
-                _ref0->EndQuery(test.mAreaQueryIdx);
+                mOcclusionQueryMgr->EndQuery(test.mAreaQueryIdx);
             }
         } else {
-            flare->SetOcclusionReady(true);
-            flare->SetVisible(true);
+            test.mFlare->SetOcclusionReady(true);
+            test.mFlare->SetVisible(true);
         }
     }
 
