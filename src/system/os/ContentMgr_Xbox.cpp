@@ -483,6 +483,25 @@ void XboxContentMgr::PollRefresh() {
                             continue;
 
                         bool discovered = false;
+                        // NEGATIVE RESULT (residual ~3.5pp).  Both dispatch loops
+                        // below load the vtable pointer into a callee-saved GPR
+                        // BEFORE the Symbol ctor call; the image loads it into
+                        // volatile r11 AFTER:
+                        //     825EB980  mr   r4, r26          ; filename
+                        //     825EB984  lwz  r16, 0x8(r29)   ; *it
+                        //     825EB988  addi r3, r31, 0x60
+                        //     825EB98C  bl   ??0Symbol@@QAA@PBD@Z
+                        //     825EB990  lwz  r11, 0x0(r16)   ; vtable, VOLATILE
+                        //     825EB9A0  lwz  r11, 0xc(r11)
+                        // That one extra long-lived value is the whole residual:
+                        // it makes us save r15-r31 where the image saves r16-r31
+                        // (__savegprlr_15 vs _16), which renames every callee-saved
+                        // register by one and accounts for 46 of the 67 rows.
+                        // Two variants are exactly neutral (96.5 both ways, same
+                        // 255 rows): hoisting `Callback *cb = *it;` out of the call
+                        // expression, and splitting the call into `bool ok = ...;
+                        // discovered = !ok || discovered;`.  The hoist is a
+                        // scheduling decision the source form does not reach.
                         if (xdata->dwContentType == 0x7000) {
                             FOREACH (it, mCallbacks) {
                                 // Unnamed temporary: the target reads the Symbol
