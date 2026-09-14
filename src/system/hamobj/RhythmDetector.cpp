@@ -878,7 +878,7 @@ void RhythmDetector::ProcessFrames() {
             count++;
         }
         if (count > 1) {
-            localHistory.erase(localHistory.begin());
+            localHistory.erase(--localHistory.end());
         }
 
         // Trim again (same logic - ensures only 1 entry)
@@ -887,7 +887,7 @@ void RhythmDetector::ProcessFrames() {
             count++;
         }
         if (count > 1) {
-            localHistory.erase(localHistory.begin());
+            localHistory.erase(--localHistory.end());
         }
 
         mCurrentFrame.mTime = localHistory.back().mTime;
