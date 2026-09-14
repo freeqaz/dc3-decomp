@@ -329,26 +329,48 @@ int CacheXbox::ThreadGetFileSize() {
         // `err` has no initialiser and MSVC places it at first use, which is
         // after `&fileSize`.  Both stack rows (r1+0x50 / r1+0x54) are equal now.
         //
-        // NEGATIVE RESULT (w7-ap, 2026-09-14), on top of that fix: the block
-        // half does not move.  The image lays the store block out FIRST as the
-        // fall-through (0x827FF420, `bne .L_827FF42C` steering err != 0 away to
-        // the notify at 0x827FF42C); we lay the notify block first whichever
-        // way the test is spelt.  `res != -1 || (err = GetLastError()) == 0`
-        // with the arms swapped, and dropping the `else` for an early-return
-        // shape, both measure byte-identical to this spelling -- 21 rows, diff
-        // score 970.  MSVC canonicalises the short-circuit either way.
+        // The block half is now fixed too, and the w7-ap negative that said it
+        // could not be is SUPERSEDED -- it was a negative about `&&`/`||`, not
+        // about block placement.  The image lays the store block out FIRST as
+        // the fall-through (0x827FF420), with `bne .L_827FF42C` steering
+        // err != 0 forward to the notify.  Every spelling built out of a single
+        // short-circuit expression measures byte-identical, in EITHER polarity:
+        // MSVC applies De Morgan to `if (a || b) B else A` and re-emits it as
+        // `if (!a && !b) A else B`, so the notify block lands first no matter
+        // which arm you write first.  Only splitting the condition into two
+        // separate `if`s with explicit gotos, so the two blocks are two
+        // independent layout items rather than the arms of one expression,
+        // survives that rewrite.  87.43 -> 95.83.
+        //
+        // The 95.83 residual is a 3-cycle of callee-saved registers, and it is
+        // NOT a spelling: the image holds this=r30, file=r28, ret=r29, we hold
+        // this=r29, file=r30, ret=r28.  Plus one scheduling row -- we hoist the
+        // `lwz 0x1c` of mCacheID.DeviceID() above `mr r31, r3`, so the argument
+        // has to come back through r11, where the image loads it straight into
+        // r3 after err is parked.
         DWORD fileSize = 0;
         DWORD res = GetFileSize(file, &fileSize);
-        if (res == -1 && (err = GetLastError()) != 0) {
-            MILO_NOTIFY(
-                "CacheXbox::GetFileSizeAsync() - Unhandled error from GetFileSize(): %d\n",
-                err
-            );
-            ret = -1;
-        } else {
+        if (res != -1) {
+            goto store;
+        }
+        err = GetLastError();
+        if (err == 0) {
+            goto store;
+        }
+        goto notify;
+    store:
+        {
             int *data = (int *)mData;
             *data = res;
         }
+        goto closed;
+    notify:
+        MILO_NOTIFY(
+            "CacheXbox::GetFileSizeAsync() - Unhandled error from GetFileSize(): %d\n",
+            err
+        );
+        ret = -1;
+    closed:;
         CloseHandle(file);
         return !IsDeviceConnected(mCacheID.DeviceID()) ? 8 : ret;
     }
