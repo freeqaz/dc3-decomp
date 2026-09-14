@@ -697,6 +697,17 @@ RndTex *RndFont::ValidTexture(int idx) const {
         return nullptr;
 }
 
+// RESIDUAL (w7-al, 95.9 canonical): 55 rows, and 50 of them are one
+// consistent callee-saved permutation.  The image ranks the nine live values
+// cursor > left > right > info > this > bmap > top > bottom > pos (r31..r23);
+// we get left > right > cursor > info > top > bottom > this > pos > bmap.
+// Every instruction is otherwise in the same order with the same opcode, so
+// the cause is MSVC's spill-weight ordering, not the source shape -- merging
+// the two cursors into one (which is what the image does) moved the structure
+// but not the ranking.  The last five rows are the scheduler placing
+// bmap.Width()'s `lhz` before the cursor's `extsw` instead of between the
+// `fcfid` and the `frsp`, which duplicates one `frsp` and one `lfs pos.x` out
+// of the cross-jumped tail.
 void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, int page) {
     info->mPage = page;
     if (mMonospace) {
