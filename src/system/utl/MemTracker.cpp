@@ -636,29 +636,35 @@ void MemTracker::ReportMemoryUsageOverview(const char *name) {
     // after `bl MemNumHeaps`, before the two stream writes), so there is no
     // separate numHeaps local.
     int loopMax = MemNumHeaps() + 1;
-    *ts << "overview,";
-    *ts << name;
+    // Chained, not two statements: the image feeds operator<<'s returned
+    // TextStream& straight into the second call (`mr r4, r30; bl` with no
+    // intervening `mr r3, r31`).
+    *ts << "overview," << name;
     for (int i = 0; i < loopMax; i++) {
-        int biggest;
+        // NOTE (w7-ai): the five locals share one declaration with the
+        // MemFreeBlockStats call precisely because the image's physical-heap
+        // arm writes into TWO OF THEM rather than into fresh locals. Slot map
+        // from the target listing -- the call passes r4=0x58, r5=0x60, r6=0x50,
+        // r7=0x5c, r8=0x54 -- so `free` is 0x50 and `lfrags` is 0x58, and those
+        // are exactly the two slots the physical arm stores to. Declaring
+        // `used` as a private local instead let MSVC dead-code the whole
+        // `mFreePhysMem - PhysicalUsage()` computation away (9 deleted
+        // instructions); it only survives because these locals have had their
+        // address taken in the sibling arm.
+        //
+        // BEHAVIOUR, faithful to the image and deliberately preserved: the
+        // physical arm never assigns `biggest`, so PhysLargest prints an
+        // uninitialised slot. The image reads r1+0x54 (the call's LAST
+        // out-param) having only written r1+0x50 and r1+0x58.
+        int lfrags, i2, free, i4, biggest;
         if (i == MemNumHeaps()) {
             int freeMem = _GetFreePhysicalMemory();
-            int used = mFreePhysMem - PhysicalUsage();
-            if (used < freeMem) {
-                used = freeMem;
+            free = mFreePhysMem - PhysicalUsage();
+            if (free < freeMem) {
+                free = freeMem;
             }
-            // RESIDUAL (88.06%): the image's physical-heap arm does NOT write
-            // the `biggest` that gets printed. Its zero goes to r1+0x58 -- the
-            // slot MemFreeBlockStats' FIRST out-param occupies in the sibling
-            // else branch -- while the printed value is read from r1+0x54, that
-            // call's LAST out-param, so PhysLargest prints an uninitialised
-            // slot. It also keeps the `used` arithmetic alive (stw to 0x50,
-            // shared with `free`) where MSVC dead-codes ours away.
-            // MEASURED NEGATIVE: spelling that as a shadowing
-            // `int biggest = 0; (void)biggest;` here costs 2.25pp (88.06 ->
-            // 85.81) and scrambles the callee-saved allocation.
-            biggest = 0;
+            lfrags = 0;
         } else {
-            int lfrags, i2, free, i4;
             MemFreeBlockStats(i, lfrags, i2, free, i4, biggest);
         }
         HeapStats &stats = mHeapStats[i];
