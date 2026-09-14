@@ -28,7 +28,6 @@ void DxCam::Select() {
     Hmx::Matrix4 proj;
     GetViewProjectXfms(view, proj);
     SetViewport();
-    auto _tmp1 = GetGfxMode();
     if (mTargetTex != nullptr) {
         RndTex::Type type = mTargetTex->GetType();
         bool isShadowMap = false;
@@ -40,7 +39,12 @@ void DxCam::Select() {
         }
         UINT clearColor = 0;
         UINT clearFlags = 0;
-        bool setClear = (type & RndTex::kRendered) && !(type & 0x20);
+        // The image RELOADS mTargetTex->mType here (lwz r11, 0x54(r11) at
+        // 8261EAF4) rather than reusing the value it kept in r9 for the
+        // kShadowMap / kDepthVolumeMap compares -- the mask expression names
+        // GetType() again, and MSVC CSEs the two loads inside it into one.
+        bool setClear =
+            (mTargetTex->GetType() & RndTex::kRendered) && !(mTargetTex->GetType() & 0x20);
         if (setClear) {
             clearFlags = 0x30;
         }
@@ -55,26 +59,44 @@ void DxCam::Select() {
             _tmp0, 0, nullptr, clearFlags, clearColor, depth, 0, 0
         );
     }
-    if (_tmp1 == kNewGfx) {
-        Hmx::Matrix4 viewProj = Hmx::operator*(view, proj);
-        SetViewProj(viewProj);
+    if (GetGfxMode() == kNewGfx) {
+        SetViewProj(Hmx::operator*(view, proj));
         Transform invView = GetInvViewXfm();
         TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, mViewProjMatrix);
-        Hmx::Matrix4 invViewMtx(invView);
-        TheShaderMgr.SetVConstant((VShaderConstant)0x10, invViewMtx);
-        Hmx::Rect tmp = TheHiResScreen.ScreenRect();
+        // Unnamed temp: the image loads TheShaderMgr and its vtable slot into
+        // r31/r29 BEFORE the Matrix4 ctor runs (8261EBB0/EBB4), then feeds the
+        // ctor's own return in r3 straight to r5. A named Matrix4 local makes
+        // MSVC re-derive the object after the call and frees r29 entirely,
+        // which also collapses the prologue off __savegprlr_29.
+        TheShaderMgr.SetVConstant((VShaderConstant)0x10, Hmx::Matrix4(invView));
+        // The image reads the ScreenRect() result through the sret POINTER the
+        // call returns (mr r11, r3 / lfs f0, 0xc(r11) at 8261EBE4), not out of
+        // a named local's slot: the temp is bound to a reference, never copied
+        // into a variable of its own.
         Hmx::Rect rect;
-        rect.x = tmp.x;
-        rect.y = tmp.y;
-        rect.w = tmp.w;
-        rect.h = tmp.h;
-        TheShaderMgr.SetVConstant((VShaderConstant)0x46, (const Vector4 &)rect);
-        Hmx::Rect tmp2 = TheHiResScreen.ScreenRect();
         Hmx::Rect rect2;
-        rect2.x = tmp2.x;
-        rect2.y = tmp2.y;
-        rect2.w = tmp2.w;
-        rect2.h = tmp2.h;
+        // Both ScreenRect() sret temps land on the SAME slot (r1+0x70) in the
+        // image, so their lifetimes cannot overlap -- each reference is scoped.
+        // Residual here (4 rows): the image reads the four floats through the
+        // sret pointer the call returns (mr r11, r3 at 8261EBE4) where we fold
+        // the reference to r1+<slot>. Copy-INITIALISING the Rect from the call
+        // instead (`Hmx::Rect rect = ScreenRect();`) does not recover it -- MSVC
+        // elides the copy outright and the function drops to 78.6.
+        {
+            const Hmx::Rect &tmp = TheHiResScreen.ScreenRect();
+            rect.x = tmp.x;
+            rect.y = tmp.y;
+            rect.w = tmp.w;
+            rect.h = tmp.h;
+        }
+        TheShaderMgr.SetVConstant((VShaderConstant)0x46, (const Vector4 &)rect);
+        {
+            const Hmx::Rect &tmp2 = TheHiResScreen.ScreenRect();
+            rect2.x = tmp2.x;
+            rect2.y = tmp2.y;
+            rect2.w = tmp2.w;
+            rect2.h = tmp2.h;
+        }
         TheShaderMgr.SetPConstant((PShaderConstant)0x46, (const Vector4 &)rect2);
     }
 }
