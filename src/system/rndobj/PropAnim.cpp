@@ -198,7 +198,25 @@ BEGIN_LOADS(RndPropAnim)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(RndAnimatable)
 
-    // RAII guard for proper object lifecycle during load
+    // RAII guard for proper object lifecycle during load.
+    //
+    // Known residual, 2 rows (99.988 canonical), and NOT a source defect.  The
+    // whole residual is inside this local's inlined ~ObjRefConcrete ->
+    // ObjRef::Release ring unlink, whose two statements are
+    //     prev->next = next;   // loads 0x88 then 0x84 -- we MATCH this
+    //     next->prev = prev;   // image loads 0x84 then 0x88, we load 0x88,0x84
+    // Same two values into the same two registers feeding an identical store;
+    // only the issue order of the second statement's two `lwz`s differs.
+    //
+    // Refuted as a source lever by census rather than by a build: the image
+    // itself emits BOTH orders for this one inline body.  Sweeping every
+    // `lwz a / lwz b / stw _,0x4 / lwz b / lwz a / stw _,0x8` window in
+    // build/373307D9/asm gives 630 "crossed" (image's order here) against 314
+    // "uniform" (ours), and the split is present within a single frame offset
+    // pair as well -- at 0x88/0x84 it is 18 uniform to 6 crossed.  One source
+    // spelling of ObjRef::Release cannot produce both, so the order is decided
+    // by the scheduler in the enclosing function, and editing that PCH-reached
+    // header would flip hundreds of currently-matching sites to chase 2 rows.
     ObjOwnerPtr<Hmx::Object> obj(this);
     mLastFrame = GetFrame();
     RemoveKeys();
