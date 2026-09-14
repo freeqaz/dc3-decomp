@@ -1494,6 +1494,18 @@ YY_DECL_LAST_ARG
     if (!b)
         YY_FATAL_ERROR("out of dynamic memory in yy_create_buffer()");
 
+    /* RESIDUAL (w7-az, 95.35, 2 rows).  Everything here matches except the
+     * order of two independent instructions in one basic block: the image
+     * computes the allocation size first, `addi r3, r30, 0x2` at 0x825C8960,
+     * and stores yy_buf_size second, `stw r30, 0xc(r31)` at 0x825C8964.  Our
+     * build always emits the store first.  NEGATIVES, both byte-inert (95.35,
+     * same 2 rows): routing the size through the declared-but-unused
+     * `alloc_size` local as a statement (`alloc_size = size + 2;` placed
+     * before `b->yy_buf_size = size;`), and as a declaration initializer
+     * (`int alloc_size = size + 2;` at the top of the function).  MSVC's
+     * scheduler picks store-before-add for this DAG whichever way the source
+     * is written.
+     */
     b->yy_buf_size = size;
 
     /* yy_ch_buf has to be 2 characters longer than the size given because
