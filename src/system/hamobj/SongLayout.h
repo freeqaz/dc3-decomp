@@ -44,7 +44,12 @@ public:
 };
 
 struct MoveReplacer {
-    MoveReplacer() : mFrom(gNullStr), mTo(gNullStr), mMoveParent(nullptr) {}
+    // The two Symbols are DEFAULT-constructed, not built from gNullStr:
+    // Symbol(const char *) is out-of-line, so spelling the member initialisers
+    // gNullStr puts two bl ??0Symbol@@QAA@PBD@Z inside this ctor and MSVC then
+    // refuses to inline it.  The image has no call here at all -- it stores
+    // gNullStr straight into mTo (the mFrom store is dead and eliminated).
+    MoveReplacer() : mMoveParent(nullptr) {}
     MoveReplacer(const MoveReplacer &o);
     Symbol mFrom; // 0x0
     Symbol mTo; // 0x4
