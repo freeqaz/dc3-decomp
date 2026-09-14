@@ -29,6 +29,11 @@ DataNode DataToggleShowTokensCheat(DataArray *arr) {
     return DataNode(0);
 }
 
+// NOT the comparator the image uses -- kept only as the readable statement of
+// what the sort is meant to mean.  LocaleChunkSort::Sort passes FastSort<3>;
+// see the comment on Sort below.  This function is static and unreferenced, so
+// it is discarded, exactly as in the shipped image (no ?LocaleChunkSortFunc@@
+// symbol anywhere in orig/373307D9/ham_xbox_r.map).
 static int LocaleChunkSortFunc(const void *a, const void *b) {
     const LocaleChunkSort::OrderedLocaleChunk *chunkA =
         (const LocaleChunkSort::OrderedLocaleChunk *)a;
@@ -43,8 +48,18 @@ static int LocaleChunkSortFunc(const void *a, const void *b) {
     return chunkA->node2.Int(0) - chunkB->node2.Int(0);
 }
 
+// BEHAVIOURAL: the comparator is FastSort<3>, not LocaleChunkSortFunc.  Sort is
+// inlined into Locale::Init, and the image's qsort call there names it:
+//   build/373307D9/asm/system/utl/Locale.s @827E9D2C
+//     lis  r11, "??$FastSort@$02@LocaleChunkSort@@YAHPBX0@Z"@ha
+//     addi r6,  r11, "??$FastSort@$02@LocaleChunkSort@@YAHPBX0@Z"@l
+//     bl   qsort
+// ?LocaleChunkSortFunc@@ appears in no map; ??$FastSort@$02@... is at
+// 827e9460 in utl:Locale.obj (ham_xbox_r.map:109216).  The two orderings are
+// not the same: FastSort<3> compares three consecutive 8-byte-strided int
+// words, LocaleChunkSortFunc compares Symbol pointers then node2.
 void LocaleChunkSort::Sort(OrderedLocaleChunk *chunks, int count) {
-    qsort(chunks, count, sizeof(OrderedLocaleChunk), LocaleChunkSortFunc);
+    qsort(chunks, count, sizeof(OrderedLocaleChunk), FastSort<3>);
 }
 
 namespace LocaleChunkSort {
@@ -148,6 +163,22 @@ void Locale::SetMagnuStrings(DataArray *da) {
     mMagnuStrings = da;
 }
 
+// Residual after the FastSort fix: 85 rows, all regalloc/slot permutation, no
+// structural difference.  Frames are the same size (0x160) and the same 18
+// callee-saved GPRs are used; what differs is WHICH.  Two independent strands:
+//   * r19 <-> r20 (26 rows).  The image keeps `this` in r20 from `mr r20, r3`
+//     at idx 8; we keep it in r19.
+//   * the `devkitPath` String sits at 0x80/0x84 in the image and at 0x88/0x8c
+//     in ours, which is where every `off:+8` row comes from.  The image's
+//     DataNode temps for `DataArrayPtr altCfg((DataNode(locale)),
+//     DataNode(devkitPath)))` are at 0x88 (the locale node, built inline with
+//     `li r19, 0x5` / `stw r19, 0x8c` / `stw r11, 0x88`) and 0xa0 (the
+//     devkitPath node, built by ??0DataNode@@QAA@ABVString@@@Z) -- see
+//     build/373307D9/asm/system/utl/Locale.s @827E9958..827E9980.  Ours uses
+//     the same two temps, eight bytes lower, so the String lands eight bytes
+//     higher.  Declaration order of the named locals above already matches the
+//     image's addresses (altCfg 0x68 < devkitPath 0x80), so the difference is
+//     in the temp pool, not in the source's declaration list.
 void Locale::Init() {
     MILO_ASSERT(!mStrTable, 0x58);
     MILO_ASSERT(!mSymTable, 0x59);

@@ -446,7 +446,16 @@ bool ClipPlayer::PushRoutineBuilderClip(int idx, HamDriver::LayerArray *arr) {
     if (c2 == c1) {
         if (mBeat >= beat && (nextTrans == nullptr || mBeat <= nextBeat)) {
             blend = pushed ? blendStart : hugeNeg;
-            PlayClip(c1, beat, blend, arr);
+            // c2, not c1: they are equal here, but the image reuses the r4 the
+            // `c2 == c1` compare already loaded rather than re-materialising
+            // c1 -- build/373307D9/asm/system/hamobj/ClipPlayer.s @8251F3B4
+            //   lwz   r4, 0x54(r1)          ; c2
+            //   cmplw cr6, r4, r29          ; r29 = c1
+            //   beq   cr6, <this block>     ; ... r4 still live into PlayClip
+            // Spelling it `c1` puts `mr r4, r29` in the shared call block, which
+            // stops MSVC duplicating the `f2 = hugeNeg` arm the way the image
+            // does.  Last 8 mismatch rows; 98.23009 -> 100.
+            PlayClip(c2, beat, blend, arr);
             pushed = true;
         }
     } else {

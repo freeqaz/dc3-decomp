@@ -123,6 +123,25 @@ void RndTexBlender::DrawBlendList(
         RndMat *work = TheShaderMgr.GetWork();
         Transform xfm;
         xfm.Reset();
+        // RESIDUAL (w7-ag).  The one charged shape in DrawBlendList -- and, via its two
+        // inlined copies, in DrawShowing -- is WHERE the shader manager's address is
+        // materialised.  The image loads it into a callee-saved register together with
+        // its vptr BEFORE the Hmx::Matrix4 temporary is constructed, then re-reads the
+        // global for SetTransform (build/373307D9/asm/system/rndobj/TexBlender.s):
+        //   /* 8271E25C */ lwz   r26, ?TheShaderMgr@@3AAVRndShaderMgr@@A@l(r24)
+        //   /* 8271E298 */ lwz   r25, 0x0(r26)
+        //   /* 8271E29C */ bl    ??0Matrix4@Hmx@@QAA@ABVTransform@@@Z
+        //   /* 8271E2A0 */ lwz   r11, 0x18(r25) / mr r5, r3 / mr r3, r26
+        //   /* 8271E2BC */ lwz   r3,  ?TheShaderMgr@@3AAVRndShaderMgr@@A@l(r24)
+        // We load the global AFTER the ctor and need one extra `mr r3, r11`.  Two
+        // measured variants, both WORSE, so the placement is scheduling, not spelling:
+        //   * `RndShaderMgr &shaderMgr = TheShaderMgr;` bound before xfm.Reset() and
+        //     used only for the SetVConstant call -- DrawShowing 99.51442 -> 99.1, and
+        //     the alias takes a frame slot (frame delta +0x10, 22 permuted slots).
+        //   * dropping the explicit temporary and letting Matrix4's converting ctor
+        //     fire (`SetVConstant(kVS_ViewProjMatrix, xfm)`) -- 99.51442 -> 97.5; MSVC
+        //     then builds the matrix in place and the `mr r5, r3` / `mr r3, r26` pair
+        //     disappears entirely instead of matching.
         TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
         TheShaderMgr.SetTransform(xfm);
         SetupMaterial(work, texmap);

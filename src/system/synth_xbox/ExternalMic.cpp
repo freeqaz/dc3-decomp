@@ -246,8 +246,8 @@ unsigned long ExternalMic::sampleProcessThread() {
                             first.pData = first.pAlloc + 0x80;
                             first.owner = this;
                             second.deviceId = deviceId;
-                            second.pOverlapped = &secondOverlapped;
                             second.numFrames = numFrames;
+                            second.pOverlapped = &secondOverlapped;
                             second.stride = frameBytes;
                             second.pAlloc = new unsigned char[numFrames * frameBytes + 0x100];
                             second.pData = second.pAlloc + 0x80;

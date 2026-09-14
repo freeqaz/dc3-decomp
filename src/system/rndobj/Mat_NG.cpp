@@ -487,6 +487,12 @@ void NgMat::RefreshState() {
     mTexGenMatrix2.z.z = 1.0f;
 
     // TexGen
+    // Slot order is observable.  MSVC gives later declarations LOWER stack
+    // addresses, and projXfm must be its OWN slot: the target's frame is 0x200
+    // with mtxTmp at 0x70 (0x30), xfmTmp at 0xa0 and projXfm at 0xe0, whereas
+    // declaring projXfm inside `case kTexGenProjected` lets MSVC colour it on
+    // top of mtxTmp and the frame shrinks to 0x1d0.
+    Transform projXfm;
     Transform xfmTmp;
     Hmx::Matrix3 mtxTmp;
     Vector3 vecTmp;
@@ -554,7 +560,7 @@ void NgMat::RefreshState() {
     }
     case kTexGenProjected: {
         FastInvert(mTexXfm, xfmTmp);
-        Transform projXfm = sProjectedXfm;
+        projXfm = sProjectedXfm;
         projXfm.m.z.y = -1.0f;
         Multiply(xfmTmp, projXfm, xfmTmp);
         mTexGenMatrix = Hmx::Matrix4(xfmTmp);

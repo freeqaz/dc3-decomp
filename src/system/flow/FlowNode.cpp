@@ -299,6 +299,19 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
         newFlow->SetProxyFile(childFlow->ProxyFile(), false);
 
         // Copy dynamic property values from old flow to new flow
+        // Residual, 24 rows, 99.9 canonical: the image's frame is 0xe0 and ours
+        // 0xd0.  Every row is an offset.  Per-slot diff (run_diff_inspect
+        // mode=stack-layout) says the image keeps FIVE four-byte user slots
+        // where we have four --
+        //   0x50 arr, 0x54 Flow::StaticClassName() Symbol temp,
+        //   0x58 the PoolAlloc result for `new DataArray(1)`,
+        //   0x5c/0x60 the two Symbol(it2->mName.c_str()) temps,
+        //   0x68 the DataNode temp
+        // -- while our build colours the StaticClassName temp onto arr's slot
+        // (base 0x50 is accessed at idx 16 AND idx 64..164; the image's 0x50 only
+        // at 64..164).  Refuted lever: rewriting this while+inner-block as a
+        // plain for loop, which moves arr out of its own block scope and the
+        // it2++ into the loop header -- bit-identical output, same 24 rows.
         Flow::DynamicPropertyEntry *it2 = newFlow->mDynamicProperties.begin();
         while (it2 != newFlow->mDynamicProperties.end()) {
             {
@@ -323,8 +336,9 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
                 newLabel->InitObject();
                 newLabel->Copy((FlowNode *)(*it), kCopyDeep);
                 newLabel->SetParent(newFlow, true);
-                ObjectDir *dir = childFlow->Dir();
-                newLabel->SetName(NextName("l", dir), dir);
+                newLabel->SetName(
+                    NextName("l", childFlow->Dir()), childFlow->Dir()
+                );
             }
         }
 
@@ -334,26 +348,33 @@ FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
         newObj->InitObject();
         FlowNode *newNode = dynamic_cast<FlowNode *>(newObj);
         newNode->Copy(child, kCopyDeep);
-        ObjectDir *dir = child->Dir();
-        newNode->SetName(NextName("n", dir), dir);
+        newNode->SetName(NextName("n", child->Dir()), child->Dir());
         return newNode;
     }
 }
 
+// Two source shapes are load-bearing here:
+//   * the math-op vector is reached as `entry.mMathOps` (FlowNode is a friend),
+//     NOT through a `ObjVector<FlowMathOp> &mathOps = const_cast<...>(
+//     entry.MathOps())` reference.  The reference costs one extra callee-saved
+//     register -- our prologue was `bl __savegprlr_23` against the image's
+//     `__savegprlr_24` -- and materialises `addi r26, r29, 0xc` once, after
+//     which every mMathOps access goes through r26 at -0xc instead of through
+//     r29 as the image does.  That one local was 18 of the 25 residual rows.
+//   * `drivenObj->Property(op->Rhs().Array(NULL), false)` is ONE expression.
+//     Splitting the array out into a `DataArray *propPath` local moves the
+//     `li r5, 0x0` (the `false`) two slots earlier, ahead of `mr r3, r27`.
 void FlowNode::PushDrivenProperties() {
     sPushDrivenProperties = true;
     FOREACH (it, mDrivenPropEntries) {
         DrivenPropertyEntry &entry = *it;
-        ObjVector<FlowMathOp> &mathOps =
-            const_cast<ObjVector<FlowMathOp> &>(entry.MathOps());
         DataNode targetValue(0);
 
-        FlowMathOp *op = &mathOps[0];
+        FlowMathOp *op = &entry.mMathOps[0];
         Hmx::Object *drivenObj = op->DrivenObj();
 
         if (drivenObj) {
-            DataArray *propPath = op->Rhs().Array(NULL);
-            const DataNode *prop = drivenObj->Property(propPath, false);
+            const DataNode *prop = drivenObj->Property(op->Rhs().Array(NULL), false);
             if (prop) {
                 targetValue = *prop;
             } else {
@@ -364,12 +385,12 @@ void FlowNode::PushDrivenProperties() {
         }
 
         op++;
-        if (op == mathOps.end()) {
+        if (op == entry.mMathOps.end()) {
             SetProperty(entry.Node().Array(NULL), targetValue);
         } else {
             if (targetValue.CompatibleType(kDataFloat)) {
                 float val = targetValue.LiteralFloat(NULL);
-                while (op != mathOps.end()) {
+                while (op != entry.mMathOps.end()) {
                     val = op->Apply(val);
                     op++;
                 }

@@ -487,6 +487,12 @@ BEGIN_COPYS(HamMove)
         // The FOREACH is already textually after both COPY_MEMBERs, so the
         // hoist is the scheduler's, not the source's, and objdiff charges it as
         // 2 inserts + 2 deletes.
+        //
+        // Lane w7-ag, 2026-09-14: source position of the FOREACH does matter in
+        // this block, but only against the wrong thing -- moving it one slot
+        // later (after COPY_MEMBER(mTexState)) does NOT reunite the two byte
+        // copies, it just drags mTexState's own lwz/stw pair across 20
+        // instructions: 4 rows -> 5, 97.765 -> 97.72.  Reverted.
         FOREACH (it, mPropKeys) {
             (*it)->SetTarget(this);
         }

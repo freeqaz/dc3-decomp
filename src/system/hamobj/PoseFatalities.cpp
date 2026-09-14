@@ -735,6 +735,20 @@ void PoseFatalities::DrawDebug() {
     float screenScale = sDebugRectW / TheRnd.YRatio();
 
     // Player 0
+    // The `= false` initializer must stay a separate statement AHEAD of the
+    // test, even though the image emits `li r11, 0x0` AFTER the compare
+    // (824933BC: `cmpw cr6, r10, r11` / `li r11, 0x0` / ... / `blt` /
+    // `lbz r11, 0x2c(r25)`).  The image can put it there because its allocator
+    // reuses r11 -- the register that held mFatalStartBeats[0] -- which creates
+    // an anti-dependency on the compare; ours picks a fresh register and the
+    // scheduler hoists the `li` one slot.  Two refuted rewrites (w7-ag):
+    //   * `= cond ? mInFatality[0] : false` -- collapses the ENTIRE 30-row
+    //     r21/r22 + r18/r19 register cascade to zero (37 rows -> 16), which is
+    //     how we know the cascade is downstream of this one `li`, but a real
+    //     ternary emits an else arm: `b` + `li r11, 0` on the far side of the
+    //     branch, 2 extra instructions and 99.07 -> 98.6.
+    //   * `= cond && mInFatality[0]` -- adds a bool normalisation
+    //     (`cmplwi` / `li 1` / `bne` / `li 0`), 4 extra instructions, 97.7.
     bool player0Active = false;
     if (mCurrentBeat >= mFatalStartBeats[0]) {
         player0Active = mInFatality[0];

@@ -447,10 +447,25 @@ void Game::Poll() {
         }
         TheTaskMgr.SetSecondsAndBeat(songMs * 0.001f, beat, false);
     }
+    // REFUTED (w7-ag): the image normalises IsLoaded()'s return to 0/1 before
+    // testing it -- build/373307D9/asm/lazer/game/Game.s @8286827C
+    //   clrlwi  r11, r3, 24 / subic r10, r11, 0x1 / subfe r11, r10, r11
+    //   clrlwi. r11, r11, 24 / beq .L_828682F0
+    // We emit the two-instruction form (`clrlwi. r11, r3, 24 / beq`), 3 rows short.
+    // Neutral (still 3 rows): `!!IsLoaded()` (folded away), and hoisting the call
+    // into `bool loaded = IsLoaded();` inside a nested `if (!mPaused && !mRealTime)`.
+    // `IsLoaded() == true` is wrong in a different way: it gets the non-recording
+    // `clrlwi` right but lowers the test to `cmplwi cr6, r11, 0x1` / `bne`.
     if (!mPaused && !mRealTime && IsLoaded()) {
         float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-        float ms = seconds * 1000.0f;
-        mSongPos = mSongDB->CalcSongPos(TheMaster, ms);
+        // Not a fresh local: the image writes the re-derived ms back into songMs,
+        // so the `songMs >= 0` test, mMaster->Poll(songMs) and `unk64 = songMs`
+        // below all see the TaskMgr-derived value on this path.  f31 holds songMs
+        // from the Unkf8() block and is overwritten here --
+        // build/373307D9/asm/lazer/game/Game.s @828682B0 `fmuls f31, f1, f0`,
+        // reread at @828682F0 `fcmpu cr6, f31, f29` and @82868384 `stfs f31, 0x64(r28)`.
+        songMs = seconds * 1000.0f;
+        mSongPos = mSongDB->CalcSongPos(TheMaster, songMs);
         TheTaskMgr.SetSongPos(mSongPos);
     }
     if (songMs >= 0) {

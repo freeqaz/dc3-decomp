@@ -350,6 +350,22 @@ void HollaBackMinigame::StartShoutOut(const char *cc) {
     }
 }
 
+// Lane w7-ag, 2026-09-14: the 4 remaining inserts are one MSVC anchoring
+// choice, repeated once per branch.  The image keeps only the HIGH half of
+// ?TheHamDirector@@3PAVHamDirector@@A in r30 and loads through it everywhere,
+// including the GetVenueWorld() call after the if/else:
+//   build/373307D9/asm/system/hamobj/HollaBackMinigame.s
+//     824EA530  lis r30, ?TheHamDirector@@...@ha
+//     824EA540  lwz r11, ?TheHamDirector@@...@l(r30)     ; in-branch
+//     824EA78C  lwz r3,  ?TheHamDirector@@...@l(r30)     ; after the join
+// We materialise the FULL address instead -- `lis r11, @ha; addi r30, r11, @l`
+// in every one of the four branches, then `lwz r3, 0x0(r30)` at the join --
+// so each branch carries one extra addi.  Splitting the tail into
+// `WorldDir *venue = TheHamDirector->GetVenueWorld();` + Find<> is completely
+// inert (identical 19 rows), and there is no expression in this function whose
+// spelling chooses between the @ha anchor and the full address: the four
+// branch bodies and the join already read the global exactly once each, which
+// is what the image does.  Permuter-class residual; 98.09524.
 void HollaBackMinigame::SetDefaultShot() {
     if (TheGameData->Player(1)->IsPlaying()) {
         if (TheGameData->Player(0)->IsPlaying()) {

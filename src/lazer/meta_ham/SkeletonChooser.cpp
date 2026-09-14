@@ -1229,6 +1229,37 @@ void SkeletonChooser::DrawDebug() {
                         sprintf_s<50>(buf, "Hand up: %d", IsHandUp(trackingID));
                         break;
                     }
+                    // Lane w7-ag, 2026-09-14: the image does NOT use the
+                    // `trackingID` local here -- it re-derives BOTH arguments
+                    // from one test of `i`, with the join block placed right
+                    // after the i==0 arm and the i!=0 arm sunk to the end with
+                    // a backwards branch:
+                    //   build/373307D9/asm/lazer/meta_ham/SkeletonChooser.s
+                    //     lwz   r11, 0x60(r1)        ; i
+                    //     lwz   r3,  0x194(r1)       ; this  (hoisted!)
+                    //     cmpwi cr6, r11, 0x0
+                    //     bne   cr6, .L_82906720
+                    //     lwz   r5,  0x5c(r1)        ; trackingID1
+                    //     lwz   r4,  0x58(r1)        ; trackingID0
+                    //   .L_82906714:
+                    //     bl    ?IsBehindPlayer@...
+                    //     ...
+                    //   .L_82906720:
+                    //     lwz   r5,  0x58(r1)
+                    //     lwz   r4,  0x5c(r1)
+                    //     b     .L_82906714
+                    // Spelling both arguments as ternaries on the SAME
+                    // condition -- IsBehindPlayer((i==0)?tid0:tid1,
+                    // (i==0)?tid1:tid0) -- reproduces the single test and the
+                    // two-value arms exactly (51 mismatch rows -> 29, stack
+                    // 3 DIFFER -> 1 PERMUTED, register swaps 27 -> 18), but
+                    // MSVC lays the join out AFTER the i!=0 arm instead of
+                    // before it, which is 3 inserts + 1 diff_op the current
+                    // shape does not pay: canonical 98.53521 -> 97.9.
+                    // Writing it as an explicit if/else into two named locals
+                    // is worse again (97.8) -- the extra locals re-shuffle the
+                    // 0x58/0x5c slots.  Both reverted; the 4 structural rows
+                    // that remain are that block placement.
                     case 4: {
                         if (skelIdx0 >= 0 && skelIdx1 >= 0) {
                             sprintf_s<50>(
