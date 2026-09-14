@@ -361,7 +361,9 @@ BEGIN_LOADS(SkeletonClip)
     Symbol className = ClassName();
     int revs;
     bs >> revs;
-    BinStreamRev d(bs, revs);
+    int dRev = getHmxRev(revs);
+    int dAltRev = getAltRev(revs);
+    BinStreamRev d(bs, dRev, dAltRev);
     if (d.rev == 10) {
         d.altRev = 1;
         d.rev = 9;
