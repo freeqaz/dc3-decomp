@@ -99,21 +99,37 @@ namespace {
         Hmx::Color greenColor = sGreen;
         Hmx::Color textColor = sLightGray;
         if (mirrored) {
-            darkColor.red *= 0.5f;
-            darkColor.green *= 0.5f;
-            darkColor.blue *= 0.5f;
-            greenColor.red *= 0.5f;
-            greenColor.green *= 0.5f;
-            greenColor.blue *= 0.5f;
-            textColor.red *= 0.5f;
-            textColor.green *= 0.5f;
-            textColor.blue *= 0.5f;
+            // The image rebuilds each colour from its STATIC, not from the local
+            // it just copied (824FCE64.. loads off r11/r10/r7, the addresses of
+            // sDarkerGray/sGreen/sLightGray), scaling r/g/b and re-storing alpha
+            // (824FCEC8: 0xc(r11) straight to 0x7c).  `*= 0.5f` on the locals
+            // reads the copies back (86.8); a `Hmx::Color(...)` temporary
+            // assigned over the local costs a 16-byte copy (57.5).
+            // RESIDUAL (94.5): the image also parks each alpha in the temp slot
+            // 0x50(r31) before storing it (824FCEB0, 824FCEBC, 824FCEE4) and
+            // schedules the nine products b,g-first; binding alpha to a
+            // `const float &` through an inline helper is byte-identical to
+            // this spelling, so that home store is not a by-ref temp.
+            darkColor.Set(
+                sDarkerGray.red * 0.5f,
+                sDarkerGray.green * 0.5f,
+                sDarkerGray.blue * 0.5f,
+                sDarkerGray.alpha
+            );
+            greenColor.Set(sGreen.red * 0.5f, sGreen.green * 0.5f, sGreen.blue * 0.5f, sGreen.alpha);
+            textColor.Set(
+                sLightGray.red * 0.5f,
+                sLightGray.green * 0.5f,
+                sLightGray.blue * 0.5f,
+                sLightGray.alpha
+            );
         }
         String str(label);
-        if (!usePercent) {
-            str += MakeString(": %.2f", detected);
-        } else {
+        // The percent arm is the fall-through (824FCF04 `beq` skips it).
+        if (usePercent) {
             str += MakeString(": %.2f%%", detected * 100.0f);
+        } else {
+            str += MakeString(": %.2f", detected);
         }
         float detectedEnd = (max - min) * detected;
         DrawOverlayBar(y, min, (max - min) + min, darkColor, sCharWidth);
