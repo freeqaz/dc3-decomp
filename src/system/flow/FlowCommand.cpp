@@ -57,7 +57,13 @@ BEGIN_LOADS(FlowCommand)
         int count;
         bs >> count;
         Flow *owner = GetOwnerFlow();
-        ObjectDir *dir = owner->Dir();
+        // The owner's *loading* dir, not its current one: while a proxy is being
+        // streamed in, DirLoader::ProxyDir() is where the objects these DataNodes
+        // name actually live. Same spelling as FlowIf::Load / Flow::PostLoad; the
+        // target inlines it here (lwz r11,0xb4(r3) = owner->Loader(), then 0xac =
+        // ProxyDir()) at all three DataNode-loading sites in this function.
+        DirLoader *loader = owner->Loader();
+        ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
         for (int i = 0; i < count; i += 2) {
             DataNode n;
             n.Load(bs, dir);
@@ -82,7 +88,8 @@ BEGIN_LOADS(FlowCommand)
     if (d.rev < 2) {
         DataNode n;
         Flow *owner = GetOwnerFlow();
-        ObjectDir *dir = owner->Dir();
+        DirLoader *loader = owner->Loader();
+        ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
         n.Load(bs, dir);
         if (n.Type() == kDataArray) {
             for (int i = 0; i < n.Array()->Size(); i++) {
@@ -93,7 +100,8 @@ BEGIN_LOADS(FlowCommand)
         int count;
         bs >> count;
         Flow *owner = GetOwnerFlow();
-        ObjectDir *dir = owner->Dir();
+        DirLoader *loader = owner->Loader();
+        ObjectDir *dir = loader ? loader->ProxyDir() : owner->Dir();
         for (int i = 0; i < count; i += 2) {
             DataNode n1;
             n1.Load(bs, dir);
