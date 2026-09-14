@@ -110,12 +110,12 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     temp_f22 = (mDepthFrac - var_f30) / rampSteps1;
     temp_f21 = (mRateRadians - curRate) / rampSteps2;
 
+    int frame = 0;
     if (numSamples > 0) {
         // Retail keeps TWO outer-loop variables: `frame` counts frames (+1 per
         // iteration, and is what the loop bound and the mWritePos offsets use)
         // and `sampleIdx` walks buf in units of numChans.  Folding them into
         // one counter incremented by 1 + numChans is wrong for both.
-        int frame = 0;
         int sampleIdx = 0;
         float temp_f23 = 2.0f;
         float temp_f24 = 4799.0f;
