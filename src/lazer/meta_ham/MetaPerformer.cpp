@@ -1320,19 +1320,35 @@ void MetaPerformer::CalcCharacters(
 
         CalcPrimarySongCharacter(data, primaryCrew, primaryChar, primaryOutfit);
 
-        if (secondaryPlayerChar != gNullStr || primaryPlayerChar != gNullStr) {
-            if (secondaryPlayerChar == gNullStr) {
-                if (!CharConflict(primaryPlayerChar, primaryChar)) {
-                    secondaryChar = primaryPlayerChar;
+        // The image tests primaryPlayerChar first and, when it is null, drives
+        // the whole block off secondaryPlayerChar:
+        //   828CCED0  addi r3, r1, 0x50   ; 0x50 is primaryPlayerChar (stored
+        //   828CCEDC  bl   ??8Symbol@@... ;  from r27 at 828CCEBC; r27 was set
+        //   828CCEE8  addi r3, r1, 0x54   ;  `mr r27, r28` = player1Char in the
+        //   828CCEFC  addi r3, r1, 0x50   ;  primary=player1 branch)
+        //   828CCF10  mr   r3, r29        ; CharConflict(secondaryPlayerChar,
+        //   828CCF14  lwz  r4, 0x0(r22)   ;              primaryChar)
+        //   828CCF2C  stw  r29, 0x0(r11)  ; secondaryChar = secondaryPlayerChar
+        //   828CCF54  mr   r4, r29        ; GetCrewForCharacter(secondary...)
+        // We had the two names the other way round here, which is a different
+        // function whenever exactly one of the two is null.
+        if (primaryPlayerChar != gNullStr || secondaryPlayerChar != gNullStr) {
+            if (primaryPlayerChar == gNullStr) {
+                if (!CharConflict(secondaryPlayerChar, primaryChar)) {
+                    secondaryChar = secondaryPlayerChar;
                     secondaryOutfit =
                         GetUnlockedOutfit(secondaryPlayer->GetPreferredOutfit());
-                    secondaryCrew = GetCrewForCharacter(primaryPlayerChar);
+                    secondaryCrew = GetCrewForCharacter(secondaryPlayerChar);
                     return;
                 }
             } else {
                 Symbol tempCrew = GetCrewForCharacter(primaryPlayerChar);
-                Symbol primaryOutfitPref = primaryPlayer->GetPreferredOutfit();
-                Symbol tempOutfit = GetUnlockedOutfit(primaryOutfitPref);
+                // Unnamed temporary: the image feeds GetPreferredOutfit's
+                // ctor-return pointer straight into GetUnlockedOutfit
+                // (`mr r11, r3` / `lwz r4, 0x0(r11)` at 828CCF8C..828CCF94).
+                // A named `primaryOutfitPref` local reads the value back out
+                // of its own stack slot instead.
+                Symbol tempOutfit = GetUnlockedOutfit(primaryPlayer->GetPreferredOutfit());
                 if (!CharConflict(primaryChar, primaryPlayerChar)) {
                     secondaryChar = primaryChar;
                     secondaryOutfit = primaryOutfit;
