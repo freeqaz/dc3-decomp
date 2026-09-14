@@ -274,6 +274,13 @@ void ThreeDSound::CalculateFaderVolume() {
         // the chain, and goto back to a `silent:` label inside the first arm --
         // byte-identical results). The residual here is block PLACEMENT, and
         // this spelling is the better of the two measured.
+        // NEGATIVE RESULT (w7-ao, 2026-09-14): the third spelling, which w7-af
+        // did not measure -- a `bool silent` set inside `case 1:` and tested
+        // after the switch -- is worse than both: 89.46 -> 86.87. It does
+        // collapse the dispatch to one `lwz`/`cmplwi`, but MSVC then
+        // MATERIALISES the flag (`li r30, 0x0` + a second `li`), which the
+        // image never does, and still sinks the -96.0f block. Block placement
+        // here is not reachable from the source; three spellings measured.
         switch (mShape) {
         case 0:
             break;

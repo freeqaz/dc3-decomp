@@ -120,6 +120,15 @@ Transform RndLight::Projection() {
 
         Vector3 pos = WorldXfm().v;
 
+        // NEGATIVE RESULT (w7-ao, 2026-09-14): the residual here is the frame
+        // offset of the xRow/yRow/pos 16-byte Vector3 slots, not regalloc, and
+        // declaration ORDER does not move it. Both directions measured (a bare
+        // `Vector3 pos;` declared first, then assigned where it is now; and
+        // swapping the `yRow`/`pos` statements): `pos` stays at 0xa0 in every
+        // variant and the diff is byte-identical. The lever that works in
+        // SuperFormatString -- init order deciding callee-saved assignment --
+        // is inert on MSVC's 16-byte-aligned Vector3 slots, which it allocates
+        // by first USE, not by declaration.
         float topR = mTopRadius;
         float slope = (mBotRadius - topR) / mRange;
 
