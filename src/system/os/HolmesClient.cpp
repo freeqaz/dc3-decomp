@@ -220,12 +220,20 @@ namespace {
     }
 
     bool CheckReads(bool b) {
-        FOREACH (it, gRequests) {
+        // NOT a FOREACH: there is no `++it` in the image. Every iteration works on
+        // the FRONT request and re-reads it -- `lwz r31, 0x0(r28)` at 0x825F0D44
+        // for the body, `lwz r11, 0x0(r28)` at 0x825F0D98 for both the erase
+        // argument and the loop condition, where r28 is &gRequests itself (so the
+        // condition is the empty() test, not `it != end()`). An advancing iterator
+        // moves on to the SECOND request after a partial read of the first, which
+        // interleaves two reads on one stream; the image keeps hammering the front
+        // request until it completes and only then erases it and returns.
+        while (!gRequests.empty()) {
             if (!CheckForResponse(Holmes::kReadFile, b)) {
                 return false;
             }
             BeginCmd(Holmes::kReadFile, false);
-            ReadRequest &cur = *it;
+            ReadRequest &cur = gRequests.front();
             int i2 = gHolmesStream->ReadAsync(cur.mBuffer, cur.mBytes);
             // The advanced pointer is STORED BACK (image: `stw r11, 0xc(r31)`
             // right beside the mBytes store). We had it in a dead local, so a
@@ -238,7 +246,7 @@ namespace {
                 return false;
             }
             if (cur.mBytes == 0) {
-                gRequests.erase(it);
+                gRequests.erase(gRequests.begin());
                 gPendingResponse = Holmes::kInvalidOpcode;
                 return true;
             }
@@ -638,6 +646,13 @@ bool HolmesClientOpen(const char *filename, int mode, unsigned int &fileSize, in
         // lowers `<< val`, so the declarations have to precede that statement
         // in the source.  The extraction is UNSIGNED -- `extrwi`, not the
         // `srawi`+mask an `int` shift produces.
+        // RESIDUAL (w7-ar, 96.08 canonical): 22 of 146 rows, and 16 of them are one
+        // callee-saved pair. The image keeps `mode` in r29 and the
+        // gStreamBuffer@ha anchor in r30 (`lis r30, ...` at 0x825F1E3C); we
+        // allocate them the other way round. The remaining rows are the
+        // `li r5, 0x1` / `addi r4, r31, 0x50` pair, which the image schedules
+        // BEFORE the four extrwi (0x825F1E44/0x825F1E48) and we schedule after.
+        // No instruction, operand or branch differs beyond those two facts.
         unsigned int umode = mode;
         unsigned char isWriteMode = (umode >> 1) & 1;
         unsigned char writeFlag = (umode >> 8) & 1;
@@ -864,6 +879,12 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
 
     u8 fileInfo[0x20];
     int attrResult = GetFileAttributesExA(arg0, (GET_FILEEX_INFO_LEVELS)0, fileInfo);
+    // RESIDUAL (w7-ar, 94.83 canonical): 6 of 119 rows, pure scheduling. The image
+    // emits `lis r11, gLastCachedResource@ha` at 0x825F2588 -- two slots earlier
+    // than we do -- and the operator== argument setup (`addi r4, r11, 0x4` /
+    // `addi r3, r31, 0x58`, 0x825F259C/0x825F25A0) three slots earlier, straddling
+    // the writeTime `std` instead of following it. Refuted: declaring writeTime
+    // before fileExists (inert, same 6 rows).
     bool fileExists = (attrResult - 1) != (-1);
     s64 writeTime = *(s64 *)(fileInfo + 0x14);
     // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.
