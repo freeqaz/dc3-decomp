@@ -385,6 +385,11 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
                     );
                 }
             }
+            // A `TrackedJoint &tj = mTrackedJoints[i];` here for the two tail
+            // stores is exactly neutral (91.1 either way, same 213 rows): MSVC
+            // walks a pointer for the tail regardless, where the image re-adds
+            // `this + 4` to the same i*0x74 accumulator it compares against
+            // 0x910 at Skeleton.s 0x15f0.
             mTrackedJoints[i].mJointConf = (JointConfidence)data.mJointTrackingState[i];
             mTrackedJoints[i].mSmoothedPos = data.mRawPositions[i];
         }
