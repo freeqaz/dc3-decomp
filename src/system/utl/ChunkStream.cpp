@@ -321,11 +321,24 @@ EofType ChunkStream::Eof() {
             mBuffers[i] = (char *)_MemAllocTemp(mBufSize, __FILE__, 0x26f, "ChunkStreamBuf", 0);
         }
         int *chunks = mChunkInfo.mChunks;
+        // `chunks` must stay a NAMED local: spelling the next two statements as
+        // `mChunkInfo.mChunks - 1` / `mChunkInfo.mChunks + ...` costs 97.31 ->
+        // 95.61 (24 mismatch rows -> 92, and the whole r21..r27 assignment
+        // shifts by one).
+        //
+        // `file` is a measured register-pressure nudge, NOT a structural
+        // finding: hoisting mFile here does not move the image's early
+        // `lwz r3, 0x10(r31)` (that row is still open), but it does make the
+        // EndianSwapEq inside the mChunks loop above pick the same two temps the
+        // image does -- rows 88-91, `rlwimi 16,16,31`/`extrwi` into the FIRST
+        // temp as at every scalar swap site, instead of the reversed pair we
+        // emitted.  24 rows -> 20, raw 96.993 -> 97.093, nothing regressed.
+        File *file = mFile;
         mCurChunk = chunks - 1;
         mChunkEnd = chunks + mChunkInfo.mNumChunks;
         mCurBufOffset = mChunkInfo.mMaxChunkSize & kChunkSizeMask;
         mCurBufferIdx = 2;
-        mFile->Seek(mChunkInfo.mChunkInfoSize, 0);
+        file->Seek(mChunkInfo.mChunkInfoSize, 0);
         ReadChunkAsync();
     }
 
