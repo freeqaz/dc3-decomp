@@ -2468,20 +2468,29 @@ void HamDirector::Reteleport() {
     PropKeys *propKeys = anim->GetKeys(this, DataArrayPtr(practice));
     int frameIdx = 0;
     CharClip *clip;
+    float startBeat;
     float endBeat;
     float frameTime;
     if (propKeys) {
         frameTime = BeatToSeconds(beat) * 30.0f;
         frameIdx = propKeys->AsSymbolKeys()->AtFrame(frameTime, s);
-        auto foundClip = GetClipStartAndEndBeats(s, endBeat, beat, 0);
-        clip = foundClip;
+        clip = GetClipStartAndEndBeats(s, startBeat, endBeat, 0);
     }
     Vector3 v = Vector3::ZeroVec();
     if (clip) {
         if (frameIdx > 0) {
             ClipPredict predict;
             predict.SetClip(clip);
-            predict.PredictDeltaPos(beat - 4.0f, beat);
+            // NOTE (w7-av): BEHAVIOURAL FIX -- this is the clip's END beat that
+            // GetClipStartAndEndBeats just wrote, not the stream beat.  The
+            // image never stores the MsToBeat result into the slot it hands to
+            // GetClipStartAndEndBeats: it reuses `s`'s dead slot for the
+            // out-parameter (0x50) and reads it back only here,
+            //   82479BFC  lfs   f2, 0x50(r31)
+            //   82479C08  fsubs f1, f2, __real@40800000
+            //   82479C0C  bl    ?PredictDeltaPos@ClipPredict@@QAAXMM@Z
+            // which a slot holding a live `beat` could never be.
+            predict.PredictDeltaPos(endBeat - 4.0f, endBeat);
             v = predict.mPos;
         }
     }
