@@ -262,6 +262,18 @@ void ThreeDSound::CalculateFaderVolume() {
         // re-test `mShape == 1` after the FAIL (3 extra instructions) and sinks
         // the shared `vol = -96.0f` block to the end of the function instead of
         // leaving it inline after the first `if`.
+        //
+        // NEGATIVE RESULT (w7-af, 2026-09-14): putting the radius test INSIDE
+        // `case 1:` and reaching the shared block with a `goto` back into the
+        // mSilenceDistance arm does fix the dispatch -- 0x827661C8 `blt` and
+        // 0x827661CC `beq` then land on two different labels and the post-FAIL
+        // re-read of mShape disappears -- but MSVC sinks BOTH the radius block
+        // and the -96.0f block to the tail of the function, inverting
+        // 0x8276618C `blt cr6` to `bge` and costing more than the dispatch
+        // gains. 89.46 -> 83.60, measured twice (goto to a `done:` label after
+        // the chain, and goto back to a `silent:` label inside the first arm --
+        // byte-identical results). The residual here is block PLACEMENT, and
+        // this spelling is the better of the two measured.
         switch (mShape) {
         case 0:
             break;

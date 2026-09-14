@@ -519,28 +519,46 @@ HamDriver *HamCharacter::SongDriver() { return Find<HamDriver>("song.hdrv", fals
 
 int HamCharacter::SongAnimation() {
     CharClip *c = nullptr;
-    if (Driver()) {
-        c = Driver()->FirstClip();
-#ifdef HX_NATIVE
-        // On native, Driver() exists but may have no clips yet (PlayAnims
-        // hasn't run). Fall through to SongDriver check so PlayAnims can fire.
-        if (!c) { /* fall through */ }
-        else
-#endif
-        MILO_ASSERT(c->Type() == "main", 0x3AB);
-    }
-    if (InClipTest() && (c && c->Dir()->Dir() != this)) {
-        return c->Property("clip_skeleton_index", false)->Int();
-    } else if (mUseCameraSkeleton || c) {
-        return -1;
-    } else if (SongDriver()) {
-        c = SongDriver()->FirstClip();
+    CharDriver *drv = Driver();
+    if (drv) {
+        c = drv->FirstClip();
+        // The image guards the assert with a null test on the clip -- 0x8248E37C
+        // `mr. r30, r3` sets CR from FirstClip()'s return and the following
+        // `beq .L_8248E388` jumps PAST the Type()/Symbol compare entirely. This
+        // used to be behind #ifdef HX_NATIVE (added because native reaches here
+        // before PlayAnims has run); it is what the Xbox build does too, and
+        // without it the PPC build dereferences a null clip.
         if (c) {
-            MILO_ASSERT(c->Type() == "main", 0x3C8);
-            return c->Property("clip_skeleton_index", false)->Int();
+            MILO_ASSERT(c->Type() == "main", 0x3AB);
         }
     }
-    return 0;
+    // -1 is the FALL-THROUGH result, not an `else if` arm. In the image the two
+    // failing tests inside the InClipTest() arm -- `beq cr6, .L_8248E3EC` after
+    // `cmplwi cr6, r30, 0x0` (clip null) and after `cmplw cr6, r11, r31` (clip's
+    // dir is this) -- both land on the same `li r3, -0x1` that the
+    // mUseCameraSkeleton/clip tests reach with `bne`. Spelled as
+    // `if (InClipTest() && (c && ...)) ... else if (mUseCameraSkeleton || c)`,
+    // a null clip under InClipTest() falls into the SongDriver() arm, which the
+    // image can never do. Writing the -1 as an explicit `return -1;` inside the
+    // InClipTest() arm fixes the branches but makes MSVC keep the cross-jumped
+    // Property()/Int() tail at the SECOND call site instead of the first
+    // (96.5 -> 87.6, measured twice: -1-after-Property and -1-before-Property).
+    // Inverting the else-if so -1 is the function tail gets both.
+    if (InClipTest()) {
+        if (c && c->Dir()->Dir() != this) {
+            return c->Property("clip_skeleton_index", false)->Int();
+        }
+    } else if (!mUseCameraSkeleton && !c) {
+        if (SongDriver()) {
+            c = SongDriver()->FirstClip();
+            if (c) {
+                MILO_ASSERT(c->Type() == "main", 0x3C8);
+                return c->Property("clip_skeleton_index", false)->Int();
+            }
+        }
+        return 0;
+    }
+    return -1;
 }
 
 bool HamCharacter::GetPropShowing(int prop) {
@@ -694,14 +712,25 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
         } else {
             hamDriver->SetClipWeightMap();
             std::map<CharClip *, float> clipMap(hamDriver->mClipTimingMap);
+            // No explicit clear() here: the target calls _Rb_tree::clear exactly
+            // ONCE on this path (0x82491978), which is the map destructor running
+            // at `return this`. Spelling `clipMap.clear(); return this;` emits a
+            // second `bl clear` and forces the early return to branch to a shared
+            // epilogue instead of the inlined one the image has at 0x8249197C.
             if (clipMap.size() == 0) {
-                clipMap.clear();
                 return this;
             }
 #ifndef HX_NATIVE
             bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
 #endif
             bones->Zero();
+            // NEGATIVE RESULT (w7-af): respelling this as a hoisted iterator plus
+            // `while (it != clipMap.end())` is byte-identical to the `for` -- 91.7%
+            // both ways. The residual here is that the image enters the loop with
+            // `b .L_824919CC` (jump straight to the bottom test) while MSVC peels a
+            // guard copy for us; the sibling loop over Driver()->mClipWeightMap has
+            // the peeled guard in the image too, so this is a per-loop backend
+            // rotation decision, not a source shape.
             for (std::map<CharClip *, float>::iterator it = clipMap.begin();
                  it != clipMap.end(); ++it) {
                 CharClip *timedClip = it->first;
