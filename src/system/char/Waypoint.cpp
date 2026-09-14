@@ -149,17 +149,27 @@ Waypoint *Waypoint::FindNearest(const Vector3 &pos, int flags) {
     float bestDist = 1e30;
     for (std::list<Waypoint *>::iterator it = sWaypoints->begin(); it != sWaypoints->end();
          ++it) {
-        Waypoint *wp = *it;
-        if (wp->mFlags & flags) {
-            const Vector3 &wpPos = wp->WorldXfm().v;
+        // No `Waypoint *wp = *it;` local: the image loads the node's payload
+        // into r3 once for the flags/WorldXfm block (0x...  `lwz r3, 0x8(r31)`)
+        // and RE-LOADS it from the iterator for the assignment to best
+        // (`lwz r27, 0x8(r31)`), which a cached local cannot produce -- it holds
+        // the pointer in a callee-saved register and needs an extra
+        // `mr r3, r31` before the WorldXfm_Force call instead.
+        if ((*it)->mFlags & flags) {
+            const Vector3 &wpPos = (*it)->WorldXfm().v;
             float dy = pos.y - wpPos.y;
             float dz = pos.z - wpPos.z;
             float dx = pos.x - wpPos.x;
             float dist = (dy * dy + (dx * dx + dz * dz));
-            if (bestDist > dist) {
-                bestDist = dist;
-                best = wp;
-            }
+            // MinEq, not a hand-written `if`: the image's
+            // `fmr f13, f31` / `fsubs f12, f31, f0` / `fsel f31, f12, f0, f31` /
+            // `fcmpu cr6, f31, f13` / `bne` is MinEq<float>'s body verbatim
+            // (save the old value, fsel-Min, return old != new).  Spelling the
+            // update as any form of `if (bestDist > dist) bestDist = dist;`
+            // leaves MSVC with a real branch and an `fmr` -- it never
+            // if-converts a store to a loop-carried FPR on its own.
+            if (MinEq(bestDist, dist))
+                best = *it;
         }
     }
     return best;
