@@ -330,14 +330,19 @@ BEGIN_LOADS(RndFont)
             d >> mMats;
         }
         if (d.rev < 4) {
+            // Stream order is the HEIGHT divisor first, then the WIDTH divisor --
+            // the reverse of the order they are used in below. Verified against the
+            // target: the rev>=2 path reads into 0xb8 then 0xc0, and 0xc0 (the
+            // second value) is what divides bmap.Width() while 0xb8 (the first)
+            // divides bmap.Height().
             float w, h;
             if (d.rev < 2) {
-                int iW, iH;
-                d >> iW >> iH;
-                w = iW;
+                int iH, iW;
+                d >> iH >> iW;
                 h = iH;
+                w = iW;
             } else {
-                d >> w >> h;
+                d >> h >> w;
             }
             RndTex *validTex = ValidTexture(0);
             if (validTex) {
