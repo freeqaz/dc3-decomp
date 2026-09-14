@@ -158,14 +158,13 @@ MoveAsyncDetector::MoveAsyncDetector(MoveDir *md) : mDir(md) {
                             MILO_NOTIFY("Could not find %s in expert keys", PathName(it));
                         }
                     } else {
-                        const DancerFrame *endFrame = frames.end();
                         const DancerFrame *curFrame = frames.begin();
-                        while (curFrame != endFrame) {
+                        while (curFrame != frames.end()) {
                             if (curFrame->mMoveIdx == foundIdx)
                                 break;
                             curFrame++;
                         }
-                        if (curFrame != endFrame) {
+                        if (curFrame != frames.end()) {
                             const FilterVersion *curFv = it->FilterVer();
                             mDetectors.push_back(new MoveDetector(curFv, it, curFrame));
                         }
