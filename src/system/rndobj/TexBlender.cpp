@@ -200,46 +200,50 @@ void RndTexBlender::DrawShowing() {
                     break;
                 }
             }
-            if (unkc0 || !nearList.empty() || !farList.empty() || !customList.empty()
-                || (unsigned int)mRenderedStates != 1) {
-                unkc0 = false;
-                RndCam *cam = TheRnd.GetDefaultCam();
-                RndCam *prevCam = RndCam::Current();
-                RndTex *targetTex = prevCam->TargetTex();
-                if (targetTex) {
-                    MILO_NOTIFY_ONCE(
-                        "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
-                        PathName(targetTex),
-                        PathName(this),
-                        PathName(targetTex)
-                    );
-                }
-                cam->SetTargetTex(mOutputTextures);
-                cam->Select();
-                if (mBaseMap) {
-                    RndMat *work = TheShaderMgr.GetWork();
-                    SetupMaterial(work, mBaseMap);
-                    work->SetAlpha(1);
-                    TheNgRnd.DrawRect(
-                        Hmx::Rect(
-                            0, 0, mOutputTextures->Width(), mOutputTextures->Height()
-                        ),
-                        work,
-                        (ShaderType)6,
-                        Hmx::Color(1, 1, 1),
-                        nullptr,
-                        nullptr
-                    );
-                    mRenderedStates = 1;
-                }
-                std::sort(nearList.begin(), nearList.end(), BlendSorter());
-                std::sort(farList.begin(), farList.end(), BlendSorter());
-                DrawBlendList(nearList, kTexNear);
-                DrawBlendList(farList, kTexFar);
-                DrawBlendList(customList, (TexState)8);
-                cam->SetTargetTex(nullptr);
-                prevCam->Select();
+            // The shipped build takes an early return here rather than wrapping the
+            // body in an `if`: the false path carries its OWN copy of the three
+            // vectors' destructor sequence (customList, farList, then a jump into
+            // the shared tail for nearList) instead of branching to the common exit.
+            // That is what an early `return` inside the vectors' scope emits.
+            if (!unkc0 && nearList.empty() && farList.empty() && customList.empty()
+                && (unsigned int)mRenderedStates == 1) {
+                return;
             }
+            unkc0 = false;
+            RndCam *cam = TheRnd.GetDefaultCam();
+            RndCam *prevCam = RndCam::Current();
+            RndTex *targetTex = prevCam->TargetTex();
+            if (targetTex) {
+                MILO_NOTIFY_ONCE(
+                    "%s: Cannot render to texture (%s) while already rendering to texture (%s).",
+                    PathName(targetTex),
+                    PathName(this),
+                    PathName(targetTex)
+                );
+            }
+            cam->SetTargetTex(mOutputTextures);
+            cam->Select();
+            if (mBaseMap) {
+                RndMat *work = TheShaderMgr.GetWork();
+                SetupMaterial(work, mBaseMap);
+                work->SetAlpha(1);
+                TheNgRnd.DrawRect(
+                    Hmx::Rect(0, 0, mOutputTextures->Width(), mOutputTextures->Height()),
+                    work,
+                    (ShaderType)6,
+                    Hmx::Color(1, 1, 1),
+                    nullptr,
+                    nullptr
+                );
+                mRenderedStates = 1;
+            }
+            std::sort(nearList.begin(), nearList.end(), BlendSorter());
+            std::sort(farList.begin(), farList.end(), BlendSorter());
+            DrawBlendList(nearList, kTexNear);
+            DrawBlendList(farList, kTexFar);
+            DrawBlendList(customList, (TexState)8);
+            cam->SetTargetTex(nullptr);
+            prevCam->Select();
         }
     }
 }

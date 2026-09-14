@@ -308,6 +308,43 @@ reload can cost an extra callee-saved register (`__savegprlr_23` vs the target's
 ~40 register swaps. See
 [fixable-liveness.md: Lever 2](fixable-liveness.md#lever-2--call-through-the-cached-local-dont-re-load-the-member-at-the-call-site).
 
+### Counter-case (REFUTED 2026-09-14): the named local can cost a stack frame
+
+The lever does what it says and can still lose. Measured in
+`RndTexBlender::DrawBlendList`, whose one non-register row was exactly this
+pattern — the target holds `TheShaderMgr`'s loaded pointer in callee-saved `r26`
+across the `Hmx::Matrix4(xfm)` temporary's constructor
+(`lwz r26, ?TheShaderMgr@@…@l(r24)` before the ctor, `mr r3, r26` after), while we
+took it into volatile `r11` and reloaded the global once the ctor had clobbered it.
+Binding the obvious local —
+
+```cpp
+RndShaderMgr &shaderMgr = TheShaderMgr;
+shaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
+```
+
+— **closed the row it was aimed at** (`DrawBlendList` diff_arg 57 → 29, REGISTER_SWAP
+59 → 32, the `replace`/`insert` pair gone) **and lost anyway**:
+
+| function | before | after |
+|---|---:|---:|
+| `RndTexBlender::DrawBlendList` (724 B) | 99.116% | 98.9% |
+| `RndTexBlender::DrawShowing` (2,636 B) | 99.5% | 99.1% |
+
+Two separate costs, and the second is the one to watch for:
+
+* In `DrawBlendList` itself the named local bought one new scheduling row — a
+  `stfs f31, 0x38(r31)` that moved three slots.
+* In `DrawShowing`, which **inlines `DrawBlendList` at two of its three call sites**,
+  the extra named local re-inflated the frame by `0x10` (`0x240` → `0x250`) and brought
+  back the *entire* stack-offset cascade that had just been eliminated: 0 offset rows
+  became ~45, plus 6 SWAPPED / 5 SHIFTED / 5 DIFFER / 22 PERMUTED slots.
+
+**Rule:** before applying this lever inside a function that is inlined elsewhere, check
+the inlining callers too. A local that is free in the callee is paid for once per inline
+site, and a frame-size change there is worth far more than the reload you removed.
+Reverted; the reload row is left open on both functions.
+
 ---
 
 ## Boolean Init from Existing Register

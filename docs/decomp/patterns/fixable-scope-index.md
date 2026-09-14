@@ -187,9 +187,11 @@ declaration line rewrites the message **string** too —
 `Message self_msg("self_msg")` before it was caught.
 
 The one row that was a real missing declaration is worked below
-(`DingoJob::SendCallback`); the two that survive are
-`RndTexBlender::DrawShowing` (5 ours / 3 target, hand-inlined `DrawBlendList`)
-and `BustAMovePanel::OnBeat` (2 ours / 3 target `matchedMessage`, in a
+(`DingoJob::SendCallback`). Of the two that used to survive,
+`RndTexBlender::DrawShowing` is **CLOSED** (2026-09-14 — routing the two loops
+through the real `DrawBlendList` fixed it; our object now emits exactly the
+target's `?M@`/`?P@`/`?BL@` and nothing else), leaving only
+`BustAMovePanel::OnBeat` (2 ours / 3 target `matchedMessage`, in a
 3,044-instruction function at 97.5% whose dominant problem is member offsets).
 
 ### A count row that WAS real: `DingoJob::SendCallback` (82.6% -> 99.1%)
@@ -358,19 +360,21 @@ neutrality gate ("if an edit moves an instruction it is the wrong edit") does no
 even apply, because the function is not matching in the first place. Two worked
 examples, left open on purpose:
 
-* **`RndTexBlender::DrawShowing`** (92.5%). Target has 3 `_dw`, we have 5. The
-  relocation pairing shows the target's near-list and far-list loops both
-  reference **`?_dw@?P@??DrawBlendList@...`** — i.e. the original called
-  `DrawBlendList(nearList, ...)` / `DrawBlendList(farList, ...)` and the compiler
-  inlined them, keeping the static's name attached to `DrawBlendList`. Our source
-  hand-wrote both loops inside `DrawShowing`, which manufactures two statics that
-  cannot exist in the target. The remaining three need +3 before the first
-  notify, -3 between the first and second, +1 between the second and third —
-  consistent with the outer `if (a && b && mOutputTextures)` being two nested
-  `if`s and the two validity warnings being siblings rather than `if`/`else`.
-  Note `DrawBlendList` is itself only 92.5%, and its `state != 2 ? mNearMap :
-  mFarMap` disagrees with the near loop's `mRenderedStates |= 2`, so that body
-  wants checking before anything is routed through it.
+* ✅ **`RndTexBlender::DrawShowing`** — **CLOSED, and the diagnosis above was
+  exactly right.** (Was 92.5% when written; 99.5% as of 2026-09-14.) The target's
+  near-list and far-list loops reference `?_dw@?P@??DrawBlendList@...` because the
+  original really did call `DrawBlendList(nearList, …)` / `DrawBlendList(farList, …)`
+  and MSVC inlined **two of the three** call sites, leaving a real
+  `bl ?DrawBlendList` for the custom list. Routing our two hand-written loops
+  through the real function reproduced that exactly: our object now emits the
+  target's three ordinals `?M@` (13), `?P@` (16), `?BL@` (38) and nothing else,
+  with one `??__F_dw@?P@??DrawBlendList@…` reference, byte-for-byte the target's set.
+  The predicted "+3 / −3 / +1" brace surgery turned out **not** to be needed — the
+  count reconciled on the routing change alone. `DrawBlendList` is now 99.116% and
+  its `state != 2 ? mNearMap : mFarMap` was checked and is correct.
+  Everything left on `DrawShowing` is register permutation plus the
+  `TheShaderMgr` reload described in
+  [fixable-declarations.md](fixable-declarations.md#pre-compute-references-before-clobbering-calls).
 * **`WorldCrowd::DrawShowing`** (85.9%). Both sides have 2 `_dw`, but they are
   offset by different amounts (+8 on the collider warning, +12 on the environ
   warning) — the equal-looking 42 on each side is our *first* static against the
@@ -577,11 +581,11 @@ static into. Recompute a floor before you build an argument on it.
   assert costing 3, all are zero-mismatch on instructions, and
   `CampaignSongProvider::Text` is not self-consistent even at 3. No sibling
   decomp witnesses a bare-`if` spelling, so no third macro was written.
-* **`RndTexBlender::DrawShowing`**, the last COUNT row with evidence behind it:
-  three target helpers against our five `_dw`, because we hand-inlined
-  `DrawBlendList` into both loops. Route through the real function instead —
-  but check its body first, since its `state != 2 ? mNearMap : mFarMap`
-  contradicts the near loop's `mRenderedStates |= 2`.
+* ✅ **`RndTexBlender::DrawShowing`** — was the last COUNT row with evidence behind
+  it; **CLOSED 2026-09-14.** Routing the two hand-inlined loops through the real
+  `DrawBlendList` reconciled the count exactly (our `?M@`/`?P@`/`?BL@` now equal
+  the target's, plus the one inlined `DrawBlendList` helper reference). The
+  `state != 2 ? mNearMap : mFarMap` worry was unfounded.
 * **`BustAMovePanel::OnBeat`**: we invented a `static Message playMsg` and are
   missing the original's third `matchedMessage`; the beat-dedup `if` around
   `sLastBeat` is ours and is not guarded by `HX_NATIVE`. Blocked behind a wrong

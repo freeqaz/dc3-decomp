@@ -51,22 +51,49 @@ virtual void SetVConstant(VShaderConstant, const Hmx::Matrix4 &) = 0; // 0x18 lo
 
 ## Remaining Gaps (At Limit)
 
-### DrawShowing — 88.6%
+> ⚠ **The two tables below were WRONG and are retained only as history. Do not
+> treat any row in them as a floor.** Both functions have since moved well past
+> the numbers they were taken at: `DrawShowing` **88.6% → 95.343% → 99.5%** and
+> `DrawBlendList` **91.9% → 99.116%**. Three rows are refuted outright:
+>
+> * **"Stack frame +8 — No, compiler stack layout" is false.** It was a source
+>   bug, not a layout fact. The shipped `DrawShowing` takes an **early return**
+>   where we wrapped the body in an `if`: the target's false path carries its own
+>   copy of the three vectors' destructor sequence (`customList` 0x70, `farList`
+>   0x80, then a branch into the shared tail for `nearList`) instead of jumping to
+>   the common exit. De Morgan'ing the condition into `if (…) return;` deleted the
+>   frame delta (`0x250` → `0x240`), all three vectors' 8-byte offset skew, and
+>   every one of the 24 `delete` rows, in one edit. 2026-09-14, `3c7ef3c73`.
+> * **"Static guard counters — No, TU definition order" is moot.** Our object now
+>   emits exactly the target's three scope ordinals for `DrawShowing`
+>   (`?M@`, `?P@`, `?BL@`) and nothing else.
+> * **"Register swaps — No"** is unsupported: the swap count is a *symptom*, and
+>   most of it went away with the early return without any register being touched.
+>
+> The one row that has survived every attempt is **TheShaderMgr vtable caching**,
+> and even there "No — compiler pre-loads vtable ptr into callee-saved reg" is the
+> wrong diagnosis: *both* sides hoist the vtable load above the `Matrix4` ctor. The
+> difference is only which register receives the **object pointer** — target
+> callee-saved `r26`, ours volatile `r11`, so ours pays a reload. The named-local
+> lever aimed at it works and still loses on net; see the counter-case in
+> [fixable-declarations.md](../decomp/patterns/fixable-declarations.md#pre-compute-references-before-clobbering-calls).
+
+### DrawShowing — 88.6% *(historical, superseded — see warning above)*
 | Pattern | Instructions | Fixable? |
 |---------|-------------|----------|
-| Register swaps | 150 (32 pairs) | No — mixed volatile+callee-saved |
-| Stack frame +8 | 61 | No — compiler stack layout |
+| Register swaps | 150 (32 pairs) | ❌ claimed No — **unsupported**, most cleared with the early return |
+| Stack frame +8 | 61 | ❌ claimed No — **REFUTED**, it was the missing early return |
 | Address relocations | 42 | No — linker-level |
-| Static guard counters | 2 | No — TU definition order |
-| TheShaderMgr vtable caching | ~10 | No — compiler pre-loads vtable ptr into callee-saved reg |
+| Static guard counters | 2 | ❌ claimed No — **moot**, all three ordinals now match |
+| TheShaderMgr vtable caching | ~10 | Open — real, but misdiagnosed; see above |
 
-### DrawBlendList — 91.9%
+### DrawBlendList — 91.9% *(historical, superseded — now 99.116%)*
 | Pattern | Instructions | Fixable? |
 |---------|-------------|----------|
 | r25↔r26 regswap | 11 | Maybe — callee-saved |
 | beq↔bne ternary | 1 | No — swapping cascades to worse (84.7%) |
-| TheShaderMgr vtable caching | 5 | No |
-| Address relocations | 4 | No |
+| TheShaderMgr vtable caching | 5 | Open — misdiagnosed; see above |
+| Address relocations | 4 | No — linker-level |
 
 ## Patterns for Permuter Rules
 
