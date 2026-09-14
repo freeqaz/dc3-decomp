@@ -381,6 +381,19 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             float distX = dx - frontPt.x;
             float distZ = dz - frontPt.z;
             float distY = dy - frontPt.y;
+            // RESIDUAL (w7-an, 97.5 canonical): 19 rows in two clusters, both
+            // scheduling.  (1) The `Vector3 frontPt` 16-byte copy: the image
+            // issues all four `lwz` (w,y,x,z off the node) before all four
+            // `stw`, clobbering r11 -- the head-node pointer -- with the last
+            // load, so it must RELOAD `lwz r11, 0x0(r30)` for the insert()
+            // below.  We keep r11 live, CSE the second begin() away, and
+            // interleave one store into the loads.  (2) f11/f12 are swapped
+            // across the three fsubs and the image squares distY with `fmuls`
+            // immediately after its fsubs, while we defer and square distZ.
+            // NEGATIVE RESULT: `mJointPath.front()` for the copy is
+            // byte-identical to `*mJointPath.begin()`; hoisting `distY * distY`
+            // into its own local is byte-identical too.  Neither touches the
+            // r11 liveness that drives cluster (1).
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
                 mJointPath.insert(mJointPath.begin(), boneVec);
             }
