@@ -286,6 +286,22 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int iStartIndex, int iEndIndex) cons
     }
 }
 
+// Vector4 has no arithmetic helpers in Vec.h; SyncDeformedCtrlPoints needs
+// the by-reference accumulate form (see the note in its body).
+static inline void ScaleAddEq(Vector4 &v, const Vector4 &a, float s) {
+    v.x += a.x * s;
+    v.y += a.y * s;
+    v.z += a.z * s;
+    v.w += a.w * s;
+}
+
+static inline void ScaleSubEq(Vector4 &v, const Vector4 &a, float s) {
+    v.x -= a.x * s;
+    v.y -= a.y * s;
+    v.z -= a.z * s;
+    v.w -= a.w * s;
+}
+
 void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
     MILO_ASSERT_RANGE(iStartIndex, 0, (int)mDeformedCtrlPoints.size(), 0x278);
     MILO_ASSERT_RANGE(iEndIndex, 0, (int)mDeformedCtrlPoints.size(), 0x279);
@@ -306,51 +322,40 @@ void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
                     nextNext.mPos.x, nextNext.mPos.y, nextNext.mPos.z, nextNext.mRoll
                 );
 
+                // Each stage is an inlined by-reference helper: the image
+                // stores every component after every stage and reloads some
+                // of them for the next (826B3554 stfs y / 826B3574 lfs y), and
+                // keeps dead `addi r11, r31, 0x18/0x28/0x38` (826B34C0,
+                // 826B35F8, 826B35FC) -- the helpers' reference arguments.
+                // Per-component `pt.mCoeff0.x -= ...` chains keep everything
+                // in registers and store once.
                 // mCoeff0 = -0.5*prev + 1.5*cur - 1.5*next + 0.5*nextNext
                 pt.mCoeff0 = Vector4::ZeroVec();
                 Vector4 curVec(pt.mPos.x, pt.mPos.y, pt.mPos.z, pt.mRoll);
-                pt.mCoeff0.x -= prevVec.x * 0.5f;
-                pt.mCoeff0.y -= prevVec.y * 0.5f;
-                pt.mCoeff0.z -= prevVec.z * 0.5f;
-                pt.mCoeff0.w -= prevVec.w * 0.5f;
-                pt.mCoeff0.x += curVec.x * 1.5f;
-                pt.mCoeff0.y += curVec.y * 1.5f;
-                pt.mCoeff0.z += curVec.z * 1.5f;
-                pt.mCoeff0.w += curVec.w * 1.5f;
-                pt.mCoeff0.x -= nextVec.x * 1.5f;
-                pt.mCoeff0.y -= nextVec.y * 1.5f;
-                pt.mCoeff0.z -= nextVec.z * 1.5f;
-                pt.mCoeff0.w -= nextVec.w * 1.5f;
-                pt.mCoeff0.x += nextNextVec.x * 0.5f;
-                pt.mCoeff0.y += nextNextVec.y * 0.5f;
-                pt.mCoeff0.z += nextNextVec.z * 0.5f;
-                pt.mCoeff0.w += nextNextVec.w * 0.5f;
+                ScaleSubEq(pt.mCoeff0, prevVec, 0.5f);
+                ScaleAddEq(pt.mCoeff0, curVec, 1.5f);
+                ScaleSubEq(pt.mCoeff0, nextVec, 1.5f);
+                ScaleAddEq(pt.mCoeff0, nextNextVec, 0.5f);
 
                 // mCoeff1 = prev - 2.5*cur + 2.0*next - 0.5*nextNext
                 pt.mCoeff1 = prevVec;
-                pt.mCoeff1.x -= curVec.x * 2.5f;
-                pt.mCoeff1.y -= curVec.y * 2.5f;
-                pt.mCoeff1.z -= curVec.z * 2.5f;
-                pt.mCoeff1.w -= curVec.w * 2.5f;
-                pt.mCoeff1.x += nextVec.x * 2.0f;
-                pt.mCoeff1.y += nextVec.y * 2.0f;
-                pt.mCoeff1.z += nextVec.z * 2.0f;
-                pt.mCoeff1.w += nextVec.w * 2.0f;
-                pt.mCoeff1.x -= nextNextVec.x * 0.5f;
-                pt.mCoeff1.y -= nextNextVec.y * 0.5f;
-                pt.mCoeff1.z -= nextNextVec.z * 0.5f;
-                pt.mCoeff1.w -= nextNextVec.w * 0.5f;
+                ScaleSubEq(pt.mCoeff1, curVec, 2.5f);
+                ScaleAddEq(pt.mCoeff1, nextVec, 2.0f);
+                ScaleSubEq(pt.mCoeff1, nextNextVec, 0.5f);
 
                 // mCoeff2 = -0.5*prev + 0.5*next
                 pt.mCoeff2 = Vector4::ZeroVec();
-                pt.mCoeff2.x -= prevVec.x * 0.5f;
-                pt.mCoeff2.y -= prevVec.y * 0.5f;
-                pt.mCoeff2.z -= prevVec.z * 0.5f;
-                pt.mCoeff2.w -= prevVec.w * 0.5f;
-                pt.mCoeff2.x += nextVec.x * 0.5f;
-                pt.mCoeff2.y += nextVec.y * 0.5f;
-                pt.mCoeff2.z += nextVec.z * 0.5f;
-                pt.mCoeff2.w += nextVec.w * 0.5f;
+                // Residual (98.2): the image walks THIS block in mirror order
+                // -- loads w, z, y, x (826B36EC-826B3700), keeps z/w in
+                // registers for the next stage and reloads x/y (826B373C,
+                // 826B3744) -- the exact reverse of what the same helpers
+                // produce on mCoeff0 and mCoeff1 above, which match. A second
+                // helper pair with w, z, y, x bodies measures 98.9 (pairs still
+                // swapped within (x,y) and (z,w)); Set(...) with the four
+                // expressions as arguments measures 89.7 and disturbs the
+                // mCoeff1 copy. Kept on the one natural helper pair.
+                ScaleSubEq(pt.mCoeff2, prevVec, 0.5f);
+                ScaleAddEq(pt.mCoeff2, nextVec, 0.5f);
 
                 // mCoeff3 = cur
                 pt.mCoeff3 = curVec;
