@@ -127,6 +127,14 @@ BEGIN_LOADS(RndMatAnim)
         // (`Keys<TexPtr, RndTex *> &texKeys = mTexKeys;` etc., declared in the
         // image's right-to-left order) is byte-for-byte inert -- MSVC folds the
         // references away before scheduling.
+        // REFUTED (2026-09-14, w7-ac): the same thing through POINTERS rather
+        // than references -- `Keys<Vector3, Vector3> *pt = &mTransKeys;` etc.,
+        // then `d >> *pt >> *ps >> *pr >> ...` -- is ALSO byte-for-byte inert,
+        // same six rows, same 97.9/97.9.  MSVC folds an address-of/deref pair
+        // exactly as it folds a reference, so no spelling of the operands moves
+        // the hoist; the decision is made by the scheduler on the anchor
+        // register (r30 = this + 0xE0-ish, every member reached at a NEGATIVE
+        // displacement off it).
         d >> mTransKeys >> mScaleKeys >> mRotKeys >> (Keys<TexPtr, RndTex *> &)mTexKeys;
     }
 END_LOADS
