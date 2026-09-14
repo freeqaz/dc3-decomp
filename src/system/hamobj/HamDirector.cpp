@@ -2480,10 +2480,16 @@ bool HamDirector::ReactToCollision(float frame) {
     float beat = FrameToBeat(frame);
     if (!mCurShot)
         return false;
-    Symbol cat = mCurShot->Category();
-    if (strncmp(cat.Str(), "Area", 4) != 0) {
+    // Retail holds the category in a short-lived register for the strncmp and
+    // only copies it into the long-lived `cat` register AFTER the early return
+    // (mr r24,r29 at 0x8247A1E8, past the bne at 0x8247A1E0).  A single local
+    // initialised from Category() is allocated straight into r24 and that copy
+    // never appears.
+    Symbol curCat = mCurShot->Category();
+    if (strncmp(curCat.Str(), "Area", 4) != 0) {
         return false;
     }
+    Symbol cat = curCat;
     static Symbol shot("shot");
     PropKeys *propKeys = GetPropKeysByPlayer(0, shot);
     if (!propKeys)
