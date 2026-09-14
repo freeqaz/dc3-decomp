@@ -407,14 +407,34 @@ void HiResScreen::CurrentTileRect(
     float tileXf = (float)tileX;
     float invTiling = 1.0f / (float)tiling;
     float tileYf = (float)tileY;
+    // REFUTED (w7-aq): the one remaining row is idx 43, `fmuls f6, f6, f10` vs
+    // our `fmuls f6, f10, f6` -- a plain two-term same-register commutative
+    // swap, the known backend floor.  Spelling it `invTiling * tileXf` is
+    // bit-for-bit inert, and tileYStart below already matches with this order.
     float tileXStart = tileXf * invTiling;
     float tileYStart = tileYf * invTiling;
-    float tileXWidth = (tileXf + 1.0f) * invTiling - tileXStart;
-    float tileYHeight = (tileYf + 1.0f) * invTiling - tileYStart;
-    float x0 = (inRect.x - tileXStart) / tileXWidth;
-    float x1 = ((inRect.w + inRect.x) - tileXStart) / tileXWidth;
-    float y0 = (inRect.y - tileYStart) / tileYHeight;
-    float y1 = ((inRect.h + inRect.y) - tileYStart) / tileYHeight;
+    // The image emits FOUR real `fdivs` (idx 57-60), two of them by the same
+    // register, and keeps the width/height products unfused -- `fmuls f4, f4,
+    // f10` then `fsubs f4, f4, f6` (idx 48/53), not `fmsubs`.  Xenon MSVC
+    // defaults to /fp:fast, so naming ONE divisor variable twice strength-
+    // reduces the pair into `fdivs 1.0/x` + two `fmuls`, and writing the
+    // product and the subtraction as one expression contracts them into
+    // `fmsubs`.  Both transforms key on source-level identity, so each division
+    // gets its own divisor temp and each product its own statement; CSE merges
+    // the duplicates back afterwards, which is why the image has two
+    // computations and four divides.
+    // See docs/decomp/patterns/fixable-fsel-fma.md (per-division temps; do NOT
+    // reach for /fp:precise, that is a measured -624 functions project-wide).
+    float tileXEnd = (tileXf + 1.0f) * invTiling;
+    float tileYEnd = (tileYf + 1.0f) * invTiling;
+    float tileXWidth0 = tileXEnd - tileXStart;
+    float tileXWidth1 = tileXEnd - tileXStart;
+    float tileYHeight0 = tileYEnd - tileYStart;
+    float tileYHeight1 = tileYEnd - tileYStart;
+    float x0 = (inRect.x - tileXStart) / tileXWidth0;
+    float x1 = ((inRect.w + inRect.x) - tileXStart) / tileXWidth1;
+    float y0 = (inRect.y - tileYStart) / tileYHeight0;
+    float y1 = ((inRect.h + inRect.y) - tileYStart) / tileYHeight1;
     x0 = Clamp(0.0f, 1.0f, x0);
     x1 = Clamp(0.0f, 1.0f, x1);
     y0 = Clamp(0.0f, 1.0f, y0);
