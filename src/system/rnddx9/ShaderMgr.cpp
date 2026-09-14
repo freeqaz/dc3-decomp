@@ -121,7 +121,8 @@ bool DxShader::Compile(
 
     LPCSTR data = nullptr;
     UINT bytes = 0;
-    if (TheDxShaderInclude.Open(
+    ID3DXInclude *include = &TheDxShaderInclude;
+    if (include->Open(
             D3DXINC_LOCAL, shaderName, nullptr, (LPCVOID *)&data, &bytes, nullptr, 0
         )
         < 0) {
