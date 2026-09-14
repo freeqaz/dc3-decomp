@@ -535,7 +535,9 @@ void GestureMgr::DrawSkeletonKinectData() {
     Vector2 textPos(0.15f, 0.2f);
 
     auto& debugDir = mDebugDir;
-    for (int i = 0; (unsigned int)i < NUM_SKELETONS; i++) {
+    // Signed: the image's loop-back test is `cmpwi cr6, r11, 0x6` at 0x82DBB014,
+    // not `cmplwi` -- the (unsigned int) cast was ours.
+    for (int i = 0; i < NUM_SKELETONS; i++) {
         const Skeleton &skel = GetSkeleton(i);
         SkeletonTrackingState tracking = skel.TrackingState();
 

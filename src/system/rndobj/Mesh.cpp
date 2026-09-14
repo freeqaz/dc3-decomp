@@ -1330,6 +1330,10 @@ void RndMesh::InstanceGeomOwnerBones() {
     bool needsCopy = mGeomOwner && mGeomOwner->mBones[0].mBone != mBones[0].mBone;
     if (needsCopy) {
         DeleteBones(true);
+        // NEGATIVE RESULT: the image's test here is `cmplwi` (0x82642F6C), an
+        // unsigned raw-pointer test, where the two earlier mGeomOwner tests are
+        // `cmpwi` and match. Neither `mGeomOwner.Ptr()` nor
+        // `mGeomOwner.Ptr() != nullptr` moved it -- both still lower to `cmpwi`.
         if (mGeomOwner) {
             mBones = mGeomOwner->mBones;
         } else {
