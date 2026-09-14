@@ -346,11 +346,12 @@ DWORD NuipCameraAdjustTilt(
     } else if (NuipDetroitRuntimeState.Unk3c == 0
                && NuipDetroitRuntimeState.FloorHeightMillimeters == 0.0f) {
         NuipDetroitRuntimeState.LastTiltTime = dwNow;
-        if ((NuipDetroitRuntimeState.TiltXConfig.Flags & 2) == 0) {
+        if ((NuipDetroitRuntimeState.TiltXConfig.Flags & 2) != 0) {
+            NuipCameraElevationSetAngle(NuipDetroitRuntimeState.TargetElevationDegrees);
+            dwTiltState = 3;
+        } else {
             goto BeginFloorSearch;
         }
-        NuipCameraElevationSetAngle(NuipDetroitRuntimeState.TargetElevationDegrees);
-        dwTiltState = 3;
     } else {
         NuipDetroitRuntimeState.LastTiltTime = dwNow;
         dwTiltState = 3;
