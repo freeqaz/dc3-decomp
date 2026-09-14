@@ -192,6 +192,15 @@ void Trie::remove(unsigned int index) {
 
         // Find the first child in the sibling chain
         check_index(curIdx);
+        // NEGATIVE RESULT (w7-as, 2026-09-14): the r25/r26/r27 three-way
+        // rotation (16 of the 54 residual rows) is NOT reachable by declaration
+        // order.  Image: firstChildIdx=r25, prevSib=r27, traverseCount=r26;
+        // ours: r27 / r26 / r25, i.e. plain descending decl order.  Moving
+        // `prevSib`/`traverseCount` above `firstChildIdx` *with* their `= 0`
+        // initialisers sinks both `li` to the top of the block and costs
+        // 88.61 -> 86.90; moving the bare declarations up without the
+        // initialisers is exactly byte-identical (a slot is claimed at the
+        // first STORE, not at the declaration).
         unsigned int firstChildIdx;
         if (Parent(curNode) == 0) {
             firstChildIdx = 1;
@@ -251,6 +260,12 @@ void Trie::remove(unsigned int index) {
             // curNode is rebuilt from scratch after the loop at 827FE5C8.
             // Keeping a loop-carried curNode forces MSVC to rotate the loop
             // and peel the zero-trip test.
+            // NEGATIVE RESULT (w7-as, 2026-09-14): writing this as a `for` with
+            // the increment in the latch is byte-identical (88.61 both ways).
+            // The residual here is MSVC ROTATING the loop -- it peels the
+            // zero-trip test as `subic./beq` and duplicates `lbz 0x20(r31)` +
+            // `subi` + `cmplw` into the latch, where the image keeps ONE
+            // top-tested copy and an unconditional `b` back-edge (827FE5B4).
             while (scanCount < TRIE_ROOT_SIBLING_COUNT - 1) {
                 check_index(curIdx);
                 scanCount++;
