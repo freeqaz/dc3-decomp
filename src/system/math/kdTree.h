@@ -100,7 +100,18 @@ public:
         kdTriList *GetTriList() const { return mData.triList; }
         void SetTriList(kdTriList *p) { mData.triList = p; }
 #endif
-        short mFlags;
+        // The image writes the low 15 bits with `rlwimi r8, r11, 0, 17, 31`
+        // (kdTree ctor, 0x8299xxxx) -- a BITFIELD store, not an or.  MSVC/Xenon
+        // bitfields are MSB-first, so mIsLeaf (declared first) is 0x8000 and
+        // mIndex is the low 15 bits.  `mFlags` keeps its own spelling for the
+        // mask-and-test sites, which the image really does write that way.
+        union {
+            short mFlags;
+            struct {
+                unsigned short mIsLeaf : 1;
+                unsigned short mIndex : 15;
+            };
+        };
 
         unsigned short GetIsLeaf() const { return mFlags & 0x8000; }
 
@@ -221,7 +232,8 @@ public:
         mBounds.Set(box.mMin, box.mMax);
         mNodes = new kdTreeNode[0x8000];
         for (u16 i = 0; i < 0x8000; i++) {
-            mNodes[i].mFlags |= i;
+            kdTreeNode &node = mNodes[i];
+            node.mIndex = i;
         }
     }
     ~kdTree() { delete[] mNodes; }
