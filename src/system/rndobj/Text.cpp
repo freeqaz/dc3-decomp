@@ -2677,24 +2677,35 @@ void RndText::FontMap::SetupCharacter(
 
     xPos += (mFont->Kerning(prevChar, charCode) + state.mKerning) * state.mSize;
 
-    float width = charW;
+    // charW is REUSED as the glyph width and then as the scaled width.  It is
+    // address-taken (the out-param above), so every assignment to it is a store
+    // to its frame slot and every read is a reload -- which is exactly what the
+    // image does:
+    //     stfs f0,  0x50(r1)   ; charW = advW        (0x25a4)
+    //     stfs f12, 0x50(r1)   ; charW *= state.mSize (0x25dc)
+    //     lfs  f13, 0x50(r1)   ; reload at vert[2].x  (0x266c)
+    //     lfs  f0,  0x50(r1)   ; reload at vert[3].x  (0x2680)
+    // Separate `width` / `scaledW` locals stay in FPRs and lose all four rows.
     if (charW <= 0.0f) {
-        width = advW;
+        charW = advW;
     }
 
     float centerOfs = 0.0f;
     if (mFont->IsMonospace()) {
-        centerOfs = Max((advW - width) * 0.5f, 0.0f);
+        centerOfs = Max((advW - charW) * 0.5f, 0.0f);
     }
 
     float scaledCenter = state.mSize * centerOfs;
-    float scaledW = state.mSize * width;
-    if (scaledW <= 0.0f) return;
+    charW = state.mSize * charW;
+    if (charW <= 0.0f) return;
 
     float z0 = yPos + state.mZOffset * state.mSize;
+    // The image parks state.mSize in a callee-saved FPR across the virtual
+    // AspectRatio() call (`fmr f26, f0` at 0x25f4) instead of reloading it
+    // afterwards; naming it here is what produces that copy.
+    float size = state.mSize;
     auto _tmp1 = mFont->AspectRatio();
-    float x = xPos;
-    float italics = state.mItalics * state.mSize;
+    float italics = state.mItalics * size;
     // NOTE (bug 1B fix): keep glyph height CONSTANT (z0 - z1 == aspect*size)
     // regardless of yPos. Permuter sweep f5f704d6 flipped this subtraction to
     // `_tmp1*state.mSize - z0`, which reflects the quad about aspect*size/2 and
@@ -2702,33 +2713,51 @@ void RndText::FontMap::SetupCharacter(
     // aspect*size/2 for a single centered line) — making all menu/HUD text
     // invisible. Subtraction is not commutative; the swap was match-neutral
     // (objdiff 83.8% either way) but behaviorally wrong. Reverted to og form.
-    float z1 = z0 - _tmp1 * state.mSize;
+    // NEGATIVE RESULT: the image keeps `_tmp1 * size` and the subtraction apart
+    // (`fmuls f12, f1, f26` at 0x261c, `fsubs f12, f27, f12` at 0x2638) where we
+    // contract to one fnmsubs.  Splitting it into a named `aspectH` temporary is
+    // exactly neutral -- MSVC re-fuses across the statement boundary.  Two rows.
+    float z1 = z0 - _tmp1 * size;
 
-    pg.mVertStart[0].pos.Set(italics + scaledCenter + x, 0.0f, z0);
-    pg.mVertStart[1].pos.Set(scaledCenter + x - italics, 0.0f, z1);
-    pg.mVertStart[2].pos.Set(scaledCenter + x - italics + scaledW, 0.0f, z1);
-    pg.mVertStart[3].pos.Set(italics + scaledCenter + scaledW + x, 0.0f, z0);
+    // xPos is read straight out of the reference each time (`lfs f13, 0x0(r29)`
+    // at 0x2618 / 0x2648 / 0x2660 / 0x2688); caching it in a local `x` folds
+    // those four reloads into one.
+    pg.mVertStart[0].pos.Set(italics + scaledCenter + xPos, 0.0f, z0);
+    pg.mVertStart[1].pos.Set(scaledCenter + xPos - italics, 0.0f, z1);
+    pg.mVertStart[2].pos.Set(scaledCenter + xPos - italics + charW, 0.0f, z1);
+    pg.mVertStart[3].pos.Set(italics + scaledCenter + charW + xPos, 0.0f, z0);
 
     if (circle != 0.0f) {
         float midX = (pg.mVertStart[3].pos.x - pg.mVertStart[1].pos.x) * 0.5f
             + pg.mVertStart[1].pos.x;
         Transform xfm = XfmOnCircleEdge(circle, midX);
-        xfm.v.x -= xfm.m.x.x * midX;
-        xfm.v.y -= xfm.m.x.y * midX;
-        xfm.v.z -= xfm.m.x.z * midX;
+        // Three separate `fmuls` followed by three `fsubs`, not three fused
+        // `fnmsubs` (0x26cc-0x2700): the image scales the whole basis row into
+        // a temporary first, then subtracts it componentwise.  Written as
+        // `xfm.v.x -= xfm.m.x.x * midX;` MSVC contracts each line into one
+        // fnmsubs and the row count drops by three.
+        Vector3 offset;
+        Scale(xfm.m.x, midX, offset);
+        Subtract(xfm.v, offset, xfm.v);
         Multiply(pg.mVertStart[0].pos, xfm, pg.mVertStart[0].pos);
         Multiply(pg.mVertStart[1].pos, xfm, pg.mVertStart[1].pos);
         Multiply(pg.mVertStart[2].pos, xfm, pg.mVertStart[2].pos);
         Multiply(pg.mVertStart[3].pos, xfm, pg.mVertStart[3].pos);
     }
 
-    pg.mVertStart[1].tex.y = pg.mVertStart[2].tex.y;
-    pg.mVertStart[1].tex.x = pg.mVertStart[0].tex.x;
-    pg.mVertStart[3].tex.x = pg.mVertStart[2].tex.x;
-    pg.mVertStart[3].tex.y = pg.mVertStart[0].tex.y;
+    // One `lwz r11, 0x8(r31)` at 0x82691240 serves all six statements below.
+    // Spelled `pg.mVertStart[...]` MSVC cannot prove the float stores miss the
+    // pointer member and reloads it before each one (four extra rows); the
+    // integer struct copies further down DO reload in the image too, so they
+    // deliberately keep the member spelling.
+    RndMesh::Vert *verts = pg.mVertStart;
+    verts[1].tex.y = verts[2].tex.y;
+    verts[1].tex.x = verts[0].tex.x;
+    verts[3].tex.y = verts[0].tex.y;
+    verts[3].tex.x = verts[2].tex.x;
 
-    pg.mVertStart[0].norm.Set(0.0f, -1.0f, 0.0f);
-    pg.mVertStart[3].norm = pg.mVertStart[0].norm;
+    verts[0].norm.Set(0.0f, -1.0f, 0.0f);
+    verts[3].norm = verts[0].norm;
     pg.mVertStart[2].norm = pg.mVertStart[3].norm;
     pg.mVertStart[1].norm = pg.mVertStart[2].norm;
 
