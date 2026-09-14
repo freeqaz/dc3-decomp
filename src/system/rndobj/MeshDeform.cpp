@@ -191,43 +191,38 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
         ptr += (*ptr * 2) + 1;
     }
     float sum = 0.0f;
-    // RESIDUAL (w7-as, 71.2 canonical, was 70.0): `vertIdx` is hoisted above the
-    // dedup loop because the image stores it into the MakeString slot there
-    // (`stw r18, 0x54(r1)` at 0x8264F4E0, before the loop, not between the two
-    // loops), and the dedup loop counts from 0 rather than 1 because the image's
-    // zero-trip guard is `cmpwi cr6, r31, 0x0` -- and it is the ONLY such guard:
-    // retail proves num >= 1 on exit (num-- can only run when i >= 1, so
-    // num >= 2 going in) and elides the second loop's test entirely, which we
-    // still emit.  What is left is the inner loop's addressing: retail keeps
-    // `boneIndices[j]` as an indexed load (`lwzx r4, r8, r28`) with four
-    // base-relative offsets computed per outer iteration, where our build
-    // strength-reduces it to a walking pointer, and it hoists the
-    // "negative weight" string anchor and the loop-2 weights pointer above the
-    // dedup loop instead of between the loops.
-    int vertIdx = vertCount;
-    int i;
-    // deduplicate bone entries: if two entries share the same bone index, merge them
-    for (i = 0; i < num; i++) {
-        for (int j = 0; j < i; j++) {
-            if (boneIndices[i] == boneIndices[j]) {
-                weights[j] += weights[i];
+    // RESIDUAL (w7-bi, 91.8 canonical, was 71.2): 7 rows are the stack pair
+    // (0x50,0x54) -- the image gives 0x50 to `sum` (shared with the first
+    // PathName temp) and 0x54 to `vertCount`; we allocate them the other way.
+    // REFUTED, do not re-try: declaring `float sum;` above the counting loop
+    // (identical 91.8), and moving the whole `float sum = 0.0f;` there (82.5 --
+    // it drags the 0.0f anchor and the init store in front of the loop).
+    // Another 5 rows are r23<->r24 (`this` vs the outer index) and the counting
+    // loop's rotation: the image branches straight to the bottom test
+    // (`b .L_826D8D58` at 0x826D8D40) and homes `vertCount` once afterwards,
+    // where we peel a top test and home it eagerly.
+    // One fused loop: the dedup scan, the negative-weight report and the sum all
+    // live in the same `for (i)` -- 0x826D8D98..0x826D8E68 is a single loop with
+    // one `cmpwi cr6, r31, 0x0` zero-trip guard at 0x826D8D68.  The inner scan
+    // walks j FORWARD from i+1 and merges j into i (`stfsx f0, r8, r30` writes
+    // back to weights[i] at 0x826D8DE4), then fills the hole from the tail and
+    // steps j back; there is no `break`, the scan continues from the swapped-in
+    // element.
+    for (int i = 0; i < num; i++) {
+        for (int j = i + 1; j < num; j++) {
+            if (boneIndices[j] == boneIndices[i]) {
+                weights[i] += weights[j];
                 num--;
-                int last = num;
-                boneIndices[i] = boneIndices[last];
-                weights[i] = weights[last];
-                i--;
-                break;
+                boneIndices[j] = boneIndices[num];
+                weights[j] = weights[num];
+                j--;
             }
         }
-    }
-    // validate weights
-    for (i = 0; i < num; i++) {
         if (!(weights[i] > 0.0f)) {
-            auto _tmp0 = PathName(mParent);
             MILO_NOTIFY(
                 "%s vert %d has negative weight %g on bone, won't export",
-                _tmp0,
-                vertIdx,
+                PathName(mParent),
+                vertCount,
                 weights[i]
             );
             weights[i] = 0.0f;
@@ -238,7 +233,7 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
         MILO_NOTIFY(
             "%s vert %d weights sum to %g, not close enough to 1, check the skinning",
             PathName(mParent),
-            vertIdx,
+            vertCount,
             sum
         );
     }
@@ -251,8 +246,7 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
     for (int i = 0; i < num; i++) {
         newEntry[i * 2 + 1] = (u8)boneIndices[i];
         float w = weights[i] * scale;
-        float clamped = w < 0.0f ? 0.0f : (w > 1.0f ? 1.0f : w);
-        newEntry[i * 2 + 2] = (u8)(int)(clamped * 255.0f + 0.5f);
+        newEntry[i * 2 + 2] = (u8)(Clamp(0.0f, 1.0f, w) * 255.0f + 0.5f);
     }
     return vertCount;
 }
