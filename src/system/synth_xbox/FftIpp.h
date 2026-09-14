@@ -37,12 +37,26 @@ public:
     const_pointer address(const_reference value) const { return &value; }
     size_type max_size() const { return size_type(-1) / sizeof(T); }
 
+    // BUG FIX (w7-as, 2026-09-14): three things wrong here, all visible at the
+    // inlined call site in vector<float,XboxAllocator<float> >::
+    // _M_insert_overflow (0x828C6C5C..0x828C6C7C):
+    //   * a zero-count guard -- `add. r26, r10, r11` / `beq` / `li r28, 0x0`;
+    //     we called MemAlloc(0, ...) instead of returning NULL,
+    //   * the ALIGNMENT argument is 0x10, not 0 (`li r7, 0x10`).  A float vector
+    //     handed to the VMX/IPP spectral code was being 4-byte aligned,
+    //   * the line number is 0x2f = 47 (`li r5, 0x2f`), which is where this call
+    //     sits in the real common_vector.h; __LINE__ here is this file's line.
     pointer allocate(size_type count, const void *hint = 0) {
-        return (pointer)MemAlloc(count * sizeof(T), "e:\\lazer_build_gmc1\\system\\src\\synth360\\synapse_apo\\common_vector.h", __LINE__, "synapse", 0);
+        if (count != 0)
+            return (pointer)MemAlloc(count * sizeof(T), "e:\\lazer_build_gmc1\\system\\src\\synth360\\synapse_apo\\common_vector.h", 47, "synapse", 0x10);
+        return 0;
     }
 
     void deallocate(pointer ptr, size_type) {
-        MemFree(ptr);
+        // The image null-checks before freeing: `lwz r3, 0x0(r30)` /
+        // `cmplwi cr6, r3, 0x0` / `beq` at 0x828C6CB0 in _M_insert_overflow.
+        if (ptr)
+            MemFree(ptr);
     }
 
     void construct(pointer ptr, const_reference value) { new (ptr) T(value); }
