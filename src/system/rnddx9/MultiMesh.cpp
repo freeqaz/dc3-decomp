@@ -121,26 +121,27 @@ void DxMultiMesh::UpdateGeometryBuffers() {
     u16 temp_r8_2;
     void *temp_r27_ptr;
 
-    owner = *(DxMesh **)((char *)this + 0x4C);
+    // The mesh this uploads is mMesh's GEOMETRY OWNER, not mMesh itself.  The
+    // image reads `lwz r9, 0x4c(r29)` (RndMultiMesh::mMesh, 0x40 + 0xc) and
+    // then `lwz r30, 0x148(r9)` (RndMesh::mGeomOwner, 0x13c + 0xc) at
+    // 0x82622D74-8C, and it is THAT pointer it asserts on, hands to
+    // DxMesh::VertFVF (0x82622E44) and takes the vert/face counts from.  We
+    // were using mMesh directly, which is a different object for every mesh
+    // that shares its geometry with another -- and it also put the two
+    // MILO_ASSERT accessors one dereference short, which is why spelling them
+    // as accessors used to regress the function.
+    owner = (DxMesh *)mMesh->GetGeomOwner();
     temp_r30 = (void *)owner;
     temp_r11 = (void *)((char *)temp_r30 + 0x150);
     temp_r27_ptr = *(void **)((char *)temp_r30 + 0x148);
     temp_r27 = temp_r27_ptr;
 
-    // The shipped literals here are "!owner->IsSkinned()" and
-    // "owner->Mutable()" (ham_xbox_r.map), i.e. the original wrote the two
-    // asserts against the accessors, not raw offsets.  Spelling them that way
-    // REGRESSES this function -- both accessors re-load through mGeomOwner
-    // where the target uses values already in registers:
-    //   both accessors : norm 80.52147 -> 77.71428
-    //   IsSkinned only : norm 80.52147 -> 78.43559
-    // The body is still raw m2c output (temp_rNN locals, hand-written offset
-    // arithmetic); the literals will close for free once the function is
-    // properly decompiled, and not before.
-    MILO_ASSERT(!(*(u32 *)((char *)temp_r30 + 0x150) != *(u32 *)((char *)temp_r30 + 0x154)),
-               0x21A);
+    // Shipped literals, ham_xbox_r.map: "!owner->IsSkinned()" (char[20],
+    // ??_C@_0BE@CAKEIJLA@) and "owner->Mutable()" (char[17],
+    // ??_C@_0BB@JDEEIHMK@).
+    MILO_ASSERT(!owner->IsSkinned(), 0x21A);
 
-    MILO_ASSERT(!(*(s32 *)((char *)temp_r27 + 0x160) == 0), 0x21B);
+    MILO_ASSERT(owner->Mutable(), 0x21B);
 
     temp_r24 = *(u32 *)((char *)this + 0x60) % 3;
     temp_r28 = (temp_r24 + 0x19) * 4;
@@ -150,8 +151,10 @@ void DxMultiMesh::UpdateGeometryBuffers() {
         owner->VertFVF();
         temp_r3 = (s32)D3DDevice_CreateVertexBuffer(temp_r23 * 0x60, 0, (D3DPOOL)0);
         *(s32 *)((char *)this + temp_r28) = temp_r3;
-        temp_r10 = temp_r3 - 1;
-        temp_r3_2 = ((temp_r10 - temp_r10) - (temp_r10 == 0 ? 1 : 0)) & 0x8007000E;
+        // Same -1/0 mask as DxMultiMesh::Init; the image's form is
+        // `subic r10, r3, 0x1` / `subfe r10, r10, r10` / `and. r3, r10, r11`
+        // at 0x82622EA0-B4.
+        temp_r3_2 = ((temp_r3 == 0) ? -1 : 0) & 0x8007000E;
         if (temp_r3_2 != 0) {
             const char *errMsg = DxRnd::Error(temp_r3_2);
             MILO_FAIL("File: %s Line: %d Error: %s\n", __FILE__, 0x225, errMsg);
