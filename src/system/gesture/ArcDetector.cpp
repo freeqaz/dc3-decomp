@@ -303,7 +303,10 @@ bool ArcDetector::IsPathAcceptable() const {
         const Vector3 &back = jointPath.back();
         float sign = (float)(mSide != 0 ? 1 : -1);
         float diffX = front.x - back.x;
-        float dy = -(back.y - front.y);
+        // front-first: the image has a single `fsubs f12, f9, f12`
+        // (front.y - back.y). Spelled `-(back.y - front.y)` MSVC emits the
+        // subtraction the other way round plus an `fneg`.
+        float dy = front.y - back.y;
         float diffZ = front.z - back.z;
         float dx = sign * diffX;
         if (dx < 0.0f) {
@@ -313,10 +316,8 @@ bool ArcDetector::IsPathAcceptable() const {
             return true;
         }
         float invDy = 1.0f / dy;
-        if (invDy * dx >= sSlopeRatioThreshold) {
-            return true;
-        }
-        if (invDy * diffZ >= sSlopeRatioThreshold) {
+        if (invDy * dx >= sSlopeRatioThreshold
+            || invDy * diffZ >= sSlopeRatioThreshold) {
             return true;
         }
         return false;
