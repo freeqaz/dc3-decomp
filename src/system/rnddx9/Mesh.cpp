@@ -115,6 +115,23 @@ void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {
     ScaleAddEq(m1.z, m2.z, f);
 }
 
+// FLOOR (63.3%), and the spelling above is not the problem: the fmadds operand
+// order proves the image's second statement really is ScaleAdd(v,v,f,v) and not
+// ScaleAddEq(v,v,f) (`lfs f0,0x30(r30)` = tf2 loaded FIRST, then
+// `fmadds f0,f0,f31,f13`; contrast the ScaleAddEq(m1.y,...) calls in the Matrix3
+// overload below, which load m1 first and emit `fmadds f0,f13,f1,f0`).
+//
+// The whole 28-byte gap is the prologue.  The image spills all three parameters
+// across the `bl` (std r30/r31, stfd f31, then mr r31,r3 / mr r30,r4 / fmr f31,f1
+// at 0x82620268-0x8262028C) and reads the vector part back through r30/r31.  We
+// emit no callee-saved registers at all and read 0x30(r3) / 0x30(r4) AFTER the
+// call, i.e. MSVC propagated the same-TU callee's real register usage --
+// ScaleAddEq(Matrix3&) is a leaf that never writes r3/r4/f1 -- and kept the
+// arguments live in the volatile registers.  MEASURED NEGATIVES: swapping the two
+// definitions so the callee comes second is byte-inert (the propagation is not
+// source-order dependent), and deleting the callee's body to force the
+// conservative prologue is blocked by check_undefined_decomp_symbols.  Reaching
+// the image needs the callee to be invisible to this TU, which it is not.
 void ScaleAddEq(Transform &tf1, const Transform &tf2, float f) {
     ScaleAddEq(tf1.m, tf2.m, f);
     ScaleAdd(tf1.v, tf2.v, f, tf1.v);
