@@ -33,7 +33,17 @@ struct tagBITMAPINFOHEADER {
     /** The number of bits per pixel, aka the image's color depth. */
     unsigned short biBitCount; // 0xe
     /** The compression method being used. (usually 0) */
-    unsigned int biCompression; // 0x10
+    // Signed `long` on Xbox: LoadDIB hands this straight to
+    // ??$MakeString@PBDJ@@ at 0x82672CB8, and the target's `addi r5, r1, 0x80`
+    // points at the field's OWN stack slot rather than at a converted copy, so
+    // the reference parameter binds to the member directly. On native LP64
+    // `long` is 8 bytes, which would change both this struct's layout and the
+    // width BinStream reads, so keep it 32-bit there.
+#ifdef HX_NATIVE
+    int biCompression; // 0x10
+#else
+    long biCompression; // 0x10
+#endif
     /** The image size, aka the number of chars in the bitmap's pixel array. */
     unsigned int biSizeImage; // 0x14
     /** The image's horizontal resolution (pixels per meter) */
