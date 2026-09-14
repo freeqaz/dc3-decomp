@@ -561,8 +561,14 @@ void RhythmBattle::PlayTanClip(int i1, bool b2) {
 
 void RhythmBattle::Begin() {
     if (!mActive) {
+        // mFullKTB is read into a local BEFORE the mActive store. MSVC hoists
+        // the load either way, but the source order decides a scheduling
+        // tie-break in the entry block: with the load written after the store
+        // the `lis r25, TheHamDirector@ha` remat lands two slots early (the
+        // function's whole residual, 99.6226).
+        bool fullKTB = mFullKTB;
         mActive = true;
-        if (mFullKTB) {
+        if (fullKTB) {
             PropKeys *keys = TheHamDirector->GetPropKeys(kDifficultyExpert, "move");
             if (keys) {
                 Keys<Symbol, Symbol> *symKeys = keys->AsSymbolKeys();
