@@ -32,6 +32,10 @@
 
 /* TODO: '-' has a significant usage outside of SIGN */
 
+/* NOTE: there is deliberately no \r rule -- the original lexer has none, and
+ * '\r' shares tab's equivalence class in the shipped yy_ec table. It is skipped
+ * by the default rule, exactly as a tab is. */
+
 DIGIT               [0-9]
 HEX_DIGIT           [A-Fa-f0-9]
 SIGN                [+-]
@@ -49,6 +53,7 @@ QUOTED_SYMBOL       \'[^\']*\'
 STRING              \"[^\"]*\"
 
 COMMENT             ;[^\n]*
+LINE_COMMENT        \/\/[^\n]*
 
 %x BLOCK_COMMENT
 /* BUG: /** won't start a block */
@@ -58,7 +63,6 @@ BCOMMENT_SKIP       \*+[^\n\/\*]*
 BCOMMENT_END        \*+\/
 
 %%
-\r                                                  { /* skip carriage returns */ TESTER_RETURN(kDataTokenCarriageReturn); }
 \n                                                  { gDataLine++; TESTER_RETURN(kDataTokenNewline); }
 {STRING}                                            { return kDataTokenString; }
 {QUOTED_SYMBOL}                                     { return kDataTokenQuotedSymbol; }
@@ -68,6 +72,7 @@ BCOMMENT_END        \*+\/
 <BLOCK_COMMENT>\n                                   { gDataLine++; TESTER_RETURN(kDataTokenBlockCommentNewline); }
 <BLOCK_COMMENT>{BCOMMENT_END}                       { BEGIN(INITIAL); TESTER_RETURN(kDataTokenBlockCommentEnd); }
 {COMMENT}                                           { /* skip comments */ TESTER_RETURN(kDataTokenComment); }
+{LINE_COMMENT}                                      { /* skip // line comments */ TESTER_RETURN(kDataTokenLineComment); }
 kDataUnhandled                                      { return kDataTokenUnhandled; }
 
 {HEX_NUMBER}                                        { return kDataTokenHex; }
