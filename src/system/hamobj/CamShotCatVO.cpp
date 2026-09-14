@@ -107,6 +107,24 @@ void CamShotVOData(
                     s1 = lose_camp_char;
                     if (subStrings.size() > 2) {
                         charSym = StrToCharacterSym(subStrings[2]);
+                        // String(Symbol), NOT String(const char *) -- REFUTED
+                        // 2026-09-14 (w7-q).  objdiff's "Function Call Diff"
+                        // reports `??0String@@QAA@VSymbol@@@Z` as base-only and
+                        // `??0String@@QAA@PBD@Z` as target-2/base-1, which reads
+                        // exactly like a wrong-callee bug.  It is not: the two
+                        // constructors are ICF-FOLDED.
+                        //   build/373307D9/icf_aliases.map:1875-1876
+                        //     ??0String@@QAA@PBD@Z        827CE9E8
+                        //     ??0String@@QAA@VSymbol@@@Z  827CE9E8
+                        // dtk names the single body after the PBD symbol, so the
+                        // listing can never distinguish the two spellings here.
+                        // Measured anyway, full ninja, report.json canonical:
+                        //   String s2Str(charSym)        97.42986 (fuzzy 96.77376)
+                        //   String s2Str(charSym.Str())  97.12820 (fuzzy 96.41177)
+                        //   Symbol c = ...; String s2Str(c.Str())  97.0 -- the
+                        //     named local takes a frame word and shifts every
+                        //     stack slot in the function by 8.
+                        // Keep the Symbol overload.
                         String s2Str(charSym);
                         if (s2Str.contains("robot")) {
                             charSym = all;
