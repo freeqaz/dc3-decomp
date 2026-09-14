@@ -141,7 +141,11 @@ bool DxShader::Compile(
     memset(&params, 0, sizeof(params));
     params.TempRegisterLimit = 36;
 
-    buf1 = new DxShaderBuffer();
+    // The image reuses the pointer it just stored into buf1/buf2 rather than
+    // reloading it through the reference: `mr r11, r3` then `addi r10, r11, 0x4`
+    // at 0x8261D558, where we emitted `lwz r11, 0x0(r23)` first.
+    DxShaderBuffer *vBuf = new DxShaderBuffer();
+    buf1 = vBuf;
 
     defines[0].Value = "0";
     HRESULT vRes = D3DXCompileShaderExA(
@@ -152,13 +156,14 @@ bool DxShader::Compile(
         "vshader",
         "vs_3_0",
         0,
-        &static_cast<DxShaderBuffer *>(buf1)->mBuffer,
+        &vBuf->mBuffer,
         &vError,
         nullptr,
         &params
     );
 
-    buf2 = new DxShaderBuffer();
+    DxShaderBuffer *pBuf = new DxShaderBuffer();
+    buf2 = pBuf;
 
     defines[0].Value = "1";
     HRESULT pRes = D3DXCompileShaderExA(
@@ -169,7 +174,7 @@ bool DxShader::Compile(
         "pshader",
         "ps_3_0",
         0,
-        &static_cast<DxShaderBuffer *>(buf2)->mBuffer,
+        &pBuf->mBuffer,
         &pError,
         nullptr,
         &params
