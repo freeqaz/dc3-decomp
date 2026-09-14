@@ -1074,9 +1074,12 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
          it != mObjectsReceive.end(); ++it) {
         RndMesh *mesh = *it;
         const Transform &xfm = mesh->WorldXfm();
-        RndMesh *geomOwner = mesh->GetGeomOwner();
-        for (unsigned int v = 0; v < (unsigned int)geomOwner->Verts().size(); v++) {
-            RndMesh::Vert &vert = geomOwner->Verts(v);
+        // The image re-derives mesh->Verts() here too: 826A0388 is a single
+        // `lwz r11, 0x148(r25)` off the MESH.  Caching GetGeomOwner() in a
+        // local adds a second 0x148 hop (Verts() already goes through
+        // mGeomOwner) and pins the owner in a callee-saved GPR.
+        for (unsigned int v = 0; v < (unsigned int)mesh->Verts().size(); v++) {
+            RndMesh::Vert &vert = mesh->Verts(v);
             Vector3 worldPos;
             Multiply(vert.pos, xfm, worldPos);
             Vector3 worldNorm;
