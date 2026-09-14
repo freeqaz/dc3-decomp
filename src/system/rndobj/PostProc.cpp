@@ -361,11 +361,18 @@ BEGIN_LOADS(RndPostProc)
         int dRev;
         d >> dRev;
         MILO_ASSERT(dRev == 3, 0x2A8);
-        float f30 = 0;
         bool b70;
         Vector3 v40;
+        float f30 = 0;
         int i5c;
-        d >> b70 >> v40 >> f30 >> i5c;
+        // The image converts to the underlying BinStream once, on the reference the
+        // bool overload returns, and holds it in a callee-saved register across the
+        // remaining reads (one `lwz r30, 0x8(r3)`, then `mr r3, r30` at each restart).
+        // Reading straight off `d` calls BinStreamRev::operator>>(T&) instead, which
+        // reloads `.stream` every time.
+        BinStream &s = (d >> b70).stream;
+        s >> v40 >> f30;
+        s >> i5c;
     } else {
         LOAD_SUPERCLASS(Hmx::Object)
     }
