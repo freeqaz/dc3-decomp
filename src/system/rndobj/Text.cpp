@@ -2803,7 +2803,12 @@ void RndText::FontMap3d::SetupCharacter(
 
     float scaledCenter = state.mSize * centerOffset;
 
-    if ((state.mSize * width) <= _kFloat0_0)
+    // Same reuse as the 2d overload: `width` is the CharWidthAdvanceMesh
+    // out-param, so it lives in a frame slot and the scaled width is written
+    // back over it (`fmuls f12, f0, f12` / `stfs f12, 0x50(r1)` at 0x8268ffd4)
+    // and reloaded at the circle-edge midpoint (`lfs f13, 0x50(r1)`).
+    width = state.mSize * width;
+    if (width <= _kFloat0_0)
         return;
 
     yPos += state.mZOffset * state.mSize;
@@ -2813,23 +2818,39 @@ void RndText::FontMap3d::SetupCharacter(
         mMeshCursor++;
         mesh->SetGeomOwner(charMesh);
 
-        // Copy origin to transform position, then scale in-place
-        Vector3 origin = mFont->CharOriginOffset();
-
+        // The whole position vector is scaled (three `fmuls` by state.mSize,
+        // 0x8268ff58/5c/64), then z and x are adjusted; dead-store elimination
+        // leaves exactly one store per component, in the order y (0x94), z
+        // (0x98), x (0x90).  The CharOriginOffset() result is consumed straight
+        // out of the returned sret pointer (`lwz r9, 0x0(r3)` at 0x82690018) --
+        // naming it `Vector3 origin` makes MSVC address the buffer through its
+        // own `addi r11, r1, 0xa0` and forward origin.x past the copy.
         Transform xfm;
-        xfm.v = origin;
-        xfm.v.x = xfm.v.x * state.mSize + scaledCenter + xPos;
-        xfm.v.y *= state.mSize;
-        xfm.v.z = xfm.v.z * state.mSize + yPos;
+        xfm.v = mFont->CharOriginOffset();
+        xfm.v *= state.mSize;
+        // NEGATIVE RESULT: the image keeps z's scale and its +yPos apart
+        // (`fmuls f10, f0, f10` at 0x8268ff5c, `fadds f0, f10, f30` at
+        // 0x8268ff6c) where we contract to one fmadds.  Spelling the scale as
+        // Scale(xfm.v, state.mSize, xfm.v) instead of `*=` is exactly inert.
+        xfm.v.z += yPos;
+        xfm.v.x = xfm.v.x + scaledCenter + xPos;
 
         // Scale matrix by cell height
         float cellHeight = mFont->FontUnitInverse() * state.mSize;
+        // NEGATIVE RESULT: the image writes the three diagonal slots (0x60,
+        // 0x74, 0x88) BEFORE the six zeros, and materialises the zero as
+        // `fmuls f0, f0, f31` -- cellHeight times the 0.0 it already holds in a
+        // callee-saved FPR (0x82690064) -- rather than storing the literal.
+        // Writing the nine fields as individual assignments in the image's
+        // order is EXACTLY inert (96.0% and an identical row table): MSVC sinks
+        // and groups the stores by value, not by statement order.  The source
+        // shape that produces a multiply by zero here is still unidentified.
         xfm.m.x.Set(cellHeight, _kFloat0_0, _kFloat0_0);
         xfm.m.y.Set(_kFloat0_0, cellHeight, _kFloat0_0);
         xfm.m.z.Set(_kFloat0_0, _kFloat0_0, cellHeight);
 
         if (size != _kFloat0_0) {
-            float circlePos = (state.mSize * width) * 0.5f + xfm.v.x;
+            float circlePos = width * 0.5f + xfm.v.x;
             Transform circleXfm = XfmOnCircleEdge(size, circlePos);
             xfm.v.x -= circlePos;
             Multiply(xfm, circleXfm, xfm);
