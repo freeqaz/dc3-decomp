@@ -1721,19 +1721,15 @@ Symbol HamDirector::ClosestMove() {
                                 } while (*p != '\0');
                             }
 
-                            const char *q0 = &buf[matchCount];
-                            const char *q = q0;
-                            do {
-                            } while (*q++ != '\0');
-                            int bufRem = q - q0 - 1;
-
-                            const char *r0 = &candidate[matchCount];
-                            const char *r = r0;
-                            do {
-                            } while (*r++ != '\0');
-                            int candRem = r - r0 - 1;
-
-                            int penalty = candRem;
+                            // The two tail loops are MSVC's inline strlen
+                            // expansion: the image's `clrrwi r10, r10, 0`
+                            // no-ops and its UNSIGNED `cmplw cr6, r11, r10`
+                            // over the two lengths are only emitted when both
+                            // quantities are size_t, i.e. strlen results fed
+                            // straight to Max.
+                            unsigned int bufRem = strlen(&buf[matchCount]);
+                            unsigned int candRem = strlen(&candidate[matchCount]);
+                            unsigned int penalty = candRem;
                             if (penalty < bufRem)
                                 penalty = bufRem;
 
