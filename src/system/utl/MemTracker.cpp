@@ -524,6 +524,31 @@ int MemTracker::SpitAllocInfo(struct _iobuf *file) {
     return ret;
 }
 
+// RESIDUAL at 95.37 canonical (w7-at, 2026-09-14). 110 of 137 instructions are
+// equal and the structure is right; what is left is 16 callee-saved register
+// renames (r23<->r27, r24<->r28) plus ONE three-instruction reordering at target
+// rows 49-59, where the image materialises the DebugHeapAlloc result into a
+// callee-saved register and stores THAT to both 0x50 and 0x54 --
+//   mr r27,r3 / add r10,r30,r3 / mr r24,r3 / stw r27,0x50 / mr r29,r3 /
+//   stw r27,0x54 / mr r3,r11 / lwz r4,0(r11) / stw r10,0x58
+// -- so its AllocInfoVec words land in declaration order 0x50, 0x54, 0x58 and
+// the image already holds allocIt (r29) and the Free() pointer (r24) before the
+// push_back loop even starts. We store r3 straight to 0x50 and emit 0x58 in the
+// middle. Same instruction multiset, different schedule.
+//
+// TWO NEGATIVE RESULTS, both byte-identical output:
+//  - hoisting `allocIt`/`allocEnd` above the sorts and passing them AS the sort
+//    arguments (so the image's reuse of the sort's argument registers as the
+//    loop variables has a source spelling): MSVC already CSEs this.
+//  - rewriting AllocInfoVec(int) from a member-init list to three body
+//    assignments in declaration order, to force the 0x50/0x54/0x58 store order:
+//    MSVC canonicalises the two forms. (AllocInfo.h is PCH-reached, so this was
+//    measured with a full ninja; since the objects did not change there is no
+//    binary-wide delta to report.)
+// Adjudicated and NOT a bug: the "alloc"/"free" literals look swapped at rows
+// 89-93 but the uses at rows 119/128 swap back -- both sides pass "alloc" on the
+// allocIt arm and "free" on the freedIt arm. It is only which of r25/r26 holds
+// which literal.
 void MemTracker::DiffDump(TextStream &ts) {
     if (mTimeSlice) {
         ts << "(executable " << TheSystemArgs.front() << ")\n";
