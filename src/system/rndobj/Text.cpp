@@ -268,6 +268,10 @@ BEGIN_LOADS(RndText)
     LOAD_REVS(bs)
     ASSERT_REVS(28, 1)
     TEXT_REV = d.rev;
+    // NOTE: `style` MUST be declared before `font`. Swapping the two
+    // declarations costs 5.6pp (99.4 -> 93.8): it moves the whole frame by
+    // 0x10 and de-schedules the TEXT_REV block. The target's slot order is
+    // style-then-font.
     StyleData style;
     ObjPtr<RndFontBase> font(this);
     if (d.rev > 15) {
