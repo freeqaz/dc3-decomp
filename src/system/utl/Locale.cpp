@@ -156,6 +156,7 @@ void Locale::Init() {
     MILO_ASSERT(!mNumFilesLoaded, 0x5C);
     mSize = 0;
     int totalStrLen = 0;  // Total length of all unique localized strings
+    int totalChunks = 0;   // Sum of all loaded arrays' Size()
     int numChunks = 0;     // Number of locale entries loaded from files
     DataArray *cfg = 0;
     LocaleChunkSort::OrderedLocaleChunk *chunks = 0;
@@ -192,7 +193,6 @@ void Locale::Init() {
             std::vector<DataArray *> arrVec(cfg->Size() - 1);
             mNumFilesLoaded = arrVec.size();
 
-            int totalChunks = 0;
             // mInitialized is STATICALLY TRUE: the shipped image holds 0x01 at
             // TheLocale+0x1c in .data. This is not the uninitialized read it was long
             // documented as -- the gate is always taken, and it has to be, because
