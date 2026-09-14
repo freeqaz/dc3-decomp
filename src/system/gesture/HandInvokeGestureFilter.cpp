@@ -89,66 +89,40 @@ bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
     Subtract(unk104.Value(), unkc8.Value(), leftArmDir);
     Normalize(leftArmDir, leftArmDir);
 
-    // NEGATIVE RESULT: the residual frame gap is one 16-byte vector slot.  The
-    // target owns five (0x50 rightArmDir, 0x60 leftArmDir, 0x70 lateral, 0x80
-    // and 0x90 the two Value() return buffers); we get four, because MSVC
-    // colours `lateral` onto the first return buffer.  Moving this declaration
-    // above the Value() calls, and splitting or merging the scopes that hold
-    // them, are both byte-for-byte inert (129 mismatch rows either way).
-    Vector3 lateral;
-
     // Spine vector: shoulderCenter - hipCenter.  0x82DFE198-0x82DFE1C4 reads
     // 0xec/0xf0/0xf4 and 0x4/0x8/0xc off the Skeleton -- mTrackedJoints[2] and
-    // mTrackedJoints[0] -- and keeps the three differences in FPRs, so this is
-    // three floats, never a Vector3.
-    const TrackedJoint *joints = skel.TrackedJoints();
-    float spineX = joints[kJointShoulderCenter].mJointPos[0].x
-        - joints[kJointHipCenter].mJointPos[0].x;
-    float spineY = joints[kJointShoulderCenter].mJointPos[0].y
-        - joints[kJointHipCenter].mJointPos[0].y;
-    float spineZ = joints[kJointShoulderCenter].mJointPos[0].z
-        - joints[kJointHipCenter].mJointPos[0].z;
+    // mTrackedJoints[0].  It never reaches memory: `spine` and `proj` below are
+    // only ever handed to INLINE helpers, so MSVC keeps all six components in
+    // FPRs and the frame stays at five vector slots.
+    Vector3 spine;
+    Subtract(
+        skel.TrackedJoints()[kJointShoulderCenter].mJointPos[0],
+        skel.TrackedJoints()[kJointHipCenter].mJointPos[0],
+        spine
+    );
 
     // Project the spine onto the smoothed body normal and subtract that
     // component off to get the lateral (near-vertical) axis.  unk4.Value() is
     // called FOUR separate times (0x82DFE1C8, 0x82DFE1F0, 0x82DFE264,
-    // 0x82DFE2B0) and the temporaries alternate between r1+0x80 and r1+0x90,
-    // so each one must die before the next is built.
-    {
-        const Vector3 &bodyNormal = unk4.Value();
-        float spineDot = bodyNormal.x * spineX + bodyNormal.y * spineY
-            + bodyNormal.z * spineZ;
+    // 0x82DFE2B0); each result is consumed straight off the returned pointer
+    // (`mr r11, r3`), never bound to a named object.
+    float spineDot = Dot(unk4.Value(), spine);
 
-        const Vector3 &projNormal = unk4.Value();
-        // 0x82DFE1D8-0x82DFE22C is three `fmuls` and then three `fsubs`, never
-        // an `fnmsubs` -- the projection is held in its own three floats, so
-        // /fp:fast has no `a - b*c` tree to contract.
-        float projX = projNormal.x * spineDot;
-        float projY = projNormal.y * spineDot;
-        float projZ = projNormal.z * spineDot;
-        lateral.Set(spineX - projX, spineY - projY, spineZ - projZ);
-    }
+    // 0x82DFE1D8-0x82DFE22C is three `fmuls` and then three `fsubs`, never an
+    // `fnmsubs`: the scale and the subtraction are two separate inline calls,
+    // so /fp:fast has no single `a - b*c` tree to contract.
+    Vector3 proj;
+    Scale(unk4.Value(), spineDot, proj);
+    Vector3 lateral;
+    Subtract(spine, proj, lateral);
     Normalize(lateral, lateral);
 
     // Project the arm directions onto the body side vector (unk40) and onto
     // the body normal.
-    float rightElevation =
-        -(unk40.x * rightArmDir.x + unk40.y * rightArmDir.y
-          + unk40.z * rightArmDir.z);
-    float leftElevation =
-        -(unk40.x * leftArmDir.x + unk40.y * leftArmDir.y + unk40.z * leftArmDir.z);
-
-    float rightForward;
-    float leftForward;
-    {
-        const Vector3 &rightNormal = unk4.Value();
-        rightForward = rightArmDir.x * rightNormal.x + rightArmDir.y * rightNormal.y
-            + rightArmDir.z * rightNormal.z;
-
-        const Vector3 &leftNormal = unk4.Value();
-        leftForward = leftNormal.x * leftArmDir.x + leftNormal.y * leftArmDir.y
-            + leftNormal.z * leftArmDir.z;
-    }
+    float rightElevation = -Dot(unk40, rightArmDir);
+    float leftElevation = -Dot(unk40, leftArmDir);
+    float rightForward = Dot(rightArmDir, unk4.Value());
+    float leftForward = Dot(unk4.Value(), leftArmDir);
 
     float negZero = -0.0f;
 
