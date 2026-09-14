@@ -107,6 +107,12 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     // multiplies, which the target does not do.
     float rampSteps1 = (float)(numSamples * 20);
     float rampSteps2 = (float)(numSamples * 20);
+    // NEGATIVE RESULT (w7-ap, 2026-09-14, 85.0 canonical): the residual
+    // (0x18, 0x1c) load-order swap -- image reads unk1c into f30 and only then
+    // mDepthFrac, we do it the other way round even though the source order is
+    // already 0x1c-then-0x18 -- is NOT reachable by naming mDepthFrac into a
+    // local declared after `var_f30 = unk1c;`.  That costs 0.2pp (84.8) and
+    // leaves the swap in place; MSVC schedules the two loads itself.
     temp_f22 = (mDepthFrac - var_f30) / rampSteps1;
     temp_f21 = (mRateRadians - curRate) / rampSteps2;
 
