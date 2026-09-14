@@ -100,13 +100,17 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
     Character *character = mCharacter;
 
     auto& waypoint = mWaypoint;
+    // The image hoists &character->LocalXfm() into a callee-saved register
+    // (`addi r28, r3, 0xf4`) before the mRegulateMode branch and never keeps
+    // `character` itself alive past the load -- both arms use the transform.
+    const Transform &charXfm = character->LocalXfm();
     if (mRegulateMode == 1) {
         float dy, dz;
         if (character->Teleported()) {
             const Transform &wpXfm = waypoint->WorldXfm();
-            dz = wpXfm.v.z - character->LocalXfm().v.z;
-            dy = wpXfm.v.y - character->LocalXfm().v.y;
-            posDelta.x = wpXfm.v.x - character->LocalXfm().v.x;
+            dz = wpXfm.v.z - charXfm.v.z;
+            dy = wpXfm.v.y - charXfm.v.y;
+            posDelta.x = wpXfm.v.x - charXfm.v.x;
         } else {
             const Transform &wpXfm = waypoint->WorldXfm();
             dz = wpXfm.v.z - mPosDelta.z;
@@ -126,7 +130,7 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
         CharServoBone *servo = character->BoneServo();
         servo->MoveToFacing(facing);
         FastInvert(facing, facing);
-        Multiply(facing, character->LocalXfm(), facing);
+        Multiply(facing, charXfm, facing);
 
         rotDelta = -(waypoint->LocalXfm().m.x.x * facing.m.x.y
                     - waypoint->LocalXfm().m.x.y * facing.m.x.x);
