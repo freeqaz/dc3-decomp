@@ -163,10 +163,12 @@ void HiResScreen::TakeShot(const char *c, int i) {
         MILO_NOTIFY("Padding exceeds screen size");
         mActive = false;
     } else {
-        mAccumWidth = i * (TheRnd.Width() - 480);
-        mAccumHeight = i * TheRnd.Height() - i * 270;
+        int padX = i * 480;
+        int padY = i * 270;
+        mAccumWidth = i * TheRnd.Width() - padX;
+        mAccumHeight = i * TheRnd.Height() - padY;
         if (mAccumWidth < TheRnd.Width() || mAccumHeight < TheRnd.Height()) {
-            MILO_NOTIFY(MakeString("HiResScreenshot requires more tiles (%d specified)", i));
+            MILO_NOTIFY("HiResScreenshot requires more tiles (%d specified)", GetTiling());
             mActive = false;
         } else {
             mCache = new BmpCache(mAccumWidth, mAccumHeight);
