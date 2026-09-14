@@ -178,8 +178,8 @@ void PropertyTask::Poll(float ms) {
             int startColor = mStartValue.Int(nullptr);
 
             float inv255 = 1.0f / 255.0f;
-            float startG = (float)(unsigned char)(startColor >> 8) * inv255;
             float startB = (float)(unsigned char)(startColor) * inv255;
+            float startG = (float)(unsigned char)(startColor >> 8) * inv255;
             float startR = (float)(unsigned char)(startColor >> 16) * inv255;
 
             int endColor = mValue.Int(nullptr);
