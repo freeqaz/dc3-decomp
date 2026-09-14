@@ -4,6 +4,24 @@
 #include "rndobj/MultiMesh.h"
 #include "rndobj\Poll.h"
 
+// RESIDUAL (w7-bl, 85.40 canonical, 22 of 88 rows): pure instruction
+// SCHEDULING inside the vbase/member-init block, plus the register swaps it
+// induces.  Both sides emit exactly the same 12 instructions there; the image
+// materialises every vtable address first (`lis r9, ??_7RndPartLauncher@@
+// 6BObject@Hmx@@` at index 28, unused until index 54) and only then bunches
+// the four inlined-ctor `this` home stores -- `addi rX, r30, {0x8,0x1c,0x30,
+// 0x48}` / `stw rX, 0x50(r31)` -- at indices 41-51.  We interleave the home
+// stores from index 26 and push the Object-vtable `lis` down to 38/42.  That
+// ordering is the whole gap: 6 inserts + 6 deletes are the same instructions
+// in different slots, and the 10 diff_args are the r7<->r9 / r5<->r11
+// renumbering that falls out of it (all volatile registers -- no value is
+// live across a call, so this is scheduling, not liveness).
+// Failed spellings, both measured in this worktree and both byte-inert
+// (85.40, identical 10/6/6 row split): writing the init list in a different
+// textual order (`mNumParts, mEmitRate, mEmitCount` before the three
+// ObjPtrs -- MSVC re-sorts to declaration order and schedules identically);
+// and the one-argument `mPart(this)` / `mTrans(this)` / `mMeshEmitter(this)`
+// ObjPtr ctor instead of `(this, 0)`.
 RndPartLauncher::RndPartLauncher()
     : mPart(this, 0), mTrans(this, 0), mMeshEmitter(this, 0), mNumParts(0),
       mEmitRate(0.0f, 0.0f), mEmitCount(0.0f)
