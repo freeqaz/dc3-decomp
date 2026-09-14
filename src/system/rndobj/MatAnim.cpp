@@ -278,10 +278,24 @@ void RndMatAnim::LoadStage(BinStreamRev &d) {
         MILO_NOTIFY("Can't convert old MatAnim stages");
     }
     if (d.rev > 0) {
-        Keys<Vector3, Vector3> &t = TransKeys();
-        Keys<Vector3, Vector3> &s = ScaleKeys();
-        Keys<Vector3, Vector3> &r = RotKeys();
-        d >> t >> s >> r;
+        // BEHAVIOURAL FIX (w7-av): these three read into THIS object's keys, not
+        // the keys OWNER's.  The image computes all three operand addresses off
+        // `this` in r30 -- `addi r4, r30, 0x50` (0x826EBFD8), `addi r29, r30,
+        // 0x68` (0x826EBFE0), `addi r28, r30, 0x5c` (0x826EBFE4) -- and never
+        // loads the mKeysOwner pointer
+        // at 0x30(this), which the TransKeys()/ScaleKeys()/RotKeys() accessors
+        // this used to call would have needed.  It cannot: RndMatAnim::Load runs
+        // LoadStages(d) BEFORE `d >> mKeysOwner`, so mKeysOwner is still whatever
+        // the freshly-constructed object holds when LoadStage runs.
+        //
+        // Residual, 73.30 canonical (was 92.79 with the accessor bug): the image
+        // computes this+0x5c and this+0x68 BEFORE the first call and parks them
+        // in r28/r29, so its prologue is __savegprlr_28; we rematerialise
+        // `addi r4, r30, N` at each call and save only r30/r31.  Three spellings
+        // are byte-for-byte inert against that -- named `Keys<Vector3,Vector3>&`
+        // references, named pointers, and a mix -- which is the same refutation
+        // already recorded above for RndMatAnim::Load's four-operand chain.
+        d >> mTransKeys >> mScaleKeys >> mRotKeys;
     }
     if (d.rev > 1) {
         d >> (Keys<TexPtr, RndTex *> &)mTexKeys;

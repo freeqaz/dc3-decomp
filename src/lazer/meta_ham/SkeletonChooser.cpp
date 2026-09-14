@@ -473,13 +473,22 @@ void SkeletonChooser::SwitchActiveToPlayerIndexImmediate(int playerIndex) {
 bool SkeletonChooser::ShouldWaitForRecovery() {
     int id0 = TheGameData->Player(0)->GetSkeletonTrackingID();
     int id1 = TheGameData->Player(1)->GetSkeletonTrackingID();
+    // The `&& skel0` the image's `and r28, r11, r28` (0x82904D28) implies is
+    // unreachable from source: skel0 provably holds 1 there, so MSVC folds the
+    // AND away whichever way it is spelled. Measured at 91.44 for `skel0 &&
+    // ptr`, `skel0 &= ptr != nullptr` and `(ptr != nullptr) & skel0` alike (all
+    // three collapse to clrlwi 24/31); the plain assignment below is 92.90 and
+    // is what the folded form actually means. The two residual rows are the
+    // image's -1/0 MASK idiom (`subfic r11, r3, 0` + `subfe r11, r11, r11`)
+    // where we emit the 0/1 idiom (`subic r11, r3, 1` + `subfe r11, r11, r3`),
+    // plus the `and` that consumes the mask.
     bool skel0 = true;
     if (id0 > 0) {
-        skel0 = skel0 && TheGestureMgr->GetSkeletonByTrackingID(id0);
+        skel0 = TheGestureMgr->GetSkeletonByTrackingID(id0) != nullptr;
     }
     bool skel1 = true;
     if (id1 > 0) {
-        skel1 = skel1 && TheGestureMgr->GetSkeletonByTrackingID(id1);
+        skel1 = TheGestureMgr->GetSkeletonByTrackingID(id1) != nullptr;
     }
     if ((!skel0 || !skel1) && TheGestureMgr->Recoverer().WaitingToRecover()) {
         return true;

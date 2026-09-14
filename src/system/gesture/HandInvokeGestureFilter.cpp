@@ -226,7 +226,10 @@ void HandInvokeGestureFilter::Update(const Skeleton &skel, int ms) {
         if (wasInvokeDetected) {
             return;
         }
+        unk144 = 0;
+        mInvokeDetected = false;
+        return;
     }
-    mInvokeDetected = false;
     unk144 = 0;
+    mInvokeDetected = false;
 }

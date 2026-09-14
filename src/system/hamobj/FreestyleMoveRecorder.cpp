@@ -460,16 +460,14 @@ BaseSkeleton *FreestyleMoveRecorder::GetLiveSkeleton() {
         int count = 0;
         int idx = 0;
         int byteOff = 0;
-        do {
-            if (count == mBeatIndex)
-                break;
+        while (idx < numFrames && mBeatIndex != count) {
             float *base = (float *)((char *)mClipFrames + byteOff);
             if (base[0x2d8 / 4] > base[0x5b4 / 4]) {
                 count++;
             }
             idx++;
             byteOff += 0x2dc;
-        } while (idx < numFrames);
+        }
 
         if (idx < numFrames) {
             int off = idx * 0x2dc;

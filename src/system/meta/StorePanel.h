@@ -79,7 +79,7 @@ public:
     bool mLoadOk; // 0x51
     bool mShowTestOffers;
     std::list<NetCacheLoader *> mNetCacheLoaders;
-    int mArtLoader;
+    NetCacheLoader *mArtLoader; // 0x5c
     RndTex *mAlbumTex;
     UIPanel *mPendingArtCallback; // 0x64
     int mEnumJobID;

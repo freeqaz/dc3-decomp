@@ -398,9 +398,21 @@ void UIManager::Terminate() {
 
 bool UIManager::IsGameScreenActive() {
     bool ret = BottomScreen() && streq(BottomScreen()->Name(), "game_screen");
-    auto _val0 = mCurrentScreen;
-    if (_val0)
-        ret &= BottomScreen() != _val0;
+    // NOTE (w7-av): BEHAVIOURAL FIX.  We used to write `ret &= cur != BottomScreen()`,
+    // which is the opposite of the image.  The image's tail is
+    //   0x8277B674 subic r11, r11, 0x1 / 0x8277B678 subfe r11, r11, r11
+    //   / 0x8277B67C and r9, r11, r9
+    // i.e. CA-1, a -1/0 mask that is all-ones exactly when the difference is ZERO,
+    // so `ret` survives only when mCurrentScreen == BottomScreen().  Our `!=`
+    // spelling produced `subic r10, r11, 1 ; subfe r11, r10, r11` = CA = (diff != 0),
+    // the complement.  Spelling it `==` costs 2.5pp (97.50 -> 95.00) because MSVC
+    // lowers the equality with cntlzw/extrwi instead of the subic/subfe mask, but
+    // the mask form could not be recovered: `if (cur != BottomScreen()) ret = false;`
+    // (nested or as one `&&`) is if-converted differently and scores 89.2.
+    // Coordinator: `ret &= BottomScreen() == cur` (operand order) is inert, 95.00.
+    UIScreen *cur = mCurrentScreen;
+    if (cur != nullptr)
+        ret &= cur == BottomScreen();
     return ret;
 }
 

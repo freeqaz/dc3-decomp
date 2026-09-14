@@ -80,6 +80,23 @@ bool ClipPlayer::Init(int x) { return Init(TheHamDirector->SongAnim(x)); }
 bool ClipPlayer::CanUseRestStep() {
     // In non-edit mode (or when transitions are enabled), check if the out clip
     // is compatible with rest steps. Rest steps require a 3-beat clip with no flag 0x4.
+    // NOTE (w7-av): 97.14.  The residual is the bool materialisation: the image
+    // converges every true path on `li r11, 0x1` and masks once with
+    // `clrlwi r3, r11, 24`, i.e. the whole body is ONE returned short-circuit
+    // expression, which is
+    //   (TheLoadMgr.EditMode() && TheHamDirector->NoTransitions()) || !clip
+    //       || (ClipLength(clip) == 3 && !(clip->Flags() & 4))
+    // -- written that way with a `CharClip *clip = mOutClip;` local it closes
+    // the mask rows exactly and leaves only ONE difference, the position of
+    // `lwz r31, 0x2c(r3)`: the image loads mOutClip at the `beq` target, after
+    // the EditMode test, while the local hoists it into the prologue.  That
+    // insert/delete pair costs more on the canonical ruler than the three mask
+    // rows (94.29 vs 97.14), so the if-form is kept.  Also refuted: `return 0`/
+    // `return 1` instead of false/true (97.14, identical rows); a `bool ret`
+    // flag (82.16); `return !(clip && ...)` inside the if (94.05); an early
+    // `if (Edit && NoTrans) return true;` (94.05) -- MSVC will not tail-merge
+    // that `li r3, 1` with the expression's true path; and inlining mOutClip
+    // into the expression instead of a local (94.32, it then reloads 0x4c).
     if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
         CharClip *clip = mOutClip;
         if (clip && (ClipLength(clip) != 3 || clip->Flags() & 4)) {

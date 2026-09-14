@@ -98,17 +98,30 @@ void HamDriver::Poll() {
                     sSeqLog, HamDirector_NativeSetFrameCount(), ++g_ikPollSeq, pp);
         }
     }
-    // Bootstrap: Layer::mWeight is uninitialized (no initializer in ctor).
-    // On Xbox, garbage heap memory provides a non-zero initial value.
-    // On native, zero-initialized heap keeps mWeight at 0, so the guard
-    // below (mWeight > 0) prevents Eval() from ever running.  Force one
-    // evaluation when layers exist but mWeight hasn't been bootstrapped.
-    if (mBones && mLayers.mWeight <= 0.0f && !mLayers.mLayers.empty()) {
-        mLayers.Eval(1.0f);
-    }
+    // NOTE (w7-av): the old "bootstrap" hack that used to live here -- one
+    // forced mLayers.Eval(1.0f) when mLayers.mWeight was still 0 -- existed
+    // only to compensate for the mis-decompiled guard below (see the NOTE on
+    // the `if`).  The guard now reads CharWeightable::Weight(), which the ctor
+    // does initialise, so there is nothing left to bootstrap and the forced
+    // Eval would just fire every frame for every idle driver.
 #endif
-    if (mBones && mLayers.mWeight > 0.0f) {
-        mLayers.Eval(mLayers.mWeight);
+    // NOTE (w7-av): BEHAVIOURAL FIX.  The gate and the Eval() argument are
+    // CharWeightable::Weight() (== mWeightOwner->mWeight), NOT mLayers.mWeight.
+    // Image, 0x824BB61C..0x824BB630:
+    //     lwz  r11, -0x8(r3)          ; mWeightOwner  (CharWeightable + 0xc)
+    //     lfs  f1, 0x8(r11)           ; ->mWeight     (CharWeightable + 0x8)
+    //     lfs  f0, __real@00000000
+    //     fcmpu cr6, f1, f0 / ble
+    // and f1 is then live, unclobbered, into the `bctrl` at 0x824BB648 -- the
+    // LayerArray::Eval call takes that same value.  Only afterwards does the
+    // image read the layer weight, at 0x824BB654 `lfs f13, 0x24(r31)`, for
+    // ScaleDown's 1.0f - w.  That ordering is the proof: mLayers.mWeight is
+    // LayerArray::Eval's *output* (it opens with `mWeight = 0;`), so gating on
+    // it made the driver poll off its own previous-frame result -- Eval could
+    // never restart once the accumulator reached 0, and the weight actually
+    // set on the driver was ignored.
+    if (mBones && Weight() > 0.0f) {
+        mLayers.Eval(Weight());
 #ifdef HX_NATIVE
         if (Dc3KneeClipEnv()) {
             extern int HamDirector_NativeSetFrameCount();

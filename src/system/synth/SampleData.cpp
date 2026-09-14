@@ -42,11 +42,13 @@ void SampleData::Dealloc() {
         return;
     }
 #endif
-    // Pass the member straight to ReleaseRes: the by-value parameter is an
-    // UNNAMED temporary, which retail materialises in its own frame slot
-    // (stw/addi/lwz at r1+0x50, +0x10 of frame). A named `Hmx::CRC crc` copy
-    // gets held in a register instead and loses those three instructions.
-    if (mCRC.mCRC == 0 || !TheWavMgr->ReleaseRes(mCRC)) {
+    // Pass the raw hash, not the CRC object: ReleaseRes takes Hmx::CRC BY VALUE,
+    // so an int argument goes through the converting ctor CRC(int) and builds an
+    // unnamed temporary in its own frame slot -- `stw r11, 0x50(r1)` (the inlined
+    // ctor storing through &temp), `addi r9, r1, 0x50`, `lwz r4, 0x0(r9)`, and
+    // +0x10 of frame.  Passing `mCRC` itself is a plain copy of an lvalue and
+    // MSVC keeps it in a register, losing all three (94.23).
+    if (mCRC.mCRC == 0 || !TheWavMgr->ReleaseRes(mCRC.mCRC)) {
         sFree(mData, "SampleData.cpp", 196, "SampleData");
     }
     mData = 0;

@@ -28,7 +28,7 @@ protected:
 EventTask::EventTask(FlowTimer *owner, ObjPtrVec<FlowNode> *children, TaskUnits units, float duration)
     : mOwner(this), mChildNodes(children), mCurNode(), mDuration(duration) {
     mOwner = owner;
-    mCurNode = children->begin();
+    mCurNode = mChildNodes->begin();
     TheTaskMgr.Start(this, units, 0);
 }
 

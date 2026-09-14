@@ -220,12 +220,25 @@ DataNode op7(DataArray *msg) {
 }
 
 DataNode op8(DataArray *msg) {
+    // NOTE (w7-av): 93.85 is a one-slot scheduling floor.  The image keeps the
+    // raw Int(1) result in r11 (`mr r11, r3`) across the second call's argument
+    // setup and truncates afterwards (`clrlwi r28, r11, 24` immediately before
+    // the `bl`); we truncate straight out of r3 and never need the move, which
+    // costs one replace + one delete.  Refuted: an extra u32 staging variable
+    // between op and bop (93.85, identical rows) -- MSVC coalesces it away.
     u32 op = msg->Int(1);
     u8 bop = op;
     return u8(msg->Int(2) + bop) ^ bop;
 }
 
 DataNode op9(DataArray *msg) {
+    // NOTE (w7-av): 96.30 is the same one-slot scheduling floor as op8 -- the
+    // image moves the raw Int(1) result to r11 and truncates it after the second
+    // call's argument setup.  Do NOT "fix" it by truncating b: the image's
+    // `clrlwi r31, r11, 24` makes the xor/add operands 8-bit, which is value-
+    // identical here (bits >= 8 of b cannot reach the final & 0xFF), but writing
+    // `u8 bop = op;` scores 94.12 -- MSVC then merges the truncation into r3 the
+    // way it does in op8 AND flips the xor operand order.
     unsigned long b = msg->Int(1);
     unsigned long a = u8(msg->Int(2));
     return DataNode(kDataInt, (int)(((a ^ b) + b) & 0xFF));

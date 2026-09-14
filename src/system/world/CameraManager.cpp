@@ -370,15 +370,18 @@ bool CameraManager::SetCrowds(ObjVector<CamShotCrowd> &crowds) {
     bool ret = false;
     FOREACH (it, mCrowds) {
         WorldCrowd *curCrowd = *it;
-        CamShotCrowd *cit = crowds.begin();
-        for (; crowds.end() != cit; cit++) {
+        CamShotCrowd *found;
+        for (CamShotCrowd *cit = crowds.begin(); cit != crowds.end(); cit++) {
             if (curCrowd == cit->mCrowd) {
-                break;
+                found = cit;
+                goto haveCrowd;
             }
         }
-        if (cit != crowds.end()) {
+        found = crowds.end();
+    haveCrowd:
+        if (found != crowds.end()) {
             curCrowd->SetShowing(true);
-            curCrowd->mCrowdRotate = cit->mCrowdRotate;
+            curCrowd->mCrowdRotate = found->mCrowdRotate;
             ret = true;
         } else {
             curCrowd->SetShowing(false);

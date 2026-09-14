@@ -188,6 +188,16 @@ void JoypadClient::Poll() {
     JoypadRepeat *pRepeat = mRepeats;
     do {
         if (ThePlatformMgr.GuideShowing()) {
+            // NOTE (w7-av): 94.45 is an address-anchor floor.  The image forms
+            // `addi r28, r31, 0x40` (the repeat timer) into a CALLEE-SAVED
+            // register before the first call and derives the hold timer from it
+            // as `subi r3, r28, 0x30`, which is why it saves one GPR more than
+            // we do (__savegprlr_27 vs _28).  We form each address from r31 at
+            // its use.  Refuted, both 94.45 with identical rows: binding
+            // `Timer &repeatTimer = pRepeat->mRepeatTimer;` before the first
+            // Reset, and even writing the hold timer as explicit pointer
+            // arithmetic off the repeat timer -- MSVC folds both back to
+            // `r31 + constant` at the use site.
             pRepeat->mHoldTimer.Reset();
             pRepeat->mRepeatTimer.Reset();
         } else {

@@ -14,6 +14,13 @@ namespace DSP {
 // initialiser list is byte-inert, and rb3-xenon's independently-written
 // SynapseAPO.cpp -- a different class spelling with padding members instead of
 // real ones -- lands on the identical 93.3333% with the same two rows.
+// NOTE (w7-av): 93.33 is a compiler-emission floor.  The only residual is the
+// position of the SECOND vptr store, `stw r10, 0x20(r30)` (the IXAPOParameters
+// subobject): the image emits it AFTER `addi r3, r30, 0x16c`, the `this` for
+// the mCurrentParams ctor, and we emit it before.  Both stores are synthesised
+// by MSVC after the base ctor returns, so no initialiser-list spelling reaches
+// them -- naming mCurrentParams() explicitly in the list scores 93.33 with a
+// byte-identical row set.
 SynapseAPO::SynapseAPO() : ATG::CSampleXAPOBase<SynapseAPO, SynapseAPOParams>(), mSynapse(nullptr) {
     SetSamplingRate(48000.0f);
 }

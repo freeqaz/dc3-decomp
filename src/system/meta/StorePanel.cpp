@@ -137,7 +137,7 @@ void StorePanel::Poll() {
     while (cur != mNetCacheLoaders.end()) {
         NetCacheLoader *loader = *cur;
         if (loader->IsLoaded()) {
-            if (loader == (NetCacheLoader *)mArtLoader) {
+            if (loader == mArtLoader) {
                 MILO_ASSERT(mPendingArtCallback, 0x167);
                 int size = loader->GetSize();
                 char *pBuffer = loader->GetBuffer();
@@ -266,12 +266,12 @@ void StorePanel::LoadArt(const char *cc, UIPanel *panel) {
     std::list<NetCacheLoader *>::iterator it = std::find(mNetCacheLoaders.begin(), mNetCacheLoaders.end(), str);
     if (it == mNetCacheLoaders.end()) {
         NetCacheLoader *loader = TheNetCacheMgr->AddNetCacheLoader(cc, (NetLoaderPos)0);
-        mArtLoader = (int)loader;
+        mArtLoader = loader;
         if (loader) {
-            mNetCacheLoaders.insert(it, (NetCacheLoader *)mArtLoader);
+            mNetCacheLoaders.insert(it, mArtLoader);
         }
     } else {
-        mArtLoader = (int)*it;
+        mArtLoader = *it;
     }
     mPendingArtCallback = panel;
 }
@@ -568,13 +568,11 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
     Profile *profile = StoreProfile();
     if (profile != 0) {
         // Check if this profile's pad number is in the signin change mask
-        int changedMask;
-        int padNum;
-        changedMask = bool(msg.mData->Node(3).Int(msg.mData));
-        padNum = profile->GetPadNum();
+        int changedMask = msg.mData->Node(3).Int(msg.mData);
+        int padNum = profile->GetPadNum();
         // If this pad's bit is not set in the change mask, ignore the message
         if (((1 << padNum) & changedMask) == 0) {
-            return 0;
+            return 1;
         }
     }
     // Signin changed for this profile - exit the store
@@ -582,7 +580,7 @@ DataNode StorePanel::OnMsg(SigninChangedMsg const &msg) {
         mLoadOk = false;
         ExitStore(kStoreErrorLiveServer);
     }
-    return 0;
+    return 1;
 }
 
 // Folded with MetaPerformer::OnMsg(RCJobCompleteMsg) at 0x82E13DD8, which

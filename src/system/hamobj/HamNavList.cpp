@@ -1023,6 +1023,23 @@ float HamNavList::GetTargetSwellAmount(int display) {
     if (TheLoadMgr.EditMode()) {
         int selDisplay = mListState.SelectedDisplay();
         if (display == selDisplay) {
+            // NOTE (w7-av): 98.13 is a block-order floor.  101 of 107
+            // instructions match; the six that do not are this pair of blocks
+            // laid out the other way round.  The image falls through into
+            // GetFrame() and branches away to the 1.0f:
+            //     bne  cr6, .L_1p0            (mRibbonMode != kRibbonSwell)
+            //     lfs  f1, 0x4c(r29)          (GetFrame, inlined)
+            //     b    <return>
+            //   .L_1p0:
+            //     lis/lfs __real@3f800000
+            //     b    <return>
+            // and the function's two other `return 1.0f;` sites branch into
+            // that same .L_1p0.  Writing the test positively --
+            // `if (mRibbonMode == kRibbonSwell) return GetFrame(); return 1.0f;`
+            // -- does put the blocks in the image's order but measures WORSE,
+            // 92.30: MSVC then tail-merges the 1.0f return into a different
+            // block and the two shared branches, the 0.0f epilogue and the
+            // frame teardown all move with it (25 rows instead of 6).
             if (mRibbonMode != HamListRibbon::kRibbonSwell) {
                 return 1.0f;
             }

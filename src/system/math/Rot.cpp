@@ -296,6 +296,20 @@ void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
     vout.y = vx * 2*(xy+zw)       + vy * (1 - 2*(xx+zz)) + vz * 2*(yz-xw);
     vout.z = vx * 2*(xz-yw)       + vy * 2*(yz+xw)      + vz * (1 - 2*(xx+yy));
 #else
+    // w7-av: 91.5%, a pure FP-scheduling residual (44 register swaps, 0 diff_op).
+    // The image's emission order is: q.x, q.z, qx*qx, qz*qz, q.y, q.w, qy*qx,
+    // qz*qw, vin.y, qz*qy, vin.x, qx*qw, vin.z, qy*qy, 2.0f, qz*qx, qy*qw --
+    // ours starts with q.z/q.y and squares qz/qy first. Measured, all rejected:
+    //   * writing the three output expressions with the terms in x,y,z order
+    //     instead of z,x,y -- byte-identical diff (/fp:fast reassociates the
+    //     add tree, so term order inside one statement is inert here);
+    //   * reordering the three neg_* declarations -- byte-identical diff;
+    //   * swapping the vout.x / vout.y statements -- 87.3%;
+    //   * hoisting the three squares to the top of the product block -- 75.0%
+    //     (this DOES fix the load order to q.x/q.z/q.y, and wrecks everything
+    //     downstream, so first-use order is the lever but not by itself enough);
+    //   * transcribing the image's full emission order as the declaration
+    //     order, with and without the component loads interleaved -- 83.2%.
     // Load quaternion components
     float qx = q.x;
     float qz = q.z;

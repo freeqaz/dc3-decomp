@@ -144,6 +144,12 @@ void VoiceInputPanel::OnConfidenceChange(float conf) {
     if (mActiveVoiceContext) {
         float newConf = conf + mActiveVoiceContext->mConfThreshold;
         mActiveVoiceContext->mConfThreshold = Clamp(0.0f, 1.0f, newConf);
+        // NOTE (w7-av): the image re-derives `TheSpeechMgr->Overlay()` for the Print
+        // `this` AFTER the MakeString call (keeping only the global's @ha in r31),
+        // where we keep the overlay pointer itself in r31 across the call. Tried:
+        // hoisting MakeString into a named local (85.1%, worse -- kills the early
+        // vptr load too) and caching the overlay in a local for the condition only
+        // (90.2%, byte-identical rows). MSVC CSEs both spellings the same way.
         if (TheSpeechMgr->Overlay()->Showing()) {
             TheSpeechMgr->Overlay()->Print(MakeString(
                 "voice context %s, confidence: %f\n",

@@ -85,6 +85,15 @@ END_COPYS
 void ClipCollide::SetTypeDef(DataArray *da) {
     Hmx::Object::SetTypeDef(da);
     if (da) {
+        // NOTE (w7-av): 94.42 is a temp-slot/scheduling floor.  Two rows left:
+        // `li r5, 0x1` one slot early (the FindArray `fail` default), and the
+        // Sym(0) sret at r1+0x54 where the image reuses r1+0x50 -- the slot the
+        // Symbol("modes") temp occupied.  Refuted: one-expression
+        // `da->FindArray("modes")->Array(1)->Sym(0)` (94.42, identical rows);
+        // spelling `fail` explicitly as `true` (94.42, identical rows); a named
+        // `Symbol modes("modes")` in an inner block to end its lifetime early
+        // (91.60 -- the named local is stored to its slot instead of using the
+        // ctor's return value, and the sret still lands at 0x54).
         DataArray *modesArr = da->FindArray("modes");
         mMode = modesArr->Array(1)->Sym(0);
     }

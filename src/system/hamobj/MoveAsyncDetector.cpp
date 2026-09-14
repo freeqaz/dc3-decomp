@@ -185,6 +185,16 @@ void MoveAsyncDetector::EnqueueDetectFrames(int i1, int i2, float f3, int i4) {
     for (std::set<MoveDetector *>::iterator it = mActiveDetectors.begin(); it != mActiveDetectors.end(); ++it) {
         MoveDetector *cur = *it;
         cur->Poll(i1, i2, mDir);
+        // NOTE (w7-av): 90.53 is a register-allocation floor, not a statement-order
+        // one.  The image keeps `cur` in r25 across the PlayerDetectFrames call and
+        // does the Move() load inline at 0x8252D3B8 (`lwz r3, 0x0(r25)`), putting
+        // `frames` in r24; we kill `cur` early and put `frames` in r25.  Measured:
+        // deferring Move() below `frames` (86.8), spelling it inline as
+        // `cur->Move()->FilterVer()` in the call (86.8), and hoisting it to a
+        // separate `ver` statement (86.8) all make MSVC take a NINTH callee-saved
+        // GPR (`stfd f31, -0x48` / __savegprlr_23) and score worse.  Passing
+        // PlayerDetectFrames inline too is 84.2 and proves the arg order: MSVC
+        // evaluates this call right-to-left, so `frames` has to be a named local.
         const HamMove *move = cur->Move();
         std::vector<DetectFrame> &frames = cur->PlayerDetectFrames(i4);
         mDir->EnqueueDetectFrames(f3, i4, frames, move->FilterVer());
@@ -216,27 +226,34 @@ MoveDetector *MoveAsyncDetector::FindDetector(const HamMove *move) {
 }
 
 void MoveAsyncDetector::EnableDetector(HamMove *move) {
-    if (nullptr == move)
-        return;
-    MoveDetector *detector = FindDetector(move);
-    if (detector != nullptr)
-        goto activate;
-    auto moveName = move->Name();
-    auto msg = MakeString("Could not enable detector for %s", moveName);
-    TheDebug.Notify(msg);
-    return;
-activate:
-    int active = detector->mActive;
-    if (!(!(active == 1))) {
-        // skip
-    } else {
-        *(int *)&detector->mLastDetectFracs[0] = 0;
-        *(int *)&detector->mLastDetectFracs[1] = 0;
-        detector->mLastDetectFrameIdx = -1;
-        detector->mDetectFrameOffset = -1;
-        detector->mActive = true;
+    if (move != 0) {
+        MoveDetector *detector = FindDetector(move);
+        if (detector != 0) {
+            if (detector->mActive != true) {
+                // NOTE (w7-av): the image clears the two fracs with an UNROLLED
+                // LOOP -- that is what the otherwise-dead `addi r11, r3, 0x34`
+                // at 0x8252EA9C is (the induction pointer, folded back to
+                // base+disp in both stores).  Spelling it as a loop here, the way
+                // MoveDetector::Reset does, gets 48 of 50 rows equal but leaves
+                // the addi ONE SLOT late (after `stw r10, 0x8(r3)` instead of
+                // before) and the canonical ruler charges that insert/delete pair
+                // 95.92 -- worse than the 97.96 the two straight-line stores get
+                // with their r10/r11 permutation.  Kept the higher-scoring
+                // spelling; the loop is the truer one.  Moving `mActive = true`
+                // above the two -1 stores is 87.7.
+                *(int *)&detector->mLastDetectFracs[0] = 0;
+                *(int *)&detector->mLastDetectFracs[1] = 0;
+                detector->mLastDetectFrameIdx = -1;
+                detector->mDetectFrameOffset = -1;
+                detector->mActive = true;
+            }
+            mActiveDetectors.insert(detector);
+        } else {
+            char *name = (char *)move->Name();
+            auto _tmp0 = MakeString("Could not enable detector for %s", name);
+            TheDebug.Notify(_tmp0);
+        }
     }
-    mActiveDetectors.insert(detector);
 }
 
 float MoveDetector::Last4BeatsDetectFrac(int player) const {
