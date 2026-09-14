@@ -160,14 +160,24 @@ bool RndShaderProgram::Cache(
                     optsStr.c_str()
                 );
                 if (UsingCD()) {
+                    // w7-al: the virtual-base conversion of RndEnviron::Current()
+                    // to Hmx::Object* (the null test + vbtable load + addi 4) is
+                    // the FIRST thing the image does in this block -- 0x82732134,
+                    // immediately after the UsingCD branch and before
+                    // ShaderTypeName -- and it keeps the converted pointer in a
+                    // callee-saved register across SystemConfig/Node/Str. Writing
+                    // the conversion at the point of `envPath` sank it below
+                    // Str(), which is nine rows out of place.
+                    Hmx::Object *envObj = RndEnviron::Current();
                     const char *shaderTypeName = ShaderTypeName(shaderType);
                     DataArray *cfg = SystemConfig("rnd", "title");
-                    char *dataRoot = (char *)cfg->Node(1).Str(nullptr);
-                    const char *envPath = PathName(
-                        RndEnviron::Current()
-                            ? static_cast<Hmx::Object *>(RndEnviron::Current())
-                            : nullptr
-                    );
+                    // BEHAVIOURAL FIX (w7-al): the image passes the array itself
+                    // as DataNode::Str's parent, not null -- `mr r4, r26` at
+                    // 0x827321A0, where r26 is SystemConfig's return value saved
+                    // by `mr r26, r3` at 0x82732198. We passed nullptr, which
+                    // changes how a variable/property node resolves.
+                    char *dataRoot = (char *)cfg->Node(1).Str(cfg);
+                    const char *envPath = PathName(envObj);
                     const char *matPath2 = PathName(NgMat::Current());
                     const char *shaderHex = MakeString("%s_%llx", shaderTypeName, opts.flags);
                     const char *flagsHex = MakeString("%llx", opts.flags);
@@ -216,11 +226,15 @@ bool RndShaderProgram::Cache(
                 psModTime = 0;
             }
             if (gModTime > psModTime) {
-                static DataNode *sCompileVerbose;
-                if (!sCompileVerbose) {
-                    sCompileVerbose = &DataVariable("shader_compile_print_opts");
-                }
-                if (sCompileVerbose->Int(nullptr) != 0) {
+                // w7-al: a REFERENCE-typed function-local static, not a pointer
+                // with a hand-rolled null check. The image tests MSVC's own
+                // one-bit init guard (`lwz lbl_830E1CDC; clrlwi. r9, r11, 31;
+                // bne; ori r11, r11, 1; stw` at 0x82732?--) and, on the
+                // freshly-initialised path, skips the reload of the slot because
+                // DataVariable's return is already in r3. A pointer + `if (!p)`
+                // compiles to a null test and no guard word.
+                static DataNode &sCompileVerbose = DataVariable("shader_compile_print_opts");
+                if (sCompileVerbose.Int(nullptr) != 0) {
                     String optsStr;
                     ShaderMakeOptionsString(shaderType, opts, optsStr);
                     MILO_LOG(
