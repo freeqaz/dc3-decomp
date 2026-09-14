@@ -169,79 +169,84 @@ void Locale::Init() {
     static Symbol locale("locale");
     DataArrayPtr altCfg((DataNode(locale)), DataNode(devkitPath));
 
-    DataArray *cfg = SystemConfig();
-    if (!cfg) {
-        goto done;
-    }
+    // The image branches the no-config case to the ALLOCATION block, not past it:
+    // `cmplwi r3, 0x0` / `beq .L_827E9DE8` at 827E99C0 lands on `mSymTable = new
+    // Symbol[mSize]`, so the original wraps the locale load in an `if` and always
+    // allocates the (then zero-length) tables.  It also tests SystemConfig()'s
+    // return value directly rather than through `cfg`: `cfg` is zeroed up front
+    // (`mr r16, r14` at 827E98E0) and only written by the SystemConfig("locale")
+    // call inside the branch.
+    DataArray *cfg = 0;
+    if (SystemConfig()) {
+        cfg = SystemConfig("locale");
 
-    cfg = SystemConfig("locale");
-
-    if (DmMapDevkitDrive() >= 0) {
-        if (FileExists(devkitPath.c_str(), 0, 0)) {
-            MILO_NOTIFY("Using alternate locale file from HDD: %s", devkitPath);
-            cfg = (DataArray *)altCfg;
-        }
-    }
-
-    MemPushTemp();
-    {
-        std::vector<DataArray *> arrVec(cfg->Size() - 1);
-        mNumFilesLoaded = arrVec.size();
-
-        int totalChunks = 0;
-        // mInitialized is STATICALLY TRUE: the shipped image holds 0x01 at
-        // TheLocale+0x1c in .data. This is not the uninitialized read it was long
-        // documented as -- the gate is always taken, and it has to be, because
-        // everything below it is the locale load. RB3 has no such check.
-        if (mInitialized) {
-            for (int i = 1; i < cfg->Size(); i++) {
-                const char *path = FileMakePath(FileGetPath(cfg->File()), cfg->Str(i));
-                arrVec[i - 1] = DataReadFile(path, true);
-                if (!arrVec[i - 1]) {
-                    MILO_FAIL("could not load language file %s", path);
-                }
-                totalChunks += arrVec[i - 1]->Size();
+        if (DmMapDevkitDrive() >= 0) {
+            if (FileExists(devkitPath.c_str(), 0, 0)) {
+                MILO_NOTIFY("Using alternate locale file from HDD: %s", devkitPath);
+                cfg = (DataArray *)altCfg;
             }
+        }
 
-            chunks = new LocaleChunkSort::OrderedLocaleChunk[totalChunks];
+        MemPushTemp();
+        {
+            std::vector<DataArray *> arrVec(cfg->Size() - 1);
+            mNumFilesLoaded = arrVec.size();
 
-            numChunks = 0;
-            for (int j = cfg->Size() - 2; j >= 0; j--) {
-                DataArray *curArr = arrVec[j];
-                for (int k = curArr->Size() - 1; k >= 0; k--, numChunks++) {
-                    DataArray *chunkArr = curArr->Node(k).LiteralArray(curArr);
-                    int size = chunkArr->Size();
-                    if (size < 2) {
-                        MILO_FAIL(
-                            "%s line %d should have 2 entries, has %d, mismatched quotes?",
-                            chunkArr->File(),
-                            chunkArr->Line(),
-                            size
-                        );
+            int totalChunks = 0;
+            // mInitialized is STATICALLY TRUE: the shipped image holds 0x01 at
+            // TheLocale+0x1c in .data. This is not the uninitialized read it was long
+            // documented as -- the gate is always taken, and it has to be, because
+            // everything below it is the locale load. RB3 has no such check.
+            if (mInitialized) {
+                for (int i = 1; i < cfg->Size(); i++) {
+                    const char *path = FileMakePath(FileGetPath(cfg->File()), cfg->Str(i));
+                    arrVec[i - 1] = DataReadFile(path, true);
+                    if (!arrVec[i - 1]) {
+                        MILO_FAIL("could not load language file %s", path);
                     }
-                    chunks[numChunks].node1 = chunkArr->LiteralSym(0);
-                    chunks[numChunks].node2 = numChunks;
-                    chunks[numChunks].node3 = chunkArr->LiteralStr(1);
+                    totalChunks += arrVec[i - 1]->Size();
                 }
-                curArr->Release();
+
+                chunks = new LocaleChunkSort::OrderedLocaleChunk[totalChunks];
+
+                numChunks = 0;
+                for (int j = cfg->Size() - 2; j >= 0; j--) {
+                    DataArray *curArr = arrVec[j];
+                    for (int k = curArr->Size() - 1; k >= 0; k--, numChunks++) {
+                        DataArray *chunkArr = curArr->Node(k).LiteralArray(curArr);
+                        int size = chunkArr->Size();
+                        if (size < 2) {
+                            MILO_FAIL(
+                                "%s line %d should have 2 entries, has %d, mismatched quotes?",
+                                chunkArr->File(),
+                                chunkArr->Line(),
+                                size
+                            );
+                        }
+                        chunks[numChunks].node1 = chunkArr->LiteralSym(0);
+                        chunks[numChunks].node2 = numChunks;
+                        chunks[numChunks].node3 = chunkArr->LiteralStr(1);
+                    }
+                    curArr->Release();
+                }
+            }
+
+            if (cfg->Size() > 1) {
+                LocaleChunkSort::Sort(chunks, numChunks);
+            }
+
+            mSize = 0;
+            for (int i = 0; i < numChunks; i++) {
+                Symbol curSym = chunks[i].node1.LiteralSym();
+                if (curSym != prevSym) {
+                    totalStrLen += strlen(chunks[i].node3.LiteralStr());
+                    prevSym = curSym;
+                    mSize++;
+                }
             }
         }
-
-        if (cfg->Size() > 1) {
-            LocaleChunkSort::Sort(chunks, numChunks);
-        }
-
-        mSize = 0;
-        for (int i = 0; i < numChunks; i++) {
-            Symbol curSym = chunks[i].node1.LiteralSym();
-            if (curSym != prevSym) {
-                totalStrLen += strlen(chunks[i].node3.LiteralStr());
-                prevSym = curSym;
-                mSize++;
-            }
-        }
+        MemPopTemp();
     }
-    MemPopTemp();
 
     mSymTable = new Symbol[mSize];
     mStringData = new StringTable(totalStrLen);
@@ -265,7 +270,6 @@ void Locale::Init() {
         delete[] chunks;
     }
 
-done:
     if (cfg && cfg->Size() > 1) {
         mFile = cfg->Str(1);
     }
