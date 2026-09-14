@@ -117,3 +117,9 @@ public:
     ~StaticCriticalSection();
     static StaticCriticalSection *Instance();
 };
+
+// Defined in UsbMidiKeyboard.cpp.  It had no declaration anywhere, so
+// ReadSingleXinputJoypad reached it through a hardcoded address and a
+// vtable slot; the image calls ?GetSustain@UsbMidiKeyboard@@QAA_NH@Z
+// directly off this symbol (0x825FD064 / 0x825FD074).
+extern UsbMidiKeyboard *TheKeyboard;
