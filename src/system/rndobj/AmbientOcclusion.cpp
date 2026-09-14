@@ -717,7 +717,9 @@ bool kdTree<Triangle>::Intersect(
     bool boxHit = ::Intersect(origin, direction, mBounds, tNear, tFar);
     if (boxHit) {
         bool found = false;
-        int stackDepth = 0;
+        // unsigned: the image tests it with `cmplwi cr6, r27, 0x0`
+        // (AmbientOcclusion.s idx 132), not `cmpwi`.
+        unsigned int stackDepth = 0;
         hitDist = FLT_MAX;
         kdTreeNode *nodes = mNodes;
         tFar = (tFar - maxDist >= 0.0f) ? maxDist : tFar;
@@ -736,19 +738,34 @@ bool kdTree<Triangle>::Intersect(
                 children[0] = &nodes[(node->mFlags & 0x7FFF) * 2 + 1];
                 children[1] = &nodes[(node->mFlags & 0x7FFF) * 2 + 2];
 
-                bool isAbove = origin[axis] > splitVal;
+                // `int`, not `bool`: the image indexes with a plain 0/1 int and
+                // never re-masks it.  With a bool every use is preceded by a
+                // `clrlwi rN, rN, 24` byte-extend (AmbientOcclusion.s has none at
+                // the three index sites 0x11c4, 0x11f0, 0x1230; it emits a bare
+                // `slwi rN, rN, 2` each time).
+                int isAbove = origin[axis] > splitVal;
 
                 if (tSplit < 0.0f || tSplit > tFar) {
                     node = children[isAbove];
-                } else if (tSplit >= tNear) {
+                } else if (tSplit < tNear) {
+                    // `isAbove ^ 1`, not `!isAbove`.  The image gets the sibling
+                    // index by XOR-ing the scaled index: `slwi r11, r11, 2` then
+                    // `xori r11, r11, 0x4` (AmbientOcclusion.s idx 83/84, and
+                    // again at 86/90 in the push block).  `!isAbove` instead
+                    // lowers to cntlzw + rlwinm, which is what we used to emit.
+                    node = children[isAbove ^ 1];
+                } else {
                     nodeStack[stackDepth].tFar = tFar;
                     nodeStack[stackDepth].tNear = tSplit;
                     tFar = tSplit;
+                    // Stored at [stackDepth] BEFORE the increment: the image
+                    // emits `stw r10, 0x0(r30)` then `addi r30, r30, 0xc`, where
+                    // r30 is the running &nodeStack[].node pointer.  Writing it
+                    // as [stackDepth - 1] after the increment hoists the `addi`
+                    // above the store and costs the -0xc displacement.
+                    nodeStack[stackDepth].node = children[isAbove ^ 1];
                     stackDepth++;
                     node = children[isAbove];
-                    nodeStack[stackDepth - 1].node = children[!isAbove];
-                } else {
-                    node = children[!isAbove];
                 }
             } else {
                 kdTriList *triList = node->GetTriList();
