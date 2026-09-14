@@ -2718,12 +2718,21 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
     if (!shotKeys)
         return;
 
-    auto& nextShot = mNextShot;
-    const char *cat = nextShot->Category().Str();
+    // NOT `auto &nextShot = mNextShot;`.  A reference local makes MSVC hoist
+    // `addi r20, this, 0x270` into a callee-saved register across the player
+    // loop -- which is the whole prologue difference (base saved r17-r31,
+    // the image saves r18-r31).  The image reloads `lwz r3, 0x27c(this)` at
+    // each use instead.
+    const char *cat = mNextShot->Category().Str();
     if (strncmp(cat, "Area", 4) != 0)
         return;
 
     float beat = TheTaskMgr.Beat();
+    // ONE float local, reused -- not `frame` and `nextFrame`.  Its address is
+    // taken by FrameFromIndex below (`addi r5, r31, 0x50`), so it is homed at
+    // 0x50, and the image therefore also stores the FIRST value into that
+    // slot (`stfs f1, 0x50(r31)` immediately after the *30.0f) -- a store we
+    // did not emit while the two values were separate variables.
     float frame = BeatToSeconds(beat) * 30.0f;
 
     Symbol unused;
@@ -2733,15 +2742,14 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
     keyIdx++;
     int numKeys = shotKeys->NumKeys();
 
-    float nextFrame;
     if (keyIdx >= numKeys) {
         RndPropAnim *anim = SongAnim(0);
-        nextFrame = anim->EndFrame();
+        frame = anim->EndFrame();
     } else {
-        shotKeys->FrameFromIndex(keyIdx, nextFrame);
+        shotKeys->FrameFromIndex(keyIdx, frame);
     }
 
-    int nextBeatPlusOne = (int)SecondsToBeat(nextFrame / 30.0f) + 1;
+    int nextBeatPlusOne = (int)SecondsToBeat(frame / 30.0f) + 1;
 
     Difficulty diffs[2];
     Transform transforms[2];
@@ -2759,7 +2767,7 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
         static Symbol player1("player1");
         Symbol targetSym = (targetIdx == 0) ? player0 : player1;
 
-        if (!nextShot->TargetTeleportTransform(targetSym, transforms[targetIdx])) {
+        if (!mNextShot->TargetTeleportTransform(targetSym, transforms[targetIdx])) {
             return;
         }
 
@@ -2773,11 +2781,11 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
         static Symbol area1Wide("Area1_WIDE");
         static Symbol area2Wide("Area2_WIDE");
 
-        if (strncmp(cat, "Area1", 5) == 0) {
-            mShot = area1Wide;
-        } else {
-            mShot = area2Wide;
-        }
+        // Ternary, and it selects the SYMBOL OBJECT, not the value: the image
+        // emits `mr r30, r29` over one `lwz r11, 0x0(r30)` / `stw r11,
+        // 0x298(this)`, i.e. it picks which static's ADDRESS to read.  An
+        // if/else assigning mShot twice duplicates the load and the branch.
+        mShot = strncmp(cat, "Area1", 5) == 0 ? area1Wide : area2Wide;
         FindNextShot();
     }
 }
