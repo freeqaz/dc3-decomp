@@ -1117,6 +1117,12 @@ void MoveDir::LoadScoring(const DataArray *cfg) {
 void MoveDir::FinalPoseStateMachine() {
     float songBeat = (float)(TheTaskMgr.CurrentMeasure() * 4);
     float beatInMeasure = TheTaskMgr.TotalBeat() - songBeat;
+    // RESIDUAL (w7-ba, 99.95): the image updates the loop's three memory-homed
+    // walkers other_player, &mMovePlayerData[i].mFeedbackMode, &other.mFeedbackMode
+    // (82503FB0..82503FD0: 0x54, 0x50, 0x58); we update 0x54, 0x58, 0x50.  Inert:
+    // other_player declared after `move` or at its first use, `[1 - i]` in place
+    // of `[other_player]`.  Do NOT bind `mMovePlayerData[i]` to a reference --
+    // it then lives in a register and the walker base moves to 0x318 (95.6).
     for (int i = 0; i < 2; i++) {
         int other_player = 1 - i;
         HamMove *move = mMovePlayerData[i].mCurMove;
