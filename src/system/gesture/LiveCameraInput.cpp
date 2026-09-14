@@ -458,6 +458,20 @@ LiveCameraInput::LiveCameraInput()
     for (int i = 0; i < DIM(mTexClips); i++) {
         mTexClips[i].mTex = nullptr;
     }
+    // MEASURED, 2026-09-14 (lane w7-aa).  We emit the mSpeechMgr (0x1444) store
+    // TWICE -- once at idx 56, fused into the mTexClips loop preamble where it
+    // displaces the image's `subi r10, r10, 0x4`, and once at idx 60 where the
+    // image has its single store.  Both one-sided removals score WORSE:
+    //   drop `mSpeechMgr(0)` from the init list  -> 98.37369 -> 97.9
+    //     (idx 56 becomes a bare `delete` of the subi, and an insert appears)
+    //   drop this `mSpeechMgr = nullptr;` line   -> 98.37369 -> 97.6
+    //     (idx 60's store is the BODY one, so removing it loses that row AND
+    //      the 0x14b0 store, +1 insert/-1 delete around the erase() args)
+    // So the init-list entry is emitted at 56 and the body one at 60; the image
+    // has only the second.  Neither spelling reproduces that, and the residual
+    // rotation at idx 62-65 (we emit 14b0,1200,14a8,14ac; the image emits
+    // 1200,14a8,14ac,14b0, which is OUR source order) survives both -- so the
+    // rotation is not caused by the duplicate store and is not decl-ordered.
     mSpeechMgr = nullptr;
     mNumSnapshots = 0;
     mColorStreamTex = 0;
