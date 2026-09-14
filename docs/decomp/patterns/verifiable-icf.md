@@ -129,6 +129,34 @@ objdiff's `reloc_eq()` now normalizes MSVC mangled array sizes before comparing 
 
 This is distinct from the [MakeString type mismatch](fixable-casting.md#makestring-template-type-mismatch-milo-macro-arguments) pattern, which involves different argument **types** (e.g., `Symbol` vs `const char*`) and requires source-level fixes.
 
+### ⚠ A *type*-level MakeString divergence can still be a benign fold — check the map before editing
+
+The sentence above sends you to `fixable-casting.md` for any type difference, and that is the
+right default, but it is not a proof. **ICF folds by machine code, and two MakeString
+instantiations whose arguments are all register-width scalars have identical machine code**, so a
+type-level pair can land on one address too. Measured on `Voice::UpdateMix` (lane w7-g,
+2026-09-14): the Function Call Diff listed **6 target-only and 6 base-only** `MakeString`
+instantiations plus `MakeString<_D3DFORMAT>` (target) vs `MakeString<int>` (ours) — twelve rows
+that read as a wrong-callee cluster and one that reads as a genuine type bug. All thirteen are
+benign. `MakeString<_D3DFORMAT>` and `MakeString<int>` are **both at `82610090`** in
+`build/373307D9/icf_aliases.map` (an enum lowers to `int`; same code), and all six of the
+array-size pairs are in the map as well. The same fold is already noted in the source at
+`src/system/synth_xbox/EnvelopeGenerator.cpp:29-33`.
+
+The trap is that the Function Call Diff prints **whichever name won the fold**, not the name our
+source would emit. Reading the target listing settles it in seconds: the target's
+`MakeString<char const[19], int, char const[5]>` call site actually loads `"Voice.cpp"`
+(`char[10]`) and `"buffer"` (`char[7]`) — the printed instantiation belongs to some other TU that
+folded onto the same address. The argument *count and shape* at the call site is the thing to
+compare, never the mangled name alone.
+
+Procedure, ~1 minute, before spending an edit on one of these rows:
+
+1. `grep <both mangled names> build/373307D9/icf_aliases.map` — equal address ends it.
+2. If the map is silent, read the target listing at the call site and count the loaded literals
+   and their lengths against ours.
+3. Only then reach for `fixable-casting.md`.
+
 ### Details
 
 See [../../plans/MAKESTRING_ICF_EQUIVALENCE.md](../../plans/MAKESTRING_ICF_EQUIVALENCE.md) for full implementation details.
