@@ -31,9 +31,22 @@ namespace {
     ) {
         Vector3 screenPos;
         JointScreenPos(skeleton.TrackedJoints()[joint], screenPos);
-        out.y = screenPos.z;
-        out.x = ((screenPos.x - bounds.x) / (bounds.z - bounds.x) - 0.5f) * 318.0f - 1.0f;
-        out.z = (0.5f - (screenPos.y - bounds.y) / (bounds.w - bounds.y)) * 238.0f - 1.0f;
+        // Set(), not three assignments: `out` is a Vector3& that may alias the
+        // `const Vector4&` bounds, so an early store to out.y pins every later
+        // bounds load below it. The image issues all four bounds loads and both
+        // fdivs before the first store (0x82DED7F0..0x82DED83C all precede
+        // `stfs f6, 0x4(r31)` at 0x82DED844).
+        // REFUTED (3 variants, all byte-identical at 99.8): hoisting the x
+        // expression into a named local ahead of the z one, hoisting both, and
+        // hoisting just the two divisions. MSVC evaluates the two component
+        // expressions right-to-left regardless, so the z formula's four loads
+        // come first where the image's x formula's do; 10 rows, no register or
+        // stack difference, arithmetic identical.
+        out.Set(
+            ((screenPos.x - bounds.x) / (bounds.z - bounds.x) - 0.5f) * 318.0f - 1.0f,
+            screenPos.z,
+            (0.5f - (screenPos.y - bounds.y) / (bounds.w - bounds.y)) * 238.0f - 1.0f
+        );
     }
 
     void VertexToWorld(
