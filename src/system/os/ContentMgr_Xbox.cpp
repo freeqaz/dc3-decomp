@@ -460,8 +460,15 @@ void XboxContentMgr::PollRefresh() {
                 DWORD numItems = 0;
                 DWORD res = XGetOverlappedResult(mOverlappeds[i], &numItems, false);
                 if (res == 0x3E4) {
+                    // RETURN, not `continue`.  The image's ERROR_IO_INCOMPLETE
+                    // arm is the shared block at ContentMgr_Xbox.s .L_825EBAFC
+                    // (`li r11, 0x2` / `stw r11, 0x2c(r30)` / `b .L_825EBC7C`),
+                    // and .L_825EBC7C is the epilogue (`addi r1, r31, 0x100` /
+                    // `b __restgprlr_16`) -- it skips the remaining buffers,
+                    // the ContentMountBegun broadcast AND the base-class
+                    // ContentMgr::PollRefresh() call at 0x825EBC78.
                     mState = kDiscoveryMounting;
-                    continue;
+                    return;
                 }
                 if (res == 0) {
                     for (unsigned int j = 0; j < numItems; j++) {
@@ -513,7 +520,12 @@ void XboxContentMgr::PollRefresh() {
                         mEnumHandles[i], &mXDatas[i], 0x138, 0, mOverlappeds[i]
                     );
                     if (enumRes == 0x3E5) {
+                        // Same shared early-return block: 0x825EBAF8
+                        // `bne cr6, .L_825EBB3C` falls THROUGH into .L_825EBAFC,
+                        // so a 0x3E5 from XEnumerateCrossTitle also returns
+                        // without freeing the overlapped or closing the handle.
                         mState = kDiscoveryMounting;
+                        return;
                     }
                 } else {
                     DWORD err = XGetOverlappedExtendedError(mOverlappeds[i]);
