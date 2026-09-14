@@ -542,6 +542,22 @@ void WorldDir::DrawShowing() {
 
         if (mHUDDir)
             mHUDDir->DrawShowing();
+        // The 5-row residual in this function is all one root cause, and it
+        // is NOT a declaration-count or scoping difference. Both sides put
+        // Hmx::Rect at 0x50 and Hmx::Color at 0x60; both give each AutoTimer
+        // its own 0x10 slot; the frame is 0xf0 on both sides. Only the two
+        // AutoTimer slots are swapped: the target gives the outer
+        // "world_draw" timer 0x70 and this "hud_draw" timer 0x80 (declaration
+        // order ascending), we do the reverse. That is 4 of the 5 rows
+        // ([26], [258], [266], [279]).
+        // The 5th row ([54]) follows from the same ordering difference: after
+        // `if (Showing()) RndDir::DrawShowing();` the target's `beq` jumps to
+        // the shared `b <epilogue>` block, while ours folds the
+        // branch-to-branch and jumps straight to the epilogue. Both sides
+        // still emit that `b`, so it is a block-layout/peephole ordering
+        // artifact, not a control-flow difference.
+        // Measured inert (w7-m): wrapping this timer + call in an extra
+        // lexical block (deeper scope) -- 5 rows unchanged, byte-identical.
         if (mHUD && mHUD->Showing()) {
             START_AUTO_TIMER("hud_draw");
             mHUD->DrawShowing();
