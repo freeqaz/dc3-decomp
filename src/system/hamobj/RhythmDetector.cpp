@@ -842,6 +842,18 @@ RhythmDetector::GetRecord(float windowStart, float windowEnd, bool finalize, Sym
     return mRecordData;
 }
 
+// NOTE (w7-ai): residual at 94.4%.  Retail's frame is 0x140 and saves r18-r31
+// (bl __savegprlr_18); ours is 0x130 and saves r19-r31.  The extra register is
+// a SECOND pointer to mCurrentFrame.mJointVelocities, derived as
+// `addi r21,r29,0x4` from a base register holding &mCurrentFrame, while the
+// empty() test keeps its own independent this+0x20.  Binding `Frame &cur =
+// mCurrentFrame;` does reproduce all of that -- frame size, save count and the
+// derived addi all match -- but MSVC then schedules the `addi rN,this,0x1c`
+// ABOVE the loop-entry beq where retail keeps it in the preheader, and that one
+// insert/delete pair costs more on the canonical ruler than the whole structural
+// gain is worth: 93.4% with the reference vs 94.4% without, measured both with
+// the reference before the loop and with it inside the body (the latter is
+// coalesced away again and reads 93.7%).  Three placements measured 2026-09-14.
 void RhythmDetector::ProcessFrames() {
     std::list<Frame> localHistory;
     localHistory.swap(mFrameHistory);
