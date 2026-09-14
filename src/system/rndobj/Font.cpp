@@ -710,38 +710,46 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         int right = (int)(mCellSize.x + pos.x);
         int bottom = (int)(mCellSize.y + pos.y);
         int dummy;
-        int leftCol = left;
+        // ONE cursor drives both scans -- r31 holds it across the whole body
+        // (0x8270366C `mr r31, r30` for the left scan, 0x827036E8
+        // `mr r31, r29` for the right one), which is why it outranks `left`
+        // and `right` for the top callee-saved register.
+        int col = left;
         // The first compare in each scan is against the RAW bound, not the
         // cursor (0x82703688 `cmpw r30, r29` is left vs right, while the loop
-        // latch at 0x827036C4 is leftCol vs right), so the entry test has to be
-        // spelled with `left`/`rightCol` and the latch with the cursor.
+        // latch at 0x827036C4 is the cursor vs right).
         if (left != right) {
-            auto _tmp0 = bmap.ColumnNonTransparent(leftCol, top, bottom, &dummy);
+            auto _tmp0 = bmap.ColumnNonTransparent(col, top, bottom, &dummy);
             while (_tmp0 == 0) {
                 if (right > left) {
-                    leftCol++;
+                    col++;
                 } else {
-                    leftCol--;
+                    col--;
                 }
-                if (leftCol == right)
+                if (col == right)
                     break;
             }
         }
-        float leftColF = (float)(long long)leftCol;
-        int rightCol = right - 1;
-        if (rightCol != left - 1) {
-            auto _tmp1 = bmap.ColumnNonTransparent(rightCol, top, bottom, &dummy);
+        float leftColF = (float)(long long)col;
+        // 0x827036D0 / 0x827036E0 decrement IN PLACE (`subi r29, r29, 1` and
+        // `subi r30, r30, 1`), so the bounds are the same two variables walked
+        // down by one, not two fresh `x - 1` temporaries.
+        right--;
+        left--;
+        col = right;
+        if (right != left) {
+            auto _tmp1 = bmap.ColumnNonTransparent(col, top, bottom, &dummy);
             while (_tmp1 == 0) {
-                if (left - 1 > right - 1) {
-                    rightCol++;
+                if (left > right) {
+                    col++;
                 } else {
-                    rightCol--;
+                    col--;
                 }
-                if (rightCol == left - 1)
+                if (col == left)
                     break;
             }
         }
-        float charW = (float)(long long)rightCol + 1.0f - leftColF;
+        float charW = (float)(long long)col + 1.0f - leftColF;
         int width = bmap.Width();
         // 0x82703760 `bgt` jumps to the measured arm, so the degenerate arm is
         // the fall-through -- and it is written mAdvance/charWidth/mU, the same
