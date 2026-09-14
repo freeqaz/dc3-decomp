@@ -459,15 +459,20 @@ void HamSongMgr::InitializePlaylists() {
             mPlaylists.push_back(p);
         }
     }
-    char buffer[0x70];
+    // The shipped image sprintf()s to TWO distinct stack addresses here
+    // (r31+0x90 for "%d0s", r31+0xa0 for "%s_dynamic_playlist"), so the
+    // original had two separate char arrays, not one shared scratch buffer.
+    // The 0x10/0x60 split is what keeps the frame at the image's 0x1c0.
+    char decadeBuffer[0x10];
+    char buffer[0x60];
     std::map<Symbol, Playlist *> playlistMap;
     FOREACH (it, TheHamSongMgr.mRankedSongs) {
         const HamSongMetadata *data = TheHamSongMgr.Data(*it);
         if (data->IsComplete() && !data->IsFake()
             && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
             Symbol crewSym = GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
-            sprintf(buffer, "%d0s", data->YearReleased() / 10);
-            Symbol decadeSym = buffer;
+            sprintf(decadeBuffer, "%d0s", data->YearReleased() / 10);
+            Symbol decadeSym = decadeBuffer;
             if (playlistMap.find(crewSym) == playlistMap.end()) {
                 Playlist *p = new Playlist();
                 playlistMap[crewSym] = p;

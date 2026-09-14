@@ -176,12 +176,13 @@ void HamCamShot::UpdateTargetsFlipped() {
 
         if (isDanceBattle && flipped) {
             if (TheHamProvider->Property(game_stage, true)->Sym(NULL) == intro) {
-                TheDebug << MakeString("Camshot %s\n", (char *)Name());
+                TheDebug << MakeString("Camshot %s\n", Name());
                 int targetIdx = 0;
                 for (ObjList<Target>::iterator it = mTargets.begin();
                      it != mTargets.end();
                      ++it) {
                     HamCharacter *character = CharacterNameToCharacter(it->mTarget);
+                    Target &target = *it;
                     ObjectDir *clipsDir;
                     if (character != NULL) {
                         clipsDir = character->Find<ObjectDir>("clips", true);
@@ -196,41 +197,33 @@ void HamCamShot::UpdateTargetsFlipped() {
                             Hmx::Object *found =
                                 clipsDir->Find<Hmx::Object>("crewbattle_intro", false);
                             if (found != NULL) {
-                                it->mAnimGroup = crewbattle_intro;
+                                target.mAnimGroup = crewbattle_intro;
                             } else {
                                 found = clipsDir->Find<Hmx::Object>("BattleIntro", false);
                                 if (found != NULL) {
-                                    it->mAnimGroup = BattleIntro;
+                                    target.mAnimGroup = BattleIntro;
                                 } else {
                                     found = clipsDir->Find<Hmx::Object>(
                                         "crew_battle_intro", false
                                     );
                                     if (found != NULL) {
-                                        it->mAnimGroup = crew_battle_intro;
+                                        target.mAnimGroup = crew_battle_intro;
                                     }
                                 }
                             }
                         }
                     }
 
-                    const char *clipsDirName;
-                    if (clipsDir != NULL) {
-                        clipsDirName = clipsDir->Name();
-                    } else {
-                        clipsDirName = "NULL";
-                    }
-                    const char *charName;
-                    if (character != NULL) {
-                        charName = character->Name();
-                    } else {
-                        charName = "NULL";
-                    }
+                    const char *clipsDirName =
+                        clipsDir != NULL ? clipsDir->ProxyFile().c_str() : "NULL";
+                    const char *charName =
+                        character != NULL ? character->Name() : "NULL";
                     TheDebug << MakeString(
                         "   Target %d: character = '%s' clips = '%s' animGroup = '%s'\n",
                         targetIdx,
                         charName,
                         clipsDirName,
-                        it->mAnimGroup
+                        target.mAnimGroup
                     );
                     targetIdx++;
                 }
@@ -256,7 +249,7 @@ void HamCamShot::UpdateTargetsFlipped() {
                      ++tit) {
                     RndTransformable *target = *tit;
                     const char *name = target->Name();
-                    char buf[240];
+                    char buf[256];
                     const char *p = name;
                     char c;
                     do {

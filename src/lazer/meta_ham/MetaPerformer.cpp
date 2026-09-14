@@ -1482,7 +1482,7 @@ void MetaPerformer::SaveAndUploadScores(Symbol song, int totalScore, int stars) 
                         awesomeCount,
                         perfectCount,
                         GetMovesPassed(i),
-                        0,
+                        count,
                         false,
                         mCompletedSongWithNoFlashcards
                     );
@@ -1508,7 +1508,7 @@ void MetaPerformer::SaveAndUploadScores(Symbol song, int totalScore, int stars) 
                 0,
                 0,
                 0,
-                0,
+                count,
                 false,
                 mCompletedSongWithNoFlashcards
             );

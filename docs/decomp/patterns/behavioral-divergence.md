@@ -336,3 +336,76 @@ tree before landing. Do not touch load-bearing native math
 - [fixable-comparison.md](fixable-comparison.md) — signed/unsigned and comparison-direction codegen
 - [at-limit-systemic.md](at-limit-systemic.md) — ICF/COMDAT, block sinking, the floor classes you may legitimately certify
 - `scripts/scan_behavioral_idioms.py` — codebase scanner for the cleanly-detectable idioms here
+
+## A literal `0` where the image passes a live local — `MetaPerformer::SaveAndUploadScores`
+
+**2026-09-14, lane w7-k. One wrong argument, passed at two call sites, was the
+whole 95.110 -> 100.0 residual.**
+
+The function counts how many of the two players finished with a non-zero score:
+
+```cpp
+int count = 0;
+for (int i = 0; i < 2; i++) {
+    ...
+    if (0 < pScoreNode->Int()) count++;
+}
+```
+
+and then calls `HamProfile::UpdateScore(songID, playerData, diff, playerScore,
+totalScore, stars, awesomeCount, perfectCount, GetMovesPassed(i), <arg10>,
+false, mCompletedSongWithNoFlashcards)` once per signed-in player, and once
+more for the critical profile on the campaign path. Our source passed the
+literal `0` as arg10 at **both** sites. The image passes `count`.
+
+`UpdateScore`'s arg10 (`i8`) is forwarded straight into
+`SongStatusMgr::UpdateSong(songID, score, i3, diff, **i8**, stars, ...)`, so
+every song completion in the shipped code recorded its player count and every
+completion in ours recorded zero -- on the per-player path AND the
+campaign/critical-profile path.
+
+### How it was read out of the listing, which is the reusable part
+
+The tell was **a stack slot with no reader in the region that writes it**.
+`run_diff_inspect mode=stack-layout` reported one TGT_ONLY slot and a uniform
+one-slot (-4) permutation of nineteen others -- the signature of the image
+having exactly one more live value than we do. Following that slot:
+
+| idx | target | ours |
+|---|---|---|
+|  27 | `li r23, 0x0` | - |
+|  30 | `stw r23, 0x84(r31)` | - |
+| 104 | `stw r11, 0x84(r31)` (r11 = r23+1) | - |
+| 105 | `clrrwi r23, r11, 0` | - |
+| 408 | `lwz r11, 0x84(r31)` | - |
+| 421 | `stw r11, 0x64(r1)` | `stw r11, 0x64(r1)` with r11 = 0 |
+| 474 | `lwz r30, 0x84(r31)` | - |
+| 484 | `stw r30, 0x64(r1)` | `stw r11, 0x64(r1)` with r11 = 0 |
+
+0x84 is written exactly where `count` is initialised and incremented and read
+exactly twice, and both reads land in `0x64(r1)` -- which, for a 12-argument
+`__cdecl` call on Xenon (this + args 1-7 in r3..r10, args 8-12 at r1+0x54,
+0x5c, 0x64, 0x6c, 0x74), is **argument 10**. Our build materialises a `0` into
+that same outgoing slot. Nothing else in the function touches 0x84.
+
+**Generalise it:** when the image keeps a counter in *both* a callee-saved
+register and a stack home and you keep it only in a register, do not read that
+as a spill-policy difference. The stack home exists because the value is read
+again somewhere your source does not read it -- follow the load, and see where
+the value lands. Here it landed in an outgoing-argument slot that our source
+filled with a constant, which is invisible to every check except the
+instruction listing: it compiles, it is type-correct, and a literal `0` in an
+argument list of six other zeros reads as boilerplate.
+
+Also confirmed benign on the way past, and worth knowing for this function's
+class: the six `MakeString<const char[N], int, const char[M]>` rows and the
+`IsLocal@LocalUser` / `Tell@BufStream` rows in the Function Call Diff are all
+**ICF folds**, proven from `icf_aliases.map` (`Tell@BufStream` and
+`GetSongStatusMgr@HamProfile` both at 82545670; `IsLocal@LocalUser` and
+`IsDifficultyUnlockedForProfile@HamProfile` both at 82E2AB00; the whole
+`MakeString<char[N],int,char[M]>` family at 824D1870). The image's own assert
+string literals are `MetaPerformer.cpp` [18] and `pPlayerData` [12] /
+`pPlayerProvider` [16] / `pScoreNode` [11] -- i.e. **exactly our
+instantiations**; the surviving fold is just named after a different member of
+the family. Do not chase a `__FILE__`-length or `#cond`-length theory from the
+mangled template argument: check the string literal the call actually loads.
