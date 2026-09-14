@@ -1356,6 +1356,20 @@ DEF_DATA_FUNC(DataMacroSize) {
     return macro->Size();
 }
 
+// RESIDUAL (w7-az, 93.75, 5 rows).  Only the third int->bool conversion is
+// placed differently.  The image defers it past the `bl Node` for GetObj(1) and
+// lands it in r31 -- `subic r11, r30, 0x1` at 0x825B8A70 and
+// `subfe r31, r11, r30` at 0x825B8A78 straddle `mr r4, r31` at 0x825B8A74,
+// reusing `array`'s register after its last use -- so `mr r7, r31` at
+// 0x825B8A8C feeds the call.  We emit the same two instructions two slots
+// earlier and overwrite r30 in place.  The first two conversions
+// (`subfe r27` at 0x825B89F0, `subfe r29` at 0x825B8A20) match exactly.
+// NEGATIVE: declaring setProxyFile as `int` and letting the conversion happen
+// implicitly at the call is byte-inert -- MSVC normalises it to the same
+// placement.  The declaration order is already confirmed correct: the image
+// evaluates the three ternaries 3,4,5 before either GetObj, which only happens
+// if they are locals; written inline as call arguments MSVC's right-to-left
+// argument evaluation would run them 5,4,3.
 DEF_DATA_FUNC(DataReplaceObject) {
     bool copyDeep = array->Size() > 3 ? array->Int(3) : true;
     bool deleteFrom = array->Size() > 4 ? array->Int(4) : true;
