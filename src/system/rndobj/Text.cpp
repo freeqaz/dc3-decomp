@@ -36,9 +36,13 @@ int RndText::sBlacklightPacketCount;
 bool RndText::sBlacklightModeEnabled;
 std::list<RndText::FontMapBase *> RndText::sFontMapCache;
 int TEXT_REV = 0;
-float gSuperscriptScale = 0.7f;
-float gGuitarScale = 0.7f;
-float gGuitarZOffset = 0.2f;
+// TU-local: the image's references to all three carry NO symbol name (dtk emits
+// placeholder `lbl_82F14D14` relocations), and ParseMarkup's gtr arm addresses
+// gGuitarScale/gGuitarZOffset as 0x4/0x8 off a single anchor at gSuperscriptScale
+// -- an offset the compiler can only know for internal-linkage data in one section.
+static float gSuperscriptScale = 0.7f;
+static float gGuitarScale = 0.7f;
+static float gGuitarZOffset = 0.2f;
 
 float SegmentLength(
     int start, int end, const float *widths, const unsigned short *chars, float scale
@@ -2126,8 +2130,11 @@ void RndText::ConstructMeshes(
 }
 
 const unsigned short *
-RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned short &ch) {
-    const unsigned short *cur = str;
+RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned short &ch) {
+    // The cursor IS the parameter -- the image promotes r4 straight into r31
+    // (`mr r31, r4`) and folds the pre-increment into `lhzu r11, 0x2(r31)`.
+    // A separate `const unsigned short *cur = str;` local makes MSVC keep str in
+    // r4 and emit `lhz r11, 0x2(r4)` + a lazy `addi r31, r4, 0x2` instead.
     unsigned int isClosing = (unsigned int)(*++cur - 0x2f) == 0;
     if (isClosing) {
         cur++;
@@ -2141,12 +2148,15 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
 #else
     if (WStrniCmp(cur, (const unsigned short *)L"sup", 3) == 0) {
 #endif
-        cur += 3;
+        // The `cur += 3` lands AFTER the if/else in the image: target emits the
+        // `cmplwi cr6, r24, 0x0` / `beq` pair first and only reaches
+        // `addi r31, r31, 0x6` on the join block at .L_82695854.
         if (isClosing) {
             fVar12 = state.mStyle->mSize;
         } else {
             fVar12 = state.mStyle->mSize * gSuperscriptScale;
         }
+        cur += 3;
         goto set_size;
     }
 #ifdef HX_NATIVE
@@ -2163,9 +2173,15 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
             scale = style->mSize * gGuitarScale;
         }
         state.mSize = state.mBaseSize * scale;
-        float zOff = gGuitarZOffset;
+        // if/else, NOT `zOff = gGuitarZOffset; if (isClosing) zOff = ...`: the image
+        // branches on isClosing and loads exactly one of the two (target .L_826958b4
+        // `beq cr6, .L_826958c0` with `lfs f0, 0x30(r11)` on the fallthrough), where
+        // the seeded form loads gGuitarZOffset unconditionally before the branch.
+        float zOff;
         if (isClosing) {
             zOff = style->mZOffset;
+        } else {
+            zOff = gGuitarZOffset;
         }
         state.mZOffset = zOff;
     }
@@ -2190,7 +2206,10 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
         if (isClosing) {
                         state.mTextColor = state.mStyle->mTextColor;
         } else {
-            int r = 0, g = 0, b = 0;
+            // Declared blue-first: MSVC lays the three out in reverse declaration
+            // order, and the image's swscanf out-params are &r=0x58, &g=0x60,
+            // &b=0x68 (r5/r6/r7 at .L_82695998).
+            int b = 0, g = 0, r = 0;
             int a = (int)(state.mTextColor.alpha * 255.999f);
             cur++;
 #ifdef HX_NATIVE
@@ -2238,8 +2257,6 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
     else if (WStrniCmp(cur, (const unsigned short *)L"alt", 3) == 0) {
 #endif
         cur += 3;
-        bool bBlacklight = false;
-        unsigned int styleIdx = 1;
 
         if (isClosing) {
             unsigned short scanChar = *cur;
@@ -2250,12 +2267,20 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
         }
 
         unsigned short markupChar = *cur;
+        // Declared AFTER the closing scan and after markupChar is read: the image
+        // emits `mr r25, r23` / `li r26, 0x4c` / `li r30, 0x1` at .L_82695b0c, i.e.
+        // between the `lhz r11, 0x0(r31)` and the 0x32/0x39 range test.
+        bool bBlacklight = false;
+        unsigned int styleIdx = 1;
         if ((markupChar >= 0x32) && (markupChar <= 0x39)) {
             styleIdx = markupChar - 0x30;
             cur++;
         } else if ((markupChar == 0x62) || (markupChar == 0x42)) {
             bBlacklight = true;
-            styleIdx = (1 < (unsigned int)_ref0.size()) ? 1 : 0;
+            // `styleIdx &= ...`, not a ternary: the image emits `and r30, r10, r30`
+            // at .L_82695b60 (styleIdx AND the 0/1 size predicate), where the
+            // ternary lowers to `clrlwi r29, r10, 31`.
+            styleIdx &= (unsigned int)(1 < (unsigned int)_ref0.size());
             Style *fallback = &_ref0[0];
             Style *stylePtr = &_ref0[styleIdx];
             if (stylePtr->mFont != nullptr) {
@@ -2274,20 +2299,37 @@ RndText::ParseMarkup(const unsigned short *str, StyleState &state, unsigned shor
 
         styleIdx = styleIdx & -(isClosing == 0);
 
+        // The INDEX is clamped, not the pointer: the image computes the address
+        // once (`mulli r10, r10, 0x4c` / `add r4, r10, r11` at .L_82695c04) after a
+        // branchless `subfc`/`subfe`/`and` select of the index, where a
+        // pointer-valued if/else lowers to a real `cmplw`/`bge` and two addresses.
         unsigned int numStyles = (unsigned int)_ref0.size();
-        if (styleIdx < numStyles) {
-            state.mStyle = &_ref0[styleIdx];
-        } else {
-            state.mStyle = &_ref0[0];
+        if (styleIdx >= numStyles) {
+            styleIdx = 0;
         }
+        state.mStyle = &_ref0[styleIdx];
 
         memcpy(&state, state.mStyle, 0x34);
 
-        bool bFontColorOverride = state.mFontColorOverride || bBlacklight;
-        if (!state.mStyle->mFont) {
-            state.mStyle = &_ref0[0];
+        // BUG FIX: the blacklight flag comes from Style::mBlacklight (Style+0x48,
+        // Text.h:127), NOT StyleState::mFontColorOverride (StyleState+0x14). The
+        // image reloads state.mStyle after the memcpy and reads `lbz r10, 0x48(r11)`
+        // at .L_82695c18; we were reading `lbz r10, 0x14(r28)` off the freshly
+        // memcpy'd StyleState instead, so <alt=b> styles whose Style had
+        // mBlacklight set resolved to the wrong font map.
+        //
+        // BUG FIX: the no-font fallback does NOT write back to state.mStyle. The
+        // image keeps state.mStyle pointing at the selected style and only
+        // substitutes _ref0[0] for the FontMapIndex argument (.L_82695c40 loads
+        // mStyles.begin into r11 and falls into the shared `addi r11, r11, 0x34` /
+        // `lwz r4, 0xc(r11)`; there is no `stw` to 0x34(r28) on that path). We were
+        // clobbering state.mStyle, which changed every later tag in the same run.
+        Style *chosen = state.mStyle;
+        bool blacklight = chosen->mBlacklight || bBlacklight;
+        if (!chosen->mFont) {
+            chosen = &_ref0[0];
         }
-        state.mFontMapIdx = FontMapIndex(state.mStyle->mFont, bFontColorOverride);
+        state.mFontMapIdx = FontMapIndex(chosen->mFont, blacklight);
 
         fVar12 = state.mSize;
         goto set_size;
@@ -2299,12 +2341,15 @@ set_size:
     state.mSize = state.mBaseSize * fVar12;
 scan_close:
     {
-        short scanChar = *cur;
+        // UNSIGNED, and the post-loop test is `!= 0`, not `== 0x3e`: the image ends
+        // with `lhz`/`cmplwi` throughout (.L_82695c68 onward) and closes with
+        // `cmplwi cr6, r11, 0x0` + `beq`. A `short` here gave lha/lhau/cmpwi.
+        unsigned short scanChar = *cur;
         while (scanChar != 0x3e && scanChar != 0) {
             cur++;
             scanChar = *cur;
         }
-        if (scanChar == 0x3e) {
+        if (scanChar != 0) {
             cur++;
         }
     }
