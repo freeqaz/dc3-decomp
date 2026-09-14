@@ -1050,9 +1050,8 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
         return;
 
     unsigned int totalVerts = 0;
-    auto receiveEnd = mObjectsReceive.end();
     for (std::vector<RndMesh *>::iterator it = mObjectsReceive.begin();
-         receiveEnd != it; ++it) {
+         it != mObjectsReceive.end(); ++it) {
         RndMesh *mesh = *it;
         if (mesh->GetGeomOwner() != mesh) {
             mesh->CopyGeometry(mesh->GetGeomOwner(), true);
