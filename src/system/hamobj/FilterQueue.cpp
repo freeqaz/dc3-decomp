@@ -84,6 +84,15 @@ void FilterQueue::Poll(const SkeletonUpdateData &skelData) {
     std::vector<FilterOutputFrame> &oframes = mOutput.frames;
     for (std::vector<FilterOutputFrame>::iterator it = oframes.begin(); it != oframes.end(); ++it) {
         FilterInputFrame *inFrame = it->mInputFrame;
+        // REFUTED (wave 7, lane w7-y): the image reloads `lwz r3, 0x10(r30)`
+        // inside the node loop instead of holding mFilterVersion in a
+        // callee-saved register, and keeps only `&mErrorNodes[0]` (r25,
+        // materialised before the IsTracked test and bumped by 4 per
+        // iteration).  Dropping this local and spelling
+        // `inFrame->mFilterVersion->` at all three use sites does NOT reproduce
+        // that: MSVC then strength-reduces the mErrorNodes index into a `li
+        // r25, 0x18` running offset and loses the `addi r25, r3, 0x18`
+        // entirely.  98.40 -> 97.40.  Kept the local.
         const FilterVersion *filterVer = inFrame->mFilterVersion;
         BaseSkeleton *skel = skelData.mSkeletonsLeft[inFrame->mSlot];
 #ifdef HX_NATIVE
