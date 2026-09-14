@@ -189,8 +189,15 @@ MCResult MCContainerXbox::Mount(CreateType ct) {
         u5 = 0x12;
         break;
     }
+    // The content size goes in the LOW half. The image builds the whole
+    // quadword in one instruction -- `lwz r10, 0xc(r30)` at 0x825F6338, whose
+    // zero-extension supplies the high half -- and the argument register is
+    // never spilled. Writing `u.u.HighPart` instead stored the word to
+    // 0x60(r31) and reloaded it with `ld`, and (win_types.h names the field at
+    // offset 0 "HighPart") put the size in the true high half: 2^32 times too
+    // large.
     ULARGE_INTEGER u;
-    u.u.HighPart = Cid().unk8;
+    u.QuadPart = Cid().unk8;
 
     DWORD res = XContentCreateEx(
         Cid().mUserIndex, mDriveName.c_str(), &data, u5, nullptr, nullptr, 0, u, nullptr
@@ -208,14 +215,29 @@ MCResult MCContainerXbox::Mount(CreateType ct) {
             }
         }
     }
-    if (res == ERROR_PATH_NOT_FOUND) {
+    // Three separate returns, and TranslateCommonWinErrorToMCResult is reached
+    // only in the default case. 0x825F63A0..0x825F63C4:
+    //   cmplwi cr6, r3, 0x3   / beq -> li r3, 0x8   (kMCFileNotFound)
+    //   cmplwi cr6, r3, 0xb7  / beq -> li r3, 0x5   (kMCCorrupt)
+    //   bl TranslateCommonWinErrorToMCResult
+    // We were calling Translate unconditionally and then overwriting its result
+    // for ERROR_ALREADY_EXISTS, which also forced `res` into r10; in the image
+    // it never leaves r3.
+    //
+    // NEGATIVE RESULT on the block PLACEMENT: our build sinks this whole chain
+    // below the epilogue and threads `li r3, 0x570` straight into the Translate
+    // call, because ERROR_FILE_CORRUPT is a compile-time constant on that edge.
+    // The image does not const-propagate it. Four spellings (early returns,
+    // `MCResult result` + if/else-if/else, `switch`, and a `goto` that puts the
+    // success block last) all produce the identical sunk layout; only the
+    // unfaithful "call Translate first, then overwrite" shape keeps the rows
+    // aligned, and it does so with the wrong register. Every instruction here
+    // is present and correct -- the residual is ordering only.
+    if (res == ERROR_PATH_NOT_FOUND)
         return kMCFileNotFound;
-    }
-    auto _result = TranslateCommonWinErrorToMCResult(res);
-    if (res == ERROR_ALREADY_EXISTS) {
-                _result = kMCCorrupt;
-    }
-    return _result;
+    if (res == ERROR_ALREADY_EXISTS)
+        return kMCCorrupt;
+    return TranslateCommonWinErrorToMCResult(res);
 }
 
 MCResult MCContainerXbox::Unmount() {
