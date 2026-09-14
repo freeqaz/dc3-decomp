@@ -66,6 +66,21 @@ void CharForeTwist::Poll() {
         return;
     const Transform &parentxfm = mHand->TransParent()->WorldXfm();
     const Transform &handxfm = mHand->WorldXfm();
+    // RESIDUAL (w7-ak, 91.4 canonical): 52 of 139 rows, and every one of them is
+    // inside the inlined Dot/Cross/Dot block at idx 34-87.  The whole residual has
+    // ONE cause: the image needs FOUR callee-saved FPRs there (f28 newbias, f29
+    // parentxfm.m.x.x, f30 the cross.y term, f31 DEG2RAD) and so opens with
+    // `subi r12,r1,0x28` + `bl __savefpr_28` and a 0x110 frame; we need only three
+    // (f29 newbias, f30 m.x.x, f31 DEG2RAD), inline the three `stfd`s and take a
+    // 0x100 frame.  The extra pressure is in the SCHEDULE, not the source: both
+    // sides emit the same multiset of lfs/fmr/fmuls/fmsubs/fmadds and associate
+    // both dot products identically (Dot(x,v98) = x.y*c.y + x.z*c.z + x.x*c.x on
+    // both sides); the image merely starts Dot(y,z) from the .z term and loads
+    // parentxfm.m.y.z first, where we start from .y and load m.y.y first.
+    // NEGATIVE RESULTS: hoisting the Cross above the first Clamp (so v98 is live
+    // longer, the obvious way to buy a fourth long-lived FPR) costs 91.4 -> 90.6
+    // and adds a row; moving `newbias` above the whole block is exactly inert
+    // (same 52 rows, same registers).
     float clamped = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.y, handxfm.m.z));
     Vector3 v98;
     Cross(parentxfm.m.y, handxfm.m.z, v98);
