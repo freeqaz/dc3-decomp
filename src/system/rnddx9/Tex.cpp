@@ -137,12 +137,12 @@ void *DxTex::StartCompress(AlphaCompress alpha) {
     }
     {
         MemDoTempAllocations tmp;
-        desc->tiledBuffer = MemAlloc(
-            desc->levels[0].scratchDesc.Height * (desc->levels[0].scratchDesc.Width * 4),
-            __FILE__,
-            0x183,
-            "compress"
-        );
+        // The image loads Width (0x38) BEFORE Height (0x3c) and then multiplies
+        // `mullw r3, height, rowPitch` -- a named row pitch, the same spelling
+        // DoCompress uses, not `Height * (Width * 4)`.
+        int rowPitch = desc->levels[0].scratchDesc.Width * 4;
+        desc->tiledBuffer =
+            MemAlloc(desc->levels[0].scratchDesc.Height * rowPitch, __FILE__, 0x183, "compress");
     }
     return desc;
 }
