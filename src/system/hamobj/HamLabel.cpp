@@ -71,6 +71,19 @@ void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
     mCountKeys.clear();
     float f1 = TheTaskMgr.UISeconds() * 1000;
     mCountKeys.push_back(Key<float>(i1, f1));
+    // RESIDUAL (w7-ak, 99.96 canonical): 5 rows, ONE cause -- the two
+    // callee-saved FPRs are assigned the other way round.  The image puts the
+    // `f3` parameter in f30 (`fmr f30, f1`, idx 6) and the UISeconds()*1000
+    // product in f31; we do the reverse.  Everything else follows: the two
+    // `stfs` into the Key<float> temp at 0x50(r1)/0x54(r1) are emitted in the
+    // opposite order for the FIRST key only (the second key's pair is already
+    // instruction-identical), and idx 30's `fadds f0, f31, f30` vs our
+    // `fadds f0, f30, f31` is the SAME source expression `f1 + f3` -- the
+    // COMMUTATIVE_OP_ORDER detector is reading the register swap, not an
+    // operand-order difference.  Both live ranges start where the image's do,
+    // so this is an allocator tie-break, not a liveness difference.
+    // NEGATIVE RESULT: inlining `f2` (push_back(Key<float>(i2, f1 + f3))) is
+    // exactly inert -- same 5 rows, same registers.
     float f2 = f1 + f3;
     mCountKeys.push_back(Key<float>(i2, f2));
     mCountToken = s;
