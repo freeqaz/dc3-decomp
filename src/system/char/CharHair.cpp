@@ -318,6 +318,20 @@ void CharHair::SimulateInternal(float fps) {
                 }
                 ScaleAddEq(pt.pos, m128.y, rsalen);
                 Vector3 idealPos;
+                // REFUTED (lane w7-a, 2026-09-14): spelling this ScaleAdd as
+                // three per-component statements in the image's emission order
+                // (y, x, z -- the image's three fmadds land in f24, f25, f23
+                // in that order, ours in f24, f23, f25) does NOT close the
+                // cluster.  Canonical does not move (99.6 either way) and raw
+                // drops 99.0 -> 98.9: the three [291]-[296] offset rows survive
+                // with merely different offsets, and twelve NEW rows appear
+                // hundreds of instructions away ([468], [488], [500]-[502],
+                // [520], [525], [552]).  idealPos is live across the Interp
+                // call and the entire collide loop, so all three components sit
+                // in callee-saved FPRs with no stores at all; there is no store
+                // order to shape, and forcing the emission order only perturbs
+                // the allocator's choices downstream.  This cluster is
+                // scheduler-owned, not source-owned.
                 ScaleAdd(t100.v, t100.m.y, pt.length, idealPos);
                 Interp(pt.lastZ, t100.m.z, mTorsion, m128.z);
 
