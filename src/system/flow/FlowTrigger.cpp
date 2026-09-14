@@ -225,6 +225,18 @@ DataArray *FlowTrigger::GetEventEditorDef(Symbol s) {
     // Nothing in the source spelling steers MSVC's CR-field choice here; this is
     // condition-register allocation, not control-flow shape. Do not re-permute
     // without a new lever.
+    // w7-bn (still 99.35): every `cmplwi cr6, r3, 0x0` that directly follows a
+    // `bl` in a 100%-matched function tests a value with MULTIPLE reaching
+    // definitions (a phi: HamListRibbon::OnExitBlacklightMode's `flow`,
+    // CharClip::FindNode's switch-assigned `n`, SyncSubDir's ternary,
+    // DataExport's if/else `obj`, ShowGamercardForPadNum's `ret`); a
+    // single-def call result tested by an `if` is cr0, which is what `a` is.
+    // Four more spellings refuted, each a full ninja: reusing the multi-def
+    // `eval` for the tail (`eval = eval->Array(1)`) -> INERT; a second
+    // separate `if (a)` after the block -> INERT; `bool hasArray = a != 0`
+    // -> INERT; `return a;` on the null path / `found ? found : nullptr`
+    // -> 98.5 (the second test is folded away).  The image's `a` is a phi
+    // at 82424B38 that no spelling of one Array(1) call reproduces.
 }
 
 void FlowTrigger::RegisterEvents() {
