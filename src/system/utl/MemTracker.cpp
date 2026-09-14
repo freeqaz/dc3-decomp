@@ -83,22 +83,23 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
         const char *entryName;
 
         if (cmp < 0) {
+            entryName = curStat.mName;
             numAllocs1 = curStat.mNumAllocs;
             size1 = curStat.mSizeReq;
             numAllocs2 = 0;
-            size2 = 0;
             heap = curStat.mHeap;
+            size2 = 0;
             curIdx++;
-            entryName = curStat.mName;
         } else if (cmp > 0) {
+            entryName = prevStat.mName;
             numAllocs1 = 0;
             size1 = 0;
             numAllocs2 = prevStat.mNumAllocs;
             size2 = prevStat.mSizeReq;
             heap = prevStat.mHeap;
             prevIdx++;
-            entryName = prevStat.mName;
         } else {
+            entryName = curStat.mName;
             numAllocs1 = curStat.mNumAllocs;
             size1 = curStat.mSizeReq;
             numAllocs2 = prevStat.mNumAllocs;
@@ -106,7 +107,6 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
             heap = prevStat.mHeap;
             curIdx++;
             prevIdx++;
-            entryName = curStat.mName;
         }
 
         int numDiff = numAllocs1 - numAllocs2;
