@@ -1755,6 +1755,29 @@ void ResetNormals(RndMesh *m) {
                 if (repVerts[face[k]] != repVerts[i])
                     continue;
 
+                // 54-row residual, 99.032326 canonical (lane w7-j, 2026-09-14).
+                // The image is 1980 B against our 1972: the shipped build spends two
+                // extra instructions turning the index multiplies into the two-address
+                // form, `mr r9, r7 / mulli r9, r9, 0x60` and `mr r7, r4 / mulli
+                // r7, r7, 0x60`, where we emit `mulli r9, r7, 0x60` directly.  The
+                // rest is one scheduling inversion and its register cascade: we
+                // compute &v2 and v2.pos.z (rows 246/249) BEFORE &v1 and v1.pos.z,
+                // so d2's components land before d1's and d1 is stored x,y,z where
+                // the image stores x,z,y (d2 is stored x,z,y on both sides already).
+                // 39 of the 54 rows are the resulting FPR permutation, dominated by
+                // f0<->f12 x13 and f0<->f13 x10.
+                //
+                // REFUTED (lane w7-j, both measured):
+                //   1. Naming the three vertex indices --
+                //        int i0 = face[k % 3]; ... m->Verts()[i0]
+                //      -- REGRESSES to 97.4%.  It does not produce the image's
+                //      two-address multiplies; it gives the three ints their own
+                //      stack slots and perturbs the whole surrounding schedule.
+                //   2. Sinking the `v2` declaration below d1's construction, so that
+                //      d1 is fully built before v2's address is formed, is exactly
+                //      SCORE-NEUTRAL: 54 rows -> 53 rows but canonical 99.032326
+                //      before and after, to all six digits.  Kept the symmetric
+                //      three-declarations-together spelling.
                 const RndMesh::Vert &v0 = m->Verts()[face[k % 3]];
                 const RndMesh::Vert &v1 = m->Verts()[face[(k + 1) % 3]];
                 const RndMesh::Vert &v2 = m->Verts()[face[(k + 2) % 3]];
