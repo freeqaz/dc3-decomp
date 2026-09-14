@@ -110,9 +110,16 @@ static void *sCompressData;
 // linkage MSVC emits a separate lis/addi pair per global, which costs two
 // extra callee-saved registers and 16 bytes of frame. Nothing outside this
 // TU references them.
-bool gFailRestartConsole;
-bool gFailKeepGoing;
-bool gNotifyKeepGoing;
+// Static for the same reason as the block above, and measured: Rnd::Modal
+// reaches all three through ONE base register (gFailRestartConsole as the
+// anchor, gFailKeepGoing at -0x1, gNotifyKeepGoing at -0x2; see 0x8266219C
+// in build/373307D9/asm/system/rndobj/Rnd.s).  With external linkage MSVC
+// emits a separate lis/addi pair per global, which costs two extra
+// callee-saved registers and 16 bytes of frame.  Nothing outside this TU
+// references them.
+static bool gFailRestartConsole;
+static bool gFailKeepGoing;
+static bool gNotifyKeepGoing;
 static bool sCompressDone;
 #ifdef HX_NATIVE
 static void *sTexture;

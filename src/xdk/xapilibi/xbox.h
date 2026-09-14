@@ -17,7 +17,13 @@ DWORD XBackgroundDownloadSetMode(XBACKGROUND_DOWNLOAD_MODE Mode);
 DWORD XEnableScreenSaver(BOOL fEnable);
 DWORD XGetLocale();
 DWORD XTLGetLanguage();
-VOID XLaunchNewImage(LPCSTR szImagePath, DWORD dwFlags);
+// noreturn: it reboots into another title and never comes back.  The target
+// proves the original declaration carried the attribute -- Rnd::Modal's
+// gFailRestartConsole block ends at `bl XLaunchNewImage` (0x826622B8) with no
+// ~ModalKeyListener call and no epilogue after it, which is only legal if the
+// compiler knew the call cannot return.  The native shim exit(0)s, so this
+// holds there too.
+__declspec(noreturn) VOID XLaunchNewImage(LPCSTR szImagePath, DWORD dwFlags);
 LPVOID XPhysicalAlloc(
     SIZE_T dwSize, ULONG_PTR ulPhysicalAddress, ULONG_PTR ulAlignment, DWORD flProtect
 );
