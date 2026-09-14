@@ -151,6 +151,17 @@ RndTexBlendController::GetBlendState(float &blend, float influence) const {
             // canonicalises the addition before forming the FMA and fuses the
             // term whose multiplicand is defined FIRST (t2) -- the opposite of
             // the image's choice.  2 rows, and 4 more under name_check.
+            //
+            // Wave 7, lane w7-y: that "defined FIRST" reading was tested both
+            // ways and does not hold.  Hoisting `float t3;` above t2's
+            // definition and assigning it afterwards is INERT (still 6 rows).
+            // Defining t3 outright first, `float t3 = blend*blend*blend;
+            // float t2 = blend*blend;`, is WORSE -- CSE still emits t2's
+            // multiply first but now swaps its operands, adding a seventh row
+            // (6 -> 7).  Reverted.  What the image actually keeps is -2.0f as a
+            // LITERAL: MSVC rewrites any `a*3 + b*(-2)` we write into the
+            // subtraction `a*3 - b*2` and loads 2.0f instead, so the constant
+            // pair is downstream of the fusion choice, not a separate lever.
             blend = t3 * (-2.0f) + t2 * 3.0f;
         }
     }
