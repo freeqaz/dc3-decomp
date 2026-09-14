@@ -983,8 +983,7 @@ int fft_real_forward_altivec(float* data, long size, float* context) {
         float* hiRead = data + (size / 4) * 4 - 4;
         float* hiWrite = hiRead;
 
-        long pairs = size / 8;
-        for (long i = 0; i < pairs; i++) {
+        for (long i = 0; i < size / 8; i++) {
             XMVECTOR hiNew = __lvx(hiRead, 0);
             XMVECTOR loNext = __lvx(loRead, 0);
             XMVECTOR hiPair = __vsel(hiNew, hiPrev, *(XMVECTOR*)&sel_hi);
