@@ -51,6 +51,7 @@ public:
     void SetMaps();
     void LoaderPoll();
     int GetMeasure() const { return mSongPos.GetMeasure(); }
+    int GetBeat() const { return mSongPos.GetBeat(); }
     float TotalBeat1() const { return mSongPos.GetTotalBeat(); }
     float TotalBeat2() const { return mPrevSongPos.GetTotalBeat(); }
     SongPos &SongPos1() { return mSongPos; }

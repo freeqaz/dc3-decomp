@@ -646,9 +646,16 @@ void MoveDir::Poll() {
                 mCurMoveNormalizedResult[i] =
                     DetectFracToRatingFrac(frac, mCurMove[i]->RatingOverride());
             }
+            // REFUTED (w7-i): binding TheMaster to a local `master` here costs
+            // 0.56pp -- it flips the null-check branch polarity (2 extra
+            // beq<->beq replace rows) without touching the two rows that
+            // actually differ: our base-only `stw r28, 0x50(r31)` spill of the
+            // &TheTaskMgr anchor and our base-only `lis r14, TheMaster@h`
+            // loop-invariant hoist, which the image rematerialises per
+            // iteration at 82500B4C.
             mCurMoveSmoothers[i].Smooth(
                 mCurMoveNormalizedResult[i],
-                TheMaster && TheMaster->GetMeasure() == 3
+                TheMaster && TheMaster->GetBeat() == 3
                     ? TheTaskMgr.DeltaUISeconds() * 4.0f
                     : TheTaskMgr.DeltaUISeconds()
             );
@@ -681,8 +688,9 @@ void MoveDir::Enter() {
                 i13 = numKeys;
             }
             if (i == kDifficultyEasy) {
-                while (--numKeys > 0) {
-                    HamMoveKey &curKey = hamMoveKeys[numKeys];
+                int keyIdx = numKeys;
+                while (--keyIdx > 0) {
+                    HamMoveKey &curKey = hamMoveKeys[keyIdx];
                     if (curKey.move && curKey.move->IsFinalPose()) {
                         int tmp = curKey.beat / -4.0f;
                         mFinishingMoveMeasure = 1 - tmp;
@@ -702,9 +710,10 @@ void MoveDir::Enter() {
     if (!TheLoadMgr.EditMode()) {
         mGamePanel = ObjectDir::Main()->Find<Hmx::Object>("game_panel", false);
         mErrorNodeInfo = 0;
+        MoveDir *self = this;
         mFiltersEnabled = true;
         if (TheLoadMgr.EditMode()) {
-            MiloInit();
+            self->MiloInit();
         }
         mDebugLoopMarker = -1;
     } else {
@@ -853,6 +862,10 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
             songSpeed
         );
         ErrorNode **nodePtr = mFilterVer->mErrorNodes;
+        // REFUTED (w7-i): hoisting `node` above the loop is byte-identical, and
+        // so is splitting the base off into its own `nodeBase` local. The
+        // residual is a target-only `mr r27, r29` -- the image splits nodePtr's
+        // live range between the loop guard and the loop body; we coalesce it.
         for (int i = 0; i < mFilterVer->NumNodes(); i++, nodePtr++) {
             ErrorNode *node = *nodePtr;
             if (node->IsTypeJointMatch(mErrorNodeInfo)) {
@@ -1262,6 +1275,16 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                     );
                 }
                 int detectCapacity = mpd.mDetectFrames.capacity();
+                // REFUTED (w7-i): two levers are byte-identical here --
+                // hoisting `&*mpd.mMoveKeys.begin()` above the `if` (MSVC sinks
+                // it straight back in), and folding this capacity read into the
+                // for-init next to the counter. The residual is two scheduling
+                // ties the image wins on register assignment alone: it
+                // evaluates mDetectFrames.capacity() before mMoveKeys.size()
+                // in this preheader (we do the reverse, so divw/srawi. swap),
+                // and its back-edge loads _M_start before _M_finish, which
+                // leaves _M_start live into the loop head -- we load _M_finish
+                // first and reload _M_start inside the body.
                 for (int moveKeyIdx = 0; moveKeyIdx < mpd.mMoveKeys.size();
                      moveKeyIdx++) {
                     if (dfIt->mMoveIdx == moveKeyIdx) {
@@ -1652,8 +1675,9 @@ void MoveDir::DrawShowing() {
                     const SongCollisionOutput &out = outputs[i];
                     Hmx::Color color(gray, gray, gray, 1.0f);
                     Hmx::Color altColor;
+                    bool colliding = out.Colliding();
                     altColor.blue = zero;
-                    if (out.Colliding()) {
+                    if (colliding) {
                         altColor.red = 1.0f;
                         altColor.green = zero;
                     } else {
@@ -1685,8 +1709,7 @@ void MoveDir::DrawShowing() {
                         TheRnd.DrawLine(worldPos, offsetPos, altColor, false);
                         UtilDrawSphere(offsetPos, radius2, altColor, nullptr);
 
-                        const char *label = MakeString("%i", playerIdx);
-                        UtilDrawString(label, offsetPos, altColor);
+                        UtilDrawString(MakeString("%i", playerIdx), offsetPos, altColor);
                     }
 
                     beatIdx++;
