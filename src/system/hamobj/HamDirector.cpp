@@ -3325,6 +3325,12 @@ void Dc3KneeLog(const char *evt) {
 }
 #endif
 
+// RESIDUAL (w7-aq, 98.3 canonical): 40 of the remaining 52 rows are one
+// callee-saved 4-cycle -- the image colours {0-const: r28, player1: r27,
+// songAnim: r25, p1anim: r26} where we get {r25, r28, r26, r27}, and it keeps
+// &TheTaskMgr in r26 where we reuse the TheHamWardrobe base register r24.
+// First-definition order is identical on both sides, so this is MSVC's
+// spill-weight ranking, not a source ordering we can spell.
 void HamDirector::Poll() {
 #ifdef HX_NATIVE
     Dc3KneeLog("HamDir-ENTRY");
@@ -3391,9 +3397,16 @@ void HamDirector::Poll() {
                         HamCharacter *backup = TheHamWardrobe ? TheHamWardrobe->GetBackup(backupIdx) : nullptr;
                         backupIdx++;
                         if (!backup) break;
+                        // RESIDUAL (w7-aq, 98.3 canonical): the image makes
+                        // `(float)backupIdx * freq` the standalone fmuls and
+                        // `frame * dt` the fmadds multiply; we get the reverse,
+                        // which also swaps which constant lands in f29 vs f30
+                        // (3 rows).  Refuted: swapping the two terms, and
+                        // binding the idx product to its own local -- both
+                        // byte-inert.
                         float noise = RndWind::GetWhiteNoise(
-                            songAnim->GetFrame() * sBackupDriftDt
-                            + (float)backupIdx * sBackupDriftFreq
+                            (float)backupIdx * sBackupDriftFreq
+                            + songAnim->GetFrame() * sBackupDriftDt
                         );
                         float drift = (noise - sBackupDriftOffset) * mBackupDrift * sBackupDriftScale;
                         if (0.0f < drift) {
