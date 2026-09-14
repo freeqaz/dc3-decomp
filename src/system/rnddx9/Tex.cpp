@@ -84,6 +84,15 @@ XGHierarchicalZSize(UINT Width, UINT Height, D3DMULTISAMPLE_TYPE MultiSample) {
     return alignedWidth * alignedHeight / 0x200;
 }
 
+// Thin by-value wrapper: its inlined parameters are what the image homes to
+// the frame just before each D3DDevice_CreateSurface call.
+static inline D3DSurface *CreateEdramSurface(
+    UINT Width, UINT Height, D3DFORMAT Format, D3DMULTISAMPLE_TYPE MultiSample,
+    const D3DSURFACE_PARAMETERS *pParams
+) {
+    return D3DDevice_CreateSurface(Width, Height, Format, MultiSample, pParams);
+}
+
 DxTex::DxTex()
     : mFormat((D3DFORMAT)-1), mTexture(0), unk84(0), mRenderTarget(0), mDepthRT(0),
       mMovieBufIdx(0), mLockedRect(), unka4(0), unka8(0), unkac(0) {
@@ -688,12 +697,21 @@ void DxTex::SyncBitmap() {
             params.HierarchicalZBase = -1;
             params.ColorExpBias = 0;
             params.HiZFunc = D3DHIZFUNC_DEFAULT;
-            colorTiles = XGSurfaceSize(mWidth, mHeight, edramFormat, D3DMULTISAMPLE_NONE);
+            {
+                int gpuFormat = edramFormat & 0x3f;
+                UINT bytesPerPixel = 4;
+                UINT alignedWidth = (((UINT)mWidth + 79) / 80) * 80;
+                UINT alignedHeight = ((UINT)mHeight + 15) & ~15;
+                if (gpuFormat == 0x15 || gpuFormat == 0x20 || gpuFormat == 0x25) {
+                    bytesPerPixel = 8;
+                }
+                colorTiles = alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
+            }
             if (colorTiles < 0x800) {
                 if (sEDRamChecksEnabled && colorTiles > TheDxRnd.EdramBase()) {
                     unkac = true;
                 }
-                mRenderTarget = D3DDevice_CreateSurface(
+                mRenderTarget = CreateEdramSurface(
                     mWidth, mHeight, edramFormat, D3DMULTISAMPLE_NONE, &params
                 );
                 DX_ASSERT(mRenderTarget, 1026);
@@ -740,8 +758,18 @@ void DxTex::SyncBitmap() {
             depthParams.HierarchicalZBase = 0;
             depthParams.ColorExpBias = 0;
             depthParams.HiZFunc = D3DHIZFUNC_DEFAULT;
-            colorTiles += XGSurfaceSize(mWidth, mHeight, depthFormat, D3DMULTISAMPLE_NONE);
-            UINT hzTiles = XGHierarchicalZSize(mWidth, mHeight, D3DMULTISAMPLE_NONE);
+            UINT hzTiles;
+            {
+                int gpuFormat = depthFormat & 0x3f;
+                UINT bytesPerPixel = 4;
+                UINT alignedWidth = (((UINT)mWidth + 79) / 80) * 80;
+                UINT alignedHeight = ((UINT)mHeight + 15) & ~15;
+                if (gpuFormat == 0x15 || gpuFormat == 0x20 || gpuFormat == 0x25) {
+                    bytesPerPixel = 8;
+                }
+                colorTiles += alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
+                hzTiles = (((UINT)mWidth + 31) & ~31) * alignedHeight / 0x200;
+            }
             if (colorTiles < 0x800 && hzTiles < 0xe10) {
                 if (sEDRamChecksEnabled
                     && (colorTiles > TheDxRnd.EdramBase()
@@ -749,7 +777,7 @@ void DxTex::SyncBitmap() {
                     unkac = true;
                 }
                 BeginMemTrackFileName(mFilepath.c_str());
-                mDepthRT = D3DDevice_CreateSurface(
+                mDepthRT = CreateEdramSurface(
                     mWidth, mHeight, depthFormat, D3DMULTISAMPLE_NONE, &depthParams
                 );
                 DX_ASSERT(mDepthRT, 1114);
