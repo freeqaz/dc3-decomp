@@ -647,6 +647,35 @@ void DxTex::ResetSurfaces() {
     mDepthRT = nullptr;
 }
 
+// RESIDUAL (w7-bm, 2026-09-14, 96.2 canonical, 110 rows; was 93.97): every
+// call, store and arithmetic row matches.  What is left, in order of weight:
+//  (a) the 4-byte MakeString temp class A sits at 0x80 in the image with the
+//      PhysMemTypeTracker at 0x84; ours is the pure swap (tracker 0x80, A 0x84),
+//      ~14 rows of displacement.  Declaring d3dcaps / params / colorTiles /
+//      hzTiles at function top is byte-inert; so is a `D3DTexture *tex` local.
+//  (b) the depth path: 0x82C0D8xx computes the 16-aligned height early and
+//      homes it (`stw r11, 0x88`) where we compute it late and keep it in a
+//      register; a textual duplicate of `(h + 15) & ~15` is worse (95.6), and
+//      helper bodies without the width/height copies, or an align-8 spelling,
+//      are byte-inert.
+//  (c) prologue constant order (`ori r24` / `li r25, 0x1400` / `lis r22`) and
+//      `stw r11, 0x94` (the tile count's home store) landing before, not after,
+//      `mr r27, r11`.
+//  (d) the DxRndTexMgr::CreateSurface argument load/store order and the
+//      `addi r27, r30, 0x80` placement in its else branch.
+//  (e) the final XGSetTextureHeader block: the image spills the `new` result
+//      to 0x5c(r1) before loading the members and stores mTexture last; the
+//      in-argument `new D3DTexture` form is byte-inert.
+//  (f) two extra `b <epilogue>` trampolines.
+// Levers that DID move it, kept above: the by-value CreateEdramSurface wrapper
+// (MSVC homes an inlined callee's by-value parameters at the inline site),
+// UINT offsets in XGSetTextureHeaderEx (xgraphics.h), the single `while
+// (nextMip())` loop with both invariant stores inside it, a shared `tiles`
+// local for both paths, and the D3DSURFACE_PARAMETERS field assignment ORDER
+// (ColorExpBias, Base, HierarchicalZBase, HiZFunc) after the memset.  Also
+// byte-inert or worse: 0xFFFFFFFF for the -1 offsets, a named `mip` local in
+// the mip loop, `if (nextMip()) do {} while`, dropping the zero assignments
+// after the memset (95.8), and w7-g's in-branch hoist of the tile math.
 void DxTex::SyncBitmap() {
     PhysMemTypeTracker tracker("D3D(phys):Tex");
     PreDeviceReset();
