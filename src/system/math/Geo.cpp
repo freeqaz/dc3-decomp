@@ -384,8 +384,16 @@ bool Intersect(const Plane &plane, const Box &box) {
     }
 
     const Vector3 &normal = *(const Vector3 *)&plane.a;
-    if (0.0f < normal.x * pMin.x + normal.y * pMin.y + normal.z * pMin.z + plane.d
-        || normal.x * pMax.x + normal.y * pMax.y + normal.z * pMax.z + plane.d < 0.0f) {
+    // /fp:fast contracts `p + q*r` into fmadds and evaluates the SECOND operand
+    // of each `+` first, so the association AND the term order of this dot
+    // product are both source-reachable.  The image (Geo.s .L_825365D0) emits
+    //   fmuls  ny*py ; fmadds nz*pz ; fmadds nx*px ; fadds d
+    // which is ((nx*px) + ((nz*pz) + (ny*py))) + d -- i.e. the x term folded in
+    // last, and z before y inside the sub-sum.  Written flat it comes out as
+    // fmuls ny*py / fmadds nx*px / fmadds nz*pz instead.  Not Plane::Dot: that
+    // helper is spelled flat and lowers to the flat order.
+    if (0.0f < normal.x * pMin.x + (normal.z * pMin.z + normal.y * pMin.y) + plane.d
+        || normal.x * pMax.x + (normal.z * pMax.z + normal.y * pMax.y) + plane.d < 0.0f) {
         return false;
     }
     return true;
