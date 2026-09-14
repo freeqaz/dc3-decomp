@@ -1332,6 +1332,17 @@ reaching for it.
   mismatches, 3 TGT-only and 3 BASE-only stack slots). The named local pins the
   slot; the unnamed-temporary lever is for **arguments**, not for objects whose
   address outlives the call.
+- **`std::vector::size()` must stay `size_type(this->_M_finish - this->_M_start)`.**
+  `SongSequence::DoNext` loads `_M_start` *before* `_M_finish` in its inlined
+  `size()`; we load `_M_finish` first, which costs 3 rows there and a 4th
+  downstream (we keep `_M_start` live in `r9` and `mr` it into the
+  `operator[]`, where the target has to reload it). SGI/STLport's ancestral
+  spelling is `size_type(end() - begin())`, and MSVC's right-to-left evaluation
+  of that form *does* load `_M_start` first — so it looks like a fidelity fix.
+  It is not: whole-binary A/B in one worktree, same objects otherwise, measured
+  **30,963 → 30,533 matched functions and 5,421,732 → 5,242,120 bytes
+  (-430 / -179,612)**. Reverted. The member-direct form is what this binary was
+  built with; `DoNext`'s load order comes from somewhere else.
 - **`ObjectDir::Save`'s 2-row residual is not the swap receiver and not the
   statement order.** `unused.swap(mInlinedDirs)` instead of
   `mInlinedDirs.swap(unused)` is **byte-identical** (same 2 rows, same
