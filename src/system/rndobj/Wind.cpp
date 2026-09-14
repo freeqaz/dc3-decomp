@@ -60,18 +60,33 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
             float dot = -(diff.x * zAxis.x + diff.y * zAxis.y + diff.z * zAxis.z);
             Vector3 proj(diff.x + zAxis.x * dot, diff.y + zAxis.y * dot,
                 diff.z + zAxis.z * dot);
+            // RESIDUAL (w7-ab, 89.6 canonical): the image gives `proj` its own
+            // 16-byte stack slot at 0x50..0x58 and STORES it there dead (S=1,
+            // L=0), which pushes `cross` to 0x60 and `zAxis` to 0x70 and lets
+            // it reload zAxis.{x,y,z} from 0x70/0x74/0x78 instead of parking
+            // them in f29/f30/f31 across the out-of-line Normalize call --
+            // hence TGT saves 1 callee-saved FPR where we save 3.  Frame size
+            // is identical (0xb0) on both sides.  Refuted spellings for the
+            // dead store, both byte-for-byte inert: `Vector3 proj;
+            // ScaleAdd(diff, zAxis, dot, proj);` and `ScaleAddEq(diff, zAxis,
+            // dot); Vector3 &proj = diff;`.  MSVC elides the stores here
+            // whatever the spelling, so the lever is not the assignment form.
             Vector3 cross;
             Cross(zAxis, proj, cross);
             Normalize(cross, cross);
             float ry = result.y;
             float rz = result.z;
             float rx = result.x;
+            // The image right-associates the trailing two terms of each
+            // component: the final fmadds on each row takes the two non-`rx`
+            // terms already summed (e.g. `fmadds f13, f1, f13, f3` builds
+            // rz*zAxis.y + ry*cross.y before the rx term is folded in).
             result.y = rx * (cross.z * zAxis.x - zAxis.z * cross.x)
-                + rz * zAxis.y + ry * cross.y;
+                + (rz * zAxis.y + ry * cross.y);
             result.z = rz * zAxis.z
-                + rx * (zAxis.y * cross.x - cross.y * zAxis.x) + ry * cross.z;
+                + (rx * (zAxis.y * cross.x - cross.y * zAxis.x) + ry * cross.z);
             result.x = rz * zAxis.x
-                + ry * cross.x + rx * (cross.y * zAxis.z - cross.z * zAxis.y);
+                + (ry * cross.x + rx * (cross.y * zAxis.z - cross.z * zAxis.y));
         } else {
             Multiply(result, xfm.m, result);
         }

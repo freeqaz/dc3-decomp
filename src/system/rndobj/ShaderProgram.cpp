@@ -125,6 +125,24 @@ bool RndShaderProgram::Cache(
                 String optsStr;
                 ShaderMakeOptionsString(shaderType, opts, optsStr);
                 const char *matPath = PathName(NgMat::Current());
+                // BEHAVIOURAL GAP, not closable from this file (w7-ab).  The
+                // image builds this message with TWO MakeString calls back to
+                // back -- `bl ??$MakeString@PBD_KPBDPBDPBD@@...` at 0x82732110
+                // immediately followed by `bl ?MakeString@@YAPBDPBD@Z` at
+                // 0x82732114, r3 flowing straight through -- i.e. the notify
+                // argument is itself a MakeString and MILO_NOTIFY wraps it a
+                // second time.  Spelling that faithfully as
+                // `MILO_NOTIFY(MakeString(fmt, ...))` REGRESSES this function
+                // 86.9 -> 85.9 because utl/MakeString.h declares the
+                // single-argument overload `inline`, so MSVC expands
+                // FormatString's 4 KB buffer into our frame (frame delta
+                // +0x1010) where the image keeps it out of line as a COMDAT in
+                // App.obj (`.fn "?MakeString@@YAPBDPBD@Z"` in asm/App.s, 30
+                // call sites binary-wide).  Closing it needs MakeString.h to
+                // stop inlining that overload -- a shared-header change with a
+                // binary-wide blast radius, not a change this call site can
+                // make.  Left unfaithful deliberately; the missing call is a
+                // logged-message-only path, so no gameplay behaviour differs.
                 MILO_NOTIFY(
                     "Missing shader %s_%llx\n(material: %s)\n(environment: %s)\n(compile options: %s)",
                     ShaderTypeName(shaderType),
@@ -162,7 +180,17 @@ bool RndShaderProgram::Cache(
                 return false;
             }
             AutoSlowFrame slowFrame("RndShaderProgram::Cache", 5.0f);
-            char sourcePath[320];
+            // Buffer sizes and declaration order are read off the image's frame:
+            // it is 0x410 with the three buffers at 0x2d0 (source), 0x1d0 and
+            // 0xd0, and __savegprlr_26's save area starting at 0x3f4 -- so
+            // sourcePath is 0x100, not 0x140.  MSVC lays these out in REVERSE
+            // declaration order, hence cachedPsPath is declared before
+            // cachedVsPath to put the VS buffer at the lower address (0xd0).
+            // RESIDUAL: the image puts cachedVsPath at 0xd0 and cachedPsPath at
+            // 0x1d0; we get them the other way round (OFFSET_SWAP (0xd0,0x1d0)
+            // x4).  Swapping the two DECLARATIONS is byte-for-byte inert -- at
+            // equal sizes MSVC is not ordering these by declaration.
+            char sourcePath[256];
             char cachedVsPath[256];
             char cachedPsPath[256];
             strcpy(sourcePath, ShaderSourcePath(ShaderTypeName(shaderType)));

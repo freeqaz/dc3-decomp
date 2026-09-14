@@ -541,6 +541,27 @@ int Synth360::GetNextAvailableMicID() const {
 }
 
 void Synth360::SetupHeadsetSubmixes() {
+    // RESIDUAL (w7-ab, 89.8 canonical, 37 of 201 rows).  Every remaining row is
+    // instruction SCHEDULING, not a different computation -- the per-field store
+    // sequences themselves already match the image exactly:
+    //  1) idx 43-56 and idx 84-103: we emit `lwz r3, 0xec(r24)` (the unkec engine
+    //     pointer) about eight instructions EARLIER than the image, which rotates
+    //     the surrounding store/arg-setup block at both call sites.  The image
+    //     loads it last, immediately before `lwz r11, 0x0(r3)`.  Refuted: writing
+    //     the call as `(*(int *)(*(int *)(int *)unkec + 0x24))((int *)unkec, ...)`
+    //     with no `pEngine` local is byte-for-byte INERT (201 instructions, 37
+    //     rows, 89.8 both ways) -- MSVC CSEs the load back to the same anchor.
+    //  2) idx 78-103: the seven WAVEFORMATEX stores are emitted in a different
+    //     order (image 0x80, 0x8e, 0x88, 0x82, 0x8c, 0x84, 0x90; we get 0x8c,
+    //     0x88, 0x84, 0x8e, 0x90, 0x80, 0x82).  Refuted: putting the assignments
+    //     in WAVEFORMATEX DECLARATION order (wFormatTag, nChannels,
+    //     nSamplesPerSec, nAvgBytesPerSec, nBlockAlign, wBitsPerSample, cbSize)
+    //     costs five extra instructions and drops 89.8 -> 84.3.  The order below
+    //     is the best measured; the emission order is not a function of it.
+    //  3) idx 132-140: the XAUDIO2_BUFFER zero stores land in a different order
+    //     around the memset (image: 0xa0 before the call, then 0xb8, 0xac, 0xb0,
+    //     0xc0, ..., 0xb4).  Refuted: hoisting `buffer.Flags = 0;` above the
+    //     memset drops 84.3 -> 83.6 on top of (2) and adds a REGISTER_SWAP pair.
     // Ensure mHeadsetSubmixes has exactly 4 entries. resize() already contains the
     // shrink-with-erase branch; spelling the outer test by hand emits it twice.
     std::vector<IXAudio2SubmixVoice *> &submixes = mHeadsetSubmixes;

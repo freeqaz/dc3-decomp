@@ -244,14 +244,30 @@ void VoiceInputPanel::CreatePlaylistEditorGrammar() const {
 void VoiceInputPanel::ActivateVoiceContext(Symbol sym) {
     VoiceContext **it;
     if (!sym.Null()) {
+        // RESIDUAL (w7-ab, 93.4 canonical).  Two row classes left:
+        //  a) the image emits the begin() load before the end() load; we emit
+        //     them the other way round.  Swapping the two declarations is
+        //     byte-for-byte INERT, so it is scheduling, not declaration order.
+        //  b) the image re-loads TheSpeechMgr->Overlay() at each of the three
+        //     uses in the deactivate block (0x48(r11) three times) and keeps
+        //     only the vtable pointer across the MakeString call; we CSE the
+        //     overlay pointer into a callee-saved register, which costs one
+        //     extra callee-saved GPR and shifts TheSpeechMgr's anchor r29->r28
+        //     (the 10-row r28<->r29 swap).  Both sides already spell the two
+        //     Overlay() calls separately in source.
         it = mVoiceContexts.begin();
         VoiceContext **end = mVoiceContexts.end();
-        if (end != it) {
+        if (it != end) {
             do {
                 if ((*it)->mName == sym)
                     break;
                 it++;
-            } while (it != end);
+                // The image reloads mVoiceContexts.end() for the loop-back
+                // test (`lwz r10, 0x50(r31)` inside the body) and keeps the
+                // pre-loop copy only for the zero-trip guard and the post-loop
+                // found/not-found test -- the `(*it)->mName` load may alias the
+                // vector, so MSVC cannot hoist the end pointer.
+            } while (it != mVoiceContexts.end());
             if (it != end)
                 goto found;
         }
@@ -269,11 +285,14 @@ found:
         TheDebug << MakeString(
             "----- Deactivating voice context %s\n", mActiveVoiceContext->mName
         );
-        bool showing = TheSpeechMgr->Overlay()->Showing();
-        if (showing) {
-            const char *deactivateMsg =
-                MakeString("Deactivating voice context %s\n", mActiveVoiceContext->mName);
-            TheSpeechMgr->Overlay()->Print(deactivateMsg);
+        if (TheSpeechMgr->Overlay()->Showing()) {
+            // No named temp for the message: the image loads the overlay's
+            // vtable pointer into a callee-saved register BEFORE the MakeString
+            // call (`lwz r30, 0x0(r11)` then `lwz r10, 0x4(r30)` after), which
+            // is what the one-expression form emits.
+            TheSpeechMgr->Overlay()->Print(
+                MakeString("Deactivating voice context %s\n", mActiveVoiceContext->mName)
+            );
         }
         int numGrammars =
             mActiveVoiceContext->mActiveConfig->mGrammars.size();
@@ -283,25 +302,29 @@ found:
             );
         }
     }
-    if (sym.Null()) {
+    // if/else, not an early `return`: the image branches straight to a cold
+    // `li r11, 0x0 / stw r11, 0x58(r31)` tail past the epilogue-adjacent label
+    // (.L_82957D1C) rather than emitting the null-arm inline with a jump over
+    // the long arm.
+    if (!sym.Null()) {
+        mActiveVoiceContext = *it;
+        mActiveVoiceContext->SetActiveConfig(unk3c);
+        int numGrammars2 = mActiveVoiceContext->mActiveConfig->mGrammars.size();
+        for (int i = 0; i < numGrammars2; i++) {
+            TheSpeechMgr->SetGrammarState(
+                mActiveVoiceContext->GetGrammarSym(i), true
+            );
+        }
+        TheDebug << MakeString("----- Activating voice context %s\n", sym.Str());
+        if (TheSpeechMgr->Overlay()->Showing()) {
+            TheSpeechMgr->Overlay()->Print(MakeString(
+                "Activating voice context %s, confidence: %f\n",
+                sym.Str(),
+                mActiveVoiceContext->mConfThreshold
+            ));
+        }
+    } else {
         mActiveVoiceContext = NULL;
-        return;
-    }
-    mActiveVoiceContext = *it;
-    mActiveVoiceContext->SetActiveConfig(unk3c);
-    int numGrammars2 = mActiveVoiceContext->mActiveConfig->mGrammars.size();
-    for (int i = 0; i < numGrammars2; i++) {
-        TheSpeechMgr->SetGrammarState(
-            mActiveVoiceContext->GetGrammarSym(i), true
-        );
-    }
-    TheDebug << MakeString("----- Activating voice context %s\n", sym.Str());
-    if (TheSpeechMgr->Overlay()->Showing()) {
-        TheSpeechMgr->Overlay()->Print(MakeString(
-            "Activating voice context %s, confidence: %f\n",
-            sym.Str(),
-            mActiveVoiceContext->mConfThreshold
-        ));
     }
 }
 
