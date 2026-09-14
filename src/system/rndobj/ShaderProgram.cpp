@@ -154,9 +154,17 @@ bool RndShaderProgram::Cache(
                     ShaderTypeName(shaderType),
                     opts.flags,
                     PathName(NgMat::Current()),
-                    RndEnviron::Current()
-                        ? PathName(static_cast<Hmx::Object *>(RndEnviron::Current()))
-                        : nullptr,
+                    // BEHAVIOURAL FIX (w7-al): this was
+                    // `Current() ? PathName(Current()) : nullptr`, which skips
+                    // the call entirely when there is no environ. The image
+                    // calls PathName UNCONDITIONALLY -- the null test at
+                    // 0x827320B0 selects between `li r3, 0` and the vbtable
+                    // adjustment and then falls into the single
+                    // `bl PathName` at 0x827320D0, i.e. the test IS the
+                    // virtual-base conversion of RndEnviron* to Hmx::Object*,
+                    // not a user ternary. PathName(nullptr) does not return
+                    // nullptr, so the notify text differed.
+                    PathName(RndEnviron::Current()),
                     optsStr.c_str()
                 );
                 if (UsingCD()) {
