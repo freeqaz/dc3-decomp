@@ -16,6 +16,10 @@ public:
 
     DataNode GetFileList(Symbol s) { return GetFileList(mOwner->ClassName(), s); }
 
+    bool MakeResourcePath(FilePath &fp, Symbol s, const char *name) {
+        return MakeResourcePath(fp, mOwner->ClassName(), s, name);
+    }
+
 protected:
     ResourceDirBase(Hmx::Object *owner) : mOwner(owner) {}
 
@@ -33,7 +37,7 @@ public:
     const char *GetName() const { return FileGetBase(GetFile().c_str()); }
     void SetName(const char *name, bool b2) {
         FilePath path;
-        if (MakeResourcePath(path, mOwner->ClassName(), T::StaticClassName(), name)) {
+        if (MakeResourcePath(path, T::StaticClassName(), name)) {
             LoadFile(path, b2, true, kLoadFront, false);
         } else {
             ObjDirPtr<T>::operator=(nullptr);
