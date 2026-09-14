@@ -451,12 +451,14 @@ void HamListRibbon::DrawRibbon(
         mLabelPlaceholder->mCanHaveFocus = true;
         mLabelPlaceholder->SetState((UIComponent::State)(int)state.mSelected);
 
-#ifdef HX_NATIVE
-        UIListElementDrawState *elem = state.mElemDrawState;
-#else
-        UIListElementDrawState *elem = (UIListElementDrawState *)state.mElemDrawState;
-#endif
-        if (elem) {
+        // Re-read through the cast at every use rather than caching a named
+        // `elem` local: the image reloads `lwz r11, 0x18(r24)` THREE times
+        // (0x8248329C, 0x824832C8, 0x824832E8) and keeps nothing in a
+        // callee-saved register for it.  A named local pins r31 for the whole
+        // block, which pushed `this` out of r31 into r30 and rotated 23 rows.
+        // (The cast is an identity cast on native, where mElemDrawState is
+        // already the pointer, so the old #ifdef is not needed.)
+        if ((UIListElementDrawState *)state.mElemDrawState) {
             // These are per-axis SCALE factors, not colours: the target's two
             // statics each take exactly three stores and never touch +0xc, which
             // Hmx::Color cannot do (both its 3- and 4-arg ctors write alpha).
@@ -469,16 +471,27 @@ void HamListRibbon::DrawRibbon(
             const Transform &labelXfm = mLabelPlaceholder->WorldXfm();
             Vector3 pos = labelXfm.v;
             pos.z += ribbonXfm.v.z;
-            *(Vector3 *)&elem->mPosX = pos;
+            *(Vector3 *)&((UIListElementDrawState *)state.mElemDrawState)->mPosX = pos;
 
-            float alpha = GetLabelTotalAlpha();
-            memcpy(&elem->mData, &alpha, sizeof(float));
+            // BUG FIX (w7-as, 2026-09-14): this wrote the label alpha into
+            // `mData` (offset 0x38, an int) via memcpy.  The image stores it as
+            // a FLOAT into offset 0x24, which is `mAlpha`:
+            //   0x824832C8  lwz  r11, 0x18(r24)
+            //   0x824832CC  stfs f1,  0x24(r11)
+            // -- a bare `stfs`, so the destination is a float, and 0x24 is the
+            // only float at that offset.  We wrote 0x38 and had to round-trip
+            // the value through a stack slot (`stfs f1, 0x50(r1)` /
+            // `lwz r10, 0x50(r1)` / `stw r10, 0x38(r31)`), which is also where
+            // our extra 0x10 of frame came from.
+            ((UIListElementDrawState *)state.mElemDrawState)->mAlpha =
+                GetLabelTotalAlpha();
 
             Vector3 *scale = &sBigScale;
             if (state.mBigScale == 0.0f) {
                 scale = &sNormalScale;
             }
-            *(Vector3 *)&elem->mScaleX = *scale;
+            *(Vector3 *)&((UIListElementDrawState *)state.mElemDrawState)->mScaleX =
+                *scale;
         }
     }
 
