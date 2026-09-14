@@ -18,8 +18,18 @@ BEGIN_HANDLERS(RndShockwave)
 END_HANDLERS
 
 BEGIN_PROPSYNCS(RndShockwave)
+    // Clearing is GUARDED: the image only nulls sSelected when it already
+    // points at this shockwave (0x82722238 `lwz r10, sSelected` /
+    // 0x8272223C `cmplw cr6, r10, r30` / 0x82722240 `bne`), so setting
+    // selected=0 on shockwave A does not deselect shockwave B.  Written as
+    // `sSelected = _val.Int() != 0 ? this : nullptr` we cleared it
+    // unconditionally.
     SYNC_PROP_SET(
-        selected, sSelected == this, sSelected = _val.Int() != 0 ? this : nullptr
+        selected,
+        sSelected == this,
+        RndShockwave *self = this;
+        if (_val.Int() != 0) sSelected = self;
+        else if (sSelected == self) sSelected = nullptr
     )
     SYNC_PROP(auto_select, mAutoSelect)
     SYNC_PROP(radius, mRadius)

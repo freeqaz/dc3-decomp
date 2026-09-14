@@ -242,6 +242,17 @@ void HamCamShot::UpdateTargetsFlipped() {
                  kit != mKeyframes.end();
                  ++kit) {
                 CamShotFrame &frame = *kit;
+                // RESIDUAL at 98.26 (w7-at): the image carries a SECOND induction
+                // variable for this list. At 0x824A83A8 it forms `addi r25, r22, 0x88`
+                // (= &frame.mTargets + 4) BEFORE the keyframe loop and bumps it by
+                // 0x118 alongside the iterator at 0x824A8578, then reaches begin() as
+                // `0x4(r25)`, empty() as `0x0(r25)`, and the member calls through
+                // `subi r26, r25, 0x4`. We instead read begin() as `0x8c(r25)` off the
+                // keyframe iterator and form `addi r26, r25, 0x84` inside the loop, so
+                // MSVC never strength-reduces it. NEGATIVE RESULT: dropping this
+                // reference and spelling all four uses `frame.mTargets` does NOT create
+                // the induction variable -- it costs a whole extra register-swap
+                // cascade, 98.26 -> 97.6. Keep the binding.
                 ObjPtrList<RndTransformable> &frameTargets = frame.mTargets;
                 std::vector<RndTransformable *> newTargets;
                 for (ObjPtrList<RndTransformable>::iterator tit = frameTargets.begin();

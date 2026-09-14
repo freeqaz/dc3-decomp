@@ -436,37 +436,36 @@ float HollaBackMinigame::NailedMovesInRoutinePct() {
     int nailedCount = 0;
     int numMoves = mRoutineMoves.size();
     MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
-    if (numMoves > 0) {
-        int moveIndex = 0;
-        int routineCount = numMoves;
-        do {
-            HamMove *curMove = mRoutineMoves[moveIndex];
-            int j = 0;
-            if (mMaxRoutineSize > 0) {
-                while (true) {
-                    HamMove *foundMove = theMoveDir->GetMoveAtMeasure(0, mSpecifyFirstMoveMeasure + j);
-                    // Continue searching if no match found or state not powered_up
-                    if ((foundMove != curMove) || (mMoveStates[mSpecifyFirstMoveMeasure + j] != powered_up)) {
-                        j++;
-                        if (j >= mMaxRoutineSize) {
-                            break;
+    for (int moveIndex = 0; moveIndex < numMoves; moveIndex++) {
+        HamMove *curMove = mRoutineMoves[moveIndex];
+        int j = 0;
+        if (mMaxRoutineSize > 0) {
+            while (true) {
+                HamMove *foundMove = theMoveDir->GetMoveAtMeasure(0, mSpecifyFirstMoveMeasure + j);
+                // The image reads mMoveStates[] UNCONDITIONALLY (target rows
+                // 45-51, before the `bne` at 52 that skips to the j++ path) and
+                // tests the POSITIVE case, reading powered_up only on the arm
+                // where the move already matched.  Written as the negated `||`
+                // the state load is short-circuited behind the move compare and
+                // MSVC may not hoist it.
+                Symbol state = mMoveStates[mSpecifyFirstMoveMeasure + j];
+                if (foundMove == curMove && state == powered_up) {
+                    // Found a nailed move - mark all matching moves in routine
+                    nailedCount++;
+                    for (int k = 0; k < mMaxRoutineSize; k++) {
+                        HamMove *checkMove = theMoveDir->GetMoveAtMeasure(0, mSpecifyFirstMoveMeasure + k);
+                        if (checkMove == foundMove) {
+                            mMoveStates[mSpecifyFirstMoveMeasure + k] = powered_up;
                         }
-                    } else {
-                        // Found a nailed move - mark all matching moves in routine
-                        nailedCount++;
-                        for (int k = 0; k < mMaxRoutineSize; k++) {
-                            HamMove *checkMove = theMoveDir->GetMoveAtMeasure(0, mSpecifyFirstMoveMeasure + k);
-                            if (checkMove == foundMove) {
-                                mMoveStates[mSpecifyFirstMoveMeasure + k] = powered_up;
-                            }
-                        }
-                        break;
                     }
+                    break;
+                }
+                j++;
+                if (j >= mMaxRoutineSize) {
+                    break;
                 }
             }
-            routineCount--;
-            moveIndex++;
-        } while (routineCount != 0);
+        }
     }
     return (float)(s64)nailedCount / (float)(s64)numMoves;
 }

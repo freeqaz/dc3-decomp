@@ -777,46 +777,64 @@ Vector3 CharEyes::GenerateDartOffset() {
     return vout;
 }
 
+// The target does NOT loop over the vectors (RB3's shape): because EyeDesc::mEye and
+// CharInterestState::mInterest sit at offset 0 of their elements, an incoming ObjRef*
+// IS an element address, so the image recovers the element by pointer arithmetic.
+// The recovered element pointer starts life as end() and is only overwritten when the
+// offset is in range and element-aligned; the != end() test is the single join point
+// all the failure branches fall into (target 8237D218 / 8237D2A4), which is why it
+// cannot be nested inside the range checks.
+//
+// LEVER (new, 2026-09-14): the image reads begin() TWICE and end() TWICE off the same
+// vector with no intervening store, and MSVC will happily CSE the second load of each
+// pair away -- which is what kept this at 91.4 with two `delete` rows. Spelling the two
+// reads of one member through TWO DIFFERENT LVALUES -- the member itself (`mEyes`) for
+// one and a bound reference (`_ref0`) for the other -- defeats the CSE and reproduces
+// both loads. Which of the pair gets the reference decides the base register MSVC picks,
+// and it is not free: end() wants the REFERENCE first and the member at the test (the
+// other way round leaves a base+displacement row at idx 24/59), begin() wants the
+// member first and the reference at the offset computation. 91.40 -> 100.00.
 bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     auto& _ref0 = mEyes;
-    EyeDesc *eyeEnd = _ref0.end();
-    EyeDesc *eyeBegin = _ref0.begin();
-    int eyeCount = (int)((char *)eyeEnd - (char *)eyeBegin) / (int)sizeof(EyeDesc);
+    EyeDesc *desc = _ref0.end();
+    EyeDesc *eyeBegin = mEyes.begin();
+    int eyeCount = (int)((char *)desc - (char *)eyeBegin) / (int)sizeof(EyeDesc);
     if (eyeCount != 0) {
-        int eyeOff = (int)((char *)ref - (char *)eyeBegin);
+        int eyeOff = (int)((char *)ref - (char *)_ref0.begin());
         if (eyeOff >= 0) {
             int eyeTotal = eyeCount * (int)sizeof(EyeDesc);
             if ((unsigned)eyeOff < (unsigned)eyeTotal) {
-                int eyeIdx = eyeOff / (int)sizeof(EyeDesc);
-                if (eyeOff == eyeIdx * (int)sizeof(EyeDesc)) {
-                    EyeDesc *desc = eyeBegin + eyeIdx;
-                    if (desc != _ref0.end()) {
-                        if (!desc->mEye.SetObj(obj))
-                            _ref0.erase(_ref0.begin() + eyeIdx);
-                        return true;
-                    }
-                }
+                int eyeRounded = (eyeOff / (int)sizeof(EyeDesc)) * (int)sizeof(EyeDesc);
+                if (eyeRounded == eyeOff)
+                    desc = (EyeDesc *)((char *)eyeBegin + eyeRounded);
             }
         }
+        if (desc != mEyes.end()) {
+            if (!desc->mEye.SetObj(obj))
+                _ref0.erase(desc);
+            return true;
+        }
     }
-    CharInterestState *stateEnd = mInterests.end();
+    auto& _ref1 = mInterests;
+    CharInterestState *state = _ref1.end();
     CharInterestState *stateBegin = mInterests.begin();
-    int stateCount = (int)((char *)stateEnd - (char *)stateBegin) / (int)sizeof(CharInterestState);
+    int stateCount =
+        (int)((char *)state - (char *)stateBegin) / (int)sizeof(CharInterestState);
     if (stateCount != 0) {
-        int stateOff = (int)((char *)ref - (char *)stateBegin);
+        int stateOff = (int)((char *)ref - (char *)_ref1.begin());
         if (stateOff >= 0) {
             int stateTotal = stateCount * (int)sizeof(CharInterestState);
             if ((unsigned)stateOff < (unsigned)stateTotal) {
-                int stateIdx = stateOff / (int)sizeof(CharInterestState);
-                if (stateOff == stateIdx * (int)sizeof(CharInterestState)) {
-                    CharInterestState *state = stateBegin + stateIdx;
-                    if (state != mInterests.end()) {
-                        if (!state->mInterest.SetObj(obj))
-                            mInterests.erase(mInterests.begin() + stateIdx);
-                        return true;
-                    }
-                }
+                int stateRounded = (stateOff / (int)sizeof(CharInterestState))
+                    * (int)sizeof(CharInterestState);
+                if (stateRounded == stateOff)
+                    state = (CharInterestState *)((char *)stateBegin + stateRounded);
             }
+        }
+        if (state != mInterests.end()) {
+            if (!state->mInterest.SetObj(obj))
+                _ref1.erase(state);
+            return true;
         }
     }
     return CharWeightable::Replace(ref, obj);
@@ -1022,6 +1040,34 @@ stateReset:
     }
 }
 
+// RESIDUAL at 98.35 canonical (w7-at, 2026-09-14). ~100 of the 111 diff_arg rows
+// are ONE frame-slot permutation, not 100 causes. Both sides allocate the same eight
+// 16-byte slots at 0x50..0xc0 and the same sharing groups; only the order differs:
+//   target  0x50 srcPos  0x60 lidPos  0x70 Symbol-temp  0x80 upperDir
+//           0x90 upperBlinkPos  0xa0 sourcePos  0xb0 lowerBlinkPos  0xc0 lowerDir
+//   ours    0x50 srcPos  0x60 Symbol-temp  0x70 upperDir  0x80 lidPos
+//           0x90 lowerDir  0xa0 upperBlinkPos  0xb0 sourcePos  0xc0 lowerBlinkPos
+// i.e. exactly two moves: lidPos up two places, lowerDir to the top. The relative
+// order of the (lowerBlinkPos, sourcePos, upperBlinkPos) trio ALREADY matches. The
+// slots are shared with later variables (newLowerPos / origDir / newDir / the debug
+// Color temps), so this is a graph-colouring result, not a declaration-order one.
+//
+// NEGATIVE RESULTS, all measured in this worktree, none of which moved canonical:
+//  - `Vector3 lidPos;` as a bare declaration ahead of srcPos, assigned in place:
+//    98.3 -> 98.3 (and two extra rows at idx 644-650). Confirms the brief's "a bare
+//    declaration claims its slot at first STORE" -- it does not claim it earlier.
+//  - flipping the fmuls operand order in BOTH lid-rotate arms
+//    (`negEyeRot * (cond ? up : down)`): byte-identical output, MSVC canonicalises it.
+//  - RB3's per-arm spelling (`if (eyeRot >= 0) angle = -eyeRot * up; else ...`):
+//    98.3 -> 98.0, one extra insert/delete pair and a second FPR swap pair. The
+//    current scoped-negation spelling is the better of the two.
+// Remaining non-slot rows: idx 100/102 (our `fneg` lands before the `fcmpu`, the
+// image's between the `fcmpu` and the `blt`, with f0/f13 roles swapped), idx 179-209
+// (we hoist `lbz 0xbd(rN)` -- RndTransformable's WorldXfm dirty flag -- ~10
+// instructions earlier than the image in both blink-position blocks), and idx 627-650
+// (a 16-byte Transform copy whose three word loads/stores are scheduled in a rotated
+// order; the "wrong field" story in the resolved-offsets block is the base-register
+// defect noted in CLAUDE.md, not a finding).
 void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
     if (DataVariable("no_lids").Int(0))
         return;

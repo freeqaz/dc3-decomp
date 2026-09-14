@@ -130,6 +130,18 @@ const _s_RTTIBaseClassDescriptor *FindSITargetTypeInstance(
 // Multiple (non-virtual) inheritance: the same type can occur more than once,
 // so a candidate is only accepted when the source sub-object it was found
 // alongside actually lives at SrcOffset within the complete object.
+//
+// RESIDUAL w7-at, 93.77 canonical, 440 B.  The arithmetic and the control
+// flow are already the image's; what is left is block placement plus a
+// volatile r8/r9 naming swap through the whole scan loop.  Two placement
+// rows: (a) the image falls out of the `i < numBaseClasses` loop into a
+// SHARED `return 0` epilogue at 0x8299DF50, where we tail-duplicate
+// `li r3, 0x0` + `b __restgprlr_25` inline; (b) at 0x8299DF04 it tests
+// `iTarget != 0` with `bne` straight to the return and falls through to
+// the pBase NOTVISIBLE check, where we emit `beq` to the check plus an
+// unconditional `b`.  Hoisting the BCD_HASPCHD arm to a positive early
+// return (so the `iTarget != 0` test becomes the fallthrough) was measured
+// and is WORSE: 93.77 -> 88.3.
 const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
     void *pCompleteObject, const _s_RTTICompleteObjectLocator *pCompleteLocator,
     TypeDescriptor *pSrcType, int SrcOffset, TypeDescriptor *pTargetType
@@ -311,10 +323,10 @@ extern "C" void *__RTDynamicCast(
 
     __try {
         pCompleteLocator = (const _s_RTTICompleteObjectLocator *)((*((void ***)inptr))[-1]);
+        unsigned long cdOffset = pCompleteLocator->cdOffset;
         pCompleteObject = (char *)inptr - pCompleteLocator->offset;
-        if (pCompleteLocator->cdOffset != 0) {
-            pCompleteObject =
-                (char *)pCompleteObject - *(int *)((char *)inptr - pCompleteLocator->cdOffset);
+        if (cdOffset != 0) {
+            pCompleteObject = (char *)pCompleteObject - *(int *)((char *)inptr - cdOffset);
         }
 
         char *pvfptr = (char *)inptr - VfDelta;
@@ -337,13 +349,24 @@ extern "C" void *__RTDynamicCast(
         }
 
         if (pBaseClass) {
+            // RESIDUAL w7-at, 87.7 canonical.  Three rows left, none of them
+            // arithmetic: two dead home-slot stores `stw r11, 0x58(r31)`
+            // (0x8299E274 spilling the locator, 0x8299E300 spilling pdisp --
+            // both values stay live in r11 across the store), the 8-byte frame
+            // shift those imply (the image builds the thrown exception object
+            // at r31+0x60, we at r31+0x58), and the 9-instruction __except
+            // filter, which the image carries as its own symbol fn_8299E398
+            // and MSVC emits inside our COMDAT.  Moving pCompleteLocator and
+            // pBaseClass into the __try scope -- the obvious way to make the
+            // two spills share one slot -- is byte-identical, measured.
+            int pdisp = pBaseClass->where.pdisp;
             int adj = 0;
-            if (pBaseClass->where.pdisp >= 0) {
-                adj = pBaseClass->where.pdisp +
-                    *(int *)(*(char **)((char *)pCompleteObject + pBaseClass->where.pdisp) +
-                             pBaseClass->where.vdisp);
+            if (pdisp >= 0) {
+                adj = *(int *)(*(char **)((char *)pCompleteObject + pdisp) +
+                               pBaseClass->where.vdisp) +
+                    pdisp;
             }
-            pResult = (char *)pCompleteObject + pBaseClass->where.mdisp + adj;
+            pResult = (char *)pCompleteObject + (pBaseClass->where.mdisp + adj);
         } else {
             pResult = 0;
             if (isReference) {
