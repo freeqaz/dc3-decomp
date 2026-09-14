@@ -1313,8 +1313,11 @@ void PlatformMgr::Poll() {
         MILO_ASSERT(mFriendsAsync, 0x4C0);
         MILO_ASSERT(mFriendsList, 0x4C1);
         unsigned long numFriends;
-        unsigned long res =
-            XGetOverlappedResult((XOVERLAPPED *)mFriendsAsync, &numFriends, false);
+        // The target keeps the asserted load of mFriendsAsync live into the call
+        // (it rematerialises it on both Fail tails and homes it to a stack slot),
+        // which is what a named local spells.
+        XOVERLAPPED *async = (XOVERLAPPED *)mFriendsAsync;
+        unsigned long res = XGetOverlappedResult(async, &numFriends, false);
         if (res != ERROR_IO_INCOMPLETE) {
             static PlatformMgrOpCompleteMsg msg(false);
             if (res == ERROR_SUCCESS) {
