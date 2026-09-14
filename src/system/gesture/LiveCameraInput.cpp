@@ -918,43 +918,45 @@ void LiveCameraInput::NuiAudioErrorCallback(HRESULT hr) {
 // SpeechMgr::mVoiceDirection — use public getter/setter instead of raw byte offset
 
 void LiveCameraInput::NuiAudioDataCallback(NUIAUDIO_RESULTS *results) {
-    if (!sInstance)
+    LiveCameraInput *inst = sInstance;
+    if (!inst)
         return;
-    if (!sInstance->mSpeechMgr)
+    SpeechMgr *mgr = inst->mSpeechMgr;
+    if (!mgr)
         return;
-    if (!sInstance->mSpeechMgr->Recognizing())
+    if (!mgr->Recognizing())
         return;
 
     float confidence = results->Confidence;
     float beamAngle = results->BeamAngle;
     if (confidence > 0.2f) {
-        sInstance->mBeamAngle = beamAngle;
-        sInstance->mBeamConfidence = confidence;
+        inst->mBeamAngle = beamAngle;
+        inst->mBeamConfidence = confidence;
         side = (int)(beamAngle / Abs(beamAngle)) + side;
         if (side > 10) {
             side = 10;
         } else if (side < -10) {
             side = -10;
-            goto checkSide;
-        } else {
-            goto checkSide;
         }
-        sInstance->mSpeechMgr->SetVoiceDirection(0);
-        return;
-    } else {
-        if (side != 0) {
-            int absVal = side < 0 ? -side : side;
-            side = side - side / absVal;
-        }
-    checkSide:
-        if (side == 10) {
-            sInstance->mSpeechMgr->SetVoiceDirection(0);
-            return;
-        }
-        if (side == -10) {
-            sInstance->mSpeechMgr->SetVoiceDirection(1);
-        }
+    } else if (side != 0) {
+        int absVal = side < 0 ? -side : side;
+        side = side - side / absVal;
     }
+
+    // ONE SetVoiceDirection site.  The image computes the direction into r10
+    // (`li r10, 0x0` at .L_8243073C / `li r10, 0x1` at 0x8243074C) and joins a
+    // single `lwz r11, 0x1444(r8)` / `stw r10, 0x44(r11)` at .L_82430750; the
+    // `side > 10` arm branches straight into it.  Duplicating the call in each
+    // arm costs six rows and re-materialises the `?side@@3HA` address twice.
+    int direction;
+    if (side == 10) {
+        direction = 0;
+    } else if (side == -10) {
+        direction = 1;
+    } else {
+        return;
+    }
+    inst->mSpeechMgr->SetVoiceDirection(direction);
 }
 
 bool LiveCameraInput::SetAutoexposure(bool enable) {
