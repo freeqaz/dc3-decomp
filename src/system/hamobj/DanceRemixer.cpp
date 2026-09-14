@@ -349,11 +349,20 @@ const MoveVariant *DanceRemixer::MoveVariantFromHamMove(const HamMove *aHamMove)
         const auto &measures = TheMoveMgr->mRoutineMeasures[i];
         for (unsigned int j = 0; j < measures.size(); j++) {
             if (JumpedMoveIdx(j) == (int)j) {
-                if (measures[j].first && measures[j].first->HamMoveName() == moveName) {
-                    return measures[j].first;
+                // Through locals: the image loads `.first` once (`lwzx r3, r5,
+                // r7`) and forms the element address alongside it (`add r11,
+                // r5, r7`), then reads `.second` off that address (`lwz r3,
+                // 0x4(r11)`) and returns the loaded value straight from r3.
+                // Writing `measures[j].first` again in the return re-indexes:
+                // MSVC emits a fresh `slwi r11, r4, 0x3` + `lwzx` per exit,
+                // seven extra instructions across the two return sites.
+                const MoveVariant *first = measures[j].first;
+                if (first && first->HamMoveName() == moveName) {
+                    return first;
                 }
-                if (measures[j].second && measures[j].second->HamMoveName() == moveName) {
-                    return measures[j].second;
+                const MoveVariant *second = measures[j].second;
+                if (second && second->HamMoveName() == moveName) {
+                    return second;
                 }
             }
         }
