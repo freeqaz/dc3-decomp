@@ -451,15 +451,16 @@ bool MicXbox::AddToBuffer(std::vector<short> &buf, void *data, int bytes, int *d
         if (dropped) {
             *dropped += buf.size();
         }
-        buf.erase(buf.begin(), buf.end());
         overflowed = true;
+        buf.erase(buf.begin(), buf.end());
     }
     short zero = 0;
     unsigned int oldSize = buf.size();
-    if (oldSize + samps < oldSize) {
-        buf.erase(buf.begin() + (oldSize + samps), buf.end());
+    unsigned int newSize = oldSize + samps;
+    if (newSize < buf.size()) {
+        buf.erase(buf.begin() + newSize, buf.end());
     } else {
-        buf.insert(buf.end(), (oldSize + samps) - oldSize, zero);
+        buf.insert(buf.end(), newSize - buf.size(), zero);
     }
     XMemCpy(&buf[oldSize], data, bytes);
     return overflowed;
