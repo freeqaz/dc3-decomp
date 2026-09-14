@@ -16,7 +16,12 @@ public:
     };
 
     MultiTempoTempoMap();
-    virtual ~MultiTempoTempoMap();
+    // NO user-declared destructor.  The image's ??1MultiTempoTempoMap@@UAA@XZ
+    // does NOT store the derived vptr on entry -- it only writes
+    // ??_7TempoMap@@6B@ at 0x827EE9E8, from the inlined base dtor -- and MSVC
+    // elides that entry store only for an IMPLICITLY defined destructor.  It is
+    // still virtual, inherited from TempoMap.
+    // ~MultiTempoTempoMap() is implicit.
     virtual float TickToTime(float f) const;
     virtual float TimeToTick(float f) const;
     virtual float GetTempo(int) const;
