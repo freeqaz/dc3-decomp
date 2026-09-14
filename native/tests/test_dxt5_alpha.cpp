@@ -4,17 +4,26 @@
 // transcription with three behavioral bugs vs the original Xbox 360 binary
 // (confirmed against the shared-engine RB3 reference and the BC3 spec):
 //
-//   1. code 0 / code 1 mapped to the WRONG endpoint (uc[1]/uc[0] swapped):
-//      code 0 must return alpha0 (uc[0]); code 1 must return alpha1 (uc[1]).
+//   1. code 0 / code 1 mapped to the WRONG endpoint: code 0 must return
+//      alpha0 and code 1 alpha1 (which physical byte each is: see below).
 //   2. The 6-vs-8 value interpolation selector was inverted: `!(a1 > a0)`
 //      (== a1 <= a0 == a0 >= a1) instead of the correct `a0 <= a1`.
 //   3. Spurious code==6 -> 0 / code==7 -> 0xFF special cases were added to the
 //      8-value (a0 > a1) branch, where codes 6 and 7 are normal interpolants.
 //
 // These tests pin the ORIGINAL (correct) decode behavior so the bug cannot
-// silently regress. The function reads the 3-bit alpha indices with the Xbox
-// 16-bit-word byteswap (byte index XOR 1), so the reference encoder applies the
-// same swizzle when laying indices into the block.
+// silently regress. The Xbox 360 stores the whole 8-byte block with a 16-bit
+// word byteswap (byte index XOR 1), so the reference encoder applies the same
+// swizzle when laying the block out -- to the index bytes AND to the endpoint
+// word. The endpoint half of that was wrong here until 2026-09-14: this file
+// swizzled bytes 2..7 and left a0/a1 at physical bytes 0/1, which pinned a
+// decoder that read a0 from uc[0]. The target listing reads a0 from uc[1]:
+// 82671ED8 `lbz r28, 0x1(r3)` is what code 0 stores (82671F84 `stb r28`),
+// 82671EDC `lbz r27, 0x0(r3)` is what code 1 stores (82671F94 `stb r27`), and
+// 82671FA4 `cmplw cr6, r9(=uc[1]), r10(=uc[0])` / `bgt` selects the 8-value
+// mode when uc[1] > uc[0], i.e. a0 > a1. Wave 7 (lane w7-am, DecodeDxt5Alpha
+// 81.9 -> 94.6) corrected the decoder; this file now models the block the way
+// the image does.
 
 #include <gtest/gtest.h>
 
@@ -44,8 +53,10 @@ std::vector<unsigned char> MakeBlock(uint8_t a0, uint8_t a1,
         idxBytes[b] = (unsigned char)((packed >> (8 * b)) & 0xFF);
     }
     std::vector<unsigned char> block(8, 0);
-    block[0] = a0;
-    block[1] = a1;
+    // The endpoint word gets the same 16-bit byteswap as the index bytes:
+    // logical a0 (byte 0) lives at physical byte 1 and a1 at physical byte 0.
+    block[0 ^ 1] = a0;
+    block[1 ^ 1] = a1;
     // Apply the Xbox byteswap: the value the decoder reads at logical byte b
     // is what we store at physical byte (b ^ 1). The decoder indexes block+2,
     // so write idxBytes[b] to block[2 + (b ^ 1)].
@@ -74,8 +85,8 @@ TEST(Dxt5Alpha, EndpointCodesMapToCorrectEndpoint) {
     idx[Lin(1, 0)] = 1;  // texel (1,0) -> code 1 -> a1
     auto block = MakeBlock(/*a0=*/200, /*a1=*/50, idx);
 
-    EXPECT_EQ(Decode(block, 0, 0), 200) << "code 0 must return alpha0 (uc[0])";
-    EXPECT_EQ(Decode(block, 1, 0), 50) << "code 1 must return alpha1 (uc[1])";
+    EXPECT_EQ(Decode(block, 0, 0), 200) << "code 0 must return alpha0 (uc[1] on Xbox)";
+    EXPECT_EQ(Decode(block, 1, 0), 50) << "code 1 must return alpha1 (uc[0] on Xbox)";
 }
 
 // Bug #2: a0 > a1 selects the 8-value interpolation (no transparent/opaque
