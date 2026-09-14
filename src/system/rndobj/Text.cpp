@@ -861,6 +861,15 @@ void RndText::WrapText(
         // callee-saved register for the strip loop's `s` and for `cur`, and
         // emits an explicit `mr r21, r15` reset between them. That only
         // happens if `cur` is not live across the strip block.
+        //
+        // Two refuted follow-ons, both measured against this 94.8 baseline:
+        //   - declaring `int wpI = 0;` BEFORE `cur` (the image's emission
+        //     order at rows 176/180/181) holds 94.8 but raises the register
+        //     swap count 185 -> 187: inert at best.
+        //   - writing `wpI++; numWp++;` instead of `numWp++; wpI++;` at both
+        //     WrapPoint-commit sites -- which is the order the image's three
+        //     induction updates appear in (+1, +0x18, +0x18 vs our +0x18, +1,
+        //     +0x18) -- is a REGRESSION, 94.8 -> 94.5.
         const unsigned short *cur = wideChars;
         int wpI = 0;
         for (;;) {
