@@ -636,6 +636,19 @@ void HamListRibbon::Draw(
     unsigned int selectedIdx = 0xFFFFFFFF;
     Transform selectedXfm;
 
+    // RESIDUAL (w7-as, 96.2 canonical): what is left is one block-placement
+    // difference plus its register knock-on.  The image parks the
+    // `inRange ? mSpacing : mPaddedSpacing` select at 0x82483890, i.e. BELOW the
+    // `if (!mSelected)` body at 0x824838A0, and branches back up to it from all
+    // three predecessors (`b 0x360` at 0x8248389C and 0x824838C4); it also keeps
+    // `ribbonXfm.v.z` cached in f30 across the loop, reloading it only after the
+    // DrawRibbon call (`lfs f30, 0xb8(r31)`).  We lay the select out after the
+    // body and reload v.z into f13 at the subtraction.  The `stb r26, 0x74(r31)`
+    // at index 70 is a base-only home store for `scrollable` (no target
+    // instruction references 0x74(r31) at all); `int scrollable` instead of
+    // `bool` removes it but costs 5.6pp of register allocation -- 96.2 -> 90.6.
+    // The (0xb0, 0xb4) store swap is inside the inlined Transform::Reset(), in
+    // PCH-reached math/Mtx.h, which this lane may not touch.
     unsigned int totalPadded = paddedStates.size();
     for (unsigned int i = 0; i < totalPadded; i++) {
         bool inRange = ((int)i >= startOffset + paddingPerSide)
@@ -650,6 +663,10 @@ void HamListRibbon::Draw(
             }
         }
 
+        // NEGATIVE RESULT (w7-as, 2026-09-14): inlining this as
+        // `ribbonXfm.v.z -= inRange ? mSpacing : mPaddedSpacing;` keeps the same
+        // 96.2 canonical but adds a commutative-operand row at the
+        // `add r29, r11` index computation -- kept the named `step`.
         float step = inRange ? mSpacing : mPaddedSpacing;
         ribbonXfm.v.z -= step;
     }
