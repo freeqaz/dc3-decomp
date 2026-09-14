@@ -1158,11 +1158,17 @@ void DxRnd::DoPointTests() {
         }
     }
 
-    // Update frame index - both direct manipulation and virtual call
+    // Update frame index - both direct manipulation and virtual call.
+    // BUG FIX (w7-bl): the two virtual calls were the wrong way round.
+    // 0x8261B008 calls vtable slot 0x20 (OnEndFrame) right after the 0x1804
+    // toggle, and 0x8261B018 calls slot 0x1c (OnBeginFrame) after the 0x1808
+    // increment -- we emitted 0x1c then 0x20.  Semantically the image retires
+    // the previous frame's queries, bumps the counter, then opens the new
+    // frame; we were opening the new frame before retiring the old one.
     mOcclusionQueryMgr->ToggleFrameIndex();
-    mOcclusionQueryMgr->OnBeginFrame();
-    mOcclusionQueryMgr->IncrementFrameCounter();
     mOcclusionQueryMgr->OnEndFrame();
+    mOcclusionQueryMgr->IncrementFrameCounter();
+    mOcclusionQueryMgr->OnBeginFrame();
 
     // Count point tests needed
     int numTests = 0;
@@ -1176,6 +1182,24 @@ void DxRnd::DoPointTests() {
     // Early out if no point tests
     if (mPointTests.empty())
         return;
+
+    // The image's frame is 0x40 larger than a naive one because the unnamed
+    // Hmx::Matrix4 temporary below does NOT share a slot with the vertex
+    // buffers -- it sits at r1+0x130, right above `xfm`, while the vertex
+    // scratch stays at r1+0x70/0x90.  Declaring the vertex locals here keeps
+    // them live across the SetVConstant call so the slots cannot be merged.
+    struct PointVertex {
+        float x, y, z;
+        float w;
+        DWORD color;
+    };
+    struct QuadVertex {
+        float x, y, z;
+        float w;
+        DWORD color;
+    };
+    PointVertex vtx;
+    QuadVertex verts[4];
 
     // Setup identity transform
     Transform xfm;
@@ -1222,19 +1246,18 @@ void DxRnd::DoPointTests() {
 
         RndFlare *flare = it->mFlare;
         RndPointTest &test = mPointTestQueries[idx];
-        // 0x8261B268-0x8261B284: mFlare is stored FIRST, then the two -1s.
+        // 0x8261B268-0x8261B284: mFlare is stored FIRST, then mAreaQueryIdx
+        // (0x8) and only then mPointQueryIdx (0x4).
         test.mFlare = flare;
-        test.mPointQueryIdx = -1;
         test.mAreaQueryIdx = -1;
+        test.mPointQueryIdx = -1;
 
         // Point test
         if (flare->GetPointTest()) {
-            struct PointVertex {
-                float x, y, z;
-                float w;
-                DWORD color;
-            };
-            PointVertex vtx;
+            // NEGATIVE RESULT (w7-bl, byte-identical): the image stores w and
+            // color between the z load and the z conversion, but writing the
+            // fields in that order (x, y, w, color, z) changes not one
+            // instruction -- MSVC schedules stores to a local struct freely.
             vtx.x = (float)it->x;
             vtx.y = (float)it->y;
             vtx.z = (float)it->z * 5.9604651881e-08f;
@@ -1246,9 +1269,10 @@ void DxRnd::DoPointTests() {
             // temp, and its result gates TWO separate `if`s -- BeginQuery
             // under the first, DrawVerticesUP+EndQuery under the second, each
             // reloading the index from 0x0(r27).
-            bool ok = mOcclusionQueryMgr->CreateQuery(test.mPointQueryIdx);
+            RndOcclusionQueryMgr *mgr = mOcclusionQueryMgr;
+            bool ok = mgr->CreateQuery(test.mPointQueryIdx);
             if (ok) {
-                mOcclusionQueryMgr->BeginQuery(test.mPointQueryIdx);
+                mgr->BeginQuery(test.mPointQueryIdx);
             }
             if (ok) {
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_POINTLIST, 1, &vtx, sizeof(PointVertex));
@@ -1257,20 +1281,17 @@ void DxRnd::DoPointTests() {
         }
 
         // Area test.  0x8261B330 reloads the flare from `test.mFlare`
-        // (`lwz r11, 0x0(r30)`), not from the `flare` local.
-        if (test.mFlare->GetAreaTest()) {
-            struct QuadVertex {
-                float x, y, z;
-                float w;
-                DWORD color;
-            };
-            QuadVertex verts[4];
-
+        // (`lwz r11, 0x0(r30)`), not from the `flare` local -- and that ONE
+        // load then serves the whole block: the rect base at 0x8261B33C, the
+        // three GetArea() reads, and both stores in the else arm.
+        RndFlare *areaFlare = test.mFlare;
+        if (areaFlare->GetAreaTest()) {
             // 0x8261B33C `addi r10, r11, 0x134`: the rect is held BY
             // REFERENCE, so w/h are read as 0x8(r10)/0xc(r10) rather than
             // 0x13c/0x140 off the flare.
-            verts[0].x = test.mFlare->GetArea().x;
-            verts[0].y = test.mFlare->GetArea().y;
+            Hmx::Rect &area = areaFlare->GetArea();
+            verts[0].x = area.x;
+            verts[0].y = area.y;
             verts[0].z = (float)it->z * 5.9604651881e-08f;
             verts[0].w = 1.0f;
             verts[0].color = 0;
@@ -1281,26 +1302,30 @@ void DxRnd::DoPointTests() {
             // from the copy -- except verts[3].y, which reloads its own slot
             // at 0xd0(r1).  Every `fadds` takes the RECT term first.
             verts[1] = verts[0];
-            verts[1].y = test.mFlare->GetArea().h + verts[0].y;
+            verts[1].y = area.h + verts[0].y;
 
             verts[2] = verts[0];
-            verts[2].x = test.mFlare->GetArea().w + verts[0].x;
+            verts[2].x = area.w + verts[0].x;
 
             verts[3] = verts[0];
-            verts[3].x = test.mFlare->GetArea().w + verts[0].x;
-            verts[3].y = test.mFlare->GetArea().h + verts[3].y;
+            verts[3].x = area.w + verts[0].x;
+            verts[3].y = area.h + verts[3].y;
 
-            bool ok = mOcclusionQueryMgr->CreateQuery(test.mAreaQueryIdx);
+            // 0x8261B430/0x8261B444: the manager is read ONCE into a
+            // callee-saved register and reused for BeginQuery (`mr r3, r30`);
+            // EndQuery at 0x8261B478 reloads the member.
+            RndOcclusionQueryMgr *mgr = mOcclusionQueryMgr;
+            bool ok = mgr->CreateQuery(test.mAreaQueryIdx);
             if (ok) {
-                mOcclusionQueryMgr->BeginQuery(test.mAreaQueryIdx);
+                mgr->BeginQuery(test.mAreaQueryIdx);
             }
             if (ok) {
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_TRIANGLESTRIP, 4, verts, sizeof(QuadVertex));
                 mOcclusionQueryMgr->EndQuery(test.mAreaQueryIdx);
             }
         } else {
-            test.mFlare->SetOcclusionReady(true);
-            test.mFlare->SetVisible(true);
+            areaFlare->SetOcclusionReady(true);
+            areaFlare->SetVisible(true);
         }
     }
 
