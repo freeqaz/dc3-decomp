@@ -416,22 +416,45 @@ void ReadFunc(BINKIO *bink, bool startRead) {
     }
 }
 
-unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameOffset, int hasHeader, void *dest, unsigned int length) {
+unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffset, void *dest, unsigned int length) {
+    // The offset read from is the SDK's THIRD parameter, `origofs` -- r5 in the
+    // image (0x82E5D644 `mr r29, r5`, then `add r29, r11, r29` for the
+    // encryption-header skew, `cmpwi cr6, r29, -0x1`, `cmplw r29, iFileBufPos`).
+    // The second parameter, `Framenum`, is never read.  Signature in
+    // binkxenon/bink.h: BINKIOREADFRAME(BINKIO*, U32 Framenum, S32 origofs,
+    // void *dest, U32 size).
+    //
+    // A scoped guard, not a bare Enter/Exit pair: the image sets up an EH frame
+    // pointer (0x82E5D630 `subi r31, r1, 0xb0`) and stores &gCrit into the
+    // guard object at 0x82E5D64C `stw r22, 0x50(r31)` BEFORE calling Enter, so
+    // the Exit runs from a destructor on every path.  CritSecTracker's null
+    // check folds away because &gCrit is provably non-null.
     unsigned int bytesReturned = 0;
-    gCrit.Enter();
+    CritSecTracker _cs(&gCrit);
+    // 0x82E5D660 `addi r26, r30, 0x80`, emitted BETWEEN the ReadError load and
+    // its branch -- so it is declared before the early return, not after it.
+    // The image reaches pFile, iHeaderSize, mEncHeader and pXTEADecrypter
+    // through THIS base (0x0/0x28/0x30/0x34/0x48/0x68 off r26) but the five
+    // buffer fields off `bink` itself (0x88 pBuffer, 0x8c pBufEnd,
+    // 0x90 pBufPos, 0x98 iBufEmpty, 0x9c iFileBufPos), so the two halves are
+    // spelled differently below.
+    BINKIOFILE *bf = &bink->io;
     if (bink->ReadError != 0) {
-        gCrit.Exit();
         return 0;
     }
-    // If encrypted, skip the 0x38-byte encryption header when computing offset
-    unsigned int adjOffset = frameOffset;
-    if (bink->io.mEncHeader.mSignature != 0) adjOffset += 0x38;
+    // If encrypted, skip the 0x38-byte encryption header when computing offset.
+    // BRANCHLESS in the image: 0x82E5D68C `subfic r10, r10, 0x0` /
+    // `subfe r10, r10, r10` builds the 0/-1 mask from mSignature,
+    // `and r11, r10, r11` selects 0x38, and `add r29, r11, r29` adds it with
+    // the 0x38 term on the LEFT.  An `if (...) adjOffset += 0x38;` emits a
+    // cmplwi/beq pair instead.
+    unsigned int adjOffset
+        = (bf->mEncHeader.mSignature != 0 ? 0x38u : 0u) + (unsigned int)origOffset;
     // Check if the file has enough data
-    unsigned int fileSize = (unsigned int)bink->io.pFile->Size();
+    unsigned int fileSize = (unsigned int)bf->pFile->Size();
     if (adjOffset + length > fileSize) {
         bink->ReadError = 1;
         bytesReturned = 0;
-        gCrit.Exit();
         return bytesReturned;
     }
     {
@@ -443,7 +466,7 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameOffset, int hasHe
             bytesReturned = 0;
             if (seekPos > bink->io.iFileBufPos) {
                 // Target is ahead — can we satisfy from buffered data?
-                int fileTell = bink->io.pFile->Tell();
+                int fileTell = bf->pFile->Tell();
                 if ((int)seekPos <= fileTell) {
                     // Advance buffer read position to skip data
                     unsigned int advance = seekPos - bink->io.iFileBufPos;
@@ -463,15 +486,15 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameOffset, int hasHe
                     bink->io.iBufEmpty = bink->BufSize;
                     bink->io.pBufPos = pBuf;
                     bink->io.pBufBack = pBuf;
-                    if (bink->io.mEncHeader.mVersion == 2) {
+                    if (bf->mEncHeader.mVersion == 2) {
                         // Align to XTEA block boundary
-                        unsigned int rawOff = seekPos - bink->io.iHeaderSize - 0x38;
+                        unsigned int rawOff = seekPos - bf->iHeaderSize - 0x38;
                         blockOff = rawOff & 0xf;
                         bink->io.pBufPos = pBuf + blockOff;
-                        seekPos = (rawOff & 0xfffffff0) + bink->io.iHeaderSize + 0x38;
-                        bink->io.pXTEADecrypter->SetNonce(bink->io.mEncHeader.mNonce, rawOff >> 4);
+                        seekPos = (rawOff & 0xfffffff0) + bf->iHeaderSize + 0x38;
+                        bf->pXTEADecrypter->SetNonce(bf->mEncHeader.mNonce, rawOff >> 4);
                     }
-                    bink->io.pFile->Seek((int)seekPos, FILE_SEEK_SET);
+                    bf->pFile->Seek((int)seekPos, FILE_SEEK_SET);
                     bink->DoingARead = 0;
                 }
             }
@@ -480,7 +503,7 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameOffset, int hasHe
         if (bink->io.pBuffer == nullptr) {
             // No buffer — direct synchronous read
             int readStart = RADTimerRead();
-            unsigned int nr = (unsigned int)bink->io.pFile->Read(dest, (int)length);
+            unsigned int nr = (unsigned int)bf->pFile->Read(dest, (int)length);
             bytesReturned = nr;
             if (nr < length) {
                 bink->ReadError = 1;
@@ -527,7 +550,7 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameOffset, int hasHe
             bink->TotalTime += (unsigned int)(threadEnd - startTimer);
         }
         // Update CurBufSize for Bink SDK flow control
-        unsigned int newAvail = (unsigned int)(bink->io.pFile->Size() - (int)bink->io.iFileBufPos);
+        unsigned int newAvail = (unsigned int)(bf->pFile->Size() - (int)bink->io.iFileBufPos);
         if (newAvail >= bink->BufSize) {
             newAvail = bink->BufSize;
         }
@@ -536,7 +559,6 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameOffset, int hasHe
             bink->CurBufSize = bink->bytesAvail;
         }
     }
-    gCrit.Exit();
     return bytesReturned;
 }
 #endif
