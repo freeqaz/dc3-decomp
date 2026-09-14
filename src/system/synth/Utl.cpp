@@ -55,6 +55,12 @@ const char *CacheWav(const char *file, CacheResourceResult &result) {
     // rewriting as two returns `if (>0) return nullptr; return sCacheWavBuf;`
     // (90.7%, 17 rows -- MSVC then duplicates the ~String call instead of
     // sharing the epilogue, which retail does share).
+    // Also NOT fixable by giving the `if` an explicit empty first arm
+    // (`if ((int)result <= 0) {} else { dst = nullptr; }`).  Retail's `ble` at
+    // 0x82768AF4 lands on a block that holds nothing but `b` at 0x82768B08, so
+    // an empty else-arm looked like the shape that produced it -- it is
+    // byte-inert here (93.3%, the same 7 rows).  The arm-placement lever that
+    // fixed ReadEditorDirDead does not reach an if-conversion decision.
     if ((int)result > 0)
         dst = nullptr;
     return dst;
