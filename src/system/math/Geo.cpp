@@ -685,31 +685,14 @@ namespace stlpmtx_std {
 #endif // HX_NATIVE
 
 void Multiply(const Box &box, float f, Box &out) {
-    const Box& _ref0 = box;
     Vector3 center;
-    Interp(_ref0.mMin, _ref0.mMax, 0.5f, center);
-    Vector3 *pMax = &out.mMax;
-    float hsz = _ref0.mMax.z - center.z;
-    float hsy = _ref0.mMax.y - center.y;
-    float hsx = _ref0.mMax.x - center.x;
-    pMax->y = hsy;
-    pMax->z = hsz;
-    pMax->x = hsx;
-    float hsxf = out.mMax.x * f;
-    float hsyf = out.mMax.y * f;
-    pMax->y = hsyf;
-    float hszf = hsz * f;
-    pMax->x = hsxf;
-    pMax->z = hszf;
-    pMax->y = hsyf + center.y;
-    pMax->x = hsxf + center.x;
-    pMax->z = hszf + center.z;
-    float dmx = _ref0.mMin.x - center.x;
-    float dmy = _ref0.mMin.y - center.y;
-    float dmz = _ref0.mMin.z - center.z;
-    out.mMin.z = dmz * f + center.z;
-    out.mMin.x = dmx * f + center.x;
-    out.mMin.y = dmy * f + center.y;
+    Interp(box.mMin, box.mMax, 0.5f, center);
+    Subtract(box.mMax, center, out.mMax);
+    Scale(out.mMax, f, out.mMax);
+    Add(out.mMax, center, out.mMax);
+    Subtract(box.mMin, center, out.mMin);
+    out.mMin *= f;
+    out.mMin += center;
 }
 
 void Multiply(const Plane &p, const Transform &t, Plane &out) {
