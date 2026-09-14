@@ -288,19 +288,37 @@ typedef struct _XSHOWDEVICESELECTORUI_PARAMS { /* Size=0x28 */
     /* 0x0020 */ BOOL fNuiEnabled;
 } XSHOWDEVICESELECTORUI_PARAMS;
 
+/* MSVC/Xenon allocates bitfields MSB-FIRST, so the members must be declared
+   in DESCENDING BitPos order for each one to land on the bit the XDK
+   documents. Declared ascending (the order a PDB dump prints them in),
+   dwMemoryProtect lands on mask 0x0000000C and XMemAlloc's
+   `Attr(x).dwMemoryProtect == XALLOC_MEMPROTECT_READWRITE` compares it
+   against 0x20000000 -- an assert that can never pass. The image masks
+   0x30000000 (`rlwinm r9, r4, 0, 2, 3`) and compares 0x20000000
+   (`lis r8, 0x2000`); with this order we emit exactly that, and the other
+   three masks XMemAlloc uses line up too: 0x80000000 dwMemoryType,
+   0x40000000 dwZeroInitialize, 0x00FF0000 dwAllocatorId, 0x00004000
+   dwMustSucceed. */
 typedef struct _XALLOC_ATTRIBUTES { /* Size=0x4 */
-    /* 0x0000 */ DWORD dwObjectType : 13; /* BitPos=0 */
-    /* 0x0000 */ DWORD dwHeapTracksAttributes : 1; /* BitPos=13 */
-    /* 0x0000 */ DWORD dwMustSucceed : 1; /* BitPos=14 */
-    /* 0x0000 */ DWORD dwFixedSize : 1; /* BitPos=15 */
-    /* 0x0000 */ DWORD dwAllocatorId : 8; /* BitPos=16 */
-    /* 0x0000 */ DWORD dwAlignment : 4; /* BitPos=24 */
-    /* 0x0000 */ DWORD dwMemoryProtect : 2; /* BitPos=28 */
-    /* 0x0000 */ DWORD dwZeroInitialize : 1; /* BitPos=30 */
     /* 0x0000 */ DWORD dwMemoryType : 1; /* BitPos=31 */
+    /* 0x0000 */ DWORD dwZeroInitialize : 1; /* BitPos=30 */
+    /* 0x0000 */ DWORD dwMemoryProtect : 2; /* BitPos=28 */
+    /* 0x0000 */ DWORD dwAlignment : 4; /* BitPos=24 */
+    /* 0x0000 */ DWORD dwAllocatorId : 8; /* BitPos=16 */
+    /* 0x0000 */ DWORD dwFixedSize : 1; /* BitPos=15 */
+    /* 0x0000 */ DWORD dwMustSucceed : 1; /* BitPos=14 */
+    /* 0x0000 */ DWORD dwHeapTracksAttributes : 1; /* BitPos=13 */
+    /* 0x0000 */ DWORD dwObjectType : 13; /* BitPos=0 */
 } XALLOC_ATTRIBUTES;
 
-#define XALLOC_MEMPROTECT_READWRITE 0x20000000
+/* The FIELD value of XALLOC_ATTRIBUTES::dwMemoryProtect, not the packed
+   dwAllocAttributes flag (which is this shifted left by 28, 0x20000000).
+   XMemAlloc's only use is `Attr(x).dwMemoryProtect == XALLOC_MEMPROTECT_READWRITE`,
+   and the image folds the shift into the compare: `rlwinm r9, r4, 0, 2, 3`
+   (& 0x30000000) against `lis r8, 0x2000` (0x20000000). Spelled 0x20000000
+   here the field, which only holds 0..3, is compared against a value it can
+   never take. */
+#define XALLOC_MEMPROTECT_READWRITE 2
 
 #ifdef __cplusplus
 }

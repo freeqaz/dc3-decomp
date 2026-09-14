@@ -273,6 +273,22 @@ void NgEnviron::Select(const Vector3 *pos) {
         ClearLightRegisters(i);
     }
 
+    // NEGATIVE RESULT (96.3%, two refuted variants). The residual is one clean
+    // rotation of the six callee-saved registers r28..r23: the image puts
+    // numProj in r28 and the four hoisted MILO_NOTIFY string/global addresses
+    // in r27..r24, where MSVC ranks numProj *below* all four and gives it r23.
+    // The image also consumes numProj as the countdown for this loop
+    // (`subic. r28, r28, 0x1` at 0x825A9E14) instead of copying it into a
+    // scratch first. Two spellings of the loop tests were tried against that:
+    // both counters unsigned (`for (unsigned int i = ...`) does fix the two
+    // zero-guard comparisons -- the image tests both hoisted guards unsigned,
+    // `cmplwi cr6, r28, 0x0` / `cmplwi cr6, r21, 0x0`, where an int `i` gives
+    // `cmpwi` -- but it costs an extra instruction elsewhere and nets 96.2;
+    // making only the point-light loop unsigned is worse still at 95.7. The
+    // counters themselves are signed in the image (`cmpwi cr6, r21, 0x3` for
+    // `numPoint < 3`, `cmpwi cr6, r28, 0x1` for `numProj < 1`), so the
+    // signedness lever cannot be pushed further. Left at the signed spelling:
+    // an equality test is behaviourally identical either way.
     for (int i = 0, projLightIdx = 3; i != numProj; i++, projLightIdx--) {
         if (SetProjLightRegisters(projLightIdx, projLightIdx - 3, *projLights[i])) {
             mNumLightsProj++;

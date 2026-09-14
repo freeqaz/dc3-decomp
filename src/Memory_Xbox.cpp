@@ -289,7 +289,14 @@ int ForceLinkXMemFuncs() {
 
 VOID *XMemAlloc(SIZE_T dwSize, DWORD dwAllocAttributes) {
     void *ptr;
-    if (!(dwAllocAttributes & 0x80000000) && (dwAllocAttributes & 0x00FF0000) != 0x008C0000) {
+    // Hoisted: the image keeps the masked physical flag in a callee-saved
+    // register (`clrrwi. r29, r4, 31`) and re-derives the bool for
+    // MemAllocFailed from it with `subic r11, r29, 0x1` / `subfe r4, r11, r29`
+    // (the "!= 0" idiom on a live variable). Spelled inline as
+    // `(bool)(dwAllocAttributes & 0x80000000)` MSVC re-reads the argument and
+    // emits a single `srwi r4, r31, 31` bit-extract instead.
+    DWORD physical = dwAllocAttributes & 0x80000000;
+    if (!physical && (dwAllocAttributes & 0x00FF0000) != 0x008C0000) {
         // Not physical and not the special attribute
         MILO_ASSERT(Attr(dwAllocAttributes).dwMemoryProtect == XALLOC_MEMPROTECT_READWRITE, 0xf9);
 
@@ -310,7 +317,7 @@ VOID *XMemAlloc(SIZE_T dwSize, DWORD dwAllocAttributes) {
         // Physical or special: use default XDK allocator
         ptr = XMemAllocDefault(dwSize, dwAllocAttributes);
         if (!ptr) {
-            MemAllocFailed(dwSize, (bool)(dwAllocAttributes & 0x80000000));
+            MemAllocFailed(dwSize, physical != 0);
         }
         int allocSize = XMemSizeDefault(ptr, dwAllocAttributes);
         gPhysicalUsage += allocSize;

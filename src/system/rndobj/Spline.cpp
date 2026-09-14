@@ -251,11 +251,29 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int iStartIndex, int iEndIndex) cons
             float prevX = prev.mPos.x;
             float lastZ = last.mPos.z;
             float prevZ = prev.mPos.z;
+            // NEGATIVE RESULT (byte-identical, 92.45%): the image's load order
+            // here is last.x / prev.x / last.z / prev.z / last.y / prev.y --
+            // our declaration order with the y pair last -- yet it computes and
+            // stores y FIRST (`stfs f12, 0x98(r31)` before `stfs f0, 0x94`),
+            // where MSVC gives us x, z, y. Hoisting the y pair into named
+            // locals declared after prevZ reproduces neither and changes not one
+            // instruction. The store order is a scheduling artifact, not a
+            // source lever.
             mDummyAfter.mPos.y = last.mPos.y + (last.mPos.y - prev.mPos.y);
             mDummyAfter.mPos.x = lastX + (lastX - prevX);
             mDummyAfter.mPos.z = lastZ + (lastZ - prevZ);
             mDummyAfter.mRoll = last.mRoll;
 
+            // NEGATIVE RESULT (92.45%). The image DOES reload the vector's
+            // begin pointer and re-index here -- `lwz r11, 0x0(r10)` +
+            // `add r11, r9, r11` twice more, before this group and again
+            // before the [lastIdx - 1] dirty flag -- where we keep one element
+            // pointer alive, so we are 8 instructions short (base 612 B vs the
+            // image's 644 B). Spelling all three reads here as
+            // `mDeformedCtrlPoints[lastIdx]` does buy the reloads, and costs
+            // far more than it buys: 92.45 -> 87.8, because MSVC then
+            // re-schedules the whole mDummyAfter group around the new pointer
+            // and the f0/f9..f13 assignment rotates again. Left cached.
             float endZ = last.mPos.z;
             float endX = last.mPos.x;
             mDummyAfterEnd.mPos.y = mDummyAfter.mPos.y + (mDummyAfter.mPos.y - last.mPos.y);

@@ -525,6 +525,25 @@ SynthSample *Sound::Sample() { return mSynthSample; }
 // entirely and still scores ~90%.
 void Sound::SetSpeed(float speed, Hmx::Object *obj) {
     float speedTranspose = CalcSpeedFromTranspose(mFaders.GetTranspose());
+    // NEGATIVE RESULT (91.17%, two refuted variants). The residual is entirely
+    // register naming plus one loop shape. The image holds `this` in r31 and
+    // the clamped speed in f31, giving the CalcSpeedFromTranspose result f30
+    // and the sSpeedCaps anchor r28 (`fmr f31, f1` / `fsel f31, f11, f0, f12`,
+    // build/373307D9/asm/src/system/synth/Sound.s); MSVC ranks the transpose
+    // result first and shifts every one of those by a register --
+    // this->r30, clamped->f30, transpose->f31, caps->r29 -- which is 32 of the
+    // 36 mismatch rows. Tried:
+    //   * clamping back into the PARAMETER (`speed = Clamp(...)`), which is the
+    //     shape f31's live range implies: byte-identical, 91.17.
+    //   * moving the clamp ABOVE the CalcSpeedFromTranspose call so the clamped
+    //     value is the one live across it: 91.17 -> 57.8, because MSVC then has
+    //     to materialise the caps anchor before the call too and the whole
+    //     prologue diverges.
+    // The other real row is the else-branch loop guard: the image tests the
+    // list for empty before entering (`cmplw cr6, r30, r29` / `beq`) where
+    // FOREACH gives us a rotated loop that branches straight to the bottom
+    // test. That costs 2 instructions (292 B vs the image's 300 B) and is a
+    // property of the macro, not of this function.
     float clamped = Clamp(sSpeedCaps[0], sSpeedCaps[1], speed);
     if (obj) {
         FOREACH (it, mSamples) {

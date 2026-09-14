@@ -415,6 +415,13 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
         // stack until one that permits them is on top, retry the whole request
         // there, then put the stack back exactly as it was.
         MemHeapStack &tempStack = ThreadMemStack(true);
+        // NEGATIVE RESULT: the image keeps the running depth in a register
+        // across the loop (`lwz r9, 0x40(r3)` once, then
+        // `subic. r11, r9, 0x1` / `stw r11, 0x40(r30)` / `mr r9, r11`, and the
+        // back-edge re-tests r9), while we reload `0x40(r30)` at the bottom.
+        // Hoisting the depth into an `int curSize` local removes that reload
+        // but loses the image's `mr r9, r11` -- 92.9% either way, so the
+        // member spelling is kept as the less invented one.
         int savedSize = tempStack.mSize;
         while (tempStack.mSize > 0) {
             tempStack.mSize--;
@@ -433,7 +440,14 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
         return tempAlloc;
     }
     if (heap == nullptr) {
-        if (heapNum == -2) {
+        // Re-evaluated, not reused: 0x825...(MemMgr.s, the block below
+        // `cmplwi cr6, r29, 0x0`) reloads stack.mSize and walks mStack again
+        // before `cmpwi cr6, r11, -0x2`. Holding the first value in a register
+        // across the whole function is what costs us the extra callee-saved
+        // register the image does not need.
+        if ((stack.mSize != 0 ? stack.mStack[stack.mSize - 1]
+                              : MemHeapStack::sDefaultHeap)
+            == -2) {
             allocated_mem = PhysicalAlloc(iSizeBytes);
         } else {
             MILO_ASSERT_FMT(
@@ -469,7 +483,11 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
         }
         heap->SetStrategy(oldStrategy);
         MILO_ASSERT(allocated_mem, 0x427);
-        MILO_ASSERT(allocated_mem != (void *)0x01000000, 0x428);
+        // No space after `void`: the image's assert string is
+        // ??_C@_0CD@...@allocated_mem?5?$CB?$DN?5?$CIvoid?$CK?$CJ0x010000@ --
+        // 0x23 bytes. `(void *)` made it 0x24 and picked a different pooled
+        // literal.
+        MILO_ASSERT(allocated_mem != (void*)0x01000000, 0x428);
     }
     return allocated_mem;
 #endif
@@ -861,7 +879,12 @@ int MemFindHeap(const char *name) {
     if (gSingleHeap) {
         return 0;
     }
-    if (gInitted && gNumHeaps > 0) {
+    // Materialised as a byte, not short-circuited into the branch: the image
+    // builds `li r11, 0x1` / `li r11, 0x0` at 0x827CC804/0x827CC80C and then
+    // tests it with `clrlwi. r11, r11, 24` / `beq` at 0x827CC810 -- the shape a
+    // bool local gets, not the shape `if (a && b)` gets.
+    bool complain = gInitted && gNumHeaps > 0;
+    if (complain) {
         MILO_FAIL("could not find heap \"%s\"", name);
     }
     return -1;

@@ -164,27 +164,40 @@ int AsyncFile::Seek(int i, int j) {
     if (mMode & FILE_OPEN_WRITE)
         Flush();
     else
-        MILO_ASSERT(!mBytesLeft, 0x1CA);
+        MILO_ASSERT(!mBytesLeft, 0x1C2);
 
     // Calculate new file position based on seek mode
     // j=0 (SEEK_SET): absolute, j=1 (SEEK_CUR): relative, j=2 (SEEK_END): from end
-    unsigned int newPos;
-    if ((unsigned int)j == 1) {
-        newPos = mTell + i;
+    //
+    // 64-BIT: the image widens the running position. 0x825FA260 `extsw r10, r29`
+    // sign-extends the offset before adding the (zero-extended) mTell, and the
+    // clamps at 0x825FA294/0x825FA2A4 are `cmpd`/`cmpdi`, not `cmplw`/`cmpwi`.
+    // The kSeekEnd arm is the odd one out and is 32-bit on purpose: `add` then
+    // `rldicl r11, r11, 0, 32` at 0x825FA28C is `mSize + i` evaluated as
+    // unsigned int and then widened. Done in 32 bits throughout, a seek past 2GB
+    // wrapped negative and then clamped to 0.
+    // Seeded with mTell before the mode test -- 0x825FA254 `lwz r11, 0x14(r31)`
+    // sits above `cmpwi cr6, r30, 0x1`, and an unrecognised mode falls through to
+    // the clamp at .L_825FA290 carrying it. That also removes the spill/reload of
+    // newPos our conditional-only initialisation forced.
+    long long newPos = mTell;
+    if (j == 1) {
+        newPos += i;
     } else if (j == 0) {
         newPos = i;
     } else if (j == 2) {
         newPos = mSize + i;
     }
 
-    // Clamp position to valid file range [0, mSize]
+    // Clamp position to valid file range [0, mSize]: two clamps over one
+    // variable and a single store, not three stores (0x825FA2B0 is the only
+    // `stw r11, 0x14(r31)`).
     if (newPos > mSize) {
-        mTell = mSize;
-    } else if ((int)newPos < 0) {
-        mTell = 0;
-    } else {
-        mTell = newPos;
+        newPos = mSize;
+    } else if (newPos < 0) {
+        newPos = 0;
     }
+    mTell = newPos;
 
     _SeekToTell();
     if (mBuffer && (mMode & FILE_OPEN_READ)) {

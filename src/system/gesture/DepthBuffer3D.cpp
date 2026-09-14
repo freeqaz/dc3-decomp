@@ -128,6 +128,16 @@ void DepthBuffer3D::UpdateAttachment(
     if (skelIdx + 1 > 0) {
         const Transform &localXfm = LocalXfm();
         Skeleton &skeleton = TheGestureMgr->GetSkeleton(skelIdx);
+        // NEGATIVE RESULT (93.47%, two refuted variants). The image keeps the
+        // localXfm.v copy at 0x50(r1) and the JointToVertexData output at
+        // 0x60(r1) -- `addi r9, r1, 0x50` / `addi r3, r1, 0x60` in
+        // build/373307D9/asm/src/system/gesture/DepthBuffer3D.s -- so newPos,
+        // which always lands on 0x50, shares localPos's slot there and pos's
+        // slot here. Swapping the two declarations is byte-identical, and so is
+        // scoping pos into its own block: neither the order nor the lexical
+        // scope moves this pair. That one swap accounts for the 0x50/0x60
+        // offset rows and the f0/f11, f13/f10, f12/f13 pairs that read from
+        // them, i.e. 11 of the 20 mismatch rows.
         Vector3 localPos = localXfm.v;
         Vector3 pos;
         JointToVertexData(pos, skeleton, (SkeletonJoint)attachment.mJoint, v1);
