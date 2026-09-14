@@ -250,45 +250,34 @@ void XboxContentMgr::StartRefresh() {
         for (int i = 0; i < kNumberOfBuffers; i++) {
             if ((i >= 4 || ThePlatformMgr.IsSignedIn(i))
                 && (i != 5 || mEnumerateSaveGameExports)) {
-                int param;
-                int flags;
-                void **handle;
+                // ONE enumerator call PER ARM (w7-bn, 99.12 -> 100.0).  bg's two
+                // "unreachable" residuals -- the shared `li r3, 0xff` hosted at
+                // the end of the i==5 arm with i==6 branching BACK to it
+                // (825EC040/825EC058), and the result tested in cr6 (825EC084)
+                // -- are one cause: the image has four call sites that MSVC
+                // cross-jumps into the single `bl` at 825EC080, so the tested
+                // value is a phi (cr6), not a direct call result (cr0).  With
+                // param/flags/handle locals and one call: 99.12; a named DWORD
+                // result on that one call: INERT; a switch: 92.7.
+                DWORD result;
                 if (i == 4) {
-                    handle = &mEnumHandles[4];
-                    param = 0xff;
-                    flags = 2;
+                    result = XContentCreateCrossTitleEnumerator(
+                        0xff, 0, 2, 0, 1, 0, &mEnumHandles[4]
+                    );
                 } else if (i == 5) {
-                    handle = &mEnumHandles[5];
-                    flags = 1;
-                    param = 0xff;
+                    result = XContentCreateCrossTitleEnumerator(
+                        0xff, 0, 1, 0, 1, 0, &mEnumHandles[5]
+                    );
                 } else if (i == 6) {
-                    handle = &mEnumHandles[6];
-                    param = 0xff;
-                    flags = 0x7000;
+                    result = XContentCreateCrossTitleEnumerator(
+                        0xff, 0, 0x7000, 0, 1, 0, &mEnumHandles[6]
+                    );
                 } else {
-                    handle = &mEnumHandles[i];
-                    param = i;
-                    flags = 2;
+                    result = XContentCreateCrossTitleEnumerator(
+                        i, 0, 2, 0, 1, 0, &mEnumHandles[i]
+                    );
                 }
-                // The `== 0` and `!= 0 { continue; }` spellings compile
-                // byte-identically here; the readable one is kept.
-                // NEGATIVE RESULT (w7-bg): StartRefresh floors at 99.12%
-                // canonical, 5 of 252 rows, from two causes, neither reachable
-                // from the source spelling:
-                //  (1) TAIL-MERGE DIRECTION.  The image hosts the shared
-                //      `li r3, 0xff` (param = 0xff) at the END of the i==5 arm
-                //      and branches BACKWARD into it from i==6
-                //      (825EC03C `li r5, 0x1` / 825EC040 `li r3, 0xff` /
-                //       825EC054 `li r5, 0x7000` / 825EC058 `b .L_825EC040`).
-                //      We host it in the i==6 arm and branch forward from i==5.
-                //      Writing the i==6 arm flags-first, so both arms end in
-                //      `param = 0xff` exactly as the image's do, only MIRRORS
-                //      the merge -- measured 98.73%, one row WORSE.
-                //  (2) CR-FIELD SELECTION on the enumerator result:
-                //      825EC0xx `cmplwi cr6, r3, 0x0` where we emit cr0.  Same
-                //      class as FlowTrigger::GetEventEditorDef; see its note.
-                if (XContentCreateCrossTitleEnumerator(param, 0, flags, 0, 1, 0, handle)
-                    == 0) {
+                if (result == 0) {
                     mOverlappeds[i] = new XOVERLAPPED;
                     memset(mOverlappeds[i], 0, sizeof(XOVERLAPPED));
                     if (XEnumerateCrossTitle(
