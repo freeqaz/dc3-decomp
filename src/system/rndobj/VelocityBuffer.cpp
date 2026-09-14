@@ -264,9 +264,18 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
         // it in a callee-saved register across AdvanceFrame and five virtual
         // calls.  Referencing it only at the SetPConstant site recomputes the
         // address there instead.
-        int cacheIdx = mActiveXfmCacheIndex;
-        ViewProjXfm &curXfm = unk36bec[cacheIdx];
-        ViewProjXfm &prevXfm = unk36bec[cacheIdx ^ 1];
+        //
+        // The cache index must be read INLINE in both subscripts, not through a
+        // named `int cacheIdx` local.  The local is what made MSVC sink
+        // prevXfm's address past the nine intervening calls and rematerialise it
+        // at the SetPConstant site from a callee-saved copy of the index PLUS a
+        // callee-saved copy of the 0x36bec base -- two registers where the image
+        // spends one, which pushed the prologue from `__savegprlr_16` to
+        // `__savegprlr_15`, the frame from 0xe0 to 0xf0, and rotated every
+        // callee-saved register in the function by one.  That single local was
+        // worth 48.74 -> 99.0 canonical.
+        ViewProjXfm &curXfm = unk36bec[mActiveXfmCacheIndex];
+        ViewProjXfm &prevXfm = unk36bec[mActiveXfmCacheIndex ^ 1];
         memcpy(&curXfm, &mViewProjXfm, 0x40);
 
         // AdvanceFrame must run unconditionally here (before PreDepthTexture),
