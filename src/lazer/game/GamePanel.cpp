@@ -161,7 +161,7 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     if (!stream->IsPastStreamJumpPointOfNoReturn()) {
         mDebugMeter1.DrawBar(
             loopStartNorm + loopRangeNorm * loopProgress,
-            bufferAheadProgress * loopRangeNorm,
+            loopRangeNorm * bufferAheadProgress,
             Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f
         );
     } else {
@@ -186,6 +186,12 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     mDebugMeter1.DrawText(MakeString("%d", loopStart), loopStartNorm, 0.0f, startColor);
 
     Hmx::Color endColor = mLoopStartChangeTimer > 0.0f ? Hmx::Color(1.0f, 1.0f, 0.0f) : Hmx::Color(1.0f, 1.0f, 1.0f);
+    // NOTE (w7-z): the image computes this label position as `fadds f1, f28, f29`,
+    // i.e. loopStartNorm + loopRangeNorm, not loopEndNorm (f25, which is live in a
+    // callee-saved register right there and would only need `fmr f1, f25`).
+    // Spelling it that way here does NOT reproduce the row -- it perturbs FPR
+    // allocation instead (93.48 -> 92.60, +4 instructions), so it is left alone
+    // until the one-extra-callee-saved-FPR cascade below is understood.
     mDebugMeter1.DrawText(MakeString("%d", loopEnd), loopEndNorm, 0.0f, endColor);
 
     mDebugMeter1.DrawText(
