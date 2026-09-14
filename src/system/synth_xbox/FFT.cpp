@@ -529,6 +529,33 @@ int fft_matrix_forward_columnwise(float* data, long size, float* context) {
 
             // Twiddle-multiply the transformed rows and scatter them back.
             {
+                // NEGATIVE RESULT on the twiddle loop's two source pointers.
+                // The image walks THREE pointers into this loop -- `mr r10, r29`
+                // (temp), `mr r9, r26` (temp2), `mr r8, r30` (data_ptr) -- and
+                // loads both halves with a zero index: `lvx128 v63, r0, r10` /
+                // `lvx128 v62, r0, r9`, advancing each with its own
+                // `addi rN, rN, 0x10` (FFT.s, the block at 0x45c-0x558).  We
+                // emit only TWO `mr`, plus `subf r7, r29, r26`, and load the
+                // second half indexed off the first: `lvx128 v62, r7, r11`.
+                // That is MSVC folding src2 into src1 + (temp2 - temp) --
+                // induction-variable elimination, and it cascades into the
+                // whole loop's vector-register assignment (61 of this
+                // function's 102 mismatch rows are in this one loop).
+                //
+                // Two variants tried, both BYTE-FOR-BYTE INERT (86.8 canonical /
+                // 84.9 raw, 319 instructions, 60/6/19/17 row split, identical
+                // before and after):
+                //   1. `float*` walked with `+= 4` instead of `char*` walked
+                //      with `+= 0x10` -- i.e. spelled exactly like the gather
+                //      loop 30 lines above, which does NOT get merged even
+                //      though its dst1/dst2 stand in the same temp/temp2
+                //      relationship.
+                //   2. the two increments separated in source order to match
+                //      the image's schedule (src1 right after `k += 1`, src2
+                //      down inside the recurrence after the last use of `b`).
+                // The gather loop's pointers survive because they are STORE
+                // destinations; the merge here is a load-side decision the
+                // pointer's spelling and its increment's position do not reach.
                 char* src1 = (char*)temp;
                 char* src2 = (char*)temp2;
                 char* out = (char*)data_ptr;
@@ -807,6 +834,12 @@ int fft_matrix_inverse_columnwise(float *data, long size, float *scratch) {
 
             // Deinterleave from temp back to data
             {
+                // Same induction-variable merge as the forward transform's
+                // twiddle loop -- see the NEGATIVE RESULT block in
+                // fft_matrix_forward_columnwise.  The image walks three
+                // pointers in (`mr r9, r28` / `mr r8, r27` / `mr r10, r30`,
+                // FFT.s 0x890-0x8ac); we emit one `mr` and index the second
+                // half off the first.  Both spellings tried there are inert.
                 char *src1 = (char *)temp;
                 char *src2 = (char *)temp2;
                 char *out = (char *)data_ptr;
