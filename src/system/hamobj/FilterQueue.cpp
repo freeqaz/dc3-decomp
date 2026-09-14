@@ -135,5 +135,20 @@ void FilterQueue::Poll(const SkeletonUpdateData &skelData) {
         }
     }
     mJobFinished = true;
-    mLastPollMs = Timer::CyclesToMs(timer.Stop());
+    // `timer.Stop(); timer.Ms();`, NOT `CyclesToMs(timer.Stop())`.  The image's
+    // not-taken arm of the inlined `--mRunning == 0` test is a bare
+    // `ld r11, 0x68(r1)` (mCycles), and its taken arm is `ld r9, 0x68(r1)` /
+    // `subf` / `rldicl` / `add r11, r11, r9` -- i.e. the value handed to
+    // CyclesToMs is mCycles, with Stop()'s store to mCycles dead because the
+    // Timer is a stack local.  Feeding Stop()'s RETURN value instead makes the
+    // not-taken arm `li r11, 0` and loses the `ld`/`add` pair entirely.
+    //
+    // Do NOT "fix" this by making Timer::Stop() return mCycles: measured
+    // binary-wide (full ninja + compare_progress), that spelling buys 20 bytes
+    // here and costs 217 across AutoTimer::~AutoTimer (100.0 -> 69.9),
+    // CameraTilt::Poll (100.0 -> 89.2) and FlowManager::Poll (100.0 -> 95.9),
+    // all three of which are at 100% precisely because Stop() returns the
+    // interval.
+    timer.Stop();
+    mLastPollMs = timer.Ms();
 }
