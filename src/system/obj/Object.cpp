@@ -523,12 +523,11 @@ const char *Hmx::Object::FindPathName() {
 
     ObjectDir *dataDir = DataDir();
     if (dataDir) {
-        DirLoader *loader = dataDir->Loader();
-        if (loader) {
+        if (dataDir->Loader()) {
             return MakeString(
                 "%s (%s)",
                 name,
-                FileLocalize(loader->LoaderFile().c_str(), nullptr)
+                FileLocalize(dataDir->Loader()->LoaderFile().c_str(), nullptr)
             );
         } else if (!dataDir->ProxyFile().empty()) {
             return MakeString(
