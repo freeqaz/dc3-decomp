@@ -364,6 +364,21 @@ void NgMat::RefreshState() {
     }
 
     // Blend mode switch
+    // w7-bj: 97.14 residual, three clusters, no lever found.
+    //  (1) The five hoisted constants after `lwz mBlend` (0x8269D19C-0x8269D1AC)
+    //      come out 4,3,2,0,1 in the image and 0,1,4,3,2 here.  Their order
+    //      is the order of FIRST USE in source: moving the kDarken arm to the
+    //      top of this switch re-emitted them 1,2,0,4,3 (and moved the arm's
+    //      block, 96.11).  No arm order puts 4 before 0 while keeping the
+    //      Dest arm first, so the image's order comes from something else.
+    //  (2) The `lwz mTexGen` / `cmplwi` of the mTexGen switch sits AFTER the
+    //      four mTexGenMatrix2 diagonal stores in the image (0x8269D3B4) and is
+    //      hoisted above them here.
+    //  (3) In the second mBlend switch the image stores the four floats and
+    //      THEN unk2d4 in every arm (0x8269D654-D664), tail-merging the
+    //      Multiply/Darken arm into the Add arm's `stw 2`; ours schedules the
+    //      int store first and merges the two zero-fill arms instead.  Writing
+    //      `unk2d4 = N` first in each arm is byte-identical.
     switch (mBlend) {
     case kBlendDest:
         mBlendSrc = (RndRenderState::Blend)0;
