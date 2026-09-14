@@ -382,7 +382,15 @@ void SongCollision::CheckCollision(
             Vector3 maxVec(bd->mMaxX, 0.0f, 0.0f);
             Multiply(maxVec, transforms[i], *maxEdge);
 
-            // Pre-compute all differences (target interleaves min/max loads)
+            // Pre-compute all differences (target interleaves min/max loads).
+            //
+            // This order is LOAD-BEARING and already tuned -- do not "tidy" it
+            // into min-then-max.  The image's own issue order is minDz, minDy,
+            // minDx, maxDx, maxDz, maxDy; writing exactly that here REGRESSES
+            // the function 99.943 -> 98.4 (23 rows -> 45, plus an insert and a
+            // delete), because the tidier order costs a stack slot and shifts
+            // nine `stfs` and the whole loop-pointer block by 4.  Measured
+            // 2026-09-14 in this tree.
             float minDz = minEdge->z - transforms[i].v.z;
             float minDy = minEdge->y - transforms[i].v.y;
             float maxDy = maxEdge->y - transforms[i].v.y;
