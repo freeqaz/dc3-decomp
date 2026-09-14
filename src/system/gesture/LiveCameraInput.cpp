@@ -342,6 +342,37 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
     }
 }
 
+/** SURVEYED w7-aj, 88.5% canonical (up from 87.1), 596 B, target
+ *  0x82431060-0x824312B4.  The one source-reachable lever found was statement
+ *  ORDER of the `g_colorBufferUpdate3++` counter: retail materialises the
+ *  counter's `lis` AFTER both `& 0xfffe` / `% N` clip computations
+ *  (target 0x824310C4), not before, so the increment belongs below them.
+ *  Worth +1.4.
+ *
+ *  The residual is register allocation plus one scheduling cluster, and three
+ *  variants were measured NON-improving -- do not re-derive:
+ *    (1) commutative swaps on `texWidth + startX - 1 >= 640` and
+ *        `texHeight + startY - 1 >= 480` (target indices 16/31): exactly
+ *        neutral, MSVC normalises both operand orders.
+ *    (2) declaring `srcPitch` before `destWidth`: exactly neutral at 88.5.
+ *    (3) declaring `clippedY` before `clippedX` to flip the r7/r6 assignment
+ *        at target indices 40/41: canonical unchanged at 88.5 but raw drops
+ *        and it manufactures two new (0x1e0,0x280) OFFSET_SWAP rows -- strictly
+ *        worse, reverted.
+ *
+ *  What is left, for anyone who picks this up: 43-48 instructions of pure
+ *  REGISTER_SWAP (r10<->r9, r27<->r30, r26<->r27, r29<->r30, r21<->r22 ...),
+ *  and one scheduling cluster at target indices 86-115 where retail computes
+ *  `srcOffset` (mullw/slwi/add into r30) BEFORE the `mTex->TexelsPitch()`
+ *  `bctrl` and then SINKS `destStride * 2`, `(srcPitch - 320) * 4` and
+ *  `srcPtr = srcOffset - 4` past the `mTex->Height()` loop guard, while our
+ *  build hoists the `bctrl` above `srcOffset` and computes all three before the
+ *  guard.  The statement order below is already retail's; this is the
+ *  scheduler, not the source.
+ *
+ *  Not a bug: the final `D3DCubeTexture_UnlockRect` vs our
+ *  `D3DTexture_UnlockRect` (index 153) are the SAME address 0x82B9BEC0 in
+ *  build/373307D9/icf_aliases.map -- a proven ICF fold. */
 void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     LiveCameraInput *cam, float clipLeft, float clipTop
 ) {
@@ -359,9 +390,9 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     if (texHeight + startY - 1 >= 480) {
         startY = 480 - texHeight;
     }
-    g_colorBufferUpdate3++;
     int clippedX = ((startX + 1) & 0xfffe) % 640;
     int clippedY = ((startY + 1) & 0xfffe) % 480;
+    g_colorBufferUpdate3++;
     if (!g_startMetering) {
         g_startMetering = true;
         g_ColorNoFrameDataCnt = 0;
@@ -918,43 +949,45 @@ void LiveCameraInput::NuiAudioErrorCallback(HRESULT hr) {
 // SpeechMgr::mVoiceDirection — use public getter/setter instead of raw byte offset
 
 void LiveCameraInput::NuiAudioDataCallback(NUIAUDIO_RESULTS *results) {
-    if (!sInstance)
+    LiveCameraInput *inst = sInstance;
+    if (!inst)
         return;
-    if (!sInstance->mSpeechMgr)
+    SpeechMgr *mgr = inst->mSpeechMgr;
+    if (!mgr)
         return;
-    if (!sInstance->mSpeechMgr->Recognizing())
+    if (!mgr->Recognizing())
         return;
 
     float confidence = results->Confidence;
     float beamAngle = results->BeamAngle;
     if (confidence > 0.2f) {
-        sInstance->mBeamAngle = beamAngle;
-        sInstance->mBeamConfidence = confidence;
+        inst->mBeamAngle = beamAngle;
+        inst->mBeamConfidence = confidence;
         side = (int)(beamAngle / Abs(beamAngle)) + side;
         if (side > 10) {
             side = 10;
         } else if (side < -10) {
             side = -10;
-            goto checkSide;
-        } else {
-            goto checkSide;
         }
-        sInstance->mSpeechMgr->SetVoiceDirection(0);
-        return;
-    } else {
-        if (side != 0) {
-            int absVal = side < 0 ? -side : side;
-            side = side - side / absVal;
-        }
-    checkSide:
-        if (side == 10) {
-            sInstance->mSpeechMgr->SetVoiceDirection(0);
-            return;
-        }
-        if (side == -10) {
-            sInstance->mSpeechMgr->SetVoiceDirection(1);
-        }
+    } else if (side != 0) {
+        int absVal = side < 0 ? -side : side;
+        side = side - side / absVal;
     }
+
+    // ONE SetVoiceDirection site.  The image computes the direction into r10
+    // (`li r10, 0x0` at .L_8243073C / `li r10, 0x1` at 0x8243074C) and joins a
+    // single `lwz r11, 0x1444(r8)` / `stw r10, 0x44(r11)` at .L_82430750; the
+    // `side > 10` arm branches straight into it.  Duplicating the call in each
+    // arm costs six rows and re-materialises the `?side@@3HA` address twice.
+    int direction;
+    if (side == 10) {
+        direction = 0;
+    } else if (side == -10) {
+        direction = 1;
+    } else {
+        return;
+    }
+    inst->mSpeechMgr->SetVoiceDirection(direction);
 }
 
 bool LiveCameraInput::SetAutoexposure(bool enable) {

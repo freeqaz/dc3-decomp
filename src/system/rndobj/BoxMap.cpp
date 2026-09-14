@@ -59,6 +59,34 @@ bool BoxMapLighting::QueueLight(RndLight *light, float colorScale) {
     return false;
 }
 
+/** SURVEYED w7-aj, 62.8% canonical, 648 B.  The ARITHMETIC below is exact --
+ *  all eighteen fmadds at 0x826F12AC-F8 were matched one by one against these
+ *  statements (accumulator FPR -> its `lfs off(r30)` at 0x826F11A0-E8 -> the
+ *  color[i] member), and the six Max() calls lower to the fneg+fsel pairs at
+ *  0x826F1224-8C exactly as Utl.h's `(x - y < 0) ? y : x` predicts, with
+ *  Max(0.0f, -x1) producing the fneg-of-fneg chain (f24 = -x1, f14 = -f24).
+ *  The loop induction is also exact: `lfs 0x8(r11)` / `lfs 0xc(r11)` /
+ *  `lfsu 0x10(r11)` is the (float*)gLightBuffer1 - 2 walk.
+ *
+ *  The whole 37-point gap is FPR allocation, and the tell is in the prologue:
+ *  the image calls __savefpr_14 (18 callee-saved FPRs) where we call
+ *  __savefpr_15 (17), spills two accumulators to 0x50/0x54(r31) and
+ *  stfd/lfd-spills two more across the loop body (0x58/0x60(r31), which is
+ *  the whole 0x10 frame delta), and emits NINE fnegs where three of them are
+ *  textually redundant -- `fneg f24, f26` and `fneg f18, f26` are the same
+ *  expression, un-CSEd.  We are CHEAPER than the image, so no rewriting of
+ *  these statements can reach it; we would have to make MSVC need a register
+ *  it does not need.
+ *
+ *  Two variants measured, both neutral (62.8 -> 62.9, i.e. noise):
+ *    (1) hoisting `float mx1 = -x1, my1 = -y1, mz1 = -z1;` out of the Max()
+ *        calls, to reproduce the un-CSEd second fneg;
+ *    (2) (1) plus moving the c20r accumulation down to the image's emission
+ *        position (between c12g and c16g).
+ *  Do not re-derive these.  If this is picked up again, the lever is whatever
+ *  makes the image load the eighteen colours ABOVE the loop guard (it has a
+ *  duplicated `cmplwi cr6, r11, 0x0` at 0x826F11A4 and a second `beq` at
+ *  0x826F11F4), not the expression order inside the loop. */
 void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vector3 *v3) const {
     START_AUTO_TIMER("draw_light_approx");
     gLightIndex = 0;

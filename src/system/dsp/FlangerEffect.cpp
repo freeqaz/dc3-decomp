@@ -43,6 +43,43 @@ void FlangerEffect::SetParameters(FlangerEffect::Params const &params) {
     mWetFrac = params.mWet / 100.0f;
 }
 
+/** SURVEYED w7-aj, 83.8% canonical, 824 B.  The SEMANTICS are settled: every
+ *  arithmetic instruction in the image (0x82E588F8-0x82E58C2C) is accounted
+ *  for by the statements below, the `bl sin` + `frsp` pair is what `sinf`
+ *  lowers to here, and both loop bounds, both wrap moduli (0x2580 = 9600 and
+ *  0x257F) and the two Min() fsel pairs match one for one.  The
+ *  ??$MakeString@ callee name differs (image `$$BY0BD@`/`$$BY04@`, ours
+ *  `$$BY0BG@`/`$$BY0O@`) but the string literals it is handed are byte-equal
+ *  -- `dsp?2FlangerEffect?4cpp` and `numChans?5?$DM?$DN?52` -- so that is an
+ *  ICF fold of two identically-lowered instantiations, not a wrong callee.
+ *
+ *  The residual is FPR/GPR allocation plus scheduling.  Ours holds var_f25 in
+ *  f23 and the two ramp steps in f22/f21 where the image uses f25 and f21/f22,
+ *  which rotates f23/f24/f25 across the whole body; and our scheduler emits
+ *  the `(float)mDelaySamples` conversion and the `% 9600` wrap on the other
+ *  side of the `numChans > 0` guard from the image.
+ *
+ *  Five variants measured, ALL non-improving -- do not re-derive:
+ *    (1) index `mDelayBuffers[i]` / `[i+2]` instead of walking a `float **`,
+ *        to reproduce the image's single induction register (`mr r29, r30`,
+ *        `subf r23, r30, r10`, `lfsx f0, r23, r29`): 83.4, and it grows the
+ *        frame by 0x10 (extra callee-saved GPR).
+ *    (2) spell the second term `(temp_f31 - var_f30 * temp_f29)` so MSVC
+ *        folds it to the image's single `fnmsubs f0, f30, f29, f31`
+ *        (0x82E58A14) instead of our fmsubs+fneg: the fnmsubs DOES appear,
+ *        but the int->float conversion then re-schedules across the guard and
+ *        the net is 80.7.
+ *    (3) (2) plus hoisting `temp_r25` above the `if (numChans > 0)`, which is
+ *        where the image computes it (divw at 0x82E58A34, cmpwi only at
+ *        0x82E58A38): 74.7.
+ *    (4) swap the two ramp divisions so the depth division is emitted first
+ *        (the image's `fdivs f22, f13, f0` is depth, ours is rate): 82.8 --
+ *        it fixes the fdivs pair and breaks the two fsubs above it.
+ *    (5) commutative operand order on `sampleIdx + var_r28` and on
+ *        `temp_f0_3 * (temp_f13 * var_f30 * temp_f29)`: exactly neutral,
+ *        MSVC normalises both.
+ *  If this is picked up again the lever is whatever makes MSVC allocate f25
+ *  for var_f25, not any re-spelling of the expressions. */
 void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x3f);
 

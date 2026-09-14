@@ -93,6 +93,12 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
 //    revisiting ONLY together with a fix for the body's r9/r11 scratch
 //    allocation (88 of the 104 swap pairs), which is what actually costs the
 //    ~230 extra instructions.
+//
+// RE-CONFIRMED 2026-09-14 (lane w7-aj) at 62.0 canonical / 55.7 raw, 1698
+// instructions: 1721 instructions across 99 REGISTER_SWAP pairs, 47 offset
+// swaps, 17 commutative rows. Both leads above still read exactly as recorded,
+// so neither was re-derived. The class that remains is the body's scratch
+// allocation, which is register permutation and is not source-reachable.
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 #ifdef HX_NATIVE
     // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap

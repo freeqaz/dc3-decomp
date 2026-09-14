@@ -73,35 +73,63 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
             SetProperty(name, *prop);
         }
         mStartMode = c->mStartMode;
-        // Deactivate existing child nodes
-        while (mChildNodes.begin() != mChildNodes.end()) {
-            FlowNode *child = mChildNodes.begin()->Obj();
+        // DELETE the existing child nodes, do not Deactivate them.  The target
+        // calls slot 0 of the child's VIRTUAL BASE (Hmx::Object) vtable with
+        // r4 = 1 (0x823F7098-B8: lwz r10,4(r11) / lwz r10,4(r10) / add / lwz
+        // r11,4(r11) / lwz r11,0(r11) / bctrl with `li r4, 1` hoisted above
+        // it) -- that is MSVC's scalar *deleting* destructor, reached through
+        // the vbtable exactly the way this function reaches Hmx::Object on its
+        // own `this` at 0x823F7044.  Deactivate is introduced by FlowNode and
+        // would dispatch through FlowNode's own vfptr at +0 with no vbase
+        // adjustment at all.  It is also the only reading that terminates:
+        // deleting the node erases its ObjPtr from mChildNodes, whereas
+        // Deactivate leaves the vector untouched and spins forever.
+        while (!mChildNodes.empty()) {
+            // [0], not front(): front() is *begin() and begin() carries the
+            // `empty() ? nullptr : ...` ternary, which shows up as a second
+            // _M_start/_M_finish compare plus an `li r11, 0` inside the loop
+            // body.  The target goes straight to the node: `lwz r11, 0x0(r31)`
+            // / `lwz r11, 0xc(r11)` at 0x823F7088, which is
+            // mNodes[0].Obj().  (front() itself must stay as it is --
+            // rewriting it in obj/Object.h regressed FlowNode::~FlowNode from
+            // 100.0% to 85.2% binary-wide.)
+            FlowNode *child = mChildNodes[0];
             if (child) {
-                child->Deactivate(true);
+                delete child;
             }
         }
-        // Copy child nodes from source
+        // Copy child nodes from source. it->Obj() is re-read at every use --
+        // the target reloads it from the iterator four times (0x823F713C,
+        // 0x823F7158, 0x823F7168, 0x823F71E0) and strength-reduces the
+        // iterator to point straight at the ObjPtr's object word.
         FOREACH (it, c->mChildNodes) {
-            FlowNode *srcChild = it->Obj();
             FlowNode *newChild;
-            if (dynamic_cast<Flow *>(srcChild)) {
-                newChild = FlowNode::DuplicateChild(srcChild);
+            if (dynamic_cast<Flow *>(it->Obj())) {
+                newChild = FlowNode::DuplicateChild(it->Obj());
             } else {
-                Symbol sym = srcChild->ClassName();
-                Hmx::Object *newObj = Hmx::Object::NewObject(sym);
+                // Unnamed temporary, not a named Symbol local: the target
+                // feeds NewObject from ClassName()'s RETURN pointer
+                // (`lwz r3, 0x0(r3)` at 0x823F7190) instead of re-loading the
+                // 0x50(r1) home slot a named local would pin.
+                Hmx::Object *newObj =
+                    Hmx::Object::NewObject(it->Obj()->ClassName());
                 newObj->InitObject();
                 newChild = dynamic_cast<FlowNode *>(newObj);
                 newChild->SetParent(this, true);
-                newChild->Copy(srcChild, kCopyShallow);
+                newChild->Copy(it->Obj(), kCopyDeep);
             }
             newChild->SetParent(this, true);
-            newChild->MoveIntoDir(Dir(), c->Dir());
+            newChild->MoveIntoDir(this, const_cast<Flow *>(c));
         }
         mPrivate = c->mPrivate;
         mHardStop = c->mHardStop;
         RefreshPortLabelLists();
         if (!ProxyFile().empty()) {
-            mStartMode = 5;
+            // mInterrupt, not mStartMode: the target stores 5 at -0x124(r30)
+            // (0x823F72B8), i.e. Flow + 0x5c, while mStartMode is Flow + 0x170
+            // and is the -0x10(r30) store at 0x823F7078.  5 is kPassThrough,
+            // which is a QueueState; mStartMode only ever holds 0, 1 or 2.
+            mInterrupt = kPassThrough;
         }
     }
 }

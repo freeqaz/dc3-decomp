@@ -102,6 +102,8 @@ void XboxEnumeration::Poll() {
         return;
     }
 
+    unsigned long long *offersEnd;
+
     DWORD bytesReceived = 0;
     DWORD overlappedResult = XGetOverlappedResult(&mOverlapped, &bytesReceived, 0);
 
@@ -118,18 +120,24 @@ void XboxEnumeration::Poll() {
             // separate `String str` cost an extra ctor/dtor pair and turned the
             // assignment into operator=(String const&).
             char buf[256];
-            EnumProduct prod;
-            u8 *entryPtr = (u8 *)mCurOffers + offset;
-            WideCharToMultiByte(0, 0, *(LPCWSTR *)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
-            prod.mName = buf;
+            // The EnumProduct gets its OWN scope: retail runs ~String
+            // (0x82E1D3E8) BEFORE the two induction increments at
+            // 0x82E1D3F0/0x82E1D3F4.  With prod at while-body scope MSVC hoists
+            // both increments above the dtor call.
+            {
+                EnumProduct prod;
+                u8 *entryPtr = (u8 *)mCurOffers + offset;
+                WideCharToMultiByte(0, 0, *(LPCWSTR *)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
+                prod.mName = buf;
 
-            prod.mOfferID = *(u64 *)entryPtr;
-            prod.mPurchased = *(int *)(entryPtr + 0x48);
-            // mPrice is written BEFORE the insert (0x82E1D3D8 stores to 0x74,
-            // then bl insert).  Setting it afterwards wrote to the dead local
-            // and every product in mContentList kept price 0.
-            prod.mPrice = *(int *)(entryPtr + 0x64);
-            mContentList.insert(it, prod);
+                prod.mOfferID = *(u64 *)entryPtr;
+                prod.mPurchased = *(int *)(entryPtr + 0x48);
+                // mPrice is written BEFORE the insert (0x82E1D3D8 stores to
+                // 0x74, then bl insert).  Setting it afterwards wrote to the
+                // dead local and every product in mContentList kept price 0.
+                prod.mPrice = *(int *)(entryPtr + 0x64);
+                mContentList.insert(it, prod);
+            }
 
             offset += 0x68;
             productCount++;
@@ -148,80 +156,98 @@ void XboxEnumeration::Poll() {
     delete mCurOffers;
     mCurOffers = 0;
 
-    if (overlappedResult == 0) {
-        goto done;
-    }
-
-    // THE THREE ERROR ARMS WERE ROTATED.  0x82E1D448 sends overlappedResult
-    // == 0x12 (ERROR_NO_MORE_FILES) to .L_82E1D518, the "error no more files"
-    // block -- which in our source was `error_no_more`, and NOTHING BRANCHED TO
-    // IT.  0x82E1D454 sends 0x65b to .L_82E1D488, the extended-error / winsock
-    // block.  And the FALLTHROUGH at 0x82E1D458 is the "overlapped failed
-    // with ... extended ..." message, where our source called
-    // XGetOverlappedExtendedError and threw the result away.
-    if (overlappedResult == 0x12) {
-        goto error_no_more;
-    }
-
-    if (overlappedResult == 0x65b) {
-        goto handle_65b;
-    }
-
-    {
-        DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
-        // The middle argument is the 16-BIT-TRUNCATED error: 0x82E1D45C is
-        // `clrlwi r9, r3, 16`, and 0x54(r31) (arg 2) holds r9 while 0x50(r31)
-        // (arg 3) holds the full value.
-        TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)\n", (unsigned long)overlappedResult, (unsigned long)(WORD)extError, (unsigned long)extError);
-    }
-    goto check_more_offers;
-
-handle_65b:
-    {
-        DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
-        if ((WORD)extError == 0x12) {
-            goto done;
+    // 0x82E1D440 sends overlappedResult == 0 to .L_82E1D54C, which reloads
+    // bytesReceived and falls straight into the continue_enum tail at
+    // .L_82E1D550 -- i.e. a SUCCESSFUL poll still asks whether another batch is
+    // outstanding and calls Start() again.  Our source sent it to `done`, which
+    // stopped every batched enumeration after its first 99 offers.  Spelling it
+    // as an `if (overlappedResult != 0) { ... }` wrapper rather than a
+    // `goto continue_enum` is what keeps the three dispatch tests as FORWARD
+    // beq's with the "overlapped failed" arm as the fallthrough, the way
+    // 0x82E1D440-0x82E1D458 lays them out.
+    if (overlappedResult != 0) {
+        // THE THREE ERROR ARMS WERE ROTATED.  0x82E1D448 sends overlappedResult
+        // == 0x12 (ERROR_NO_MORE_FILES) to .L_82E1D518, the "error no more
+        // files" block -- which in our source was `error_no_more`, and NOTHING
+        // BRANCHED TO IT.  0x82E1D454 sends 0x65b to .L_82E1D488, the
+        // extended-error / winsock block.  And the FALLTHROUGH at 0x82E1D458 is
+        // the "overlapped failed with ... extended ..." message, where our
+        // source called XGetOverlappedExtendedError and threw the result away.
+        if (overlappedResult == 0x12) {
+            goto error_no_more;
         }
-        // Same shape at 0x82E1D4A4/0x82E1D4AC: arg 1 is 0x50(r31), the
-        // truncated value, and arg 2 is 0x54(r31), the full one.
-        TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)\n", (unsigned long)(WORD)extError, (unsigned long)extError);
-        if ((WORD)extError >= 0x2710 && (WORD)extError < 0x2EE0) {
-            TheDebug << MakeString(" which is a winsock error, so fail.\n");
-        }
-    }
 
-check_more_offers:
-    if (mOfferIDsBegin != 0) {
-        if (mOfferIDsCur < mOfferIDsBegin + mOfferIDCount) {
-            goto continue_enum;
+        if (overlappedResult == 0x65b) {
+            goto handle_65b;
         }
-    }
-    goto done;
 
-error_no_more:
-    if (mOfferIDsBegin != 0) {
+        {
+            DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
+            // The middle argument is the 16-BIT-TRUNCATED error: 0x82E1D45C is
+            // `clrlwi r9, r3, 16`, and 0x54(r31) (arg 2) holds r9 while
+            // 0x50(r31) (arg 3) holds the full value.
+            TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)\n", (unsigned long)overlappedResult, (unsigned long)(WORD)extError, (unsigned long)extError);
+            // Only the MESSAGE arms clear mEnumerating.  The shared tail at
+            // .L_82E1D534/.L_82E1D540 is `bl TextStream::operator<<` /
+            // `stb r25, 0x1c(r29)` / `b .L_82E1D590`, and the epilogue label
+            // .L_82E1D590 itself carries NO store to 0x1c -- so a successful
+            // poll must leave mEnumerating set, which is what IsSuccess() reads.
+            mEnumerating = false;
+        }
+        return;
+
+    handle_65b:
+        {
+            DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
+            if ((WORD)extError == 0x12) {
+                return;
+            }
+            // Same shape at 0x82E1D4A4/0x82E1D4AC: arg 1 is 0x50(r31), the
+            // truncated value, and arg 2 is 0x54(r31), the full one.
+            TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)\n", (unsigned long)(WORD)extError, (unsigned long)extError);
+            if ((WORD)extError >= 0x2710 && (WORD)extError < 0x2EE0) {
+                TheDebug << MakeString(" which is a winsock error, so fail.\n");
+                mEnumerating = false;
+                return;
+            }
+        }
+
+    check_more_offers:
+        // .L_82E1D4FC computes `mOfferIDsBegin + mOfferIDCount` and then jumps
+        // INTO the continue_enum block at .L_82E1D570 -- the
+        // `mOfferIDsCur >= end` test and the Start() call are SHARED between the
+        // two paths, not duplicated.
+        if (mOfferIDsBegin == 0) {
+            return;
+        }
+        offersEnd = mOfferIDsBegin + mOfferIDCount;
+        goto test_cur;
+
+    error_no_more:
+        if (mOfferIDsBegin == 0) {
+            return;
+        }
         // MakeString<unsigned int>, not <unsigned long>:
         // ??$MakeString@I@@YAPBDPBDABI@Z at 0x82E1D530.
         TheDebug << MakeString(" store enum: error no more files (%d)\n", (unsigned int)overlappedResult);
         mEnumerating = false;
         return;
     }
-    goto done;
 
 continue_enum:
     if (mOfferIDsBegin != 0) {
-        if (mOfferIDsCur < mOfferIDsBegin + mOfferIDCount) {
-            Start();
-            return;
-        }
-    } else {
-        if (bytesReceived >= 99) {
-            Start();
-            return;
-        }
+        goto compute_end;
     }
-
-done:
-    mEnumerating = false;
+    if (bytesReceived >= 99) {
+        goto call_start;
+    }
+compute_end:
+    offersEnd = mOfferIDsBegin + mOfferIDCount;
+test_cur:
+    if (mOfferIDsCur >= offersEnd) {
+        return;
+    }
+call_start:
+    Start();
 }
 

@@ -381,6 +381,33 @@ const ADSRImpl *Synth::DefaultADSR() {
 
 static const float sMeterConsts[] = { 0.2f, 40.0f, 0.7f, 0.0f };
 
+/** SURVEYED w7-aj at 73.0% canonical, 688 B (same size as the image).  Every
+ *  statement below was checked against 0x82737418-827376C4 and is correct:
+ *  the five colour constructors land in the image's own stack slots
+ *  (white 0x90, red 0xa0, grey 0xb0, white2 0xc0, green 0xd0, black 0xe0 --
+ *  33 of 43 slots MATCH), Clamp(0,1,x) expands to exactly the image's
+ *  fneg/fsel/fsubs/fsel quartet (Utl.h Clamp = Min(Max(min,value),max)), the
+ *  peak colour really is `red` with `if (peakNorm != 1.0f) peakColor = &green`
+ *  (fcmpu against 1.0 then `addi r5, r1, 0xd0`, 0x82737608), TheRnd.Width() is
+ *  read twice as the image reads it, and dbLabelPos is `barWidth + barLeft`
+ *  in that order (`fadds f0, f28, f29`, 0x82737644).
+ *
+ *  The residual is one scheduling decision: the image finishes the level
+ *  Clamp into f24 BEFORE the background DrawRect (hence its __savefpr_24
+ *  against our __savefpr_25 and its 0x170 frame against our 0x160), while we
+ *  compute it after.  NEGATIVE RESULT, measured, do not re-derive: hoisting
+ *  the `levelNorm` statement above `TheRnd.DrawRect(bgRect, ...)` -- tried
+ *  both before and after the barLeft/barWidth pair, which MSVC normalises to
+ *  the same code -- DOES fix the frame size, the callee-saved FPR count and
+ *  the f24/f29 register assignment, but MSVC then sinks only the SECOND fsel
+ *  of the Clamp past the call, and the function drops 73.0 -> 70.3 (196
+ *  instructions against the image's 194).  Whatever keeps both fsels above
+ *  the call is not statement order.
+ *
+ *  Also noted, not chased: the image's MakeString here is
+ *  ??$MakeString@W4_D3DFORMAT@@@@... where ours is ??$MakeString@H@@... --
+ *  the usual identical-COMDAT fold of MakeString<int> onto another 4-byte
+ *  instantiation, not a source defect. */
 void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
     Hmx::Color grey(0.5f, 0.5f, 0.5f, 1.0f);
     Hmx::Color black(0.0f, 0.0f, 0.0f, 1.0f);
