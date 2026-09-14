@@ -88,7 +88,12 @@ void SynthSample::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(6, 0)
     if (d.rev > 1) {
-        LOAD_SUPERCLASS(Hmx::Object)
+        // Not LOAD_SUPERCLASS: the image passes the `bs` argument straight
+        // through (`mr r4, r30`) instead of reloading `d.stream` out of the
+        // BinStreamRev home slot (`lwz r4, 0x70(r1)`).  `d.stream` IS `bs` --
+        // BinStreamRev binds the reference in its ctor -- so this is the same
+        // call with the same object.
+        Hmx::Object::Load(bs);
     }
     d >> mFile;
     if (d.rev <= 5) {
