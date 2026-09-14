@@ -20,10 +20,7 @@ StreamReceiver360::StreamReceiver360(int sampleRate, int numBuffers, bool slip)
     mStreamBuf = (unsigned char *)_MemAllocTemp(
         numBuffers << 14, "StreamReceiver.cpp", 0x33, "StreamBuffer", 0);
 
-    Voice *mem = (Voice *)PoolAlloc(
-        0x7c, 0x7c, "e:\\lazer_build_gmc1\\system\\src\\synth360\\Voice.h", 0x28, "Voice"
-    );
-    mVoice = mem ? new (mem) Voice(false, 1, false) : 0;
+    mVoice = new Voice(false, 1, false);
 
     mVoice->SetData(mStreamBuf, numBuffers << 14, 0);
     mVoice->SetLoopRegion(0, -1);
