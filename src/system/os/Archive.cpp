@@ -146,46 +146,52 @@ void Archive::Enumerate(
         }
     }
 
-    const char *dirp = dir;
-    do {
-        dirp++;
-    } while ('\0' != *(dirp - 1));
-    int dirLen = dirp - dir - 1;
+    // MSVC's intrinsic strlen: `mr r11, r27` / `lbz r10, 0x0(r11)` /
+    // `addi r11, r11, 0x1` / `cmplwi cr6, r10, 0x0` / `bne cr6` / `subf` /
+    // `subi` at 0x825DB8C0-E4.
+    int dirLen = strlen(dir);
 
-    bool matches = false;
     const char *lastPath = nullptr;
+    bool matches = false;
 
-    auto& _ref0 = mHashTable;
     FOREACH (it, mFileEntries) {
-        const char *curPath = _ref0[it->HashedPath()];
+        const char *curPath = mHashTable[it->HashedPath()];
 
         if (lastPath != curPath) {
+            lastPath = curPath;
+            // A PREFIX TEST AND NOTHING MORE.  The recurse arm is exactly
+            // `strncmp(curPath, dir, dirLen) == 0` -- `bl strncmp` /
+            // `cntlzw r11, r3` / `b .L_825DB978` at 0x825DB93C-44, joining the
+            // non-recurse arm's inlined strcmp at the shared
+            // `extrwi r28, r11, 1, 26`.  There is NO separator check on
+            // curPath[dirLen]; we had added one, which silently dropped every
+            // entry in a sibling directory whose name merely EXTENDS `dir`
+            // (e.g. dir="ui/mod" would have matched "ui/modifier" in retail
+            // and did not match it here).
             if (recurse) {
-                matches = !strncmp(curPath, dir, dirLen)
-                    && (curPath[dirLen] == '\0' || curPath[dirLen] == '/'
-                        || curPath[dirLen] == '\\');
+                matches = strncmp(curPath, dir, dirLen) == 0;
             } else {
                 matches = strcmp(curPath, dir) == 0;
             }
-            lastPath = curPath;
         }
 
         if (!matches) continue;
 
-        const char *curName = _ref0[it->HashedName()];
+        const char *curName = mHashTable[it->HashedName()];
         if (pattern) {
             const char *buf = MakeString("%s/%s", curPath, curName);
             if (!FileMatch(buf, pattern)) continue;
         }
 
+        // ONE call site: the image rewrites r31/r30 in place inside the isDtb
+        // arm and falls through to a single `mr r4, r30` / `mtctr r17` /
+        // `mr r3, r31` / `bctrl` at .L_825DB9F0.
         if (isDtb) {
-            const char *path = FileGetPath(curPath);
-            char *base = (char *)FileGetBase(curName);
-            const char *dtaName = MakeString("%s.dta", base);
-            cb(path, dtaName);
-        } else {
-            cb(curPath, curName);
+            curPath = FileGetPath(curPath);
+            const char *base = FileGetBase(curName);
+            curName = MakeString("%s.dta", base);
         }
+        cb(curPath, curName);
     }
 }
 
