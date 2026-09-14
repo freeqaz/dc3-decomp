@@ -1263,6 +1263,82 @@ the locals' sizes. In the instruction diff: repeated `mr rN, r3` (TGT) vs
 
 ---
 
+## Unnamed temporary forces a BY-VALUE class argument to be materialised
+
+**Symptom, and it is the rare one: our object is SHORTER than the target.** One
+`stw` of the argument value into a local-temp slot, immediately before the call,
+that nothing ever reloads. Read it off the size line before the diff — a base
+size 4 bytes under the target size is this shape's fingerprint.
+
+`Campaign::ConfigureCampaignData` (2,572 B), 99.751% → **100.0%**, 643/643 equal
+under both the default ruler and `name_check` (commit in branch `w6-h`):
+
+```
+        target                          ours
+  482   lwz r4, 0x60(r31)               -                     <- delete
+  483   mr  r3, r15                     mr  r3, r15
+  484   stw r4, 0x50(r31)               lwz r4, 0x60(r31)     <- replace
+  485   bl  ?GetCampaignEra@...VSymbol@@@Z
+```
+
+`GetCampaignEra` takes `Symbol` **by value**. `Symbol` is a trivially-copyable
+`{const char*}`, so passing the named local hands it straight over in `r4` and
+MSVC materialises nothing:
+
+```cpp
+Symbol name = pCampaignEra->GetName();
+if (GetCampaignEra(name)) {                 // 99.751% -- one instruction SHORT
+```
+
+Spelling the argument as an **unnamed temporary** makes MSVC build the by-value
+copy in the function's first local-temp slot *as well as* passing it in the
+register. The dead store is the whole difference:
+
+```cpp
+if (GetCampaignEra(Symbol(name))) {         // 100.0%, zero mismatch rows
+```
+
+Note also the evaluation-order tell, visible before you know the cause: the
+target computes the **argument** first and `this` second (MSVC evaluates
+right-to-left) — ours emitted `mr r3` before the load. When the two sides
+disagree about which of `this`/arg is computed first *and* one side is an
+instruction short, look here rather than at scheduling.
+
+**This is not the `Symbol` copy-constructor lever, which is refuted.** Wave 3
+established that `Symbol` must not declare a copy constructor (it is still
+correctly commented out in `src/system/utl/Symbol.h`), and re-declaring it to
+chase this store would regress template instantiations binary-wide — see
+[fixable-copy-ctor.md](fixable-copy-ctor.md). The copy is forced **at the call
+site**, by the argument's value category, not by the type.
+
+Behaviour is unchanged for any trivially-copyable by-value parameter, so this is
+a formulation change, not a semantic one. Check the callee really does take the
+class **by value** (`VSymbol@@` in the mangled name, not `ABVSymbol@@`) before
+reaching for it.
+
+### Refuted on the same lane (do not re-derive)
+
+- **`ObjRef::Release` statement/temporary shaping does not reach
+  `RndPropAnim::ForeachKeyframe`.** That function's residual is 3 rows — an
+  adjacent-slot load-order swap at `(0x124, 0x128)` in what looks exactly like
+  the inlined ring unlink (`prev->next = next; next->prev = prev;`). Hoisting
+  `ObjRef *p = prev;` in `Object.h` to force the target's prev-then-next load
+  order left `ForeachKeyframe` **byte-identical** (still 3 rows at the same
+  indices) and cost **-3 functions / -324 bytes** binary-wide. Reverted. Whatever
+  emits those two loads, it is not reached by editing `ObjRef::Release`.
+- **`ForeachKeyframe`'s `ObjectStage objStage(...)` must stay a NAMED local.**
+  Rewriting it as `curObjKeys.value = ObjectStage(sKeyReplace.GetObj());` — the
+  inverse of the lever above — drops the function 99.997% → **96.7%** (61
+  mismatches, 3 TGT-only and 3 BASE-only stack slots). The named local pins the
+  slot; the unnamed-temporary lever is for **arguments**, not for objects whose
+  address outlives the call.
+- **`ObjectDir::Save`'s 2-row residual is not the swap receiver and not the
+  statement order.** `unused.swap(mInlinedDirs)` instead of
+  `mInlinedDirs.swap(unused)` is **byte-identical** (same 2 rows, same
+  registers). Moving `gLoadingProxyFromDisk = oldProxy;` above the swap is
+  **worse** (99.997% → 99.3%, +4 rows), which confirms the current statement
+  order is the target's.
+
 ## See Also
 
 - [fixable-liveness.md](fixable-liveness.md) - **Register-swap levers** (live-range shortening, call-through-the-local, schedule-then-polarity); corrects the declaration-order guidance on this page
