@@ -1339,8 +1339,13 @@ void RndMesh::InstanceGeomOwnerBones() {
 
     // Find the root bone in the geom owner's hierarchy
     RndTransformable *oldRoot = nullptr;
-    for (RndTransformable *parent = mGeomOwner->mBones[0].mBone; nullptr != parent;
-         parent = parent->TransParent()) {
+    // `parent` outlives the loop: the image feeds the *loop* variable (r31) to
+    // NextName(...->Name()) at 0x82643048 while null-checking a separate `oldRoot`
+    // (r29) for the Copy() argument at 0x82643078. One variable cannot do both --
+    // a load through oldRoot would let MSVC drop that null check, which is exactly
+    // what our build did.
+    RndTransformable *parent = mGeomOwner->mBones[0].mBone;
+    for (; nullptr != parent; parent = parent->TransParent()) {
         RndDir *transParent = dynamic_cast<RndDir *>(parent->TransParent());
         // The assignment belongs INSIDE the break, not hoisted above it. In the
         // image `mr r29, r31` at 0x82643088 is the only write to oldRoot and it
@@ -1358,8 +1363,11 @@ void RndMesh::InstanceGeomOwnerBones() {
 
     // Create new root
     RndTransformable *newRoot = Hmx::Object::New<RndTransformable>();
-    newRoot->SetName(NextName(oldRoot->Name(), Dir()), Dir());
-    newRoot->Copy(oldRoot, Hmx::Object::kCopyDeep);
+    newRoot->SetName(NextName(parent->Name(), Dir()), Dir());
+    // kCopyShallow, not kCopyDeep: the image loads `li r5, 0x1` at 0x826430A4
+    // (and again at 0x826431CC for the per-bone copy), and Hmx::Object::CopyType
+    // is kCopyDeep=0 / kCopyShallow=1. We were deep-copying every instanced bone.
+    newRoot->Copy(oldRoot, Hmx::Object::kCopyShallow);
 
     // Parent new root under the RndDir
     RndTransformable *dirTrans = dynamic_cast<RndDir *>(Dir());
@@ -1369,21 +1377,28 @@ void RndMesh::InstanceGeomOwnerBones() {
     for (unsigned int i = 0; i < mBones.size(); i++) {
         RndTransformable *newBone = Hmx::Object::New<RndTransformable>();
         newBone->SetName(NextName(mGeomOwner->mBones[i].mBone->Name(), Dir()), Dir());
-        newBone->Copy(mGeomOwner->mBones[i].mBone, Hmx::Object::kCopyDeep);
+        newBone->Copy(mGeomOwner->mBones[i].mBone, Hmx::Object::kCopyShallow);
         mBones[i].mBone = newBone;
 
-        // Find parent in owner hierarchy and reparent
+        // Find parent in owner hierarchy and reparent.
+        // The parent is looked up in the GEOM OWNER's bone array, not ours: the image
+        // reloads 0x148(this) (mGeomOwner) at 0x82643230 and indexes 0x150 off *that*,
+        // where we were indexing our own mBones.
         int parentIdx = mGeomOwner->GetBoneIndex(mGeomOwner->mBones[i].mBone->TransParent());
 #ifdef HX_NATIVE
         // Clang sees the ?: as ambiguous (ObjPtr<RndTransformable> <-> RndTransformable*
         // convert both directions); make the ObjPtr branch an explicit pointer. Same
         // conversion MSVC picks implicitly — no PPC-side change.
-        RndTransformable *parent =
-            parentIdx == -1 ? newRoot : (RndTransformable *)mBones[parentIdx].mBone;
+        RndTransformable *boneParent = parentIdx == -1
+            ? newRoot
+            : (RndTransformable *)mGeomOwner->mBones[parentIdx].mBone;
 #else
-        RndTransformable *parent = parentIdx == -1 ? newRoot : mBones[parentIdx].mBone;
+        RndTransformable *boneParent =
+            parentIdx == -1 ? newRoot : mGeomOwner->mBones[parentIdx].mBone;
 #endif
-        newBone->SetTransParent(parent, false);
+        // The image re-reads mBones[i].mBone as the callee (`lwz r3, 0xc(r11)` at
+        // 0x82643244, r11 = &mBones[i]) rather than reusing newBone.
+        mBones[i].mBone->SetTransParent(boneParent, false);
     }
 }
 
