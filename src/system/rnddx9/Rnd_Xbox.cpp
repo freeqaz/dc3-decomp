@@ -46,6 +46,23 @@
 
 void CreateBackBuffers(int, int, D3DMULTISAMPLE_TYPE, unsigned int &, unsigned int &, D3DSurface *&, D3DSurface *&);
 
+// RESIDUAL (w7-an, 70.3 canonical): the member LAYOUT is confirmed correct --
+// every store the image makes lands on a member we declare at that offset
+// (0x304/0x310 vectors, 0x360/0x361 bools, 0x364/0x368/0x36c pointers,
+// 0x370/0x374 floats, 0x378/0x3a4 bools), and the whole body after the
+// initialiser list (0x3f4 .. 0x34d, indices 62-76) is instruction-for-
+// instruction equal.  What differs is a scheduling permutation of ten stores
+// inside indices 28-61: (a) the image finishes each inlined vector ctor
+// before starting the next -- `addi r11, r30, BASE` / `addi r11, r11, 0x8` /
+// three null stores / `stw r11, 0x50(r31)` -- where MSVC interleaves ours and
+// defers both `stw ..., 0x50(r31)` homings; (b) the image emits the
+// 0x360..0x36c group BEFORE the two `stfs` of mGPUBusyMs/mGPUCountMs and
+// splits them around `stb r29, 0x378`, where MSVC hoists our `lis
+// __real@00000000@h` to index 28 and both floats ahead of the group; (c) the
+// image emits one extra `addi r11, r30, 0x350` (index 44) that nothing
+// consumes.  The initialiser list is already in declaration order, which is
+// the order MSVC emits regardless of how the list is written, so there is no
+// source-order lever here.
 DxRnd::DxRnd()
     : mInited(0),
       mD3DDevice(nullptr),
