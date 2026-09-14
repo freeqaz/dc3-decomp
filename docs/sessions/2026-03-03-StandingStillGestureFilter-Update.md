@@ -1,10 +1,58 @@
 # Session: StandingStillGestureFilter::Update Decomp Attempt
 
+> ## ⚠ CORRECTION 2026-09-14 (lane w7-t) — THIS TABLE IS STALE AND ITS FLOOR CLAIM IS WRONG
+>
+> **The function reads `96.608696` canonical (`match_percent_normalized`) today, not
+> 81.9%.** Everything below was written against an 81.9% build and a *different*
+> source file; three of its four "root causes" no longer exist, and its closing
+> verdict — *"not fixable at source level with current compiler/toolchain"* — was
+> a floor claim made 14.7 percentage points early. Per
+> `docs/decomp/patterns/a-floor-claim-must-carry-its-percentage.md` the rows are
+> corrected in place rather than deleted, so the refuted levers stay refuted and
+> the stale diagnoses stop being quoted.
+>
+> Measured 2026-09-14 in `/home/free/tmp/w7-t` at `91dcca042`, objdiff
+> `run_diff_inspect mode=stack-layout`:
+>
+> | claim in this doc | status today | evidence |
+> |---|---|---|
+> | Final match 81.9%, AT_LIMIT | **SUPERSEDED** — 96.608696 canonical | `build/373307D9/report.json` |
+> | "Stack frame 16 bytes larger (0xf0 vs 0xe0)" | **GONE** — frames are equal | `TGT stwu r1, -0xf0` / `BASE stwu r1, -0xf0`, Δ +0x0 |
+> | "Extra FPR saves (stfd f29-f31) not in original" | **GONE** — equal | callee-saved FPRs TGT 3 / BASE 3, GPRs TGT 6 / BASE 6 |
+> | "40 insert/delete mismatches in 14 clusters" | **GONE** — 6 inserts, 2 deletes, in one cluster at idx 34-41 | `run_objdiff` |
+> | "54 register swaps (r30↔r31)" | **STILL TRUE** — 57, and now the dominant residual | `run_objdiff` |
+> | "Maybe Normalize is a real function call in original" (What to Try Next #3) | **CONFIRMED, and already done** | 82DFFCE8 / 82DFFD18 / 82DFFD54 / 82DFFD84 are four `bl "?Normalize@@YAXABVVector3@@AAV1@@Z"` |
+>
+> Which means the two Normalize-inlining regressions recorded below (61.1% and
+> 77.1%) were not compiler capriciousness: the image *calls* Normalize, so
+> inlining it can only ever lose. That row is right for a reason the doc did not
+> know.
+>
+> **The residual as of 2026-09-14** — new information, not in the original
+> session — is one callee-saved GPR permutation plus a stack-slot permutation,
+> and nothing else:
+>
+> * GPR rotation, ours → image: `r30`→`r31` (`this`), `r31`→`r30` (`skeleton`),
+>   `r27`→`r28` (`idx`), `r28`→`r29` (the `TheGestureMgr` `@ha` anchor),
+>   `r29`→`r27` (the `SkeletonQualityFilter&`). 57 of the 118 rows.
+> * Stack slots: the image gives `v1..v4` the slots `0x90/0x80/0x70/0x60`,
+>   reusing in reverse the three `Vector2` slots that `ScreenPos` filled
+>   (`handRightPos` 0x60, `kneeLeftPos` 0x70, `kneeRightPos` 0x80). Ours assigns
+>   the same *set* of slots in a different order — 3 PERMUTED, 5 DIFFER, and one
+>   4-byte float at `0x58` that exists only on the target side.
+> * **Refuted 2026-09-14**: reversing the declaration to `Vector3 v4, v3, v2, v1;`
+>   measures **96.5** against 96.6 and turns 3 permuted slots into 9. Declaration
+>   order is the documented lever for a stack-slot diff and it moves this one the
+>   wrong way.
+>
+> Nothing here licenses an AT_LIMIT certificate. The next lane should attack the
+> slot assignment (scope, not order) and the GPR rotation, from 96.6.
+
 **Date**: 2026-03-03  
 **Function**: `StandingStillGestureFilter::Update(const Skeleton&, int)`  
 **Symbol**: `?Update@StandingStillGestureFilter@@QAAXABVSkeleton@@H@Z`  
-**Final Match**: 81.9%  
-**Status**: AT_LIMIT
+**Final Match**: 81.9% *(as of 2026-03-03; see the correction above — 96.608696 on 2026-09-14)*  
+**Status**: ~~AT_LIMIT~~ **RETRACTED** — see the correction above
 
 ## Session Goal
 
@@ -229,4 +277,10 @@ StandingStillGestureFilter::Update is structurally correct but has compiler-leve
 
 These are not fixable at source level with current compiler/toolchain. The function is correctly implemented and matches the algorithm, just not the exact instruction sequence.
 
-**Verdict**: AT_LIMIT at 81.9% - acceptable for decomp completion.
+**Verdict**: ~~AT_LIMIT at 81.9% - acceptable for decomp completion.~~
+
+**RETRACTED 2026-09-14.** The three compiler-level differences this conclusion
+rests on — the +16-byte frame, the f29-f31 saves, and the insert/delete clusters
+— are all gone, and the function is at 96.608696. The one surviving item
+(r30↔r31) is a register permutation, which the canonical ruler charges but which
+is not by itself evidence of a floor. See the correction block at the top.
