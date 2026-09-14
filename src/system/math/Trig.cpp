@@ -17,6 +17,20 @@ void TrigTableInit() {
         }
         tablePtr += 2;
         i++;
+        // FLOOR, 98.72: the image's loop test is `cmpw cr6, r30, r11` --
+        // SIGNED -- and a plain pointer `<` gives us `cmplw`.  Four spellings
+        // measured, none better than this one:
+        //   tablePtr < &gBigSinTable[511]      98.72  (1 row: cmpw vs cmplw)
+        //   tablePtr < gBigSinTable + 511      98.72  inert, same row
+        //   (int)tablePtr < (int)&gBigSinTable[511]        95.6
+        //   (int)tablePtr < (int)gBigSinTable + 0x7fc      95.6
+        //   i < 256                                        96.6
+        // Both casts do buy the signed compare, and both cost a fourth
+        // callee-saved GPR: the limit becomes a loop-invariant int in r28, the
+        // prologue goes r29-r31 -> r28-r31 and the frame grows 0x10, where the
+        // image recomputes `addi r11, r29, 0x7fc` inside the loop.  The index
+        // form just compares i (`cmpwi cr6, r31, 0x100`) and drops the pointer
+        // test altogether.
     } while (tablePtr < &gBigSinTable[511]);
     float sineValue = std::sin(0.024543693f * i);
     // Peeled last half-iteration: writes the odd (delta) slot 2i-1 and reads the
