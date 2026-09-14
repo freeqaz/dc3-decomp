@@ -204,9 +204,9 @@ bool DxMesh::CanDraw() const {
 void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
     MILO_ASSERT(mTransformCache.size() > i, 0x1ee);
     Transform &cached = mTransformCache[i];
-    float dz = cached.v.z - xfm.v.z;
-    float dy = cached.v.y - xfm.v.y;
     float dx = cached.v.x - xfm.v.x;
+    float dy = cached.v.y - xfm.v.y;
+    float dz = cached.v.z - xfm.v.z;
     if (Dot(xfm.m.y, cached.m.y) >= 0.8660254f
         && dx * dx + dy * dy + dz * dz < 2500.0f) {
         float invWeight = 1.0f - weight;
@@ -224,9 +224,10 @@ void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
         Vector3 windForce;
         float windTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
         wind->GetWind(xfm.v, windTime, windForce);
-        cached.v.x += windForce.x * 0.05f;
-        cached.v.y += windForce.y * 0.05f;
-        cached.v.z += windForce.z * 0.05f;
+        Vector3 &cachedPos = cached.v;
+        cachedPos.x += windForce.x * 0.05f;
+        cachedPos.y += windForce.y * 0.05f;
+        cachedPos.z += windForce.z * 0.05f;
     }
 }
 
