@@ -783,23 +783,25 @@ void RndLine::UpdateLine(const Transform &camXfm, float nearPlane) {
         while (i < numPts - 1) {
             Point *pt1 = &mPoints[i];
             Point *pt2 = &mPoints[i + 1];
-            float dist1 = ((float *)&pt1->unk[0])[1];
-            if (dist1 < clipDist) {
-                float dist2 = ((float *)&pt2->unk[0])[1];
-                if (dist2 < clipDist) {
+            float *view1 = (float *)&pt1->unk[0];
+            float *view2 = (float *)&pt2->unk[0];
+            // No `dist1`/`dist2` locals: the image re-reads the near-plane
+            // component at every use (0x8267912C reloads pt1's from memory
+            // after 0x82679118 has overwritten f0 with pt2's), and it
+            // tail-merges the two Interp calls into one shared block at
+            // 0x82679150.
+            if (view1[1] < clipDist) {
+                if (view2[1] < clipDist) {
                     pt2 = pt1;
                 } else {
-                    Interp(*(Vector3 *)&pt1->unk[0], *(Vector3 *)&pt2->unk[0],
-                           (clipDist - dist1) / (dist2 - dist1),
-                           *(Vector3 *)&pt1->unk[0]);
+                    Interp(*(Vector3 *)view1, *(Vector3 *)view2,
+                           (clipDist - view1[1]) / (view2[1] - view1[1]),
+                           *(Vector3 *)view1);
                 }
-            } else {
-                float dist2 = ((float *)&pt2->unk[0])[1];
-                if (dist2 < clipDist) {
-                    Interp(*(Vector3 *)&pt2->unk[0], *(Vector3 *)&pt1->unk[0],
-                           (clipDist - dist2) / (dist1 - dist2),
-                           *(Vector3 *)&pt2->unk[0]);
-                }
+            } else if (view2[1] < clipDist) {
+                Interp(*(Vector3 *)view2, *(Vector3 *)view1,
+                       (clipDist - view2[1]) / (view1[1] - view2[1]),
+                       *(Vector3 *)view2);
             }
             UpdateLinePair(pt1, pt2);
             i += 2;
