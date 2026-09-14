@@ -291,12 +291,14 @@ bool RndShaderProgram::Cache(
             }
             CreateVertexShader(*vsBuffer);
             CreatePixelShader(*psBuffer, shaderType);
-            if (vsBuffer) {
-                vsBuffer->~RndShaderBuffer();
-            }
-            if (psBuffer) {
-                psBuffer->~RndShaderBuffer();
-            }
+            // BEHAVIOURAL FIX (w7-al): `delete`, not an explicit destructor
+            // call. Both sites dispatch through vtable slot 0 -- the scalar
+            // DELETING destructor ??_E -- and the image passes 1 in r4
+            // (0x8273253C and 0x8273255C), the flag that makes it call
+            // operator delete. We were passing 0, so every compiled shader
+            // ran the destructor and leaked the RndShaderBuffer allocation.
+            delete vsBuffer;
+            delete psBuffer;
         }
     }
     return true;
