@@ -29,6 +29,11 @@ DataNode DataToggleShowTokensCheat(DataArray *arr) {
     return DataNode(0);
 }
 
+// NOT the comparator the image uses -- kept only as the readable statement of
+// what the sort is meant to mean.  LocaleChunkSort::Sort passes FastSort<3>;
+// see the comment on Sort below.  This function is static and unreferenced, so
+// it is discarded, exactly as in the shipped image (no ?LocaleChunkSortFunc@@
+// symbol anywhere in orig/373307D9/ham_xbox_r.map).
 static int LocaleChunkSortFunc(const void *a, const void *b) {
     const LocaleChunkSort::OrderedLocaleChunk *chunkA =
         (const LocaleChunkSort::OrderedLocaleChunk *)a;
@@ -43,8 +48,18 @@ static int LocaleChunkSortFunc(const void *a, const void *b) {
     return chunkA->node2.Int(0) - chunkB->node2.Int(0);
 }
 
+// BEHAVIOURAL: the comparator is FastSort<3>, not LocaleChunkSortFunc.  Sort is
+// inlined into Locale::Init, and the image's qsort call there names it:
+//   build/373307D9/asm/system/utl/Locale.s @827E9D2C
+//     lis  r11, "??$FastSort@$02@LocaleChunkSort@@YAHPBX0@Z"@ha
+//     addi r6,  r11, "??$FastSort@$02@LocaleChunkSort@@YAHPBX0@Z"@l
+//     bl   qsort
+// ?LocaleChunkSortFunc@@ appears in no map; ??$FastSort@$02@... is at
+// 827e9460 in utl:Locale.obj (ham_xbox_r.map:109216).  The two orderings are
+// not the same: FastSort<3> compares three consecutive 8-byte-strided int
+// words, LocaleChunkSortFunc compares Symbol pointers then node2.
 void LocaleChunkSort::Sort(OrderedLocaleChunk *chunks, int count) {
-    qsort(chunks, count, sizeof(OrderedLocaleChunk), LocaleChunkSortFunc);
+    qsort(chunks, count, sizeof(OrderedLocaleChunk), FastSort<3>);
 }
 
 namespace LocaleChunkSort {
