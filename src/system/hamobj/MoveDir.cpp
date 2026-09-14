@@ -648,7 +648,7 @@ void MoveDir::Poll() {
             }
             mCurMoveSmoothers[i].Smooth(
                 mCurMoveNormalizedResult[i],
-                TheMaster && TheMaster->GetMeasure() == 3
+                TheMaster && TheMaster->GetBeat() == 3
                     ? TheTaskMgr.DeltaUISeconds() * 4.0f
                     : TheTaskMgr.DeltaUISeconds()
             );
@@ -681,8 +681,9 @@ void MoveDir::Enter() {
                 i13 = numKeys;
             }
             if (i == kDifficultyEasy) {
-                while (--numKeys > 0) {
-                    HamMoveKey &curKey = hamMoveKeys[numKeys];
+                int keyIdx = numKeys;
+                while (--keyIdx > 0) {
+                    HamMoveKey &curKey = hamMoveKeys[keyIdx];
                     if (curKey.move && curKey.move->IsFinalPose()) {
                         int tmp = curKey.beat / -4.0f;
                         mFinishingMoveMeasure = 1 - tmp;
@@ -1690,8 +1691,7 @@ void MoveDir::DrawShowing() {
                         TheRnd.DrawLine(worldPos, offsetPos, altColor, false);
                         UtilDrawSphere(offsetPos, radius2, altColor, nullptr);
 
-                        const char *label = MakeString("%i", playerIdx);
-                        UtilDrawString(label, offsetPos, altColor);
+                        UtilDrawString(MakeString("%i", playerIdx), offsetPos, altColor);
                     }
 
                     beatIdx++;
