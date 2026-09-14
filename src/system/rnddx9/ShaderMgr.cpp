@@ -466,21 +466,29 @@ void DxShaderMgr::LoadShaderFile(FileStream &fs) {
             ShaderType shaderType = ShaderTypeFromName(name.Str());
             unsigned int alloc;
             fs >> alloc;
-            void *bases[4];
+            // TWO arrays of 2, not one of 4: the target holds their two
+            // addresses in separate registers and indexes both with the SAME
+            // scaled counter -- `addi r11, r31, 0x80` / `addi r7, r31, 0x88`
+            // then `lwzx r8, r30, r11` / `lwzx r11, r30, r7` at 0x8261B8xx.
+            // A single bases[4] indexed by k and k+2 gives one base register
+            // and lets MSVC turn the whole thing into a pointer induction
+            // variable (stwu/stw -0x4) instead.
+            void *bases[2];
+            void *physBases[2];
             bases[0] = nullptr;
             bases[1] = nullptr;
-            bases[2] = nullptr;
-            bases[3] = nullptr;
+            physBases[0] = nullptr;
+            physBases[1] = nullptr;
             for (unsigned int j = 0; j < 2; j++) {
                 SIZE_T size1, size2;
                 fs >> size1;
                 fs >> size2;
                 BeginMemTrackFileName(fs.Name());
                 bases[j] = XMemAlloc(size1, 0x20800000);
-                bases[j + 2] = XMemAlloc(size2, 0xB5800000);
+                physBases[j] = XMemAlloc(size2, 0xB5800000);
                 EndMemTrackFileName();
                 fs.Read(bases[j], size1);
-                fs.Read(bases[j + 2], size2);
+                fs.Read(physBases[j], size2);
             }
             ShaderPoolAlloc(alloc);
             RndSplasherSuspend();
@@ -495,7 +503,7 @@ void DxShaderMgr::LoadShaderFile(FileStream &fs) {
                     fs >> ic0;
                     fs >> ibc;
                     void *addr = (void *)((unsigned int)bases[k] + ic0);
-                    void *physAddr = (void *)((unsigned int)bases[k + 2] + ibc);
+                    void *physAddr = (void *)((unsigned int)physBases[k] + ibc);
                     if (k - 1) {
                         pVS = (D3DVertexShader *)addr;
                         XGRegisterVertexShader(pVS, physAddr);
