@@ -920,31 +920,57 @@ void DecodeDxt3Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
 }
 
 void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
-    unsigned char a0 = uc[0];
+    // The two alpha endpoints live in the block's first 16-bit word, and the
+    // Xbox 360 stores that word byte-swapped -- the same swizzle the index
+    // bytes below get.  So a0 is uc[1] and a1 is uc[0]: 82671ED8
+    // `lbz r28, 0x1(r3)` is the value stored for code 0 (82671F84
+    // `stb r28, 0x0(r6)`) and 82671EDC `lbz r27, 0x0(r3)` the one for code 1,
+    // and 82671FA4 `cmplw cr6, r9, r10` / `bgt` selects the 8-value mode when
+    // uc[1] > uc[0], which is DXT5's `a0 > a1`.  We had the two the wrong way
+    // round, which inverted the endpoint-order test and swapped the two
+    // endpoint colours.
+    unsigned char a0 = uc[1];
     int code;
     unsigned char byteOffsets[16] = {
         0, 0, 0, 1, 1, 1, 2, 2,
         3, 3, 3, 4, 4, 4, 5, 5,
     };
-    unsigned char a1 = uc[1];
-    unsigned int byte = byteOffsets[i + (j << 2)];
+    unsigned char a1 = uc[0];
+    unsigned char byte = byteOffsets[i + (j << 2)];
     unsigned char bitOffsets[16] = {
         0, 3, 6, 1, 4, 7, 2, 5,
         0, 3, 6, 1, 4, 7, 2, 5,
     };
-    unsigned int bit = bitOffsets[i + (j << 2)];
+    unsigned char bit = bitOffsets[i + (j << 2)];
+    // The three-byte index field starts at uc[2] and the image holds a pointer
+    // to it: 82671E8C `addi r9, r3, 0x2` in the prologue, then `lbzx` off it at
+    // every one of the three reads.  Spelled `uc[swizByte + 2]` we instead
+    // emitted an `add` plus `lbz 0x2(rN)` per read.
+    unsigned char *indices = uc + 2;
     // Xbox 360 stores the DXT5 alpha index bytes byte-swapped within each
     // 16-bit word, so even/odd byte indices are swapped before the read.
-    unsigned int swizByte = (byte & 1) ? byte - 1 : byte + 1;
-    if (bit < 6) {
-        code = (uc[swizByte + 2] >> bit) & 7;
+    // The image copies and then mutates in place -- 82671EEC `mr r10, r11`
+    // above the test, `addi r10, r10, 0xff` / `addi r10, r10, 0x1` in the two
+    // arms -- rather than selecting between two fresh `byte +- 1` values.
+    unsigned char swizByte = byte;
+    if (byte & 1) {
+        swizByte--;
     } else {
-        unsigned int next = byte + 1;
-        unsigned int nextSwizByte = (next & 1) ? next - 1 : next + 1;
-        if (bit == 6) {
-            code = ((uc[nextSwizByte + 2] & 1) << 2) | ((uc[swizByte + 2] >> 6) & 3);
+        swizByte++;
+    }
+    if (bit < 6) {
+        code = (indices[swizByte] >> bit) & 7;
+    } else {
+        unsigned char next = byte + 1;
+        if (next & 1) {
+            next--;
         } else {
-            code = ((uc[nextSwizByte + 2] & 3) << 1) | ((uc[swizByte + 2] >> 7) & 1);
+            next++;
+        }
+        if (bit == 6) {
+            code = ((indices[next] & 1) << 2) | (indices[swizByte] >> 6);
+        } else {
+            code = ((indices[next] & 3) << 1) | (indices[swizByte] >> 7);
         }
     }
     if (code == 0) {
