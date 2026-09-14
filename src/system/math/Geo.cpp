@@ -1072,6 +1072,25 @@ void BSPFace::Update() {
 }
 
 #ifndef HX_NATIVE
+// DIAGNOSIS (90.2 canonical, frame 0x10 larger than the image's).
+//
+// The residual is one extra callee-saved GPR, and it comes from how the two
+// tuning globals are addressed.  gBSPPosTol .. gBSPCheckScale are laid out
+// contiguously at +0, +4, +8, +0xc, +0x10 (Geo.cpp:16-20), and the image
+// materialises ONE anchor -- `lis`/`addi` on &gBSPDirTol -- then reads its
+// neighbours off it as `0x4(rN)` (gBSPMaxDepth) and `0x8(rN)`
+// (gBSPMaxCandidates).  We emit a separate `lis` + `@l`-in-displacement for
+// each global, which costs a second page-base register for the whole
+// function and renames every callee-saved GPR by one (r17->r16, r23->r24,
+// ... 130 register-swap rows over 16 pairs).  There is no source spelling
+// that forces the anchor: the two globals are already read through their own
+// names, and `&gBSPDirTol`-relative access would be UB the compiler is free
+// to undo.  See docs/decomp/patterns/anchor-displacement-*.
+//
+// NEGATIVE RESULT: rotating the inner plane loop to
+// `if (planeIt != end) do { ... } while (++planeIt != end);` REGRESSES
+// 90.2 -> 90.0.  MSVC still emits the `b` to the bottom test and additionally
+// drops one home store.  Reverted.
 bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
     if (faces.empty()) {
         node = nullptr;
