@@ -81,19 +81,15 @@ BEGIN_LOADS(DancerSequence)
             // arm and the rev>=6 arm. The rev>=6 arm reading the int is not
             // cosmetic -- without it a rev-6 DancerSequence desyncs the stream by
             // four bytes for the rest of the frame, and mElapsedMs is never set.
-            int ms;
+            int ms = -1;
             if (d.rev < 2) {
                 skeletonRev = 0;
-                ms = -1;
             } else if (d.rev < 3) {
                 skeletonRev = 1;
-                ms = -1;
             } else if (d.rev < 4) {
                 skeletonRev = 2;
-                ms = -1;
             } else if (d.rev < 5) {
                 skeletonRev = 3;
-                ms = -1;
             } else {
                 if (d.rev < 6) {
                     skeletonRev = 4;
