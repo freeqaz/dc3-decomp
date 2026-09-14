@@ -276,6 +276,14 @@ void RndConsole::SetShowing(bool show) {
     }
 }
 
+// RESIDUAL (88.5 canonical, 8 rows): every row is MSVC forwarding a stored value
+// that the image re-reads.  The image stores mLevel, copies it back out with a
+// no-op `clrrwi r11, r11, 0` (0x826F2974) and compares with a separate `cmpwi
+// cr6` -- we fuse the compare into `add.` -- and after the clamp store it reloads
+// BOTH gCallStackPtr and mLevel (0x826F29B0-0x826F29B8) where we keep them in
+// registers.  Same family as ScaleAddEq(Transform&) in rnddx9/Mesh.cpp: a
+// value-forwarding decision with no source lever.  MEASURED NEGATIVE: spelling
+// the clamp input as a named `int lvl = mLevel;` temp is byte-inert (88.5).
 void RndConsole::MoveLevel(int level) {
     if (mDebugging) {
         mLevel += level;
