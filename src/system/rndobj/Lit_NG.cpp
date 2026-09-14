@@ -317,6 +317,37 @@ void NgLight::CheckShadowMap() {
     }
 }
 
+// RESIDUAL (w7-ai, 92.8%): the instruction STREAM is right -- every arithmetic,
+// store and call row matches, including both Vector4 builds, the two fdivs and
+// the Rect. What is left is one extra callee-saved register and the uniform
+// renumbering it forces (__savegprlr_18 vs _19, frame 0x160 vs 0x150).
+//
+// The extra register is the CSE of the two SetPConstant indices. Ours computes
+// `0x9c + i` once into callee-saved r26 (it has to survive the first
+// SetPConstant call) and derives the first index from it as `subi r4, r26, 0x10`;
+// the image recomputes both from `i` in volatile r4 -- `addi r4, r31, 0x8c`
+// before the first call and `addi r4, r31, 0x9c` before the second. Map the two
+// allocations and they agree 1:1 with a shift of one: target r19..r31 = this,
+// kWeights, 0, TheNgRnd, 1, srcTex, TheRenderState, pass, pWeight, taps,
+// TheShaderMgr, dstTex, i; ours is the same list with r26 = `0x9c + i` wedged in.
+// A second, cosmetic-only difference in the same class: MSVC hoists the whole
+// `kWeights - 1` to the prologue (r18) where the image keeps the bare kWeights
+// address invariant (r20) and re-subtracts 4 per outer iteration.
+//
+// MEASURED NEGATIVES, both BYTE-IDENTICAL (no movement at all, not merely
+// neutral):
+//   1. giving each SetPConstant index its own named local in its own block
+//      scope, to break the reassociation;
+//   2. naming the array base (`const float *weights = kWeights;` then
+//      `weights - 1`), to stop the full LICM of `kWeights - 1`.
+// Two consecutive inert variants -> stopping here per the lane rule; what
+// remains is register allocation, which is not source-reachable.
+//
+// Adjudicated and NOT a wrong callee: row 115 pairs
+// SetObjConcrete<ObjRefConcrete<AnimTask,ObjectDir>> against our
+// SetObjConcrete<ObjRefConcrete<RndTex,ObjectDir>>. Both are at 82401CD0 in
+// icf_aliases.map -- a proven ICF fold, so the target-side name is only the
+// fold representative. `workMat->SetDiffuseTex(srcTex)` is correct as written.
 void NgLight::BlurShadowRT() {
     static const float kWeights[] = { 0.1f, 0.25f, 0.3f, 0.25f, 0.1f };
     float blurX = 1.0f;
