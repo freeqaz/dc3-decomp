@@ -118,6 +118,18 @@ void CharPollGroup::SortPolls() {
     }
     sorter.Sort(polls);
     mPolls.clear();
+    // RESIDUAL (w7-ak, 89.03 canonical): the whole 29-row residual is one MSVC
+    // decision. The target RE-LOADS polls._M_start / _M_finish on every iteration
+    // (`lwz r4, 0x60(r31)` + `lwz r11, 0x64(r31)` inside the loop) and indexes with
+    // `lwzx r3, r30, r4` off a byte-offset induction variable, keeping i and i*4 as
+    // two induction variables; our build proves the base loop-invariant, hoists it
+    // into r23, caches the element count in r25 and strength-reduces to `lwzu r3,
+    // 0x4(r29)`. That costs two extra callee-saved GPRs (`__savegprlr_23` vs `_25`)
+    // and +0x10 of frame. NEGATIVE RESULT: binding the element to a reference
+    // (`RndPollable *&poll = polls[i];`), which would explain the target's dead
+    // `stw &polls[i], 0x54(r31)`, is inert to the digit -- MSVC elides the reference
+    // while it can still strength-reduce, so the reference is a consequence of the
+    // missing hoist, not its cause.
     for (int i = 0; i < polls.size(); i++) {
         mPolls.push_back(dynamic_cast<CharPollable *>(polls[i]));
     }
