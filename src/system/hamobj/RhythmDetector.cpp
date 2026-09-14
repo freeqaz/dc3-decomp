@@ -120,10 +120,11 @@ namespace {
                             do {
                                 float m = Mean(raw, windowStart, windowStart + 10);
                                 float diff = raw[rawOffset] - m;
-                                float v = Variance(raw, m, windowStart, windowStart + 10);
+                                float quotient =
+                                    diff / Variance(raw, m, windowStart, windowStart + 10);
                                 remaining--;
                                 windowStart++;
-                                normalized[rawOffset] = diff / v;
+                                normalized[rawOffset] = quotient;
                                 rawOffset++;
                             } while (remaining != 0);
                         }
