@@ -652,7 +652,12 @@ void StreamRenderer::DrawToTexture() {
         // temp slot (0x50, staged/reloaded alternately); we allocate a second
         // at 0x58. Hoisting the two Width()/Height() results into named float
         // locals first (the spelling blurRect below already uses) is
-        // byte-for-byte INERT, so that is not the lever.
+        // byte-for-byte INERT, so that is not the lever.  REFUTED as well
+        // (wave 7, lane w7-y): a default-constructed Rect with four member
+        // assignments -- the shape that would give the two conversions
+        // sequential temp lifetimes, and hence one reused slot -- costs
+        // 98.74 -> 96.70 and 9 extra instructions; MSVC then keeps the whole
+        // rect in registers across the block and re-permutes 12 stack slots.
         Hmx::Rect drawRect(0, 0, targetRT->Width(), targetRT->Height());
         TheNgRnd.DrawRect(drawRect, workMat, shaderType, Hmx::Color(), nullptr, nullptr);
 
