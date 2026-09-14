@@ -261,25 +261,53 @@ void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &viewProj) {
             if (sl->mBeam.mLength > zero) {
                 unsigned int shape = sl->mBeam.mShape;
                 int shaderShape;
-                if (shape < 2) {
+                // The assert arm is the fall-through and it lands on the SAME
+                // `shaderShape = 0` block as the `shape < 2` arm: 82821C88
+                // `blt cr6, .L_82821CEC` jumps AWAY to `li r11, 0x2`, and the
+                // Fail call at 82821CB4 falls into .L_82821CB8 `mr r11, r22`
+                // (r22 is the function's hoisted zero).  We wrote the assert as
+                // a guarded statement inside the `shaderShape = 2` arm, so an
+                // out-of-range shape selected shader shape 2 where the image
+                // selects 0.
+                switch (shape) {
+                case 0:
+                case 1:
                     shaderShape = 0;
-                } else if (shape == 2) {
+                    break;
+                case 2:
                     shaderShape = 1;
-                } else {
-                    if (shape >= 5) {
-                        MILO_ASSERT(false, 0x456);
-                    }
+                    break;
+                case 3:
+                case 4:
                     shaderShape = 2;
+                    break;
+                default:
+                    MILO_ASSERT(false, 0x456);
+                    shaderShape = 0;
+                    break;
                 }
                 TheShaderMgr.unk1c = shaderShape;
 
+                // 82821CC8-82821CD8 is `cmpwi cr6, r11, 0x2` / `beq cr6,
+                // .L_82821D0C` -> RenderSheet, `ble cr6, .L_82821CFC` ->
+                // RenderCone, `cmpwi cr6, r11, 0x4` / `bgt cr6, .L_82821CFC` ->
+                // RenderCone, fall through -> RenderSphere.  All three arms
+                // were permuted: we called RenderSphere for shape 2 where the
+                // image calls RenderSheet, RenderSheet for the out-of-range
+                // shapes where it calls RenderCone, and RenderCone for shapes
+                // 3 and 4 where it calls RenderSphere.
                 int shapeVal = sl->mBeam.mShape;
-                if (shapeVal == 2) {
-                    RenderSphere(sl);
-                } else if (shapeVal < 3 || shapeVal > 4) {
+                switch (shapeVal) {
+                case 2:
                     RenderSheet(sl);
-                } else {
+                    break;
+                case 3:
+                case 4:
+                    RenderSphere(sl);
+                    break;
+                default:
                     RenderCone(sl);
+                    break;
                 }
 
                 TheShaderMgr.SetPConstant((PShaderConstant)0xc, sr.unk18);
