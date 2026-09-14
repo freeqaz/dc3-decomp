@@ -65,6 +65,10 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
     ts << MakeString(";---------------------------------------\n");
     const char *heapInfo = MakeString("; HEAP: %i (%s), starts %p, %d bytes\n", mNum, mName, mStart, mSizeWords * 4);
     ts << heapInfo;
+    // REFUTED (w7-aq): swapping the lFrags/rFrags declaration order does not
+    // move the 0x54/0x58 slot pair the image uses (`addi r4, r1, 0x58` /
+    // `addi r5, r1, 0x54` at both FreeBlockStats call sites); the 4 offset rows
+    // are unchanged to five decimals either way.
     int rFrags, lFrags, freeBytes, maxFreeIdx, minFreeBytes;
     FreeBlockStats(lFrags, rFrags, freeBytes, maxFreeIdx, minFreeBytes);
     ts << MakeString("\n");
@@ -74,29 +78,49 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
         rFrags,
         freeBytes
     );
-    unsigned int *curPtr = (unsigned int *)mStart;
+    // NEGATIVE RESULT (w7-aq, 2026-09-14): the image loads mSizeWords (0xc)
+    // first and mStart (0x4) second, both AFTER this MakeString("\n") write
+    // (`lwz r10, 0xc(r31)` / `lwz r11, 0x4(r31)` / `slwi` / `add r20, r10,
+    // r11`), while we hoist the 0x4 load above the call into r28.  Sinking
+    // `curPtr = mStart` below the write costs 2pp (91.796 -> 89.8), with or
+    // without an `int sizeWords = mSizeWords;` temp to force the load order --
+    // it converts one insert/delete pair into two and re-splits the r10/r11
+    // pair across the whole loop.  Same result w7-z measured independently.
+    // curPtr is `int *`, not `unsigned int *`: MakeString takes every argument
+    // by const reference, so the image passes `&curPtr` itself (`addi r4, r1,
+    // 0x50`, idx 111) and therefore keeps the variable live in slot 0x50 --
+    // written on loop entry (idx 72) and after every increment (idx 152).  A
+    // `(int *)curPtr` cast at the call site materialises a *temporary* instead,
+    // which is why our build spilled once, just before the call.
+    int *curPtr = mStart;
 
     ts << MakeString("\n");
     int curAllocCount = 0;
     int *curAllocPtr = nullptr;
     int curAllocSize = 0;
-    unsigned int *endPtr = curPtr + mSizeWords;
+    int *endPtr = curPtr + mSizeWords;
     const AllocInfo *curAllocInfo = nullptr;
     unsigned int blockSizeWords = 0;
 
     unsigned int *curFreeBlock = (unsigned int *)mFreeBlockChain;
+    // `curPtr` itself is the pointer handed to the free-block MakeString, whose
+    // args are all `const&` -- so the image ADDRESS-TAKES curPtr and pins it to
+    // stack slot 0x50, writing it back on entry (827F8... `stw r11, 0x50(r1)`,
+    // idx 72) and after every increment (`stw r21, 0x50(r1)`, idx 152), while
+    // still caching it in r21.  A separate `savedCurPtr` copy would take the
+    // slot instead and leave curPtr purely in a register.
     for (; curPtr < endPtr; curPtr += blockSizeWords) {
-        unsigned int *savedCurPtr = curPtr;
-
-        if (curFreeBlock == nullptr || curPtr != curFreeBlock) {
+        if (curFreeBlock == nullptr || curPtr != (int *)curFreeBlock) {
             // Alloc block
-            unsigned int hdr = *curPtr;
-            unsigned int *headerPtr = curPtr;
-            while ((int)hdr == 0) {
+            unsigned int *headerPtr = (unsigned int *)curPtr;
+            // The image re-loads *headerPtr after the scan loop (idx 126
+            // `lwz r10, 0x0(r11)`) instead of reusing the value the loop's
+            // `lwzu` left in a register, so the shift reads the dereference
+            // directly rather than a `hdr` local carried out of the loop.
+            while ((int)*headerPtr == 0) {
                 headerPtr++;
-                hdr = *headerPtr;
             }
-            blockSizeWords = hdr >> 8;
+            blockSizeWords = *headerPtr >> 8;
 
             if (!verbose) {
                 int *newPtr = (int *)(headerPtr + 1);
@@ -125,7 +149,7 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
             unsigned int timeStamp = curFreeBlock[1];
             ts << MakeString(
                 "(%p FREE  (size %6d) (time %5d))%s\n",
-                (int *)savedCurPtr,
+                curPtr,
                 blockSize,
                 timeStamp,
                 freeStr
