@@ -58,27 +58,32 @@ AsyncFile::~AsyncFile() {}
 extern bool HolmesClientCacheFile(char *, const char *);
 
 AsyncFile *AsyncFile::New(const char *cc, int i) {
+    AsyncFile *result = nullptr;
+    char buf[256];
     if (Archive::DebugArkOrder())
         PrintDiscFile(cc);
 
     if (UsingHolmes(1) && (i & 1U) && !FileIsLocal(cc)) {
-        AsyncFile *result = new AsyncFileHolmes(cc, i);
-        if (result) {
-            result->Init();
-            return result;
-        }
+        result = new AsyncFileHolmes(cc, i);
     } else if (!UsingCD() && !FileIsLocal(cc)) {
-        char buf[256];
+        // The cache-hit arm REDIRECTS the path and still goes on to open a
+        // plain AsyncFileWin -- `addi r29, r31, 0x60` (cc = buf) then a branch
+        // straight to the AsyncFileWin allocation -- and it is the cache MISS
+        // that constructs the AsyncFileHolmes, with r4 = r29, the original cc,
+        // not buf.  We had the two arms the other way round and passed buf to
+        // the Holmes constructor.
         if (HolmesClientCacheFile(buf, cc)) {
-            AsyncFile *result = new AsyncFileHolmes(buf, i);
-            if (result) {
-                result->Init();
-                return result;
-            }
+            cc = buf;
+        } else {
+            result = new AsyncFileHolmes(cc, i);
         }
     }
 
-    AsyncFile *result = new AsyncFileWin(cc, i);
+    // One shared null test (`cmplwi cr6, r30, 0x0` / `bne` to the Init tail),
+    // not a per-arm test-and-return.
+    if (!result) {
+        result = new AsyncFileWin(cc, i);
+    }
     result->Init();
     return result;
 }
