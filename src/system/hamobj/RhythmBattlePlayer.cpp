@@ -696,8 +696,10 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     mMoveConsistencyScore = mMovePresenceAccumulator / mWindowElapsedTime;
     // REFUTED (w7-i): hoisting `none` into a local read before the division and
     // storing mTrickSymbol after it -- the RhythmBattle::Begin lever -- is
-    // byte-identical here. The residual is one slot of the rematerialised
-    // `autotrick` anchor addi, which stays ahead of the mTrickSymbol store.
+    // byte-identical here, and swapping these two statements costs 0.75pp (the
+    // division's fdivs/stfs pair moves out of the static-guard block). The
+    // residual is one slot of the rematerialised `autotrick` anchor addi, which
+    // stays ahead of the mTrickSymbol store where the image has it after.
     static Symbol autotrick(OptionStr("autotrick", "none"));
     if ((mMoveConsistencyScore < 0.5f || autotrick == pose) && mRhythmBattle->CanTrick(pose)) {
         mTrickSymbol = rhythmbattle_trickpose;
