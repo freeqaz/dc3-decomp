@@ -135,13 +135,33 @@ void HiResScreen::BmpCache::SetPixelColor(
     MILO_ASSERT(y >= nLoadedStart && y <= nLoadedEnd, 0xD5);
     unsigned int yOffset = nLoadedEnd - y;
     unsigned int offset = (yOffset * mPixelsPerRow + x) * 4;
-    unsigned int newPixel = (a << 24) | (r << 16) | (g << 8) | b;
+    // The image does NOT build this word with shifts.  It stores the four
+    // channels as bytes into a 4-byte stack buffer at 0x50(r1) -- a to 0x53,
+    // r to 0x52, g to 0x51, b to 0x50 -- and loads the word straight back
+    // (`stb r21, 0x53(r1)` .. `stb r22, 0x50(r1)`, `lwz r9, 0x50(r1)`), in the
+    // same a/r/g/b statement order GetPixelColor reads them in.
+    //
+    // That also settles the channel order, which we had BACKWARDS.  The cache
+    // buffer is BGRA: GetPixelColor above reads a=ptr[3], r=ptr[2], g=ptr[1],
+    // b=ptr[0].  Big-endian, the word the image assembles is therefore
+    // (b << 24) | (g << 16) | (r << 8) | a -- the exact reverse of the
+    // `(a << 24) | (r << 16) | (g << 8) | b` that used to be here, which wrote
+    // a into ptr[0] and b into ptr[3] and so disagreed with every read.
+    unsigned char newBytes[4];
+    newBytes[3] = a;
+    newBytes[2] = r;
+    newBytes[1] = g;
+    newBytes[0] = b;
+    unsigned int newPixel = *(unsigned int *)newBytes;
     unsigned char *bufPtr = mBuffer + offset;
     unsigned int oldPixel = *(unsigned int *)bufPtr;
     if (newPixel != oldPixel) {
         *(unsigned int *)bufPtr = newPixel;
+        // The image compares the OFFSET against the accumulator, not the other
+        // way round: `cmplw cr6, r11, r10` / `bge` (idx 74/75), where r11 is
+        // offset and r10 is mDirtyStart.  `minDirty > offset` emits `ble`.
         unsigned int minDirty = mDirtyStart;
-        if (minDirty > offset) {
+        if (offset < minDirty) {
             minDirty = offset;
         }
         mDirtyStart = minDirty;
