@@ -338,8 +338,12 @@ void Flow::PostLoad(BinStream &bs) {
                 ObjPtr<Hmx::Object> eventProvider(this, 0);
                 eventProvider.Load(d.stream, true, 0);
             }
-            std::list<Symbol> triggerEvents;
+            // Declared stop-before-trigger (the READ order below is unchanged and
+            // still trigger-then-stop). MSVC assigns these two discarded lists
+            // adjacent frame slots in declaration order, and the target's pair is
+            // the other way round; swapping the declarations lines the slots up.
             std::list<Symbol> stopEvents;
+            std::list<Symbol> triggerEvents;
             d >> triggerEvents;
             d >> stopEvents;
             if (triggerEvents.size() > 0 || stopEvents.size() > 0) {
@@ -347,8 +351,10 @@ void Flow::PostLoad(BinStream &bs) {
             }
             d >> mHardStop;
             if (oldRev > 0) {
-                ObjList<FlowTrigger::PropTriggerDefn> triggerProperties(this);
+                // Same slot-pairing swap as the Symbol lists above; read order is
+                // still trigger-then-stop.
                 ObjList<FlowTrigger::PropTriggerDefn> stopProperties(this);
+                ObjList<FlowTrigger::PropTriggerDefn> triggerProperties(this);
                 d >> triggerProperties;
                 d >> stopProperties;
                 if (triggerProperties.size() > 0 || stopProperties.size() > 0) {
