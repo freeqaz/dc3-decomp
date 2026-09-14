@@ -67,17 +67,28 @@ void SkeletonExtentTracker::ApplyToMeshVerts(RndMesh *mesh, bool mirrored) const
     MILO_ASSERT(mesh->Verts().size() == 16, 0x43);
 
     int vertIdx = 0;
-    int direction = (-(unsigned int)mirrored & 0xFFFFFFFEu) + 1;
+    // A SELECT, not an arithmetic negation.  The image lowers `mirrored ? -1 : 1`
+    // to the 0/-1 mask idiom -- `subfic r11, r11, 0` + `subfe r11, r11, r11`
+    // (0x82624xxx), then `clrrwi r11, r11, 1` and `addi r11, r11, 1`.  Writing
+    // the mask out by hand as `(-(unsigned)mirrored & 0xFFFFFFFEu) + 1` gives a
+    // bare `neg` instead, because that negates the byte rather than testing it.
+    int direction = mirrored ? -1 : 1;
     float dir = (float)(long long)direction;
     for (unsigned int i = 0; (int)i < 4; i++) {
-        float yFrac = i > 0 ? (i == 1 ? 0.2f : (i < 3 ? 0.8f : 1.0f)) : 0.0f;
+        // Same ternary shape as xFrac below: the image opens both chains with
+        // `cmplwi cr6, rN, 0x1` / `blt`, not with a test against 0.
+        float yFrac = i < 1 ? 0.0f : (i == 1 ? 0.2f : (i < 3 ? 0.8f : 1.0f));
         float texY = (box.h * yFrac + box.y) * dir;
 
         for (unsigned int j = 0; j < 4; j++) {
-            vertIdx++;
             float xFrac = j < 1 ? 0.0f : (j == 1 ? 0.2f : (j < 3 ? 0.8f : 1.0f));
-            mesh->Verts()[vertIdx - 1].tex.x = box.w * xFrac + box.x;
-            mesh->Verts()[vertIdx - 1].tex.y = texY;
+            mesh->Verts()[vertIdx].tex.x = box.w * xFrac + box.x;
+            mesh->Verts()[vertIdx].tex.y = texY;
+            // Post-increment: the image computes `mulli r10, r9, 0x60` once in
+            // the preheader and bumps r9/r10 at the BOTTOM of the body, so the
+            // two stores use positive 0x40/0x44 displacements.  Incrementing
+            // first makes MSVC pre-bump the byte offset and store at -0x20/-0x1c.
+            vertIdx++;
         }
     }
 }
