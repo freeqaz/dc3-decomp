@@ -869,8 +869,12 @@ void RhythmDetector::ProcessFrames() {
                 hadBlendedFrames = true;
                 for (int j = 0; j < tickDiff; j++) {
                     float beatTime = (float)(prevTick + j + 1) * 0.1f;
-                    Frame blended = BlendFrameDataToBeat(mCurrentFrame, *it, beatTime);
-                    mAnalysisFrames2.push_back(blended);
+                    // push_back takes the callee's sret buffer straight
+                    // through (mr r4,r3 at 0x82489D48); a named `blended`
+                    // local re-materialises its own address instead.
+                    mAnalysisFrames2.push_back(
+                        BlendFrameDataToBeat(mCurrentFrame, *it, beatTime)
+                    );
                 }
             }
 
