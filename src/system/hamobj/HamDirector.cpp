@@ -1692,8 +1692,10 @@ Symbol HamDirector::ClosestMove() {
                         *dot = '\0';
                     DataNode list = PracticeList(kDifficultyExpert);
                     DataArray *listArr = list.Array();
-                    int i = 0;
+                    // 0x82474450 `li r25, -0x1` precedes 0x82474454
+                    // `li r24, 0x0`: maxScore is initialised first.
                     int maxScore = -1;
+                    int i = 0;
                     if (0 < listArr->Size()) {
                         do {
                             // listArr->Str(i), not Node(i).Str(): the image
@@ -1710,7 +1712,9 @@ Symbol HamDirector::ClosestMove() {
                                     if (buf[p - candidate] == '\0')
                                         break;
                                     int bufLower = tolower(buf[p - candidate]);
-                                    if (bufLower != tolower(*p))
+                                    // 0x824744BC is `cmpw cr6, r3, r22`:
+                                    // tolower(*p) is the left operand.
+                                    if (tolower(*p) != bufLower)
                                         break;
                                     p++;
                                     matchCount++;
