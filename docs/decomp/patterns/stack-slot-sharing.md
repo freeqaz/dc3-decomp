@@ -222,3 +222,45 @@ and 30+ variants through `slot_table.py` (six declaration orders, provably byte-
 const; a Symbol local; direct-init; every deref spelling; a const-ref inline pin) either did
 nothing or packed the bools while adding another slot. Same for `CacheMgrXbox::PollSearch`'s
 `numFound`/`res` swap (declaration order, both scopings, the type, renaming: inert).
+
+### `RhythmBattle::OnBeat`, re-derived independently (lane w6-a, 2026-09-14)
+
+Worth recording because the *arithmetic* makes this the single largest prize on the board and
+the diagnosis is now exact rather than suggestive. 16,508 bytes at 99.44997; second lane, same
+conclusion, reached without reading the paragraph above first.
+
+What is measured, not inferred:
+
+- Both sides reference **exactly 203 distinct `r31`-relative slots**. There is no extra
+  *variable* on our side -- only an extra *word*: target **202 words**, base **203**.
+- The target's **only** multi-byte word is `0x8c`, holding `{0x8c, 0x8d}`. Our build has
+  **zero** multi-byte words. `/FAs` names them `inMindControl` and `goofy`.
+- That one word *is* the entire 470-row offset residual, and the cascade is arithmetic:
+  base pads `0xe4` to 8-align the `DataNode` pair the target puts at `0xe0` (+4 -> +8), then
+  pads again to 16-align the `Vector3` block at `0x350` (+8 -> +16). That is the
+  `0x760`-vs-`0x750` frame delta. Offset-delta histogram: `+8 x327, +4 x71, +16 x41, 0 x117`.
+- `/FAs` also shows **`0x90` holds both `i` and `beat`** (disjoint scopes, shared slot) and sits
+  *between* `goofy` (`0x8c`) and `inMindControl` (`0x94`). The target has both bools *below*
+  `0x90`. So the question is only "why is `inMindControl` above `0x90` here".
+
+Seven further variants, each compiled and each **inert** -- same slot table, same
+`this@0x774`, and for the two measured end-to-end the same canonical/`diff_score`/histogram
+to the digit:
+
+| variant | result |
+|---|---|
+| `bool inMindControl;` hoisted above `UIPanel *focusPanel` | inert |
+| `bool inMindControl;` immediately after `bool goofy`, assigned at the original site | inert |
+| **both bools computed lexically adjacent**, after the early return | inert |
+| the two `static Symbol`s hoisted above `goofy` (nothing separating the bools) | inert |
+| `const int beat` / `const int i6cc` (narrowing `0x90`'s occupant) | inert |
+| `UIPanel *const focusPanel` | inert |
+| `mind_control == ...Sym()` (operand order) | inert |
+
+The third row is the one that settles it: **making the two bools lexically adjacent does not
+pack them.** An uninitialised declaration does not move a slot either -- MSVC is not using
+declaration position for the byte class in this function. Combined with the 30+ variants above,
+this lever is refused by ~37 distinct spellings. Treat `OnBeat`'s remaining 0.55% as a
+byte-class placement floor unless someone finds the actual discriminator; the probe to use is
+`slot_table.py` (~40 s, no ninja), and the pass/fail signal is `goofy`/`inMindControl` sharing a
+word **without** the total slot count rising.
