@@ -432,7 +432,7 @@ DWORD NuiCameraAdjustTilt(
                 if (pTiltObjects->Objects[i].Flags & 0x40000000) {
                     tracked++;
                     if (tracked > 1)
-                        goto InvalidParameter;
+                        return 0x57;
                 }
             }
         }
@@ -443,11 +443,9 @@ DWORD NuiCameraAdjustTilt(
         // unless the caller asks to bypass the throttle.
         elapsed = now - NuipDetroitRuntimeState.LastTiltTime;
         if (elapsed > 20000) {
-            requests = 0;
-            NuipDetroitRuntimeState.TiltCount = requests;
-        } else {
-            requests = NuipDetroitRuntimeState.TiltCount;
+            NuipDetroitRuntimeState.TiltCount = 0;
         }
+        requests = NuipDetroitRuntimeState.TiltCount;
 
         if (NuipRuntimeState.DeviceState == 0) {
             if (NuipDetroitRuntimeState.CalibrationValid != 0) {
