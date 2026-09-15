@@ -3277,23 +3277,35 @@ found:
             // `startBeat = x - adjust + clip->StartBeat()`, target idx 182-184;
             // the `startBeat = clipStartBeat; startBeat += ...` form emits a
             // dead first store the image does not have.
-            // RESIDUAL (w7-aq, 95.2 canonical): the image computes
-            // `adjust = beat1 - loopAdjust` AFTER the first SecondsToBeat call
-            // (`fsubs f30, f29, f30` at target idx 169), which forces loopAdjust
-            // to live across that call in a callee-saved FPR and costs the image
-            // an extra `fmr f30, f1` at idx 164.  Our build sinks the subtraction
-            // in front of the call and keeps loopAdjust in f1, the Mod return
-            // register, so it is one instruction SHORTER there and then loads
-            // clip->StartBeat() before the call instead of after.  Measured
-            // BYTE-INERT: writing the subtraction inline at both use sites,
-            // `- (beat1 - loopAdjust)`, gives the identical 18 rows -- MSVC
-            // hoists the call-invariant subexpression either way.  Nine of the
-            // remaining rows are the resulting FPR permutation.
+            // CLOSED (w7-bp, 95.2 -> 98.0 -> 100.0 canonical, 200/200 equal).
+            // w7-aq had this at 95.2 and correctly diagnosed the cause: the
+            // image computes `adjust = beat1 - loopAdjust` AFTER the first
+            // SecondsToBeat call (`fsubs f30, f29, f30`, target idx 169), which
+            // forces BOTH beat1 and loopAdjust to live across that call in
+            // callee-saved FPRs (f29/f30) and costs it an extra `fmr f30, f1`
+            // at idx 164.  Written as one expression -- inline or with a named
+            // `adjust` -- MSVC hoists the call-invariant subtraction IN FRONT
+            // of the call, keeps loopAdjust in f1 (Mod's return register), and
+            // then loads clip->StartBeat() before the call instead of after.
+            // w7-aq's recorded negative (`- (beat1 - loopAdjust)` spelled at
+            // both use sites, byte-inert) is correct and does not fix it.
+            //
+            // THE LEVER IS STATEMENT SPLITTING, not re-spelling the expression:
+            // give each SecondsToBeat call its own statement and its own named
+            // local, and everything downstream of it is scheduled after it.
+            //   one expression, named `adjust`        95.2  (18 rows)
+            //   `startSecs` split out, endBeat inline 98.0  ( 5 rows)
+            //   both split out                        100.0 ( 0 rows)
+            // The second split is what moves the endBeat `lwz r11, 0x40(r30)` /
+            // `lfs f13, 0x0(r11)` to AFTER the call (target idx 180/182); with
+            // endBeat still written as one expression we loaded StartBeat early
+            // into callee-saved f29 and reused it, which the image does not do.
+            // Do not fold these four statements back into two.
+            float startSecs = SecondsToBeat(practiceKey->frame * (1.0f / 30.0f));
             float adjust = beat1 - loopAdjust;
-            startBeat =
-                SecondsToBeat(practiceKey->frame * (1.0f / 30.0f)) - adjust + clip->StartBeat();
-            endBeat = SecondsToBeat(nextPracticeKey->frame * (1.0f / 30.0f)) - adjust
-                + clip->StartBeat();
+            startBeat = startSecs - adjust + clip->StartBeat();
+            float endSecs = SecondsToBeat(nextPracticeKey->frame * (1.0f / 30.0f));
+            endBeat = endSecs - adjust + clip->StartBeat();
             if (range) {
                 range->first = SecondsToBeat(practiceKey->frame * (1.0f / 30.0f));
                 range->second = SecondsToBeat(nextPracticeKey->frame * (1.0f / 30.0f));
