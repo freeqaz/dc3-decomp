@@ -505,47 +505,81 @@ void Spotlight::DrawShowing() {
     if (!mTargetLoaded)
         return;
     UpdateTransforms();
-    // Residual (21 rows, frame Δ +0x10): the image gives `tracker` the SAME
-    // frame word as `c` -- it builds the colour at r31+0x60 (82828D08..D18) and
-    // then passes r31+0x60 to ??0RndEnvironTracker (82828D44) and to
-    // ??1RndEnvironTracker (82828FB0).  Our build puts `c` at 0x60 and `tracker`
-    // at 0xa0, and that one extra word shifts `_at` 0x70->0x80 and the Sphere
-    // 0x80->0x90, which is every [off:-16] row.  Wrapping `c` in its own closing
-    // scope does NOT buy the reuse (measured: byte-identical, 97.60 both ways).
-    Hmx::Color c(Color());
-    Multiply(c, Intensity(), c);
-    sEnviron->SetAmbientColor(c);
-    RndEnvironTracker tracker(sEnviron, nullptr);
-    FOREACH (it, mAdditionalObjects) {
-        MILO_ASSERT(*it != this, 0x3E3);
-        if (*it != this)
-            (*it)->DrawShowing();
+    // w7-bo (2026-09-15): 97.56 -> 97.60 canonical, 21 mismatch rows -> 8.
+    // Lever: SIBLING block scopes for `c` and `tracker`.  The image gives
+    // `tracker` the SAME frame word as `c` -- it builds the colour at r31+0x60
+    // (82828D08..D18, target idx 87 `addi r9, r31, 0x60`) and then passes
+    // r31+0x60 to ??0RndEnvironTracker (82828D44, target idx 92 `addi r3, r31,
+    // 0x60`) and to ??1RndEnvironTracker (82828FB0).  With `c` at function
+    // scope our build put it at 0x60 and `tracker` at 0xa0; that one extra word
+    // shifted `_at` 0x70->0x80 and the Sphere 0x80->0x90, i.e. all fourteen
+    // [off:-16] diff_arg rows plus a frame Δ +0x10.
+    // Measured negatives:
+    //   - `c` alone in its own closing scope: byte-identical, 97.56 both ways
+    //     (the earlier note here claimed the reuse was therefore unobtainable;
+    //     it is not -- `tracker` has to be scoped TOO, so the two scopes are
+    //     siblings and MSVC coalesces the slots).
+    // Residual (8 rows) is a store-scheduling group around the tracker ctor --
+    // the image sinks `stw r8, 0x50(r31)` past the two `stw`s our build emits
+    // first, and hoists `addi r8, r10, 0x13c` (the RndEnviron vtable/field
+    // pointer) above them:
+    //   [95]  insert   stw  r7, 0x4(r9)        [96]  insert   stw  r6, 0x8(r9)
+    //   [102] delete   stw  r8, 0x0(r9)        [103] delete   stw  r7, 0x4(r9)
+    //   [104] delete   addi r8, r10, 0x13c     [105] diff_arg stw [reg:r6->r8, off:-8]
+    //   [109] replace  stw r8, 0x50(r31) vs addi r8, r10, 0x13c
+    //   [117] insert   stw  r8, 0x50(r31)
+    // Same instruction MULTISET on both sides -- only the schedule differs.
+    // Target spends r8 on `addi r8, r10, 0x13c` at idx 104, which forces
+    // `stw r8, 0x0(r9)` ahead of it at 102 and the whole c-copy lands in
+    // address order 0x0/0x4/0x8/0xc; our build keeps r8 holding the 0x1b0
+    // word longer, fires 0x4/0x8 as soon as their loads retire (95/96), and
+    // pushes the `addi`+home store past the fmuls.  Pure MSVC store
+    // scheduling driven by r8's live range.
+    // Further measured negatives, both 97.60 / 8 rows, byte-for-byte the same
+    // eight rows:
+    //   - `Hmx::Color c = Color();` copy-initialisation instead of direct-init
+    //   - `UpdateTransforms();` moved INSIDE the scope (the RB3 sibling's
+    //     shape -- rb3 Spotlight.cpp puts UpdateTransforms, c48 and tracker in
+    //     one block; that block shape is what we had at 97.56/21 rows, so the
+    //     sibling-scope split is the DC3-specific lever, not a port of rb3).
+    {
+        Hmx::Color c(Color());
+        Multiply(c, Intensity(), c);
+        sEnviron->SetAmbientColor(c);
     }
-    if (mLensMaterial) {
-        MILO_ASSERT(sDiskMesh, 0x3ED);
-        sDiskMesh->SetWorldXfm(mLensXfm);
-        sDiskMesh->SetMat(mLensMaterial);
-        sDiskMesh->DrawShowing();
-    }
-    auto& _ref3 = mBeam;
-    if (_ref3.mBeam && TheRnd.DrawMode() != 5) {
-        _ref3.mBeam->DrawShowing();
-    }
-    if (mFlare && mFlare->GetMat()) {
-        mFlare->Draw();
-    }
-    if (mTarget) {
-        if (mTargetShadow) {
-            RndDrawable *drawable = dynamic_cast<RndDrawable *>(mTarget.Ptr());
-            if (drawable) {
-                drawable->DrawShadow(WorldXfm(), 3.0f);
-            }
+    {
+        RndEnvironTracker tracker(sEnviron, nullptr);
+        FOREACH (it, mAdditionalObjects) {
+            MILO_ASSERT(*it != this, 0x3E3);
+            if (*it != this)
+                (*it)->DrawShowing();
         }
-        if (DoFloorSpot()) {
-            MILO_ASSERT(sDiskMesh, 0x40F);
-            sDiskMesh->SetWorldXfm(mFloorSpotXfm);
-            sDiskMesh->SetMat(mSpotMaterial);
+        if (mLensMaterial) {
+            MILO_ASSERT(sDiskMesh, 0x3ED);
+            sDiskMesh->SetWorldXfm(mLensXfm);
+            sDiskMesh->SetMat(mLensMaterial);
             sDiskMesh->DrawShowing();
+        }
+        auto& _ref3 = mBeam;
+        if (_ref3.mBeam && TheRnd.DrawMode() != 5) {
+            _ref3.mBeam->DrawShowing();
+        }
+        if (mFlare && mFlare->GetMat()) {
+            mFlare->Draw();
+        }
+        if (mTarget) {
+            if (mTargetShadow) {
+                RndDrawable *drawable = dynamic_cast<RndDrawable *>(mTarget.Ptr());
+                if (drawable) {
+                    drawable->DrawShadow(WorldXfm(), 3.0f);
+                }
+            }
+            if (DoFloorSpot()) {
+                MILO_ASSERT(sDiskMesh, 0x40F);
+                sDiskMesh->SetWorldXfm(mFloorSpotXfm);
+                sDiskMesh->SetMat(mSpotMaterial);
+                sDiskMesh->DrawShowing();
+            }
         }
     }
 }
@@ -1018,6 +1052,47 @@ void Spotlight::UpdateFloorSpotTransform(const Transform &tf) {
     }
 }
 
+// w7-bo (2026-09-15): 68.77 -> 70.20 canonical, 1628 B. Two levers, each
+// measured alone: a plain counted `for` over totalSections (the image guards
+// with `cmplwi cr6, r16, 0x0` at 0x8282D898 and then `mtctr r16` at
+// 0x8282D8D4 -- our `int count` do/while cost a second IV), and inverting the
+// halfWidth step so the BOTTOM arm is the fall-through (0x8282DCC4 is
+// `cmplw cr6, r18, r14` / `blt cr6, <top arm>`; that closed the one blt/bge
+// diff_op).
+//
+// MEASURED NEGATIVES, each alone from the 70.20 state:
+//  - `unsigned short` for c0..n3 (69.60). This is what the image's TYPE is --
+//    every index is materialised with `clrlwi ...,16` (0x8282DAF4) and
+//    RndMesh::Face's members are unsigned short -- and it does remove the
+//    frame-size delta and move the prologue from r16-r31 to r15-r31. It
+//    scores lower because MSVC then rebiases the `s` induction variable from
+//    4i+6 to 4i+1, so it hoists ONE modular addend (`addis r9,r21,1` /
+//    `subi r9,r9,1` = +0xffff) where the image hoists SIX
+//    (`ori r20, r7, 0xfffa` .. `ori r25, r8, 0xfffd`, 0x8282D90C-0x8282D920).
+//  - `unsigned short s` as well (69.50). The image's `s` is an untruncated
+//    32-bit IV (`addi r11, r11, 0x4` at 0x8282DCE4), so this is wrong anyway.
+//  - `int s` + `short c0..c3` (69.80).
+//  - spelling the addends `s + (unsigned short)-6` to force the modular
+//    constants: MSVC folds it straight back to `s - 6`, byte-identical object.
+//  - inverting the even/odd face arms to `if (i & 1)`: INERT (kept, because it
+//    is what 0x8282DAEC `clrlwi. r9, r18, 31` / `beq .L_8282DBAC` reads as).
+//  - declaring bottomSideBorderVal before verts/faces: INERT.
+//
+// RESIDUAL is a register-pressure cascade, not a row: the image saves
+// r14-r31 + f26-f31 (18 GPR / 6 FPR), we save r16-r31 + f25-f31 (16 / 7). It
+// spills `this` to 0x144(r1) (0x8282D710) so r27 can carry a vertex BYTE
+// cursor biased +0xc0 (two Verts) and derive three more bases per iteration
+// (`subi r8, r27, 0xc0` / `subi r7, r27, 0x60` / `addi r6, r27, 0x60` at
+// 0x8282D98C/0x8282D9A4/0x8282D9AC); ours runs one cursor at bias 0 and folds
+// k*0x60 into the store displacements instead. It also keeps lVar31 as its own
+// IV (`neg r15, r14`, `addi r15, r15, 0x1` at 0x8282DCDC) where MSVC
+// eliminates ours into `i - numSectionsTop`.
+//
+// The MakeString name difference under name_check is the known per-TU ICF
+// alias, NOT a wrong string: the target's own relocations at 0x8282D730 and
+// 0x8282D734 name "Spotlight.cpp" (_0O@ = 14) and
+// "!SpotlightDrawer::DrawNGSpotligh..." (_0CF@ = 37), which is exactly the
+// instantiation we emit.
 void Spotlight::BuildBeam(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x609);
     def.mIsCone = false;
@@ -1048,14 +1123,12 @@ void Spotlight::BuildBeam(BeamDef &def) {
     float radiusStepTopVal = radiusStepTop * topSectionLen;
     float radiusStepBotVal = (def.mBottomRadius - borderTopRadius) * botSectionLen;
 
-    if (totalSections != 0) {
-        float halfWidth = topRadius;
-        int fi = 0;
-        int lVar31 = -numSectionsTop;
-        short s = 6;
-        int count = totalSections;
-        unsigned int i = 0;
-        do {
+    float halfWidth = topRadius;
+    int fi = 0;
+    int lVar31 = -numSectionsTop;
+    short s = 6;
+    {
+        for (unsigned int i = 0; i < (unsigned int)totalSections; i++) {
             float y;
             float alpha;
             if (i == (unsigned int)(totalSections - 1)) {
@@ -1122,20 +1195,23 @@ void Spotlight::BuildBeam(BeamDef &def) {
                 short n2 = s;
                 short n3 = s + 1;
 
-                if ((i & 1) == 0) {
-                    faces[fi].Set(c0, n0, c1);
-                    faces[fi + 1].Set(c1, n0, n1);
-                    faces[fi + 2].Set(c1, n2, c2);
-                    faces[fi + 3].Set(c1, n1, n2);
-                    faces[fi + 4].Set(c2, n2, c3);
-                    faces[fi + 5].v1 = c3;
-                } else {
+                // Target 0x8282DAEC is `clrlwi. r9, r18, 31` / `beq .L_8282DBAC`
+                // -- the ODD arm is the fall-through, so the source tests
+                // `i & 1` and the even arm is the else.
+                if (i & 1) {
                     faces[fi].Set(c0, n0, n1);
                     faces[fi + 1].Set(c0, n1, c1);
                     faces[fi + 2].Set(c1, n1, c2);
                     faces[fi + 3].Set(c2, n1, n2);
                     faces[fi + 4].Set(c2, n3, c3);
                     faces[fi + 5].v1 = c2;
+                } else {
+                    faces[fi].Set(c0, n0, c1);
+                    faces[fi + 1].Set(c1, n0, n1);
+                    faces[fi + 2].Set(c1, n2, c2);
+                    faces[fi + 3].Set(c1, n1, n2);
+                    faces[fi + 4].Set(c2, n2, c3);
+                    faces[fi + 5].v1 = c3;
                 }
                 faces[fi + 5].v2 = n2;
                 faces[fi + 5].v3 = n3;
@@ -1148,18 +1224,19 @@ void Spotlight::BuildBeam(BeamDef &def) {
                 }
             }
 
-            if (i < (unsigned int)numSectionsTop) {
-                halfWidth = radiusStepTopVal + halfWidth;
-            } else {
+            // Target 0x8282DCC4 is `cmplw cr6, r18, r14` / `blt cr6, <top arm>`
+            // -- the BOTTOM arm is the fall-through, so the source tests
+            // `i >= numSectionsTop` and the top step is the else.
+            if (i >= (unsigned int)numSectionsTop) {
                 halfWidth = radiusStepBotVal + halfWidth;
+            } else {
+                halfWidth = radiusStepTopVal + halfWidth;
             }
 
-            i++;
             lVar31++;
             s += 4;
             fi += 6;
-            count--;
-        } while (count != 0);
+        }
     }
 
     def.mBeam->Sync(0x13F);
@@ -1170,6 +1247,32 @@ void Spotlight::BuildBeam(BeamDef &def) {
     def.mBeam->SetTransParent(parent, false);
 }
 
+// w7-bo (2026-09-15): 90.22 -> 91.83 canonical, 1140 B. The two TAIL uses of
+// the length read `def.mLength` fresh -- the image reloads it at 0x8282D?? for
+// verts[31].tex (`lfs f0, 0x8(r29)` / `fdivs f0, f29, f0`, target idx 257-258)
+// and again for verts[47].pos.y (`lfs f13, 0x8(r29)`, idx 263). The duplicated
+// verts[15]/verts[31] writes below are REAL: the image writes both twice, the
+// second verts[31] differing only in tex.y (1.0 vs borderY/mLength).
+//
+// MEASURED NEGATIVES, each alone from the 91.83 state:
+//  - doing the same for the two IN-LOOP uses (`borderY / def.mLength` in
+//    verts[s-1].tex and `def.mLength` as verts[s+15].pos.y): 61.5. This is
+//    what the image does -- it reloads and re-divides inside the loop, and the
+//    change lands the callee-saved FPR count EXACTLY (`__savefpr_23` both
+//    sides, vs _21 here) -- but MSVC then rebiases the vertex byte cursor and
+//    the whole loop body loses alignment. Registering it as a negative, not as
+//    "unfixable": something that fixes the cursor bias should let it back in.
+//  - naming the six face indices as `unsigned short` locals (47.3), even
+//    though the image's arithmetic is plainly 16-bit modular off `s`
+//    (`addis r10, r30, 0x1` / `subi r10, r10, 0x11` = s + 0xFFEF; s-1 is
+//    `add r8, r30, r25` with r25 = 0xffff hoisted at 0x8282C???). Keep the
+//    inline expressions in Set().
+//
+// RESIDUAL: the image's vertex byte cursor r28 sits at verts[s-1] (`li r28,
+// 0x600`) and derives the other two rows with `subi r10, r28, 0x600` /
+// `addi r9, r28, 0x600`; ours sits at verts[s] (`li r30, 0x660`) and folds the
+// row offset into the store displacement (-0xc00/-0x630/-0x60). Same code,
+// different bias -- that is where most of the 113 diff_arg rows live.
 void Spotlight::BuildCone(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x5B6);
     def.mIsCone = true;
@@ -1180,6 +1283,10 @@ void Spotlight::BuildCone(BeamDef &def) {
     verts.resize(0x30);
     faces.resize(60);
 
+    // The image never caches mLength: it reloads `lfs ..., 0x8(r29)` at every
+    // use (0x8282D0xx in the loop, and again at 0x8282D2xx for verts[31]/[47])
+    // and recomputes borderY/mLength rather than holding it.  A `float len`
+    // local costs two callee-saved FPRs (savefpr_21 vs the image's _23).
     float len = def.mLength;
     float bottomBorderLen = def.mBottomBorder * len;
     bottomBorderLen = (float)__fsel(len - bottomBorderLen, bottomBorderLen, len);
@@ -1231,9 +1338,9 @@ void Spotlight::BuildCone(BeamDef &def) {
 
     verts[31].pos.Set(borderRadius, borderY, 0.0f);
     verts[31].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
-    verts[31].tex.Set(1.0f, borderY / len);
+    verts[31].tex.Set(1.0f, borderY / def.mLength);
 
-    verts[47].pos.Set(def.mBottomRadius, len, 0.0f);
+    verts[47].pos.Set(def.mBottomRadius, def.mLength, 0.0f);
     verts[47].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
     verts[47].tex.Set(1.0f, 1.0f);
 

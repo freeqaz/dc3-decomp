@@ -980,29 +980,32 @@ void UtilDrawCigar(
     float scale = sqrtf(mz * mz + mx * mx + my * my);
     // Only two entries: retail's ctr for the scaling loop is a literal 2
     // (li r9,0x2 / mtctr r9), and only [0] and [1] are ever read back.
-    float scaledLens[2];
     Transform basis;
-
+    float sLen0;
+    float sLen1;
     {
-        int cnt = 2;
-        float *dst = scaledLens;
-        do {
+        float scaledLens[2];
+        {
+            int cnt = 2;
+            float *dst = scaledLens;
+            do {
 #ifdef HX_NATIVE
-            *dst =
-                *(float *)((intptr_t)(lengths) + ((intptr_t)dst - (intptr_t)scaledLens))
-                * scale;
+                *dst = *(float *)((intptr_t)(lengths)
+                                  + ((intptr_t)dst - (intptr_t)scaledLens))
+                    * scale;
 #else
-            *dst = *(float *)((int)(lengths) + ((int)dst - (int)scaledLens)) * scale;
+                *dst = *(float *)((int)(lengths) + ((int)dst - (int)scaledLens)) * scale;
 #endif
-            dst++;
-            cnt--;
-        } while (cnt != 0);
-    }
-    memcpy(&basis, &tf, 0x40);
-    Normalize(basis.m, basis.m);
+                dst++;
+                cnt--;
+            } while (cnt != 0);
+        }
+        memcpy(&basis, &tf, 0x40);
+        Normalize(basis.m, basis.m);
 
-    float sLen0 = scaledLens[0];
-    float sLen1 = scaledLens[1];
+        sLen0 = scaledLens[0];
+        sLen1 = scaledLens[1];
+    }
 
     // Two behavioural bugs fixed here, both visible in retail's stores:
     //  1. The cap apex sits on the LOCAL X AXIS, not Y.  Retail writes the
@@ -1012,14 +1015,35 @@ void UtilDrawCigar(
     //     it in y put both caps off the cigar's axis.
     //  2. Retail transforms through a SEPARATE temp (in = 0x60, out = 0x90 /
     //     0xa0); we were transforming in place.
-    // Retail's frame is 0x3d0 and ours is 0x3e0: retail coalesces the int->float
+    // Retail's frame is 0x3d0 and ours WAS 0x3e0: retail coalesces the int->float
     // conversion scratch double into the dead `scaledLens` slot (0x50, accessed
-    // again at the (float)i conversions), while MSVC gives us a fresh 0x90 and
-    // pushes top/bottom/basis/both vertex arrays up by 0x10.  Hoisting `end` out
+    // again at the (float)i conversions), while MSVC gave us a fresh 0x90 and
+    // pushed top/bottom/basis/both vertex arrays up by 0x10.  Hoisting `end` out
     // of a nested block recovered 0.1pp of that; swapping the declaration order of
     // `end` and `scaledLens` to give scaledLens the lower slot was byte-identical
-    // (measured 2026-09-14, two consecutive neutral variants), so the readable
-    // order stays and the 0x10 is a deliberate residual.
+    // (measured 2026-09-14, two consecutive neutral variants).
+    //
+    // w7-bo (2026-09-15): THE 0x10 IS CLOSED, and declaration order was never the
+    // lever -- LIFETIME was.  `scaledLens` and the do-loop that fills it now live in
+    // their own block, with `sLen0`/`sLen1` declared outside it, so the array is dead
+    // the moment the block ends and MSVC reuses 0x50 for the conversion double exactly
+    // as retail does.  Frame 0x3e0 -> 0x3d0 (prologue `stwu r1, -0x3d0(r1)` now equal),
+    // all 38 +/-0x10 offset rows closed, canonical 91.94 -> 92.31193, mismatch rows
+    // 97 -> 72.  See docs/decomp/patterns/lexical-scope-controls-msvc-stack-slots.
+    // w7-bo (2026-09-15) measured negatives on the two remaining small clusters,
+    // both BYTE-IDENTICAL (canonical 92.31193 unchanged, same 72 rows):
+    //  - swapping the declaration order of `top` and `bottom` to chase the 0x90/0xa0
+    //    permutation (retail puts `top` at 0x90; we get 0xa0).  MSVC assigns these two
+    //    same-sized Vector3 temps by use, not by declaration order.
+    //  - writing the three `sin * radii[]` products as `radii[] * sin` to chase
+    //    idx 82/88/50 (retail `fmuls f27,f1,f0`, we emit `fmuls f28,f13,f0`; retail
+    //    `fadds f0,f24,f0`, we emit `fadds f0,f0,f24`).  MSVC canonicalises fmuls/fadds
+    //    operand order from its register assignment, not from the source order, so the
+    //    readable order stays.
+    // Also unclosed: idx 94, retail `fmuls f0,f1,f0` + `fadds f27,f0,f24` where we
+    // contract to a single `fmadds f27,f0,f1,f24` despite h1raw/h1 already being
+    // separate statements -- /fp:fast contraction that the statement split does not
+    // block.
     Vector3 end;
     Vector3 top;
     Vector3 bottom;
@@ -1037,6 +1061,16 @@ void UtilDrawCigar(
     // produces retail's `add r10,r28,r31` / `slwi r29,r10,4`; a float[18*4] with
     // an index pre-multiplied by 4 lets MSVC fuse the two induction variables
     // into one byte-stepping counter (addi r30,r30,0x10 / cmpwi r30,0x120).
+    //
+    // w7-bo (2026-09-15) CORRECTION: that is describing a state this file is no
+    // longer in.  With the Vector3 indexing exactly as written below, MSVC STILL
+    // fuses: we emit `addi r30,r30,0x10` / `cmpwi cr6,r30,0x120` (idx 131/136) where
+    // retail keeps iLatSum in r28 and recomputes `add r10,r28,r31` / `slwi r29,r10,4`
+    // inside the loop (idx 111/114).  ~10 of the 72 residual rows are this strength
+    // reduction, and it also drives the r27/r28/r29/r30/r31 relabelling that objdiff
+    // reports as 41 REGISTER_SWAP instructions -- retail spends a callee-saved
+    // register on iLatSum, we spend it on the byte cursor.  No source spelling tried
+    // so far blocks it; it is the largest single item left on this function.
     Vector3 verts2e0[18];
     Vector3 verts1c0[18];
 
@@ -1262,13 +1296,51 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
 //     experiment that changed BOTH things at once, so the destructor-merge had never
 //     actually been measured on its own.  It has been now: the `ret` hoist ALONE, with
 //     the block placement left exactly as it is, moves 71.537 -> 67.9 -- the same 3.6pp
-//     regression the combined experiment produced.  Both levers are independently bad,
-//     and the dismissal survives de-confounding.  Do not re-open this one on the
-//     "a dismissal is a lead" principle a third time without a NEW mechanism.
+//     regression the combined experiment produced.
+//
+// w7-bo (2026-09-15) -- BOTH DISMISSALS ABOVE ARE NOW SUPERSEDED, with the NEW mechanism
+// they asked for: the rb3 sibling (../rb3/src/system/rndobj/Utl.cpp:1117), which neither
+// earlier pass consulted.
+//
+//  2'. THE DESTRUCTOR MERGE IS OBTAINABLE, and the lever is not a `ret` hoist -- it is
+//      DUPLICATING `return cacheFile;` INSIDE the String's scope (rb3 does exactly this).
+//      Target 8262E6C4..8262E6D8:
+//          ble .L_8262E6DC   <- cacheRes <= 0
+//          li  r29, 0x0      <- cacheRes  > 0: return value := nullptr
+//        .L_8262E6CC:
+//          addi r3, r31, 0x60
+//          bl   ??1String@@UAA@XZ   <- the ONE destructor, on both paths
+//          mr   r3, r29
+//      .L_8262E6DC is a bare `b .L_8262E6CC`, the tail-merge seam of the second return.
+//      With the duplicated return we now emit idx 155-158 EXACTLY, ??1String goes 2 -> 1,
+//      equal instructions 123 -> 127 of 185, mismatch rows 62 -> 58, and base size
+//      656 -> 648 == target size.  The `ret`-hoist spelling could never do this because
+//      it moves the store OUT of the scope instead of moving the return INTO it.
+//      ⚠ Canonical went 71.55556 -> 71.49383, a 0.062pp LOSS, and that is an aligner
+//      artifact, not a regression in the code: diff_score is 4643/16200 on both sides
+//      (normalized/fuzzy 71.33951 unchanged).  Closing the destructor turned three
+//      partially-credited `replace` rows inside the STILL-MISPLACED movie block into two
+//      fully-charged `delete` rows.  Kept on faithful-over-score: the emitted bytes are
+//      strictly closer to the image and the size is now exact.  When 1 is closed this
+//      becomes a strict win.
+//
+//  1'. THE ARM INVERSION IS INERT, not a 3.6pp regression.  The 2026-08-22 experiment
+//      changed the arm order AND hoisted `ret`; the 2026-08-31 re-measure de-confounded
+//      only the hoist.  Measured on its own, on top of 2', rewriting the head as
+//          if (stricmp(ext,"bmp") == 0 || stricmp(ext,"png") == 0) { ...main...; return; }
+//          const char *movieExt = MovieExtension(ext, thisPlatform);   // trailing, no else
+//      -- i.e. the movie arm LAST IN SOURCE ORDER rather than in an `else` -- produces
+//      BYTE-IDENTICAL code: same 58 mismatch rows, same canonical 71.49383, idx 28 still
+//      `beq` vs the image's `bne`.  MSVC normalises the two arms to "smaller arm first"
+//      and no source ordering of them reaches it.  The whole 3.6pp belonged to the hoist.
+//      44 of the 58 residual rows are this one block placement (idx 29-51 inserted,
+//      idx 160-182 deleted); it is the only thing left between this function and ~100.
 //
 // The census WRONG_CALLEE charge here (target MovieExtension vs base ~String) is a
 // consequence of 1: both sides call MovieExtension exactly once, at different points in
 // the function, so the aligner pairs our ~String against it.  It is not a wrong callee.
+// (With 2' landed the charge is gone from the pattern list anyway -- our ~String no
+// longer sits where the aligner would pair it against MovieExtension.)
 const char *CacheResource(const char *cc, CacheResourceResult &res) {
     Platform thisPlatform = TheLoadMgr.GetPlatform();
     res = kCacheUnnecessary;
@@ -1321,6 +1393,7 @@ const char *CacheResource(const char *cc, CacheResourceResult &res) {
         if (cacheRes > 0) {
             return nullptr;
         }
+        return cacheFile;
     }
     return cacheFile;
 }
@@ -1595,6 +1668,25 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     // fill -- which is how the image threads the mulli / lwz 0x110 / add
     // through the identity stores -- costs 0.6pp (94.13 -> 93.5). The face
     // reference belongs first.
+    //
+    // w7-bo (2026-09-15): where the 114 residual rows actually come from.  76 of
+    // them are ONE relabelling: retail's prologue is __savegprlr_23, ours is
+    // __savegprlr_24, so every callee-saved register reads one number off.  The
+    // ninth register is spent on the `Hmx::Matrix3 edgeMat(edge21, edge31,
+    // faceNormal)` copy, and the reason is scheduling, not spelling: retail loads
+    // ALL TWELVE words first (idx 158-176, into r5/r31/r30/r10 for edge21,
+    // r26/r25/r24/r9 for edge31, r27/r23/r29/r11 for faceNormal) and only then
+    // stores them (177-191), which needs twelve live registers at once; we
+    // interleave the three 16-byte copies load-store, load-store, load-store and
+    // therefore need eight.  Same instruction multiset either way.
+    // The other visible item is the faceNormal store order: retail writes 0x50 /
+    // 0x54 / 0x58 in x,y,z order (idx 165/167/169) where we write x,z,y.
+    // Measured negative (2026-09-15): replacing the three-argument `Vector3
+    // faceNormal(...)` constructor with three separate `faceNormal.x = ... ;
+    // .y = ...; .z = ...;` assignments -- which forces x,y,z in the source -- is
+    // BYTE-IDENTICAL.  Canonical stayed 94.13, same 114 rows, same store order.
+    // MSVC schedules the three fmsubs from its FPR assignment, not from the
+    // source order, exactly as measured on UtilDrawCigar's fmuls operands.
     RndMesh::Face &face = m->Faces()[faceIdx];
     outBasis.x.x = 1.0f;
     outBasis.x.y = 0.0f;
@@ -2506,6 +2598,36 @@ void TessellateMesh(RndMesh *mesh) {
     // MSVC does not take slot order for these from declaration order or from
     // scope, so there is no spelling of THIS function that moves them; the
     // allocation is decided by the STL temp above.
+    //
+    // w7-bo (2026-09-15) re-measured: 95.5 canonical / 94.9 raw, 298 rows,
+    // 231 equal / 54 diff_arg / 9 delete / 4 insert -- unchanged, and regions
+    // 6-62, 100-116, 125-135, 151-159, 175-183, 195-208, 227-239, 241-259 and
+    // 265-297 are all already 100%.  One observation the note above does not
+    // carry, and the best remaining lead for whoever takes this next:
+    //
+    //   THE DEAD-HOME-STORE COUNT DIFFERS, 4 vs 2.  At the top of the loop the
+    //   image loads the sub-object at 0x148(r27) ONCE and then homes it FOUR
+    //   times into the shared slot:
+    //     82637BB4  stw r8, 0x50(r31)
+    //     82637BBC  stw r8, 0x50(r31)
+    //     82637BC0  stw r8, 0x50(r31)
+    //     82637BC8  stw r8, 0x50(r31)
+    //   We emit exactly TWO (idx 69 and 74) -- the loop condition's
+    //   `mesh->Faces().size()` and the `mesh->Faces()[i]` subscript.  Under
+    //   the repeated-call-expression rule (docs/decomp/patterns, "a call
+    //   written twice is CSE'd but still homes `this` once per occurrence"),
+    //   four homes means the image's source names that same inlined accessor
+    //   FOUR times in this block where ours names it twice.  The image also
+    //   carries three dead `sth` of face.v1/v2/v3 into the same 0x50
+    //   (82637BF4/BF8/C00) plus four `mr` register copies (82637BD0/D8/E0/E4)
+    //   that we do not emit -- the same family.  Finding the two missing
+    //   mentions is what would make MSVC coalesce the comparator temp onto
+    //   0x50 and unwind the whole 4-byte shift; guessing extra mentions in
+    //   order to manufacture stores was deliberately NOT done here.
+    //   (r27+0x148 is not plain `mesh->Faces()`: the image reads 0x110 off it
+    //   as a byte OFFSET added to r30 for the face cursor AND 0x100 off it as
+    //   the verts base for the *0x60 index math, so the accessor being homed
+    //   covers both of those uses.)
     Edge e12, e23, e31;
 
     for (unsigned int i = 0; i < (unsigned int)mesh->Faces().size(); i++) {
@@ -2642,6 +2764,31 @@ void BuildVisit(BSPNode *node) {
     // `addi r26,r29,0x14` right after the node load, where retail computes it
     // only at the first Cross, and costs 2.4pp (95.0 -> 92.6, measured
     // 2026-09-14).  Member access through the iterator stays.
+    //
+    // w7-bo (2026-09-15): the CAUSAL ORDER of those two symptoms, which the note
+    // above had backwards.  The home stores are not a by-product of the extra
+    // register -- they are what CREATES it.  All eleven land on 0x60(r31) and they
+    // are the three reference parameters of the two inlined Cross() calls plus the
+    // Set()/operator= ahead of them, homed once each:
+    //     40 &m.z   41 &m.y   42 &m.y      (m.z = plane; m.y.Set(0,1,0))
+    //     82 &m.y                          (m.y.Set(1,0,0), inside the |dot| > 0.9 arm)
+    //     88 &m.z   98 &m.x   99 &m.y      (Cross(m.y, m.z, m.x))
+    //    117 &m.y  119 &m.x  121 &m.z      (Cross(m.z, m.x, m.y))
+    // Because &m.x is stored at 98 and again at 119 -- across the intervening
+    // `bl Normalize` -- retail must keep it in a CALLEE-SAVED register (r26,
+    // materialised at idx 86 `addi r26,r28,0x14`).  That is the ninth callee-saved
+    // GPR, hence __savegprlr_23 against our __savegprlr_24, and every register in
+    // the body then reads one number off: 103 of the 121 residual rows are that
+    // single relabelling, and 13 more are the home stores themselves.  We already
+    // compute the same address at the same instruction index (idx 86
+    // `addi r4,r30,0x14`) -- into a VOLATILE register, because nothing in our
+    // source keeps it live past the call.
+    // Measured negative (2026-09-15): binding ONLY `Vector3 &axisX` immediately
+    // before the first Cross -- the surgical form the 2026-09-14 experiment did not
+    // try -- does not force the callee-saved either.  Prologue stayed r24-r31,
+    // canonical stayed 94.97, and mismatch rows went 121 -> 123.
+    // So the open question is narrow and concrete: what source spelling makes MSVC
+    // home an inlined Cross()'s reference parameters?  Nothing tried so far does.
     lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
     lastIt->mTransform.m.y.Set(0, 1, 0);

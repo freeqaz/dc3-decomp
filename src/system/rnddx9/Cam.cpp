@@ -95,6 +95,54 @@ void DxCam::Select() {
         //       MSVC's right-to-left argument evaluation for a 4-float Set(),
         //       and it is NOT -- MSVC canonicalises the two spellings, so that
         //       ordering cannot be used as evidence for either.
+        //
+        // w7-bo (2026-09-15) attributed the rest of the 84.130 residual rather
+        // than re-deriving the spellings above.  55 rows, and they are three
+        // things, none of them a source defect we can name:
+        //
+        //  1. PROLOGUE, 8 rows (idx 1-3 and 143-147).  The image runs
+        //     `bl __savegprlr_29` / `b __restgprlr_29`; we save r30/r31
+        //     inline.  The third callee-saved GPR exists for ONE value: at
+        //     8261EBB0/EBB4 the image loads TheShaderMgr into r31 AND its
+        //     vtable into r29 BEFORE `??0Matrix4@Hmx@@` runs, and after the
+        //     call uses `lwz r11, 0x18(r29)` + `mr r3, r31`.  We load the
+        //     object into VOLATILE r11, keep only the vtable in r31, and
+        //     rematerialise the object with a second
+        //     `lwz r3, ?TheShaderMgr@@...@l(r30)` after the call (idx 97).
+        //     Both are correct; the image is holding a value we reload.  Note
+        //     the image itself reloads TheShaderMgr at all FOUR other call
+        //     sites (idx 83, 105, 125), so binding one `RndShaderMgr &mgr =
+        //     TheShaderMgr;` for the whole block would move those four the
+        //     WRONG way -- it is this one call's regalloc, not a CSE the
+        //     source is missing.
+        //
+        //  2. SLOT TRIPLE, the (0x50,0x70) OFFSET_SWAP plus the loads around
+        //     it.  Three Rect-sized slots are in play and both sides use all
+        //     three; only the assignment differs:
+        //         image:  sret temp 0x70, rect 0x60, rect2 0x50
+        //         ours:   sret temp 0x50, rect 0x60, rect2 0x70
+        //     rect and rect2 do NOT coalesce on either side, so their
+        //     lifetimes overlap on both -- the outer-scope declarations below
+        //     are right and moving either into its block would be wrong.  The
+        //     two sret temps DO coalesce on both sides, so the block scoping
+        //     is right too.  What is left is same-type same-size slot order,
+        //     which this wave has repeatedly measured to come out of MSVC's
+        //     own allocation and not out of declaration order.
+        //
+        //  3. The 4 sret-pointer rows already described above (`mr r11, r3`
+        //     + `lfs f*, 0x0/0x4/0x8/0xc(r11)` descending, against our
+        //     ascending reads off r1), and the f0/f11 + f12/f13 relabelling
+        //     they drag with them.  Checked and REFUTED as a source lever:
+        //     RndShaderMgr has no Set{V,P}Constant overload taking a
+        //     Hmx::Rect (ShaderMgr.h:98-111 -- bool/int/Vector4/float*/
+        //     RndTex/Matrix4 only, all pure virtual), so there is no inlined
+        //     reference-parameter helper here whose home slot could be
+        //     producing the pointer read.  The Vector4 really is built in
+        //     this function, and the pointer-vs-slot addressing is MSVC's.
+        //
+        //  FLOOR 84.130 canonical (82.971 fuzzy), 148 rows: 93 equal /
+        //  30 diff_arg / 8 replace / 7 delete / 10 insert.  Regions 4-32 and
+        //  59-87 are already 100%.
         {
             const Hmx::Rect &tmp = TheHiResScreen.ScreenRect();
             rect.x = tmp.x;
