@@ -18,6 +18,43 @@
 #include <set>
 #include "utl\Std.h"
 
+/* w8-e 2026-09-15 -- ADJUDICATED UNSCOREABLE, do not hunt these five.
+ *
+ * report.json files five 0% rows against this unit, 656 B in total:
+ *   ??$__introsort_loop@PAV?$Key@_N@@...           188 B  @826E0138
+ *   ??$__partial_sort@PAV?$Key@_N@@...             168 B  @826DE6C0
+ *   ??$sort_heap@PAV?$Key@VSymbol@@@@...           116 B  @826DDEB8
+ *   ??$__final_insertion_sort@PAV?$Key@_N@@...     108 B  @826DEFF8
+ *   ??$__unguarded_linear_insert@PAV?$Key@VSymbol@@@@...  76 B  @826DB000
+ * None of them is missing code.  Key<float>, Key<bool> and Key<Symbol> are all
+ * 8 bytes with `frame` at the same offset, so less<Key<T>> and every sort helper
+ * above them compile to IDENTICAL machine code and /OPT:ICF folded them.  At
+ * each of the five addresses ham_xbox_r.map lists 4 names (the Key<M>, Key<_N>,
+ * Key<VSymbol> and FacePriority spellings); symbols.txt binds ONE, and at these
+ * five it happened to bind a Key<bool>/Key<Symbol> name.  The surviving body was
+ * contributed by rndobj:PropKeys.obj (PropKeys::ReSort, src/system/rndobj/
+ * PropKeys.cpp:117-139), which our PropKeys.obj does emit -- all seven Key<T>
+ * spellings, verified by `strings build/373307D9/src/system/rndobj/PropKeys.obj`.
+ * It merely lands in a different unit than the split range dtk carved it into
+ * (PropKeys .text is 0x82688260..0x8268E9F0; these five sit inside this unit's
+ * 0x826DABB8..0x826E2D70).
+ *
+ * The proof that the names are arbitrary is in the listing itself: at
+ * AmbientOcclusion.s:3562, ??$__adjust_heap@PAV?$Key@M@@... -- a Key<FLOAT>
+ * function -- calls ??$__push_heap@PAV?$Key@_N@@..., and at :9626
+ * ??$sort@PAV?$Key@M@@... calls ??$__introsort_loop@PAV?$Key@_N@@....  No
+ * source can produce a float sort that dispatches into a bool sort.
+ * build/373307D9/icf_aliases.map already records 826E0138 as a synthetic ICF
+ * alias, so the relocation side is handled; only the symbol ROW cannot pair.
+ *
+ * Also unscoreable here, for a different reason: ??$MakeString@II@@ (100 B,
+ * @82533... unique name, contributed by rndobj:AmbientOcclusion.obj).  The
+ * target instantiates exactly ONE assert-shaped MakeString for this TU
+ * (??$MakeString@$$BY0BD@$$CBDH$$BY04$$CBD@@, file[19]/expr[5]); we instantiate
+ * 21, none of them that one, because our MILO_ASSERT expression texts differ in
+ * length from the originals.  That is the known per-TU MakeString class, not a
+ * one-line fix.  See docs/decomp/patterns/. */
+
 void BuildSphereStratified(unsigned int, std::vector<Vector3> &);
 
 // Quality parameters: [samples_q0, samples_q1, splitPlane_q0, splitPlane_q1]

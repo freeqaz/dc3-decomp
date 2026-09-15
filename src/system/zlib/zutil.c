@@ -7,6 +7,20 @@
 
 #include "zutil.h"
 
+/* w8-e 2026-09-15: the 0% row ?jpeg_free_small@@YAXPAUjpeg_common_struct@@PAXI@Z
+ * (8 B) is filed against this unit but cannot be written here.  It is an ICF
+ * fold: ham_xbox_r.map lists THREE names at 0x82860908 --
+ *   ?jpeg_free_small@@...   jpeg:jmemnobs.obj
+ *   ?jpeg_free_large@@...   jpeg:jmemnobs.obj
+ *   zcfree                  zlib:zutil.obj
+ * -- all three being the same two instructions (a tail call to free), and
+ * build/373307D9/icf_aliases.map records the group.  0x82860908 falls inside
+ * this file's own split range (config/373307D9/splits.txt:5029,
+ * .text 0x828608F0-0x82860910), so dtk carves the survivor into zutil.c's target
+ * object and objdiff then asks THIS unit for a jpeg symbol.  Our zutil.c does
+ * define zcfree, correctly; it can never define jpeg_free_small.  Measured 0.0%
+ * and structurally unscoreable -- do not restructure vendored zlib for it. */
+
 #ifndef NO_DUMMY_DECL
 struct internal_state      {int dummy;}; /* for buggy compilers */
 #endif

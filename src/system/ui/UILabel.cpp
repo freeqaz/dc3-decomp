@@ -1,5 +1,12 @@
 #include "ui\UILabel.h"
 
+/* w8-e 2026-09-15 -- ??$?6VHamScrollSpeedIndicator@@@@YAAAVBinStream@@... (144 B)
+ * is an ICF fold alias: operator<<(BinStream&, const ObjDirPtr<T>&) is
+ * byte-identical for every T, six names share 0x82793CA8, and the surviving body
+ * was contributed by hamobj:HamNavList.obj.  UILabel.obj's own contribution is
+ * the UILabelDir spelling.  Unfixable from this file. */
+
+
 #include "macros.h"
 #include "math\Color.h"
 #include "math/Geo.h"

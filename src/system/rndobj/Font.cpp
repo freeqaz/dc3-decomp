@@ -12,6 +12,19 @@
 #include "math\Utl.h"
 #include "utl\FilePath.h"
 #include "utl\MakeString.h"
+
+// w8-e 2026-09-15: ??$PropSync@VRndMat@@@@YA_NAAPAVRndMat@@... (240 B, 0%) is a
+// real same-TU gap.  ham_xbox_r.map shows FOUR PropSync<RndMat> instantiations
+// in the image, discriminated only by the container they sync:
+//   AAV?$ObjPtr@VRndMat@@       824987b0  hamobj:CharFeedback.obj
+//   AAPAVRndMat@@  (raw ptr)    82703fd8  rndobj:Font.obj   <-- this row
+//   AAV?$ObjPtrVec@VRndMat@@    82707210  rndobj:Font.obj   (we do emit this)
+//   AAV?$ObjPtrList@VRndMat@@   827ab310  ui:UIFontImporter.obj
+// So the image PropSyncs a BARE `RndMat *` here, not an ObjPtr<RndMat>.  Our
+// Font.cpp only ever syncs the ObjPtrVec form, so the raw-pointer overload is
+// never instantiated and the row reads 0.0%.  The lever is a PROPERTY that holds
+// a plain RndMat* (not an ObjPtr) reached through SyncProperty/PropSync here.
+// Not investigated further; left open.
 #include "utl\UTF8.h"
 #include <cmath>
 

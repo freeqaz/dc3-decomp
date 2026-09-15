@@ -8,6 +8,17 @@
 #include "rndobj\Trans.h"
 #include "utl\MakeString.h"
 
+// w8-e 2026-09-15: `merged_ObjPtrVecErase` (240 B, 0%) is NOT a target symbol.
+// It is a SYNTHETIC ICF-group label invented by our own tooling:
+// build/373307D9/icf_aliases.map:11045 declares the group at 823EA0B8 and lists
+// four real members folded there -- ObjPtrVec<FlowNode|RndEnviron|RndLight|
+// SpotlightDrawer, ObjectDir>::erase -- all tagged `icf_aliases.synthetic`, and
+// config/373307D9/symbols.txt:123849 binds the made-up name to that address.
+// Nothing our source can spell is named `merged_ObjPtrVecErase`, so this row
+// can never pair and can never score.  The FlowNode spelling this TU really does
+// emit (see the explicit instantiation above) is one of the four folded copies.
+// Measured 0.0% and structurally unscoreable; not a missing body.
+
 template Hmx::Object *ObjPtrVec<RndTransformable, ObjectDir>::Node::RefOwner() const;
 template ObjPtrVec<FlowNode, ObjectDir>::iterator
 ObjPtrVec<FlowNode, ObjectDir>::erase(ObjPtrVec<FlowNode, ObjectDir>::iterator);

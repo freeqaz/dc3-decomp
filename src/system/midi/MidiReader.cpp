@@ -12,6 +12,17 @@ const MidiChunkID MidiChunkID::kMThd("MThd");
 const MidiChunkID MidiChunkID::kMTrk("MTrk");
 bool MidiReader::sVerify = false;
 
+// w8-e 2026-09-15: ??3FileStream@@SAXPAX@Z (24 B, 0%) -- FileStream's class
+// `operator delete` -- is a real same-TU gap.  ham_xbox_r.map contributes it
+// from `midi:MidiReader.obj` at 8254e100, i.e. the image instantiates
+// FileStream's OBJ_MEM_OVERLOAD deallocator in THIS translation unit, which only
+// happens if this file `delete`s a FileStream (or destroys one held by value
+// through a path that emits the deleting dtor).  Our MidiReader.cpp does not
+// mention FileStream at all -- no include, no use -- so the COMDAT is never
+// emitted and the row reads 0.0%.  The lever is finding the FileStream the
+// reader really owns (most likely a `new FileStream` opened for a .mid and
+// deleted on teardown); it is NOT a missing body in utl/File.
+
 namespace {
     int MidiRank(unsigned char status) {
         switch (status & 0xF0) {

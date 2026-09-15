@@ -1,4 +1,13 @@
 #include "net\JsonUtils.h"
+
+/* w8-e 2026-09-15 -- ??$MakeString@$$BY0O@$$CBDH$$BY04$$CBD@@... (116 B, stale
+ * AT_LIMIT) is an ICF fold alias.  SEVENTEEN MakeString instantiations share
+ * 0x82563B08 -- the assert-shaped MakeString<const char[N], int, const char[M]>
+ * body does not depend on N or M -- and the survivor was contributed by
+ * net:WebSvcMgr.obj.  This TU does contribute two of the other sixteen
+ * (...$$BY0CK@ and ...$$BY0BK@).  Chasing the exact literal lengths here would
+ * only move which alias is unnamed. */
+
 #include "net\json-c\json_object_private.h"
 #include "net\json-c\json_object.h"
 #include "net\json-c\json_tokener.h"

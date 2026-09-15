@@ -44,6 +44,18 @@ bool gDrawJmpBufSet = false;
 #include "platform\Rnd_Wgpu.h"
 #include "platform\NativeSettings.h"
 #include "utl\Locale.h"
+
+// w8-e 2026-09-15: ??_H@YAXPAXIHP6APAX0@Z@Z (64 B, 0%) is MSVC's CRT "vector
+// constructor iterator" helper -- the thunk `new T[n]` emits to run T's ctor
+// over n elements.  ham_xbox_r.map contributes it from `App.obj` at 823313a8
+// (`f i`, a COMDAT of this TU), so the image really does `new T[n]` for some
+// class-type T somewhere in this file.  Our App.cpp never array-news a class
+// type (every array here is either POD or a std:: container), so the helper is
+// never emitted and the row reads 0.0%.  This is NOT a missing body -- ??_H is
+// CRT code we cannot write; the lever is the `new T[n]` site itself.  Note the
+// sibling ??_M / ??_L helpers are absent from App.obj in the map, which says the
+// array is constructed but never destroyed through a ??_M path (a leaked or
+// never-freed table), a useful constraint when hunting the site.
 #ifdef HX_IMGUI
 #include "gfx\ImGuiBackend.h"
 #include "platform\DebugPanel.h"

@@ -12,6 +12,19 @@
 
 // Triangle::Set is defined in-class in Geo.h -- see the note there.
 
+// w8-e 2026-09-15: ??$?6VVector2@@V?$StlNodeAlloc@VVector2@@...TextStream (176 B,
+// 0%) is a real same-TU gap.  ham_xbox_r.map contributes it from `math:Geo.obj`
+// at 825346e0, and it is the TEXT-stream overload -- the BinStream twin of the
+// same template lives at 826d4508 in rndobj:MeshAnim.obj, so the two are
+// genuinely different instantiations and this one belongs here.  The generic
+// body is src/system/utl/TextStream.h:37,
+//   template <class T, class Allocator>
+//   TextStream &operator<<(TextStream &, const std::vector<T, Allocator> &);
+// and our Geo.cpp does not include TextStream.h at all, so nothing instantiates
+// it and the row reads 0.0%.  The lever is a real `ts << someVector<Vector2>`
+// use in this TU (a Print/Dump path), not an explicit instantiation -- adding
+// the include alone emits nothing.
+
 float gUnitsPerMeter = 39.370079f;
 static float gBSPPosTol = 0.01f;
 static float gBSPDirTol = 0.985f;

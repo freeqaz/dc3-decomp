@@ -1,4 +1,16 @@
 #include "ui\UIList.h"
+
+/* w8-e 2026-09-15 -- ?Unlink@?$ObjPtrList@VEventTrigger@@VObjectDir@@@@... (284 B,
+ * the largest 0% row filed against this unit) is an ICF fold alias, NOT missing
+ * code.  ham_xbox_r.map lists THIRTY-THREE names at 0x8278B718 -- every
+ * ObjPtrList<T>::Unlink in the binary, because Unlink only touches Node's two
+ * link pointers and is byte-identical for every T.  symbols.txt binds one; it
+ * binds the EventTrigger spelling, whose surviving body was contributed by
+ * rndobj:EventTrigger.obj.  UIList.obj's own contribution to that address is
+ * ?Unlink@?$ObjPtrList@VUILabel@@VObjectDir@@@@..., which our object does emit.
+ * Nothing in this file can make our UIList.obj define the EventTrigger
+ * spelling short of fabricating an ObjPtrList<EventTrigger> member. */
+
 #include "ui\Utl.h"
 #include "math/Geo.h"
 #include "math\Utl.h"

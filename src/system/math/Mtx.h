@@ -124,7 +124,13 @@ namespace Hmx {
 
     public:
         Matrix4() {}
-        Matrix4(const Transform &);
+        // w8-e: defined here, not out-of-line in mtx.cpp.  ham_xbox_r.map lists
+        // ??0Matrix4@Hmx@@QAA@ABVTransform@@@Z once, flagged `i` (COMDAT) and
+        // contributed by rnddx9:Rnd.obj at 0x82610B38 -- an out-of-line
+        // definition in mtx.cpp would have been flagged `f` and contributed by
+        // math:mtx.obj, and build/373307D9/asm/system/math/mtx.s does not
+        // mention the symbol at all.  Ten target units name it.
+        Matrix4(const Transform &tf);
         Matrix4(const Vector4 &v1, const Vector4 &v2, const Vector4 &v3, const Vector4 &v4)
             : x(v1), y(v2), z(v3), w(v4) {}
 
@@ -322,6 +328,38 @@ public:
 
     static const Transform &IDXfm() { return sID; }
 };
+
+/** w8-e: body moved here verbatim from mtx.cpp.  Whole-binary A/B (full ninja
+ * both sides, baseline bb2e759eb): 6 functions improved / 3.2 KB, 1 regressed.
+ *   +  rnddx9/Rnd   Matrix4::Matrix4(const Transform&)      0.0 -> 100.0 (132 B)
+ *   +  rnddx9/Rnd   DxRnd::DrawLargeQuad                   97.6 -> 100.0 (436 B)
+ *   +  rndobj/Env_NG  SetProjLightRegisters                96.9 -> 100.0 (796 B)
+ *   +  rndobj/Env_NG  SetPointLightRegisters               97.4 -> 100.0 (712 B)
+ *   +  rndobj/Lit_NG  NgLight::SetShadowTransforms         97.7 -> 100.0 (460 B)
+ *   +  rndobj/TexBlender RndTexBlender::DrawBlendList      99.1 -> 100.0 (724 B)
+ *   -  rnddx9/Rnd_Xbox DxRnd::DrawString                   99.9 ->  96.1 (888 B)
+ * The DrawString cost is NOT a Matrix4 row: all 22 residual mismatches sit in
+ * its inlined MakeColor ARGB pack (fmuls by f31, fctidz, rlwimi r,r,8,0,23)
+ * with 6 PERMUTED stack slots -- the extra inline body shifted that TU's slot
+ * allocation.  Accepted: +3.2 KB against ~35 B. */
+inline Hmx::Matrix4::Matrix4(const Transform &tf) {
+    x.x = tf.m.x.x;
+    x.y = tf.m.x.y;
+    x.z = tf.m.x.z;
+    x.w = 0.0f;
+    y.x = tf.m.y.x;
+    y.y = tf.m.y.y;
+    y.z = tf.m.y.z;
+    y.w = 0.0f;
+    z.x = tf.m.z.x;
+    z.y = tf.m.z.y;
+    z.z = tf.m.z.z;
+    z.w = 0.0f;
+    w.x = tf.v.x;
+    w.y = tf.v.y;
+    w.z = tf.v.z;
+    w.w = 1.0f;
+}
 
 inline void Interp(const Transform &a, const Transform &b, float t, Transform &dst) {
     Interp(a.v, b.v, t, dst.v);

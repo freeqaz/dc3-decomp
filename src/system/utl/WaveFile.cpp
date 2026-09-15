@@ -1,4 +1,11 @@
 #include "utl\WaveFile.h"
+
+/* w8-e 2026-09-15 -- ??$__uninitialized_copy@PBVSampleMarker@@PAV1@@... (96 B)
+ * is an ICF fold alias; the surviving body at 0x827F5A88 was contributed by
+ * synth:SampleInst.obj.  utl:WaveFile.obj's own contribution to that address is
+ * ??$__uninitialized_copy@PAULabel@?A0x81ddebd1@@PAU12@@... -- an anonymous
+ * namespace Label, i.e. this file's own type.  Unfixable from here. */
+
 #include "os\Debug.h"
 #include "utl/BinStream.h"
 #include "utl\ChunkIDs.h"

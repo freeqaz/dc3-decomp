@@ -12,6 +12,17 @@
  */
 
 #define JPEG_INTERNALS
+
+/* w8-e 2026-09-15: fn_82EDF4B8 (24 B, 0%) filed against this unit is
+ * ??__EsLicense@@YAXXZ, the MSVC dynamic initializer for a namespace-scope
+ * `sLicense` object -- not jpeg code.  Seven TUs declare such an object, so
+ * ham_xbox_r.map lists that one mangled name seven times (82edb268 math:SHA1,
+ * 82edb280 math:Easing, 82edc020 os:System, 82edd3c8 synth:TomCryptLicense,
+ * 82edda80 zlib:ZlibLicense, 82edf4b8 jpeg:jcmaster, 82ee0b00
+ * oggvorbis:VorbisMem).  config/373307D9/symbols.txt:193695 can bind the name
+ * only once and binds SHA1's copy; dtk parks the other six as fn_<addr>, and
+ * 82EDF4B8 landed in this file's split range.  Measured 0.0%, structurally
+ * unscoreable, and nothing to change in vendored jpeg source. */
 #include "jinclude.h"
 #include "jpeglib.h"
 
