@@ -132,6 +132,16 @@ struct SkeletonUpdateData {
 };
 
 // size 0x11c8
+// w8-i: the implicit ctor `??0SkeletonFrame@@QAA@XZ` is 100.0 under the
+// normalized ruler and 99.20 under name_check (100 B, 21/25 equal) -- and the
+// gap is a TOOLING gap, not a source defect, so do not spend a lane on it.  All
+// four charged rows are the two `lis`/`addi` symbol pairs at idx 7/9 and 13/15:
+// our object names `??0PaddedJointPos@@QAA@XZ` where the image names
+// `OnlyReturns@0x823e3b70`, which is the same code -- the ICF fold that
+// collapsed every trivially-returning ctor.  build/373307D9/icf_aliases.map is
+// missing that membership (group 348 in scripts/symbol_aliases.json), so the
+// name_check ruler charges a fold it should forgive.  Fix the alias map, not
+// this header; hand-editing the map was deliberately NOT done here.
 struct SkeletonFrame {
     void Create(const NUI_SKELETON_FRAME &, int);
     float TiltAngle() const;

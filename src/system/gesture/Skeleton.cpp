@@ -165,6 +165,22 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 #pragma endregion
 #pragma region Skeleton
 
+// RESIDUAL (w8-i, 89.87 canonical / 88.94736 fuzzy): 10 rows of 39, 152 B both
+// sides.  MEASURED, not attacked -- recorded so the next lane starts from the
+// anatomy rather than re-deriving it.  The three member stores and the Init()
+// call are INTERLEAVED in the image and sequential in ours: the image
+// materialises `addi r10, r30, 0xac8` (idx 21) and `li r8, -0x1` (idx 23)
+// before storing anything, and only lands mTrackingID with `stw r8, 0xaac(r30)`
+// at idx 28, after the 0xac8 block is already under way; we store mTracking to
+// 0xaa0 at idx 23 and have Init()'s `this` set up (`mr r3, r30`) by idx 26.
+// That is why idx 25 reads as a wrong-field row (target 0xaa0 mTracking vs our
+// 0xaac mTrackingID) -- it is the same two stores in the other order, not a
+// swapped member.
+// The obvious lever is CLOSED BY CONSTRUCTION: MSVC initialises in DECLARATION
+// order whatever the init list says, and declaration order is pinned by the
+// target's own offsets (mTracking 0xaa0, mTrackingID 0xaac, unkac4 0xac4), so
+// permuting the list below cannot move these stores.  The reachable question is
+// what sits at 0xac8 and whether the image inlines the head of Init().
 Skeleton::Skeleton() : mTracking(kSkeletonNotTracked), mTrackingID(-1), unkac4(0) {
     Init();
 }

@@ -478,6 +478,19 @@ void Invert(const Hmx::Matrix4 &, Hmx::Matrix4 &);
 
 bool operator>(const Sphere &, const Frustum &);
 
+// RESIDUAL (w8-i, 95.78 canonical / 92.30612 fuzzy, measured on this header
+// COMDAT as it lands in char/Character.obj): 21 rows of 50, 196 B both sides,
+// and every one of them is allocation or scheduling -- 7 FPR swap pairs led by
+// f10<->f12, r30<->r31 on the two matrix parameters, 3 offset swaps, and 2
+// commutative fmuls operand orders (idx 35, 37).  The single insert/delete pair
+// at idx 18-20 is the same reorder seen head-on: the image has `lfs f8,
+// 0x28(r30)` where we have `lfs f8, 0x18(r31)`, i.e. it reaches the out.z row a
+// load earlier than we do.  Arithmetic and instruction MULTISET are identical.
+// NOT ATTACKED by w8-i deliberately: this is an `inline` in a PCH-reached header
+// shared by the whole binary, so a spelling change here is not lane-local -- it
+// would have to be measured against every unit that instantiates it, not just
+// Character.obj.  Any lane that does take it on should start from the operand
+// order of the two fmuls, which is the cheapest of the three causes.
 inline void Normalize(const Hmx::Matrix3 &in, Hmx::Matrix3 &out) {
     Normalize(in.y, out.y);
     out.x.Set(
