@@ -821,6 +821,13 @@ void SortXfms(RndMultiMesh *mesh, const Vector3 &vec) {
     mesh->InvalidateProxies();
 }
 
+// FLOOR 99.931 canonical / 97.690 raw (w8-h).  The residual is six FPR
+// permutations (f0/f10/f13) plus the r4-side 0x38/0x3c load order.  MEASURED
+// NEGATIVE: re-associating mesh2's sum to mirror mesh1's -- `y*y + (z*z + x*x)`,
+// which reproduces the image's fmuls-then-two-fmadds accumulation shape on paper
+// -- reads 99.931 canonical but 94.4 raw, i.e. it ADDS an OFFSET_SWAP of
+// (0x34,0x3c) and four register swaps.  Under /fp:fast MSVC re-associates the
+// flat sum itself, so the parenthesisation below is not what selects the order.
 bool XfmSort(RndMultiMesh::Instance &mesh1, RndMultiMesh::Instance &mesh2) {
     return (mesh1.mXfm.v.y - gUtlXfms.y) * (mesh1.mXfm.v.y - gUtlXfms.y)
             + ((mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)

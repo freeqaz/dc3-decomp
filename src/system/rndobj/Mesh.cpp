@@ -34,9 +34,17 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     float nx = normal.x;
     float ny = normal.y;
     float nz = normal.z;
-    result.y = ny * inv.y.y + nz * inv.z.y + nx * inv.x.y;
-    result.x = ny * inv.y.x + nz * inv.z.x + nx * inv.x.x;
-    result.z = ny * inv.y.z + nz * inv.z.z + nx * inv.x.z;
+    // w8-h BEHAVIOURAL FIX: these were COLUMN dots (`result = normal * inv`), i.e.
+    // the transpose was silently dropped, so every skinned/instanced normal was
+    // rotated by inv instead of inv-transpose.  The image takes ROW dots -- for
+    // result.x it loads inv.x.z at 0x58(r1) and inv.x.y at 0x54(r1)
+    // (0x8263xxxx `lfs f9,0x58(r1)` / `lfs f13,0x54(r1)`, fed to
+    // `fmuls f9,f11,f9` and `fmadds f0,f12,f13,f9`), where the old spelling
+    // wanted inv.z.x at 0x70 and inv.y.x at 0x60.  Term order is the image's:
+    // each row's first fmuls is the term written first here.
+    result.y = ny * inv.y.y + nx * inv.y.x + nz * inv.y.z;
+    result.x = nz * inv.x.z + nx * inv.x.x + ny * inv.x.y;
+    result.z = ny * inv.z.y + nx * inv.z.x + nz * inv.z.z;
     return result;
 }
 

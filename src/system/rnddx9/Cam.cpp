@@ -176,6 +176,16 @@ void DxCam::SetViewport() {
 }
 
 unsigned int DxCam::ProjectZ(float z) {
+    // FLOOR 84.5 canonical / 82.4 raw (w8-h).  Every residual row is evaluation
+    // ORDER, not arithmetic: the image loads mNearPlane (0x2c0) before mFarPlane
+    // (0x2c4) and emits `fsubs f12,f1,f13` (z-near) then `fdivs f12,f12,f1` before
+    // the far/(far-near) pair; we do the two the other way round.  The fmuls that
+    // consumes them is `fmuls f0,f0,f<z>` with the SAME operand roles on both
+    // sides, so the multiply itself is already right.  MEASURED NEGATIVE: writing
+    // the far factor first -- `(mFarPlane/(mFarPlane-mNearPlane)) * ((z-mNearPlane)/z)`
+    // -- is BYTE-INERT (84.538 / 82.423, identical instruction table).  MSVC
+    // canonicalises both the operand order and the evaluation order of a
+    // commutative `*` under /fp:fast, so source order is not a lever here.
     float f = ((z - mNearPlane) / z)
         * (mFarPlane / (mFarPlane - mNearPlane))
         * (mZRange.y - mZRange.x) + mZRange.x;

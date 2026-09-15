@@ -38,6 +38,16 @@ bool RndXfmCache::GetXfms(
     unsigned int numBones,
     const float *&outFloats
 ) const {
+    // FLOOR 75.0 canonical / 74.0 raw (w8-h).  The residual is entirely the
+    // scheduling of the two mMeshPtrs reads: the image issues BOTH loads before
+    // the first `cmplw` (`lwzx r10,r10,r3` then `lwz r11,-0x4(r11)`, then
+    // `cmplw r10,r4` / `bne` / `cmplw r11,r4` / `bne`), while we compare-and-branch
+    // on the first before computing the second.  MEASURED NEGATIVE: hoisting both
+    // reads into named locals inside an `else` block guarded by the bounds test --
+    // the one spelling that removes the short-circuit barrier by hand -- is 75.0
+    // canonical and 73.5 raw, i.e. no better on the canonical ruler and one row
+    // WORSE on the relocation-sensitive one.  MSVC re-sinks the second load behind
+    // the first branch regardless of how the source is blocked.
     bool valid;
     const float *floats;
     unsigned int endIndex = startIndex + numBones;
