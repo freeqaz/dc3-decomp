@@ -222,6 +222,30 @@ void BoxMapLighting::ApplyLight(
     }
 }
 
+/** RESIDUAL w7-bl, 94.02 canonical / 90.3 raw, 332 B.  The gap is ONE
+ *  instruction and it is precisely located.  Of the 36 mismatch rows, 31 are
+ *  register permutation (forgiven by the canonical ruler) and the remaining
+ *  five -- three deletes and two inserts at rows 34-40 -- are all the same
+ *  fact: the image RELOADS dir.red out of gLightBuffer1 to build distSq.
+ *
+ *    0x...+34  stfsx f13, r10, r3     dir.red = dx
+ *    0x...+35  fsubs f13, f11, f12    f13 is reused for dz
+ *    0x...+36  lfsx  f11, r10, r3     <-- dir.red read BACK
+ *    0x...+43  fmadds f12, f11, f11, f12   distSq uses the reloaded value
+ *
+ *  Our build keeps dx live in f13 and never reloads, which is why the target is
+ *  332 bytes and we are 328.  Everything else -- the load order, the fsubs
+ *  operand order, the fmuls/fmadds association, the dir/col base-pointer
+ *  scheme, the r6 = r10 + gLightBuffer1 + 8 walker -- already matches.
+ *
+ *  NEGATIVE (w7-bl): writing the distSq term as `dir.red * dir.red` instead of
+ *  `dx * dx`, which is the obvious way to ask for that reload, is EXACTLY inert
+ *  -- 94.02, same 90.3 raw, same five rows.  MSVC store-to-load forwards the
+ *  just-stored value inside the block, so the reload cannot be requested by
+ *  naming the memory; it is an allocator decision about dx's register.  Note
+ *  the sibling Spot overload above went 87.37 -> 99.21 on source spellings, so
+ *  this is not a "these functions are at their floor" situation -- it is one
+ *  specific unreached rematerialisation. */
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Point, 50> &arr, const Vector3 &viewPos
 ) const {
