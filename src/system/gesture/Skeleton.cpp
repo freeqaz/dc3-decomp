@@ -374,26 +374,50 @@ bool Skeleton::NeedIdentify() const {
     return GetEnrollmentIndex() == -1 || GetEnrollmentIndex() == -5;
 }
 
-// RESIDUAL (w7-bl, 91.13 canonical, 97 of 213 rows): ONE induction-variable
-// choice in the kNumJoints loop below, and the flat register renumbering it
-// forces.  The image saves TWELVE callee-saved GPRs (`bl __savegprlr_20`,
-// frame 0xe0); we save eleven (`__savegprlr_21`, frame 0xd0), and 55 of the 69
-// register-swap rows are the resulting r30<->r31 / r21<->r22 / r20<->r21
-// cascade -- value-identical, just one register off all the way down.
-// The extra live value is `this + 4`: the image keeps i*0x74 as a plain OFFSET
-// (r29), re-forms `&mTrackedJoints[i]` at the loop head as `add r28, r24, r29`
-// with r24 = this+4, and gets its trip test for free by comparing that same
-// offset against 0x910 (= 20 * 0x74) at Skeleton.s 0x15f0.  MSVC here instead
-// strength-reduces the tail into two WALKING POINTERS (`addi r29, r29, 0x74`,
-// `addi r28, r28, 0x10`) and then needs a separate down-counter
-// (`li r25, 0x14` / `subic. r25, r25, 0x1` / `bne`), which is why our loop is
-// 8 bytes shorter (820 vs 828) and one callee-saved register lighter.
-// Also note: the image derives `&data.mJointPositions[i]` from a separate base
-// (r22 = data+0x144) plus i*0x10, where MSVC here derives it from the
-// mRawPositions walker (`addi r27, r28, 0x140`).
+// RESIDUAL (w7-br, 97.5 canonical, 49 of 209 rows; was 91.13 under w7-bl):
+// ONE induction-variable choice left in the kNumJoints loop, and the flat
+// register renumbering it forces.  The image keeps i*0x10 as a plain OFFSET
+// (r27, `mr r27, r20` zeroed at 0x82436BD0, `addi r27, r27, 0x10` at
+// 0x82436C5C) and adds it to TWO hoisted bases -- `add r26, r27, r22` at the loop
+// head (0x82436BEC) (r22 = data+0x144, &mJointPositions[0]) and `add r10, r23, r27` in the
+// tail (0x82436C50; r23 = data+4, &mRawPositions[0]).  MSVC here strength-reduces the
+// same two uses into two WALKING POINTERS (`addi r26, r26, 0x10` /
+// `addi r28, r28, 0x10`), one register lighter: that one register is why the
+// image saves twelve callee-saved GPRs (`bl __savegprlr_20`, frame 0xe0) and
+// we save eleven (`__savegprlr_21`, 0xd0), and every remaining register-swap
+// row is that cascade (r21<->r23, r20<->r22, r27<->r28).
+// LEVERS (w7-br), each measured with run_objdiff in the worktree:
+//   * `TrackedJoint &tj = mTrackedJoints[i];` bound at the loop HEAD but
+//     used only for the two tail stores (the inner loop keeps the
+//     `mTrackedJoints[i].mJointPos[j]` subscript): 91.13 -> 95.6.  This is
+//     what gives MSVC the image's i*0x74 offset IV (r29) with the two bases
+//     `this` (inner loop) and `this+4` (r24, head `add r28, r24, r29` at 0x82436BE4), and
+//     the free trip test `cmpwi cr6, r29, 0x910` at 0x82436C60 -- w7-bl's
+//     note recorded the same binding as neutral, but it had measured it at
+//     the TAIL, after the inner loop, where it is.
+//   * `switch (mTracking)` with `case kSkeletonNotTracked: Init()` and
+//     `case kSkeletonTracked:` instead of the if/else-if pair: 95.9 -> 96.5.
+//     The image's dispatch is `cmpwi r11, 0x0` on cr0 (0x82436B1C) / `beq` at
+//     0x82436B24 then `cmpwi cr6, r11, 0x2` / `bne`; the nested ifs put
+//     both compares on cr6.  Same behaviour (kSkeletonPositionOnly does
+//     nothing on both spellings).
+//   * a `const Vector3 *jointPositions` local declared AFTER the
+//     MakeCameraToPlayerXfm loop (whose args stay inline) and used inside
+//     the joint loop: 96.1 -> 97.5.  Declared BEFORE that loop it is 96.5
+//     (the image materialises floorNormal, then data+0x144, then mPlayerXfms
+//     -- the call's right-to-left argument order -- after `li r29, 1`, so
+//     the pointer is not a pre-loop local); with no local at all MSVC
+//     derives &mJointPositions[i] from the mRawPositions walker
+//     (`addi r26, r29, 0x140`), 96.1.
+// NEGATIVE RESULTS (w7-br), all exactly inert or worse: a matching
+// `const Vector3 *rawPositions` local for the tail copy (91.1 -- MSVC then
+// walks the raw pointer AND re-derives the joint address from it); binding
+// `const Vector3 &pos = jointPositions[i];` at the head instead of the two
+// inline subscripts (identical 49 rows); `if (mTracking)` for the dispatch
+// (identical to the != spelling).
 // The three MakeString rows in the Function Call Diff are ICF folds (the assert
 // format strings), not wrong callees.  Control flow is faithful: the `beq` at
-// Skeleton.s 0x14fc goes to Init() and the `bne` two instructions later returns.
+// 0x82436B24 goes to Init() and the `bne` two instructions later returns.
 void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
     MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x1F8);
     if (mSkeletonIdx != skel_idx && TheGestureMgr) {
@@ -408,8 +432,11 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
     mTrackingID = data.mTrackingID;
     unkab0 = data.mHipCenter;
     mTracking = data.mTracking;
-    if (mTracking != kSkeletonNotTracked) {
-        if (mTracking == kSkeletonTracked) {
+    switch (mTracking) {
+    case kSkeletonNotTracked:
+        Init();
+        break;
+    case kSkeletonTracked: {
         mQualityFlags = data.mQualityFlags;
         if (TheGestureMgr) {
             IdentityInfo *identityInfo = TheGestureMgr->GetIdentityInfo(skel_idx);
@@ -419,41 +446,36 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
             }
         }
 
-        {
-            const Vector3 &floorNormal = frame.mFloorNormal;
-            for (int i = 1; i < kNumCoordSys; i++) {
-                BaseSkeleton::MakeCameraToPlayerXfm(
-                    (SkeletonCoordSys)i,
-                    mPlayerXfms[i - 1],
-                    (const Vector3 *)data.mJointPositions,
-                    floorNormal
-                );
-            }
+        for (int i = 1; i < kNumCoordSys; i++) {
+            BaseSkeleton::MakeCameraToPlayerXfm(
+                (SkeletonCoordSys)i,
+                mPlayerXfms[i - 1],
+                (const Vector3 *)data.mJointPositions,
+                frame.mFloorNormal
+            );
         }
 
-        // No cached `TrackedJoint&` for mTrackedJoints[i]: a reference lets MSVC
-        // strength-reduce the whole row into one walking pointer, and the image
-        // re-forms the address from `this` every time -- `slwi r11, r31, 4` /
+        // The inner loop must keep the `mTrackedJoints[i].mJointPos[j]`
+        // subscript rather than go through `tj`: the image re-forms that
+        // address from `this` every iteration -- `slwi r11, r31, 4` /
         // `add r11, r11, r29` (i*0x74) / `add r11, r11, r30` (this) /
-        // `addi r5, r11, 0x4` at the inner-loop head, Skeleton.s 0x1580.
+        // `addi r5, r11, 0x4` at 0x82436BF0 -- and that is what keeps
+        // i*0x74 an offset IV.  `tj` itself is bound here, at the head,
+        // so that `&mTrackedJoints[i]` is `add r28, r24, r29` (r24 = this+4)
+        // and stays live across the inner loop's calls.
+        const Vector3 *jointPositions = (const Vector3 *)data.mJointPositions;
         for (int i = 0; i < kNumJoints; i++) {
+            TrackedJoint &tj = mTrackedJoints[i];
             for (int j = 0; j < kNumCoordSys; j++) {
                 Vector3 &dst = mTrackedJoints[i].mJointPos[j];
                 if (j == 0) {
-                    dst = data.mJointPositions[i];
+                    dst = jointPositions[i];
                 } else {
-                    MultiplyTranspose(
-                        data.mJointPositions[i], mPlayerXfms[j - 1], dst
-                    );
+                    MultiplyTranspose(jointPositions[i], mPlayerXfms[j - 1], dst);
                 }
             }
-            // A `TrackedJoint &tj = mTrackedJoints[i];` here for the two tail
-            // stores is exactly neutral (91.1 either way, same 213 rows): MSVC
-            // walks a pointer for the tail regardless, where the image re-adds
-            // `this + 4` to the same i*0x74 accumulator it compares against
-            // 0x910 at Skeleton.s 0x15f0.
-            mTrackedJoints[i].mJointConf = (JointConfidence)data.mJointTrackingState[i];
-            mTrackedJoints[i].mSmoothedPos = data.mRawPositions[i];
+            tj.mJointConf = (JointConfidence)data.mJointTrackingState[i];
+            tj.mSmoothedPos = data.mRawPositions[i];
         }
 
         for (int i = 0; i < kNumBones; i++) {
@@ -466,9 +488,8 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
         unkac4 = (mTrackedJoints[kJointHipRight].mJointPos[kCoordCamera].y
                   + mTrackedJoints[kJointHipLeft].mJointPos[kCoordCamera].y)
             * 0.5f + clipPlane.w;
-        }
-    } else {
-        Init();
+        break;
+    }
     }
 }
 
