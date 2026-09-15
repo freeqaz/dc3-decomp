@@ -204,9 +204,22 @@ void CharSignalApplier::Poll() {
     }
 }
 
-DataNode CharSignalApplier::Handle(DataArray *d, bool b) {
-    return Hmx::Object::Handle(d, b);
-}
+// w8-k: the macro form, not a bare `return Hmx::Object::Handle(d, b);`.  The
+// target body (CharSignalApplier.s:1155-1275, 0x823AAA20, 436 B) is the full
+// BEGIN_HANDLERS dispatch: ?Sym@DataArray@@ at 0x823AAA58 (that is _msg->Sym(1)),
+// the MessageTimer::Active() guard + ??0Timer@@/Timer::Restart at 0x823AAA94/A4,
+// then TWO HANDLE_FORWARD blocks -- ?Handle@CharWeightable@@ at 0x823AAAB8 and
+// ?Handle@Object@Hmx@@ at 0x823AAB10, each followed by the same
+// `cmpwi cr6, r11, 6` / DataNode copy-ctor / DataArray::Release sequence
+// _HANDLE_CHECKED expands to -- and then the END_HANDLERS tail: PathName,
+// MakeString<const char *, Symbol> on "%s unhandled msg: %s", Debug::Notify,
+// Timer::SplitMs and MessageTimer::AddTime.  Plain HANDLE_SUPERCLASS, not
+// HANDLE_VIRTUAL_SUPERCLASS: there is no ClassName()/StaticClassName() compare
+// anywhere in the body.
+BEGIN_HANDLERS(CharSignalApplier)
+    HANDLE_SUPERCLASS(CharWeightable)
+    HANDLE_SUPERCLASS(Hmx::Object)
+END_HANDLERS
 
 void CharSignalApplier::PollDeps(
     std::list<Hmx::Object *> &changedBy, std::list<Hmx::Object *> &change
