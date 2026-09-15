@@ -110,19 +110,39 @@ namespace {
             // schedules the nine products b,g-first; binding alpha to a
             // `const float &` through an inline helper is byte-identical to
             // this spelling, so that home store is not a by-ref temp.
-            darkColor.Set(
-                sDarkerGray.red * 0.5f,
-                sDarkerGray.green * 0.5f,
-                sDarkerGray.blue * 0.5f,
-                sDarkerGray.alpha
-            );
-            greenColor.Set(sGreen.red * 0.5f, sGreen.green * 0.5f, sGreen.blue * 0.5f, sGreen.alpha);
-            textColor.Set(
-                sLightGray.red * 0.5f,
-                sLightGray.green * 0.5f,
-                sLightGray.blue * 0.5f,
-                sLightGray.alpha
-            );
+            // UPDATE (w7-bq, 2026-09-15): 94.5 -> 94.9.  The three `Set(r,g,b,a)`
+            // calls were one inline level too many (fixable-inline-boundary.md,
+            // "target assigns the components directly").  Writing the twelve
+            // fields directly removes the `replace` row at idx 71 outright
+            // (22 diff_arg / 1 replace / 2 ins / 5 del -> 30 diff_arg / 0
+            // replace / 2 ins / 5 del) and drops OFFSET_SWAP to 3.
+            // NEGATIVE, same day: permuting the per-colour assignment order to
+            // blue,green,red,alpha -- the order the image ISSUES its loads --
+            // also reads 94.9 but with OFFSET_SWAP 7 and 10 PERMUTED slots
+            // (vs 3 and 8), i.e. MSVC schedules this block independently of
+            // statement order.  The r,g,b,a spelling below is the better of
+            // the two at the same score, so it stands.
+            // FLOOR (94.9): target 560 B vs base 548 B, and the 12-byte gap is
+            // exactly the three dead `stfs fN, 0x50(r31)` alpha parks -- 0x50 is
+            // the shared float-temp slot that `MakeString(": %.2f%%", detected *
+            // 100.0f)` takes the address of at idx 96.  Nothing ever reads those
+            // three stores back (no `addi rX, r31, 0x50` between them), so they
+            // are dead materialisations of a float temporary.  The rest of the
+            // residual is 30 diff_arg rows that are pure FPR renaming
+            // (f11<->f12, f7<->f8, ...) plus load scheduling inside this one
+            // block; regions 0-56 and 90-141 are 100%.
+            darkColor.red = sDarkerGray.red * 0.5f;
+            darkColor.green = sDarkerGray.green * 0.5f;
+            darkColor.blue = sDarkerGray.blue * 0.5f;
+            darkColor.alpha = sDarkerGray.alpha;
+            greenColor.red = sGreen.red * 0.5f;
+            greenColor.green = sGreen.green * 0.5f;
+            greenColor.blue = sGreen.blue * 0.5f;
+            greenColor.alpha = sGreen.alpha;
+            textColor.red = sLightGray.red * 0.5f;
+            textColor.green = sLightGray.green * 0.5f;
+            textColor.blue = sLightGray.blue * 0.5f;
+            textColor.alpha = sLightGray.alpha;
         }
         String str(label);
         // The percent arm is the fall-through (824FCF04 `beq` skips it).

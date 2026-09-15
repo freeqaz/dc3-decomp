@@ -108,6 +108,17 @@ void NavListSort::DeleteTree() {
 // 4-byte slot at 0x6c.  Collapsing token/token1/token2/token3 into a single
 // reused Symbol -- the obvious way to drop a slot -- costs 0.4pp and adds a
 // 0x10 frame delta (measured 2026-09-14), so the four named locals stand.
+// NEGATIVE RESULT (w7-bq, 2026-09-15), a second attack on that same slot:
+// eliminating all four named temps outright -- `NodeFind(a->Sym(0..3))`
+// constructed inline at each of the five find_if call sites, so no Symbol
+// local exists at all -- reads **80.7** canonical (89 mismatch rows, 14
+// inserts / 13 deletes) against the 89.8 of the named form, with the same
+// frame delta of -0x10 the collapse experiment produced.  Removing the
+// temps does not remove the slots: MSVC still materialises a Symbol
+// home slot per call site for the by-value NodeFind member, and losing the
+// names costs it the r25/r28 colouring as well (REGISTER_SWAP grows to 20
+// instructions across 5 pairs, from 3 pairs in the named form).  The four
+// named locals stand.
 // (2) Retail materialises `li r3,0` at the aSize==0 site and branches to the
 // epilogue, and duplicates the epilogue inline at the aSize==1 success site;
 // our build funnels every return through one shared tail.  That is MSVC's

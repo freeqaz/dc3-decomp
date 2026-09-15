@@ -271,7 +271,6 @@ DWORD NuipCameraAdjustTilt(
     LONG lCurrentAngle;
     DWORD dwMovingFlags;
     DWORD OldIrql;
-    XOVERLAPPED *pRequest;
     DWORD dwResult;
     DWORD dwTiltState;
 
@@ -290,34 +289,30 @@ DWORD NuipCameraAdjustTilt(
     OldIrql = KfAcquireSpinLock(&NuipDetroitRuntimeState.SpinLock);
 
     if (pOverlapped == 0) {
-        // NEGATIVE RESULT (w7-al, 2026-09-14): 0xb84 computes &LocalOverlapped
-        // ONCE (`addi r11, r1, 0x60`) and uses it for both the hEvent store and
-        // the runtime-state store, where we emit the addi twice.  Hoisting it
-        // into pRequest and writing through the pointer
-        // (`pRequest = &LocalOverlapped; pRequest->hEvent = CreateEventA(...)`)
-        // does remove the duplicate, but pins pRequest into a callee-saved
-        // register for the whole body: one extra GPR saved, __savefpr shifted
-        // by 8, and a 6-register renumbering downstream.  Net 85.8 -> 85.8.
-        // Re-tried at 96.4 in both remaining spellings -- the separate
-        // `pRequest = &LocalOverlapped;` statement kept here, and the chained
-        // `NuipDetroitRuntimeState.pOverlapped = pRequest = &LocalOverlapped;`
-        // -- and both are byte-inert: MSVC rematerialises the frame address per
-        // use rather than CSE-ing it, so the duplicate addi is a backend choice.
+        // CLOSED (w7-bq, 2026-09-15): 0xb84 computes &LocalOverlapped ONCE
+        // (`addi r11, r1, 0x60`) for both the hEvent store and the
+        // runtime-state store; we emitted the addi twice, into r10 and r11.
+        // w7-al had tried three spellings that all KEEP a `pRequest` local
+        // (separate assignment, chained assignment, and writing hEvent through
+        // the pointer) -- the first two byte-inert, the third a 6-register
+        // renumbering -- and concluded the duplicate was a backend choice.  It
+        // was not: the local itself was the duplicate.  `pRequest` is always
+        // exactly `NuipDetroitRuntimeState.pOverlapped` on every path, which is
+        // why the image RELOADS it at 0xba4 (`lwz r11, 0x1f0(r31)`) instead of
+        // keeping a register.  Deleting the local and writing through the
+        // runtime state removed the dead `addi`: 96.45 -> 97.04.
         LocalOverlapped.hEvent = CreateEventA(0, 1, 0, 0);
-        pRequest = &LocalOverlapped;
-        NuipDetroitRuntimeState.pOverlapped = pRequest;
+        NuipDetroitRuntimeState.pOverlapped = &LocalOverlapped;
     } else {
         NuipDetroitRuntimeState.pOverlapped = pOverlapped;
-        pRequest = pOverlapped;
         if (pOverlapped->hEvent != 0 && pOverlapped->hEvent != INVALID_HANDLE_VALUE) {
             ResetEvent(pOverlapped->hEvent);
-            pRequest = NuipDetroitRuntimeState.pOverlapped;
         }
     }
 
     NuipDetroitRuntimeState.PreferredPlayspaceMillimeters =
         PreferredPlayspaceDistanceMeters * 1000.0f;
-    pRequest->InternalContext = (ULONG_PTR)pTiltObjects;
+    NuipDetroitRuntimeState.pOverlapped->InternalContext = (ULONG_PTR)pTiltObjects;
     NuipDetroitRuntimeState.FarSpaceDistanceMillimeters = FarSpaceMillimeters;
     NuipDetroitRuntimeState.Unk40 = 1;
     NuipDetroitRuntimeState.SpaceAboveHeadMillimeters = SpaceAboveHeadMeters * 1000.0f;
@@ -384,6 +379,19 @@ Unlock:
     // lengthens dwResult's live range past the whole tilt-state chain and
     // renumbers r28/r29 through it (12 register rows), and MSVC still folds the
     // two epilogues back into one.  The single `return dwResult` is kept.
+    //
+    // w7-bq, 2026-09-15: three more spellings, all 97.04 -> 95.53, all with the
+    // SAME 20-row signature (r28<->r29 across 8 rows, `li r30, 0x3e5` at 0xbd4
+    // deleted, the fmuls/rlwinm pair at 0xbc4 reordered).  (a) block-scoped
+    // second local `DWORD dwWaitedResult = LocalOverlapped.InternalLow;`
+    // returned from inside the if; (b) the same local hoisted to function scope
+    // with the other declarations, in case declaration order pinned it to r31;
+    // (c) no second local at all -- just an explicit `return dwResult;` as the
+    // last statement of the if, so both returns name ONE variable.  It is the
+    // RETURN STATEMENT inside the guarded block that costs it, not the extra
+    // variable: any of them ends dwResult's live range early and MSVC then
+    // declines to give it a callee-saved home at all.  Residual is 5 rows
+    // (the second epilogue) plus 2 register rows; nothing else is charged.
     if (pOverlapped == 0) {
         while (WaitForSingleObjectEx(LocalOverlapped.hEvent, INFINITE, 1) == 0xc0) {
         }

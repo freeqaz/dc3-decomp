@@ -233,6 +233,15 @@ MCResult MCContainerXbox::Mount(CreateType ct) {
     // unfaithful "call Translate first, then overwrite" shape keeps the rows
     // aligned, and it does so with the wrong register. Every instruction here
     // is present and correct -- the residual is ordering only.
+    // NEGATIVE RESULT (w7-bq, 2026-09-15), a fifth spelling: the inverted
+    // nested form -- `if (res != 3) { if (res != 0xb7) return Translate(res);
+    // return kMCCorrupt; } return kMCFileNotFound;` -- reads 83.9 (22 rows, 10
+    // inserts / 9 deletes), WORSE than the 87.08 of the flat form below.  The
+    // blocker is not arm polarity: it is that MSVC threads the compile-time
+    // 0x570 straight past both compares (base falls from `li r3, 0x570` into
+    // `bl Translate` with the compare chain sunk below the epilogue), and the
+    // image at 0x825F639C..0x825F63B0 does not thread it.  No source spelling
+    // tried so far hides the constant on that edge.
     if (res == ERROR_PATH_NOT_FOUND)
         return kMCFileNotFound;
     if (res == ERROR_ALREADY_EXISTS)

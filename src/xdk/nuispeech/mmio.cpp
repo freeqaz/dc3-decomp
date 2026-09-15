@@ -195,6 +195,23 @@ MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuff
     //     MMIO_EMPTYBUF)` puts it on the back edge but rotates the whole loop
     //     the other way -- compute-and-test above the flush, exit on `bge` --
     //     and that spelling measured 79.4.
+    //     NEGATIVE (w7-bq, 2026-09-15), two further spellings of that same
+    //     back-edge placement, both 88.4 -> 79.4, byte-for-byte the SAME
+    //     result as the `for (;; fuFlush = ...)` one above (100 instructions,
+    //     19 diff_arg / 2 diff_op / 1 replace / 9 insert / 9 delete, two
+    //     blt<->bge inversions, r28<->r29):
+    //       (a) `for (;;) { ...; if (cchBuffer >= cchNext) break;
+    //           fuFlush = MMIO_EMPTYBUF; }` -- the assignment placed AFTER the
+    //           exit test, so it is on the back edge and nowhere else;
+    //       (b) the image's CFG written out literally, `goto firstFlush;` over
+    //           a `do { fuFlush = MMIO_EMPTYBUF; firstFlush: ... } while (...)`,
+    //           which is exactly `b .L_82AA3808` / `.L_82AA3804: li r4, 0x10`.
+    //     Three different sources, one output: MSVC rotates this loop before
+    //     it lays out blocks, so the placement of the re-arm is not
+    //     source-reachable.  The do/while below is the 88.4 form and stands.
+    //     Cost of the rotation is only 3 of the 23 residual rows (idx 18/19
+    //     delete `b`/`li r4,0x10`, idx 25 insert `li r4,0x10`); the other 20
+    //     are the two groups below.
     //   * 82AA3840 `clrrwi r3, r11, 0`: the image keeps pchOld in r11 across
     //     the loop test and zero-extends it into r3 at the LocalReAlloc call;
     //     we load straight into r3.

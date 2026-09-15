@@ -175,36 +175,39 @@ bool CacheXbox::GetFreeSpaceSync(u64 *u) {
         return false;
     } else {
         ULARGE_INTEGER freeBytes = {0};
-        const char *path = mCacheID.GetCachePath(nullptr);
-        if (GetDiskFreeSpaceExA(path, &freeBytes, nullptr, nullptr) == 0U) {
-            void *err = (void *)GetLastError();
-            if ((DWORD)err != 0x15 && (DWORD)err != 0x456 && (DWORD)err != 0x48F && (DWORD)err != 0x651
+        if (GetDiskFreeSpaceExA(
+                mCacheID.GetCachePath(nullptr), &freeBytes, nullptr, nullptr
+            ) == 0U) {
+            unsigned int err = GetLastError();
+            if (err != 0x15 && err != 0x456 && err != 0x48F && err != 0x651
                 && IsDeviceConnected(mCacheID.DeviceID())) {
                 MILO_NOTIFY(
                     "CacheXbox::GetFreeSpaceSync(): Unhandled error %u returned from GetDiskFreeSpaceEx().\n",
                     err
                 );
                 mLastResult = kCache_ErrorUnknown;
-                return false;
             } else {
                 mLastResult = kCache_ErrorStorageDeviceMissing;
-                return false;
             }
+            return false;
         } else {
             XDEVICE_DATA deviceData;
             unsigned int err = XContentGetDeviceData(mCacheID.DeviceID(), &deviceData);
             if (err != ERROR_SUCCESS) {
-                if (err != 5 && err != 0x15 && err != 0x456 && err != 0x48F
-                    && err != 0x651 && IsDeviceConnected(mCacheID.DeviceID())) {
+                if (err == 5 || err == 0x15 || err == 0x456 || err == 0x48F
+                    || err == 0x651) {
+                    mLastResult = kCache_ErrorStorageDeviceMissing;
+                    return false;
+                }
+                if (IsDeviceConnected(mCacheID.DeviceID())) {
                     MILO_NOTIFY(
                         "CacheXbox::GetFreeSpaceSync(): Unhandled error returned from GetDiskFreeSpaceEx().\n"
                     );
                     mLastResult = kCache_ErrorUnknown;
-                    return false;
                 } else {
                     mLastResult = kCache_ErrorStorageDeviceMissing;
-                    return false;
                 }
+                return false;
             } else {
                 *u = freeBytes.QuadPart + deviceData.ulDeviceFreeBytes;
                 mLastResult = kCache_NoError;
