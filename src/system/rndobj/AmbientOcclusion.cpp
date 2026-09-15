@@ -1266,6 +1266,15 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                 FacePriority *pPtr = (FacePriority *)priBegin;
                 do {
                     RndMesh::Face &face = mesh->Faces(pPtr->faceIndex);
+                    // RESIDUAL (w7-bw, 92.38 canonical): the image loads each
+                    // index once and reuses the register for the Edge fields,
+                    // AND homes a dead u16 temp per index (sth 0x50(r31) at
+                    // 826E14A0/B4/C8).  u16 locals give the reuse but no temp;
+                    // direct Verts(FaceVert(face, k)) gives the temp but the
+                    // Edge stores then reload the face (91.0); `int` locals
+                    // 92.0; const-ref-bound temps 92.3, no store.  Hoisting the
+                    // midpoint = 0xffff stores above this lookup (image order,
+                    // 826E1464..70) regresses to 90.2 (regswap wave, as am saw).
                     unsigned short i0 = FaceVert(face, 0);
                     unsigned short i1 = FaceVert(face, 1);
                     unsigned short i2 = FaceVert(face, 2);
