@@ -65,33 +65,18 @@ void CharEyes::Enter() {
     // mAvDelta = 0.0f;`. Without it, Enter() leaked the previous take's
     // angular-velocity accumulator into a freshly entered character.
     mAvDelta = 0.0f;
-    // MSVC/Xenon preserves source order WITHIN each store stream (the integer
-    // stream and the float stream) and only interleaves the two streams.
-    // Reading the target's two streams separately gives the image's statement
-    // order directly: among the floats it writes 0xc0 (mLastCang, 1.0f) BEFORE
-    // 0xd0 (mLastBlinkWeight, -1.0f), and among the integers it writes 0xd5
-    // (mBlinkActive) LAST, immediately before the mInterestFilterFlags copy.
-    // RB3's CharEyes::Enter confirms both: `mLastCang = 1.0f; mLastBlinkWeight
-    // = -1.0f;` and the lone byte store (there `mTargetTooClose`) sitting right
-    // above `mInterestFilterFlags = mDefaultFilterFlags;`.
-    //
-    // The float half LANDS (87.3 -> 87.4 canonical, and it also fixes the
-    // lis-order rows at idx 8/9: with 1.0f referenced first the image's
-    // `lis r9, __real@3f800000` comes first, as ours now does).
-    //
-    // NEGATIVE RESULT (w7-ap, 2026-09-14): the integer half does NOT, in any
-    // placement. mBlinkActive after mBlinkCount = 85.7; after mLowerBlinkAngle
-    // = 85.7; both tried on top of the float swap, and an earlier lane measured
-    // 85.8 for the former without it. Every placement away from the current one
-    // costs an extra unmatched row and re-scrambles the schedule of the whole
-    // block. Either the image reaches 0xd5 from a statement we do not have, or
-    // this last int store is pure store scheduling. Residual: 4 `stb`/`stw`
-    // offset rows (idx 19/21/23/25/27/29) that rotate the six integer stores by
-    // one position, plus the idx 11/13 `lfs 0.0` scheduling pair.
+    // w7-by (87.35955 -> 100.0, 0 mismatch rows): the statement order is RB3's
+    // CharEyes::Enter member for member (mBlinkActive is RB3's mTargetTooClose,
+    // the lone byte store right above the filter-flags copy at 0x823772A0),
+    // and the flags copy is the inline ClearInterestFilterFlags() call.  The
+    // inlined call is a scheduling barrier: spelled as a plain member
+    // assignment MSVC hoists `lwz r10, 0x60(r31)` above every store, where
+    // the image loads it at 0x823772B8, immediately before the `stw` at
+    // 0x823772BC.  That hoist is what made every mBlinkActive placement read
+    // as a loss (w7-ap measured 85.7 for exactly this order without it).
     mLastCang = 1.0f;
     mLastBlinkWeight = -1.0f;
     mBlinkDetect = false;
-    mBlinkActive = false;
     mDartEnabled = false;
     mDartInterval = -1.0f;
     mEyeClampCount = -1;
@@ -100,7 +85,8 @@ void CharEyes::Enter() {
     mBlinkCount = 0;
     mUpperBlinkAngle = -1.0f;
     mLowerBlinkAngle = -1.0f;
-    mInterestFilterFlags = mDefaultFilterFlags;
+    mBlinkActive = false;
+    ClearInterestFilterFlags();
     mDartTimer = 0.0f;
     mEnabled = false;
     mNeedRecalc = false;
