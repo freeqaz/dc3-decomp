@@ -1750,23 +1750,51 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 // the SAME function: ham_xbox_r.map lists the mangled name at 826204d8 and
 // 8263a360 and the two shipped bodies are instruction-identical.
 
-// RESIDUAL (w7-bp): 96.99 canonical (95.1 raw), 1196 B, 203/203 instructions,
-// 67 arg diffs + 2 insert + 4 delete.  Unmoved by this lane; recorded so the
-// next one starts from the diagnosis rather than the symptom.
+// w7-bs (2026-09-15): 96.99 -> 98.5 canonical (95.1 -> 97.3 raw), 202 rows,
+// 151 equal / 48 register-permutation diff_arg / 1 insert / 2 delete.
 //
-// THE WHOLE FUNCTION HANGS OFF ONE ALLOCATOR DECISION.  The image reserves r31
-// as a frame BASE -- `subi r31, r1, 0x10f0` at target index 2, computed before
-// the `stwu`, so r31 == the new sp -- and reaches every local through it
-// (`0x50(r31)`, `0x54(r31)`, `0x58(r31)`, `0x5c(r31)`, `0x60(r31)`,
-// `0x64(r31)`, `0x68(r31)`, `0x70(r31)`).  Our build spends r31 on an ordinary
-// variable and addresses the same slots off r1.  That single choice produces
-// 34 of the 71 register-swap rows (r1 <-> r31), the whole r21..r31 vs r22..r31
-// prologue difference (the image needs one EXTRA callee-saved register, r21,
-// because r31 is not available to it), and the frame-size row
-// (`stwu r1, -0x10f0` vs `-0x10e0`, index 4).  The SLOT ASSIGNMENT is
+// THE r31 FRAME BASE IS NOT AN ALLOCATOR DECISION, IT IS C++ EH.  The image's
+// Mesh.obj carries `except_record_8263C3A8` (FuncInfo magic 0x19930522) for
+// this function: ONE unwind-map entry (state 0 -> `__unwind$150236` at
+// 0x8263C6CC, 0x28 bytes, whose body is `addi r3, r31, 0x1084; bl
+// ??1MemDoTempAllocations@@QAA@XZ`) and a 7-entry IP-to-state map at
+// lbl_8208C800 that enters state 0 at 0x8263C5C8 -- the `bl ??_U@YAPAXI@Z`
+// (operator new[]) -- and leaves it at 0x8263C5D0, the MemPopTemp call.  So
+// the original scopes the allocation with the RAII pair, not the bare calls:
+//
+//     { MemDoTempAllocations tmp; mCompressedVerts = new unsigned char[n]; }
+//
+// An EH-bearing local forces MSVC to address the frame through r31 (the
+// funclet rebuilds it from r12: `subi r31, r12, 0x10f0`), which is exactly
+// what w7-bp measured as "r31 reserved as a frame base": the extra
+// callee-saved r21, the 0x10f0 frame (the 1-byte object is homed at 0x1084,
+// just past the FormatString at 0x70+0x1014), and the 34 r1<->r31 rows.  All
+// of that closes with the one-line change; the prologue is now row-equal
+// (`bl __savegprlr_21; subi r31, r1, 0x10f0; ld r12, -0x1000(r1); stwu`).
+// HOW TO SEE IT NEXT TIME: a `subi r31, r1, <frame>` BEFORE the `stwu` with no
+// alloca means "find the except_record_/pdata entry and read the funclet" --
+// the funclet names the object.
+//
+// RESIDUAL 98.5 (all scheduling / register permutation, no offset or callee
+// rows): [24]/[26] the zero-init stores of loadedCompressedSize (0x58) and i8c
+// (0x64) are emitted in the other order (w7-bp already measured statement
+// order as inert -- the slots themselves agree); [29]/[31] `lis r24,
+// kAssertStr@h` two rows earlier on our side; [174] `mr r28, r21` -- the
+// image copies the hoisted zero register into a fresh register for the vertex
+// loop counter i5, we coalesce i5 onto the zero register itself.
+// MEASURED (w7-bs) on that last row: `int i5 = 0` moved above
+// `mVerts.resize` -- inert, identical 98.5; `int i5;` at the top with
+// `i5 = 0` before the loop -- inert, identical 98.5; `int i5 = 0` hoisted into
+// the top zero-init group -- 99.5 canonical BUT the compiler then keeps i5
+// live in its own register for the whole function and the prologue becomes
+// `__savegprlr_20` (r20-r31 vs the image's r21-r31, `mr r22, r30` at row 31).
+// The score rises only because the canonical ruler folds the save-helper name;
+// the shape is wrong, so it was NOT kept.
+//
+// (w7-bp's earlier reading, kept for the record: the SLOT ASSIGNMENT is
 // identical on both sides -- 0x58 loadedCompressedSize, 0x5c numVerts, 0x60
-// loadedVersion, 0x64 i8c, 0x68 i88, 0x70 the FormatString -- so this is not a
-// local-layout problem and reshuffling declarations cannot reach it.
+// loadedVersion, 0x64 i8c, 0x68 i88, 0x70 the FormatString -- so reshuffling
+// declarations cannot reach any of it.)
 //
 // MEASURED NEGATIVE (w7-bp): splitting the six zero-initialisers into bare
 // declarations plus assignments written in the image's own store order
@@ -1776,13 +1804,10 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 // OFFSET_SWAP(0x58,0x64) still reported.  The store order is scheduling, not
 // statement order.
 //
-// The four remaining structural rows are also scheduling, not missing code:
-//   [29]/[31]  `lis r24, ?kAssertStr@@3PBDB@h` -- same instruction, two rows
-//              earlier on our side
-//   [141]/[144] ReadChunks argument setup: the image loads `lwz r4, 0x184(r22)`
-//              (mCompressedVerts) between the r6 and r5 moves, we load it after
-//   [175]      `mr r28, r21` -- the vertex loop counter's zero init, which our
-//              build folds into an earlier move
+// The structural rows w7-bp listed were scheduling, not missing code; the
+// [141]/[144] ReadChunks argument-order pair closed with the RAII change above
+// (the `lwz r4, 0x184(r22)` reload is now row-equal), [29]/[31] and [174]
+// remain as described in the w7-bs residual.
 //
 // NOT A DEFECT: rows 62 and 159 call different MakeString instantiations
 // (`$$BY0BD@...$$BY04` vs our `$$BY08...$$BY0DH@`) while referencing the SAME
@@ -1886,9 +1911,8 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
                 unsigned int i99 = i9 << 9;
                 MILO_ASSERT(compressedSize > 0, 0x2D4);
                 {
-                    MemPushTemp();
+                    MemDoTempAllocations tmp;
                     mCompressedVerts = new unsigned char[compressedSize];
-                    MemPopTemp();
                 }
                 ReadChunks(d.stream, mCompressedVerts, compressedSize, i99);
             }
