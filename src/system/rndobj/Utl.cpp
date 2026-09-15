@@ -980,29 +980,32 @@ void UtilDrawCigar(
     float scale = sqrtf(mz * mz + mx * mx + my * my);
     // Only two entries: retail's ctr for the scaling loop is a literal 2
     // (li r9,0x2 / mtctr r9), and only [0] and [1] are ever read back.
-    float scaledLens[2];
     Transform basis;
-
+    float sLen0;
+    float sLen1;
     {
-        int cnt = 2;
-        float *dst = scaledLens;
-        do {
+        float scaledLens[2];
+        {
+            int cnt = 2;
+            float *dst = scaledLens;
+            do {
 #ifdef HX_NATIVE
-            *dst =
-                *(float *)((intptr_t)(lengths) + ((intptr_t)dst - (intptr_t)scaledLens))
-                * scale;
+                *dst = *(float *)((intptr_t)(lengths)
+                                  + ((intptr_t)dst - (intptr_t)scaledLens))
+                    * scale;
 #else
-            *dst = *(float *)((int)(lengths) + ((int)dst - (int)scaledLens)) * scale;
+                *dst = *(float *)((int)(lengths) + ((int)dst - (int)scaledLens)) * scale;
 #endif
-            dst++;
-            cnt--;
-        } while (cnt != 0);
-    }
-    memcpy(&basis, &tf, 0x40);
-    Normalize(basis.m, basis.m);
+                dst++;
+                cnt--;
+            } while (cnt != 0);
+        }
+        memcpy(&basis, &tf, 0x40);
+        Normalize(basis.m, basis.m);
 
-    float sLen0 = scaledLens[0];
-    float sLen1 = scaledLens[1];
+        sLen0 = scaledLens[0];
+        sLen1 = scaledLens[1];
+    }
 
     // Two behavioural bugs fixed here, both visible in retail's stores:
     //  1. The cap apex sits on the LOCAL X AXIS, not Y.  Retail writes the
@@ -1012,14 +1015,35 @@ void UtilDrawCigar(
     //     it in y put both caps off the cigar's axis.
     //  2. Retail transforms through a SEPARATE temp (in = 0x60, out = 0x90 /
     //     0xa0); we were transforming in place.
-    // Retail's frame is 0x3d0 and ours is 0x3e0: retail coalesces the int->float
+    // Retail's frame is 0x3d0 and ours WAS 0x3e0: retail coalesces the int->float
     // conversion scratch double into the dead `scaledLens` slot (0x50, accessed
-    // again at the (float)i conversions), while MSVC gives us a fresh 0x90 and
-    // pushes top/bottom/basis/both vertex arrays up by 0x10.  Hoisting `end` out
+    // again at the (float)i conversions), while MSVC gave us a fresh 0x90 and
+    // pushed top/bottom/basis/both vertex arrays up by 0x10.  Hoisting `end` out
     // of a nested block recovered 0.1pp of that; swapping the declaration order of
     // `end` and `scaledLens` to give scaledLens the lower slot was byte-identical
-    // (measured 2026-09-14, two consecutive neutral variants), so the readable
-    // order stays and the 0x10 is a deliberate residual.
+    // (measured 2026-09-14, two consecutive neutral variants).
+    //
+    // w7-bo (2026-09-15): THE 0x10 IS CLOSED, and declaration order was never the
+    // lever -- LIFETIME was.  `scaledLens` and the do-loop that fills it now live in
+    // their own block, with `sLen0`/`sLen1` declared outside it, so the array is dead
+    // the moment the block ends and MSVC reuses 0x50 for the conversion double exactly
+    // as retail does.  Frame 0x3e0 -> 0x3d0 (prologue `stwu r1, -0x3d0(r1)` now equal),
+    // all 38 +/-0x10 offset rows closed, canonical 91.94 -> 92.31193, mismatch rows
+    // 97 -> 72.  See docs/decomp/patterns/lexical-scope-controls-msvc-stack-slots.
+    // w7-bo (2026-09-15) measured negatives on the two remaining small clusters,
+    // both BYTE-IDENTICAL (canonical 92.31193 unchanged, same 72 rows):
+    //  - swapping the declaration order of `top` and `bottom` to chase the 0x90/0xa0
+    //    permutation (retail puts `top` at 0x90; we get 0xa0).  MSVC assigns these two
+    //    same-sized Vector3 temps by use, not by declaration order.
+    //  - writing the three `sin * radii[]` products as `radii[] * sin` to chase
+    //    idx 82/88/50 (retail `fmuls f27,f1,f0`, we emit `fmuls f28,f13,f0`; retail
+    //    `fadds f0,f24,f0`, we emit `fadds f0,f0,f24`).  MSVC canonicalises fmuls/fadds
+    //    operand order from its register assignment, not from the source order, so the
+    //    readable order stays.
+    // Also unclosed: idx 94, retail `fmuls f0,f1,f0` + `fadds f27,f0,f24` where we
+    // contract to a single `fmadds f27,f0,f1,f24` despite h1raw/h1 already being
+    // separate statements -- /fp:fast contraction that the statement split does not
+    // block.
     Vector3 end;
     Vector3 top;
     Vector3 bottom;
@@ -1037,6 +1061,16 @@ void UtilDrawCigar(
     // produces retail's `add r10,r28,r31` / `slwi r29,r10,4`; a float[18*4] with
     // an index pre-multiplied by 4 lets MSVC fuse the two induction variables
     // into one byte-stepping counter (addi r30,r30,0x10 / cmpwi r30,0x120).
+    //
+    // w7-bo (2026-09-15) CORRECTION: that is describing a state this file is no
+    // longer in.  With the Vector3 indexing exactly as written below, MSVC STILL
+    // fuses: we emit `addi r30,r30,0x10` / `cmpwi cr6,r30,0x120` (idx 131/136) where
+    // retail keeps iLatSum in r28 and recomputes `add r10,r28,r31` / `slwi r29,r10,4`
+    // inside the loop (idx 111/114).  ~10 of the 72 residual rows are this strength
+    // reduction, and it also drives the r27/r28/r29/r30/r31 relabelling that objdiff
+    // reports as 41 REGISTER_SWAP instructions -- retail spends a callee-saved
+    // register on iLatSum, we spend it on the byte cursor.  No source spelling tried
+    // so far blocks it; it is the largest single item left on this function.
     Vector3 verts2e0[18];
     Vector3 verts1c0[18];
 
