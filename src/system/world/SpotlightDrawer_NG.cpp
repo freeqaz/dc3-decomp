@@ -364,7 +364,12 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
         Vector4 camPosVec(camPos.x, camPos.y, camPos.z, 1.0f);
         TheShaderMgr.SetPConstant((PShaderConstant)0xa, camPosVec);
 
-        float dotProduct = -(camUp.x * camPos.x + camUp.y * camPos.y + camUp.z * camPos.z);
+        // Association is the image's, not a flat sum: retail starts the chain
+        // at z (828215DC fmuls f11, f0, f29), adds y (82821600 fmadds), then
+        // negates x in (82821604 fnmadds). A flat three-term sum in any
+        // order lowers y-first here.
+        float dotProduct =
+            -(camUp.x * camPos.x + (camUp.y * camPos.y + camUp.z * camPos.z));
         Vector4 camPlane(camUp.x, camUp.y, camUp.z, dotProduct);
         TheShaderMgr.SetPConstant((PShaderConstant)0x1e, camPlane);
 
@@ -380,7 +385,13 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
             invFarPlane = zero;
         }
 
-        Vector4 fogParams(mParams.mHalfDistance, invFarPlane, zero, zero);
+        // BUG FIX (w7-bw): the image lays the 0x5b constant out as
+        // (0, mHalfDistance, 0, invFarPlane) -- 82821640 `stfs f13, 0xe4(r1)`
+        // (half distance -> .y), 82821648 `stfs f0, 0xec(r1)` (1/farPlane
+        // -> .w), 82821650/54 `stfs f19` to 0xe0/0xe8 (.x/.z = 0). The old
+        // spelling (mHalfDistance, invFarPlane, 0, 0) fed the pixel shader
+        // both values in the wrong lanes.
+        Vector4 fogParams(zero, mParams.mHalfDistance, zero, invFarPlane);
         TheShaderMgr.SetPConstant((PShaderConstant)0x5b, fogParams);
 
         Vector3 lightPos;
@@ -413,13 +424,20 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
         // MSVC contract each pair into a single fmadds, which retail does not do.
         Vector3 apexOffset = dir;
         apexOffset *= negOffset;
-        float apexX = lightPos.x + apexOffset.x;
-        float apexY = lightPos.y + apexOffset.y;
-        float apexZ = lightPos.z + apexOffset.z;
+        float apexX = apexOffset.x + lightPos.x;
+        float apexY = apexOffset.y + lightPos.y;
+        float apexZ = apexOffset.z + lightPos.z;
 
         Vector4 apex(apexX, apexY, apexZ, invTotalLength);
         TheShaderMgr.SetPConstant((PShaderConstant)0x19, apex);
 
+        // NEGATIVE RESULT (w7-bw): retail fills this Vector4 through one FPR,
+        // load/store interleaved (828217B4..828217D8). Member-wise assignment
+        // (`Vector4 direction; direction.x = ...`) reproduces that shape but
+        // re-colours every Vector4 slot in the frame (camPosVec 0xb0 -> 0x90,
+        // fogParams 0xe0 -> 0xa0, apex 0x90 -> 0xe0, ...): 96.47 -> 93.5, and
+        // 94.8 with the block wrapped in its own scope. The ctor form keeps
+        // the frame layout; the three-load-then-store shape is the residual.
         const Transform &slXfm2 = sl->WorldXfm();
         Vector4 direction(slXfm2.m.y.x, slXfm2.m.y.y, slXfm2.m.y.z, totalLength);
         TheShaderMgr.SetPConstant((PShaderConstant)0x1a, direction);
@@ -441,6 +459,20 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
         );
         TheShaderMgr.SetPConstant((PShaderConstant)0x1d, radiiVec);
 
+        // After the 0x1d upload retail re-reads both radii from the Vector4
+        // it just passed (828218C0 `lfs f12, 0x74(r1)`, 828218C8
+        // `lfs f13, 0x70(r1)`) rather than from the registers still holding
+        // minRad/botRad: the source reads radiiVec back.
+        // RESIDUAL (w7-bw, 96.5 canonical): after the 0x1d upload retail
+        // re-reads both radii from the Vector4 it just passed (828218C0
+        // `lfs f12, 0x74(r1)`, 828218C8 `lfs f13, 0x70(r1)`) instead of the
+        // callee-saved copies, so the source read radiiVec.x/.y back. Spelling
+        // it that way (radiusDiff = radiiVec.y - radiiVec.x, shift from
+        // radiiVec.x, cos from radiiVec.y) matches those three rows but
+        // re-colours totalLength/invTotalLength (f24/f23 -> f23/f22) and
+        // reschedules the whole apex block 82821700..82821780 (copy words
+        // 0,4,c,8 -> c,0,4,8; y/z sums swapped): 96.5 -> 93.2 twice. Kept the
+        // register-sourced form.
         float radiusDiff = botRad - minRad;
         float dotRelDir = dir.x * relX + dir.y * relY + dir.z * relZ;
         float tanSlope = invTotalLength * radiusDiff;
@@ -450,8 +482,8 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
             shift = (minRad / radiusDiff) * totalLength;
         }
 
-        float extProj = shift + dotRelDir;
         float cosAngle = (float)cos((float)atan(invTotalLength * botRad));
+        float extProj = shift + dotRelDir;
 
         Vector4 coneParams(
             tanSlope * tanSlope + 1.0f,

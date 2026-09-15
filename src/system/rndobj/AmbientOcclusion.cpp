@@ -63,6 +63,17 @@ void RndAmbientOcclusion::BlendVert(
     // opcodes on both sides, plus ~4 rows where MSVC defers the `lfs 0x44(r30)`
     // of `out.tex += v2.tex` past the store to out.tex.x -- i.e. our build proved
     // the two Vert& do not alias and the image's did not.
+    // w7-bw (2026-09-15), 85.66912 -> 88.7: the colour zeroing at the end is
+    // Color::Set(0.0f) (its chained assignment stores alpha, blue, green, red
+    // = 0x3c..0x30 in that order) -- that also stops our build sinking the
+    // out.tangent.x store past the zeroing, so rows 121-142 now match.
+    // Refuted on top of that: out.tex.Set(x + v2.x, y + v2.y) fixes the tex
+    // block's load order but reshuffles the pos add (88.0); Scale(out.pos,
+    // 0.5f, out.pos) for the pos scaling is inert (88.7); `out.tex *= 0.5f`
+    // ahead of the tangent copy makes the pos add byte-exact but drags the
+    // tex scale up with it (75.4); reading v2.tangent.x/y/z into float locals
+    // before the scaling (the image holds them in f11/f13 across it) hoists
+    // the loads above the tangent copy instead (85.1).
     Vector4 tang = out.tangent;
     tang.x = v2.tangent.x + tang.x;
     out.pos *= 0.5f;
@@ -75,10 +86,7 @@ void RndAmbientOcclusion::BlendVert(
     out.tangent.x = tang.x;
     out.tangent.y = tang.y;
     out.tangent.z = tang.z;
-    out.color.alpha = 0.0f;
-    out.color.blue = 0.0f;
-    out.color.green = 0.0f;
-    out.color.red = 0.0f;
+    out.color.Set(0.0f);
 }
 
 bool IsValidObject(Hmx::Object *obj) {
@@ -902,6 +910,10 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
     result[3] = (float)shAccum[3];
 }
 
+static inline unsigned short FaceVert(const RndMesh::Face &face, int i) {
+    return (&face.v1)[i];
+}
+
 void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     const Transform &xfm = mesh->WorldXfm();
 
@@ -925,25 +937,24 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     // per-component Verts() calls) was not attempted here.
     Hmx::Color aoResult;
     std::vector<Hmx::Color> faceAO(mesh->Faces().size(), aoResult);
-    unsigned int f = 0;
-    if (mesh->Faces().size() != 0) {
-        float oneThird = 1.0f / 3.0f;
-        do {
+    float oneThird = 1.0f / 3.0f;
+    for (unsigned int f = 0; f < (unsigned int)mesh->Faces().size(); f++) {
+        {
             RndMesh::Face &face = mesh->Faces(f);
 
             // Average position of the 3 face vertices
-            const Vector3 &p0 = mesh->Verts(face.v1).pos;
-            const Vector3 &p1 = mesh->Verts(face.v2).pos;
-            const Vector3 &p2 = mesh->Verts(face.v3).pos;
+            const Vector3 &p0 = mesh->Verts(FaceVert(face, 0)).pos;
+            const Vector3 &p1 = mesh->Verts(FaceVert(face, 1)).pos;
+            const Vector3 &p2 = mesh->Verts(FaceVert(face, 2)).pos;
             Vector3 center;
             center.z = (p2.z + (p1.z + p0.z)) * oneThird;
             center.y = (p2.y + (p1.y + p0.y)) * oneThird;
             center.x = (p2.x + (p1.x + p0.x)) * oneThird;
 
             // Average normal of the 3 face vertices
-            const Vector3 &n0 = mesh->Verts(face.v1).norm;
-            const Vector3 &n1 = mesh->Verts(face.v2).norm;
-            const Vector3 &n2 = mesh->Verts(face.v3).norm;
+            const Vector3 &n0 = mesh->Verts(FaceVert(face, 0)).norm;
+            const Vector3 &n1 = mesh->Verts(FaceVert(face, 1)).norm;
+            const Vector3 &n2 = mesh->Verts(FaceVert(face, 2)).norm;
             Vector3 faceNorm;
             faceNorm.z = n2.z + (n1.z + n0.z);
             faceNorm.y = n2.y + (n1.y + n0.y);
@@ -958,8 +969,7 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
             CalculateAOAtPoint(worldCenter, worldNorm, (float *)&aoResult);
 
             faceAO[f] = aoResult;
-            f++;
-        } while (f < (unsigned int)mesh->Faces().size());
+        }
     }
 
     // Phase 2: Build vertex equivalence map (weld coincident vertices)
@@ -989,14 +999,14 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     v = 0;
     if (0 < mesh->Verts().size()) {
         do {
-            unsigned int fNum = 0;
             float accR = 0.0f;
             float accG = 0.0f;
             float accB = 0.0f;
             float accA = 0.0f;
             float totalAngle = 0.0f;
-            if (mesh->Faces().size() != 0) {
-                do {
+            for (unsigned int fNum = 0; fNum < (unsigned int)mesh->Faces().size();
+                 fNum++) {
+                {
                     int j = 0;
                     unsigned short *faceVerts = (unsigned short *)&mesh->Faces(fNum);
                     Hmx::Color *faceColor = &faceAO[fNum];
@@ -1039,10 +1049,11 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                         }
                         j++;
                     } while (j < 3);
-                    fNum++;
-                } while (fNum < (unsigned int)mesh->Faces().size());
+                }
+            }
 
-                // Blend smoothed AO with existing vertex color
+            // Blend smoothed AO with existing vertex color
+            {
                 if (totalAngle > 0.0f) {
                     float invAngle = 1.0f / totalAngle;
                     RndMesh::Vert &vert = mesh->Verts(v);
@@ -1263,20 +1274,32 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                 FacePriority *pPtr = (FacePriority *)priBegin;
                 do {
                     RndMesh::Face &face = mesh->Faces(pPtr->faceIndex);
-                    RndMesh::Vert &vert0 = mesh->Verts(face.v1);
-                    RndMesh::Vert &vert1 = mesh->Verts(face.v2);
-                    RndMesh::Vert &vert2 = mesh->Verts(face.v3);
+                    // RESIDUAL (w7-bw, 92.38 canonical): the image loads each
+                    // index once and reuses the register for the Edge fields,
+                    // AND homes a dead u16 temp per index (sth 0x50(r31) at
+                    // 826E14A0/B4/C8).  u16 locals give the reuse but no temp;
+                    // direct Verts(FaceVert(face, k)) gives the temp but the
+                    // Edge stores then reload the face (91.0); `int` locals
+                    // 92.0; const-ref-bound temps 92.3, no store.  Hoisting the
+                    // midpoint = 0xffff stores above this lookup (image order,
+                    // 826E1464..70) regresses to 90.2 (regswap wave, as am saw).
+                    unsigned short i0 = FaceVert(face, 0);
+                    unsigned short i1 = FaceVert(face, 1);
+                    unsigned short i2 = FaceVert(face, 2);
+                    RndMesh::Vert &vert0 = mesh->Verts(i0);
+                    RndMesh::Vert &vert1 = mesh->Verts(i1);
+                    RndMesh::Vert &vert2 = mesh->Verts(i2);
 
                     // Construct 3 midpoint edges
                     Edge edge01, edge12, edge20;
-                    edge01.v0 = face.v1;
-                    edge01.v1 = face.v2;
+                    edge01.v0 = i0;
+                    edge01.v1 = i1;
                     edge01.midpoint = 0xffff;
-                    edge12.v0 = face.v2;
-                    edge12.v1 = face.v3;
+                    edge12.v0 = i1;
+                    edge12.v1 = i2;
                     edge12.midpoint = 0xffff;
-                    edge20.v0 = face.v3;
-                    edge20.v1 = face.v1;
+                    edge20.v0 = i2;
+                    edge20.v1 = i0;
                     edge20.midpoint = 0xffff;
 
                     RndMesh::Vert blendVert01;

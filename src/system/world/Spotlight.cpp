@@ -1670,6 +1670,23 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
     }
     MILO_ASSERT(iVert == kNumVerts, 0x526);
 
+    // NEGATIVE RESULT (w7-bw, 96.30232 canonical, no change).  Three more
+    // spellings refuted, each measured whole-function under name_check:
+    // (1) `int base` with the four indices as unsigned short locals derived
+    //     from it and from `int baseNext` (what 8282CD40..8282CD5C looks like:
+    //     untruncated adds, clrlwi at the use) plus faces[iFace + 1] and a
+    //     single iFace += 2: 93.6, and the prologue grows to __savegprlr_18.
+    // (2) reordering the hand-inlined p.x sum to py*yx + pz*zx + px*xx (the
+    //     image's x' at 8282CBFC..8282CC18 is x*xx + (z*zx + y*yx)): inert,
+    //     byte-for-byte the same block -- /fp:fast canonicalises the three
+    //     sums regardless of source order, so the 24 fmadds rows of the pos
+    //     and norm blocks are a lowering floor from this TU.
+    // (3) The two MakeString rows (MILO_ASSERT at 0x526 / 0x53F) are charged
+    //     because the target's whole-TU ICF representative is
+    //     MakeString<char[19], int, char[5]> and our <char[14], int, char[19]>
+    //     is not in scripts/symbol_aliases.json's accepted classes; the same
+    //     representative is uncharged in this TU's Handle/Load/BuildBoard.
+    //     Instrument gap, not source.
     int iFace = 0;
     int rowStart = 0;
     for (int row = 0; row < numSections; row++) {
@@ -1731,8 +1748,8 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     faces.resize(totalFaces);
 
     int n = sGridSize;
-    float bottomRadius = def.mBottomRadius;
     float topRadius = def.mLength;
+    float bottomRadius = def.mBottomRadius;
 
     // SURVEY 2026-09-14 (w7-ae), 88.1% canonical, 145 mismatch rows, no edit.
     // The pos matrix-multiply block (diff rows 113-127) is structurally IDENTICAL
@@ -1755,8 +1772,11 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     // (`bl __savegprlr_22` vs `__savegprlr_23`), which is the whole reported
     // frame delta of -0x10 and nearly all 21 register-swap pairs -- so the single
     // fsubs row is worth ~12pp of renaming behind it.
-    // NOT a spelling of Multiply(): the association and store order it produces
-    // already match.  What would have to change is whether MSVC can see the
+    // (w7-bw correction: the store order does NOT already match -- the image
+    // stores z,y,x (stfs 0x8/0x4/0x0 at 8282D048/50/58) and ours stores x,z,y,
+    // and the x' / y' sums associate differently under /fp:fast.  Same root:
+    // the literal -1 is visible at our multiply site and not at the image's.)
+    // NOT a spelling of Multiply(): what would have to change is whether MSVC can see the
     // literal at the multiply, and no value-preserving source form of a
     // Matrix3 built from literals was found that hides it.  Recorded, not fixed.
     Hmx::Matrix3 rot;
@@ -1786,30 +1806,34 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
         }
     }
 
+    // RESIDUAL (w7-bw, 90.62 canonical, face loop 8282D100..8282D1C0): ours
+    // computes base + n once at the loop top as the next IV value and then
+    // derives uPrev from it as (0xffff - n) + (base + n); the image adds
+    // 0xffff to base directly (8282D13C) and forms base + n inside each
+    // branch (8282D150 / 8282D190), feeding the IV update from that register
+    // (mr r11, r8 at 8282D1B0).  Refuted, each measured whole-function:
+    // explicit `int base = row + 1` + `col++, base += n` gives two bottom-
+    // updated IVs and a down-counted outer loop (88.5, one more GPR saved);
+    // `(unsigned short)base - 1` for uPrev is inert; the RB3 ibase form
+    // (uPrev = ibase, uBase = ibase + 1, ...) makes ibase the IV and derives
+    // uBase from uBaseN + (1 - n) instead (88.6); a hoisted `int nm1 = n - 1`
+    // is inert; unsigned short locals for all four values pre-computed
+    // before the branch is the 88.4 state.  The rot lowering in the vertex
+    // loop (fmadds f9 vs fsubs, and the store order z,y,x vs x,z,y) is in
+    // the off-limits math header's Multiply and is the ae-recorded floor.
     int iFace = 0;
     for (int row = 0; row < nMinus1; row++) {
         for (int col = 0; col < nMinus1; col++) {
-            short base = (short)(row + 1 + col * n);
-            unsigned short uBase = (unsigned short)base;
-            unsigned short uPrev = (unsigned short)(base - 1);
-            unsigned short uBaseN = (unsigned short)(base + (short)n - 1);
-            unsigned short uBasePN = (unsigned short)(base + (short)n);
-            if (!((iFace & 2) == 0)) {
-                faces[iFace].v1 = uBaseN;
-                faces[iFace].v2 = uPrev;
-                faces[iFace].v3 = uBasePN;
-                faces[iFace + 1].v1 = uBasePN;
-                faces[iFace + 1].v2 = uPrev;
-                faces[iFace + 1].v3 = uBase;
+            int base = row + 1 + col * n;
+            int uBaseN = base + n - 1;
+            unsigned short uPrev = base - 1;
+            if (iFace & 2) {
+                faces[iFace++].Set(uBaseN, uPrev, base + n);
+                faces[iFace++].Set(base + n, uPrev, base);
             } else {
-                faces[iFace].v1 = uPrev;
-                faces[iFace].v2 = uBase;
-                faces[iFace].v3 = uBaseN;
-                faces[iFace + 1].v1 = uBaseN;
-                faces[iFace + 1].v2 = uBase;
-                faces[iFace + 1].v3 = uBasePN;
+                faces[iFace++].Set(uPrev, base, uBaseN);
+                faces[iFace++].Set(uBaseN, base, base + n);
             }
-            iFace += 2;
         }
     }
 
