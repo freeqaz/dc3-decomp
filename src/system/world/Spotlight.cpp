@@ -1731,8 +1731,8 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     faces.resize(totalFaces);
 
     int n = sGridSize;
-    float bottomRadius = def.mBottomRadius;
     float topRadius = def.mLength;
+    float bottomRadius = def.mBottomRadius;
 
     // SURVEY 2026-09-14 (w7-ae), 88.1% canonical, 145 mismatch rows, no edit.
     // The pos matrix-multiply block (diff rows 113-127) is structurally IDENTICAL
@@ -1789,27 +1789,16 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     int iFace = 0;
     for (int row = 0; row < nMinus1; row++) {
         for (int col = 0; col < nMinus1; col++) {
-            short base = (short)(row + 1 + col * n);
-            unsigned short uBase = (unsigned short)base;
-            unsigned short uPrev = (unsigned short)(base - 1);
-            unsigned short uBaseN = (unsigned short)(base + (short)n - 1);
-            unsigned short uBasePN = (unsigned short)(base + (short)n);
-            if (!((iFace & 2) == 0)) {
-                faces[iFace].v1 = uBaseN;
-                faces[iFace].v2 = uPrev;
-                faces[iFace].v3 = uBasePN;
-                faces[iFace + 1].v1 = uBasePN;
-                faces[iFace + 1].v2 = uPrev;
-                faces[iFace + 1].v3 = uBase;
+            int base = row + 1 + col * n;
+            unsigned short uBaseN = base + n - 1;
+            unsigned short uPrev = base - 1;
+            if (iFace & 2) {
+                faces[iFace++].Set(uBaseN, uPrev, base + n);
+                faces[iFace++].Set(base + n, uPrev, base);
             } else {
-                faces[iFace].v1 = uPrev;
-                faces[iFace].v2 = uBase;
-                faces[iFace].v3 = uBaseN;
-                faces[iFace + 1].v1 = uBaseN;
-                faces[iFace + 1].v2 = uBase;
-                faces[iFace + 1].v3 = uBasePN;
+                faces[iFace++].Set(uPrev, base, uBaseN);
+                faces[iFace++].Set(uBaseN, base, base + n);
             }
-            iFace += 2;
         }
     }
 
