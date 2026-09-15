@@ -328,6 +328,43 @@ int FFTComplex(float* data, long size, long inverse, float* context) {
 // and it also selects which of the two word-interleave permutes is copied to
 // the `perm_sel` slot -- the forward one builds {s, -s} and the inverse one
 // {-s, s}.
+//
+// RESIDUAL (w8-f, 48.75376 canonical / 45.417294 fuzzy, 648 emitted against
+// 532 in the image).  PARTIAL by construction: the skeleton, the constants,
+// the trig recurrence, the recursion and both tail loops are recovered; the
+// per-iteration register colouring and the stack-slot assignment are not.
+//
+// ⚠ READ THIS BEFORE TUNING.  At this structural distance the canonical
+// number is dominated by how objdiff ALIGNS two ~600-instruction loop
+// bodies, and a one-line source reorder flips the alignment wholesale.  Four
+// changes that are individually justified BY THE LISTING all measured WORSE,
+// every one of them re-measured from a full `ninja` in this worktree:
+//   * moving the eight walking pointers above the sin/cos block, where the
+//     image computes them (0x82E4FE40-0x82E4FE94, between the `lfs 1.0` and
+//     the `fdivs`): 48.30 -> 27.3 alone.
+//   * computing `angle2` AFTER the first sin() call, which is what the image
+//     does (`fmuls f24, f31, f0` at 0x82E4FEB4, between `frsp f13, f1` and
+//     `fmul f13, f13, f13`) and what fft_real_forward_altivec already spells:
+//     48.30 -> 25.56 ALONE.  That is the single most surprising number here.
+//   * all four of {v_zero declared above the scratch block so it is loaded
+//     into the callee-saved v127 before free/malloc, as at 0x82E4FD20; the
+//     body wrapped in `if (ret == 0)` with one return, matching
+//     `mr r3, r31` / `cmpwi cr6, r31, 0` / `bne` at 0x82E4FD94; merge_lo /
+//     merge_hi declared below the sign branch so MSVC reuses perm_sel_inv's
+//     0x90 slot the way the image does at 0x82E4FE50; plus the pointer
+//     hoist} TOGETHER: 48.30 -> 31.3 -- even though that variant is strictly
+//     CLOSER on every structural measure objdiff reports (frame delta -0x10
+//     instead of -0x30, 1 DIFFER / 17 PERMUTED stack slots instead of
+//     6 DIFFER / 18 PERMUTED / 3 base-only, and 115 REGISTER_SWAP
+//     instructions instead of 192).
+// The lesson is that percentage and structural agreement have DECOUPLED
+// here.  Do not read a drop as "that reading of the listing was wrong" --
+// three of those four changes are demonstrably what the image does.  They
+// will pay once the butterfly body itself pairs; until then they only move
+// the alignment.  Judge the next round of work on the structural counters,
+// and re-check the percentage at the end.
+// The one change that paid was the CTR lever, and it paid because it made a
+// BRANCH match rather than moving code: 48.30 -> 48.75.
 int fft_recursive(float* data, unsigned long size, long sign, float* context) {
     XMVECTORU32 perm_sel_fwd = { 0x00010203, 0x10111213, 0x04050607, 0x14151617 };
     XMVECTORU32 perm_sel_inv = { 0x10111213, 0x00010203, 0x14151617, 0x04050607 };
@@ -751,9 +788,27 @@ int fft_recursive(float* data, unsigned long size, long sign, float* context) {
 // the {1,-1,1,-1} vs {-1,1,-1,1} multiplier, the {0,~0,0,~0} vs {~0,0,~0,0}
 // select mask, and which of the two sin-gather permutes is used.
 //
-// PARTIAL: this is a structural reconstruction, not a finished match.  The
-// radix-4 butterfly, the pass/stage skeleton, the four tails and the constant
-// set are recovered; the exact group-loop pointer algebra is not.
+// RESIDUAL (w8-f, 46.934383 canonical / 42.465878 fuzzy, 866 emitted against
+// 762 in the image, 282 delete / 104 insert).  PARTIAL: the radix-4
+// butterfly, the pass/stage skeleton, the four tails and the constant set are
+// recovered; the group-loop pointer algebra is not, and that is where most of
+// the 282 deletes live.
+//
+// ⚠ The same alignment fragility documented on fft_recursive above applies
+// here, and it bit the one large structural fix this function obviously
+// needs.  The biggest single cluster is 79 instructions, ALL delete
+// (idx 213-297): it is the scaled radix-2 tail at 0x82E4EF98, which the image
+// lays out immediately after the stage-loop guard, whereas ours sits at the
+// end of the function.  The image's own branch says so -- `cmpwi cr6, r22,
+// 0x1` / `bne cr6, .L_82E4F084` then `clrlwi. r11, r20, 31` /
+// `beq .L_82E4F428` at 0x82E4F074-0x82E4F080 jumps OUT past the stage body to
+// a block placed after it, so the source leaves the loop by a forward jump,
+// not by falling through.  Reproducing exactly that -- `goto last_radix4`
+// from inside the stage loop, the odd-power radix-2 tail immediately after
+// the loop, and the last-radix-4 block behind a label after `return 0` --
+// measured 46.93 -> 28.72.  Not kept, and NOT refuted as a reading: it moves
+// ~136 instructions at once and the diff realigns badly while the butterfly
+// bodies themselves still disagree.  Revisit it once a stage body pairs.
 int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddle) {
     XMVECTORU32 sel_odd = { 0x00000000, 0xFFFFFFFF, 0x00000000, 0xFFFFFFFF };
     XMVECTORU32 perm_sin_fwd = { 0x04050607, 0x14151617, 0x0C0D0E0F, 0x1C1D1E1F };
