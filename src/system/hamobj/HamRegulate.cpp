@@ -104,6 +104,24 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
     // (`addi r28, r3, 0xf4`) before the mRegulateMode branch and never keeps
     // `character` itself alive past the load -- both arms use the transform.
     const Transform &charXfm = character->LocalXfm();
+    // mWaypoint is an ObjPtr; the image reads its pointer at 0x20(this) three
+    // times (824C5220, 824C533C, and 824C5374 -- a reload after the store
+    // through the float &rotDelta), so there is no reference to the ObjPtr
+    // here, and every arm loads all three components before storing any:
+    // the Set()-shaped Subtract() from math/Vec.h.
+    //
+    // RESIDUAL (w7-bv, 94.2 canonical / 93.4 raw, up from 89.18): the only
+    // rows left are the else arm's interleave after Multiply (824C5338..
+    // 824C539C).  The image issues the posFactor product first, hoists
+    // facing.v.z/y/x (0x88/0x84/0x80) above the rotDelta store and loads
+    // facing.m.x.y late; we hoist facing.m.x.y and load facing.v.z after the
+    // store.  Same instructions, one scheduler ordering.  Refuted spellings:
+    // posFactor before the calls (89.8, held in an FPR across them), the
+    // Clamp before/after rotDelta (neutral), rotDelta as c*d - a*b without
+    // the outer negation (92.0), explicit x/z/y component stores (90.2, a
+    // reload of mWaypoint per component), dx/dz/dy temps then x/z/y stores
+    // (93.3 raw), posDelta = v; posDelta -= facing.v (88.2), Scale() for
+    // the tail (neutral).
     if (mRegulateMode == 1) {
         if (character->Teleported()) {
             const Transform &wpXfm = mWaypoint->WorldXfm();
