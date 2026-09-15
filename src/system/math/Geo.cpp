@@ -7,6 +7,7 @@
 #include "obj\DataFunc.h"
 #include "os\System.h"
 #include "utl/BinStream.h"
+#include "utl/TextStream.h"
 #include <cfloat>
 #include <cmath>
 
@@ -1430,3 +1431,11 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
         out.points = tempPoints;
     }
 }
+
+#ifndef HX_NATIVE
+// w8-g: explicit instantiation of the TextStream vector<> inserter, the 176 B
+// row at 0x825346e0 that ham_xbox_r.map credits to math:Geo.obj.  The w8-e note
+// above concluded only a real `ts << vec` use could emit it; an explicit
+// instantiation is the cheaper test of the same claim.
+template TextStream &operator<<(TextStream &, const std::vector<Vector2> &);
+#endif

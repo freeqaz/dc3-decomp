@@ -167,6 +167,11 @@ inline BinStream &operator>>(BinStream &bs, Vector3 &vec) {
 }
 
 TextStream &operator<<(TextStream &, const Vector3 &);
+// w8-g: the Vector2 twin is defined right beside the Vector3 one in Rot.cpp
+// (both 100%, ham_xbox_r.map -> math:Rot.obj) but was never declared here, so
+// no TU could instantiate `TextStream << std::vector<Vector2>` (Geo.obj,
+// 0x825346e0).
+TextStream &operator<<(TextStream &, const Vector2 &);
 
 // 16-byte padded Vector3 for structs that need XMVECTOR-compatible stride
 struct PaddedJointPos {

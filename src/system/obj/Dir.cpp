@@ -1629,3 +1629,12 @@ void ObjectDir::PostLoad(BinStream &bs) {
         );
     }
 }
+
+#ifndef HX_NATIVE
+// w8-g: ??$__uninitialized_copy@PBVFilePath@@PAV1@@ (96 B) sits at 0x82591ec0,
+// inside this unit's .text split range, but nothing in Dir.cpp odr-uses it.
+// Explicit instantiation of the __false_type overload emits the COMDAT here.
+template FilePath *std::__uninitialized_copy<const FilePath *, FilePath *>(
+    const FilePath *, const FilePath *, FilePath *, const std::__false_type &
+);
+#endif
