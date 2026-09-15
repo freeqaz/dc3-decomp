@@ -659,39 +659,54 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
     return 0;
 }
 
-// RESIDUAL (w7-bp, 91.66 canonical, 652 B, 25 rows, target 0x82491900-82491B8C).
-// No behavioural divergence: both loops' argument sets, the
-// `(mSkeletonBones ? mSkeletonBones + 0x10 : 0)` null-select feeding ScaleAdd,
-// and the 0.0f/weight FPR assignment at 0x82491AB0-B8 all pair exactly.  The
-// 25 rows are three separable backend clusters:
+// RESIDUAL (w7-bs, 98.8 canonical / 98.4 raw, 652 B, 9 rows, target
+// 0x82491900-82491B8C).  Was 91.66 (w7-bp, 25 rows).  Two of w7-bp's three
+// "backend" clusters were source shapes:
 //
-//  (1) EPILOGUE PLACEMENT, 6 rows (target deletes 32-34, our inserts 167-169).
-//      Both sides have exactly ONE epilogue copy and identical block ORDER.
-//      The image puts the three instructions (`addi r1, r31, 0xe0` / two `lfd`)
-//      inline in the `return this` block at 0x82491980, and its last block
-//      (`.L_82491B84: lwz r3, 0x334(r30)`, the `return mNeutralSkelDir`)
-//      branches BACKWARD to it.  We put them in the tail block and branch
-//      forward from `return this`.  MSVC is choosing which of the two
-//      return-value blocks hosts the epilogue; source order of the returns is
-//      already the image's (the first `return this` is the first return in
-//      this function either way), so it is not reachable from that.
+//  (1) EPILOGUE HOST (was 6 rows).  The image hosts the epilogue in the
+//      `return this` block at 0x8249197C-8C and its `return mNeutralSkelDir`
+//      is ONE block at the very end (0x82491B84: `lwz r3, 0x334(r30)` /
+//      `b .L_82491980`) reached by fall-through from the else arm and by
+//      `b .L_82491B84` from the shared map-destructor site 0x82491AF8.  MSVC
+//      hosts the epilogue in the return block that the LAST source-order
+//      fall-through reaches, so `return mNeutralSkelDir;` as the final
+//      statement (every previous spelling) pins it there: 95.1.  Writing
+//      the success paths as `goto neutral;` onto a single
+//      `neutral: return mNeutralSkelDir;` INSIDE the else arm's success
+//      block, with `return this;` as the function's last statement, gives
+//      the image's host and its single return block: 98.8.  Measured
+//      alternatives: per-arm `return mNeutralSkelDir;` with a final
+//      `return this;` hosts the epilogue right but leaves TWO return-value
+//      blocks (96.6; 97.5 once each map's scope is closed before the
+//      return, because the image reads 0x334 AFTER the dtor); inverting the
+//      timing test to `if (clipMap.size() != 0)` flips 0x82491970 to beq
+//      (88.3); explicit `return this;` on the else arm's null/flag tests
+//      plus a final `return this;` breaks the clear cross-jump (93.8); a
+//      trailing `no_clip: return this;` reached by goto is inert (95.1).
 //
-//  (2) THE clipTimingMap LOOP GUARD, 6 rows (target 39-43).  Already refuted
-//      by w7-af -- see the note at the loop itself.  Worth adding what it is:
-//      the image CROSS-JUMPS the guard into the latch (`lwz r29, 0x68(r31)` /
-//      `b .L_824919CC`, straight to the bottom test) while we duplicate the
-//      test at the top.  The sibling loop over mClipWeightMap has the
-//      duplicated guard in the IMAGE too (0x82491A2C-3C), from the same source
-//      spelling, which is the direct evidence that this is per-loop backend
-//      tail-merging and not a shape the source picks.
+//  (2) THE clipTimingMap LOOP GUARD (was 6 rows, "refuted" by w7-af as a
+//      per-loop backend rotation decision).  It was the function-scope
+//      `bones = ...; bones->Zero();` pair on that path: a local assigned and
+//      immediately consumed there kept MSVC from cross-jumping the guard into
+//      the latch.  `mSkeletonBones->Zero()` on that one path restores the
+//      image's `lwz r29, 0x68(r31)` / `b .L_824919CC` at 0x8249199C-A0.
+//      Dropping `bones` on ALL paths loses the hoisted `lwz 0x338 /
+//      addi r3, r11, 0x10` above the `beq` at 0x82491A00-0C (92.6), so the
+//      goto path keeps it.
 //
-//  (3) r26 <-> r27, 7 rows (target 81-91 and 115-120), in the mClipWeightMap
-//      loop only: the image holds the iterator in r27 and `sSkeletonClips` in
-//      r26 (`mr r27, r11` at 0x82491A34 then `addi r26, r11, sSkeletonClips@l`
-//      at 0x82491A4C), we hold them the other way round.  Pure callee-saved
-//      permutation, which the canonical ruler forgives in principle but
-//      objdiff still charges here because the two registers are defined in a
-//      different ORDER, not merely renamed.
+//  Remaining 9 rows, both still open:
+//  (3) r26 <-> r27, 7 rows, mClipWeightMap loop only: the image holds the
+//      iterator in r27 and `sSkeletonClips` in r26 (`mr r27, r11` at
+//      0x82491A34, `addi r26, r11, sSkeletonClips@l` at 0x82491A4C); we hold
+//      them the other way round.  Hoisting the iterator declaration out of
+//      the `for` is inert; indexing with the inline `Property()->Int()`
+//      expression costs a 7th callee-saved register (91.9).
+//  (4) 2 rows at zero_and_scale: the image orders the null-select
+//      `addi r4, r11, 0x10` BEFORE `cmplwi cr6, r11, 0` (0x82491B2C-30) while
+//      the same select at 0x82491A9C-AA0 has cmplwi first (and matches).
+//      Ternary, implicit derived-to-base, and inline
+//      `*static_cast<CharBones *>(mSkeletonBones)` spellings are all
+//      byte-identical.
 ObjectDir *HamCharacter::GetNeutralSkeleton() {
 #ifdef HX_NATIVE
     {
@@ -749,6 +764,7 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
                 }
             }
             mSkeletonBones->Poll();
+            goto neutral;
         } else {
             hamDriver->SetClipWeightMap();
             std::map<CharClip *, float> clipMap(hamDriver->mClipTimingMap);
@@ -760,17 +776,11 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
             if (clipMap.size() == 0) {
                 return this;
             }
-#ifndef HX_NATIVE
-            bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
-#endif
-            bones->Zero();
-            // NEGATIVE RESULT (w7-af): respelling this as a hoisted iterator plus
-            // `while (it != clipMap.end())` is byte-identical to the `for` -- 91.7%
-            // both ways. The residual here is that the image enters the loop with
-            // `b .L_824919CC` (jump straight to the bottom test) while MSVC peels a
-            // guard copy for us; the sibling loop over Driver()->mClipWeightMap has
-            // the peeled guard in the image too, so this is a per-loop backend
-            // rotation decision, not a source shape.
+            mSkeletonBones->Zero();
+            // No `bones` local on this path: `bones = ...; bones->Zero();` here
+            // made MSVC peel a guard copy of the loop test instead of entering
+            // with `b .L_824919CC` (w7-af read that as a backend rotation
+            // decision; w7-bs: it was this pair, see the note above).
             for (std::map<CharClip *, float>::iterator it = clipMap.begin();
                  it != clipMap.end(); ++it) {
                 CharClip *timedClip = it->first;
@@ -780,69 +790,68 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
                 }
             }
             mSkeletonBones->Poll();
+            goto neutral;
         }
     } else {
         CharClip *clip = Driver()->FirstClip();
-        if (clip == nullptr) {
-            return this;
-        }
-        if (clip->Flags() & 1) {
-            return this;
-        }
+        if (clip != nullptr && !(clip->Flags() & 1)) {
 #ifndef HX_NATIVE
-        bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
+            bones = reinterpret_cast<CharBones *>((char *)mSkeletonBones + 0x10);
 #endif
 zero_and_scale:
-        bones->Zero();
-        {
-            CharBones *skBones = mSkeletonBones ? static_cast<CharBones *>(mSkeletonBones) : nullptr;
-            sSkeletonClips[mGender == kHamFemale ? 1 : 0]->ScaleAdd(*skBones, 1.0f, 0.0f, 0.0f);
-        }
-        mSkeletonBones->Poll();
-    }
+            bones->Zero();
+            {
+                CharBones *skBones = mSkeletonBones ? static_cast<CharBones *>(mSkeletonBones) : nullptr;
+                sSkeletonClips[mGender == kHamFemale ? 1 : 0]->ScaleAdd(*skBones, 1.0f, 0.0f, 0.0f);
+            }
+            mSkeletonBones->Poll();
+neutral:
 #ifdef HX_NATIVE
-    {
-        // Diagnostic: confirm the neutral skeleton is a SEPARATE posed dir (not
-        // a collapse onto `this`), and read its neutral ankle Z after posing.
-        // If the neutral ankle is planted (~+4) the IK clamp anchor is good;
-        // if it tracks the dropped live pose the foot will sink.
-        extern int HamDirector_NativeSetFrameCount();
-        static int sNeutralLog = 0;
-        const char *p = PathName(this);
-        bool isMain = p && strstr(p, "main.milo") && !strstr(p, "backup");
-        // Sample during gameplay (frame>3000) AND only the on-screen dancer
-        // (player0), so the neutral-anchor values correlate with the sunk
-        // dancer's ChainZ trace.
-        if (sNeutralLog < 30 && isMain && p && strstr(p, "player0")
-            && HamDirector_NativeSetFrameCount() > 3000) {
-            sNeutralLog++;
-            ObjectDir *nd = mNeutralSkelDir;
-            RndTransformable *nAnkle = nd ?
-                nd->Find<RndTransformable>("bone_L-ankle.mesh", true) : nullptr;
-            RndTransformable *nPelvis = nd ?
-                nd->Find<RndTransformable>("bone_pelvis.mesh", true) : nullptr;
-            RndTransformable *nToe = nd ?
-                nd->Find<RndTransformable>("bone_L-toe.mesh", true) : nullptr;
-            // Live (this) pelvis/toe for the same char.
-            RndTransformable *lPelvis =
-                Find<RndTransformable>("bone_pelvis.mesh", true);
-            RndTransformable *lToe =
-                Find<RndTransformable>("bone_L-toe.mesh", true);
-            fprintf(stderr,
-                "DC3_IK_DIAG GetNeutralSkel[%d] f=%d: char=%s neutralDir=%s "
-                "neutralAnkleWorldZ=%.3f neutralPelvisWorldZ=%.3f "
-                "neutralToeWorldZ=%.3f | livePelvisZ=%.3f liveToeZ=%.3f\n",
-                sNeutralLog, HamDirector_NativeSetFrameCount(), p,
-                nd ? nd->Name() : "(null)",
-                nAnkle ? nAnkle->WorldXfm().v.z : -999.0f,
-                nPelvis ? nPelvis->WorldXfm().v.z : -999.0f,
-                nToe ? nToe->WorldXfm().v.z : -999.0f,
-                lPelvis ? lPelvis->WorldXfm().v.z : -999.0f,
-                lToe ? lToe->WorldXfm().v.z : -999.0f);
+            {
+                // Diagnostic: confirm the neutral skeleton is a SEPARATE posed dir (not
+                // a collapse onto `this`), and read its neutral ankle Z after posing.
+                // If the neutral ankle is planted (~+4) the IK clamp anchor is good;
+                // if it tracks the dropped live pose the foot will sink.
+                extern int HamDirector_NativeSetFrameCount();
+                static int sNeutralLog = 0;
+                const char *p = PathName(this);
+                bool isMain = p && strstr(p, "main.milo") && !strstr(p, "backup");
+                // Sample during gameplay (frame>3000) AND only the on-screen dancer
+                // (player0), so the neutral-anchor values correlate with the sunk
+                // dancer's ChainZ trace.
+                if (sNeutralLog < 30 && isMain && p && strstr(p, "player0")
+                    && HamDirector_NativeSetFrameCount() > 3000) {
+                    sNeutralLog++;
+                    ObjectDir *nd = mNeutralSkelDir;
+                    RndTransformable *nAnkle = nd ?
+                        nd->Find<RndTransformable>("bone_L-ankle.mesh", true) : nullptr;
+                    RndTransformable *nPelvis = nd ?
+                        nd->Find<RndTransformable>("bone_pelvis.mesh", true) : nullptr;
+                    RndTransformable *nToe = nd ?
+                        nd->Find<RndTransformable>("bone_L-toe.mesh", true) : nullptr;
+                    // Live (this) pelvis/toe for the same char.
+                    RndTransformable *lPelvis =
+                        Find<RndTransformable>("bone_pelvis.mesh", true);
+                    RndTransformable *lToe =
+                        Find<RndTransformable>("bone_L-toe.mesh", true);
+                    fprintf(stderr,
+                        "DC3_IK_DIAG GetNeutralSkel[%d] f=%d: char=%s neutralDir=%s "
+                        "neutralAnkleWorldZ=%.3f neutralPelvisWorldZ=%.3f "
+                        "neutralToeWorldZ=%.3f | livePelvisZ=%.3f liveToeZ=%.3f\n",
+                        sNeutralLog, HamDirector_NativeSetFrameCount(), p,
+                        nd ? nd->Name() : "(null)",
+                        nAnkle ? nAnkle->WorldXfm().v.z : -999.0f,
+                        nPelvis ? nPelvis->WorldXfm().v.z : -999.0f,
+                        nToe ? nToe->WorldXfm().v.z : -999.0f,
+                        lPelvis ? lPelvis->WorldXfm().v.z : -999.0f,
+                        lToe ? lToe->WorldXfm().v.z : -999.0f);
+                }
+            }
+#endif
+            return mNeutralSkelDir;
         }
     }
-#endif
-    return mNeutralSkelDir;
+    return this;
 }
 
 void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool notify) {
