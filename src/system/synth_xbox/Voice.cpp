@@ -202,15 +202,31 @@ long Voice::createOrReuse(
     return result;
 }
 
-// RESIDUAL (w7-an, 92.4 canonical): 75 of 454 rows, all one register-allocation
-// cascade plus what MSVC's block layout does with it.  (a) In the STEREO arm we
-// partially-redundancy-eliminate the `*TheXboxSynth` load out of the two
-// `mFxSend ? ... : TheXboxSynth->OutputVoice()` ternaries into r8 and reload it
-// after each call; the image reloads the global inside each arm
-// (0x82E37474/0x82E37494).  The textually identical MONO copy of the same
-// ternary pair (0x82E375C0 on) matches exactly, so this is contextual, not a
-// spelling.  (b) loChannel/hiChannel/&TheDebug are a 3-way rotation of
-// r30/r29/r28 against the image's r28/r30/r29.
+// w7-bu (2026-09-15): 92.4 -> 95.0 canonical, three levers on the MONO arm:
+// (1) the two 0x3d9 asserts are ONE assert on a shared `HRESULT hr = 0`
+// (the image compares it in cr6, 0x82E378F4, where a call result tested in
+// place is cr0 -- compare the 0x37a site at 0x82E3758C -- and the
+// `!unk54` path jumps straight past the assert, 0x82E378A4, because
+// SUCCEEDED(0) folds).  Keeping the per-site `voice` locals matters:
+// `hr = GetVoice()->SetOutputMatrix(...)` swaps this/r24 with the assert
+// string's r25 (92.9), and `hr` assigned in every arm is 91.9.
+// (2) loChannel/loPan/hiChannel/hiPan are declared interleaved: the
+// image materialises the uninitialised set as lwz/lfs/lwz/lfs from 0x50(r1)
+// (0x82E376A4 on).  (3) each pan arm assigns loChannel, loPan, hiChannel,
+// hiPan in that order (0x82E37700-0x82E37780) -- with (2) this also removed
+// the r30/r29/r28 rotation w7-an recorded.
+// RESIDUAL (w7-bu, 95.0, 37 rows): all in the STEREO arm plus the 6 fmuls
+// rows below.  We partially-redundancy-eliminate the `*TheXboxSynth` load out
+// of the two `mFxSend ? ... : TheXboxSynth->OutputVoice()` ternaries into r8
+// (hoisted between the `cmplwi` and its `beq`) and reload it after each call;
+// the image reloads the global inside each arm (0x82E37474/0x82E37494).  The
+// textually identical MONO copy of the same ternary pair (0x82E375C0 on)
+// matches exactly, so this is contextual, not a spelling.  Tied to it: the
+// image lays the cos/sin arm out as the fall-through of the `== 6 || == 2`
+// test (`bne cr6` at 0x82E374F8) and puts the fill-1.0 loop out of line; we
+// do the reverse.  Measured inert for both: stereo/mono as if/else instead of
+// an early return (95.0, and it shrinks the frame by 0x20), and the 6/2 test
+// as a `switch` (95.0, and the compares come out sorted 2-then-6).
 // NEGATIVE RESULT (w7-an, 2026-09-14): the 6 `fmuls` commutative operand rows
 // are NOT reachable from the source -- writing `(float)cos(angle) * mVolume`
 // instead of `mVolume * (float)cos(angle)` at all six sites is byte-for-byte
@@ -276,37 +292,39 @@ void Voice::UpdateMix() {
         levels[i] = 0.0f;
     }
 
-    int loChannel, hiChannel;
-    float loPan, hiPan;
+    int loChannel;
+    float loPan;
+    int hiChannel;
+    float hiPan;
     if (destChannels == 6 || destChannels == 2) {
         if (mPan < -3.0f) {
-            loPan = -3.0f;
             loChannel = 4;
+            loPan = -3.0f;
             hiChannel = 5;
             hiPan = -5.0f;
         } else if (mPan < -1.0f) {
-            loPan = -1.0f;
             loChannel = 0;
+            loPan = -1.0f;
             hiChannel = 4;
             hiPan = -3.0f;
         } else if (mPan < 0.0f) {
-            loPan = -1.0f;
             loChannel = 0;
+            loPan = -1.0f;
             hiChannel = 2;
             hiPan = 0.0f;
         } else if (mPan < 1.0f) {
-            loPan = 0.0f;
             loChannel = 2;
+            loPan = 0.0f;
             hiChannel = 1;
             hiPan = 1.0f;
         } else if (mPan < 3.0f) {
-            loPan = 1.0f;
             loChannel = 1;
+            loPan = 1.0f;
             hiChannel = 5;
             hiPan = 3.0f;
         } else {
-            loPan = 3.0f;
             loChannel = 5;
+            loPan = 3.0f;
             hiChannel = 4;
             hiPan = 5.0f;
         }
@@ -325,23 +343,23 @@ void Voice::UpdateMix() {
         MILO_NOTIFY("Output voice has unexpected number of channels %d", destChannels);
     }
 
+    HRESULT hr = 0;
     if ((mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice()) == nullptr) {
         if (unk54) {
             IXAudio2SourceVoice *voice = GetVoice();
-            HRESULT hr = voice->SetOutputMatrix(nullptr, 1, 6, levels, 0);
-            MILO_ASSERT(SUCCEEDED(hr), 0x3d9);
+            hr = voice->SetOutputMatrix(nullptr, 1, 6, levels, 0);
         }
     } else {
         IXAudio2SourceVoice *voice = GetVoice();
-        HRESULT hr = voice->SetOutputMatrix(
+        hr = voice->SetOutputMatrix(
             mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice(),
             1,
             destChannels,
             levels,
             0
         );
-        MILO_ASSERT(SUCCEEDED(hr), 0x3d9);
     }
+    MILO_ASSERT(SUCCEEDED(hr), 0x3d9);
 
     if (mReverbEnabled && unk48) {
         float reverbRatio = DbToRatio(mReverbMixDb);
