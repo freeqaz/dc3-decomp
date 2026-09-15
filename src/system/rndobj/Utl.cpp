@@ -1047,10 +1047,20 @@ void UtilDrawCigar(
     //    `fadds f0,f24,f0`, we emit `fadds f0,f0,f24`).  MSVC canonicalises fmuls/fadds
     //    operand order from its register assignment, not from the source order, so the
     //    readable order stays.
-    // Also unclosed: idx 94, retail `fmuls f0,f1,f0` + `fadds f27,f0,f24` where we
-    // contract to a single `fmadds f27,f0,f1,f24` despite h1raw/h1 already being
-    // separate statements -- /fp:fast contraction that the statement split does not
-    // block.
+    // w7-bs (2026-09-15): the fmadds row (retail `fmuls f0,f1,f0` + `fadds
+    // f27,f0,f24` at 0x8262D384/D38C) is CLOSED by H2 below -- see the note above
+    // the inner loop.  Two further byte-identical negatives (95.3 canonical, same
+    // 54 rows both times): constructing `end` with its value (`Vector3 end(sLen0 -
+    // radii[0], 0, 0)`) instead of Set(), and declaring `v2` before `v1` in the
+    // inner loop.  What is left on this function after H1/H2 is register and
+    // slot assignment only: `top`/`bottom` at 0x90/0xa0 vs our 0xa0/0x90 (rows
+    // 33-50, which also drags the sLen0 reload and the `fadds f0,f24,f0` operand
+    // order), `v1`/`v2` at 0x70/0x80 vs our 0x80/0x70 (rows 107-127), h0 in f27
+    // vs our f28 with the matching `fmr` placement (rows 79-93), TheRnd's base in
+    // r30 vs our r28 (canonical-forgiven), and the `li` order in the ring-index
+    // loop (rows 153-161).  Both slot pairs are same-sized Vector3 temps that
+    // MSVC assigns by use, not declaration order, and the documented pinned-region
+    // slot order is still unresolved (docs/decomp/patterns/stack-slot-sharing.md).
     Vector3 end;
     Vector3 top;
     Vector3 bottom;
@@ -1064,25 +1074,26 @@ void UtilDrawCigar(
     float anglePi6 = 0.5235987901687622f;
 
     // 18 entries each (3 rings x 6 vertices).  Vector3 carries its own 4-byte
-    // PAD member, so sizeof is 16 and indexing the array directly is what
-    // produces retail's `add r10,r28,r31` / `slwi r29,r10,4`; a float[18*4] with
-    // an index pre-multiplied by 4 lets MSVC fuse the two induction variables
-    // into one byte-stepping counter (addi r30,r30,0x10 / cmpwi r30,0x120).
+    // PAD member, so sizeof is 16.
     //
-    // w7-bo (2026-09-15) CORRECTION: that is describing a state this file is no
-    // longer in.  With the Vector3 indexing exactly as written below, MSVC STILL
-    // fuses: we emit `addi r30,r30,0x10` / `cmpwi cr6,r30,0x120` (idx 131/136) where
-    // retail keeps iLatSum in r28 and recomputes `add r10,r28,r31` / `slwi r29,r10,4`
-    // inside the loop (idx 111/114).  ~10 of the 72 residual rows are this strength
-    // reduction, and it also drives the r27/r28/r29/r30/r31 relabelling that objdiff
-    // reports as 41 REGISTER_SWAP instructions -- retail spends a callee-saved
-    // register on iLatSum, we spend it on the byte cursor.  No source spelling tried
-    // so far blocks it; it is the largest single item left on this function.
+    // w7-bs (2026-09-15), H1: the index is spelled `iIdx * 6 + iLon` and the outer
+    // loop is bounded by `iIdx < 3`.  MSVC strength-reduces `iIdx * 6` into its own
+    // induction variable (retail's r28, stepping by 6, LFTR test `cmpwi r28,0x12`
+    // at 0x8262D410) but does NOT strength-reduce the derived-of-derived `idx`, so
+    // `add r10,r28,r31` / `slwi r29,r10,4` (0x8262D3D0/D3DC) are recomputed per
+    // iteration exactly as retail does.  The earlier `iLatSum` source-level IV was
+    // what let MSVC fuse both loops into one byte cursor (`addi r30,r30,0x10` /
+    // `cmpwi r30,0x120`) -- an IV that already IS the sum has nothing left to
+    // reduce, so it becomes the cursor.  92.31193 -> 95.1 canonical, 72 -> 53 rows.
+    // H2: the apex offsets `sLen0 - h0` / `sLen1 + h1` are written INSIDE the
+    // inner loop (in the Vector3 ctor call).  LICM hoists them to the outer loop
+    // as stand-alone `fsubs`/`fadds` (retail 0x8262D38C `fadds f27,f0,f24`),
+    // which is why retail has no fmadds there; a separate `h1 = h1raw + sLen1`
+    // statement in the outer loop is contracted under /fp:fast.  95.1 -> 95.3.
     Vector3 verts2e0[18];
     Vector3 verts1c0[18];
 
     int iIdx = 0;
-    int iLatSum = 0;
     do {
         float latVal = (float)iIdx * anglePi6;
         float sinLatPi2 = FastSin(latVal + anglePiHalf);
@@ -1095,29 +1106,24 @@ void UtilDrawCigar(
         float sinLatPi2b = FastSin(latVal + anglePiHalf);
         float r1 = sinLatPi2b * radii[1];
         float sinLatb = FastSin(latVal);
-        float h0b = sLen0 - h0;
+        float h1 = sinLatb * radii[1];
         int iLon = 0;
-        // Separate statements: folding these into one expression lets MSVC
-        // contract the pair into a single fmadds, which retail does not do.
-        float h1raw = sinLatb * radii[1];
-        float h1 = h1raw + sLen1;
         do {
             float lonVal = (float)iLon * angle2Pi;
             float sinLon = FastSin((float)iLon * angle2Pi);
             float sinLonPi2 = FastSin(lonVal + anglePiHalf);
-            int idx = iLatSum + iLon;
-            Vector3 v1(h0b, sinLonPi2 * r0, sinLon * r0);
+            int idx = iIdx * 6 + iLon;
+            Vector3 v1(sLen0 - h0, sinLonPi2 * r0, sinLon * r0);
             Multiply(v1, basis, verts1c0[idx]);
             // y takes the cos-phase sine and z the sin-phase one, the same way
             // round as v1 -- retail's stores at 0x74/0x78 read f22 (the
             // lonVal+pi/2 result) then f21 (the plain lonVal result).
-            Vector3 v2(h1, sinLonPi2 * r1, sinLon * r1);
+            Vector3 v2(sLen1 + h1, sinLonPi2 * r1, sinLon * r1);
             Multiply(v2, basis, verts2e0[idx]);
             iLon = iLon + 1;
         } while (iLon < 6);
-        iLatSum = iLatSum + 6;
         iIdx = iIdx + 1;
-    } while (iLatSum < 0x12);
+    } while (iIdx < 3);
 
     int i = 0;
     do {
