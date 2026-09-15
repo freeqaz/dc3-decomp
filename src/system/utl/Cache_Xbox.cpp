@@ -175,8 +175,9 @@ bool CacheXbox::GetFreeSpaceSync(u64 *u) {
         return false;
     } else {
         ULARGE_INTEGER freeBytes = {0};
-        const char *path = mCacheID.GetCachePath(nullptr);
-        if (GetDiskFreeSpaceExA(path, &freeBytes, nullptr, nullptr) == 0U) {
+        if (GetDiskFreeSpaceExA(
+                mCacheID.GetCachePath(nullptr), &freeBytes, nullptr, nullptr
+            ) == 0U) {
             unsigned int err = GetLastError();
             if (err != 0x15 && err != 0x456 && err != 0x48F && err != 0x651
                 && IsDeviceConnected(mCacheID.DeviceID())) {
