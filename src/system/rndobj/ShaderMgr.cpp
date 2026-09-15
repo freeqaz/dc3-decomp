@@ -91,7 +91,20 @@ void RndShaderMgr::UpdateCache(const Transform &xfm, int idx) {
     // Cache pointer - accessing mConstantCache[idx * 12]
     float *p = &mConstantCache[idx * 12];
 
-    // Load transform components - declaration order affects register allocation
+    // Load transform components - declaration order affects register allocation.
+    // FLOOR 99.786 canonical / 98.714 raw (w8-h).  Every store already writes the
+    // CORRECT value; the twelve loads are just coloured into rotated registers.
+    // The image's load order IS the store order -- 0x0, 0x10, 0x20, 0x30, 0x4,
+    // 0x14, 0x24, 0x34, 0x8, 0x18, 0x28, 0x38 into f0, f13, f12, f11, f10, f9, f8,
+    // f7, f6, f5, f4, f3 -- and MSVC does allocate those twelve FPRs strictly in
+    // LOAD order.  MEASURED NEGATIVE: declaring the temps in store order (the
+    // obvious fix) reads 99.571 / 97.429, WORSE, because MSVC sinks the
+    // displacement-0 load (`xfm.m.x.x`) to the END of the load block in every
+    // order tried -- with xx declared 7th it is loaded last, and with xx declared
+    // 1st it is STILL loaded last.  That rotates all twelve registers by one and
+    // turns 6 charged rows into 24.  The scrambled order below is the one that
+    // lands 6 of the 12 loads on the image's register; fixing the row needs
+    // whatever stops the 0x0 load sinking, not a declaration permutation.
     float xz = xfm.m.x.z;
     float yx = xfm.m.y.x;
     float zx = xfm.m.z.x;

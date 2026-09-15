@@ -108,6 +108,14 @@ void SpotlightDrawer::Init() {
     sEnviron = Hmx::Object::New<RndEnviron>();
     sEnviron->SetUseApproxes(false);
     REGISTER_OBJ_FACTORY(SpotlightDrawer)
+    // FLOOR 93.929 canonical (w8-h).  The image stores New()'s result into
+    // sDefault FIRST (stw at 828275E4), writes 0.0f to 0x64 through the
+    // still-live result, then RELOADS sDefault (lwz at 828275F0) for Select();
+    // we store sDefault last and never reload, which swaps the two `lis` and
+    // moves the stw.  MEASURED NEGATIVE (w8-h): naming the global on all three
+    // lines -- `sDefault = New(); sDefault->mParams... = 0.0f; sDefault->
+    // Select();`, the RB3 spelling -- reads 90.357, WORSE: MSVC then emits the
+    // reload but ALSO reloads for the 0.0f store, adding rows.  Reverted.
     SpotlightDrawer* ptr = Hmx::Object::New<SpotlightDrawer>();
     ptr->mParams.mLightingInfluence = 0.0f;
     sDefault = ptr;
@@ -665,13 +673,17 @@ SpotMeshEntry_* vector<SpotMeshEntry_, StlNodeAlloc<SpotMeshEntry_>>::_M_erase(
     if (__next != this->_M_finish) {
         int __count = ((char*)this->_M_finish - (char*)__next) / (int)sizeof(SpotMeshEntry_);
         SpotMeshEntry_* __dst = __pos;
+        // Same shape as the 3-arg overload in SpotlightDrawer_NG.cpp: the image
+        // tests the division result in a volatile and copies it into the
+        // callee-saved loop counter inside the taken branch (`mr r31, r11`).
         if (__count > 0) {
+            int __n = __count;
             do {
                 SpotMeshEntry_* __src = __dst + 1;
                 memcpy(__dst, __src, sizeof(SpotMeshEntry_));
-                __count--;
+                __n--;
                 __dst = __src;
-            } while (__count != 0);
+            } while (__n != 0);
         }
     }
 

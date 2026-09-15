@@ -1063,8 +1063,28 @@ SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
 ) {
     SpotMeshEntry* __pos = __first;
     SpotMeshEntry* __src = __last;
-    int __count = (this->_M_finish - __src) / 0x50;
+    // w8-h BEHAVIOURAL FIX: `_M_finish - __src` is a POINTER difference between
+    // two SpotMeshEntry*, so it is already an element count -- the compiler
+    // emits the /0x50 itself.  The explicit `/ 0x50` divided a second time.
+    // Proof in the listings: the target's _M_erase (SpotlightDrawer_NG.s:4852)
+    // has exactly ONE `divw.` (the recording one feeding its `ble`); we emitted
+    // an extra `divw r10, r10, r11` ahead of it.  With the double divide,
+    // __count is (finish-last)/80 instead of (finish-last), so any erase with
+    // fewer than 80 elements following __last took __count <= 0, skipped the
+    // shift loop entirely, and still ran `_M_finish = __pos` -- silently
+    // discarding the tail instead of moving it down.
+    int __count = this->_M_finish - __src;
 
+    // FLOOR 95.833 canonical / 93.958 fuzzy (w8-h).  One real row left: the
+    // image tests the division result in a VOLATILE (`divw. r11`) and copies it
+    // into the callee-saved loop counter inside the taken branch (`mr r29,
+    // r11`); we let the allocator write divw. straight into r30.  The other 8
+    // rows are the r27<->r28 / r29<->r30 renaming that follows.  MEASURED
+    // NEGATIVE (w8-h): `int __n = __count;` inside the if -- the lever that
+    // takes the SINGLE-position overload in SpotlightDrawer.cpp from 96.429 to
+    // 100.0 -- reads 91.667 HERE, worse.  The two overloads want opposite
+    // spellings: this one has three values live across the memcpy (this, first,
+    // src) and the extra name costs a fourth callee-saved register.
     if (__count > 0) {
         do {
             memcpy(__pos, __src, 0x50);

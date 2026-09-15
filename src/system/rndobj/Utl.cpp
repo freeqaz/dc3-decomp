@@ -821,6 +821,13 @@ void SortXfms(RndMultiMesh *mesh, const Vector3 &vec) {
     mesh->InvalidateProxies();
 }
 
+// FLOOR 99.931 canonical / 97.690 raw (w8-h).  The residual is six FPR
+// permutations (f0/f10/f13) plus the r4-side 0x38/0x3c load order.  MEASURED
+// NEGATIVE: re-associating mesh2's sum to mirror mesh1's -- `y*y + (z*z + x*x)`,
+// which reproduces the image's fmuls-then-two-fmadds accumulation shape on paper
+// -- reads 99.931 canonical but 94.4 raw, i.e. it ADDS an OFFSET_SWAP of
+// (0x34,0x3c) and four register swaps.  Under /fp:fast MSVC re-associates the
+// flat sum itself, so the parenthesisation below is not what selects the order.
 bool XfmSort(RndMultiMesh::Instance &mesh1, RndMultiMesh::Instance &mesh2) {
     return (mesh1.mXfm.v.y - gUtlXfms.y) * (mesh1.mXfm.v.y - gUtlXfms.y)
             + ((mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)
@@ -2224,6 +2231,19 @@ const char *ResourceFileCacheHelper::CacheFile(const char *cc) {
     return CacheResource(cc, (const Hmx::Object *)0);
 }
 
+// FLOOR 89.613 canonical / 86.226 fuzzy for the _M_find<Edge> row (124 B) that
+// this operator is the callee of (w8-h).  Every one of its 18 diff_arg rows is
+// the same substitution: the image holds the tree node pointers in CALLEE-SAVED
+// r28-r31 and brackets the body with `bl __savegprlr_28` / `b __restgprlr_28`
+// (2 more rows, and a 0x80 vs 0x60 frame); we keep them in VOLATILE r5-r8
+// across both `bl ??MEdge` and inline the prologue.  Volatiles surviving a call
+// is MSVC's same-TU callee register-usage propagation: it only does that when
+// the callee's register usage is already known, i.e. when this definition has
+// been compiled.  MEASURED NEGATIVE (w8-h): moving this definition BELOW
+// TessellateMesh (the only std::set<Edge>::find user in the TU) is byte-inert,
+// 89.613 unchanged -- MSVC's propagation is not source-order sensitive for a
+// template instantiation, so compile order is NOT the discriminator.  The
+// remaining hypothesis is that the image compiled the two in different TUs.
 #ifndef HX_NATIVE
 bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
     unsigned short aMax = v1, aMin = v0;

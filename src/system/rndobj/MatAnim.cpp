@@ -9,6 +9,17 @@
 
 Hmx::Object *RndMatAnim::sOwner;
 
+// FLOOR 89.500 canonical (w8-h).  The 13 instructions of the inlined
+// ObjPtr<RndTex>(DeferOwner(), tex) are identical; the residual is a 2-instruction
+// permutation of the join block with the SAME multiset on both sides.  The image
+// anchors sOwner first and starts its load BEFORE the compiler-generated vtable
+// store (`lis r11, sOwner@h` / `lis r10, ??_7TexPtr@h` / addi / lwz / stw r10,
+// 0(r3) / stw r11, 0x10(r3)); we anchor the vtable first and sink the load after
+// the store.  The r10<->r11 swap is downstream -- whichever anchor is emitted
+// first takes r11 on both sides.  Same values, same offsets, no behavioural
+// divergence.  MEASURED NEGATIVE (w8-h): a named temp for the global,
+// `Hmx::Object *owner = sOwner; mOwner = owner;`, is byte-inert (89.500,
+// identical instruction table) -- the same folding w7-ac recorded for this TU.
 RndMatAnim::TexPtr::TexPtr(RndTex *tex) : ObjPtr<RndTex>(DeferOwner(), tex) {
     mOwner = sOwner;
 }

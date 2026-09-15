@@ -11,6 +11,28 @@
 // colour-key append path the image uses as a literal `push_back`; note the
 // sibling ??$?6VVector2@...BinStream at 826d4508 is also contributed by this
 // object, which is consistent with the load/save path here being vector-shaped.
+//
+// w8-h 2026-09-15, ADJUDICATED: this is the discarded-function ORPHAN
+// INSTANTIATION shape, not a missing append path.  MeshAnim.s defines
+// push_back<Hmx::Color> at 826d5788 but contains NO `bl` to it anywhere; the
+// only three call sites in the whole image are world/Crowd.s:8997, :10651 and
+// world/ColorPalette.s:1504.  Its own callee
+// _M_insert_overflow_aux<Hmx::Color> is NOT defined in this object either (the
+// three _M_insert_overflow_aux COMDATs here are all for the OUTER
+// vector<Key<...>>).  So MSVC instantiated push_back through an
+// external-linkage function in this TU and /OPT:REF then discarded that
+// function -- its name is not recoverable from the binary.  Per
+// docs pattern "orphan instantiation from a discarded function", an
+// unreferenced EXTERNAL-linkage stand-in reproduces the COMDAT exactly and a
+// `static` one does nothing (MSVC drops a static before instantiating inside
+// it).  The name below is a stand-in, not the shipped name.
+#ifndef HX_NATIVE
+void MeshAnimAppendVertColorKey(
+    std::vector<Hmx::Color> &colors, const Hmx::Color &color
+) {
+    colors.push_back(color);
+}
+#endif
 
 #pragma region Hmx::Object
 

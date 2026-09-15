@@ -363,6 +363,19 @@ void DxShaderMgr::SetPConstant(PShaderConstant psc, int i) {
     D3DDevice_SetPixelShaderConstantI(TheDxRnd.Device(), psc, &i, 1);
 }
 
+// FLOOR 70.0 canonical / 69.5 raw, and SetPConstant(PShaderConstant, const Vector4 &)
+// below is the same row for the same reason (w8-h).  One instruction carries the
+// whole gap: the image computes `start` with `srwi r8,r4,2` (a 32-bit rlwinm),
+// we emit `rldicl r8,r4,62,34`, which is MSVC fusing the same 32-bit shift with
+// the zero-extension its 64-bit consumer (`srd r9,r7,r8`) needs.  The three
+// scheduling rows (`addi r10,r4,0x78` hoisted to slot 2, `li r11,1` sunk) all
+// hang off that one dependency-chain difference.  MEASURED NEGATIVE: spelling it
+// as the file's own `ShaderConstantDirtyMask(vsc)` helper -- whose `unsigned int
+// reg` parameter was the hypothesis for what keeps the shift 32-bit -- is
+// BYTE-INERT (70.000 / 69.545, identical instruction table).  Note SetVConstant4x3
+// DOES get `srwi` (0x8261BA98) from the two-argument helper, but only because
+// `start` there has a SECOND, 32-bit use in the `span` subtraction; with a single
+// use feeding `srd`, MSVC always fuses.
 void DxShaderMgr::SetVConstant(VShaderConstant vsc, const Vector4 &v) {
     D3DDevice *dev = TheDxRnd.Device();
     float x = v.x, y = v.y, z = v.z, w = v.w;

@@ -724,6 +724,16 @@ void Spotlight::SetColor(int packed) {
 // games genuinely diverge here and RB3 is not a reference for this function.
 void Spotlight::SetIntensity(float f) { SetColorIntensity(Color(), f); }
 
+// FLOOR for ?SetColor@Spotlight@@IAAXH@Z: 94.091 canonical (w8-h).  SetColor's
+// whole 8-byte shortfall is two instructions inside THIS body after inlining:
+// the image keeps `mr r11, r9` (82827E14) and a DEAD `addi r9, r11, 0x1b0`
+// (82827E24); MSVC drops that address temp when it inlines into SetColor, where
+// `color` is a non-escaping local.  Standalone this function is already 100.0%
+// and DOES emit the same dead addi (82827D90), so the source shape is right and
+// only the inliner differs.  MEASURED NEGATIVE (w8-h): binding the destination
+// here -- `Hmx::Color &dst = mColorOwner->mColor; dst = c;` -- leaves SetColor
+// at 94.091 unchanged and drops Spotlight::SyncProperty 99.829 -> 99.744.
+// Reverted.  Call-site respellings were already refuted by the note at ~222.
 void Spotlight::SetColorIntensity(const Hmx::Color &c, float f) {
     mColorOwner->mColor = c;
     mColorOwner->mIntensity = f;
