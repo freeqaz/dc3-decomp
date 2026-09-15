@@ -1198,3 +1198,9 @@ void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
     }
 }
 #endif // HX_NATIVE
+
+// w8-c: see the note in CharBonesMeshes.cpp.  Character.obj's out-of-line
+// `PropSync<RndDrawable>(RndDrawable *&, ...)` is at 0x823534D0 in
+// build/373307D9/asm/system/char/Character.s (its EH region table is the
+// `.rel` block at lbl_8200AF58) and has no caller in the unit.
+template bool PropSync<RndDrawable>(RndDrawable *&, DataNode &, DataArray *, int, PropOp);

@@ -236,3 +236,9 @@ void Waypoint::ShapeDeltaBox(const Vector3 &v1, float f1, float f2, Vector3 &res
             res *= 1.0f - (f1 / sqrtf(lensq));
     }
 }
+
+// w8-c: see the note in CharBonesMeshes.cpp.  Waypoint.obj's out-of-line
+// `PropSync<Waypoint>(Waypoint *&, ...)` is at 0x823CC908 in
+// build/373307D9/asm/system/char/Waypoint.s and has no caller in the unit --
+// retail inlined both ObjPtrVec call sites and still emitted the COMDAT.
+template bool PropSync<Waypoint>(Waypoint *&, DataNode &, DataArray *, int, PropOp);

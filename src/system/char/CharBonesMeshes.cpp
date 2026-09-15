@@ -225,3 +225,17 @@ END_PROPSYNCS
 void CharBonesMeshes::Init() { sDummyMesh = Hmx::Object::New<RndTransformable>(); }
 
 void CharBonesMeshes::Terminate() {}
+
+// w8-c: the image's CharBonesMeshes.obj carries an out-of-line
+// `PropSync<RndTransformable>(RndTransformable *&, ...)` COMDAT (264 B, at
+// 0x8234D0F8 in build/373307D9/asm/system/char/CharBonesMeshes.s) that NOTHING
+// in the TU calls -- retail's ObjPtrVec PropSync inlines the two call sites
+// (the asserts at line 0x66 appear inline inside
+// `??$PropSync@VRndTransformable@@@@YA_NAAV?$ObjPtrVec@...`), and MSVC emits the
+// instantiation anyway.  We build at /O1 (=> /Ob1), where MSVC declines to
+// expand it even when the template is marked `inline`, so writing the call
+// instead of the hand-inlined body costs the enclosing function 100.0 -> 68.0
+// while gaining this row: measured, net -4,344 B on the headline.  An explicit
+// instantiation buys the COMDAT with no code change at all.
+template bool
+PropSync<RndTransformable>(RndTransformable *&, DataNode &, DataArray *, int, PropOp);
