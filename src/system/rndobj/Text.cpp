@@ -2256,49 +2256,68 @@ void RndText::ConstructMeshes(
     }
 }
 
-/** w7-bo (2026-09-15) SURVEYED at 95.269 canonical / 93.667 fuzzy, 310 rows:
- *  222 equal / 72 diff_arg / 4 replace / 4 insert / 8 delete.  d38f2cb34 took
- *  this 87.1 -> 95.3; no further source change made, and here is why:
+/** w7-bs (2026-09-15): 95.267975 -> 100.0 canonical, 306/306 rows equal, fuzzy
+ *  100.0 (raw 99.9 is the lbl_82F14D14-vs-gSuperscriptScale relocation addend).
+ *  Each lever below was attributed by reverting it alone from the 100% state:
  *
- *  72 of the 88 mismatched rows are ONE callee-saved relabelling.  The image
- *  opens `mr r29, r3` / `mr r28, r5` (this -> r29, &state -> r28); we open
- *  `mr r27, r3` / `mr r29, r5` (this -> r27, &state -> r29).  Same prologue,
- *  same register count -- r28<->r29 alone accounts for 27 instructions, and
- *  every `0x34(r28)` / `0x3c(r28)` / `stfs 0x0(r28)` row downstream is that
- *  same substitution.  The 1.6pp gap between canonical and fuzzy is exactly
- *  this being partly forgiven.
+ *  - `mStyles` spelled directly instead of through a reference local
+ *    (`auto& _ref0 = mStyles;`): 55 rows.  The reference made MSVC hold
+ *    `this`/`&state`/`font` in r27/r29/r29 instead of r29/r28/r27 AND emit no
+ *    copy of mStyles.begin -- the image copies it (`mr r11, r9` at 0x82695B4C
+ *    and 0x82695BE8) because size() and the [i] address are two mentions of
+ *    _M_start that the allocator keeps apart.
+ *  - `bool isClosing = *++cur == 0x2f;` (was an unsigned int of the same
+ *    value): the image computes `extrwi. r11` and copies to r24 (0x82695800);
+ *    the unsigned spelling wrote r24 directly.  2 rows.
+ *  - <gtr>: no `Style *style = state.mStyle;` local -- each arm reads
+ *    `state.mStyle->` itself.  With the local, the 0x34(r28) load is scheduled
+ *    above `addi r31,r31,6` / the gSuperscriptScale address (0x8269587C/5880)
+ *    and the else-arm loads mSize before gGuitarScale (0x82695898/589C).
+ *    10 rows.  Writing `gGuitarScale * mSize` was byte-inert (commutative
+ *    operand order is register-driven, re-confirmed).
+ *  - <color> closing: `memcpy(&state.mTextColor, &state.mStyle->mTextColor,
+ *    sizeof(Hmx::Color))` -- the image forms BOTH addresses as dead temps
+ *    (`addi r11,r28,4` / `addi r11,r10,4` at 0x82695944/5948) before the
+ *    four-word copy; a struct assignment forms only the source's, and going
+ *    through a `Hmx::Color &dst` reference was inert.  10 rows.
+ *  - <color> open: `int r = 0, g = 0, b = 0;` and the four stores written
+ *    red, green, blue, alpha.  The image has &r=0x58, &g=0x60, &b=0x68
+ *    (swscanf args at 0x82695998-59A4) -- the slot order follows the order of
+ *    the later STORE statements, not the declaration order (r,g,b and b,g,r
+ *    declarations both gave r=0x68 while the stores were blue-first); the
+ *    declaration order only sets the zero-store order (0x82695978-5988).
+ *    6 rows.
+ *  - <alt>: `if (mStyles.size() <= 1) styleIdx = 0;` and `if (isClosing)
+ *    styleIdx = 0;` -- both if-converted late, so `and r30,r10,r30`
+ *    (0x82695B60) keeps styleIdx as an operand instead of folding the
+ *    constant 1 into `clrlwi`, and the second gives the `subic r11,r24,1` /
+ *    `subfe r8,r11,r11` mask (0x82695BD4/5BE0) where `-(isClosing == 0)`
+ *    gave cntlzw/extrwi/neg.
+ *  - <alt>: the font fallback is a ternary on the ObjPtrs, `s->mFont ?
+ *    s->mFont : mStyles[0].mFont` (both sites).  The conditional yields an
+ *    ObjPtr lvalue, so the image forms `addi r11,rX,0x34` in each arm and
+ *    reads the pointer at 0xc off the join (0x82695B78-5B84, 0x82695C44-5C4C);
+ *    a `Style *` select folds to one `lwz 0x40`.
+ *  - <alt>: `chosen->mBlacklight || bBlacklight` written directly as the
+ *    second FontMapIndex argument: MSVC evaluates arguments right to left, so
+ *    the || lands before the font select and straight into r5 (0x82695C28/
+ *    5C30); a `bool blacklight` local added a `clrlwi r5,r10,24` normalise.
  *
- *  The genuinely structural rows, all small and all scheduling:
- *    - idx 10/11: the image computes `extrwi. r11, r11, 1, 26` and then
- *      copies `mr r24, r11`, keeping the unmasked word alive; we write the
- *      mask straight into r24 and save the copy.  (1 row, BOOL_MASK.)
- *    - idx 42-47: `addi r31, r31, 0x6` (the six-wide-char markup skip) is
- *      hoisted above the gSuperscriptScale address formation in the image and
- *      sunk below it for us; the paired `lbl_82F14D14` vs `gSuperscriptScale`
- *      is the usual named-static-vs-label relocation noise.
- *    - idx 51-53: the two gSuperscriptScale elements (0x0 and 0x4) are loaded
- *      in the opposite order, taking the idx 53 `fmuls` operands with them.
- *    - idx 94/95: the image forms `addi r11, r28, 0x4` AND `addi r11, r10,
- *      0x4` where we form one -- a second base for the 0x4/0x8/0xc struct
- *      copy that follows.
- *  The idx 290 `lwz r11, 0xc` vs `0x14` row renders in run_objdiff's resolved
- *  block as RndText::mWrapEnabled; that block ignores the base register and r11
- *  holds different things on the two sides here, so it is NOT a wrong-field
- *  finding -- do not chase it as one. */
+ *  The idx 290 `lwz r11, 0xc` vs `0x14` row w7-bo saw was the ObjPtr ternary
+ *  above, not a wrong field. */
 const unsigned short *
 RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned short &ch) {
     // The cursor IS the parameter -- the image promotes r4 straight into r31
     // (`mr r31, r4`) and folds the pre-increment into `lhzu r11, 0x2(r31)`.
     // A separate `const unsigned short *cur = str;` local makes MSVC keep str in
     // r4 and emit `lhz r11, 0x2(r4)` + a lazy `addi r31, r4, 0x2` instead.
-    unsigned int isClosing = (unsigned int)(*++cur - 0x2f) == 0;
+    bool isClosing = *++cur == 0x2f;
     if (isClosing) {
         cur++;
     }
     ch = 0;
 
     float fVar12;
-    auto& _ref0 = mStyles;
 #ifdef HX_NATIVE
     if (WStrniCmp(cur, kTag_sup, 3) == 0) {
 #else
@@ -2321,12 +2340,11 @@ RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned shor
     else if (WStrniCmp(cur, (const unsigned short *)L"gtr", 3) == 0) {
 #endif
         cur += 3;
-        Style *style = state.mStyle;
         float scale;
         if (isClosing) {
-            scale = style->mSize;
+            scale = state.mStyle->mSize;
         } else {
-            scale = style->mSize * gGuitarScale;
+            scale = state.mStyle->mSize * gGuitarScale;
         }
         state.mSize = state.mBaseSize * scale;
         // if/else, NOT `zOff = gGuitarZOffset; if (isClosing) zOff = ...`: the image
@@ -2335,7 +2353,7 @@ RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned shor
         // the seeded form loads gGuitarZOffset unconditionally before the branch.
         float zOff;
         if (isClosing) {
-            zOff = style->mZOffset;
+            zOff = state.mStyle->mZOffset;
         } else {
             zOff = gGuitarZOffset;
         }
@@ -2360,12 +2378,13 @@ RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned shor
 #endif
         cur += 5;
         if (isClosing) {
-                        state.mTextColor = state.mStyle->mTextColor;
+            memcpy(&state.mTextColor, &state.mStyle->mTextColor, sizeof(Hmx::Color));
         } else {
-            // Declared blue-first: MSVC lays the three out in reverse declaration
-            // order, and the image's swscanf out-params are &r=0x58, &g=0x60,
-            // &b=0x68 (r5/r6/r7 at .L_82695998).
-            int b = 0, g = 0, r = 0;
+            // Declared r,g,b and STORED red-first below: the image's swscanf
+            // out-params are &r=0x58, &g=0x60, &b=0x68 (r5/r6/r7 at .L_82695998),
+            // and it is the store order, not the declaration order, that picks
+            // those slots (see the function note).
+            int r = 0, g = 0, b = 0;
             int a = (int)(state.mTextColor.alpha * 255.999f);
             cur++;
 #ifdef HX_NATIVE
@@ -2375,9 +2394,9 @@ RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned shor
 #else
             swscanf((const wchar_t *)cur, L"%d %d %d %d", &r, &g, &b, &a);
 #endif
-            state.mTextColor.blue = (float)b * (1.0f / 255.0f);
-            state.mTextColor.green = (float)g * (1.0f / 255.0f);
             state.mTextColor.red = (float)r * (1.0f / 255.0f);
+            state.mTextColor.green = (float)g * (1.0f / 255.0f);
+            state.mTextColor.blue = (float)b * (1.0f / 255.0f);
             state.mTextColor.alpha = (float)a * (1.0f / 255.0f);
         }
     }
@@ -2433,16 +2452,14 @@ RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned shor
             cur++;
         } else if ((markupChar == 0x62) || (markupChar == 0x42)) {
             bBlacklight = true;
-            // `styleIdx &= ...`, not a ternary: the image emits `and r30, r10, r30`
-            // at .L_82695b60 (styleIdx AND the 0/1 size predicate), where the
-            // ternary lowers to `clrlwi r29, r10, 31`.
-            styleIdx &= (unsigned int)(1 < (unsigned int)_ref0.size());
-            Style *fallback = &_ref0[0];
-            Style *stylePtr = &_ref0[styleIdx];
-            if (stylePtr->mFont != nullptr) {
-                fallback = stylePtr;
+            // An `if`, not `&=` or a ternary: the image emits `and r30, r10, r30`
+            // at .L_82695b60 with styleIdx still an operand; the value forms
+            // fold the known 1 into `clrlwi r30, r10, 31`.
+            if ((unsigned int)mStyles.size() <= 1) {
+                styleIdx = 0;
             }
-            RndFontBase *font = fallback->mFont;
+            Style *stylePtr = &mStyles[styleIdx];
+            RndFontBase *font = stylePtr->mFont ? stylePtr->mFont : mStyles[0].mFont;
             if (font != nullptr) {
                 if (FontMapIndex(font, true) == -1) {
                     FontMapBase *fm = AcquireFontMap(font);
@@ -2453,17 +2470,19 @@ RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned shor
             cur++;
         }
 
-        styleIdx = styleIdx & -(isClosing == 0);
+        if (isClosing) {
+            styleIdx = 0;
+        }
 
         // The INDEX is clamped, not the pointer: the image computes the address
         // once (`mulli r10, r10, 0x4c` / `add r4, r10, r11` at .L_82695c04) after a
         // branchless `subfc`/`subfe`/`and` select of the index, where a
         // pointer-valued if/else lowers to a real `cmplw`/`bge` and two addresses.
-        unsigned int numStyles = (unsigned int)_ref0.size();
+        unsigned int numStyles = (unsigned int)mStyles.size();
         if (styleIdx >= numStyles) {
             styleIdx = 0;
         }
-        state.mStyle = &_ref0[styleIdx];
+        state.mStyle = &mStyles[styleIdx];
 
         memcpy(&state, state.mStyle, 0x34);
 
@@ -2476,16 +2495,15 @@ RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned shor
         //
         // BUG FIX: the no-font fallback does NOT write back to state.mStyle. The
         // image keeps state.mStyle pointing at the selected style and only
-        // substitutes _ref0[0] for the FontMapIndex argument (.L_82695c40 loads
+        // substitutes mStyles[0] for the FontMapIndex argument (.L_82695c40 loads
         // mStyles.begin into r11 and falls into the shared `addi r11, r11, 0x34` /
         // `lwz r4, 0xc(r11)`; there is no `stw` to 0x34(r28) on that path). We were
         // clobbering state.mStyle, which changed every later tag in the same run.
         Style *chosen = state.mStyle;
-        bool blacklight = chosen->mBlacklight || bBlacklight;
-        if (!chosen->mFont) {
-            chosen = &_ref0[0];
-        }
-        state.mFontMapIdx = FontMapIndex(chosen->mFont, blacklight);
+        state.mFontMapIdx = FontMapIndex(
+            chosen->mFont ? chosen->mFont : mStyles[0].mFont,
+            chosen->mBlacklight || bBlacklight
+        );
 
         fVar12 = state.mSize;
         goto set_size;
