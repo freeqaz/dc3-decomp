@@ -10,7 +10,6 @@
 class PlaylistSongProvider : public UIListProvider, public Hmx::Object {
 public:
     // UIListProvider
-    virtual ~PlaylistSongProvider();
     virtual DataNode Handle(DataArray *, bool);
     virtual void Text(int, int, UIListLabel *, UILabel *) const;
     virtual Symbol DataSymbol(int) const;
