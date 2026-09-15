@@ -79,8 +79,12 @@ namespace {
 // read for any other layout, so the native port uses the honest spelling.
 #ifdef HX_NATIVE
 #define HOLMES_SHARE_NAME (gShareName)
+#define HOLMES_MACHINE_NAME (gMachineName)
 #else
 #define HOLMES_SHARE_NAME (&gMachineName[NETBIOS_NAME_MAX])
+// w8-g: the other direction of the same layout accident -- see
+// HolmesSetFileShare, where the target anchors on gShareName instead.
+#define HOLMES_MACHINE_NAME (&gShareName[-NETBIOS_NAME_MAX])
 #endif
 
     Holmes::Protocol gPendingResponse = Holmes::kInvalidOpcode;
@@ -580,7 +584,12 @@ int HolmesClientDelete(const char *cc) {
 const char *HolmesFileShare() { return gShareName; }
 
 void HolmesSetFileShare(const char *machine, const char *share) {
-    strncpy(gMachineName, machine, NETBIOS_NAME_MAX);
+    // w8-g: the target anchors ONE base register on gShareName here and reaches
+    // gMachineName backwards from it (`subi r3, r31, 0x40` at 0x825c4bd4), the
+    // mirror image of the HolmesClientInitOpcode case documented above.  Two
+    // plain symbol names make MSVC materialize two independent addresses, so
+    // the machine-name site has to be spelled relative to gShareName.
+    strncpy(HOLMES_MACHINE_NAME, machine, NETBIOS_NAME_MAX);
     strncpy(gShareName, share, NETBIOS_NAME_MAX);
 }
 
