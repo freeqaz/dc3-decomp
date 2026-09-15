@@ -33,7 +33,16 @@
 extern int lbl_82F0E8A4;
 
 #ifndef HX_NATIVE
-// w8-b EXPERIMENT: orphan vector<Symbol> copy-construct instantiation probe.
+// w8-b: orphan-instantiation anchor, and the body MUST be an ASSIGNMENT.
+// 0x824EAD60 is an ICF fold of two _M_allocate_and_copy spellings: map 45453 has
+// the PAVSymbol (non-const source) one in hamobj:HollaBackMinigame.obj, map 45452
+// the PBVSymbol (const source) one in hamobj:HamNavList.obj, both at 0x824EAD60.
+// symbols.txt names the folded address with the PBV spelling, so this object has
+// to define the CONST-source instantiation to pair at all.  Refuted spelling:
+// `std::vector<Symbol> copy(src);` emits only the PAV variant and left the row at
+// 0%.  stl/_vector.c:170 is why -- `operator=` is the one path that reaches
+// _M_allocate_and_copy through __CONST_CAST(const_pointer, __x._M_start);
+// reserve() and the copy ctor both pass the non-const _M_start.
 void Dc3W8bHollaProbe(const std::vector<Symbol> &src, std::vector<Symbol> &dst) { dst = src; }
 #endif
 

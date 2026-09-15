@@ -24,7 +24,14 @@
 float HamMove::sMinFrameDistBeats = 0.2;
 
 #ifndef HX_NATIVE
-// w8-b EXPERIMENT: orphan MakeString instantiation probe.
+// w8-b: orphan-instantiation anchor.  ham_xbox_r.map line 43563 puts
+// ??$MakeString@PBDPBDH@@YAPBDPBDABQBD1ABH@Z at 0x824AFEA8 in hamobj:HamMove.obj,
+// but no surviving call in HamMove reaches a MakeString("...%s...%s...%d..."):
+// the caller was /OPT:REF'd away and only the instantiation was linked.  An
+// unreferenced EXTERNAL function re-creates it.  `static` does NOT -- measured on
+// this exact probe: adding `static` costs exactly 1 function / 92 B binary-wide
+// (31246/5546312 -> 31245/5546220), i.e. MSVC discards a static before it
+// instantiates anything it mentions.  Deleting it likewise takes the row to 0%.
 const char *Dc3W8bHamMoveProbe(const char *a, const char *b, int c) {
     return MakeString("%s %s %d", a, b, c);
 }

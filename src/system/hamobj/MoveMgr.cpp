@@ -24,7 +24,11 @@ MoveMgr *TheMoveMgr;
 #include <climits>
 
 #ifndef HX_NATIVE
-// w8-b EXPERIMENT: orphan MakeString instantiation probe.
+// w8-b: orphan-instantiation anchor.  ham_xbox_r.map line 42162 puts
+// ??$MakeString@HPBDPBD@@YAPBDPBDABHABQBD2@Z at 0x8245F500 in hamobj:MoveMgr.obj
+// with no surviving caller -- the odr-use was compiled here and then dropped by
+// /OPT:REF.  An unreferenced EXTERNAL function reinstates the instantiation;
+// `static` does not (MSVC discards it before instantiating).  100% -> 0% without.
 const char *Dc3W8bMoveMgrProbe(int a, const char *b, const char *c) {
     return MakeString("%d %s %s", a, b, c);
 }
