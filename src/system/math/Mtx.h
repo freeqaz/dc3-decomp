@@ -124,7 +124,13 @@ namespace Hmx {
 
     public:
         Matrix4() {}
-        Matrix4(const Transform &);
+        // w8-e: defined here, not out-of-line in mtx.cpp.  ham_xbox_r.map lists
+        // ??0Matrix4@Hmx@@QAA@ABVTransform@@@Z once, flagged `i` (COMDAT) and
+        // contributed by rnddx9:Rnd.obj at 0x82610B38 -- an out-of-line
+        // definition in mtx.cpp would have been flagged `f` and contributed by
+        // math:mtx.obj, and build/373307D9/asm/system/math/mtx.s does not
+        // mention the symbol at all.  Ten target units name it.
+        Matrix4(const Transform &tf);
         Matrix4(const Vector4 &v1, const Vector4 &v2, const Vector4 &v3, const Vector4 &v4)
             : x(v1), y(v2), z(v3), w(v4) {}
 
@@ -322,6 +328,25 @@ public:
 
     static const Transform &IDXfm() { return sID; }
 };
+
+inline Hmx::Matrix4::Matrix4(const Transform &tf) {
+    x.x = tf.m.x.x;
+    x.y = tf.m.x.y;
+    x.z = tf.m.x.z;
+    x.w = 0.0f;
+    y.x = tf.m.y.x;
+    y.y = tf.m.y.y;
+    y.z = tf.m.y.z;
+    y.w = 0.0f;
+    z.x = tf.m.z.x;
+    z.y = tf.m.z.y;
+    z.z = tf.m.z.z;
+    z.w = 0.0f;
+    w.x = tf.v.x;
+    w.y = tf.v.y;
+    w.z = tf.v.z;
+    w.w = 1.0f;
+}
 
 inline void Interp(const Transform &a, const Transform &b, float t, Transform &dst) {
     Interp(a.v, b.v, t, dst.v);
