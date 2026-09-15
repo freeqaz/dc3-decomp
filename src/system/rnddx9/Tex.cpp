@@ -84,6 +84,21 @@ XGHierarchicalZSize(UINT Width, UINT Height, D3DMULTISAMPLE_TYPE MultiSample) {
     return alignedWidth * alignedHeight / 0x200;
 }
 
+// Hi-Z tile count for a depth surface: an inline whose by-value parameters
+// are overwritten with their aligned values.  w7-bt: this is what homes the
+// 16-aligned height to 0x88 in the depth path (0x82C0D8xx `stw r11, 0x88`) --
+// the write to `Height` materialises the parameter's slot, and the CSE with
+// the colour-tile `(h + 15) & ~15` in the enclosing block gives it a second
+// use (the same rule leaves `Width`, used once, in a register).  96.2 -> 97.6
+// canonical, 110 -> 68 rows.  Refuted: the same treatment for the tile count
+// (a `SurfaceTiles(w, h, fmt)` inline with written params, both paths) is
+// 97.1 -- the colour path then re-schedules its `stw r11, 0x94` / `mr r27`.
+static inline UINT HierarchicalZTiles(UINT Width, UINT Height) {
+    Width = (Width + 31) & ~31;
+    Height = (Height + 15) & ~15;
+    return Width * Height / 0x200;
+}
+
 // Thin by-value wrapper: its inlined parameters are what the image homes to
 // the frame just before each D3DDevice_CreateSurface call.
 static inline D3DSurface *CreateEdramSurface(
@@ -653,11 +668,12 @@ void DxTex::ResetSurfaces() {
 //      PhysMemTypeTracker at 0x84; ours is the pure swap (tracker 0x80, A 0x84),
 //      ~14 rows of displacement.  Declaring d3dcaps / params / colorTiles /
 //      hzTiles at function top is byte-inert; so is a `D3DTexture *tex` local.
-//  (b) the depth path: 0x82C0D8xx computes the 16-aligned height early and
-//      homes it (`stw r11, 0x88`) where we compute it late and keep it in a
-//      register; a textual duplicate of `(h + 15) & ~15` is worse (95.6), and
-//      helper bodies without the width/height copies, or an align-8 spelling,
-//      are byte-inert.
+//  (b) CLOSED by w7-bt (97.6 canonical, 68 rows): the depth path's early,
+//      homed 16-aligned height (`stw r11, 0x88`) is the written by-value
+//      `Height` parameter of an inlined hi-Z helper -- see HierarchicalZTiles
+//      above.  A textual duplicate of `(h + 15) & ~15` is worse (95.6), and
+//      helper bodies that copy their params into locals instead of writing
+//      them are byte-inert.
 //  (c) prologue constant order (`ori r24` / `li r25, 0x1400` / `lis r22`) and
 //      `stw r11, 0x94` (the tile count's home store) landing before, not after,
 //      `mr r27, r11`.
@@ -799,7 +815,7 @@ void DxTex::SyncBitmap() {
                     bytesPerPixel = 8;
                 }
                 tiles = colorTiles + alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
-                hzTiles = (((UINT)mWidth + 31) & ~31) * alignedHeight / 0x200;
+                hzTiles = HierarchicalZTiles(mWidth, mHeight);
             }
             if (tiles < 0x800 && hzTiles < 0xe10) {
                 if (sEDRamChecksEnabled
