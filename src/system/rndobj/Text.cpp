@@ -780,6 +780,38 @@ struct WrapPoint {
     bool isHardBreak;
 };
 
+/** w7-bo (2026-09-15) SURVEYED at 94.759 canonical / 93.234 fuzzy, 687 rows:
+ *  489 equal / 160 diff_arg / 2 diff_op / 3 replace / 12 insert / 21 delete.
+ *  No source change -- the residual is ONE cause and it is not spellable from
+ *  inside this function's statements:
+ *
+ *  185 of the 198 mismatched instructions are REGISTER_SWAP across 22 pairs,
+ *  and the pairs are a permutation of the CALLEE-SAVED file, not of scratch:
+ *  r30<->r27 and r27<->r26 at the very first `mr` rows (idx 6, 12, 26), then
+ *  the same two substitutions propagate through every member access for the
+ *  rest of the function.  The image parks `this` in r30 and the wps cursor in
+ *  r27; we park them in r27 and r26.  Same register COUNT, same prologue --
+ *  it is a relabelling, which is why canonical (94.76) sits 1.5pp above fuzzy
+ *  (93.23).
+ *
+ *  Two things that LOOK like defects and are not, both checked instruction by
+ *  instruction so the next lane does not re-open them:
+ *    - idx 94/96 render as an off-by-one constant (`li r25,0x1`+`li r27,0x0`
+ *      against `li r25,0x0`+`li r24,0x1`).  Both sides set one register to 1
+ *      and one to 0; only WHICH register differs.  objdiff paired them
+ *      crosswise.  Not an off-by-one.
+ *    - idx 352/354/357 render as the image storing a byte at 0x15 that we
+ *      never store (`stb r11, 0x15(r10)` at 0x8954 against our
+ *      `stb r11, 0x14(r10)`).  The 0x18-stride struct there is the local
+ *      `wps` array, whose two bools are isLineEnd (0x14) and isHardBreak
+ *      (0x15), and the three-store group is the
+ *      `nxt->isLineEnd = true; nxt->isHardBreak = true;
+ *       wps[bestWp].isLineEnd = false;` triple below -- we emit all three,
+ *      just scheduled differently, so no field is missing.
+ *
+ *  Remaining named rows beyond the relabelling: 6 OFFSET_SWAPs dominated by
+ *  (0x0,0xc) x2, 5 address relocations, and the idx 536 slwi whose operand is
+ *  r9 in the image and r11 for us (same value, different producer). */
 void RndText::WrapText(
     const unsigned short *wideChars, int wLen, float *charWidths,
     HX_VECTOR(Line) &lines, Hmx::Rect &bounds, float scale
@@ -2205,6 +2237,35 @@ void RndText::ConstructMeshes(
     }
 }
 
+/** w7-bo (2026-09-15) SURVEYED at 95.269 canonical / 93.667 fuzzy, 310 rows:
+ *  222 equal / 72 diff_arg / 4 replace / 4 insert / 8 delete.  d38f2cb34 took
+ *  this 87.1 -> 95.3; no further source change made, and here is why:
+ *
+ *  72 of the 88 mismatched rows are ONE callee-saved relabelling.  The image
+ *  opens `mr r29, r3` / `mr r28, r5` (this -> r29, &state -> r28); we open
+ *  `mr r27, r3` / `mr r29, r5` (this -> r27, &state -> r29).  Same prologue,
+ *  same register count -- r28<->r29 alone accounts for 27 instructions, and
+ *  every `0x34(r28)` / `0x3c(r28)` / `stfs 0x0(r28)` row downstream is that
+ *  same substitution.  The 1.6pp gap between canonical and fuzzy is exactly
+ *  this being partly forgiven.
+ *
+ *  The genuinely structural rows, all small and all scheduling:
+ *    - idx 10/11: the image computes `extrwi. r11, r11, 1, 26` and then
+ *      copies `mr r24, r11`, keeping the unmasked word alive; we write the
+ *      mask straight into r24 and save the copy.  (1 row, BOOL_MASK.)
+ *    - idx 42-47: `addi r31, r31, 0x6` (the six-wide-char markup skip) is
+ *      hoisted above the gSuperscriptScale address formation in the image and
+ *      sunk below it for us; the paired `lbl_82F14D14` vs `gSuperscriptScale`
+ *      is the usual named-static-vs-label relocation noise.
+ *    - idx 51-53: the two gSuperscriptScale elements (0x0 and 0x4) are loaded
+ *      in the opposite order, taking the idx 53 `fmuls` operands with them.
+ *    - idx 94/95: the image forms `addi r11, r28, 0x4` AND `addi r11, r10,
+ *      0x4` where we form one -- a second base for the 0x4/0x8/0xc struct
+ *      copy that follows.
+ *  The idx 290 `lwz r11, 0xc` vs `0x14` row renders in run_objdiff's resolved
+ *  block as RndText::mWrapEnabled; that block ignores the base register and r11
+ *  holds different things on the two sides here, so it is NOT a wrong-field
+ *  finding -- do not chase it as one. */
 const unsigned short *
 RndText::ParseMarkup(const unsigned short *cur, StyleState &state, unsigned short &ch) {
     // The cursor IS the parameter -- the image promotes r4 straight into r31
@@ -2816,6 +2877,23 @@ void RndText::FontMap3d::CleanupSyncMeshes() {
     }
 }
 
+/** w7-bo (2026-09-15) SURVEYED at 94.607 canonical / 93.606 fuzzy, 260 rows:
+ *  203 equal / 43 diff_arg / 1 replace / 6 insert / 7 delete.  No source
+ *  change; the two largest residuals are already refuted below (the z1
+ *  fnmsubs contraction and the `fmr f26` AspectRatio park).  What was NOT
+ *  attributed before:
+ *    - 47 of the 57 rows are an FPR relabelling shifted by exactly one
+ *      (image f27/f28/f29/f30 where we use f26/f27/f28/f29, from idx 6
+ *      onward).  Same FPR count, same prologue.  It is downstream of the
+ *      `fmr f26, f0` at idx 77 that the image emits and we do not -- the
+ *      image keeps a second copy of state.mSize alive, which pushes every
+ *      later callee-saved FPR up one.
+ *    - the last 6 rows (idx 181-190) are the 4-word copy
+ *      `pg.mVertStart[3].color = state.mTextColor;`.  Both sides emit four
+ *      lwz/stw pairs over the same addresses (src 0x10..0x1c, dst
+ *      0x130..0x13c); the image runs them ascending from 0x130, we start at
+ *      0x13c and wrap.  A rotation of one whole-struct copy, no field wrong.
+ */
 void RndText::FontMap::SetupCharacter(
     unsigned short charCode,
     float &xPos,
