@@ -417,10 +417,13 @@ int fft_recursive(float* data, unsigned long size, long sign, float* context) {
     float* hiWrite = hiRead;
     float* hiWriteBack = hiReadBack;
 
-    unsigned int count = size >> 4;
+    // w8-f: the bound is written INLINE in each condition -- as a local it is a
+    // provable trip count and MSVC converts to CTR (mtctr/bdnz), where the image
+    // keeps `addi r11, r11, 0x1` / `cmplw cr6, r11, r22` / `blt` (0x82E5014C,
+    // 0x82E5015C, 0x82E50190).  Same lever as CalculateSinCosTable above.
 
     if (sign == -1) {
-        for (unsigned int i = 0; i < count; ++i) {
+        for (unsigned int i = 0; i < (size >> 4); ++i) {
             XMVECTOR hiA = __lvx(hiRead, 0);
             XMVECTOR loA = __lvx(loRead, 0);
             XMVECTOR loB = __lvx(loReadBack, 0);
@@ -537,7 +540,7 @@ int fft_recursive(float* data, unsigned long size, long sign, float* context) {
         // (0x82E50198 loads __vmx@3f000000.. and each of the four loads gets a
         // `vmaddcfp128 vN, v0, v127`).
         XMVECTOR v_half = { 0.5f, 0.5f, 0.5f, 0.5f };
-        for (unsigned int i = 0; i < count; ++i) {
+        for (unsigned int i = 0; i < (size >> 4); ++i) {
             XMVECTOR loA = __vmaddfp(v_half, __lvx(loRead, 0), v_zero);
             XMVECTOR hiA = __vmaddfp(v_half, __lvx(hiRead, 0), v_zero);
             XMVECTOR loB = __vmaddfp(v_half, __lvx(loReadBack, 0), v_zero);
@@ -661,7 +664,7 @@ int fft_recursive(float* data, unsigned long size, long sign, float* context) {
     float* scratch = (float*)g_fftScratch.buf;
     float* copySrc = data;
     float* copyDst = scratch;
-    for (unsigned int i = 0; i < count; ++i) {
+    for (unsigned int i = 0; i < (size >> 4); ++i) {
         XMVECTOR c0 = __lvx(copySrc, 0);
         copySrc += 4;
         XMVECTOR c1v = __lvx(copySrc, 0);
