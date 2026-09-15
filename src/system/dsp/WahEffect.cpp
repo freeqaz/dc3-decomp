@@ -53,8 +53,14 @@ void WahEffect::SetParameters(WahEffect::Params const &params) {
 // build/373307D9/icf_aliases.map, because MakeString's array-bound template
 // parameters never reach the generated code and every instantiation of that
 // shape is byte-identical.  The name objdiff shows is just whichever
-// instantiation won the fold.  (The indexed-vs-auto-update addressing floor at
-// 93.29% is recorded in-body below and in d23473cc4; not re-attempted.)
+// instantiation won the fold.  (w7-bh's "indexed-vs-auto-update addressing
+// floor" at 93.29% was the `sampleIdx += numChans` spelling; `i * numChans + ch`
+// reaches the indexed form -- see w7-bx notes in the body.  RESIDUAL at 99.0:
+// callee-saved homing of the three parameters (image r28/r30/r27 = buf /
+// numSamples / numChans, ours r29/r27/r28) and of the sample base (r29 vs
+// r30), the f12/f13 colouring of `1 - newFreq` vs mGain at 0x82E5A1A0-1C0,
+// and the `fmuls f29, f17, f17` slot after `bl cos`; declaring i above the
+// guard, hoisting mGain into a local, and `out * gain` are all byte-identical.)
 void WahEffect::Process(float *buf, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x34);
 
@@ -133,7 +139,20 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
         float f20 = -4.2704245e-9f;   // 0xb192bb0d (negative)
         float f22 = 0.99958f;         // 0x3f7fe47a
 
-        int sampleIdx = 0;
+        // w7-bx: the image's inner loop is INDEXED -- `add r8, r29, r10` /
+        // `slwi r7, r8, 2` / `lfsx f12, r7, r28` (0x82E5A214-0x82E5A230) and
+        // `stfsx f12, r7, r28` (0x82E5A270) -- with r29 advanced by
+        // `add r29, r29, r27` (0x82E5A280) each sample.  That is
+        // `buf[i * numChans + ch]`: MSVC strength-reduces i*numChans to the
+        // r29 += numChans walker but will not fold the second-level
+        // `(i*numChans) + ch` into a pointer walk.  Spelling the index as a
+        // running `sampleIdx += numChans` (w7-bh's form) makes the whole
+        // subscript a reducible IV and yields the `stfsu f12, 0x4(r10)` /
+        // `add r30, r28, r30` pointer walk (93.3); `unsigned` sampleIdx is
+        // identical.  The countdown on numSamples (`subic. r30, r30, 0x1`,
+        // 0x82E5A278) is kept as a separate decrement: a counting
+        // `i < numSamples` loop keeps i live and costs r25 (94.1).
+        int i = 0;
 
         do {
             // Compute sin of phase
@@ -196,32 +215,32 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
             feedback = feedback * sinVal2;
 
             // Process channels
+            int ch = 0;
             if (numChans > 0) {
                 float f13_gain = f21 + f31;
 
-                for (int ch = 0; ch < numChans; ch++) {
-                    // NEGATIVE RESULT (93.287%, unchanged to five figures).
-                    // These were `*(float *)((char *)stack50 + ch * 4)` -- a
-                    // decompiler artifact -- on the theory that the byte-offset
-                    // form would stop MSVC strength-reducing the walk. It does
-                    // not: plain subscripting scores identically, so the
-                    // readable spelling is kept. The image addresses both state
-                    // arrays with indexed loads and stores off a recomputed
-                    // `slwi r7, r8, 2` (`lfsx f12, r7, r28` / `stfsx f12, r7, r28`
-                    // in build/373307D9/asm/src/system/dsp/WahEffect.s) where
-                    // MSVC gives us an auto-updating `stfsu f12, 0x4(r10)` with
-                    // `add r30, r28, r30`; neither spelling of the subscript
-                    // reaches the indexed form.
-                    float sample = buf[sampleIdx + ch];
+                for (; ch < numChans; ch++) {
+                    // w7-bx: `ch` is declared above the `numChans > 0` guard
+                    // because the image sets `li r10, 0x0` (0x82E5A1F4) BEFORE
+                    // `cmpwi cr6, r27, 0x0`.  (w7-bh's byte-offset
+                    // `*(float *)((char *)stack50 + ch * 4)` spelling of the
+                    // state arrays was a no-op; plain subscripts are kept.)
+                    float sample = buf[i * numChans + ch];
                     mLastInput = sample;
                     float state1 = stack50[ch];
                     float state2 = stack58[ch];
 
                     stack58[ch] = state1;
 
-                    // Biquad filter
-                    float tmp1 = sample * feedback;
-                    tmp1 = state1 * f28_scaled + tmp1;
+                    // Biquad filter.  Under /fp:fast the source order of the
+                    // two products is the OPPOSITE of the image's: the image
+                    // does `fmuls f11, f12(sample), f0(feedback)` at
+                    // 0x82E5A238 and then `fmadds f11, f10(state1), f28, f11`
+                    // at 0x82E5A24C; writing sample*feedback first emits
+                    // state1*f28 first and hoists the state1 load above the
+                    // buf load (w7-bx).
+                    float tmp1 = state1 * f28_scaled;
+                    tmp1 = sample * feedback + tmp1;
                     tmp1 = tmp1 - state2 * f29;
                     stack50[ch] = tmp1;
 
@@ -233,14 +252,14 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
                     out = out / absOut;
 
                     mLastOutput = out;
-                    buf[sampleIdx + ch] = out;
+                    buf[i * numChans + ch] = out;
                 }
             }
 
             // Update phase
             numSamples--;
             f27 = f18 + f27;
-            sampleIdx += numChans;
+            i++;
         } while (numSamples != 0);
     }
 
