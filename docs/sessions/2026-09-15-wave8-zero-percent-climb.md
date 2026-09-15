@@ -82,6 +82,23 @@ one unit, 85 of them already carrying an AT_LIMIT certificate and 36 never
 adjudicated at all. Phase 3 holds 94 % of the remaining bytes, and 664 of its
 721 rows are already above 90 %.
 
+## Finding 3: a better phase-3 derivation than band times size
+
+Wave 7 ended saying the band-by-size frontier was exhausted and the next wave
+needed a different derivation. Here is one, measured at wave-8 dispatch:
+
+| shape | units | bytes to close |
+|---|---:|---:|
+| units needing exactly **one** more function | 151 | 120,288 |
+| units needing one **or two** | 218 | 201,572 |
+
+That is 218 of the 344 incomplete authorable units, and closing them moves the
+complete-units metric (currently 623 / 967) rather than fractions of a
+percentage point. The single-function list is saved at
+`~/tmp/dc3-wells/w8/unit-completions.txt`, sorted by size — it opens with an
+8-byte row in `zlib/zutil` and a 24-byte funclet in `jpeg/jcmaster`, and 4 of
+the 20 cheapest are already above 99 %.
+
 ## Pending measurement correction
 
 `scripts/authorable.py` counts the 65 link-glue-only rows in the authorable
