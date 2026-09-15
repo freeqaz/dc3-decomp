@@ -544,6 +544,21 @@ LiveCameraInput::LiveCameraInput()
     // Deletes [110]/[111] are the image's `b` over a `lwz r25, 0x54(r31)`
     // reload on the `!kinectArr` path above; it spills and reloads a value
     // across that join where our build keeps it in a register.
+    // w7-bs (2026-09-15): two more loop spellings measured against the same
+    // rows, neither reaches the image's GPR-counted form:
+    //   - six explicit `mStreams[i].field = ...` stores (no `cur` reference):
+    //     BYTE-IDENTICAL, 98.4 -- MSVC folds the six addresses into the one
+    //     stwu cursor exactly as it folds `verts[i*4+k]` in
+    //     Spotlight::BuildBeam;
+    //   - `Buffer *cur = mStreams; int n = kBufferNum; do { cur->... ; cur++; }
+    //     while (--n);` -- still `mtctr`/`stwu`/`bdnz` (MSVC converts the
+    //     explicit down-counter to CTR anyway), and it keeps `&mStreams[0]` in
+    //     r23 for reuse at idx 247 (`mr r8, r23` where the image re-materialises
+    //     `addi r8, r30, 0x1448`): 98.3.
+    // The image's `li r10, 4` / `subic. r10, r10, 1` / `bne` (0x3d48-0x3d68 in
+    // the diff, a GPR counter alongside the +0xc-biased pointer) is therefore
+    // not a source-order or a reference-vs-index choice; nothing here makes
+    // MSVC decline the CTR conversion it applies to the mTexClips loop above.
     for (int i = 0; i < kBufferNum; i++) {
         Buffer &cur = mStreams[i];
         cur.mHandle = nullptr;

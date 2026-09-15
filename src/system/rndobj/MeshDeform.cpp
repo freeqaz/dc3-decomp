@@ -99,59 +99,39 @@ BEGIN_LOADS(RndMeshDeform)
     }
     bs >> mMeshInverse;
     // how NOT to check against the identity matrix.
-    // The accumulator is a u8 rather than a bool on purpose: `mSkipInverse` is a
-    // bool, and a bool->bool assignment lets MSVC fuse the last conjunction's
-    // 0/1 materialisation straight into the `stb`. The target does NOT fuse --
-    // it re-tests the accumulator and re-materialises 0/1 before the store,
-    // which is the u8->bool conversion (96.152 -> 97.2). Behaviour is identical:
-    // an `&&` chain yields 0 or 1 either way.
     //
-    // REFUTED (measured, do not re-try): rewriting the three continuation lines
-    // as `if (isIdentity) isIdentity = ...;` to try to buy the target's
-    // jump-threading -- the target sends groups 1-3's false exits straight to
-    // the shared `li r11,0` while we walk each subsequent test. Identical
-    // canonical 97.2 and two MORE register rows (63 -> 65 diff_arg, a 5th swap
-    // pair). The threading is a backend choice here, not a source shape.
-    //
-    // RESIDUAL (w7-bp): 97.20089 canonical (95.5 raw), 896 B, 226/226
-    // instructions.  Unmoved.  Two charged clusters remain and I could reach
-    // neither from source:
-    //   [175]-[180] the image tests the accumulator and branches BEFORE it
-    //     materialises the 1.0 literal (`clrlwi.` / `beq` at idx 175/176, then
-    //     `lis`/`lfs __real@3f800000`); our build hoists the constant-pool load
-    //     above the short-circuit guard.  2 insert / 2 delete.
-    //   [218]-[221] the u8 -> bool normalisation at the final store.  The image
-    //     BRANCHES -- `clrlwi.` (record bit) / `li r11, 0x1` / `bne` /
-    //     `li r11, 0x0` -- where we emit the branchless mask idiom
-    //     `clrlwi` (no record bit) / `subic` / `subfe`.
-    //   MEASURED NEGATIVES for that second cluster, both against 97.20089:
-    //     `if (isIdentity) mSkipInverse = true; else mSkipInverse = false;`
-    //         -> 94.1 canonical, and it grew the frame by 0x10 and flipped the
-    //            prologue to r23-r31.  Much worse; do not retry.
-    //     `mSkipInverse = isIdentity ? true : false;`  -> byte-INERT, 97.2 and
-    //            the identical 71 rows.
-    // No behavioural divergence: the && chain yields 0 or 1 either way.
-    // NEGATIVE, and an instructive one (w7-bp).  Binding
-    // `const Hmx::Matrix3 &m = mMeshInverse.m;` and reading all nine elements
-    // through it collapses the diff from 71 rows to 19 and lifts raw 95.50 ->
-    // 96.82 / fuzzy 95.549 -> 96.871 -- but CANONICAL goes DOWN, 97.20089 ->
-    // 97.18304, because canonical forgives the 60 register rows it removes and
-    // charges the 6 offset rows it adds.  The image is genuinely inconsistent
-    // here: it reads the x row off a cached &mMeshInverse base (`lfs f13,
-    // 0x0(r30)`, target idx 179 -- the address `bs >> mMeshInverse` left in
-    // r30) and the y and z rows off `this` (`0x50/0x54/0x58(r27)` and
-    // `0x60/0x64/0x68(r27)`, idx 194-213).  Spelling every element through
-    // `mMeshInverse.m` reproduces the y/z half, which is six of the nine.
-    // Keep this spelling; do not "clean it up" with a reference.
-    unsigned char isIdentity =
-        mMeshInverse.v.x == 0 && mMeshInverse.v.y == 0 && mMeshInverse.v.z == 0;
-    isIdentity = isIdentity && mMeshInverse.m.x.x == 1 && mMeshInverse.m.x.y == 0
-        && mMeshInverse.m.x.z == 0;
-    isIdentity = isIdentity && mMeshInverse.m.y.x == 0 && mMeshInverse.m.y.y == 1
-        && mMeshInverse.m.y.z == 0;
-    isIdentity = isIdentity && mMeshInverse.m.z.x == 0 && mMeshInverse.m.z.y == 0
-        && mMeshInverse.m.z.z == 1;
-    mSkipInverse = isIdentity;
+    // MATCHED (w7-bs, 97.20089 -> 100.0 canonical, 99.96 raw, 896 B, 224/224
+    // rows equal).  The image is four INLINED Vector3::operator== calls
+    // (Vec.h: `x == v.x && y == v.y && z == v.z`) joined by one `&&` and
+    // assigned straight to the bool, and every one of the recorded residuals
+    // was that shape:
+    //   - each row's compare ends in `li r11,1 / fcmpu / beq / li r11,0 /
+    //     clrlwi. r11,r11,24 / beq END` (0x826DAAE4-AAF8 etc.): the inlined
+    //     operator materialises its bool result, then the OUTER `&&` tests it;
+    //   - all the false exits thread to ONE `li r11,0` at 0x826DABA4 because
+    //     the whole thing is a single expression, and the last operand is
+    //     re-materialised as the expression's value (`clrlwi.` / `li r11,1` /
+    //     `bne` at 0x826DAB98-A0) -- that is the "u8 -> bool normalisation"
+    //     w7-bp saw, and the branch-before-`lfs __real@3f800000` at
+    //     0x826DAAF4-AB04 follows from the threaded CFG (the 1.0 literal is
+    //     only needed on the fall-through path);
+    //   - the x row reads `0x0/0x4/0x8(r30)` off the cached &mMeshInverse
+    //     while v/y/z read off `this` because the inlined operator's `this`
+    //     is `&m.x` = this+0x40, which CSEs with the `bs >> mMeshInverse`
+    //     argument; `&m.y`/`&m.z` were derived from r30 (+0x10/+0x20) for the
+    //     `>>` calls, not from `this`, so their reads fold to this+0x50/0x60.
+    //     w7-bp's `const Hmx::Matrix3 &m` binding put y/z through the pointer
+    //     too, which is why it charged 6 offset rows.
+    //   - the register permutation (r27<->r30 etc., 63 rows) was the same
+    //     thing: with one expression `this` is only live in the compares and
+    //     lands in r27, below the three callee-saved temporaries.
+    // Superseded, do not re-derive: the u8 accumulator split into four
+    // statements (97.2), `if (isIdentity) isIdentity = ...` (97.2, more
+    // rows), `if/else` store (94.1), `? true : false` (inert), the Matrix3
+    // reference (97.18).  Behaviour is identical: an exact identity test.
+    mSkipInverse = mMeshInverse.v == Vector3(0, 0, 0)
+        && mMeshInverse.m.x == Vector3(1, 0, 0) && mMeshInverse.m.y == Vector3(0, 1, 0)
+        && mMeshInverse.m.z == Vector3(0, 0, 1);
 END_LOADS
 
 void RndMeshDeform::PreSave(BinStream &bs) {

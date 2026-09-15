@@ -368,7 +368,14 @@ float AngleBetween(const Hmx::Quat &q1, const Hmx::Quat &q2) {
     }
 }
 
-bool BadUV(Vector2 &v) {
+// `inline` is load-bearing for the one caller, ComputeFaceTangentBasis: an
+// out-of-line same-TU BadUV lets MSVC keep the caller's vertex pointers in
+// volatile r7-r9 across the three calls (it knows this body touches only
+// r3/r10/r11), where the image saves them in r29-r31.  The image's compiler
+// had no usable register summary for BadUV, which is what an inline (pick-any
+// COMDAT) definition gives.  The body is still emitted out of line and matches
+// 100.0 (46 rows) either way.  w7-bs, 2026-09-15.
+inline bool BadUV(Vector2 &v) {
     bool xIsNaN = v.x != v.x;
     if (xIsNaN)
         return true;
@@ -1040,10 +1047,20 @@ void UtilDrawCigar(
     //    `fadds f0,f24,f0`, we emit `fadds f0,f0,f24`).  MSVC canonicalises fmuls/fadds
     //    operand order from its register assignment, not from the source order, so the
     //    readable order stays.
-    // Also unclosed: idx 94, retail `fmuls f0,f1,f0` + `fadds f27,f0,f24` where we
-    // contract to a single `fmadds f27,f0,f1,f24` despite h1raw/h1 already being
-    // separate statements -- /fp:fast contraction that the statement split does not
-    // block.
+    // w7-bs (2026-09-15): the fmadds row (retail `fmuls f0,f1,f0` + `fadds
+    // f27,f0,f24` at 0x8262D384/D38C) is CLOSED by H2 below -- see the note above
+    // the inner loop.  Two further byte-identical negatives (95.3 canonical, same
+    // 54 rows both times): constructing `end` with its value (`Vector3 end(sLen0 -
+    // radii[0], 0, 0)`) instead of Set(), and declaring `v2` before `v1` in the
+    // inner loop.  What is left on this function after H1/H2 is register and
+    // slot assignment only: `top`/`bottom` at 0x90/0xa0 vs our 0xa0/0x90 (rows
+    // 33-50, which also drags the sLen0 reload and the `fadds f0,f24,f0` operand
+    // order), `v1`/`v2` at 0x70/0x80 vs our 0x80/0x70 (rows 107-127), h0 in f27
+    // vs our f28 with the matching `fmr` placement (rows 79-93), TheRnd's base in
+    // r30 vs our r28 (canonical-forgiven), and the `li` order in the ring-index
+    // loop (rows 153-161).  Both slot pairs are same-sized Vector3 temps that
+    // MSVC assigns by use, not declaration order, and the documented pinned-region
+    // slot order is still unresolved (docs/decomp/patterns/stack-slot-sharing.md).
     Vector3 end;
     Vector3 top;
     Vector3 bottom;
@@ -1057,25 +1074,26 @@ void UtilDrawCigar(
     float anglePi6 = 0.5235987901687622f;
 
     // 18 entries each (3 rings x 6 vertices).  Vector3 carries its own 4-byte
-    // PAD member, so sizeof is 16 and indexing the array directly is what
-    // produces retail's `add r10,r28,r31` / `slwi r29,r10,4`; a float[18*4] with
-    // an index pre-multiplied by 4 lets MSVC fuse the two induction variables
-    // into one byte-stepping counter (addi r30,r30,0x10 / cmpwi r30,0x120).
+    // PAD member, so sizeof is 16.
     //
-    // w7-bo (2026-09-15) CORRECTION: that is describing a state this file is no
-    // longer in.  With the Vector3 indexing exactly as written below, MSVC STILL
-    // fuses: we emit `addi r30,r30,0x10` / `cmpwi cr6,r30,0x120` (idx 131/136) where
-    // retail keeps iLatSum in r28 and recomputes `add r10,r28,r31` / `slwi r29,r10,4`
-    // inside the loop (idx 111/114).  ~10 of the 72 residual rows are this strength
-    // reduction, and it also drives the r27/r28/r29/r30/r31 relabelling that objdiff
-    // reports as 41 REGISTER_SWAP instructions -- retail spends a callee-saved
-    // register on iLatSum, we spend it on the byte cursor.  No source spelling tried
-    // so far blocks it; it is the largest single item left on this function.
+    // w7-bs (2026-09-15), H1: the index is spelled `iIdx * 6 + iLon` and the outer
+    // loop is bounded by `iIdx < 3`.  MSVC strength-reduces `iIdx * 6` into its own
+    // induction variable (retail's r28, stepping by 6, LFTR test `cmpwi r28,0x12`
+    // at 0x8262D410) but does NOT strength-reduce the derived-of-derived `idx`, so
+    // `add r10,r28,r31` / `slwi r29,r10,4` (0x8262D3D0/D3DC) are recomputed per
+    // iteration exactly as retail does.  The earlier `iLatSum` source-level IV was
+    // what let MSVC fuse both loops into one byte cursor (`addi r30,r30,0x10` /
+    // `cmpwi r30,0x120`) -- an IV that already IS the sum has nothing left to
+    // reduce, so it becomes the cursor.  92.31193 -> 95.1 canonical, 72 -> 53 rows.
+    // H2: the apex offsets `sLen0 - h0` / `sLen1 + h1` are written INSIDE the
+    // inner loop (in the Vector3 ctor call).  LICM hoists them to the outer loop
+    // as stand-alone `fsubs`/`fadds` (retail 0x8262D38C `fadds f27,f0,f24`),
+    // which is why retail has no fmadds there; a separate `h1 = h1raw + sLen1`
+    // statement in the outer loop is contracted under /fp:fast.  95.1 -> 95.3.
     Vector3 verts2e0[18];
     Vector3 verts1c0[18];
 
     int iIdx = 0;
-    int iLatSum = 0;
     do {
         float latVal = (float)iIdx * anglePi6;
         float sinLatPi2 = FastSin(latVal + anglePiHalf);
@@ -1088,29 +1106,24 @@ void UtilDrawCigar(
         float sinLatPi2b = FastSin(latVal + anglePiHalf);
         float r1 = sinLatPi2b * radii[1];
         float sinLatb = FastSin(latVal);
-        float h0b = sLen0 - h0;
+        float h1 = sinLatb * radii[1];
         int iLon = 0;
-        // Separate statements: folding these into one expression lets MSVC
-        // contract the pair into a single fmadds, which retail does not do.
-        float h1raw = sinLatb * radii[1];
-        float h1 = h1raw + sLen1;
         do {
             float lonVal = (float)iLon * angle2Pi;
             float sinLon = FastSin((float)iLon * angle2Pi);
             float sinLonPi2 = FastSin(lonVal + anglePiHalf);
-            int idx = iLatSum + iLon;
-            Vector3 v1(h0b, sinLonPi2 * r0, sinLon * r0);
+            int idx = iIdx * 6 + iLon;
+            Vector3 v1(sLen0 - h0, sinLonPi2 * r0, sinLon * r0);
             Multiply(v1, basis, verts1c0[idx]);
             // y takes the cos-phase sine and z the sin-phase one, the same way
             // round as v1 -- retail's stores at 0x74/0x78 read f22 (the
             // lonVal+pi/2 result) then f21 (the plain lonVal result).
-            Vector3 v2(h1, sinLonPi2 * r1, sinLon * r1);
+            Vector3 v2(sLen1 + h1, sinLonPi2 * r1, sinLon * r1);
             Multiply(v2, basis, verts2e0[idx]);
             iLon = iLon + 1;
         } while (iLon < 6);
-        iLatSum = iLatSum + 6;
         iIdx = iIdx + 1;
-    } while (iLatSum < 0x12);
+    } while (iIdx < 3);
 
     int i = 0;
     do {
@@ -1335,6 +1348,26 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
 //      and no source ordering of them reaches it.  The whole 3.6pp belonged to the hoist.
 //      44 of the 58 residual rows are this one block placement (idx 29-51 inserted,
 //      idx 160-182 deleted); it is the only thing left between this function and ~100.
+//
+// w7-bs (2026-09-15) -- three more spellings of the head, each BYTE-IDENTICAL to the
+// current one (58 mismatch rows, canonical 71.49383, idx 28 `beq` vs the image's `bne`
+// at 0x8262E528, movie block still inline at idx 29-51 instead of at 0x8262E6E0-0x8262E734
+// where the image's unknown-extension arm `li r11,1; li r3,0; stw r11,0(r26)` FALLS INTO
+// the shared epilogue at 0x8262E738):
+//   (a) full arm inversion `if (bmp==0 || png==0) { ...main... } else { ...movie... }`;
+//   (b) the Block-Placement Lever 2 goto split
+//       `if (stricmp(ext,"bmp")==0) goto cached; if (stricmp(ext,"png")!=0) goto movie;`
+//       with the movie block spelled last in the function;
+//   (c) Lever 1, the condition materialised into a named int
+//       `int isMovie = !!(stricmp(ext,"bmp") != 0 && stricmp(ext,"png") != 0);`.
+// Together with w7-bo's trailing-arm spelling that is four source orders of the two
+// arms and both documented placement levers, all folding to one layout.  The home-slot
+// permutation (image: movieExt 0x54 / base 0x50 / path 0x58 in the movie arm, ext 0x58 /
+// base 0x50 / path 0x54 in the main arm; ours 0x58/0x54/0x50 and 0x50/0x54/0x58) is
+// allocated in block order and moves with it, so it is the same single residual, not a
+// second one.  FLOOR 71.49383 canonical until a placement heuristic is found that ranks
+// a two-return arm as the out-of-line one; nothing in docs/decomp/patterns/
+// fixable-control-flow.md "Block Placement" reaches it.
 //
 // The census WRONG_CALLEE charge here (target MovieExtension vs base ~String) is a
 // consequence of 1: both sides call MovieExtension exactly once, at different points in
@@ -1664,39 +1697,37 @@ void MakeTangentsLate(RndMesh *m) {
 
 void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     MILO_ASSERT(m, 0x250);
-    // NEGATIVE RESULT (w7-aq, 2026-09-14): declaring `face` AFTER the identity
-    // fill -- which is how the image threads the mulli / lwz 0x110 / add
-    // through the identity stores -- costs 0.6pp (94.13 -> 93.5). The face
-    // reference belongs first.
-    //
-    // w7-bo (2026-09-15): where the 114 residual rows actually come from.  76 of
-    // them are ONE relabelling: retail's prologue is __savegprlr_23, ours is
-    // __savegprlr_24, so every callee-saved register reads one number off.  The
-    // ninth register is spent on the `Hmx::Matrix3 edgeMat(edge21, edge31,
-    // faceNormal)` copy, and the reason is scheduling, not spelling: retail loads
-    // ALL TWELVE words first (idx 158-176, into r5/r31/r30/r10 for edge21,
-    // r26/r25/r24/r9 for edge31, r27/r23/r29/r11 for faceNormal) and only then
-    // stores them (177-191), which needs twelve live registers at once; we
-    // interleave the three 16-byte copies load-store, load-store, load-store and
-    // therefore need eight.  Same instruction multiset either way.
-    // The other visible item is the faceNormal store order: retail writes 0x50 /
-    // 0x54 / 0x58 in x,y,z order (idx 165/167/169) where we write x,z,y.
-    // Measured negative (2026-09-15): replacing the three-argument `Vector3
-    // faceNormal(...)` constructor with three separate `faceNormal.x = ... ;
-    // .y = ...; .z = ...;` assignments -- which forces x,y,z in the source -- is
-    // BYTE-IDENTICAL.  Canonical stayed 94.13, same 114 rows, same store order.
-    // MSVC schedules the three fmsubs from its FPR assignment, not from the
-    // source order, exactly as measured on UtilDrawCigar's fmuls operands.
+    // 100.0 canonical / 100.0 raw, 230 of 230 rows (w7-bs, 2026-09-15; was 94.13
+    // with 114 rows).  Four levers, in the order they were found -- none of them
+    // was the "scheduling" the w7-bo residual note blamed:
+    //   1. BadUV() is `inline`.  Our caller kept the three vertex pointers in
+    //      r7/r8/r9 ACROSS the three `bl BadUV` because MSVC uses a same-TU
+    //      callee's register summary; the image holds them in r29/r30/r31
+    //      (0x8262CE7C / 0x8262CE90 / 0x8262CE94), i.e. its compiler did not
+    //      trust BadUV's summary, which is what a pick-any COMDAT (inline)
+    //      callee gets.  That relabelled every GPR downstream: 100 -> 70 arg rows.
+    //   2. The transpose is a nine-argument `edgeMat.Set(x.x, y.x, z.x, ...)`
+    //      (RB3's inline Transpose(Matrix3) body): six loads then six stores in
+    //      exactly the image's order (0x8262D08C-D0E8).  Three swap temps read
+    //      and wrote 0x84/0x98 and 0x90/0xa4 in the other order: 4 offset rows.
+    //   3. edge21/edge31 come from `Subtract(vert2.pos, vert1.pos, edge21)`, and
+    //      the zero tests read the vectors; six scalar diffs feeding a Vector3
+    //      constructor gave a different FPR assignment for the whole block
+    //      (0x8262CED8-CF54, 29 arg rows + one insert/delete).
+    //   4. `outBasis.Identity()`: the image threads `mulli r11, r31, 6` and the
+    //      `add` through the nine identity stores (0x8262CE14 / 0x8262CE30);
+    //      nine explicit component stores hoisted both above them.  This is the
+    //      ninth callee-saved register too: with Identity() the Matrix3 copy is
+    //      scheduled loads-first (0x8262D008-D084) and takes r23.
+    // Inert, measured on the way: `m->Faces(faceIdx)` for `Faces()[faceIdx]`;
+    // `edgeMat.Set(edge21, edge31, faceNormal)` for the three-vector ctor;
+    // faceNormal as three component assignments (fmsubs order is FPR-driven,
+    // as w7-bo found); `Cross(edge21, edge31, faceNormal)` for the hand-written
+    // cross product (kept: same three fmsubs, and it cannot re-flip the y sign).
+    // Declaring `face` AFTER the identity fill costs 0.6pp (w7-aq, 2026-09-14),
+    // and sinking edge21/edge31 into the innermost block costs 10.5pp.
     RndMesh::Face &face = m->Faces()[faceIdx];
-    outBasis.x.x = 1.0f;
-    outBasis.x.y = 0.0f;
-    outBasis.x.z = 0.0f;
-    outBasis.y.x = 0.0f;
-    outBasis.y.y = 1.0f;
-    outBasis.y.z = 0.0f;
-    outBasis.z.x = 0.0f;
-    outBasis.z.y = 0.0f;
-    outBasis.z.z = 1.0f;
+    outBasis.Identity();
 
     if (face.v1 != face.v2 && face.v2 != face.v3 && face.v3 != face.v1) {
         RndMesh::Vert &vert1 = m->Verts()[face.v1];
@@ -1710,55 +1741,42 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
         Vector2 uv2 = vert2.tex;
         Vector2 uv3 = vert3.tex;
         if (!BadUV(uv1) && !BadUV(uv2) && !BadUV(uv3)) {
-            float dx21 = vert2.pos.x - vert1.pos.x;
-            float dy21 = vert2.pos.y - vert1.pos.y;
-            float dz21 = vert2.pos.z - vert1.pos.z;
-            float dx31 = vert3.pos.x - vert1.pos.x;
-            float dy31 = vert3.pos.y - vert1.pos.y;
-            float dz31 = vert3.pos.z - vert1.pos.z;
+            // These two must be declared HERE, above the four zero tests, not
+            // next to the Matrix3 they feed: sinking them into the innermost
+            // block costs 10.5pp (94.13 -> 83.6, measured 2026-09-14) by
+            // shuffling every stack slot from 0x50 up.
+            Vector3 edge21;
+            Subtract(vert2.pos, vert1.pos, edge21);
+            Vector3 edge31;
+            Subtract(vert3.pos, vert1.pos, edge31);
 
             float du21 = uv2.x - uv1.x;
             float dv21 = uv2.y - uv1.y;
             float du31 = uv3.x - uv1.x;
             float dv31 = uv3.y - uv1.y;
 
-            // These two must be declared HERE, above the four zero tests, not
-            // next to the Matrix3 they feed: sinking them into the innermost
-            // block costs 10.5pp (94.13 -> 83.6, measured 2026-09-14) by
-            // shuffling every stack slot from 0x50 up.
-            Vector3 edge21(dx21, dy21, dz21);
-            Vector3 edge31(dx31, dy31, dz31);
-
-            bool zero21 = dx21 == 0.0f && dy21 == 0.0f && dz21 == 0.0f;
+            bool zero21 = edge21.x == 0.0f && edge21.y == 0.0f && edge21.z == 0.0f;
             if (!zero21) {
-                bool zero31 = dx31 == 0.0f && dy31 == 0.0f && dz31 == 0.0f;
+                bool zero31 = edge31.x == 0.0f && edge31.y == 0.0f && edge31.z == 0.0f;
                 if (!zero31) {
                     bool zeroUV21 = du21 == 0.0f && dv21 == 0.0f;
                     if (!zeroUV21) {
                         bool zeroUV31 = du31 == 0.0f && dv31 == 0.0f;
                         if (!zeroUV31) {
-                            // Cross product e21 x e31. The y term is
-                            // dz21*dx31 - dx21*dz31 -- previously written with
-                            // its sign flipped, which made the third basis row
-                            // non-orthogonal to the first two.
-                            Vector3 faceNormal(
-                                dz31 * dy21 - dy31 * dz21,
-                                dx31 * dz21 - dz31 * dx21,
-                                dy31 * dx21 - dx31 * dy21
-                            );
+                            // Face normal = edge21 x edge31 (its y term was
+                            // once hand-written with the sign flipped, which
+                            // made the third basis row non-orthogonal).
+                            Vector3 faceNormal;
+                            Cross(edge21, edge31, faceNormal);
                             Hmx::Matrix3 edgeMat(edge21, edge31, faceNormal);
 
                             Invert(edgeMat, edgeMat);
 
-                            float swapXY = edgeMat.x.y;
-                            edgeMat.x.y = edgeMat.y.x;
-                            edgeMat.y.x = swapXY;
-                            float swapXZ = edgeMat.x.z;
-                            edgeMat.x.z = edgeMat.z.x;
-                            edgeMat.z.x = swapXZ;
-                            float swapYZ = edgeMat.y.z;
-                            edgeMat.y.z = edgeMat.z.y;
-                            edgeMat.z.y = swapYZ;
+                            edgeMat.Set(
+                                edgeMat.x.x, edgeMat.y.x, edgeMat.z.x,
+                                edgeMat.x.y, edgeMat.y.y, edgeMat.z.y,
+                                edgeMat.x.z, edgeMat.y.z, edgeMat.z.z
+                            );
 
                             Hmx::Matrix3 texMat;
                             texMat.x.Set(du21, du31, 0.0f);
@@ -1771,10 +1789,19 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
                     }
                 }
             }
+        } else {
+            // Only a BadUV() failure notifies.  The four degenerate-edge /
+            // degenerate-UV tests above exit silently with outBasis still the
+            // identity: every one of their four `bne` rows targets the epilogue
+            // at 0x8262D128, and the notify block at 0x8262D0F4 is reached only
+            // from the three BadUV() `bne` at 0x8262CEB4 / 0x8262CEC4 / 0x8262CED4.
+            // Until 2026-09-15 (w7-bs) this notify sat after the nested ifs, so a
+            // zero-area face or a zero UV delta printed "has bad UVs" -- a
+            // decompilation-introduced message the image never emits.
+            TheDebug << MakeString(
+                "NOTIFY: %s has bad UVs, should reexport from Max\n", PathName(m)
+            );
         }
-        TheDebug << MakeString(
-            "NOTIFY: %s has bad UVs, should reexport from Max\n", PathName(m)
-        );
     }
 }
 
@@ -2628,6 +2655,26 @@ void TessellateMesh(RndMesh *mesh) {
     //   as a byte OFFSET added to r30 for the face cursor AND 0x100 off it as
     //   the verts base for the *0x60 index math, so the accessor being homed
     //   covers both of those uses.)
+    //
+    // w7-bs (2026-09-15): the two missing mentions were the vertex lookups.
+    // `&mesh->Verts(face.vN)` (or `Verts()[face.vN]`, byte-identical) instead
+    // of the hand-written `face.vN * 0x60 + vertsBase` gives the image's FOUR
+    // `stw r8, 0x50` homes and its two `mr` copies of the mVerts base --
+    // 95.46 -> 95.9 canonical, 67 -> 66 rows, and the HX_NATIVE fork goes away.
+    // What is STILL missing is the family of three dead `sth` of v2/v3/v1 into
+    // 0x50 (82637BF4/BF8/C00) and their `mr` copies; the same three dead
+    // `sth` sit in RndAmbientOcclusion::Tessellate (826E14A0/B4/C8) and six of
+    // them in RndAmbientOcclusion::SmoothResults (826DF7D0-E8, one per
+    // `mesh->Verts(face.vN)` mention there), and our builds of BOTH of those
+    // lack them too, while MakeNormals' `m->Verts()[face[k]]` has none in the
+    // image either.  So a 16-bit temp is homed once per `Verts(face.vN)` mention
+    // in the original and never in ours.  REFUTED as the cause: a by-value
+    // `unsigned short` parameter (a TU-local `static inline Vert &At(RndMesh *,
+    // unsigned short)` wrapper is byte-identical to `Verts(int)`), pointer vs
+    // reference binding, `Verts(int)` vs `Verts()[]`.  Until that temp is found
+    // the comparator byte stays at 0x54 (image 0x50, row 5) and the 4-byte
+    // shift of the small-temp block stays with it -- the remaining 66 rows are
+    // all that shift plus its register renames.
     Edge e12, e23, e31;
 
     for (unsigned int i = 0; i < (unsigned int)mesh->Faces().size(); i++) {
@@ -2639,22 +2686,9 @@ void TessellateMesh(RndMesh *mesh) {
         // parks them in registers across the find/insert calls instead.
         RndMesh::Face &face = mesh->Faces()[i];
 
-#ifdef HX_NATIVE
-        intptr_t vertsBase = (intptr_t)mesh->Verts().mVerts;
-
-        RndMesh::Vert *pv1 = (RndMesh::Vert *)((uintptr_t)face.v1 * 0x60 + vertsBase);
-        RndMesh::Vert *pv2 = (RndMesh::Vert *)((uintptr_t)face.v2 * 0x60 + vertsBase);
-        RndMesh::Vert *pv3 = (RndMesh::Vert *)((uintptr_t)face.v3 * 0x60 + vertsBase);
-#else
-        int vertsBase = (int)(unsigned int)mesh->Verts().mVerts;
-
-        RndMesh::Vert *pv1 =
-            (RndMesh::Vert *)((unsigned int)face.v1 * 0x60 + vertsBase);
-        RndMesh::Vert *pv2 =
-            (RndMesh::Vert *)((unsigned int)face.v2 * 0x60 + vertsBase);
-        RndMesh::Vert *pv3 =
-            (RndMesh::Vert *)((unsigned int)face.v3 * 0x60 + vertsBase);
-#endif
+        RndMesh::Vert &vert1 = mesh->Verts(face.v1);
+        RndMesh::Vert &vert2 = mesh->Verts(face.v2);
+        RndMesh::Vert &vert3 = mesh->Verts(face.v3);
 
         e12.v0 = face.v1;
         e12.v1 = face.v2;
@@ -2664,9 +2698,9 @@ void TessellateMesh(RndMesh *mesh) {
         e31.v1 = face.v1;
 
         RndMesh::Vert blend12, blend23, blend31;
-        RndAmbientOcclusion::BlendVert(*pv1, *pv2, blend12);
-        RndAmbientOcclusion::BlendVert(*pv2, *pv3, blend23);
-        RndAmbientOcclusion::BlendVert(*pv3, *pv1, blend31);
+        RndAmbientOcclusion::BlendVert(vert1, vert2, blend12);
+        RndAmbientOcclusion::BlendVert(vert2, vert3, blend23);
+        RndAmbientOcclusion::BlendVert(vert3, vert1, blend31);
 
         std::set<Edge>::iterator it12 = edges.find(e12);
         if (it12 == edges.end()) {
@@ -2789,6 +2823,13 @@ void BuildVisit(BSPNode *node) {
     // canonical stayed 94.97, and mismatch rows went 121 -> 123.
     // So the open question is narrow and concrete: what source spelling makes MSVC
     // home an inlined Cross()'s reference parameters?  Nothing tried so far does.
+    // w7-bs (2026-09-15): nor does routing every one of those eleven mentions
+    // through the inlined `Matrix3::operator[]` (`m[2] = plane`, `m[1].Set(..)`,
+    // `Cross(m[1], m[2], m[0])`, `Cross(m[2], m[0], m[1])`) -- byte-identical,
+    // 121 rows, 94.97.  The homes elsewhere in this wave that DID answer to a
+    // spelling were all return values of an inlined accessor
+    // (`mGeomOwner->` in TessellateMesh/UpdateGeometryBuffers), so an extra
+    // inlined layer per mention is not by itself what creates them.
     lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
     lastIt->mTransform.m.y.Set(0, 1, 0);
