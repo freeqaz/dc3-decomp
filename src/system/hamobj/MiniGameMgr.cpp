@@ -80,6 +80,24 @@ void MiniGameMgr::InitCascade(int numMovesNeeded, int blockingFactor) {
     LoadValidMoves(false);
 }
 
+// w8-l: 99.900000 normalized, the only function keeping this unit from 100%
+// (30/31).  Five charged rows and every one is a register NAME, not a
+// different computation:
+//   [43]/[44] the two hoisted lis's are emitted r25(kAssertStr) then
+//             r24(TheGameData) by the image and the other way round by us --
+//             same destination registers, same values, opposite order.
+//   [51]/[52]/[55] the image loads mNumMovesNeeded(0x2c) into r9 and
+//             mBlockingFactor(0x30) into r10; we use r10 and r9.  The add is
+//             `add r10, r9, r10` vs `add r10, r10, r9` -- the same sum in the
+//             same order, spelled with the two volatiles exchanged.
+// Refuted: writing the sum as `mNumMovesNeeded + mBlockingFactor` is exactly
+// inert (99.900000) -- MSVC already canonicalises the two loads to ascending
+// field order on both sides.
+// Not a bug: objdiff reports four target-only/base-only callees here
+// (MakeString<char[19],int,char[5]>, __find<DxTex**>, vector<JoypadClient*>
+// _M_erase, vector<UILabel*> erase).  The string literals those MakeStrings
+// actually load, rows [40] and [41], MATCH -- these are ICF folds of
+// byte-identical instantiations from other TUs, not wrong callees.
 void MiniGameMgr::UpdateCascadeMovePool(
     MoveGraph &graph,
     std::vector<const MoveVariant *> &allMoves,

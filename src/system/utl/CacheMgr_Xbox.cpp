@@ -377,16 +377,23 @@ void CacheMgrXbox::PollDelete() {
 }
 
 void CacheMgrXbox::PollSearch() {
-    // Known residual, 14 rows, all one slot apart and all the SAME decision:
-    // the image puts `res` -- and every MakeString temp that shares the temp
-    // pool with it -- at 0x50(r31), and the address-taken `numFound` at 0x54.
-    // We allocate them the other way round.  Both levers are refuted here:
-    // swapping the two declarations is byte-inert (14 rows before and after),
-    // and so is scoping them into this block instead of the function body.
+    // w8-l: 99.911390 normalized, the only function keeping this unit from
+    // 100% (23/24).  Known residual, 14 rows, all one slot apart and all the
+    // SAME decision: the image puts `res` -- and every MakeString temp that
+    // shares the temp pool with it -- at 0x50(r31), and the address-taken
+    // `numFound` at 0x54.  We allocate them the other way round.  Refuted:
+    // swapping the two declarations is byte-inert, so is scoping them into
+    // this block, and so is spelling `res` as `unsigned int` (below).
     // Nothing else in the frame moves, so it is a single one-slot tie.
+    //
+    // FIXED here though: `res` and `enumRes` are `unsigned int`, not DWORD.
+    // The image calls MakeString<unsigned int> (??$MakeString@I@@) at the two
+    // %u sites; with DWORD (unsigned long) we emitted MakeString<unsigned
+    // long> (??$MakeString@K@@).  The canonical ruler does not charge a
+    // relocation name, but name_check did: 16 rows before, 14 after.
     if (mOverlapped.InternalLow != 0x3E5) {
         DWORD numFound = 0;
-        DWORD res = XGetOverlappedResult(&mOverlapped, &numFound, false);
+        unsigned int res = XGetOverlappedResult(&mOverlapped, &numFound, false);
         // res == ERROR_NO_MORE_FILES (0x65B) goes straight to EndSearch in the
         // target -- it does not fall into the numFound check.
         if (res != 0) {
@@ -413,7 +420,7 @@ void CacheMgrXbox::PollSearch() {
                 memset(&mContentData, 0, sizeof(XCONTENT_DATA));
                 mContentData.DeviceID = 0;
                 memset(&mOverlapped, 0, sizeof(XOVERLAPPED));
-                DWORD enumRes =
+                unsigned int enumRes =
                     XEnumerate(mFile, &mContentData, 0x134, nullptr, &mOverlapped);
                 if (enumRes == 0x3E5) {
                     return;

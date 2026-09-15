@@ -22,6 +22,12 @@ void WebSvcMgrCurl::Init() {
     InitCurl();
 }
 
+// w8-l: 99.978490 normalized, the only function short of 100% in this unit.
+// Two rows, [16] and [19]: the FIRST MILO_ASSERT's line-number temp homes at
+// 0x50(r1) in the image and 0x54(r1) in ours.  Every NAMED local agrees exactly
+// (httpStatus 0x50, msgs_in_queue 0x54, running_handles 0x58, assert-2 temp
+// 0x5c) -- only which free slot the first assert temp pools into differs.
+// Same family as PlaylistSongProvider::DataSymbol; no source lever found.
 void WebSvcMgrCurl::Poll() {
     WebSvcMgr::Poll();
 #ifdef HX_NATIVE

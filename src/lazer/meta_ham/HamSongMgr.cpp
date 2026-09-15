@@ -422,6 +422,15 @@ Symbol HamSongMgr::RankTierToken(int token) const {
     return MakeString("song_tier_%i", token);
 }
 
+// w8-l: 99.856820 normalized, the only function short of 100% in this unit
+// (94/95) and the largest row in this lane's worklist at 1760 bytes.  63
+// charged rows out of 440: essentially every frame reference in the body is
+// +16 from the image's, i.e. one extra 16-byte local near the bottom of our
+// frame pushes everything above it.  Worth knowing before picking it up: the
+// target-only / base-only callees objdiff lists here (MakeString template
+// lengths, and _M_find<MoveRatingHistory::Key> vs _M_find<Symbol>) are ICF
+// folds of byte-identical instantiations, not wrong callees -- do not chase
+// them.  Measured only in this wave.
 void HamSongMgr::InitializePlaylists() {
     ClearPlaylists();
     static Symbol playlists("playlists");

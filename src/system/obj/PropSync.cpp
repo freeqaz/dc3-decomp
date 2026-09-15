@@ -86,6 +86,16 @@ bool PropSync(Vector3 &vec, DataNode &node, DataArray *prop, int i, PropOp op) {
     }
 }
 
+// w8-l: 99.979004 normalized, the only function short of 100% in this unit
+// (11/12).  12 charged rows out of 381: four fmuls with their two operands
+// exchanged ([186] f11/f13, [197] f13/f12, [314] and [371] f12/f0) and six
+// lfs's reading the sibling component (+4/-8), all inside the y_scale and
+// z_scale arms.  The x_scale arm, which is spelled component-wise
+// (_m.x.x/_m.x.y/_m.x.z), already matches.
+// Refuted: spelling y_scale and z_scale component-wise too, to mirror x_scale,
+// is a large REGRESSION -- 99.979004 -> 98.745410.  The image really does use
+// the whole-vector `_m.y *= ratio` / `_m.z *= ratio` form for those two arms
+// and the per-component form only for x; the asymmetry below is deliberate.
 bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp _op) {
     MILO_ASSERT(_i == _prop->Size() - 1 && (_op & (kPropSet|kPropGet|kPropInsert)), 0x4F);
     Symbol sym = _prop->Sym(_i);

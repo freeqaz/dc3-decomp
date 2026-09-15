@@ -61,6 +61,17 @@
  * This function is BLOCKING which is nasty for all multi interface using apps.
  */
 
+/* w8-l: 99.991990 normalized and the ONLY function in this unit (0/1), so this
+ * single instruction is a whole unit.  One charged row, [51] at 0xcc:
+ *   target  subi r11, r11, 0x28f4
+ *   ours    addi r11, r11, ??_C@_0BL@FDNFJOM@CONNECT?5responded?5chunked?6?$AA@@l
+ * The image reaches the "CONNECT responded chunked\n" literal as a NEGATIVE
+ * compile-time displacement from an anchor whose high half is already in r11
+ * (row [50], the "chunked" literal, matches exactly on both sides).  That
+ * displacement is a function of the final .rdata layout, not of this source
+ * file -- the same class as the Curl_month residual in parsedate.c and the
+ * three rows in Curl_http_readwrite_headers.  No source spelling produces it.
+ */
 CURLcode Curl_proxyCONNECT(struct connectdata *conn,
                            int sockindex,
                            const char *hostname,

@@ -325,6 +325,15 @@ bool AccomplishmentProgress::AddAward(Symbol award, Symbol reason) {
     }
 }
 
+// w8-l: 99.989190 normalized, the only function short of 100% in this unit.
+// Two rows, both one stack slot apart:
+//   [19] stw  r31, 0x58(r1) (target) vs 0x54 (ours)
+//   [21] addi r4,  r1, 0x58 (target) vs 0x54 (ours)
+// In the image 0x54 holds only the _M_find key temp; 0x58 is shared by the
+// MILO_NOTIFY temp, `award`, and the category/group award temps.  We pool the
+// notify temp down into 0x54.  Refuted: introducing `const char *accName =
+// s.Str();` before the MILO_NOTIFY was exactly inert (99.989190 unchanged).
+// See the note on PlaylistSongProvider::DataSymbol for the shared family.
 bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
     if (!IsAccomplished(s)) {
         Accomplishment *pAcc = TheAccomplishmentMgr->GetAccomplishment(s);

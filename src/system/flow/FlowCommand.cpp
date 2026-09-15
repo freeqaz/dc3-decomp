@@ -60,6 +60,14 @@ BEGIN_LOADS(FlowCommand)
     // (idx 86-100) and the dtor block (408/410) with it: 6 rows -> 20 rows,
     // 99.96619 -> 99.90.  So MSVC is not assigning these slots by declaration
     // order here, and the lever is something else.  Do not re-try the swap.
+    // w8-l (2026-09-15): re-measured at 99.966190 normalized, still 35/36 and
+    // still the only function keeping this unit from 100%.  Confirmed the
+    // w7-aa reading with the stack-layout diff: frame sizes are IDENTICAL
+    // (0x110 both sides), there is no extra local, and exactly two slots are
+    // PERMUTED -- 0x70 and 0x80 -- i.e. the same slot SET with the two lists
+    // exchanged.  The remaining 6 rows are [125]/[126]/[141]/[152] (+/-16 on
+    // those two slots) and [181]/[182] (r28<->r29).  The declaration swap
+    // stays refuted; do not re-try it.
     std::list<DataNode> datanodes;
     std::list<Symbol> symbols;
     if (d.rev > 2) {

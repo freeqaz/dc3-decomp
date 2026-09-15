@@ -22,6 +22,22 @@ int PlaylistSongProvider::NumData() const {
     return m_pPlaylist->GetNumSongs();
 }
 
+// w8-l: 99.966100 normalized, and this is the ONLY function keeping the unit
+// from 100% (12/13).  Only TWO rows are charged, both a stack-slot choice:
+//   [47] addi r3, r1, 0x54  (target)  vs  0x50 (ours)
+//   [49] lwz  r11, 0x54(r1) (target)  vs  0x50(r1) (ours)
+// The image gives the MILO_ASSERT line-number temp (MakeString takes const int&,
+// so 0x6d needs a home) its own slot at 0x50 and puts `shortName` at 0x54; we
+// pool both into 0x50.  The other 14 rows are a callee-saved permutation the
+// canonical ruler forgives (target r31=r3/r30=r4/r29=r5, ours r29/r31/r30).
+// Refuted here: returning the call directly instead of naming `shortName`
+// regressed to 94.57627; naming only the songID temp regressed to 95.59322.
+// Hoisting `Symbol shortName;` above the MILO_ASSERT to force overlapping live
+// ranges is not viable -- Symbol's default ctor is non-trivial (mStr(gNullStr))
+// and would emit a store the image does not have.
+// Same unsolved family as MidiParserMgr::ParseText, WebSvcMgrCurl::Poll and
+// AccomplishmentProgress::AddAccomplishment: the image never pools the first
+// 4-byte assert temp with a later temp, and no source lever found does that.
 Symbol PlaylistSongProvider::DataSymbol(int i) const {
     MILO_ASSERT(m_pPlaylist, 0x6d);
     if (i >= 0 && i < NumData() && m_pPlaylist && m_pPlaylist->IsValidSong(i)) {

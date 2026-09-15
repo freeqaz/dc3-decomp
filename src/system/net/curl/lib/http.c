@@ -2743,6 +2743,14 @@ static CURLcode header_append(struct SessionHandle *data,
  * emit.  Do not "fix" this and do not permute it: it is a carve artifact of the
  * 4160-byte row, not a divergence.  (Lane w7-bf, 2026-09-14.)
  */
+/* w8-l: 99.985580 normalized, the only function short of 100% in this unit
+ * (23/24).  Three charged rows out of 1040 instructions -- [61], [87] and [94]
+ * -- and all three are the identical shape: the image emits `subi rX, rX, imm`
+ * where we emit `addi rX, rX, <string literal>@l`, i.e. it reaches the literal
+ * as a negative displacement off an anchor symbol already loaded in that
+ * register.  Layout-derived, same class as Curl_proxyCONNECT [51] and the
+ * Curl_month residual in parsedate.c.  Not reachable from source.
+ */
 CURLcode Curl_http_readwrite_headers(struct SessionHandle *data,
                                        struct connectdata *conn,
                                        ssize_t *nread,

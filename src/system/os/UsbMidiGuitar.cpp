@@ -57,6 +57,12 @@ void UsbMidiGuitar::Terminate() {
     RELEASE(TheGuitar);
 }
 
+// w8-l: re-measured at 99.993570 normalized, still the only function short of
+// 100% in this unit (8/9).  Confirmed NOT a behavioural bug: the image loads
+// pgRaw[0xb] before pgRaw[0xc] and we load them the other way round, but the
+// three terms are summed into the same value either way -- the byte loads are
+// independent and every arithmetic instruction matches.  The three refutations
+// recorded below still stand.
 void UsbMidiGuitar::Poll() {
     if (TheGuitar) {
         ProGuitarData *proData;

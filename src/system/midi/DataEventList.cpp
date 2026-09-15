@@ -149,6 +149,20 @@ void DataEventList::Compact() {
     }
 }
 
+// w8-l: 99.912000 normalized, the only function keeping this unit from 100%
+// (49/50).  11 charged rows, all one stack decision.  The image's frame is
+// 0x10 BIGGER than ours (0xb0 vs 0xa0): it gives `str` its own slot at
+// 0x58(r1) and puts `event` at 0x60/0x64/0x68, while we POOL `str`'s address
+// into event.start's slot at 0x58 and run event at 0x58/0x5c/0x60.  The two
+// live ranges really are disjoint on both sides ([24..82] for event, [97..122]
+// for str), so MSVC is entitled to pool them and ours does.
+// Refuted: writing the DataEvent temp unnamed
+// (`mEvents.insert(mEvents.begin() + idx, DataEvent(start, end, node.Array()))`)
+// is exactly inert, 99.912000 before and after -- that temp is in the other
+// branch and is not what allocates these slots.  Hoisting `String str` up to
+// `CompEv event`'s scope would stop the pooling but would also emit an
+// unconditional String ctor/dtor pair, and the image has the same 125
+// instructions we do, so it does not construct str unconditionally.
 void DataEventList::InsertEvent(float start, float end, const DataNode &node, int idx) {
     if (mElement < 0) {
         if (mSize == 0)

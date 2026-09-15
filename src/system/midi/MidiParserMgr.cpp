@@ -154,6 +154,13 @@ const char *MidiParserMgr::StripEndBracket(char *c1, const char *cc2) {
     return c1;
 }
 
+// w8-l: 99.983604 normalized (re-measured), still the only function short of
+// 100% in this unit.  One row: [57] lwz r30, 0x54(r31) target vs 0x50(r31).
+// Same family as PlaylistSongProvider::DataSymbol / WebSvcMgrCurl::Poll --
+// the image frame is [0x50 = the assert line int (pooled only with the catch
+// funclet's const char* temp), 0x54 = parsed, 0x58 = errMsg] and ours pools
+// `parsed` with the assert int at 0x50.  The w7-ak refutations above still
+// hold; no new lever found.
 DataArray *MidiParserMgr::ParseText(const char *str, int tick) {
     MILO_ASSERT(strlen(str) < 256, 0xF3);
     char buf[256];
