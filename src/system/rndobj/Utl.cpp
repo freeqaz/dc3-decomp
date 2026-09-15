@@ -1336,6 +1336,26 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
 //      44 of the 58 residual rows are this one block placement (idx 29-51 inserted,
 //      idx 160-182 deleted); it is the only thing left between this function and ~100.
 //
+// w7-bs (2026-09-15) -- three more spellings of the head, each BYTE-IDENTICAL to the
+// current one (58 mismatch rows, canonical 71.49383, idx 28 `beq` vs the image's `bne`
+// at 0x8262E528, movie block still inline at idx 29-51 instead of at 0x8262E6E0-0x8262E734
+// where the image's unknown-extension arm `li r11,1; li r3,0; stw r11,0(r26)` FALLS INTO
+// the shared epilogue at 0x8262E738):
+//   (a) full arm inversion `if (bmp==0 || png==0) { ...main... } else { ...movie... }`;
+//   (b) the Block-Placement Lever 2 goto split
+//       `if (stricmp(ext,"bmp")==0) goto cached; if (stricmp(ext,"png")!=0) goto movie;`
+//       with the movie block spelled last in the function;
+//   (c) Lever 1, the condition materialised into a named int
+//       `int isMovie = !!(stricmp(ext,"bmp") != 0 && stricmp(ext,"png") != 0);`.
+// Together with w7-bo's trailing-arm spelling that is four source orders of the two
+// arms and both documented placement levers, all folding to one layout.  The home-slot
+// permutation (image: movieExt 0x54 / base 0x50 / path 0x58 in the movie arm, ext 0x58 /
+// base 0x50 / path 0x54 in the main arm; ours 0x58/0x54/0x50 and 0x50/0x54/0x58) is
+// allocated in block order and moves with it, so it is the same single residual, not a
+// second one.  FLOOR 71.49383 canonical until a placement heuristic is found that ranks
+// a two-return arm as the out-of-line one; nothing in docs/decomp/patterns/
+// fixable-control-flow.md "Block Placement" reaches it.
+//
 // The census WRONG_CALLEE charge here (target MovieExtension vs base ~String) is a
 // consequence of 1: both sides call MovieExtension exactly once, at different points in
 // the function, so the aligner pairs our ~String against it.  It is not a wrong callee.
