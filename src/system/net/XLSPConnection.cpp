@@ -1,4 +1,11 @@
 #include "net\XLSPConnection.h"
+
+/* w8-e 2026-09-15 -- ??$MakeString@W4ReqType@@@@... (104 B) is an ICF fold
+ * alias: five MakeString<enum> instantiations share 0x8255A0A0 (the body is
+ * identical for any 4-byte enum) and the survivor came from net:HttpReqCurl.obj.
+ * This TU's own contribution at that address is
+ * ??$MakeString@W4State@XLSPConnection@@@@..., which we emit. */
+
 #include "math/Rand.h"
 #include "utl\MemMgr.h"
 #include "xdk\XAPILIB.h"

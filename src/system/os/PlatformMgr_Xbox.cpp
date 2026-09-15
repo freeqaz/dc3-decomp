@@ -12,6 +12,16 @@
 #include "utl\DataPointMgr.h"
 #include "utl\Locale.h"
 #include "os\ThreadCall.h"
+
+// w8-e 2026-09-15: the two 0% rows here (360 B) are a real, same-TU gap, not an
+// artifact.  ham_xbox_r.map contributes both from `os:PlatformMgr_Xbox.obj`:
+//   ?_M_insert_overflow@?$vector@_KV?$StlNodeAlloc@_K@...  825d8900  248 B
+//   ?push_back@?$vector@_KV?$StlNodeAlloc@_K@...           825d8e80  112 B
+// `_K` is `unsigned __int64`, so the image grows a std::vector<u64> in this
+// translation unit -- almost certainly a list of XUIDs / offer IDs.  Our
+// PlatformMgr_Xbox.cpp has no vector<u64> at all, so neither COMDAT is emitted
+// and both read 0.0%.  Closing them needs the real member found and used on its
+// growth path; an explicit instantiation alone emits the wrong member set.
 #include "utl\GlitchFinder.h"
 #include "xdk\XAPILIB.h"
 #include "xdk\xparty\xparty.h"

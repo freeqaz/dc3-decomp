@@ -1,4 +1,13 @@
 #include "obj\Dir.h"
+
+/* w8-e 2026-09-15 -- ??$__uninitialized_copy@PBVFilePath@@PAV1@@... (96 B) is an
+ * ICF fold alias and the surviving body was contributed by ui:PanelDir.obj, not
+ * by obj:Dir.obj.  Dir.obj's own contribution at 0x82591EC0 is the non-const
+ * source spelling ??$__uninitialized_copy@PAVFilePath@@PAV1@@..., which we emit;
+ * const-source and non-const-source instantiations are byte-identical, so ICF
+ * folded them and symbols.txt could bind only one.  Not a missing const
+ * overload -- verified against ham_xbox_r.map, which names PanelDir.obj. */
+
 #include "Dir.h"
 
 #include "Msg.h"

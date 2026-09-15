@@ -329,6 +329,19 @@ public:
     static const Transform &IDXfm() { return sID; }
 };
 
+/** w8-e: body moved here verbatim from mtx.cpp.  Whole-binary A/B (full ninja
+ * both sides, baseline bb2e759eb): 6 functions improved / 3.2 KB, 1 regressed.
+ *   +  rnddx9/Rnd   Matrix4::Matrix4(const Transform&)      0.0 -> 100.0 (132 B)
+ *   +  rnddx9/Rnd   DxRnd::DrawLargeQuad                   97.6 -> 100.0 (436 B)
+ *   +  rndobj/Env_NG  SetProjLightRegisters                96.9 -> 100.0 (796 B)
+ *   +  rndobj/Env_NG  SetPointLightRegisters               97.4 -> 100.0 (712 B)
+ *   +  rndobj/Lit_NG  NgLight::SetShadowTransforms         97.7 -> 100.0 (460 B)
+ *   +  rndobj/TexBlender RndTexBlender::DrawBlendList      99.1 -> 100.0 (724 B)
+ *   -  rnddx9/Rnd_Xbox DxRnd::DrawString                   99.9 ->  96.1 (888 B)
+ * The DrawString cost is NOT a Matrix4 row: all 22 residual mismatches sit in
+ * its inlined MakeColor ARGB pack (fmuls by f31, fctidz, rlwimi r,r,8,0,23)
+ * with 6 PERMUTED stack slots -- the extra inline body shifted that TU's slot
+ * allocation.  Accepted: +3.2 KB against ~35 B. */
 inline Hmx::Matrix4::Matrix4(const Transform &tf) {
     x.x = tf.m.x.x;
     x.y = tf.m.x.y;

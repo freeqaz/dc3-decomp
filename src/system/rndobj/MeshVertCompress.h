@@ -24,6 +24,28 @@ struct CompressedVertex_Xbox {
 // displacements and each TU's own copy of that file string, which is also why
 // /OPT:ICF could not fold them: the string COMDATs sit at different addresses,
 // so the bytes differ.
+//
+// w8-e 2026-09-15, RE-MEASURED AND CONFIRMED UNSCOREABLE.  fn_8263A168 (504 B)
+// and fn_8263A360 (556 B) are the two largest 0% rows in rndobj/Mesh and both
+// are this.  Evidence, in order:
+//   * build/373307D9/asm/system/rndobj/Mesh.s:5332 / :5464 carve them as real
+//     functions with .pdata entries (:2853, :2859) -- not EH funclets; 8263A360
+//     is called at 8263B250 with (r3=CompressedVertex_Xbox*, r4=Vert*), one
+//     instruction before `bl ?SaveCompressedVertex@@...` at 8263B25C;
+//   * `strings build/373307D9/src/system/rndobj/Mesh.obj` lists BOTH
+//     ?PackVector@@... and ?FillCompressedVertex@@... -- our object emits them;
+//   * dtk's apply_symbols_file (jeff src/util/config.rs) PARKS a prior holder
+//     when a REAL name collides, so symbols.txt can bind each name exactly
+//     once; it binds the rnddx9 addresses (config/373307D9/symbols.txt:142797,
+//     :142798) and leaves these two as fn_ placeholders;
+//   * scripts/analysis/map_multiplicity_census.py --check-objs files both in
+//     its 5-row REAL residue with ours_defines=True.
+// Adding symbols.txt lines here is ZERO-SUM: it would park the rnddx9 copies as
+// fn_826204D8 / fn_826202E0 and move the 0% rather than remove it.  The lever
+// that pays is improving the SHARED bodies below, which scores in rnddx9 and is
+// silently identical here: as of 2026-09-15 rnddx9's FillCompressedVertex reads
+// 99.96% (8 rows: 6 lfs/stfs offset swaps, one r28<->r29 rlwimi pair) and its
+// PackVector reads 96.2% (22 diff_arg / 3 replace, r29<->r30 dominant).
 static const unsigned int kBitsOutput = 32;
 
 static void PackVector(

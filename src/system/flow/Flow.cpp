@@ -12,6 +12,26 @@
 #include "flow\FlowOutPort.h"
 #include "flow\FlowPickOne.h"
 #include "flow\FlowQueueable.h"
+
+// w8-e 2026-09-15: the five 0% rows in this unit are a SINGLE real gap, not an
+// ICF or placeholder artifact -- they are the std::vector<Hmx::Object*> growth
+// machinery, 636 B total, and orig/373307D9/ham_xbox_r.map contributes every one
+// of them from `flow:Flow.obj` itself (`f i`, i.e. a COMDAT of THIS TU):
+//   ?_M_insert_overflow@?$vector@PAVObject@Hmx@@...  823f2630  248 B
+//   ?push_back@?$vector@PAVObject@Hmx@@...           823f29c0  112 B
+//   ?allocate@?$StlNodeAlloc@PAVObject@Hmx@@...      823ed698  112 B
+//   ?deallocate@?$StlNodeAlloc@PAVObject@Hmx@@...    823ed708  128 B
+//   ??1?$vector@PAVObject@Hmx@@...                   823f25a8   36 B
+// So unlike most of the w8-e worklist these ARE emittable from this file; all
+// five read 0.0% as of 2026-09-15 because our Flow.cpp never instantiates that
+// vector at all -- it holds its Hmx::Object* set in other containers.  What the
+// target needs is a `std::vector<Hmx::Object*>` member/local here whose growth
+// path (push_back on a full vector) is actually taken, which forces the stlport
+// _M_insert_overflow/allocate/deallocate quartet into this TU.  Refuted: adding
+// an explicit `template class std::vector<Hmx::Object*>;` is NOT sufficient by
+// itself -- stlport's vector members are already emitted per-use as COMDATs, and
+// an explicit instantiation with no call site still emits the wrong set (the
+// image has exactly these five and no ?reserve/?insert siblings).  Left open.
 #include "flow\FlowRun.h"
 #include "flow\FlowSequence.h"
 #include "flow\FlowSetProperty.h"

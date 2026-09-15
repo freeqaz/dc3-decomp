@@ -2,6 +2,16 @@
 #include "obj/Object.h"
 #include "rndobj\Anim.h"
 
+// w8-e 2026-09-15: ?push_back@?$vector@VColor@Hmx@@... (136 B, 0%) is a real
+// same-TU gap -- ham_xbox_r.map contributes it from `rndobj:MeshAnim.obj` at
+// 826d5788, so the image really does push_back into a std::vector<Hmx::Color>
+// in this file.  Our MeshAnim.cpp reaches its colour keys with resize() /
+// insert() / erase() instead, which emit a different COMDAT set, so push_back is
+// never instantiated and the row reads 0.0%.  The lever is rewriting whichever
+// colour-key append path the image uses as a literal `push_back`; note the
+// sibling ??$?6VVector2@...BinStream at 826d4508 is also contributed by this
+// object, which is consistent with the load/save path here being vector-shaped.
+
 #pragma region Hmx::Object
 
 RndMeshAnim::RndMeshAnim() : mMesh(this), mKeysOwner(this, this) {}

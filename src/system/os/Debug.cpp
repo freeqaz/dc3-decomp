@@ -12,6 +12,20 @@ ScopedState<T, InitVal, DestroyVal>::~ScopedState() {
 }
 
 // Force instantiation of the destructor COMDAT
+
+// w8-e 2026-09-15: both 0% `fn_` rows in this unit are symbols.txt name
+// collisions, not missing code.
+//   * fn_825CCF20 (160 B) is ?DebugModal@@YAXAAW4ModalType@Debug@@AAVFixedString
+//     @@_N@Z.  ham_xbox_r.map lists that mangled name TWICE -- 82331FA8 from
+//     App.obj (size 0x1D0) and 825CCF20 from os:Debug.obj (this one) -- both
+//     bare `f`, which only internal linkage produces.  dtk's apply_symbols_file
+//     (jeff src/util/config.rs) can bind a real name exactly once and PARKS the
+//     loser as fn_<addr>; config/373307D9/symbols.txt:117577 binds the App copy,
+//     so the Debug copy is permanently fn_825CCF20 and can never pair.
+//   * fn_825CE40C (40 B) is `__unwind$110265` -- an UNWIND DATA blob that the
+//     split carved into .text.  It is not a function at all and has no source
+//     spelling; unscoreable by construction.
+// Both measured 0.0%; neither is fixable from this file.
 template ScopedState<bool, 1, 0>::~ScopedState();
 
 #include "os\Debug.h"

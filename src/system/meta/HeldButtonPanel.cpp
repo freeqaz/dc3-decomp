@@ -1,4 +1,10 @@
 #include "meta\HeldButtonPanel.h"
+
+/* w8-e 2026-09-15 -- ??$__uninitialized_copy@PBVActionRec@@PAV1@@... (96 B) is
+ * an ICF fold alias whose surviving body was contributed by meta:ButtonHolder.obj
+ * (ham_xbox_r.map, 0x82E1C720).  HeldButtonPanel.obj contributes the non-const
+ * source spelling at the same address.  Unfixable from this file. */
+
 #include "meta\ButtonHolder.h"
 #include "obj/Object.h"
 #include "os\JoypadMsgs.h"

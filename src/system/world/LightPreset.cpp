@@ -1,4 +1,12 @@
 #include "world/LightPreset.h"
+
+/* w8-e 2026-09-15 -- ?erase@?$ObjPtrVec@VHamMove@@VObjectDir@@@@... (276 B, and
+ * carrying a stale AT_LIMIT verdict) is an ICF fold alias.  ham_xbox_r.map lists
+ * ELEVEN names at 0x82848AD0; the surviving body came from hamobj:MoveDir.obj.
+ * LightPreset.obj's own contribution at that address is the Spotlight spelling,
+ * ?erase@?$ObjPtrVec@VSpotlight@@VObjectDir@@@@..., which we do emit.  Not a
+ * source gap -- symbols.txt can bind only one of the eleven. */
+
 #include "SpotlightDrawer.h"
 #include "obj\ObjPtrVec_impl.h"
 #include "math\Mtx.h"

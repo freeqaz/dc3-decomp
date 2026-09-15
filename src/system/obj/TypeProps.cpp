@@ -7,6 +7,15 @@
 #include "utl/Loader.h"
 #include "utl\Symbol.h"
 
+// w8-e 2026-09-15: `merged_ObjPtrListRemove` (100 B, 0%) is the same synthetic
+// ICF-group label as merged_ObjPtrVecErase in flow/FlowManager -- not a target
+// symbol.  build/373307D9/icf_aliases.map:11114 declares the group at 825C6868
+// with five folded members (ObjPtrList<FlowNode|Hmx::Object|RndDrawable|
+// RndLight|ThreeDSound, ObjectDir>::remove), all `icf_aliases.synthetic`, and
+// config/373307D9/symbols.txt:139568 binds the invented name there.  No source
+// spelling produces that name, so the row cannot pair.  Measured 0.0%,
+// structurally unscoreable.
+
 DataNode *TypeProps::KeyValue(Symbol key, bool fail) const {
     if (mMap) {
         for (int i = mMap->Size() - 2; i >= 0; i -= 2) {

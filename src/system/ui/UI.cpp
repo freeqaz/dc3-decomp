@@ -12,6 +12,14 @@
 #include "obj/Object.h"
 #include "os\Debug.h"
 #include "os\File.h"
+
+// w8-e 2026-09-15: fn_8277AFC0 (132 B, 0%) is ?TerminateCallback@@YAXXZ, a
+// file-static.  ham_xbox_r.map lists that name TWICE -- 8265EA60 from
+// rndobj:Rnd.obj (size 0x38) and 8277AFC0 from ui:UI.obj (this one) -- both bare
+// `f`.  symbols.txt can carry one symbol per name and line 144853 binds the
+// rndobj copy, so dtk parks this one as fn_8277AFC0.  The row can never pair and
+// can never score; adding a symbols.txt line here would merely park Rnd's copy
+// instead (zero-sum).  Measured 0.0%, structurally unscoreable.
 #include "os\Joypad.h"
 #include "os\JoypadClient.h"
 #include "os\JoypadMsgs.h"
