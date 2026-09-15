@@ -84,6 +84,10 @@ void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
     // so this is an allocator tie-break, not a liveness difference.
     // NEGATIVE RESULT: inlining `f2` (push_back(Key<float>(i2, f1 + f3))) is
     // exactly inert -- same 5 rows, same registers.
+    // NEGATIVE RESULT (w8-i): hoisting `float f2 = f1 + f3;` ABOVE the first
+    // push_back -- so that the sum, not the parameter, is the value whose live
+    // range opens first -- is equally inert: same 5 rows, same f30/f31
+    // assignment, 99.96.  The allocator is not reading source live-range order.
     float f2 = f1 + f3;
     mCountKeys.push_back(Key<float>(i2, f2));
     mCountToken = s;
