@@ -85,16 +85,17 @@ void HamRegulate::RegulateWay(Waypoint *w, float f) {
 }
 
 void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
-    float radius = mArriveRadius;
+    float radius;
     if (mArriveRadius < 0.0f) {
         if (mLeftFoot) {
             radius = mLeftFoot->mData->LocalXfm().v.z;
         } else {
             radius = 0.0f;
         }
+    } else {
+        radius = mArriveRadius;
     }
-    radius = Max(radius, 0.01f);
-    float invRadius = 1.0f / radius;
+    float invRadius = 1.0f / Max(radius, 0.01f);
 
     float absDt = Max(0.0f, TheTaskMgr.DeltaBeat());
     Character *character = mCharacter;
