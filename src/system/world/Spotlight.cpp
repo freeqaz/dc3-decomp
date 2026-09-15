@@ -1790,7 +1790,7 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     for (int row = 0; row < nMinus1; row++) {
         for (int col = 0; col < nMinus1; col++) {
             int base = row + 1 + col * n;
-            unsigned short uBaseN = base + n - 1;
+            int uBaseN = base + n - 1;
             unsigned short uPrev = base - 1;
             if (iFace & 2) {
                 faces[iFace++].Set(uBaseN, uPrev, base + n);
