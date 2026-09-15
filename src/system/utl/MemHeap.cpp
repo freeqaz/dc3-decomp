@@ -198,6 +198,33 @@ void MemHeap::Init(
     bool allowTemp
 ) {
     MILO_ASSERT_FMT(start, "Could not allocate %d bytes for heap %s\n", size * 4, name);
+    // RESOLVED (w7-bn, 2026-09-15): 83.0 -> 100.0 canonical, 78 rows all
+    // equal, 312 B both sides.  The lever is the OPACITY of the first
+    // mStart write, not a read-back.  `int **pStart = &mStart; *pStart =
+    // start;` is a store the early optimizer will not equate with
+    // this->mStart, so (a) the later direct `mStart = alignedStart` cannot
+    // dead-store-eliminate it (827F87BC survives), (b) the adjacent direct
+    // read `int *rawStart = mStart;` stays a real load through the early
+    // passes and is forwarded LATE by the machine-level stw->lwz peephole,
+    // which keeps lwz's zero-extension -- that is the `clrrwi r10, r30, 0`
+    // at 827F87C0 -- and (c) the stack-argument load `lbz r8, 0xf7(r1)`
+    // (827F87C4) cannot hoist above an opaque store, which is what pins the
+    // whole store window (827F87BC-827F8810) into the image's order.
+    // Measured on the way (each with run_objdiff in this worktree):
+    //   direct store + read through *pStart, adjacent          89.7 (clrrwi
+    //     present, both sides 312 B, but lbz hoisted above the store);
+    //   *pStart store + *pStart read, adjacent                  89.0 (read
+    //     forwarded early, no clrrwi, dead `addi r11, r31, 0x4`);
+    //   *pStart for both stores and the read, 3 stores between 66.4 (read
+    //     stays a real lwz);
+    //   direct store + direct read + aligned store via *pStart  74.1 (read
+    //     forwarded early as bare r30);
+    //   mAllowTemp moved between the stores; `*(unsigned int *)&mStart`
+    //     read; (unsigned long long) casts on the subtraction; reading
+    //     (mStart - rawStart) after the aligned store: all byte-identical
+    //     to their parent spelling.
+    // The paragraphs below are the history that led here; they are kept
+    // because every negative in them is still true of a DIRECT read-back.
     // RESIDUAL (w7-aq, 83.013 canonical): the image writes mStart TWICE --
     // 827F87BC stores the raw `start`, 827F87E8 overwrites it with the
     // 16-byte-aligned pointer -- and also carries a `clrrwi r10, r30, 0` copy
@@ -223,9 +250,12 @@ void MemHeap::Init(
     // so no read-back spelling can keep it alive.  The entire residual is
     // those 2 absent instructions plus the member-store reshuffle they cause
     // (idx 27-56); idx 0-26 and 57-82 are exact on both sides.
+    // Opaque first write + direct read-back: see the RESOLVED note above.
+    // Do NOT "simplify" to `mStart = start;` -- that spelling is DSE'd and
+    // reads 83.0.
     int **pStart = &mStart;
-    mStart = start;
-    int *rawStart = *pStart;
+    *pStart = start;
+    int *rawStart = mStart;
     mName = name;
     mNum = num;
     mIsHandleHeap = handle;
