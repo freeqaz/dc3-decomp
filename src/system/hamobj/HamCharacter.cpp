@@ -659,6 +659,39 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
     return 0;
 }
 
+// RESIDUAL (w7-bp, 91.66 canonical, 652 B, 25 rows, target 0x82491900-82491B8C).
+// No behavioural divergence: both loops' argument sets, the
+// `(mSkeletonBones ? mSkeletonBones + 0x10 : 0)` null-select feeding ScaleAdd,
+// and the 0.0f/weight FPR assignment at 0x82491AB0-B8 all pair exactly.  The
+// 25 rows are three separable backend clusters:
+//
+//  (1) EPILOGUE PLACEMENT, 6 rows (target deletes 32-34, our inserts 167-169).
+//      Both sides have exactly ONE epilogue copy and identical block ORDER.
+//      The image puts the three instructions (`addi r1, r31, 0xe0` / two `lfd`)
+//      inline in the `return this` block at 0x82491980, and its last block
+//      (`.L_82491B84: lwz r3, 0x334(r30)`, the `return mNeutralSkelDir`)
+//      branches BACKWARD to it.  We put them in the tail block and branch
+//      forward from `return this`.  MSVC is choosing which of the two
+//      return-value blocks hosts the epilogue; source order of the returns is
+//      already the image's (the first `return this` is the first return in
+//      this function either way), so it is not reachable from that.
+//
+//  (2) THE clipTimingMap LOOP GUARD, 6 rows (target 39-43).  Already refuted
+//      by w7-af -- see the note at the loop itself.  Worth adding what it is:
+//      the image CROSS-JUMPS the guard into the latch (`lwz r29, 0x68(r31)` /
+//      `b .L_824919CC`, straight to the bottom test) while we duplicate the
+//      test at the top.  The sibling loop over mClipWeightMap has the
+//      duplicated guard in the IMAGE too (0x82491A2C-3C), from the same source
+//      spelling, which is the direct evidence that this is per-loop backend
+//      tail-merging and not a shape the source picks.
+//
+//  (3) r26 <-> r27, 7 rows (target 81-91 and 115-120), in the mClipWeightMap
+//      loop only: the image holds the iterator in r27 and `sSkeletonClips` in
+//      r26 (`mr r27, r11` at 0x82491A34 then `addi r26, r11, sSkeletonClips@l`
+//      at 0x82491A4C), we hold them the other way round.  Pure callee-saved
+//      permutation, which the canonical ruler forgives in principle but
+//      objdiff still charges here because the two registers are defined in a
+//      different ORDER, not merely renamed.
 ObjectDir *HamCharacter::GetNeutralSkeleton() {
 #ifdef HX_NATIVE
     {
