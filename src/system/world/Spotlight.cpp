@@ -1018,6 +1018,47 @@ void Spotlight::UpdateFloorSpotTransform(const Transform &tf) {
     }
 }
 
+// w7-bo (2026-09-15): 68.77 -> 70.20 canonical, 1628 B. Two levers, each
+// measured alone: a plain counted `for` over totalSections (the image guards
+// with `cmplwi cr6, r16, 0x0` at 0x8282D898 and then `mtctr r16` at
+// 0x8282D8D4 -- our `int count` do/while cost a second IV), and inverting the
+// halfWidth step so the BOTTOM arm is the fall-through (0x8282DCC4 is
+// `cmplw cr6, r18, r14` / `blt cr6, <top arm>`; that closed the one blt/bge
+// diff_op).
+//
+// MEASURED NEGATIVES, each alone from the 70.20 state:
+//  - `unsigned short` for c0..n3 (69.60). This is what the image's TYPE is --
+//    every index is materialised with `clrlwi ...,16` (0x8282DAF4) and
+//    RndMesh::Face's members are unsigned short -- and it does remove the
+//    frame-size delta and move the prologue from r16-r31 to r15-r31. It
+//    scores lower because MSVC then rebiases the `s` induction variable from
+//    4i+6 to 4i+1, so it hoists ONE modular addend (`addis r9,r21,1` /
+//    `subi r9,r9,1` = +0xffff) where the image hoists SIX
+//    (`ori r20, r7, 0xfffa` .. `ori r25, r8, 0xfffd`, 0x8282D90C-0x8282D920).
+//  - `unsigned short s` as well (69.50). The image's `s` is an untruncated
+//    32-bit IV (`addi r11, r11, 0x4` at 0x8282DCE4), so this is wrong anyway.
+//  - `int s` + `short c0..c3` (69.80).
+//  - spelling the addends `s + (unsigned short)-6` to force the modular
+//    constants: MSVC folds it straight back to `s - 6`, byte-identical object.
+//  - inverting the even/odd face arms to `if (i & 1)`: INERT (kept, because it
+//    is what 0x8282DAEC `clrlwi. r9, r18, 31` / `beq .L_8282DBAC` reads as).
+//  - declaring bottomSideBorderVal before verts/faces: INERT.
+//
+// RESIDUAL is a register-pressure cascade, not a row: the image saves
+// r14-r31 + f26-f31 (18 GPR / 6 FPR), we save r16-r31 + f25-f31 (16 / 7). It
+// spills `this` to 0x144(r1) (0x8282D710) so r27 can carry a vertex BYTE
+// cursor biased +0xc0 (two Verts) and derive three more bases per iteration
+// (`subi r8, r27, 0xc0` / `subi r7, r27, 0x60` / `addi r6, r27, 0x60` at
+// 0x8282D98C/0x8282D9A4/0x8282D9AC); ours runs one cursor at bias 0 and folds
+// k*0x60 into the store displacements instead. It also keeps lVar31 as its own
+// IV (`neg r15, r14`, `addi r15, r15, 0x1` at 0x8282DCDC) where MSVC
+// eliminates ours into `i - numSectionsTop`.
+//
+// The MakeString name difference under name_check is the known per-TU ICF
+// alias, NOT a wrong string: the target's own relocations at 0x8282D730 and
+// 0x8282D734 name "Spotlight.cpp" (_0O@ = 14) and
+// "!SpotlightDrawer::DrawNGSpotligh..." (_0CF@ = 37), which is exactly the
+// instantiation we emit.
 void Spotlight::BuildBeam(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x609);
     def.mIsCone = false;
@@ -1048,14 +1089,12 @@ void Spotlight::BuildBeam(BeamDef &def) {
     float radiusStepTopVal = radiusStepTop * topSectionLen;
     float radiusStepBotVal = (def.mBottomRadius - borderTopRadius) * botSectionLen;
 
-    if (totalSections != 0) {
-        float halfWidth = topRadius;
-        int fi = 0;
-        int lVar31 = -numSectionsTop;
-        short s = 6;
-        int count = totalSections;
-        unsigned int i = 0;
-        do {
+    float halfWidth = topRadius;
+    int fi = 0;
+    int lVar31 = -numSectionsTop;
+    short s = 6;
+    {
+        for (unsigned int i = 0; i < (unsigned int)totalSections; i++) {
             float y;
             float alpha;
             if (i == (unsigned int)(totalSections - 1)) {
@@ -1122,20 +1161,23 @@ void Spotlight::BuildBeam(BeamDef &def) {
                 short n2 = s;
                 short n3 = s + 1;
 
-                if ((i & 1) == 0) {
-                    faces[fi].Set(c0, n0, c1);
-                    faces[fi + 1].Set(c1, n0, n1);
-                    faces[fi + 2].Set(c1, n2, c2);
-                    faces[fi + 3].Set(c1, n1, n2);
-                    faces[fi + 4].Set(c2, n2, c3);
-                    faces[fi + 5].v1 = c3;
-                } else {
+                // Target 0x8282DAEC is `clrlwi. r9, r18, 31` / `beq .L_8282DBAC`
+                // -- the ODD arm is the fall-through, so the source tests
+                // `i & 1` and the even arm is the else.
+                if (i & 1) {
                     faces[fi].Set(c0, n0, n1);
                     faces[fi + 1].Set(c0, n1, c1);
                     faces[fi + 2].Set(c1, n1, c2);
                     faces[fi + 3].Set(c2, n1, n2);
                     faces[fi + 4].Set(c2, n3, c3);
                     faces[fi + 5].v1 = c2;
+                } else {
+                    faces[fi].Set(c0, n0, c1);
+                    faces[fi + 1].Set(c1, n0, n1);
+                    faces[fi + 2].Set(c1, n2, c2);
+                    faces[fi + 3].Set(c1, n1, n2);
+                    faces[fi + 4].Set(c2, n2, c3);
+                    faces[fi + 5].v1 = c3;
                 }
                 faces[fi + 5].v2 = n2;
                 faces[fi + 5].v3 = n3;
@@ -1148,18 +1190,19 @@ void Spotlight::BuildBeam(BeamDef &def) {
                 }
             }
 
-            if (i < (unsigned int)numSectionsTop) {
-                halfWidth = radiusStepTopVal + halfWidth;
-            } else {
+            // Target 0x8282DCC4 is `cmplw cr6, r18, r14` / `blt cr6, <top arm>`
+            // -- the BOTTOM arm is the fall-through, so the source tests
+            // `i >= numSectionsTop` and the top step is the else.
+            if (i >= (unsigned int)numSectionsTop) {
                 halfWidth = radiusStepBotVal + halfWidth;
+            } else {
+                halfWidth = radiusStepTopVal + halfWidth;
             }
 
-            i++;
             lVar31++;
             s += 4;
             fi += 6;
-            count--;
-        } while (count != 0);
+        }
     }
 
     def.mBeam->Sync(0x13F);
