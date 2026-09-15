@@ -446,6 +446,15 @@ void DxRnd::FinishPostProcess() {
     // All 29 residual rows have this one cause; the two `lwa 0x40/0x44` order
     // rows and the 0x68/0x6c store swap are downstream scheduling, not a
     // wrong field (both sides put mWidth in .w and mHeight in .h).
+    // w7-bx (2026-09-15, still 83.91304): two more probes, both inert or
+    // worse.  (a) Caller-size inline budget: inflating the inlined preamble
+    // with 1 or 4 extra MipFilter/AddressU pairs before the Clear does NOT
+    // turn our MakeColor into a call -- MSVC folds the constant-argument
+    // inline regardless of how much it has already inlined here, so a
+    // budget reachable from this TU is not the mechanism.  (b) Building
+    // `rect` before the Clear (so its lwa/fcfid work precedes the call)
+    // is 70.1: the image's `lwa 0x40/0x44` sit after `bl D3DDevice_Clear`
+    // (0x82617E1C/0x82617E28), as written below.
     D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(Hmx::Color(0, 0, 0.3f)), 0, 0, 0);
     Hmx::Rect rect(0, 0, (float)mWidth, (float)mHeight);
     RndMat *mat = TheShaderMgr.GetPostProcMat();

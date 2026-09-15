@@ -26,37 +26,51 @@ void SpectralAnalysis::Analyze(const float *in, float *out) {
     mFft1.FftReal(&mData0[0], &mData4[0], &mData5[0]);
 
     // Magnitude spectrum back into mData0.
-    // NEGATIVE RESULT (w7-ap, 2026-09-14, 85.9 canonical): the image's
-    // magnitude loop is ONE induction pointer plus two byte biases --
-    // 0x82E4D4AC `subf r10, r11, r8` / 0x82E4D4B0 `subf r9, r11, r9` off the
-    // mData5 walker, then `lfs f0, 0x0(r11)` / `lfsx f13, r10, r11` /
-    // `stfsx f0, r9, r11` / `addi r11, r11, 0x4` -- exactly the idiom the
-    // recombination loop below uses.  Writing it that way (with the biases as
-    // char* differences so no srawi/slwi rescale appears, in either
-    // declaration order) costs 4.9pp: 85.9 -> 81.0.  The image emits the
-    // zero-trip `beq cr6` and the `mtctr` BEFORE the two `subf`s; MSVC puts
-    // the biases first whenever they are named locals, which reorders the
-    // whole preheader and re-colours r7/r8/r9/r11.  Three walking pointers
-    // and the lfsu/lfsu/stfsu update forms remain the better source.
+    // w7-bx (2026-09-15, 85.90323 -> 95.48387): the image's magnitude loop is
+    // ONE induction pointer plus two byte biases -- 0x82E4D4A4 `beq cr6` /
+    // 0x82E4D4A8 `mtctr r10` first, THEN 0x82E4D4AC `subf r10, r11, r8` /
+    // 0x82E4D4B0 `subf r9, r11, r9` off the mData5 (im, 0xd0) walker r11,
+    // and `lfs f0, 0x0(r11)` / `lfsx f13, r10, r11` / `stfsx f0, r9, r11`.
+    // Index-based `re[k]` / `im[k]` / `mag[k]` (NOT named char* biases, NOT
+    // walking pointers -- w7-ap's 81.0 / 85.9 spellings) reproduce all of it:
+    // MSVC strength-reduces the three same-stride arrays to one walker plus
+    // biases, and emits the zero-trip guard and mtctr before the biases when
+    // the biases are its own, not named locals.  Under /fp:fast the image
+    // squares im (the walker) FIRST (0x82E4D4B4 `lfs f0, 0x0(r11)` /
+    // `fmuls f0, f0, f0`, then `fmadds f0, f13, f13, f0` on re); the source
+    // spelling that lands there is the OPPOSITE order, `re*re` then
+    // `im*im + acc` -- `im*im` first walks re instead.
     unsigned int bins = (unsigned int)mHalfPlusOne;
     float *mag = &mData0[0];
     float *im = &mData5[0];
     float *re = &mData4[0];
-    if (bins != 0) {
-        do {
-            float acc = im[0] * im[0];
-            acc = re[0] * re[0] + acc;
-            mag[0] = sqrtf(acc);
-            im++;
-            re++;
-            mag++;
-        } while (--bins != 0);
+    for (unsigned int k = 0; k < bins; k++) {
+        float acc = re[k] * re[k];
+        acc = im[k] * im[k] + acc;
+        mag[k] = sqrtf(acc);
     }
 
     // Spectral window recombination over the first half, using the sin/cos
     // table, accumulating the cosine term into mAccum.
+    // w7-bx: the table pointers are loaded at 0x82E4D4E8/0x82E4D4EC, ABOVE
+    // the `data[0]` store and the `ble` guard at 0x82E4D524 -- they must be
+    // named locals declared BEFORE the `data[0] = ...` store, or MSVC keeps
+    // the member loads below the (possibly aliasing) stfs through `data`.
+    // RESIDUAL (w7-bx, 95.48387): the image biases BOTH tables off the data
+    // walker (0x82E4D52C `subf r8, r4, r8`, 0x82E4D530 `subf r7, r4, r7`,
+    // then `lfsx f10, r8, r11` / `lfsx f12, r7, r11`); ours chains the
+    // second table off the first (`subf r6, r8, r7` = sin - cos, then
+    // `add r7, r8, r11` / `lfsx f9, r7, r6`), which costs r5 for `quarter`
+    // (image keeps it in r6), moves `addi r9, r9, 0x1`, and renames f9-f12.
+    // Tried: cosT declared first (only swaps the two lwz targets), int vs
+    // unsigned i (identical), pc before ps (fixes the lwz pair, kept),
+    // walking lo/hi pointers for data (93.3), mSinTable[i]/mCosTable[i]
+    // read directly in the loop (92.2, loads land inside the loop).
     float *data = &mData0[0];
     int half = (unsigned int)mFftSize >> 1;
+    float *sinT = &mSinTable[0];
+    float *cosT = &mCosTable[0];
+    int i = 1;
     float a0 = data[0];
     float aN = data[half];
     float diff0 = a0 - aN;
@@ -65,36 +79,21 @@ void SpectralAnalysis::Analyze(const float *in, float *out) {
     data[0] = sum0 * 0.5f;
 
     unsigned int quarter = (unsigned int)half >> 1;
-    // Both tables and the counter are materialised ABOVE the guard in the
-    // image: 0x82E4D4E0 `li r9, 0x1`, 0x82E4D4E8 `lwz r8, 0xac(r31)` and
-    // 0x82E4D4EC `lwz r7, 0xb8(r31)` all sit before 0x82E4D524 `ble cr6`.
-    // The biases are BYTE differences fed straight to `lfsx` (0x82E4D52C /
-    // 0x82E4D530 `subf`); a float-element difference makes MSVC emit a
-    // srawi/slwi pair to scale it back.
-    float *sinT = &mSinTable[0];
-    float *cosT = &mCosTable[0];
-    unsigned int i = 1;
     if (quarter > 1) {
-        long sinBias = (const char *)sinT - (const char *)data;
-        long cosBias = (const char *)cosT - (const char *)data;
-        float *lo = data + 1;
-        float *hi = data + half;
         do {
-            float a = lo[0];
-            float b = hi[-1];
+            float a = data[i];
+            float b = data[half - i];
             float diff = a - b;
-            float s = *(const float *)((const char *)lo + sinBias);
+            float c = cosT[i];
             float sum = b + a;
-            float c = *(const float *)((const char *)lo + cosBias);
+            float s = sinT[i];
             double acc = mAccum;
-            float ps = s * diff;
-            sum = sum * 0.5f;
             float pc = c * diff;
-            lo[0] = sum - ps;
-            // fused decrement-and-store: 0x82E4D570 `stfsu f13, -0x4(r10)`
-            *--hi = ps + sum;
+            sum = sum * 0.5f;
+            float ps = s * diff;
+            data[i] = sum - ps;
+            data[half - i] = ps + sum;
             mAccum = (double)pc + acc;
-            ++lo;
             ++i;
         } while (i < quarter);
     }

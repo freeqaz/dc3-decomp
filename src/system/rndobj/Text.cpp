@@ -71,15 +71,9 @@ Transform XfmOnCircleEdge(float circumference, float pos) {
     float cosA = Cosine(angle);
     float sinA = Sine(angle);
 
-    float negSign = -sign;
     xfm.v.Set(cosA, sinA, 0.0f);
-    xfm.m.y.y = xfm.v.y * negSign;
-    xfm.m.y.x = xfm.v.x * negSign;
-    xfm.m.y.z = xfm.v.z * negSign;
-
-    xfm.m.x.z = xfm.m.y.x * xfm.m.z.y - xfm.m.z.x * xfm.m.y.y;
-    xfm.m.x.x = xfm.m.z.z * xfm.m.y.y - xfm.m.y.z * xfm.m.z.y;
-    xfm.m.x.y = xfm.m.y.z * xfm.m.z.x - xfm.m.z.z * xfm.m.y.x;
+    Scale(xfm.v, -sign, xfm.m.y);
+    Cross(xfm.m.y, xfm.m.z, xfm.m.x);
 
     float radius = (sign * circumference) * 0.15915494f;
     xfm.v *= radius;
@@ -2628,6 +2622,13 @@ void RndText::DrawShowing() {
                 FontMapBase *fontMap = mFontMaps[fmIdx];
                 for (int i = 0; i < fontMap->NumMaterials(); i++) {
                     RndMat *mat = fontMap->Material(i);
+                    // NEGATIVE (w7-bx): the image interleaves the mDirty RMW
+                    // inside this 4-word copy (lwz 0x228 at 0x8269940C between
+                    // the blue load and store, stw 0x228 at 0x8269941C before
+                    // the alpha store); ours keeps copy-then-RMW.  Writing
+                    // MarkDirty(1) first keeps RMW-then-copy instead (97.3):
+                    // MSVC preserves the source order of these memory ops, so
+                    // the image's copy is not an opaque block move.
                     mat->GetColor() = style.mFontColor;
                     mat->MarkDirty(1);
                 }
@@ -2689,6 +2690,10 @@ void RndText::DrawShowing() {
                 // copy count meant DrawMesh's repeat loop never ran, so a
                 // marquee drew exactly one copy and left a gap instead of
                 // tiling across the label.
+                // NEGATIVE (w7-bx): the image hoists `lis sBlacklightModeEnabled`
+                // into r27 before `lis TheUI` into r26 (0x82699470/74); ours
+                // hoists them the other way round, and the positive form of
+                // this condition (A && B && !C) does not change that.
                 if (!(!sBlacklightModeEnabled || !(*it)->mBlacklight ||
                     TheUI->DisableScreenBlacklight())) {
                     QueueBlacklightPacket(mesh, mLineHeight, mScrollCopies);
@@ -2702,15 +2707,20 @@ void RndText::DrawShowing() {
     // Restore material colors (r, g, b only — not alpha)
     if (hasOverride) {
         vlaIdx = 0;
-        auto fontMapsEnd = mFontMaps.end();
-        for (auto it = mFontMaps.begin(); fontMapsEnd != it; ++it) {
+        for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
             for (int i = 0; i < (*it)->NumMaterials(); i++) {
                 RndMat *mat = (*it)->Material(i);
-                Hmx::Color &color = mat->GetColor();
-                color.red = savedColors[vlaIdx].red;
-                color.green = savedColors[vlaIdx].green;
-                color.blue = savedColors[vlaIdx].blue;
-                mat->MarkDirty(1);
+                // Restore (w7-bx): SetColor(r, g, b) -- right-to-left argument
+                // evaluation loads blue, green, red with the lfsu on red
+                // (0x82699588-0x82699598) and its mDirty |= 1 is the RMW that
+                // follows (0x826995A8).  The image then stores green, blue,
+                // red; our Set body stores red, green, blue (3 rows).
+                // NEGATIVE: per-field green/blue/red assignments + MarkDirty
+                // reorder the loads too (96.8); hoisting mFontMaps.end() into
+                // a local turns the rotated `b`-to-bottom loop into a top
+                // test and steals r26 (92.0).
+                const Hmx::Color &saved = savedColors[vlaIdx];
+                mat->SetColor(saved.red, saved.green, saved.blue);
                 vlaIdx++;
             }
         }
@@ -2855,16 +2865,15 @@ void RndText::FontMap3d::IncrementDisplayableChars(unsigned short us) {
 void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
     unsigned int targetSize = 0;
     if (mFont != NULL) {
-        targetSize = fixedLength;
-        if (fixedLength == 0) {
+        if (fixedLength != 0) {
+            targetSize = fixedLength;
+        } else {
             targetSize = mDisplayableChars;
         }
     }
 
-    unsigned int oldSize = (unsigned int)mMeshes.size();
-
-    if (targetSize < oldSize) {
-        unsigned int i = targetSize;
+    unsigned int i = targetSize;
+    if (targetSize < (unsigned int)mMeshes.size()) {
         do {
             RndMesh *mesh = mMeshes[i];
             if (mesh != NULL) {
@@ -2874,26 +2883,17 @@ void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
         } while (i < (unsigned int)mMeshes.size());
     }
 
-    RndMesh *nullMesh = NULL;
+    unsigned int oldSize = (unsigned int)mMeshes.size();
+    mMeshes.resize(targetSize);
 
-    if (targetSize < oldSize) {
-        mMeshes.erase(mMeshes.begin() + targetSize, mMeshes.end());
-    } else {
-        mMeshes.insert(mMeshes.end(), (int)targetSize - (int)oldSize, nullMesh);
-    }
-
+    i = 0;
     if ((unsigned int)mMeshes.size() > 0) {
-        unsigned int i = 0;
         do {
             if ((int)i >= (int)oldSize) {
                 mMeshes[i] = Hmx::Object::New<RndMesh>();
             }
             RndMesh *mesh = mMeshes[i];
-            RndTransformable *parent = NULL;
-            if (text != NULL) {
-                parent = text;
-            }
-            mesh->SetTransParent(parent, false);
+            mesh->SetTransParent(text, false);
             mesh->SetTransConstraint(RndTransformable::kConstraintNone, NULL, false);
             mesh->SetMat(mFont->Mat());
             mesh->SetShowing(true);

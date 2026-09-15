@@ -641,7 +641,20 @@ dprintf_Pass1(const char *format, va_stack_t *vto, char **endpos, va_list arglis
    NEGATIVE (measured here): hoisting `static const char null[] = "(nil)";` from
    the FORMAT_STRING block to the top of the function body is byte-identical --
    MSVC emits function-local statics in reverse declaration order regardless, so
-   neither the layout nor the anchor moves. */
+   neither the layout nor the anchor moves.
+   w7-bx (2026-09-15, still 98.21525) -- two more probes, both reverted:
+   * swapping the file-scope declaration order of upper_digits/lower_digits
+     moves upper to +0 and makes IT the anchor (`addi r10, r18, 0x28` = lower),
+     and as a side effect schedules the prologue like the image (`addi r5/r4`
+     and `li r30, 0x0` rows 12-20 close, 99.0) -- but the .rdata layout is then
+     wrong (image has lower_digits at +0), so it is not taken;
+   * a sized tentative definition `static const char null[6];` above the digit
+     tables (earliest symbol id) with the definition after the function puts
+     null at +0x50 (before strnil) and STILL anchors lower_digits.  So the
+     anchor is the lowest-addressed static of the section, not the earliest
+     declared one; the image anchoring the HIGHEST (null[]) is not reachable
+     from any declaration order here.  (An unsized `static const char null[];`
+     is C2133 on this compiler.) */
 static int dprintf_formatf(
     void *data, /* untouched by format(), just sent to the stream() function in
                    the second argument */
