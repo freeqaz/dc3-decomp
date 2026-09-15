@@ -181,8 +181,28 @@ void HamCamShot::UpdateTargetsFlipped() {
                 for (ObjList<Target>::iterator it = mTargets.begin();
                      it != mTargets.end();
                      ++it) {
-                    HamCharacter *character = CharacterNameToCharacter(it->mTarget);
+                    // CLOSED (w7-bp, 98.25641 -> 98.62937 canonical): this order is
+                    // load-bearing.  Binding `target` BEFORE the call and passing
+                    // `target.mTarget` reproduces the image exactly --
+                    //     0x4ff0 lwz  r3, 0x8(r29)      (the Symbol, off the NODE)
+                    //     0x4ff4 addi r28, r29, 0x8     (&target, kept in r28 only)
+                    // Note MSVC still spells the Symbol load off the node pointer,
+                    // not off r28, so `target.mTarget` costs nothing.
+                    // With the call FIRST (`CharacterNameToCharacter(it->mTarget)`)
+                    // and `Target &target = *it;` after it, MSVC emitted the `addi`
+                    // ahead of the load AND homed it -- an extra dead
+                    // `stw r28, 0x58(r31)` into what later becomes the `charName`
+                    // MakeString slot (overwritten at 0x5120 on every path, so it
+                    // really is dead).  That was 1 insert + 1 replace, 98.25641, and
+                    // it made the loop 431 instructions against the image's 430.
+                    // Second measured negative: deleting the reference entirely and
+                    // spelling all four uses `it->mAnimGroup` does NOT remove the
+                    // dead store -- MSVC forms and homes &*it either way -- and it
+                    // costs a register cascade on top: 98.25408 canonical, 69
+                    // diff_arg rows against 33.  The reference is not the problem;
+                    // its position relative to the call is.
                     Target &target = *it;
+                    HamCharacter *character = CharacterNameToCharacter(target.mTarget);
                     ObjectDir *clipsDir;
                     if (character != NULL) {
                         clipsDir = character->Find<ObjectDir>("clips", true);
@@ -253,6 +273,20 @@ void HamCamShot::UpdateTargetsFlipped() {
                 // reference and spelling all four uses `frame.mTargets` does NOT create
                 // the induction variable -- it costs a whole extra register-swap
                 // cascade, 98.26 -> 97.6. Keep the binding.
+                // RE-CONFIRMED (w7-bp) at 98.62937 canonical, after the debug-loop
+                // row above was closed.  This is now the WHOLE residual: the three
+                // remaining structural rows are exactly this one decision --
+                //   [282] target `addi r25, r22, 0x88` before the loop, where we
+                //         emit `li r20, 0x31` (the pre-loop block is otherwise
+                //         instruction-for-instruction identical, just permuted);
+                //   [292] our `addi r26, r25, 0x84` INSIDE the loop, absent there;
+                //   [370] their `subi r26, r25, 0x4`, and [398] their second bump
+                //         `addi r22, r22, 0x118`, absent here.
+                // Everything else charged is register permutation (22 rows, 4
+                // pairs) plus 8 address-relocation rows on the function-local
+                // statics.  The w7-bp lever that closed the debug loop -- hoist the
+                // reference ABOVE the call that first uses it -- does not apply:
+                // `frame` is already the first statement of this loop body.
                 ObjPtrList<RndTransformable> &frameTargets = frame.mTargets;
                 std::vector<RndTransformable *> newTargets;
                 for (ObjPtrList<RndTransformable>::iterator tit = frameTargets.begin();
