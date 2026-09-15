@@ -155,6 +155,34 @@ CURLcode Curl_base64_decode(const char *src,
  *
  * @unittest: 1302
  */
+/* w8-l: 99.829060 normalized, the only function short of 100% in this unit
+ * (2/3).  Two charged rows, [40] and [43]: the loop preheader hoists four
+ * addresses into callee-saved registers and the image emits them in the order
+ *   table64(r31), "%c%c%c%c"(r28), "%c%c%c="(r27), "%c%c=="(r26)
+ * while we emit
+ *   "%c%c=="(r26), "%c%c%c%c"(r28), "%c%c%c="(r27), table64(r31).
+ * The register ASSIGNMENT is identical on both sides -- only the order of the
+ * lis/addi pairs differs -- so every other instruction, including the uses at
+ * [75]/[85]/[93]/[98], matches.
+ *
+ * Measured: the hoist order of the three format strings is the reverse of
+ * their source order, and table64 is always hoisted LAST by our build.  The
+ * image wants it FIRST, and nothing tried moves it:
+ *   - upstream curl case order (1, 2, default) puts the three strings in the
+ *     right relative order but leaves table64 last -> 99.658120 (a rotation,
+ *     8 name_check rows instead of 4)
+ *   - `const char *b64 = table64;` hoisted above the loop -> inert
+ *   - dropping `static` from table64 (the dtk-carved target object references
+ *     it as an UNDEFINED external, cls=2 sec=0, where ours defines it
+ *     cls=3 sec=5) -> inert
+ *
+ * Worth knowing for whoever picks this up: the string-literal COMDATs are
+ * emitted in SOURCE APPEARANCE order, and in the target object they are laid
+ * out "%c%c==", "%c%c%c=", "%c%c%c%c" -- i.e. the image's switch really does
+ * use the upstream order (case 1, case 2, default), not the order below.  The
+ * order below is kept only because it scores 0.17pp higher on the code ruler;
+ * it is vendored third-party code and is not being restructured on a hunch.
+ */
 CURLcode Curl_base64_encode(struct SessionHandle *data,
                             const char *inputbuff, size_t insize,
                             char **outptr, size_t *outlen)
