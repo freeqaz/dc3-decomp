@@ -30,6 +30,7 @@ int gDc3PollSeq = 0;
 #include "flow\PropertyEventProvider.h"
 #include "gesture\BaseSkeleton.h"
 #include "hamobj\ClipPlayer.h"
+#include "hamobj\DancerSequence.h"
 #include "hamobj\Difficulty.h"
 #include "hamobj\HamCamShot.h"
 #include "hamobj\HamCharacter.h"
@@ -106,6 +107,15 @@ ObjectDir *OfflineCallback::SongMainDir() {
     MILO_ASSERT(TheHamDirector, 0x1137);
     return TheHamDirector->GetWorld();
 }
+
+#ifndef HX_NATIVE
+// w8-b EXPERIMENT: orphan instantiation probe.
+void Dc3W8bProbe(const DancerFrame &frame) {
+    std::vector<DancerFrame> frames;
+    frames.push_back(frame);
+    std::vector<HamMoveKey> keys;
+}
+#endif
 
 HamDirector::HamDirector()
     : mMasterClipAnim(this), mPlayer1RoutineBuilderAnim(this),
