@@ -583,11 +583,10 @@ void Synth360::SetupHeadsetSubmixes() {
         effectChain.EffectCount = 1;
         effectChain.pEffectDescriptors = &effectDesc;
 
-        int *pEngine = (int *)unkec;
-        ((HRESULT(*)(int *, IXAudio2SubmixVoice **, int, int, int, int, int, XAUDIO2_EFFECT_CHAIN *)
-        )(*(int *)(*(int *)pEngine + 0x24)))(
-            pEngine, &submixes[i], 1, 48000, 0, 0, 0, &effectChain
-        );
+        ((IXAudio2 *)unkec)
+            ->CreateSubmixVoice(
+                (IXAudio2Voice **)&submixes[i], 1, 48000, 0, 0, 0, &effectChain
+            );
     }
 
     // Build the send list that routes everything to the headset submixes.
@@ -600,39 +599,37 @@ void Synth360::SetupHeadsetSubmixes() {
         sendDescs.push_back(desc);
     }
 
-    WAVEFORMATEX format;
-    format.wFormatTag = 1;
-    format.nChannels = 1;
-    format.nBlockAlign = 2;
-    format.wBitsPerSample = 16;
-    format.nSamplesPerSec = 48000;
-    format.nAvgBytesPerSec = 96000;
-    format.cbSize = 0;
-
     XAUDIO2_VOICE_SENDS voiceSends;
     voiceSends.SendCount = sendDescs.size();
     voiceSends.pSends = &sendDescs[0];
 
+    WAVEFORMATEX format;
+    format.wFormatTag = 1;
+    format.nChannels = 1;
+    format.wBitsPerSample = 16;
+    format.nBlockAlign = 2;
+    format.nSamplesPerSec = 48000;
+    format.nAvgBytesPerSec = 96000;
+    format.cbSize = 0;
+
     IXAudio2SourceVoice *headsetVoice;
-    int *pEngine = (int *)unkec;
     // Flags = 2 == XAUDIO2_VOICE_NOPITCH: the silence voice never repitches.
-    HRESULT hr = ((HRESULT(*)(
-        int *, IXAudio2SourceVoice **, WAVEFORMATEX *, int, float, int, XAUDIO2_VOICE_SENDS *, int
-    ))(*(int *)(*(int *)pEngine + 0x20)))(
-        pEngine, &headsetVoice, &format, 2, 2.0f, 0, &voiceSends, 0
-    );
+    HRESULT hr = ((IXAudio2 *)unkec)
+                     ->CreateSourceVoice(
+                         (IXAudio2Voice **)&headsetVoice, &format, 2, 2.0f, 0, &voiceSends, 0
+                     );
     MILO_ASSERT(SUCCEEDED(hr), 0x30a);
 
     XAUDIO2_BUFFER buffer;
-    memset(&buffer.AudioBytes, 0, sizeof(buffer) - 4);
     buffer.Flags = 0;
+    memset(&buffer.AudioBytes, 0, sizeof(buffer) - 4);
     buffer.AudioBytes = 0x100;
     buffer.pAudioData = (const BYTE *)sHeadsetSilence;
-    buffer.PlayBegin = 0;
-    buffer.PlayLength = 0;
+    buffer.LoopCount = 0xff;
     buffer.LoopBegin = 0;
     buffer.LoopLength = 0;
-    buffer.LoopCount = 0xff;
+    buffer.PlayBegin = 0;
+    buffer.PlayLength = 0;
     buffer.pContext = nullptr;
     hr = ((IXAudio2SourceVoice *)unke8)->SubmitSourceBuffer(&buffer, nullptr);
     MILO_ASSERT(SUCCEEDED(hr), 0x319);
