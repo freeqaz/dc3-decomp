@@ -11,6 +11,23 @@
  * Nothing in this file can make our UIList.obj define the EventTrigger
  * spelling short of fabricating an ObjPtrList<EventTrigger> member. */
 
+/* w8-k 2026-09-15 -- independently re-derived and CONFIRMED.  Class: ICF ALIAS.
+ * Map address 0x8278B718, contributing object rndobj:EventTrigger.obj
+ * (ham_xbox_r.map:58535, one of 33 entries running to :58567).  symbols.txt:154932
+ * binds the EventTrigger spelling; UIList.s:6367 carves the body under it.  Our
+ * UIList.obj emits the UILabel, Object and RndMesh spellings and NOT the
+ * EventTrigger one; our rndobj/EventTrigger.obj does emit it.  Holds at 0.0000%.
+ *
+ * Checked against, and NOT closeable by, the lever that closed this lane's other
+ * placeholder rows: re-anchoring symbols.txt onto the contributor whose split
+ * range contains the address.  That test does not discriminate here.  The name
+ * bound is ALREADY a real map symbol (not a synthetic label), and it is already
+ * the spelling whose fold the linker recorded -- there is no wrong binding to
+ * correct.  Re-pointing it at UIList's own ?Unlink@?$ObjPtrList@VUILabel@@... would
+ * be the zero-sum trade the MeshVertCompress.h note warns about: it would move the
+ * 0% into whichever of the other 32 names lost, and dtk's apply_symbols_file would
+ * park the prior holder.  Leave it. */
+
 #include "ui\Utl.h"
 #include "math/Geo.h"
 #include "math\Utl.h"

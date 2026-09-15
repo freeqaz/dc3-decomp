@@ -7,6 +7,22 @@
  * ?erase@?$ObjPtrVec@VSpotlight@@VObjectDir@@@@..., which we do emit.  Not a
  * source gap -- symbols.txt can bind only one of the eleven. */
 
+/* w8-k 2026-09-15 -- independently re-derived and CONFIRMED.  Class: ICF ALIAS.
+ * Map address 0x82848AD0, contributing object hamobj:MoveDir.obj
+ * (ham_xbox_r.map:62535, one of 11 entries running to :62545).  symbols.txt:161597
+ * binds the HamMove spelling; LightPreset.s:20978 carves the body under it.  Our
+ * LightPreset.obj emits the Spotlight, RndEnviron, RndLight and SpotlightDrawer
+ * spellings and NOT HamMove; our hamobj/MoveDir.obj does emit HamMove.  Holds at
+ * 0.0000%, and the AT_LIMIT verdict on it is stale in the usual way -- it was
+ * taken over a row that cannot move, not over a floor anyone measured.
+ *
+ * Distinguish this from FlowManager's merged_ObjPtrVecErase, which LOOKED like the
+ * same thing and was not: there the bound name was a SYNTHETIC label naming no map
+ * symbol at all, so re-anchoring it onto the claimant whose splits.txt .text range
+ * contains the address was a pure gain (0% -> 80.58%).  Here the bound name is a
+ * real map symbol and already the right one, so the same move would merely shuffle
+ * the 0% among the eleven.  Leave it. */
+
 #include "SpotlightDrawer.h"
 #include "obj\ObjPtrVec_impl.h"
 #include "math\Mtx.h"

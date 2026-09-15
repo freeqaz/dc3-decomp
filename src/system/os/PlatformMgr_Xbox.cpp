@@ -1577,3 +1577,12 @@ void PlatformMgr::Poll() {
         break;
     }
 }
+
+// w8-k: same lever as Waypoint.cpp:251 / Flow.cpp.  ham_xbox_r.map contributes
+// ?_M_insert_overflow@?$vector@_K... (0x825D8900, 248 B) and
+// ?push_back@?$vector@_K... (0x825D8E80, 112 B) from os:PlatformMgr_Xbox.obj.
+// The rest of the vector<u64> member set (allocate/deallocate/_Vector_base ctor/
+// copy ctor/dtor) already reads 100% here off the by-value copy in
+// MultipleItemsEnumJob; only the growth path was missing, because every
+// vector<u64> this TU still names is taken by reference and never pushed to.
+template class std::vector<u64>;

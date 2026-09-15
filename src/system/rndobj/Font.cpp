@@ -845,3 +845,10 @@ bool RndFont::CharWidthAdvanceCoords(
     }
     return false;
 }
+
+// w8-k: the raw-pointer PropSync<RndMat> COMDAT at 0x82703FD8 (ham_xbox_r.map,
+// rndobj:Font.obj) is an orphan instantiation -- retail inlined its call site and
+// still emitted the COMDAT, exactly as Waypoint.cpp:249 documents for
+// PropSync<Waypoint>(Waypoint *&, ...).  Explicit instantiation is the lever;
+// the ObjPtrVec spelling beside it (0x82707210) already reads 100%.
+template bool PropSync<RndMat>(RndMat *&, DataNode &, DataArray *, int, PropOp);

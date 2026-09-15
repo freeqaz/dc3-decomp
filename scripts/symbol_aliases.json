@@ -25704,13 +25704,14 @@
   },
   {
    "name": "retailmap:merged_823AAA20",
-   "survivor": "merged_823AAA20",
+   "survivor": "?Handle@CharSignalApplier@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
    "address": "0x823aaa20",
    "folded": [
     "?Handle@CharBoneTwist@@UAA?AVDataNode@@PAVDataArray@@_N@Z",
-    "?Handle@CharSignalApplier@@UAA?AVDataNode@@PAVDataArray@@_N@Z"
+    "merged_823AAA20"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it",
+   "reconciled": "w8-k 2026-09-15, RE-ANCHOR: the survivor was the splitter's synthetic label `merged_823AAA20`, which is not a name orig/373307D9/ham_xbox_r.map prints anywhere, so gate (c) could not pass and the 436 B row read 0.0%. The map names exactly two claimants at 0x823aaa20 -- ?Handle@CharBoneTwist@@UAA... (char:CharBoneTwist.obj) and ?Handle@CharSignalApplier@@UAA... (char:CharSignalApplier.obj) -- and the address-range test picks between them without appealing to symbols.txt: config/373307D9/splits.txt gives CharSignalApplier .text [0x823AA888, 0x823ACE28), which CONTAINS 0x823AAA20, and CharBoneTwist .text [0x82360180, 0x823616B8), which does not. CharBoneTwist.s accordingly carries no Handle body at all (its only trace is a vtable .4byte naming the CharSignalApplier thunk), so re-anchoring takes nothing from it. config/373307D9/symbols.txt now binds the CharSignalApplier spelling; whole-binary before/after row diff moved exactly 2 rows at this address and the row went 0.0% -> 11.34%."
   },
   {
    "name": "retailmap:merged_823E5850",
@@ -25763,15 +25764,16 @@
   },
   {
    "name": "retailmap:merged_ObjPtrVecErase",
-   "survivor": "merged_ObjPtrVecErase",
+   "survivor": "?erase@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
    "address": "0x823ea0b8",
    "folded": [
-    "?erase@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
     "?erase@?$ObjPtrVec@VRndEnviron@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
     "?erase@?$ObjPtrVec@VRndLight@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
-    "?erase@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@QAA?AViterator@1@V21@@Z"
+    "?erase@?$ObjPtrVec@VSpotlightDrawer@@VObjectDir@@@@QAA?AViterator@1@V21@@Z",
+    "merged_ObjPtrVecErase"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it",
+   "reconciled": "w8-k 2026-09-15, RE-ANCHOR: the survivor was `merged_ObjPtrVecErase`, a hand-authored synthetic label (introduced with config/373307D9/symbols.txt by 9d58cad4c) that appears 0 times in orig/373307D9/ham_xbox_r.map, so the 240 B row read 0.0%. The map names four claimants at 0x823ea0b8: the FlowNode spelling from flow:FlowManager.obj and the RndEnviron / RndLight / SpotlightDrawer spellings from world:LightPreset.obj. The address-range test decides it independently of symbols.txt -- config/373307D9/splits.txt gives FlowManager .text [0x823E8318, 0x823EB8A0), which CONTAINS 0x823ea0b8, and LightPreset .text [0x8283DA50, 0x82850940), which does not -- and the body is accordingly carved into FlowManager.s. Our flow/FlowManager.obj emits the FlowNode spelling. Whole-binary before/after row diff moved exactly 2 rows at this address and the row went 0.0% -> 80.58%."
   },
   {
    "name": "retailmap:merged_823FB1A8",

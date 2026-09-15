@@ -18,6 +18,36 @@
 // can never pair and can never score.  The FlowNode spelling this TU really does
 // emit (see the explicit instantiation above) is one of the four folded copies.
 // Measured 0.0% and structurally unscoreable; not a missing body.
+//
+// w8-k 2026-09-15: RE-ANCHORED, and the row is now scoreable at 80.58%.
+// Everything above is accurate about the artifact; "can never pair and can never
+// score" was the one step too far.  A synthetic label is not a fact about the
+// image, it is a choice in config/373307D9/symbols.txt, and the choice was
+// wrong: ham_xbox_r.map names four REAL claimants at 0x823EA0B8, and the
+// address-range test picks one without appealing to symbols.txt at all --
+// splits.txt gives FlowManager .text [0x823E8318, 0x823EB8A0), which CONTAINS
+// 0x823EA0B8, against LightPreset .text [0x8283DA50, 0x82850940), which does
+// not, which is also why dtk carves the body into FlowManager.s.  symbols.txt
+// now binds ?erase@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAA?AViterator@1@V21@@Z
+// there; LightPreset loses nothing, since its three spellings have no body in
+// LightPreset.s either.  Whole-binary row diff: exactly 2 rows moved.
+//
+// RESIDUAL, 80.58% canonical / 80.0% raw, 240 B target vs 276 B base, 51 of 70
+// instructions equal.  This is now ordinary decomp work, and the diagnosis is
+// already done -- but the fix is NOT in this file and must not be made here:
+//   * the target calls `bl ?Set@?$ObjPtrVec@VFlowNode@@VObjectDir@@@@QAAXViterator@1@PAVFlowNode@@@Z`;
+//     we call ?SetObjConcrete@?$ObjRefConcrete@VFlowNode@@... directly, with a
+//     10-instruction inserted cluster at rows 45-54 that is the `!obj &&
+//     mListMode == 0` null-check from Set's body.  MSVC inlined Set into erase
+//     for us and did not for retail.
+//   * residual beyond that is one r26<->r27 and one r27<->r28 callee-saved
+//     register-permutation pair, which the canonical ruler forgives anyway.
+// ObjPtrVec<T1,T2>::erase and ::Set are both in src/system/obj/ObjPtr_p.h
+// (erase at :878, Set at :313), which is PCH-REACHED -- it is in decomp_pch.h's
+// 178-header closure -- so any edit there rebuilds and re-scores every
+// ObjPtrVec<T> instantiation in the binary, far outside this unit.  Whoever
+// takes it: make the change there, run a FULL ninja, and diff the whole binary,
+// because the blast radius is the whole binary.
 
 template Hmx::Object *ObjPtrVec<RndTransformable, ObjectDir>::Node::RefOwner() const;
 template ObjPtrVec<FlowNode, ObjectDir>::iterator
