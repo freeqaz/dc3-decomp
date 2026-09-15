@@ -599,3 +599,17 @@ jinit_c_master_control (j_compress_ptr cinfo, boolean transcode_only)
   else
     master->total_passes = cinfo->num_scans;
 }
+
+/* w8-j 2026-09-15: fn_82EDF4B8 (24 B) is this file's `sLicense` dynamic
+ * initializer, and it is structurally unscoreable rather than missing.  Seven
+ * units declare a namespace-scope `sLicense`, so ham_xbox_r.map lists the one
+ * mangled name ??__EsLicense@@YAXXZ at seven addresses: 82edb268 math:SHA1,
+ * 82edb280 math:Easing, 82edc020 os:System, 82edd3c8 synth:TomCryptLicense,
+ * 82edda80 zlib:ZlibLicense, 82edf4b8 jpeg:jcmaster (this one), 82ee0b00
+ * oggvorbis:VorbisMem.  config/373307D9/symbols.txt binds SHA1's (which scores
+ * 100.0 at 24 B); dtk parks the other six as fn_<addr>.  Our object does emit
+ * the initializer -- it simply cannot be named.  Renaming the variable would
+ * move six other units' rows, not fix this one, and this is vendored jpeg code
+ * that must not be restructured.  Measured 0.0%.  See also the identical note
+ * in src/system/zlib/ZlibLicense.cpp.
+ */

@@ -1299,3 +1299,17 @@ BEGIN_HANDLERS(Automator)
 END_HANDLERS
 
 #pragma endregion Automator
+
+// w8-j 2026-09-15: fn_8277AFC0 (132 B) is unscoreable from this TU, and it is
+// not a missing body.  `?TerminateCallback@@YAXXZ` is a file-static registered
+// with atexit-style teardown, so ham_xbox_r.map prints that ONE mangled name at
+// TWO addresses with a bare `f` flag (internal linkage in two TUs):
+//     8265ea60  f  rndobj:Rnd.obj   56 B
+//     8277afc0  f  ui:UI.obj       132 B   <- this row
+// config/373307D9/symbols.txt:144853 binds the name to 0x8265EA60, and dtk can
+// only name one address per symbol, so the other is carved as fn_<addr> and can
+// never pair against anything our object emits.  The binding that exists is the
+// one currently SCORING: rndobj:Rnd's 56 B copy reads 100.0.  Rebinding to
+// 0x8277AFC0 would be zero-sum-plus-a-goalpost-move (+76 B gross, but it trades
+// a scoring row for an fn_ row and the map names neither as the "wrong" one).
+// Measured 0.0%, refuted as a rename target, left as-is deliberately.
