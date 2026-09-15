@@ -521,6 +521,11 @@ DWORD PlatformMgr::ShowDeviceSelectorUI(
     return ret;
 }
 
+// w8-g: 88.24% (normalized, full ninja). Residue is where `mr r3, r31` is placed
+// relative to the branch join. REFUTED: collapsing the if/else into a single call
+// `SetRegion(XGetGameRegion() != 0xFF ? kRegionEurope : kRegionNA);` -- which should
+// force `this` to be set up after the join -- measured 55.29%, a 32.9pp regression.
+// The two-call if/else is the better spelling. Reverted.
 void PlatformMgr::RegionInit() {
     if (XGetGameRegion() != 0xFF) {
         SetRegion(kRegionEurope);

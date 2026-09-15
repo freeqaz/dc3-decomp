@@ -279,6 +279,12 @@ const char *MemHeapName(int heap) {
 
 int MemHeapSize(int heap) { return gHeaps[heap].SizeWords() * 4; }
 
+// w8-g: 87.29% (normalized, full ninja). The residue is address materialization:
+// the target loads &gHeaps once and reads gNumHeaps as a displacement off that same
+// base (gHeaps is +0x950, gNumHeaps +0xbe4 in .bss -- delta 0x294), while we
+// materialize both. REFUTED: rewriting the loop with a walking `MemHeap *heap`
+// (the style used at lines 210-211 of this file) does NOT produce the shared
+// anchor -- measured 71.46%, a 15.8pp regression. Reverted.
 int MemFindAddrHeap(void *addr) {
     for (int i = 0; i < gNumHeaps; i++) {
         if (addr >= gHeaps[i].Start() && addr < gHeaps[i].End()) {
