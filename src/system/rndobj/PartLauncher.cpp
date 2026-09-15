@@ -22,6 +22,15 @@
 // ObjPtrs -- MSVC re-sorts to declaration order and schedules identically);
 // and the one-argument `mPart(this)` / `mTrans(this)` / `mMeshEmitter(this)`
 // ObjPtr ctor instead of `(this, 0)`.
+// NEGATIVE RESULT (w7-br): og-dc3's spelling -- one-argument ObjPtr ctors plus
+// integer `mEmitRate(0, 0)` / `mEmitCount(0)` -- is byte-inert too (85.40,
+// same 10/6/6).  Re-diagnosis: the sibling PhotoSpotlightPositioner ctor
+// (two ObjPtr members, 100%) shows the image INTERLEAVING its home stores
+// early (`addi r7, r30, 0xc` at 0x82509B78, `stw r7, 0x50(r31)` at
+// 0x82509B84), exactly the shape we produce here; only in this ctor does the
+// image hoist every vtable/constant `lis` (0x82700140 .. 0x82700168) ahead of
+// the four home stores (first `addi r5, r30, 0x8` at 0x8270018C).  Nothing in the init list distinguishes the two
+// beyond the float members, and spelling those as ints does not move it.
 RndPartLauncher::RndPartLauncher()
     : mPart(this, 0), mTrans(this, 0), mMeshEmitter(this, 0), mNumParts(0),
       mEmitRate(0.0f, 0.0f), mEmitCount(0.0f)
