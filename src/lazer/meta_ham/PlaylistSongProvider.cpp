@@ -13,8 +13,6 @@
 
 PlaylistSongProvider::PlaylistSongProvider() : m_pPlaylist(0), unk34(false) {}
 
-PlaylistSongProvider::~PlaylistSongProvider() {}
-
 PackSongListProvider::~PackSongListProvider() {}
 
 int PlaylistSongProvider::NumData() const {

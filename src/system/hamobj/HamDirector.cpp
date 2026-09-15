@@ -28,8 +28,10 @@ int gDc3PollSeq = 0;
 #include "char\FileMerger.h"
 #include "flow\Flow.h"
 #include "flow\PropertyEventProvider.h"
+#include "gesture\ArchiveSkeleton.h"
 #include "gesture\BaseSkeleton.h"
 #include "hamobj\ClipPlayer.h"
+#include "hamobj\DancerSequence.h"
 #include "hamobj\Difficulty.h"
 #include "hamobj\HamCamShot.h"
 #include "hamobj\HamCharacter.h"
@@ -106,6 +108,57 @@ ObjectDir *OfflineCallback::SongMainDir() {
     MILO_ASSERT(TheHamDirector, 0x1137);
     return TheHamDirector->GetWorld();
 }
+
+#ifndef HX_NATIVE
+// w8-b: orphan-instantiation anchor.  ham_xbox_r.map attributes eleven COMDATs to
+// hamobj:HamDirector.obj that nothing in the shipped HamDirector body calls --
+//   ?deallocate@?$StlNodeAlloc@UDancerFrame@@...     0x82466BD8 (map 42301)
+//   ?allocate@?$StlNodeAlloc@UDancerFrame@@...       0x82467888 (map 42320)
+//   ??1DancerFrame@@QAA@XZ                           0x82469108 (map 42355)
+//   ??0DancerSkeleton@@QAA@ABV0@@Z                   0x82469860 (map 42383)
+//   ??1?$vector@UDancerFrame@@...                    0x82470650 (map 42542)
+//   ??$__uninitialized_fill_n@PAUDancerFrame@@...    0x82470A38 (map 42549)
+//   ?_M_insert_overflow_aux@?$vector@UDancerFrame@@  0x82470FB0 (map 42557)
+//   ??$MakeString@PBDVSymbol@@V1@V1@@@...            0x82467758 (map 42316)
+//   ??$MakeString@PBDVSymbol@@V1@@@...               0x824677C8 (map 42317)
+//   ??$MakeString@PBDHH@@...                         0x82467828 (map 42318)
+//   ??1ArchiveSkeleton@@UAA@XZ                       0x82466B48 (map 42296, via Skeleton.obj's copy)
+// -- i.e. the odr-use that instantiated them was compiled into this TU and then
+// dropped by /OPT:REF, leaving the instantiations behind.  Reproducing that needs
+// an unreferenced function with EXTERNAL linkage.  `static` does not work -- MSVC
+// discards a static before it instantiates anything the static mentions; measured
+// on the sibling probe in HamMove.cpp, where `static` cost exactly its one row
+// (31246/5546312 -> 31245/5546220).  Removing this anchor takes all eleven to 0%.
+void Dc3W8bProbe(const DancerFrame &frame, const char *s, Symbol a, Symbol b, Symbol c, int i, int j) {
+    std::vector<DancerFrame> frames;
+    // w8-b FLOOR: this push_back is what emits
+    // ?_M_insert_overflow_aux@?$vector@UDancerFrame@@... (0x82470FB0, 452 B target).
+    // Measured 98.23009 match_percent_normalized (97.65487 fuzzy), up from 0.0 on
+    // both rulers -- the row now pairs at all, and the residual
+    // is inside the inlined _M_clear_after_move()'s reverse _Destroy_Moved_Range
+    // loop: our 460 B body carries two extra instructions the image does not have
+    // (`subi r5, r11, 0x2d8` + `stw r5, 0x5c(r31)`, MSVC EH sub-object bookkeeping)
+    // plus 13 r10<->r11 swaps across one register pair (normalization discounts
+    // those: 98.23 normalized vs 97.65 fuzzy on the same rows).
+    // REFUTED, do not re-derive: (a) the "wrong callee" row objdiff reports for
+    // ??$__uninitialized_copy@PBUDancerFrame@@ vs @PAUDancerFrame@@ is an ICF
+    // naming artifact -- ham_xbox_r.map 43136/43137 are BOTH 0x8249AAA0, so the two
+    // spellings are one function and no source change can separate them;
+    // (b) the only remaining lever is respelling the shared stlport
+    // _M_clear_after_move()/_Destroy_Moved_Range path, and that is DECLINED rather
+    // than untried: every inlined use in the binary moves with it, which is exactly
+    // the shape w7-bk measured on the neighbouring vector::size() (see the REFUTED
+    // block at stl/_vector.h:180 -- 31171 matched -> 30851 / 30554 for its two
+    // spellings, hundreds of rows down, to cross a handful).  452 B is not worth
+    // gambling the binary on; re-measure whole-binary before touching it.
+    frames.push_back(frame);
+    std::vector<HamMoveKey> keys;
+    MakeString("%s %s %s %s", s, a, b, c);
+    MakeString("%s %s %s", s, a, b);
+    MakeString("%s %d %d", s, i, j);
+    ArchiveSkeleton arch;
+}
+#endif
 
 HamDirector::HamDirector()
     : mMasterClipAnim(this), mPlayer1RoutineBuilderAnim(this),
