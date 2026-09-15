@@ -363,6 +363,25 @@ EofType ChunkStream::Eof() {
         // So MSVC normalises source order across these four independent
         // member stores and schedules the block itself; the emitted order is
         // not reachable from the statement order.  Do not re-derive.
+        //
+        // RE-MEASURED (w7-bs, still 97.97 canonical / 97.80 raw, 15 rows,
+        // 303/303).  Six of the 24 statement orders are now measured and
+        // they produce exactly TWO object shapes:
+        //   - mCurChunk NOT first (this order, (b), (c), and
+        //     mChunkEnd/mCurChunk/mCurBufOffset/mCurBufferIdx): byte-identical
+        //     15-row residual, `stw r27, 0x888` emitted FIRST at 0x2544;
+        //   - mCurChunk first ((a) and mCurChunk/mChunkEnd/mCurBufferIdx/
+        //     mCurBufOffset): 97.3, and the (0x888,0x8ac) OFFSET_SWAP appears
+        //     in the TAIL block too (target 0x827E0B20-28, our rows 294/296),
+        //     which is not touched by the edit -- the tie-break is a
+        //     function-wide property of the fields, not this block's order.
+        // The image stores 0x888 LAST (0x827E0A1C) even though r27 = 2 has
+        // been available since 0x827E08B4, while in the mID-fixup block at
+        // 0x827E083C-40 the same compiler stores its ready constants FIRST;
+        // so the late 0x888 store is an ordering dependence in the image's
+        // IR that the literal `2` does not carry, and no member-store order
+        // reaches it.  The `lwz r11, 0x30` placed after two stores at
+        // 0x827E0A10 is the same dependence seen from the load side.
         mCurBufferIdx = 2;
         mCurBufOffset = mChunkInfo.mMaxChunkSize & kChunkSizeMask;
         mChunkEnd = chunks + mChunkInfo.mNumChunks;
