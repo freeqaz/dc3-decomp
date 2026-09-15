@@ -381,7 +381,48 @@ const ADSRImpl *Synth::DefaultADSR() {
 
 static const float sMeterConsts[] = { 0.2f, 40.0f, 0.7f, 0.0f };
 
-/** SURVEYED w7-aj at 73.0% canonical, 688 B (same size as the image).  Every
+/** w7-bs (2026-09-15): 73.0 -> 91.3 canonical (179 rows, 149 equal / 15
+ *  diff_arg / 7 insert / 8 delete).  The lever the two notes below never
+ *  reached is ClampEq, and the reason it works is measurable: MSVC forwards
+ *  a SINGLE-USE temp's defining expression to its use site, one node at a
+ *  time, stopping at multi-use nodes -- that is exactly the "sinks only the
+ *  second fsel" behaviour w7-aj/w7-bo recorded (Min(t,1) is single-use,
+ *  t = Max(0,x) is used twice inside it).  ClampEq's `return tmp != value`
+ *  is a second use of the clamped value BEFORE the bgRect DrawRect, so the
+ *  whole Clamp is pinned above the call (fneg/fsel/fsubs/fsel at idx 82-93,
+ *  image 0x82737558-0x82737578) and only `fmuls f0, f24, f28` follows it
+ *  (0x82737588); the dead compare is then eliminated and emits nothing.
+ *  Control: the same by-reference helper WITHOUT the compare drops to 84.8
+ *  (the Min is forwarded past the call again), so it is the extra use, not
+ *  the reference, that pins it.  Two more levers landed on the way:
+ *    - peakRect constructed BEFORE the peakColor select: the image stores
+ *      0xfc/0xf8/0xf4/0xf0 interleaved with the peak clamp and before the
+ *      `fcmpu cr6, f0, f31` (0x82737608), i.e. the Rect is built first and
+ *      the colour chosen after.  76.4 -> 91.2, region 116-148 now 100%.
+ *    - dbLabelPos constructed BEFORE white2: fixes the rotated white2 stores
+ *      (image 0xc0,0xc4,0xc8,0xcc at 0x82737654-0x82737664).  91.2 -> 91.3.
+ *  Inert (measured, do not re-probe): `(sMeterConsts[1] + level)` operand
+ *  flip (still `fadds f12, f0, f29`); barWidth declared before barLeft
+ *  (swaps the f28/f29 assignment, schedule unchanged); the level clamp
+ *  placed before, between or after barLeft/barWidth (only flips the
+ *  post-call `fmuls f0, f24, f28` operand order -- MSVC puts the LATER-
+ *  defined operand first); an RB3-style if/else-if clamp (real fcmpu/bge
+ *  branches, 69.8 -- MSVC does not if-convert float stores to fsel).
+ *  Residual, 91.3, all inside one basic block and all scheduler/RA:
+ *    - idx 83-95: the image multiplies barLeft (`fmuls f29, f11, f13`,
+ *      0x8273755C) before barWidth (0x82737564) and writes the Max in place
+ *      (`fsel f12, f10, f30, f12`); we multiply barWidth first and put the
+ *      Max in f0, which forces `stfs f28` above the fsel.  Source order of
+ *      the three statements does not reach it (three permutations measured).
+ *    - idx 58/60, 68/71: `lfs f13, sMeterConsts[0]` one slot early and
+ *      `lfs f26, 0.025` two slots late -- same block, same cause.
+ *    - idx 67, 115: `fadds f29, f0` vs `f0, f29` on `x + sMeterConsts[1]`,
+ *      commutative, refuted by the flip above.
+ *    - idx 160-168: the image spends `lwz r11, TheRnd; mr r3, r11` where we
+ *      load r3 directly (688 vs 684 B); GPR choice around the MakeString
+ *      call, no source expression for it.
+ *
+ *  SURVEYED w7-aj at 73.0% canonical, 688 B (same size as the image).  Every
  *  statement below was checked against 0x82737418-827376C4 and is correct:
  *  the five colour constructors land in the image's own stack slots
  *  (white 0x90, red 0xa0, grey 0xb0, white2 0xc0, green 0xd0, black 0xe0 --
@@ -427,9 +468,10 @@ static const float sMeterConsts[] = { 0.2f, 40.0f, 0.7f, 0.0f };
  *        Statement separation does not pin the fsel either.
  *  Net: the hoist buys the whole prologue/epilogue (13 rows: __savefpr_24,
  *  __restfpr_24, stwu -0x170, addi 0x170, fmr f29) and costs more than it
- *  buys in the body, so the 73.0 non-hoisted spelling below is kept.
- *  FLOOR 73.0 canonical, 194 instructions, 123 equal / 23 diff_arg / 4
- *  replace / 22 insert / 22 delete.  Residual, verbatim:
+ *  buys in the body, so the 73.0 non-hoisted spelling was kept at the time.
+ *  (Superseded by the w7-bs ClampEq finding above.)
+ *  FLOOR-AS-OF-w7-bo 73.0 canonical, 194 instructions, 123 equal / 23
+ *  diff_arg / 4 replace / 22 insert / 22 delete.  Residual, verbatim:
  *    - prologue/epilogue: __savefpr_24 vs _25, stwu -0x170 vs -0x160,
  *      `fmr f29, f1` vs `fmr f26, f1` (the levelNorm-across-the-call FPR)
  *    - idx 56-99: the level Clamp scheduled before vs after the bgRect
@@ -458,28 +500,27 @@ void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
     Vector2 labelPos((float)TheRnd.Width() * 0.1f, y);
     TheRnd.DrawString(name, labelPos, white, true);
 
-    float rndWidth = (float)TheRnd.Width();
-    float barLeft = rndWidth * sMeterConsts[0];
-    float barWidth = rndWidth * sMeterConsts[2];
+    float barLeft = (float)TheRnd.Width() * sMeterConsts[0];
+    float barWidth = (float)TheRnd.Width() * sMeterConsts[2];
+    float levelNorm = (level + sMeterConsts[1]) * 0.025f;
+    ClampEq(levelNorm, 0.0f, 1.0f);
     Hmx::Rect bgRect(barLeft, y, barWidth, 12.0f);
     TheRnd.DrawRect(bgRect, black, 0, 0, 0);
-
-    float levelNorm = Clamp(0.0f, 1.0f, (level + sMeterConsts[1]) * 0.025f);
 
     Hmx::Rect levelRect(barLeft, y, levelNorm * barWidth, 12.0f);
     TheRnd.DrawRect(levelRect, grey, 0, 0, 0);
 
-    float peakNorm = Clamp(0.0f, 1.0f, (peakHold + sMeterConsts[1]) * 0.025f);
+    float peakNorm = (peakHold + sMeterConsts[1]) * 0.025f;
+    ClampEq(peakNorm, 0.0f, 1.0f);
+    Hmx::Rect peakRect(barLeft + peakNorm * barWidth, y, 8.0f, 12.0f);
 
     Hmx::Color *peakColor = &red;
     if (peakNorm != 1.0f)
         peakColor = &green;
-
-    Hmx::Rect peakRect(barLeft + peakNorm * barWidth, y, 8.0f, 12.0f);
     TheRnd.DrawRect(peakRect, *peakColor, 0, 0, 0);
 
-    Hmx::Color white2(1.0f, 1.0f, 1.0f, 1.0f);
     Vector2 dbLabelPos(barWidth + barLeft, y);
+    Hmx::Color white2(1.0f, 1.0f, 1.0f, 1.0f);
     TheRnd.DrawString(MakeString("%i", (int)peakHold), dbLabelPos, white2, true);
 
     y += 16.0f;
