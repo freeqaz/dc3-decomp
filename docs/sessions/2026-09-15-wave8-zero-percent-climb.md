@@ -254,3 +254,162 @@ Six lanes. The pool is every remaining authorable row under 200 B in any band
 `w8-l` is the highest-leverage list in the wave: each of its 25 rows is the only
 function keeping its unit from 100 %, so each close moves the complete-units
 metric directly. 102 more are parked in `~/tmp/dc3-wells/w8/backlog-unit-completions.md`.
+
+### Phase 2 — results (six lanes, all landed at `3b251bedd`)
+
+| measure | wave start `bb2e759eb` | phase-1 close `980e4d5e4` | phase-2 close `3b251bedd` |
+|---|---:|---:|---:|
+| Matched functions | 31,228 | 31,310 | **31,352** |
+| Matched code | 5,544,916 B | 5,557,336 B | **5,562,916 B** |
+| XEX-total headline | 48.747 % | 48.856 % | **48.905 %** |
+| Fuzzy | 55.4588 | 55.5577 | **55.5859** |
+| **Authorable functions (canonical)** | 96.80 % | 97.05 % | **97.19 %** |
+| Authorable complete units | 623 / 967 | 629 / 967 | **640 / 967** |
+| Remaining authorable | 1,032 fns / 620,028 B | 950 fns | **906 fns / 601,508 B** |
+
+Phase 2 contributed **+42**; the wave total is **+124** matched functions and
+**+18,000 B** of matched code. Every lane landed with **zero DOWN rows** and all
+four build guards at exit 0 on both sides of its merge.
+
+| lane | merge | commits | matched | what it was |
+|---|---|---:|---:|---|
+| `w8-k` | `f5a8d0a80` | 4 | +9 | the 0 % rows >= 200 B phase 1 left |
+| `w8-h` | `c41bcd7a1` | 5 | +4 | `rndobj/`, `rnddx9/`, `world/` |
+| `w8-g` | `a153a143b` | 10 | +12 | `utl/`, `os/`, `obj/`, `math/` |
+| `w8-l` | `04b7b6332` | 10 | +3 | single-function unit completions |
+| `w8-j` | `bd1be9e1e` | 9 | +8 | `synth/`, `ui/`, `net/`, `flow/`, `meta/` |
+| `w8-i` | `3b251bedd` | 12 | +6 | `char/`, `gesture/`, `hamobj/` |
+
+Those per-lane commit counts are taken from each merge's own parent range
+(`<merge>^1..<merge>^2`). Counting `980e4d5e4..<branch>` instead reports
+4/5/10/10/9/12 as 6/11/21/31/40/53, because each branch was rebased onto main
+*after* the previous lane merged and therefore contains every earlier lane's
+work. The corrected figures sum to 50, which with this phase's 3 doc commits is
+exactly the 53 non-merge commits git reports since the phase-1 close.
+
+### A config rename is invisible to an UP/DOWN diff
+
+`w8-j` measured **+8** matched with only **three** UP rows. The other five were
+`symbols.txt` re-anchors, and a re-anchor changes the report *key*: the row
+leaves under one name and reappears under another, so it is a disappearance plus
+an appearance rather than a delta. Keying the comparison on the symbol name
+alone additionally collapses any symbol that also moved units — it reported 3
+gone / 3 new where the truth was 5 and 5.
+
+**Reconcile on `(unit, name)` and require the arithmetic to close before
+merging.** For `w8-j`: `3 UP + 5 new-matched - 0 gone-matched = +8`.
+
+The check that makes a re-anchor a *free* win, rather than the rename that just
+moves a 0 % from one object to another, is that **every displaced name measured
+0.0000 and every replacement measured 100.0000**. Verify both sides. All five of
+`w8-j`'s cleared it, which is why that lane's re-anchors are the genuine
+wrong-object-binding class:
+
+| address | was bound to | belongs to | row before / after |
+|---|---|---|---|
+| `0x8255A0A0` | `MakeString<ReqType>` | XLSPConnection | 0.0 -> 100.0 |
+| `0x82563B08` | `MakeString<char[14]>` | JsonUtils | 0.0 -> 100.0 |
+| `0x82793CA8` | `operator<< ObjDirPtr<HamScrollSpeedIndicator>` | UILabel | 0.0 -> 100.0 |
+| `0x82860908` | `jpeg_free_small` | zutil | 0.0 -> 100.0 |
+| `0x82E1C720` | `__uninitialized_copy<const ActionRec*>` | HeldButtonPanel | 0.0 -> 100.0 |
+
+### Behavioural bugs fixed in phase 2
+
+Each was adjudicated against the target listing by the coordinator, not accepted
+from the lane that reported it.
+
+- **`CharSignalApplier::Handle` skipped its own superclass** — the body was a
+  bare `return Hmx::Object::Handle(d, b);` where the image forwards through
+  `CharWeightable` first. 93 of 109 instructions were deleted before the fix.
+- **`RndMesh::TransformNormal` dropped its transpose**, taking column dots where
+  the image takes row dots. **99.683 before and after** — the canonical ruler
+  forgives the permutation, so this bug is invisible to the score and was only
+  found by reading the listing for correctness.
+- **`SpotMeshEntry::_M_erase` divided the element count twice.** The target has
+  exactly one `divw.` at `0x8282292C`.
+- **`PlatformMgrOpCompleteMsg` carried a name suffix the image never had** —
+  the literal is `platform_mgr_op_complete`, and no DTA under `orig-assets`
+  references the longer spelling.
+- **`SkeletonExtentTracker::GetViewBox` anchored the box to the wrong edge.**
+  At `0x82DFE79C` the image loads `lfs f0, 0x30(r4)` and that same `f0` reaches
+  `stfs f0, 0x4(r3)`; the `0x38` field is consumed only by the height `fsubs`
+  and never stored. Field names confirmed with `lookup_struct_offset` rather
+  than inferred from shape: `0x30` is `mMinY`, `0x38` is `mMaxY`. Every view box
+  sat at the top of the tracked extent instead of the bottom.
+- **`MoveAsyncDetector` instantiated the wrong `MakeString`** — gratuitous
+  `(char *)` casts gave us `MakeString<char*>` where the image calls
+  `MakeString<const char*>` at `0x8252EBA8`. Visible **only** under `name_check`.
+
+### Native gate
+
+**Green on `3b251bedd`, the fully merged wave.** `gate exit 0` — 506 registered,
+437 executed, 437 passed, **0 failed**, 69 skipped against a budget of 69. The
+skipped-suite block is **byte-identical** to the `a153a143b` run (48
+`GameplayTelemetryTest`, 4 `MoggDecodeTest`, 4 `BinkFFmpeg`, 3 `MoggV0xETest`,
+3 `FFmpegIntegration`, 2 `BikAudioTest`, 2 `AudioDevice`, and one each of
+`ManualReproTest`, `HeadlessBootTest`, `ExtractBik`), so coverage neither shrank
+nor grew and there is no driver or asset artefact behind the count. Log:
+`~/tmp/dc3-wells/w8/native-gate-3b251bedd.log`.
+
+⚠ Compare the gate's own **"Skipped suites"** block, not a regex over the log.
+A first attempt here matched `[A-Za-z0-9_]+\.[A-Za-z0-9_]+` across the whole
+file and reported the two runs as differing — every difference it found was a
+ctest *duration* (`0.04`, `0.68`, `0.70`). A broken check that reports a
+difference is luckier than one that reports a match, but neither is evidence.
+
+### Where the 0 % band ended up
+
+| band | fns | bytes |
+|---|---:|---:|
+| exactly 0 % | 18 | 2,976 |
+| under 80 % | 33 | 31,052 |
+| 80–95 % | 172 | 79,492 |
+| 95–99.9 % | 506 | 406,416 |
+| 99.9 – under 100 % | 114 | 79,888 |
+| **total remaining** | **843** | **599,824** |
+
+link_glue and the vendor prefixes excluded. Including link_glue the total is
+919, which is exactly 13 more than `progress_metrics.py`'s 906 — its deduped
+shadow rows. The instrument agrees with itself.
+
+**The 0 % class went from 119 real rows / 19,984 B to 18 rows / 2,976 B.** Of
+those 18, six are structurally unscoreable: `merged_8237A7E8` (CharEyes) and
+`merged_ObjPtrListRemove` (TypeProps) carry *our own* `merged_*` label, and the
+`UI.cpp` and `jcmaster.c` rows were recorded in-source by their lanes. The
+genuine residue is about a dozen rows — six `AmbientOcclusion` STL sort
+instantiations (656 B) plus `LightPreset::erase` and
+`ObjPtrList<EventTrigger>::Unlink` — all of which answer to the explicit
+instantiation lever that paid throughout this wave.
+
+**The two largest survivors are a judgement call, not a gap.** `fn_8263A168`
+(504 B) and `fn_8263A360` (556 B) in `rndobj/Mesh` are 1,060 B, 36 % of the
+remaining zero bytes. `ham_xbox_r.map` shows `?PackVector@@` and
+`?FillCompressedVertex@@` **twice each**, bare `f` both times, in
+`rnddx9:Mesh.obj` *and* `rndobj:Mesh.obj`; `symbols.txt` binds the rnddx9
+addresses, where they score 96.19 % and 99.96 %. A rebind moves the naming
+rather than creating it. But "zero-sum" understates the choice in one direction:
+the score banked on the rnddx9 side is **partial credit**, which feeds fuzzy and
+the code percentages and contributes **nothing** to `matched_functions` or
+`matched_code`, since neither row is at 100. So the real trade is up to **+2
+matched functions and +1,060 B of matched code** if the rndobj copies reach 100,
+against a certain loss of ~1,041 B of partial credit. Testable, and worth
+testing — decide it by measuring rather than by quoting this paragraph.
+
+### Carried findings, added in phase 2
+
+- **`scripts/symbol_aliases.json` group 348 is missing a fold.** Group 348 is
+  `OnlyReturns@0x823e3b70` with 523 folded members, and
+  `??0PaddedJointPos@@QAA@XZ` is in **no** group at all — an unwitnessed pair in
+  the alias *source*, upstream of `icf_aliases.map`. `name_check` therefore
+  charges an ICF fold it should forgive, holding `??0SkeletonFrame@@QAA@XZ` at
+  **99.20** while it is 100.0 normalized.
+- **`HamDirector::CollideList` is a class-layout finding.** Both sides load
+  `0x114(r3)` and dispatch slot `0x2c`, but the image uses the primary vtable
+  unadjusted where we emit `addi r3, r11, 0x9c`. The cause is the base order of
+  `class RndDir : public ObjectDir, public RndDrawable, ...` in
+  `src/system/rndobj/Dir.h`; changing it moves every RndDir consumer.
+
+Both were left alone deliberately, for the same reason as the `authorable.py`
+correction above: each would move a ruler, a denominator or a class layout
+underneath every lane's before/after. They belong after the wave, each on its
+own commit, stating the before and after explicitly.
