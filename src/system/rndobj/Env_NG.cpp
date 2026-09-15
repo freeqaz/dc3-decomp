@@ -273,30 +273,35 @@ void NgEnviron::Select(const Vector3 *pos) {
         ClearLightRegisters(i);
     }
 
-    // NEGATIVE RESULT (96.3%, two refuted variants). The residual is one clean
-    // rotation of the six callee-saved registers r28..r23: the image puts
-    // numProj in r28 and the four hoisted MILO_NOTIFY string/global addresses
-    // in r27..r24, where MSVC ranks numProj *below* all four and gives it r23.
-    // The image also consumes numProj as the countdown for this loop
-    // (`subic. r28, r28, 0x1` at 0x825A9E14) instead of copying it into a
-    // scratch first. Two spellings of the loop tests were tried against that:
-    // both counters unsigned (`for (unsigned int i = ...`) does fix the two
-    // zero-guard comparisons -- the image tests both hoisted guards unsigned,
-    // `cmplwi cr6, r28, 0x0` / `cmplwi cr6, r21, 0x0`, where an int `i` gives
-    // `cmpwi` -- but it costs an extra instruction elsewhere and nets 96.2;
-    // making only the point-light loop unsigned is worse still at 95.7. The
-    // counters themselves are signed in the image (`cmpwi cr6, r21, 0x3` for
-    // `numPoint < 3`, `cmpwi cr6, r28, 0x1` for `numProj < 1`), so the
-    // signedness lever cannot be pushed further. Left at the signed spelling:
-    // an equality test is behaviourally identical either way.
-    for (int i = 0, projLightIdx = 3; i != numProj; i++, projLightIdx--) {
-        if (SetProjLightRegisters(projLightIdx, projLightIdx - 3, *projLights[i])) {
-            mNumLightsProj++;
-            mNumLightsReal++;
-        }
+    // The image consumes numProj itself as this loop's countdown
+    // (`subic. r28, r28, 0x1` at 826A4B60) behind an UNSIGNED zero guard
+    // (`cmplwi cr6, r28, 0x0` at 826A4B20), and that is what ranks numProj
+    // into r28 above the four hoisted MILO_NOTIFY addresses (r27..r24): an
+    // up-counting `for (i = 0; i != numProj; i++)` made MSVC copy numProj into
+    // a fresh countdown register, leave numProj at r23 and rotate all six
+    // callee-saved GPRs (96.30). A guarded do/while on an unsigned copy of
+    // numProj coalesces onto numProj's register (`--projLeft != 0` is the
+    // subic.), and the unsigned copy is what makes the guard cmplwi; the
+    // point loop's guard (`cmplwi cr6, r21, 0x0` at 826A4B70) only needs its
+    // counter unsigned. (w7-bw, 96.30 -> 96.88; refuted on the way: a
+    // for-loop decrementing numProj in place still copies, 95.1; the same
+    // countdown as `for (unsigned n = numProj; n != 0; n--)` coalesces but
+    // evaluates the pointer/index inits ahead of the guard, 95.7.)
+    unsigned int projLeft = numProj;
+    if (projLeft != 0) {
+        NgLight **proj = projLights;
+        int projLightIdx = 3;
+        do {
+            if (SetProjLightRegisters(projLightIdx, projLightIdx - 3, **proj)) {
+                mNumLightsProj++;
+                mNumLightsReal++;
+            }
+            proj++;
+            projLightIdx--;
+        } while (--projLeft != 0);
     }
 
-    for (int i = 0; i != numPoint; i++) {
+    for (unsigned int i = 0; i != numPoint; i++) {
         bool hasPointCubeTex;
         if (SetPointLightRegisters(mNumLightsPoint, *pointLights[i], hasPointCubeTex)) {
             mNumLightsPoint++;
