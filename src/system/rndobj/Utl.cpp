@@ -42,6 +42,12 @@
 #include "os\File.h"
 #include "obj\Data.h"
 #include "obj\Utl.h"
+// w8-a: for ObjPair -- see RndUtlDiscardedInstanceMerge below.  ObjPair is
+// MISPLACED in this tree: RB3's decomp has it in obj/Object.h immediately
+// before ObjMatchPr, and DC3's obj/Object.h still has ObjMatchPr at that exact
+// spot (line 1706).  Moving it there is the real fix; obj/Object.h is
+// PCH-reached, so it is a whole-tree rebuild and out of this lane's scope.
+#include "world\Instance.h"
 
 #include "math/Rand.h"
 
@@ -2287,6 +2293,24 @@ void RndUtlDiscardedKeyAppend(
 ) {
     dstTrans.insert(dstTrans.end(), srcTrans.begin(), srcTrans.end());
     dstRot.insert(dstRot.end(), srcRot.begin(), srcRot.end());
+}
+
+// w8-a: the std::list<ObjPair> COMDATs are the same orphan class.  The retail
+// map attributes four of the six to rndobj:Utl.obj (insert 0x826309A0,
+// _M_create_node 0x8262EF48, StlNodeAlloc<_List_node<ObjPair> >::allocate
+// 0x8262C4E0 and ::deallocate 0x8262C550) and the other two to
+// world:Instance.obj, yet nothing in rndobj/Utl.s mentions ObjPair outside
+// those four and their RTTI descriptor at 0x82F13ADC.  The surviving user of
+// the type is WorldInstance (src/system/world/Instance.cpp:318-360), which is
+// where the shape below comes from.
+void RndUtlDiscardedInstanceMerge(ObjectDir *dir, Hmx::Object *obj) {
+    std::list<ObjPair> objPairs;
+    objPairs.push_back(ObjPair(dir, obj));
+    for (std::list<ObjPair>::const_iterator it = objPairs.begin();
+         it != objPairs.end();
+         ++it) {
+        it->from->ReplaceRefs(it->to);
+    }
 }
 #endif
 
