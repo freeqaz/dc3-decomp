@@ -112,61 +112,68 @@ Transform RndLight::Projection() {
         Vector3 xRow = WorldXfm().m.x;
 
         const Transform &wz = WorldXfm();
-        float nzx = -wz.m.z.x;
-        float nzy = -wz.m.z.y;
-        float nzz = -wz.m.z.z;
+        Vector3 nz;
+        Negate(wz.m.z, nz);
+        float nzx = nz.x;
+        float nzy = nz.y;
+        float nzz = nz.z;
 
         Vector3 yRow = WorldXfm().m.y;
 
         Vector3 pos = WorldXfm().v;
 
-        // NEGATIVE RESULT (w7-ao, 2026-09-14): the residual here is the frame
-        // offset of the xRow/yRow/pos 16-byte Vector3 slots, not regalloc, and
-        // declaration ORDER does not move it. Both directions measured (a bare
-        // `Vector3 pos;` declared first, then assigned where it is now; and
-        // swapping the `yRow`/`pos` statements): `pos` stays at 0xa0 in every
-        // variant and the diff is byte-identical. The lever that works in
-        // SuperFormatString -- init order deciding callee-saved assignment --
-        // is inert on MSVC's 16-byte-aligned Vector3 slots, which it allocates
-        // by first USE, not by declaration.
+        // HISTORY (kept so nobody re-derives it):
+        // NEGATIVE RESULT (w7-ao, 2026-09-14): declaration ORDER of the
+        // xRow/yRow/pos Vector3 copies does not move their 16-byte frame slots
+        // (`pos` stayed at 0xa0 with either order).
+        // NEGATIVE RESULT (w7-bi, 2026-09-14): reading pos before yRow through
+        // hoisted `_fprN` float locals is inert too (93.3 either way).
         //
-        // NEGATIVE RESULT (w7-bi, 2026-09-14): the obvious follow-on to w7-ao's
-        // "allocates by first USE" -- moving the USES rather than the
-        // declarations, i.e. reading `_fpr3/_fpr4/_fpr5` (pos) before
-        // `_fpr0/_fpr1/_fpr2` (yRow) below -- is ALSO inert: 93.3 canonical
-        // either way, identical 197-row table (33 diff_arg / 1 replace / 6
-        // insert / 6 delete) and the same (0xa0,0xb0) OFFSET_SWAP at indices
-        // 69/85. MSVC normalises the load order, so neither declaration order
-        // nor use order reaches this slot pair. Both sides copy m.y first
-        // (target 0x826BAE0C region) and v second, so the ONLY difference is
-        // which local gets 0xa0 -- nothing in the source steers it. The rest of
-        // the residual is 20 instructions of pure REGISTER_SWAP (f4<->f5,
-        // f7<->f8, f0<->f11) plus two scheduling clusters (the `fneg f28`
-        // at index 58/60 and the 99-115 load/store cluster).
+        // MECHANISM (w7-bn, 2026-09-15, 93.3 -> 100.0 canonical, 191 rows all
+        // equal): the (0xa0,0xb0) slot swap and the whole 85-139 fmuls/fmadds
+        // cluster were ONE cause -- the association order of the three dot
+        // products below.  MSVC lowers `A + (B + C)` (all products) as
+        // fmuls(B or C) / fmadds(the other) / f[n]madds(A), and picks which of
+        // B/C is the fmuls by VALUE NUMBER: the product whose pos.* operand was
+        // first numbered comes first.  The image's order is y, z, x for v.x,
+        // v.y and v.z alike (0x826BAF28 fmuls pos.y; 0x826BAF34 fmadds pos.z;
+        // 0x826BAF88 fnmadds pos.x), which needs x as the OUTER term and pos.y
+        // numbered before pos.z -- so pos.* must be read directly in v.x in
+        // x, y, z order, not hoisted into locals declared z, y, x.  The slot
+        // pair follows from that: whichever copy's LAST load is scheduled
+        // earlier gets 0xa0, and the load schedule follows the dot-product
+        // order (yRow.x at 0x826BAF40 is the last yRow read, pos.x at
+        // 0x826BAF4C the last pos read).  Two more rows are operand order:
+        // an fmuls puts the higher-numbered operand first, so the v.x products
+        // are spelled `xRow.* * pos.*` (0x826BAF28 `fmuls f6, f0(pos.y),
+        // f12(xRow.y)`) while v.y/v.z keep pos first because nz*/the columns
+        // are numbered earlier.  The last row, `fneg f28` between the yRow
+        // `cmplwi` and its `bne` (0x826BAE78/0x826BAE7C), is the three
+        // negations being one statement (`Negate`) rather than three.
+        // Refuted on the way, full ninja each: flat `x + y + z` for all three
+        // (98.9: the outer term became y); hoisted pos locals declared y, z, x
+        // with `x + (y + z)` (99.0, pos-second operand order); `nzy` declared
+        // before `nzx` (98.9, f29<->f30); `nzz` computed after the yRow copy
+        // (93.3, wz kept in r30 across the call); `x + (y + z)` alone with
+        // the old z, y, x locals (92.4: slot swap fixed, fmuls order not).
         float topR = mTopRadius;
         float slope = (mBotRadius - topR) / mRange;
 
         result.m.x.y = nzx;
-        float _fpr0 = yRow.y;
-        float _fpr1 = yRow.z;
-        float _fpr2 = yRow.x;
-        float _fpr3 = pos.z;
-        float _fpr4 = pos.y;
-        float _fpr5 = pos.x;
         // The image reuses the three scaled column entries it has just stored
         // (f10/f8/f7) for v.z, and accumulates them in y, z, x order:
         //   fmuls f0, pos.y, yzCol ; fmadds pos.z, zzCol ; fmadds pos.x, xzCol
         //   fsubs f0, topR, f0
-        float yzCol = _fpr0 * slope;
-        float zzCol = _fpr1 * slope;
-        float xzCol = _fpr2 * slope;
+        float yzCol = yRow.y * slope;
+        float zzCol = yRow.z * slope;
+        float xzCol = yRow.x * slope;
         result.m.y.z = yzCol;
         result.m.z.z = zzCol;
         result.m.x.z = xzCol;
 
-        result.v.x = -((_fpr3 * xRow.z + (_fpr4 * xRow.y + _fpr5 * xRow.x)));
-        result.v.y = -((_fpr5 * nzx + (_fpr4 * nzy + _fpr3 * nzz)));
-        result.v.z = topR - (_fpr4 * yzCol + _fpr3 * zzCol + _fpr5 * xzCol);
+        result.v.x = -(xRow.x * pos.x + (xRow.y * pos.y + xRow.z * pos.z));
+        result.v.y = -(pos.x * nzx + (pos.y * nzy + pos.z * nzz));
+        result.v.z = topR - (pos.x * xzCol + (pos.y * yzCol + pos.z * zzCol));
 
         result.m.x.x = xRow.x;
         result.m.y.x = xRow.y;

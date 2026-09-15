@@ -133,6 +133,26 @@ RndShaderBuffer *DxShader::NewBuffer(unsigned int ui) { return new DxShaderBuffe
 // instantiation of that shape is byte-identical: all four names above resolve
 // to 0x824D1870 in build/373307D9/icf_aliases.map.  The name objdiff shows is
 // whichever instantiation won the fold.
+// w7-bn (2026-09-15) retry, still 94.4.  The lever bh's note did not try -- an
+// ASYMMETRIC spelling of the pshader block -- was measured and is not it:
+//   * hoisting the out-pointer, `ID3DXBuffer **pOut = &pBuf->mBuffer;` before
+//     `defines[0].Value = "1"` (or the same through the reference,
+//     `&static_cast<DxShaderBuffer *>(buf2)->mBuffer`, which MSVC store-forwards
+//     to identical code) DOES move `addi r10, .., 0x4` up to the image's slot
+//     right after `stw .., 0x0(r21)` (0x8261D634; bh's `0x82406030-34` above is a
+//     typo for 0x8261D630-34, checked against the .s), but the phi of the `new`
+//     result stays in r11 (`mr r11, r3` / `mr r11, r28`) instead of the image's
+//     r3, and the rest of the block reshuffles (`lwz r4, 0x8c(r31)` moves up,
+//     `stw r28, 0x5c(r1)` moves down): 93.9, three rows worse.
+//   * `buf2 = pBuf = new DxShaderBuffer();` 94.4, inert.
+//   * both pointers declared at the top of the function: 94.4, inert.
+//   * ctor body `{ mBuffer = nullptr; }` instead of `: mBuffer(0)`: 94.4, inert.
+//   * a static `CompileOne(...)` helper wrapping D3DXCompileShaderExA, inlined
+//     at both sites (so the inliner renumbers the temps per site): 94.4, inert,
+//     byte-identical to the direct calls.
+// The image's pshader block keeps the `new` result in r3 because its addi is
+// scheduled before `lwz r3, 0x74(r31)` (0x8261D64C); no spelling moved that
+// phi out of r11 on our side.
 bool DxShader::Compile(
     ShaderType s, const ShaderOptions &opts, RndShaderBuffer *&buf1, RndShaderBuffer *&buf2
 ) {

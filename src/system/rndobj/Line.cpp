@@ -525,6 +525,23 @@ void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
 // where every counted spelling here (for, do/while, hoisted bound) gives
 // `mtctr`/`bdnz` with `stwu`; the end cap re-reads pos.x after the Subtract
 // where the image keeps it in f0.
+//
+// w7-bn (85.3, no net gain, full ninja each): the phase-4 `subic.`/`bne` loops
+// ARE reproducible -- a STRUCT copy in the loop body is what stops MSVC from
+// converting the counter to ctr.  `*(Vector2 *)&p->unk[8] = *(Vector2 *)&end
+// ->unk[8]; p->ViewPos() = endView;` (endView a `Vector3 &`) gives both loops
+// row for row: `subic.` at the top, `stw`+`addi r11, r11, 0x48`, the IV biased
+// to p+0x20 (82678680 `addi r11, r11, 0x20`), the side words read off the
+// end/start base (`lwz r8, 0x40(r29)`) and the view words off a hoisted
+// end+0x20 (rows 186-207 and 214-229 all equal).  The Vector2 copy alone
+// keeps `subic.` but leaves the IV `stwu`-biased (83.9); int side + Vector3
+// view keeps `subic.` with the IV at p (84.2).  What it costs is phase 5: with
+// any struct copy in phase 4 the start cap stops store-forwarding the
+// Subtract result into the Add (`lfs f11, 0x8(r11)` / `lfs f10, 0x0(r11)`
+// reloads instead of the image's forwarded `fadds f12, f0, f12` at
+// 826787A4, 6 inserts / 3 deletes where this spelling has 2 / 1), so the net
+// is 84.9.  The two have to be solved together; the int-copy spelling below
+// keeps the better total.
 void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
     // Phase 1: project every point (x, z over y in view space). The three
     // view-space components are read before either projected value is

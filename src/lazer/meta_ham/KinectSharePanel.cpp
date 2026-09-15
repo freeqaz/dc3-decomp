@@ -145,24 +145,19 @@ void KinectSharePanel::ConvertImages() {
             EndianSwapBitmap(bitmapa0);
             auto bitmapPixels = bitmapa0.Pixels();
             memcpy(mPreviewBuf, bitmapPixels, mult);
-            // NEGATIVE RESULT (w7-bg): floor at 99.03% canonical, and the ONLY
-            // charged rows are one instruction's schedule.  The image computes
-            // the stbu pre-bias INSIDE the guarded loop --
-            //   82953738 lwz    r10, 0x0(r29)   ; mPreviewBuf
-            //   8295373C mullw. r11, r11, r9
-            //   82953740 ble    .L_82953758
-            //   82953744 mtctr  r11
-            //   82953748 subi   r11, r10, 0x4
-            // -- while we emit the `subi` immediately after the load, above the
-            // trip-count test.  Refuted, each a full ninja in the worktree:
-            //   * `area` declared before `previewPtr`                -> INERT (99.03)
-            //   * no named pointer, `((unsigned char *)mPreviewBuf)[i*4]` -> 97.00
-            // Everything else in this function already matches modulo an r10/r11
-            // volatile swap, which the canonical ruler forgives.
+            // An explicit pointer WALK, not an indexed store (w7-bn, 99.03 ->
+            // 100.0).  With `previewPtr[i * 4] = -1` MSVC strength-reduces the
+            // index and materialises the -4 bias right after the mPreviewBuf
+            // load, ABOVE the trip-count test; with the pointer as its own
+            // induction variable (`previewPtr += 4` in the increment) the bias
+            // lands in the loop preheader after `mtctr` (82953744/48), which
+            // is the image.  bg's refutations at 99.03: `area` declared first
+            // (inert), `((unsigned char *)mPreviewBuf)[i * 4]` (97.00); bn:
+            // `void *` local cast inside the loop (inert).
             unsigned char *previewPtr = (unsigned char *)mPreviewBuf;
             int area = bitmapa0.Height() * bitmapa0.Width();
-            for (int i = 0; i < area; i++) {
-                previewPtr[i * 4] = -1;
+            for (int i = 0; i < area; i++, previewPtr += 4) {
+                *previewPtr = -1;
             }
         }
         mImagePostParams.PreviewImage.pBytes = (BYTE *)mPreviewBuf;

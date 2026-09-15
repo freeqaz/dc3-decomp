@@ -495,6 +495,20 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
 //   * idx 316/319: `cmpwi cr6, r11, 0x0` moves three slots.
 // No source spelling attempted moved any of these; recorded as a scheduling
 // floor rather than chased further.
+//
+// w7-bn (2026-09-15), still 96.6: the 366-393 block is the mNodes loop and is
+// NOT pure regalloc -- the image carries `_M_start` in r11 around the back
+// edge (loaded at 0x823E4D60 for size(), reused at 0x823E4D34 for the element
+// address) and lowers the two field reads from DIFFERENT address expressions:
+// curBeat is an unshared indexed load `lfsx f3, r11, r30` (0x823E4D58) while
+// nextBeat materialises the sum (`add r10, r11, r30` / `lfs f4, 0x4(r10)`).
+// We reload _M_start at the loop top and share ONE sum for both `lfs`.  Refuted,
+// full ninja each: `Hmx::Color(...)` as a temporary in the call (96.6, inert);
+// `int i` (96.6, inert); `float nb = mNodes[i].nextBeat` hoisted above the
+// colour ctor (94.9, home slot); `float cb = mNodes[i].curBeat` hoisted (94.9);
+// both hoisted after the ctor (96.6 -- flips our `add` to begin+off like the
+// image but the sum stays shared).  Whatever made the image not CSE the two
+// `begin + i*12` sums is not the evaluation order of the two reads.
 void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     Hmx::Rect rect;
 

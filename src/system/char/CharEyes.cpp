@@ -899,6 +899,32 @@ void CharEyes::NextLook() {
         // oldTarget` (a reference there made the copy word-serialised), a named
         // `headPos` reference so the loop loads go through the pointer register,
         // and a Transform reference for Dir()'s WorldXfm().
+        //
+        // w7-bn (96.7 -> 99.6): FOUND.  The copy is `newFacing`, and what keeps
+        // MSVC from propagating it away is a MEMBER operator on it that returns
+        // `*this` -- `newFacing += Vector3(dx, dy, dz)`.  With that spelling the
+        // 16-byte copy appears at 0x823799F8..0x82379A30, the `&mLastFacing` home
+        // store sinks to 0x82379A18, y/z are reloaded from the copy at
+        // 0x82379A6C/0x82379A74, and the prologue drops to `bl __savefpr_26` /
+        // `stwu r1, -0x130(r1)` exactly.  The same copy is ELIMINATED (96.7,
+        // full ninja each) by every spelling that reads or writes the fields
+        // directly: `newFacing.x += dx` (93.5), `newFacing.Set(newFacing.x + dx,
+        // dy + newFacing.y, dz + newFacing.z)`, `Add(Vector3(dx, dy, dz),
+        // newFacing, newFacing)`.  A modified copy for the DELTA instead
+        // (`Vector3 extrap = facingDir; extrap -= lastFacing; extrap *= 45.0f`)
+        // keeps a copy but puts the fsubs on it and the post-tan reloads on
+        // facingDir, the mirror image of the target (95.5).
+        //
+        // Residual at 99.6: eight commutative operand orders (`fmuls f30, f30,
+        // f0` vs ours `f30, f0, f30` at 0x82379A60/64, the post-tan y/z fadds,
+        // and the projection/Set rows at 0x82379AB0..0x82379AD0) that source
+        // operand order does NOT drive -- `dy = scale * dy` vs `dy = dy * scale`
+        // is inert on them -- plus the tail's oldDir load order (the image loads
+        // oldTarget x/y/z before headXfm.v at 0x82379F4C; `Subtract(oldTarget,
+        // headXfm.v, oldDir)` homes a reference instead, 98.0) and the
+        // `mTarget.z < dirXfm.v.z` load order (`dirXfm.v.z > mTarget.z` flips
+        // the branch to ble, 98.0).
+        Vector3 newFacing = facingDir;
         float dz = (facingDir.z - lastFacing.z) * 45.0f;
         float dx = (facingDir.x - lastFacing.x) * 45.0f;
         float dy = (facingDir.y - lastFacing.y) * 45.0f;
@@ -913,16 +939,14 @@ void CharEyes::NextLook() {
             dz = dz * scale;
         }
 
-        float newFacingX = facingDir.x + dx;
-        float newFacingY = dy + facingDir.y;
-        float newFacingZ = dz + facingDir.z;
+        newFacing += Vector3(dx, dy, dz);
 
         float dist = RandomFloat(20.0f, 100.0f);
         dist *= 12.0f;
 
-        float projX = dist * newFacingX;
-        float projY = newFacingY * dist;
-        float projZ = newFacingZ * dist;
+        float projX = dist * newFacing.x;
+        float projY = newFacing.y * dist;
+        float projZ = newFacing.z * dist;
 
         _ref0.Set(headXfm.v.x + projX, projY + headXfm.v.y, headXfm.v.z + projZ);
         const Vector3 &headPos = headXfm.v;

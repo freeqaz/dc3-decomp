@@ -142,17 +142,19 @@ void AsyncFileWin::_Close() {
     mFile = INVALID_HANDLE_VALUE;
 }
 
-// COLLATERAL (w7-bg): 99.29% -> 97.84% canonical when _ReadAsync below was fixed
-// (unk58 bool -> unsigned char, its `aligned` local unsigned char -> int).  The
-// code SHAPE here improved -- the `mr r28, r11` insert that copied the memset
-// zero into a callee-saved register is gone -- but MSVC then allocates one
-// fewer callee-saved register for this function (r23..r30 vs the image's
-// r22..r30), which renumbers every row, and objdiff's section-relative branch
-// rendering charges one `bne` displacement (82605xxx `bne 0x754` vs `bne 0xa00`)
-// that had previously coincided.  Every other row here is register permutation,
-// which the canonical ruler forgives.  Moving `int aligned` above the memset was
-// measured and is INERT.  Do not undo the _ReadAsync fix for this: it is worth
-// +1.35pp on a 768 B row against -1.45pp on a 564 B one.
+// `aligned` is a BOOL here (w7-bn, 97.84 -> 99.3): the image sets it with
+// `mr r28, r23` (the 1 already materialised for mWriteInProgress) and tests it
+// with `clrlwi. r11, r28, 24` at 82605xxx, holding it in a callee-saved
+// register across the two Tell() calls -- that register is the ninth GPR in
+// the image's __savegprlr_22.  bg's _ReadAsync fix changed this function's
+// local to `int` as well, which let MSVC fold the test away and drop to
+// __savegprlr_23 (the 97.84 "collateral"); the fix in _ReadAsync itself is
+// independent of this and stays.  Residual (all register permutation plus
+// one `mr`): the image materialises the zero for `aligned = false` directly
+// in r28 and lets the inlined memset borrow it; we materialise memset's zero
+// in r11 and copy it (`mr r28, r11`).  Refuted at 99.3, full ninja each:
+// `aligned` declared before the memset, before `mWriteInProgress = true`,
+// `unsigned char aligned = 0`; declared above the asserts -> 95.6.
 void AsyncFileWin::_WriteAsync(const void *buf, int count) {
     if (mFd >= 0) {
         int written = _write(mFd, buf, count);
@@ -169,11 +171,11 @@ void AsyncFileWin::_WriteAsync(const void *buf, int count) {
             return;
         mWriteInProgress = true;
         memset(&mOverlapped, 0, sizeof(OVERLAPPED));
-        int aligned = 0;
+        bool aligned = false;
         if (((int)buf & 3) == 0) {
             if (Tell() % mSectorBytes == 0) {
                 if (count % mSectorBytes == 0) {
-                    aligned = 1;
+                    aligned = true;
                 }
             }
         }

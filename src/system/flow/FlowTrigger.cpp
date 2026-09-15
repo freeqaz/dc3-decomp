@@ -189,42 +189,42 @@ Hmx::Object *FlowTrigger::GetEventProvider() {
 }
 
 DataArray *FlowTrigger::GetEventEditorDef(Symbol s) {
-    DataArray *eval;
+    DataArray *a;
     if (mEventProvider && mEventProvider->TypeDef()
         && mEventProvider->TypeDef()->FindArray("supported_events", false)) {
-        eval = mEventProvider->TypeDef()->FindArray("supported_events", true);
+        a = mEventProvider->TypeDef()->FindArray("supported_events", true)->Array(1);
     } else if (mEventProvider
                && mEventProvider->ObjectDef(gNullStr)->FindArray(
                    "supported_events", false
                )) {
-        eval = mEventProvider->ObjectDef(gNullStr)->FindArray("supported_events", true);
+        a = mEventProvider->ObjectDef(gNullStr)
+                ->FindArray("supported_events", true)
+                ->Array(1);
     } else {
         Flow *owner = GetOwnerFlow();
         if (owner->TypeDef() && owner->TypeDef()->FindArray("supported_events", false)) {
-            eval = owner->TypeDef()->FindArray("supported_events", true);
+            a = owner->TypeDef()->FindArray("supported_events", true)->Array(1);
         } else if (owner->ObjectDef(gNullStr)->FindArray("supported_events", false)) {
-            eval = owner->ObjectDef(gNullStr)->FindArray("supported_events", true);
+            a = owner->ObjectDef(gNullStr)->FindArray("supported_events", true)->Array(1);
         } else
             return nullptr;
     }
-    DataArray *a = eval->Array(1);
     if (a) {
         a = a->FindArray(s, false);
         if (a)
             return a;
     }
     return nullptr;
-    // NEGATIVE RESULT (w7-bg): floor at 99.35% canonical, 2 of 184 rows.
-    // The image tests the two pointers in DIFFERENT condition-register fields --
-    // 82424B38 `cmplwi cr6, r3, 0x0` / `beq cr6` for eval->Array(1), then
-    // 82424B4C `cmplwi r3, 0x0` (cr0) / `bne` for FindArray's result -- while we
-    // emit cr0 for both. Refuted spellings, all built full-ninja in the worktree:
-    //   * a separate `DataArray *found = a->FindArray(s, false);` local  -> INERT (99.35, same 2 rows)
-    //   * flattened early returns (`if (!a) return nullptr;` twice)      -> WORSE (98.5, 4 rows)
-    //   * short-circuit `if (a && (a = a->FindArray(s, false)))`         -> INERT (99.35, same 2 rows)
-    // Nothing in the source spelling steers MSVC's CR-field choice here; this is
-    // condition-register allocation, not control-flow shape. Do not re-permute
-    // without a new lever.
+    // Each arm computes `->Array(1)` ITSELF and MSVC cross-jumps the four
+    // identical FindArray/Node/Array tails into .L_82424B20 (w7-bn, 99.35 ->
+    // 100.0).  That makes `a` a phi of four definitions at 82424B38, and a
+    // phi'd null test is `cmplwi cr6`; a single-def call result tested by an
+    // `if` is `cmplwi r3` (cr0), which is what a shared `eval->Array(1)`
+    // after the chain produced.  Same rule closed XboxContentMgr::
+    // StartRefresh.  Refuted at 99.35 (bg + bn, full ninja each): a separate
+    // `found` local, `if (a && (a = ...))`, a bool temp, reusing the
+    // multi-def `eval` for the tail, a second separate `if (a)`; flattened
+    // early returns / `return a` / `found ? found : nullptr` -> 98.5.
 }
 
 void FlowTrigger::RegisterEvents() {
