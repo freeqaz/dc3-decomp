@@ -572,13 +572,15 @@ void CreateBackBuffers(
     edramBase = 0x800;
     edramHzBase = 0xE10;
 
+    D3DSURFACE_PARAMETERS params;
+    memset(&params, 0, sizeof(params));
+
     edramBase -= depthSize;
+    params.Base = edramBase;
 
     edramHzBase -= (((adjustedWidth + 0x1F) >> 5) * ((adjustedHeight + 0xF) >> 4)) & 0x7FFFFF;
-
-    D3DSURFACE_PARAMETERS params = {0};
-    params.Base = edramBase;
     params.HierarchicalZBase = edramHzBase;
+
     depthSurface = D3DDevice_CreateSurface(width, height, D3DFMT_D24FS8, multisample, &params);
     DX_ASSERT(depthSurface, 0x2CE);
 
@@ -651,6 +653,20 @@ RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
     return PostProcessTexture();
 }
 
+// RESIDUAL (w7-bl, 99.99 canonical, 15 rows, all register/operand ORDER and
+// no value): (a) a flat r22<->r23 permutation -- the image gives r22 to the
+// `?TheShaderMgr@@...@h` page base and r23 to `s`, we give them the other way
+// round, 10 rows; (b) inside the inlined MakeColor at 0x38C4/0x38D8 the image
+// issues the red (0x0) and alpha (0xc) `lfs` in that order and we issue alpha
+// then red, which cascades into the r9/r10 naming of the three `rlwimi`s --
+// the packed ARGB word is bit-identical either way (verified by hand from the
+// rlwimi masks).  Failed spellings: reordering MakeColor's four |-terms in
+// Rnd.h so red precedes alpha is BYTE-INERT here (15 rows before and after),
+// so it is not an argument-order lever, matching the negative already recorded
+// for the same packing in rnddx9/Part.cpp; hoisting `RndShaderMgr &shaderMgr`
+// to the top of the function costs 2.8pp (it pulls the `lis`/`lwz` pair ahead
+// of D3DDevice_SetFVF and grows the frame by 0x10).
+//
 // Debug text: each glyph is a list of polylines held in the `font` DataArray,
 // indexed by character code, each point a pair of floats scaled to a 9x12 cell
 // on a 13.5 x 18 pixel grid.  Returns a reference to a shared cursor holding
@@ -662,21 +678,22 @@ Vector2 &DxRnd::DrawString(
     D3DDevice_SetFVF(mD3DDevice, 0x42);
     Transform screenXfm;
     screenXfm.Reset();
-    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(screenXfm));
+    RndShaderMgr &shaderMgr = TheShaderMgr;
+    shaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(screenXfm));
     TheShaderMgr.SetTransform(screenXfm);
     RndShader::SelectConfig(nullptr, kLineNozShader, false);
     D3DDevice_SetRenderState_ViewportEnable(TheDxRnd.Device(), 0);
     static Vector2 cursor;
     cursor = pos;
     float widest = pos.x;
-    while (*s) {
-        char c = *s;
+    char c;
+    while ((c = *s) != 0) {
         if (c == '\n') {
             s++;
             if (*s) {
                 widest = Max(widest, cursor.x);
-                cursor.y += 18.0f;
                 cursor.x = pos.x;
+                cursor.y += 18.0f;
             }
             continue;
         }
@@ -733,9 +750,19 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(mD3DDevice);
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, 0);
-    Hmx::Color color(0, 0.1, 0.5, 0);
+    // BUG FIX (w7-bl).  0x82618DAC-0x82618DB4 packs the clear colour as
+    // A=0xff (a CONSTANT -- `lis r8, 0xffff`, so alpha is a compile-time
+    // 1.0f), R=f13, G=f12, B=f11, and 0x82618D34/0x82618D3C load f12=0.5f
+    // and f11=0.1f with f13=0.0f; the kModalFail arm at 0x82618D48-0x82618D50
+    // sets f13=0.25f and zeroes f12/f11.  So the image clears to an OPAQUE
+    // (0, 0.5, 0.1) green for a normal modal and an OPAQUE (0.25, 0, 0) red
+    // for a failure.  We had green/blue swapped, alpha 0 instead of 1, and
+    // the failure arm writing 0.25 into ALPHA instead of RED -- our modal
+    // cleared to 0x0000197f (fully transparent blue) and our failure screen
+    // to 0x3f000000 instead of 0xff3f0000.
+    Hmx::Color color(0, 0.5f, 0.1f);
     if (t == Debug::kModalFail) {
-        color.alpha = 0.25f;
+        color.red = 0.25f;
         color.green = 0;
         color.blue = 0;
     }
@@ -749,6 +776,12 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
         mRegAlloc = (RegisterAlloc)0;
         D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
     }
+    // w7-bl RESIDUAL (89.7%): the image keeps the `__real@00000000` PAGE BASE
+    // in a callee-saved GPR (r30 at 0x82618D20) and issues two `lfs` -- one
+    // for the colour components, one for this Resolve's ClearZ -- where MSVC
+    // gives us one `lfs` into a callee-saved f31 that spans D3DDevice_Clear.
+    // That is the whole r25..r31 vs r26..r31 renumbering: the image spends a
+    // GPR where we spend an FPR.  Allocator choice, no source lever found.
     Present();
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, savedRenderTarget);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, savedStencilSurface);
@@ -802,6 +835,13 @@ void DxRnd::InitBuffers() {
         // half height) over the default vertical one (side-by-side tiles,
         // half width, full height).  The loop re-reads mNumTiles from the
         // member every iteration (`lwz r8, 0x3b0(r30)`).
+        // w7-bl RESIDUAL (95.2%): the image computes `offset + tile` TWICE in
+        // each of the two rect loops (0x82619110 `add r8, r10, r23` and
+        // 0x82619124 `add r10, r10, r23`), where MSVC CSEs ours into one add
+        // (loop 1) or an add plus `mr` (loop 2).  The rest is a uniform
+        // renumbering of the callee-saved set: the image gets by with
+        // __savegprlr_19 and we need _18, i.e. one more simultaneously-live
+        // value, which is what shifts r25->r22, r27->r24, r24->r25, r26->r27.
         int i = 0;
         int offset = 0;
         if (mFlags & 2) {
@@ -909,8 +949,13 @@ void DxRnd::InitBuffers() {
     // 32, not an arithmetic shift.  With `>> 5` MSVC fuses one of them into a
     // single `extlwi` and the addze pair disappears.
     int temp27 = ((((mHeight + 0x1F) / 32) * ((mWidth + 0x1F) / 32)) << 0xC);
+    // w7-bl: `rect` is hoisted OUT of the loop on purpose.  Scoped inside the
+    // body it shares r1+0x58 with the MakeString scratch slot; the image keeps
+    // the two apart (Symbol temp at 0x5c, D3DLOCKED_RECT at 0x60), and hoisting
+    // reproduces that (-3 rows).  Swapping the mullw operands above to match
+    // the image's mHeight/mWidth LOAD order is inert (measured, 0 rows).
+    D3DLOCKED_RECT rect;
     for (int i = 0; i < 2; i++) {
-        D3DLOCKED_RECT rect;
         D3DTexture_LockRect(mFrontBuffers[i], 0, &rect, nullptr, 0);
         memset(rect.pBits, 0, temp27);
         D3DTexture_UnlockRect(mFrontBuffers[i], 0);
@@ -1158,11 +1203,17 @@ void DxRnd::DoPointTests() {
         }
     }
 
-    // Update frame index - both direct manipulation and virtual call
+    // Update frame index - both direct manipulation and virtual call.
+    // BUG FIX (w7-bl): the two virtual calls were the wrong way round.
+    // 0x8261B008 calls vtable slot 0x20 (OnEndFrame) right after the 0x1804
+    // toggle, and 0x8261B018 calls slot 0x1c (OnBeginFrame) after the 0x1808
+    // increment -- we emitted 0x1c then 0x20.  Semantically the image retires
+    // the previous frame's queries, bumps the counter, then opens the new
+    // frame; we were opening the new frame before retiring the old one.
     mOcclusionQueryMgr->ToggleFrameIndex();
-    mOcclusionQueryMgr->OnBeginFrame();
-    mOcclusionQueryMgr->IncrementFrameCounter();
     mOcclusionQueryMgr->OnEndFrame();
+    mOcclusionQueryMgr->IncrementFrameCounter();
+    mOcclusionQueryMgr->OnBeginFrame();
 
     // Count point tests needed
     int numTests = 0;
@@ -1176,6 +1227,24 @@ void DxRnd::DoPointTests() {
     // Early out if no point tests
     if (mPointTests.empty())
         return;
+
+    // The image's frame is 0x40 larger than a naive one because the unnamed
+    // Hmx::Matrix4 temporary below does NOT share a slot with the vertex
+    // buffers -- it sits at r1+0x130, right above `xfm`, while the vertex
+    // scratch stays at r1+0x70/0x90.  Declaring the vertex locals here keeps
+    // them live across the SetVConstant call so the slots cannot be merged.
+    struct PointVertex {
+        float x, y, z;
+        float w;
+        DWORD color;
+    };
+    struct QuadVertex {
+        float x, y, z;
+        float w;
+        DWORD color;
+    };
+    PointVertex vtx;
+    QuadVertex verts[4];
 
     // Setup identity transform
     Transform xfm;
@@ -1222,19 +1291,18 @@ void DxRnd::DoPointTests() {
 
         RndFlare *flare = it->mFlare;
         RndPointTest &test = mPointTestQueries[idx];
-        // 0x8261B268-0x8261B284: mFlare is stored FIRST, then the two -1s.
+        // 0x8261B268-0x8261B284: mFlare is stored FIRST, then mAreaQueryIdx
+        // (0x8) and only then mPointQueryIdx (0x4).
         test.mFlare = flare;
-        test.mPointQueryIdx = -1;
         test.mAreaQueryIdx = -1;
+        test.mPointQueryIdx = -1;
 
         // Point test
         if (flare->GetPointTest()) {
-            struct PointVertex {
-                float x, y, z;
-                float w;
-                DWORD color;
-            };
-            PointVertex vtx;
+            // NEGATIVE RESULT (w7-bl, byte-identical): the image stores w and
+            // color between the z load and the z conversion, but writing the
+            // fields in that order (x, y, w, color, z) changes not one
+            // instruction -- MSVC schedules stores to a local struct freely.
             vtx.x = (float)it->x;
             vtx.y = (float)it->y;
             vtx.z = (float)it->z * 5.9604651881e-08f;
@@ -1246,9 +1314,10 @@ void DxRnd::DoPointTests() {
             // temp, and its result gates TWO separate `if`s -- BeginQuery
             // under the first, DrawVerticesUP+EndQuery under the second, each
             // reloading the index from 0x0(r27).
-            bool ok = mOcclusionQueryMgr->CreateQuery(test.mPointQueryIdx);
+            RndOcclusionQueryMgr *mgr = mOcclusionQueryMgr;
+            bool ok = mgr->CreateQuery(test.mPointQueryIdx);
             if (ok) {
-                mOcclusionQueryMgr->BeginQuery(test.mPointQueryIdx);
+                mgr->BeginQuery(test.mPointQueryIdx);
             }
             if (ok) {
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_POINTLIST, 1, &vtx, sizeof(PointVertex));
@@ -1257,20 +1326,17 @@ void DxRnd::DoPointTests() {
         }
 
         // Area test.  0x8261B330 reloads the flare from `test.mFlare`
-        // (`lwz r11, 0x0(r30)`), not from the `flare` local.
-        if (test.mFlare->GetAreaTest()) {
-            struct QuadVertex {
-                float x, y, z;
-                float w;
-                DWORD color;
-            };
-            QuadVertex verts[4];
-
+        // (`lwz r11, 0x0(r30)`), not from the `flare` local -- and that ONE
+        // load then serves the whole block: the rect base at 0x8261B33C, the
+        // three GetArea() reads, and both stores in the else arm.
+        RndFlare *areaFlare = test.mFlare;
+        if (areaFlare->GetAreaTest()) {
             // 0x8261B33C `addi r10, r11, 0x134`: the rect is held BY
             // REFERENCE, so w/h are read as 0x8(r10)/0xc(r10) rather than
             // 0x13c/0x140 off the flare.
-            verts[0].x = test.mFlare->GetArea().x;
-            verts[0].y = test.mFlare->GetArea().y;
+            Hmx::Rect &area = areaFlare->GetArea();
+            verts[0].x = area.x;
+            verts[0].y = area.y;
             verts[0].z = (float)it->z * 5.9604651881e-08f;
             verts[0].w = 1.0f;
             verts[0].color = 0;
@@ -1281,26 +1347,37 @@ void DxRnd::DoPointTests() {
             // from the copy -- except verts[3].y, which reloads its own slot
             // at 0xd0(r1).  Every `fadds` takes the RECT term first.
             verts[1] = verts[0];
-            verts[1].y = test.mFlare->GetArea().h + verts[0].y;
+            verts[1].y = area.h + verts[0].y;
 
             verts[2] = verts[0];
-            verts[2].x = test.mFlare->GetArea().w + verts[0].x;
+            verts[2].x = area.w + verts[0].x;
 
             verts[3] = verts[0];
-            verts[3].x = test.mFlare->GetArea().w + verts[0].x;
-            verts[3].y = test.mFlare->GetArea().h + verts[3].y;
+            verts[3].x = area.w + verts[0].x;
+            verts[3].y = area.h + verts[3].y;
 
-            bool ok = mOcclusionQueryMgr->CreateQuery(test.mAreaQueryIdx);
+            // w7-bl RESIDUAL (92.90%): what is left is a flat renumbering of
+            // the callee-saved set (`this` is r29 in the image, r30 for us;
+            // the iterator, the byte index and the two query-index addresses
+            // shift with it), four `fadds` whose operands MSVC canonicalises
+            // (writing `verts[0].y + area.h` is byte-identical), and the
+            // mFlare store at 0x8261B268, which the image does off the
+            // computed `&test` where we emit an indexed `stwx`.
+            // 0x8261B430/0x8261B444: the manager is read ONCE into a
+            // callee-saved register and reused for BeginQuery (`mr r3, r30`);
+            // EndQuery at 0x8261B478 reloads the member.
+            RndOcclusionQueryMgr *mgr = mOcclusionQueryMgr;
+            bool ok = mgr->CreateQuery(test.mAreaQueryIdx);
             if (ok) {
-                mOcclusionQueryMgr->BeginQuery(test.mAreaQueryIdx);
+                mgr->BeginQuery(test.mAreaQueryIdx);
             }
             if (ok) {
                 D3DDevice_DrawVerticesUP(mD3DDevice, D3DPT_TRIANGLESTRIP, 4, verts, sizeof(QuadVertex));
                 mOcclusionQueryMgr->EndQuery(test.mAreaQueryIdx);
             }
         } else {
-            test.mFlare->SetOcclusionReady(true);
-            test.mFlare->SetVisible(true);
+            areaFlare->SetOcclusionReady(true);
+            areaFlare->SetVisible(true);
         }
     }
 

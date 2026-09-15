@@ -252,7 +252,16 @@ void SkeletonUpdate::Update() {
                 }
                 data.mTrackingID = -1;
                 data.mClippedFlags = -1;
-                data.mHipCenter = Vector3::ZeroVec();
+                // A 16-byte PaddedJointPos copy, NOT PaddedJointPos::operator=
+                // (const Vector3 &).  The image reads FOUR words out of
+                // Vector3::sZero -- 0x0, 0x4, 0x8 and 0xc -- with plain `lwz`
+                // and stores them to 0x2e0..0x2ec with `stw`, i.e. it copies
+                // the pad slot too and over-reads sZero by one word.  The
+                // three-float form emits lfs/stfs and leaves _pad alone.
+                // Spell it through a POINTER cast: `(const PaddedJointPos &)`
+                // makes MSVC materialise a 16-byte stack temp instead
+                // (79.7 canonical, frame +0x10).
+                data.mHipCenter = *(const PaddedJointPos *)&Vector3::ZeroVec();
             }
         }
     }

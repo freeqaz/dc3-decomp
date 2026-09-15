@@ -96,6 +96,21 @@ void BaseSkeleton::NormPos(SkeletonCoordSys cs, SkeletonJoint joint, Vector3 &v)
     LimbNormPos(cs, joint, true, v40, v);
 }
 
+// RESIDUAL (w7-bl, 98.28 canonical, 5 of 175 rows): two register-allocator
+// decisions, both downstream of identical arithmetic.
+//  (1) `bone1` -- the image leaves the ternary's result in the scratch r7 in
+//      BOTH branches (`addi r7, r7, 0xb` / `addi r7, r7, 0x6`) and pays a
+//      `mr r4, r7` at the BoneLength call site; MSVC here coalesces that move
+//      into the addi (`addi r4, r7, 0xb`), so our code is ONE instruction
+//      shorter (692 vs 696 bytes).  r4 is only clobbered on the MILO_FAIL path,
+//      which branches away before the call, so the coalesce is legal for both.
+//      All six sibling ternaries land in the same registers as the image.
+//  (2) The second `xori rX, rY, 0x1` (bone3's negated side) is scheduled four
+//      slots later in the image, after the three clrlwi/clrrwi; MSVC packs the
+//      two xori adjacently.  Same instructions, same registers, same order of
+//      the seven `addi` results (indices 60-66).
+// Both MakeString rows in the Function Call Diff are ICF folds (the assert
+// format string and the "Unsupported joint %i" one), not wrong callees.
 void BaseSkeleton::LimbNormPos(
     SkeletonCoordSys cs,
     SkeletonJoint joint,
@@ -154,6 +169,34 @@ void BaseSkeleton::LimbNormPos(
     }
 }
 
+// RESIDUAL (w7-bl, 95.70 canonical, 45 of 220 rows, was 95.00/48): two
+// scheduling residuals, both inside the joint-copy blocks.
+//  (1) The kUnk5 branch is 3 instructions SHORT because MSVC cross-jumps our
+//      `limbDir.x -= nearJoint.x` into the arm/leg tail (our `b` lands on the
+//      shared `lfs 0x60 / lfs 0x80 / fsubs f13` pair instead of on the store
+//      block).  It merges because our two branches assign the same FPRs to x;
+//      the image's do not (kUnk5 `fsubs f13, f10, f13` vs arm/leg
+//      `fsubs f13, f12, f13`), so it emits all three subtractions inline and
+//      jumps straight to the stfs triple.  No source spelling reached that.
+//  (2) The image loads nearJoint's three components BEFORE limbDir's and
+//      round-robins the three 16-byte joint copies limb/near/origin; we
+//      complete near+origin first.  Pure store scheduling -- same set, same
+//      slots (limbDir 0x60, upDir 0x70, nearJoint/crossDir 0x80, origin 0x90).
+// Lever that DID pay (0.7pp, 3 rows): the kUnk5 subtraction is written z,y,x
+// below -- that order is what the image emits, and writing it x,y,z made MSVC
+// spill two intermediates to 0x60/0x68 inside the branch (2 extra stfs).
+// Failed spellings, all measured in this worktree:
+//   - `Subtract(limbDir, nearJoint, limbDir)` in all three branches: byte-inert
+//     (95.00, identical 37/1/6/4 row split) -- MSVC canonicalises Set() back to
+//     three component subtractions.
+//   - assigning limbDir before nearJoint in all three branches: same 95.70 but
+//     48->63 rows, and it moves nearJoint off the 0x80 slot (`addi r4, r31,
+//     0xc0` picks up a +48 offset diff at index 48).
+//   - arm/leg subtraction reordered z,x,y to match the image's emission order
+//     there: same 95.70, 45->48 rows.
+// The MakeString<char const(&)[13], int const&, char const(&)[5]> vs our
+// <[11], int const&, [49]> in the Function Call Diff is an ICF fold -- both
+// sides load the SAME two string symbols at indices 14/15 -- not a wrong callee.
 void BaseSkeleton::MakeCameraToPlayerXfm(
     SkeletonCoordSys cs,
     Transform &xfm,
@@ -207,9 +250,9 @@ void BaseSkeleton::MakeCameraToPlayerXfm(
         Vector3 nearJoint = pj[kJointHipLeft];
         limbDir = pj[kJointHipRight];
         origin = pj[kJointHipCenter];
-        limbDir.x -= nearJoint.x;
-        limbDir.y -= nearJoint.y;
         limbDir.z -= nearJoint.z;
+        limbDir.y -= nearJoint.y;
+        limbDir.x -= nearJoint.x;
     }
 
     Normalize(limbDir, limbDir);

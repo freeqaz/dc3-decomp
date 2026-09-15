@@ -374,6 +374,26 @@ bool Skeleton::NeedIdentify() const {
     return GetEnrollmentIndex() == -1 || GetEnrollmentIndex() == -5;
 }
 
+// RESIDUAL (w7-bl, 91.13 canonical, 97 of 213 rows): ONE induction-variable
+// choice in the kNumJoints loop below, and the flat register renumbering it
+// forces.  The image saves TWELVE callee-saved GPRs (`bl __savegprlr_20`,
+// frame 0xe0); we save eleven (`__savegprlr_21`, frame 0xd0), and 55 of the 69
+// register-swap rows are the resulting r30<->r31 / r21<->r22 / r20<->r21
+// cascade -- value-identical, just one register off all the way down.
+// The extra live value is `this + 4`: the image keeps i*0x74 as a plain OFFSET
+// (r29), re-forms `&mTrackedJoints[i]` at the loop head as `add r28, r24, r29`
+// with r24 = this+4, and gets its trip test for free by comparing that same
+// offset against 0x910 (= 20 * 0x74) at Skeleton.s 0x15f0.  MSVC here instead
+// strength-reduces the tail into two WALKING POINTERS (`addi r29, r29, 0x74`,
+// `addi r28, r28, 0x10`) and then needs a separate down-counter
+// (`li r25, 0x14` / `subic. r25, r25, 0x1` / `bne`), which is why our loop is
+// 8 bytes shorter (820 vs 828) and one callee-saved register lighter.
+// Also note: the image derives `&data.mJointPositions[i]` from a separate base
+// (r22 = data+0x144) plus i*0x10, where MSVC here derives it from the
+// mRawPositions walker (`addi r27, r28, 0x140`).
+// The three MakeString rows in the Function Call Diff are ICF folds (the assert
+// format strings), not wrong callees.  Control flow is faithful: the `beq` at
+// Skeleton.s 0x14fc goes to Init() and the `bne` two instructions later returns.
 void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
     MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x1F8);
     if (mSkeletonIdx != skel_idx && TheGestureMgr) {

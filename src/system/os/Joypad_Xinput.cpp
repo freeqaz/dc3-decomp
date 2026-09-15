@@ -108,6 +108,37 @@ void JoypadResetXboxPC(int pad) {
 // /fp:fast build rewrites the division to a reciprocal and then folds it into
 // the following constant, giving one `fmuls` against -279.3578.  Two rows per
 // clamp block remain on that account.
+//
+// NEGATIVE RESULT (w7-bl, 94.8 canonical): spelling the reciprocal as the
+// image's own literal -- `* 0.010526316f * -26539.0f`, i.e. exactly
+// __real@3c2c7692 followed by __real@c6cf5600 -- folds the same way, to the
+// same single `fmuls` against __real@c38badcf.  Identical 212-row
+// 33/3/5/4 split.  So it is not the DIVISION that MSVC is folding; it
+// reassociates two adjacent float literal multiplies under /fp:fast whatever
+// the first one is spelled as.  This is the whole of the missing 4th literal
+// (`lis r6, __real@41d80000` / `lfs f8, __real@c6cf5600`) and the r6/r9/r10
+// renumbering of the other three pool bases -- 5 rows, plus 1 per clamp block.
+//
+// RESIDUAL (w7-bl, 94.8 canonical, 45 of 212 rows) -- the rest, all measured:
+//  * the two `-0x8000 - (unsigned short)(int)` arguments (6 rows: 108-110 and
+//    140-142).  The image narrows the INPUT (`lhz r11, 0x56(r1)`) and passes
+//    the subtraction straight to r4; we load the whole fctiwz word
+//    (`lwz r11, 0x54(r1)`) and narrow the OUTPUT with a trailing `extsh`.
+//    Both are correct mod 2^16 and TranslateStick sign-extends its own
+//    argument at 0x825FCBE0, so the caller-side narrowing is optional and
+//    MSVC picks the other end.  Three spellings measured inert at 94.8 with
+//    an identical row split: a named `unsigned short` local for the fctiwz
+//    result; casting the whole argument `(unsigned short)(-0x8000 - u)`; and
+//    (w7-ap, earlier) a named `short` local, which is worse.
+//  * r24 <-> r25 (9 rows): the image copies `buttons` to r24 and `stick_ry`
+//    to r25, we do the reverse.  Both are plain `mr` saves of incoming
+//    argument registers in the prologue; nothing in the source orders them.
+//  * r9 <-> r10 (11 rows): the image colours `rt` r9 and `lt` r10 in the
+//    trigger tail, we do the reverse.  Swapping the two declarations in BOTH
+//    blocks (the kJoypadAnalog one and the tail one) is byte-inert.
+//  * r31 <-> r7 (5 rows): `rx` is held in the callee-saved r31 for us and in
+//    the volatile r7 in the image, which is the same one liveness decision
+//    seen twice.
 
 JoypadType ReadSingleXinputJoypad(
     int pad,
@@ -240,15 +271,27 @@ JoypadType ReadSingleXinputJoypad(
             0
         );
     } else {
-        // The image's fallback passes param_a = 0 and param_b = deadzone_apply
-        // (0x825FD014 `li r5, 0x0`, 0x825FD01C `mr r6, r8`), not 1 and 0 --
-        // so a plain analog pad had its right-stick X deadzone SKIPPED and an
-        // unwanted flag set.  RESIDUAL: on the drums-but-out-of-range edge the
-        // image reaches 0x825FD00C `li r5, 0x1` / `bgt cr6` with cr6 still
-        // holding `rx vs 0x100`, i.e. param_a there is `rx > 0x100`; that does
-        // not reduce to a sane source expression and is most likely the
-        // cross-jump sharing the `mr r4, r7` / `mr r6, r8` tail at 0x825FD018.
-        TranslateStick(stick_rx, rx, 0, deadzone_apply);
+        // The image's fallback passes param_b = deadzone_apply (0x825FD01C
+        // `mr r6, r8`), not 1 and 0 -- so a plain analog pad had its
+        // right-stick X deadzone SKIPPED and an unwanted flag set.
+        //
+        // param_a is NOT a constant 0 here (w7-bl: the earlier note calling
+        // that edge "not a sane source expression" is refuted).  Three edges
+        // reach this call and the image distinguishes them:
+        //   0x825FCFAC `bne cr6, .L_825FD014` -- not drums: r5 = 0;
+        //   0x825FCFB8 `ble .L_825FD00C` / 0x825FCFBC `bge cr6, .L_825FD00C`
+        //     -- drums but rx out of (0, 0x100): fall into
+        //   0x825FD00C `li r5, 0x1` / 0x825FD010 `bgt cr6, .L_825FD018`,
+        //     where cr6 still holds `rx vs 0x100` from 0x825FCFB4, so r5
+        //     survives as 1 only when rx > 0x100.
+        // i.e. param_a == (drums && rx > 0x100).  Written that way, as ONE
+        // call, MSVC reproduces the whole shape including the hoisted
+        // `cmpwi cr6, r11, 0x100` above the `ble` (92.46 -> 94.8 canonical).
+        // Splitting it into a nested if/else with two calls instead is much
+        // worse -- MSVC duplicates the tail rather than merging it (88.9).
+        TranslateStick(
+            stick_rx, rx, joypad_type == kJoypadXboxDrums && rx > 0x100, deadzone_apply
+        );
     }
 
     unsigned char deadzone_apply2;
