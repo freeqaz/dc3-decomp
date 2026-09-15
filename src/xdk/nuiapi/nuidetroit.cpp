@@ -271,7 +271,6 @@ DWORD NuipCameraAdjustTilt(
     LONG lCurrentAngle;
     DWORD dwMovingFlags;
     DWORD OldIrql;
-    XOVERLAPPED *pRequest;
     DWORD dwResult;
     DWORD dwTiltState;
 
@@ -290,34 +289,30 @@ DWORD NuipCameraAdjustTilt(
     OldIrql = KfAcquireSpinLock(&NuipDetroitRuntimeState.SpinLock);
 
     if (pOverlapped == 0) {
-        // NEGATIVE RESULT (w7-al, 2026-09-14): 0xb84 computes &LocalOverlapped
-        // ONCE (`addi r11, r1, 0x60`) and uses it for both the hEvent store and
-        // the runtime-state store, where we emit the addi twice.  Hoisting it
-        // into pRequest and writing through the pointer
-        // (`pRequest = &LocalOverlapped; pRequest->hEvent = CreateEventA(...)`)
-        // does remove the duplicate, but pins pRequest into a callee-saved
-        // register for the whole body: one extra GPR saved, __savefpr shifted
-        // by 8, and a 6-register renumbering downstream.  Net 85.8 -> 85.8.
-        // Re-tried at 96.4 in both remaining spellings -- the separate
-        // `pRequest = &LocalOverlapped;` statement kept here, and the chained
-        // `NuipDetroitRuntimeState.pOverlapped = pRequest = &LocalOverlapped;`
-        // -- and both are byte-inert: MSVC rematerialises the frame address per
-        // use rather than CSE-ing it, so the duplicate addi is a backend choice.
+        // CLOSED (w7-bq, 2026-09-15): 0xb84 computes &LocalOverlapped ONCE
+        // (`addi r11, r1, 0x60`) for both the hEvent store and the
+        // runtime-state store; we emitted the addi twice, into r10 and r11.
+        // w7-al had tried three spellings that all KEEP a `pRequest` local
+        // (separate assignment, chained assignment, and writing hEvent through
+        // the pointer) -- the first two byte-inert, the third a 6-register
+        // renumbering -- and concluded the duplicate was a backend choice.  It
+        // was not: the local itself was the duplicate.  `pRequest` is always
+        // exactly `NuipDetroitRuntimeState.pOverlapped` on every path, which is
+        // why the image RELOADS it at 0xba4 (`lwz r11, 0x1f0(r31)`) instead of
+        // keeping a register.  Deleting the local and writing through the
+        // runtime state removed the dead `addi`: 96.45 -> 97.04.
         LocalOverlapped.hEvent = CreateEventA(0, 1, 0, 0);
-        pRequest = &LocalOverlapped;
-        NuipDetroitRuntimeState.pOverlapped = pRequest;
+        NuipDetroitRuntimeState.pOverlapped = &LocalOverlapped;
     } else {
         NuipDetroitRuntimeState.pOverlapped = pOverlapped;
-        pRequest = pOverlapped;
         if (pOverlapped->hEvent != 0 && pOverlapped->hEvent != INVALID_HANDLE_VALUE) {
             ResetEvent(pOverlapped->hEvent);
-            pRequest = NuipDetroitRuntimeState.pOverlapped;
         }
     }
 
     NuipDetroitRuntimeState.PreferredPlayspaceMillimeters =
         PreferredPlayspaceDistanceMeters * 1000.0f;
-    pRequest->InternalContext = (ULONG_PTR)pTiltObjects;
+    NuipDetroitRuntimeState.pOverlapped->InternalContext = (ULONG_PTR)pTiltObjects;
     NuipDetroitRuntimeState.FarSpaceDistanceMillimeters = FarSpaceMillimeters;
     NuipDetroitRuntimeState.Unk40 = 1;
     NuipDetroitRuntimeState.SpaceAboveHeadMillimeters = SpaceAboveHeadMeters * 1000.0f;
