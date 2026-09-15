@@ -38,6 +38,19 @@ float SampleInst360::GetProgress() {
     // subtraction instead of before and after it. NEGATIVE RESULT: moving this
     // declaration inside the `if` (testing `mVoice->mLoopStart` in the condition),
     // which is what would produce that re-materialisation, drops it to 88.13.
+    // NEGATIVE (w7-bq, 2026-09-15): writing the sum the other way round,
+    // `pos = voice->mStartSamp + offset % len;`, is inert -- 89.55224 before and
+    // after, same 70 instructions and the same 15 diff_arg / 3 insert / 4 delete
+    // profile -- so the trap scheduling is not commutative-operand order.
+    // Measured shape of the whole residual: the instruction SET is identical on
+    // both sides and only its order differs.  Target runs mullw, andc, subf,
+    // twllei, twi, add (0x324..0x338); we run mullw, twllei, subf, andc, add,
+    // twi.  That plus the target-only `clrrwi r10, r10, 0` at 0x2f8 is the
+    // entire gap: regions 0-15 and 42-69 are 100%, and every one of the 15
+    // diff_arg rows is the r11/r9/r8 renaming those two drive.  Note that
+    // `lwz` already zero-extends on Xenon, so 0x2f8 is a true no-op the backend
+    // chose to emit -- there is no source-level cast that removes an
+    // instruction we do not have.
     Voice *voice = mVoice;
     int pos = (unsigned int)state.SamplesPlayed;
     if (voice->mLoopStart >= 0) {
