@@ -68,6 +68,15 @@ public:
     // Dup count is the upper 24 bits of the count field.
     static unsigned int GetDupCount(unsigned int countField) { return countField >> 8; }
 
+    // The sibling count is the low byte of the count field, so `&cf[0] + 3` is
+    // byte node+0x0F -- exactly the address SiblingCount(node) names, on any
+    // endianness.  Reaching it *through* the count-field pointer rather than
+    // through `node` is what makes MSVC materialize that pointer into a register
+    // (see the inc_count/dec_count note below); it is not a different access.
+    static unsigned char &SiblingCountVia(unsigned int *cf) {
+        return ((unsigned char *)cf)[3];
+    }
+
     static unsigned int &NodeCount(Trie *trie) {
         return *(unsigned int *)((char *)trie + HEADER_OFFSET);
     }
@@ -124,12 +133,26 @@ public:
 // 82.90 -> 75.64.  The image keeps them out of line -- all six have their own
 // address and their own callers in ham_xbox_r.map -- so the attribute restores
 // the shipped inline boundary without giving up the linkage.
+//
+// w8-g 2026-09-15: all four counters were stuck one instruction short -- the
+// target carries a DEAD `addi r11, r31, 0xc` (the address of the count field)
+// that r11 being volatile makes useless across the second check_index call, and
+// which MSVC then re-derives as a `0xc(r31)` displacement.  We did not emit it
+// because every read went through `node`, so `cf` was never needed in a register
+// at all and was folded away before it could be spilled.  Routing BOTH reads
+// through `cf` -- `GetDupCount(*cf)` and `SiblingCountVia(cf)` instead of
+// `CountField(node)` / `SiblingCount(node)` -- gives the pointer a use ahead of
+// the call and reproduces the addi at the exact target index (10, 10, 9, 9).
+// Same addresses, same loads (`lbz 0xf(r31)`), no behaviour change.
+//   inc_count 95.00 -> 100, dec_count 95.00 -> 100,
+//   inc_dup_count 95.24 -> 100, dec_dup_count 95.24 -> 100  (+328 B)
+// Measured by full ninja; store and remove did not move.
 
 __declspec(noinline) inline void Trie::inc_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
     unsigned int *cf = &CountField(node);
-    unsigned int count = SiblingCount(node);
+    unsigned int count = SiblingCountVia(cf);
     check_index(index);
     *cf = (*cf & 0xFFFFFF00) | (count + 1);
 }
@@ -138,7 +161,7 @@ __declspec(noinline) inline void Trie::dec_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
     unsigned int *cf = &CountField(node);
-    unsigned int count = SiblingCount(node);
+    unsigned int count = SiblingCountVia(cf);
     check_index(index);
     *cf = (*cf & 0xFFFFFF00) | (count - 1);
 }
@@ -146,17 +169,18 @@ __declspec(noinline) inline void Trie::dec_count(unsigned int index) {
 __declspec(noinline) inline void Trie::inc_dup_count(unsigned int index) {
     check_index(index);
     char *node = NodePtr(this, index);
-    unsigned int dupCount = GetDupCount(CountField(node));
+    unsigned int *cf = &CountField(node);
+    unsigned int dupCount = GetDupCount(*cf);
     check_index(index);
-    CountField(node) = ((dupCount + 1) << 8) | SiblingCount(node);
+    *cf = ((dupCount + 1) << 8) | SiblingCountVia(cf);
 }
 
 __declspec(noinline) inline void Trie::dec_dup_count(unsigned int index) {
     check_index(index);
     unsigned int *cf = &CountField(NodePtr(this, index));
-    unsigned int dupCount = GetDupCount(CountField(NodePtr(this, index)));
+    unsigned int dupCount = GetDupCount(*cf);
     check_index(index);
-    *cf = ((dupCount - 1) << 8) | SiblingCount(NodePtr(this, index));
+    *cf = ((dupCount - 1) << 8) | SiblingCountVia(cf);
 }
 
 __declspec(noinline) inline unsigned int Trie::get_free_node() {
