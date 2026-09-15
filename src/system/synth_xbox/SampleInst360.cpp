@@ -51,12 +51,29 @@ float SampleInst360::GetProgress() {
     // `lwz` already zero-extends on Xenon, so 0x2f8 is a true no-op the backend
     // chose to emit -- there is no source-level cast that removes an
     // instruction we do not have.
+    // BUG FIX (w7-br, 89.6 -> 98.5 canonical, 22 -> 1 rows): the "pure
+    // scheduling" residual above was a real behavioural divergence.  The image
+    // subtracts mLoopStart on BOTH arms of the loop-end select: the `bne cr6`
+    // at 0x82E44744 lands ON `subf r8, r7, r8` at 0x82E4474C (r7 = mLoopStart,
+    // r8 = mLoopEnd or, at 0x82E44748, mNumSamples), so len is
+    // `(mLoopEnd == -1 ? mNumSamples : mLoopEnd) - mLoopStart`.  Our old
+    // `mLoopEnd == -1 ? mNumSamples - mLoopStart : mLoopEnd` jumped PAST the
+    // subtraction and took the absolute loop-end position as the loop length
+    // whenever an explicit loop end was set, so the modulo wrapped at the
+    // wrong period.  Every trap/regalloc row was a consequence of that one
+    // missing subf.  The sole remaining row is the no-op `clrrwi r10, r10, 0`
+    // at 0x82E44730 on the voice pointer.  NEGATIVE (w7-br), post-fix:
+    // declaring `voice` inside the if with `mVoice->mLoopStart` in the
+    // condition, 92.2 (the field is reloaded); keeping the outer local but
+    // testing `mVoice->mLoopStart`, the same 92.2; `unsigned int pos =
+    // state.SamplesPlayed` (implicit narrowing), 97.6 -- pos must be a signed
+    // int, the image's `extsw r11, r11` at 0x82E44778 becomes `rldicl`.
     Voice *voice = mVoice;
     int pos = (unsigned int)state.SamplesPlayed;
     if (voice->mLoopStart >= 0) {
         int offset = pos - voice->mStartSamp;
-        int len = voice->mLoopEnd == -1 ? voice->mNumSamples - voice->mLoopStart
-                                        : voice->mLoopEnd;
+        int len = (voice->mLoopEnd == -1 ? voice->mNumSamples : voice->mLoopEnd)
+            - voice->mLoopStart;
         pos = offset % len + voice->mStartSamp;
     }
     SynthSample360 *sample = (SynthSample360 *)mSample.Ptr();
