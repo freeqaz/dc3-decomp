@@ -1109,9 +1109,10 @@ void RndParticleSys::UpdateRelativeXfm() {
     mLastWorldXfm = mMotionParent->WorldXfm();
 }
 
-// TODO: 69.3% match (AT_LIMIT). 2340-byte function, implemented from 0.1% stub.
+// 97.9 canonical (w7-bw). The breakdown below dates from the 69.3% state and
+// is kept for its inventory of what the image does; most of it is closed.
 //
-// Remaining diff breakdown (614 instructions total):
+// Remaining diff breakdown at 69.3% (614 instructions total):
 //   - r29<->r30 register swap: 117 instructions. Target uses r30 for 'this',
 //     our compiler picks r29. Unfixable compiler register allocation choice.
 //   - 111 deletes: target has dead stores to stack slots 0x60/0x64 where it
@@ -1147,10 +1148,17 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     if (mActiveParticles == NULL || frameSpan == 0.0f)
         return;
 
-    float oneOverThirty = 1.0f / 30.0f;
+    // The 1/30 is spelled inline at all three sites, not hoisted into a
+    // named local: a named `oneOverThirty` (declared first) flips the
+    // commutative operand order of ~12 fmadds/fmuls/fadds rows across the
+    // whole body (826BF58C, 826BF6F4, 826BFA98 ...), 97.57 -> 97.23 with
+    // the levers below applied; declared after dragFactor it is inert.
+    // The registers are still the image's mirror (f30 holds 1/30 and f29
+    // the pow result at 826BF4A4/826BF4B8; ours f29/f30), which costs the
+    // two reload rows at 826BF9C4/826BF9DC (w7-bw).
     float dragFactor;
     if (mDrag > 0.0f) {
-        dragFactor = std::pow(1.0f - mDrag, frameSpan * oneOverThirty);
+        dragFactor = std::pow(1.0f - mDrag, frameSpan * (1.0f / 30.0f));
     } else {
         dragFactor = 1.0f;
     }
@@ -1159,8 +1167,11 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     if (mRotate && mRPMDrag > 0.0f) {
         // Second pow evaluates the base before the exponent (826BF4D0 fsubs,
         // 826BF4D4 fmuls); the first does the reverse. A hoisted `exponent`
-        // local is kept in f31 and passed by fmr on both calls (2 -> 3 rows).
-        rpmDragFactor = std::pow(1.0f - mRPMDrag, frameSpan * oneOverThirty);
+        // local is kept in f31 and passed by fmr on both calls (2 -> 3 rows);
+        // naming the BASE instead sequences it first and closes both rows
+        // (w7-bw).
+        float rpmBase = 1.0f - mRPMDrag;
+        rpmDragFactor = std::pow(rpmBase, frameSpan * (1.0f / 30.0f));
     } else {
         rpmDragFactor = 1.0f;
     }
@@ -1230,7 +1241,7 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                     Vector3 birthDelta;
                     Scale(
                         fp->mBirthVel,
-                        mBirthMomentumAmount * frameSpan * oneOverThirty,
+                        mBirthMomentumAmount * frameSpan * (1.0f / 30.0f),
                         birthDelta
                     );
                     Add(p->Pos3(), birthDelta, p->Pos3());
@@ -1244,7 +1255,7 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                 // Bounce plane reflection
                 if (bounce) {
                     if (!(pos <= bouncePlane)) {
-                        float velDotN = bouncePlane.b * vel.y + bouncePlane.c * vel.z
+                        float velDotN = bouncePlane.c * vel.z + bouncePlane.b * vel.y
                             + bouncePlane.a * vel.x;
                         if (velDotN < 0.0f) {
                             // Named products: the image subtracts three
@@ -1305,8 +1316,17 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
                 // re-reads vel.z after storing it (`fmr f0, f12` / `lfs f12,
                 // 0x8(r26)`, 826BFA28-826BFA2C). Add(vel, relForce, vel),
                 // Add(relForce, vel, vel) and three explicit `+=` in z, y, x
-                // order all load x first and keep z in a register.
-                Add(relForce, vel, vel);
+                // order all load x first and keep z in a register. Named
+                // loads in z, y, x order with the sums spelled force-first
+                // for x and z and vel-first for y reproduce the image's three
+                // fadds operand orders (826BFA00/826BFA10/826BFA14, w7-bw);
+                // the hoisted x load stays.
+                float vfz = vel.z;
+                float vfy = vel.y;
+                float vfx = vel.x;
+                vel.x = relForce.x + vfx;
+                vel.y = vfy + relForce.y;
+                vel.z = relForce.z + vfz;
 
                 if (isFancy) {
                     vel.y *= dragFactor;
