@@ -767,3 +767,22 @@ void StoreEnumJob::OnCompletion(Hmx::Object *) {
         mStorePanel->FinishEnum(contentList, mEnumeration->IsSuccess());
     }
 }
+
+// w8-j 2026-09-15 -- FLOOR at 99.950% for
+// ?OnMsg@StorePanel@@IAA?AVDataNode@@ABVSigninChangedMsg@@@Z (168 B, 30 of 42
+// instructions equal).  Two things, neither a source defect:
+//  1. A callee-saved permutation.  The image assigns r27 to the hidden
+//     return-slot pointer, r29 to msg.mData and r30 to the Profile; we assign
+//     r30, r27 and r29 to the same three.  11 of the 12 rows are that rename.
+//  2. The DataNode return is stored in the opposite order: the image writes
+//     mValue (0x0) then mType (0x4), we write mType then mValue.  Our source is
+//     already `return 1;` through DataNode(int), whose body in obj/Data.h:86
+//     assigns mValue.integer first and mType second -- i.e. the SOURCE order
+//     already matches the image and MSVC reordered the two independent stores
+//     on our side.  Changing the ctor would reshape every DataNode construction
+//     in the binary, so it is not a lever for this row.
+// Also note idx 23: the image's callee is spelled
+// ?Parent@Node@?$ObjPtrList@VCharLookAt@@VObjectDir@@@@UBAPAVObjRefOwner@@XZ
+// where ours is ?GetPadNum@Profile@@QBAHXZ.  Both are a single `lwz` + `blr`,
+// so this is an ICF fold that build/373307D9/icf_aliases.map does not yet group;
+// it is a naming artifact, NOT a wrong call.

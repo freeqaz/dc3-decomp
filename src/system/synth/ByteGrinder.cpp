@@ -1140,3 +1140,19 @@ void ByteGrinder::Init() {
         DataRegisterFunc(functionName, funPtrs[i]);
     }
 }
+
+// w8-j 2026-09-15 -- FLOOR at 99.933% for ?op59@@YA?AVDataNode@@PAVDataArray@@@Z
+// (120 B, 28 of 30 instructions equal).  The two residual rows are one swapped
+// pair:
+//     target   xori r9, r9, 0xf    /  xori r11, r11, 0x19
+//     ours     xori r9, r9, 0x19   /  xori r11, r11, 0xf
+// MSVC distributed the `>> 2` over the OR, so 0x3C>>2 = 0xf is the
+// `(w << 8) ^ 0x3C` half and 0x65>>2 = 0x19 is the `w ^ 0x65` half.  The image
+// evaluates the shifted half into r9 and the plain half into r11; we do the
+// reverse.  Both operand-order levers are REFUTED, one full ninja each:
+//   (a) `(working3 | working2) >> 2` instead of `(working2 | working3) >> 2`
+//       -- byte identical, MSVC canonicalises the commutative OR.
+//   (b) swapping the DECLARATION order of working2 and working3 as well
+//       -- byte identical again.
+// The value is correct either way (the final u8 truncation makes the halves
+// interchangeable); only the register assignment differs.  Do not re-derive.
