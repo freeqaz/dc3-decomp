@@ -595,14 +595,36 @@ const char *FileLocalize(const char *iFilename, char *buffer) {
                     // block order in this region is not reachable from the
                     // condition's polarity.  The form below is kept because it
                     // is the one the listing's branches describe.
+                    //
+                    // 100% (w7-bp, 2026-09-15, was 91.62): the residual was
+                    // never the condition -- it was the two NAMED LOCALS the
+                    // language arm used to carry (`char *dst = &buffer[...]`
+                    // and `const char *langStr = SystemLanguage().Str()`).
+                    // With them, both arms end in a textually identical
+                    // `memcpy(dst, src, 3)` and MSVC CROSS-JUMPS them: the eng
+                    // arm degenerates to one `lbz` plus a `b` into a shared
+                    // tail that computes `subf/add/addi` once and does all
+                    // three `stb`.  The image does not merge them -- it emits
+                    // the address chain and the three stores TWICE, once per
+                    // arm (0x825D0BC4-D8 `subf r11,r31,r30` / `add r11,r11,r29`
+                    // / three `stb 0x1..0x3(r11)` / `b`, and again at
+                    // 0x825D0BF0-0C1C into r31/r30 across the SystemLanguage
+                    // call).  Spelling the destination expression inline in
+                    // BOTH arms, so neither block has a common named value to
+                    // merge on, reproduces that exactly: 141/141 equal.  The
+                    // dead `addi rN, rM, 0x1` each arm emits is the `+ 1` of
+                    // `&buffer[p + 1 - iFilename]`, which the inlined 3-byte
+                    // memcpy then addresses as 0x1/0x2/0x3 off the pre-`+1`
+                    // base -- keep the subscript spelling, not a `buffer + n`
+                    // one.
                     if (HongKongExceptionMet()
                         && (strstr(iFilename, "sfx/loc/") != 0
                             || strstr(iFilename, "barks.milo") != 0)) {
                         memcpy(&buffer[p + 1 - iFilename], "eng", 3);
                     } else {
-                        char *dst = &buffer[p + 1 - iFilename];
-                        const char *langStr = SystemLanguage().Str();
-                        memcpy(dst, langStr, 3);
+                        memcpy(
+                            &buffer[p + 1 - iFilename], SystemLanguage().Str(), 3
+                        );
                     }
                     // NOT `return buffer`.  Retail sets r31 = buffer at
                     // 0x825D0C20 and FALLS INTO the `isOg` test at
