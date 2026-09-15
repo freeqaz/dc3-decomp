@@ -780,7 +780,25 @@ struct WrapPoint {
     bool isHardBreak;
 };
 
-/** w7-bo (2026-09-15) SURVEYED at 94.759 canonical / 93.234 fuzzy, 687 rows:
+/** w7-bs (2026-09-15): 94.759 -> 95.354 canonical (93.234 -> 93.8 raw), 686 rows,
+ *  target 2700 B / ours 2672 B.  The lever is not in the statements either --
+ *  it is in the EH tables.  Text.obj carries except_record_82697768 for this
+ *  function with ONE unwind entry, `__unwind$170467`, whose body is
+ *  `addi r3, r31, 0xe4; bl ??1MemDoTempAllocations@@QAA@XZ`, and whose
+ *  IP-to-state map (lbl_8209BDD0) is in state 0 from 0x826977B8 to 0x826977CC,
+ *  i.e. across the `lines.reserve(100)` / erase prologue.  So the original
+ *  scopes that with the RAII pair from MemMgr.h, not with bare
+ *  MemPushTemp()/MemPopTemp() calls; the 1-byte object is homed at 0xe4(r31).
+ *  Spelling it that way is what closed 4 rows (12/21 insert/delete -> 11/18).
+ *  What is left, beyond the callee-saved relabelling w7-bo describes below:
+ *  rows 93-105 the image copies the `numWp = 1` register into a second one
+ *  (`mr r14, r25`) where we coalesce; rows 197-211 the `subi`/home-store pair
+ *  for the two counters is scheduled after the ParseMarkup call in the image
+ *  and before it here; rows 160-176 the three MILO_ASSERT string pointers are
+ *  materialised into the SAME three slots (0x68/0x6c/0x74) in a different
+ *  register order.  None of those is an offset or callee row.
+ *
+ *  w7-bo (2026-09-15) SURVEYED at 94.759 canonical / 93.234 fuzzy, 687 rows:
  *  489 equal / 160 diff_arg / 2 diff_op / 3 replace / 12 insert / 21 delete.
  *  No source change -- the residual is ONE cause and it is not spellable from
  *  inside this function's statements:
@@ -816,11 +834,12 @@ void RndText::WrapText(
     const unsigned short *wideChars, int wLen, float *charWidths,
     HX_VECTOR(Line) &lines, Hmx::Rect &bounds, float scale
 ) {
-    MemPushTemp();
-    lines.reserve(100);
-    auto _tmp0 = lines.begin();
-    lines.erase(_tmp0, lines.end());
-    MemPopTemp();
+    {
+        MemDoTempAllocations tmp;
+        lines.reserve(100);
+        auto _tmp0 = lines.begin();
+        lines.erase(_tmp0, lines.end());
+    }
     StyleState style(this, scale);
     auto& _ref0 = mWidth;
     auto& _ref1 = mAlignment;
