@@ -882,6 +882,30 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
 // something the call sites here can steer; a single-return rewrite is refused
 // because the image plainly has TWO DataNode slots (0x68 and 0x70), one per
 // branch.
+// w7-bt (still 92.77 canonical): the flag is tied to having TWO non-NRVO
+// DataNode returns, and nothing tried removes it while keeping both.
+//   - Discriminator: collapsing the else branch to `return 0;` drops the flag
+//     AND the sret home store -- prologue then pairs 1:1 with the image
+//     (pointer slot at 0x50, zeroed at entry, frame 0xa0), 67.0 only because
+//     the second branch is gone.  So one class-typed return site: no
+//     registration; two: registered.
+//   - The image's six __unwind funclets after the function (159581..159589)
+//     are exactly delete@0x50, ~DataNode@0x58, ~DataNode@0x68, delete@0x54,
+//     ~DataNode@0x60, ~DataNode@0x70 -- both `ret` locals ARE registered,
+//     the sret never is, with two copy-ctor sites into r26 (8267F570 and
+//     8267F624) and the pointer slots written at 8267F4B0 (0x50, zeroed at
+//     entry 8267F468) and 8267F5A8 (0x54).
+//   - Byte-identical to the committed spelling (all 92.77): second branch at
+//     function scope instead of `else`; `return DataNode(ret);` at both
+//     sites.  Inverting the condition to put the empty branch first keeps the
+//     flag and flips the layout (61.4).  A file-static helper
+//     `DataNode ArrayNode(DataArray*)` is not inlined even under
+//     __forceinline (82.0, WRONG_CALLEE), so an inlined-helper origin for
+//     the temp+copy shape is ruled out too.
+// What is left is a front-end EH-shaping decision (register the return
+// object when there is more than one class-typed return site) that the
+// image did not make from a source we have not found; every instruction of
+// the body already pairs.
 DataNode RndPropAnim::OnListFlowLabels(DataArray *arr) {
     if (mFlowLabels.size() != 0) {
         DataArray *flowArr = new DataArray(mFlowLabels.size());
