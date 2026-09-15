@@ -1668,6 +1668,25 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     // fill -- which is how the image threads the mulli / lwz 0x110 / add
     // through the identity stores -- costs 0.6pp (94.13 -> 93.5). The face
     // reference belongs first.
+    //
+    // w7-bo (2026-09-15): where the 114 residual rows actually come from.  76 of
+    // them are ONE relabelling: retail's prologue is __savegprlr_23, ours is
+    // __savegprlr_24, so every callee-saved register reads one number off.  The
+    // ninth register is spent on the `Hmx::Matrix3 edgeMat(edge21, edge31,
+    // faceNormal)` copy, and the reason is scheduling, not spelling: retail loads
+    // ALL TWELVE words first (idx 158-176, into r5/r31/r30/r10 for edge21,
+    // r26/r25/r24/r9 for edge31, r27/r23/r29/r11 for faceNormal) and only then
+    // stores them (177-191), which needs twelve live registers at once; we
+    // interleave the three 16-byte copies load-store, load-store, load-store and
+    // therefore need eight.  Same instruction multiset either way.
+    // The other visible item is the faceNormal store order: retail writes 0x50 /
+    // 0x54 / 0x58 in x,y,z order (idx 165/167/169) where we write x,z,y.
+    // Measured negative (2026-09-15): replacing the three-argument `Vector3
+    // faceNormal(...)` constructor with three separate `faceNormal.x = ... ;
+    // .y = ...; .z = ...;` assignments -- which forces x,y,z in the source -- is
+    // BYTE-IDENTICAL.  Canonical stayed 94.13, same 114 rows, same store order.
+    // MSVC schedules the three fmsubs from its FPR assignment, not from the
+    // source order, exactly as measured on UtilDrawCigar's fmuls operands.
     RndMesh::Face &face = m->Faces()[faceIdx];
     outBasis.x.x = 1.0f;
     outBasis.x.y = 0.0f;
