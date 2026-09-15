@@ -415,23 +415,46 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
         // stack until one that permits them is on top, retry the whole request
         // there, then put the stack back exactly as it was.
         MemHeapStack &tempStack = ThreadMemStack(true);
-        // NEGATIVE RESULT: the image keeps the running depth in a register
-        // across the loop (`lwz r9, 0x40(r3)` once, then
-        // `subic. r11, r9, 0x1` / `stw r11, 0x40(r30)` / `mr r9, r11`, and the
-        // back-edge re-tests r9), while we reload `0x40(r30)` at the bottom.
-        // Hoisting the depth into an `int curSize` local removes that reload
-        // but loses the image's `mr r9, r11` -- 92.9% either way, so the
-        // member spelling is kept as the less invented one.
+        // w7-bu (2026-09-15): 92.8 -> 94.3 canonical. The pop loop is a
+        // do/while whose CONDITION is the AllowTemp test and whose depth
+        // check is a top-of-body break: the image's only back-edge is the
+        // conditional `mr. r11, r10 / beq .L_827CC1AC` at 827CC1FC-827CC200,
+        // jumping to the top `cmpwi cr6, r9, 0x0 / ble exit` (827CC1AC), and
+        // there is NO reload of 0x40(r30) at the bottom. The former
+        // `while (mSize > 0) { ...; if (AllowTemp()) break; }` gave a
+        // rotated loop with two bottom tests (`cmplwi r9,0 / bne exit /
+        // lwz 0x40(r30) / cmpwi / bgt body`), 4 rows; `for (;;)` with a top
+        // break measured identical to it (92.8), and a loop-carried
+        // `curSize = --mSize` local regressed to 92.1.
+        // The earlier NEGATIVE RESULT (a hoisted `int curSize` local, 92.9
+        // either way) was measured against that rotated shape and is
+        // superseded.
+        // RESIDUAL (94.3, 131 rows): (1) the image saves r15-r31, we r16-r31
+        // -- it re-masks `temp` into a FRESH register at the test
+        // (`clrlwi. r27, r28, 24`, 827CC178) and reads r27 for the
+        // `temp ? kLastFit` select (827CC358); we mask r28 in place. A second
+        // bool copy (`bool useTemp = temp`) is copy-propagated away (94.3,
+        // same rows). Every low callee-saved register is off by one from
+        // that. (2) r29/r30 heap vs allocated_mem are flipped, and because
+        // the image's temp-path result lands in r29 (heap's register, dead
+        // there) while the common exit returns r30, it emits the
+        // CritSecTracker dtor TWICE (827CC278-827CC28C: `cmplwi cr6, r15 /
+        // beq / mr r3, r15 / bl Exit / mr r3, r29 / b .L_827CC44C`); ours
+        // tail-merges into the single exit at 827CC438. Declaring
+        // `allocated_mem` above `heap` does not flip them (94.3, same rows).
+        // (3) The .bss anchor rows (gTinyHeapReady at -0x14(r26), gHeaps at
+        // -0x294(r26): idx 53, 69-72, 86-95, 141) -- see the note at the top
+        // of this file.
         int savedSize = tempStack.mSize;
-        while (tempStack.mSize > 0) {
+        do {
+            if (tempStack.mSize <= 0)
+                break;
             tempStack.mSize--;
             int poppedHeap = tempStack.mSize != 0
                 ? tempStack.mStack[tempStack.mSize - 1]
                 : MemHeapStack::sDefaultHeap;
             heap = poppedHeap > -1 ? &gHeaps[poppedHeap] : nullptr;
-            if (heap->AllowTemp())
-                break;
-        }
+        } while (!heap->AllowTemp());
         MILO_ASSERT(heap->AllowTemp(), 0x3C1);
         tempStack.mTempRefs++;
         void *tempAlloc = MemAlloc(iSizeBytes, file, line, name, align);
