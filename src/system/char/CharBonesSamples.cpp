@@ -772,3 +772,9 @@ BEGIN_PROPSYNCS(CharBonesSamples)
     gPropBones = this;
     SYNC_PROP(bones, mBones)
 END_PROPSYNCS
+
+// w8-c: orphan COMDAT, same class as CharCuff.cpp's std::list<RndMesh *> note.
+// CharBonesSamples.obj carries MakeString<int,int,int,int> at 0x823E1008
+// (CharBonesSamples.s) with no caller in the unit.
+template const char *
+MakeString<int, int, int, int>(const char *, const int &, const int &, const int &, const int &);
