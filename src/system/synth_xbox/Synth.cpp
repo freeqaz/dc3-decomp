@@ -46,6 +46,19 @@
 #include "xdk\xaudio2\xaudio2.h"
 #include "xdk\xaudio2\xaudio2fx.h"
 #include "xdk\LIBCMT\math.h"
+#include "synth\WahEffect.h"
+
+namespace ATG {
+// The Process COMDAT the linker kept inside Synth.obj's address range is
+// spelled with VWahEffect (Synth.s:5720, 0x82E2D660), not with the
+// CompressionEffect instantiation this TU creates via StandardEffect.  The
+// body is the same 33 instructions for every Effect, so the instantiations
+// fold and the surviving name is whichever one the map recorded.  Emit the
+// named one here or the target row has nothing to pair with.
+template void CSampleXAPOBase<WahEffect, WahEffect::Params>::Process(
+    UINT, const XAPO_PROCESS_BUFFER_PARAMETERS *, UINT, XAPO_PROCESS_BUFFER_PARAMETERS *, INT
+);
+} // namespace ATG
 
 // The XAudio2 engine interface. Only the three factory slots this file needs are
 // spelled out; slots 0-7 (IUnknown + GetDeviceCount/GetDeviceDetails/Initialize/
