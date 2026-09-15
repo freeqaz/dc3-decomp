@@ -67,6 +67,30 @@ Six Opus lanes, grouped so no two touch the same file.
 | `w8-e` | 38 | 5,528 | `rndobj/*`, `flow/*`, `os/*`, `ui/*`, misc |
 | `w8-f` | 2 | 5,176 | `synth_xbox/FFT` (the AltiVec pair, hardest) |
 
+## Phases after the 0 % band
+
+Derived at dispatch time, link_glue excluded throughout.
+
+| phase | population | rows | bytes | lanes |
+|---|---|---:|---:|---|
+| 1 | 0 %, real rows | 119 | 19,984 | `w8-a` … `w8-f` |
+| 2 | partial, under 200 B | 127 | 15,052 | `w8-g` … `w8-j` |
+| 3 | partial, 200 B and over | 721 | 583,160 | not yet assigned |
+
+Phase 2 is thin and wide: 127 rows spread over 88 units, at most four in any
+one unit, 85 of them already carrying an AT_LIMIT certificate and 36 never
+adjudicated at all. Phase 3 holds 94 % of the remaining bytes, and 664 of its
+721 rows are already above 90 %.
+
+## Pending measurement correction
+
+`scripts/authorable.py` counts the 65 link-glue-only rows in the authorable
+denominator even though nothing can score them. Correcting it would move the
+canonical headline by roughly 0.2 pp. **Deliberately deferred** until the wave's
+lanes have landed, so that every lane's before/after comparison in this wave is
+taken against one definition. It is a denominator change and must be committed
+on its own, stating the before and after explicitly.
+
 ## Results
 
 *(appended as lanes land)*
