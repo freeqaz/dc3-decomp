@@ -13,16 +13,16 @@ const MidiChunkID MidiChunkID::kMThd("MThd");
 const MidiChunkID MidiChunkID::kMTrk("MTrk");
 bool MidiReader::sVerify = false;
 
-// w8-e 2026-09-15: ??3FileStream@@SAXPAX@Z (24 B, 0%) -- FileStream's class
+// w8-e 2026-09-15: ??3FileStream@@SAXPAX@Z (24 B) -- FileStream's class
 // `operator delete` -- is a real same-TU gap.  ham_xbox_r.map contributes it
 // from `midi:MidiReader.obj` at 8254e100, i.e. the image instantiates
-// FileStream's OBJ_MEM_OVERLOAD deallocator in THIS translation unit, which only
-// happens if this file `delete`s a FileStream (or destroys one held by value
-// through a path that emits the deleting dtor).  Our MidiReader.cpp does not
-// mention FileStream at all -- no include, no use -- so the COMDAT is never
-// emitted and the row reads 0.0%.  The lever is finding the FileStream the
-// reader really owns (most likely a `new FileStream` opened for a .mid and
-// deleted on teardown); it is NOT a missing body in utl/File.
+// FileStream's OBJ_MEM_OVERLOAD deallocator in THIS translation unit.
+// w8-j 2026-09-15: CLOSED, 0.0 -> 100.0.  It is NOT a `delete` site (see the
+// probe at the bottom of this file for why a delete-expression emits nothing
+// here): it is a `new FileStream(...)`, whose ctor-throws cleanup path takes
+// operator delete's ADDRESS and so forces the COMDAT.  The tell was the map
+// asymmetry -- ??3FileStream@@ present, ??2FileStream@@ absent everywhere,
+// because MEM_OVERLOAD's operator new is inlined straight into the call site.
 
 namespace {
     int MidiRank(unsigned char status) {
@@ -568,3 +568,50 @@ FileStream *Dc3W8jMidiFileStreamProbe(const char *path) {
     return new FileStream(path, FileStream::kRead, true);
 }
 #endif
+
+#ifndef HX_NATIVE
+// w8-j 2026-09-15 -- FLOOR at 85.000% (match_percent_normalized) for
+// ?pow@@YAMMH@Z, 80 B target vs 76 B ours, 13 of 21 instructions equal.
+// The whole residual is FPR naming plus one missing copy.  The image opens with
+//     fmr   f13, f1          <- a copy of the base parameter
+// and then runs the loop on f13, holding the CSE'd 1.0f literal in f12 and the
+// accumulator in f0.  We never emit that copy: we mutate the parameter in f1
+// directly, hold 1.0f in f13 and the accumulator in f0 -- so our tail is
+// already exact (`fdivs f0, f13, f0` / `fmr f1, f0` / `blr` all pair) and only
+// the register NAMES differ, four rows of them.
+// Three spellings measured, three full ninja builds:
+//   (a) `float b = base;` declared first, loop mutates b   -> 82.000%.  It DOES
+//       emit the copy, but frees f1 so MSVC then allocates `result` into f1,
+//       which costs the final `fmr f1, f0` (it early-returns with `bgelr`) and
+//       loses two rows that (c) already has.
+//   (b) same, declared after `float result = 1.0f;`        -> 82.000%, byte
+//       identical to (a).  Declaration reorder is inert for register-only
+//       swaps, as docs/decomp/patterns/fixable-declarations.md says.
+//   (c) `int exp = exponent < 0 ? -exponent : exponent;`   -> 57.750%.  The
+//       ternary lowers to the branchless abs idiom (srawi/xor/subf) instead of
+//       the image's compare-and-negate, deleting five rows at once.  This also
+//       refutes the ternary as a way to fix the one remaining insert/delete
+//       pair (the image issues `cmpwi cr6, r4, 0` BEFORE `mr r11, r4`; we issue
+//       it after).
+// Kept (c)-free original at 85.000%.  What is left wants the permuter, not
+// another source spelling.  Do not re-derive.
+#endif
+
+// w8-j 2026-09-15 -- FLOOR at 77.182% for
+// ?DefaultMidiLess@?A0x7d41cf68@@YA_NABUMidi@MidiReader@@0@Z, 88 B target vs
+// 68 B ours, 11 of 22 instructions equal.  This one is a COMPILER POLICY
+// difference, not a source difference, and the evidence is unusually clean.
+// Our build applies MSVC/Xenon's static-callee register-footprint optimisation
+// to the two MidiRank calls: MidiRank is a leaf in this same anonymous
+// namespace that touches only r3/r11/cr6 (it is 100.0% matched, 124 B), so the
+// compiler keeps the second Midi reference in the VOLATILE r4 and the first
+// rank in the VOLATILE r10 straight across both `bl`s and needs no frame at
+// all.  The image does not: it saves r30/r31 (`std r30, -0x18(r1)` /
+// `std r31, -0x10(r1)`), homes r4 into r31, keeps the first rank in r30, and
+// pays 16 more bytes of stack for it.  Every one of the 11 mismatched rows is
+// that one decision -- 2 saves, 2 restores, the `mr r31, r4`, the +16 stack
+// adjust pair, and four r10<->r30 / r31<->r4 renames.  No logic differs.
+// REFUTED: defining MidiRank AFTER DefaultMidiLess with a forward declaration
+// (one full ninja) is byte-identical -- MSVC computes the footprint over the
+// whole TU, not in source order, so it is not reachable by reordering.  The
+// comparison itself already matches exactly (subfc/eqv/srwi/addze/clrlwi).
