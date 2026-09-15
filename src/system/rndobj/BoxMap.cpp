@@ -253,37 +253,50 @@ void BoxMapLighting::ApplyLight(
     }
 }
 
-/** RESIDUAL w7-at + w7-bl, 94.09 canonical / 91.8 raw, 360 B (was 87.37).
- *  Three source-level fixes from w7-bl, each read off the target listing at
- *  0x826F0E78-0x826F0F7C:
- *    (1) `Min(cone, 1.0f)`, NOT `Min(1.0f, cone)`.  Min(a,b) lowers to
- *        `fsubs a-b` + `fsel(a-b, b, a)`, so the operand order is visible:
- *        the image emits `fsubs f10, f12, f0` (cone - 1.0) then
- *        `fsel f12, f10, f0, f12` at rows 61/63.  The `dist` clamp one line
- *        above already had the image's order and was never wrong.
- *    (2) `float blue = atten * light.mColor.blue;` hoisted ABOVE the three
- *        `dir` stores, with only `col.blue = blue;` left below them.  The image
- *        loads mColor.blue (`lfsu f12, 0x5c(r11)`) and multiplies BEFORE
- *        storing dir.red/green/blue, then stores col.blue last.  MSVC may not
- *        sink a load of `arr` below a store to gLightBuffer1 on its own -- it
- *        cannot prove they do not alias -- so the load position has to come
- *        from the source.  This alone was 87.37 -> 91.9.
- *    (3) `coneX` names the mDirection.x product and mDirection.z*ndz is left
- *        inline, which is the REVERSE of the old `coneZ` spelling.  MSVC makes
- *        the INLINE product the standalone `fmuls` and folds the NAMED one into
- *        the `fmadds`; the image's standalone product is mDirection.z * ndz
- *        (`fmuls f9, f9, f12` at row 52, f9 from 0x4c(r11)).  This closed the
- *        (0x44, 0x4c) offset swap, took the register swaps from 34 rows to 9,
- *        and brought back the second callee-saved FPR the note below called
- *        unreachable: 91.9 -> 94.09.
+/** RESIDUAL w7-at + w7-bl, 99.21 canonical / 97.1 raw, 360 B (was 87.37).
+ *  21 mismatch rows remain and NONE of them is an insert, a delete or an
+ *  offset: 18 are register permutation (forgiven by the canonical ruler), two
+ *  are one adjacent `addi`/`subi` scheduling swap, and one is the col.red
+ *  store.  Four source-level fixes from w7-bl, each read off the target listing
+ *  at 0x826F0E78-0x826F0F7C rather than off a diff summary:
  *
- *  What is left (31 rows): the two `stfd` prologue slots are 8 bytes lower than
- *  the image's, the gLightBuffer1/gLightBuffer2 base-pointer setup is ordered
- *  differently (rows 14/16/19/21/27/31 -- the image materialises
- *  `&gLightBuffer2[i].blue` in r8 per iteration and stores col.green/col.blue
- *  at -0x4(r8)/0x0(r8), where we keep two extra precomputed bases r31/r28 and
- *  use `stfsx`, costing __savegprlr_28 vs _29), and seven commutative fmuls
- *  operand orders.
+ *    (1) `Min(cone, 1.0f)`, NOT `Min(1.0f, cone)`.  Min(a,b) lowers to
+ *        `fsubs a-b` + `fsel(a-b, b, a)`, so the operand order is legible in
+ *        the listing: the image emits `fsubs f10, f12, f0` (cone - 1.0) then
+ *        `fsel f12, f10, f0, f12`.  The `dist` clamp one line above already had
+ *        the image's order and was never wrong.
+ *    (2) `float blue = atten * light.mColor.blue;` hoisted ABOVE the three
+ *        gLightBuffer1 stores, with only `col.blue = blue;` left below them.
+ *        The image loads mColor.blue (`lfsu f12, 0x5c(r11)`) and multiplies
+ *        BEFORE storing the direction triple.  MSVC may not sink a load of
+ *        `arr` below a store to gLightBuffer1 on its own -- it cannot prove
+ *        they do not alias -- so the load position has to come from the source.
+ *        87.37 -> 91.9.
+ *    (3) `coneX` names the mDirection.x product and mDirection.z * ndz is left
+ *        INLINE, the reverse of the old `coneZ` spelling.  MSVC makes the
+ *        inline product the standalone `fmuls` and folds the NAMED one into the
+ *        `fmadds`; the image's standalone product is mDirection.z * ndz
+ *        (`fmuls f9, f9, f12`, f9 from 0x4c(r11)).  This closed the (0x44,0x4c)
+ *        offset swap and brought back the second callee-saved FPR that the old
+ *        note called unreachable.  91.9 -> 94.09.
+ *    (4) The two light buffers are spelled DIFFERENTLY on purpose: `col` is a
+ *        reference into gLightBuffer2, gLightBuffer1 is written through a
+ *        repeated subscript.  That asymmetry is in the image: it stores the
+ *        direction triple with three `stfsx` off three bases (r9, r9+4, r9+8)
+ *        and the colour through a per-iteration pointer
+ *        `r8 = r10 + &gLightBuffer2[0] + 8`, at -0x4(r8) and 0x0(r8).  Making
+ *        BOTH of them references gives six precomputed bases and six `stfsx`,
+ *        which costs a fourth callee-saved GPR (__savegprlr_28 vs the image's
+ *        _29) and drops the two FPR save slots 8 bytes.  94.09 -> 99.21.  The
+ *        MIRROR of this (subscript the colour, reference the direction) puts
+ *        the pointer on the wrong buffer and reaches only 94.7 -- the asymmetry
+ *        has to point the same way the image's does.
+ *
+ *  What is left: rows 14/16 are one adjacent scheduling swap (the image emits
+ *  gLightBuffer2's `addi` low half before `subi r11, r4, 0x44`, we emit them
+ *  the other way round), row 72 stores col.red as `stfs f12, -0x8(r9)` through
+ *  the same pointer where the image uses `stfsx f12, r10, r3`, and the rest is
+ *  r8<->r9 and fmuls operand permutation.
  *
  *  Measured, all reverted:
  *    - caching gLightIndex in a local across the loop and storing it back once:
@@ -297,12 +310,19 @@ void BoxMapLighting::ApplyLight(
  *      (`dir.z*ndz + dir.x*ndx + dir.y*ndy`): 87.37 -> 85.2 (w7-at).  w7-bl
  *      re-tested the same idea as a statement accumulation
  *      (`cone = .x*ndx + coneZ; cone = .y*ndy + cone;`) on top of fixes (1)
- *      and (2) and it is EXACTLY inert -- 91.9, same 88.1 raw, same offset
- *      swap.  MSVC canonicalises the chain; only which product is NAMED
- *      decides the lowering, which is what (3) exploits.
+ *      and (2): EXACTLY inert at 91.9, same raw, same offset swap.  MSVC
+ *      canonicalises the chain; only which product is NAMED decides the
+ *      lowering, which is what (3) exploits.
  *    - hoisting `-ndx/-ndy/-ndz` into named temps ahead of the clamp chain to
  *      reproduce the image's early fnegs: byte-identical, MSVC already
- *      schedules them there. */
+ *      schedules them there.
+ *    - declaring `dir` before `col` while both were still references: 94.09
+ *      canonical but 91.7 raw, one extra row -- worse.
+ *    - writing col.red through the subscript and green/blue through the
+ *      reference, to reach the image's `stfsx` for red: exactly inert at 99.21;
+ *      MSVC CSEs the address back into the single pointer.
+ *    - hoisting the `col` reference to the top of the loop body to flip the
+ *      rows-14/16 scheduling swap: exactly inert at 99.21. */
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Spot, 50> &arr, const Vector3 &viewPos
 ) const {
@@ -332,13 +352,12 @@ void BoxMapLighting::ApplyLight(
         float coneAtten = Max(0.0f, coneClamped);
         float atten = distAtten * (coneAtten * light.mConeAngleInverse);
         Hmx::Color &col = gLightBuffer2[gLightIndex];
-        Hmx::Color &dir = gLightBuffer1[gLightIndex];
         col.red = atten * light.mColor.red;
         col.green = atten * light.mColor.green;
         float blue = atten * light.mColor.blue;
-        dir.red = -ndx;
-        dir.green = -ndy;
-        dir.blue = -ndz;
+        gLightBuffer1[gLightIndex].red = -ndx;
+        gLightBuffer1[gLightIndex].green = -ndy;
+        gLightBuffer1[gLightIndex].blue = -ndz;
         col.blue = blue;
         gLightIndex++;
     }
