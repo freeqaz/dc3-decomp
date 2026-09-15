@@ -126,6 +126,34 @@ return_zero:
     return 0;
 }
 
+// RESOLVED 2026-09-15 (lane w7-bn): 88.61 -> 100.0 canonical, 924 B both sides,
+// 231 rows all equal.  Everything below this paragraph is the history of how the
+// residual was misread as "regalloc / loop-rotation floor"; it is kept because
+// the mechanism is general and the refutations were real.
+//
+// The two un-rotated loops (root sibling scan at 827FE588, child re-parent at
+// 827FE60C) are NOT a rotation heuristic we cannot reach.  MSVC duplicates a
+// loop header into the latch only when the header is ONE basic block; a
+// `check_index(1)` with a constant argument is inlined and its MILO_ASSERT
+// folds to nothing, but the fold leaves the header split across blocks, and
+// the rotation is skipped.  That is exactly the trie's own idiom -- every
+// NodePtr(this, n) read is preceded by check_index(n) -- so the original had
+// `check_index(1)` before its `SiblingCount(NodePtr(this, 1))` /
+// `FirstChild(NodePtr(this, 1))` reads and we had dropped them because they
+// emit no code.  Adding them back: 88.61 -> 93.5 (scan loop) -> 97.4 (both).
+// The r25/r26/r27 rotation went with it (it trailed the peeled guards).
+// The last 2.6 was block ORDER, not the tail-merge itself: both compilers
+// cross-jump the two `bl delete_node; b exit` tails, but each keeps the copy
+// that is reached by FALL-THROUGH.  The image keeps the not-root path's
+// (.L_827FE708) and makes the root stub `li r4, 1; b .L_827FE708` (827FE664);
+// we kept the stub's.  `if (curIdx != 1) { ...; return; } delete_node(1);`
+// places the stub after the loop (99.1) and a `goto delete_root` to a label
+// AFTER the not-root path makes that path's copy the fall-through one (100).
+// Refuted on the way, all measured: an explicit `goto`-loop spelling of the
+// scan loop is byte-identical to `while` (88.61); `#pragma optimize("t", on)`
+// on remove inlines every check_index (3.5); `#pragma optimize("g", off)` is
+// /Od (2.3) -- the TU is /O1 and the image agrees.
+//
 // WRONG_CALLEE row on this function (target `check_index` vs base `delete_node`):
 // NOT settled as an artifact.  Emitted-callee multisets, measured 2026-09-14 with
 // scripts/analysis/callee_multiset.py (objdiff JSON, both sides counted
@@ -160,6 +188,8 @@ return_zero:
 // Same class as the already-recorded root-scan rotation below, and the same
 // class the wave-7 brief records as refuted across six spellings.  Nothing in
 // the source is missing a call and nothing emits one too many.
+// (w7-bn: the "six spellings" were all loop SYNTAX; the lever was a folded
+// call in the header -- see the RESOLVED paragraph at the top.)
 //
 // MEASURED NEGATIVE (w7-bh, 2026-09-14): dropping the `auto _tmp2 =
 // NodePtr(this, 1);` temp and writing `unsigned int updateIdx =
@@ -275,24 +305,26 @@ void Trie::remove(unsigned int index) {
             unsigned int scanCount = 0;
             // The root sibling count is re-read from the header on every trip
             // (lbz 0x20(this) sits inside the loop), not hoisted into a local.
+            // The `check_index(1)` is load-bearing even though it emits nothing:
+            // it is inlined and folded, and the fold leaves the loop header
+            // split across basic blocks, which is what stops MSVC rotating the
+            // loop (peeled `subic./beq` guard + duplicated latch, 88.61).  With
+            // it the image's single top test and `b .L_827FE588` back-edge
+            // come out (93.5).
 #ifdef HX_NATIVE
-#define TRIE_ROOT_SIBLING_COUNT SiblingCount(NodePtr(this, 1))
+#define TRIE_ROOT_SIBLING_COUNT (check_index(1), SiblingCount(NodePtr(this, 1)))
 #else
-#define TRIE_ROOT_SIBLING_COUNT (*(unsigned char *)((char *)this + 0x20))
+#define TRIE_ROOT_SIBLING_COUNT (check_index(1), *(unsigned char *)((char *)this + 0x20))
 #endif
 
             // Retail does NOT carry `curNode` across this loop: the body
             // recomputes NodePtr from the *current* index (mulli r30,0x11 /
             // add r11,r31 at 827FE550) and reads NextSibling out of that, and
             // curNode is rebuilt from scratch after the loop at 827FE5C8.
-            // Keeping a loop-carried curNode forces MSVC to rotate the loop
-            // and peel the zero-trip test.
             // NEGATIVE RESULT (w7-as, 2026-09-14): writing this as a `for` with
-            // the increment in the latch is byte-identical (88.61 both ways).
-            // The residual here is MSVC ROTATING the loop -- it peels the
-            // zero-trip test as `subic./beq` and duplicates `lbz 0x20(r31)` +
-            // `subi` + `cmplw` into the latch, where the image keeps ONE
-            // top-tested copy and an unconditional `b` back-edge (827FE5B4).
+            // the increment in the latch is byte-identical (88.61 both ways);
+            // (w7-bn) so is an explicit `scan_top: if (..) { ..; goto scan_top; }`.
+            // The rotation was never reachable by loop syntax -- see the macro.
             while (scanCount < TRIE_ROOT_SIBLING_COUNT - 1) {
                 check_index(curIdx);
                 scanCount++;
@@ -300,83 +332,98 @@ void Trie::remove(unsigned int index) {
             }
 #undef TRIE_ROOT_SIBLING_COUNT
 
-            // Retail tail-merges this call: at .L_827FE664 it emits `li r4, 0x1`
-            // and branches straight to the shared `bl delete_node` at
-            // .L_827FE708, skipping that path's CountField update.  Recorded
-            // because it looks like a missing call in the listing and is not --
-            // our build emits `delete_node` 4 times too (see the note above
-            // Trie::remove for the corrected counts).
-            if (curIdx == 1) {
-                delete_node(1);
+            // Retail tail-merges the root delete: at .L_827FE664 it emits
+            // `li r4, 0x1` and branches straight to the shared `bl delete_node`
+            // at .L_827FE708, skipping that path's CountField update.  It looks
+            // like a missing call in the listing and is not -- both builds emit
+            // `delete_node` 4 times.  MSVC keeps whichever copy of the merged
+            // tail is reached by fall-through, so the root stub has to be
+            // (a) laid out after the re-parent loop -- the inverted
+            // `if (curIdx != 1) { ...; return; }` does that (97.4 -> 99.1) --
+            // and (b) created AFTER the not-root path so that path's `bl` is
+            // the fall-through copy: hence the `goto delete_root` to a label
+            // past the not-root block (99.1 -> 100).
+            if (curIdx != 1) {
+                // Move last sibling to position 1
+                check_index(curIdx);
+                curNode = NodePtr(this, curIdx);
+                FirstChild(NodePtr(this, 1)) = FirstChild(curNode);
+                check_index(curIdx);
+#ifdef HX_NATIVE
+                Character(NodePtr(this, 1)) = Character(curNode);
+#else
+                *(unsigned char *)((char *)this + 0x21) = Character(curNode);
+#endif
+                delete_node(curIdx);
+                dec_count(firstChildIdx);
+
+                // Update parent pointers of children
+                unsigned int updateCount = 0;
+                auto _tmp2 = NodePtr(this, 1);
+                unsigned int updateIdx = FirstChild(_tmp2);
+
+                while (true) {
+                    // Load-bearing no-op, same mechanism as the scan loop's
+                    // macro: the folded check_index(1) keeps MSVC from
+                    // duplicating this header (and its real `bl check_index`)
+                    // into the latch (93.5 -> 97.4; the 30th check_index the
+                    // note above chased was that duplicate).
+                    check_index(1);
+                    unsigned int childIdx = FirstChild(NodePtr(this, 1));
+                    check_index(childIdx);
+                    if (updateCount >= SiblingCount(NodePtr(this, childIdx))) {
+                        break;
+                    }
+                    check_index(updateIdx);
+                    char *updateNode = NodePtr(this, updateIdx);
+                    Parent(updateNode) = 1;
+                    check_index(updateIdx);
+                    updateCount++;
+                    updateIdx = NextSibling(updateNode);
+                }
                 return;
             }
-
-            // Move last sibling to position 1
-            check_index(curIdx);
-            curNode = NodePtr(this, curIdx);
-            FirstChild(NodePtr(this, 1)) = FirstChild(curNode);
-            check_index(curIdx);
-#ifdef HX_NATIVE
-            Character(NodePtr(this, 1)) = Character(curNode);
-#else
-            *(unsigned char *)((char *)this + 0x21) = Character(curNode);
-#endif
-            delete_node(curIdx);
-            dec_count(firstChildIdx);
-
-            // Update parent pointers of children
-            unsigned int updateCount = 0;
-            auto _tmp2 = NodePtr(this, 1);
-            unsigned int updateIdx = FirstChild(_tmp2);
-
-            while (true) {
-                unsigned int childIdx = FirstChild(NodePtr(this, 1));
-                check_index(childIdx);
-                if (updateCount >= SiblingCount(NodePtr(this, childIdx))) {
-                    break;
-                }
-                check_index(updateIdx);
-                char *updateNode = NodePtr(this, updateIdx);
-                Parent(updateNode) = 1;
-                check_index(updateIdx);
-                updateCount++;
-                updateIdx = NextSibling(updateNode);
-            }
-            return;
+            goto delete_root;
         }
 
         // Not root - update parent's first child
-        check_index(curIdx);
-        check_index(curIdx);
-        unsigned int parentIdx2 = Parent(curNode);
-        check_index(parentIdx2);
-        FirstChild(NodePtr(this, parentIdx2)) = NextSibling(curNode);
+        {
+            check_index(curIdx);
+            check_index(curIdx);
+            unsigned int parentIdx2 = Parent(curNode);
+            check_index(parentIdx2);
+            FirstChild(NodePtr(this, parentIdx2)) = NextSibling(curNode);
 
-        // Update sibling count
-        check_index(curIdx);
-        // Retail loads the raw sibling byte here (lbz r28, 0xf(r29) at
-        // 827FE6B4) and does the decrement at the point of use as a 32-bit
-        // `subi r9, r28, 0x1` (827FE6E8).  Writing it as
-        // `unsigned char n = SiblingCount(..) - 1` truncates the result to a
-        // byte (addi 0xff / clrlwi 24), which is both two extra instructions
-        // and a different value if the count is ever 0.
-        unsigned int sibCountBefore = SiblingCount(curNode);
-        check_index(curIdx);
-        unsigned int parentIdx3 = Parent(curNode);
-        check_index(parentIdx3);
-        unsigned int newFirstChild = FirstChild(NodePtr(this, parentIdx3));
-        check_index(newFirstChild);
-        char *newFirstChildNode = NodePtr(this, newFirstChild);
-        // Through an explicit POINTER to the count field: the image emits a
-        // dead `addi r10, r11, 0xc` at 0x827FE6EC -- the address is
-        // materialised and then immediately overwritten by the `lwz r10,
-        // 0xc(r11)` at 0x827FE6F8 -- which is the signature of `&CountField(..)`
-        // being taken, exactly as Trie::dec_count / dec_dup_count do in
-        // trie.h.  The member-expression form never materialises it.
-        unsigned int *cf = &CountField(newFirstChildNode);
-        *cf = (*cf & 0xFFFFFF00) | (sibCountBefore - 1);
+            // Update sibling count
+            check_index(curIdx);
+            // Retail loads the raw sibling byte here (lbz r28, 0xf(r29) at
+            // 827FE6B4) and does the decrement at the point of use as a 32-bit
+            // `subi r9, r28, 0x1` (827FE6E8).  Writing it as
+            // `unsigned char n = SiblingCount(..) - 1` truncates the result to a
+            // byte (addi 0xff / clrlwi 24), which is both two extra instructions
+            // and a different value if the count is ever 0.
+            unsigned int sibCountBefore = SiblingCount(curNode);
+            check_index(curIdx);
+            unsigned int parentIdx3 = Parent(curNode);
+            check_index(parentIdx3);
+            unsigned int newFirstChild = FirstChild(NodePtr(this, parentIdx3));
+            check_index(newFirstChild);
+            char *newFirstChildNode = NodePtr(this, newFirstChild);
+            // Through an explicit POINTER to the count field: the image emits a
+            // dead `addi r10, r11, 0xc` at 0x827FE6EC -- the address is
+            // materialised and then immediately overwritten by the `lwz r10,
+            // 0xc(r11)` at 0x827FE6F8 -- which is the signature of `&CountField(..)`
+            // being taken, exactly as Trie::dec_count / dec_dup_count do in
+            // trie.h.  The member-expression form never materialises it.
+            unsigned int *cf = &CountField(newFirstChildNode);
+            *cf = (*cf & 0xFFFFFF00) | (sibCountBefore - 1);
 
-        delete_node(curIdx);
+            delete_node(curIdx);
+            return;
+        }
+
+    delete_root:
+        delete_node(1);
         return;
 
     update_node:
