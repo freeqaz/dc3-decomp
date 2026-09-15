@@ -1063,7 +1063,17 @@ SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
 ) {
     SpotMeshEntry* __pos = __first;
     SpotMeshEntry* __src = __last;
-    int __count = (this->_M_finish - __src) / 0x50;
+    // w8-h BEHAVIOURAL FIX: `_M_finish - __src` is a POINTER difference between
+    // two SpotMeshEntry*, so it is already an element count -- the compiler
+    // emits the /0x50 itself.  The explicit `/ 0x50` divided a second time.
+    // Proof in the listings: the target's _M_erase (SpotlightDrawer_NG.s:4852)
+    // has exactly ONE `divw.` (the recording one feeding its `ble`); we emitted
+    // an extra `divw r10, r10, r11` ahead of it.  With the double divide,
+    // __count is (finish-last)/80 instead of (finish-last), so any erase with
+    // fewer than 80 elements following __last took __count <= 0, skipped the
+    // shift loop entirely, and still ran `_M_finish = __pos` -- silently
+    // discarding the tail instead of moving it down.
+    int __count = this->_M_finish - __src;
 
     if (__count > 0) {
         do {

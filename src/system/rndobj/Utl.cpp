@@ -2231,6 +2231,19 @@ const char *ResourceFileCacheHelper::CacheFile(const char *cc) {
     return CacheResource(cc, (const Hmx::Object *)0);
 }
 
+// FLOOR 89.613 canonical / 86.226 fuzzy for the _M_find<Edge> row (124 B) that
+// this operator is the callee of (w8-h).  Every one of its 18 diff_arg rows is
+// the same substitution: the image holds the tree node pointers in CALLEE-SAVED
+// r28-r31 and brackets the body with `bl __savegprlr_28` / `b __restgprlr_28`
+// (2 more rows, and a 0x80 vs 0x60 frame); we keep them in VOLATILE r5-r8
+// across both `bl ??MEdge` and inline the prologue.  Volatiles surviving a call
+// is MSVC's same-TU callee register-usage propagation: it only does that when
+// the callee's register usage is already known, i.e. when this definition has
+// been compiled.  MEASURED NEGATIVE (w8-h): moving this definition BELOW
+// TessellateMesh (the only std::set<Edge>::find user in the TU) is byte-inert,
+// 89.613 unchanged -- MSVC's propagation is not source-order sensitive for a
+// template instantiation, so compile order is NOT the discriminator.  The
+// remaining hypothesis is that the image compiled the two in different TUs.
 #ifndef HX_NATIVE
 bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
     unsigned short aMax = v1, aMin = v0;

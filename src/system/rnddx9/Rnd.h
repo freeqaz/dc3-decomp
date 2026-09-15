@@ -77,7 +77,12 @@ public:
     virtual void SetVertShaderTex(RndTex *, int);
     virtual void UpdateScalerParams();
 
-    D3DDevice *Device() { return mD3DDevice; }
+    /** const: DxRnd::Offscreen() is a const member and the image's inlined
+     *  device read there goes through the accessor's COPY (w7-br, Rnd_Xbox.cpp
+     *  :759).  `?Device@DxRnd@@Q*` appears in no target listing and in no
+     *  symbols.txt entry -- it is inlined at every site -- so the QAA->QBA
+     *  mangling change cannot break a symbol pairing. */
+    D3DDevice *Device() const { return mD3DDevice; }
     /** Base of the free EDRAM colour-tile region, in 5120-byte tiles. */
     unsigned int EdramBase() const { return mEdramBase; }
     /** Base of the free EDRAM hierarchical-Z region, in tiles. */

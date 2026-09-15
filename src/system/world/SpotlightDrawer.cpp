@@ -108,6 +108,14 @@ void SpotlightDrawer::Init() {
     sEnviron = Hmx::Object::New<RndEnviron>();
     sEnviron->SetUseApproxes(false);
     REGISTER_OBJ_FACTORY(SpotlightDrawer)
+    // FLOOR 93.929 canonical (w8-h).  The image stores New()'s result into
+    // sDefault FIRST (stw at 828275E4), writes 0.0f to 0x64 through the
+    // still-live result, then RELOADS sDefault (lwz at 828275F0) for Select();
+    // we store sDefault last and never reload, which swaps the two `lis` and
+    // moves the stw.  MEASURED NEGATIVE (w8-h): naming the global on all three
+    // lines -- `sDefault = New(); sDefault->mParams... = 0.0f; sDefault->
+    // Select();`, the RB3 spelling -- reads 90.357, WORSE: MSVC then emits the
+    // reload but ALSO reloads for the 0.0f store, adding rows.  Reverted.
     SpotlightDrawer* ptr = Hmx::Object::New<SpotlightDrawer>();
     ptr->mParams.mLightingInfluence = 0.0f;
     sDefault = ptr;
