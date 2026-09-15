@@ -119,6 +119,15 @@ void JoypadResetXboxPC(int pad) {
 // (`lis r6, __real@41d80000` / `lfs f8, __real@c6cf5600`) and the r6/r9/r10
 // renumbering of the other three pool bases -- 5 rows, plus 1 per clamp block.
 //
+// LEVER (w7-br, 94.7 -> 96.7 canonical): the fold is a FRONT-END fold of one
+// expression tree, not a back-end reassociation.  Naming the quotient --
+// `float scaled = (f3 - 27.0f) / 95.0f;` then `scaled * -26539.0f` in the
+// call -- keeps both multiplies (0x825FCF78 / 0x825FCF7C) and restores all
+// four pool literals with the image's r11/r10/r9/r6 bases (0x825FCF04..1C).
+// A function-local `static const float kPedalScale = -26539.0f` used in the
+// single-expression form is NOT a lever here: MSVC constant-propagates it and
+// folds identically (same 48 rows, 94.7).
+//
 // RESIDUAL (w7-bl, 94.8 canonical, 45 of 212 rows) -- the rest, all measured:
 //  * the two `-0x8000 - (unsigned short)(int)` arguments (6 rows: 108-110 and
 //    140-142).  The image narrows the INPUT (`lhz r11, 0x56(r1)`) and passes
@@ -130,6 +139,27 @@ void JoypadResetXboxPC(int pad) {
 //    an identical row split: a named `unsigned short` local for the fctiwz
 //    result; casting the whole argument `(unsigned short)(-0x8000 - u)`; and
 //    (w7-ap, earlier) a named `short` local, which is worse.
+//    CLOSED (w7-br, 96.7 -> 100.0 canonical): the conversion is
+//    `(unsigned short)(short)(float)`.  With `(int)` in the middle the front
+//    end emits a separate zext16 on the int word, and the narrowing pass
+//    trades it for an `extsh` on the OUTPUT; with `(short)` the float->short
+//    conversion lowers to fctiwz + stfd + a halfword load of 0x56(r1), the
+//    zext folds into that load (lha -> lhz), and there is nothing left to
+//    narrow at the output.  Two more spellings measured on the way:
+//    `(unsigned short)(float)` with no signed step gives the same lhz and no
+//    extsh but converts with `fctidz` (MSVC's unsigned path), 2 rows, 99.4;
+//    `(short)(0x8000 - (unsigned short)(int)x)` is canonicalised back to the
+//    subfic/extsh form, 98.5.
+//  * deadzone_apply2 (rows 153-161, closed w7-br): `bool`, not
+//    `unsigned char` -- the `unsigned char` costs the `clrlwi` / `subic` /
+//    `subfe` re-normalisation before the fourth TranslateStick at
+//    0x825FD04C, exactly as the first note says of deadzone_apply.
+//  * The remaining 26 rows at 100.0 canonical (99.3 raw) are three register
+//    permutations, listed below, plus `lis r11, lbl_83099C7C@h` vs our
+//    absolute `lis r11, 0x830a`: the threshold byte at 0x83099C7C has no
+//    symbol in config/373307D9/symbols.txt, so the target carries a placeholder
+//    relocation and we carry an immediate.  Naming it is a config change, not
+//    a source one.
 //  * r24 <-> r25 (9 rows): the image copies `buttons` to r24 and `stick_ry`
 //    to r25, we do the reverse.  Both are plain `mr` saves of incoming
 //    argument registers in the prologue; nothing in the source orders them.
@@ -237,23 +267,21 @@ JoypadType ReadSingleXinputJoypad(
         float f = (float)ly;
         float f2 = (27.0f - f >= 0.0f) ? 27.0f : f;
         float f3 = (f2 - 122.0f >= 0.0f) ? 122.0f : f2;
-        // A DIVISION by 95.0f, not a multiply by 0.010526316f: /fp:fast
-        // rewrites the division in the code generator, AFTER constant folding,
-        // so the reciprocal can never merge with the -26539.0f that follows.
-        // The image keeps both multiplies (0x825FCF78 `fmuls f0, f0, f9` then
-        // 0x825FCF7C `fmuls f0, f0, f8`); a folded literal gives one.
+        // A DIVISION by 95.0f, not a multiply by 0.010526316f, and the
+        // quotient is a NAMED LOCAL: in one expression the front end folds the
+        // reciprocal into the -26539.0f that follows (w7-ap/w7-bl, see the
+        // note above the function), giving one `fmuls`; the image keeps both
+        // (0x825FCF78 `fmuls f0, f0, f9` then 0x825FCF7C `fmuls f0, f0, f8`).
         // 95 is exactly 122 - 27, the width of the clamp window.
         //
-        // The result is narrowed to an UNSIGNED SHORT and fed straight to the
-        // call: 0x825FD000 `lhz r11, 0x56(r1)` takes only the low halfword of
-        // the fctiwz word at 0x54(r1), zero-extended, and 0x825FD004
-        // `subfic r4, r11, -0x8000` is the argument.  A named `short result`
-        // local adds the `extsh` we used to emit.
+        // The float is converted to SHORT, then zero-extended: 0x825FD000
+        // `lhz r11, 0x56(r1)` takes only the low halfword of the fctiwz word
+        // at 0x54(r1), and 0x825FD004 `subfic r4, r11, -0x8000` is the
+        // argument, with no `extsh` behind it.  `(unsigned short)(int)` costs
+        // that extsh (w7-br, note above).
+        float scaled = (f3 - 27.0f) / 95.0f;
         TranslateStick(
-            stick_ly,
-            -0x8000 - (unsigned short)(int)((f3 - 27.0f) / 95.0f * -26539.0f),
-            1,
-            0
+            stick_ly, -0x8000 - (unsigned short)(short)(scaled * -26539.0f), 1, 0
         );
     } else {
         TranslateStick(stick_ly, ly, 1, deadzone_apply);
@@ -264,11 +292,9 @@ JoypadType ReadSingleXinputJoypad(
         float f = (float)rx;
         float f2 = (27.0f - f >= 0.0f) ? 27.0f : f;
         float f3 = (f2 - 122.0f >= 0.0f) ? 122.0f : f2;
+        float scaled = (f3 - 27.0f) / 95.0f;
         TranslateStick(
-            stick_rx,
-            -0x8000 - (unsigned short)(int)((f3 - 27.0f) / 95.0f * -26539.0f),
-            1,
-            0
+            stick_rx, -0x8000 - (unsigned short)(short)(scaled * -26539.0f), 1, 0
         );
     } else {
         // The image's fallback passes param_b = deadzone_apply (0x825FD01C
@@ -294,11 +320,11 @@ JoypadType ReadSingleXinputJoypad(
         );
     }
 
-    unsigned char deadzone_apply2;
+    bool deadzone_apply2;
     if ((setup_flag != 0 || joypad_type == kJoypadXboxDrums)) {
-        deadzone_apply2 = 0;
+        deadzone_apply2 = false;
     } else {
-        deadzone_apply2 = 1;
+        deadzone_apply2 = true;
     }
     short ry = state.Gamepad.sThumbRY;
     TranslateStick(stick_ry, ry, 1, deadzone_apply2);

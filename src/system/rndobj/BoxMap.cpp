@@ -222,44 +222,43 @@ void BoxMapLighting::ApplyLight(
     }
 }
 
-/** RESIDUAL w7-bl, 94.02 canonical / 90.3 raw, 332 B.  The gap is ONE
- *  instruction and it is precisely located.  Of the 36 mismatch rows, 31 are
- *  register permutation (forgiven by the canonical ruler) and the remaining
- *  five -- three deletes and two inserts at rows 34-40 -- are all the same
- *  fact: the image RELOADS dir.red out of gLightBuffer1 to build distSq.
+/** 100.0% canonical / 99.3% raw, 332 B (w7-br, from 94.02).  The two rows
+ *  left are the `fmuls` operand order of dy*invDist / dz*invDist, which the
+ *  canonical ruler forgives and which flipping the source operands does not
+ *  move.
  *
- *    0x...+34  stfsx f13, r10, r3     dir.red = dx
- *    0x...+35  fsubs f13, f11, f12    f13 is reused for dz
- *    0x...+36  lfsx  f11, r10, r3     <-- dir.red read BACK
- *    0x...+43  fmadds f12, f11, f11, f12   distSq uses the reloaded value
+ *  The w7-bl note located the residual at one instruction: the image STORES
+ *  dir.red (`stfsx f13, r10, r3` at 0x826F0D60) before dz's `fsubs`, reuses
+ *  f13 for dz, then RELOADS dir.red (`lfsx f11, r10, r3` at 0x826F0D68) and
+ *  builds distSq and the normalised x from the reloaded value.  w7-bl tried
+ *  `dir.red * dir.red` with `dir.red = dx` still present and found it inert,
+ *  and concluded MSVC store-to-load forwards.  It does not forward here; it
+ *  value-numbers `dir.red` to the LOCAL `dx` because a local exists.  The
+ *  lever is that there is NO dx local: `dir.red = light.mPosition.x -
+ *  viewPos.x;` is the only x difference, and both later uses read `dir.red`.
+ *  With the local gone MSVC has nothing to number the read to, and emits the
+ *  image's reload.
  *
- *  Our build keeps dx live in f13 and never reloads, which is why the target is
- *  332 bytes and we are 328.  Everything else -- the load order, the fsubs
- *  operand order, the fmuls/fmadds association, the dir/col base-pointer
- *  scheme, the r6 = r10 + gLightBuffer1 + 8 walker -- already matches.
- *
- *  NEGATIVE (w7-bl): writing the distSq term as `dir.red * dir.red` instead of
- *  `dx * dx`, which is the obvious way to ask for that reload, is EXACTLY inert
- *  -- 94.02, same 90.3 raw, same five rows.  MSVC store-to-load forwards the
- *  just-stored value inside the block, so the reload cannot be requested by
- *  naming the memory; it is an allocator decision about dx's register.  Note
- *  the sibling Spot overload above went 87.37 -> 99.21 on source spellings, so
- *  this is not a "these functions are at their floor" situation -- it is one
- *  specific unreached rematerialisation. */
+ *  Two things fall out of that on the listing.  (1) The pos.z/viewPos.z loads
+ *  sit ABOVE the store (0x826F0D54/58) even though dz's fsubs is below it
+ *  (0x826F0D64): MSVC will not hoist a load through `arr` above a store to
+ *  gLightBuffer1 it cannot prove disjoint, so `dz` must be declared before the
+ *  direct store (declaring it after: 87.9).  (2) Declaration order is dz, dy:
+ *  the image loads viewPos.y/pos.y first and z last, so dy declared before dz
+ *  leaves a +4/-4 offset swap on four rows (99.95). */
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Point, 50> &arr, const Vector3 &viewPos
 ) const {
     for (unsigned int i = 0; i < arr.NumElements(); i++) {
         const LightParams_Point &light = arr[i];
         if (light.mRange > light.mFalloffStart) {
+            Hmx::Color &dir = gLightBuffer1[gLightIndex];
             float dz = light.mPosition.z - viewPos.z;
             float dy = light.mPosition.y - viewPos.y;
-            float dx = light.mPosition.x - viewPos.x;
-            Hmx::Color &dir = gLightBuffer1[gLightIndex];
-            dir.red = dx;
+            dir.red = light.mPosition.x - viewPos.x;
             dir.green = dy;
             dir.blue = dz;
-            float distSq = dy * dy + dx * dx + dz * dz;
+            float distSq = dy * dy + dir.red * dir.red + dz * dz;
             if (0.0f < distSq) {
                 float invDist = RecipSqrtEst(distSq);
                 float dist = Max(0.0f, invDist * distSq - light.mFalloffStart);
@@ -268,7 +267,7 @@ void BoxMapLighting::ApplyLight(
                 col.red = light.mColor.red * atten;
                 col.green = light.mColor.green * atten;
                 col.blue = light.mColor.blue * atten;
-                dir.red = dx * invDist;
+                dir.red = dir.red * invDist;
                 dir.green = dy * invDist;
                 dir.blue = dz * invDist;
                 gLightIndex++;
@@ -346,7 +345,16 @@ void BoxMapLighting::ApplyLight(
  *      reference, to reach the image's `stfsx` for red: exactly inert at 99.21;
  *      MSVC CSEs the address back into the single pointer.
  *    - hoisting the `col` reference to the top of the loop body to flip the
- *      rows-14/16 scheduling swap: exactly inert at 99.21. */
+ *      rows-14/16 scheduling swap: exactly inert at 99.21.
+ *    - (w7-br) red through the subscript with the `col` reference declared
+ *      AFTER that store, and the same with `col` hoisted to the top of the
+ *      body: both exactly inert, same 21 rows.  The Point overload below now
+ *      matches with `col` a plain reference and gets the image's `stfsx` for
+ *      red, so the address-mode choice is not a spelling of `col` at all;
+ *      it follows the materialisation order of the two buffer bases (rows
+ *      12-19: the image forms gLightBuffer2's address before the `subi r11,
+ *      r4, 0x44` bias, we form gLightBuffer1's first), which no source order
+ *      of the stores moved. */
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Spot, 50> &arr, const Vector3 &viewPos
 ) const {

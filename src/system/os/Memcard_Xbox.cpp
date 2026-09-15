@@ -242,6 +242,23 @@ MCResult MCContainerXbox::Mount(CreateType ct) {
     // `bl Translate` with the compare chain sunk below the epilogue), and the
     // image at 0x825F639C..0x825F63B0 does not thread it.  No source spelling
     // tried so far hides the constant on that edge.
+    // NEGATIVE RESULTS (w7-br, 87.1 held, same 21 rows unless stated), four
+    // more spellings aimed at that constant rather than at the arms:
+    //   - the chain as one nested ternary `return res == 3 ? ... : res == 0xb7
+    //     ? ... : Translate(res);` -- identical rows;
+    //   - the chain moved into an anonymous-namespace `inline` helper and
+    //     called from here -- MSVC inlines it and threads the constant
+    //     through it exactly as before, identical rows;
+    //   - a second `if (res == ERROR_SUCCESS)` test between the corrupt edge
+    //     and the success return (three compares for the constant to cross
+    //     instead of two) -- threaded through all three, identical rows;
+    //   - `res = ERROR_FILE_CORRUPT` written BEFORE the XContentClose call --
+    //     86.4: `res` is then kept in r29 across the call (`mr. r29, r3`) and
+    //     the whole tail recolours; the image assigns after the call
+    //     (0x825F639C) and never leaves r3.
+    // The constant is visible on that edge to every pass MSVC runs after
+    // inlining; nothing at source level makes it opaque without adding
+    // instructions the image does not have.
     if (res == ERROR_PATH_NOT_FOUND)
         return kMCFileNotFound;
     if (res == ERROR_ALREADY_EXISTS)

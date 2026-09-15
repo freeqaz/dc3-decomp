@@ -392,14 +392,31 @@ Unlock:
     // variable: any of them ends dwResult's live range early and MSVC then
     // declines to give it a callee-saved home at all.  Residual is 5 rows
     // (the second epilogue) plus 2 register rows; nothing else is charged.
+    //
+    // LEVER (w7-br, 97.04 -> 97.6 canonical, 8 -> 5 rows): the waited-on
+    // result IS a second local, but it is COPIED into dwResult after the
+    // CloseHandle rather than returned.  That reproduces the image's
+    // `lwz r31, 0x60(r1)` at 0x829C48FC (r31 is free once the INFINITE
+    // constant dies) and its `mr r3, r31` at 0x829C4914 exactly; what is left
+    // is how the phi is resolved.  The image tail-duplicates the return block
+    // (second epilogue at 0x829C4928 `mr r3, r30`, the target of the `bne` at
+    // 0x829C48D8) where we emit one copy `mr r30, r31` and a single epilogue.
+    // NEGATIVE (w7-br): `if (pOverlapped != 0) return dwResult;` ahead of the
+    // wait with ONE variable and no second local, 90.7 -- the same
+    // `li r30, 0x3e5`-deleted / r28<->r29 signature as w7-al's and w7-bq's
+    // early returns.  Every spelling with a return inside or before the guarded
+    // block constant-propagates the pending 0x3e5 into that return; the image
+    // does not, so both of its returns are one statement reached through a
+    // join, and the epilogue duplication is MSVC's phi resolution.
     if (pOverlapped == 0) {
         while (WaitForSingleObjectEx(LocalOverlapped.hEvent, INFINITE, 1) == 0xc0) {
         }
-        dwResult = LocalOverlapped.InternalLow;
+        DWORD dwWaited = LocalOverlapped.InternalLow;
         if (LocalOverlapped.hEvent != 0
             && LocalOverlapped.hEvent != INVALID_HANDLE_VALUE) {
             CloseHandle(LocalOverlapped.hEvent);
         }
+        dwResult = dwWaited;
     }
     return dwResult;
 }

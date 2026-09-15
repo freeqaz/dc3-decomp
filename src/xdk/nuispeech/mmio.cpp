@@ -187,7 +187,7 @@ MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuff
         return 0;
     }
 
-    // RESIDUAL (w7-am, 88.4 canonical), three groups:
+    // RESIDUAL (w7-am, 88.4 canonical; w7-br 89.0, 16 rows), three groups:
     //   * 82AA3800 `b .L_82AA3808` / 82AA3804 `li r4, 0x10`: the image puts the
     //     MMIO_EMPTYBUF re-arm in a block reached ONLY by the back edge, so the
     //     preheader has to jump over it.  Our do/while leaves the assignment in
@@ -212,12 +212,31 @@ MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuff
     //     Cost of the rotation is only 3 of the 23 residual rows (idx 18/19
     //     delete `b`/`li r4,0x10`, idx 25 insert `li r4,0x10`); the other 20
     //     are the two groups below.
-    //   * 82AA3840 `clrrwi r3, r11, 0`: the image keeps pchOld in r11 across
-    //     the loop test and zero-extends it into r3 at the LocalReAlloc call;
-    //     we load straight into r3.
+    //   * 82AA3838 `clrrwi r3, r11, 0` (the `bl LocalReAlloc` is 82AA3840):
+    //     the image keeps pchOld in r11 across the loop test and truncates it
+    //     into r3 at the call -- the 64-bit-tracked-pointer idiom (NewHandle
+    //     at 82AA32F8 shows the same rldicl/clrrwi pair); we load straight
+    //     into r3 (7 rows: idx 24/26-29 colouring + idx 33 delete).
+    //     NEGATIVE (w7-br), all exactly inert at the same rows: re-reading
+    //     `info->pchBuffer` at the call instead of pchOld; `(void *)(LONG)
+    //     pchOld` at the call; dropping the pchOld local entirely and reading
+    //     the field at all three uses.  The truncation is not a source cast.
     //   * 82AA3918: the LocalAlloc failure block is sunk PAST the epilogue
-    //     (`beq .L_82AA3918`, and the success arm falls through into the common
-    //     tail).  We emit it inline with a `b` over it -- MSVC block sinking.
+    //     (`beq .L_82AA3918` at 82AA38E0, and the success arm falls through
+    //     into the common tail at 82AA38F4).  MSVC block sinking.
+    //     LEVER (w7-br, 88.4 -> 89.0 canonical, 23 -> 16 rows): spelling the
+    //     null test with the failure as the THEN arm (`if (pchNew == nullptr)
+    //     { fail } else { success }`) drops the `b` over the failure block and
+    //     the colouring it forced (7 rows).  What remains is the polarity
+    //     itself (idx 75 `beq` vs our `bne`) plus the 3+3 rows of the sunk
+    //     `li r28,0x102 / li r30,0 / b` block, which we still emit inline.
+    //     NEGATIVE (w7-br): the literal CFG -- `goto allocFailed;` to a label
+    //     placed AFTER `return ret;` that sets ret/cchBuffer and jumps back to
+    //     the stores -- measures byte-for-byte the same 89.0 / 16 rows.  MSVC
+    //     re-lays the block from the CFG, so the placement is not
+    //     source-reachable; same finding as the loop re-arm above.
+    //     Assigning the LocalAlloc result straight to `pchBuffer` (no pchNew
+    //     local) is worse: 87.2, 18 rows.
     MMRESULT flushRet = mmioFlush(hmmio, MMIO_EMPTYBUF);
     if (flushRet != 0) {
         return flushRet;
@@ -229,12 +248,12 @@ MMRESULT mmioSetBuffer(HMMIO hmmio, LPSTR pchBuffer, LONG cchBuffer, UINT fuBuff
     MMRESULT ret = 0;
     if (pchBuffer == nullptr && cchBuffer > 0) {
         HPSTR pchNew = (HPSTR)LocalAlloc(LMEM_FIXED, cchBuffer);
-        if (pchNew != nullptr) {
-            info->dwFlags |= MMIO_ALLOCBUF;
-            pchBuffer = pchNew;
-        } else {
+        if (pchNew == nullptr) {
             ret = MMIOERR_OUTOFMEMORY;
             cchBuffer = 0;
+        } else {
+            info->dwFlags |= MMIO_ALLOCBUF;
+            pchBuffer = pchNew;
         }
     }
     info->pchBuffer = pchBuffer;

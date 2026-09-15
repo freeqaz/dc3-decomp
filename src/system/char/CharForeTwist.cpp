@@ -91,6 +91,14 @@ void CharForeTwist::Poll() {
     // 11 delete / 7 insert.  The Dot()/Cross() calls already produce the
     // image's association and multiply multiset; only the colouring differs,
     // and naming the intermediates is not the way to reach it.
+    // NEGATIVE RESULT (w7-br): the one asymmetry left in the block is which
+    // term of Dot(m.y, m.z) is the standalone fmuls -- the image's is the z
+    // term (`fmuls f6, f6, f11` at 0x8239CABC, y.z*z.z) and ours the y term --
+    // so the first Dot was spelled INLINE, no locals, in the image's z, x, y
+    // order.  91.4 -> 88.7 (54 rows, 8 insert / 4 delete): MSVC re-derives the
+    // whole load order from the expression and the fourth callee-saved FPR
+    // still does not appear.  The standalone term is not source-addressable
+    // through the association either.
     float clamped = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.y, handxfm.m.z));
     Vector3 v98;
     Cross(parentxfm.m.y, handxfm.m.z, v98);

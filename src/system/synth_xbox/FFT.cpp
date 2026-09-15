@@ -72,6 +72,36 @@ static FftScratch g_fftScratch;
 //    - writing `sum_im` as `lo_im + hi_im` (the image's textual operand order
 //      for the idx-73 `fadds`) -- COMMUTATIVE_OP_ORDER stays at 1 either way.
 //  Swapping the `c` / `s` declarations was already measured inert by w7-an.
+//
+// w7-br (85.6 -> 88.0 canonical, 39 of 110 rows): the store-order half of the
+// residual is source-addressable after all, but the lever is the POSITION of
+// the `ss` / `c` / `s` declarations, not the store statements.  With those
+// three between the two bin stores, MSVC emits the second store first and
+// defers the first bin's fadds/fsubs to just before its store, whichever bin
+// is written first (that is why w7-bl's swap read inert: it swapped both).
+// Declaring `ss`, `c`, `s` BEFORE the bins and writing the two stores
+// adjacent, sum first, gives the image's `stfs 0x0(r31)`-early shape and the
+// 2 OFFSET_SWAP rows go.  Also measured: diff-first adjacent 86.7; named
+// diff0/sum0 temps with the declarations before the bins 86.7; `cc` folded
+// as `sin_a * sin_a * 2.0` inert; `cc = cc * 2.0` moved above the bins
+// inert; `hi` / `lo` moved above the bins inert; `data[0]` re-read in place
+// of `re0` 85.6 (load order flips); the bins' stores written after `hi`/`lo`
+// 85.6 (separation flips them again).
+// What is left (39 rows) is ONE scheduling decision and the colouring it
+// drives: the image computes `fmul f10, f30, f30` (cc = sin_a^2) as the very
+// first instruction after the second `bl sin` (0x82E509BC), before the
+// `lfs f0, 0x0(r31)` / `lfs f13, 0x4(r31)` loads (0x82E509C8 / 0x82E509D0).
+// We load first, add, store `data[0]`, and only then multiply -- into the f10
+// that the sum just vacated -- so the sum never needs f8, c/s take f0/f13
+// instead of f13/f0 (0x82E509EC / 0x82E509F4), and the loop inherits the
+// swap (14 rows).  Every position of the `cc` statement from the top of the
+// block to just above the loop schedules the multiply after the first store.
+// f30 <-> f31 (inv_n / sin_a, 4 rows) is the callee-saved pair's allocation
+// order and moves with nothing above.
+// Bug-family check (worklist): fft_matrix_inverse_columnwise's harvested
+// defect was a loop advancing the malloc'd pointer it later freed.  Nothing
+// here is freed; `data` (r31) is never advanced, only `lo` and `hi` walk, and
+// the image agrees (`addi r11, r31, 0x8` at 0x82E50A00 rebases `lo` off r31).
 int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
     if (size < 2) {
         return 0;
@@ -84,15 +114,22 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
             double sin_2a = sin(inv_n * (float)(2.0 * M_PI));
 
             double cc = (double)sin_a * (double)sin_a;
+            // ss, c and s are declared BEFORE the DC/Nyquist bins, and the two
+            // bin stores are ADJACENT, sum first (w7-br, 85.6 -> 88.0
+            // canonical).  With the three declarations between the stores,
+            // MSVC emits the SECOND store first and defers the first bin's
+            // arithmetic to just before its store; adjacent, the stores keep
+            // source order.  Diff-first adjacent is 86.7; pre-computing both
+            // bins into named temps changes nothing either way.
+            float ss = (float)sin_2a;
+            double c = 1.0;
+            double s = 0.0;
 
             // DC / Nyquist bins.
             float re0 = data[0];
             float im0 = data[1];
-            data[1] = re0 - im0;
-            double c = 1.0;
-            double s = 0.0;
-            float ss = (float)sin_2a;
             data[0] = im0 + re0;
+            data[1] = re0 - im0;
 
             float* hi = data + size - 2;
             float* lo = data + 2;

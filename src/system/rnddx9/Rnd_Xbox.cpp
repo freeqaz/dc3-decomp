@@ -747,7 +747,11 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     bool wasSuspended = mSuspended;
     Resume();
     D3DSurface *savedRenderTarget = D3DDevice_GetRenderTarget(mD3DDevice, 0);
-    D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(mD3DDevice);
+    // Device() rather than mD3DDevice (w7-br): the image loads the device
+    // into r11 at 0x82618CF0 BEFORE `mr r27, r3` saves GetRenderTarget's
+    // result at 0x82618CF4; the member spelling loads it straight into r3
+    // after the mr.  The inline accessor's copy is what hoists the load.
+    D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(Device());
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, 0);
     // BUG FIX (w7-bl).  0x82618DAC-0x82618DB4 packs the clear colour as
@@ -760,28 +764,35 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     // the failure arm writing 0.25 into ALPHA instead of RED -- our modal
     // cleared to 0x0000197f (fully transparent blue) and our failure screen
     // to 0x3f000000 instead of 0xff3f0000.
-    Hmx::Color color(0, 0.5f, 0.1f);
+    // 100% (w7-br; w7-bl left it at 89.7 / 135 rows).  The five zeros --
+    // colour red, the fail arm's green/blue, Clear's Z and Resolve's ClearZ --
+    // are ONE function-local `static const float`.  MSVC folds its value into
+    // the `__real@00000000` pool but still treats it as memory: the page base
+    // is kept in callee-saved r30 (`lis r30` at 0x82618D20) and the value is
+    // RE-LOADED after the calls (`lfs f1` at 0x82618D30 and again at
+    // 0x82618E0C, past Clear / DrawStringScreen / DrawAll).  Any literal
+    // spelling (`0`, `0.0f`, `0.0`, mixed) is one value CSE'd into a
+    // callee-saved f31 with `fmr f1, f31` at both call sites, an extra
+    // stfd/lfd pair and `__savegprlr_26` for the image's `_25`: 93.6, and
+    // byte-inert across all four literal spellings.  Same idiom as
+    // RatioToDb's `static const float zero` (Decibels.cpp, 100%).
+    static const float zero = 0.0f;
+    Hmx::Color color(zero, 0.5f, 0.1f);
     if (t == Debug::kModalFail) {
         color.red = 0.25f;
-        color.green = 0;
-        color.blue = 0;
+        color.green = zero;
+        color.blue = zero;
     }
-    D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(color), 0, 0, 0);
+    D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(color), zero, 0, 0);
     Rnd::DrawStringScreen(cc, Vector2(0.025f, 0.025f), Hmx::Color(1, 1, 1, 1), true);
     RndOverlay::DrawAll(true);
     D3DDevice_Resolve(
-        mD3DDevice, 0, nullptr, FrontBuffer(), nullptr, 0, 0, nullptr, 0, 0, nullptr
+        mD3DDevice, 0, nullptr, FrontBuffer(), nullptr, 0, zero, nullptr, 0, 0, nullptr
     );
     if (mRegAlloc != 0) {
         mRegAlloc = (RegisterAlloc)0;
         D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
     }
-    // w7-bl RESIDUAL (89.7%): the image keeps the `__real@00000000` PAGE BASE
-    // in a callee-saved GPR (r30 at 0x82618D20) and issues two `lfs` -- one
-    // for the colour components, one for this Resolve's ClearZ -- where MSVC
-    // gives us one `lfs` into a callee-saved f31 that spans D3DDevice_Clear.
-    // That is the whole r25..r31 vs r26..r31 renumbering: the image spends a
-    // GPR where we spend an FPR.  Allocator choice, no source lever found.
     Present();
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, savedRenderTarget);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, savedStencilSurface);
@@ -790,6 +801,12 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     }
 }
 
+// 100% (w7-br; w7-bl left it at 95.2 / 96 rows).  Four levers, each noted
+// at its site: the tile rects are `i * tile` (a strength-reduced IV, two
+// adds per iteration), mWidth is stored inside each branch of the aspect
+// test, the CreateTexture calls go through the XDK's inline
+// IDirect3DDevice9_CreateTexture wrapper (d3d9.h), and the front-buffer
+// clear size multiplies mWidth's term by mHeight's.
 void DxRnd::InitBuffers() {
     PhysMemTypeTracker tracker("D3D(phys):DxRndBuffer");
     memset(&mPresentParams, 0, sizeof(D3DPRESENT_PARAMETERS));
@@ -819,15 +836,18 @@ void DxRnd::InitBuffers() {
     }
     int tileHeight = mHeight;
     int tileWidth;
-    int width;
+    // mWidth is assigned in BOTH arms (w7-br): MSVC tail-merges the two
+    // stores into the one `stw r7, 0x40(r30)` at 0x826190DC, and that is
+    // what puts the quotient in r7 with the shift in place on r11
+    // (0x826190BC-0x826190C4); a `width` local stored after the join
+    // colours them the other way round and hoists the zero `li r24`.
     if (mVideoMode.fIsHiDef != 0 || mLowRes != 0) {
-        width = (mHeight << 4) / 9;
+        mWidth = (mHeight << 4) / 9;
         tileWidth = (tileHeight << 4) / 9;
     } else {
-        width = (mHeight << 2) / 3;
+        mWidth = (mHeight << 2) / 3;
         tileWidth = (tileHeight << 2) / 3;
     }
-    mWidth = width;
     if (!lowResFlag) {
         mNumTiles = 2;
         // 0x826190EC-0x8261916C: two tile rects covering the frame.  Bit 1 of
@@ -835,32 +855,29 @@ void DxRnd::InitBuffers() {
         // half height) over the default vertical one (side-by-side tiles,
         // half width, full height).  The loop re-reads mNumTiles from the
         // member every iteration (`lwz r8, 0x3b0(r30)`).
-        // w7-bl RESIDUAL (95.2%): the image computes `offset + tile` TWICE in
-        // each of the two rect loops (0x82619110 `add r8, r10, r23` and
-        // 0x82619124 `add r10, r10, r23`), where MSVC CSEs ours into one add
-        // (loop 1) or an add plus `mr` (loop 2).  The rest is a uniform
-        // renumbering of the callee-saved set: the image gets by with
-        // __savegprlr_19 and we need _18, i.e. one more simultaneously-live
-        // value, which is what shifts r25->r22, r27->r24, r24->r25, r26->r27.
-        int i = 0;
-        int offset = 0;
+        // w7-br: the rect edges are `i * tile` and `(i + 1) * tile`, NOT a
+        // running `offset`.  MSVC strength-reduces `i * tile` into an IV
+        // (r10, stepped by `add r10, r10, r23` at 0x82619124) and computes
+        // `(i + 1) * tile` as a SEPARATE `add r8, r10, r23` at 0x82619110 --
+        // the two adds w7-bl saw.  An explicit `offset` local with
+        // `y2 = offset + tile; offset += tile` is one value-numbered add
+        // however it is spelled (reading y2 back from the just-stored y1 is
+        // forwarded and CSE'd the same way): 95.2 -> 96.9 from this alone.
         if (mFlags & 2) {
             tileHeight = tileHeight / 2;
-            for (; i < mNumTiles; i++) {
+            for (int i = 0; i < mNumTiles; i++) {
                 mTileRects[i].x1 = 0;
-                mTileRects[i].y1 = offset;
+                mTileRects[i].y1 = i * tileHeight;
                 mTileRects[i].x2 = tileWidth;
-                mTileRects[i].y2 = offset + tileHeight;
-                offset += tileHeight;
+                mTileRects[i].y2 = (i + 1) * tileHeight;
             }
         } else {
             tileWidth = tileWidth / 2;
-            for (; i < mNumTiles; i++) {
-                mTileRects[i].x1 = offset;
+            for (int i = 0; i < mNumTiles; i++) {
+                mTileRects[i].x1 = i * tileWidth;
                 mTileRects[i].y1 = 0;
-                mTileRects[i].x2 = offset + tileWidth;
+                mTileRects[i].x2 = (i + 1) * tileWidth;
                 mTileRects[i].y2 = tileHeight;
-                offset += tileWidth;
             }
         }
     }
@@ -913,47 +930,67 @@ void DxRnd::InitBuffers() {
         );
     }
     EndMemTrackObjectName();
+    // w7-br: the XDK inline wrapper (d3d9.h) with `&member` as its out
+    // pointer.  The `tracker` local gives this function an EH state, and
+    // an inlined callee that uses a computed `&member` twice then gets a
+    // dead home-slot store of that address before the call (`addi r11,
+    // r30, 0x390` + `stw r11, 0x58(r31)` at 0x826193C8/0x826193DC, and
+    // again for 0x394 and 0x358); the loop's `&mFrontBuffers[i]` is an IV
+    // (r28) and gets none.  The wrapper's null test is the `subic/subfe/
+    // and.` against E_OUTOFMEMORY held in r29 (0x826193F4-0x82619408).
+    // Assigning the member from D3DDevice_CreateTexture directly and
+    // DX_ASSERT-ing it also CSEs D3DFMT_A8R8G8B8 into a callee-saved r19
+    // (`__savegprlr_18` for the image's `_19`) where the image
+    // re-materialises `lis/ori` per call.  96.9 -> 99.6.
     {
         BeginMemTrackObjectName("CreateTexture:PreProcessBuffer");
-        mPreProcessBuffer = static_cast<D3DTexture *>(D3DDevice_CreateTexture(
-            mWidth, mHeight, 1, 1, 0, D3DFMT_A8R8G8B8, 0, D3DRTYPE_TEXTURE
-        ));
-        DX_ASSERT(mPreProcessBuffer, 0x390);
+        HRESULT hr = IDirect3DDevice9_CreateTexture(
+            mD3DDevice, mWidth, mHeight, 1, 0, D3DFMT_A8R8G8B8, 0, &mPreProcessBuffer, NULL
+        );
+        DX_ASSERT_CODE(hr, 0x390);
         EndMemTrackObjectName();
     }
     {
         BeginMemTrackObjectName("CreateTexture:PostProcessBuffer");
-        mPostProcessBuffer = static_cast<D3DTexture *>(D3DDevice_CreateTexture(
-            mWidth, mHeight, 1, 1, 0, D3DFMT_A8R8G8B8, 0, D3DRTYPE_TEXTURE
-        ));
-        DX_ASSERT(mPostProcessBuffer, 0x394);
+        HRESULT hr = IDirect3DDevice9_CreateTexture(
+            mD3DDevice, mWidth, mHeight, 1, 0, D3DFMT_A8R8G8B8, 0, &mPostProcessBuffer, NULL
+        );
+        DX_ASSERT_CODE(hr, 0x394);
         EndMemTrackObjectName();
     }
     for (int i = 0; i < 2; i++) {
         BeginMemTrackObjectName("CreateTexture:FrontBuffer");
-        mFrontBuffers[i] = static_cast<D3DTexture *>(D3DDevice_CreateTexture(
-            mWidth, mHeight, 1, 1, 0, D3DFMT_A8R8G8B8, 0, D3DRTYPE_TEXTURE
-        ));
-        DX_ASSERT(mFrontBuffers[i], 0x39C);
+        // BUG FIX (w7-br): the front buffers are D3DFMT_LE_A8R8G8B8
+        // (`ori r8, r8, 0x106` at 0x82619518 -> 0x18280106), not
+        // D3DFMT_A8R8G8B8 (0x18280186), which is what the pre/post-process
+        // buffers use.  og-dc3 has the same wrong format.
+        HRESULT hr = IDirect3DDevice9_CreateTexture(
+            mD3DDevice, mWidth, mHeight, 1, 0, D3DFMT_LE_A8R8G8B8, 0, &mFrontBuffers[i], NULL
+        );
+        DX_ASSERT_CODE(hr, 0x39C);
         EndMemTrackObjectName();
     }
 
     BeginMemTrackObjectName("CreateTexture:FrontBufferDepth");
-    mFrontBufferDepth = static_cast<D3DTexture *>(D3DDevice_CreateTexture(
-        mWidth, mHeight, 1, 1, 0, D3DFMT_D24FS8, 0, D3DRTYPE_TEXTURE
-    ));
-    DX_ASSERT(mFrontBufferDepth, 0x3A2);
+    HRESULT hr = IDirect3DDevice9_CreateTexture(
+        mD3DDevice, mWidth, mHeight, 1, 0, D3DFMT_D24FS8, 0, &mFrontBufferDepth, NULL
+    );
+    DX_ASSERT_CODE(hr, 0x3A2);
     EndMemTrackObjectName();
     PostDeviceReset();
     // 0x8261963C-0x82619658: srawi+addze on BOTH terms -- a signed divide by
     // 32, not an arithmetic shift.  With `>> 5` MSVC fuses one of them into a
     // single `extlwi` and the addze pair disappears.
-    int temp27 = ((((mHeight + 0x1F) / 32) * ((mWidth + 0x1F) / 32)) << 0xC);
+    // w7-br: mWidth's term FIRST.  MSVC evaluates the right operand first,
+    // so this is what loads mHeight into r11 at 0x8261962C ahead of mWidth
+    // into r10 at 0x82619630.  w7-bl measured the swap as inert at 95.2;
+    // with the register set settled by the levers above it is the last two
+    // rows (99.6 -> 100).
+    int temp27 = ((((mWidth + 0x1F) / 32) * ((mHeight + 0x1F) / 32)) << 0xC);
     // w7-bl: `rect` is hoisted OUT of the loop on purpose.  Scoped inside the
     // body it shares r1+0x58 with the MakeString scratch slot; the image keeps
     // the two apart (Symbol temp at 0x5c, D3DLOCKED_RECT at 0x60), and hoisting
-    // reproduces that (-3 rows).  Swapping the mullw operands above to match
-    // the image's mHeight/mWidth LOAD order is inert (measured, 0 rows).
+    // reproduces that (-3 rows).
     D3DLOCKED_RECT rect;
     for (int i = 0; i < 2; i++) {
         D3DTexture_LockRect(mFrontBuffers[i], 0, &rect, nullptr, 0);
@@ -1181,14 +1218,22 @@ void DxRnd::DoPointTests() {
     if (TheHiResScreen.IsActive())
         return;
 
-    // Process query results from previous frame
+    // Process query results from previous frame.  w7-br: the manager is read
+    // into a fresh local at the TOP of the body -- the image hoists that load
+    // into the loop latch (`lwz r3, 0x204(r29)` at 0x8261B02C, between the
+    // end() load and the compare) and then reuses the same r3 for the
+    // ToggleFrameIndex block after the loop (0x8261B038).  With the member
+    // read inline as the call's `this` it sits last in the argument setup
+    // and never leaves the body (92.9 -> 95.9 together with the two locals
+    // below).  The second call keeps the member read: it reloads (0x8261AFF4).
     for (std::vector<RndPointTest>::iterator it = mPointTestQueries.begin(); it !=mPointTestQueries.end(); ++it) {
         unsigned int result;
+        RndOcclusionQueryMgr *queryMgr = mOcclusionQueryMgr;
         // 0x8261AFD8-0x8261AFE8 and 0x8261B008-0x8261B020 each load
         // `it->mFlare` ONCE and use it for both stores; writing
         // `it->mFlare->` twice makes MSVC reload it, because the store to
         // 0x144/0x102 may alias the pointer.
-        if (mOcclusionQueryMgr->GetQueryResults(it->mPointQueryIdx, result)) {
+        if (queryMgr->GetQueryResults(it->mPointQueryIdx, result)) {
             // 0x8261AFD0: the result is loaded and bool-ified BEFORE the flare
             // pointer is loaded, so the visibility value is a local of its own.
             bool visible = result != 0;
@@ -1210,19 +1255,24 @@ void DxRnd::DoPointTests() {
     // increment -- we emitted 0x1c then 0x20.  Semantically the image retires
     // the previous frame's queries, bumps the counter, then opens the new
     // frame; we were opening the new frame before retiring the old one.
-    mOcclusionQueryMgr->ToggleFrameIndex();
-    mOcclusionQueryMgr->OnEndFrame();
-    mOcclusionQueryMgr->IncrementFrameCounter();
-    mOcclusionQueryMgr->OnBeginFrame();
+    // w7-br: one pointer serves Toggle + OnEndFrame (0x8261B038-0x8261B054,
+    // the vtable is read off r3 BEFORE the 0x1804 store) and a second read
+    // serves Increment + OnBeginFrame (0x8261B058); reading the member four
+    // times reloads it after each store instead.
+    RndOcclusionQueryMgr *endMgr = mOcclusionQueryMgr;
+    endMgr->ToggleFrameIndex();
+    endMgr->OnEndFrame();
+    RndOcclusionQueryMgr *beginMgr = mOcclusionQueryMgr;
+    beginMgr->IncrementFrameCounter();
+    beginMgr->OnBeginFrame();
 
-    // Count point tests needed
-    int numTests = 0;
-    for (std::list<PointTest>::iterator it = mPointTests.begin(); it !=mPointTests.end(); ++it) {
-        numTests++;
-    }
-
-    // Resize mPointTestQueries to match mPointTests count
-    mPointTestQueries.resize(numTests);
+    // Resize mPointTestQueries to match mPointTests count.  w7-br: the
+    // count loop IS list::size() -- and because it is the resize's argument,
+    // the {0, -1, -1} default value (0x8261B084-0x8261B090) is built BEFORE
+    // the loop walks the list (0x8261B098-0x8261B0A4), right-to-left; a
+    // hand-written count loop
+    // put it after (95.9 -> 98.1).
+    mPointTestQueries.resize(mPointTests.size());
 
     // Early out if no point tests
     if (mPointTests.empty())
@@ -1254,7 +1304,12 @@ void DxRnd::DoPointTests() {
     // Setup view matrix.  0x8261B160-0x8261B16C passes the Matrix4
     // CONSTRUCTOR'S return value (`mr r5, r3`) straight to SetVConstant -- an
     // unnamed temporary, not a named local whose address is re-taken.
-    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
+    // w7-br: via a reference local the manager pointer is loaded ONCE, before
+    // the ctor call, and held in r31 (0x8261B158 / `mr r3, r31` at
+    // 0x8261B170); written as `TheShaderMgr.SetVConstant(...)` it is reloaded
+    // after the ctor.
+    RndShaderMgr &shaderMgr = TheShaderMgr;
+    shaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
 
     // Setup shader state
     RndShader::SelectConfig(nullptr, kStandardShader, false);
@@ -1286,19 +1341,24 @@ void DxRnd::DoPointTests() {
 
     // Process each point test
     int idx = 0;
-    for (std::list<PointTest>::iterator it = mPointTests.begin(); it !=mPointTests.end(); ++it, ++idx) {
+    for (std::list<PointTest>::iterator it = mPointTests.begin(); it !=mPointTests.end(); ++it) {
         TheNgStats->mFlares++;
 
-        RndFlare *flare = it->mFlare;
-        RndPointTest &test = mPointTestQueries[idx];
+        // w7-br: `idx++` in the subscript -- the byte-offset IV is bumped
+        // right after the address is formed (0x8261B270), not at the loop
+        // end -- and the point test reads `test.mFlare` back: the image's
+        // `clrrwi r11, r10, 0` at 0x8261B264 is that store-forwarded load
+        // (a 32-bit zero-extending copy of the value just stored), which a
+        // `flare` local cannot produce.
+        RndPointTest &test = mPointTestQueries[idx++];
         // 0x8261B268-0x8261B284: mFlare is stored FIRST, then mAreaQueryIdx
         // (0x8) and only then mPointQueryIdx (0x4).
-        test.mFlare = flare;
+        test.mFlare = it->mFlare;
         test.mAreaQueryIdx = -1;
         test.mPointQueryIdx = -1;
 
         // Point test
-        if (flare->GetPointTest()) {
+        if (test.mFlare->GetPointTest()) {
             // NEGATIVE RESULT (w7-bl, byte-identical): the image stores w and
             // color between the z load and the z conversion, but writing the
             // fields in that order (x, y, w, color, z) changes not one
@@ -1356,13 +1416,11 @@ void DxRnd::DoPointTests() {
             verts[3].x = area.w + verts[0].x;
             verts[3].y = area.h + verts[3].y;
 
-            // w7-bl RESIDUAL (92.90%): what is left is a flat renumbering of
-            // the callee-saved set (`this` is r29 in the image, r30 for us;
-            // the iterator, the byte index and the two query-index addresses
-            // shift with it), four `fadds` whose operands MSVC canonicalises
-            // (writing `verts[0].y + area.h` is byte-identical), and the
-            // mFlare store at 0x8261B268, which the image does off the
-            // computed `&test` where we emit an indexed `stwx`.
+            // 100% canonical (w7-br; w7-bl left it at 92.90).  The
+            // callee-saved renumbering was the four levers above.  What is
+            // left is register permutation only (r21/r22) plus the four
+            // `fadds` whose operands MSVC canonicalises (writing
+            // `verts[0].y + area.h` is byte-identical, per w7-bl).
             // 0x8261B430/0x8261B444: the manager is read ONCE into a
             // callee-saved register and reused for BeginQuery (`mr r3, r30`);
             // EndQuery at 0x8261B478 reloads the member.

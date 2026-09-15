@@ -216,21 +216,30 @@ void CharDebug::SetObjects(DataArray *msg) {
     mOverlay->SetShowing(!mObjects.empty() || !mOnce.empty());
 }
 
-// RESIDUAL (w7-bl, 88.89 canonical, 54 rows): the entire gap is ONE MSVC
-// decision -- we hoist the function-local static `mesh` POINTER into a
-// callee-saved register and the image re-loads it at every use.  The image
-// emits `lwz r11, ?mesh@?8??DisplayObject@...@l(r31)` before each
-// `lwz r11, 0x148(r11)` (0x82340C24, 0x82340CC0 inside the vertex loop,
-// 0x82340D18, 0x82340D30, 0x82340D40, 0x82340D64), i.e. it treats the
-// vertex stores as possibly aliasing the static; we prove they do not and
-// cache it in r30.  That single extra live value is the whole cascade: a
-// 5th callee-saved GPR (`__savegprlr_27` vs the image's `_28`), frame 0x90
-// vs 0x80, and the flat r27..r31 renumbering that accounts for 21 of the
-// 54 rows.  Failed spellings (both measured in this worktree): writing the
-// loop body as `mesh->Verts()[i].pos.Set(...)` etc. with no `vert`
-// reference is WORSE (86.31, 170 rows -- MSVC then rematerialises the
-// vector base five times); hoisting `Vector2 uv` out of the loop and using
-// `uv.Set(v, u)` is byte-inert (88.89, same 35/3/6/10 rows).
+// 100% (w7-br; w7-bl left it at 88.89 / 54 rows).  Two levers, both
+// source-addressable:
+//  * The image re-loads the `mesh` / `mat` function-local statics before
+//   every use (0x82340C24, 0x82340CC0 inside the vertex loop, 0x82340D2C,
+//   0x82340D54, 0x82340D6C; `stw r3, mat` immediately after New at
+//   0x82340BCC and a reload for CreateAndSetMetaMat at 0x82340DA0) because
+//   in the original their ADDRESS IS TAKEN, so every store through an
+//   unknown pointer may alias them.  A plain `static RndMesh *mesh` whose
+//   address never escapes is proven alias-free and hoisted into r30 -- that
+//   was the 5th callee-saved GPR, the 0x90 frame and the r27..r31 cascade.
+//   Binding a reference (`RndMesh *&meshRef = mesh`) marks the static
+//   address-taken and reproduces every reload: 88.89 -> 93.4 for mesh,
+//   -> 99.3 raw with mat as well.  (The mangled names prove they are
+//   function-local statics, `?mesh@?8??DisplayObject@...`, so the
+//   file-scope-static spelling the brief suggested would be a wrong name
+//   under name_check -- not tried for that reason.)
+//  * The vertex position is stored y, z, x (`stfs f0, 0x4` at 0x82340CEC,
+//   `stfs f12, 0x8` at 0x82340CF4, `stfs f11, 0x0` at 0x82340CF8, with the
+//   8-byte tex copy between): MSVC keeps the source order of independent
+//   component stores, so `pos.Set(x, y, z)` can never produce it.  Writing
+//   the three components in that order closes the last five rows (the two
+//   Face::Set store orders follow once the loop body matches).
+//   NEGATIVE: `vert.pos = Vector3(...)` builds the temp on the stack and
+//   copies it (85.9, 47 rows); moving `vert.tex = uv` above pos is inert.
 // The `SetObjConcrete<AnimTask>` vs `SetObjConcrete<RndTex>` name in the
 // Function Call Diff is an ICF fold -- ObjRefConcrete<T,ObjectDir>::
 // SetObjConcrete is the same machine code for every T -- not a wrong callee.
@@ -243,10 +252,14 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
         if (tex) {
             static RndMesh *mesh = nullptr;
             static RndMat *mat = nullptr;
-            if (!mesh) {
+            // The references make the statics address-taken; see the note
+            // above -- the image re-loads them after every pointer store.
+            RndMesh *&meshRef = mesh;
+            RndMat *&matRef = mat;
+            if (!meshRef) {
                 mesh = Hmx::Object::New<RndMesh>();
-                mat = Hmx::Object::New<RndMat>();
-                mat->SetUseEnv(false);
+                matRef = Hmx::Object::New<RndMat>();
+                matRef->SetUseEnv(false);
                 mesh->Verts().resize(4);
                 mesh->Faces().resize(2);
                 for (int i = 0; i < 4; i++) {
@@ -258,7 +271,9 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
                     // were being written over the bone indices.
                     Vector2 uv(v, u);
                     RndMesh::Vert &vert = mesh->Verts()[i];
-                    vert.pos.Set((uv.x + 1) * 20, 0, -(uv.y * 20 - 60));
+                    vert.pos.y = 0;
+                    vert.pos.z = -(uv.y * 20 - 60);
+                    vert.pos.x = (uv.x + 1) * 20;
                     vert.tex = uv;
                     vert.norm.Set(0, -1, 0);
                     vert.boneWeights.Set(0, 0, 0, 0);
@@ -271,8 +286,8 @@ void CharDebug::DisplayObject(Hmx::Object *obj) {
             }
             // Retail has no null test on `mat` here: 0x82340D80 loads the
             // static and goes straight into the inlined SetDiffuseTex.
-            mat->SetDiffuseTex(tex);
-            CreateAndSetMetaMat(mat);
+            matRef->SetDiffuseTex(tex);
+            CreateAndSetMetaMat(matRef);
             mesh->DrawShowing();
         }
     }

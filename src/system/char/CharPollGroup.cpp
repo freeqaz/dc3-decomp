@@ -118,39 +118,18 @@ void CharPollGroup::SortPolls() {
     }
     sorter.Sort(polls);
     mPolls.clear();
-    // RESIDUAL (w7-ak, 89.03 canonical): the whole 29-row residual is one MSVC
-    // decision. The target RE-LOADS polls._M_start / _M_finish on every iteration
-    // (`lwz r4, 0x60(r31)` + `lwz r11, 0x64(r31)` inside the loop) and indexes with
-    // `lwzx r3, r30, r4` off a byte-offset induction variable, keeping i and i*4 as
-    // two induction variables; our build proves the base loop-invariant, hoists it
-    // into r23, caches the element count in r25 and strength-reduces to `lwzu r3,
-    // 0x4(r29)`. That costs two extra callee-saved GPRs (`__savegprlr_23` vs `_25`)
-    // and +0x10 of frame. NEGATIVE RESULT: binding the element to a reference
-    // (`RndPollable *&poll = polls[i];`), which would explain the target's dead
-    // `stw &polls[i], 0x54(r31)`, is inert to the digit -- MSVC elides the reference
-    // while it can still strength-reduce, so the reference is a consequence of the
-    // missing hoist, not its cause.
-    // ADDENDUM (w7-bl, still 89.03): the target listing at 0x823A8B10-0x823A8B60
-    // now reads completely, and it closes off the two remaining source-shaped
-    // explanations. (1) The dead `stw r11, 0x54(r31)` is the HOMED reference that
-    // `vector::operator[]` returns -- 0x54 is the very slot the FIRST loop uses for
-    // `vector::push_back(const RndPollable*&)`'s temp (0x823A8AA4), reused -- so it
-    // is emitted by the inliner, not by a named local, which is why w7-ak's explicit
-    // reference could not conjure it. Spelling the element access as a materialised
-    // iterator (`std::vector<RndPollable*>::iterator it = polls.begin() + i;` then
-    // `*it`) is EXACTLY INERT: same 29 rows, same registers, same 89.03.
-    // (2) The call in the loop is `ObjPtrList<CharPollable>::insert(iterator, T*)`
-    // returning an iterator by value into 0x58(r31), with the iterator argument a
-    // hoisted null (r26, `mr r26, r30` at 0x823A8B04) -- i.e. `insert(end(), x)`.
-    // Writing that out (`mPolls.insert(mPolls.end(), dynamic_cast<CharPollable*>(
-    // polls[i]))`) is ALSO exactly inert: our `push_back` already lowers to that
-    // same `insert` call, and the Function Call Diff confirms `insert` on both sides.
-    // What is left is purely that MSVC keeps `polls._M_start` and `polls.size()`
-    // live in r23/r25 across the `insert` call where the image re-derives both from
-    // 0x60/0x64(r31) at 0x823A8B44-0x823A8B58 and reuses the reloaded `_M_start` as
-    // the next iteration's index base. Same compiler, same flags, no source spelling
-    // found that makes MSVC decline the CSE; the frame and `__savegprlr_23` vs
-    // `_25` follow from it.
+    // 100% (w7-br, from 89.03).  w7-ak and w7-bl correctly located the whole
+    // residual at one MSVC decision -- the image re-derives polls._M_start /
+    // _M_finish from 0x60/0x64(r31) after every `insert` (0x823A8B44-58) where
+    // we hoisted them into r23/r25 -- and correctly found that no spelling of
+    // this loop (reference element, materialised iterator, explicit
+    // insert(end())) moves it.  It was not the loop: this TU also DEFINED
+    // CharPollableSorter::Sort (a duplicate of Character.cpp's, where the
+    // image has it), so MSVC could see that Sort never retains &polls, `polls`
+    // never escaped, and hoisting across the opaque insert was legal.  With
+    // Sort external, as in the image, polls escapes through `sorter.Sort(polls)`
+    // and the reload -- and the homed operator[] reference at 0x54, and
+    // __savegprlr_25 -- all follow.
     for (int i = 0; i < polls.size(); i++) {
         mPolls.push_back(dynamic_cast<CharPollable *>(polls[i]));
     }
@@ -179,6 +158,13 @@ void CharPollGroup::SortPolls() {
 #endif
 }
 
+// On PPC these live in Character.cpp, which is where the image has them
+// (?Sort@CharPollableSorter@@ is in Character.s, an EXTERNAL call from
+// SortPolls).  Defining them here as well gave MSVC Sort's body in the same
+// TU, so it could see that Sort never retains &polls and hoisted
+// polls._M_start/_M_finish across the insert call -- the whole 89.03
+// residual of SortPolls.  The native port keeps its producer-first variant here.
+#ifdef HX_NATIVE
 int CharPollableSorter::sSearchID = 0;
 
 void CharPollableSorter::AddDeps(
@@ -344,3 +330,4 @@ void CharPollableSorter::Sort(std::vector<RndPollable *> &polls) {
 #endif
     }
 }
+#endif // HX_NATIVE
