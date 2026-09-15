@@ -434,30 +434,26 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
     }
 }
 
-// Residual at 95.5 is ONE cause, measured 2026-09-14: our frame is 0x2e0+0x20 =
-// 0x300 (`stwu r1, -0x300` vs the image's `-0x2e0`) with the SAME callee-saved
-// counts (10 GPR / 18 FPR), and that +0x20 is exactly two extra 16-byte Hmx::Color
-// temporaries.  The image allocates 15 by-reference Color slots, 0x100 through
-// 0x1ec, and puts `prevScaled` immediately above them at 0x1f0; we allocate 17,
-// 0x100 through 0x20c, which pushes prevScaled to 0x210.  The body has exactly 15
-// `Hmx::Color(...)` arguments taken by const reference (7 in the point loop, 8
-// after it) -- the four passed BY VALUE (the two DebugMeter ctors and the two
-// DrawBar calls) are built in the shared low scratch at 0x50/0x70 on both sides,
-// so they are not the surplus.  170 of the 206 diff_arg rows are the resulting
-// uniform displacement shift, and the 33-row r29<->r30 swap is the same story in
-// registers: the image keeps `this` in r30 and the TheRnd@ha anchor in r29, we do
-// the reverse.  Close the two surplus slots and most of this function follows.
-//
-// Measured negatives, both reverted:
-//   - Naming the second head circle's Vector2 and declaring it before the first
-//     circle -- the image does store both halves of it (0xc0/0xc4) above the FIRST
-//     UtilDrawCircle2D call at 82E020F8, which an unnamed temporary in an argument
-//     list cannot do -- measures 95.0 (237 rows vs 229): the named local buys a
-//     THIRD surplus slot.
-//   - Binding `const Vector3 &` to joints[..].mJointPos[0] instead of
-//     `const TrackedJoint &` to the joint, to recover the two dead
-//     `addi r9, r11, 0x4` / `addi r9, r10, 0x4` at 82E0221C: byte-identical, 229
-//     rows either way.  Those two addis are still missing.
+// 100% canonical (w7-bm, 2026-09-15; was 95.5).  The 2026-09-14 diagnosis of
+// "two extra 16-byte Hmx::Color temporaries" was wrong: both sides allocate
+// exactly 15 by-reference Color slots.  The +0x20 of frame was one extra
+// Vector2 temporary plus two address-taken float HOMES, and every remaining row
+// was argument-temporary shape.  What the image encodes, and how it is spelled:
+//   - MakeString's const float& binds to a TEMPORARY for dx and arcY (a single
+//     `stfs` into the 0x50 call scratch right before the call, never a home
+//     store at the definitions), so those arguments are prvalues: `+dx`, `+arcY`.
+//     `+zd` is worse -- zd's copy already sits at 0x70 on both sides.
+//   - Every Vector2 whose stores precede the Color stores of its own call is a
+//     NAMED local declared just before the call (arcPt, heightPt/basePt in that
+//     order, curPt, curHeightPt); curPt is passed to both the circle and the
+//     line, which is why the image reuses one slot (0xa0) for both.
+//   - No `const TrackedJoint *joints` base local: indexing TrackedJoints()
+//     directly leaves the two dead `addi r9, rN, 0x4` at 82E021DC, as in
+//     TryToStartSwipe / Update.
+//   - The else-branch copy of `front` reads z, y, x in that order.
+// Each lever alone measured BELOW 95.5 (93.6-95.0) because the static
+// DebugMeter Color-copy schedule (~82E024xx) reshuffles under any upstream
+// change; only the full set lands it.  Do not evaluate these one at a time.
 float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
     static std::list<Vector3> jointPathCopy;
     // lbl_82F44758 (.data, .float 0.1) is a MUTABLE function-local static, not a
@@ -527,13 +523,14 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
             // Each successive path point is drawn dimmer:
             // `fnmsubs f29, f25, f21, f31` with f21 = __real@3eb33333 (0.35).
             float c = 1.0f - fade * 0.35f;
-            UtilDrawCircle2D(Vector2(scaledX, arcY), 0.01f, Hmx::Color(c, 0.0f, c, 1.0f), 37);
+            Vector2 arcPt(scaledX, arcY);
+            UtilDrawCircle2D(arcPt, 0.01f, Hmx::Color(c, 0.0f, c, 1.0f), 37);
             UtilDrawCircle2D(zPt, 0.004f, Hmx::Color(c, c, 0.0f, 1.0f), 37);
             if (pt != jointPathCopy.front()) {
                 UtilDrawLine(prevScaled, zPt, Hmx::Color(c, c, 0.0f, 1.0f));
             }
-            Vector2 basePt(scaledX, 0.75f);
             Vector2 heightPt(scaledX, (mArcOffset.y - pt.y) + 0.75f);
+            Vector2 basePt(scaledX, 0.75f);
             UtilDrawCircle2D(basePt, 0.01f, Hmx::Color(0.0f, 0.0f, c, 1.0f), 37);
             UtilDrawCircle2D(heightPt, 0.01f, Hmx::Color(0.0f, c, 0.0f, 1.0f), 37);
 
@@ -554,9 +551,9 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
             handY = primary.mJointPos[0].y - secondary.mJointPos[0].y;
             handZ = primary.mJointPos[0].z - secondary.mJointPos[0].z;
         } else {
-            handX = front.x;
-            handY = front.y;
             handZ = front.z;
+            handY = front.y;
+            handX = front.x;
         }
 
         float curDx = mArcOffset.x - handX;
@@ -569,10 +566,8 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
         UtilDrawCircle2D(curPt, 0.015f, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), 37);
         UtilDrawLine(curPt, Vector2(aspectRatio * 0.5f, 0.0f), Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f));
 
-        UtilDrawCircle2D(
-            Vector2(curScaledX, (mArcOffset.y - handY) + 0.75f), 0.015f,
-            Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f), 37
-        );
+        Vector2 curHeightPt(curScaledX, (mArcOffset.y - handY) + 0.75f);
+        UtilDrawCircle2D(curHeightPt, 0.015f, Hmx::Color(0.0f, 0.0f, 1.0f, 1.0f), 37);
 
         float pathErr = GetPathError();
         TheRnd.DrawStringScreen(
