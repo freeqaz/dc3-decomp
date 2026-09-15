@@ -485,6 +485,19 @@ void HamDirector::ListDrawChildren(std::list<RndDrawable *> &draws) {
 }
 
 void HamDirector::CollideList(const Segment &s, std::list<Collision> &colls) {
+    // RESIDUAL (w8-i, 84.16 canonical / 83.10526 fuzzy): 6 rows of 21, and the
+    // cause is a CLASS LAYOUT difference, not a statement in this function.
+    // Both sides load the same member (`0x114(r3)` = mVenue's ObjPtr pointer) and
+    // both dispatch vtable slot 0x2c.  The image dispatches it through the
+    // object's PRIMARY vtable with `this` unadjusted -- `lwz r11, 0x0(r3)` /
+    // `lwz r11, 0x2c(r11)` -- while we have to reach the RndDrawable subobject
+    // first: `addi r3, r11, 0x9c` + `lwz r10, 0x9c(r11)` / `lwz r11, 0x2c(r10)`.
+    // So in the image the RndDrawable base of WorldDir sits at offset 0, and in
+    // ours at 0x9c, which is decided by `class RndDir : public ObjectDir, public
+    // RndDrawable, ...` in rndobj/Dir.h -- outside this lane's units, and a base
+    // reorder there would move every RndDir-derived class in the binary.  The
+    // extra `addi` is also why our body is 80 bytes against the target's 76.
+    // Not attempted here; reported to the coordinator instead.
     if (mVenue) {
         mVenue->CollideList(s, colls);
     }
