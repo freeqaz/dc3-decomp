@@ -1,0 +1,72 @@
+# Wave 8 — climbing from 0 %, smallest functions first
+
+**Started:** 2026-09-15, base `bb2e759eb` (wave-7 close-out).
+**Directive:** work the remaining authorable list from the bottom up — 0 % rows
+first, then the small rows, then the hard ones. Opus lanes only.
+**Coordinator artefacts:** `~/tmp/dc3-wells/w8/` (worklists, snapshots,
+`compare.py`, gate logs). Baseline snapshot `report-baseline-bb2e759eb.json`.
+
+## Where the wave starts
+
+| denominator | functions | bytes |
+|---|---|---|
+| Authorable matched (canonical) | 96.80 % (31,191 / 32,223) | 87.32 % (5,540,052 / 6,344,596) |
+| Remaining authorable | 1,032 | 620,028 B |
+
+Remaining work by band, with what the database claims about each row:
+
+| band | functions | bytes | AT_LIMIT | unadjudicated |
+|---|---:|---:|---:|---:|
+| 0 % | 195 | 21,872 | 27 | 168 |
+| under 80 % | 34 | 25,000 | 16 | 18 |
+| 80–95 % | 176 | 77,000 | 157 | 19 |
+| 95–99.9 % | 519 | 399,000 | 457 | 58 |
+| 99.9 – under 100 % | 119 | 79,000 | 90 | 27 |
+
+## Finding 1: 76 of the 195 zero rows are not work
+
+`default/link_glue` is a synthetic unit — `configure.py` registers it with
+`"object": None`, so **there is no target object to diff against**. Every one of
+its 76 functions therefore scores 0.0 with a diff that is pure `delete`
+(`HDCache::Flush` measures 1 instruction, 1 delete, against an empty target
+side), while the unit's own metadata reads `complete: true` and
+`complete_code_percent: 100.0`.
+
+Consequences, both measured:
+
+- The 0 % class is **119 real rows / 19,984 B**, not 195 / 21,872.
+- The canonical authorable headline is **understated by up to 65 functions**.
+  `progress_metrics.py` already dedups 11 link-glue rows that shadow a symbol
+  matched in its real unit; the other 65 exist only in link_glue and are counted
+  as authorable-but-unmatched even though nothing can ever score them.
+
+Do not send a lane at a link_glue row. If the denominator is to be corrected,
+that is a `scripts/authorable.py` change, not decomp work.
+
+## Finding 2: the 0 % class is instantiation placement, not missing bodies
+
+Of the 119 real zero rows, the large majority are template instantiations
+(`vector<T>::_M_range_insert_realloc`, `StlNodeAlloc<T>::allocate`,
+`PropSync<T>`, `ObjPtrList<T>::Unlink`, `ObjDirItr<T>::Advance`,
+`CSampleXAPOBase<T>::Process`), plus compiler-generated funclets and ICF fold
+survivors. A prior audit found only **10** genuinely unwritten non-excluded
+functions in the whole binary, all SDK boilerplate. So this class is about
+*which translation unit emits an instantiation and with what linkage*, not about
+writing new game logic.
+
+## Lanes
+
+Six Opus lanes, grouped so no two touch the same file.
+
+| lane | rows | bytes | units |
+|---|---:|---:|---|
+| `w8-a` | 25 | 3,360 | `rndobj/Utl`, `obj/Utl` |
+| `w8-b` | 19 | 1,848 | `hamobj/*`, `lazer/meta_ham/*` |
+| `w8-c` | 20 | 2,972 | `char/*` |
+| `w8-d` | 15 | 1,100 | `synth_xbox/*` except FFT |
+| `w8-e` | 38 | 5,528 | `rndobj/*`, `flow/*`, `os/*`, `ui/*`, misc |
+| `w8-f` | 2 | 5,176 | `synth_xbox/FFT` (the AltiVec pair, hardest) |
+
+## Results
+
+*(appended as lanes land)*
