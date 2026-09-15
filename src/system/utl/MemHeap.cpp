@@ -396,16 +396,30 @@ int MemHeap::GetAlignWords(int bytes) {
     }
 }
 
-// RESIDUAL (w7-aq, 90.007 canonical): the remaining rows are one register
-// assignment, not a missing statement.  The image puts `this` in r26 and
-// sizeWords in r27 (827F88A4/827F88AC); we get the pair the other way round,
-// which charges 15 rows across the four Fit calls and the three later `this`
-// uses.  Consequences of the same choice: the image loads info.mBlock straight
-// into r31 and updates it in place with `stwux` (827F89A8), while we load into
-// r30, copy to r31 and use `add`+`stwx`; and MSVC tail-merges the two
-// `return nullptr` sites the other way (the image's default arm branches
-// FORWARD into the null check's `li r3, 0`, ours branches back).  Declaration
-// order is not a lever here -- both are parameters.
+// w7-bu (2026-09-15): 90.007 -> 93.3 canonical.  Three of w7-aq's four
+// residual rows were spellings, not allocation: the default-arm tail merge
+// (block starts null, default arm `break`s), the split header built as a
+// register FreeBlock temp and stored whole (loads-before-stores + the
+// forwarded-reload `clrrwi r8, r11, 0` at 827F89B0), and `totalUsed =
+// blockSize` at the top of its arm (`mr r27, r28` at 827F8A08).  See the
+// in-body comments for the measurements.
+// RESIDUAL (w7-bu, 93.3 canonical, 45 rows): one register plan.  The image
+// puts `this` in r26 and sizeWords in r27 (827F88A4/827F88AC), we get the
+// pair the other way round (15 rows); it loads info.mBlock straight into r31
+// and copies the OLD block to r29 inside the split arm just before the
+// in-place `stwux r28, r31, r10` (827F89A0/827F89A8), we keep the loaded
+// value as the survivor and copy the advanced pointer at the top (`mr r31,
+// r30`, +`add`/`stwx` instead of `stwux`); it keeps padWords in r30 and
+// copies it into r5 for the call (827F89A4), we load into r5 and copy the
+// survivor out.  Measured inert: `sizeWords += padWords` in place of the
+// totalUsed local (byte-identical), swapping the two header-load
+// declarations (byte-identical), a `newBlock` local with `block = newBlock`
+// after the call (identical rows), reassigning prevBlock before the call
+// through an oldPrev temp (88.8).  The remaining 0x4/0x8 load+store order
+// (image next@0x8 first, ours ascending) rides on the same stwux plan: with
+// the base register updated in place the scheduler orders the two stores
+// after it differently.  Declaration order is not a lever -- both swapped
+// values are parameters.
 int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     FreeBlockInfo info;
     info.mBlock = nullptr;
@@ -413,17 +427,22 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     info.mSizeWords = 0x7FFFFFFF;
     info.mPadWords = 0x7FFFFFFF;
 
+    // block starts null and the default arm falls out of the switch: MSVC
+    // then jump-threads the known-null path straight into the null check's
+    // `li r3, 0` (827F8914 `b .L_827F8970`), which is the image's shape.  A
+    // `return nullptr` in the default arm tail-merges the other way round
+    // (the null check branches BACK into the default arm's copy).
+    FreeBlock *block = nullptr;
     switch (mStrategy) {
-    case kFirstFit: FirstFit(sizeWords, align, info); break;
-    case kBestFit:  BestFit(sizeWords, align, info); break;
-    case kLRUFit:   LRUFit(sizeWords, align, info); break;
-    case kLastFit:  LastFit(sizeWords, align, info); break;
+    case kFirstFit: FirstFit(sizeWords, align, info); block = info.mBlock; break;
+    case kBestFit:  BestFit(sizeWords, align, info); block = info.mBlock; break;
+    case kLRUFit:   LRUFit(sizeWords, align, info); block = info.mBlock; break;
+    case kLastFit:  LastFit(sizeWords, align, info); block = info.mBlock; break;
     default:
         MILO_ASSERT(false, 0x151);
-        return nullptr;
+        break;
     }
 
-    FreeBlock *block = info.mBlock;
     if (block == nullptr) return nullptr;
 
     FreeBlock *prevBlock = info.mPrevBlock;
@@ -435,18 +454,26 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
     int blockSize;
 
     if (padWords > 8) {
-        // `block` itself is advanced -- there is no separate newBlock local.
-        // That is what lets the image fuse the advance and the mSizeWords
-        // store into a single `stwux r28, r31, r10` (827F89A8).
         blockSize = info.mSizeWords - padWords;
+        // The split block's header is built in a register-held FreeBlock
+        // temp and stored as a WHOLE STRUCT, not field by field: that is the
+        // only spelling that (a) hoists both header loads above every store
+        // (827F8990/827F899C precede the `stwux` at 827F89A8) and (b) makes
+        // the timestamp argument a store-forwarded reload -- the
+        // `clrrwi r8, r11, 0` at 827F89B0 is MSVC zero-extending a value it
+        // forwarded out of the struct store, which a plain `timeStamp` local
+        // never needs (w7-bu, measured: locals 90.0, temp+struct store 93.3).
+        // A memory-copied temp (`saved = *block`) keeps a dead load of the
+        // old mSizeWords and spills it (91.4); assigning the three fields is
+        // what keeps the temp in registers.
+        FreeBlock saved;
+        saved.mSizeWords = blockSize;
+        saved.mTimeStamp = block->mTimeStamp;
+        saved.mNextBlock = block->mNextBlock;
         FreeBlock *oldBlock = block;
-        FreeBlock *nextBlock = oldBlock->mNextBlock;
-        unsigned int timeStamp = oldBlock->mTimeStamp;
         block = (FreeBlock *)((int *)block + padWords);
-        block->mSizeWords = blockSize;
-        block->mNextBlock = nextBlock;
-        block->mTimeStamp = timeStamp;
-        InsertFreeBlock(oldBlock, padWords, prevBlock, block, timeStamp);
+        *block = saved;
+        InsertFreeBlock(oldBlock, padWords, prevBlock, block, block->mTimeStamp);
         prevBlock = oldBlock;
         padWords = 0;
     } else {
@@ -462,12 +489,14 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
             prevBlock, block->mNextBlock, block->mTimeStamp
         );
     } else {
+        // Assigned at the TOP of the arm: the image's `mr r27, r28` (827F8A08)
+        // sits between the shared `lwz mNextBlock` and the prevBlock test.
+        totalUsed = blockSize;
         if (prevBlock == nullptr) {
             mFreeBlockChain = block->mNextBlock;
         } else {
             prevBlock->mNextBlock = block->mNextBlock;
         }
-        totalUsed = blockSize;
     }
 
     unsigned int *header = (unsigned int *)block + padWords;
