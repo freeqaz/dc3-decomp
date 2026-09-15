@@ -430,51 +430,53 @@ bool Intersect(const Triangle &tri, const Box &box) {
     // commutative spelling of the two x adds is inert: writing them origin-first
     // to match `fadds f10, f11, f0` at Geo.s idx 13 leaves rows 13 and 21
     // unchanged, so MSVC canonicalises the operand order here.
-    float v1x = (tri.frame.x.x + tri.origin.x) - cx;
-    float v2x = (tri.frame.y.x + tri.origin.x) - cx;
+    // w7-bt: the untranslated vertices ARE units, but as Vector3 locals built by
+    // Add(), not as grouped scalars.  MSVC folds the two locals into registers
+    // (no 16-byte copy -- their source is computed, not foreign memory) and the
+    // twelve-load block then comes out in the image's order: v1y, v1z, v2z, v2y
+    // (Geo.s 0x82536780..0x825367C8), closing rows 26-33/40 of the old diff.
+    Vector3 v1, v2;
+    Add(tri.frame.x, tri.origin, v1);
+    Add(tri.frame.y, tri.origin, v2);
+    float v1x = v1.x - cx;
+    float v2x = v2.x - cx;
 
     float v0y = v0.y - cy;
-    float v1y = (tri.frame.x.y + tri.origin.y) - cy;
-    float v2y = (tri.frame.y.y + tri.origin.y) - cy;
+    float v1y = v1.y - cy;
+    float v2y = v2.y - cy;
 
     float v0z = v0.z - cz;
-    float v1z = (tri.frame.x.z + tri.origin.z) - cz;
-    float v2z = (tri.frame.y.z + tri.origin.z) - cz;
+    float v1z = v1.z - cz;
+    float v2z = v2.z - cz;
 
-    // X axis separation test (fsel ternary for min/max)
+    // Per-axis separation test: the triangle's [min, max] extent along the axis
+    // against the box's half-extent.  w7-bt (87.32 -> 98.37 canonical): the
+    // extent is a Vector2 AGGREGATE (x = min, y = max), not two scalars.  As
+    // scalars, `mx` is a single-use temporary and MSVC forward-substitutes its
+    // whole fsubs/fsel tree into the second `||` arm, past the `bgt` on mn
+    // (rows 63-70 of the old diff); the image computes both fsels before the
+    // first compare (Geo.s 0x825367FC..0x82536808, then `fcmpu f13, f22; bgt`
+    // at 0x8253680C).  A field store is not a temporary, so it stays put.  The
+    // ternary spelling, Utl.h Min/Max, a MinMax3(float&, float&) helper and a
+    // function-scope `float mn, mx` reassigned per block were all byte-identical
+    // to each other and all sunk.
     {
-        float diff = v0x - v1x;
-        float mn = diff >= 0.0f ? v1x : v0x;
-        float mx = diff >= 0.0f ? v0x : v1x;
-        float sub_mn = mn - v2x;
-        float sub_mx = mx - v2x;
-        mn = sub_mn >= 0.0f ? v2x : mn;
-        mx = sub_mx >= 0.0f ? mx : v2x;
-        if (mn > halfX || mx < -halfX) return false;
+        Vector2 range;
+        range.x = Min(Min(v0x, v1x), v2x);
+        range.y = Max(Max(v0x, v1x), v2x);
+        if (range.x > halfX || range.y < -halfX) return false;
     }
-
-    // Y axis separation test
     {
-        float diff = v0y - v1y;
-        float mn = diff >= 0.0f ? v1y : v0y;
-        float mx = diff >= 0.0f ? v0y : v1y;
-        float sub_mn = mn - v2y;
-        float sub_mx = mx - v2y;
-        mn = sub_mn >= 0.0f ? v2y : mn;
-        mx = sub_mx >= 0.0f ? mx : v2y;
-        if (mn > halfY || mx < -halfY) return false;
+        Vector2 range;
+        range.x = Min(Min(v0y, v1y), v2y);
+        range.y = Max(Max(v0y, v1y), v2y);
+        if (range.x > halfY || range.y < -halfY) return false;
     }
-
-    // Z axis separation test
     {
-        float diff = v0z - v1z;
-        float mn = diff >= 0.0f ? v1z : v0z;
-        float mx = diff >= 0.0f ? v0z : v1z;
-        float sub_mn = mn - v2z;
-        float sub_mx = mx - v2z;
-        mn = sub_mn >= 0.0f ? v2z : mn;
-        mx = sub_mx >= 0.0f ? mx : v2z;
-        if (mn > halfZ || mx < -halfZ) return false;
+        Vector2 range;
+        range.x = Min(Min(v0z, v1z), v2z);
+        range.y = Max(Max(v0z, v1z), v2z);
+        if (range.x > halfZ || range.y < -halfZ) return false;
     }
 
     // Face normal plane test — reuse v0 stack for plane
@@ -489,6 +491,13 @@ bool Intersect(const Triangle &tri, const Box &box) {
     if (!Intersect(facePlane, box)) return false;
 
     // Edge cross product axes (9 tests)
+    // RESIDUAL (w7-bt): the scheduler's order of these nine fsubs and of the
+    // 27 axis stores.  The image computes e0x, e0z, e1z, e0y, e1x, e1y, e2x,
+    // e2y, e2z (0x825368B8..0x825368F8); we compute e0x, e0z, e1y, e1z, e1x,
+    // e0y, ... and the `lis` of __real@0 lands one row later.  Declaring the
+    // deltas in the image's order, or ordering the Set() calls by the image's
+    // first-store order (0x90, 0xc4, 0xa0, 0x68, 0x78), reshuffles the block
+    // without closing it (both 98.4, raw 96.9 / 97.1).
     float e0x = v1x - v0x, e0y = v1y - v0y, e0z = v1z - v0z;
     float e1x = v2x - v1x, e1y = v2y - v1y, e1z = v2z - v1z;
     float e2x = v0x - v2x, e2y = v0y - v2y, e2z = v0z - v2z;
@@ -512,24 +521,38 @@ bool Intersect(const Triangle &tri, const Box &box) {
     float radii[9];
     unsigned int i = 0;
     float *pfR = radii;
-    float *pfAxis = &axes[0].y;
+    const float *pfAxis = &axes[0].y;
     do {
-        // CORRECTION to an earlier note here: the image does NOT fold the second
-        // set of loads away.  Geo.s reloads all three components after the abs
-        // test (`lfs f10, -0x4(r11)` / `lfs f8, 0x4(r11)` / `lfs f6, 0x0(r11)`
-        // at idx 182/185/187) because the negation clobbered the first copy in
-        // place.  Our build instead keeps the originals alive in registers and
-        // emits three `fmr` copies before negating -- the same source, a
-        // different CSE decision, and no spelling found so far moves it.
+        // The image negates each loaded component IN PLACE (`fneg f11, f11` at
+        // 0x8253698C) and RELOADS all three for the projections (`lfs f10,
+        // -0x4(r11)` / `lfs f8, 0x4(r11)` / `lfs f6, 0x0(r11)` at 0x825369B0/
+        // BC/C4), so the abs loads and the projection loads were never
+        // value-numbered together.  w7-bt: that only happens when the two
+        // groups reach the axis through DIFFERENT address families -- here the
+        // loop-carried float pointer for the abs test and the i-indexed
+        // `axes[i]` for the projections.  Reading both groups through pfAxis,
+        // both through axes[i], through `&axes[i].y` derived from i, through a
+        // Vector3& cast from pfAxis, or through two loop-carried pointers
+        // (float* and Vector3*, which MSVC coalesces) all merge the loads and
+        // emit three `fmr` copies instead (93.9-94.0 canonical).  A Vector3
+        // copy of axes[i] survives as a real copy (89.8); advancing pfAxis
+        // between the groups splits the IV into two registers (94.8); putting
+        // axes and radii in one aggregate does reload, but as a barrier AFTER
+        // the radius store (92.0), where the image's reloads precede it.
+        // RESIDUAL: this spelling costs a fourth induction register (the image
+        // walks r9 = i, r10 = radii, r11 = &axes[0].y; we add `addi r8, r1,
+        // 0xf0` / `addi r8, r8, 4` for the radii pointer and base the abs
+        // family at 0x68 instead of 0x64), which is the 2 extra rows at 98.37.
         float absx = pfAxis[-1]; if (absx <= 0.0f) absx = -absx;
         float absy = pfAxis[0];  if (absy <= 0.0f) absy = -absy;
         float absz = pfAxis[1];  if (absz <= 0.0f) absz = -absz;
         float r = absy * halfY + absz * halfZ + absx * halfX;
         *pfR = r;
 
-        float p0 = pfAxis[-1] * v0x + pfAxis[1] * v0z + pfAxis[0] * v0y;
-        float p1 = pfAxis[-1] * v1x + pfAxis[1] * v1z + pfAxis[0] * v1y;
-        float p2 = pfAxis[-1] * v2x + pfAxis[1] * v2z + pfAxis[0] * v2y;
+        const Vector3 &axis = axes[i];
+        float p0 = axis.x * v0x + axis.z * v0z + axis.y * v0y;
+        float p1 = axis.x * v1x + axis.z * v1z + axis.y * v1y;
+        float p2 = axis.x * v2x + axis.z * v2z + axis.y * v2y;
 
         float diff = p1 - p2;
         float mx = diff >= 0.0f ? p1 : p2;
