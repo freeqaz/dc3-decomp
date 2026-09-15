@@ -112,6 +112,37 @@ BEGIN_LOADS(RndMeshDeform)
     // the shared `li r11,0` while we walk each subsequent test. Identical
     // canonical 97.2 and two MORE register rows (63 -> 65 diff_arg, a 5th swap
     // pair). The threading is a backend choice here, not a source shape.
+    //
+    // RESIDUAL (w7-bp): 97.20089 canonical (95.5 raw), 896 B, 226/226
+    // instructions.  Unmoved.  Two charged clusters remain and I could reach
+    // neither from source:
+    //   [175]-[180] the image tests the accumulator and branches BEFORE it
+    //     materialises the 1.0 literal (`clrlwi.` / `beq` at idx 175/176, then
+    //     `lis`/`lfs __real@3f800000`); our build hoists the constant-pool load
+    //     above the short-circuit guard.  2 insert / 2 delete.
+    //   [218]-[221] the u8 -> bool normalisation at the final store.  The image
+    //     BRANCHES -- `clrlwi.` (record bit) / `li r11, 0x1` / `bne` /
+    //     `li r11, 0x0` -- where we emit the branchless mask idiom
+    //     `clrlwi` (no record bit) / `subic` / `subfe`.
+    //   MEASURED NEGATIVES for that second cluster, both against 97.20089:
+    //     `if (isIdentity) mSkipInverse = true; else mSkipInverse = false;`
+    //         -> 94.1 canonical, and it grew the frame by 0x10 and flipped the
+    //            prologue to r23-r31.  Much worse; do not retry.
+    //     `mSkipInverse = isIdentity ? true : false;`  -> byte-INERT, 97.2 and
+    //            the identical 71 rows.
+    // No behavioural divergence: the && chain yields 0 or 1 either way.
+    // NEGATIVE, and an instructive one (w7-bp).  Binding
+    // `const Hmx::Matrix3 &m = mMeshInverse.m;` and reading all nine elements
+    // through it collapses the diff from 71 rows to 19 and lifts raw 95.50 ->
+    // 96.82 / fuzzy 95.549 -> 96.871 -- but CANONICAL goes DOWN, 97.20089 ->
+    // 97.18304, because canonical forgives the 60 register rows it removes and
+    // charges the 6 offset rows it adds.  The image is genuinely inconsistent
+    // here: it reads the x row off a cached &mMeshInverse base (`lfs f13,
+    // 0x0(r30)`, target idx 179 -- the address `bs >> mMeshInverse` left in
+    // r30) and the y and z rows off `this` (`0x50/0x54/0x58(r27)` and
+    // `0x60/0x64/0x68(r27)`, idx 194-213).  Spelling every element through
+    // `mMeshInverse.m` reproduces the y/z half, which is six of the nine.
+    // Keep this spelling; do not "clean it up" with a reference.
     unsigned char isIdentity =
         mMeshInverse.v.x == 0 && mMeshInverse.v.y == 0 && mMeshInverse.v.z == 0;
     isIdentity = isIdentity && mMeshInverse.m.x.x == 1 && mMeshInverse.m.x.y == 0

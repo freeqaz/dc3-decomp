@@ -1750,6 +1750,45 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 // the SAME function: ham_xbox_r.map lists the mangled name at 826204d8 and
 // 8263a360 and the two shipped bodies are instruction-identical.
 
+// RESIDUAL (w7-bp): 96.99 canonical (95.1 raw), 1196 B, 203/203 instructions,
+// 67 arg diffs + 2 insert + 4 delete.  Unmoved by this lane; recorded so the
+// next one starts from the diagnosis rather than the symptom.
+//
+// THE WHOLE FUNCTION HANGS OFF ONE ALLOCATOR DECISION.  The image reserves r31
+// as a frame BASE -- `subi r31, r1, 0x10f0` at target index 2, computed before
+// the `stwu`, so r31 == the new sp -- and reaches every local through it
+// (`0x50(r31)`, `0x54(r31)`, `0x58(r31)`, `0x5c(r31)`, `0x60(r31)`,
+// `0x64(r31)`, `0x68(r31)`, `0x70(r31)`).  Our build spends r31 on an ordinary
+// variable and addresses the same slots off r1.  That single choice produces
+// 34 of the 71 register-swap rows (r1 <-> r31), the whole r21..r31 vs r22..r31
+// prologue difference (the image needs one EXTRA callee-saved register, r21,
+// because r31 is not available to it), and the frame-size row
+// (`stwu r1, -0x10f0` vs `-0x10e0`, index 4).  The SLOT ASSIGNMENT is
+// identical on both sides -- 0x58 loadedCompressedSize, 0x5c numVerts, 0x60
+// loadedVersion, 0x64 i8c, 0x68 i88, 0x70 the FormatString -- so this is not a
+// local-layout problem and reshuffling declarations cannot reach it.
+//
+// MEASURED NEGATIVE (w7-bp): splitting the six zero-initialisers into bare
+// declarations plus assignments written in the image's own store order
+// (loadedVersion, loadedCompressedSize, i8c, i88, i9, b3 -- target indices
+// 22/24/26/28 store 0x60, 0x58, 0x64, 0x68 where we store 0x60, 0x64, 0x58,
+// 0x68) is completely INERT: 97.0 / 95.1 and the identical 73 rows, with the
+// OFFSET_SWAP(0x58,0x64) still reported.  The store order is scheduling, not
+// statement order.
+//
+// The four remaining structural rows are also scheduling, not missing code:
+//   [29]/[31]  `lis r24, ?kAssertStr@@3PBDB@h` -- same instruction, two rows
+//              earlier on our side
+//   [141]/[144] ReadChunks argument setup: the image loads `lwz r4, 0x184(r22)`
+//              (mCompressedVerts) between the r6 and r5 moves, we load it after
+//   [175]      `mr r28, r21` -- the vertex loop counter's zero init, which our
+//              build folds into an earlier move
+//
+// NOT A DEFECT: rows 62 and 159 call different MakeString instantiations
+// (`$$BY0BD@...$$BY04` vs our `$$BY08...$$BY0DH@`) while referencing the SAME
+// `??_C@` string symbols on both sides.  Those instantiations are ICF-folded
+// and objdiff leaves both rows marked equal -- per-TU MakeString divergence is
+// not charged.  Do not chase it.
 void RndMesh::LoadVertices(BinStreamRev &d) {
     int numVerts;
     d >> numVerts;
