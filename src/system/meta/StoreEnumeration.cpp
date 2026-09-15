@@ -185,31 +185,17 @@ void XboxEnumeration::Poll() {
         //   * nested inverted ifs, `if (r != 0x12) { if (r != 0x65b) {...} ... }`
         //     with the error_no_more body as the outer fall-through.
         // Both emit byte-identical objects, so they are one experiment, not two.
-        if (overlappedResult == 0x12) {
-            goto error_no_more;
-        }
-
-        if (overlappedResult == 0x65b) {
-            goto handle_65b;
-        }
-
-        {
-            DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
-            // The middle argument is the 16-BIT-TRUNCATED error: 0x82E1D45C is
-            // `clrlwi r9, r3, 16`, and 0x54(r31) (arg 2) holds r9 while
-            // 0x50(r31) (arg 3) holds the full value.
-            TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)\n", (unsigned long)overlappedResult, (unsigned long)(WORD)extError, (unsigned long)extError);
-            // Only the MESSAGE arms clear mEnumerating.  The shared tail at
-            // .L_82E1D534/.L_82E1D540 is `bl TextStream::operator<<` /
-            // `stb r25, 0x1c(r29)` / `b .L_82E1D590`, and the epilogue label
-            // .L_82E1D590 itself carries NO store to 0x1c -- so a successful
-            // poll must leave mEnumerating set, which is what IsSuccess() reads.
+        switch (overlappedResult) {
+        case 0x12:
+            if (mOfferIDsBegin == 0) {
+                return;
+            }
+            // MakeString<unsigned int>, not <unsigned long>:
+            // ??$MakeString@I@@YAPBDPBDABI@Z at 0x82E1D530.
+            TheDebug << MakeString(" store enum: error no more files (%d)\n", (unsigned int)overlappedResult);
             mEnumerating = false;
-        }
-        return;
-
-    handle_65b:
-        {
+            return;
+        case 0x65b: {
             DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
             if ((WORD)extError == 0x12) {
                 return;
@@ -222,28 +208,31 @@ void XboxEnumeration::Poll() {
                 mEnumerating = false;
                 return;
             }
+            // .L_82E1D4FC computes `mOfferIDsBegin + mOfferIDCount` and then
+            // jumps INTO the continue_enum block at .L_82E1D570 -- the
+            // `mOfferIDsCur >= end` test and the Start() call are SHARED
+            // between the two paths, not duplicated.
+            if (mOfferIDsBegin == 0) {
+                return;
+            }
+            offersEnd = mOfferIDsBegin + mOfferIDCount;
+            goto test_cur;
         }
-
-    check_more_offers:
-        // .L_82E1D4FC computes `mOfferIDsBegin + mOfferIDCount` and then jumps
-        // INTO the continue_enum block at .L_82E1D570 -- the
-        // `mOfferIDsCur >= end` test and the Start() call are SHARED between the
-        // two paths, not duplicated.
-        if (mOfferIDsBegin == 0) {
+        default: {
+            DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
+            // The middle argument is the 16-BIT-TRUNCATED error: 0x82E1D45C is
+            // `clrlwi r9, r3, 16`, and 0x54(r31) (arg 2) holds r9 while
+            // 0x50(r31) (arg 3) holds the full value.
+            TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)\n", (unsigned long)overlappedResult, (unsigned long)(WORD)extError, (unsigned long)extError);
+            // Only the MESSAGE arms clear mEnumerating.  The shared tail at
+            // .L_82E1D534/.L_82E1D540 is `bl TextStream::operator<<` /
+            // `stb r25, 0x1c(r29)` / `b .L_82E1D590`, and the epilogue label
+            // .L_82E1D590 itself carries NO store to 0x1c -- so a successful
+            // poll must leave mEnumerating set, which is what IsSuccess() reads.
+            mEnumerating = false;
             return;
         }
-        offersEnd = mOfferIDsBegin + mOfferIDCount;
-        goto test_cur;
-
-    error_no_more:
-        if (mOfferIDsBegin == 0) {
-            return;
         }
-        // MakeString<unsigned int>, not <unsigned long>:
-        // ??$MakeString@I@@YAPBDPBDABI@Z at 0x82E1D530.
-        TheDebug << MakeString(" store enum: error no more files (%d)\n", (unsigned int)overlappedResult);
-        mEnumerating = false;
-        return;
     }
 
 continue_enum:
