@@ -108,6 +108,37 @@ void JoypadResetXboxPC(int pad) {
 // /fp:fast build rewrites the division to a reciprocal and then folds it into
 // the following constant, giving one `fmuls` against -279.3578.  Two rows per
 // clamp block remain on that account.
+//
+// NEGATIVE RESULT (w7-bl, 94.8 canonical): spelling the reciprocal as the
+// image's own literal -- `* 0.010526316f * -26539.0f`, i.e. exactly
+// __real@3c2c7692 followed by __real@c6cf5600 -- folds the same way, to the
+// same single `fmuls` against __real@c38badcf.  Identical 212-row
+// 33/3/5/4 split.  So it is not the DIVISION that MSVC is folding; it
+// reassociates two adjacent float literal multiplies under /fp:fast whatever
+// the first one is spelled as.  This is the whole of the missing 4th literal
+// (`lis r6, __real@41d80000` / `lfs f8, __real@c6cf5600`) and the r6/r9/r10
+// renumbering of the other three pool bases -- 5 rows, plus 1 per clamp block.
+//
+// RESIDUAL (w7-bl, 94.8 canonical, 45 of 212 rows) -- the rest, all measured:
+//  * the two `-0x8000 - (unsigned short)(int)` arguments (6 rows: 108-110 and
+//    140-142).  The image narrows the INPUT (`lhz r11, 0x56(r1)`) and passes
+//    the subtraction straight to r4; we load the whole fctiwz word
+//    (`lwz r11, 0x54(r1)`) and narrow the OUTPUT with a trailing `extsh`.
+//    Both are correct mod 2^16 and TranslateStick sign-extends its own
+//    argument at 0x825FCBE0, so the caller-side narrowing is optional and
+//    MSVC picks the other end.  Three spellings measured inert at 94.8 with
+//    an identical row split: a named `unsigned short` local for the fctiwz
+//    result; casting the whole argument `(unsigned short)(-0x8000 - u)`; and
+//    (w7-ap, earlier) a named `short` local, which is worse.
+//  * r24 <-> r25 (9 rows): the image copies `buttons` to r24 and `stick_ry`
+//    to r25, we do the reverse.  Both are plain `mr` saves of incoming
+//    argument registers in the prologue; nothing in the source orders them.
+//  * r9 <-> r10 (11 rows): the image colours `rt` r9 and `lt` r10 in the
+//    trigger tail, we do the reverse.  Swapping the two declarations in BOTH
+//    blocks (the kJoypadAnalog one and the tail one) is byte-inert.
+//  * r31 <-> r7 (5 rows): `rx` is held in the callee-saved r31 for us and in
+//    the volatile r7 in the image, which is the same one liveness decision
+//    seen twice.
 
 JoypadType ReadSingleXinputJoypad(
     int pad,
