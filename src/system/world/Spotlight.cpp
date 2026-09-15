@@ -505,47 +505,81 @@ void Spotlight::DrawShowing() {
     if (!mTargetLoaded)
         return;
     UpdateTransforms();
-    // Residual (21 rows, frame Δ +0x10): the image gives `tracker` the SAME
-    // frame word as `c` -- it builds the colour at r31+0x60 (82828D08..D18) and
-    // then passes r31+0x60 to ??0RndEnvironTracker (82828D44) and to
-    // ??1RndEnvironTracker (82828FB0).  Our build puts `c` at 0x60 and `tracker`
-    // at 0xa0, and that one extra word shifts `_at` 0x70->0x80 and the Sphere
-    // 0x80->0x90, which is every [off:-16] row.  Wrapping `c` in its own closing
-    // scope does NOT buy the reuse (measured: byte-identical, 97.60 both ways).
-    Hmx::Color c(Color());
-    Multiply(c, Intensity(), c);
-    sEnviron->SetAmbientColor(c);
-    RndEnvironTracker tracker(sEnviron, nullptr);
-    FOREACH (it, mAdditionalObjects) {
-        MILO_ASSERT(*it != this, 0x3E3);
-        if (*it != this)
-            (*it)->DrawShowing();
+    // w7-bo (2026-09-15): 97.56 -> 97.60 canonical, 21 mismatch rows -> 8.
+    // Lever: SIBLING block scopes for `c` and `tracker`.  The image gives
+    // `tracker` the SAME frame word as `c` -- it builds the colour at r31+0x60
+    // (82828D08..D18, target idx 87 `addi r9, r31, 0x60`) and then passes
+    // r31+0x60 to ??0RndEnvironTracker (82828D44, target idx 92 `addi r3, r31,
+    // 0x60`) and to ??1RndEnvironTracker (82828FB0).  With `c` at function
+    // scope our build put it at 0x60 and `tracker` at 0xa0; that one extra word
+    // shifted `_at` 0x70->0x80 and the Sphere 0x80->0x90, i.e. all fourteen
+    // [off:-16] diff_arg rows plus a frame Δ +0x10.
+    // Measured negatives:
+    //   - `c` alone in its own closing scope: byte-identical, 97.56 both ways
+    //     (the earlier note here claimed the reuse was therefore unobtainable;
+    //     it is not -- `tracker` has to be scoped TOO, so the two scopes are
+    //     siblings and MSVC coalesces the slots).
+    // Residual (8 rows) is a store-scheduling group around the tracker ctor --
+    // the image sinks `stw r8, 0x50(r31)` past the two `stw`s our build emits
+    // first, and hoists `addi r8, r10, 0x13c` (the RndEnviron vtable/field
+    // pointer) above them:
+    //   [95]  insert   stw  r7, 0x4(r9)        [96]  insert   stw  r6, 0x8(r9)
+    //   [102] delete   stw  r8, 0x0(r9)        [103] delete   stw  r7, 0x4(r9)
+    //   [104] delete   addi r8, r10, 0x13c     [105] diff_arg stw [reg:r6->r8, off:-8]
+    //   [109] replace  stw r8, 0x50(r31) vs addi r8, r10, 0x13c
+    //   [117] insert   stw  r8, 0x50(r31)
+    // Same instruction MULTISET on both sides -- only the schedule differs.
+    // Target spends r8 on `addi r8, r10, 0x13c` at idx 104, which forces
+    // `stw r8, 0x0(r9)` ahead of it at 102 and the whole c-copy lands in
+    // address order 0x0/0x4/0x8/0xc; our build keeps r8 holding the 0x1b0
+    // word longer, fires 0x4/0x8 as soon as their loads retire (95/96), and
+    // pushes the `addi`+home store past the fmuls.  Pure MSVC store
+    // scheduling driven by r8's live range.
+    // Further measured negatives, both 97.60 / 8 rows, byte-for-byte the same
+    // eight rows:
+    //   - `Hmx::Color c = Color();` copy-initialisation instead of direct-init
+    //   - `UpdateTransforms();` moved INSIDE the scope (the RB3 sibling's
+    //     shape -- rb3 Spotlight.cpp puts UpdateTransforms, c48 and tracker in
+    //     one block; that block shape is what we had at 97.56/21 rows, so the
+    //     sibling-scope split is the DC3-specific lever, not a port of rb3).
+    {
+        Hmx::Color c(Color());
+        Multiply(c, Intensity(), c);
+        sEnviron->SetAmbientColor(c);
     }
-    if (mLensMaterial) {
-        MILO_ASSERT(sDiskMesh, 0x3ED);
-        sDiskMesh->SetWorldXfm(mLensXfm);
-        sDiskMesh->SetMat(mLensMaterial);
-        sDiskMesh->DrawShowing();
-    }
-    auto& _ref3 = mBeam;
-    if (_ref3.mBeam && TheRnd.DrawMode() != 5) {
-        _ref3.mBeam->DrawShowing();
-    }
-    if (mFlare && mFlare->GetMat()) {
-        mFlare->Draw();
-    }
-    if (mTarget) {
-        if (mTargetShadow) {
-            RndDrawable *drawable = dynamic_cast<RndDrawable *>(mTarget.Ptr());
-            if (drawable) {
-                drawable->DrawShadow(WorldXfm(), 3.0f);
-            }
+    {
+        RndEnvironTracker tracker(sEnviron, nullptr);
+        FOREACH (it, mAdditionalObjects) {
+            MILO_ASSERT(*it != this, 0x3E3);
+            if (*it != this)
+                (*it)->DrawShowing();
         }
-        if (DoFloorSpot()) {
-            MILO_ASSERT(sDiskMesh, 0x40F);
-            sDiskMesh->SetWorldXfm(mFloorSpotXfm);
-            sDiskMesh->SetMat(mSpotMaterial);
+        if (mLensMaterial) {
+            MILO_ASSERT(sDiskMesh, 0x3ED);
+            sDiskMesh->SetWorldXfm(mLensXfm);
+            sDiskMesh->SetMat(mLensMaterial);
             sDiskMesh->DrawShowing();
+        }
+        auto& _ref3 = mBeam;
+        if (_ref3.mBeam && TheRnd.DrawMode() != 5) {
+            _ref3.mBeam->DrawShowing();
+        }
+        if (mFlare && mFlare->GetMat()) {
+            mFlare->Draw();
+        }
+        if (mTarget) {
+            if (mTargetShadow) {
+                RndDrawable *drawable = dynamic_cast<RndDrawable *>(mTarget.Ptr());
+                if (drawable) {
+                    drawable->DrawShadow(WorldXfm(), 3.0f);
+                }
+            }
+            if (DoFloorSpot()) {
+                MILO_ASSERT(sDiskMesh, 0x40F);
+                sDiskMesh->SetWorldXfm(mFloorSpotXfm);
+                sDiskMesh->SetMat(mSpotMaterial);
+                sDiskMesh->DrawShowing();
+            }
         }
     }
 }
