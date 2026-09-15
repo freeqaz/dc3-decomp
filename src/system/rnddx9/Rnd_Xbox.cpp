@@ -747,7 +747,11 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     bool wasSuspended = mSuspended;
     Resume();
     D3DSurface *savedRenderTarget = D3DDevice_GetRenderTarget(mD3DDevice, 0);
-    D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(mD3DDevice);
+    // Device() rather than mD3DDevice (w7-br): the image loads the device
+    // into r11 at 0x82618CF0 BEFORE `mr r27, r3` saves GetRenderTarget's
+    // result at 0x82618CF4; the member spelling loads it straight into r3
+    // after the mr.  The inline accessor's copy is what hoists the load.
+    D3DSurface *savedStencilSurface = D3DDevice_GetDepthStencilSurface(Device());
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, mBackBuffer);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, 0);
     // BUG FIX (w7-bl).  0x82618DAC-0x82618DB4 packs the clear colour as
@@ -760,28 +764,35 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     // the failure arm writing 0.25 into ALPHA instead of RED -- our modal
     // cleared to 0x0000197f (fully transparent blue) and our failure screen
     // to 0x3f000000 instead of 0xff3f0000.
-    Hmx::Color color(0, 0.5f, 0.1f);
+    // 100% (w7-br; w7-bl left it at 89.7 / 135 rows).  The five zeros --
+    // colour red, the fail arm's green/blue, Clear's Z and Resolve's ClearZ --
+    // are ONE function-local `static const float`.  MSVC folds its value into
+    // the `__real@00000000` pool but still treats it as memory: the page base
+    // is kept in callee-saved r30 (`lis r30` at 0x82618D20) and the value is
+    // RE-LOADED after the calls (`lfs f1` at 0x82618D30 and again at
+    // 0x82618E0C, past Clear / DrawStringScreen / DrawAll).  Any literal
+    // spelling (`0`, `0.0f`, `0.0`, mixed) is one value CSE'd into a
+    // callee-saved f31 with `fmr f1, f31` at both call sites, an extra
+    // stfd/lfd pair and `__savegprlr_26` for the image's `_25`: 93.6, and
+    // byte-inert across all four literal spellings.  Same idiom as
+    // RatioToDb's `static const float zero` (Decibels.cpp, 100%).
+    static const float zero = 0.0f;
+    Hmx::Color color(zero, 0.5f, 0.1f);
     if (t == Debug::kModalFail) {
         color.red = 0.25f;
-        color.green = 0;
-        color.blue = 0;
+        color.green = zero;
+        color.blue = zero;
     }
-    D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(color), 0, 0, 0);
+    D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(color), zero, 0, 0);
     Rnd::DrawStringScreen(cc, Vector2(0.025f, 0.025f), Hmx::Color(1, 1, 1, 1), true);
     RndOverlay::DrawAll(true);
     D3DDevice_Resolve(
-        mD3DDevice, 0, nullptr, FrontBuffer(), nullptr, 0, 0, nullptr, 0, 0, nullptr
+        mD3DDevice, 0, nullptr, FrontBuffer(), nullptr, 0, zero, nullptr, 0, 0, nullptr
     );
     if (mRegAlloc != 0) {
         mRegAlloc = (RegisterAlloc)0;
         D3DDevice_SetShaderGPRAllocation(mD3DDevice, 0, 0, 0);
     }
-    // w7-bl RESIDUAL (89.7%): the image keeps the `__real@00000000` PAGE BASE
-    // in a callee-saved GPR (r30 at 0x82618D20) and issues two `lfs` -- one
-    // for the colour components, one for this Resolve's ClearZ -- where MSVC
-    // gives us one `lfs` into a callee-saved f31 that spans D3DDevice_Clear.
-    // That is the whole r25..r31 vs r26..r31 renumbering: the image spends a
-    // GPR where we spend an FPR.  Allocator choice, no source lever found.
     Present();
     D3DDevice_SetRenderTarget_External(mD3DDevice, 0, savedRenderTarget);
     D3DDevice_SetDepthStencilSurface(mD3DDevice, savedStencilSurface);
