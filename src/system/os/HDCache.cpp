@@ -13,6 +13,27 @@
 #include "utl\MemStream.h"
 #include "utl\Option.h"
 
+// w8-g 2026-09-15: ??3CriticalSection@@SAXPAX@Z (24 B) reads 100.0% under the
+// normalized ruler with ZERO mismatched instructions, and 98.33% in report.json,
+// which charges relocation NAMES.  The whole charge is one string COMDAT: the
+// OBJ_MEM_OVERLOAD __FILE__ for CritSec.h.  The image's is
+//   ??_C@_0CM@BHOIGAFK@... = "e:\lazer_build_gmc1\system\src\os\CritSec.h"
+// and ours is
+//   ??_C@_0CM@HACIFEKI@... = "e:\lazer_build_gmc1\system\src\os/CritSec.h"
+// -- a FORWARD slash, because MSVC spells __FILE__ as the include search dir
+// plus the path exactly as written in the #include that first opened the file.
+// This file's own `#include "os\CritSec.h"` is not that include: os/CritSec.h is
+// inside the PCH closure (os/Debug.h -> os/ThreadCall.h, which is the one place
+// in the tree that spells it with a forward slash), so the PCH decides it for
+// all 574 PCH TUs at once.
+//
+// NOT actionable from here, and the direction matters: across the whole target
+// binary the FORWARD-slash literal appears in 5 objects (moviebink/BinkMovieSys,
+// synth_xbox/Synth, synth/VorbisReader, utl/MakeString, utl/MemMgr) and the
+// BACKSLASH one in exactly ONE -- this object.  So the shipped build opened
+// CritSec.h per TU and disagreed with itself; a single PCH cannot reproduce
+// that, and changing ThreadCall.h's spelling would fix this 24-byte row and
+// break the five that are currently right.
 HDCache TheHDCache;
 
 HDCache::HDCache()

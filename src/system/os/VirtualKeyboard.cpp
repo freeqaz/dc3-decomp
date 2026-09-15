@@ -42,6 +42,15 @@ DataNode VirtualKeyboard::OnShowKeyboardUI(const DataArray *array) {
     return ShowKeyboardUI(i2, i3, s4, s5, s6, i8);
 }
 
+// w8-g 2026-09-15: ?Terminate@VirtualKeyboard@@QAAXXZ reads 0.00% (4 B) and is
+// AT_LIMIT by construction, not by codegen.  In the image it is a linker ICF
+// thunk -- a single `b OnlyReturns` -- and the two sides of the accounting
+// disagree about where it lives: ham_xbox_r.map credits the symbol to
+// os:VirtualKeyboard.obj, while config/373307D9/splits.txt puts its ADDRESS
+// inside the Memcard_Xbox range (see the note beside MemcardXbox::Terminate in
+// os/Memcard_Xbox.cpp, which folded to the same address).  No source spelling of
+// an empty member function can produce a 4-byte branch-to-another-function; only
+// the linker can.  3 prior attempts, all refuted.
 void VirtualKeyboard::Terminate() {}
 
 void VirtualKeyboard::ClearKeyboardCallback() { mPobjKeyboardCallback = nullptr; }

@@ -30,6 +30,9 @@ void Rand::Seed(int seed) {
     // target's shape everywhere except the final opcode; written with `|` the
     // fusion costs ~10pp. Every `|` spelling tried (mask to 0xFFFF, unsigned
     // `j`, hoisting the shift to a local, both term orders) fused.
+    //
+    // w8-g 2026-09-15: floor stands at 87.00% (normalized, full ninja, 80 B),
+    // 11 recorded attempts.  Not re-litigated this lane.
     int s = seed;
     for (int i = 0; i < 0x100; i++) {
         int j = s * 0x41C64E6D + 0x3039;

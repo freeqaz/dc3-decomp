@@ -101,6 +101,10 @@ bool gbUseLowestMip; // +0xbd2
 // unidentified int-sized globals the target has at +0xbdc, +0xbe0 and +0xbe8,
 // which are what make its gInitted->gNumHeaps distance 0x13 where ours is
 // 0xb.)
+//
+// w8-g 2026-09-15: measured floor for that claim, normalized ruler, full ninja:
+//   MemPushTemp 91.46% (96 B), MemPopHeap 95.44% (180 B), MemPopTemp 95.44%
+//   (180 B).  Re-confirmed unchanged after this lane's other MemMgr work.
 static bool gInitted; // +0xbd1
 // +0xbd0. The fourth byte is NOT padding and it is not unrecoverable -- nothing
 // forms its address because nothing needs to: both of its users reach it by a
