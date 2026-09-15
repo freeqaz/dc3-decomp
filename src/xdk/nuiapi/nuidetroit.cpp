@@ -379,6 +379,19 @@ Unlock:
     // lengthens dwResult's live range past the whole tilt-state chain and
     // renumbers r28/r29 through it (12 register rows), and MSVC still folds the
     // two epilogues back into one.  The single `return dwResult` is kept.
+    //
+    // w7-bq, 2026-09-15: three more spellings, all 97.04 -> 95.53, all with the
+    // SAME 20-row signature (r28<->r29 across 8 rows, `li r30, 0x3e5` at 0xbd4
+    // deleted, the fmuls/rlwinm pair at 0xbc4 reordered).  (a) block-scoped
+    // second local `DWORD dwWaitedResult = LocalOverlapped.InternalLow;`
+    // returned from inside the if; (b) the same local hoisted to function scope
+    // with the other declarations, in case declaration order pinned it to r31;
+    // (c) no second local at all -- just an explicit `return dwResult;` as the
+    // last statement of the if, so both returns name ONE variable.  It is the
+    // RETURN STATEMENT inside the guarded block that costs it, not the extra
+    // variable: any of them ends dwResult's live range early and MSVC then
+    // declines to give it a callee-saved home at all.  Residual is 5 rows
+    // (the second epilogue) plus 2 register rows; nothing else is charged.
     if (pOverlapped == 0) {
         while (WaitForSingleObjectEx(LocalOverlapped.hEvent, INFINITE, 1) == 0xc0) {
         }
