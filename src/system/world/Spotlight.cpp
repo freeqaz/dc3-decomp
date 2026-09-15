@@ -1124,11 +1124,17 @@ void Spotlight::BuildBeam(BeamDef &def) {
     float radiusStepBotVal = (def.mBottomRadius - borderTopRadius) * botSectionLen;
 
     float halfWidth = topRadius;
-    int fi = 0;
     int lVar31 = -numSectionsTop;
-    short s = 6;
+    int c0 = 0;
     {
         for (unsigned int i = 0; i < (unsigned int)totalSections; i++) {
+            int c1 = c0 + 1;
+            int c2 = c0 + 2;
+            int c3 = c0 + 3;
+            int n0 = c0 + 4;
+            int n1 = c0 + 5;
+            int n2 = c0 + 6;
+            int n3 = c0 + 7;
             float y;
             float alpha;
             if (i == (unsigned int)(totalSections - 1)) {
@@ -1151,68 +1157,59 @@ void Spotlight::BuildBeam(BeamDef &def) {
             float rightInner = halfWidth - sideBorder;
 
             // Column 0: left edge
-            verts[i * 4].pos.Set(-halfWidth, 0.0f, negY);
-            verts[i * 4].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
-            verts[i * 4].tex.Set(0.0f, yFrac);
+            verts[c0].pos.Set(-halfWidth, 0.0f, negY);
+            verts[c0].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
+            verts[c0].tex.Set(0.0f, yFrac);
 
             // Column 1: left inner.  Target idx 193/208 is
             // `fneg f28, f27` / `fsel f28, f28, f27, f0` -- keep leftInner
             // while -leftInner >= 0, else 0, i.e. clamp to <= 0.
             leftInner = -leftInner < 0.0f ? 0.0f : leftInner;
-            verts[i * 4 + 1].pos.Set(leftInner, 0.0f, negY);
-            verts[i * 4 + 1].color.Set(alpha, alpha, alpha, alpha);
-            verts[i * 4 + 1].tex.Set(borderRatio, yFrac);
+            verts[c1].pos.Set(leftInner, 0.0f, negY);
+            verts[c1].color.Set(alpha, alpha, alpha, alpha);
+            verts[c1].tex.Set(borderRatio, yFrac);
 
             // Column 2: right inner.  Target idx 210/222 is
             // `fneg f27, f26` / `fsel f27, f27, f0, f26` -- the OTHER way
             // round from column 1: 0 while -rightInner >= 0, else rightInner,
             // i.e. clamp to >= 0.  We had this clamp inverted.
             rightInner = -rightInner < 0.0f ? rightInner : 0.0f;
-            verts[i * 4 + 2].pos.Set(rightInner, 0.0f, negY);
-            verts[i * 4 + 2].color.Set(alpha, alpha, alpha, alpha);
-            verts[i * 4 + 2].tex.Set(1.0f - borderRatio, yFrac);
+            verts[c2].pos.Set(rightInner, 0.0f, negY);
+            verts[c2].color.Set(alpha, alpha, alpha, alpha);
+            verts[c2].tex.Set(1.0f - borderRatio, yFrac);
 
             // Column 3: right edge
-            verts[i * 4 + 3].pos.Set(halfWidth, 0.0f, negY);
-            verts[i * 4 + 3].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
-            verts[i * 4 + 3].tex.Set(1.0f, yFrac);
+            verts[c3].pos.Set(halfWidth, 0.0f, negY);
+            verts[c3].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
+            verts[c3].tex.Set(1.0f, yFrac);
 
             if (i != (unsigned int)(totalSections - 1)) {
-                short c0 = s - 6;
-                short c1 = s - 5;
-                short c2 = s - 4;
-                short c3 = s - 3;
-                short n0 = s - 2;
-                short n1 = s - 1;
-                short n2 = s;
-                short n3 = s + 1;
-
                 // Target 0x8282DAEC is `clrlwi. r9, r18, 31` / `beq .L_8282DBAC`
                 // -- the ODD arm is the fall-through, so the source tests
                 // `i & 1` and the even arm is the else.
                 if (i & 1) {
-                    faces[fi].Set(c0, n0, n1);
-                    faces[fi + 1].Set(c0, n1, c1);
-                    faces[fi + 2].Set(c1, n1, c2);
-                    faces[fi + 3].Set(c2, n1, n2);
-                    faces[fi + 4].Set(c2, n3, c3);
-                    faces[fi + 5].v1 = c2;
+                    faces[i * 6].Set(c0, n0, n1);
+                    faces[i * 6 + 1].Set(c0, n1, c1);
+                    faces[i * 6 + 2].Set(c1, n1, c2);
+                    faces[i * 6 + 3].Set(c2, n1, n2);
+                    faces[i * 6 + 4].Set(c2, n3, c3);
+                    faces[i * 6 + 5].v1 = c2;
                 } else {
-                    faces[fi].Set(c0, n0, c1);
-                    faces[fi + 1].Set(c1, n0, n1);
-                    faces[fi + 2].Set(c1, n2, c2);
-                    faces[fi + 3].Set(c1, n1, n2);
-                    faces[fi + 4].Set(c2, n2, c3);
-                    faces[fi + 5].v1 = c3;
+                    faces[i * 6].Set(c0, n0, c1);
+                    faces[i * 6 + 1].Set(c1, n0, n1);
+                    faces[i * 6 + 2].Set(c1, n2, c2);
+                    faces[i * 6 + 3].Set(c1, n1, n2);
+                    faces[i * 6 + 4].Set(c2, n2, c3);
+                    faces[i * 6 + 5].v1 = c3;
                 }
-                faces[fi + 5].v2 = n2;
-                faces[fi + 5].v3 = n3;
+                faces[i * 6 + 5].v2 = n2;
+                faces[i * 6 + 5].v3 = n3;
 
                 if (i == (unsigned int)(totalSections - 2)) {
-                    faces[fi].Set(c0, n0, c1);
-                    faces[fi + 1].Set(c1, n0, n1);
-                    faces[fi + 4].Set(c2, n2, n3);
-                    faces[fi + 5].Set(c3, c2, n3);
+                    faces[i * 6].Set(c0, n0, c1);
+                    faces[i * 6 + 1].Set(c1, n0, n1);
+                    faces[i * 6 + 4].Set(c2, n2, n3);
+                    faces[i * 6 + 5].Set(c3, c2, n3);
                 }
             }
 
@@ -1226,8 +1223,7 @@ void Spotlight::BuildBeam(BeamDef &def) {
             }
 
             lVar31++;
-            s += 4;
-            fi += 6;
+            c0 += 4;
         }
     }
 
