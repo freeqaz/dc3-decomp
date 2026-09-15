@@ -801,6 +801,12 @@ void DxRnd::ModalDraw(Debug::ModalType t, const char *cc) {
     }
 }
 
+// 100% (w7-br; w7-bl left it at 95.2 / 96 rows).  Four levers, each noted
+// at its site: the tile rects are `i * tile` (a strength-reduced IV, two
+// adds per iteration), mWidth is stored inside each branch of the aspect
+// test, the CreateTexture calls go through the XDK's inline
+// IDirect3DDevice9_CreateTexture wrapper (d3d9.h), and the front-buffer
+// clear size multiplies mWidth's term by mHeight's.
 void DxRnd::InitBuffers() {
     PhysMemTypeTracker tracker("D3D(phys):DxRndBuffer");
     memset(&mPresentParams, 0, sizeof(D3DPRESENT_PARAMETERS));
@@ -830,15 +836,18 @@ void DxRnd::InitBuffers() {
     }
     int tileHeight = mHeight;
     int tileWidth;
-    int width;
+    // mWidth is assigned in BOTH arms (w7-br): MSVC tail-merges the two
+    // stores into the one `stw r7, 0x40(r30)` at 0x826190DC, and that is
+    // what puts the quotient in r7 with the shift in place on r11
+    // (0x826190BC-0x826190C4); a `width` local stored after the join
+    // colours them the other way round and hoists the zero `li r24`.
     if (mVideoMode.fIsHiDef != 0 || mLowRes != 0) {
-        width = (mHeight << 4) / 9;
+        mWidth = (mHeight << 4) / 9;
         tileWidth = (tileHeight << 4) / 9;
     } else {
-        width = (mHeight << 2) / 3;
+        mWidth = (mHeight << 2) / 3;
         tileWidth = (tileHeight << 2) / 3;
     }
-    mWidth = width;
     if (!lowResFlag) {
         mNumTiles = 2;
         // 0x826190EC-0x8261916C: two tile rects covering the frame.  Bit 1 of
@@ -846,32 +855,29 @@ void DxRnd::InitBuffers() {
         // half height) over the default vertical one (side-by-side tiles,
         // half width, full height).  The loop re-reads mNumTiles from the
         // member every iteration (`lwz r8, 0x3b0(r30)`).
-        // w7-bl RESIDUAL (95.2%): the image computes `offset + tile` TWICE in
-        // each of the two rect loops (0x82619110 `add r8, r10, r23` and
-        // 0x82619124 `add r10, r10, r23`), where MSVC CSEs ours into one add
-        // (loop 1) or an add plus `mr` (loop 2).  The rest is a uniform
-        // renumbering of the callee-saved set: the image gets by with
-        // __savegprlr_19 and we need _18, i.e. one more simultaneously-live
-        // value, which is what shifts r25->r22, r27->r24, r24->r25, r26->r27.
-        int i = 0;
-        int offset = 0;
+        // w7-br: the rect edges are `i * tile` and `(i + 1) * tile`, NOT a
+        // running `offset`.  MSVC strength-reduces `i * tile` into an IV
+        // (r10, stepped by `add r10, r10, r23` at 0x82619124) and computes
+        // `(i + 1) * tile` as a SEPARATE `add r8, r10, r23` at 0x82619110 --
+        // the two adds w7-bl saw.  An explicit `offset` local with
+        // `y2 = offset + tile; offset += tile` is one value-numbered add
+        // however it is spelled (reading y2 back from the just-stored y1 is
+        // forwarded and CSE'd the same way): 95.2 -> 96.9 from this alone.
         if (mFlags & 2) {
             tileHeight = tileHeight / 2;
-            for (; i < mNumTiles; i++) {
+            for (int i = 0; i < mNumTiles; i++) {
                 mTileRects[i].x1 = 0;
-                mTileRects[i].y1 = offset;
+                mTileRects[i].y1 = i * tileHeight;
                 mTileRects[i].x2 = tileWidth;
-                mTileRects[i].y2 = offset + tileHeight;
-                offset += tileHeight;
+                mTileRects[i].y2 = (i + 1) * tileHeight;
             }
         } else {
             tileWidth = tileWidth / 2;
-            for (; i < mNumTiles; i++) {
-                mTileRects[i].x1 = offset;
+            for (int i = 0; i < mNumTiles; i++) {
+                mTileRects[i].x1 = i * tileWidth;
                 mTileRects[i].y1 = 0;
-                mTileRects[i].x2 = offset + tileWidth;
+                mTileRects[i].x2 = (i + 1) * tileWidth;
                 mTileRects[i].y2 = tileHeight;
-                offset += tileWidth;
             }
         }
     }
@@ -924,47 +930,67 @@ void DxRnd::InitBuffers() {
         );
     }
     EndMemTrackObjectName();
+    // w7-br: the XDK inline wrapper (d3d9.h) with `&member` as its out
+    // pointer.  The `tracker` local gives this function an EH state, and
+    // an inlined callee that uses a computed `&member` twice then gets a
+    // dead home-slot store of that address before the call (`addi r11,
+    // r30, 0x390` + `stw r11, 0x58(r31)` at 0x826193C8/0x826193DC, and
+    // again for 0x394 and 0x358); the loop's `&mFrontBuffers[i]` is an IV
+    // (r28) and gets none.  The wrapper's null test is the `subic/subfe/
+    // and.` against E_OUTOFMEMORY held in r29 (0x826193F4-0x82619408).
+    // Assigning the member from D3DDevice_CreateTexture directly and
+    // DX_ASSERT-ing it also CSEs D3DFMT_A8R8G8B8 into a callee-saved r19
+    // (`__savegprlr_18` for the image's `_19`) where the image
+    // re-materialises `lis/ori` per call.  96.9 -> 99.6.
     {
         BeginMemTrackObjectName("CreateTexture:PreProcessBuffer");
-        mPreProcessBuffer = static_cast<D3DTexture *>(D3DDevice_CreateTexture(
-            mWidth, mHeight, 1, 1, 0, D3DFMT_A8R8G8B8, 0, D3DRTYPE_TEXTURE
-        ));
-        DX_ASSERT(mPreProcessBuffer, 0x390);
+        HRESULT hr = IDirect3DDevice9_CreateTexture(
+            mD3DDevice, mWidth, mHeight, 1, 0, D3DFMT_A8R8G8B8, 0, &mPreProcessBuffer, NULL
+        );
+        DX_ASSERT_CODE(hr, 0x390);
         EndMemTrackObjectName();
     }
     {
         BeginMemTrackObjectName("CreateTexture:PostProcessBuffer");
-        mPostProcessBuffer = static_cast<D3DTexture *>(D3DDevice_CreateTexture(
-            mWidth, mHeight, 1, 1, 0, D3DFMT_A8R8G8B8, 0, D3DRTYPE_TEXTURE
-        ));
-        DX_ASSERT(mPostProcessBuffer, 0x394);
+        HRESULT hr = IDirect3DDevice9_CreateTexture(
+            mD3DDevice, mWidth, mHeight, 1, 0, D3DFMT_A8R8G8B8, 0, &mPostProcessBuffer, NULL
+        );
+        DX_ASSERT_CODE(hr, 0x394);
         EndMemTrackObjectName();
     }
     for (int i = 0; i < 2; i++) {
         BeginMemTrackObjectName("CreateTexture:FrontBuffer");
-        mFrontBuffers[i] = static_cast<D3DTexture *>(D3DDevice_CreateTexture(
-            mWidth, mHeight, 1, 1, 0, D3DFMT_A8R8G8B8, 0, D3DRTYPE_TEXTURE
-        ));
-        DX_ASSERT(mFrontBuffers[i], 0x39C);
+        // BUG FIX (w7-br): the front buffers are D3DFMT_LE_A8R8G8B8
+        // (`ori r8, r8, 0x106` at 0x82619518 -> 0x18280106), not
+        // D3DFMT_A8R8G8B8 (0x18280186), which is what the pre/post-process
+        // buffers use.  og-dc3 has the same wrong format.
+        HRESULT hr = IDirect3DDevice9_CreateTexture(
+            mD3DDevice, mWidth, mHeight, 1, 0, D3DFMT_LE_A8R8G8B8, 0, &mFrontBuffers[i], NULL
+        );
+        DX_ASSERT_CODE(hr, 0x39C);
         EndMemTrackObjectName();
     }
 
     BeginMemTrackObjectName("CreateTexture:FrontBufferDepth");
-    mFrontBufferDepth = static_cast<D3DTexture *>(D3DDevice_CreateTexture(
-        mWidth, mHeight, 1, 1, 0, D3DFMT_D24FS8, 0, D3DRTYPE_TEXTURE
-    ));
-    DX_ASSERT(mFrontBufferDepth, 0x3A2);
+    HRESULT hr = IDirect3DDevice9_CreateTexture(
+        mD3DDevice, mWidth, mHeight, 1, 0, D3DFMT_D24FS8, 0, &mFrontBufferDepth, NULL
+    );
+    DX_ASSERT_CODE(hr, 0x3A2);
     EndMemTrackObjectName();
     PostDeviceReset();
     // 0x8261963C-0x82619658: srawi+addze on BOTH terms -- a signed divide by
     // 32, not an arithmetic shift.  With `>> 5` MSVC fuses one of them into a
     // single `extlwi` and the addze pair disappears.
-    int temp27 = ((((mHeight + 0x1F) / 32) * ((mWidth + 0x1F) / 32)) << 0xC);
+    // w7-br: mWidth's term FIRST.  MSVC evaluates the right operand first,
+    // so this is what loads mHeight into r11 at 0x8261962C ahead of mWidth
+    // into r10 at 0x82619630.  w7-bl measured the swap as inert at 95.2;
+    // with the register set settled by the levers above it is the last two
+    // rows (99.6 -> 100).
+    int temp27 = ((((mWidth + 0x1F) / 32) * ((mHeight + 0x1F) / 32)) << 0xC);
     // w7-bl: `rect` is hoisted OUT of the loop on purpose.  Scoped inside the
     // body it shares r1+0x58 with the MakeString scratch slot; the image keeps
     // the two apart (Symbol temp at 0x5c, D3DLOCKED_RECT at 0x60), and hoisting
-    // reproduces that (-3 rows).  Swapping the mullw operands above to match
-    // the image's mHeight/mWidth LOAD order is inert (measured, 0 rows).
+    // reproduces that (-3 rows).
     D3DLOCKED_RECT rect;
     for (int i = 0; i < 2; i++) {
         D3DTexture_LockRect(mFrontBuffers[i], 0, &rect, nullptr, 0);
