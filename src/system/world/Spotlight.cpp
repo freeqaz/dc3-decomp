@@ -1213,6 +1213,32 @@ void Spotlight::BuildBeam(BeamDef &def) {
     def.mBeam->SetTransParent(parent, false);
 }
 
+// w7-bo (2026-09-15): 90.22 -> 91.83 canonical, 1140 B. The two TAIL uses of
+// the length read `def.mLength` fresh -- the image reloads it at 0x8282D?? for
+// verts[31].tex (`lfs f0, 0x8(r29)` / `fdivs f0, f29, f0`, target idx 257-258)
+// and again for verts[47].pos.y (`lfs f13, 0x8(r29)`, idx 263). The duplicated
+// verts[15]/verts[31] writes below are REAL: the image writes both twice, the
+// second verts[31] differing only in tex.y (1.0 vs borderY/mLength).
+//
+// MEASURED NEGATIVES, each alone from the 91.83 state:
+//  - doing the same for the two IN-LOOP uses (`borderY / def.mLength` in
+//    verts[s-1].tex and `def.mLength` as verts[s+15].pos.y): 61.5. This is
+//    what the image does -- it reloads and re-divides inside the loop, and the
+//    change lands the callee-saved FPR count EXACTLY (`__savefpr_23` both
+//    sides, vs _21 here) -- but MSVC then rebiases the vertex byte cursor and
+//    the whole loop body loses alignment. Registering it as a negative, not as
+//    "unfixable": something that fixes the cursor bias should let it back in.
+//  - naming the six face indices as `unsigned short` locals (47.3), even
+//    though the image's arithmetic is plainly 16-bit modular off `s`
+//    (`addis r10, r30, 0x1` / `subi r10, r10, 0x11` = s + 0xFFEF; s-1 is
+//    `add r8, r30, r25` with r25 = 0xffff hoisted at 0x8282C???). Keep the
+//    inline expressions in Set().
+//
+// RESIDUAL: the image's vertex byte cursor r28 sits at verts[s-1] (`li r28,
+// 0x600`) and derives the other two rows with `subi r10, r28, 0x600` /
+// `addi r9, r28, 0x600`; ours sits at verts[s] (`li r30, 0x660`) and folds the
+// row offset into the store displacement (-0xc00/-0x630/-0x60). Same code,
+// different bias -- that is where most of the 113 diff_arg rows live.
 void Spotlight::BuildCone(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x5B6);
     def.mIsCone = true;
@@ -1223,6 +1249,10 @@ void Spotlight::BuildCone(BeamDef &def) {
     verts.resize(0x30);
     faces.resize(60);
 
+    // The image never caches mLength: it reloads `lfs ..., 0x8(r29)` at every
+    // use (0x8282D0xx in the loop, and again at 0x8282D2xx for verts[31]/[47])
+    // and recomputes borderY/mLength rather than holding it.  A `float len`
+    // local costs two callee-saved FPRs (savefpr_21 vs the image's _23).
     float len = def.mLength;
     float bottomBorderLen = def.mBottomBorder * len;
     bottomBorderLen = (float)__fsel(len - bottomBorderLen, bottomBorderLen, len);
@@ -1274,9 +1304,9 @@ void Spotlight::BuildCone(BeamDef &def) {
 
     verts[31].pos.Set(borderRadius, borderY, 0.0f);
     verts[31].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
-    verts[31].tex.Set(1.0f, borderY / len);
+    verts[31].tex.Set(1.0f, borderY / def.mLength);
 
-    verts[47].pos.Set(def.mBottomRadius, len, 0.0f);
+    verts[47].pos.Set(def.mBottomRadius, def.mLength, 0.0f);
     verts[47].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
     verts[47].tex.Set(1.0f, 1.0f);
 
