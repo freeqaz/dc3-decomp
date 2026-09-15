@@ -26,6 +26,18 @@ ScopedState<T, InitVal, DestroyVal>::~ScopedState() {
 //     split carved into .text.  It is not a function at all and has no source
 //     spelling; unscoreable by construction.
 // Both measured 0.0%; neither is fixable from this file.
+//
+// w8-g 2026-09-15 addendum on fn_825CE40C: it does NOT disassemble as data.  Its
+// ten instructions are a well-formed EH funclet --
+//   subi r31, r12, 0x21e0 / mflr r12 / stw r12, -0x8(r1) / stwu r1, -0x60(r1) /
+//   addi r3, r31, 0x2194 / bl ??1MemHeapTracker@@QAA@XZ / epilogue
+// -- i.e. the cleanup for a `MemHeapTracker` local at +0x2194 of a parent whose
+// frame is 0x21e0 (8.4 KB, so a function with a multi-kilobyte stack buffer).
+// No function in this file declares a MemHeapTracker, and nothing in our build
+// emits a funclet of that shape, so the row is a genuinely missing cleanup path
+// rather than carved data.  It is still not scoreable in isolation (objdiff
+// flags UNVERIFIABLE_PAIRING and our side is empty): the lever is finding which
+// Debug function should hold the tracker, not editing the funclet.
 template ScopedState<bool, 1, 0>::~ScopedState();
 
 #include "os\Debug.h"

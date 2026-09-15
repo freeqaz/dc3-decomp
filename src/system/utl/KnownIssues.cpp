@@ -61,6 +61,14 @@ DataNode KnownIssues::OnDisplayKnownIssues(DataArray *msg) {
     return 0;
 }
 
+// w8-g: 88.89% (normalized, full ninja).  Residue is one scheduling pair: the
+// image stores the float FIRST and only then masks the bool into the register
+// the store freed (`stfs f0, 0x10(r11)` / `clrlwi r11, r10, 24`); we mask into
+// r10 before the store.  REFUTED: rewriting the body as an explicit if/else that
+// assigns `ret` in both arms -- which does reproduce the image's `mr r10, r9`
+// on the not-taken path and drops an instruction -- leaves the score exactly
+// unchanged at 88.89, because the clrlwi/stfs pair simply swaps places.  Left in
+// the shorter form.
 DataNode KnownIssues::OnToggleLastKnownIssues(DataArray *) {
     float f10 = 0;
     if (TheKnownIssues.unk_0x10 == 0)

@@ -12,6 +12,15 @@
 #include "xdk\xbdm\xbdm.h"
 #include <vector>
 
+// w8-g 2026-09-15: fn_827EA01C (40 B, 93.90% normalized) is an EH funclet and is
+// NOT adjudicable from this unit.  objdiff flags it UNVERIFIABLE_PAIRING -- the
+// two sides were paired by masked byte signature, not by name -- and the two
+// mismatched rows say the parent frames disagree: the image's is 0x160
+// (`subi r31, r12, 0x160`) where ours is 0x80, and the image's funclet destroys
+// a String (`addi r3, r31, 0x80` / `bl ??1String@@UAA@XZ`) where ours frees a
+// DataArray (`lwz r3, 0x50(r31)` / `bl ??3DataArray@@SAXPAX@Z`).  So it is a
+// funclet of a DIFFERENT parent function in the same object; nothing can be
+// fixed here until the parent it belongs to is matched.
 Locale TheLocale;
 
 // ~Locale() is inline in Locale.h (compiler inlines it into atexit destructor)

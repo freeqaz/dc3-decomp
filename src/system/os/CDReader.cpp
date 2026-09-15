@@ -129,12 +129,22 @@ bool CDReadExternal(void *&v, int i, u64 u) {
         // `LONG l = u;` we stored the truncated LOW 32 bits there instead and
         // handed the API the low half twice.  The `u64` parameter is also homed
         // (`std r5, 0xa0(r1)`) and the LONG argument reloaded out of it
-        // (`lwz r4, 0xa4(r1)`) -- RESIDUAL (w7-az, 88.46, 3 rows): we keep the
-        // offset in a callee-saved register and truncate with `clrrwi` instead,
-        // so the two home instructions are missing.  An explicit `(LONG)` cast on
-        // the second argument is byte-inert.
+        // (`lwz r4, 0xa4(r1)`) -- w8-g CLOSED (88.46 -> 100.0).  w7-az was right
+        // that an explicit `(LONG)` cast is byte-inert: on PPC64 the low dword of
+        // `u` is already the low half of its register, so MSVC truncates with a
+        // no-op `clrrwi` and never homes the parameter.  Spelling the truncation
+        // as the big-endian LOAD of that dword -- `((const LONG *)&u)[1]` -- takes
+        // the parameter's address, which is what forces `std r5, 0xa0(r1)` and
+        // makes the argument come back as `lwz r4, 0xa4(r1)`.  It also flips the
+        // r29/r30 assignment order to the image's.  Same value on big-endian;
+        // native gets the plain cast.
         u64 offset = u;
-        SetFilePointer(v, (LONG)u, (LONG *)&offset, 0);
+#ifdef HX_NATIVE
+        LONG low = (LONG)u;
+#else
+        LONG low = ((const LONG *)&u)[1];
+#endif
+        SetFilePointer(v, low, (LONG *)&offset, 0);
         return true;
     }
 }

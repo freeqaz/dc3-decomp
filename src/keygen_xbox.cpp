@@ -188,6 +188,18 @@ void supershuffle(char *c) {
 
 extern volatile long lbl_82F5E180;
 
+// w8-g: opaquePredicate 75.00%, random 83.33% (normalized, full ninja), and the
+// two share one cause, so they stand or fall together.  The image materializes a
+// global's address in three instructions -- `lis r11, sym@ha` / `addi r11, r11,
+// sym@l` / `lwz r10, 0(r11)` -- where we fold the displacement into the load:
+// `lis r11, sym@ha` / `lwz r10, sym@l(r11)`.  REFUTED as a config change:
+// `/Od /Os` on this object reproduces the image's REGISTER ALLOCATION exactly but
+// still folds the addi, and it moves 16 keygen functions that are already 100%
+// under plain `/Od` off their match -- a net loss even if it had worked.  About
+// 40 compiler-flag combinations and 15 source spellings were tried; the only
+// construct that makes MSVC emit the split form is a struct/array member at a
+// NON-ZERO offset, and an offset of 0 always folds.  `volatile`, an explicit
+// `&lbl`, a local pointer copy and an inline-asm barrier are all inert.
 void opaquePredicate() {
     lbl_82F5E180++;
 }

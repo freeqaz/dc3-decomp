@@ -153,7 +153,25 @@ public:
     void Poll();
     void AddTask(Task *, float);
     void ClearTasks();
-    void ResetTaskTime(float);
+    // w8-g: defined IN-CLASS on purpose.  MSVC/Xenon propagates a same-TU
+    // callee's real register-clobber set into its callers, so an out-of-line
+    // definition in Task.cpp let TaskMgr::ResetTaskTime keep `this` in r9 and
+    // the second float in fr2 across both calls.  The target saves r31/fr31
+    // instead, i.e. it had NO clobber information -- which is what a deferred
+    // in-class body gives you.  Measured: out-of-line 73.6%, in-class 100%.
+    void ResetTaskTime(float time) {
+        float delta = time - mTime;
+        for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != mTasks.end();
+             ++it) {
+            it->mStartTime += delta;
+        }
+        for (std::list<TaskInfo>::iterator it = mAddedTasks.begin();
+             it != mAddedTasks.end(); ++it) {
+            it->mStartTime += delta;
+        }
+        mTime += delta;
+        mLastTime += delta;
+    }
 
     void SetTime(float f, bool b) {
         mLastTime = b ? f : mTime;

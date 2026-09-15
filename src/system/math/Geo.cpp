@@ -7,6 +7,7 @@
 #include "obj\DataFunc.h"
 #include "os\System.h"
 #include "utl/BinStream.h"
+#include "utl/TextStream.h"
 #include <cfloat>
 #include <cmath>
 
@@ -24,6 +25,15 @@
 // it and the row reads 0.0%.  The lever is a real `ts << someVector<Vector2>`
 // use in this TU (a Print/Dump path), not an explicit instantiation -- adding
 // the include alone emits nothing.
+//
+// w8-g 2026-09-15 CORRECTION: the last sentence is REFUTED.  An explicit
+// instantiation does emit it and closes the row (0% -> 100%, measured by full
+// ninja).  The reason it looked impossible is that the real blocker was one
+// missing declaration: `TextStream &operator<<(TextStream &, const Vector2 &)`
+// is DEFINED in Rot.cpp (100%, ham_xbox_r.map -> math:Rot.obj) beside its
+// Vector3 twin but was never declared in math/Vec.h, so the element-wise body of
+// the vector<> inserter could not compile in any TU.  Declaration added to
+// Vec.h; the instantiation is at the bottom of this file.
 
 float gUnitsPerMeter = 39.370079f;
 static float gBSPPosTol = 0.01f;
@@ -1430,3 +1440,11 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
         out.points = tempPoints;
     }
 }
+
+#ifndef HX_NATIVE
+// w8-g: explicit instantiation of the TextStream vector<> inserter, the 176 B
+// row at 0x825346e0 that ham_xbox_r.map credits to math:Geo.obj.  The w8-e note
+// above concluded only a real `ts << vec` use could emit it; an explicit
+// instantiation is the cheaper test of the same claim.
+template TextStream &operator<<(TextStream &, const std::vector<Vector2> &);
+#endif

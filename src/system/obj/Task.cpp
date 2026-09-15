@@ -400,19 +400,6 @@ void TaskTimeline::ClearTasks() {
     }
 }
 
-void TaskTimeline::ResetTaskTime(float time) {
-    float delta = time - mTime;
-    for (std::list<TaskInfo>::iterator it = mTasks.begin(); it != mTasks.end(); ++it) {
-        it->mStartTime += delta;
-    }
-    for (std::list<TaskInfo>::iterator it = mAddedTasks.begin(); it != mAddedTasks.end();
-         ++it) {
-        it->mStartTime += delta;
-    }
-    mTime += delta;
-    mLastTime += delta;
-}
-
 void TaskTimeline::AddTask(const TaskInfo &info) {
     if (info.mStartTime > mTime || info.mTask) {
         if (mPollingTask) {

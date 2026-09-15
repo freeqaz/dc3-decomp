@@ -140,3 +140,11 @@ WaveFileData::WaveFileData(WaveFile &wf)
     : IDataChunk(wf.PrepareToProvideData()), mWaveFile(wf) {}
 
 WaveFileData::~WaveFileData() {}
+
+#ifndef HX_NATIVE
+// w8-g: ??$__uninitialized_copy@PBVSampleMarker@@PAV1@@ (96 B) at 0x827f5a88 is
+// inside this unit's .text split range with no odr-use in the TU.
+template SampleMarker *std::__uninitialized_copy<const SampleMarker *, SampleMarker *>(
+    const SampleMarker *, const SampleMarker *, SampleMarker *, const std::__false_type &
+);
+#endif
