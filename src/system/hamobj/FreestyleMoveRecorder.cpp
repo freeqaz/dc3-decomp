@@ -746,72 +746,64 @@ float FreestyleMoveRecorder::CompareSkeletonPositions(
 float FreestyleMoveRecorder::CompareSkeletonJointDisplacement(
     const FreestyleMoveFrame *frames, int frameIdx, const BaseSkeleton *liveSkel, float &outTotalWeight
 ) const {
-    // Clamped prev-frame index: max(frameIdx - 1, 0).
-    // NEGATIVE RESULT (w7-aq, 2026-09-14): the image's branchless clamp keeps
-    // the constant 0 in a register and shifts it (`li r10,0` / `srwi r10,r10,31`
-    // / `subfc r3,r11,r10` / `subfe r10,r10,r6`, target idx 9/18/15/22) where we
-    // fold it (`subfic`/`addme`) -- 4 rows.  Neither `Max(frameIdx - 1, 0)` nor
-    // the inverted `frameIdx - 1 < 0 ? 0 : frameIdx - 1` recovers it: both drop
-    // to 87.3 by emitting a different sequence entirely.  `int zeroIdx = 0;`
-    // with the comparison against the variable is byte-inert (MSVC folds it).
-    int clampedPrev = frameIdx - 1 > 0 ? frameIdx - 1 : 0;
+    // Clamped prev-frame index: max(frameIdx - 1, 0).  The constant sits on
+    // the LEFT of the compare: `0 < x` keeps the 0 in a register through the
+    // branchless mask idiom (`li r10,0` / `subfc r3,r11,r10` / `srwi r10,r10,31`
+    // / `subfe r10,r10,r6` at 8252439C..825243D0), whereas `x > 0` lets the
+    // backend fold it to `subfic`/`addme` (4 rows, w7-aq).  `Max(x, 0)` is a
+    // third shape again (`subi r10,r10,1`).  -- w7-bv, 89.74 -> 100.0
+    int clampedPrev = 0 < frameIdx - 1 ? frameIdx - 1 : 0;
     float totalScore = 0.0f;
     float totalWeight = 0.0f;
     unsigned int i = 0;
-    // RESIDUAL (w7-aq, 89.72 canonical): 19 of the 21 remaining rows are one
-    // prologue cluster.  The image loads _M_start (0xd8) before _M_finish
-    // (0xdc) and tests the count with `srawi.`; we load finish first and MSVC
-    // peepholes the test to `clrrwi.`.  `size() > 0`, `size() != 0` and
-    // `end() - begin() != 0` all produce the same `clrrwi.`, and `empty()` is a
-    // pointer compare with no shift at all.  The other 2 rows are the
-    // strength-reduced byte offset's `addi r27, r27, 0x4`, which the image
-    // issues after the fmadds (idx 109) and we issue before it (idx 107).
-    if (mTrackedJoints.size() != 0) {
+    // A plain rotated `for` over size(): the entry test the rotation copies out
+    // of the loop condition is `srawi. r9,r9,2; beq` (825243DC) with _M_start
+    // loaded before _M_finish, where a hand-written `if (size() != 0)` guard
+    // around a do/while is peepholed to `clrrwi.` under every spelling w7-aq
+    // tried.  The frame pointers are loop-invariant and get hoisted into the
+    // preheader after the beq (825243F4..82524400), which is why they are
+    // declared inside the body.  -- w7-bv
+    for (; i < mTrackedJoints.size(); i++) {
         const FreestyleMoveFrame *curFrame = &frames[frameIdx];
         const FreestyleMoveFrame *prevFrame = &frames[clampedPrev];
-        do {
-            SkeletonJoint joint = mTrackedJoints[i];
-            Vector3 curJointPos, prevJointPos;
-            curFrame->skeleton.JointPos(kCoordCamera, joint, curJointPos);
-            prevFrame->skeleton.JointPos(kCoordCamera, joint, prevJointPos);
-            int beatDiff = (int)(curFrame->mBeat - prevFrame->mBeat);
-            // Build displacement vector (y=0.0 zeroed — ignore vertical component)
-            Vector3 dispOffset;
-            // MSVC evaluates arguments right-to-left, so Set() subtracts z
-            // BEFORE x (target idx 66-69) and only then stores x, y, z in
-            // declaration order (idx 70/62/71).  Three separate assignments
-            // cannot produce that split.
-            dispOffset.Set(
-                curJointPos.x - prevJointPos.x, 0.0f, curJointPos.z - prevJointPos.z
-            );
-            Vector3 liveDisp;
-            int liveCount = 0;
-            // The handle is a temporary: it dies at the end of this full
-            // expression, well before the Displacement() call below.
-            const SkeletonHistory *history = SkeletonUpdate::InstanceHandle().History();
+        SkeletonJoint joint = mTrackedJoints[i];
+        Vector3 curJointPos, prevJointPos;
+        curFrame->skeleton.JointPos(kCoordCamera, joint, curJointPos);
+        prevFrame->skeleton.JointPos(kCoordCamera, joint, prevJointPos);
+        int beatDiff = (int)(curFrame->mBeat - prevFrame->mBeat);
+        // Build displacement vector (y=0.0 zeroed — ignore vertical component)
+        Vector3 dispOffset;
+        // MSVC evaluates arguments right-to-left, so Set() subtracts z
+        // BEFORE x (target idx 66-69) and only then stores x, y, z in
+        // declaration order (idx 70/62/71).  Three separate assignments
+        // cannot produce that split.
+        dispOffset.Set(
+            curJointPos.x - prevJointPos.x, 0.0f, curJointPos.z - prevJointPos.z
+        );
+        Vector3 liveDisp;
+        int liveCount = 0;
+        // The handle is a temporary: it dies at the end of this full
+        // expression, well before the Displacement() call below.
+        const SkeletonHistory *history = SkeletonUpdate::InstanceHandle().History();
 #ifdef HX_NATIVE
-            // History may be null before GestureMgr init or after terminate
-            if (history) {
+        // History may be null before GestureMgr init or after terminate
+        if (history) {
 #endif
-            bool hasDisp = liveSkel->Displacement(history, kCoordCamera, joint, beatDiff, liveDisp, liveCount);
-            liveDisp.y = 0.0f;
-            float similarity = 0.0f;
-            float maxDisp = 0.0f;
-            if (hasDisp) {
-                CompareDisplacementVectors(dispOffset, beatDiff, liveDisp, liveCount, similarity, maxDisp);
-            }
-            i++;
-            totalScore += maxDisp * similarity;
-            totalWeight += maxDisp;
-#ifdef HX_NATIVE
-            } else {
-                i++;
-            }
-#endif
-        } while (i < mTrackedJoints.size());
-        if (0.0f < totalWeight) {
-            totalScore /= totalWeight;
+        bool hasDisp = liveSkel->Displacement(history, kCoordCamera, joint, beatDiff, liveDisp, liveCount);
+        liveDisp.y = 0.0f;
+        float similarity = 0.0f;
+        float maxDisp = 0.0f;
+        if (hasDisp) {
+            CompareDisplacementVectors(dispOffset, beatDiff, liveDisp, liveCount, similarity, maxDisp);
         }
+        totalScore += maxDisp * similarity;
+        totalWeight += maxDisp;
+#ifdef HX_NATIVE
+        }
+#endif
+    }
+    if (0.0f < totalWeight) {
+        totalScore /= totalWeight;
     }
     outTotalWeight = totalWeight;
     return totalScore;
