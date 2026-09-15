@@ -42,6 +42,12 @@
 #include "os\File.h"
 #include "obj\Data.h"
 #include "obj\Utl.h"
+// w8-a: for ObjPair -- see RndUtlDiscardedInstanceMerge below.  ObjPair is
+// MISPLACED in this tree: RB3's decomp has it in obj/Object.h immediately
+// before ObjMatchPr, and DC3's obj/Object.h still has ObjMatchPr at that exact
+// spot (line 1706).  Moving it there is the real fix; obj/Object.h is
+// PCH-reached, so it is a whole-tree rebuild and out of this lane's scope.
+#include "world\Instance.h"
 
 #include "math/Rand.h"
 
@@ -2239,6 +2245,74 @@ bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
 #endif
 
 #include "rndobj\CamAnim.h"
+
+#ifndef HX_NATIVE
+// w8-a: ORPHAN INSTANTIATION -- reconstruction of a never-called external
+// function that /OPT:REF discarded.  ham_xbox_r.map attributes these COMDATs to
+// rndobj:Utl.obj, but nothing that survives in
+// build/373307D9/asm/system/rndobj/Utl.s calls any of them:
+//
+//   ?_M_erase@vector<Key<vector<Color> > >   0x82638C20   (no in-unit caller)
+//   ?_M_erase@vector<Key<vector<Vector3> > > 0x82638DC8   (no in-unit caller)
+//   ?_M_erase@vector<Key<vector<Vector2> > > 0x82638E38   (no in-unit caller)
+//   ?_M_erase@vector<Key<RndMatAnim::TexPtr> > 0x826381D0 (no in-unit caller)
+//   ?_M_erase@vector<RndMesh::Face>(pos, __false_type) 0x82630938 -- note the
+//        SINGLE-element overload (mangled `PAV34@ABU__false_type@2@`), not the
+//        range overload our TessellateMesh already emits
+//   ??$?0H@vector<int>(int, int, alloc)      0x82631178   (no in-unit caller)
+//
+// The name of the original function is not recoverable from the binary.  The
+// erase()/Remove() calls below reproduce the exact instantiation set; the
+// bodies are deliberately inert.  A `static` stand-in does NOT work -- MSVC
+// drops an unreferenced static function before instantiating through it.
+void RndUtlDiscardedKeyTrim(
+    RndMeshAnim *meshanim, RndMatAnim *matanim, RndMesh *mesh, int lo, int hi
+) {
+    meshanim->VertPointsKeys().Remove((float)lo, (float)hi);
+    meshanim->VertTexsKeys().Remove((float)lo, (float)hi);
+    meshanim->VertColorsKeys().Remove((float)lo, (float)hi);
+    matanim->GetTexKeys().Remove((float)lo, (float)hi);
+    mesh->Faces().erase(mesh->Faces().begin() + lo);
+    std::vector<int> verts(lo, hi);
+    mesh->Verts().resize(verts.size());
+}
+
+// w8-a: the same discarded function also appended one key range onto another
+// from a CONST source.  ConvertBonesToTranses' own appends go through
+// _M_range_insert<Key<T>*> (non-const, 0x82638A10/0x82638A38), which lowers to
+// _M_range_insert_realloc<Key<T>*>; the image additionally holds
+// _M_range_insert_realloc<const Key<T>*> at 0x82633348 (Vector3) and
+// 0x826334C0 (Quat).  Those two are ICF-folded with the non-const bodies -- the
+// retail map lists both names at each address -- so only a const-iterator
+// source range produces the spelling dtk carved the unit under.
+void RndUtlDiscardedKeyAppend(
+    Keys<Vector3, Vector3> &dstTrans,
+    const Keys<Vector3, Vector3> &srcTrans,
+    Keys<Hmx::Quat, Hmx::Quat> &dstRot,
+    const Keys<Hmx::Quat, Hmx::Quat> &srcRot
+) {
+    dstTrans.insert(dstTrans.end(), srcTrans.begin(), srcTrans.end());
+    dstRot.insert(dstRot.end(), srcRot.begin(), srcRot.end());
+}
+
+// w8-a: the std::list<ObjPair> COMDATs are the same orphan class.  The retail
+// map attributes four of the six to rndobj:Utl.obj (insert 0x826309A0,
+// _M_create_node 0x8262EF48, StlNodeAlloc<_List_node<ObjPair> >::allocate
+// 0x8262C4E0 and ::deallocate 0x8262C550) and the other two to
+// world:Instance.obj, yet nothing in rndobj/Utl.s mentions ObjPair outside
+// those four and their RTTI descriptor at 0x82F13ADC.  The surviving user of
+// the type is WorldInstance (src/system/world/Instance.cpp:318-360), which is
+// where the shape below comes from.
+void RndUtlDiscardedInstanceMerge(ObjectDir *dir, Hmx::Object *obj) {
+    std::list<ObjPair> objPairs;
+    objPairs.push_back(ObjPair(dir, obj));
+    for (std::list<ObjPair>::const_iterator it = objPairs.begin();
+         it != objPairs.end();
+         ++it) {
+        it->from->ReplaceRefs(it->to);
+    }
+}
+#endif
 
 void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
     RndDrawable *draw = dynamic_cast<RndDrawable *>(obj);

@@ -286,6 +286,24 @@ void ReloadObjectType(Hmx::Object *obj, DataArray *arr) {
     }
 }
 
+#ifndef HX_NATIVE
+// w8-a: ORPHAN INSTANTIATION. The image's obj/Utl.obj owns the COMDATs for
+// ObjDirItr<ObjectDir>::{ctor,Advance,operator++} (0x8259B6C0, 0x8259B220,
+// 0x8259B798 in build/373307D9/asm/system/obj/Utl.s) but nothing *inside*
+// obj/Utl.s calls them -- the only caller in the whole image is
+// obj/TypeProps.s:1835. So the odr-use lived in an external-linkage function
+// that /OPT:REF discarded; its name is not recoverable from the binary.
+// obj/Utl.h still declares two such never-defined, never-shipped functions
+// (InitObject, StringMatchesFilter), which is independent evidence that this
+// TU carried discarded externals. A `static` stand-in does nothing -- MSVC
+// drops an unreferenced static before instantiating through it.
+void ObjDirItrObjectDirInstantiation(ObjectDir *dir) {
+    for (ObjDirItr<ObjectDir> it(dir, true); it != 0; ++it) {
+        it->SetName(it->Name(), dir);
+    }
+}
+#endif
+
 DataNode ObjectList(ObjectDir *dir, Symbol parentSym, bool b) {
     std::list<const char *> sList;
     if (dir) {
