@@ -249,3 +249,12 @@ template bool PropSync<Waypoint>(Waypoint *&, DataNode &, DataArray *, int, Prop
 // whose only caller in the whole binary is CharacterTest.s:0x823DC7F8.
 // Waypoint.obj won the fold, so retail's Waypoint.cpp odr-used one too.
 template class std::vector<Waypoint *>;
+
+// w8-c: orphan COMDAT, and like NormalizeTo in CharBonesSamples.cpp it is not a
+// template -- `Rand::Int(int, int)` is defined in the body of class Rand in
+// math/Rand.h, so it is implicitly inline.  The image's Waypoint.obj carries it
+// out-of-line at 0x823CC090 (Waypoint.s) with no caller in the unit; the `bl`
+// sites are in math/Rand.s, synth/MicNull.s, world/Crowd.s, world/CameraManager.s
+// and lazer/meta_ham/ContextChecker.s.  Waypoint.obj won the fold.  Taking the
+// address forces emission; see the linkage warning in that other note.
+int (Rand::*const kRandIntRef)(int, int) = &Rand::Int;

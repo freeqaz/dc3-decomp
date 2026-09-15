@@ -778,3 +778,20 @@ END_PROPSYNCS
 // (CharBonesSamples.s) with no caller in the unit.
 template const char *
 MakeString<int, int, int, int>(const char *, const int &, const int &, const int &, const int &);
+
+// w8-c: orphan COMDAT, but NOT a template -- `NormalizeTo` is an `inline` free
+// function in math/Mtx.h, so there is no explicit instantiation to write.  The
+// image's CharBonesSamples.obj carries it out-of-line at 0x823E1150
+// (CharBonesSamples.s) and it is the ONLY definition in the whole binary; the
+// three `bl` sites are all in math/Key.s (0x82E07480/8C/98, Key.cpp's
+// Catmull-Rom quat interpolation), which means CharBonesSamples.obj won the
+// COMDAT fold and retail's CharBonesSamples.cpp odr-used NormalizeTo somewhere
+// we have not recovered -- there is no inlined copy in the image's unit either
+// (the only fnegs in CharBonesSamples.s outside this body are FracToSample's,
+// at 0x823E2DE4).  Taking the address is the only thing that forces MSVC to
+// emit the body.  It MUST have external linkage: a namespace-scope `const`
+// pointer has internal linkage, MSVC then discards the unused definition, and
+// the odr-use never happens (measured: the symbol was absent from the object
+// and the row stayed at 0.0).
+extern void (*const kNormalizeToRef)(const Hmx::Quat &, Hmx::Quat &);
+void (*const kNormalizeToRef)(const Hmx::Quat &, Hmx::Quat &) = &NormalizeTo;
