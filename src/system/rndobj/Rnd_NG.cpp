@@ -132,6 +132,27 @@ void NgRnd::ResetStats() {
     TheNgStats->mCams++;
 }
 
+// w8-l: 99.808690 normalized, and the ONLY function keeping this unit from
+// 100% (25/26).  Exactly two rows are charged, both in the address setup:
+//   [5] addi r8, r11, 0x4  (target)  vs  0x8 (ours)
+//   [8] addi r5, r11, 0x8  (target)  vs  0x4 (ours)
+// Everything else is equal.  The two rows mean only this: in the INNERMOST add
+// of the chain the image fuses mParts into the fmadds and leaves mPartSys as
+// the standalone fmuls, while we do the reverse.  The value computed is the
+// same, and the constants follow their fields on both sides (target [4] f0 =
+// __real@3ba3d70a = 0.005 paired with +0x8 = mPartSys; [39] f13 =
+// __real@3974aaf1 = 0.00023333334 paired with +0x4 = mParts).  Field offsets
+// are corroborated by NgRnd::UpdateOverlay, which is matched in this unit.
+// Refuted, each a full ninja + report.json read:
+//   - swapping the two innermost terms       -> 99.808690 (EXACTLY inert)
+//   - writing both innermost muls constant-first -> 99.808690 (inert)
+//   - naming the mPartSys product in a local  -> 99.808690 (inert)
+//   - flat left-associated sum (same accumulation order, no nesting)
+//                                            -> 52.530434
+//   - binding `NgStats &stats = gNgStats[idx]` -> 18.591305
+// The right-nested spelling below is therefore the correct shape; MSVC
+// canonicalises which half of the bottom pair gets fused and no source
+// rewriting found here moves it.
 float EstimateDraw(int idx) {
     return (float)gNgStats[idx].mMotionBlurs * 0.003f + ((float)gNgStats[idx].mFlares * 0.017f + ((float)gNgStats[idx].mMultiMeshInsts * 0.001f + ((float)gNgStats[idx].mLightsApprox * 0.01f + ((float)gNgStats[idx].mLightsReal * 0.001f + ((float)gNgStats[idx].mCams * 0.0068f + ((float)gNgStats[idx].mMats * 0.0097f + ((float)gNgStats[idx].mBones * 0.00126f + ((float)gNgStats[idx].mMutMeshes * 0.0112f + ((float)gNgStats[idx].mRegMeshes * 0.0028f + ((float)gNgStats[idx].mPartSys * 0.005f + (float)gNgStats[idx].mParts * 0.00023333334f))))))))));
 }
