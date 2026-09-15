@@ -202,15 +202,31 @@ long Voice::createOrReuse(
     return result;
 }
 
-// RESIDUAL (w7-an, 92.4 canonical): 75 of 454 rows, all one register-allocation
-// cascade plus what MSVC's block layout does with it.  (a) In the STEREO arm we
-// partially-redundancy-eliminate the `*TheXboxSynth` load out of the two
-// `mFxSend ? ... : TheXboxSynth->OutputVoice()` ternaries into r8 and reload it
-// after each call; the image reloads the global inside each arm
-// (0x82E37474/0x82E37494).  The textually identical MONO copy of the same
-// ternary pair (0x82E375C0 on) matches exactly, so this is contextual, not a
-// spelling.  (b) loChannel/hiChannel/&TheDebug are a 3-way rotation of
-// r30/r29/r28 against the image's r28/r30/r29.
+// w7-bu (2026-09-15): 92.4 -> 95.0 canonical, three levers on the MONO arm:
+// (1) the two 0x3d9 asserts are ONE assert on a shared `HRESULT hr = 0`
+// (the image compares it in cr6, 0x82E378F4, where a call result tested in
+// place is cr0 -- compare the 0x37a site at 0x82E3758C -- and the
+// `!unk54` path jumps straight past the assert, 0x82E378A4, because
+// SUCCEEDED(0) folds).  Keeping the per-site `voice` locals matters:
+// `hr = GetVoice()->SetOutputMatrix(...)` swaps this/r24 with the assert
+// string's r25 (92.9), and `hr` assigned in every arm is 91.9.
+// (2) loChannel/loPan/hiChannel/hiPan are declared interleaved: the
+// image materialises the uninitialised set as lwz/lfs/lwz/lfs from 0x50(r1)
+// (0x82E376A4 on).  (3) each pan arm assigns loChannel, loPan, hiChannel,
+// hiPan in that order (0x82E37700-0x82E37780) -- with (2) this also removed
+// the r30/r29/r28 rotation w7-an recorded.
+// RESIDUAL (w7-bu, 95.0, 37 rows): all in the STEREO arm plus the 6 fmuls
+// rows below.  We partially-redundancy-eliminate the `*TheXboxSynth` load out
+// of the two `mFxSend ? ... : TheXboxSynth->OutputVoice()` ternaries into r8
+// (hoisted between the `cmplwi` and its `beq`) and reload it after each call;
+// the image reloads the global inside each arm (0x82E37474/0x82E37494).  The
+// textually identical MONO copy of the same ternary pair (0x82E375C0 on)
+// matches exactly, so this is contextual, not a spelling.  Tied to it: the
+// image lays the cos/sin arm out as the fall-through of the `== 6 || == 2`
+// test (`bne cr6` at 0x82E374F8) and puts the fill-1.0 loop out of line; we
+// do the reverse.  Measured inert for both: stereo/mono as if/else instead of
+// an early return (95.0, and it shrinks the frame by 0x20), and the 6/2 test
+// as a `switch` (95.0, and the compares come out sorted 2-then-6).
 // NEGATIVE RESULT (w7-an, 2026-09-14): the 6 `fmuls` commutative operand rows
 // are NOT reachable from the source -- writing `(float)cos(angle) * mVolume`
 // instead of `mVolume * (float)cos(angle)` at all six sites is byte-for-byte
@@ -276,37 +292,39 @@ void Voice::UpdateMix() {
         levels[i] = 0.0f;
     }
 
-    int loChannel, hiChannel;
-    float loPan, hiPan;
+    int loChannel;
+    float loPan;
+    int hiChannel;
+    float hiPan;
     if (destChannels == 6 || destChannels == 2) {
         if (mPan < -3.0f) {
-            loPan = -3.0f;
             loChannel = 4;
+            loPan = -3.0f;
             hiChannel = 5;
             hiPan = -5.0f;
         } else if (mPan < -1.0f) {
-            loPan = -1.0f;
             loChannel = 0;
+            loPan = -1.0f;
             hiChannel = 4;
             hiPan = -3.0f;
         } else if (mPan < 0.0f) {
-            loPan = -1.0f;
             loChannel = 0;
+            loPan = -1.0f;
             hiChannel = 2;
             hiPan = 0.0f;
         } else if (mPan < 1.0f) {
-            loPan = 0.0f;
             loChannel = 2;
+            loPan = 0.0f;
             hiChannel = 1;
             hiPan = 1.0f;
         } else if (mPan < 3.0f) {
-            loPan = 1.0f;
             loChannel = 1;
+            loPan = 1.0f;
             hiChannel = 5;
             hiPan = 3.0f;
         } else {
-            loPan = 3.0f;
             loChannel = 5;
+            loPan = 3.0f;
             hiChannel = 4;
             hiPan = 5.0f;
         }
@@ -325,23 +343,23 @@ void Voice::UpdateMix() {
         MILO_NOTIFY("Output voice has unexpected number of channels %d", destChannels);
     }
 
+    HRESULT hr = 0;
     if ((mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice()) == nullptr) {
         if (unk54) {
             IXAudio2SourceVoice *voice = GetVoice();
-            HRESULT hr = voice->SetOutputMatrix(nullptr, 1, 6, levels, 0);
-            MILO_ASSERT(SUCCEEDED(hr), 0x3d9);
+            hr = voice->SetOutputMatrix(nullptr, 1, 6, levels, 0);
         }
     } else {
         IXAudio2SourceVoice *voice = GetVoice();
-        HRESULT hr = voice->SetOutputMatrix(
+        hr = voice->SetOutputMatrix(
             mFxSend ? mFxSend->GetOutputVoice() : TheXboxSynth->OutputVoice(),
             1,
             destChannels,
             levels,
             0
         );
-        MILO_ASSERT(SUCCEEDED(hr), 0x3d9);
     }
+    MILO_ASSERT(SUCCEEDED(hr), 0x3d9);
 
     if (mReverbEnabled && unk48) {
         float reverbRatio = DbToRatio(mReverbMixDb);
@@ -846,8 +864,27 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
 // benign ICF fold, not a wrong callee -- both the image's and our instantiation
 // resolve to 0x824D1870 in build/373307D9/icf_aliases.map.  MakeString's array
 // bounds are template parameters that never reach the code, so all such
-// instantiations are byte-identical and the linker folds them.  The real
-// residual at 90.7% / 1168 B is a prologue hoist-set permutation.
+// instantiations are byte-identical and the linker folds them.
+// w7-bu (2026-09-15): 90.5 -> 95.8 canonical.  (1) BEHAVIOURAL: the egParams
+// free in the drain loop is `delete pv.egParams` through the header's
+// POOL_OVERLOAD operator delete -- the image's PoolFree at 0x82E3964C takes
+// r15 = "e:\lazer_build_gmc1\system\src\synth360\EnvelopeGenerator.h"
+// (hoisted at 0x82E39308), not this file's "Voice.cpp"; a hand-written
+// `PoolFree(0x10, ..., __FILE__, 0x1e, ...)` passed the wrong file string,
+// and a `delete` on the old `void *` field went to the global ??3@YAXPAX@Z
+// (86.2, WRONG_CALLEE), so PoolVoice::egParams is now typed.  (2) The GC loop
+// refreshes `front = s_voiceGC.begin()` BEFORE the `gcCount >= 4` break: the
+// image copies the four iterator words (0x82E39560-0x82E39590) and only then
+// takes `bge cr6` out (0x82E39594), followed by the duplicated end() test;
+// `for (...; gcCount < 4 && front != end(); front = begin())` shares the
+// header test instead (93.0).
+// RESIDUAL (w7-bu, 95.8, 43 rows): rows 20-65 are the prologue's lis/addi
+// hoist order and scratch registers (same hoist SET now, including the
+// header-path string in r15 and "EnvelopeGeneratorParams" in r14); the
+// image tests TheXboxSynth in cr0 at 0x82E39470 where every other test of it
+// in this TU is cr6 (nested `if`s: inert); and it reaches gVoiceCounters[1]
+// as a sym+4 relocation (`lwz r11, lbl_8316C734@l(r20)`, 0x82E39558) where
+// we hoist the array base and use 0x4(r20) (`-= 1`: inert).
 unsigned long StartVoiceThreadEntry(void *) {
     rolling++;
     WaitForSingleObject(gEvent, INFINITE);
@@ -912,11 +949,8 @@ unsigned long StartVoiceThreadEntry(void *) {
             // the deque at 0x10(r26); the same four-word copy is repeated at the
             // bottom of the loop, 0x82E39560-0x82E39590.  An unnamed temporary is
             // folded away and only `_M_start._M_cur` is read.
-            for (;;) {
-                std::deque<PoolVoice>::iterator front = s_voiceGC.begin();
-                if (front == s_voiceGC.end()) {
-                    break;
-                }
+            std::deque<PoolVoice>::iterator front = s_voiceGC.begin();
+            while (front != s_voiceGC.end()) {
                 // The tick difference is computed and tested in 64 bits, with an
                 // explicit wraparound fixup -- 0x82E39520 `subf r11, r11, r29`
                 // over two zero-extended 32-bit ticks (0x82E39514
@@ -937,7 +971,9 @@ unsigned long StartVoiceThreadEntry(void *) {
                 s_voiceGCInProgress.push_back(s_voiceGC.front());
                 s_voiceGC.pop_front();
                 gVoiceCounters[1]--;
-                if (++gcCount >= 4) {
+                gcCount++;
+                front = s_voiceGC.begin();
+                if (gcCount >= 4) {
                     break;
                 }
             }
@@ -961,7 +997,7 @@ unsigned long StartVoiceThreadEntry(void *) {
                     ((void (*)(void *, int))(*(int *)(*(int *)pv.eg + 0x38)))(pv.eg, 1);
                 }
                 pv.eg = 0;
-                PoolFree(0x10, pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
+                delete pv.egParams;
                 pv.egParams = 0;
             }
         }

@@ -370,10 +370,23 @@ void ReadFunc(BINKIO *bink, bool startRead) {
             // (89.21 -> 88.0) and widens the r29<->r30 permutation from 53
             // instructions to 79.  Naming the INPUTS was already known to be
             // neutral; naming the outputs is worse than either.
+            //
+            // w7-bu (89.21 -> 90.8 canonical): the extra callee-saved register
+            // IS source-reachable -- swap the STATEMENT order.  With mData[1]
+            // swapped first the image's r24 (0x82E5D3DC `rlwinm r24, r10, 0,
+            // 8, 15`) appears and the prologue becomes __savegprlr_24 / frame
+            // 0xd0 (0x82E5D294/9C), closing the 4 prologue/epilogue rows; the
+            // two `std`s still come out in the image's 0x0-then-0x8 order
+            // (0x82E5D43C/44).  What remains is the shape of the d0 chain:
+            // the image opens BOTH chains with `rldicl rX, rN, 48, 16` +
+            // `and` + `or` (0x82E5D374/78 for d0, 0x82E5D380 for d1); ours
+            // gives mData[0]'s chain `rldicl r9, r11, 48, 24` + `rldicr r9,
+            // r9, 0, 31` whichever statement comes first, and naming the two
+            // inputs under this order is 90.6 (worse).
             XTEABlock *block = (XTEABlock *)bf->pBufBack;
             while (block < (XTEABlock *)((unsigned char *)bf->pBufBack + bytesRead)) {
-                block->mData[0] = EndianSwap(block->mData[0]);
                 block->mData[1] = EndianSwap(block->mData[1]);
+                block->mData[0] = EndianSwap(block->mData[0]);
                 bf->pXTEADecrypter->Encrypt(block, &temp);
                 unsigned int *dst = (unsigned int *)block;
                 const unsigned int *src = (const unsigned int *)&temp;
@@ -393,13 +406,16 @@ void ReadFunc(BINKIO *bink, bool startRead) {
         bf->iBufEmpty -= uBytesRead;
         bink->bytesAvail += uBytesRead;
         bink->BytesRead += uBytesRead;
-        // NEGATIVE RESULT: the image loads bytesAvail (0x82E5D4EC
-        // `lwz r11, 0x6c(r28)`) before BufHighUsed (0x82E5D4F0) and ours emits
-        // them the other way round, but spelling it
-        // `BufHighUsed < bytesAvail` does NOT swap them -- it keeps the same
-        // load order and inverts the branch polarity on top (ble -> bge), a
-        // net loss.  The load order is the scheduler's, not the source's.
-        if (bink->bytesAvail > bink->BufHighUsed) {
+        // The image loads bytesAvail (0x82E5D4EC `lwz r11, 0x6c(r28)`) before
+        // BufHighUsed (0x82E5D4F0), compares `cmplw r11, r10` and then RELOADS
+        // bytesAvail for the store (0x82E5D4FC).  Written as one
+        // `if (bytesAvail > BufHighUsed)` MSVC loads BufHighUsed first, and
+        // `BufHighUsed < bytesAvail` keeps that order and inverts the branch
+        // on top.  w7-bu: reading bytesAvail into a local FIRST fixes the
+        // load order (that volatile read is sequenced before the other) and
+        // the store's own `bink->bytesAvail` read keeps the reload.  3 rows.
+        unsigned int avail = bink->bytesAvail;
+        if (avail > bink->BufHighUsed) {
             bink->BufHighUsed = bink->bytesAvail;
         }
         int now = RADTimerRead();
@@ -470,9 +486,23 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffs
     }
     // Declared HERE, after both early returns: the image has no zero register
     // live across Enter, it builds one lazily (0x82E5D6C0 `li r30, 0x0` for the
-    // size-check return, 0x82E5D6DC `li r27, 0x0` for blockOff, which the seek
-    // branch then shares at 0x82E5D6F4 `mr r28, r27`).  Initialised at the top
-    // of the function all four zeros CSE into one hoisted `li` before Enter.
+    // size-check return).  Initialised at the top of the function all the
+    // zeros CSE into one hoisted `li` before Enter.
+    //
+    // w7-bu: bytesReturned is zeroed AFTER the timer read (0x82E5D6D4 bl
+    // RADTimerRead, 0x82E5D6D8 mr r23, 0x82E5D6DC `li r27, 0x0`), and blockOff
+    // is declared INSIDE the seek branch: its zero is the `mr r28, r27` at
+    // 0x82E5D6F4, between the iFileBufPos `beq` and the `ble`, borrowing
+    // bytesReturned's register.  Declared before the branch (the old shape)
+    // the `mr` sat above both compares.  The seek branch's own
+    // `bytesReturned = 0` was redundant and is gone.
+    //
+    // Still open (99.1 canonical): our `li` lands one slot early, between
+    // the bl and the `mr r23, r3`, and the callee-saved colouring is the
+    // pair-swap {dest,length}={r25,r24} / {bf,bytesReturned}={r26,r27} in
+    // the image vs {r27,r26} / {r25,r24} here (32 rows, one cause).
+    // Declaring bytesReturned before bf, and swapping the loop's
+    // destPtr/remaining declarations, are both byte-inert.
     //
     // NEGATIVE RESULT: hoisting `bytesReturned` out of this inner block and
     // declaring it AFTER `blockOff` at function scope -- so that blockOff's
@@ -480,14 +510,14 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffs
     // 95.0, i.e. 0.6pp WORSE.  MSVC then keeps blockOff's zero in a
     // callee-saved register across the whole body and our `stw` of the
     // bytesAvail flush picks up r24 rather than a freshly created zero.
-    unsigned int bytesReturned = 0;
+    unsigned int bytesReturned;
     {
         int startTimer = RADTimerRead();
+        bytesReturned = 0;
         unsigned int seekPos = adjOffset;
         // If frame is not at the current file position, seek/skip
-        unsigned int blockOff = 0;
         if ((int)seekPos != -1 && seekPos != bink->io.iFileBufPos) {
-            bytesReturned = 0;
+            unsigned int blockOff = 0;
             // ONE `&&`, not a nested `if` with an empty else.  The image tests
             // seekPos against iFileBufPos at 0x82E5D6EC and takes BOTH the
             // `beq` (skip everything, 0x82E5D6F0) and the `ble` (0x82E5D6F8)
@@ -519,28 +549,46 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffs
                 while (bink->DoingARead != 0) {
                     ReadFunc(bink, false);
                 }
-                // NEGATIVE RESULT: this block's four stores are already
-                // written in the image's order (0x6c bytesAvail, 0x98
-                // iBufEmpty, 0x90 pBufPos, 0x94 pBufBack) yet MSVC emits
-                // 0x94, 0x90, 0x98 and loads pBuffer (0x88) before BufSize
-                // (0x60) where the image loads BufSize first.  Dropping
-                // this named local and spelling `bink->io.pBuffer` at all
-                // three use sites is BYTE-NEUTRAL -- MSVC CSEs the load
-                // back into one `lwz` at the same place, 95.6 and the same
-                // 62 rows either way.  The store order is a scheduler
-                // decision downstream of the r25/r26 colouring, not a
-                // source-reachable one.
+                // w7-bu: the store order IS source-reachable, just not in
+                // source order.  MSVC emits an independent store pair from
+                // this struct REVERSED (the second memcpy block below proved
+                // it first), so the image's 0x6c/0x98/0x90/0x94 sequence at
+                // 0x82E5D780-8C comes from writing bytesAvail LAST and
+                // iBufEmpty before it; the two pBuf stores are one value and
+                // keep their order.  This also satisfies the volatile rule:
+                // BufSize (volatile) is loaded at 0x82E5D778 BEFORE the
+                // volatile bytesAvail store at 0x82E5D780, which source order
+                // `bytesAvail = 0; iBufEmpty = BufSize;` can never emit.
+                // Written the image's way (0x6c, 0x98, 0x90, 0x94) MSVC emits
+                // 0x6c, 0x94, 0x90, 0x98 and loads pBuffer before BufSize:
+                // 95.6 vs 97.1 here.
                 unsigned char *pBuf = bink->io.pBuffer;
-                bink->bytesAvail = 0;
-                bink->io.iBufEmpty = bink->BufSize;
                 bink->io.pBufPos = pBuf;
                 bink->io.pBufBack = pBuf;
+                bink->io.iBufEmpty = bink->BufSize;
+                bink->bytesAvail = 0;
                 if (bf->mEncHeader.mVersion == 2) {
-                    // Align to XTEA block boundary
-                    unsigned int rawOff = seekPos - bf->iHeaderSize - 0x38;
+                    // Align to XTEA block boundary.
+                    // w7-bu: iHeaderSize is read ONCE (0x82E5D79C `lwz r9,
+                    // 0x28(r26)`, used by both the subf and the add at
+                    // 0x82E5D7B8).  Read twice through bf across the pBufPos
+                    // store, MSVC reloads it (BINKIOFILE may alias).  blockOff
+                    // is assigned from the CSE'd `rawOff & 0xf` AFTER the
+                    // pBufPos store: the image computes the mask into r10
+                    // (0x82E5D7AC), adds it to pBuffer (0x82E5D7B4) and only
+                    // then copies it to its home `mr r28, r10` (0x82E5D7C8)
+                    // before the SetNonce call.  Naming blockOff first puts
+                    // the clrlwi straight into r28 and drops the `mr`;
+                    // assigning it after the call costs an extra callee-saved
+                    // register (97.9).  The hdrSize-then-blockOff-then-seekPos
+                    // order is what places the `mr` before the seekPos
+                    // `addi` (0x82E5D7CC); seekPos before blockOff swaps
+                    // those two rows.
+                    unsigned int hdrSize = bf->iHeaderSize;
+                    unsigned int rawOff = seekPos - hdrSize - 0x38;
+                    bink->io.pBufPos = pBuf + (rawOff & 0xf);
                     blockOff = rawOff & 0xf;
-                    bink->io.pBufPos = pBuf + blockOff;
-                    seekPos = (rawOff & 0xfffffff0) + bf->iHeaderSize + 0x38;
+                    seekPos = (rawOff & 0xfffffff0) + hdrSize + 0x38;
                     bf->pXTEADecrypter->SetNonce(bf->mEncHeader.mNonce, rawOff >> 4);
                 }
                 bf->pFile->Seek((int)seekPos, FILE_SEEK_SET);
@@ -552,16 +600,21 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffs
             // No buffer — direct synchronous read
             int readStart = RADTimerRead();
             unsigned int nr = (unsigned int)bf->pFile->Read(dest, (int)length);
-            bytesReturned = nr;
             if (nr < length) {
                 bink->ReadError = 1;
             }
-            bink->BytesRead += bytesReturned;
-            bink->io.iFileBufPos += bytesReturned;
+            // w7-bu: nr keeps its own register (0x82E5D830 `mr r29, r3`) and
+            // is copied into bytesReturned only AFTER the short-read test
+            // (0x82E5D848 `mr r27, r29`); the counters below add nr, not
+            // bytesReturned.  Assigned before the test, MSVC coalesces the
+            // two and the `mr` disappears.
+            bytesReturned = nr;
+            bink->BytesRead += nr;
+            bink->io.iFileBufPos += nr;
             int readEnd = RADTimerRead();
             *(volatile unsigned int *)&bink->ForegroundTime += (unsigned int)(readEnd - readStart);
             *(volatile unsigned int *)&bink->ForegroundTime += (unsigned int)(readEnd - startTimer);
-            EndianSwapBlock<unsigned int>((unsigned int *)dest, bytesReturned >> 2);
+            EndianSwapBlock<unsigned int>((unsigned int *)dest, nr >> 2);
         } else {
             // Buffered async read loop
             unsigned char *destPtr = (unsigned char *)dest;
@@ -588,8 +641,15 @@ unsigned int BinkFileReadFrame(BINKIO *bink, unsigned int frameNum, int origOffs
                     if (avail > 0) {
                         memcpy(destPtr, bink->io.pBufPos, avail);
                         destPtr += avail;
-                        bink->io.iBufEmpty += avail;
+                        // w7-bu: written pBufPos-then-iBufEmpty so that MSVC
+                        // emits iBufEmpty first (0x82E5D938 lwz 0x98, 0x82E5D93C
+                        // lwz 0x90, stores 0x82E5D94C/50 in the same order) --
+                        // an independent RMW pair on this struct comes out
+                        // reversed.  The first memcpy block above is not a
+                        // pair (pBufPos = pBuffer is a plain store) and keeps
+                        // source order.
                         bink->io.pBufPos += avail;
+                        bink->io.iBufEmpty += avail;
                         bink->bytesAvail -= avail;
                     }
                 }

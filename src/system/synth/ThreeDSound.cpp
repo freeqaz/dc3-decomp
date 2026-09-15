@@ -280,8 +280,25 @@ void ThreeDSound::CalculateFaderVolume() {
         // after the switch -- is worse than both: 89.46 -> 86.87. It does
         // collapse the dispatch to one `lwz`/`cmplwi`, but MSVC then
         // MATERIALISES the flag (`li r30, 0x0` + a second `li`), which the
-        // image never does, and still sinks the -96.0f block. Block placement
-        // here is not reachable from the source; three spellings measured.
+        // image never does, and still sinks the -96.0f block.
+        //
+        // w7-bu (89.5 -> 94.5): the -96.0f placement WAS reachable.  Both
+        // `vol = -96.0f` copies are tail-merged; MSVC deletes the copy that is
+        // only reached by a jump and keeps the fall-through one.  With the
+        // radius test written `if (mShape == 1 && unk210 > mRadius) vol = -96`
+        // the radius copy is the fall-through, so the first arm's copy is the
+        // one deleted and 0x8276618C `blt` becomes `bge` forward.  Inverted --
+        // `if (mShape != 1 || unk210 <= mRadius) { falloff } else { -96 }` --
+        // the radius copy is the jump-only block, it is the one deleted, and
+        // the first arm keeps its inline load with 0x827661FC `bgt cr6`
+        // jumping back to it, exactly as in the image.
+        // RESIDUAL 8 rows: the post-FAIL re-test.  The image's default arm
+        // goes `b` straight to the falloff (after 0x827661E8 Fail), so its
+        // radius test lives inside `case 1:`; every goto/flag spelling of
+        // that (w7-af, w7-ao, and the else-form + goto measured here: 83.6)
+        // sinks the blocks.  Caching `int shape = mShape` so the re-test can
+        // fold is worse (91.2: MSVC neither folds it nor keeps &mShape as
+        // the MakeString argument).
         switch (mShape) {
         case 0:
             break;
@@ -290,9 +307,7 @@ void ThreeDSound::CalculateFaderVolume() {
         default:
             MILO_FAIL("Calculating volume for unknown shape %d\n", mShape);
         }
-        if (mShape == 1 && unk210 > mRadius) {
-            vol = -96.0f;
-        } else {
+        if (mShape != 1 || unk210 <= mRadius) {
             float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
             float t = invRange * unk20c + (1.0f - mMinFalloffDistance * invRange);
             // The assert and the gEaseFuncs load are GetEaseFunction()'s, from
@@ -302,6 +317,8 @@ void ThreeDSound::CalculateFaderVolume() {
             eased = Clamp(0.0f, 1.0f, eased);
             vol = RatioToDb(eased);
             vol = Max(vol, -96.0f);
+        } else {
+            vol = -96.0f;
         }
     }
     mDistanceFader->SetVolume(vol);

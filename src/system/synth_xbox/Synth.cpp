@@ -541,27 +541,27 @@ int Synth360::GetNextAvailableMicID() const {
 }
 
 void Synth360::SetupHeadsetSubmixes() {
-    // RESIDUAL (w7-ab, 89.8 canonical, 37 of 201 rows).  Every remaining row is
-    // instruction SCHEDULING, not a different computation -- the per-field store
-    // sequences themselves already match the image exactly:
-    //  1) idx 43-56 and idx 84-103: we emit `lwz r3, 0xec(r24)` (the unkec engine
-    //     pointer) about eight instructions EARLIER than the image, which rotates
-    //     the surrounding store/arg-setup block at both call sites.  The image
-    //     loads it last, immediately before `lwz r11, 0x0(r3)`.  Refuted: writing
-    //     the call as `(*(int *)(*(int *)(int *)unkec + 0x24))((int *)unkec, ...)`
-    //     with no `pEngine` local is byte-for-byte INERT (201 instructions, 37
-    //     rows, 89.8 both ways) -- MSVC CSEs the load back to the same anchor.
-    //  2) idx 78-103: the seven WAVEFORMATEX stores are emitted in a different
-    //     order (image 0x80, 0x8e, 0x88, 0x82, 0x8c, 0x84, 0x90; we get 0x8c,
-    //     0x88, 0x84, 0x8e, 0x90, 0x80, 0x82).  Refuted: putting the assignments
-    //     in WAVEFORMATEX DECLARATION order (wFormatTag, nChannels,
-    //     nSamplesPerSec, nAvgBytesPerSec, nBlockAlign, wBitsPerSample, cbSize)
-    //     costs five extra instructions and drops 89.8 -> 84.3.  The order below
-    //     is the best measured; the emission order is not a function of it.
-    //  3) idx 132-140: the XAUDIO2_BUFFER zero stores land in a different order
-    //     around the memset (image: 0xa0 before the call, then 0xb8, 0xac, 0xb0,
-    //     0xc0, ..., 0xb4).  Refuted: hoisting `buffer.Flags = 0;` above the
-    //     memset drops 84.3 -> 83.6 on top of (2) and adds a REGISTER_SWAP pair.
+    // w7-bu: 89.8 -> 99.99.  The w7-ab RESIDUAL note that stood here filed the
+    // two engine-call clusters as scheduling floors; they were the spelling.
+    // The calls were raw vtable-slot function-pointer casts through an
+    // `int *pEngine` local (pre-dating this TU's IXAudio2 declaration), which
+    // let MSVC float `lwz r3, 0xec(r24)` to the top of each block.  As real
+    // virtual calls the engine load is evaluated as the `this` argument and
+    // lands where the image has it, last before `lwz r11, 0x0(r3)`: 98.9.
+    // Then, each measured alone against that (the old note had only stacked
+    // them on the 84.3 declaration-order variant): `buffer.Flags = 0` above
+    // the memset (image `stw r28, 0xa0(r31)` before `bl memset`) 99.9;
+    // wBitsPerSample before nBlockAlign, and the XAUDIO2_BUFFER assignment
+    // order below (the ready-zero stores emit as a rotation of source order
+    // starting at the 5th of 8, the li-fed ones keep source order) 99.99.
+    //
+    // RESIDUAL 2 rows: `stw r26, 0x84(r31)` (nSamplesPerSec) and
+    // `stw r25, 0x6c(r31)` (voiceSends.pSends) emit in the other order.
+    // Inert: voiceSends before/after format, pSends before SendCount,
+    // nAvgBytesPerSec spelled as nSamplesPerSec * nBlockAlign (folds).
+    // Worse: nSamplesPerSec first in the format block (99.4, it then emits
+    // first overall); the two voiceSends stores interleaved into the format
+    // block (97.9).
     // Ensure mHeadsetSubmixes has exactly 4 entries. resize() already contains the
     // shrink-with-erase branch; spelling the outer test by hand emits it twice.
     std::vector<IXAudio2SubmixVoice *> &submixes = mHeadsetSubmixes;
@@ -583,11 +583,10 @@ void Synth360::SetupHeadsetSubmixes() {
         effectChain.EffectCount = 1;
         effectChain.pEffectDescriptors = &effectDesc;
 
-        int *pEngine = (int *)unkec;
-        ((HRESULT(*)(int *, IXAudio2SubmixVoice **, int, int, int, int, int, XAUDIO2_EFFECT_CHAIN *)
-        )(*(int *)(*(int *)pEngine + 0x24)))(
-            pEngine, &submixes[i], 1, 48000, 0, 0, 0, &effectChain
-        );
+        ((IXAudio2 *)unkec)
+            ->CreateSubmixVoice(
+                (IXAudio2Voice **)&submixes[i], 1, 48000, 0, 0, 0, &effectChain
+            );
     }
 
     // Build the send list that routes everything to the headset submixes.
@@ -600,39 +599,37 @@ void Synth360::SetupHeadsetSubmixes() {
         sendDescs.push_back(desc);
     }
 
-    WAVEFORMATEX format;
-    format.wFormatTag = 1;
-    format.nChannels = 1;
-    format.nBlockAlign = 2;
-    format.wBitsPerSample = 16;
-    format.nSamplesPerSec = 48000;
-    format.nAvgBytesPerSec = 96000;
-    format.cbSize = 0;
-
     XAUDIO2_VOICE_SENDS voiceSends;
     voiceSends.SendCount = sendDescs.size();
     voiceSends.pSends = &sendDescs[0];
 
+    WAVEFORMATEX format;
+    format.wFormatTag = 1;
+    format.nChannels = 1;
+    format.wBitsPerSample = 16;
+    format.nBlockAlign = 2;
+    format.nSamplesPerSec = 48000;
+    format.nAvgBytesPerSec = 96000;
+    format.cbSize = 0;
+
     IXAudio2SourceVoice *headsetVoice;
-    int *pEngine = (int *)unkec;
     // Flags = 2 == XAUDIO2_VOICE_NOPITCH: the silence voice never repitches.
-    HRESULT hr = ((HRESULT(*)(
-        int *, IXAudio2SourceVoice **, WAVEFORMATEX *, int, float, int, XAUDIO2_VOICE_SENDS *, int
-    ))(*(int *)(*(int *)pEngine + 0x20)))(
-        pEngine, &headsetVoice, &format, 2, 2.0f, 0, &voiceSends, 0
-    );
+    HRESULT hr = ((IXAudio2 *)unkec)
+                     ->CreateSourceVoice(
+                         (IXAudio2Voice **)&headsetVoice, &format, 2, 2.0f, 0, &voiceSends, 0
+                     );
     MILO_ASSERT(SUCCEEDED(hr), 0x30a);
 
     XAUDIO2_BUFFER buffer;
-    memset(&buffer.AudioBytes, 0, sizeof(buffer) - 4);
     buffer.Flags = 0;
+    memset(&buffer.AudioBytes, 0, sizeof(buffer) - 4);
     buffer.AudioBytes = 0x100;
     buffer.pAudioData = (const BYTE *)sHeadsetSilence;
-    buffer.PlayBegin = 0;
-    buffer.PlayLength = 0;
+    buffer.LoopCount = 0xff;
     buffer.LoopBegin = 0;
     buffer.LoopLength = 0;
-    buffer.LoopCount = 0xff;
+    buffer.PlayBegin = 0;
+    buffer.PlayLength = 0;
     buffer.pContext = nullptr;
     hr = ((IXAudio2SourceVoice *)unke8)->SubmitSourceBuffer(&buffer, nullptr);
     MILO_ASSERT(SUCCEEDED(hr), 0x319);

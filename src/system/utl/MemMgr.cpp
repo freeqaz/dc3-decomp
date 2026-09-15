@@ -415,23 +415,46 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
         // stack until one that permits them is on top, retry the whole request
         // there, then put the stack back exactly as it was.
         MemHeapStack &tempStack = ThreadMemStack(true);
-        // NEGATIVE RESULT: the image keeps the running depth in a register
-        // across the loop (`lwz r9, 0x40(r3)` once, then
-        // `subic. r11, r9, 0x1` / `stw r11, 0x40(r30)` / `mr r9, r11`, and the
-        // back-edge re-tests r9), while we reload `0x40(r30)` at the bottom.
-        // Hoisting the depth into an `int curSize` local removes that reload
-        // but loses the image's `mr r9, r11` -- 92.9% either way, so the
-        // member spelling is kept as the less invented one.
+        // w7-bu (2026-09-15): 92.8 -> 94.3 canonical. The pop loop is a
+        // do/while whose CONDITION is the AllowTemp test and whose depth
+        // check is a top-of-body break: the image's only back-edge is the
+        // conditional `mr. r11, r10 / beq .L_827CC1AC` at 827CC1FC-827CC200,
+        // jumping to the top `cmpwi cr6, r9, 0x0 / ble exit` (827CC1AC), and
+        // there is NO reload of 0x40(r30) at the bottom. The former
+        // `while (mSize > 0) { ...; if (AllowTemp()) break; }` gave a
+        // rotated loop with two bottom tests (`cmplwi r9,0 / bne exit /
+        // lwz 0x40(r30) / cmpwi / bgt body`), 4 rows; `for (;;)` with a top
+        // break measured identical to it (92.8), and a loop-carried
+        // `curSize = --mSize` local regressed to 92.1.
+        // The earlier NEGATIVE RESULT (a hoisted `int curSize` local, 92.9
+        // either way) was measured against that rotated shape and is
+        // superseded.
+        // RESIDUAL (94.3, 131 rows): (1) the image saves r15-r31, we r16-r31
+        // -- it re-masks `temp` into a FRESH register at the test
+        // (`clrlwi. r27, r28, 24`, 827CC178) and reads r27 for the
+        // `temp ? kLastFit` select (827CC358); we mask r28 in place. A second
+        // bool copy (`bool useTemp = temp`) is copy-propagated away (94.3,
+        // same rows). Every low callee-saved register is off by one from
+        // that. (2) r29/r30 heap vs allocated_mem are flipped, and because
+        // the image's temp-path result lands in r29 (heap's register, dead
+        // there) while the common exit returns r30, it emits the
+        // CritSecTracker dtor TWICE (827CC278-827CC28C: `cmplwi cr6, r15 /
+        // beq / mr r3, r15 / bl Exit / mr r3, r29 / b .L_827CC44C`); ours
+        // tail-merges into the single exit at 827CC438. Declaring
+        // `allocated_mem` above `heap` does not flip them (94.3, same rows).
+        // (3) The .bss anchor rows (gTinyHeapReady at -0x14(r26), gHeaps at
+        // -0x294(r26): idx 53, 69-72, 86-95, 141) -- see the note at the top
+        // of this file.
         int savedSize = tempStack.mSize;
-        while (tempStack.mSize > 0) {
+        do {
+            if (tempStack.mSize <= 0)
+                break;
             tempStack.mSize--;
             int poppedHeap = tempStack.mSize != 0
                 ? tempStack.mStack[tempStack.mSize - 1]
                 : MemHeapStack::sDefaultHeap;
             heap = poppedHeap > -1 ? &gHeaps[poppedHeap] : nullptr;
-            if (heap->AllowTemp())
-                break;
-        }
+        } while (!heap->AllowTemp());
         MILO_ASSERT(heap->AllowTemp(), 0x3C1);
         tempStack.mTempRefs++;
         void *tempAlloc = MemAlloc(iSizeBytes, file, line, name, align);
@@ -519,21 +542,23 @@ void MemInit() {
     gMemLock = new CriticalSection();
     gMemStackLock = new CriticalSection();
     CritSecTracker tracker(gMemLock);
-    // Open residual (w7-r, 2026-09-14): the image packs the five byte locals as
-    // 0x54=disableMgr, 0x55=enableTracking, 0x56=<heapOnly/spew>, 0x57=
-    // noTrackImmediate, 0x58=<the other>; we get 0x54=enableTracking,
-    // 0x55=<later bool>, 0x56=noTrackImmediate, 0x57=disableMgr, 0x58=<other>.
-    // Ten of the 49 rows are that permutation (the stb inits at 46/47/49/203/214,
-    // the FindData out-param addi at 75/85/107/221, and the lbz reads at
-    // 227/285). REFUTED: reversing these three declarations
-    // (noTrackImmediate/enableTracking/disableMgr) moves 0x54 onto disableMgr and
-    // lands row 46, but pushes enableTracking from 0x54 to 0x57 and loses row 47
-    // -- 49 rows and 97.2 before and after. The byte-slot order is not a function
-    // of declaration order here.
-    // The anchor rows (62/64 `addi r5, r21, 0x17` vs `subi r5, r18, 0x285`, and
-    // 333/337 `stw r11, 0x13(r21)` vs a separate lis/@l for gNumHeaps) are the
-    // .bss anchor+displacement pattern already documented at the top of this file
-    // -- codegen, not a wrong global.
+    // RESOLVED (w7-bu, 2026-09-15, 97.2 -> 98.4 canonical): the byte-slot
+    // permutation w7-r recorded (0x54..0x58 in a different order, refuted as a
+    // declaration-order lever) was not a slot-order problem at all -- it was
+    // two missing statements. The image stores disableMgr AGAIN after the heap
+    // block (`stb r18, 0x54(r31)` at 827CD488, a dead store to an
+    // address-taken local), which extends disableMgr's live range past the
+    // block and is what puts it at 0x54; and `sDefaultHeap = 0` sits INSIDE
+    // the `!disableMgr` arm (see below). With both, every slot lands.
+    // RESIDUAL (98.4, 38 rows): every remaining row is the .bss
+    // anchor+displacement pattern documented at the top of this file -- the
+    // image reaches gCheckConsistency / gNumHeaps / gTinyHeapReady as
+    // +0x17 / +0x13 / -0x1 off r21 = &gInitted (827CD308, 827CD330,
+    // 827CD3B8) where we need a separate lis/addi for gNumHeaps, and that
+    // extra anchor is what flips the r18/r19/r20/r21 callee-saved assignment
+    // (image: r18 = 0, r19 = &gSingleHeap, r20 = mem, r21 = &gInitted) and
+    // the lis/cmpwi schedule at 827CD314..827CD328 -- plus one `li r10, 0x0`
+    // for an argument the image leaves undefined (see the "tiny" AddHeap).
     bool disableMgr = false;
     bool enableTracking = false;
     bool noTrackImmediate = true;
@@ -590,8 +615,21 @@ void MemInit() {
             gNumHeaps = heapArr->Size();
             MILO_ASSERT(gNumHeaps < MAX_HEAPS, 0x295);
         }
-        Symbol size("size");
+        // totalBytes is declared BEFORE the Symbol: the image materialises it
+        // (`mr r26, r18`, 827CD384) between the Symbol ctor's argument setup
+        // and the `bl`; declared after, ours lands past the call.
         int totalBytes = 0;
+        Symbol size("size");
+        // w7-bu (2026-09-15): the image's 8th argument to this AddHeap is
+        // UNDEFINED -- it sets r6..r9 to 0 (827CD390..827CD3A0) and never
+        // writes r10, which still holds `MemMgr.cpp`@ha from 827CD318. In
+        // the shipped game allowTemp is therefore whatever byte that was
+        // (low byte 0x00, so false). Spelling it as an uninitialised local
+        // (`bool t; AddHeap(..., t)`) makes MSVC home it in a frame slot and
+        // `lbz` it (98.3 canonical but a phantom slot at 0x60 that shifts
+        // 0x64/0x68); an uninitialised `int` does the same and costs more
+        // (97.7). Neither reproduces "no instruction", so the literal
+        // stays -- one `li r10, 0x0` row (98.1).
         AddHeap(heapArr->Size() - 1, 0x2500000, "tiny", false, 0, (MemHeap::Strategy)0, 0, false);
         // Opens MemAlloc's tiny-heap fast path -- gHeaps[gNumHeaps-1] now exists.
         gTinyHeapReady = true;
@@ -614,8 +652,17 @@ void MemInit() {
             } while (--i > 0);
         }
         free(mem);
+        // Inside the `!disableMgr` arm, not after it: the `bne .L_827CD484`
+        // on disableMgr at 827CD284 skips the `stw r18, sDefaultHeap` at
+        // 827CD480 (the label sits AFTER the store). With the manager
+        // disabled the default heap stays at its static -1.
+        MemHeapStack::sDefaultHeap = 0;
     }
-    MemHeapStack::sDefaultHeap = 0;
+    // The image stores a fresh 0 to disableMgr's slot at 827CD488 (`stb r18,
+    // 0x54(r31)`) after the arm merges and never reads it again -- a dead
+    // store MSVC keeps because the local is address-taken by FindData.
+    // og-dc3-decomp carries the same statement.
+    disableMgr = false;
     if (enableTracking) {
         MemTrackInit(trackHeap, trackedAllocs, heapOnly);
         MemTrackEnable(!noTrackImmediate);

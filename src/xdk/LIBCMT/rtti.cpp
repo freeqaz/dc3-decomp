@@ -330,29 +330,58 @@ const _s_RTTIBaseClassDescriptor *FindVITargetTypeInstance(
     return 0;
 }
 
+// w7-bu: __RTDynamicCast 87.7 -> 90.0 canonical by spelling the __try body
+// the way the CRT does -- two static helpers, both inlined.  The locator is
+// read here AND again by the caller; MSVC CSEs the two loads into one r11
+// and homes the caller's copy (`stw r11, 0x58(r31)`, 0x8299E274) between
+// `subf r30, r8, r3` and the cdOffset test.  A single named locator in the
+// caller (the old shape) never produced that store.  Marking the helpers
+// `static inline` is byte-inert and still emits the out-of-line copies
+// (sections 34/35 of our obj), so the plain CRT spelling is kept.
+static void *FindCompleteObject(void **inptr) {
+    const _s_RTTICompleteObjectLocator *pCompleteLocator =
+        (const _s_RTTICompleteObjectLocator *)((*((void ***)inptr))[-1]);
+    char *pCompleteObject = (char *)inptr - pCompleteLocator->offset;
+    if (pCompleteLocator->cdOffset) {
+        pCompleteObject -= *(int *)((char *)inptr - pCompleteLocator->cdOffset);
+    }
+    return (void *)pCompleteObject;
+}
+
+// CRT PMDtoOffset: RetOff is assigned pdisp and then incremented, which is
+// what homes it (`stw r11, 0x58(r31)`, 0x8299E300) before the vbase read
+// (86.0 with pdisp read twice, 87.7 with a named pdisp local, 88.9 with this
+// shape written inline in the caller).  Written inline it also puts
+// pCompleteObject first in `lwzx r10, r30, r11` / `add r30, r30, r11`
+// (0x8299E2F8 / 0x8299E314 want r11 first); swapping the operands in source
+// is inert, only the helper-call shape restores the order.
+static int PMDtoOffset(void *pThis, const PMD &pmd) {
+    int RetOff = 0;
+    if (pmd.pdisp >= 0) {
+        RetOff = pmd.pdisp;
+        RetOff += *(int *)(*(char **)((char *)pThis + RetOff) + pmd.vdisp);
+    }
+    RetOff += pmd.mdisp;
+    return RetOff;
+}
+
 extern "C" void *__RTDynamicCast(
     void *inptr, long VfDelta, void *SrcType, void *TargetType, int isReference
 ) {
     void *pResult;
-    const _s_RTTICompleteObjectLocator *pCompleteLocator;
-    void *pCompleteObject;
     const _s_RTTIBaseClassDescriptor *pBaseClass;
-    int myoffset;
 
     if (!inptr) {
         return 0;
     }
 
     __try {
-        pCompleteLocator = (const _s_RTTICompleteObjectLocator *)((*((void ***)inptr))[-1]);
-        unsigned long cdOffset = pCompleteLocator->cdOffset;
-        pCompleteObject = (char *)inptr - pCompleteLocator->offset;
-        if (cdOffset != 0) {
-            pCompleteObject = (char *)pCompleteObject - *(int *)((char *)inptr - cdOffset);
-        }
+        void *pCompleteObject = FindCompleteObject((void **)inptr);
+        const _s_RTTICompleteObjectLocator *pCompleteLocator =
+            (const _s_RTTICompleteObjectLocator *)((*((void ***)inptr))[-1]);
 
-        char *pvfptr = (char *)inptr - VfDelta;
-        myoffset = (int)(pvfptr - (char *)pCompleteObject);
+        inptr = (char *)inptr - VfDelta;
+        int myoffset = (int)((char *)inptr - (char *)pCompleteObject);
 
         if (!(pCompleteLocator->pClassDescriptor->attributes & CHD_MULTINH)) {
             pBaseClass = FindSITargetTypeInstance(
@@ -371,24 +400,16 @@ extern "C" void *__RTDynamicCast(
         }
 
         if (pBaseClass) {
-            // RESIDUAL w7-at, 87.7 canonical.  Three rows left, none of them
-            // arithmetic: two dead home-slot stores `stw r11, 0x58(r31)`
-            // (0x8299E274 spilling the locator, 0x8299E300 spilling pdisp --
-            // both values stay live in r11 across the store), the 8-byte frame
-            // shift those imply (the image builds the thrown exception object
-            // at r31+0x60, we at r31+0x58), and the 9-instruction __except
-            // filter, which the image carries as its own symbol fn_8299E398
-            // and MSVC emits inside our COMDAT.  Moving pCompleteLocator and
-            // pBaseClass into the __try scope -- the obvious way to make the
-            // two spills share one slot -- is byte-identical, measured.
-            int pdisp = pBaseClass->where.pdisp;
-            int adj = 0;
-            if (pdisp >= 0) {
-                adj = *(int *)(*(char **)((char *)pCompleteObject + pdisp) +
-                               pBaseClass->where.vdisp) +
-                    pdisp;
-            }
-            pResult = (char *)pCompleteObject + (pBaseClass->where.mdisp + adj);
+            // RESIDUAL w7-bu, 90.0 canonical: all 90 body rows match.  The 9
+            // rows left are the __except filter (lis/ori 0xC0000005, two lwz,
+            // subf, cntlzw, extrwi, nop, blr), which the image carries as its
+            // own symbol fn_8299E398 (0x8299E230 + 0x168, size 0x24) and MSVC
+            // emits inside our COMDAT right after the body -- a symbols.txt
+            // extent question, not a source one.  Inert here: const vs
+            // non-const locator, pCompleteObject/myoffset in or out of the
+            // __try scope, `inptr -= VfDelta` vs a pvfptr local.
+            pResult = (char *)pCompleteObject
+                + PMDtoOffset(pCompleteObject, pBaseClass->where);
         } else {
             pResult = 0;
             if (isReference) {
