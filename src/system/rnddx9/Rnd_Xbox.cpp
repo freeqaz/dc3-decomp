@@ -1181,14 +1181,22 @@ void DxRnd::DoPointTests() {
     if (TheHiResScreen.IsActive())
         return;
 
-    // Process query results from previous frame
+    // Process query results from previous frame.  w7-br: the manager is read
+    // into a fresh local at the TOP of the body -- the image hoists that load
+    // into the loop latch (`lwz r3, 0x204(r29)` at 0x8261B02C, between the
+    // end() load and the compare) and then reuses the same r3 for the
+    // ToggleFrameIndex block after the loop (0x8261B038).  With the member
+    // read inline as the call's `this` it sits last in the argument setup
+    // and never leaves the body (92.9 -> 95.9 together with the two locals
+    // below).  The second call keeps the member read: it reloads (0x8261AFF4).
     for (std::vector<RndPointTest>::iterator it = mPointTestQueries.begin(); it !=mPointTestQueries.end(); ++it) {
         unsigned int result;
+        RndOcclusionQueryMgr *queryMgr = mOcclusionQueryMgr;
         // 0x8261AFD8-0x8261AFE8 and 0x8261B008-0x8261B020 each load
         // `it->mFlare` ONCE and use it for both stores; writing
         // `it->mFlare->` twice makes MSVC reload it, because the store to
         // 0x144/0x102 may alias the pointer.
-        if (mOcclusionQueryMgr->GetQueryResults(it->mPointQueryIdx, result)) {
+        if (queryMgr->GetQueryResults(it->mPointQueryIdx, result)) {
             // 0x8261AFD0: the result is loaded and bool-ified BEFORE the flare
             // pointer is loaded, so the visibility value is a local of its own.
             bool visible = result != 0;
@@ -1210,19 +1218,24 @@ void DxRnd::DoPointTests() {
     // increment -- we emitted 0x1c then 0x20.  Semantically the image retires
     // the previous frame's queries, bumps the counter, then opens the new
     // frame; we were opening the new frame before retiring the old one.
-    mOcclusionQueryMgr->ToggleFrameIndex();
-    mOcclusionQueryMgr->OnEndFrame();
-    mOcclusionQueryMgr->IncrementFrameCounter();
-    mOcclusionQueryMgr->OnBeginFrame();
+    // w7-br: one pointer serves Toggle + OnEndFrame (0x8261B038-0x8261B054,
+    // the vtable is read off r3 BEFORE the 0x1804 store) and a second read
+    // serves Increment + OnBeginFrame (0x8261B058); reading the member four
+    // times reloads it after each store instead.
+    RndOcclusionQueryMgr *endMgr = mOcclusionQueryMgr;
+    endMgr->ToggleFrameIndex();
+    endMgr->OnEndFrame();
+    RndOcclusionQueryMgr *beginMgr = mOcclusionQueryMgr;
+    beginMgr->IncrementFrameCounter();
+    beginMgr->OnBeginFrame();
 
-    // Count point tests needed
-    int numTests = 0;
-    for (std::list<PointTest>::iterator it = mPointTests.begin(); it !=mPointTests.end(); ++it) {
-        numTests++;
-    }
-
-    // Resize mPointTestQueries to match mPointTests count
-    mPointTestQueries.resize(numTests);
+    // Resize mPointTestQueries to match mPointTests count.  w7-br: the
+    // count loop IS list::size() -- and because it is the resize's argument,
+    // the {0, -1, -1} default value (0x8261B084-0x8261B090) is built BEFORE
+    // the loop walks the list (0x8261B098-0x8261B0A4), right-to-left; a
+    // hand-written count loop
+    // put it after (95.9 -> 98.1).
+    mPointTestQueries.resize(mPointTests.size());
 
     // Early out if no point tests
     if (mPointTests.empty())
@@ -1254,7 +1267,12 @@ void DxRnd::DoPointTests() {
     // Setup view matrix.  0x8261B160-0x8261B16C passes the Matrix4
     // CONSTRUCTOR'S return value (`mr r5, r3`) straight to SetVConstant -- an
     // unnamed temporary, not a named local whose address is re-taken.
-    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
+    // w7-br: via a reference local the manager pointer is loaded ONCE, before
+    // the ctor call, and held in r31 (0x8261B158 / `mr r3, r31` at
+    // 0x8261B170); written as `TheShaderMgr.SetVConstant(...)` it is reloaded
+    // after the ctor.
+    RndShaderMgr &shaderMgr = TheShaderMgr;
+    shaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(xfm));
 
     // Setup shader state
     RndShader::SelectConfig(nullptr, kStandardShader, false);
@@ -1286,19 +1304,24 @@ void DxRnd::DoPointTests() {
 
     // Process each point test
     int idx = 0;
-    for (std::list<PointTest>::iterator it = mPointTests.begin(); it !=mPointTests.end(); ++it, ++idx) {
+    for (std::list<PointTest>::iterator it = mPointTests.begin(); it !=mPointTests.end(); ++it) {
         TheNgStats->mFlares++;
 
-        RndFlare *flare = it->mFlare;
-        RndPointTest &test = mPointTestQueries[idx];
+        // w7-br: `idx++` in the subscript -- the byte-offset IV is bumped
+        // right after the address is formed (0x8261B270), not at the loop
+        // end -- and the point test reads `test.mFlare` back: the image's
+        // `clrrwi r11, r10, 0` at 0x8261B264 is that store-forwarded load
+        // (a 32-bit zero-extending copy of the value just stored), which a
+        // `flare` local cannot produce.
+        RndPointTest &test = mPointTestQueries[idx++];
         // 0x8261B268-0x8261B284: mFlare is stored FIRST, then mAreaQueryIdx
         // (0x8) and only then mPointQueryIdx (0x4).
-        test.mFlare = flare;
+        test.mFlare = it->mFlare;
         test.mAreaQueryIdx = -1;
         test.mPointQueryIdx = -1;
 
         // Point test
-        if (flare->GetPointTest()) {
+        if (test.mFlare->GetPointTest()) {
             // NEGATIVE RESULT (w7-bl, byte-identical): the image stores w and
             // color between the z load and the z conversion, but writing the
             // fields in that order (x, y, w, color, z) changes not one
@@ -1356,13 +1379,11 @@ void DxRnd::DoPointTests() {
             verts[3].x = area.w + verts[0].x;
             verts[3].y = area.h + verts[3].y;
 
-            // w7-bl RESIDUAL (92.90%): what is left is a flat renumbering of
-            // the callee-saved set (`this` is r29 in the image, r30 for us;
-            // the iterator, the byte index and the two query-index addresses
-            // shift with it), four `fadds` whose operands MSVC canonicalises
-            // (writing `verts[0].y + area.h` is byte-identical), and the
-            // mFlare store at 0x8261B268, which the image does off the
-            // computed `&test` where we emit an indexed `stwx`.
+            // 100% canonical (w7-br; w7-bl left it at 92.90).  The
+            // callee-saved renumbering was the four levers above.  What is
+            // left is register permutation only (r21/r22) plus the four
+            // `fadds` whose operands MSVC canonicalises (writing
+            // `verts[0].y + area.h` is byte-identical, per w7-bl).
             // 0x8261B430/0x8261B444: the manager is read ONCE into a
             // callee-saved register and reused for BeginQuery (`mr r3, r30`);
             // EndQuery at 0x8261B478 reloads the member.
