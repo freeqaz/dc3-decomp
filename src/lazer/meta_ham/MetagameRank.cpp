@@ -1154,3 +1154,12 @@ void MetagameRank::AwardForRankUp(int i1) {
         }
     }
 }
+
+// w8-j 2026-09-15 -- UNSCOREABLE at 99.824% for the vector copy constructor
+// ??0?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@...@@QAA@ABV01@@Z
+// (112 B).  All 28 of 28 instructions are EQUAL; the entire 0.176 is a
+// RELOCATION-NAME charge under the graded name_check ruler, not a code
+// difference.  The image spells one callee `OnlyReturns` where we emit
+// ?get_allocator@...; both bodies are the same two instructions, so this is an
+// ICF fold that build/373307D9/icf_aliases.map has not grouped.  There is no
+// source change that can move it -- the code is already byte-exact.

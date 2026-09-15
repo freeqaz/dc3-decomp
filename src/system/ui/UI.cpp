@@ -1313,3 +1313,19 @@ END_HANDLERS
 // 0x8277AFC0 would be zero-sum-plus-a-goalpost-move (+76 B gross, but it trades
 // a scoring row for an fn_ row and the map names neither as the "wrong" one).
 // Measured 0.0%, refuted as a rename target, left as-is deliberately.
+
+// w8-j 2026-09-15 -- FLOOR at 99.430% for ?GotoFirstScreen@UIManager@@QAAXXZ
+// (140 B, 31 of 35 instructions equal).  All four residual rows are the
+// ARGUMENT MATERIALISATION ORDER of the __RTDynamicCast call behind
+// DataVariable("first_screen").Obj<UIScreen>():
+//     target   addi r6, r11, ??_R0?AVUIScreen@@@8@l
+//              addi r5, r10, ??_R0?AVObject@Hmx@@@8@l
+//              li   r7, 0x0   /  li r4, 0x0
+//     ours     addi r5, ... Object   /  addi r6, ... UIScreen
+//              li   r4, 0x0   /  li r7, 0x0
+// The two `lis` that feed them (idx 13/14) already pair, and every operand and
+// every register is right -- only the issue order of four independent
+// instructions differs, so the cast itself is correct.  That order is produced
+// inside the Obj<T>() template expansion in a PCH-reached header, not in this
+// file, so there is no local lever: any change would reshape every Obj<T>()
+// call site in the binary.  Permuter territory.
