@@ -151,6 +151,16 @@ move and there is no driver-mismatch artefact behind it. Log:
 this merge: four behavioural fixes landed in it, including `CharEyes`'s copy
 constructor and `PlaylistSongProvider`'s destructor shape.
 
+**Native gate on `a153a143b` (phase 2, lanes k/h/g): green.** `gate exit 0` —
+506 registered, 437 executed, 437 passed, 0 failed, 69 skipped against budget 69,
+and the skipped suite list is *identical* to the `980e4d5e4` run, so coverage did
+not shrink. Run deliberately before the remaining lanes landed, so that the four
+behavioural changes in those three merges — `CharSignalApplier::Handle`'s missing
+superclass forward, `TransformNormal`'s dropped transpose, `_M_erase`'s double
+division, and the `PlatformMgrOpCompleteMsg` name — are attributable on their own
+rather than sitting in a six-lane batch to bisect. Log:
+`~/tmp/dc3-wells/w8/native-gate-a153a143b.log`.
+
 ### What phase 1 proved about the 0 % class
 
 **Almost none of it was missing bodies.** Ranked by rows recovered:
