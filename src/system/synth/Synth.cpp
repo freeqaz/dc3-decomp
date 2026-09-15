@@ -687,11 +687,11 @@ void Synth::CullZombies() {
     std::list<SampleInst *>::iterator next = mZombieInsts.begin();
     std::list<SampleInst *>::iterator it;
     while (next != mZombieInsts.end()) {
+        std::list<SampleInst *>::iterator cur = next;
         it = next;
         ++next;
-        if ((*it)->DonePlaying()) {
+        if ((*cur)->DonePlaying())
             mZombieInsts.erase(it);
-        }
     }
 }
 
