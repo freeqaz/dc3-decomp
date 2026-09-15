@@ -95,55 +95,52 @@ void DxMultiMesh::Shutdown() {
     }
 }
 
-// RESIDUAL (w7-bp, 93.98 canonical, 652 B, 21 rows).  Two independent
-// residuals, both measured:
+// RESIDUAL (w7-bs, 100.0 canonical / 99.69 raw, 652 B, 163/163, 5 rows):
+// only target indices 73-77, the 0x8007000E mask after
+// D3DDevice_CreateVertexBuffer, where the image allocates r10/r11 and we
+// allocate r11/r12 (w7-bp's cluster (1)).  Everything for the preceding 72
+// instructions is equal and the operand order of the `and.` is the same, so
+// this is volatile numbering, not a source shape.
 //
-//  (1) Target indices 73-77, the 0x8007000E mask after
-//      D3DDevice_CreateVertexBuffer: the image allocates r10/r11 where we
-//      allocate r11/r12, five pure REGISTER_SWAP rows.  Everything for the
-//      preceding 72 instructions is equal, so this is the volatile allocator
-//      having one fewer free register on our side at that exact point, not a
-//      source shape.
+// BUSTED (w7-bs, 93.98 -> 100.0).  w7-bp's cluster (2) -- the three DEAD home
+// stores of `*(mGeomOwner + 0x148)` at 0x82622F50 / 0x82622F6C / 0x82622FA0
+// and the tail's `lwz r11, 0x148(r30)` / 0x110-0x114 / `divw` re-derivation
+// at 0x82622F90-AC -- IS the accessor's real spelling: `owner->Faces()` is an
+// inlined `return mGeomOwner->mFaces;` (Mesh.h), and MSVC homes the returned
+// reference once per source MENTION while CSE-ing the loads.  Three mentions
+// = three homes: the loop bound `owner->Faces().size()` (home 0x58, evaluated
+// at entry and again in every tail because the bound is not hoisted), the
+// subscript `owner->Faces()[i]` (home 0x5c), and `indexCount` before the
+// null test.  The tail compare is `cmplw cr6, r9, r8` / `bne cr6` at
+// 0x82622FAC-B0, so the bound is spelled `!=`, not `<` (`<` costs one
+// diff_op row, 99.97).  The `beq .L_82622FB4` at 0x82622F5C is the
+// zero-trip test the counted `for` produces on its own.
 //
-//  (2) Target indices 132-156, the index-copy loop.  The image emits THREE
-//      DEAD home stores of the same pointer value `*(mGeomOwner + 0x148)`:
-//      `stw r11, 0x58(r31)` at 132 (before the loop), `stw r11, 0x5c(r31)` at
-//      139 (inside it, immediately before r11 is clobbered) and
-//      `stw r11, 0x58(r31)` at 153 (in the tail).  Nothing ever reads them --
-//      the tail re-derives the pointer with `lwz r11, 0x148(r30)` at 149.
-//      run_diff_inspect mode=stack-layout confirms the count directly:
-//      target slot 0x58 has 5 stores over [21..153], ours has 2 over [21..87];
-//      target 0x5c has 2 over [6..139], ours has 1 over [6..109] (base var
-//      `temp_r11`).  That is the repeated-call-expression / dead-home-slot
-//      signature (docs/decomp/patterns/repeated-call-expression-home-stores.md,
-//      dead-home-slot-store.md) pointing the OTHER way than usual: the image
-//      writes that accessor expression more times than we do and MSVC CSE'd
-//      the loads while keeping the homes.  Reproducing it needs the accessor's
-//      real spelling, which this raw-offset decomp does not have.
+// Kept from the raw-offset era, still measured against THAT spelling and
+// superseded by the accessor form above -- do not resurrect either:
+//   (w7-aj) re-evaluating the raw (0x114-0x110)/6 bound in a hand-rotated
+//       do/while tail regressed 88.4 -> 86.0 and 91.5 -> 90.3;
+//   (w7-bp) post-increment `*dst++ = a; *dst++ = b; *dst++ = c;` cost
+//       94.0 -> 93.0 (MSVC split the induction variable into r6+r3);
+//       `*++dst` was worth +0.7 over `dst[0]/dst[1]/dst[2]`.
+// The `*dst` / `*++dst` / `*++dst` / `dst++` form below is what the image's
+// `stw 0x0(r3)` / `stwu 0x4(r3)` / `stwu 0x4(r3)` / `addi r3, r3, 4` at
+// 0x82622F7C-94 lowers from.
 void DxMultiMesh::UpdateGeometryBuffers() {
     // Register variables ordered to match calling conventions
-    u32 var_r9;
-    s32 var_r10;
     void *temp_r3_3;
     void *temp_r11;
-    void *temp_r11_2;
-    void *temp_r11_3;
     s32 temp_r24;
     s32 temp_r28_2;
     s32 temp_r3;
     DxMesh *owner;
     s32 temp_r28;
     s32 temp_r10;
-    void *temp_r11_4;
     s32 temp_r3_2;
     void *temp_r27;
     PhysMemTypeTracker tracker(Symbol("D3D(phys):Mesh"));
-    s32 temp_r8;
-    void *var_r3;
     s32 temp_r23;
     void *temp_r30;
-
-    u16 temp_r8_2;
     void *temp_r27_ptr;
 
     // The mesh this uploads is mMesh's GEOMETRY OWNER, not mMesh itself.  The
@@ -202,66 +199,33 @@ void DxMultiMesh::UpdateGeometryBuffers() {
         memcpy(dstData, srcData, temp_r3 * 0x60);
     }
 
-    temp_r11_2 = *(void **)((char *)temp_r30 + 0x148);
     temp_r28_2 = (temp_r24 + 0x1C) * 4;
-    temp_r11 = (void *)((char *)temp_r11_2 + 0x110);
 
     // Computed BEFORE the null test: the image emits the whole
     // (end - begin) / 6 * 3 chain at 0x82622F10-24 and only then takes the
     // `bne` that skips the allocation.
-    s32 indexCount = ((*(s32 *)((char *)temp_r11 + 4) -
-                      *(s32 *)((char *)temp_r11 + 0)) / 6) * 3;
+    s32 indexCount = owner->Faces().size() * 3;
     if (*(void **)((char *)this + temp_r28_2) == nullptr) {
         void *vb2Ptr = D3DDevice_CreateVertexBuffer(indexCount * 4, 0, (D3DPOOL)0);
         *(void **)((char *)this + temp_r28_2) = vb2Ptr;
     }
 
-    auto _tmp0 = D3DVertexBuffer_Lock((D3DVertexBuffer *)*(void **)((char *)this + temp_r28_2), 0, 0, 0);
-    var_r3 = _tmp0;
+    unsigned int *dst = (unsigned int *)D3DVertexBuffer_Lock(
+        (D3DVertexBuffer *)*(void **)((char *)this + temp_r28_2), 0, 0, 0
+    );
 
-    temp_r11_3 = *(void **)((char *)temp_r30 + 0x148);
-    var_r9 = 0;
-
-    if ((*(s32 *)((char *)temp_r11_3 + 0x114) -
-                     *(s32 *)((char *)temp_r11_3 + 0x110)) / 6 != 0) {
-        var_r10 = 0;
-        // NEGATIVE RESULT (w7-aj): re-evaluating this bound in the loop tail,
-        // which is literally what the image does (`lwz r11, 0x148(r30)` /
-        // 0x114 - 0x110 / divw at 0x82622FC4-D8), REGRESSES the function --
-        // measured twice, 88.4 -> 86.0 before the index-count hoist and
-        // 91.5 -> 90.3 after it.  MSVC then keeps the reloaded pointer in a
-        // different register than the body wants and the 0x110/0x114 loads
-        // swap, which costs more than the six tail rows it buys.  Do not retry.
-        u32 indexCount = (u32)((*(s32 *)((char *)temp_r11_3 + 0x114) -
-                                  *(s32 *)((char *)temp_r11_3 + 0x110)) / 6);
-        do {
-            temp_r8 = *(s32 *)((char *)temp_r11_3 + 0x110);
-            var_r9++;
-            temp_r11_4 = (void *)(var_r10 + temp_r8);
-            temp_r8_2 = *(u16 *)((char *)temp_r11_4 + 0);
-            var_r10 += 6;
-            // Pre-increment stores: the image walks the destination with
-            // `stw r8, 0x0(r3)` / `stwu r8, 0x4(r3)` / `stwu r11, 0x4(r3)` /
-            // `addi r3, r3, 0x4` (0x82622FA4-C0).  `stwu` is store-with-update,
-            // i.e. `*++dst = x`.  MSVC still lowers this to plain `stw` at
-            // 0x4/0x8, but the pre-increment spelling is nonetheless worth
-            // +0.7 over plain `dst[0]/dst[1]/dst[2]` indexing (94.0 vs 92.9),
-            // which also loses the loop's register assignment.  Do not
-            // "simplify" it back.
-            // NEGATIVE RESULT (w7-bp): post-increment `*dst++ = a; *dst++ = b;
-            // *dst++ = c; var_r3 = dst;` -- the spelling that most literally
-            // describes the image's `stw 0x0(r3)` / `stwu 0x4(r3)` /
-            // `stwu 0x4(r3)` / `addi r3, r3, 0x4` -- costs 94.0 -> 93.0.  MSVC
-            // still refuses the update form and additionally splits the
-            // induction variable into r6+r3, adding two rows.  The `*++dst`
-            // form below stays.
-            s32 *dst = (s32 *)var_r3;
-            *dst = (s32)temp_r8_2;
-            *++dst = (s32)*(u16 *)((char *)temp_r11_4 + 2);
-            *++dst = (s32)*(u16 *)((char *)temp_r11_4 + 4);
-            temp_r11_3 = *(void **)((char *)temp_r30 + 0x148);
-            var_r3 = (void *)(dst + 1);
-        } while (var_r9 != indexCount);
+    // The image re-derives `owner->Faces()` (lwz 0x148(r30), then 0x110/0x114,
+    // divw by the 6 it keeps in r27) at the loop entry AND in every tail
+    // (0x82622F40-5C, 0x82622F90-AC), and homes the accessor's reference
+    // result into 0x58 both times and into 0x5c for the subscript -- so the
+    // bound is `owner->Faces().size()` re-read each iteration, not a hoisted
+    // count.
+    for (unsigned int i = 0; i != owner->Faces().size(); i++) {
+        RndMesh::Face &face = owner->Faces()[i];
+        *dst = face.v1;
+        *++dst = face.v2;
+        *++dst = face.v3;
+        dst++;
     }
 
     D3DVertexBuffer_Unlock((D3DVertexBuffer *)*(void **)((char *)this + temp_r28_2));
