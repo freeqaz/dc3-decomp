@@ -96,7 +96,7 @@ void BaseSkeleton::NormPos(SkeletonCoordSys cs, SkeletonJoint joint, Vector3 &v)
     LimbNormPos(cs, joint, true, v40, v);
 }
 
-// RESIDUAL (w7-bl, 98.28 canonical, 5 of 175 rows): two register-allocator
+// RESIDUAL (w7-bl, 98.28 canonical, 5 of 175 rows; w7-br held): two register-allocator
 // decisions, both downstream of identical arithmetic.
 //  (1) `bone1` -- the image leaves the ternary's result in the scratch r7 in
 //      BOTH branches (`addi r7, r7, 0xb` / `addi r7, r7, 0x6`) and pays a
@@ -109,6 +109,13 @@ void BaseSkeleton::NormPos(SkeletonCoordSys cs, SkeletonJoint joint, Vector3 &v)
 //      slots later in the image, after the three clrlwi/clrrwi; MSVC packs the
 //      two xori adjacently.  Same instructions, same registers, same order of
 //      the seven `addi` results (indices 60-66).
+// NEGATIVE RESULT (w7-br): computing bone3 before bone1/bone2 (so its xori
+// temp is dead before bone1's addi) is 98.3 -> 98.2, 15 rows: the two xori
+// swap clrlwi/clrrwi partners and all three bone addi's recolour, and the
+// `mr r4, r7` at 0x8243459C is still not coalesced.  Both branches of the
+// image define bone1 in r7 and every other ternary result lands in the
+// register we use, so the un-coalesced move is a hint the allocator did not
+// take, not a live range we can shorten from source.
 // Both MakeString rows in the Function Call Diff are ICF folds (the assert
 // format string and the "Unsupported joint %i" one), not wrong callees.
 void BaseSkeleton::LimbNormPos(
@@ -169,8 +176,8 @@ void BaseSkeleton::LimbNormPos(
     }
 }
 
-// RESIDUAL (w7-bl, 95.70 canonical, 45 of 220 rows, was 95.00/48): two
-// scheduling residuals, both inside the joint-copy blocks.
+// RESIDUAL (w7-br, 95.9 canonical, 44 of 222 rows; w7-bl left it at 95.70/45):
+// two scheduling residuals, both inside the joint-copy blocks.
 //  (1) The kUnk5 branch is 3 instructions SHORT because MSVC cross-jumps our
 //      `limbDir.x -= nearJoint.x` into the arm/leg tail (our `b` lands on the
 //      shared `lfs 0x60 / lfs 0x80 / fsubs f13` pair instead of on the store
@@ -194,6 +201,23 @@ void BaseSkeleton::LimbNormPos(
 //     0xc0` picks up a +48 offset diff at index 48).
 //   - arm/leg subtraction reordered z,x,y to match the image's emission order
 //     there: same 95.70, 45->48 rows.
+// w7-br: the arm/leg subtraction is written y,x,z below.  The image computes
+// z (the branch-selected `fsubs f0, f0, f0` at 0x82434270), then x
+// (`fsubs f13, f12, f13` at 0x82434278), then y (0x82434284); with x,y,z in
+// the source MSVC emitted z, y, x and with z,x,y (w7-bl) 48 rows.  y,x,z gives
+// the image's z, x, y emission: 95.70 -> 95.9, and the kUnk5 block stops
+// cross-jumping into the x subtraction (its `b` now lands on the stfs triple
+// at 0x82434288 like the image's) at the cost of the x/y fsubs register
+// colouring and two moved stores.  NEGATIVE RESULTS (w7-br): kUnk5 in x,y,z
+// with the arm/leg y,x,z is 95.7 (47 rows); `Vector3 nearJoint;` declared
+// first and assigned AFTER limbDir in all three branches is 95.7 with 63
+// rows -- the image's dead `addi r4, r31, 0xc0` at 0x824340F8 (the
+// PaddedJointPos -> const Vector3& conversion of pj[kJointHipLeft]) moves
+// to +0xf0, which pins nearJoint = pj[HipLeft] as the FIRST statement of
+// the kUnk5 block.  What is left is which 16-byte copy's stores the
+// scheduler issues first (image: limb/near/origin round-robin from
+// 0x8243422C; ours: near+origin, then limb) and, downstream of that, which
+// of limb.{x,y} / near.{x,y} is loaded first for the subtraction.
 // The MakeString<char const(&)[13], int const&, char const(&)[5]> vs our
 // <[11], int const&, [49]> in the Function Call Diff is an ICF fold -- both
 // sides load the SAME two string symbols at indices 14/15 -- not a wrong callee.
@@ -231,8 +255,8 @@ void BaseSkeleton::MakeCameraToPlayerXfm(
             limbDir.z = nearJoint.z;
         else
             nearJoint.z = limbDir.z;
-        limbDir.x -= nearJoint.x;
         limbDir.y -= nearJoint.y;
+        limbDir.x -= nearJoint.x;
         limbDir.z -= nearJoint.z;
     } else if (cs == kCoordLeftLeg || cs == kCoordRightLeg) {
         int originIdx = (cs == kCoordLeftLeg) ? kJointHipLeft : kJointHipRight;
@@ -243,8 +267,8 @@ void BaseSkeleton::MakeCameraToPlayerXfm(
             limbDir.z = nearJoint.z;
         else
             nearJoint.z = limbDir.z;
-        limbDir.x -= nearJoint.x;
         limbDir.y -= nearJoint.y;
+        limbDir.x -= nearJoint.x;
         limbDir.z -= nearJoint.z;
     } else if (cs == kUnk5) {
         Vector3 nearJoint = pj[kJointHipLeft];
