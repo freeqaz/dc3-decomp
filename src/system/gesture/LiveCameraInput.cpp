@@ -360,15 +360,20 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
  *        and it manufactures two new (0x1e0,0x280) OFFSET_SWAP rows -- strictly
  *        worse, reverted.
  *
- *  What is left, for anyone who picks this up: 43-48 instructions of pure
- *  REGISTER_SWAP (r10<->r9, r27<->r30, r26<->r27, r29<->r30, r21<->r22 ...),
- *  and one scheduling cluster at target indices 86-115 where retail computes
- *  `srcOffset` (mullw/slwi/add into r30) BEFORE the `mTex->TexelsPitch()`
- *  `bctrl` and then SINKS `destStride * 2`, `(srcPitch - 320) * 4` and
- *  `srcPtr = srcOffset - 4` past the `mTex->Height()` loop guard, while our
- *  build hoists the `bctrl` above `srcOffset` and computes all three before the
- *  guard.  The statement order below is already retail's; this is the
- *  scheduler, not the source.
+ *  w7-by (88.50336 -> 97.31544 canonical): the "scheduling cluster at target
+ *  indices 86-115" was the LOOP SHAPE, not the scheduler.  The image's
+ *  preheader values -- `slwi r23, r10, 1` (destStride * 2), `slwi r22, r11, 2`
+ *  ((srcPitch - 320) * 4) and `subi r28, r30, 0x4` at 0x82430A28..0x82430A34,
+ *  all placed AFTER the `ble` on mTex->Height() -- are loop-invariant code
+ *  motion of expressions written inside the loop: `*srcPtr++` (which MSVC
+ *  strength-reduces to `lwzu r31, 0x4(r28)` from a pre-decremented base),
+ *  `destPtr += destStride * 2` and `srcPtr += srcStride` with the strides
+ *  named unscaled.  Written pre-scaled before the loop they are computed
+ *  before the guard, which dragged 40+ register assignments with them.
+ *  Residual (12 rows): the two commutative `add`s at 0x824308C8/0x82430904
+ *  and the r6/r7 assignment of the two masked clip values (0x82430924) --
+ *  clippedY-first, rounding startX/startY in place, and swapping the add
+ *  operands were all re-measured in this shape and are inert or worse.
  *
  *  Not a bug: the final `D3DCubeTexture_UnlockRect` vs our
  *  `D3DTexture_UnlockRect` (index 153) are the SAME address 0x82B9BEC0 in
@@ -419,14 +424,13 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
         int destWidth = mTex->Width();
         unsigned int srcPitch = lockedRect.mPitch >> 2;
         uintptr_t srcBits = (uintptr_t)lockedRect.mBits;
-        uintptr_t srcOffset = srcPitch * clippedY * 4 + srcBits;
+        unsigned int *srcPtr = (unsigned int *)(srcPitch * clippedY * 4 + srcBits);
         unsigned int destPitch = mTex->TexelsPitch();
-        int destStride = (int)((destPitch >> 1) - destWidth) * 2;
-        unsigned int *srcPtr = (unsigned int *)(srcOffset - 4);
+        int destStride = (int)((destPitch >> 1) - destWidth);
+        int srcStride = (int)(srcPitch - 320);
         for (int row = 0; row < mTex->Height(); row++) {
             for (int col = 0; col < 320; col++) {
-                srcPtr++;
-                unsigned int pixel = *srcPtr;
+                unsigned int pixel = *srcPtr++;
                 if (col >= clippedX / 2 && col < (mTex->Width() + clippedX) / 2) {
                     int cr = (pixel >> 24) - 0x80;
                     int cb = (pixel >> 8 & 0xff) - 0x80;
@@ -436,8 +440,8 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
                     destPtr += 2;
                 }
             }
-            destPtr += destStride;
-            srcPtr += (int)(srcPitch - 320);  // same unsigned-wrap hazard as line 267
+            destPtr += destStride * 2;
+            srcPtr += srcStride;  // same unsigned-wrap hazard as line 267
         }
         D3DTexture_UnlockRect((D3DTexture *)bufferData, 0);
     }
