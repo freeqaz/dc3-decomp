@@ -148,3 +148,14 @@ void CharCuff::Highlight() {
         }
     }
 }
+
+// w8-c: CharCuff.obj carries six `std::list<RndMesh *>` COMDATs in the image
+// (CharCuff.s: allocate 0x82391300, deallocate 0x82391340, _M_create_node
+// 0x82391480, insert 0x82391600, _List_base::clear 0x82391680, ~list
+// 0x8239273C) that nothing in the unit calls -- every `bl` to them in the whole
+// binary is in rndobj/Utl, rndobj/AmbientOcclusion or world/DefaultPhysicsManager.
+// CharCuff.obj simply won the COMDAT fold, so retail's CharCuff.cpp odr-used a
+// std::list<RndMesh *> whose use we have not recovered (mIgnore is an
+// ObjPtrList, which is intrusive and shares nothing with std::list).  Without an
+// odr-use MSVC emits nothing and all six rows read 0.0.
+template class std::list<RndMesh *>;

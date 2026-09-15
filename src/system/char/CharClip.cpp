@@ -1228,3 +1228,9 @@ void CharClip::LockAndDelete(CharClip **const clips, int numClips, int remaining
         } while (numClips > 0);
     }
 }
+
+// w8-c: orphan COMDAT -- CharClip.obj carries MakeString<int,int,const char *>
+// at 0x823D13D0 (CharClip.s) with no caller in the unit.
+template const char *MakeString<int, int, const char *>(
+    const char *, const int &, const int &, const char *const &
+);

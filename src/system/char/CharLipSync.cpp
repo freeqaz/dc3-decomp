@@ -420,3 +420,11 @@ void CharLipSync::PlayBack::Reset() {
         weight.mPrevWeight = 0;
     }
 }
+
+// w8-c: orphan COMDAT -- CharLipSync.obj carries
+// `std::vector<String>::_M_allocate_and_copy<String *>` at 0x823BCFC8
+// (CharLipSync.s) with no caller in the unit.  It is a MEMBER TEMPLATE, so
+// `template class std::vector<String>;` would not reach it.
+template String *std::vector<String>::_M_allocate_and_copy<String *>(
+    std::vector<String>::size_type, String *, String *
+);

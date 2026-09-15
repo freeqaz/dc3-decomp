@@ -236,3 +236,25 @@ void Waypoint::ShapeDeltaBox(const Vector3 &v1, float f1, float f2, Vector3 &res
             res *= 1.0f - (f1 / sqrtf(lensq));
     }
 }
+
+// w8-c: see the note in CharBonesMeshes.cpp.  Waypoint.obj's out-of-line
+// `PropSync<Waypoint>(Waypoint *&, ...)` is at 0x823CC908 in
+// build/373307D9/asm/system/char/Waypoint.s and has no caller in the unit --
+// retail inlined both ObjPtrVec call sites and still emitted the COMDAT.
+template bool PropSync<Waypoint>(Waypoint *&, DataNode &, DataArray *, int, PropOp);
+
+// w8-c: same shape as CharCuff.cpp's std::list<RndMesh *> note -- Waypoint.obj
+// carries `std::vector<Waypoint *>` COMDATs in the image (push_back 0x823CCDA0,
+// _M_insert_overflow 0x823CCCA8, allocate 0x823CBEF0, deallocate 0x823CBF30)
+// whose only caller in the whole binary is CharacterTest.s:0x823DC7F8.
+// Waypoint.obj won the fold, so retail's Waypoint.cpp odr-used one too.
+template class std::vector<Waypoint *>;
+
+// w8-c: orphan COMDAT, and like NormalizeTo in CharBonesSamples.cpp it is not a
+// template -- `Rand::Int(int, int)` is defined in the body of class Rand in
+// math/Rand.h, so it is implicitly inline.  The image's Waypoint.obj carries it
+// out-of-line at 0x823CC090 (Waypoint.s) with no caller in the unit; the `bl`
+// sites are in math/Rand.s, synth/MicNull.s, world/Crowd.s, world/CameraManager.s
+// and lazer/meta_ham/ContextChecker.s.  Waypoint.obj won the fold.  Taking the
+// address forces emission; see the linkage warning in that other note.
+int (Rand::*const kRandIntRef)(int, int) = &Rand::Int;
