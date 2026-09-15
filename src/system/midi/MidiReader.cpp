@@ -6,6 +6,7 @@
 #include "utl\TempoMap.h"
 #include "midi\MidiVarLen.h"
 #include "utl\MBT.h"
+#include "utl\FileStream.h"
 #include <algorithm>
 
 const MidiChunkID MidiChunkID::kMThd("MThd");
@@ -542,3 +543,28 @@ bool MidiReader::ReadTrack() {
     } while (!mFail);
     return mState == kNewTrack;
 }
+
+#ifndef HX_NATIVE
+// w8-j: orphan-instantiation probe for ??3FileStream@@SAXPAX@Z (0x8254E100,
+// 24 B).  ham_xbox_r.map contributes that COMDAT from midi:MidiReader.obj and
+// NOTHING in MidiReader.s calls it -- the listing holds only .fn/.endfn, no bl --
+// so the odr-use was compiled into this TU and dropped by /OPT:REF.  Note the
+// map attributes no ??2FileStream@@ (operator new) to this object, or to any
+// other, so the discarded site deleted a FileStream rather than allocating one.
+// The sibling ??3TempoMap@@SAXPAX@Z two functions later in the same listing is
+// already 100% here, emitted by the utl\TempoMap.h include above -- same
+// MEM_OVERLOAD shape, so the body is not in question, only the odr-use.
+// REFUTED: `delete fs` emits NOTHING here -- ~FileStream is virtual, so the
+// delete-expression dispatches to the scalar deleting destructor and the
+// operator delete call lives inside that, in FileStream's own TU.  The site is
+// `new FileStream(...)`: MEM_OVERLOAD's operator new is a small inline static
+// member that MSVC inlines straight into the call (which is why the map has no
+// ??2FileStream@@ anywhere at all), while the matching operator delete is
+// reached by ADDRESS from the constructor-throws cleanup path and therefore has
+// to be emitted as a real COMDAT.
+// External linkage is required; `static` is discarded before it instantiates
+// anything it mentions (measured by w8-b in HamMove.cpp).
+FileStream *Dc3W8jMidiFileStreamProbe(const char *path) {
+    return new FileStream(path, FileStream::kRead, true);
+}
+#endif
