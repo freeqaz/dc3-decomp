@@ -85,6 +85,25 @@ const char * const Curl_wkday[] =
 static const char * const weekday[] =
 { "Monday", "Tuesday", "Wednesday", "Thursday",
   "Friday", "Saturday", "Sunday" };
+/* w8-l: parsedate() is 99.996925% -- ONE instruction, [79] `subi r29, r21, 0x50`
+   (target) vs `subi r29, r21, 0x4c` (ours).  r21 holds &tz[0]; r29 is &weekday[0].
+   The immediate is a pure compile-time constant (verified: the target object has NO
+   relocation within +/-12 bytes of it), so it is the .rdata layout of THIS object,
+   not a link-time fact.
+   Measured layout of our non-COMDAT .rdata section: Curl_wkday@0x00 (0x1c),
+   weekday@0x1c (0x1c), Curl_month@0x38 (0x30), tz@0x68, month_days_cumulative@0x398,
+   section size 0x3c8, section align 8.  weekday->tz = 0x4c.  The target needs 0x50.
+   REFUTED: adding a 13th NULL entry to Curl_month (to make it 0x34 like the size dtk
+   reports) does NOT give 0x50 -- it gives 0x54, because our MSVC gives `tz` 8-byte
+   alignment, so the 4 extra bytes push tz by 8 (section grew 0x3c8 -> 0x3d0 and
+   month_days_cumulative moved 0x398 -> 0x3a0).  Same |delta|, same score; reverted.
+   The parity can only be fixed by 4 bytes (mod 8) of real .rdata BEFORE Curl_wkday.
+   The target image has exactly such a blob at 0x8206DAA8 (0x44 bytes, ints
+   0,0,2,2,3,3,3,4,4,4,4,4,4,5,5,5,5) sitting between the "Mon" literal and
+   Curl_wkday -- but the identical 18-word pattern also appears three more times in
+   the same region (folded into the "%02d:%02d:%02d" literal at 0x8206DF00), which
+   makes it look like discarded-COMDAT dead space rather than parsedate.c data.
+   Not fabricating .rdata to buy one immediate.  Leaving at 99.996925%. */
 const char * const Curl_month[]=
 { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };

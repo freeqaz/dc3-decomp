@@ -122,8 +122,7 @@ void CharBonesMeshes::PoseMeshes() {
     // Set positions
     auto& start = mStart;
     Vector3 *pos = (Vector3 *)start;
-    auto& scaleOffset = mOffsets[TYPE_SCALE];
-    Vector3 *scaleOff = (Vector3 *)(start + scaleOffset);
+    Vector3 *scaleOff = (Vector3 *)(start + mOffsets[TYPE_SCALE]);
     for (; pos < scaleOff; pos++, ++curMesh) {
 #ifdef HX_NATIVE
         { extern bool Dc3PlantGuarded(RndTransformable *);
@@ -145,13 +144,12 @@ void CharBonesMeshes::PoseMeshes() {
     }
 
     // Handle quaternions and rotations if we have enough meshes
-    auto& quatOffset = mOffsets[TYPE_QUAT];
     if (mCounts[TYPE_QUAT] < mMeshes.size()) {
         curMesh = mMeshes.begin() + mCounts[TYPE_QUAT];
 
         // Apply quaternion rotations
         Hmx::Quat *quatEnd = (Hmx::Quat *)(start + mOffsets[TYPE_ROTX]);
-        Hmx::Quat *quat = (Hmx::Quat *)(start + quatOffset);
+        Hmx::Quat *quat = (Hmx::Quat *)(start + mOffsets[TYPE_QUAT]);
         for (; quat < quatEnd; quat++, ++curMesh) {
             Normalize(*quat, *quat);
 #ifdef HX_NATIVE
@@ -198,8 +196,8 @@ void CharBonesMeshes::PoseMeshes() {
     // Handle scales if we have enough meshes
     if (mCounts[TYPE_SCALE] < mMeshes.size()) {
         curMesh = mMeshes.begin() + mCounts[TYPE_SCALE];
-        Vector3 *scale = (Vector3 *)(start + scaleOffset);
-        Vector3 *scaleEnd = (Vector3 *)(start + quatOffset);
+        Vector3 *scaleEnd = (Vector3 *)(start + mOffsets[TYPE_QUAT]);
+        Vector3 *scale = (Vector3 *)(start + mOffsets[TYPE_SCALE]);
         for (; scale < scaleEnd; scale++, ++curMesh) {
             Transform &xfm = (*curMesh)->DirtyLocalXfm();
             Vector3 scaleVec;
