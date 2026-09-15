@@ -55,38 +55,47 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
     if ((int)trans) {
         const Transform &xfm = trans->WorldXfm();
         if (mAboutZ) {
-            Vector3 zAxis(xfm.m.z);
+            // w7-bt (89.6 -> 96.3 canonical): the three 16-byte rows at
+            // 0x50/0x60/0x70 are one Hmx::Matrix3, not three locals.  m.z is
+            // the axis (the 4-word copy at 0x8266FDB4..FDCC), m.x the
+            // projection, m.y the cross.  Normalize takes &m.y (0x60) out of
+            // line at 0x8266FE34, so the m.x stores at 0x8266FDFC/FE04/FE0C
+            // are the aggregate staying live across the call, and the axis
+            // is reloaded from 0x70/0x74/0x78 afterwards instead of being
+            // parked in f29..f31 (the w7-ab residual: 3 callee-saved FPRs
+            // where the image saves 1).  A separate `proj` local, whatever
+            // its spelling, has its stores elided: an unnamed `Vector3(...)`
+            // temp bound to Cross's const-ref param and a TU-local
+            // by-value-return helper were both byte-identical at 89.6.
+            // The image's final rows are NOT `Multiply(result, m, result)`
+            // with m.x = Cross(m.y, m.z) (92.7, and a `Vector3 mx` cross
+            // plus explicit rows is 94.6): they are the explicit
+            // right-associated rows below (result.y = rx*mx.y + (rz*z.y +
+            // ry*c.y) at 0x8266FE98, etc.), with the row-x cross terms
+            // spelled inline.
+            // RESIDUAL (w7-bt, 96.3 canonical): fmuls/fmsubs operand order
+            // inside the first cross (0x8266FE10..FE30) and fnmadds at
+            // 0x8266FDF4 -- spelling the cross as explicit `m.y.Set(...)` in
+            // the image's operand order is byte-identical to Vec.h's Cross,
+            // so the order is the allocator's, not the source's -- and the
+            // scheduler's load order after the Normalize call (image loads
+            // c.z/z.y/c.y/z.x/ry first, we load c.y/z.x/c.z/z.y/rz).
+            Hmx::Matrix3 m;
+            m.z = xfm.m.z;
             Vector3 diff(pos.x - xfm.v.x, pos.y - xfm.v.y, pos.z - xfm.v.z);
-            float dot = -(diff.x * zAxis.x + diff.y * zAxis.y + diff.z * zAxis.z);
-            Vector3 proj(diff.x + zAxis.x * dot, diff.y + zAxis.y * dot,
-                diff.z + zAxis.z * dot);
-            // RESIDUAL (w7-ab, 89.6 canonical): the image gives `proj` its own
-            // 16-byte stack slot at 0x50..0x58 and STORES it there dead (S=1,
-            // L=0), which pushes `cross` to 0x60 and `zAxis` to 0x70 and lets
-            // it reload zAxis.{x,y,z} from 0x70/0x74/0x78 instead of parking
-            // them in f29/f30/f31 across the out-of-line Normalize call --
-            // hence TGT saves 1 callee-saved FPR where we save 3.  Frame size
-            // is identical (0xb0) on both sides.  Refuted spellings for the
-            // dead store, both byte-for-byte inert: `Vector3 proj;
-            // ScaleAdd(diff, zAxis, dot, proj);` and `ScaleAddEq(diff, zAxis,
-            // dot); Vector3 &proj = diff;`.  MSVC elides the stores here
-            // whatever the spelling, so the lever is not the assignment form.
-            Vector3 cross;
-            Cross(zAxis, proj, cross);
-            Normalize(cross, cross);
+            float dot = -(diff.x * m.z.x + diff.y * m.z.y + diff.z * m.z.z);
+            ScaleAdd(diff, m.z, dot, m.x);
+            Cross(m.z, m.x, m.y);
+            Normalize(m.y, m.y);
             float ry = result.y;
             float rz = result.z;
             float rx = result.x;
-            // The image right-associates the trailing two terms of each
-            // component: the final fmadds on each row takes the two non-`rx`
-            // terms already summed (e.g. `fmadds f13, f1, f13, f3` builds
-            // rz*zAxis.y + ry*cross.y before the rx term is folded in).
-            result.y = rx * (cross.z * zAxis.x - zAxis.z * cross.x)
-                + (rz * zAxis.y + ry * cross.y);
-            result.z = rz * zAxis.z
-                + (rx * (zAxis.y * cross.x - cross.y * zAxis.x) + ry * cross.z);
-            result.x = rz * zAxis.x
-                + (ry * cross.x + rx * (cross.y * zAxis.z - cross.z * zAxis.y));
+            result.y = rx * (m.y.z * m.z.x - m.z.z * m.y.x)
+                + (rz * m.z.y + ry * m.y.y);
+            result.z = rz * m.z.z
+                + (rx * (m.z.y * m.y.x - m.y.y * m.z.x) + ry * m.y.z);
+            result.x = rz * m.z.x
+                + (ry * m.y.x + rx * (m.y.y * m.z.z - m.y.z * m.z.y));
         } else {
             Multiply(result, xfm.m, result);
         }

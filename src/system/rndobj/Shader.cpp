@@ -517,9 +517,11 @@ u64 RndShaderParticles::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     opts.mColorXfm = colorAdjust;
     opts.mIntensify = mat->GetIntensify();
     if (fadeOut) {
-        Vector4 fadeParams(mat->unk2d8, mat->unk2dc, mat->unk2e0, mat->unk2e4);
+        Vector4 fadeParams(
+            mat->mFadeParams.x, mat->mFadeParams.y, mat->mFadeParams.z, mat->mFadeParams.w
+        );
         TheShaderMgr.SetPConstant((PShaderConstant)0x68, fadeParams);
-        opts.mFadeOut = mat->unk2d4;
+        opts.mFadeOut = mat->mFadeOut;
     }
     if (mat->GetRefractEnabled(b) && mat->GetRefractNormalMap() != nullptr) {
         opts.mRefractWorld = 1;
@@ -635,9 +637,11 @@ u64 RndShaderMultimesh::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     }
     opts.mToneMapping = env->UseToneMapping();
     if (fadeOut) {
-        Vector4 fadeParams(mat->unk2d8, mat->unk2dc, mat->unk2e0, mat->unk2e4);
+        Vector4 fadeParams(
+            mat->mFadeParams.x, mat->mFadeParams.y, mat->mFadeParams.z, mat->mFadeParams.w
+        );
         TheShaderMgr.SetPConstant((PShaderConstant)0x68, fadeParams);
-        opts.mFadeOut = mat->unk2d4;
+        opts.mFadeOut = mat->mFadeOut;
     }
     CheckDistortionOpts((RndMat *)mat, opts);
     bool recvProjLights = mat->GetRecvProjLights() && env->NumLights_Proj() > 0;
@@ -762,9 +766,11 @@ u64 RndShaderStandard::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     }
     opts.mToneMapping = env->UseToneMapping();
     if (fadeOut && !opts.mFog) {
-        Vector4 fadeParams(mat->unk2d8, mat->unk2dc, mat->unk2e0, mat->unk2e4);
+        Vector4 fadeParams(
+            mat->mFadeParams.x, mat->mFadeParams.y, mat->mFadeParams.z, mat->mFadeParams.w
+        );
         TheShaderMgr.SetPConstant((PShaderConstant)0x68, fadeParams);
-        opts.mFadeOut = mat->unk2d4;
+        opts.mFadeOut = mat->mFadeOut;
     }
     CheckDistortionOpts((RndMat *)mat, opts);
     opts.mShowShaderCost = TheRnd.ResourceCached();
@@ -886,9 +892,11 @@ u64 RndShaderFur::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
         fadeOut = env->FadeOut() && env->FadeEnd() != env->FadeStart();
     }
     if (fadeOut && !opts.mFog) {
-        Vector4 fadeParams(mat->unk2d8, mat->unk2dc, mat->unk2e0, mat->unk2e4);
+        Vector4 fadeParams(
+            mat->mFadeParams.x, mat->mFadeParams.y, mat->mFadeParams.z, mat->mFadeParams.w
+        );
         TheShaderMgr.SetPConstant((PShaderConstant)0x68, fadeParams);
-        opts.mFadeOut = mat->unk2d4;
+        opts.mFadeOut = mat->mFadeOut;
     }
     opts.mShowShaderCost = TheRnd.ResourceCached();
     opts.mHiResScreen = TheHiResScreen.IsActive();
@@ -1000,9 +1008,11 @@ u64 RndShaderSyncTrack::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     }
     opts.mToneMapping = env->UseToneMapping();
     if (fadeOut && !opts.mFog) {
-        Vector4 fadeParams(mat->unk2d8, mat->unk2dc, mat->unk2e0, mat->unk2e4);
+        Vector4 fadeParams(
+            mat->mFadeParams.x, mat->mFadeParams.y, mat->mFadeParams.z, mat->mFadeParams.w
+        );
         TheShaderMgr.SetPConstant((PShaderConstant)0x68, fadeParams);
-        opts.mFadeOut = mat->unk2d4;
+        opts.mFadeOut = mat->mFadeOut;
     }
     opts.mShowShaderCost = TheRnd.ResourceCached();
     opts.mHiResScreen = TheHiResScreen.IsActive();

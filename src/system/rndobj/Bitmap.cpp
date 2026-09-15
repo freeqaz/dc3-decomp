@@ -284,26 +284,35 @@ void RndBitmap::SetPixelIndex(int x, int y, unsigned char idx) {
     }
 }
 
-// RESIDUAL (w7-am, 83.2 canonical): the arithmetic of all four arms is the
-// target's instruction for instruction; what is left is schedule and the
-// register permutation that falls out of it.  The one structural group is the
-// 8bpp arm's table select: the image computes the whole subscript
-// `(y % 4) * 0x10 + (x % 16)` FIRST and only then branches to the lis/addi pair
-// (82671868 `beq .L_82671878` sits below the index, at index 38 of the
-// listing), where we emit the branch immediately after the `clrlwi.` at index
-// 22 -- 6 inserts + 6 deletes.
-// NEGATIVE RESULT (w7-am, 2026-09-14): hoisting that subscript into a named
-// local to make it "happen first" does the opposite -- it pins the value and
-// costs 1.9pp (83.2 -> 81.3), and it also flips the `lbzx` operand order away
-// from the target's index-first form.
+// w7-bt (83.17 -> 92.29 canonical): the two table selects are spelled with the
+// SUBSCRIPT INSIDE EACH ARM, `if (odd) v = t13[idx]; else v = t02[idx];`, not
+// as one subscript on a selected pointer.  MSVC hoists the subscript, which is
+// very busy in both arms, ahead of the `beq` and cross-jumps the two `lbzx`
+// into one after the join -- which is exactly the image's shape: in the 8bpp
+// arm the whole `(y % 4) * 0x10 + (x % 16)` sits between the `clrlwi.` at
+// 0x8267183C and the `beq .L_82671878` at 0x82671868, and the hoisted block is
+// scheduled as a unit after returnBase rather than interleaved with it (the
+// w7-am named-local spelling, 81.3, interleaved it).  With a single shared
+// subscript the compiler instead sinks the index past the join (83.2).  The
+// same spelling closes the nibble arm's 3 inserts / 3 deletes around
+// 0x82671958..0x82671990 (89.05 -> 92.29): with `lookupIdx2` as a named local
+// the index is scheduled as a peer of tiledBase; hoisted, it follows it.
+// The arms must assign an `int` local: the ternary form of the same two arms
+// (any table type, `char` or `unsigned char`, cast per arm or outside) leaves
+// a `clrlwi r11, r11, 24` after the merged lbzx (88.56), because the widening
+// is applied to the phi instead of inside each arm where it folds into the
+// load.  Statement order inside the compressed arm is inert (nibble store
+// moved before blockWidth, rowOffset moved before offsetMod: byte-identical).
+// RESIDUAL (w7-bt, 92.29 canonical): the compressed arm's schedule.  The
+// image stores `nibble` at 0x82671A10, before `addi r11, r11, 0x4`
+// (blockWidth), and holds y / blockSize in r30; we store it 8 instructions
+// later and hold the nibble in r30 instead, so `divw`, `addi r9, r9, 0x1`,
+// `lhz r28, 0x8(r3)` and `divwu r8, r8, r27` (0x82671AB0) each land a few
+// slots off -- 6 inserts / 6 deletes over one basic block whose DAG we cannot
+// change from the source.
 // NEGATIVE RESULT (w7-am, 2026-09-14): writing the subscript on the left,
 // `(idx)[cond ? bytes13 : bytes02]`, is byte-identical -- MSVC's operand
 // evaluation order here is not reachable from the source spelling.
-// NEGATIVE RESULT (w7-am, 2026-09-14): the mirror move on the nibble arm --
-// inlining `lookupIdx2` into its subscript, which is the spelling the 8bpp arm
-// uses and whose `lbzx r10, r10, r7` operand order matches the target -- costs
-// 4.6pp (83.2 -> 78.6).  Named-local vs inline is not the lever for the `lbzx`
-// operand order in either arm.
 int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
     static char bytes02[64] = {
         0x0,  0x4,  0x8,  0xC,  0x10, 0x14, 0x18, 0x1c, 0x2,  0x6,  0xa,  0xe,  0x12,
@@ -352,9 +361,12 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             int xHalf = x >> 1;
             int doubleRowStride = (int)mRowBytes * 2;
             int returnBase = ((yHalf & 0xFFFFFFFE) * doubleRowStride) + ((xHalf & 0x3FFFFFF8) * 4);
-            int lookupOffset =
-                (unsigned char)(((y >> 2) % 4) & 1 ? bytes13
-                                                   : bytes02)[(y % 4) * 0x10 + (x % 16)];
+            int lookupOffset;
+            if (((y >> 2) % 4) & 1) {
+                lookupOffset = (unsigned char)bytes13[(y % 4) * 0x10 + (x % 16)];
+            } else {
+                lookupOffset = (unsigned char)bytes02[(y % 4) * 0x10 + (x % 16)];
+            }
             if (lookupOffset > 0x1F) {
                 lookupOffset = (lookupOffset + doubleRowStride) - 0x20;
             }
@@ -376,9 +388,13 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
             tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
             tiledStride = (int)_ref3 * 2;
         }
-        int lookupIdx2 = ((y % 4) << 5) + (x % 32);
         int tiledBase = (tiledStride * tiledOffsetY) + (tiledOffsetX * 4);
-        int nibbleOffset = (unsigned char)(yQuadMod & 1 ? hbytes13 : hbytes02)[lookupIdx2];
+        int nibbleOffset;
+        if (yQuadMod & 1) {
+            nibbleOffset = (unsigned char)hbytes13[((y % 4) << 5) + (x % 32)];
+        } else {
+            nibbleOffset = (unsigned char)hbytes02[((y % 4) << 5) + (x % 32)];
+        }
         nibble = nibbleOffset & 1;
         int offsetShifted = nibbleOffset >> 1;
         if (offsetShifted > 0x1F) {

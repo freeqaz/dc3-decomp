@@ -375,10 +375,10 @@ void NgMat::RefreshState() {
     //      four mTexGenMatrix2 diagonal stores in the image (0x8269D3B4) and is
     //      hoisted above them here.
     //  (3) In the second mBlend switch the image stores the four floats and
-    //      THEN unk2d4 in every arm (0x8269D654-D664), tail-merging the
+    //      THEN mFadeOut in every arm (0x8269D654-D664), tail-merging the
     //      Multiply/Darken arm into the Add arm's `stw 2`; ours schedules the
     //      int store first and merges the two zero-fill arms instead.  Writing
-    //      `unk2d4 = N` first in each arm is byte-identical.
+    //      `mFadeOut = N` first in each arm is byte-identical.
     switch (mBlend) {
     case kBlendDest:
         mBlendSrc = (RndRenderState::Blend)0;
@@ -596,39 +596,35 @@ void NgMat::RefreshState() {
         break;
     }
 
-    // Second blend switch - set unk2d4 and unk2d8-2e4
+    // Second blend switch - fade-out mode and fade parameters.
+    // w7-bt (97.14 -> 98.9 canonical): the four floats are one Vector4 set
+    // through its inlined Set(); as four scalar stores MSVC hoists the
+    // mFadeOut store above them and tail-merges the two zero-fill arms,
+    // where the image keeps the floats first in every arm (0x8269D654-D664)
+    // and merges the Multiply/Darken arm into the Add arm's `stw 2`.
     switch (mBlend) {
     case kBlendDest:
         break;
     case kBlendSrc:
-        unk2d4 = 0;
+        mFadeOut = 0;
         break;
     case kBlendSrcAlpha:
     case kPreMultAlpha:
-        unk2d8 = 0.0f;
-        unk2dc = 0.0f;
-        unk2e0 = 0.0f;
-        unk2e4 = 0.0f;
-        unk2d4 = 1;
+        mFadeParams.Set(0.0f, 0.0f, 0.0f, 0.0f);
+        mFadeOut = 1;
         break;
     case kBlendAdd:
     case kBlendSrcAlphaAdd:
     case kBlendSubtract:
     case kScreen:
     case kLighten:
-        unk2d8 = 0.0f;
-        unk2dc = 0.0f;
-        unk2e0 = 0.0f;
-        unk2e4 = 0.0f;
-        unk2d4 = 2;
+        mFadeParams.Set(0.0f, 0.0f, 0.0f, 0.0f);
+        mFadeOut = 2;
         break;
     case kBlendMultiply:
     case kDarken:
-        unk2d8 = 1.0f;
-        unk2dc = 1.0f;
-        unk2e0 = 1.0f;
-        unk2e4 = 1.0f;
-        unk2d4 = 2;
+        mFadeParams.Set(1.0f, 1.0f, 1.0f, 1.0f);
+        mFadeOut = 2;
         break;
     default:
         MILO_ASSERT(false, 0x139);

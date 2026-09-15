@@ -247,38 +247,33 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int iStartIndex, int iEndIndex) cons
             const CtrlPoint &last = mDeformedCtrlPoints[lastIdx];
             const CtrlPoint &prev = mDeformedCtrlPoints[lastIdx - 1];
             unk145 = false;
-            float lastX = last.mPos.x;
-            float prevX = prev.mPos.x;
-            float lastZ = last.mPos.z;
-            float prevZ = prev.mPos.z;
-            // NEGATIVE RESULT (byte-identical, 92.45%): the image's load order
-            // here is last.x / prev.x / last.z / prev.z / last.y / prev.y --
-            // our declaration order with the y pair last -- yet it computes and
-            // stores y FIRST (`stfs f12, 0x98(r31)` before `stfs f0, 0x94`),
-            // where MSVC gives us x, z, y. Hoisting the y pair into named
-            // locals declared after prevZ reproduces neither and changes not one
-            // instruction. The store order is a scheduling artifact, not a
-            // source lever.
-            mDummyAfter.mPos.y = last.mPos.y + (last.mPos.y - prev.mPos.y);
-            mDummyAfter.mPos.x = lastX + (lastX - prevX);
-            mDummyAfter.mPos.z = lastZ + (lastZ - prevZ);
+            // w7-bt (92.45 -> 95.56 canonical): the two extrapolations are the
+            // Vec.h Subtract/Add pair on whole Vector3s, not per-component
+            // scalar spellings.  The scalar form (four named x/z locals, y
+            // inline, y/x/z statement order) let MSVC scramble the six loads
+            // and store x, z, y where the image stores y, x, z (826B28D8 /
+            // 28E4 / 28EC), and put the mDummyAfterEnd roll copy out of place;
+            // the helper form restores the AfterEnd group's shape.  Probes
+            // that did NOT move it: a CtrlPoint& to mDummyAfter (89.99), a
+            // const_cast self pointer (byte-identical), a computed Vector3
+            // temp copied into mDummyAfter.mPos (85.98: a real 16-byte copy
+            // through r1+0x60), re-subscripting for the AfterEnd Subtract
+            // (95.55, buys one reload two slots early), a Vector3& to
+            // mDummyAfter.mPos for the helpers (byte-identical to this).
+            // RESIDUAL (w7-bt, 95.56 canonical): the image treats the
+            // mDummyAfter stores as opaque -- it materialises &mDummyAfter at
+            // 826B28B0 (`addi r8, r31, 0x94`, never read again), reloads the
+            // vector's begin pointer after them (826B28F8) and again before
+            // each dirty flag (826B2944, 826B2950), and stores y before x --
+            // where we know the stores are this-relative and keep one element
+            // pointer.  5 missing instructions plus the y/x/z rotation in both
+            // groups; no source spelling tried reproduces the dead addi.
+            Vector3 delta;
+            Subtract(last.mPos, prev.mPos, delta);
+            Add(last.mPos, delta, mDummyAfter.mPos);
             mDummyAfter.mRoll = last.mRoll;
-
-            // NEGATIVE RESULT (92.45%). The image DOES reload the vector's
-            // begin pointer and re-index here -- `lwz r11, 0x0(r10)` +
-            // `add r11, r9, r11` twice more, before this group and again
-            // before the [lastIdx - 1] dirty flag -- where we keep one element
-            // pointer alive, so we are 8 instructions short (base 612 B vs the
-            // image's 644 B). Spelling all three reads here as
-            // `mDeformedCtrlPoints[lastIdx]` does buy the reloads, and costs
-            // far more than it buys: 92.45 -> 87.8, because MSVC then
-            // re-schedules the whole mDummyAfter group around the new pointer
-            // and the f0/f9..f13 assignment rotates again. Left cached.
-            float endZ = last.mPos.z;
-            float endX = last.mPos.x;
-            mDummyAfterEnd.mPos.y = mDummyAfter.mPos.y + (mDummyAfter.mPos.y - last.mPos.y);
-            mDummyAfterEnd.mPos.x = mDummyAfter.mPos.x + (mDummyAfter.mPos.x - endX);
-            mDummyAfterEnd.mPos.z = mDummyAfter.mPos.z + (mDummyAfter.mPos.z - endZ);
+            Subtract(mDummyAfter.mPos, last.mPos, delta);
+            Add(mDummyAfter.mPos, delta, mDummyAfterEnd.mPos);
             mDummyAfterEnd.mRoll = mDummyAfter.mRoll;
             mDeformedCtrlPoints[lastIdx - 1].mDirtyConstants = true;
             mDeformedCtrlPoints[lastIdx].mDirtyConstants = true;

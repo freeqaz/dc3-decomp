@@ -491,6 +491,19 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
     // projYNum *= 2.0f;` measure 81.5 -- identical to each other, so the
     // regression is the statement split resequencing the surrounding loads,
     // not the constant.  Leave the fused spelling.
+    // w7-bt (83.80 unchanged), two more negatives on the same residual:
+    //   - `(-mScreenRect.h * m.z.y) * 2.0f` (negate the LEAF, not the product)
+    //     does kill the second constant -- the build then has the image's
+    //     `fneg` and one shared __real@40000000 -- but lands at 81.54, the
+    //     same number as w7-ap's statement splits: the `fneg` sinks to after
+    //     the last hiRect word copy and both `* 2.0f` multiplies fall behind
+    //     the fsels (image: 0x82628D5C / D6C, before the first fsel at
+    //     0x82628D74).  The constant was never the cost; the schedule is.
+    //   - reading ONLY mFarPlane at point of use (`const float &farPlane`,
+    //     near still a copy) to get the image's post-fcmpu far load
+    //     (0x82628C94): 78.7 -- the far load still sinks into both arms and
+    //     takes `stfs f31, 0x3c(r30)` with it, exactly as the both-planes
+    //     variant did at 77.4.  Which plane is referenced is not the trigger.
     float projYNum = -(mScreenRect.h * mLocalProjectXfm.m.z.y) * 2.0f;
     float cx = mScreenRect.w * 0.5f + mScreenRect.x;
     float projXNum = mScreenRect.w * mLocalProjectXfm.m.x.x * 2.0f;

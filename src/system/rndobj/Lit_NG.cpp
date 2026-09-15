@@ -357,33 +357,46 @@ void NgLight::CheckShadowMap() {
     }
 }
 
-// RESIDUAL (w7-ai, 92.8%): the instruction STREAM is right -- every arithmetic,
-// store and call row matches, including both Vector4 builds, the two fdivs and
-// the Rect. What is left is one extra callee-saved register and the uniform
-// renumbering it forces (__savegprlr_18 vs _19, frame 0x160 vs 0x150).
+// w7-bt (92.68 -> 100.0 canonical, 143 rows all equal; the 99.9 raw is the
+// SetObjConcrete ICF fold adjudicated below).  The w7-ai residual -- one
+// extra callee-saved register holding `0x9c + i` across the first
+// SetPConstant call (`subi r4, r26, 0x10` for the first index, `mr r4, r26`
+// for the second) -- was two source shapes, not register allocation:
 //
-// The extra register is the CSE of the two SetPConstant indices. Ours computes
-// `0x9c + i` once into callee-saved r26 (it has to survive the first
-// SetPConstant call) and derives the first index from it as `subi r4, r26, 0x10`;
-// the image recomputes both from `i` in volatile r4 -- `addi r4, r31, 0x8c`
-// before the first call and `addi r4, r31, 0x9c` before the second. Map the two
-// allocations and they agree 1:1 with a shift of one: target r19..r31 = this,
-// kWeights, 0, TheNgRnd, 1, srcTex, TheRenderState, pass, pWeight, taps,
-// TheShaderMgr, dstTex, i; ours is the same list with r26 = `0x9c + i` wedged in.
-// A second, cosmetic-only difference in the same class: MSVC hoists the whole
-// `kWeights - 1` to the prologue (r18) where the image keeps the bare kWeights
-// address invariant (r20) and re-subtracts 4 per outer iteration.
+//   1. The loop is a zero-based counted `for (k = 0; k < 5; k++)` with the
+//      tap offset derived as `i = k - 2`, NOT a do/while over `i = -2` with
+//      an explicit `taps` down-counter.  MSVC keeps `i` as the register IV
+//      (r31: `li r31, -0x2` at 826B9ED4, `extsw r11, r31` at 826B9EF4 for
+//      the float conversion) and rewrites both indices `0x8a + k` /
+//      `0x9a + k` against it -- `addi r4, r31, 0x8c` at 826B9F18 and
+//      `addi r4, r31, 0x9c` at 826B9F5C, each computed from r31 in volatile
+//      r4 -- and manufactures the down-counter itself (`li r28, 0x5` at
+//      826B9EDC, `subic. r28, r28, 0x1` at 826B9F74).  Written directly as
+//      `0x8c + i` / `0x9c + i` on a source-level `i`, the optimizer
+//      reassociates the pair into one shared `i + 0x9c` that has to live
+//      across the call (the r26 of the w7-ai note); the same reassociation
+//      is what the image itself does in DOFProc_NG's SetVHBlurWeights
+//      (826ABFB0 `subi r4, r31, 0x10`), where `i` has no other use.
+//      Probe ladder: `i + 0x8c` operand order, `0x8cu + i`, a separate
+//      `idx` IV (folded back to `i + 0x8e` in r26, 98.41), and
+//      `for (i = -2; i < 3)` (drops the down-counter: `cmpwi r31, 3` /
+//      `blt`, 95.5) all keep the shared register; `k`-based: 99.15.
+//   2. The weight is `kWeights[k]`, not a `pWeight` walked by hand.  With
+//      `pWeight = kWeights - 1` and a pre-increment, MSVC hoists the whole
+//      `kWeights - 4` into the prologue (r18, the __savegprlr_18 half of
+//      the residual); with `*pWeight++` from the bare array it keeps the
+//      array address in r20 (826B9E70) and re-derives `subi r27, r20, 0x4`
+//      per outer pass (826B9ED8) but orders it before `li r31, -0x2`
+//      (99.15); the subscript form gives the image's order and the same
+//      `lfsu f0, 0x4(r27)` (826B9F44) -- 99.99.
 //
-// MEASURED NEGATIVES, both BYTE-IDENTICAL (no movement at all, not merely
-// neutral):
-//   1. giving each SetPConstant index its own named local in its own block
-//      scope, to break the reassociation;
-//   2. naming the array base (`const float *weights = kWeights;` then
-//      `weights - 1`), to stop the full LICM of `kWeights - 1`.
-// Two consecutive inert variants -> stopping here per the lane rule; what
-// remains is register allocation, which is not source-reachable.
+// The last two rows were the order of the two zero stores into the work
+// material: the image writes mTexWrap (0xb8, 826B9FF0) before mZMode
+// (0x6c, 826B9FF4), and the scheduler only reproduces that with mZMode
+// assigned BEFORE mTexWrap in source (the two stores share r21 = 0 and are
+// otherwise unordered).
 //
-// Adjudicated and NOT a wrong callee: row 115 pairs
+// Adjudicated and NOT a wrong callee: row 111 pairs
 // SetObjConcrete<ObjRefConcrete<AnimTask,ObjectDir>> against our
 // SetObjConcrete<ObjRefConcrete<RndTex,ObjectDir>>. Both are at 82401CD0 in
 // icf_aliases.map -- a proven ICF fold, so the target-side name is only the
@@ -415,24 +428,19 @@ void NgLight::BlurShadowRT() {
         float invW = 1.0f / (float)(long long)w;
         float invH = 1.0f / (float)(long long)h;
 
-        const float *pWeight = kWeights - 1;
-        int i = -2;
-        int taps = 5;
-        do {
+        for (int k = 0; k < 5; k++) {
+            int i = k - 2;
             Vector4 offset(
                 (float)((float)((float)(long long)i * invW) * blurX),
                 (float)((float)((float)(long long)i * invH) * blurDir),
                 1.0f, 1.0f
             );
-            TheShaderMgr.SetPConstant((PShaderConstant)(0x8c + i), offset);
+            TheShaderMgr.SetPConstant((PShaderConstant)(0x8a + k), offset);
 
-            pWeight++;
-            float wt = *pWeight;
+            float wt = kWeights[k];
             Vector4 weight(wt, wt, wt, wt);
-            TheShaderMgr.SetPConstant((PShaderConstant)(0x9c + i), weight);
-            taps--;
-            i++;
-        } while (taps != 0);
+            TheShaderMgr.SetPConstant((PShaderConstant)(0x9a + k), weight);
+        }
 
         TheRenderState.SetTextureFilter(0, (RndRenderState::FilterMode)1, false);
         TheRenderState.SetTextureFilter(6, (RndRenderState::FilterMode)1, false);
@@ -442,8 +450,8 @@ void NgLight::BlurShadowRT() {
         RndMat *workMat = TheShaderMgr.GetWork();
         workMat->SetDiffuseTex(srcTex);
         workMat->mBlend = BaseMaterial::kBlendSrc;
-        workMat->mTexWrap = kTexWrapClamp;
         workMat->mZMode = kZModeDisable;
+        workMat->mTexWrap = kTexWrapClamp;
         workMat->MarkDirty(2);
 
         Hmx::Color color;
