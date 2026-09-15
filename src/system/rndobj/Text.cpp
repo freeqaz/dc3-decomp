@@ -2849,16 +2849,15 @@ void RndText::FontMap3d::IncrementDisplayableChars(unsigned short us) {
 void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
     unsigned int targetSize = 0;
     if (mFont != NULL) {
-        targetSize = fixedLength;
-        if (fixedLength == 0) {
+        if (fixedLength != 0) {
+            targetSize = fixedLength;
+        } else {
             targetSize = mDisplayableChars;
         }
     }
 
-    unsigned int oldSize = (unsigned int)mMeshes.size();
-
-    if (targetSize < oldSize) {
-        unsigned int i = targetSize;
+    unsigned int i = targetSize;
+    if (targetSize < (unsigned int)mMeshes.size()) {
         do {
             RndMesh *mesh = mMeshes[i];
             if (mesh != NULL) {
@@ -2868,26 +2867,17 @@ void RndText::FontMap3d::AllocateMeshes(RndText *text, int fixedLength) {
         } while (i < (unsigned int)mMeshes.size());
     }
 
-    RndMesh *nullMesh = NULL;
+    unsigned int oldSize = (unsigned int)mMeshes.size();
+    mMeshes.resize(targetSize);
 
-    if (targetSize < oldSize) {
-        mMeshes.erase(mMeshes.begin() + targetSize, mMeshes.end());
-    } else {
-        mMeshes.insert(mMeshes.end(), (int)targetSize - (int)oldSize, nullMesh);
-    }
-
+    i = 0;
     if ((unsigned int)mMeshes.size() > 0) {
-        unsigned int i = 0;
         do {
             if ((int)i >= (int)oldSize) {
                 mMeshes[i] = Hmx::Object::New<RndMesh>();
             }
             RndMesh *mesh = mMeshes[i];
-            RndTransformable *parent = NULL;
-            if (text != NULL) {
-                parent = text;
-            }
-            mesh->SetTransParent(parent, false);
+            mesh->SetTransParent(text, false);
             mesh->SetTransConstraint(RndTransformable::kConstraintNone, NULL, false);
             mesh->SetMat(mFont->Mat());
             mesh->SetShowing(true);
