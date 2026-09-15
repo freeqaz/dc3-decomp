@@ -144,14 +144,12 @@ void VoiceInputPanel::OnConfidenceChange(float conf) {
     if (mActiveVoiceContext) {
         float newConf = conf + mActiveVoiceContext->mConfThreshold;
         mActiveVoiceContext->mConfThreshold = Clamp(0.0f, 1.0f, newConf);
-        // NOTE (w7-av): the image re-derives `TheSpeechMgr->Overlay()` for the Print
-        // `this` AFTER the MakeString call (keeping only the global's @ha in r31),
-        // where we keep the overlay pointer itself in r31 across the call. Tried:
-        // hoisting MakeString into a named local (85.1%, worse -- kills the early
-        // vptr load too) and caching the overlay in a local for the condition only
-        // (90.2%, byte-identical rows). MSVC CSEs both spellings the same way.
+        // The Print `this` is the member LVALUE, not the Overlay() accessor:
+        // the image re-derives it from the global after the MakeString call
+        // and keeps only the vptr in a callee-saved register (w7-av's note;
+        // lever found by w7-bv in ActivateVoiceContext below).
         if (TheSpeechMgr->Overlay()->Showing()) {
-            TheSpeechMgr->Overlay()->Print(MakeString(
+            TheSpeechMgr->mOverlay->Print(MakeString(
                 "voice context %s, confidence: %f\n",
                 mActiveVoiceContext->mName.Str(),
                 mActiveVoiceContext->mConfThreshold
@@ -268,28 +266,15 @@ void VoiceInputPanel::ActivateVoiceContext(Symbol sym) {
         //     MSVC choosing to spill where the image rematerialises; the knock-on
         //     is that TheSpeechMgr's anchor lands in r28 for us and r29 for the
         //     image, which is the whole 10-row r28<->r29 swap.
-        it = mVoiceContexts.begin();
-        if (it != mVoiceContexts.end()) {
-            do {
-                if ((*it)->mName == sym)
-                    break;
-                it++;
-                // The image reloads mVoiceContexts.end() for the loop-back
-                // test (`lwz r10, 0x50(r31)` inside the body) and keeps the
-                // pre-loop copy only for the zero-trip guard and the post-loop
-                // found/not-found test.  Naming a `VoiceContext **end` local for
-                // the outer two tests is what lets MSVC CSE the latch load away
-                // as well: all three sites have to be spelled
-                // `mVoiceContexts.end()` for the extra `lwz r10, 0x50(r31)` to
-                // appear.
-            } while (it != mVoiceContexts.end());
-            if (it != mVoiceContexts.end())
-                goto found;
+        for (it = mVoiceContexts.begin(); it != mVoiceContexts.end(); it++) {
+            if ((*it)->mName == sym)
+                break;
         }
-        MILO_NOTIFY("Couldn't find voice context %s", sym.Str());
-        return;
+        if (it == mVoiceContexts.end()) {
+            MILO_NOTIFY("Couldn't find voice context %s", sym.Str());
+            return;
+        }
     }
-found:
     if (!TheSpeechMgr->Enabled()) {
         MILO_NOTIFY(
             "----- VoiceInputPanel::ActivateVoiceContext() - speechMgr not enabled"
@@ -303,9 +288,15 @@ found:
         if (TheSpeechMgr->Overlay()->Showing()) {
             // No named temp for the message: the image loads the overlay's
             // vtable pointer into a callee-saved register BEFORE the MakeString
-            // call (`lwz r30, 0x0(r11)` then `lwz r10, 0x4(r30)` after), which
-            // is what the one-expression form emits.
-            TheSpeechMgr->Overlay()->Print(
+            // call (`lwz r30, 0x0(r11)` at 0x82957BCC, then `lwz r10, 0x4(r30)`
+            // after), which is what the one-expression form emits.  And the
+            // object is the member LVALUE `mOverlay`, not the `Overlay()`
+            // accessor: an lvalue object expression is re-evaluated for `this`
+            // after the argument call (`lwz r11, TheSpeechMgr; lwz r3, 0x48(r11)`
+            // at 0x82957BD4..0x82957BE0), whereas the accessor's rvalue is homed
+            // in r30 and held across the call -- the whole 10-row r28/r29
+            // rotation and both replace rows (93.4 -> 100.0, w7-bv).
+            TheSpeechMgr->mOverlay->Print(
                 MakeString("Deactivating voice context %s\n", mActiveVoiceContext->mName)
             );
         }
@@ -332,7 +323,7 @@ found:
         }
         TheDebug << MakeString("----- Activating voice context %s\n", sym.Str());
         if (TheSpeechMgr->Overlay()->Showing()) {
-            TheSpeechMgr->Overlay()->Print(MakeString(
+            TheSpeechMgr->mOverlay->Print(MakeString(
                 "Activating voice context %s, confidence: %f\n",
                 sym.Str(),
                 mActiveVoiceContext->mConfThreshold
