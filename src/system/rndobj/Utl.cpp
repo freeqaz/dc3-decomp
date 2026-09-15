@@ -1199,6 +1199,11 @@ void UtilDrawPlane(
         // puts these at 0x90-0xd0, which is the whole +0x40 frame delta.
         // Refuted: reversing the declaration order to vece0/vecd4/vecc8/vecbc
         // is byte-for-byte inert (identical 80-row diff).
+        // NEGATIVE (w7-bx): scoping tf88 in a block and copying v/m.x/m.z out
+        // to three outer Vector3 locals (so the loop scope is lexically
+        // disjoint from tf88's) does NOT pack: the copies fold into f23-f31
+        // as in the image, but the frame stays 0x190 (tf88 keeps its own
+        // 0x60-0x8c) and the fmadds operands swap. Still 99.7421.
         Vector3 vecbc, vecc8, vecd4, vece0;
         float scalar = (float)(i + 1) * f;
         ScaleAdd(tf88.v, tf88.m.x, scalar, vece0);
