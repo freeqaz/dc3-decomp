@@ -97,6 +97,38 @@ bool XboxEnumeration::IsEnumerating() const {
     return mHandle != 0;
 }
 
+// XDK XMARKETPLACE_CONTENTOFFER_INFO (sizeof 0x68): one entry of the buffer
+// XEnumerate fills for a marketplace offer enumerator.  Field offsets are
+// proven by Poll (0x82E1D3A0-0x82E1D3DC read 0x10, 0x14, 0x00, 0x48 and 0x64
+// off each entry and step by 0x68); the names are the XDK's.  It belongs in
+// xdk/xapilibi/xbox.h next to XMarketplaceCreateOfferEnumerator, but that
+// header is PCH-reached and adding the struct there reorders small COMDAT
+// .text sections in 18 unrelated objects (Dir, MatAnim, Char, PanelDir, ...;
+// measured 2026-09-15 against a same-source control rebuild that moved 0),
+// so it stays TU-local until someone owning the xdk headers adjudicates that.
+struct XMARKETPLACE_CONTENTOFFER_INFO {
+    ULONGLONG qwOfferID;        // 0x00
+    ULONGLONG qwPreviewOfferID; // 0x08
+    DWORD dwOfferNameLength;    // 0x10
+    WCHAR *wszOfferName;        // 0x14
+    DWORD dwOfferType;          // 0x18
+    unsigned char contentId[20];// 0x1c
+    BOOL fIsUnrestrictedLicense;// 0x30
+    DWORD dwLicenseMask;        // 0x34
+    DWORD dwTitleID;            // 0x38
+    DWORD dwContentCategory;    // 0x3c
+    DWORD dwTitleNameLength;    // 0x40
+    WCHAR *wszTitleName;        // 0x44
+    BOOL fUserHasPurchased;     // 0x48
+    DWORD dwPackageSize;        // 0x4c
+    DWORD dwInstallSize;        // 0x50
+    DWORD dwSellTextLength;     // 0x54
+    WCHAR *wszSellText;         // 0x58
+    DWORD dwAssetID;            // 0x5c
+    DWORD dwPurchaseQuantity;   // 0x60
+    DWORD dwPointsPrice;        // 0x64
+};
+
 void XboxEnumeration::Poll() {
     if (0 == mHandle || mOverlapped.InternalLow == 0x3E5U) {
         return;
@@ -106,11 +138,26 @@ void XboxEnumeration::Poll() {
 
     DWORD bytesReceived = 0;
     DWORD overlappedResult = XGetOverlappedResult(&mOverlapped, &bytesReceived, 0);
+    // FRAME SLOTS (w7-bn, 2026-09-15): the image homes the four 4-byte locals
+    // as insert-pos copy 0x50 / insert result 0x54 / bytesReceived 0x58 /
+    // overlappedResult 0x5c.  Every spelling that gives the ERROR_NO_MORE_FILES
+    // arm below a conversion TEMPORARY for its MakeString argument adds a
+    // fifth 4-byte object and the packer reverses all four (97.5 canonical,
+    // 22 offset rows); see the note at that arm.  Declaration order and scope
+    // of `it` / the DWORDs were inert (function scope, before bytesReceived,
+    // push_back instead of insert(end()): all 97.5 with identical rows).
 
     DWORD productCount = 0;
     if (bytesReceived > 0) {
         std::list<EnumProduct>::iterator it = mContentList.end();
-        u32 offset = 0;
+        // Indexed as an array of XMARKETPLACE_CONTENTOFFER_INFO off the
+        // MEMBER, not a cached local: 0x82E1D380/0x82E1D388 reload mCurOffers
+        // every iteration and add the strength-reduced index (`add r30, r28,
+        // r11`, induction variable first).  A cached `const ...INFO *offers`
+        // local lets MSVC turn the whole thing into a pointer induction
+        // variable (`lwzu r11, 0x68(r30)`, __savegprlr_23: 90.9), and an
+        // explicit byte offset `(u8 *)mCurOffers + offset` keeps both
+        // counters but emits the add pointer-first (97.5, 1 row).
         while (productCount < bytesReceived) {
             // One String, not two: the image constructs EnumProduct FIRST
             // (??0String@@QAA@XZ into slot 0x60, which is prod.mName -- the
@@ -126,20 +173,19 @@ void XboxEnumeration::Poll() {
             // both increments above the dtor call.
             {
                 EnumProduct prod;
-                u8 *entryPtr = (u8 *)mCurOffers + offset;
-                WideCharToMultiByte(0, 0, *(LPCWSTR *)(entryPtr + 0x14), *(int *)(entryPtr + 0x10), buf, 0xFF, 0, 0);
+                const XMARKETPLACE_CONTENTOFFER_INFO &offer = ((const XMARKETPLACE_CONTENTOFFER_INFO *)mCurOffers)[productCount];
+                WideCharToMultiByte(0, 0, offer.wszOfferName, offer.dwOfferNameLength, buf, 0xFF, 0, 0);
                 prod.mName = buf;
 
-                prod.mOfferID = *(u64 *)entryPtr;
-                prod.mPurchased = *(int *)(entryPtr + 0x48);
+                prod.mOfferID = offer.qwOfferID;
+                prod.mPurchased = offer.fUserHasPurchased;
                 // mPrice is written BEFORE the insert (0x82E1D3D8 stores to
                 // 0x74, then bl insert).  Setting it afterwards wrote to the
                 // dead local and every product in mContentList kept price 0.
-                prod.mPrice = *(int *)(entryPtr + 0x64);
+                prod.mPrice = offer.dwPointsPrice;
                 mContentList.insert(it, prod);
             }
 
-            offset += 0x68;
             productCount++;
         }
     }
@@ -173,37 +219,62 @@ void XboxEnumeration::Poll() {
         // extended-error / winsock block.  And the FALLTHROUGH at 0x82E1D458 is
         // the "overlapped failed with ... extended ..." message, where our
         // source called XGetOverlappedExtendedError and threw the result away.
-        // NEGATIVE RESULT (w7-bi, 88.7 canonical): the image's dispatch is two
-        // FORWARD beq's with the bodies laid out default / 0x65b /
-        // check_more_offers / error_no_more (0x82E1D444-0x82E1D518), where we
-        // invert the 0x12 test and inline the error_no_more body at the test
-        // site.  Two spellings that should produce that layout were measured
-        // and BOTH collapse to 45.0 (210 instructions against the image's 173 --
-        // MSVC duplicates the continue_enum tail):
-        //   * `switch (overlappedResult) { default: ...; case 0x65b: ...;
-        //      case 0x12: ...; }` with default written first;
-        //   * nested inverted ifs, `if (r != 0x12) { if (r != 0x65b) {...} ... }`
-        //     with the error_no_more body as the outer fall-through.
-        // Both emit byte-identical objects, so they are one experiment, not two.
+        // RESOLVED (w7-bn, 2026-09-15, 88.7 -> 100.0 canonical): the image's
+        // dispatch is two FORWARD beq's with the bodies laid out default /
+        // 0x65b / check_more_offers / error_no_more (0x82E1D444-0x82E1D518).
+        // It is a `switch` written in CASE ORDER 0x12 / 0x65b / default.  MSVC
+        // lays the compare chain out with the `default:` body as the
+        // fall-through no matter where `default:` is written, and the three
+        // arms share the `TheDebug << str; mEnumerating = false; return` tail
+        // at .L_82E1D534: the cross-jumped copy that is KEPT is the earliest
+        // one in source order, so the 0x12 arm must be written first for its
+        // copy to be the one at .L_82E1D534.  w7-bi measured the same switch
+        // with `default:` written first at 45.0 (210 instructions) and read
+        // it as "MSVC duplicates the continue_enum tail"; re-measured (S1),
+        // the 45.0 is a pure block-order difference plus two constant-
+        // propagation rows, not tail duplication.  Still refuted: nested
+        // inverted ifs (bi, 45.0, byte-identical to default-first) and a
+        // forward `if (r == 0x12) ... else if (r == 0x65b) ... else` chain in
+        // image order (37.0: bne inversions and 216 instructions).
         switch (overlappedResult) {
         case 0x12:
             if (mOfferIDsBegin == 0) {
                 return;
             }
-            // MakeString<unsigned int>, not <unsigned long>:
-            // ??$MakeString@I@@YAPBDPBDABI@Z at 0x82E1D530.
-            TheDebug << MakeString(" store enum: error no more files (%d)\n", (unsigned int)overlappedResult);
+            // MakeString<unsigned int>, not <unsigned long>
+            // (??$MakeString@I@@YAPBDPBDABI@Z at 0x82E1D530), and its argument
+            // is overlappedResult's OWN home slot: 0x82E1D528 is `addi r4, r31,
+            // 0x5c`, the same slot the default arm hands to
+            // MakeString<unsigned long> at 0x82E1D47C, with no store in either
+            // arm.  A value cast in either direction makes MSVC materialise a
+            // temporary -- `(unsigned int)overlappedResult` folds the case
+            // constant into it (`li r11, 0x12; stw r11, ...`, 2 rows), typing
+            // the variable `unsigned int` and casting the default arm
+            // `(DWORD)` stores r25 into one instead (idx 88), and a C-style
+            // `(const unsigned int &)` cast is a static_cast here, so it is
+            // the same temporary -- and that fifth 4-byte object is what
+            // reverses the frame-slot order above.  Only an lvalue
+            // reinterpretation reproduces the image (99.9 raw, 4 rows, all
+            // frame slots equal).  DWORD is 4 bytes on every target this
+            // builds for, so the pun is exact.
+            TheDebug << MakeString(" store enum: error no more files (%d)\n", *(const unsigned int *)&overlappedResult);
             mEnumerating = false;
             return;
         case 0x65b: {
             DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
-            if ((WORD)extError == 0x12) {
+            // The 16-bit code is a NAMED DWORD local (HRESULT_CODE shape,
+            // MakeString<unsigned long> at 0x82E1D4B0): its home store
+            // `stw r30, 0x50(r31)` sits at 0x82E1D494, BEFORE the `== 0x12`
+            // test.  As a `(unsigned long)(WORD)extError` temporary the store
+            // sinks below the test (1 insert / 1 delete).
+            DWORD extCode = extError & 0xFFFF;
+            if (extCode == 0x12) {
                 return;
             }
             // Same shape at 0x82E1D4A4/0x82E1D4AC: arg 1 is 0x50(r31), the
             // truncated value, and arg 2 is 0x54(r31), the full one.
-            TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)\n", (unsigned long)(WORD)extError, (unsigned long)extError);
-            if ((WORD)extError >= 0x2710 && (WORD)extError < 0x2EE0) {
+            TheDebug << MakeString(" store enum: funciton failed with: %d (0x%X)\n", extCode, extError);
+            if (extCode >= 0x2710 && extCode < 0x2EE0) {
                 TheDebug << MakeString(" which is a winsock error, so fail.\n");
                 mEnumerating = false;
                 return;
@@ -220,10 +291,11 @@ void XboxEnumeration::Poll() {
         }
         default: {
             DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
+            DWORD extCode = extError & 0xFFFF;
             // The middle argument is the 16-BIT-TRUNCATED error: 0x82E1D45C is
             // `clrlwi r9, r3, 16`, and 0x54(r31) (arg 2) holds r9 while
             // 0x50(r31) (arg 3) holds the full value.
-            TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)\n", (unsigned long)overlappedResult, (unsigned long)(WORD)extError, (unsigned long)extError);
+            TheDebug << MakeString(" store enum: overlapped failed with: %d, extended: %d (0x%X)\n", overlappedResult, extCode, extError);
             // Only the MESSAGE arms clear mEnumerating.  The shared tail at
             // .L_82E1D534/.L_82E1D540 is `bl TextStream::operator<<` /
             // `stb r25, 0x1c(r29)` / `b .L_82E1D590`, and the epilogue label
