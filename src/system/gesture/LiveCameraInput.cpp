@@ -527,6 +527,23 @@ LiveCameraInput::LiveCameraInput()
         DataArray *speechArr = kinectArr->FindArray("speech");
         b17 = speechArr->FindArray("enabled")->Int(1);
     }
+    // RESIDUAL (w7-bp, ctor is 98.37369 canonical / 98.2 raw, 1520 B, 380/380
+    // instructions).  Unmoved by this lane.  Beyond the mSpeechMgr/rotation
+    // finding recorded above by w7-aa, the only other charged cluster is THIS
+    // loop's lowering, target indices 110-122, and it is pure backend:
+    //   the image biases the induction variable to the MIDDLE of the struct --
+    //   `addi r11, r30, 0x1454` and then displacements -0xc, -0x8, -0x4, 0x0,
+    //   +0x4, +0x8 -- and counts down with `li r10, 0x4` / `subic. r10, r10,
+    //   0x1` / `bne` plus a separate `addi r11, r11, 0x18`;
+    //   we bias to the START (`addi r11, r30, 0x1444`, displacements 0x4..0x18)
+    //   and use the counted form, `mtctr` / `stwu` / `bdnz`.
+    // The SIX STORE ADDRESSES ARE IDENTICAL on both sides (0x1448, 0x144c,
+    // 0x1450, 0x1454, 0x1458, 0x145c) and the value registers line up field for
+    // field -- the 5th store is the 1 that initialises mReadIdx in both -- so
+    // the field order below is right and only the loop form differs.
+    // Deletes [110]/[111] are the image's `b` over a `lwz r25, 0x54(r31)`
+    // reload on the `!kinectArr` path above; it spills and reloads a value
+    // across that join where our build keeps it in a register.
     for (int i = 0; i < kBufferNum; i++) {
         Buffer &cur = mStreams[i];
         cur.mHandle = nullptr;
