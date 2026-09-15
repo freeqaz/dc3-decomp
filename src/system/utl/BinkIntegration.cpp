@@ -370,6 +370,19 @@ void ReadFunc(BINKIO *bink, bool startRead) {
             // (89.21 -> 88.0) and widens the r29<->r30 permutation from 53
             // instructions to 79.  Naming the INPUTS was already known to be
             // neutral; naming the outputs is worse than either.
+            //
+            // w7-bu (89.21 -> 90.8 canonical): the extra callee-saved register
+            // IS source-reachable -- swap the STATEMENT order.  With mData[1]
+            // swapped first the image's r24 (0x82E5D3DC `rlwinm r24, r10, 0,
+            // 8, 15`) appears and the prologue becomes __savegprlr_24 / frame
+            // 0xd0 (0x82E5D294/9C), closing the 4 prologue/epilogue rows; the
+            // two `std`s still come out in the image's 0x0-then-0x8 order
+            // (0x82E5D43C/44).  What remains is the shape of the d0 chain:
+            // the image opens BOTH chains with `rldicl rX, rN, 48, 16` +
+            // `and` + `or` (0x82E5D374/78 for d0, 0x82E5D380 for d1); ours
+            // gives mData[0]'s chain `rldicl r9, r11, 48, 24` + `rldicr r9,
+            // r9, 0, 31` whichever statement comes first, and naming the two
+            // inputs under this order is 90.6 (worse).
             XTEABlock *block = (XTEABlock *)bf->pBufBack;
             while (block < (XTEABlock *)((unsigned char *)bf->pBufBack + bytesRead)) {
                 block->mData[1] = EndianSwap(block->mData[1]);
@@ -393,12 +406,14 @@ void ReadFunc(BINKIO *bink, bool startRead) {
         bf->iBufEmpty -= uBytesRead;
         bink->bytesAvail += uBytesRead;
         bink->BytesRead += uBytesRead;
-        // NEGATIVE RESULT: the image loads bytesAvail (0x82E5D4EC
-        // `lwz r11, 0x6c(r28)`) before BufHighUsed (0x82E5D4F0) and ours emits
-        // them the other way round, but spelling it
-        // `BufHighUsed < bytesAvail` does NOT swap them -- it keeps the same
-        // load order and inverts the branch polarity on top (ble -> bge), a
-        // net loss.  The load order is the scheduler's, not the source's.
+        // The image loads bytesAvail (0x82E5D4EC `lwz r11, 0x6c(r28)`) before
+        // BufHighUsed (0x82E5D4F0), compares `cmplw r11, r10` and then RELOADS
+        // bytesAvail for the store (0x82E5D4FC).  Written as one
+        // `if (bytesAvail > BufHighUsed)` MSVC loads BufHighUsed first, and
+        // `BufHighUsed < bytesAvail` keeps that order and inverts the branch
+        // on top.  w7-bu: reading bytesAvail into a local FIRST fixes the
+        // load order (that volatile read is sequenced before the other) and
+        // the store's own `bink->bytesAvail` read keeps the reload.  3 rows.
         unsigned int avail = bink->bytesAvail;
         if (avail > bink->BufHighUsed) {
             bink->BufHighUsed = bink->bytesAvail;
