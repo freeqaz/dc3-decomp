@@ -2914,22 +2914,39 @@ void RndText::FontMap3d::CleanupSyncMeshes() {
     }
 }
 
-/** w7-bo (2026-09-15) SURVEYED at 94.607 canonical / 93.606 fuzzy, 260 rows:
- *  203 equal / 43 diff_arg / 1 replace / 6 insert / 7 delete.  No source
- *  change; the two largest residuals are already refuted below (the z1
- *  fnmsubs contraction and the `fmr f26` AspectRatio park).  What was NOT
- *  attributed before:
- *    - 47 of the 57 rows are an FPR relabelling shifted by exactly one
- *      (image f27/f28/f29/f30 where we use f26/f27/f28/f29, from idx 6
- *      onward).  Same FPR count, same prologue.  It is downstream of the
- *      `fmr f26, f0` at idx 77 that the image emits and we do not -- the
- *      image keeps a second copy of state.mSize alive, which pushes every
- *      later callee-saved FPR up one.
- *    - the last 6 rows (idx 181-190) are the 4-word copy
- *      `pg.mVertStart[3].color = state.mTextColor;`.  Both sides emit four
- *      lwz/stw pairs over the same addresses (src 0x10..0x1c, dst
- *      0x130..0x13c); the image runs them ascending from 0x130, we start at
- *      0x13c and wrap.  A rotation of one whole-struct copy, no field wrong.
+/** w7-bs (2026-09-15) 94.607 -> 97.8 canonical (93.606 -> 97.0 fuzzy),
+ *  256 rows: 214 equal / 36 diff_arg / 1 replace / 2 insert / 3 delete.
+ *  Three tail levers, no behavioural change:
+ *    - `verts[1].tex.Set(verts[0].tex.x, verts[2].tex.y)` (and [3]) instead
+ *      of four scalar assignments: the image loads and stores each pair
+ *      separately (0x8269125c-0x82691278); spelled as scalars MSVC hoists all
+ *      four loads above the first pair's stores.  6 rows.
+ *    - the 16-byte normal copy 0x10 -> 0x130 (0x8269128c-0x826912a8; w7-bo
+ *      read it as the colour copy, it is `verts[3].norm = verts[0].norm`)
+ *      pairs lwz/stw in the image.  A struct assignment rotates it (starts at
+ *      0x14 and wraps, HEAD) and a reference-to-source form hoists the first
+ *      lwz above the Set stores; `memcpy(&n3, &n0, sizeof(Vector3))` through
+ *      two Vector3& references pairs it.  4 rows.
+ *  Residual (42 rows) and what was tried against each:
+ *    - 30 rows are the FPR relabelling downstream of the image's
+ *      `fmr f26, f0` at 0x825f4 (idx 77), a second callee-saved copy of
+ *      state.mSize kept across AspectRatio().  A `float size = state.mSize`
+ *      local declared before z0, right after the xPos update, or right
+ *      before the charW multiply all merge into the one callee-saved load
+ *      (`lfs f30, 0x0(r30)`) -- no copy is ever emitted.
+ *    - `fmuls f12,f1,f26` / `fsubs f12,f27,f12` (0x261c/0x2638) vs our
+ *      fnmsubs: a named `aspectH` temp, and `z1 = z0; z1 -= aspect*size;`
+ *      are both re-fused.  2 rows.
+ *    - dead address temps `addi r10,r11,0x130` / `addi r10,r11,0x10` at
+ *      0x82691254/58 come out in the other order (2 rows), and our second
+ *      normal copy forms an extra `addi r10,r11,0x130` after its pointer
+ *      reload (1 row, 0x9e28 base).  Spelling that copy's source as
+ *      `verts[3].norm` puts the temps in image order but then reads the
+ *      source through the stale pointer (worse).
+ *    - `stfs f31, 0x18` before `stfs f31, 0x10` in the image
+ *      (0x8269127c/80); ours stores x first.  Explicit z,x,y assignments and
+ *      Set() schedule identically.  2 rows.
+ *    - xPos read before vs after the `pg.mVertStart += 4` store.  2 rows.
  */
 void RndText::FontMap::SetupCharacter(
     unsigned short charCode,
@@ -2980,9 +2997,10 @@ void RndText::FontMap::SetupCharacter(
     if (charW <= 0.0f) return;
 
     float z0 = yPos + state.mZOffset * state.mSize;
-    // The image parks state.mSize in a callee-saved FPR across the virtual
-    // AspectRatio() call (`fmr f26, f0` at 0x25f4) instead of reloading it
-    // afterwards; naming it here is what produces that copy.
+    // The image parks a SECOND copy of state.mSize in a callee-saved FPR
+    // across the virtual AspectRatio() call (`fmr f26, f0` at 0x25f4).  This
+    // local does NOT reproduce it (w7-bs): wherever it is declared it merges
+    // into the single `lfs f30, 0x0(r30)`; it is kept for readability only.
     float size = state.mSize;
     auto _tmp1 = mFont->AspectRatio();
     float italics = state.mItalics * size;
@@ -3025,19 +3043,22 @@ void RndText::FontMap::SetupCharacter(
         Multiply(pg.mVertStart[3].pos, xfm, pg.mVertStart[3].pos);
     }
 
-    // One `lwz r11, 0x8(r31)` at 0x82691240 serves all six statements below.
-    // Spelled `pg.mVertStart[...]` MSVC cannot prove the float stores miss the
-    // pointer member and reloads it before each one (four extra rows); the
-    // integer struct copies further down DO reload in the image too, so they
-    // deliberately keep the member spelling.
+    // One `lwz r11, 0x8(r31)` at 0x82691240 serves all the float statements
+    // below.  Spelled `pg.mVertStart[...]` MSVC cannot prove the float stores
+    // miss the pointer member and reloads it before each one (four extra
+    // rows); the integer struct copies further down DO reload in the image
+    // too, so they deliberately keep the member spelling.
     RndMesh::Vert *verts = pg.mVertStart;
-    verts[1].tex.y = verts[2].tex.y;
-    verts[1].tex.x = verts[0].tex.x;
-    verts[3].tex.y = verts[0].tex.y;
-    verts[3].tex.x = verts[2].tex.x;
+    // Set(), not scalar assignments: see the w7-bs note above (6 rows).
+    verts[1].tex.Set(verts[0].tex.x, verts[2].tex.y);
+    verts[3].tex.Set(verts[2].tex.x, verts[0].tex.y);
 
-    verts[0].norm.Set(0.0f, -1.0f, 0.0f);
-    verts[3].norm = verts[0].norm;
+    // verts[3].norm = verts[0].norm, spelled so the 16-byte copy comes out as
+    // four paired lwz/stw (w7-bs note above, 4 rows).
+    Vector3 &n3 = verts[3].norm;
+    Vector3 &n0 = verts[0].norm;
+    n0.Set(0.0f, -1.0f, 0.0f);
+    memcpy(&n3, &n0, sizeof(Vector3));
     pg.mVertStart[2].norm = pg.mVertStart[3].norm;
     pg.mVertStart[1].norm = pg.mVertStart[2].norm;
 
@@ -3048,6 +3069,10 @@ void RndText::FontMap::SetupCharacter(
 
     pg.mVertStart += 4;
 
+    // The image reads xPos (`lfs f0, 0x0(r29)` at 0x82691388) BEFORE the
+    // `pg.mVertStart += 4` store; we read it after.  `xPos +=`, a `float x =
+    // xPos` read ahead of the increment, and swapping the two statements are
+    // all inert (w7-bs) -- the scheduler decides this, not the source.  2 rows.
     xPos = advW * state.mSize + xPos;
 }
 
