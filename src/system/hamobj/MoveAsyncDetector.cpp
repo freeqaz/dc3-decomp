@@ -241,6 +241,21 @@ void MoveAsyncDetector::EnableDetector(HamMove *move) {
                 // with their r10/r11 permutation.  Kept the higher-scoring
                 // spelling; the loop is the truer one.  Moving `mActive = true`
                 // above the two -1 stores is 87.7.
+                // w8-i, refining the row count above: the loop spelling leaves
+                // exactly TWO rows (48 of 50 equal, base size 196 = target size),
+                // and the addi is NOT one slot late -- it lands at the image's
+                // index 22.  What is misplaced is `stw r10, 0x8(r3)`, one slot
+                // EARLY: MSVC schedules the dead pointer init BETWEEN our two -1
+                // stores, where the image emits both of them after it.  The loop
+                // also fixes the r10/r11 assignment that the straight-line form
+                // gets backwards.  Still kept out because the canonical ruler
+                // charges the insert/delete pair harder than six register rows:
+                // loop = 95.9, straight-line = 98.0, and neither is 100 so
+                // matched_code is indifferent.  Refuted on top of that: moving
+                // the two -1 stores ABOVE the loop is 95.8 (the addi then sinks
+                // past BOTH of them AND the registers go back to swapped), and
+                // the pointer-walking form `int *frac = ...; *frac++ = 0;` is
+                // bit-identical to the index form.
                 *(int *)&detector->mLastDetectFracs[0] = 0;
                 *(int *)&detector->mLastDetectFracs[1] = 0;
                 detector->mLastDetectFrameIdx = -1;
@@ -249,7 +264,13 @@ void MoveAsyncDetector::EnableDetector(HamMove *move) {
             }
             mActiveDetectors.insert(detector);
         } else {
-            char *name = (char *)move->Name();
+            // w8-i: `const char *`, NOT a `(char *)` cast.  MakeString takes its
+            // varargs by reference, so the cast instantiated
+            // `??$MakeString@PAD@@YAPBDPBDABQAD@Z` where the image calls
+            // `??$MakeString@PBD@@YAPBDPBDABQBD@Z` -- a genuinely different
+            // callee that only the name_check ruler charges (Hmx::Object::Name()
+            // has returned `const char *` all along).
+            const char *name = move->Name();
             auto _tmp0 = MakeString("Could not enable detector for %s", name);
             TheDebug.Notify(_tmp0);
         }
@@ -340,7 +361,7 @@ void MoveAsyncDetector::DisableDetector(HamMove *move) {
             detector->Reset();
             mActiveDetectors.erase(detector);
         } else {
-            char *name = (char *)move->Name();
+            const char *name = move->Name();
             auto _tmp0 = MakeString("Could not disable detector for %s", name);
             TheDebug.Notify(_tmp0);
         }
