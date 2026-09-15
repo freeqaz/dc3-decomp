@@ -170,3 +170,38 @@ void StorePreviewMgr::Poll() {
         mDownloadQueue.pop_front();
     }
 }
+// w8-j 2026-09-15 -- FLOOR for three rows in this TU, all ONE phenomenon:
+// MSVC coalesces an EH-tracked object onto a stack slot the image kept separate.
+// Frame sizes match exactly on both functions, no instruction is inserted or
+// deleted, and every mismatched row is an `addi rN, r31, <slot>`.
+//
+//   ?Handle@StorePreviewMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z  99.9897%
+//     1164 B, 288 of 291 equal.  Three rows, all the temporary String built for
+//     HANDLE_ACTION(download_preview_file, AddToDownloadQueue(_msg->Str(2))):
+//     image 0x68, ours 0x58.  The image puts the OTHER THREE String temps of
+//     this dispatch (set_current_preview_file, set_current_preview_movie,
+//     is_downloading_file, allow_preview_download) at 0x58 exactly as we do --
+//     verified directly in build/373307D9/asm/system/meta/StorePreviewMgr.s at
+//     82E1E868, 82E1E8F0, 82E1EA08 and 82E1EA90 -- so this is not a base-offset
+//     shift, it is one temp of four that the image declined to coalesce.
+//
+//   fn_82E1ED0C  99.9%, 40 B -- the EH unwind funclet for exactly that temp
+//     (`addi r3, r31, 0x68` / `bl ??1String@@UAA@XZ`).  It moves if and only if
+//     the Handle row above moves; it is listed in the state-unwind table
+//     lbl_8225AFD0 and carries UNVERIFIABLE_PAIRING (objdiff paired it by masked
+//     byte signature, not by name), so it cannot be adjudicated on its own.
+//
+//   ?PlayCurrentPreview@StorePreviewMgr@@IAAXXZ  99.883%, 412 B, 91 of 103
+//     equal.  Every one of the 12 rows is a uniform -0x8: the image's first
+//     EH-tracked object (`String str`) starts at 0x58 and ours at 0x50, so
+//     `str`, both `FilePath fp` temps and the `int len` spill all sit 8 bytes
+//     low.  The image reserves 0x50..0x57 for the MILO_ASSERT(mStreamPlayer,
+//     0xd8) scratch -- the line number is passed to MakeString BY REFERENCE
+//     (`ABH` in the mangled name), so it needs a real slot -- and then starts
+//     objects at 0x58.  We reuse that same slot for `str`, which is legal
+//     because the assert temp is dead by then, and MSVC took the reuse.
+//     Instructions 0..32 are identical on both sides, including both stores to
+//     0x50, so there is no missing local to add: the difference is purely
+//     whether the allocator coalesced.
+// No source lever found for any of the three; this is MSVC temp-area shaping.
+// Measured percentages above are match_percent_normalized from a full ninja.

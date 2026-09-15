@@ -197,3 +197,22 @@ DataNode UILabelDir::GetMatVariations(UILabelDir *dir) {
     arr->Release();
     return ret;
 }
+
+// w8-j 2026-09-15 -- FLOOR at 97.619% for
+// ?GetStateColor@UILabelDir@@QBAPAVUIColor@@W4State@UIComponent@@@Z (168 B,
+// 38 of 42 instructions equal).  The image keeps the fallback chain in r11 and
+// converges with an explicit `mr r3, r11`; we let MSVC compute it straight into
+// the return register r3, so we are one instruction short:
+//     target   lwz r11, 0x2fc(r31) / cmpwi cr6, r11, 0 / lwz r11, gColor(r11)
+//              / mr r3, r11
+//     ours     lwz r3,  0x2fc(r31) / cmpwi cr6, r3,  0 / lwz r3,  gColor(r11)
+// REFUTED, two full ninja builds -- giving the fallback its own local so the
+// assignment back to `color` becomes a real merge does NOT create the move;
+// MSVC coalesces the temp into `color` either way:
+//   (a) UIColor *dflt = mDefaultColor; if (!dflt) dflt = gColor; color = dflt;
+//       -- 4 rows still, and it makes row 31 WORSE: testing the local emits
+//       `cmplwi` where the image (and our original, which re-tests the MEMBER
+//       mDefaultColor) emits the signed `cmpwi`.  Keep `if (!mDefaultColor)`.
+//   (b) same but keeping `if (!mDefaultColor)` as the test -- restores `cmpwi`
+//       and is then byte-identical to the original.  No gain.
+// What is left is which register MSVC picks for the merge, not source shape.

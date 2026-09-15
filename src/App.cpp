@@ -1422,3 +1422,19 @@ DWORD KinectGuideThread(void *) {
     }
     return 0;
 }
+
+#ifndef HX_NATIVE
+// w8-j: orphan-instantiation probe for ??_H@YAXPAXIHP6APAX0@Z@Z (0x823313A8,
+// 64 B) -- MSVC's CRT "vector constructor iterator", the helper `new T[n]` emits
+// to run T's constructor over n elements.  ham_xbox_r.map contributes it from
+// App.obj and nothing in App.s calls it, so the array-new that emitted it was
+// dropped by /OPT:REF.  ??_H, not ??_L: the EH form is chosen when the element
+// type needs unwinding, so the real T had a constructor and NO destructor -- and
+// consistently, the map attributes no ??_M / ??_L to App.obj either, i.e. the
+// array is constructed and never destroyed through a ??_M path.
+struct Dc3W8jArrayProbeElem {
+    Dc3W8jArrayProbeElem() : mValue(0) {}
+    int mValue;
+};
+void *Dc3W8jArrayProbe(int n) { return new Dc3W8jArrayProbeElem[n]; }
+#endif

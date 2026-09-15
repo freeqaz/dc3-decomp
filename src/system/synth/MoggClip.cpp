@@ -457,3 +457,27 @@ void MoggClip::SetupPanInfo(float pan, float panWidth, bool stereo) {
         SetPan(0, pan);
     }
 }
+
+// w8-j 2026-09-15 -- FLOOR at 78.387% for ?SetupPanInfo@MoggClip@@QAAXMM_N@Z
+// (124 B, 26 of 33 instructions equal).  This is a /fp:fast REASSOCIATION
+// floor, not a missing operation -- the arithmetic is already correct.
+// The image computes the two pans as two INDEPENDENT fused multiply-adds, each
+// loading its own signed half:
+//     lfs f0, __real@bf000000   ; -0.5f
+//     fmadds f1, f2, f0, f1     ; panWidth * -0.5 + pan
+//     ...
+//     lfs f0, __real@3f000000   ; +0.5f
+//     fmadds f1, f30, f0, f31   ; panWidth * +0.5 + pan
+// We instead let MSVC factor out the common product: it computes
+// `fmuls f30, f2, f0` once with +0.5f and reaches the two call sites with
+// `fsubs f1, f1, f30` and `fadds f1, f30, f31`.  Same values, one multiply
+// fewer, and it costs 7 rows (the saved `fmr f30, f2` plus both constant
+// loads).
+// REFUTED, one full ninja: spelling each operand as a multiply by its own
+// signed constant --
+//     SetPan(0, panWidth * -0.5f + pan);  SetPan(1, panWidth * 0.5f + pan);
+// is BYTE-IDENTICAL to the `/ 2.0f` form.  MSVC canonicalises `x * -0.5f` and
+// `-x / 2.0f` to the same shared product before it schedules, so the CSE
+// survives every spelling that keeps both halves derivable from one multiply.
+// Reverted to the faithful `/ 2.0f` reading.  See
+// docs/decomp/patterns/xenon-msvc-defaults-fp-fast.  Do not re-derive.
