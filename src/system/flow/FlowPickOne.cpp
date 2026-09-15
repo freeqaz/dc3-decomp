@@ -39,22 +39,42 @@ BEGIN_COPYS(FlowPickOne)
     END_COPYING_MEMBERS
 END_COPYS
 
-// w7-bh residual note: 95.80% canonical / 1284 B (was 95.19 before the
-// kChoiceUseIndex fix below).  Two residual clusters, neither reachable from
-// source so far:
-//   * The image materialises r26 = &mChoiceHistory.mNodes at 0x82405E90 -- one
-//     instruction BEFORE the `mIndex >= 0` test it is only used inside -- and
-//     then addresses the vector r26-relative (`lwz r10, 0x4(r26)`) for the
-//     size, empty and _M_erase sites, while still reloading _M_finish
-//     r30-relative for back() (`lwz r11, 0x64(r30)` at 0x82405ED8).  We defer
-//     the addi past the test and use r30+0x60/0x64 throughout, which also lets
-//     MSVC CSE the empty() load into back().  mNodes is private to ObjPtrVec,
-//     so there is no reference local that would force the base register.
-//   * The refill loop tests `srawi. r11, r11, 2` in the image (0x82405FAC and
-//     0x82405FD0); we get `clrrwi. r11, r11, 2`, MSVC's mask peephole for
-//     shift-then-test-eq.  FAILED spellings (all identical to five figures):
-//     `items.size() != 0`, `items.end() - items.begin() != 0`.  `empty()` is a
-//     pointer compare (`cmplw`) and is wrong outright.
+// w7-bv: 95.80 -> 98.6 canonical (98.4 raw, 9 of 323 rows), on top of w7-bh's
+// 95.19 -> 95.80 kChoiceUseIndex fix (no mIndex++ in that arm -- keep it).
+// Levers, each measured on this function:
+//   * Per-arm ActivateChild(...) calls, no shared `chosen` local.  With one
+//     `FlowNode *chosen` assigned in every arm and activated after the switch,
+//     MSVC spilled it to 0x58(r31) across the arms (16 rows, idx 280-295).
+//     Written per arm, the identical tails cross-jump into the image's shared
+//     blocks at 0x82406090 / 0x8240609C / 0x824060A0 (bctrl-free `bl
+//     ActivateChild`) and 0x824060E4 (the incrementing tail).
+//   * `while (int remaining = items.size())` is the only spelling that keeps
+//     the refill test a SIGNED shift: 0x82405FAC / 0x82405FD0 are
+//     `srawi. r11, r11, 2`.  `items.size() != 0`, `(int)items.size() != 0`,
+//     `items.size()`, `items.end() - items.begin() != 0` all fold to MSVC's
+//     mask peephole `clrrwi. r11, r11, 2`; `!items.empty()` is a pointer
+//     compare (`cmplw`) and wrong outright.
+//   * kChoiceOrdered reads mIndex into a named `int index` before the range
+//     test: written on the member directly, MSVC copied it (`clrrwi r10, r9,
+//     0`) and took r9 for the 0x14 divisor (4 rows at 0x824060BC-0x824060C4).
+//   * `lastChosen == mChoiceHistory[0]`, operand order as in the image
+//     (`cmplw cr6, r25, r11` at 0x82405FE4); the member on the left swaps it.
+//   * `FlowNode *lastChosen = nullptr; if (!empty()) lastChosen = back();`
+//     -- the ternary form inverts the branch (bne + `mr r25, r24` + b).
+// RESIDUAL (9 rows, r26 cluster): the image materialises r26 = &mChoiceHistory
+// .mNodes at 0x82405E90, one instruction BEFORE the `mIndex >= 0` test, and
+// addresses the vector r26-relative for size() (0x82405E9C/EA0), empty()
+// (0x82405EC4/ECC), clear() (`mr r3, r26`), [0] (0x82405FD8) and [mIndex] --
+// yet reloads _M_finish r30-relative for back() (`lwz r11, 0x64(r30)` at
+// 0x82405ED8).  We form r26 lazily at the clear() call, fold the earlier
+// sites to r30+0x60/0x64, and CSE the empty() load into back() (`clrrwi r11,
+// r10, 0`).  mNodes is private to ObjPtrVec, so nothing in this TU can name
+// +0x60: `ObjPtrVec<FlowNode> &history = mChoiceHistory;` gives r26 =
+// this+0x5c, an extra `addi r27, r26, 4`, one more callee-saved register
+// (r23, frame 0x10e0) and 95.1 -- refuted.  The split (vector methods through
+// an explicit `this` temp, back() through the member) lives in how the
+// ObjPtrVec accessors were spelled in the original header, which is
+// PCH-reached and out of scope for this row.
 bool FlowPickOne::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
@@ -70,27 +90,22 @@ bool FlowPickOne::Activate() {
     if (mChildNodes.empty())
         return false;
 
-    // No initialiser: the target never initialises the merge register, and
-    // every reachable break path assigns it (mChildNodes.empty() has already
-    // returned).
-    FlowNode *chosen;
-
     switch (mChoiceType) {
     case kChoiceOrdered: {
-        int numChildren = (int)mChildNodes.size();
         // The target materialises this as a bool (li 1 / blt / li 0 / clrlwi. /
         // bne), not as two direct branches, so the original held it in a local.
-        bool inRange = mIndex >= 0 && mIndex < numChildren;
+        int index = mIndex;
+        bool inRange = index >= 0 && index < mChildNodes.size();
         if (!inRange)
             mIndex = 0;
         ActivateChild(mChildNodes[mIndex]);
         mIndex++;
-        return !mRunningNodes.empty();
+        break;
     }
     case kChoiceRandom: {
         int numChildren = (int)mChildNodes.size();
         mIndex = RandomInt(0, numChildren);
-        chosen = mChildNodes[mIndex];
+        ActivateChild(mChildNodes[mIndex]);
         break;
     }
     case kChoiceRandomNoRepeat: {
@@ -104,7 +119,7 @@ bool FlowPickOne::Activate() {
         } else {
             mIndex = 0;
         }
-        chosen = mChildNodes[mIndex];
+        ActivateChild(mChildNodes[mIndex]);
         break;
     }
     case kChoiceRandomJukeBox: {
@@ -129,8 +144,9 @@ bool FlowPickOne::Activate() {
                 // body at 0x82405FB8 writes items._M_finish back to memory
                 // after the push_back (`stw r29, 0x64(r31)`) and re-derives the
                 // count with `subf r11, r27, r29` / `srawi. r11, r11, 2` -- a
-                // signed shift, i.e. size() != 0, not empty().
-                while (items.size() != 0) {
+                // signed shift.  Only a named int in the condition keeps it
+                // signed; see the w7-bv note above.
+                while (int remaining = items.size()) {
                     mChoiceHistory.push_back(items.back());
                     items.pop_back();
                 }
@@ -144,16 +160,15 @@ bool FlowPickOne::Activate() {
                 // with lastChosen still 0 when the history was empty.  The
                 // `if (lastChosen)` we used to wrap this in was
                 // decompilation-introduced.
-                if (mChoiceHistory[0] == lastChosen) {
+                if (lastChosen == mChoiceHistory[0]) {
                     mIndex = 1;
                 }
             }
             ActivateChild(mChoiceHistory[mIndex]);
             mIndex++;
-            return !mRunningNodes.empty();
+        } else if (numChildren == 1) {
+            ActivateChild(mChildNodes[0]);
         }
-        if (numChildren == 1)
-            chosen = mChildNodes[0];
         break;
     }
     case kChoiceUseIndex: {
@@ -174,15 +189,14 @@ bool FlowPickOne::Activate() {
         // incrementing tail is 0x824060E4, and only kChoiceOrdered and the
         // jukebox history path reach it.  Semantically right too: "use index"
         // means the driven property owns mIndex.
-        chosen = it->Obj();
+        ActivateChild(it->Obj());
         break;
     }
     default:
         MILO_NOTIFY_ONCE("FlowPickOne: bad picking type");
-        return !mRunningNodes.empty();
+        break;
     }
 
-    ActivateChild(chosen);
     return !mRunningNodes.empty();
 }
 
