@@ -1755,8 +1755,11 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     // (`bl __savegprlr_22` vs `__savegprlr_23`), which is the whole reported
     // frame delta of -0x10 and nearly all 21 register-swap pairs -- so the single
     // fsubs row is worth ~12pp of renaming behind it.
-    // NOT a spelling of Multiply(): the association and store order it produces
-    // already match.  What would have to change is whether MSVC can see the
+    // (w7-bw correction: the store order does NOT already match -- the image
+    // stores z,y,x (stfs 0x8/0x4/0x0 at 8282D048/50/58) and ours stores x,z,y,
+    // and the x' / y' sums associate differently under /fp:fast.  Same root:
+    // the literal -1 is visible at our multiply site and not at the image's.)
+    // NOT a spelling of Multiply(): what would have to change is whether MSVC can see the
     // literal at the multiply, and no value-preserving source form of a
     // Matrix3 built from literals was found that hides it.  Recorded, not fixed.
     Hmx::Matrix3 rot;
@@ -1786,6 +1789,21 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
         }
     }
 
+    // RESIDUAL (w7-bw, 90.62 canonical, face loop 8282D100..8282D1C0): ours
+    // computes base + n once at the loop top as the next IV value and then
+    // derives uPrev from it as (0xffff - n) + (base + n); the image adds
+    // 0xffff to base directly (8282D13C) and forms base + n inside each
+    // branch (8282D150 / 8282D190), feeding the IV update from that register
+    // (mr r11, r8 at 8282D1B0).  Refuted, each measured whole-function:
+    // explicit `int base = row + 1` + `col++, base += n` gives two bottom-
+    // updated IVs and a down-counted outer loop (88.5, one more GPR saved);
+    // `(unsigned short)base - 1` for uPrev is inert; the RB3 ibase form
+    // (uPrev = ibase, uBase = ibase + 1, ...) makes ibase the IV and derives
+    // uBase from uBaseN + (1 - n) instead (88.6); a hoisted `int nm1 = n - 1`
+    // is inert; unsigned short locals for all four values pre-computed
+    // before the branch is the 88.4 state.  The rot lowering in the vertex
+    // loop (fmadds f9 vs fsubs, and the store order z,y,x vs x,z,y) is in
+    // the off-limits math header's Multiply and is the ae-recorded floor.
     int iFace = 0;
     for (int row = 0; row < nMinus1; row++) {
         for (int col = 0; col < nMinus1; col++) {
