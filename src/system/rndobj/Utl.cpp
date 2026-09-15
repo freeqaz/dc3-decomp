@@ -2270,6 +2270,24 @@ void RndUtlDiscardedKeyTrim(
     std::vector<int> verts(lo, hi);
     mesh->Verts().resize(verts.size());
 }
+
+// w8-a: the same discarded function also appended one key range onto another
+// from a CONST source.  ConvertBonesToTranses' own appends go through
+// _M_range_insert<Key<T>*> (non-const, 0x82638A10/0x82638A38), which lowers to
+// _M_range_insert_realloc<Key<T>*>; the image additionally holds
+// _M_range_insert_realloc<const Key<T>*> at 0x82633348 (Vector3) and
+// 0x826334C0 (Quat).  Those two are ICF-folded with the non-const bodies -- the
+// retail map lists both names at each address -- so only a const-iterator
+// source range produces the spelling dtk carved the unit under.
+void RndUtlDiscardedKeyAppend(
+    Keys<Vector3, Vector3> &dstTrans,
+    const Keys<Vector3, Vector3> &srcTrans,
+    Keys<Hmx::Quat, Hmx::Quat> &dstRot,
+    const Keys<Hmx::Quat, Hmx::Quat> &srcRot
+) {
+    dstTrans.insert(dstTrans.end(), srcTrans.begin(), srcTrans.end());
+    dstRot.insert(dstRot.end(), srcRot.begin(), srcRot.end());
+}
 #endif
 
 void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
