@@ -368,7 +368,14 @@ float AngleBetween(const Hmx::Quat &q1, const Hmx::Quat &q2) {
     }
 }
 
-bool BadUV(Vector2 &v) {
+// `inline` is load-bearing for the one caller, ComputeFaceTangentBasis: an
+// out-of-line same-TU BadUV lets MSVC keep the caller's vertex pointers in
+// volatile r7-r9 across the three calls (it knows this body touches only
+// r3/r10/r11), where the image saves them in r29-r31.  The image's compiler
+// had no usable register summary for BadUV, which is what an inline (pick-any
+// COMDAT) definition gives.  The body is still emitted out of line and matches
+// 100.0 (46 rows) either way.  w7-bs, 2026-09-15.
+inline bool BadUV(Vector2 &v) {
     bool xIsNaN = v.x != v.x;
     if (xIsNaN)
         return true;
@@ -1684,39 +1691,37 @@ void MakeTangentsLate(RndMesh *m) {
 
 void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
     MILO_ASSERT(m, 0x250);
-    // NEGATIVE RESULT (w7-aq, 2026-09-14): declaring `face` AFTER the identity
-    // fill -- which is how the image threads the mulli / lwz 0x110 / add
-    // through the identity stores -- costs 0.6pp (94.13 -> 93.5). The face
-    // reference belongs first.
-    //
-    // w7-bo (2026-09-15): where the 114 residual rows actually come from.  76 of
-    // them are ONE relabelling: retail's prologue is __savegprlr_23, ours is
-    // __savegprlr_24, so every callee-saved register reads one number off.  The
-    // ninth register is spent on the `Hmx::Matrix3 edgeMat(edge21, edge31,
-    // faceNormal)` copy, and the reason is scheduling, not spelling: retail loads
-    // ALL TWELVE words first (idx 158-176, into r5/r31/r30/r10 for edge21,
-    // r26/r25/r24/r9 for edge31, r27/r23/r29/r11 for faceNormal) and only then
-    // stores them (177-191), which needs twelve live registers at once; we
-    // interleave the three 16-byte copies load-store, load-store, load-store and
-    // therefore need eight.  Same instruction multiset either way.
-    // The other visible item is the faceNormal store order: retail writes 0x50 /
-    // 0x54 / 0x58 in x,y,z order (idx 165/167/169) where we write x,z,y.
-    // Measured negative (2026-09-15): replacing the three-argument `Vector3
-    // faceNormal(...)` constructor with three separate `faceNormal.x = ... ;
-    // .y = ...; .z = ...;` assignments -- which forces x,y,z in the source -- is
-    // BYTE-IDENTICAL.  Canonical stayed 94.13, same 114 rows, same store order.
-    // MSVC schedules the three fmsubs from its FPR assignment, not from the
-    // source order, exactly as measured on UtilDrawCigar's fmuls operands.
+    // 100.0 canonical / 100.0 raw, 230 of 230 rows (w7-bs, 2026-09-15; was 94.13
+    // with 114 rows).  Four levers, in the order they were found -- none of them
+    // was the "scheduling" the w7-bo residual note blamed:
+    //   1. BadUV() is `inline`.  Our caller kept the three vertex pointers in
+    //      r7/r8/r9 ACROSS the three `bl BadUV` because MSVC uses a same-TU
+    //      callee's register summary; the image holds them in r29/r30/r31
+    //      (0x8262CE7C / 0x8262CE90 / 0x8262CE94), i.e. its compiler did not
+    //      trust BadUV's summary, which is what a pick-any COMDAT (inline)
+    //      callee gets.  That relabelled every GPR downstream: 100 -> 70 arg rows.
+    //   2. The transpose is a nine-argument `edgeMat.Set(x.x, y.x, z.x, ...)`
+    //      (RB3's inline Transpose(Matrix3) body): six loads then six stores in
+    //      exactly the image's order (0x8262D08C-D0E8).  Three swap temps read
+    //      and wrote 0x84/0x98 and 0x90/0xa4 in the other order: 4 offset rows.
+    //   3. edge21/edge31 come from `Subtract(vert2.pos, vert1.pos, edge21)`, and
+    //      the zero tests read the vectors; six scalar diffs feeding a Vector3
+    //      constructor gave a different FPR assignment for the whole block
+    //      (0x8262CED8-CF54, 29 arg rows + one insert/delete).
+    //   4. `outBasis.Identity()`: the image threads `mulli r11, r31, 6` and the
+    //      `add` through the nine identity stores (0x8262CE14 / 0x8262CE30);
+    //      nine explicit component stores hoisted both above them.  This is the
+    //      ninth callee-saved register too: with Identity() the Matrix3 copy is
+    //      scheduled loads-first (0x8262D008-D084) and takes r23.
+    // Inert, measured on the way: `m->Faces(faceIdx)` for `Faces()[faceIdx]`;
+    // `edgeMat.Set(edge21, edge31, faceNormal)` for the three-vector ctor;
+    // faceNormal as three component assignments (fmsubs order is FPR-driven,
+    // as w7-bo found); `Cross(edge21, edge31, faceNormal)` for the hand-written
+    // cross product (kept: same three fmsubs, and it cannot re-flip the y sign).
+    // Declaring `face` AFTER the identity fill costs 0.6pp (w7-aq, 2026-09-14),
+    // and sinking edge21/edge31 into the innermost block costs 10.5pp.
     RndMesh::Face &face = m->Faces()[faceIdx];
-    outBasis.x.x = 1.0f;
-    outBasis.x.y = 0.0f;
-    outBasis.x.z = 0.0f;
-    outBasis.y.x = 0.0f;
-    outBasis.y.y = 1.0f;
-    outBasis.y.z = 0.0f;
-    outBasis.z.x = 0.0f;
-    outBasis.z.y = 0.0f;
-    outBasis.z.z = 1.0f;
+    outBasis.Identity();
 
     if (face.v1 != face.v2 && face.v2 != face.v3 && face.v3 != face.v1) {
         RndMesh::Vert &vert1 = m->Verts()[face.v1];
@@ -1730,55 +1735,42 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
         Vector2 uv2 = vert2.tex;
         Vector2 uv3 = vert3.tex;
         if (!BadUV(uv1) && !BadUV(uv2) && !BadUV(uv3)) {
-            float dx21 = vert2.pos.x - vert1.pos.x;
-            float dy21 = vert2.pos.y - vert1.pos.y;
-            float dz21 = vert2.pos.z - vert1.pos.z;
-            float dx31 = vert3.pos.x - vert1.pos.x;
-            float dy31 = vert3.pos.y - vert1.pos.y;
-            float dz31 = vert3.pos.z - vert1.pos.z;
+            // These two must be declared HERE, above the four zero tests, not
+            // next to the Matrix3 they feed: sinking them into the innermost
+            // block costs 10.5pp (94.13 -> 83.6, measured 2026-09-14) by
+            // shuffling every stack slot from 0x50 up.
+            Vector3 edge21;
+            Subtract(vert2.pos, vert1.pos, edge21);
+            Vector3 edge31;
+            Subtract(vert3.pos, vert1.pos, edge31);
 
             float du21 = uv2.x - uv1.x;
             float dv21 = uv2.y - uv1.y;
             float du31 = uv3.x - uv1.x;
             float dv31 = uv3.y - uv1.y;
 
-            // These two must be declared HERE, above the four zero tests, not
-            // next to the Matrix3 they feed: sinking them into the innermost
-            // block costs 10.5pp (94.13 -> 83.6, measured 2026-09-14) by
-            // shuffling every stack slot from 0x50 up.
-            Vector3 edge21(dx21, dy21, dz21);
-            Vector3 edge31(dx31, dy31, dz31);
-
-            bool zero21 = dx21 == 0.0f && dy21 == 0.0f && dz21 == 0.0f;
+            bool zero21 = edge21.x == 0.0f && edge21.y == 0.0f && edge21.z == 0.0f;
             if (!zero21) {
-                bool zero31 = dx31 == 0.0f && dy31 == 0.0f && dz31 == 0.0f;
+                bool zero31 = edge31.x == 0.0f && edge31.y == 0.0f && edge31.z == 0.0f;
                 if (!zero31) {
                     bool zeroUV21 = du21 == 0.0f && dv21 == 0.0f;
                     if (!zeroUV21) {
                         bool zeroUV31 = du31 == 0.0f && dv31 == 0.0f;
                         if (!zeroUV31) {
-                            // Cross product e21 x e31. The y term is
-                            // dz21*dx31 - dx21*dz31 -- previously written with
-                            // its sign flipped, which made the third basis row
-                            // non-orthogonal to the first two.
-                            Vector3 faceNormal(
-                                dz31 * dy21 - dy31 * dz21,
-                                dx31 * dz21 - dz31 * dx21,
-                                dy31 * dx21 - dx31 * dy21
-                            );
+                            // Face normal = edge21 x edge31 (its y term was
+                            // once hand-written with the sign flipped, which
+                            // made the third basis row non-orthogonal).
+                            Vector3 faceNormal;
+                            Cross(edge21, edge31, faceNormal);
                             Hmx::Matrix3 edgeMat(edge21, edge31, faceNormal);
 
                             Invert(edgeMat, edgeMat);
 
-                            float swapXY = edgeMat.x.y;
-                            edgeMat.x.y = edgeMat.y.x;
-                            edgeMat.y.x = swapXY;
-                            float swapXZ = edgeMat.x.z;
-                            edgeMat.x.z = edgeMat.z.x;
-                            edgeMat.z.x = swapXZ;
-                            float swapYZ = edgeMat.y.z;
-                            edgeMat.y.z = edgeMat.z.y;
-                            edgeMat.z.y = swapYZ;
+                            edgeMat.Set(
+                                edgeMat.x.x, edgeMat.y.x, edgeMat.z.x,
+                                edgeMat.x.y, edgeMat.y.y, edgeMat.z.y,
+                                edgeMat.x.z, edgeMat.y.z, edgeMat.z.z
+                            );
 
                             Hmx::Matrix3 texMat;
                             texMat.x.Set(du21, du31, 0.0f);
@@ -1791,10 +1783,19 @@ void ComputeFaceTangentBasis(RndMesh *m, int faceIdx, Hmx::Matrix3 &outBasis) {
                     }
                 }
             }
+        } else {
+            // Only a BadUV() failure notifies.  The four degenerate-edge /
+            // degenerate-UV tests above exit silently with outBasis still the
+            // identity: every one of their four `bne` rows targets the epilogue
+            // at 0x8262D128, and the notify block at 0x8262D0F4 is reached only
+            // from the three BadUV() `bne` at 0x8262CEB4 / 0x8262CEC4 / 0x8262CED4.
+            // Until 2026-09-15 (w7-bs) this notify sat after the nested ifs, so a
+            // zero-area face or a zero UV delta printed "has bad UVs" -- a
+            // decompilation-introduced message the image never emits.
+            TheDebug << MakeString(
+                "NOTIFY: %s has bad UVs, should reexport from Max\n", PathName(m)
+            );
         }
-        TheDebug << MakeString(
-            "NOTIFY: %s has bad UVs, should reexport from Max\n", PathName(m)
-        );
     }
 }
 
