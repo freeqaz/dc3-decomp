@@ -260,3 +260,36 @@ CharSignalApplier::BoneOp* __uninitialized_fill_n<CharSignalApplier::BoneOp*, un
 }
 #endif
 
+
+// w8-c: `merged_823AAA20` (436 B) holds at 0.0000 and is NOT work.
+// It is an unscoreable pairing artifact, not a missing body.
+//   - config/373307D9/symbols.txt:121732 binds the address with a synthetic
+//     placeholder: `merged_823AAA20 = .text:0x823AAA20; // type:function
+//     size:0x1B4 scope:global`. dtk therefore carves the target-side COMDAT
+//     under that name, and no mangled C++ name on our side can ever pair
+//     with it -- objdiff has nothing to match against.
+//   - build/373307D9/icf_aliases.map:11012-11015 names the fold group:
+//     0x823AAA20 = `CharBoneTwist::Handle` + `CharSignalApplier::Handle`.
+//     /Gy COMDAT folding collapsed the two identical Handle bodies into one
+//     address, and the linker map records both members.
+//   - We DO emit the real body. `strings build/373307D9/src/system/char/
+//     CharSignalApplier.obj` shows
+//     `?Handle@CharSignalApplier@@UAA?AVDataNode@@PAVDataArray@@_N@Z`, and
+//     the vtable thunk `?Handle@CharSignalApplier@@$4PPPPPPPM@A@AA?AVDataNode
+//     @@PAVDataArray@@_N@Z` scores 100.0000 (12 B) in report.json.
+//   - Target body: CharSignalApplier.s:1155-1275. Referenced as data at
+//     CharSignalApplier.s:670 (`.4byte merged_823AAA20`, the vtable slot) and
+//     tail-called at CharSignalApplier.s:3015 (`b merged_823AAA20`). Its
+//     shape is the ordinary Handle dispatch: `?Sym@DataArray@@QBA?AVSymbol@@H@Z`
+//     at 0x823AAA58, `??0Timer@@QAA@XZ` 0x823AAA94, `?Restart@Timer@@QAAXXZ`
+//     0x823AAAA4, `?Handle@CharWeightable@@UAA...` 0x823AAAB8,
+//     `?Handle@Object@Hmx@@UAA...` 0x823AAB10, the
+//     `"%s unhandled msg: %s"` MakeString at 0x823AAB8C, and
+//     `?AddTime@MessageTimer@@KAX...` 0x823AABC4 -- i.e. exactly what our
+//     CharSignalApplier::Handle already compiles to.
+//   - REFUTED: "CharBoneTwist is the fold winner, so name it there instead."
+//     `grep -n "Handle@CharBoneTwist" build/373307D9/asm/system/char/
+//     CharBoneTwist.s` returns nothing -- CharBoneTwist's Handle is not named
+//     in the listings either. Both members of the group are anonymous; the
+//     row can only be closed by renaming the address in symbols.txt, which is
+//     a config change outside this lane, not a source fix.

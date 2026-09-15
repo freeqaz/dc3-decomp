@@ -1587,3 +1587,38 @@ DataNode CharEyes::OnAddInterest(DataArray *arr) {
 // skips callee-saved GPR saves (r29-r31) that the target uses. Result:
 // structurally incompatible prologue (91.3% -> 57.8%). AT_LIMIT.
 // Native build: NormalizeScale is provided inline in src/system/math/Vec.h.
+
+// w8-c: `merged_8237A7E8` (84 B) holds at 0.0000 and is NOT work.
+// Same class as CharSignalApplier's merged_823AAA20: an unscoreable ICF
+// pairing artifact, not a missing body.
+//   - config/373307D9/symbols.txt:120181 binds the address with a synthetic
+//     placeholder: `merged_8237A7E8 = .text:0x8237A7E8; // type:function
+//     size:0x54 scope:global`, so the target-side COMDAT carries no mangled
+//     name and nothing on our side can pair with it.
+//   - build/373307D9/icf_aliases.map:11008-11011 names the fold group:
+//     0x8237A7E8 = `_Copy_Construct<CharEyes::CharInterestState>` +
+//     `_Param_Construct<CharEyes::CharInterestState>`. The two stlport
+//     helpers have identical machine code, so /Gy folded them.
+//   - We DO emit both real bodies. `strings build/373307D9/src/system/char/
+//     CharEyes.obj` shows
+//     `??$_Copy_Construct@UCharInterestState@CharEyes@@@stlpmtx_std@@YAXPAU
+//      CharInterestState@CharEyes@@ABU12@@Z` and
+//     `??$_Param_Construct@UCharInterestState@CharEyes@@U12@@stlpmtx_std@@
+//      YAXPAUCharInterestState@CharEyes@@ABU12@@Z`.
+//   - Target body: CharEyes.s:9856-9880. It is the placement copy-construct
+//     of CharInterestState -- `bl "??0?$ObjOwnerPtr@VCharInterest@@@@QAA@ABV0
+//     @@Z"` followed by `lfs f0, "__real@bf800000"@l(r11)` / `stfs f0,
+//     0x14(r30)` (the -1.0f initialiser for the state's timer field), which
+//     is exactly what our CharInterestState copy ctor compiles to. Called at
+//     CharEyes.s:11179 and CharEyes.s:11239.
+//   - No source lever exists FOR THE ROW: adding, moving or explicitly
+//     instantiating the helper changes nothing, because the failure is in the
+//     target-side NAME, not in whether we emit the code. Closing it requires
+//     renaming the address in config/373307D9/symbols.txt.
+//   - But reading it was NOT wasted: the `stfs f0, 0x14(r30)` of -1.0f at
+//     0x8237A820 is a STORE, not a copy of 0x14(r4), which proved the image's
+//     CharInterestState copy ctor RESETS mRefractoryTime. We had no
+//     user-declared copy ctor, so the implicit memberwise one copied it. Fixed
+//     in CharEyes.h; the fix crossed
+//     `?_M_fill_insert_aux@?$vector@UCharInterestState@CharEyes@@...`
+//     (444 B) from 99.0991 to 100.0000.
