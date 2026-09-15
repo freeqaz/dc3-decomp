@@ -404,6 +404,46 @@ static const float sMeterConsts[] = { 0.2f, 40.0f, 0.7f, 0.0f };
  *  instructions against the image's 194).  Whatever keeps both fsels above
  *  the call is not statement order.
  *
+ *  w7-bo (2026-09-15) re-measured that negative and added two more, all
+ *  from the SAME hoisted shape (frame 0x170, __savefpr_24, regions 0-55 and
+ *  176-195 both 100%, but 196 instructions and 70.3 canonical -- exactly the
+ *  numbers w7-aj recorded):
+ *    (a) hoisting the MULTIPLY as well, i.e.
+ *        `float levelWidth = Clamp(0.f,1.f,(level+sMeterConsts[1])*0.025f)
+ *             * barWidth;` above the bgRect DrawRect, then
+ *        `Hmx::Rect levelRect(barLeft, y, levelWidth, 12.f);`
+ *        -- 70.3, 196 instructions.  MSVC still sinks the high clamp:
+ *        base gets `fsel f24, f10, f30, f12` (LOW clamp) before the bctrl and
+ *        `fsubs f0, f24, f31` / `fsel f0, f0, f31, f24` / `fmuls f0, f0, f28`
+ *        after it, where the image has BOTH fsels before (0x827374F0,
+ *        0x82737504) and only `fmuls f0, f24, f28` after (0x8273751C).
+ *        So the thing MSVC sinks is not the multiply -- giving it a multiply
+ *        to sink instead does not buy back the high clamp.
+ *    (b) splitting Clamp into three statements in the hoisted position
+ *        (`levelNorm = (level+sMeterConsts[1])*0.025f;`
+ *         `levelNorm = Max(0.0f, levelNorm);`
+ *         `levelNorm = Min(1.0f, levelNorm);`)
+ *        -- BYTE-IDENTICAL to (a): 70.3, 196 instructions, same 66 rows.
+ *        Statement separation does not pin the fsel either.
+ *  Net: the hoist buys the whole prologue/epilogue (13 rows: __savefpr_24,
+ *  __restfpr_24, stwu -0x170, addi 0x170, fmr f29) and costs more than it
+ *  buys in the body, so the 73.0 non-hoisted spelling below is kept.
+ *  FLOOR 73.0 canonical, 194 instructions, 123 equal / 23 diff_arg / 4
+ *  replace / 22 insert / 22 delete.  Residual, verbatim:
+ *    - prologue/epilogue: __savefpr_24 vs _25, stwu -0x170 vs -0x160,
+ *      `fmr f29, f1` vs `fmr f26, f1` (the levelNorm-across-the-call FPR)
+ *    - idx 56-99: the level Clamp scheduled before vs after the bgRect
+ *      DrawRect, and the f11/f12 + f0/f13 relabelling it drags with it
+ *    - idx 119-148: the peakRect member stores interleaved with the peak
+ *      Clamp (image) vs emitted as a block after it (ours) -- pure schedule,
+ *      same 6 stores, same values
+ *    - idx 160-174: the white2 stores + the TheRnd reload reordered around
+ *      `stfs f0, 0x54(r1)`; includes the (0xc0,0xc4) OFFSET_SWAP, which is
+ *      two stores of the SAME value f31 (1.0f) and cannot be spelled apart
+ *    - idx 120: `fadds f25,f0` vs `f0,f25` -- commutative operand order on
+ *      `peakHold + sMeterConsts[1]`; MSVC picks this from its own FPR
+ *      assignment, not from source order (refuted repeatedly this wave)
+ *
  *  Also noted, not chased: the image's MakeString here is
  *  ??$MakeString@W4_D3DFORMAT@@@@... where ours is ??$MakeString@H@@... --
  *  the usual identical-COMDAT fold of MakeString<int> onto another 4-byte
