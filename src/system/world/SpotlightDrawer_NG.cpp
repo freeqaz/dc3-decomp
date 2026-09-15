@@ -380,7 +380,13 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
             invFarPlane = zero;
         }
 
-        Vector4 fogParams(mParams.mHalfDistance, invFarPlane, zero, zero);
+        // BUG FIX (w7-bw): the image lays the 0x5b constant out as
+        // (0, mHalfDistance, 0, invFarPlane) -- 82821640 `stfs f13, 0xe4(r1)`
+        // (half distance -> .y), 82821648 `stfs f0, 0xec(r1)` (1/farPlane
+        // -> .w), 82821650/54 `stfs f19` to 0xe0/0xe8 (.x/.z = 0). The old
+        // spelling (mHalfDistance, invFarPlane, 0, 0) fed the pixel shader
+        // both values in the wrong lanes.
+        Vector4 fogParams(zero, mParams.mHalfDistance, zero, invFarPlane);
         TheShaderMgr.SetPConstant((PShaderConstant)0x5b, fogParams);
 
         Vector3 lightPos;
@@ -413,9 +419,9 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
         // MSVC contract each pair into a single fmadds, which retail does not do.
         Vector3 apexOffset = dir;
         apexOffset *= negOffset;
-        float apexX = lightPos.x + apexOffset.x;
-        float apexY = lightPos.y + apexOffset.y;
-        float apexZ = lightPos.z + apexOffset.z;
+        float apexX = apexOffset.x + lightPos.x;
+        float apexY = apexOffset.y + lightPos.y;
+        float apexZ = apexOffset.z + lightPos.z;
 
         Vector4 apex(apexX, apexY, apexZ, invTotalLength);
         TheShaderMgr.SetPConstant((PShaderConstant)0x19, apex);
@@ -441,6 +447,10 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
         );
         TheShaderMgr.SetPConstant((PShaderConstant)0x1d, radiiVec);
 
+        // After the 0x1d upload retail re-reads both radii from the Vector4
+        // it just passed (828218C0 `lfs f12, 0x74(r1)`, 828218C8
+        // `lfs f13, 0x70(r1)`) rather than from the registers still holding
+        // minRad/botRad: the source reads radiiVec back.
         float radiusDiff = botRad - minRad;
         float dotRelDir = dir.x * relX + dir.y * relY + dir.z * relZ;
         float tanSlope = invTotalLength * radiusDiff;
@@ -450,8 +460,8 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
             shift = (minRad / radiusDiff) * totalLength;
         }
 
-        float extProj = shift + dotRelDir;
         float cosAngle = (float)cos((float)atan(invTotalLength * botRad));
+        float extProj = shift + dotRelDir;
 
         Vector4 coneParams(
             tanSlope * tanSlope + 1.0f,
