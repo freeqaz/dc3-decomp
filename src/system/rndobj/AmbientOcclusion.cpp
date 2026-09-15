@@ -55,6 +55,24 @@
  * length from the originals.  That is the known per-TU MakeString class, not a
  * one-line fix.  See docs/decomp/patterns/. */
 
+/* w8-h 2026-09-15 -- the paragraph above conflates TWO different MakeString
+ * symbols and the worklist row is the other one.  The row is
+ * ??$MakeString@II@@YAPBDPBDABI1@Z (100 B, @826DAE58) -- MakeString<unsigned
+ * int, unsigned int>, an ORDINARY two-argument instantiation, not one of the
+ * assert-shaped array-template spellings, so the per-TU expression-text
+ * argument does not apply to it.  It is the DISCARDED-FUNCTION ORPHAN shape:
+ * AmbientOcclusion.s defines it and contains no `bl` to it anywhere, and the
+ * only caller in the entire image is utl/UTF8.s:732.  MSVC instantiated it
+ * through an external-linkage function in this TU that /OPT:REF then dropped.
+ * The shipped name and format literal are not recoverable from the binary; the
+ * stand-in below reproduces the COMDAT.  External linkage is load-bearing -- a
+ * static stand-in is discarded before anything inside it is instantiated. */
+#ifndef HX_NATIVE
+const char *AmbientOcclusionSampleCountString(unsigned int samples, unsigned int rays) {
+    return MakeString("%d/%d", samples, rays);
+}
+#endif
+
 void BuildSphereStratified(unsigned int, std::vector<Vector3> &);
 
 // Quality parameters: [samples_q0, samples_q1, splitPlane_q0, splitPlane_q1]
