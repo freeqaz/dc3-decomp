@@ -63,6 +63,17 @@ void RndAmbientOcclusion::BlendVert(
     // opcodes on both sides, plus ~4 rows where MSVC defers the `lfs 0x44(r30)`
     // of `out.tex += v2.tex` past the store to out.tex.x -- i.e. our build proved
     // the two Vert& do not alias and the image's did not.
+    // w7-bw (2026-09-15), 85.66912 -> 88.7: the colour zeroing at the end is
+    // Color::Set(0.0f) (its chained assignment stores alpha, blue, green, red
+    // = 0x3c..0x30 in that order) -- that also stops our build sinking the
+    // out.tangent.x store past the zeroing, so rows 121-142 now match.
+    // Refuted on top of that: out.tex.Set(x + v2.x, y + v2.y) fixes the tex
+    // block's load order but reshuffles the pos add (88.0); Scale(out.pos,
+    // 0.5f, out.pos) for the pos scaling is inert (88.7); `out.tex *= 0.5f`
+    // ahead of the tangent copy makes the pos add byte-exact but drags the
+    // tex scale up with it (75.4); reading v2.tangent.x/y/z into float locals
+    // before the scaling (the image holds them in f11/f13 across it) hoists
+    // the loads above the tangent copy instead (85.1).
     Vector4 tang = out.tangent;
     tang.x = v2.tangent.x + tang.x;
     out.pos *= 0.5f;
@@ -75,10 +86,7 @@ void RndAmbientOcclusion::BlendVert(
     out.tangent.x = tang.x;
     out.tangent.y = tang.y;
     out.tangent.z = tang.z;
-    out.color.alpha = 0.0f;
-    out.color.blue = 0.0f;
-    out.color.green = 0.0f;
-    out.color.red = 0.0f;
+    out.color.Set(0.0f);
 }
 
 bool IsValidObject(Hmx::Object *obj) {
