@@ -902,6 +902,10 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
     result[3] = (float)shAccum[3];
 }
 
+static inline unsigned short FaceVert(const RndMesh::Face &face, int i) {
+    return (&face.v1)[i];
+}
+
 void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     const Transform &xfm = mesh->WorldXfm();
 
@@ -925,25 +929,24 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     // per-component Verts() calls) was not attempted here.
     Hmx::Color aoResult;
     std::vector<Hmx::Color> faceAO(mesh->Faces().size(), aoResult);
-    unsigned int f = 0;
-    if (mesh->Faces().size() != 0) {
-        float oneThird = 1.0f / 3.0f;
-        do {
+    float oneThird = 1.0f / 3.0f;
+    for (unsigned int f = 0; f < (unsigned int)mesh->Faces().size(); f++) {
+        {
             RndMesh::Face &face = mesh->Faces(f);
 
             // Average position of the 3 face vertices
-            const Vector3 &p0 = mesh->Verts(face.v1).pos;
-            const Vector3 &p1 = mesh->Verts(face.v2).pos;
-            const Vector3 &p2 = mesh->Verts(face.v3).pos;
+            const Vector3 &p0 = mesh->Verts(FaceVert(face, 0)).pos;
+            const Vector3 &p1 = mesh->Verts(FaceVert(face, 1)).pos;
+            const Vector3 &p2 = mesh->Verts(FaceVert(face, 2)).pos;
             Vector3 center;
             center.z = (p2.z + (p1.z + p0.z)) * oneThird;
             center.y = (p2.y + (p1.y + p0.y)) * oneThird;
             center.x = (p2.x + (p1.x + p0.x)) * oneThird;
 
             // Average normal of the 3 face vertices
-            const Vector3 &n0 = mesh->Verts(face.v1).norm;
-            const Vector3 &n1 = mesh->Verts(face.v2).norm;
-            const Vector3 &n2 = mesh->Verts(face.v3).norm;
+            const Vector3 &n0 = mesh->Verts(FaceVert(face, 0)).norm;
+            const Vector3 &n1 = mesh->Verts(FaceVert(face, 1)).norm;
+            const Vector3 &n2 = mesh->Verts(FaceVert(face, 2)).norm;
             Vector3 faceNorm;
             faceNorm.z = n2.z + (n1.z + n0.z);
             faceNorm.y = n2.y + (n1.y + n0.y);
@@ -958,8 +961,7 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
             CalculateAOAtPoint(worldCenter, worldNorm, (float *)&aoResult);
 
             faceAO[f] = aoResult;
-            f++;
-        } while (f < (unsigned int)mesh->Faces().size());
+        }
     }
 
     // Phase 2: Build vertex equivalence map (weld coincident vertices)
@@ -989,14 +991,14 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     v = 0;
     if (0 < mesh->Verts().size()) {
         do {
-            unsigned int fNum = 0;
             float accR = 0.0f;
             float accG = 0.0f;
             float accB = 0.0f;
             float accA = 0.0f;
             float totalAngle = 0.0f;
-            if (mesh->Faces().size() != 0) {
-                do {
+            for (unsigned int fNum = 0; fNum < (unsigned int)mesh->Faces().size();
+                 fNum++) {
+                {
                     int j = 0;
                     unsigned short *faceVerts = (unsigned short *)&mesh->Faces(fNum);
                     Hmx::Color *faceColor = &faceAO[fNum];
@@ -1039,10 +1041,11 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                         }
                         j++;
                     } while (j < 3);
-                    fNum++;
-                } while (fNum < (unsigned int)mesh->Faces().size());
+                }
+            }
 
-                // Blend smoothed AO with existing vertex color
+            // Blend smoothed AO with existing vertex color
+            {
                 if (totalAngle > 0.0f) {
                     float invAngle = 1.0f / totalAngle;
                     RndMesh::Vert &vert = mesh->Verts(v);
