@@ -1128,6 +1128,7 @@ system/hamobj/HamPlayerData.cpp:
 	.rdata      start:0x82290C40 end:0x82290D2C rename:.rdata$r
 	.pdata      start:0x822C0758 end:0x822C0998
 	.text       start:0x8247EA68 end:0x82480A08
+	.text       start:0x829747A0 end:0x829747AC
 	.text       start:0x82EE1210 end:0x82EE1230 rename:.text$yd
 	.data       start:0x82F0D4B8 end:0x82F0D548
 
@@ -5884,8 +5885,12 @@ lazer/meta_ham/DepthBuffer.cpp:
 lazer/meta_ham/NavListNode.cpp:
 	.rdata      start:0x82132FF4 end:0x821336C8
 	.rdata      start:0x822A66AC end:0x822A67FC rename:.rdata$r
-	.pdata      start:0x823017E8 end:0x82301A20
-	.text       start:0x82974480 end:0x82976528
+	.pdata      start:0x823017E8 end:0x82301828
+	.pdata      start:0x82301828 end:0x82301830
+	.pdata      start:0x82301830 end:0x82301A20
+	.text       start:0x82974480 end:0x829747A0
+	.text       start:0x829747AC end:0x829747E8
+	.text       start:0x829747F8 end:0x82976528
 	.data       start:0x82F1D7A0 end:0x82F1D7C4
 
 lazer/meta_ham/NavListSort.cpp:
@@ -6033,6 +6038,7 @@ lazer/meta_ham/SongSortByDiff.cpp:
 	.rdata      start:0x82137D2C end:0x82137F1C
 	.rdata      start:0x822A7064 end:0x822A710C rename:.rdata$r
 	.pdata      start:0x82302B98 end:0x82302BE8
+	.text       start:0x829747E8 end:0x829747F8
 	.text       start:0x82989CF8 end:0x8298A1E8
 	.data       start:0x82F1DB3C end:0x82F1DB58
 
