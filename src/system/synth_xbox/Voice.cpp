@@ -864,8 +864,27 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
 // benign ICF fold, not a wrong callee -- both the image's and our instantiation
 // resolve to 0x824D1870 in build/373307D9/icf_aliases.map.  MakeString's array
 // bounds are template parameters that never reach the code, so all such
-// instantiations are byte-identical and the linker folds them.  The real
-// residual at 90.7% / 1168 B is a prologue hoist-set permutation.
+// instantiations are byte-identical and the linker folds them.
+// w7-bu (2026-09-15): 90.5 -> 95.8 canonical.  (1) BEHAVIOURAL: the egParams
+// free in the drain loop is `delete pv.egParams` through the header's
+// POOL_OVERLOAD operator delete -- the image's PoolFree at 0x82E3964C takes
+// r15 = "e:\lazer_build_gmc1\system\src\synth360\EnvelopeGenerator.h"
+// (hoisted at 0x82E39308), not this file's "Voice.cpp"; a hand-written
+// `PoolFree(0x10, ..., __FILE__, 0x1e, ...)` passed the wrong file string,
+// and a `delete` on the old `void *` field went to the global ??3@YAXPAX@Z
+// (86.2, WRONG_CALLEE), so PoolVoice::egParams is now typed.  (2) The GC loop
+// refreshes `front = s_voiceGC.begin()` BEFORE the `gcCount >= 4` break: the
+// image copies the four iterator words (0x82E39560-0x82E39590) and only then
+// takes `bge cr6` out (0x82E39594), followed by the duplicated end() test;
+// `for (...; gcCount < 4 && front != end(); front = begin())` shares the
+// header test instead (93.0).
+// RESIDUAL (w7-bu, 95.8, 43 rows): rows 20-65 are the prologue's lis/addi
+// hoist order and scratch registers (same hoist SET now, including the
+// header-path string in r15 and "EnvelopeGeneratorParams" in r14); the
+// image tests TheXboxSynth in cr0 at 0x82E39470 where every other test of it
+// in this TU is cr6 (nested `if`s: inert); and it reaches gVoiceCounters[1]
+// as a sym+4 relocation (`lwz r11, lbl_8316C734@l(r20)`, 0x82E39558) where
+// we hoist the array base and use 0x4(r20) (`-= 1`: inert).
 unsigned long StartVoiceThreadEntry(void *) {
     rolling++;
     WaitForSingleObject(gEvent, INFINITE);
@@ -930,11 +949,8 @@ unsigned long StartVoiceThreadEntry(void *) {
             // the deque at 0x10(r26); the same four-word copy is repeated at the
             // bottom of the loop, 0x82E39560-0x82E39590.  An unnamed temporary is
             // folded away and only `_M_start._M_cur` is read.
-            for (;;) {
-                std::deque<PoolVoice>::iterator front = s_voiceGC.begin();
-                if (front == s_voiceGC.end()) {
-                    break;
-                }
+            std::deque<PoolVoice>::iterator front = s_voiceGC.begin();
+            while (front != s_voiceGC.end()) {
                 // The tick difference is computed and tested in 64 bits, with an
                 // explicit wraparound fixup -- 0x82E39520 `subf r11, r11, r29`
                 // over two zero-extended 32-bit ticks (0x82E39514
@@ -955,7 +971,9 @@ unsigned long StartVoiceThreadEntry(void *) {
                 s_voiceGCInProgress.push_back(s_voiceGC.front());
                 s_voiceGC.pop_front();
                 gVoiceCounters[1]--;
-                if (++gcCount >= 4) {
+                gcCount++;
+                front = s_voiceGC.begin();
+                if (gcCount >= 4) {
                     break;
                 }
             }
@@ -979,7 +997,7 @@ unsigned long StartVoiceThreadEntry(void *) {
                     ((void (*)(void *, int))(*(int *)(*(int *)pv.eg + 0x38)))(pv.eg, 1);
                 }
                 pv.eg = 0;
-                PoolFree(0x10, pv.egParams, __FILE__, 0x1e, "EnvelopeGeneratorParams");
+                delete pv.egParams;
                 pv.egParams = 0;
             }
         }
