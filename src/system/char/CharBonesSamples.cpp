@@ -565,76 +565,54 @@ int CharBonesSamples::FracToSample(float *frac) const {
     }
 }
 
-// RESIDUAL (w7-as, 88.0 canonical): 46 of the 89 rows are one fact -- the two
-// callee-saved GPRs carry the OPPOSITE variables.  Retail puts `dest` in r31
-// (`mr r31, r4` at 0x823E1224) and `srcNext` in r30 (`add r30, r10, r3` at
-// 0x823E1378); we put `dest` in r30 and `srcNext` in r31.  Prologue, frame size
-// (0xd0), saved-register set (r30/r31/f31) and every live range are otherwise
-// identical, so this is the allocator walking its callee-saved list in the other
-// direction, not a liveness difference we can spell.  NEGATIVE RESULT
-// (2026-09-14): joining the frac != 0 ROTX arm into a single `val` temporary and
-// one store -- which is what retail's shared tail at 0x823E1504 looks like -- is
-// byte-for-byte inert (89 rows before and after).  The remaining insert/delete
-// pairs are the physical placement of that shared store (retail keeps the copy
-// in the frac != 0 block and jumps to it from the frac == 0 arms; we keep it in
-// the frac == 0 block) and the interleaving of the six `lha`s in the
-// kCompressVects arms, which the notes below already cover.
+// w7-by (88.04237 -> 92.47034 canonical): the w7-as "r30/r31 role swap" (dest in
+// r31 at 0x823E11F4, srcNext in r30 at 0x823E1310) and the placement of the
+// shared ROTX tail (fmuls at 0x823E122C kept in the frac == 0 arm, stfs at
+// 0x823E136C kept in the frac != 0 arm) were both the CFG: the image is one
+// if/else tree with a single exit, not a ladder of early returns.  Written as
+// og-dc3 nests it, both fall out, and the frac == 0 kCompressVects arm
+// (hoisted lha at 0x823E1284, three slots, dead `mr r11, r8`) is reproduced by
+// ShortVector3::ToVector3 -- which MSVC folds identically to Vector3(short *)
+// and to Set(); all three were byte-identical here.
+// NEGATIVE RESULTS (w7-by, canonical): `int comp` in the frac == 0 half drops
+// the two extsh at 0x823E1248 but shrinks the frame 0xd0 -> 0xb0 -- the slot
+// packer then overlaps q0/q1 with sv0/sv1 (q1 on sv0 at 0x60), 82.2;
+// `unsigned short comp` keeps 0xd0 but costs clrlwi+cmplwi, 91.7; hoisting
+// sv0/sv1/q0/q1 to the frac != 0 scope (or leaving them per-arm) is inert --
+// packing is by liveness; ShortVector3 by-value copies materialise sth/lha,
+// 70.3; Interp(v0, v1, frac, *out) + `*out *= scale` for ROTX, scalar Interp
+// for the quat lerps, v1-before-v0 in ROTX: all byte-identical; converting sv1
+// before sv0: 90.5.  Residual at 92.5: the two extsh, the ROTX short-arm
+// load/convert order (0x823E1328..0x823E1354), element 1 of the uncompressed
+// quat lerp, and the six-conversion schedule of the frac != 0 vects arm
+// (0x823E1474..0x823E153C).
 void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, float frac) {
     char *src = mRawData + mTotalSize * sample + byteOffset;
     if (frac == 0.0f) {
         if (byteOffset >= mOffsets[TYPE_ROTX]) {
-            float val;
             if (mCompression != kCompressNone) {
-                val = (float)*(short *)src * (1.0f / 1638.4f);
+                *(float *)dest = (float)*(short *)src * (1.0f / 1638.4f);
             } else {
-                val = *(float *)src;
+                *(float *)dest = *(float *)src;
             }
-            *(float *)dest = val;
-            return;
+        } else {
+            // `short` on purpose: see the w7-by note above (int shrinks the
+            // frame to 0xb0 and repacks the four 16-byte locals).
+            short comp = mCompression;
+            if (byteOffset >= mOffsets[TYPE_QUAT]) {
+                if (comp >= kCompressQuats) {
+                    ((const ByteQuat *)src)->ToQuat(*(Hmx::Quat *)dest);
+                } else if (comp != kCompressNone) {
+                    ((const ShortQuat *)src)->ToQuat(*(Hmx::Quat *)dest);
+                } else {
+                    *(Hmx::Quat *)dest = *(const Hmx::Quat *)src;
+                }
+            } else if (comp >= kCompressVects) {
+                ((const ShortVector3 *)src)->ToVector3(*(Vector3 *)dest);
+            } else {
+                *(Vector3 *)dest = *(const Vector3 *)src;
+            }
         }
-        // NEGATIVE RESULT: retail loads mCompression with a bare
-        // `lwz r11, 0x4(r11)` at 0x823E1248 and compares it with cmpwi -- no
-        // sign extension -- so this `short` local costs us two extsh the image
-        // does not have.  Widening it to `int` does delete both, but objdiff's
-        // aligner then re-locks the kCompressVects block below and turns a
-        // `replace` pair into a separate insert+delete: 88.0 -> 87.1.  The
-        // `short` here and the `int` in the frac != 0 arm below are the pairing
-        // that measures highest; making them agree in either direction loses
-        // ~0.9pp.
-        short comp = mCompression;
-        if (byteOffset >= mOffsets[TYPE_QUAT]) {
-            if (comp >= kCompressQuats) {
-                ((const ByteQuat *)src)->ToQuat(*(Hmx::Quat *)dest);
-                return;
-            }
-            if (comp != kCompressNone) {
-                ((const ShortQuat *)src)->ToQuat(*(Hmx::Quat *)dest);
-                return;
-            }
-        } else if (comp >= kCompressVects) {
-            short *sv = (short *)src;
-            float *out = (float *)dest;
-            float scale = 1300.0f / 32767.0f;
-            // NEGATIVE RESULT: retail hoists all three lha above the three
-            // stores (sv[2] first, at 0x823E1284), bounces them through three
-            // distinct int->double slots (0x60/0x50/0x58 rather than the one
-            // slot we reuse) and leaves a dead `mr r11, r8` -- the signature of
-            // one inlined Vector3::Set.  Two spellings were measured and both
-            // grow the frame 0xd0 -> 0xe0 for a 16-byte temporary retail never
-            // materialises, costing 10pp each: `((Vector3 *)dest)->Set(...)`,
-            // and three named `float x/y/z = (float)sv[i];` temporaries
-            // consumed by the stores below.
-            out[0] = (float)sv[0] * scale;
-            out[1] = (float)sv[1] * scale;
-            out[2] = (float)sv[2] * scale;
-            return;
-        }
-        int *out = (int *)dest;
-        int *v = (int *)src;
-        out[0] = v[0];
-        out[1] = v[1];
-        out[2] = v[2];
-        out[3] = v[3];
     } else {
         char *srcNext = src + mTotalSize;
         if (byteOffset >= mOffsets[TYPE_ROTX]) {
@@ -648,40 +626,35 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
                 v1 = *(float *)srcNext;
                 *(float *)dest = v0 + (v1 - v0) * frac;
             }
-            return;
-        }
-        int comp = mCompression;
-        if (byteOffset >= mOffsets[TYPE_QUAT]) {
-            float *out = (float *)dest;
-            Hmx::Quat q0, q1;
-            if (comp >= kCompressQuats) {
-                ((const ByteQuat *)src)->ToQuat(q0);
-                ((const ByteQuat *)srcNext)->ToQuat(q1);
-            } else if (comp != kCompressNone) {
-                ((const ShortQuat *)src)->ToQuat(q0);
-                ((const ShortQuat *)srcNext)->ToQuat(q1);
-            } else {
-                float *s0 = (float *)src;
-                float *s1 = (float *)srcNext;
-                out[0] = s0[0] + (s1[0] - s0[0]) * frac;
-                out[1] = s0[1] + (s1[1] - s0[1]) * frac;
-                out[2] = s0[2] + (s1[2] - s0[2]) * frac;
-                out[3] = s0[3] + (s1[3] - s0[3]) * frac;
-                goto quat_done;
-            }
-            out[0] = q0.x + (q1.x - q0.x) * frac;
-            out[1] = q0.y + (q1.y - q0.y) * frac;
-            out[2] = q0.z + (q1.z - q0.z) * frac;
-            out[3] = q0.w + (q1.w - q0.w) * frac;
-            quat_done:;
         } else {
-            if (comp >= kCompressVects) {
-                float scale = 1300.0f / 32767.0f;
-                short *s0 = (short *)src;
-                short *s1 = (short *)srcNext;
+            int comp = mCompression;
+            if (byteOffset >= mOffsets[TYPE_QUAT]) {
+                float *out = (float *)dest;
+                Hmx::Quat q0, q1;
+                if (comp >= kCompressQuats) {
+                    ((const ByteQuat *)src)->ToQuat(q0);
+                    ((const ByteQuat *)srcNext)->ToQuat(q1);
+                } else if (comp != kCompressNone) {
+                    ((const ShortQuat *)src)->ToQuat(q0);
+                    ((const ShortQuat *)srcNext)->ToQuat(q1);
+                } else {
+                    float *s0 = (float *)src;
+                    float *s1 = (float *)srcNext;
+                    out[0] = Interp(s0[0], s1[0], frac);
+                    out[1] = Interp(s0[1], s1[1], frac);
+                    out[2] = Interp(s0[2], s1[2], frac);
+                    out[3] = Interp(s0[3], s1[3], frac);
+                    goto quat_done;
+                }
+                out[0] = q0.x + (q1.x - q0.x) * frac;
+                out[1] = q0.y + (q1.y - q0.y) * frac;
+                out[2] = q0.z + (q1.z - q0.z) * frac;
+                out[3] = q0.w + (q1.w - q0.w) * frac;
+            quat_done:;
+            } else if (comp >= kCompressVects) {
                 Vector3 sv0, sv1;
-                sv0.Set((float)s0[0] * scale, (float)s0[1] * scale, (float)s0[2] * scale);
-                sv1.Set((float)s1[0] * scale, (float)s1[1] * scale, (float)s1[2] * scale);
+                ((const ShortVector3 *)src)->ToVector3(sv0);
+                ((const ShortVector3 *)srcNext)->ToVector3(sv1);
                 Interp(sv0, sv1, frac, *(Vector3 *)dest);
             } else {
                 Interp(*(const Vector3 *)src, *(const Vector3 *)srcNext, frac, *(Vector3 *)dest);
