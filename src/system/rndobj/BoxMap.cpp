@@ -345,7 +345,16 @@ void BoxMapLighting::ApplyLight(
  *      reference, to reach the image's `stfsx` for red: exactly inert at 99.21;
  *      MSVC CSEs the address back into the single pointer.
  *    - hoisting the `col` reference to the top of the loop body to flip the
- *      rows-14/16 scheduling swap: exactly inert at 99.21. */
+ *      rows-14/16 scheduling swap: exactly inert at 99.21.
+ *    - (w7-br) red through the subscript with the `col` reference declared
+ *      AFTER that store, and the same with `col` hoisted to the top of the
+ *      body: both exactly inert, same 21 rows.  The Point overload below now
+ *      matches with `col` a plain reference and gets the image's `stfsx` for
+ *      red, so the address-mode choice is not a spelling of `col` at all;
+ *      it follows the materialisation order of the two buffer bases (rows
+ *      12-19: the image forms gLightBuffer2's address before the `subi r11,
+ *      r4, 0x44` bias, we form gLightBuffer1's first), which no source order
+ *      of the stores moved. */
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Spot, 50> &arr, const Vector3 &viewPos
 ) const {
