@@ -7,6 +7,15 @@
 #include "xdk\d3d9i\d3d9.h"
 
 DxRndTexMgr TheDxTexMgr;
+// w8-l: the std::map<Hmx::CRC, RefRes<void> > insert_unique instantiated from
+// this TU is 99.967220 normalized and is the only function short of 100% in
+// this unit (15/16).  Four charged rows, [13]/[14] and [65]/[66], and each
+// pair is ONE exchange: the two lwz's swap BOTH their destination register and
+// their base register together (r11<->r27 with r30<->r6, and r26<->r27 with
+// r30<->r29), the offsets following at -/+0x10.  objdiff's offset resolver
+// says so explicitly -- "4 excluded as non-field (4 different base register on
+// each side)" -- so this is a register permutation inside stlport's tree
+// insert, not a wrong struct field.  Nothing in this file selects it.
 TexMgr &TheTexMgr = TheDxTexMgr;
 
 void DxRndTexMgr::OnReleaseResource(void *v) {

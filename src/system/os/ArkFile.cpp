@@ -93,6 +93,13 @@ int ArkFile::Write(const void *, int) {
 }
 
 #ifdef HX_NATIVE
+// w8-l: 99.934690 normalized, the only function short of 100% in this unit
+// (14/15).  60 charged rows out of 245, and 49 of them are register names
+// across NINE callee-saved pairs (r21/r22 leading with 10) -- the whole
+// callee-saved bank is rotated by one relative to the image, which then shows
+// up again as 2 slot swaps of (0x50, 0x54) and a handful of +/-4..24
+// displacements.  One upstream liveness decision, not 60 independent rows.
+// Measured only in this wave.
 bool ArkFile::ReadAsync(void *iData, int iBytes) {
     // On native, just perform the read synchronously via Read()
     // and track it as if it completed immediately

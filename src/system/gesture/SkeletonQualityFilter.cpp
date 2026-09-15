@@ -84,6 +84,12 @@ void SkeletonQualityFilter::UpdateIsConfident(const TrackedJoint *joints) {
     }
 }
 
+// w8-l: 99.914894 normalized, the only function short of 100% in this unit
+// (10/11).  27 charged rows out of 94, dominated by one callee-saved pair:
+// r28 and r29 are exchanged for the whole body (13 of 24 register rows), which
+// drags f0/f13, f30/f13 and f29/f12 along with it, plus 4 slot swaps including
+// (0x4, 0xec).  A single liveness/scheduling cause upstream of all of them;
+// measured only in this wave, no source lever tried.
 void SkeletonQualityFilter::UpdateIsSideways(const TrackedJoint *joint) {
     Vector3 vDiff;
     Subtract(joint[8].mJointPos[0], joint[4].mJointPos[0], vDiff);

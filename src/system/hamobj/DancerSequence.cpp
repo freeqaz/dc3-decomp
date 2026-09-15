@@ -48,6 +48,13 @@ END_COPYS
 
 INIT_REVS(8, 0)
 
+// w8-l: 99.964860 normalized, the only function short of 100% in this unit
+// (32/33).  11 charged rows out of 313, every one an `addi` frame displacement
+// in the +32 / -48 / -16 family, and the stack-layout diff reports 7 PERMUTED
+// slots -- the SAME SET of slots on both sides, no frame-size difference and
+// no extra local, just different variables living in them.  MSVC slot-
+// allocation shaping rather than a declaration-count difference.  Measured
+// only in this wave; no source lever attempted.
 BEGIN_LOADS(DancerSequence)
     LOAD_REVS(bs)
     ASSERT_REVS(8, 0)
