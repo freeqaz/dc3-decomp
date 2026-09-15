@@ -132,6 +132,14 @@ void CharBones::RecomputeSizes() {
         int cur_offset = *offset;
         // offset[-7] = mCounts[i], offset[-6] = mCounts[i+1]
         // (mCounts is 7 ints (0x1C bytes) before mOffsets)
+        // RESIDUAL (w8-i, 99.926 canonical / 99.556 fuzzy, 3 rows of 27): the image
+        // loads the SUBTRAHEND first -- `lwz r11, -0x1c(r10)` then `lwz r7, -0x18(r10)`
+        // then `subf r7, r11, r7` -- while we load -0x18 first and flip the subf
+        // operands to compensate.  Both compute offset[-6] - offset[-7]; only the
+        // load order differs.  REFUTED: splitting into two named locals declared in
+        // the image's load order (`int prev = offset[-7]; int next = offset[-6];`)
+        // leaves all 3 rows bit-identical -- MSVC schedules the two loads
+        // independently of statement order.
         int count_diff = offset[-6] - offset[-7];
         *++offset = cur_offset + TypeSize(i) * count_diff;
         i++;
