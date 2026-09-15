@@ -140,11 +140,26 @@ void SaveCompressedVertex(const CompressedVertex_Xbox &cv, BinStream &bs) {
 }
 
 /** Calculate the centroid of a triangle face by averaging its three vertex positions. */
+// The interleaving below is load-bearing (w7-bp: 94.74 -> 100.0 canonical,
+// 38/38 equal).  The image issues the two pointer loads at 0x8263F6A0 and
+// 0x8263F6B4, i.e. `lwz r8, 0x148(r3)` FIRST and `lwz r9, 0x100(r8)` in the
+// middle of the three `stfs f0` zero stores, not after them:
+//     lis r9,__real@0 / lwz r8,0x148(r3) / li r11,3 / subi r10,r4,2
+//     lfs f0,__real@0(r9) / lwz r9,0x100(r8) / stfs 0x0 / mtctr / stfs 0x4/0x8
+// Two measured negatives, both with the declaration as ONE statement:
+//   - both loads after all three zero stores (the original spelling): the
+//     0x100 load lands at index 10 instead of 5 -- 1 insert + 1 delete, 94.74;
+//   - both loads before all three zero stores: the 0x148 load moves to index 0
+//     and drags the literal's `lis` with it -- 2I/2D + 2 arg diffs, 89.47.
+// Splitting the deref into `owner` + `verts` and putting the `verts` load
+// between `center.x = 0` and `center.y = 0` is what reproduces the image's
+// schedule.  Do not "tidy" these four lines back together.
 void FaceCenter(RndMesh *mesh, RndMesh::Face *face, Vector3 &center) {
+    RndMesh *owner = mesh->mGeomOwner;
     center.x = 0.0f;
+    RndMesh::Vert *verts = owner->mVerts.mVerts;
     center.y = 0.0f;
     center.z = 0.0f;
-    RndMesh::Vert *verts = mesh->mGeomOwner->mVerts.mVerts;
     // Accumulate positions of all three vertices
     for (int i = 0; i < 3; i++) {
         RndMesh::Vert &v = verts[(*face)[i]];
@@ -1219,6 +1234,52 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
     }
 }
 
+// RESIDUAL (w7-bp): 96.91 -> 97.6 canonical (95.2 raw), 1196 B, 300/300
+// instructions.  What is left is 118 arg diffs + 2 replace + 1 insert + 5
+// delete, and EVERY one of them is the same single cause -- see below.
+//
+// TWO LEVERS APPLIED HERE (both worth reusing):
+//  1. `u5` / `bestFaceIt` are assigned at the TOP of the `uvar16 < u5` arm,
+//     before the FaceCenter call, not at the bottom.  They used to sit at the
+//     bottom of both arms, textually identical, and MSVC tail-merged the two
+//     copies into one; the image emits both (`mr r24, r30` / `mr r27, r7` at
+//     0x82640958-5C in the `<` arm AND again at 0x826409E8-EC in the `==`
+//     arm).  Hoisting them above the call breaks the textual identity and
+//     stops the cross-jump.  96.91 -> 97.6, two deletes closed.
+//  2. `DistanceSquared(v4c, v40)` in place of a named `Vector3 diff` +
+//     `Subtract` + `LengthSquared`.  Measured BYTE-IDENTICAL (97.6 either
+//     way) -- kept only because the image materialises no `diff` temp at all
+//     (it fsubs straight into f0/f13/f12 at 0x82640964-84).
+//
+// MEASURED NEGATIVE: `unsigned short vertIdx` by value instead of
+// `unsigned short &vertIdx` in the 3-vertex loop -- inert, 97.6 both ways.
+//
+// THE FLOOR IS ONE MECHANISM: same-TU callee volatile-register propagation,
+// exactly the effect already documented on PatchVerts::HasVert above (81.4%,
+// and refuted there as a definition-order problem).  MSVC has already
+// compiled FaceCenter / HasVert / Clear / Add when it reaches OnSync, so it
+// knows which volatiles they really clobber and keeps live values there.  Our
+// callees are leaner than the image's, so we get MORE free volatiles and the
+// allocator never needs the high callee-saved registers:
+//     target f28/f29/f30 hold v40.x/.y/.z and f31 holds `f68`  (rows 142-217)
+//     ours   f7 /f8 /f9              ,,          f10    ,,     -- volatile
+//     target r17/r18 hold two of the three HasVert results
+//     ours   volatiles, so the whole GPR file is rotated by one (r22->r23,
+//            r20->r21, r29->r30, ... 17 pairs, 124 instructions)
+// Everything that is CHARGED follows from that and nothing else:
+//     [2]/[3] + [297]/[298]  target `subi r12,r1,0x80` + `bl __savefpr_27`
+//                            vs our single `stfd f31,-0x78(r1)`, and the
+//                            matching `__restfpr_27` in the epilogue
+//     [4]/[5]                frame 0x150 vs 0x120 -- 0x30 = the 6 extra saves
+//     [246]/[248]/[249]/[256] the image re-materialises the vertex index from
+//                            callee-saved r30 before each of HasVert and Add
+//                            (`mr r4, r30` twice); we leave it in r4 across
+//                            the HasVert call because we know our HasVert
+//                            does not touch r4.
+// So OnSync cannot cross 100 while HasVert is at 81.4 -- fix HasVert's own
+// register usage first and re-measure this function.  No behavioural
+// divergence: the arithmetic rows (142-217) are structurally identical and
+// differ only in which FPR holds each value.
 #ifndef HX_NATIVE
 void RndMesh::OnSync(int flags) {
     if (mGeomOwner != this || (flags & 0x80U) || !(flags & 0x20U))
@@ -1256,19 +1317,15 @@ void RndMesh::OnSync(int flags) {
                 int uvar16 = !gPatchVerts.HasVert(faceIt->v1)
                     + !gPatchVerts.HasVert(faceIt->v2) + !gPatchVerts.HasVert(faceIt->v3);
                 if (uvar16 < u5) {
-                    Vector3 v4c;
-                    FaceCenter(this, &*faceIt, v4c);
-                    Vector3 diff;
-                    Subtract(v4c, v40, diff);
-                    f68 = LengthSquared(diff);
                     u5 = uvar16;
                     bestFaceIt = faceIt;
+                    Vector3 v4c;
+                    FaceCenter(this, &*faceIt, v4c);
+                    f68 = DistanceSquared(v4c, v40);
                 } else if (uvar16 == u5) {
                     Vector3 v58;
                     FaceCenter(this, &*faceIt, v58);
-                    Vector3 diff2;
-                    Subtract(v58, v40, diff2);
-                    if (MinEq(f68, LengthSquared(diff2))) {
+                    if (MinEq(f68, DistanceSquared(v58, v40))) {
                         u5 = uvar16;
                         bestFaceIt = faceIt;
                     }
@@ -1281,7 +1338,7 @@ void RndMesh::OnSync(int flags) {
                 i4 = 0;
             }
             for (int i = 0; i < 3; i++) {
-                unsigned short &vertIdx = (*faceIt)[i];
+                unsigned short vertIdx = (*faceIt)[i];
                 if (!gPatchVerts.HasVert(vertIdx)) {
                     gPatchVerts.Add(vertIdx, mVerts, v40);
                 }
@@ -1332,6 +1389,33 @@ void RndMesh::DeleteBones(bool findRoot) {
     }
 }
 
+// RESIDUAL (w7-bp): 97.38 -> 98.4 canonical (97.7 raw), 1012 B, 255/255
+// instructions.  Remaining: 35 arg diffs (all register permutation, which the
+// canonical ruler forgives) + 2 insert + 2 delete, and nothing else.
+//
+// LEVERS APPLIED (each measured, in order):
+//   97.38 -> 98.2  bind `RndBone &bone = bones[i]` BEFORE the `?:` (see below)
+//   98.2  -> 98.2  route every mBones use through the `bones` reference --
+//                  score-neutral, but it turned target row 64 from a real
+//                  offset mismatch (`lwz r5, 0x4(r26)` vs our
+//                  `lwz r5, 0x154(r30)`) into a mere register permutation
+//   98.2  -> 98.4  `RndMesh *owner = mGeomOwner` for the cmplwi (see below)
+//
+// THE TWO STRUCTURAL ROWS LEFT are both pure MSVC scheduling and I could not
+// reach either from source:
+//   target [231] `li r5, 0x0` sits between the `cmpwi cr6, r3, -0x1` and the
+//     `bne` that selects the parent; ours lands at [241], after the join.
+//     MEASURED NEGATIVE: hoisting the `false` into a named `bool keepWorldPos`
+//     bound before the `?:` is completely inert -- 98.2 before and after, same
+//     37 rows.
+//   target [245] `addi r25, r25, 0x1` (the i++) is issued between the two
+//     `bones` end/begin loads; ours issues it after both, at [247].
+//
+// NOT A DEFECT: target row 222 calls
+// `ObjRefConcrete<SpotlightDrawer,ObjectDir>::SetObjConcrete` where we call the
+// `RndTransformable` instantiation.  Those two are ICF-folded to one address
+// (build/373307D9/icf_aliases.map), and objdiff leaves the row UNCHARGED --
+// dtk just picked the other name.  Do not "fix" it.
 void RndMesh::InstanceGeomOwnerBones() {
     if (!mGeomOwner) {
         MILO_NOTIFY("Cannot duplicate bones if mesh is not a Geom Owner!");
@@ -1344,20 +1428,36 @@ void RndMesh::InstanceGeomOwnerBones() {
         return;
     }
 
-    if (mBones.empty())
+    // `bones` is a named reference, not a convenience: the image computes
+    // `addi r26, r30, 0x150` ONCE at 0x82642F30 and reaches mBones through that
+    // one base for the rest of the function -- `0x0(r26)` / `0x4(r26)` for
+    // begin/end at the erase (0x82642F80), at the loop bound, and at
+    // &mBones[i].  We were re-deriving `0x154(r30)` from `this` at some of
+    // those sites (target index 64).
+    ObjVector<RndBone> &bones = mBones;
+    if (bones.empty())
         return;
 
-    bool needsCopy = mGeomOwner && mGeomOwner->mBones[0].mBone != mBones[0].mBone;
+    bool needsCopy = mGeomOwner && mGeomOwner->mBones[0].mBone != bones[0].mBone;
     if (needsCopy) {
         DeleteBones(true);
-        // NEGATIVE RESULT: the image's test here is `cmplwi` (0x82642F6C), an
-        // unsigned raw-pointer test, where the two earlier mGeomOwner tests are
-        // `cmpwi` and match. Neither `mGeomOwner.Ptr()` nor
-        // `mGeomOwner.Ptr() != nullptr` moved it -- both still lower to `cmpwi`.
-        if (mGeomOwner) {
-            mBones = mGeomOwner->mBones;
+        // CLOSED (w7-bp, 98.2 -> 98.4): the image's test here is `cmplwi`
+        // (0x82642F6C), an UNSIGNED raw-pointer test, where the two earlier
+        // mGeomOwner tests are `cmpwi` and match.  Testing the ObjPtr itself --
+        // `if (mGeomOwner)`, `mGeomOwner.Ptr()`, `mGeomOwner.Ptr() != nullptr`,
+        // all measured -- lowers to `cmpwi` every time, because the null test
+        // goes through ObjPtr's conversion and MSVC treats that result as
+        // signed.  Binding the ObjPtr to a RAW `RndMesh *` local first and
+        // testing the local is what emits `cmplwi`; compare row 71
+        // (`cmplwi cr6, r31, 0x0`), which already matched because `parent` is a
+        // raw pointer.  The local also feeds `addi r4, r11, 0x150` at the
+        // assignment, so it costs no extra load.  Reusable lever: an unsigned
+        // pointer compare needs a raw pointer lvalue, not a smart-pointer one.
+        RndMesh *owner = mGeomOwner;
+        if (owner) {
+            bones = owner->mBones;
         } else {
-            mBones.erase(mBones.begin(), mBones.end());
+            bones.erase(bones.begin(), bones.end());
         }
     }
 
@@ -1398,17 +1498,23 @@ void RndMesh::InstanceGeomOwnerBones() {
     newRoot->SetTransParent(dirTrans, false);
 
     // Create new bone transforms for each bone
-    for (unsigned int i = 0; i < mBones.size(); i++) {
+    for (unsigned int i = 0; i < bones.size(); i++) {
         RndTransformable *newBone = Hmx::Object::New<RndTransformable>();
         newBone->SetName(NextName(mGeomOwner->mBones[i].mBone->Name(), Dir()), Dir());
         newBone->Copy(mGeomOwner->mBones[i].mBone, Hmx::Object::kCopyShallow);
-        mBones[i].mBone = newBone;
+        bones[i].mBone = newBone;
 
         // Find parent in owner hierarchy and reparent.
         // The parent is looked up in the GEOM OWNER's bone array, not ours: the image
         // reloads 0x148(this) (mGeomOwner) at 0x82643230 and indexes 0x150 off *that*,
         // where we were indexing our own mBones.
         int parentIdx = mGeomOwner->GetBoneIndex(mGeomOwner->mBones[i].mBone->TransParent());
+        // `bone` must be bound BEFORE the ?: below.  The image computes
+        // &mBones[i] (`lwz r11, 0x0(r26)` / `add r11, r11, r29`) and the
+        // `false` argument between `bl GetBoneIndex` and the `bne` that
+        // selects the parent -- i.e. above the branch, with only the
+        // `lwz r3, 0xc(r11)` member read left in the join at 0x82643244.
+        RndBone &bone = bones[i];
 #ifdef HX_NATIVE
         // Clang sees the ?: as ambiguous (ObjPtr<RndTransformable> <-> RndTransformable*
         // convert both directions); make the ObjPtr branch an explicit pointer. Same
@@ -1422,7 +1528,7 @@ void RndMesh::InstanceGeomOwnerBones() {
 #endif
         // The image re-reads mBones[i].mBone as the callee (`lwz r3, 0xc(r11)` at
         // 0x82643244, r11 = &mBones[i]) rather than reusing newBone.
-        mBones[i].mBone->SetTransParent(boneParent, false);
+        bone.mBone->SetTransParent(boneParent, false);
     }
 }
 
@@ -1644,6 +1750,45 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 // the SAME function: ham_xbox_r.map lists the mangled name at 826204d8 and
 // 8263a360 and the two shipped bodies are instruction-identical.
 
+// RESIDUAL (w7-bp): 96.99 canonical (95.1 raw), 1196 B, 203/203 instructions,
+// 67 arg diffs + 2 insert + 4 delete.  Unmoved by this lane; recorded so the
+// next one starts from the diagnosis rather than the symptom.
+//
+// THE WHOLE FUNCTION HANGS OFF ONE ALLOCATOR DECISION.  The image reserves r31
+// as a frame BASE -- `subi r31, r1, 0x10f0` at target index 2, computed before
+// the `stwu`, so r31 == the new sp -- and reaches every local through it
+// (`0x50(r31)`, `0x54(r31)`, `0x58(r31)`, `0x5c(r31)`, `0x60(r31)`,
+// `0x64(r31)`, `0x68(r31)`, `0x70(r31)`).  Our build spends r31 on an ordinary
+// variable and addresses the same slots off r1.  That single choice produces
+// 34 of the 71 register-swap rows (r1 <-> r31), the whole r21..r31 vs r22..r31
+// prologue difference (the image needs one EXTRA callee-saved register, r21,
+// because r31 is not available to it), and the frame-size row
+// (`stwu r1, -0x10f0` vs `-0x10e0`, index 4).  The SLOT ASSIGNMENT is
+// identical on both sides -- 0x58 loadedCompressedSize, 0x5c numVerts, 0x60
+// loadedVersion, 0x64 i8c, 0x68 i88, 0x70 the FormatString -- so this is not a
+// local-layout problem and reshuffling declarations cannot reach it.
+//
+// MEASURED NEGATIVE (w7-bp): splitting the six zero-initialisers into bare
+// declarations plus assignments written in the image's own store order
+// (loadedVersion, loadedCompressedSize, i8c, i88, i9, b3 -- target indices
+// 22/24/26/28 store 0x60, 0x58, 0x64, 0x68 where we store 0x60, 0x64, 0x58,
+// 0x68) is completely INERT: 97.0 / 95.1 and the identical 73 rows, with the
+// OFFSET_SWAP(0x58,0x64) still reported.  The store order is scheduling, not
+// statement order.
+//
+// The four remaining structural rows are also scheduling, not missing code:
+//   [29]/[31]  `lis r24, ?kAssertStr@@3PBDB@h` -- same instruction, two rows
+//              earlier on our side
+//   [141]/[144] ReadChunks argument setup: the image loads `lwz r4, 0x184(r22)`
+//              (mCompressedVerts) between the r6 and r5 moves, we load it after
+//   [175]      `mr r28, r21` -- the vertex loop counter's zero init, which our
+//              build folds into an earlier move
+//
+// NOT A DEFECT: rows 62 and 159 call different MakeString instantiations
+// (`$$BY0BD@...$$BY04` vs our `$$BY08...$$BY0DH@`) while referencing the SAME
+// `??_C@` string symbols on both sides.  Those instantiations are ICF-folded
+// and objdiff leaves both rows marked equal -- per-TU MakeString divergence is
+// not charged.  Do not chase it.
 void RndMesh::LoadVertices(BinStreamRev &d) {
     int numVerts;
     d >> numVerts;

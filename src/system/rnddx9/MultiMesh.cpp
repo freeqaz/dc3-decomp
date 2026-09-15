@@ -95,6 +95,31 @@ void DxMultiMesh::Shutdown() {
     }
 }
 
+// RESIDUAL (w7-bp, 93.98 canonical, 652 B, 21 rows).  Two independent
+// residuals, both measured:
+//
+//  (1) Target indices 73-77, the 0x8007000E mask after
+//      D3DDevice_CreateVertexBuffer: the image allocates r10/r11 where we
+//      allocate r11/r12, five pure REGISTER_SWAP rows.  Everything for the
+//      preceding 72 instructions is equal, so this is the volatile allocator
+//      having one fewer free register on our side at that exact point, not a
+//      source shape.
+//
+//  (2) Target indices 132-156, the index-copy loop.  The image emits THREE
+//      DEAD home stores of the same pointer value `*(mGeomOwner + 0x148)`:
+//      `stw r11, 0x58(r31)` at 132 (before the loop), `stw r11, 0x5c(r31)` at
+//      139 (inside it, immediately before r11 is clobbered) and
+//      `stw r11, 0x58(r31)` at 153 (in the tail).  Nothing ever reads them --
+//      the tail re-derives the pointer with `lwz r11, 0x148(r30)` at 149.
+//      run_diff_inspect mode=stack-layout confirms the count directly:
+//      target slot 0x58 has 5 stores over [21..153], ours has 2 over [21..87];
+//      target 0x5c has 2 over [6..139], ours has 1 over [6..109] (base var
+//      `temp_r11`).  That is the repeated-call-expression / dead-home-slot
+//      signature (docs/decomp/patterns/repeated-call-expression-home-stores.md,
+//      dead-home-slot-store.md) pointing the OTHER way than usual: the image
+//      writes that accessor expression more times than we do and MSVC CSE'd
+//      the loads while keeping the homes.  Reproducing it needs the accessor's
+//      real spelling, which this raw-offset decomp does not have.
 void DxMultiMesh::UpdateGeometryBuffers() {
     // Register variables ordered to match calling conventions
     u32 var_r9;
@@ -223,6 +248,13 @@ void DxMultiMesh::UpdateGeometryBuffers() {
             // +0.7 over plain `dst[0]/dst[1]/dst[2]` indexing (94.0 vs 92.9),
             // which also loses the loop's register assignment.  Do not
             // "simplify" it back.
+            // NEGATIVE RESULT (w7-bp): post-increment `*dst++ = a; *dst++ = b;
+            // *dst++ = c; var_r3 = dst;` -- the spelling that most literally
+            // describes the image's `stw 0x0(r3)` / `stwu 0x4(r3)` /
+            // `stwu 0x4(r3)` / `addi r3, r3, 0x4` -- costs 94.0 -> 93.0.  MSVC
+            // still refuses the update form and additionally splits the
+            // induction variable into r6+r3, adding two rows.  The `*++dst`
+            // form below stays.
             s32 *dst = (s32 *)var_r3;
             *dst = (s32)temp_r8_2;
             *++dst = (s32)*(u16 *)((char *)temp_r11_4 + 2);

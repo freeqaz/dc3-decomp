@@ -334,6 +334,35 @@ EofType ChunkStream::Eof() {
         // temp as at every scalar swap site, instead of the reversed pair we
         // emitted.  24 rows -> 20, raw 96.993 -> 97.093, nothing regressed.
         File *file = mFile;
+        // RESIDUAL (w7-bp, 97.97 canonical, 1200 B, 15 rows) -- the whole
+        // remaining residual is ONE scheduling cluster, target indices 213-228
+        // (0x824... region ending at the `lwz r11, 0x0(r3)` Seek vcall).  The
+        // image emits the four stores below in the order
+        //   0x8ac mCurChunk / 0x8b0 mChunkEnd / 0x8a4 mCurBufOffset /
+        //   0x888 mCurBufferIdx
+        // and loads BOTH Seek arguments early (`lwz r3, 0x10` mFile at target
+        // 214, `lwz r4, 0x28` mChunkInfoSize at 219) with
+        // `lwz r11, 0x30` mMaxChunkSize LATE, at 225, immediately before its
+        // one use.  We emit 0x888 / 0x8ac / 0x8a4 / 0x8b0 and hoist
+        // mMaxChunkSize to 214 instead.
+        //
+        // NEGATIVE RESULTS (w7-bp, three source spellings, all measured):
+        //   (a) source order mCurChunk, mChunkEnd, mCurBufOffset,
+        //       mCurBufferIdx -- i.e. LITERALLY the image's store order:
+        //       98.0 -> 97.3.  Putting mCurChunk first is the part that hurts;
+        //       it shifts the whole block by one and adds an OFFSET_SWAP of
+        //       (0x888,0x8ac).
+        //   (b) source order mCurBufOffset, mCurChunk, mChunkEnd,
+        //       mCurBufferIdx: BYTE-IDENTICAL to the form below -- same 98.0,
+        //       same 8 diff_arg / 1 diff_op / 3 insert / 3 delete at the same
+        //       indices.
+        //   (c) hoisting the second Seek argument into a named local
+        //       (`int infoSize = mChunkInfo.mChunkInfoSize;` before the stores,
+        //       `file->Seek(infoSize, 0)`), which is what target index 219
+        //       looks like: also BYTE-IDENTICAL, 98.0, same row set.
+        // So MSVC normalises source order across these four independent
+        // member stores and schedules the block itself; the emitted order is
+        // not reachable from the statement order.  Do not re-derive.
         mCurBufferIdx = 2;
         mCurBufOffset = mChunkInfo.mMaxChunkSize & kChunkSizeMask;
         mChunkEnd = chunks + mChunkInfo.mNumChunks;
