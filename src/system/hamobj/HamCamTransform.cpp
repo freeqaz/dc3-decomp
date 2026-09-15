@@ -176,6 +176,17 @@ BinStream &operator<<(BinStream &bs, const TransformCrowd &c) {
 // original while it stayed chained.  Definition order is NOT it -- moving this
 // definition below TransformArea::Save (the `bs << mCrowds` that instantiates
 // the template) is byte-inert, because MSVC instantiates at end of TU.
+// RESIDUAL (w8-i, 77.67 canonical / 77.39 fuzzy): 7 rows of 19, one artefact.  `this`
+// lives in the volatile r11 so both sides hoist `lwz 0x14(r11)` (mCrowdRotate) above
+// `bl operator<<`; the image also holds it in the CALLEE-SAVE r31 and stores it into
+// the WriteEndian home slot at 0x50(r1) only AFTER that call, paying `std/ld r31` and
+// 0x10 of extra frame for the privilege.  We sink the value into r10 and store it
+// before the call, needing no callee-save at all.  Measured here:
+//   `bs << mCrowd; bs << mCrowdRotate;` (statement split)  -> 71.00 canonical, WORSE:
+//       unchaining forces `bs` itself into r30, so the frame grows a SECOND callee-save.
+//   `CrowdRotate rotate = mCrowdRotate; bs << mCrowd << rotate;` -> 77.67, neutral.
+// Chaining is load-bearing (it returns `bs` in r3); the store position is not reachable
+// from the source.
 void TransformCrowd::Save(BinStream &bs) const { bs << mCrowd << mCrowdRotate; }
 
 BinStream &operator>>(BinStream &bs, TransformCrowd &c) {
