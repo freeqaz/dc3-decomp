@@ -9,11 +9,15 @@
 # dies with C1083.  Numbers taken from the listing are for ITERATION ONLY --
 # quote every percentage from a full `ninja` + report.json.
 REPO=${REPO_ROOT:-${0:a:h:h}}
+# wibo: prefer this tree's symlinked toolchain, else the sibling checkout.
+WIBO=$REPO/build/tools/wibo
+[[ -x $WIBO ]] || WIBO=$REPO/../wibo/build/release/wibo
+[[ -x $WIBO ]] || { print -u2 "w8g_asm.sh: no wibo at $REPO/build/tools/wibo or $REPO/../wibo/build/release/wibo"; exit 9 }
 REL="$1"; OUT="$2"
 cd $REPO/src/$REL:h
-/home/free/code/milohax/wibo/build/release/wibo WIBO_COMPUTER_NAME='9QVZU3' WIBO_FS_CACHE='1' \
+"$WIBO" WIBO_COMPUTER_NAME='9QVZU3' WIBO_FS_CACHE='1' \
  WIBO_PATH_MAP="e:/lazer_build_gmc1/system/src/=$REPO/src/system;e:/lazer_build_gmc1/lazer/src/=$REPO/src/lazer" \
- /home/free/code/milohax/dc3-decomp/build/compilers/X360/16.00.11886.00/cl.exe \
+ $REPO/build/compilers/X360/16.00.11886.00/cl.exe \
  /I 'e:\lazer_build_gmc1\system\src\stlport' /I $REPO/src/xdk/LIBCMT \
  /I 'e:\lazer_build_gmc1\system\src' /I 'e:\lazer_build_gmc1\lazer\src' \
  /I 'e:\lazer_build_gmc1\system\src\oggvorbis' /I 'e:\lazer_build_gmc1\system\src\synth\tomcrypt' \
