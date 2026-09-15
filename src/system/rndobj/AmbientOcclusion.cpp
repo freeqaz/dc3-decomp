@@ -1266,20 +1266,23 @@ void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
                 FacePriority *pPtr = (FacePriority *)priBegin;
                 do {
                     RndMesh::Face &face = mesh->Faces(pPtr->faceIndex);
-                    RndMesh::Vert &vert0 = mesh->Verts(face.v1);
-                    RndMesh::Vert &vert1 = mesh->Verts(face.v2);
-                    RndMesh::Vert &vert2 = mesh->Verts(face.v3);
+                    unsigned short i0 = FaceVert(face, 0);
+                    unsigned short i1 = FaceVert(face, 1);
+                    unsigned short i2 = FaceVert(face, 2);
+                    RndMesh::Vert &vert0 = mesh->Verts(i0);
+                    RndMesh::Vert &vert1 = mesh->Verts(i1);
+                    RndMesh::Vert &vert2 = mesh->Verts(i2);
 
                     // Construct 3 midpoint edges
                     Edge edge01, edge12, edge20;
-                    edge01.v0 = face.v1;
-                    edge01.v1 = face.v2;
+                    edge01.v0 = i0;
+                    edge01.v1 = i1;
                     edge01.midpoint = 0xffff;
-                    edge12.v0 = face.v2;
-                    edge12.v1 = face.v3;
+                    edge12.v0 = i1;
+                    edge12.v1 = i2;
                     edge12.midpoint = 0xffff;
-                    edge20.v0 = face.v3;
-                    edge20.v1 = face.v1;
+                    edge20.v0 = i2;
+                    edge20.v1 = i0;
                     edge20.midpoint = 0xffff;
 
                     RndMesh::Vert blendVert01;
