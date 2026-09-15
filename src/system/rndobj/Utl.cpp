@@ -2369,28 +2369,34 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
     RndParticleSys *partsys = dynamic_cast<RndParticleSys *>(obj);
     if (partsys) {
         Vector3 vb = partsys->ForceDir();
-        // /fp:fast folds every division by fovScale into a single reciprocal, so
-        // the ONLY thing the target's instruction order can still tell us is the
+        // /fp:fast folds every division by fovScale into a single reciprocal
+        // (`fdivs f0, f0, f30` from __real@3f800000 at 0x82630018), so the ONLY
+        // thing the target's instruction order can still tell us is the
         // association. It says: speed is (x / fovScale) * scale (fmuls by the
         // reciprocal first, by scale second), and the force-dir factor is
         // (1/fovScale * 1/fovScale) * scale -- fmuls f12,f0,f0 then fmuls f13,f12,f31
         // at 0x82630064 / 0x82630088 -- not (scale/fovScale)/fovScale, which would
-        // multiply by scale first.
-        float invFov = 1.0f / fovScale;
-        // Retail's store order in this block is BubbleSize (0x150/0x154), Life
-        // (0x158), BubblePeriod (0x148/0x14c), then EmitRate (0x198/0x19c) --
-        // EmitRate last, matching RB3's spelling of the same function.
+        // multiply by scale first.  Spelling the reciprocal as a named local,
+        // as `X * invFov`, or as `X / fovScale` is the same code (w7-bx).
+        //
+        // w7-bx (2026-09-15, 94.06421 -> 97.333336): the whole branch is one
+        // basic block, so MSVC's list scheduler decides the emitted order and
+        // the source order is only its tie-break.  Swept all 24 orders of the
+        // four Vector2 setters: Life LAST is what the image wants (its Life.y
+        // store 0x15c at 0x82630080 sits below EmitRate's 0x19c at 0x82630070),
+        // 95.83 with the tail below vs 93.9 for Life third; BubbleSize and
+        // BubblePeriod are interchangeable.
         partsys->SetBubbleSize(
             partsys->BubbleSize().x * scale, partsys->BubbleSize().y * scale
         );
         partsys->SetBubblePeriod(
             partsys->BubblePeriod().x * fovScale, partsys->BubblePeriod().y * fovScale
         );
-        partsys->SetLife(partsys->Life().x * fovScale, partsys->Life().y * fovScale);
         partsys->SetEmitRate(
-            partsys->EmitRate().x * invFov, partsys->EmitRate().y * invFov
+            partsys->EmitRate().x / fovScale, partsys->EmitRate().y / fovScale
         );
-        vb *= invFov * invFov * scale;
+        partsys->SetLife(partsys->Life().x * fovScale, partsys->Life().y * fovScale);
+        vb *= (1.0f / fovScale / fovScale) * scale;
         partsys->SetForceDir(vb);
         // Retail coalesces box2 into vb's dead stack slot (0x50) and gives box1
         // its own (0x70); declaring box2 first does NOT reproduce that (measured
@@ -2401,19 +2407,38 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         // called after SetDeltaSize (93.36, 82 diff_arg rows vs 56); spelling
         // `scale * X` on BubbleSize/BubblePeriod/StartSize/DeltaSize
         // (byte-identical -- MSVC canonicalises the commutative fmuls).
+        // w7-bx: the image loads all four StartSize/DeltaSize floats
+        // (0x1a0-0x1ac, 0x82630134-0x8263014C) and Speed's reciprocal products
+        // (0x82630120/28) BEFORE any of the tail's stores, then stores
+        // StartSize, Speed, DeltaSize (0x82630164-0x82630188).  Only the
+        // named-local spelling below reproduces that grouping: with the
+        // products inline in the setter calls every one of the 24 orders of
+        // {SetBoxExtent, SetSpeed, SetStartSize, SetDeltaSize} interleaves
+        // load/mul/store per setter (best 95.83, SetBoxExtent/DeltaSize/Speed/
+        // StartSize).  SetBoxExtent must stay FIRST: any later position drops
+        // to 90.5-92.1 because the copy's source pointers (`addi r10, r1, 0x70`
+        // at 0x82630048, `addi r9, r1, 0x50` at 0x826300C0) stop being hoisted.
+        // RESIDUAL (97.33): our eight stw's still land before the StartSize
+        // store, the image's after DeltaSize.x (0x82630184-0x826301A4), and
+        // ~25 f11/f13-class register-colouring rows in the top block.  Also
+        // inert: `Vector2` temporaries instead of the four floats (+1 equal
+        // row, same canonical), Scale(vb, k, vb) for the `vb *=`, and moving
+        // the box Scale() calls above the vb work (90.3).  `*=` on the members
+        // through a friend declaration is refuted outright (89.8): it emits an
+        // `addi r11, r3, <member>` per Vector2 that the image lacks.
         Vector3 box1, box2;
         Scale(partsys->BoxExtent1(), scale, box1);
         Scale(partsys->BoxExtent2(), scale, box2);
         partsys->SetBoxExtent(box1, box2);
-        partsys->SetSpeed(
-            partsys->Speed().x * invFov * scale, partsys->Speed().y * invFov * scale
-        );
-        partsys->SetStartSize(
-            partsys->StartSize().x * scale, partsys->StartSize().y * scale
-        );
-        partsys->SetDeltaSize(
-            partsys->DeltaSize().x * scale, partsys->DeltaSize().y * scale
-        );
+        float speedX = partsys->Speed().x / fovScale;
+        float speedY = partsys->Speed().y / fovScale;
+        float startX = partsys->StartSize().x * scale;
+        float startY = partsys->StartSize().y * scale;
+        float deltaX = partsys->DeltaSize().x * scale;
+        float deltaY = partsys->DeltaSize().y * scale;
+        partsys->SetStartSize(startX, startY);
+        partsys->SetSpeed(speedX * scale, speedY * scale);
+        partsys->SetDeltaSize(deltaX, deltaY);
         return;
     }
     RndParticleSysAnim *partsysanim = dynamic_cast<RndParticleSysAnim *>(obj);
