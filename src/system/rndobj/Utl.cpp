@@ -2240,6 +2240,38 @@ bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
 
 #include "rndobj\CamAnim.h"
 
+#ifndef HX_NATIVE
+// w8-a: ORPHAN INSTANTIATION -- reconstruction of a never-called external
+// function that /OPT:REF discarded.  ham_xbox_r.map attributes these COMDATs to
+// rndobj:Utl.obj, but nothing that survives in
+// build/373307D9/asm/system/rndobj/Utl.s calls any of them:
+//
+//   ?_M_erase@vector<Key<vector<Color> > >   0x82638C20   (no in-unit caller)
+//   ?_M_erase@vector<Key<vector<Vector3> > > 0x82638DC8   (no in-unit caller)
+//   ?_M_erase@vector<Key<vector<Vector2> > > 0x82638E38   (no in-unit caller)
+//   ?_M_erase@vector<Key<RndMatAnim::TexPtr> > 0x826381D0 (no in-unit caller)
+//   ?_M_erase@vector<RndMesh::Face>(pos, __false_type) 0x82630938 -- note the
+//        SINGLE-element overload (mangled `PAV34@ABU__false_type@2@`), not the
+//        range overload our TessellateMesh already emits
+//   ??$?0H@vector<int>(int, int, alloc)      0x82631178   (no in-unit caller)
+//
+// The name of the original function is not recoverable from the binary.  The
+// erase()/Remove() calls below reproduce the exact instantiation set; the
+// bodies are deliberately inert.  A `static` stand-in does NOT work -- MSVC
+// drops an unreferenced static function before instantiating through it.
+void RndUtlDiscardedKeyTrim(
+    RndMeshAnim *meshanim, RndMatAnim *matanim, RndMesh *mesh, int lo, int hi
+) {
+    meshanim->VertPointsKeys().Remove((float)lo, (float)hi);
+    meshanim->VertTexsKeys().Remove((float)lo, (float)hi);
+    meshanim->VertColorsKeys().Remove((float)lo, (float)hi);
+    matanim->GetTexKeys().Remove((float)lo, (float)hi);
+    mesh->Faces().erase(mesh->Faces().begin() + lo);
+    std::vector<int> verts(lo, hi);
+    mesh->Verts().resize(verts.size());
+}
+#endif
+
 void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
     RndDrawable *draw = dynamic_cast<RndDrawable *>(obj);
     if (draw) {
