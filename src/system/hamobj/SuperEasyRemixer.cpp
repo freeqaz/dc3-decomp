@@ -138,18 +138,15 @@ void SuperEasyRemixer::DumpSongLayout() {
 #endif
     MILO_LOG("\tSUPEREASY\t\tEASY\t\tMEDIUM\t\tHARD\n");
     String str;
-    // RESIDUAL (w7-ak, 93.79 canonical): 32 rows, two causes.
-    // (1) The image carries `(i-1)*4` as the loop's induction variable (`li r25,
-    //     -0x4` in the preheader, `addi r27, r25, 0x4` for the `[i]` index) and
-    //     derives the MakeString argument from it as `addi r11, r23, 0x2` after
-    //     `subi r23, r20, 0x1` -- i.e. `i - 1` is materialised FIRST. NEGATIVE
-    //     RESULT: hoisting it into a named `int prev = i - 1;` used for both
-    //     `prev + 2` and the two `[prev]` subscripts does NOT reproduce the
-    //     strength reduction (we still emit `slwi r26, r20, 2` and subtract) and
-    //     costs raw 93.07 -> 92.9 for a flat canonical.
-    // (2) The image keeps &TheDebug in r28 AND home-stores it to 0x58(r31),
-    //     reloading it for the final MILO_LOG; our MakeString temp takes 0x58 and
-    //     &TheDebug lives in r14 with no home store.
+    // RESIDUAL (w7-bv, 97.9 canonical, 17 rows): the image carries `(i-1)*4`
+    // as the register induction variable (`li r25, -0x4` in the preheader at
+    // 824F6198, `addi r27, r25, 0x4` for the `[i]` index at 824F61F4) where we
+    // reduce `i*4` (`slwi`) and subtract 4 for `[i-1]`.  Every spelling that
+    // names `i - 1` makes it worse, not better: `int prev = i - 1` with
+    // `[prev]`/`[i]` is 94.8 (prev and i both get home slots, frame +0x10);
+    // `[prev]`/`[prev + 1]` does produce the `li -4` IV but keeps the homed
+    // locals, 96.7.  The two `>= 0` / `+ 2` uses of `i - 1` (r23) are CSE'd
+    // by MSVC on its own from the anonymous form.
     for (int i = 0; i < mTotalMeasures; i++) {
         str = MakeString("%d", i + 1);
         for (Difficulty d = EasiestDifficulty(); d != kNumDifficulties;
@@ -160,18 +157,31 @@ void SuperEasyRemixer::DumpSongLayout() {
             if (next != kNumDifficulties) {
                 str += "\t";
                 if (i - 1 >= 0) {
-                    if (TheMoveMgr->HasVariantPair(
-                            GetMoveParentsByDifficulty(next)[i - 1],
-                            GetMoveParentsByDifficulty(d)[i]
-                        )) {
+                    // Each pair member is a named local: the image evaluates the
+                    // FIRST argument's lookup first and holds the element itself
+                    // (not the vector's begin) across the second call
+                    // (`lwzx r14, r25, r10` at 824F628C before the second bctrl).
+                    // Nested in the call, MSVC evaluates right-to-left and defers
+                    // the element load past the other call, and &TheDebug then
+                    // stays in r14 instead of being home-stored to 0x58(r31)
+                    // (w7-ak's class (2)).
+                    const MoveParent *harderPrev = GetMoveParentsByDifficulty(next)[i - 1];
+                    const MoveParent *easierCur = GetMoveParentsByDifficulty(d)[i];
+                    if (TheMoveMgr->HasVariantPair(harderPrev, easierCur)) {
                         str += "<";
                     } else {
                         str += "_";
                     }
-                    if (TheMoveMgr->HasVariantPair(
-                            GetMoveParentsByDifficulty(next)[i],
-                            GetMoveParentsByDifficulty(d)[i - 1]
-                        )) {
+                    // BUG FIX (w7-bv): the second pair is (easier[i-1], harder[i]),
+                    // not (harder[i], easier[i-1]).  At 824F62FC..824F631C the
+                    // image passes r4 = the d-row element at (i-1)*4 (r28, loaded
+                    // from the FIRST GetMoveParentsByDifficulty(d) call) and
+                    // r5 = the next-row element at i*4.  FindVariantPair is
+                    // directional (p1 -> p2), so the swapped order asked the
+                    // wrong question for the '>' marker.
+                    const MoveParent *easierPrev = GetMoveParentsByDifficulty(d)[i - 1];
+                    const MoveParent *harderCur = GetMoveParentsByDifficulty(next)[i];
+                    if (TheMoveMgr->HasVariantPair(easierPrev, harderCur)) {
                         str += ">";
                     } else {
                         str += "_";
