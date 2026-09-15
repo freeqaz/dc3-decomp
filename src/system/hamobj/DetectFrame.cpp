@@ -30,12 +30,23 @@ void DetectFrame::Reset(
     const ErrorNode *const *nodes = fv->mErrorNodes;
     if (fv->mType == kFilterVersionHam1) {
         for (int i = 0; i < MoveFrame::kNumHam1Nodes; i++) {
-            mNodeComponentWeights[i].y = 1;
+            // w8-i: the `Vector3 &w` hoist is load-bearing, and it is a SCHEDULING
+            // lever, not a codegen-size one -- the 47 instructions were already
+            // identical apart from the two induction-variable bumps, emitted in the
+            // opposite order (image: `addi r31,r31,0x10` then `addi r30,r30,0x4`;
+            // ours: r30 first).  Subscripting mNodeComponentWeights[i] three times
+            // makes the weights pointer a strength-reduction result DERIVED inside
+            // the body, so MSVC sinks its bump below the nodes[] bump; binding the
+            // element to a reference at the top of the body makes it an induction
+            // variable in its own right, created in source order, and the two bumps
+            // come out in the image's order.  99.96 -> 100.0 (188 B).
+            Vector3 &w = mNodeComponentWeights[i];
+            w.y = 1;
             Vector3 v;
             if (nodes[i]->XZErrorAxis(v, df->mSkeleton)) {
-                XZErrorWeight(v, mNodeComponentWeights[i].x, mNodeComponentWeights[i].z);
+                XZErrorWeight(v, w.x, w.z);
             } else {
-                mNodeComponentWeights[i].x = mNodeComponentWeights[i].z = 1;
+                w.x = w.z = 1;
             }
         }
     }
