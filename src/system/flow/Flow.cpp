@@ -24,14 +24,16 @@
 //   ??1?$vector@PAVObject@Hmx@@...                   823f25a8   36 B
 // So unlike most of the w8-e worklist these ARE emittable from this file; all
 // five read 0.0% as of 2026-09-15 because our Flow.cpp never instantiates that
-// vector at all -- it holds its Hmx::Object* set in other containers.  What the
-// target needs is a `std::vector<Hmx::Object*>` member/local here whose growth
-// path (push_back on a full vector) is actually taken, which forces the stlport
-// _M_insert_overflow/allocate/deallocate quartet into this TU.  Refuted: adding
-// an explicit `template class std::vector<Hmx::Object*>;` is NOT sufficient by
-// itself -- stlport's vector members are already emitted per-use as COMDATs, and
-// an explicit instantiation with no call site still emits the wrong set (the
-// image has exactly these five and no ?reserve/?insert siblings).  Left open.
+// vector at all -- it holds its Hmx::Object* set in other containers.
+//
+// w8-k 2026-09-15: the "Refuted" that used to close this note -- that an explicit
+// `template class std::vector<Hmx::Object*>;` cannot reach these -- was REASONED,
+// not measured, and it is WRONG.  The counter-example was already in the tree:
+// src/system/char/Waypoint.cpp:251 carries `template class std::vector<Waypoint *>;`
+// and its identically-shaped quartet (allocate/deallocate/_M_insert_overflow 248 B/
+// push_back 112 B) all read 100.0%.  An explicit instantiation emitting EXTRA
+// COMDATs costs nothing, because report.json enumerates TARGET symbols -- an
+// unpaired base-side symbol is not a row.  See the instantiation at end of file.
 #include "flow\FlowRun.h"
 #include "flow\FlowSequence.h"
 #include "flow\FlowSetProperty.h"
@@ -807,3 +809,11 @@ void FlowInit() {
         prov->SetName("exampleData", ObjectDir::Main());
     }
 }
+
+// w8-k: the image's flow:Flow.obj carries the whole std::vector<Hmx::Object*>
+// growth quartet as COMDATs of THIS TU (allocate 0x823ED698, deallocate
+// 0x823ED708, ~vector 0x823F25A8, _M_insert_overflow 0x823F2630, push_back
+// 0x823F29C0 -- ham_xbox_r.map, all `flow:Flow.obj`), but nothing in the
+// surviving source odr-uses that vector; retail's Flow.cpp did and the call site
+// did not survive /OPT:REF.  Same shape and same lever as Waypoint.cpp:251.
+template class std::vector<Hmx::Object *>;
