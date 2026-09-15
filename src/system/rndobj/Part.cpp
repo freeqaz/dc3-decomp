@@ -1479,25 +1479,22 @@ void RndParticleSys::UpdateParticles() {
                     Vector3 baseVel;
                     if (!mMeshEmitter) {
                         f32 halfSample = 0.5f;
-                        // Naming the two low bounds keeps them live instead of
-                        // reloading 0x188/0x190 after each LimitAng, which is
-                        // what the image does.  Refuted on top of this: hoisting
-                        // the pitch delta into its own local (inert, identical
-                        // 14-row diff), so the residual load-order swap at
-                        // 0x188/0x18c is scheduling, not spelling.
-                        // NEGATIVE RESULT (w7-ao, 2026-09-14): inlining these
-                        // two bounds back into their expressions
-                        // (`LimitAng(mPitch.y - mPitch.x) * halfSample +
-                        // mPitch.x`) to reproduce the image's y-then-x load
-                        // order costs 1.1pp (94.43 -> 93.33): MSVC then
-                        // RELOADS 0x188/0x190 for the `+ lo` term instead of
-                        // keeping them in f29/f27 across the LimitAng calls,
-                        // which the image does. The load-order swap at
-                        // 0x188/0x18c is not worth the two reloads.
+                        // Both bounds of each range are named locals, high
+                        // first, and the yaw pair is read AFTER the pitch
+                        // LimitAng call: the image loads 0x18c then 0x188
+                        // (826C4C34/38), calls, then 0x194/0x190 (826C4C48/4C),
+                        // and keeps each low bound in f29/f27 across its call
+                        // for the `+ lo` term.  Inlining `mPitch.x` into the
+                        // expression reloads it after the call (w7-ao, 93.33);
+                        // loading yawLo before the first call hoists the
+                        // 0x190 load a call too early (94.43); naming only the
+                        // low bounds loads x before y (99.98) -- w7-bt, 100.0.
+                        f32 pitchHi = mPitch.y;
                         f32 pitchLo = mPitch.x;
+                        f32 pitchMid = LimitAng(pitchHi - pitchLo) * halfSample + pitchLo;
+                        f32 yawHi = mYaw.y;
                         f32 yawLo = mYaw.x;
-                        f32 pitchMid = LimitAng(mPitch.y - pitchLo) * halfSample + pitchLo;
-                        f32 yawMid = LimitAng(mYaw.y - yawLo) * halfSample + yawLo;
+                        f32 yawMid = LimitAng(yawHi - yawLo) * halfSample + yawLo;
                         f32 speedMid = (mSpeed.y - mSpeed.x) * halfSample + mSpeed.x;
 
                         f32 halfPi = 1.57079637f;
@@ -1506,22 +1503,20 @@ void RndParticleSys::UpdateParticles() {
                         f32 yVel = FastSin(yawMid + halfPi) * cosPitch * speedMid;
                         f32 sinPitch = FastSin(pitchMid);
 
-                        // RESIDUAL (w7-ao, 94.43 canonical): the last 10 of the
-                        // 14 rows are MSVC hoisting the x and y `* frameUpdate`
-                        // products ABOVE the final `bl FastSin`; the image
-                        // (826C4CBC..826C4CC8) emits all three after it, keeping
-                        // yVel in the callee-saved f27 across the call. Three
-                        // spellings produce BYTE-IDENTICAL code and the same
-                        // 14-row diff: (a) `baseVel.Set(a,b,c)` as below,
-                        // (b) three separate `baseVel.x/.y/.z =` assignments,
-                        // (c) folding `* speedMid` into the sinPitch local so
-                        // the z term reads `zVel * frameUpdate`. This is the
-                        // scheduler, not the spelling.
-                        baseVel.Set(
-                            negXVel * frameUpdate,
-                            yVel * frameUpdate,
-                            sinPitch * speedMid * frameUpdate
-                        );
+                        // The frame scaling is a separate Scale() after the
+                        // Set(), not folded into each component: with
+                        // `Set(a * frameUpdate, ...)` MSVC hoists the x and y
+                        // products and their stores above the final
+                        // `bl FastSin` (w7-ao's 14-row residual at 94.43 --
+                        // three spellings of the folded form were
+                        // byte-identical, and inlining the last FastSin into
+                        // the Set argument is too).  Set-then-Scale keeps
+                        // negXVel/yVel in f29/f27 across the call and emits
+                        // the three `fmuls fN, fN, f31; stfs` pairs after it,
+                        // which is the image at 826C4CBC..826C4CD8 (w7-bt,
+                        // 94.43 -> 98.87).
+                        baseVel.Set(negXVel, yVel, sinPitch * speedMid);
+                        Scale(baseVel, frameUpdate, baseVel);
 
                         Multiply(baseVel, mSubSampleXfm, baseVel);
                     } else {
