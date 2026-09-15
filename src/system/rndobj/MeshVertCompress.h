@@ -46,6 +46,22 @@ struct CompressedVertex_Xbox {
 // silently identical here: as of 2026-09-15 rnddx9's FillCompressedVertex reads
 // 99.96% (8 rows: 6 lfs/stfs offset swaps, one r28<->r29 rlwimi pair) and its
 // PackVector reads 96.2% (22 diff_arg / 3 replace, r29<->r30 dominant).
+//
+// w8-k 2026-09-15: independently re-derived, AGREES, and CLASS = PLACEHOLDER for
+// both rows (fn_8263A168 @0x8263A168 and fn_8263A360 @0x8263A360, contributor
+// rndobj:Mesh.obj).  Two things w8-e asserted but did not measure, now measured:
+//   * the duplicate-name census it never ran comes back EMPTY -- parsing all
+//     `NAME = .text:0xADDR;` lines of config/373307D9/symbols.txt gives 211608
+//     entries, 211608 distinct names, 0 names at more than one address.  So the
+//     "binds each name exactly once" claim is not just dtk's intent, it is the
+//     shipped state of the file, and there is no precedent to copy;
+//   * the swap is not merely zero-sum, it is a NET LOSS.  Sizes are identical
+//     across each pair (504/504, 556/556), and we bank 96.190475% x 504 B +
+//     99.95683% x 556 B on the rnddx9 side today.  A rename hands rndobj about
+//     those same numbers and hands rnddx9 a hard 0.0.
+// Do not re-open this as a symbols.txt task.  The open work is PackVector's
+// 96.190475% in the shared body below, which is a rnddx9/Mesh row, not a
+// rndobj/Mesh one.
 static const unsigned int kBitsOutput = 32;
 
 static void PackVector(
