@@ -253,14 +253,37 @@ void BoxMapLighting::ApplyLight(
     }
 }
 
-/** RESIDUAL w7-at, 87.37 canonical / 83.4 raw, 360 B.  The arithmetic and the
- *  store order are exact; what is left is FPR allocation, and the tell is the
- *  prologue: the image saves TWO callee-saved FPRs (`stfd f30, -0x30(r1)` /
- *  `stfd f31, -0x28(r1)` at 0x826F0E30-34) where we save only f31.  We are
- *  CHEAPER than the image by one live float inside the loop, so no reordering
- *  of these statements reaches it -- we would have to make MSVC need a register
- *  it does not need.  One offset swap survives with it: the image loads
- *  mDirection.z (0x4c(r11)) before mHalfLengthRecip (0x7c), we load 0x44 there.
+/** RESIDUAL w7-at + w7-bl, 94.09 canonical / 91.8 raw, 360 B (was 87.37).
+ *  Three source-level fixes from w7-bl, each read off the target listing at
+ *  0x826F0E78-0x826F0F7C:
+ *    (1) `Min(cone, 1.0f)`, NOT `Min(1.0f, cone)`.  Min(a,b) lowers to
+ *        `fsubs a-b` + `fsel(a-b, b, a)`, so the operand order is visible:
+ *        the image emits `fsubs f10, f12, f0` (cone - 1.0) then
+ *        `fsel f12, f10, f0, f12` at rows 61/63.  The `dist` clamp one line
+ *        above already had the image's order and was never wrong.
+ *    (2) `float blue = atten * light.mColor.blue;` hoisted ABOVE the three
+ *        `dir` stores, with only `col.blue = blue;` left below them.  The image
+ *        loads mColor.blue (`lfsu f12, 0x5c(r11)`) and multiplies BEFORE
+ *        storing dir.red/green/blue, then stores col.blue last.  MSVC may not
+ *        sink a load of `arr` below a store to gLightBuffer1 on its own -- it
+ *        cannot prove they do not alias -- so the load position has to come
+ *        from the source.  This alone was 87.37 -> 91.9.
+ *    (3) `coneX` names the mDirection.x product and mDirection.z*ndz is left
+ *        inline, which is the REVERSE of the old `coneZ` spelling.  MSVC makes
+ *        the INLINE product the standalone `fmuls` and folds the NAMED one into
+ *        the `fmadds`; the image's standalone product is mDirection.z * ndz
+ *        (`fmuls f9, f9, f12` at row 52, f9 from 0x4c(r11)).  This closed the
+ *        (0x44, 0x4c) offset swap, took the register swaps from 34 rows to 9,
+ *        and brought back the second callee-saved FPR the note below called
+ *        unreachable: 91.9 -> 94.09.
+ *
+ *  What is left (31 rows): the two `stfd` prologue slots are 8 bytes lower than
+ *  the image's, the gLightBuffer1/gLightBuffer2 base-pointer setup is ordered
+ *  differently (rows 14/16/19/21/27/31 -- the image materialises
+ *  `&gLightBuffer2[i].blue` in r8 per iteration and stores col.green/col.blue
+ *  at -0x4(r8)/0x0(r8), where we keep two extra precomputed bases r31/r28 and
+ *  use `stfsx`, costing __savegprlr_28 vs _29), and seven commutative fmuls
+ *  operand orders.
  *
  *  Measured, all reverted:
  *    - caching gLightIndex in a local across the loop and storing it back once:
@@ -271,9 +294,12 @@ void BoxMapLighting::ApplyLight(
  *    - the same with an explicit `if (arr.NumElements() > 0)` guard around it:
  *      87.37 -> 76.3, and the guard is emitted twice.
  *    - `cone` as a flat left-associated sum
- *      (`dir.z*ndz + dir.x*ndx + dir.y*ndy`), which is what the fmadds chain
- *      reads as: 87.37 -> 85.2.  The nested spelling below is the one that
- *      matches.
+ *      (`dir.z*ndz + dir.x*ndx + dir.y*ndy`): 87.37 -> 85.2 (w7-at).  w7-bl
+ *      re-tested the same idea as a statement accumulation
+ *      (`cone = .x*ndx + coneZ; cone = .y*ndy + cone;`) on top of fixes (1)
+ *      and (2) and it is EXACTLY inert -- 91.9, same 88.1 raw, same offset
+ *      swap.  MSVC canonicalises the chain; only which product is NAMED
+ *      decides the lowering, which is what (3) exploits.
  *    - hoisting `-ndx/-ndy/-ndz` into named temps ahead of the clamp chain to
  *      reproduce the image's early fnegs: byte-identical, MSVC already
  *      schedules them there. */
@@ -290,7 +316,6 @@ void BoxMapLighting::ApplyLight(
         float ndz = dz * invDist;
         float ndx = dx * invDist;
         float ndy = dy * invDist;
-        float coneZ = light.mDirection.z * ndz;
         // The image computes (invDist * distSq) as its own product and only then
         // scales by mHalfLengthRecip -- `fmuls f3, f31, f3` then
         // `fmsubs f6, f3, f5, f6` at the target's rows 49/53.  Written as the
@@ -299,9 +324,10 @@ void BoxMapLighting::ApplyLight(
         // FPR assignment downstream shifts; the named temp pins the association.
         float trueDist = invDist * distSq;
         float dist = trueDist * light.mHalfLengthRecip - light.mOffsetFactor;
-        float cone = light.mDirection.y * ndy + (light.mDirection.x * ndx + coneZ);
+        float coneX = light.mDirection.x * ndx;
+        float cone = light.mDirection.y * ndy + (light.mDirection.z * ndz + coneX);
         dist = Min(1.0f, dist);
-        float coneClamped = Min(1.0f, cone) - light.mConeAngleFactor;
+        float coneClamped = Min(cone, 1.0f) - light.mConeAngleFactor;
         float distAtten = Max(0.0f, 1.0f - dist);
         float coneAtten = Max(0.0f, coneClamped);
         float atten = distAtten * (coneAtten * light.mConeAngleInverse);
@@ -309,10 +335,11 @@ void BoxMapLighting::ApplyLight(
         Hmx::Color &dir = gLightBuffer1[gLightIndex];
         col.red = atten * light.mColor.red;
         col.green = atten * light.mColor.green;
+        float blue = atten * light.mColor.blue;
         dir.red = -ndx;
         dir.green = -ndy;
         dir.blue = -ndz;
-        col.blue = atten * light.mColor.blue;
+        col.blue = blue;
         gLightIndex++;
     }
 }
