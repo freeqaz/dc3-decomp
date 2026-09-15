@@ -274,6 +274,34 @@ CharSignalApplier::BoneOp* __uninitialized_fill_n<CharSignalApplier::BoneOp*, un
 #endif
 
 
+// w8-k 2026-09-15: CLOSED, 0.0000 -> 11.34 -> 100.0000.  The w8-c note below is
+// kept because its diagnosis of the ARTIFACT is correct and worth preserving, but
+// its conclusion has been overtaken twice, so read it with these two corrections:
+//
+//   1. "the row can only be closed by renaming the address in symbols.txt, which
+//      is a config change outside this lane" -- right about the mechanism, and
+//      that rename is now DONE.  config/373307D9/symbols.txt binds
+//      ?Handle@CharSignalApplier@@UAA?AVDataNode@@PAVDataArray@@_N@Z at
+//      0x823AAA20.  Which of the two fold members to name is settled without
+//      appealing to symbols.txt by the address-range test: splits.txt gives
+//      CharSignalApplier .text [0x823AA888, 0x823ACE28), which contains the
+//      address, and CharBoneTwist .text [0x82360180, 0x823616B8), which does not.
+//      Nothing is taken from CharBoneTwist, which names no Handle body at all.
+//   2. "-- i.e. exactly what our CharSignalApplier::Handle already compiles to."
+//      This was WRONG, and it is the clause that made the row look like pure
+//      pairing noise with no work behind it.  Our body was
+//      `return Hmx::Object::Handle(d, b);`, a bare passthrough; the moment the
+//      rename made the row scoreable it read 11.34% with 93 of 109 instructions
+//      DELETED.  The target is the BEGIN_HANDLERS macro expansion -- see the note
+//      on the definition above.  It now reads 100.0000, 109 of 109 equal.
+//
+// The general lesson, since this row cost two lanes: an unscoreable row hides
+// whether there is source work behind it.  "We already emit the real body" was
+// established from `strings` on the object, which proves a symbol of that NAME
+// exists -- not that its CONTENTS are right.  Do not promote that to "no work
+// here" without a ruler that can actually charge the body.
+//
+// --- w8-c, as written (diagnosis good, conclusion superseded by the above) ---
 // w8-c: `merged_823AAA20` (436 B) holds at 0.0000 and is NOT work.
 // It is an unscoreable pairing artifact, not a missing body.
 //   - config/373307D9/symbols.txt:121732 binds the address with a synthetic
