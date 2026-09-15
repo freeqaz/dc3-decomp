@@ -672,22 +672,14 @@ inline void Invert(const Transform &in, Transform &out) {
     Vector3 inV;
     Negate(in.v, inV);
     Invert(in.m, out.m);
-    out.v.Set(
-        out.m.x.x * inV.x + out.m.y.x * inV.y + out.m.z.x * inV.z,
-        out.m.x.y * inV.x + out.m.y.y * inV.y + out.m.z.y * inV.z,
-        out.m.x.z * inV.x + out.m.y.z * inV.y + out.m.z.z * inV.z
-    );
+    Multiply(inV, out.m, out.v);
 }
 
 inline void FastInvert(const Transform &in, Transform &out) {
     Vector3 inV;
     Negate(in.v, inV);
     FastInvert(in.m, out.m);
-    out.v.Set(
-        out.m.x.x * inV.x + out.m.y.x * inV.y + out.m.z.x * inV.z,
-        out.m.x.y * inV.x + out.m.y.y * inV.y + out.m.z.y * inV.z,
-        out.m.x.z * inV.x + out.m.y.z * inV.y + out.m.z.z * inV.z
-    );
+    Multiply(inV, out.m, out.v);
 }
 
 inline void Transpose(const Hmx::Matrix4 &in, Hmx::Matrix4 &out) {
