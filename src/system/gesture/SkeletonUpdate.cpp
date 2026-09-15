@@ -284,25 +284,30 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
     JoypadData *padData = JoypadGetPadData(0);
     float ry = padData->mSticks[1][0];
     if (ry > 0.5f) {
-        // RESIDUAL (w7-an, 82.1 canonical): the image RELOADS elbowRight.y
-        // (lfs f12, 0x1d8(r31)) and elbowRight.z (lfs f12, 0x1dc(r31)) to
-        // build the wrist, where MSVC forwards our just-stored values --
-        // which also drags the handRight = wristRight word copy forward into
-        // the middle of the shoulder loads.  Source order here already
-        // matches the image (z, x, y for the wrist); the divergence is
-        // MSVC's store-to-load forwarding, which no spelling of the reads
-        // reached.
-        float shoulderX = data.mJointPositions[kJointShoulderRight].x;
-        float shoulderY = data.mJointPositions[kJointShoulderRight].y;
-        float shoulderZ = data.mJointPositions[kJointShoulderRight].z;
-        data.mJointPositions[kJointElbowRight].z = shoulderZ;
-        data.mJointPositions[kJointElbowRight].y = shoulderY - 0.3f;
-        float elbowRightX = shoulderX + 0.3f;
-        data.mJointPositions[kJointElbowRight].x = elbowRightX;
-        data.mJointPositions[kJointWristRight].z = data.mJointPositions[kJointElbowRight].z;
-        data.mJointPositions[kJointWristRight].x = elbowRightX + 0.3f;
-        data.mJointPositions[kJointWristRight].y =
-            data.mJointPositions[kJointElbowRight].y - 0.3f;
+        // w7-by (82.132454 -> 89.5): the w7-an note below called the image's
+        // reloads of elbowRight.y/.z (lfs f12, 0x1d8/0x1dc(r31) at
+        // 0x8242CEA4/0x8242CEB0) a forwarding floor.  They are a spelling: the
+        // wrist stores go through a plain `PaddedJointPos &` local, which MSVC
+        // treats as an opaque object -- stores through it block forwarding of
+        // the later direct loads, and the materialised reference survives as
+        // the image's dead `addi r11, r31, 0x1e4` at 0x8242CE84.  The elbow
+        // stores stay direct so the shoulder loads still forward.
+        // Measured, all canonical: HEAD's shoulderX/Y/Z + elbowRightX locals
+        // and all-direct-no-locals are byte-identical (82.1); Vector3& refs
+        // for all three joints 83.3; PaddedJointPos& for shoulder+elbow+wrist
+        // 83.2; Vector3& wrist only 87.7; wrist stores in x,y,z order 85.7;
+        // `wrist.Set(...)` 86.4; `hand = wrist = rightPos` chain 87.8 but
+        // copies in the wrong order; Vector3 struct copies 75.8.
+        // Residual at 89.5: the image forwards elbow.x and reloads y/z where
+        // we forward z and reload x/y; sx/sy load order; arm-3 word order of
+        // the two 16-byte copies (see below).
+        PaddedJointPos &wrist = data.mJointPositions[kJointWristRight];
+        data.mJointPositions[kJointElbowRight].z = data.mJointPositions[kJointShoulderRight].z;
+        data.mJointPositions[kJointElbowRight].y = data.mJointPositions[kJointShoulderRight].y - 0.3f;
+        data.mJointPositions[kJointElbowRight].x = data.mJointPositions[kJointShoulderRight].x + 0.3f;
+        wrist.z = data.mJointPositions[kJointElbowRight].z;
+        wrist.x = data.mJointPositions[kJointElbowRight].x + 0.3f;
+        wrist.y = data.mJointPositions[kJointElbowRight].y - 0.3f;
         data.mJointPositions[kJointHandRight] = data.mJointPositions[kJointWristRight];
     } else if (ry < -0.5f) {
         data.mJointPositions[kJointHandRight].y = 0.65f;
@@ -325,12 +330,15 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
             // 52/6/10/13 rows).  MSVC normalises the temporaries away and
             // still folds `x + -(rt*0.5f - 0.1f)` to fmsubs+fsubs where the
             // image keeps fnmsubs+fadds, and still loads unk5398 before the
-            // joint field.  Kept for readability, not for score.
+            // joint field.
+            // w7-by: `x + (0.1f - rt * 0.5f)` DOES reproduce the image's
+            // `fnmsubs f0, f13, f11, f0` at 0x8242CF98 (c - a*b is the fnmsubs
+            // idiom; x + -(a*b - c) and x - (a*b - c) both canonicalise to
+            // fmsubs+fsubs).  The unk5398 load order is still the image's.
             PaddedJointPos rightPos;
             rightPos.z = data.mJointPositions[kJointElbowRight].z - 0.5f;
             rightPos.y = data.mJointPositions[kJointElbowRight].y + unk5398;
-            rightPos.x =
-                data.mJointPositions[kJointElbowRight].x + -(rt * 0.5f - 0.1f);
+            rightPos.x = data.mJointPositions[kJointElbowRight].x + (0.1f - rt * 0.5f);
             // RESIDUAL (w7-an, 82.1 canonical): both sides assign handRight
             // from the first materialised `addi rN, r1, 0x50` and wristRight
             // from the second -- same registers, same eight words -- but the

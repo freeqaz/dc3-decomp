@@ -175,10 +175,7 @@ void HamScrollBehavior::Update(float input) {
         } else {
             delay = mNeutralToSlowDownDelay;
         }
-        float dt = TheTaskMgr.DeltaUISeconds();
-        // 8248B484 `fadds f0, f1, f0` puts dt LEFT; measured negative -- spelling it
-        // `mScrollTimeAccum = dt + mScrollTimeAccum` is byte-identical to `+=`.
-        mScrollTimeAccum += dt;
+        mScrollTimeAccum = TheTaskMgr.DeltaUISeconds() + mScrollTimeAccum;
         if ((!mAutoScrollActive && mScrollTimeAccum >= delay) || (mAutoScrollActive && mScrollTimeAccum >= mTickDelay)) {
             if (!mAutoScrollActive) {
                 mFirstTick = true;
@@ -194,11 +191,13 @@ void HamScrollBehavior::Update(float input) {
             }
         }
     } else {
-        // 8248B500 stores 0x1c before 0x1d; we emit 0x1d first whichever order the
-        // source uses (measured both ways, byte-identical).  MSVC picks the order.
-        mScrollTimeAccum = 0.0f;
+        // 8248B500 stores 0x1c before 0x1d.  The two bool stores come out 0x1d
+        // first whenever the float store precedes them (`= 0.0f` first, and
+        // both chained spellings); the bools first and the float LAST is the
+        // order that reproduces 8248B500..8248B508 (w7-by).
         mAutoScrollActive = false;
         mFirstTick = false;
+        mScrollTimeAccum = 0.0f;
     }
 
     // Input normalization
@@ -248,11 +247,9 @@ void HamScrollBehavior::Update(float input) {
                 mTickDelay = delay;
             }
             soundLevel = 0.0f;
-            int state = 1;
-            if (scrollDir != 1) {
-                state = 3;
-            }
-            mSpeedState = state;
+            // Ternary, not `int state = 1; if (..) state = 3;`: 8248B67C puts
+            // the `mr r11, r27` (state = 1) AFTER the cmpwi (w7-by).
+            mSpeedState = (scrollDir == 1) ? 1 : 3;
         } else {
             speed = mFastScrollSpeedScalar * absIntensity + mFastScrollSpeedBase;
             float delay;
@@ -292,55 +289,55 @@ void HamScrollBehavior::Update(float input) {
     mNavList->SetScrollSoundFrame(mSmoother.Level());
 
     // Scroll speed anim
-    // NOTE (w7-ai): residual at 96.3%.  Retail loads mScrollSpeedAnim into the
-    // callee-saved r29 and tests it UNSIGNED (cmplwi cr6,r29,0x0 at
-    // 0x8248B928) where the ObjPtr expression below gives a volatile r11 and a
-    // SIGNED cmpwi.  Spelling it as a named `RndAnimatable *anim` DOES produce
-    // the cmplwi, but MSVC then allocates anim and &mSmoother to the opposite
-    // registers from retail and the resulting r28<->r29 swap plus one extra
-    // insert/delete costs more than the row it buys: 95.8% with the local vs
-    // 96.3% without (measured 2026-09-14).  The two spellings are
-    // indistinguishable at run time -- both branches are `beq` on == 0.
-    // The other residual here is the SetFrame tail: retail materialises the
-    // shift into f1 and the 1.0f into f2 INSIDE each switch arm and tail-merges
-    // two different join points (b 0x4f8 from case 0, b 0x4fc from case 1),
-    // which is the shape of the call being written out in every arm rather
-    // than once after a `float shift` local.
-    if ((mNavList->mScrollSpeedAnim)) {
-        float shift;
+    // w7-by (96.291664 -> 100.0): the w7-ai note below was right about the
+    // shape and stopped one step short.  The named `anim` local gives retail's
+    // unsigned test on the callee-saved r29 (cmplwi cr6, r29, 0x0 at
+    // 0x8248B738; the w7-ai note cited 0x8248B928, a unit-relative offset), and
+    // the r28<->r29 swap it seemed to cost only existed while
+    // a `float shift` local carried the result to ONE SetFrame call after the
+    // switch: with `anim->SetFrame(expr, 1.0f)` written in every arm, MSVC
+    // materialises f1/f2 per arm and cross-jumps into the merged tail at
+    // three different points (0x8248B7F8 / 0x8248B7FC / 0x8248B804), the
+    // swell arms load anim's vtable BEFORE their CalculateSwell call
+    // (`lwz r28, 0x0(r29)` at 0x8248B7A8 and 0x8248B7D8), and both registers land where
+    // retail has them.
+    // NOTE (w7-ai, superseded): Retail loads mScrollSpeedAnim into the
+    // callee-saved r29 and tests it UNSIGNED where the ObjPtr expression gave
+    // a volatile r11 and a SIGNED cmpwi.  A named `RndAnimatable *anim` alone
+    // produced the cmplwi but swapped r28<->r29 against a single call after a
+    // `float shift` local: 95.8% with the local vs 96.3% without.
+    RndAnimatable *anim = mNavList->mScrollSpeedAnim;
+    if (anim) {
         switch (mSpeedState) {
         case 0:
-            shift = -1.0f - mSmoother.Level();
+            anim->SetFrame(-1.0f - mSmoother.Level(), 1.0f);
             break;
         case 1:
-            shift = -1.0f;
+            anim->SetFrame(-1.0f, 1.0f);
             break;
         case 2:
             if (input > 0.5f) {
-                shift = 0.0f;
                 if (!AtBottom() && mNavList->mRibbonMode != HamListRibbon::kRibbonDisengaged) {
-                    shift = mNavList->CalculateSwell(5);
+                    anim->SetFrame(mNavList->CalculateSwell(5), 1.0f);
+                } else {
+                    anim->SetFrame(0.0f, 1.0f);
                 }
             } else {
                 if (mListState->FirstShowing() != 0) {
-                    shift = -mNavList->CalculateSwell(0);
+                    anim->SetFrame(-mNavList->CalculateSwell(0), 1.0f);
                 } else {
-                    shift = 0.0f;
+                    anim->SetFrame(0.0f, 1.0f);
                 }
             }
             break;
         case 3:
-            shift = 1.0f;
+            anim->SetFrame(1.0f, 1.0f);
             break;
         case 4:
-            shift = mSmoother.Level() + 1.0f;
+            anim->SetFrame(mSmoother.Level() + 1.0f, 1.0f);
             break;
-        default:
-            goto skip_anim;
         }
-        (mNavList->mScrollSpeedAnim)->SetFrame(shift, 1.0f);
     }
-skip_anim:
 
     // Scroll progress
     if (mPendingScrollDir != 0) {
@@ -352,8 +349,14 @@ skip_anim:
         if (progress > 1.0f) {
             mScrollProgress = 0.0f;
             if (dir == 2) {
-                int first = mListState->FirstShowing();
-                mListState->SetSelected(first + HamListRibbon::sNumListSelectable - 1, first, true);
+                // FirstShowing() read twice, not through an `int first` local:
+                // 8248B85C `add r11, r5, r11` adds the value in the r5 argument
+                // register; a local puts it right (w7-by).
+                mListState->SetSelected(
+                    mListState->FirstShowing() + HamListRibbon::sNumListSelectable - 1,
+                    mListState->FirstShowing(),
+                    true
+                );
                 mListState->Scroll(1, false);
                 mListState->Poll(0.0f);
             }

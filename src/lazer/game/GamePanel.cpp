@@ -117,39 +117,42 @@ void LoopVizCallback::DrawHashMarks(
     }
 }
 
-// RESIDUAL (w7-am, 93.5 canonical): the whole remaining gap is ONE stack
-// allocator decision, and it is not reachable from this source.
+// w7-by (93.475266 -> 99.99647, 2 residual rows): the w7-am "stack allocator
+// decision" and w7-z's "extra callee-saved FPR" were both downstream of ONE
+// thing -- MSVC's CSE of `loopStartNorm + loopRangeNorm * loopProgress`.
+// The image never CSEs that sum: it emits `fmadds f1, f28, f27, f29` at every
+// use site (8287BC0C, 8287BCCC, 8287BDB8), computes it TWICE inside one call
+// (`fmadds f0` + `fsubs f2, f25, f0` at 8287BC30..8287BC34), and keeps only 12
+// callee-saved FPRs (`__savefpr_20`).  With a named `loopRangeNorm` at every
+// site the product was a common subexpression, MSVC hoisted product and sum
+// into f27/f28 before the branch, contraction to fmadds was impossible, and
+// the extra live FPR pushed the two 16-byte Color staging temps onto one
+// slot (frame 0x190 vs 0x1a0).
 //
-//   * Frame: target 0x1a0, ours 0x190.  Every local from 0xa0 up sits 0x10
-//     lower in our build, which is what ~100 of the 138 `diff_arg` rows are
-//     (`off:-16` on `stfs`/`addi`).  The slot SET is otherwise identical
-//     (0x50..0x9c used byte-for-byte the same on both sides).
-//   * The target keeps TWO 16-byte by-value `Hmx::Color` staging temps: 0x80
-//     for the ones loaded into (r5,r6)/(r6,r7) by DrawBar/DrawLine, and 0x90
-//     for the ones loaded into (r7,r8) by DrawText (82... `addi r28, r31,
-//     0x90`).  We coalesce both onto 0x80 and reuse 0x80 for the `fctiwz`
-//     double staging as well (index 308: target `stfd f0, 0x80(r31)`, ours
-//     `stfd f0, 0x60(r31)`, folded onto the `int` slot).
-//   * Downstream of that we burn one extra callee-saved FPR (`__savefpr_19`
-//     vs the image's `__savefpr_20`) because MSVC CSE'd
-//     `loopStartNorm + loopRangeNorm * loopProgress` into f27 and held it
-//     across two calls (`fmuls f28, f26, f24` + `fadds f27, f28, f29`),
-//     where the image re-derives it at each of the three use sites with a
-//     single `fmadds f1, f28, f27, f29`.  Contraction to fmadds only fires
-//     when the multiply has one use, so the CSE is what suppresses it --
-//     but the multiply is shared because line "DrawBar(loopStartNorm,
-//     loopRangeNorm * loopProgress, ...)" legitimately needs it, exactly as
-//     the image does.  Both sides compile the same expressions.
+// MSVC's CSE is ONE PASS over the tree: `(loopEndNorm - loopStartNorm)` is
+// unified into the single `fsubs f28, f25, f29` at 8287BB70, but a product
+// whose operand is that re-derived sub is NOT unified with a product of the
+// named local.  So the standalone width at the second DrawBar and every
+// loop-position sum spell the range as `(loopEndNorm - loopStartNorm)`; the
+// three sites that pass the range itself (`fmr f2, f28` at 8287BBAC,
+// `fmuls f2, f28, f21` at 8287BC28, `fmuls f2, f0, f28` at 8287BCA0) keep the
+// named local.  Measured: swapping only the standalone product's operand
+// order is byte-identical (MSVC canonicalises commutative operands before
+// CSE), and removing the standalone product entirely (diagnostic) also
+// stops the CSE -- the product is the trigger, not the sums.
 //
-// NEGATIVE RESULT (w7-am, 2026-09-14): swapping the commutative operand order
-// to `loopStartNorm + loopProgress * loopRangeNorm` at all five sites, to try
-// to break that CSE, is byte-identical -- 93.5 canonical, 138/10/16/14 rows
-// before and after.  MSVC canonicalises the multiply before CSE.
+// The loop-end label position is `loopStartNorm + (loopEndNorm -
+// loopStartNorm) * 1.0f`, which MSVC folds to `fadds f1, f28, f29` at
+// 8287BD70 -- w7-z's observation, reproducible once the FPR cascade is gone.
+// The endColor sites read mLoopStartChangeTimer (`lfs f0, 0x54(r30)` at
+// 8287BD2C and 8287BFDC), so the Start/Start/Start/End timer reads on the
+// four label colours are the image's, not a transcription slip.
 //
-// The five `MakeString` rows (indices 278/298/317/540/566) are ICF folds:
-// the image's `MakeString<_D3DFORMAT>` / `MakeString<int, SaveLoadManager::
-// State>` are the same machine code as our `MakeString<int>` /
-// `MakeString<int,int>` and the linker merged them.
+// Residual: `Hmx::Color(1,1,1)` for the meter-2 DrawLine stores alpha (0x9c)
+// before blue (0x98) at 8287BF4C/8287BF54; the 4-arg ctor is inert.  The five
+// `MakeString` rows are ICF folds (`MakeString<_D3DFORMAT>` / `MakeString<int,
+// SaveLoadManager::State>` are the same code as our `MakeString<int>` /
+// `MakeString<int,int>`).
 float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     if (!TheMaster || !TheMaster->GetAudio() || !TheMaster->GetAudio()->GetSongStream())
         return y;
@@ -189,18 +192,18 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     mDebugMeter1.Draw();
     float loopRangeNorm = loopEndNorm - loopStartNorm;
     mDebugMeter1.DrawBar(loopStartNorm, loopRangeNorm, Hmx::Color(0.0f, 0.0f, 0.8f));
-    mDebugMeter1.DrawBar(loopStartNorm, loopRangeNorm * loopProgress, Hmx::Color(0.0f, 0.8f, 0.0f));
+    mDebugMeter1.DrawBar(loopStartNorm, (loopEndNorm - loopStartNorm) * loopProgress, Hmx::Color(0.0f, 0.8f, 0.0f));
 
     if (!stream->IsPastStreamJumpPointOfNoReturn()) {
         mDebugMeter1.DrawBar(
-            loopStartNorm + loopRangeNorm * loopProgress,
+            loopStartNorm + (loopEndNorm - loopStartNorm) * loopProgress,
             loopRangeNorm * bufferAheadProgress,
             Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f
         );
     } else {
         mDebugMeter1.DrawBar(
-            loopStartNorm + loopRangeNorm * loopProgress,
-            loopEndNorm - (loopStartNorm + loopRangeNorm * loopProgress),
+            loopStartNorm + (loopEndNorm - loopStartNorm) * loopProgress,
+            loopEndNorm - (loopStartNorm + (loopEndNorm - loopStartNorm) * loopProgress),
             Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f
         );
         mDebugMeter1.DrawBar(
@@ -211,7 +214,7 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     }
 
     mDebugMeter1.DrawLine(
-        loopStartNorm + loopRangeNorm * loopProgress,
+        loopStartNorm + (loopEndNorm - loopStartNorm) * loopProgress,
         Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f
     );
 
@@ -219,17 +222,18 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     mDebugMeter1.DrawText(MakeString("%d", loopStart), loopStartNorm, 0.0f, startColor);
 
     Hmx::Color endColor = mLoopStartChangeTimer > 0.0f ? Hmx::Color(1.0f, 1.0f, 0.0f) : Hmx::Color(1.0f, 1.0f, 1.0f);
-    // NOTE (w7-z): the image computes this label position as `fadds f1, f28, f29`,
-    // i.e. loopStartNorm + loopRangeNorm, not loopEndNorm (f25, which is live in a
-    // callee-saved register right there and would only need `fmr f1, f25`).
-    // Spelling it that way here does NOT reproduce the row -- it perturbs FPR
-    // allocation instead (93.48 -> 92.60, +4 instructions), so it is left alone
-    // until the one-extra-callee-saved-FPR cascade below is understood.
-    mDebugMeter1.DrawText(MakeString("%d", loopEnd), loopEndNorm, 0.0f, endColor);
+    // `fadds f1, f28, f29` at 8287BD70: the image adds the range back onto the
+    // start rather than passing loopEndNorm (see the note above the function).
+    mDebugMeter1.DrawText(
+        MakeString("%d", loopEnd),
+        loopStartNorm + (loopEndNorm - loopStartNorm) * 1.0f,
+        0.0f,
+        endColor
+    );
 
     mDebugMeter1.DrawText(
         MakeString("%d", (int)currentBeat),
-        loopStartNorm + loopRangeNorm * loopProgress, 1.0f,
+        loopStartNorm + (loopEndNorm - loopStartNorm) * loopProgress, 1.0f,
         Hmx::Color(1.0f, 1.0f, 1.0f)
     );
 

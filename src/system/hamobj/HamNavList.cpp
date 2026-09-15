@@ -1722,8 +1722,8 @@ void HamNavList::LinkRibbonDrawState(
     std::vector<HamListRibbonDrawState> &ribbonStates,
     UIListWidgetDrawState &widgetState
 ) {
-auto& _ref0 = mListState;
 #ifdef HX_NATIVE
+    auto &_ref0 = mListState;
     // LP64-safe version: use proper struct access instead of raw pointer arithmetic
     int widgetElemCount = (int)widgetState.mElements.size();
     if (widgetElemCount != (int)ribbonStates.size()) {
@@ -1776,20 +1776,47 @@ auto& _ref0 = mListState;
     }
 #else
     // ILP32 (Xbox 360) version
+    // w7-by (85.72059 -> 100.0, 5 residual rows, all the r10/r11 pair on the
+    // 8244E1D0..8244E1E0 mElemDrawState store -- volatile scheduling; a named
+    // `elemAddr` local is inert).  Four levers, each reproducing a listing site:
+    //  - `resize(n, HamListRibbonDrawState())`, not a named `defaultState`:
+    //    8244E0C8 `mr r5, r3` takes the ctor's return, a named local re-derives
+    //    `addi r5, r1, 0x60`.
+    //  - `mListState.` read directly, not through a function-scope reference:
+    //    8244E0E4 `addi r24, r27, 0x70` sits AFTER the `ble` at 8244E0E0, and
+    //    8244E154 loads mFirstShowing as `lwz r26, 0xa0(r27)` off `this`; a
+    //    hoisted `auto &` binds the address before the resize and reads it as
+    //    0x30(r24).
+    //  - if/else with the mActive store in BOTH arms, not a ternary: the image
+    //    has two `bctrl` IsHeader sites (8244E174, 8244E198), each followed by
+    //    its own `add r11, r31, rN` before the shared `stb r3, 0x24(r11)` at
+    //    8244E1A0; the ternary merges them into one bctrl.
+    //  - ONE `mElementState = kUIListWidgetActive` store site (8244E278) with the
+    //    two rejecting tests written as `continue`: two store sites are two zero
+    //    uses inside the loop, and MSVC then hoists the constant into a callee-
+    //    saved register (`li r20,0` + `mr r28/r31/r23, r20`, `mr r11, r20`,
+    //    `stw r20`) and saves r16; the image rematerialises `li r28/r31/r23, 0`
+    //    at 8244E0D8/8244E0EC/8244E0F0, `li r11, 0` at 8244E25C and `li r10, 0`
+    //    at 8244E26C, saving r17.  Inert: signed `widgetElemCount`; inlining the
+    //    controller-mode test drops the bool diamond the image has at
+    //    8244E254..8244E260 (91.7).
     unsigned int widgetElemCount = widgetState.mElements.size();
     if (widgetElemCount != ribbonStates.size()) {
-        HamListRibbonDrawState defaultState;
-        ribbonStates.resize(widgetElemCount, defaultState);
+        ribbonStates.resize(widgetElemCount, HamListRibbonDrawState());
     }
     for (int i = 0; i < (int)widgetElemCount; i++) {
-        ribbonStates[i].mSelected = (_ref0.SelectedDisplay() == i);
+        ribbonStates[i].mSelected = (i == mListState.SelectedDisplay());
 
-        int numShowing = _ref0.NumShowing();
+        int numShowing = mListState.NumShowing();
         bool scrollable = mListRibbonResource->IsScrollable(numShowing);
 
-                ribbonStates[i].mActive = scrollable ? _ref0.Provider()->IsHeader(
-                _ref0.FirstShowing() + i - _ref0.MinDisplay()
-            ) : _ref0.Provider()->IsHeader(i);
+        if (scrollable) {
+            ribbonStates[i].mActive = mListState.Provider()->IsHeader(
+                mListState.FirstShowing() + i - mListState.MinDisplay()
+            );
+        } else {
+            ribbonStates[i].mActive = mListState.Provider()->IsHeader(i);
+        }
 
         ribbonStates[i].mBigScale = (float)IsElementBig(i);
         ribbonStates[i].mElemDrawState = (unsigned int)&widgetState.mElements[i];
@@ -1800,17 +1827,16 @@ auto& _ref0 = mListState;
 
         elemPtr = (UIListElementDrawState *)ribbonStates[i].mElemDrawState;
         if (elemPtr->mElementState == kUIListWidgetHighlight) {
-            if (mListRibbonResource->TestEntering()
-                || mRibbonMode == HamListRibbon::kRibbonDisengaged) {
-                elemPtr = (UIListElementDrawState *)ribbonStates[i].mElemDrawState;
-                elemPtr->mElementState = kUIListWidgetActive;
-            } else if (TheUI->FocusComponent() != this) {
+            if (!mListRibbonResource->TestEntering()
+                && mRibbonMode != HamListRibbon::kRibbonDisengaged) {
+                if (TheUI->FocusComponent() == this)
+                    continue;
                 bool controllerMode = TheGestureMgr && TheGestureMgr->InControllerMode();
-                if (controllerMode) {
-                    elemPtr = (UIListElementDrawState *)ribbonStates[i].mElemDrawState;
-                    elemPtr->mElementState = kUIListWidgetActive;
-                }
+                if (!controllerMode)
+                    continue;
             }
+            elemPtr = (UIListElementDrawState *)ribbonStates[i].mElemDrawState;
+            elemPtr->mElementState = kUIListWidgetActive;
         }
     }
 #endif
