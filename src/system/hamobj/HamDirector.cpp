@@ -3425,6 +3425,15 @@ void HamDirector::Poll() {
                         // (3 rows).  Refuted: swapping the two terms, and
                         // binding the idx product to its own local -- both
                         // byte-inert.
+                        // RE-CONFIRMED (w7-bp, at 98.5): doing BOTH at once --
+                        // `float idxTerm = (float)backupIdx * sBackupDriftFreq;`
+                        // as its own statement AND the frame product written
+                        // first -- is also byte-inert, same 55 rows.  Statement
+                        // splitting, which is what broke the analogous floor in
+                        // GetClipStartAndEndBeats, does not reach this one:
+                        // there the split moved work across a CALL boundary,
+                        // here both products are call-free and MSVC canonicalises
+                        // the fmadds operand choice regardless of source shape.
                         float noise = RndWind::GetWhiteNoise(
                             (float)backupIdx * sBackupDriftFreq
                             + songAnim->GetFrame() * sBackupDriftDt
@@ -3499,6 +3508,17 @@ void HamDirector::Poll() {
             mVenue->Poll();
         }
         if (mWorldPostProc) {
+            // RESIDUAL (w7-bp, Poll is 98.25 -> 98.5 canonical / 97.9 raw,
+            // 1428 B, 360/360 instructions).  One cluster left that is not
+            // already refuted above: target indices 229-232, where our build
+            // emits an extra `mr r28, r25` and forms `addi r27, "force"@l`
+            // one row earlier than the image.  Both sides zero overlayA and
+            // overlayB at index 16 (`li r28, 0x0` there, `li r25, 0x0` here);
+            // the image then keeps that null in r28 for the rest of the
+            // function while we hold it in r25 and have to copy it across.
+            // That is a consequence of the r25 <-> r28 permutation (18 of the
+            // 40 register rows), not a separate defect, and canonical forgives
+            // the permutation itself -- only the extra `mr` is charged.
             float blend = 1.0f;
             const char *overlayName;
             RndPostProc *overlayA = nullptr;
@@ -3523,6 +3543,16 @@ void HamDirector::Poll() {
                     mWorldPostProc->Copy(mPostProcInterpA, Hmx::Object::kCopyDeep);
                     mActivePostProc.CopyRef(mPostProcInterpA);
                     overlayName = "song authoring - 2 equiv";
+                    // Redundant by value -- `blend` is still 1.0f here -- but
+                    // the image EMITS it: `fmr f30, f31` at target index 278,
+                    // between the CopyRef and the `addi r30, "song authoring -
+                    // 2 equiv"`, in addition to the shared `fmr f30, f31` at
+                    // index 234.  The sibling arm below writes
+                    // mPostProcInterpBlend, so without this assignment the two
+                    // arms share one initialisation and MSVC emits a single
+                    // `fmr`.  w7-bp: 98.25 -> 98.5 canonical.  Do not delete it
+                    // as dead -- it is the same cross-jump tell as FileLocalize.
+                    blend = 1.0f;
                 } else {
                     mWorldPostProc->Interp(mPostProcInterpA, mPostProcInterpB, mPostProcInterpBlend);
                     mActivePostProc.CopyRef(mPostProcInterpB);
