@@ -81,6 +81,16 @@ void CharForeTwist::Poll() {
     // longer, the obvious way to buy a fourth long-lived FPR) costs 91.4 -> 90.6
     // and adds a row; moving `newbias` above the whole block is exactly inert
     // (same 52 rows, same registers).
+    // NEGATIVE RESULT (w7-bl): hand-expanding the block the way RB3's matching
+    // source does -- nine named component locals declared in the image's own
+    // load order (m.y.z, m.z.z, m.y.x, m.y.y, m.z.x, m.z.y, m.x.y, m.x.z,
+    // m.x.x), then `pyz*hzz + pyx*hzx + pyy*hzy` and the three cross terms
+    // written with the image's operand order -- costs 91.4 -> 83.7.  It does
+    // cut the register swaps from 29 to 9, but MSVC then rebuilds the whole
+    // schedule around the explicit temporaries: 3 delete / 6 insert becomes
+    // 11 delete / 7 insert.  The Dot()/Cross() calls already produce the
+    // image's association and multiply multiset; only the colouring differs,
+    // and naming the intermediates is not the way to reach it.
     float clamped = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.y, handxfm.m.z));
     Vector3 v98;
     Cross(parentxfm.m.y, handxfm.m.z, v98);
