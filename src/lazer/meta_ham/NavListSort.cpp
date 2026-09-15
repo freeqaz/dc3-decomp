@@ -127,6 +127,42 @@ void NavListSort::DeleteTree() {
 // both sides pass the SAME ??_C@ string data (NavListSort.cpp [16] and the two
 // condition strings [0x22]/[0x20]); only the instantiation name differs, and
 // MakeString's body is identical for every array-size triple.
+//
+// LEVER (w7-br, 89.8 -> 93.6 canonical, 55 -> 18 rows, every stack offset now
+// equal).  The slot map was readable from the image once the else arm was
+// looked at as a whole: 0x54 is written by `addi r3, r1, 0x54` (Sym(1), at
+// 0x82977200) and then by `stw r6, 0x54(r1)` at 0x829772C0 and 0x82977314 --
+// the Sym(2)/Sym(3) results come back in the 0x64 temp (`addi r3, r1, 0x64`,
+// then `lwz r6, 0x0(r3)`) and are COPIED into 0x54.  That is one Symbol
+// variable initialised from Sym(1) and ASSIGNED from Sym(2) and Sym(3), so
+// `token1` is reused and `it` with it (all three list results land at 0x5c).
+// The other half is that the image keeps two DIFFERENT slots for the two
+// Sym(0) tokens, 0x58 in the aSize==1 arm and 0x68 for the multi-token path:
+// with `if (aSize == 1) { ... } else { ... }` MSVC colours the two sibling
+// block-scoped tokens into one slot (93.4, frame 0xb0 vs 0xc0); with the
+// multi-token path written at FUNCTION scope after the aSize==1 early return,
+// the outer `token` cannot share with the nested one and the frame and every
+// slot match (93.6).  w7-ai's "collapse all four" (89.4) collapsed the
+// Sym(0) token too, which the image does not do.
+// NEGATIVES (w7-br): inlining `NodeFind(a->Sym(0))` in the aSize==1 arm only,
+// 91.5 (the temp comes back through `mr r10, r3; lwz r6, 0(r10)`, the image
+// loads 0x58 directly -- it is a named local); `if (aSize == 0) return false;
+// else if (aSize == 1)`, byte-inert; the multi-token path written FIRST under
+// `if (aSize != 1)` with the single-token path last, 78.2 (whole layout
+// inverts).
+// RESIDUAL (w7-br, 18 rows), all block placement of the two shared tails:
+// the image keeps the aSize==0 `return false` INLINE as the fall-through of
+// `bne .L_82977108` (0x829770FC; `li r3, 0` / `b .L_82977160` at
+// 0x82977100) and every not-found path jumps back up to it, while the ONE
+// epilogue at 0x82977160 belongs to the aSize==1 success arm (`stw r11,
+// 0x50(r28)` at 0x82977158 falls into it); we invert to `beq`, sink the
+// return-false block to the end and hang the shared epilogue off it, so the
+// aSize==1 success is `li r3, 1; stw; b` instead of `stw; li r3, 1;
+// epilogue`.  The `mr r4, r30` at 0x82977110 the image hoists above the
+// aSize==1 test is a copy of an argument register that still holds `a`; we
+// use r4 as-is.  Both are MSVC's tail-merge/canonical-return choice, not a
+// spelling; the ggIt tail's `b .L_8297714C` (0x82977328) into the aSize==1
+// compare is reproduced.
 bool NavListSort::SetHighlightID(DataArray *a) {
     // Retail clears mHighlightNode BEFORE reading a->Size(): the
     // stw r10,0x50(r3) sits between the load of the old value and the
@@ -147,50 +183,46 @@ bool NavListSort::SetHighlightID(DataArray *a) {
             mHighlightNode = *it;
             return true;
         }
-    } else {
-        Symbol token = a->Sym(0);
-        auto si = std::find_if(mShortcutNodes.begin(), mShortcutNodes.end(), NodeFind(token));
-        if (si == mShortcutNodes.end()) {
-            return false;
-        }
-        MILO_ASSERT(kNodeShortcut == (*si)->GetType(), 0x44);
-        std::list<NavListSortNode *> &children = (*si)->Children();
-        Symbol token1 = a->Sym(1);
-        auto it = std::find_if(children.begin(), children.end(), NodeFind(token1));
-        if (it == children.end()) {
-            return false;
-        }
-        MILO_ASSERT(kNodeHeader == (*it)->GetType(), 0x4E);
-        if (aSize == 2) {
-            mHighlightNode = *it;
-            return true;
-        }
-        std::list<NavListSortNode *> &grandChildren = (*it)->Children();
-        Symbol token2 = a->Sym(2);
-        auto gIt =
-            std::find_if(grandChildren.begin(), grandChildren.end(), NodeFind(token2));
-        if (gIt == grandChildren.end()) {
-            return false;
-        }
-        if (aSize == 3) {
-            mHighlightNode = *gIt;
-            return true;
-        }
-        std::list<NavListSortNode *> &greatGrandChildren = (*gIt)->Children();
-        Symbol token3 = a->Sym(3);
-        auto ggIt = std::find_if(
-            greatGrandChildren.begin(), greatGrandChildren.end(), NodeFind(token3)
-        );
-        // The target dereferences the iterator from THIS search, not the
-        // grandchild one: its tail is shared with the aSize==1 arm
-        // (`lwz r11, 0x8(found); stw r11, 0x50(this)`), and the value it
-        // loads is the result slot the last __find_if wrote.
-        if (ggIt != greatGrandChildren.end()) {
-            mHighlightNode = *ggIt;
-            return true;
-        }
+    }
+    Symbol token = a->Sym(0);
+    auto si = std::find_if(mShortcutNodes.begin(), mShortcutNodes.end(), NodeFind(token));
+    if (si == mShortcutNodes.end()) {
         return false;
     }
+    MILO_ASSERT(kNodeShortcut == (*si)->GetType(), 0x44);
+    std::list<NavListSortNode *> &children = (*si)->Children();
+    Symbol token1 = a->Sym(1);
+    auto it = std::find_if(children.begin(), children.end(), NodeFind(token1));
+    if (it == children.end()) {
+        return false;
+    }
+    MILO_ASSERT(kNodeHeader == (*it)->GetType(), 0x4E);
+    if (aSize == 2) {
+        mHighlightNode = *it;
+        return true;
+    }
+    std::list<NavListSortNode *> &grandChildren = (*it)->Children();
+    token1 = a->Sym(2);
+    it = std::find_if(grandChildren.begin(), grandChildren.end(), NodeFind(token1));
+    if (it == grandChildren.end()) {
+        return false;
+    }
+    if (aSize == 3) {
+        mHighlightNode = *it;
+        return true;
+    }
+    std::list<NavListSortNode *> &greatGrandChildren = (*it)->Children();
+    token1 = a->Sym(3);
+    it = std::find_if(greatGrandChildren.begin(), greatGrandChildren.end(), NodeFind(token1));
+    // The target dereferences the iterator from THIS search, not the
+    // grandchild one: its tail is shared with the aSize==1 arm
+    // (`lwz r11, 0x8(found); stw r11, 0x50(this)`), and the value it
+    // loads is the result slot the last __find_if wrote.
+    if (it != greatGrandChildren.end()) {
+        mHighlightNode = *it;
+        return true;
+    }
+    return false;
 }
 
 int NavListSort::GetCurrentShortcut() {
