@@ -23,38 +23,38 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
     const TrackedJoint &rightShoulder = skel.ShoulderJoint(kSkeletonRight);
     const TrackedJoint &leftShoulder = skel.ShoulderJoint(kSkeletonLeft);
 
-    float dx = leftShoulder.mJointPos[0].x - rightShoulder.mJointPos[0].x;
-    float dy = leftShoulder.mJointPos[0].y - rightShoulder.mJointPos[0].y;
-    float dz = leftShoulder.mJointPos[0].z - rightShoulder.mJointPos[0].z;
+    Vector3 shoulderVec;
+    Subtract(leftShoulder.mJointPos[0], rightShoulder.mJointPos[0], shoulderVec);
 
     bool _result = false;
+    // The squared-length test is spelled z + x + y on purpose: for a three-term
+    // sum of products A + B + C this compiler emits `fmuls B; fmadds C; fmadds A`
+    // (measured on four permutations, w7-bv), and the image at 0x82DFDED8 is
+    // `fmuls f30,f30` (x) / `fmadds f28` (y) / `fmadds f29` (z).  The natural
+    // `LengthSquared(shoulderVec)` and `x*x + y*y + z*z` are 100.0 canonical
+    // but leave a 2-row f28/f30 swap; this order is byte-identical (117/117).
     bool valid = skel.ShoulderJoint(kSkeletonLeft).mJointConf != kConfidenceNotTracked
         && skel.ShoulderJoint(kSkeletonRight).mJointConf != kConfidenceNotTracked
-        && dx * dx + dy * dy + dz * dz > 0.0f;
+        && shoulderVec.z * shoulderVec.z + shoulderVec.x * shoulderVec.x
+                + shoulderVec.y * shoulderVec.y
+            > 0.0f;
 
     if (valid) {
-        // Cross(yAxis, shoulderVec) = body forward normal in XZ plane
-        Vector3 bodyNormal(dz - dy * 0.0f, dx * 0.0f - dz * 0.0f, dy * 0.0f - dx);
+        Vector3 yAxis(0.0f, 1.0f, 0.0f);
+        // Cross(yAxis, shoulderVec) = body forward normal in XZ plane.  The
+        // 1.0f products fold away and the 0.0f ones survive as `fmuls .., f31`.
+        Vector3 bodyNormal;
+        Cross(yAxis, shoulderVec, bodyNormal);
         Normalize(bodyNormal, bodyNormal);
         unk4.Smooth(bodyNormal, dt, true);
 
-        // Compute body "side" vector as Cross(yAxis, smoothedBodyNormal)
-        {
-            // NEGATIVE RESULT (w7-ap, 2026-09-14, 91.44 canonical): the image
-            // keeps Value()'s sret pointer (`mr r11, r3` at 0x82DFDF54) and
-            // reads the three components straight off it (`lfs f0, 0x8(r11)`
-            // / `0x4(r11)` / `0x0(r11)` at 0x82DFDF60-70), and it materialises
-            // &unk40 into a callee-saved GPR BEFORE the call
-            // (`addi r31, r30, 0x40` at 0x82DFDF4C) where we do it after.
-            // Binding the result as `const Vector3 &smoothed = unk4.Value();`
-            // -- the spelling CalcInPose below documents -- is BYTE-IDENTICAL:
-            // MSVC reads the same sret slot through r1 rather than keeping r3,
-            // so the six-row cluster at idx 69-83 is not reachable this way.
-            Vector3 smoothed = unk4.Value();
-            unk40.y = smoothed.x * 0.0f - smoothed.z * 0.0f;
-            unk40.z = smoothed.y * 0.0f - smoothed.x;
-            unk40.x = smoothed.z - smoothed.y * 0.0f;
-        }
+        // Body "side" vector = Cross(yAxis, smoothedBodyNormal), with Value()'s
+        // result consumed as an UNNAMED temporary argument: that is what makes
+        // MSVC read the components through the returned sret pointer
+        // (`mr r11, r3` at 0x82DFDF54, `lfs 0x8/0x4/0x0(r11)`) and hoist
+        // &unk40 into r31 before the call.  A named `Vector3` or a named
+        // `const Vector3 &` both read the slot through r1 instead (w7-ap).
+        Cross(yAxis, unk4.Value(), unk40);
         Normalize(unk40, unk40);
 
         // Check body orientation angle: project bodyNormal to XZ plane and get angle

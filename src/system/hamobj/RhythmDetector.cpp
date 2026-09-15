@@ -871,18 +871,39 @@ RhythmDetector::GetRecord(float windowStart, float windowEnd, bool finalize, Sym
     return mRecordData;
 }
 
-// NOTE (w7-ai): residual at 94.4%.  Retail's frame is 0x140 and saves r18-r31
-// (bl __savegprlr_18); ours is 0x130 and saves r19-r31.  The extra register is
-// a SECOND pointer to mCurrentFrame.mJointVelocities, derived as
-// `addi r21,r29,0x4` from a base register holding &mCurrentFrame, while the
-// empty() test keeps its own independent this+0x20.  Binding `Frame &cur =
-// mCurrentFrame;` does reproduce all of that -- frame size, save count and the
-// derived addi all match -- but MSVC then schedules the `addi rN,this,0x1c`
-// ABOVE the loop-entry beq where retail keeps it in the preheader, and that one
-// insert/delete pair costs more on the canonical ruler than the whole structural
-// gain is worth: 93.4% with the reference vs 94.4% without, measured both with
-// the reference before the loop and with it inside the body (the latter is
-// coalesced away again and reads 93.7%).  Three placements measured 2026-09-14.
+// w7-bv: 94.37 -> 100.0 canonical (99.66 raw, one commutative add row).  The
+// w7-ai note above this function blamed the image's extra callee-saved register
+// (bl __savegprlr_18, frame 0x140, `addi r21, r29, 0x4` at 0x824D5858) on a
+// `Frame &cur = mCurrentFrame;` reference, which measured 93.4 / 93.7.  The
+// second pointer is not a reference: it is the STRUCT assignment
+// `mCurrentFrame = *it;` (Frame::operator= inlined: float copy + the
+// vector<Vector3>::operator= call at 0x824D5948), which addresses both fields
+// off the two Frame bases (`addi r3, r29, 0x4` / `addi r4, r30, 0x4`) instead of
+// deriving them from this+0x20 and the node as two member assignments do.
+// `mCurrentFrame = localHistory.back();` is the same lever for the tail
+// (0x824D59F4-0x824D5A0C).  That alone was 94.37 -> 95.2; the rest:
+//   - stlport vector::erase(first, last) inlines `if (first == last) return`,
+//     so the old `begin() != trimEnd + 1` guard was redundant and added a dead
+//     home store of begin(); dropped.
+//   - `hadBlendedFrames = true` at the END of the inner loop body is LICM'd
+//     LAST into the preheader (`li r18, 1` at 0x824D58D8, after the other two
+//     invariants); before the loop or at the body start it is emitted first,
+//     after the loop it stays after the loop.
+//   - naming the trim bound (`float threshold = ...`) computes the fsubs
+//     before the loop-entry beq (0x824D5BB8 / 0x824D5BBC) and reorders the
+//     end() home stores to match; inline in the condition it lands after.
+//   - the second FindArray's Symbol is passed as an explicit copy,
+//     `Symbol(analyzePeriodCount)`: that is the only spelling that materialises
+//     the argument temporary in memory (`stw r4, 0x80(r31)` at 0x824D5AFC),
+//     and the temp slot it claims is what also moves the AnalyzeData
+//     stack-argument stores into the image's order (0x824D5C3C-0x824D5C60):
+//     both clusters (8 rows, 97.7 -> 100.0) went together.  Inert for that
+//     store: `->Int(1)` on the FindArray result (full-expression lifetime),
+//     nullptr vs 0 for the pointer args.
+//   - the windowSize product wants NAMED float operands, declared periods
+//     then beats: that yields the image's `fmuls f13, f12, f13` at
+//     0x824D5B84; every unnamed permutation of the three factors gives
+//     f13, f12.
 void RhythmDetector::ProcessFrames() {
     std::list<Frame> localHistory;
     localHistory.swap(mFrameHistory);
@@ -907,8 +928,16 @@ void RhythmDetector::ProcessFrames() {
             int tickDiff = (curTick - prevTick) % 40;
 
             if (!mCurrentFrame.mJointVelocities.empty() && tickDiff > 0) {
-                hadBlendedFrames = true;
                 for (int j = 0; j < tickDiff; j++) {
+                    // RESIDUAL (w7-bv): 0x824D58DC is `add r11, r28(j), r27`
+                    // and we emit `add r11, r27, r28` -- one commutative
+                    // register row, 100.0 canonical / 99.66 raw.  Inert:
+                    // prevTick + j + 1, j + 1 + prevTick, j + (prevTick + 1),
+                    // an in-body `int tick = prevTick + 1` (same row), and a
+                    // named `nextTick` ABOVE the loop, which does flip the
+                    // operands but is no longer LICM'd: its addi lands before
+                    // j's `mr r28, r19` instead of after it and drags eight
+                    // registers with it (96.3 raw).
                     float beatTime = (float)(prevTick + j + 1) * 0.1f;
                     // push_back takes the callee's sret buffer straight
                     // through (mr r4,r3 at 0x82489D48); a named `blended`
@@ -916,11 +945,11 @@ void RhythmDetector::ProcessFrames() {
                     mAnalysisFrames2.push_back(
                         BlendFrameDataToBeat(mCurrentFrame, *it, beatTime)
                     );
+                    hadBlendedFrames = true;
                 }
             }
 
-            mCurrentFrame.mTime = it->mTime;
-            mCurrentFrame.mJointVelocities = it->mJointVelocities;
+            mCurrentFrame = *it;
         }
 
         // Trim local list to keep only the last entry
@@ -941,8 +970,7 @@ void RhythmDetector::ProcessFrames() {
             localHistory.erase(--localHistory.end());
         }
 
-        mCurrentFrame.mTime = localHistory.back().mTime;
-        mCurrentFrame.mJointVelocities = localHistory.back().mJointVelocities;
+        mCurrentFrame = localHistory.back();
     }
 
     if (!mAnalysisFrames1.empty()) {
@@ -954,31 +982,35 @@ void RhythmDetector::ProcessFrames() {
             static Symbol analyzeBeatFrequency("analyze_beat_frequency");
             DataArray *cfg = typeDef->FindArray(analyzeBeatFrequency, true);
             static Symbol analyzePeriodCount("analyze_period_count");
-            DataArray *periodCfg = typeDef->FindArray(analyzePeriodCount, true);
             // Every DataNode::Int here is passed its OWNING array as the
-            // evaluation source -- mr r4,r28 (periodCfg) at 0x8248A0C0 and
-            // mr r4,r30 (cfg) at 0x8248A0DC / 0x8248A0F4 -- not NULL.  The
+            // evaluation source -- mr r4,r28 (periodCfg) at 0x824D5B10 and
+            // mr r4,r30 (cfg) at 0x824D5B2C / 0x824D5B48 -- not NULL.  The
             // source argument is what lets Int() resolve a $variable or a
             // property node against the array it came from; with NULL those
-            // node kinds evaluate wrongly.
-            int periodCount = periodCfg->Node(1).Int(periodCfg);
-            cfg->Node(cfg->Size() - 1).Int(cfg);
-            int beatFreq = cfg->Node(cfg->Size() - 1).Int(cfg);
-            windowSize = (float)beatFreq * (float)(periodCount - 1) * 2.0f;
+            // node kinds evaluate wrongly.  DataArray::Int(int) is exactly
+            // Node(i).Int(this) inlined.  The explicit Symbol copy is the
+            // argument temporary the image homes at 0x80(r31) (0x824D5AFC);
+            // see the note above the function.
+            int periodCount = typeDef->FindArray(Symbol(analyzePeriodCount), true)->Int(1);
+            cfg->Int(cfg->Size() - 1);
+            int beatFreq = cfg->Int(cfg->Size() - 1);
+            float periods = (float)(periodCount - 1);
+            float beats = (float)beatFreq;
+            windowSize = beats * periods * 2.0f;
         } else {
             windowSize = 0.0f;
         }
 
         // Trim old frames outside the analysis window
         std::vector<Frame>::iterator trimEnd = mAnalysisFrames1.end();
-        float lastFrameTime = (mAnalysisFrames1.end() - 1)->mTime;
+        float threshold = (mAnalysisFrames1.end() - 1)->mTime - windowSize;
         for (std::vector<Frame>::iterator it = mAnalysisFrames1.begin(); it != mAnalysisFrames1.end(); ++it) {
-            if (it->mTime >= lastFrameTime - windowSize) {
+            if (it->mTime >= threshold) {
                 break;
             }
             trimEnd = it;
         }
-        if (trimEnd != mAnalysisFrames1.end() && mAnalysisFrames1.begin() != trimEnd + 1) {
+        if (trimEnd != mAnalysisFrames1.end()) {
             mAnalysisFrames1.erase(mAnalysisFrames1.begin(), trimEnd + 1);
         }
 

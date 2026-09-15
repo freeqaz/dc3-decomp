@@ -582,6 +582,24 @@ void GestureMgr::DrawSkeletonKinectData() {
                     // byte-identical.  The rest is the constant-pool lis
                     // shuffle, one register wide, downstream of nothing we can
                     // name from source.
+                    // NEGATIVE RESULT (w7-bv, 2026-09-15, still 95.9 canonical /
+                    // 46 rows): the image loads the vtable THROUGH the adjusted
+                    // pointer after the arguments (0x8242A0F8 `addi r3, r3,
+                    // 0x110` / `lwz r4, 0xaac(r27)` / `li r5, 0` / `lwz r11,
+                    // 0x0(r3)`), and the epilogue at 0x8242A360 copies mDebugDir
+                    // (`clrrwi r11, r11, 0`) before `addi r3, r11, 0x9c`.  Every
+                    // way of naming that conversion in the TU is inert or worse:
+                    // `TextHolder &th = *idLabel; th.SetInt(..)` and
+                    // `static_cast<TextHolder *>(indexLabel)->SetInt(..)` are
+                    // byte-identical to the plain call; a `TextHolder *`-typed
+                    // local with the null test on IT (and `RndDrawable *` for the
+                    // epilogue) makes MSVC emit its own null-preserving adjust
+                    // AND the user test (`beq / li r3, 0 / cmplwi cr6 / beq`),
+                    // 93.6; `RndDir *dir = mDebugDir;` after the loop is inert.
+                    // For the prologue, hoisting `int i;` above textPos so the
+                    // counter's init precedes the 0.2f constant is inert too:
+                    // the r28/r29 vs r9 assignment of "(active)"/"not tracked"
+                    // and the 0.0f/1.0f pool registers do not move.
                     UILabel *idLabel =
                         marker->Find<UILabel>("id.lbl", false);
                     if (idLabel) {

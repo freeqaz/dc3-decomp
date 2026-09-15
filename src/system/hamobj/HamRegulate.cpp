@@ -85,54 +85,53 @@ void HamRegulate::RegulateWay(Waypoint *w, float f) {
 }
 
 void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
-    float radius = mArriveRadius;
+    float radius;
     if (mArriveRadius < 0.0f) {
         if (mLeftFoot) {
             radius = mLeftFoot->mData->LocalXfm().v.z;
         } else {
             radius = 0.0f;
         }
+    } else {
+        radius = mArriveRadius;
     }
-    radius = Max(radius, 0.01f);
-    float invRadius = 1.0f / radius;
+    float invRadius = 1.0f / Max(radius, 0.01f);
 
     float absDt = Max(0.0f, TheTaskMgr.DeltaBeat());
     Character *character = mCharacter;
 
-    auto& waypoint = mWaypoint;
     // The image hoists &character->LocalXfm() into a callee-saved register
     // (`addi r28, r3, 0xf4`) before the mRegulateMode branch and never keeps
     // `character` itself alive past the load -- both arms use the transform.
     const Transform &charXfm = character->LocalXfm();
-    // RESIDUAL (w7-ab, 89.2 canonical).  Two rows remain, both measured:
-    //  1) We emit an extra anchor `addi r30, r29, 0x14` for the `waypoint`
-    //     alias, so mWaypoint is reached as 0xc(r30) where the image uses
-    //     0x20(this) -- one extra callee-saved GPR.  Dropping the alias is
-    //     WORSE both with the charXfm hoist (89.2 -> 88.2) and without it
-    //     (86.5 -> 83.2), so the alias is not the defect it looks like.
-    //  2) The image evaluates the three components z, y, x in BOTH arms; we
-    //     evaluate x, z, y from the same source order.  Pure scheduling: both
-    //     sides store posDelta.x last, only the subtraction order differs.
+    // mWaypoint is an ObjPtr; the image reads its pointer at 0x20(this) three
+    // times (824C5220, 824C533C, and 824C5374 -- a reload after the store
+    // through the float &rotDelta), so there is no reference to the ObjPtr
+    // here, and every arm loads all three components before storing any:
+    // the Set()-shaped Subtract() from math/Vec.h.
+    //
+    // RESIDUAL (w7-bv, 94.2 canonical / 93.4 raw, up from 89.18): the only
+    // rows left are the else arm's interleave after Multiply (824C5338..
+    // 824C539C).  The image issues the posFactor product first, hoists
+    // facing.v.z/y/x (0x88/0x84/0x80) above the rotDelta store and loads
+    // facing.m.x.y late; we hoist facing.m.x.y and load facing.v.z after the
+    // store.  Same instructions, one scheduler ordering.  Refuted spellings:
+    // posFactor before the calls (89.8, held in an FPR across them), the
+    // Clamp before/after rotDelta (neutral), rotDelta as c*d - a*b without
+    // the outer negation (92.0), explicit x/z/y component stores (90.2, a
+    // reload of mWaypoint per component), dx/dz/dy temps then x/z/y stores
+    // (93.3 raw), posDelta = v; posDelta -= facing.v (88.2), Scale() for
+    // the tail (neutral).
     if (mRegulateMode == 1) {
-        float dy, dz;
         if (character->Teleported()) {
-            const Transform &wpXfm = waypoint->WorldXfm();
-            dz = wpXfm.v.z - charXfm.v.z;
-            dy = wpXfm.v.y - charXfm.v.y;
-            posDelta.x = wpXfm.v.x - charXfm.v.x;
+            const Transform &wpXfm = mWaypoint->WorldXfm();
+            Subtract(wpXfm.v, charXfm.v, posDelta);
         } else {
-            const Transform &wpXfm = waypoint->WorldXfm();
-            dz = wpXfm.v.z - mPosDelta.z;
-            dy = wpXfm.v.y - mPosDelta.y;
-            float dx = wpXfm.v.x - mPosDelta.x;
-            posDelta.x = dx;
-            float factor = Min(absDt * invRadius * 1.1f, 1.0f);
-            posDelta.x = dx * factor;
-            dy = dy * factor;
-            dz = dz * factor;
+            const Transform &wpXfm = mWaypoint->WorldXfm();
+            Subtract(wpXfm.v, mPosDelta, posDelta);
+            float factor = Min(1.0f, absDt * invRadius * 1.1f);
+            Scale(posDelta, factor, posDelta);
         }
-        posDelta.y = dy;
-        posDelta.z = dz;
     } else {
         Transform facing;
         facing.Reset();
@@ -141,14 +140,12 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
         FastInvert(facing, facing);
         Multiply(facing, charXfm, facing);
 
-        rotDelta = -(waypoint->LocalXfm().m.x.x * facing.m.x.y
-                    - waypoint->LocalXfm().m.x.y * facing.m.x.x);
+        float posFactor = Clamp(0.0f, 1.0f, absDt * invRadius);
 
-        float posFactor = Min(1.0f, Max(0.0f, absDt * invRadius));
+        rotDelta = -(mWaypoint->LocalXfm().m.x.x * facing.m.x.y
+                    - mWaypoint->LocalXfm().m.x.y * facing.m.x.x);
 
-        posDelta.x = waypoint->LocalXfm().v.x - facing.v.x;
-        posDelta.z = waypoint->LocalXfm().v.z - facing.v.z;
-        posDelta.y = waypoint->LocalXfm().v.y - facing.v.y;
+        Subtract(mWaypoint->LocalXfm().v, facing.v, posDelta);
 
         rotDelta *= posFactor;
         posDelta.x *= posFactor;

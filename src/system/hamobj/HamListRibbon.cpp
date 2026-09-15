@@ -449,23 +449,26 @@ void HamListRibbon::DrawRibbon(
         }
         mLabelPlaceholder->SetShowing(showLabel);
         mLabelPlaceholder->mCanHaveFocus = true;
-        // RESIDUAL (w7-as, 4 rows): the image does NOT pass the bool straight
-        // through here.  It materialises the enumerator with a real BRANCH --
-        //   li r4, 0x1 / lbz r11, 0x14(r24) / cmplwi r11, 0x0 /
-        //   ... / bne <bctrl> / li r4, 0x0
-        // -- with the compare and its branch scheduled around the three vtable
-        // loads.  NEGATIVE RESULT (2026-09-14): neither source form that
-        // *should* produce that branch does.  MSVC if-converts both:
+        // The image materialises the enumerator with a real BRANCH --
+        //   0x82481570 li r4, 0x1 / 0x82481578 lbz r11, 0x14(r24) / cmplwi /
+        //   ... the three vtable loads ... / 0x82481594 bne / li r4, 0x0 / bctrl
+        // -- which is NOT a select: it is TWO virtual calls, one per arm,
+        // tail-merged by MSVC into a single bctrl with only r4 differing.  The
+        // value forms are all if-converted or folded instead (w7-as, 2026-09-14):
         //   `state.mSelected ? kFocused : kNormal`        -> subic/subfe, 92.5
         //   `State s = kFocused; if (!sel) s = kNormal;`  -> subfic/subfe/and, 93.4
-        // The plain cast below leaves the four target instructions unpaired but
-        // scores 94.3, and is the only spelling of the three that does not also
-        // rotate the callee-saved set.
-        mLabelPlaceholder->SetState((UIComponent::State)(int)state.mSelected);
+        //   `(UIComponent::State)(int)state.mSelected`     -> lbz straight into r4, 94.3
+        // The duplicated call pairs all four rows and also removes the r24/r27
+        // callee-saved rotation those spellings caused (w7-bv: 95.0 -> 96.9).
+        if (state.mSelected) {
+            mLabelPlaceholder->SetState(UIComponent::kFocused);
+        } else {
+            mLabelPlaceholder->SetState(UIComponent::kNormal);
+        }
 
         // Re-read through the cast at every use rather than caching a named
-        // `elem` local: the image reloads `lwz r11, 0x18(r24)` THREE times
-        // (0x8248329C, 0x824832C8, 0x824832E8) and keeps nothing in a
+        // `elem` local: the image reloads `lwz rN, 0x18(r24)` THREE times
+        // (0x82481654, 0x824816A0, 0x824816C0) and keeps nothing in a
         // callee-saved register for it.  A named local pins r31 for the whole
         // block, which pushed `this` out of r31 into r30 and rotated 23 rows.
         // (The cast is an identity cast on native, where mElemDrawState is
@@ -488,8 +491,8 @@ void HamListRibbon::DrawRibbon(
             // BUG FIX (w7-as, 2026-09-14): this wrote the label alpha into
             // `mData` (offset 0x38, an int) via memcpy.  The image stores it as
             // a FLOAT into offset 0x24, which is `mAlpha`:
-            //   0x824832C8  lwz  r11, 0x18(r24)
-            //   0x824832CC  stfs f1,  0x24(r11)
+            //   0x824816A0  lwz  r11, 0x18(r24)
+            //   0x824816A4  stfs f1,  0x24(r11)
             // -- a bare `stfs`, so the destination is a float, and 0x24 is the
             // only float at that offset.  We wrote 0x38 and had to round-trip
             // the value through a stack slot (`stfs f1, 0x50(r1)` /
@@ -498,27 +501,53 @@ void HamListRibbon::DrawRibbon(
             ((UIListElementDrawState *)state.mElemDrawState)->mAlpha =
                 GetLabelTotalAlpha();
 
-            Vector3 *scale = &sBigScale;
-            if (state.mBigScale == 0.0f) {
-                scale = &sNormalScale;
-            }
+            // A ternary of the two statics, tested `!= 0.0f` so that sBigScale is
+            // the fall-through arm: 0x824816A8 `mr r11, r29` (sBigScale) sits
+            // AFTER the mAlpha store, then `fcmpu / bne / 0x824816B8 mr r11, r30`.
+            // The pointer-variable form (`Vector3 *scale = &sBigScale; if (==
+            // 0.0f) scale = &sNormalScale;`) hoists its `mr` above the store and
+            // hands the two statics r30/r29 instead of r29/r30 (9 rows, w7-bv);
+            // `== 0.0f ? sNormalScale : sBigScale` fixes the registers but
+            // inverts the branch (beq for bne).
             *(Vector3 *)&((UIListElementDrawState *)state.mElemDrawState)->mScaleX =
-                *scale;
+                state.mBigScale != 0.0f ? sBigScale : sNormalScale;
         }
     }
 
-    float savedAlpha;
+    // Initialised, and initialised HERE: the image keeps savedAlpha in f30,
+    // the register that already holds the 0.0f literal from 0x824814C8
+    // (SetFrame's first argument and the mBigScale compare), so `= 0.0f`
+    // costs no instruction -- the else path simply leaves f30 alone.  Left
+    // uninitialised, MSVC homes the variable at 0x50(r1), loads it back on
+    // the else path (`lfs f31, 0x50(r1)`) and the frame grows to 0x110
+    // (94.1 -> 95.0, w7-bv).  Declared at the top of the function the literal
+    // is materialised there instead of at 0x824814C8 (95.9).
+    float savedAlpha = 0.0f;
     if (TheLoadMgr.EditMode() && mLabelPlaceholder) {
-        savedAlpha = ((const UILabel *)(HamLabel *)mLabelPlaceholder)->Style(0).GetAlpha();
-        // The label pointer is read BEFORE GetLabelTotalAlpha() clobbers the
-        // volatiles -- `lwz r30, 0x31c(r31)` at 0x82483334 sits above the call,
-        // and the call site is then just `mr r3, r30`.  Written as
-        // `mLabelPlaceholder->Style(0).SetAlpha(t)` MSVC evaluates the argument
-        // first (right to left) and re-loads 0x31c afterwards.
-        HamLabel *label = mLabelPlaceholder;
-        label->Style(0).SetAlpha(GetLabelTotalAlpha());
+        // Read the FIELD, not the inline accessor.  `Style(0).GetAlpha()`
+        // returns through an inline temporary and MSVC sinks the load to the
+        // block end: `mr r11, r3 / mr r3, r31 / lwz r30 / lfs f30, 0x24(r11)`
+        // (97.8).  The field read is `lfs f30, 0x24(r3)` straight off the
+        // const Style() return at 0x8248170C, and the total-alpha `fmr f31, f1`
+        // then lands after `mr r3, r30` as at 0x82481724.  A named
+        // `const HamLabel *` and a named `const RndText::Style &` are both
+        // inert (w7-bv).
+        savedAlpha =
+            ((const UILabel *)(HamLabel *)mLabelPlaceholder)->Style(0).mFontColor.alpha;
+        // The ObjPtr accessor's rvalue is homed in r30 across the argument
+        // call (`lwz r30, 0x31c(r31)` at 0x82481714, `mr r3, r30` after it),
+        // exactly as a named `HamLabel *label` is; only a NAMED
+        // `float totalAlpha = GetLabelTotalAlpha();` made MSVC re-load 0x31c
+        // afterwards (w7-as).
+        mLabelPlaceholder->Style(0).SetAlpha(GetLabelTotalAlpha());
     }
 
+    // RESIDUAL (w7-bv, 4 register rows, 100.0 canonical / 99.7 raw): the
+    // image gives worldXfm r26 (0x82481468 `mr r26, r6`) and inRange r25
+    // (0x824814A0 `clrlwi r25, r11, 24`); we allocate them the other way
+    // round.  Both die before the label block (Multiply at 0x82481514, the
+    // clrlwi. at 0x82481544) and every other callee-saved assignment matches.
+    // Moving `Transform tempXfm;` above inRange is inert.
     SetWorldXfm(tempXfm);
 
     if (!state.mHidden) {

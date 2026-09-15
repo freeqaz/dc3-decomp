@@ -276,11 +276,20 @@ void HamAudio::SetCrossfadeJump(float startTime, float endTime, float fadeDurati
     // (`addi r30, r31, 0x5c` at 8252A308), and reads the two fields of the
     // overlap test back through it after the notify calls
     // (`lfs f13, 0x0(r30)` / `lfs f0, 0x8(r30)` at 8252A360/64).
+    //
+    // The STORES go through this (`stfs f31, 0x64(r31)` at 8252A2F4 ...
+    // `stw r10, 0x68(r31)` at 8252A310) and the first test's READS go through
+    // the reference: with the two bases different, MSVC forwards each stored
+    // value into a fresh copy (`fmr f13, f31` at 8252A2EC, `fmr f0, f30` at
+    // 8252A300 -- the second one dead), which lets fadeDuration's f31 be
+    // reused for the 0.5 literal (8252A314) and keeps the function at three
+    // callee-saved FPRs with inline stfd/lfd.  Same base on both sides (either
+    // one) forwards without a copy and costs a fourth FPR + __savefpr_28.
     HamCrossfade &crossfade = mCrossfade;
-    crossfade.mEnd = endTime;
-    crossfade.mStart = startTime;
-    crossfade.mDuration = fadeDuration;
-    crossfade.mFlag = 1;
+    mCrossfade.mEnd = endTime;
+    mCrossfade.mStart = startTime;
+    mCrossfade.mDuration = fadeDuration;
+    mCrossfade.mFlag = 1;
 
     // The fade is centred on startTime, so it reaches back to
     // startTime - fadeDuration/2; if that is at or before zero the crossfade
@@ -290,7 +299,7 @@ void HamAudio::SetCrossfadeJump(float startTime, float endTime, float fadeDurati
     // r11 = 0 before the compare (8252A318) and r11 = 1 as the last
     // instruction of the notify block (8252A350), and never tests it here.
     bool crossfadeInvalid = false;
-    if (startTime - fadeDuration * 0.5f <= 0.0f) {
+    if (crossfade.mStart - crossfade.mDuration * 0.5f <= 0.0f) {
         MILO_NOTIFY(
             "Crossfade begins before start of song. Setting up hard jump instead of crossfade."
         );
@@ -308,29 +317,9 @@ void HamAudio::SetCrossfadeJump(float startTime, float endTime, float fadeDurati
     }
 
     if (crossfadeInvalid) {
-        crossfade.mFlag = 0;
+        mCrossfade.mFlag = 0;
     }
 
-    // RESIDUAL (w7-ap, 90.5 canonical, up from 86.147): the three levers above
-    // (the &mCrossfade reference bound AFTER the mCrossfade.mFlag read, the
-    // false-then-raise bool, and the fnmsubs-shaped overlap test) land. What is
-    // left is pure register permutation:
-    //   * image r31 = this, r30 = &mCrossfade; ours is the other way round, so
-    //     the `crossfade.mFlag = 0` store reads `stw ... 0xc(r31)` where the
-    //     image reads `stw ... 0x68(r31)` -- the SAME address, one row.
-    //   * image saves f29/f30/f31 with three inline `stfd` (8252A250/54/58);
-    //     we allocate f28/f30/f31 and therefore take `bl __savefpr_28`, which
-    //     saves a fourth double and widens the frame from -0x10a0 to -0x10b0.
-    //     f29 is never used on our side -- it is the helper's contiguous range,
-    //     not an extra live value, so the double-literal lever does not apply.
-    //
-    // NEGATIVE RESULT (w7-ap, 2026-09-14): respelling the first check as
-    // `crossfade.mStart - crossfade.mDuration * 0.5f <= 0.0f` (to shorten
-    // fadeDuration's live range and drop to three callee-saved FPRs) is exactly
-    // score-neutral at 90.5 -- MSVC forwards the stores -- and it is also the
-    // LESS faithful spelling: `fnmsubs f13, f13, f31, f30` at 8252A320 consumes
-    // the incoming parameter registers (f30 = startTime, f31 = fadeDuration,
-    // fmr'd in at 8252A270/7C), not reloads through r30. Keep the parameters.
     SetLoop(endTime, startTime, mStreams[0]);
 }
 

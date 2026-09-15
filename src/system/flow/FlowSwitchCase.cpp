@@ -10,6 +10,43 @@
 #include "obj/Object.h"
 #include "world\CameraShot.h"
 
+namespace {
+    // The four relational cases compare curValue against mToValue.Node() as
+    // floats when both are numeric.  The Node() result is an UNNAMED temporary
+    // bound to this helper's reference parameter: that is what makes the image
+    // keep Node()'s returned pointer (`mr r30, r3` at 0x82408BE0) and read
+    // to.Type() / to.LiteralFloat() through it (`lwz r11, 0x4(r30)`, `mr r3,
+    // r30`), and what leaves the temporary an expression temp so the frame
+    // colours it after the kTransition branch's four (0x78..0x90 vs 0x58..0x70).
+    // A named `const DataNode &to` (or a by-value `DataNode to`) is a scoped
+    // local instead: MSVC folds its address to the fixed r31 slot, hoists the
+    // Type() load above the curValue tests, and colours it first.  Plain
+    // `inline` is NOT inlined (the inner switch tips the heuristic; 66.9 with
+    // four real calls); __forceinline folds `op` per call site and gives the
+    // four arms their ble/blt/bge/bgt at 0x82408C48/0x82408CDC/0x82408D70/
+    // 0x82408E04.
+    __forceinline bool CompareNumeric(
+        const DataNode &cur, const DataNode &to, FlowNode::OperatorType op
+    ) {
+        if ((cur.Type() == kDataInt || cur.Type() == kDataFloat)
+            && (to.Type() == kDataInt || to.Type() == kDataFloat)) {
+            switch (op) {
+            case FlowNode::kGreaterThan:
+                return cur.LiteralFloat() > to.LiteralFloat();
+            case FlowNode::kGreaterThanOrEqual:
+                return cur.LiteralFloat() >= to.LiteralFloat();
+            case FlowNode::kLessThan:
+                return cur.LiteralFloat() < to.LiteralFloat();
+            case FlowNode::kLessThanOrEqual:
+                return cur.LiteralFloat() <= to.LiteralFloat();
+            default:
+                return false;
+            }
+        }
+        return false;
+    }
+}
+
 FlowSwitchCase::FlowSwitchCase()
     : mToValue(0), mFromValue(0), mOperator(kEqual), mUseLastValue(0),
       mUnregisterParent(0), mContinuous(0) {
@@ -43,39 +80,18 @@ bool FlowSwitchCase::IsValidCase(
         if (mUseLastValue) {
             mToValue = *lastValue;
         }
-        // Each comparison arm binds Node()'s return buffer to a REFERENCE, not to a
-        // by-value `DataNode to`.  0x82408BE0 `mr r30, r3` keeps the returned
-        // pointer and 0x82408C00 reads `lwz r11, 0x4(r30)` through it; a by-value
-        // local is addressed at a fixed r31 displacement instead, which lets MSVC
-        // hoist the load above the first type test and kills the pair of home
-        // stores at 0x82408C08/0x82408C10 that mark `to.Type()` being written
-        // twice in the source.
-        //
-        // NEGATIVE RESULT: spelling this as a POINTER instead -- `const DataNode
-        // *to = &mToValue.Node();` with `to->Type()`/`to->LiteralFloat()` -- is a
-        // large REGRESSION (88.10 -> 77.90 canonical): it re-colours r26/r27/r28
-        // across all four relational arms (17 instructions of r26<->r28 swap) and
-        // inverts six branch polarities.  The reference binding above is the best
-        // of the three spellings.  What remains after it is the frame-slot
-        // COLOURING: the target allocates the kTransition branch's four Node()
-        // return buffers LOW (0x58/0x60/0x68/0x70) and the switch cases' six HIGH
-        // (0x78..0xa0), ours the other way round, which charges every switch-case
-        // slot row `[off:-32]` and every transition row `[off:+32]`.  That is
-        // colouring, not source structure, and no declaration order reaches it.
-        //
-        // NEGATIVE RESULT (w7-ap, 2026-09-14, 88.08 canonical): three more
-        // spellings, all refuted.
-        //   * ONE pointer declared before the switch and ASSIGNED in each of
-        //     the four relational arms (`const DataNode *to;` + `to = &...`),
-        //     on the theory that a pointer with four definitions cannot have
-        //     its address folded at any use: 77.9 -- the SAME figure as the
-        //     per-arm pointer spelling refuted above, so the regression is the
-        //     pointer itself, not where it is declared.
-        //   * a redundant `{ }` around the kTransition branch's whole body,
-        //     to push its four Node() buffers one scope deeper: byte-neutral,
-        //     the eight slot rows stay at [off:+32].
-        //   * a redundant `{ }` around the switch instead: also byte-neutral.
-        // Scope depth does not reach this colouring in either direction.
+        // The four relational arms go through CompareNumeric above (w7-bv,
+        // 88.08 -> 100.0, 297/297 instructions).  Earlier notes here had
+        // measured a named `const DataNode &to` (88.1), a per-arm or hoisted
+        // `const DataNode *to` (77.9 both) and redundant scopes around either
+        // branch (byte-neutral), and concluded the frame colouring -- the
+        // kTransition branch's four Node() buffers at 0x58..0x70 and the six
+        // switch-case buffers at 0x78..0xa0 -- was unreachable from source.  It
+        // is reachable: every one of those spellings made `to` a scoped local,
+        // which MSVC colours BEFORE the expression temporaries; passing the
+        // Node() result straight into an inlined reference parameter keeps it
+        // an expression temporary, colours it in statement order behind the
+        // kTransition ones, and reads it through the returned pointer.
         switch (mOperator) {
         case kEqual:
             result = curValue->Equal(mToValue.Node(), nullptr, true);
@@ -83,46 +99,18 @@ bool FlowSwitchCase::IsValidCase(
         case kNotEqual:
             result = *curValue != mToValue.Node();
             break;
-        case kGreaterThan: {
-            const DataNode &to = mToValue.Node();
-            if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
-                && (to.Type() == kDataInt || to.Type() == kDataFloat)) {
-                result = curValue->LiteralFloat() > to.LiteralFloat();
-            } else {
-                result = false;
-            }
+        case kGreaterThan:
+            result = CompareNumeric(*curValue, mToValue.Node(), FlowNode::kGreaterThan);
             break;
-        }
-        case kGreaterThanOrEqual: {
-            const DataNode &to = mToValue.Node();
-            if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
-                && (to.Type() == kDataInt || to.Type() == kDataFloat)) {
-                result = curValue->LiteralFloat() >= to.LiteralFloat();
-            } else {
-                result = false;
-            }
+        case kGreaterThanOrEqual:
+            result = CompareNumeric(*curValue, mToValue.Node(), FlowNode::kGreaterThanOrEqual);
             break;
-        }
-        case kLessThan: {
-            const DataNode &to = mToValue.Node();
-            if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
-                && (to.Type() == kDataInt || to.Type() == kDataFloat)) {
-                result = curValue->LiteralFloat() < to.LiteralFloat();
-            } else {
-                result = false;
-            }
+        case kLessThan:
+            result = CompareNumeric(*curValue, mToValue.Node(), FlowNode::kLessThan);
             break;
-        }
-        case kLessThanOrEqual: {
-            const DataNode &to = mToValue.Node();
-            if ((curValue->Type() == kDataInt || curValue->Type() == kDataFloat)
-                && (to.Type() == kDataInt || to.Type() == kDataFloat)) {
-                result = curValue->LiteralFloat() <= to.LiteralFloat();
-            } else {
-                result = false;
-            }
+        case kLessThanOrEqual:
+            result = CompareNumeric(*curValue, mToValue.Node(), FlowNode::kLessThanOrEqual);
             break;
-        }
         default:
             return false;
         }
