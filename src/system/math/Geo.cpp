@@ -1070,6 +1070,39 @@ void BSPFace::Update() {
 // `if (planeIt != end) do { ... } while (++planeIt != end);` REGRESSES
 // 90.2 -> 90.0.  MSVC still emits the `b` to the bottom test and additionally
 // drops one home store.  Reverted.
+//
+// w7-bt (90.92701 -> 99.02676 canonical, 172 -> 50 rows).  Five source
+// facts read off Geo.s, in order of weight:
+//  1. The tail is three early returns and NO explicit clear(): the five
+//     `clear` calls (0x82538A9C/AA4/ACC/AD8/AE8) are the two list
+//     destructors on three return paths, tail-merged onto one frontFaces
+//     clear with the result in r30.  Explicit clears were seven calls.
+//  2. `totalFaces = faces.size()`: list::size() is distance(begin(), end())
+//     and its const-ref `__first` homes the begin() temporary at 0x60
+//     (0x82538568) before walking a register copy of it.
+//  3. The candidate iterator is FUNCTION-SCOPE and ASSIGNED in the for-init
+//     (`it = faces.begin()`), the same variable the split loop reuses.  That
+//     is what rotates the planes loop into the image's top-tested shape
+//     (0x825385C8 `cmplw r25, r10` / 0x825385CC `beq`, then the hoisted end
+//     in r20) and homes each `it->` deref at 0x60 (0x825385C0/C4/D0).  A
+//     for-scoped iterator, or a function-scoped one COPY-initialised, is the
+//     unrotated `b`-to-bottom form at 98.09; the OLD negative above rotated
+//     the loop by hand and lost on the home stores.  Making planeIt
+//     function-scope the same way is 98.6: it gets its own slot and grows
+//     the frame by 0x10.
+//  4. The five per-plane counters are zeroed BEFORE `cmpwi r24, 1`
+//     (0x825385D8..E8), so they are declared above the single-face test.
+//  5. `const Plane &plane = *planeIt` inside the coplanar arm is the
+//     `stw r28, 0x60(r31)` at 0x8253863C; the FRONT power is the named pow.
+// Also read off the image and kept: the split arm advances `it` only inside
+// the size() > 2 branch (see the note there).
+// RESIDUAL (w7-bt): the assignment's own home store (ours has one more
+// `stw r11, 0x60` after the size() loop, the image has one more `it->` home
+// before `addi r20`), the `cmplwi cr6, r11, 0` on `front` scheduled above
+// the backArea fadds at 0x82538680 (an if/else respelling is byte-identical),
+// and the callee-saved naming (faces r23/it r22, planeIt r25, the counters)
+// -- all register rows the ruler forgives.  Byte-inert probes: `(*it).planes`
+// for `it->planes`, post-increment `it++`.
 bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
     if (faces.empty()) {
         node = nullptr;
@@ -1087,31 +1120,41 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
     stlpmtx_std::less<BSPFace> cmp;
     stlpmtx_std::_S_sort<BSPFace, stlpmtx_std::StlNodeAlloc<BSPFace>, stlpmtx_std::less<BSPFace>>(faces, cmp);
 
-    int totalFaces = 0;
-    for (std::list<BSPFace>::iterator it = faces.begin(); it != faces.end(); ++it)
-        totalFaces++;
+    // size(), not an open-coded count: list::size() is distance(begin(), end()),
+    // whose by-const-ref `__first` parameter homes the begin() temporary at
+    // the call site -- the `stw r11, 0x60(r31)` at 0x82538568 that the hand
+    // loop never emits -- and walks a register COPY of it (`mr r10, r11`),
+    // leaving r11 = begin() live for the candidate loop's `mr r22, r11`.
+    int totalFaces = faces.size();
 
     int candidateIdx = 0;
     float bestScore = -1.0f;
     float zero = 0.0f;
     double powExp = (double)0.6f;
-    for (std::list<BSPFace>::iterator faceIt = faces.begin(); faceIt != faces.end(); ++faceIt) {
+    std::list<BSPFace>::iterator it;
+    for (it = faces.begin(); it != faces.end(); ++it) {
         if (candidateIdx >= gBSPMaxCandidates) break;
-        for (std::list<Plane>::iterator planeIt = faceIt->planes.begin(); planeIt != faceIt->planes.end(); ++planeIt) {
+        for (std::list<Plane>::iterator planeIt = it->planes.begin(); planeIt != it->planes.end(); ++planeIt) {
+            // Declared ABOVE the single-face test: the image zeroes all five
+            // (f31/r29/f30/r27/r26 at 0x825385D8..E8) before `cmpwi r24, 1`.
+            float frontArea = zero;
+            int frontCount = 0;
+            float backArea = zero;
+            int backCount = 0;
+            int spanCount = 0;
             if (totalFaces == 1) {
                 node->plane = *planeIt;
                 bestScore = zero;
                 break;
             }
-            int frontCount = 0, backCount = 0, spanCount = 0;
-            float frontArea = zero, backArea = zero;
             std::list<BSPFace>::iterator jt;
             for (jt = faces.begin(); jt != faces.end(); ++jt) {
                 bool back, front;
                 jt->OnSide(*planeIt, front, back);
                 if (!front && !back) {
                     const Vector3 &faceNormal = jt->t.m.z;
-                    if (fabs(planeIt->a * faceNormal.x + planeIt->b * faceNormal.y + planeIt->c * faceNormal.z) < gBSPDirTol)
+                    const Plane &plane = *planeIt;
+                    if (fabs(plane.a * faceNormal.x + plane.b * faceNormal.y + plane.c * faceNormal.z) < gBSPDirTol)
                         break;
                 } else {
                     float area = jt->area;
@@ -1130,10 +1173,14 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
                 continue;
             }
             // (float), not (double): the target emits `fcfid; frsp` before the
-            // implicit promotion to pow's double parameter.
-            float powBack = (float)pow((float)(spanCount + backCount), powExp);
-            float score = (float)pow((float)(spanCount + frontCount), powExp) * frontArea
-                        + powBack * backArea;
+            // implicit promotion to pow's double parameter.  The FRONT power is
+            // the named one: it is the first pow call (0x825386D4 on
+            // spanCount + frontCount, r26 + r29) and the one parked in f26
+            // across the second; its product is the `fmuls f13, f26, f31`
+            // and the back product is folded into the fmadds (0x82538704/08).
+            float powFront = (float)pow((float)(spanCount + frontCount), powExp);
+            float score = powFront * frontArea
+                        + (float)pow((float)(spanCount + backCount), powExp) * backArea;
             if (frontCount < totalFaces && backCount < totalFaces && (bestScore < zero || score < bestScore)) {
                 node->plane = *planeIt;
                 bestScore = score;
@@ -1153,7 +1200,7 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
     // recurses into node->right (offset 0x14) with the 0x58 list, so 0x68 is
     // frontFaces and 0x58 is backFaces, i.e. frontFaces is declared first.
     std::list<BSPFace> frontFaces, backFaces;
-    std::list<BSPFace>::iterator it = faces.begin();
+    it = faces.begin();
     while (it != faces.end()) {
         bool back, front;
         it->OnSide(node->plane, front, back);
@@ -1173,37 +1220,47 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
             // end(), not begin() -- same reading, Geo.s 0x825388D4.
             backFaces.splice(backFaces.end(), faces, cur);
         } else {
-            std::list<BSPFace>::iterator cur = it++;
+            // The split arm works on `it` itself and only advances it inside
+            // the size() > 2 branch (the splice's `it++`, 0x82538A18..A24).
+            // w7-bt: the image has NO advance on the `ble` path at
+            // 0x82538A08 -> 0x82538A6C -> 0x82538A74 (`cmplw r30, r23` with
+            // r30 untouched), so a face whose back half clips to <= 2 points
+            // stays in `faces` and is re-examined on the next pass with its
+            // polygon already cut to the back side, where OnSide no longer
+            // reports it in front and the back-only / erase arms take it.
+            // A `cur = it++` hoisted to the top of the arm (the old spelling)
+            // skipped that pass and left the degenerate face behind in
+            // `faces` instead.
             Hmx::Ray ray;
-            Intersect(cur->t, node->plane, ray);
+            Intersect(it->t, node->plane, ray);
             BSPFace frontFace;
-            frontFace.t = cur->t;
-            Clip(cur->p, ray, frontFace.p);
+            frontFace.t = it->t;
+            Clip(it->p, ray, frontFace.p);
             if (frontFace.p.points.size() > 2) {
                 frontFace.Update();
                 frontFaces.insert(frontFaces.end(), frontFace);
             }
             ray.dir.Set(-ray.dir.x, -ray.dir.y);
-            Clip(cur->p, ray, cur->p);
-            if (cur->p.points.size() > 2) {
-                cur->Update();
-                backFaces.splice(backFaces.end(), faces, cur);
+            Clip(it->p, ray, it->p);
+            if (it->p.points.size() > 2) {
+                it->Update();
+                backFaces.splice(backFaces.end(), faces, it++);
             }
         }
     }
 
-    bool ok = MakeBSPTree(node->left, frontFaces, nextDepth);
-    if (!ok) {
-        // The image clears backFaces (0x58) before frontFaces (0x68) on BOTH
-        // the failure and the success path -- Geo.s 0x82538A98 and 0x82538AC8.
-        backFaces.clear();
-        frontFaces.clear();
+    // No explicit clear(): the five `clear` calls in the image are the two
+    // lists' destructors (backFaces at 0x58 first, frontFaces at 0x68 second,
+    // reverse declaration order) on three return paths, of which MSVC
+    // cross-jumps the last two onto one `frontFaces` clear with the result
+    // parked in r30 (`mr r30, r18` at 0x82538AD0 / `li r30, 1` at
+    // 0x82538AEC).  Explicit clears plus the destructors were seven calls
+    // and a `bool ok` -- the largest of the five w7-bt levers in the note above.
+    if (!MakeBSPTree(node->left, frontFaces, nextDepth))
         return false;
-    }
-    ok = MakeBSPTree(node->right, backFaces, nextDepth);
-    backFaces.clear();
-    frontFaces.clear();
-    return ok;
+    if (!MakeBSPTree(node->right, backFaces, nextDepth))
+        return false;
+    return true;
 }
 #else
 bool MakeBSPTree(BSPNode *&, std::list<BSPFace> &, int) { return false; }
