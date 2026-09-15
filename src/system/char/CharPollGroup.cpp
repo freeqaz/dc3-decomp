@@ -130,6 +130,27 @@ void CharPollGroup::SortPolls() {
     // `stw &polls[i], 0x54(r31)`, is inert to the digit -- MSVC elides the reference
     // while it can still strength-reduce, so the reference is a consequence of the
     // missing hoist, not its cause.
+    // ADDENDUM (w7-bl, still 89.03): the target listing at 0x823A8B10-0x823A8B60
+    // now reads completely, and it closes off the two remaining source-shaped
+    // explanations. (1) The dead `stw r11, 0x54(r31)` is the HOMED reference that
+    // `vector::operator[]` returns -- 0x54 is the very slot the FIRST loop uses for
+    // `vector::push_back(const RndPollable*&)`'s temp (0x823A8AA4), reused -- so it
+    // is emitted by the inliner, not by a named local, which is why w7-ak's explicit
+    // reference could not conjure it. Spelling the element access as a materialised
+    // iterator (`std::vector<RndPollable*>::iterator it = polls.begin() + i;` then
+    // `*it`) is EXACTLY INERT: same 29 rows, same registers, same 89.03.
+    // (2) The call in the loop is `ObjPtrList<CharPollable>::insert(iterator, T*)`
+    // returning an iterator by value into 0x58(r31), with the iterator argument a
+    // hoisted null (r26, `mr r26, r30` at 0x823A8B04) -- i.e. `insert(end(), x)`.
+    // Writing that out (`mPolls.insert(mPolls.end(), dynamic_cast<CharPollable*>(
+    // polls[i]))`) is ALSO exactly inert: our `push_back` already lowers to that
+    // same `insert` call, and the Function Call Diff confirms `insert` on both sides.
+    // What is left is purely that MSVC keeps `polls._M_start` and `polls.size()`
+    // live in r23/r25 across the `insert` call where the image re-derives both from
+    // 0x60/0x64(r31) at 0x823A8B44-0x823A8B58 and reuses the reloaded `_M_start` as
+    // the next iteration's index base. Same compiler, same flags, no source spelling
+    // found that makes MSVC decline the CSE; the frame and `__savegprlr_23` vs
+    // `_25` follow from it.
     for (int i = 0; i < polls.size(); i++) {
         mPolls.push_back(dynamic_cast<CharPollable *>(polls[i]));
     }
