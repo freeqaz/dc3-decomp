@@ -20,12 +20,21 @@ public:
     int mHalfPlusOne;       // 0x08
     FftIpp mFft1;           // 0x0C
     FftIpp mFft2;           // 0x50
-    std::vector<float, XboxAllocator<float> > mData0; // 0x94
-    std::vector<float, XboxAllocator<float> > mData1; // 0xA0
-    std::vector<float, XboxAllocator<float> > mSinTable; // 0xAC
-    std::vector<float, XboxAllocator<float> > mCosTable; // 0xB8
-    std::vector<float, XboxAllocator<float> > mData4; // 0xC4
-    std::vector<float, XboxAllocator<float> > mData5; // 0xD0
+    // aligned_vector<float>, NOT the bare std::vector<float,XboxAllocator<float> >
+    // these used to be spelled as.  Same layout and the same inlined destructor,
+    // so ??1SpectralAnalysis is identical either way -- but ??0SpectralAnalysis's
+    // EH unwind funclets destroy a partially-constructed member by CALLING the
+    // class's own out-of-line destructor COMDAT, and that is what names the type:
+    // __unwind$104961..104965 at 0x82E4A428/54/80/AC/D8 each do
+    // `addi r3, r11, 0x94|0xa0|0xac|0xb8|0xc4` then
+    // `bl "??1?$aligned_vector@M@@QAA@XZ"`.  With the bare std::vector spelling
+    // there is no such COMDAT to call and 0x82E4A160 had nothing to pair with.
+    aligned_vector<float> mData0;    // 0x94
+    aligned_vector<float> mData1;    // 0xA0
+    aligned_vector<float> mSinTable; // 0xAC
+    aligned_vector<float> mCosTable; // 0xB8
+    aligned_vector<float> mData4;    // 0xC4
+    aligned_vector<float> mData5;    // 0xD0
     double mAccum;          // 0xE0 (running phase accumulator, used by Analyze)
 };
 
