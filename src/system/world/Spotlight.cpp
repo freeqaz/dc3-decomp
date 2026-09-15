@@ -1282,32 +1282,65 @@ void Spotlight::BuildBeam(BeamDef &def) {
     def.mBeam->SetTransParent(parent, false);
 }
 
-// w7-bo (2026-09-15): 90.22 -> 91.83 canonical, 1140 B. The two TAIL uses of
-// the length read `def.mLength` fresh -- the image reloads it at 0x8282D?? for
-// verts[31].tex (`lfs f0, 0x8(r29)` / `fdivs f0, f29, f0`, target idx 257-258)
-// and again for verts[47].pos.y (`lfs f13, 0x8(r29)`, idx 263). The duplicated
-// verts[15]/verts[31] writes below are REAL: the image writes both twice, the
-// second verts[31] differing only in tex.y (1.0 vs borderY/mLength).
+// w7-bs (2026-09-15): 91.76 -> 92.6 canonical (fuzzy 89.66 -> 91.19), 1140 B,
+// 292 rows: 81 diff_arg / 3 diff_op / 11 replace / 7 insert / 7 delete. Two
+// levers, both behaviourally identical to what was here (same reads, same
+// stores, same order):
+//  - the two IN-LOOP length uses read `def.mLength` (`borderY / def.mLength`
+//    for verts[s-1].tex.y, `def.mLength` as verts[s+15].pos.y) like the tail
+//    ones already did. The image reloads `lfs 0x8(r29)` inside the loop and
+//    re-divides; with this our callee-saved FPR set is f23-f31 EXACTLY
+//    (`__savefpr_23` / `__restfpr_23` both sides, vs _21 before). w7-bo's
+//    "61.5" for this lever alone is real but is NOT a regression of the loop
+//    body: alone it collapses the three vertex rows onto one cursor at verts[s]
+//    with folded displacements (-0xc00/-0x630/-0x60) while the image keeps one
+//    cursor at verts[s-1] (`li r28, 0x600` 8282D3A8) and DERIVES the top and
+//    bottom rows (`subi r10, r28, 0x600` 8282D3EC / `addi r9, r28, 0x600`
+//    8282D40C), so every store row mis-pairs. Measured alone from HEAD: 60.4.
+//  - `unsigned int top = s - 17; mid = s - 1; bot = s + 15;` index locals for
+//    the vertex rows only (faces keep the inline expressions). This gives MSVC a
+//    byte-offset register per row like the image (rows 100-160 now mostly
+//    equal: `add r11, r11, r2x` after each `lwz r11, 0(r31)` verts.begin
+//    reload), which is what turns the 60.4 into 92.6.
 //
-// MEASURED NEGATIVES, each alone from the 91.83 state:
-//  - doing the same for the two IN-LOOP uses (`borderY / def.mLength` in
-//    verts[s-1].tex and `def.mLength` as verts[s+15].pos.y): 61.5. This is
-//    what the image does -- it reloads and re-divides inside the loop, and the
-//    change lands the callee-saved FPR count EXACTLY (`__savefpr_23` both
-//    sides, vs _21 here) -- but MSVC then rebiases the vertex byte cursor and
-//    the whole loop body loses alignment. Registering it as a negative, not as
-//    "unfixable": something that fixes the cursor bias should let it back in.
-//  - naming the six face indices as `unsigned short` locals (47.3), even
-//    though the image's arithmetic is plainly 16-bit modular off `s`
-//    (`addis r10, r30, 0x1` / `subi r10, r10, 0x11` = s + 0xFFEF; s-1 is
-//    `add r8, r30, r25` with r25 = 0xffff hoisted at 0x8282C???). Keep the
-//    inline expressions in Set().
+// MEASURED NEGATIVES, each from the state above:
+//  - `unsigned short s` loop variable (the image's arithmetic is 16-bit modular
+//    off r30: s-1 = `add r8, r30, r25` 8282D514 with r25 = 0xffff hoisted at
+//    8282D3AC; s-17 = `addis r10, r30, 1; subi r10, r10, 0x11` 8282D50C): 74.6.
+//  - one `mid` index local with `verts[mid - 16]` / `verts[mid + 16]` for the
+//    other rows, aiming at the image's derived-cursor form: 61.8 (336 rows,
+//    51 insert / 53 delete -- MSVC folds it back to the single-cursor shape).
+//  - `RndMesh::Vert *mid = &verts[s - 1]; top = mid - 16; bot = mid + 16;`
+//    pointer locals: 78.9 (loses the per-Set `lwz r11, 0(r31)` reload the image
+//    does before EVERY Set on all three rows).
+//  - w7-bo's `unsigned short` face-index locals: 47.3 (their measurement).
 //
-// RESIDUAL: the image's vertex byte cursor r28 sits at verts[s-1] (`li r28,
-// 0x600`) and derives the other two rows with `subi r10, r28, 0x600` /
-// `addi r9, r28, 0x600`; ours sits at verts[s] (`li r30, 0x660`) and folds the
-// row offset into the store displacement (-0xc00/-0x630/-0x60). Same code,
-// different bias -- that is where most of the 113 diff_arg rows live.
+// RESIDUAL (all 109 non-equal rows accounted for):
+//  - ours keeps THREE induction variables for the vertex rows (`addi r27/r26/
+//    r25, +0x60` at the loop bottom, rows 200-204) where the image keeps ONE
+//    (`addi r28, r28, 0x60` 8282D578) and derives the other two; prologue is
+//    therefore r21-r31 (`__savegprlr_21`) vs the image's r23-r31 (8282D284),
+//    frame 0x100 vs 0xf0, and the loop-carried GPRs relabel (r24<->r26 etc.,
+//    45 rows).
+//  - the face-index arithmetic and loop test are rebuilt around an i-biased
+//    face base (r30) and a 0x10000 bias register (r23, `subf r4, r23, r10`
+//    loop test vs the image's `subi r6, r30, 0x11; cmplwi r6, 0xf` 8282D584):
+//    face args become `addi r10, r30, 0x10/0x11/0x1/0x20/0x21` and the sth
+//    displacements -0x6/-0x2/-0x4 instead of 0xe/0x10/0xc (rows 161-206).
+//  - mid row pos store order: image 0x0, 0x4, 0x8 (f13, f29, f11); ours
+//    0x8, 0x0, 0x4 (rows 123-125). Not source-controlled -- explicit z,x,y
+//    scalar stores schedule identically to Set() (see Text.cpp SetupCharacter).
+//  - tail rows 212-215: verts[15]/verts[31] first-write store order swapped.
+// Nothing here reads or writes anything the image does not; do not chase the
+// score with a semantic change.
+//
+// w7-bo (2026-09-15, superseded above): 90.22 -> 91.83 canonical. The two TAIL
+// uses of the length read `def.mLength` fresh -- the image reloads it at
+// 0x8282D6xx for verts[31].tex (`lfs f0, 0x8(r29)` / `fdivs f0, f29, f0`,
+// target idx 257-258) and again for verts[47].pos.y (`lfs f13, 0x8(r29)`, idx
+// 263). The duplicated verts[15]/verts[31] writes below are REAL: the image
+// writes both twice, the second verts[31] differing only in tex.y (1.0 vs
+// borderY/mLength).
 void Spotlight::BuildCone(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x5B6);
     def.mIsCone = true;
@@ -1319,9 +1352,9 @@ void Spotlight::BuildCone(BeamDef &def) {
     faces.resize(60);
 
     // The image never caches mLength: it reloads `lfs ..., 0x8(r29)` at every
-    // use (0x8282D0xx in the loop, and again at 0x8282D2xx for verts[31]/[47])
-    // and recomputes borderY/mLength rather than holding it.  A `float len`
-    // local costs two callee-saved FPRs (savefpr_21 vs the image's _23).
+    // use inside the loop and again for verts[31]/[47] in the tail, and
+    // recomputes borderY/mLength rather than holding it. `len` is only for the
+    // three pre-loop derivations; every later use reads def.mLength (w7-bs).
     float len = def.mLength;
     float bottomBorderLen = def.mBottomBorder * len;
     bottomBorderLen = (float)__fsel(len - bottomBorderLen, bottomBorderLen, len);
@@ -1338,17 +1371,21 @@ void Spotlight::BuildCone(BeamDef &def) {
 
         float uvX = (float)(s - 17) * uvStep;
 
-        verts[s - 17].pos.Set(def.mTopRadius * cosA, 0.0f, def.mTopRadius * sinA);
-        verts[s - 17].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
-        verts[s - 17].tex.Set(uvX, 0.0f);
+        unsigned int top = s - 17;
+        unsigned int mid = s - 1;
+        unsigned int bot = s + 15;
 
-        verts[s - 1].pos.Set(borderRadius * cosA, borderY, borderRadius * sinA);
-        verts[s - 1].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
-        verts[s - 1].tex.Set(uvX, borderY / len);
+        verts[top].pos.Set(def.mTopRadius * cosA, 0.0f, def.mTopRadius * sinA);
+        verts[top].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+        verts[top].tex.Set(uvX, 0.0f);
 
-        verts[s + 15].pos.Set(def.mBottomRadius * cosA, len, def.mBottomRadius * sinA);
-        verts[s + 15].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
-        verts[s + 15].tex.Set(uvX, 1.0f);
+        verts[mid].pos.Set(borderRadius * cosA, borderY, borderRadius * sinA);
+        verts[mid].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
+        verts[mid].tex.Set(uvX, borderY / def.mLength);
+
+        verts[bot].pos.Set(def.mBottomRadius * cosA, def.mLength, def.mBottomRadius * sinA);
+        verts[bot].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
+        verts[bot].tex.Set(uvX, 1.0f);
 
         int fi = (s - 17) * 4;
         faces[fi].Set(s - 17, s - 1, s);
