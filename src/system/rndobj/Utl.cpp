@@ -1262,13 +1262,51 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
 //     experiment that changed BOTH things at once, so the destructor-merge had never
 //     actually been measured on its own.  It has been now: the `ret` hoist ALONE, with
 //     the block placement left exactly as it is, moves 71.537 -> 67.9 -- the same 3.6pp
-//     regression the combined experiment produced.  Both levers are independently bad,
-//     and the dismissal survives de-confounding.  Do not re-open this one on the
-//     "a dismissal is a lead" principle a third time without a NEW mechanism.
+//     regression the combined experiment produced.
+//
+// w7-bo (2026-09-15) -- BOTH DISMISSALS ABOVE ARE NOW SUPERSEDED, with the NEW mechanism
+// they asked for: the rb3 sibling (../rb3/src/system/rndobj/Utl.cpp:1117), which neither
+// earlier pass consulted.
+//
+//  2'. THE DESTRUCTOR MERGE IS OBTAINABLE, and the lever is not a `ret` hoist -- it is
+//      DUPLICATING `return cacheFile;` INSIDE the String's scope (rb3 does exactly this).
+//      Target 8262E6C4..8262E6D8:
+//          ble .L_8262E6DC   <- cacheRes <= 0
+//          li  r29, 0x0      <- cacheRes  > 0: return value := nullptr
+//        .L_8262E6CC:
+//          addi r3, r31, 0x60
+//          bl   ??1String@@UAA@XZ   <- the ONE destructor, on both paths
+//          mr   r3, r29
+//      .L_8262E6DC is a bare `b .L_8262E6CC`, the tail-merge seam of the second return.
+//      With the duplicated return we now emit idx 155-158 EXACTLY, ??1String goes 2 -> 1,
+//      equal instructions 123 -> 127 of 185, mismatch rows 62 -> 58, and base size
+//      656 -> 648 == target size.  The `ret`-hoist spelling could never do this because
+//      it moves the store OUT of the scope instead of moving the return INTO it.
+//      ⚠ Canonical went 71.55556 -> 71.49383, a 0.062pp LOSS, and that is an aligner
+//      artifact, not a regression in the code: diff_score is 4643/16200 on both sides
+//      (normalized/fuzzy 71.33951 unchanged).  Closing the destructor turned three
+//      partially-credited `replace` rows inside the STILL-MISPLACED movie block into two
+//      fully-charged `delete` rows.  Kept on faithful-over-score: the emitted bytes are
+//      strictly closer to the image and the size is now exact.  When 1 is closed this
+//      becomes a strict win.
+//
+//  1'. THE ARM INVERSION IS INERT, not a 3.6pp regression.  The 2026-08-22 experiment
+//      changed the arm order AND hoisted `ret`; the 2026-08-31 re-measure de-confounded
+//      only the hoist.  Measured on its own, on top of 2', rewriting the head as
+//          if (stricmp(ext,"bmp") == 0 || stricmp(ext,"png") == 0) { ...main...; return; }
+//          const char *movieExt = MovieExtension(ext, thisPlatform);   // trailing, no else
+//      -- i.e. the movie arm LAST IN SOURCE ORDER rather than in an `else` -- produces
+//      BYTE-IDENTICAL code: same 58 mismatch rows, same canonical 71.49383, idx 28 still
+//      `beq` vs the image's `bne`.  MSVC normalises the two arms to "smaller arm first"
+//      and no source ordering of them reaches it.  The whole 3.6pp belonged to the hoist.
+//      44 of the 58 residual rows are this one block placement (idx 29-51 inserted,
+//      idx 160-182 deleted); it is the only thing left between this function and ~100.
 //
 // The census WRONG_CALLEE charge here (target MovieExtension vs base ~String) is a
 // consequence of 1: both sides call MovieExtension exactly once, at different points in
 // the function, so the aligner pairs our ~String against it.  It is not a wrong callee.
+// (With 2' landed the charge is gone from the pattern list anyway -- our ~String no
+// longer sits where the aligner would pair it against MovieExtension.)
 const char *CacheResource(const char *cc, CacheResourceResult &res) {
     Platform thisPlatform = TheLoadMgr.GetPlatform();
     res = kCacheUnnecessary;
@@ -1321,6 +1359,7 @@ const char *CacheResource(const char *cc, CacheResourceResult &res) {
         if (cacheRes > 0) {
             return nullptr;
         }
+        return cacheFile;
     }
     return cacheFile;
 }
