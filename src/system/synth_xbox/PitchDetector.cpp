@@ -3,6 +3,17 @@
 #include "IPP_basicmath_xbox.h"
 #include <math.h>
 
+// ??1?$aligned_vector@M@@QAA@XZ at 0x82E4A160 belongs to this TU because
+// SpectralAnalysis's six float vectors ARE aligned_vector<float> -- see the
+// member comment in PitchDetector.h.  Two other spellings were tried first and
+// both emit NOTHING into PitchDetector.obj (verified with a COFF symbol dump):
+//   * `template class aligned_vector<float>;`          -- MSVC does not
+//     instantiate an implicitly-declared special member from a class-level
+//     explicit instantiation;
+//   * `template aligned_vector<float>::~aligned_vector();` -- accepted without
+//     a diagnostic, still no symbol.
+// Only an odr-use emits it, and the constructor's EH unwind path is the use.
+
 namespace DSP {
 
 // The target parks SpectralAnalysis's ctor/dtor in PitchDetector.obj (Analyze

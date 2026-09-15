@@ -1,4 +1,5 @@
 #include "HeadsetXferEffect.h"
+#include "PitchShiftEffect.h"
 #include "xdk\LIBCMT\string.h"
 
 namespace ATG {
@@ -6,6 +7,13 @@ namespace ATG {
 // m_regProps comes from the primary template in xdk/xaudio2/xapobase.h via
 // __uuidof(HeadsetXferEffect); see HeadsetXferEffect.h for the uuid attribute.
 template class CSampleXAPOBase<HeadsetXferEffect, HeadsetXferEffectParams>;
+
+// w8-d EXPERIMENT: the target's HeadsetXferEffect.obj holds
+// ?Process@?$CSampleXAPOBase@VPitchShiftEffect@@UPitchShiftEffectParams@@@ATG@@
+// at 0x82E41C40, not the HeadsetXferEffect instantiation.
+template void CSampleXAPOBase<PitchShiftEffect, PitchShiftEffectParams>::Process(
+    UINT, const XAPO_PROCESS_BUFFER_PARAMETERS *, UINT, XAPO_PROCESS_BUFFER_PARAMETERS *, INT
+);
 
 } // namespace ATG
 

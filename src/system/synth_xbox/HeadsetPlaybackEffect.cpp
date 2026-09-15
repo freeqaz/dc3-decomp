@@ -1,4 +1,5 @@
 #include "synth_xbox\HeadsetPlaybackEffect.h"
+#include "synth_xbox\GainEffect.h"
 #include "xdk\LIBCMT\string.h"
 
 namespace ATG {
@@ -7,6 +8,14 @@ namespace ATG {
 // __uuidof(HeadsetPlaybackEffect); see HeadsetPlaybackEffect.h for the uuid
 // attribute.
 template class CSampleXAPOBase<HeadsetPlaybackEffect, HeadsetPlaybackEffectParams>;
+
+// Same cross-named COMDAT story as GainEffect.cpp, one function over: the
+// survivor at 0x82E41A20 in HeadsetPlaybackEffect.s:319 is spelled with
+// VGainEffect.  The untyped OnSetParameters is four instructions (vtable load
+// + tail branch) and identical for every Effect, so it folds too.
+template void CSampleXAPOBase<GainEffect, GainEffectParams>::OnSetParameters(
+    const void *, unsigned int
+);
 
 } // namespace ATG
 

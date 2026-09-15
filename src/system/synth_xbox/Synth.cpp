@@ -46,6 +46,19 @@
 #include "xdk\xaudio2\xaudio2.h"
 #include "xdk\xaudio2\xaudio2fx.h"
 #include "xdk\LIBCMT\math.h"
+#include "synth\WahEffect.h"
+
+namespace ATG {
+// The Process COMDAT the linker kept inside Synth.obj's address range is
+// spelled with VWahEffect (Synth.s:5720, 0x82E2D660), not with the
+// CompressionEffect instantiation this TU creates via StandardEffect.  The
+// body is the same 33 instructions for every Effect, so the instantiations
+// fold and the surviving name is whichever one the map recorded.  Emit the
+// named one here or the target row has nothing to pair with.
+template void CSampleXAPOBase<WahEffect, WahEffect::Params>::Process(
+    UINT, const XAPO_PROCESS_BUFFER_PARAMETERS *, UINT, XAPO_PROCESS_BUFFER_PARAMETERS *, INT
+);
+} // namespace ATG
 
 // The XAudio2 engine interface. Only the three factory slots this file needs are
 // spelled out; slots 0-7 (IUnknown + GetDeviceCount/GetDeviceDetails/Initialize/
@@ -729,6 +742,36 @@ ULONG CXAPOBase::Release() {
     }
     return count;
 }
+
+// w8-d: AddRef was DECLARED in xdk/xaudio2/xapobase.h:46,89 and defined nowhere
+// in the tree -- only the `WCA@` adjustor thunk was ever emitted.  The body is
+// at 0x82E2D4F8, sandwiched between ?Release@CXAPOBase@@ (0x82E2D520) and
+// ?QueryInterface@CXAPOParametersBase@@ (0x82E2D598) in Synth.obj's carve, and
+// is the same interrupt-masked reservation idiom as Release with the counter
+// address formed up front: `addi r11, r3, 0x1c` (m_lReferenceCount) / mfmsr r9 /
+// mtmsrd r13,1 / lwarx / addi r10,r10,1 / stwcx. / mtmsrd r9,1 / bne, returning
+// the POST-increment value in r10.
+ULONG CXAPOBase::AddRef() {
+    return _InterlockedIncrement((long volatile *)&m_lReferenceCount);
+}
+
+// Unlike Release -- whose `delete this` path is too big to inline, so the
+// override stays a one-instruction tail branch at its own address -- CXAPOBase's
+// AddRef is small enough to inline into the derived override, so the two bodies
+// come out byte-identical and ICF-fold.  The image proves the fold rather than a
+// tail call: ?AddRef@CXAPOParametersBase@@WCA@AAKXZ at 0x82E2D970 is
+// `subi r3, r3, 0x20` / `b 0x82E2D4F8` -- it branches straight INTO the shared
+// body, not to a separate forwarder.
+ULONG CXAPOParametersBase::AddRef() { return CXAPOBase::AddRef(); }
+
+// w8-d: the CXAPOBase frame-count pair, both `return n;`.  The target body at
+// 0x82E2D590 is literally `mr r3, r4` / `blr`, and ham_xbox_r.map prints BOTH
+// ?CalcInputFrames@CXAPOBase@@UAAII@Z and ?CalcOutputFrames@CXAPOBase@@UAAII@Z
+// at that one address from synth_xbox:Synth.obj -- so the two fold into each
+// other and symbols.txt can bind only one of the pair.
+UINT32 CXAPOBase::CalcInputFrames(UINT32 outputFrameCount) { return outputFrameCount; }
+
+UINT32 CXAPOBase::CalcOutputFrames(UINT32 inputFrameCount) { return inputFrameCount; }
 
 HRESULT CXAPOBase::QueryInterface(const _GUID &riid, void **ppvInterface) {
     // Hoisting the short-circuit test into a named BOOL is load-bearing, not

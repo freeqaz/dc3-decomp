@@ -1,4 +1,5 @@
 #include "GainEffect.h"
+#include "HeadsetPlaybackEffect.h"
 #include "xdk\LIBCMT\vectorintrinsics.h"
 
 namespace ATG {
@@ -6,6 +7,15 @@ namespace ATG {
 // m_regProps comes from the primary template in xdk/xaudio2/xapobase.h via
 // __uuidof(GainEffect); see GainEffect.h for the uuid attribute.
 template class CSampleXAPOBase<GainEffect, GainEffectParams>;
+
+// The COMDAT the linker kept at 0x82E43FB0 -- inside the address range dtk
+// attributes to GainEffect.obj -- carries the HeadsetPlaybackEffect name, not
+// the GainEffect one (GainEffect.s:327).  Process's 33 instructions are
+// identical for every Effect, so the instantiations fold and the surviving
+// name need not be this TU's.  Emit the named one here or the row cannot pair.
+template void CSampleXAPOBase<HeadsetPlaybackEffect, HeadsetPlaybackEffectParams>::Process(
+    UINT, const XAPO_PROCESS_BUFFER_PARAMETERS *, UINT, XAPO_PROCESS_BUFFER_PARAMETERS *, INT
+);
 
 } // namespace ATG
 

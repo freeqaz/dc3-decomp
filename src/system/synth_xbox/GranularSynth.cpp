@@ -3,8 +3,22 @@
 #ifndef HX_NATIVE
 #include "..\stlport\stl\_uninitialized.h"
 #include "IPP_basicmath_xbox.h"
+#include "obj/Dir.h"
 #include <math.h>
 #include <string.h>
+
+// The COMDAT the linker kept at 0x82E4BA38, inside GranularSynth.obj's range,
+// is spelled with ObjectDir::Viewport (GranularSynth.s:...), not with the
+// Granule instantiation this TU creates for mGranules.resize().  Both types are
+// 0x40 bytes of non-POD, so the two instantiations are the same 20 instructions
+// (a per-element `memcpy` of 0x40 under a count loop) and the linker folded
+// them -- icf_aliases.map:10903-10907 lists Viewport, Transform, Triangle and
+// Granule at that one address.  Emit the named one here or the row cannot pair.
+namespace stlpmtx_std {
+template ObjectDir::Viewport *__uninitialized_fill_n(
+    ObjectDir::Viewport *, unsigned int, const ObjectDir::Viewport &, const __false_type &
+);
+} // namespace stlpmtx_std
 
 // Synapse natural-log helper with a small-magnitude clamp (avoids log(0)).
 namespace Util {
