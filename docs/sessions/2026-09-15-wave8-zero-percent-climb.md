@@ -142,6 +142,15 @@ crossed `DrawBlendList` 99.116 → 100, so the unit went 61 → 62) and
 renamed/moved keys were each verified as a 0 % → 100 % config correction with no
 loss.
 
+**Native gate on `980e4d5e4`: green.** `gate exit 0` — 506 registered, 437
+executed, 437 passed, 0 failed, 69 skipped against a budget of 69. The skips are
+the expected gated suites (`GameplayTelemetryTest` 48, the Mogg/Bink/FFmpeg
+audio families, `HeadlessBootTest.LongRunStability`), so the skip count did not
+move and there is no driver-mismatch artefact behind it. Log:
+`~/tmp/dc3-wells/w8/native-gate-980e4d5e4.log`. This matters more than usual for
+this merge: four behavioural fixes landed in it, including `CharEyes`'s copy
+constructor and `PlaylistSongProvider`'s destructor shape.
+
 ### What phase 1 proved about the 0 % class
 
 **Almost none of it was missing bodies.** Ranked by rows recovered:
