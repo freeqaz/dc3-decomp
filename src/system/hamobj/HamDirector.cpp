@@ -28,6 +28,7 @@ int gDc3PollSeq = 0;
 #include "char\FileMerger.h"
 #include "flow\Flow.h"
 #include "flow\PropertyEventProvider.h"
+#include "gesture\ArchiveSkeleton.h"
 #include "gesture\BaseSkeleton.h"
 #include "hamobj\ClipPlayer.h"
 #include "hamobj\DancerSequence.h"
@@ -110,10 +111,14 @@ ObjectDir *OfflineCallback::SongMainDir() {
 
 #ifndef HX_NATIVE
 // w8-b EXPERIMENT: orphan instantiation probe.
-void Dc3W8bProbe(const DancerFrame &frame) {
+void Dc3W8bProbe(const DancerFrame &frame, const char *s, Symbol a, Symbol b, Symbol c, int i, int j) {
     std::vector<DancerFrame> frames;
     frames.push_back(frame);
     std::vector<HamMoveKey> keys;
+    MakeString("%s %s %s %s", s, a, b, c);
+    MakeString("%s %s %s", s, a, b);
+    MakeString("%s %d %d", s, i, j);
+    ArchiveSkeleton arch;
 }
 #endif
 
