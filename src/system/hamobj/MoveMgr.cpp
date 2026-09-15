@@ -23,6 +23,13 @@ MoveMgr *TheMoveMgr;
 #include <algorithm>
 #include <climits>
 
+#ifndef HX_NATIVE
+// w8-b EXPERIMENT: orphan MakeString instantiation probe.
+const char *Dc3W8bMoveMgrProbe(int a, const char *b, const char *c) {
+    return MakeString("%d %s %s", a, b, c);
+}
+#endif
+
 MoveMgr::MoveMgr() : mCurrentSongLayout(0), mLoadingProgressCounter(0) {
     mMovesDir = nullptr;
     for (int i = 0; i < kNumDifficultiesDC2; i++) {

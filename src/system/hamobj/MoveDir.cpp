@@ -1541,6 +1541,17 @@ bool MoveDir::InGracePeriod(int player) {
 }
 
 MoveFrame *MoveDir::ClosestMoveFrame() {
+    HamMove *move = mMovePlayerData[0].mCurMove;
+    if (!move)
+        return nullptr;
+
+    // w8-b: the local class MUST be declared here, after the null check, not at
+    // the top of the body.  MSVC mangles a local class with the function's
+    // lexical-scope counter, which starts at 2 for the body and is bumped +2 by
+    // the unbraced `if (...) return nullptr;` above -- so the image's
+    // min_element instantiation is ...@UFilterFrameDist@?3??ClosestMoveFrame...
+    // (?3 = 4) at 0x824FC160, while declaring it first gives ?1 (= 2) and the
+    // instantiation never pairs.  See docs/decomp/patterns/fixable-scope-index.md.
     struct FilterFrameDist {
         FilterFrameDist(float dist) : mDist(dist) {}
         bool operator()(const MoveFrame &frame1, const MoveFrame &frame2) const {
@@ -1549,9 +1560,6 @@ MoveFrame *MoveDir::ClosestMoveFrame() {
 
         float mDist; // 0x0
     };
-    HamMove *move = mMovePlayerData[0].mCurMove;
-    if (!move)
-        return nullptr;
 
     int measure = TheTaskMgr.CurrentMeasure();
     float beat = TheTaskMgr.TotalBeat();

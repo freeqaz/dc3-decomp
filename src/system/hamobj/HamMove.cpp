@@ -23,6 +23,13 @@
 
 float HamMove::sMinFrameDistBeats = 0.2;
 
+#ifndef HX_NATIVE
+// w8-b EXPERIMENT: orphan MakeString instantiation probe.
+const char *Dc3W8bHamMoveProbe(const char *a, const char *b, int c) {
+    return MakeString("%s %s %d", a, b, c);
+}
+#endif
+
 BinStream &operator<<(BinStream &bs, const Ham1NodeWeight &wt) {
     bs << wt.mPerfectDist << wt.mRate << wt.mPerfectDist2 << wt.mRate2 << wt.mActive;
     return bs;

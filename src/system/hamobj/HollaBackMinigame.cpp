@@ -32,6 +32,11 @@
 // unknown, so reference it as the linker label per the project convention.
 extern int lbl_82F0E8A4;
 
+#ifndef HX_NATIVE
+// w8-b EXPERIMENT: orphan vector<Symbol> copy-construct instantiation probe.
+void Dc3W8bHollaProbe(const std::vector<Symbol> &src, std::vector<Symbol> &dst) { dst = src; }
+#endif
+
 void JumpToMeasure(float beat) {
     float ms = BeatToMs(beat * 4.0f);
     Hmx::Object *game = ObjectDir::Main()->Find<Hmx::Object>("game", true);
