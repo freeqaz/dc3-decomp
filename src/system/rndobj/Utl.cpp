@@ -2715,6 +2715,31 @@ void BuildVisit(BSPNode *node) {
     // `addi r26,r29,0x14` right after the node load, where retail computes it
     // only at the first Cross, and costs 2.4pp (95.0 -> 92.6, measured
     // 2026-09-14).  Member access through the iterator stays.
+    //
+    // w7-bo (2026-09-15): the CAUSAL ORDER of those two symptoms, which the note
+    // above had backwards.  The home stores are not a by-product of the extra
+    // register -- they are what CREATES it.  All eleven land on 0x60(r31) and they
+    // are the three reference parameters of the two inlined Cross() calls plus the
+    // Set()/operator= ahead of them, homed once each:
+    //     40 &m.z   41 &m.y   42 &m.y      (m.z = plane; m.y.Set(0,1,0))
+    //     82 &m.y                          (m.y.Set(1,0,0), inside the |dot| > 0.9 arm)
+    //     88 &m.z   98 &m.x   99 &m.y      (Cross(m.y, m.z, m.x))
+    //    117 &m.y  119 &m.x  121 &m.z      (Cross(m.z, m.x, m.y))
+    // Because &m.x is stored at 98 and again at 119 -- across the intervening
+    // `bl Normalize` -- retail must keep it in a CALLEE-SAVED register (r26,
+    // materialised at idx 86 `addi r26,r28,0x14`).  That is the ninth callee-saved
+    // GPR, hence __savegprlr_23 against our __savegprlr_24, and every register in
+    // the body then reads one number off: 103 of the 121 residual rows are that
+    // single relabelling, and 13 more are the home stores themselves.  We already
+    // compute the same address at the same instruction index (idx 86
+    // `addi r4,r30,0x14`) -- into a VOLATILE register, because nothing in our
+    // source keeps it live past the call.
+    // Measured negative (2026-09-15): binding ONLY `Vector3 &axisX` immediately
+    // before the first Cross -- the surgical form the 2026-09-14 experiment did not
+    // try -- does not force the callee-saved either.  Prologue stayed r24-r31,
+    // canonical stayed 94.97, and mismatch rows went 121 -> 123.
+    // So the open question is narrow and concrete: what source spelling makes MSVC
+    // home an inlined Cross()'s reference parameters?  Nothing tried so far does.
     lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
     lastIt->mTransform.m.y.Set(0, 1, 0);
