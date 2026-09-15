@@ -185,6 +185,22 @@ const std::vector<PracticeStep> &PracticeSection::Steps() const { return mSteps;
 void PracticeSection::ClearSteps() { ClearAndShrink(mSteps); }
 void PracticeSection::AddStep(PracticeStep step) { mSteps.push_back(step); }
 
+// RESIDUAL (w8-i, 99.90 canonical / 97.21212 fuzzy): 15 rows of 33, ONE cause --
+// the four volatile registers are allocated one slot rotated from the image's.
+// Image: r6=idx, r7=gNullStr, r8=mSteps.end(), r9=it->mStart.  Ours: r6=gNullStr,
+// r7=end, r8=mStart, r9=idx.  Everything else follows, including the OFFSET_SWAP
+// at idx 17/18, which is just the two induction bumps in the opposite order
+// (image `addi r6,r6,0x1` then `addi r11,r11,0x18`).
+// REFUTED, five spellings, every one BIT-IDENTICAL to this body (same 15 rows,
+// same registers): (a) `++idx, ++it` instead of `++it, ++idx`; (b) hoisting the
+// iterator out of the for-init so `int idx = 0` is the for-init declaration;
+// (c) moving `idx++` to the END of the loop body, which is the source position
+// that would put the idx bump first if the bump order were reachable at all;
+// (d) `unsigned int idx`; (e) binding `PracticeStep &step = *it;` at the top of
+// the body -- the lever that closed DetectFrame::Reset, inert here because `it`
+// is already an induction variable rather than a body-derived address.
+// The permutation is a whole-set rotation, i.e. an allocator tie-break upstream
+// of anything the source can say.
 DancerSequence *PracticeSection::SequenceForDetection(Symbol start, Symbol end) {
     int idx = 0;
     for (std::vector<PracticeStep>::iterator it = mSteps.begin(); it != mSteps.end();

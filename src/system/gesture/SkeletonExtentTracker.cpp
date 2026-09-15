@@ -55,7 +55,21 @@ Hmx::Rect SkeletonExtentTracker::GetViewBox() const {
     Hmx::Rect ret;
     if (mMinX != FLT_MIN && mMinX != FLT_MAX && mMinY != FLT_MIN && mMinY != FLT_MAX) {
         float val = Min(mMaxY - mMinY, 1.0f);
-        ret.Set(((mMaxX + mMinX) / 2.0f) - (val / 2.0f), mMaxY, val, val);
+        // w8-i BUG FIX: the y component is mMinY, not mMaxY.  0x82DFE79C loads
+        // `lfs f0, 0x30(r4)` (mMinY) for the FLT_MIN/FLT_MAX guards and the image
+        // stores that same f0 into the rect at 0x82DFE7BC (`stfs f0, 0x4(r3)`);
+        // mMaxY (0x38, loaded at 0x82DFE7B0) is consumed only by the
+        // `fsubs f12, f12, f0` height on the next line and never stored.  We
+        // passed mMaxY, so every view box sat at the TOP of the tracked extent
+        // instead of the bottom -- a full box-height offset on the mesh UVs that
+        // ApplyToMeshVerts lays out.
+        // RESIDUAL after the fix (w8-i, 94.87 canonical / 94.74359 fuzzy): 3 rows
+        // of 40, all one scheduling slot -- `lfs f0, 0x34(r4)` (mMaxX) is emitted
+        // before the `lis r10, __real@3f000000@h` anchor where the image emits
+        // `lfs f11, 0x34(r4)` after it.  Pure FPR choice: in the image mMaxX
+        // lands in f11 (dead since the FLT_MIN guard), in ours in f0 (dead since
+        // the mMinY store one instruction earlier).  Was 89.74 before the fix.
+        ret.Set(((mMaxX + mMinX) / 2.0f) - (val / 2.0f), mMinY, val, val);
     } else {
         ret.Set(0, 0, 1, 1);
     }

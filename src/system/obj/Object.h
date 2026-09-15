@@ -1429,12 +1429,13 @@ namespace Hmx {
         virtual const char *FindPathName();
 
         /** "script type of the object" */
-        Symbol Type() const {
-            if (mTypeDef)
-                return mTypeDef->Sym(0);
-            else
-                return Symbol();
-        }
+        /** w8-i: a TERNARY, not an if/else with two `return`s.  The image builds ONE
+         *  Symbol temporary that both arms write (`addi r3, r1, 0x50` before the
+         *  branch; the null arm does `stw r11, 0x50(r1)`), then copies it into the
+         *  sret with `lwz r11, 0x0(r3)` / `stw r11, 0x0(r31)`.  Two `return`
+         *  statements let NRVO write the sret directly in each arm and drop the
+         *  copy, which costs the frame 0x10 bytes and four instructions. */
+        Symbol Type() const { return mTypeDef ? mTypeDef->Sym(0) : Symbol(); }
         const ObjRef &Refs() const { return mRefs; }
         void SetNote(const char *note);
         DataArray *TypeDef() const { return mTypeDef; }

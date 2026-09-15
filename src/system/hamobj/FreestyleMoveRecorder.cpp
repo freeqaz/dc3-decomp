@@ -629,6 +629,21 @@ DataNode FreestyleMoveRecorder::OnReadCreated(DataArray *a) {
         a->Str(1), framecount, sInstance->mTakes[sInstance->mCurrentTakeIndex].mFrames
     );
     sInstance->mTakes[sInstance->mCurrentTakeIndex].Init(sInstance->mMaxFrames);
+    // RESIDUAL (w8-i, 97.67 canonical / 97.20930 fuzzy): 4 rows of 44, ONE cause,
+    // and it is a destination-register choice rather than anything the source
+    // says.  The last two statements share one load of sInstance in r11; the
+    // image computes the take address with `add r10, r10, r11`, leaving r11 (the
+    // sInstance pointer) alive, and then reaches both `lwz r10, 0xb8(r11)` and
+    // `stw r10, 0x20(r11)` off it.  We emit `add r11, r10, r11`, which kills the
+    // pointer, so MSVC has to reload it from the global -- the one extra `lwz`
+    // that makes our body 176 bytes against the target's 172.  Note MSVC does
+    // NOT reuse the index either side: 0xb8 is re-loaded after the store on both,
+    // so the store really is treated as possibly aliasing the member but not the
+    // pointer global.
+    // REFUTED: `FreestyleMoveRecorder *inst = sInstance;` for these two
+    // statements only is WORSE (96.7 raw -- it buys a `mr r9, r11` copy and
+    // shifts r9->r8), and `FreestyleMove &take = sInstance->mTakes[...];` is
+    // exactly inert (the subscript already forms the address).
     sInstance->mTakes[sInstance->mCurrentTakeIndex].mNumFrames = framecount;
     sInstance->mLastFrameIndex = sInstance->mCurrentTakeIndex;
     return 0;

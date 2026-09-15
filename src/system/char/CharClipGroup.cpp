@@ -85,6 +85,16 @@ void CharClipGroup::AddClip(CharClip *clip) {
     }
 }
 
+// RESIDUAL (w8-i, 56.81 canonical / 55.41 fuzzy): the only structural difference is
+// WHERE `end() = begin() + size()` is finished.  The image completes it before the
+// call and holds the single pointer in r31 across `bl find` (one callee-save,
+// __savegprlr_31); we keep `begin` in r31 and `size` in r30 and sink the
+// `mulli`/`add` past the call (two callee-saves).  Every one of the 23 charged rows
+// is downstream of that one scheduling choice.  Measured here, all at 56.81 canonical:
+//   - `const_iterator e = mClips.end(); return e != mClips.find(clip);`  56.81 / 55.41
+//   - `return mClips.find(clip) != mClips.end();` (operand swap)          56.81 / 55.19
+// Binding end() to a named local does not materialise it -- the value is a bare
+// pointer, so MSVC re-sinks the arithmetic regardless of statement boundaries.
 bool CharClipGroup::HasClip(CharClip *clip) const {
     return mClips.end() != mClips.find(clip);
 }

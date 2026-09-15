@@ -92,7 +92,22 @@ namespace {
     ) {
         unsigned int colors[8];
         colors[0] = 0;
-        colors[1] = (unsigned short)(player == 0 ? -1 : 0x3000);
+        // w8-i: the two lines below are deliberately spelled DIFFERENTLY, and the
+        // asymmetry is the whole residual -- 87.4 -> 100.0 (152 B).  Both arms are
+        // lowered branchlessly as the mask select `b + (mask & (a - b))`, with the
+        // mask coming from the `subfic r11, r6, 0` / `subfe r11, r11, r11` pair.
+        // For colors[1] the select is the LIVE one and the cast must sit INSIDE
+        // the arms: then b is 0xFFFF, a - b is 0x3000 - 0xFFFF = 0xFFFF3001, which
+        // is not a contiguous bit run, so MSVC materialises it as the image's two
+        // `rlwinm` masks (0, 31, 19 then 0, 18, 15) plus `addis r11, r11, 1` /
+        // `subi r11, r11, 1` -- and the result is already 16-bit, so nothing
+        // truncates at the end.  Cast OUTSIDE, b is the int -1, a - b collapses to
+        // 0x3001, and the value needs a trailing `clrlwi r11, r11, 16` that the
+        // image does not have: that one instruction was the entire 6-row cluster.
+        // colors[2] keeps the cast OUTSIDE because its select is never computed --
+        // `cmpwi cr6, r6, 0x1` / `beq` branches over it to a `li r10, 0x3000`, so
+        // only the narrowing survives and the inner spelling is unobservable.
+        colors[1] = player == 0 ? (unsigned short)-1 : (unsigned short)0x3000;
         colors[2] = (unsigned short)(player == 1 ? -1 : 0x3000);
         colors[3] = 0x216b;
         colors[4] = 0x216b;

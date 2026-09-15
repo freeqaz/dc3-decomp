@@ -568,6 +568,16 @@ int HamCharacter::SongAnimation() {
     return -1;
 }
 
+// RESIDUAL (w8-i, 95.24 canonical / 94.76 fuzzy): 3 rows of 21, all one artefact.
+// The image keeps the loaded node pointer in r10 and makes a SEPARATE zero-extended
+// copy to address through -- `lwz r10, 0xc(r11)` / `cmplwi cr6, r10, 0` /
+// `clrrwi r11, r10, 0` / `lbz r11, 0x8(r11)` -- where we load straight into r11 and
+// address through that, dropping the copy.  Two spellings measured, both WORSE:
+//   `size() > prop && mShowableProps[prop] && mShowableProps[prop]->Showing()`
+//        -> 92.38 canonical; the double subscript does NOT produce the clrrwi, it only
+//           turns the null test from `cmplwi` into a signed `cmpwi`.
+//   ... `mShowableProps[prop] != nullptr && ...` -> 92.38, identical rows.
+// The assignment-expression form below is what keeps the test unsigned.
 bool HamCharacter::GetPropShowing(int prop) {
     RndDrawable *d;
     auto _tmp0 = mShowableProps.size();
