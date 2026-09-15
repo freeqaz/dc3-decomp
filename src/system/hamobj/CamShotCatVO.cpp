@@ -148,37 +148,59 @@ void CamShotVOData(
                     s1 = win_hype_crew;
                     charSym = all;
                 }
-            } else if (subStrings.size() > 2) {
-                // One address for the two comparisons: the target computes
-                // `addi r29, r3, 0x10` once and reuses it (82518.. `mr r3, r29`
-                // before each String::operator==), unlike subStrings[1] above
-                // which it recomputes at every use.
-                String &camType = subStrings[2];
-                if (camType == "DLG")
-                    s1 = win_dlg_char;
-                else if (camType == "MOV")
-                    s1 = win_mov_char;
-                else
-                    MILO_NOTIFY("Could not find cam_type for %s", s);
-            }
-
-            if (subStrings.size() > 1) {
-                String strd0(subStrings[1]);
-                strd0.ToLower();
-                static Symbol low("low");
-                static Symbol med("med");
-                static Symbol high("high");
-                if (strd0 == low || strd0 == med || strd0 == high) {
-                    winLevelSym = strd0.c_str();
-                }
-            }
-            if (winLevelSym.Null()) {
-                MILO_NOTIFY("Couldn't find win level for %s", s);
-            }
-            if (subStrings.size() > 3) {
-                charSym = StrToCharacterSym(subStrings[3]);
             } else {
-                MILO_NOTIFY("Couldn't find character for %s", s);
+                // BUG FIX (w7-bv): the win-level / character block below is
+                // INSIDE this final else, not after the chain.  Every earlier
+                // arm exits straight to the vector destructor at 0x82519524 in
+                // the image -- BATTLE `b 0x825194FC` (at 0x82519118, via the
+                // shared `lwz r11, 0(r3); stw r11, 0(r10)` tail), WIN
+                // `b 0x82519500` (0x82519174), LOSE `b 0x82519524` (0x8251920C)
+                // and HYPE (0x825192F0) -- and only the DLG/MOV arm and the
+                // no-match case (`ble cr6, 0x8251937C` at 0x82519310) reach the
+                // `subStrings.size() > 1` test at 0x82519378.  We used to fall
+                // into it from every arm, which notified "Couldn't find win
+                // level" / "Couldn't find character" for every BATTLE/CAMP/HYPE
+                // category and overwrote charSym with subStrings[3] on any
+                // four-part BATTLE name.  97.43 -> 100.0 canonical (99.95 raw);
+                // the whole r23/r25 and TheDebug-in-r14 cascade that w7-q
+                // recorded as a register-allocator floor was downstream of
+                // this control flow.  Residual 6 rows: the low/med/high statics
+                // mangle as scope `?FG@` in the image and `?FI@` here (MSVC's
+                // per-function scope ordinal -- two more numbered scopes reach
+                // this block in our spelling), a class the canonical ruler
+                // folds.
+                if (subStrings.size() > 2) {
+                    // One address for the two comparisons: the target computes
+                    // `addi r29, r3, 0x10` once and reuses it (`mr r3, r29`
+                    // before each String::operator==), unlike subStrings[1]
+                    // above which it recomputes at every use.
+                    String &camType = subStrings[2];
+                    if (camType == "DLG")
+                        s1 = win_dlg_char;
+                    else if (camType == "MOV")
+                        s1 = win_mov_char;
+                    else
+                        MILO_NOTIFY("Could not find cam_type for %s", s);
+                }
+
+                if (subStrings.size() > 1) {
+                    String strd0(subStrings[1]);
+                    strd0.ToLower();
+                    static Symbol low("low");
+                    static Symbol med("med");
+                    static Symbol high("high");
+                    if (strd0 == low || strd0 == med || strd0 == high) {
+                        winLevelSym = strd0.c_str();
+                    }
+                }
+                if (winLevelSym.Null()) {
+                    MILO_NOTIFY("Couldn't find win level for %s", s);
+                }
+                if (subStrings.size() > 3) {
+                    charSym = StrToCharacterSym(subStrings[3]);
+                } else {
+                    MILO_NOTIFY("Couldn't find character for %s", s);
+                }
             }
         }
     }
