@@ -2648,6 +2648,26 @@ void TessellateMesh(RndMesh *mesh) {
     //   as a byte OFFSET added to r30 for the face cursor AND 0x100 off it as
     //   the verts base for the *0x60 index math, so the accessor being homed
     //   covers both of those uses.)
+    //
+    // w7-bs (2026-09-15): the two missing mentions were the vertex lookups.
+    // `&mesh->Verts(face.vN)` (or `Verts()[face.vN]`, byte-identical) instead
+    // of the hand-written `face.vN * 0x60 + vertsBase` gives the image's FOUR
+    // `stw r8, 0x50` homes and its two `mr` copies of the mVerts base --
+    // 95.46 -> 95.9 canonical, 67 -> 66 rows, and the HX_NATIVE fork goes away.
+    // What is STILL missing is the family of three dead `sth` of v2/v3/v1 into
+    // 0x50 (82637BF4/BF8/C00) and their `mr` copies; the same three dead
+    // `sth` sit in RndAmbientOcclusion::Tessellate (826E14A0/B4/C8) and six of
+    // them in RndAmbientOcclusion::SmoothResults (826DF7D0-E8, one per
+    // `mesh->Verts(face.vN)` mention there), and our builds of BOTH of those
+    // lack them too, while MakeNormals' `m->Verts()[face[k]]` has none in the
+    // image either.  So a 16-bit temp is homed once per `Verts(face.vN)` mention
+    // in the original and never in ours.  REFUTED as the cause: a by-value
+    // `unsigned short` parameter (a TU-local `static inline Vert &At(RndMesh *,
+    // unsigned short)` wrapper is byte-identical to `Verts(int)`), pointer vs
+    // reference binding, `Verts(int)` vs `Verts()[]`.  Until that temp is found
+    // the comparator byte stays at 0x54 (image 0x50, row 5) and the 4-byte
+    // shift of the small-temp block stays with it -- the remaining 66 rows are
+    // all that shift plus its register renames.
     Edge e12, e23, e31;
 
     for (unsigned int i = 0; i < (unsigned int)mesh->Faces().size(); i++) {
@@ -2659,22 +2679,9 @@ void TessellateMesh(RndMesh *mesh) {
         // parks them in registers across the find/insert calls instead.
         RndMesh::Face &face = mesh->Faces()[i];
 
-#ifdef HX_NATIVE
-        intptr_t vertsBase = (intptr_t)mesh->Verts().mVerts;
-
-        RndMesh::Vert *pv1 = (RndMesh::Vert *)((uintptr_t)face.v1 * 0x60 + vertsBase);
-        RndMesh::Vert *pv2 = (RndMesh::Vert *)((uintptr_t)face.v2 * 0x60 + vertsBase);
-        RndMesh::Vert *pv3 = (RndMesh::Vert *)((uintptr_t)face.v3 * 0x60 + vertsBase);
-#else
-        int vertsBase = (int)(unsigned int)mesh->Verts().mVerts;
-
-        RndMesh::Vert *pv1 =
-            (RndMesh::Vert *)((unsigned int)face.v1 * 0x60 + vertsBase);
-        RndMesh::Vert *pv2 =
-            (RndMesh::Vert *)((unsigned int)face.v2 * 0x60 + vertsBase);
-        RndMesh::Vert *pv3 =
-            (RndMesh::Vert *)((unsigned int)face.v3 * 0x60 + vertsBase);
-#endif
+        RndMesh::Vert &vert1 = mesh->Verts(face.v1);
+        RndMesh::Vert &vert2 = mesh->Verts(face.v2);
+        RndMesh::Vert &vert3 = mesh->Verts(face.v3);
 
         e12.v0 = face.v1;
         e12.v1 = face.v2;
@@ -2684,9 +2691,9 @@ void TessellateMesh(RndMesh *mesh) {
         e31.v1 = face.v1;
 
         RndMesh::Vert blend12, blend23, blend31;
-        RndAmbientOcclusion::BlendVert(*pv1, *pv2, blend12);
-        RndAmbientOcclusion::BlendVert(*pv2, *pv3, blend23);
-        RndAmbientOcclusion::BlendVert(*pv3, *pv1, blend31);
+        RndAmbientOcclusion::BlendVert(vert1, vert2, blend12);
+        RndAmbientOcclusion::BlendVert(vert2, vert3, blend23);
+        RndAmbientOcclusion::BlendVert(vert3, vert1, blend31);
 
         std::set<Edge>::iterator it12 = edges.find(e12);
         if (it12 == edges.end()) {
