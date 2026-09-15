@@ -233,21 +233,21 @@ DataNode OnPrintTimers(DataArray *a) {
 void AutoGlitchReport::EnableCallback() { gGlitchCallback = true; }
 
 void AutoGlitchReport::SendCallback(
-    float f1, float f2, const char *cc, AutoTimerCallback cb, void *v
+    float ms, float threshold, const char *name, AutoTimerCallback cb, void *user
 ) {
     if (gGlitchCallback) {
         float min = Min(Timer::SlowFrameTimer().SplitMs(), Timer::SlowFrameWaiver());
-        float diff = f1 - min;
-        if (diff >= f2) {
+        ms -= min;
+        if (ms >= threshold) {
             String str;
             for (int i = 0; i < sDepth; i++) {
                 str += ' ';
             }
             TheDebug << str;
             if (!cb) {
-                MILO_LOG("%s took %.2f ms\n", cc, diff);
+                MILO_LOG("%s took %.2f ms\n", name, ms);
             } else {
-                cb(diff, v);
+                cb(ms, user);
             }
         }
     }
