@@ -673,13 +673,17 @@ SpotMeshEntry_* vector<SpotMeshEntry_, StlNodeAlloc<SpotMeshEntry_>>::_M_erase(
     if (__next != this->_M_finish) {
         int __count = ((char*)this->_M_finish - (char*)__next) / (int)sizeof(SpotMeshEntry_);
         SpotMeshEntry_* __dst = __pos;
+        // Same shape as the 3-arg overload in SpotlightDrawer_NG.cpp: the image
+        // tests the division result in a volatile and copies it into the
+        // callee-saved loop counter inside the taken branch (`mr r31, r11`).
         if (__count > 0) {
+            int __n = __count;
             do {
                 SpotMeshEntry_* __src = __dst + 1;
                 memcpy(__dst, __src, sizeof(SpotMeshEntry_));
-                __count--;
+                __n--;
                 __dst = __src;
-            } while (__count != 0);
+            } while (__n != 0);
         }
     }
 
