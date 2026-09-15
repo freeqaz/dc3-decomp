@@ -64,9 +64,16 @@ TextStream &operator<<(TextStream &, const AllocInfo &);
 class AllocInfoVec {
 public:
     AllocInfoVec() : mStart(0), mEnd(0), mEndOfStorage(0) {}
-    __forceinline AllocInfoVec(int size)
-        : mStart((AllocInfo **)DebugHeapAlloc(size * sizeof(AllocInfo *))), mEnd(mStart),
-          mEndOfStorage(mStart + size) {}
+    // STLport-shaped: `allocate(size, size)` hands the byte count back as an
+    // element count through the reference (see Allocate). In the shipped
+    // MemTracker::MemTracker that write-back is visible as `clrlwi r5, r27, 2`
+    // (y & 0x3fffffff = (y*4)/4 unsigned, 827DB768) spilled to a frame temp
+    // (`stw r5, 0x54(r31)`, 827DB788) that nothing reads; the plain
+    // `DebugHeapAlloc(size * sizeof(AllocInfo *))` init could not produce
+    // either. Must stay __forceinline: without it MSVC emits an out-of-line
+    // ??0AllocInfoVec call (measured, w7-bu).
+    __forceinline AllocInfoVec(unsigned int size)
+        : mStart(Allocate(size, size)), mEnd(mStart), mEndOfStorage(mStart + size) {}
     // NO destructor.  The shipped MemTracker::DiffDump carries pdata flag
     // 0x40008603 -- the exception-handler bit CLEAR -- while DiffTblReport in
     // the same TU is 0xC000A404, so DiffDump has no unwind region at all.  It
@@ -97,6 +104,15 @@ public:
     }
 
 private:
+    // STLport-shaped allocate(n, allocated_n): the byte count is handed back
+    // as an element count through the reference.
+    static __forceinline AllocInfo **Allocate(unsigned int n, unsigned int &allocatedN) {
+        unsigned int bytes = n * sizeof(AllocInfo *);
+        AllocInfo **p = (AllocInfo **)DebugHeapAlloc(bytes);
+        allocatedN = bytes / sizeof(AllocInfo *);
+        return p;
+    }
+
     AllocInfo **mStart; // 0x0
     AllocInfo **mEnd; // 0x4
     AllocInfo **mEndOfStorage; // 0x8
