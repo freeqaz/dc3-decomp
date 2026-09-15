@@ -372,8 +372,8 @@ void ReadFunc(BINKIO *bink, bool startRead) {
             // neutral; naming the outputs is worse than either.
             XTEABlock *block = (XTEABlock *)bf->pBufBack;
             while (block < (XTEABlock *)((unsigned char *)bf->pBufBack + bytesRead)) {
-                block->mData[0] = EndianSwap(block->mData[0]);
                 block->mData[1] = EndianSwap(block->mData[1]);
+                block->mData[0] = EndianSwap(block->mData[0]);
                 bf->pXTEADecrypter->Encrypt(block, &temp);
                 unsigned int *dst = (unsigned int *)block;
                 const unsigned int *src = (const unsigned int *)&temp;
@@ -399,7 +399,8 @@ void ReadFunc(BINKIO *bink, bool startRead) {
         // `BufHighUsed < bytesAvail` does NOT swap them -- it keeps the same
         // load order and inverts the branch polarity on top (ble -> bge), a
         // net loss.  The load order is the scheduler's, not the source's.
-        if (bink->bytesAvail > bink->BufHighUsed) {
+        unsigned int avail = bink->bytesAvail;
+        if (avail > bink->BufHighUsed) {
             bink->BufHighUsed = bink->bytesAvail;
         }
         int now = RADTimerRead();
