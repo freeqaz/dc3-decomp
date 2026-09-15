@@ -33,6 +33,21 @@ void StandingStillGestureFilter::RestoreDefaultForwardFacingCutoff() {
     mForwardFacingCutoff = 0.4f;
 }
 
+// 100% canonical (w7-bm, 2026-09-15; was 96.6). The image tail-merges every
+// state store: the not-tracked site (state 2) at 0x8c is the cross-jump body
+// holder and states 3..9 are each `li r9,k; b 0x8c`, so every site below is
+// written as the full store/reset/return tail rather than as one `int state`
+// chain with a single store after it (that chain puts the join after the
+// last site and leaves the state-2 site as a separate store: 96.6; the
+// r30/r31 this/skeleton rotation and the 0x50..0x90 slot permutation were
+// downstream of that join placement). The dotR test must `goto` a label
+// INSIDE the dotL block: any spelling that makes the state-9 tail the
+// function's fall-through (`dotR > t || dotL > t`, or `if (dotR <= t) {..}`
+// followed by the tail) makes it the body holder and moves the whole block
+// to the end (94.2). Residual: 4 register-only rows (r9/r11, value vs address
+// registers in the 16-byte `unk38 = skeleton.GetUnkab0()` copy); hoisting
+// `pos` above the `if` and copying from it drops the dead source-address
+// addi the image has (99.6).
 void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
     // Two file-local mutable floats, read from memory rather than folded as
     // literals: .data 0x2c/0x30 of this TU.  The first is a DISTANCE (0.5),
@@ -57,87 +72,91 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
     if (unk48)
         goto StandingStillLogic;
 
-    {
-        int state = 0;
-        if (filter.Sitting()) {
-            state = 3;
-        } else if (!filter.IsConfident()) {
-            state = (int)filter.Confidence() + 400;
-        } else if (filter.Sideways()) {
-            state = 5;
-        } else {
-            const TrackedJoint &leftShoulder = skeleton.ShoulderJoint(kSkeletonLeft);
-            const TrackedJoint &rightShoulder = skeleton.ShoulderJoint(kSkeletonRight);
-            Vector3 shoulderDiff;
-            shoulderDiff.x = rightShoulder.mJointPos[0].x - leftShoulder.mJointPos[0].x;
-            shoulderDiff.y = rightShoulder.mJointPos[0].y - leftShoulder.mJointPos[0].y;
-            shoulderDiff.z = rightShoulder.mJointPos[0].z - leftShoulder.mJointPos[0].z;
-            Normalize(shoulderDiff, shoulderDiff);
-            float shoulderFacing =
-                ((shoulderDiff.y + shoulderDiff.x) * 0.0f) + shoulderDiff.z;
-            auto _tmp0 = std::fabs(shoulderFacing);
-            if (_tmp0 > mForwardFacingCutoff) {
-                state = 6;
-            } else {
-                Vector2 handLeftPos, handRightPos;
-                skeleton.ScreenPos(kJointHandLeft, handLeftPos);
-                skeleton.ScreenPos(kJointHandRight, handRightPos);
-                if (handLeftPos.x > handRightPos.x) {
-                    state = 7;
-                } else {
-                    Vector2 kneeLeftPos, kneeRightPos;
-                    skeleton.ScreenPos(kJointKneeLeft, kneeLeftPos);
-                    skeleton.ScreenPos(kJointKneeRight, kneeRightPos);
-                    if (kneeLeftPos.x > kneeRightPos.x) {
-                        state = 8;
-                    } else {
-                        const TrackedJoint *joints = skeleton.TrackedJoints();
-                        // Declaration ORDER here is a measured negative: the
-                        // image gives v1..v4 the stack slots 0x90/0x80/0x70/0x60
-                        // (reusing, in reverse, the three Vector2 slots above),
-                        // but reversing the declaration to `v4, v3, v2, v1`
-                        // measures 96.5 against 96.6 and turns 3 permuted slots
-                        // into 9.
-                        Vector3 v1, v2, v3, v4;
-                        v1.x = joints[kJointKneeRight].mJointPos[0].x - joints[kJointHipRight].mJointPos[0].x;
-                        v1.y = joints[kJointKneeRight].mJointPos[0].y - joints[kJointHipRight].mJointPos[0].y;
-                        v1.z = joints[kJointKneeRight].mJointPos[0].z - joints[kJointHipRight].mJointPos[0].z;
-                        Normalize(v1, v1);
-
-                        v2.x = joints[kJointKneeRight].mJointPos[0].x - joints[kJointAnkleRight].mJointPos[0].x;
-                        v2.y = joints[kJointKneeRight].mJointPos[0].y - joints[kJointAnkleRight].mJointPos[0].y;
-                        v2.z = joints[kJointKneeRight].mJointPos[0].z - joints[kJointAnkleRight].mJointPos[0].z;
-                        Normalize(v2, v2);
-
-                        v3.x = joints[kJointKneeLeft].mJointPos[0].x - joints[kJointHipLeft].mJointPos[0].x;
-                        v3.y = joints[kJointKneeLeft].mJointPos[0].y - joints[kJointHipLeft].mJointPos[0].y;
-                        v3.z = joints[kJointKneeLeft].mJointPos[0].z - joints[kJointHipLeft].mJointPos[0].z;
-                        Normalize(v3, v3);
-
-                        v4.x = joints[kJointKneeLeft].mJointPos[0].x - joints[kJointAnkleLeft].mJointPos[0].x;
-                        v4.y = joints[kJointKneeLeft].mJointPos[0].y - joints[kJointAnkleLeft].mJointPos[0].y;
-                        v4.z = joints[kJointKneeLeft].mJointPos[0].z - joints[kJointAnkleLeft].mJointPos[0].z;
-                        Normalize(v4, v4);
-
-                        float dotR = v2.x * v1.x + v2.y * v1.y + v2.z * v1.z;
-                        if (dotR > sLegStraightDot) {
-                            state = 9;
-                        } else {
-                            float dotL = v4.x * v3.x + v4.y * v3.y + v4.z * v3.z;
-                            if (dotL > sLegStraightDot) {
-                                state = 9;
-                            } else {
-                                goto StandingStillLogic;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        TheGestureMgr->unk30[idx] = state;
+    if (filter.Sitting()) {
+        TheGestureMgr->unk30[idx] = 3;
         mRaisedMs = 0;
         mStandingStill = false;
         return;
+    }
+    if (!filter.IsConfident()) {
+        TheGestureMgr->unk30[idx] = (int)filter.Confidence() + 400;
+        mRaisedMs = 0;
+        mStandingStill = false;
+        return;
+    }
+    if (filter.Sideways()) {
+        TheGestureMgr->unk30[idx] = 5;
+        mRaisedMs = 0;
+        mStandingStill = false;
+        return;
+    }
+    {
+        const TrackedJoint &leftShoulder = skeleton.ShoulderJoint(kSkeletonLeft);
+        const TrackedJoint &rightShoulder = skeleton.ShoulderJoint(kSkeletonRight);
+        Vector3 shoulderDiff;
+        shoulderDiff.x = rightShoulder.mJointPos[0].x - leftShoulder.mJointPos[0].x;
+        shoulderDiff.y = rightShoulder.mJointPos[0].y - leftShoulder.mJointPos[0].y;
+        shoulderDiff.z = rightShoulder.mJointPos[0].z - leftShoulder.mJointPos[0].z;
+        Normalize(shoulderDiff, shoulderDiff);
+        float shoulderFacing = ((shoulderDiff.y + shoulderDiff.x) * 0.0f) + shoulderDiff.z;
+        float shoulderFacingAbs = std::fabs(shoulderFacing);
+        if (shoulderFacingAbs > mForwardFacingCutoff) {
+            TheGestureMgr->unk30[idx] = 6;
+            mRaisedMs = 0;
+            mStandingStill = false;
+            return;
+        }
+        Vector2 handLeftPos, handRightPos;
+        skeleton.ScreenPos(kJointHandLeft, handLeftPos);
+        skeleton.ScreenPos(kJointHandRight, handRightPos);
+        if (handLeftPos.x > handRightPos.x) {
+            TheGestureMgr->unk30[idx] = 7;
+            mRaisedMs = 0;
+            mStandingStill = false;
+            return;
+        }
+        Vector2 kneeLeftPos, kneeRightPos;
+        skeleton.ScreenPos(kJointKneeLeft, kneeLeftPos);
+        skeleton.ScreenPos(kJointKneeRight, kneeRightPos);
+        if (kneeLeftPos.x > kneeRightPos.x) {
+            TheGestureMgr->unk30[idx] = 8;
+            mRaisedMs = 0;
+            mStandingStill = false;
+            return;
+        }
+        const TrackedJoint *joints = skeleton.TrackedJoints();
+        Vector3 v1, v2, v3, v4;
+        v1.x = joints[kJointKneeRight].mJointPos[0].x - joints[kJointHipRight].mJointPos[0].x;
+        v1.y = joints[kJointKneeRight].mJointPos[0].y - joints[kJointHipRight].mJointPos[0].y;
+        v1.z = joints[kJointKneeRight].mJointPos[0].z - joints[kJointHipRight].mJointPos[0].z;
+        Normalize(v1, v1);
+
+        v2.x = joints[kJointKneeRight].mJointPos[0].x - joints[kJointAnkleRight].mJointPos[0].x;
+        v2.y = joints[kJointKneeRight].mJointPos[0].y - joints[kJointAnkleRight].mJointPos[0].y;
+        v2.z = joints[kJointKneeRight].mJointPos[0].z - joints[kJointAnkleRight].mJointPos[0].z;
+        Normalize(v2, v2);
+
+        v3.x = joints[kJointKneeLeft].mJointPos[0].x - joints[kJointHipLeft].mJointPos[0].x;
+        v3.y = joints[kJointKneeLeft].mJointPos[0].y - joints[kJointHipLeft].mJointPos[0].y;
+        v3.z = joints[kJointKneeLeft].mJointPos[0].z - joints[kJointHipLeft].mJointPos[0].z;
+        Normalize(v3, v3);
+
+        v4.x = joints[kJointKneeLeft].mJointPos[0].x - joints[kJointAnkleLeft].mJointPos[0].x;
+        v4.y = joints[kJointKneeLeft].mJointPos[0].y - joints[kJointAnkleLeft].mJointPos[0].y;
+        v4.z = joints[kJointKneeLeft].mJointPos[0].z - joints[kJointAnkleLeft].mJointPos[0].z;
+        Normalize(v4, v4);
+
+        float dotR = v2.x * v1.x + v2.y * v1.y + v2.z * v1.z;
+        if (dotR > sLegStraightDot)
+            goto LegsStraight;
+        float dotL = v4.x * v3.x + v4.y * v3.y + v4.z * v3.z;
+        if (dotL > sLegStraightDot) {
+        LegsStraight:
+            TheGestureMgr->unk30[idx] = 9;
+            mRaisedMs = 0;
+            mStandingStill = false;
+            return;
+        }
     }
 
 StandingStillLogic:

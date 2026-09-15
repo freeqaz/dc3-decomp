@@ -84,6 +84,15 @@ XGHierarchicalZSize(UINT Width, UINT Height, D3DMULTISAMPLE_TYPE MultiSample) {
     return alignedWidth * alignedHeight / 0x200;
 }
 
+// Thin by-value wrapper: its inlined parameters are what the image homes to
+// the frame just before each D3DDevice_CreateSurface call.
+static inline D3DSurface *CreateEdramSurface(
+    UINT Width, UINT Height, D3DFORMAT Format, D3DMULTISAMPLE_TYPE MultiSample,
+    const D3DSURFACE_PARAMETERS *pParams
+) {
+    return D3DDevice_CreateSurface(Width, Height, Format, MultiSample, pParams);
+}
+
 DxTex::DxTex()
     : mFormat((D3DFORMAT)-1), mTexture(0), unk84(0), mRenderTarget(0), mDepthRT(0),
       mMovieBufIdx(0), mLockedRect(), unka4(0), unka8(0), unkac(0) {
@@ -638,6 +647,35 @@ void DxTex::ResetSurfaces() {
     mDepthRT = nullptr;
 }
 
+// RESIDUAL (w7-bm, 2026-09-14, 96.2 canonical, 110 rows; was 93.97): every
+// call, store and arithmetic row matches.  What is left, in order of weight:
+//  (a) the 4-byte MakeString temp class A sits at 0x80 in the image with the
+//      PhysMemTypeTracker at 0x84; ours is the pure swap (tracker 0x80, A 0x84),
+//      ~14 rows of displacement.  Declaring d3dcaps / params / colorTiles /
+//      hzTiles at function top is byte-inert; so is a `D3DTexture *tex` local.
+//  (b) the depth path: 0x82C0D8xx computes the 16-aligned height early and
+//      homes it (`stw r11, 0x88`) where we compute it late and keep it in a
+//      register; a textual duplicate of `(h + 15) & ~15` is worse (95.6), and
+//      helper bodies without the width/height copies, or an align-8 spelling,
+//      are byte-inert.
+//  (c) prologue constant order (`ori r24` / `li r25, 0x1400` / `lis r22`) and
+//      `stw r11, 0x94` (the tile count's home store) landing before, not after,
+//      `mr r27, r11`.
+//  (d) the DxRndTexMgr::CreateSurface argument load/store order and the
+//      `addi r27, r30, 0x80` placement in its else branch.
+//  (e) the final XGSetTextureHeader block: the image spills the `new` result
+//      to 0x5c(r1) before loading the members and stores mTexture last; the
+//      in-argument `new D3DTexture` form is byte-inert.
+//  (f) two extra `b <epilogue>` trampolines.
+// Levers that DID move it, kept above: the by-value CreateEdramSurface wrapper
+// (MSVC homes an inlined callee's by-value parameters at the inline site),
+// UINT offsets in XGSetTextureHeaderEx (xgraphics.h), the single `while
+// (nextMip())` loop with both invariant stores inside it, a shared `tiles`
+// local for both paths, and the D3DSURFACE_PARAMETERS field assignment ORDER
+// (ColorExpBias, Base, HierarchicalZBase, HiZFunc) after the memset.  Also
+// byte-inert or worse: 0xFFFFFFFF for the -1 offsets, a named `mip` local in
+// the mip loop, `if (nextMip()) do {} while`, dropping the zero assignments
+// after the memset (95.8), and w7-g's in-branch hoist of the tile math.
 void DxTex::SyncBitmap() {
     PhysMemTypeTracker tracker("D3D(phys):Tex");
     PreDeviceReset();
@@ -667,6 +705,8 @@ void DxTex::SyncBitmap() {
         }
         unkac = false;
         UINT colorTiles = 0;
+        UINT tiles;
+        D3DSURFACE_PARAMETERS params;
         if (mType == kShadowMap) {
             mRenderTarget = nullptr;
         } else {
@@ -682,24 +722,34 @@ void DxTex::SyncBitmap() {
                 edramFormat = D3DFMT_G16R16_EDRAM;
                 break;
             }
-            D3DSURFACE_PARAMETERS params = { 0 };
+            memset(&params, 0, sizeof(params));
+            params.ColorExpBias = 0;
             params.Base = 0;
             params.HierarchicalZBase = -1;
-            params.ColorExpBias = 0;
             params.HiZFunc = D3DHIZFUNC_DEFAULT;
-            colorTiles = XGSurfaceSize(mWidth, mHeight, edramFormat, D3DMULTISAMPLE_NONE);
-            if (colorTiles < 0x800) {
-                if (sEDRamChecksEnabled && colorTiles > TheDxRnd.EdramBase()) {
+            {
+                int gpuFormat = edramFormat & 0x3f;
+                UINT bytesPerPixel = 4;
+                UINT alignedWidth = (((UINT)mWidth + 79) / 80) * 80;
+                UINT alignedHeight = ((UINT)mHeight + 15) & ~15;
+                if (gpuFormat == 0x15 || gpuFormat == 0x20 || gpuFormat == 0x25) {
+                    bytesPerPixel = 8;
+                }
+                tiles = alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
+            }
+            colorTiles = tiles;
+            if (tiles < 0x800) {
+                if (sEDRamChecksEnabled && tiles > TheDxRnd.EdramBase()) {
                     unkac = true;
                 }
-                mRenderTarget = D3DDevice_CreateSurface(
+                mRenderTarget = CreateEdramSurface(
                     mWidth, mHeight, edramFormat, D3DMULTISAMPLE_NONE, &params
                 );
                 DX_ASSERT(mRenderTarget, 1026);
             } else {
                 MILO_FAIL(
                     "Render target '%s' exceeds available\nEDRAM area (requested %d of %d color tiles)\n",
-                    PathName(this), colorTiles, 0x800
+                    PathName(this), tiles, 0x800
                 );
                 mRenderTarget = nullptr;
             }
@@ -733,23 +783,32 @@ void DxTex::SyncBitmap() {
             if (mType == kShadowMap) {
                 depthFormat = D3DFMT_D24S8;
             }
-            D3DSURFACE_PARAMETERS depthParams = { 0 };
+            D3DSURFACE_PARAMETERS depthParams;
+            memset(&depthParams, 0, sizeof(depthParams));
             depthParams.Base = colorTiles;
-            depthParams.HierarchicalZBase = 0;
             depthParams.ColorExpBias = 0;
+            depthParams.HierarchicalZBase = 0;
             depthParams.HiZFunc = D3DHIZFUNC_DEFAULT;
-            UINT depthTiles =
-                XGSurfaceSize(mWidth, mHeight, depthFormat, D3DMULTISAMPLE_NONE)
-                + colorTiles;
-            UINT hzTiles = XGHierarchicalZSize(mWidth, mHeight, D3DMULTISAMPLE_NONE);
-            if (depthTiles < 0x800 && hzTiles < 0xe10) {
+            UINT hzTiles;
+            {
+                int gpuFormat = depthFormat & 0x3f;
+                UINT bytesPerPixel = 4;
+                UINT alignedWidth = (((UINT)mWidth + 79) / 80) * 80;
+                UINT alignedHeight = ((UINT)mHeight + 15) & ~15;
+                if (gpuFormat == 0x15 || gpuFormat == 0x20 || gpuFormat == 0x25) {
+                    bytesPerPixel = 8;
+                }
+                tiles = colorTiles + alignedHeight * alignedWidth * bytesPerPixel / 0x1400;
+                hzTiles = (((UINT)mWidth + 31) & ~31) * alignedHeight / 0x200;
+            }
+            if (tiles < 0x800 && hzTiles < 0xe10) {
                 if (sEDRamChecksEnabled
-                    && (depthTiles > TheDxRnd.EdramBase()
+                    && (tiles > TheDxRnd.EdramBase()
                         || hzTiles > TheDxRnd.EdramHzBase())) {
                     unkac = true;
                 }
                 BeginMemTrackFileName(mFilepath.c_str());
-                mDepthRT = D3DDevice_CreateSurface(
+                mDepthRT = CreateEdramSurface(
                     mWidth, mHeight, depthFormat, D3DMULTISAMPLE_NONE, &depthParams
                 );
                 DX_ASSERT(mDepthRT, 1114);
@@ -757,14 +816,14 @@ void DxTex::SyncBitmap() {
             } else {
                 MILO_NOTIFY_ONCE(
                     "Depth surface '%s' exceeds available EDRAM or hi-z area\n(requested %d of %d color tiles and %d of %d hi-z tiles)\nDepth surface creation failed.",
-                    PathName(this), depthTiles, 0x800, hzTiles, 0xe10
+                    PathName(this), tiles, 0x800, hzTiles, 0xe10
                 );
                 mDepthRT = nullptr;
             }
         } else {
             mDepthRT = nullptr;
         }
-    } else if (mType & kBackBuffer) {
+    } else if (IsBackBuffer()) {
         mFormat = D3DFMT_A8R8G8B8;
         BeginMemTrackFileName(mFilepath.c_str());
         mTexture = (D3DTexture *)D3DDevice_CreateTexture(
@@ -788,14 +847,13 @@ void DxTex::SyncBitmap() {
         bool fromTexMgr = false;
         unk2c = bitmap.Name();
         if (MemUseLowestMip() && !MemUseLowestMipException(mFilepath.c_str())) {
-            RndBitmap *mip = bitmap.nextMip();
-            if (mip) {
+            // Written as one loop with the two invariant stores inside it: MSVC
+            // rotates it (test, hoisted li/li, body, test) and homes the CSE'd
+            // nextMip() at both tests, which an if + do/while does not reproduce.
+            while (bmp->nextMip()) {
                 numLevels = 1;
                 usedLowestMip = true;
-                do {
-                    bmp = mip;
-                    mip = mip->nextMip();
-                } while (mip);
+                bmp = bmp->nextMip();
             }
             mWidth = bmp->Width();
             mHeight = bmp->Height();
@@ -825,20 +883,18 @@ void DxTex::SyncBitmap() {
                 bmp = &converted;
             }
             if (usedLowestMip) {
-                RndBitmap *mip = bmp->nextMip();
-                while (mip) {
-                    bmp = mip;
-                    mip = mip->nextMip();
+                while (bmp->nextMip()) {
+                    bmp = bmp->nextMip();
                 }
             }
             for (int level = 0; level < numLevels; level++) {
                 MILO_ASSERT(bmp, 1332);
-                D3DTexture_LockRect(mTexture, level, &rect, nullptr, 0);
+                mTexture->LockRect(level, &rect, nullptr, 0);
                 XGTileTextureLevel(
                     desc.Width, desc.Height, level, gpuFormat, numLevels == 1, rect.pBits,
                     nullptr, bmp->Pixels(), bmp->DxtRowBytes(), nullptr
                 );
-                D3DTexture_UnlockRect(mTexture, level);
+                mTexture->UnlockRect(level);
                 bmp = bmp->nextMip();
             }
         }

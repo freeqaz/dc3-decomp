@@ -636,7 +636,7 @@ void HamListRibbon::Draw(
     unsigned int selectedIdx = 0xFFFFFFFF;
     Transform selectedXfm;
 
-    // RESIDUAL (w7-as, 96.2 canonical): what is left is one block-placement
+    // RESIDUAL (w7-as, 96.2 canonical; w7-bm 96.8, see the loop): what is left is one block-placement
     // difference plus its register knock-on.  The image parks the
     // `inRange ? mSpacing : mPaddedSpacing` select at 0x82483890, i.e. BELOW the
     // `if (!mSelected)` body at 0x824838A0, and branches back up to it from all
@@ -654,13 +654,29 @@ void HamListRibbon::Draw(
         bool inRange = ((int)i >= startOffset + paddingPerSide)
             && ((int)i < startOffset + paddingPerSide + visibleCount - 1);
 
-        if (entering == paddedStates[i].mActive) {
-            if (!paddedStates[i].mSelected) {
-                DrawRibbon(i, ribbonXfm, xfm, paddedStates[i], paddingPerSide, numItems, startOffset, disengaged);
-            } else {
-                selectedXfm = ribbonXfm;
-                selectedIdx = i;
-            }
+        // 96.2 -> 97.5 canonical (w7-bm, 2026-09-15). Two levers: (1) writing
+        // the spacing advance on the inactive path as well (this `continue`
+        // block) lets MSVC cross-jump the two copies and drops the r26/r27
+        // knock-on (8 rows): 96.8. It keeps the copy AFTER the arms as the
+        // holder, so the image's placement (select at 0x824838B0, both arms
+        // `b` back up to it) is still not reproduced: 1 diff_op + 3/4
+        // insert/delete remain. Same 96.8 as an explicit if/else with the
+        // tail in both arms; three single-predecessor copies (tail in each of
+        // the three arms) is 94.6; a `goto`-labelled tail before the arms with
+        // the arms jumping back is canonicalised straight back to the 96.2
+        // layout. (2) `selectedIdx = i` BEFORE the Transform copy matches the
+        // image's `mr r25, r30` ahead of `bl memcpy` (0x82483908): 97.5.
+        // `int scrollable` re-measured on this state: 91.9, still refuted.
+        if (entering != paddedStates[i].mActive) {
+            float step = inRange ? mSpacing : mPaddedSpacing;
+            ribbonXfm.v.z -= step;
+            continue;
+        }
+        if (!paddedStates[i].mSelected) {
+            DrawRibbon(i, ribbonXfm, xfm, paddedStates[i], paddingPerSide, numItems, startOffset, disengaged);
+        } else {
+            selectedIdx = i;
+            selectedXfm = ribbonXfm;
         }
 
         // NEGATIVE RESULT (w7-as, 2026-09-14): inlining this as
