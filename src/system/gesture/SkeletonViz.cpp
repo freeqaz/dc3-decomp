@@ -316,6 +316,27 @@ void SkeletonViz::SetCamera(
     //     two locals sit at the same depth.
     // Vector3 is 12 bytes and Plane is 16 (math/Vec.h, math/Mtx.h:357), so the
     // packer may simply refuse to merge unequal sizes; needs the permuter.
+    //
+    // w7-by (still 95.083336): the size theory is wrong -- Vector3 carries a
+    // PAD word (Vec.h:140), both are 16 bytes, and the SetLocalRot by-value
+    // temp (0x50..0x5f, `ld r4/r5` at 0x824406D8/0x824406EC) already shares
+    // 0x50 with `plane` in OUR build too.  The +0x10 is `pos` alone, and what
+    // keeps it out of the shared slot is its address reaching the OUT-OF-LINE
+    // `RotateAboutZ` (0x82440674): deleting that call (measurement only) puts
+    // pos on 0x50 and the frame at 0x140.  Every spelling that keeps the call
+    // leaves pos distinct: direct-store init, `Vector3 pos(0,-d,0)`, a
+    // whole-object copy init, pos in its own inner `{ }`, a copy temp handed
+    // to SetLocalPos, out-of-line SetWorldPos in place of the inlined
+    // SetLocalPos, an inline helper returning pos by value, an inline helper
+    // owning pos as a named local (95.5 -- reloads mPhysicalCam into r30).
+    // The one shape that DOES land pos on 0x50 with frame 0x140 is a by-value
+    // `Vector3` parameter of an inlined static helper -- but the callee writes
+    // it, so the 16-byte argument copy survives (+16 rows, 91.6; the same with
+    // an uninitialised `Vector3()` argument, 87.6), and a reference-taking
+    // helper is not inlined at all (62.4).  `plane` itself is not the lever:
+    // it is passed to out-of-line Multiply/UtilDrawPlane exactly like pos and
+    // shares in both builds.  Whatever the original wrote for pos, it is not
+    // a named local whose address escapes.
     if (unk218) {
         Plane plane = *(const Plane *)&frame.mFloorClipPlane;
         Transform localXfm = unk1d4;
