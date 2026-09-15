@@ -518,7 +518,7 @@ float ArcDetector::UpdateOverlay(RndOverlay *overlay, float y) {
                 arcY = sqrtf(comp);
             }
             TheRnd.DrawStringScreen(
-                MakeString("%f", arcY),
+                MakeString("%f", +arcY),
                 Vector2(0.8f, drawY),
                 Hmx::Color(1.0f, 1.0f, 1.0f, 1.0f),
                 true
