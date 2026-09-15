@@ -45,11 +45,11 @@ protected:
     RndRenderState::StencilOp mStencilZFail; // 0x250
     Hmx::Matrix4 mTexGenMatrix; // 0x254
     Hmx::Matrix4 mTexGenMatrix2; // 0x294
-    int unk2d4; // 0x2d4
-    float unk2d8;
-    float unk2dc;
-    float unk2e0;
-    float unk2e4;
+    int mFadeOut; // 0x2d4
+    // One Vector4, not four floats: RefreshState's blend arms store it through
+    // an inlined Set(), which is what keeps the four stfs ahead of the mFadeOut
+    // store in the image (0x8269D654-D664) -- w7-bt, 97.14 -> 98.9 canonical.
+    Vector4 mFadeParams; // 0x2d8
     RndRenderState::BlendOp mBlendOp; // 0x2e8
     bool mBlendEnable; // 0x2ec
 };
