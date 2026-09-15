@@ -1151,9 +1151,7 @@ void Spotlight::BuildBeam(BeamDef &def) {
             float rightInner = halfWidth - sideBorder;
 
             // Column 0: left edge
-            verts[i * 4].pos.z = negY;
-            verts[i * 4].pos.x = -halfWidth;
-            verts[i * 4].pos.y = 0.0f;
+            verts[i * 4].pos.Set(-halfWidth, 0.0f, negY);
             verts[i * 4].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
             verts[i * 4].tex.Set(0.0f, yFrac);
 
@@ -1161,9 +1159,7 @@ void Spotlight::BuildBeam(BeamDef &def) {
             // `fneg f28, f27` / `fsel f28, f28, f27, f0` -- keep leftInner
             // while -leftInner >= 0, else 0, i.e. clamp to <= 0.
             leftInner = -leftInner < 0.0f ? 0.0f : leftInner;
-            verts[i * 4 + 1].pos.x = leftInner;
-            verts[i * 4 + 1].pos.y = 0.0f;
-            verts[i * 4 + 1].pos.z = negY;
+            verts[i * 4 + 1].pos.Set(leftInner, 0.0f, negY);
             verts[i * 4 + 1].color.Set(alpha, alpha, alpha, alpha);
             verts[i * 4 + 1].tex.Set(borderRatio, yFrac);
 
@@ -1172,16 +1168,12 @@ void Spotlight::BuildBeam(BeamDef &def) {
             // round from column 1: 0 while -rightInner >= 0, else rightInner,
             // i.e. clamp to >= 0.  We had this clamp inverted.
             rightInner = -rightInner < 0.0f ? rightInner : 0.0f;
-            verts[i * 4 + 2].pos.x = rightInner;
-            verts[i * 4 + 2].pos.y = 0.0f;
-            verts[i * 4 + 2].pos.z = negY;
+            verts[i * 4 + 2].pos.Set(rightInner, 0.0f, negY);
             verts[i * 4 + 2].color.Set(alpha, alpha, alpha, alpha);
             verts[i * 4 + 2].tex.Set(1.0f - borderRatio, yFrac);
 
             // Column 3: right edge
-            verts[i * 4 + 3].pos.x = halfWidth;
-            verts[i * 4 + 3].pos.y = 0.0f;
-            verts[i * 4 + 3].pos.z = negY;
+            verts[i * 4 + 3].pos.Set(halfWidth, 0.0f, negY);
             verts[i * 4 + 3].color.Set(0.0f, 0.0f, 0.0f, 0.0f);
             verts[i * 4 + 3].tex.Set(1.0f, yFrac);
 
