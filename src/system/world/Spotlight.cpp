@@ -1052,7 +1052,54 @@ void Spotlight::UpdateFloorSpotTransform(const Transform &tf) {
     }
 }
 
-// w7-bo (2026-09-15): 68.77 -> 70.20 canonical, 1628 B. Two levers, each
+// w7-bs (2026-09-15): 70.20 -> 85.3 canonical, 1628 B, three levers on top of
+// w7-bo's two, each measured alone:
+//  - pos.Set(x, y, z) per column (73.9): the image writes each column's pos
+//    with ONE verts.begin() reload (0x8282D988 `lwz r9, 0(r30)` / `add` /
+//    `stfs 0x8/0x0/0x4(r9)`); three pos.x/y/z statements reloaded begin
+//    three times.
+//  - the RB3-shaped index family `int c0 = 0; c0 += 4; c1..n3 = c0+1..c0+7`
+//    with verts[c0..c3] (80.3): the image's vertex byte cursor is
+//    0x60*(4i+2) (`li r27, 0xc0` at 0x8282D908, +0x180 at 0x8282DCE0) and
+//    its face-index IV starts at exactly 6 (`mr r11, r28` at 0x8282D904,
+//    sharing the resize divisor) -- both are MSVC re-biases of a c0 family.
+//    `verts[i*4+k]` never produces a biased cursor: MSVC folds k*0x60 into
+//    the displacement instead. The old `short s = 6; s += 4` was the
+//    re-biased IV spelled as the source variable, which forced extsh.
+//  - faces[i*6+k] instead of a separate `fi += 6` (85.3): the image's face
+//    cursor r10 = 6*fi is UNbiased with folded displacements 0x0..0x22
+//    (0x8282DB1C..0x8282DC54); a separate int fi re-biases to fi+3
+//    (`li r6, 0x12`) and derives the other bases.
+//
+// MEASURED NEGATIVES, each alone from the 85.3 state:
+//  - RB3's two-level derivation n1 = n0+1, n2 = n0+2, n3 = n0+3: 77.7.
+//  - n0..n3 declared inside the `i != totalSections-1` block: INERT.
+//  - `int c0 = i * 4;` as an expression instead of the += 4 IV: INERT (85.3,
+//    128 vs 137 diff_arg rows, same structure).
+//  - RB3's clamp `numSectionsTop = 4; if (rawTop > 4) numSectionsTop =
+//    rawTop;`: 78.9 (gives `ble; mr`, the image is `mr r14, r11; bgt; li
+//    r14, 4` at 0x8282D7BC-0x8282D7C8).
+//  - `rawTop > 4 ? rawTop : 4` for the top clamp only: matches those four
+//    rows but the extra live value cascades through the loop, 80.8.
+//  - w7-bo's `int s` + `unsigned short c0..n3` re-measured from the pos.Set
+//    state: 71.8, and the listing shows WHY it loses -- MSVC re-biases to c1
+//    and applies the 16-bit modular addend to the 32-bit start (`lis r21, 1;
+//    ori r21, r21, 1` = 0x10001), which is what proves the image's IV starts
+//    at a plain 6 from a base of 0.
+//
+// RESIDUAL (77 register rows + ~30 structural): the face-index family's
+// representative. Ours re-biases to c2 (`li r10, 0x2`; c0/c1 via two
+// hoisted 0xfffe/0xffff addends); the image's is n2 = 4i+6 with SIX hoisted
+// 16-bit addends r20-r25 (0x8282D90C-0x8282D920). Whatever rule picks the
+// representative, it is not use count (c1/c2 tie at 11, n2 has 6), not
+// declaration order or scope (INERT above), and not two-level derivation
+// (77.7). The image also keeps lVar31 as its own IV (`neg r15, r14` at
+// 0x8282D900, `addi r15, r15, 1` at 0x8282DCDC) where ours folds it into
+// `add r9, r18, r23`; the two together are what push the image to
+// r14-r31 and spill `this` to its home slot (0x8282D710 `stw r3, 0x144(r1)`,
+// reloaded at 0x8282DCF0).
+//
+// w7-bo (2026-09-15, superseded above): 68.77 -> 70.20 canonical. Two levers, each
 // measured alone: a plain counted `for` over totalSections (the image guards
 // with `cmplwi cr6, r16, 0x0` at 0x8282D898 and then `mtctr r16` at
 // 0x8282D8D4 -- our `int count` do/while cost a second IV), and inverting the
