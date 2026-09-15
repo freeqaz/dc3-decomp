@@ -1169,7 +1169,7 @@ void UtilDrawCigar(
 }
 
 void UtilDrawPlane(
-    const Plane &p, const Vector3 &v, const Hmx::Color &c, int i4, float f, bool
+    const Plane &p, const Vector3 &v, const Hmx::Color &c, int i4, float f, bool b
 ) {
     // The image allocates mb0 at 0x60 and tf88 at 0x90 (contiguous, frame
     // 0x150), and its Identity() stores precede both the ScaleAdd result and
@@ -1206,10 +1206,15 @@ void UtilDrawPlane(
         float negscalar = -scalar;
         ScaleAdd(tf88.v, tf88.m.x, negscalar, vecc8);
         ScaleAdd(tf88.v, tf88.m.z, negscalar, vecbc);
-        TheRnd.DrawLine(vece0, vecd4, c, false);
-        TheRnd.DrawLine(vecd4, vecc8, c, false);
-        TheRnd.DrawLine(vecc8, vecbc, c, false);
-        TheRnd.DrawLine(vecbc, vece0, c, false);
+        // BUG FIX (w7-bx): the sixth parameter is forwarded to every DrawLine
+        // -- `mr r28, r8` in the prologue (0x8262F550) and `mr r7, r28` at
+        // each call (0x8262F70C, 0x8262F7AC, 0x8262F7D0, 0x8262F7F4); a
+        // literal false dropped it and cost the callee-saved register
+        // (93.39474 -> 99.7).
+        TheRnd.DrawLine(vece0, vecd4, c, b);
+        TheRnd.DrawLine(vecd4, vecc8, c, b);
+        TheRnd.DrawLine(vecc8, vecbc, c, b);
+        TheRnd.DrawLine(vecbc, vece0, c, b);
     }
 }
 
