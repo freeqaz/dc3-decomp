@@ -33,6 +33,21 @@ void StandingStillGestureFilter::RestoreDefaultForwardFacingCutoff() {
     mForwardFacingCutoff = 0.4f;
 }
 
+// 100% canonical (w7-bm, 2026-09-15; was 96.6). The image tail-merges every
+// state store: the not-tracked site (state 2) at 0x8c is the cross-jump body
+// holder and states 3..9 are each `li r9,k; b 0x8c`, so every site below is
+// written as the full store/reset/return tail rather than as one `int state`
+// chain with a single store after it (that chain puts the join after the
+// last site and leaves the state-2 site as a separate store: 96.6; the
+// r30/r31 this/skeleton rotation and the 0x50..0x90 slot permutation were
+// downstream of that join placement). The dotR test must `goto` a label
+// INSIDE the dotL block: any spelling that makes the state-9 tail the
+// function's fall-through (`dotR > t || dotL > t`, or `if (dotR <= t) {..}`
+// followed by the tail) makes it the body holder and moves the whole block
+// to the end (94.2). Residual: 4 register-only rows (r9/r11, value vs address
+// registers in the 16-byte `unk38 = skeleton.GetUnkab0()` copy); hoisting
+// `pos` above the `if` and copying from it drops the dead source-address
+// addi the image has (99.6).
 void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
     // Two file-local mutable floats, read from memory rather than folded as
     // literals: .data 0x2c/0x30 of this TU.  The first is a DISTANCE (0.5),
@@ -84,8 +99,8 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
         shoulderDiff.z = rightShoulder.mJointPos[0].z - leftShoulder.mJointPos[0].z;
         Normalize(shoulderDiff, shoulderDiff);
         float shoulderFacing = ((shoulderDiff.y + shoulderDiff.x) * 0.0f) + shoulderDiff.z;
-        auto _tmp0 = std::fabs(shoulderFacing);
-        if (_tmp0 > mForwardFacingCutoff) {
+        float shoulderFacingAbs = std::fabs(shoulderFacing);
+        if (shoulderFacingAbs > mForwardFacingCutoff) {
             TheGestureMgr->unk30[idx] = 6;
             mRaisedMs = 0;
             mStandingStill = false;
