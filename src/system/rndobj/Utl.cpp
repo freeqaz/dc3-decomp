@@ -2816,6 +2816,13 @@ void BuildVisit(BSPNode *node) {
     // canonical stayed 94.97, and mismatch rows went 121 -> 123.
     // So the open question is narrow and concrete: what source spelling makes MSVC
     // home an inlined Cross()'s reference parameters?  Nothing tried so far does.
+    // w7-bs (2026-09-15): nor does routing every one of those eleven mentions
+    // through the inlined `Matrix3::operator[]` (`m[2] = plane`, `m[1].Set(..)`,
+    // `Cross(m[1], m[2], m[0])`, `Cross(m[2], m[0], m[1])`) -- byte-identical,
+    // 121 rows, 94.97.  The homes elsewhere in this wave that DID answer to a
+    // spelling were all return values of an inlined accessor
+    // (`mGeomOwner->` in TessellateMesh/UpdateGeometryBuffers), so an extra
+    // inlined layer per mention is not by itself what creates them.
     lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
     lastIt->mTransform.m.y.Set(0, 1, 0);
