@@ -223,7 +223,9 @@ void MemHeap::Init(
     // so no read-back spelling can keep it alive.  The entire residual is
     // those 2 absent instructions plus the member-store reshuffle they cause
     // (idx 27-56); idx 0-26 and 57-82 are exact on both sides.
+    int **pStart = &mStart;
     mStart = start;
+    int *rawStart = *pStart;
     mName = name;
     mNum = num;
     mIsHandleHeap = handle;
@@ -233,7 +235,7 @@ void MemHeap::Init(
     mAllowTemp = allowTemp;
     mMinFreeBytes = -1;
     mDebugLevel = debugLevel;
-    mSizeWords = size - (alignedStart - start);
+    mSizeWords = size - (alignedStart - rawStart);
     // POST-increment: 827F8814 reads gTimeStamp into r8, 827F8818/1C store
     // r8+1 back, and r8 -- the OLD value -- is what reaches InsertFreeBlock.
     InsertFreeBlock((FreeBlock *)mStart, mSizeWords, nullptr, nullptr, gTimeStamp++);
