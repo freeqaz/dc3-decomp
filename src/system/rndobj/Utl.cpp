@@ -2598,6 +2598,36 @@ void TessellateMesh(RndMesh *mesh) {
     // MSVC does not take slot order for these from declaration order or from
     // scope, so there is no spelling of THIS function that moves them; the
     // allocation is decided by the STL temp above.
+    //
+    // w7-bo (2026-09-15) re-measured: 95.5 canonical / 94.9 raw, 298 rows,
+    // 231 equal / 54 diff_arg / 9 delete / 4 insert -- unchanged, and regions
+    // 6-62, 100-116, 125-135, 151-159, 175-183, 195-208, 227-239, 241-259 and
+    // 265-297 are all already 100%.  One observation the note above does not
+    // carry, and the best remaining lead for whoever takes this next:
+    //
+    //   THE DEAD-HOME-STORE COUNT DIFFERS, 4 vs 2.  At the top of the loop the
+    //   image loads the sub-object at 0x148(r27) ONCE and then homes it FOUR
+    //   times into the shared slot:
+    //     82637BB4  stw r8, 0x50(r31)
+    //     82637BBC  stw r8, 0x50(r31)
+    //     82637BC0  stw r8, 0x50(r31)
+    //     82637BC8  stw r8, 0x50(r31)
+    //   We emit exactly TWO (idx 69 and 74) -- the loop condition's
+    //   `mesh->Faces().size()` and the `mesh->Faces()[i]` subscript.  Under
+    //   the repeated-call-expression rule (docs/decomp/patterns, "a call
+    //   written twice is CSE'd but still homes `this` once per occurrence"),
+    //   four homes means the image's source names that same inlined accessor
+    //   FOUR times in this block where ours names it twice.  The image also
+    //   carries three dead `sth` of face.v1/v2/v3 into the same 0x50
+    //   (82637BF4/BF8/C00) plus four `mr` register copies (82637BD0/D8/E0/E4)
+    //   that we do not emit -- the same family.  Finding the two missing
+    //   mentions is what would make MSVC coalesce the comparator temp onto
+    //   0x50 and unwind the whole 4-byte shift; guessing extra mentions in
+    //   order to manufacture stores was deliberately NOT done here.
+    //   (r27+0x148 is not plain `mesh->Faces()`: the image reads 0x110 off it
+    //   as a byte OFFSET added to r30 for the face cursor AND 0x100 off it as
+    //   the verts base for the *0x60 index math, so the accessor being homed
+    //   covers both of those uses.)
     Edge e12, e23, e31;
 
     for (unsigned int i = 0; i < (unsigned int)mesh->Faces().size(); i++) {
