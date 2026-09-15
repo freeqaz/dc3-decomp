@@ -242,3 +242,10 @@ void Waypoint::ShapeDeltaBox(const Vector3 &v1, float f1, float f2, Vector3 &res
 // build/373307D9/asm/system/char/Waypoint.s and has no caller in the unit --
 // retail inlined both ObjPtrVec call sites and still emitted the COMDAT.
 template bool PropSync<Waypoint>(Waypoint *&, DataNode &, DataArray *, int, PropOp);
+
+// w8-c: same shape as CharCuff.cpp's std::list<RndMesh *> note -- Waypoint.obj
+// carries `std::vector<Waypoint *>` COMDATs in the image (push_back 0x823CCDA0,
+// _M_insert_overflow 0x823CCCA8, allocate 0x823CBEF0, deallocate 0x823CBF30)
+// whose only caller in the whole binary is CharacterTest.s:0x823DC7F8.
+// Waypoint.obj won the fold, so retail's Waypoint.cpp odr-used one too.
+template class std::vector<Waypoint *>;
