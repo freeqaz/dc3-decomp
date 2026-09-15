@@ -347,6 +347,15 @@ void NgEnviron::Select(const Vector3 *pos) {
         Transform fadeRef = LRFadeRef();
         Vector3 fadeDir = fadeRef.m.x;
         Normalize(fadeDir, fadeDir);
+        // RESIDUAL (w7-bw, 96.88): the image multiplies the y terms first
+        // (826A4E48..826A4E84: y, z, x), ours z, y, x. Inlining the dot as a
+        // flat sum in any of three term orders (x,y,z / y,z,x / x,z,y) keeps
+        // z first and additionally flips every fmuls to scale-first (95.5
+        // each), so Dot() stays. Also refuted: binding `RndShaderMgr &` before
+        // the fade block (the image reloads TheShaderMgr through r30 at every
+        // call, `lwz r3, 0x0(r30)`; a bound reference holds the object and
+        // emits `mr r3, r30`: 91.8) and a local copy of mNumLightsApprox in
+        // the early-return tail (moves both stats loads, not one).
         float fadeRefDot = Dot(fadeRef.v, fadeDir);
 
         Vector4 leftPlane(0.0f, 0.0f, 0.0f, 1.0f);
