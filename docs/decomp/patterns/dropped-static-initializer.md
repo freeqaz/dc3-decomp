@@ -45,9 +45,9 @@ the name finds nothing.
 > if it ever returns more, someone added a declaration without its initializer."*
 > Both halves are wrong.
 >
-> The scan joins **by symbol name inside a matched object pair**
-> (`bss_initializer_scan.py`, `if name not in tgt: continue`). Its own coverage
-> block, on the current tree:
+> The scan joined **by symbol name inside a matched object pair**
+> (`bss_initializer_scan.py`, `if name not in tgt: continue`). Its coverage
+> block at the time read:
 >
 > ```
 > universe : 16238  (defined symbols WE place in .bss, across paired objects)
@@ -85,11 +85,79 @@ the name finds nothing.
 >   (`?sGain@GainEffect@@0MA`), but our definition sat in the **wrong TU**
 >   (`Mic.cpp`), and this scan pairs object-by-object, so the two never met.
 >
-> The scan now reports its real denominator and counts that discard as
-> `no-name-match-in-paired-target`. **A zero from it means "zero among the
-> 11.7% it can see", and nothing about the rest.** Closing the two blind spots
-> needs an address-based join (target `lbl_*` via the map) and a whole-binary
-> rather than per-pair search; neither is written yet.
+> ✅ **Both blind spots CLOSED 2026-09-16.** The scan now runs three joins and
+> its coverage block on the same tree reads:
+>
+> ```
+> universe : 16238  (defined symbols WE place in .bss, across paired objects)
+> examined : 15464  (15464/16238 = 95.23%)
+> dropped  :   774
+>     coff-section-symbol-not-a-variable             : 697
+>     aligned-instruction-opcode-differs             :  38
+>     no-code-reference-in-our-object                :  13
+>     capped-by-max-size                             :  10
+>     referencing-function-absent-from-paired-target :   8
+>     reference-site-unalignable                     :   4
+>     address-join-ambiguous                         :   2
+>     target-relocation-is-not-the-low-half          :   2
+> ```
+>
+> **20.29% → 95.23%**, same denominator, same numerator definition — the tool
+> reproduces the old figure exactly under
+> `--no-address-join --no-cross-tu` (3294/16238 = 20.29%), so the before/after
+> is one instrument measuring itself, not two instruments being compared.
+> 697 of the 16,238 universe rows turn out to be COFF **section-definition**
+> symbols (the record literally named `.bss`) rather than variables; they are
+> kept in the universe so the denominator stays comparable and dropped rather
+> than examined. Against the 15,541 real variables, coverage is **99.50%**.
+>
+> ⚠ **The map-based address join named above does not work, and this is
+> measured, not argued.** Of the 12,473 distinct names we place in `.bss`,
+> 2,297 appear in `ham_xbox_r.map`; of the 8,893 the name join cannot resolve,
+> **0** appear in it. The unresolvable population is almost entirely
+> function-local statics, and MSVC mangles those with a **per-TU scope
+> ordinal** (`?1@`, `?6@`, `?CH@`) that counts scopes as the compiler walks the
+> file — so ours and the image's differ whenever anything earlier in the TU
+> differs. This is the same `?BD@` vs `?BH@` divergence CLAUDE.md documents as
+> a relocation-name noise class the graded ruler deliberately exempts. **A
+> function-local static is unjoinable by name on principle**, whether the name
+> comes from a target object or from the map.
+>
+> What locates it is the **code that reads it**: our object has a `REFLO`
+> relocation inside function F naming our `.bss` symbol; the target's F, at the
+> aligned offset, names whatever the image put there — usually `lbl_<addr>`, a
+> name that *is* an address. Alignment compares instruction words with only the
+> *relocated field* masked (not objdiff's `funclet_signature`, which zeroes the
+> whole word and would let a `lfs` align to a `lwz`), falls back to `difflib`
+> when the streams differ, and then requires the target instruction to carry a
+> `REFLO` of its own and to agree in its top 16 bits. The `difflib` tier is
+> load-bearing rather than a courtesy: `Game::Poll` is 98.77% and its masked
+> stream is *not* identical, so `sLastBeat` is reachable only through it.
+
+## Open: the two the widened scan found immediately
+
+Both were invisible to the name-only join, and both are in the population it
+could not reach. Neither is fixed yet.
+
+| symbol | ours | target | reached via |
+|---|---|---|---|
+| `g_LineBreakTable` (`wordwrap.cpp`) | 146 entries of zero in `.bss` | `lbl_82F16AD0`, `.data`, 0x244 B of populated table | address join (aligned) |
+| `gPollToken` (`Loader.cpp`) | `static int gPollToken;` → 0 | `lbl_82F189F8` = `.4byte 0x00000001` | address join (exact) |
+
+`g_LineBreakTable` is the more serious of the two. `wordwrap.cpp` runs three
+binary searches over it (`CantStartLine`, `CantEndLine`), and the image's table
+is a sorted list of 145 `{wchar_t ch; u8 cantBreakBefore; u8 cantBreakAfter;}`
+records — `0x00210100` is `'!'` with *cannot break before*, `0x00280001` is
+`'('` with *cannot break after*, running up through `0xFFE6`. Ours is all
+zeroes, so every search misses, both helpers always return false, and line
+breaking never suppresses a break before `!`, `)`, `?`, `:` or any CJK
+punctuation. Note our declaration is `[146]` against the image's 0x244 = 580
+bytes = 145 entries; settle the count against the listing when restoring it.
+
+`gPollToken`'s source comment already *names* `lbl_82F189F8` as its target
+symbol — someone identified the address and never read the value out of it,
+which is exactly the failure mode the "uninitialized, matches anyway" trap
+below describes.
 
 ## Two traps this class sets
 
