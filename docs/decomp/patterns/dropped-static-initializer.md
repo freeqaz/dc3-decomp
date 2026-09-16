@@ -23,7 +23,11 @@ under `build/373307D9/obj/` are dtk splits of the shipped image, so *every*
 section carries raw bytes — including the one literally named `.bss`. Matching on
 the name finds nothing.
 
-## The census: exactly ten, all fixed
+## The census: fourteen fixed, and the count was never the point
+
+⚠ This heading read *"exactly ten, all fixed"* while the table under it already
+listed twelve symbols. Do not read a census as a bound — see the correction
+below for why this one could not have been one.
 
 | symbol | ours | target | what the wrong value did |
 |---|---|---|---|
@@ -38,6 +42,28 @@ the name finds nothing.
 | `DxRnd::CopyPostProcess::sCopyPostInited` | false | **true** | guarded block never ran (see below) |
 | `TheLocale.mInitialized` (+0x1c) | 0 | **1** | skipped the entire locale load |
 | `CSampleXAPOBase<SynapseAPO,…>::m_regProps` | all zero | full struct | APO registered with a null CLSID |
+| wordwrap `g_LineBreakTable` | 146 zeroed entries | 145 populated entries | **both line-break helpers were dead logic** — see below |
+| `gPollToken` (Loader) | 0 | 1 | **nothing**: fidelity only, the token is only ever compared against itself |
+
+The last two were found 2026-09-16 by the address-via-code-reference join, after
+the class had twice been declared closed. Neither was reachable by name.
+
+**`g_LineBreakTable` is the one to learn from, because it is not a wrong value —
+it is a disabled feature.** `CantStartLine`/`CantEndLine` binary-search the table
+for `c == entry.ch`. With every `ch` zero no real character can match, so
+`result = 0` falls through and **both helpers return false unconditionally**.
+Every call site is dead code in our build: line breaking never suppresses a break
+before `!` `)` `,` `.` `:` `;` `?` `]` `}`, before CJK closing punctuation or
+small kana, and never holds one after `(` `[` `{`. A scan that only asks "is the
+value wrong?" undersells this class; ask what the code *does* with the zero.
+
+**`gPollToken` is the counterexample, and it is worth stating.** The datum
+genuinely differs from the image, so the scanner was right to surface it — but
+`int myToken = ldr1->mLoadCount = ++gPollToken;` is compared only against itself
+(`if (ldr1->mLoadCount != myToken) break;`) as a re-entrance sentinel, and
+`mLoadCount` is constructed to 0, so both 0→1 and 1→2 clear the only value that
+matters. **A scan hit is a value claim, never a behaviour claim.** Adjudicate
+each one against the call sites before filing it as a bug.
 
 > ⚠ **CORRECTED 2026-09-16 — "ten is the whole binary" was never measured, and
 > two more instances walked straight through it.** The sentence that stood here

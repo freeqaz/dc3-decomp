@@ -431,7 +431,11 @@ Loader *LoadMgr::AddLoader(const FilePath &file, LoaderPos pos) {
 // outer loop's token no longer matches and it bails out instead of spinning on
 // a loader somebody else is now driving. Target: lbl_82F189F8 in Loader.obj's
 // .data -- a file-local counter, distinct from gLoadCount.
-static int gPollToken;
+// The image holds 1 here (lbl_82F189F8 in .data), not 0. Fidelity only: the
+// token is compared against nothing but itself -- `if (ldr1->mLoadCount !=
+// myToken) break;` is a re-entrance sentinel, and mLoadCount is constructed to
+// 0, so both 0->1 and 1->2 clear the only value that could collide.
+static int gPollToken = 1;
 
 void LoadMgr::PollUntilLoaded(Loader *ldr1, Loader *ldr2) {
     AutoGlitchReport hang(50.0f, __FUNCTION__);
