@@ -242,12 +242,20 @@ def main():
     # ---- our side -----------------------------------------------------
     ours_fn = {}
     n_objs = 0
-    for p in glob.glob(os.path.join(args.obj_root, "**", "*.obj"), recursive=True):
+    n_obj_unparseable = 0
+    # sorted(): `ours_fn.setdefault` is FIRST-write-wins, so with an unsorted
+    # glob the winner for a symbol defined in more than one object is decided
+    # by filesystem order -- the scope_index_census defect exactly.  Measured
+    # 2026-09-16 this is LATENT, not live (1 symbol in >1 object, 0 conflicting
+    # values, 0 conflicting function lists), which is the right time to pin it
+    # rather than after it starts flipping a verdict.
+    for p in sorted(glob.glob(os.path.join(args.obj_root, "**", "*.obj"), recursive=True)):
         n_objs += 1
         try:
             o, _st = our_float_statics(p)
         except Exception as e:  # noqa: BLE001
             print(f"!! {p}: {e}", file=sys.stderr)
+            n_obj_unparseable += 1
             continue
         for k, v in o.items():
             ours_fn.setdefault(k, v)
@@ -281,7 +289,11 @@ def main():
 
     den = {
         "asm_files_parsed": len({b.file for b in all_blobs}),
-        "our_objects_parsed": n_objs,
+        # "parsed" used to be the GLOBBED count, so it claimed 990 while 989
+        # parsed and StreamRecorder.obj (a 0-byte orphan of a deleted TU) threw.
+        "our_objects_globbed": n_objs,
+        "our_objects_PARSED": n_objs - n_obj_unparseable,
+        "our_objects_UNPARSEABLE": n_obj_unparseable,
         "data_float_labels_whole_binary": len(
             [b for b in all_blobs
              if b.section == ".data" and b.name.startswith("lbl_") and b.floats]
@@ -325,10 +337,15 @@ def main():
         if MANGLED_FLOAT.search(n) or MANGLED_DOUBLE.search(n):
             tgt_named[n] = (float(b.floats[0]), b.file, b.addr)
     ours_named = {}
-    for p in glob.glob(os.path.join(args.obj_root, "**", "*.obj"), recursive=True):
+    n_named_unparseable = 0
+    for p in sorted(glob.glob(os.path.join(args.obj_root, "**", "*.obj"), recursive=True)):
         try:
             _o, st = our_float_statics(p)
         except Exception:  # noqa: BLE001
+            # This swallow used to be silent.  An unparseable object here
+            # SHORTENS ours_named, which INFLATES named_target_only_we_emit_none
+            # -- a drop that manufactures findings rather than hiding them.
+            n_named_unparseable += 1
             continue
         for v, n, _c in st.values():
             ours_named.setdefault(n, (v, p))
@@ -338,6 +355,7 @@ def main():
         if abs(tgt_named[n][0] - ours_named[n][0])
         > 1e-6 * max(1.0, abs(tgt_named[n][0]))
     ]
+    den["our_objects_UNPARSEABLE_in_named_pass"] = n_named_unparseable
     den["target_NAMED_data_float_statics_nonxdk"] = len(tgt_named)
     den["our_NAMED_data_float_statics"] = len(ours_named)
     den["named_present_on_both_sides"] = len(both)
