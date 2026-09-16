@@ -182,37 +182,91 @@ def our_float_statics(path: str):
             if sec["chars"] & 0x20:  # IMAGE_SCN_CNT_CODE
                 fn_secs[s["sec"]].append(s["name"])
 
+    # Walk INSTRUCTIONS, not relocations.  A relocation walk is wrong on our
+    # objects, and wrong in BOTH directions at once.
+    #
+    # The target folds the low half into the load (`lfs f0, lbl@l(r11)`), so
+    # there one relocation IS one load site.  Our MSVC frequently MATERIALISES
+    # the address instead -- `lis`/`addi` into a GPR, then `lfs fN, <disp>(rGPR)`
+    # -- and then:
+    #   * the REFLO lands on the `addi`, which is NOT a load, so counting it
+    #     over-counts the site list, and
+    #   * the sibling statics at +4/+8/+12 are read by loads carrying NO
+    #     RELOCATION AT ALL, which a relocation walk cannot see at any effort.
+    #
+    # Measured 2026-09-16, whole binary: 16 functions, 74 such hidden sites.
+    # On IsValidSwipePosition the old walk reported sSwipeEllipseWidth (0.9)
+    # three times where the source really reads four distinct statics
+    # (0.9/1.3/0.8/1.1) -- a DISAGREE manufactured against correct source.
+    OP_ADDI, OP_ADDIS, OP_LFS, OP_LFD, OP_BL = 14, 15, 48, 50, 18
+    VOLATILE_GPRS = {0} | set(range(3, 13))
+
     out = {}
-    _ = REL_PPC_REFHI
     for secnum, names in fn_secs.items():
         sec = secs[secnum - 1]
-        # Each `lis rX, sym@ha` / `lfs fN, sym@l(rX)` pair emits TWO
-        # relocations: REFHI (0x10) then REFLO (0x11).  Counting both doubles
-        # every list and destroys the ordered comparison -- count only REFLO,
-        # which is the load itself and is 1:1 with the target's `lfs ...@l`.
-        seq = []
+        # One `va` carries SEVERAL relocation records: MSVC emits a `@comp.id`
+        # record (type 0x12) at the SAME address as the real REFHI/REFLO.  A
+        # dict keyed by va with last-write-wins lets that record SHADOW the
+        # real one -- which silently zeroed a whole-binary measurement during
+        # this investigation until the raw table was dumped.  Keep only the
+        # address relocations.
+        rel = {}
         for r in range(sec["nrel"]):
-            off = sec["prel"] + 10 * r
-            va, symidx, rtype = struct.unpack_from("<IIH", b, off)
-            if rtype != REL_PPC_REFLO:
+            va, symidx, rtype = struct.unpack_from("<IIH", b, sec["prel"] + 10 * r)
+            if rtype in (REL_PPC_REFHI, REL_PPC_REFLO):
+                rel[va] = (rtype, symidx)
+
+        seq = []
+        base = {}  # GPR -> (data section, byte offset) the register now holds
+        for off in range(0, max(0, sec["size"] - 3), 4):
+            w = struct.unpack_from(">I", b, sec["ptr"] + off)[0]
+            op = w >> 26
+            rd = (w >> 21) & 31
+            ra = (w >> 16) & 31
+            disp = struct.unpack_from(">h", b, sec["ptr"] + off + 2)[0]
+            rl = rel.get(off)
+
+            if rl is not None and rl[0] == REL_PPC_REFLO and rl[1] in sec_of_sym:
+                symidx = rl[1]
+                # MSVC packs a TU's file-scope statics into ONE .data section
+                # and relocates the group against its FIRST symbol, carrying
+                # +4/+8/+12 in the instruction's own displacement field.
+                key = (sec_of_sym[symidx], sym_off[symidx] + disp)
+                if op in (OP_ADDI, OP_ADDIS):
+                    base[rd] = key          # address materialisation, not a read
+                    continue
+                if op in (OP_LFS, OP_LFD):
+                    datum = by_sec_off.get(key) or statics.get(symidx)
+                    if datum is not None:
+                        seq.append((off, datum))
+                    continue
+
+            if op in (OP_LFS, OP_LFD) and rl is None and ra in base and ra != 1:
+                bsec, boff = base[ra]
+                # Gate on the computed slot actually BEING a catalogued .data
+                # float static.  A stray base+disp landing exactly on one is
+                # far less likely than the silent mis-attribution it prevents.
+                # (Displacements are signed: IsValidScrollPos reads its base
+                # at -4, a static earlier in the section.)
+                datum = by_sec_off.get((bsec, boff + disp))
+                if datum is not None:
+                    seq.append((off, datum))
                 continue
-            if symidx not in sec_of_sym:
-                continue
-            # MSVC packs a TU's file-scope statics into ONE .data section and
-            # relocates the whole group against its FIRST symbol, carrying the
-            # +4/+8/+12 in the instruction's own 16-bit displacement field.
-            # Ignoring that addend reports `sSwipeEllipseWidth` four times and
-            # manufactures a disagreement out of a perfectly correct source.
-            disp = struct.unpack_from(">h", b, sec["ptr"] + va + 2)[0]
-            key = (sec_of_sym[symidx], sym_off[symidx] + disp)
-            datum = by_sec_off.get(key) or statics.get(symidx)
-            if datum is not None:
-                seq.append((va, datum))
+
+            # Invalidate stale bases, conservatively.  A stale base is exactly
+            # how a value gets attributed to the wrong static, which is the
+            # failure this block exists to prevent.
+            if op == OP_BL:
+                for g in VOLATILE_GPRS:
+                    base.pop(g, None)       # a call clobbers r0, r3-r12
+            elif op in (OP_ADDI, OP_ADDIS) or 32 <= op <= 47:
+                base.pop(rd, None)          # plain addi / any integer load
+
         if not seq:
             continue
         seq.sort()
         for n in names:
-            out[n] = [st for _va, st in seq]
+            out[n] = [st for _off, st in seq]
     return out, statics
 
 
@@ -242,18 +296,26 @@ def main():
     # ---- our side -----------------------------------------------------
     ours_fn = {}
     n_objs = 0
-    for p in glob.glob(os.path.join(args.obj_root, "**", "*.obj"), recursive=True):
+    n_obj_unparseable = 0
+    # sorted(): `ours_fn.setdefault` is FIRST-write-wins, so with an unsorted
+    # glob the winner for a symbol defined in more than one object is decided
+    # by filesystem order -- the scope_index_census defect exactly.  Measured
+    # 2026-09-16 this is LATENT, not live (1 symbol in >1 object, 0 conflicting
+    # values, 0 conflicting function lists), which is the right time to pin it
+    # rather than after it starts flipping a verdict.
+    for p in sorted(glob.glob(os.path.join(args.obj_root, "**", "*.obj"), recursive=True)):
         n_objs += 1
         try:
             o, _st = our_float_statics(p)
         except Exception as e:  # noqa: BLE001
             print(f"!! {p}: {e}", file=sys.stderr)
+            n_obj_unparseable += 1
             continue
         for k, v in o.items():
             ours_fn.setdefault(k, v)
 
     # ---- join ---------------------------------------------------------
-    paired, missing, agree, disagree, lowconf = [], [], [], [], []
+    paired, missing, agree, disagree, lowconf, order_only = [], [], [], [], [], []
     for fn, tl in sorted(tgt_fn.items()):
         ol = ours_fn.get(fn)
         rec = {
@@ -270,10 +332,23 @@ def main():
         paired.append(rec)
         tv = [v for v, _n, _a, _l in tl]
         ov = [v for v, _n, _c in ol]
-        if len(tv) == len(ov) and all(
-            abs(a - b) <= 1e-6 * max(1.0, abs(a)) for a, b in zip(tv, ov)
-        ):
+
+        def _same(xs, ys):
+            return len(xs) == len(ys) and all(
+                abs(p - q) <= 1e-6 * max(1.0, abs(p)) for p, q in zip(xs, ys)
+            )
+
+        if _same(tv, ov):
             agree.append(rec)
+        elif _same(sorted(tv), sorted(ov)):
+            # Same MULTISET, different ISSUE ORDER.  Our MSVC and the image
+            # schedule the loads of one static group differently -- on
+            # IsValidSwipePosition the image reads the +4 slot before the +0
+            # slot and we read +0 before +4 -- so an ORDERED comparison
+            # manufactures a value disagreement out of correct source.
+            # A wrong VALUE cannot hide in here: the multisets are equal, so
+            # every constant the image loads is one we also load.
+            order_only.append(rec)
         else:
             disagree.append(rec)
         if any(not c for _v, _n, c in ol):
@@ -281,7 +356,11 @@ def main():
 
     den = {
         "asm_files_parsed": len({b.file for b in all_blobs}),
-        "our_objects_parsed": n_objs,
+        # "parsed" used to be the GLOBBED count, so it claimed 990 while 989
+        # parsed and StreamRecorder.obj (a 0-byte orphan of a deleted TU) threw.
+        "our_objects_globbed": n_objs,
+        "our_objects_PARSED": n_objs - n_obj_unparseable,
+        "our_objects_UNPARSEABLE": n_obj_unparseable,
         "data_float_labels_whole_binary": len(
             [b for b in all_blobs
              if b.section == ".data" and b.name.startswith("lbl_") and b.floats]
@@ -296,13 +375,14 @@ def main():
         "unpaired_ours_has_no_float_static": len(missing),
         "paired_and_agreeing": len(agree),
         "paired_and_DISAGREEING": len(disagree),
+        "paired_same_values_DIFFERENT_ORDER": len(order_only),
         "paired_with_a_low_confidence_our_side_symbol": len(lowconf),
     }
 
     if args.json:
         json.dump(
             {"denominators": den, "disagree": disagree, "missing": missing,
-             "agree": agree},
+             "order_only": order_only, "agree": agree},
             sys.stdout, indent=2,
         )
         print()
@@ -325,10 +405,15 @@ def main():
         if MANGLED_FLOAT.search(n) or MANGLED_DOUBLE.search(n):
             tgt_named[n] = (float(b.floats[0]), b.file, b.addr)
     ours_named = {}
-    for p in glob.glob(os.path.join(args.obj_root, "**", "*.obj"), recursive=True):
+    n_named_unparseable = 0
+    for p in sorted(glob.glob(os.path.join(args.obj_root, "**", "*.obj"), recursive=True)):
         try:
             _o, st = our_float_statics(p)
         except Exception:  # noqa: BLE001
+            # This swallow used to be silent.  An unparseable object here
+            # SHORTENS ours_named, which INFLATES named_target_only_we_emit_none
+            # -- a drop that manufactures findings rather than hiding them.
+            n_named_unparseable += 1
             continue
         for v, n, _c in st.values():
             ours_named.setdefault(n, (v, p))
@@ -338,6 +423,7 @@ def main():
         if abs(tgt_named[n][0] - ours_named[n][0])
         > 1e-6 * max(1.0, abs(tgt_named[n][0]))
     ]
+    den["our_objects_UNPARSEABLE_in_named_pass"] = n_named_unparseable
     den["target_NAMED_data_float_statics_nonxdk"] = len(tgt_named)
     den["our_NAMED_data_float_statics"] = len(ours_named)
     den["named_present_on_both_sides"] = len(both)
@@ -372,6 +458,7 @@ def main():
                 print(f"   OURS: {o}")
 
     show("DISAGREE (paired, values differ)", disagree)
+    show("SAME VALUES, DIFFERENT LOAD ORDER (scheduling, not a bug)", order_only)
     show("MISSING (target has a mutable static, our function has none)", missing)
     show("AGREE", agree)
 

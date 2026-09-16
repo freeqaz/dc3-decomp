@@ -39,8 +39,57 @@ the name finds nothing.
 | `TheLocale.mInitialized` (+0x1c) | 0 | **1** | skipped the entire locale load |
 | `CSampleXAPOBase<SynapseAPO,…>::m_regProps` | all zero | full struct | APO registered with a null CLSID |
 
-Ten is the whole binary. The scan returns zero hits as of 2026-08-19; if it ever
-returns more, someone added a declaration without its initializer.
+> ⚠ **CORRECTED 2026-09-16 — "ten is the whole binary" was never measured, and
+> two more instances walked straight through it.** The sentence that stood here
+> read: *"Ten is the whole binary. The scan returns zero hits as of 2026-08-19;
+> if it ever returns more, someone added a declaration without its initializer."*
+> Both halves are wrong.
+>
+> The scan joins **by symbol name inside a matched object pair**
+> (`bss_initializer_scan.py`, `if name not in tgt: continue`). Its own coverage
+> block, on the current tree:
+>
+> ```
+> universe : 16238  (defined symbols WE place in .bss, across paired objects)
+> examined :  3295  (3295/16238 = 20.29%)
+> dropped  : 12943
+>     no-name-match-in-paired-target : 12939
+>     capped-by-max-size             :     4
+> ```
+>
+> **Four fifths of the population was discarded by an uncounted `continue`**,
+> under a summary line whose denominator (`scanned 980 object pairs`) counts
+> *object pairs* and not *symbols* — so nothing in the output could contradict
+> it. A census of 20% was presented as the whole binary.
+>
+> ⚠ An earlier draft of this correction said *30,548 / 3,578 / 11.7%*. Those
+> came from an ad-hoc count taken before the instrument was fixed, and they are
+> **record** counts, not **name** counts: COFF emits several symbol records per
+> name, the scan dedups with `setdefault`, and 30,548 is exactly the un-deduped
+> record total over the same 980 paired objects (16,252 names over all 990 of
+> our objects; 10 have no target counterpart). Quote the coverage block, which
+> is reproducible by running the thing.
+>
+> Two real instances landed **after** that exhaustion verdict, neither findable
+> by this scan:
+>
+> * **`Game::Poll::sLastBeat`** (`88c3d9c20c`) — we declared `static float
+>   sLastBeat;` (`.bss` zero); the image holds **−1** in writable `.data`. dtk
+>   names a function-local static `lbl_<addr>` on the target side, so there is
+>   **no name to join on**. Found by `mutable_float_audit.py` as `lbl_82F1A524`,
+>   not by this scan. `sLastBeat` is process-lifetime and never reset per song,
+>   so the first Poll's big-jump window was (−4, 4) instead of (−3, 5),
+>   desynchronising every beat-scheduled task for songs whose first polled beat
+>   fell in the gap.
+> * **`GainEffect::sGain`** (`df13adcd1c`) — the target side *is* named
+>   (`?sGain@GainEffect@@0MA`), but our definition sat in the **wrong TU**
+>   (`Mic.cpp`), and this scan pairs object-by-object, so the two never met.
+>
+> The scan now reports its real denominator and counts that discard as
+> `no-name-match-in-paired-target`. **A zero from it means "zero among the
+> 11.7% it can see", and nothing about the rest.** Closing the two blind spots
+> needs an address-based join (target `lbl_*` via the map) and a whole-binary
+> rather than per-pair search; neither is written yet.
 
 ## Two traps this class sets
 
