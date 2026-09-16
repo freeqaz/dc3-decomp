@@ -106,6 +106,15 @@ CASES: list[tuple[str, list[str]]] = [
     # hypothetical one.  Agreed with itself, and across PYTHONHASHSEED, on
     # the day it was added (12,419 B).
     ("mutable_float_audit",   ["python3", "scripts/analysis/mutable_float_audit.py"]),
+    # Added 2026-09-16.  ~12 s/run over 989 COFF object pairs.  Same rationale
+    # as the three above: the output is a WORK LIST for taxonomy class 7
+    # (Save/Load field-order desync), it reads 0-1 findings on the current
+    # tree, and a zero that moves between runs reads as "this class is clean".
+    # Its coverage block carries the load-bearing part of the result -- which
+    # bodies it could NOT follow -- so a nondeterministic denominator would be
+    # worse than a nondeterministic hit list.  Both globs are sorted and both
+    # per-object loops iterate a sorted list.
+    ("serializer_field_trace", ["python3", "scripts/analysis/serializer_field_trace.py"]),
     # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
     # oracles -- the class of tool whose nondeterminism reads as "this class is
     # exhausted" -- and none of them had ever been checked.  All four agreed
