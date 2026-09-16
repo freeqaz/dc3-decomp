@@ -193,6 +193,28 @@ a template. Standing check: `scripts/analysis/reloc_name_gate.py` (with a
 its "Check the instrument first" section before triaging a row, because three of
 the loudest findings there were config defects rather than source bugs.
 
+### A wrong struct FIELD costs one displacement, and a biased `this` hides which field it was
+
+Taxonomy class 1 (121 bugs). A same-width wrong field emits a byte-identical
+instruction except for its 16-bit displacement — no insert, no delete, no register
+pressure change — so `run_objdiff`'s **rounded** headline prints `100.0%`
+(`report.json`'s exact `match_percent_normalized` does charge it; nobody was reading
+it per-field). The reason a naive offset comparison is worthless: **MSVC routinely
+biases `this`** (`RndFlare::Load` gets `this + 0x188`, so every field is a *negative*
+displacement) and the `this` register varies (r31, r30, r29/r23) — a raw displacement
+is meaningless outside its coordinate system, and guessing the anchor invents
+field names in the exact shape of a true positive. Detector:
+`scripts/analysis/this_offset_scan.py` (`--explain <mangled>` is the adjudication
+surface; `--selftest`, 29 checks). Whole binary: universe **30,832** paired function
+bodies, **20,432 examined**, **1 finding** (`CharMirror::Poll` reads `mBones.mStart`
+where the image reads `mBones.mCounts[TYPE_POS]`); two-sided sabotage control
+1 → 2 → 1. **14,618 of the examined pairs are byte-identical, which is a proof of
+absence for this class, not a blind spot** — so the residue is a *mislabelled header
+layout*, where both sides emit the same displacement, and that needs independent
+layout truth (RB2 DWARF, Ghidra) rather than a target diff. It is unhunted. Full
+write-up, the four artifact buckets and the manual recognizer:
+**[wrong-field-at-100-percent.md](wrong-field-at-100-percent.md)**.
+
 ### A symbol the report scores FEWER TIMES than the map lists is unmeasured by construction
 
 `symbols.txt` can bind a mangled name to exactly one address, so a second
@@ -588,6 +610,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [verifiable-icf.md](verifiable-icf.md) — ICF, LTCG, float constant pooling
 - [harmful-avoid.md](harmful-avoid.md) — Member aliasing, child pointer in loop
 - [behavioral-divergence.md](behavioral-divergence.md) — **Metric-invisible bugs**: non-commutative swaps, float reassociation, dropped guards, aliased self-clobber, reversed container args, wrong 0%-stub bodies; the "regalloc floor" false-cert anti-pattern
+- [wrong-field-at-100-percent.md](wrong-field-at-100-percent.md) — **Metric-invisible bugs**: a same-width wrong struct field costs one displacement and rounds to 100.0%. Why a raw offset comparison is worthless (MSVC biases `this`; the `this` register varies), the four artifact buckets, and `scripts/analysis/this_offset_scan.py`
 - [dropped-static-initializer.md](dropped-static-initializer.md) — **Metric-invisible bugs**: a static in our `.bss` that the image defines in `.data` with content. objdiff scores these 100% forever. `scripts/analysis/bss_initializer_scan.py`; all ten in the binary are fixed
 - [mutable-data-float-constants-are-unmetered.md](mutable-data-float-constants-are-unmetered.md) — **Metric-invisible bugs**: the VALUE of a `.data` float static costs 0% however wrong it is (`lfs` is byte-identical, and `name_check` exempts the `lbl_*` placeholder). `scripts/analysis/mutable_float_audit.py`. Its blind spots were **addressing modes** three times running — folded vs materialised base on each side, and float arrays — plus two walker defects worth knowing alone: *a call is a branch with **LK set**, not "opcode 18"* (and never `startswith("bl")`, which eats `ble`/`blt`/`blr`), and *`sc == 2` skips every `static` function*
 - [PERMUTER_ROI_ANALYSIS.md](PERMUTER_ROI_ANALYSIS.md) — Pattern automation ROI rankings, permuter coverage gaps
