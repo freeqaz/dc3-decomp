@@ -106,6 +106,13 @@ CASES: list[tuple[str, list[str]]] = [
     # hypothetical one.  Agreed with itself, and across PYTHONHASHSEED, on
     # the day it was added (12,419 B).
     ("mutable_float_audit",   ["python3", "scripts/analysis/mutable_float_audit.py"]),
+    # Added 2026-09-16.  ~6 s/run over 979 COFF object pairs (30,832 function
+    # bodies).  Same rationale as the three above, with one extra: its output is
+    # a CANDIDATE list for a bug class that scores 100%, so a row that appears
+    # on one run and not the next would read as "adjudicated and gone".  Its
+    # dict iteration order feeds the reported pair order directly.  Agreed with
+    # itself, and across PYTHONHASHSEED, on the day it was added.
+    ("this_offset_scan",      ["python3", "scripts/analysis/this_offset_scan.py"]),
     # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
     # oracles -- the class of tool whose nondeterminism reads as "this class is
     # exhausted" -- and none of them had ever been checked.  All four agreed
