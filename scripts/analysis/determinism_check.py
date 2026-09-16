@@ -97,6 +97,15 @@ CASES: list[tuple[str, list[str]]] = [
     # nondeterministic denominator would be worse than a nondeterministic hit
     # list.  Agreed with itself, and across PYTHONHASHSEED, on the day it was added.
     ("bss_initializer_scan",  ["python3", "scripts/analysis/bss_initializer_scan.py"]),
+    # Added 2026-09-16 after its our-side walker was rewritten to follow
+    # materialised base registers.  ~5 s/run.  Same rationale as the two
+    # above: the output is a WORK LIST whose DISAGREE bucket reads 0 today,
+    # and a 0 that moves between runs reads as "this class is clean".  Both
+    # globs were unsorted into a first-write-wins setdefault until today, so
+    # this entry is guarding a fragility that was real rather than a
+    # hypothetical one.  Agreed with itself, and across PYTHONHASHSEED, on
+    # the day it was added (12,419 B).
+    ("mutable_float_audit",   ["python3", "scripts/analysis/mutable_float_audit.py"]),
     # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
     # oracles -- the class of tool whose nondeterminism reads as "this class is
     # exhausted" -- and none of them had ever been checked.  All four agreed
