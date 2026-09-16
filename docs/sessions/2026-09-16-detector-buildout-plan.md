@@ -173,3 +173,91 @@ MSVC and the image schedule loads of one static group differently, so an
   points. Worth a design pass after these four land, not a speculative build now.
 - **Class 9 (OOB write, 9 bugs).** Too few and too varied to generalise.
 - The two pre-existing `honesty_lint` E1 errors. Not ours.
+
+---
+
+## OUTCOMES (recorded 2026-09-16, all lanes landed)
+
+All four lanes landed on `main` with `--no-ff`, plus a fifth that the work
+uncovered. Every lane reproduced for me independently before merging:
+coverage block, determinism across two `PYTHONHASHSEED` values on non-empty
+output, `honesty_lint` delta 0, and a two-sided sabotage control.
+
+| lane | tool | coverage (with denominator) | result | merge |
+|---|---|---|---|---|
+| A | `serializer_field_trace` (new) | 947 / 2,189 bodies = 43.26% | `FIELD_SET_DIFF` 0, `FIELD_ORDER_DIFF` 1 (known-WEAK `HamMove::Copy`) | `205baacc3` |
+| B | `this_offset_scan` (new) | 20,432 / 30,832 bodies = 66.27% | 1 candidate, **refuted** | `9e49dd942` |
+| C | `bss_initializer_scan` | 3,294 → **15,464** / 16,238 = 20.29% → **95.23%** | 2 findings, both fixed | `f13e6f6de` |
+| D | `mutable_float_audit` | target sites 92 → **268**; labels 63 → 116 | 0 disagreements | `d4f9703f7` |
+| E | `access_specifier_scan` (unplanned) | mangled-symbol examined 19.21% → **26.05%** | findings 6 → 7 | `a252a2f16` |
+
+### The one real game bug
+
+**`g_LineBreakTable`** (`1426dec31`) — 146 zeroed entries against the image's
+145 populated ones. Both helpers binary-search it for `c == entry.ch`; with
+every `ch` zero, nothing matches, `result = 0` falls through, and
+`CantStartLine`/`CantEndLine` returned **false unconditionally**. Every call
+site was dead logic: our build never suppressed a break before `!` `)` `,` `.`
+`:` `;` `?` or CJK closing punctuation, and never held one after `(` `[` `{`.
+Live in the native port. Values transcribed programmatically and round-trip
+verified against the listing; `.data` payload byte-equal to the image's 580 B;
+`WordWrap_CanBreakLineAt` unchanged at 97.6%; native gate 437/437, 0 failed.
+
+The array stays `[146]` against the image's 145 deliberately — the image's own
+search bound (`hi = 0x91`) provably probes index 145, i.e. it reads four bytes
+past its own table. `[145]` would reproduce that OOB read for real.
+
+### Three claims that did NOT survive adjudication
+
+- **`gPollToken`** — value claim correct, *impact* claim wrong. The token is
+  only ever compared against itself as a re-entrance sentinel and `mLoadCount`
+  is constructed to 0, so 0→1 and 1→2 are equivalent. Landed as fidelity
+  (`674683a0c`), labelled as such. **A scan hit is a value claim, never a
+  behaviour claim.**
+- **`CharMirror::Poll`** (lane B's only candidate) — filed as a −4 wrong field;
+  objdiff shows **seven** `this`-relative rows shifted by a *uniform* `+0x30`,
+  which is a class-layout divergence, not a substituted field. The tool's own
+  anchor fit was 2/10 there.
+- **The linker-map address join** (lane C's prescribed fix) — recovers **zero**
+  rows, measured: of the 8,893 names the name join misses, 0 appear in
+  `ham_xbox_r.map`. Function-local statics carry a per-TU scope ordinal and are
+  unjoinable by name on principle. What works is joining through the *code that
+  reads the static*.
+
+### Open follow-up
+
+**`CharMirror` layout.** The `+0x30` shift covers rows *before* `mBones` (the
+image reads `0x14` where we read `0x44` = `mMirrorServo+0x8`), so a pure
+`mBones` relocation (`0x38` → `0x50` = `+0x18`) does not explain it. Our
+headers put `mBones` at `0x50`; RB2 DWARF says `0x38`. Every field access in
+the class is affected. Not started.
+
+### Tooling defects found in already-landed code
+
+- **`run_diff_inspect(mode="asm_listing")` was dead tree-wide** (`f8b54c9e0`).
+  It appended `/FAs` to the *metadata patcher's* argv — since 2026-08-31 the
+  compile edge is `<cl> && <obj_build_metadata_patcher.py>` — so `cl.exe` was
+  never asked for a listing and the mode reported "no output" instead of the
+  refusal underneath. ⚠ **Needs an MCP server restart to reach callers.**
+- **`access_specifier_scan` was examining a denominator computed from its own
+  parser's output** (lane E). `rfind("@@")` both *dropped* symbols (parameter
+  types carry their own `@@`) and *fabricated* member functions out of static
+  data members — and the docstring defended it. Neither `find` nor `rfind` is
+  correct; it needed a tokeniser.
+
+### A denominator lesson this session paid for twice
+
+Lane C's old universe was "symbols in `.bss`" but its join could reach 20% of
+them. Lane E's old universe was *literally the set its parser succeeded on*, so
+64,682 parse failures could never appear in it. **A denominator computed from
+the classifier's own output can only ever report success** — and fixing it makes
+the headline fraction *fall* (E: 48.23% → 7.65% of the true denominator), which
+is the honest direction.
+
+⚠ **I committed the same defect myself.** The figures I put in lane E's brief
+("48,836 distinct `?`-mangled symbols, 52.4% garbage") came from an ad-hoc probe
+that globbed `[:400]` of 990 objects — a truncated sample stated as a total. The
+lane could not reproduce it, said so, and refused to substitute its own numbers
+quietly. Re-measured untruncated: **107,493** mangled symbols, rfind-valid
+**42,811** (exactly the old universe), find-valid 61,048. Direction right,
+figures wrong.
