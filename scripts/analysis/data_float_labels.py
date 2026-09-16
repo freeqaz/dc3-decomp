@@ -19,6 +19,42 @@ Three confirmed behavioural defects were found this way:
 This script is the systematic version of that hunt.  It reports DENOMINATORS,
 not just hits: a sweep that reports only hits is not believable.
 
+THE TARGET ALSO MATERIALISES BASE REGISTERS  (fixed 2026-09-16)
+---------------------------------------------------------------
+This parser used to recognise exactly ONE addressing mode, the folded form
+
+    lfs f0, lbl_82F44758@l(r24)
+
+which is one relocation per load site.  But the image frequently materialises
+the address into a GPR first and then reads the group through displacements:
+
+    lis  r11, lbl_82F16D28@ha
+    addi r25, r11, lbl_82F16D28@l     <-- the reference; NOT a load
+    ...
+    addi r26, r25, 0x4                <-- a base derived from a base
+    lfs  f31, -0x4(r26)               <-- the actual read, NO relocation at all
+
+Every one of those reads was structurally invisible: the label is referenced by
+an `addi`, and the sibling slots at +4/+8/+12 carry no relocation to find.  This
+is the SAME defect that was fixed on the our-side walker in `1b75dc677`, in the
+same week, for the same reason -- see `our_float_statics` in
+`mutable_float_audit.py`, which is the reference implementation this walk is
+ported from.
+
+Measured whole-binary at the time of the fix: **29** `addi`-materialised
+references reach a `.data` float label, covering **17** distinct labels, of
+which **9** (5 non-XDK) are reachable by NO folded load and so were invisible
+to this file entirely.  `lbl_82F16D28` -- ten floats, referenced from
+`?BlurSurface@RndSoftParticleBuffer@@AAAXXZ` -- is the worked example.
+
+WHAT THE WALK DELIBERATELY DOES NOT DO
+--------------------------------------
+* It never guesses.  A base register is dropped on a call (volatiles) and on
+  any instruction that writes it, so a stale base can never be attributed to
+  the wrong static.  Over-clearing loses a site; mis-attribution invents a bug.
+* It follows LOADS only.  `stfs f26, 0x4(r25)` tells you the slot exists, not
+  what constant is behind it, so stores are counted and not turned into sites.
+
 Usage:
     python3 scripts/analysis/data_float_labels.py            # summary + table
     python3 scripts/analysis/data_float_labels.py --json     # machine readable
@@ -27,10 +63,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import os
 import re
-import subprocess
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -45,10 +81,52 @@ OBJ_START = re.compile(r'^\.obj\s+("?)(.+?)\1(?:,\s*\w+)?\s*$')
 OBJ_END = re.compile(r"^\.endobj\b")
 FN_START = re.compile(r'^\.fn\s+("?)(.+?)\1(?:,\s*\w+)?\s*$')
 FN_END = re.compile(r"^\.endfn\b")
-# `lfs f0, lbl_82F44758@l(r24)`  /  `lfd f1, lbl_...@l(r3)`
-FLOAT_LOAD = re.compile(r"\b(lf[sd]u?)\s+(f\d+),\s*(lbl_[0-9A-Fa-f]+)@l\(")
 # Any @ha/@l/@h reference to a lbl_, for the "referenced at all" denominator.
 ANY_LBL_REF = re.compile(r"\b(lbl_[0-9A-Fa-f]+)@(?:ha|l|h)\b")
+
+# --------------------------------------------------------------------------- #
+# Instruction forms in dtk's listings.
+#
+#   /* 82732FA0 007279A0  3B 2B 6D 28 */\taddi r25, r11, lbl_82F16D28@l
+#
+# dtk QUOTES any symbol containing a character that would not survive as a bare
+# token (`"__real@3f000000"`, `"?sFoo@@3MA"`), so the bare alternative never has
+# to contain an `@` -- which is what makes a non-greedy match safe here.
+# --------------------------------------------------------------------------- #
+INSN = re.compile(r"^/\*[^*]*\*/\s*(\S+)\s*(.*?)\s*$")
+_SYM = r'(?:"([^"]*)"|([A-Za-z_$.][\w$.]*))'
+#: `addi rD, rA, sym@l` / `ori rD, rA, sym@l` -- materialise a symbol address.
+LO_MATERIALISE = re.compile(r"^r(\d+),\s*r(\d+),\s*" + _SYM + r"@l$")
+#: `addi rD, rA, 0x2c` -- a base DERIVED from a base (the `addi r26, r25, 0x4`
+#: in BlurSurface).  Without this the reads through r26 are lost.
+IMM_ADD = re.compile(r"^r(\d+),\s*r(\d+),\s*(-?(?:0x[0-9A-Fa-f]+|\d+))$")
+#: `lfs f0, sym@l(rX)` -- the folded form, one relocation per load.
+LOAD_SYM = re.compile(r"^f\d+,\s*" + _SYM + r"@l\(r(\d+)\)$")
+#: `lfs f31, -0x4(r26)` -- a displaced read off a materialised base.
+LOAD_DISP = re.compile(r"^f\d+,\s*(-?(?:0x[0-9A-Fa-f]+|\d+))\(r(\d+)\)$")
+#: first operand is a GPR -- used to invalidate a base the instruction clobbers.
+FIRST_GPR = re.compile(r"^r(\d+)\b")
+
+FLOAT_LOADS = ("lfs", "lfd", "lfsu", "lfdu")
+#: Mnemonic prefixes whose FIRST operand is not a destination GPR.  A store's
+#: first operand is the SOURCE, a compare's is a CR field, a branch's is a
+#: target -- clobbering on those would drop live bases for no reason.
+NO_GPR_DEST = ("st", "b", "cmp", "tw", "td", "mt", "dcb", "icbi", "sync",
+               "eieio", "trap")
+#: The mnemonics dtk emits that actually LINK (write LR) -- i.e. CALLS.
+#: This has to be an exact set, not a `startswith("bl")` test: dtk's `b*`
+#: vocabulary over the whole asm tree is `bl` 233,601 / `beq` 99,977 / `b`
+#: 86,495 / `bne` 75,319 / `blr` 45,132 / `blt` 24,890 / `bctrl` 15,310 /
+#: `ble` 14,105 / ... , so a prefix test treats `ble`, `blt`, `blr`, `blelr`
+#: and `bltlr` as calls and drops every materialised base at each one.  Those
+#: are conditional branches and returns; none of them clobbers a volatile.
+CALL_MNEMONICS = frozenset(("bl", "bla", "bctrl", "blrl", "bclrl", "bcctrl"))
+#: r0 and r3-r12 are volatile across a call on the Xenon ABI.
+VOLATILE_GPRS = {0} | set(range(3, 13))
+
+#: Retained for the legacy `--json` shape and for callers that only want the
+#: folded form; the walk below supersedes it.
+FLOAT_LOAD = re.compile(r"\b(lf[sd]u?)\s+(f\d+),\s*(lbl_[0-9A-Fa-f]+)@l\(")
 
 # Width in bytes of each data directive, for computing sub-offsets inside a blob.
 DIRECTIVE_WIDTH = {
@@ -62,6 +140,18 @@ DIRECTIVE_WIDTH = {
     ".float": 4,
     ".double": 8,
 }
+
+FLOAT_DIRECTIVES = (".float", ".double")
+
+
+def _imm(text: str) -> int:
+    """Parse a dtk immediate: `0x2c`, `-0x4`, `12`, `-12`."""
+    t = text.strip()
+    neg = t.startswith("-")
+    if neg:
+        t = t[1:]
+    v = int(t, 16) if t.lower().startswith("0x") else int(t, 10)
+    return -v if neg else v
 
 
 @dataclass
@@ -80,27 +170,47 @@ class Blob:
         return {
             off: val
             for off, (d, val) in self.slots.items()
-            if d in (".float", ".double")
+            if d in FLOAT_DIRECTIVES
         }
 
     @property
     def is_pure_float(self):
         return bool(self.slots) and all(
-            d in (".float", ".double") for d, _ in self.slots.values()
+            d in FLOAT_DIRECTIVES for d, _ in self.slots.values()
         )
 
 
 @dataclass
 class Site:
+    """One float READ, resolved to the byte it reads.
+
+    `label`/`sub_off` are what the instruction stream said: a symbol name and a
+    byte offset from it.  `blob_name`/`blob_off`/`value` are filled in by
+    `collect()` once every blob in the binary is known, because a materialised
+    base can read PAST the end of the symbol it was formed from and land in the
+    next blob (dtk ends a blob at the next NAMED symbol, so a run of unnamed
+    siblings folds into one blob and a named one starts a new one).
+    """
     fn: str
     file: str
     line: int
     insn: str
     label: str
+    sub_off: int = 0
+    via: str = "folded"          # "folded" | "materialised"
+    blob_name: str | None = None
+    blob_off: int = 0
+    addr: int = 0
+    directive: str | None = None
+    value: str | None = None
 
 
 def parse_file(path: str, rel: str):
-    """Return (blobs, sites, fn_ref_labels)."""
+    """Return (blobs, sites, fn_ref_labels).
+
+    Sites are UNRESOLVED here -- they carry (symbol, byte offset).  Resolution
+    needs the whole-binary blob index and happens in `collect()`.
+    """
     blobs: list[Blob] = []
     sites: list[Site] = []
     fn_refs: dict[str, set] = defaultdict(set)
@@ -109,6 +219,8 @@ def parse_file(path: str, rel: str):
     cur_blob = None
     cur_fn = None
     off = 0
+    # GPR -> (symbol name, byte offset from that symbol)
+    base: dict[int, tuple[str, int]] = {}
 
     with open(path, errors="replace") as fh:
         for lineno, raw in enumerate(fh, 1):
@@ -151,21 +263,92 @@ def parse_file(path: str, rel: str):
                 m = FN_START.match(stripped)
                 if m:
                     cur_fn = m.group(2)
+                base = {}
                 continue
             if FN_END.match(stripped):
                 cur_fn = None
+                base = {}
                 continue
 
-            if cur_fn and "lbl_" in line:
-                for m in ANY_LBL_REF.finditer(line):
-                    fn_refs[cur_fn].add(m.group(1))
-                m = FLOAT_LOAD.search(line)
+            if not cur_fn:
+                continue
+
+            for m in ANY_LBL_REF.finditer(line):
+                fn_refs[cur_fn].add(m.group(1))
+
+            mi = INSN.match(stripped)
+            if not mi:
+                continue
+            mnem, ops = mi.group(1), mi.group(2)
+
+            # -- a float READ ------------------------------------------------
+            if mnem in FLOAT_LOADS:
+                m = LOAD_SYM.match(ops)
                 if m:
-                    sites.append(
-                        Site(cur_fn, rel, lineno, m.group(1), m.group(3))
-                    )
+                    sym = m.group(1) if m.group(1) is not None else m.group(2)
+                    sites.append(Site(cur_fn, rel, lineno, mnem, sym, 0, "folded"))
+                    continue
+                m = LOAD_DISP.match(ops)
+                if m:
+                    disp, ra = _imm(m.group(1)), int(m.group(2))
+                    b = base.get(ra)
+                    if b is not None:
+                        sites.append(Site(cur_fn, rel, lineno, mnem,
+                                          b[0], b[1] + disp, "materialised"))
+                continue
+
+            # -- materialise a symbol address into a GPR ---------------------
+            if mnem in ("addi", "ori"):
+                m = LO_MATERIALISE.match(ops)
+                if m:
+                    rd = int(m.group(1))
+                    sym = m.group(3) if m.group(3) is not None else m.group(4)
+                    base[rd] = (sym, 0)
+                    continue
+                m = IMM_ADD.match(ops)
+                if m:
+                    rd, ra, imm = int(m.group(1)), int(m.group(2)), _imm(m.group(3))
+                    b = base.get(ra)
+                    # r1 is the stack pointer: a frame offset is not a static.
+                    if b is not None and ra != 1 and rd != 1:
+                        base[rd] = (b[0], b[1] + imm)
+                    else:
+                        base.pop(rd, None)
+                    continue
+
+            # -- invalidate, conservatively ----------------------------------
+            if mnem in CALL_MNEMONICS:
+                for g in VOLATILE_GPRS:
+                    base.pop(g, None)
+                continue
+            if mnem.startswith(NO_GPR_DEST):
+                continue
+            m = FIRST_GPR.match(ops)
+            if m:
+                base.pop(int(m.group(1)), None)
 
     return blobs, sites, fn_refs
+
+
+class BlobIndex:
+    """Address -> the blob covering it.  dtk emits blobs in address order."""
+
+    def __init__(self, blobs):
+        self._items = sorted(
+            ((b.addr, b) for b in blobs if b.addr), key=lambda kv: kv[0]
+        )
+        self._keys = [a for a, _b in self._items]
+
+    def at(self, addr: int):
+        if not self._keys:
+            return None
+        i = bisect.bisect_right(self._keys, addr) - 1
+        if i < 0:
+            return None
+        a, b = self._items[i]
+        if addr < a or addr >= a + max(b.size, 1):
+            return None
+        return b, addr - a
 
 
 def collect(asm_root: str):
@@ -176,7 +359,13 @@ def collect(asm_root: str):
     fn_refs: dict[str, set] = defaultdict(set)
     fn_file: dict[str, str] = {}
 
-    for dirpath, _dirs, files in os.walk(asm_root):
+    # sorted(): os.walk yields DIRECTORIES in arbitrary order, and the dicts
+    # below are last-write-wins.  Filenames were already sorted; the directory
+    # level was not, which is the scope_index_census defect with one level of
+    # indirection.  Measured 2026-09-16: 0 blob names occur twice, so this is
+    # LATENT rather than live -- which is the right time to pin it.
+    for dirpath, dirs, files in os.walk(asm_root):
+        dirs.sort()
         for fn in sorted(files):
             if not fn.endswith(".s"):
                 continue
@@ -190,9 +379,27 @@ def collect(asm_root: str):
             sites.extend(s)
             for k, v in r.items():
                 fn_refs[k] |= v
-                fn_file.setdefault(k, rel)
             for site in s:
                 fn_file.setdefault(site.fn, rel)
+    for k in sorted(fn_refs):
+        fn_file.setdefault(k, "?")
+
+    # -- resolve every site now that the whole binary is known ---------------
+    index = BlobIndex(all_blobs)
+    for s in sites:
+        anchor = blobs_by_name.get(s.label)
+        if anchor is None:
+            continue
+        addr = anchor.addr + s.sub_off
+        hit = index.at(addr)
+        if hit is None:
+            continue
+        blob, off = hit
+        slot = blob.slots.get(off)
+        if slot is None or slot[0] not in FLOAT_DIRECTIVES:
+            continue
+        s.blob_name, s.blob_off, s.addr = blob.name, off, addr
+        s.directive, s.value = slot
 
     return all_blobs, blobs_by_name, sites, fn_refs, fn_file
 
@@ -202,11 +409,10 @@ def is_xdk(rel: str) -> bool:
 
 
 def label_value(blobs_by_name, label: str):
-    """Resolve a lbl_ reference to (section, directive, value) if it is a float.
+    """Resolve a lbl_ reference to (blob, directive, value) if it is a float.
 
-    A load through `lbl_X@l` names the exact symbol; dtk emits one `.obj` per
-    label, so the offset is always 0.  If the label is not its own `.obj`, fall
-    back to an address lookup inside the enclosing blob.
+    Kept for callers that only have a NAME.  Prefer a resolved `Site`, which
+    carries the sub-offset a materialised base may have added.
     """
     blob = blobs_by_name.get(label)
     if blob is None:
@@ -215,7 +421,7 @@ def label_value(blobs_by_name, label: str):
     if slot is None:
         return None
     d, v = slot
-    if d not in (".float", ".double"):
+    if d not in FLOAT_DIRECTIVES:
         return None
     return blob, d, v
 
@@ -244,28 +450,26 @@ def main():
     data_lbl = [b for b in lbl_float_blobs if b.section == ".data"]
     data_lbl_nonxdk = [b for b in data_lbl if not is_xdk(b.file)]
 
-    # float-load sites through lbl_ labels
     sel_sections = None if args.all_sections else {".data"}
     resolved = []
     unresolved = []
     for s in sites:
-        r = label_value(by_name, s.label)
-        if r is None:
+        if s.blob_name is None:
             unresolved.append(s)
             continue
-        blob, d, v = r
+        blob = by_name[s.blob_name]
         if sel_sections and blob.section not in sel_sections:
             continue
         if not args.include_xdk and is_xdk(s.file):
             continue
-        resolved.append((s, blob, d, v))
+        resolved.append((s, blob, s.directive, s.value))
 
-    # group by function
     per_fn = defaultdict(list)
     for s, blob, d, v in resolved:
         per_fn[s.fn].append((s, blob, d, v))
 
     referenced_labels = {blob.name for _s, blob, _d, _v in resolved}
+    n_materialised = sum(1 for s, _b, _d, _v in resolved if s.via == "materialised")
 
     out = {
         "denominators": {
@@ -281,9 +485,11 @@ def main():
             "lbl_float_blobs": len(lbl_float_blobs),
             "lbl_float_blobs_data_section": len(data_lbl),
             "lbl_float_blobs_data_section_nonxdk": len(data_lbl_nonxdk),
-            "float_load_sites_through_lbl_total": len(sites),
+            "float_load_sites_found_total": len(sites),
             "float_load_sites_selected": len(resolved),
-            "float_load_sites_label_not_a_float": len(unresolved),
+            "float_load_sites_via_FOLDED_reloc": len(resolved) - n_materialised,
+            "float_load_sites_via_MATERIALISED_base": n_materialised,
+            "float_load_sites_unresolvable": len(unresolved),
             "functions_with_selected_sites": len(per_fn),
             "distinct_labels_referenced": len(referenced_labels),
             "data_nonxdk_labels_never_float_loaded": len(
@@ -293,18 +499,20 @@ def main():
         "functions": [],
     }
 
-    for fn in sorted(per_fn, key=lambda f: -len(per_fn[f])):
+    for fn in sorted(per_fn, key=lambda f: (-len(per_fn[f]), f)):
         entries = per_fn[fn]
         vals = {}
         for s, blob, d, v in entries:
-            vals.setdefault(blob.name, {"addr": f"0x{blob.addr:08X}",
-                                        "section": blob.section,
-                                        "directive": d,
-                                        "value": v,
-                                        "loads": 0,
-                                        "lines": []})
-            vals[blob.name]["loads"] += 1
-            vals[blob.name]["lines"].append(s.line)
+            key = f"{blob.name}+0x{s.blob_off:x}" if s.blob_off else blob.name
+            vals.setdefault(key, {"addr": f"0x{s.addr:08X}",
+                                  "section": blob.section,
+                                  "directive": d,
+                                  "value": v,
+                                  "via": s.via,
+                                  "loads": 0,
+                                  "lines": []})
+            vals[key]["loads"] += 1
+            vals[key]["lines"].append(s.line)
         out["functions"].append(
             {
                 "fn": fn,
@@ -332,8 +540,8 @@ def main():
         print(f"   {f['file']}   ({f['n_loads']} float loads)")
         for name, info in sorted(f["labels"].items(), key=lambda kv: kv[1]["addr"]):
             print(
-                f"     {name:20} {info['addr']}  {info['directive']:8} {info['value']:<22}"
-                f" x{info['loads']}  asm lines {info['lines'][:6]}"
+                f"     {name:24} {info['addr']}  {info['directive']:8} {info['value']:<18}"
+                f" x{info['loads']} {info['via']:12} asm lines {info['lines'][:6]}"
             )
         print()
 
