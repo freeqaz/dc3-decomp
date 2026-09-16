@@ -90,6 +90,13 @@ CASES: list[tuple[str, list[str]]] = [
     # class is clean".  Agreed with itself, and across PYTHONHASHSEED, on the
     # day it was added.
     ("access_specifier_scan", ["python3", "scripts/analysis/access_specifier_scan.py"]),
+    # Added 2026-09-16.  Cheap (~8 s/run, 980 COFF object pairs).  It earns the
+    # seat for the same reason: its output is a WORK LIST whose ZERO was read as
+    # an exhaustion proof for a month, and two real bugs went through it.  Its
+    # coverage block is now the load-bearing part of the output, so a
+    # nondeterministic denominator would be worse than a nondeterministic hit
+    # list.  Agreed with itself, and across PYTHONHASHSEED, on the day it was added.
+    ("bss_initializer_scan",  ["python3", "scripts/analysis/bss_initializer_scan.py"]),
     # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
     # oracles -- the class of tool whose nondeterminism reads as "this class is
     # exhausted" -- and none of them had ever been checked.  All four agreed
