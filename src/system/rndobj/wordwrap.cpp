@@ -1,7 +1,164 @@
 #include "rndobj\wordwrap.h"
 
 unsigned int g_uOption = 1;
-LineBreakEntry g_LineBreakTable[146];
+// Restored from the shipped image: lbl_82F16AD0, .data, 145 entries of 4 bytes
+// (ch:u16, cantBreakBefore:u8, cantBreakAfter:u8), strictly ascending by ch
+// because both helpers binary-search it.
+//
+// The array is [146] while the image holds 145 entries. That is deliberate and
+// matches the image's own behaviour: the search bound is `hi = 0x91` (145), and an
+// exhaustive walk of the midpoint recurrence shows index 145 IS reachable -- for a
+// char greater than every entry, the image reads four bytes past its own table.
+// Declaring [145] here would reproduce that out-of-bounds read for real (and trip
+// ASAN in the native port); the trailing zeroed entry has ch == 0, which no real
+// character equals, so the probe falls through to `result = 0` exactly as before.
+LineBreakEntry g_LineBreakTable[146] = {
+    { 0x0021, 1, 0 },  // '!'
+    { 0x0024, 0, 1 },  // '$'
+    { 0x0025, 1, 0 },  // '%'
+    { 0x0027, 1, 1 },  // "'"
+    { 0x0028, 0, 1 },  // '('
+    { 0x0029, 1, 0 },  // ')'
+    { 0x002C, 1, 0 },  // ','
+    { 0x002E, 1, 0 },  // '.'
+    { 0x002F, 1, 1 },  // '/'
+    { 0x003A, 1, 0 },  // ':'
+    { 0x003B, 1, 0 },  // ';'
+    { 0x003F, 1, 0 },  // '?'
+    { 0x005B, 0, 1 },  // '['
+    { 0x005C, 0, 1 },  // '\\'
+    { 0x005D, 1, 0 },  // ']'
+    { 0x007B, 0, 1 },  // '{'
+    { 0x007D, 1, 0 },  // '}'
+    { 0x00A2, 1, 0 },
+    { 0x00A3, 0, 1 },
+    { 0x00A5, 0, 1 },
+    { 0x00A7, 0, 1 },
+    { 0x00A8, 1, 0 },
+    { 0x00A9, 1, 0 },
+    { 0x00AE, 1, 0 },
+    { 0x00B0, 1, 0 },
+    { 0x00B7, 1, 1 },
+    { 0x02C7, 1, 0 },
+    { 0x02C9, 1, 0 },
+    { 0x2013, 1, 0 },
+    { 0x2014, 1, 0 },
+    { 0x2015, 1, 0 },
+    { 0x2016, 1, 0 },
+    { 0x2018, 0, 1 },
+    { 0x2019, 1, 0 },
+    { 0x201C, 0, 1 },
+    { 0x201D, 1, 0 },
+    { 0x2022, 1, 0 },
+    { 0x2025, 1, 0 },
+    { 0x2026, 1, 0 },
+    { 0x2027, 1, 0 },
+    { 0x2032, 1, 0 },
+    { 0x2033, 1, 0 },
+    { 0x2035, 0, 1 },
+    { 0x2103, 1, 0 },
+    { 0x2122, 1, 0 },
+    { 0x2236, 1, 0 },
+    { 0x2574, 1, 0 },
+    { 0x266F, 0, 1 },
+    { 0x3001, 1, 0 },
+    { 0x3002, 1, 0 },
+    { 0x3003, 1, 0 },
+    { 0x3005, 1, 0 },
+    { 0x3008, 0, 1 },
+    { 0x3009, 1, 0 },
+    { 0x300A, 0, 1 },
+    { 0x300B, 1, 0 },
+    { 0x300C, 0, 1 },
+    { 0x300D, 1, 0 },
+    { 0x300E, 0, 1 },
+    { 0x300F, 1, 0 },
+    { 0x3010, 0, 1 },
+    { 0x3011, 1, 0 },
+    { 0x3012, 0, 1 },
+    { 0x3014, 0, 1 },
+    { 0x3015, 1, 0 },
+    { 0x3016, 0, 1 },
+    { 0x3017, 1, 0 },
+    { 0x301D, 0, 1 },
+    { 0x301E, 1, 0 },
+    { 0x301F, 1, 0 },
+    { 0x3041, 1, 0 },
+    { 0x3043, 1, 0 },
+    { 0x3045, 1, 0 },
+    { 0x3047, 1, 0 },
+    { 0x3049, 1, 0 },
+    { 0x3063, 1, 0 },
+    { 0x3083, 1, 0 },
+    { 0x3085, 1, 0 },
+    { 0x3087, 1, 0 },
+    { 0x308E, 1, 0 },
+    { 0x3099, 1, 0 },
+    { 0x309A, 1, 0 },
+    { 0x309B, 1, 0 },
+    { 0x309C, 1, 0 },
+    { 0x309D, 1, 0 },
+    { 0x309E, 1, 0 },
+    { 0x30A1, 1, 0 },
+    { 0x30A3, 1, 0 },
+    { 0x30A5, 1, 0 },
+    { 0x30A7, 1, 0 },
+    { 0x30A9, 1, 0 },
+    { 0x30C3, 1, 0 },
+    { 0x30E3, 1, 0 },
+    { 0x30E5, 1, 0 },
+    { 0x30E7, 1, 0 },
+    { 0x30EE, 1, 0 },
+    { 0x30F5, 1, 0 },
+    { 0x30F6, 1, 0 },
+    { 0x30FB, 1, 0 },
+    { 0x30FC, 1, 0 },
+    { 0x30FD, 1, 0 },
+    { 0x30FE, 1, 0 },
+    { 0xFE30, 1, 0 },
+    { 0xFE50, 1, 0 },
+    { 0xFE51, 1, 0 },
+    { 0xFE52, 1, 0 },
+    { 0xFE54, 1, 0 },
+    { 0xFE55, 1, 0 },
+    { 0xFE56, 1, 0 },
+    { 0xFE57, 1, 0 },
+    { 0xFE59, 0, 1 },
+    { 0xFE5A, 1, 0 },
+    { 0xFE5B, 0, 1 },
+    { 0xFE5C, 1, 0 },
+    { 0xFE5D, 0, 1 },
+    { 0xFE5E, 1, 0 },
+    { 0xFF01, 1, 0 },
+    { 0xFF02, 1, 0 },
+    { 0xFF04, 0, 1 },
+    { 0xFF05, 1, 0 },
+    { 0xFF07, 1, 0 },
+    { 0xFF08, 0, 1 },
+    { 0xFF09, 1, 0 },
+    { 0xFF0C, 1, 0 },
+    { 0xFF0E, 1, 0 },
+    { 0xFF1A, 1, 0 },
+    { 0xFF1B, 1, 0 },
+    { 0xFF1F, 1, 0 },
+    { 0xFF20, 0, 1 },
+    { 0xFF3B, 0, 1 },
+    { 0xFF3D, 1, 0 },
+    { 0xFF40, 1, 0 },
+    { 0xFF5B, 0, 1 },
+    { 0xFF5C, 1, 0 },
+    { 0xFF5D, 1, 0 },
+    { 0xFF5E, 1, 0 },
+    { 0xFF61, 1, 0 },
+    { 0xFF64, 1, 0 },
+    { 0xFF70, 1, 0 },
+    { 0xFF9E, 1, 0 },
+    { 0xFF9F, 1, 0 },
+    { 0xFFE0, 1, 1 },
+    { 0xFFE1, 0, 1 },
+    { 0xFFE5, 0, 1 },
+    { 0xFFE6, 0, 1 },
+};
 
 void WordWrap_SetOption(unsigned int option) { g_uOption = option; }
 
