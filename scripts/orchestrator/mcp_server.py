@@ -756,6 +756,25 @@ def _filter_build_output(text: str) -> str:
     return "\n".join(filtered)
 
 
+def _with_compiler_flags(compile_cmd: str, flags: str) -> str:
+    """Append `flags` to the COMPILER invocation of a chained ninja command.
+
+    ninja hands back `<cl invocation> && <obj_build_metadata_patcher.py --obj ...>`
+    -- `config.obj_postprocess_cmd`, chained with `&&` since 2026-08-31 so that a
+    patcher failure fails the compile edge.  Appending to the whole string hands
+    the flags to the PATCHER's argparse, which exits
+
+        obj_build_metadata_patcher.py: error: unrecognized arguments: /FAs /Fa...
+
+    writing no listing at all.  Only the FIRST segment is the compiler; the rest
+    are preserved, because dropping the patcher clause would leave an
+    unnormalized object behind (see verify_objs_patched.py --check-compile-edge).
+    """
+    segs = compile_cmd.split(" && ")
+    segs[0] = f"{segs[0]} {flags}"
+    return " && ".join(segs)
+
+
 def _extract_function_fallback(asm_lines: list[str], symbol: str) -> list[str] | None:
     """Fallback function extraction from /FAs listing using PROC/ENDP markers."""
     # Clean symbol for matching (strip leading ? for MSVC mangled names)
@@ -3736,8 +3755,20 @@ Use the Read tool to view: `Read {output_file.relative_to(project_dir)}`
         asm_dir = Path(_tempfile.mkdtemp(dir="/tmp/claude-1000"))
         asm_output = asm_dir / "listing.asm"
 
-        # Add /FAs and /Fa<path> to the compile command
-        compile_cmd = compile_cmd + f" /FAs /Fa{asm_output}"
+        # Add /FAs and /Fa<path> to the COMPILER, not to the end of the whole
+        # chained command.
+        #
+        # Since 2026-08-31 the msvc rules run the object metadata pass inside
+        # the compile edge (`config.obj_postprocess_cmd` in configure.py,
+        # chained with `&&` so a patcher failure fails the compile), so the
+        # command ninja hands back is
+        #     cd <dir> && <cl invocation ...> && <obj_build_metadata_patcher.py --obj ...>
+        # The `cd` is split off above; appending to what remains therefore gave
+        # /FAs to the PATCHER's argparse, which exited with
+        #     obj_build_metadata_patcher.py: error: unrecognized arguments: /FAs /Fa...
+        # no listing was ever written, and asm_listing was dead tree-wide,
+        # reporting only "/FAs compilation produced no output".
+        compile_cmd = _with_compiler_flags(compile_cmd, f"/FAs /Fa{asm_output}")
 
         # 5. Run the compile
         result = subprocess.run(

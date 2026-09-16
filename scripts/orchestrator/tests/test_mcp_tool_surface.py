@@ -353,6 +353,46 @@ class TestDiffInspectRulerHonesty(unittest.TestCase):
             "stack-layout and attributed",
         )
 
+    def test_asm_listing_flags_reach_the_compiler_not_the_patcher(self):
+        """/FAs must land on the cl.exe segment, not the end of the chain.
+
+        Since 2026-08-31 the msvc rules run the object metadata pass inside the
+        compile edge, so ninja returns
+            <cl invocation> && <obj_build_metadata_patcher.py --obj ...>
+        Appending the flags to the whole string gave them to the PATCHER's
+        argparse, which exits `unrecognized arguments: /FAs /Fa...`, no listing
+        is written, and the mode reports only "/FAs compilation produced no
+        output".  That is what it did, tree-wide, until this was fixed --
+        measured on ?Poll@CharMirror@@UAAXXZ.
+        """
+        ns = {}
+        start = MCP_SRC.index("def _with_compiler_flags(")
+        end = MCP_SRC.index("\ndef ", start) + 1
+        exec(MCP_SRC[start:end], ns)  # noqa: S102
+        inject = ns["_with_compiler_flags"]
+
+        cmd = ('wibo /toolchain/cl.exe /c /O1 wordwrap.cpp '
+               '&& "/repo/.venv/bin/python3" '
+               '/repo/scripts/obj_build_metadata_patcher.py '
+               '--obj /repo/build/373307D9/src/system/rndobj/wordwrap.obj')
+        out = inject(cmd, "/FAs /Fa/tmp/listing.asm")
+        head, _, tail = out.partition(" && ")
+
+        self.assertIn("/FAs", head,
+                      "flags never reached the compiler segment")
+        self.assertIn("/Fa/tmp/listing.asm", head)
+        self.assertNotIn("/FAs", tail,
+                         "flags leaked onto obj_build_metadata_patcher's argv "
+                         "-- the exact defect that killed asm_listing")
+        self.assertIn("obj_build_metadata_patcher.py", tail,
+                      "the patcher clause must survive; dropping it would "
+                      "leave an unnormalized object behind")
+
+        # An unchained command (no postprocess step) must still work.
+        plain = inject("wibo /toolchain/cl.exe /c foo.cpp", "/FAs /Fa/x.asm")
+        self.assertTrue(plain.endswith("/FAs /Fa/x.asm"))
+        self.assertEqual(plain.count("/FAs"), 1)
+
     def test_schema_admits_the_partial_support(self):
         props = _tool_schemas()["run_diff_inspect"]["properties"]
         desc = props["diff_mode"]["description"]
