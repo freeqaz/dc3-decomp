@@ -587,12 +587,21 @@ def classify_symbol(name):
     'template-or-complex' (a mangling this parser will not guess at) or
     'unparsable'.
 
-    ⚠ The access/storage character is the one after the FIRST `@@`, not the
-    last.  `rfind` is wrong here and wrong in a way that hides functions rather
-    than mis-reads them: `?Load@RndFlare@@UAAXAAVBinStream@@@Z` ends with a
+    ⚠ The access/storage character is NOT the one after the final `@@`.
+    `rfind` is wrong here, and wrong in a way that hides functions rather than
+    mis-reads them: `?Load@RndFlare@@UAAXAAVBinStream@@@Z` ends with a
     PARAMETER type that carries its own `@@`, so rfind lands on `Z` and the
-    symbol is silently skipped.  (`access_specifier_scan.py` uses rfind for its
-    own key and drops every member function whose parameter list names a class.)
+    symbol is silently skipped.  Taking the FIRST `@@` is correct for the names
+    THIS function accepts and only those -- it bails to `template-or-complex`
+    before any `?$` argument list, and it is exactly a template argument list
+    whose own `@@` comes first.  A parser that must handle templates has to
+    tokenise the qualified name; see `access_specifier_scan.code_index`.
+
+    (Updated 2026-09-16: this note used to end "`access_specifier_scan.py` uses
+    rfind for its own key and drops every member function whose parameter list
+    names a class."  That was true when written and is no longer -- that file
+    now tokenises.  Left visible rather than deleted, per the repo convention
+    that a superseded claim gets a dated correction.)
     """
     if not name.startswith("?"):
         return "unparsable", None

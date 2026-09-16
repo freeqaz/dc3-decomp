@@ -63,9 +63,25 @@ under more than one spelling across objects, and a key where the two sides share
 *any* spelling is not evidence of anything. On the current tree that bucket is
 empty (0 partial overlaps), but it is counted and reported rather than assumed.
 
-The access character is the one after the **final** `@@`. Template names embed
-`@@` inside themselves, so `rfind` is correct and `find` silently reclassifies
-every templated member — that is mutation **M1** in the test suite.
+The access character is the one after the `@@` that **terminates the qualified
+name**, which is found by tokenising — neither end of the string is the answer.
+
+> ⚠ **RETRACTED 2026-09-16.** This paragraph used to read: *"The access
+> character is the one after the **final** `@@`. Template names embed `@@`
+> inside themselves, so `rfind` is correct and `find` silently reclassifies
+> every templated member."* The claim about templates is true; the conclusion
+> is false, and the scanner implemented the false half. `rfind` takes the last
+> `@@` in the whole string, which for any member function whose parameter list
+> names a class belongs to that **parameter's** type —
+> `?Load@RndFlare@@UAAXAAVBinStream@@@Z` reads `Z`, not `U`, and the symbol was
+> dropped. It also *fabricates*: on the static data member
+> `?sInterpMessage@PropKeys@@2VMessage@@A` it reads the `A` after `Message@@`
+> and invents a private member function. Plain `find` is wrong too — in
+> `?end@?$vector@…@stlp_std@@QAA…` the first `@@` is inside the template
+> argument list. Measured over the 107,493 distinct `?`-mangled symbols our
+> objects define: `rfind` yields a valid access code for 42,811 (39.8%), `find`
+> for 61,048 (56.8%), tokenising for all 107,493. The scanner's examined count
+> went 20,648 → 28,001 when this was fixed.
 
 ## What it cannot see
 
@@ -74,15 +90,18 @@ every templated member — that is mutation **M1** in the test suite.
   The coverage block prints this on every run. **This is not a whole-binary
   census and must not be quoted as one.**
 - A member the image never emitted standalone (inlined away, or an unreferenced
-  template instantiation) has no target spelling to disagree with. ~22k of our
-  keys are in that bucket — overwhelmingly STL and inline (`?Str@Symbol@@QBAPBDXZ`,
+  template instantiation) has no target spelling to disagree with. 23,469 of our
+  symbols are in that bucket — overwhelmingly STL and inline (`?Str@Symbol@@QBAPBDXZ`,
   `?end@?$vector@…`). They are counted as `absent-from-target`, not skipped.
+- **Static DATA members carry access too** (codes `0`/`1`/`2`) and are *not*
+  compared: a deliberate scope decision, counted as
+  `static-data-member-not-compared` (399 symbols) rather than filtered silently.
 - `static` vs non-static and near/far share the same character, so a
   disagreement is reported as an access disagreement even when the real defect
   is storage class. The rendered row prints both raw characters so the reader
   can tell which it is.
 
-## Current findings — 6 rows, 4 distinct declarations, all OPEN
+## Current findings — 7 rows, 5 distinct declarations, all OPEN
 
 | declaration | ours | target | status |
 |---|---|---|---|
@@ -90,6 +109,7 @@ every templated member — that is mutation **M1** in the test suite.
 | `RndVelocityBuffer::~RndVelocityBuffer` (`??_E`/`??_G`) | public | **private** | documented 2026-08-19, unfixed |
 | `GroupSeqInst::Poll` (`src/system/synth/Sequence_p.h`) | public | **protected** | **found by this scanner, previously unrecorded** |
 | `StreamReceiver360::SendDoneImpl` (`src/system/synth_xbox/StreamReceiver360.h`) | public | **protected** | **found by this scanner, previously unrecorded** |
+| `DName::append` (`src/xdk/LIBCMT/undname.cpp:16`) | public | **private** | **found 2026-09-16 by the parser fix** — `?append@DName@@QAAXPAVDNameNode@@@Z` vs the map's `…@@AAAX…`. Structurally invisible to `rfind`, whose last `@@` was `DNameNode@@`. Low severity: a CRT `undname` reconstruction whose `class DName` declares everything `public:`; the fix is an access section, not a code change. |
 
 `GroupSeqInst::Poll` appears in `docs/native/DECOMP_GAPS.md` only as
 implementation status ("Done, 99.4%"); `StreamReceiver360`'s other methods
@@ -114,11 +134,18 @@ real — the map is the truth on both sides.
 
 ## Guards
 
-- `scripts/analysis/tests/test_access_specifier_scan.py` — 11 negative controls.
+- `scripts/analysis/tests/test_access_specifier_scan.py` — 26 negative controls.
   Each was checked by sabotaging the scanner and confirming the test goes red;
-  three mutations are recorded in the suite (`rfind`→`find`, disjoint-never-
-  reported, uncounted-`continue`), and the control passes before *and* after
-  each, so the harness itself cannot silently pass.
+  the mutations are recorded in the suite (disjoint-never-reported,
+  uncounted-`continue`, and the **regression pin**, which requires the four
+  shapes above and fails against *both* wrong spellings — 3 failures under
+  `rfind`, 2 under `find` — while keeping one shape both wrong spellings get
+  right, so "reject everything" cannot pass it).
+- The tokeniser is cross-checked against an **independent instrument**:
+  objdiff's demangler spells the access in words in `report.json`'s
+  `metadata.demangled_name`. Over the 41,106 symbols where both have an
+  opinion they agree 41,106 times and disagree 0. `--selftest` re-runs it and
+  fails if the agreement count collapses.
 - `--selftest` exercises the comparator on synthetic input **and** requires all
   four documented live instances to still be found, so a future change that
   quietly stops detecting the class fails loudly instead of printing a smaller,
