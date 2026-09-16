@@ -84,6 +84,12 @@ CASES: list[tuple[str, list[str]]] = [
     ("honesty_lint",          ["python3", "scripts/analysis/honesty_lint.py", "--json"]),
     ("vtable_dispatch_scan",  ["python3", "scripts/analysis/vtable_dispatch_scan.py",
                                "--min-norm", "99.9"]),
+    # Added 2026-09-15.  Reads 990 COFF objects and a 12 MB linker map, so it is
+    # the slowest entry here (~40 s/run); it earns the seat because its output
+    # is a WORK LIST -- an access divergence it drops silently reads as "that
+    # class is clean".  Agreed with itself, and across PYTHONHASHSEED, on the
+    # day it was added.
+    ("access_specifier_scan", ["python3", "scripts/analysis/access_specifier_scan.py"]),
     # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
     # oracles -- the class of tool whose nondeterminism reads as "this class is
     # exhausted" -- and none of them had ever been checked.  All four agreed
