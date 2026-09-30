@@ -497,14 +497,31 @@ void HamCharacter::ResetFaceOverrideBlending() {
     }
 }
 
+// 100% (w8-n).  Three levers, in the order they paid:
+//  1. `int hasVO = !mCampaignVO.empty(); if (hasVO)` materialises the bool
+//     (`subic`/`subfe.`) where the image just tests it -> 94.46 -> 96.92.
+//  2. DirLoader::LoadObjects takes `const FilePath&`; letting the `const char*`
+//     convert implicitly makes MSVC re-materialise the temp's address
+//     (`addi r3, r31, 0x60`) after the ctor already returned it in r3.  Writing
+//     the temporary explicitly reuses the ctor's r3 -> 96.92 -> 98.46.
+//  3. RELEASE(x) is `(delete x, x = null)`; MSVC folds the comma form's null
+//     test into `delete`'s own and drops the pointer's home store.  The image
+//     has `stw r3, 0x50(r31)` at 0x824904E0, i.e. one inline level more, which
+//     the SPELT-OUT `if (x) { delete x; x = nullptr; }` restores -> 100.00.
+//     REFUTED on the way: dropping `auto &_ref1` for three direct
+//     `mCampaignVOBank` reads is 95.38, and binding the deleted pointer to its
+//     own local (`Hmx::Object *bank = _ref1; if (bank) ...`) stalls at 98.46 --
+//     the null test has to read the REFERENCE, not a copy of it.
 void HamCharacter::SetCampaignVo(const char *cc) {
     mCampaignVO = cc;
     auto& _ref1 = mCampaignVOBank;
-    RELEASE(_ref1);
-    int hasVO = !mCampaignVO.empty();
-    if (hasVO) {
+    if (_ref1) {
+        delete _ref1;
+        _ref1 = nullptr;
+    }
+    if (!mCampaignVO.empty()) {
         String milo = GetCampaignVoMilo();
-        mCampaignVODir = DirLoader::LoadObjects(milo.c_str(), 0, 0);
+        mCampaignVODir = DirLoader::LoadObjects(FilePath(milo.c_str()), 0, 0);
         for (ObjDirItr<Hmx::Object> it(mCampaignVODir, false); it != nullptr; ++it) {
             if (it->Type() == "character_vo") {
                 _ref1 = it;
