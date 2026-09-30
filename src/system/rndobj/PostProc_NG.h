@@ -46,9 +46,13 @@ public:
             }
         }
 
+        // Each level of the bloom chain is a quarter of the previous one per
+        // side: the image re-divides w and h at the top of every pass.
         void AllocateTextures(unsigned int w, unsigned int h) {
             BloomTextureSet *tex = mTextures;
             for (int i = N; i != 0; i--) {
+                w /= 4;
+                h /= 4;
                 tex->AllocateTextures(w, h);
                 tex++;
             }
