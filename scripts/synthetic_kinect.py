@@ -111,10 +111,12 @@ class SyntheticKinect:
         # performing: person index -> 20 camera-space (x, y, z) or None
         self.targets = [None] * people
         self.perf_thread = None
+        self.watch_only = False
         self.perf_stop = threading.Event()
         self.perf_stats = {}          # source -> packets sent with it
         self.perf_samples = []        # the engine's answer, every ~1 s
         self.perf_events = []         # every change of a player's score / rating / fatality
+        self.perf_fatal_frames = []   # the first fatality answers, joints and all
         self.send_evt = threading.Event()
         # sensor clock (the packet timestamp): wall time, except that while
         # performing it advances by the engine's song time
@@ -143,11 +145,14 @@ class SyntheticKinect:
             self.log.append((time.time(), "all_stand"))
 
     # ---- performing -----------------------------------------------------------
-    def perform(self, http_base, lead_ms=0.0):
+    def perform(self, http_base, lead_ms=0.0, watch_only=False):
         """Start imitating the game's targets (see module doc).  `http_base`
-        is the debug server's /api root, e.g. http://127.0.0.1:9191/api."""
+        is the debug server's /api root, e.g. http://127.0.0.1:9191/api.
+        watch_only: the NEGATIVE CONTROL -- read and record the targets and
+        scores exactly as when performing, but keep everyone standing still."""
         if self.perf_thread:
             return
+        self.watch_only = watch_only
         self.perf_stop.clear()
         self.perf_thread = threading.Thread(target=self._perform_loop,
                                             args=(http_base, lead_ms), daemon=True)
@@ -197,7 +202,7 @@ class SyntheticKinect:
                 if src == "none" or "joints" not in pl:
                     continue
                 i = self._person_for(pl["player"], pl.get("trackingId"))
-                if i is None or targets[i] is not None:
+                if i is None or targets[i] is not None or self.watch_only:
                     continue
                 targets[i] = self._place(i, pl["joints"], src)
             now = time.monotonic()
@@ -213,14 +218,20 @@ class SyntheticKinect:
                     self.perf_stats[src] = self.perf_stats.get(src, 0) + 1
             last_song = song
             for pl in d.get("players", []):
-                key = (pl.get("score"), pl.get("rating"), pl.get("inFatality"))
+                key = (pl.get("score"), pl.get("rating"), pl.get("inFatality"),
+                       pl.get("fatalPose"),
+                       None if pl.get("fatalMatch") is None else round(pl["fatalMatch"], 1))
                 prev = self._last_state.get(pl.get("player"))
                 if prev is not None and key != prev:
                     self.perf_events.append({"song": song, "beat": d.get("beat"),
                                              "player": pl.get("player"), "move": pl.get("move"),
                                              "score": key[0], "rating": key[1],
-                                             "inFatality": key[2], "source": pl.get("source")})
+                                             "inFatality": key[2], "source": pl.get("source"),
+                                             **{k: pl[k] for k in pl if k.startswith("fatal")}})
                 self._last_state[pl.get("player")] = key
+            for pl in d.get("players", []):
+                if pl.get("source") == "fatality" and len(self.perf_fatal_frames) < 20:
+                    self.perf_fatal_frames.append({"song": song, **pl})
             if now - last_sample > 1.0:
                 last_sample = now
                 self.perf_samples.append({
@@ -369,13 +380,15 @@ def main():
     ap.add_argument("--perform", metavar="HTTP_API",
                     help="debug-server /api root to read targets from, "
                          "e.g. http://127.0.0.1:9191/api")
+    ap.add_argument("--watch-only", action="store_true",
+                    help="negative control: record targets/scores but stand still")
     ap.add_argument("--lead-ms", type=float, default=0.0)
     ap.add_argument("--record", default=None, help="write the performing record here on exit")
     a = ap.parse_args()
     k = SyntheticKinect(a.socket, people=a.people)
     k.start()
     if a.perform:
-        k.perform(a.perform, lead_ms=a.lead_ms)
+        k.perform(a.perform, lead_ms=a.lead_ms, watch_only=a.watch_only)
     done = threading.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: done.set())
@@ -385,7 +398,8 @@ def main():
     if a.record:
         with open(a.record, "w") as f:
             json.dump({"frames_sent": k.frames_sent, "perform_sources": k.perf_stats,
-                       "perform_samples": k.perf_samples, "perform_events": k.perf_events},
+                       "perform_samples": k.perf_samples, "perform_events": k.perf_events,
+                       "perform_fatal_frames": k.perf_fatal_frames},
                       f, indent=1)
 
 

@@ -243,6 +243,28 @@ std::string Dc3PoseTargetJson(float leadMs) {
         const char *source = "none";
         const char *moveName = "";
         if (fatal && fatal->InFatality(p)) {
+            float match, clipOffset, progress, hold;
+            int poseIndex;
+            fatal->NativeMatchState(p, match, clipOffset, progress, hold, poseIndex);
+            snprintf(buf, sizeof(buf),
+                     "\"fatalMatch\":%.4f,\"fatalClipOffset\":%.4f,\"fatalProgress\":%.4f,"
+                     "\"fatalHold\":%.4f,\"fatalPose\":%d,",
+                     match, clipOffset, progress, hold, poseIndex);
+            out += buf;
+            // the player as UpdateMatchingPose sees them, for diagnosis
+            const Skeleton *live = pd ? pd->GetSkeleton() : nullptr;
+            if (live) {
+                Vector3 lj[kNumJoints];
+                for (int j = 0; j < kNumJoints; j++)
+                    live->JointPos(kCoordCamera, (SkeletonJoint)j, lj[j]);
+                snprintf(buf, sizeof(buf), "\"liveTracked\":%s,\"liveJoints\":",
+                         live->IsTracked() ? "true" : "false");
+                out += buf;
+                AppendJoints(out, lj);
+                out += ",";
+            } else {
+                out += "\"liveTracked\":null,";
+            }
             const Skeleton &s = fatal->NativeTargetSkeleton(p);
             if (s.IsTracked()) {
                 for (int j = 0; j < kNumJoints; j++)

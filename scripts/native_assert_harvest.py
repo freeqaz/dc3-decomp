@@ -165,7 +165,8 @@ class Harvest:
             return ""
         last = k.perf_samples[-1]
         scores = " ".join(f"p{i}score={pl.get('score')}" for i, pl in enumerate(last["players"]))
-        return f" [sensor performing: {scores}; target sources {k.perf_stats}]"
+        what = "standing (control)" if k.watch_only else "performing"
+        return f" [sensor {what}: {scores}; target sources {k.perf_stats}]"
 
     def perf_watch(self, tag):
         """Screenshot the first frame the performing sensor saw a fatality /
@@ -227,7 +228,7 @@ class Harvest:
         # The in-engine input-script runner is the only working input path.
         a = self.args
         self.kinect = None
-        if a.route == "party" or a.perform:
+        if a.route == "party" or a.perform or a.stand_and_watch:
             # Party mode is gated on skeleton input the controller cannot give
             # (see synthetic_kinect.py): two people stand in front of a
             # scripted stand-in for the sensor for the whole run.  --perform
@@ -347,8 +348,8 @@ class Harvest:
             if not self.alive():
                 return self.mark("boot", False, "engine exited during boot")
             if self.jget("/health", timeout=2):
-                if self.kinect and a.perform:
-                    self.kinect.perform(self.base)
+                if self.kinect and (a.perform or a.stand_and_watch):
+                    self.kinect.perform(self.base, watch_only=not a.perform)
                 return self.mark("boot", True)
             time.sleep(1)
         return self.mark("boot", False, "health endpoint never answered")
@@ -361,6 +362,7 @@ class Harvest:
                 json.dump({"frames_sent": k.frames_sent, "perform_sources": k.perf_stats,
                            "perform_samples": k.perf_samples,
                            "perform_events": k.perf_events,
+                           "perform_fatal_frames": k.perf_fatal_frames,
                            "log": k.log}, f, indent=1)
         if self.alive():
             self.proc.send_signal(signal.SIGTERM)
@@ -873,6 +875,9 @@ def main():
                          "player to do (choreography, fatality / Strike a Pose poses) "
                          "as live skeleton data, so moves are rated by the decompiled "
                          "scoring; per-second samples land in <out>/kinect.json")
+    ap.add_argument("--stand-and-watch", action="store_true",
+                    help="negative control for --perform: the same sensor and the same "
+                         "per-move record, but its people stand still")
     ap.add_argument("--gameplay-eval", action="append", default=[],
                     metavar="BEAT:DTA",
                     help="POST DTA to /api/dta/eval once, when the song beat first "
