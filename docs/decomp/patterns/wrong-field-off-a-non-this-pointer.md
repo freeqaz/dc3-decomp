@@ -115,6 +115,78 @@ bucket.
   `FREE_SPECIAL_RE` workaround here is now redundant, and this scanner's
   output was byte-identical under both classifiers.)*
 
+## The weak bucket, adjudicated (2026-09-30, lane leads-disp-arith)
+
+Whole binary at `731b6137f` (main), same universe and coverage as below:
+**218 candidate rows in 20 functions** (cand-permuted 216/19, cand-novel-address
+2/2). **217 read on this pass, the 218th (UpdateLine's novel-address row) is
+det-disp's refutation; zero real bugs.** Method: both listings traced by
+hand (`build/373307D9/asm/**` against objdiff's aligned listing), and for the
+float-heavy leaf functions a two-sided numeric run -- the image's `.text` and
+ours executed in the unicorn PPC harness on the same random inputs, output
+regions compared (`/fp:fast` last-bit noise ~1e-6 relative is equality; a
+one-operand sabotage of `Multiply(Transform)` built through ninja gives
+max relative error **5.27**, 100/100 samples differing, and reverting it
+returns **3.6e-7**).
+
+| function (rows) | native? | refutation |
+|---|---|---|
+| `CharInterest::ComputeScore` (5) | yes | Vec.h component order (image z,y,x; ours x,z,y) through Subtract/LengthSquared/Dot: every component meets its own partner. Other one-sided effects: the li-0/li-1 diamond read linearly, a scratch FPR at `atexit`, and `lbl_82010450` = `.rdata` **0.25** vs `__real@3e800000` |
+| `HandInvokeGestureFilter::CalcInPose` (2) | yes | `Value()->y/z` loads permuted; each meets `rightArmDir.y/.z` (0x82DFE28C-AC). All five angle tests, bends and the tilt constant re-derived from the listing: equal. **Now bucketed `reordered` by the tool** (see defects below) |
+| `RndParticleSys::MoveParticles` (6) | yes | midcolVel/colVel component registers permuted, each channel lands in its own `col` field; size phases: grow/sustain/shrink arms take the same (frame, scale, vel) triple, the image just keeps one `fsubs` in the tail |
+| `RndScaleObject` (3) | yes | particle-system block scheduling: every field is multiplied by the same factor on both sides (0x148/0x14c/0x158/0x15c by fov, 0x150/0x154/0x1a0-0x1ac by scale, 0x198/0x19c by 1/fov) |
+| `NgSpotlightDrawer::RenderConeDefs` (4) | **no** (`{}` natively) | camUp/camPos loaded in another order; scratch GPRs/FPRs at the `SetPConstant` vcalls; the image re-reads both radii from the stack Vector4 it just passed by const reference, we keep them in registers |
+| `DxRnd::DrawString` (2) | no (rnddx9) | D3DCOLOR packing traced both sides: both build `a<<24 \| r<<16 \| g<<8 \| b` |
+| `Invert(Matrix4)` (10) | yes | numeric, both `.text`s, 400 inputs (half affine): max relative diff **4.1e-6** |
+| `Multiply(Transform, Transform, Transform&)` (7) | PPC arm only | both arms (`&b == &out` and not) traced to the same `a.v * b.m + b.v`; numeric, both aliasing modes, 300 inputs each: **6.2e-7 / 7.2e-7**; sabotage control above |
+| `Multiply(Matrix3, Matrix3, Matrix3&)` (3) | yes | numeric, 300 inputs: **9.5e-7** |
+| `CSHA1::Transform` (147) | yes | re-verified first-hand: both `.text`s in unicorn, 100 random (state, block) pairs with `m_block` pointed into the compared region (the `memcpy` is a stub, so the block is seeded in place): object region **byte-identical 100/100**, state changed in 100/100. Earlier: both produce SHA-1("abc") (`src/system/math/SHA1.cpp`) |
+| `ArcDetector::Update` (4) | yes | the 16-byte node copy into the stack Vector3 is the same word-for-word map in another order; the rest is scratch at `list::insert` |
+| `SkeletonQualityFilter::UpdateIsSideways` (4) | yes | joint loads permuted; the only differing effect is the compare constant: image `.data` `lbl_82F0C194` = **0.25** (read once, never written), ours `__real@3e800000` |
+| `RndCam::GetViewProjectXfms` (1) | yes | image `fneg`, then `* 2.0`; ours `* -2.0` (the source comment's known residual): projYNum equal. Scratch `f12` at `ScreenRect` |
+| `SpotlightDrawer::DrawWorld` (3) | yes | intensity-scaled colour: r/g/b land at 0x60/0x64/0x68 on both sides; differing FPRs are scratch at the vcall |
+| `RndParticleSys::InitParticle` (2) | yes | `size + sizeVel` added in the other order. (Its one-sided `vel.w` store: the image joins the ternary before one store, we store in each arm) |
+| `DxParticleSys::DrawParticles` (2) | no (rnddx9) | scratch GPRs at `D3DDevice_EndVertices` (takes r3 only) |
+| `FlowDistance::Activate` (2), `kdTree::FindSplit_Mean` (6) | yes | re-read: the only one-sided effect in Activate is a scratch FPR at the slot-0x1c vcall (takes r3, r4); FindSplit_Mean's float loads meet the same sums, and its two stores are `rlwimi` with complementary masks and swapped operands -- both `(old & ~3) \| (x & 3)` |
+| `RndLine::UpdateLine` (3 + 1 novel) | yes | the 3 permuted rows traced this pass: load-order permutations (`nextProj.x - proj.x` -> +0x38; `side + proj` -> 0x60/0x64(r1) on both sides). The novel-address row: det-disp's refutation, not re-read |
+| `HamDirector::CollideList` (1 novel) | yes | re-read: both dispatch `CollideList` (vtable slot 0x2c) on the venue's RndDrawable; the image's pointer already is that subobject, ours adjusts by +0x9c (a base-order question the source comment records, not a field) |
+
+**Outside the candidate buckets** (a sample, not the bucket): 7 of the 22
+`permuted-unobserved` LEAD rows were read too -- `MeasureMap::
+AddTimeSignature` [2] (the image CSEs `tick - prev.tick` across the MILO_FAIL,
+we recompute it; same operands), `Skeleton::Poll` [4] (the floor-clip-plane
+Vector4 copied word-for-word in another order, then `w` read back from 0x6c on
+both sides), `RndAmbientOcclusion::BlendVert` [1] (a dead `addi r11` -- the
+typed "tex vs tangent" field pair is an address never dereferenced). All
+refuted. The other 15 (`CharEyes::LidTrackAndClampingUpdate` 3,
+`CharGuitarString::Poll` 7, `NgLight::SphereConeTest` 1, and 4 ⊘) are unread.
+
+**What recurs:** 12 of the 20 functions carry a one-sided effect that is only a
+SCRATCH register at a call the tool cannot type (indirect call, by-value
+return, CRT/D3D external). The by-value-return part of that is now closed
+(below). The rest -- indirect calls and externals -- stays strict on purpose.
+
+## Instrument defects found by that pass (fixed on branch leads-disp-arith)
+
+`arg_regs()` -- the "exact registers from the callee's signature" model --
+was wrong in three measured ways:
+
+* **A by-value aggregate parameter is not one GPR.** `Vector3DESmoother::
+  Smooth(class Vector3, float, bool)` is called `ld r4; ld r5; fmr f1; li r7`:
+  two 64-bit GPRs for the Vector3, so the float consumes r6's slot and the bool
+  is r7. The model compared r6 and never r5 or r7 -- **a soundness hole**: a
+  wrong z/w half or a wrong bool at such a call could not keep a row a
+  candidate. 1,953 signatures in report.json had that shape. Now strict.
+* **Constructors and destructors lost `this`** (their head is the bare
+  `public:`, which never matched `"public: "`), shifting every argument down
+  one register.
+* **By-value aggregate returns** were refused ("do not guess"). Measured
+  layout: r3 = hidden result pointer, r4 = `this`, then the arguments.
+
+Same objects, before -> after: exactly 2 of 5,473 rows moved (CalcInPose's,
+to `reordered`); nothing moved INTO a candidate bucket, i.e. the soundness
+holes were not hiding a live difference in today's tree.
+
 ## Provenance
 
 Whole binary, 2026-09-30, worktree `det-disp` at the tool's final version:

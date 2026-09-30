@@ -228,6 +228,60 @@ a whole-function harness, not a row trace. `fft_recursive` [3] — one image
 `vmaddcfp128` (vD = vA·vD + vB) against our `vmaddfp128` (vD = vA·vB + vD),
 equal only if the accumulator and addend swapped roles, unconfirmed.
 
+## The `trace-crossed-branch` lead bucket, adjudicated (2026-09-30, lane leads-disp-arith)
+
+Whole binary at `731b6137f` (main): **84 rows in 46 functions**, byte-identical
+(as a multiset of symbol / target / ours rows) to arith-tail's final scan. 71
+of the 84 are rows arith-tail had already read as `operand-source` before its
+CFG change; 13 are new with the CFG trace. The bucket had never been read AS a
+bucket, so this pass re-read every native row independently, testing the
+earlier reasons as hypotheses (two agents plus the lane, each row traced on
+both sides along every reaching definition, joins and back edges included).
+
+**Adjudicated 69 of 84 rows (68 native + 1 ⊘); 0 real bugs.** Precision of the
+bucket on this tree: **0 / 69**. Not adjudicated: the **15 ⊘ FFT rows**
+(`fft_altivec` 8, `fft_real_forward_altivec` 3, `fft_matrix_forward_columnwise`
+2, `fft_matrix_inverse_columnwise` 1, `fft_recursive` 1) -- synth_xbox, not in
+the native build, VMX128 (no emulator for it here).
+
+What the rows actually were (69 rows, each in exactly one class) -- read this before trusting the bucket's name:
+
+| class | rows | examples |
+|---|---|---|
+| **objdiff paired two different instructions** (often `mr` into DIFFERENT argument registers: `mr r3, x` vs `mr r5, y`) | 19 | AdjustSaturation [2], HamNavProvider::OnSetEnabled/Hidden, AnnotateClip, CharClip AddNode, PixelOffset, TypeProps::Save, MakeCameraToPlayerXfm, TransformKeys, BuildBeam [2], RndRibbon::ConstructMesh [2], UpdateLine [2], BuildNGCone [3] |
+| the scanner's "other definition" sits on a path that cannot reach the row (jump-table arms, an exit path, the arm of the other `if`) | 14 | SaveLoadManager::SetState [8] (all 19 sites have ONE reaching def once the `bctr` fan-out is modelled), RandomGroupSeqInst ctor [2], WrapText, MoveDir::Poll [2] (a spill of the same `&TheTaskMgr`), UpdateOverlay [1] |
+| induction-variable / index spelling | 10 | BuildCone [4] (0x60·i both ways), EQEffect::Reset, RepsToNextPhrase [2], Tessellate [2], BuildNGQuad |
+| exchanged components / commuted operands / reassociation | 10 | MoveParticles [2], BuildNGSheet [2], EQEffect::Process [3] (also numeric, both `.text`s, 70 inputs: 1.4e-5; one sabotaged `fmadds` of ours: 3.31), CalcRect, Displacements, ApplyQueuedLights (a different accumulator spilled per iteration) |
+| equal masks / equal values by path | 10 | HDCache::Init, RndShaderParticles::CalcShaderOpts, StorePanel::OnMsg, Voice::createOrReuse⊘, SetFullness, DepthBuffer3D::DrawShowing [2] (now traced upstream of the clamp too), BlurSurface, UpdateLine [2] (a dead `addi`; the loop pointer equals `end` on both exits) |
+| other: list declaration order (FlowCommand::Load), strcmp operand order tested `== 0` only (MemFindHeap), out-of-line vs inlined Save (BinStream << vector<TransformCrowd>), a register renamed around an unchanged member reload (MemTracker::DiffDump), UpdateOverlay's colour pointer (image `.data lbl_82F0EB08` = ours `sLightGray` = {0.8, 0.8, 0.8, 1}), NavListSort (below) | 6 | |
+
+The two UpdateOverlay rows were the only native rows no one had read:
+`CurrentMoveMode()` is called earlier in the image and spilled (0x68(r31)), later
+in ours (r22) -- both before the row loop that consumes it, and nothing between
+the calls changes the mode; and the `DrawStringScreen` colour is the same
+{0.8, 0.8, 0.8, 1} under two names.
+
+**One real control-flow difference, deliberately left alone:**
+`NavListSort::ChangeHighlightHeader` -- when the header does not move, the
+image skips its inlined wrap (`Mod`) and we always apply it. Values agree for
+every `shortcutIdx` in `[0, size)`; they differ only after
+`GetCurrentShortcut` has already hit its MILO_FAIL and returned -1, where the
+image reads `mShortcutNodes[-1]` and we wrap to `size - 1`. Restoring the
+image's shape would restore an out-of-bounds read on an already-failed path.
+(The source comment's claim of the "same block layout" is not literally true.)
+
+**What this says about the bucket.** Its premise -- a non-unique reaching
+definition -- is real, but on this tree it is dominated by two things the
+scanner could model instead of reporting: (1) the pairing -- when the two
+instructions write different registers, the row compares different values by
+construction, and the meaningful comparison is each consumer's register (the
+call's r3..r10), not the paired instruction's source; (2) jump tables -- a
+block reached only through `bctr` has "unknown" predecessors, which makes every
+switch-heavy function (SetState's 8 rows) ambiguous. Neither was changed here:
+(2) is only sound if every jump-table target is a block leader, and a case that
+falls through into the next case can be entered mid-block, so it needs the
+table's contents, not a guess.
+
 ## Manual recognizer (for the part the tool cannot reach)
 
 1. In a sub-100 function, read every `diff_arg` row whose opcode is a **store**
