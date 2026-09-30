@@ -742,6 +742,11 @@ float StandardStream::GetBufferAheadTime() const {
 
 // TODO: implement
 #ifdef HX_NATIVE
+// Same control flow as the image (?ConsumeData@StandardStream@@QAAHPAPAXHH@Z,
+// 82770C10..82770F64) and the #else body below. The one native adaptation is
+// the receiver flow-control query: StreamReceiverNative's ring buffer reports
+// its free space through AvailableWriteBytes() rather than the Xbox
+// StreamReceiver::BytesWriteable().
 int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     if (mGetInfoOnly)
         return 0;
@@ -752,63 +757,90 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
         MILO_LOG("sample mismatch: expected %i, got %i\n", mCurrentSamp, startSamp);
         mCurrentSamp = startSamp;
     }
+    // Real slots are the reader's buffers, virtual slots are mVirtBufs
+    // (82770D48..82770D70); v[] is never read past realChannels.
+    void *pcm[0x1E];
+    MILO_ASSERT(numChannels < DIM(pcm), 0x1B3);
+    for (int i = 0; i < numChannels; i++) {
+        if (i < realChannels)
+            pcm[i] = v[i];
+        else
+            pcm[i] = mVirtBufs[i - realChannels];
+    }
 
+    // One call consumes at most 0x800 samples (82770D74); the readers loop.
     int samplesToConsume = numSamples;
-    if (mJumpFromSamples != 0 && mJumpFromSamples != kStreamEndSamples) {
-        MILO_ASSERT(mCurrentSamp <= mJumpFromSamples, 0x1CF);
-        int remaining = mJumpFromSamples - mCurrentSamp;
-        if (remaining < samplesToConsume) {
-            samplesToConsume = remaining;
-        }
-    }
+    if (samplesToConsume >= 0x800)
+        samplesToConsume = 0x800;
 
-    // Flow control: limit to what the ring buffers can accept.
-    // Without this, decoded audio is silently dropped when the buffer is full,
-    // causing the Vorbis decoder to advance past unconsumed data.
-    for (int i = 0; i < (int)mChannels.size(); i++) {
-        StreamReceiverNative *rcvr = static_cast<StreamReceiverNative *>(mChannels[i]);
-        int availSamples = rcvr->AvailableWriteBytes() / 2; // bytes → samples (16-bit)
-        if (availSamples < samplesToConsume) {
-            samplesToConsume = availSamples;
-        }
-    }
-    if (samplesToConsume <= 0)
-        return 0;
-
-    int bytesPerSample = mFloatSamples ? 4 : 2;
-    int bufSize = samplesToConsume * bytesPerSample;
-
-    // Vorbis decoder always outputs float PCM (vorbis_synthesis_pcmout returns float**),
-    // but mFloatSamples=false so bytesPerSample=2. Convert float→int16 before sending
-    // to StreamReceiverNative which stores int16 in its ring buffer.
-    int16_t *convBuf = (int16_t *)alloca(samplesToConsume * sizeof(int16_t));
-
-    for (int i = 0; i < realChannels; i++) {
-        int chanIdx = i;
-        for (int j = 0; j < (int)mChanMaps.size(); j++) {
-            if (mChanMaps[j].first == i) {
-                chanIdx = mChanMaps[j].second;
-                break;
+    // Jump cap, as the image computes it (82770D80..82770E08): only a positive
+    // jump-from caps. A forward jump (from < to) caps only while cur < to --
+    // DoJump() leaves an in-memory jump armed with cur = to > from, and the
+    // stream must keep flowing past it; from < cur < to consumes nothing.
+    // from == to takes no cap. Only a backward jump asserts cur <= from. The
+    // remaining-count compare is unsigned (82770E00 cmplw), so a negative
+    // remainder never caps.
+    if (mJumpFromSamples > 0) {
+        if (mJumpFromSamples < mJumpToSamples) {
+            if (mCurrentSamp < mJumpToSamples) {
+                if (mCurrentSamp > mJumpFromSamples) {
+                    samplesToConsume = 0;
+                } else {
+                    int remaining = mJumpFromSamples - mCurrentSamp;
+                    if ((unsigned int)remaining < (unsigned int)samplesToConsume)
+                        samplesToConsume = remaining;
+                }
             }
+        } else if (mJumpFromSamples > mJumpToSamples) {
+            MILO_ASSERT(mCurrentSamp <= mJumpFromSamples, 0x1CF);
+            int remaining = mJumpFromSamples - mCurrentSamp;
+            if ((unsigned int)remaining < (unsigned int)samplesToConsume)
+                samplesToConsume = remaining;
         }
-        float *src = (float *)v[i];
-        for (int s = 0; s < samplesToConsume; s++) {
-            float clamped = src[s];
-            if (clamped > 1.0f) clamped = 1.0f;
-            if (clamped < -1.0f) clamped = -1.0f;
-            convBuf[s] = (int16_t)(clamped * 32767.0f);
-        }
-        mChannels[chanIdx]->WriteData(convBuf, samplesToConsume * 2);
     }
-    for (int i = 0; i < mVirtualChans; i++) {
-        float *src = (float *)v[realChannels + i];
-        for (int s = 0; s < samplesToConsume; s++) {
-            float clamped = src[s];
-            if (clamped > 1.0f) clamped = 1.0f;
-            if (clamped < -1.0f) clamped = -1.0f;
-            convBuf[s] = (int16_t)(clamped * 32767.0f);
+
+    // Flow control: never hand a receiver more than its ring buffer can take
+    // (the image's BytesWriteable() >> 1 loop, 82770E14..82770E38).
+    for (int i = 0; i < numChannels; i++) {
+        StreamReceiverNative *rcvr = static_cast<StreamReceiverNative *>(mChannels[i]);
+        int availSamples = rcvr->AvailableWriteBytes() / 2; // bytes -> 16-bit samples
+        if (availSamples < samplesToConsume)
+            samplesToConsume = availSamples;
+    }
+
+    if (samplesToConsume > 0) {
+        int bytesPerSample = mFloatSamples ? 4 : 2;
+        // RemapChannel(first, second) COPIES slot first into slot second
+        // (82770E6C..82770EA0: memcpy(pcm[second], pcm[first], n * bps)).
+        for (std::vector<std::pair<int, int> >::iterator mapIt = mChanMaps.begin();
+             mapIt != mChanMaps.end();
+             ++mapIt) {
+            memcpy(
+                pcm[mapIt->second], pcm[mapIt->first], samplesToConsume * bytesPerSample
+            );
         }
-        memcpy(mVirtBufs[i], convBuf, samplesToConsume * 2);
+        // Every receiver, virtual ones included, gets its own slot
+        // (82770EC4..82770F44). Float PCM is converted only when the reader
+        // declared it (82770EC4 lbz r11,0xe0(r30) / beq): x*32767 clamped to
+        // +/-32767 (82770EF4 fmuls, fsel x2, fctiwz); int16 PCM goes through
+        // unchanged (.L_82770F24). The native VorbisReader hands
+        // vorbis_synthesis_pcmout's float** and declares floatSamples=true;
+        // FFmpegAudioReader hands int16 and declares false.
+        int16_t convBuf[0x800];
+        for (int ch = 0; ch < numChannels; ch++) {
+            const void *data = pcm[ch];
+            if (mFloatSamples) {
+                const float *src = (const float *)pcm[ch];
+                for (int j = 0; j < samplesToConsume; j++) {
+                    float f = Clamp(-32767.0f, 32767.0f, src[j] * 32767.0f);
+                    convBuf[j] = (int16_t)f;
+                }
+                data = convBuf;
+            }
+            mChannels[ch]->WriteData(data, samplesToConsume << 1);
+        }
+    } else {
+        samplesToConsume = 0;
     }
     mCurrentSamp += samplesToConsume;
     return samplesToConsume;
