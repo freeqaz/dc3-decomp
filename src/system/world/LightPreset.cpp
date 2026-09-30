@@ -1071,7 +1071,8 @@ void LightPreset::SetKeyframe(Keyframe &k) {
         FillLightPresetData(mLights[i], k.mLightEntries[i]);
     }
     for (uint i = 0; i != k.mSpotlightDrawerEntries.size(); i++) {
-        FillSpotlightDrawerPresetData(mSpotlightDrawers[i], k.mSpotlightDrawerEntries[i]);
+        SpotlightDrawerEntry &entry = k.mSpotlightDrawerEntries[i];
+        FillSpotlightDrawerPresetData(mSpotlightDrawers[i], entry);
     }
 }
 
@@ -1249,7 +1250,8 @@ void LightPreset::Animate(float f) {
     }
     MILO_ASSERT(mSpotlightDrawers.size() == mSpotlightDrawerState.size(), 0x37e);
     for (uint i = 0; i != mSpotlightDrawers.size(); i++) {
-        AnimateSpotlightDrawerFromPreset(mSpotlightDrawers[i], mSpotlightDrawerState[i], f);
+        SpotlightDrawerEntry &state = mSpotlightDrawerState[i];
+        AnimateSpotlightDrawerFromPreset(mSpotlightDrawers[i], state, f);
     }
 }
 

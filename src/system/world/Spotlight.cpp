@@ -891,10 +891,13 @@ void Spotlight::Generate() {
         if (mBeam.HasLength()) {
             if (SpotlightDrawer::DrawNGSpotlights()) {
                 BuildNGShaft(mBeam);
-            } else if (mBeam.IsCone()) {
-                BuildCone(mBeam);
             } else {
-                BuildBeam(mBeam);
+                BeamDef &def = mBeam;
+                if (def.IsCone()) {
+                    BuildCone(def);
+                } else {
+                    BuildBeam(def);
+                }
             }
         }
         UpdateBounds();
