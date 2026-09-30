@@ -811,28 +811,7 @@ void UIManager::Poll() {
         }
     }
     if (mTransitionState == kTransitionFrom) {
-#ifdef HX_NATIVE
-        // Wait for enter animations with timeout
-        static int sEnterWaitFrames = 0;
-        bool screenEntered = !mCurrentScreen || !mCurrentScreen->Entering();
-        if (!screenEntered) {
-            if (++sEnterWaitFrames > 90) { // ~3s safety net for stuck enter animations
-                printf("DC3 UI WARNING: Enter animation timeout for '%s' — force-completing\n",
-                       mCurrentScreen ? mCurrentScreen->Name() : "<null>");
-                screenEntered = true;
-                sEnterWaitFrames = 0;
-            }
-        } else {
-            sEnterWaitFrames = 0;
-        }
-#endif
-        if (
-#ifdef HX_NATIVE
-            screenEntered
-#else
-            !mCurrentScreen || !mCurrentScreen->Entering()
-#endif
-            ) {
+        if (!mCurrentScreen || !mCurrentScreen->Entering()) {
             if (mOverlay && mOverlay->Showing() && mLoadTimer.Running()
                 && mCurrentScreen) {
                 mLoadTimer.Stop();
