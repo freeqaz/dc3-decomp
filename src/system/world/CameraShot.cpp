@@ -355,19 +355,6 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
     CamShotFrame *me = const_cast<CamShotFrame *>(this);
     GetCurrentTargetPosition(targetPos);
 
-#ifdef HX_NATIVE
-    // Guard: if targetPos is zero (no valid targets) or camera projection
-    // hasn't been initialized, WorldToScreen + subsequent math produces NaN/inf.
-    // Skip target-dependent filtering and use raw offset.
-    if (targetPos.x == 0.0f && targetPos.y == 0.0f && targetPos.z == 0.0f
-        && mTargets.empty()) {
-        me->mLastTargetPos = targetPos;
-        tf = mWorldOffset;
-        Multiply(tf, mCamShot->WorldXfm(), tf);
-        return;
-    }
-#endif
-
     Vector2 screenPos;
     cam->WorldToScreen(targetPos, screenPos);
 

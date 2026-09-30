@@ -107,3 +107,47 @@ TEST_F(NativeAdditionsStreamTest, NoAudioDevicePlaybackStillAdvances) {
     EXPECT_LT(t, 1000.0f);
 }
 
+
+// ---------------------------------------------------------------------------
+// CamShotFrame::BuildTransform.
+//
+// Image (?BuildTransform@CamShotFrame@@QBAXPAVRndCam@@AAVTransform@@_N@Z):
+// 82812D28 bl GetCurrentTargetPosition -> 82812D38 bl WorldToScreen -> the
+// filter math (82812D74, 82812DA0 fsel) -> the path / mWorldOffset pick -> the
+// mParent block (live parent transform, filter, clamp height) -> Multiply by
+// the shot's world -> the dynamic offsets and ApplyScreenOffset. There is no
+// early exit anywhere.
+//
+// A native-only block returned `mWorldOffset * shot world` for every frame
+// with no targets, skipping the path, the whole mParent block and the dynamic
+// offsets -- so a targetless shot parented to a moving object (or driven by a
+// path) froze in place. Its stated reason (a NaN from WorldToScreen on a zero
+// target) is covered by the NaN sanitizer that follows WorldToScreen.
+// ---------------------------------------------------------------------------
+
+class NativeAdditionsCamShotTest : public EngineTestFixture {};
+
+TEST_F(NativeAdditionsCamShotTest, TargetlessFrameFollowsItsParent) {
+    CamShot *shot = Hmx::Object::New<CamShot>();
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    cam->SetFrustum(1.0f, 1000.0f, 0.6f, 1.0f);
+    RndTransformable *parent = Hmx::Object::New<RndTransformable>();
+    parent->SetLocalPos(Vector3(100.0f, 0.0f, 0.0f));
+    {
+        CamShotFrame frame(shot);
+        frame.mParent = parent;
+        ASSERT_FALSE(frame.HasTargets());
+        // CamShot::SetFrame calls UpdateTarget() on the keys it is between
+        // before BuildTransform: it latches mTargetXfm = parent world.
+        frame.UpdateTarget();
+        Transform tf;
+        frame.BuildTransform(cam, tf, false);
+        EXPECT_NEAR(tf.v.x, 100.0f, 1.0e-3f)
+            << "a targetless keyframe parented to a trans at x=100 must sit at the "
+               "parent (image: tf = mWorldOffset, then tf.v += parent world.v); "
+               "the native early-out skipped the parent block";
+    }
+    delete parent;
+    delete cam;
+    delete shot;
+}
