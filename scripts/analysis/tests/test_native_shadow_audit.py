@@ -234,8 +234,12 @@ def test_b_preclassifier_real_tree_every_adds_region_bucketed():
     assert all(r["b_class"] is None for r in regions if r["shape"] != "ADDS")
     assert sum(cov.as_dict()["b_classes"].values()) == len(adds)
     by = {(r["file"], r["enclosing"]): r["b_class"] for r in adds if r["enclosing"]}
-    # positive: a native-only early return on a gameplay path is SUSPECT
-    assert by[("src/lazer/meta_ham/Overshell.cpp", "OvershellSlot::SetPlaying")] \
+    # positive: a native-only early return is SUSPECT even when it is a
+    # legitimate one (no NUI natively) -- the classifier reads shape, and the
+    # verdict is the triager's.  Pinned on a region that is meant to stay:
+    # the first version of this test pinned OvershellSlot::SetPlaying, which
+    # this lane then fixed away.
+    assert by[("src/system/gesture/GestureMgr.cpp", "GestureMgr::UpdateTrackedSkeletons")] \
         .startswith("suspect:")
     # negative: a bounded stderr trace is plumbing
     assert by[("src/lazer/game/Game.cpp", "Game::HandleWait")] == "plumbing:diag"
