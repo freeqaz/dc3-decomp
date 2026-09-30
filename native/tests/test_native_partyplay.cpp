@@ -306,3 +306,67 @@ TEST_F(MakeYourMoveRecorderTest, ScoringARecordingReadsAnAllocatedTake) {
         << "GetScore after StartRecording read an unallocated take "
            "(StartRecording did not run FreestyleMove::Init)";
 }
+
+// ===========================================================================
+// A subdir held only by the dying dir must be destroyed with it
+// ===========================================================================
+//
+// Image: ~ObjectDir does mSubDirs.clear(); the last ObjDirPtr to a subdir
+// deletes it.  Native ~ObjectDir first pre-nullifies every cascade dir's ref
+// ring -- including the subdir's, whose ring holds the PARENT's ObjDirPtr in
+// mSubDirs.  That ObjDirPtr was nulled (mObject = NULL) instead of released,
+// so mSubDirs.clear() released nothing: the subdir was never destroyed,
+// leaked with every ref into it cut, and stayed findable by its loader path.
+// party_mode_signin.milo's subdir ui/augmented_photo.milo survived the team-1
+// panel this way; the team-2 panel re-used the zombie, whose Environ.env had
+// had its self-referencing fog owner nulled, and RndEnviron::FogEnable
+// SIGSEGV'd on every UI draw of the second party_mode_signin_screen (the
+// screen rendered black).
+
+namespace {
+class DeathFlag : public Hmx::Object {
+public:
+    explicit DeathFlag(bool *flag) : mFlag(flag) {}
+    ~DeathFlag() override { *mFlag = true; }
+private:
+    bool *mFlag;
+};
+} // namespace
+
+class CascadeSubDirTest : public EngineTestFixture {};
+
+TEST_F(CascadeSubDirTest, SubDirHeldOnlyByTheDyingDirIsDestroyed) {
+    ObjectDir *parent = Hmx::Object::New<ObjectDir>();
+    parent->SetName("subdir_cascade_parent", ObjectDir::Main());
+    ObjectDir *sub = Hmx::Object::New<ObjectDir>();
+    bool subObjectDied = false;
+    DeathFlag *flag = new DeathFlag(&subObjectDied);
+    flag->SetName("flag", sub);
+    parent->AppendSubDir(ObjDirPtr<ObjectDir>(sub));
+    ASSERT_TRUE(sub->HasDirPtrs());
+    delete parent;
+    EXPECT_TRUE(subObjectDied)
+        << "the subdir outlived the only dir that held it (its ObjDirPtr in "
+           "mSubDirs was nulled by the pre-nullify, so nothing released it)";
+}
+
+// Control: a subdir that something OUTSIDE the cascade also holds survives,
+// with its objects' refs intact (the survivor logic this must not disturb).
+TEST_F(CascadeSubDirTest, SubDirAlsoHeldOutsideSurvivesIntact) {
+    ObjectDir *parent = Hmx::Object::New<ObjectDir>();
+    parent->SetName("subdir_cascade_parent2", ObjectDir::Main());
+    ObjectDir *sub = Hmx::Object::New<ObjectDir>();
+    bool subObjectDied = false;
+    DeathFlag *flag = new DeathFlag(&subObjectDied);
+    flag->SetName("flag", sub);
+    RndEnviron *env = Hmx::Object::New<RndEnviron>();
+    env->SetName("Environ.env", sub);
+    ASSERT_EQ(env->AmbientFogOwner(), env);
+    ObjDirPtr<ObjectDir> outside(sub);
+    parent->AppendSubDir(ObjDirPtr<ObjectDir>(sub));
+    delete parent;
+    EXPECT_FALSE(subObjectDied);
+    EXPECT_EQ(env->AmbientFogOwner(), env) << "a surviving subdir's self fog owner was cut";
+    outside = nullptr; // releases and destroys the subdir
+    EXPECT_TRUE(subObjectDied);
+}
