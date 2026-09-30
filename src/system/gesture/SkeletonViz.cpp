@@ -588,8 +588,9 @@ void SkeletonViz::Visualize(
         }
     } else {
         SetCamera(cachedFrame, worldXfm, 0.0f);
-        if (currentCam) {
-            currentCam->Select();
-        }
+    }
+    // restore the caller's camera on every path: SetCamera selected ours
+    if (currentCam) {
+        currentCam->Select();
     }
 }

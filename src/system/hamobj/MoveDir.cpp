@@ -84,7 +84,7 @@ namespace {
         return f4;
     }
 
-    static float sCharWidth;
+    static float sLineHeight;
 
     float DrawDetectedBar(
         float y,
@@ -152,10 +152,10 @@ namespace {
             str += MakeString(": %.2f", detected);
         }
         float detectedEnd = (max - min) * detected;
-        DrawOverlayBar(y, min, (max - min) + min, darkColor, sCharWidth);
-        DrawOverlayBar(y, min, detectedEnd + min, greenColor, sCharWidth);
+        DrawOverlayBar(y, min, (max - min) + min, darkColor, sLineHeight);
+        DrawOverlayBar(y, min, detectedEnd + min, greenColor, sLineHeight);
         TheRnd.DrawStringScreen(str.c_str(), Vector2(min, y), textColor, true);
-        y += sCharWidth;
+        y += sLineHeight;
         return y;
     }
 
@@ -174,7 +174,7 @@ namespace {
         } else {
             str += " (no rating overrides)";
         }
-        Hmx::Rect rect(0.01f, y, 0.9f, sCharWidth);
+        Hmx::Rect rect(0.01f, y, 0.9f, sLineHeight);
         TheRnd.DrawRectScreen(rect, sDarkGray, nullptr, nullptr, nullptr);
         return TheRnd.DrawStringScreen(str.c_str(), Vector2(0.01f, y), sLightGray, true).y;
     }
@@ -1643,7 +1643,7 @@ float MoveDir::DetectFrac(
             }
         }
         if (i8 != 0) {
-            frac = i7 / (i8 * frac);
+            frac = ((float)i7 / (float)i8) * frac;
         }
     }
     return frac;
@@ -1903,11 +1903,12 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     MoveFrame *closest = ClosestMoveFrame();
     int mirrored = (move->Mirror() != nullptr);
 
-    // Cache character width for overlay column spacing
-    if (sCharWidth == 0.0f) {
+    // Cache the overlay's row pitch: the HEIGHT of a drawn "W" (result.y - y),
+    // which the image reads from 0x64 = the returned Vector2's .y
+    if (sLineHeight == 0.0f) {
         Vector2 pos(gBeatLineData.minValue, y);
         Vector2 result = TheRnd.DrawStringScreen("W", pos, sLightGray, false);
-        sCharWidth = (result.x - pos.x) * 0.8f;
+        sLineHeight = (result.y - y) * 0.8f;
     }
 
     // Draw play clip overlay if present
@@ -1929,7 +1930,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         Symbol ratingName;
         float thresh;
         RatingStateThreshold(i, ratingName, thresh, move->RatingOverride());
-        float xRight = sCharWidth + y;
+        float xRight = sLineHeight + y;
         float xPos = (gBeatLineData.maxValue - gBeatLineData.minValue)
                 * (gBeatLineData.rangeOffset
                    / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
@@ -1943,7 +1944,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     }
 
     // Compute overlay positioning
-    float xRight = sCharWidth + y;
+    float xRight = sLineHeight + y;
     float xMin = (gBeatLineData.maxValue - gBeatLineData.minValue)
             * (gBeatLineData.rangeOffset
                / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset + beatScale4))
@@ -1958,7 +1959,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         MakeString(
             "%i %s %s",
             TheTaskMgr.CurrentMeasure(),
-            move->Name() + (move->Name()[0] == '/' ? 1 : 0),
+            move->Name(),
             mirroredStr
         ),
         detectFrac,
@@ -1969,8 +1970,8 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     );
 
     // Draw smoothed overlay bar
-    DrawOverlayBar(y, xMin, 0.99f, sDarkGray, sCharWidth);
-    DrawOverlayBar(y, xMin, mLastPollMs * 0.0625f * barRange + xMin, sGreen, sCharWidth);
+    DrawOverlayBar(y, xMin, 0.99f, sDarkGray, sLineHeight);
+    DrawOverlayBar(y, xMin, mLastPollMs * 0.0625f * barRange + xMin, sGreen, sLineHeight);
 
     // Timer text
     {
@@ -1982,14 +1983,14 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         );
     }
 
-    float height = sCharWidth;
-    float yBase = sCharWidth * 2.0f + xRight;
+    float height = sLineHeight;
+    float yBase = sLineHeight * 2.0f + xRight;
 
     // Node-count background rect
     if (fv->mType == kFilterVersionHam1) {
-        height = ((float)numNodes + 1.0f) * sCharWidth;
+        height = ((float)numNodes + 1.0f) * sLineHeight;
     } else if (fv->mType == kFilterVersionHam2) {
-        height = sCharWidth * 2.0f;
+        height = sLineHeight * 2.0f;
     }
     {
         float bgBottom = (gBeatLineData.maxValue - gBeatLineData.minValue)
@@ -2024,7 +2025,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw Ham1 node column headers
     if (fv->mType == kFilterVersionHam1) {
-        Vector2 pos(gBeatLineData.minValue, sCharWidth + yBase);
+        Vector2 pos(gBeatLineData.minValue, sLineHeight + yBase);
         for (int n = 0; n < numNodes; n++) {
             const ErrorNode *node = fv->mErrorNodes[n];
             Vector2 result =
@@ -2033,7 +2034,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             TheRnd.DrawStringScreen(
                 node->NodeName().Str(), Vector2(pos.x - width, pos.y), sLightGray, true
             );
-            pos.y += sCharWidth;
+            pos.y += sLineHeight;
         }
     }
 
@@ -2051,7 +2052,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     float totalBeatF = TheTaskMgr.TotalBeat();
     int measureStart = TheTaskMgr.CurrentMeasure() * 4;
     float beatOffset = totalBeatF - (float)measureStart;
-    float halfWidth = TheRnd.YRatio() * sCharWidth * 0.5f;
+    float halfWidth = TheRnd.YRatio() * sLineHeight * 0.5f;
     MoveMode mode = CurrentMoveMode();
 
     const std::vector<MoveFrame> &moveFrames =
@@ -2074,20 +2075,20 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
         TheRnd.DrawStringScreen(
             MakeString("%.2f", frame.GetBeat()),
-            Vector2(frameBeatX, yBase - sCharWidth),
+            Vector2(frameBeatX, yBase - sLineHeight),
             markerColor,
             true
         );
 
         // Draw node-by-node rects for Ham1
         if (fv->mType == kFilterVersionHam1) {
-            float colY = sCharWidth + yBase;
+            float colY = sLineHeight + yBase;
             float bx1 = frameBeatX - halfWidth;
             float bx2 = frameBeatX + halfWidth;
             for (int n = 0; n < numNodes; n++) {
-                float cellH = colY + sCharWidth;
+                float cellH = colY + sLineHeight;
                 UtilDrawRect2D(Vector2(bx1, bx2), Vector2(cellH, colY), markerColor);
-                colY += sCharWidth;
+                colY += sLineHeight;
             }
         }
     }
@@ -2104,7 +2105,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     if (fv->mType == kFilterVersionHam1 && detectRange.first != detectRange.second) {
         for (DetectFrame *df = detectRange.first; df != detectRange.second; df++) {
             MoveFrame *mf = (MoveFrame *)df->GetMoveFrame();
-            float colY = sCharWidth + yBase;
+            float colY = sLineHeight + yBase;
             float frameBeatX = (gBeatLineData.maxValue - gBeatLineData.minValue)
                     * ((mf->GetBeat() + gBeatLineData.rangeOffset)
                        / (gBeatLineData.rangeScale + gBeatLineData.rangeOffset
@@ -2114,7 +2115,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             if (numNodes > 0) {
                 float bx2 = frameBeatX + halfWidth;
                 for (int n = 0; n < numNodes; n++) {
-                    float cellH = colY + sCharWidth;
+                    float cellH = colY + sLineHeight;
                     Hmx::Rect cellRect(bx1, colY, bx2 - bx1, cellH - colY);
                     const Ham1NodeWeight &nw =
                         mf->NodeWeightHam1(n, mode, (MoveMirrored)mirrored);
@@ -2128,7 +2129,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
                             cellRect, errColor, nullptr, nullptr, nullptr
                         );
                     }
-                    colY += sCharWidth;
+                    colY += sLineHeight;
                 }
             }
         }
@@ -2269,9 +2270,9 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     }
 
     // Advance y past the overlay
-    y = height + sCharWidth + yBase;
+    y = height + sLineHeight + yBase;
     if (fv->mType == kFilterVersionHam2) {
-        y += sCharWidth;
+        y += sLineHeight;
     }
 
     // Clamp min height

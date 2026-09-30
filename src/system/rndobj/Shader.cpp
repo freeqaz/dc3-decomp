@@ -454,10 +454,12 @@ u64 RndShaderDrawRect::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     } else {
         offscreen = TheNgRnd.Offscreen();
     }
-    u64 pseudoHDR = (!offscreen && mat->AllowHDR()) ? 1 : 0;
-    u64 hi = pseudoHDR | ((u64)(TheHiResScreen.IsActive() & 1) << 2
+    bool pseudoHDR = !offscreen && mat->AllowHDR();
+    u64 hi = (u64)(pseudoHDR & 1) | ((u64)(TheHiResScreen.IsActive() & 1) << 2
         | (u64)(TheRnd.ResourceCached() & 1)) << 28;
-    return (hi << 22) | (matBits & (0xAFFFFFFEULL << 22));
+    // clear the three fields `hi` fills (bits 22, 50, 52) and keep the rest:
+    // the image's mask is rotl64(0xFFFFFFFFAFFFFFFE, 22) = 0xFFEBFFFFFFBFFFFF
+    return (hi << 22) | (matBits & ~(((u64)1 << 22) | ((u64)1 << 50) | ((u64)1 << 52)));
 }
 
 u64 RndShaderParticles::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {

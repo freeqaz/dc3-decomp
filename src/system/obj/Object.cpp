@@ -636,8 +636,9 @@ void Hmx::Object::ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *to) {
 #else
         if (it->RefOwner() == from) {
 #endif
-            it->Release(&other);
-            other.AddRef(it);
+            // move `it` from mRefs to the end of `other`, then resume from
+            // its old predecessor in mRefs
+            it = it->MoveBefore(&other);
         }
     }
     other.ReplaceList(to);
@@ -1053,14 +1054,14 @@ DataNode Hmx::Object::OnGetTypeList(const DataArray *a) {
 }
 
 DataNode Hmx::Object::OnAddSink(DataArray *a) {
-    if (a->Size() >= 4) {
+    if (a->Size() > 3) {
         SinkMode mode = (a->Size() > 4) ? (SinkMode)a->Int(4) : kHandle;
         bool chain = (a->Size() > 5) ? a->Int(5) : true;
         DataArray *arr3 = a->Array(3);
         Hmx::Object *obj = a->GetObj(2);
         if (obj) {
             if (arr3->Size() == 0) {
-                GetOrAddSinks()->AddSink(obj, Symbol(), Symbol(), mode, chain);
+                GetOrAddSinks()->AddSink(obj, Symbol(), Symbol(), mode, true);
             } else {
                 for (int i = 0; i < arr3->Size(); i++) {
                     DataNode eval = arr3->Evaluate(i);

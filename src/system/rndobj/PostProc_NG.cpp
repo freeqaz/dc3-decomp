@@ -271,7 +271,7 @@ void NgPostProc::RebuildTex() {
         h = TheNgRnd.PreProcessTexture()->Height();
     }
     RndVelocityBuffer::Singleton().AllocateData(w, h, TheRnd.Bpp());
-    sBloom.AllocateTextures(w / 4, h / 4);
+    sBloom.AllocateTextures(w, h);
 }
 
 #ifdef HX_NATIVE
