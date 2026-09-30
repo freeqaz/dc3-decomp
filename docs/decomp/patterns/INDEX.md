@@ -205,6 +205,18 @@ a template. Standing check: `scripts/analysis/reloc_name_gate.py` (with a
 its "Check the instrument first" section before triaging a row, because three of
 the loudest findings there were config defects rather than source bugs.
 
+### A native-only body is invisible to every ruler — `#ifdef HX_NATIVE` shadows
+
+The native port compiles the same `src/` with `HX_NATIVE`; where a guard swaps in a
+hand-written native body, objdiff measures only the `#else` branch, so a native-only
+semantic drift scores 100% forever. **1,164 guard directives / 1,146 regions** (340
+REPLACES, 688 ADDS, 118 REMOVES, 54 function shadows) inventoried by
+`scripts/analysis/native_shadow_audit.py`; the 464 REPLACES/REMOVES/shadow regions were
+triaged against the target listing and 20+ divergences fixed (FlowQueueable queue, Locale
+sort-vs-search key, RandomShuffle RNG draw, StandardStream forward-jump stall, RndCam
+mirrored y, ...). Write-up, the tool's blind spots and the 10-point drift recognizer:
+**[native-shadow-bodies-are-unmeasured.md](native-shadow-bodies-are-unmeasured.md)**.
+
 ### An offset diff on an iterator step may be a DIRECTION bug, not a wrong field
 
 `HamCamShot::SetPreFrame` rewound its camera-shot list with `++` because
