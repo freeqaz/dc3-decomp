@@ -60,6 +60,36 @@ scoring coverage to the `errors=1.0` short-circuit.
 > dummy must score clearly below a real dancer, and neither may be exactly
 > 0 or exactly 1 for every move.
 
+## The performing sensor (branch `native-posesynth`, 2026-09-30)
+
+`scripts/synthetic_kinect.py` stands in for the Kinect SENSOR over the external
+pose socket (`DC3_POSE=external DC3_POSE_NO_SPAWN=1`).  With `perform()` (CLI:
+`--perform http://127.0.0.1:<port>/api`; harvester: `--perform`) it plays a
+human who imitates the screen: once per game frame it reads
+`GET /api/pose/target` (`native/src/platform/PoseTarget_Native.cpp`,
+read-only) and streams each player's target skeleton back as that player's
+person.  Target sources, per player:
+
+| source | when | what |
+|---|---|---|
+| `fatality` | `PoseFatalities::InFatality(p)` (Strike a Pose, battle fatalities) | the skeleton `UpdateMatchingPose` compares against (`mPlayerSkeletons[p]`, from the character via `CharCameraInput`), hips moved onto the person's spot |
+| `choreo` | the player has scheduled DetectFrames (non-Beginner perform / battle / practice) | their reference `DancerSkeleton`s interpolated at `SongSeconds() - latency` -- the time `PostUpdateFilters` scores a skeleton against |
+| `move` | no scheduled frames (Beginner: `ResetDetectFrames` builds none, yet the async detectors still rate it) | the current move's `MoveDetector` reference frames, on the beat `MoveDetector::Poll` schedules them |
+| `none` | rests, menus, gaps | the person stands |
+
+Everything that decides a score runs in decompiled code on a LIVE `Skeleton`
+(history, bone lengths, quality filter, displacement lookback) -- unlike
+`DC3_POSE_SELFTEST`, which swaps the reference in INSIDE the scorer and never
+runs that half.  Packets carry a sensor clock that advances by song time, and
+`GestureMgr_NativePoll` takes a frame's elapsed ms from the packet stamps (as
+Xbox does from `NUI_SKELETON_FRAME`), so `DC3_FAST_TIME` replays at the
+choreography's own speed.  `--stand-and-watch` is the negative control: the same
+sensor and the same per-move record (`<out>/kinect.json`), people standing.
+
+The async detectors that perform and battle rate from (`last_detector_result`)
+used to be switched off natively (two `HX_NATIVE` guards); they run as on the
+360 since this branch.
+
 ## `move_passed` arg semantics (so future agents don't "fix" it)
 
 `Msg.h` maps `operator[](i)` to `Node(i+2)`, and the handler reads `Int(4)` /

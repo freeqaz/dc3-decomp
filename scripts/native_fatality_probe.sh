@@ -1,4 +1,18 @@
 #!/bin/bash
+# SUPERSEDED (native-posesynth, 2026-09-30) -- use instead:
+#     python3 scripts/native_assert_harvest.py --route battle --perform --out DIR --port N
+# The performing synthetic sensor (scripts/synthetic_kinect.py) dances the
+# choreography, the async detectors rate it (they are live natively since that
+# branch), a perfect Finishing_Move starts the fatality through
+# HamDirector::CheckBeginFatal, and the sensor then strikes each fatality pose,
+# which UpdateMatchingPose matches for real.  Measured: fatality from a real
+# rating at beat ~346, full 8-pose combo for both players, 570000 -> 666000.
+# Every score/rating/fatality change lands in DIR/kinect.json.  Nothing is
+# injected.  This script is kept only as a quick way to start a fatality
+# mid-song for debugging; its move_passed injection is a fake rating event and
+# its autoplay makes the pose match unconditionally, so it proves nothing about
+# scoring.
+#
 # native_fatality_probe.sh -- drive a dance battle and force ONE final-pose
 # fatality, probing PoseFatalities state every few beats.
 #
