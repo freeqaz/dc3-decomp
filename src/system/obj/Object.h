@@ -668,6 +668,15 @@ public:
             return tmp;
         }
 
+        // Follows Node::prev (+0x18). Without it, backward walks over an
+        // ObjPtrList could not be spelled at all, and HamCamShot::SetPreFrame's
+        // rewind loop was decompiled as `++` -- stepping forward through the
+        // shot list while subtracting durations as if stepping back.
+        iterator operator--() {
+            mNode = mNode->prev;
+            return *this;
+        }
+
         // iterator &operator=(T1 *obj) {
         //     mNode->SetObjConcrete(obj);
         //     return *this;

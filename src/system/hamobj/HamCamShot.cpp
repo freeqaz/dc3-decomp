@@ -78,10 +78,7 @@ void HamCamShot::EndAnim() {
 void HamCamShot::SetPreFrame(float frame, float blend) {
     mTargetsFlipped = true;
 
-    bool inFirstShot = true;
-    if (frame >= mDuration && mNextShots.size() != 0) {
-        inFirstShot = false;
-    }
+    bool inFirstShot = frame < mDuration || mNextShots.size() == 0;
 
     if (inFirstShot) {
         if (mCurrentShot != this) {
@@ -90,7 +87,7 @@ void HamCamShot::SetPreFrame(float frame, float blend) {
     } else {
         float nextOffset = frame - mDuration;
         while (nextOffset < mNextShotOffset && mNextShotIt != mNextShots.begin()) {
-            ++mNextShotIt;
+            --mNextShotIt;
             mNextShotDuration = (*mNextShotIt)->GetTotalDuration();
             mNextShotOffset -= mNextShotDuration;
             mCurrentShot = *mNextShotIt;
@@ -105,7 +102,7 @@ void HamCamShot::SetPreFrame(float frame, float blend) {
                 }
                 mCurrentShot = *mNextShotIt;
                 mCurrentShot->StartAnim();
-                mNextShotDuration = mCurrentShot->GetTotalDuration();
+                mNextShotDuration = (*mNextShotIt)->GetTotalDuration();
             } else {
                 mNextShotDuration = FLT_MAX;
             }

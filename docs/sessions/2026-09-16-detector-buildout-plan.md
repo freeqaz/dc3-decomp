@@ -214,10 +214,28 @@ past its own table. `[145]` would reproduce that OOB read for real.
   is constructed to 0, so 0→1 and 1→2 are equivalent. Landed as fidelity
   (`674683a0c`), labelled as such. **A scan hit is a value claim, never a
   behaviour claim.**
-- **`CharMirror::Poll`** (lane B's only candidate) — filed as a −4 wrong field;
+- ~~**`CharMirror::Poll`** (lane B's only candidate) — filed as a −4 wrong field;
   objdiff shows **seven** `this`-relative rows shifted by a *uniform* `+0x30`,
   which is a class-layout divergence, not a substituted field. The tool's own
-  anchor fit was 2/10 there.
+  anchor fit was 2/10 there.~~
+
+  > ⚠ **RETRACTED 2026-09-30 — this refutation was wrong, and it was wrong in
+  > the exact way CLAUDE.md warns about.** The "seven rows shifted by `+0x30`"
+  > came from objdiff's *Offset Mismatches (resolved)* block, which **ignores
+  > the base register**. The target parks `this` in **r23** (`mr r23, r3`) and
+  > later does `addi r29, r23, 0x30` — so the target's `r29` is `&mBones`, not
+  > `this`, and every `+0x30` row is the same field reached through a different
+  > anchor. Lane B's scanner, which does track the base register, had already
+  > dismissed exactly those rows for exactly that reason. The class layout
+  > **agrees**; only our header's `// 0x50` comment on `mBones` is stale.
+  >
+  > The divergence lane B flagged is real once decoded with the right anchor:
+  > the image starts the position loop at `it = mStart` (`extsw r10, r11`),
+  > we start at `mStart + mOffsets[TYPE_POS]` (`add`). It is
+  > **behaviour-neutral** — `CharBones::RecomputeSizes()` writes
+  > `mOffsets[0] = 0` before anything else — so it is a matching residue, not a
+  > native bug. (A naive "drop the add" spelling regressed 98.6% → 98.3% by
+  > changing the loop's rotation; not pursued.)
 - **The linker-map address join** (lane C's prescribed fix) — recovers **zero**
   rows, measured: of the 8,893 names the name join misses, 0 appear in
   `ham_xbox_r.map`. Function-local statics carry a per-TU scope ordinal and are
@@ -226,11 +244,25 @@ past its own table. `[145]` would reproduce that OOB read for real.
 
 ### Open follow-up
 
-**`CharMirror` layout.** The `+0x30` shift covers rows *before* `mBones` (the
+~~**`CharMirror` layout.** The `+0x30` shift covers rows *before* `mBones` (the
 image reads `0x14` where we read `0x44` = `mMirrorServo+0x8`), so a pure
 `mBones` relocation (`0x38` → `0x50` = `+0x18`) does not explain it. Our
 headers put `mBones` at `0x50`; RB2 DWARF says `0x38`. Every field access in
-the class is affected. Not started.
+the class is affected. Not started.~~
+
+> ⚠ **CLOSED 2026-09-30 — there is no layout divergence.** See the retraction
+> above: the `+0x30` is an anchor (`r29 = this + 0x30 = &mBones` on the target
+> side), and the offsets agree. The "open follow-up" was built on the same
+> base-register-blind reading.
+>
+> **The same adjudication pass turned up a real bug that this doc had filed as
+> neutral.** Lane B also reported `HamCamShot::SetPreFrame` reading `+0x18`
+> where we read `+0x14`, and read it as `*mNextShotIt` vs `mCurrentShot`. That
+> reading was the neutral half. `ObjPtrList::Node` has `next` at `+0x14` and
+> `prev` at `+0x18`: the image's camera-shot **rewind loop steps backwards**
+> and ours stepped **forwards**, because `ObjPtrList::iterator` had no
+> `operator--` and the right spelling did not compile. Fixed (97.34% → 100.0%),
+> see `docs/decomp/patterns/missing-container-operator-forces-wrong-spelling.md`.
 
 ### Tooling defects found in already-landed code
 
