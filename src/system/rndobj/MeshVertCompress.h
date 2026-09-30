@@ -102,6 +102,28 @@ struct CompressedVertex_Xbox {
 // rndobj/Mesh one.
 static const unsigned int kBitsOutput = 32;
 
+// PackVector's 96.190475 residual is 28 rows and the cause IS identified: the
+// image's entry sum of the four bit counts is a right-to-left CHAIN over the
+// parameter registers,
+//     add r11, p(r8), p(r7)  /  add r11, r11, p(r6)  /  add r9, r11, p(r5)
+// where ours is a balanced TREE, (p(r5)+p(r6)) + (p(r7)+p(r8)).  The sum's TEXT
+// is pinned by MILO_ASSERT's stringification (??_C@_0CP@JCHBHFAK@,
+// "(bitsX + bitsY + bitsZ + bitsW) == ...", equal on both sides).
+//
+// REVERTED, and the reason is worth keeping.  Declaring the parameters W,Z,Y,X
+// and passing 2, 10, 10, 10 DOES take this function to 100.0 -- the text
+// X+Y+Z+W then maps to r8+r7+r6+r5 and MSVC's left chain is the image's.  It is
+// still WRONG, and scripts/analysis/arith_semantics_scan.py proves it from the
+// CALLERS: the image's three call sites emit `li r5, 0xa` and `li r8, 0x2`, so
+// the image binds r5 to the 10-bit count and r8 to the 2-bit count.  Under a
+// W,Z,Y,X declaration that reads bitsW = 10 and bitsX = 2, which cannot be the
+// DEC4N/UDEC4N layout this function packs (x, y, z get 10 bits and w gets 2 in
+// the high bits, via kOffsetW = bitsZ + bitsY + bitsX = 30).  The reorder was a
+// NAME permutation that matched the callee's bytes while putting a wrong
+// constant into every caller -- FillCompressedVertex picked up six li-constant
+// rows for it and dropped 99.9568 -> 99.9137.  Behaviour was preserved either
+// way; faithfulness was not.  Do not re-apply it: the chain-vs-tree difference
+// has to be reached without moving which name binds which register.
 static void PackVector(
     unsigned int &output,
     const Vector4 &vec,
@@ -210,6 +232,23 @@ static void FillCompressedVertex(
     // Pack color (ARGB D3DCOLOR format)
     u32 green = (u32)(vert.color.green * 255.0f);
     u32 blue = (u32)(vert.color.blue * 255.0f);
+    // ADJUDICATED, NOT A BUG (w9-e 2026-09-30).
+    // arith_semantics_scan.py reports an [operand-source] row here --
+    //     target  rlwimi r28, r29, 8, 0, 23
+    //     ours    rlwimi r29, r28, 8, 0, 23
+    // with r29 = [0x54(r1)] and r28 = [0x64(r1)] loaded by rows that are EQUAL
+    // on both sides, so the two values really are exchanged at that one
+    // instruction.  It is compensated two instructions earlier: the image loads
+    // `lfs f11, 0x3c(r4)` / `lfs f10, 0x30(r4)` (alpha then red) where we load
+    // `lfs f11, 0x30(r4)` / `lfs f10, 0x3c(r4)` (red then alpha).  Composing
+    // both exchanges, BOTH sides store
+    //     alpha<<24 | red<<16 | green<<8 | blue
+    // i.e. D3DCOLOR ARGB, which is also what this vertex element must be.  The
+    // scanner row is a true operand-source difference and a false bug.
+    // REFUTED as a scoring lever: swapping these two declarations (so MSVC's
+    // own reordering of the last two would land on the image's order) is
+    // byte-inert -- 99.9568 / 99.8489 either way, same 8 rows.  4 of those 8
+    // rows are this compensating pair.
     u32 alpha = (u32)(vert.color.alpha * 255.0f);
     u32 red = (u32)(vert.color.red * 255.0f);
     compressed.mColor = ((((alpha << 8) | (red & 0xFF)) << 8) | (green & 0xFF))

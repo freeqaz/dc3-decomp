@@ -1622,30 +1622,28 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
         BlacklightPacket packet;
         sBlacklightPacketPool.resize(newsize, packet);
     }
-#ifdef HX_NATIVE
+    // Residual (2 rows, and the only thing keeping fuzzy at 99.51): the image
+    // loads sBlacklightPacketCount BEFORE the pool's mStart, we load mStart
+    // first.  REFUTED as source-reachable by folding the post-increment into
+    // the subscript (`sBlacklightPacketPool[sBlacklightPacketCount++]`) --
+    // byte-inert, same two rows.  Pure scheduling of two independent loads.
     int idx = sBlacklightPacketCount++;
     BlacklightPacket &pkt = sBlacklightPacketPool[idx];
     pkt.mMesh = mesh;
+#ifdef HX_NATIVE
+    // The 360 build dereferences Mat() unconditionally here (the target loads
+    // mesh+0x128 and indexes it with no null test).  Native keeps the guard:
+    // a text object with no material is reachable off-console.
     RndMat *mat = mesh->Mat();
     if (mat) {
         pkt.mSavedColor = mat->GetColor();
     }
+#else
+    pkt.mSavedColor = mesh->Mat()->GetColor();
+#endif
     pkt.mSize = f2;
     pkt.mSyncFlags = i3;
     pkt.mCam = RndCam::Current();
-#else
-    int idx = sBlacklightPacketCount++;
-    int *pkt_ptr = (int *)&sBlacklightPacketPool[0] + (idx << 3);
-    pkt_ptr[0] = (int)mesh;
-    int *mat = *(int **)((char *)mesh + 0x128);
-    pkt_ptr[1] = *(int *)((char *)mat + 0x2C);
-    pkt_ptr[2] = *(int *)((char *)mat + 0x30);
-    pkt_ptr[3] = *(int *)((char *)mat + 0x34);
-    pkt_ptr[4] = *(int *)((char *)mat + 0x38);
-    *(float *)(pkt_ptr + 5) = f2;
-    pkt_ptr[6] = i3;
-    pkt_ptr[7] = (int)RndCam::Current();
-#endif
 }
 
 void RndText::ClearBlacklight() { sBlacklightPacketCount = 0; }
@@ -1653,36 +1651,28 @@ void RndText::ClearBlacklight() { sBlacklightPacketCount = 0; }
 void RndText::DrawBlacklight() {
     RndCam *savedCam = RndCam::Current();
     for (int i = 0; i < sBlacklightPacketCount; i++) {
-#ifdef HX_NATIVE
         BlacklightPacket &pkt = sBlacklightPacketPool[i];
         if (pkt.mCam && pkt.mCam != RndCam::Current()) {
             pkt.mCam->Select();
         }
+        // RndMat::SetColor, inlined: the image stores red/green/blue into
+        // mColor (mat+0x2c/0x30/0x34) and only THEN reads mDirty at +0x228 to
+        // OR in 1.  Writing the three fields and calling MarkDirty() separately
+        // lets the scheduler hoist the mDirty load above the third store.
+#ifdef HX_NATIVE
+        // The 360 build dereferences Mat() unconditionally; native guards it.
         RndMat *mat = pkt.mMesh->Mat();
         if (mat) {
-            Hmx::Color &color = mat->GetColor();
-            color.red = pkt.mSavedColor.red;
-            color.green = pkt.mSavedColor.green;
-            color.blue = pkt.mSavedColor.blue;
-            mat->MarkDirty(1);
+            mat->SetColor(
+                pkt.mSavedColor.red, pkt.mSavedColor.green, pkt.mSavedColor.blue
+            );
         }
-        DrawMesh(pkt.mMesh, pkt.mSize, pkt.mSyncFlags);
 #else
-        int *pkt = (int *)((char *)&sBlacklightPacketPool[0] + i * 0x20);
-        RndCam *cam = (RndCam *)pkt[7];
-        if (cam != 0 && cam != RndCam::Current()) {
-            cam->Select();
-        }
-        float savedB = *(float *)(pkt + 3);
-        float savedG = *(float *)(pkt + 2);
-        float savedR = *(float *)(pkt + 1);
-        int *mat = *(int **)((char *)pkt[0] + 0x128);
-        *(float *)((char *)mat + 0x2c) = savedR;
-        *(float *)((char *)mat + 0x30) = savedG;
-        *(float *)((char *)mat + 0x34) = savedB;
-        *(int *)((char *)mat + 0x228) |= 1;
-        DrawMesh((RndMesh *)pkt[0], *(float *)(pkt + 5), pkt[6]);
+        pkt.mMesh->Mat()->SetColor(
+            pkt.mSavedColor.red, pkt.mSavedColor.green, pkt.mSavedColor.blue
+        );
 #endif
+        DrawMesh(pkt.mMesh, pkt.mSize, pkt.mSyncFlags);
     }
     if (savedCam != 0 && savedCam != RndCam::Current()) {
         savedCam->Select();
@@ -2052,6 +2042,32 @@ void RndText::FitTextScroll() {
         mWidth = 0.0f;
         mWrapEnabled = true;
 
+        // Residual 7 rows (98.276).  The image READS mStyles[0].mFont TWICE and
+        // tests it twice, the first read into a VOLATILE register that is then
+        // discarded, with a dead home of the Style base between them:
+        //     lwz    r10, 0x40(r11)      first read, volatile, test only
+        //     cmplwi cr6, r10, 0x0
+        //     bne    cr6, .L_second      (skips ONLY the store below)
+        //     stw    r11, 0x54(r31)      dead home of the Style base
+        //  .L_second:
+        //     lwz    r23, 0x40(r11)      second read, kept for CharAdvance
+        //     cmplwi cr6, r23, 0x0
+        //     bne    cr6, .L_body
+        //     <MILO_ASSERT fail>
+        // The assert's stringified expression is the 4-byte literal "font"
+        // (??_C@_04EFPADHIC@font?$AA@, equal on both sides), so a local named
+        // `font` really does exist -- it is not `MILO_ASSERT(mStyles[0].mFont)`.
+        // With a raw-pointer copy MSVC CSEs the assert's test with the `if`'s
+        // and emits ONE read, which is where our 7 rows come from.
+        // THREE REFUTATIONS, all measured here (w9-e 2026-09-30):
+        //   `RndFontBase *&font = mStyles[0].mFont;`  does not compile --
+        //       Style::mFont is ObjPtr<RndFontBase> (0x34), not a raw pointer.
+        //   `const ObjPtr<RndFontBase> &font = ...;`  98.276 -> 95.595.
+        //   keep `font` for the assert and re-spell the guard as
+        //       `if (mStyles[0].mFont)`                98.276 -> 96.099.
+        // So the second read is real but neither an ObjPtr reference nor a
+        // second textual mention reproduces it.  Left as the shape that scores
+        // best.
         RndFontBase *font = mStyles[0].mFont;
         MILO_ASSERT(font, 2718);
         if (font) {
@@ -2104,18 +2120,23 @@ void RndText::FitTextScroll() {
 
 void RndText::DrawMesh(RndMesh *mesh, float size, int syncFlags) {
     mesh->DrawShowing();
-    if (size != 0.0f && syncFlags > 0) {
+    // The image sets up the accumulator BETWEEN the two tests -- `fmr f31, f29`
+    // sits after `beq` on `size != 0` and before `cmpwi r28, 0` -- so the two
+    // conditions are nested with the declaration in the outer body, not `&&`.
+    if (size != 0.0f) {
         float offset = size;
-        do {
-            Vector3 pos = mesh->LocalXfm().v;
-            pos.x += offset;
-            mesh->SetLocalPos(pos);
-            mesh->DrawShowing();
-            pos.x -= offset;
-            mesh->SetLocalPos(pos);
-            syncFlags--;
-            offset += size;
-        } while (syncFlags != 0);
+        if (syncFlags > 0) {
+            do {
+                Vector3 pos = mesh->LocalXfm().v;
+                pos.x += offset;
+                mesh->SetLocalPos(pos);
+                mesh->DrawShowing();
+                pos.x -= offset;
+                mesh->SetLocalPos(pos);
+                syncFlags--;
+                offset += size;
+            } while (syncFlags != 0);
+        }
     }
 }
 
@@ -2543,6 +2564,18 @@ scan_close:
     return cur;
 }
 
+// Residual 31 rows (98.7952) but only TWO are charged by the canonical ruler --
+// the other 29 are one r29<->r30 exchange between `this` and the style loop's
+// byte-offset induction variable (target binds `this` to r30, we bind it to
+// r29), which normalization forgives.  The two live rows are a single store
+// position inside the MILO_NOTIFY argument marshalling:
+//     target   lwz r10, 0x4(r30) / stw r11, 0x50(r31) / lwz r11, 0x4(r10)
+//     base     stw r11, 0x50(r31) / lwz r11, 0x4(r29) / lwz r11, 0x4(r11)
+// i.e. the image begins inlining Name() BEFORE homing the previous MakeString
+// argument.  Same shape as DxMesh::DrawFur (an allocation order that follows
+// from where one computation sits), so the lever to look for is a statement
+// that moves the `this`/IV creation order, not a declaration reorder.
+// Diagnosed only (w9-e 2026-09-30), nothing attempted.
 void RndText::UpdateText() {
     if (mFitType == kFitEllipsis) {
         FitTextJust();
@@ -2746,6 +2779,13 @@ void RndText::DrawShowing() {
     }
 }
 
+// Residual 2 rows (98.5714 on BOTH rulers, so its 560 B are parked behind them):
+// the argument setup for CalcScreenHeight is scheduled one slot apart --
+//     target   lfs f0, 0x70(r1) / addi r5, r1, 0x50 / mr r4, r27 / fmuls f1, f1, f0
+//     base     lfs f0, 0x70(r1) / mr r4, r27 / addi r5, r1, 0x50 / fmuls f1, f1, f0
+// Two independent argument registers, same instructions, adjacent positions.
+// Diagnosed only (w9-e 2026-09-30), nothing attempted: there is no source
+// operator between `mesh` and `&screenHeight` to reorder.
 void RndText::SizeCheck() {
 #ifdef HX_NATIVE
     // On Xbox this hook only emitted an "oversized font" warning; the native

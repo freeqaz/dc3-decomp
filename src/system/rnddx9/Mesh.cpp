@@ -198,14 +198,29 @@ void DxMesh::Copy(const Hmx::Object *src, Hmx::Object::CopyType ty) {
     }
 }
 
+// Residual 13 rows (98.3051), of which exactly ONE is charged by the canonical
+// ruler: a target-only `clrrwi r3, r3, 0` (rlwinm r3,r3,0,0,31 -- a 32-bit
+// zero-extending self-move) sitting between `stw r3, 0x1b0(r30)` and
+// `bl D3DVertexBuffer_Lock`.  The other 12 are an r29<->r30 exchange between
+// `this` and the lock result, which normalization forgives.
+// TWO REFUTATIONS, both measured (w9-e 2026-09-30):
+//   reading the VB back through the member instead of a `vb` local -- MSVC CSEs
+//     the store-then-load into the same register with no re-truncation: INERT.
+//   holding it as `unsigned int vb = (unsigned int)D3DDevice_CreateVertexBuffer(
+//     ...)` and casting back at the call -- also INERT; MSVC knows the value is
+//     already a valid 32-bit pointer and emits no rlwinm.
+// Both D3DVertexBuffer_Lock's free-function form and D3DVertexBuffer::Lock are
+// declared in src/xdk/d3d9i/d3d9.h; the member form would round-trip the result
+// through memory, which the image does not do (it takes r3 straight into r29).
 D3DVertexBuffer *DxMesh::GetMultimeshFaces() {
     MILO_ASSERT(!Mutable(), 0x1A7);
     if (!unk1b0) {
         unsigned int numIndices = mNumFaces * 3;
-        D3DVertexBuffer *vb =
-            D3DDevice_CreateVertexBuffer(numIndices * 4, 0, (D3DPOOL)0);
-        unk1b0 = (D3DResource *)vb;
-        unsigned int *dst = (unsigned int *)D3DVertexBuffer_Lock(vb, 0, 0, 0);
+        unk1b0 = (D3DResource *)D3DDevice_CreateVertexBuffer(
+            numIndices * 4, 0, (D3DPOOL)0
+        );
+        unsigned int *dst =
+            (unsigned int *)D3DVertexBuffer_Lock((D3DVertexBuffer *)unk1b0, 0, 0, 0);
         unsigned short *src =
             (unsigned short *)D3DIndexBuffer_Lock((D3DIndexBuffer *)unk1ac, 0, 0, 0x10);
         for (unsigned int i = 0; i < numIndices; i++) {
@@ -337,6 +352,22 @@ DxMat *DxMesh::DrawFur(DxMat *mat) {
     if (numBones == 0)
         numBones = 1;
     MILO_ASSERT(mTransformCache.size() == numBones, 0x22A);
+    // `numBones * 3` is a SOURCE statement, above the zero-trip guard, and the
+    // `kVS_WorldTransform +` stays inside the loop.  That split is measured, not
+    // cosmetic -- the guard is the discriminator:
+    //     target   mulli r11, r31, 3  /  cmpwi r31, 0  /  ble  /
+    //              li r30, 0  /  addi r29, r11, 0x5c
+    //     (98.46)  cmpwi  /  ble  /  mulli r11, r31, 3  /
+    //              li r29, 0  /  addi r30, r11, 0x5c
+    // With the whole index written in the loop MSVC sinks the multiply into the
+    // preheader (below the guard) and creates the two induction variables the
+    // other way round, which is where the r29<->r30 swap and the 0x40/0x3 step
+    // exchange came from -- one cause, six rows.  Two measured near-misses:
+    // hoisting `kVS_WorldTransform + numBones * 3` whole gives 99.0038 (the
+    // `+0x5c` then rises above the guard too, 3 rows), and writing
+    // `numBones * 3 + i * 3` inline is EXACTLY inert at 98.4598 -- MSVC folds it
+    // straight back into `(numBones + i) * 3`.
+    int furBoneOffset = numBones * 3;
     for (int i = 0; i < numBones; i++) {
         // The shader manager is named INSIDE the loop: MSVC then hoists the
         // global load into the loop preheader (after the zero-trip guard, where
@@ -345,7 +376,7 @@ DxMat *DxMesh::DrawFur(DxMat *mat) {
         // loop instead sinks the load ABOVE the guard and scores worse (96.9).
         RndShaderMgr &shaderMgr = TheShaderMgr;
         shaderMgr.SetVConstant4x3(
-            (VShaderConstant)(kVS_WorldTransform + (numBones + i) * 3),
+            (VShaderConstant)(kVS_WorldTransform + furBoneOffset + i * 3),
             Hmx::Matrix4(mTransformCache[i])
         );
     }
@@ -482,7 +513,12 @@ void DxMesh::SetTransforms() {
     unsigned int boneCount = mBones.size();
     TheShaderMgr.SetMeshInfo(boneCount, HasAOCalc());
     float fw = FurWeight(Mat());
-    bool hasFur = fw > 0.0f;
+    bool hasFur;
+    if (fw > 0.0f) {
+        hasFur = true;
+    } else {
+        hasFur = false;
+    }
     if (boneCount == 0) {
         TheShaderMgr.UpdateCache(WorldXfm(), 0);
         if (hasFur) {
