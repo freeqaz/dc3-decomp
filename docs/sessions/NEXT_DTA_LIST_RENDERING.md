@@ -4,6 +4,25 @@
 
 This note is for the `docs/native/` effort. It is specifically about the native boot path reaching `choose_mode_screen` while the menu list is missing, empty, or visually absent. It should be read as a native-port triage note, not a generic decomp note.
 
+## RESOLVED 2026-09-30 (branch `native-menulist`)
+
+The invisible-items symptom was none of the hypotheses below. Every element
+reached `UIListSlot::Draw` with `mAlpha = 0.000` (that is why the 2026-03-10
+trace saw `alpha=0.000` on every choose-mode slot). `HamListRibbon::DrawRibbon`
+copies the ribbon's label-placeholder alpha into each element's `mAlpha`
+(image `stfs f1, 0x24(r11)` @824816A4, restored to the right field by
+`930e8e801` on 2026-09-14), that alpha is faded 0 -> 1 by the ribbon's
+`enter.anim`, and an HX_NATIVE-only `HamNavList::OnMsg(UITransitionCompleteMsg)`
+-> `StopAnimation()` (added 2026-03-17; the image's HamNavList never handles
+`transition_complete`) killed the enter animation on the frame it started, so
+`enter.anim` stayed at frame 0. Removing the handler: `enter.anim` runs 0 -> 20
+in ~20 frames, alpha reaches 1.000, items draw on main, choose_mode, results
+and complete. The fault is timing-dependent per screen: items vanish only when
+`transition_complete` lands while the enter animation is still running (main,
+choose_mode and results in the 2026-09-30 before-run; perform_complete happened
+to draw in that run). Regression test: `HamNavListTransitionTest` in milo-tests.
+The rest of this note is kept as history.
+
 ## Status
 
 Partially understood, but the original note was too narrow. We have enough evidence to say:
