@@ -1484,6 +1484,13 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
     // `poly.points.back()` (and the lastDot initialiser) more than once rather
     // than through these two variables.  NOT attempted here, so it is a lead
     // and not a refutation.
+    // REFUTED (w9-e 2026-09-30): the two remaining commutative rows -- the
+    // image's `fmadds f0, f11, f13, f0` and `fmadds f31, f8, f10, f11` take
+    // ray.dir.x as fA where ours takes the x-difference -- are NOT source-
+    // reachable.  Writing both products as `(p->x - ray.base.x) * dirPtr->x`
+    // is byte-for-byte inert (96.0938 / 95.8984 and the identical 8-row table),
+    // which is the same commutative-operand floor recorded for fmuls elsewhere.
+    // The five dead-home-store deletes above remain the only live lead.
     const Vector2 *lastPoint = &poly.points.back();
     const Vector2 *dirPtr = &ray.dir;
     float yDiff = lastPoint->y - ray.base.y;

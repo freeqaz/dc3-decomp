@@ -198,6 +198,20 @@ void DxMesh::Copy(const Hmx::Object *src, Hmx::Object::CopyType ty) {
     }
 }
 
+// Residual 13 rows (98.3051), of which exactly ONE is charged by the canonical
+// ruler: a target-only `clrrwi r3, r3, 0` (rlwinm r3,r3,0,0,31 -- a 32-bit
+// zero-extending self-move) sitting between `stw r3, 0x1b0(r30)` and
+// `bl D3DVertexBuffer_Lock`.  The other 12 are an r29<->r30 exchange between
+// `this` and the lock result, which normalization forgives.
+// TWO REFUTATIONS, both measured (w9-e 2026-09-30):
+//   reading the VB back through the member instead of a `vb` local -- MSVC CSEs
+//     the store-then-load into the same register with no re-truncation: INERT.
+//   holding it as `unsigned int vb = (unsigned int)D3DDevice_CreateVertexBuffer(
+//     ...)` and casting back at the call -- also INERT; MSVC knows the value is
+//     already a valid 32-bit pointer and emits no rlwinm.
+// Both D3DVertexBuffer_Lock's free-function form and D3DVertexBuffer::Lock are
+// declared in src/xdk/d3d9i/d3d9.h; the member form would round-trip the result
+// through memory, which the image does not do (it takes r3 straight into r29).
 D3DVertexBuffer *DxMesh::GetMultimeshFaces() {
     MILO_ASSERT(!Mutable(), 0x1A7);
     if (!unk1b0) {

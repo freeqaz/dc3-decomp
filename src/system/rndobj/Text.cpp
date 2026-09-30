@@ -2564,6 +2564,18 @@ scan_close:
     return cur;
 }
 
+// Residual 31 rows (98.7952) but only TWO are charged by the canonical ruler --
+// the other 29 are one r29<->r30 exchange between `this` and the style loop's
+// byte-offset induction variable (target binds `this` to r30, we bind it to
+// r29), which normalization forgives.  The two live rows are a single store
+// position inside the MILO_NOTIFY argument marshalling:
+//     target   lwz r10, 0x4(r30) / stw r11, 0x50(r31) / lwz r11, 0x4(r10)
+//     base     stw r11, 0x50(r31) / lwz r11, 0x4(r29) / lwz r11, 0x4(r11)
+// i.e. the image begins inlining Name() BEFORE homing the previous MakeString
+// argument.  Same shape as DxMesh::DrawFur (an allocation order that follows
+// from where one computation sits), so the lever to look for is a statement
+// that moves the `this`/IV creation order, not a declaration reorder.
+// Diagnosed only (w9-e 2026-09-30), nothing attempted.
 void RndText::UpdateText() {
     if (mFitType == kFitEllipsis) {
         FitTextJust();
@@ -2767,6 +2779,13 @@ void RndText::DrawShowing() {
     }
 }
 
+// Residual 2 rows (98.5714 on BOTH rulers, so its 560 B are parked behind them):
+// the argument setup for CalcScreenHeight is scheduled one slot apart --
+//     target   lfs f0, 0x70(r1) / addi r5, r1, 0x50 / mr r4, r27 / fmuls f1, f1, f0
+//     base     lfs f0, 0x70(r1) / mr r4, r27 / addi r5, r1, 0x50 / fmuls f1, f1, f0
+// Two independent argument registers, same instructions, adjacent positions.
+// Diagnosed only (w9-e 2026-09-30), nothing attempted: there is no source
+// operator between `mesh` and `&screenHeight` to reorder.
 void RndText::SizeCheck() {
 #ifdef HX_NATIVE
     // On Xbox this hook only emitted an "oversized font" warning; the native
