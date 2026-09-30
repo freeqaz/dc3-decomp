@@ -658,6 +658,13 @@ def triage(pairs, norm):
 
     Two cross-checks that cost nothing and each killed a plausible-looking row:
 
+    ⚠ CORRECTION 2026-09-30: the gate below was only as current as report.json,
+    and report.json is regenerated only by a full `ninja`.  After a per-target
+    rebuild it describes an object that no longer exists, and a stale 100.0
+    excused a freshly-injected wrong field.  `scan()` now passes `norm=None`
+    (never excuses) for any unit whose object is newer than the report; the
+    reasoning below holds only for a score of the CURRENT object.
+
     `contradicted-by-100pct` -- `report.json`'s `match_percent_normalized` is an
     exact score-weighted f32 that DOES charge an immediate/displacement diff
     (docs/decomp/patterns/rounded-100-hides-real-bugs.md); it forgives only
@@ -831,6 +838,25 @@ def scan(args, cov):
             continue
         pairs.append((u.get("name", ""), tp, bp))
 
+    # DEFECT 1 (fixed 2026-09-30): the contradicted-by-100pct gate trusts
+    # report.json, which only a full `ninja` regenerates.  After `ninja
+    # <one>.obj` the object is NEWER than the report, and the report's 100.0 is
+    # a score of an object that no longer exists -- so a freshly-injected wrong
+    # field was excused by it.  pointer_disp_scan's sabotage control hit exactly
+    # that.  A score is consulted only for a unit whose BOTH objects are no
+    # newer than report.json (the target side too: a re-split rewrites it).
+    # Withholding a score can only move a row OUT of contradicted-by-100pct and
+    # into the findings, never the other way, so this errs loud.
+    # mtime is a proxy: report.json's provenance block records no object
+    # content hash, so there is nothing stronger to compare against.
+    rep_mtime = os.path.getmtime(args.report) if os.path.exists(args.report) else None
+    stale_units = set()
+    for unit, tp, bp in pairs:
+        if rep_mtime is None or max(os.path.getmtime(tp),
+                                    os.path.getmtime(bp)) > rep_mtime:
+            stale_units.add(unit)
+    n_withheld = 0
+
     findings = []
     contradicted = []
     n_rescued = 0
@@ -892,11 +918,15 @@ def scan(args, cov):
             shape_rows.append({"unit": unit, "symbol": name, **detail})
             continue
         # substitution -> a candidate, unless an independent check contradicts it.
-        verdict2 = triage(detail["pairs"], norms.get((unit, name)))
+        stale = unit in stale_units
+        if stale:
+            n_withheld += 1
+        verdict2 = triage(detail["pairs"], None if stale else norms.get((unit, name)))
         if verdict2 != "finding":
             buckets[verdict2] += 1
             contradicted.append({"unit": unit, "symbol": name, "why": verdict2,
                                  "match_percent_normalized": norms.get((unit, name)),
+                                 "report_score_stale": stale,
                                  "pairs": detail["pairs"]})
             continue
         members = structs.get(cls, {})
@@ -913,6 +943,7 @@ def scan(args, cov):
         findings.append({
             "unit": unit, "symbol": name, "class": cls,
             "match_percent_normalized": norms.get((unit, name)),
+            "report_score_stale": stale,
             "anchor": anchor, "anchor_fit": f"{hits}/{total}",
             "n_swapped": detail["n"], "pairs": pr,
         })
@@ -922,6 +953,18 @@ def scan(args, cov):
     cov.extra("paired_units", len(pairs))
     cov.extra("units_without_both_objects", n_units_unpaired)
     cov.extra("buckets", buckets)
+    cov.extra("report_json_present", rep_mtime is not None)
+    cov.extra("units_newer_than_report", len(stale_units))
+    cov.extra("rows_triaged_without_report_score", n_withheld)
+    if rep_mtime is None:
+        cov.note(f"report.json NOT FOUND ({args.report}): the "
+                 f"contradicted-by-100pct gate is OFF for every unit")
+    elif stale_units:
+        cov.note(f"{len(stale_units)} of {len(pairs)} paired units have an object "
+                 f"NEWER than report.json: its score is not about those objects, "
+                 f"so the contradicted-by-100pct gate is OFF there "
+                 f"({n_withheld} substitution rows triaged without it). "
+                 f"Run a full `ninja` to re-arm it.")
     cov.note(f"{len(pairs)} unit object pairs on disk of {len(units)} declared "
              f"units -- a wrong field in a TU that does not build yet is NOT visible")
     cov.note("agree-byte-identical is a PROOF of absence for this class, not a "
@@ -1346,6 +1389,14 @@ def main(argv=None):
           f"(report.json says no displacement can differ -- MY artifact)")
     print(f"  multi-delta swap      : {buckets['multi-delta-block-swap']}   "
           f"(>1 delta = swapped blocks -- NOT findings)")
+    cd = cov.as_dict()
+    if not cd.get("report_json_present"):
+        print("  !! report.json absent: the contradicted-at-100% gate is OFF everywhere")
+    elif cd.get("units_newer_than_report"):
+        print(f"  !! report.json is OLDER than the objects of "
+              f"{cd['units_newer_than_report']} paired units: the "
+              f"contradicted-at-100% gate is OFF there "
+              f"({cd['rows_triaged_without_report_score']} rows triaged without it)")
     print()
     for c in contradicted:
         norm = c["match_percent_normalized"]
@@ -1360,6 +1411,8 @@ def main(argv=None):
     for f in shown:
         norm = f["match_percent_normalized"]
         norm_s = "n/a" if norm is None else f"{norm:.4f}"
+        if f.get("report_score_stale"):
+            norm_s += " (STALE: object newer than report.json)"
         anch = "unresolved" if f["anchor"] is None else hex(f["anchor"])
         print(f"  {f['symbol']}")
         print(f"      unit={f['unit']}  norm={norm_s}  class={f['class']}  "
