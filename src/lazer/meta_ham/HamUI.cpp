@@ -710,8 +710,3 @@ DataNode HamUI::OnMsg(const ButtonDownMsg &msg) {
     return DATA_UNHANDLED;
 }
 
-bool ToggleDrawSkeletons() {
-    MILO_ASSERT(TheSkeletonViz, 0xe2);
-    TheSkeletonViz->SetShowing(TheSkeletonViz->GetForceSubpartSelection());
-    return TheSkeletonViz->GetForceSubpartSelection();
-}

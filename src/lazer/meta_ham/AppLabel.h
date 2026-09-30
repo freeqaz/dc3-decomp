@@ -95,5 +95,9 @@ protected:
     DataNode OnSetUserName(const DataArray *);
 
 private:
+#ifdef HX_NATIVE
+    // native/tests/test_native_shadow_bodies.cpp drives the private body.
+    friend struct NativeShadowAppLabelProbe;
+#endif
     void SetTimeElapsedSince(unsigned int);
 };

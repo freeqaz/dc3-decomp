@@ -212,7 +212,14 @@ void VorbisReader::Seek(int sample) {
 
 void VorbisReader::Init() {
     MILO_ASSERT(mStream, 0x41F);
+#ifdef HX_NATIVE
+    // The native Poll hands StandardStream vorbis_synthesis_pcmout's float**
+    // directly, so it must declare float PCM; the Xbox Poll converts to short
+    // itself first and declares false.
+    mStream->InitInfo(mNumChannels, mSampleRate, true, mOggMap.GetSongLengthSamples());
+#else
     mStream->InitInfo(mNumChannels, mSampleRate, false, mOggMap.GetSongLengthSamples());
+#endif
 }
 
 int VorbisReader::ConsumeData(void **pcm, int samples, int startSamp) {

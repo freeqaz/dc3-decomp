@@ -151,6 +151,15 @@ CASES: list[tuple[str, list[str]]] = [
     # (--idle-timeout) is the one timing-dependent input: a symbol it gives up
     # on is NAMED in the coverage block, so a flake is visible, not silent.
     ("arith_semantics_scan",  ["python3", "scripts/analysis/arith_semantics_scan.py"]),
+    # Added 2026-09-30.  ~2 s/run over ~2,600 src/ files.  Its output is the
+    # WORK LIST for the native-shadow class (HX_NATIVE bodies no ruler
+    # measures), so a region that appears on one run and not the next would
+    # read as "that shadow is gone".  os.walk dirs and files are both sorted,
+    # the universe dict is iterated sorted, and every set feeding output is
+    # sorted before printing.  --list all so the whole region list, not just a
+    # summary, is compared.
+    ("native_shadow_audit",   ["python3", "scripts/analysis/native_shadow_audit.py",
+                               "--list", "all"]),
     # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
     # oracles -- the class of tool whose nondeterminism reads as "this class is
     # exhausted" -- and none of them had ever been checked.  All four agreed
