@@ -20,6 +20,8 @@
 #include "utl/LocaleChunkSort.h"
 #include "math/Rand.h"
 #include "utl/Loader.h"
+#include "obj/Dir.h"
+#include "os/Debug.h"
 
 #include <cstdlib>
 #include <vector>
@@ -285,6 +287,43 @@ TEST_F(NativeShadowTest, PollFrontLoaderPublishesTheLoadersPosition) {
         << "a StayBack loader must see kLoadStayBack while it polls";
     EXPECT_EQ(TheLoadMgr.GetLoaderPos(), before) << "position must be restored";
     delete probe;
+}
+
+// ---------------------------------------------------------------------------
+// ObjPtrList::erase of the TAIL returns the new tail (the predecessor), not
+// end(). The image's Unlink (UIList.s ?Unlink@?$ObjPtrList@VEventTrigger:
+// 8278B7C0/C4 lwz r10,0x18(r11); cmplw r30,r10 = "node is tail";
+// 8278B7D4/D8 mNodes->prev = tail->prev; 8278B7E4 newtail->next = 0;
+// 8278B7EC lwz r3,0x18(r11) returns mNodes->prev) and erase returns
+// Unlink's value. The native Unlink returned node->next == nullptr.
+// Head and middle erases return the successor on both builds (controls).
+// ---------------------------------------------------------------------------
+TEST_F(NativeShadowTest, ObjPtrListEraseTailReturnsPredecessor) {
+    Hmx::Object *owner = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *a = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *b = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *c = Hmx::Object::New<Hmx::Object>();
+    {
+        ObjPtrList<Hmx::Object> l(owner, kObjListNoNull);
+        l.push_back(a);
+        l.push_back(b);
+        l.push_back(c);
+        ObjPtrList<Hmx::Object>::iterator it = l.begin();
+        ++it; // b (middle)
+        it = l.erase(it);
+        ASSERT_TRUE(it != l.end());
+        EXPECT_EQ(*it, c) << "middle erase returns the successor";
+        it = l.erase(it); // c is the tail now
+        ASSERT_TRUE(it != l.end()) << "tail erase must return the new tail, not end()";
+        EXPECT_EQ(*it, a);
+        it = l.erase(l.begin()); // a is head and only element
+        EXPECT_TRUE(it == l.end());
+        EXPECT_EQ(l.size(), 0);
+    }
+    delete a;
+    delete b;
+    delete c;
+    delete owner;
 }
 
 } // namespace

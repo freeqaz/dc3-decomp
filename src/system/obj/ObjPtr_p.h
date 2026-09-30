@@ -981,9 +981,13 @@ typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *node) {
         if (next) {
             next->prev = prev;
         }
-        // If removing the tail, update head's tail pointer
+        // If removing the tail, update head's tail pointer -- and return the
+        // NEW TAIL, not null: the image's Unlink returns mNodes->prev on this
+        // arm (UIList.s ?Unlink@?$ObjPtrList@VEventTrigger 8278B7EC
+        // lwz r3,0x18(r11)), so erase(tail) lands on the predecessor.
         if (mNodes->prev == node) {
             mNodes->prev = prev;
+            next = prev;
         }
     }
     mSize--;
