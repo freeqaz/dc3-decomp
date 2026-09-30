@@ -949,12 +949,28 @@ __declspec(noinline) bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
         return true;
     if (curTime >= mJumpFromMs)
         return false;
-    // NOTE (w7-av): 97.73 -- 2 rows, both from the LAST exit.  The image sends
-    // this `bge` to the same `li r3, 0x0` block as every other false exit (the
-    // one at the top, from `mState == kInit`); MSVC tail-DUPLICATES it for us,
-    // emitting a second `li r3, 0x0` and branching to the epilogue instead.
-    // Refuted: merging the two tests into one `||` -- that inverts the whole
-    // block layout (`bne` becomes `beq`, three bge/blt flip) and scores 86.02.
+    // NOTE (w7-av, re-measured w9-c 2026-09-30): 97.727 canonical / 97.614 fuzzy
+    // -- 2 rows of 45, both from the LAST exit, and 43 of 45 instructions equal.
+    // The image sends this `bge` to the same `li r3, 0x0` block as every other
+    // false exit (the one at the top, from `mState == kInit`).  MSVC
+    // tail-DUPLICATES it for us: it emits its own `li r3, 0x0` BEFORE the branch
+    // and then branches forward to the epilogue, skipping the `li r3, 0x1` -- one
+    // instruction more, one taken branch fewer.  A layout heuristic, on a
+    // `__declspec(noinline)` function whose every other row already matches.
+    // Refuted, one full ninja each:
+    //   86.02  merging the two tests into one `||` (inverts the whole block
+    //          layout -- `bne` becomes `beq` and three bge/blt flip)
+    //   86.00  flipping the polarity, `if (mJumpFromMs < fromTime) return true;
+    //          return false;`
+    //   90.659 `return mJumpFromMs < fromTime;`
+    //   90.659 `return !(mJumpFromMs >= fromTime);`
+    //   90.659 `return fromTime > mJumpFromMs;` (also loses the operand order --
+    //          the image compares (mJumpFromMs, fromTime), which is what the
+    //          spelling kept below produces)
+    //   97.727 (inert) `if (...) { return false; } else { return true; }`
+    //   97.727 (inert) `if (!(mJumpFromMs < fromTime)) return false; return true;`
+    // Every spelling that changes the comparison also changes its operand order or
+    // its polarity, and each costs more than the duplicated `li`.  Keep this one.
     if (mJumpFromMs >= fromTime)
         return false;
     return true;

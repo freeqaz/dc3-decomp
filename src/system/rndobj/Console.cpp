@@ -286,6 +286,45 @@ void RndConsole::SetShowing(bool show) {
 // the clamp input as a named `int lvl = mLevel;` temp is byte-inert (88.5).
 void RndConsole::MoveLevel(int level) {
     if (mDebugging) {
+        // RESIDUAL (w9-c 2026-09-30): 88.469 canonical / 88.265 fuzzy, 8 rows of
+        // 50.  ONE cause, in two halves: the image treats mLevel as MEMORY on both
+        // reads after the `+=` store, and MSVC forwards the stored value to us
+        // instead.
+        //   - Clamp's `value` argument: the image emits `add` + `stw` +
+        //     `clrrwi r11, r11, 0` + `cmpwi cr6, r11, 0` -- the clrrwi is
+        //     `rlwinm r11,r11,0,0,31`, the zero-extension a 32-bit `lwz` would
+        //     have produced, left behind by a store-to-load forward.  We propagate
+        //     the sum straight into the compare, which lets MSVC fuse it as
+        //     `add.` and branch on CR0, costing rows 10/13/17/19.
+        //   - the array index: the image re-reads `lwz r10, 0x5c(r3)` after
+        //     storing the clamped value (rows 27-29), loading gCallStackPtr first;
+        //     we keep the clamped value in a register and compute `mLevel - 2`
+        //     from it before the store.
+        // The single `stw` at the branch join proves the image assigns the result
+        // of one expression (the Clamp/ternary form kept below), not an in-place
+        // if/else-if.
+        //
+        // Ten spellings measured, one full ninja each:
+        //   88.469 (inert): the `limit` local hoisted ahead of the Clamp; the `+=`
+        //     folded into the Clamp argument (`Clamp(lo, 0, mLevel += level)`);
+        //     `(int)mLevel` cast on the value; fully `this->`-qualified; the Clamp
+        //     result via an intermediate local; the ternary written out by hand;
+        //     all three accesses through `int *lvl = &mLevel` (88.061 fuzzy) or
+        //     `int &lvl = mLevel` (88.061 fuzzy)
+        //   75.816 (much WORSE): in-place if/else-if with the limit expression
+        //     repeated in the body rather than hoisted
+        //   90.510 (HIGHER but structurally wrong -- do not adopt): in-place
+        //     if/else-if over a hoisted `limit` local.  That form DOES buy the
+        //     image's memory reload of mLevel for the array index, which is the
+        //     useful finding here: the reload appears exactly when the stored
+        //     value arrives from a control-flow join MSVC cannot forward.  It pays
+        //     for it with a SECOND `stw 0x5c(r3)` inside the `mLevel = 0` arm,
+        //     which the image does not have, plus an r8/r10 allocation shift.
+        // Getting both halves at once needs one tail-merged store AND a
+        // non-forwardable load, which are the same condition pulling opposite
+        // ways; on the evidence this is MSVC's copy-propagation cleaning up an
+        // inlined by-value template parameter that the image's build left in
+        // place.  Faithful Clamp form kept.
         mLevel += level;
         mLevel = Clamp((int)(gCallStack - gCallStackPtr + 2), 0, mLevel);
         mDebugging = gCallStackPtr[mLevel - 2];
