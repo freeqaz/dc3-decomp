@@ -208,6 +208,8 @@ class Harvest:
             "DC3_TAG_MODALS": "1",
             "DC3_DATA": env.get("DC3_DATA", os.path.join(REPO, "orig-assets")),
         })
+        if self.args.real_time:
+            env.pop("DC3_FAST_TIME", None)
         # Menus are driven by the in-engine input-script runner, not by HTTP
         # presses.  Two measured reasons (2026-09-30):
         #  * the title screen must be CONFIRMED, not skipped: title_panel's
@@ -821,19 +823,38 @@ def report(h, sites, crashes, rc_engine):
     return missed
 
 
+# real_time: song time on the AUDIO clock, as on the image, instead of
+# DC3_FAST_TIME's frame-stepped clock.  Required by every route whose song
+# stream JUMPS (practice's loops, dance battle's start loop, party's Strike a
+# Pose / shortened songs): the stream fires a jump when ITS decode position
+# reaches the jump point and refuses new loop points once it is past the point
+# of no return, all on the stream's own clock, while the game's beat runs on
+# DC3_FAST_TIME's.  Two clocks that drift apart race: the game can pass a jump
+# point before the stream jumps, or the stream can loop a section the game has
+# left.  Measured 2026-09-30 (native-audioseek), once native mid-song seeks and
+# device-less playback worked: under DC3_FAST_TIME, 1 of 10 Strike a Pose
+# rounds still stalled ~110 beats, 2 of 7 party runs stalled on the final
+# party_mode_standings_screen (one after a showdown whose beat ran to 804), 1
+# of 2 battle runs ran to beat 493 with no fatality, and a practice run with a
+# real-time audio device (MILO_AUDIO_BACKEND=null) looped one section ~90 times
+# while the game's beat passed the song's end.  On the audio clock: practice
+# 8/8 moves to practice_endgame_screen, party 2/2 to main_screen with Strike a
+# Pose scoring throughout, battle with its fatality.  perform has
+# no audio jump (its set_jump is the move remixer's) and keeps DC3_FAST_TIME.
 ROUTE_PRESETS = {
     "perform": dict(mode_downs=0),
-    "battle": dict(mode_downs=2, multiuser="duo",
+    "battle": dict(mode_downs=2, multiuser="duo", real_time=True,
                    post_screens="dancebattle_perform_endgame_screen,"
                                 "dancebattle_perform_complete_screen"),
     # practice_welcome_screen needs its confirm too: without it the route
     # stalls there (measured on native-suspects' baseline binary).
-    "practice": dict(mode_downs=1, multiuser="none",
+    "practice": dict(mode_downs=1, multiuser="none", real_time=True,
                      confirm_screens="seldiff_practice_screen,startgame_practice_screen,"
                                      "practice_welcome_screen",
                      post_screens="practice_endgame_screen"),
     # choose_mode's 5th item is crew_showdown (Crew Throwdown)
-    "party": dict(mode_downs=4, multiuser="none", confirm_screens="", post_screens=""),
+    "party": dict(mode_downs=4, multiuser="none", confirm_screens="", post_screens="",
+                  real_time=True),
 }
 
 
@@ -885,6 +906,9 @@ def main():
                          "'0:{toggle_autoplay 0}{toggle_autoplay 1}').  Breaks the "
                          "no-eval rule on purpose: any message it raises is the "
                          "caller's, not the game's")
+    ap.add_argument("--real-time", action="store_true",
+                    help="song time on the audio clock (no DC3_FAST_TIME); the battle, "
+                         "practice and party routes always run so, see ROUTE_PRESETS")
     ap.add_argument("--gameplay-timeout", type=int, default=3600,
                     help="hard cap on the gameplay stage, seconds")
     ap.add_argument("--stall-timeout", type=int, default=180,
