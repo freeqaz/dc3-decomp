@@ -26,6 +26,51 @@ bool Hmx::Object::sRingsDirty = false;
 bool gInReplaceList = false;
 bool gInRefSnapshot = false;
 
+namespace {
+    struct PendingVecCompact {
+        void *vec;
+        DeferredVecCompactFn compact;
+    };
+    std::vector<PendingVecCompact> &PendingVecCompacts() {
+        static std::vector<PendingVecCompact> v;
+        return v;
+    }
+    int sRefSnapshotDepth = 0;
+
+    // Run once the outermost snapshot walk has returned and no live
+    // ReplaceList walk is on the stack: only then can a vector erase shift
+    // nodes without anything still pointing at them.
+    void FlushPendingVecCompacts() {
+        std::vector<PendingVecCompact> &pending = PendingVecCompacts();
+        while (!pending.empty()) {
+            PendingVecCompact entry = pending.back();
+            pending.pop_back();
+            entry.compact(entry.vec);
+        }
+    }
+}
+
+void DeferVecCompact(void *vec, DeferredVecCompactFn compact) {
+    std::vector<PendingVecCompact> &pending = PendingVecCompacts();
+    for (const PendingVecCompact &entry : pending) {
+        if (entry.vec == vec)
+            return;
+    }
+    pending.push_back({ vec, compact });
+}
+
+size_t PendingVecCompactCount() { return PendingVecCompacts().size(); }
+
+void ForgetVecCompact(void *vec) {
+    std::vector<PendingVecCompact> &pending = PendingVecCompacts();
+    for (size_t i = 0; i < pending.size(); i++) {
+        if (pending[i].vec == vec) {
+            pending.erase(pending.begin() + i);
+            return;
+        }
+    }
+}
+
 // Check if an ObjRef's alive sentinel is still set. Reads potentially freed
 // memory during cascading destruction — suppress ASAN for this specific check.
 // Under glibc, freed memory is typically zeroed → sentinel reads as 0 → dead.
@@ -565,6 +610,7 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
         bool wasInSnapshot = gInRefSnapshot;
         gInReplaceList = true;
         gInRefSnapshot = true;
+        sRefSnapshotDepth++;
         std::vector<ObjRef *> snapshot;
         SnapshotRing(&mRefs, snapshot);
         mRefs.Clear();
@@ -577,8 +623,11 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
             ref->prev = ref;
             ref->Replace(obj);
         }
+        sRefSnapshotDepth--;
         gInReplaceList = wasInReplace;
         gInRefSnapshot = wasInSnapshot;
+        if (sRefSnapshotDepth == 0 && !gInReplaceList)
+            FlushPendingVecCompacts();
 #else
         ObjRef other(mRefs);
         other.prev->next = &other;
