@@ -338,6 +338,22 @@ DxMat *DxMesh::DrawFur(DxMat *mat) {
     if (numBones == 0)
         numBones = 1;
     MILO_ASSERT(mTransformCache.size() == numBones, 0x22A);
+    // `numBones * 3` is a SOURCE statement, above the zero-trip guard, and the
+    // `kVS_WorldTransform +` stays inside the loop.  That split is measured, not
+    // cosmetic -- the guard is the discriminator:
+    //     target   mulli r11, r31, 3  /  cmpwi r31, 0  /  ble  /
+    //              li r30, 0  /  addi r29, r11, 0x5c
+    //     (98.46)  cmpwi  /  ble  /  mulli r11, r31, 3  /
+    //              li r29, 0  /  addi r30, r11, 0x5c
+    // With the whole index written in the loop MSVC sinks the multiply into the
+    // preheader (below the guard) and creates the two induction variables the
+    // other way round, which is where the r29<->r30 swap and the 0x40/0x3 step
+    // exchange came from -- one cause, six rows.  Two measured near-misses:
+    // hoisting `kVS_WorldTransform + numBones * 3` whole gives 99.0038 (the
+    // `+0x5c` then rises above the guard too, 3 rows), and writing
+    // `numBones * 3 + i * 3` inline is EXACTLY inert at 98.4598 -- MSVC folds it
+    // straight back into `(numBones + i) * 3`.
+    int furBoneOffset = numBones * 3;
     for (int i = 0; i < numBones; i++) {
         // The shader manager is named INSIDE the loop: MSVC then hoists the
         // global load into the loop preheader (after the zero-trip guard, where
@@ -346,7 +362,7 @@ DxMat *DxMesh::DrawFur(DxMat *mat) {
         // loop instead sinks the load ABOVE the guard and scores worse (96.9).
         RndShaderMgr &shaderMgr = TheShaderMgr;
         shaderMgr.SetVConstant4x3(
-            (VShaderConstant)(kVS_WorldTransform + (numBones + i) * 3),
+            (VShaderConstant)(kVS_WorldTransform + furBoneOffset + i * 3),
             Hmx::Matrix4(mTransformCache[i])
         );
     }
