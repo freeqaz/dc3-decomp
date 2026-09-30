@@ -2352,7 +2352,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             mDancerViz->SetUsePhysicalCam(true);
             // Grid visualization of multiple skeletons from unkf88
             int setSize = asyncCount;
-            if (setSize > 0) {
+            { // no `setSize > 0`: the image has no such test, and `asyncCount != 0` above implies it
                 float gridF = std::ceil(std::sqrt((float)setSize));
                 int gridSize = (int)gridF;
                 float invGrid = 1.0f / (float)gridSize;
