@@ -89,9 +89,13 @@ TEST_F(RndCamProjectionTest, PerspectiveWorldToScreenMatchesExpectedFrustumEdges
     EXPECT_NEAR(screen.x, 1.0f, 2.0e-3f);
     EXPECT_NEAR(screen.y, 0.5f, 2.0e-3f);
 
+    // Top edge of the frustum is screen y = 0: screen y grows DOWN. The image
+    // projects through mWorldProjectXfm, whose m.z.y is -1/tan(fov/2)
+    // (Cam.s UpdateLocal 82628694/98). This used to expect 1.0 -- the
+    // mirrored value the old native-only body produced.
     cam->WorldToScreen(Vector3(0.0f, depth, depth * tanHalf), screen);
     EXPECT_NEAR(screen.x, 0.5f, 2.0e-3f);
-    EXPECT_NEAR(screen.y, 1.0f, 2.0e-3f);
+    EXPECT_NEAR(screen.y, 0.0f, 2.0e-3f);
 }
 
 TEST_F(RndCamProjectionTest, TranslatedCameraKeepsForwardPointCentered) {
@@ -159,7 +163,10 @@ TEST_F(RndCamProjectionTest, ChooseModeDebugUiCamHackPushesApproximateLayoutOffs
     Vector2 screen;
     float depth = cam->WorldToScreen(Vector3(-107.6f, -8.0f, -62.5f), screen);
     EXPECT_GT(depth, 0.0f);
-    EXPECT_LT(screen.y, 0.0f);
+    // The label sits far BELOW the raised camera, so it is pushed off the
+    // bottom (screen y grows down, as in the image). Used to expect y < 0,
+    // the mirrored value of the old native-only WorldToScreen.
+    EXPECT_GT(screen.y, 1.0f);
 }
 
 TEST_F(RndCamProjectionTest, OrthographicProjectionMatchesExpectedMatrix) {

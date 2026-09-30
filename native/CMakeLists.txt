@@ -1981,6 +1981,7 @@ if(BUILD_TESTS)
         tests/test_camera_yuv_decode.cpp
         tests/test_native_shadow.cpp
         tests/test_native_shadow_stream.cpp
+        tests/test_native_shadow_cam.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
