@@ -850,6 +850,14 @@ void Frustum::Set(float near, float far, float fovY, float ratio) {
     }
 }
 
+// REFUTED (w8-o 2026-09-30): the image's tail materialises 0/1 into r11 and
+// truncates -- 0x82535D90 `li r11, 0x0` / `beq` / `li r11, 0x1` /
+// 0x82535D9C `clrlwi r3, r11, 24` -- where the two literals below compile to
+// `li r3, 0 / beqlr / li r3, 1`, one instruction fewer.  It is NOT reached by
+// returning the variable.  `return r;` in place of `return true;` makes MSVC
+// cross-jump every intermediate `if (r == 0)` exit into `bnelr` and costs
+// 4.3pp (98.280 -> 93.968, 364 B); dropping the innermost early-out as well
+// costs more (356 B, 17 rows).  Leave the literals.
 bool operator>(const Sphere &s, const Frustum &f) {
     float neg_r = -s.radius;
     bool r;
