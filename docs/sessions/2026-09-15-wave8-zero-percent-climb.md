@@ -462,3 +462,125 @@ there.
 ⚠ **Another session is live in main** and landed the `HamCamShot` rewind fix at
 01:39. `hamobj/` is therefore contested: `w8-n` is told not to touch
 `hamobj/HamCamShot.cpp`, and every lane will need a rebase at landing.
+
+### Phase 3 — results for the first five lanes (`w8-r` still out)
+
+| measure | phase-3 dispatch `0e1dcb139` | after five lanes |
+|---|---:|---:|
+| Matched functions | 31,353 | **31,366** |
+| Authorable canonical | 97.19 % | — |
+
+| lane | merge | matched | substance |
+|---|---|---:|---|
+| `w8-m` | `9c68c6a78` | 0 | `.rdata` section fix; five 0 % rows *proven* unscoreable |
+| `w8-p` | `3aa82522b` | +3 | the map's COMDAT column; Mesh rebind measured an exact wash |
+| `w8-q` | `16af76f8b` | +5 | inverted `DrawLenses` guard; refuted `w8-p`'s mechanism |
+| `w8-n` | `f47a8c5f4` | +2 | read past a stack struct's end; inverted blink predicate |
+| `w8-o` | `540476ecb` | +3 | phantom `AddHeap` parameter; SHA1 floor with a number |
+
+Every landing was row-diffed against a **baseline worktree pinned to that lane's
+own base**, not against main — another session was merging into main every few
+minutes, and a `ninja` there can have its working tree change mid-build and emit
+a report describing no commit at all. Main's own report was stale against main's
+own HEAD twice inside one hour.
+
+**Native gate green** at `d41a0fe1f`: 509 registered, 440 executed, **440
+passed, 0 failed**, 69 skipped against budget 69, skip-suite block identical to
+the `980e4d5e4` and `a153a143b` runs. Registered grew 507 → 509, so coverage
+rose rather than shrank. Log: `~/tmp/dc3-wells/w8/native-gate-phase3.log`.
+
+### Six behavioural bugs, each adjudicated against the listing
+
+One of them was found **independently by two lanes and a third session**, which
+is the strongest corroboration this process produces.
+
+- **`Plane::Set` built a negated normal** — the image computes
+  `Cross(diff21, diff31)`. At `0x82535AA4` `fmsubs f0,f8,f10,f6` stores
+  `d21.y*d31.z − d21.z*d31.y` to `0x50(r1)` as cross.x. Behaviourally visible,
+  not cosmetic: the consumer at `HamSkeletonConverter.cpp:410` negates a/b/c
+  **again**, and the four-float `Set` overwrites the plane only on the
+  `usePelvis` branch — so on `angle >= 0.2` the hip Z axis fed to IK was the
+  image's value negated. `Triangle::Set` winds the same way, so a Plane and a
+  Triangle from the same three points disagreed.
+- **`SpotlightDrawer::DrawLenses` had guard and assert inverted** — the image
+  fails iff `mLensMaterial != 0 && sDiskMesh == 0` (`0x82823EF8`, `0x82823F04`);
+  we asserted the wrong condition *and* called `sDiskMesh->SetMat(NULL)` for
+  every lens-less spotlight. The assert text is stale: `??_C@_0P@ICJAFDBB@` is
+  15 bytes reading `"sl->LensMesh()"` and that object's literal list holds no
+  `sDiskMesh` string. **RB3 carries our old inverted shape, so it is not a
+  reference here.**
+- **`MoveDir::PostUpdate` read past the end of a stack struct** — it cast the
+  member *lvalue*, passing `&data->mSkeletonsRight`; the image loads the
+  pointer's value (`0x8250532C lwz r31, 0x4(r30)`, `0x82505334 mr r4, r31`).
+- **`HamCharacter::SyncObjects` inverted the blink predicate** — the image
+  computes `!left.Null() || right.Null()`; at `0x8249189C` the `bne` jumps
+  straight to `li r11, 0x1`, a short-circuited `||` an `&&` cannot emit.
+- **`AddHeap` had a parameter the image does not have**, retracting a prior
+  claim that the image passed an *undefined* 8th argument so `allowTemp` was
+  garbage in the shipped game. Nothing was undefined.
+- **`MoveAsyncDetector` instantiated `MakeString<char*>`** where the image calls
+  `MakeString<const char*>` — visible only under `name_check`.
+
+### The COMDAT arc: a lever, a refutation, and a number I got wrong
+
+`w8-p` found that `ham_xbox_r.map` carries a COMDAT flag (`f i` vs bare `f`)
+nobody had read, and closed three rows certified as floors by adding `inline`.
+`w8-q` then measured the stated mechanism and **refuted it**: MSVC/Xenon puts
+every function we compile into its own COMDAT, so no `.cpp`-vs-header spelling
+moves a symbol between map classes. The carrier is the COMDAT **selection type**
+at aux-record offset 14, and we emit `NODUPLICATES` for both of `w8-p`'s own
+control symbols — reproducing neither class. It also showed the lever did not
+move the two floors it was reached for: `BuildBeam` stayed byte-identical at
+85.3415, and `ApplyLightingApprox` is out of reach because all its callees are
+cross-TU. The page now carries the lever **and** the refutation, with usage
+starting at "prove the callee is same-TU".
+
+⚠ **I then misreported the surface twice.** Whole-binary it is **1,898**
+selection mismatches (536 ours-`NODUPLICATES`/image-`ANY`, 1,362 reverse) over
+78,352 compared — not the "7 in 1,396" I broadcast to three lanes, which was a
+legitimate four-unit figure I generalised after reading the whole-binary run
+through a `tail -40`. The tool printed correct summary counters; my `tail` kept
+the rows and discarded them. A correct instrument plus a truncated read produces
+the same wrong belief as a truncated instrument.
+
+### The two rulers, quantified
+
+`matched_functions` counts `match_percent_normalized == 100`; `matched_code`
+sums size at **`fuzzy_match_percent == 100`**. Whole-binary, **257 functions /
+184,832 bytes read normalized 100.0 and bank zero bytes** — largest
+`RndMat::SyncProperty`, 7,920 B at fuzzy 99.9924. That is why `w8-p`'s +3
+functions is only +360 B. Also: `run_objdiff`'s parenthesised "(99.5 % raw)" is
+`raw_match_percent`, a **third** axis — not fuzzy.
+
+### Coordinator defects in this tranche, and the guard that now blocks them
+
+Four, all mine, each now refused by `~/tmp/dc3-wells/w8/land_preflight.sh`
+rather than left to memory. A check that tested for the **absence** of a
+`rebase-merge` directory reported "rebase COMPLETE" on a rebase that never
+started, and the resulting diff showed 8 phantom DOWN rows. The baseline was
+pinned **after** the step that can fail, so a hand-resolved rebase left it a
+merge behind and credited 4 of 9 UP rows to the wrong lane. I rebased **two live
+lanes** — one by acting on a report the notification had flagged as interim, one
+by using a live lane as a self-test fixture (the script now needs `DRY_RUN=1`).
+And I ran `ninja` inside a working lane's tree while probing a tool.
+
+### Carried findings from phase 3
+
+- **`HamDirector::CollideList`** — 76 B at 84.16 %, and all six rows are
+  downstream of one fact: the base order of `class RndDir` in
+  `src/system/rndobj/Dir.h`. Whoever changes that header gets the row free.
+- **`SpotlightDrawer::DrawMeshVec`** calls the **wrong virtual** — the image
+  dispatches a one-argument virtual at slot 1 of the unadjusted vptr
+  (`li r4,0` / `lwz r11,0x0(r30)` / `lwz r11,0x4(r11)`), and
+  `RndDrawable::Highlight` is `void(void)`. Spelling it `Highlight()` measures
+  10.5 pp worse, so the `reinterpret_cast` is faithful.
+- **`HamDirector::OnSetDircut`** is one instruction from 100 % on 356 B: image
+  `li r5, 0x0`, ours `mr r5, r28` reusing a CSE'd zero.
+- **`?Mod@@YAMMM@Z`** is `f i` in the map and out-of-line in
+  `char/CharLipSyncDriver.cpp:18`; many callers.
+- ⚠ **`Plane::Set` has no test coverage.** No test in the suite names
+  `HamSkeletonConverter`, `Plane`, `BSP`, `Frustum` or `Geo`, so the green gate
+  is general-regression evidence only for a change that alters IK behaviour. I
+  checked for native-side compensation and found none (no `HX_NATIVE` guard in
+  that file), so the composition is faithful — but a targeted test for the hip Z
+  axis is genuinely missing and would be the highest-value test to add.
