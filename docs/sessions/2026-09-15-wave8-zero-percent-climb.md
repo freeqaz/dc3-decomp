@@ -689,10 +689,27 @@ second's narrower ones do not — which happens once the ankle effector reaches 
 gameplay pose — the "one-shot" fires every frame. Measured: **4,594 copies** in
 one run, whose log was **508 KB against ~97 KB** for its sibling tests.
 
-It is runtime-gated by `getenv("DC3_IK_DIAG")`, so it is not live in an ordinary
-build; the fix is to give the dump block its own counter rather than to share one
-that a different block owns. Unbounded stderr inside a frame loop is a plausible
-contributor to a test with a 120 s wall-clock cap.
+⚠ **CORRECTED, and my correction was the reassuring half — which is the half to
+verify hardest.** I wrote that this was runtime-gated by `getenv("DC3_IK_DIAG")`
+and therefore "not live in an ordinary build". **False.** I saw
+`getenv("DC3_IK_DIAG")` at two nearby lines and assumed it enclosed the block at
+663 without checking the scope; the block actually sits inside
+`if (sFCCount < 40 && fcMain && fcLA && t == kEffectorTypeAnkle …)`, which tests
+no flag at all. All three trace blocks ran in **ordinary native builds**.
+
+The session that owns the file measured it from that day's harvest logs, all run
+**without** `DC3_IK_DIAG`: **7,201** `TypePropsDump` lines in a perform run and
+**8,561** in each of two dance-battle runs. So unbounded stderr was firing every
+gameplay frame of every native run, not in a diagnostic configuration.
+
+**Fixed by that session**, not by this wave: `8e155163c`, merged as `310c45d29` —
+`TypePropsDump` gets its own counter and all three IK trace blocks now actually
+require `DC3_IK_DIAG`. Its own earlier commit `c28f56f1a` had moved the
+frame-3000 threshold that used to quiet it, which is why it became loud today.
+
+The lesson for me is narrower than the bug: **checking that a flag exists nearby
+is not checking that it guards the block in question.** A `grep` for the flag
+name returns hits from every sibling block, and those hits read as reassurance.
 
 ⚠ **Related measurement hazard, worth more than the defect.** That gate failure
 (`DtaFlowTest.NoCrashCleanExit`, exit 8, `exitCode 124`) was **environmental, not
