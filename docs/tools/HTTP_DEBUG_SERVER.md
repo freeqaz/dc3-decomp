@@ -248,6 +248,15 @@ Object details include type-specific fields:
 
 ### Input Injection (Phase 4)
 
+Presses are pad-0 `ButtonDownMsg`s (the matching `ButtonUpMsg` follows one frame
+later), broadcast by `HttpServer::DispatchInjectedButtons` from
+`ProcessCommands`. They do not enter `JoypadData::mButtons`, so code that samples
+held buttons instead of listening for messages does not see them. Until
+2026-09-30 (`native-partyplay`) both endpoints answered `{"ok":true}` and did
+nothing: the only drain was the engine's `JoypadPoll`, which
+`libmilo-engine.a` compiles without `DC3_HTTP_SERVER`. Guarded by
+`HttpInputTest.PressReachesTheUIAsAPad0Button` (`native/tests/test_native_partyplay.cpp`).
+
 ```bash
 # Press a button this frame
 curl -X POST localhost:9090/api/input/press -d '{"button":"confirm"}'

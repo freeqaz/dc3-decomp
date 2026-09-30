@@ -70,8 +70,14 @@ public:
     // Phase 4: Notify current screen + frame from main loop (called each frame)
     void NotifyFrame(const char* screenName, int frame);
 
-    // Phase 4: Get HTTP-injected button bits (called by JoypadPoll on main thread)
+    // Phase 4: Get HTTP-injected button bits.  Drained once per frame by
+    // DispatchInjectedButtons() (below), NOT by JoypadPoll: the engine's
+    // JoypadPoll is compiled without DC3_HTTP_SERVER.
     unsigned int ConsumeHttpButtons();
+
+    // Called from main thread each frame (from ProcessCommands): broadcast the
+    // drained bits as pad-0 ButtonDownMsg / ButtonUpMsg, like a real press.
+    void DispatchInjectedButtons();
 
 private:
     void ServerThread();
@@ -114,6 +120,7 @@ private:
     std::mutex mInputMutex;
     unsigned int mImmediateButtons = 0;     // buttons to inject this frame
     std::vector<InputEvent> mInputQueue;    // sequence events counting down
+    unsigned int mInjectedHeld = 0;         // pressed last frame; released this frame
 
     // Phase 4: Screen/frame state for long-poll waits
     std::mutex mWaitMutex;

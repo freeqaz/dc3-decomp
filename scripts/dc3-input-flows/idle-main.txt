@@ -1,0 +1,10 @@
+# Boot to main_screen, then press NOTHING from the script.
+#
+# Used by HttpInputTest: the only input after main_screen is whatever a test
+# POSTs to /api/input/press, so main_screen -> choose_mode_screen proves the
+# HTTP press reached the UI as a pad-0 button.
+#
+# title_screen must be CONFIRMED (not skipped by DC3_FAST_BOOT), as in ymca.txt.
+wait_screen title_screen
++30 confirm
+wait_screen main_screen
