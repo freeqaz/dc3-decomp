@@ -7,13 +7,13 @@ wait_screen attract_screen
 +10 confirm
 
 wait_screen title_screen
-+10 confirm
++30 confirm
 
 wait_screen main_screen
-+10 confirm
++30 confirm
 
 wait_screen choose_mode_screen
-+10 confirm
++30 confirm
 
 # Song select — scroll down to Better Off Alone (near top of list)
 wait_screen song_select_screen

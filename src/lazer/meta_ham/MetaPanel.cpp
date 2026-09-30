@@ -373,14 +373,8 @@ bool MetaPanel::Exiting() const {
     if (mState != 2) {
         return UIPanel::Exiting();
     }
-    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut() ||
-#ifndef HX_NATIVE
-        // On native, audio fadeout timing is unreliable — IsActive() stays
-        // true indefinitely and blocks screen transitions. Skip this check
-        // (same pattern as HamPanel::Exiting() returning false on native).
-        TheMetaMusic->IsActive() ||
-#endif
-        UIPanel::Exiting();
+    bool ret = mSongPreview.IsWaitingToDelete() || mSongPreview.IsFadingOut()
+        || TheMetaMusic->IsActive() || UIPanel::Exiting();
     if (!ret) {
         TheTaskMgr.SetAutoSecondsBeats(true);
     }

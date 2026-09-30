@@ -28,26 +28,12 @@ void HamPanel::Enter() {
 }
 
 bool HamPanel::Exiting() const {
-#ifdef HX_NATIVE
-    // On native, the gesture/ribbon animation system was believed not to settle
-    // (no Kinect input), so the IsAnimating() check was dropped here to avoid
-    // blocking transitions.  NOTE: this comment used to justify itself with a
-    // native-only HamNavList::OnMsg(UITransitionCompleteMsg) that called
-    // StopAnimation(); that handler does not exist in the image and was
-    // removed 2026-09-30 because it killed every nav list's enter animation on
-    // its first frame (ribbon enter.anim stuck at frame 0 -> label alpha 0 ->
-    // list items drawn fully transparent).  Measured then: main_ribbon's
-    // enter animation (0..20) settles on its own in ~20 frames, so whether
-    // this short-circuit is still needed is an open question, not a fact.
-    return false;
-#else
     if (UIPanel::Exiting()) {
         return true;
     } else if (ShouldUseLocalNavlist() && mNavList && mNavList->IsAnimating()) {
         return true;
     }
     return false;
-#endif
 }
 
 void HamPanel::Poll() { UIPanel::Poll(); }

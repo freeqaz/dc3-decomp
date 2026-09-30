@@ -15,15 +15,15 @@ wait_screen attract_screen
 
 # Title screen — confirm to start
 wait_screen title_screen
-+10 confirm
++30 confirm
 
 # Main screen — select "gameplay" (first item)
 wait_screen main_screen
-+10 confirm
++30 confirm
 
 # Choose mode — select "perform" (first item)
 wait_screen choose_mode_screen
-+10 confirm
++30 confirm
 
 # Song select — scroll down a few times then confirm
 wait_screen song_select_screen

@@ -699,6 +699,15 @@ void UIManager::Poll() {
 
             for (int i = 0; fast && sBoot[i].from; i++) {
                 int delay = (sBoot[i].delay > 10) ? 10 : sBoot[i].delay;
+                // title_screen is the one boot screen a script CONFIRMS: its
+                // NAV_SELECT_MSG sets $post_load_dest_screen and the initial
+                // profiles.  Its right_hand.hnl ignores buttons while the list's
+                // enter animation runs (~20 UI frames; the image's
+                // HamNavList::OnMsg(ButtonDownMsg) checks IsAnimating()), so a
+                // 10-frame skip would close the only window in which a confirm
+                // can land.  Keep title's full delay.
+                if (!strcmp(sBoot[i].from, "title_screen"))
+                    delay = sBoot[i].delay;
                 if (!strcmp(curName, sBoot[i].from) && sStuckFrames == delay) {
                     UIScreen *next = ObjectDir::Main()->Find<UIScreen>(sBoot[i].to, false);
                     if (next) {
@@ -802,28 +811,7 @@ void UIManager::Poll() {
         }
     }
     if (mTransitionState == kTransitionFrom) {
-#ifdef HX_NATIVE
-        // Wait for enter animations with timeout
-        static int sEnterWaitFrames = 0;
-        bool screenEntered = !mCurrentScreen || !mCurrentScreen->Entering();
-        if (!screenEntered) {
-            if (++sEnterWaitFrames > 90) { // ~3s safety net for stuck enter animations
-                printf("DC3 UI WARNING: Enter animation timeout for '%s' — force-completing\n",
-                       mCurrentScreen ? mCurrentScreen->Name() : "<null>");
-                screenEntered = true;
-                sEnterWaitFrames = 0;
-            }
-        } else {
-            sEnterWaitFrames = 0;
-        }
-#endif
-        if (
-#ifdef HX_NATIVE
-            screenEntered
-#else
-            !mCurrentScreen || !mCurrentScreen->Entering()
-#endif
-            ) {
+        if (!mCurrentScreen || !mCurrentScreen->Entering()) {
             if (mOverlay && mOverlay->Showing() && mLoadTimer.Running()
                 && mCurrentScreen) {
                 mLoadTimer.Stop();
