@@ -431,53 +431,69 @@ void MoggClip::SetPan(int i1, float f2) {
     }
 }
 
-// The target loads TWO DISTINCT SINGLE-precision constants here -- __real@bf000000
-// (-0.5f) ahead of the `li r4, 0` SetPan and __real@3f000000 (+0.5f) ahead of the
-// `li r4, 1` one -- so the channel/sign pairing below is the right way round and
-// the arithmetic is float, not double.
+// SOLVED 2026-09-30 (w9-c), 78.387% -> 100.0%.  The lever is the two pairs of
+// PARENTHESES below, and nothing else: `(panWidth * -0.5f) + pan` instead of
+// `-panWidth / 2.0f + pan`.
 //
-// This does NOT reach 100%: MSVC /fp:fast canonicalises `x * -0.5f` into
-// `-(x * 0.5f)` and then CSEs the multiply into f30 across the intervening SetPan
-// call, collapsing the target's two independent fmadds into one fmuls + fsubs +
-// fadds. rb3-xenon adjudicated the identical function and refuted four source
-// spellings (`-f2/2.0f`, `f2/-2.0f`, explicit `f2 * -0.5f`, and both channels as
-// explicit multiplies at once) -- all byte-identical. Codegen wall; do not re-dig.
+// The target computes the two pans as two INDEPENDENT fused multiply-adds, each
+// loading its own signed half:
+//     lfs    f0, __real@bf000000   ; -0.5f
+//     fmadds f1, f2,  f0, f1       ; panWidth * -0.5 + pan
+//     bl     SetPan                ; channel 0
+//     lfs    f0, __real@3f000000   ; +0.5f   (rematerialised after the call)
+//     fmadds f1, f30, f0, f31      ; panWidth * +0.5 + pan
+// Unparenthesised, Xenon MSVC's /fp:fast pass hoists the negative literal's sign
+// out of the product (`x * -0.5f + y` -> `y - x * 0.5f`), which makes BOTH arms
+// share the single product `panWidth * 0.5f`.  It then CSEs that product into f30
+// across the intervening SetPan call and reaches the two call sites with
+// `fmuls f30, f2, f0` / `fsubs f1, f1, f30` / `fadds f1, f30, f31` -- same values,
+// one multiply fewer, and it cost 7 of 33 rows.  Explicit parentheses are a
+// grouping barrier for that pass: the sign stays inside the product, the two
+// constants stay distinct (bf000000 and 3f000000, both of which the target's
+// .rdata holds), there is nothing left to CSE, and panWidth is homed into f30
+// exactly as the image does it.  31 of 31 instructions equal.
 //
-// ⚠ Writing the channel-0 divisor as a `2.0` DOUBLE literal scores HIGHER (92.9%,
-// 3 mismatches vs 78.7%, 7) because objdiff masks the constant as a relocation
-// argument. It is provably not the original source -- it emits an lfd of a double
-// 0.5 plus an frsp that the target does not contain, and the target's .rdata holds
-// no double here. The row contributes 0 matched bytes at either score, so the
-// honest spelling is free.
+// Twelve spellings measured here, one full ninja each.  GROUPING is the only axis
+// that moves the score; constant spelling and operand order are all inert:
+//   78.387% (byte-identical to the old `/ 2.0f` form, i.e. the CSE survives):
+//     -panWidth / 2.0f + pan   |   panWidth / -2.0f + pan
+//     pan + panWidth * -0.5f   |   -0.5f * panWidth + pan
+//     pan + -0.5f * panWidth   |   -(panWidth * 0.5f) + pan
+//     pan - panWidth * 0.5f  /  pan + panWidth * 0.5f
+//     pan - panWidth / 2.0f  /  pan + panWidth / 2.0f
+//     named `const float` halves (folded, then CSEd)
+//     second product hoisted into a post-call local
+//   76.903% (WORSE -- breaks the CSE but pays a runtime `fneg` the image folds
+//     into its literal):  `float negWidth = -panWidth; negWidth * 0.5f + pan`
+//     and `(-panWidth) / 2.0f + pan`
+//   95.484%: `panWidth * -0.5f + pan` / `pan - panWidth * -0.5f` -- the asymmetry
+//     leaves the two constants distinct so the CSE dies and the structure becomes
+//     exact, but both arms come out as `fnmsubs` (the sign-hoisted form) where the
+//     image has `fmadds`.
+//   100.0%: the parenthesised form below, and equivalently each product bound to
+//     its own local (`float leftOffset = panWidth * -0.5f; SetPan(0, leftOffset + pan);`).
+//     A local is a grouping barrier for the same reason; the parens are cheaper.
+// Parenthesising only ONE arm is not enough (78.710% / 78.387%): the surviving
+// unparenthesised arm still offers the shared product.
+//
+// The channel/sign pairing is confirmed by the two distinct SINGLE-precision
+// literals -- __real@bf000000 ahead of the `li r4, 0` SetPan and __real@3f000000
+// ahead of the `li r4, 1` one -- so the arithmetic is float, not double.
+//
+// Retracted by the above: the earlier note that this was a "/fp:fast
+// REASSOCIATION floor ... codegen wall; do not re-dig", and the imported
+// rb3-xenon adjudication of four spellings.  Those four refutations reproduce
+// exactly (all 78.387% here) -- they were just all drawn from the one axis that
+// does not matter.  Also retracted: the claim that a `2.0` DOUBLE literal on
+// channel 0 "scores HIGHER (92.9%)".  It does, and it is still provably not the
+// original source (it emits an lfd of a double 0.5 plus an frsp the target lacks),
+// but the honest spelling now scores 100.0% and the point is moot.
 void MoggClip::SetupPanInfo(float pan, float panWidth, bool stereo) {
     if (stereo) {
-        SetPan(0, -panWidth / 2.0f + pan);
-        SetPan(1, panWidth / 2.0f + pan);
+        SetPan(0, (panWidth * -0.5f) + pan);
+        SetPan(1, (panWidth * 0.5f) + pan);
     } else {
         SetPan(0, pan);
     }
 }
 
-// w8-j 2026-09-15 -- FLOOR at 78.387% for ?SetupPanInfo@MoggClip@@QAAXMM_N@Z
-// (124 B, 26 of 33 instructions equal).  This is a /fp:fast REASSOCIATION
-// floor, not a missing operation -- the arithmetic is already correct.
-// The image computes the two pans as two INDEPENDENT fused multiply-adds, each
-// loading its own signed half:
-//     lfs f0, __real@bf000000   ; -0.5f
-//     fmadds f1, f2, f0, f1     ; panWidth * -0.5 + pan
-//     ...
-//     lfs f0, __real@3f000000   ; +0.5f
-//     fmadds f1, f30, f0, f31   ; panWidth * +0.5 + pan
-// We instead let MSVC factor out the common product: it computes
-// `fmuls f30, f2, f0` once with +0.5f and reaches the two call sites with
-// `fsubs f1, f1, f30` and `fadds f1, f30, f31`.  Same values, one multiply
-// fewer, and it costs 7 rows (the saved `fmr f30, f2` plus both constant
-// loads).
-// REFUTED, one full ninja: spelling each operand as a multiply by its own
-// signed constant --
-//     SetPan(0, panWidth * -0.5f + pan);  SetPan(1, panWidth * 0.5f + pan);
-// is BYTE-IDENTICAL to the `/ 2.0f` form.  MSVC canonicalises `x * -0.5f` and
-// `-x / 2.0f` to the same shared product before it schedules, so the CSE
-// survives every spelling that keeps both halves derivable from one multiply.
-// Reverted to the faithful `/ 2.0f` reading.  See
-// docs/decomp/patterns/xenon-msvc-defaults-fp-fast.  Do not re-derive.
