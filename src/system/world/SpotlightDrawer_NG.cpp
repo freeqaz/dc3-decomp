@@ -75,7 +75,10 @@ void NgSpotlightDrawer::SetAmbientColor(const Hmx::Color &color) {
     TheShaderMgr.SetPConstant(kPS_AmbientColor, Vector4(r, g, b, a));
 }
 
-void NgSpotlightDrawer::ClearPostDraw() { sNeedDraw = false; }
+// COMDAT selection ANY, per ham_xbox_r.map's `f i` at 0x82820808; an ordinary
+// out-of-line definition compiles to NODUPLICATES here.  Only this TU uses it
+// (protected virtual, reached through the vtable), so `inline` is well-formed.
+inline void NgSpotlightDrawer::ClearPostDraw() { sNeedDraw = false; }
 
 void NgSpotlightDrawer::ClearPostProc() {
     sLights.resize(0);
@@ -179,12 +182,13 @@ void NgSpotlightDrawer::RenderSphere(Spotlight *sl) {
     static float sBeamBrighten = 0.1f; // lbl_82F197C8
     static float sSphereScale = 1.0f; // lbl_82F197CC
     MILO_ASSERT(sl->HasBeam(), 0x470);
+    Spotlight::BeamDef &def = sl->mBeam;
     float zero = 0.0f;
-    Vector4 sphereParams(zero, zero, 0.625f, sl->mBeam.mTopRadius * sSphereScale);
+    Vector4 sphereParams(zero, zero, 0.625f, def.mTopRadius * sSphereScale);
     TheShaderMgr.SetPConstant((PShaderConstant)0x5b, sphereParams);
 
     Spotlight *colorOwner = sl->mColorOwner;
-    float intensity = colorOwner->mIntensity * sl->mBeam.mBrighten * sBeamBrighten;
+    float intensity = colorOwner->mIntensity * def.mBrighten * sBeamBrighten;
     float r = intensity * colorOwner->mColor.red;
     float g = colorOwner->mColor.green * intensity;
     float b = colorOwner->mColor.blue * intensity;
@@ -202,8 +206,8 @@ void NgSpotlightDrawer::RenderSphere(Spotlight *sl) {
     Vector4 colorVec(r, g, b, a);
     TheShaderMgr.SetPConstant((PShaderConstant)0x5a, colorVec);
 
-    SetXSectionTexture(sl->mBeam);
-    sl->mBeam.mBeam->DrawShowing();
+    SetXSectionTexture(def);
+    def.mBeam->DrawShowing();
 }
 
 void NgSpotlightDrawer::RenderSheet(Spotlight *sl) {
@@ -536,6 +540,15 @@ void NgSpotlightDrawer::SetupForPostProcess() {
 
 void NgSpotlightDrawer::RenderFogProxy() {
     static float kFogScale = 10.0f;
+    // RESIDUAL 99.4595 canonical (444 B), ONE charged row: the image tests this
+    // null check SIGNED -- `cmpwi cr6, r29, 0x0` at 0x828306AC (function base
+    // 0x82830704 - 0x9a8 + 0x9a8; see SpotlightDrawer_NG.s) -- and we emit
+    // `cmplwi`.  The `lwz r29, 0x88(r3)` that feeds it is identical on both
+    // sides, so it is the same value; only the comparison's signedness differs,
+    // which on MSVC/Xenon means the image's operand is an `int`-typed
+    // expression, not a pointer.  MEASURED NEGATIVE (w8-q): `if (proxy != NULL)`
+    // is byte-inert -- still cmplwi, still 99.4595.  Whatever the image writes
+    // there is not a pointer-to-null comparison.
     RndDrawable *proxy = mParams.mProxy;
     if (proxy) {
         MILO_ASSERT(mFogDensityMap == SR().mDensityMap, 0x400);
@@ -1007,7 +1020,7 @@ namespace stlpmtx_std {
 // Manual specialization for SpotMeshEntry vector to match target codegen
 // The target binary uses manual memcpy loops instead of STL helpers
 template <>
-void vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_fill_insert_aux(
+inline void vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_fill_insert_aux(
     SpotMeshEntry* __pos,
     unsigned int __n,
     const SpotMeshEntry& __x,

@@ -116,7 +116,20 @@ void SpotlightDrawer::Init() {
     // lines -- `sDefault = New(); sDefault->mParams... = 0.0f; sDefault->
     // Select();`, the RB3 spelling -- reads 90.357, WORSE: MSVC then emits the
     // reload but ALSO reloads for the 0.0f store, adding rows.  Reverted.
-    SpotlightDrawer* ptr = Hmx::Object::New<SpotlightDrawer>();
+    //
+    // TWO MORE MEASURED NEGATIVES (w8-q).  The 4-byte shortfall is WHERE MSVC
+    // puts the store to the global, and source order does not decide it:
+    //   `ptr = New(); sDefault = ptr; ptr->...= 0.0f; sDefault->Select();`
+    //       -- the target's statement order exactly -- is BYTE-INERT, 94.3% and
+    //       the same 3 rows.  MSVC sinks the global store past the 0x64 field
+    //       store on its own, so writing it earlier buys nothing.
+    //   `sDefault = New(); ptr = sDefault; ptr->...= 0.0f; sDefault->Select();`
+    //       reads 90.7, WORSE: it adds a `clrrwi r3, r3, 0` for the read-back.
+    // Reading the global for the field store is the only thing that moves the
+    // store, and that is the 90.357 negative above.  Treat this as a floor until
+    // someone finds a construct that pins the global store ahead of the field
+    // store without also forcing a reload for the field store.
+    SpotlightDrawer *ptr = Hmx::Object::New<SpotlightDrawer>();
     ptr->mParams.mLightingInfluence = 0.0f;
     sDefault = ptr;
     ptr->Select();
@@ -137,6 +150,30 @@ void SpotlightDrawer::ListDrawChildren(std::list<RndDrawable *> &draws) {
     draws.push_back(mParams.mProxy);
 }
 
+// RESIDUAL 97.705 canonical (352 B), and the two charged rows say we are calling
+// the WRONG VIRTUAL.  At 0x1D48..0x1D60 the image does
+//   li   r4, 0x0
+//   lwz  r30, 0x4(r31)        ; envMesh
+//   mr   r3, r30              ; this, UNADJUSTED
+//   lwz  r11, 0x0(r30)        ; vptr at object offset 0
+//   lwz  r11, 0x4(r11)        ; SLOT 1
+//   bctrl
+// and the same again at 0x1DB8.  We emit slot 0 and no r4.  Two things follow.
+// (1) The image dispatches on the UNADJUSTED pointer, so the reinterpret_cast
+//     below is faithful and must stay.  MEASURED NEGATIVE (w8-q): spelling it
+//     `envMesh->Highlight()` -- legal, since RndMesh -> RndDrawable ->
+//     virtual RndHighlightable really does expose Highlight() -- drops this row
+//     from 97.705 to 87.227, because MSVC then emits the full virtual-base
+//     adjustment the image has nowhere: `lwz r11,0x4(r30)` (vbptr),
+//     `lwz r11,0x8(r11)` (vbase displacement), `add r11,r11,r30`,
+//     `addi r3,r11,0x4`.  Reverted.
+// (2) `li r4, 0x0` is an ARGUMENT, and RndHighlightable::Highlight() has no
+//     parameter -- ?Highlight@RndDrawable@@UAAXXZ in ham_xbox_r.map is `XZ`,
+//     void(void).  So slot 1 of the unadjusted vptr is a ONE-ARGUMENT virtual
+//     and this call is not Highlight() at all.  Whatever it is, it is reached by
+//     a cast to some class whose slot 0 is occupied and whose slot 1 takes one
+//     pointer/bool; finding it is the next step, not another spelling of
+//     Highlight.
 void SpotlightDrawer::DrawMeshVec(std::vector<SpotMeshEntry> &entries) {
     if (entries.size() != 0) {
         std::vector<SpotMeshEntry>::iterator it = entries.begin();
@@ -217,8 +254,40 @@ void SpotlightDrawer::DrawLenses(
     MILO_ASSERT(spotIter != spotEnd, 0x2b1);
     for (; spotEnd != spotIter; ++spotIter) {
         Spotlight *sl = spotIter->mSpotlight;
-        if (Spotlight::sDiskMesh) {
-            MILO_ASSERT(sl->LensMesh(), 0x2b9);
+        // The guard is the LENS MATERIAL and the assert is on sDiskMesh -- that
+        // is the image's nesting, not the other way round, and it is a
+        // BEHAVIOURAL correction (w8-q, 90.381 -> 100.0).  Decoded at
+        // 0x82823EEC..0x82823F54: `lwz r11,0x1ec(r25)` / `cmpwi cr6,r11,0` /
+        // `beq cr6,.L_82823F54` jumps straight to the loop LATCH, so a spotlight
+        // with no lens material is skipped entirely and never asserts; only then
+        // is `sDiskMesh` loaded (0x82823EFC) and `cmplwi`-tested, with
+        // `bne cr6,.L_82823F38` hopping over the line-0x2B9 Fail block.  So the
+        // image fails iff mLensMaterial != 0 && sDiskMesh == 0.  We had it
+        // inverted (guard on sDiskMesh, assert on LensMesh), which asserted on
+        // the wrong condition AND drew the disk mesh with a null material for
+        // every lens-less spotlight.  Spelling the image's nesting removed all 3
+        // inserts, all 3 deletes and the beq/bne inversion at once; RB3's
+        // SpotlightDrawer.cpp:DrawLenses has our old inverted shape, so it is not
+        // a reference here.
+        //
+        // HAND-EXPANDED ASSERT, and it has to be: the image's line-0x2B9 message
+        // string is "sl->LensMesh()" -- 14 chars, `??_C@_0P@ICJAFDBB@...` at
+        // 0x820e6400, the ONLY assert literal in world:SpotlightDrawer.obj -- and
+        // `_0P@` pins its length at 15 bytes including the NUL, so it cannot be
+        // the 21-byte "Spotlight::sDiskMesh" that MILO_ASSERT's `#cond` would
+        // produce for the condition the image actually tests.  There is no
+        // "Spotlight::sDiskMesh" literal anywhere in ham_xbox_r.map.  Harmonix
+        // moved the guard and left the old assert text behind; MILO_ASSERT
+        // stringifies its own condition and so cannot reproduce that, and
+        // `MILO_ASSERT(Spotlight::sDiskMesh, 0x2b9)` holds this row at 99.84127
+        // on exactly one charged relocation-name row.  The `if` form (rather than
+        // MILO_ASSERT's do/while) is free here: DrawLenses holds no
+        // function-local static, so the scope-ordinal difference between the two
+        // spellings has nothing to number.
+        if (sl->LensMesh()) {
+            if (!Spotlight::sDiskMesh) {
+                TheDebugFailer << MakeString(kAssertStr, __FILE__, 0x2b9, "sl->LensMesh()");
+            }
             Spotlight::sDiskMesh->SetMat(sl->LensMesh());
             Spotlight::sDiskMesh->Draw();
         }
@@ -359,10 +428,6 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
     }
 }
 
-bool SpotlightDrawer::DrawNGSpotlights() {
-    return GetGfxMode() == kNewGfx && TheLoadMgr.GetPlatform() != kPlatformPC;
-}
-
 void SpotlightDrawer::DeSelect() {
     if (sCurrent != this)
         return;
@@ -394,6 +459,17 @@ void SpotlightDrawer::ApplyLightingApprox(BoxMapLighting &boxMap, float f2) cons
         params->mPosition = xfm.v;
         params->mDirection = xfm.m.y;
         params->mColor = c50;
+        // The residual is a REGISTER BUDGET, not an expression (w8-q, measured):
+        // the image spends one more callee-saved GPR and one fewer callee-saved
+        // FPR than we do.  Target prologue: `bl __savegprlr_26` + a single
+        // `stfd f31, -0x40(r1)`, with `lis r26, __real@40000000@ha` hoisted
+        // pre-loop and `lfs f0, __real@40000000@l(r26)` reloaded every iteration.
+        // Ours: `bl __savegprlr_27` + `stfd f30` AND `stfd f31`, with the value
+        // itself parked in f30 for the whole function.  That accounts for all six
+        // prologue/epilogue rows (idx 1,2,3,133,134,135) and the three around the
+        // materialisation (35,37,92) -- nine of the twenty-nine.  Any fix has to
+        // make MSVC prefer the GPR-plus-reload trade, so it is about pressure, not
+        // about how `* 2.0f` is spelled.
         // RESIDUAL (w7-am, 94.2 canonical): MSVC hoists this 2.0f out of the
         // loop into a second callee-saved FPR (f30, plus the extra stfd), where
         // the image keeps only `lis r26, __real@40000000@ha` live and reloads
@@ -489,8 +565,12 @@ void DrawAccessories(
     SpotlightDrawer::SpotlightEntry *const &
 );
 
+// COMDAT selection must be ANY, not NODUPLICATES: ham_xbox_r.map flags
+// ??$DrawAccessories@VLensExtract@@@@YAX... with `f i`, and an explicit
+// specialization without `inline` compiles to a NODUPLICATES COMDAT here
+// (verified by reading the section aux record's Selection byte).
 template <>
-void DrawAccessories<LensExtract>(
+inline void DrawAccessories<LensExtract>(
     SpotlightDrawer::SpotlightEntry *const &spotBegin,
     SpotlightDrawer::SpotlightEntry *const &spotEnd
 ) {
@@ -512,6 +592,14 @@ void DrawAccessories<LensExtract>(
             }
             const Transform &lensXfm = sl->LensXfm();
             bool visible;
+            // MEASURED NEGATIVE (w8-q, 94.277 -> 92.858): flipping this to
+            // `if (disk->Showing()) { sphere path } else { visible = false; }`.
+            // The image tests mShowing and branches AWAY to the sphere path
+            // (`lbz r10,0x8(r28)` / `cmplwi r10,0` / `bne 0x2448` at 0x2430) with
+            // the visible=false arm in the fall-through, which is this spelling's
+            // source order and NOT what MSVC gives us -- it inverts ours to
+            // `beq` into the false arm.  Writing the arms the other way round does
+            // not make MSVC invert a second time; it just loses rows elsewhere.
             if (!disk->Showing()) {
                 visible = false;
             } else {
