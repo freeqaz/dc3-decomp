@@ -13,6 +13,8 @@
 #include "test_helpers.h"
 
 #include "flow/FlowNode.h"
+#include "gesture/DrawUtl.h"
+#include "gesture/SkeletonViz.h"
 #include "flow/FlowQueueable.h"
 #include "obj/Object.h"
 
@@ -105,6 +107,35 @@ TEST(NativeShadowUnit, TextEllipsisTrimSetIsTheImagesLiteral) {
     EXPECT_FALSE(RndTextEllipsisTrimsChar('a'));
     EXPECT_FALSE(RndTextEllipsisTrimsChar(0x3002)); // ideographic full stop: not in L" .,"
     EXPECT_TRUE(RndTextEllipsisTrimsChar(0)) << "wcschr matches the terminator";
+}
+
+// ---------------------------------------------------------------------------
+// ToggleDrawSkeletons (the "s" key cheat, DTA {ui toggle_draw_skeletons}).
+// The image defines it once, in DrawUtl.obj (DrawUtl.s ?ToggleDrawSkeletons:
+// 82434B90 lbz r11,0x8(r3) = mShowing; cntlzw/extrwi = !mShowing; bl
+// SetShowing; 82434BA4 lbz r3,0x8(r11) returns the new mShowing). HamUI.s
+// only CALLS it (82892F18). The DrawUtl body sat in #ifndef HX_NATIVE, so
+// native linked a stray copy in HamUI.cpp that set Showing to the static
+// RndDrawable::sForceSubpartSelection and returned that: it never turned
+// skeleton drawing on. The first toggle from "showing" passes by accident
+// (false either way); the second exposes it.
+// ---------------------------------------------------------------------------
+TEST_F(NativeShadowTest, ToggleDrawSkeletonsFlipsShowing) {
+    SkeletonViz *saved = TheSkeletonViz;
+    SkeletonViz *viz = Hmx::Object::New<SkeletonViz>();
+    TheSkeletonViz = viz;
+    bool savedForce = RndDrawable::GetForceSubpartSelection();
+    RndDrawable::SetForceSubpartSelection(false);
+
+    viz->SetShowing(true);
+    EXPECT_FALSE(ToggleDrawSkeletons());
+    EXPECT_FALSE(viz->Showing());
+    EXPECT_TRUE(ToggleDrawSkeletons()) << "toggle must turn skeleton drawing back ON";
+    EXPECT_TRUE(viz->Showing());
+
+    RndDrawable::SetForceSubpartSelection(savedForce);
+    TheSkeletonViz = saved;
+    delete viz;
 }
 
 } // namespace
