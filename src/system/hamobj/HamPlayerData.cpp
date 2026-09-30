@@ -182,17 +182,14 @@ float HamPlayerData::TrackingAgeSeconds() const {
 }
 
 bool HamPlayerData::IsPlaying() const {
-#ifdef HX_NATIVE
-    // No Kinect skeleton tracking — both players are always "playing"
-    // so both hud_left and hud_right display flashcards/scores.
-    return true;
-#else
+    // Native used to return true here ("no Kinect skeleton tracking"); it has
+    // bound real tracking ids since the native skeleton providers landed, and
+    // the pin made an absent player 2 play every solo song.
     if (!TheLoadMgr.EditMode() && mAutoplay.Null() && TheGestureMgr->GetPauseOnSkeletonLossMode() != 1) {
         return mSkeletonTrackingID > 0;
     } else {
         return true;
     }
-#endif
 }
 
 Symbol HamPlayerData::GetPreferredOutfit() const { return mPreferredOutfit; }

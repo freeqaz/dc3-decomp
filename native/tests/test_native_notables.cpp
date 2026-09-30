@@ -4,6 +4,8 @@
 
 #include "test_helpers.h"
 
+#include "gesture/GestureMgr.h"
+#include "hamobj/HamPlayerData.h"
 #include "math/Geo.h"
 #include "platform/StreamReceiver_Native.h"
 #include "rndobj/Mesh.h"
@@ -95,6 +97,7 @@ long long PlayedAtFinish(int numBuffers, int written, int frameBytes) {
 }
 
 class NativeNotablesStreamTest : public EngineTestFixture {};
+class NativeNotablesTest : public EngineTestFixture {};
 
 } // namespace
 
@@ -129,7 +132,7 @@ TEST_F(NativeNotablesStreamTest, ReceiverFinishesOneBufferPastTheLastBuffer) {
 // shipped files carry their tree on disk (rev > 0x12) and are unaffected;
 // measured on perform + practice routes, SetVolume(kVolumeBSP) was never
 // reached, so this is a latent divergence.
-TEST_F(NativeNotablesStreamTest, BspVolumeMeshGetsATreeThatCollides) {
+TEST_F(NativeNotablesTest, BspVolumeMeshGetsATreeThatCollides) {
     RndMesh *mesh = Hmx::Object::New<RndMesh>();
     static const float kCorners[8][3] = {
         { -1, -1, -1 }, { 1, -1, -1 }, { 1, 1, -1 }, { -1, 1, -1 },
@@ -159,4 +162,31 @@ TEST_F(NativeNotablesStreamTest, BspVolumeMeshGetsATreeThatCollides) {
     beside.end.Set(3, 0, 5);
     EXPECT_FALSE(Intersect(beside, tree, frac, pl)) << "a segment beside the cube must miss it";
     delete mesh;
+}
+
+// ---------------------------------------------------------------------------
+// HamPlayerData::IsPlaying (0x8255xxxx, HamPlayerData.cpp): outside edit mode,
+// a player who is not autoplaying is playing only while a skeleton is bound
+// to them (mSkeletonTrackingID > 0), unless the pause-on-skeleton-loss mode is
+// 1. Native returned true unconditionally -- written in March, when native had
+// no skeleton source at all. It has had one since (the static dummy, the
+// synthetic sensor, the camera provider bind real tracking ids through
+// HamGameData::AssignSkeleton), and the pin made player 2 "playing" in every
+// solo song: measured on a perform route, player 1 bound (id 5), player 2
+// unbound (id -1) -- the image says not playing -- while native drew player
+// 2's score HUD and scored their moves.
+TEST_F(NativeNotablesTest, UnboundPlayerIsNotPlaying) {
+    if (!TheGestureMgr)
+        GestureMgr::Init();
+    ASSERT_NE(TheGestureMgr, nullptr);
+    while (TheGestureMgr->GetPauseOnSkeletonLossMode() == 1)
+        TheGestureMgr->TogglePauseOnSkeletonLoss();
+    HamPlayerData player(1); // constructed unbound: mSkeletonTrackingID -1
+    ASSERT_EQ(player.GetSkeletonTrackingID(), -1);
+    EXPECT_FALSE(player.IsPlaying()) << "no skeleton bound, not autoplaying: the image says not playing";
+    player.AssignSkeleton(7);
+    EXPECT_TRUE(player.IsPlaying()) << "a bound skeleton is playing";
+    HamPlayerData autoplayer(0);
+    autoplayer.SetAutoplay("autoplay");
+    EXPECT_TRUE(autoplayer.IsPlaying()) << "an autoplaying player is playing without a skeleton";
 }
