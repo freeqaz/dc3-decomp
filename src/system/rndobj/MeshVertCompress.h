@@ -232,6 +232,23 @@ static void FillCompressedVertex(
     // Pack color (ARGB D3DCOLOR format)
     u32 green = (u32)(vert.color.green * 255.0f);
     u32 blue = (u32)(vert.color.blue * 255.0f);
+    // ADJUDICATED, NOT A BUG (w9-e 2026-09-30).
+    // arith_semantics_scan.py reports an [operand-source] row here --
+    //     target  rlwimi r28, r29, 8, 0, 23
+    //     ours    rlwimi r29, r28, 8, 0, 23
+    // with r29 = [0x54(r1)] and r28 = [0x64(r1)] loaded by rows that are EQUAL
+    // on both sides, so the two values really are exchanged at that one
+    // instruction.  It is compensated two instructions earlier: the image loads
+    // `lfs f11, 0x3c(r4)` / `lfs f10, 0x30(r4)` (alpha then red) where we load
+    // `lfs f11, 0x30(r4)` / `lfs f10, 0x3c(r4)` (red then alpha).  Composing
+    // both exchanges, BOTH sides store
+    //     alpha<<24 | red<<16 | green<<8 | blue
+    // i.e. D3DCOLOR ARGB, which is also what this vertex element must be.  The
+    // scanner row is a true operand-source difference and a false bug.
+    // REFUTED as a scoring lever: swapping these two declarations (so MSVC's
+    // own reordering of the last two would land on the image's order) is
+    // byte-inert -- 99.9568 / 99.8489 either way, same 8 rows.  4 of those 8
+    // rows are this compensating pair.
     u32 alpha = (u32)(vert.color.alpha * 255.0f);
     u32 red = (u32)(vert.color.red * 255.0f);
     compressed.mColor = ((((alpha << 8) | (red & 0xFF)) << 8) | (green & 0xFF))
