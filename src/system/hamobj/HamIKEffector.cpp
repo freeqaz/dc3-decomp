@@ -628,9 +628,11 @@ void HamIKEffector::Poll() {
                     const char *fp = PathName(this);
                     extern int HamDirector_SelectCameraSetFrameCount();
                     static int sFCCount = 0;
+                    // Diagnostic only: this used to fire in every native run.
+                    static const bool sFCDiag = getenv("DC3_IK_DIAG") != nullptr;
                     bool fcMain = fp && strstr(fp, "main.milo") && !strstr(fp, "backup");
                     bool fcLA = fp && strstr(fp, "bone_L-ankle.ikf");
-                    if (sFCCount < 40 && fcMain && fcLA && t == kEffectorTypeAnkle
+                    if (sFCDiag && sFCCount < 40 && fcMain && fcLA && t == kEffectorTypeAnkle
                         && HamDirector_SelectCameraSetFrameCount() > 800) {
                         sFCCount++;
                         fcTrace = true;
@@ -650,13 +652,22 @@ void HamIKEffector::Poll() {
                     // Capture only main.milo (the actual player character),
                     // not backup.milo. Filter by ankle Z below 1.5 (gameplay pose).
                     static int sTotalWeightLog = 0;
+                    // The TypePropsDump block below used to test sTotalWeightLog
+                    // (< 3) without ever incrementing it -- only the IkSnap block
+                    // does, and only past frame 3000 -- so the "one-shot" fired on
+                    // every gameplay frame of every native run (7,201-8,561 lines
+                    // per run, measured 2026-09-30, with DC3_IK_DIAG unset). It now
+                    // has its own counter, and both blocks need DC3_IK_DIAG.
+                    static int sTypePropsDumpLog = 0;
+                    static const bool sIkDiag = getenv("DC3_IK_DIAG") != nullptr;
                     const char *path = PathName(this);
                     bool isMain = path && strstr(path, "main.milo") != nullptr
                                   && strstr(path, "backup") == nullptr;
-                    if (sTotalWeightLog < 3
+                    if (sIkDiag && sTypePropsDumpLog < 3
                         && t == kEffectorTypeAnkle
                         && isMain
                         && mEffector->WorldXfm().v.z < 1.5f) {
+                        sTypePropsDumpLog++;
                         // One-shot: dump TypeProps state to see if constraints
                         // live there even when mConstraints is empty.
                         fprintf(stderr,
@@ -674,7 +685,7 @@ void HamIKEffector::Poll() {
                         }
                     }
                     extern int HamDirector_SelectCameraSetFrameCount();
-                    if (sTotalWeightLog < 60
+                    if (sIkDiag && sTotalWeightLog < 60
                         && t == kEffectorTypeAnkle
                         && isMain
                         && HamDirector_SelectCameraSetFrameCount() > 3000
