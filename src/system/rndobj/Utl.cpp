@@ -2131,13 +2131,43 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
 // instead of recomputing `addi r11, r29, 0x3` off the live `i` each iteration.
 static const unsigned int kNumBloomTaps = 7;
 
-static float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
+// CONST, and both arrays live in .rdata -- established from the ORIGINAL's own
+// linker map, not inferred: build/373307D9/default.map attributes
+//   lbl_8208B100  .rdata  size 0x3C  <- sBloomWeights
+//   lbl_8208B13C  .rdata  size 0x3C  <- sBloomOffsets
+// to Utl.obj, the same TU, and config/373307D9/symbols.txt records both as
+// `.rdata:...; // type:object size:0x3C`.  They were `static float` here, i.e.
+// emitted to .data, which is a faithfulness defect independent of score.
+// Adding `const` is MEASURED SCORE-NEUTRAL (88.66129 canonical, same 16 rows,
+// w8-m 2026-09-30); it is landed for the section, not the number.
+//
+// RESIDUAL 88.66129, and all 16 rows are ONE root cause (w8-m):
+// the image hoists TWO INDEPENDENT .rdata bases into callee-saved registers --
+//   addi r27, r11, lbl_8208B100@l   (sBloomWeights)
+//   addi r26, r10, lbl_8208B13C@l   (sBloomOffsets)
+// and therefore saves r25-r31.  We hoist only sBloomWeights into r27 and let
+// MSVC derive the second base as `addi r11, r27, 0x3c` INSIDE the loop, in a
+// volatile register, recomputed every iteration -- so we save only r26-r31.
+// Everything else follows from that one decision: the __savegprlr_25 vs _26 and
+// __restgprlr_25 vs _26 pair, the 8-byte frame delta (`subi r12, r1, 0x40` vs
+// `0x38`), and the whole idx 8-25 lis/lfs/li shuffle, which is a REORDERING and
+// not missing code -- both sides load __real@00000000 into f31 and both set the
+// r30=0x9a / r31=0 pair, just at different slots.
+// MEASURED NEGATIVE: hoisting the second array into a named local pointer
+// (`const float *offsets = sBloomOffsets;` and indexing `offsets[i]`) is
+// BYTE-IDENTICAL -- same 65 instructions, same 16 rows, same 88.66129.  MSVC
+// sees through the pointer and still folds the two adjacent .rdata statics into
+// one base plus a displacement.  Defeating that fold needs the two arrays in
+// different sections, which the image does NOT have (both are .rdata, adjacent,
+// 0x3C apart), so the fold is a backend register-pressure choice rather than
+// something the source reaches.  Do not retry the pointer spelling.
+static const float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
                                    0.0612547919f, 0.0815124959f, 0.0999667868f,
                                    0.1129886061f, 0.1176957935f, 0.1129886061f,
                                    0.0999667868f, 0.0815124959f, 0.0612547919f,
                                    0.0424231887f, 0.0270778369f, 0.0159283932f };
 
-static float sBloomOffsets[15] = { -6.5f, -5.5f, -4.5f, -3.5f, -2.5f, -1.5f, -0.5f, 0.5f,
+static const float sBloomOffsets[15] = { -6.5f, -5.5f, -4.5f, -3.5f, -2.5f, -1.5f, -0.5f, 0.5f,
                                    1.5f,  2.5f,  3.5f,  4.5f,  5.5f,  6.5f,  7.5f };
 
 void SetBloomBlurWeights(bool horizontal, float width, float height) {
