@@ -890,7 +890,11 @@ def effects_eval(words, relocs, symtab, E, sigs=None):
         freshly written volatile -- strict, so a scratch difference keeps a row
         a candidate rather than excusing it.
         """
-        regs = arg_regs(sigs.get(callee)) if (callee and sigs) else None
+        regs = None
+        if callee in CRT_FLOAT_ARGS:
+            regs = [("f", k) for k in range(1, CRT_FLOAT_ARGS[callee] + 1)]
+        elif callee and sigs:
+            regs = arg_regs(sigs.get(callee))
         if regs is None:
             return (tuple((r, canon_arg(g[r])) for r in sorted(fresh_g) if r in g)
                     + tuple((100 + r, f[r]) for r in sorted(fresh_f) if r in f))
@@ -955,7 +959,17 @@ def effects_eval(words, relocs, symtab, E, sigs=None):
                     # `std` and reloaded with `lfd` for fcfid is one value
                     # moving between register files, not two
                     sk = stack.get(ea)
-                    if sk is None:
+                    lo = None
+                    if sk is None and kind == "w":
+                        # the low word of a double spilled by `stfd` (fctiwz
+                        # then `lwz 0x54(r1)` after `stfd 0x50(r1)`)
+                        b_, o_ = offs.get(ea, (ea, 0))
+                        hi = stack.get(add(b_, o_ - 4))
+                        if hi is not None and hi[0] in ("fd", "d"):
+                            lo = E("lo32", hi[1])
+                    if lo is not None:
+                        val = lo
+                    elif sk is None:
                         val = E("stk", kind)
                     elif sk[0] == kind:
                         val = sk[1]
@@ -1152,6 +1166,10 @@ def effects_eval(words, relocs, symtab, E, sigs=None):
                 fret = E("fret", epoch, name, *flat)
                 epoch += 1
                 origin.clear()
+                # a callee can write any stack slot whose address escaped (the
+                # Normalize(cross, cross) out-parameter): what a slot holds
+                # after the call is "whatever was there, as modified by call N"
+                stack = {a: (k, E("postcall", epoch, v)) for a, (k, v) in stack.items()}
                 for r in VOLATILE:
                     g[r] = E("clob-g", r)
                 for r in range(0, 14):
@@ -1177,6 +1195,10 @@ def effects_eval(words, relocs, symtab, E, sigs=None):
                 ret = E("iret", epoch, ctr, *flat)
                 epoch += 1
                 origin.clear()
+                # a callee can write any stack slot whose address escaped (the
+                # Normalize(cross, cross) out-parameter): what a slot holds
+                # after the call is "whatever was there, as modified by call N"
+                stack = {a: (k, E("postcall", epoch, v)) for a, (k, v) in stack.items()}
                 for r in VOLATILE:
                     g[r] = E("clob-g", r)
                 for r in range(0, 14):
@@ -1258,6 +1280,13 @@ def arg_regs(demangled):
 
 
 ACCESS_WORDS = ("public: ", "protected: ", "private: ")
+
+# C runtime math the report does not describe (it is not a decomp unit): all
+# double-in-FPR, count of arguments.  Anything absent falls back to strict.
+CRT_FLOAT_ARGS = {n: 1 for n in ("acos", "asin", "atan", "cos", "sin", "tan",
+                                 "sqrt", "exp", "log", "log10", "floor", "ceil",
+                                 "fabs", "cosh", "sinh", "tanh")}
+CRT_FLOAT_ARGS.update({"atan2": 2, "pow": 2, "fmod": 2})
 
 
 class ValueFlow:
