@@ -106,10 +106,14 @@ bucket.
   older than the object; the sabotage control's injected row hid there until the
   report was regenerated. The gate is now off for any unit whose object is newer
   than `report.json`. ⚠ `this_offset_scan.triage` has the same gate and the same
-  exposure after a per-target rebuild.
+  exposure after a per-target rebuild. *(Fixed there 2026-09-30, lane
+  fix-thisoff; see wrong-field-at-100-percent.md, defect 3.)*
 * `this_offset_scan.classify_symbol` reads a free special-name operator
   (`??6@YAAAVBinStream@@…`, operator<<) as a MEMBER of class `YAAAVBinStream`, so
   it treats r3 — the BinStream — as `this`. Worked around here; not fixed there.
+  *(Fixed there 2026-09-30 via `access_specifier_scan.code_index`; the
+  `FREE_SPECIAL_RE` workaround here is now redundant, and this scanner's
+  output was byte-identical under both classifiers.)*
 
 ## Provenance
 
