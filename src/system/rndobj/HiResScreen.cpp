@@ -237,7 +237,14 @@ void HiResScreen::Accumulate() {
         return;
     }
     int prevTile = mCurrTile - 1;
-    if (prevTile >= mTiling * mTiling) {
+    // GetTiling(), not mTiling.  The image homes the accessor's result at
+    // 0x6c(r31) twice back to back and never reads it -- `stw r10, 0x6c(r31)`
+    // at 82627A60/82627A64 for this product, and `stw r5, 0x6c(r31)` at
+    // 82627AFC/82627B00 for the two divisions below.  A member read emits no
+    // home store; one dead home per inlined accessor call is the tell, and the
+    // two `twllei r5, 0x0` div-by-zero traps at 82627B18/1C confirm the two
+    // divisions are separate source expressions rather than one CSEd value.
+    if (prevTile >= GetTiling() * GetTiling()) {
         return;
     }
     RndTex *tex = Hmx::Object::New<RndTex>();
@@ -245,23 +252,46 @@ void HiResScreen::Accumulate() {
     tex->SetBitmap(0, 0, 0, RndTex::kFrontBuffer, false, 0);
     tex->LockBitmap(bm, true);
     delete tex;
-    int tileX = prevTile % mTiling;
-    int tileY = prevTile / mTiling;
-    // Residual 95.94% canonical / 95.64% raw, 11 rows / 8 B.
-    // Four of them are DEAD STORES the image emits and we do not: two
-    // `stw r10, 0x6c(r31)` back to back before the RndTex work, and two
-    // `stw r5, 0x6c(r31)` back to back after it, none ever read.
+    int tileX = prevTile % GetTiling();
+    int tileY = prevTile / GetTiling();
+    // BEHAVIOURAL FIX (w9-f).  We were handing Merge() a HORIZONTAL border
+    // where the image hands it a vertical one, and vice versa -- and the bug
+    // was invisible to the score, because our stack-slot assignment happened to
+    // compensate for it exactly.
     //
-    // The OFFSET_SWAP in rows 64/65 and the volatile r7<->r8 swap in the
-    // Merge() argument set-up were NOT a slot-allocation choice, which is why
-    // reordering this declaration was byte-inert when it was tried: the cause
-    // was GetBorderForTile's own parameter list, whose 2nd and 3rd references
-    // are (top, right) and not (right, top).  See the note on its definition.
-    int left, right, top, bottom;
+    // Read the image's two calls by SLOT.  GetBorderForTile receives
+    // &p3 = 0x6c, &p4 = 0x60, &p5 = 0x68, &p6 = 0x64 (82627B20-82627B2C), and
+    // its body puts the horizontal 480 in p5 or p3 and the vertical 270 in p4
+    // or p6.  Merge is then called (82627B48-82627B88) with
+    //   srcW = lwz 0x6c = p3,  srcH = lwz 0x60 = p4,
+    //   padX = lwz 0x68 = p5 -> stw 0x54(r1),
+    //   padY = lwz 0x64 = p6 -> stw 0x5c(r1)
+    // (0x54 and 0x5c, not 0x54/0x58, because Xenon's parameter save area uses
+    // 8-byte slots and a 32-bit int sits in the high half of one).  So the image
+    // passes p3, p4, p5, p6 straight through in order, which pairs srcW with
+    // padX (both horizontal, left/right) and srcH with padY (both vertical,
+    // top/bottom) -- exactly what Merge's body needs: blendThreshX = dstX - padX
+    // is compared against bmX, which starts at srcW, and blendThreshY =
+    // dstY - padY against bmY, which starts at srcH.
+    //
+    // We passed (left, right, ..., top, bottom), i.e. p3, p5, p4, p6 -- so
+    // srcW got the left border but padX got the TOP one, and srcH got the right
+    // border while padY got the bottom.  Both axes were crossed, so the blend
+    // ramp on a tiled hi-res screenshot was divided by the wrong pad and
+    // started at the wrong row.
+    //
+    // It scored 100% on those instructions anyway: our locals were declared
+    // `left, right, top, bottom`, which put top at 0x68 and right at 0x60 --
+    // the mirror of the image -- so `lwz 0x60` read our `right` where the image
+    // reads its `top`.  Identical bytes, different meaning.  The declaration
+    // order below is now the image's, which is what the two remaining
+    // OFFSET_SWAP rows at idx 63/64 were reporting all along; the earlier note
+    // here read those as "not a slot-allocation choice", which was wrong.
+    int left, top, right, bottom;
     GetBorderForTile(tileX, tileY, left, top, right, bottom);
     int xOff = (TheRnd.Width() - 480) * tileX;
     int yOff = (TheRnd.Height() - 270) * tileY;
-    Merge(bm, xOff, yOff, left, right, bm.Width(), bm.Height(), top, bottom);
+    Merge(bm, xOff, yOff, left, top, bm.Width(), bm.Height(), right, bottom);
     TheRnd.ResetProcCounter();
     mCurrTile++;
 }
