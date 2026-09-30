@@ -213,12 +213,13 @@ def load_symtab(path):
 
 def resolve_global(name, symtab):
     """A global's absolute address, or None.  `lbl_<hex>` parses directly."""
-    if name.startswith("lbl_"):
-        try:
-            return int(name[4:], 16)
-        except ValueError:
-            return None
+    m = LBL_RE.match(name)
+    if m:
+        return int(m.group(1), 16)
     return symtab.get(name)
+
+
+LBL_RE = re.compile(r"^lbl_([0-9A-Fa-f]{1,8})$")
 
 
 # --------------------------------------------------------------------------- #
