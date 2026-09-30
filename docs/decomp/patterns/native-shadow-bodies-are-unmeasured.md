@@ -172,7 +172,7 @@ triaged; many are defensive null checks and DTA-flow shortcuts, and some change 
 | `rndobj/Cam.cpp` `RndCam::WorldToScreen` / `ScreenToWorld` | mirrored screen y; ortho depth/scale wrong; forced `UpdatedWorldXfm()` — flares drawn mirrored, CamShot follow filter off. Two expectations in `test_rndcam_projection.cpp` had encoded the native bug | `test_native_shadow_cam.cpp` (4 tests) |
 | `rndobj/Ribbon.cpp` `ConstructMesh` / `UpdateMesh` / `UpdateChase` | empty on native | `test_native_shadow_bodies.cpp` (3 tests) |
 | `lazer/meta_ham/AppLabel.cpp` `SetTimeElapsedSince` | empty stub on native — "last played" never updated | `test_native_shadow_bodies.cpp` |
-<!-- HAMCHAR-ROW -->
+| `hamobj/HamCharacter.cpp` `HamCharacter::Poll` | early native rewrite dropped the `bone_prop0`/`spot_prop0` prop-attach blend and the `robot_face.mat` viseme texture swap (every frame, every dancer) | `test_native_shadow_hamchar.cpp` (6 tests) |
 
 The calibration case (`ObjPtrVec::erase`) was found by the tool as a split-pair shadow
 (`ObjPtr_p.h` 797 REMOVES + 906 ADDS) and was fixed separately on `fix-ptrvec-erase`.
@@ -217,6 +217,12 @@ The calibration case (`ObjPtrVec::erase`) was found by the tool as a split-pair 
 
 ### Open leads (what would decide each)
 
+- **`HamCharacter::Poll` force-show** — native `SetShowing(true)`s any hidden character;
+  the image does so only with `mPollWhenHidden`. Kept as a labelled workaround (tried and
+  reverted once). Measured in one gameplay flow: only `iconman` is hidden at Poll time
+  (8,400/8,400 polls), the four dancers never; with the image's gate swapped in, 48/48
+  gameplay tests passed. Decide by running the same counter over menus, practice,
+  campaign and crew select.
 - **`Dir.cpp:662` `HasDirPtrs`** — address-keyed DirPtr counter can go stale when
   `NullifyObj` clears a DirPtr without decrementing; assert counter == ring walk in a
   native debug run.
