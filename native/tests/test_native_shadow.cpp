@@ -17,6 +17,9 @@
 #include "gesture/SkeletonViz.h"
 #include "flow/FlowQueueable.h"
 #include "obj/Object.h"
+#include "utl/LocaleChunkSort.h"
+
+#include <cstdint>
 
 namespace {
 
@@ -136,6 +139,62 @@ TEST_F(NativeShadowTest, ToggleDrawSkeletonsFlipsShowing) {
     RndDrawable::SetForceSubpartSelection(savedForce);
     TheSkeletonViz = saved;
     delete viz;
+}
+
+// ---------------------------------------------------------------------------
+// Locale token lookup. Locale::Init sorts the (symbol, index, string) chunks
+// with LocaleChunkSort::Sort and Locale::FindDataIndex binary-searches the
+// result, so the two must agree on the key. On the Xbox they do: FastSort<3>
+// compares the 32-bit symbol pointers as signed ints (Locale.s 827E9474
+// cmpw) and the search compares (int)Symbol signed too (827E93E0 cmpw).
+// Natively DataNode is 16 bytes, so FastSort<3>'s 8-byte stride reads the
+// signed LOW 32 bits of the symbol pointer, then node1.mType, then the low 32
+// bits of node2 -- while the HX_NATIVE search compares full 64-bit pointers,
+// unsigned. Whenever the interned strings straddle a low-32 value of
+// 0x80000000 (or a 4 GB line) the table is out of order for the search and
+// tokens go missing -- ASLR-dependent missing UI text.
+// ---------------------------------------------------------------------------
+TEST(NativeShadowUnit, LocaleChunkSortOrdersByTheSearchKey) {
+    // Three fake interned-string addresses. Sort never dereferences them.
+    const uintptr_t base = (uintptr_t)0x7f1200000000ull;
+    const char *lowA = (const char *)(base + 0x10);        // low32 0x00000010
+    const char *lowB = (const char *)(base + 0x20);        // low32 0x00000020
+    const char *high = (const char *)(base + 0x80000010);  // low32 0x80000010 (<0 signed)
+    LocaleChunkSort::OrderedLocaleChunk chunks[3];
+    const char *in[3] = { high, lowB, lowA };
+    for (int i = 0; i < 3; i++) {
+        chunks[i].node1 = DataNode(kDataSymbol, in[i]);
+        chunks[i].node2 = DataNode(i);
+    }
+    LocaleChunkSort::Sort(chunks, 3);
+    // FindDataIndex's native key is the full pointer, unsigned: lowA < lowB
+    // < high. node2 identifies each chunk without dereferencing the fake
+    // pointers (LiteralSym() would intern them).
+    EXPECT_EQ(chunks[0].node2.Int(), 2); // lowA
+    EXPECT_EQ(chunks[1].node2.Int(), 1); // lowB
+    EXPECT_EQ(chunks[2].node2.Int(), 0)  // high
+        << "sort put the pointer whose low 32 bits are negative FIRST; the "
+           "binary search expects it LAST";
+    for (int i = 0; i < 3; i++)
+        chunks[i].node1 = DataNode(0); // don't let a dtor see the fake symbols
+}
+
+TEST(NativeShadowUnit, LocaleChunkSortKeepsFileOrderAmongDuplicates) {
+    // A token defined twice: the image's second key is node2 (the running
+    // chunk index), so the lower index sorts first and wins the dedupe.
+    const char *sym = (const char *)(uintptr_t)0x7f1200001000ull;
+    LocaleChunkSort::OrderedLocaleChunk chunks[2];
+    chunks[0].node1 = DataNode(kDataSymbol, sym);
+    chunks[0].node2 = DataNode(7);
+
+    chunks[1].node1 = DataNode(kDataSymbol, sym);
+    chunks[1].node2 = DataNode(3);
+
+    LocaleChunkSort::Sort(chunks, 2);
+    EXPECT_EQ(chunks[0].node2.Int(), 3);
+    EXPECT_EQ(chunks[1].node2.Int(), 7);
+    chunks[0].node1 = DataNode(0);
+    chunks[1].node1 = DataNode(0);
 }
 
 } // namespace

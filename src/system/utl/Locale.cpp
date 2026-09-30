@@ -67,8 +67,41 @@ static int LocaleChunkSortFunc(const void *a, const void *b) {
 // 827e9460 in utl:Locale.obj (ham_xbox_r.map:109216).  The two orderings are
 // not the same: FastSort<3> compares three consecutive 8-byte-strided int
 // words, LocaleChunkSortFunc compares Symbol pointers then node2.
+#ifdef HX_NATIVE
+// LP64: FastSort<3> walks three 4-byte words at an 8-byte stride, which on
+// the Xbox (8-byte DataNode) are node1/node2/node3's values. Natively
+// DataNode is 16 bytes, so the same walk reads the signed LOW 32 bits of the
+// symbol pointer, then node1.mType, then node2's low word -- an order that
+// disagrees with the native FindDataIndex, which compares full pointers
+// unsigned, whenever the interned strings straddle a low-32 value of
+// 0x80000000 or a 4 GB line. The binary search then misses tokens. Sort by
+// the key the search uses: the full symbol pointer, then node2 (the running
+// chunk index, unique by construction, so node3 -- the image's third key --
+// is never consulted). Same semantics as the image's signed-int32 sort and
+// signed-int32 search, which agree with each other.
+static int NativeLocaleChunkCompare(const void *a, const void *b) {
+    const LocaleChunkSort::OrderedLocaleChunk *ca =
+        (const LocaleChunkSort::OrderedLocaleChunk *)a;
+    const LocaleChunkSort::OrderedLocaleChunk *cb =
+        (const LocaleChunkSort::OrderedLocaleChunk *)b;
+    uintptr_t sa = (uintptr_t)ca->node1.LiteralSym().Str();
+    uintptr_t sb = (uintptr_t)cb->node1.LiteralSym().Str();
+    if (sa != sb)
+        return sa < sb ? -1 : 1;
+    int ia = ca->node2.UncheckedInt();
+    int ib = cb->node2.UncheckedInt();
+    if (ia != ib)
+        return ia < ib ? -1 : 1;
+    return 0;
+}
+#endif
+
 void LocaleChunkSort::Sort(OrderedLocaleChunk *chunks, int count) {
+#ifdef HX_NATIVE
+    qsort(chunks, count, sizeof(OrderedLocaleChunk), NativeLocaleChunkCompare);
+#else
     qsort(chunks, count, sizeof(OrderedLocaleChunk), FastSort<3>);
+#endif
 }
 
 namespace LocaleChunkSort {
