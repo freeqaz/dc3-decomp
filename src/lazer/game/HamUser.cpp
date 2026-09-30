@@ -23,6 +23,18 @@ BEGIN_PROPSYNCS(HamUser)
 END_PROPSYNCS
 
 int HamUser::GetPadNum() const {
+#ifdef HX_NATIVE
+    // Native has no SkeletonIdentifier (ShellInput::Init's HX_NATIVE arm skips
+    // the Kinect identity subsystem; the image builds one at boot), so this
+    // dereferenced null -- reached once a native player could score enough to
+    // rank up: MetagameRank::AwardForRankUp -> HamProfile::GetHamUser ->
+    // HamUserMgr::GetUserFromPad (native-posesynth, perform route, SIGSEGV on
+    // perform_endgame_screen).  With no identifier nobody is NUI-enrolled, and
+    // the image's answer for an unenrolled player is -1
+    // (SkeletonIdentifier::UpdateEnrolledPlayers sets mPadNum = -1).
+    if (!TheSkeletonIdentifier)
+        return -1;
+#endif
     if (TheSkeletonIdentifier->GetPlayerPadNum(mPlayerIndex) < 4) {
         return TheSkeletonIdentifier->GetPlayerPadNum(mPlayerIndex);
     } else {
