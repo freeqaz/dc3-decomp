@@ -186,6 +186,12 @@ public:
         // Kinect hardware — not present on native
         if (sym == "has_kinect") return DataNode(0);
         if (sym == "is_kinect_connected") return DataNode(0);
+        // Xbox LIVE social sharing — no capabilities on native.  The endgame
+        // results panel polls this EVERY frame (perform_endgame.dta), so
+        // leaving it unhandled logged ~55k "unhandled msg" notifies per
+        // results screen in the 2026-09-30 native harvest.
+        if (sym == "query_xsocial_capabilities") return DataNode(0);
+        if (sym == "poll_xsocial_capabilities") return DataNode(0);
         return Hmx::Object::Handle(msg, rev);
     }
 };
