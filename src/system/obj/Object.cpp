@@ -640,7 +640,6 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 
 #ifdef HX_NATIVE
 #include "rndobj/Env.h"
-#include "rndobj/Group.h"
 
 // Owner-control holders during the native cascade.
 //
@@ -664,13 +663,16 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 //     it on every UI draw of party_mode_signin_screen (the Draw() recovery
 //     swallowed the SIGSEGV and the rest of the screen was never drawn).
 //   * RndGroup::Replace erases the child's node (and its draw/anim entries).
-//     Skipped, a group kept a NULL child: a sound_group's get_group_children
-//     handed ui_objects.dta's shuffle a null $elem.
-// For exactly these three owners this runs the image's step.  None of them
-// deletes an object or touches a ref other than `ref` (the group erases
-// `ref`'s own node; the env relinks `ref` into its own ring; the TypeProps
-// scrub edits DataNodes only, leaving `ref` to be nulled below), so the ring
-// walk -- which has already read `ref`'s successor -- stays valid.  Other
+//     Skipped, a group keeps a NULL child (a sound_group's get_group_children
+//     hands ui_objects.dta's shuffle a null $elem).  NOT handled here: running
+//     RndGroup::Replace inside this walk double-freed a list node in
+//     MergeScopeParityTest.RepeatedVenueMergeAfterClear (native-partyplay,
+//     2026-09-30); open lead.
+// For the first two owners this runs the image's step.  Neither deletes an
+// object or touches a ref other than `ref` (the env relinks `ref` into its own
+// ring; the TypeProps scrub edits DataNodes only, leaving `ref` to be nulled
+// below), so the ring walk -- which has already read `ref`'s successor --
+// stays valid.  Other
 // owner-control owners (Task, LightPreset, CharBonesMeshes,
 // DefaultPhysicsManager) are not covered: unmeasured, and Task's Replace is
 // the re-entrant one.  Returns true when the owner took the ref over, so the
@@ -707,12 +709,6 @@ static bool NativeOwnerControlReplace(
         Hmx::Object *owner = list->Owner();
         if (!owner || owner == dying || !owner->IsRefAlive())
             return false;
-        if (RndGroup *group = dynamic_cast<RndGroup *>(owner)) {
-            if (list == &group->Objects()) {
-                static_cast<ObjRefOwner *>(group)->Replace(ref, nullptr);
-                return true;
-            }
-        }
         if (DataArray *map = typePropsMap(owner))
             NativeScrubTypePropsValue(map, dying);
         return false;
