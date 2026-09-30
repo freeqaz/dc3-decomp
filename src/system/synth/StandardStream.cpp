@@ -796,9 +796,12 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     int bytesPerSample = mFloatSamples ? 4 : 2;
     int bufSize = samplesToConsume * bytesPerSample;
 
-    // Vorbis decoder always outputs float PCM (vorbis_synthesis_pcmout returns float**),
-    // but mFloatSamples=false so bytesPerSample=2. Convert float→int16 before sending
-    // to StreamReceiverNative which stores int16 in its ring buffer.
+    // The image converts only when the reader declared float PCM
+    // (82770EC4 lbz r11,0xe0(r30) / beq): x*32767 clamped to +/-32767
+    // (82770EF4 fmuls, fsel x2, fctiwz). An int16 reader's buffer goes to
+    // WriteData unchanged (.L_82770F24). The native VorbisReader hands
+    // vorbis_synthesis_pcmout's float** and declares floatSamples=true;
+    // FFmpegAudioReader hands int16 and declares false.
     int16_t *convBuf = (int16_t *)alloca(samplesToConsume * sizeof(int16_t));
 
     for (int i = 0; i < realChannels; i++) {
@@ -809,14 +812,16 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
                 break;
             }
         }
-        float *src = (float *)v[i];
-        for (int s = 0; s < samplesToConsume; s++) {
-            float clamped = src[s];
-            if (clamped > 1.0f) clamped = 1.0f;
-            if (clamped < -1.0f) clamped = -1.0f;
-            convBuf[s] = (int16_t)(clamped * 32767.0f);
+        const void *data = v[i];
+        if (mFloatSamples) {
+            float *src = (float *)v[i];
+            for (int s = 0; s < samplesToConsume; s++) {
+                float f = Clamp(-32767.0f, 32767.0f, src[s] * 32767.0f);
+                convBuf[s] = (int16_t)f;
+            }
+            data = convBuf;
         }
-        mChannels[chanIdx]->WriteData(convBuf, samplesToConsume * 2);
+        mChannels[chanIdx]->WriteData(data, samplesToConsume * 2);
     }
     for (int i = 0; i < mVirtualChans; i++) {
         float *src = (float *)v[realChannels + i];

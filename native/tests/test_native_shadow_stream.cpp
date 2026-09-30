@@ -159,4 +159,48 @@ TEST_F(NativeShadowStreamTest, EndOfStreamJumpIsNotCapped) {
     delete s;
 }
 
+// ---------------------------------------------------------------------------
+// Sample format. The image converts float PCM only when mFloatSamples is set
+// (82770EC4 lbz r11,0xe0(r30) / beq .L_82770F24); otherwise it hands the
+// reader's int16 buffer to WriteData unchanged (.L_82770F24 lwzx r4 from the
+// pcm[] array). The conversion is x*32767 clamped to [-32767, 32767]
+// (82770EF4 fmuls by __real@46fffe00, fsel against +/-32767, fctiwz). The
+// pre-fix native body always read the samples as float, so an int16 reader
+// (FFmpegAudioReader, which declares floatSamples=false) was reinterpreted.
+// ---------------------------------------------------------------------------
+
+TEST_F(NativeShadowStreamTest, Int16SamplesPassThroughUnchanged) {
+    StandardStream *s = MakeStream(1, false);
+    const int n = 64;
+    // Twice the length, zero tail: the pre-fix body reads n FLOATS (4n bytes)
+    // from an int16 buffer; keep that read in bounds so it fails, not crashes.
+    std::vector<int16_t> pcm(2 * n, 0);
+    for (int i = 0; i < n; i++)
+        pcm[i] = (int16_t)(i * 300 - 9000);
+    void *ptr = pcm.data();
+    ASSERT_EQ(s->ConsumeData(&ptr, n, -1), n);
+    const std::vector<int16_t> &got = Rcvr(s, 0)->mWritten;
+    ASSERT_EQ(got.size(), (size_t)n);
+    for (int i = 0; i < n; i++)
+        ASSERT_EQ(got[i], pcm[i]) << "int16 sample " << i
+                                  << " was rewritten: mFloatSamples=false passes "
+                                     "the reader's buffer through (.L_82770F24)";
+    delete s;
+}
+
+TEST_F(NativeShadowStreamTest, FloatSamplesConvertAndClamp) {
+    StandardStream *s = MakeStream(1, true);
+    float in[5] = {0.25f, -0.5f, 2.0f, -2.0f, 0.0f};
+    void *ptr = in;
+    ASSERT_EQ(s->ConsumeData(&ptr, 5, -1), 5);
+    const std::vector<int16_t> &got = Rcvr(s, 0)->mWritten;
+    ASSERT_EQ(got.size(), 5u);
+    EXPECT_EQ(got[0], (int16_t)(0.25f * 32767.0f));
+    EXPECT_EQ(got[1], (int16_t)(-0.5f * 32767.0f));
+    EXPECT_EQ(got[2], 32767);
+    EXPECT_EQ(got[3], -32767) << "the image clamps to -32767, not -32768";
+    EXPECT_EQ(got[4], 0);
+    delete s;
+}
+
 } // namespace
