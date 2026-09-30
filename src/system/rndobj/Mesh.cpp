@@ -741,6 +741,33 @@ void RndMesh::UpdateSphere() {
     RndDrawable::SetSphere(s);
 }
 
+// RESIDUAL 99.91666 / 10 rows (w8-p 2026-09-30), and it is the SAME CLASS as
+// RndMesh::MakeWorldSphere (99.98198 / 4 rows), RndMesh::SetVolume (99.98586 /
+// 4 rows) and FillCompressedVertex in rndobj/MeshVertCompress.h (99.95683 /
+// 8 rows).  In all four the residual is nothing but the ORDER in which MSVC
+// loads the members of a component triple, so the rows are charged `lfs`/`lwz`
+// OFFSETS -- real canonical points and real matched_code, not a forgiven
+// register permutation.  Here the image reads p.c before p.b at idx 39/43 and
+// starts the second Plane::Dot from the Z term (`lfs f12,0x58(r1)` +
+// `lfs f0,0x8(r30)`), where we start from X.
+//
+// THE GENERALISATION, which is what makes this worth writing down: the load
+// order of a triple is reachable from source EXACTLY WHEN the triple is spelled
+// as explicit locals in the function being matched, and NOT when it comes out of
+// an inlined shared helper.
+//   * Reachable: DxMesh::CacheFurTransform's `float dx/dy/dz` -- brute-forcing
+//     all six declaration orders moved fuzzy 98.08054 -> 98.49664, and the
+//     permutation MSVC applies is not a fixed function of declaration order, so
+//     it had to be enumerated rather than reasoned out.
+//   * NOT reachable: everything here.  The loads belong to Plane::Dot
+//     (math/Mtx.h:429), Dot(Vector3,Vector3) (math/Vec.h:283), ScaleAdd,
+//     Vector3::operator*= and the vector's end() -- all correctly written in
+//     natural x,y,z order, all shared by the whole engine.  Changing one to
+//     chase a row here would move thousands of unrelated functions.
+// MEASURED NEGATIVES on this class, each a full build, each EXACTLY inert on
+// BOTH rulers: declaration reorder and argument inlining and commuting the
+// combining operator (FillCompressedVertex); swapping -Dot's arguments and
+// hand-writing the product explicitly right-associated (SetVolume).
 float RndMesh::GetDistanceToPlane(const Plane &p, Vector3 &v) {
     if (Verts().empty())
         return 0;
@@ -1978,6 +2005,18 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
 #endif
 }
 
+// RESIDUAL 96.77778 / 27 rows (w8-p re-read 2026-09-30).  Three of the rows are
+// the only structural ones: `b` + `li r31,0x24` + `li r30,0x1` -- the sunk
+// `else { compressedSize = 0x24; isXBox = 1; }` arm -- is placed at instruction
+// 115 in our build and at 155 in the image, i.e. the image emits it AFTER the
+// vertex loop and we emit it before.  Same three instructions, same order,
+// different block placement; that is the block-sinking class
+// (docs/decomp/patterns/block-sinking.md), decided by MSVC's layout pass.
+// The other 24 rows are a consistent pairwise exchange of two callee-saved
+// pairs, target r27<->our r26 and target r25<->our r24: the image gives the
+// higher register of each pair to the flag defined first (`cached`) and the
+// lower to TheDebug / the format string, and we do the opposite.  Nothing here
+// is a missing or wrong instruction.
 void RndMesh::SaveVertices(BinStream &bs) {
     VertVector &verts = mVerts;
     // The image writes each of these three flags STRAIGHT into its final
