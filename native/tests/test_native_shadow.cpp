@@ -18,6 +18,10 @@
 #include "flow/FlowQueueable.h"
 #include "obj/Object.h"
 #include "utl/LocaleChunkSort.h"
+#include "math/Rand.h"
+
+#include <cstdlib>
+#include <vector>
 
 #include <cstdint>
 
@@ -195,6 +199,51 @@ TEST(NativeShadowUnit, LocaleChunkSortKeepsFileOrderAmongDuplicates) {
     EXPECT_EQ(chunks[1].node2.Int(), 7);
     chunks[0].node1 = DataNode(0);
     chunks[1].node1 = DataNode(0);
+}
+
+// ---------------------------------------------------------------------------
+// RandomShuffle. The image's std::random_shuffle is STLport's: for i in
+// [first+1, last) iter_swap(i, first + __random_number(i-first+1)), and
+// __random_number is CRT rand() % n (FlowPickOne.s 824051C8: bl rand; divw;
+// mullw; subf). It never touches the game's RNG (sRand). The native wrapper
+// was std::shuffle(first, last, default_random_engine(RandomInt())), which
+// CONSUMED one sRand draw per shuffle -- shifting every later RandomInt /
+// RandomFloat in MoveMgr, MiniGameMgr, FlowPickOne, MetagameRank, Jukebox --
+// and ignored srand() entirely.
+// ---------------------------------------------------------------------------
+TEST(NativeShadowUnit, RandomShuffleLeavesTheGameRngAlone) {
+    std::vector<int> v;
+    for (int i = 0; i < 16; i++)
+        v.push_back(i);
+    SeedRand(1234);
+    RandomShuffle(v.begin(), v.end());
+    int afterShuffle = RandomInt();
+    SeedRand(1234);
+    int withoutShuffle = RandomInt();
+    EXPECT_EQ(afterShuffle, withoutShuffle)
+        << "RandomShuffle advanced the game RNG; the image's shuffle uses CRT rand()";
+}
+
+TEST(NativeShadowUnit, RandomShuffleIsDrivenByCrtRand) {
+    std::vector<int> a, b;
+    for (int i = 0; i < 16; i++) {
+        a.push_back(i);
+        b.push_back(i);
+    }
+    srand(99);
+    RandomShuffle(a.begin(), a.end());
+    RandomInt(); // disturb the game RNG between the two runs
+    srand(99);
+    RandomShuffle(b.begin(), b.end());
+    EXPECT_EQ(a, b) << "same srand() seed must give the same permutation";
+    // The STLport algorithm, spelled out: the permutation it must produce.
+    std::vector<int> c;
+    for (int i = 0; i < 16; i++)
+        c.push_back(i);
+    srand(99);
+    for (int i = 1; i < 16; i++)
+        std::swap(c[i], c[rand() % (i + 1)]);
+    EXPECT_EQ(a, c);
 }
 
 } // namespace

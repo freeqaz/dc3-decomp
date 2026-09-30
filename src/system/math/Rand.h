@@ -87,14 +87,22 @@ int RandomInt(int, int);
 float RandomFloat();
 float RandomFloat(float, float);
 
-// std::random_shuffle was removed in C++17 (Emscripten/Clang).
-// This wrapper uses std::shuffle on native, std::random_shuffle on PPC.
+// std::random_shuffle was removed in C++17 (Emscripten/Clang), so native
+// spells out the algorithm the image runs: STLport's random_shuffle, whose
+// __random_number(n) is CRT rand() % n (FlowPickOne.s 824051C8: bl rand;
+// divw; mullw; subf). It must NOT draw from the game RNG: an earlier
+// std::shuffle(..., default_random_engine(RandomInt())) consumed one sRand
+// draw per shuffle and shifted every later RandomInt/RandomFloat.
 #ifdef HX_NATIVE
-#include <random>
+#include <random> // no longer used here; kept because TUs rely on it transitively
 #include <algorithm>
+#include <cstdlib>
 template <typename Iter>
 inline void RandomShuffle(Iter first, Iter last) {
-    std::shuffle(first, last, std::default_random_engine(RandomInt()));
+    if (first == last)
+        return;
+    for (Iter i = first + 1; i != last; ++i)
+        std::iter_swap(i, first + rand() % ((i - first) + 1));
 }
 #else
 #include <algorithm>
