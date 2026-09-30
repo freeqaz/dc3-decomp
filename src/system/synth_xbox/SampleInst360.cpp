@@ -68,6 +68,22 @@ float SampleInst360::GetProgress() {
     // testing `mVoice->mLoopStart`, the same 92.2; `unsigned int pos =
     // state.SamplesPlayed` (implicit narrowing), 97.6 -- pos must be a signed
     // int, the image's `extsw r11, r11` at 0x82E44778 becomes `rldicl`.
+    // RESIDUAL CONFIRMED (w9-c 2026-09-30): 98.507 canonical / 98.507 fuzzy, ONE
+    // row of 67 -- the target-only `clrrwi r10, r10, 0` at the top of the if-body,
+    // a no-op 32-bit truncate of the voice pointer that MSVC re-materialises there
+    // and we do not.  Six more pointer-alias spellings refuted, one full ninja
+    // each: an inner `Voice *v = voice;` alias (98.507, inert), `Voice *const v =
+    // voice;` (98.507, inert), an inner `Voice &v = *voice;` (98.507, inert), an
+    // OUTER `Voice &voice = *mVoice;` for the whole body (98.507, inert), an inner
+    // `Voice *v = mVoice;` re-read (92.239 -- WORSE, reloads 0xa8(r31)), and no
+    // local at all with `mVoice->` at all five sites (82.687 -- much worse, five
+    // reloads).  The truncate is not reachable by re-spelling the pointer.
+    //
+    // NOT A WRONG CALLEE: objdiff's "Function Call Diff" reports the image calling
+    // `?GetMaxProcess@CFEWaveStreamDecoder@NUISPEECH@@UAAIXZ` where we call
+    // `?GetSampleRate@SynthSample@@QBAHXZ`.  Both resolve to 82AF68F0 in
+    // icf_aliases.map -- one proven ICF fold, so the row is charged by neither the
+    // canonical nor the name_check ruler.  Do not "fix" the callee.
     Voice *voice = mVoice;
     int pos = (unsigned int)state.SamplesPlayed;
     if (voice->mLoopStart >= 0) {
