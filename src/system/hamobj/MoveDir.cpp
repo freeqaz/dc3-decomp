@@ -844,8 +844,18 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
                     mDebugSkeleton.Poll(0, skeletonFrame);
                 }
             } else {
+                // BEHAVIOURAL FIX (w8-n).  mSkeletonsRight is a `Skeleton **`
+                // (gesture/Skeleton.h:128), so the array of pointers is what it
+                // POINTS AT.  Casting the member lvalue to a reference-to-array
+                // handed GetSkeleton `&data->mSkeletonsRight` -- the struct field
+                // itself -- so it read mSkeletonsRight/mFrame/mHistory/
+                // mCameraInput and two words PAST the 0x14-byte struct as if they
+                // were Skeleton pointers.  The image loads the pointer's VALUE:
+                // `lwz r31, 0x4(r30)` / `mr r4, r31` at 0x8250532C..0x82505334,
+                // where we emitted `addi r4, r30, 0x4`.  Game.cpp:192,194 already
+                // use the correct pointer-to-array-then-deref idiom.
                 const Skeleton *playerSkeleton = TheGameData->Player(0)->GetSkeleton(
-                    (const Skeleton *const(&)[6])data->mSkeletonsRight
+                    *(const Skeleton *const(*)[6])(data->mSkeletonsRight)
                 );
                 if (playerSkeleton) {
                     mDebugSkeleton = *playerSkeleton;
