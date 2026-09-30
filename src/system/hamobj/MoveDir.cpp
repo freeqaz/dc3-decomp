@@ -664,6 +664,18 @@ void MoveDir::Poll() {
             filler[i] = oldMove;
             MovePlayerData &curPlayerData = mMovePlayerData[i];
             if (curMeasure >= 0 && curMeasure < curPlayerData.mMoveKeys.size()) {
+                // REFUTED (w9-d, BYTE-IDENTICAL): binding the element to a
+                // `const HamMoveKey &key` first, to coax out the image's
+                // `stw r11, 0x50(r31)` home store of mMoveKeys._M_start where we
+                // emit a plain register move `clrrwi r10, r9, 0`, leaves the
+                // object unchanged -- canonical 97.9607, fuzzy 96.41048, base
+                // 924 B, the same 62 rows (56 diff_arg / 1 diff_op / 1 replace /
+                // 1 delete / 3 insert) before and after.  The two charged rows
+                // in that window are the LOAD ORDER: the image reads _M_start
+                // (0x20(r10)) before _M_finish (0x24(r10)) and then reuses
+                // _M_start for the indexed load; we read _M_finish first and pay
+                // a move to get _M_start into place.  Not reachable from the
+                // subscript spelling.
                 mCurMove[i] = curPlayerData.mMoveKeys[curMeasure].move;
             }
             MoveRating oldRating = mCurMoveRating[i];
@@ -864,9 +876,21 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
         }
     }
     PostUpdateFilters();
+    // BEHAVIOURAL FIX (w9-d).  We had `!mFiltersEnabled || (mCurMove &&
+    // mCurMove->IsRest())`, which SKIPS the reset when filters are enabled and
+    // there is no current move.  The image resets there: at 0x82505370 it does
+    // `cmplwi cr6, r3, 0x0` / `beq cr6, .L_82505384` -- and 0x82505384 is the
+    // mFeedback/ResetErrors block, not the loop bottom.  Only the IsRest test
+    // at 0x8250537C..0x82505380 branches PAST it (to .L_82505394).  So the
+    // condition is `!mFiltersEnabled || !mCurMove || mCurMove->IsRest()`: a
+    // player with no move for this measure gets its error accumulators cleared.
+    // Naming the pointer in a local also reproduces the image's unconditional
+    // load at the top of the loop body (0x82505364, ahead of the
+    // mFiltersEnabled compare) and the UNSIGNED `cmplwi` pointer test we were
+    // emitting as a signed `cmpwi`.
     for (int i = 0; i < 2; i++) {
-        if (!mFiltersEnabled
-            || (mMovePlayerData[i].mCurMove && mMovePlayerData[i].mCurMove->IsRest())) {
+        HamMove *curMove = mMovePlayerData[i].mCurMove;
+        if (!mFiltersEnabled || !curMove || curMove->IsRest()) {
             if (mMovePlayerData[i].mFeedback) {
                 mMovePlayerData[i].mFeedback->ResetErrors();
             }
@@ -1631,19 +1655,24 @@ float MoveDir::DetectFrac(
         } else {
             frac = RatingToDetectFrac(autoplay, move->RatingOverride());
         }
-        int i8 = 0;
-        int i7 = 0;
-        for (DetectFrame *it = detectFrames.first; it != detectFrames.second; ++it) {
-            const Ham2FrameWeight &wt = it->GetMoveFrame()->FrameWeight(it->Mirror());
-            if (wt.mWeight != 0) {
-                i8++;
-                if (it->HasScore()) {
-                    i7++;
+        DetectFrame *it = detectFrames.first;
+        if (it != detectFrames.second) {
+            int i8 = 0;
+            int i7 = 0;
+            do {
+                const Ham2FrameWeight &wt =
+                    it->GetMoveFrame()->FrameWeight(it->Mirror());
+                if (wt.mWeight != 0) {
+                    i8++;
+                    if (it->HasScore()) {
+                        i7++;
+                    }
                 }
+                ++it;
+            } while (it != detectFrames.second);
+            if (i8 != 0) {
+                frac = ((float)i7 / (float)i8) * frac;
             }
-        }
-        if (i8 != 0) {
-            frac = ((float)i7 / (float)i8) * frac;
         }
     }
     return frac;
@@ -1662,8 +1691,14 @@ void MoveDir::EnqueueDetectFrames(
     int moveIdx = MoveIdx();
     DetectRange(frames, range, moveIdx - 1, moveIdx + 1);
     CurrentMoveMode();
+    // `best` is initialised BEFORE the range test: 0x82500F1C `stw r30, 0x50(r1)`
+    // sits between the two `lwz` of range.first/range.second and the
+    // `cmplw`/`beq` at 0x82500F20.  MSVC gave it range.first's own stack slot
+    // (0x50), which is dead the moment r31 holds it, so the store reads as a
+    // second write of the same slot.  Declared inside the `if` it lands four
+    // instructions later.
+    DetectFrame *best = nullptr;
     if (range.first != range.second) {
-        DetectFrame *best = nullptr;
         float bestError = 1000.0f;
         for (DetectFrame *it = range.first; it != range.second; ++it) {
             float error = ScaleDistToError(

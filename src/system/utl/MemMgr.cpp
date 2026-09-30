@@ -105,6 +105,42 @@ bool gbUseLowestMip; // +0xbd2
 // w8-g 2026-09-15: measured floor for that claim, normalized ruler, full ninja:
 //   MemPushTemp 91.46% (96 B), MemPopHeap 95.44% (180 B), MemPopTemp 95.44%
 //   (180 B).  Re-confirmed unchanged after this lane's other MemMgr work.
+//
+// w9-d 2026-09-30: the SAME family is the whole residual of six more rows in
+// this TU, and the anchor the image picks is NOT the one source order would
+// predict -- which is the strongest argument yet that it is an MSVC-internal
+// choice rather than a source lever.  Each row below reads "image anchors X and
+// reaches Y as a displacement; we materialise both":
+//
+//   AddHeap           96.894  264 B  anchors gNumHeaps, gHeaps = -0x294   (2 rows)
+//   MemFree           96.894  264 B  anchors gHeaps,    gNumHeaps = +0x294
+//   MemAllocSize      95.583  240 B  anchors gHeaps,    gNumHeaps = +0x294
+//   MemTruncate       95.667  300 B  anchors gHeaps,    gNumHeaps = +0x294
+//   MemPushHeap       97.387  248 B  anchors gInitted,  gNumHeaps = +0x13
+//   MemFindHeap       96.033  368 B  anchors gInitted,  gNumHeaps = +0x13,
+//                                            gHeaps = -0x281
+//   MemPrintOverview  95.929  508 B  anchors gHeaps,    gNumHeaps = +0x294
+//
+// Note AddHeap and MemAllocSize go OPPOSITE ways on the same pair: AddHeap's
+// source touches gHeaps first (`gHeaps[heapNum].Init(c3, gNumHeaps, ...)`) and
+// the image anchors gNumHeaps, while MemAllocSize's source touches gNumHeaps
+// first (the loop bound) and the image anchors gHeaps.  So "anchor whichever
+// global the source names first" is refuted outright, and so is "anchor the one
+// whose address is actually needed".
+//
+// Two of the three displacements are ALSO unavailable in our layout: the image's
+// gNumHeaps sits at +0xbe4 where ours sits at +0xbdc, so its gHeaps->gNumHeaps
+// distance is 0x294 and ours 0x28c, and its gInitted->gNumHeaps distance is 0x13
+// where ours is 0xb.  Closing that needs the three unidentified int-sized
+// globals the image has at +0xbdc/+0xbe0/+0xbe8 (they are exactly the 12 bytes
+// by which our .bss is short: ours ends at +0xbfc, the image's at +0xc08).
+// DO NOT REDO THAT EXPERIMENT: a byte-exact reproduction of the image's 3,080 B
+// (0xc08) section with external-linkage stand-ins was already measured and moved
+// MemInit 99.133 -> 99.145 and NOTHING else.  Verified here that the tree is
+// back in the un-padded state (MemMgr.obj .bss: gNumHeaps +0xbdc,
+// gNewOperatorAlign +0xbe0, gStlAllocNameLookup +0xbe4, gMemLock +0xbe8,
+// gMemStackLock +0xbec, gUseLowestMipExceptions +0xbf0), so the refutation is
+// about a layout we no longer have and re-testing it would only reproduce it.
 static bool gInitted; // +0xbd1
 // +0xbd0. The fourth byte is NOT padding and it is not unrecoverable -- nothing
 // forms its address because nothing needs to: both of its users reach it by a
@@ -898,6 +934,33 @@ MemHeapStack &ThreadMemStack(bool createIfMissing) {
             }
         }
     }
+    // MEASURED NEGATIVE (w9-d, 2026-09-30): 98.63946 -> 98.60545, reverted.
+    //
+    // The image's write-back is genuinely CONDITIONAL and this spelling is not:
+    // two paths branch straight past `.L_827CB878` (`stw r30, 0xbd4(r29)`) to
+    // the `addi r11, r29, 0x48` at .L_827CB87C -- the gNumThreads == 0 arm
+    // (`b .L_827CB87C` at 0x827CB6B4) and the cache hit (`beq cr6, .L_827CB87C`
+    // at 0x827CB6D4, after `cmplw cr6, r11, r3` compares gThreadIds[idx]
+    // against the current thread id).  Only 0x827CB734 and 0x827CB824 reach the
+    // store.  Both skipped paths had just READ idx out of
+    // gThreadBufCurrentIndex, so the store is a self-assignment there and the
+    // VALUE is identical either way; the difference is that an unconditional
+    // store cannot be branched over, so MSVC hoists the `addi` above it and we
+    // carry one extra instruction (base 588 B, 1 insert + 1 delete).
+    //
+    // Moving the store inside the `gThreadIds[idx] != currentThreadId` block
+    // and returning `gThreadBuf[idx]` DOES fix that ordering exactly -- and
+    // costs two instructions elsewhere, for a net loss.  With the two return
+    // paths no longer separated by the store, MSVC cross-jumps the two
+    // CritSecTracker `bl Exit` sites (0x827CB724 and 0x827CB894 in the image)
+    // into one and lets `return gNullMemStack` fall into the shared
+    // `mr r3, r30`: base drops to 580 B with 1 diff_op (`bl` vs `b`) and 2
+    // deletes.  That merge is only available because our r30 holds the .bss
+    // anchor where the image's holds idx -- the r29<->r30 swap this function
+    // carries -- and `add r30, r10, r11` then kills the anchor.  Declaring
+    // `idx` after the CritSecTracker to shift that allocation is BYTE-IDENTICAL
+    // (measured), as docs/decomp/patterns/fixable-declarations.md says decl
+    // reorder is for stack slots, not register-only swaps.
     gThreadBufCurrentIndex = idx;
     MemHeapStack &result = gThreadBuf[gThreadBufCurrentIndex];
     return result;
@@ -966,7 +1029,16 @@ void MemPrintOverview(int heapId, char *const buf) {
         int usage = PhysicalUsage();
         unsigned long minFreeKB = sMinPhysFree >> 10;
         unsigned long availKB = status.dwAvailPhys >> 10;
-        int usageKB = usage >> 10;
+        // DIVISION, not a shift.  0x827CC8AC `srawi r9, r3, 10` followed by
+        // 0x827CC8B4 `addze r9, r9` is MSVC/PPC's signed divide-by-2^n idiom:
+        // srawi sets CA when the value was negative and bits were shifted out,
+        // and addze folds it back in so the result truncates toward zero.  A
+        // plain `>> 10` on an int emits the srawi alone and drops the addze.
+        // The two agree for non-negative usage and differ by one below zero.
+        // The three shifts inside the heap loop below really ARE shifts: the
+        // image emits bare `srawi ..., 10` at 0x827CC984/988/998/99C with no
+        // addze, which is why they stay spelt as `>> 10`.
+        int usageKB = usage / 1024;
         const char *str = MakeString(
             " [%5s] KB free:%7u(%7u) usage:%5i\n",
             (const char *)"physical", availKB, minFreeKB, usageKB
