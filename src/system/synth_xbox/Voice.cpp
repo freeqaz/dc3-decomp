@@ -635,6 +635,13 @@ void Voice::Pause(bool b1) {
     }
 }
 
+// RESIDUAL (w8-r, 97.059, 272 B, 4 of 69 rows).  The image threads the
+// 0.01f literal's `lis`/`lfs` pair through r11 and only then overwrites r11
+// with `addi r11, r1, 0x10bc` (the homed `speed` parameter, above this
+// function's 0x10a0 frame -- the frame is that big because MILO_NOTIFY_ONCE's
+// MakeString buffer forces the `ld r12, -0x1000(r1)` stack probe).  We use r10
+// for the literal and compute the `addi` two instructions earlier, so it is
+// the same four instructions in a different order with one register renamed.
 void Voice::SetSpeed(float speed) {
     float min_speed = 0.01f;
     float *pSpeed = &speed;
@@ -707,8 +714,13 @@ bool Voice::IsPlaying() {
     START_AUTO_TIMER("voice_is_playing");
     if (mState == 2)
         return true;
-    IXAudio2SourceVoice *voice = GetVoice();
-    if (!voice)
+    // GetVoice() written TWICE, not hoisted into a local: MSVC CSEs the two
+    // calls into one `lwz r3, 0x58(r29)` and emits a dead home store of the
+    // result (`stw r3, 0x50(r31)` at 0x82E36EF8, never reloaded -- the
+    // GetState call below uses r3 directly).  A single named local gives the
+    // compiler no second call expression to fold and drops that store, and
+    // with it the cr0 form of the null test.
+    if (!GetVoice())
         return false;
     if (mState == 1)
         return false;
@@ -716,7 +728,7 @@ bool Voice::IsPlaying() {
         return true;
 
     XAUDIO2_VOICE_STATE state;
-    voice->GetState(&state, 0);
+    GetVoice()->GetState(&state, 0);
     if (state.BuffersQueued == 0 && state.SamplesPlayed == 0)
         return false;
 
@@ -818,6 +830,14 @@ void Voice::Init(bool b1) {
     ((float *)mPoolVoice.egParams)[1] = mReleaseRate;
     ((float *)mPoolVoice.egParams)[2] = 0.0f;
     ((float *)mPoolVoice.egParams)[3] = 0.0f;
+    // RESIDUAL (w8-r, 99.9925, 1072 B, 2 of 268 rows).  The image loads the
+    // vtable slot BEFORE the argument (`lwz r11, 0x18(r11)` then
+    // `lwz r5, 0x60(r30)`); we emit those two independent loads the other way
+    // round.  Both sides call slot 0x18 with the same four arguments, reload
+    // mPoolVoice.egParams from 0x60(r30) for each of the four stores above and
+    // once more here, and hoist the 0 / 0x10 constants to the same places --
+    // this is instruction scheduling of two loads with no dependency between
+    // them, and no spelling of the call expression has been found that moves it.
     hr = GetVoice()->SetEffectParameters(0, mPoolVoice.egParams, 0x10, 0);
     MILO_ASSERT(SUCCEEDED(hr), 0x1b0);
 }
@@ -840,6 +860,15 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
             fmt.ChannelMask = 0x60f;
         }
         fmt.SamplesEncoded = mNumSamples;
+        // RESIDUAL (w8-r, 99.960, 5 rows).  The image emits PlayBegin (0x20)
+        // BEFORE BytesPerBlock (0x1c) -- `stw r8, 0x20(r31)` then
+        // `stw r9, 0x1c(r31)` -- and loads buf.PlayBegin (0x9c(r1)) before
+        // buf.LoopCount (0xac(r1)).  We emit the constant store first whatever
+        // the source order: MEASURED, swapping these two lines is INERT
+        // (99.960 either way) and sinking BytesPerBlock past EncoderVersion
+        // costs 99.960 -> 97.950.  The values stored are identical on both
+        // sides; only the order of the constant store against the by-value
+        // parameter's loads differs.
         fmt.PlayBegin = buf.PlayBegin;
         fmt.BytesPerBlock = 0x10000;
         fmt.PlayLength = buf.PlayLength;
@@ -860,6 +889,33 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
     }
 }
 
+// COMDAT-SELECTION LEVER: MEASURED for this unit (w8-r).  The mechanism is NOT
+// "add `inline` to make the callee a COMDAT" -- retracted; MSVC/Xenon puts every
+// compiled function in its own COMDAT, and ham_xbox_r.map's flag column reports
+// the COMDAT *selection type* from the section symbol's aux record at offset 14
+// (`f i` = IMAGE_COMDAT_SELECT_ANY, bare `f` = NODUPLICATES).  Measured over
+// build/373307D9/src/system/synth_xbox/Voice.obj with
+// scripts/analysis/comdat_selection_audit.py: 8 selection mismatches, and ALL
+// EIGHT are the reverse, non-actionable direction (ours ANY / image
+// NODUPLICATES) on dynamic-initialiser thunks -- ??__EgInProgressSyncVoices,
+// ??__EgInProgressVoices, ??__EgLockPendingLists, ??__EgPendingSyncVoices,
+// ??__EgPendingVoices, ??__EgVoiceGC, ??__Es_voiceGC, ??__Es_voiceGCInProgress.
+// ZERO in the actionable ours-NODUP / image-ANY direction, and not one of the
+// eight is a sub-100 row.  Nothing in this unit to match.
+//
+// Do NOT read this unit's save sets as a lead for it either: a sibling lane's
+// BuildBeam kept `__savegprlr_16` byte-identically at 85.3415 after its
+// same-TU callee's class was matched, and all four selection closures verified
+// anywhere so far were fidelity-only with zero score movement.  Target save
+// sets as reference only: UpdateMix __savegprlr_22 + __savefpr_26;
+// createOrReuse __savegprlr_21; StartVoiceThreadEntry __savegprlr_14; SetSpeed
+// __savegprlr_29.  createOrReuse's only helper-shaped row is an EPILOGUE
+// STRUCTURE difference, not a save-set one -- the image tail-branches
+// `b __restgprlr_21` after `addi r1, r31, 0x1910` where we branch to a shared
+// local epilogue block; its other 37 rows are a callee-saved rotation
+// (r21->r23, r22->r21, r23->r22, r29<->r30) plus one target-only dead home
+// store `stw r30, 0x50(r31)`.
+//
 // w7-bh: the MakeString template-instantiation row objdiff reports here is a
 // benign ICF fold, not a wrong callee -- both the image's and our instantiation
 // resolve to 0x824D1870 in build/373307D9/icf_aliases.map.  MakeString's array

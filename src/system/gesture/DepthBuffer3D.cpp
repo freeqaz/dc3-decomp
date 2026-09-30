@@ -170,6 +170,24 @@ void DepthBuffer3D::UpdateAttachment(
 
 void DepthBuffer3D::AddAttachment(const DepthBuffer3DAttachment &attachment) {
     MILO_ASSERT(attachment.obj, 0x390);
+    // RESIDUAL (w8-r, 97.714, 3 rows -- 1 branch-address, 2 real).  The
+    // image's post-loop test is `li r10, 0x0` immediately followed by
+    // `cmplwi cr6, r10, 0x0` (0x82DF14F8/0x82DF14FC): a compare of a register
+    // just set to zero AGAINST zero, which constant propagation would have
+    // deleted inside one function body.  It survives only across an inline
+    // boundary -- the `return nullptr` fall-off of an inlined helper plus the
+    // caller's own `if (!ret)` -- and the image's r10 doubles as the loop
+    // iterator, so the sentinel is a POINTER, never an iterator re-compared
+    // against end().  Two reconstructions MEASURED and both worse than this
+    // spelling: (a) an inline loop with a local `existing` pointer sentinel
+    // scores 95.714 -- MSVC folds the test away completely, leaving all three
+    // dispatch instructions target-only; (b) an anonymous-namespace
+    // `FindAttachment(vector&, RndTransformable*)` helper DOES reproduce the
+    // `li rN, 0` + `cmplwi 0` pair exactly, but scores 94.286: it moves `this`
+    // from r30 to r29 and `0x24` from r29 to r30 (21 rename rows) and forces
+    // `begin()` to be reloaded after the loop (`lwz r10, 0x0(r31)`) where the
+    // image keeps the pre-loop value live in r11.  The sentinel is real; the
+    // spelling that buys it has not been found.
     std::vector<DepthBuffer3DAttachment>::iterator it;
     for (it = mAttachments.begin(); it != mAttachments.end(); ++it) {
         if (it->obj == attachment.obj) {
@@ -266,6 +284,55 @@ END_SAVES
 
 INIT_REVS(11, 0)
 
+// COMDAT-SELECTION LEVER: MEASURED, nothing to fix in this unit (w8-r).
+// The mechanism is NOT "add `inline` to make the callee a COMDAT" -- that was
+// retracted.  MSVC/Xenon puts every function we compile into its own COMDAT, so
+// the map's flag column reports the COMDAT *selection type* in the section
+// symbol's aux record at offset 14 (`f i` = IMAGE_COMDAT_SELECT_ANY, bare `f` =
+// NODUPLICATES), and the dtk-carved target objects carry no selection byte at
+// all, so the map is its only carrier.  Reasoning from where our source puts a
+// definition is therefore not evidence; run
+// scripts/analysis/comdat_selection_audit.py.  Measured over
+// build/373307D9/src/system/gesture/DepthBuffer3D.obj: ZERO selection
+// mismatches in either direction.
+//
+// DrawShowing does carry this lane's one real save-set difference -- the image
+// calls __savefpr_18 / __restfpr_18 (f18-f31, 14 FPRs, at 0x82DEF8BC and
+// 0x82DF0CEC) where we call __savefpr_17 / __restfpr_17 (f17-f31, 15), i.e. WE
+// hold one extra callee-saved FPR, alongside a +0x10 frame delta -- but do NOT
+// read that as a lead for the selection lever.  Measured elsewhere: a sibling
+// lane's RndSpotlight::BuildBeam is the same textbook symptom (image
+// `bl __savegprlr_14`, ours `_16`) and stayed BYTE-IDENTICAL at 85.3415 after
+// its same-TU callee's selection class was matched, and all four selection
+// closures verified anywhere so far were fidelity-only with zero score
+// movement.  The extra FPR is the "double literal masquerades as an FPR floor"
+// question instead: we hold one value in a callee-saved FPR that the image
+// spills with stfd.
+//
+// Worth knowing regardless: both funclets fn_82DF0D1C and fn_82DF0D6C are
+// DrawShowing's (they immediately follow it and its __unwind$ in
+// build/373307D9/asm/system/gesture/DepthBuffer3D.s), and their single charged
+// row IS that frame delta -- `subi r31, r12, 0x250` against our 0x260.  So
+// closing DrawShowing's frame banks 80 B and 2 functions with it.
+//
+// SURVEYED w8-r, Load is 77.336 canonical, 856 B, 87 of 230 rows.  Two
+// findings, neither actioned:
+//  * NOT a wrong global.  objdiff charges `lbl_82251220` (target) against
+//    `gRev` (ours) on the 4th MakeString argument, but that argument is the
+//    `const unsigned short&` INIT_REVS constant -- the image passes
+//    0x82251220 for the main rev and 0x82251224 (`addi r7, r29, 0x4`) for the
+//    alt rev, i.e. the 8-byte .rdata pair INIT_REVS(11, 0) emits, and the
+//    `cmpwi cr6, r10, 0xb` at the top confirms 11.  config/373307D9/symbols.txt
+//    names a DIFFERENT object `gRev` (0x820737F0, size 4) and leaves this pair
+//    as lbl_82251220 (size 8), so the row is a target-side NAMING artifact of
+//    the split config, not a source defect.  Do not "fix" it by renaming.
+//  * The real gap is storage class.  The image keeps `d.rev` and `d.altRev` in
+//    0x60(r1) / 0x64(r1) and the BinStream& in 0x68(r1), reloading each one at
+//    every use (`lwz r11, 0x60(r1)` before each compare, `lwz r3, 0x68(r1)`
+//    before each `operator>>`); we hoist all three into r26 / r27 / r30 and
+//    never reload.  Our frame is 0xb0 against the image's 0xa0 for the same
+//    reason.  That is the "reloaded value is a stack variable" lever applied to
+//    the LOAD_REVS/BEGIN_LOADS macro locals, and it is where the 87 rows live.
 BEGIN_LOADS(DepthBuffer3D)
     LOAD_REVS(bs)
     ASSERT_REVS(11, 0)

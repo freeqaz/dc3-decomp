@@ -132,6 +132,14 @@ void CamTexClip::StoreTextureClip(RndTex *tex, float clipLeft, float clipTop, fl
     const float minY = 80.0f / 480.0f;
     const float maxY = 400.0f / 480.0f;
 
+    // RESIDUAL (w8-r, 99.919, 296 B, 10 of 74 rows) -- pure FPR colouring in
+    // the two trailing row scales, and the arithmetic is identical on both
+    // sides.  `m.y *= scaleY` loads 0x14 into f13 on both sides and then the
+    // image takes 0x10 into f12 / 0x18 into f0 where we take 0x18 into f12 /
+    // 0x10 into f0; `m.z *= scaleZ` (folded to a load/store triple because
+    // scaleZ is 1.0f) is the same story on 0x20/0x24/0x28.  The STORE order is
+    // ascending on both sides -- only which FPR carries which component
+    // differs, so there is no component swap here.
     float adjustedTop = gTempPortraitOffset * scaleY + clipTop;
     mTex = tex;
     mXfm = Transform::IDXfm();
@@ -297,35 +305,47 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
             do {
                 unsigned short depthPixel =
                     *(unsigned short *)(((int)x / 2) * 2 + srcBase);
+                // The `playerIdx <= 7` guard IS in the image -- `cmplwi cr6,
+                // r10, 0x7` / `bgt cr6` at 0x82432B8C -- so it is not the
+                // tautology it looks like; REMOVING it costs 93.940 -> 92.723.
+                // The residual is the dispatch: the image lowers the switch as
+                // a CTR countdown (`mtctr r10`, `cmpwi cr6, r10, 0x0`, six
+                // `bdzf cr6eq` and one `bne cr6`, 0x82432B94..0x82432BB8),
+                // which lays the eight `li r11, <colour>` blocks out in CASE
+                // order; we get a binary search (cmplwi 1/3/5/7 + blt/beq)
+                // which lays the same eight constants out in REVERSE case
+                // order.  The colour mapping is identical on both sides -- the
+                // reversed `li` sequence is block layout, NOT a reversed
+                // palette table.
                 unsigned short color = 0;
                 unsigned short playerIdx = depthPixel & 7;
                 if (playerIdx <= 7) {
-                    switch (playerIdx) {
-                    case 0:
-                        color = 0;
-                        break;
-                    case 1:
-                        color = 0xf800;
-                        break;
-                    case 2:
-                        color = 0x7e0;
-                        break;
-                    case 3:
-                        color = 0x1f;
-                        break;
-                    case 4:
-                        color = 0xf81f;
-                        break;
-                    case 5:
-                        color = 0x7ff;
-                        break;
-                    case 6:
-                        color = 0xffe0;
-                        break;
-                    default:
-                        color = 0xffff;
-                        break;
-                    }
+                switch (playerIdx) {
+                case 0:
+                    color = 0;
+                    break;
+                case 1:
+                    color = 0xf800;
+                    break;
+                case 2:
+                    color = 0x7e0;
+                    break;
+                case 3:
+                    color = 0x1f;
+                    break;
+                case 4:
+                    color = 0xf81f;
+                    break;
+                case 5:
+                    color = 0x7ff;
+                    break;
+                case 6:
+                    color = 0xffe0;
+                    break;
+                case 7:
+                    color = 0xffff;
+                    break;
+                }
                 }
                 x++;
                 destRow++;
@@ -385,6 +405,8 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     int startX = (int)(clipLeft * 640.0f);
     if (startX < 0)
         startX = 0;
+    // MEASURED INERT (w8-r): writing this `startX + texWidth`, to flip the
+    // image's `add r8, r10, r9` operand order, is byte-identical at 97.315.
     if (texWidth + startX - 1 >= 640) {
         startX = 640 - texWidth;
     }
@@ -447,6 +469,15 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     }
 }
 
+// RESIDUAL (w8-r, 98.182, 440 B, 22 of 111 rows) -- ONE callee-saved
+// colouring decision and nothing else.  The image puts clippedX in r27
+// (`subf r27, r11, r10`, the %640 remainder) and srcPitch in r28
+// (`srwi r28, r8, 1`); we colour them the other way round, and every later row
+// -- r8<->r9 and r10<->r11 in the inner pixel loop, the `mullw`, the `lhzx`,
+// the `sthu` -- inherits the swap.  The one non-rename row is the `mr r11,
+// r27` copy of clippedX, which the image emits BEFORE the `add`/`cmpw` pair
+// that bounds the row and we emit four instructions later.  No address,
+// constant or value differs on either side.
 void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
     LiveCameraInput *cam, float clipLeft, float clipTop
 ) {
@@ -525,10 +556,33 @@ LiveCameraInput::LiveCameraInput()
     mSnapshotBatches.clear();
     mNumSnapshots = 0;
     SkeletonUpdate::Init();
+    // BEHAVIOURAL FIX (w8-r): SpeechMgr is constructed from the "speech"
+    // SUB-ARRAY, not from the whole "kinect" array.  The image keeps
+    // FindArray("speech")'s result in r25 (`mr r25, r3` at 0x82432E78) and
+    // that is the register it passes to SpeechMgr::SpeechMgr -- `mr r4, r25`
+    // at 0x82432FA8, the instruction before the
+    // `bl ??0SpeechMgr@@QAA@PBVDataArray@@@Z` at 0x82432FAC.  kinectArr lives
+    // in r23 (`mr. r23, r3` at 0x82432E44) and is never passed there.  LiveCameraInput::Init corroborates it: the image
+    // feeds SpeechMgr::InitGrammars the same speech array.
+    //
+    // `speechArr` is also declared OUTSIDE the `if` and deliberately left
+    // uninitialised, because the image reads it back on the !kinectArr path:
+    // 0x82432EBC is `lwz r25, 0x54(r31)`, and 0x54(r31) is the slot the
+    // "speech" Symbol temp occupies (`addi r3, r31, 0x54` at 0x82432E54),
+    // i.e. the stack packer shares it with speechArr's home.  The read is harmless in the
+    // shipped game -- b17 can only be true when kinectArr is non-null -- but
+    // it is what buys the `b` over the reload at target indices 110/111, and
+    // w7-bp's reading of those two rows as "the image spills and reloads a
+    // value across that join" is hereby RETRACTED: it is an uninitialised
+    // local, the same shape as LiveCameraInput::Init.
+    DataArray *speechArr;
+#ifdef HX_NATIVE
+    speechArr = nullptr;
+#endif
     DataArray *kinectArr = SystemConfig()->FindArray("kinect", false);
     bool b17 = false;
     if (kinectArr) {
-        DataArray *speechArr = kinectArr->FindArray("speech");
+        speechArr = kinectArr->FindArray("speech");
         b17 = speechArr->FindArray("enabled")->Int(1);
     }
     // RESIDUAL (w7-bp, ctor is 98.37369 canonical / 98.2 raw, 1520 B, 380/380
@@ -586,7 +640,7 @@ LiveCameraInput::LiveCameraInput()
     }
     MILO_ASSERT_FMT(SUCCEEDED(initRes), "NuiInitialize failed (0x%x)", initRes);
     if (b17) {
-        mSpeechMgr = new SpeechMgr(kinectArr);
+        mSpeechMgr = new SpeechMgr(speechArr);
     }
     mAudioInitialized = 0;
     if (SUCCEEDED(NuiAudioCreate(5, NuiAudioErrorCallback, 1, &mAudioHandle, nullptr))) {
@@ -692,14 +746,27 @@ void LiveCameraInput::PreInit() {
 void LiveCameraInput::Init() {
     PreInit();
     if (sInstance) {
+        // `speechArr` is deliberately left uninitialised on the no-"kinect"
+        // path: the image reads it back from its home slot there.  At
+        // 0x8243390C the `FindArray("kinect")==0` arm is `lwz r31, 0x54(r1)`
+        // -- 0x54(r1) is the slot the *"speech" Symbol temp* occupies
+        // (`addi r3, r1, 0x54` at 0x824338AC), i.e. the stack packer shares it
+        // with speechArr's home and the image passes whatever is there to
+        // InitGrammars.  The old spelling assigned `cfg = speechArr` inside the
+        // block and passed `cfg`, which gives the memory phi no reason to
+        // exist.  Reproduced for the match; nulled on native so the port does
+        // not dereference a garbage DataArray.
+        DataArray *speechArr;
+#ifdef HX_NATIVE
+        speechArr = nullptr;
+#endif
         DataArray *cfg = SystemConfig()->FindArray("kinect", false);
         if (cfg) {
-            DataArray *speechArr = cfg->FindArray("speech");
-            cfg = speechArr;
+            speechArr = cfg->FindArray("speech");
             speechArr->FindInt("enabled");
         }
         if (sInstance->mSpeechMgr) {
-            sInstance->mSpeechMgr->InitGrammars(cfg);
+            sInstance->mSpeechMgr->InitGrammars(speechArr);
         }
     }
 }
@@ -861,6 +928,18 @@ void LiveCameraInput::PollNewStream(BufferType buf) {
     }
 }
 
+// BEHAVIOURAL FIX (w8-r): the previous body indexed mStreams[type] and read
+// mFrames[i3] with a *constant* i3.  The image (0x8242F7F0..0x8242F824) does
+// neither.  It remaps the buffer type to a STREAM index -- kBufferPlayer(2)
+// reads the depth stream, kBufferPlayerColor(3) reads the colour stream, i.e.
+// `idx = type==2 ? 1 : (type==3 ? 0 : type)`, the `type != 3` arm lowered as
+// the subfic/subfe bool mask at 0x8242F804-0x8242F80C and `and r11, r11, r31`
+// -- and then reads mFrames[mReadIdx], the same double-buffer read index
+// PollNewStream maintains.  The old spelling read mStreams[2]/mStreams[3],
+// which PollNewStream never fills (it asserts type is colour or depth), so
+// StreamBufferData(kBufferPlayer) always returned null; and for colour/depth
+// it pinned mFrames[0] instead of following mReadIdx, so it returned the
+// wrong half of the double buffer on every other frame.
 void *LiveCameraInput::StreamBufferData(BufferType type) const {
     MILO_ASSERT(type < kBufferNum, 0x1FC);
     // The player buffers have no stream of their own: kBufferPlayer reads the
@@ -1087,23 +1166,17 @@ bool LiveCameraInput::GetTweakedAutoexposure() const {
     if (!GetExposureRegion(configRegion)) {
         return false;
     }
-    if (!frameRateOk) {
-        return false;
-    }
-    bool leftOk = NearlyEqual(currentRegion.Left, configRegion.Left);
-    if (!leftOk) {
-        return false;
-    }
-    bool topOk = NearlyEqual(currentRegion.Top, configRegion.Top);
-    if (!topOk) {
-        return false;
-    }
-    bool widthOk = NearlyEqual(currentRegion.Width, configRegion.Width);
-    if (!widthOk) {
-        return false;
-    }
-    bool heightOk = NearlyEqual(currentRegion.Height, configRegion.Height);
-    return heightOk;
+    // ONE && chain, not five `if (!x) return false;` statements.  The image
+    // gives the GetExposureRegion test its own `li r3, 0x0` + branch to the
+    // epilogue (0x82430330), then funnels every later failure into a SINGLE
+    // `li r11, 0x0` at 0x824303E4 while the success path materialises
+    // `li r11, 0x1` at 0x824303E0 -- the short-circuit shape.  Separate early
+    // returns give each test its own zero block and drop the final 0/1
+    // normalisation (`clrlwi. ; li 1 ; bne ; li 0 ; clrlwi r3`).
+    return frameRateOk && NearlyEqual(currentRegion.Left, configRegion.Left)
+        && NearlyEqual(currentRegion.Top, configRegion.Top)
+        && NearlyEqual(currentRegion.Width, configRegion.Width)
+        && NearlyEqual(currentRegion.Height, configRegion.Height);
 }
 
 #define NUI_CAMERA_AE_ROI_MINIMUM_WIDTH 0.15f
@@ -1330,7 +1403,16 @@ void CameraDump(const char *filename) {
     RndTex *tex = cam->GetStreamTex(LiveCameraInput::kBufferDepth);
     int texSize = tex->Width() * tex->Height() * tex->Bpp() / 8;
     void *buf = MemAlloc(texSize, "unknown", 0, "unknown", 0);
-    void *texels;
+    // `= nullptr`, not a bare declaration: the image writes 0 into the slot
+    // before the TexelsLock call (`li r11, 0x0` / `stw r11, 0x50(r31)` at
+    // 0x82434964..0x8243496C, reloaded as memcpy's r4 at 0x8243497C).  That
+    // took 94.737 from 6 charged rows to 5.  RESIDUAL (w8-r, 94.737): the
+    // image hoists tex's vtable load ABOVE the `mr r29, r3` / home store
+    // (`lwz r10, 0x0(r27)` is the instruction after `li r11, 0x0`) where we
+    // emit it two instructions after, and it reloads `lwz r4, 0x50(r31)` after
+    // `mr r3, r29` where we load it before -- a two-instruction hoist, no
+    // value or address differs.
+    void *texels = nullptr;
     tex->TexelsLock(texels);
     memcpy(buf, texels, texSize);
     tex->TexelsUnlock();

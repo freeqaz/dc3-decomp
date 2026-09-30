@@ -32,6 +32,49 @@ int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddl
 int fft_real_forward_altivec(float* data, long size, float* context);
 void SquareComplexTransposeVector(float* data, long size);
 
+// COMDAT-SELECTION LEVER: MEASURED, and the actionable direction is EMPTY for
+// this unit (w8-r).  Read the mechanism before reusing this note, because the
+// obvious one is WRONG and was retracted: it is NOT "add `inline` so the
+// definition becomes a COMDAT".  MSVC/Xenon puts EVERY function we compile into
+// its own COMDAT (function-level linking), so being a COMDAT does not
+// discriminate at all.  What ham_xbox_r.map's flag column reports is the COMDAT
+// *selection type*, carried in the section symbol's aux record at offset 14:
+// `f i` <-> IMAGE_COMDAT_SELECT_ANY (inline / template / in-class), bare `f`
+// <-> IMAGE_COMDAT_SELECT_NODUPLICATES (ordinary out-of-line).  The dtk-carved
+// TARGET objects record no selection byte at all, so the map is the only
+// carrier and there is nothing to diff object-to-object -- which is why
+// "our source defines it out-of-line, therefore our class matches" is not
+// evidence.  Use scripts/analysis/comdat_selection_audit.py instead.
+//
+// MEASURED over build/373307D9/src/system/synth_xbox/FFT.obj: ZERO selection
+// mismatches, in either direction.  Every FFT symbol our build emits already
+// carries the class ham_xbox_r.map records for it, so there is nothing here to
+// match and the 46.93 / 48.75 stall on fft_altivec / fft_recursive is not a
+// selection-class artifact.  (The FFT functions do all call each other, so the
+// same-TU precondition IS satisfied -- the lever is not ruled out by
+// construction, it is ruled out by the audit finding nothing to fix.)
+//
+// Two things that are NOT leads for this lever, both measured elsewhere and
+// worth not re-deriving: (1) a SAVE-SET difference is not evidence for it --
+// a sibling lane's RndSpotlight::BuildBeam is the textbook symptom (image
+// `bl __savegprlr_14`, ours `_16`) and stayed BYTE-IDENTICAL at 85.3415 with
+// `__savegprlr_16` unchanged after its same-TU callee's selection class was
+// matched; (2) all four selection closures verified anywhere so far were
+// FIDELITY-ONLY, zero score movement.  Whole-binary surface, for scale:
+// 1,898 selection mismatches over 78,352 functions compared, of which 536 are
+// the actionable ours-NODUP / image-ANY direction and 1,362 are the reverse.
+//
+// Target save sets, recorded for whoever picks this up -- as REFERENCE, not as
+// a lead, per (1) above: fft_altivec __savegprlr_14; fft_recursive
+// __savegprlr_15 + __savefpr_24 + __savevmx_124; fft_scalar __savegprlr_24;
+// fft_real_forward_altivec __savegprlr_23 + __savefpr_25 + __savevmx_121;
+// fft_matrix_forward_columnwise __savegprlr_20 + __savefpr_24 + __savevmx_120;
+// fft_matrix_inverse_columnwise __savegprlr_21 + __savefpr_24 + __savevmx_124;
+// fft_real_forward_scalar __savegprlr_29.  The stored
+// REGISTER_SAVE_HELPER_MISMATCH scan flags fft_scalar and fft_recursive in this
+// unit; its fft_recursive row still reads "STUB: no body emitted", which is
+// stale -- the function is implemented and scores 48.754.
+
 // Lazily-grown ping-pong scratch buffer shared by fft_pingpong / fft_recursive.
 struct FftScratch {
     void* buf;
@@ -135,6 +178,14 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
             // arithmetic to just before its store; adjacent, the stores keep
             // source order.  Diff-first adjacent is 86.7; pre-computing both
             // bins into named temps changes nothing either way.
+            // w8-r: moving ONLY `c`/`s` between the two bin stores (leaving
+            // `ss` above them), to reproduce the image's `lfd c` / `lfd s` pair
+            // sitting BETWEEN `stfs f9, 0x4(r31)` and `stfs f8, 0x0(r31)`, is
+            // byte-identical at 88.048.  The image's residual shape is: diff
+            // computed, sum computed, store DIFF, c/s loaded, store SUM -- it
+            // stores the second bin first WITHOUT deferring the first bin's
+            // arithmetic, which is the half w7-br's declarations-between
+            // variant could not get.
             float ss = (float)sin_2a;
             double c = 1.0;
             double s = 0.0;
@@ -2223,6 +2274,10 @@ void SquareComplexTransposeVector(float* data, long size) {
             __stvx(outRowHi, rowHi, 0);
             rowHi += 16;
             __stvx(outColLo, colLo, 0);
+            // MEASURED INERT (w8-r): spelling these `colLo = rowStep + colLo`
+            // to flip the image's `add r7, r4, r7` / `add r6, r4, r6` operand
+            // order is byte-identical at 97.297.  Confirms the commutative
+            // operand-order floor for `add` as well as `fmuls`.
             colLo += rowStep;
             __stvx(outColHi, colHi, 0);
             colHi += rowStep;
