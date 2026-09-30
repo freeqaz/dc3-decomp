@@ -1775,8 +1775,17 @@ def load_layouts(path):
             for c, mem in raw.items()}
 
 
+FREE_SPECIAL_RE = re.compile(r"^\?\?(?:_[0-9A-Z]|[0-9A-Z])@[YZ]")
+
+
 def function_ctx(unit, name, demangled):
     kind, cls = tos.classify_symbol(name)
+    if FREE_SPECIAL_RE.match(name):
+        # `??6@YAAAVBinStream@@...` is a FREE operator<<: the storage class
+        # follows the operator code directly.  this_offset_scan.classify_symbol
+        # reads its first parameter type (`YAAAVBinStream`) as a class and
+        # calls it a member, which would make r3 -- the BinStream -- `this`.
+        kind, cls = "free-or-static", None
     dm = demangled.get((unit, name))
     if kind == "template-or-complex":
         r = tos.member_from_demangled(dm)
@@ -1821,6 +1830,13 @@ def scan(args, cov, only=None):
     cov.universe(len(target), "function bodies in the target objects of every "
                               "objdiff.json unit that has one")
 
+    # The `contradicted-by-100pct` gate trusts report.json.  A per-target
+    # rebuild leaves it STALE, and a stale 100.0 then silently swallows the very
+    # row a new bug produces (measured: the sabotage control's injected row
+    # landed in that bucket until report.json was regenerated).  Never consult a
+    # score older than the object it describes.
+    rep_mtime = os.path.getmtime(args.report) if os.path.exists(args.report) else 0
+    stale_units = set()
     rows_all = []
     bucket_rows = {b: 0 for b in BUCKETS}
     funcs_with = {b: set() for b in BUCKETS}
@@ -1833,6 +1849,8 @@ def scan(args, cov, only=None):
             continue
         if cache_unit != unit:
             cache_unit, cache_bodies = unit, function_bodies(bp)
+            if os.path.getmtime(bp) > rep_mtime:
+                stale_units.add(unit)
         if name not in cache_bodies:
             cov.drop("not-defined-in-our-object",
                      note="target function with no body in our object "
@@ -1844,8 +1862,8 @@ def scan(args, cov, only=None):
             n_byte_identical += 1
             continue
         ctx = function_ctx(unit, name, demangled)
-        rows = compare_function(tw, trel, bw, brel, symtab, ctx, layouts,
-                                norms.get((unit, name)), sigs)
+        norm = None if unit in stale_units else norms.get((unit, name))
+        rows = compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm, sigs)
         for r in rows:
             r["unit"], r["symbol"] = unit, name
             r["norm"] = norms.get((unit, name))
@@ -1859,6 +1877,10 @@ def scan(args, cov, only=None):
     cov.extra("buckets_rows", bucket_rows)
     cov.extra("buckets_functions", {b: len(s) for b, s in funcs_with.items()})
     cov.extra("byte_identical", n_byte_identical)
+    cov.extra("units_newer_than_report", len(stale_units))
+    if stale_units:
+        cov.note(f"{len(stale_units)} units' objects are NEWER than report.json: "
+                 f"the contradicted-by-100pct gate is OFF for them")
     cov.extra("units_without_target_object", n_units_no_target)
     cov.note(f"{n_byte_identical} examined functions are byte-identical: a proof "
              f"of absence for this class, not a blind spot")
@@ -2198,6 +2220,10 @@ def selftest(args):
           "address -> anchor-normalised",
           [r["bucket"] for r in rows] == ["anchor-normalised"])
 
+    check("a free special-name operator (??6@Y...) is not a member -- r3 is "
+          "its first argument, not `this`",
+          not function_ctx("u", "??6@YAAAVBinStream@@AAV0@ABVRndParticle@@@Z", {})["member"]
+          and function_ctx("u", "??0RndFlare@@IAA@XZ", {})["member"])
     check("link-pair naming: mNext/mPrev, _M_left/_M_right, next/prev",
           is_link_pair("mNext", "mPrev") and is_link_pair("_M_left", "_M_right")
           and is_link_pair("next", "prev") and not is_link_pair("mNext", "mSize"))
