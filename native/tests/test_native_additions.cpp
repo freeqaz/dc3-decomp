@@ -18,6 +18,9 @@
 #include "rndobj/Cam.h"
 #include "rndobj/Trans.h"
 #include "world/CameraShot.h"
+#include "ui/UI.h"
+#include "ui/UIScreen.h"
+#include "obj/Msg.h"
 
 #include <chrono>
 #include <thread>
@@ -150,4 +153,58 @@ TEST_F(NativeAdditionsCamShotTest, TargetlessFrameFollowsItsParent) {
     delete parent;
     delete cam;
     delete shot;
+}
+
+// ---------------------------------------------------------------------------
+// UIManager message dispatch after a screen transition.
+//
+// Image, ?Handle@UIManager@@ (UI.s): BlockHandlerDuringTransition (8277FB58),
+// then mSink (8277FB78 lwz r4,0x50(r31)) -- a member only the `set_sink`
+// handler writes, and no shipped DTA calls it -- then the C++ handlers, the
+// `ui` typedef (82780694) and, LAST, mCurrentScreen (827806D0 lwz r4,0x48).
+// UIManager::Poll never stores to +0x50.
+//
+// A native-only line in UIManager::Poll set mSink = the entering screen on
+// every transition ("DTA set_sink never fires"), so the screen saw every
+// message BEFORE the ui typedef and the C++ handlers, and anything it left
+// unhandled was delivered to it a second time by the trailing mCurrentScreen
+// dispatch -- which was always there, so button input never needed it.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+class CountingScreen : public UIScreen {
+public:
+    DataNode Handle(DataArray *msg, bool warn) override {
+        if (msg->Size() > 1 && msg->Type(1) == kDataSymbol && msg->Sym(1) == "na_probe")
+            mProbes++;
+        return UIScreen::Handle(msg, warn);
+    }
+    int mProbes = 0;
+};
+
+class NativeAdditionsUITest : public EngineTestFixture {};
+
+} // namespace
+
+TEST_F(NativeAdditionsUITest, TransitionDoesNotMakeTheScreenTheSink) {
+    UIManager ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    CountingScreen *scr = new CountingScreen();
+    ui.GotoScreen(scr, false, false);
+    for (int i = 0; i < 16 && (ui.InTransition() || ui.CurrentScreen() != scr); i++)
+        ui.Poll();
+    ASSERT_EQ(ui.CurrentScreen(), scr) << "precondition: the transition completed";
+    ASSERT_FALSE(ui.InTransition());
+
+    static Message probe("na_probe");
+    ui.Handle(probe, false);
+    EXPECT_EQ(scr->mProbes, 1)
+        << "a message the screen leaves unhandled reached it " << scr->mProbes
+        << " times: the image routes to mCurrentScreen once, last; mSink is "
+           "only ever set by set_sink";
+
+    TheUI = savedUI;
+    delete scr;
 }
