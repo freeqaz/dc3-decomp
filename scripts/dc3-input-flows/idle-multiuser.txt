@@ -17,11 +17,10 @@ wait_screen main_screen
 wait_screen choose_mode_screen
 +30 confirm
 
+# One down: song_tier_0 (the entry focus, index 2) -> ymca (3).  See ymca.txt
+# for the derivation; four downs land on the song_tier_1 header.
 wait_screen song_select_screen
 +30 down
-+45 down
-+60 down
-+75 down
 +90 confirm
 
 wait_screen multiuser_screen
