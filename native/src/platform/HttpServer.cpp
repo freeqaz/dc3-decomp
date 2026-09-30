@@ -241,6 +241,7 @@ void HttpServer::ProcessCommands() {
             case kCmdGetObject:    HandleGetObject(*cmd); break;
             case kCmdGetChildren:  HandleGetChildren(*cmd); break;
             case kCmdSceneTree:    HandleSceneTree(*cmd); break;
+            case kCmdPoseTarget:   HandlePoseTarget(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
@@ -789,6 +790,14 @@ void HttpServer::HandleGetChildren(Command& cmd) {
     cmd.result.jsonData = json;
 }
 
+// PoseTarget_Native.cpp.  Read-only: builds the targets, touches no state.
+std::string Dc3PoseTargetJson(float leadMs);
+
+void HttpServer::HandlePoseTarget(Command& cmd) {
+    cmd.result.jsonData = Dc3PoseTargetJson((float)atof(cmd.param1.c_str()));
+    cmd.result.ok = true;
+}
+
 void HttpServer::HandleSceneTree(Command& cmd) {
     ObjectDir* dir = ObjectDir::Main();
     if (!dir) {
@@ -1264,6 +1273,21 @@ void HttpServer::RegisterEndpoints() {
                 JsonError("Timeout waiting for screen '" + target +
                           "' (current: '" + curScreen + "')"),
                 "application/json");
+        }
+    });
+
+    // GET /api/pose/target[?lead_ms=N] — the skeleton each player is being
+    // asked to perform right now (choreography reference or fatality pose),
+    // for scripts/synthetic_kinect.py.  Answered on the main thread between
+    // frames, so successive calls step with the game.  Read-only.
+    svr->Get("/api/pose/target", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string lead = req.has_param("lead_ms") ? req.get_param_value("lead_ms") : "0";
+        auto result = QueueAndWait(kCmdPoseTarget, lead);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
         }
     });
 

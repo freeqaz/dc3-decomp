@@ -345,26 +345,36 @@ static void BindPlayerSkeletons(GestureMgr *mgr) {
     }
 }
 
-// Wall-clock ms since the previous ACCEPTED frame (Xbox gets this from
+// Milliseconds since the previous ACCEPTED frame (Xbox gets this from
 // NUI_SKELETON_FRAME). Displacement scoring integrates these, so a garbage value
 // poisons it; clamped to [1,200], first accepted frame returns 33.
-static int AcceptedFrameElapsed() {
+//
+// `sensorTs` is the pose packet's own capture timestamp in seconds (<0: none).
+// When successive stamps advance, the elapsed time is theirs, not the game
+// loop's wall clock: a real sensor's frame interval is a property of the
+// camera, and under DC3_FAST_TIME (song time = 1/120 s per game frame, however
+// long the frame took) a wall-clock interval does not even share the song's
+// time base -- a replayed choreography then reads as moving too fast or too
+// slow and every displacement node mis-scores it.  A stamp that does not
+// advance (a looped video, a restarted server) falls back to wall clock.
+static int AcceptedFrameElapsed(double sensorTs = -1.0) {
     static std::chrono::steady_clock::time_point sPrevTime;
     static bool sHavePrevTime = false;
+    static double sPrevSensorTs = -1.0;
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
-    int elapsedMs;
+    long ms = 33;
     if (sHavePrevTime) {
-        long ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(now - sPrevTime).count();
+        ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - sPrevTime).count();
+        if (sensorTs >= 0.0 && sPrevSensorTs >= 0.0 && sensorTs > sPrevSensorTs)
+            ms = (long)((sensorTs - sPrevSensorTs) * 1000.0 + 0.5);
         if (ms < 1) ms = 1;
         if (ms > 200) ms = 200;
-        elapsedMs = (int)ms;
     } else {
-        elapsedMs = 33;
         sHavePrevTime = true;
     }
     sPrevTime = now;
-    return elapsedMs;
+    sPrevSensorTs = sensorTs;
+    return (int)ms;
 }
 
 // DC3_SCORING_DEBUG=1: once-per-second frame-gating liveness counters, matching
@@ -462,7 +472,7 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
         sExtLastFrameId = frameId;
 
         if (newFrame) {
-            int elapsedMs = AcceptedFrameElapsed();
+            int elapsedMs = AcceptedFrameElapsed(TheSkeletonProvider->Timestamp());
             ArchivePrevFrame(mgr);
 
             int numPersons = TheSkeletonProvider->NumPersons();

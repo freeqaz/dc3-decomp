@@ -19,6 +19,12 @@ public:
     float Last4BeatsDetectFrac(int) const;
     void Poll(int, int, MoveDir *);
     const HamMove *Move() const { return mMove; }
+#ifdef HX_NATIVE
+    // Read-only, for the native synthetic sensor (PoseTarget_Native.cpp): the
+    // reference skeletons this detector scores the move against, one per
+    // MoveFrame of Move().
+    const std::vector<DancerFrame> &NativeDancerFrames() const { return mDancerFrames; }
+#endif
     void Reset() {
         if (mActive) {
             for (int i = 0; i < 2; i++) {
@@ -59,6 +65,12 @@ public:
     void ClearLoopedRatingFrac(const HamMove *);
     float MoveRatingFrac(int, RatingBar, const HamMove *);
 
+#ifdef HX_NATIVE
+    // Read-only lookup for the native synthetic sensor: FindDetector without its
+    // create-on-miss side effect.  Defined below MoveDetectorCmp.
+    const MoveDetector *NativeFindDetector(const HamMove *) const;
+#endif
+
 private:
     MoveDetector *FindDetector(const HamMove *);
 
@@ -78,3 +90,12 @@ struct MoveDetectorCmp {
         return move < md->Move();
     }
 };
+
+#ifdef HX_NATIVE
+inline const MoveDetector *MoveAsyncDetector::NativeFindDetector(const HamMove *move) const {
+    std::pair<std::vector<MoveDetector *>::const_iterator,
+              std::vector<MoveDetector *>::const_iterator>
+        range = std::equal_range(mDetectors.begin(), mDetectors.end(), move, MoveDetectorCmp());
+    return range.first == range.second ? nullptr : *range.first;
+}
+#endif

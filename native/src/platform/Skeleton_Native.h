@@ -47,6 +47,12 @@ public:
     // multiple times.
     uint32_t FrameId() const { return mFrameIdFront; }
 
+    // Sensor capture timestamp (seconds) of that packet, as the server stamped
+    // it -- the v1/v2 header's f64 ts.  Xbox takes a skeleton frame's elapsed
+    // time from NUI_SKELETON_FRAME's own timestamp, not from when the game got
+    // round to reading it; GestureMgr_NativePoll does the same with this.
+    double Timestamp() const { return mTimestampFront; }
+
     // Find person by BOTSORT track ID, returns -1 if not found
     int FindByTrackId(int trackId) const;
 
@@ -97,6 +103,8 @@ private:
     // Latest packet frame_id (reader writes mFrameIdBack, Poll() latches Front)
     uint32_t mFrameIdBack = 0;
     uint32_t mFrameIdFront = 0;
+    double mTimestampBack = 0.0;
+    double mTimestampFront = 0.0;
 
     // Coordinate mapping: camera view extent in metres at mViewDepth.
     //

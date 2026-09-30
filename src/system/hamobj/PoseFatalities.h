@@ -32,6 +32,12 @@ public:
     void SetJump(int, int);
     bool GotFullCombo(int) const;
     void Poll();
+#ifdef HX_NATIVE
+    // Read-only, for the native synthetic sensor (native/src/platform/
+    // PoseTarget_Native.cpp): the pose the fatality asks this player to strike,
+    // i.e. the skeleton UpdateMatchingPose compares the player against.
+    const Skeleton &NativeTargetSkeleton(int player) const { return mPlayerSkeletons[player]; }
+#endif
 
 private:
     Symbol GetFatalityFace();

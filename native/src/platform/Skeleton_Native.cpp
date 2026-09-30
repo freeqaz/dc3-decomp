@@ -343,6 +343,7 @@ void NativeSkeletonProvider::ReaderThread() {
             memcpy(mBack, newBack, sizeof(mBack));
             mNumPersonsBack = numPersons;
             mFrameIdBack = frameId;
+            mTimestampBack = timestamp;
         }
     }
 }
@@ -352,6 +353,7 @@ void NativeSkeletonProvider::Poll() {
     memcpy(mPersons, mBack, sizeof(mPersons));
     mNumPersons = mNumPersonsBack;
     mFrameIdFront = mFrameIdBack;
+    mTimestampFront = mTimestampBack;
 }
 
 int NativeSkeletonProvider::FindByTrackId(int trackId) const {
