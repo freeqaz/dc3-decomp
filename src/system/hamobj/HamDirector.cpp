@@ -3225,6 +3225,21 @@ found:
 // REFUTED: un-hoisting `Key<Symbol> &key = keys->at(clipIdx)` into two direct
 // `keys->at(clipIdx)` accesses DOES remove the extra callee-saved register (the
 // PROLOGUE_MISMATCH pattern disappears) but adds 6 instructions, for 96.4.
+// OUT OF REACH of the map-COMDAT lever (a COMDAT callee is link-time
+// replaceable, so MSVC will not propagate its clobber set and the caller has to
+// spill to non-volatiles -- which can make a save-set difference an `inline`
+// keyword on the callee).  That lever needs a SAME-TU callee, and here it has
+// none to work on: of this function's callees, the only three the image marks
+// `f i` in orig/373307D9/ham_xbox_r.map are ?Mod@@YAMMM@Z (char:
+// CharLipSyncDriver.obj), ?KeyLessEq@?$Keys@VSymbol@@V1@@@QBAHM@Z and
+// ?__stl_throw_out_of_range@stlpmtx_std@@YAXPBD@Z -- all CROSS-TU, where neither
+// side can propagate anything.  Every callee defined in HamDirector.cpp itself
+// (GetPropKeys, PoseIconMan, SetMasterClipAnim, DrawIconMan(Symbol,...)) is bare
+// `f`, so there is no in-TU COMDAT-ANY callee to match in the first place.
+// Do NOT read this as "our linkage classes already agree": MSVC/Xenon puts every
+// function we compile in its own COMDAT and our objects emit NODUPLICATES for
+// both classes, so we reproduce neither.  The claim here is only about which
+// callees are same-TU.
 void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, float duration, float beatExtra, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {
         SetMasterClipAnim();
