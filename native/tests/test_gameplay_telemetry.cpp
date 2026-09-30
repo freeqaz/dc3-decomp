@@ -498,25 +498,24 @@ TEST_F(GameplayTelemetryTest, SongDriverLayersStayLiveAfterIntro) {
 }
 
 // ---------------------------------------------------------------------------
-// Tier 3: SetFrame path — verify HamDirector::Poll() drives animation
+// Tier 3: the song anim is driven by the image's own path
 //
-// The SetFrame path in HamDirector::Poll() drives song anim prop key evaluation
-// on native/web (replacing the Xbox select_camera → OnSelectCamera → SetFrame
-// chain). These tests verify the engine works correctly via the SetFrame path.
+// On the Xbox the song anim frame is set only by HamDirector::OnSelectCamera,
+// reached every frame from WorldDir::Poll's select_camera.  A native block in
+// HamDirector::Poll used to set it a second time each frame on the premise
+// that select_camera never fired natively; measured 2026-09-30 it fires every
+// frame, with the same frame value, so the Poll block was a double drive.
 // ---------------------------------------------------------------------------
 
-TEST_F(GameplayTelemetryTest, NativeSetFrameDrivesAnimation) {
-    // The SetFrame call in HamDirector::Poll() should fire repeatedly during
-    // gameplay, driving prop key evaluation (move_interp, clip interp, etc.).
+TEST_F(GameplayTelemetryTest, SongAnimIsDrivenOnlyBySelectCamera) {
     auto playing = gameplaySamples();
     ASSERT_FALSE(playing.empty())
         << "Never observed real gameplay on game_screen. " << progressSummary();
 
-    int finalCount = playing.back().getInt("nativeSetFrameCount", 0);
-    EXPECT_GT(finalCount, 0)
-        << "Native SetFrame path never fired during gameplay. "
-        << "This means prop key evaluation (move_interp, clip interp) "
-        << "is not being driven by HamDirector::Poll(). "
+    int selectCamera = playing.back().getInt("selectCameraSetFrameCount", 0);
+    EXPECT_GT(selectCamera, 0)
+        << "OnSelectCamera never set the song anim frame during gameplay: "
+           "select_camera is not reaching HamDirector. "
         << progressSummary();
 }
 

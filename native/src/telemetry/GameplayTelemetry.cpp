@@ -33,7 +33,7 @@ extern WorldDir *TheWorld;
 extern PropertyEventProvider *TheHamProvider;
 
 // Telemetry counters from engine code
-extern int HamDirector_NativeSetFrameCount();
+extern int HamDirector_SelectCameraSetFrameCount();
 
 // GamePanel — use IsGameOver() and public accessors to avoid protected access
 #include "lazer/game/GamePanel.h"
@@ -209,7 +209,7 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
     }
 
     // SetFrame path counter
-    s.nativeSetFrameCount = HamDirector_NativeSetFrameCount();
+    s.selectCameraSetFrameCount = HamDirector_SelectCameraSetFrameCount();
 
     // Move/flashcard validation: check if move prop key track exists and has keys
     if (TheHamDirector) {
@@ -676,7 +676,7 @@ void GameplayTelemetry::Sample(int frame) {
         "hamProvider=%d mergerDir=%d "
         "clipDir=%d masterClip=%d clipPlayerInit=%d charClipLayers=%d p0=%d p1=%d "
         "clipKeyCount=%d songAnimKeys=%d diffProxy=%d routineLoaded=%d mergeMoves=%d "
-        "p0SongAnim=%d doSongAnim=%d nativeSetFrameCount=%d "
+        "p0SongAnim=%d doSongAnim=%d selectCameraSetFrameCount=%d "
         "moveInterpActive=%d moveKeyCount=%d songAnimFrameRate=%.1f activeMoveCount=%d "
         "hudMergeTargetIsHUD=%d hudPanelIsHUD=%d hudHasLeft=%d hudHasRight=%d hudMDirResolved=%d "
         "footDataValid=%d lAnkleZ=%.1f lToeZ=%.1f rAnkleZ=%.1f rToeZ=%.1f "
@@ -704,7 +704,7 @@ void GameplayTelemetry::Sample(int frame) {
         s.clipDir ? 1 : 0, s.masterClip ? 1 : 0, s.clipPlayerInit ? 1 : 0,
         s.charClipLayers, s.player0 ? 1 : 0, s.player1 ? 1 : 0,
         s.clipKeyCount, s.songAnimKeys, s.diffProxy, s.routineLoaded, s.mergeMoves,
-        s.p0SongAnim, s.doSongAnim, s.nativeSetFrameCount,
+        s.p0SongAnim, s.doSongAnim, s.selectCameraSetFrameCount,
         s.moveInterpActive ? 1 : 0, s.moveKeyCount, s.songAnimFrameRate,
         s.activeMoveCount,
         s.hudMergeTargetIsHUD ? 1 : 0, s.hudPanelIsHUD ? 1 : 0,

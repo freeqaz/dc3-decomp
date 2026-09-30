@@ -35,7 +35,7 @@ void Dc3PlantGuardTick() {
 bool Dc3PlantGuarded(RndTransformable *b) {
     return gDc3PlantGuardActive && gDc3PlantGuard.count(b) != 0;
 }
-// FEET-IN-FLOOR FIX (opt-out: DC3_FEET_PLANT_FIX_OFF=1). The leg foot-plant IK must
+// FEET-IN-FLOOR FIX (opt-in: DC3_FEET_PLANT_FIX=1, see Dc3FeetPlantFix). The leg foot-plant IK must
 // bend the leg; native loads mMoveElbow=false for the *.ikfoot, which disables the
 // IKElbow knee bend AND drops the knee/thigh dependency from CharIKHand::PollDeps, so
 // the sorter polls the IK before the skeleton pose and the bend is overwritten. See

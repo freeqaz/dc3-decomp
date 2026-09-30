@@ -524,12 +524,12 @@ bool HamIKEffector::Dc3PostPollPelvisRetarget(int charIdx) {
     if (sDiag < 0)
         sDiag = (getenv("DC3_IK_DIAG") || getenv("DC3_KNEE_LOCAL")) ? 1 : 0;
     if (sDiag) {
-        extern int HamDirector_NativeSetFrameCount();
+        extern int HamDirector_SelectCameraSetFrameCount();
         static int sLogCount = 0;
         static int sLastFrame[8] = { -1000, -1000, -1000, -1000,
                                      -1000, -1000, -1000, -1000 };
         int slot = (charIdx >= 0 && charIdx < 8) ? charIdx : 7;
-        int frame = HamDirector_NativeSetFrameCount();
+        int frame = HamDirector_SelectCameraSetFrameCount();
         if (sLogCount < 200 && frame - sLastFrame[slot] >= 30) {
             sLogCount++;
             sLastFrame[slot] = frame;
@@ -565,16 +565,16 @@ void HamIKEffector::Poll() {
     // main.milo so it can be ordered vs the POSE(hdrv) line (g_ikPollSeq).
     {
         extern int g_ikPollSeq;
-        extern int HamDirector_NativeSetFrameCount();
+        extern int HamDirector_SelectCameraSetFrameCount();
         static int sIkSeqLog = 0;
         const char *pp = PathName(this);
         bool isMain = pp && strstr(pp, "main.milo") && !strstr(pp, "backup");
         bool isAnkle = pp && strstr(pp, "ankle.ikf");
         if (getenv("DC3_IK_DIAG") && sIkSeqLog < 40 && isMain && isAnkle
-            && HamDirector_NativeSetFrameCount() > 3000) {
+            && HamDirector_SelectCameraSetFrameCount() > 3000) {
             sIkSeqLog++;
             fprintf(stderr, "DC3_IK_DIAG PollSeq[%d] f=%d seq=%d IK(ankle) %s\n",
-                    sIkSeqLog, HamDirector_NativeSetFrameCount(), ++g_ikPollSeq, pp);
+                    sIkSeqLog, HamDirector_SelectCameraSetFrameCount(), ++g_ikPollSeq, pp);
         }
     }
     // Run the matched IK in CHARACTER-LOCAL space (re-rooted to the world
@@ -626,12 +626,12 @@ void HamIKEffector::Poll() {
                 bool fcTrace = false;
                 {
                     const char *fp = PathName(this);
-                    extern int HamDirector_NativeSetFrameCount();
+                    extern int HamDirector_SelectCameraSetFrameCount();
                     static int sFCCount = 0;
                     bool fcMain = fp && strstr(fp, "main.milo") && !strstr(fp, "backup");
                     bool fcLA = fp && strstr(fp, "bone_L-ankle.ikf");
                     if (sFCCount < 40 && fcMain && fcLA && t == kEffectorTypeAnkle
-                        && HamDirector_NativeSetFrameCount() > 800) {
+                        && HamDirector_SelectCameraSetFrameCount() > 800) {
                         sFCCount++;
                         fcTrace = true;
                     }
@@ -673,11 +673,11 @@ void HamIKEffector::Poll() {
                                 (void*)n, n ? (int)n->Type() : -1);
                         }
                     }
-                    extern int HamDirector_NativeSetFrameCount();
+                    extern int HamDirector_SelectCameraSetFrameCount();
                     if (sTotalWeightLog < 60
                         && t == kEffectorTypeAnkle
                         && isMain
-                        && HamDirector_NativeSetFrameCount() > 3000
+                        && HamDirector_SelectCameraSetFrameCount() > 3000
                         && strstr(path, "bone_L-ankle.ikf")) {
                         sTotalWeightLog++;
                         const Transform &fingW = finger->WorldXfm();
@@ -689,7 +689,7 @@ void HamIKEffector::Poll() {
                             "fingerDirty=%d effDirty=%d "
                             "totalWeight=%.3f constraintCount=%d\n",
                             sTotalWeightLog,
-                            HamDirector_NativeSetFrameCount(),
+                            HamDirector_SelectCameraSetFrameCount(),
                             PathName(this),
                             fingW.v.x, fingW.v.y, fingW.v.z,
                             effW.v.x, effW.v.y, effW.v.z,
@@ -797,11 +797,11 @@ void HamIKEffector::Poll() {
                                     // finger / toe is planted (+0.1) or sunk
                                     // (-4) at the exact clamp instant, and how it
                                     // tracks frame-to-frame.
-                                    extern int HamDirector_NativeSetFrameCount();
+                                    extern int HamDirector_SelectCameraSetFrameCount();
                                     static int sChainLog = 0;
                                     bool isLeftAnkle = p && strstr(p, "bone_L-ankle.ikf");
                                     if (sChainLog < 60 && isMain && isLeftAnkle
-                                        && HamDirector_NativeSetFrameCount() > 3000) {
+                                        && HamDirector_SelectCameraSetFrameCount() > 3000) {
                                         sChainLog++;
                                         ObjectDir *d = Dir();
                                         const char *names[] = {
@@ -815,7 +815,7 @@ void HamIKEffector::Poll() {
                                         fprintf(stderr,
                                             "DC3_IK_DIAG ChainZ[%d] f=%d eff=%s:",
                                             sChainLog,
-                                            HamDirector_NativeSetFrameCount(), p);
+                                            HamDirector_SelectCameraSetFrameCount(), p);
                                         for (int ci = 0; ci < 6; ci++) {
                                             RndTransformable *bt =
                                                 d ? d->Find<RndTransformable>(
@@ -912,13 +912,13 @@ void HamIKEffector::Poll() {
 #endif
 #ifdef HX_NATIVE
                     {
-                        extern int HamDirector_NativeSetFrameCount();
+                        extern int HamDirector_SelectCameraSetFrameCount();
                         static int sBackLog = 0;
                         const char *bp = PathName(this);
                         bool bMain = bp && strstr(bp, "main.milo") && !strstr(bp, "backup");
                         bool bLA = bp && strstr(bp, "bone_L-ankle.ikf");
                         if (sBackLog < 40 && bMain && bLA
-                            && HamDirector_NativeSetFrameCount() > 800) {
+                            && HamDirector_SelectCameraSetFrameCount() > 800) {
                             sBackLog++;
                             const Transform &fingW = finger->WorldXfm();
                             const Transform &fingL = finger->LocalXfm();
@@ -932,7 +932,7 @@ void HamIKEffector::Poll() {
                                 "  effW.v=(%.3f,%.3f,%.3f)\n"
                                 "  inv.v=(%.3f,%.3f,%.3f) inv.m.x=(%.3f,%.3f,%.3f)\n"
                                 "  finalAfter.v=(%.3f,%.3f,%.3f)\n",
-                                sBackLog, HamDirector_NativeSetFrameCount(), bp,
+                                sBackLog, HamDirector_SelectCameraSetFrameCount(), bp,
                                 q.v.x, q.v.y, q.v.z,
                                 dbgFinalBefore.v.x, dbgFinalBefore.v.y, dbgFinalBefore.v.z,
                                 finger->Name(),
@@ -997,7 +997,7 @@ void HamIKEffector::Poll() {
                     mEffector->SetWorldXfm(finalXfm);
 #ifdef HX_NATIVE
                     if (fcTrace) {
-                        extern int HamDirector_NativeSetFrameCount();
+                        extern int HamDirector_SelectCameraSetFrameCount();
                         // Post-write world Z of the ankle and toe (the rendered result).
                         // mEffector is the L-ankle bone here. Toe via Dir() lookup,
                         // matching the ChainZ diag bone names.
@@ -1026,7 +1026,7 @@ void HamIKEffector::Poll() {
                             " inv=(%.3f,%.3f,%.3f)"
                             " finalXfm=(%.3f,%.3f,%.3f)"
                             " => ankleW=(%.3f,%.3f,%.3f) toeW=(%.3f,%.3f,%.3f)\n",
-                            HamDirector_NativeSetFrameCount(),
+                            HamDirector_SelectCameraSetFrameCount(),
                             fcNeutralX, fcNeutralY, fcNeutralZ,
                             fcEffX, fcEffY, fcEffZ,
                             fcFingerX, fcFingerY, fcFingerZ,

@@ -461,15 +461,14 @@ void AnimTask::Poll(float time) {
 
     mPrevFrame = frame;
 
-#ifdef HX_NATIVE
-    // On native, DTA callbacks that would call StopAnimation() or null mAnimTarget
-    // never fire. Auto-null when a non-looping animation has completed.
-    if (mAnimTarget && !mLoop && !mBlending && !mBlendPeriod) {
-        if (time > mFrameSpan && mFrameSpan > 0.0f) {
-            mAnimTarget = NULL;
-        }
-    }
-#endif
+    // No native "auto-null mAnimTarget on completion" here (removed 2026-09-30):
+    // its trigger (time > mFrameSpan, not looping, not blending) is already a term
+    // of the end test below, so it never ended a task that would not end anyway.
+    // What it did change was the order: the target ref was dropped BEFORE `ended`
+    // was sent, so an AnimTask started from that callback on the same target no
+    // longer found this task as its mBlendTask. The image keeps the target until
+    // the task is deleted. Pinned by
+    // NativeEngineLeadsTest.AnimTaskEndedKeepsTargetForBlendChaining.
     if (!mAnimTarget
         || (!mLoop && !mBlending && !mBlendPeriod
             && (time > mFrameSpan || mScale == 0.0f))) {

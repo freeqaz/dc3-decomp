@@ -87,15 +87,15 @@ static bool Dc3KneeClipEnv() {
 void HamDriver::Poll() {
 #ifdef HX_NATIVE
     {
-        extern int HamDirector_NativeSetFrameCount();
+        extern int HamDirector_SelectCameraSetFrameCount();
         static int sSeqLog = 0;
         const char *pp = PathName(this);
         bool isMain = pp && strstr(pp, "main.milo") && !strstr(pp, "backup");
         if (getenv("DC3_IK_DIAG") && sSeqLog < 40 && isMain
-            && HamDirector_NativeSetFrameCount() > 3000) {
+            && HamDirector_SelectCameraSetFrameCount() > 3000) {
             sSeqLog++;
             fprintf(stderr, "DC3_IK_DIAG PollSeq[%d] f=%d seq=%d POSE(hdrv) %s\n",
-                    sSeqLog, HamDirector_NativeSetFrameCount(), ++g_ikPollSeq, pp);
+                    sSeqLog, HamDirector_SelectCameraSetFrameCount(), ++g_ikPollSeq, pp);
         }
     }
     // NOTE (w7-av): the old "bootstrap" hack that used to live here -- one
@@ -124,9 +124,9 @@ void HamDriver::Poll() {
         mLayers.Eval(Weight());
 #ifdef HX_NATIVE
         if (Dc3KneeClipEnv()) {
-            extern int HamDirector_NativeSetFrameCount();
+            extern int HamDirector_SelectCameraSetFrameCount();
             const char *pp = PathName(this);
-            int f = HamDirector_NativeSetFrameCount();
+            int f = HamDirector_SelectCameraSetFrameCount();
             g_dc3KneeDrvPath = pp;
             // main-dancer drivers only, every 5th frame once gameplay is warm,
             // so the per-clip log stays readable across the whole routine
@@ -137,14 +137,14 @@ void HamDriver::Poll() {
         // stale-pose residual (mWeight<1 ⇒ A2) or is mWeight==1 in steady state
         // (⇒ base is zeroed, A2 inert, sink is in the move data / A1)?
         {
-            extern int HamDirector_NativeSetFrameCount();
+            extern int HamDirector_SelectCameraSetFrameCount();
             static int sWLog = 0;
             if (getenv("DC3_IK_DIAG") && sWLog < 40
-                && HamDirector_NativeSetFrameCount() > 3000) {
+                && HamDirector_SelectCameraSetFrameCount() > 3000) {
                 sWLog++;
                 fprintf(stderr,
                     "DC3_IK_DIAG DriverWeight[%d] f=%d mWeight=%.4f scaleDown=%.4f nLayers=%d\n",
-                    sWLog, HamDirector_NativeSetFrameCount(),
+                    sWLog, HamDirector_SelectCameraSetFrameCount(),
                     mLayers.mWeight, 1.0f - mLayers.mWeight,
                     (int)mLayers.mLayers.size());
             }
@@ -171,7 +171,7 @@ void HamDriver::Poll() {
             static int sFinLog = 0;
             if (sFinLog < 800) {
                 sFinLog++;
-                extern int HamDirector_NativeSetFrameCount();
+                extern int HamDirector_SelectCameraSetFrameCount();
                 extern long g_dc3ScaleAddCalls;
                 extern long g_dc3DstPuntCount;
                 float *knee = (float *)mBones->FindPtr(Symbol("bone_L-knee.rotz"));
@@ -181,7 +181,7 @@ void HamDriver::Poll() {
                 fprintf(stderr,
                     "DC3_KNEE_FINAL[%d] f=%d drv=%s knee=%.4f (%.1fdeg) pelZ=%.2f "
                     "kneeMiss=%d pelMiss=%d scaleAdds=%ld punts=%ld nLayers=%d w=%.3f\n",
-                    sFinLog, HamDirector_NativeSetFrameCount(), g_dc3KneeDrvPath,
+                    sFinLog, HamDirector_SelectCameraSetFrameCount(), g_dc3KneeDrvPath,
                     kv, kv * 57.29578f, pz, knee == nullptr, pel == nullptr,
                     g_dc3ScaleAddCalls, g_dc3DstPuntCount,
                     (int)mLayers.mLayers.size(), mLayers.mWeight);
@@ -440,11 +440,11 @@ void HamDriver::LayerClip::Play(CharBones &bones) {
             static int sClipLog = 0;
             if (sClipLog < 4000) {
                 sClipLog++;
-                extern int HamDirector_NativeSetFrameCount();
+                extern int HamDirector_SelectCameraSetFrameCount();
                 fprintf(stderr,
                     "DC3_KNEE_CLIP[%d] f=%d drv=%s clip=%s w=%.3f beat=%.2f "
                     "rotz %.4f->%.4f d=%.4f (deg %.1f->%.1f)\n",
-                    sClipLog, HamDirector_NativeSetFrameCount(), g_dc3KneeDrvPath,
+                    sClipLog, HamDirector_SelectCameraSetFrameCount(), g_dc3KneeDrvPath,
                     mClip ? mClip->Name() : "?", mWeight, deltaBeat,
                     kneeBefore, *kneeDst, *kneeDst - kneeBefore,
                     kneeBefore * 57.29578f, *kneeDst * 57.29578f);
