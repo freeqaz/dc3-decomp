@@ -637,6 +637,7 @@ BUCKETS = [
     "contradicted-by-100pct",
     # leads -- reported on request, never findings
     "base-unknown", "base-provenance-differs", "permuted-unobserved",
+    "global-layout-dependent",
     # candidates -- every one needs adjudication
     "cand-adjacent-links", "cand-wrong-field-typed", "cand-chain-step",
     "cand-novel-address", "cand-permuted",
@@ -1518,8 +1519,77 @@ def _first_consumer_reorder(row, root, bv_root, tw, bw, tacc, bacc, t2o):
     return ok1 and ok2
 
 
+def static_overlay(tw, trel, bw, brel, symtab):
+    """Resolve OUR function-local statics through the code that reads them.
+
+    symbols.txt names only the target's statics (`lbl_<addr>`); ours carry a
+    per-TU scope ordinal (`?cursor@?6??DrawString@...`) that no map lists, so
+    every access to one compared as "unresolvable" and kept unrelated rows
+    candidates.  Where an aligned pair of REFLO/REFHI relocations has a
+    resolvable target symbol and an unresolvable one of ours, map ours to the
+    target's address.  Only a BIJECTIVE pairing is accepted: one of our names
+    to exactly one address and back.  A static read in the wrong place would
+    make the pairing inconsistent and is dropped, not normalised away -- and a
+    relocated displacement row is never in this tool's scope anyway.
+    """
+    fwd, rev = {}, {}
+    bad = set()
+    for ti, bi in aligned_pairs(tw, bw):
+        rt, rb = trel.get(ti), brel.get(bi)
+        if not rt or not rb or rt[0] != rb[0] or rt[0] not in (REL_PPC_REFHI, REL_PPC_REFLO):
+            continue
+        if resolve_global(rb[1], symtab) is not None:
+            continue
+        at = resolve_global(rt[1], symtab)
+        if at is None:
+            continue
+        if rt[0] == REL_PPC_REFLO:
+            at += tos._simm(tw[ti]) - tos._simm(bw[bi])
+        if fwd.get(rb[1], at) != at or rev.get(at, rb[1]) != rb[1]:
+            bad.add(rb[1])
+        fwd[rb[1]] = at
+        rev[at] = rb[1]
+    cand = {k: v for k, v in fwd.items() if k not in bad}
+    if not cand:
+        return cand
+    # LAYOUT CHECK.  An aligned relocation pair is not an identity: MSVC picks
+    # an ANCHOR for neighbouring statics and reaches the others by
+    # displacement (anchor-displacement-false-wrong-global), so the target's
+    # anchor and ours can be different statics.  Accept a mapping only if every
+    # access we make through our static lands on an address the target also
+    # touches with the same width -- measured on LocalizeFloat, where a pure
+    # anchor pairing mapped a counter onto a buffer and invented three rows.
+    _tb, tacc, _ta = evaluate(tw, trel, symtab)
+    _bb, bacc, _ba = evaluate(bw, brel, symtab)
+    t_touch = {(k, off) for (k, _st, r, off) in tacc.values() if r == (ABS,)}
+    ok = {}
+    for name, addr in cand.items():
+        mine = [(k, off) for (k, _st, r, off) in bacc.values() if r == ("sym", name)]
+        if mine and all((k, addr + off) in t_touch for (k, off) in mine):
+            ok[name] = addr
+    return ok
+
+
+class _Overlay(dict):
+    """symtab with a per-function overlay, without copying 200k entries."""
+
+    def __init__(self, base, extra):
+        super().__init__(extra)
+        self._base = base
+
+    def get(self, k, d=None):
+        v = dict.get(self, k)
+        return v if v is not None else self._base.get(k, d)
+
+    def __bool__(self):
+        return True
+
+
 def compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm, sigs=None):
     """Returns a list of row dicts, each with a 'bucket'."""
+    ov = static_overlay(tw, trel, bw, brel, symtab)
+    if ov:
+        symtab = _Overlay(symtab, ov)
     tbase, tacc, taddi = evaluate(tw, trel, symtab)
     bbase, bacc, baddi = evaluate(bw, brel, symtab)
     rows = []
@@ -1625,6 +1695,19 @@ def compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm, sigs=None):
                 row["bucket"] = "reordered"
                 row["reorder_test"] = "first-consumer"
                 continue
+        if root[0] in (ABS, "sym") and not is_addi:
+            # A displacement off a GLOBAL anchor is an address in the layout of
+            # the build that emitted it: `lis gA; lwz -0x285(rX)` names
+            # whatever OUR compiler placed 0x285 before gA.  Two builds whose
+            # .data orders differ disagree here without either being wrong
+            # (MemInit: our anchor-relative gCheckConsistency vs the image's
+            # lbl_830E56F0).  Equal addresses were excused above; unequal ones
+            # are a wrong-GLOBAL question with its own tools, never a field.
+            row["bucket"] = "global-layout-dependent"
+            continue
+        if root[0] in (ABS, "sym") and is_addi:
+            row["bucket"] = "global-layout-dependent"
+            continue
         # -- candidate: type it ----------------------------------------------- #
         lay = type_of_root(root, ctx, layouts)
         row["base_type"] = lay
@@ -1810,7 +1893,9 @@ def _explain_effects(args):
         sigs = {}
         for (_u, nm), dm in sorted(demangled.items()):
             sigs.setdefault(nm, dm)
-        vf = ValueFlow(*tb[args.explain], *bb[args.explain], symtab, sigs,
+        ov = static_overlay(*tb[args.explain], *bb[args.explain], symtab)
+        st = _Overlay(symtab, ov) if ov else symtab
+        vf = ValueFlow(*tb[args.explain], *bb[args.explain], st, sigs,
                        ret_kind_of(sigs.get(args.explain)))
         for side, eff, un in (("target", vf.t_eff, vf.t_un), ("ours", vf.b_eff, vf.b_un)):
             print(f"  effects only in {side} ({len(un)} distinct of {len(eff)}):")
@@ -1887,6 +1972,7 @@ def main(argv=None):
         "base-unknown": "LEAD: a base value unknown/unresolvable on a side",
         "base-provenance-differs": "LEAD: the two bases hold different values",
         "permuted-unobserved": "LEAD: permuted, all effects match, row's value never observed",
+        "global-layout-dependent": "LEAD: off a global anchor -- address depends on each build's .data layout",
         "cand-adjacent-links": "CANDIDATE: adjacent links of one node (direction bug shape)",
         "cand-wrong-field-typed": "CANDIDATE: wrong field of a typed base",
         "cand-chain-step": "CANDIDATE: untyped p = p->field step",
