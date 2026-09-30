@@ -993,7 +993,16 @@ void MemPrintOverview(int heapId, char *const buf) {
         int usage = PhysicalUsage();
         unsigned long minFreeKB = sMinPhysFree >> 10;
         unsigned long availKB = status.dwAvailPhys >> 10;
-        int usageKB = usage >> 10;
+        // DIVISION, not a shift.  0x827CC8AC `srawi r9, r3, 10` followed by
+        // 0x827CC8B4 `addze r9, r9` is MSVC/PPC's signed divide-by-2^n idiom:
+        // srawi sets CA when the value was negative and bits were shifted out,
+        // and addze folds it back in so the result truncates toward zero.  A
+        // plain `>> 10` on an int emits the srawi alone and drops the addze.
+        // The two agree for non-negative usage and differ by one below zero.
+        // The three shifts inside the heap loop below really ARE shifts: the
+        // image emits bare `srawi ..., 10` at 0x827CC984/988/998/99C with no
+        // addze, which is why they stay spelt as `>> 10`.
+        int usageKB = usage / 1024;
         const char *str = MakeString(
             " [%5s] KB free:%7u(%7u) usage:%5i\n",
             (const char *)"physical", availKB, minFreeKB, usageKB
