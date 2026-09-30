@@ -198,15 +198,15 @@ ObjectDir::~ObjectDir() {
     mSubDirs.clear();
     delete mLoader;
     if (TheLoadMgr.AsyncUnload()) {
-#ifdef HX_NATIVE
-        // Async unload still needs to nullify refs on objects that will be
-        // destroyed later, so persistent ObjPtrs (TaskMgr, globals) don't
-        // hold stale pointers. DirUnloader handles the actual destruction.
-        for (ObjDirItr<Hmx::Object> it(this, false); it != nullptr; ++it) {
-            if (it != this && ((Hmx::Object *)it)->IsRefAlive())
-                ((Hmx::Object *)it)->NullifyAllRefs();
-        }
-#endif
+        // No ref nullification here, native included (it used to NullifyAllRefs
+        // every object eagerly). The objects are still ALIVE: the DirUnloader
+        // deletes one per LoadMgr poll, and each ~Object nulls its own refs then,
+        // as on the Xbox. Nulling early let a playing SampleInst's mSample read
+        // NULL while its sample waited here; Synth::Poll then SIGSEGV'd in
+        // SynthSample::GetSampleRate leaving a dance battle (world panel is
+        // unload_async), and an inst deleted in the window could not unregister
+        // from its sample. native/tests/test_async_unload_lifetime.cpp.
+        // (9 lines, as the removed block was: keeps PPC __LINE__ values fixed.)
         new DirUnloader(this);
     } else {
         DeleteObjects();
