@@ -92,8 +92,10 @@ materialised bools. None was a bug. **That is a sample, not the population.**
 On a re-run at `731b6137f` the pile was **201 rows in 65 functions** (the tree
 had moved three functions since the 204/68 count). Every function was traced
 against its listing. **No real bug.** One decompilation-introduced guard was
-found, and it was dead (`MoveDir::UpdateOverlay`, removed for fidelity in
-`3ae5a6ad5`, 87.3115 -> 87.5363). The refutations fall into nine classes. The
+found, and it was dead (`MoveDir::UpdateOverlay`). Removing it measured
+87.3115 -> 87.5363 (`3ae5a6ad5`), but that change was reverted in
+`a870924b1` and handed over rather than landed, because the MoveDir unit was
+held by a concurrent wave. The refutations fall into nine classes. The
 first four now have a recogniser in the scanner (see the next section).
 
 | Class | Functions (native-reachable unless marked Xbox) | How to tell |
@@ -102,7 +104,7 @@ first four now have a recogniser in the scanner (see the next section).
 | **Relocated test** | `UIListState::Scroll`, `FileMerger::Clear`, `DxMesh::DrawFur` (Xbox), `RndXfmCache::GetXfms`, `HamListRibbon::PostLoad`/`Draw`, `Trie::store`, `CacheResource`, `MCContainerXbox::Mount` (Xbox), `DingoSvrXbox::Poll` (Xbox), `Voice::UpdateMix` (Xbox, a moved `bdnz` block), `DecodeDxt5Alpha`, `FlowSlider::UpdateActivations` | the same producer + branch sits a few rows away, or in a moved block. LCS alignment pairs one of them with a neighbour, so a relocated test often shows up as TWO one-sided rows, one per side |
 | **Cross-jump / tail merge** | `ChoosePlayerSides`, `MemAlloc`, `UIListState::Scroll` rows 135/149 | one side's `b` lands on the other copy of the test. Follow the `b` before believing it |
 | **Rotated loop** | `RndText::ConstructMeshes` x2, `RndFont::CharWidthAdvanceCoords`, `RndSoftParticleBuffer::DoPost`, `SkeletonHistory::PrevFromArchive`, `HamCamShot::FlipTargetAnimGroups`, `Game::OnSetShuttle`, `FileMerger::Clear` row 126, `Sound::SetSpeed`, `WordWrap` (a strlen loop lowered two ways) | a guard + top test on one side against `b` to the bottom latch on the other |
-| **Re-test / dead test** | `UIFontImporter::GetMatVariationName` (`x>0` then `x!=0`), `CharEyes::Poll` (jump threading), `CharLipSyncDriver::UpdatePlayback`, `ThreeDSound::CalculateFaderVolume` (re-reads `mShape` after `MILO_FAIL`; its case is already decided), `RndText::FitTextScroll` (the only effect is a dead stack store), `fft_recursive` row 62 (Xbox: `err != 0` at a join where the arm is a constant), `DumpHolmesLog` (ours null-checks `delete log` on a pointer already dereferenced), `MoveDir::UpdateOverlay` (**ours**, dead, removed) | the value was already tested, or is already known on every path |
+| **Re-test / dead test** | `UIFontImporter::GetMatVariationName` (`x>0` then `x!=0`), `CharEyes::Poll` (jump threading), `CharLipSyncDriver::UpdatePlayback`, `ThreeDSound::CalculateFaderVolume` (re-reads `mShape` after `MILO_FAIL`; its case is already decided), `RndText::FitTextScroll` (the only effect is a dead stack store), `fft_recursive` row 62 (Xbox: `err != 0` at a join where the arm is a constant), `DumpHolmesLog` (ours null-checks `delete log` on a pointer already dereferenced), `MoveDir::UpdateOverlay` (**ours**, dead; removal handed to the lane that holds MoveDir) | the value was already tested, or is already known on every path |
 | **If-conversion / materialised bool / select** | `CacheWav` (`subic/srwi/subfze/and` = `r3>0 ? 0 : x`), `Geo::Intersect` (`return f() ? 1 : 0`), `HamCharacter::SyncObjects` (re-normalising a 0/1 bool), `BSPFace::Update`, `CharInterest::ComputeScore`, `Spotlight::BuildNGCone`, `DecodeDxt5Alpha` row 57 | one side branches over 1-2 `li`/`mr`/`fmr`; the other computes the same value without a branch, or speculates it before the branch |
 | **Upcast null guard** | `CharLipSync::Print`, `DirLoader::WriteTypeMemDump` | `addic. r,base,off; bne; li r,0`: MSVC's `p ? p+off : 0` for a derived-to-base conversion of a pointer that is never null (`&vec[i]`, `this+0x10`) |
 | **Inlining difference** | `ObjPtrVec<FlowNode>::erase` | ours inlines `Set()`; the image calls it, and the image's out-of-line `Set` at `0x823E8A38` holds exactly our inlined `obj \|\| mListMode` test |
@@ -127,9 +129,9 @@ leaves the row ONE-SIDED.
 | `RETEST` | 9 | this side compared the same register(s) the same way (same immediate or operand pair) earlier, found by a LINEAR walk with no redefinition in between. **This is an artifact label, not a dominance proof.** The row still lists under `--show-recognised` |
 
 ONE-SIDED went from **201 to 86 rows** (65 to 38 functions) at `d511959ff`. All
-10,857 other rows and the drop table stayed byte-identical. After the
-UpdateOverlay guard was removed, the counts are 200 rows, 86 still ONE-SIDED,
-RETEST 8. What is left is
+10,857 other rows and the drop table stayed byte-identical. The
+UpdateOverlay guard is still in the source, so its row still counts under
+RETEST (9). What is left is
 mostly out-of-scope rows (DrawShowing 29, fft_altivec 13), the
 if-conversion/select class, and rotated loops whose guard's producer is not
 on its own fall-through chain.
