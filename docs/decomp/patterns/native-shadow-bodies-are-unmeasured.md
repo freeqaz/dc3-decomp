@@ -177,6 +177,14 @@ triaged; many are defensive null checks and DTA-flow shortcuts, and some change 
 The calibration case (`ObjPtrVec::erase`) was found by the tool as a split-pair shadow
 (`ObjPtr_p.h` 797 REMOVES + 906 ADDS) and was fixed separately on `fix-ptrvec-erase`.
 
+**A (b) ADDS region is not safe to skip.** A concurrent lane (`native-menulist`) root-caused
+the "menu list items never draw" bug to a native-only `HamNavList::OnMsg(UITransitionCompleteMsg)`
+handler that called `StopAnimation()` and froze every list's `enter.anim` at frame 0
+(alpha 0). The inventory holds it — `HamNavList.cpp:148` (the `HANDLE_MESSAGE` line) and
+`HamNavList.cpp:1654` (the definition), both **(b) ADDS** — but this audit triaged only
+(a) and (c), so it was not caught here. It is fixed by `native-menulist`, not on this
+branch. The 688 (b) regions are the next triage pass.
+
 ### Legitimate but behaviour-changing (NOTABLE) — not fixed, recorded
 
 - **Tombstones in NoNull containers.** Native `ReplaceRefs`/`ReplaceList` set
@@ -198,7 +206,11 @@ The calibration case (`ObjPtrVec::erase`) was found by the tool as a split-pair 
 - **`HamPanel::Exiting` returns false**, dropping `UIPanel::Exiting()` and DTA `exiting`
   handlers; **`MetaPanel`** never creates `Campaign`/`MetaMusicManager`/`HAQManager`;
   **`UI.cpp:821`** force-completes a screen enter after 90 frames.
-- **`HamNavList.cpp:529/1609`** ignore `IsAnimating()`; **`Game.cpp:1105/1158`**,
+- **`HamNavList.cpp:529/1609`** ignore `IsAnimating()` (Poll select completion,
+  `OnMsg(ButtonDownMsg)`), and **`HamPanel::Exiting`** returns false — all three rest on
+  the belief that animations never settle natively, which the `native-menulist` fix above
+  shows was caused by the native stop-handler. Likely removable once that lands;
+  adjudicate against the image first. **`Game.cpp:1105/1158`**,
   **`GameMode.cpp:24`**, **`PreloadPanel.cpp:64`** are DTA-flow shortcuts.
 - **`MoggClip::LoadNumChannels`** (`MoggClip.cpp:323`) calls `SynthPoll()` instead of
   `Play(0)`, so `mNumChannels` is always -1 and stereo moggs never disable pan;
