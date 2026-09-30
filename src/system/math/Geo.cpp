@@ -826,12 +826,20 @@ void Frustum::Set(float near, float far, float fovY, float ratio) {
     float cy = std::cos((fovY * 0.5f));
     top.Set(0, sy, -cy, 0);
     bottom.Set(0, sy, cy, 0);
+    // Two variables, not one.  `len = 1.0f / len` in place lets MSVC leave the
+    // zero case as a fall-through; the image has an explicit else arm
+    // (0x82537... `beq cr6, L` / `fdivs f12, f29, f12` / `b done` /
+    // `L: fmr f12, f31`), which is what a SEPARATE accumulator initialised to
+    // zero emits -- the same idiom as Normalize() in math/Vec.h.
+    float inv;
     float len = std::sqrt(cy * cy + (sy / ratio) * (sy / ratio));
     if (len != 0.0f) {
-        len = 1.0f / len;
+        inv = 1.0f / len;
+    } else {
+        inv = 0.0f;
     }
-    float la = len * cy;
-    float lb = len * (sy / ratio);
+    float la = inv * cy;
+    float lb = inv * (sy / ratio);
     left.Set(la, lb, 0, 0);
     right.Set(-la, lb, 0, 0);
     if (fovY == 0.0f) {
