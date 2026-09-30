@@ -728,7 +728,7 @@ class Ref(int):
     """An interned expression id (distinguishable from an immediate)."""
 
 
-def effects_eval(words, relocs, symtab, E):
+def effects_eval(words, relocs, symtab, E, sigs=None):
     """(effects, load_val, store_eff, addi_cons).
 
     effects    list[Ref]: every store to non-stack memory, call (with its fresh
@@ -877,6 +877,30 @@ def effects_eval(words, relocs, symtab, E):
         if addr is None:
             return E("sym", rel[1], imm)
         return add(E("abs"), addr + imm)
+
+    def call_args(callee=None):
+        """The argument registers of a call, as values.
+
+        With the callee's signature known (report.json's demangled names), the
+        EXACT registers: slot k is r(3+k) for an integer/pointer and the next
+        f-register for a float -- which still consumes GPR slot k (measured:
+        `CharInterest::ComputeScore(V3&,V3&,V3&,float,int,bool)` reads its int
+        from r8 and its bool from r9, with r7 skipped).  Without a signature
+        (an indirect call, an external, a by-value return, varargs), EVERY
+        freshly written volatile -- strict, so a scratch difference keeps a row
+        a candidate rather than excusing it.
+        """
+        regs = arg_regs(sigs.get(callee)) if (callee and sigs) else None
+        if regs is None:
+            return (tuple((r, canon_arg(g[r])) for r in sorted(fresh_g) if r in g)
+                    + tuple((100 + r, f[r]) for r in sorted(fresh_f) if r in f))
+        out = []
+        for cls, r in regs:
+            if cls == "g":
+                out.append((r, canon_arg(G(r))))
+            else:
+                out.append((100 + r, F(r)))
+        return tuple(out)
 
     prev_uncond = False
     for i, w in enumerate(words):
@@ -1110,11 +1134,14 @@ def effects_eval(words, relocs, symtab, E):
         # ---- branches -------------------------------------------------------- #
         if o == tos.OP_BRANCH:
             if w & 1:
+                args = call_args(callee)
                 name = callee or "<unnamed>"
                 if name.startswith(PLACEHOLDER):
                     name = "*"
-                args = tuple((r, canon_arg(g[r])) for r in sorted(fresh_g) if r in g) + \
-                    tuple((100 + r, f[r]) for r in sorted(fresh_f) if r in f)
+                elif name.startswith("??$MakeString@"):
+                    # the instantiation is a wrong-CALLEE question with its own
+                    # tools; for value flow, every MakeString formats its args
+                    name = "MakeString"
                 flat = [x for pair in args for x in pair]
                 ce = E("call", epoch, name, *flat)
                 effects.append(ce)
@@ -1140,8 +1167,7 @@ def effects_eval(words, relocs, symtab, E):
             xo = (w >> 1) & 0x3FF
             always = ((w >> 21) & 0x14) == 0x14
             if xo == 528 and (w & 1):                  # bctrl
-                args = tuple((r, canon_arg(g[r])) for r in sorted(fresh_g) if r in g) + \
-                    tuple((100 + r, f[r]) for r in sorted(fresh_f) if r in f)
+                args = call_args()
                 flat = [x for pair in args for x in pair]
                 ce = E("icall", epoch, ctr, *flat)
                 effects.append(ce)
@@ -1201,13 +1227,46 @@ def _reaches(E, roots, target):
     return False
 
 
+def arg_regs(demangled):
+    """[('g'|'f', regno), ...] for a demangled MSVC signature, or None when the
+    register assignment cannot be stated with confidence."""
+    if not demangled or "..." in demangled or "__cdecl" not in demangled:
+        return None
+    head, rest = demangled.split("__cdecl", 1)
+    head = head.strip()
+    member = head.startswith(ACCESS_WORDS) and " static " not in f" {head} "
+    ret = head.split(":", 1)[1] if head.startswith(ACCESS_WORDS) else head
+    ret = ret.replace("virtual", "").strip()
+    if (("class " in ret or "struct " in ret or "union " in ret)
+            and not ret.endswith(("*", "&"))):
+        return None                        # hidden return pointer: do not guess
+    params = split_params(rest)
+    if params is None:
+        return None
+    slots = (["g"] if member else []) + [
+        "f" if p in ("float", "double") else "g" for p in params]
+    if len(slots) > 8:
+        return None
+    out, fnext = [], 1
+    for k, c in enumerate(slots):
+        if c == "g":
+            out.append(("g", 3 + k))
+        else:
+            out.append(("f", fnext))
+            fnext += 1
+    return out
+
+
+ACCESS_WORDS = ("public: ", "protected: ", "private: ")
+
+
 class ValueFlow:
-    def __init__(self, tw, trel, bw, brel, symtab):
+    def __init__(self, tw, trel, bw, brel, symtab, sigs=None):
         self.E = Interner()
         (self.t_eff, self.t_ld, self.t_st,
-         self.t_addi) = effects_eval(tw, trel, symtab, self.E)
+         self.t_addi) = effects_eval(tw, trel, symtab, self.E, sigs)
         (self.b_eff, self.b_ld, self.b_st,
-         self.b_addi) = effects_eval(bw, brel, symtab, self.E)
+         self.b_addi) = effects_eval(bw, brel, symtab, self.E, sigs)
         self.t_un = _unmatched(self.t_eff, self.b_eff)
         self.b_un = _unmatched(self.b_eff, self.t_eff)
         self.t_all = set(self.t_eff)
@@ -1358,7 +1417,7 @@ def _first_consumer_reorder(row, root, bv_root, tw, bw, tacc, bacc, t2o):
     return ok1 and ok2
 
 
-def compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm):
+def compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm, sigs=None):
     """Returns a list of row dicts, each with a 'bucket'."""
     tbase, tacc, taddi = evaluate(tw, trel, symtab)
     bbase, bacc, baddi = evaluate(bw, brel, symtab)
@@ -1454,7 +1513,7 @@ def compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm):
             row["bucket"] = "contradicted-by-100pct"
             continue
         if vf is None:
-            vf = ValueFlow(tw, trel, bw, brel, symtab)
+            vf = ValueFlow(tw, trel, bw, brel, symtab, sigs)
         if (vf.addi_benign(ti, bi) if is_addi else vf.benign(ti, bi)):
             row["bucket"] = "reordered"
             continue
@@ -1552,6 +1611,11 @@ def scan(args, cov, only=None):
     symtab = load_symtab(args.symbols)
     layouts = load_layouts(args.struct_db)
     norms, demangled = tos.load_report(args.report)
+    # callee signatures for exact call-argument registers, by mangled name;
+    # sorted so a name defined in two units resolves the same way every run
+    sigs = {}
+    for (_u, nm), dm in sorted(demangled.items()):
+        sigs.setdefault(nm, dm)
 
     units = list(iter_units(args.objdiff))
     target = []                          # (unit, name, body, base_path)
@@ -1592,7 +1656,7 @@ def scan(args, cov, only=None):
             continue
         ctx = function_ctx(unit, name, demangled)
         rows = compare_function(tw, trel, bw, brel, symtab, ctx, layouts,
-                                norms.get((unit, name)))
+                                norms.get((unit, name)), sigs)
         for r in rows:
             r["unit"], r["symbol"] = unit, name
             r["norm"] = norms.get((unit, name))
@@ -1636,7 +1700,11 @@ def _explain_effects(args):
         bb = function_bodies(bp)
         if args.explain not in bb:
             continue
-        vf = ValueFlow(*tb[args.explain], *bb[args.explain], symtab)
+        _n, demangled = tos.load_report(args.report)
+        sigs = {}
+        for (_u, nm), dm in sorted(demangled.items()):
+            sigs.setdefault(nm, dm)
+        vf = ValueFlow(*tb[args.explain], *bb[args.explain], symtab, sigs)
         for side, eff, un in (("target", vf.t_eff, vf.t_un), ("ours", vf.b_eff, vf.b_un)):
             print(f"  effects only in {side} ({len(un)} distinct of {len(eff)}):")
             for e in sorted(un):
