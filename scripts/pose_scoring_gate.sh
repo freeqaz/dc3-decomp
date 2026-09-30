@@ -15,12 +15,18 @@
 #             Perfect mimicry, so this must score HIGH (~1.0).
 #   dummy     a static standing skeleton (no provider). A person standing
 #             still is not dancing, so this must score clearly BELOW selftest.
+#   sensor    scripts/synthetic_kinect.py PERFORMING: the same choreography,
+#             replayed as live camera-space skeleton frames through the
+#             external pose socket (GET /api/pose/target), so the live-skeleton
+#             half of the pipeline -- history, bone lengths, quality filter,
+#             displacement lookback -- runs, which selftest bypasses.  Must also
+#             score clearly ABOVE dummy.
 #   video     real pose estimation from a recorded dancer, if footage + server
 #             are available. Optional; reported but not asserted, since its
 #             value depends on the clip.
 #
 # FAIL conditions: any config scoring identically 0.000 or identically 1.000
-# across every move, or dummy scoring >= selftest.
+# across every move, or dummy scoring >= selftest, or dummy >= sensor.
 #
 # Usage:
 #   scripts/pose_scoring_gate.sh [--frames N] [--song FLOW] [--video CLIP]
@@ -90,6 +96,20 @@ echo "selftest : exit=$ST_EXIT segv=$ST_SEGV samples=$ST_N range=[$ST_LO..$ST_HI
 read -r DU_EXIT DU_SEGV DU_N DU_LO DU_HI DU_D <<<"$(run_cfg dummy)"
 echo "dummy    : exit=$DU_EXIT segv=$DU_SEGV samples=$DU_N range=[$DU_LO..$DU_HI] distinct=$DU_D"
 
+SENSOR_SOCK="/tmp/dc3_pose_gate_sensor_$$.sock"
+SENSOR_PORT=$((9400 + $$ % 400))
+python3 scripts/synthetic_kinect.py --socket "$SENSOR_SOCK" --people 1 \
+    --perform "http://127.0.0.1:$SENSOR_PORT/api" --record /tmp/pose_gate_sensor.json \
+    >/tmp/pose_gate_sensor_kinect.log 2>&1 &
+KINECT_PID=$!
+for _ in $(seq 1 50); do [ -S "$SENSOR_SOCK" ] && break; sleep 0.1; done
+read -r SE_EXIT SE_SEGV SE_N SE_LO SE_HI SE_D <<<"$(run_cfg sensor \
+    DC3_POSE=external DC3_POSE_NO_SPAWN=1 "DC3_POSE_SOCKET=$SENSOR_SOCK" \
+    DC3_HTTP=1 "DC3_HTTP_PORT=$SENSOR_PORT")"
+kill "$KINECT_PID" 2>/dev/null; wait "$KINECT_PID" 2>/dev/null
+echo "sensor   : exit=$SE_EXIT segv=$SE_SEGV samples=$SE_N range=[$SE_LO..$SE_HI] distinct=$SE_D" \
+     "(record: /tmp/pose_gate_sensor.json)"
+
 VI_N=0
 if [ -n "$VIDEO" ] && [ -f "$VIDEO" ]; then
     rm -f "$SOCKET"
@@ -113,6 +133,9 @@ note() { echo "FAIL: $1"; FAIL=1; }
 [ "$DU_SEGV" = "0" ] || note "dummy crashed"
 [ "${ST_N:-0}" -gt 0 ] || note "selftest produced no ham2 DetectFrac samples (pipeline not reached)"
 [ "${DU_N:-0}" -gt 0 ] || note "dummy produced no ham2 DetectFrac samples (pipeline not reached)"
+[ "$SE_EXIT" = "0" ] || note "sensor exited $SE_EXIT"
+[ "$SE_SEGV" = "0" ] || note "sensor crashed"
+[ "${SE_N:-0}" -gt 0 ] || note "sensor produced no ham2 DetectFrac samples (pipeline not reached)"
 
 # The degeneracy checks: a config whose score never varies AND sits at an
 # extreme is the signature of a broken kernel, not of a consistent player.
@@ -127,8 +150,11 @@ fi
 awk -v st="${ST_HI:-0}" -v du="${DU_HI:-0}" 'BEGIN{exit !(du+0 >= st+0)}' \
     && note "dummy (${DU_HI}) scores >= selftest (${ST_HI}) — scoring cannot tell dancing from standing"
 
+awk -v se="${SE_HI:-0}" -v du="${DU_HI:-0}" 'BEGIN{exit !(du+0 >= se+0)}' \
+    && note "dummy (${DU_HI}) scores >= sensor (${SE_HI}) — a live replay of the choreography cannot beat standing still"
+
 if [ "$FAIL" = "0" ]; then
-    echo "PASS: scoring is differential (selftest ${ST_LO}..${ST_HI} > dummy ${DU_LO}..${DU_HI})"
+    echo "PASS: scoring is differential (selftest ${ST_LO}..${ST_HI}, sensor ${SE_LO}..${SE_HI} > dummy ${DU_LO}..${DU_HI})"
 else
     echo "GATE FAILED"
 fi
