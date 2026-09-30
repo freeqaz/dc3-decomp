@@ -367,23 +367,30 @@ void HiResScreen::Merge(
                         bm.PixelColor(bmX, bmY, r, g, b, a);
                         unsigned char cr, cg, cb, ca;
                         mCache->GetPixelColor(xIter, yIter, cr, cg, cb, ca);
-                        float blendX = 0.0f;
+                        // `blend` is INITIALISED here and the guarded block has
+                        // no else: the image seeds it with `fmr f12, f31` (f31 =
+                        // 0.0f) before the two ramp tests and simply falls
+                        // through when neither fires.  Declaring it late and
+                        // assigning 0.0f in an else arm cost three rows (a
+                        // branch inversion plus `fmr f0, f31` and a `b` for the
+                        // else) and pushed the whole blend chain from f12 into
+                        // f0/f11.  Declaration order is blend, blendY, blendX --
+                        // the same as RB3's HiResScreen::Merge.
+                        float blend = 0.0f;
                         float blendY = 0.0f;
+                        float blendX = 0.0f;
                         if (bmX > blendThreshX) {
                             blendX = (float)yBlend / (float)padX;
                         }
                         if (bmY > blendThreshY) {
                             blendY = (float)xBlend / (float)padY;
                         }
-                        float blend;
                         if (blendX > 0.0f || blendY > 0.0f) {
                             blend = sqrtf(blendY * blendY + blendX * blendX);
                             blend = blend - 0.5f;
                             blend = blend + blend;
                             blend = Max(blend, 0.0f);
                             blend = Min(blend, 1.0f);
-                        } else {
-                            blend = 0.0f;
                         }
                         float invBlend = (1.0f - blend) * 255.0f;
                         a = (unsigned char)invBlend;
