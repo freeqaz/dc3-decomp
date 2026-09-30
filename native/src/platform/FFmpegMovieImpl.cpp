@@ -167,7 +167,15 @@ bool FFmpegMovieImpl::DecodeNextVideoFrame() {
 bool FFmpegMovieImpl::Poll() {
     // Convention: return true = still playing, false = done/ended
     // (TexMovie::Poll checks `if (!mMovie.Poll()) mMovie.End()`)
-    if (!mOpen || mPaused) return true;
+    //
+    // A movie that is not open is DONE, as in the image: BinkMovieImpl::Poll
+    // returns false when there is no HBINK (the `mBink && mInternalBufs` test
+    // fails and it falls to `return false`), so MoviePanel::Poll fires
+    // movie_done for a video that failed to open -- attract_screen goes on to
+    // its next_screen.  Returning true here reported a missing .bik as
+    // "still playing" forever.
+    if (!mOpen) return false;
+    if (mPaused) return true;
 
     // Check if it's time for the next frame
     float elapsed = mUseVirtualTime ? mVirtualTimeMs : mPlayTimer.SplitMs();

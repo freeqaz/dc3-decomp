@@ -74,7 +74,4 @@ protected:
 
 private:
     void UpdateNavLists(int);
-#ifdef HX_NATIVE
-    bool mNativeEnterPending;
-#endif
 };

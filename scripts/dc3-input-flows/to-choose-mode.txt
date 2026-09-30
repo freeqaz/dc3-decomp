@@ -7,8 +7,8 @@
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/to-choose-mode.txt \
 #     timeout 60 native/build/dc3-native
 
-wait_screen attract_screen
-+1 confirm
+# attract_screen advances by itself: its .bik does not open, so MoviePanel::Poll
+# sends movie_done (as the image does for a movie that failed to open).
 
 # main_screen: select "gameplay"
 wait_screen main_screen

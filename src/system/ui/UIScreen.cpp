@@ -520,20 +520,6 @@ bool UIScreen::SharesPanels(UIScreen *screen) {
 }
 
 DataNode UIScreen::OnMsg(ButtonDownMsg const &msg) {
-#ifdef HX_NATIVE
-    // On Xbox, movie/overlay panels convert button presses to skip_selected
-    // messages during fullscreen movies (attract, credits). On native, those
-    // panels aren't functional (no BINK), so route the message directly.
-    // The same DTA skip_selected handler fires, producing the same transition.
-    {
-        DataArray *td = TypeDef();
-        if (td && td->FindArray("skip_selected", false)) {
-            static Message skipMsg("skip_selected");
-            HandleType(skipMsg);
-            return DataNode(0);
-        }
-    }
-#endif
     if (mBack != nullptr && msg.GetAction() == kAction_Cancel) {
         DataNode n = mBack->Evaluate(1);
         if (n.Type() != kDataUnhandled) {

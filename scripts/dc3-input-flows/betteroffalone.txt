@@ -3,8 +3,7 @@
 # Same flow as ymca.txt but scrolls to "Better Off Alone" in the song list.
 # Better Off Alone is near the top alphabetically (~3-5 downs from start).
 
-wait_screen attract_screen
-+10 confirm
+# attract_screen advances by itself (movie_done: its .bik does not open).
 
 wait_screen title_screen
 +30 confirm
@@ -24,5 +23,11 @@ wait_screen song_select_screen
 +90 down
 +105 confirm
 
-# multiuser_screen auto-advances (no input needed).
+# multiuser_screen: controller input, as on the 360 (see ymca.txt):
+# difficulty, `play`, `skip_waiting` -> start_game -> enter_gameplay.
+wait_screen multiuser_screen
++40 confirm
++110 confirm
++180 confirm
+
 # Loading screens auto-advance via DTA handlers.

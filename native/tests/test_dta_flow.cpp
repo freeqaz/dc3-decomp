@@ -2,7 +2,8 @@
 //
 // Verifies the full DTA-driven panel flow works end-to-end using the ymca.txt
 // input script: boot → attract → title → main → choose_mode → song_select
-// → multiuser → loading → preloading → real_loading → game_screen.
+// → multiuser (driven by controller input: difficulty, play, skip_waiting)
+// → loading → preloading → real_loading → game_screen.
 //
 // Gated by DC3_DTA_FLOW_TESTS=1 (requires game assets).
 // Pattern: subprocess-based, single engine run shared via SetUpTestSuite.
@@ -65,9 +66,10 @@ static bool FileExists(const std::string &p) {
     return ::stat(p.c_str(), &st) == 0;
 }
 
-static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120) {
+static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120,
+                               const char *scriptName = "ymca.txt") {
     std::string binary = GetDc3NativePath();
-    std::string script = GetScriptDir() + "/ymca.txt";
+    std::string script = GetScriptDir() + "/" + scriptName;
 
     // Check the prerequisites BEFORE running, so a missing one is reported as
     // itself instead of as seven content assertions about gameplay.
@@ -87,7 +89,10 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120) {
     }
 
     std::ostringstream cmd;
+    // DC3_TEL at interval 1: GameplayReachesPlayingState reads the real
+    // hamprovider game_stage off the per-frame telemetry line.
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
+        << " DC3_TEL=1 DC3_TEL_INTERVAL=1"
         << " MILO_INPUT_SCRIPT=" << script
         << " MILO_MAX_FRAMES=" << maxFrames
         << " timeout " << timeout << " " << binary << " 2>&1";
@@ -180,9 +185,12 @@ bool DtaFlowTest::sRanEngine = false;
 // ===========================================================================
 
 TEST_F(DtaFlowTest, EnterGameplayFired) {
-    // The DTA flow navigates through multiuser_screen which fires
-    // enter_gameplay. This transitions to loading_screen, proving
-    // the DTA function executed.
+    // The DTA flow navigates through multiuser_screen, whose start_game
+    // (reached with the controller: seldiff_pane -> startgame_pane `play` ->
+    // readywait_pane `skip_waiting`) fires enter_gameplay. This transitions
+    // to loading_screen, proving the DTA function executed.  There is no
+    // native auto-fire any more: the image's MultiUserGesturePanel::Poll
+    // (82942EB8) only runs UpdateNavLists / UpdateProviderPlayerIndices.
     EXPECT_TRUE(outputContains("Screen 'multiuser_screen' Exit (to 'loading_screen')"))
         << "multiuser_screen never transitioned to loading_screen — "
         << "enter_gameplay DTA function didn't fire from the menu flow";
@@ -220,10 +228,35 @@ TEST_F(DtaFlowTest, HamDirectorActivates) {
 }
 
 TEST_F(DtaFlowTest, GameplayReachesPlayingState) {
-    // StartGame() sets game_stage to 'playing' after all loading completes
-    EXPECT_TRUE(outputContains("game_stage set to 'playing'"))
-        << "game_stage never reached 'playing' — StartGame() didn't fire "
-        << "or loading stalled before gameplay could begin";
+    // hamprovider game_stage becomes `playing` for real, and only when the
+    // intro is over: Game::Poll sends intro_over once the song clock crosses 0
+    // ("Game::Poll: intro timer expired"), and the mode's DTA handler sets it
+    // (game_modes.dta `intro_over`: {hamprovider set game_stage playing},
+    // skipped only in rhythm_battle).  The image's GamePanel::StartGame
+    // (HasIntro/Start, SetInGame, mState = kGamePlaying) sets no property.
+    //
+    // A native-only SetProperty(game_stage, playing) in StartGame -- which
+    // runs ~25 ms of song time EARLIER, at TaskMgr seconds > -0.025 -- used to
+    // be what this test looked for (its log line).  It clobbered the intro
+    // stage for every mode (rhythm_battle's intro, holla_back's `title`), so
+    // this now asserts the real state AND its order: no telemetry sample may
+    // read gameStage=playing before intro_over was sent.  Both lines go to
+    // stderr, so their order in the captured output is the order they ran.
+    const std::string &out = sResult.output;
+    size_t introOver = out.find("Game::Poll: intro timer expired");
+    size_t firstPlaying = out.find("gameStage=playing");
+    ASSERT_NE(firstPlaying, std::string::npos)
+        << "no telemetry sample ever read gameStage=playing -- the intro_over "
+           "DTA handler never ran, or loading stalled before gameplay";
+    ASSERT_NE(introOver, std::string::npos)
+        << "Game::Poll never sent intro_over (no 'intro timer expired')";
+    EXPECT_GT(firstPlaying, introOver)
+        << "game_stage read 'playing' before intro_over was sent: something "
+           "other than the mode's intro_over handler forced it";
+    size_t lineStart = out.rfind('\n', firstPlaying);
+    std::string line = out.substr(lineStart + 1, firstPlaying - lineStart);
+    EXPECT_NE(line.find("screen=game_screen"), std::string::npos)
+        << "first gameStage=playing sample was not on game_screen:\n" << line;
 }
 
 TEST_F(DtaFlowTest, NoCrashCleanExit) {
@@ -250,4 +283,57 @@ TEST_F(DtaFlowTest, SongLoadChainRunsOncePerSong) {
         n++;
     EXPECT_EQ(n, 1u) << "the song load chain ran " << n
                      << " times in one song (Restart reset mLoadState)";
+}
+
+// ===========================================================================
+// multiuser_screen waits for input
+// ===========================================================================
+//
+// Image: ?Poll@MultiUserGesturePanel@@UAAXXZ (82942EB8) is UpdateNavLists x2,
+// UpdateProviderPlayerIndices, TexLoadPanel::Poll -- nothing that leaves the
+// screen.  It leaves through its DTA panes' start_game, i.e. through input.
+// A native-only mNativeEnterPending executed enter_gameplay on the first
+// non-transition frame, skipping difficulty / character / crew select, the
+// readywait pane and start_game itself (enter_game.flow, the campaign state
+// step).  idle-multiuser.txt drives to multiuser_screen and presses nothing.
+
+class DtaFlowIdleMultiuserTest : public ::testing::Test {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS"))
+            return;
+        sResult = RunDtaFlow(2500, 120, "idle-multiuser.txt");
+        sRanEngine = true;
+    }
+
+    void SetUp() override {
+        if (!getenv("DC3_DTA_FLOW_TESTS"))
+            GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+        if (!sRanEngine)
+            GTEST_SKIP() << "Engine did not run (SetUpTestSuite failed)";
+        if (!sResult.setupError.empty())
+            GTEST_FAIL() << "DtaFlowIdleMultiuserTest could not run the engine.\n"
+                         << sResult.setupError;
+    }
+
+    bool outputContains(const char *needle) const {
+        return sResult.output.find(needle) != std::string::npos;
+    }
+};
+
+DtaRunResult DtaFlowIdleMultiuserTest::sResult = {};
+bool DtaFlowIdleMultiuserTest::sRanEngine = false;
+
+TEST_F(DtaFlowIdleMultiuserTest, MultiuserScreenWaitsForInput) {
+    ASSERT_TRUE(outputContains("Screen 'multiuser_screen' Enter"))
+        << "precondition: the route never reached multiuser_screen";
+    EXPECT_FALSE(outputContains("Screen 'multiuser_screen' Exit"))
+        << "multiuser_screen left with no input at all -- something executed "
+           "enter_gameplay / goto_screen on its own";
+    EXPECT_FALSE(outputContains("Screen 'loading_screen' Enter"))
+        << "loading_screen entered with no input on multiuser_screen";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
