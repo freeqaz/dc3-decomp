@@ -397,12 +397,27 @@ testing — decide it by measuring rather than by quoting this paragraph.
 
 ### Carried findings, added in phase 2
 
-- **`scripts/symbol_aliases.json` group 348 is missing a fold.** Group 348 is
-  `OnlyReturns@0x823e3b70` with 523 folded members, and
-  `??0PaddedJointPos@@QAA@XZ` is in **no** group at all — an unwitnessed pair in
-  the alias *source*, upstream of `icf_aliases.map`. `name_check` therefore
-  charges an ICF fold it should forgive, holding `??0SkeletonFrame@@QAA@XZ` at
-  **99.20** while it is 100.0 normalized.
+- **`scripts/symbol_aliases.json` group 348 is missing 246 of its own members**,
+  and this is now a number rather than an anecdote. Counted three ways at
+  `0x823e3b70`: `orig/373307D9/ham_xbox_r.map` places **769** names there,
+  `symbol_aliases.json` group 348 (`OnlyReturns@0x823e3b70`) lists **523** folded
+  members, and the generated `build/373307D9/icf_aliases.map` carries **525**
+  entries. So the alias source captures 68 % of one witnessed `/OPT:ICF` fold
+  class, and **every missing member charges a relocation-name row that
+  `name_check` exists to forgive.**
+
+  Two lanes hit it independently from opposite ends: `??0PaddedJointPos@@QAA@XZ`
+  is in no group at all, holding `??0SkeletonFrame@@QAA@XZ` at **99.20** while it
+  is 100.0 normalized; and `MetagameRank`'s `vector<Unlockable*>` copy ctor reads
+  100.0 with **zero mismatch rows** over all 28 instructions while its whole
+  0.179 is one relocation name.
+
+  ⚠ **Do not widen it to buy rows.** That lane was asked to complete its unit and
+  declined this route explicitly, which was the right call: changing what the
+  ruler forgives binary-wide in order to close a row is laundering, and it would
+  move every other lane's before/after. It belongs on its own commit, derived
+  from the map rather than hand-edited, stating the before and after headline —
+  the same discipline as the deferred `authorable.py` denominator fix.
 - **`HamDirector::CollideList` is a class-layout finding.** Both sides load
   `0x114(r3)` and dispatch slot `0x2c`, but the image uses the primary vtable
   unadjusted where we emit `addi r3, r11, 0x9c`. The cause is the base order of
