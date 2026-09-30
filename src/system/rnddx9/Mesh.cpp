@@ -202,10 +202,11 @@ D3DVertexBuffer *DxMesh::GetMultimeshFaces() {
     MILO_ASSERT(!Mutable(), 0x1A7);
     if (!unk1b0) {
         unsigned int numIndices = mNumFaces * 3;
-        D3DVertexBuffer *vb =
-            D3DDevice_CreateVertexBuffer(numIndices * 4, 0, (D3DPOOL)0);
-        unk1b0 = (D3DResource *)vb;
-        unsigned int *dst = (unsigned int *)D3DVertexBuffer_Lock(vb, 0, 0, 0);
+        unk1b0 = (D3DResource *)D3DDevice_CreateVertexBuffer(
+            numIndices * 4, 0, (D3DPOOL)0
+        );
+        unsigned int *dst =
+            (unsigned int *)D3DVertexBuffer_Lock((D3DVertexBuffer *)unk1b0, 0, 0, 0);
         unsigned short *src =
             (unsigned short *)D3DIndexBuffer_Lock((D3DIndexBuffer *)unk1ac, 0, 0, 0x10);
         for (unsigned int i = 0; i < numIndices; i++) {
@@ -482,7 +483,12 @@ void DxMesh::SetTransforms() {
     unsigned int boneCount = mBones.size();
     TheShaderMgr.SetMeshInfo(boneCount, HasAOCalc());
     float fw = FurWeight(Mat());
-    bool hasFur = fw > 0.0f;
+    bool hasFur;
+    if (fw > 0.0f) {
+        hasFur = true;
+    } else {
+        hasFur = false;
+    }
     if (boneCount == 0) {
         TheShaderMgr.UpdateCache(WorldXfm(), 0);
         if (hasFur) {
