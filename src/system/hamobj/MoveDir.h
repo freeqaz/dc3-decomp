@@ -107,6 +107,16 @@ public:
     bool InGracePeriod(int);
 
     MoveAsyncDetector *GetAsyncDetector() const { return mAsyncDetector; }
+#ifdef HX_NATIVE
+    // Read-only, for the native synthetic sensor (native/src/platform/
+    // PoseTarget_Native.cpp): the player's scheduled choreography -- one
+    // DetectFrame per scored MoveFrame, with its song time and the reference
+    // DancerSkeleton the FilterQueue compares the player against.
+    const std::vector<DetectFrame> &NativePlayerDetectFrames(int player) const {
+        return mMovePlayerData[player].mDetectFrames;
+    }
+    static float NativeLatencySeconds() { return sLatencySeconds; }
+#endif
 
     static void Init();
     static void LoadScoring(const DataArray *);

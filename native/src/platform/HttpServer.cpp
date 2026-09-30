@@ -217,10 +217,34 @@ HttpServer::CommandResult HttpServer::QueueAndWait(
     }
 
     if (!cmd.done) {
-        CommandResult timeout;
-        timeout.ok = false;
-        timeout.error = "Command timed out (main thread not processing?)";
-        return timeout;
+        // `cmd` lives on THIS stack frame.  Returning while the main thread
+        // still holds its address left a dangling pointer in the queue: the
+        // next ProcessCommands wrote the result into a dead frame (SIGSEGV in
+        // std::string::_M_replace under ProcessCommands, measured 2026-09-30
+        // when a 10 s load stalled the main thread under a polling client).
+        // Withdraw it if the main thread has not taken it yet; if it has, it
+        // is being processed right now -- wait for that to finish.
+        bool withdrawn = false;
+        {
+            std::lock_guard<std::mutex> lk(mQueueMutex);
+            std::vector<Command*> &q =
+                (type == kCmdScreenshot) ? mPendingScreenshots : mPendingCommands;
+            for (size_t i = 0; i < q.size(); i++) {
+                if (q[i] == &cmd) {
+                    q.erase(q.begin() + i);
+                    withdrawn = true;
+                    break;
+                }
+            }
+        }
+        if (withdrawn) {
+            CommandResult timeout;
+            timeout.ok = false;
+            timeout.error = "Command timed out (main thread not processing?)";
+            return timeout;
+        }
+        std::unique_lock<std::mutex> lk(cmd.mtx);
+        cmd.cv.wait(lk, [&] { return cmd.done; });
     }
 
     return cmd.result;
@@ -241,13 +265,16 @@ void HttpServer::ProcessCommands() {
             case kCmdGetObject:    HandleGetObject(*cmd); break;
             case kCmdGetChildren:  HandleGetChildren(*cmd); break;
             case kCmdSceneTree:    HandleSceneTree(*cmd); break;
+            case kCmdPoseTarget:   HandlePoseTarget(*cmd); break;
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
+            // notify under the lock: once `done` is visible the waiter may
+            // return and destroy the Command, cv included
             std::lock_guard<std::mutex> lk(cmd->mtx);
             cmd->done = true;
+            cmd->cv.notify_one();
         }
-        cmd->cv.notify_one();
     }
 
     DispatchInjectedButtons();
@@ -325,10 +352,12 @@ void HttpServer::ProcessScreenshots() {
     for (Command* cmd : batch) {
         HandleScreenshot(*cmd);
         {
+            // notify under the lock: once `done` is visible the waiter may
+            // return and destroy the Command, cv included
             std::lock_guard<std::mutex> lk(cmd->mtx);
             cmd->done = true;
+            cmd->cv.notify_one();
         }
-        cmd->cv.notify_one();
     }
 }
 
@@ -787,6 +816,14 @@ void HttpServer::HandleGetChildren(Command& cmd) {
 
     cmd.result.ok = true;
     cmd.result.jsonData = json;
+}
+
+// PoseTarget_Native.cpp.  Read-only: builds the targets, touches no state.
+std::string Dc3PoseTargetJson(float leadMs);
+
+void HttpServer::HandlePoseTarget(Command& cmd) {
+    cmd.result.jsonData = Dc3PoseTargetJson((float)atof(cmd.param1.c_str()));
+    cmd.result.ok = true;
 }
 
 void HttpServer::HandleSceneTree(Command& cmd) {
@@ -1264,6 +1301,21 @@ void HttpServer::RegisterEndpoints() {
                 JsonError("Timeout waiting for screen '" + target +
                           "' (current: '" + curScreen + "')"),
                 "application/json");
+        }
+    });
+
+    // GET /api/pose/target[?lead_ms=N] — the skeleton each player is being
+    // asked to perform right now (choreography reference or fatality pose),
+    // for scripts/synthetic_kinect.py.  Answered on the main thread between
+    // frames, so successive calls step with the game.  Read-only.
+    svr->Get("/api/pose/target", [this](const httplib::Request& req, httplib::Response& res) {
+        std::string lead = req.has_param("lead_ms") ? req.get_param_value("lead_ms") : "0";
+        auto result = QueueAndWait(kCmdPoseTarget, lead);
+        if (result.ok) {
+            res.set_content(JsonOk(result.jsonData), "application/json");
+        } else {
+            res.status = 500;
+            res.set_content(JsonError(result.error), "application/json");
         }
     });
 

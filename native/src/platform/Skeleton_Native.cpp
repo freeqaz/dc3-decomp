@@ -343,6 +343,7 @@ void NativeSkeletonProvider::ReaderThread() {
             memcpy(mBack, newBack, sizeof(mBack));
             mNumPersonsBack = numPersons;
             mFrameIdBack = frameId;
+            mTimestampBack = timestamp;
         }
     }
 }
@@ -352,6 +353,7 @@ void NativeSkeletonProvider::Poll() {
     memcpy(mPersons, mBack, sizeof(mPersons));
     mNumPersons = mNumPersonsBack;
     mFrameIdFront = mFrameIdBack;
+    mTimestampFront = mTimestampBack;
 }
 
 int NativeSkeletonProvider::FindByTrackId(int trackId) const {
@@ -600,27 +602,51 @@ void NativeSkeletonProvider::FillDummySkeleton(Skeleton &skel) {
 }
 
 void NativeSkeletonProvider::FinalizeSkeletonFrame(Skeleton &skel, int skelIdx, int elapsedMs) {
-    skel.mSkeletonIdx = skelIdx;
-    skel.mElapsedMs = elapsedMs;
-
-    // Xbox Skeleton::Poll caches every bone length here, and Skeleton::BoneLength
-    // returns that cache directly rather than recomputing. Leaving it zeroed makes
-    // ErrorNode's norm_bones divisor zero, so PositionNode/DisplacementNode take
-    // their "no base bone length" path and emit MAXIMUM error (1,1,1) for every
-    // node — DetectFrac then pins at exactly 0 no matter what the player does.
-    // (DC3_POSE_SELFTEST hid this: it substitutes a DancerSkeleton, which computes
-    // its bone lengths lazily on demand.)
-    for (int i = 0; i < kNumBones; i++) {
-        skel.mCamBoneLengths[i] = skel.BaseSkeleton::BoneLength((SkeletonBone)i, kCoordCamera);
+    // Hand the filled pose to the image's own Skeleton::Poll, as one
+    // SkeletonFrame, exactly as SkeletonUpdate does on the 360 with the NUI
+    // frame.  Poll is what derives everything past camera space: the four
+    // limb coordinate systems (mPlayerXfms, and mJointPos[cs] by
+    // MultiplyTranspose), bone lengths, the displacement cache reset, the hip
+    // centre, the tracking id.  This used to be a hand-written subset --
+    // mSkeletonIdx, mElapsedMs, mCamBoneLengths, unkab0, mCamDisplacements --
+    // and it never filled the limb systems, so every NormPos a scorer took on a
+    // live native skeleton (FreestyleMoveRecorder::CompareSkeletonPositions,
+    // the fatality / Strike a Pose match) read stale zeros.  Each earlier gap
+    // (the zero bone lengths that pinned DetectFrac at 0, the zero hip centre
+    // that made IsValid() false) was the same omission, fixed one field at a
+    // time.  NativeSkeletonPollTest pins the whole set against Poll.
+    static SkeletonFrame sFrame; // 0x11c8 bytes, main thread only
+    memset(&sFrame, 0, sizeof(sFrame));
+    sFrame.mElapsedMs = elapsedMs;
+    // The providers are upright cameras: floor plane y = 0, up = +y (the same
+    // frame CharCameraInput hands Poll for the fatality targets).
+    sFrame.mFloorNormal.Set(0.0f, 1.0f, 0.0f);
+    sFrame.mFloorClipPlane.Set(0.0f, 1.0f, 0.0f, 0.0f);
+    SkeletonData &data = sFrame.mSkeletonDatas[skelIdx];
+    data.mTracking = kSkeletonTracked;
+    data.mTrackingID = skel.mTrackingID;
+    data.mQualityFlags = skel.mQualityFlags;
+    for (int j = 0; j < kNumJoints; j++) {
+        const Vector3 &cam = skel.mTrackedJoints[j].mJointPos[kCoordCamera];
+        data.mJointPositions[j].Set(cam.x, cam.y, cam.z);
+        const Vector3 &smoothed = skel.mTrackedJoints[j].mSmoothedPos;
+        data.mRawPositions[j].Set(smoothed.x, smoothed.y, smoothed.z);
+        data.mJointTrackingState[j] = skel.mTrackedJoints[j].mJointConf;
     }
-
     // Xbox sets this from the NUI body position; SkeletonQualityFilter treats a
-    // zero root as "no data" and forces mValid/mSitting/mSideways all false, which
-    // makes Skeleton::IsValid() permanently false (breaking ShellInput::HasSkeleton
-    // and HamGameData::AutoAssignSkeletons player binding).
-    skel.unkab0 = skel.mTrackedJoints[kJointHipCenter].mJointPos[kCoordCamera];
-
-    skel.mCamDisplacements.clear();
+    // zero root as "no data" and forces mValid/mSitting/mSideways all false,
+    // which makes Skeleton::IsValid() permanently false (breaking
+    // ShellInput::HasSkeleton and HamGameData::AutoAssignSkeletons binding).
+    data.mHipCenter = data.mJointPositions[kJointHipCenter];
+    // mClippedFlags is read by Poll as the slot's NUI enrollment index; native
+    // has no enrollment, so hand back the one the slot already has rather than
+    // re-enrolling it every frame.
+    if (TheGestureMgr) {
+        IdentityInfo *info = TheGestureMgr->GetIdentityInfo(skelIdx);
+        if (info)
+            data.mClippedFlags = info->EnrollmentIndex();
+    }
+    skel.Poll(skelIdx, sFrame);
 }
 
 void NativeSkeletonProvider::MarkUntracked(Skeleton &skel) {

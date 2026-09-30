@@ -500,9 +500,11 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                 // MetaPerformer::OnMovePassed), now DEFAULT-ON (opt-out
                 // DC3_REAL_MOVE_PASSED=0). Detection is wired: the live-pose
                 // pipeline landed 2026-07-02, the move_passed gateway crash is
-                // fixed (TheGameMode gameplay_mode defaulted in GameModeInit; the
-                // MoveRatingFrac -> MoveDetector::Poll null DetectFrame::mMoveFrame
-                // SIGSEGV is gated on SkeletonUpdate::HasInstance()). This is
+                // fixed (TheGameMode gameplay_mode defaulted in GameModeInit).
+                // The async detectors that perform/battle rate from
+                // (`last_detector_result` -> MoveAsyncDetector::MoveRatingFrac)
+                // are fed and polled as on the 360 since native-posesynth; the
+                // native-only guards that returned 0 there are gone. This is
                 // byte-identical to the authentic Xbox #else path below: with a
                 // real provider it scores the live player; with no provider the
                 // static tracked dummy makes DetectFrac ~0 so per-move move_passed

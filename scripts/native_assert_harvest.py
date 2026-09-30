@@ -156,6 +156,28 @@ class Harvest:
         except Exception:
             return None
 
+    # ---- performing sensor --------------------------------------------------------
+    def perf_note(self):
+        """Scores and target sources as the performing sensor last saw them
+        (read from GET /api/pose/target), for a stage's note."""
+        k = getattr(self, "kinect", None)
+        if not (k and k.perf_samples):
+            return ""
+        last = k.perf_samples[-1]
+        scores = " ".join(f"p{i}score={pl.get('score')}" for i, pl in enumerate(last["players"]))
+        what = "standing (control)" if k.watch_only else "performing"
+        return f" [sensor {what}: {scores}; target sources {k.perf_stats}]"
+
+    def perf_watch(self, tag):
+        """Screenshot the first frame the performing sensor saw a fatality /
+        Strike a Pose target, once per `tag`."""
+        k = getattr(self, "kinect", None)
+        if not (k and k.perf_samples) or tag in getattr(self, "_perf_shots", set()):
+            return
+        if any(pl.get("inFatality") for pl in k.perf_samples[-1]["players"]):
+            self._perf_shots = getattr(self, "_perf_shots", set()) | {tag}
+            self.mark(f"fatality_target:{tag}", True, self.perf_note())
+
     # ---- stage bookkeeping ------------------------------------------------------
     def mark(self, name, reached, note=""):
         off = os.path.getsize(self.log_path) if os.path.exists(self.log_path) else 0
@@ -206,12 +228,15 @@ class Harvest:
         # The in-engine input-script runner is the only working input path.
         a = self.args
         self.kinect = None
-        if a.route == "party":
+        if a.route == "party" or a.perform or a.stand_and_watch:
             # Party mode is gated on skeleton input the controller cannot give
             # (see synthetic_kinect.py): two people stand in front of a
-            # scripted stand-in for the sensor for the whole run.
+            # scripted stand-in for the sensor for the whole run.  --perform
+            # puts the same stand-in in front of any route, and has it dance
+            # whatever the game asks (started once the engine answers).
             sock = os.path.join(self.out, "kinect.sock")
-            self.kinect = SyntheticKinect(sock, people=2)
+            people = 2 if (a.route == "party" or a.multiuser == "duo") else 1
+            self.kinect = SyntheticKinect(sock, people=people)
             self.kinect.start()
             env.update(SyntheticKinect.engine_env(sock))
         # A HamNavList ignores every button while its enter animation runs
@@ -323,6 +348,8 @@ class Harvest:
             if not self.alive():
                 return self.mark("boot", False, "engine exited during boot")
             if self.jget("/health", timeout=2):
+                if self.kinect and (a.perform or a.stand_and_watch):
+                    self.kinect.perform(self.base, watch_only=not a.perform)
                 return self.mark("boot", True)
             time.sleep(1)
         return self.mark("boot", False, "health endpoint never answered")
@@ -330,6 +357,13 @@ class Harvest:
     def shutdown(self):
         if getattr(self, "kinect", None):
             self.kinect.stop()
+            k = self.kinect
+            with open(os.path.join(self.out, "kinect.json"), "w") as f:
+                json.dump({"frames_sent": k.frames_sent, "perform_sources": k.perf_stats,
+                           "perform_samples": k.perf_samples,
+                           "perform_events": k.perf_events,
+                           "perform_fatal_frames": k.perf_fatal_frames,
+                           "log": k.log}, f, indent=1)
         if self.alive():
             self.proc.send_signal(signal.SIGTERM)
             try:
@@ -408,11 +442,13 @@ class Harvest:
             if not mid_shot and tel.get("beat", 0) > 60:
                 self.screenshot("gameplay_mid")
                 mid_shot = True
+            self.perf_watch("song")
             if state == "gameover":
                 break
             time.sleep(2)
         if not self.mark("gameover", state == "gameover",
-                         f"state={state!r} beat={self.telemetry().get('beat')}"):
+                         f"state={state!r} beat={self.telemetry().get('beat')}"
+                         + self.perf_note()):
             return
         # post-song: walk whatever screens follow, pressing confirm, until a menu
         seen = []
@@ -606,12 +642,13 @@ class Harvest:
             if not shot and (beat or 0) > 60:
                 self.screenshot(f"party_event{n}_mid")
                 shot = True
+            self.perf_watch(f"event{n}")
             time.sleep(2)
         ok = ended == "gameover" or (ended is not None and (
             "endgame" in ended or "cleanup" in ended or stage == "outro"))
         self.mark("event_complete" if n == 1 else f"event_complete#{n}", ok,
                   f"event {n}: {ended or 'stalled/timed out'}; state={state!r} "
-                  f"beat={self.telemetry().get('beat')}")
+                  f"beat={self.telemetry().get('beat')}" + self.perf_note())
 
 # ---- log analysis ---------------------------------------------------------------
 TAG_RE = re.compile(r"^MILO_(WARN|NOTIFY|FAIL): (.*)$")
@@ -832,6 +869,15 @@ def main():
                          "skip_waiting; duo = ready both sides (modes requiring 2 "
                          "players); auto = solo for perform, duo for dance battle, "
                          "none otherwise (practice does not pass multiuser_screen)")
+    ap.add_argument("--perform", action="store_true",
+                    help="put scripts/synthetic_kinect.py in front of the sensor and "
+                         "have it PERFORM: it replays whatever the game asks each "
+                         "player to do (choreography, fatality / Strike a Pose poses) "
+                         "as live skeleton data, so moves are rated by the decompiled "
+                         "scoring; per-second samples land in <out>/kinect.json")
+    ap.add_argument("--stand-and-watch", action="store_true",
+                    help="negative control for --perform: the same sensor and the same "
+                         "per-move record, but its people stand still")
     ap.add_argument("--gameplay-eval", action="append", default=[],
                     metavar="BEAT:DTA",
                     help="POST DTA to /api/dta/eval once, when the song beat first "

@@ -39,6 +39,7 @@ public:
         kCmdGetObject,      // Get object details by name
         kCmdGetChildren,    // List children of a dir-type object
         kCmdSceneTree,      // Full scene graph as nested JSON
+        kCmdPoseTarget,     // What each player is asked to perform (synthetic sensor)
     };
 
     struct CommandResult {
@@ -96,6 +97,7 @@ private:
     void HandleGetObject(Command& cmd);
     void HandleGetChildren(Command& cmd);
     void HandleSceneTree(Command& cmd);
+    void HandlePoseTarget(Command& cmd);
 
     volatile bool mRunning = false;
     int mPort = 0;

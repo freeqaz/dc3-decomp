@@ -1,7 +1,7 @@
 # Better Off Alone — Full DTA flow from boot to gameplay
 #
 # Same flow as ymca.txt but scrolls to "Better Off Alone" in the song list.
-# Better Off Alone is near the top alphabetically (~3-5 downs from start).
+# Better Off Alone is list index 4: two downs from where perform mode opens.
 
 # attract_screen advances by itself (movie_done: its .bik does not open).
 
@@ -14,20 +14,34 @@ wait_screen main_screen
 wait_screen choose_mode_screen
 +30 confirm
 
-# Song select — scroll down to Better Off Alone (near top of list)
+# Song select -- TWO downs, derived from the list (see ymca.txt for the
+# derivation): perform mode opens with the cursor on index 2 and the list reads
+#   0 playlists  1 random_song  2 song_tier_0  3 ymca  4 betteroffalone
+#   5 thehustle  6 song_tier_1  7 starships ...
+# so index 4 is two downs.  The old FIVE downs never selected Better Off
+# Alone: with the invented `- 1` scroll edge (removed on native-navscroll) they
+# jumped the tier header and landed on starships, and without it they land on
+# index 7 -- starships again.  Every run of pose_scoring_gate.sh and
+# test_lighting_events.sh before this fix scored and lit Starships.
 wait_screen song_select_screen
 +30 down
-+45 down
 +60 down
-+75 down
-+90 down
-+105 confirm
++120 confirm
 
 # multiuser_screen: controller input, as on the 360 (see ymca.txt):
 # difficulty, `play`, `skip_waiting` -> start_game -> enter_gameplay.
+# The difficulty is EASY -- one down from the highlighted `beginner`
+# (seldiff list: beginner, easy, medium, expert).  pose_scoring_gate.sh
+# needs a non-Beginner difficulty: MoveDir::ResetDetectFrames builds no
+# scheduled detect frames for Beginner (Beginner is rated by the async
+# detectors only), so its ham2 DetectFrac samples all read
+# branch=no-move-key and the gate has nothing to measure.  Easy is what this
+# flow played before multiuser_screen became controller-driven (1ac79728d):
+# the auto-fired path kept HamPlayerData's default difficulty, 0 = Easy.
 wait_screen multiuser_screen
-+40 confirm
++40 down
 +110 confirm
 +180 confirm
++250 confirm
 
 # Loading screens auto-advance via DTA handlers.

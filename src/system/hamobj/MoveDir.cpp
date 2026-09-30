@@ -2468,7 +2468,6 @@ void MoveDir::PostUpdateFilters() {
                             move->FilterVer()
                         );
                     }
-#ifndef HX_NATIVE
                     if (mAsyncDetector) {
                         mAsyncDetector->EnqueueDetectFrames(
                             TheTaskMgr.CurrentMeasure(),
@@ -2477,14 +2476,6 @@ void MoveDir::PostUpdateFilters() {
                             i
                         );
                     }
-#else
-                    // The async (Ham1) detector is never fed on native (no
-                    // Kinect skeleton feed), so its mPlayerDetectFrames keep a
-                    // null DetectFrame::mMoveFrame and MoveDetector::Poll would
-                    // deref null. Its read side (MoveRatingFrac) is already gated
-                    // to 0 via SkeletonUpdate::HasInstance(); skip the write side
-                    // too. Native scores via the FilterQueue/Ham2 DetectFrac path.
-#endif
                 }
                 mFilterQueue->StartJob();
             }
