@@ -173,6 +173,16 @@ void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
     Vector3 diff31, diff21, cross;
     Subtract(v3, v1, diff31);
     Subtract(v2, v1, diff21);
+    // The target computes diff21 x diff31, NOT diff31 x diff21.  Plane::Set is at
+    // 0x82535A28; with f11=d21.x, f0=d31.x, f8=d31.z, f10=d21.y, f12=d21.z,
+    // f13=d31.y, the three stores are 0x82535AA4 fmsubs f0,f8,f10,f6 -> 0x50(r1)
+    // = d21.y*d31.z - d21.z*d31.y (cross.x), 0x82535A94 -> 0x54(r1) = cross.y and
+    // 0x82535A9C -> 0x58(r1) = cross.z -- exactly Cross(diff21, diff31).  Reversing
+    // the operands negates every component of the normal and hence d, and the
+    // consumer at HamSkeletonConverter.cpp:410 negates again, so on the
+    // angle >= 0.2 branch the hip Z axis came out as the image's value negated.
+    // Triangle::Set winds the same way, so a Plane and a Triangle built from the
+    // same three points used to disagree.
     Cross(diff21, diff31, cross);
     Normalize(cross, cross);
     a = cross.x;
@@ -358,7 +368,14 @@ void BSPFace::OnSide(const Plane &plane, bool &front, bool &back) {
         do {
             Vector3 pt(it->x, it->y, 0.0f);
             Multiply(pt, t, pt);
-            float dot = plane.a * pt.x + plane.b * pt.y + plane.c * pt.z + plane.d;
+            // Term grouping, not arithmetic.  Under /fp:fast MSVC rotates a FLAT
+            // 3-product sum (source a,b,c lowers as b,c,a -- measured over all
+            // six permutations, none of which reaches the image).  Parenthesising
+            // the a+b pair pins the image's fmuls a*x / fmadds b*y / fmadds c*z.
+            // The one residual row is the c-term's fmadds operand order
+            // (`f11,f10` vs `f10,f11`); writing `pt.z * plane.c` is inert, same
+            // backend floor as recorded in Intersect(Transform,Polygon,BSPNode).
+            float dot = (plane.a * pt.x + plane.b * pt.y) + plane.c * pt.z + plane.d;
             if (dot > posTol) {
                 front = true;
             }
@@ -747,12 +764,17 @@ void Multiply(const Plane &p, const Transform &t, Plane &out) {
     Hmx::Matrix3 invM;
     FastInvert(t.m, invM);
     float b = p.b;
-    float a = p.a;
     float c = p.c;
-    float nx = invM.x.y * b + invM.x.x * a + invM.x.z * c;
-    float ny = invM.y.y * b + invM.y.x * a + invM.y.z * c;
-    float nz = invM.z.y * b + invM.z.x * a + invM.z.z * c;
-    float scalar = -(p.d / (b * b + a * a + c * c));
+    float a = p.a;
+    // Local LOAD order is what pins the term order here, not the sum's spelling:
+    // with the old `b,a,c` decl order every permutation of the three products was
+    // INERT (22 rows either way).  Declaring b,c,a makes the image's p.c/p.a/p.b
+    // load order and its c*c/a*a/b*b denominator fall out, and the sum then wants
+    // its FIRST source term emitted LAST (b,c,a spelled -> c,a,b emitted).
+    float nx = b * invM.x.y + c * invM.x.z + a * invM.x.x;
+    float ny = b * invM.y.y + c * invM.y.z + a * invM.y.x;
+    float nz = b * invM.z.y + c * invM.z.z + a * invM.z.x;
+    float scalar = -(p.d / (a * a + b * b + c * c));
     Vector3 on(a * scalar, b * scalar, c * scalar);
     Vector3 pOut;
     Multiply(on, t, pOut);
