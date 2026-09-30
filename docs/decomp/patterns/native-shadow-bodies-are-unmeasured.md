@@ -934,4 +934,14 @@ the full-detail group.
   failing against `cef251e` ("not showing", "filtered by consumer" x3), with passing
   controls (no-material refusal, `grid_80by60`).
 - The PPC `UIListMesh.obj` hash is unchanged.
+- `milo-viewer` renders emilia01 pixel-identically to main's viewer (AE 0). The viewer now
+  applies the showing gate itself.
+- Native gate: 586 registered, 517 executed, 508 passed, 9 failed, 69 skipped (budget 69).
+  - One failure was `RndCamProjectionTest.UIListMeshDrawTemporarilyShowsHiddenTemplateMesh`,
+    which pinned the workaround. It was re-adjudicated against the 100%-matched
+    `UIListMeshElement::Draw` (`827C2888`) and rewritten as
+    `...DrawsHiddenTemplateMeshAsShipped`.
+  - The other 8 were `DtaFlow*` tests, stuck on `song_select_screen` at the 5000-frame cap.
+    They fail identically with the pre-change (main-equivalent) `dc3-native` swapped in, so
+    they are not this change.
 
