@@ -647,6 +647,9 @@ CANDIDATE_BUCKETS = [b for b in BUCKETS if b.startswith("cand-")]
 FPR_LOADS = frozenset({48, 49, 50, 51})
 FPR_STORES = frozenset({52, 53, 54, 55})
 REACH_BUDGET = 200000
+POLY_OPS = frozenset({20, 21, 25, 28, 29, 30, 31})
+POLY_CAP = 64
+POLY_DEGREE = 8
 
 # --------------------------------------------------------------------------- #
 # Value-level equivalence: is a displacement row a SCHEDULING reorder?
@@ -695,6 +698,7 @@ class Interner:
     def __init__(self):
         self.ids = {}
         self.kids = []
+        self.nodes = []
 
     def __call__(self, *node):
         i = self.ids.get(node)
@@ -702,7 +706,22 @@ class Interner:
             i = len(self.kids)
             self.ids[node] = i
             self.kids.append(tuple(x for x in node[1:] if isinstance(x, Ref)))
+            self.nodes.append(node)
         return Ref(i)
+
+    def show(self, r, depth=4):
+        node = self.nodes[r]
+        if depth <= 0:
+            return f"#{int(r)}"
+        parts = []
+        for x in node[1:]:
+            if isinstance(x, Ref):
+                parts.append(self.show(x, depth - 1))
+            elif isinstance(x, int) and not isinstance(x, bool):
+                parts.append(hex(x) if abs(x) > 9 else str(x))
+            else:
+                parts.append(str(x)[:48])
+        return f"{node[0]}(" + ", ".join(parts) + ")"
 
 
 class Ref(int):
@@ -763,6 +782,83 @@ def effects_eval(words, relocs, symtab, E):
             is_sp.add(r)
         return r
 
+    polys = {}                                # Ref -> {monomial: coef}
+
+    # /fp:fast lets MSVC reassociate float arithmetic freely, so two
+    # correct builds routinely compute a*b + c*d - e in different orders
+    # (MakeScale, the Multiply/Invert family).  Normalise fadd/fsub/fmul/
+    # fmadd/fmsub/fnmadd/fnmsub/fneg into a polynomial over leaf values:
+    # a reassociation leaves it unchanged, a SWAP of two leaves does not.
+    # Capped: past POLY_CAP monomials the op stays opaque (deterministic,
+    # merely unnormalised).
+    def poly_of(x):
+        return polys.get(x) or {(x,): 1}
+
+    def padd(p, q, sq):
+        r = dict(p)
+        for m, k in q.items():
+            r[m] = r.get(m, 0) + sq * k
+        return {m: k for m, k in r.items() if k}
+
+    def pmul(p, q):
+        if len(p) * len(q) > POLY_CAP:
+            return None
+        r = {}
+        for m1, k1 in p.items():
+            for m2, k2 in q.items():
+                m = tuple(sorted(m1 + m2))
+                if len(m) > POLY_DEGREE:
+                    return None
+                r[m] = r.get(m, 0) + k1 * k2
+        return {m: k for m, k in r.items() if k}
+
+    def mkpoly(p):
+        if len(p) > POLY_CAP:
+            p = None
+        if p is None:
+            return E("poly-overflow")
+        if len(p) == 1:
+            (m, k), = p.items()
+            if k == 1 and len(m) == 1:
+                return m[0]
+        flat = []
+        for m in sorted(p):
+            flat.append(p[m])
+            flat.append(len(m))
+            flat.extend(m)
+        r = E("poly", *flat)
+        polys[r] = p
+        return r
+
+    lins = {}                                 # Ref -> (const, {term: coef})
+
+    def lin_of(x):
+        if x in lins:
+            return lins[x]
+        b, o = offs.get(x, (x, 0))
+        return (o, {b: 1})
+
+    def lin(c, terms):
+        """Integer sums are exact mod 2**32, so `(size - p) + buf` and
+        `(buf - p) + size` are the same value (DecompressChunk).  Canonicalise
+        add/subf/neg into a sorted linear form.  NOT applied to floats."""
+        terms = {t: k for t, k in terms.items() if k}
+        if len(terms) == 1:
+            (t, k), = terms.items()
+            if k == 1:
+                return add(t, c)
+        r = E("lin", c, *[x for t in sorted(terms) for x in (t, terms[t])])
+        lins[r] = (c, terms)
+        return r
+
+    def lin_combine(x, y, sy):
+        cx, tx = lin_of(x)
+        cy, ty = lin_of(y)
+        t = dict(tx)
+        for k, v in ty.items():
+            t[k] = t.get(k, 0) + sy * v
+        return lin(cx + sy * cy, t)
+
     def canon_arg(v):
         return E("spaddr") if v in is_sp else v
 
@@ -821,7 +917,7 @@ def effects_eval(words, relocs, symtab, E):
             if store:
                 val = F(D) if o in FPR_STORES else G(D)
                 if ea in is_sp:
-                    stack[(ea, kind)] = val
+                    stack[ea] = (kind, val)
                 else:
                     e = E("st", epoch, kind, ea, canon_arg(val))
                     effects.append(e)
@@ -831,7 +927,16 @@ def effects_eval(words, relocs, symtab, E):
                             addi_cons[a].append(("st", i))
             else:
                 if ea in is_sp:
-                    val = stack.get((ea, kind)) or E("stk", kind)
+                    # a stack slot is keyed by ADDRESS: an int spilled with
+                    # `std` and reloaded with `lfd` for fcfid is one value
+                    # moving between register files, not two
+                    sk = stack.get(ea)
+                    if sk is None:
+                        val = E("stk", kind)
+                    elif sk[0] == kind:
+                        val = sk[1]
+                    else:
+                        val = E("cvt", sk[0], kind, sk[1])
                 else:
                     val = E("ld", epoch, kind, ea)
                 load_val[i] = val
@@ -907,6 +1012,23 @@ def effects_eval(words, relocs, symtab, E):
         if o in (59, 63):
             xo5 = (w >> 1) & 31
             C = (w >> 6) & 31
+            if xo5 in POLY_OPS and not (o == 63 and xo5 in (16, 17)):
+                a_, b_, c_ = F(A), F(B), F(C)
+                pa, pb, pc = poly_of(a_), poly_of(b_), poly_of(c_)
+                if xo5 == 20:
+                    r = padd(pa, pb, -1)
+                elif xo5 == 21:
+                    r = padd(pa, pb, 1)
+                elif xo5 == 25:
+                    r = pmul(pa, pc)
+                else:
+                    ac = pmul(pa, pc)
+                    r = None if ac is None else padd(ac, pb, 1 if xo5 in (29, 31) else -1)
+                    if r is not None and xo5 in (30, 31):
+                        r = {m: -k for m, k in r.items()}
+                if r is not None:
+                    setf(D, mkpoly(r))
+                    continue
             if xo5 >= 18 and not (o == 63 and xo5 in (16, 17)):
                 if xo5 in (18, 20, 21):
                     ops = [F(A), F(B)]
@@ -924,8 +1046,11 @@ def effects_eval(words, relocs, symtab, E):
             if o == 63 and xo in (0, 32):
                 effects.append(E("fcmp", F(A), F(B)))
                 continue
-            if o == 63 and xo == 72:                   # fmr
+            if o == 63 and xo in (72, 12):             # fmr, frsp
                 setf(D, F(B))
+                continue
+            if o == 63 and xo == 40:                   # fneg
+                setf(D, mkpoly({m: -k for m, k in poly_of(F(B)).items()}))
                 continue
             setf(D, E("fx", o, xo, F(B)))
             continue
@@ -961,6 +1086,16 @@ def effects_eval(words, relocs, symtab, E):
                 if xo in X_COMMUTATIVE:
                     ops = sorted(ops)
                 setg(A, E("xl", xo, *ops))
+                continue
+            if xo == 266:                              # add
+                setg(D, lin_combine(G(A), G(B), 1))
+                continue
+            if xo == 40:                               # subf: rB - rA
+                setg(D, lin_combine(G(B), G(A), -1))
+                continue
+            if xo == 104:                              # neg
+                c, t = lin_of(G(A))
+                setg(D, lin(-c, {k: -v for k, v in t.items()}))
                 continue
             if xo in X_ARITH:
                 ops = [G(A), G(B)] if xo not in (104, 202, 234, 232, 200) else [G(A)]
@@ -1125,12 +1260,111 @@ class ValueFlow:
                 and not _reaches(self.E, self.b_un, vb))
 
 
+# --------------------------------------------------------------------------- #
+# Second, independent reorder test: FIRST-CONSUMER correspondence.
+#
+# The value-flow test above is exact but global: in a 97% function an effect
+# that differs for an UNRELATED reason keeps a pure scheduling swap a candidate.
+# This test is local and equally sound for the swap question: a load of address
+# X is excused only if OUR load of X feeds the instruction that the TARGET's
+# load of X feeds (mapped through the alignment), in the same operand slot --
+# and symmetrically for our address.  A crossed-over swap sends X to the other
+# consumer and fails; a reorder does not.  Commutative consumers (fadd/fmul/
+# add/and/or/xor/mullw) accept either source slot.
+# --------------------------------------------------------------------------- #
+DATAFLOW_WINDOW = 48
+
+
+def _commutative(w):
+    o = tos._op(w)
+    if o in (59, 63):
+        return ((w >> 1) & 31) in (21, 25)
+    if o == 31:
+        return ((w >> 1) & 0x3FF) in X_COMMUTATIVE
+    return False
+
+
+def _mentions(w, reg, cls):
+    o = tos._op(w)
+    if cls == "f":
+        if o in (59, 63):
+            fields = (21, 16, 11, 6)
+        elif o in FPR_STORES or o in FPR_LOADS:
+            fields = (21,)
+        else:
+            return None
+    else:
+        if o in (59, 63):
+            return None
+        if o in FPR_STORES or o in FPR_LOADS:
+            fields = (16,)
+        else:
+            fields = (21, 16, 11)
+    for sh in fields:
+        if (w >> sh) & 31 == reg:
+            if sh != 21 and _commutative(w):
+                return "comm"
+            return sh
+    return None
+
+
+def _writes(w, reg, cls):
+    o = tos._op(w)
+    if cls == "f":
+        return (o in (59, 63) or o in FPR_LOADS) and tos._d(w) == reg
+    if o in INT_LOADS or o in (OP_ADDI, OP_ADDIS, 58):
+        return tos._d(w) == reg
+    if o in (31, 21, 24, 25, 26, 27, 28, 29, 20, 23, 30):
+        return reg in (tos._a(w), tos._d(w))
+    return False
+
+
+def _flow(words, i):
+    w = words[i]
+    o = tos._op(w)
+    cls = "f" if (o in FPR_LOADS or o in FPR_STORES) else "g"
+    reg = tos._d(w)
+    if o in FPR_STORES or o in STORES or o == 62:
+        for j in range(i - 1, max(-1, i - 1 - DATAFLOW_WINDOW), -1):
+            if _writes(words[j], reg, cls):
+                return (j, "def")
+        return None
+    for j in range(i + 1, min(len(words), i + 1 + DATAFLOW_WINDOW)):
+        sh = _mentions(words[j], reg, cls)
+        if sh is not None:
+            return (j, sh)
+    return None
+
+
+def _first_consumer_reorder(row, root, bv_root, tw, bw, tacc, bacc, t2o):
+    ti, bi = row["t_idx"], row["o_idx"]
+    tf, bf = _flow(tw, ti), _flow(bw, bi)
+    if tf is None or bf is None or ti not in tacc or bi not in bacc:
+        return False
+    kind, is_store = tacc[ti][0], tacc[ti][1]
+
+    def find(acc, words, ea, root_, want):
+        for k in sorted(acc):
+            kk, st, r, off = acc[k]
+            if kk == kind and st == is_store and off == ea and root_eq(r, root_) is True:
+                f = _flow(words, k)
+                if f is not None and want(f):
+                    return True
+        return False
+    ok1 = find(bacc, bw, row["t_ea"], bv_root,
+               lambda f: f[0] == t2o.get(tf[0]) and f[1] == tf[1])
+    ok2 = find(tacc, tw, row["o_ea"], root,
+               lambda f: t2o.get(f[0]) == bf[0] and f[1] == bf[1])
+    return ok1 and ok2
+
+
 def compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm):
     """Returns a list of row dicts, each with a 'bucket'."""
     tbase, tacc, taddi = evaluate(tw, trel, symtab)
     bbase, bacc, baddi = evaluate(bw, brel, symtab)
     rows = []
     vf = None                     # built lazily: most functions never need it
+    t2o = None
     for ti, bi in aligned_pairs(tw, bw):
         a, b = tw[ti], bw[bi]
         if a == b:
@@ -1224,6 +1458,13 @@ def compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm):
         if (vf.addi_benign(ti, bi) if is_addi else vf.benign(ti, bi)):
             row["bucket"] = "reordered"
             continue
+        if not is_addi:
+            if t2o is None:
+                t2o = dict(aligned_pairs(tw, bw))
+            if _first_consumer_reorder(row, root, bv[0], tw, bw, tacc, bacc, t2o):
+                row["bucket"] = "reordered"
+                row["reorder_test"] = "first-consumer"
+                continue
         # -- candidate: type it ----------------------------------------------- #
         lay = type_of_root(root, ctx, layouts)
         row["base_type"] = lay
@@ -1383,6 +1624,26 @@ def _default_struct_db():
     return tos._default_struct_db()
 
 
+def _explain_effects(args):
+    """The value-flow adjudication surface: effects present on one side only."""
+    symtab = load_symtab(args.symbols)
+    for unit, tp, bp in iter_units(args.objdiff):
+        if not (tp and bp and os.path.exists(tp) and os.path.exists(bp)):
+            continue
+        tb = function_bodies(tp)
+        if args.explain not in tb:
+            continue
+        bb = function_bodies(bp)
+        if args.explain not in bb:
+            continue
+        vf = ValueFlow(*tb[args.explain], *bb[args.explain], symtab)
+        for side, eff, un in (("target", vf.t_eff, vf.t_un), ("ours", vf.b_eff, vf.b_un)):
+            print(f"  effects only in {side} ({len(un)} distinct of {len(eff)}):")
+            for e in sorted(un):
+                print(f"      {vf.E.show(e, args.explain_depth)}")
+        return
+
+
 def print_row(r):
     fld = ""
     if r.get("t_field") or r.get("o_field"):
@@ -1410,6 +1671,8 @@ def main(argv=None):
     ap.add_argument("--explain", default=None, metavar="SYMBOL",
                     help="print every in-scope row of one function with both "
                          "sides' base values. The adjudication surface.")
+    ap.add_argument("--explain-depth", type=int, default=4,
+                    help="expression depth printed by --explain")
     ap.add_argument("--selftest", action="store_true")
     add_coverage_args(ap)
     args = ap.parse_args(argv)
@@ -1428,6 +1691,7 @@ def main(argv=None):
         print(f"explain {args.explain}: {len(rows)} in-scope rows")
         for r in rows:
             print_row(r)
+        _explain_effects(args)
         cov.emit()
         return 0 if rows or cov.as_dict()["examined"] else EXIT_NO_INPUT
 
