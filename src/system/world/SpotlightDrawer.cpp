@@ -592,6 +592,14 @@ void DrawAccessories<LensExtract>(
             }
             const Transform &lensXfm = sl->LensXfm();
             bool visible;
+            // MEASURED NEGATIVE (w8-q, 94.277 -> 92.858): flipping this to
+            // `if (disk->Showing()) { sphere path } else { visible = false; }`.
+            // The image tests mShowing and branches AWAY to the sphere path
+            // (`lbz r10,0x8(r28)` / `cmplwi r10,0` / `bne 0x2448` at 0x2430) with
+            // the visible=false arm in the fall-through, which is this spelling's
+            // source order and NOT what MSVC gives us -- it inverts ours to
+            // `beq` into the false arm.  Writing the arms the other way round does
+            // not make MSVC invert a second time; it just loses rows elsewhere.
             if (!disk->Showing()) {
                 visible = false;
             } else {
