@@ -1643,7 +1643,7 @@ float MoveDir::DetectFrac(
             }
         }
         if (i8 != 0) {
-            frac = i7 / (i8 * frac);
+            frac = ((float)i7 / (float)i8) * frac;
         }
     }
     return frac;
