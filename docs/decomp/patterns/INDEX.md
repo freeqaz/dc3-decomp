@@ -224,6 +224,19 @@ layout truth (RB2 DWARF, Ghidra) rather than a target diff. It is unhunted. Full
 write-up, the four artifact buckets and the manual recognizer:
 **[wrong-field-at-100-percent.md](wrong-field-at-100-percent.md)**.
 
+### A wrong condition is a question about BLOCKS, not mnemonics
+
+Taxonomy classes 2+3 (161 historical bugs). A wrong condition always costs points,
+so it is always a row — but a `beq`/`bne` row is at least as often MSVC placing the
+other arm inline (test AND successors swapped) as a flipped test (test swapped, arms
+held). Decide on aligned successor BLOCKS, turn producer+branch into a predicate
+(value sets make `x<=3`≡`x<4` and unsigned `x>0`≡`x!=0` fall out), and let what the
+arms DO overrule a bulk block pairing. Detector: `scripts/analysis/cond_semantics_scan.py`.
+840 sub-100% functions, 10,995 of 11,125 branch rows classified; 2 real bugs fixed
+(`XboxContentMgr::PollRefresh` inverted exit test; `AllocAlign`'s jump table); every
+other candidate refuted against the listing, each recorded in the doc. Blind spots with manual recognizers — branch-free mask idioms,
+jump-table contents, tail merges: **[wrong-condition-is-a-block-question.md](wrong-condition-is-a-block-question.md)**.
+
 ### A symbol the report scores FEWER TIMES than the map lists is unmeasured by construction
 
 `symbols.txt` can bind a mangled name to exactly one address, so a second
