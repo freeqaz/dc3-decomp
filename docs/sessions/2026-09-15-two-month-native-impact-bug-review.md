@@ -15,8 +15,8 @@
 | # | Class | Count | Detector status |
 |---|---|---|---|
 | 1 | Wrong struct field / wrong offset | 121 | ❌ none (lead-only tool, known false positives) |
-| 2 | Inverted / missing / extra condition | **128** | ❌ **none — largest class, zero tooling** |
-| 3 | Wrong loop bound / off-by-one / container | 33 | ❌ none |
+| 2 | Inverted / missing / extra condition | **128** | ⚠ `cond_semantics_scan.py` (added 2026-09-30) — branches only; mask idioms and jump tables are manual |
+| 3 | Wrong loop bound / off-by-one / container | 33 | ⚠ `cond_semantics_scan.py` (bounds/strictness on branches; CTR trip counts not traced) |
 | 4 | Arithmetic: sign, width, dropped term | 68 | ❌ none verified |
 | 5 | Wrong `.data` constant | 54 | ⚠ partial — `mutable_float_audit.py`, blind spot measured below |
 | 6 | Wrong callee / vtable slot / dispatch | 97 | ✅ best covered |
@@ -43,11 +43,11 @@
 **Tell:** a branch whose sense is flipped relative to the target, or one that exists on only one side. This repo's commits routinely cite the exact bit (`fcmpu` + bool materialization for an inlined `IsNaN`, `beq`/`bne` polarity, `cmplwi` vs `cmpwi`).
 **The single most productive recognizer across all 11 source reports** was grepping commit *subjects* for `invert|guard|missing|extra|backwards` and reading the body for the disassembly proof.
 **Sub-shape worth its own hunt:** guards **we invented** that the image does not have (`RndText::OnComputeCharWidths`, `DepthBuffer3D::DrawShowing`, `CharDebug::DisplayObject`, `CharEyes::LidTrackAndClampingUpdate` — whose else-arm dereferences unconditionally anyway, so it never guarded anything). See `pattern_decompilation_introduced_semantics.md`.
-**Detector:** none exists.
+**Detector:** `scripts/analysis/cond_semantics_scan.py` (added 2026-09-30) — decides a `beq`/`bne` row on aligned successor BLOCKS, not the mnemonic, so block placement stops reading as inversion. First run: 2 real bugs (`XboxContentMgr::PollRefresh`, `AllocAlign`). Blind spots and their manual recognizers: `docs/decomp/patterns/wrong-condition-is-a-block-question.md`.
 
 ### 3 — Wrong loop bound / off-by-one / wrong container (33)
 **Tell:** a bound off by one register or immediate (`cmplwi r0,N` vs `N-1`); `.begin()` where the target splices at `.end()`; `push_back` vs `push_front`; an increment on the wrong side of a `continue` edge. Often **invisible under the normalized ruler** — the bound compiles to identically-shaped code with a different literal.
-**Detector:** none.
+**Detector:** `scripts/analysis/cond_semantics_scan.py` (added 2026-09-30) for the branch-bound shapes (OFF-BY-ONE / STRICTNESS buckets, value-set comparison so `x<=3`≡`x<4` is not flagged). ⚠ "Invisible under the normalized ruler" applies to the ROUNDED display only: the exact `match_percent_normalized` charges a changed literal (measured by that scanner's immediate-sabotage control). Container shapes (`.begin()` vs `.end()`, `push_back` vs `push_front`) are a wrong-callee/argument question, not a branch — still no detector.
 
 ### 4 — Arithmetic: sign, width, dropped operation (68)
 **Tell:** a cited instruction substitution — `fnmsubs` vs `fmsubs`, `lwa` vs `lwz`, `divw` vs `divwu`, a missing `fmuls`/`fadds` term, an explicit double-rounding claim.

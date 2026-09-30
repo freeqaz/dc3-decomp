@@ -60,11 +60,31 @@ Every pair lands in exactly one bucket:
   NAN-ONLY           float: differ only on the unordered outcome -- recorded,
                      not a finding (`!(a<b)` vs `a>=b`)
 
+LEAD buckets -- listed on every run, never counted as findings, each one the
+home of a measured false positive:
+
+  ORIENTATION-CONFLICT  block pairing and the arms' distinguishing effects
+                     disagree about which successor is which
+                     (CacheXbox::ThreadGetDir: two destructor runs differing only
+                     in the returned value)
+  UNPAIRED-DIFFERS   blocks did not pair; a DECISIVE arm-effects reading
+                     oriented the row and the predicates still differ
+  PRODUCER-SHAPE     integer vs float producer, or immediate vs register: the
+                     row pairing matched two different tests
+  LOOP-LOWERING      a backward decrement-and-test latch against a bound compare
+  SELECT             DIRECTION/STRICTNESS where an arm is 1-2 pure register
+                     moves: min/max spelled a<b?a:b vs b<a?b:a (JoypadPollCommon)
+
+An OFF-BY-ONE whose single differing value v is assigned v by the other arm on
+BOTH sides is a clamp and reads `agree` (libvorbis seed_curve: min(choice,7)).
+
 and, separately, rows that are not a PAIR of conditional branches:
 
   ONE-SIDED          a conditional branch on one side only (missing / extra
                      condition).  A LEAD, never a finding: an inline boundary,
-                     a peeled loop or a CTR loop produce exactly this shape.
+                     a peeled loop, a CTR loop, a tail merge or cross-jump
+                     produce exactly this shape -- 11 of 11 hand-checked on
+                     2026-09-30 were one of those.
 
 WHAT IT CANNOT SEE  (read before calling the class exhausted)
 -----------------------------------------------------------

@@ -123,6 +123,13 @@ orientation exists.
   finding rows (11,016 B) → sabotaged 9, the new row `INVERTED` for
   `?RandomInt@@YAHXZ`, which left the exact-100 set at 99.4643 → reverted,
   output **byte-identical** (sha256 `cf2c6137…`).
+* **Immediate sabotage** (the class-3 shape): `TickFormat`'s `if (tick >= 0)` →
+  `tick >= 1`. The function left the exact-100 set at **99.9677** — a number the
+  rounded display prints as `100.0` — and landed in `OFF-BY-ONE` ("predicates
+  differ on exactly one value (immediate 0 vs 1)"); reverted, byte-identical
+  again. This is the measurement behind the exact-100 proof-of-absence drop: a
+  changed literal IS charged by `match_percent_normalized`; "invisible under the
+  normalized ruler" is true only of the rounded rendering.
 * **Script mutation**, run from a freshly created empty directory: deleting the
   `swapped`-successor negation fails exactly the two selftest pins that exist to
   catch it; the unmutated copy passes.
