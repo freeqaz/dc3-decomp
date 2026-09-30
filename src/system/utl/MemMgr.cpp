@@ -335,12 +335,28 @@ void MemOrPoolFreeSTL(
     }
 }
 
+// Seven parameters, not eight.  Our declaration carried an unused `int i5`
+// between `b4` and `strat`, which the image does NOT have.  Two independent
+// proofs off build/373307D9/asm/system/utl/MemMgr.s:
+//
+//  1. THIS function's prologue homes r7/r8/r9 and nothing else --
+//     0x827CBED8 `mr r27, r6` / 0x827CBEDC `mr r26, r7` /
+//     0x827CBEE0 `mr r25, r8` / 0x827CBEE4 `mr r24, r9` -- and feeds them to
+//     MemHeap::Init as args 6/7/8 (0x827CBF8C `mr r10, r25`,
+//     0x827CBF94 `mr r9, r26`, 0x827CBF7C `stb r24, 0x57(r1)`).  With the extra
+//     parameter ours homed r8/r9/r10 instead, one register late all the way down.
+//  2. The ONLY caller, AddHeap(int, int, DataArray *), sets r3..r9 and never
+//     touches r10 (0x827CCCA0..0x827CCCB8 -- seven argument registers for what
+//     our signature said was an eight-argument call).
+//
+// The mangled name in config/373307D9/symbols.txt was authored from the wrong
+// signature and is renamed with this commit: the address (0x827CBEB0) and size
+// (0x108) are unchanged, and the corrected name appeared nowhere before.
 void AddHeap(
     int heapNum,
     int size,
     const char *c3,
     bool b4,
-    int i5,
     MemHeap::Strategy strat,
     int i7,
     bool b8
@@ -380,9 +396,11 @@ void AddHeap(int i1, int i2, DataArray *arr) {
     arr->FindData(debug, iDebug, false);
     int iStrategy = 0;
     arr->FindData(strategy, iStrategy, false);
-    AddHeap(
-        i1, i2, name, iHandle, iRegion, (MemHeap::Strategy)iStrategy, iDebug, iAllowTemp
-    );
+    // iRegion is READ and DROPPED, in the image too: it is stored at 0x64(r1),
+    // handed to FindData as an out-param, and never loaded again (the call at
+    // 0x827CCCBC passes r3..r9 only).  Keep the FindData -- the image makes the
+    // call -- but do not pass the value.
+    AddHeap(i1, i2, name, iHandle, (MemHeap::Strategy)iStrategy, iDebug, iAllowTemp);
 }
 
 void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int align) {
@@ -630,17 +648,16 @@ void MemInit() {
         // and the `bl`; declared after, ours lands past the call.
         int totalBytes = 0;
         Symbol size("size");
-        // w7-bu (2026-09-15): the image's 8th argument to this AddHeap is
-        // UNDEFINED -- it sets r6..r9 to 0 (827CD390..827CD3A0) and never
-        // writes r10, which still holds `MemMgr.cpp`@ha from 827CD318. In
-        // the shipped game allowTemp is therefore whatever byte that was
-        // (low byte 0x00, so false). Spelling it as an uninitialised local
-        // (`bool t; AddHeap(..., t)`) makes MSVC home it in a frame slot and
-        // `lbz` it (98.3 canonical but a phantom slot at 0x60 that shifts
-        // 0x64/0x68); an uninitialised `int` does the same and costs more
-        // (97.7). Neither reproduces "no instruction", so the literal
-        // stays -- one `li r10, 0x0` row (98.1).
-        AddHeap(heapArr->Size() - 1, 0x2500000, "tiny", false, 0, (MemHeap::Strategy)0, 0, false);
+        // RETRACTS w7-bu (2026-09-15), which read the image here as passing an
+        // UNDEFINED 8th argument ("it sets r6..r9 to 0 and never writes r10, so
+        // in the shipped game allowTemp is whatever byte that was").  There is
+        // no 8th argument and nothing is undefined: AddHeap takes SEVEN
+        // parameters (see the proof above its definition), so r6..r9 at
+        // 0x827CD390..0x827CD3A0 are exactly `false, (Strategy)0, 0, false` --
+        // a complete argument list.  The three spellings w7-bu measured for a
+        // phantom r10 (`bool t;`, an uninitialised int, a literal) were all
+        // answers to a question that does not exist.
+        AddHeap(heapArr->Size() - 1, 0x2500000, "tiny", false, (MemHeap::Strategy)0, 0, false);
         // Opens MemAlloc's tiny-heap fast path -- gHeaps[gNumHeaps-1] now exists.
         gTinyHeapReady = true;
         int i = heapArr->Size() - 1;
