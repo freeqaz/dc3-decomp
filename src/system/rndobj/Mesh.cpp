@@ -42,6 +42,42 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     // `fmuls f9,f11,f9` and `fmadds f0,f12,f13,f9`), where the old spelling
     // wanted inv.z.x at 0x70 and inv.y.x at 0x60.  Term order is the image's:
     // each row's first fmuls is the term written first here.
+    // w8-p 2026-09-30, INDEPENDENT CONFIRMATION of the w8-h fix above, by
+    // decoding all nine terms out of the image rather than re-reading three of
+    // them.  `inv` is the stack Matrix3 based at 0x50(r1), so its rows are
+    // inv.x = 0x50/0x54/0x58, inv.y = 0x60/0x64/0x68, inv.z = 0x70/0x74/0x78,
+    // and r30 holds `normal` (nx=0x0, ny=0x4, nz=0x8).  The image computes:
+    //   fmuls  f10,f12,f10  @8263B9A8   ny * inv.y.y (0x64)
+    //   fmuls  f9,f11,f9    @8263B9B4   nz * inv.x.z (0x58)
+    //   fmuls  f8,f12,f8    @8263B9B8   ny * inv.z.y (0x74)
+    //   fmadds f10,f7,f6,f10 @8263B9D8  + nx * inv.y.x (0x60)
+    //   fmadds f9,f7,f5,f9   @8263B9DC  + nx * inv.x.x (0x50)
+    //   fmadds f8,f7,f4,f8   @8263B9E0  + nx * inv.z.x (0x70)
+    //   fmadds f0,f11,f0,f10 @8263B9E4  + nz * inv.y.z (0x68) -> stfs 0x4(r31) = result.y
+    //   fmadds f0,f12,f13,f9 @8263B9EC  + ny * inv.x.y (0x54) -> stfs 0x0(r31) = result.x
+    //   fmadds f0,f11,f3,f8  @8263B9F4  + nz * inv.z.z (0x78) -> result.z
+    // All nine terms, all three destinations and the y-before-x store order
+    // (0x4(r31) at 8263B9E8 BEFORE 0x0(r31) at 8263B9F0) agree with the three
+    // lines below exactly.  The w8-h row-dot fix is right and the term order is
+    // the image's.
+    //
+    // RESIDUAL 99.68293 canonical / 94.31707 fuzzy, 23 rows, all register and
+    // stack-slot permutation: the image INTERLEAVES the three rows -- three
+    // fmuls, then three nx-fmadds sharing f7=nx as the multiplicand, then the
+    // three closing fmadds -- and holds nx in one register across all of it,
+    // where we schedule more of each row before moving on.  Zero `[sym]` rows,
+    // i.e. nothing here is a wrong callee.
+    //
+    // ⚠ METHOD NOTE for whoever reads the numbers next: a large
+    // (normalized - fuzzy) gap is NOT a wrong-callee tell.  This row has the
+    // biggest such gap in these three units (5.37pp) and carries no relocation
+    // charge at all; ConvertTextToWide's 3.87pp gap is a frame-pointer
+    // difference.  normalized = diff_score - arg_diff_score, and arg_diff_score
+    // collects register-only diff_arg rows as well as relocation penalties, so
+    // the gap only says "there are diff_arg rows".  To hunt a wrong callee, look
+    // for `[sym]` rows under name_check, or ask
+    // query_functions(objdiff_pattern='WRONG_CALLEE') -- which, asked of all
+    // three of these units, returns a measured empty set.
     result.y = ny * inv.y.y + nx * inv.y.x + nz * inv.y.z;
     result.x = nz * inv.x.z + nx * inv.x.x + ny * inv.x.y;
     result.z = ny * inv.z.y + nx * inv.z.x + nz * inv.z.z;
