@@ -840,3 +840,75 @@ person's work. I sent the correction as soon as the PCH diagnostic appeared, whi
 is the only part of the sequence worth repeating. **Correlation plus a plausible
 mechanism is not attribution, and the cost of a wrong attribution falls on someone
 else's afternoon.**
+
+## Wave 8 closed — gated, with one regression caused and fixed
+
+**Native gate green** on `54365d0c3`: 584 registered, 515 executed, **515 passed,
+0 failed**, 69 skipped against a budget of 69, skipped-suite block identical to
+every run in this wave. Both patch-state guards exit 0.
+
+| measure | wave start `bb2e759eb` | close `54365d0c3` |
+|---|---:|---:|
+| Matched functions (XEX-total) | 31,228 | **31,393** (+165) |
+| Matched code | 5,544,916 B | **5,574,424 B** |
+| **Authorable canonical** | 96.80 % | **97.32 %** (31,356 / 32,221) |
+| Complete authorable units | 623 / 967 | **646 / 967** (+23) |
+| Remaining authorable | 1,032 fns / 620,028 B | **865 fns / 585,908 B** |
+| XEX-total headline | 48.747 % | **49.01 %** |
+
+Twelve lanes across four phases, every landing row-diffed against a baseline
+pinned to that lane's own base, **zero DOWN rows** on all twelve, all four build
+guards green throughout. **Thirteen behavioural bugs**, each adjudicated against
+the target listing by the coordinator rather than accepted on a lane's report —
+and two of them independently rediscovered by a concurrent session, which is the
+strongest corroboration this process produces.
+
+### The regression I caused, and what it cost to find
+
+`w9-e` removed an invented `- 1` from `HamNavList::OnMsg`'s ScrollDown edge. The
+removal is **faithful** — verified twice at `0x8244A124`/`0x8244A128` — and it was
+**still a regression**, because that `- 1` was compensating for a *second*
+divergence in native scroll behaviour. Without it, four d-pad downs in song select
+alternate between display indices 6 and 3, both on a `song_tier_1` header; the
+cursor never advances, song select never exits, and 8 DtaFlow tests fail.
+
+Cost: a **five-step bisect across two sessions**, ~6 min per step, plus three
+full-gate runs. Reverted at `54365d0c3` with the debt recorded at the line;
+measured 9/9 DtaFlow green before landing. The concurrent session owns the native
+fix and will re-land the faithful comparison on top.
+
+**The process failure that made it expensive** is worth more than the fix. I
+landed six merges containing behavioural changes and gated **once, at the end** —
+two of those changes were described in their own merge messages as altering
+navigation selection and the RNG sequence. Gating after each behavioural merge
+would have named the culprit in one step. The gate exists to catch what review
+cannot, and I spent it after the point where it could isolate anything.
+
+**And the blind spot behind it:** I briefed all twelve lanes to read for *meaning*
+rather than score, and never once asked whether a **correct** change could break
+something that had been compensating for the bug. That is the inverse of the
+failure mode I was warning against, it is documented in this repo as "a native
+rewrite masked a mis-decompiled function", and I walked into it anyway.
+
+### Four mechanisms I asserted and had to retract, in one session
+
+Recorded together because the pattern matters more than any one of them. Each was
+a plausible story that *explained an observation*, which is exactly what makes a
+guess feel like a finding.
+
+1. **`__LINE__` in `MILO_ASSERT`** — refuted by a whole-binary probe already in the
+   repo, and by the macro signature. I had read `MILO_ASSERT(type < kBufferNum,
+   0x1FC)` the same day and read past it.
+2. **"A peer's commit broke the native build"** — asserted on correlation plus a
+   plausible mechanism, before I had a reproduction. The cause was my own
+   concurrent build.
+3. **"It's my build directory"** — refuted by the peer's clean-room reproduction;
+   the regression was real.
+4. **"Re-tune the input script"** — refuted by reading the log I had already
+   captured: a cursor that *alternates* cannot be fixed with more presses.
+
+What made these recoverable rather than damaging: each was stated precisely enough
+to be falsified, and corrected the moment a disconfirming fact arrived. Three of
+the six phase-4 lanes used the same discipline on themselves — one reverted its
+own 100 % win after tracing callers, one retracted a "do not re-dig" note, one
+withdrew a metrics claim after checking the source.
