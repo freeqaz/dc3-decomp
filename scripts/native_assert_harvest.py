@@ -16,8 +16,10 @@ HOW
     title -> main -> choose_mode[--mode-downs] -> song_select[--song-downs] ->
     multiuser_screen[--multiuser: controller presses through its panes, as on
     the 360 -- there is no native auto-advance] -> --confirm-screens ->
-    --post-screens).  NOT with /api/input/press, which is
-    dead in dc3-native (see launch());
+    --post-screens).  Screens whose input must wait on game STATE (party
+    mode's photo confirm, its standings and rematch screens) are pressed over
+    /api/input/press instead, only while that screen is current -- the
+    endpoint works since native-partyplay (it was dead before, see launch());
   * watches progress over the HTTP debug server using ONLY side-effect-free
     probes (screen, frame, telemetry, screenshot).  It deliberately never calls
     /api/dta/eval: a probe query that fails raises its own FAIL/NOTIFY and the
@@ -44,10 +46,16 @@ USAGE
   dance battle (both multiuser sides readied with the controller):
     python3 scripts/native_assert_harvest.py --out /tmp/h-battle --port 9195 --mode-downs 2 \
         --post-screens dancebattle_perform_endgame_screen,dancebattle_perform_complete_screen
-  practice:
+  practice (--route practice = the flags below; practice_welcome_screen needs
+  its confirm too, without it the route stalls there):
     python3 scripts/native_assert_harvest.py --out /tmp/h-practice --port 9195 \
-        --mode-downs 1 --confirm-screens seldiff_practice_screen,startgame_practice_screen \
+        --mode-downs 1 --multiuser none --confirm-screens \
+        seldiff_practice_screen,startgame_practice_screen,practice_welcome_screen \
         --post-screens practice_endgame_screen
+  party mode / Crew Throwdown (crew select -> team photos -> hub -> every
+  event -> standings -> rematch -> main_screen; see route_party):
+    python3 scripts/native_assert_harvest.py --out /tmp/h-party --port 9196 --route party
+  (--route perform|battle|practice|party are presets for the flags above.)
   re-analyse a finished run:  --out <dir> --analyse-only
   (GPU access: run outside the sandbox.  Needs a built native/build/dc3-native.)
 """
@@ -63,6 +71,8 @@ import urllib.error
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from synthetic_kinect import SyntheticKinect  # noqa: E402
 MENU_SCREENS = {"main_screen", "choose_mode_screen", "song_select_screen"}
 
 
@@ -105,10 +115,14 @@ class Harvest:
         return d["data"] if d and d.get("ok") else {}
 
     def press(self, button):
+        """One pad-0 press over HTTP.  Dispatched by the engine's
+        HttpServer::DispatchInjectedButtons (dead before native-partyplay: the
+        queued bits were never drained)."""
         try:
             self.post("/input/press", json.dumps({"button": button}))
+            return True
         except Exception:
-            pass
+            return False
 
     def wait_frames(self, n):
         target = self.frame() + n
@@ -179,7 +193,9 @@ class Harvest:
         #    native boot-advance (UIManager::Poll, HX_NATIVE) jumps title_screen ->
         #    wait_main_after_saveload_screen after 60 frames without it, and an
         #    HTTP round trip cannot reliably land inside that window;
-        #  * /api/input/press is DEAD in dc3-native: it answers {"ok":true} but
+        #  * /api/input/press WAS dead in dc3-native (fixed on native-partyplay:
+        #    HttpServer::DispatchInjectedButtons now drains it; the frame-exact
+        #    menu presses stay in the script): it answered {"ok":true} but
         #    the press never reaches a pad.  Since the shared-engine extraction
         #    the Joypad_Native.cpp that links is milo-native-engine's, compiled
         #    in libmilo-engine.a WITHOUT DC3_HTTP_SERVER, so its
@@ -189,6 +205,15 @@ class Harvest:
         #    immediate or delayed.
         # The in-engine input-script runner is the only working input path.
         a = self.args
+        self.kinect = None
+        if a.route == "party":
+            # Party mode is gated on skeleton input the controller cannot give
+            # (see synthetic_kinect.py): two people stand in front of a
+            # scripted stand-in for the sensor for the whole run.
+            sock = os.path.join(self.out, "kinect.sock")
+            self.kinect = SyntheticKinect(sock, people=2)
+            self.kinect.start()
+            env.update(SyntheticKinect.engine_env(sock))
         # A HamNavList ignores every button while its enter animation runs
         # (~20 UI frames; the image's HamNavList::OnMsg(ButtonDownMsg) checks
         # IsAnimating(), and native now does too), so the first press on each
@@ -203,12 +228,29 @@ class Harvest:
             lines.append(f"+{t} down")
             t += 15
         lines.append(f"+{t} confirm")
-        lines.append("wait_screen song_select_screen")
-        t = 30
-        for _ in range(a.song_downs):
-            lines.append(f"+{t} down")
-            t += 15
-        lines.append(f"+{t} confirm")
+        if a.route == "party":
+            # choose_mode `crew_showdown` -> party_mode_branch_screen, whose
+            # first item is `crew_showdown_start` -> party_mode_welcome_screen,
+            # which moves on by itself to crew_throwdown_multiuser_screen.
+            # Crew select is the multiuser panel with a crew_select_pane per
+            # side: side 0 picks its highlighted crew, DLeft moves focus to
+            # right_hand_p2 (MultiUserGesturePanel::OnMsg(ButtonDownMsg)),
+            # side 1 picks.  Everything after that is gated on the synthetic
+            # Kinect and on state-gated HTTP presses (route_party).
+            lines += ["wait_screen party_mode_branch_screen", f"+{NAV_SETTLE} confirm",
+                      "wait_screen crew_throwdown_multiuser_screen",
+                      "+60 confirm", "+130 left", "+200 confirm"]
+            a.confirm_screens = a.post_screens = ""
+            lines_done = True
+        else:
+            lines_done = False
+        if not lines_done:
+            lines.append("wait_screen song_select_screen")
+            t = 30
+            for _ in range(a.song_downs):
+                lines.append(f"+{t} down")
+                t += 15
+            lines.append(f"+{t} confirm")
         # multiuser_screen is driven by controller input as on the 360 (native
         # is pinned in controller mode).  Its two nav lists (right_hand_p1 /
         # right_hand_p2) each walk seldiff_pane -> startgame_pane; `play` sets
@@ -218,7 +260,7 @@ class Harvest:
         # the list's enter animation, during which presses are dropped, so
         # presses are MULTIUSER_GAP frames apart.  Offsets are relative to the
         # wait_screen, so they must increase.
-        mu = a.multiuser
+        mu = "none" if a.route == "party" else a.multiuser
         if mu == "auto":
             mu = {0: "solo", 2: "duo"}.get(a.mode_downs, "none")
         if mu != "none":
@@ -266,7 +308,14 @@ class Harvest:
             shutil.copy2(binary, pinned)
         self.binary = pinned
         self.logf = open(self.log_path, "wb")
-        self.proc = subprocess.Popen([binary], cwd=build_dir, env=env,
+        cmd = [binary]
+        if a.gdb:
+            # Diagnostic: run under gdb with a command file (e.g. one that
+            # catches SIGSEGV, prints a backtrace and continues, so the
+            # engine's own handlers -- the Draw() sigsetjmp recovery
+            # included -- still run).  Its output lands in engine.log.
+            cmd = ["gdb", "-q", "-batch", "-x", os.path.abspath(a.gdb), "--args", binary]
+        self.proc = subprocess.Popen(cmd, cwd=build_dir, env=env,
                                      stdout=self.logf, stderr=subprocess.STDOUT)
         self.t0 = time.time()
         deadline = time.time() + 120
@@ -279,6 +328,8 @@ class Harvest:
         return self.mark("boot", False, "health endpoint never answered")
 
     def shutdown(self):
+        if getattr(self, "kinect", None):
+            self.kinect.stop()
         if self.alive():
             self.proc.send_signal(signal.SIGTERM)
             try:
@@ -312,6 +363,8 @@ class Harvest:
 
     def route(self):
         a = self.args
+        if a.route == "party":
+            return self.route_party()
         # menus: driven by route_input.txt (see launch); a stage for every
         # screen entered is recovered from the engine log afterwards.
         if not self.goto("game_screen", 300):
@@ -377,6 +430,188 @@ class Harvest:
         back = last in MENU_SCREENS
         self.mark("back_to_menu", back, f"post-song screens: {' -> '.join(seen) or '(none)'}")
 
+
+    # ---- party mode (Crew Throwdown) ---------------------------------------------
+    # The checkpoints a full party passes, in order.  Every one is reported
+    # REACHED or NOT REACHED; a run that stops early says where.
+    PARTY_CHECKPOINTS = [
+        "crew_throwdown_multiuser_screen",   # crew select (controller)
+        "party_mode_signin_screen",          # team 1 enrollment (raised hand + photo)
+        "party_mode_crew_announcement_screen",
+        "party_mode_signin#2",               # team 2 enrollment
+        "party_mode_hub_screen",             # round 1 hub (high five to start)
+        "game_screen",                       # the first event's gameplay
+        "event_complete",                    # ...to gameover, or strike_a_pose's outro
+        "party_mode_standings_screen",
+        "party_mode_rematch_screen",         # after the last event's standings
+        "back_to_menu",
+    ]
+
+    def entered_screens(self):
+        """Screens entered since the last call, in order, from the engine's own
+        `DC3 UI: Screen 'X' Enter` lines.  /api/screen is not usable as an
+        edge detector here: it also reports a transition's TARGET, which can
+        be a screen that is never entered (party mode redirects
+        dancebattle_perform_endgame_screen to meta_loading_party_cleanup_screen),
+        and it flips back, which read as a second game_screen."""
+        out = []
+        try:
+            with open(self.log_path, "rb") as f:
+                f.seek(getattr(self, "_follow_off", 0))
+                data = f.read()
+        except OSError:
+            return out
+        end = data.rfind(b"\n") + 1
+        self._follow_off = getattr(self, "_follow_off", 0) + end
+        for raw in data[:end].splitlines():
+            m = SCREEN_ENTER_RE.match(raw.decode("utf-8", "replace"))
+            if m:
+                out.append(m.group(1))
+        return out
+
+    def route_party(self):
+        """Drive Crew Throwdown from crew select to the end of the party.
+
+        Menus up to crew select come from route_input.txt.  From there the
+        route is a state machine on the current screen (read over HTTP):
+          * two synthetic people stand in front of the sensor all run, so both
+            sides of crew select are `player_present` -> ready;
+          * party_mode_signin_screen (once per team): one person raises a hand
+            and holds it -- HandRaisedGestureFilter claims a photo frame, the
+            enrollment timer runs out, the photo is taken -- and pad confirms
+            (HTTP, only while this screen is current) accept the photo;
+          * party_mode_hub_screen: the two people high-five
+            (HighFiveGestureFilter -> hamprovider high_five -> on_high_five);
+          * game_screen: sampled until gameover, as the other routes;
+          * party_mode_standings_screen after the last event shows a continue
+            panel: pad confirm;  party_mode_rematch_screen: `crew_showdown_no_more`
+            (two downs, confirm) -> main_screen.
+        No game logic is shortcut: every transition is the image's own DTA /
+        gesture code reacting to pad or skeleton input."""
+        a = self.args
+        k = self.kinect
+        seen_order = []
+        counts = {}
+        reached = set()
+        last = None
+        entered_at = time.time()
+        songs = 0
+        stall_deadline = time.time() + a.party_stall_timeout
+        hub_fives = 0
+        next_press = 0.0
+        deadline = time.time() + a.party_timeout
+
+        def cp(name, note=""):
+            if name not in reached:
+                reached.add(name)
+                self.mark(name, True, note)
+
+        pending = []
+        while time.time() < deadline and self.alive():
+            pending += self.entered_screens()
+            entered = pending.pop(0) if pending else None
+            s = entered or last
+            now = time.time()
+            if entered:
+                counts[s] = counts.get(s, 0) + 1
+                seen_order.append(s)
+                print(f"[harvest] party screen {s} (#{counts[s]})", flush=True)
+                last, entered_at = s, now
+                stall_deadline = now + a.party_stall_timeout
+                hub_fives = 0
+                next_press = now + 8.0
+                k.all_stand()
+                self.wait_frames(20)  # let the screen draw before its screenshot
+                if s == "party_mode_signin_screen" and counts[s] == 2:
+                    cp("party_mode_signin#2")
+                elif s in self.PARTY_CHECKPOINTS and s not in reached:
+                    cp(s)
+                else:
+                    self.mark(f"party:{s}#{counts[s]}", True)
+                if s == "party_mode_signin_screen":
+                    # team 1 = person 0, team 2 = person 1
+                    k.set_pose((counts[s] - 1) % 2, "raise_right")
+                if s == "main_screen" and "party_mode_rematch_screen" in reached:
+                    cp("back_to_menu", f"screens: {' -> '.join(seen_order)}")
+                    return
+                if s == "game_screen":
+                    songs += 1
+                    self.party_gameplay(songs)
+                    stall_deadline = time.time() + a.party_stall_timeout
+                    if songs >= a.party_songs:
+                        self.mark("party_songs_limit", True, f"stopped after {songs} song(s)")
+                        break
+                    continue
+            if pending:
+                continue  # catch up: act only on the screen that is current
+            if s == "party_mode_signin_screen" and now >= next_press:
+                # Accepting the team photo.  Before the photo exists the
+                # continue panel is disabled and a confirm does nothing.
+                self.press("confirm")
+                next_press = now + 3.0
+            elif s == "party_mode_hub_screen" and now - entered_at > 4.0 + hub_fives * 15.0 \
+                    and hub_fives < 4:
+                k.high_five()
+                time.sleep(3.0)
+                k.all_stand()
+                hub_fives += 1
+            elif s in ("party_mode_standings_screen", "party_mode_rematch_screen") \
+                    and now >= next_press + 4.0:
+                if s == "party_mode_rematch_screen":
+                    # rematch / new showdown / no more
+                    for b in ("down", "down", "confirm"):
+                        self.press(b)
+                        time.sleep(1.5)
+                else:
+                    self.press("confirm")
+                next_press = time.time() + 4.0
+            if s and now > stall_deadline:
+                self.mark("party_stall", False,
+                          f"no screen change for {a.party_stall_timeout}s on {s}")
+                break
+            # short: the round standings and crew announcement screens can be
+            # gone in about a second
+            time.sleep(0.25)
+        for c in self.PARTY_CHECKPOINTS:
+            if c not in reached:
+                self.mark(c, False, f"last screen {last!r}; screens: {' -> '.join(seen_order)}")
+
+    def party_gameplay(self, n):
+        """One party event: sample until it ends.  Most events end at
+        gameover (idle past song end); strike_a_pose does not -- its
+        strikeapose_over sets game_stage outro and calls fatals_over, and the
+        game goes to the win screen without a gameover state (the fatality
+        probe saw the same for a dance-battle fatality).  Both count as the
+        event completing; how it ended is in the note."""
+        a = self.args
+        last_beat, last_move = None, time.time()
+        state = stage = None
+        ended = None
+        shot = False
+        deadline = time.time() + a.gameplay_timeout
+        while time.time() < deadline and self.alive():
+            tel = self.telemetry()
+            state, beat, stage = tel.get("state"), tel.get("beat"), tel.get("gameStage")
+            scr = tel.get("screen")
+            if state == "gameover":
+                ended = "gameover"
+                break
+            if scr not in (None, "", "game_screen"):
+                ended = f"left gameplay for {scr} (game_stage={stage})"
+                break
+            if beat != last_beat:
+                last_beat, last_move = beat, time.time()
+            elif time.time() - last_move > a.stall_timeout:
+                break
+            if not shot and (beat or 0) > 60:
+                self.screenshot(f"party_event{n}_mid")
+                shot = True
+            time.sleep(2)
+        ok = ended == "gameover" or (ended is not None and (
+            "endgame" in ended or "cleanup" in ended or stage == "outro"))
+        self.mark("event_complete" if n == 1 else f"event_complete#{n}", ok,
+                  f"event {n}: {ended or 'stalled/timed out'}; state={state!r} "
+                  f"beat={self.telemetry().get('beat')}")
 
 # ---- log analysis ---------------------------------------------------------------
 TAG_RE = re.compile(r"^MILO_(WARN|NOTIFY|FAIL): (.*)$")
@@ -549,10 +784,41 @@ def report(h, sites, crashes, rc_engine):
     return missed
 
 
+ROUTE_PRESETS = {
+    "perform": dict(mode_downs=0),
+    "battle": dict(mode_downs=2, multiuser="duo",
+                   post_screens="dancebattle_perform_endgame_screen,"
+                                "dancebattle_perform_complete_screen"),
+    # practice_welcome_screen needs its confirm too: without it the route
+    # stalls there (measured on native-suspects' baseline binary).
+    "practice": dict(mode_downs=1, multiuser="none",
+                     confirm_screens="seldiff_practice_screen,startgame_practice_screen,"
+                                     "practice_welcome_screen",
+                     post_screens="practice_endgame_screen"),
+    # choose_mode's 5th item is crew_showdown (Crew Throwdown)
+    "party": dict(mode_downs=4, multiuser="none", confirm_screens="", post_screens=""),
+}
+
+
+def apply_route_preset(args):
+    for k, v in ROUTE_PRESETS.get(args.route, {}).items():
+        setattr(args, k, v)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", required=True)
     ap.add_argument("--port", type=int, default=9191)
+    ap.add_argument("--route", choices=["custom", "perform", "battle", "practice", "party"],
+                    default="custom",
+                    help="preset route (fills --mode-downs/--confirm-screens/--post-screens/"
+                         "--multiuser); custom = use those flags as given")
+    ap.add_argument("--party-songs", type=int, default=99,
+                    help="party route: stop after this many events (default: the whole party)")
+    ap.add_argument("--party-timeout", type=int, default=10800,
+                    help="party route: hard cap on the whole party, seconds")
+    ap.add_argument("--party-stall-timeout", type=int, default=240,
+                    help="party route: give up when the screen has not changed for this long")
     ap.add_argument("--mode-downs", type=int, default=0, help="downs on choose_mode (0=perform)")
     ap.add_argument("--song-downs", type=int, default=5, help="downs on song select")
     ap.add_argument("--confirm-screens", default="",
@@ -581,9 +847,13 @@ def main():
     ap.add_argument("--binary", default=None,
                     help="dc3-native executable to run (default: native/build/dc3-native); "
                          "it is still launched from native/build")
+    ap.add_argument("--gdb", metavar="CMDFILE", default=None,
+                    help="run the engine under gdb with this command file (it must `run`); "
+                         "its output lands in engine.log")
     ap.add_argument("--analyse-only", action="store_true",
                     help="re-analyse an existing --out dir (needs stages.json)")
     args = ap.parse_args()
+    apply_route_preset(args)
     h = Harvest(args)
     h.binary = os.path.join(REPO, "native", "build", "dc3-native")
     if os.path.exists(os.path.join(h.out, "dc3-native.pinned")):

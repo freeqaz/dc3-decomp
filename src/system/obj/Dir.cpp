@@ -137,6 +137,52 @@ static void CollectSurvivorClosure(
 static bool IsSurvivor(ObjectDir *dir, const std::vector<ObjectDir *> &survivors) {
     return dir && std::find(survivors.begin(), survivors.end(), dir) != survivors.end();
 }
+
+// Pre-nullify a cascade dir's ref ring EXCEPT the ObjDirPtrs that cascade dirs
+// hold to it in their mSubDirs.  Those are how the image destroys a subdir:
+// ~ObjectDir's mSubDirs.clear() releases them and the last one deletes it.
+// Nulled here (NullifyObj sets mObject = NULL), mSubDirs.clear() released
+// nothing, the subdir was never destroyed -- it leaked with every ref into it
+// cut, and stayed findable by its loader path, so the next load of the same
+// file re-used the zombie.  Measured: party_mode_signin.milo's subdir
+// ui/augmented_photo.milo outlived the team-1 panel; the team-2 panel got it
+// back, and its Environ.env, whose self-referencing fog owner had been nulled,
+// SIGSEGV'd RndEnviron::FogEnable on every UI draw of that screen.  The
+// DirPtrRefCounts entries are untouched, so the release path counts right.
+static void NullifyAllRefsKeepingSubDirPtrs(
+    ObjectDir *dir, const std::vector<ObjectDir *> &cascade,
+    const std::vector<ObjectDir *> &survivors
+) {
+    // Not when the subdir still holds something the native survivor logic
+    // keeps alive (a reparented dir, or an object with DirPtrs from outside
+    // the cascade -- MergeLifecycleTest.CascadeSkipsObjectsWithExternalDirPtrs):
+    // destroying the subdir would destroy those with it.  That case keeps the
+    // old behaviour (the subdir is not released), and stays an open lead.
+    for (ObjDirItr<Hmx::Object> it(dir, true); it != nullptr; ++it) {
+        Hmx::Object *obj = it;
+        if (obj == dir)
+            continue;
+        if (IsSurvivor(dynamic_cast<ObjectDir *>(obj), survivors)
+            || ShouldSkipCascadeNullify(obj, cascade)) {
+            dir->NullifyAllRefs();
+            return;
+        }
+    }
+    std::vector<ObjRef *> kept;
+    for (size_t q = 0; q < cascade.size(); q++) {
+        const std::vector<ObjDirPtr<ObjectDir> > &subs = cascade[q]->SubDirs();
+        for (size_t s = 0; s < subs.size(); s++) {
+            if ((ObjectDir *)subs[s] == dir) {
+                ObjRef *ref = const_cast<ObjDirPtr<ObjectDir> *>(&subs[s]);
+                dir->Release(ref); // unlink from dir's ring
+                kept.push_back(ref);
+            }
+        }
+    }
+    dir->NullifyAllRefs();
+    for (size_t k = 0; k < kept.size(); k++)
+        dir->AddRef(kept[k]); // back into the (now otherwise empty) ring
+}
 #endif
 
 #pragma region Virtual Methods
@@ -174,7 +220,7 @@ ObjectDir::~ObjectDir() {
             if (allDirs[i] != this && IsSurvivor(allDirs[i], survivors))
                 continue;
             if (allDirs[i]->IsRefAlive())
-                allDirs[i]->NullifyAllRefs();
+                NullifyAllRefsKeepingSubDirPtrs(allDirs[i], allDirs, survivors);
             for (ObjDirItr<Hmx::Object> it(allDirs[i], false); it != nullptr; ++it) {
                 Hmx::Object *obj = it;
                 if (obj == allDirs[i])

@@ -145,9 +145,12 @@ void FreestyleMoveRecorder::UpdateFakeSkeleton() {
 }
 
 // Poll() accesses LiveCameraInput depth buffers -- Xbox-only.
-#ifdef HX_NATIVE
-void FreestyleMoveRecorder::Poll() {}
-#else
+// Native runs the image body.  It used to be emptied ("depth rendering"),
+// which also dropped the part that needs no camera: the skeleton frames
+// RecordSkeletonFrame / the dancer take write, and the mRecordPos /
+// mPlaybackPos clocks.  The two hardware touches are guarded instead: native
+// has no LiveCameraInput (no depth stream to sample) and no mPlayerPalette
+// (the ctor's native block; nothing to render the depth playback into).
 void FreestyleMoveRecorder::Poll() {
     int recordFrame;
     if (mRecordPos >= 0.0f) {
@@ -170,6 +173,9 @@ void FreestyleMoveRecorder::Poll() {
 
     if (recordFrame >= 0 && mLastFrameIndex != mCurrentTakeIndex) {
         LiveCameraInput *camInput = TheGestureMgr->GetLiveCameraInput();
+#ifdef HX_NATIVE
+        if (camInput) {
+#endif
         if (!camInput->mDepthPolled) {
             camInput->PollNewStream(LiveCameraInput::kBufferDepth);
         }
@@ -222,6 +228,9 @@ void FreestyleMoveRecorder::Poll() {
             }
             streamTex->TexelsUnlock();
         }
+#ifdef HX_NATIVE
+        }
+#endif
 
         if (recordFrame == 0) {
             mTakes[mCurrentTakeIndex].CalcCentering(0);
@@ -268,6 +277,9 @@ void FreestyleMoveRecorder::Poll() {
     }
 
     if (playbackFrame >= 0
+#ifdef HX_NATIVE
+        && mPlayerPalette
+#endif
         && (playbackFrame < mTakes[mCurrentTakeIndex].mNumFrames || mPlaybackActive)) {
         void *texels = nullptr;
         mPlayerPalette->TexelsLock(texels);
@@ -344,7 +356,6 @@ void FreestyleMoveRecorder::Poll() {
     }
     UpdateFakeSkeleton();
 }
-#endif // Poll
 
 // DrawDebug uses SkeletonViz with CameraInput -- Xbox-only.
 #ifdef HX_NATIVE
@@ -410,12 +421,9 @@ void FreestyleMoveRecorder::DrawDebug() {
 }
 #endif // DrawDebug
 
-// Recording functions -- touch depth frame allocation (Xbox-only).
-#ifdef HX_NATIVE
-void FreestyleMoveRecorder::StartRecording() {}
-void FreestyleMoveRecorder::StartRecordingDancerTake() {}
-void FreestyleMoveRecorder::StopRecording() {}
-#else
+// Recording: plain allocation and bookkeeping (FreestyleMove::Init news the
+// take's frame arrays), no camera.  Native runs these too -- emptied, the take
+// was never allocated and BustAMovePanel's first GetScore dereferenced NULL.
 void FreestyleMoveRecorder::StartRecording() {
     mPlaybackIndex = 0xffffffff;
     mRecording = false;
@@ -434,7 +442,6 @@ void FreestyleMoveRecorder::StartRecordingDancerTake() {
 void FreestyleMoveRecorder::StopRecording() {
     mPlaybackIndex = mTakes[mCurrentTakeIndex].mNumFrames + 2;
 }
-#endif // Recording
 
 void FreestyleMoveRecorder::ClearRecording() {
     if (mLastFrameIndex != mCurrentTakeIndex) {

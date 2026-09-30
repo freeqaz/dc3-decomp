@@ -19,6 +19,8 @@
 #include "rndobj/Trans.h"
 #include "rndobj/Draw.h"
 #include "ui/UI.h"
+#include "os/Joypad.h"
+#include "os/JoypadMsgs.h"
 #include "StubTrace.h"
 
 // cpp-httplib rejects any application/x-www-form-urlencoded body larger than
@@ -247,6 +249,70 @@ void HttpServer::ProcessCommands() {
         }
         cmd->cv.notify_one();
     }
+
+    DispatchInjectedButtons();
+}
+
+// POST /api/input/press and /api/input/sequence only queue bits; something on
+// the main thread has to turn them into button messages.  That used to be the
+// engine's JoypadPoll (`newButtons |= TheHttpServer->ConsumeHttpButtons()`),
+// but since the shared-engine extraction the JoypadPoll that links is
+// libmilo-engine.a's, compiled WITHOUT DC3_HTTP_SERVER (the macro is defined on
+// the dc3-native target only), so nothing ever drained the queue: the endpoint
+// answered {"ok":true} and the press was lost (0 calls to ConsumeHttpButtons in
+// the linked binary; measured dead by the 2026-09-30 assert harvest).
+//
+// The consumer drains it here instead, once per frame, and broadcasts each bit
+// exactly as JoypadPoll broadcasts a pad-0 press: a ButtonDownMsg through
+// JoypadPushThroughMsg this frame and the matching ButtonUpMsg the next.  The
+// action comes from the pad's controller-type mapping, with the same fallback
+// the engine uses when the DTA mapping is absent.  Pad 0 only, like the
+// endpoint.  The press does not enter JoypadData::mButtons (the engine rewrites
+// that from the physical/scripted pad every poll), so code that samples held
+// buttons instead of listening for messages does not see it.
+static JoypadAction HttpButtonAction(JoypadButton btn, Symbol controllerType) {
+    JoypadAction action = ButtonToAction(btn, controllerType);
+    if (action != kAction_None)
+        return action;
+    switch (btn) { // milo-native-engine Joypad_Native.cpp nativeButtonToAction
+    case kPad_X: return kAction_Confirm;
+    case kPad_Circle: return kAction_Cancel;
+    case kPad_Start: return kAction_Start;
+    case kPad_Select: return kAction_Option;
+    case kPad_DUp: return kAction_Up;
+    case kPad_DDown: return kAction_Down;
+    case kPad_DLeft: return kAction_Left;
+    case kPad_DRight: return kAction_Right;
+    case kPad_L1: return kAction_PageUp;
+    case kPad_R1: return kAction_PageDown;
+    case kPad_Square: return kAction_ViewModify;
+    case kPad_Tri: return kAction_ShellOption;
+    default: return kAction_None;
+    }
+}
+
+void HttpServer::DispatchInjectedButtons() {
+    unsigned int pressed = ConsumeHttpButtons();
+    if (!pressed && !mInjectedHeld)
+        return;
+    JoypadData *pad = JoypadGetPadData(0);
+    if (!pad)
+        return;
+    for (int b = 0; b < kPad_NumButtons; b++) {
+        if (mInjectedHeld & (1u << b)) {
+            JoypadButton btn = (JoypadButton)b;
+            ButtonUpMsg msg(pad->mUser, btn, HttpButtonAction(btn, pad->mControllerType), 0);
+            JoypadPushThroughMsg(msg);
+        }
+    }
+    for (int b = 0; b < kPad_NumButtons; b++) {
+        if (pressed & (1u << b)) {
+            JoypadButton btn = (JoypadButton)b;
+            ButtonDownMsg msg(pad->mUser, btn, HttpButtonAction(btn, pad->mControllerType), 0);
+            JoypadPushThroughMsg(msg);
+        }
+    }
+    mInjectedHeld = pressed;
 }
 
 void HttpServer::ProcessScreenshots() {
