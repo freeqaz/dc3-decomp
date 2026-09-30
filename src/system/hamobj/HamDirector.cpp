@@ -2470,15 +2470,6 @@ void HamDirector::FindNextShot() {
         mNextShot = dynamic_cast<HamCamShot *>(
             mVenue->GetCameraManager()->FindCameraShot(mShot, propFilters)
         );
-#ifdef HX_NATIVE
-        // Fallback: if the shot category wasn't found, try Area1_WIDE
-        if (!mNextShot) {
-            static Symbol Area1_WIDE("Area1_WIDE");
-            mNextShot = dynamic_cast<HamCamShot *>(
-                mVenue->GetCameraManager()->FindCameraShot(Area1_WIDE, propFilters)
-            );
-        }
-#endif
         if (!mNextShot) {
             MILO_NOTIFY(
                 "could not find HamCamShot %s in %s at %s, ignoring",
