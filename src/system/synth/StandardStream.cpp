@@ -10,6 +10,7 @@
 #include "synth\StreamReceiverFile.h"
 #ifdef HX_NATIVE
 #include "platform\StreamReceiver_Native.h"
+#include "audio\AudioDevice.h"
 #endif
 #include "utl\Symbol.h"
 #include <cmath>
@@ -476,28 +477,15 @@ void StandardStream::UpdateTime() {
     float rawTime = GetRawTime();
 
 #ifdef HX_NATIVE
-    // In headless mode (no real audio device), the audio callback fires very
-    // slowly, making rawTime lag far behind wall-clock time. Use an independent
-    // wall-clock timer (not mTimer, which gets drift-corrected toward rawTime)
-    // to detect this. Once detected, bypass drift correction permanently.
-    if (mState == kPlaying && !mUseTimerFallback) {
-        if (!mWallClockStarted) {
-            mWallClock.Start();
-            mWallClockStarted = true;
-        }
-        mWallClock.Split();
-        float wallElapsed = mWallClock.Ms();
-        if (wallElapsed > 500.0f) {
-            float audioElapsed = rawTime - mStartMs;
-            if (audioElapsed < wallElapsed * 0.1f) {
-                // Audio output is < 10% real-time — switch to wall-clock timing
-                mUseTimerFallback = true;
-                // Sync mTimer to match current wall-clock elapsed time from song start
-                mTimer.Reset(mStartMs + wallElapsed);
-            }
-        }
-    }
-    if (mUseTimerFallback) {
+    // No audio device (headless: MILO_HEADLESS / DC3_NO_AUDIO, or a device
+    // that failed to open): nothing renders the receivers, so GetBytesPlayed()
+    // never moves and the drift correction below would pin song time to the
+    // start. Run on mTimer alone -- the image's own clock, which Play() starts,
+    // Stop() pauses and Init()/Resync() reset. This used to be a second,
+    // never-paused, never-reset wall clock that switched to "fallback" whenever
+    // audio lagged it by 10x: with a real device it fired after any long pause
+    // or any Resync and jumped song time forward by the whole pause.
+    if (!AudioDevice::GetInstance().IsInitialized()) {
         mLastStreamTime = mTimer.Ms();
         return;
     }
