@@ -173,16 +173,30 @@ void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
     Vector3 diff31, diff21, cross;
     Subtract(v3, v1, diff31);
     Subtract(v2, v1, diff21);
-    // The target computes diff21 x diff31, NOT diff31 x diff21.  Plane::Set is at
-    // 0x82535A28; with f11=d21.x, f0=d31.x, f8=d31.z, f10=d21.y, f12=d21.z,
-    // f13=d31.y, the three stores are 0x82535AA4 fmsubs f0,f8,f10,f6 -> 0x50(r1)
-    // = d21.y*d31.z - d21.z*d31.y (cross.x), 0x82535A94 -> 0x54(r1) = cross.y and
-    // 0x82535A9C -> 0x58(r1) = cross.z -- exactly Cross(diff21, diff31).  Reversing
-    // the operands negates every component of the normal and hence d, and the
-    // consumer at HamSkeletonConverter.cpp:410 negates again, so on the
-    // angle >= 0.2 branch the hip Z axis came out as the image's value negated.
-    // Triangle::Set winds the same way, so a Plane and a Triangle built from the
-    // same three points used to disagree.
+    // The image computes diff21 x diff31, NOT diff31 x diff21.  Proof off
+    // build/373307D9/asm/system/math/Geo.s (this function at .text 0x174c,
+    // absolute 0x82535A28):
+    //   0x17ac / 0x82535A88  fmuls  f7, f11, f8      f11 = d21.x, f8  = d31.z
+    //   0x17b4 / 0x82535A90  fmuls  f6, f12, f13     f12 = d21.z, f13 = d31.y
+    //   0x17c8 / 0x82535AA4  fmsubs f0, f8, f10, f6  f10 = d21.y
+    //                                            -> d21.y*d31.z - d21.z*d31.y
+    //   0x17cc / 0x82535AA8  stfs   f0, 0x50(r1)     cross.x
+    // Cross(A,B).x is A.y*B.z - A.z*B.y, so A = diff21 and B = diff31.  Ours
+    // emitted the NEGATION of every component, so the plane normal -- and
+    // therefore d = -Dot(cross, v1) -- pointed the wrong way.
+    //
+    // This was behaviourally visible, not only a matching detail.  The only
+    // caller in the image is HamSkeletonConverter at 0x824C9784, and the
+    // consumer at HamSkeletonConverter.cpp:410 negates a/b/c AGAIN.  The
+    // four-float Set overwrites the plane only on the usePelvis branch, so on
+    // angle >= 0.2 the hip Z axis fed to IK came out as the image's value
+    // negated.
+    //
+    // Corroborated by the winding convention next door: Triangle::Set in
+    // math/Geo.h builds its normal as Cross(v1-v0, v2-v0), i.e. the same
+    // (second-minus-first) x (third-minus-first) order.  Before this fix a
+    // Plane built from three points had the OPPOSITE normal from a Triangle
+    // built from the same three points.
     Cross(diff21, diff31, cross);
     Normalize(cross, cross);
     a = cross.x;
