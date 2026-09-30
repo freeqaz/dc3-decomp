@@ -78,11 +78,17 @@ public:
         // separately from the 4-byte float+bitfield pack.
 #ifdef HX_NATIVE
         kdTriList *mTriList; // LP64: separate 8-byte pointer
+        // Declared in the REVERSE order of the Xbox struct below: MSVC/Xenon
+        // allocates bitfields MSB-first (index = bits 0-1, the float's low
+        // mantissa bits: AmbientOcclusion.s 826DBFE4 rlwimi r10,r11,0,30,31,
+        // 826DC004 clrlwi r29,r11,30), clang LSB-first. With the Xbox order,
+        // clang put index in bits 30-31 -- the sign and top exponent bit --
+        // and every axis store wrecked the split plane.
         union {
             float real;
             struct {
-                unsigned int unused : 30;
                 unsigned int index : 2;
+                unsigned int unused : 30;
             };
         } mData;
         kdTriList *GetTriList() const { return mTriList; }

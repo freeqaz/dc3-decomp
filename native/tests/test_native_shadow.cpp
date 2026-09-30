@@ -22,6 +22,7 @@
 #include "utl/Loader.h"
 #include "obj/Dir.h"
 #include "os/Debug.h"
+#include "math/kdTree.h"
 
 #include <cstdlib>
 #include <vector>
@@ -364,6 +365,30 @@ TEST(NativeShadowUnit, MiloLogEvaluatesArgumentsOnce) {
     int i = 0;
     MILO_LOG("native_shadow MILO_LOG probe %d\n", i++);
     EXPECT_EQ(i, 1) << "MILO_LOG evaluated its arguments more than once";
+}
+
+// ---------------------------------------------------------------------------
+// kdTreeNode packs the split plane (a float) and the 2-bit split axis into
+// ONE word: the axis lives in the float's two LOW mantissa bits. MSVC/Xenon
+// allocates bitfields MSB-first, so `unused:30; index:2;` puts index in bits
+// 0-1 (FindSplit_Mean, AmbientOcclusion.s: 826DBFE4 rlwimi r10,r11,0,30,31;
+// 826DC004 clrlwi r29,r11,30; after the stfs at 826DC060, 826DC068 rlwimi
+// r10,r11,0,0,29 puts the axis bits back). Clang allocates LSB-first, so the
+// same declaration put index in bits 30-31 -- the float's sign and top
+// exponent bit -- and storing the axis destroyed the split plane
+// (5.0f with axis 2 became 0x80A00000, about -1.5e-38).
+// ---------------------------------------------------------------------------
+TEST(NativeShadowUnit, KdTreeSplitAxisLivesInTheLowMantissaBits) {
+    kdTree<Triangle>::kdTreeNode node;
+    Box box(Vector3(0, 0, 0), Vector3(2, 2, 10)); // z is the widest axis
+    std::list<Triangle *> none;
+    node.FindSplit_Mean(box, none);
+    EXPECT_EQ((unsigned int)node.mData.index, 2u);
+    EXPECT_NEAR(node.mData.real, 5.0f, 1e-5f)
+        << "storing the axis clobbered the split plane";
+    uint32_t bits;
+    memcpy(&bits, &node.mData.real, sizeof(bits));
+    EXPECT_EQ(bits & 3u, 2u) << "the axis must occupy the float's two low bits";
 }
 
 } // namespace
