@@ -232,9 +232,12 @@ lol:
 }
 
 bool MoviePanel::IsLoaded() const {
-#ifdef HX_NATIVE
-    // Native Movie stub's Ready() always returns false — skip the check
-    // so screen transitions don't block forever on video playback.
+#ifdef __EMSCRIPTEN__
+    // Web only: WebMovieImpl's Ready() is "the <video> element's metadata has
+    // arrived", which only its Poll() observes -- a panel waiting on it before
+    // it polls could wait forever.  Native (FFmpegMovieImpl) answers the
+    // image's question -- no load pending -- and runs the image body below,
+    // including the subtitles-loader wait.
     return UIPanel::IsLoaded();
 #endif
     if (!mMovie.Ready()) {

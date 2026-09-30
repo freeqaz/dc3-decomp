@@ -786,12 +786,6 @@ void ObjectDir::LoadSubDir(int i, const FilePath &fp, BinStream &bs, bool b) {
             mSubDirs[i] = 0;
         } else {
             mSubDirs[i].LoadFile(subdirpath, true, b, kLoadFront, true);
-#ifdef HX_NATIVE
-            // Propagate parent dir so ObjPtr fallback can walk up to this dir
-            // when the subdir's Dir() is self-referential during loading.
-            DirLoader *dl = mSubDirs[i].GetLoader();
-            if (dl) dl->SetParentDir(this);
-#endif
         }
     }
 }
@@ -1492,10 +1486,6 @@ void ObjectDir::PreLoad(BinStream &bs) {
             } else {
                 curIDir.dir.LoadFile(fpath, true, curIDir.shared, kLoadFront, true);
             }
-#ifdef HX_NATIVE
-            DirLoader *dl = curIDir.dir.GetLoader();
-            if (dl) dl->SetParentDir(this);
-#endif
         }
     }
 
@@ -1504,10 +1494,6 @@ void ObjectDir::PreLoad(BinStream &bs) {
         MILO_ASSERT(mSubDirs.capacity() >= offset + inlinedSubDirs.size(), 0x415);
         for (int i = 0; i < inlinedSubDirs.size(); i++) {
             mSubDirs[i + offset].LoadInlinedFile(inlinedSubDirs[i], bs);
-#ifdef HX_NATIVE
-            DirLoader *dl = mSubDirs[i + offset].GetLoader();
-            if (dl) dl->SetParentDir(this);
-#endif
         }
     }
 

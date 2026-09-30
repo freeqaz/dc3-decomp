@@ -679,12 +679,8 @@ HANDLED_JUDGED = {
         "open lead in the native-shadow doc (DC3_POLL_ORDER_FIX polarity)",
     ("src/system/utl/Song.cpp", "Song::SetFrame"):
         "notable in the native-shadow doc (deferred unpause, Song.cpp:291)",
-    ("src/system/obj/ObjPtr_p.h", "ObjRefConcrete::Load"):
-        "notable in the native-shadow doc (owner-less refs walk parent dirs)",
-    ("src/system/obj/ObjPtr_p.h", "ObjPtrVec::Load"):
-        "notable in the native-shadow doc (same parent-dir walk)",
-    ("src/system/obj/ObjPtr_p.h", "ObjPtrList::Load"):
-        "notable in the native-shadow doc (same parent-dir walk)",
+    # The ObjPtr_p.h ObjRefConcrete / ObjPtrVec / ObjPtrList ::Load parent-dir
+    # walks that used to be listed here were removed on native-suspects.
 }
 
 _LOG_CALL_RE = re.compile(

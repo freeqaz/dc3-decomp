@@ -232,7 +232,8 @@ branch. The 688 (b) regions are the next triage pass.
   revision gating; **`FileMerger.cpp:489`** passes a parent dir the image does not.
 - **`Song.cpp:291`** defers the unpause to `Poll`, so Play-then-Pause ends up playing.
 - **`Dir.cpp:921`** three-phase delete skips owner `Replace()` callbacks during teardown;
-  **`ObjPtr_p.h:129`** resolves owner-less refs by walking parent dirs and `Main()`.
+  ~~**`ObjPtr_p.h:129`** resolves owner-less refs by walking parent dirs and `Main()`~~
+  (removed on `native-suspects`).
 
 ### Open leads (what would decide each)
 
@@ -346,8 +347,8 @@ the pre-extension tool (3 of 8).
   foot-IK reorder~~, ~~`HamDirector::Poll` SetFrame~~, ~~`SetupRoutineBuilderAnims`
   `mLoop=false`~~, ~~`CharForeTwist`/`CharUpperTwist` `mLocalXfm`~~, ~~**`AnimTask::Poll`**
   nulls `mAnimTarget`~~ -- **all FIXED on `native-engineleads`**; see "Engine leads" below.
-  Still open from that family: the `ObjPtr_p.h` `ObjRefConcrete::Load` parent-walk /
-  `Main()` fallback (same "FileMerger flattens" premise as the FindObject one; not measured).
+  ~~The `ObjPtr_p.h` `ObjRefConcrete::Load` parent-walk / `Main()` fallback~~ -- **measured
+  (0 hits) and removed on `native-suspects`**; see "Suspect pass" below.
 
 ## Engine leads (branch `native-engineleads`, 2026-09-30)
 
@@ -432,3 +433,146 @@ driven.
 convention and was not built here; with the `UIScreen` shortcut gone a stalled web movie is
 left the image's way (confirm on `movie_overlay_panel`'s list), not by any button.
 
+
+## Suspect pass (branch `native-suspects`, 2026-09-30)
+
+The (b) ADDS triage above adjudicated 92 of its 301 `suspect:*` regions against the
+image and judged the rest from their code. This pass took the whole current suspect list.
+
+**Denominator.** `native_shadow_audit.py --list b-suspect` on `731b6137f`: **279** suspect
+regions (of 665 ADDS). **35** are already judged, fixed or kept in the sections above,
+or belong to the controller-mode pin they name. That leaves **244** regions. All 244 were read
+and given a verdict. The per-region ledger, with its class and a one-line reason, is
+`docs/analysis/2026-09-30-native-suspects-ledger.tsv`, which carries all 279 rows.
+
+The evidence was not the same for every region, so the kinds are listed separately:
+
+- **Matched body.** Every verdict names the enclosing function's decompiled body as the
+  image's stand-in. For **206 of 279** regions that function reads 100.0 normalized in
+  `report.json`, and for most of the rest it reads ≥ 97.
+- **Target listing.** **7** regions were read in the asm directly: `Spotlight::BuildBoard`,
+  the two `UIListMeshElement::Draw` blocks against `DxMesh::DrawShowing`,
+  `WorldCrowd3DCharHandle::SyncProperty`, `RndParticleSys::UpdateRelativeXfm`,
+  `SampleData::Dealloc`, and `MoviePanel::IsLoaded` against `BinkMovieImpl::Ready`. The
+  ObjRef loads (not among the 279) were checked against their 100%-matched instantiations.
+- **Runtime.** **28** native branches were instrumented and counted over the perform and
+  dance-battle harvest routes (boot → menus → gameplay → results, every stage reached).
+- **Code only.** The `feet` class (17 regions) is foot-plant/IK compensation owned by the
+  feet-in-floor work. It was **not** adjudicated here.
+
+| verdict | n | meaning |
+|---|---|---|
+| FIXED | 7 | below (plus `ObjRefConcrete::Load`, which is `handled:already-judged` and not in the 279) |
+| divergent-held | 1 | `SetupRoutineBuilderAnims` retarget, reverted: unit held by another wave |
+| image-fatal | 72 | differs only after the image has failed a fatal `MILO_ASSERT` / `MILO_FAIL`, or where the image dereferences null |
+| image-page0 / image-ub / equivalent | 11 | the image reads zeroed page 0 or past a container's end; or the native branch is observably the same |
+| inert-measured | 25 | the probe fired **0** times on both routes |
+| inert | 8 | the guarded condition cannot occur natively; the reason is named per row |
+| stub / stub-consequence | 42 | absent Kinect / voice / LIVE / save system, or a consequence of the doc's `SaveLoadManager` / `ProfileMgr` / `Campaign` notables |
+| plumbing / diag / debug-optin / renderer / legit / dead / tombstone | 59 | inert by default or platform plumbing |
+| feet | 17 | not adjudicated (see above) |
+| renderer-workaround | 2 | open lead (below) |
+
+### Divergences fixed (one commit each; test watched failing first)
+
+Tests are in `native/tests/test_native_suspects.cpp`. Every edit is `HX_NATIVE`-only, or
+under `native/src/`, or removes a native block around code the image runs. The PPC tree
+hashes identically with and without the branch; the measurement is below.
+
+| file : function | wrong native behaviour | image | test |
+|---|---|---|---|
+| `obj/ObjPtr_p.h` `ObjRefConcrete` / `ObjPtrVec` / `ObjPtrList::Load` (+ `Dir.cpp` `SetParentDir`, `Font3d.cpp`) | a missing name was searched up `Dir()` / the loader's ParentDir and then `Main()`, and an owner-less ref resolved against an explicit dir | every instantiation is 100% matched: `FindObject(name, false, true)`, resolved only when `refOwner && dir` | `ObjPtrLoadDoesNotSearchParentDirs`, `ObjPtrVecAndListLoadDoNotSearchParentDirs`, `OwnerlessObjPtrLoadResolvesNothing` |
+| `world/Spotlight.cpp` `BuildBoard` | returned at the top ("no renderer"), so `sDiskMesh` stayed null. Lens disks and floor spots had no mesh, and their draw paths dereference it | `8282DDF8 bl BuildBoard` from Init; `8282BFF8` `New<RndMesh>` → `sDiskMesh` | `SpotlightInitBuildsTheDiskMesh` |
+| `meta_ham/HamUI.cpp` `IsTimelineResetAllowed` | returned true whenever `TheSkeletonIdentifier` was null, which is always the case natively. A UI timeline reset was therefore allowed with a passive message queued or the help bar busy | 100% body: every term is required | `TimelineResetRefusedWhileAPassiveMessageIsQueued` |
+| `native/src/platform/FFmpegMovieImpl.cpp` `Ready` + `meta/MoviePanel.cpp` `IsLoaded` | `Ready()` was false until a successful open, and no `.bik` ships. `MoviePanel::IsLoaded` skipped `Ready()` and the subtitles-loader wait | `BinkMovieImpl::Ready` `82E221C8`: loader `IsLoaded()`, else true | `MovieWithNoPendingLoadIsReady` |
+| `world/Crowd3DCharHandle.cpp` `SyncProperty` | returned false for every path, including the resolved one | ICF-folded empty `BEGIN_PROPSYNCS` (`82711F80` → `827118E0`) | `CrowdCharHandleSyncPropertyResolvesTheEmptyPath` |
+
+Two findings were landed and then reverted on this branch. Both sit in units held by a
+concurrent wave (`~/tmp/dc3-wells/w8/phase4-w9-*.txt`), and lanes were asked to report
+findings in held units rather than edit them.
+
+- **`hamobj/HamDirector.cpp` `SetupRoutineBuilderAnims`** re-points copied PropKeys at
+  `this` director. The image has no such walk, and a probe counted **0** retargets on both
+  routes. Remove it when the unit is free.
+- **`rndobj/Font3d.cpp` `RndFont3d::Load`**: the native explicit-`Dir()` `CharInfo::mMesh`
+  load is equivalent to the image. The owner is the font, so the premise is stale. The
+  removal did **not** hash neutrally, as the next subsection shows.
+
+### PPC neutrality, measured
+
+- **Method.** Full `ninja` in this worktree for three trees, comparing
+  `patch_state.json`'s `tree_sha256` and the per-object sha256:
+  - the branch as landed;
+  - the branch with `main`'s copy of every touched `src/` file;
+  - the branch plus a control edit.
+- **Result.** The first two agree: `ef03e651…`, with **0 of 989** objects differing in
+  content.
+- **Control.** One PPC-visible literal in `Spotlight::BuildBoard` moved `Spotlight.obj`
+  (`6dd8c8ea` → `d7738027`) and the tree hash (→ `1b531a41…`). Reverting restored both.
+- **Line numbers moved one object.** Removing Font3d's `#ifdef HX_NATIVE` / `#else` lines
+  changed `Font3d.obj` (`0e675c83` → `dc6d0998`), although every `report.json` score was
+  identical. Something in that TU encodes a line number. **Deleting an `HX_NATIVE` block
+  is not PPC-neutral by construction; measure it.** That edit was reverted. The
+  HamDirector removal hashed neutrally.
+
+### `ObjRefConcrete::Load`: the verdict and what was measured
+
+Its fallback rested on the same premise as the `ObjectDir::FindObject` fallback removed on
+`native-engineleads`: "FileMerger flattens on Xbox, and the native merge is incomplete".
+
+- **Arms instrumented (6).** The parent walk and the `Main()` fallback in all three Loads
+  (ObjRefConcrete, ObjPtrVec, ObjPtrList), plus ObjRefConcrete's owner-less arm.
+- **Hits: 0 of 6, on both routes.** The fallbacks did run: every "couldn't find" notify
+  from `ObjPtr_p.h` on the route passed through them first. They found nothing.
+- **Why the image cannot reach it.** The image never walks parents. With no owner it
+  leaves the ref null.
+- **Owner-less premise.** Its one named user, Font3d's `CharInfo::mMesh`, is constructed
+  `CharInfo(this)`, so it has an owner. The premise is stale.
+- **Result.** Removed, together with the three native-only `DirLoader::SetParentDir` calls
+  the walk read, and Font3d's explicit-dir spelling. That spelling was equivalent: the
+  owner's `Dir()` is the font's `Dir()`.
+- **Post-fix perform route.** 24 of 24 stages, **96 distinct / 400 total** harvest messages,
+  identical to the pre-fix probe run.
+
+### Open leads (what would decide each)
+
+- **Native `RndMesh::DrawShowing` (`native/src/platform/Mesh_Wgpu.cpp`) drops every hidden
+  *named* mesh, and every `*_lod*` mesh.**
+  - The image's `DxMesh::DrawShowing` (`826229B0`) tests only `CanDraw()`. `Draw()`, not
+    `DrawShowing()`, is what gates on showing.
+  - `UIListMeshElement::Draw`'s native show/restore undoes the skip for list meshes. The
+    probe counted between 400 and 599 forced draws per route, every one in
+    `list_choose_mode.milo`.
+  - **To decide:** move the viewer's direct mesh iteration onto `Draw()`, then remove both
+    skips. Also check whether `Character::DrawLod` ever reaches a `_lod` mesh natively.
+- **`UIManager::Poll` boot advance under `DC3_FAST_BOOT`.** Every harvest route sets
+  `DC3_FAST_BOOT`.
+  - It still force-advances `attract` / `autosave_warning` / `wait_main_after_saveload`, and
+    skips the tutorial screens.
+  - `title_screen` skips `NAV_SELECT_MSG` if no confirm arrives within 60 frames. The
+    harvester confirms, so its routes do take the image path.
+  - The attract movie now reports `movie_done` by itself, so that entry is likely dead.
+  - **To decide:** measure which entries still fire.
+- **`UIListSlot::EnsureElements`** exists because `RootTrans()` was null at `UIList::Update`.
+  - It created **0** elements on both routes, and its `Draw` / `Fill` / `StartScroll` guards
+    fired 0 times. The gap it covered appears gone.
+  - **To decide:** remove it after a menu-heavy route (options, song select, crew select)
+    also reads 0.
+- **`RndMat::CreateMetaMaterial`'s `!sMetaMaterials` guard is dead.** `RndMat::Init`
+  always loads `metamaterials.milo` natively.
+- **The `feet` class (17 regions).** `Dc3RunPostPollFootPlant`, the CharBonesMeshes plant
+  guard, `CharLocalIKScope`, `PreEvalClipWeights` and friends compensate for a native knee
+  under-bend whose root is not identified. `PreEvalClipWeights`' premise ("IK polls before
+  `song.hdrv`") is worth re-checking now that the poll-order polarity is the image's.
+
+### Gate and routes (final branch)
+
+- **Native gate.** `scripts/native_test.sh`: **584 registered / 515 executed / 515
+  passed / 0 failed / 69 skipped** (budget 69), exit 0.
+- **Harvest routes**, run with `scripts/native_assert_harvest.py` on the final binary:
+
+| route | stages reached | harvest messages | crashes | same run on the pre-fix probe binary |
+|---|---|---|---|---|
+| perform, `--mode-downs 0` | 24 of 24 (gameover at beat 267) | 96 distinct / 400 total | 0 | 96 / 400 |
+| dance battle, `--mode-downs 2` | 23 of 23 (gameover at beat 267) | 154 / 471 | 0 | 154 / 471 |
+| practice, `--mode-downs 1` | `game_screen` reached; ran to beat 1806 with no crash, then stopped by the run's own 1800 s timeout | not recorded | 0 | the same run on the baseline binary stalls on `practice_welcome_screen`: the documented practice route lacks that confirm, so pass `--confirm-screens ...,practice_welcome_screen` |
