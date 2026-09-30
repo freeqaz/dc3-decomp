@@ -103,15 +103,130 @@ the five objdiff `BOOLEAN_NEGATION` rows det-cond checked turned out to be.
 - **Functions we do not define** (16,072): arithmetic arrives with the body.
 - **A dropped STORE** (`DxRnd::SavePreBuffer`'s `w = 0` — fixed on this branch,
   found by hand): not an arithmetic atom. That is class 10.
-- **Definitions across a join.** The def walk is linear; in branchy functions it
-  can pick another arm's definition (`SaveLoadManager::SetState`'s `MemFree`
-  file-name register). Symmetric, so it adds noise rather than bias — but
-  `operand-source` precision falls with the function's mismatch ratio. The
-  printout is sorted cleanest-first; **every true positive on this pass came
-  from a function with ≤ 20% mismatch rows** (StreamBufferData, 10/50, is the
-  loosest).
+- **Definitions across a join — FIXED 2026-09-30 (arith-tail).** The def walk
+  was linear (and gave up after 256 instructions); in branchy functions it
+  picked another arm's definition (`SaveLoadManager::SetState`'s `MemFree`
+  file-name register). It now resolves the UNIQUE reaching definition over
+  each side's CFG, and a row whose operand has no unique one goes to the lead
+  bucket `trace-crossed-branch`. Same objects, 357 `operand-source` rows: 242
+  stay, 76 → `trace-crossed-branch`, 39 dissolve. The earlier claim that every
+  true positive sits in a function with ≤ 20% mismatch rows did NOT survive
+  the tail: `MoveDir::UpdateOverlay` (49%) and `Hmx::Object::OnAddSink` (27%)
+  carried real bugs. Sort order is a priority, not a filter.
+- **Resolving the definition is not resolving the value.** Scheduling that
+  pairs one component's multiply with another's (`RndScaleObject`), and two
+  `fmr` copies of different function inputs (same exchange key), still
+  surface as `operand-source`. So does a call the tool assumes clobbers every
+  volatile register when MSVC kept one live across a same-TU leaf callee
+  (`PropSync<ObjVector<Strand>>`, r6 across `Strand::Strand`).
 - A wrong value produced by the *same* instruction sequence (a wrong field
   feeding the op — class 1; a wrong `.data` constant — class 5).
+
+## The operand-source tail, adjudicated (2026-09-30, branch `arith-tail`)
+
+341 of the 357 rows (131 of 133 functions) that `operand-source` carried after
+det-arith's fixes were hand-traced on both sides, respecting control flow (sbs listing =
+`objdiff-cli diff --batch --include-instructions`, plus symbolic/numeric
+per-path store simulators for the float-heavy ones). **Seven were real bugs,
+plus one unflagged bug found beside a flagged row:**
+
+| function | wrong behaviour | fix |
+|---|---|---|
+| `Hmx::Object::OnAddSink` | empty event list with explicit chain = 0 registered chainProxy = false; image `li r28, 1` on that arm | pass `true` |
+| `MoveDir::UpdateOverlay` | overlay row pitch cached from the text WIDTH (`result.x - pos.x`); image reads `.y` at 0x64(r31) minus y | `(result.y - y) * 0.8f` |
+| `MoveDir::UpdateOverlay` (unflagged) | we stripped a leading '/' from the move name; image passes `Name()` | drop the guard |
+| `NgPostProc::RebuildTex` | all three bloom levels w/4 x h/4; image re-divides at the loop head (w/4, w/16, w/64) | divide inside `BloomTextures::AllocateTextures` |
+| `MoveDir::DetectFrac` | autoplay: `i7 / (i8 * frac)` — divides by the rating; image `(i7 / i8) * frac` | multiply |
+| `RndShaderDrawRect::CalcShaderOpts` | mask `0xAFFFFFFE << 22` zeroed the diffuse/prelit bits; image rotl64(sign-extended 0xAFFFFFFE, 22) clears only bits 22/50/52 | `~(bit22 \| bit50 \| bit52)` |
+| `Hmx::Object::ReplaceRefsFrom` | `other.AddRef(it)` spliced the temp head INTO mRefs; ReplaceList then retargeted every ref | `it = it->MoveBefore(&other)` |
+| `SkeletonViz::Visualize` | tracked path never re-selected the caller's camera | Select after the if/else |
+
+Two of the eight were **control-flow** bugs (RebuildTex's loop head,
+Visualize's branch targets) that surfaced as a register-only row because the
+saved value lived in a register the wrong path reused — a register-only row is
+a lead into any class, not only arithmetic.
+
+**Refuted — reasons, so the next lane does not re-raise them** (row counts in
+brackets; ⊘ = not in the native build):
+- *linear trace crossed a branch/join; unique reaching defs agree*:
+  SaveLoadManager::SetState [8], DataNode::Equal [1], HolmesClientOpen [5],
+  MemHeap::TryAlloc [2], FindVITargetTypeInstance⊘ [2], yy_get_next_buffer [4],
+  OSCMessenger::GetInt [1], RndText::WrapText [3], DepthBuffer3D::DrawShowing [3],
+  HamScrollSpeedIndicator::Update [1], EQEffect::SetParameter [3],
+  HamAudio::PollCrossfade [2], WordWrap_CanBreakLineAt [1], HamNavProvider::
+  OnSetEnabled/OnSetHidden [1+1], Rnd::TestPoint [2], UpdateBufferTex [3],
+  HamNavList::NumItems [1], RandomGroupSeqInst ctor [2], MoveDir::Poll [2],
+  TypeProps::Save [1], Locale::Init [1], StorePanel::LoadArt [1].
+- *exchanged components / scheduling / reassociation (/fp:fast, FMA)*:
+  RndParticleSys::InitParticle [3] & MoveParticles [2], ResetNormals [1],
+  CharCollide::GetRadius [2], CharEyes::EnforceMinimumTargetDistance [1],
+  SpotlightDrawer::DrawWorld [2], HamDirector::Poll [1], Synth::DrawMeter [1],
+  ArcDetector::DrawPath [2] & GetPathError [1], RndAmbientOcclusion::
+  SmoothResults [1] & BlendVert [2], RndFlare::CalcRect [1], CharBones::
+  RotateBy [1], HandInvokeGestureFilter::CalcInPose [3], BaseSkeleton::
+  MakeCameraToPlayerXfm [4], RndTransformable::ApplyDynamicConstraint [5],
+  CharIKFingers::CalculateHandDest [2], BSPFace::Update [3], Intersect [3],
+  CharForeTwist::Poll [2], EQEffect::Process [7], RndLine::UpdateLine [10] &
+  UpdateLinePair [4], MakeScale [1], Spotlight::BuildNGSheet [8],
+  IsValidSwipePosition [1], Vector3DESmoother::Smooth [1], FlangerEffect::
+  Process [2], HamRegulate::Regulate [1], RndWind::SelfGetWind [3],
+  HamRibbon::UpdateChase [1], CharGuitarString::Poll [1], Quat::Set [2],
+  BurnXfm [1], Multiply(Vector3,Transform) [2], HamIKEffector::
+  ComputeElbowPullAndQuat [2], TransformKeys [2], CharIKHand::IKElbow [10],
+  HandAtSide [1], DrawDetectedBar [1], UtilDrawPlane [3], TransformNormal [4],
+  BoxMapLighting::ApplyQueuedLights [3] & CacheData [1], Spotlight::
+  BuildNGQuad [4], NgSpotlightDrawer::RenderConeDefs [4] & SetupXSection [6]
+  (both `{}` natively), Multiply(Vector3,Quat) [3], Multiply(Transform,
+  Transform) [1], Multiply(Matrix3,Matrix3) [5], NgLight::SphereConeTest [9],
+  Invert(Matrix4) [17] (host-compiled: M·out = I to 2.2e-7 over 1,000
+  matrices), RndScaleObject [1, new with the CFG], and MoveDir::UpdateOverlay's
+  other 5 rows (fmadds reassociation; one sLightGray pointer reloaded from two
+  spill slots; quotient/remainder crossed between registers).
+- *induction-variable / index spelling (same faces, same indices)*:
+  Spotlight::BuildCone [7] & BuildBeam [4], Skeleton::Poll [2],
+  EQEffect::Reset [1], BustAMovePanel::RepsToNextPhrase [2], HamRibbon::
+  ConstructMesh [1], RndRibbon::ConstructMesh [2], TessellateMesh [3],
+  RndAmbientOcclusion::Tessellate [5], RndBitmap::PixelOffset [1],
+  fft_scalar⊘ [3], fft_matrix_inverse_columnwise⊘ [1], PackVector⊘ [1].
+- *misaligned pairing / renamed registers, same arguments*:
+  RndMat::UpdatePropertiesFromMetaMat [1], RndColorXfm::AdjustSaturation [2],
+  JoypadPollCommon [1], ClipPlayer::AnnotateClip [1], DepthBuffer3D::Load [1],
+  CharClip::Transitions::AddNode [1], StorePanel::OnMsg [1] (bool mask),
+  HamSkeletonConverter::SetLeg [3] (0x734(r11) == 0x4(r30)), FlowCommand::
+  Load [1] (list declaration order — a match lever), PartyModeMgr::
+  CreateEventA [1] (vec[i] vs its copy — a lever), MemTracker::DiffDump [1],
+  PropSync<ObjVector<Strand>> [2] (r6 live across a same-TU leaf call).
+- *equal truth masks / bit spellings*: HDCache::Init [1],
+  RndShaderSimple::CalcShaderOpts [1], RndShaderParticles::CalcShaderOpts [1],
+  RndSpline::SyncPristineCtrlPoints [1] (two carry spellings of max(x,0)),
+  DecodeDxt5Alpha [1], ReadFunc⊘ [1] (bswap64 simulated), FillCompressedVertex⊘ [1].
+- *same address, different anchor*: dprintf_formatf [1], MemAlloc [1]
+  (`&gNumHeaps - 0x294` = `&gHeaps`), SpectralAnalysis::Analyze⊘ [1],
+  MemcardMgr::ThreadStart⊘ [1], MemFindHeap [1] (strcmp operands, == 0 only),
+  ArkHash::Read [1], MeasureMap::AddTimeSignature [1] (CSE),
+  NavListSort::ChangeHighlightHeader [2] (differs only after MILO_FAIL).
+- *equal by path / out-of-line vs inline*: BinStream << vector<TransformCrowd> [1],
+  Voice::createOrReuse⊘ [2], ChatReceiver::ProcessChatData⊘ [3],
+  MemcardXbox::ShowDeviceSelector⊘ [1], fft_matrix_forward_columnwise⊘ [3],
+  fft_real_forward_altivec⊘ [1].
+- *behaviourally verified*: CSHA1::Transform [18] (unicorn, both .text
+  sections produce SHA-1("abc"); see SHA1.cpp).
+
+- *hand-traced every arm*: Spotlight::BuildNGCone [22] (orientMtx at 0xb0
+  vs 0xe0 — the swapped slot the source already records; all three
+  matrix-multiply sites and every face index equal).
+- *new rows after the CFG change, refuted*: RndSoftParticleBuffer::BlurSurface,
+  BaseDisplacementNode::Displacements, WorldCrowd::SetFullness, and
+  DepthBuffer3D::DrawShowing's three `fmr` clamp rows (both listings emulated
+  over 20,000 random inputs, 0/120,000 output mismatches; a one-opcode
+  sabotage of ours gives 2,000/2,000).
+
+**Not adjudicated (16 rows, both ⊘):** `fft_altivec` [13] — structurally
+divergent (image 762 instructions to our 584; 94 vs 58 `vmaddfp`; the image
+builds `vperm` control words where we store masks) — needs a VMX emulator and
+a whole-function harness, not a row trace. `fft_recursive` [3] — one image
+`vmaddcfp128` (vD = vA·vD + vB) against our `vmaddfp128` (vD = vA·vB + vD),
+equal only if the accumulator and addend swapped roles, unconfirmed.
 
 ## Manual recognizer (for the part the tool cannot reach)
 
