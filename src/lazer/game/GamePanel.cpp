@@ -615,17 +615,9 @@ void GamePanel::CreateGame() {
 
 void GamePanel::StartGame() {
     AutoTimer::SetCollectStats(true, TheRnd.VerboseTimers());
-#ifdef HX_NATIVE
-    // On native, always start (no intro gating). Character outfits are loaded
-    // by HamDirector::OnFileLoaded('song') via the DTA flow — do NOT call
-    // LoadCharacters here, as it would trigger a redundant async FileMerger
-    // Clear→Merge cycle that destroys character meshes/animation mid-gameplay.
-    mGame->Start();
-#else
     if (mGame->HasIntro()) {
         mGame->Start();
     }
-#endif
     ThePresenceMgr.SetInGame(TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong()));
     mState = kGamePlaying;
 #ifdef HX_NATIVE
