@@ -202,15 +202,21 @@ branch. The 688 (b) regions are the next triage pass.
   never update from live play.
 - **`FreestyleMoveRecorder` Poll/Start/StopRecording emptied** (`:148`, `:414`) — including
   the parts that need no camera (timers, dancer-take recording).
-- **`GamePanel.cpp:618`** calls `Game::Start()` unconditionally; the image only when `HasIntro()`.
-- **`HamPanel::Exiting` returns false**, dropping `UIPanel::Exiting()` and DTA `exiting`
-  handlers; **`MetaPanel`** never creates `Campaign`/`MetaMusicManager`/`HAQManager`;
-  **`UI.cpp:821`** force-completes a screen enter after 90 frames.
-- **`HamNavList.cpp:529/1609`** ignore `IsAnimating()` (Poll select completion,
-  `OnMsg(ButtonDownMsg)`), and **`HamPanel::Exiting`** returns false — all three rest on
-  the belief that animations never settle natively, which the `native-menulist` fix above
-  shows was caused by the native stop-handler. Likely removable once that lands;
-  adjudicate against the image first. **`Game.cpp:1105/1158`**,
+- **RESOLVED on `native-animbypass` (2026-09-30): the "animations never settle" family.**
+  `HamNavList::Poll` select completion and `HamNavList::OnMsg(ButtonDownMsg)` now check
+  `IsAnimating()`; `HamPanel::Exiting` runs the image body (`UIPanel::Exiting()` + nav-list
+  animation); `UI.cpp`'s 90-frame enter force-complete is gone; `MetaPanel::Exiting` waits
+  on `TheMetaMusic->IsActive()` again; `GamePanel::StartGame` calls `Game::Start()` only when
+  `HasIntro()`. Each was adjudicated against the image and runtime-checked (perform, dance
+  battle, practice, 25x main<->choose_mode): the belief came from the native
+  `transition_complete -> StopAnimation()` handler removed by `native-menulist`, and every
+  wait now observed ends (enter anim ~20 UI frames, panel exit <=24, metamusic fade 2 s wall
+  clock). One consequence is faithful and visible to tooling: a press during a nav list's
+  enter animation is dropped, so input scripts wait +30 on nav-list screens and
+  `DC3_FAST_BOOT` keeps title_screen's 60-frame delay. Tests:
+  `native/tests/test_native_animbypass.cpp`.
+- **`MetaPanel`** never creates `Campaign`/`MetaMusicManager`/`HAQManager` (not part of the
+  family above; still open). **`Game.cpp:1105/1158`**,
   **`GameMode.cpp:24`**, **`PreloadPanel.cpp:64`** are DTA-flow shortcuts.
 - **`MoggClip::LoadNumChannels`** (`MoggClip.cpp:323`) calls `SynthPoll()` instead of
   `Play(0)`, so `mNumChannels` is always -1 and stereo moggs never disable pan;
