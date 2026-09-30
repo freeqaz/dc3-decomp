@@ -317,18 +317,13 @@ the pre-extension tool (3 of 8).
 
 ### Open leads (divergent, not fixed here -- with what blocks each)
 
-- **`MultiUserGesturePanel` `mNativeEnterPending`** -- auto-fires `enter_gameplay` and
-  `SetAssociatedPadNum(0,0)` on the first frame, so character/crew/outfit/difficulty
-  select and the campaign state step are skipped. Needs a native input path into the
-  panel's own `start_game`; the harvest route currently relies on the auto-fire.
-- **`GamePanel::StartGame`** forces `game_stage playing` (image: `HasIntro/Start`, then
-  `mState=2`, no property; the `HasIntro` half was restored by `a408e80a2`). Natively `intro_over` does fire right after StartGame
-  (`Game::Poll: intro timer expired`), so deletion looks safe for perform, and the force
-  clobbers rhythm_battle's intro and holla-back's `title`. `DtaFlowTest.GameplayReaches
-  PlayingState` keys on the forced log line (tell 10) and must be re-pointed with it.
-- **`PoseFatalities::Poll`** unconditional return: dance-battle fatalities and all of
-  strike-a-pose are dead natively. The "LP64 struct mismatch" premise is from March;
-  re-test with the battle route.
+- ~~**`MultiUserGesturePanel` `mNativeEnterPending`**~~ -- **FIXED on `native-gameflow`**
+  (see "Game-flow leads" below): the screen is driven by the controller, as on the 360.
+- ~~**`GamePanel::StartGame`** forces `game_stage playing`~~ -- **FIXED on
+  `native-gameflow`**; `DtaFlowTest.GameplayReachesPlayingState` re-pointed at the real
+  state.
+- ~~**`PoseFatalities::Poll`** unconditional return~~ -- **FIXED on `native-gameflow`**;
+  what still cannot run without skeleton input is recorded there.
 - **`MetaPanel::Init` `sUnlockAll = true`** -- everything unlocked, campaign reads
   finished, profile reads cheated. Its premise (asserts on an empty profile list) is
   stale since `InitNative`; removing it is a product decision (no save system natively).
@@ -337,11 +332,12 @@ the pre-extension tool (3 of 8).
   native HUD camera / draw path, not the merge.
 - **`UIManager::GotoScreenImpl` refuses `*campaign*` screens** -- Story mode unreachable;
   blocked on `MetaPanel` never creating `Campaign`.
-- **`UIScreen::OnMsg(ButtonDownMsg)` -> `skip_selected`** (image: Cancel -> `go_back_screen`,
-  always unhandled), **`MoviePanel::Poll` `IsOpen` guard** (image fires `movie_done`),
+- ~~**`UIScreen::OnMsg(ButtonDownMsg)` -> `skip_selected`**~~, ~~**`MoviePanel::Poll`
+  `IsOpen` guard**~~ -- **FIXED on `native-gameflow`** (with `FFmpegMovieImpl::Poll`);
   **`HamDirector::FindNextShot` Area1_WIDE fallback** (image keeps the shot and notifies),
   **`HamNavList::RealRefresh`** recreates every widget on every refresh,
-  **`UIList::Refresh`** display recount, **`UI.cpp OnGotoScreen`** null -> main_screen,
+  **`UIList::Refresh`** display recount, **`UI.cpp OnGotoScreen`** null -> main_screen
+  (kept on `native-gameflow` but now a `MILO_WARN` on every hit),
   **`WorldCrowd::DrawShowing`** static additive impostor cache,
   **`SkeletonChooser::DoesRequireHandRaise`** always false.
 - **`ObjectDir::FindObject`** proxy/parent-loader fallback binds pointers the image leaves
@@ -357,3 +353,61 @@ the pre-extension tool (3 of 8).
   listener runs; the task is deleted on the same frame either way and `IsAnimating()` does
   not observe it, but a new AnimTask started from `ended` on the same target no longer
   finds the finishing task as its `mBlendTask`.
+
+## Game-flow leads (branch `native-gameflow`, 2026-09-30)
+
+Five of the (b) ADDS open leads above were menu / gameplay FLOW shortcuts. Each was
+adjudicated against the target listing, restored, and runtime-checked on the perform and
+dance-battle routes (`scripts/native_assert_harvest.py`, now pressing through
+multiuser_screen). All five are `HX_NATIVE`-only on the decomp side: the six touched PPC
+objects were rebuilt with and without the branch and hash identically (`tree_sha256`
+`329cf14c...` both ways).
+
+| lead | why it existed | image | now | test (watched failing first) |
+|---|---|---|---|---|
+| `PoseFatalities::Poll` early `return;` | March: "LP64 struct mismatch" in Player/Side lookups | `82496DA0`: whole body from `bl InStrikeAPose` | image body | none in-process (needs director, venue, HUD); probe A/B below |
+| `GamePanel::StartGame` sets `game_stage playing` | March: "the intro may be skipped" | `8287AE28`: HasIntro/Start, SetInGame, `mState=2`; no property | removed | `DtaFlowTest.GameplayReachesPlayingState` re-pointed: first `gameStage=playing` telemetry sample must follow `Game::Poll: intro timer expired` (pre-fix: frames 843-845 read `playing` before it) |
+| `MultiUserGesturePanel` auto-fires `enter_gameplay` | March: "no Kinect skeleton chooser" | `82942EB8`: `UpdateNavLists` x2, `UpdateProviderPlayerIndices`, `TexLoadPanel::Poll` | removed; `SetAssociatedPadNum(0,0)` kept at Enter as the enrollment stand-in | `DtaFlowIdleMultiuserTest.MultiuserScreenWaitsForInput` (`idle-multiuser.txt`, no presses: pre-fix it left for loading_screen) |
+| `UIScreen::OnMsg(ButtonDownMsg)` fires `skip_selected` on any button | March: "movie panels aren't functional (no BINK)" | `827A3AF0`: only Cancel -> `go_back_screen`, only with `mBack` | removed | `NativeGameflowUITest.ButtonOnAMovieScreenIsNotSkipSelected` |
+| `MoviePanel::Poll` returns when the movie is not open; `FFmpegMovieImpl::Poll` returned `true` when not open | March stub era: "avoid infinite movie_done loop" | `82E0F970`: no IsOpen test; `BinkMovieImpl::Poll` `82E25DE0` returns false with no HBINK | movie_done fires for a movie that did not open (attract advances by itself -- no `.bik` ships) | `NativeGameflowMovieTest.UnopenedMovieReportsDone`, `.PanelFiresMovieDoneWhenTheVideoDidNotOpen` |
+
+**multiuser_screen with a controller** (native is pinned in controller mode, so the image's
+own controller path is what runs): perform -- `right_hand_p1` `beginner` (seldiff_pane) ->
+`play` (startgame_pane) -> `skip_waiting` (readywait_pane) -> `start_game`. Dance battle
+(`requires_2_players`: readywait's list is disabled, `can_enter_game` needs both sides) --
+p1 difficulty, `play`, **DLeft** (`OnMsg(ButtonDownMsg)` moves focus to `right_hand_p2`),
+p2 difficulty, `play_title` -> `start_game`. Presses 70 frames apart: each pane change
+replays the list's enter animation. Party mode's `crew_throwdown_multiuser_screen` used to
+be auto-fired too (gameplay with no song, bounced to main_screen through the silent
+`OnGotoScreen` fallback); it now waits, and both captains can pick a crew with the
+controller. It then waits in readywait: party mode's ready flags / `is_team_signed_in` were
+not pursued.
+
+**Fatalities: what runs and what cannot.** Nothing natively ACTIVATES a fatality: dance
+battle rates moves from MoveDir's async detector (`last_detector_result`), which returns 0
+without a skeleton feed (`MoveAsyncDetector::MoveRatingFrac`'s `SkeletonUpdate` guard), so
+no final-pose move is ever rated <= 1 and `HamDirector::CheckBeginFatal` never fires.
+`scripts/native_fatality_probe.sh` stands in for exactly that one event
+(`{meta_performer move_passed 0 Finishing_Move_macarena.move 0 1.0}`, what
+`dance_battle.dta`'s handler calls on a perfect rating) and turns on Autoplay, which
+`UpdateMatchingPose` accepts as matching (its skeleton compare reads 0 natively). Injected
+at beat ~200:
+
+| probe beat | pre-fix (Poll returns) | image body |
+|---|---|---|
+| +7 | fatal_active=1, stage=`none` | fatal_active=1, stage=`playing` (OnBeat) |
+| +12 | same | p0 score 20000 |
+| +18 | same | p0 score 96000, fatal_active=0 |
+| +24 | same | stage=`outro` (fatals_over) -> endgame -> complete -> song_select |
+| end | gameover at 267, then stuck on game_screen (game_won waits on `fatal_active`) until the run died at beat 646 (std::bad_alloc in Dawn's shader compiler) | 0 crashes |
+
+A mid-song activation is artificial (the final pose ends the battle): after it the song
+ends through fatals_over, so `GamePanel` never reaches `gameover` and the harvester's
+`gameover` checkpoint reads NOT REACHED although every post-song screen is entered. Injected
+at beat ~250 the run reaches gameover normally. Strike-a-pose (a party-mode minigame) was not
+driven.
+
+**Web is not covered.** `WebMovieImpl::Poll` keeps its "not open = still playing"
+convention and was not built here; with the `UIScreen` shortcut gone a stalled web movie is
+left the image's way (confirm on `movie_overlay_panel`'s list), not by any button.
+
