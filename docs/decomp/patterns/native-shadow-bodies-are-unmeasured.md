@@ -232,7 +232,8 @@ branch. The 688 (b) regions are the next triage pass.
   does not reorder faces / rebuild patches; **`Tex.cpp:137`** native Pre/PostLoad drops
   revision gating; **`FileMerger.cpp:489`** passes a parent dir the image does not.
 - **`Song.cpp:291`** defers the unpause to `Poll`, so Play-then-Pause ends up playing.
-- **`Dir.cpp:921`** three-phase delete skips owner `Replace()` callbacks during teardown;
+- ~~**`Dir.cpp:921`** three-phase delete skips owner `Replace()` callbacks during teardown~~
+  (owner-control holders stepped since `native-lifetime2`, see the last section);
   ~~**`ObjPtr_p.h:129`** resolves owner-less refs by walking parent dirs and `Main()`~~
   (removed on `native-suspects`).
 
@@ -636,7 +637,8 @@ natively, and `HamUI`'s texture-store calls (100% matched) do nothing without it
 `RhythmBattle::Poll` warns `bustajack recordings are getting big` thousands of times per
 Keep the Beat round once player 2 has a skeleton (100% matched; image behaviour).
 
-**Open leads.** `$elem = <null>` from a sound_group's `get_group_children` is the same
+**Open leads** (all three taken by `native-lifetime2`, see the next section).
+`$elem = <null>` from a sound_group's `get_group_children` is the same
 bypass (`RndGroup::Replace` never erases the child's node); running it inside the walk
 double-freed a list node in `MergeScopeParityTest.RepeatedVenueMergeAfterClear`, so it is
 not fixed. Other owner-control owners bypassed by the cascade (Task, LightPreset,
@@ -644,3 +646,65 @@ CharBonesMeshes, DefaultPhysicsManager) are unmeasured. A subdir that still hold
 "survivor" (an object with external DirPtrs) keeps the old leak, because
 `MergeLifecycleTest.CascadeSkipsObjectsWithExternalDirPtrs` pins that survival; in the image
 it would be deleted.
+
+## Cascade owner steps (branch `native-lifetime2`, 2026-09-30)
+
+The three leads the party lane left open, all in the native delete cascade
+(`ObjectDir::DeleteObjects` / `~ObjectDir` pre-nullify / `Hmx::Object::NullifyAllRefs`).
+Tests: `native/tests/test_native_lifetime2.cpp`, plus the rewritten
+`MergeLifecycleTest.CascadeDeletesNamedObjectDespiteExternalDirPtr`.
+
+**1. The RndGroup double free was the walk, not the group.** `NullifyAllRefs` walks the dying
+object's ring and self-loops each ref it nulls without repairing neighbours, so the next
+ref's `prev` still names the ref just processed. `RndGroup::Replace` erases its node, whose
+destructor unlinks it (`SafeReleaseFromRing`: `prev->next = next`) -- a write into the
+earlier holder; when that holder was a `kObjListNoNull` list node, `NullifyObj` had already
+`delete`d it, and the write corrupted glibc's bins. Reproduced with the group step restored:
+both `MergeScopeParityTest` merge tests abort `free(): chunks in smallbin corrupted`, and
+`GroupStepLeavesEarlierRefsSelfLooped` shows a plain `ObjPtr` ahead of the group node left
+linked into the freed object's ring. The group's ownership of its child is the image's.
+
+**2. Every owner-control holder, not four.** The party lane named Task, LightPreset,
+CharBonesMeshes and DefaultPhysicsManager. A temporary audit of owner-control refs whose
+owner outlived the cascade with its step skipped found, besides those, TypeProps,
+CharDriver/HamDriver (clip drivers left on a NULL clip), HamCamShot, AnimTask,
+PropertyEventProvider, RndMesh geometry owners, Spotlight colour owners, RndTransformable
+parents, RndPropAnim keys, NgEnviron and CharServoBone (a CharBonesMeshes). So the fix is the
+image's call for all of them: `ObjRef::ControlOwner()` (native virtual) identifies the
+holders; the walk moves them onto a local head -- the image's `ObjRef other` in
+`ReplaceRefs` -- and, once the dying ring is empty, drains it exactly like `ReplaceList`.
+The TypeProps / RndEnviron / RndGroup special cases are subsumed. Two rules came from
+failures: the dying object's OWN members are stepped too (a self-looped member broke
+`CharClip::Transitions::RemoveNodes`, which memmoves refs and patches their ring neighbours:
+`ObjectLifetimeTest.MergeKeepCharClipSetRootDoesNotCorruptRefs` aborted), and a dying dir's
+own `DirLoader` is not (its `Replace` deletes the loader `~ObjectDir` deletes again: the image
+deletes `mLoader` in the body, before `ReplaceRefs`; the native pre-nullify runs before the
+body). Still divergent: `AnimTask::Replace` queues its delete and `TaskMgr::QueueTaskDelete`
+refuses to queue during any cascade, so an AnimTask whose anim dies in a cascade is nulled
+but never deleted (a leak; its `Poll` returns early on the NULL anim).
+
+**3. The subdir leak: the test encoded it.** `MergeLifecycleTest.CascadeSkipsObjectsWith-
+ExternalDirPtrs` asserted that an ObjectDir named in a subdir of a dir being deleted, with an
+outside `ObjDirPtr`, survives. The image's `DeleteObjects` deletes every object it names (no
+DirPtr test; `?DeleteObjects@ObjectDir@@QAAXXZ`), and `HasDirPtrs()`'s `sDeleting` guard
+keeps the outside pointer's `Replace` from deleting it twice: the pointer reads NULL.
+Natively the object "survived" only because the subdir leaked (probed: `anon_sub` never
+destroyed, `hud_left` alive with `Dir() == NULL`); the same object named directly in the
+deleted dir was already deleted, as in the image. The pre-nullify now always releases
+subdirs; the test asserts the image's outcome. A subdir SHARED into the dying tree still
+survives by refcount, as in the image.
+
+The removed bail-out never fired for a non-root dir on the perform, dance-battle or party
+routes (temporary audit, with a positive control: the same hook fires on the unit test's
+`anon_sub`); every leak the party lane saw was a cascade ROOT, destroyed anyway.
+
+**Route symptom of lead 1.** `$elem = <null>` did not reproduce on main's binary: 0 in a party
+run through events 1-2 (and 0 on this branch over the full party). The unit-level faults above
+reproduce deterministically.
+
+**Also on the way:** `FreestyleMoveRecorder::GetScore` indexed player frame scores with the
+Xbox's 0x10 stride (natively 0x20): player 1 read a heap pointer as its score count, so with
+about half of all heap layouts the sum loop ran off the heap -- the party route SIGSEGV'd in
+Make Your Move once on this branch before the fix. (Separately, and not attributed: one run of
+main's binary never ended Make Your Move -- still `playing` at beat 3360 after 28 minutes.)
+

@@ -647,7 +647,7 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 // ReplaceRefs(nullptr), so every ref to the dying object gets
 // ObjRef::Replace(nullptr).  For an OWNER-CONTROL holder (ObjOwnerPtr, and the
 // nodes of an ObjPtrList/ObjPtrVec in kObjListOwnerControl mode --
-// ObjRef::IsOwnerControl) that call is the only way the owner learns of it:
+// ObjRef::ControlOwner) that call is the only way the owner learns of it:
 // the ref forwards to mOwner->Replace(ref, nullptr), and the owner keeps its
 // own state in step.  NullifyAllRefs nulled every ref with NullifyObj, so for
 // these owners the ref went NULL and the owner's state did not follow:
