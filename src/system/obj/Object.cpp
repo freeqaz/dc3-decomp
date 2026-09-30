@@ -639,6 +639,86 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 }
 
 #ifdef HX_NATIVE
+#include "rndobj/Env.h"
+#include "rndobj/Group.h"
+
+// Owner-control holders during the native cascade.
+//
+// The image frees a dir's objects with `delete`, and ~Object runs
+// ReplaceRefs(nullptr), so every ref to the dying object gets
+// ObjRef::Replace(nullptr).  For an OWNER-CONTROL holder (ObjOwnerPtr, and the
+// nodes of an ObjPtrList/ObjPtrVec in kObjListOwnerControl mode) that call is
+// the only way the owner learns of it: the ref forwards to
+// mOwner->Replace(ref, nullptr), and the owner keeps its own state in step.
+// NullifyAllRefs deliberately does not call Replace (re-entrancy: a
+// ScriptTask's Replace deletes the task mid-cascade), so for these owners the
+// ref went NULL and the owner's state did not follow.  Measured on the party
+// mode route (native-partyplay, 2026-09-30):
+//   * TypeProps::Replace nulls the property DataNode that held the object.
+//     Skipped, a HamCharacter's cached `vo_bank` property (char_objects.dta
+//     cache_vo_bank) kept its character_vo dir after an outfit reload freed
+//     it, and world_objects.dta's play_character_vo called {$vo_bank ...} on
+//     the freed block: SIGSEGV entering round 3's gameplay, every run.
+//   * RndEnviron::Replace re-points mAmbientFogOwner at the env itself.
+//     Skipped, the fog owner read NULL and RndEnviron::FogEnable dereferenced
+//     it on every UI draw of party_mode_signin_screen (the Draw() recovery
+//     swallowed the SIGSEGV and the rest of the screen was never drawn).
+//   * RndGroup::Replace erases the child's node (and its draw/anim entries).
+//     Skipped, a group kept a NULL child: a sound_group's get_group_children
+//     handed ui_objects.dta's shuffle a null $elem.
+// For exactly these three owners this runs the image's step.  None of them
+// deletes an object or touches a ref other than `ref` (the group erases
+// `ref`'s own node; the env relinks `ref` into its own ring; the TypeProps
+// scrub edits DataNodes only, leaving `ref` to be nulled below), so the ring
+// walk -- which has already read `ref`'s successor -- stays valid.  Other
+// owner-control owners (Task, LightPreset, CharBonesMeshes,
+// DefaultPhysicsManager) are not covered: unmeasured, and Task's Replace is
+// the re-entrant one.  Returns true when the owner took the ref over, so the
+// caller must not null it.
+static void NativeScrubTypePropsValue(DataArray *map, Hmx::Object *dying) {
+    for (int i = map->Size() - 1; i > 0; i -= 2) { // TypeProps::Replace's walk
+        DataNode &node = map->Node(i);
+        if (node.Type() == kDataObject) {
+            if (node.UncheckedObj() == dying)
+                node = (Hmx::Object *)nullptr;
+        } else if (node.Type() == kDataArray) {
+            DataArray *inner = node.UncheckedArray();
+            for (int j = inner->Size() - 1; j >= 0; j--) {
+                DataNode &node2 = inner->Node(j);
+                if (node2.Type() == kDataObject && node2.UncheckedObj() == dying)
+                    node2 = (Hmx::Object *)nullptr;
+            }
+        }
+    }
+}
+
+static bool NativeOwnerControlReplace(
+    ObjRef *ref, Hmx::Object *dying, DataArray *(*typePropsMap)(Hmx::Object *)
+) {
+    Hmx::Object *owner = ref->RefOwner();
+    if (!owner || owner == dying || !owner->IsRefAlive())
+        return false;
+    ObjPtrList<Hmx::Object> *list = dynamic_cast<ObjPtrList<Hmx::Object> *>(ref->Parent());
+    if (list && list->Mode() == kObjListOwnerControl) {
+        if (RndGroup *group = dynamic_cast<RndGroup *>(owner)) {
+            if (list == &group->Objects()) {
+                static_cast<ObjRefOwner *>(group)->Replace(ref, nullptr);
+                return true;
+            }
+        }
+        if (DataArray *map = typePropsMap(owner))
+            NativeScrubTypePropsValue(map, dying);
+        return false;
+    }
+    if (dynamic_cast<ObjOwnerPtr<RndEnviron> *>(ref)) {
+        if (RndEnviron *env = dynamic_cast<RndEnviron *>(owner)) {
+            static_cast<ObjRefOwner *>(env)->Replace(ref, nullptr);
+            return true;
+        }
+    }
+    return false;
+}
+
 #if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))
 __attribute__((no_sanitize("address")))
 #endif
@@ -649,6 +729,9 @@ void Hmx::Object::NullifyAllRefs() {
     constexpr size_t kMaxRingSize = 100000;
     ObjRef *cur = sentinel->next;
     size_t count = 0;
+    DataArray *(*typePropsMap)(Hmx::Object *) = [](Hmx::Object *o) -> DataArray * {
+        return o->mTypeProps ? o->mTypeProps->Map() : nullptr;
+    };
     while (cur != sentinel) {
         if ((uintptr_t)cur < 0x10000 || ++count > kMaxRingSize)
             break;
@@ -658,7 +741,8 @@ void Hmx::Object::NullifyAllRefs() {
         // next pointer (same technique as SnapshotRing).
         ObjRef *nxt = *(ObjRef **)((const char *)cur + kNextOffset);
         uint32_t alive = *(const uint32_t *)((const char *)cur + kSentinelOffset);
-        if (alive == ObjRef::kAliveSentinel)
+        if (alive == ObjRef::kAliveSentinel
+            && !NativeOwnerControlReplace(cur, this, typePropsMap))
             cur->NullifyObj();
         cur = nxt;
     }

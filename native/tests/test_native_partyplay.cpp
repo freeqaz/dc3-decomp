@@ -148,3 +148,125 @@ TEST_F(HttpInputTest, PressReachesTheUIAsAPad0Button) {
         << sRun.driver;
     EXPECT_FALSE(Has("Caught SIGSEGV"));
 }
+
+// ===========================================================================
+// Owner-control holders across the native delete cascade
+// ===========================================================================
+//
+// The image deletes a dir's objects with `delete`, and ~Object runs
+// ReplaceRefs(nullptr): every ref pointing at the dying object gets
+// ObjRef::Replace(nullptr).  For an OWNER-CONTROL holder that call is the only
+// way the owner hears about it -- ObjOwnerPtr::Replace and an
+// ObjPtrList<kObjListOwnerControl>::Node::Replace both forward to
+// mOwner->Replace(ref, nullptr), and the owner keeps shadow state in step:
+//   * TypeProps::Replace (ReplaceObject) nulls the property DataNode that held
+//     the object;
+//   * RndEnviron::Replace re-points mAmbientFogOwner at the env itself.
+// Native ObjectDir::DeleteObjects instead nullifies refs with NullifyAllRefs
+// (Phase 0, and ~Object during a cascade), which bypasses Replace on purpose
+// (re-entrancy).  The ref was nulled, the owner never heard, and:
+//   * a property still held the freed object -- party mode's round-3 crash:
+//     char_objects.dta's cached `vo_bank` property on a HamCharacter kept its
+//     old character_vo dir after an outfit reload deleted it, and
+//     world_objects.dta's play_character_vo called {$vo_bank ...} on it;
+//   * an environ's fog owner read NULL -- RndEnviron::FogEnable dereferenced it
+//     on every UI draw of party_mode_signin_screen;
+//   * a group kept a NULL child (RndGroup::Replace erases the node): a
+//     sound_group's get_group_children handed ui_objects.dta's `shuffle` a
+//     null $elem (`$elem = <null> not function or object`, 8x per party song).
+
+#include "test_helpers.h"
+#include "obj/Dir.h"
+#include "obj/Object.h"
+#include "rndobj/Env.h"
+#include "rndobj/Group.h"
+
+class OwnerControlCascadeTest : public EngineTestFixture {};
+
+// Control: outside a cascade (ReplaceRefs) the property is nulled.  Passes
+// before and after the fix.
+TEST_F(OwnerControlCascadeTest, TypePropsObjectValueIsNulledByPlainDelete) {
+    // A property with no PropSync lands in the owner's TypeProps, as
+    // char_objects.dta's `vo_bank` does on a HamCharacter.
+    Hmx::Object *owner = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *value = Hmx::Object::New<Hmx::Object>();
+    owner->SetProperty(Symbol("vo_bank"), DataNode(value));
+    ASSERT_EQ(owner->Property(Symbol("vo_bank"), false)->UncheckedObj(), value);
+    delete value;
+    const DataNode *n = owner->Property(Symbol("vo_bank"), false);
+    ASSERT_NE(n, nullptr);
+    EXPECT_EQ(n->UncheckedObj(), nullptr);
+    delete owner;
+}
+
+TEST_F(OwnerControlCascadeTest, TypePropsObjectValueIsNulledByTheDirCascade) {
+    Hmx::Object *owner = Hmx::Object::New<Hmx::Object>();
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+    dir->SetName("typeprops_cascade_dir", ObjectDir::Main());
+    Hmx::Object *value = Hmx::Object::New<Hmx::Object>();
+    value->SetName("character_vo", dir);
+    owner->SetProperty(Symbol("vo_bank"), DataNode(value));
+    ASSERT_EQ(owner->Property(Symbol("vo_bank"), false)->UncheckedObj(), value);
+    delete dir; // native three-phase cascade frees `value`
+    const DataNode *n = owner->Property(Symbol("vo_bank"), false);
+    ASSERT_NE(n, nullptr);
+    EXPECT_EQ(n->UncheckedObj(), nullptr)
+        << "the property still holds the object the cascade freed "
+           "(TypeProps::Replace never ran)";
+    delete owner;
+}
+
+// Control for the environ: outside a cascade the fog owner falls back to self.
+TEST_F(OwnerControlCascadeTest, EnvironFogOwnerFallsBackToSelfOnPlainDelete) {
+    RndEnviron *env = Hmx::Object::New<RndEnviron>();
+    RndEnviron *owner = Hmx::Object::New<RndEnviron>();
+    env->SetProperty(Symbol("ambient_fog_owner"), DataNode(owner));
+    ASSERT_EQ(env->AmbientFogOwner(), owner);
+    delete owner;
+    EXPECT_EQ(env->AmbientFogOwner(), env);
+    delete env;
+}
+
+TEST_F(OwnerControlCascadeTest, EnvironFogOwnerFallsBackToSelfInTheDirCascade) {
+    RndEnviron *env = Hmx::Object::New<RndEnviron>();
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+    dir->SetName("env_cascade_dir", ObjectDir::Main());
+    RndEnviron *owner = Hmx::Object::New<RndEnviron>();
+    owner->SetName("fog_owner.env", dir);
+    env->SetProperty(Symbol("ambient_fog_owner"), DataNode(owner));
+    ASSERT_EQ(env->AmbientFogOwner(), owner);
+    delete dir;
+    EXPECT_EQ(env->AmbientFogOwner(), env)
+        << "the fog owner was nulled instead of re-pointed at the env "
+           "(RndEnviron::Replace never ran); FogEnable() would dereference NULL";
+    delete env;
+}
+
+// Control: outside a cascade the child's node is erased (RndGroup::Replace).
+TEST_F(OwnerControlCascadeTest, GroupDropsADeletedChildOnPlainDelete) {
+    RndGroup *group = Hmx::Object::New<RndGroup>();
+    Hmx::Object *child = Hmx::Object::New<Hmx::Object>();
+    group->AddObject(child);
+    ASSERT_EQ(group->Objects().size(), 1);
+    delete child;
+    EXPECT_EQ(group->Objects().size(), 0);
+    delete group;
+}
+
+TEST_F(OwnerControlCascadeTest, GroupDropsADeletedChildInTheDirCascade) {
+    RndGroup *group = Hmx::Object::New<RndGroup>();
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+    dir->SetName("group_cascade_dir", ObjectDir::Main());
+    Hmx::Object *child = Hmx::Object::New<Hmx::Object>();
+    child->SetName("child.snd", dir);
+    group->AddObject(child);
+    ASSERT_EQ(group->Objects().size(), 1);
+    delete dir;
+    EXPECT_EQ(group->Objects().size(), 0)
+        << "the group kept a NULL child node (RndGroup::Replace never ran)";
+    for (ObjPtrList<Hmx::Object>::iterator it = group->Objects().begin();
+         it != group->Objects().end(); ++it) {
+        EXPECT_NE(*it, nullptr) << "null child left in the group";
+    }
+    delete group;
+}
