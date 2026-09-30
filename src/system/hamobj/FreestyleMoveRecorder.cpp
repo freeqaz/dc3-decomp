@@ -964,7 +964,17 @@ float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerId
     // Copy reference frame skeleton into debug global
     sLastComparedDancerSkel.Set(frames[frameIdx].skeleton);
     // Compute pointer to this player's FreestyleFrameScores
+#ifdef HX_NATIVE
+    // The image's stride is sizeof(FreestyleFrameScores) on the Xbox, 0x10
+    // (vector<float> 0xc + int).  Natively it is 0x20, so `<< 4` put player 1
+    // mid-way through player 0's scores: it read unk0's capacity pointer as the
+    // score array and the low half of a heap pointer as unkc, and the sum
+    // loop ran off the heap (SIGSEGV in GetScore <- BustAMovePanel::Poll,
+    // party mode's Make Your Move, native-lifetime2).
+    FreestyleFrameScores &frameScores = unke4[playerIdx];
+#else
     FreestyleFrameScores &frameScores = *(FreestyleFrameScores *)((char *)unke4 + (playerIdx << 4));
+#endif
     if (liveSkel != nullptr && liveSkel->IsTracked()) {
         CalcFrameScore(frameScores, frames, numFrames, liveSkel, beatMillis - 100.0f);
     }

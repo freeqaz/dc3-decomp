@@ -639,90 +639,78 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 }
 
 #ifdef HX_NATIVE
-#include "rndobj/Env.h"
+#include "obj/DirLoader.h"
 
 // Owner-control holders during the native cascade.
 //
 // The image frees a dir's objects with `delete`, and ~Object runs
 // ReplaceRefs(nullptr), so every ref to the dying object gets
 // ObjRef::Replace(nullptr).  For an OWNER-CONTROL holder (ObjOwnerPtr, and the
-// nodes of an ObjPtrList/ObjPtrVec in kObjListOwnerControl mode) that call is
-// the only way the owner learns of it: the ref forwards to
-// mOwner->Replace(ref, nullptr), and the owner keeps its own state in step.
-// NullifyAllRefs deliberately does not call Replace (re-entrancy: a
-// ScriptTask's Replace deletes the task mid-cascade), so for these owners the
-// ref went NULL and the owner's state did not follow.  Measured on the party
-// mode route (native-partyplay, 2026-09-30):
-//   * TypeProps::Replace nulls the property DataNode that held the object.
-//     Skipped, a HamCharacter's cached `vo_bank` property (char_objects.dta
-//     cache_vo_bank) kept its character_vo dir after an outfit reload freed
-//     it, and world_objects.dta's play_character_vo called {$vo_bank ...} on
-//     the freed block: SIGSEGV entering round 3's gameplay, every run.
+// nodes of an ObjPtrList/ObjPtrVec in kObjListOwnerControl mode --
+// ObjRef::ControlOwner) that call is the only way the owner learns of it:
+// the ref forwards to mOwner->Replace(ref, nullptr), and the owner keeps its
+// own state in step.  NullifyAllRefs nulled every ref with NullifyObj, so for
+// these owners the ref went NULL and the owner's state did not follow:
+//   * TypeProps::Replace nulls the property DataNode.  Skipped, a
+//     HamCharacter's cached `vo_bank` kept a freed character_vo dir: SIGSEGV
+//     entering party round 3 (native-partyplay).
 //   * RndEnviron::Replace re-points mAmbientFogOwner at the env itself.
-//     Skipped, the fog owner read NULL and RndEnviron::FogEnable dereferenced
-//     it on every UI draw of party_mode_signin_screen (the Draw() recovery
-//     swallowed the SIGSEGV and the rest of the screen was never drawn).
-//   * RndGroup::Replace erases the child's node (and its draw/anim entries).
-//     Skipped, a group keeps a NULL child (a sound_group's get_group_children
-//     hands ui_objects.dta's shuffle a null $elem).  NOT handled here: running
-//     RndGroup::Replace inside this walk double-freed a list node in
-//     MergeScopeParityTest.RepeatedVenueMergeAfterClear (native-partyplay,
-//     2026-09-30); open lead.
-// For the first two owners this runs the image's step.  Neither deletes an
-// object or touches a ref other than `ref` (the env relinks `ref` into its own
-// ring; the TypeProps scrub edits DataNodes only, leaving `ref` to be nulled
-// below), so the ring walk -- which has already read `ref`'s successor --
-// stays valid.  Other
-// owner-control owners (Task, LightPreset, CharBonesMeshes,
-// DefaultPhysicsManager) are not covered: unmeasured, and Task's Replace is
-// the re-entrant one.  Returns true when the owner took the ref over, so the
-// caller must not null it.
-static void NativeScrubTypePropsValue(DataArray *map, Hmx::Object *dying) {
-    for (int i = map->Size() - 1; i > 0; i -= 2) { // TypeProps::Replace's walk
-        DataNode &node = map->Node(i);
-        if (node.Type() == kDataObject) {
-            if (node.UncheckedObj() == dying)
-                node = (Hmx::Object *)nullptr;
-        } else if (node.Type() == kDataArray) {
-            DataArray *inner = node.UncheckedArray();
-            for (int j = inner->Size() - 1; j >= 0; j--) {
-                DataNode &node2 = inner->Node(j);
-                if (node2.Type() == kDataObject && node2.UncheckedObj() == dying)
-                    node2 = (Hmx::Object *)nullptr;
-            }
-        }
-    }
-}
-
-static bool NativeOwnerControlReplace(
-    ObjRef *ref, Hmx::Object *dying, DataArray *(*typePropsMap)(Hmx::Object *)
-) {
-    // Classify by the REF first (it is alive -- the caller checked its
-    // sentinel) and only then ask for its owner.  RefOwner() dereferences the
-    // holder's owner, which for an ordinary (non-owner-control) holder can
-    // already be gone: MergeScopeParityTest.SyntheticInterestCollection-
-    // MatchesSyncPattern deletes an ObjPtrList's owner before the list's
-    // referents.  An owner-control holder is a member of its owner, so the
-    // owner is alive whenever the holder is.
-    ObjPtrList<Hmx::Object> *list = dynamic_cast<ObjPtrList<Hmx::Object> *>(ref->Parent());
-    if (list && list->Mode() == kObjListOwnerControl) {
-        Hmx::Object *owner = list->Owner();
-        if (!owner || owner == dying || !owner->IsRefAlive())
+//     Skipped, RndEnviron::FogEnable dereferenced NULL on every draw of
+//     party_mode_signin_screen (native-partyplay).
+//   * RndGroup::Replace erases the child's node: a group kept a NULL child, and
+//     a sound_group handed ui_objects.dta's shuffle a null $elem.
+//   * and every other owner the same way.  Owners that outlived a cascade with
+//     their step skipped, counted on the perform / battle / party routes
+//     (native-lifetime2 audit): TypeProps, CharDriver and HamDriver (clip
+//     drivers left on a NULL clip), HamCamShot, AnimTask, CharServoBone
+//     (CharBonesMeshes: the image substitutes sDummyMesh, PoseMeshes
+//     dereferences every entry), PropertyEventProvider.
+// native-partyplay special-cased three owners; this runs the image's call for
+// all of them, the image's way.  ReplaceRefs moves the whole ring onto a
+// local head (`ObjRef other(mRefs); mRefs.Clear(); other.ReplaceList(obj)`)
+// and Replaces other.next until the ring is empty: every step unlinks its ref
+// from a CONSISTENT ring, and a ref an owner copies (ObjPtrVec::erase shifts
+// nodes with CopyRef) joins that ring beside its source and is Replaced too.
+// Here the walk moves the owner-control refs onto such a head, `pending`, and
+// nulls the rest with NullifyObj as before; once the dying object's own ring
+// is empty, `pending` is drained exactly like ReplaceList.  Running an owner
+// step inside the half-walked ring instead -- what native-partyplay tried for
+// the group -- double-frees: this walk never repairs neighbours, so an unlink
+// there writes through a stale `prev` into an earlier holder or a freed block
+// (MergeScopeParityTest.RepeatedVenueMergeAfterClear).
+//
+// Not stepped (NullifyObj, as before): a dying dir's OWN DirLoader (its
+// mProxyDir): DirLoader::Replace deletes the loader, and ~ObjectDir deletes
+// mLoader again -- the image deletes mLoader in ~ObjectDir's body, before
+// ~Object's ReplaceRefs, and this walk runs before that body; and refs whose
+// owner is already destroyed.  An owner that IS the dying object is stepped:
+// it is alive here (the image would have destroyed that member first, taking
+// the ref with it), and a member left nulled in place breaks containers that
+// relink their refs by ring neighbour -- CharClip::Transitions::RemoveNodes
+// memmoves its NodeVectors and patches each one's prev/next, and a
+// self-looped ref in there patches its OLD address (ObjectLifetimeTest.
+// MergeKeepCharClipSetRootDoesNotCorruptRefs: 'free(): chunks in smallbin
+// corrupted').  An owner whose RefOwner() is NULL (PhysicsManager, DirLoader)
+// is stepped too: the holder is its member, so it is alive while the holder is.
+namespace {
+    bool TakesOwnerStep(ObjRef *ref, Hmx::Object *dying) {
+        // Classify by the REF first (it is alive -- the caller checked its
+        // sentinel) and only then ask for its owner: RefOwner() dereferences
+        // the holder's owner, which for an ordinary holder can already be
+        // gone (MergeScopeParityTest.SyntheticInterestCollectionMatchesSync-
+        // Pattern deletes an ObjPtrList's owner before the list's referents).
+        // An owner-control holder is a member of its owner.
+        ObjRefOwner *owner = ref->ControlOwner();
+        if (!owner)
             return false;
-        if (DataArray *map = typePropsMap(owner))
-            NativeScrubTypePropsValue(map, dying);
-        return false;
-    }
-    if (dynamic_cast<ObjOwnerPtr<RndEnviron> *>(ref)) {
-        Hmx::Object *owner = ref->RefOwner();
-        if (!owner || owner == dying || !owner->IsRefAlive())
-            return false;
-        if (RndEnviron *env = dynamic_cast<RndEnviron *>(owner)) {
-            static_cast<ObjRefOwner *>(env)->Replace(ref, nullptr);
-            return true;
+        if (DirLoader *loader = dynamic_cast<DirLoader *>(owner)) {
+            ObjectDir *dir = dynamic_cast<ObjectDir *>(dying);
+            if (dir && dir->Loader() == loader)
+                return false;
         }
+        Hmx::Object *obj = owner->RefOwner();
+        return !obj || obj->IsRefAlive();
     }
-    return false;
 }
 
 #if defined(__SANITIZE_ADDRESS__) || (defined(__has_feature) && __has_feature(address_sanitizer))
@@ -735,9 +723,7 @@ void Hmx::Object::NullifyAllRefs() {
     constexpr size_t kMaxRingSize = 100000;
     ObjRef *cur = sentinel->next;
     size_t count = 0;
-    DataArray *(*typePropsMap)(Hmx::Object *) = [](Hmx::Object *o) -> DataArray * {
-        return o->mTypeProps ? o->mTypeProps->Map() : nullptr;
-    };
+    ObjRef pending; // the image's `other`: owner-control refs, a consistent ring
     while (cur != sentinel) {
         if ((uintptr_t)cur < 0x10000 || ++count > kMaxRingSize)
             break;
@@ -747,13 +733,33 @@ void Hmx::Object::NullifyAllRefs() {
         // next pointer (same technique as SnapshotRing).
         ObjRef *nxt = *(ObjRef **)((const char *)cur + kNextOffset);
         uint32_t alive = *(const uint32_t *)((const char *)cur + kSentinelOffset);
-        if (alive == ObjRef::kAliveSentinel
-            && !NativeOwnerControlReplace(cur, this, typePropsMap))
-            cur->NullifyObj();
+        if (alive == ObjRef::kAliveSentinel) {
+            // Out of the ring first: this walk never repairs neighbours, so
+            // the next ref's `prev` still names this one.
+            cur->DetachSelf();
+            if (TakesOwnerStep(cur, this))
+                cur->AddRef(&pending); // still aimed at us, for its owner
+            else
+                cur->NullifyObj();
+        }
         cur = nxt;
     }
     sentinel->next = sentinel;
     sentinel->prev = sentinel;
+    // Drain `pending` as ReplaceList drains `other`: each owner step unlinks
+    // its ref (retargets it, or destroys it with its node or its owner).
+    while (!pending.empty()) {
+        ObjRef *ref = pending.next;
+        if (TakesOwnerStep(ref, this))
+            ref->Replace(nullptr);
+        if (pending.next == ref) {
+            // Declined (the default Hmx::Object::Replace changes nothing), or
+            // its owner died in an earlier step.  Do not leave it aimed at a
+            // block that is about to be freed.
+            ObjRef::SafeReleaseFromRing(ref);
+            ref->NullifyObj();
+        }
+    }
 }
 #endif
 

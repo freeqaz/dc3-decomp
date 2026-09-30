@@ -171,9 +171,10 @@ TEST_F(HttpInputTest, PressReachesTheUIAsAPad0Button) {
 //     world_objects.dta's play_character_vo called {$vo_bank ...} on it;
 //   * an environ's fog owner read NULL -- RndEnviron::FogEnable dereferenced it
 //     on every UI draw of party_mode_signin_screen.
-// (RndGroup::Replace -- erase the child's node -- is the same class and is NOT
-// fixed: running it inside the cascade walk double-freed a list node in
-// MergeScopeParityTest.RepeatedVenueMergeAfterClear.  Open lead.)
+// (RndGroup::Replace -- erase the child's node -- is the same class.  Backed
+// out here because running it inside the cascade walk double-freed a list node
+// in MergeScopeParityTest.RepeatedVenueMergeAfterClear; fixed on
+// native-lifetime2 -- see test_native_lifetime2.cpp.)
 
 #include "test_helpers.h"
 #include "obj/Dir.h"

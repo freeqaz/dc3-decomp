@@ -149,25 +149,16 @@ static bool IsSurvivor(ObjectDir *dir, const std::vector<ObjectDir *> &survivors
 // back, and its Environ.env, whose self-referencing fog owner had been nulled,
 // SIGSEGV'd RndEnviron::FogEnable on every UI draw of that screen.  The
 // DirPtrRefCounts entries are untouched, so the release path counts right.
+//
+// Unconditionally.  It used to bail out (nulling everything, subdir DirPtrs
+// included) whenever the subdir -- recursively, shared nested subdirs and all
+// -- held a native "survivor": leaking the subdir was what kept such an object
+// alive, and MergeLifecycleTest pinned the survival.  The image has no such
+// case: releasing the subdir deletes it, and its DeleteObjects deletes every
+// object it names; a subdir SHARED into it survives by refcount either way.
 static void NullifyAllRefsKeepingSubDirPtrs(
-    ObjectDir *dir, const std::vector<ObjectDir *> &cascade,
-    const std::vector<ObjectDir *> &survivors
+    ObjectDir *dir, const std::vector<ObjectDir *> &cascade
 ) {
-    // Not when the subdir still holds something the native survivor logic
-    // keeps alive (a reparented dir, or an object with DirPtrs from outside
-    // the cascade -- MergeLifecycleTest.CascadeSkipsObjectsWithExternalDirPtrs):
-    // destroying the subdir would destroy those with it.  That case keeps the
-    // old behaviour (the subdir is not released), and stays an open lead.
-    for (ObjDirItr<Hmx::Object> it(dir, true); it != nullptr; ++it) {
-        Hmx::Object *obj = it;
-        if (obj == dir)
-            continue;
-        if (IsSurvivor(dynamic_cast<ObjectDir *>(obj), survivors)
-            || ShouldSkipCascadeNullify(obj, cascade)) {
-            dir->NullifyAllRefs();
-            return;
-        }
-    }
     std::vector<ObjRef *> kept;
     for (size_t q = 0; q < cascade.size(); q++) {
         const std::vector<ObjDirPtr<ObjectDir> > &subs = cascade[q]->SubDirs();
@@ -220,7 +211,7 @@ ObjectDir::~ObjectDir() {
             if (allDirs[i] != this && IsSurvivor(allDirs[i], survivors))
                 continue;
             if (allDirs[i]->IsRefAlive())
-                NullifyAllRefsKeepingSubDirPtrs(allDirs[i], allDirs, survivors);
+                NullifyAllRefsKeepingSubDirPtrs(allDirs[i], allDirs);
             for (ObjDirItr<Hmx::Object> it(allDirs[i], false); it != nullptr; ++it) {
                 Hmx::Object *obj = it;
                 if (obj == allDirs[i])
