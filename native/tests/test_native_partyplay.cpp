@@ -121,7 +121,7 @@ protected:
     static void SetUpTestSuite() {
         if (!getenv("DC3_DTA_FLOW_TESTS"))
             return;
-        sRun = RunHttpPressOnMain(9000 + (getpid() % 400), 8);
+        sRun = RunHttpPressOnMain(9500 + (getpid() % 400), 8); // clear of the harvest ports (9191..)
         sRan = true;
     }
     void SetUp() override {
