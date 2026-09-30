@@ -610,12 +610,21 @@ void DxRnd::SavePreBuffer() {
     D3DDevice_Resolve(
         mD3DDevice, 0x14, nullptr, mFrontBufferDepth, nullptr, 0, 0, nullptr, 1, 0, nullptr
     );
-
+    // The clear colour handed to the second Resolve is (r, g, b, 0): the image
+    // stores 0.0 into the w lane (`stfs f0, 0x7c(r1)`) before any call.  This
+    // assignment used to sit AFTER the second Resolve, where it was a dead
+    // store and was dropped, so the w lane read through `&vector` was never
+    // written -- on Xbox it happened to hold mClearColor.alpha (the Color copy
+    // shares the slot), on native it is an uninitialised read.
+    //
+    // Placement: written here (66.8% canonical) rather than first or next to
+    // x/y/z (59.4% -- MSVC then holds 0.0 in a callee-saved FPR across the
+    // first call instead of re-anchoring the literal the way the image does).
+    // The baseline, carrying the bug, read 68.7%.
+    vector.w = 0.f;
     D3DDevice_Resolve(
         mD3DDevice, 0x300, nullptr, mPreProcessBuffer, nullptr, 0, 0, &vector, 0, 0, nullptr
     );
-
-    vector.w = 0.f;
 }
 
 void DxRnd::SavePostBuffer() {
