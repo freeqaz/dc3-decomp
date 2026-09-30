@@ -827,10 +827,16 @@ def val_eq(tseq, da, bseq, ea, depth=3):
             return False
         (xi, xr), (yi, yr) = sx, sy
         return val_eq(tseq, last_def(tseq, xi, xr), bseq, last_def(bseq, yi, yr), depth)
-    if x["op"] == "mr" and len(x["regs"]) == 2:
-        return val_eq(tseq, last_def(tseq, da, x["regs"][1]), bseq, ea, depth)
-    if y["op"] == "mr" and len(y["regs"]) == 2:
-        return val_eq(tseq, da, bseq, last_def(bseq, ea, y["regs"][1]), depth)
+    if (x["op"] == "mr" and len(x["regs"]) == 2) or (y["op"] == "mr" and len(y["regs"]) == 2):
+        # follow register moves; two moves from the same function INPUT
+        # (no reaching definition) are equal when they name the same register
+        xi, xr = (da, x["regs"][1]) if x["op"] == "mr" else (None, None)
+        yi, yr = (ea, y["regs"][1]) if y["op"] == "mr" else (None, None)
+        ndx = last_def(tseq, xi, xr) if xi is not None else da
+        ndy = last_def(bseq, yi, yr) if yi is not None else ea
+        if ndx is None and ndy is None:
+            return xr is not None and xr == yr
+        return val_eq(tseq, ndx, bseq, ndy, depth)
     if not (x["op"] == y["op"] and x["imms"] == y["imms"] and x["syms"] == y["syms"]):
         return False
     xs, ys = _src_regs(x), _src_regs(y)
@@ -1083,12 +1089,14 @@ def analyse_function(rows):
     const_rows = []
     source_rows = []
 
+    t_loose, b_loose = [], []           # (row position, instruction)
+    pos = [0]
+
     def one_sided(c, side, idx):
-        for a in atoms_of(c):
-            (t_only if side == "t" else b_only)[a] += 1
-            (t_only_rows if side == "t" else b_only_rows)[a].append(c["text"])
+        (t_loose if side == "t" else b_loose).append((pos[0], c))
 
     for mt, ti, bi in aligned:
+        pos[0] += 1
         if mt == "equal":
             continue
         t = tseq[ti] if ti is not None else None
@@ -1282,6 +1290,59 @@ def analyse_function(rows):
                 f["bucket"] = "cond-mask"
         keep.append(f)
     findings[:] = keep
+
+    # ---- one-sided instructions: pair substitutions objdiff did not align -- #
+    # objdiff often renders a one-opcode substitution as a delete plus an
+    # insert a row or two apart (measured: re-introducing Rand::Seed's
+    # `srawi` produced exactly that, and the row landed in multi-atom until
+    # this pass existed).  Pair them by the substitution table first; only
+    # what is left is atom arithmetic.
+    # Only register-to-register substitutions, and only when both sides
+    # operate on the SAME input value (val_eq on the first source's reaching
+    # definition): loose loads/stores of different widths a few rows apart
+    # are everywhere, and pairing them produced 251 int-width rows of noise.
+    PAIRABLE = ("signedness", "float-sign", "int-op")
+    tpos = {id(c): n for n, c in enumerate(tseq)}
+    bpos = {id(c): n for n, c in enumerate(bseq)}
+
+    def same_input(t, b):
+        if len(t["regs"]) < 2 or len(b["regs"]) < 2 or _mem_base(t["op"]) or _mem_base(b["op"]):
+            return False
+        ti_, bi_ = tpos[id(t)], bpos[id(b)]
+        dt, db = last_def(tseq, ti_, t["regs"][1]), last_def(bseq, bi_, b["regs"][1])
+        if dt is None and db is None:
+            return t["regs"][1] == b["regs"][1]
+        return val_eq(tseq, dt, bseq, db)
+
+    used_b = set()
+    t_rest = []
+    for k1, t in t_loose:
+        best = None
+        for n, (k2, b) in enumerate(b_loose):
+            if n in used_b or abs(k1 - k2) > 8 or t["op"] == b["op"]:
+                continue
+            r = classify_substitution(t, b)
+            if r and r[0] in PAIRABLE and same_input(t, b):
+                if best is None or abs(k1 - k2) < best[0]:
+                    best = (abs(k1 - k2), n, r)
+        if best is None:
+            t_rest.append(t)
+            continue
+        _, n, (bucket, why) = best
+        used_b.add(n)
+        b = b_loose[n][1]
+        buckets[bucket] += 1
+        findings.append({"bucket": bucket, "why": why + " (objdiff did not align the pair)",
+                         "target": t["text"], "ours": b["text"]})
+    b_rest = [b for n, (_k, b) in enumerate(b_loose) if n not in used_b]
+    for c in t_rest:
+        for a in atoms_of(c):
+            t_only[a] += 1
+            t_only_rows[a].append(c["text"])
+    for c in b_rest:
+        for a in atoms_of(c):
+            b_only[a] += 1
+            b_only_rows[a].append(c["text"])
 
     # ---- net-term: atom balance over one-sided instructions -------------- #
     net = {}
@@ -1704,6 +1765,12 @@ def selftest():
                     ("delete", _S("addi", "r8, r8, 0x4"), None),
                     E("cmplw", "r9, r8")])
     check("addi 4;addi 4 vs addi 8 -> const-folded", fb == [] and b["const-folded"] == 1)
+    # srawi/srwi rendered as a delete + an insert (the sabotage shape)
+    fb, b, _ = run([E("mr", "r10, r4"),
+                    ("delete", _S("srwi", "r7, r10, 16"), None),
+                    ("replace", _S("or", "r7, r7, r8"), _S("add", "r7, r7, r8")),
+                    ("insert", None, _S("srawi", "r7, r10, 16"))])
+    check("unaligned srwi / srawi pair -> signedness", "signedness" in fb)
     # extsb vs clrlwi 24
     fb, _, _ = run([("replace", _S("extsb", "r3, r3"), _S("clrlwi", "r3, r3, 24"))])
     check("extsb vs clrlwi 24 -> signedness", fb == ["signedness"])
