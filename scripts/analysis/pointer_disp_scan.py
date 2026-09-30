@@ -1209,8 +1209,14 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                 for r in range(3, 11):
                     for a in origin.get(r, ()):
                         addi_cons[a].append(("call", ce))
-                ret = E("ret", epoch, name, *flat)
-                fret = E("fret", epoch, name, *flat)
+                # The RETURN value is named by (call ordinal, callee) only.  Its
+                # arguments already live in the call EFFECT above, so a real
+                # argument difference is still charged there -- to every row
+                # that reaches it -- without also poisoning every value derived
+                # from the result (a leftover scratch f13 in an unsignatured
+                # call used to make every downstream load compare unequal).
+                ret = E("ret", epoch, name)
+                fret = E("fret", epoch, name)
                 epoch += 1
                 origin.clear()
                 # a callee can write any stack slot whose address escaped (the
@@ -1240,7 +1246,7 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                 for r in range(3, 11):
                     for a in origin.get(r, ()):
                         addi_cons[a].append(("call", ce))
-                ret = E("iret", epoch, ctr, *flat)
+                ret = E("iret", epoch, ctr)
                 epoch += 1
                 origin.clear()
                 # a callee can write any stack slot whose address escaped (the
@@ -1253,7 +1259,7 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                 for r in range(0, 14):
                     f[r] = E("clob-f", r)
                 g[3] = ret
-                f[1] = E("ifret", epoch, ctr, *flat)
+                f[1] = E("ifret", epoch, ctr)
                 fresh_g.clear()
                 fresh_f.clear()
             elif xo == 16 and always:                  # blr
@@ -2231,6 +2237,44 @@ def selftest(args):
           "its first argument, not `this`",
           not function_ctx("u", "??6@YAAAVBinStream@@AAV0@ABVRndParticle@@@Z", {})["member"]
           and function_ctx("u", "??0RndFlare@@IAA@XZ", {})["member"])
+    # value flow: a float difference whose operands were loaded in the other
+    # order is the SAME program; the Plane::Set shape (operands crossed over,
+    # result negated) is not.
+    def lfs(d, a, imm):
+        return (48 << 26) | (d << 21) | (a << 16) | (imm & 0xFFFF)
+
+    def stfs(sv, a, imm):
+        return (52 << 26) | (sv << 21) | (a << 16) | (imm & 0xFFFF)
+
+    def fsubs(d, a, b):
+        return (59 << 26) | (d << 21) | (a << 16) | (b << 11) | (20 << 1)
+
+    def fmadds(d, a, c, b):
+        return (59 << 26) | (d << 21) | (a << 16) | (b << 11) | (c << 6) | (29 << 1)
+
+    def fmuls(d, a, c):
+        return (59 << 26) | (d << 21) | (a << 16) | (c << 6) | (25 << 1)
+
+    t = [lfs(1, 4, 0x0), lfs(2, 4, 0x4), fsubs(3, 1, 2), stfs(3, 5, 0x0)]
+    o = [lfs(1, 4, 0x4), lfs(2, 4, 0x0), fsubs(3, 2, 1), stfs(3, 5, 0x0)]
+    check("value flow: loads swapped AND operands swapped = same value -> "
+          "reordered (not a candidate)",
+          [r["bucket"] for r in run(t, o, ctx=free)] == ["reordered"] * 2)
+    o = [lfs(1, 4, 0x4), lfs(2, 4, 0x0), fsubs(3, 1, 2), stfs(3, 5, 0x0)]
+    check("value flow: loads swapped, operands NOT -> the stored value is "
+          "negated (the Plane::Set bug) -> stays a candidate",
+          all(r["bucket"] in CANDIDATE_BUCKETS for r in run(t, o, ctx=free))
+          and len(run(t, o, ctx=free)) == 2)
+    # /fp:fast reassociation: a*b + c*d as fmuls+fmadds in either order
+    t = [lfs(1, 4, 0x0), lfs(2, 4, 0x4), lfs(3, 4, 0x8), lfs(6, 4, 0xc),
+         fmuls(7, 1, 2), fmadds(8, 3, 6, 7), stfs(8, 5, 0x0)]
+    o = [lfs(1, 4, 0x8), lfs(2, 4, 0xc), lfs(3, 4, 0x0), lfs(6, 4, 0x4),
+         fmuls(7, 1, 2), fmadds(8, 3, 6, 7), stfs(8, 5, 0x0)]
+    check("value flow: a*b + c*d computed in the other order (fp:fast "
+          "reassociation) -> reordered",
+          all(r["bucket"] == "reordered" for r in run(t, o, ctx=free))
+          and len(run(t, o, ctx=free)) == 4)
+
     check("link-pair naming: mNext/mPrev, _M_left/_M_right, next/prev",
           is_link_pair("mNext", "mPrev") and is_link_pair("_M_left", "_M_right")
           and is_link_pair("next", "prev") and not is_link_pair("mNext", "mSize"))
