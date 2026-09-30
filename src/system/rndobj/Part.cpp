@@ -1747,7 +1747,7 @@ void RndParticleSys::InitParticle(
                 : 0;
         } else {
             fancyParticle->shrinkVel = 0;
-            fancyParticle->shrinkFrame = fancyParticle->birthFrame;
+            fancyParticle->shrinkFrame = death;
         }
         fancyParticle->beginGrow = fancyParticle->growFrame > fancyParticle->birthFrame
             ? 1.0f / (fancyParticle->growFrame - fancyParticle->birthFrame)
