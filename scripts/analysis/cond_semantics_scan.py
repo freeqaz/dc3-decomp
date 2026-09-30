@@ -896,6 +896,144 @@ def _select_arm(S, p, br):
     return False
 
 
+class _BlockPairing:
+    """Lazily computed block correspondence for one function (shared by every
+    branch pair classified in it)."""
+
+    def __init__(self, T, B, rows):
+        self.T, self.B, self.rows = T, B, rows
+        self._m = None
+
+    def blocks(self):
+        if self._m is None:
+            self._m = pair_blocks(self.T, self.B, self.rows)
+        return self._m
+
+
+def classify_pair(T, B, t, b, brt, brb, pt_pos, pb_pos, prt, prb, state, row_index):
+    """Classify ONE pair of conditional branches -- the target's at `pt_pos`
+    and ours at `pb_pos` -- whose CR producers have already been found.
+    Returns ("row", result) or ("drop", reason, note).  Positions need not
+    come from the same objdiff row: the ONE-SIDED re-pairing pass below calls
+    this with a counterpart found elsewhere in the function."""
+    (qt, prod_t), (qb, prod_b) = prt, prb
+    is_f_t, is_f_b = prod_t[0] == "fcmp", prod_b[0] == "fcmp"
+    if (brt["bit"] == "SO" and not is_f_t) or (brb["bit"] == "SO" and not is_f_b):
+        return ("drop", "summary-overflow-bit-on-integer-compare", "")
+    st = outcome_set(brt["bit"], brt["sense"], is_f_t)
+    sb = outcome_set(brb["bit"], brb["sense"], is_f_b)
+    # ---- successors on blocks ---------------------------------------- #
+    bmap, bhow = state.blocks()
+    tk, tf = successors(T, pt_pos, brt)
+    bk, bf = successors(B, pb_pos, brb)
+    if tk is None or bk is None:
+        return ("drop", "branch-destination-outside-function", "")
+
+    def mapped(x):
+        if x in ("RET", "END"):
+            return x
+        if is_ret_block(T, x) and x not in bmap:
+            return "RET?"
+        return bmap.get(x)
+
+    def canon_b(x):
+        if x in ("RET", "END"):
+            return x
+        if is_ret_block(B, x) and x not in set(bmap.values()):
+            return "RET?"
+        return x
+    mtk, mtf = mapped(tk), mapped(tf)
+    cbk, cbf = canon_b(bk), canon_b(bf)
+    eff, e_same, e_swap = effects_orientation(
+        T, B, _arm_pos(T, pt_pos, brt, "taken"), _arm_pos(T, pt_pos, brt, "fall"),
+        _arm_pos(B, pb_pos, brb, "taken"), _arm_pos(B, pb_pos, brb, "fall"))
+    # When the blocks do not pair, a DECISIVE arm-effects reading (at least
+    # two distinguishing tokens one way, none the other) orients the row on
+    # its own.  Such a row is never a finding: a non-agree verdict lands in
+    # the UNPAIRED-DIFFERS lead bucket.  Anything weaker stays a drop.
+    decisive = max(e_same, e_swap) >= 2 and min(e_same, e_swap) == 0
+    orient_by = "blocks"
+    if mtk is None or mtf is None or mtk == mtf or not (
+            (mtk == cbk and mtf == cbf) or (mtk == cbf and mtf == cbk)):
+        if not decisive:
+            if mtk is None or mtf is None:
+                return ("drop", "successor-blocks-unpaired",
+                        "a successor block of the target branch has no "
+                        "counterpart on our side and the arms' effects "
+                        "are not decisive -- restructured arms; the "
+                        "residue of class 2 lives here")
+            if mtk == mtf:
+                return ("drop", "degenerate-successors", "")
+            return ("drop", "successors-map-to-a-third-block",
+                    "the target's successors pair with blocks that "
+                    "are neither of our branch's successors, and "
+                    "the arms' effects are not decisive")
+        orient_by = "arm-effects-only"
+        orient = eff
+    elif mtk == cbk and mtf == cbf:
+        orient = "same"
+    else:
+        orient = "swapped"
+    if orient == "same":
+        sb_or = sb
+    else:
+        sb_or = frozenset(FLT_OUT if is_f_b else INT_OUT) - sb
+    order, order_how = ("n/a", "")
+    if prod_t[-1][0] == "reg" and prod_b[-1][0] == "reg":
+        order, order_how = operand_order(T, B, qt, qb, prod_t, prod_b)
+    # A latch only when the branch is BACKWARD: `subic. r11,r11,1; beq`
+    # forward is a switch case test (GetExpCode's `code - 0x80000001`).
+    dc_t = is_down_counter(T.ins[qt][1]) and _is_backward(t, brt)
+    dc_b = is_down_counter(B.ins[qb][1]) and _is_backward(b, brb)
+    if dc_t != dc_b:
+        bucket, detail = ("LOOP-LOWERING", "a decrement-and-test latch on one "
+                          "side, a bound compare on the other: the same loop "
+                          "lowered two ways, not a condition")
+    else:
+        bucket, detail = compare_predicates((prod_t, st), (prod_b, sb_or), order)
+    if (bucket == "OFF-BY-ONE" and prod_t[-1][0] == "imm"
+            and prod_b[-1][0] == "imm"):
+        n_diff, span = iv_symdiff_size_and_span(
+            value_set(prod_t[1], prod_t[2], prod_t[-1][1], st),
+            value_set(prod_b[1], prod_b[2], prod_b[-1][1], sb_or), prod_t[2])
+        v = span[0]
+        if v >= 1 << (prod_t[2] - 1):
+            v -= 1 << prod_t[2]
+        if (_single_arm_assign(T, pt_pos, brt, prod_t[-2][1], v)
+                and _single_arm_assign(B, pb_pos, brb, prod_b[-2][1], v)):
+            bucket, detail = ("agree", f"clamp boundary: the only differing "
+                              f"value {v} is assigned {v} by the other arm")
+    if (bucket in ("DIRECTION", "STRICTNESS")
+            and (_select_arm(T, pt_pos, brt) or _select_arm(B, pb_pos, brb))):
+        detail = (f"{bucket} under a SELECT: an arm is a pure register move, "
+                  f"so which value wins also depends on the moved operands "
+                  f"(min/max spelled a<b?a:b vs b<a?b:a) -- {detail}")
+        bucket = "SELECT"
+    if orient_by == "arm-effects-only" and bucket in FINDING_BUCKETS:
+        detail = (f"blocks did not pair; oriented by arm effects alone "
+                  f"({e_same} vs {e_swap} tokens) -> would be {bucket}: {detail}")
+        bucket = "UNPAIRED-DIFFERS"
+    elif eff != "undecided" and eff != orient:
+        # The arms' distinguishing effects say the other orientation.  Under
+        # that orientation the verdict flips agree <-> INVERTED, so neither
+        # verdict can be trusted: a LEAD, never a finding and never agree.
+        detail = (f"block pairing says successors {orient}, the arms' "
+                  f"distinguishing effects say {eff} ({e_same} vs {e_swap} "
+                  f"tokens); predicate verdict under the pairing was {bucket}")
+        bucket = "ORIENTATION-CONFLICT"
+    return ("row", {
+        "bucket": bucket, "row": row_index, "detail": detail,
+        "successors": orient if orient_by == "blocks" else f"{orient} (arm effects only)",
+        "arm_effects": f"{eff} ({e_same}/{e_swap})",
+        "block_pairing": ",".join(sorted({bhow.get(x, "?") for x in (tk, tf)
+                                          if isinstance(x, int)})),
+        "operand_order": order if order == "n/a" else f"{order} ({order_how})",
+        "target": f"{_txt(T.ins[qt][1])} ; {_txt(t)}",
+        "ours": f"{_txt(B.ins[qb][1])} ; {_txt(b)}",
+        "target_addr": t.get("address"), "ours_addr": b.get("address"),
+    })
+
+
 def analyse_function(fn, rcov, dropped=None):
     """Classify every conditional-branch row.  Every row the universe regex
     counts is either examined (one bucket) or dropped (one reason).  When
@@ -918,7 +1056,7 @@ def analyse_function(fn, rcov, dropped=None):
             real.examine(n)
     rcov = _Drops()
     T, B = Side(rows, "target"), Side(rows, "base")
-    bmap = None
+    state = _BlockPairing(T, B, rows)
     out = []
     for r in rows:
         t, b = r.get("target"), r.get("base")
@@ -956,128 +1094,16 @@ def analyse_function(fn, rcov, dropped=None):
         if prt is None or prb is None:
             rcov.drop(why_t or why_b)
             continue
-        (qt, prod_t), (qb, prod_b) = prt, prb
-        is_f_t, is_f_b = prod_t[0] == "fcmp", prod_b[0] == "fcmp"
-        if (brt["bit"] == "SO" and not is_f_t) or (brb["bit"] == "SO" and not is_f_b):
-            rcov.drop("summary-overflow-bit-on-integer-compare")
+        res = classify_pair(T, B, t, b, brt, brb, pt_pos, pb_pos, prt, prb,
+                            state, r["index"])
+        if res[0] == "drop":
+            if res[2]:
+                rcov.drop(res[1], note=res[2])
+            else:
+                rcov.drop(res[1])
             continue
-        st = outcome_set(brt["bit"], brt["sense"], is_f_t)
-        sb = outcome_set(brb["bit"], brb["sense"], is_f_b)
-        # ---- successors on blocks ---------------------------------------- #
-        if bmap is None:
-            bmap, bhow = pair_blocks(T, B, rows)
-        tk, tf = successors(T, pt_pos, brt)
-        bk, bf = successors(B, pb_pos, brb)
-        if tk is None or bk is None:
-            rcov.drop("branch-destination-outside-function")
-            continue
-
-        def mapped(x):
-            if x in ("RET", "END"):
-                return x
-            if is_ret_block(T, x) and x not in bmap:
-                return "RET?"
-            return bmap.get(x)
-
-        def canon_b(x):
-            if x in ("RET", "END"):
-                return x
-            if is_ret_block(B, x) and x not in set(bmap.values()):
-                return "RET?"
-            return x
-        mtk, mtf = mapped(tk), mapped(tf)
-        cbk, cbf = canon_b(bk), canon_b(bf)
-        eff, e_same, e_swap = effects_orientation(
-            T, B, _arm_pos(T, pt_pos, brt, "taken"), _arm_pos(T, pt_pos, brt, "fall"),
-            _arm_pos(B, pb_pos, brb, "taken"), _arm_pos(B, pb_pos, brb, "fall"))
-        # When the blocks do not pair, a DECISIVE arm-effects reading (at least
-        # two distinguishing tokens one way, none the other) orients the row on
-        # its own.  Such a row is never a finding: a non-agree verdict lands in
-        # the UNPAIRED-DIFFERS lead bucket.  Anything weaker stays a drop.
-        decisive = max(e_same, e_swap) >= 2 and min(e_same, e_swap) == 0
-        orient_by = "blocks"
-        if mtk is None or mtf is None or mtk == mtf or not (
-                (mtk == cbk and mtf == cbf) or (mtk == cbf and mtf == cbk)):
-            if not decisive:
-                if mtk is None or mtf is None:
-                    rcov.drop("successor-blocks-unpaired",
-                              note="a successor block of the target branch has no "
-                                   "counterpart on our side and the arms' effects "
-                                   "are not decisive -- restructured arms; the "
-                                   "residue of class 2 lives here")
-                elif mtk == mtf:
-                    rcov.drop("degenerate-successors")
-                else:
-                    rcov.drop("successors-map-to-a-third-block",
-                              note="the target's successors pair with blocks that "
-                                   "are neither of our branch's successors, and "
-                                   "the arms' effects are not decisive")
-                continue
-            orient_by = "arm-effects-only"
-            orient = eff
-        elif mtk == cbk and mtf == cbf:
-            orient = "same"
-        else:
-            orient = "swapped"
-        if orient == "same":
-            sb_or = sb
-        else:
-            sb_or = frozenset(FLT_OUT if is_f_b else INT_OUT) - sb
-        order, order_how = ("n/a", "")
-        if prod_t[-1][0] == "reg" and prod_b[-1][0] == "reg":
-            order, order_how = operand_order(T, B, qt, qb, prod_t, prod_b)
-        # A latch only when the branch is BACKWARD: `subic. r11,r11,1; beq`
-        # forward is a switch case test (GetExpCode's `code - 0x80000001`).
-        dc_t = is_down_counter(T.ins[qt][1]) and _is_backward(t, brt)
-        dc_b = is_down_counter(B.ins[qb][1]) and _is_backward(b, brb)
-        if dc_t != dc_b:
-            bucket, detail = ("LOOP-LOWERING", "a decrement-and-test latch on one "
-                              "side, a bound compare on the other: the same loop "
-                              "lowered two ways, not a condition")
-        else:
-            bucket, detail = compare_predicates((prod_t, st), (prod_b, sb_or), order)
-        if (bucket == "OFF-BY-ONE" and prod_t[-1][0] == "imm"
-                and prod_b[-1][0] == "imm"):
-            n_diff, span = iv_symdiff_size_and_span(
-                value_set(prod_t[1], prod_t[2], prod_t[-1][1], st),
-                value_set(prod_b[1], prod_b[2], prod_b[-1][1], sb_or), prod_t[2])
-            v = span[0]
-            if v >= 1 << (prod_t[2] - 1):
-                v -= 1 << prod_t[2]
-            if (_single_arm_assign(T, pt_pos, brt, prod_t[-2][1], v)
-                    and _single_arm_assign(B, pb_pos, brb, prod_b[-2][1], v)):
-                bucket, detail = ("agree", f"clamp boundary: the only differing "
-                                  f"value {v} is assigned {v} by the other arm")
-        if (bucket in ("DIRECTION", "STRICTNESS")
-                and (_select_arm(T, pt_pos, brt) or _select_arm(B, pb_pos, brb))):
-            detail = (f"{bucket} under a SELECT: an arm is a pure register move, "
-                      f"so which value wins also depends on the moved operands "
-                      f"(min/max spelled a<b?a:b vs b<a?b:a) -- {detail}")
-            bucket = "SELECT"
-        if orient_by == "arm-effects-only" and bucket in FINDING_BUCKETS:
-            detail = (f"blocks did not pair; oriented by arm effects alone "
-                      f"({e_same} vs {e_swap} tokens) -> would be {bucket}: {detail}")
-            bucket = "UNPAIRED-DIFFERS"
-        elif eff != "undecided" and eff != orient:
-            # The arms' distinguishing effects say the other orientation.  Under
-            # that orientation the verdict flips agree <-> INVERTED, so neither
-            # verdict can be trusted: a LEAD, never a finding and never agree.
-            detail = (f"block pairing says successors {orient}, the arms' "
-                      f"distinguishing effects say {eff} ({e_same} vs {e_swap} "
-                      f"tokens); predicate verdict under the pairing was {bucket}")
-            bucket = "ORIENTATION-CONFLICT"
         rcov.examine()
-        out.append({
-            "bucket": bucket, "row": r["index"], "detail": detail,
-            "successors": orient if orient_by == "blocks" else f"{orient} (arm effects only)",
-            "arm_effects": f"{eff} ({e_same}/{e_swap})",
-            "block_pairing": ",".join(sorted({bhow.get(x, "?") for x in (tk, tf)
-                                              if isinstance(x, int)})),
-            "operand_order": order if order == "n/a" else f"{order} ({order_how})",
-            "target": f"{_txt(T.ins[qt][1])} ; {_txt(t)}",
-            "ours": f"{_txt(B.ins[qb][1])} ; {_txt(b)}",
-            "target_addr": t.get("address"), "ours_addr": b.get("address"),
-        })
+        out.append(res[1])
     return out
 
 
