@@ -42,17 +42,58 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     // `fmuls f9,f11,f9` and `fmadds f0,f12,f13,f9`), where the old spelling
     // wanted inv.z.x at 0x70 and inv.y.x at 0x60.  Term order is the image's:
     // each row's first fmuls is the term written first here.
+    // w8-p 2026-09-30, INDEPENDENT CONFIRMATION of the w8-h fix above, by
+    // decoding all nine terms out of the image rather than re-reading three of
+    // them.  `inv` is the stack Matrix3 based at 0x50(r1), so its rows are
+    // inv.x = 0x50/0x54/0x58, inv.y = 0x60/0x64/0x68, inv.z = 0x70/0x74/0x78,
+    // and r30 holds `normal` (nx=0x0, ny=0x4, nz=0x8).  The image computes:
+    //   fmuls  f10,f12,f10  @8263B9A8   ny * inv.y.y (0x64)
+    //   fmuls  f9,f11,f9    @8263B9B4   nz * inv.x.z (0x58)
+    //   fmuls  f8,f12,f8    @8263B9B8   ny * inv.z.y (0x74)
+    //   fmadds f10,f7,f6,f10 @8263B9D8  + nx * inv.y.x (0x60)
+    //   fmadds f9,f7,f5,f9   @8263B9DC  + nx * inv.x.x (0x50)
+    //   fmadds f8,f7,f4,f8   @8263B9E0  + nx * inv.z.x (0x70)
+    //   fmadds f0,f11,f0,f10 @8263B9E4  + nz * inv.y.z (0x68) -> stfs 0x4(r31) = result.y
+    //   fmadds f0,f12,f13,f9 @8263B9EC  + ny * inv.x.y (0x54) -> stfs 0x0(r31) = result.x
+    //   fmadds f0,f11,f3,f8  @8263B9F4  + nz * inv.z.z (0x78) -> result.z
+    // All nine terms, all three destinations and the y-before-x store order
+    // (0x4(r31) at 8263B9E8 BEFORE 0x0(r31) at 8263B9F0) agree with the three
+    // lines below exactly.  The w8-h row-dot fix is right and the term order is
+    // the image's.
+    //
+    // RESIDUAL 99.68293 canonical / 94.31707 fuzzy, 23 rows, all register and
+    // stack-slot permutation: the image INTERLEAVES the three rows -- three
+    // fmuls, then three nx-fmadds sharing f7=nx as the multiplicand, then the
+    // three closing fmadds -- and holds nx in one register across all of it,
+    // where we schedule more of each row before moving on.  Zero `[sym]` rows,
+    // i.e. nothing here is a wrong callee.
+    //
+    // ⚠ METHOD NOTE for whoever reads the numbers next: a large
+    // (normalized - fuzzy) gap is NOT a wrong-callee tell.  This row has the
+    // biggest such gap in these three units (5.37pp) and carries no relocation
+    // charge at all; ConvertTextToWide's 3.87pp gap is a frame-pointer
+    // difference.  normalized = diff_score - arg_diff_score, and arg_diff_score
+    // collects register-only diff_arg rows as well as relocation penalties, so
+    // the gap only says "there are diff_arg rows".  To hunt a wrong callee, look
+    // for `[sym]` rows under name_check, or ask
+    // query_functions(objdiff_pattern='WRONG_CALLEE') -- which, asked of all
+    // three of these units, returns a measured empty set.
     result.y = ny * inv.y.y + nx * inv.y.x + nz * inv.y.z;
     result.x = nz * inv.x.z + nx * inv.x.x + ny * inv.x.y;
     result.z = ny * inv.z.y + nx * inv.z.x + nz * inv.z.z;
     return result;
 }
 
-void PatchVerts::Clear() {
+inline void PatchVerts::Clear() {
     mPatchVerts.clear();
     mCentroid.Set(0, 0, 0);
 }
 
+// CLOSED (w8-p 2026-09-30): 96.77778 -> 100.0, by the COMDAT lever documented on
+// PatchVerts::HasVert below -- `inline` on this definition and on GreaterEq.  The
+// w7-az reading below was exactly right that the image "treats GreaterEq as an
+// opaque call"; what it could not find was why, and the answer is in the map's
+// flag column (`f i` = COMDAT).  Kept for the record:
 // RESIDUAL (w7-az, 96.78, 23 rows) -- SAME CLASS as the HasVert note below,
 // and the same callee.  The image treats GreaterEq as an opaque call and
 // therefore parks everything it needs afterwards in non-volatiles: five of
@@ -73,7 +114,7 @@ void PatchVerts::Clear() {
 // does NOT work here: 96.78 canonical unchanged (raw 95.03 -> 94.92), same
 // prologue, same rotation.  It reorders the two `addi`s and nothing else.
 // Do not retry the source reorder either; see the REFUTED EXPERIMENT below.
-void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid) {
+inline void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid) {
     int idx = GreaterEq(vertIdx);
     mPatchVerts.insert(mPatchVerts.begin() + idx, vertIdx);
     mCentroid += verts[vertIdx].pos;
@@ -82,7 +123,7 @@ void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid)
     centroid *= invCount;
 }
 
-int PatchVerts::GreaterEq(int iii) const {
+inline int PatchVerts::GreaterEq(int iii) const {
     if (!(!mPatchVerts.empty() && iii > mPatchVerts.front())) {
         return 0;
     } else {
@@ -106,21 +147,24 @@ int PatchVerts::GreaterEq(int iii) const {
     }
 }
 
-// 81.4% under name_check, and 81.4% is not the floor: the target keeps `this`
-// and `vert` in r30/r31 across the GreaterEq call (108 bytes, saves two
-// non-volatiles), where we hold them in r7/r4 -- volatile registers -- and read
-// them back afterwards (88 bytes, saves none).  That only type-checks if MSVC
-// propagated GreaterEq's clobber set into this caller, which it can do for a
-// callee it has already compiled in the same TU.
+// CLOSED (w8-p 2026-09-30): 81.40741 -> 100.0.  The diagnosis below was right
+// about the mechanism and wrong about the knob.  The target keeps `this` and
+// `vert` in r30/r31 across the GreaterEq call (108 bytes, saves two
+// non-volatiles) because GreaterEq is a COMDAT there, not because of source
+// order: ham_xbox_r.map's flag column separates an ordinary out-of-line .cpp
+// definition (bare `f`) from a COMDAT emitted for an inline/in-class/template
+// definition (`f i`), and ?GreaterEq@PatchVerts@@IBAHH@Z @8263c030 is `f i`
+// (map line 51879) -- as are HasVert @8263e178, Clear @8263f1e8 and Add
+// @8263f238.  ?FaceCenter@@YAXPAVRndMesh@@PAVFace@1@AAVVector3@@@Z @8263b860 is
+// bare `f` in the same object, which is the control: the image really does mix
+// the two, and it is the map, not guesswork, that says which is which.
+// A COMDAT may be replaced at link time by an equivalent definition from another
+// TU, so MSVC cannot assume the callee's register usage and the caller must
+// spill to non-volatiles.  Marking these four `inline` reproduces that.
 //
-// REFUTED EXPERIMENT (2026-08-23): moving this definition ABOVE
-// PatchVerts::GreaterEq, so the callee is no longer compiled first, is
-// completely inert -- HasVert stays at 81.40741 / 80.666664 / 80.48148 on all
-// three rulers, GreaterEq stays at 100.0, and a whole-binary A/B moves no other
-// function.  Source order is not what gates the propagation here.  Do not
-// retry the reorder; look for whatever else makes the target treat GreaterEq
-// as an opaque call.
-bool PatchVerts::HasVert(int vert) const {
+// The 2026-08-23 experiment (moving this definition ABOVE GreaterEq) was inert,
+// and correctly so -- source order was never the gate.  Do not retry it.
+inline bool PatchVerts::HasVert(int vert) const {
     int idx = GreaterEq(vert);
     if (idx < mPatchVerts.size()) {
         return mPatchVerts[idx] == vert;
@@ -733,6 +777,33 @@ void RndMesh::UpdateSphere() {
     RndDrawable::SetSphere(s);
 }
 
+// RESIDUAL 99.91666 / 10 rows (w8-p 2026-09-30), and it is the SAME CLASS as
+// RndMesh::MakeWorldSphere (99.98198 / 4 rows), RndMesh::SetVolume (99.98586 /
+// 4 rows) and FillCompressedVertex in rndobj/MeshVertCompress.h (99.95683 /
+// 8 rows).  In all four the residual is nothing but the ORDER in which MSVC
+// loads the members of a component triple, so the rows are charged `lfs`/`lwz`
+// OFFSETS -- real canonical points and real matched_code, not a forgiven
+// register permutation.  Here the image reads p.c before p.b at idx 39/43 and
+// starts the second Plane::Dot from the Z term (`lfs f12,0x58(r1)` +
+// `lfs f0,0x8(r30)`), where we start from X.
+//
+// THE GENERALISATION, which is what makes this worth writing down: the load
+// order of a triple is reachable from source EXACTLY WHEN the triple is spelled
+// as explicit locals in the function being matched, and NOT when it comes out of
+// an inlined shared helper.
+//   * Reachable: DxMesh::CacheFurTransform's `float dx/dy/dz` -- brute-forcing
+//     all six declaration orders moved fuzzy 98.08054 -> 98.49664, and the
+//     permutation MSVC applies is not a fixed function of declaration order, so
+//     it had to be enumerated rather than reasoned out.
+//   * NOT reachable: everything here.  The loads belong to Plane::Dot
+//     (math/Mtx.h:429), Dot(Vector3,Vector3) (math/Vec.h:283), ScaleAdd,
+//     Vector3::operator*= and the vector's end() -- all correctly written in
+//     natural x,y,z order, all shared by the whole engine.  Changing one to
+//     chase a row here would move thousands of unrelated functions.
+// MEASURED NEGATIVES on this class, each a full build, each EXACTLY inert on
+// BOTH rulers: declaration reorder and argument inlining and commuting the
+// combining operator (FillCompressedVertex); swapping -Dot's arguments and
+// hand-writing the product explicitly right-associated (SetVolume).
 float RndMesh::GetDistanceToPlane(const Plane &p, Vector3 &v) {
     if (Verts().empty())
         return 0;
@@ -1194,6 +1265,23 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                     plane.a = vb0.x;
                     plane.b = vb0.y;
                     plane.c = vb0.z;
+                    // RESIDUAL 99.98586 / 4 rows (w8-p): the image's -Dot lowers to
+                    // `fmuls f10,f10,f9` on the Z pair, `fmadds f0,f0,f13,f10` on
+                    // the Y pair and `fnmadds f0,f12,f11,f0` on X
+                    // (0x82642900-0x8264290C), i.e. -(x*x' + (y*y' + z*z')); we emit
+                    // the identical three instructions with Y and Z exchanged, so
+                    // only the four `lfs` offsets at 0x826428E8-0x826428FC differ
+                    // (0x4/0x74 <-> 0x8/0x78).  MEASURED NEGATIVES, each a full
+                    // build, each EXACTLY inert at 99.98586 norm AND fuzzy:
+                    // swapping the arguments to `-Dot(planePoint, vb0)`; and
+                    // writing the product out by hand, explicitly right-associated
+                    // the way the image accumulates it,
+                    // `-(vb0.x*planePoint.x + (vb0.y*planePoint.y + vb0.z*planePoint.z))`.
+                    // MSVC canonicalises all three spellings to the same bytes; the
+                    // scheduler, not the source, picks which pair is the innermost
+                    // fmuls.  Same class as FillCompressedVertex in
+                    // rndobj/MeshVertCompress.h.  1132 B of matched_code is parked
+                    // behind it.
                     plane.d = -Dot(vb0, planePoint);
                     bspIt->left = 0;
                     if (i == 5) {
@@ -1262,6 +1350,14 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
 // MEASURED NEGATIVE: `unsigned short vertIdx` by value instead of
 // `unsigned short &vertIdx` in the 3-vertex loop -- inert, 97.6 both ways.
 //
+// CLOSED (w8-p 2026-09-30) on the canonical ruler: 97.58194 -> 100.0 normalized,
+// by marking PatchVerts::Clear / Add / GreaterEq / HasVert `inline` (see the
+// COMDAT-flag note on PatchVerts::HasVert).  The w7-bp diagnosis below named the
+// mechanism correctly.
+// ⚠ NOT fully banked: fuzzy_match_percent is 99.83278, and report.json computes
+// matched_functions from the NORMALIZED ruler but matched_code from fuzzy == 100,
+// so this row adds +1 matched function and 0 of its 1196 bytes.  Do not read the
+// normalized 100.0 as byte-identity here.
 // THE FLOOR IS ONE MECHANISM: same-TU callee volatile-register propagation,
 // exactly the effect already documented on PatchVerts::HasVert above (81.4%,
 // and refuted there as a definition-order problem).  MSVC has already
@@ -1945,6 +2041,18 @@ void RndMesh::LoadVertices(BinStreamRev &d) {
 #endif
 }
 
+// RESIDUAL 96.77778 / 27 rows (w8-p re-read 2026-09-30).  Three of the rows are
+// the only structural ones: `b` + `li r31,0x24` + `li r30,0x1` -- the sunk
+// `else { compressedSize = 0x24; isXBox = 1; }` arm -- is placed at instruction
+// 115 in our build and at 155 in the image, i.e. the image emits it AFTER the
+// vertex loop and we emit it before.  Same three instructions, same order,
+// different block placement; that is the block-sinking class
+// (docs/decomp/patterns/block-sinking.md), decided by MSVC's layout pass.
+// The other 24 rows are a consistent pairwise exchange of two callee-saved
+// pairs, target r27<->our r26 and target r25<->our r24: the image gives the
+// higher register of each pair to the flag defined first (`cached`) and the
+// lower to TheDebug / the format string, and we do the opposite.  Nothing here
+// is a missing or wrong instruction.
 void RndMesh::SaveVertices(BinStream &bs) {
     VertVector &verts = mVerts;
     // The image writes each of these three flags STRAIGHT into its final

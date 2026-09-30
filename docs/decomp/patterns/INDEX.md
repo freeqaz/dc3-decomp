@@ -8,6 +8,18 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
 
 ## Corrections — read before trusting an older section
 
+- **2026-09-30 — a conservative-prologue "clobber propagation floor" is often just the wrong
+  LINKAGE CLASS, and `ham_xbox_r.map`'s flag column says which.** See
+  **[map-comdat-flag-gates-clobber-propagation.md](map-comdat-flag-gates-clobber-propagation.md)**.
+  Bare `f` = ordinary out-of-line `.cpp` definition; `f i` = a COMDAT (inline / in-class /
+  template). MSVC may not assume a COMDAT callee's register usage, because the linker can
+  replace it, so the caller spills to non-volatiles — which is exactly the prologue gap that
+  gets certified as unfixable. One `inline` keyword took `PatchVerts::HasVert` 81.40741 → 100.0,
+  `PatchVerts::Add` 96.77778 → 100.0, `RndMesh::OnSync` 97.58194 → 100.0 and
+  `ScaleAddEq(Transform&)` 63.26667 → 93.33334, with 0 regressions over 48,367 rows.
+  `?FaceCenter@@...` is bare `f` in the same object, which is the control proving the flag
+  carries information. Two prior source notes certified this class as a floor.
+
 - **2026-09-13 — "a comment shifts `__LINE__` in every MILO assert below it" is FALSE here; the
   class is ONE function binary-wide.** See
   **[comments-are-inert-except-at-__LINE__.md](comments-are-inert-except-at-__LINE__.md)**.

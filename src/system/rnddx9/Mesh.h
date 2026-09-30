@@ -1,5 +1,6 @@
 #pragma once
 #include "math\Mtx.h"
+#include "os\System.h"
 #include "obj/Object.h"
 #include "rnddx9\Object.h"
 #include "rndobj\Mesh.h"
@@ -69,3 +70,19 @@ protected:
     D3DResource *unk1ac;
     D3DResource *unk1b0;
 };
+
+// Inline, not out-of-line in Mesh.cpp: the map marks both of these `f i`
+// (COMDAT) at 82620708 / 82620768, and DxMultiMesh calls them from another TU.
+inline unsigned int DxMesh::VertSize() const {
+    if (GetGfxMode() == kNewGfx) {
+        return 0x24;
+    }
+    return IsSkinned() ? 0x30 : 0x24;
+}
+
+inline unsigned int DxMesh::VertFVF() const {
+    if (GetGfxMode() == kNewGfx) {
+        return 0;
+    }
+    return IsSkinned() ? 0x15A : 0x152;
+}

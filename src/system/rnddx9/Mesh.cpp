@@ -95,22 +95,15 @@ DxMesh::~DxMesh() {
     unk1b0 = nullptr;
 }
 
-unsigned int DxMesh::VertSize() const {
-    if (GetGfxMode() == kNewGfx) {
-        return 0x24;
-    }
-    return IsSkinned() ? 0x30 : 0x24;
-}
-
-unsigned int DxMesh::VertFVF() const {
-    if (GetGfxMode() == kNewGfx) {
-        return 0;
-    }
-    return IsSkinned() ? 0x15A : 0x152;
-}
+// DxMesh::VertSize / DxMesh::VertFVF moved to rnddx9/Mesh.h as inline member
+// definitions: ham_xbox_r.map lists ?VertSize@DxMesh@@IBAIXZ (82620708) and
+// ?VertFVF@DxMesh@@IBAIXZ (82620768) as `f i`, i.e. COMDATs, and MultiMesh.cpp
+// calls both -- so the image reached them through the header, not through an
+// out-of-line definition here.  An out-of-line body in this TU is bare `f` and
+// lets MSVC propagate the callee's register usage into every caller in this TU.
 
 
-void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {
+inline void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {
     ScaleAdd(m1.x, m2.x, f, m1.x);
     ScaleAddEq(m1.y, m2.y, f);
     ScaleAddEq(m1.z, m2.z, f);
@@ -131,9 +124,38 @@ void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {
 // arguments live in the volatile registers.  MEASURED NEGATIVES: swapping the two
 // definitions so the callee comes second is byte-inert (the propagation is not
 // source-order dependent), and deleting the callee's body to force the
-// conservative prologue is blocked by check_undefined_decomp_symbols.  Reaching
-// the image needs the callee to be invisible to this TU, which it is not.
-void ScaleAddEq(Transform &tf1, const Transform &tf2, float f) {
+// conservative prologue is blocked by check_undefined_decomp_symbols.
+//
+// SOLVED (w8-p 2026-09-30), 63.267 -> 93.333: the callee does not have to be
+// invisible, it has to be a COMDAT.  ham_xbox_r.map's flag column distinguishes
+// the two, and we had been ignoring it: an ordinary out-of-line .cpp definition
+// is bare `f`, a COMDAT (inline / in-class / template) is `f i`.  Both
+// ScaleAddEq overloads are `f i` there (map lines 51286-51287, 826201c8 and
+// 82620268), as is ?GreaterEq@PatchVerts@@IBAHH@Z (8263c030) -- while
+// ?FaceCenter@@... (8263b860) and every RndMesh/DxMesh method we define
+// out-of-line are bare `f`.  So the image compiled these as inline functions.
+// A COMDAT callee may be replaced at link time by an equivalent definition from
+// another TU, so MSVC may NOT assume its register usage: the caller has to spill
+// to non-volatiles, which is exactly the 28-byte prologue gap described above.
+// Marking the Matrix3 overload `inline` reproduces it -- the whole prologue
+// (std r30/r31, stfd f31, mr r31,r3 / mr r30,r4 / fmr f31,f1) now matches, and
+// the 9 delete + 2 insert rows collapse to 6.
+// The same one-word change closed PatchVerts::HasVert (81.4 -> 100),
+// PatchVerts::Add (96.8 -> 100) and RndMesh::OnSync (97.6 -> canonical 100) in
+// rndobj/Mesh.cpp.  Check the map flag before certifying any residual of this
+// shape as a clobber-propagation floor.
+//
+// RESIDUAL 93.333 / 6 rows: an r30<->r31 + f0<->f13 exchange in the inlined
+// ScaleAdd(tf1.v, tf2.v, f, tf1.v) expansion -- the image loads tf2 (r30)
+// before tf1 (r31) at idx 10/12 and we load tf1 first -- plus the `stfs f0,
+// 0x34(r31)` at idx 18 vs 20 that follows from it.
+// `inline` here matches the map (82620268, `f i`) and is kept for fidelity, but
+// MEASURED (w8-p): it is inert for this function's own callers -- DxMesh::OnSync
+// stays at 95.08458 and CacheFurTransform at 99.55705.  Same for marking
+// DxMesh::FurWeight inline (also `f i`, 82622728): DrawFur stays at 98.45977.
+// The COMDAT lever only pays where the caller's residual actually IS the
+// conservative-prologue gap.
+inline void ScaleAddEq(Transform &tf1, const Transform &tf2, float f) {
     ScaleAddEq(tf1.m, tf2.m, f);
     ScaleAdd(tf1.v, tf2.v, f, tf1.v);
 }
@@ -222,9 +244,22 @@ bool DxMesh::CanDraw() const {
 void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
     MILO_ASSERT(mTransformCache.size() > i, 0x1ee);
     Transform &cached = mTransformCache[i];
-    float dx = cached.v.x - xfm.v.x;
-    float dy = cached.v.y - xfm.v.y;
+    // Declaration order is LOAD ORDER here, and it is measured rather than
+    // guessed: these three subtractions are the only thing that decides which
+    // of cached.v's three floats the image reads first at 0x30/0x34/0x38, and
+    // the offsets are charged (not a forgiven register permutation).  All six
+    // orders built and scored (w8-p 2026-09-30), norm / fuzzy:
+    //     dx/dy/dz  99.55705 / 98.08054      dx/dz/dy  99.57047 / 98.09396
+    //     dy/dx/dz  99.55705 / 98.14765      dy/dz/dx  99.55705 / 98.48322
+    //     dz/dx/dy  99.57047 / 98.16107      dz/dy/dx  99.57047 / 98.49664  <-- kept
+    // Note the two rulers disagree about the ranking, so picking on canonical
+    // alone would have stopped at dx/dz/dy and left 0.4pp of fuzzy on the table.
+    // The permutation the compiler applies is NOT a fixed function of
+    // declaration order -- dx/dy/dz loads (y,z,x) and dz/dx/dy loads (z,y,x) --
+    // so this had to be brute-forced.
     float dz = cached.v.z - xfm.v.z;
+    float dy = cached.v.y - xfm.v.y;
+    float dx = cached.v.x - xfm.v.x;
     if (Dot(xfm.m.y, cached.m.y) >= 0.8660254f
         && dx * dx + dy * dy + dz * dz < 2500.0f) {
         float invWeight = 1.0f - weight;
@@ -264,7 +299,7 @@ bool DxMesh::CheckFurTransformCache() {
     return false;
 }
 
-float DxMesh::FurWeight(RndMat *mat) {
+inline float DxMesh::FurWeight(RndMat *mat) {
     while (mat) {
         if (mat->GetFur()) {
             if (CheckFurTransformCache()) {

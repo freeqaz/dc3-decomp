@@ -59,6 +59,44 @@ struct CompressedVertex_Xbox {
 //     across each pair (504/504, 556/556), and we bank 96.190475% x 504 B +
 //     99.95683% x 556 B on the rnddx9 side today.  A rename hands rndobj about
 //     those same numbers and hands rnddx9 a hard 0.0.
+// w8-p 2026-09-30: THE REBIND WAS ACTUALLY PERFORMED AND MEASURED, because both
+// notes above argued it from the source rather than running it, and they
+// disagreed about the sign.  Verdict: w8-e's "ZERO-SUM" is CONFIRMED and w8-k's
+// "NET LOSS" is REFUTED -- it is an exact wash, to five decimals.
+//   Method: rebind both names in config/373307D9/symbols.txt to 0x8263A168 /
+//   0x8263A360 and delete the two fn_ lines.  dtk re-derives its own input on
+//   the first build (the fixed-point rule) -- it moves the names into sorted
+//   position and auto-names the vacated rnddx9 addresses fn_826202E0 /
+//   fn_826204D8 -- and the second build is stable, split-guard green both times.
+//   ADDRESS-RANGE TEST from config/373307D9/splits.txt: rnddx9/Mesh.cpp .text is
+//   [0x82620180, 0x82622AF0) and holds 0x826202E0 + 0x826204D8; rndobj/Mesh.cpp
+//   .text is [0x82639738, 0x826465E8) and holds 0x8263A168 + 0x8263A360.
+//   Result, whole binary, full ninja each way:
+//       matched_functions  31356 -> 31356   (no change)
+//       matched_code     5563700 -> 5563700 (no change)
+//       canonical          55.59% -> 55.59%
+//     0 regressions over 48,367 rows; the only movement is 4 only-in-current /
+//     4 only-in-baseline symbol-identity rows, i.e. the names themselves moving.
+//   The rndobj copies score EXACTLY what the rnddx9 copies scored: PackVector
+//   96.190475 norm / 94.920631 fuzzy, FillCompressedVertex 99.956833 /
+//   99.848923 -- identical to five decimals, because it is the same shared body.
+//
+// ⚠ A PREDICTION OF MINE THAT THE MEASUREMENT KILLED, recorded so nobody rebuilds
+// it: I expected the moved side to score LOWER, on the reasoning that rndobj's
+// FillCompressedVertex would then call a target-side `fn_8263A168` while our
+// object emits `?PackVector@@...`, costing a relocation-name row under
+// name_check.  It does not, because BOTH names move together -- the intra-pair
+// call is named on whichever side holds the names.  The pair is exactly
+// symmetric.
+//
+// WHAT THIS SETTLES about the "+2 functions / +1060 B" framing: reaching 100 is a
+// property of the SHARED BODY, not of which side is named.  Whichever side holds
+// the names gets precisely the shared body's score, so the rebind neither
+// unlocks the prize nor blocks it.  And on matched_code specifically the parked
+// "partial credit" is worth ZERO either way, since report.json banks matched_code
+// only at fuzzy == 100 and neither row is at 100 on either side.  The prize is
+// unlocked by taking PackVector past 96.190475, after which it lands wherever the
+// names already are.  So there is no reason to rebind, in either direction.
 // Do not re-open this as a symbols.txt task.  The open work is PackVector's
 // 96.190475% in the shared body below, which is a rnddx9/Mesh row, not a
 // rndobj/Mesh one.
@@ -134,6 +172,38 @@ static inline unsigned short FloatToHalf(float value) {
 // PackVector callee each TU resolves to its own copy of.  config/symbols.txt
 // can only carry one symbol per name, so it names 826204d8 and leaves the
 // rndobj copy as the placeholder `fn_8263A360`.
+// RESIDUAL 99.95683 / 8 rows (w8-p 2026-09-30), and the 8 rows are ONE decision
+// twice over: which member of a pair is converted 3rd vs 4th, after which the
+// register and stack-slot assignment follows mechanically.
+//   * colour group, idx 7/9/34/35: the image assigns f13,f12,f11,f10 <-
+//     green,blue,ALPHA,RED (`lfs f11,0x3c(r4)` / `lfs f10,0x30(r4)` at
+//     0x826204F4 / 0x826204FC) and we assign green,blue,RED,ALPHA.  The first
+//     two agree, so it is only the last pair.  Downstream, the image converts
+//     red 4th into the SECOND scratch slot (`fctidz f0,f0` + `stfd f0,0x60(r1)`
+//     at 0x82620550/54, read back `lwz r28,0x64(r1)`) while alpha goes through
+//     0x50/0x54 into r29; we route alpha through the second slot instead, which
+//     is the whole of the `rlwimi r28,r29` <-> `rlwimi r29,r28` row pair at
+//     0x82620560/64.  Both spellings compute (alpha<<8)|(red&0xFF) correctly.
+//   * normal group, idx 102/103/105/113: the image loads norm.z (0x18) BEFORE
+//     norm.y (0x14) -- `lfs f11,0x18(r31)` / `lfs f13,0x14(r31)` at
+//     0x82620670 / 0x82620674 -- then stores y to 0x64(r1) and z to 0x68(r1);
+//     we load y first and store the same two values to the same two slots.
+//     Semantically identical, f11<->f13 exchanged.
+// MEASURED NEGATIVES (w8-p, each a full post-compile build, each EXACTLY inert
+// -- identical 8-row table, identical 99.84892 fuzzy, not merely the same
+// rounded canonical):
+//   1. swapping the `alpha`/`red` declarations, and separately the
+//      `normZ`/`normY` declarations, so the pair is declared the other way up;
+//   2. deleting the `normZ`/`normY` locals altogether and writing
+//      `Vector4 normVec(vert.norm.x, vert.norm.y, vert.norm.z, 0.0f)` -- the
+//      right-to-left argument evaluation that fixed RndText::SetColor (w7-bx)
+//      does NOT reach these loads, because the locals were never what pinned
+//      them;
+//   3. commuting the innermost `|` to `(red & 0xFF) | (alpha << 8)`, which under
+//      right-to-left evaluation should have converted alpha first.
+// The scheduler, not the source, picks which conversion gets the second scratch
+// slot; all three source-visible orderings produce the same bytes.  Do not retry
+// declaration order, argument inlining, or commuting this `|`.
 static void FillCompressedVertex(
     CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool normalize
 ) {
