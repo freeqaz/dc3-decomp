@@ -256,7 +256,14 @@ TEST_F(RndCamProjectionTest, HamListRibbonUsesUniformSpacingForFiveVisibleItems)
     }
 }
 
-TEST_F(RndCamProjectionTest, UIListMeshDrawTemporarilyShowsHiddenTemplateMesh) {
+// UIListMeshElement::Draw (827C2888, 100% matched, 106/106 instructions) hands
+// the list's template mesh to DrawShowing() exactly as the file ships it --
+// hidden -- and never touches its Showing flag. This test used to pin a native
+// SetShowing(true)/restore around the call, which existed only because the
+// native RndMesh::DrawShowing refused hidden named meshes; the image's
+// DxMesh::DrawShowing (826229B0) has no such test, and neither does the native
+// one now (see NativeSuspectsTest.MeshDrawShowingDrawsAHiddenNamedMesh).
+TEST_F(RndCamProjectionTest, UIListMeshDrawDrawsHiddenTemplateMeshAsShipped) {
     TestUIListMesh listMesh;
     HiddenTemplateMesh mesh;
     RndMat *mat = Hmx::Object::New<RndMat>();
@@ -273,7 +280,8 @@ TEST_F(RndCamProjectionTest, UIListMeshDrawTemporarilyShowsHiddenTemplateMesh) {
     element.Draw(tf, 1.0f, nullptr, nullptr);
 
     EXPECT_EQ(mesh.mDrawShowingCalls, 1);
-    EXPECT_TRUE(mesh.mShowingInsideDraw);
+    EXPECT_FALSE(mesh.mShowingInsideDraw)
+        << "the image draws the template with its Showing flag as shipped (false)";
     EXPECT_FALSE(mesh.Showing());
 }
 
