@@ -52,9 +52,6 @@ MultiUserGesturePanel::MultiUserGesturePanel() {
         mOutfitProviders[i].SetPlayer(i);
         mDifficultyProviders[i].SetPlayer(i);
     }
-#ifdef HX_NATIVE
-    mNativeEnterPending = false;
-#endif
 }
 
 void MultiUserGesturePanel::Enter() {
@@ -66,34 +63,25 @@ void MultiUserGesturePanel::Enter() {
     }
     UpdateProviders();
 #ifdef HX_NATIVE
-    mNativeEnterPending = true;
+    // Xbox associates the player's pad during Kinect skeleton enrollment
+    // (SkeletonIdentifier), well before this screen; native has no
+    // enrollment, so the local player would keep PadNum()==-1 and its
+    // per-profile scoring / accomplishment rewards (which resolve through
+    // GetProfileFromPad(PadNum())) would silently no-op.  Associate the local
+    // player with pad 0 here -- the native single-player stand-in for
+    // enrollment having completed.  This is ONLY the pad association: the
+    // screen itself is driven by controller input exactly as on the 360
+    // (seldiff_pane -> startgame_pane -> readywait/start_game), see
+    // docs/decomp/patterns/native-shadow-bodies-are-unmeasured.md.
+    TheGameData->SetAssociatedPadNum(0, 0);
 #endif
 }
 
 void MultiUserGesturePanel::Poll() {
     if (!TheUI->InTransition()) {
-#ifdef HX_NATIVE
-        // No Kinect skeleton chooser on native — fire enter_gameplay directly
-        // (on Xbox, this fires from DTA once skeleton assignment completes)
-        if (mNativeEnterPending) {
-            mNativeEnterPending = false;
-            // Xbox assigns player pads during Kinect skeleton enrollment (via
-            // SkeletonIdentifier) before enter_gameplay fires; native has no
-            // enrollment, so the local player would keep PadNum()==-1 and its
-            // per-profile scoring / accomplishment rewards (which resolve through
-            // GetProfileFromPad(PadNum())) would silently no-op. Associate the
-            // local player with pad 0 here — the native single-player equivalent
-            // of enrollment completing.
-            TheGameData->SetAssociatedPadNum(0, 0);
-            static Symbol enter_gameplay("enter_gameplay");
-            static DataArrayPtr dataPtr(enter_gameplay);
-            dataPtr->Execute();
-        }
-#else
         // UpdateNavLists manages Kinect skeleton tracking IDs for nav lists
         for (int i = 0; i < 2; i++)
             UpdateNavLists(i);
-#endif
         UpdateProviderPlayerIndices();
     }
     TexLoadPanel::Poll();

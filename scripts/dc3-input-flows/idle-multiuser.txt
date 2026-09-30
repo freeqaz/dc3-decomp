@@ -1,0 +1,28 @@
+# Boot to multiuser_screen, then press NOTHING.
+#
+# The control for DtaFlowTest's multiuser tests: on the 360 the multiuser
+# screen only leaves through its own panes (seldiff -> startgame `play` ->
+# readywait `skip_waiting` -> start_game), i.e. through input.  With no
+# input it must still be on multiuser_screen when the run ends.  A native
+# auto-fire of enter_gameplay on the first frame (removed on native-gameflow)
+# made it leave for loading_screen with no input at all.
+#
+# Same route as ymca.txt up to song select.
+wait_screen title_screen
++30 confirm
+
+wait_screen main_screen
++30 confirm
+
+wait_screen choose_mode_screen
++30 confirm
+
+wait_screen song_select_screen
++30 down
++45 down
++60 down
++75 down
++90 confirm
+
+wait_screen multiuser_screen
+# (no input)

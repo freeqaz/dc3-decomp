@@ -3,13 +3,13 @@
 # Navigates through the complete screen chain:
 #   attract -> (auto) autosave_warning -> (auto) title
 #   -> (auto) wait_main_after_saveload -> main -> choose_mode
-#   -> song_select -> (auto) multiuser -> loading -> preloading
-#   -> real_loading -> game_screen
+#   -> song_select -> multiuser (difficulty, play, skip_waiting) -> loading
+#   -> preloading -> real_loading -> game_screen
 #
 # Splash screens (ESRB/Harmonix logos) happen during App init before the
 # UI screen system starts, so no input is needed to dismiss them.
-# autosave_warning_screen, wait_main_after_saveload_screen, and
-# multiuser_screen all auto-advance without input.
+# autosave_warning_screen and wait_main_after_saveload_screen auto-advance
+# without input.
 #
 # IMPORTANT: +N offsets are all relative to the LAST wait_screen satisfaction
 # frame, NOT to the previous directive. They must be monotonically increasing.
@@ -55,6 +55,15 @@ wait_screen song_select_screen
 +75 down
 +90 confirm
 
-# multiuser_screen auto-advances (no input needed).
+# multiuser_screen is driven by the controller, as on the 360: the focused
+# list (right_hand_p1) is seldiff_pane -> confirm the highlighted difficulty;
+# startgame_pane -> confirm `play` (ready); readywait_pane -> confirm
+# `skip_waiting` -> start_game -> enter_gameplay.  Each pane change replays the
+# list's enter animation (presses dropped meanwhile), hence the spacing.
+wait_screen multiuser_screen
++40 confirm
++110 confirm
++180 confirm
+
 # Loading screens auto-advance via DTA handlers:
 #   loading -> preloading -> real_loading -> game_screen

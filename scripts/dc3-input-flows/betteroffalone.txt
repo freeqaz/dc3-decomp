@@ -23,5 +23,11 @@ wait_screen song_select_screen
 +90 down
 +105 confirm
 
-# multiuser_screen auto-advances (no input needed).
+# multiuser_screen: controller input, as on the 360 (see ymca.txt):
+# difficulty, `play`, `skip_waiting` -> start_game -> enter_gameplay.
+wait_screen multiuser_screen
++40 confirm
++110 confirm
++180 confirm
+
 # Loading screens auto-advance via DTA handlers.

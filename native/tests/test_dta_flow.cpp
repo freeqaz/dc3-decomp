@@ -2,7 +2,8 @@
 //
 // Verifies the full DTA-driven panel flow works end-to-end using the ymca.txt
 // input script: boot → attract → title → main → choose_mode → song_select
-// → multiuser → loading → preloading → real_loading → game_screen.
+// → multiuser (driven by controller input: difficulty, play, skip_waiting)
+// → loading → preloading → real_loading → game_screen.
 //
 // Gated by DC3_DTA_FLOW_TESTS=1 (requires game assets).
 // Pattern: subprocess-based, single engine run shared via SetUpTestSuite.
@@ -65,9 +66,10 @@ static bool FileExists(const std::string &p) {
     return ::stat(p.c_str(), &st) == 0;
 }
 
-static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120) {
+static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120,
+                               const char *scriptName = "ymca.txt") {
     std::string binary = GetDc3NativePath();
-    std::string script = GetScriptDir() + "/ymca.txt";
+    std::string script = GetScriptDir() + "/" + scriptName;
 
     // Check the prerequisites BEFORE running, so a missing one is reported as
     // itself instead of as seven content assertions about gameplay.
@@ -183,9 +185,12 @@ bool DtaFlowTest::sRanEngine = false;
 // ===========================================================================
 
 TEST_F(DtaFlowTest, EnterGameplayFired) {
-    // The DTA flow navigates through multiuser_screen which fires
-    // enter_gameplay. This transitions to loading_screen, proving
-    // the DTA function executed.
+    // The DTA flow navigates through multiuser_screen, whose start_game
+    // (reached with the controller: seldiff_pane -> startgame_pane `play` ->
+    // readywait_pane `skip_waiting`) fires enter_gameplay. This transitions
+    // to loading_screen, proving the DTA function executed.  There is no
+    // native auto-fire any more: the image's MultiUserGesturePanel::Poll
+    // (82942EB8) only runs UpdateNavLists / UpdateProviderPlayerIndices.
     EXPECT_TRUE(outputContains("Screen 'multiuser_screen' Exit (to 'loading_screen')"))
         << "multiuser_screen never transitioned to loading_screen — "
         << "enter_gameplay DTA function didn't fire from the menu flow";
@@ -278,4 +283,57 @@ TEST_F(DtaFlowTest, SongLoadChainRunsOncePerSong) {
         n++;
     EXPECT_EQ(n, 1u) << "the song load chain ran " << n
                      << " times in one song (Restart reset mLoadState)";
+}
+
+// ===========================================================================
+// multiuser_screen waits for input
+// ===========================================================================
+//
+// Image: ?Poll@MultiUserGesturePanel@@UAAXXZ (82942EB8) is UpdateNavLists x2,
+// UpdateProviderPlayerIndices, TexLoadPanel::Poll -- nothing that leaves the
+// screen.  It leaves through its DTA panes' start_game, i.e. through input.
+// A native-only mNativeEnterPending executed enter_gameplay on the first
+// non-transition frame, skipping difficulty / character / crew select, the
+// readywait pane and start_game itself (enter_game.flow, the campaign state
+// step).  idle-multiuser.txt drives to multiuser_screen and presses nothing.
+
+class DtaFlowIdleMultiuserTest : public ::testing::Test {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS"))
+            return;
+        sResult = RunDtaFlow(2500, 120, "idle-multiuser.txt");
+        sRanEngine = true;
+    }
+
+    void SetUp() override {
+        if (!getenv("DC3_DTA_FLOW_TESTS"))
+            GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+        if (!sRanEngine)
+            GTEST_SKIP() << "Engine did not run (SetUpTestSuite failed)";
+        if (!sResult.setupError.empty())
+            GTEST_FAIL() << "DtaFlowIdleMultiuserTest could not run the engine.\n"
+                         << sResult.setupError;
+    }
+
+    bool outputContains(const char *needle) const {
+        return sResult.output.find(needle) != std::string::npos;
+    }
+};
+
+DtaRunResult DtaFlowIdleMultiuserTest::sResult = {};
+bool DtaFlowIdleMultiuserTest::sRanEngine = false;
+
+TEST_F(DtaFlowIdleMultiuserTest, MultiuserScreenWaitsForInput) {
+    ASSERT_TRUE(outputContains("Screen 'multiuser_screen' Enter"))
+        << "precondition: the route never reached multiuser_screen";
+    EXPECT_FALSE(outputContains("Screen 'multiuser_screen' Exit"))
+        << "multiuser_screen left with no input at all -- something executed "
+           "enter_gameplay / goto_screen on its own";
+    EXPECT_FALSE(outputContains("Screen 'loading_screen' Enter"))
+        << "loading_screen entered with no input on multiuser_screen";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }

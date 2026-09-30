@@ -14,7 +14,9 @@ HOW
     of each distinct message (MILO_BT_BASE / MILO_BT / MILO_BT_END);
   * drives the menus with a generated MILO_INPUT_SCRIPT (route_input.txt:
     title -> main -> choose_mode[--mode-downs] -> song_select[--song-downs] ->
-    --confirm-screens -> --post-screens).  NOT with /api/input/press, which is
+    multiuser_screen[--multiuser: controller presses through its panes, as on
+    the 360 -- there is no native auto-advance] -> --confirm-screens ->
+    --post-screens).  NOT with /api/input/press, which is
     dead in dc3-native (see launch());
   * watches progress over the HTTP debug server using ONLY side-effect-free
     probes (screen, frame, telemetry, screenshot).  It deliberately never calls
@@ -39,6 +41,9 @@ DENOMINATOR
 USAGE
   perform (default route):
     python3 scripts/native_assert_harvest.py --out /tmp/h-perform
+  dance battle (both multiuser sides readied with the controller):
+    python3 scripts/native_assert_harvest.py --out /tmp/h-battle --port 9195 --mode-downs 2 \
+        --post-screens dancebattle_perform_endgame_screen,dancebattle_perform_complete_screen
   practice:
     python3 scripts/native_assert_harvest.py --out /tmp/h-practice --port 9195 \
         --mode-downs 1 --confirm-screens seldiff_practice_screen,startgame_practice_screen \
@@ -204,6 +209,33 @@ class Harvest:
             lines.append(f"+{t} down")
             t += 15
         lines.append(f"+{t} confirm")
+        # multiuser_screen is driven by controller input as on the 360 (native
+        # is pinned in controller mode).  Its two nav lists (right_hand_p1 /
+        # right_hand_p2) each walk seldiff_pane -> startgame_pane; `play` sets
+        # the side ready, and in controller mode can_enter_game needs BOTH
+        # sides ready unless the side's readywait_pane offers skip_waiting
+        # (modes that do not require 2 players).  Every pane change replays
+        # the list's enter animation, during which presses are dropped, so
+        # presses are MULTIUSER_GAP frames apart.  Offsets are relative to the
+        # wait_screen, so they must increase.
+        mu = a.multiuser
+        if mu == "auto":
+            mu = {0: "solo", 2: "duo"}.get(a.mode_downs, "none")
+        if mu != "none":
+            MULTIUSER_GAP = 70
+            presses = ["confirm", "confirm"]            # side 0: difficulty, play
+            if mu == "solo":
+                presses += ["confirm"]                  # readywait: skip_waiting
+            else:
+                # DLeft moves focus right_hand_p1 -> right_hand_p2
+                # (MultiUserGesturePanel::OnMsg(ButtonDownMsg)); side 1:
+                # difficulty, play -> both ready -> start_game.
+                presses += ["left", "confirm", "confirm"]
+            lines.append("wait_screen multiuser_screen")
+            t = 40
+            for b in presses:
+                lines.append(f"+{t} {b}")
+                t += MULTIUSER_GAP
         # Mode-specific screens between song select and gameplay (practice's
         # seldiff_practice_screen, ...): confirm each, in order.
         for scr in [x for x in a.confirm_screens.split(",") if x]:
@@ -510,6 +542,11 @@ def main():
     ap.add_argument("--post-screens",
                     default="perform_final_results_screen,perform_complete_screen",
                     help="comma list of post-song screens to confirm, in order")
+    ap.add_argument("--multiuser", choices=["auto", "none", "solo", "duo"], default="auto",
+                    help="how to drive multiuser_screen: solo = one side, then "
+                         "skip_waiting; duo = ready both sides (modes requiring 2 "
+                         "players); auto = solo for perform, duo for dance battle, "
+                         "none otherwise (practice does not pass multiuser_screen)")
     ap.add_argument("--gameplay-timeout", type=int, default=3600,
                     help="hard cap on the gameplay stage, seconds")
     ap.add_argument("--stall-timeout", type=int, default=180,
