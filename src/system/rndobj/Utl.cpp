@@ -837,6 +837,17 @@ void SortXfms(RndMultiMesh *mesh, const Vector3 &vec) {
 // -- reads 99.931 canonical but 94.4 raw, i.e. it ADDS an OFFSET_SWAP of
 // (0x34,0x3c) and four register swaps.  Under /fp:fast MSVC re-associates the
 // flat sum itself, so the parenthesisation below is not what selects the order.
+// RESIDUAL (w9-f, 99.93104 canonical / 97.69 fuzzy, 116 B): 8 rows of 29.  Six
+// are FPR renames; the two that cost canonical are an OFFSET SWAP at idx 5/10 --
+// the image loads mesh2.v.z (0x3c) at 8262E44C and mesh2.v.y (0x38) at 8262E460,
+// we load them the other way round.  The ASSOCIATION is already right: reading
+// the fmadds chain at 8262E480-8262E494, the image computes mesh1 as
+// y + (x + z) and mesh2 as y + (z + x), which is what is written below.
+// REFUTED (w9-f): re-spelling the mesh2 sum as `y + (z + x)` to move the load
+// order -- i.e. hoisting the y term to the front and parenthesising (z + x),
+// which is literally the image's shape -- makes it WORSE, not better: 8 rows ->
+// 13, raw 97.17 -> 94.4, and the offset swap merely moves from (0x38,0x3c) to
+// (0x34,0x3c).  The two loads are independent and MSVC orders them itself.
 bool XfmSort(RndMultiMesh::Instance &mesh1, RndMultiMesh::Instance &mesh2) {
     return (mesh1.mXfm.v.y - gUtlXfms.y) * (mesh1.mXfm.v.y - gUtlXfms.y)
             + ((mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)
