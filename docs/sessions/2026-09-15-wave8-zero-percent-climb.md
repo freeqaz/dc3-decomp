@@ -786,3 +786,57 @@ unnecessary; the "preserve line numbers before any assert macro" rule is
 withdrawn; and the `HamDirector` dead-native-walk handover is **not** blocked by a
 40-assert cost, because that cost does not exist. It needs an object hash and a
 row diff like any other edit.
+
+### A concurrent build in the same checkout SIGBUSes the compiler through the PCH
+
+The wave's closing native gate returned wrapper **exit 6 (build failed)** with **18
+objects** dying on `clang++: error: clang frontend command failed with exit code
+135` — full LLVM stack traces, no source diagnostic. Not load: 300 GB free disk,
+33 GB available RAM, load 59 at launch.
+
+**Exit 135 is 128+7, SIGBUS.** In a compiler that means a memory-mapped input was
+rewritten underneath it, and the mapped input in a CMake build is the
+**precompiled header**. The crash preamble named the site:
+
+```
+1. <eof> parser at end of file
+2. <invalid>: instantiating function definition 'ObjPtr<Task>::ObjPtr'
+3. <invalid>: instantiating function definition 'ObjRefConcrete<Task>::ObjRefConcrete'
+```
+
+**What actually happened.** I launched the PPC `ninja` and `scripts/native_test.sh`
+*in parallel in the same checkout*, reasoning they were isolated because one writes
+`build/373307D9` and the other `native/build`. That is true of the PPC build alone —
+but `native_test.sh` **builds and can reconfigure**, and another session had just
+landed a change shrinking `obj/ObjPtr_p.h` from 37,618 to 34,606 bytes, so
+`native/build`'s PCH needed rebuilding. Compiles that had mmap'd the old PCH met a
+rewritten one.
+
+Three measurements, converging:
+- Re-running the exact failing command verbatim gives a clean diagnostic, **not** a
+  crash: `fatal error: file ObjPtr_p.h has been modified since the precompiled
+  header was built: size changed (was 37618, now 34606)`.
+- Rebuilding the PCH and the same object through `ninja`, nothing else running,
+  **exits 0**.
+- The session that owned the suspect commit built `milo-viewer` from scratch in a
+  **fresh worktree with a private build dir**: **881/881 objects, exit 0, zero
+  crash markers.** Source exonerated.
+
+**Two rules worth keeping.**
+1. **"Different build directories" is not isolation when one of the jobs is
+   `native_test.sh`.** It builds, and it may reconfigure. Run it alone, and verify
+   nothing holds its build dir first — scoped by **cwd**, never by process name.
+2. **Gate after any merge that touches a PCH-reached header, not only at the end of
+   a wave.** `tree_sha256` identical proves the *PPC* graph is untouched and says
+   nothing about whether `native/build`'s PCH survives that header changing size.
+   Separate graphs, separate staleness.
+
+⚠ **And a process failure of mine worth recording next to it.** I messaged the
+owning session that their commit was the likely cause *before* I had a
+reproduction — on a strong correlation (their change shrank exactly the header the
+PCH was stale against) plus a plausible mechanism. That is the same shape as the
+`__LINE__` error retracted above, committed within the hour, against a different
+person's work. I sent the correction as soon as the PCH diagnostic appeared, which
+is the only part of the sequence worth repeating. **Correlation plus a plausible
+mechanism is not attribution, and the cost of a wrong attribution falls on someone
+else's afternoon.**
