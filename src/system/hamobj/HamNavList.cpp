@@ -1597,11 +1597,7 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
 
     bool inControllerMode = InControllerMode();
     if ((inControllerMode || TheLoadMgr.EditMode())
-#ifdef HX_NATIVE
-        && mEnabled) {
-#else
         && !RndAnimatable::IsAnimating() && mEnabled) {
-#endif
         bool gesturing = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
         if (!gesturing && TheUI->FocusComponent() == this) {
             int dir = ScrollDirection(msg, false, true, 1);

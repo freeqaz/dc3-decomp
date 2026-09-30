@@ -14,8 +14,10 @@
 # IMPORTANT: +N offsets are all relative to the LAST wait_screen satisfaction
 # frame, NOT to the previous directive. They must be monotonically increasing.
 #
-# NOTE: With DC3_FAST_BOOT=1, transitions complete in ~10 frames. Use short
-# confirm delays (+10) so the button fires on the current screen, not the next.
+# NOTE: A HamNavList ignores buttons while its enter animation runs (~20 UI
+# frames -- the image's HamNavList::OnMsg(ButtonDownMsg) checks IsAnimating()),
+# so the first press on title/main/choose_mode waits +30.  With DC3_FAST_BOOT=1
+# title_screen auto-advances after 60 frames, so its confirm must land before.
 #
 # Usage:
 #   MILO_HEADLESS=1 MILO_FATAL_FAILS=0 \
@@ -31,16 +33,16 @@ wait_screen attract_screen
 # autosave_warning_screen auto-transitions to title_screen.
 # Title screen -- press confirm to proceed.
 wait_screen title_screen
-+10 confirm
++30 confirm
 
 # wait_main_after_saveload_screen auto-transitions to main_screen.
 # Main screen -- select "gameplay" (first item).
 wait_screen main_screen
-+10 confirm
++30 confirm
 
 # Choose mode -- select "perform" (first item).
 wait_screen choose_mode_screen
-+10 confirm
++30 confirm
 
 # Song select -- YMCA is at index 4 (after finish_setlist, playlists,
 # song_tier_0 header, thehustle). 4 downs + confirm selects it.

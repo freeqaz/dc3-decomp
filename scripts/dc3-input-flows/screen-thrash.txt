@@ -16,150 +16,150 @@ wait_screen attract_screen
 
 # cycle 1
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 2
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 3
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 4
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 5
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 6
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 7
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 8
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 9
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 10
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 11
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 12
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 13
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 14
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 15
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 16
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 17
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 18
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 19
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 20
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 21
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 22
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 23
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 24
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel
 
 # cycle 25
 wait_screen main_screen
-+15 confirm
++30 confirm
 wait_screen choose_mode_screen
-+15 cancel
++30 cancel

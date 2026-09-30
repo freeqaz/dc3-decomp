@@ -172,8 +172,8 @@ class Harvest:
         #  * the title screen must be CONFIRMED, not skipped: title_panel's
         #    NAV_SELECT_MSG is what sets $post_load_dest_screen.  DC3_FAST_BOOT's
         #    native boot-advance (UIManager::Poll, HX_NATIVE) jumps title_screen ->
-        #    wait_main_after_saveload_screen after 10 frames without it, and an
-        #    HTTP round trip cannot reliably beat a 10-frame window;
+        #    wait_main_after_saveload_screen after 60 frames without it, and an
+        #    HTTP round trip cannot reliably land inside that window;
         #  * /api/input/press is DEAD in dc3-native: it answers {"ok":true} but
         #    the press never reaches a pad.  Since the shared-engine extraction
         #    the Joypad_Native.cpp that links is milo-native-engine's, compiled
@@ -184,10 +184,16 @@ class Harvest:
         #    immediate or delayed.
         # The in-engine input-script runner is the only working input path.
         a = self.args
-        lines = ["wait_screen title_screen", "+2 confirm",
-                 "wait_screen main_screen", "+10 confirm",
+        # A HamNavList ignores every button while its enter animation runs
+        # (~20 UI frames; the image's HamNavList::OnMsg(ButtonDownMsg) checks
+        # IsAnimating(), and native now does too), so the first press on each
+        # nav-list screen waits NAV_SETTLE frames.  On title_screen it must
+        # also land before the 60-frame fast-boot skip.
+        NAV_SETTLE = 30
+        lines = ["wait_screen title_screen", f"+{NAV_SETTLE} confirm",
+                 "wait_screen main_screen", f"+{NAV_SETTLE} confirm",
                  "wait_screen choose_mode_screen"]
-        t = 10
+        t = NAV_SETTLE
         for _ in range(a.mode_downs):
             lines.append(f"+{t} down")
             t += 15
