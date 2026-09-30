@@ -188,11 +188,17 @@ void RndMorph::SetFrame(float frame, float blend) {
                     intenseInterp *= blend;
                     if (b3) {
                         b3 = false;
+                        // target = pose * w.  Scale(src, f, dst): the image
+                        // reads the pose verts and writes the target's
+                        // (same direction as the ScaleAddEq loop below).
+                        // The arguments were reversed, which overwrote the
+                        // POSE mesh with target*w every frame and left the
+                        // target unset.
                         for (; targetIt != vertEnd && itVert != itVertEnd;
                              ++targetIt, ++itVert) {
-                            Scale(targetIt->pos, intenseInterp, itVert->pos);
+                            Scale(itVert->pos, intenseInterp, targetIt->pos);
                             if (mNormals) {
-                                Scale(targetIt->norm, intenseInterp, itVert->norm);
+                                Scale(itVert->norm, intenseInterp, targetIt->norm);
                             }
                         }
                     } else {
