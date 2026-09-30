@@ -31,7 +31,13 @@ namespace {
         bool isPhys = (p1 & 0x80000000) != 0;
         unsigned int type = p1 >> 0x10 & 0xff;
 
-        switch (type) {
+        // XTL allocator IDs start at 128 (eXALLOCAllocatorId_D3D = 0x80; 0-0x7f
+        // are the game's own, 0xc0+ middleware -- see the default arm).  The
+        // image switches on `type - 0x80` (`subi r9, r10, 0x80; cmplwi r9,
+        // 0x3e`).  Switching on `type` labelled the GAME's allocator IDs 0-0x3e
+        // as XTL:D3D, XTL:D3DX, ... and sent every real XTL allocation to
+        // "XTL:Unknown" in the memory tracker.
+        switch (type - 0x80) {
         case 0:
             if (isPhys) {
                 if (gPhysicalType != gNullStr) {

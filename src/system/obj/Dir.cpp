@@ -726,7 +726,10 @@ void ObjectDir::ResetViewports() {
     vp[1].mXfm.v.Set(-768, 0, 0);
     vp[2].mXfm.m.Set(0, 1, 0, -1, 0, 0, 0, 0, 1);
     vp[2].mXfm.v.Set(768, 0, 0);
-    vp[3].mXfm.m.Set(1, 0, 0, 0, 0, 1, 0, 1, 0);
+    // The image stores -1.0 at m.y.z (`stfs f13, 0xd8(r31)`, f13 = -1.0): with
+    // +1 this basis has determinant -1, i.e. viewport 3 was a MIRROR image,
+    // not a rotation.  vp[4] below is the proper rotation the other way.
+    vp[3].mXfm.m.Set(1, 0, 0, 0, 0, -1, 0, 1, 0);
     vp[3].mXfm.v.Set(0, 0, 768);
     vp[4].mXfm.m.Set(1, 0, 0, 0, 0, 1, 0, -1, 0);
     vp[4].mXfm.v.Set(0, 0, -768);

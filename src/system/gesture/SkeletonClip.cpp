@@ -82,8 +82,13 @@ void SkeletonClip::LoadFrame(BinStream &bs, RecordedFrame &frame, int version) {
         bs >> frame.mFloorClipPlane;
     } else {
         frame.mElapsedMs = 0x21;
-        frame.mFloorNormal.Set(0, 0, 1);
-        frame.mFloorClipPlane.Set(0, 0, 1, 0);
+        // The image's version<=1 defaults are a Y-UP floor normal and an
+        // all-zero clip plane (`stfs 1.0 -> 0xc`, zeros to 0x8/0x10/0x18-0x24):
+        // Kinect camera space is Y-up, and (0,0,0,0) is the SDK's "no floor
+        // detected" plane.  (0,0,1) / (0,0,1,0) tilted every legacy clip's
+        // floor onto the camera axis.
+        frame.mFloorNormal.Set(0, 1, 0);
+        frame.mFloorClipPlane.Set(0, 0, 0, 0);
     }
 
     bs >> frame.mIsTracked;

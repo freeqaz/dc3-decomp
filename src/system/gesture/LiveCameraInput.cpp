@@ -863,15 +863,25 @@ void LiveCameraInput::PollNewStream(BufferType buf) {
 
 void *LiveCameraInput::StreamBufferData(BufferType type) const {
     MILO_ASSERT(type < kBufferNum, 0x1FC);
-    int i3;
+    // The player buffers have no stream of their own: kBufferPlayer reads the
+    // DEPTH stream (player index lives in the depth frame) and
+    // kBufferPlayerColor the COLOR stream.  The image selects the stream as
+    //   type == 2 ? 1 : (subfic/subfe mask of type != 3) & type
+    // and then reads that stream's frame at mReadIdx (`lwz r11, 0x1458(r11)`,
+    // Buffer+0x10).  We indexed mStreams[type] -- whose player entries are
+    // never filled -- with a 0/1 derived from the type, so the player
+    // buffers always came back null and the colour/depth ones ignored
+    // mReadIdx (the double-buffer slot PollNewStream just released).
+    BufferType stream;
     if (type == kBufferPlayer) {
-        i3 = 1;
+        stream = kBufferDepth;
     } else {
-        i3 = type == kBufferPlayerColor ? 1 : 0;
+        stream = type == kBufferPlayerColor ? kBufferColor : type;
     }
-    auto& _sub1 = mStreams[type];
-    if (_sub1.mFrames[i3]) {
-        return _sub1.mFrames[i3]->pFrameTexture;
+    const Buffer &buf = mStreams[stream];
+    const NUI_IMAGE_FRAME *frame = buf.mFrames[buf.mReadIdx];
+    if (frame) {
+        return frame->pFrameTexture;
     } else {
         return nullptr;
     }

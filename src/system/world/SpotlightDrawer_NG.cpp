@@ -522,8 +522,10 @@ void NgSpotlightDrawer::SetupForPostProcess() {
     } else {
         recipFarPlane = 0.0f;
     }
+    // .y is the far-plane DISTANCE (`stfs f13, 0x64(r1)`, f13 = mFarPlane as
+    // loaded for the > 0 test); only .z is zero.  We passed 0.0 in .y.
     Vector4 intensityParams(
-        mParams.mIntensity * sPostIntensityScale, 0.0f, 0.0f, recipFarPlane
+        mParams.mIntensity * sPostIntensityScale, farPlane, 0.0f, recipFarPlane
     );
     TheShaderMgr.SetPConstant((PShaderConstant)0x5B, intensityParams);
     Hmx::Color c = mParams.mColor;

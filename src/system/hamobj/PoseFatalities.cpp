@@ -208,8 +208,17 @@ void PoseFatalities::EndFatal(int player) {
     }
     mCurrentCombo[player] = 0;
     if (!DataVariable("restart_fatals").Int() && !InStrikeAPose()) {
+        // "no player is still in a fatality": the image's mask is
+        // `subic r10,r10,1; subfe r10,r10,r10` = (x == 0) ? -1 : 0.  The old
+        // `b10 &= mInFatality[i] != 0` compiled to `subfe r10,r8,r10` =
+        // (x != 0) ? 1 : 0 -- the opposite truth value; since
+        // mInFatality[player] is cleared above, it was false in the normal
+        // case and mAnimTimer was not armed.  Spelled as an if, MSVC
+        // if-converts it into exactly the image's mask; `b10 &= x == 0`,
+        // `!x` and `x ? false : true` are correct but emit cntlzw/extrwi.
         for (int i = 0; i < 2; i++) {
-            b10 &= mInFatality[i] != 0;
+            if (mInFatality[i])
+                b10 = false;
         }
         if (b10) {
             mAnimTimer = 4;
@@ -794,7 +803,9 @@ void PoseFatalities::DrawDebug() {
             meterB.Draw();
             Hmx::Color greenColor(0, 0, normalizedScore * normalizedScore, 1);
             meterB.DrawBar(0.0f, 1.0f, greenColor, 1.0f, 0.0f);
-            Hmx::Color blueColor(0, 0, 0, 1);
+            // (0, 1, 0, 1): the image stores f30 (1.0) into .green at
+            // 0x64(r31) for this bar; we drew it black.
+            Hmx::Color blueColor(0, 1, 0, 1);
             meterB.DrawBar(0.0f, weightedCompare, blueColor, 1.0f, 0.0f);
 
             static DebugMeter meterC(
