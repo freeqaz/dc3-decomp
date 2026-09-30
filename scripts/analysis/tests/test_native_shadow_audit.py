@@ -142,3 +142,120 @@ def test_nested_guard_resolves_against_its_context(tmp_path):
     assert d["universe"] == 3 and cov.unaccounted == 0
     assert d["dropped"] == {"dead-nested-under-opposite-guard": 1}
     assert sorted(r["shape"] for r in regions) == ["ADDS", "ADDS"]
+
+
+# --------------------------------------------------------------------------- #
+# (b) ADDS pre-classifier
+# --------------------------------------------------------------------------- #
+
+B_SYNTH = """\
+void Logs() {
+#ifdef HX_NATIVE
+    static int sLog = 0;
+    if (sLog++ < 5)
+        fprintf(stderr, "x=%d\\n", 1);
+#endif
+}
+void Handler() {
+#ifdef HX_NATIVE
+    static Message msg("stop");
+    Handle(msg, false);
+#endif
+}
+void EarlyOut() {
+#ifdef HX_NATIVE
+    // animations never settle natively
+    return;
+#endif
+    Work();
+}
+void NullGuard() {
+#ifdef HX_NATIVE
+    if (!mThing) return;
+#endif
+    mThing->Work();
+}
+void Forced() {
+#ifdef HX_NATIVE
+    mLoadState = 0;
+#endif
+}
+void OptIn() {
+#ifdef HX_NATIVE
+    if (getenv("DC3_SOME_EXPERIMENT"))
+        mLoadState = 3;
+#endif
+}
+void DefaultOn() {
+#ifdef HX_NATIVE
+    if (Dc3EnvFlag("DC3_SOME_FIX", true))
+        mLoadState = 3;
+#endif
+}
+#ifdef HX_NATIVE
+    bool mNativeOnlyMember;
+#endif
+"""
+
+B_EXPECT = {
+    "Logs": "plumbing:diag",
+    "Handler": "suspect:handler",
+    "EarlyOut": "suspect:early-return",
+    "NullGuard": "suspect:null-guard",
+    "Forced": "suspect:forced-state",
+    "OptIn": "plumbing:debug-optin",
+    "DefaultOn": "suspect:forced-state",
+    None: "plumbing:decl",
+}
+
+
+def test_b_preclassifier_buckets_each_shape(tmp_path):
+    # FAILS on the pre-extension tool: it assigned no b_class at all, so every
+    # ADDS region -- the menu-list alpha-0 handler among them -- read the same.
+    root = tmp_path / "b"
+    f = root / "src" / "b.cpp"
+    f.parent.mkdir(parents=True)
+    f.write_text(B_SYNTH)
+    cov, regions, _ = _scan(str(root))
+    assert cov.is_clean(), cov.render()
+    got = {r["enclosing"]: r["b_class"] for r in regions}
+    assert got == B_EXPECT, got
+    # the counts carried into the coverage block are the same assignment
+    bc = cov.as_dict()["b_classes"]
+    assert sum(bc.values()) == len(regions) == len(B_EXPECT)
+    assert set(bc) == set(nsa.B_CLASSES)
+
+
+def test_b_preclassifier_real_tree_every_adds_region_bucketed():
+    cov, regions, _ = _scan(REPO)
+    assert cov.is_clean(), cov.render()
+    adds = [r for r in regions if r["shape"] == "ADDS"]
+    assert adds and all(r["b_class"] in nsa.B_CLASSES for r in adds)
+    assert all(r["b_class"] is None for r in regions if r["shape"] != "ADDS")
+    assert sum(cov.as_dict()["b_classes"].values()) == len(adds)
+    by = {(r["file"], r["enclosing"]): r["b_class"] for r in adds if r["enclosing"]}
+    # positive: a native-only early return on a gameplay path is SUSPECT
+    assert by[("src/lazer/meta_ham/Overshell.cpp", "OvershellSlot::SetPlaying")] \
+        .startswith("suspect:")
+    # negative: a bounded stderr trace is plumbing
+    assert by[("src/lazer/game/Game.cpp", "Game::HandleWait")] == "plumbing:diag"
+
+
+def test_b_preclassifier_that_loses_a_region_is_unaccounted(tmp_path, monkeypatch):
+    root = tmp_path / "b"
+    f = root / "src" / "b.cpp"
+    f.parent.mkdir(parents=True)
+    f.write_text(B_SYNTH)
+    # Sabotage: a classifier that returns a bucket outside B_CLASSES.  The
+    # region is then in no named bucket, the books do not balance, and the one
+    # outcome not allowed is a clean exit.
+    real = nsa.classify_addition
+
+    def lossy(*a, **k):
+        b, why = real(*a, **k)
+        return ("suspect:typo" if b == "suspect:handler" else b), why
+
+    monkeypatch.setattr(nsa, "classify_addition", lossy)
+    cov, _, _ = _scan(str(root))
+    assert cov.as_dict().get("b_classes_unbalanced")
+    assert nsa.verdict(cov) == EXIT_UNACCOUNTED

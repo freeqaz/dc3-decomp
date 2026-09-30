@@ -615,6 +615,403 @@ def branch_has_code(fr: FileResult, b: Branch) -> bool:
     return False
 
 
+
+# --------------------------------------------------------------------------- #
+# (b) ADDS pre-classifier
+# --------------------------------------------------------------------------- #
+#
+# A native-only ADDITION changes behaviour as surely as a replacement does:
+# the menu-list alpha-0 bug was a (b) region, a native-only
+# HamNavList::OnMsg(UITransitionCompleteMsg) handler that called
+# StopAnimation().  688 such regions were left untriaged by the first audit.
+# This pre-classifier is a TRIAGE AID, not a verdict: it puts every ADDS
+# region into exactly one named bucket so a human reads the SUSPECT buckets
+# against the target listing first and the PLUMBING buckets as a sample.
+#
+# Bucket precedence is the order of B_CLASSES; the first predicate that holds
+# wins.  "suspect:*" predicates are deliberately checked before the broad
+# "plumbing:platform"/"plumbing:native-def" shapes so a region that is both a
+# renderer adapter AND forces game state is read, not waved through.  Every
+# ADDS region lands in a bucket (the last one, suspect:unrecognised, is a
+# catch-all) and the per-bucket counts must sum to the ADDS count or the run
+# exits 4 (see run()).
+
+B_CLASSES = (
+    # handled elsewhere: owned by another lane, or already adjudicated in
+    # docs/decomp/patterns/native-shadow-bodies-are-unmeasured.md
+    "handled:animbypass",
+    "handled:already-judged",
+    # plumbing: cannot change game behaviour by shape
+    "plumbing:decl",
+    "plumbing:diag",
+    "plumbing:debug-optin",
+    # suspect: read against the listing
+    "suspect:handler",
+    # plumbing, content-marked
+    "plumbing:ring",
+    "plumbing:lp64-endian",
+    "plumbing:platform",
+    "plumbing:native-def",
+    # suspect, by shape
+    "suspect:timeout",
+    "suspect:hw-stub",
+    "suspect:null-guard",
+    "suspect:early-return",
+    "suspect:forced-state",
+    "suspect:extra-call",
+    "suspect:unrecognised",
+)
+
+# (file, enclosing-or-defined function) -> why it is not this lane's to judge.
+# Keyed on names, not line numbers: line numbers drift with every edit.
+HANDLED_ANIMBYPASS = {
+    ("src/system/ui/UI.cpp", "UIManager::Poll", "sEnterWaitFrames"):
+        "force-completes a screen enter after 90 frames (native-animbypass)",
+    ("src/system/rndobj/Anim.cpp", "AnimTask::Poll", "mAnimTarget"):
+        "auto-nulls mAnimTarget on completion; same 'animations never settle' "
+        "belief (flagged to native-animbypass, not in its brief)",
+}
+HANDLED_JUDGED = {
+    ("src/system/hamobj/HamDirector.cpp", "HamDirector::SongAnim"):
+        "open lead in the native-shadow doc (expert-anim fallback)",
+    ("src/system/char/CharPollGroup.cpp", "CharPollableSorter::ChangedBy"):
+        "open lead in the native-shadow doc (DC3_POLL_ORDER_FIX polarity)",
+    ("src/system/utl/Song.cpp", "Song::SetFrame"):
+        "notable in the native-shadow doc (deferred unpause, Song.cpp:291)",
+    ("src/system/obj/ObjPtr_p.h", "ObjRefConcrete::Load"):
+        "notable in the native-shadow doc (owner-less refs walk parent dirs)",
+    ("src/system/obj/ObjPtr_p.h", "ObjPtrVec::Load"):
+        "notable in the native-shadow doc (same parent-dir walk)",
+    ("src/system/obj/ObjPtr_p.h", "ObjPtrList::Load"):
+        "notable in the native-shadow doc (same parent-dir walk)",
+}
+
+_LOG_CALL_RE = re.compile(
+    r"\b(printf|fprintf|puts|fflush|MILO_LOG|MILO_WARN|MILO_NOTIFY|"
+    r"Dc3KneeLog|Dc3DetectFracProbe|Dc3DumpPosChannels|NATIVE_MODAL_TAP|"
+    r"TraceState|RefAudit::\w+|backtrace\w*)\s*\(")
+_COUNTER_RE = re.compile(
+    r"^(static\s+)?(const\s+)?(int|bool|long|unsigned|float)\s+s\w*\s*(=[^;]*)?;$|"
+    r"^(\+\+\s*(s|g_?[dD]c3)\w+|(s|g_?[dD]c3)\w+\s*\+\+)\s*;$")
+_NEUTRAL_RE = re.compile(
+    r"^([{}();,]*|else\s*\{?|\}\s*else\s*\{?|(public|private|protected)\s*:|"
+    r"#.*|namespace\b.*|using\b.*|typedef\b.*|friend\b.*|extern\b.*|"
+    r"(class|struct|enum)\s+[\w:]+\s*[;{]?.*|k\w+\s*(=[^,]*)?,?|"
+    r"template\s*<.*)$")
+# a local/member DECLARATION with an optional initializer: `Type name = expr;`
+_DECL_RE = re.compile(
+    r"^(static\s+|const\s+|inline\s+|mutable\s+|unsigned\s+|constexpr\s+)*"
+    r"[A-Za-z_][\w:]*(\s*<[^;=()]*>)?(\s*[*&]+\s*|\s+)(const\s+)?[*&]?\s*"
+    r"[A-Za-z_]\w*(\[[^\]]*\])?\s*(=[^;]*|\([^;]*\)|\{[^;]*\})?\s*;$")
+# `float a = 0, b = 0, c = x.y;` -- several locals in one declaration
+_MULTI_DECL_RE = re.compile(
+    r"^(const\s+)?(int|float|bool|double|char|long|unsigned)\s+[A-Za-z_]\w*\s*(=[^;,()]*)?"
+    r"(\s*,\s*[A-Za-z_]\w*\s*(=[^;,()]*)?)+\s*;$")
+# a prototype / pure declaration of a function, or a one-line inline accessor
+_PROTO_RE = re.compile(r"^[\w:<>*&,\s~]+\([^;{]*\)\s*(const)?\s*(override)?\s*(=\s*0)?\s*;$")
+_INLINE_DEF_RE = re.compile(
+    r"^(virtual\s+|static\s+|inline\s+)*[\w:<>*&\s~]+\s*\([^;{]*\)\s*(const)?\s*"
+    r"(override)?\s*\{.*\}\s*;?$")
+_CTOR_INIT_RE = re.compile(r"^[,:]\s*m\w+\s*\([^;]*\)\s*,?$")
+_IF_RE = re.compile(r"^(\}\s*else\s+)?(if|for|while)\s*\(")
+_GATE_RE = re.compile(
+    r"getenv\s*\(|Dc3EnvFlag\s*\([^,()]*,\s*false\s*\)|\bDebug\w*\s*\(\s*\)|"
+    r"SoundAudioTraceOn\s*\(|\bsFastTime\b|\bsHeadless\b|\bsFastBoot\b|"
+    r"Dc3FeetPlantFix\s*\(|\bsMergeDebug\b|\bsZeroBase\b|\bsCharFootSkip\b|"
+    r"\bsFootSkip\b|\bsPelvisSkip\b|\bsLocalScope\b|\bg_dc3KneeLogThis\b|\bfcTrace\b|"
+    r"\bfast\s*&&")
+_HANDLER_RE = re.compile(
+    r"\bHANDLE\w*\s*\(|(->|\.|\b)Handle\s*\(|\bHandleType\s*\(|\bOnMsg\b|"
+    r"\bstatic\s+Message\b|\bMessage\s+\w+\s*\(|\bBEGIN_HANDLERS\b|"
+    r"\bvirtual\s+DataNode\s+Handle\b|\bSyncProperty\b|\bbool\s+Replace\s*\(")
+_RING_RE = re.compile(
+    r"InDeleteObjects|gInReplaceList|RefAudit|SafeReleaseFromRing|IsLive\s*\(|"
+    r"DirPtrRefCounts|NullifyAllRefs|NullifyObj|sRingsDirty|DeferFree|"
+    r"FlushDeferredFrees|BatchDelete|mAliveSentinel|kAliveSentinel|DeathWatch|"
+    r"InMergeDirs|IsRefAlive|CompactNulls|VecCompact|mQueuedSerials|"
+    r"PruneDeadRefs|sDeleteObjectsDepth|ReleaseCascadeBlock|DetachFromDir|"
+    r"TaskSerial|SerialOf|ClearTimelineTasks")
+_LP64_RE = re.compile(
+    r"bswap|LittleEndian|SwapBE|mValue\.object\s*=\s*nullptr|UncheckedStr\s*\(\s*\)\s*==|"
+    r"\buintptr_t\b|\bintptr_t\b|sizeof\s*\(\s*void\s*\*\s*\)|DataNode\s*\(\s*unsigned\s+int")
+_PLATFORM_RE = re.compile(
+    r"Wgpu|WGPU|NativeSettings|CleanupGpu\w*|FlushPostProcessingForOverlay|"
+    r"FlushTransparentDraws|DrawParticlesBillboard|AudioDevice|glfw|GLFW|"
+    r"emscripten|EM_ASM|\bNgRnd\b|TheNgRnd|SetMeshDebugLabel|mbstowcs|"
+    r"sprintf_s|ImGui|HttpServer|sigsetjmp|__builtin_|MakeDrawTarget|"
+    r"SetViewport|sImpostorCache|DecodeXMAToPCM|dc3_xma|PumpAudio|Timer::Sleep|"
+    r"Bink\w*\s*\(|HolmesClient\w*|XUSER_\w+")
+_TIMEOUT_RE = re.compile(
+    r"(\+\+\s*s\w+|\bs\w+\s*\+\+)\s*[<>]=?\s*\d{2,}|\bs\w*Frames\b\s*(==|>=?)|"
+    r">=?\s*maxFrames\b")
+_HW_RE = re.compile(
+    r"kinect|\bnui\b|voice|speech|microphone|sign-?in|xbox live|\blive\b|bink|"
+    r"\bmovie|achievement|webcam|skeletonupdate|livecamera|no gesture|fitness|"
+    r"friends|rockcentral|online|holmes|\bxmp\b|guide|no camera|hand-raise|"
+    r"wave gesture|save system|profile", re.I)
+_RET_RE = re.compile(r"\b(return|continue|break|goto)\b")
+_ASSIGN_RE = re.compile(
+    r"(\b(m[A-Z]\w*|s[A-Z]\w*|g[A-Z_]\w*|The[A-Z]\w*)(\s*(\.|->)\s*\w+)*\s*"
+    r"(=(?!=)|\|=|&=|\+=|-=))|\bSet(Property|Showing|Frame|LocalXfm|WorldXfm|"
+    r"InControllerMode|HUD|Paused|NumDisplay)\s*\(|\bDataVariable\s*\(")
+
+
+def _strip_comments_strings(text: str) -> str:
+    """Remove // and /* */ comments; blank string/char literal contents."""
+    out = []
+    i, n = 0, len(text)
+    in_block = False
+    while i < n:
+        if in_block:
+            k = text.find("*/", i)
+            if k < 0:
+                break
+            # keep line structure
+            out.append("\n" * text.count("\n", i, k))
+            i = k + 2
+            in_block = False
+            continue
+        c = text[i]
+        if text.startswith("//", i):
+            k = text.find("\n", i)
+            i = n if k < 0 else k
+            continue
+        if text.startswith("/*", i):
+            in_block = True
+            i += 2
+            continue
+        if c in ('"', "'"):
+            q = c
+            j = i + 1
+            while j < n and text[j] != q and text[j] != "\n":
+                j += 2 if text[j] == "\\" else 1
+            out.append(q + q)
+            i = j + 1
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+_STMT_KEYWORDS = {"return", "delete", "throw", "goto", "continue", "break", "case",
+                  "else", "new", "if", "for", "while", "do", "switch"}
+
+
+def _has_return_type(ln: str) -> bool:
+    """`Type name(...)` (a declaration/definition), not `name(...)` (a call)."""
+    head = ln.split("(", 1)[0]
+    if "." in head or "->" in head or "=" in head:
+        return False
+    toks = re.findall(r"[A-Za-z_~][\w:]*", head)
+    toks = [t for t in toks if t not in ("virtual", "static", "inline", "const",
+                                           "explicit", "constexpr")]
+    return len(toks) >= 2 and toks[0] not in _STMT_KEYWORDS
+
+
+_DEFAULT_ON_RE = re.compile(r"Dc3EnvFlag\s*\([^,()]*,\s*true\s*\)")
+
+
+def _if_tail(ln: str) -> str:
+    """The statement after `if (...)` on the same line ('' if none)."""
+    i = ln.find("(")
+    depth = 0
+    for j in range(i, len(ln)):
+        if ln[j] == "(":
+            depth += 1
+        elif ln[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return ln[j + 1:].strip()
+    return ""
+
+
+_ACCESSOR_CALL_RE = re.compile(r"(\.|->)\s*(size|empty|Size|Ptr|Obj|get)\s*\(\s*\)")
+
+
+def _is_guard_cond(cond: str) -> bool:
+    """A condition that only tests pointers/indices for null/range."""
+    c = _ACCESSOR_CALL_RE.sub("", cond)
+    c = re.sub(r"\((int|size_t|unsigned)\)", "", c)
+    if re.search(r"[A-Za-z_]\w*\s*\(", c):
+        return False
+    if re.search(r"(?<![=!<>])=(?!=)", c):
+        return False
+    return bool(re.fullmatch(r"[\s!()\w:.\->\[\]&|<>=+\-*]*", c))
+
+
+def _paren_delta(s: str) -> int:
+    return s.count("(") - s.count(")")
+
+
+def classify_addition(rel: str, enclosing: Optional[str], scope: str,
+                      native_defs: List[str], shadowed: List[str],
+                      raw_text: str, prev_code: str = "") -> Tuple[str, str]:
+    """Return (bucket, reason) for one (b) ADDS region's native-branch text.
+
+    `prev_code` is the last code line before the guard: a bare `return;`
+    straight after the image's own failing check (`MILO_FAIL`, `MILO_ASSERT`,
+    `if (!p) {`) completes that check natively -- the 360 stops there.
+    """
+    names = [enclosing] if enclosing else []
+    names += native_defs
+    code = _strip_comments_strings(raw_text)
+    for (f, fn, marker), why in HANDLED_ANIMBYPASS.items():
+        if f == rel and fn in names and marker in code:
+            return "handled:animbypass", why
+    if shadowed:
+        return ("handled:already-judged",
+                "shadows a function defined elsewhere; triaged with the (a)/(c) pass")
+    for (f, fn), why in HANDLED_JUDGED.items():
+        if f == rel and fn in names:
+            return "handled:already-judged", why
+
+    in_function = scope == "in-function"
+    lines = [ln.strip() for ln in code.split("\n")]
+    lines = [ln for ln in lines if ln]
+    effect: List[str] = []       # lines with a possible run-time effect
+    gated: List[bool] = []       # ... and whether an opt-in env/debug gate covers it
+    n_diag = 0
+    # brace-level gating: a stack of booleans, one per open `{`
+    gate_stack: List[bool] = []
+    pending_gate = False         # an `if (gate)` with no `{` gates the next statement
+    log_depth = 0                # inside a multi-line log call
+    open_ifs: List[Tuple[int, str, bool]] = []   # `if (...) {` still open
+    block_ifs: List[str] = []    # every ungated `if (...) {` (for guard shape)
+    pending_if: Optional[Tuple[str, bool]] = None  # `if (x)` awaiting its statement
+    for ln in lines:
+        in_gate = any(gate_stack) or pending_gate
+        if log_depth > 0:
+            log_depth += _paren_delta(ln)
+            n_diag += 1
+            continue
+        opens = ln.count("{") - ln.count("}")
+        is_if = bool(_IF_RE.match(ln))
+        if is_if:
+            cond_gated = bool(_GATE_RE.search(ln)) and not _DEFAULT_ON_RE.search(ln)
+            body_same_line = ln.rstrip().endswith(";")
+            tail = _if_tail(ln)
+            if pending_if is not None:           # `if (a)` `if (b) stmt;` nesting
+                effect.append(pending_if[0])
+                gated.append(pending_if[1])
+                pending_if = None
+            if _LOG_CALL_RE.search(ln):
+                n_diag += 1
+                if _paren_delta(ln) > 0:
+                    log_depth = _paren_delta(ln)
+            elif body_same_line and not _COUNTER_RE.match(tail):
+                effect.append(ln)
+                gated.append(in_gate or cond_gated)
+            if ln.endswith("{"):
+                gate_stack.append(cond_gated or in_gate)
+                open_ifs.append((len(gate_stack), ln, in_gate or cond_gated))
+                if not (in_gate or cond_gated):
+                    block_ifs.append(ln)
+                pending_gate = False
+            elif not body_same_line:
+                pending_gate = cond_gated or in_gate
+                pending_if = (ln, in_gate or cond_gated)
+            continue
+        if _LOG_CALL_RE.search(ln):
+            n_diag += 1
+            pending_if = None                    # `if (sLog++ < 5)` + log call
+            if _paren_delta(ln) > 0:
+                log_depth = _paren_delta(ln)
+        elif _COUNTER_RE.match(ln) or _NEUTRAL_RE.match(ln) or _CTOR_INIT_RE.match(ln):
+            pass
+        elif not in_function and _PROTO_RE.match(ln) and _has_return_type(ln):
+            pass
+        elif _MULTI_DECL_RE.match(ln):
+            pass
+        elif (_DECL_RE.match(ln) and ln.split()[0] not in _STMT_KEYWORDS
+              and not _ASSIGN_RE.search(ln.split("=")[0])):
+            pass
+        elif (not in_function and _INLINE_DEF_RE.match(ln) and _has_return_type(ln)
+              and not re.search(r"\b(virtual|override)\b", ln)):
+            pass
+        else:
+            if pending_if is not None:
+                effect.append(pending_if[0])
+                gated.append(pending_if[1])
+                pending_if = None
+            effect.append(ln)
+            gated.append(in_gate)
+        pending_gate = False if not ln.endswith("{") else pending_gate
+        for _ in range(max(0, opens)):
+            gate_stack.append(in_gate)
+        for _ in range(max(0, -opens)):
+            if gate_stack:
+                gate_stack.pop()
+        open_ifs = [o for o in open_ifs if o[0] <= len(gate_stack)]
+    if pending_if is not None:
+        # a bare `if (x)` guard prefix that the #endif cuts off: it guards
+        # the (unguarded) statement that follows the region
+        effect.append(pending_if[0])
+        gated.append(pending_if[1])
+    # An `if (p) {` whose block the #endif cuts off wraps UNGUARDED code that
+    # follows the region: it is a guard in its own right, not a declaration.
+    for (_, ln, g) in open_ifs:
+        effect.append(ln)
+        gated.append(g)
+
+    if not effect:
+        if n_diag:
+            return "plumbing:diag", "only logging / counters"
+        return "plumbing:decl", "declarations only"
+    if all(gated):
+        return "plumbing:debug-optin", "every effect sits under an opt-in env/debug gate"
+    eff_text = "\n".join([e for e, g in zip(effect, gated) if not g] + block_ifs)
+    if _HANDLER_RE.search(code):
+        return "suspect:handler", "adds or answers a message/handler"
+    if _RING_RE.search(eff_text):
+        return "plumbing:ring", "ref-ring / cascade-teardown / liveness bookkeeping"
+    if _LP64_RE.search(eff_text):
+        return "plumbing:lp64-endian", "pointer width / byte order"
+    if _PLATFORM_RE.search(eff_text):
+        return "plumbing:platform", "host renderer/audio/file/API adapter"
+    if scope in ("file-scope-defs", "whole-file") and native_defs:
+        return "plumbing:native-def", "defines native-only functions; judged via their callers"
+    if _TIMEOUT_RE.search(eff_text):
+        return "suspect:timeout", "counter-driven forced progress"
+    has_ret = bool(_RET_RE.search(eff_text))
+    has_assign = bool(_ASSIGN_RE.search(eff_text))
+    if (has_ret or has_assign) and _HW_RE.search(raw_text):
+        return "suspect:hw-stub", "early-out / forced value justified by absent hardware"
+    guard_like = True
+    n_guard_ifs = 0
+    for e in eff_text.split("\n"):
+        if _IF_RE.match(e) and e.startswith("if"):
+            i = e.find("(")
+            tail = _if_tail(e)
+            cond = e[i + 1:len(e) - len(tail)].strip()
+            cond = cond[:-1] if cond.endswith(")") else cond
+            tail = tail.rstrip("{").strip()
+            if not _is_guard_cond(cond) or (tail and not _RET_RE.match(tail)):
+                guard_like = False
+                break
+            n_guard_ifs += 1
+        elif re.match(r"^(return\b[^;]*|continue|break)\s*;$", e) or \
+                re.match(r"^(&&|\|\|)\s*[\w:>.\-]+$", e):
+            continue
+        else:
+            guard_like = False
+            break
+    completes_check = bool(re.search(
+        r"\bMILO_(FAIL|ASSERT)\w*\s*\(|^(\}\s*else\s*)?if\s*\(.*\{$", prev_code.strip()))
+    # an unconditional `return;` is an early return, not a guard -- unless it
+    # completes a failing check the 360 would have stopped on
+    if guard_like and (n_guard_ifs or completes_check):
+        return "suspect:null-guard", ("null/bounds guard: differs only where the pointer "
+                                      "is null" if n_guard_ifs else
+                                      "completes the image's own failing check")
+    if has_ret:
+        return "suspect:early-return", "returns/continues where the image does not"
+    if has_assign:
+        return "suspect:forced-state", "writes a member/property/global the image does not"
+    if re.search(r"\w\s*\(", eff_text):
+        return "suspect:extra-call", "calls something the image does not"
+    return "suspect:unrecognised", "no recogniser matched"
+
+
 def run(root: str, include_vendor: bool, cov: CoverageReport):
     files = iter_source_files(root)
     universe_hits: Dict[str, List[int]] = {}
@@ -707,6 +1104,12 @@ def run(root: str, include_vendor: bool, cov: CoverageReport):
                 "ppc_code_lines": ppc_lines,
                 "nested_in_guard_at": outer,
                 "area": area_of(rel),
+                "_prev_code": next((_strip_code(fr.lines[k]) for k in
+                                    range(g.branches[0].line - 2, -1, -1)
+                                    if _strip_code(fr.lines[k])), ""),
+                "_nat_text": "\n".join(fr.lines[ln - 1] for b in nat
+                                       for ln in b.content_lines
+                                       if 0 < ln <= len(fr.lines)),
             })
         missing = sorted(set(hits) - attributed)
         if missing:
@@ -763,10 +1166,32 @@ def run(root: str, include_vendor: bool, cov: CoverageReport):
                     r.setdefault("shadowed_functions", [])
                     if n not in r["shadowed_functions"]:
                         r["shadowed_functions"].append(n)
+    b_counts: Dict[str, int] = {k: 0 for k in B_CLASSES}
+    n_adds = 0
     for r in regions:
         r["bucket_d"] = r["scope"] in ("file-scope-defs", "whole-file")
         r.setdefault("shadowed_functions", [])
         r["shadowed_functions"].sort()
+        text = r.pop("_nat_text", "")
+        if r["shape"] != "ADDS":
+            r.pop("_prev_code", None)
+        r["b_class"] = r["b_reason"] = None
+        if r["shape"] == "ADDS":
+            n_adds += 1
+            r["b_class"], r["b_reason"] = classify_addition(
+                r["file"], r["enclosing"], r["scope"], r["native_defs"],
+                r["shadowed_functions"], text, r.pop("_prev_code", ""))
+            if r["b_class"] in b_counts:
+                b_counts[r["b_class"]] += 1
+            # a bucket outside B_CLASSES is not counted, so the books below
+            # do not balance and verdict() refuses a clean exit
+    cov.extra("b_classes", b_counts)
+    if sum(b_counts.values()) != n_adds:
+        # every ADDS region must land in exactly one named bucket; a mismatch
+        # is a classifier that lost regions, which must not print a clean census
+        cov.note(f"(b) pre-classifier accounted {sum(b_counts.values())} of {n_adds} "
+                 f"ADDS regions")
+        cov.extra("b_classes_unbalanced", True)
     return regions, splits
 
 
@@ -780,6 +1205,10 @@ PARSER_DROPS = ("file-unbalanced-conditionals", "condition-unparseable",
 def verdict(cov: CoverageReport) -> int:
     """cov.emit()'s exit code, escalated to EXIT_UNACCOUNTED on any parser drop."""
     code = cov.emit()
+    if code == 0 and cov.as_dict().get("b_classes_unbalanced"):
+        print("(b) PRE-CLASSIFIER LOST REGIONS: its buckets do not sum to the ADDS "
+              "count -- not a clean census", file=sys.stderr)
+        return EXIT_UNACCOUNTED
     bad = {k: v for k, v in cov.as_dict()["dropped"].items() if k in PARSER_DROPS}
     if code == 0 and bad:
         print(f"PARSER DROPS {bad}: these guard directives were counted but never "
@@ -811,9 +1240,10 @@ def fmt_region(r: dict) -> str:
                         + (",..." if len(r["ppc_defs"]) > 6 else "") + "}")
         ctx = " ".join(bits)
     sh = (" SHADOWS[" + ",".join(r["shadowed_functions"]) + "]") if r["shadowed_functions"] else ""
+    bc = f" <{r['b_class']}>" if r.get("b_class") else ""
     return (f"  ({r['bucket']}) {r['file']}:{r['line']}-{r['endif']}  "
             f"{r['scope']:<16} n={r['native_code_lines']:<4} p={r['ppc_code_lines']:<4} "
-            f"{ctx}{sh}")
+            f"{ctx}{sh}{bc}")
 
 
 def main() -> int:
@@ -822,9 +1252,10 @@ def main() -> int:
     ap.add_argument("--include-vendor", action="store_true",
                     help="classify src/xdk and src/system/stlport too")
     ap.add_argument("--list", default="triage",
-                    choices=("none", "triage", "all", "a", "b", "c", "d"),
+                    choices=("none", "triage", "all", "a", "b", "c", "d", "b-suspect"),
                     help="DISPLAY filter only (every region is classified and counted "
-                         "regardless): triage = (a)+(c)+split shadows [default]")
+                         "regardless): triage = (a)+(c)+split shadows [default]; "
+                         "b-suspect = (b) regions the pre-classifier put in suspect:*")
     ap.add_argument("--find", default=None,
                     help="print every region whose enclosing/defined functions contain "
                          "this substring (control lookup)")
@@ -863,6 +1294,15 @@ def main() -> int:
     print(f"  function shadows (one name, a native-only AND a PPC-only definition): "
           f"{len(splits)}  (one guard: {n_same}; two guards, one file: {n_split}; "
           f"cross-file: {n_cross})")
+    bc = cov.as_dict().get("b_classes", {})
+    groups: Dict[str, int] = {}
+    for k, v in bc.items():
+        groups[k.split(":")[0]] = groups.get(k.split(":")[0], 0) + v
+    print(f"  (b) pre-classifier (triage aid, not a verdict): "
+          f"{sum(bc.values())} of {by_shape.get('ADDS', 0)} ADDS regions bucketed -- "
+          + ", ".join(f"{g}={groups[g]}" for g in sorted(groups)))
+    for k in B_CLASSES:
+        print(f"      {k:<24} {bc.get(k, 0)}")
     by_area: Dict[str, Dict[str, int]] = {}
     for r in regions:
         a = by_area.setdefault(r["area"], {"a": 0, "b": 0, "c": 0})
@@ -891,6 +1331,7 @@ def main() -> int:
             if args.list == "all" or \
                (args.list == "triage" and (r["bucket"] in ("a", "c") or r["shadowed_functions"])) or \
                (args.list == "d" and r["bucket_d"]) or \
+               (args.list == "b-suspect" and (r.get("b_class") or "").startswith("suspect:")) or \
                args.list == r["bucket"]:
                 sel.append(r)
         print(f"\n== regions ({args.list}): {len(sel)} of {len(regions)} "
