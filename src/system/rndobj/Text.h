@@ -151,17 +151,16 @@ public:
         bool brk; // 0x40
     };
 
+    // 0x20 bytes: the pool index scales by 32 in QueueBlacklightPacket
+    // (slwi r9, r9, 5) and DrawBlacklight, and the saved colour is copied as
+    // one 16-byte Hmx::Color out of RndMat's mColor at +0x2c.
     class BlacklightPacket {
     public:
-#ifdef HX_NATIVE
-        RndMesh *mMesh;
-        Hmx::Color mSavedColor;
-        float mSize;
-        int mSyncFlags;
-        RndCam *mCam;
-#else
-        int unk[8];
-#endif
+        RndMesh *mMesh; // 0x0
+        Hmx::Color mSavedColor; // 0x4
+        float mSize; // 0x14
+        int mSyncFlags; // 0x18
+        RndCam *mCam; // 0x1c
     };
 
     class FontMapBase {

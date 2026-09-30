@@ -1622,30 +1622,28 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
         BlacklightPacket packet;
         sBlacklightPacketPool.resize(newsize, packet);
     }
-#ifdef HX_NATIVE
+    // Residual (2 rows, and the only thing keeping fuzzy at 99.51): the image
+    // loads sBlacklightPacketCount BEFORE the pool's mStart, we load mStart
+    // first.  REFUTED as source-reachable by folding the post-increment into
+    // the subscript (`sBlacklightPacketPool[sBlacklightPacketCount++]`) --
+    // byte-inert, same two rows.  Pure scheduling of two independent loads.
     int idx = sBlacklightPacketCount++;
     BlacklightPacket &pkt = sBlacklightPacketPool[idx];
     pkt.mMesh = mesh;
+#ifdef HX_NATIVE
+    // The 360 build dereferences Mat() unconditionally here (the target loads
+    // mesh+0x128 and indexes it with no null test).  Native keeps the guard:
+    // a text object with no material is reachable off-console.
     RndMat *mat = mesh->Mat();
     if (mat) {
         pkt.mSavedColor = mat->GetColor();
     }
+#else
+    pkt.mSavedColor = mesh->Mat()->GetColor();
+#endif
     pkt.mSize = f2;
     pkt.mSyncFlags = i3;
     pkt.mCam = RndCam::Current();
-#else
-    int idx = sBlacklightPacketCount++;
-    int *pkt_ptr = (int *)&sBlacklightPacketPool[0] + (idx << 3);
-    pkt_ptr[0] = (int)mesh;
-    int *mat = *(int **)((char *)mesh + 0x128);
-    pkt_ptr[1] = *(int *)((char *)mat + 0x2C);
-    pkt_ptr[2] = *(int *)((char *)mat + 0x30);
-    pkt_ptr[3] = *(int *)((char *)mat + 0x34);
-    pkt_ptr[4] = *(int *)((char *)mat + 0x38);
-    *(float *)(pkt_ptr + 5) = f2;
-    pkt_ptr[6] = i3;
-    pkt_ptr[7] = (int)RndCam::Current();
-#endif
 }
 
 void RndText::ClearBlacklight() { sBlacklightPacketCount = 0; }
@@ -1653,36 +1651,28 @@ void RndText::ClearBlacklight() { sBlacklightPacketCount = 0; }
 void RndText::DrawBlacklight() {
     RndCam *savedCam = RndCam::Current();
     for (int i = 0; i < sBlacklightPacketCount; i++) {
-#ifdef HX_NATIVE
         BlacklightPacket &pkt = sBlacklightPacketPool[i];
         if (pkt.mCam && pkt.mCam != RndCam::Current()) {
             pkt.mCam->Select();
         }
+        // RndMat::SetColor, inlined: the image stores red/green/blue into
+        // mColor (mat+0x2c/0x30/0x34) and only THEN reads mDirty at +0x228 to
+        // OR in 1.  Writing the three fields and calling MarkDirty() separately
+        // lets the scheduler hoist the mDirty load above the third store.
+#ifdef HX_NATIVE
+        // The 360 build dereferences Mat() unconditionally; native guards it.
         RndMat *mat = pkt.mMesh->Mat();
         if (mat) {
-            Hmx::Color &color = mat->GetColor();
-            color.red = pkt.mSavedColor.red;
-            color.green = pkt.mSavedColor.green;
-            color.blue = pkt.mSavedColor.blue;
-            mat->MarkDirty(1);
+            mat->SetColor(
+                pkt.mSavedColor.red, pkt.mSavedColor.green, pkt.mSavedColor.blue
+            );
         }
-        DrawMesh(pkt.mMesh, pkt.mSize, pkt.mSyncFlags);
 #else
-        int *pkt = (int *)((char *)&sBlacklightPacketPool[0] + i * 0x20);
-        RndCam *cam = (RndCam *)pkt[7];
-        if (cam != 0 && cam != RndCam::Current()) {
-            cam->Select();
-        }
-        float savedB = *(float *)(pkt + 3);
-        float savedG = *(float *)(pkt + 2);
-        float savedR = *(float *)(pkt + 1);
-        int *mat = *(int **)((char *)pkt[0] + 0x128);
-        *(float *)((char *)mat + 0x2c) = savedR;
-        *(float *)((char *)mat + 0x30) = savedG;
-        *(float *)((char *)mat + 0x34) = savedB;
-        *(int *)((char *)mat + 0x228) |= 1;
-        DrawMesh((RndMesh *)pkt[0], *(float *)(pkt + 5), pkt[6]);
+        pkt.mMesh->Mat()->SetColor(
+            pkt.mSavedColor.red, pkt.mSavedColor.green, pkt.mSavedColor.blue
+        );
 #endif
+        DrawMesh(pkt.mMesh, pkt.mSize, pkt.mSyncFlags);
     }
     if (savedCam != 0 && savedCam != RndCam::Current()) {
         savedCam->Select();
