@@ -118,6 +118,17 @@ BEGIN_PROPSYNCS(HamCharacter)
     SYNC_PROP_MODIFY(
         tex_blenders_active, mTexBlendersActive, SetTexBlendersActive(mTexBlendersActive)
     )
+    // The 12th SyncProperty row is here, not in SetPropShowing: the image masks
+    // the materialised bool with `clrlwi r11, r11, 24` at 82490B88 before
+    // storing it into the DataNode, even though its own `li r11, 0x1` /
+    // `li r11, 0x0` pair (82490B78 / 82490B84) makes the mask redundant; we
+    // drop it.  MEASURED (w9-f): the mask IS reachable -- spelling this getter
+    // `mCrewCardMesh ? mCrewCardMesh->Showing() : false` emits it -- but the
+    // ternary replaces the `li r11, 0x1` with a `b` and costs four rows net
+    // (97.93 -> 97.71), because MSVC then merges the two arms instead of
+    // computing 0/1 in place.  Not worth chasing on its own: the other 11 rows
+    // are the SetPropShowing cross-jump above, so closing the mask alone cannot
+    // cross this function.
     SYNC_PROP_SET(
         crew_card_showing,
         mCrewCardMesh && mCrewCardMesh->Showing(),
@@ -638,9 +649,32 @@ void HamCharacter::SetPropShowing(int prop, bool show) {
     // 97.93% on exactly those four copies. The image keeps `cmplwi/beq/clrrwi`
     // inline in each copy and cross-jumps only the shared `bl SetShowing`; our
     // build cross-jumps one instruction deeper, merging the null test too (12
-    // target-only instructions, 2276 vs 2324 bytes). Refuted spelling: dropping
-    // the named local for `mShowableProps[prop] && mShowableProps[prop]->...`
-    // scores WORSE (97.93 -> 97.37) and shifts the bool materialisation.
+    // target-only instructions, 2276 vs 2324 bytes).
+    //
+    // MECHANISM (w9-f, read off the listing at 82490C34-82490C48): the image
+    // loads the element into a SCRATCH (`lwz r10, 0xc(r11)`), tests r10, and
+    // only then copies it into the argument register (`clrrwi r3, r10, 0`), so
+    // the `beq` cannot be part of the shared tail -- only `bl SetShowing; b`
+    // at .L_82490B50 is, and that block is shared with the crew_card_showing
+    // setter.  We load straight into r3, which makes our per-site tail
+    // `cmplwi cr6, r3, 0 / beq / bl / b` identical across sites, so MSVC
+    // cross-jumps three instructions deep instead of two.  The r10->r3
+    // register "swap" objdiff reports is the consequence, not the cause: once
+    // the shared block tests r3, the load has to target r3.
+    //
+    // THREE MORE SPELLINGS MEASURED, none reaches it (w9-f):
+    //   `if (mShowableProps[prop]) mShowableProps[prop]->SetShowing(show);`
+    //        (nested ifs, repeated subscript)   -> 97.43, WORSE: the merge gets
+    //        deeper still (site 1 loses its cmplwi too) and a subfe moves.
+    //   `RndDrawable *d; if (size() > prop && (d = mShowableProps[prop]) != 0)`
+    //        (the assignment-expression idiom that fixed GetPropShowing)
+    //                                          -> byte-identical, 97.93, same
+    //        21 rows.  MSVC folds it back to the nested-if form.
+    //   w7-x's `mShowableProps[prop] && mShowableProps[prop]->...` with &&
+    //                                          -> 97.37, WORSE.
+    // Cross-jump DEPTH is a backend decision with no source handle found; the
+    // four copies are identical by construction, so no per-site spelling can
+    // make their tails differ.
     if (mShowableProps.size() > prop) {
         RndDrawable *drawable = mShowableProps[prop];
         if (drawable)
@@ -1113,6 +1147,23 @@ void HamCharacter::Poll() {
     _strlwr(texName);
     strcat(texName, ".tex");
 
+    // RESIDUAL (w9-f, 99.13386 canonical, 1016 B): exactly 3 rows of 255, and the
+    // branch structure below is already the image's.  At both Find sites the image
+    // emits the RECORD-FORM move `mr. r4, r3` (8249167C and 82491698), copying the
+    // result into r4 -- SetDiffuseTex's argument register, since the call inlines
+    // to `SetObjConcrete(&mat->..., tex)` with r3 = 0x40(mat) -- and testing it in
+    // the same instruction.  We test in place with `cmplwi r3, 0x0` and defer a
+    // single `mr r4, r3` to just before the call.  Ours is the cheaper codegen (one
+    // move, not two); making MSVC home the value in r4 early is not expressible.
+    // REFUTED (w9-f): folding the two finds into one condition,
+    //   if (!(tex = Find(texName)) && !(tex = Find("base.tex"))) notify; else set;
+    // is far worse -- 99.13386 -> 94.4, 3 rows -> 17 -- because the && chain moves
+    // the whole SetDiffuseTex block past the MILO_NOTIFY_ONCE block and inverts two
+    // branches.  Keep the nested-if form.
+    // (Aside, worth knowing: the target names that callee
+    // SetObjConcrete<AnimTask, ObjectDir> and we name it
+    // SetObjConcrete<RndTex, ObjectDir>.  That is an ICF fold -- the two bodies are
+    // identical -- and OUR name is the correct one for this call site.)
     RndTex *tex = Find<RndTex>(texName, false);
     if (!tex) {
         tex = Find<RndTex>("base.tex", false);

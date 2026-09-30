@@ -837,6 +837,17 @@ void SortXfms(RndMultiMesh *mesh, const Vector3 &vec) {
 // -- reads 99.931 canonical but 94.4 raw, i.e. it ADDS an OFFSET_SWAP of
 // (0x34,0x3c) and four register swaps.  Under /fp:fast MSVC re-associates the
 // flat sum itself, so the parenthesisation below is not what selects the order.
+// RESIDUAL (w9-f, 99.93104 canonical / 97.69 fuzzy, 116 B): 8 rows of 29.  Six
+// are FPR renames; the two that cost canonical are an OFFSET SWAP at idx 5/10 --
+// the image loads mesh2.v.z (0x3c) at 8262E44C and mesh2.v.y (0x38) at 8262E460,
+// we load them the other way round.  The ASSOCIATION is already right: reading
+// the fmadds chain at 8262E480-8262E494, the image computes mesh1 as
+// y + (x + z) and mesh2 as y + (z + x), which is what is written below.
+// REFUTED (w9-f): re-spelling the mesh2 sum as `y + (z + x)` to move the load
+// order -- i.e. hoisting the y term to the front and parenthesising (z + x),
+// which is literally the image's shape -- makes it WORSE, not better: 8 rows ->
+// 13, raw 97.17 -> 94.4, and the offset swap merely moves from (0x38,0x3c) to
+// (0x34,0x3c).  The two loads are independent and MSVC orders them itself.
 bool XfmSort(RndMultiMesh::Instance &mesh1, RndMultiMesh::Instance &mesh2) {
     return (mesh1.mXfm.v.y - gUtlXfms.y) * (mesh1.mXfm.v.y - gUtlXfms.y)
             + ((mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)
@@ -1918,6 +1929,22 @@ void MakeNormals(RndMesh *m) {
                             // registers -- which is the stop signal for the
                             // commutative-order lever: the backend picks the
                             // operand order here and source cannot reach it.
+                            // REFUTED (w9-f) -- and it is the y/z ORDER, not
+                            // Vec.h, that the four offset rows report.  Add()
+                            // ends in `dst.Set(v1.x+v2.x, v1.y+v2.y, v1.z+v2.z)`
+                            // and Vector3::Set assigns x, then y, then z, so the
+                            // source order is ALREADY the image's; MSVC reorders
+                            // the y and z halves on our side while inlining.
+                            // Expanding the call by hand to dodge the 3-argument
+                            // Set --
+                            //     Vector3 &norm = m->Verts()[i].norm;
+                            //     norm.x = norm.x + weighted.x;  (y, z likewise)
+                            // -- costs a callee-saved GPR for the reference and
+                            // collapses the function: 99.98799 -> 94.5 canonical,
+                            // 9 rows -> 86, the whole repVerts loop reallocated.
+                            // Do NOT reach for math/Vec.h here either: its order
+                            // is correct, it is PCH-reached, and there is nothing
+                            // in it to change.
                             Add(m->Verts()[i].norm, weighted, m->Verts()[i].norm);
                         }
                     }
@@ -2161,6 +2188,15 @@ static const unsigned int kNumBloomTaps = 7;
 // different sections, which the image does NOT have (both are .rdata, adjacent,
 // 0x3C apart), so the fold is a backend register-pressure choice rather than
 // something the source reaches.  Do not retry the pointer spelling.
+// SECOND MEASURED NEGATIVE (w9-f), a different attack on the same fold: the
+// hoist is a register-PRESSURE decision, so the obvious next lever is to make
+// both bases needed before a call -- read `float w = sBloomWeights[i];` at the
+// TOP of the loop body instead of between the two SetPConstant calls, which
+// keeps `w` live across the first call and forces the weights base to be
+// materialised early.  It is much worse: 88.66129 -> 82.2 canonical, 16 rows ->
+// 35, and it perturbs the r28/r29 pair, the 0x9a/0 setup and three stack slots
+// on top of the original save-set difference.  Both attacks on the two-base
+// hoist are now spent; treat the save-set difference as the floor here.
 static const float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
                                    0.0612547919f, 0.0815124959f, 0.0999667868f,
                                    0.1129886061f, 0.1176957935f, 0.1129886061f,
