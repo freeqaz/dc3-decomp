@@ -558,18 +558,18 @@ LiveCameraInput::LiveCameraInput()
     SkeletonUpdate::Init();
     // BEHAVIOURAL FIX (w8-r): SpeechMgr is constructed from the "speech"
     // SUB-ARRAY, not from the whole "kinect" array.  The image keeps
-    // FindArray("speech")'s result in r25 (`mr r25, r3` at 0x82432F04-ish,
-    // idx 100 of the function) and that is the register it passes to
-    // SpeechMgr::SpeechMgr -- `mr r4, r25` at 0x82432FAC, immediately before
-    // `bl ??0SpeechMgr@@QAA@PBVDataArray@@@Z`.  kinectArr lives in r23 and is
-    // never passed there.  LiveCameraInput::Init corroborates it: the image
+    // FindArray("speech")'s result in r25 (`mr r25, r3` at 0x82432E78) and
+    // that is the register it passes to SpeechMgr::SpeechMgr -- `mr r4, r25`
+    // at 0x82432FA8, the instruction before the
+    // `bl ??0SpeechMgr@@QAA@PBVDataArray@@@Z` at 0x82432FAC.  kinectArr lives
+    // in r23 (`mr. r23, r3` at 0x82432E44) and is never passed there.  LiveCameraInput::Init corroborates it: the image
     // feeds SpeechMgr::InitGrammars the same speech array.
     //
     // `speechArr` is also declared OUTSIDE the `if` and deliberately left
     // uninitialised, because the image reads it back on the !kinectArr path:
-    // 0x82432EBC is `lwz r25, 0x54(r31)`, and 0x54(r1/r31) is the slot the
-    // "speech" Symbol temp occupies (`addi r3, r31, 0x54`), i.e. the stack
-    // packer shares it with speechArr's home.  The read is harmless in the
+    // 0x82432EBC is `lwz r25, 0x54(r31)`, and 0x54(r31) is the slot the
+    // "speech" Symbol temp occupies (`addi r3, r31, 0x54` at 0x82432E54),
+    // i.e. the stack packer shares it with speechArr's home.  The read is harmless in the
     // shipped game -- b17 can only be true when kinectArr is non-null -- but
     // it is what buys the `b` over the reload at target indices 110/111, and
     // w7-bp's reading of those two rows as "the image spills and reloads a
@@ -750,7 +750,7 @@ void LiveCameraInput::Init() {
         // path: the image reads it back from its home slot there.  At
         // 0x8243390C the `FindArray("kinect")==0` arm is `lwz r31, 0x54(r1)`
         // -- 0x54(r1) is the slot the *"speech" Symbol temp* occupies
-        // (`addi r3, r1, 0x54` at 0x824338D0), i.e. the stack packer shares it
+        // (`addi r3, r1, 0x54` at 0x824338AC), i.e. the stack packer shares it
         // with speechArr's home and the image passes whatever is there to
         // InitGrammars.  The old spelling assigned `cfg = speechArr` inside the
         // block and passed `cfg`, which gives the memory phi no reason to
