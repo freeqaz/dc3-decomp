@@ -640,6 +640,7 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 
 #ifdef HX_NATIVE
 #include "rndobj/Env.h"
+#include "rndobj/Group.h"
 
 // Owner-control holders during the native cascade.
 //
@@ -663,15 +664,19 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
 //     it on every UI draw of party_mode_signin_screen (the Draw() recovery
 //     swallowed the SIGSEGV and the rest of the screen was never drawn).
 //   * RndGroup::Replace erases the child's node (and its draw/anim entries).
-//     Skipped, a group keeps a NULL child (a sound_group's get_group_children
-//     hands ui_objects.dta's shuffle a null $elem).  NOT handled here: running
-//     RndGroup::Replace inside this walk double-freed a list node in
-//     MergeScopeParityTest.RepeatedVenueMergeAfterClear (native-partyplay,
-//     2026-09-30); open lead.
-// For the first two owners this runs the image's step.  Neither deletes an
-// object or touches a ref other than `ref` (the env relinks `ref` into its own
-// ring; the TypeProps scrub edits DataNodes only, leaving `ref` to be nulled
-// below), so the ring walk -- which has already read `ref`'s successor --
+//     Skipped, a group kept a NULL child: a sound_group's get_group_children
+//     handed ui_objects.dta's shuffle a null $elem (`$elem = <null> not
+//     function or object`, 8x per party song).  First tried on
+//     native-partyplay and backed out: the erase unlinked the node through a
+//     stale ring `prev` and double-freed a list node in MergeScopeParityTest.
+//     RepeatedVenueMergeAfterClear.  The walk below now detaches each ref
+//     before its owner step runs (native-lifetime2), which is what the image's
+//     ReplaceList guarantees.
+// For these three owners this runs the image's step.  None of them deletes an
+// object or touches a ref other than `ref` (the group erases `ref`'s own
+// node; the env relinks `ref` into its own ring; the TypeProps scrub edits
+// DataNodes only, leaving `ref` to be nulled below), and `ref` is already out
+// of the ring, so the walk -- which has already read `ref`'s successor --
 // stays valid.  Other
 // owner-control owners (Task, LightPreset, CharBonesMeshes,
 // DefaultPhysicsManager) are not covered: unmeasured, and Task's Replace is
@@ -709,6 +714,12 @@ static bool NativeOwnerControlReplace(
         Hmx::Object *owner = list->Owner();
         if (!owner || owner == dying || !owner->IsRefAlive())
             return false;
+        if (RndGroup *group = dynamic_cast<RndGroup *>(owner)) {
+            if (list == &group->Objects()) {
+                static_cast<ObjRefOwner *>(group)->Replace(ref, nullptr);
+                return true;
+            }
+        }
         if (DataArray *map = typePropsMap(owner))
             NativeScrubTypePropsValue(map, dying);
         return false;
@@ -747,9 +758,24 @@ void Hmx::Object::NullifyAllRefs() {
         // next pointer (same technique as SnapshotRing).
         ObjRef *nxt = *(ObjRef **)((const char *)cur + kNextOffset);
         uint32_t alive = *(const uint32_t *)((const char *)cur + kSentinelOffset);
-        if (alive == ObjRef::kAliveSentinel
-            && !NativeOwnerControlReplace(cur, this, typePropsMap))
-            cur->NullifyObj();
+        if (alive == ObjRef::kAliveSentinel) {
+            // Take `cur` out of the ring BEFORE any owner step runs.  This walk
+            // never repairs neighbours: every ref it has passed is self-looped
+            // by NullifyObj (a kObjListNoNull list node is deleted outright),
+            // while the next ref's `prev` still names it.  An owner step that
+            // unlinks its ref -- RndGroup::Replace erases the node, and
+            // ~ObjRefConcrete in a cascade does SafeReleaseFromRing; the env's
+            // SetObj does the same -- would write through that stale `prev`
+            // into an earlier holder, or into a list node already freed.  That
+            // write corrupted glibc's bins (MergeScopeParityTest.Repeated-
+            // VenueMergeAfterClear: 'free(): chunks in smallbin corrupted').
+            // The image never has a stale neighbour: ReplaceList unlinks each
+            // ref from a consistent ring as it goes.  Self-looped, the unlink
+            // is a no-op and nothing outside `cur` is written.
+            cur->DetachSelf();
+            if (!NativeOwnerControlReplace(cur, this, typePropsMap))
+                cur->NullifyObj();
+        }
         cur = nxt;
     }
     sentinel->next = sentinel;
