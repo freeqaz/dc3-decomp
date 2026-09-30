@@ -135,6 +135,14 @@ int fft_real_forward_scalar(float* data, unsigned long size, float* context) {
             // arithmetic to just before its store; adjacent, the stores keep
             // source order.  Diff-first adjacent is 86.7; pre-computing both
             // bins into named temps changes nothing either way.
+            // w8-r: moving ONLY `c`/`s` between the two bin stores (leaving
+            // `ss` above them), to reproduce the image's `lfd c` / `lfd s` pair
+            // sitting BETWEEN `stfs f9, 0x4(r31)` and `stfs f8, 0x0(r31)`, is
+            // byte-identical at 88.048.  The image's residual shape is: diff
+            // computed, sum computed, store DIFF, c/s loaded, store SUM -- it
+            // stores the second bin first WITHOUT deferring the first bin's
+            // arithmetic, which is the half w7-br's declarations-between
+            // variant could not get.
             float ss = (float)sin_2a;
             double c = 1.0;
             double s = 0.0;
