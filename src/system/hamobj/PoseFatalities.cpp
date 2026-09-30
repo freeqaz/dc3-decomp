@@ -794,7 +794,9 @@ void PoseFatalities::DrawDebug() {
             meterB.Draw();
             Hmx::Color greenColor(0, 0, normalizedScore * normalizedScore, 1);
             meterB.DrawBar(0.0f, 1.0f, greenColor, 1.0f, 0.0f);
-            Hmx::Color blueColor(0, 0, 0, 1);
+            // (0, 1, 0, 1): the image stores f30 (1.0) into .green at
+            // 0x64(r31) for this bar; we drew it black.
+            Hmx::Color blueColor(0, 1, 0, 1);
             meterB.DrawBar(0.0f, weightedCompare, blueColor, 1.0f, 0.0f);
 
             static DebugMeter meterC(
