@@ -73,25 +73,10 @@ void CharUpperTwist::Poll() {
     Interp(v68, twist2world.m.y, 0.333f, tf48.m.y);
     NormalizeAboutX(tf48.m);
     mUpperArm->SetWorldXfm(tf48);
-#ifdef HX_NATIVE
-    // Back-compute mLocalXfm so it survives dirty cascades (same as CharForeTwist fix).
-    if (mUpperArm->TransParent()) {
-        Transform invParent;
-        Invert(mUpperArm->TransParent()->WorldXfm(), invParent);
-        Multiply(tf48, invParent, mUpperArm->mLocalXfm);
-    }
-#endif
     tf48.v = mTwist1->WorldXfm().v;
     Interp(v68, twist2world.m.y, 0.666f, tf48.m.y);
     NormalizeAboutX(tf48.m);
     mTwist1->SetWorldXfm(tf48);
-#ifdef HX_NATIVE
-    if (mTwist1->TransParent()) {
-        Transform invParent;
-        Invert(mTwist1->TransParent()->WorldXfm(), invParent);
-        Multiply(tf48, invParent, mTwist1->mLocalXfm);
-    }
-#endif
 }
 
 void CharUpperTwist::PollDeps(

@@ -116,27 +116,11 @@ void CharForeTwist::Poll() {
     tf88.v = parentxfm.v;
     Multiply(m58, parentxfm.m, tf88.m);
     twistparent->SetWorldXfm(tf88);
-#ifdef HX_NATIVE
-    // Back-compute mLocalXfm so it survives dirty cascades from later pollables.
-    // CharUpperTwist may call SetWorldXfm on upperArm after us, dirtying our bones.
-    {
-        Transform invParent;
-        Invert(twistparent->TransParent()->WorldXfm(), invParent);
-        Multiply(tf88, invParent, twistparent->mLocalXfm);
-    }
-#endif
     RndTransformable *hand = mHand;
     RndTransformable *twist2 = mTwist2;
     Interp(tf88.v, handxfm.v, twist2->mLocalXfm.v.x / hand->mLocalXfm.v.x, tf88.v);
     Multiply(m58, tf88.m, tf88.m);
     mTwist2->SetWorldXfm(tf88);
-#ifdef HX_NATIVE
-    {
-        Transform invParent;
-        Invert(twistparent->WorldXfm(), invParent);
-        Multiply(tf88, invParent, mTwist2->mLocalXfm);
-    }
-#endif
 }
 
 void CharForeTwist::PollDeps(

@@ -3,6 +3,7 @@
 // the (b) ADDS triage in docs/decomp/patterns/native-shadow-bodies-are-unmeasured.md.
 #include "test_helpers.h"
 
+#include "char/CharForeTwist.h"
 #include "game/GameMode.h"
 #include "hamobj/HamGameData.h"
 #include "obj/Dir.h"
@@ -12,6 +13,7 @@
 #include "rndobj/Anim.h"
 #include "rndobj/Dir.h"
 #include "rndobj/Poll.h"
+#include "rndobj/Trans.h"
 
 namespace {
 
@@ -208,3 +210,67 @@ TEST_F(NativeEngineLeadsTest, NewGameModeInstallsTheInitModeProperties) {
     delete mode;
 }
 
+// ----------------------------------------------------------------------------
+// CharForeTwist::Poll
+// ----------------------------------------------------------------------------
+
+// The image's CharForeTwist::Poll sets the twist bones' WORLD transforms only
+// (SetWorldXfm at 8239CBA8 and 8239CBE8; no Invert, no local write).  Native
+// back-computed both bones' mLocalXfm after each SetWorldXfm, on the 2026-03-24
+// premise that CharUpperTwist polls after it and dirties the chain (that order
+// came from the reversed poll-sorter polarity, fixed 2026-07-02; and no
+// CharUpperTwist exists at runtime -- CharacterTest creates one in edit mode
+// only).  The persisted local also fed the next frame's
+// twist2.local.x / hand.local.x interpolation ratio.
+TEST_F(NativeEngineLeadsTest, ForeTwistPollWritesWorldNotLocal) {
+    RndTransformable *forearm = Hmx::Object::New<RndTransformable>();
+    RndTransformable *twist1 = Hmx::Object::New<RndTransformable>();
+    RndTransformable *twist2 = Hmx::Object::New<RndTransformable>();
+    RndTransformable *hand = Hmx::Object::New<RndTransformable>();
+    twist1->SetTransParent(forearm, false);
+    twist2->SetTransParent(twist1, false);
+    hand->SetTransParent(forearm, false);
+
+    Transform t;
+    t.Reset();
+    t.v.Set(6.0f, 0.0f, 0.0f);
+    twist1->SetLocalXfm(t);
+    t.v.Set(7.0f, 0.0f, 0.0f);
+    twist2->SetLocalXfm(t);
+    Transform h;
+    h.Reset();
+    MakeRotMatrixX(0.9f, h.m); // a twisted wrist, so the solve does work
+    h.v.Set(20.0f, 0.0f, 0.0f);
+    hand->SetLocalXfm(h);
+    const Transform twist1Local = twist1->LocalXfm();
+    const Transform twist2Local = twist2->LocalXfm();
+
+    CharForeTwist *twist = Hmx::Object::New<CharForeTwist>();
+    twist->SetProperty("hand", DataNode(hand));
+    twist->SetProperty("twist2", DataNode(twist2));
+    const Transform twist2WorldBefore = twist2->WorldXfm();
+    twist->Poll();
+    const Transform twist2WorldAfter = twist2->WorldXfm();
+    ASSERT_FALSE(twist2WorldAfter.m.y.y == twist2WorldBefore.m.y.y
+                 && twist2WorldAfter.m.z.z == twist2WorldBefore.m.z.z)
+        << "control: the solve must rotate the twist bone, or an unchanged "
+           "local below proves nothing";
+
+    auto sameXfm = [](const Transform &a, const Transform &b) {
+        return a.v.x == b.v.x && a.v.y == b.v.y && a.v.z == b.v.z
+            && a.m.x.x == b.m.x.x && a.m.y.y == b.m.y.y && a.m.z.z == b.m.z.z
+            && a.m.y.z == b.m.y.z && a.m.z.y == b.m.z.y;
+    };
+    EXPECT_TRUE(sameXfm(twist1->LocalXfm(), twist1Local))
+        << "CharForeTwist::Poll rewrote the twist parent's mLocalXfm; the image "
+           "only calls SetWorldXfm";
+    EXPECT_TRUE(sameXfm(twist2->LocalXfm(), twist2Local))
+        << "CharForeTwist::Poll rewrote twist2's mLocalXfm; the image only "
+           "calls SetWorldXfm";
+
+    delete twist;
+    delete hand;
+    delete twist2;
+    delete twist1;
+    delete forearm;
+}
