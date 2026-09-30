@@ -624,8 +624,7 @@ watched failing; every PPC object touched hashes identically):
 
 | symptom on the route | cause | fix |
 |---|---|---|
-| SIGSEGV entering round 3 (perform, throneroom), every run | native cascade (`NullifyAllRefs`) never called `TypeProps::Replace`: a HamCharacter's cached `vo_bank` property kept a freed character_vo dir; `play_character_vo` called it | `NullifyAllRefs` runs the image's owner step for TypeProps / RndEnviron / RndGroup (`OwnerControlCascadeTest`) |
-| `$elem = <null>` from a sound_group's `get_group_children` | same bypass: `RndGroup::Replace` never erased the child node | same fix |
+| SIGSEGV entering round 3 (perform, throneroom), every run | native cascade (`NullifyAllRefs`) never called `TypeProps::Replace`: a HamCharacter's cached `vo_bank` property kept a freed character_vo dir; `play_character_vo` called it | `NullifyAllRefs` runs the image's owner step for TypeProps and RndEnviron (`OwnerControlCascadeTest`) |
 | second `party_mode_signin_screen` rendered black; `RndEnviron::FogEnable` SIGSEGV every draw | `~ObjectDir`'s pre-nullify nulled the parent's `ObjDirPtr` in `mSubDirs` instead of releasing it, so a file-loaded subdir (`ui/augmented_photo.milo`) was never destroyed; the next panel load got the zombie back, fog owner cut | unlink/relink those DirPtrs around the pre-nullify so `mSubDirs.clear()` destroys the subdir (`CascadeSubDirTest`) |
 | SIGSEGV at Make Your Move's first score | `FreestyleMoveRecorder` Start/Stop/Poll emptied; `mFrames` never allocated | image bodies, camera/palette touches guarded (`MakeYourMoveRecorderTest`) |
 
@@ -637,7 +636,10 @@ natively, and `HamUI`'s texture-store calls (100% matched) do nothing without it
 `RhythmBattle::Poll` warns `bustajack recordings are getting big` thousands of times per
 Keep the Beat round once player 2 has a skeleton (100% matched; image behaviour).
 
-**Open leads.** Other owner-control owners bypassed by the cascade (Task, LightPreset,
+**Open leads.** `$elem = <null>` from a sound_group's `get_group_children` is the same
+bypass (`RndGroup::Replace` never erases the child's node); running it inside the walk
+double-freed a list node in `MergeScopeParityTest.RepeatedVenueMergeAfterClear`, so it is
+not fixed. Other owner-control owners bypassed by the cascade (Task, LightPreset,
 CharBonesMeshes, DefaultPhysicsManager) are unmeasured. A subdir that still holds a native
 "survivor" (an object with external DirPtrs) keeps the old leak, because
 `MergeLifecycleTest.CascadeSkipsObjectsWithExternalDirPtrs` pins that survival; in the image
