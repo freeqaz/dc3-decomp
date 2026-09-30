@@ -345,13 +345,6 @@ void Game::Restart(bool b) {
     }
     if (TheHamDirector)
         TheHamDirector->ResetFacialAnimation();
-#ifdef HX_NATIVE
-    // StopAllSounds destroys the song streams (via MoggClip::KillStream).
-    // The song will be reloaded by LoaderPoll, but mLoadState stays at 3,
-    // so Game::IsLoaded() never re-polls HamAudio::IsReady() to trigger
-    // FinishLoad. Reset to 0 so the load state machine runs again.
-    mLoadState = 0;
-#endif
 }
 
 void Game::SetTimePaused(bool b) {

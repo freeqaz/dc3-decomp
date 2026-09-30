@@ -234,3 +234,20 @@ TEST_F(DtaFlowTest, NoCrashCleanExit) {
     EXPECT_EQ(sResult.exitCode, 0)
         << "Engine exited with code " << sResult.exitCode;
 }
+
+TEST_F(DtaFlowTest, SongLoadChainRunsOncePerSong) {
+    // Game::IsLoaded's load chain (SongDB/Game PostLoad -- which deletes and
+    // recreates mOvershell -- MoveMgr::LoadMoveData, LoadAllVariants, the
+    // MoveMerger wait) runs once per song: the image's Game::Restart
+    // (82864F08..82864F98) stores mRestartCount and mWaitState and never
+    // touches mLoadState (+0xa0), so the Restart(true) that GamePanel::Reset
+    // runs at song start leaves the game loaded.  A native-only
+    // `mLoadState = 0` in Restart re-ran the whole chain on every song start.
+    size_t n = 0;
+    const std::string needle = "Game::IsLoaded() - Done waiting for MoveGraph";
+    for (size_t p = sResult.output.find(needle); p != std::string::npos;
+         p = sResult.output.find(needle, p + 1))
+        n++;
+    EXPECT_EQ(n, 1u) << "the song load chain ran " << n
+                     << " times in one song (Restart reset mLoadState)";
+}

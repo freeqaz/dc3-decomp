@@ -765,12 +765,6 @@ void UIManager::Poll() {
             UIScreen *oldCur = mCurrentScreen;
             mTransitionState = kTransitionFrom;
             mCurrentScreen = trans;
-#ifdef HX_NATIVE
-            // Native: DTA set_sink never fires in DC3 (investigated 2026-03-12).
-            // Screens don't have {ui set_sink} in their TypeDefs. Set mSink to
-            // current screen so HANDLE_MEMBER_PTR(mSink) routes button input.
-            mSink = trans;
-#endif
             mTransitionScreen = oldCur;
 #ifdef HX_WEB
             printf("DC3 UI: transition complete, will enter '%s'\n", trans ? trans->Name() : "<null>");

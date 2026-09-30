@@ -149,8 +149,9 @@ edit — same hash; PCH-reached headers: full `ninja` + `report.json` comparison
 the 6 (b) regions that shadow a function defined elsewhere, split by area across six
 read-only triage passes (obj/math/utl 112, hamobj/game/flow/meta 83, char/meta_ham/ui/world
 71, rndobj 79, audio/movie 62, os/gesture/net/App 57). The 688 (b) ADDS regions were **not**
-triaged; many are defensive null checks and DTA-flow shortcuts, and some change behaviour
-(see "notable" below for the ones that surfaced incidentally).
+triaged by this pass; many are defensive null checks and DTA-flow shortcuts, and some change
+behaviour (see "notable" below for the ones that surfaced incidentally). They were triaged
+the same day on `native-additions` -- see "(b) ADDS triage" at the end of this file.
 
 ### Divergences fixed (one commit each on `native-shadow`; test watched failing first)
 
@@ -257,3 +258,102 @@ branch. The 688 (b) regions are the next triage pass.
   start with and without it.
 - **`CharPollGroup.cpp`** — `DC3_POLL_ORDER_FIX=0` flips to a polarity its comment
   wrongly calls "the PPC polarity" (the default is correct).
+
+## (b) ADDS triage (branch `native-additions`, 2026-09-30)
+
+**Read: 689 of 689 (b) regions at body level** (the inventory on `3f59e5b4c`; 682 after the
+fixes below removed 7). **Adjudicated against the target listing: 97** -- 92 of the 301
+pre-classified SUSPECT regions, plus 5 others -- by this lane and two read-only
+sub-agents. The other **209 suspect regions were judged by class from their bodies, not
+against the asm**: mostly null/bounds guards that only differ where the image would read
+its zero-mapped page 0 or has already failed a fatal `MILO_ASSERT`/`MILO_FAIL`, absent-
+hardware stubs (Kinect, voice, sign-in, LIVE), and diagnostics the classifier could not
+prove inert. Read those as unexamined, not clean.
+
+### The pre-classifier
+
+`native_shadow_audit.py` now puts every ADDS region into exactly one of 17 buckets
+(`classify_addition`, `B_CLASSES`; `--list b-suspect`): `handled:*` (owned by
+`native-animbypass`, or already judged above), `plumbing:*` (decl, diag, debug-optin,
+ring, lp64-endian, platform, native-def) and `suspect:*` (handler, timeout, hw-stub,
+null-guard, early-return, forced-state, extra-call, unrecognised). It is a triage aid,
+not a verdict: it reads shapes, not semantics. On `3f59e5b4c`: handled 13, plumbing 375,
+suspect 301 (of 689). After this branch's fixes, rebased on `7add51c15` (native-animbypass
+landed and removed its regions, so `handled:animbypass` is now empty): handled 11,
+plumbing 375, suspect 295 (of 681). Known confusions: a region with an unrecognised diagnostic line
+lands in `suspect:extra-call`; the `hw-stub` bucket keys on comment words. Contract:
+the bucket counts ride the coverage JSON as `b_classes` and must sum to the ADDS count or
+the run exits 4; tests in `scripts/analysis/tests/test_native_shadow_audit.py` fail on
+the pre-extension tool (3 of 8).
+
+### Divergences fixed (one commit each; test watched failing first)
+
+| file : function | wrong native behaviour | test |
+|---|---|---|
+| `synth/StandardStream.cpp` `UpdateTime` | a second, never-paused, never-reset wall clock switched the stream to "timer fallback" whenever audio lagged it 10x -- after any long pause or any `Resync`, with a real device too: song time jumped forward by the pause, drift correction off for good. Now: no `AudioDevice` -> `mTimer` (the image's clock) | `NativeAdditionsStreamTest.PauseDoesNotAdvanceSongTime` (+ headless control) |
+| `world/CameraShot.cpp` `CamShotFrame::BuildTransform` | early return for every targetless keyframe skipped the path, the whole parent block and the dynamic offsets -- parented/path shots froze | `NativeAdditionsCamShotTest.TargetlessFrameFollowsItsParent` |
+| `ui/UI.cpp` `UIManager::Poll` | `mSink = trans` on every transition: the screen saw every `ui` message before the typedef and C++ handlers, and got unhandled ones twice | `NativeAdditionsUITest.TransitionDoesNotMakeTheScreenTheSink` |
+| `meta_ham/Overshell.cpp` `OvershellSlot::SetPlaying` | unconditional `return;` -- `player_join`/`player_quit` never exported (reset_detection, drop-in grace, flashcards) | `NativeAdditionsOvershellTest.SetPlayingExportsJoinAndQuit` |
+| `ui/UIScreen.cpp` / `ui/UIPanel.cpp` `Enter` | any panel named `*tutorial*` refused to enter -- Options/Pause -> Tutorials opened empty | `NativeAdditionsTutorialTest.*` (+ ordinary-name control) |
+| `game/Game.cpp` `Game::Restart` | `mLoadState = 0` on a false premise re-ran the whole song load chain (PostLoad recreating `mOvershell`, LoadMoveData, ...) at every song start; telemetry read `gameLoadState=0` all through gameplay | `DtaFlowTest.SongLoadChainRunsOncePerSong` |
+
+### Legitimate but notable
+
+- `StandardStream::Play` pump/prefill, `Rnd::PreInit` 1280x720 (the image's
+  `DxRnd::InitBuffers` also forces 720p), `Splash` non-threaded path,
+  `WaveToTurnOnLight::EnableWaveState` (the image's own NUI-failure branch),
+  `ShellInput::SyncVoiceControl`, `SkeletonChooser::GetPlayerSide`, the signin fictions
+  (`GetSignedInProfiles`, `SetAssociatedPadNum` -- the latter also drops a -1
+  re-association blip), `HamInit` provider defaults (no-ops on real assets:
+  `flow.dta` defines them), `GameModeInit gameplay_mode` (cleared by the first
+  `SetMode`), `LoadingPanel` ready gate (web only), `HamMaster::Poll` MIDI with no stream
+  (web only), `Game::PostWaitStart` audio-failed branch (web only).
+- Dead code: `Synth::NewStreamDecoder` mogg branch (NativeSynth overrides it),
+  `PropKeys::Replace` (the owner dispatch reaches `RndPropAnim::Replace` natively too),
+  `RndText::OnComputeCharWidths` reset (the image resets in `AcquireFontMap`),
+  `Splash::EndSplasher` camera clear (`~RndCam` clears it).
+- `DataNode::Evaluate` null property returns `sNullNode(0)` -- the same value the 360
+  reads from page 0 after the Continue dialog.
+
+### Open leads (divergent, not fixed here -- with what blocks each)
+
+- **`MultiUserGesturePanel` `mNativeEnterPending`** -- auto-fires `enter_gameplay` and
+  `SetAssociatedPadNum(0,0)` on the first frame, so character/crew/outfit/difficulty
+  select and the campaign state step are skipped. Needs a native input path into the
+  panel's own `start_game`; the harvest route currently relies on the auto-fire.
+- **`GamePanel::StartGame`** forces `game_stage playing` (image: `HasIntro/Start`, then
+  `mState=2`, no property; the `HasIntro` half was restored by `a408e80a2`). Natively `intro_over` does fire right after StartGame
+  (`Game::Poll: intro timer expired`), so deletion looks safe for perform, and the force
+  clobbers rhythm_battle's intro and holla-back's `title`. `DtaFlowTest.GameplayReaches
+  PlayingState` keys on the forced log line (tell 10) and must be re-pointed with it.
+- **`PoseFatalities::Poll`** unconditional return: dance-battle fatalities and all of
+  strike-a-pose are dead natively. The "LP64 struct mismatch" premise is from March;
+  re-test with the battle route.
+- **`MetaPanel::Init` `sUnlockAll = true`** -- everything unlocked, campaign reads
+  finished, profile reads cheated. Its premise (asserts on an empty profile list) is
+  stale since `InitNative`; removing it is a product decision (no save system natively).
+- **`HamDirector::OnFileMerged` HUD block + `GamePanel::SetTypeDef` `common_reset`** --
+  repositions score/flashcard transforms and snaps the show-score anims; the root is the
+  native HUD camera / draw path, not the merge.
+- **`UIManager::GotoScreenImpl` refuses `*campaign*` screens** -- Story mode unreachable;
+  blocked on `MetaPanel` never creating `Campaign`.
+- **`UIScreen::OnMsg(ButtonDownMsg)` -> `skip_selected`** (image: Cancel -> `go_back_screen`,
+  always unhandled), **`MoviePanel::Poll` `IsOpen` guard** (image fires `movie_done`),
+  **`HamDirector::FindNextShot` Area1_WIDE fallback** (image keeps the shot and notifies),
+  **`HamNavList::RealRefresh`** recreates every widget on every refresh,
+  **`UIList::Refresh`** display recount, **`UI.cpp OnGotoScreen`** null -> main_screen,
+  **`WorldCrowd::DrawShowing`** static additive impostor cache,
+  **`SkeletonChooser::DoesRequireHandRaise`** always false.
+- **`ObjectDir::FindObject`** proxy/parent-loader fallback binds pointers the image leaves
+  null -- log every non-null fallback hit over a boot and a song.
+- **`RndDir::SyncObjects`** moves `*ikfoot*`/`*feetandhands*` polls last **by default**
+  (`DC3_FEET_PLANT_FIX_OFF` to disable) although every sibling of that experiment is
+  opt-in and `Dc3FeetPlantFix()` calls itself non-functional; the image does not reorder.
+- **UNSURE:** `HamDirector::Poll` drives `songAnim->SetFrame` from the beat (double drive
+  if `select_camera` also fires -- count `OnSelectCamera` calls); `SetupRoutineBuilderAnims`
+  `mLoop=false` (read the routine anim's EndFrame after `ResetRemixer`);
+  `CharForeTwist`/`CharUpperTwist` write `mLocalXfm` (compare Xenia twist-bone telemetry).
+- **`AnimTask::Poll` (unowned -- flagged to `native-animbypass`, not in its merge):** it nulls `mAnimTarget` before the `ended`
+  listener runs; the task is deleted on the same frame either way and `IsAnimating()` does
+  not observe it, but a new AnimTask started from `ended` on the same target no longer
+  finds the finishing task as its `mBlendTask`.
