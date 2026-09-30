@@ -162,7 +162,6 @@ void RndRibbon::ExposeMesh() {
  *  false positive of the offset resolver.  Both loads exist on both sides;
  *  the regalloc shift merely pairs them against each other. */
 void RndRibbon::ConstructMesh() {
-#ifndef HX_NATIVE
     if (mNumSegments <= 0)
         return;
 
@@ -172,6 +171,16 @@ void RndRibbon::ConstructMesh() {
     RndMesh::Face emptyFace;
     std::vector<RndMesh::Face> &faces = mMesh->Faces();
     unsigned int targetFaceCount = numFacePairs * 2;
+#ifdef HX_NATIVE
+    // LP64: the image's (end - begin) / 6 byte arithmetic (divw at 8271625C)
+    // is faces.size(); the int pointer casts below would truncate on x86_64.
+    unsigned int curFaceCount = (unsigned int)faces.size();
+    if (targetFaceCount < curFaceCount) {
+        faces.erase(faces.begin() + targetFaceCount, faces.end());
+    } else {
+        faces.insert(faces.end(), targetFaceCount - curFaceCount, emptyFace);
+    }
+#else
     int facesBegin = (int)faces.begin();
     unsigned int curFaceCount = (unsigned int)(((int)faces.end() - facesBegin) / 6);
 
@@ -187,6 +196,7 @@ void RndRibbon::ConstructMesh() {
             emptyFace
         );
     }
+#endif
 
     int seg = 0;
     if (mNumSegments > 0) {
@@ -207,7 +217,11 @@ void RndRibbon::ConstructMesh() {
                     int vNextRaw = rem + baseVert2;
                     int v0PlusNS = vertIdx + ns;
                     int vNextWrapRaw = ns + vNextRaw;
+#ifdef HX_NATIVE
+                    short *facePtr = (short *)((char *)mMesh->Faces().data() + faceOff);
+#else
                     short *facePtr = (short *)((int)mMesh->Faces().begin() + faceOff);
+#endif
                     unsigned short vNextWrap = (unsigned short)vNextWrapRaw;
                     unsigned short vNext = (unsigned short)vNextRaw;
                     unsigned short v0PlusNSu = (unsigned short)v0PlusNS;
@@ -216,11 +230,21 @@ void RndRibbon::ConstructMesh() {
                     vertIdx = vertIdx + 1;
                     facePtr[1] = vNext;
                     facePtr[2] = vNextWrap;
+#ifdef HX_NATIVE
+                    // Second triple of the pair: the image re-reads the face
+                    // array (8271632C..38) and stores at +6/+8/+10 bytes.
+                    short *faceBase = (short *)((char *)mMesh->Faces().data() + faceOff);
+                    faceBase[3] = vNextWrap;
+                    faceBase[4] = v0PlusNSu;
+                    faceOff = faceOff + 12;
+                    faceBase[5] = v0;
+#else
                     short *faceBase = (short *)((int)mMesh->Faces().begin() + faceOff);
                     *(short *)((int)faceBase + 6) = vNextWrap;
                     *(short *)((int)faceBase + 8) = v0PlusNSu;
                     faceOff = faceOff + 12;
                     *(short *)((int)faceBase + 10) = v0;
+#endif
                     numSides = mNumSides;
                 } while (side < numSides);
             }
@@ -229,11 +253,9 @@ void RndRibbon::ConstructMesh() {
     }
 
     mMesh->Sync(0x3f);
-#endif // !HX_NATIVE
 }
 
 void RndRibbon::UpdateMesh() {
-#ifndef HX_NATIVE
     if (mTransforms.size() == 0)
         return;
 
@@ -307,12 +329,10 @@ void RndRibbon::UpdateMesh() {
         } while (seg < mNumSegments);
     }
     mMesh->Sync(0x1f);
-#endif // !HX_NATIVE
 }
 
 #pragma fp_contract(off)
 void RndRibbon::UpdateChase() {
-#ifndef HX_NATIVE
     if (!mFollowA) {
         return;
     }
@@ -489,5 +509,4 @@ void RndRibbon::UpdateChase() {
 
     UpdateMesh();
     lastTime = now;
-#endif // !HX_NATIVE
 }

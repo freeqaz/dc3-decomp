@@ -692,11 +692,6 @@ void AppLabel::SetStoreFilterName(const HamStoreFilter *filter) {
     SetDisplayText(filter->mDisplayName.c_str(), true);
 }
 
-#ifdef HX_NATIVE
-void AppLabel::SetTimeElapsedSince(unsigned int) {}
-#endif
-
-#ifndef HX_NATIVE
 void AppLabel::SetTimeElapsedSince(unsigned int timestamp) {
     static Symbol last_played_today("last_played_today");
     static Symbol last_played_yesterday("last_played_yesterday");
@@ -733,4 +728,3 @@ void AppLabel::SetTimeElapsedSince(unsigned int timestamp) {
         SetTokenFmt(last_played_months, elapsed / 2592000);
     }
 }
-#endif
