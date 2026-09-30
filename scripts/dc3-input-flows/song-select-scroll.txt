@@ -1,0 +1,41 @@
+# Song select d-pad scroll edge -- pins HamNavList::OnMsg(ButtonDownMsg).
+#
+# Driven by native/tests/test_dta_flow.cpp (DtaFlowSongSelectScrollTest).
+#
+# The list shows sNumListSelectable (5) selectable rows, [first, first + 4].
+# The image (0x8244A11C..0x8244A12C) scrolls when the new selection reaches
+# first + sNumListSelectable -- `add r11, r11, r10` / `cmpw` / `blt`, NO `- 1`
+# -- and otherwise just moves the highlight.  Every row counts: tier headers
+# are active (NavListHeaderNode::IsActive), so nothing is skipped.
+#
+# Perform-mode song select enters focused on index 2 with first = 2
+# (song_select.dta: scroll_to_index 2 2).  Six downs:
+#   2 -> 3, 4, 5, 6       highlight only; 6 is the song_tier_1 header
+#   6 -> 7                7 >= 2 + 5: ScrollDown, first 2 -> 3
+#   7 -> 8                8 >= 3 + 5: ScrollDown, first 3 -> 4
+# so the confirm selects index 8 with first = 4.  With the old `- 1` edge the
+# first scroll fires one row early and jumps the header (5 -> 7), and six
+# downs end on index 9.
+#
+# Presses are 15 frames apart: a scroll completes in ~0.1 s
+# (navlist_scrolling.dta normal_scroll_speed 10), well inside the gap.
+
+wait_screen title_screen
++30 confirm
+
+wait_screen main_screen
++30 confirm
+
+wait_screen choose_mode_screen
++30 confirm
+
+wait_screen song_select_screen
++30 down
++45 down
++60 down
++75 down
++90 down
++105 down
++165 confirm
+
+wait_screen multiuser_screen

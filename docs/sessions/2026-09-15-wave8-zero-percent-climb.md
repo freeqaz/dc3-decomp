@@ -877,6 +877,22 @@ full-gate runs. Reverted at `54365d0c3` with the debt recorded at the line;
 measured 9/9 DtaFlow green before landing. The concurrent session owns the native
 fix and will re-land the faithful comparison on top.
 
+> ⚠ **Correction (2026-09-30, branch `native-navscroll`): there was no second
+> divergence.** Instrumented per press, native scrolls exactly as the listing
+> does. Song select enters on index 2 (`song_select.dta`, perform branch:
+> `scroll_to_index 2 2`) and the list is `0 playlists, 1 random_song,
+> 2 song_tier_0, 3 ymca, 4 betteroffalone, 5 thehustle, 6 song_tier_1,
+> 7 starships`. Tier headers are *active* rows (`NavListHeaderNode::IsActive` →
+> `IsEnabled`, both 100 %), so the four scripted downs faithfully end **on the
+> song_tier_1 header**. The `- 1` only "worked" because it fired the ScrollDown
+> one row early and hopped the cursor over index 6 — the `ymca.txt` flow had been
+> playing **starships** (`select selected=7 sym='starships'`). The "6 ↔ 3
+> alternation" was not the d-pad at all: it was the input runner's three
+> multiuser confirms, fired after the multiuser `wait_screen` timed out, toggling
+> header mode (song_tier_1 is index 6 expanded, index 3 collapsed). The fix
+> *was* the input script: one down, derived from the list. Item 4 below is
+> therefore itself retracted.
+
 **The process failure that made it expensive** is worth more than the fix. I
 landed six merges containing behavioural changes and gated **once, at the end** —
 two of those changes were described in their own merge messages as altering
@@ -906,6 +922,9 @@ guess feel like a finding.
    the regression was real.
 4. **"Re-tune the input script"** — refuted by reading the log I had already
    captured: a cursor that *alternates* cannot be fixed with more presses.
+   ⚠ *This retraction was itself wrong* (see the correction above): the
+   alternation came from later confirms toggling header mode, not from the
+   d-pad, and re-deriving the script's down count from the list was the fix.
 
 What made these recoverable rather than damaging: each was stated precisely enough
 to be falsified, and corrected the moment a disconfirming fact arrived. Three of

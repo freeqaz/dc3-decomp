@@ -1325,9 +1325,10 @@ void HamNavList::SetSelecting(bool selecting) {
     static int sSelectDiag = 0;
     if (sSelectDiag++ < 32) {
         MILO_LOG(
-            "DC3 HamNavList: select name='%s' selected=%d sym='%s' focus=%d selecting=%d provider=%p\n",
+            "DC3 HamNavList: select name='%s' selected=%d first=%d sym='%s' focus=%d selecting=%d provider=%p\n",
             Name(),
             selected,
+            listState.FirstShowing(),
             sym.Str(),
             TheUI->FocusComponent() == this,
             selecting,
@@ -1621,28 +1622,20 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                         // r10`, ours `add r11, r10, r11`) is NOT source-
                         // reachable: writing the sum the other way round is
                         // byte-inert.
-                        // ⚠ KNOWINGLY UNFAITHFUL, and reverted on purpose.  The
-                        // faithful form is `firstShowing + sNumListSelectable`
-                        // with NO `- 1`, exactly as the comment above describes.
-                        // Landing it broke the menu flow: with the `- 1` gone,
-                        // four d-pad downs in song_select alternate between
-                        // display indices 6 and 3 -- both showing `song_tier_1`
-                        // -- so the cursor never advances past the tier header,
-                        // song select never exits, and 8 DtaFlow tests fail
-                        // (EnterGameplayFired, LoadingChainTransitions,
-                        // ScreenChainReachesGameScreen, GamePanelGatesPass,
-                        // HamDirectorActivates, GameplayReachesPlayingState,
-                        // SongLoadChainRunsOncePerSong, MultiuserScreenWaitsForInput).
-                        // Bisected to this hunk: 47fd0abcb GOOD, dd879cdfd BAD.
-                        //
-                        // The `- 1` is therefore compensating for a SECOND
-                        // divergence -- native ScrollDown / UIListState scroll
-                        // behaviour that does not match the image -- which this
-                        // edge was masking.  Restore the faithful comparison only
-                        // together with that fix, with the DtaFlow tests green.
-                        // Costs 0.82 pp on this row (98.361 -> 97.541).
+                        // Landing this once broke 8 DtaFlow tests and it was
+                        // reverted (54365d0c3) on the theory that the `- 1`
+                        // compensated for a native scroll divergence.  There was
+                        // none: instrumented per press, native computes exactly
+                        // what this listing does.  The flows were counting on
+                        // the bug -- song select enters on index 2 (the
+                        // song_tier_0 header; headers are active rows), four
+                        // downs reach index 6 (the song_tier_1 header), and only
+                        // the early `- 1` edge made the fourth press ScrollDown
+                        // and hop the cursor over it to starships.  The input
+                        // scripts now use one down (-> ymca, index 3), and
+                        // DtaFlowSongSelectScrollTest pins this edge.
                     } else if (selected
-                        >= firstShowing + HamListRibbon::sNumListSelectable - 1) {
+                        >= firstShowing + HamListRibbon::sNumListSelectable) {
                         mScrollBehavior.ScrollDown(false);
                     } else {
                         SetHighlight(selected);

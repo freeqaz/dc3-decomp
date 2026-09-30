@@ -44,15 +44,21 @@ wait_screen main_screen
 wait_screen choose_mode_screen
 +30 confirm
 
-# Song select -- YMCA is at index 4 (after finish_setlist, playlists,
-# song_tier_0 header, thehustle). 4 downs + confirm selects it.
-# Headers are skipped during d-pad navigation, so 3 downs from index 0
-# reaches index 4 (ymca). Use 4 downs for margin.
+# Song select -- ONE down, derived from the list, not tuned until green.
+# In perform mode song_select.dta's enter handler runs
+# `{right_hand.hnl scroll_to_index 2 2}` (focus_song_index 2, top_index 2), and
+# the list (song_offer_provider, sort_with_headers TRUE) reads
+#   0 playlists  1 random_song  2 song_tier_0  3 ymca  4 betteroffalone
+#   5 thehustle  6 song_tier_1  7 starships ...
+# Tier headers are NOT skipped by the d-pad: HamNavList::OnMsg only skips
+# !IsActive rows, and NavListHeaderNode::IsActive is true whenever any child is
+# (selecting one collapses the list to its headers).  So the cursor starts on
+# song_tier_0 and one down lands on ymca.  The old four downs landed on the
+# song_tier_1 HEADER; they only reached a song because OnMsg's ScrollDown edge
+# carried an invented `- 1` that fired one row early and jumped the cursor
+# over index 6 to starships (so this flow was playing starships, not ymca).
 wait_screen song_select_screen
 +30 down
-+45 down
-+60 down
-+75 down
 +90 confirm
 
 # multiuser_screen is driven by the controller, as on the 360: the focused

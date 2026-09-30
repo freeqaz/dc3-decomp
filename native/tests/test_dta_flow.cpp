@@ -285,6 +285,19 @@ TEST_F(DtaFlowTest, SongLoadChainRunsOncePerSong) {
                      << " times in one song (Restart reset mLoadState)";
 }
 
+TEST_F(DtaFlowTest, SongSelectPicksYmca) {
+    // ymca.txt must actually play YMCA.  Perform-mode song select enters on
+    // index 2 (song_select.dta: scroll_to_index 2 2 -- the song_tier_0 header)
+    // and one down reaches ymca at index 3.  Until 2026-09-30 this flow pressed
+    // four downs and quietly played `starships`: the fourth press reached the
+    // song_tier_1 header at index 6, and an invented `- 1` in HamNavList::
+    // OnMsg's ScrollDown edge fired one row early and hopped the cursor over
+    // it.  With the image's edge restored, four downs select the header.
+    EXPECT_TRUE(outputContains(
+        "HamNavList: select name='right_hand.hnl' selected=3 first=2 sym='ymca'"))
+        << "song select did not select ymca (index 3, first showing 2)";
+}
+
 // ===========================================================================
 // multiuser_screen waits for input
 // ===========================================================================
@@ -335,5 +348,61 @@ TEST_F(DtaFlowIdleMultiuserTest, MultiuserScreenWaitsForInput) {
            "enter_gameplay / goto_screen on its own";
     EXPECT_FALSE(outputContains("Screen 'loading_screen' Enter"))
         << "loading_screen entered with no input on multiuser_screen";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// ===========================================================================
+// Song select d-pad scroll edge
+// ===========================================================================
+//
+// Image: ?OnMsg@HamNavList@@AAA?AVDataNode@@ABVButtonDownMsg@@@Z, 0x8244A11C:
+//   lwz r10, sNumListSelectable / add r11, r11, r10 / cmpw cr6, r31, r11 / blt
+// -- ScrollDown once the new selection reaches firstShowing +
+// sNumListSelectable (5), with no `- 1`; otherwise SetHighlight.  Tier headers
+// are active rows, so none is skipped.  song-select-scroll.txt presses six
+// downs from the entry focus (index 2, first 2): four highlight moves to the
+// song_tier_1 header (6), then two ScrollDowns (7 >= 2+5, 8 >= 3+5), so the
+// confirm selects index 8 with first showing 4.  The `- 1` edge scrolled one
+// press early, skipped index 6, and ended on index 9 / first 5.
+
+class DtaFlowSongSelectScrollTest : public ::testing::Test {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS"))
+            return;
+        sResult = RunDtaFlow(700, 120, "song-select-scroll.txt");
+        sRanEngine = true;
+    }
+
+    void SetUp() override {
+        if (!getenv("DC3_DTA_FLOW_TESTS"))
+            GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+        if (!sRanEngine)
+            GTEST_SKIP() << "Engine did not run (SetUpTestSuite failed)";
+        if (!sResult.setupError.empty())
+            GTEST_FAIL() << "DtaFlowSongSelectScrollTest could not run the engine.\n"
+                         << sResult.setupError;
+    }
+
+    bool outputContains(const char *needle) const {
+        return sResult.output.find(needle) != std::string::npos;
+    }
+};
+
+DtaRunResult DtaFlowSongSelectScrollTest::sResult = {};
+bool DtaFlowSongSelectScrollTest::sRanEngine = false;
+
+TEST_F(DtaFlowSongSelectScrollTest, ScrollDownEdgeMatchesImage) {
+    ASSERT_TRUE(outputContains("DC3 Input: wait_screen 'song_select_screen' satisfied"))
+        << "precondition: the route never reached song_select_screen";
+    EXPECT_TRUE(outputContains(
+        "HamNavList: select name='right_hand.hnl' selected=8 first=4 "))
+        << "six downs from index 2 / first 2 should select index 8 with first "
+           "showing 4 (four highlight moves, then two ScrollDowns)";
+    EXPECT_TRUE(outputContains("Screen 'song_select_screen' Exit (to 'multiuser_screen')"))
+        << "the selected row was not a song (a header does not leave song select)";
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
