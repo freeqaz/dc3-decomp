@@ -17,7 +17,10 @@ copies the ribbon's label-placeholder alpha into each element's `mAlpha`
 `transition_complete`) killed the enter animation on the frame it started, so
 `enter.anim` stayed at frame 0. Removing the handler: `enter.anim` runs 0 -> 20
 in ~20 frames, alpha reaches 1.000, items draw on main, choose_mode, results
-and complete. Regression test: `HamNavListTransitionTest` in milo-tests.
+and complete. The fault is timing-dependent per screen: items vanish only when
+`transition_complete` lands while the enter animation is still running (main,
+choose_mode and results in the 2026-09-30 before-run; perform_complete happened
+to draw in that run). Regression test: `HamNavListTransitionTest` in milo-tests.
 The rest of this note is kept as history.
 
 ## Status
