@@ -3,6 +3,8 @@
 // the (b) ADDS triage in docs/decomp/patterns/native-shadow-bodies-are-unmeasured.md.
 #include "test_helpers.h"
 
+#include "game/GameMode.h"
+#include "hamobj/HamGameData.h"
 #include "obj/Dir.h"
 #include "obj/DirLoader.h"
 #include "obj/Object.h"
@@ -180,3 +182,29 @@ TEST_F(NativeEngineLeadsTest, RndDirSyncObjectsKeepsHarvestOrder) {
     delete feet;
     delete dir;
 }
+
+// ----------------------------------------------------------------------------
+// GameMode::GameMode / SkeletonChooser::DoesRequireHandRaise
+// ----------------------------------------------------------------------------
+
+// The image's GameMode ctor calls SetMode("init", "none"), which installs the
+// merged mode config (init + parents + defaults) as the object's properties.
+// Native only stored mMode = "init" ("SystemConfig / TheHamProvider not ready
+// during GameInit"), so TheGameMode had no properties until the first DTA
+// set_mode -- and SkeletonChooser::DoesRequireHandRaise, which the image runs
+// from the attract screen on, read raise_hand_to_join through a null DataNode.
+// That crash is why native stubbed DoesRequireHandRaise to `return false`.
+TEST_F(NativeEngineLeadsTest, NewGameModeInstallsTheInitModeProperties) {
+    ASSERT_NE(TheHamProvider, nullptr);
+    if (!TheGameData)
+        GTEST_SKIP() << "no TheGameData in this engine init";
+    if (TheGameMode)
+        GTEST_SKIP() << "a GameMode already exists; a second would collide on its name";
+    GameMode *mode = new GameMode();
+    EXPECT_EQ(mode->Mode(), Symbol("init"));
+    EXPECT_NE(mode->Property("raise_hand_to_join", false), nullptr)
+        << "a freshly constructed GameMode has no mode properties: the ctor did "
+           "not run SetMode(\"init\", \"none\") as the image does";
+    delete mode;
+}
+
