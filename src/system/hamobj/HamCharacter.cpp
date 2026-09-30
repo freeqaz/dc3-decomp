@@ -871,7 +871,7 @@ neutral:
                 // a collapse onto `this`), and read its neutral ankle Z after posing.
                 // If the neutral ankle is planted (~+4) the IK clamp anchor is good;
                 // if it tracks the dropped live pose the foot will sink.
-                extern int HamDirector_NativeSetFrameCount();
+                extern int HamDirector_SelectCameraSetFrameCount();
                 static int sNeutralLog = 0;
                 const char *p = PathName(this);
                 bool isMain = p && strstr(p, "main.milo") && !strstr(p, "backup");
@@ -879,7 +879,7 @@ neutral:
                 // (player0), so the neutral-anchor values correlate with the sunk
                 // dancer's ChainZ trace.
                 if (sNeutralLog < 30 && isMain && p && strstr(p, "player0")
-                    && HamDirector_NativeSetFrameCount() > 3000) {
+                    && HamDirector_SelectCameraSetFrameCount() > 3000) {
                     sNeutralLog++;
                     ObjectDir *nd = mNeutralSkelDir;
                     RndTransformable *nAnkle = nd ?
@@ -897,7 +897,7 @@ neutral:
                         "DC3_IK_DIAG GetNeutralSkel[%d] f=%d: char=%s neutralDir=%s "
                         "neutralAnkleWorldZ=%.3f neutralPelvisWorldZ=%.3f "
                         "neutralToeWorldZ=%.3f | livePelvisZ=%.3f liveToeZ=%.3f\n",
-                        sNeutralLog, HamDirector_NativeSetFrameCount(), p,
+                        sNeutralLog, HamDirector_SelectCameraSetFrameCount(), p,
                         nd ? nd->Name() : "(null)",
                         nAnkle ? nAnkle->WorldXfm().v.z : -999.0f,
                         nPelvis ? nPelvis->WorldXfm().v.z : -999.0f,

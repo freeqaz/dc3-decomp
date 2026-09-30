@@ -42,7 +42,7 @@ struct Snapshot {
     int mergeMoves = -1;
     int p0SongAnim = -99;
     int doSongAnim = -1;
-    int nativeSetFrameCount = 0;
+    int selectCameraSetFrameCount = 0;
 
     // Move/flashcard validation fields
     bool moveInterpActive = false;  // move prop key track exists and has keys

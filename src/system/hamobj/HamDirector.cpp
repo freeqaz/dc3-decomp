@@ -93,11 +93,10 @@ OfflineCallback gOfflineCallback;
 std::map<Symbol, int> gMoveMergeMap;
 
 #ifdef HX_NATIVE
-// Counter for telemetry: tracks how many times the native SetFrame path fires
-// in HamDirector::Poll(). Should be >0 during gameplay, proving the prop key
-// evaluation chain (move_interp, clip interp) is being driven.
-int sNativeSetFrameCount = 0;
-int HamDirector_NativeSetFrameCount() { return sNativeSetFrameCount; }
+// Counter for telemetry: song-anim SetFrame calls made by the image's own path,
+// WorldDir::Poll -> select_camera -> OnSelectCamera.
+static int sSelectCameraSetFrameCount = 0;
+int HamDirector_SelectCameraSetFrameCount() { return sSelectCameraSetFrameCount; }
 
 #endif
 
@@ -2815,6 +2814,9 @@ DataNode HamDirector::OnSelectCamera(DataArray *a) {
                 static Timer *song_anim_timer = AutoTimer::GetTimer(Symbol("song_anim"));
                 AutoTimer timer(song_anim_timer, 50.0f, NULL, NULL);
                 songAnim->SetFrame(frame, blend);
+#ifdef HX_NATIVE
+                sSelectCameraSetFrameCount++;
+#endif
             }
 
             // The map is keyed by a reference, so the key has to live in a
@@ -3438,7 +3440,7 @@ void Dc3KneeLog(const char *evt) {
     // in-song poll order (pose vs IK vs servo), and add pelvis Z — the sink is
     // a pelvis-height retarget (HamIKEffector pelvis effector) being stomped.
     if (!getenv("DC3_IK_DIAG") || gDc3PollSeq >= 120
-        || HamDirector_NativeSetFrameCount() <= 3000)
+        || HamDirector_SelectCameraSetFrameCount() <= 3000)
         return;
     HamCharacter *p0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     RndTransformable *kn = p0 ? p0->Find<RndTransformable>("bone_L-knee.mesh", false) : nullptr;
@@ -3451,7 +3453,7 @@ void Dc3KneeLog(const char *evt) {
         rz = 57.29578f * std::atan2(m.x.y, m.x.x);
     }
     std::fprintf(stderr, "DC3_SEQ %d f=%d %s kneeRotZ=%.1f ankleZ=%.2f toeZ=%.2f pelvisZ=%.2f\n",
-                 gDc3PollSeq++, HamDirector_NativeSetFrameCount(), evt, rz,
+                 gDc3PollSeq++, HamDirector_SelectCameraSetFrameCount(), evt, rz,
                  an ? an->WorldXfm().v.z : -999.f,
                  to ? to->WorldXfm().v.z : -999.f,
                  pv ? pv->WorldXfm().v.z : -999.f);
@@ -3571,25 +3573,6 @@ void HamDirector::Poll() {
             if (currentSec - deltaSec < 0.0f) {
                 songAnim->StartAnim();
             }
-#ifdef HX_NATIVE
-            // On Xbox, WorldDir::Poll() fires select_camera → OnSelectCamera →
-            // songAnim->SetFrame(frame, blend). This evaluates all prop keys
-            // and fires interp handlers (move_interp for flashcard updates,
-            // clip interp for character animation timing, etc.).
-            // On native/web, the world_panel loads world.milo as a PanelDir
-            // (not a WorldDir), so select_camera is never dispatched. Drive
-            // the song anim frame directly from here instead.
-            {
-                float beat = TheTaskMgr.Beat();
-                float seconds = BeatToSeconds(beat);
-                float frame = seconds * 30.0f;
-                if (frame > 0.0f) {
-                    songAnim->SetFrame(frame, 1.0f);
-                    extern int sNativeSetFrameCount;
-                    sNativeSetFrameCount++;
-                }
-            }
-#endif
         }
         mPoseFatalities->Poll();
 #ifdef HX_NATIVE
