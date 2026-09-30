@@ -105,6 +105,38 @@ BinStreamRev &operator>>(BinStreamRev &d, RndSpline::CtrlPoint &pt) {
 
 INIT_REVS(1, 0)
 
+// RESIDUAL (w9-f, 97.970 canonical / 97.78 fuzzy, 536 B, 9 rows of 135, sizes
+// already equal at 536/536).  ALL NINE ROWS ARE ONE ROOT CAUSE: which of
+// INIT_REVS' two statics becomes the .data anchor register.
+//
+//   target   r29 = &gAltRev (lbl_8209F864), r28 = &TheDebug
+//            first  assert: `subi r7, r29, 0x4`   (826B5354)  -> gRev
+//            second assert: `mr   r7, r29`        (826B53D4)  -> gAltRev
+//   ours     r28 = &gRev,                  r29 = &TheDebug
+//            first  assert: `mr   r7, r28`                    -> gRev
+//            second assert: `addi r7, r28, 0x4`               -> gAltRev
+//
+// The layout agrees (gAltRev = gRev + 4, so the declaration order in INIT_REVS
+// is right); only the anchor PICK differs, and the two `lis`/`addi` pairs at
+// idx 9-13 swap r28/r29 with it, which is what also reorders the three operand
+// set-ups of the second MakeString (the delete/insert pair at idx 75/78).
+//
+// REFUTED as a shared-macro defect (measured, w9-f): across all 244 target
+// listings there are 489 call sites of
+// MakeString<const char*, Symbol, int, unsigned short> -- the ASSERT_REVS
+// message -- and 225 of them are preceded by `addi r7, rX, 0x4`, i.e. the
+// image anchors on gRev exactly as we do.  Only 18 use `subi r7, rX, 0x4`.
+// So INIT_REVS/ASSERT_REVS in obj/Object.h are NOT mis-ordered; RndSpline::Load
+// is in the 18-site minority and the anchor pick is a function-local
+// allocation decision.  Do not "fix" the macro -- it is PCH-reached and would
+// move the 225 sites that currently match.
+//
+// ⚠ Two of those nine rows are INVISIBLE under the default ruler: idx 10/13 are
+// a relocation-NAME difference (`?TheDebug@@3VDebug@@A` vs `gRev`) and only
+// appear under diff_mode=name_check.  Worse, idx 9/12 -- the anchor pair
+// itself, the actual root cause -- is scored EQUAL under BOTH rulers, because
+// the target side spells it `lbl_8209F864` and objdiff exempts `lbl_*`
+// placeholder names.  The listing is the only place the cause is visible.
 BEGIN_LOADS(RndSpline)
     LOAD_REVS(bs)
     ASSERT_REVS(1, 0)
