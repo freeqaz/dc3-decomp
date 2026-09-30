@@ -3206,6 +3206,16 @@ found:
     PoseIconMan(clip, poseBeat, tex, (bool)tex, NULL, 0.0f, 0.0f);
 }
 
+// RESIDUAL (w8-n, 99.43): 44 rows but ONE cause, and the diagnosis is solid even
+// though the fix is not.  Both sides are 218 instructions; the only non-register
+// rows are idx 195/196, where the image recomputes the keys array address
+// (`slwi r10, r10, 3` / `lwzx r5, r10, r9`) and we keep its base in the
+// CALLEE-SAVED r28 (`add r8, r28, r10` / `lwz r5, 0x8(r8)`).  That one extra live
+// value is why the prologue is __savegprlr_25 against the image's _26 and the
+// frame is 0x10 larger, and every r27->r26 / r26->r25 rename below is the shift.
+// REFUTED: un-hoisting `Key<Symbol> &key = keys->at(clipIdx)` into two direct
+// `keys->at(clipIdx)` accesses DOES remove the extra callee-saved register (the
+// PROLOGUE_MISMATCH pattern disappears) but adds 6 instructions, for 96.38.
 void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, float duration, float beatExtra, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {
         SetMasterClipAnim();
