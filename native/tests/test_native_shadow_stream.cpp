@@ -203,4 +203,68 @@ TEST_F(NativeShadowStreamTest, FloatSamplesConvertAndClamp) {
     delete s;
 }
 
+// ---------------------------------------------------------------------------
+// Channel layout and chunking. The image builds a pcm[] pointer table whose
+// real slots are the reader's buffers and whose virtual slots are mVirtBufs
+// (82770D48..82770D70: i < realChannels ? v[i] : mVirtBufs[i - real]); it
+// never reads v[] past realChannels. It caps one call at 0x800 samples
+// (82770D74 cmpwi r28,0x800 / li r28,0x800). Each RemapChannel(first, second)
+// pair then COPIES slot first's samples into slot second
+// (82770E6C..82770EA0: memcpy(pcm[second], pcm[first], n * bytesPerSample)),
+// and every one of the numChannels receivers -- virtual ones included -- gets
+// its own slot (82770EC4..82770F44, WriteData(pcm[ch]) counted by r27).
+// The pre-fix native body wrote real channel i to mChannels[second] instead
+// of mChannels[i], never wrote a virtual receiver, read v[realChannels + i]
+// past the reader's array, and consumed any count in one call.
+// No in-tree caller uses AddVirtualChannels/RemapChannel today, so this is
+// latent -- but the stream API is public and virtual.
+// ---------------------------------------------------------------------------
+
+TEST_F(NativeShadowStreamTest, OneCallConsumesAtMost0x800Samples) {
+    StandardStream *s = MakeStream(1, true);
+    FloatPcm pcm(0x1000);
+    EXPECT_EQ(s->ConsumeData(&pcm.ptr, 0x1000, -1), 0x800)
+        << "the image caps a single ConsumeData at 0x800 samples (82770D74)";
+    delete s;
+}
+
+TEST_F(NativeShadowStreamTest, RemapCopiesIntoVirtualChannelAndWritesEveryReceiver) {
+    // One real channel + one virtual channel; channel 0 is mirrored into 1.
+    StandardStream *s = MakeStream(1, false, /*virtualChans=*/1);
+    s->RemapChannel(0, 1);
+    ASSERT_EQ(s->GetNumChannels(), 2);
+    const int n = 32;
+    std::vector<int16_t> ch0(n);
+    for (int i = 0; i < n; i++)
+        ch0[i] = (int16_t)(100 + i);
+    // The reader supplies only its real channels. The second entry is a
+    // decoy the image never reads; it stands in for whatever lies past the
+    // caller's array, so the pre-fix body fails instead of crashing.
+    std::vector<int16_t> decoy(2 * n, 0x5a5a);
+    void *v[2] = {ch0.data(), decoy.data()};
+    ASSERT_EQ(s->ConsumeData(v, n, -1), n);
+    const std::vector<int16_t> &r0 = Rcvr(s, 0)->mWritten;
+    const std::vector<int16_t> &r1 = Rcvr(s, 1)->mWritten;
+    EXPECT_EQ(r0, ch0) << "the real channel's own receiver gets its samples";
+    EXPECT_EQ(r1, ch0) << "the virtual channel receives the remapped copy";
+    EXPECT_EQ(Rcvr(s, 0)->mWriteCalls, 1);
+    EXPECT_EQ(Rcvr(s, 1)->mWriteCalls, 1);
+    delete s;
+}
+
+TEST_F(NativeShadowStreamTest, RemapBetweenRealChannelsCopiesSource) {
+    // Two real channels, RemapChannel(0, 1): slot 1 is overwritten with slot 0
+    // before the writes, so both receivers carry channel 0.
+    StandardStream *s = MakeStream(2, false);
+    s->RemapChannel(0, 1);
+    const int n = 16;
+    std::vector<int16_t> ch0(n, 1234), ch1(n, -4321);
+    void *v[2] = {ch0.data(), ch1.data()};
+    ASSERT_EQ(s->ConsumeData(v, n, -1), n);
+    EXPECT_EQ(Rcvr(s, 0)->mWritten, std::vector<int16_t>(n, 1234));
+    EXPECT_EQ(Rcvr(s, 1)->mWritten, std::vector<int16_t>(n, 1234));
+    EXPECT_EQ(Rcvr(s, 1)->mWriteCalls, 1) << "one write per receiver per call";
+    delete s;
+}
+
 } // namespace
