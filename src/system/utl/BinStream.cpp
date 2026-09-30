@@ -296,6 +296,22 @@ bool BinStream::WaitUntilReady(int sleepMs) {
 // own ctor shape in src/system/stlport/stl/_vector.h:226 -- and that header is
 // PCH-reached by 574 TUs, so it needs a whole-binary A/B in both directions
 // before anyone touches it, not a local edit.
+// w9-b ATTEMPTED that STLport experiment and ABANDONED it -- it is UNTESTED, not
+// refuted, and produced NO measurement.  The edit tried was splitting the
+// default argument into two overloads at src/system/stlport/stl/_vector.h:226:
+//     _VECTOR_IMPL() : _Vector_base<_Tp, _Alloc>(allocator_type()) {}
+//     explicit _VECTOR_IMPL(const allocator_type& __a) : _Vector_base<...>(__a) {}
+// in place of
+//     explicit _VECTOR_IMPL(const allocator_type& __a = allocator_type())
+// The theory is that the dead zero-store is the default-argument temporary, so a
+// no-arg overload would never materialise it.  The full `ninja` this needs was
+// killed at 606/849 because the box was at load ~240 with six lanes building, so
+// no number exists in either direction.  Whoever resumes it: `_vector.h` IS in
+// the decomp_pch.h closure (confirmed via `ninja -t deps
+// build/373307D9/pch/decomp_pch.obj`), so it needs a full `ninja` and a
+// whole-binary per-function row diff in BOTH directions -- the change touches
+// every default-constructed std::vector in the binary, so it can pay or cost far
+// beyond these 3 rows, and a per-target build would read LOW and silent.
 void BinStream::PushRev(int revs, Hmx::Object *obj) {
     if (!mRevStack) {
         mRevStack = new std::vector<ObjVersion>();
