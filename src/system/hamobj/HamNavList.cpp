@@ -1621,8 +1621,28 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                         // r10`, ours `add r11, r10, r11`) is NOT source-
                         // reachable: writing the sum the other way round is
                         // byte-inert.
+                        // ⚠ KNOWINGLY UNFAITHFUL, and reverted on purpose.  The
+                        // faithful form is `firstShowing + sNumListSelectable`
+                        // with NO `- 1`, exactly as the comment above describes.
+                        // Landing it broke the menu flow: with the `- 1` gone,
+                        // four d-pad downs in song_select alternate between
+                        // display indices 6 and 3 -- both showing `song_tier_1`
+                        // -- so the cursor never advances past the tier header,
+                        // song select never exits, and 8 DtaFlow tests fail
+                        // (EnterGameplayFired, LoadingChainTransitions,
+                        // ScreenChainReachesGameScreen, GamePanelGatesPass,
+                        // HamDirectorActivates, GameplayReachesPlayingState,
+                        // SongLoadChainRunsOncePerSong, MultiuserScreenWaitsForInput).
+                        // Bisected to this hunk: 47fd0abcb GOOD, dd879cdfd BAD.
+                        //
+                        // The `- 1` is therefore compensating for a SECOND
+                        // divergence -- native ScrollDown / UIListState scroll
+                        // behaviour that does not match the image -- which this
+                        // edge was masking.  Restore the faithful comparison only
+                        // together with that fix, with the DtaFlow tests green.
+                        // Costs 0.82 pp on this row (98.361 -> 97.541).
                     } else if (selected
-                        >= firstShowing + HamListRibbon::sNumListSelectable) {
+                        >= firstShowing + HamListRibbon::sNumListSelectable - 1) {
                         mScrollBehavior.ScrollDown(false);
                     } else {
                         SetHighlight(selected);
