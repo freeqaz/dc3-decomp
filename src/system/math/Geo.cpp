@@ -1106,11 +1106,12 @@ void BSPFace::Update() {
 
     planes.clear();
 
+    const Vector3 &zAxis = t.m.z;
     Plane facePlane;
-    facePlane.a = t.m.z.x;
-    facePlane.b = t.m.z.y;
-    facePlane.c = t.m.z.z;
-    facePlane.d = -(t.m.z.x * t.v.x + t.m.z.y * t.v.y + t.m.z.z * t.v.z);
+    facePlane.a = zAxis.x;
+    facePlane.b = zAxis.y;
+    facePlane.c = zAxis.z;
+    facePlane.d = -(zAxis.x * t.v.x + zAxis.y * t.v.y + zAxis.z * t.v.z);
     planes.insert(planes.end(), facePlane);
 
     Vector3 prevPt(p.points.back().x, p.points.back().y, 0.0f);
@@ -1124,11 +1125,20 @@ void BSPFace::Update() {
         float dy = curPt.y - prevPt.y;
         float dz = curPt.z - prevPt.z;
 
-        if (dx != 0.0f || dy != 0.0f || dz != 0.0f) {
+        bool degenerate = dx == 0.0f && dy == 0.0f && dz == 0.0f;
+        if (!degenerate) {
             Vector3 normal;
-            normal.z = t.m.z.y * dx - t.m.z.x * dy;
-            normal.y = t.m.z.x * dz - t.m.z.z * dx;
-            normal.x = t.m.z.z * dy - t.m.z.y * dz;
+            // Statement order y, z, x is MEASURED, not stylistic: all six
+            // permutations were built and scored (w9-e 2026-09-30), norm/fuzzy --
+            //   YZX 99.9655 / 99.4483   YXZ 99.9655 / 99.4483
+            //   ZYX 99.9425 / 98.9655   ZXY 99.9425 / 98.9655
+            //   XZY 99.9310 / 99.1264   XYZ 99.9310 / 99.1264
+            // It sets the load order of the zAxis triple (the image loads
+            // 0x0(r30), 0x8(r30), 0x4(r30) -- x, z, y) and the store order of
+            // `normal`.
+            normal.y = zAxis.x * dz - zAxis.z * dx;
+            normal.z = zAxis.y * dx - zAxis.x * dy;
+            normal.x = zAxis.z * dy - zAxis.y * dz;
             Normalize(normal, normal);
 
             Plane edgePlane;
