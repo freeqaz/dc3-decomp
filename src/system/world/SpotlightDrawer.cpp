@@ -116,7 +116,20 @@ void SpotlightDrawer::Init() {
     // lines -- `sDefault = New(); sDefault->mParams... = 0.0f; sDefault->
     // Select();`, the RB3 spelling -- reads 90.357, WORSE: MSVC then emits the
     // reload but ALSO reloads for the 0.0f store, adding rows.  Reverted.
-    SpotlightDrawer* ptr = Hmx::Object::New<SpotlightDrawer>();
+    //
+    // TWO MORE MEASURED NEGATIVES (w8-q).  The 4-byte shortfall is WHERE MSVC
+    // puts the store to the global, and source order does not decide it:
+    //   `ptr = New(); sDefault = ptr; ptr->...= 0.0f; sDefault->Select();`
+    //       -- the target's statement order exactly -- is BYTE-INERT, 94.3% and
+    //       the same 3 rows.  MSVC sinks the global store past the 0x64 field
+    //       store on its own, so writing it earlier buys nothing.
+    //   `sDefault = New(); ptr = sDefault; ptr->...= 0.0f; sDefault->Select();`
+    //       reads 90.7, WORSE: it adds a `clrrwi r3, r3, 0` for the read-back.
+    // Reading the global for the field store is the only thing that moves the
+    // store, and that is the 90.357 negative above.  Treat this as a floor until
+    // someone finds a construct that pins the global store ahead of the field
+    // store without also forcing a reload for the field store.
+    SpotlightDrawer *ptr = Hmx::Object::New<SpotlightDrawer>();
     ptr->mParams.mLightingInfluence = 0.0f;
     sDefault = ptr;
     ptr->Select();
