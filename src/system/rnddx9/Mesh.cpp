@@ -95,19 +95,12 @@ DxMesh::~DxMesh() {
     unk1b0 = nullptr;
 }
 
-unsigned int DxMesh::VertSize() const {
-    if (GetGfxMode() == kNewGfx) {
-        return 0x24;
-    }
-    return IsSkinned() ? 0x30 : 0x24;
-}
-
-unsigned int DxMesh::VertFVF() const {
-    if (GetGfxMode() == kNewGfx) {
-        return 0;
-    }
-    return IsSkinned() ? 0x15A : 0x152;
-}
+// DxMesh::VertSize / DxMesh::VertFVF moved to rnddx9/Mesh.h as inline member
+// definitions: ham_xbox_r.map lists ?VertSize@DxMesh@@IBAIXZ (82620708) and
+// ?VertFVF@DxMesh@@IBAIXZ (82620768) as `f i`, i.e. COMDATs, and MultiMesh.cpp
+// calls both -- so the image reached them through the header, not through an
+// out-of-line definition here.  An out-of-line body in this TU is bare `f` and
+// lets MSVC propagate the callee's register usage into every caller in this TU.
 
 
 inline void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {

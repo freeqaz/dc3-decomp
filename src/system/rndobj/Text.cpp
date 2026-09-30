@@ -173,7 +173,15 @@ RndText::Style::Style(const Style &s) : StyleData(s), mFont(s.mFont) {
     mBlacklight = s.mBlacklight;
 }
 
-RndText::StyleState::StyleState(RndText *text, float size) {
+// `inline` matches the map: ??0StyleState@RndText@@QAA@PAV1@M@Z @82690d78 is
+// `f i` (a COMDAT), and every other RndText method we define out-of-line here is
+// bare `f`.  MEASURED (w8-p 2026-09-30): the change is inert for every caller --
+// WrapText stays 95.35407, both SetupCharacter overloads 96.00671 / 97.77953,
+// DrawShowing 98.80604, ConstructMeshes 90.94355 -- so it is a linkage-fidelity
+// fix, not a lever.  Kept because the map says the image did it; do not read the
+// inertness as evidence the flag does not matter (it took PatchVerts::HasVert
+// from 81.4 to 100 in rndobj/Mesh.cpp).
+inline RndText::StyleState::StyleState(RndText *text, float size) {
     memcpy(this, &text->mStyles[0], 0x34);
     mStyle = &text->mStyles[0];
     mFontMapIdx = text->FontMapIndex(mStyle->mFont, mStyle->mBlacklight);
