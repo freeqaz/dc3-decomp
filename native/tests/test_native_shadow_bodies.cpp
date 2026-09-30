@@ -7,15 +7,30 @@
 
 #include "test_helpers.h"
 
+#include "meta_ham/AppLabel.h"
 #include "math/Key.h"
 #include "math/Mtx.h"
+#include "obj/DataFile.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
+#include "os/DateTime.h"
+#include "os/System.h"
+#include "utl/Locale.h"
 #include "rndobj/Mesh.h"
 #include "rndobj/Ribbon.h"
 #include "rndobj/Trans.h"
 
 #include <cmath>
+#include <string>
+
+// Friend of AppLabel (declared under HX_NATIVE in AppLabel.h) so the test can
+// drive the private SetTimeElapsedSince body directly.
+struct NativeShadowAppLabelProbe {
+    static void Elapsed(AppLabel *l, unsigned int ts) { l->SetTimeElapsedSince(ts); }
+    static void Preset(AppLabel *l, const char *text, bool clearToken) {
+        l->SetDisplayText(text, clearToken);
+    }
+};
 
 namespace {
 
@@ -170,6 +185,80 @@ TEST_F(NativeShadowBodiesTest, RibbonUpdateChaseRecordsTheFollowPoint) {
     r->Follow(nullptr);
     delete r;
     delete t;
+}
+
+// ---------------------------------------------------------------------------
+// AppLabel::SetTimeElapsedSince (the "last played" label on song select) was
+// an empty `#ifdef HX_NATIVE` stub (89be25183 "Added stubs") with the real
+// body under `#ifndef HX_NATIVE`, so on native the label kept whatever it
+// showed before. Image (AppLabel.s, ?SetTimeElapsedSince@AppLabel@@AAAXI@Z):
+// 8296CD08 cmplwi r21,0 -> vcall SetDisplayText(gNullStr, true); 8296CD48 bl
+// GetDateAndTime; 8296CD50 bl DateTime::ToCode; 8296CD5C..6C
+// elapsed = (now - now % 86400) - ts; blt -> today; ladder 8296CD7C..CDF4:
+// <86400 yesterday, <518400 days (n = elapsed/86400 + 1, 8296CDA4),
+// <1123200 one_week, <2332800 weeks (n = elapsed/604800), <5097600
+// one_month, else months (n = elapsed/2592000).
+// ---------------------------------------------------------------------------
+std::string LabelText(AppLabel *l) { return l->GetText().c_str(); }
+
+TEST_F(NativeShadowBodiesTest, AppLabelTimeElapsedSinceIsTheImagesLadder) {
+    AppLabel *l = dynamic_cast<AppLabel *>(AppLabel::NewObject());
+    ASSERT_NE(l, nullptr);
+
+    // The test locale has no last_played_* strings (Localize falls back to
+    // the token name, which would hide n). Inject English overrides through
+    // the Magnu table -- Locale::Localize consults it first when the system
+    // language is eng -- so the formatted n becomes observable text.
+    ASSERT_EQ(SystemLanguage(), Symbol("eng"));
+    TheLocale.SetMagnuStrings(DataReadString(
+        "(last_played_days \"days:%d\") (last_played_weeks \"weeks:%d\")"
+         " (last_played_months \"months:%d\")"
+    ));
+
+    DateTime now;
+    GetDateAndTime(now);
+    unsigned int code = now.ToCode();
+    unsigned int midnight = code - code % 86400;
+    const unsigned int day = 86400;
+
+    // 0 = never played: the label is blanked and its token cleared.
+    l->SetTextToken(Symbol("last_played_weeks"));
+    NativeShadowAppLabelProbe::Preset(l, "preset", false);
+    NativeShadowAppLabelProbe::Elapsed(l, 0);
+    EXPECT_EQ(LabelText(l), "") << "timestamp 0 must blank the label";
+    EXPECT_TRUE(l->GetTextToken().Null()) << "timestamp 0 clears the token";
+
+    struct Case {
+        unsigned int ts;
+        const char *token;
+        int n; // -1: SetTextToken, no argument
+    } cases[] = {
+        { midnight + 1, "last_played_today", -1 },
+        { midnight, "last_played_yesterday", -1 }, // elapsed 0 is NOT "today"
+        { midnight - 1, "last_played_yesterday", -1 },
+        { midnight - 2 * day, "last_played_days", 3 },
+        { midnight - 5 * day, "last_played_days", 6 },
+        { midnight - 6 * day, "last_played_one_week", -1 },
+        { midnight - 13 * day, "last_played_weeks", 1 }, // divw truncates: 13d -> 1
+        { midnight - 26 * day, "last_played_weeks", 3 },
+        { midnight - 27 * day, "last_played_one_month", -1 },
+        { midnight - 59 * day, "last_played_months", 1 },
+        { midnight - 90 * day, "last_played_months", 3 },
+    };
+    for (const Case &c : cases) {
+        NativeShadowAppLabelProbe::Preset(l, "preset", true);
+        NativeShadowAppLabelProbe::Elapsed(l, c.ts);
+        unsigned int back = midnight - c.ts;
+        EXPECT_STREQ(l->GetTextToken().Str(), c.token)
+            << "midnight - ts = " << (int)back;
+        if (c.n >= 0) {
+            std::string prefix = std::string(c.token).substr(strlen("last_played_"));
+            EXPECT_EQ(LabelText(l), prefix + ":" + std::to_string(c.n))
+                << "midnight - ts = " << (int)back;
+        }
+    }
+    TheLocale.SetMagnuStrings(nullptr); // releases the injected table
+    delete l;
 }
 
 } // namespace
