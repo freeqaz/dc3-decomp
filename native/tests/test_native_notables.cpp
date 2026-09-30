@@ -4,7 +4,9 @@
 
 #include "test_helpers.h"
 
+#include "math/Geo.h"
 #include "platform/StreamReceiver_Native.h"
+#include "rndobj/Mesh.h"
 #include "synth/MoggClip.h"
 #include "synth/StreamReceiver.h"
 #include "synth/Synth.h"
@@ -116,4 +118,45 @@ TEST_F(NativeNotablesStreamTest, ReceiverFinishesOneBufferPastTheLastBuffer) {
             << "numBuffers " << c.numBuffers << " written " << c.written
             << ": finished late (" << got << " vs " << expect << ")";
     }
+}
+
+// ---------------------------------------------------------------------------
+// RndMesh::SetVolume(kVolumeBSP) builds the mesh's collision BSP tree with
+// MakeBSPTree (math/Geo.cpp, 0x82538xxx). Native compiled MakeBSPTree as
+// `return false`, so SetVolume released the tree and a BSP-volume mesh built
+// or copied at runtime (SetVolume from the `volume` property, CopyGeometry,
+// a rev-0x12 mesh's Load) had no collision at all. Meshes loaded from the
+// shipped files carry their tree on disk (rev > 0x12) and are unaffected;
+// measured on perform + practice routes, SetVolume(kVolumeBSP) was never
+// reached, so this is a latent divergence.
+TEST_F(NativeNotablesStreamTest, BspVolumeMeshGetsATreeThatCollides) {
+    RndMesh *mesh = Hmx::Object::New<RndMesh>();
+    static const float kCorners[8][3] = {
+        { -1, -1, -1 }, { 1, -1, -1 }, { 1, 1, -1 }, { -1, 1, -1 },
+        { -1, -1, 1 },  { 1, -1, 1 },  { 1, 1, 1 },  { -1, 1, 1 },
+    };
+    mesh->Verts().resize(8);
+    for (int i = 0; i < 8; i++)
+        mesh->Verts()[i].pos.Set(kCorners[i][0], kCorners[i][1], kCorners[i][2]);
+    static const int kFaces[12][3] = {
+        { 0, 2, 1 }, { 0, 3, 2 }, { 4, 5, 6 }, { 4, 6, 7 }, { 0, 1, 5 }, { 0, 5, 4 },
+        { 3, 6, 2 }, { 3, 7, 6 }, { 0, 4, 7 }, { 0, 7, 3 }, { 1, 2, 6 }, { 1, 6, 5 },
+    };
+    mesh->Faces().resize(12);
+    for (int i = 0; i < 12; i++)
+        mesh->Faces()[i].Set(kFaces[i][0], kFaces[i][1], kFaces[i][2]);
+    mesh->SetVolume(RndMesh::kVolumeBSP);
+    const BSPNode *tree = mesh->GetBSPTree();
+    ASSERT_NE(tree, nullptr) << "SetVolume(kVolumeBSP) left no BSP tree: MakeBSPTree failed";
+    Segment through;
+    through.start.Set(0, 0, -5);
+    through.end.Set(0, 0, 5);
+    float frac = -1;
+    Plane pl;
+    EXPECT_TRUE(Intersect(through, tree, frac, pl)) << "a segment through the cube must hit it";
+    Segment beside;
+    beside.start.Set(3, 0, -5);
+    beside.end.Set(3, 0, 5);
+    EXPECT_FALSE(Intersect(beside, tree, frac, pl)) << "a segment beside the cube must miss it";
+    delete mesh;
 }
