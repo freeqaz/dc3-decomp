@@ -631,7 +631,9 @@ watched failing; every PPC object touched hashes identically):
 
 **What runs and what cannot.** Strike a Pose runs to its end (pose windows, `strikeapose_over`,
 outro, results 0-0): the synthetic people stand still and match no pose, and the sensor
-stand-in cannot produce the target poses. Every camera photo (sign-in, hub, standings,
+stand-in cannot produce the target poses. (Superseded by `native-posesynth`: with
+`--perform` the sensor strikes each pose and the round scores; see "The performing
+sensor" below.) Every camera photo (sign-in, hub, standings,
 the in-game party HUD photo) renders as a white quad: there is no `LiveCameraInput`
 natively, and `HamUI`'s texture-store calls (100% matched) do nothing without it.
 `RhythmBattle::Poll` warns `bustajack recordings are getting big` thousands of times per
@@ -713,3 +715,55 @@ loop points when we're already past the point of no return!" ~160 times (13 in a
 completed party). Seen once on main's binary (1 of 2 runs) and once on this branch's final
 binary (1 of 2 runs, with the stride fix); the other run of each completed all 106 stages.
 
+
+## The performing sensor (branch `native-posesynth`, 2026-09-30)
+
+`scripts/synthetic_kinect.py` now PERFORMS: it reads, once per game frame, what each
+player is being asked to do (`GET /api/pose/target`, `native/src/platform/
+PoseTarget_Native.cpp`, read-only: the choreography's reference skeleton for the
+player's scheduled or current move, or the fatality / Strike a Pose target) and
+streams it back through the external pose socket as that player's person. Every
+decision is the decompiled scorer's, on a LIVE `Skeleton`. Harvester: `--perform`;
+negative control: `--stand-and-watch`; pose gate: third config `sensor`. Reference in
+`docs/native/SCORING_ENV_VARS.md`.
+
+**What a scoring native player exposed** (each found only because a move could score;
+tests in `native/tests/test_native_posesynth.cpp`, watched failing first):
+
+| symptom | cause | fix |
+|---|---|---|
+| perform/battle moves always rated at the bottom, whatever the player did; no battle fatality could start | two `HX_NATIVE` guards switched the async detectors off (`PostUpdateFilters` never enqueued them; `MoveRatingFrac` returned 0 without `SkeletonUpdate`), justified by a null `mMoveFrame` the detector ctor rules out | guards removed; image code (`a2c255ed8`) |
+| SIGSEGV on `perform_endgame_screen` after the first real score | rank-up -> `HamProfile::GetHamUser` -> `HamUser::GetPadNum` read the null native `TheSkeletonIdentifier` | no identifier = no enrolled pad = -1, the image's unenrolled answer (`HamUserPadNumTest`) |
+| the sensor fed the fatality its OWN target and the match still read 0.0: no pose could ever be struck (fatality, Strike a Pose) | `CompareSkeletonPositions` compares NormPos in the four limb coordinate systems, which only `Skeleton::Poll` derives; the native provider hand-filled camera space | every live frame goes through the image's `Skeleton::Poll` (`NativeSkeletonPollTest`) |
+| SIGSEGV in `HttpServer::ProcessCommands` under a polling client | a timed-out request left its stack `Command` in the queue | withdraw on timeout; notify under the lock |
+
+**Shown working** (`kinect.json` in each harvest dir records every score/rating/fatality
+change): perform (Starships, Beginner, async `move` source) 73/73 moves `move_perfect`,
+1,867,920, through `xp_reward_screen` (rank-up) to `song_select` -- and the negative
+control, `--stand-and-watch` (same sensor, people standing), scores 0 with every move
+`move_bad`; dance battle: the
+Finishing_Move rates `move_perfect`, `CheckBeginFatal` starts the fatality, both players
+strike all eight poses (570,000 -> 666,000) -- `scripts/native_fatality_probe.sh` is
+superseded; `pose_scoring_gate.sh` on Better Off Alone / Easy: selftest 1.0000, sensor
+1.0000 (77/77 perfect), dummy 0.1374..0.7812 (the 0.78 is Roxbury, a head bob a standing
+body nearly does). Party (`--route party --perform`, Crew Throwdown): every event and the
+showdown, back to `main_screen`, 0 crash lines; **Strike a Pose awards points** -- both
+players match one pose per beat (`fatalMatch` 1.0, combo +2000 each) to 1,740,000 each,
+and `strikeapose_over` ends the round. One native gap shows there too: the round's
+`HamPartyJumpData` stream jump never happens (below), so from beat ~56 PoseFatalities'
+beat bookkeeping (`SetJump` -> `mCurrentBeat = mJumpEnd`) runs ahead of the unjumped song
+clock and no pose resolves (hold progress climbs past 100 s against a 0.5 s hold) until
+the clock catches up at beat ~168; scoring then resumes.
+
+**What still cannot run: practice's gameover (and any stream jump).** Practice never
+loops natively. Its song
+starts mid-song (the section start), and `StandardStream`'s decode position
+(`mCurrentSamp`) stays at that start for the whole session -- 5752.4 ms on YMCA,
+measured at every `SetJump` -- so `IsPastStreamJumpPointOfNoReturn()` ("decoded behind
+played") reads true, `practice.dta` queues every loop (`queued_start_beat`) and never
+sets one, and song time runs on past the end (beat 2,300 on a 167 s song) with the
+session stuck in `review`. The same freeze holds under a real-time song clock with a
+thread pulling the mix as a device would, so it is not the missing headless audio
+device alone; the lead is the native `VorbisReader` after a start-position seek
+(`DoSeek` / `mSamplesToSkip`), not pursued here. Until it is, `--route practice` cannot
+reach `practice_endgame_screen`, performing or not.
