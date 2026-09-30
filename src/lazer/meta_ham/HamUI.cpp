@@ -347,9 +347,18 @@ void HamUI::Draw() {
 
 bool HamUI::IsTimelineResetAllowed() const {
 #ifdef HX_NATIVE
-    // TheSkeletonIdentifier and ThePassiveMessenger are null on native (no Kinect)
-    if (!ThePassiveMessenger || !TheSkeletonIdentifier)
-        return true;
+    // Only the Kinect term is absent natively: TheSkeletonIdentifier is never
+    // created (no camera), so identification is never in progress -- the
+    // image's GetIDStatus() == 0.  ThePassiveMessenger IS created natively
+    // (cursor_panel), and before it exists there are no messages.  The other
+    // terms still apply: a queued / recently dismissed passive message or a
+    // busy help bar refuses the reset, as on the 360.
+    bool messagesQuiet = !ThePassiveMessenger
+        || (!ThePassiveMessenger->HasMessages()
+            && !ThePassiveMessenger->HasRecentlyDismissedMessage());
+    bool identIdle = !TheSkeletonIdentifier || TheSkeletonIdentifier->GetIDStatus() == 0;
+    return messagesQuiet && identIdle
+        && (!mHelpBar || (!mHelpBar->IsWriteIconShowing() && !mHelpBar->IsAnimating()));
 #endif
     if (!ThePassiveMessenger->HasMessages()
         && !ThePassiveMessenger->HasRecentlyDismissedMessage()

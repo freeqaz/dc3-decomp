@@ -4,6 +4,9 @@
 // "Suspect pass" in docs/decomp/patterns/native-shadow-bodies-are-unmeasured.md.
 #include "test_helpers.h"
 
+#include "meta_ham/HamUI.h"
+#include "meta_ham/PassiveMessenger.h"
+#include "meta_ham/SkeletonIdentifier.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
 #include "rndobj/Mesh.h"
@@ -139,6 +142,39 @@ TEST_F(NativeSuspectsTest, SpotlightInitBuildsTheDiskMesh) {
     EXPECT_EQ(disk->Faces().size(), 2u);
     EXPECT_FLOAT_EQ(disk->Verts()[3].pos.x, 0.5f);
     EXPECT_FLOAT_EQ(disk->Verts()[3].pos.y, 0.5f);
+}
+
+// ----------------------------------------------------------------------------
+// HamUI::IsTimelineResetAllowed
+// ----------------------------------------------------------------------------
+
+// UIManager::Poll restarts the UI timer and UI seconds on a screen transition
+// only when IsTimelineResetAllowed().  The image's HamUI body refuses while a
+// passive message is queued or recently dismissed, while skeleton
+// identification is in progress, or while the help bar's write icon shows /
+// animates.  Native returned true whenever ThePassiveMessenger OR
+// TheSkeletonIdentifier was null -- and TheSkeletonIdentifier is ALWAYS null
+// natively (no Kinect; native ShellInput::Init skips it) while
+// ThePassiveMessenger is created (CursorPanel is a PassiveMessagesPanel), so
+// every other term was skipped on every transition.
+TEST_F(NativeSuspectsTest, TimelineResetRefusedWhileAPassiveMessageIsQueued) {
+    ASSERT_EQ(TheSkeletonIdentifier, nullptr) << "precondition: no Kinect natively";
+    Hmx::Object *callback = new Hmx::Object();
+    PassiveMessenger *made = nullptr;
+    if (!ThePassiveMessenger)
+        made = new PassiveMessenger(callback);
+    ASSERT_NE(ThePassiveMessenger, nullptr);
+    ThePassiveMessenger->TriggerStringMsg(
+        String("suspects test message"), Symbol("none"), kPassiveMessageGeneral,
+        gNullStr, 0
+    );
+    ASSERT_TRUE(ThePassiveMessenger->HasMessages());
+    EXPECT_FALSE(TheHamUI.IsTimelineResetAllowed())
+        << "a UI timeline reset was allowed with a passive message queued: native "
+           "returned true because TheSkeletonIdentifier is null, skipping the "
+           "image's HasMessages / HasRecentlyDismissedMessage / help-bar terms";
+    delete made;
+    delete callback;
 }
 
 } // namespace
