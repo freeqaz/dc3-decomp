@@ -113,7 +113,7 @@ idx	region	function	class	verdict	note
 111	src/system/hamobj/HamCharacter.cpp:770-788	HamCharacter::GetNeutralSkeleton	suspect:early-return	inert	the guarded pointer/condition cannot occur natively (sHamMaster set in MetaPanel ctor; TheMetaMusic made in Load; InitNative fills mProfiles; mSkeletonBones set in ctor)
 112	src/system/hamobj/HamCharacter.cpp:868-909	HamCharacter::GetNeutralSkeleton	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
 113	src/system/hamobj/HamDirector.cpp:509-600	HamDirector::OnFileMerged	suspect:handler	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
-114	src/system/hamobj/HamDirector.cpp:951-962	HamDirector::SetupRoutineBuilderAnims	suspect:extra-call	FIXED	routine-builder PropKeys retarget (0 hits measured; image has none)
+114	src/system/hamobj/HamDirector.cpp:951-962	HamDirector::SetupRoutineBuilderAnims	suspect:extra-call	divergent-held	routine-builder PropKeys retarget: image has none, 0 retargets measured; fix reverted -- HamDirector unit held by another wave
 115	src/system/hamobj/HamDirector.cpp:3558-3581	HamDirector::Poll	suspect:hw-stub	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
 116	src/system/hamobj/HamDriver.cpp:125-166	HamDriver::Poll	suspect:forced-state	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
 117	src/system/hamobj/HamDriver.cpp:169-197	HamDriver::Poll	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here

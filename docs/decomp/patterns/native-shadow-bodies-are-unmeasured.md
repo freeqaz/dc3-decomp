@@ -462,7 +462,8 @@ The evidence was not the same for every region, so the kinds are listed separate
 
 | verdict | n | meaning |
 |---|---|---|
-| FIXED | 8 | below (plus `ObjRefConcrete::Load`, which is `handled:already-judged` and not in the 279) |
+| FIXED | 7 | below (plus `ObjRefConcrete::Load`, which is `handled:already-judged` and not in the 279) |
+| divergent-held | 1 | `SetupRoutineBuilderAnims` retarget, reverted: unit held by another wave |
 | image-fatal | 72 | differs only after the image has failed a fatal `MILO_ASSERT` / `MILO_FAIL`, or where the image dereferences null |
 | image-page0 / image-ub / equivalent | 11 | the image reads zeroed page 0 or past a container's end; or the native branch is observably the same |
 | inert-measured | 25 | the probe fired **0** times on both routes |
@@ -485,7 +486,34 @@ hashes identically with and without the branch; the measurement is below.
 | `meta_ham/HamUI.cpp` `IsTimelineResetAllowed` | returned true whenever `TheSkeletonIdentifier` was null, which is always the case natively. A UI timeline reset was therefore allowed with a passive message queued or the help bar busy | 100% body: every term is required | `TimelineResetRefusedWhileAPassiveMessageIsQueued` |
 | `native/src/platform/FFmpegMovieImpl.cpp` `Ready` + `meta/MoviePanel.cpp` `IsLoaded` | `Ready()` was false until a successful open, and no `.bik` ships. `MoviePanel::IsLoaded` skipped `Ready()` and the subtitles-loader wait | `BinkMovieImpl::Ready` `82E221C8`: loader `IsLoaded()`, else true | `MovieWithNoPendingLoadIsReady` |
 | `world/Crowd3DCharHandle.cpp` `SyncProperty` | returned false for every path, including the resolved one | ICF-folded empty `BEGIN_PROPSYNCS` (`82711F80` → `827118E0`) | `CrowdCharHandleSyncPropertyResolvesTheEmptyPath` |
-| `hamobj/HamDirector.cpp` `SetupRoutineBuilderAnims` | re-pointed copied PropKeys at `this` director | no such walk in the image | none: 0 retargets measured, and nothing native builds a second director |
+
+Two findings were landed and then reverted on this branch. Both sit in units held by a
+concurrent wave (`~/tmp/dc3-wells/w8/phase4-w9-*.txt`), and lanes were asked to report
+findings in held units rather than edit them.
+
+- **`hamobj/HamDirector.cpp` `SetupRoutineBuilderAnims`** re-points copied PropKeys at
+  `this` director. The image has no such walk, and a probe counted **0** retargets on both
+  routes. Remove it when the unit is free.
+- **`rndobj/Font3d.cpp` `RndFont3d::Load`**: the native explicit-`Dir()` `CharInfo::mMesh`
+  load is equivalent to the image. The owner is the font, so the premise is stale. The
+  removal did **not** hash neutrally, as the next subsection shows.
+
+### PPC neutrality, measured
+
+- **Method.** Full `ninja` in this worktree for three trees, comparing
+  `patch_state.json`'s `tree_sha256` and the per-object sha256:
+  - the branch as landed;
+  - the branch with `main`'s copy of every touched `src/` file;
+  - the branch plus a control edit.
+- **Result.** The first two agree: `ef03e651…`, with **0 of 989** objects differing in
+  content.
+- **Control.** One PPC-visible literal in `Spotlight::BuildBoard` moved `Spotlight.obj`
+  (`6dd8c8ea` → `d7738027`) and the tree hash (→ `1b531a41…`). Reverting restored both.
+- **Line numbers moved one object.** Removing Font3d's `#ifdef HX_NATIVE` / `#else` lines
+  changed `Font3d.obj` (`0e675c83` → `dc6d0998`), although every `report.json` score was
+  identical. Something in that TU encodes a line number. **Deleting an `HX_NATIVE` block
+  is not PPC-neutral by construction; measure it.** That edit was reverted. The
+  HamDirector removal hashed neutrally.
 
 ### `ObjRefConcrete::Load`: the verdict and what was measured
 
