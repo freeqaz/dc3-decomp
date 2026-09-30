@@ -9,7 +9,16 @@
 FlowQueueable::FlowQueueable()
     : mInterrupt(kImmediate)
 #ifdef HX_NATIVE
-      , mListeners(this)
+      // kObjListAllowNull, NOT the default kObjListNoNull: mListeners is the
+      // queue of pending triggers, and a trigger with no listener (every
+      // Flow::Activate(), FlowRun) is a NULL entry that must be queued. The
+      // image's std::list stores it (FlowQueueable.s, Activate: `stw r27,0x54`
+      // with r27=0, then list::insert at this+0x60). A NoNull list silently
+      // dropped it, so a kQueue/kQueueOne/kWhenAble flow re-triggered while
+      // running lost the queued run. A listener destroyed while queued now
+      // becomes a null entry (ReleaseListener(null) is a no-op) where the
+      // Xbox list would hold a dangling pointer.
+      , mListeners(this, kObjListAllowNull)
 #endif
 {}
 FlowQueueable::~FlowQueueable() {}
@@ -55,7 +64,8 @@ void FlowQueueable::Deactivate(bool b) {
     }
     // ObjPtrList: pop before release to avoid ring-modified iteration.
     // If ReleaseListener triggers destruction of another listener still
-    // in temp, the ring auto-removes it (kObjListNoNull).
+    // in temp, the ring nulls its entry (kObjListAllowNull, see the ctor)
+    // and ReleaseListener(nullptr) is a no-op.
     ObjPtrList<Hmx::Object> temp(mListeners);
     mListeners.clear();
     while (temp.size() > 0) {
