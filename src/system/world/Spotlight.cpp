@@ -1466,6 +1466,15 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
         );
         pMtx = &rotMtx;
     }
+    // MEASURED NEGATIVE (w8-q): the target holds orientMtx at frame 0xb0 and
+    // identMtx at 0xe0; we hold them the other way round (16 SWAPPED slots,
+    // every `stfs` in the identity init carries off:-48). Hoisting
+    // `Hmx::Matrix3 orientMtx;` above identMtx -- so declaration order matches
+    // the target's slot order -- is BYTE-INERT: 79.0% canonical and the same
+    // 318 mismatch rows before and after. MSVC/Xenon assigns these slots by
+    // liveness/first-use, not by declaration order, and all three matrices have
+    // identical type, size and alignment, so nothing in the declaration list
+    // discriminates them.
     Hmx::Matrix3 orientMtx;
     memcpy(&orientMtx, pMtx, 0x30);
 
@@ -1549,25 +1558,33 @@ void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
         }
 
         int cur = baseIdx - 1;
-        int curFlip = flip;
         int fCount = 2;
         do {
-            flip = curFlip + 1;
             int nextRow = cur - 1 + sideWidth;
             // Bitwise, not logical: the target emits `clrlwi. rN, rM, 31`
             // (an explicit AND with 1), so the winding alternates every
-            // iteration. `curFlip && 1` compiles to `cmpwi rM, 0` instead and
-            // is true for every iteration after the first.
-            if (curFlip & 1) {
+            // iteration. `flip && 1` compiles to `cmpwi rM, 0` instead and is
+            // true for every iteration after the first.
+            //
+            // ONE flip variable, not two (w8-q, 77.766 -> 79.0 canonical). The
+            // image reads the flip counter from its stack home, tests bit 0 and
+            // writes back the incremented value in three adjacent instructions
+            // at 0x8282C6C8/C6CC/C6D0/C6D8 -- `lwz r8,0x54(r1)`,
+            // `clrlwi. r6,r8,31`, `addi r8,r8,1`, `stw r8,0x54(r1)` -- i.e. ONE
+            // object read-tested-incremented, not a `flip = curFlip + 1` /
+            // `curFlip = flip` pair. The old two-variable spelling kept the copy
+            // live in r18 and forced a genuine spill in the else arm
+            // (`sth r10,0x50(r1)` / `lhz r3,0x50(r1)`), which is now gone.
+            if (flip & 1) {
                 faces[iFace].Set(nextRow, cur - 1, nextRow + 1);
                 faces[iFace + 1].Set(nextRow + 1, cur - 1, cur);
             } else {
                 faces[iFace].Set(cur - 1, cur, nextRow);
                 faces[iFace + 1].Set(nextRow, cur, nextRow + 1);
             }
+            flip++;
             cur = cur + 1;
             iFace += 2;
-            curFlip = flip;
             fCount--;
         } while (fCount != 0);
 
