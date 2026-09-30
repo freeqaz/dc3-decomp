@@ -150,6 +150,30 @@ void SpotlightDrawer::ListDrawChildren(std::list<RndDrawable *> &draws) {
     draws.push_back(mParams.mProxy);
 }
 
+// RESIDUAL 97.705 canonical (352 B), and the two charged rows say we are calling
+// the WRONG VIRTUAL.  At 0x1D48..0x1D60 the image does
+//   li   r4, 0x0
+//   lwz  r30, 0x4(r31)        ; envMesh
+//   mr   r3, r30              ; this, UNADJUSTED
+//   lwz  r11, 0x0(r30)        ; vptr at object offset 0
+//   lwz  r11, 0x4(r11)        ; SLOT 1
+//   bctrl
+// and the same again at 0x1DB8.  We emit slot 0 and no r4.  Two things follow.
+// (1) The image dispatches on the UNADJUSTED pointer, so the reinterpret_cast
+//     below is faithful and must stay.  MEASURED NEGATIVE (w8-q): spelling it
+//     `envMesh->Highlight()` -- legal, since RndMesh -> RndDrawable ->
+//     virtual RndHighlightable really does expose Highlight() -- drops this row
+//     from 97.705 to 87.227, because MSVC then emits the full virtual-base
+//     adjustment the image has nowhere: `lwz r11,0x4(r30)` (vbptr),
+//     `lwz r11,0x8(r11)` (vbase displacement), `add r11,r11,r30`,
+//     `addi r3,r11,0x4`.  Reverted.
+// (2) `li r4, 0x0` is an ARGUMENT, and RndHighlightable::Highlight() has no
+//     parameter -- ?Highlight@RndDrawable@@UAAXXZ in ham_xbox_r.map is `XZ`,
+//     void(void).  So slot 1 of the unadjusted vptr is a ONE-ARGUMENT virtual
+//     and this call is not Highlight() at all.  Whatever it is, it is reached by
+//     a cast to some class whose slot 0 is occupied and whose slot 1 takes one
+//     pointer/bool; finding it is the next step, not another spelling of
+//     Highlight.
 void SpotlightDrawer::DrawMeshVec(std::vector<SpotMeshEntry> &entries) {
     if (entries.size() != 0) {
         std::vector<SpotMeshEntry>::iterator it = entries.begin();
