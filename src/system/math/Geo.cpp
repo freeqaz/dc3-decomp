@@ -1442,6 +1442,24 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
 
     newPoints->reserve((poly.points.end() - poly.points.begin()) * 2);
 
+    // LEAD for the next lane (w8-o 2026-09-30, 96.094, 512 B target vs 492 B
+    // base -- FIVE instructions the image has and we do not, and they are all
+    // DEAD HOME STORES of these two loop-carried variables).  r31+0x50 holds
+    // lastPoint and r31+0x54 holds lastDot; both sides store 0x50 twice
+    // (rows 43 and 47 of the aligned diff are equal), but the image ALSO
+    // emits, target-only:
+    //   subi r10, r11, 0x8      a SECOND copy of the `end()-1` computation
+    //   stw  r9,  0x50(r31)     an extra home of lastPoint
+    //   mr   r9,  r11
+    //   stfs f0,  0x54(r31)     an extra home of lastDot (first one)
+    //   stfs f11, 0x54(r31)     an extra home of lastDot (second one)
+    // That is the documented signature of an expression WRITTEN TWICE in the
+    // source and CSE'd by MSVC, which homes the slot once per textual
+    // occurrence -- see docs/decomp/patterns/repeated-call-expression-home-stores
+    // and dead-home-slot-store.  The shape to try is spelling
+    // `poly.points.back()` (and the lastDot initialiser) more than once rather
+    // than through these two variables.  NOT attempted here, so it is a lead
+    // and not a refutation.
     const Vector2 *lastPoint = &poly.points.back();
     const Vector2 *dirPtr = &ray.dir;
     float yDiff = lastPoint->y - ray.base.y;
