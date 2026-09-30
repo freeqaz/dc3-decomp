@@ -98,6 +98,7 @@ Tool-specific deep docs live in subdirectories:
 | [plans/dc3-native/STATUS.md](plans/dc3-native/STATUS.md) | Native port status — boot flow, error handling, env vars |
 | [plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md](plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md) | HX_NATIVE hacks audit — 298 guards categorized, DTA handler root cause, screen flow reference |
 | [plans/dc3-native/TEST_GAP_ANALYSIS.md](plans/dc3-native/TEST_GAP_ANALYSIS.md) | Test gaps — high-value missing tests for native port correctness |
+| [plans/XENIA_ORACLE.md](plans/XENIA_ORACLE.md) | Xenia as an oracle for the native port — what the fork can be trusted for, tiered plan (evaluator DTA channel first), recorded goldens with patch manifests |
 
 ## Projects
 
