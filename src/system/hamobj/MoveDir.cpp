@@ -1959,7 +1959,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         MakeString(
             "%i %s %s",
             TheTaskMgr.CurrentMeasure(),
-            move->Name() + (move->Name()[0] == '/' ? 1 : 0),
+            move->Name(),
             mirroredStr
         ),
         detectFrac,
