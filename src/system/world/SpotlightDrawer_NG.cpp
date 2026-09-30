@@ -75,7 +75,10 @@ void NgSpotlightDrawer::SetAmbientColor(const Hmx::Color &color) {
     TheShaderMgr.SetPConstant(kPS_AmbientColor, Vector4(r, g, b, a));
 }
 
-void NgSpotlightDrawer::ClearPostDraw() { sNeedDraw = false; }
+// COMDAT selection ANY, per ham_xbox_r.map's `f i` at 0x82820808; an ordinary
+// out-of-line definition compiles to NODUPLICATES here.  Only this TU uses it
+// (protected virtual, reached through the vtable), so `inline` is well-formed.
+inline void NgSpotlightDrawer::ClearPostDraw() { sNeedDraw = false; }
 
 void NgSpotlightDrawer::ClearPostProc() {
     sLights.resize(0);
@@ -1017,7 +1020,7 @@ namespace stlpmtx_std {
 // Manual specialization for SpotMeshEntry vector to match target codegen
 // The target binary uses manual memcpy loops instead of STL helpers
 template <>
-void vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_fill_insert_aux(
+inline void vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_fill_insert_aux(
     SpotMeshEntry* __pos,
     unsigned int __n,
     const SpotMeshEntry& __x,

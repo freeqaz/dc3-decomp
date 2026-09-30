@@ -6,6 +6,8 @@
 #include "rndobj\PostProc.h"
 #include "utl/BinStream.h"
 #include "utl\MemMgr.h"
+#include "utl/Loader.h"
+#include "os/System.h"
 
 class Spotlight;
 class SpotlightDrawer;
@@ -86,7 +88,16 @@ public:
     const SpotDrawParams &Params() const { return mParams; }
 
     static SpotlightDrawer *Current() { return sCurrent; }
-    static bool DrawNGSpotlights();
+    // COMDAT selection ANY, not NODUPLICATES: ham_xbox_r.map flags
+    // ?DrawNGSpotlights@SpotlightDrawer@@SA_NXZ at 0x82823AC0 with `f i`, and an
+    // ordinary out-of-line .cpp definition compiles to NODUPLICATES here -- so
+    // the original declared this inline and the body has to live in the header
+    // for the COMDAT to exist in each calling TU.  See the refutation note above
+    // Spotlight::BuildBeam's caller-side save set: matching the class did NOT
+    // move it.
+    static inline bool DrawNGSpotlights() {
+        return GetGfxMode() == kNewGfx && TheLoadMgr.GetPlatform() != kPlatformPC;
+    }
 
 protected:
     // RndDrawable (protected access for correct mangling)

@@ -428,10 +428,6 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
     }
 }
 
-bool SpotlightDrawer::DrawNGSpotlights() {
-    return GetGfxMode() == kNewGfx && TheLoadMgr.GetPlatform() != kPlatformPC;
-}
-
 void SpotlightDrawer::DeSelect() {
     if (sCurrent != this)
         return;
@@ -569,8 +565,12 @@ void DrawAccessories(
     SpotlightDrawer::SpotlightEntry *const &
 );
 
+// COMDAT selection must be ANY, not NODUPLICATES: ham_xbox_r.map flags
+// ??$DrawAccessories@VLensExtract@@@@YAX... with `f i`, and an explicit
+// specialization without `inline` compiles to a NODUPLICATES COMDAT here
+// (verified by reading the section aux record's Selection byte).
 template <>
-void DrawAccessories<LensExtract>(
+inline void DrawAccessories<LensExtract>(
     SpotlightDrawer::SpotlightEntry *const &spotBegin,
     SpotlightDrawer::SpotlightEntry *const &spotEnd
 ) {
