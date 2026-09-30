@@ -51,10 +51,24 @@
 > 3. Do **not** treat a prologue save-set difference as evidence *for* this
 >    lever. See `BuildBeam` above.
 > 4. For the real surface area, run the read-only
->    `scripts/analysis/comdat_selection_audit.py` (no ninja, no DB). Over four
->    units it found **7 mismatches among 1,396** mapped functions, only **4** in
->    the actionable direction (ours `NODUPLICATES`, image `ANY`). Closing those
->    four was **fidelity-only: 0 regressions, 0 score movement.**
+>    `scripts/analysis/comdat_selection_audit.py` (no ninja, no DB).
+>    **Whole-binary, 989 objects: 1,898 selection mismatches** — **536** in the
+>    direction the tool calls actionable (ours `NODUPLICATES`, image `ANY`) and
+>    **1,362** reverse (ours `ANY`, image `NODUPLICATES`) — over **78,352**
+>    functions compared, with **85,992 skipped as not-in-map**, and only 16 rows
+>    in the synthetic `link_glue` unit. So the surface is **large, not small.**
+>    ⚠ The first figure quoted here was "7 mismatches among 1,396, 4 actionable":
+>    that is a **four-unit sample**, and I generalised it to the binary from a
+>    `tail -40` of the whole-binary run. A truncated probe stated as a total, the
+>    same defect this repo already documents. Corrected by re-running with the
+>    output captured in full.
+>
+>    **But a large surface is not a large prize.** The only measured closures —
+>    four of them, each verified by reading the selection byte — were
+>    **fidelity-only: 0 regressions and 0 score movement**, and `BuildBeam`, the
+>    textbook symptom, did not move either. Treat the 536 as a *fidelity*
+>    backlog of unknown score value, and measure a handful before committing a
+>    lane to it.
 
 ## Symptom
 
