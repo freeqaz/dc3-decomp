@@ -692,14 +692,27 @@ void LiveCameraInput::PreInit() {
 void LiveCameraInput::Init() {
     PreInit();
     if (sInstance) {
+        // `speechArr` is deliberately left uninitialised on the no-"kinect"
+        // path: the image reads it back from its home slot there.  At
+        // 0x8243390C the `FindArray("kinect")==0` arm is `lwz r31, 0x54(r1)`
+        // -- 0x54(r1) is the slot the *"speech" Symbol temp* occupies
+        // (`addi r3, r1, 0x54` at 0x824338D0), i.e. the stack packer shares it
+        // with speechArr's home and the image passes whatever is there to
+        // InitGrammars.  The old spelling assigned `cfg = speechArr` inside the
+        // block and passed `cfg`, which gives the memory phi no reason to
+        // exist.  Reproduced for the match; nulled on native so the port does
+        // not dereference a garbage DataArray.
+        DataArray *speechArr;
+#ifdef HX_NATIVE
+        speechArr = nullptr;
+#endif
         DataArray *cfg = SystemConfig()->FindArray("kinect", false);
         if (cfg) {
-            DataArray *speechArr = cfg->FindArray("speech");
-            cfg = speechArr;
+            speechArr = cfg->FindArray("speech");
             speechArr->FindInt("enabled");
         }
         if (sInstance->mSpeechMgr) {
-            sInstance->mSpeechMgr->InitGrammars(cfg);
+            sInstance->mSpeechMgr->InitGrammars(speechArr);
         }
     }
 }
@@ -861,6 +874,18 @@ void LiveCameraInput::PollNewStream(BufferType buf) {
     }
 }
 
+// BEHAVIOURAL FIX (w8-r): the previous body indexed mStreams[type] and read
+// mFrames[i3] with a *constant* i3.  The image (0x8242F7F0..0x8242F824) does
+// neither.  It remaps the buffer type to a STREAM index -- kBufferPlayer(2)
+// reads the depth stream, kBufferPlayerColor(3) reads the colour stream, i.e.
+// `idx = type==2 ? 1 : (type==3 ? 0 : type)`, the `type != 3` arm lowered as
+// the subfic/subfe bool mask at 0x8242F804-0x8242F80C and `and r11, r11, r31`
+// -- and then reads mFrames[mReadIdx], the same double-buffer read index
+// PollNewStream maintains.  The old spelling read mStreams[2]/mStreams[3],
+// which PollNewStream never fills (it asserts type is colour or depth), so
+// StreamBufferData(kBufferPlayer) always returned null; and for colour/depth
+// it pinned mFrames[0] instead of following mReadIdx, so it returned the
+// wrong half of the double buffer on every other frame.
 void *LiveCameraInput::StreamBufferData(BufferType type) const {
     MILO_ASSERT(type < kBufferNum, 0x1FC);
     // The player buffers have no stream of their own: kBufferPlayer reads the

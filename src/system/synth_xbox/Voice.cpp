@@ -707,8 +707,13 @@ bool Voice::IsPlaying() {
     START_AUTO_TIMER("voice_is_playing");
     if (mState == 2)
         return true;
-    IXAudio2SourceVoice *voice = GetVoice();
-    if (!voice)
+    // GetVoice() written TWICE, not hoisted into a local: MSVC CSEs the two
+    // calls into one `lwz r3, 0x58(r29)` and emits a dead home store of the
+    // result (`stw r3, 0x50(r31)` at 0x82E36EF8, never reloaded -- the
+    // GetState call below uses r3 directly).  A single named local gives the
+    // compiler no second call expression to fold and drops that store, and
+    // with it the cr0 form of the null test.
+    if (!GetVoice())
         return false;
     if (mState == 1)
         return false;
@@ -716,7 +721,7 @@ bool Voice::IsPlaying() {
         return true;
 
     XAUDIO2_VOICE_STATE state;
-    voice->GetState(&state, 0);
+    GetVoice()->GetState(&state, 0);
     if (state.BuffersQueued == 0 && state.SamplesPlayed == 0)
         return false;
 
@@ -840,8 +845,8 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
             fmt.ChannelMask = 0x60f;
         }
         fmt.SamplesEncoded = mNumSamples;
-        fmt.PlayBegin = buf.PlayBegin;
         fmt.BytesPerBlock = 0x10000;
+        fmt.PlayBegin = buf.PlayBegin;
         fmt.PlayLength = buf.PlayLength;
         fmt.LoopBegin = buf.LoopBegin;
         fmt.LoopLength = buf.LoopLength;
