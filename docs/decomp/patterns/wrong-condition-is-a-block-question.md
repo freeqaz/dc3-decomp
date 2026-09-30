@@ -77,6 +77,9 @@ producer not found).
 | `BSPFace::Update` row 124 | PRODUCER-SHAPE | refuted: a materialised `isZero` bool vs direct `fcmpu` chain |
 | `PlayBack::Set`, `XMemDelete` | LOOP-LOWERING | refuted: guarded down-counter |
 | `RndPropAnim::OnListFlowLabels` row 20 | (first cut: INVERTED) | refuted — an artifact of stack-slot-sensitive pairing, fixed in the tool |
+| `PartyModeMgr::PickNextPlayer` row 93 | dropped (unpaired) | refuted: `idx = a>b ? 0 : 1` with the default and override values swapped (`li 1 … ble … li 0` vs `li 0 … bgt … li 1`) |
+| `CharClipGroup::GetClip` row 15 | dropped (unpaired) | refuted: `mIndex = min(n-1, mIndex)` as an unconditional store of a select vs a conditional store of `n-1` |
+| `ShouldWaitForRecovery`, `GestureMgr::PostUpdate`, `CalcShaderOpts`, `Skeleton::Displacements` | (objdiff `BOOLEAN_NEGATION`; not branches) | refuted: mask-idiom spellings; the image's extra `and` consumes a register provably holding 1 |
 
 ONE-SIDED leads: 204 rows in 68 functions. Hand-checked 11 (`RhythmBattlePlayer::Poll`,
 `ChoosePlayerSides`, `SyncProperty@HamCharacter`, `TypeProps::Save`,
