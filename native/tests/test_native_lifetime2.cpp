@@ -13,6 +13,12 @@
 #include "obj/Dir.h"
 #include "obj/Object.h"
 #include "rndobj/Group.h"
+#include "rndobj/Lit.h"
+#include "rndobj/Mesh.h"
+#include "char/CharBonesMeshes.h"
+#include "obj/Task.h"
+#include "world/DefaultPhysicsManager.h"
+#include "world/LightPreset.h"
 
 class NativeLifetime2Test : public EngineTestFixture {};
 
@@ -110,3 +116,179 @@ TEST_F(NativeLifetime2Test, GroupStepAfterANoNullListNode) {
     delete group;
     delete holderOwner;
 }
+
+
+// ===========================================================================
+// Every owner-control holder: the owner hears its target die in the cascade
+// ===========================================================================
+//
+// native-partyplay ran the image's owner step for TypeProps, RndEnviron and
+// (backed out) RndGroup only.  Every other owner-control holder kept the old
+// bypass: its ref was nulled and the owner's own state was left behind.  The
+// four owners named as open leads, each against its image Replace:
+//   * CharBonesMeshes::Replace substitutes sDummyMesh (PoseMeshes dereferences
+//     every entry of mMeshes);
+//   * DefaultPhysicsManager::Replace erases the node AND RemoveCollidable()s
+//     the object from the raw RndMesh* lists and the dir map, which Poll and
+//     the ray casts walk -- skipped, those kept the freed mesh;
+//   * LightPreset::Replace removes the light from mLights and its column from
+//     every keyframe;
+//   * ScriptTask::Replace / MessageTask::Replace `delete this` -- skipped, the
+//     task outlived an object its script names (ScriptTask) or its target
+//     (MessageTask).
+// Each is paired with a plain-delete control (the ReplaceRefs path).
+
+namespace {
+    struct BonesMeshesProbe : public CharBonesMeshes {
+        ObjPtrVec<RndTransformable> &Meshes() { return mMeshes; }
+        static RndTransformable *Dummy() { return sDummyMesh; }
+    };
+
+    struct PhysicsProbe : public DefaultPhysicsManager {
+        PhysicsProbe() : DefaultPhysicsManager(nullptr) {}
+        void Add(Hmx::Object *o) { AddCollidable(o, nullptr, true); }
+        int Collidables() const { return mCollidables.size(); }
+        int Active() const { return mActiveCollidables.size(); }
+        int Mapped() const { return mCollidableDirs.size(); }
+    };
+
+    struct PresetProbe : public LightPreset {
+        using LightPreset::AddLight;
+        int Lights() const { return mLights.size(); }
+        bool HasNullLight() const {
+            for (int i = 0; i < mLights.size(); i++)
+                if (!mLights[i])
+                    return true;
+            return false;
+        }
+    };
+
+    ObjectDir *DyingDir(const char *name) {
+        ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+        dir->SetName(name, ObjectDir::Main());
+        return dir;
+    }
+}
+
+static void CheckBonesMeshes(bool cascade) {
+    if (!BonesMeshesProbe::Dummy())
+        CharBonesMeshes::Init();
+    BonesMeshesProbe *servo = new BonesMeshesProbe();
+    ObjectDir *dir = cascade ? DyingDir("lt2_bones_dir") : nullptr;
+    RndTransformable *bone = Hmx::Object::New<RndTransformable>();
+    if (dir)
+        bone->SetName("bone_pelvis.mesh", dir);
+    servo->Meshes().push_back(bone);
+    ASSERT_EQ(servo->Meshes().size(), 1);
+    if (dir)
+        delete dir;
+    else
+        delete bone;
+    ASSERT_EQ(servo->Meshes().size(), 1);
+    EXPECT_EQ((RndTransformable *)servo->Meshes()[0], BonesMeshesProbe::Dummy())
+        << "the deleted bone was not replaced by sDummyMesh "
+           "(CharBonesMeshes::Replace never ran); PoseMeshes would write through NULL";
+    delete servo;
+}
+
+TEST_F(NativeLifetime2Test, BonesMeshesSubstituteTheDummyOnPlainDelete) { CheckBonesMeshes(false); }
+TEST_F(NativeLifetime2Test, BonesMeshesSubstituteTheDummyInTheDirCascade) { CheckBonesMeshes(true); }
+
+static void CheckPhysics(bool cascade) {
+    PhysicsProbe *physics = new PhysicsProbe();
+    ObjectDir *dir = cascade ? DyingDir("lt2_physics_dir") : nullptr;
+    RndMesh *mesh = Hmx::Object::New<RndMesh>();
+    if (dir)
+        mesh->SetName("collide.mesh", dir);
+    physics->Add(mesh);
+    ASSERT_EQ(physics->Collidables(), 1);
+    ASSERT_EQ(physics->Active(), 1);
+    if (dir)
+        delete dir;
+    else
+        delete mesh;
+    EXPECT_EQ(physics->Collidables(), 0) << "the collidable's node was kept";
+    EXPECT_EQ(physics->Active(), 0)
+        << "the active-collidable list still holds the freed mesh "
+           "(DefaultPhysicsManager::Replace -> RemoveCollidable never ran)";
+    EXPECT_EQ(physics->Mapped(), 0) << "mCollidableDirs still maps the freed mesh";
+    delete physics;
+}
+
+TEST_F(NativeLifetime2Test, PhysicsDropsADeletedCollidableOnPlainDelete) { CheckPhysics(false); }
+TEST_F(NativeLifetime2Test, PhysicsDropsADeletedCollidableInTheDirCascade) { CheckPhysics(true); }
+
+static void CheckLightPreset(bool cascade) {
+    PresetProbe *preset = new PresetProbe();
+    ObjectDir *dir = cascade ? DyingDir("lt2_preset_dir") : nullptr;
+    RndLight *light = Hmx::Object::New<RndLight>();
+    if (dir)
+        light->SetName("key.lit", dir);
+    preset->AddLight(light);
+    ASSERT_EQ(preset->Lights(), 1);
+    if (dir)
+        delete dir;
+    else
+        delete light;
+    EXPECT_EQ(preset->Lights(), 0)
+        << "the preset kept the deleted light (LightPreset::Replace never ran)";
+    EXPECT_FALSE(preset->HasNullLight());
+    delete preset;
+}
+
+TEST_F(NativeLifetime2Test, LightPresetDropsADeletedLightOnPlainDelete) { CheckLightPreset(false); }
+TEST_F(NativeLifetime2Test, LightPresetDropsADeletedLightInTheDirCascade) { CheckLightPreset(true); }
+
+static void CheckScriptTask(bool cascade) {
+    ObjectDir *dir = cascade ? DyingDir("lt2_task_dir") : nullptr;
+    Hmx::Object *target = Hmx::Object::New<Hmx::Object>();
+    if (dir)
+        target->SetName("task_target", dir);
+    // {<target> foo}: the script names the object, so ScriptTask's
+    // UpdateVarsObjects puts it in mObjects (owner control).
+    DataArray *script = new DataArray(1);
+    DataArray *cmd = new DataArray(2);
+    cmd->Node(0) = DataNode(target);
+    cmd->Node(1) = DataNode(Symbol("foo"));
+    script->Node(0) = DataNode(cmd, kDataCommand);
+    cmd->Release();
+    ScriptTask *task = new ScriptTask(script, true, nullptr);
+    script->Release();
+    Hmx::DeathWatch watch(task);
+    if (dir)
+        delete dir;
+    else
+        delete target;
+    EXPECT_TRUE(watch.Dead())
+        << "the task outlived an object its script names "
+           "(ScriptTask::Replace never ran)";
+    if (!watch.Dead())
+        delete task;
+}
+
+TEST_F(NativeLifetime2Test, ScriptTaskDiesWithItsObjectOnPlainDelete) { CheckScriptTask(false); }
+TEST_F(NativeLifetime2Test, ScriptTaskDiesWithItsObjectInTheDirCascade) { CheckScriptTask(true); }
+
+static void CheckMessageTask(bool cascade) {
+    ObjectDir *dir = cascade ? DyingDir("lt2_msgtask_dir") : nullptr;
+    Hmx::Object *target = Hmx::Object::New<Hmx::Object>();
+    if (dir)
+        target->SetName("msg_target", dir);
+    DataArray *msg = new DataArray(2);
+    msg->Node(0) = DataNode(target);
+    msg->Node(1) = DataNode(Symbol("foo"));
+    MessageTask *task = new MessageTask(target, msg);
+    msg->Release();
+    Hmx::DeathWatch watch(task);
+    if (dir)
+        delete dir;
+    else
+        delete target;
+    EXPECT_TRUE(watch.Dead())
+        << "the task outlived its target (MessageTask::Replace never ran)";
+    if (!watch.Dead())
+        delete task;
+}
+
+TEST_F(NativeLifetime2Test, MessageTaskDiesWithItsTargetOnPlainDelete) { CheckMessageTask(false); }
+TEST_F(NativeLifetime2Test, MessageTaskDiesWithItsTargetInTheDirCascade) { CheckMessageTask(true); }

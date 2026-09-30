@@ -175,6 +175,12 @@ public:
      *  No Replace callback fires — purely mechanical. Used by
      *  NullifyAllRefs during cascade Phase 0 to avoid delete-this. */
     virtual void NullifyObj() { next = this; prev = this; }
+    /** For an OWNER-CONTROL holder -- an ObjOwnerPtr, or a node of an
+     *  ObjPtrList/ObjPtrVec in kObjListOwnerControl mode -- the owner its
+     *  Replace() forwards to; NULL for every other ref.  Replace(nullptr) is
+     *  that owner's only notice that the target died, so NullifyAllRefs runs
+     *  it for these holders instead of NullifyObj (see Object.cpp). */
+    virtual ObjRefOwner *ControlOwner() const { return nullptr; }
 #endif
 
     class iterator {
@@ -341,6 +347,9 @@ public:
     virtual ~ObjOwnerPtr();
     virtual Hmx::Object *RefOwner() const;
     virtual void Replace(Hmx::Object *obj) { mOwner->Replace(this, obj); }
+#ifdef HX_NATIVE
+    ObjRefOwner *ControlOwner() const override { return mOwner; }
+#endif
     void operator=(T *obj) { SetObjConcrete(obj); }
     // Retargets this reference only. Must NOT be the implicit copy-assignment,
     // which would also overwrite mOwner with the source's owner and leave this
@@ -392,6 +401,10 @@ private:
         }
         virtual ObjRefOwner *Parent() const { return mOwner; }
 #ifdef HX_NATIVE
+        ObjRefOwner *ControlOwner() const override {
+            ObjPtrVec<T1, T2> *vec = static_cast<ObjPtrVec<T1, T2> *>(mOwner);
+            return vec->Mode() == kObjListOwnerControl ? vec->mOwner : nullptr;
+        }
         void NullifyObj() override {
             ObjRefConcrete<T1, T2>::NullifyObj();
             ObjPtrVec<T1, T2> *vec = static_cast<ObjPtrVec<T1, T2> *>(mOwner);
@@ -620,6 +633,10 @@ private:
         }
         virtual ObjRefOwner *Parent() const { return mOwner; }
 #ifdef HX_NATIVE
+        ObjRefOwner *ControlOwner() const override {
+            ObjPtrList<T1, T2> *list = static_cast<ObjPtrList<T1, T2> *>(mOwner);
+            return list->Mode() == kObjListOwnerControl ? list->mOwner : nullptr;
+        }
         void NullifyObj() override {
             ObjRefConcrete<T1, T2>::NullifyObj();
             ObjPtrList<T1, T2> *list =
