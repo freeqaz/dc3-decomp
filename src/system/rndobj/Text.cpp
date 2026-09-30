@@ -2104,18 +2104,23 @@ void RndText::FitTextScroll() {
 
 void RndText::DrawMesh(RndMesh *mesh, float size, int syncFlags) {
     mesh->DrawShowing();
-    if (size != 0.0f && syncFlags > 0) {
+    // The image sets up the accumulator BETWEEN the two tests -- `fmr f31, f29`
+    // sits after `beq` on `size != 0` and before `cmpwi r28, 0` -- so the two
+    // conditions are nested with the declaration in the outer body, not `&&`.
+    if (size != 0.0f) {
         float offset = size;
-        do {
-            Vector3 pos = mesh->LocalXfm().v;
-            pos.x += offset;
-            mesh->SetLocalPos(pos);
-            mesh->DrawShowing();
-            pos.x -= offset;
-            mesh->SetLocalPos(pos);
-            syncFlags--;
-            offset += size;
-        } while (syncFlags != 0);
+        if (syncFlags > 0) {
+            do {
+                Vector3 pos = mesh->LocalXfm().v;
+                pos.x += offset;
+                mesh->SetLocalPos(pos);
+                mesh->DrawShowing();
+                pos.x -= offset;
+                mesh->SetLocalPos(pos);
+                syncFlags--;
+                offset += size;
+            } while (syncFlags != 0);
+        }
     }
 }
 
