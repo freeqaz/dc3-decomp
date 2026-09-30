@@ -38,6 +38,21 @@ int PlaylistSongProvider::NumData() const {
 // Same unsolved family as MidiParserMgr::ParseText, WebSvcMgrCurl::Poll and
 // AccomplishmentProgress::AddAccomplishment: the image never pools the first
 // 4-byte assert temp with a later temp, and no source lever found does that.
+// 99.966% (normalized, full ninja).  Two charged rows, both the same fact: the
+// Symbol temp that receives GetShortNameFromSongID's return lives at 0x54(r1) in
+// the image (`addi r3, r1, 0x54` at 0x8298517C, `lwz r11, 0x54(r1)` at
+// 0x82985184) and at 0x50(r1) in ours -- MSVC REUSES the MILO_ASSERT vararg slot
+// at 0x50, which is dead after Debug::Fail, while the image allocates 0x54 beside
+// it.  The fourteen r29/r30/r31 rows are a three-way rotation of the same
+// callee-saved set and the canonical ruler forgives them; idx 18's MakeString
+// instantiation is an ICF representative, not a per-call-site type.
+//
+// REFUTED, each a full ninja on this row:
+//   99.966  this form
+//   98.271  `Symbol shortName;` hoisted to function scope above the assert
+//   95.593  the Symbol temp inlined into the return, songID kept
+//   94.576  everything inlined into one return expression
+// Keep the two named locals; the slot pairing is an allocator decision.
 Symbol PlaylistSongProvider::DataSymbol(int i) const {
     MILO_ASSERT(m_pPlaylist, 0x6d);
     if (i >= 0 && i < NumData() && m_pPlaylist && m_pPlaylist->IsValidSong(i)) {
