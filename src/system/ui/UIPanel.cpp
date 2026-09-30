@@ -276,14 +276,6 @@ bool UIPanel::Exiting() const {
 
 void UIPanel::Enter() {
     MILO_ASSERT(mState == kDown, 0x158);
-#ifdef HX_NATIVE
-    // Block Kinect tutorial panels from entering on native.
-    // DTA handlers call {$tutorial_nav_panel enter} which bypasses our
-    // UIScreen::Enter() skip. Suppress here at the panel level.
-    if (strstr(Name(), "tutorial")) {
-        return;
-    }
-#endif
     if (!mFocusName.empty() && mDir) {
         SetFocusComponent(mDir->FindComponent(mFocusName.c_str()));
     }

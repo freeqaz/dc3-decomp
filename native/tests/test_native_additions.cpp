@@ -24,6 +24,8 @@
 #include "flow/PropertyEventProvider.h"
 #include "hamobj/HamPlayerData.h"
 #include "meta_ham/Overshell.h"
+#include "ui/UIPanel.h"
+#include "obj/DataFile.h"
 
 #include <chrono>
 #include <thread>
@@ -267,3 +269,85 @@ TEST_F(NativeAdditionsOvershellTest, SetPlayingExportsJoinAndQuit) {
         << "SetPlaying(false) must Export player_quit with the slot's player number";
 }
 
+// ---------------------------------------------------------------------------
+// Panels whose name contains "tutorial".
+//
+// Image: ?Enter@UIScreen@@ checks only the panel's state (827A528C cmpwi 0x2)
+// before the virtual Enter (827A52A8..B4); ?Enter@UIPanel@@ (827A7540..) goes
+// straight to focus/state/enter with no name test.
+//
+// Two native-only `strstr(Name(), "tutorial")` skips (UIScreen::Enter and
+// UIPanel::Enter) kept every such panel from entering, "no gesture input on
+// native".  The substring also matches options_tutorials_panel, so Options ->
+// Tutorials and Pause -> Tutorials opened empty; the tutorial panels
+// themselves (TUTORIAL_PANEL_COMMON) take controller input.
+// ---------------------------------------------------------------------------
+
+namespace {
+class NativeAdditionsTutorialTest : public EngineTestFixture {};
+
+UIPanel *LoadedPanel(const char *name) {
+    UIPanel *p = Hmx::Object::New<UIPanel>();
+    p->SetName(name, ObjectDir::Main());
+    p->CheckLoad();       // no file: Load() is a no-op, mLoadRefs 1
+    p->CheckIsLoaded();   // FinishLoad -> kDown
+    return p;
+}
+} // namespace
+
+TEST_F(NativeAdditionsTutorialTest, TutorialNamedPanelEnters) {
+    UIPanel *p = LoadedPanel("na_options_tutorials_panel");
+    ASSERT_EQ(p->GetState(), UIPanel::kDown) << "precondition: loaded, down";
+    p->Enter();
+    EXPECT_EQ(p->GetState(), UIPanel::kUp)
+        << "UIPanel::Enter refused a panel because its NAME contains 'tutorial'";
+    p->Exit();
+    p->CheckUnload();
+    delete p;
+}
+
+TEST_F(NativeAdditionsTutorialTest, ScreenEntersItsTutorialNamedPanel) {
+    UIManager ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    UIPanel *p = Hmx::Object::New<UIPanel>();
+    p->SetName("na_tutorial_probe_panel", ObjectDir::Main());
+    UIScreen *scr = Hmx::Object::New<UIScreen>();
+    DataArray *def = DataReadString("(panels na_tutorial_probe_panel)");
+    scr->SetTypeDef(def);
+    def->Release();
+    scr->LoadPanels();
+    ASSERT_TRUE(scr->CheckIsLoaded());
+    ASSERT_EQ(p->GetState(), UIPanel::kDown) << "precondition: loaded, down";
+    scr->Enter(nullptr);
+    EXPECT_EQ(p->GetState(), UIPanel::kUp)
+        << "UIScreen::Enter skipped a down panel because its NAME contains 'tutorial'";
+    scr->Exit(nullptr);
+    scr->UnloadPanels();
+    delete scr;
+    TheUI = savedUI;
+    delete p;
+}
+
+// Control for the two above: the same harness with an ordinary name enters.
+TEST_F(NativeAdditionsTutorialTest, ControlScreenEntersAnOrdinaryPanel) {
+    UIManager ui;
+    UIManager *savedUI = TheUI;
+    TheUI = &ui;
+    UIPanel *p = Hmx::Object::New<UIPanel>();
+    p->SetName("na_ordinary_probe_panel", ObjectDir::Main());
+    UIScreen *scr = Hmx::Object::New<UIScreen>();
+    DataArray *def = DataReadString("(panels na_ordinary_probe_panel)");
+    scr->SetTypeDef(def);
+    def->Release();
+    scr->LoadPanels();
+    ASSERT_TRUE(scr->CheckIsLoaded());
+    ASSERT_EQ(p->GetState(), UIPanel::kDown) << "precondition: loaded, down";
+    scr->Enter(nullptr);
+    EXPECT_EQ(p->GetState(), UIPanel::kUp) << "harness broken: an ordinary panel did not enter";
+    scr->Exit(nullptr);
+    scr->UnloadPanels();
+    delete scr;
+    TheUI = savedUI;
+    delete p;
+}

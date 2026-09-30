@@ -252,13 +252,6 @@ void UIScreen::Enter(UIScreen *scr) {
     int i5 = 0;
     FOREACH (it, mPanelList) {
         if (it->Active() && it->mPanel->GetState() == UIPanel::kDown) {
-#ifdef HX_NATIVE
-            // Skip Kinect tutorial panels — no gesture input on native.
-            // On Xbox, DTA scripts suppress these in controller mode.
-            if (strstr(it->mPanel->Name(), "tutorial")) {
-                continue;
-            }
-#endif
 #ifdef HX_WEB
             fprintf(stderr, "DC3 Web: UIScreen '%s' entering panel '%s'...\n", Name(), it->mPanel->Name());
             fflush(stderr);
