@@ -11,8 +11,8 @@
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/screen-thrash.txt \
 #     timeout 900 native/build/dc3-native
 
-wait_screen attract_screen
-+1 confirm
+# attract_screen advances by itself: its .bik does not open, so MoviePanel::Poll
+# sends movie_done (as the image does for a movie that failed to open).
 
 # cycle 1
 wait_screen main_screen

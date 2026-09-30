@@ -3,8 +3,7 @@
 # Same flow as ymca.txt but scrolls to "Better Off Alone" in the song list.
 # Better Off Alone is near the top alphabetically (~3-5 downs from start).
 
-wait_screen attract_screen
-+10 confirm
+# attract_screen advances by itself (movie_done: its .bik does not open).
 
 wait_screen title_screen
 +30 confirm

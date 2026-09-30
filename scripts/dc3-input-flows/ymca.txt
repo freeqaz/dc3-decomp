@@ -25,10 +25,10 @@
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
 #     native/build/dc3-native
 
-# attract_screen plays the intro movie (flimflam.bik).
-# The movie_overlay_panel handles NAV_SELECT_MSG → skip.
-wait_screen attract_screen
-+10 confirm
+# attract_screen needs no input: its movie (no .bik ships in the extracted
+# tree) fails to open, so MoviePanel::Poll sends movie_done on the first poll
+# and attract_movie_panel's handler goes to next_screen -- what the image does
+# with a movie that did not open (BinkMovieImpl::Poll returns false).
 
 # autosave_warning_screen auto-transitions to title_screen.
 # Title screen -- press confirm to proceed.

@@ -9,9 +9,7 @@
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/full-dta-flow.txt \
 #     DC3_DATA=orig-assets native/build/dc3-native
 
-# Skip attract movie
-wait_screen attract_screen
-+1 confirm
+# attract_screen advances by itself (movie_done: its .bik does not open).
 
 # Title screen — confirm to start
 wait_screen title_screen

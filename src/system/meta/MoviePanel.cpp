@@ -180,11 +180,9 @@ void MoviePanel::Poll() {
     if (GetState() == kUnloaded)
         return;
 #ifdef HX_NATIVE
-    // If no movies were loaded, skip movie polling entirely
+    // Load() skips a panel with no `videos` property (the image fails
+    // there), so there is no mCurrentMovie to play or report done.
     if (mMovies.empty())
-        return;
-    // Stub MovieImpl never opens successfully — avoid infinite movie_done loop
-    if (!mMovie.IsOpen())
         return;
 #endif
     if (!mMovie.Poll() && !TheUI->InTransition()) {
