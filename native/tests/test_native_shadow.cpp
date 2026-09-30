@@ -326,4 +326,32 @@ TEST_F(NativeShadowTest, ObjPtrListEraseTailReturnsPredecessor) {
     delete owner;
 }
 
+// ---------------------------------------------------------------------------
+// ObjDirPtr stream-out writes the dir's FILE PATH, which is what the reader
+// (operator>> : FilePath, then LoadFile) reopens. The image's COMDAT at
+// 0x82793CA8 (UILabel.s) inlines GetFile() and ends in bl FileRelativePath
+// (82793D10) then bl ??6BinStream@@QAAAAV0@PBD@Z (82793D1C). The native
+// branch wrote dir->Name(), so a native save/load round trip reopened a bare
+// object name instead of the milo path.
+// ---------------------------------------------------------------------------
+TEST_F(NativeShadowTest, ObjDirPtrSavesTheFilePathNotTheName) {
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+    dir->StoredFile().SetRoot("ui/native_shadow/probe.milo");
+    std::string expected;
+    {
+        MemBinStream ref(false);
+        ref << dir->StoredFile();
+        expected.assign(ref.Buffer(), ref.Size());
+    }
+    std::string got;
+    {
+        ObjDirPtr<ObjectDir> ptr(dir); // releasing it deletes dir
+        MemBinStream out(false);
+        out << ptr;
+        got.assign(out.Buffer(), out.Size());
+    }
+    EXPECT_EQ(got, expected) << "an ObjDirPtr must save the path its reader reopens";
+    EXPECT_NE(got.find("probe.milo"), std::string::npos);
+}
+
 } // namespace

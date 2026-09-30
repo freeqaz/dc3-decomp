@@ -263,15 +263,6 @@ bool ObjDirPtr<C>::IsLoaded() const {
     return mObject != nullptr || (mLoader != nullptr && mLoader->IsLoaded());
 }
 
-#ifdef HX_NATIVE
-template <class C>
-BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr) {
-    C *dir = ptr;
-    const char *name = dir ? dir->Name() : "";
-    bs << name;
-    return bs;
-}
-#else
 // w8-j 2026-09-15: this used to be a DECLARATION with no definition anywhere in a
 // header, so no TU ever emitted the COMDAT and every ObjDirPtr<T> stream-out was
 // an undefined external resolved from link_glue.cpp.  The body link_glue carries
@@ -288,14 +279,14 @@ BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr) {
 // FilePath's own BinStream operator<< (utl/FilePath.h:32) supplies the
 // FileRelativePath(FilePath::Root().c_str(), ...) the listing ends with.
 //
-// The HX_NATIVE branch above still writes dir->Name() and is deliberately left
-// alone: changing native save behaviour is not this lane's call.
+// This body is now compiled natively too. The native build used to write
+// dir->Name() instead, so a native save/load round trip handed the reader
+// (operator>> below: FilePath, then LoadFile) a bare object name.
 template <class C>
 BinStream &operator<<(BinStream &bs, const ObjDirPtr<C> &ptr) {
     bs << ptr.GetFile();
     return bs;
 }
-#endif
 
 template <class T>
 BinStream &operator>>(BinStream &bs, ObjDirPtr<T> &ptr) {
