@@ -217,17 +217,18 @@ void HamCharacter::SyncObjects() {
         // short-circuit TRUE, not a fall-through into the second test; only the
         // left==null path reads 0xb0, and there `bne` (right != gNullStr) selects
         // `li r11, 0x0` while the fall-through selects `li r11, 0x1`.
-        // RESIDUAL (w8-n, 98.35): 1 cause, 3 rows.  After the `||` merges r11 the
-        // image RE-NORMALISES it -- `clrlwi. r11, r11, 24` / `li r4, 0x1` /
+        // RESIDUAL (w8-n, 98.2990 canonical): 1 cause, 3 rows.  After the `||`
+        // merges r11 the image RE-NORMALISES it -- `clrlwi. r11, r11, 24` / `li r4, 0x1` /
         // `bne .L_824918C4`, sharing the `li r4, 0x0` at 0x824918C0 with the else
         // arm -- where we mask straight into the argument (`clrlwi r4, r11, 24`)
-        // and jump over it.  Measured spellings for the whole statement:
-        //     bool blinking; if (servo) {...} else { blinking = false; }  98.35 <- this
-        //     SetBlinking(servo && (...))                                96.29
-        //     bool blinking = servo && (...)                             95.24
-        //     SetBlinking(servo ? (...) : false)                         95.24
-        //     bool blinking = false; if (servo) blinking = ...           95.79
-        //     if (!servo) blinking = false; else blinking = ...          94.72
+        // and jump over it.
+        // Measured, as run_objdiff's canonical headline (1 d.p. as printed):
+        //     bool blinking; if (servo) {...} else { blinking = false; }  98.3 <- this
+        //     SetBlinking(servo && (...))                                96.3
+        //     bool blinking = servo && (...)                             95.2
+        //     SetBlinking(servo ? (...) : false)                         95.2
+        //     bool blinking = false; if (servo) blinking = ...           95.8
+        //     if (!servo) blinking = false; else blinking = ...          94.7
         //     ... with an extra `bool namesOk = ...; blinking = namesOk;` INERT
         bool blinking;
         if (servo) {
@@ -522,18 +523,18 @@ void HamCharacter::ResetFaceOverrideBlending() {
 
 // 100% (w8-n).  Three levers, in the order they paid:
 //  1. `int hasVO = !mCampaignVO.empty(); if (hasVO)` materialises the bool
-//     (`subic`/`subfe.`) where the image just tests it -> 94.46 -> 96.92.
+//     (`subic`/`subfe.`) where the image just tests it: 94.4615 -> 96.9.
 //  2. DirLoader::LoadObjects takes `const FilePath&`; letting the `const char*`
 //     convert implicitly makes MSVC re-materialise the temp's address
 //     (`addi r3, r31, 0x60`) after the ctor already returned it in r3.  Writing
-//     the temporary explicitly reuses the ctor's r3 -> 96.92 -> 98.46.
+//     the temporary explicitly reuses the ctor's r3: 96.9 -> 98.5.
 //  3. RELEASE(x) is `(delete x, x = null)`; MSVC folds the comma form's null
 //     test into `delete`'s own and drops the pointer's home store.  The image
 //     has `stw r3, 0x50(r31)` at 0x824904E0, i.e. one inline level more, which
-//     the SPELT-OUT `if (x) { delete x; x = nullptr; }` restores -> 100.00.
+//     the SPELT-OUT `if (x) { delete x; x = nullptr; }` restores: 98.5 -> 100.0.
 //     REFUTED on the way: dropping `auto &_ref1` for three direct
-//     `mCampaignVOBank` reads is 95.38, and binding the deleted pointer to its
-//     own local (`Hmx::Object *bank = _ref1; if (bank) ...`) stalls at 98.46 --
+//     `mCampaignVOBank` reads is 95.4, and binding the deleted pointer to its
+//     own local (`Hmx::Object *bank = _ref1; if (bank) ...`) stalls at 98.5 --
 //     the null test has to read the REFERENCE, not a copy of it.
 void HamCharacter::SetCampaignVo(const char *cc) {
     mCampaignVO = cc;
@@ -595,7 +596,7 @@ int HamCharacter::SongAnimation() {
     // `return -1;` at the end of the InClipTest() arm AND a second
     // `if (mUseCameraSkeleton || c) return -1;` with `return 0;` as the function
     // tail -- reproduces the image's BLOCK ORDER (the -1 block early, `return 0`
-    // falling through to the epilogue) and still costs 96.11 -> 87.22, because
+    // falling through to the epilogue) and still costs 96.1062 -> 87.2, because
     // the shared Property()/Int() tail moves to the second call site.  The four
     // branch-destination rows and the 63/64-vs-111/112 insert/delete pair are
     // therefore ONE cause with the cross-jump, not two independent ones.
@@ -920,12 +921,13 @@ void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool notify) {
             found = true;
             driver->mOverrideClip = nullptr;
         } else {
-            // RESIDUAL (w8-n, 96.63): the image loads mOverrideOptions into r11,
+            // RESIDUAL (w8-n, 96.6316): the image loads mOverrideOptions into r11,
             // tests it on CR0, HOMES it at 0x54(r31) and only then `mr r4, r11`
-            // into the ObjDirItr argument (0x8248F1C4..0x8248F1D8); we load
+            // into the ObjDirItr argument (0x82490214..0x8249022C; the identical
+            // sequence in BlendInFaceOverrideClip starts at 0x824903D0); we load
             // straight into r4 on CR6 and emit neither extra row.  REFUTED: the
             // ternary `driver->mOverrideOptions ? driver->mOverrideOptions
-            // : driver->mClips` is 92.63 -- MSVC stops folding the ObjPtr read
+            // : driver->mClips` is 92.6 -- MSVC stops folding the ObjPtr read
             // and instead materialises each ObjPtr's ADDRESS (`addi r11, r30,
             // 0xf0` / `0x44` then `lwz r4, 0xc(r11)`), i.e. it costs three rows
             // rather than gaining two.  Also INERT: splitting the first read into

@@ -1811,7 +1811,7 @@ namespace {
     }
 }
 
-// RESIDUAL (w8-n, 93.36): 1 cause, 6 rows -- BLOCK SINKING, believed unfixable.
+// RESIDUAL (w8-n, 93.3553 canonical): 1 cause, 6 rows -- BLOCK SINKING, believed unfixable.
 // The image emits the zero return INLINE: `cmplwi cr6, r30, 0x0` at 0x82500918 is
 // followed by `bne cr6, .L_8250092C` to the DetectRange path and FALLS THROUGH
 // into `lis r11, __real@00000000@h` / `lfs f1` / `b <epilogue>`, so the failure
@@ -1821,7 +1821,7 @@ namespace {
 // REFUTED: spelling it as the early exit -- `if (beat < 0 || (unsigned)beat >=
 // keys.size() || (move = keys[beat].move) == nullptr) return 0.0f;` with three
 // explicit `return`s after it -- DOES create the separate zero block, and MSVC
-// still SINKS it past the success path (`beq cr6, <tail>` again), for 92.04.
+// still SINKS it past the success path (`beq cr6, <tail>` again), for 92.0.
 // That is the docs/decomp/patterns block-sinking class, not a spelling problem.
 float MoveDir::DetectFrac(int player, int beat) {
     MILO_ASSERT_RANGE(player, 0, 2, 0x16a);

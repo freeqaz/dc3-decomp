@@ -1653,17 +1653,17 @@ void HamDirector::BlendOutFaceOverrides(float blendTime) {
     }
 }
 
-// RESIDUAL (w8-n, 98.04): 3 rows, 1 cause.  The image merges the bool into r11
+// RESIDUAL (w8-n, 98.0392 canonical): 3 rows, 1 cause.  The image merges the bool into r11
 // and masks it into the return register -- `li r11, 0x0` / `b` / `li r11, 0x1` /
 // `clrlwi r3, r11, 24` at 0x8246881C..0x82468828 -- where we merge straight into
 // r3 and skip the mask.  The BRANCH structure already matches exactly.  REFUTED:
 //   `bool disabled = true; ... if (...) disabled = false; return disabled;`
-//        -> 92.94; `disabled` takes a CALLEE-SAVED register and the prologue
+//        -> 92.9; `disabled` takes a CALLEE-SAVED register and the prologue
 //        grows from __savegprlr_29 to _28, which charges the prologue too.
 //   `if (mDisablePicking) return true; if (freecam) return true;
 //    return mPlayerFreestyle && !mFreestyleEnabled;` (semantically identical,
 //        and the branch polarities of the last line DO match the image)
-//        -> 92.83; MSVC then materialises the first `return true` as its own
+//        -> 92.8; MSVC then materialises the first `return true` as its own
 //        `li r3, 1` / `b` block instead of cross-jumping it.
 bool HamDirector::ShotsDisabled() {
     if (!mDisablePicking) {
@@ -3206,7 +3206,7 @@ found:
     PoseIconMan(clip, poseBeat, tex, (bool)tex, NULL, 0.0f, 0.0f);
 }
 
-// RESIDUAL (w8-n, 99.43): 44 rows but ONE cause, and the diagnosis is solid even
+// RESIDUAL (w8-n, 99.4266 canonical): 44 rows but ONE cause, and the diagnosis is solid even
 // though the fix is not.  Both sides are 218 instructions; the only non-register
 // rows are idx 195/196, where the image recomputes the keys array address
 // (`slwi r10, r10, 3` / `lwzx r5, r10, r9`) and we keep its base in the
@@ -3215,7 +3215,7 @@ found:
 // frame is 0x10 larger, and every r27->r26 / r26->r25 rename below is the shift.
 // REFUTED: un-hoisting `Key<Symbol> &key = keys->at(clipIdx)` into two direct
 // `keys->at(clipIdx)` accesses DOES remove the extra callee-saved register (the
-// PROLOGUE_MISMATCH pattern disappears) but adds 6 instructions, for 96.38.
+// PROLOGUE_MISMATCH pattern disappears) but adds 6 instructions, for 96.4.
 void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, float duration, float beatExtra, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {
         SetMasterClipAnim();
