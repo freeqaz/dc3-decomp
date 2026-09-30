@@ -742,3 +742,47 @@ the gate is run **once, serially, on merged main**, which is the tree that
 actually ships. Note the lane's discriminator is the transferable part, not the
 verdict: when a gate fails under load, revert your own change and re-run before
 believing it.
+
+### Retraction: I invented a `__LINE__` mechanism that this repo had already refuted
+
+While applying a cross-session handover I wrote, in the commit message of
+`5a20b9f55` and in two messages to the session that owns the finding, that
+`MILO_ASSERT` bakes `__LINE__` into emitted bytes — and therefore that inserting
+or deleting a line before an assert shifts its constant and changes the object.
+**That is false**, and I then built on it twice: I preserved a line count that did
+not need preserving, and I advised holding a handover after counting 40 assert
+macros whose count was irrelevant.
+
+`src/system/os/Debug.h:93` is `#define MILO_ASSERT(cond, line)` — the line is an
+**explicit argument**, passed to `MakeString(kAssertStr, __FILE__, line, #cond)`.
+Call sites read `MILO_ASSERT(ptr, 0x67)`. The macro uses `__FILE__` but never
+`__LINE__`, so no amount of line insertion or deletion can move an assert
+constant.
+
+This repo had already measured it, and the write-up predates my claim by two
+weeks: `docs/decomp/patterns/comments-are-inert-except-at-__LINE__.md`, indexed
+as *"Adding a comment to a .cpp is INERT — the assert-line-shift story is false
+here"*. Whole-binary probe: one comment line prepended to **all 1,188** `src/`
+sources, full `ninja`, 48,365 functions compared, **exactly 1** moved — and that
+one from a literal `__LINE__` at `synth_xbox/SynthSample.cpp:33`. Negative
+control: 9 comment lines above 68 assert sites in `Mesh.cpp` and `Dir.cpp` moved
+**0**.
+
+**How I got there is the part worth keeping.** I had the disconfirming evidence in
+front of me: I read `MILO_ASSERT(type < kBufferNum, 0x1FC)` in a conflict hunk
+earlier the same day. An explicit hex line number is *exactly* what refutes the
+`__LINE__` story, and I read past it because the story was plausible and explained
+an observation someone else had handed me ("deleting an HX_NATIVE block changed
+the object"). A mechanism that explains a real observation feels confirmed by it.
+
+**What is actually true** is narrower and still unexplained: deleting one
+`HX_NATIVE` block from `Font3d.cpp` changed `Font3d.obj` while every `report.json`
+score stayed identical. **Cause undetermined — not asserts.** The honest rule is
+the boring one: hash the object after any edit you believe is inert, and if bytes
+move with no score change, find the cause rather than naming one.
+
+Consequences corrected: the line-count care in `5a20b9f55` was harmless but
+unnecessary; the "preserve line numbers before any assert macro" rule is
+withdrawn; and the `HamDirector` dead-native-walk handover is **not** blocked by a
+40-assert cost, because that cost does not exist. It needs an object hash and a
+row diff like any other edit.
