@@ -201,12 +201,20 @@ void RndSpline::SyncPristineCtrlPoints() {
             mEndCtrlPoint = Clamp(1, (int)mCtrlPoints.size() - 1, mEndCtrlPoint);
         }
         if (mStartCtrlPoint != -1) {
-            int maxStart = mEndCtrlPoint - 1;
-            if (mStartCtrlPoint > maxStart) {
-                mStartCtrlPoint = maxStart;
-            } else {
-                mStartCtrlPoint = Max(0, mStartCtrlPoint);
-            }
+            // Clamp, not a hand-written if/else -- and parallel to the
+            // mEndCtrlPoint line above.  Clamp's body is
+            //   value > max ? max : (value < min ? min : value)
+            // which is exactly the image's shape at 826B478C-826B47B8: one
+            // `bgt` to a SHARED store (826B47B4 `stw r10, 0x20(r20)`), with the
+            // lower bound applied branchlessly in the fall-through as
+            // `srwi r10, r11, 31 / subi r10, r10, 0x1 / and r10, r10, r11`
+            // (826B47A8-47B0) -- the sign-bit mask MSVC emits for `x < 0`.
+            // The hand-written form cost 4 instructions and the whole tail:
+            // `Max(0, mStartCtrlPoint)` is `(0 < x) ? x : 0`, whose comparison
+            // is against a materialised zero, so MSVC used the generic carry
+            // mask (`li r10, 0` / `subfc` / `subfe`) instead of the sign bit,
+            // and the two arms each stored to mStartCtrlPoint separately.
+            mStartCtrlPoint = Clamp(0, mEndCtrlPoint - 1, mStartCtrlPoint);
         }
     } else {
         mStartCtrlPoint = -1;
