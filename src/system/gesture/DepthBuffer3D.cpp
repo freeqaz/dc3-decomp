@@ -284,6 +284,29 @@ END_SAVES
 
 INIT_REVS(11, 0)
 
+// COMDAT-VISIBILITY LEVER SCREENED FOR THIS UNIT (w8-r), and it does not
+// apply.  ham_xbox_r.map's flag column is bare `f` for an ordinary .cpp
+// definition and `f i` for a COMDAT (inline / in-class / template); a COMDAT
+// callee is link-time replaceable, so MSVC may not assume its register usage
+// and the caller spills more.  EVERY code symbol in the image's
+// gesture:DepthBuffer3D.obj is bare `f` -- including all five of DrawShowing's
+// callees (DrawMesh, UpdateAttachment, and the anonymous-namespace
+// SetUpWorkingMat / JointToVertexData / VertexToWorld) -- and this file defines
+// each of them out-of-line, so the linkage classes already agree.
+// DepthBuffer3D.h has exactly three in-class bodies (Highlight, GetUnk18C,
+// SetUnk18C) and DrawShowing calls none of them.
+//
+// DrawShowing also carries the unit's one real save-set difference, and its
+// DIRECTION is the inverse of what that lever fixes: the image calls
+// __savefpr_18 / __restfpr_18 (f18-f31, 14 FPRs, 0x82DEF8BC / 0x82DF0CEC) and
+// we call __savefpr_17 / __restfpr_17 (f17-f31, 15) -- WE hold one extra
+// callee-saved FPR, alongside a +0x10 frame delta.  The lever adds `inline` to
+// make the IMAGE's extra save appear; here we need to shed one of ours, which
+// is the "double literal masquerades as an FPR floor" question instead.  Both
+// funclets fn_82DF0D1C and fn_82DF0D6C are DrawShowing's, and their single
+// charged row is that frame delta (`subi r31, r12, 0x250` vs our 0x260), so
+// closing DrawShowing's frame closes 80 B and 2 functions with it.
+//
 // SURVEYED w8-r, Load is 77.336 canonical, 856 B, 87 of 230 rows.  Two
 // findings, neither actioned:
 //  * NOT a wrong global.  objdiff charges `lbl_82251220` (target) against

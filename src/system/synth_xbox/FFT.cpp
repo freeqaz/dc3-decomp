@@ -32,6 +32,30 @@ int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddl
 int fft_real_forward_altivec(float* data, long size, float* context);
 void SquareComplexTransposeVector(float* data, long size);
 
+// COMDAT-VISIBILITY LEVER SCREENED AND REFUTED FOR THIS WHOLE UNIT (w8-r).
+// `orig/373307D9/ham_xbox_r.map` carries a COMDAT column after each address:
+// bare `f` is an ordinary out-of-line .cpp definition, `f i` is a COMDAT
+// (inline / in-class / template), and a COMDAT callee is link-time replaceable
+// so MSVC may not assume its register usage -- which can make a caller's save
+// set differ for reasons no amount of body rewriting will reach.
+//
+// ALL THIRTEEN code symbols in the image's synth_xbox:FFT.obj are bare `f`:
+// CalculateSinCosTable, FFTComplex, FFTRealForward, SquareComplexTransposeVector,
+// fft_{matrix_forward_columnwise,matrix_inverse_columnwise,square_matrix,altivec,
+// scalar,pingpong,recursive,real_forward_altivec,real_forward_scalar}.  This file
+// defines every one of them as a plain external function -- no `inline`, no
+// `static`, no anonymous namespace -- so the linkage class ALREADY agrees with
+// the image in both directions and there is no `inline` keyword to add or
+// remove.  The 46.93 / 48.75 stall on fft_altivec / fft_recursive is therefore
+// NOT a COMDAT-visibility artifact, and neither is fft_scalar's save-set row
+// (which the stored REGISTER_SAVE_HELPER_MISMATCH scan flags on this unit).
+// Target save sets, for whoever picks this up: fft_altivec __savegprlr_14;
+// fft_recursive __savegprlr_15 + __savefpr_24 + __savevmx_124; fft_scalar
+// __savegprlr_24; fft_real_forward_altivec __savegprlr_23 + __savefpr_25 +
+// __savevmx_121; fft_matrix_forward_columnwise __savegprlr_20 + __savefpr_24 +
+// __savevmx_120; fft_matrix_inverse_columnwise __savegprlr_21 + __savefpr_24 +
+// __savevmx_124; fft_real_forward_scalar __savegprlr_29.
+
 // Lazily-grown ping-pong scratch buffer shared by fft_pingpong / fft_recursive.
 struct FftScratch {
     void* buf;
