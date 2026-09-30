@@ -13,6 +13,7 @@
 #include "obj/Utl.h"
 #include "utl/FilePath.h"
 #include <cstdlib>
+#include <vector>
 #include <ctime>
 #include <sys/stat.h>
 
@@ -1426,6 +1427,57 @@ TEST_F(ObjectLifetimeTest, PollSkipsQueuedTaskDestroyedByDeleteObjectsCascade) {
            "as defence in depth, but with the root fixed it must never fire; "
            "if it does, some path still destroys objects mid-cascade without "
            "their ref rings being nullified.";
+}
+
+// ObjPtrList::iterator had no operator--, so a backward walk could not be
+// spelled; HamCamShot::SetPreFrame's camera-shot rewind loop was decompiled
+// as `++` and walked FORWARD (the image steps through Node::prev, +0x18).
+// This pins that operator-- follows prev. A wrong operator-- that follows next
+// steps from the tail onto the null end iterator, which fails the
+// assertion below rather than dereferencing it.
+TEST_F(ObjectLifetimeTest, ObjPtrListIteratorDecrementWalksBackward) {
+    Hmx::Object *listOwner = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *a = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *b = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *c = Hmx::Object::New<Hmx::Object>();
+    {
+        ObjPtrList<Hmx::Object> list(listOwner, kObjListNoNull);
+        list.push_back(a);
+        list.push_back(b);
+        list.push_back(c);
+        ASSERT_EQ(list.size(), 3);
+
+        ObjPtrList<Hmx::Object>::iterator it = list.begin();
+        ++it;
+        ++it;
+        ASSERT_EQ(*it, c) << "precondition: two increments from begin() reach the tail";
+
+        std::vector<Hmx::Object *> seen;
+        seen.push_back(*it);
+        while (it != list.begin()) {
+            --it;
+            ASSERT_TRUE(it != list.end())
+                << "operator-- stepped off the list: it followed Node::next, not Node::prev";
+            seen.push_back(*it);
+            ASSERT_LE(seen.size(), 3u) << "backward walk did not terminate at begin()";
+        }
+        ASSERT_EQ(seen.size(), 3u);
+        EXPECT_EQ(seen[0], c);
+        EXPECT_EQ(seen[1], b);
+        EXPECT_EQ(seen[2], a);
+
+        // -- then ++ must return to the same node.
+        ObjPtrList<Hmx::Object>::iterator mid = list.begin();
+        ++mid;
+        ObjPtrList<Hmx::Object>::iterator back = mid;
+        --back;
+        ++back;
+        EXPECT_EQ(*back, *mid);
+    }
+    delete a;
+    delete b;
+    delete c;
+    delete listOwner;
 }
 
 } // namespace

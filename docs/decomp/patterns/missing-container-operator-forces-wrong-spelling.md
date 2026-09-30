@@ -59,13 +59,16 @@ end iterator and dereference it.
   walk over an `ObjPtrList`.
 * **Image side:** the target's `ObjPtrList` iterator step has a fingerprint —
   `clrrwi rA, rA, 0` then `lwz rB, 0x18(rA)`. Over all 2,223 target listings
-  (69,307 functions, 1,124 `clrrwi rA,rA,0` sites) it matched 6 iterator steps,
-  3 of them via `prev`: `SetPreFrame` (fixed), `SampleInst360::GetProgress`
-  (ours already reads `prev`; the only diff is the no-op `clrrwi`), and
-  `ObjPtrList<EventTrigger>::Unlink` (not emitted in our object — the 0%
-  placement class, not a wrong walk). ⚠ This fingerprint is **narrow**: a
-  backward walk lowered without the `clrrwi` idiom is invisible to it. It is a
-  net, not a census.
+  (69,307 functions, 1,124 `clrrwi rA,rA,0` sites) it matched 6 sites,
+  3 of them at `+0x18`: `SetPreFrame` (fixed), `ObjPtrList<EventTrigger>::Unlink`
+  (not emitted in our object — the 0% placement class, not a wrong walk), and
+  `SampleInst360::GetProgress`, which is **a false positive of the
+  fingerprint**: its `clrrwi rA, rA, 0` is a no-op re-materialisation of a
+  *voice* pointer and `+0x18` is a voice field, not a list link (see the
+  RESIDUAL notes in `SampleInst360.cpp`). So the fingerprint is imprecise as
+  well as **narrow** — `clrrwi rA,rA,0` is a generic no-op the backend emits,
+  not an iterator marker, and a backward walk lowered without it is invisible.
+  It is a net, not a census; confirm every hit by reading the source.
 
 Other iterators worth knowing about: `ObjRef`'s iterator has `operator--` only
 under `HX_NATIVE`; `ObjPtrVec`'s has both directions.
