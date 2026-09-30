@@ -168,13 +168,16 @@ RndFontBase *UILabelDir::FontObj(Symbol s) const {
 UIColor *UILabelDir::GetStateColor(UIComponent::State state) const {
     MILO_ASSERT(state < UIComponent::kNumStates, 0x39);
     UIColor *color = mColors[state];
-    if (!color) {
-        color = mDefaultColor;
-        if (!mDefaultColor) {
-            color = gColor;
-        }
+    if (color) {
+        return color;
     }
-    return color;
+    UIColor *fallback;
+    if (mDefaultColor) {
+        fallback = mDefaultColor;
+    } else {
+        fallback = gColor;
+    }
+    return fallback;
 }
 
 void UILabelDir::Init() {
@@ -198,21 +201,38 @@ DataNode UILabelDir::GetMatVariations(UILabelDir *dir) {
     return ret;
 }
 
-// w8-j 2026-09-15 -- FLOOR at 97.619% for
-// ?GetStateColor@UILabelDir@@QBAPAVUIColor@@W4State@UIComponent@@@Z (168 B,
-// 38 of 42 instructions equal).  The image keeps the fallback chain in r11 and
-// converges with an explicit `mr r3, r11`; we let MSVC compute it straight into
-// the return register r3, so we are one instruction short:
-//     target   lwz r11, 0x2fc(r31) / cmpwi cr6, r11, 0 / lwz r11, gColor(r11)
-//              / mr r3, r11
-//     ours     lwz r3,  0x2fc(r31) / cmpwi cr6, r3,  0 / lwz r3,  gColor(r11)
-// REFUTED, two full ninja builds -- giving the fallback its own local so the
-// assignment back to `color` becomes a real merge does NOT create the move;
-// MSVC coalesces the temp into `color` either way:
-//   (a) UIColor *dflt = mDefaultColor; if (!dflt) dflt = gColor; color = dflt;
-//       -- 4 rows still, and it makes row 31 WORSE: testing the local emits
-//       `cmplwi` where the image (and our original, which re-tests the MEMBER
-//       mDefaultColor) emits the signed `cmpwi`.  Keep `if (!mDefaultColor)`.
-//   (b) same but keeping `if (!mDefaultColor)` as the test -- restores `cmpwi`
-//       and is then byte-identical to the original.  No gain.
-// What is left is which register MSVC picks for the merge, not source shape.
+// w9-b 2026-09-30 -- CLOSED at 100.0% (normalized AND fuzzy, full ninja, 168 B).
+// The w8-j note below was right about the symptom and wrong about the cause: it
+// is source shape, and it took TWO independent changes that only pay together.
+//
+// The image's control flow is not one merge, it is an early return plus a merge:
+//   row 27  lwz r3, 0xc(r11)      mColors[state] straight into the RETURN reg
+//   row 28  cmplwi cr6, r3, 0     UNSIGNED -- a test of the LOCAL, not the member
+//   row 29  bne cr6, <epilogue>   returns r3 directly, bypassing the merge
+//   row 30  lwz r11, 0x2fc(r31)   mDefaultColor into r11
+//   row 31  cmpwi cr6, r11, 0     SIGNED -- a test of the MEMBER
+//   row 32  bne cr6, <row 35>
+//   row 33/34 gColor into r11 as well
+//   row 35  mr r3, r11            the two fallbacks merge in r11, then copy
+// So the fallback pair needs a register OTHER than the one holding
+// mColors[state], and the first arm must not go through the merge at all.
+//
+// Measured ladder (each a full ninja):
+//   97.619  UIColor *color = mColors[state]; if (!color) { color = mDefaultColor;
+//           if (!mDefaultColor) color = gColor; } return color;   <- the old shape
+//   97.619  same with the inner test written as if/else -- byte-inert
+//   96.190  fallback in its own local, still nested inside `if (!color)`  (= w8-j (a)/(b))
+//   96.190  three bare `return` statements
+//   28.762  color = mDefaultColor ? mDefaultColor : gColor;
+//   85.238  the two fallback tests as sequential (non-nested) ifs
+//   98.571  flat if / else if / else into ONE uninitialised local, single return
+//           -- this is what buys rows 30..35: an uninitialised local forces all
+//           arms to merge in r11 rather than coalescing into r3
+//   100.0   the shape below: early `return color;` for mColors[state] (keeps the
+//           unsigned test on the local and the direct r3 return) PLUS a SECOND
+//           local for the if/else fallback pair (keeps the r11 merge).
+// The two halves are not separable: with one variable MSVC coalesces the whole
+// chain into r3 and rows 30..35 break; without the early return the first arm
+// joins the merge and rows 27..29 break.
+// Keep `if (mDefaultColor)` testing the MEMBER -- testing the local there emits
+// `cmplwi` where the image has the signed `cmpwi` at row 31.
