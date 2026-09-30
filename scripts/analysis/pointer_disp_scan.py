@@ -46,8 +46,17 @@ For every function defined in both the dtk-carved target object and ours:
      anchor-displacement-false-wrong-global normalisation: target anchors on
      `gNumHeaps` and reaches `gInitted` by displacement, we anchor on
      `gInitted` -- one absolute address, not a finding.
-  5. BUCKET every kept row -- exactly one bucket, and the row ledger must
-     balance (asserted).
+  5. DECIDE REORDER VS SUBSTITUTION BY VALUE FLOW, never by "both sides touch
+     both addresses" (that rule hides a real swap -- Plane::Set's negated
+     normal and CharUpperTwist::Load's 3-cycle both touch every address).
+     Each side is evaluated into hash-consed expressions and every EFFECT
+     (non-stack store, call with its signature's argument registers, compare,
+     return) is collected; a row is excused only if everything its value
+     reaches is matched on the other side.  See the ValueFlow section.
+  6. BUCKET every kept row -- exactly one bucket, and the row ledger must
+     balance (asserted).  Full write-up, the artifact classes with worked
+     examples, and the manual recognizer:
+     docs/decomp/patterns/wrong-field-off-a-non-this-pointer.md
 
 WHY LINEAR, AND WHY IT IS SYMMETRIC
 -----------------------------------
