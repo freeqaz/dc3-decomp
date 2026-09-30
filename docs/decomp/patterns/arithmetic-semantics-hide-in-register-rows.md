@@ -51,6 +51,28 @@ store. See the docstring for the full bucket list; the reported ones are
 `operand-order`, `operand-source`, `const-operand`, `op-substitution`,
 `net-term`, `cond-mask`.
 
+**Measured 2026-09-30, whole binary** (branch `det-arith`, after its fixes):
+universe **48,365** report functions; examined **32,220** (66.62%); dropped
+16,072 not-defined-in-our-build, 58 objdiff errors, 14 duplicate names that
+batch mode resolves to another unit, 1 objdiff hang (`?Terminate@VirtualKeyboard@@QAAXXZ`,
+named in the coverage block). **1,104** examined functions have any mismatch
+row; **190** carry a reported row. Reported rows: signedness 3, int-width 5,
+float-width 1, float-sign 16, int-op 12, operand-order 1, operand-source 363,
+const-operand 63, op-substitution 65, net-term 48, cond-mask 24. Counted:
+register-only 12,384, operand-exchanged 821, displacement 2,538, stack 2,418, ...
+~2 min wall with 12 workers.
+
+**Two-sided sabotage control** (re-introducing the historical `Rand::Seed` bug,
+`((unsigned int)j >> 16)` → `(j >> 16)`, full `ninja` each way): clean
+signedness **3 rows / 2 functions** → sabotaged **4 / 3** with
+`?Seed@Rand@@QAAXH@Z` as `srawi 16 vs srwi 16` → reverted **3 / 2**, stdout+stderr
+byte-identical to the clean run (135,109 B, exit 0 all three). ⚠ **The first
+attempt at this control FAILED**: objdiff rendered the one-opcode change as a
+delete + insert, the row landed in `multi-atom`, and signedness stayed 3. The
+fix — pair one-sided instructions through the substitution table when both
+operate on the same input value — is what made the control pass. Determinism:
+agreed with itself across `PYTHONHASHSEED` 1/7 on 135,109 B.
+
 `cond-mask` is also the **blind spot of det-cond's** `cond_semantics_scan.py`:
 a condition compiled *without a branch* (the carry-chain idioms) is arithmetic.
 `subfe` masks and `cntlzw/extrwi` zero tests are evaluated to a truth predicate
