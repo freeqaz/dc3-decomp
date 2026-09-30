@@ -131,6 +131,16 @@ CASES: list[tuple[str, list[str]]] = [
     # objdiff (BTreeMap by unit position).  Agreed with itself, and across
     # PYTHONHASHSEED, on non-empty output on the day it was added.
     ("cond_semantics_scan",   ["python3", "scripts/analysis/cond_semantics_scan.py"]),
+    # Added 2026-09-30.  ~20 s/run over 979 COFF object pairs (30,832 function
+    # bodies, 5,536 displacement-only rows).  Its candidate list feeds bug
+    # hunting for taxonomy class 1 off NON-`this` bases, and its value-flow
+    # check hash-conses expressions into ids whose numbering follows
+    # evaluation order -- a set iterated into that numbering would move rows
+    # between the reordered and candidate buckets from run to run.  No globs;
+    # units are walked sorted and every dict it iterates for output is built
+    # from a sorted source.  Agreed with itself, and across PYTHONHASHSEED, on
+    # the day it was added.
+    ("pointer_disp_scan",     ["python3", "scripts/analysis/pointer_disp_scan.py"]),
     # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
     # oracles -- the class of tool whose nondeterminism reads as "this class is
     # exhausted" -- and none of them had ever been checked.  All four agreed
