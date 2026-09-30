@@ -30,8 +30,9 @@ run in parallel, with a watchdog: see run_shard) over EVERY function
 sides (`subi`->`addi -imm`, every `rlwinm` alias — `slwi`/`srwi`/`clrlwi`/
 `extrwi`/`rotlwi`/`clrlslwi`/... — back to (rotate, mask32)), then classifies.
 Register-only rows are not thrown away: each operand is traced to its DEFINING
-instruction on its own side (a linear walk), and the two definitions are
-compared through objdiff's alignment.
+instruction on its own side -- the UNIQUE definition reaching it over that
+side's control-flow graph (basic blocks from objdiff's instruction addresses
+and branch destinations) -- and the two definitions are compared by value.
 
 REPORTED buckets (a value claim — adjudicate every row)
   signedness      srawi<->srwi, sraw<->srw, extsb/extsh<->clrlwi 24/16,
@@ -60,6 +61,14 @@ REPORTED buckets (a value claim — adjudicate every row)
                   `subfe` masks and `cntlzw/extrwi` zero tests are evaluated to
                   a truth predicate on both sides -- equal truth is counted as
                   cond-mask-equivalent, never reported
+  trace-crossed-branch
+                  an operand-source / operand-order row whose operand has NO
+                  unique reaching definition on some side (two arms of a join
+                  define it, a loop carries it, or only a jump table reaches
+                  the block).  A LEAD, not a value claim: the row may be real,
+                  but no single definition can be named for it.  Until
+                  2026-09-30 these were reported as operand-source off a
+                  linear walk that picked whichever arm came last.
   net-term        after cancelling every instruction that merely MOVED (it is
                   one-sided in both directions), exactly one arithmetic atom
                   (fmul, fadd, fneg, iadd, imul, shift, ext, ...) is present
@@ -102,14 +111,34 @@ WHAT IT CANNOT SEE (read before calling class 4 exhausted)
   16,072 on the day this was written.  Arithmetic arrives with the body.
 * A DROPPED STORE is not an arithmetic atom (DxRnd::SavePreBuffer's missing
   w = 0 store, class 10).  Neither is a wrong field feeding the op (class 1).
-* Definitions are resolved by a LINEAR backward walk: across a join the
-  walk can pick the wrong reaching definition, which is the dominant source
-  of operand-source false positives in branchy functions (measured:
-  SaveLoadManager::SetState, whose MemFree file-name register was resolved
-  to a different arm's definition).  It is symmetric, so it invents noise,
-  not systematic bias -- but the precision of operand-source falls with the
-  function's mismatch ratio.  The printout is sorted so the clean shapes
-  come first.
+* Definitions were resolved by a LINEAR backward walk until 2026-09-30:
+  across a join it picked whichever arm came last in the listing, and past
+  256 instructions it gave up (so a frame pointer set in the prologue of a
+  long function was invisible, and its stack slots were counted as FIELD
+  displacements).  Now last_def() walks the CFG (build_cfg/reaching_defs):
+  a unique reaching definition is used; a non-unique one demotes the row to
+  `trace-crossed-branch`.  Measured on the same objects: of 357 operand-
+  source rows, 242 stayed, 76 became trace-crossed-branch, 39 dissolved
+  (the unique definitions agree); 9 operand-source and 5 trace-crossed-branch
+  rows appeared that the linear walk never reported (RndScaleObject: its
+  `fmr` definitions sit >256 instructions back); 1,464 rows moved from
+  displacement/addi-address to stack-displacement.  STILL linear: the
+  stack-slot reload trace (_spill_source), subfe_truth, addi_use.
+* VMX registers: objdiff types `v<N>` as Other, so until 2026-09-30 they were
+  not registers at all -- `lvx128 v1, r0, r8` "defined" r0, and a row that
+  differed only in a vector register was other-opcode.  Now they are
+  registers (297 -> 83 other-opcode on the same objects; the new
+  operand-source rows are all in synth_xbox/FFT, not native).  A call is
+  still assumed to clobber every volatile register, which MSVC does not
+  always do for a same-TU leaf callee (PropSync<ObjVector<Strand>> keeps r6
+  live across `Strand::Strand`) -- a residual false-positive source.  A
+  recording without instruction addresses (a pre-CFG --save-rows file) is
+  traced linearly and counted in `mismatched_functions_traced_linearly`.
+  Resolving the definition is not the same as resolving the VALUE: the
+  exchange cancellation keys a definition by (op, immediates, literal), so
+  two `fmr` copies of different function inputs look alike, and scheduling
+  that pairs one component's multiply with another's (RndScaleObject) still
+  surfaces as operand-source.  The printout is sorted cleanest-first.
 * objdiff's ALIGNMENT decides which rows are aligned; a substituted opcode it
   paired with an unrelated instruction reaches the net-term pool instead.
 * A bucket hit is a VALUE claim, never a behaviour claim.  `add` vs `or`, a
@@ -150,7 +179,7 @@ DEFAULT_OBJDIFF = os.path.join(REPO, "bin", "objdiff-cli")
 
 REPORTED = ("signedness", "int-width", "float-width", "float-sign", "int-op",
             "operand-order", "operand-source", "const-operand", "op-substitution",
-            "net-term", "cond-mask")
+            "net-term", "cond-mask", "trace-crossed-branch")
 COUNTED = ("register-only", "displacement", "stack-displacement", "compare",
            "branch", "relocation", "addi-address", "li-constant", "li-misaligned",
            "bit-test-encoding", "flag-bit-renumbering", "const-reordered",
@@ -214,10 +243,14 @@ RLW_ALIASES = {"slwi", "srwi", "clrlwi", "clrrwi", "extrwi", "extlwi", "rotlwi",
                "rotrwi", "clrlslwi", "rlwinm"}
 
 
+VREG_RE = re.compile(r"^v\d+$")
+
+
 def canon(side):
     """side = [opcode, args_text, [(type, value), ...]] ->
     dict(op, rec, regs, imms, syms, raw, rlw=(rot, mask) | None)."""
-    op, text, targs = side
+    op, text, targs = side[0], side[1], side[2]
+    addr = side[3] if len(side) > 3 else None
     rec = op.endswith(".") and op not in (".",)
     o = op.rstrip(".")
     regs, imms, syms, other = [], [], [], []
@@ -226,6 +259,11 @@ def canon(side):
             regs.append(str(v))
         elif t in ("Signed", "Unsigned"):
             imms.append(_int(v))
+        elif t == "Other" and VREG_RE.match(str(v)):
+            # objdiff types VMX registers as Other, not Register.  Without this
+            # `lvx128 v1, r0, r8` had regs [r0, r8], writes() said it DEFINED
+            # r0, and every later use of r0 traced to the vector load.
+            regs.append(str(v))
         elif t == "Other":
             iv = _int(v)
             (imms if iv is not None else other).append(iv if iv is not None else str(v))
@@ -236,7 +274,7 @@ def canon(side):
         else:
             other.append(str(v))
     d = {"op": o, "rec": rec, "regs": regs, "imms": imms, "syms": syms,
-         "other": other, "text": f"{op} {text}".strip(), "rlw": None}
+         "other": other, "text": f"{op} {text}".strip(), "rlw": None, "addr": addr}
     # subi / subis / subic are addi / addis / addic with a negated immediate
     if o in ("subi", "subis", "subic") and imms:
         d["op"] = {"subi": "addi", "subis": "addis", "subic": "addic"}[o]
@@ -593,13 +631,150 @@ def writes(c):
     return {c["regs"][0]} if c["regs"] else set()
 
 
-def last_def(seq, i, reg, horizon=256):
-    """Index of the nearest instruction before seq[i] that writes `reg`, on a
-    linear walk (branches ignored -- symmetric on both sides), else None."""
+def _linear_last_def(seq, i, reg, horizon=256):
+    """The nearest instruction before seq[i] that writes `reg` in LISTING
+    order, branches ignored.  This was the whole of last_def() until
+    2026-09-30, and it is still the answer when the function's control flow
+    cannot be recovered (a recording without addresses)."""
     for j in range(i - 1, max(-1, i - 1 - horizon), -1):
         if reg in writes(seq[j]):
             return j
     return None
+
+
+class Seq(list):
+    """One side's canonical instructions, plus its control-flow graph when the
+    instruction addresses are known (`cfg` is None otherwise)."""
+    cfg = None
+
+
+# Set by last_def() whenever a register's reaching definition is NOT unique
+# (two arms of a join, a loop-carried value, a block only a jump table can
+# reach).  A value claim built on such a trace is routed to the
+# `trace-crossed-branch` lead bucket instead of being reported as a fact.
+_AMBIG = [False]
+
+_CFG_BLOCK_CAP = 4096
+
+
+def build_cfg(seq):
+    """Basic blocks and predecessor lists for one side, or None when any
+    instruction lacks an address.  Leaders: the entry, every in-function
+    branch destination, and every instruction after a branch.  Edges: a
+    conditional branch has its destination and its fall-through; `b` has its
+    destination only (a `b` to a SYMBOL -- `__restgprlr_N`, a tail call --
+    leaves the function); `blr`/`bctr` have none.  A block nothing branches
+    to or falls into, other than the entry, is reachable only through a jump
+    table (`bctr`) or an exception edge: its predecessors are UNKNOWN."""
+    if not seq or any(c.get("addr") is None for c in seq):
+        return None
+    start = seq[0]["addr"]
+    n = len(seq)
+    if any(seq[k]["addr"] != start + 4 * k for k in range(n)):
+        return None                       # not contiguous: do not guess
+
+    def dest(c):
+        for o in c["other"]:
+            if isinstance(o, tuple) and o[0] == "bd" and isinstance(o[1], int):
+                k, r = divmod(o[1] - start, 4)
+                if r == 0 and 0 <= k < n:
+                    return k
+                return -1                 # leaves the function
+        return None
+
+    kinds = []                            # per instruction: None | (cond, dest)
+    leaders = {0}
+    for k, c in enumerate(seq):
+        o = c["op"]
+        if _is_call(c) or not BRANCH_RE.match(o):
+            kinds.append(None)
+            continue
+        d = dest(c)
+        uncond = o in ("b", "ba", "blr", "bctr", "bcctr", "bclr")
+        kinds.append((not uncond, d))
+        if d is not None and d >= 0:
+            leaders.add(d)
+        if k + 1 < n:
+            leaders.add(k + 1)
+    starts = sorted(leaders)
+    block_of = [0] * n
+    blocks = []                           # (first, last) inclusive
+    for bi, s0 in enumerate(starts):
+        e0 = (starts[bi + 1] - 1) if bi + 1 < len(starts) else n - 1
+        blocks.append((s0, e0))
+        for k in range(s0, e0 + 1):
+            block_of[k] = bi
+    preds = [set() for _ in blocks]
+    for bi, (s0, e0) in enumerate(blocks):
+        kd = kinds[e0]
+        if kd is None:
+            if e0 + 1 < n:
+                preds[block_of[e0 + 1]].add(bi)
+            continue
+        cond, d = kd
+        if d is not None and d >= 0:
+            preds[block_of[d]].add(bi)
+        if cond and e0 + 1 < n:
+            preds[block_of[e0 + 1]].add(bi)
+    return {"blocks": blocks, "block_of": block_of,
+            "preds": [sorted(p) for p in preds]}
+
+
+def reaching_defs(seq, i, reg):
+    """Every definition of `reg` that reaches seq[i] along the CFG.
+    Returns (defs, from_entry, unknown): the defining indices, whether some
+    path reaches the function entry with no definition (the register is then
+    a function input on that path), and whether some path runs into a block
+    whose predecessors are unknown or past the block cap."""
+    cfg = seq.cfg
+    blocks, block_of, preds = cfg["blocks"], cfg["block_of"], cfg["preds"]
+    b0 = block_of[i]
+    for j in range(i - 1, blocks[b0][0] - 1, -1):
+        if reg in writes(seq[j]):
+            return {j}, False, False
+    defs, from_entry, unknown = set(), False, False
+    seen = set()
+    work = [b0]
+    while work:
+        b = work.pop()
+        if b == 0:
+            from_entry = True
+        elif not preds[b]:
+            unknown = True
+        for p in preds[b]:
+            if p in seen:
+                continue
+            seen.add(p)
+            if len(seen) > _CFG_BLOCK_CAP:
+                return defs, from_entry, True
+            s0, e0 = blocks[p]
+            for j in range(e0, s0 - 1, -1):
+                if reg in writes(seq[j]):
+                    defs.add(j)
+                    break
+            else:
+                work.append(p)
+    return defs, from_entry, unknown
+
+
+def last_def(seq, i, reg, horizon=256):
+    """Index of the instruction whose write of `reg` reaches seq[i], else None
+    (a function input).  With a CFG this is the UNIQUE reaching definition.
+    The linear walk it replaces could pick a definition from an arm that does
+    not even reach the use (SaveLoadManager::SetState's MemFree file-name
+    register).  When the reaching definition is not unique the old linear
+    answer is returned -- so every caller keeps a concrete index -- and
+    `_AMBIG` is raised so a value claim resting on it can be demoted."""
+    if i is None:
+        return None
+    cfg = getattr(seq, "cfg", None)
+    if cfg is None:
+        return _linear_last_def(seq, i, reg, horizon)
+    defs, from_entry, unknown = reaching_defs(seq, i, reg)
+    if unknown or len(defs) + (1 if from_entry else 0) != 1:
+        _AMBIG[0] = True
+        return _linear_last_def(seq, i, reg, horizon)
+    return next(iter(defs)) if defs else None
 
 
 def operand_swap(t, b, ctx):
@@ -774,13 +949,17 @@ def rlw_src_mask(rlw):
 
 
 def _src_regs(c):
-    """Every register VALUE an instruction reads, base registers included."""
+    """Every register VALUE an instruction reads, base registers included.
+    In an indexed (X-form) access `r0` in the RA slot is the literal 0, not a
+    register read."""
     o = c["op"]
     mb = _mem_base(o)
     if mb is not None:
-        if o.startswith("st"):
-            return c["regs"][:]
-        return c["regs"][1:]
+        rs = c["regs"][:] if o.startswith("st") else c["regs"][1:]
+        if len(c["regs"]) == 3 and c["regs"][1] == "r0" and not c["imms"]:
+            rs = [r for n, r in enumerate(rs) if not (r == "r0" and
+                  n == (1 if o.startswith("st") else 0))]
+        return rs
     if BRANCH_RE.match(o) or o in COMPARE_OPS or o in TRAP_OPS:
         return c["regs"][:]
     return c["regs"][1:]
@@ -1060,10 +1239,12 @@ def folded_addi(seq, i):
     return total
 
 
-def analyse_function(rows):
+def analyse_function(rows, stats=None):
     """rows: [(match_type, target_side|None, base_side|None)].
-    Returns (row_findings, bucket_counter, net_atoms)."""
-    tseq, bseq = [], []
+    Returns (row_findings, bucket_counter, net_atoms).  `stats`, if given,
+    receives "cfg": whether BOTH sides' control flow was recovered (else the
+    definition trace was linear for this function)."""
+    tseq, bseq = Seq(), Seq()
     aligned = []           # (ti, bi, mt) indices into tseq/bseq
     for mt, ts, bs in rows:
         tc = canon(ts) if ts else None
@@ -1076,6 +1257,10 @@ def analyse_function(rows):
             bi = len(bseq)
             bseq.append(bc)
         aligned.append((mt, ti, bi))
+    tseq.cfg = build_cfg(tseq)
+    bseq.cfg = build_cfg(bseq)
+    if stats is not None:
+        stats["cfg"] = tseq.cfg is not None and bseq.cfg is not None
 
     same_pairs = [(tseq[ti], bseq[bi]) for mt, ti, bi in aligned
                   if ti is not None and bi is not None]
@@ -1217,20 +1402,24 @@ def analyse_function(rows):
                                      f"iff {tb_ or '?'}"),
                              "target": t["text"], "ours": b["text"]})
             continue
+        _AMBIG[0] = False
         if operand_swap(t, b, (tseq, bseq, ti, bi, t2b)):
             if o in ("subf", "subfc") and only_zero_tested(tseq, ti) and \
                     only_zero_tested(bseq, bi):
                 buckets["swap-zero-tested"] += 1     # a-b == 0 iff b-a == 0
                 continue
-            buckets["operand-order"] += 1
-            findings.append({"bucket": "operand-order",
-                             "why": f"{o}: non-commutative source operands swapped "
+            ob = "trace-crossed-branch" if _AMBIG[0] else "operand-order"
+            buckets[ob] += 1
+            findings.append({"bucket": ob,
+                             "why": (f"[operand-order] " if _AMBIG[0] else "") +
+                                    f"{o}: non-commutative source operands swapped "
                                     f"(by where each was defined)",
                              "target": t["text"], "ours": b["text"]})
             continue
+        _AMBIG[0] = False
         src = operand_source(t, b, (tseq, bseq, ti, bi, t2b))
         if src:
-            source_rows.append((t, b) + src)
+            source_rows.append((t, b) + src + (_AMBIG[0],))
             continue
         buckets["register-only"] += 1
 
@@ -1260,12 +1449,16 @@ def analyse_function(rows):
     bk = Counter(r[4] for r in source_rows)
     t_left = tk - bk
     b_left = bk - tk
-    for t, b, why, kt, kb in source_rows:
+    for t, b, why, kt, kb, crossed in source_rows:
         if t_left[kt] > 0 and b_left[kb] > 0:
             t_left[kt] -= 1
             b_left[kb] -= 1
-            buckets["operand-source"] += 1
-            findings.append({"bucket": "operand-source", "why": why,
+            # a definition that is not the UNIQUE reaching one is a lead,
+            # not a value claim (see last_def)
+            ob = "trace-crossed-branch" if crossed else "operand-source"
+            buckets[ob] += 1
+            findings.append({"bucket": ob,
+                             "why": ("[operand-source] " if crossed else "") + why,
                              "target": t["text"], "ours": b["text"]})
         else:
             buckets["operand-exchanged"] += 1
@@ -1380,8 +1573,12 @@ def analyse_function(rows):
 def _slim(side):
     if not side:
         return None
+    try:
+        addr = int(str(side.get("address")), 0)
+    except ValueError:
+        addr = None
     return [side.get("opcode", ""), side.get("args", ""),
-            [(a.get("type"), a.get("value")) for a in side.get("typed_args", [])]]
+            [(a.get("type"), a.get("value")) for a in side.get("typed_args", [])], addr]
 
 
 def run_shard(job):
@@ -1460,7 +1657,9 @@ def run_shard(job):
                "fuzzy": d.get("fuzzy_match_percent"), "n_rows": len(ins),
                "n_mismatch": mism}
         if mism and has_base:
-            f, b, net = analyse_function(rows)
+            st = {}
+            f, b, net = analyse_function(rows, st)
+            rec["cfg"] = st["cfg"]
             rec["findings"] = f
             rec["buckets"] = dict(b)
             rec["net"] = net
@@ -1522,8 +1721,10 @@ def replay(path, cov):
             r = json.loads(line)
             if "rows" in r:
                 rows = [tuple(x) for x in r.pop("rows")]
-                f, b, net = analyse_function(rows)
+                st = {}
+                f, b, net = analyse_function(rows, st)
                 r["findings"], r["buckets"], r["net"] = f, dict(b), net
+                r["cfg"] = st["cfg"]
             results[r["symbol"]] = r
     cov.note(f"REPLAYED from {path}: objdiff was not run; the rows are as recorded")
     return results, head["_errors"], head["_timed_out"]
@@ -1627,8 +1828,12 @@ def _S(op, args):
         elif m:
             typed.append(("Signed", int(m.group(1), 0)))
             typed.append(("Register", m.group(2)))
-        elif re.match(r"^(r|f|cr|v)\d+$", tok):
+        elif re.match(r"^v\d+$", tok):
+            typed.append(("Other", tok))        # as objdiff types VMX registers
+        elif re.match(r"^(r|f|cr)\d+$", tok):
             typed.append(("Register", tok))
+        elif re.match(r"^-?(0x[0-9a-fA-F]+|\d+)$", tok) and BRANCH_RE.match(op):
+            typed.append(("BranchDest", int(tok, 0)))
         elif re.match(r"^-?(0x[0-9a-fA-F]+|\d+)$", tok):
             typed.append(("Other" if op.startswith(("rlw", "slwi", "srwi", "clr", "ext",
                                                      "rot", "rld"))
@@ -1652,6 +1857,18 @@ def selftest():
         return [x["bucket"] for x in f], b, net
 
     E = lambda op, a: ("equal", _S(op, a), _S(op, a))  # noqa: E731
+
+    def placed(rows):
+        """Give each side's instructions consecutive addresses from 0, as
+        objdiff does, so analyse_function() can build the CFG."""
+        out, na, nb = [], 0, 0
+        for mt, ts, bs in rows:
+            if ts is not None:
+                ts, na = ts + [na], na + 4
+            if bs is not None:
+                bs, nb = bs + [nb], nb + 4
+            out.append((mt, ts, bs))
+        return out
 
     # Rand::Seed: srawi vs srwi
     fb, b, _ = run([E("li", "r11, 0x100"),
@@ -1677,6 +1894,52 @@ def selftest():
                     E("lfs", "f0, __real@3f800000@l(r9)"),
                     ("diff_arg", _S("stfs", "f13, 0xd8(r31)"), _S("stfs", "f0, 0xd8(r31)"))])
     check("stfs of a different constant -> operand-source", fb == ["operand-source"])
+    # the same store with addresses: the CFG must not lose a real finding
+    fb, b, _ = run(placed([E("lfs", "f13, __real@bf800000@l(r10)"),
+                           E("lfs", "f0, __real@3f800000@l(r9)"),
+                           ("diff_arg", _S("stfs", "f13, 0xd8(r31)"), _S("stfs", "f0, 0xd8(r31)")),
+                           E("blr", "")]))
+    check("stfs of a different constant, CFG known -> still operand-source",
+          fb == ["operand-source"])
+    # A definition on an arm that does NOT reach the use.  Both sides store
+    # -1.0 (the entry block's value): the +1.0 at row 3 lives on the arm that
+    # `b`s away, so it can never reach row 5.  The linear walk of the old
+    # last_def() stopped at row 3 on the target (f13) and at row 0 on ours
+    # (our arm wrote f12), and called it a changed value.
+    fb, b, _ = run(placed([("diff_arg", _S("lfs", "f13, __real@bf800000@l(r10)"),
+                            _S("lfs", "f0, __real@bf800000@l(r10)")),
+                           E("cmpwi", "cr6, r3, 0x0"),
+                           E("beq", "cr6, 0x14"),
+                           ("diff_arg", _S("lfs", "f13, __real@3f800000@l(r9)"),
+                            _S("lfs", "f12, __real@3f800000@l(r9)")),
+                           E("b", "0x1c"),
+                           ("diff_arg", _S("stfs", "f13, 0xd8(r31)"), _S("stfs", "f0, 0xd8(r31)")),
+                           E("blr", ""),
+                           ("diff_arg", _S("stfs", "f13, 0xdc(r31)"), _S("stfs", "f12, 0xdc(r31)")),
+                           E("blr", "")]))
+    check("def on an arm that does not reach the use -> NOT operand-source "
+          "(the linear trace flagged it)", fb == [] and b["operand-source"] == 0)
+    # Two arms join and define the value differently: no single reaching
+    # definition exists, so no value claim -- a lead, not operand-source.
+    fb, b, _ = run(placed([E("cmpwi", "cr6, r3, 0x0"),
+                           E("beq", "cr6, 0x10"),
+                           ("diff_arg", _S("lfs", "f13, __real@3f800000@l(r9)"),
+                            _S("lfs", "f0, __real@3f800000@l(r9)")),
+                           E("b", "0x14"),
+                           ("diff_arg", _S("lfs", "f13, __real@bf800000@l(r10)"),
+                            _S("lfs", "f12, __real@bf800000@l(r10)")),
+                           ("diff_arg", _S("stfs", "f13, 0xd8(r31)"), _S("stfs", "f0, 0xd8(r31)")),
+                           E("blr", "")]))
+    check("definition reached through a join -> trace-crossed-branch, not operand-source",
+          fb == ["trace-crossed-branch"])
+    # A VMX load does not define r0 (objdiff types `v1` as Other; r0 in the
+    # RA slot of an indexed access is the literal 0).  fft_recursive's rows
+    # read "value comes from `lvx128`" for r0.
+    fb, b, _ = run([("diff_arg", _S("li", "r0, 0x1"), _S("li", "r12, 0x1")),
+                    E("lvx128", "v1, r0, r8"),
+                    ("diff_arg", _S("stw", "r0, 0x0(r31)"), _S("stw", "r12, 0x0(r31)"))])
+    check("lvx128 v1, r0, r8 does not define r0 -> NOT operand-source",
+          fb == [] and b["register-only"] == 2)
     # ...but a renamed register holding the same constant is not
     fb, b, _ = run([("diff_arg", _S("lfs", "f30, __real@c4400000@l(r8)"),
                      _S("lfs", "f12, __real@c4400000@l(r8)")),
@@ -1866,9 +2129,12 @@ def main(argv=None):
     fn_buckets = Counter()
     flagged = []
     n_mismatch_fns = 0
+    n_linear = 0
     for unit, name, r in per_function:
         if r["n_mismatch"]:
             n_mismatch_fns += 1
+            if not r.get("cfg"):
+                n_linear += 1
         b = Counter(r.get("buckets", {}))
         row_buckets.update(b)
         fs = r.get("findings", [])
@@ -1883,6 +2149,12 @@ def main(argv=None):
                         if any(f["bucket"] in REPORTED for f in fs))
     cov.extra("functions_with_a_mismatch_row", n_mismatch_fns)
     cov.extra("functions_with_a_reported_row", n_fn_findings)
+    cov.extra("mismatched_functions_traced_linearly", n_linear)
+    if n_linear:
+        cov.note(f"{n_linear} mismatched functions had no recoverable control flow "
+                 "(no instruction addresses, e.g. a pre-CFG --save-rows recording): "
+                 "their definition traces are LINEAR and never demoted to "
+                 "trace-crossed-branch")
     cov.extra("row_buckets", dict(sorted(row_buckets.items())))
     cov.extra("function_buckets", dict(sorted(fn_buckets.items())))
     cov.note("examined = functions objdiff paired with a base side; a function "
