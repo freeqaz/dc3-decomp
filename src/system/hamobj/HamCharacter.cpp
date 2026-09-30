@@ -1153,9 +1153,17 @@ void HamCharacter::Poll() {
     // RndDir::Poll() runs child pollables (CharDriver, etc.) and animations
     // advance. The Xbox-exact gate was tried natively in d07ce3782 and
     // reverted in a37908240 (the character-animation convergence fix) within
-    // hours; it is kept until a native run shows the gated form still animates
-    // the dancers. Consequence: a hidden character polls (and animates) on
-    // native where the Xbox leaves it frozen.
+    // hours, with no recorded reason. Consequence: a hidden character polls
+    // (and animates) on native where the Xbox leaves it frozen.
+    // Measured 2026-09-30 (ymca/houseparty headless gameplay, 9050 frames):
+    // player0/player1/backup0/backup1 were NEVER hidden at Poll (0 of ~8400
+    // polls each); the only character this line force-showed was iconman,
+    // on every poll (8400 of 8400) -- on the Xbox iconman is polled only
+    // inside HamDirector::PoseIconMan's SetPollWhenHidden(true) bracket. With
+    // the Xbox gate instead, all 48 GameplayTelemetryTest cases passed and
+    // player0 animated. So the workaround is not load-bearing for that flow;
+    // it stays until the other character-bearing flows (menus, practice,
+    // campaign, crew select) are measured the same way.
     bool wasShowing = mShowing;
     if (!wasShowing) {
         SetShowing(true);
