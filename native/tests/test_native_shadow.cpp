@@ -354,4 +354,16 @@ TEST_F(NativeShadowTest, ObjDirPtrSavesTheFilePathNotTheName) {
     EXPECT_NE(got.find("probe.milo"), std::string::npos);
 }
 
+// ---------------------------------------------------------------------------
+// MILO_LOG must evaluate its arguments once. The native macro expanded
+// MakeString(__VA_ARGS__) twice (once for TheDebug, once for stderr), so a
+// side-effecting argument ran twice -- RndConsole::Breakpoints numbered its
+// breakpoints 1,3,5 in TheDebug and 2,4,6 on stderr.
+// ---------------------------------------------------------------------------
+TEST(NativeShadowUnit, MiloLogEvaluatesArgumentsOnce) {
+    int i = 0;
+    MILO_LOG("native_shadow MILO_LOG probe %d\n", i++);
+    EXPECT_EQ(i, 1) << "MILO_LOG evaluated its arguments more than once";
+}
+
 } // namespace
