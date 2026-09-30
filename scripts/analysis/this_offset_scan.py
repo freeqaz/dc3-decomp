@@ -942,6 +942,91 @@ def _lwzx(dst, a, b):
     return (31 << 26) | (dst << 21) | (a << 16) | (b << 11) | (23 << 1)
 
 
+def _body_file_range(path, symbol):
+    """(start, end) FILE offsets of `symbol`'s bytes in a COFF object."""
+    data, secs, syms, _bi = read_coff(path)
+    by_sec = {s["idx"]: s for s in secs}
+    for s in syms:
+        if s["name"] == symbol and s["section"] > 0:
+            sec = by_sec[s["section"]]
+            peers = sorted(x["value"] for x in syms
+                           if x["section"] == s["section"]
+                           and x["type"] == IMAGE_SYM_DTYPE_FUNCTION
+                           and x["value"] > s["value"])
+            end = peers[0] if peers else sec["rawsize"]
+            return sec["rawptr"] + s["value"], sec["rawptr"] + end
+    return None
+
+
+def _pin_stale_report(check, tp, bp, name):
+    """REGRESSION PIN (defect 1, 2026-09-30): a stale 100.0 must not excuse a row.
+
+    Builds a one-unit corpus in a fresh temp dir from the live RndFlare objects,
+    re-injects the documented RndFlare::Load wrong field into OUR copy at the
+    word level (`subi r4,r31,0x5c` -> `0x58`: mSteps -> mOffset's neighbour),
+    and hands scan() a report.json that scores the function exactly 100.0.
+
+      * report NEWER than both objects -> the score is about these objects, so
+        the contradicted-by-100pct gate may fire (control: the gate still works);
+      * report OLDER than our object  -> the score describes an object that no
+        longer exists, which is exactly the per-target-rebuild case.  The row
+        MUST be a finding.  Before this fix it landed in contradicted-by-100pct.
+    """
+    import shutil
+    import tempfile
+    import types
+    import io
+    work = tempfile.mkdtemp(prefix="this_offset_pin_")
+    try:
+        t2 = os.path.join(work, "target.obj")
+        b2 = os.path.join(work, "ours.obj")
+        shutil.copyfile(tp, t2)
+        shutil.copyfile(bp, b2)
+        rng = _body_file_range(b2, name)
+        with open(b2, "rb") as f:
+            blob = bytearray(f.read())
+        want = struct.pack(">I", _addi(4, 31, -0x5c))
+        at = blob.find(want, rng[0], rng[1]) if rng else -1
+        check("pin setup: `subi r4,r31,0x5c` found in OUR RndFlare::Load", at >= 0)
+        if at < 0:
+            return
+        blob[at:at + 4] = struct.pack(">I", _addi(4, 31, -0x58))
+        with open(b2, "wb") as f:
+            f.write(bytes(blob))
+        od = os.path.join(work, "objdiff.json")
+        with open(od, "w") as f:
+            json.dump({"units": [{"name": "pin/Flare", "target_path": t2,
+                                  "base_path": b2}]}, f)
+        rp = os.path.join(work, "report.json")
+        with open(rp, "w") as f:
+            json.dump({"units": [{"name": "pin/Flare", "functions": [
+                {"name": name, "match_percent_normalized": 100.0}]}]}, f)
+
+        def run(report_mtime):
+            os.utime(t2, (1_000_000, 1_000_000))
+            os.utime(b2, (1_000_000, 1_000_000))
+            os.utime(rp, (report_mtime, report_mtime))
+            a = types.SimpleNamespace(objdiff=od, report=rp, struct_db=None)
+            cov = CoverageReport("pin", allow_truncation=True, stream=io.StringIO())
+            fnd, _bk, _sh, con = scan(a, cov)
+            return ({r["symbol"] for r in fnd}, {r["symbol"] for r in con},
+                    cov.as_dict())
+
+        fnd, con, _cd = run(2_000_000)          # report newer: a current score
+        check("pin control: a CURRENT report.json 100.0 still contradicts the "
+              "injected row (the gate works when its input is about this object)",
+              name in con and name not in fnd)
+        fnd, con, cd = run(500_000)             # report older: a stale score
+        check("regression pin: a report.json 100.0 OLDER than our object does NOT "
+              "excuse the injected wrong field -- it is a finding",
+              name in fnd and name not in con)
+        check("regression pin: the coverage block says the report was not "
+              "trusted for that unit",
+              cd.get("units_newer_than_report") == 1)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
 def selftest():
     ok = True
 
@@ -1094,6 +1179,24 @@ def selftest():
           classify_symbol(
               "?Load@?$ObjRefConcrete@VRndMat@@VObjectDir@@@@QAA_NAAVBinStream@@"
               "_NPAVObjectDir@@@Z")[0] == "template-or-complex")
+    # REGRESSION PIN (defect 2, 2026-09-30).  A FREE special-name operator has
+    # NOTHING between its operator code and the '@' that closes its (empty)
+    # qualified name, so the storage code `Y` follows immediately.  The old
+    # split('@') parser read the first PARAMETER type (`YAAAVBinStream`) as a
+    # class, found an `A` after the next `@@`, and called it a member -- which
+    # made r3, the BinStream, `this`.  127 free operator<< / operator>> bodies
+    # in the paired corpus were examined that way.
+    for free_op in ("??6@YAAAVBinStream@@AAV0@ABVRndParticle@@@Z",
+                    "??5@YAAAVBinStreamRev@@AAV0@AAUEyeDesc@CharEyes@@@Z",
+                    "??6@YAXAAVBinStream@@ABUPoint@CharHair@@@Z"):
+        check(f"regression pin: free operator {free_op[:18]}... is NOT a member "
+              f"(r3 is the stream, not `this`)",
+              classify_symbol(free_op)[0] == "free-or-static")
+    check("...while a MEMBER operator<< keeps its class (BinStream::operator<<)",
+          classify_symbol("??6BinStream@@QAAAAV0@H@Z") == ("member", "BinStream"))
+    check("a nested class's special member names the INNER class "
+          "(??1SubMode@PartyModeMgr@@ is ~SubMode, not a PartyModeMgr member)",
+          classify_symbol("??1SubMode@PartyModeMgr@@QAA@XZ") == ("member", "SubMode"))
 
     # -- anchor inference --------------------------------------------------- #
     members = {0x100, 0x104, 0x10c, 0x120, 0x128, 0x12c, 0x134}
@@ -1127,6 +1230,7 @@ def selftest():
         check("live: ours and the target agree on RndFlare::Load today "
               "(the bug is FIXED -- so this is a negative, not a positive)",
               classify(coords, bcoords)[0] == "agree")
+        _pin_stale_report(check, tp, bp, name)
     else:
         print("  SKIP  live-corpus checks (objects absent)")
         print("        This is NOT a pass: the comparator was exercised, the "
