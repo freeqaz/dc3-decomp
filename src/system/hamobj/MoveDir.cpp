@@ -1643,19 +1643,24 @@ float MoveDir::DetectFrac(
         } else {
             frac = RatingToDetectFrac(autoplay, move->RatingOverride());
         }
-        int i8 = 0;
-        int i7 = 0;
-        for (DetectFrame *it = detectFrames.first; it != detectFrames.second; ++it) {
-            const Ham2FrameWeight &wt = it->GetMoveFrame()->FrameWeight(it->Mirror());
-            if (wt.mWeight != 0) {
-                i8++;
-                if (it->HasScore()) {
-                    i7++;
+        DetectFrame *it = detectFrames.first;
+        if (it != detectFrames.second) {
+            int i8 = 0;
+            int i7 = 0;
+            do {
+                const Ham2FrameWeight &wt =
+                    it->GetMoveFrame()->FrameWeight(it->Mirror());
+                if (wt.mWeight != 0) {
+                    i8++;
+                    if (it->HasScore()) {
+                        i7++;
+                    }
                 }
+                ++it;
+            } while (it != detectFrames.second);
+            if (i8 != 0) {
+                frac = ((float)i7 / (float)i8) * frac;
             }
-        }
-        if (i8 != 0) {
-            frac = ((float)i7 / (float)i8) * frac;
         }
     }
     return frac;
@@ -1674,8 +1679,14 @@ void MoveDir::EnqueueDetectFrames(
     int moveIdx = MoveIdx();
     DetectRange(frames, range, moveIdx - 1, moveIdx + 1);
     CurrentMoveMode();
+    // `best` is initialised BEFORE the range test: 0x82500F1C `stw r30, 0x50(r1)`
+    // sits between the two `lwz` of range.first/range.second and the
+    // `cmplw`/`beq` at 0x82500F20.  MSVC gave it range.first's own stack slot
+    // (0x50), which is dead the moment r31 holds it, so the store reads as a
+    // second write of the same slot.  Declared inside the `if` it lands four
+    // instructions later.
+    DetectFrame *best = nullptr;
     if (range.first != range.second) {
-        DetectFrame *best = nullptr;
         float bestError = 1000.0f;
         for (DetectFrame *it = range.first; it != range.second; ++it) {
             float error = ScaleDistToError(
