@@ -864,9 +864,21 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
         }
     }
     PostUpdateFilters();
+    // BEHAVIOURAL FIX (w9-d).  We had `!mFiltersEnabled || (mCurMove &&
+    // mCurMove->IsRest())`, which SKIPS the reset when filters are enabled and
+    // there is no current move.  The image resets there: at 0x82505370 it does
+    // `cmplwi cr6, r3, 0x0` / `beq cr6, .L_82505384` -- and 0x82505384 is the
+    // mFeedback/ResetErrors block, not the loop bottom.  Only the IsRest test
+    // at 0x8250537C..0x82505380 branches PAST it (to .L_82505394).  So the
+    // condition is `!mFiltersEnabled || !mCurMove || mCurMove->IsRest()`: a
+    // player with no move for this measure gets its error accumulators cleared.
+    // Naming the pointer in a local also reproduces the image's unconditional
+    // load at the top of the loop body (0x82505364, ahead of the
+    // mFiltersEnabled compare) and the UNSIGNED `cmplwi` pointer test we were
+    // emitting as a signed `cmpwi`.
     for (int i = 0; i < 2; i++) {
-        if (!mFiltersEnabled
-            || (mMovePlayerData[i].mCurMove && mMovePlayerData[i].mCurMove->IsRest())) {
+        HamMove *curMove = mMovePlayerData[i].mCurMove;
+        if (!mFiltersEnabled || !curMove || curMove->IsRest()) {
             if (mMovePlayerData[i].mFeedback) {
                 mMovePlayerData[i].mFeedback->ResetErrors();
             }
