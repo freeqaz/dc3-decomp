@@ -212,10 +212,19 @@ MatShaderOptions GetDefaultMatShaderOpts(const Hmx::Object *obj, RndMat *mat) {
     if (mesh) {
         if (mesh->Mat() == mat) {
             opts.SetLast5(0x12);
-            auto _tmp4 = mesh->NumBones();
-            opts.SetHasBones(_tmp4 != (int)0);
-            auto _tmp1 = mesh->HasAOCalc();
-            opts.SetHasAOCalc(_tmp1);
+            // The NumBones temp is LOAD-BEARING, the HasAOCalc one is not
+            // (both measured, w8-m 2026-09-30, 1 dead `mr r10, r9` at idx 33):
+            //   named NumBones + inlined HasAOCalc  99.0  <- this
+            //   named NumBones + named HasAOCalc    99.0  (inert, uglier)
+            //   both inlined                        98.0  (+`clrlwi r11,r11,24`
+            //                                       bool mask + r10<->r8 swap)
+            //   both named ABOVE the two setters    98.0  (whole arm reshuffles)
+            // The residual `mr r10, r9` is a dead copy of the HasAOCalc byte
+            // into a register nothing reads (idx 35 uses r9 on BOTH sides); it
+            // is regalloc, not the temp -- removing the temp does not move it.
+            auto numBones = mesh->NumBones();
+            opts.SetHasBones(numBones != (int)0);
+            opts.SetHasAOCalc(mesh->HasAOCalc());
         }
     } else {
         const RndMultiMesh *multimesh = dynamic_cast<const RndMultiMesh *>(obj);
@@ -2064,6 +2073,27 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
         } else {
             if (b) {
                 bool foundBoneRef = false;
+                // NEGATIVE RESULT (w8-m 2026-09-30) -- this `for` with the
+                // `!foundBoneRef &&` FIRST is the local optimum at 99.4536
+                // canonical; the single residual row is one dead
+                // `addi r9, r10, 0x8` we emit at idx 51 that the image does
+                // not.  That instruction is `it->Refs().end()`, i.e.
+                // `iterator((ObjRef *)this)` = &mRefs = base+0x8: MSVC CSEs
+                // the `it->Refs()` base adjustment between the init's begin()
+                // and the condition's end(), computes end() eagerly into the
+                // VOLATILE r9, then has to recompute it inside the loop after
+                // the body's calls clobber r9 (idx 54-58, which MATCH) --
+                // leaving the eager copy dead.  Three re-spellings measured,
+                // none removes it:
+                //   (a) init split out of the `for`  -> INERT, same 1 row;
+                //   (b) the rotated shape the image actually emits (end test
+                //       at the top, `if (foundBoneRef) break;` at the bottom
+                //       after ++rit, which is what idx 102-103's `beq` back to
+                //       the top test looks like) -> 90.7, because MSVC then
+                //       spills end() to 0x54(r31) and sinks the end test;
+                //   (c) `rit != it->Refs().end() && !foundBoneRef` (swapped
+                //       && operands) -> 91.6, branch polarity inverts.
+                // Backend artifact, not a source defect.  Do not retry (b)/(c).
                 for (ObjRef::iterator rit = it->Refs().begin();
                      !foundBoneRef && rit != it->Refs().end();
                      ++rit) {
