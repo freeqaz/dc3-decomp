@@ -339,6 +339,22 @@ void HiResScreen::Finish() {
     delete mCache;
 }
 
+// RESIDUAL (w9-f, 100.0 canonical / 99.3 raw, 772 B): 19 rows, every one a pure
+// register permutation -- no insert, delete, replace or diff_op anywhere.  The
+// integer side is a cycle over the SAME callee-saved set both builds pick,
+// {r17,r18,r19,r21,r22}: the image homes bm in r19, srcX in r18, dstX in r22,
+// xConst in r21 and xBlend in r17, and we use r18/r17/r21/r22/r19 for the same
+// five.  Emission ORDER already agrees (idx 17 is xConst and idx 18 xBlend on
+// both sides), so this is allocation, not scheduling, and declaration reorder is
+// the wrong lever for it.  REFUTED (w9-f): spelling the sqrt as RB3 does,
+// `sqrtf(blendX * blendX + blendY * blendY)`, is byte-identical -- the f0<->f13
+// pair at idx 102/103 is the known commutative same-register floor, not an
+// operand-order bug.
+// ⚠ Do NOT port RB3's loop shape wholesale to chase these: RB3's Merge has no
+// `(unsigned)yIter >= mAccumHeight` break and no `yIter >= 0` guard, and ours is
+// at canonical 100.0 WITH them, so the image has them and RB3's source is a
+// different build of this function.  RB3 was the right reference for the blend
+// initialiser and the wrong one for the loop.
 void HiResScreen::Merge(
     const RndBitmap &bm, int srcX, int srcY, int srcW, int srcH, int dstX, int dstY, int padX, int padY
 ) {
