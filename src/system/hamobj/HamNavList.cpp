@@ -1608,8 +1608,21 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                     int firstShowing = mListState.FirstShowing();
                     if (selected < firstShowing) {
                         mScrollBehavior.ScrollUp(false);
-                    } else if (selected >= firstShowing
-                        + HamListRibbon::sNumListSelectable - 1) {
+                        // NOT `- 1`.  The image computes the threshold with a
+                        // single add and no subtract -- `lwz r10,
+                        // sNumListSelectable` / `add r11, r11, r10` (0x5824) /
+                        // `cmpw cr6, r31, r11` (0x5828) / `blt` -- so the
+                        // ScrollDown edge is firstShowing + sNumListSelectable,
+                        // not one item earlier.  Our `- 1` was an invention and
+                        // it showed up as a `subi r11, r11, 0x1` the image does
+                        // not have; it made the list scroll down one item too
+                        // soon on the controller path.
+                        // The remaining commutative row (target `add r11, r11,
+                        // r10`, ours `add r11, r10, r11`) is NOT source-
+                        // reachable: writing the sum the other way round is
+                        // byte-inert.
+                    } else if (selected
+                        >= firstShowing + HamListRibbon::sNumListSelectable) {
                         mScrollBehavior.ScrollDown(false);
                     } else {
                         SetHighlight(selected);
