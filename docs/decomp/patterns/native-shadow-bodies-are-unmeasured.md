@@ -564,3 +564,15 @@ Its fallback rested on the same premise as the `ObjectDir::FindObject` fallback 
   guard, `CharLocalIKScope`, `PreEvalClipWeights` and friends compensate for a native knee
   under-bend whose root is not identified. `PreEvalClipWeights`' premise ("IK polls before
   `song.hdrv`") is worth re-checking now that the poll-order polarity is the image's.
+
+### Gate and routes (final branch)
+
+- **Native gate.** `scripts/native_test.sh`: **584 registered / 515 executed / 515
+  passed / 0 failed / 69 skipped** (budget 69), exit 0.
+- **Harvest routes**, run with `scripts/native_assert_harvest.py` on the final binary:
+
+| route | stages reached | harvest messages | crashes | same run on the pre-fix probe binary |
+|---|---|---|---|---|
+| perform, `--mode-downs 0` | 24 of 24 (gameover at beat 267) | 96 distinct / 400 total | 0 | 96 / 400 |
+| dance battle, `--mode-downs 2` | 23 of 23 (gameover at beat 267) | 154 / 471 | 0 | 154 / 471 |
+| practice, `--mode-downs 1` | `game_screen` reached; ran to beat 1806 with no crash, then stopped by the run's own 1800 s timeout | not recorded | 0 | the same run on the baseline binary stalls on `practice_welcome_screen`: the documented practice route lacks that confirm, so pass `--confirm-screens ...,practice_welcome_screen` |
