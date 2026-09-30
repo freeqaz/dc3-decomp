@@ -1,0 +1,280 @@
+idx	region	function	class	verdict	note
+0	src/App.cpp:2-216	NativePlatformMgrStub,NativeProfileMgrStub,NativeSaveLoadStub,NativeSpeechMgrStub	suspect:handler	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+1	src/App.cpp:797-814	App::RunOneFrame	suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+2	src/App.cpp:1194-1213	App::RunWithoutDebugging	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+3	src/lazer/game/BustAMovePanel.cpp:148-150	BustAMovePanel::Exit	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+4	src/lazer/game/Game.cpp:299-301	Game::FlushMoveRecord	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+5	src/lazer/game/Game.cpp:307-309	Game::SwapMoveRecord	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+6	src/lazer/game/Game.cpp:317-319	Game::ReloadSong	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+7	src/lazer/game/Game.cpp:370-385	Game::PostWaitStart	suspect:forced-state	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+8	src/lazer/game/Game.cpp:398-400	Game::Poll	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+9	src/lazer/game/Game.cpp:432-434	Game::Poll	suspect:unrecognised	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+10	src/lazer/game/Game.cpp:629-631	Game::Reset	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+11	src/lazer/game/Game.cpp:720-722	Game::LoadSong	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+12	src/lazer/game/Game.cpp:859-861	Game::LoadNewSong	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+13	src/lazer/game/Game.cpp:892-921	Game::IsLoaded	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+14	src/lazer/game/Game.cpp:1038-1040	Game::OnResetDetection	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+15	src/lazer/game/GameMode.cpp:205-219	IsInLoaderMode	suspect:null-guard	image-page0	the image reads/writes guest page 0 and limps on; native returns the value the image would produce
+16	src/lazer/game/GameMode.cpp:244-259	GameModeInit	suspect:forced-state	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+17	src/lazer/game/GameMode.cpp:263-265	GameModeTerminate	suspect:null-guard	equivalent	behaviourally equivalent to the image (RELEASE(null) / memset(p,0,0) / dynamic_cast<T*>(nullptr) already skipped)
+18	src/lazer/game/GamePanel.cpp:374-392	GamePanel::SetTypeDef	suspect:handler	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+19	src/lazer/game/GamePanel.cpp:1010-1012	GamePanel::PollForLoading	suspect:forced-state	diag	diagnostic / corrupt-data abort / parse-depth guard
+20	src/lazer/meta_ham/CampaignSongSelectPanel.cpp:137-139	CampaignSongProvider::UpdateList	suspect:null-guard	stub-consequence	consequence of MetaPanel never creating Campaign (open lead in the doc)
+21	src/lazer/meta_ham/CampaignSongSelectPanel.cpp:186-192	CampaignSongSelectPanel::Load	suspect:early-return	stub-consequence	consequence of MetaPanel never creating Campaign (open lead in the doc)
+22	src/lazer/meta_ham/HamScreen.cpp:34-51	HamScreen::Enter	suspect:forced-state	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+23	src/lazer/meta_ham/HamUI.cpp:271-273	HamUI::Draw	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+24	src/lazer/meta_ham/HamUI.cpp:349-353	HamUI::IsTimelineResetAllowed	suspect:hw-stub	FIXED	IsTimelineResetAllowed: identifier-null forced true
+25	src/lazer/meta_ham/HamUI.cpp:571-574	HamUI::DrawDebug	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+26	src/lazer/meta_ham/HelpBarPanel.cpp:53-55	HelpBarPanel::Draw	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+27	src/lazer/meta_ham/HelpBarPanel.cpp:64-66	HelpBarPanel::Enter	suspect:null-guard	stub-consequence	consequence of native boot skipping SaveLoadManager::Init / ProfileMgr::Init (recorded NOTABLE in the doc)
+28	src/lazer/meta_ham/HelpBarPanel.cpp:81-83	HelpBarPanel::Exit	suspect:null-guard	stub-consequence	consequence of native boot skipping SaveLoadManager::Init / ProfileMgr::Init (recorded NOTABLE in the doc)
+29	src/lazer/meta_ham/HelpBarPanel.cpp:115-117	HelpBarPanel::Unload	suspect:null-guard	stub-consequence	consequence of native boot skipping SaveLoadManager::Init / ProfileMgr::Init (recorded NOTABLE in the doc)
+30	src/lazer/meta_ham/HelpBarPanel.cpp:124-129	HelpBarPanel::FinishLoad	suspect:null-guard	stub-consequence	consequence of native boot skipping SaveLoadManager::Init / ProfileMgr::Init (recorded NOTABLE in the doc)
+31	src/lazer/meta_ham/HelpBarPanel.cpp:131-133	HelpBarPanel::FinishLoad	suspect:null-guard	stub-consequence	consequence of native boot skipping SaveLoadManager::Init / ProfileMgr::Init (recorded NOTABLE in the doc)
+32	src/lazer/meta_ham/HelpBarPanel.cpp:136-142	HelpBarPanel::FinishLoad	suspect:extra-call	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+33	src/lazer/meta_ham/HelpBarPanel.cpp:269-271	HelpBarPanel::SyncToPanel	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+34	src/lazer/meta_ham/LoadingPanel.cpp:73-75	LoadingPanel::Load	suspect:forced-state	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+35	src/lazer/meta_ham/LoadingPanel.cpp:130-134	LoadingPanel::Poll	suspect:null-guard	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+36	src/lazer/meta_ham/MainMenuPanel.cpp:72-74	MainMenuPanel::Enter	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+37	src/lazer/meta_ham/MainMenuPanel.cpp:152-154	MainMenuPanel::CleanupNetCacheRelated	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+38	src/lazer/meta_ham/MainMenuPanel.cpp:159-163	MainMenuPanel::CleanupNetCacheRelated	suspect:extra-call	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+39	src/lazer/meta_ham/MainMenuPanel.cpp:171-173	MainMenuPanel::DownloadMotdArt	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+40	src/lazer/meta_ham/MainMenuPanel.cpp:499-501	MainMenuPanel::UpdateArtLoaders	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+41	src/lazer/meta_ham/MetaPanel.cpp:186-202	MetaPanel::Init	suspect:hw-stub	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+42	src/lazer/meta_ham/MetaPanel.cpp:258-260	MetaPanel::Load	suspect:null-guard	inert	the guarded pointer/condition cannot occur natively (sHamMaster set in MetaPanel ctor; TheMetaMusic made in Load; InitNative fills mProfiles; mSkeletonBones set in ctor)
+43	src/lazer/meta_ham/MetaPanel.cpp:295-297	MetaPanel::FinishLoad	suspect:null-guard	inert	the guarded pointer/condition cannot occur natively (sHamMaster set in MetaPanel ctor; TheMetaMusic made in Load; InitNative fills mProfiles; mSkeletonBones set in ctor)
+44	src/lazer/meta_ham/MetaPanel.cpp:308-310	MetaPanel::IsLoaded	suspect:null-guard	inert	the guarded pointer/condition cannot occur natively (sHamMaster set in MetaPanel ctor; TheMetaMusic made in Load; InitNative fills mProfiles; mSkeletonBones set in ctor)
+45	src/lazer/meta_ham/MetaPanel.cpp:322-324	MetaPanel::Poll	suspect:null-guard	inert	the guarded pointer/condition cannot occur natively (sHamMaster set in MetaPanel ctor; TheMetaMusic made in Load; InitNative fills mProfiles; mSkeletonBones set in ctor)
+46	src/lazer/meta_ham/MetaPanel.cpp:340-342	MetaPanel::Enter	suspect:null-guard	inert	the guarded pointer/condition cannot occur natively (sHamMaster set in MetaPanel ctor; TheMetaMusic made in Load; InitNative fills mProfiles; mSkeletonBones set in ctor)
+47	src/lazer/meta_ham/MetaPanel.cpp:360-362	MetaPanel::Exit	suspect:null-guard	inert	the guarded pointer/condition cannot occur natively (sHamMaster set in MetaPanel ctor; TheMetaMusic made in Load; InitNative fills mProfiles; mSkeletonBones set in ctor)
+48	src/lazer/meta_ham/MultiUserGesturePanel.cpp:65-77	MultiUserGesturePanel::Enter	suspect:extra-call	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+49	src/lazer/meta_ham/MultiUserGesturePanel.cpp:276-279	MultiUserGesturePanel::GetPlayerIndex	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+50	src/lazer/meta_ham/MultiUserGesturePanel.cpp:348-351	MultiUserGesturePanel::DropPlayerOnSide	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+51	src/lazer/meta_ham/MultiUserGesturePanel.cpp:527-530	MultiUserGesturePanel::UpdateNavLists	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+52	src/lazer/meta_ham/ProfileMgr.cpp:398-407	ProfileMgr::GetSignedInProfiles	suspect:hw-stub	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+53	src/lazer/meta_ham/ProfileMgr.cpp:416-421	ProfileMgr::SliderIxToDb	suspect:extra-call	stub-consequence	consequence of native boot skipping SaveLoadManager::Init / ProfileMgr::Init (recorded NOTABLE in the doc)
+54	src/lazer/meta_ham/ProfileMgr.cpp:880-887	ProfileMgr::IsContentUnlocked	suspect:hw-stub	inert	the guarded pointer/condition cannot occur natively (sHamMaster set in MetaPanel ctor; TheMetaMusic made in Load; InitNative fills mProfiles; mSkeletonBones set in ctor)
+55	src/lazer/meta_ham/ProfileMgr.cpp:919-924	ProfileMgr::UploadDeferredFitnessGoal	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+56	src/lazer/meta_ham/ProfileMgr.cpp:971-977	ProfileMgr::UpdateFriendsList	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+57	src/lazer/meta_ham/ShellInput.cpp:385-401	ShellInput::SyncVoiceControl	suspect:handler	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+58	src/lazer/meta_ham/ShellInput.cpp:443-452	ShellInput::EnterControllerMode	suspect:hw-stub	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+59	src/lazer/meta_ham/ShellInput.cpp:482-487	ShellInput::ExitControllerMode	suspect:hw-stub	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+60	src/lazer/meta_ham/ShellInput.cpp:540-542	ShellInput::SyncToCurrentScreen	suspect:extra-call	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+61	src/lazer/meta_ham/SkeletonChooser.cpp:142-149	SkeletonChooser::GetPlayerSide	suspect:hw-stub	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+62	src/lazer/net_ham/FitnessGoalJobs.cpp:70-87	GetFitnessGoalJob::GetFitnessGoal	suspect:hw-stub	image-page0	the image reads/writes guest page 0 and limps on; native returns the value the image would produce
+63	src/lazer/net_ham/RockCentral.cpp:242-245	RockCentral::ManageJob	suspect:early-return	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+64	src/system/char/CharBones.cpp:86-88	CharBones::Zero	suspect:null-guard	equivalent	behaviourally equivalent to the image (RELEASE(null) / memset(p,0,0) / dynamic_cast<T*>(nullptr) already skipped)
+65	src/system/char/CharBonesMeshes.cpp:101-120	CharBonesMeshes::PoseMeshes	suspect:forced-state	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+66	src/system/char/CharBonesMeshes.cpp:127-130	CharBonesMeshes::PoseMeshes	suspect:early-return	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+67	src/system/char/CharBonesMeshes.cpp:155-159	CharBonesMeshes::PoseMeshes	suspect:early-return	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+68	src/system/char/CharBonesMeshes.cpp:178-190	CharBonesMeshes::PoseMeshes	suspect:forced-state	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+69	src/system/char/CharDriver.cpp:267-269	CharDriver::PlayGroup	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+70	src/system/char/CharEyes.cpp:99-101	CharEyes::Enter	suspect:null-guard	inert-measured	probe fired 0 times over perform + dance-battle routes
+71	src/system/char/CharEyes.cpp:1556-1558	CharEyes::Poll	suspect:null-guard	inert-measured	probe fired 0 times over perform + dance-battle routes
+72	src/system/char/CharIKHand.cpp:388-425	CharIKHand::Poll	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+73	src/system/char/CharServoBone.cpp:68-75	CharServoBone::Poll	suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+74	src/system/char/Character.cpp:751-753	Character::MergeDraws	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+75	src/system/char/Character.cpp:1066-1068	DrawPtrVec::Draw	suspect:null-guard	tombstone	NoNull tombstone family (NOTABLE in the doc)
+76	src/system/dsp/DelayEffect.cpp:51-60	DelayEffect::Process	suspect:null-guard	image-fatal	DelayEffect freed-buffer race: image derefs mBuffer
+77	src/system/flow/FlowAnimate.cpp:175-185	FlowAnimate::Execute	suspect:early-return	inert-measured	probe fired 0 times over perform + dance-battle routes
+78	src/system/flow/FlowNode.cpp:137-142	FlowNode::Load	suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+79	src/system/flow/FlowNode.cpp:425-427	FlowNode::ActivateChild	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+80	src/system/flow/FlowRun.cpp:113-127	FlowRun::ResolveTarget	suspect:null-guard	image-page0	the image reads/writes guest page 0 and limps on; native returns the value the image would produce
+81	src/system/gesture/GestureMgr.cpp:84-103	GestureMgr::<BEGIN_HANDLERS>	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+82	src/system/gesture/GestureMgr.cpp:163-169	GestureMgr::Init	suspect:early-return	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+83	src/system/gesture/GestureMgr.cpp:472-482	GestureMgr::UpdateTrackedSkeletons	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+84	src/system/gesture/GestureMgr.cpp:514-522	GestureMgr::OnMsg	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+85	src/system/gesture/LiveCameraInput.cpp:579-581	LiveCameraInput::LiveCameraInput	suspect:unrecognised	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+86	src/system/gesture/LiveCameraInput.cpp:760-762	LiveCameraInput::Init	suspect:unrecognised	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+87	src/system/gesture/SkeletonHistory.cpp:13-18	SkeletonHistoryArchive::GetArchive	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+88	src/system/gesture/SkeletonHistory.cpp:31-33	SkeletonHistory::PrevFromArchive	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+89	src/system/gesture/SkeletonUpdate.cpp:36-42	SkeletonUpdateHandle::Callbacks	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+90	src/system/gesture/SkeletonUpdate.cpp:46-48	SkeletonUpdateHandle::GetCameraInput	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+91	src/system/gesture/SkeletonUpdate.cpp:52-54	SkeletonUpdateHandle::SetCameraInput	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+92	src/system/gesture/SkeletonUpdate.cpp:59-61	SkeletonUpdateHandle::HasCallback	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+93	src/system/gesture/SkeletonUpdate.cpp:66-68	SkeletonUpdateHandle::AddCallback	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+94	src/system/gesture/SkeletonUpdate.cpp:74-76	SkeletonUpdateHandle::RemoveCallback	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+95	src/system/gesture/SkeletonUpdate.cpp:84-86	SkeletonUpdateHandle::PostUpdate	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+96	src/system/gesture/SkeletonUpdate.cpp:91-93	SkeletonUpdateHandle::History	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+97	src/system/gesture/SkeletonUpdate.cpp:111-114		suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+98	src/system/gesture/WaveToTurnOnLight.cpp:75-82	WaveToTurnOnLight::EnableWaveState	suspect:hw-stub	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+99	src/system/hamobj/ClipPlayer.cpp:366-368	ClipPlayer::GetRoutineCrossoverClips	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+100	src/system/hamobj/DanceRemixer.cpp:215-223	DanceRemixer::PostMoveFinished	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+101	src/system/hamobj/DanceRemixer.cpp:225-227	DanceRemixer::PostMoveFinished	suspect:hw-stub	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+102	src/system/hamobj/DanceRemixer.cpp:229-231	DanceRemixer::PostMoveFinished	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+103	src/system/hamobj/DanceRemixer.cpp:241-249	DanceRemixer::PostMoveFinished	suspect:null-guard	image-ub	image reads one past mRoutineMeasures at the final measure (probe: 4 hits/route, measure==size at song end)
+104	src/system/hamobj/FreestyleMoveRecorder.cpp:490-507	FreestyleMoveRecorder::UpdateRecordingAttempt	suspect:null-guard	image-page0	the image reads/writes guest page 0 and limps on; native returns the value the image would produce
+105	src/system/hamobj/FreestyleMoveRecorder.cpp:803-806	FreestyleMoveRecorder::CompareSkeletonJointDisplacement	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+106	src/system/hamobj/Ham.cpp:69-101		suspect:early-return	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+107	src/system/hamobj/Ham.cpp:185-218	HamInit	suspect:forced-state	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+108	src/system/hamobj/HamAudio.cpp:70-77	HamAudio::IsReady	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+109	src/system/hamobj/HamAudio.h:56-63		suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+110	src/system/hamobj/HamCharacter.cpp:315-317	HamCharacter::Init	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+111	src/system/hamobj/HamCharacter.cpp:770-788	HamCharacter::GetNeutralSkeleton	suspect:early-return	inert	the guarded pointer/condition cannot occur natively (sHamMaster set in MetaPanel ctor; TheMetaMusic made in Load; InitNative fills mProfiles; mSkeletonBones set in ctor)
+112	src/system/hamobj/HamCharacter.cpp:868-909	HamCharacter::GetNeutralSkeleton	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+113	src/system/hamobj/HamDirector.cpp:509-600	HamDirector::OnFileMerged	suspect:handler	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+114	src/system/hamobj/HamDirector.cpp:951-962	HamDirector::SetupRoutineBuilderAnims	suspect:extra-call	FIXED	routine-builder PropKeys retarget (0 hits measured; image has none)
+115	src/system/hamobj/HamDirector.cpp:3558-3581	HamDirector::Poll	suspect:hw-stub	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+116	src/system/hamobj/HamDriver.cpp:125-166	HamDriver::Poll	suspect:forced-state	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+117	src/system/hamobj/HamDriver.cpp:169-197	HamDriver::Poll	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+118	src/system/hamobj/HamGameData.cpp:478-486	HamGameData::SetAssociatedPadNum	suspect:hw-stub	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+119	src/system/hamobj/HamIKEffector.cpp:549-594	HamIKEffector::Poll	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+120	src/system/hamobj/HamIKEffector.cpp:618-702	HamIKEffector::Poll	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+121	src/system/hamobj/HamIKEffector.cpp:765-844	HamIKEffector::Poll	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+122	src/system/hamobj/HamIKEffector.cpp:894-896	HamIKEffector::Poll	suspect:unrecognised	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+123	src/system/hamobj/HamIKEffector.cpp:902-906	HamIKEffector::Poll	suspect:unrecognised	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+124	src/system/hamobj/HamIKEffector.cpp:913-966	HamIKEffector::Poll	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+125	src/system/hamobj/HamIKSkeleton.cpp:138-186	HamIKSkeleton::NeutralWorldXfm	suspect:extra-call	feet	foot-plant/IK compensation or its diagnostics (feet-in-floor project); not adjudicated here
+126	src/system/hamobj/HamIKSkeleton.cpp:196-203	HamIKSkeleton::SetBone	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+127	src/system/hamobj/HamMaster.cpp:86-95	HamMaster::Poll	suspect:extra-call	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+128	src/system/hamobj/HamNavList.cpp:669-680	HamNavList::HideItem	suspect:early-return	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+129	src/system/hamobj/HamNavList.cpp:1833-1836	HamNavList::DrawShowing	suspect:early-return	inert-measured	probe fired 0 times over perform + dance-battle routes
+130	src/system/hamobj/HamNavList.cpp:1840-1850	HamNavList::DrawShowing	suspect:extra-call	renderer	native UI camera selection (WebGPU single pass)
+131	src/system/hamobj/HamNavList.cpp:1905-1909	HamNavList::DrawShowing	suspect:extra-call	renderer	
+132	src/system/hamobj/HamNavList.cpp:1937-1941	HamNavList::DrawShowing	suspect:extra-call	renderer	native UI camera selection (WebGPU single pass)
+133	src/system/hamobj/HamWardrobe.cpp:317-331	HamWardrobe::SyncInterestObjects	suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+134	src/system/hamobj/MoveAsyncDetector.cpp:330-338	MoveAsyncDetector::MoveRatingFrac	suspect:hw-stub	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+135	src/system/hamobj/MoveDir.cpp:811-821	MoveDir::PostUpdate	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+136	src/system/hamobj/MoveDir.cpp:2364-2369	MoveDir::UpdateOverlay	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+137	src/system/hamobj/MoveMgr.cpp:340-346	MoveMgr::LoadMoveData	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+138	src/system/hamobj/MoveMgr.cpp:449-454	MoveMgr::GetSongLayout	suspect:forced-state	inert-measured	probe fired 0 times over perform + dance-battle routes
+139	src/system/hamobj/MoveMgr.cpp:458-464	MoveMgr::GetSongLayout	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+140	src/system/hamobj/MoveMgr.cpp:494-496	MoveMgr::SongInit	suspect:null-guard	inert-measured	probe fired 0 times over perform + dance-battle routes
+141	src/system/hamobj/MoveMgr.cpp:506-512	MoveMgr::SongInit	suspect:early-return	inert-measured	probe fired 0 times over perform + dance-battle routes
+142	src/system/hamobj/MoveMgr.cpp:793-799	MoveMgr::InitSong	suspect:null-guard	inert-measured	probe fired 0 times over perform + dance-battle routes
+143	src/system/hamobj/MoveVariant.cpp:44-49	MoveCandidate::Load	suspect:forced-state	inert-measured	probe fired 0 times over perform + dance-battle routes
+144	src/system/hamobj/OriginalChoreoRemixer.cpp:123-128	OriginalChoreoRemixer::Init	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+145	src/system/hamobj/OriginalChoreoRemixer.cpp:160-162	OriginalChoreoRemixer::SaveOriginalMoveParents	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+146	src/system/hamobj/PoseFatalities.cpp:454-456	PoseFatalities::Poll	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+147	src/system/hamobj/SuperEasyRemixer.cpp:79-84	SuperEasyRemixer::Init	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+148	src/system/hamobj/SuperEasyRemixer.cpp:132-138	SuperEasyRemixer::DumpSongLayout	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+149	src/system/hamobj/SuperEasyRemixer.cpp:308-310	SuperEasyRemixer::LoadAllVariants	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+150	src/system/hamobj/SuperEasyRemixer.cpp:315-317	SuperEasyRemixer::LoadAllVariants	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+151	src/system/meta/MoviePanel.cpp:117-119	MoviePanel::Load	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+152	src/system/meta/MoviePanel.cpp:182-187	MoviePanel::Poll	suspect:null-guard	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+153	src/system/meta/MoviePanel.cpp:235-239	MoviePanel::IsLoaded	suspect:hw-stub	FIXED	MoviePanel::IsLoaded skip -> FFmpegMovieImpl::Ready faithful; block kept web-only
+154	src/system/meta/SongPreview.cpp:128-131	SongPreview::Start	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+155	src/system/movie/Splash.cpp:29-35	Splash::Splash	suspect:forced-state	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+156	src/system/movie/Splash.cpp:183-192	Splash::EndSplasher	suspect:extra-call	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+157	src/system/net/WebSvcMgrCurl.cpp:33-35	WebSvcMgrCurl::Poll	suspect:null-guard	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+158	src/system/obj/Data.h:396-398		suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+159	src/system/obj/Data.h:402-404		suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+160	src/system/obj/Data.h:413-415		suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+161	src/system/obj/Data.h:431-433		suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+162	src/system/obj/Data.h:437-439		suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+163	src/system/obj/Data.h:455-457		suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+164	src/system/obj/Data.h:461-463		suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+165	src/system/obj/DataArray.cpp:143-176	DataCallStackFrame	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+166	src/system/obj/DataArray.cpp:457-459	DataArray::DataArray	suspect:forced-state	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+167	src/system/obj/DataArray.cpp:468-470	DataArray::DataArray	suspect:forced-state	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+168	src/system/obj/DataFile.cpp:424-432	ParseArray	suspect:early-return	diag	diagnostic / corrupt-data abort / parse-depth guard
+169	src/system/obj/DataFile.cpp:444-446	ParseArray	suspect:unrecognised	diag	diagnostic / corrupt-data abort / parse-depth guard
+170	src/system/obj/DataFile.cpp:647-649	ReadEmbeddedFile	suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+171	src/system/obj/DataFunc.cpp:602-604	DataNew::<DEF_DATA_FUNC>	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+172	src/system/obj/DataFunc.cpp:624-627		suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+173	src/system/obj/DataFunc.cpp:666-671		suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+174	src/system/obj/DataFunc.cpp:889-892	DataSize::<DEF_DATA_FUNC>	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+175	src/system/obj/DataNode.cpp:142-148	DataNode::Evaluate	suspect:null-guard	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+176	src/system/obj/DataNode.cpp:371-373	DataNode::Sym	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+177	src/system/obj/DataNode.cpp:391-393	DataNode::LiteralSym	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+178	src/system/obj/DataNode.cpp:415-417	DataNode::ForceSym	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+179	src/system/obj/DataNode.cpp:440-442	DataNode::Str	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+180	src/system/obj/DataNode.cpp:464-466	DataNode::LiteralStr	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+181	src/system/obj/DataNode.cpp:528-530	DataNode::Func	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+182	src/system/obj/DataNode.cpp:577-579	DataNode::Array	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+183	src/system/obj/DataNode.cpp:597-599	DataNode::LiteralArray	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+184	src/system/obj/DataNode.cpp:617-619	DataNode::Command	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+185	src/system/obj/DataNode.cpp:637-639	DataNode::Var	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+186	src/system/obj/Dir.cpp:789-794	ObjectDir::LoadSubDir	suspect:extra-call	FIXED	SetParentDir: only reader was the ObjPtr parent-walk fallback (removed)
+187	src/system/obj/Dir.cpp:1495-1498	INIT_REVS	suspect:extra-call	FIXED	SetParentDir: only reader was the ObjPtr parent-walk fallback (removed)
+188	src/system/obj/Dir.cpp:1507-1510	INIT_REVS	suspect:extra-call	FIXED	SetParentDir: only reader was the ObjPtr parent-walk fallback (removed)
+189	src/system/obj/Dir.h:606-611	Advance	suspect:null-guard	equivalent	behaviourally equivalent to the image (RELEASE(null) / memset(p,0,0) / dynamic_cast<T*>(nullptr) already skipped)
+190	src/system/obj/DirLoader.cpp:813-818	DirLoader::LoadObjs	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+191	src/system/obj/DirLoader.cpp:821-832	DirLoader::LoadObjs	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+192	src/system/obj/DirLoader.cpp:1011-1029	DirLoader::CreateObjects	suspect:extra-call	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+193	src/system/obj/ObjPtr_p.h:80-86	ObjRefConcrete::SetObjConcrete	suspect:forced-state	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+194	src/system/obj/ObjPtr_p.h:649-654	ObjPtrList::insert	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+195	src/system/obj/Object.cpp:885-887	Hmx::Object::PropertySize	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+196	src/system/obj/Object.cpp:982-986	Hmx::Object::NewObject	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+197	src/system/obj/Object.cpp:1009-1031	Hmx::Object::RemoveFromDir	suspect:hw-stub	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+198	src/system/obj/Object.h:148-153	ObjRef	suspect:unrecognised	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+199	src/system/obj/Object.h:201-206	ObjRef	suspect:early-return	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+200	src/system/obj/Object.h:1563-1565		suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+201	src/system/obj/Object.h:1799-1804	operator>>	suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+202	src/system/obj/Task.h:30-33		suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+203	src/system/obj/Task.h:247-264		suspect:early-return	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+204	src/system/obj/TypeProps.cpp:218-223	TypeProps::GetArray	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+205	src/system/obj/TypeProps.cpp:239-244	TypeProps::SetArrayValue	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+206	src/system/os/AsyncFile.h:27-34		suspect:early-return	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+207	src/system/os/Debug.cpp:282-301	Debug::Fail	suspect:early-return	legit	port policy: MILO_ASSERT/FAIL non-fatal natively
+208	src/system/os/HolmesClient.cpp:460-462	HolmesClientInit	suspect:hw-stub	stub	absent hardware/service natively (Kinect camera/voice/skeleton, LIVE/online, save system, Holmes)
+209	src/system/os/PlatformMgr.cpp:15-17		suspect:unrecognised	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+210	src/system/rndobj/Cam.cpp:149-154	INIT_REVS	suspect:extra-call	debug-optin	env/debug-gated; neutral by default (244: DC3_FAST_BOOT boot advance -- see leads)
+211	src/system/rndobj/Cam.cpp:337-352	RndCam::GetViewProjectXfms	suspect:extra-call	debug-optin	env/debug-gated; neutral by default (244: DC3_FAST_BOOT boot advance -- see leads)
+212	src/system/rndobj/Cam.cpp:373-382	RndCam::GetViewProjectXfms	suspect:extra-call	debug-optin	env/debug-gated; neutral by default (244: DC3_FAST_BOOT boot advance -- see leads)
+213	src/system/rndobj/Cam.cpp:482-493	RndCam::GetViewProjectXfms	suspect:extra-call	debug-optin	env/debug-gated; neutral by default (244: DC3_FAST_BOOT boot advance -- see leads)
+214	src/system/rndobj/Font.cpp:529-544	RndFont::UpdateChars	suspect:null-guard	image-page0	the image reads/writes guest page 0 and limps on; native returns the value the image would produce
+215	src/system/rndobj/Lit_NG.cpp:268-281	NgLight::RenderShadows	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+216	src/system/rndobj/Mat.cpp:412-414	RndMat::CreateMetaMaterial	suspect:null-guard	inert-measured	probe fired 0 times over perform + dance-battle routes
+217	src/system/rndobj/Mesh.h:29-31	RndBone	suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+218	src/system/rndobj/Part.cpp:1078-1081	RndParticleSys::UpdateRelativeXfm	suspect:null-guard	inert-measured	probe fired 0 times over perform + dance-battle routes
+219	src/system/rndobj/PropKeys.h:96-105		suspect:early-return	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+220	src/system/rndobj/Rnd.cpp:315-320	Rnd::PreInit	suspect:forced-state	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+221	src/system/rndobj/Rnd.h:176-178		suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+222	src/system/rndobj/Text.cpp:604-606	ResetFontMapPageMeshFaces	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+223	src/system/rndobj/Text.cpp:620-625	RndText::FontMap::AllocateMeshes	suspect:extra-call	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+224	src/system/rndobj/Text.cpp:666-670	RndText::FontMap::AllocateMeshes	suspect:extra-call	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+225	src/system/rndobj/Text.cpp:1434-1440	RndText::OnComputeCharWidths	suspect:extra-call	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+226	src/system/rndobj/Text.cpp:1590-1592	RndText::OnComputeCharWidths	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+227	src/system/rndobj/Text.cpp:2927-2930	RndText::FontMap3d::CleanupSyncMeshes	suspect:null-guard	image-ub	image forms &back()+1 of an empty vector
+228	src/system/rndobj/Utl.cpp:342-347	SortDraws	suspect:null-guard	tombstone	NoNull tombstone family (NOTABLE in the doc)
+229	src/system/synth/SampleData.cpp:37-44	SampleData::Dealloc	suspect:early-return	legit	SampleData malloc/free pairs only when synth was never initialised (tests/tools)
+230	src/system/synth/StandardStream.cpp:26-28		suspect:forced-state	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+231	src/system/synth/StandardStream.cpp:99-108	StandardStream::Play	suspect:extra-call	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+232	src/system/synth/StandardStream.cpp:115-123	StandardStream::Play	suspect:extra-call	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+233	src/system/synth/StreamReceiver.h:37-41		suspect:early-return	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+234	src/system/synth/Synth.cpp:284-288	Synth::NewStreamDecoder	suspect:early-return	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+235	src/system/synth/VorbisReader.cpp:292-298	VorbisReader::TryReadHeader	suspect:early-return	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+236	src/system/synth_xbox/Voice.cpp:414-423	Voice::UpdateSends	suspect:unrecognised	dead	synth_xbox is not compiled natively
+237	src/system/ui/PanelDir.cpp:462-507	PanelDir::Enter	suspect:early-return	debug-optin	env/debug-gated; neutral by default (244: DC3_FAST_BOOT boot advance -- see leads)
+238	src/system/ui/UI.cpp:87-115		suspect:early-return	debug-optin	env/debug-gated; neutral by default (244: DC3_FAST_BOOT boot advance -- see leads)
+239	src/system/ui/UI.cpp:145-177	FailAppendCallback	suspect:early-return	image-page0	the image reads/writes guest page 0 and limps on; native returns the value the image would produce
+240	src/system/ui/UI.cpp:245-304	UIManager::Draw	suspect:hw-stub	renderer	native UI camera selection (WebGPU single pass)
+241	src/system/ui/UI.cpp:312-316	UIManager::Draw	suspect:extra-call	renderer	native UI camera selection (WebGPU single pass)
+242	src/system/ui/UI.cpp:454-462	UIManager::GotoScreenImpl	suspect:early-return	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+243	src/system/ui/UI.cpp:570-591	UIManager::OnGotoScreen	suspect:extra-call	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+244	src/system/ui/UI.cpp:655-739	UIManager::Poll	suspect:hw-stub	debug-optin	env/debug-gated; neutral by default (244: DC3_FAST_BOOT boot advance -- see leads)
+245	src/system/ui/UI.cpp:741-771	UIManager::Poll	suspect:forced-state	diag	diagnostic / corrupt-data abort / parse-depth guard
+246	src/system/ui/UI.cpp:789-793	UIManager::Poll	suspect:forced-state	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+247	src/system/ui/UIList.cpp:308-310	UIList::Enter	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+248	src/system/ui/UIList.cpp:317-319	UIList::Poll	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+249	src/system/ui/UIList.cpp:460-473	UIList::Refresh	suspect:forced-state	doc	already judged/fixed/kept in the pattern doc (or the controller-mode pin family it names)
+250	src/system/ui/UIList.cpp:679-681	UIList::Update	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+251	src/system/ui/UIListDir.cpp:21-38		suspect:early-return	debug-optin	env/debug-gated; neutral by default (244: DC3_FAST_BOOT boot advance -- see leads)
+252	src/system/ui/UIListDir.cpp:417-419	UIListDir::BuildDrawState	suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+253	src/system/ui/UIListDir.cpp:519-521	UIListDir::BuildDrawState	suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+254	src/system/ui/UIListMesh.cpp:158-164	UIListMeshElement::Draw	suspect:forced-state	renderer-workaround	undoes native RndMesh::DrawShowing skipping hidden named meshes (image DxMesh::DrawShowing has no Showing test) -- open lead
+255	src/system/ui/UIListMesh.cpp:173-177	UIListMeshElement::Draw	suspect:forced-state	renderer-workaround	undoes native RndMesh::DrawShowing skipping hidden named meshes (image DxMesh::DrawShowing has no Showing test) -- open lead
+256	src/system/ui/UIListSlot.cpp:118-120	UIListSlot::Draw	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+257	src/system/ui/UIListSlot.cpp:175-208	UIListSlot::Draw	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+258	src/system/ui/UIListSlot.cpp:228-232	UIListSlot::Fill	suspect:early-return	inert-measured	probe fired 0 times over perform + dance-battle routes
+259	src/system/ui/UIListSlot.cpp:240-244	UIListSlot::StartScroll	suspect:early-return	inert-measured	probe fired 0 times over perform + dance-battle routes
+260	src/system/ui/UIListSubList.cpp:47-50	UIListSubList::SubList	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+261	src/system/ui/UIListSubList.cpp:69-71	UIListSubList::Draw	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+262	src/system/ui/UIPanel.cpp:233-237	UIPanel::Load	suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+263	src/system/ui/UIScreen.cpp:92-100	UIScreen::SetTypeDef	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+264	src/system/ui/UIScreen.cpp:110-120	UIScreen::SetTypeDef	suspect:extra-call	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+265	src/system/ui/UIScreen.cpp:559-561	UIScreen::ReloadStrings	suspect:null-guard	image-fatal	differs only where the image has already failed a fatal MILO_ASSERT/MILO_FAIL or dereferences null (matched body)
+266	src/system/utl/BinStream.cpp:129-134	BinStream::PopRev	suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+267	src/system/utl/BinStream.cpp:216-221	BinStream::operator>>	suspect:extra-call	diag	diagnostic / corrupt-data abort / parse-depth guard
+268	src/system/utl/ChunkStream.h:83-90		suspect:forced-state	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+269	src/system/utl/Str.cpp:304-306	String::operator=	suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
+270	src/system/world/CameraManager.cpp:109-115	CameraManager::CalcFrame	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+271	src/system/world/CameraManager.cpp:237-264	CameraManager::Poll	suspect:forced-state	inert-measured	probe fired 0 times over perform + dance-battle routes
+272	src/system/world/CameraShot.cpp:288-294	CamShotFrame::ApplyScreenOffset	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+273	src/system/world/CameraShot.cpp:361-366	CamShotFrame::BuildTransform	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+274	src/system/world/CameraShot.cpp:524-527	CamShotFrame::Interp	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+275	src/system/world/CameraShot.cpp:531-534	CamShotFrame::Interp	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
+276	src/system/world/CameraShot.cpp:1407-1411	CamShot::SetFrame	suspect:null-guard	inert-measured	probe fired 0 times over perform + dance-battle routes
+277	src/system/world/Crowd3DCharHandle.cpp:54-59	WorldCrowd3DCharHandle::SyncProperty	suspect:handler	FIXED	WorldCrowd3DCharHandle::SyncProperty: empty BEGIN_PROPSYNCS
+278	src/system/world/Spotlight.cpp:749-751	Spotlight::BuildBoard	suspect:early-return	FIXED	Spotlight::BuildBoard early return: sDiskMesh never built
