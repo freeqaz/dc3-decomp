@@ -1918,6 +1918,22 @@ void MakeNormals(RndMesh *m) {
                             // registers -- which is the stop signal for the
                             // commutative-order lever: the backend picks the
                             // operand order here and source cannot reach it.
+                            // REFUTED (w9-f) -- and it is the y/z ORDER, not
+                            // Vec.h, that the four offset rows report.  Add()
+                            // ends in `dst.Set(v1.x+v2.x, v1.y+v2.y, v1.z+v2.z)`
+                            // and Vector3::Set assigns x, then y, then z, so the
+                            // source order is ALREADY the image's; MSVC reorders
+                            // the y and z halves on our side while inlining.
+                            // Expanding the call by hand to dodge the 3-argument
+                            // Set --
+                            //     Vector3 &norm = m->Verts()[i].norm;
+                            //     norm.x = norm.x + weighted.x;  (y, z likewise)
+                            // -- costs a callee-saved GPR for the reference and
+                            // collapses the function: 99.98799 -> 94.5 canonical,
+                            // 9 rows -> 86, the whole repVerts loop reallocated.
+                            // Do NOT reach for math/Vec.h here either: its order
+                            // is correct, it is PCH-reached, and there is nothing
+                            // in it to change.
                             Add(m->Verts()[i].norm, weighted, m->Verts()[i].norm);
                         }
                     }
