@@ -217,8 +217,40 @@ void SpotlightDrawer::DrawLenses(
     MILO_ASSERT(spotIter != spotEnd, 0x2b1);
     for (; spotEnd != spotIter; ++spotIter) {
         Spotlight *sl = spotIter->mSpotlight;
-        if (Spotlight::sDiskMesh) {
-            MILO_ASSERT(sl->LensMesh(), 0x2b9);
+        // The guard is the LENS MATERIAL and the assert is on sDiskMesh -- that
+        // is the image's nesting, not the other way round, and it is a
+        // BEHAVIOURAL correction (w8-q, 90.381 -> 100.0).  Decoded at
+        // 0x82823EEC..0x82823F54: `lwz r11,0x1ec(r25)` / `cmpwi cr6,r11,0` /
+        // `beq cr6,.L_82823F54` jumps straight to the loop LATCH, so a spotlight
+        // with no lens material is skipped entirely and never asserts; only then
+        // is `sDiskMesh` loaded (0x82823EFC) and `cmplwi`-tested, with
+        // `bne cr6,.L_82823F38` hopping over the line-0x2B9 Fail block.  So the
+        // image fails iff mLensMaterial != 0 && sDiskMesh == 0.  We had it
+        // inverted (guard on sDiskMesh, assert on LensMesh), which asserted on
+        // the wrong condition AND drew the disk mesh with a null material for
+        // every lens-less spotlight.  Spelling the image's nesting removed all 3
+        // inserts, all 3 deletes and the beq/bne inversion at once; RB3's
+        // SpotlightDrawer.cpp:DrawLenses has our old inverted shape, so it is not
+        // a reference here.
+        //
+        // HAND-EXPANDED ASSERT, and it has to be: the image's line-0x2B9 message
+        // string is "sl->LensMesh()" -- 14 chars, `??_C@_0P@ICJAFDBB@...` at
+        // 0x820e6400, the ONLY assert literal in world:SpotlightDrawer.obj -- and
+        // `_0P@` pins its length at 15 bytes including the NUL, so it cannot be
+        // the 21-byte "Spotlight::sDiskMesh" that MILO_ASSERT's `#cond` would
+        // produce for the condition the image actually tests.  There is no
+        // "Spotlight::sDiskMesh" literal anywhere in ham_xbox_r.map.  Harmonix
+        // moved the guard and left the old assert text behind; MILO_ASSERT
+        // stringifies its own condition and so cannot reproduce that, and
+        // `MILO_ASSERT(Spotlight::sDiskMesh, 0x2b9)` holds this row at 99.84127
+        // on exactly one charged relocation-name row.  The `if` form (rather than
+        // MILO_ASSERT's do/while) is free here: DrawLenses holds no
+        // function-local static, so the scope-ordinal difference between the two
+        // spellings has nothing to number.
+        if (sl->LensMesh()) {
+            if (!Spotlight::sDiskMesh) {
+                TheDebugFailer << MakeString(kAssertStr, __FILE__, 0x2b9, "sl->LensMesh()");
+            }
             Spotlight::sDiskMesh->SetMat(sl->LensMesh());
             Spotlight::sDiskMesh->Draw();
         }
