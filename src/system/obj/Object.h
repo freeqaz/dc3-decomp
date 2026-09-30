@@ -34,6 +34,17 @@ extern bool gInReplaceList;
 // ObjPtrList (heap node per element) can erase exactly like the image does.
 // ObjPtrVec cannot: its erase shifts the nodes the snapshot still points at.
 extern bool gInRefSnapshot;
+// ...and so, in the snapshot walk, a kObjListNoNull ObjPtrVec that loses a
+// node DEFERS its erase instead of dropping it: ReplaceNode registers the vec
+// here and the outermost ReplaceRefs erases its NULL nodes once no walk is
+// live. The image erases inside ReplaceNode; the vec ends the same call in the
+// same state. (Suppressing it outright left NULLs in no-null vectors for good,
+// e.g. a persistent Character's draw lists after FileMerger::Clear.)
+// ~ObjPtrVec forgets itself, so a vec destroyed mid-walk is never touched.
+typedef void (*DeferredVecCompactFn)(void *vec);
+void DeferVecCompact(void *vec, DeferredVecCompactFn compact);
+void ForgetVecCompact(void *vec);
+size_t PendingVecCompactCount(); // for tests
 
 /** Opt-in ref-ring audit (DC3_REFRING_AUDIT=1). Off by default and
  *  self-announcing on first use.
@@ -537,6 +548,20 @@ public:
     void swap(int, int);
     bool Load(BinStream &, bool, ObjectDir *);
     void clear() { mNodes.clear(); }
+#ifdef HX_NATIVE
+    /** Deferred half of ReplaceNode's kObjListNoNull erase (DeferVecCompact):
+     *  drop the NULL nodes a snapshot walk left, back to front so neither
+     *  erase mode moves a NULL into a slot already visited. */
+    static void CompactNulls(void *v) {
+        ObjPtrVec *vec = static_cast<ObjPtrVec *>(v);
+        if (vec->mListMode != kObjListNoNull)
+            return;
+        for (int i = (int)vec->mNodes.size() - 1; i >= 0; i--) {
+            if (!vec->mNodes[i].Obj())
+                vec->erase(iterator(vec->mNodes.begin() + i));
+        }
+    }
+#endif
     void reserve(unsigned int n) { mNodes.reserve(n); }
     void unique();
     void Set(iterator it, T1 *obj);

@@ -1955,6 +1955,7 @@ if(BUILD_TESTS)
         tests/test_merge_scope_parity.cpp
         tests/test_merge_lifecycle.cpp
         tests/test_cascade_ref_invariant.cpp
+        tests/test_async_unload_lifetime.cpp
         tests/test_archive_enumeration.cpp
         tests/test_mesh_loading.cpp
         tests/test_rndcam_projection.cpp

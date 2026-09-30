@@ -151,7 +151,11 @@ class Harvest:
 
     # ---- launch ----------------------------------------------------------------
     def launch(self):
-        binary = os.path.join(REPO, "native", "build", "dc3-native")
+        build_dir = os.path.join(REPO, "native", "build")
+        # --binary runs a saved executable (an A/B pair, a diagnostic build)
+        # from the same working directory the tree's own build would use.
+        binary = os.path.abspath(self.args.binary) if self.args.binary else \
+            os.path.join(build_dir, "dc3-native")
         if not os.access(binary, os.X_OK):
             print(f"error: {binary} not built", file=sys.stderr)
             sys.exit(2)
@@ -224,7 +228,7 @@ class Harvest:
             shutil.copy2(binary, pinned)
         self.binary = pinned
         self.logf = open(self.log_path, "wb")
-        self.proc = subprocess.Popen([binary], cwd=os.path.dirname(binary), env=env,
+        self.proc = subprocess.Popen([binary], cwd=build_dir, env=env,
                                      stdout=self.logf, stderr=subprocess.STDOUT)
         self.t0 = time.time()
         deadline = time.time() + 120
@@ -505,6 +509,9 @@ def main():
     ap.add_argument("--stall-timeout", type=int, default=180,
                     help="give up if the song beat has not advanced for this long")
     ap.add_argument("--post-timeout", type=int, default=900)
+    ap.add_argument("--binary", default=None,
+                    help="dc3-native executable to run (default: native/build/dc3-native); "
+                         "it is still launched from native/build")
     ap.add_argument("--analyse-only", action="store_true",
                     help="re-analyse an existing --out dir (needs stages.json)")
     args = ap.parse_args()

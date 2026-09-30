@@ -1556,4 +1556,88 @@ TEST_F(ObjectLifetimeTest, ObjPtrVecSwapLastOrderAfterNullify) {
     delete owner;
 }
 
+// A kObjListNoNull ObjPtrVec must lose the node of an object that dies through
+// the ordinary ReplaceRefs path (a plain delete outside a DeleteObjects
+// cascade -- every DirUnloader delete, FileMerger::Clear, ...). The image's
+// ReplaceNode erases it. Native used to SUPPRESS the erase for the whole
+// snapshot walk (erasing there shifts nodes the snapshot still points at), so
+// the vector kept a NULL for the rest of its life -- measured 2026-09-30 as
+// ~400 "suppressed erase" warnings per dance-battle exit, into Characters'
+// draw lists among others. The erase is now deferred to the end of the walk.
+TEST_F(ObjectLifetimeTest, ObjPtrVecNoNullDropsNodeOfObjectDeletedOutsideCascade) {
+    Hmx::Object *owner = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *a = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *b = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *c = Hmx::Object::New<Hmx::Object>();
+    {
+        ObjPtrVec<Hmx::Object> shiftVec(owner, kEraseShift, kObjListNoNull);
+        ObjPtrVec<Hmx::Object> swapVec(owner, kEraseSwapLast, kObjListNoNull);
+        // `a` twice in each: two of the snapshot's nodes live in the same
+        // buffer, which is exactly what made an in-walk erase unsafe.
+        for (Hmx::Object *o : { a, b, a, c }) {
+            shiftVec.push_back(o);
+            swapVec.push_back(o);
+        }
+        ASSERT_FALSE(ObjectDir::InDeleteObjects());
+        delete a; // ~Object -> ReplaceRefs(nullptr), the image's path
+
+        ASSERT_EQ(shiftVec.size(), 2) << "no-null vector kept NULL nodes";
+        EXPECT_EQ(shiftVec[0], b);
+        EXPECT_EQ(shiftVec[1], c);
+        ASSERT_EQ(swapVec.size(), 2) << "no-null vector kept NULL nodes";
+        for (int i = 0; i < swapVec.size(); i++)
+            EXPECT_NE(swapVec[i], nullptr);
+        EXPECT_NE(swapVec.find(b), swapVec.end());
+        EXPECT_NE(swapVec.find(c), swapVec.end());
+    }
+    delete b;
+    delete c;
+    delete owner;
+}
+
+// A vector destroyed while it has a deferred erase pending must never be
+// touched again: here the vec is owned by an object a Replace callback of the
+// same walk deletes.
+TEST_F(ObjectLifetimeTest, ObjPtrVecDestroyedMidWalkIsNotCompactedAfterward) {
+    struct VecHolder : public Hmx::Object {
+        VecHolder() : mVec(this, kEraseShift, kObjListNoNull) {}
+        ObjPtrVec<Hmx::Object> mVec;
+    };
+    // Its ObjPtr to `victim` deletes the holder when `victim` dies.
+    struct Killer : public Hmx::Object {
+        Killer(Hmx::Object *victim, VecHolder *holder)
+            : mTarget(this, victim), mHolder(holder) {}
+        bool Replace(ObjRef *from, Hmx::Object *to) override {
+            if (from == &mTarget && mHolder) {
+                VecHolder *h = mHolder;
+                mHolder = nullptr;
+                // Mid-walk: the holder's vec has a deferred erase pending.
+                mPendingBefore = PendingVecCompactCount();
+                delete h;
+                mPendingAfter = PendingVecCompactCount();
+                return true;
+            }
+            return Hmx::Object::Replace(from, to);
+        }
+        ObjOwnerPtr<Hmx::Object> mTarget;
+        VecHolder *mHolder;
+        size_t mPendingBefore = 0;
+        size_t mPendingAfter = 0;
+    };
+    Hmx::Object *victim = Hmx::Object::New<Hmx::Object>();
+    VecHolder *holder = new VecHolder();
+    holder->mVec.push_back(victim); // registered in victim's ring first
+    Killer killer(victim, holder);  // then the killer
+    ASSERT_EQ(PendingVecCompactCount(), 0u);
+    delete victim; // must not touch the freed holder's vector afterwards
+    ASSERT_EQ(killer.mHolder, nullptr) << "the killer's Replace never ran";
+    EXPECT_EQ(killer.mPendingBefore, 1u)
+        << "the holder's vec did not defer its erase (test is not exercising "
+           "the deferred path)";
+    EXPECT_EQ(killer.mPendingAfter, 0u)
+        << "a destroyed ObjPtrVec is still queued for compaction; the end of "
+           "the walk would erase through freed memory";
+    EXPECT_EQ(PendingVecCompactCount(), 0u);
+}
+
 } // namespace

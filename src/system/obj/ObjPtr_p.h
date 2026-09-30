@@ -263,6 +263,9 @@ ObjPtrVec<T1, T2>::Node::Node(const Node &n)
 
 template <class T1, class T2>
 ObjPtrVec<T1, T2>::~ObjPtrVec() {
+#ifdef HX_NATIVE
+    ForgetVecCompact(this);
+#endif
     mNodes.clear();
 }
 
@@ -276,10 +279,13 @@ void ObjPtrVec<T1, T2>::ReplaceNode(Node *n, Hmx::Object *obj) {
 #ifdef HX_NATIVE
             // During ReplaceList, erasing from the vector shifts subsequent
             // nodes via CopyRef, which modifies ring prev/next pointers and
-            // corrupts the ring walk. Suppress the erase; the null entry is
-            // cleaned up when the vector is destroyed or iterated.
+            // corrupts the ring walk. In ReplaceRefs' snapshot walk the erase
+            // is DEFERRED to the end of the outermost walk (see
+            // DeferVecCompact); in a live ReplaceList walk it is suppressed.
             if (!gInReplaceList) {
                 erase(iterator(mNodes.begin() + (n - mNodes.data())));
+            } else if (gInRefSnapshot) {
+                DeferVecCompact(this, &ObjPtrVec::CompactNulls);
             } else {
                 MILO_WARN("ReplaceNode: suppressed erase during ReplaceList (owner=%s)",
                     mOwner ? PathName(mOwner) : "<null>");
