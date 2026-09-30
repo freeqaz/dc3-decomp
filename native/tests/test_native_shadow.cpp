@@ -19,6 +19,7 @@
 #include "obj/Object.h"
 #include "utl/LocaleChunkSort.h"
 #include "math/Rand.h"
+#include "utl/Loader.h"
 
 #include <cstdlib>
 #include <vector>
@@ -244,6 +245,46 @@ TEST(NativeShadowUnit, RandomShuffleIsDrivenByCrtRand) {
     for (int i = 1; i < 16; i++)
         std::swap(c[i], c[rand() % (i + 1)]);
     EXPECT_EQ(a, c);
+}
+
+// ---------------------------------------------------------------------------
+// LoadMgr::PollFrontLoader publishes the front loader's position in
+// mLoaderPos for the duration of its PollLoading (Loader.s: 827D1314 lwz
+// r21,0x5c(r26) saves it; 827D1318/1C lwz r11,0x8(r30); stw r11,0x5c(r26)
+// sets it from front->mPos; 827D1558 stw r21,0x5c(r26) restores it).
+// ObjDirPtr::LoadFile / LoadInlinedFile read it (Dir.h:196/235) to keep a
+// StayBack loader's sub-dir loads at the back. The native body dropped the
+// save/set/restore, so GetLoaderPos() was always kLoadFront natively and
+// StayBack children jumped the queue.
+// ---------------------------------------------------------------------------
+class PosProbeLoader : public Loader {
+public:
+    PosProbeLoader(LoaderPos pos)
+        : Loader(FilePath("native_shadow_probe.bin"), pos), mDone(false),
+          mSeen((LoaderPos)-1) {}
+    virtual const char *DebugText() { return "native_shadow_probe"; }
+    virtual bool IsLoaded() const { return mDone; }
+    bool mDone;
+    LoaderPos mSeen;
+
+protected:
+    virtual void PollLoading() {
+        mSeen = TheLoadMgr.GetLoaderPos();
+        mDone = true;
+    }
+};
+
+TEST_F(NativeShadowTest, PollFrontLoaderPublishesTheLoadersPosition) {
+    ASSERT_TRUE(TheLoadMgr.Loading().empty()) << "test needs an idle LoadMgr";
+    LoaderPos before = TheLoadMgr.GetLoaderPos();
+    PosProbeLoader *probe = new PosProbeLoader(kLoadStayBack);
+    ASSERT_EQ(TheLoadMgr.GetFirstLoading(), probe);
+    TheLoadMgr.PollUntilLoaded(probe, nullptr);
+    EXPECT_TRUE(probe->mDone);
+    EXPECT_EQ(probe->mSeen, kLoadStayBack)
+        << "a StayBack loader must see kLoadStayBack while it polls";
+    EXPECT_EQ(TheLoadMgr.GetLoaderPos(), before) << "position must be restored";
+    delete probe;
 }
 
 } // namespace

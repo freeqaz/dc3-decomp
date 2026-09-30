@@ -290,10 +290,24 @@ Loader *LoadMgr::ForceGetLoader(const FilePath &fp) {
 }
 
 #ifdef HX_NATIVE
+// The image's body minus its debug-only parts (the AutoGlitchReport hang
+// watchdog and the ark-order timing log). The save/set/restore of
+// mLoaderPos and the heap push are NOT debug: ObjDirPtr::LoadFile /
+// LoadInlinedFile read GetLoaderPos() while the front loader polls, to keep
+// a StayBack loader's sub-dir loads at the back (Loader.s 827D1314 save,
+// 827D1318/1C set from front->mPos, 827D1558 restore). An earlier native
+// body dropped them, so GetLoaderPos() was always kLoadFront natively.
+// The empty-list guard is native-only (the image would deref front()).
 void LoadMgr::PollFrontLoader() {
-    if (!mLoading.empty()) {
-        mLoading.front()->PollLoading();
-    }
+    if (mLoading.empty())
+        return;
+    Loader *front = mLoading.front();
+    LoaderPos savedPos = mLoaderPos;
+    mLoaderPos = front->mPos;
+    MemPushHeap(front->mHeap);
+    front->PollLoading();
+    MemPopHeap();
+    mLoaderPos = savedPos;
 }
 #else
 // Known residual, 3 rows, all of them the frame size: the image reserves 0x130
