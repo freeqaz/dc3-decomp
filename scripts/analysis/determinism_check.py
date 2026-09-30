@@ -141,6 +141,16 @@ CASES: list[tuple[str, list[str]]] = [
     # from a sorted source.  Agreed with itself, and across PYTHONHASHSEED, on
     # the day it was added.
     ("pointer_disp_scan",     ["python3", "scripts/analysis/pointer_disp_scan.py"]),
+    # Added 2026-09-30 (det-arith).  The slowest entry: one sharded objdiff
+    # --batch pass over all 48,365 report functions, ~2-3 min/run with 12
+    # workers.  It earns the seat because its output is a CANDIDATE list for a
+    # bug class the canonical ruler forgives (register-only rows), and its
+    # shard results are merged from a process pool -- `ex.map` preserves
+    # submission order, and the per-function pass iterates `sorted(universe)`;
+    # a nondeterministic merge would move rows between runs.  The watchdog
+    # (--idle-timeout) is the one timing-dependent input: a symbol it gives up
+    # on is NAMED in the coverage block, so a flake is visible, not silent.
+    ("arith_semantics_scan",  ["python3", "scripts/analysis/arith_semantics_scan.py"]),
     # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
     # oracles -- the class of tool whose nondeterminism reads as "this class is
     # exhausted" -- and none of them had ever been checked.  All four agreed
