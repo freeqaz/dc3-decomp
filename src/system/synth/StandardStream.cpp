@@ -754,11 +754,29 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     }
 
     int samplesToConsume = numSamples;
-    if (mJumpFromSamples != 0 && mJumpFromSamples != kStreamEndSamples) {
-        MILO_ASSERT(mCurrentSamp <= mJumpFromSamples, 0x1CF);
-        int remaining = mJumpFromSamples - mCurrentSamp;
-        if (remaining < samplesToConsume) {
-            samplesToConsume = remaining;
+    // Jump cap, as the image computes it (82770D80..82770E08): only a positive
+    // jump-from caps. A forward jump (from < to) caps only while cur < to --
+    // DoJump() leaves an in-memory jump armed with cur = to > from, and the
+    // stream must keep flowing past it; from < cur < to consumes nothing.
+    // from == to takes no cap. Only a backward jump asserts cur <= from. The
+    // remaining-count compare is unsigned (82770E00 cmplw), so a negative
+    // remainder never caps.
+    if (mJumpFromSamples > 0) {
+        if (mJumpFromSamples < mJumpToSamples) {
+            if (mCurrentSamp < mJumpToSamples) {
+                if (mCurrentSamp > mJumpFromSamples) {
+                    samplesToConsume = 0;
+                } else {
+                    int remaining = mJumpFromSamples - mCurrentSamp;
+                    if ((unsigned int)remaining < (unsigned int)samplesToConsume)
+                        samplesToConsume = remaining;
+                }
+            }
+        } else if (mJumpFromSamples > mJumpToSamples) {
+            MILO_ASSERT(mCurrentSamp <= mJumpFromSamples, 0x1CF);
+            int remaining = mJumpFromSamples - mCurrentSamp;
+            if ((unsigned int)remaining < (unsigned int)samplesToConsume)
+                samplesToConsume = remaining;
         }
     }
 
