@@ -1735,7 +1735,8 @@ def selftest():
                 ("beq @5", None), ("bl Baz", "bl Baz"), ("stw r3, 0x14(r31)", None),
                 ("li r3, 0x0", "li r3, 0x0"), ("blr", "blr"),
                 ("stw r11, 0x18(r3)", None), ("stw r11, 0x1c(r3)", None),
-                ("stw r11, 0x20(r3)", None)]
+                ("stw r11, 0x20(r3)", None)] + [(f"stw r11, {hex(0x24 + 4 * i)}(r3)", None)
+                                                for i in range(8)]
     check("NEGATIVE CONTROL: a SHORT real body that lost its only guard "
           "(`if (x) Baz();` written `Baz();`) is not a stub -> stays ONE-SIDED",
           _classify(stub_bug), ["ONE-SIDED"])
