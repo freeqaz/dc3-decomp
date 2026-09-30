@@ -27,6 +27,9 @@
 #include "os/File.h"
 #include "audio/AudioDevice.h"
 #include "platform/StreamReceiver_Native.h"
+#include "rndobj/Cam.h"
+#include "rndobj/Rnd_NG.h"
+#include "rndobj/Tex.h"
 #include "synth/StandardStream.h"
 #include "synth/Synth.h"
 
@@ -190,6 +193,37 @@ TEST_F(NativeAudioSeekTest, WithoutADeviceTheDecodePositionKeepsAheadOfSongTime)
         << "the decode position fell behind song time: nothing played the rings";
     EXPECT_FALSE(s->IsPastStreamJumpPointOfNoReturn());
     delete s;
+}
+
+// NgRnd::Offscreen() is "the current render target is not the back buffer"
+// (the image's DxRnd::Offscreen, rnddx9/Rnd.s 8260FE78: GetRenderTarget(0) !=
+// BackBuffer()). A RndTexRenderer renders to a texture by selecting a camera
+// with a target texture, and there the image reads true. Natively it was
+// NgRnd's `return false` stub, and Character::DrawShowing gates its self-shadow
+// on !Offscreen(): a character drawn into a texture prepped its self-shadow,
+// whose extrude pass (Character::DrawLodOrShadow mode 4, no mShadow ->
+// DrawOpaque) reached a forced CharTransDraw that draws the character itself,
+// forever. Measured on the party route after Strike a Pose: a 161,000-frame
+// stack overflow, RndTexRenderer::DrawToTexture -> player0 ->
+// projection_trans_draw.td -> player0 -> ...
+TEST(NativeAudioSeekRender, OffscreenWhileACameraRendersToATexture) {
+    EnsureEngineInit();
+    RndCam *prev = RndCam::Current();
+    RndCam *cam = Hmx::Object::New<RndCam>();
+    RndTex *tex = Hmx::Object::New<RndTex>();
+    cam->Select();
+    EXPECT_FALSE(TheNgRnd.Offscreen()) << "a camera with no target draws to the screen";
+    cam->SetTargetTex(tex);
+    cam->Select();
+    EXPECT_TRUE(TheNgRnd.Offscreen()) << "a camera with a target texture draws offscreen";
+    cam->SetTargetTex(nullptr);
+    EXPECT_FALSE(TheNgRnd.Offscreen());
+    if (prev)
+        prev->Select();
+    else
+        RndCam::ClearCurrent();
+    delete cam;
+    delete tex;
 }
 
 } // namespace

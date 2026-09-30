@@ -56,7 +56,13 @@ public:
     virtual void DrawRectDepth(
         const Vector3 &, const Vector3 (&)[4], const Vector4 &, RndMat *, ShaderType
     ) {}
+#ifdef HX_NATIVE
+    // Native: the image's DxRnd::Offscreen answer, "the current render target
+    // is not the back buffer" -- see Rnd_NG.cpp.
+    virtual bool Offscreen() const;
+#else
     virtual bool Offscreen() const { return false; }
+#endif
     virtual RndTex *PreProcessTexture() { return nullptr; } // 0x12c
     virtual RndTex *PostProcessTexture() { return nullptr; }
     virtual RndTex *PreDepthTexture() { return nullptr; }
