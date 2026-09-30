@@ -29,6 +29,7 @@
 
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "rndobj/Trans.h"
 #include "synth/Pollable.h"
 #include "synth/SampleInst.h"
 #include "synth/SynthSample.h"
@@ -186,6 +187,41 @@ TEST_F(AsyncUnloadLifetimeTest, InstDeletedDuringAsyncUnloadUnregistersFromSampl
            "and ~SynthSample will call Stop(true) through it";
     if (sample->NumInsts() != 0)
         sample->ForgetInsts(); // failing run: keep the drain from a use-after-free
+
+    DrainLoaders();
+    EXPECT_TRUE(TheLoadMgr.Loading().empty());
+}
+
+// Same contract, second holder: RndTransformable's parent/child links.  The
+// child's mParent is an ObjOwnerPtr in the PARENT's ref ring, and
+// ~RndTransformable removes the child from the parent's mChildren through it.
+// If the async unload nulls mParent while both are still queued, the
+// DirUnloader's later delete of the child cannot unlink it, and the parent's
+// ~RndTransformable walks mChildren into the freed child -- the
+// "SIGSEGV in RndTransformable::~RndTransformable via RndGroup <-
+// DirUnloader::PollLoading" seen once leaving a song (2026-09-30).
+TEST_F(AsyncUnloadLifetimeTest, ChildDeletedDuringAsyncUnloadLeavesItsParent) {
+    ObjectDir *dir = Hmx::Object::New<ObjectDir>();
+    dir->SetName("async_trans_dir", ObjectDir::Main());
+    RndTransformable *parent = Hmx::Object::New<RndTransformable>();
+    parent->SetName("group", dir);
+    RndTransformable *child = Hmx::Object::New<RndTransformable>();
+    child->SetName("member", dir);
+    child->SetTransParent(parent, false);
+    ASSERT_EQ(parent->Children().size(), 1u);
+
+    DeleteDirAsync(dir);
+    ASSERT_FALSE(TheLoadMgr.Loading().empty()) << "no DirUnloader was queued";
+
+    EXPECT_EQ(child->TransParent(), parent)
+        << "a live child's mParent was nulled while its parent is still alive";
+    delete child; // as the DirUnloader would, one object per poll
+
+    EXPECT_TRUE(parent->Children().empty())
+        << "the deleted child is still in its parent's mChildren; the parent's "
+           "~RndTransformable will write through it";
+    if (!parent->Children().empty())
+        const_cast<std::list<RndTransformable *> &>(parent->Children()).clear();
 
     DrainLoaders();
     EXPECT_TRUE(TheLoadMgr.Loading().empty());
