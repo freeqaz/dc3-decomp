@@ -287,6 +287,15 @@ bool BinStream::WaitUntilReady(int sleepMs) {
 //     reverted rather than landed unverified).
 // The temp is manufactured inside STLport's `_VECTOR_IMPL(const allocator_type&
 // __a = allocator_type())` default-argument expansion, not at this call site.
+// w9-b re-measured two of the three negatives above independently (both still
+// exactly inert at 94.73684): `new std::vector<ObjVersion>` without the `()`,
+// and the allocation through a named local.  One NEW negative, also inert:
+// naming the ObjVersion temporary (`ObjVersion rev(revs, obj);
+// mRevStack->push_back(rev);`).  Confirms the diagnosis: the dead slot is not
+// produced by anything at this call site, so the remaining lead is STLport's
+// own ctor shape in src/system/stlport/stl/_vector.h:226 -- and that header is
+// PCH-reached by 574 TUs, so it needs a whole-binary A/B in both directions
+// before anyone touches it, not a local edit.
 void BinStream::PushRev(int revs, Hmx::Object *obj) {
     if (!mRevStack) {
         mRevStack = new std::vector<ObjVersion>();
