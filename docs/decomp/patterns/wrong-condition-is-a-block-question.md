@@ -93,8 +93,9 @@ On a re-run at `731b6137f` the pile was **201 rows in 65 functions** (the tree
 had moved three functions since the 204/68 count). Every function was traced
 against its listing. **No real bug.** One decompilation-introduced guard was
 found, and it was dead (`MoveDir::UpdateOverlay`). Removing it measured
-87.3115 -> 87.5363 (`3ae5a6ad5`), but that change was reverted in
-`a870924b1` and handed over rather than landed, because the MoveDir unit was
+87.3115 -> 87.5363 (commit "MoveDir::UpdateOverlay: drop a setSize > 0 guard
+the image does not have"), but that change was reverted on the same branch
+and handed over rather than landed, because the MoveDir unit was
 held by a concurrent wave. The refutations fall into nine classes. The
 first four now have a recogniser in the scanner (see the next section).
 
@@ -128,10 +129,13 @@ leaves the row ONE-SIDED.
 | `agree-via-jump` | 8 | the other side has an unconditional `b` within 4 rows whose destination (after <= 4 non-branch instructions) is a conditional branch. Its producer sits between the destination and the branch, or before the `b`; `agree` |
 | `RETEST` | 9 | this side compared the same register(s) the same way (same immediate or operand pair) earlier, found by a LINEAR walk with no redefinition in between. **This is an artifact label, not a dominance proof.** The row still lists under `--show-recognised` |
 
-ONE-SIDED went from **201 to 86 rows** (65 to 38 functions) at `d511959ff`. All
+ONE-SIDED went from **201 to 86 rows** (65 to 38 functions) on the `731b6137f` tree. All
 10,857 other rows and the drop table stayed byte-identical. The
 UpdateOverlay guard is still in the source, so its row still counts under
-RETEST (9). What is left is
+RETEST (9). Re-measured after rebasing onto `dd879cdfd`, where the w9 waves
+had closed `DxMesh::DrawFur`, `SkeletonHistory::PrevFromArchive` and others:
+197 one-sided rows, 85 still ONE-SIDED (37 functions). The other 112 were
+moved: STUB-BODY 69, agree-relocated 27, agree-via-jump 7, RETEST 9. What is left is
 mostly out-of-scope rows (DrawShowing 29, fft_altivec 13), the
 if-conversion/select class, and rotated loops whose guard's producer is not
 on its own fall-through chain.
