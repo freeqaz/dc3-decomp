@@ -87,7 +87,10 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120) {
     }
 
     std::ostringstream cmd;
+    // DC3_TEL at interval 1: GameplayReachesPlayingState reads the real
+    // hamprovider game_stage off the per-frame telemetry line.
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
+        << " DC3_TEL=1 DC3_TEL_INTERVAL=1"
         << " MILO_INPUT_SCRIPT=" << script
         << " MILO_MAX_FRAMES=" << maxFrames
         << " timeout " << timeout << " " << binary << " 2>&1";
@@ -220,10 +223,35 @@ TEST_F(DtaFlowTest, HamDirectorActivates) {
 }
 
 TEST_F(DtaFlowTest, GameplayReachesPlayingState) {
-    // StartGame() sets game_stage to 'playing' after all loading completes
-    EXPECT_TRUE(outputContains("game_stage set to 'playing'"))
-        << "game_stage never reached 'playing' — StartGame() didn't fire "
-        << "or loading stalled before gameplay could begin";
+    // hamprovider game_stage becomes `playing` for real, and only when the
+    // intro is over: Game::Poll sends intro_over once the song clock crosses 0
+    // ("Game::Poll: intro timer expired"), and the mode's DTA handler sets it
+    // (game_modes.dta `intro_over`: {hamprovider set game_stage playing},
+    // skipped only in rhythm_battle).  The image's GamePanel::StartGame
+    // (HasIntro/Start, SetInGame, mState = kGamePlaying) sets no property.
+    //
+    // A native-only SetProperty(game_stage, playing) in StartGame -- which
+    // runs ~25 ms of song time EARLIER, at TaskMgr seconds > -0.025 -- used to
+    // be what this test looked for (its log line).  It clobbered the intro
+    // stage for every mode (rhythm_battle's intro, holla_back's `title`), so
+    // this now asserts the real state AND its order: no telemetry sample may
+    // read gameStage=playing before intro_over was sent.  Both lines go to
+    // stderr, so their order in the captured output is the order they ran.
+    const std::string &out = sResult.output;
+    size_t introOver = out.find("Game::Poll: intro timer expired");
+    size_t firstPlaying = out.find("gameStage=playing");
+    ASSERT_NE(firstPlaying, std::string::npos)
+        << "no telemetry sample ever read gameStage=playing -- the intro_over "
+           "DTA handler never ran, or loading stalled before gameplay";
+    ASSERT_NE(introOver, std::string::npos)
+        << "Game::Poll never sent intro_over (no 'intro timer expired')";
+    EXPECT_GT(firstPlaying, introOver)
+        << "game_stage read 'playing' before intro_over was sent: something "
+           "other than the mode's intro_over handler forced it";
+    size_t lineStart = out.rfind('\n', firstPlaying);
+    std::string line = out.substr(lineStart + 1, firstPlaying - lineStart);
+    EXPECT_NE(line.find("screen=game_screen"), std::string::npos)
+        << "first gameStage=playing sample was not on game_screen:\n" << line;
 }
 
 TEST_F(DtaFlowTest, NoCrashCleanExit) {

@@ -620,12 +620,6 @@ void GamePanel::StartGame() {
     }
     ThePresenceMgr.SetInGame(TheHamSongMgr.GetSongIDFromShortName(TheGameData->GetSong()));
     mState = kGamePlaying;
-#ifdef HX_NATIVE
-    // SongSequence::Play also sets game_stage to "playing", but on native
-    // the intro sequence may be skipped — set it explicitly as a fallback.
-    TheHamProvider->SetProperty("game_stage", Symbol("playing"));
-    fprintf(stderr, "DC3 Native: StartGame() — game_stage set to 'playing'\n");
-#endif
 }
 
 void GamePanel::CheatPause(bool b1) {
