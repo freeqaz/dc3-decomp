@@ -138,15 +138,26 @@ int *FixedSizeAlloc::RawAlloc(int size) {
         // relocation, which costs PoolAllocInit's `FindData("big_hunk", ...)`
         // row -- measured: RawAlloc 98.036 / PoolAllocInit 99.583 for the
         // aggregate vs RawAlloc 98.214 / PoolAllocInit 100.0 for this form.
+#ifdef HX_NATIVE
+        // Native addresses the two sizes by name.  The Xenon form below reads
+        // gSmallHunk as &gBigHunk + 1, which is only defined because MSVC lays
+        // this TU's two .data ints out adjacently; the C++ object model does not
+        // promise it, and clang is free to place them apart.
+        int &bigHunk = gBigHunk;
+        int &smallHunk = gSmallHunk;
+#else
         int *hunkSizes = &gBigHunk; // [0] is gBigHunk, [1] is gSmallHunk
+        int &bigHunk = hunkSizes[0];
+        int &smallHunk = hunkSizes[1];
+#endif
         if (MemNumHeaps() > 0) {
-            if (hunkSizes[0] == hunkSizes[1]) {
+            if (bigHunk == smallHunk) {
                 printf("PoolAlloc warning: allocating small pool chunk\n");
             }
             MemPushHeap(0);
         }
 
-        sPoolBuf = (int *)_MemAllocTemp(hunkSizes[0], __FILE__, 0x71, "PoolChunk", 0);
+        sPoolBuf = (int *)_MemAllocTemp(bigHunk, __FILE__, 0x71, "PoolChunk", 0);
 
         if (MemNumHeaps() > 0) {
             MemPopHeap();
@@ -157,8 +168,8 @@ int *FixedSizeAlloc::RawAlloc(int size) {
         // once again after MemPopHeap, which is what a plain global read either
         // side of an opaque call produces.
         buf = sPoolBuf + 0x10;
-        sPoolEnd = sPoolBuf + (hunkSizes[0] >> 2);
-        hunkSizes[0] = hunkSizes[1];
+        sPoolEnd = sPoolBuf + (bigHunk >> 2);
+        bigHunk = smallHunk;
     }
 
     sPoolBuf = buf + words;
