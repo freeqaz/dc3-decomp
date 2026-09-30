@@ -155,7 +155,7 @@ COUNTED = ("register-only", "displacement", "stack-displacement", "compare",
            "branch", "relocation", "addi-address", "li-constant", "li-misaligned",
            "bit-test-encoding", "flag-bit-renumbering", "const-reordered",
            "sign-folded-literal", "operand-exchanged", "cond-mask-equivalent",
-           "swap-zero-tested", "bool-mask",
+           "swap-zero-tested", "bool-mask", "const-folded",
            "disjoint-or-add", "insert-fusion", "strength-reduction",
            "reciprocal-fold", "fsel-lowering", "multi-atom", "other-opcode")
 
@@ -633,9 +633,7 @@ def operand_swap(t, b, ctx):
         other, or value-equivalent (GlitchPoker::Dump loads the two fsubs
         operands in the opposite ORDER, so the alignment pairs each load with
         the other one -- but the values are the same)."""
-        if da is None or ea is None:
-            return False
-        return t2b.get(da) == ea or _value_equivalent(tseq[da], bseq[ea], da, ea, ctx5)
+        return val_eq(tseq, da, bseq, ea)
 
     if pos:
         ta, tb = t["regs"][1], t["regs"][2]
@@ -775,6 +773,84 @@ def rlw_src_mask(rlw):
     return ((mask >> sh) | (mask << (32 - sh))) & 0xFFFFFFFF if sh else mask
 
 
+def _src_regs(c):
+    """Every register VALUE an instruction reads, base registers included."""
+    o = c["op"]
+    mb = _mem_base(o)
+    if mb is not None:
+        if o.startswith("st"):
+            return c["regs"][:]
+        return c["regs"][1:]
+    if BRANCH_RE.match(o) or o in COMPARE_OPS or o in TRAP_OPS:
+        return c["regs"][:]
+    return c["regs"][1:]
+
+
+def _spill_source(seq, i):
+    """For a load from r1+K, the (index, register) of the last store to r1+K
+    before it on the same side, else None."""
+    c = seq[i]
+    mb = _mem_base(c["op"])
+    if mb is None or not c["op"].startswith("l") or c["syms"] or len(c["regs"]) < 2 \
+            or c["regs"][-1] != "r1" or not c["imms"]:
+        return None
+    k = c["imms"][0]
+    for j in range(i - 1, max(-1, i - 64), -1):
+        x = seq[j]
+        if x["op"].startswith("st") and _mem_base(x["op"]) is not None and \
+                len(x["regs"]) >= 2 and x["regs"][-1] == "r1" and x["imms"] and \
+                x["imms"][0] == k:
+            return (j, x["regs"][0])
+        if _is_call(x):
+            return None
+    return None
+
+
+def val_eq(tseq, da, bseq, ea, depth=3):
+    """Do target instruction `da` and base instruction `ea` compute the same
+    value?  A bounded VALUE-NUMBERING comparison: same canonical op,
+    immediates and symbols, and every source register's reaching definition
+    equal in turn (commutative pairs compared either way round).  An aligned
+    row is NOT assumed equal -- objdiff aligns `add r9,r10,r27` with
+    `add r9,r10,r26` (RhythmDetector SetupFrame), and trusting that alignment
+    made two correctly-ordered subtractions look swapped."""
+    if da is None or ea is None:
+        return False
+    x, y = tseq[da], bseq[ea]
+    # A reload from a stack slot is the value last STORED there (the
+    # int->float `std; lfd; fcfid` idiom goes through memory).  Two loads of
+    # 0x58(r1) are not equal if the two sides stored different values there
+    # (CharBonesSamples::EvaluateChannel).
+    sx, sy = _spill_source(tseq, da), _spill_source(bseq, ea)
+    if sx is not None or sy is not None:
+        if sx is None or sy is None:
+            return False
+        (xi, xr), (yi, yr) = sx, sy
+        return val_eq(tseq, last_def(tseq, xi, xr), bseq, last_def(bseq, yi, yr), depth)
+    if x["op"] == "mr" and len(x["regs"]) == 2:
+        return val_eq(tseq, last_def(tseq, da, x["regs"][1]), bseq, ea, depth)
+    if y["op"] == "mr" and len(y["regs"]) == 2:
+        return val_eq(tseq, da, bseq, last_def(bseq, ea, y["regs"][1]), depth)
+    if not (x["op"] == y["op"] and x["imms"] == y["imms"] and x["syms"] == y["syms"]):
+        return False
+    xs, ys = _src_regs(x), _src_regs(y)
+    if len(xs) != len(ys):
+        return False
+    if depth == 0:
+        return True
+
+    def one(xr, yr):
+        dx, dy = last_def(tseq, da, xr), last_def(bseq, ea, yr)
+        if dx is None and dy is None:
+            return xr == yr                 # both function inputs
+        return val_eq(tseq, dx, bseq, dy, depth - 1)
+
+    if x["op"] in COMMUTATIVE and len(xs) == 2:
+        return (one(xs[0], ys[0]) and one(xs[1], ys[1])) or \
+               (one(xs[0], ys[1]) and one(xs[1], ys[0]))
+    return all(one(a, b) for a, b in zip(xs, ys))
+
+
 def _value_equivalent(x, y, xi=None, yi=None, ctx=None):
     """Two defining instructions compute the same value as far as a single
     instruction can say: same canonical op, immediates and symbols (registers
@@ -868,8 +944,7 @@ def operand_source(t, b, ctx):
             x = tseq[da]
             if _is_call(x):
                 continue
-            if any(_value_equivalent(x, bseq[ea], da, ea, ctx) or _is_call(bseq[ea])
-                   for _, ea in bdefs):
+            if any(_is_call(bseq[ea]) or val_eq(tseq, da, bseq, ea) for _, ea in bdefs):
                 continue
             br, ea = bdefs[tdefs.index((tr, da))]
             return (f"operand {tr} vs {br}: the image's value comes from "
@@ -958,6 +1033,25 @@ def only_zero_tested(seq, i):
         if d in writes(x):
             return False
     return False
+
+
+def folded_addi(seq, i):
+    """`addi d,s,4 ; addi d,d,4` is `addi d,s,8` (RndMultiMesh::CollideList,
+    CamShotCrowd::GetSelectedCrowd): fold the immediately following
+    same-register increments into one immediate."""
+    c = seq[i]
+    if c["op"] != "addi" or not c["imms"] or not c["regs"]:
+        return None
+    total = c["imms"][0]
+    d = c["regs"][0]
+    for j in range(i + 1, min(len(seq), i + 4)):
+        x = seq[j]
+        if x["op"] == "addi" and x["regs"][:2] == [d, d] and x["imms"] and not x["syms"]:
+            total += x["imms"][0]
+            continue
+        if d in x["regs"]:
+            break
+    return total
 
 
 def analyse_function(rows):
@@ -1065,6 +1159,10 @@ def analyse_function(rows):
                 ub = addi_use(bseq, bi)
                 if "address" in (ut, ub):
                     buckets["addi-address"] += 1
+                    continue
+                ft, fb_ = folded_addi(tseq, ti), folded_addi(bseq, bi)
+                if ft is not None and ft == fb_:
+                    buckets["const-folded"] += 1
                     continue
                 if t["imms"] and b["imms"] and t["imms"][0] == -b["imms"][0]:
                     buckets["int-op"] += 1
@@ -1600,6 +1698,12 @@ def selftest():
                     E("cntlzw", "r11, r11")])
     check("subf swap feeding cntlzw -> swap-zero-tested", fb == []
           and b["swap-zero-tested"] == 1)
+    # addi 4 ; addi 4  ==  addi 8
+    fb, b, _ = run([E("add", "r9, r9, r11"),
+                    ("diff_arg", _S("addi", "r8, r9, 0x4"), _S("addi", "r8, r9, 0x8")),
+                    ("delete", _S("addi", "r8, r8, 0x4"), None),
+                    E("cmplw", "r9, r8")])
+    check("addi 4;addi 4 vs addi 8 -> const-folded", fb == [] and b["const-folded"] == 1)
     # extsb vs clrlwi 24
     fb, _, _ = run([("replace", _S("extsb", "r3, r3"), _S("clrlwi", "r3, r3, 24"))])
     check("extsb vs clrlwi 24 -> signedness", fb == ["signedness"])
