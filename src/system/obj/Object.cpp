@@ -636,8 +636,9 @@ void Hmx::Object::ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *to) {
 #else
         if (it->RefOwner() == from) {
 #endif
-            it->Release(&other);
-            other.AddRef(it);
+            // move `it` from mRefs to the end of `other`, then resume from
+            // its old predecessor in mRefs
+            it = it->MoveBefore(&other);
         }
     }
     other.ReplaceList(to);
