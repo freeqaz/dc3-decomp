@@ -780,17 +780,17 @@ void VorbisReader::Poll(float until) {
             while (timer.Ms() < until || first) {
                 first = false;
                 // Step 1: Push any decoded PCM to ring buffers.
-                // startSamp = -1 ("sequential, no position claim"), matching the
-                // Xbox reader: its unk100 stays -1 except in an unused edge path,
-                // so StandardStream::mCurrentSamp accumulates monotonically and
-                // DoJump()/Play() alone reposition it. We used to pass
-                // granulepos - pcmAvail here, but granulepos resets on every
-                // loop-wrap DoRawSeek (vorbis_synthesis_restart) and jumps to
-                // absolute file positions after seeks, so looping MoggClips
-                // (shell/venue ambience, crowd beds) snapped mCurrentSamp
-                // backward/forward every wrap ("sample mismatch" spam) and a
-                // bogus snap can fire or starve the SetLoop jump logic
-                // (mJumpFromSamples - mCurrentSamp) => audible glitches.
+                // startSamp = -1: no position claim. The image does claim one: it
+                // anchors unk100 to the first granule after every reset (DoRawSeek)
+                // and passes unk100 + unk108, so StandardStream::ConsumeData would
+                // snap mCurrentSamp to it on a mismatch. Measured on native-notables
+                // (practice + party routes, 762 anchors: mid-song starts, loop
+                // wraps, stream jumps): never a mismatch -- DoSeek's mSamplesToSkip
+                // lands exactly on the OggMap sample the decoder restarts at, so
+                // the image's snap has nothing to do. (An earlier native version
+                // passed granulepos - pcmAvail on EVERY call; that is not the
+                // image's anchor-once rule, and it did spam "sample mismatch".)
+                // native-shadow-bodies-are-unmeasured.md, "Notables re-adjudicated".
                 {
                     float **pcm;
                     int pcmAvail = vorbis_synthesis_pcmout(mVorbisDsp, &pcm);
