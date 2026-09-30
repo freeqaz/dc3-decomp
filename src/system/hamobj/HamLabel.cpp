@@ -88,6 +88,19 @@ void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
     // push_back -- so that the sum, not the parameter, is the value whose live
     // range opens first -- is equally inert: same 5 rows, same f30/f31
     // assignment, 99.96.  The allocator is not reading source live-range order.
+    // NEGATIVE RESULT (w9-a): five more spellings, each a full ninja.  Four are
+    // exactly inert at 99.95556 with the same 5 rows -- an explicit `float base
+    // = f3;` copy at the top so the product's live range opens first, both
+    // floats declared (uninitialised) at the top and assigned later, and two
+    // NAMED `Key<float>` temporaries instead of unnamed arguments.  Two are
+    // worse and say what the shape is load-bearing for: hoisting the
+    // UISeconds()*1000 product ABOVE mCountKeys.clear() is 64.644 (it has to be
+    // computed after the clear() call), and moving `mCountToken = s;` to the
+    // front is 86.489 (the Symbol store belongs at the end).  The use counts
+    // say the image is right and we are not -- the product is read twice, `f3`
+    // once, so the product should be allocated first and take f31 -- but no
+    // source ordering we can write changes which of the two MSVC processes
+    // first.  Allocator floor.
     float f2 = f1 + f3;
     mCountKeys.push_back(Key<float>(i2, f2));
     mCountToken = s;
