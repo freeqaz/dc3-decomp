@@ -21,6 +21,9 @@
 #include "ui/UI.h"
 #include "ui/UIScreen.h"
 #include "obj/Msg.h"
+#include "flow/PropertyEventProvider.h"
+#include "hamobj/HamPlayerData.h"
+#include "meta_ham/Overshell.h"
 
 #include <chrono>
 #include <thread>
@@ -208,3 +211,59 @@ TEST_F(NativeAdditionsUITest, TransitionDoesNotMakeTheScreenTheSink) {
     TheUI = savedUI;
     delete scr;
 }
+
+// ---------------------------------------------------------------------------
+// OvershellSlot::SetPlaying.
+//
+// Image (?SetPlaying@OvershellSlot@@QAAX_N@Z, 828D83A8..828D8448): always
+// stores mPlayerNum into the static player_join / player_quit message
+// (bl Node / DataNode=) and Exports it on TheHamProvider (vtable +0x38).
+// Overshell::ResolveSkeletons -- run from every mode's DTA `reset` -- reaches
+// it through SetState(3), and every gameplay mode sinks those events
+// (perform_legacy.dta:533 `(player_join on_player_join)`: reset_detection, the
+// drop-in grace move index, flashcards, the shot config).
+//
+// A native-only unconditional `return;` at the top dropped both events
+// ("$hud may be empty and crash"), so none of that ever ran natively.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+class JoinQuitSink : public Hmx::Object {
+public:
+    DataNode Handle(DataArray *msg, bool) override {
+        if (msg->Size() > 2 && msg->Type(1) == kDataSymbol) {
+            if (msg->Sym(1) == "player_join")
+                mJoins.push_back(msg->Int(2));
+            else if (msg->Sym(1) == "player_quit")
+                mQuits.push_back(msg->Int(2));
+        }
+        return DataNode(0);
+    }
+    std::vector<int> mJoins, mQuits;
+};
+
+class NativeAdditionsOvershellTest : public EngineTestFixture {};
+
+} // namespace
+
+TEST_F(NativeAdditionsOvershellTest, SetPlayingExportsJoinAndQuit) {
+    ASSERT_NE(TheHamProvider, nullptr);
+    JoinQuitSink sink;
+    TheHamProvider->AddSink(&sink, "player_join");
+    TheHamProvider->AddSink(&sink, "player_quit");
+    {
+        HamPlayerData data(1);
+        OvershellSlot slot(data);
+        slot.SetPlayerNum(1);
+        slot.SetPlaying(true);
+        slot.SetPlaying(false);
+    }
+    TheHamProvider->RemoveSink(&sink, "player_join");
+    TheHamProvider->RemoveSink(&sink, "player_quit");
+    EXPECT_EQ(sink.mJoins, std::vector<int>({1}))
+        << "SetPlaying(true) must Export player_join with the slot's player number";
+    EXPECT_EQ(sink.mQuits, std::vector<int>({1}))
+        << "SetPlaying(false) must Export player_quit with the slot's player number";
+}
+
