@@ -8,6 +8,8 @@
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "rndobj/Anim.h"
+#include "rndobj/Dir.h"
+#include "rndobj/Poll.h"
 
 namespace {
 
@@ -138,4 +140,43 @@ TEST_F(NativeEngineLeadsTest, FindObjectDoesNotSearchALoadingProxysParent) {
     delete loader; // Cleanup names the proxy back into its proxy dir
     delete proxy;
     delete parent;
+}
+
+// ----------------------------------------------------------------------------
+// RndDir::SyncObjects
+// ----------------------------------------------------------------------------
+
+namespace {
+class ProbePollable : public RndPollable {};
+class ProbeRndDir : public RndDir {
+public:
+    const std::vector<RndPollable *> &Polls() const { return mPolls; }
+};
+} // namespace
+
+// The image's RndDir::SyncObjects leaves mPolls in HarvestPollables order
+// (SortPolls: enabled first, then by name).  Native moved every pollable whose
+// name contains "ikfoot"/"feetandhands" to the end by default (opt-out
+// DC3_FEET_PLANT_FIX_OFF), a leftover of the 2026-06-09 opt-in foot-plant
+// experiment.  On characters Character::SyncObjects re-sorts right after, so
+// the move was dead there (measured: 53/53 sorted orders identical with and
+// without it); on any other RndDir it was a pure divergence.
+TEST_F(NativeEngineLeadsTest, RndDirSyncObjectsKeepsHarvestOrder) {
+    ProbeRndDir *dir = new ProbeRndDir();
+    dir->SetName("lead_rnddir", ObjectDir::Main());
+    ProbePollable *feet = new ProbePollable();
+    feet->SetName("a_feetandhands.pgrp", dir);
+    ProbePollable *other = new ProbePollable();
+    other->SetName("b_other.poll", dir);
+
+    dir->SyncObjects();
+    ASSERT_EQ(dir->Polls().size(), 2u);
+    EXPECT_EQ(dir->Polls()[0], feet)
+        << "RndDir::SyncObjects moved the *feetandhands* pollable after its "
+           "name-sorted successor; the image keeps the SortPolls order";
+    EXPECT_EQ(dir->Polls()[1], other);
+
+    delete other;
+    delete feet;
+    delete dir;
 }

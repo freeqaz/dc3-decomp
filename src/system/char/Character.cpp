@@ -510,7 +510,7 @@ void Character::SyncObjects() {
         sorter.Sort(mPolls);
     }
 #ifdef HX_NATIVE
-    // FEET-IN-FLOOR FIX (opt-out: DC3_FEET_PLANT_FIX_OFF=1). The leg foot-plant IK
+    // FEET-IN-FLOOR FIX (opt-in: DC3_FEET_PLANT_FIX=1, see Dc3FeetPlantFix). The leg foot-plant IK
     // (CharIKFoot, via IKElbow) writes the knee/thigh LOCAL to bend the leg and plant
     // the foot, but it must poll AFTER the skeleton pose (CharServoBone::PoseMeshes) or
     // the pose overwrites the bend and the foot sinks. The sorter is skipped for subdirs

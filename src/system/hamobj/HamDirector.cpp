@@ -3714,7 +3714,7 @@ void HamDirector::Poll() {
         }
     }
 #ifdef HX_NATIVE
-    // FEET-IN-FLOOR FIX (opt-out: DC3_FEET_PLANT_FIX_OFF=1). The song-move pose applied
+    // FEET-IN-FLOOR FIX (opt-in: DC3_FEET_PLANT_FIX=1, see Dc3FeetPlantFix). The song-move pose applied
     // above (ClipPlayer::PlayAnims) runs after the dancers' char poll and overwrites the
     // leg foot-plant IK's knee bend, so the leg over-extends and the foot sinks. Re-run
     // each dancer's leg IK here, after the move pose, so its knee bend is the last word
