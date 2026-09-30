@@ -746,9 +746,6 @@ void Spotlight::Init() {
 }
 
 void Spotlight::BuildBoard() {
-#ifdef HX_NATIVE
-    return; // Skip mesh setup on native — no renderer
-#endif
     MILO_ASSERT(!sDiskMesh, 0x42E);
     sDiskMesh = Hmx::Object::New<RndMesh>();
     RndMesh::VertVector &verts = sDiskMesh->Verts();
@@ -775,8 +772,12 @@ void Spotlight::BuildBoard() {
     faces[0].Set(0, 1, 2);
     faces[1].Set(1, 3, 2);
     sDiskMesh->Sync(0x13F);
+#ifndef HX_NATIVE
+    // The one D3D-only step: the native RndMesh is the WebGPU mesh, not a
+    // DxMesh, and builds its own buffers in Sync.
     DxMesh *dxDiskMesh = static_cast<DxMesh *>(sDiskMesh);
     dxDiskMesh->GetMultimeshFaces();
+#endif
     sDiskMesh->UpdateSphere();
 }
 

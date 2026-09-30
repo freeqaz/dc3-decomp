@@ -6,7 +6,9 @@
 
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "rndobj/Mesh.h"
 #include "utl/BufStream.h"
+#include "world/Spotlight.h"
 
 #include <cstring>
 #include <vector>
@@ -116,6 +118,27 @@ TEST_F(NativeSuspectsTest, OwnerlessObjPtrLoadResolvesNothing) {
     EXPECT_EQ(p.Ptr(), nullptr)
         << "an owner-less ObjPtr resolved against an explicit dir.  The image's "
            "test is `refOwner && dir`: with no owner the ref stays null.";
+}
+
+// ----------------------------------------------------------------------------
+// Spotlight::BuildBoard
+// ----------------------------------------------------------------------------
+
+// Spotlight::Init (8282DDF8 bl ?BuildBoard) builds the shared unit quad every
+// lens disk and floor spot is drawn with: New<RndMesh> (8282BFF8), stored to
+// sDiskMesh (8282BFFC), 4 verts / 2 faces.  Native returned at the top ("no
+// renderer") and left sDiskMesh null, so Spotlight::DrawShowing's lens and
+// floor-spot arms, MakeWorldSphere and SpotlightDrawer::DrawLenses had nothing
+// to draw with (and dereference it: MILO_ASSERT does not stop natively).
+TEST_F(NativeSuspectsTest, SpotlightInitBuildsTheDiskMesh) {
+    RndMesh *disk = Spotlight::GetDiskMesh();
+    ASSERT_NE(disk, nullptr)
+        << "Spotlight::Init left sDiskMesh null: native BuildBoard returned before "
+           "building the lens/floor-spot quad the image builds.";
+    EXPECT_EQ(disk->Verts().size(), 4u);
+    EXPECT_EQ(disk->Faces().size(), 2u);
+    EXPECT_FLOAT_EQ(disk->Verts()[3].pos.x, 0.5f);
+    EXPECT_FLOAT_EQ(disk->Verts()[3].pos.y, 0.5f);
 }
 
 } // namespace
