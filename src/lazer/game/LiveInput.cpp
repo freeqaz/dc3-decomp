@@ -52,19 +52,36 @@ void LiveInput::SetPaused(bool b1) {
     }
 }
 
+// DC3_FAST_TIME: CurrentMs() reads mFastTimeMs in place of mTimer, so the two
+// offset setters must subtract the clock CurrentMs() will actually read.  They
+// used to subtract mTimer's real split and THEN zero mFastTimeMs, which mixed the
+// two clocks: the offset came out (real elapsed - song time) too small, and the
+// next CurrentMs() jumped BACKWARDS by that much.  At song end, game_won_common
+// calls `{game set_realtime TRUE}` -> SetTimeOffset(), so song seconds froze
+// until the synthetic clock caught back up -- measured 2026-09-30 on
+// betteroffalone headless: 24,190 frames (~200 s) parked on a null current
+// screen, because the outro HamCamShot (kTaskSeconds) could not finish and
+// endgame_delay_panel's `{! $outro_started}` never became loaded.
+// Native-only; the #else arms are the image's code.
 void LiveInput::SetTimeOffset() {
     float f1 = TheTaskMgr.Seconds(TaskMgr::kRealTime) * 1000.0f;
+#ifdef HX_NATIVE
+    if (sFastTime) {
+        mFastTimeMs = 0.0f;
+    } else
+#endif
     f1 = f1 - mTimer.SplitMs();
     mTimeOffset = f1 - TheProfileMgr.GetSongToTaskMgrMs(kGame);
-#ifdef HX_NATIVE
-    if (sFastTime) mFastTimeMs = 0.0f;
-#endif
 }
 
 void LiveInput::SetPostWaitJumpOffset(float f1) {
     mTimer.Restart();
-    mTimeOffset = f1 - mTimer.Ms();
 #ifdef HX_NATIVE
-    if (sFastTime) mFastTimeMs = 0.0f;
+    if (sFastTime) {
+        mFastTimeMs = 0.0f;
+        mTimeOffset = f1;
+        return;
+    }
 #endif
+    mTimeOffset = f1 - mTimer.Ms();
 }
