@@ -102,13 +102,30 @@ struct CompressedVertex_Xbox {
 // rndobj/Mesh one.
 static const unsigned int kBitsOutput = 32;
 
+// The four bit-count parameters are declared W, Z, Y, X -- REVERSED relative to
+// the order the body and the assert text use them.  That is measured, not
+// stylistic: the MILO_ASSERT stringification pins the sum's TEXT to
+// `(bitsX + bitsY + bitsZ + bitsW)` (string symbol ??_C@_0CP@JCHBHFAK@, equal on
+// both sides), so the only remaining freedom is which incoming register each
+// name binds to.  The image's entry sum is a LEFT CHAIN over the parameter
+// registers from the top down:
+//     add r11, p(r8), p(r7)      bitsX + bitsY
+//     add r11, r11,   p(r6)      + bitsZ
+//     add r9,  r11,   p(r5)      + bitsW
+// which requires bitsX in r8 (the LAST byte parameter) and bitsW in r5 (the
+// first).  With the natural X,Y,Z,W order MSVC instead reassociates into a
+// balanced tree, (bitsX+bitsY) + (bitsZ+bitsW), because both leaves are ready
+// at once -- 96.190475, 28 rows.  Reversing the declaration gives 100.0.
+// All four parameters are `unsigned char`, so the mangled name
+// ?PackVector@@YAXAAIABVVector4@@EEEE_N@Z is unchanged by the reorder, and the
+// three call sites pass 2, 10, 10, 10 for the same bit widths as before.
 static void PackVector(
     unsigned int &output,
     const Vector4 &vec,
-    unsigned char bitsX,
-    unsigned char bitsY,
-    unsigned char bitsZ,
     unsigned char bitsW,
+    unsigned char bitsZ,
+    unsigned char bitsY,
+    unsigned char bitsX,
     bool normalize
 ) {
     MILO_ASSERT((bitsX + bitsY + bitsZ + bitsW) == kBitsOutput, 0x39);
@@ -218,7 +235,7 @@ static void FillCompressedVertex(
 
     // Pack bone weights as UDEC4N
     PackVector(
-        (unsigned int &)compressed.mBoneIndices, vert.boneWeights, 10, 10, 10, 2, false
+        (unsigned int &)compressed.mBoneIndices, vert.boneWeights, 2, 10, 10, 10, false
     );
 
     // Copy position as float bit patterns
@@ -235,10 +252,10 @@ static void FillCompressedVertex(
     float normZ = vert.norm.z;
     float normY = vert.norm.y;
     Vector4 normVec(vert.norm.x, normY, normZ, 0.0f);
-    PackVector((unsigned int &)compressed.mTangent, normVec, 10, 10, 10, 2, true);
+    PackVector((unsigned int &)compressed.mTangent, normVec, 2, 10, 10, 10, true);
 
     // Pack tangent as DEC4N
-    PackVector((unsigned int &)compressed.mBinormal, vert.tangent, 10, 10, 10, 2, true);
+    PackVector((unsigned int &)compressed.mBinormal, vert.tangent, 2, 10, 10, 10, true);
 
     // Pack bone indices as UBYTE4
     compressed.mBoneWeights = (((int)vert.boneIndices[3] * 0x100
