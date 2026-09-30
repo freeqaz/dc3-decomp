@@ -58,3 +58,93 @@ TEST(HamUserPadNumTest, EnrolledPadStillComesFromTheIdentifier) {
 }
 
 } // namespace
+
+// ---------------------------------------------------------------------------
+// NativeSkeletonPollTest: a live native skeleton must carry every coordinate
+// system Skeleton::Poll derives, not only camera space.
+//
+// Found by the performing sensor in a dance-battle fatality: the sensor fed
+// the fatality's own target skeleton (PoseFatalities::mPlayerSkeletons, a
+// translated copy) and PoseFatalities::UpdateMatchingPose still scored the
+// match 0.0.  FreestyleMoveRecorder::CompareSkeletonPositions compares
+// NormPos in the four LIMB coordinate systems (kCoordLeftArm..kCoordRightLeg),
+// i.e. Skeleton::JointPos(cs) = mTrackedJoints[j].mJointPos[cs], which the
+// image's Skeleton::Poll fills by MultiplyTranspose through mPlayerXfms.  The
+// native provider hand-filled mJointPos[kCoordCamera] only (FillSkeleton +
+// FinalizeSkeletonFrame), so every limb coordinate of a live native skeleton
+// was a stale zero -- the target, polled by the image's Poll from
+// CharCameraInput, had real ones.
+// ---------------------------------------------------------------------------
+#include "platform/Skeleton_Native.h"
+#include "math/Mtx.h"
+
+namespace {
+
+// FillDummySkeleton's standing pose, one arm raised so the limbs are not
+// degenerate.
+void StandingPose(NativeSkeletonProvider::PersonData &p) {
+    static const float kPose[kNumJoints][3] = {
+        { 0.00f, 0.90f, 2.0f },  { 0.00f, 1.10f, 2.0f },  { 0.00f, 1.40f, 2.0f },
+        { 0.00f, 1.60f, 2.0f },  { -0.20f, 1.40f, 2.0f }, { -0.30f, 1.60f, 1.9f },
+        { -0.32f, 1.85f, 1.9f }, { -0.33f, 1.92f, 1.9f }, { 0.20f, 1.40f, 2.0f },
+        { 0.25f, 1.15f, 2.0f },  { 0.22f, 0.90f, 2.0f },  { 0.22f, 0.85f, 2.0f },
+        { -0.12f, 0.85f, 2.0f }, { -0.12f, 0.45f, 2.1f }, { -0.12f, 0.05f, 2.0f },
+        { 0.12f, 0.85f, 2.0f },  { 0.12f, 0.45f, 2.0f },  { 0.12f, 0.05f, 2.0f },
+        { -0.12f, 0.00f, 1.9f }, { 0.12f, 0.00f, 1.9f },
+    };
+    p.trackId = 5;
+    p.valid = true;
+    for (int j = 0; j < kNumJoints; j++) {
+        p.joints[j] = Vector3(kPose[j][0], kPose[j][1], kPose[j][2]);
+        p.confidence[j] = kConfidenceTracked;
+    }
+}
+
+TEST(NativeSkeletonPollTest, LiveSkeletonCarriesTheLimbCoordinateSystems) {
+    NativeSkeletonProvider::PersonData person;
+    StandingPose(person);
+
+    // native: the provider's fill + finalize, as GestureMgr_NativePoll does it
+    static NativeSkeletonProvider helper;
+    Skeleton native;
+    helper.FillSkeleton(native, person);
+    NativeSkeletonProvider::FinalizeSkeletonFrame(native, 2, 33);
+
+    // image: Skeleton::Poll on the equivalent SkeletonFrame
+    static SkeletonFrame frame; // 0x11c8 bytes
+    memset(&frame, 0, sizeof(frame));
+    frame.mElapsedMs = 33;
+    frame.mFloorNormal.Set(0, 1, 0);
+    SkeletonData &d = frame.mSkeletonDatas[2];
+    d.mTracking = kSkeletonTracked;
+    d.mTrackingID = person.trackId;
+    for (int j = 0; j < kNumJoints; j++) {
+        d.mJointPositions[j].Set(person.joints[j].x, person.joints[j].y, person.joints[j].z);
+        d.mRawPositions[j] = d.mJointPositions[j];
+        d.mJointTrackingState[j] = kConfidenceTracked;
+    }
+    d.mHipCenter = d.mJointPositions[kJointHipCenter];
+    Skeleton image;
+    image.Poll(2, frame);
+
+    ASSERT_TRUE(native.IsTracked());
+    for (int cs = 0; cs < kNumCoordSys; cs++) {
+        for (int j = 0; j < kNumJoints; j++) {
+            Vector3 a, b;
+            native.JointPos((SkeletonCoordSys)cs, (SkeletonJoint)j, a);
+            image.JointPos((SkeletonCoordSys)cs, (SkeletonJoint)j, b);
+            EXPECT_NEAR(a.x, b.x, 1e-5f) << "cs=" << cs << " joint=" << j;
+            EXPECT_NEAR(a.y, b.y, 1e-5f) << "cs=" << cs << " joint=" << j;
+            EXPECT_NEAR(a.z, b.z, 1e-5f) << "cs=" << cs << " joint=" << j;
+        }
+    }
+    // and the arm's limb frame is not degenerate
+    Vector3 hand;
+    native.NormPos(kCoordLeftArm, kJointHandLeft, hand);
+    EXPECT_GT(fabsf(hand.x) + fabsf(hand.y) + fabsf(hand.z), 0.1f);
+    EXPECT_EQ(native.TrackingID(), 5);
+    EXPECT_EQ(native.SkeletonIndex(), 2);
+    EXPECT_EQ(native.ElapsedMs(), 33);
+}
+
+} // namespace
