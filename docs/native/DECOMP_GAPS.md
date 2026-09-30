@@ -571,7 +571,7 @@ AnimTask created → mAnimTarget = anim->AnimTarget() (non-null)
 | **Smart stubs** (3 classes) | App.cpp | `saveload_mgr`, `profile_mgr`, `platform_mgr` DTA commands need return values | DTA stub |
 | **Screen auto-advance timer** | UI.cpp | Some screen transitions still depend on DTA handlers that fail silently | Screen flow |
 | **Exit/enter animation timeouts** | UI.cpp | Safety net if animations don't complete (30/60 frame limits) | Animation lifecycle |
-| **mSink = screen on transition** | UI.cpp | DTA `set_sink` handler never fires (screen-level DTA, not system config) | Button routing |
+| ~~**mSink = screen on transition**~~ | UI.cpp | REMOVED 2026-09-30 (0800c3ed2): the image never writes mSink in UIManager::Poll; the store made `{ui goto_screen}` recurse through shell_with_narrator PanelDirs (party mode crash). Screens get unhandled messages via HANDLE_MEMBER_PTR(mCurrentScreen). | Button routing |
 | **Controller mode force-on** | GestureMgr.cpp | DTA `enter_controller_mode` message depends on Kinect subsystem state | Input |
 | **GameMode::SetMode skip** | GameMode.cpp | Property evaluation references uninitialized objects before DTA sets them | Game logic |
 | **TheHamProvider property defaults** | Ham.cpp | 47+ call sites read properties with assert-on-missing before DTA initializes them | Initialization |

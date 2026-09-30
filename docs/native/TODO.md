@@ -81,7 +81,7 @@ transitions driven by DTA handlers + native auto-advance timers. See
 ### Current workarounds (native-only guards)
 - `App.cpp`: 8 stub objects for Xbox-only managers (`platform_mgr`, `profile_mgr`, etc.)
 - `App.cpp`: TheHamProvider fallback via PropertyEventProvider::NewObject()
-- `UI.cpp`: Fallback button dispatch + mSink = screen on transition
+- `UI.cpp`: Fallback button dispatch (mSink = screen on transition: REMOVED 2026-09-30 (0800c3ed2): the image never writes mSink in UIManager::Poll; the store made `{ui goto_screen}` recurse through shell_with_narrator PanelDirs (party mode crash). Screens get unhandled messages via HANDLE_MEMBER_PTR(mCurrentScreen).)
 - `HamNavList.cpp`: Bypass `IsAnimating()` check + TheHamProvider null guards
 - `GestureMgr.cpp`: Force `mInControllerMode = true`
 - `GameMode.cpp`: Skip full SetMode property evaluation on native
@@ -167,7 +167,7 @@ Goal: Remove C++ workarounds and let real DTA screen-flow scripts drive the nati
 - [x] **Smart stubs** (Phase 1): SaveLoadManager, ProfileMgr, PlatformMgr return sensible defaults
 - [x] **Boot screen timers** (Phase 2): Intentional UX delays (permanent — no async Xbox events)
 - [x] **Animation lifecycle** (Phase 3): AnimTask auto-null on native, removed HamNavList timer bypasses
-- [x] **mSink investigation** (Phase 5a): DTA `set_sink` never fires in DC3 — fallback is permanent
+- [x] **mSink investigation** (Phase 5a): DTA `set_sink` never fires in DC3 — the fallback was NOT needed and was harmful: REMOVED 2026-09-30 (0800c3ed2): the image never writes mSink in UIManager::Poll; the store made `{ui goto_screen}` recurse through shell_with_narrator PanelDirs (party mode crash). Screens get unhandled messages via HANDLE_MEMBER_PTR(mCurrentScreen).
 - [x] **GameMode guard** (Phase 5b): `#ifdef HX_NATIVE` in constructor is correct and sufficient
 - [x] **Debug logging cleanup** (Phase 6): All ~25 debug printfs gated behind `MILO_DEBUG_UI_FLOW=1`
 - [x] **Remove multiuser auto-skip** (Phase 4): DTA `enter` handler drives game start naturally. IsAnimating() bypass in HamNavList.cpp enables button input.

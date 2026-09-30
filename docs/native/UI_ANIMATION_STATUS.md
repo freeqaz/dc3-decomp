@@ -157,7 +157,7 @@ Fresh mesh-loader validation on the current checkout:
 |------|------|--------|
 | `UI.cpp` | Auto-advance stuck boot/tutorial screens | Permanent — DTA handlers fail |
 | ~~`UI.cpp`~~ | ~~Skip transition exit/enter waits~~ | **Replaced (S52)** — timeouts |
-| `UI.cpp` | Set `mSink = current screen` | Permanent — input routing |
+| ~~`UI.cpp`~~ | ~~Set `mSink = current screen`~~ | REMOVED 2026-09-30 (0800c3ed2): the image never writes mSink in UIManager::Poll; the store made `{ui goto_screen}` recurse through shell_with_narrator PanelDirs (party mode crash). Screens get unhandled messages via HANDLE_MEMBER_PTR(mCurrentScreen). |
 | `UIPanel.cpp` | Synchronous panel loading | Permanent — LoadMgr queue issue |
 | `UIPanel.cpp` | Force-finish panels without loader | Permanent — no DLC/save state |
 | `UIPanel.cpp` | Block tutorial panel enter | Permanent — gesture UI conflicts |
