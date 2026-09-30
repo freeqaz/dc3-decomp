@@ -148,3 +148,66 @@ TEST(NativeSkeletonPollTest, LiveSkeletonCarriesTheLimbCoordinateSystems) {
 }
 
 } // namespace
+
+// ---------------------------------------------------------------------------
+// AsyncDetectorRatingTest: perform and dance battle rate every move from
+// MoveAsyncDetector::MoveRatingFrac (`last_detector_result`).  Native returned
+// 0 there unless SkeletonUpdate::HasInstance() -- never true natively -- so
+// every move rated at the bottom whatever the player did, and no battle
+// fatality could start.  The image has no such guard: an active detector is
+// polled and its fraction reported.
+// ---------------------------------------------------------------------------
+#define private public
+#define protected public
+#include "hamobj/MoveDetector.h"
+#include "hamobj/HamMove.h"
+#undef private
+#undef protected
+#include "obj/Task.h"
+
+#include <new>
+#include <set>
+
+namespace {
+
+TEST(AsyncDetectorRatingTest, AnActiveDetectorsLastFractionIsReported) {
+    // A HamMove only as far as MoveRatingFrac reads it: Scored(), and its
+    // address as the detector key.
+    void *moveMem = ::operator new(sizeof(HamMove));
+    memset(moveMem, 0, sizeof(HamMove));
+    HamMove *move = static_cast<HamMove *>(moveMem);
+    move->mScored = true;
+
+    void *detMem = ::operator new(sizeof(MoveDetector));
+    memset(detMem, 0, sizeof(MoveDetector));
+    MoveDetector *det = static_cast<MoveDetector *>(detMem);
+    det->mMove = move;
+    det->mActive = true;
+    // Already polled for this measure and beat, so Poll() changes nothing and
+    // the detector's own last fraction is what gets reported.
+    det->mDetectFrameOffset = TheTaskMgr.CurrentBeat();
+    det->mLastDetectFrameIdx = TheTaskMgr.CurrentMeasure();
+    det->mLastDetectFracs[0] = 0.8f;
+    det->mLastDetectFracs[1] = 0.3f;
+
+    void *asyncMem = ::operator new(sizeof(MoveAsyncDetector));
+    memset(asyncMem, 0, sizeof(MoveAsyncDetector));
+    MoveAsyncDetector *async = static_cast<MoveAsyncDetector *>(asyncMem);
+    // MoveDir::MoveIdx / MoveBeat only read TheTaskMgr; no MoveDir state is
+    // touched on this path.
+    async->mDir = reinterpret_cast<MoveDir *>(0x1000);
+    new (&async->mDetectors) std::vector<MoveDetector *>();
+    new (&async->mActiveDetectors) std::set<MoveDetector *>();
+    async->mDetectors.push_back(det);
+
+    EXPECT_FLOAT_EQ(async->MoveRatingFrac(0, MoveAsyncDetector::kRatingLast, move), 0.8f);
+    EXPECT_FLOAT_EQ(async->MoveRatingFrac(1, MoveAsyncDetector::kRatingLast, move), 0.3f);
+
+    async->mDetectors.~vector();
+    async->mActiveDetectors.~set();
+    ::operator delete(asyncMem);
+    ::operator delete(detMem);
+    ::operator delete(moveMem);
+}
+
+} // namespace
