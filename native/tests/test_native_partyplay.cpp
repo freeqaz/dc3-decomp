@@ -270,3 +270,39 @@ TEST_F(OwnerControlCascadeTest, GroupDropsADeletedChildInTheDirCascade) {
     }
     delete group;
 }
+
+// ===========================================================================
+// Make Your Move: FreestyleMoveRecorder recording must allocate the take
+// ===========================================================================
+//
+// Party mode's `bustamove` event (Make Your Move) crashed natively the moment
+// its recording phase started: BustAMovePanel::Poll (kBAMState_Recording)
+// calls FreestyleMoveRecorder::GetScore, which reads
+// mTakes[mCurrentTakeIndex].mFrames[frameIdx] -- and natively mFrames was
+// NULL, because StartRecording / StartRecordingDancerTake / StopRecording
+// were emptied under HX_NATIVE ("touch depth frame allocation").  The image's
+// StartRecording (100% matched) is FreestyleMove::Init(mMaxFrames), which
+// allocates the take; nothing in it touches a camera.  SIGSEGV in
+// DancerSkeleton::Set <- GetScore, frames=0x0.
+
+#include "hamobj/FreestyleMoveRecorder.h"
+
+namespace {
+void RecordThenScore() {
+    FreestyleMoveRecorder rec;
+    rec.StartRecording();                 // BustAMovePanel: kBAMState_Recording
+    rec.GetScore((const BaseSkeleton *)nullptr, 1, 0.0f, false);
+    rec.StartRecordingDancerTake();
+    rec.StopRecording();
+    _exit(0);
+}
+} // namespace
+
+class MakeYourMoveRecorderTest : public EngineTestFixture {};
+
+TEST_F(MakeYourMoveRecorderTest, ScoringARecordingReadsAnAllocatedTake) {
+    GTEST_FLAG_SET(death_test_style, "threadsafe"); // see test_object_lifetime.cpp
+    ASSERT_EXIT(RecordThenScore(), ::testing::ExitedWithCode(0), "")
+        << "GetScore after StartRecording read an unallocated take "
+           "(StartRecording did not run FreestyleMove::Init)";
+}
