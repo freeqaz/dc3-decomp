@@ -1995,6 +1995,7 @@ if(BUILD_TESTS)
         tests/test_native_lifetime2.cpp
         tests/test_native_posesynth.cpp
         tests/test_native_audioseek.cpp
+        tests/test_native_notables.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
