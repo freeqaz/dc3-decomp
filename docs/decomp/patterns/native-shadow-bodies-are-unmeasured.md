@@ -749,11 +749,14 @@ superseded; `pose_scoring_gate.sh` on Better Off Alone / Easy: selftest 1.0000, 
 body nearly does). Party (`--route party --perform`, Crew Throwdown): every event and the
 showdown, back to `main_screen`, 0 crash lines; **Strike a Pose awards points** -- both
 players match one pose per beat (`fatalMatch` 1.0, combo +2000 each) to 1,740,000 each,
-and `strikeapose_over` ends the round. One native gap shows there too: the round's
-`HamPartyJumpData` stream jump never happens (below), so from beat ~56 PoseFatalities'
-beat bookkeeping (`SetJump` -> `mCurrentBeat = mJumpEnd`) runs ahead of the unjumped song
-clock and no pose resolves (hold progress climbs past 100 s against a 0.5 s hold) until
-the clock catches up at beat ~168; scoring then resumes.
+and `strikeapose_over` ends the round. One gap shows there too: from beat ~56 to ~168 no
+pose resolves although every frame matches (`fatalMatch` 1.0, hold progress climbing past
+100 s against a 0.5 s hold) while the song clock runs on monotonically, then scoring
+resumes. Measured: the stall and the unbroken clock. Inferred, not instrumented: the
+round's `HamPartyJumpData` stream jump (`audio set_loop` + `set_jump`) does not happen
+natively (see practice below), so PoseFatalities::Poll's `mCurrentBeat = mJumpEnd` puts
+its beat bookkeeping ahead of the unjumped clock and `OnBeat` waits for the clock to
+catch up.
 
 **What still cannot run: practice's gameover (and any stream jump).** Practice never
 loops natively. Its song
