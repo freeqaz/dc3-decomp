@@ -1043,11 +1043,15 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
         if o in (10, 11):                              # cmpli / cmpi
             effects.append(E("cmpi", o, G(A), w & 0xFFFF))
             continue
+        # A RECORD form (`rlwinm.`, `andi.`, `and.` ...) compares its result
+        # with zero into cr0: a branch condition, and therefore observable.
         if o in (24, 25, 26, 27, 28, 29):              # ori oris xori xoris andi andis
             if o == 24 and (w & 0xFFFF) == 0:
                 g[A] = G(D)                            # nop / mr-like
             else:
                 setg(A, E("limm", o, G(D), w & 0xFFFF))
+                if o in (28, 29):
+                    effects.append(E("cmp0", G(A)))
             continue
         if o == OP_RLWINM:
             sh, mb, me = B, (w >> 6) & 31, (w >> 1) & 31
@@ -1055,15 +1059,20 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                 setg(A, G(D))
                 if org_d:
                     origin[A] = org_d
-                continue
             else:
                 setg(A, E("rlwinm", G(D), sh, mb, me))
+            if w & 1:
+                effects.append(E("cmp0", G(A)))
             continue
         if o == 20:
             setg(A, E("rlwimi", G(D), G(A), B, (w >> 6) & 31, (w >> 1) & 31))
+            if w & 1:
+                effects.append(E("cmp0", G(A)))
             continue
         if o == 23:
             setg(A, E("rlwnm", G(D), G(B), (w >> 6) & 31, (w >> 1) & 31))
+            if w & 1:
+                effects.append(E("cmp0", G(A)))
             continue
         if o == 30:
             setg(A, E("rld", G(D), w & 0xFFFF))
@@ -1148,12 +1157,18 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                 if xo in X_COMMUTATIVE:
                     ops = sorted(ops)
                 setg(A, E("xl", xo, *ops))
+                if w & 1:
+                    effects.append(E("cmp0", G(A)))
                 continue
             if xo == 266:                              # add
                 setg(D, lin_combine(G(A), G(B), 1))
+                if w & 1:
+                    effects.append(E("cmp0", G(D)))
                 continue
             if xo == 40:                               # subf: rB - rA
                 setg(D, lin_combine(G(B), G(A), -1))
+                if w & 1:
+                    effects.append(E("cmp0", G(D)))
                 continue
             if xo == 104:                              # neg
                 c, t = lin_of(G(A))
