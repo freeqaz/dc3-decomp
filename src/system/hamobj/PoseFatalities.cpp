@@ -208,8 +208,16 @@ void PoseFatalities::EndFatal(int player) {
     }
     mCurrentCombo[player] = 0;
     if (!DataVariable("restart_fatals").Int() && !InStrikeAPose()) {
+        // "no player is still in a fatality": the image's mask is
+        // `subic r10,r10,1; subfe r10,r10,r10` = (x == 0) ? -1 : 0.  `!= 0`
+        // compiles to `subfe r10,r8,r10` = (x != 0) ? 1 : 0 -- the opposite
+        // truth value, and since mInFatality[player] was cleared above it
+        // could never be true, so mAnimTimer was never set.  Spellings of
+        // the correct truth value measured (canonical): `== 0`, `!x`,
+        // `x ? false : true` 99.4 (cntlzw/extrwi); `x != true` 99.5 (an extra
+        // subi).  The inverted original read 100.0.
         for (int i = 0; i < 2; i++) {
-            b10 &= mInFatality[i] != 0;
+            b10 &= mInFatality[i] == 0;
         }
         if (b10) {
             mAnimTimer = 4;
