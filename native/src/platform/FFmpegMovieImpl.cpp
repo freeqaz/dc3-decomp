@@ -31,8 +31,13 @@ void FFmpegMovieImpl::SetWidthHeight(int w, int h) {
     mDisplayHeight = h;
 }
 
+// The image's BinkMovieImpl::Ready (82E221C8) reports whether an async load is
+// still pending -- mLoader / mMovieLoader IsLoaded(), and true with no loader.
+// This impl opens synchronously in BeginFromFile, so nothing is ever pending:
+// ready before any movie, after a successful open, and after a failed one.
+// (mReady, "a video is open and decodable", stays internal.)
 bool FFmpegMovieImpl::Ready() const {
-    return mReady;
+    return true;
 }
 
 bool FFmpegMovieImpl::BeginFromFile(

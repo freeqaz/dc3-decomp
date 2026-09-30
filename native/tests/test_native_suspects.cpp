@@ -9,6 +9,7 @@
 #include "meta_ham/SkeletonIdentifier.h"
 #include "obj/Dir.h"
 #include "obj/Object.h"
+#include "platform/FFmpegMovieImpl.h"
 #include "rndobj/Mesh.h"
 #include "utl/BufStream.h"
 #include "world/Spotlight.h"
@@ -175,6 +176,31 @@ TEST_F(NativeSuspectsTest, TimelineResetRefusedWhileAPassiveMessageIsQueued) {
            "image's HasMessages / HasRecentlyDismissedMessage / help-bar terms";
     delete made;
     delete callback;
+}
+
+// ----------------------------------------------------------------------------
+// FFmpegMovieImpl::Ready  (and MoviePanel::IsLoaded)
+// ----------------------------------------------------------------------------
+
+// The image's BinkMovieImpl::Ready (82E221C8) answers "is an async load
+// pending": mLoader->IsLoaded(), else mMovieLoader->IsLoaded(), else true.
+// FFmpegMovieImpl opens synchronously -- there is never a pending load -- but
+// Ready() returned mReady, false until a SUCCESSFUL open.  No .bik ships, so it
+// was false forever, and MoviePanel::IsLoaded carried a native block that
+// skipped the Ready() term (and with it the image's mSubtitlesLoader wait).
+TEST_F(NativeSuspectsTest, MovieWithNoPendingLoadIsReady) {
+    FFmpegMovieImpl movie;
+    EXPECT_TRUE(movie.Ready())
+        << "a movie that never began reported not-ready; the image answers true "
+           "when no loader is pending";
+    bool ok = movie.BeginFromFile(
+        "/nonexistent/suspects/video.bik", 1.0f, false, false, false, false, 0,
+        nullptr, kLoadFront
+    );
+    EXPECT_FALSE(ok) << "control: the file does not exist";
+    EXPECT_TRUE(movie.Ready())
+        << "after a synchronous (failed) open nothing is loading; the image's "
+           "Ready() is true once its loader has finished";
 }
 
 } // namespace
