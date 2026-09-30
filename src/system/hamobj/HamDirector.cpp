@@ -920,7 +920,16 @@ void HamDirector::SetDircut(Symbol s, std::vector<CameraManager::PropertyFilter>
         mNextShot = dynamic_cast<HamCamShot *>(
             mVenue->GetCameraManager()->FindCameraShot(s, filters)
         );
-        MILO_LOG("   mNextShot = '%s'\n", SafeName(mNextShot));
+        // 100% (w8-n).  `SafeName(mNextShot)` takes `Hmx::Object *`, so the
+        // HamCamShot -> Hmx::Object conversion happens at the CALL and MSVC has to
+        // null-guard the virtual-base adjustment: `addic. r11, r11, 0x4` + a second
+        // `beq` to the "NULL" block, then `lwz r11, 0x20(r11)`.  Testing the DERIVED
+        // pointer first lets the adjustment be unguarded and folded into the
+        // displacement -- the image is `lwz r11, 0x24(r11)` at 0x8247163C with no
+        // `addic.` at all -- and the twice-mentioned `mNextShot` supplies the image's
+        // two dead home stores of the pointer at 0x50(r31) (0x82471624, 0x82471630).
+        // 94.6289 -> 100.0, 97 of 97 instructions equal.
+        MILO_LOG("   mNextShot = '%s'\n", mNextShot ? mNextShot->Name() : "NULL");
     }
 }
 
