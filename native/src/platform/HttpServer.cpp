@@ -217,10 +217,34 @@ HttpServer::CommandResult HttpServer::QueueAndWait(
     }
 
     if (!cmd.done) {
-        CommandResult timeout;
-        timeout.ok = false;
-        timeout.error = "Command timed out (main thread not processing?)";
-        return timeout;
+        // `cmd` lives on THIS stack frame.  Returning while the main thread
+        // still holds its address left a dangling pointer in the queue: the
+        // next ProcessCommands wrote the result into a dead frame (SIGSEGV in
+        // std::string::_M_replace under ProcessCommands, measured 2026-09-30
+        // when a 10 s load stalled the main thread under a polling client).
+        // Withdraw it if the main thread has not taken it yet; if it has, it
+        // is being processed right now -- wait for that to finish.
+        bool withdrawn = false;
+        {
+            std::lock_guard<std::mutex> lk(mQueueMutex);
+            std::vector<Command*> &q =
+                (type == kCmdScreenshot) ? mPendingScreenshots : mPendingCommands;
+            for (size_t i = 0; i < q.size(); i++) {
+                if (q[i] == &cmd) {
+                    q.erase(q.begin() + i);
+                    withdrawn = true;
+                    break;
+                }
+            }
+        }
+        if (withdrawn) {
+            CommandResult timeout;
+            timeout.ok = false;
+            timeout.error = "Command timed out (main thread not processing?)";
+            return timeout;
+        }
+        std::unique_lock<std::mutex> lk(cmd.mtx);
+        cmd.cv.wait(lk, [&] { return cmd.done; });
     }
 
     return cmd.result;
@@ -245,10 +269,12 @@ void HttpServer::ProcessCommands() {
             default: cmd->result.error = "Unknown command type"; break;
         }
         {
+            // notify under the lock: once `done` is visible the waiter may
+            // return and destroy the Command, cv included
             std::lock_guard<std::mutex> lk(cmd->mtx);
             cmd->done = true;
+            cmd->cv.notify_one();
         }
-        cmd->cv.notify_one();
     }
 
     DispatchInjectedButtons();
@@ -326,10 +352,12 @@ void HttpServer::ProcessScreenshots() {
     for (Command* cmd : batch) {
         HandleScreenshot(*cmd);
         {
+            // notify under the lock: once `done` is visible the waiter may
+            // return and destroy the Command, cv included
             std::lock_guard<std::mutex> lk(cmd->mtx);
             cmd->done = true;
+            cmd->cv.notify_one();
         }
-        cmd->cv.notify_one();
     }
 }
 
