@@ -244,9 +244,22 @@ bool DxMesh::CanDraw() const {
 void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
     MILO_ASSERT(mTransformCache.size() > i, 0x1ee);
     Transform &cached = mTransformCache[i];
-    float dx = cached.v.x - xfm.v.x;
-    float dy = cached.v.y - xfm.v.y;
+    // Declaration order is LOAD ORDER here, and it is measured rather than
+    // guessed: these three subtractions are the only thing that decides which
+    // of cached.v's three floats the image reads first at 0x30/0x34/0x38, and
+    // the offsets are charged (not a forgiven register permutation).  All six
+    // orders built and scored (w8-p 2026-09-30), norm / fuzzy:
+    //     dx/dy/dz  99.55705 / 98.08054      dx/dz/dy  99.57047 / 98.09396
+    //     dy/dx/dz  99.55705 / 98.14765      dy/dz/dx  99.55705 / 98.48322
+    //     dz/dx/dy  99.57047 / 98.16107      dz/dy/dx  99.57047 / 98.49664  <-- kept
+    // Note the two rulers disagree about the ranking, so picking on canonical
+    // alone would have stopped at dx/dz/dy and left 0.4pp of fuzzy on the table.
+    // The permutation the compiler applies is NOT a fixed function of
+    // declaration order -- dx/dy/dz loads (y,z,x) and dz/dx/dy loads (z,y,x) --
+    // so this had to be brute-forced.
     float dz = cached.v.z - xfm.v.z;
+    float dy = cached.v.y - xfm.v.y;
+    float dx = cached.v.x - xfm.v.x;
     if (Dot(xfm.m.y, cached.m.y) >= 0.8660254f
         && dx * dx + dy * dy + dz * dz < 2500.0f) {
         float invWeight = 1.0f - weight;

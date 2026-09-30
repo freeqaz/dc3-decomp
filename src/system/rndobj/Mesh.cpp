@@ -1202,6 +1202,23 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                     plane.a = vb0.x;
                     plane.b = vb0.y;
                     plane.c = vb0.z;
+                    // RESIDUAL 99.98586 / 4 rows (w8-p): the image's -Dot lowers to
+                    // `fmuls f10,f10,f9` on the Z pair, `fmadds f0,f0,f13,f10` on
+                    // the Y pair and `fnmadds f0,f12,f11,f0` on X
+                    // (0x82642900-0x8264290C), i.e. -(x*x' + (y*y' + z*z')); we emit
+                    // the identical three instructions with Y and Z exchanged, so
+                    // only the four `lfs` offsets at 0x826428E8-0x826428FC differ
+                    // (0x4/0x74 <-> 0x8/0x78).  MEASURED NEGATIVES, each a full
+                    // build, each EXACTLY inert at 99.98586 norm AND fuzzy:
+                    // swapping the arguments to `-Dot(planePoint, vb0)`; and
+                    // writing the product out by hand, explicitly right-associated
+                    // the way the image accumulates it,
+                    // `-(vb0.x*planePoint.x + (vb0.y*planePoint.y + vb0.z*planePoint.z))`.
+                    // MSVC canonicalises all three spellings to the same bytes; the
+                    // scheduler, not the source, picks which pair is the innermost
+                    // fmuls.  Same class as FillCompressedVertex in
+                    // rndobj/MeshVertCompress.h.  1132 B of matched_code is parked
+                    // behind it.
                     plane.d = -Dot(vb0, planePoint);
                     bspIt->left = 0;
                     if (i == 5) {
