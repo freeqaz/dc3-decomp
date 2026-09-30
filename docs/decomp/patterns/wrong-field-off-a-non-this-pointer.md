@@ -166,7 +166,7 @@ SCRATCH register at a call the tool cannot type (indirect call, by-value
 return, CRT/D3D external). The by-value-return part of that is now closed
 (below). The rest -- indirect calls and externals -- stays strict on purpose.
 
-## Instrument defects found by that pass (fixed, `77d3ed088`)
+## Instrument defects found by that pass (fixed on branch leads-disp-arith)
 
 `arg_regs()` -- the "exact registers from the callee's signature" model --
 was wrong in three measured ways:
