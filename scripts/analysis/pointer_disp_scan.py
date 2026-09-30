@@ -636,7 +636,7 @@ BUCKETS = [
     "anchor-normalised", "addi-not-an-address", "reordered",
     "contradicted-by-100pct",
     # leads -- reported on request, never findings
-    "base-unknown", "base-provenance-differs",
+    "base-unknown", "base-provenance-differs", "permuted-unobserved",
     # candidates -- every one needs adjudication
     "cand-adjacent-links", "cand-wrong-field-typed", "cand-chain-step",
     "cand-novel-address", "cand-permuted",
@@ -728,7 +728,7 @@ class Ref(int):
     """An interned expression id (distinguishable from an immediate)."""
 
 
-def effects_eval(words, relocs, symtab, E, sigs=None):
+def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
     """(effects, load_val, store_eff, addi_cons).
 
     effects    list[Ref]: every store to non-stack memory, call (with its fresh
@@ -893,6 +893,16 @@ def effects_eval(words, relocs, symtab, E, sigs=None):
         regs = None
         if callee in CRT_FLOAT_ARGS:
             regs = [("f", k) for k in range(1, CRT_FLOAT_ARGS[callee] + 1)]
+        elif callee in CRT_GPR_ARGS:
+            regs = [("g", 3 + k) for k in range(CRT_GPR_ARGS[callee])]
+        elif callee and callee.startswith("??$MakeString@"):
+            # MakeString takes a format and every argument BY REFERENCE: all
+            # GPR, no float slot, so the fresh run from r3 is exactly its args
+            regs = []
+            r = 3
+            while r <= 10 and r in fresh_g:
+                regs.append(("g", r))
+                r += 1
         elif callee and sigs:
             regs = arg_regs(sigs.get(callee))
         if regs is None:
@@ -1208,7 +1218,16 @@ def effects_eval(words, relocs, symtab, E, sigs=None):
                 fresh_g.clear()
                 fresh_f.clear()
             elif xo == 16 and always:                  # blr
-                effects.append(E("return", G(3), F(1)))
+                # only the register the signature returns in is observable;
+                # a void function's leftover f1 is scratch (Multiply(V3,Quat))
+                if ret_kind == "void":
+                    effects.append(E("return"))
+                elif ret_kind == "f":
+                    effects.append(E("return", F(1)))
+                elif ret_kind == "g":
+                    effects.append(E("return", G(3)))
+                else:
+                    effects.append(E("return", G(3), F(1)))
                 prev_uncond = True
             elif xo == 528 and always:                 # bctr (switch / tail)
                 effects.append(E("jump", ctr))
@@ -1287,15 +1306,37 @@ CRT_FLOAT_ARGS = {n: 1 for n in ("acos", "asin", "atan", "cos", "sin", "tan",
                                  "sqrt", "exp", "log", "log10", "floor", "ceil",
                                  "fabs", "cosh", "sinh", "tanh")}
 CRT_FLOAT_ARGS.update({"atan2": 2, "pow": 2, "fmod": 2})
+CRT_GPR_ARGS = {"memcpy": 3, "memset": 3, "memmove": 3, "memcmp": 3, "strlen": 1,
+                "strcmp": 2, "stricmp": 2, "_stricmp": 2, "strcpy": 2,
+                "strncpy": 3, "strcat": 2, "strchr": 2, "strrchr": 2, "strstr": 2,
+                "strncmp": 3, "_strnicmp": 3}
+
+
+def ret_kind_of(demangled):
+    """'void' | 'f' | 'g' | None -- which register a function returns in."""
+    if not demangled or "__cdecl" not in demangled:
+        return None
+    head = demangled.split("__cdecl", 1)[0].strip()
+    if head.startswith(ACCESS_WORDS):
+        head = head.split(":", 1)[1]
+    head = head.replace("virtual", "").replace("static", "").strip()
+    if head == "void":
+        return "void"
+    if head in ("float", "double"):
+        return "f"
+    if not head or (("class " in head or "struct " in head or "union " in head)
+                    and not head.endswith(("*", "&"))):
+        return None
+    return "g"
 
 
 class ValueFlow:
-    def __init__(self, tw, trel, bw, brel, symtab, sigs=None):
+    def __init__(self, tw, trel, bw, brel, symtab, sigs=None, ret_kind=None):
         self.E = Interner()
         (self.t_eff, self.t_ld, self.t_st,
-         self.t_addi) = effects_eval(tw, trel, symtab, self.E, sigs)
+         self.t_addi) = effects_eval(tw, trel, symtab, self.E, sigs, ret_kind)
         (self.b_eff, self.b_ld, self.b_st,
-         self.b_addi) = effects_eval(bw, brel, symtab, self.E, sigs)
+         self.b_addi) = effects_eval(bw, brel, symtab, self.E, sigs, ret_kind)
         self.t_un = _unmatched(self.t_eff, self.b_eff)
         self.b_un = _unmatched(self.b_eff, self.t_eff)
         self.t_all = set(self.t_eff)
@@ -1542,7 +1583,7 @@ def compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm, sigs=None):
             row["bucket"] = "contradicted-by-100pct"
             continue
         if vf is None:
-            vf = ValueFlow(tw, trel, bw, brel, symtab, sigs)
+            vf = ValueFlow(tw, trel, bw, brel, symtab, sigs, ctx.get("ret"))
         if (vf.addi_benign(ti, bi) if is_addi else vf.benign(ti, bi)):
             row["bucket"] = "reordered"
             continue
@@ -1595,6 +1636,11 @@ def compare_function(tw, trel, bw, brel, symtab, ctx, layouts, norm, sigs=None):
         row["permuted"] = permuted
         if tf and of and is_link_pair(tf[0], of[0]):
             row["bucket"] = "cand-adjacent-links"
+        elif permuted and vf is not None and not vf.t_un and not vf.b_un:
+            # every effect the linear pass can see matches; the row's value was
+            # simply never observed (a use across a back edge or a jump).
+            # Not excused -- the pass is blind there -- but not evidence either
+            row["bucket"] = "permuted-unobserved"
         elif permuted:
             row["bucket"] = "cand-permuted"
         elif tf and of:
@@ -1623,7 +1669,7 @@ def function_ctx(unit, name, demangled):
         if r:
             kind, cls = r
     return {"member": kind == "member", "class": cls,
-            "params": split_params(dm), "kind": kind}
+            "params": split_params(dm), "kind": kind, "ret": ret_kind_of(dm)}
 
 
 def iter_units(objdiff):
@@ -1733,7 +1779,8 @@ def _explain_effects(args):
         sigs = {}
         for (_u, nm), dm in sorted(demangled.items()):
             sigs.setdefault(nm, dm)
-        vf = ValueFlow(*tb[args.explain], *bb[args.explain], symtab, sigs)
+        vf = ValueFlow(*tb[args.explain], *bb[args.explain], symtab, sigs,
+                       ret_kind_of(sigs.get(args.explain)))
         for side, eff, un in (("target", vf.t_eff, vf.t_un), ("ours", vf.b_eff, vf.b_un)):
             print(f"  effects only in {side} ({len(un)} distinct of {len(eff)}):")
             for e in sorted(un):
@@ -1808,6 +1855,7 @@ def main(argv=None):
         "contradicted-by-100pct": "contradicted by report.json = 100.0 (MY artifact)",
         "base-unknown": "LEAD: a base value unknown/unresolvable on a side",
         "base-provenance-differs": "LEAD: the two bases hold different values",
+        "permuted-unobserved": "LEAD: permuted, all effects match, row's value never observed",
         "cand-adjacent-links": "CANDIDATE: adjacent links of one node (direction bug shape)",
         "cand-wrong-field-typed": "CANDIDATE: wrong field of a typed base",
         "cand-chain-step": "CANDIDATE: untyped p = p->field step",
@@ -1834,7 +1882,8 @@ def main(argv=None):
                 print_row(r)
     if args.show_leads:
         leads = [r for r in rows if r["bucket"] in ("base-unknown",
-                                                     "base-provenance-differs")]
+                                                     "base-provenance-differs",
+                                                     "permuted-unobserved")]
         print(f"\n  leads: showing {min(args.show_leads, len(leads))} of {len(leads)}")
         for r in leads[: args.show_leads]:
             print(f"  {r['symbol']}")
