@@ -442,50 +442,61 @@ TEST_F(MergeLifecycleTest, MergeReplaceSubdirsSurviveSourceDeletion) {
 }
 
 // ============================================================================
-// Test 8: CascadeSkipsObjectsWithExternalDirPtrs
+// Test 8: CascadeDeletesNamedObjectDespiteExternalDirPtr
 //
-// Models the core game scenario: an ObjectDir is being destroyed, but it
-// contains an object registered via SetName that has DirPtrs from outside.
-// The cascade should NOT call NullifyAllRefs on the object, and
-// DeleteObjects should NOT destroy it.
+// An ObjectDir named in a subdir of a dir being destroyed, with an ObjDirPtr
+// to it from OUTSIDE the cascade.
 //
-// Scenario: parent dir has a subdir. The subdir's hash table contains an
-// ObjectDir "hudLeft" with an external ObjDirPtr. When the parent dir is
-// destroyed, the subdir cascade should skip hudLeft because it has DirPtrs.
+// The image: ~ObjectDir(parent) -> mSubDirs.clear() releases the last DirPtr
+// to anonSub, which deletes it; ~ObjectDir(anonSub) -> DeleteObjects deletes
+// EVERY object in its hash table (system/obj/Dir.s,
+// ?DeleteObjects@ObjectDir@@QAAXXZ: ObjDirItr over the dir, `bctrl` through
+// vtable slot 0 with r4 = 1 for each object that is not the dir itself --
+// there is no DirPtr test), so hudLeft is deleted, and its ~Object gives the
+// external ObjDirPtr Replace(nullptr); ObjDirPtr::operator= does not delete
+// it a second time because HasDirPtrs() answers true while sDeleting == it.
+// The external ref reads NULL afterwards.
+//
+// This test used to be CascadeSkipsObjectsWithExternalDirPtrs and pinned the
+// opposite -- "external ref to hudLeft must survive" -- which native kept only
+// by LEAKING anonSub: the ~ObjectDir pre-nullify saw a survivor inside it and
+// nulled the parent's DirPtr instead of releasing it, so anonSub was never
+// destroyed, and hudLeft lived on with Dir() == NULL.  The same object named
+// directly in the dir being destroyed was already deleted and its external
+// ref nulled, as in the image; only one level down did it "survive".  On the
+// perform, dance-battle and party routes that leak path never ran for
+// anything but the cascade root (native-lifetime2 audit), so nothing on the
+// routes needed the survival.  (Original motivation, d41f5bf72: hud_left /
+// hud_right lost after the game_hud merge -- a SUBDIR shared into the target,
+// which survives by refcount in the image too; see Test 9.)
 // ============================================================================
 
-TEST_F(MergeLifecycleTest, CascadeSkipsObjectsWithExternalDirPtrs) {
-    // Create a parent dir (simulates PanelDir "hud")
+TEST_F(MergeLifecycleTest, CascadeDeletesNamedObjectDespiteExternalDirPtr) {
     ObjectDir *parent = Hmx::Object::New<ObjectDir>();
     parent->SetName("parent_hud", ObjectDir::Main());
 
-    // Create a child ObjectDir (simulates anonymous subdir from PostLoad)
     ObjectDir *anonSub = Hmx::Object::New<ObjectDir>();
     anonSub->SetName("anon_sub", parent);
     parent->AppendSubDir(ObjDirPtr<ObjectDir>(anonSub));
 
-    // Create an object in the child dir (simulates hud_left after PostLoad
-    // reassigned it to the anonymous subdir)
     ObjectDir *hudLeft = Hmx::Object::New<ObjectDir>();
     hudLeft->SetName("hud_left_obj", anonSub);
 
-    // Hold an external ObjDirPtr to hudLeft (simulates DTA $hud or external ref)
     ObjDirPtr<ObjectDir> externalRef(hudLeft);
     ASSERT_EQ((ObjectDir *)externalRef, hudLeft);
-
-    // Verify hudLeft is findable in the anonymous subdir
     ASSERT_NE(anonSub->FindObject("hud_left_obj", false, false), nullptr);
 
-    // Delete the parent dir. This triggers the cascade on parent, which
-    // collects anonSub (via SubDirs). The cascade should skip hudLeft
-    // because it has external DirPtrs (externalRef).
+    Hmx::DeathWatch subWatch(anonSub);
+    Hmx::DeathWatch objWatch(hudLeft);
     delete parent;
 
-    // CORE ASSERTION: external ref to hudLeft must survive
-    EXPECT_NE((ObjectDir *)externalRef, nullptr)
-        << "External ObjDirPtr to object in destroyed dir was nullified by cascade";
+    EXPECT_TRUE(subWatch.Dead())
+        << "the subdir leaked: its parent's DirPtr was nulled, not released";
+    EXPECT_TRUE(objWatch.Dead())
+        << "an object named in a destroyed dir outlived it";
+    EXPECT_EQ((ObjectDir *)externalRef, nullptr)
+        << "the external ObjDirPtr still points at the deleted object";
 
-    // Cleanup
     externalRef = nullptr;
 }
 
