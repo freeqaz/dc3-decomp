@@ -3,6 +3,8 @@
 // the (b) ADDS triage in docs/decomp/patterns/native-shadow-bodies-are-unmeasured.md.
 #include "test_helpers.h"
 
+#include "obj/Dir.h"
+#include "obj/DirLoader.h"
 #include "obj/Object.h"
 #include "obj/Task.h"
 #include "rndobj/Anim.h"
@@ -93,4 +95,47 @@ TEST_F(NativeEngineLeadsTest, AnimTaskEndedKeepsTargetForBlendChaining) {
     delete second;
     delete first;
     delete target;
+}
+
+// ----------------------------------------------------------------------------
+// ObjectDir::FindObject
+// ----------------------------------------------------------------------------
+
+// While a proxy dir loads, its Dir() is itself (DirLoader::LoadHeader names it
+// into itself; Cleanup names it back into the proxy dir).  The image's
+// FindObject(name, false, true) searches only the dir and its subdirs -- no
+// parent, no proxy dir -- and callers that want the proxy dir ask for it
+// themselves (FlowPtrBase::LoadObject via FlowPtrGetLoadingDir; the
+// gLoadingProxyFromDisk loads of RndDir::mEnv / trans parent read into a
+// discarded temporary).  Native added a fallback into the loader's ProxyDir /
+// ParentDir that bound names the Xbox leaves null: e.g. CharacterTest::mDriver
+// in every outfit and skeleton character got its PARENT's main.drv, and a flow
+// in a proxy-of-a-proxy (results_cluster inside perform_endgame) bound
+// bg_*_color.anim two dirs up.
+TEST_F(NativeEngineLeadsTest, FindObjectDoesNotSearchALoadingProxysParent) {
+    ObjectDir *parent = Hmx::Object::New<ObjectDir>();
+    parent->SetName("lead_parent", ObjectDir::Main());
+    Hmx::Object *onlyInParent = parent->New<Hmx::Object>("only_in_parent.obj");
+    ASSERT_NE(onlyInParent, nullptr);
+
+    ObjectDir *proxy = Hmx::Object::New<ObjectDir>();
+    proxy->SetName("lead_proxy", parent);
+    DirLoader *loader = new DirLoader(
+        FilePath("lead_proxy.milo"), kLoadFront, nullptr, nullptr, proxy, false, nullptr
+    );
+    ASSERT_EQ(loader->ProxyDir(), parent);
+    ASSERT_EQ(proxy->Loader(), loader);
+    proxy->SetName("lead_proxy", proxy); // what LoadHeader does mid-load
+    ASSERT_EQ(proxy->Dir(), proxy);
+
+    EXPECT_EQ(parent->FindObject("only_in_parent.obj", false, true), onlyInParent)
+        << "control: the parent must find its own object";
+    EXPECT_EQ(proxy->FindObject("only_in_parent.obj", false, true), nullptr)
+        << "a loading proxy's FindObject(name, false, true) returned an object from "
+           "its proxy dir.  The image (ObjectDir::FindObject, 100% matched) searches "
+           "only the dir and its subdirs; native bound what the Xbox leaves null.";
+
+    delete loader; // Cleanup names the proxy back into its proxy dir
+    delete proxy;
+    delete parent;
 }

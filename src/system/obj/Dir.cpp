@@ -1128,25 +1128,14 @@ Hmx::Object *ObjectDir::FindObject(const char *name, bool parentDirs, bool subDi
             return sMainDir->FindObject(name, false, true);
         }
     }
-#ifdef HX_NATIVE
-    // Native fallback: when Dir() is self-referential during loading,
-    // search via the DirLoader's ProxyDir chain. On Xbox, MergeDirs
-    // flattens all objects into the same scope so this isn't needed.
-    // ProxyDir points to the parent dir that loaded this proxy object
-    // (same fallback FlowPtr uses via FlowPtrGetLoadingDir).
-    if (!parentDirs && subDirs && Dir() == this && mLoader) {
-        ObjectDir *proxyDir = mLoader->ProxyDir();
-        if (proxyDir && proxyDir != this) {
-            Hmx::Object *found = proxyDir->FindObject(name, false, true);
-            if (found) return found;
-        }
-        DirLoader *loader = mLoader;
-        if (loader->ParentDir() && loader->ParentDir() != this) {
-            Hmx::Object *found = loader->ParentDir()->FindObject(name, false, true);
-            if (found) return found;
-        }
-    }
-#endif
+    // No native proxy/parent-loader fallback here (removed 2026-09-30). The image
+    // searches only this dir and its subdirs. A loading proxy's Dir() is itself,
+    // and the callers that want its proxy dir ask for it explicitly: FlowPtr via
+    // FlowPtrGetLoadingDir, and the gLoadingProxyFromDisk loads of mEnv / trans
+    // parent read into a discarded temporary. The fallback bound what the Xbox
+    // leaves null (every outfit/skeleton CharacterTest::mDriver got its parent's
+    // main.drv; flows in a proxy-of-a-proxy bound objects two dirs up). Pinned by
+    // NativeEngineLeadsTest.FindObjectDoesNotSearchALoadingProxysParent.
     return nullptr;
 }
 
