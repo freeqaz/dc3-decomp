@@ -209,7 +209,20 @@ class Harvest:
         with open(boot_script, "w") as f:
             f.write("\n".join(lines) + "\n")
         env["MILO_INPUT_SCRIPT"] = boot_script
-        self.binary = binary
+        # Pin the exact executable this run uses: symbolising a backtrace
+        # against a binary relinked mid-run names the wrong functions (seen
+        # 2026-09-30: every site resolved to Debug::Modal / MakeString after a
+        # rebuild during the run).  A hard link keeps the old inode alive when
+        # the linker replaces the file; fall back to a copy across filesystems.
+        pinned = os.path.join(self.out, "dc3-native.pinned")
+        try:
+            if os.path.exists(pinned):
+                os.unlink(pinned)
+            os.link(binary, pinned)
+        except OSError:
+            import shutil
+            shutil.copy2(binary, pinned)
+        self.binary = pinned
         self.logf = open(self.log_path, "wb")
         self.proc = subprocess.Popen([binary], cwd=os.path.dirname(binary), env=env,
                                      stdout=self.logf, stderr=subprocess.STDOUT)
@@ -497,6 +510,8 @@ def main():
     args = ap.parse_args()
     h = Harvest(args)
     h.binary = os.path.join(REPO, "native", "build", "dc3-native")
+    if os.path.exists(os.path.join(h.out, "dc3-native.pinned")):
+        h.binary = os.path.join(h.out, "dc3-native.pinned")
     if args.analyse_only:
         with open(os.path.join(h.out, "stages.json")) as f:
             h.stages = json.load(f)
