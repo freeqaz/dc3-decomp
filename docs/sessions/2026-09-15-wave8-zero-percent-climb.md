@@ -584,3 +584,93 @@ And I ran `ninja` inside a working lane's tree while probing a tool.
   checked for native-side compensation and found none (no `HX_NATIVE` guard in
   that file), so the composition is faithful — but a targeted test for the hip Z
   axis is genuinely missing and would be the highest-value test to add.
+
+### Phase 3 closed — `w8-r` landed, and what the numbers say about phase 4
+
+`w8-r` merged as `d467b964a`: **+4** (31,367 → 31,371), five UP rows, zero DOWN,
+all guards green. Its `StreamBufferData` fix was the **second** convergence of the
+tranche — another session landed the same bug as `78fd9a1a4` while the lane was
+working, exactly as happened with `Plane::Set`. Main's spelling was kept in both
+cases; the lanes' evidence was preserved.
+
+  98.018 -> 100.000  Voice::IsPlaying                        444 B
+  93.940 -> 100.000  TextureStore::UpdateFromDepthBuffer     332 B
+  94.329 -> 100.000  LiveCameraInput::GetTweakedAutoexposure 328 B
+  96.345 -> 100.000  LiveCameraInput::Init                   220 B
+  98.374 ->  98.908  LiveCameraInput ctor                   1520 B
+
+Two more bugs, verified against the listing before landing. The **double buffer
+never advanced**: the image derives a stream index from the buffer type
+(`cmpwi r31, 0x2` → `li r11, 0x1`, else a `subfic`/`subfe` mask giving
+`idx = (type != 3) ? type : 0`), then reads `mFrames[mReadIdx]` via
+`lwz r11, 0x1458(r11)` = `mStreams` + 0x10; we indexed `mStreams[type]` with a
+constant frame, so `kBufferPlayer` always returned null and colour/depth returned
+the wrong half of the double buffer on alternate frames. And the ctor built
+**`SpeechMgr` from the wrong array** — `mr r25, r3` at `0x82432E78` captures
+`FindArray("speech")` and `mr r4, r25` at `0x82432FA8` immediately precedes the
+ctor call; `kinectArr` lives in r23 and is never passed.
+
+A third retraction the lane earned: both `speechArr` locals are read
+**uninitialised** in the image and faithfully reproduced (nulled under
+`HX_NATIVE`), which retracts a prior reading of two ctor rows as "the image
+spills and reloads across that join".
+
+**COMDAT cross-validation.** `w8-r` ran the selection audit over its five objects
+— 689 compared, 10 mismatches, **zero** actionable — and its per-object counts
+(Voice 8, LiveCameraInput 2) match the whole-binary run exactly. FFT's callees
+*are* same-TU, so the lever was not excluded by construction there; it was
+excluded by measurement finding nothing. FFT moved 0 pp, as the brief's
+calibration predicted.
+
+### Phase 3 final
+
+| measure | dispatch `0e1dcb139` | close `d467b964a` |
+|---|---:|---:|
+| Matched functions | 31,353 | **31,371** (+18) |
+| Matched code | 5,563,340 B | **5,568,116 B** |
+| XEX-total headline | 48.91 % | **48.95 %** |
+| **Authorable canonical** | 97.19 % | **97.25 %** (31,334 / 32,221) |
+| Remaining authorable | 905 fns / 601,084 B | **887 fns / 593,996 B** |
+| Complete authorable units | 640 / 967 | **640 / 967** |
+
++18 overall: +17 from the six lanes (0, +3, +5, +2, +3, +4) and the remainder
+from the other session's convergent fixes.
+
+**Native gate green** on the fully merged tree: 510 registered, 441 executed,
+**441 passed, 0 failed**, 69 skipped against budget 69, skip-suite block
+identical to every earlier run. Across this session registered grew 506 → 510
+while the skip count never moved, so coverage rose. Log:
+`~/tmp/dc3-wells/w8/native-gate-phase3-final.log`.
+
+### The planning finding: closing rows and completing units are nearly disjoint
+
+**Phase 3 closed 18 functions and moved the complete-units metric by exactly
+zero.** Units needing one more function is still **149 / 127,732 B**, units
+needing two still **66**, incomplete units still **326** — all unchanged. That is
+not an error: the lanes were given concentration units (18, 15, 14 rows each), so
+a unit going 15 → 14 never touches the one-short bucket.
+
+So the two obvious derivations pull in opposite directions, and a wave has to
+choose. Phase 3 chose row count and got it. To move complete-units, phase 4 must
+target the 149 one-short units directly — and unlike `w8-l`'s experience (3 of 25,
+all above 99.9 %), several of the cheapest now have real room:
+
+| bytes | current | unit |
+|---:|---:|---|
+| 124 | **78.387 %** | `synth/MoggClip` |
+| 80 | 85.000 % | `hamobj/FilterVersion` |
+| 80 | 87.000 % | `math/Rand` |
+| 72 | 88.889 % | `utl/KnownIssues` |
+| 96 | 91.667 % | `utl/EncryptXTEA` |
+| 120 | 93.333 % | `synth_xbox/SynapseAPO` |
+| 116 | 94.448 % | `os/JoypadClient` |
+| 168 | 97.619 % | `ui/UILabelDir` |
+| 176 | 97.727 % | `synth/StandardStream` |
+
+⚠ **Exclude** the three cheapest one-short rows from any such list: `jcmaster`
+(24 B), `ZlibLicense` (24 B) and `synth_xbox/SynthSample` (132 B) all sit at
+0.000 % and were already adjudicated structurally unscoreable by earlier lanes.
+Dispatching them would burn a lane on rows nothing can score.
+
+Bands at close: 18 rows at exactly 0 % (2,976 B), 32 under 80 %, 56 in 80–90,
+109 in 90–95, **344 in 95–99 (228,436 B)**, 153 in 99–99.9, 112 above 99.9.
