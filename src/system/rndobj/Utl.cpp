@@ -2304,7 +2304,6 @@ const char *ResourceFileCacheHelper::CacheFile(const char *cc) {
 // 89.613 unchanged -- MSVC's propagation is not source-order sensitive for a
 // template instantiation, so compile order is NOT the discriminator.  The
 // remaining hypothesis is that the image compiled the two in different TUs.
-#ifndef HX_NATIVE
 bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
     unsigned short aMax = v1, aMin = v0;
     unsigned int a;
@@ -2322,7 +2321,6 @@ bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
     }
     return a < b;
 }
-#endif
 
 #include "rndobj\CamAnim.h"
 

@@ -23,6 +23,7 @@
 #include "obj/Dir.h"
 #include "os/Debug.h"
 #include "math/kdTree.h"
+#include "rndobj/AmbientOcclusion.h"
 
 #include <cstdlib>
 #include <vector>
@@ -389,6 +390,24 @@ TEST(NativeShadowUnit, KdTreeSplitAxisLivesInTheLowMantissaBits) {
     uint32_t bits;
     memcpy(&bits, &node.mData.real, sizeof(bits));
     EXPECT_EQ(bits & 3u, 2u) << "the axis must occupy the float's two low bits";
+}
+
+// ---------------------------------------------------------------------------
+// RndAmbientOcclusion::Edge::operator< keys an unordered vertex pair as
+// (min << 16) | max (Utl.s ??MEdge@RndAmbientOcclusion: 8262BE08.. cmplw;
+// bge; slwi 16; or). The native build compiled a second copy in
+// AmbientOcclusion.cpp keyed (max << 16) | min. Both identify the same pair,
+// and today's std::set<Edge> users only find/insert, so no result changes --
+// but iteration order, and any future ordered use, diverged.
+// ---------------------------------------------------------------------------
+TEST(NativeShadowUnit, AmbientOcclusionEdgeOrderIsMinMajor) {
+    RndAmbientOcclusion::Edge a = { 1, 2, 0 }; // key 0x00010002
+    RndAmbientOcclusion::Edge b = { 3, 0, 0 }; // key 0x00000003
+    EXPECT_FALSE(a < b) << "image orders by the SMALLER vertex first";
+    EXPECT_TRUE(b < a);
+    RndAmbientOcclusion::Edge c = { 2, 1, 0 };
+    EXPECT_FALSE(a < c);
+    EXPECT_FALSE(c < a) << "the key is order-independent in the pair";
 }
 
 } // namespace

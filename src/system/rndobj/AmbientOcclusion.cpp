@@ -79,19 +79,9 @@ void BuildSphereStratified(unsigned int, std::vector<Vector3> &);
 // Values read from the target's .rdata at 0x820A658C (16 bytes).
 static const int kQualityLUT[] = { 300, 150, 2, 0 };
 
-// PPC: Edge::operator< lives in Utl.cpp (matching original link unit).
-// Native: define it here since AmbientOcclusion.cpp is the natural home.
-#ifdef HX_NATIVE
-bool RndAmbientOcclusion::Edge::operator<(const Edge &other) const {
-    short aMin = v0 < v1 ? v0 : v1;
-    short aMax = v0 < v1 ? v1 : v0;
-    short bMin = other.v0 < other.v1 ? other.v0 : other.v1;
-    short bMax = other.v0 < other.v1 ? other.v1 : other.v0;
-    unsigned int a = ((unsigned int)(unsigned short)aMax << 16) | (unsigned short)aMin;
-    unsigned int b = ((unsigned int)(unsigned short)bMax << 16) | (unsigned short)bMin;
-    return a < b;
-}
-#endif
+// Edge::operator< lives in Utl.cpp (the image's link unit) on BOTH builds.
+// A native-only copy used to sit here, keyed (max << 16) | min where the
+// image keys (min << 16) | max.
 
 void RndAmbientOcclusion::BlendVert(
     const RndMesh::Vert &v1, const RndMesh::Vert &v2, RndMesh::Vert &out
