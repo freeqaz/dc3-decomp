@@ -119,7 +119,8 @@ bucket.
 
 Whole binary at `731b6137f` (main), same universe and coverage as below:
 **218 candidate rows in 20 functions** (cand-permuted 216/19, cand-novel-address
-2/2). **Every one adjudicated; zero real bugs.** Method: both listings traced by
+2/2). **217 read on this pass, the 218th (UpdateLine's novel-address row) is
+det-disp's refutation; zero real bugs.** Method: both listings traced by
 hand (`build/373307D9/asm/**` against objdiff's aligned listing), and for the
 float-heavy leaf functions a two-sided numeric run -- the image's `.text` and
 ours executed in the unicorn PPC harness on the same random inputs, output
@@ -139,16 +140,16 @@ returns **3.6e-7**).
 | `Invert(Matrix4)` (10) | yes | numeric, both `.text`s, 400 inputs (half affine): max relative diff **4.1e-6** |
 | `Multiply(Transform, Transform, Transform&)` (7) | PPC arm only | both arms (`&b == &out` and not) traced to the same `a.v * b.m + b.v`; numeric, both aliasing modes, 300 inputs each: **6.2e-7 / 7.2e-7**; sabotage control above |
 | `Multiply(Matrix3, Matrix3, Matrix3&)` (3) | yes | numeric, 300 inputs: **9.5e-7** |
-| `CSHA1::Transform` (147) | yes | already verified behaviourally (both `.text`s produce SHA-1("abc"); see `src/system/math/SHA1.cpp`) |
+| `CSHA1::Transform` (147) | yes | re-verified first-hand: both `.text`s in unicorn, 100 random (state, block) pairs with `m_block` pointed into the compared region (the `memcpy` is a stub, so the block is seeded in place): object region **byte-identical 100/100**, state changed in 100/100. Earlier: both produce SHA-1("abc") (`src/system/math/SHA1.cpp`) |
 | `ArcDetector::Update` (4) | yes | the 16-byte node copy into the stack Vector3 is the same word-for-word map in another order; the rest is scratch at `list::insert` |
 | `SkeletonQualityFilter::UpdateIsSideways` (4) | yes | joint loads permuted; the only differing effect is the compare constant: image `.data` `lbl_82F0C194` = **0.25** (read once, never written), ours `__real@3e800000` |
 | `RndCam::GetViewProjectXfms` (1) | yes | image `fneg`, then `* 2.0`; ours `* -2.0` (the source comment's known residual): projYNum equal. Scratch `f12` at `ScreenRect` |
 | `SpotlightDrawer::DrawWorld` (3) | yes | intensity-scaled colour: r/g/b land at 0x60/0x64/0x68 on both sides; differing FPRs are scratch at the vcall |
 | `RndParticleSys::InitParticle` (2) | yes | `size + sizeVel` added in the other order. (Its one-sided `vel.w` store: the image joins the ternary before one store, we store in each arm) |
 | `DxParticleSys::DrawParticles` (2) | no (rnddx9) | scratch GPRs at `D3DDevice_EndVertices` (takes r3 only) |
-| `FlowDistance::Activate` (2), `kdTree::FindSplit_Mean` (6) | yes | adjudicated by det-disp (scratch f13 at a vcall; two `rlwimi` spellings of one insert) |
-| `RndLine::UpdateLine` (3 + 1 novel) | yes | see the arith doc's trace-crossed-branch pass (same function, same lane) and det-disp's novel-address refutation |
-| `HamDirector::CollideList` (1 novel) | yes | det-disp: refuted |
+| `FlowDistance::Activate` (2), `kdTree::FindSplit_Mean` (6) | yes | re-read: the only one-sided effect in Activate is a scratch FPR at the slot-0x1c vcall (takes r3, r4); FindSplit_Mean's float loads meet the same sums, and its two stores are `rlwimi` with complementary masks and swapped operands -- both `(old & ~3) \| (x & 3)` |
+| `RndLine::UpdateLine` (3 + 1 novel) | yes | the 3 permuted rows traced this pass: load-order permutations (`nextProj.x - proj.x` -> +0x38; `side + proj` -> 0x60/0x64(r1) on both sides). The novel-address row: det-disp's refutation, not re-read |
+| `HamDirector::CollideList` (1 novel) | yes | re-read: both dispatch `CollideList` (vtable slot 0x2c) on the venue's RndDrawable; the image's pointer already is that subobject, ours adjusts by +0x9c (a base-order question the source comment records, not a field) |
 
 **Outside the candidate buckets** (a sample, not the bucket): 7 of the 22
 `permuted-unobserved` LEAD rows were read too -- `MeasureMap::
