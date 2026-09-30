@@ -745,6 +745,12 @@ void ViewerScene::AutoFrameCamera(OrbitCamera& cam, RndCam* rndCam, const Viewer
 }
 
 bool ViewerScene::ShouldHideMesh(const RndMesh* mesh, const ViewerConfig& cfg) {
+    // The viewer walks the ObjectDir and calls DrawShowing() on each mesh,
+    // bypassing RndDrawable::Draw() -- which is where Milo gates on Showing().
+    // RndMesh::DrawShowing does not test the flag (neither does the image's
+    // DxMesh::DrawShowing), so the gate is applied here. ResolveMeshVisibility's
+    // LOD demotion works by clearing Showing(), and relies on it.
+    if (!mesh->Showing()) return true;
     for (auto& pat : cfg.hidePatterns) {
         if (strstr(mesh->Name(), pat.c_str())) return true;
     }

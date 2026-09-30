@@ -10,6 +10,8 @@
 #include "obj/Dir.h"
 #include "obj/Object.h"
 #include "platform/FFmpegMovieImpl.h"
+#include "platform/MeshDrawShowing.h"
+#include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
 #include "utl/BufStream.h"
 #include "world/Crowd3DCharHandle.h"
@@ -223,6 +225,67 @@ TEST_F(NativeSuspectsTest, CrowdCharHandleSyncPropertyResolvesTheEmptyPath) {
         << "control: an unknown property name is not handled";
     prop->Release();
     delete handle;
+}
+
+// ----------------------------------------------------------------------------
+// RndMesh::DrawShowing (native: milo-native-engine src/platform/Mesh_Wgpu.cpp)
+// ----------------------------------------------------------------------------
+
+// The image's override is DxMesh::DrawShowing (826229B0, 100% matched in
+// src/system/rnddx9/Mesh.cpp).  Its only refusal is `!geom->CanDraw()` -- no
+// GPU buffers and not mutable.  It never tests Showing(): RndDrawable::Draw()
+// is the showing gate, and every caller that invokes DrawShowing() directly
+// (UIListMeshElement::Draw on a list's hidden template mesh, RndText, RndLine,
+// RndRibbon, RndMultiMeshProxy, CharFeedback, ...) draws the mesh regardless.
+// It never tests the name either: which LOD a Character draws is decided by
+// Character::DrawShowing / DrawLodOrShadow from its mLods groups, and its
+// shadow pass (DrawLodOrShadow drawMode 4 -> mShadow.Draw()) deliberately draws
+// the *_lod meshes.  Native refused both a hidden named mesh and every mesh
+// whose name contains "_lod".
+struct DrawShowingFixture {
+    ObjectDir *dir;
+    RndMat *mat;
+    DrawShowingFixture() {
+        dir = Hmx::Object::New<ObjectDir>();
+        dir->SetName("suspects_drawshowing", ObjectDir::Main());
+        mat = dir->New<RndMat>("suspects_drawshowing.mat");
+    }
+    ~DrawShowingFixture() { delete dir; }
+    RndMesh *Mesh(const char *name, bool showing) {
+        RndMesh *mesh = dir->New<RndMesh>(name);
+        mesh->SetMat(mat);
+        mesh->SetShowing(showing);
+        return mesh;
+    }
+};
+
+TEST_F(NativeSuspectsTest, MeshDrawShowingDrawsAHiddenNamedMesh) {
+    DrawShowingFixture f;
+    // The shape UIListMeshElement::Draw hands it: list_choose_mode.milo's
+    // template meshes are hidden in the file and drawn once per list element.
+    RndMesh *hidden = f.Mesh("suspects_row_template.mesh", false);
+    const char *skip = RndMeshDrawShowingSkip(hidden);
+    EXPECT_EQ(nullptr, skip) << "refused a hidden named mesh: " << (skip ? skip : "");
+    EXPECT_EQ(nullptr, RndMeshDrawShowingSkip(f.Mesh("suspects_shown.mesh", true)))
+        << "control: a showing mesh with a material is drawn";
+    RndMesh *noMat = f.Mesh("suspects_no_mat.mesh", true);
+    noMat->SetMat(nullptr);
+    EXPECT_NE(nullptr, RndMeshDrawShowingSkip(noMat))
+        << "control: the predicate can refuse (a mesh with no material)";
+}
+
+TEST_F(NativeSuspectsTest, MeshDrawShowingDrawsLodNamedMeshes) {
+    DrawShowingFixture f;
+    // rasa05_lod.mesh and friends are in rasa05's LOD-1 group and in its
+    // mShadow list; emilia01's emilia_head_lod1.1.mesh is in LOD group 0 -- the
+    // full-detail group.  The name says nothing about whether it is drawn.
+    for (const char *name :
+         {"rasa05_lod.mesh", "rasa05_lod.3.mesh", "emilia_head_lod1.1.mesh"}) {
+        const char *skip = RndMeshDrawShowingSkip(f.Mesh(name, true));
+        EXPECT_EQ(nullptr, skip) << name << " refused: " << (skip ? skip : "");
+    }
+    EXPECT_NE(nullptr, RndMeshDrawShowingSkip(f.Mesh("grid_80by60_cube.mesh", true)))
+        << "control: a consumer content filter still applies (Kinect depth grid)";
 }
 
 } // namespace

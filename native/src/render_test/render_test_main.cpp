@@ -106,6 +106,21 @@ static const TestCase sTests[] = {
 };
 static const int sNumTests = sizeof(sTests) / sizeof(sTests[0]);
 
+// render-test draws a venue by walking its ObjectDir and calling DrawShowing()
+// on every mesh. That bypasses both gates the game goes through: Showing() is
+// tested in RndDrawable::Draw(), not in DrawShowing() (the image's
+// DxMesh::DrawShowing has no such test, and neither does the native one now),
+// and which LOD of a Character is drawn is chosen by Character::DrawShowing
+// from its mLods groups. A dir walk has neither, so it applies the showing flag
+// itself and keeps the name heuristic dc3-native's renderer used to impose on
+// everyone -- here it is a property of this tool's traversal, not of the
+// renderer.
+static bool DrawWalkedMesh(RndMesh* mesh) {
+    if (!mesh->Showing()) return false;
+    if (strstr(mesh->Name(), "_lod")) return false;
+    return true;
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -316,13 +331,13 @@ int main(int argc, char** argv) {
 
                 ObjDirItr<RndMesh> meshIt(venueDir, true);
                 while (meshIt) {
-                    meshIt->DrawShowing();
+                    if (DrawWalkedMesh(meshIt)) meshIt->DrawShowing();
                     ++meshIt;
                 }
             } else {
                 ObjDirItr<RndMesh> meshIt(venueDir, true);
                 while (meshIt) {
-                    meshIt->DrawShowing();
+                    if (DrawWalkedMesh(meshIt)) meshIt->DrawShowing();
                     ++meshIt;
                 }
             }
@@ -331,7 +346,8 @@ int main(int argc, char** argv) {
         // Draw all drawables in test dir (meshes + text objects)
         ObjDirItr<RndDrawable> drawIt(testDir, false);
         while (drawIt) {
-            drawIt->DrawShowing();
+            RndMesh* drawMesh = dynamic_cast<RndMesh*>(&*drawIt);
+            if (!drawMesh || DrawWalkedMesh(drawMesh)) drawIt->DrawShowing();
             ++drawIt;
         }
 

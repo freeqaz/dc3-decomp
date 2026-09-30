@@ -155,13 +155,6 @@ UIListMeshElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
             sChooseModeMeshDiag++;
         }
 #endif
-#ifdef HX_NATIVE
-        bool restoreShowing = false;
-        if (!mesh->Showing()) {
-            mesh->SetShowing(true);
-            restoreShowing = true;
-        }
-#endif
         mesh->SetMat(mMat);
         mMat->SetAlpha(alpha * f);
         if (col != nullptr) {
@@ -170,11 +163,6 @@ UIListMeshElement::Draw(const Transform &tf, float f, UIColor *col, Box *box) {
         }
         mesh->DrawShowing();
         mMat->SetAlpha(alpha);
-#ifdef HX_NATIVE
-        if (restoreShowing) {
-            mesh->SetShowing(false);
-        }
-#endif
     }
 }
 
