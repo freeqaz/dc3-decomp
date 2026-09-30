@@ -256,8 +256,8 @@ branch. The 688 (b) regions are the next triage pass.
   populates it natively.
 - **`audio_mixer.milo` not loaded at native boot** — compare fader/send parameters at song
   start with and without it.
-- **`CharPollGroup.cpp`** — `DC3_POLL_ORDER_FIX=0` flips to a polarity its comment
-  wrongly calls "the PPC polarity" (the default is correct).
+- ~~**`CharPollGroup.cpp`** — `DC3_POLL_ORDER_FIX=0` comment~~ -- corrected on
+  `native-engineleads` (the default is the image's polarity; the opt-out is not).
 
 ## (b) ADDS triage (branch `native-additions`, 2026-09-30)
 
@@ -334,25 +334,46 @@ the pre-extension tool (3 of 8).
   blocked on `MetaPanel` never creating `Campaign`.
 - ~~**`UIScreen::OnMsg(ButtonDownMsg)` -> `skip_selected`**~~, ~~**`MoviePanel::Poll`
   `IsOpen` guard**~~ -- **FIXED on `native-gameflow`** (with `FFmpegMovieImpl::Poll`);
-  **`HamDirector::FindNextShot` Area1_WIDE fallback** (image keeps the shot and notifies),
-  **`HamNavList::RealRefresh`** recreates every widget on every refresh,
+  ~~**`HamDirector::FindNextShot` Area1_WIDE fallback**~~,
+  ~~**`HamNavList::RealRefresh`** recreates every widget on every refresh~~ -- **FIXED on
+  `native-engineleads`** (see "Engine leads" below),
   **`UIList::Refresh`** display recount, **`UI.cpp OnGotoScreen`** null -> main_screen
   (kept on `native-gameflow` but now a `MILO_WARN` on every hit),
-  **`WorldCrowd::DrawShowing`** static additive impostor cache,
-  **`SkeletonChooser::DoesRequireHandRaise`** always false.
-- **`ObjectDir::FindObject`** proxy/parent-loader fallback binds pointers the image leaves
-  null -- log every non-null fallback hit over a boot and a song.
-- **`RndDir::SyncObjects`** moves `*ikfoot*`/`*feetandhands*` polls last **by default**
-  (`DC3_FEET_PLANT_FIX_OFF` to disable) although every sibling of that experiment is
-  opt-in and `Dc3FeetPlantFix()` calls itself non-functional; the image does not reorder.
-- **UNSURE:** `HamDirector::Poll` drives `songAnim->SetFrame` from the beat (double drive
-  if `select_camera` also fires -- count `OnSelectCamera` calls); `SetupRoutineBuilderAnims`
-  `mLoop=false` (read the routine anim's EndFrame after `ResetRemixer`);
-  `CharForeTwist`/`CharUpperTwist` write `mLocalXfm` (compare Xenia twist-bone telemetry).
-- **`AnimTask::Poll` (unowned -- flagged to `native-animbypass`, not in its merge):** it nulls `mAnimTarget` before the `ended`
-  listener runs; the task is deleted on the same frame either way and `IsAnimating()` does
-  not observe it, but a new AnimTask started from `ended` on the same target no longer
-  finds the finishing task as its `mBlendTask`.
+  **`WorldCrowd::DrawShowing`** static additive impostor cache (KEPT, see "Engine
+  leads"), ~~**`SkeletonChooser::DoesRequireHandRaise`** always false~~ -- **FIXED on
+  `native-engineleads`** with the `GameMode` ctor defect it hid.
+- ~~**`ObjectDir::FindObject`** proxy/parent-loader fallback~~, ~~**`RndDir::SyncObjects`**
+  foot-IK reorder~~, ~~`HamDirector::Poll` SetFrame~~, ~~`SetupRoutineBuilderAnims`
+  `mLoop=false`~~, ~~`CharForeTwist`/`CharUpperTwist` `mLocalXfm`~~, ~~**`AnimTask::Poll`**
+  nulls `mAnimTarget`~~ -- **all FIXED on `native-engineleads`**; see "Engine leads" below.
+  Still open from that family: the `ObjPtr_p.h` `ObjRefConcrete::Load` parent-walk /
+  `Main()` fallback (same "FileMerger flattens" premise as the FindObject one; not measured).
+
+## Engine leads (branch `native-engineleads`, 2026-09-30)
+
+The engine-side (b) ADDS leads. Each was adjudicated against the target listing and
+measured at runtime before the native block was removed; every touched PPC object hashes
+identically with and without its change (the edits are `HX_NATIVE`-only, or remove an
+`#ifndef HX_NATIVE` around code the image runs). Tests live in
+`native/tests/test_native_engineleads.cpp` unless noted; each was watched failing first.
+
+| lead | why it existed | image / measurement | now | test |
+|---|---|---|---|---|
+| `AnimTask::Poll` nulls `mAnimTarget` on completion | 2026-03 bulk commit: "DTA callbacks that would null mAnimTarget never fire" | its trigger is already a term of the end test below it, so it only changed ORDER: the target left the ring before `ended`, and an AnimTask chained from `ended` on the same target (TransAnim/MatAnim/CamAnim) lost its `mBlendTask` | removed | `AnimTaskEndedKeepsTargetForBlendChaining` |
+| `ObjectDir::FindObject` ProxyDir/ParentDir fallback | `bca8a792f`: "MergeDirs flattens all objects on Xbox" | FindObject 100% matched, no fallback. Instrumented perform route: 6,266 hits, all mid-load; 6,138 via `FlowPtrBase::LoadObject` (one level deep = what the image's own `FlowPtrGetLoadingDir` finds; a proxy of a proxy -- results_cluster in perform_endgame -- bound `bg_*_color.anim` the image cannot reach), ~100 `gLoadingProxyFromDisk` ObjPtr loads into discarded temporaries, 27 `CharacterTest::mDriver` bound to the PARENT's `main.drv` | removed (`DirLoader::SetParentDir` kept: the `ObjPtr_p.h` fallback reads it) | `FindObjectDoesNotSearchALoadingProxysParent` |
+| `RndDir::SyncObjects` moves `*ikfoot*`/`*feetandhands*` last, default ON | `d5b9a6911` opt-in foot-plant experiment ("belt-and-suspenders") | fires only on HamCharacter dirs, which `Character::SyncObjects` re-sorts right after: sorted orders identical in 53/53 syncs; toe/ankle telemetry identical on, off, removed | removed; the sibling comments that said "opt-out" now say opt-in | `RndDirSyncObjectsKeepsHarvestOrder` |
+| `HamDirector::Poll` sets the song anim frame | `d24e35534`: "select_camera never dispatched natively" | image Poll has no SetFrame; measured `OnSelectCamera` 7553 drives + Poll 7553, same frame each time = double drive | removed; telemetry counts the image path (`selectCameraSetFrameCount`) | `GameplayTelemetryTest.SongAnimIsDrivenOnlyBySelectCamera` (replaces `NativeSetFrameDrivesAnimation`) |
+| `SetupRoutineBuilderAnims` `mLoop=false` | `d93b8d09b`: "EndFrame shrinks to ~0" | no mLoop store in the image; routine anim EndFrame 4466 (song-length), source song.anim Loop()=0 | removed | none -- inert on the only measurable asset, so no test could fail |
+| `FindNextShot` Area1_WIDE retry | `7487524f8`: "abstract shot names don't match venue" | image stores null + notifies; 0 fallbacks / 0 notifies over two perform routes | removed | none -- no native input reaches it |
+| `HamNavList::RealRefresh` CreateElements(NumShowing) | `bb9725429`: "provider set after Update() which created 0 elements" | no CreateElements in the image's RealRefresh; `96d39b2d5` already fixed Update's sizing (NumDisplay) | removed; `HideItem` bounds guard kept | route screenshots only (needs a UIListDir resource) |
+| `SkeletonChooser::DoesRequireHandRaise` `return false` | `68d404dd9`: null DataNode deref off the perform path | removing it crashes on attract_screen: `gamemode: property [raise_hand_to_join] not found`. The real defect: the image's `GameMode` ctor calls `SetMode("init", "none")`; native skipped it (`72538161a`: "modes/HamProvider not ready") | both restored; `pose_scoring_gate.sh` PASS | `NewGameModeInstallsTheInitModeProperties` |
+| `CharForeTwist`/`CharUpperTwist` rewrite `mLocalXfm` | `301d5aab8`: "UpperTwist polls after ForeTwist and dirties it" | image writes world only; the order came from the reversed sorter polarity (fixed 2026-07-02) and no CharUpperTwist exists at runtime (edit-mode CharacterTest only) | removed; hand telemetry within run-to-run noise | `ForeTwistPollWritesWorldNotLocal` |
+| `CharPollGroup.cpp` comment: opt-out is "the PPC polarity" | 2026-07-02 | the image's inlined ChangedBy stores curDep to mTarget (`8235A138`) and recurses on the other: producer-first = the native DEFAULT | comment corrected; opt-out labelled non-image | -- |
+| `WorldCrowd::DrawShowing` static additive impostor cache | `836c07024`: crowd chars "don't animate" + materials don't write alpha into the RT | image renders every impostor every frame with alpha cut | **KEPT**: the alpha half is a WebGPU render-to-texture limitation, not game code. Cache is keyed by `Character*` with no eviction on dir unload -- a lifetime hazard until the backend writes alpha and the block can go | -- |
+
+Also measured along the way: `HamDirector::SongAnim`'s native "routine builder empty ->
+expert anim" fallback did not fire on the perform route (the driven anim was
+`player_1_routine_builder.anim` throughout), so the remixer does populate it natively.
 
 ## Game-flow leads (branch `native-gameflow`, 2026-09-30)
 
