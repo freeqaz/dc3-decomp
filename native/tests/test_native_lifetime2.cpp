@@ -292,3 +292,42 @@ static void CheckMessageTask(bool cascade) {
 
 TEST_F(NativeLifetime2Test, MessageTaskDiesWithItsTargetOnPlainDelete) { CheckMessageTask(false); }
 TEST_F(NativeLifetime2Test, MessageTaskDiesWithItsTargetInTheDirCascade) { CheckMessageTask(true); }
+
+// ===========================================================================
+// Make Your Move: player 1's frame scores (LP64 stride)
+// ===========================================================================
+//
+// FreestyleMoveRecorder::GetScore finds a player's FreestyleFrameScores as
+// `(char *)unke4 + (playerIdx << 4)` -- the Xbox's sizeof, 0x10.  Natively the
+// struct is 0x20, so player 1 read player 0's vector capacity pointer as its
+// score array and the low half of a heap pointer as its count.  The party
+// route SIGSEGV'd there (GetScore <- BustAMovePanel::Poll, Make Your Move).
+// A fresh recorder has no scores, so every player's score is exactly 0.  The
+// misread count is positive or negative with the heap address, so one
+// recorder can pass by luck: 32 of them cannot.
+
+#include <unistd.h>
+#include "hamobj/FreestyleMoveRecorder.h"
+
+namespace {
+void ScorePlayerOneOnFreshRecorders() {
+    for (int i = 0; i < 32; i++) {
+        FreestyleMoveRecorder *rec = new FreestyleMoveRecorder();
+        rec->StartRecording();
+        float score = rec->GetScore((const BaseSkeleton *)nullptr, 1, 0.0f, false);
+        if (score != 0.0f)
+            _exit(2);
+        delete rec;
+    }
+    _exit(0);
+}
+} // namespace
+
+class MakeYourMoveScoresTest : public SymbolTestFixture {};
+
+TEST_F(MakeYourMoveScoresTest, PlayerOneReadsItsOwnFrameScores) {
+    GTEST_FLAG_SET(death_test_style, "threadsafe"); // see test_object_lifetime.cpp
+    ASSERT_EXIT(ScorePlayerOneOnFreshRecorders(), ::testing::ExitedWithCode(0), "")
+        << "player 1's score read past player 0's FreestyleFrameScores "
+           "(GetScore's 0x10 stride)";
+}
