@@ -165,6 +165,23 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
 //    COMDAT SELECTION TYPE in the section symbol's aux record, and our objects
 //    emit NODUPLICATES for both classes.  The lever is empirical; the
 //    same-TU precondition is what is structural.)
+//
+//    Two figures for whoever comes back to this, both measured after the first
+//    version of this note was written.  (a) The selection-mismatch surface is
+//    LARGE, not small: `scripts/analysis/comdat_selection_audit.py` over all
+//    989 objects finds 1,898 mismatches -- 536 ours NODUPLICATES / image ANY
+//    and 1,362 the reverse -- over 78,352 functions compared, of which
+//    math/SHA1.obj contributes 2 (math/Geo.obj 2, utl/MemMgr.obj 2).  An
+//    earlier "7 mismatches in 1,396 functions, small surface" was a four-unit
+//    sample generalised to the binary and is withdrawn.  (b) It is
+//    nevertheless NOT a score lever on this class of row: all four closures
+//    anyone has made with it were FIDELITY-ONLY with zero score movement, and
+//    `BuildBeam` -- the textbook __savegprlr_N prologue symptom, the same
+//    symptom as this function's _17-vs-_18 -- stayed BYTE-IDENTICAL at 85.3415
+//    with its save set unchanged after its callee's selection class was
+//    matched.  So even in a unit where the lever DID apply, it did not move
+//    the save set.  That is independent corroboration of the certificate
+//    above, and the reason no selection-byte work was done in this lane.
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 #ifdef HX_NATIVE
     // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap
