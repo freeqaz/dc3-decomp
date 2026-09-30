@@ -122,6 +122,15 @@ CASES: list[tuple[str, list[str]]] = [
     # dict iteration order feeds the reported pair order directly.  Agreed with
     # itself, and across PYTHONHASHSEED, on the day it was added.
     ("this_offset_scan",      ["python3", "scripts/analysis/this_offset_scan.py"]),
+    # Added 2026-09-30.  ~15 s/run: ONE `objdiff-cli diff --batch` over every
+    # sub-100% function (840 today) plus a block pairing per function.  Same
+    # rationale as the entries above -- a WORK LIST for taxonomy classes 2/3
+    # whose finding buckets read small, so a row that moves between runs would
+    # read as "adjudicated and gone".  Every dict it iterates to produce output
+    # is walked in sorted order and the batch's own row order is fixed by
+    # objdiff (BTreeMap by unit position).  Agreed with itself, and across
+    # PYTHONHASHSEED, on non-empty output on the day it was added.
+    ("cond_semantics_scan",   ["python3", "scripts/analysis/cond_semantics_scan.py"]),
     # Added 2026-08-20 by the frontier lane.  All four are WORK-SELECTION
     # oracles -- the class of tool whose nondeterminism reads as "this class is
     # exhausted" -- and none of them had ever been checked.  All four agreed

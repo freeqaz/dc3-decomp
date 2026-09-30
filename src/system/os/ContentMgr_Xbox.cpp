@@ -598,7 +598,13 @@ void XboxContentMgr::PollRefresh() {
                 allDone = (state != Content::kNeedsMounting) & allDone;
             }
         }
-        if (allDone) {
+        // BEHAVIOURAL: the transition fires when the pass was NOT clean.  The
+        // image tests `clrlwi. r11, r28, 24` / `bne .L_825EBC74` (skip the
+        // store when allDone is set) and only then `li r11, 0x3` / `stw r11,
+        // 0x2c(r30)`.  We had `if (allDone)`, which left the manager parked in
+        // kMounting while content still needed mounting or had just been
+        // unmounted, and moved it on only once there was nothing left to do.
+        if (!allDone) {
             mState = kDiscoveryLoading;
         }
     }

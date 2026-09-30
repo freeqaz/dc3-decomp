@@ -215,24 +215,33 @@ namespace {
         // The three range tests below stay unsigned (`cmplwi`) via the U suffixes.
         int alignField = (attrs >> 24) & 0xf;
         if (attrs & 0x80000000) {
-            // Physical allocation alignment
+            // Physical allocation alignment: the XALLOC_PHYSICAL_ALIGNMENT_*
+            // codes, where 0 is DEFAULT (4K), 1 is unused, and 2..15 are 4 B
+            // .. 32 KB.  Read off the image's byte jump table
+            // (jumptable_82005128, offsets from AllocAlign+0x4C):
+            //   40 64 00 B4 BC 08 10 18 20 28 30 38 40 48 50 58
+            // i.e. 0->0x1000, 1->the MILO_FAIL, 2->4, 3->8, 4->0x10 (both
+            // shared with the heap arm's `li r3,8`/`li r3,0x10`), 5->0x20 ...
+            // 15->0x8000.  We had cases 0..11 mapped to 4..0x8000: DEFAULT came
+            // back 4 bytes instead of 4 KB, every code 1..11 came back with the
+            // alignment of code+4 (16x too large; code 1 is not even valid),
+            // and the 4K/8K/16K/32K codes 12..15 hit MILO_FAIL.
             switch (alignField) {
-            case 0: return 4;
-            case 1: return 0x20;
-            case 2: return 0x40;
-            case 3: return 0x80;
-            case 4: return 0x100;
-            case 5: return 0x200;
-            case 6: return 0x400;
-            case 7: return 0x800;
-            case 8: return 0x1000;
-            case 9: return 0x2000;
-            case 10: return 0x4000;
-            case 11: return 0x8000;
-            case 12:
-            case 13:
-            case 14:
-            case 15:
+            case 2: return 4;
+            case 3: return 8;
+            case 4: return 0x10;
+            case 5: return 0x20;
+            case 6: return 0x40;
+            case 7: return 0x80;
+            case 8: return 0x100;
+            case 9: return 0x200;
+            case 10: return 0x400;
+            case 11: return 0x800;
+            case 0:
+            case 12: return 0x1000;
+            case 13: return 0x2000;
+            case 14: return 0x4000;
+            case 15: return 0x8000;
             default:
                 MILO_FAIL("Invalid physical alignment (%d)", alignField);
                 return 0;
