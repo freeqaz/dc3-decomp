@@ -553,15 +553,8 @@ Its fallback rested on the same premise as the `ObjectDir::FindObject` fallback 
 
 ### Open leads (what would decide each)
 
-- **Native `RndMesh::DrawShowing` (`native/src/platform/Mesh_Wgpu.cpp`) drops every hidden
-  *named* mesh, and every `*_lod*` mesh.**
-  - The image's `DxMesh::DrawShowing` (`826229B0`) tests only `CanDraw()`. `Draw()`, not
-    `DrawShowing()`, is what gates on showing.
-  - `UIListMeshElement::Draw`'s native show/restore undoes the skip for list meshes. The
-    probe counted between 400 and 599 forced draws per route, every one in
-    `list_choose_mode.milo`.
-  - **To decide:** move the viewer's direct mesh iteration onto `Draw()`, then remove both
-    skips. Also check whether `Character::DrawLod` ever reaches a `_lod` mesh natively.
+- ~~**Native `RndMesh::DrawShowing` drops every hidden *named* mesh, and every `*_lod*`
+  mesh.**~~ **FIXED on `native-meshdraw`**; see "Mesh draw pass" below.
 - **`UIManager::Poll` boot advance under `DC3_FAST_BOOT`.** Every harvest route sets
   `DC3_FAST_BOOT`.
   - It still force-advances `attract` / `autosave_warning` / `wait_main_after_saveload`, and
@@ -866,3 +859,79 @@ evidence.
 **Not done here.** `HamGameData::IsSkeletonPresent` (native: always true) is the same
 March-era pin as `IsPlaying` and now has skeleton sources to read; it was not on this
 list and was left alone.
+
+## Mesh draw pass (branch `native-meshdraw`, 2026-09-30)
+
+The open lead above, closed. Two native refusals sat in front of every mesh draw, and
+neither is in the image.
+
+**The image.** `DxMesh::DrawShowing` (`826229B0`, 100% matched, 77/77 instructions) refuses
+only `!geom->CanDraw()` (no GPU buffers and not mutable). It tests neither `Showing()` nor
+the name.
+- **Showing** is gated one level up, in `RndDrawable::Draw()`. Direct `DrawShowing()`
+  callers draw regardless: `UIListMeshElement::Draw` on the list's hidden template mesh,
+  `RndText`, `RndLine`, `RndRibbon`, `RndMultiMeshProxy`, `CharFeedback`.
+- **LOD** is chosen by `Character::DrawShowing` from `mLods` (screen size with hysteresis,
+  or `mForceLod`, which `HamCamShot` and `WorldCrowd` set). `DrawLodOrShadow` draws the
+  chosen group. `SyncObjects` has already removed every LOD drawable from `mDraws`.
+  Its shadow branch (character drawMode 4, used for Rnd extrude / shadow-colour /
+  occlusion passes) draws `mShadow`. On DC3's dancers `mShadow` holds the `*_lod` meshes.
+
+**Where native was.** The live code is the ENGINE's `src/platform/Mesh_Wgpu.cpp`.
+`native/src/platform/Mesh_Wgpu.cpp` compiles only into `dc3-web`, and it still hardcoded
+the engine's pre-`138e160` name tests.
+- The engine refused `!Showing() && Name()[0]`. `UIListMeshElement::Draw` papered over
+  that with a `SetShowing(true)` / restore.
+- dc3's `ShouldSkipMesh` refused any name containing `_lod` (`#ifndef MILO_VIEWER`).
+- `git log -S` traces the name test to March 2026, commented *"drawn by Character::DrawLod
+  in the full engine, but we iterate all meshes directly in the viewer"*. It dates from
+  when meshes were drawn by walking an ObjectDir. `fc40baecb` moved the viewer onto
+  `Character::mLods` and left the name test in place for dc3-native, "without this the
+  LOD copies double-draw". That claim was never measured.
+
+**Measured.** A probe build logged every refusal, with its backtrace. It also checked every
+mesh submitted inside `Character::DrawLodOrShadow` against that Character's `mLods`. Full
+perform route, 24/24 stages:
+
+| run | not-showing refusals | `_lod` refusals | non-chosen-LOD draws |
+|---|---:|---:|---:|
+| base behaviour | **0** on any path the UIListMesh workaround was not already undoing | **14** meshes (4 dancers) | -- |
+| both tests lifted | -- | -- | **14**, every one from `mShadow.Draw()` in `DrawLodOrShadow`'s shadow branch |
+
+The 14 are `rasa05_lod*`, `lima05_lod*`, `dci01_bd03_lod*` and `dci01_bd04_lod*`. A
+second probe keyed each draw by `TheRnd.DrawMode()`. They are drawn only in two passes,
+each of which renders into its own target, exactly as the image does:
+- mode 2 (`kDrawExtrude`), from `RndShadowMap::PrepShadow`;
+- mode 4 (`kDrawOcclusion`), from the `Lit_NG` spotlight shadow.
+
+None is drawn in mode 0, the main pass, so nothing was double-drawn. The name test was also wrong in its
+own terms: `milo-viewer -v` shows emilia01's `emilia_head_lod1.1.mesh` in LOD group **0**,
+the full-detail group.
+
+**Fix.**
+- Engine `d2a4a17` (branch `native-meshdraw`, on `cef251e`, which splits the decision
+  into a testable `RndMeshDrawShowingSkip`) drops the `Showing()` test.
+- dc3 drops the `_lod` name test and removes the UIListMesh workaround. `milo-viewer`
+  and `render-test` walk ObjectDirs, bypassing `Draw()`, so they now apply the showing
+  gate themselves. `render-test` also keeps the name heuristic as a property of its own
+  traversal.
+- `dc3-web`'s copy is synced to the engine file.
+- The native `ShadowPass` walks meshes itself with its own `Showing()` / `_lod` filter.
+  It is untouched: it is a native-invented shadow, not a draw-list path.
+
+**Verification.**
+- `choose_mode_screen` and `song_select_screen` are **pixel-identical** before and after
+  (ImageMagick AE 0 at 3% fuzz). The list meshes draw without the workaround.
+- Gameplay: the main-pass mesh set is unchanged. The 14 LOD meshes now fill the
+  shadow/occlusion targets, as in the image, and nothing else is newly drawn. The probe
+  found only the five `list_choose_mode` template meshes hidden-but-drawn, all via
+  `UIListMeshElement::Draw`.
+- Frames sampled every 10 s over the whole song show no doubled bodies, z-fighting,
+  missing props or LOD popping. No visible gameplay change is expected, or seen.
+- Post-fix perform route (`--mode-downs 0`): 24/24 stages, 0 crash lines, **101 distinct
+  / 408 total** messages. That is identical to the pre-fix run.
+- `NativeSuspectsTest.MeshDrawShowingDraws{AHiddenNamedMesh,LodNamedMeshes}` were watched
+  failing against `cef251e` ("not showing", "filtered by consumer" x3), with passing
+  controls (no-material refusal, `grid_80by60`).
+- The PPC `UIListMesh.obj` hash is unchanged.
+
