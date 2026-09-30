@@ -35,9 +35,10 @@ void Rand::Seed(int seed) {
     // 11 recorded attempts.  Not re-litigated this lane.
     int s = seed;
     for (int i = 0; i < 0x100; i++) {
-        int j = s * 0x41C64E6D + 0x3039;
-        s = j * 0x41C64E6D + 0x3039;
-        mRandTable[i] = ((unsigned int)j >> 16) + (s & 0x7FFF0000);
+        s = s * 0x41C64E6D + 0x3039;
+        unsigned int lo = (unsigned int)s >> 16;
+        s = s * 0x41C64E6D + 0x3039;
+        mRandTable[i] = (s & 0x7FFF0000) | lo;
     }
     mRandIndex1 = 0;
     mRandIndex2 = 0x67;

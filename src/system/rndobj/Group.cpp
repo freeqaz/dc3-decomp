@@ -399,14 +399,17 @@ int RndGroup::CollidePlane(const Plane &p) {
 
 int RndGroup::MoveObject(Hmx::Object *obj, int delta) {
     typedef ObjPtrList<Hmx::Object>::Node Node;
-    Node *node;
-    for (node = mObjects.mNodes; node != nullptr; node = node->next) {
-        if (node->Obj() == obj)
-            break;
-    }
-    if (!node) {
+    // The image's search is ObjPtrList::find(), not a hand-rolled walk: the
+    // not-found path materialises a fresh zero (`li r29, 0x0`, index 15) which
+    // is `return end();` at the bottom of find().  A hand-rolled loop leaves
+    // the cursor already zero on that path, so MSVC elides the `li` and then
+    // jump-threads the following `cmplwi` away -- 16 diff rows, all of them
+    // the r29<->r30 allocation cascade that follows.
+    ObjPtrList<Hmx::Object>::iterator it = mObjects.find(obj);
+    if (it == mObjects.end()) {
         return 0;
     }
+    Node *node = it.mNode;
     Node *target = node;
     int remaining = delta;
     if (delta > 0) {
