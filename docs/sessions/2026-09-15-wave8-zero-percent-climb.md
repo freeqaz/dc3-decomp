@@ -674,3 +674,39 @@ Dispatching them would burn a lane on rows nothing can score.
 
 Bands at close: 18 rows at exactly 0 % (2,976 B), 32 under 80 %, 56 in 80–90,
 109 in 90–95, **344 in 95–99 (228,436 B)**, 153 in 99–99.9, 112 above 99.9.
+
+### Carried finding: a broken one-shot floods stderr in the IK diagnostic
+
+Found incidentally by lane `w9-d` while adjudicating a gate failure, and left
+unfixed deliberately — the file belongs to another session's IK work and no lane
+owns it.
+
+`src/system/hamobj/HamIKEffector.cpp` declares one `static int sTotalWeightLog`
+and uses it for **two** blocks. The `TypePropsDump` block guards on
+`sTotalWeightLog < 3` and **never increments it**; only the later `IkSnap` block
+(`sTotalWeightLog < 60`) does. Whenever the first block's conditions hold and the
+second's narrower ones do not — which happens once the ankle effector reaches the
+gameplay pose — the "one-shot" fires every frame. Measured: **4,594 copies** in
+one run, whose log was **508 KB against ~97 KB** for its sibling tests.
+
+It is runtime-gated by `getenv("DC3_IK_DIAG")`, so it is not live in an ordinary
+build; the fix is to give the dump block its own counter rather than to share one
+that a different block owns. Unbounded stderr inside a frame loop is a plausible
+contributor to a test with a 120 s wall-clock cap.
+
+⚠ **Related measurement hazard, worth more than the defect.** That gate failure
+(`DtaFlowTest.NoCrashCleanExit`, exit 8, `exitCode 124`) was **environmental, not
+source**. The lane proved it the right way: checked out the base version of the
+only file it had changed, rebuilt both native targets, re-ran, and got an
+identical failure at 120.54 s. The box was at **load average 216–235** with six
+lanes building concurrently.
+
+So: with a fleet of lanes running, **a per-lane native gate cannot distinguish a
+real regression from machine load** — a green is luck and a red is noise — and
+each run makes it worse for the others by building the native port and then
+running an engine under a wall-clock cap. The remaining lanes were told to skip
+the gate entirely and report behavioural changes with proving addresses instead;
+the gate is run **once, serially, on merged main**, which is the tree that
+actually ships. Note the lane's discriminator is the transferable part, not the
+verdict: when a gate fails under load, revert your own change and re-run before
+believing it.
