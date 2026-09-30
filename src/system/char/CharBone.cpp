@@ -17,6 +17,43 @@ void CharBone::ClearContext(int mask) {
     mRotationContext &= ~mask;
 }
 
+// RESIDUAL (w9-b, 99.70149 canonical, 268 B, 20 rows).  Every row is an
+// offset-only diff on an (r1) stack slot -- no wrong field, no wrong constant:
+// it is a stack-SLOT POOLING difference, and the two frames are the same size
+// (0x90 both).  The image's scalar frame, read off the target listing, is
+//
+//   0x50  Symbol temp of the FIRST  ChannelName() call
+//   0x54  the end() iterator temp   (shared by all three push_back()s)
+//   0x58  Symbol temp of the SECOND ChannelName() call
+//   0x5c  Symbol temp of the THIRD  ChannelName() call
+//   0x60  the insert() sret slot    (shared)
+//   0x68  the Bone (name 0x68, weight 0x6c)   (shared)
+//
+// i.e. each ChannelName destination gets its OWN slot while the push_back
+// internals are pooled.  Ours pools the Symbols WITH the iterator temp and
+// alternates them: block 1 puts the Symbol at 0x50 and the iterator at 0x54,
+// blocks 2 and 3 put the Symbol at 0x54 and the iterator at 0x50.  Symbol and
+// _List_iterator are both 4-byte one-pointer structs, which is why MSVC is
+// willing to pool them.
+//
+// NEGATIVE RESULTS (w9-b), all measured with a full ninja:
+//   * unnamed ChannelName temporaries (`bone.name = CharBones::ChannelName(...)`,
+//     no `Symbol name` local): 86.239, frame shrinks to 0x80.  This is also the
+//     diagnostic that fixes the spelling of the Symbol: with a temporary MSVC
+//     reads it back through the sret pointer (`mr r11, r3; lwz r11, 0x0(r11)`),
+//     where the image reads the known slot (`lwz r11, 0x50(r1)`).  The image's
+//     Symbol is therefore a NAMED local, as written below -- do not "simplify"
+//     this to the RB3 one-liner.
+//   * `CharBones::Bone bone;` hoisted to function scope, Symbols left per block:
+//     90.746.
+//   * keeping the named Symbol but making the Bone a temporary
+//     (`bones.push_back(CharBones::Bone(name, GetWeight(mask)))`): exactly inert,
+//     99.70149 with an identical row set.  Readable either way; left as-is.
+// What is still unexplained is why MSVC reuses the named Symbol's slot across
+// the three sibling `if` scopes here and does not in the image.  A spelling that
+// keeps the declaration-order allocation (sym1, iterator, sym2, sym3) while
+// stopping the reuse is the open lead; three-at-function-scope does not, because
+// it would allocate the three Symbols contiguously ahead of the iterator temp.
 void CharBone::StuffBones(std::list<CharBones::Bone> &bones, int mask) const {
     if (mPositionContext & mask) {
         Symbol name = CharBones::ChannelName(Name(), CharBones::TYPE_POS);

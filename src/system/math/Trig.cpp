@@ -31,6 +31,23 @@ void TrigTableInit() {
         // image recomputes `addi r11, r29, 0x7fc` inside the loop.  The index
         // form just compares i (`cmpwi cr6, r31, 0x100`) and drops the pointer
         // test altogether.
+        // w9-b 2026-09-30: floor re-confirmed.  Two more spellings and a permuter
+        // sweep, none better:
+        //   int tablePtr = (int)gBigSinTable - 4, accesses through
+        //     *(float *)(tablePtr + 4), test tablePtr < (int)gBigSinTable + 0x7fc
+        //     -- 95.574.  Making the CURSOR an int rather than casting it at the
+        //     comparison costs exactly the same fourth GPR.
+        //   float *table = gBigSinTable; ... (int)tablePtr < (int)table + 0x7fc
+        //     -- 87.043.  Hoisting the base into a named local so the limit would
+        //     have to be rematerialised from an already-live register -- the
+        //     two-axis idea that closed UILabelDir::GetStateColor -- is much worse.
+        //   decomp-synth beam search, 3 depths, 86 viable variants, with
+        //     signed_unsigned and comparison_flip both in the selected pattern
+        //     set: 0 improved over the 98.72 baseline.
+        // Still unexplained: how MSVC reaches a SIGNED compare of two pointers at
+        // all.  Every spelling that buys `cmpw` also turns the limit into a
+        // loop-invariant int, where the image recomputes `addi r11, r29, 0x7fc`
+        // inside the loop.
     } while (tablePtr < &gBigSinTable[511]);
     float sineValue = std::sin(0.024543693f * i);
     // Peeled last half-iteration: writes the odd (delta) slot 2i-1 and reads the
