@@ -78,6 +78,7 @@ balance and the run exits 4.
 Usage:
     python3 scripts/analysis/native_shadow_audit.py                 # summary + worklist
     python3 scripts/analysis/native_shadow_audit.py --list all      # every region
+    python3 scripts/analysis/native_shadow_audit.py --list b-suspect  # (b) ADDS pre-classified suspect
     python3 scripts/analysis/native_shadow_audit.py --json out.json
     python3 scripts/analysis/native_shadow_audit.py --root <dir>    # scan another tree
     python3 scripts/analysis/native_shadow_audit.py --find ObjPtrVec::erase
