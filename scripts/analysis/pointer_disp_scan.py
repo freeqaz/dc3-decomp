@@ -752,6 +752,7 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
     f = {n: E("farg", n) for n in range(1, 14)}
     ctr = E("ctr0")
     stack = {}
+    mem = {}                                  # non-stack EA Ref -> (kind, value)
     fresh_g, fresh_f = set(), set()
     effects, load_val, store_eff = [], {}, {}
     is_sp = {sp}
@@ -960,6 +961,16 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                     e = E("st", epoch, kind, ea, canon_arg(val))
                     effects.append(e)
                     store_eff[i] = e
+                    # store-to-load forwarding, the way MSVC does it: a later
+                    # load of the SAME address sees this value.  A store through
+                    # a DIFFERENT base might alias, so it evicts every entry
+                    # not provably disjoint (same base, different offset).
+                    # (InsertFakeArmPos: the image reloads elbow.z, we forward
+                    # the shoulder.z it was just set from -- one value.)
+                    root_ = offs.get(ea, (ea, 0))[0]
+                    for k_ in [k_ for k_ in mem if offs.get(k_, (k_, 0))[0] != root_]:
+                        del mem[k_]
+                    mem[ea] = (kind, val)
                     if o not in FPR_STORES:
                         for a in origin.get(D, ()):
                             addi_cons[a].append(("st", i))
@@ -985,6 +996,8 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                         val = sk[1]
                     else:
                         val = E("cvt", sk[0], kind, sk[1])
+                elif ea in mem and mem[ea][0] == kind:
+                    val = mem[ea][1]
                 else:
                     val = E("ld", epoch, kind, ea)
                 load_val[i] = val
@@ -1117,6 +1130,7 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                 val = F(D) if xo in X_FSTORE else G(D)
                 effects.append(E("stx", X_STORES[xo], G(A) if A else E("zero"),
                                  G(B), canon_arg(val)))
+                mem.clear()                    # an indexed store may alias anything
                 continue
             if xo == 444 and D == B:                   # mr
                 g[A] = G(D)
@@ -1180,6 +1194,7 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                 # Normalize(cross, cross) out-parameter): what a slot holds
                 # after the call is "whatever was there, as modified by call N"
                 stack = {a: (k, E("postcall", epoch, v)) for a, (k, v) in stack.items()}
+                mem.clear()
                 for r in VOLATILE:
                     g[r] = E("clob-g", r)
                 for r in range(0, 14):
@@ -1209,6 +1224,7 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
                 # Normalize(cross, cross) out-parameter): what a slot holds
                 # after the call is "whatever was there, as modified by call N"
                 stack = {a: (k, E("postcall", epoch, v)) for a, (k, v) in stack.items()}
+                mem.clear()
                 for r in VOLATILE:
                     g[r] = E("clob-g", r)
                 for r in range(0, 14):
