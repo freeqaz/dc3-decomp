@@ -2042,6 +2042,32 @@ void RndText::FitTextScroll() {
         mWidth = 0.0f;
         mWrapEnabled = true;
 
+        // Residual 7 rows (98.276).  The image READS mStyles[0].mFont TWICE and
+        // tests it twice, the first read into a VOLATILE register that is then
+        // discarded, with a dead home of the Style base between them:
+        //     lwz    r10, 0x40(r11)      first read, volatile, test only
+        //     cmplwi cr6, r10, 0x0
+        //     bne    cr6, .L_second      (skips ONLY the store below)
+        //     stw    r11, 0x54(r31)      dead home of the Style base
+        //  .L_second:
+        //     lwz    r23, 0x40(r11)      second read, kept for CharAdvance
+        //     cmplwi cr6, r23, 0x0
+        //     bne    cr6, .L_body
+        //     <MILO_ASSERT fail>
+        // The assert's stringified expression is the 4-byte literal "font"
+        // (??_C@_04EFPADHIC@font?$AA@, equal on both sides), so a local named
+        // `font` really does exist -- it is not `MILO_ASSERT(mStyles[0].mFont)`.
+        // With a raw-pointer copy MSVC CSEs the assert's test with the `if`'s
+        // and emits ONE read, which is where our 7 rows come from.
+        // THREE REFUTATIONS, all measured here (w9-e 2026-09-30):
+        //   `RndFontBase *&font = mStyles[0].mFont;`  does not compile --
+        //       Style::mFont is ObjPtr<RndFontBase> (0x34), not a raw pointer.
+        //   `const ObjPtr<RndFontBase> &font = ...;`  98.276 -> 95.595.
+        //   keep `font` for the assert and re-spell the guard as
+        //       `if (mStyles[0].mFont)`                98.276 -> 96.099.
+        // So the second read is real but neither an ObjPtr reference nor a
+        // second textual mention reproduces it.  Left as the shape that scores
+        // best.
         RndFontBase *font = mStyles[0].mFont;
         MILO_ASSERT(font, 2718);
         if (font) {
