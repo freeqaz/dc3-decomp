@@ -210,18 +210,20 @@ bool CharPollableSorter::ChangedByRecurse(Dep *dep) {
 
 #ifdef HX_NATIVE
 // Producer-first poll order (2026-07-02 feet-in-floor faithful root): DEFAULT
-// ON native; opt out with DC3_POLL_ORDER_FIX=0. Producer-first polarity makes
+// ON native, and it IS the image's polarity: the matched
+// CharPollableSorter::ChangedBy in Character.cpp (#ifndef HX_NATIVE; inlined
+// into Sort at Character.s 8235A0F4..8235A13C, `stw r9, 0x18(r23)` at 8235A138 storing
+// curDep into mTarget before recursing on the other dep) is
+// `mTarget = d1; return ChangedByRecurse(d2)` -- the branch below. It makes
 // the per-character order song.hdrv (buffer) -> bone.servo (pose meshes) ->
-// IK effectors — the order Xbox's rendered pose requires. With the PPC
-// polarity below the order comes out reversed, so every effector write
-// (pelvis retarget lift, ankle plants) is computed and then stomped by the
-// servo's PoseMeshes in the same frame. RB3's matched sorter uses
-// producer-first (rb3 Character.cpp ChangedBy: mTarget=d1, recurse(d2));
-// DC3's Sort byte-matches the polarity below, so the PPC branch stays
-// untouched. Was opt-in while the ankle solve diverged; with the
-// HamIKEffector Interp mis-decomp + alias-unsafe Transform Multiply fixed
-// (00c9b165) the faithful stack is Xbox-exact and gate-clean 48/48, so it is
-// now the default. CharIKFoot.cpp keys its fallback clamps off this too.
+// IK effectors, the order Xbox's rendered pose requires. RB3's matched sorter
+// is the same.
+// DC3_POLL_ORDER_FIX=0 selects the REVERSED polarity (`mTarget = b;
+// recurse(a)`, the fall-through below). That is NOT the image's -- it is the
+// pre-2026-05-30 decomp guess this file was written against, under which every
+// effector write (pelvis retarget lift, ankle plants) is computed and then
+// stomped by the servo's PoseMeshes in the same frame. It is kept only as a
+// debugging switch; CharIKFoot.cpp keys its non-image fallback clamps off it.
 bool Dc3PollOrderFixActive() {
     static int v = -1;
     if (v < 0) {
