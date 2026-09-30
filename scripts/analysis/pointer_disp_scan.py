@@ -837,7 +837,12 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
     def lin_of(x):
         if x in lins:
             return lins[x]
+        node = E.nodes[x]
+        if node[0] == "imm":                   # `li rX, k` is the constant k
+            return (node[1], {})
         b, o = offs.get(x, (x, 0))
+        if E.nodes[b][0] == "imm":
+            return (E.nodes[b][1] + o, {})
         return (o, {b: 1})
 
     def lin(c, terms):
@@ -845,6 +850,8 @@ def effects_eval(words, relocs, symtab, E, sigs=None, ret_kind=None):
         `(buf - p) + size` are the same value (DecompressChunk).  Canonicalise
         add/subf/neg into a sorted linear form.  NOT applied to floats."""
         terms = {t: k for t, k in terms.items() if k}
+        if not terms:
+            return E("imm", c)
         if len(terms) == 1:
             (t, k), = terms.items()
             if k == 1:
