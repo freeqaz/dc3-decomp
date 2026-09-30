@@ -81,11 +81,87 @@ producer not found).
 | `CharClipGroup::GetClip` row 15 | dropped (unpaired) | refuted: `mIndex = min(n-1, mIndex)` as an unconditional store of a select vs a conditional store of `n-1` |
 | `ShouldWaitForRecovery`, `GestureMgr::PostUpdate`, `CalcShaderOpts`, `Skeleton::Displacements` | (objdiff `BOOLEAN_NEGATION`; not branches) | refuted: mask-idiom spellings; the image's extra `and` consumes a register provably holding 1 |
 
-ONE-SIDED leads: 204 rows in 68 functions. Hand-checked 11 (`RhythmBattlePlayer::Poll`,
+ONE-SIDED leads: 204 rows in 68 functions (all since read -- see "The ONE-SIDED pile, read in full" below). Hand-checked 11 (`RhythmBattlePlayer::Poll`,
 `ChoosePlayerSides`, `SyncProperty@HamCharacter`, `TypeProps::Save`,
 `GetTweakedAutoexposure`, `Sound::SetSpeed`, the 13 `ObjPtrVec::operator=`, …): all
 tail merges, loop rotations, a dead test on a value that cannot occur, or
 materialised bools. None was a bug. **That is a sample, not the population.**
+
+## The ONE-SIDED pile, read in full (2026-09-30, worktree `leads-onesided`)
+
+On a re-run at `731b6137f` the pile was **201 rows in 65 functions** (the tree
+had moved three functions since the 204/68 count). Every function was traced
+against its listing. **No real bug.** One decompilation-introduced guard was
+found, and it was dead (`MoveDir::UpdateOverlay`). Removing it measured
+87.3115 -> 87.5363 (commit "MoveDir::UpdateOverlay: drop a setSize > 0 guard
+the image does not have"), but that change was reverted on the same branch
+and handed over rather than landed, because the MoveDir unit was
+held by a concurrent wave. The refutations fall into nine classes. The
+first four now have a recogniser in the scanner (see the next section).
+
+| Class | Functions (native-reachable unless marked Xbox) | How to tell |
+|---|---|---|
+| **Stub body** | `mmioWrite/OpenW/Advance/Read/Seek/StringToFOURCCW` (xdk, Xbox) | ours is `li r3,0; blr`; a class-11 question, not a condition |
+| **Relocated test** | `UIListState::Scroll`, `FileMerger::Clear`, `DxMesh::DrawFur` (Xbox), `RndXfmCache::GetXfms`, `HamListRibbon::PostLoad`/`Draw`, `Trie::store`, `CacheResource`, `MCContainerXbox::Mount` (Xbox), `DingoSvrXbox::Poll` (Xbox), `Voice::UpdateMix` (Xbox, a moved `bdnz` block), `DecodeDxt5Alpha`, `FlowSlider::UpdateActivations` | the same producer + branch sits a few rows away, or in a moved block. LCS alignment pairs one of them with a neighbour, so a relocated test often shows up as TWO one-sided rows, one per side |
+| **Cross-jump / tail merge** | `ChoosePlayerSides`, `MemAlloc`, `UIListState::Scroll` rows 135/149 | one side's `b` lands on the other copy of the test. Follow the `b` before believing it |
+| **Rotated loop** | `RndText::ConstructMeshes` x2, `RndFont::CharWidthAdvanceCoords`, `RndSoftParticleBuffer::DoPost`, `SkeletonHistory::PrevFromArchive`, `HamCamShot::FlipTargetAnimGroups`, `Game::OnSetShuttle`, `FileMerger::Clear` row 126, `Sound::SetSpeed`, `WordWrap` (a strlen loop lowered two ways) | a guard + top test on one side against `b` to the bottom latch on the other |
+| **Re-test / dead test** | `UIFontImporter::GetMatVariationName` (`x>0` then `x!=0`), `CharEyes::Poll` (jump threading), `CharLipSyncDriver::UpdatePlayback`, `ThreeDSound::CalculateFaderVolume` (re-reads `mShape` after `MILO_FAIL`; its case is already decided), `RndText::FitTextScroll` (the only effect is a dead stack store), `fft_recursive` row 62 (Xbox: `err != 0` at a join where the arm is a constant), `DumpHolmesLog` (ours null-checks `delete log` on a pointer already dereferenced), `MoveDir::UpdateOverlay` (**ours**, dead; removal handed to the lane that holds MoveDir) | the value was already tested, or is already known on every path |
+| **If-conversion / materialised bool / select** | `CacheWav` (`subic/srwi/subfze/and` = `r3>0 ? 0 : x`), `Geo::Intersect` (`return f() ? 1 : 0`), `HamCharacter::SyncObjects` (re-normalising a 0/1 bool), `BSPFace::Update`, `CharInterest::ComputeScore`, `Spotlight::BuildNGCone`, `DecodeDxt5Alpha` row 57 | one side branches over 1-2 `li`/`mr`/`fmr`; the other computes the same value without a branch, or speculates it before the branch |
+| **Upcast null guard** | `CharLipSync::Print`, `DirLoader::WriteTypeMemDump` | `addic. r,base,off; bne; li r,0`: MSVC's `p ? p+off : 0` for a derived-to-base conversion of a pointer that is never null (`&vec[i]`, `this+0x10`) |
+| **Inlining difference** | `ObjPtrVec<FlowNode>::erase` | ours inlines `Set()`; the image calls it, and the image's out-of-line `Set` at `0x823E8A38` holds exactly our inlined `obj \|\| mListMode` test |
+| **Out of scope** | `DepthBuffer3D::DrawShowing` (29 rows, 68.9%: the whole body is under `#else` of `HX_NATIVE`, so native runs an empty stub), `fft_altivec` (13 rows, 46.9%, Xbox VMX), `FindMITargetTypeInstance` (xdk CRT) | not read row by row. The DrawShowing rows sampled were `fsel`-vs-branch selects, a hoisted `has1&&has2&&has3` bool and duplicated assert compares |
+
+The prior lane's 11 (the 13 `ObjPtrVec::operator=` instances, `RhythmBattlePlayer::Poll`,
+`SyncProperty@HamCharacter`, `TypeProps::Save`, `Sound::SetSpeed`) still stand.
+
+## The ONE-SIDED recognisers
+
+Four recognisers each move a ONE-SIDED row into a named **artifact** bucket.
+They move a row only after finding the other side's test, and three of them
+re-run the full `classify_pair` predicate + successor analysis on that
+counterpart and accept only `agree`. A counterpart that tests the complement
+leaves the row ONE-SIDED.
+
+| Bucket | Rows moved | Rule |
+|---|---|---|
+| `STUB-BODY` | 69 | the other side has <= 4 instructions and no branch, call, store or `b`, and this side is >= 4x longer. Kept strict on purpose: `RandomInt()` with its assert deleted compiles to a tail call (`b Int`), and that must stay a lead |
+| `agree-relocated` | 29 | same producer signature at another address; the count of branches with that signature is equal on both sides; `agree`. A CTR latch counts too when its whole block signature matches |
+| `agree-via-jump` | 8 | the other side has an unconditional `b` within 4 rows whose destination (after <= 4 non-branch instructions) is a conditional branch. Its producer sits between the destination and the branch, or before the `b`; `agree` |
+| `RETEST` | 9 | this side compared the same register(s) the same way (same immediate or operand pair) earlier, found by a LINEAR walk with no redefinition in between. **This is an artifact label, not a dominance proof.** The row still lists under `--show-recognised` |
+
+ONE-SIDED went from **201 to 86 rows** (65 to 38 functions) on the `731b6137f` tree. All
+10,857 other rows and the drop table stayed byte-identical. The
+UpdateOverlay guard is still in the source, so its row still counts under
+RETEST (9). Re-measured after rebasing onto `dd879cdfd`, where the w9 waves
+had closed `DxMesh::DrawFur`, `SkeletonHistory::PrevFromArchive` and others:
+197 one-sided rows, 85 still ONE-SIDED (37 functions). The other 112 were
+moved: STUB-BODY 69, agree-relocated 27, agree-via-jump 7, RETEST 9. What is left is
+mostly out-of-scope rows (DrawShowing 29, fft_altivec 13), the
+if-conversion/select class, and rotated loops whose guard's producer is not
+on its own fall-through chain.
+
+**Controls.** Selftest fixtures cover all four recognisers. Each fixture reads
+ONE-SIDED with the recognisers off (`recognise_one_sided=False`) and reads its
+new bucket with them on. Each recogniser also has a negative control that must
+stay ONE-SIDED: a complemented counterpart, a register redefined between the
+two tests, and a short real body that lost its only guard. Four live rows are
+pinned.
+
+For the script-mutation control, 9 mutants were run from a freshly created
+empty directory: each recogniser switched off, each `agree` gate widened to
+"any verdict", the RETEST redefinition check deleted, and the stub
+call/store rule deleted. Each mutant failed exactly its own check. The stub
+rule mutant was first missed because a length ratio masked it, and the
+fixture was fixed.
+
+For the live two-sided control, the scanner ran from a fresh empty directory
+after two sabotages in `src/system/math/Rand.cpp`: an invented `if (i1 == i2)
+return i1;` in `RandomInt(int,int)`, and the `MILO_ASSERT` deleted from
+`RandomInt()`. ONE-SIDED went from 86 to 88, with one ours-only row and one
+target-only row, and neither was absorbed by a recogniser. After a revert and
+rebuild the output was byte-identical (sha256 `754c75e7…`).
+`determinism_check.py --only cond_semantics_scan` reads SAME. `honesty_lint`
+shows no new findings.
 
 Cross-check against objdiff's own detectors (scan 20): all 5 `BOOLEAN_NEGATION`
 functions are branch-free mask idioms (see below) and all 5 are already

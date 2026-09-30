@@ -258,7 +258,9 @@ held). Decide on aligned successor BLOCKS, turn producer+branch into a predicate
 arms DO overrule a bulk block pairing. Detector: `scripts/analysis/cond_semantics_scan.py`.
 840 sub-100% functions, 10,995 of 11,125 branch rows classified; 2 real bugs fixed
 (`XboxContentMgr::PollRefresh` inverted exit test; `AllocAlign`'s jump table); every
-other candidate refuted against the listing, each recorded in the doc. Blind spots with manual recognizers — branch-free mask idioms,
+other candidate refuted against the listing, each recorded in the doc. The whole ONE-SIDED (missing/extra condition)
+pile, 201 rows in 65 functions, has been read against the listings: no bug. Four recognisers now move 115 of those rows
+into named artifact buckets (STUB-BODY, agree-relocated, agree-via-jump, RETEST). Blind spots with manual recognizers — branch-free mask idioms,
 jump-table contents, tail merges: **[wrong-condition-is-a-block-question.md](wrong-condition-is-a-block-question.md)**.
 
 ### A symbol the report scores FEWER TIMES than the map lists is unmeasured by construction
