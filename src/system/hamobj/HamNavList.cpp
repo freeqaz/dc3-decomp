@@ -1124,13 +1124,6 @@ void HamNavList::RealRefresh() {
         }
     }
     if (mListDirResource) {
-#ifdef HX_NATIVE
-        // Recreate elements if NumShowing changed since CreateElements was last called
-        // (e.g. provider set after Update() which created 0 elements)
-        int numSh = mListState.NumShowing();
-        mListDirResource->CreateElements(nullptr, mListWidgets, numSh);
-        mRibbonDrawStates.resize(numSh, HamListRibbonDrawState());
-#endif
         mListState.Provider()->UnHighlightCurrent();
         mListState.Provider()->ClearIconLabels();
         mListDirResource->FillElements(mListState, mListWidgets);
