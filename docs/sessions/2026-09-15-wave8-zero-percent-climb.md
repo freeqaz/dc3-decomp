@@ -413,3 +413,52 @@ Both were left alone deliberately, for the same reason as the `authorable.py`
 correction above: each would move a ruler, a denominator or a class layout
 underneath every lane's before/after. They belong after the wave, each on its
 own commit, stating the before and after explicitly.
+
+### Phase 3 — dispatched at `0e1dcb139` (2026-09-30)
+
+Phases 1 and 2 are closed and pushed (`980e4d5e4..c4a3f18fb`). The frontier at
+dispatch, measured from a report built 2026-09-30 01:43 against the tree that
+actually exists:
+
+| measure | value |
+|---|---:|
+| Matched functions (XEX-total) | 31,353 |
+| Authorable canonical | 97.19 % (31,316 / 32,221) |
+| Remaining authorable | 905 fns / 601,084 B |
+| Remaining, link_glue + vendor excluded | 842 fns / 599,400 B |
+| **Phase-3 pool (>= 200 B)** | **719 fns / 585,068 B** |
+| Incomplete authorable units | 326 |
+| Units needing exactly ONE more fn | 149 (127,732 B) |
+| Units needing exactly two | 66 (82,900 B) |
+
+Band spread of the phase-3 pool: 7 rows under 50 %, 18 in 50-80, 39 in 80-90,
+97 in 90-95, **328 in 95-99 (229,784 B)**, 134 in 99-99.9, 96 above 99.9.
+
+Six lanes, **202 rows / 160,528 B**, a first tranche of 28 % of the pool. Lane
+lists are derived per UNIT and the disjointness is asserted programmatically
+before dispatch, not merely intended — overlapping lists cost this wave real
+work twice (`flow/Flow` to two lanes, `os/PlatformMgr_Xbox` to two more).
+
+| lane | rows | bytes | units |
+|---|---:|---:|---|
+| `w8-m` | 36 | 28,024 | `rndobj/Utl`, `rndobj/AmbientOcclusion` |
+| `w8-n` | 36 | 31,088 | `hamobj/HamDirector`, `MoveDir`, `HamCharacter` |
+| `w8-o` | 30 | 20,172 | `utl/MemMgr`, `math/Geo`, `math/SHA1` |
+| `w8-p` | 35 | 24,108 | `rndobj/Mesh`, `rnddx9/Mesh`, `rndobj/Text` |
+| `w8-q` | 33 | 26,744 | `world/Spotlight`, `SpotlightDrawer`, `SpotlightDrawer_NG`, `LightPreset` |
+| `w8-r` | 32 | 30,392 | `gesture/LiveCameraInput`, `DepthBuffer3D`, `StreamRenderer`, `synth_xbox/FFT`, `Voice` |
+
+Worklists: `~/tmp/dc3-wells/w8/phase3-<lane>.txt`, sorted lowest-percentage
+first, because that is where the room is.
+
+**Two calibrations carried into the briefs.** `w8-l` closed only 3 of 25
+single-function unit completions, all of which were already above 99.9 % — so
+"cheapest by size" is no longer the same as "easiest", and the derivation shows
+percentage alongside size. And the previous FFT attempt reached 48.75 % / 46.93 %
+from 0 % on the two AltiVec functions, so `w8-r` is told to work its other four
+units first and report honestly where it lands rather than sinking its budget
+there.
+
+⚠ **Another session is live in main** and landed the `HamCamShot` rewind fix at
+01:39. `hamobj/` is therefore contested: `w8-n` is told not to touch
+`hamobj/HamCamShot.cpp`, and every lane will need a rebase at landing.
