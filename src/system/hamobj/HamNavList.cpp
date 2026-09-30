@@ -145,9 +145,6 @@ BEGIN_HANDLERS(HamNavList)
     HANDLE_EXPR(data_symbol, mListState.Provider()->DataSymbol(_msg->Int(2)))
     HANDLE_EXPR(index_enabled, mListState.Provider()->IsActive(_msg->Int(2)))
     HANDLE_MESSAGE(ButtonDownMsg)
-#ifdef HX_NATIVE
-    HANDLE_MESSAGE(UITransitionCompleteMsg)
-#endif
     HANDLE_SUPERCLASS(UIComponent)
     HANDLE_SUPERCLASS(RndAnimatable)
     HANDLE_SUPERCLASS(Hmx::Object)
@@ -1650,13 +1647,6 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
     }
     return DataNode(kDataUnhandled, 0);
 }
-
-#ifdef HX_NATIVE
-DataNode HamNavList::OnMsg(const UITransitionCompleteMsg &) {
-    StopAnimation();
-    return DataNode(kDataUnhandled, 0);
-}
-#endif
 
 void HamNavList::DrawDebug() const {
 #ifdef HX_NATIVE

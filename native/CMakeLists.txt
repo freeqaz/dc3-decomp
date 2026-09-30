@@ -1974,6 +1974,7 @@ if(BUILD_TESTS)
         tests/test_sha1.cpp
         tests/test_rand_seed.cpp
         tests/test_threadtask_replace.cpp
+        tests/test_hamnavlist_transition.cpp
         tests/test_shaderprogram_cache_logic.cpp
         tests/test_dta_eval_endpoint.cpp
         tests/test_camera_yuv_decode.cpp

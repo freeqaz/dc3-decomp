@@ -150,9 +150,6 @@ private:
     static float sSlideTrendAmount;
 
     DataNode OnMsg(const ButtonDownMsg &);
-#ifdef HX_NATIVE
-    DataNode OnMsg(const UITransitionCompleteMsg &);
-#endif
 
 protected:
     virtual void OldResourcePreload(BinStream &);
