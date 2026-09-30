@@ -145,7 +145,16 @@ GameplayTelemetry::Snapshot GameplayTelemetry::CaptureSnapshot(int frame) {
     // Character animation pipeline diagnostics
     if (TheHamDirector) {
         s.clipDir = TheHamDirector->ClipDir() != nullptr;
-        PropKeys *mk = TheHamDirector->GetMasterKeys("clip");
+        // GetMasterKeys MILO_NOTIFYs (and retries SetMasterClipAnim) whenever no
+        // master clip anim exists, so probing it on every sample outside
+        // gameplay flooded the log with ~1000 self-inflicted notifies per boot
+        // (measured by scripts/native_assert_harvest.py, 2026-09-30).  Only ask
+        // once a world with a clip dir is present -- the only state in which the
+        // answer can be yes.
+        PropKeys *mk = nullptr;
+        if (TheHamDirector->GetWorld() && TheHamDirector->ClipDir()) {
+            mk = TheHamDirector->GetMasterKeys("clip");
+        }
         s.masterClip = mk != nullptr;
 
         ClipPlayer testPlayer;
