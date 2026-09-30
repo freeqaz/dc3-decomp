@@ -695,11 +695,18 @@ static void NativeScrubTypePropsValue(DataArray *map, Hmx::Object *dying) {
 static bool NativeOwnerControlReplace(
     ObjRef *ref, Hmx::Object *dying, DataArray *(*typePropsMap)(Hmx::Object *)
 ) {
-    Hmx::Object *owner = ref->RefOwner();
-    if (!owner || owner == dying || !owner->IsRefAlive())
-        return false;
+    // Classify by the REF first (it is alive -- the caller checked its
+    // sentinel) and only then ask for its owner.  RefOwner() dereferences the
+    // holder's owner, which for an ordinary (non-owner-control) holder can
+    // already be gone: MergeScopeParityTest.SyntheticInterestCollection-
+    // MatchesSyncPattern deletes an ObjPtrList's owner before the list's
+    // referents.  An owner-control holder is a member of its owner, so the
+    // owner is alive whenever the holder is.
     ObjPtrList<Hmx::Object> *list = dynamic_cast<ObjPtrList<Hmx::Object> *>(ref->Parent());
     if (list && list->Mode() == kObjListOwnerControl) {
+        Hmx::Object *owner = list->Owner();
+        if (!owner || owner == dying || !owner->IsRefAlive())
+            return false;
         if (RndGroup *group = dynamic_cast<RndGroup *>(owner)) {
             if (list == &group->Objects()) {
                 static_cast<ObjRefOwner *>(group)->Replace(ref, nullptr);
@@ -711,6 +718,9 @@ static bool NativeOwnerControlReplace(
         return false;
     }
     if (dynamic_cast<ObjOwnerPtr<RndEnviron> *>(ref)) {
+        Hmx::Object *owner = ref->RefOwner();
+        if (!owner || owner == dying || !owner->IsRefAlive())
+            return false;
         if (RndEnviron *env = dynamic_cast<RndEnviron *>(owner)) {
             static_cast<ObjRefOwner *>(env)->Replace(ref, nullptr);
             return true;
