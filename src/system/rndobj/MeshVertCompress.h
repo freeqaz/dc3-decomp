@@ -134,6 +134,38 @@ static inline unsigned short FloatToHalf(float value) {
 // PackVector callee each TU resolves to its own copy of.  config/symbols.txt
 // can only carry one symbol per name, so it names 826204d8 and leaves the
 // rndobj copy as the placeholder `fn_8263A360`.
+// RESIDUAL 99.95683 / 8 rows (w8-p 2026-09-30), and the 8 rows are ONE decision
+// twice over: which member of a pair is converted 3rd vs 4th, after which the
+// register and stack-slot assignment follows mechanically.
+//   * colour group, idx 7/9/34/35: the image assigns f13,f12,f11,f10 <-
+//     green,blue,ALPHA,RED (`lfs f11,0x3c(r4)` / `lfs f10,0x30(r4)` at
+//     0x826204F4 / 0x826204FC) and we assign green,blue,RED,ALPHA.  The first
+//     two agree, so it is only the last pair.  Downstream, the image converts
+//     red 4th into the SECOND scratch slot (`fctidz f0,f0` + `stfd f0,0x60(r1)`
+//     at 0x82620550/54, read back `lwz r28,0x64(r1)`) while alpha goes through
+//     0x50/0x54 into r29; we route alpha through the second slot instead, which
+//     is the whole of the `rlwimi r28,r29` <-> `rlwimi r29,r28` row pair at
+//     0x82620560/64.  Both spellings compute (alpha<<8)|(red&0xFF) correctly.
+//   * normal group, idx 102/103/105/113: the image loads norm.z (0x18) BEFORE
+//     norm.y (0x14) -- `lfs f11,0x18(r31)` / `lfs f13,0x14(r31)` at
+//     0x82620670 / 0x82620674 -- then stores y to 0x64(r1) and z to 0x68(r1);
+//     we load y first and store the same two values to the same two slots.
+//     Semantically identical, f11<->f13 exchanged.
+// MEASURED NEGATIVES (w8-p, each a full post-compile build, each EXACTLY inert
+// -- identical 8-row table, identical 99.84892 fuzzy, not merely the same
+// rounded canonical):
+//   1. swapping the `alpha`/`red` declarations, and separately the
+//      `normZ`/`normY` declarations, so the pair is declared the other way up;
+//   2. deleting the `normZ`/`normY` locals altogether and writing
+//      `Vector4 normVec(vert.norm.x, vert.norm.y, vert.norm.z, 0.0f)` -- the
+//      right-to-left argument evaluation that fixed RndText::SetColor (w7-bx)
+//      does NOT reach these loads, because the locals were never what pinned
+//      them;
+//   3. commuting the innermost `|` to `(red & 0xFF) | (alpha << 8)`, which under
+//      right-to-left evaluation should have converted alpha first.
+// The scheduler, not the source, picks which conversion gets the second scratch
+// slot; all three source-visible orderings produce the same bytes.  Do not retry
+// declaration order, argument inlining, or commuting this `|`.
 static void FillCompressedVertex(
     CompressedVertex_Xbox &compressed, const RndMesh::Vert &vert, bool normalize
 ) {

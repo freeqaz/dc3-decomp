@@ -48,11 +48,16 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     return result;
 }
 
-void PatchVerts::Clear() {
+inline void PatchVerts::Clear() {
     mPatchVerts.clear();
     mCentroid.Set(0, 0, 0);
 }
 
+// CLOSED (w8-p 2026-09-30): 96.77778 -> 100.0, by the COMDAT lever documented on
+// PatchVerts::HasVert below -- `inline` on this definition and on GreaterEq.  The
+// w7-az reading below was exactly right that the image "treats GreaterEq as an
+// opaque call"; what it could not find was why, and the answer is in the map's
+// flag column (`f i` = COMDAT).  Kept for the record:
 // RESIDUAL (w7-az, 96.78, 23 rows) -- SAME CLASS as the HasVert note below,
 // and the same callee.  The image treats GreaterEq as an opaque call and
 // therefore parks everything it needs afterwards in non-volatiles: five of
@@ -73,7 +78,7 @@ void PatchVerts::Clear() {
 // does NOT work here: 96.78 canonical unchanged (raw 95.03 -> 94.92), same
 // prologue, same rotation.  It reorders the two `addi`s and nothing else.
 // Do not retry the source reorder either; see the REFUTED EXPERIMENT below.
-void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid) {
+inline void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid) {
     int idx = GreaterEq(vertIdx);
     mPatchVerts.insert(mPatchVerts.begin() + idx, vertIdx);
     mCentroid += verts[vertIdx].pos;
@@ -82,7 +87,7 @@ void PatchVerts::Add(int vertIdx, RndMesh::VertVector &verts, Vector3 &centroid)
     centroid *= invCount;
 }
 
-int PatchVerts::GreaterEq(int iii) const {
+inline int PatchVerts::GreaterEq(int iii) const {
     if (!(!mPatchVerts.empty() && iii > mPatchVerts.front())) {
         return 0;
     } else {
@@ -106,21 +111,24 @@ int PatchVerts::GreaterEq(int iii) const {
     }
 }
 
-// 81.4% under name_check, and 81.4% is not the floor: the target keeps `this`
-// and `vert` in r30/r31 across the GreaterEq call (108 bytes, saves two
-// non-volatiles), where we hold them in r7/r4 -- volatile registers -- and read
-// them back afterwards (88 bytes, saves none).  That only type-checks if MSVC
-// propagated GreaterEq's clobber set into this caller, which it can do for a
-// callee it has already compiled in the same TU.
+// CLOSED (w8-p 2026-09-30): 81.40741 -> 100.0.  The diagnosis below was right
+// about the mechanism and wrong about the knob.  The target keeps `this` and
+// `vert` in r30/r31 across the GreaterEq call (108 bytes, saves two
+// non-volatiles) because GreaterEq is a COMDAT there, not because of source
+// order: ham_xbox_r.map's flag column separates an ordinary out-of-line .cpp
+// definition (bare `f`) from a COMDAT emitted for an inline/in-class/template
+// definition (`f i`), and ?GreaterEq@PatchVerts@@IBAHH@Z @8263c030 is `f i`
+// (map line 51879) -- as are HasVert @8263e178, Clear @8263f1e8 and Add
+// @8263f238.  ?FaceCenter@@YAXPAVRndMesh@@PAVFace@1@AAVVector3@@@Z @8263b860 is
+// bare `f` in the same object, which is the control: the image really does mix
+// the two, and it is the map, not guesswork, that says which is which.
+// A COMDAT may be replaced at link time by an equivalent definition from another
+// TU, so MSVC cannot assume the callee's register usage and the caller must
+// spill to non-volatiles.  Marking these four `inline` reproduces that.
 //
-// REFUTED EXPERIMENT (2026-08-23): moving this definition ABOVE
-// PatchVerts::GreaterEq, so the callee is no longer compiled first, is
-// completely inert -- HasVert stays at 81.40741 / 80.666664 / 80.48148 on all
-// three rulers, GreaterEq stays at 100.0, and a whole-binary A/B moves no other
-// function.  Source order is not what gates the propagation here.  Do not
-// retry the reorder; look for whatever else makes the target treat GreaterEq
-// as an opaque call.
-bool PatchVerts::HasVert(int vert) const {
+// The 2026-08-23 experiment (moving this definition ABOVE GreaterEq) was inert,
+// and correctly so -- source order was never the gate.  Do not retry it.
+inline bool PatchVerts::HasVert(int vert) const {
     int idx = GreaterEq(vert);
     if (idx < mPatchVerts.size()) {
         return mPatchVerts[idx] == vert;
@@ -1262,6 +1270,14 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
 // MEASURED NEGATIVE: `unsigned short vertIdx` by value instead of
 // `unsigned short &vertIdx` in the 3-vertex loop -- inert, 97.6 both ways.
 //
+// CLOSED (w8-p 2026-09-30) on the canonical ruler: 97.58194 -> 100.0 normalized,
+// by marking PatchVerts::Clear / Add / GreaterEq / HasVert `inline` (see the
+// COMDAT-flag note on PatchVerts::HasVert).  The w7-bp diagnosis below named the
+// mechanism correctly.
+// ⚠ NOT fully banked: fuzzy_match_percent is 99.83278, and report.json computes
+// matched_functions from the NORMALIZED ruler but matched_code from fuzzy == 100,
+// so this row adds +1 matched function and 0 of its 1196 bytes.  Do not read the
+// normalized 100.0 as byte-identity here.
 // THE FLOOR IS ONE MECHANISM: same-TU callee volatile-register propagation,
 // exactly the effect already documented on PatchVerts::HasVert above (81.4%,
 // and refuted there as a definition-order problem).  MSVC has already
