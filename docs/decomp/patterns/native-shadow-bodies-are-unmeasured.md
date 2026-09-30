@@ -698,13 +698,18 @@ The removed bail-out never fired for a non-root dir on the perform, dance-battle
 routes (temporary audit, with a positive control: the same hook fires on the unit test's
 `anon_sub`); every leak the party lane saw was a cascade ROOT, destroyed anyway.
 
-**Route symptom of lead 1.** `$elem = <null>` did not reproduce on main's binary: 0 in a party
-run through events 1-2 (and 0 on this branch over the full party). The unit-level faults above
+**Route symptom of lead 1.** `$elem = <null>` did not reproduce on main's binary: 0 in two
+party runs (one full, one through event 2), and 0 on this branch. The unit-level faults above
 reproduce deterministically.
 
 **Also on the way:** `FreestyleMoveRecorder::GetScore` indexed player frame scores with the
 Xbox's 0x10 stride (natively 0x20): player 1 read a heap pointer as its score count, so with
 about half of all heap layouts the sum loop ran off the heap -- the party route SIGSEGV'd in
-Make Your Move once on this branch before the fix. (Separately, and not attributed: one run of
-main's binary never ended Make Your Move -- still `playing` at beat 3360 after 28 minutes.)
+Make Your Move once on this branch before the fix.
+
+**Open, pre-existing, not a lifetime bug:** Make Your Move sometimes never ends -- still
+`playing` past beat 3200 after 27 minutes, `StandardStream::SetJump` notifying "Trying to set
+loop points when we're already past the point of no return!" ~160 times (13 in a whole
+completed party). Seen once on main's binary (1 of 2 runs) and once on this branch's final
+binary (1 of 2 runs, with the stride fix); the other run of each completed all 106 stages.
 
