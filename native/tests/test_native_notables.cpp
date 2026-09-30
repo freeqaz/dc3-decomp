@@ -42,3 +42,78 @@ TEST_F(NativeNotablesMoggTest, LoadNumChannelsReadsTheMoggsChannelCount) {
     EXPECT_FALSE(clip->IsStreaming()) << "LoadNumChannels must Stop() the probe stream";
     delete clip;
 }
+
+// ---------------------------------------------------------------------------
+// StreamReceiver: when a finished stream reports kFinished.
+//
+// The image's StreamReceiver::Poll (build/373307D9/asm/system/synth/
+// StreamReceiver.s) keeps its voice's ring of mNumBuffers 0x4000-byte buffers
+// full: each time the play cursor leaves a buffer it sends the next 0x4000
+// bytes of its 0x8000-byte local ring into it. After EndData() the local ring is
+// zero-padded, and every completed send counts one "done buffer";
+// StandardStream::PollStream reports kFinished once that count exceeds
+// mNumBuffers + 2. Walked through (a model of that Poll over 4000 random
+// lengths, buffer counts 4..12 and frame sizes 735..2940 bytes), that is the
+// moment the play cursor reaches the buffer boundary one whole buffer past the
+// one holding the last byte written: 0x4000 * (ceil(written / 0x4000) + 1),
+// i.e. between 1 and 2 buffers (186..372 ms of 44.1 kHz mono PCM per channel)
+// of silence after the audio ends -- to within one frame, whatever mNumBuffers.
+//
+// Native counted one "done buffer" per Poll() once its ring had drained, so a
+// stream finished mNumBuffers + 3 frames after its audio ended: measured on a
+// perform route 36..90 ms of silence (1153..3974 samples), below the image's
+// minimum of 8192.
+namespace {
+
+class ProbeReceiver : public StreamReceiverNative {
+public:
+    ProbeReceiver(int numBuffers) : StreamReceiverNative(numBuffers, false) {}
+    bool Finished() const { return mDoneBufferCounter > mNumBuffers + 2; }
+};
+
+// Write `written` bytes, EndData, then render `frameBytes` per poll until the
+// receiver counts as finished; returns the bytes played by then.
+long long PlayedAtFinish(int numBuffers, int written, int frameBytes) {
+    ProbeReceiver r(numBuffers);
+    r.Play();
+    std::vector<int16_t> pcm(written / 2, 1000);
+    for (int off = 0; off < written; off += 0x800) {
+        int n = std::min(0x800, written - off);
+        r.WriteData(reinterpret_cast<const char *>(pcm.data()) + off, n);
+    }
+    r.EndData();
+    std::vector<float> out(frameBytes); // stereo float frames: frameBytes/2 * 2
+    for (int i = 0; i < 1000; i++) {
+        r.Poll();
+        if (r.Finished())
+            return (long long)r.GetBytesPlayed();
+        r.RenderAudio(out.data(), frameBytes / 2);
+    }
+    return -1;
+}
+
+class NativeNotablesStreamTest : public EngineTestFixture {};
+
+} // namespace
+
+TEST_F(NativeNotablesStreamTest, ReceiverFinishesOneBufferPastTheLastBuffer) {
+    const int B = 0x4000;
+    struct Case {
+        int numBuffers, written, frameBytes;
+    } cases[] = {
+        { 6, 2 * B + 5000, 1470 }, // 44.1 kHz at 60 fps
+        { 4, 3 * B + 2, 1066 },    // 32 kHz
+        { 6, 2 * B, 1470 },        // ends exactly on a buffer boundary
+        { 12, 17000, 2940 },       // many buffers: the image rule ignores mNumBuffers
+    };
+    for (const Case &c : cases) {
+        long long expect = (long long)B * ((c.written + B - 1) / B + 1);
+        long long got = PlayedAtFinish(c.numBuffers, c.written, c.frameBytes);
+        EXPECT_GE(got, expect) << "numBuffers " << c.numBuffers << " written " << c.written
+                               << ": finished after only " << got - c.written
+                               << " bytes of silence; the image plays to " << expect;
+        EXPECT_LT(got, expect + c.frameBytes)
+            << "numBuffers " << c.numBuffers << " written " << c.written
+            << ": finished late (" << got << " vs " << expect << ")";
+    }
+}

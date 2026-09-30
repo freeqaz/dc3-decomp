@@ -14,6 +14,9 @@ StreamReceiver::StreamReceiver(int numBuffers, bool slip)
       mState(kInit), mSendTarget(0), mWantToSend(false), mSending(false), mBuffersSent(0),
       mStarving(false), mEndData(false), mDoneBufferCounter(0), mLastPlayCursor(0) {
     MILO_ASSERT(numBuffers > 0, 0x33);
+#ifdef HX_NATIVE
+    mNativeBytesWritten = 0;
+#endif
 }
 
 StreamReceiver::~StreamReceiver() {}
@@ -77,6 +80,7 @@ void StreamReceiver::WriteData(const void *data, int bytes) {
     // via StartSendImpl. The base class mBuffer is not used — audio output
     // reads from StreamReceiverNative::mPCMBuf instead.
     StartSendImpl((unsigned char *)data, bytes, 0);
+    mNativeBytesWritten += bytes;
     mSending = true;
     mWantToSend = false;
 #else
@@ -92,12 +96,23 @@ void StreamReceiver::Poll() {
         mSending = false;
         mBuffersSent++;
     }
-    // On Xbox, mDoneBufferCounter increments via the ring buffer send cycle
-    // when mEndData is true. Native skips ring buffer management — data goes
-    // directly to the platform audio thread. Increment here once the audio
-    // output has drained, so StandardStream can transition to kFinished.
-    if (mEndData && IsOutputDrained()) {
-        mDoneBufferCounter++;
+    // On the image, after EndData() every 0x4000-byte buffer the voice
+    // finishes is refilled from the zero-padded local ring and counted in
+    // mDoneBufferCounter (the #else body below), and StandardStream reports
+    // kFinished once the count passes mNumBuffers + 2. Because the local ring's
+    // head is always a whole number of buffers into the stream, that lands when
+    // the play cursor reaches the buffer boundary one whole buffer past the one
+    // holding the last byte written -- 1..2 buffers of silence after the audio,
+    // whatever mNumBuffers is. Native has no buffer cycle (WriteData feeds the
+    // platform ring directly), so place the same point from the byte counts.
+    // Counting one per Poll() once drained, as native used to, finished
+    // mNumBuffers + 3 frames after the audio: 36..90 ms, not 186..372.
+    if (mEndData && mDoneBufferCounter <= mNumBuffers + 2) {
+        unsigned long long finishAt =
+            ((unsigned long long)(mNativeBytesWritten + 0x3FFF) / 0x4000 + 1) * 0x4000;
+        if (GetBytesPlayed() >= finishAt) {
+            mDoneBufferCounter = mNumBuffers + 3;
+        }
     }
 #else
     if ((unsigned int)mState >= kReady) {

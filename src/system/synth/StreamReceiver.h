@@ -86,4 +86,10 @@ protected:
     bool mEndData; // 0x8021
     int mDoneBufferCounter; // 0x8024
     int mLastPlayCursor; // 0x8028
+#ifdef HX_NATIVE
+    /** Native only: bytes handed to WriteData(), which on native go straight to
+     *  the platform receiver's ring. Poll() needs it to place kFinished where the
+     *  image's buffer cycle does. */
+    int mNativeBytesWritten;
+#endif
 };
