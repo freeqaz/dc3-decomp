@@ -569,11 +569,22 @@ DataNode UIManager::OnGotoScreen(DataArray const *arr) {
 
 #ifdef HX_NATIVE
     // If DTA resolves to null screen (e.g., tutorial exit with missing state),
-    // try falling back to main_screen to avoid dead-end
+    // try falling back to main_screen to avoid dead-end.  NOT the image: its
+    // OnGotoScreen hands the null straight to GotoScreen.  Kept so a native
+    // state gap is not a dead end, but it must never be SILENT: it hid
+    // party mode's bounce (the MultiUserGesturePanel auto-fire started
+    // gameplay with no song, `gamemode get game_screen` was null, and the
+    // player landed on main_screen with nothing logged).  Every hit is a
+    // state gap upstream of this line -- find it, do not trust the bounce.
     if (screen == nullptr && !obj) {
         UIScreen *fallback = ObjectDir::Main()->Find<UIScreen>("main_screen", false);
         if (fallback) {
-            if (DebugUIFlow()) printf("DC3 UI: goto_screen resolved to null, falling back to 'main_screen'\n");
+            MILO_WARN(
+                "goto_screen from '%s' resolved to no screen (%s:%d); native "
+                "falls back to main_screen",
+                mCurrentScreen ? mCurrentScreen->Name() : "<none>", arr->File(),
+                arr->Line()
+            );
             screen = fallback;
         }
     }
