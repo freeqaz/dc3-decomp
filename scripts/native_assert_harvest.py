@@ -441,7 +441,7 @@ class Harvest:
         "party_mode_signin#2",               # team 2 enrollment
         "party_mode_hub_screen",             # round 1 hub (high five to start)
         "game_screen",                       # the first event's gameplay
-        "gameover",
+        "event_complete",                    # ...to gameover, or strike_a_pose's outro
         "party_mode_standings_screen",
         "party_mode_rematch_screen",         # after the last event's standings
         "back_to_menu",
@@ -577,30 +577,41 @@ class Harvest:
                 self.mark(c, False, f"last screen {last!r}; screens: {' -> '.join(seen_order)}")
 
     def party_gameplay(self, n):
-        """One party event: sample until gameover (idle past song end)."""
+        """One party event: sample until it ends.  Most events end at
+        gameover (idle past song end); strike_a_pose does not -- its
+        strikeapose_over sets game_stage outro and calls fatals_over, and the
+        game goes to the win screen without a gameover state (the fatality
+        probe saw the same for a dance-battle fatality).  Both count as the
+        event completing; how it ended is in the note."""
         a = self.args
         last_beat, last_move = None, time.time()
-        state = None
+        state = stage = None
+        ended = None
         shot = False
         deadline = time.time() + a.gameplay_timeout
         while time.time() < deadline and self.alive():
             tel = self.telemetry()
-            state, beat = tel.get("state"), tel.get("beat")
-            if tel.get("screen") not in (None, "", "game_screen") and state != "gameover":
-                break  # left gameplay without a gameover
+            state, beat, stage = tel.get("state"), tel.get("beat"), tel.get("gameStage")
+            scr = tel.get("screen")
+            if state == "gameover":
+                ended = "gameover"
+                break
+            if scr not in (None, "", "game_screen"):
+                ended = f"left gameplay for {scr} (game_stage={stage})"
+                break
             if beat != last_beat:
                 last_beat, last_move = beat, time.time()
-            elif time.time() - last_move > a.stall_timeout and state != "gameover":
+            elif time.time() - last_move > a.stall_timeout:
                 break
             if not shot and (beat or 0) > 60:
                 self.screenshot(f"party_event{n}_mid")
                 shot = True
-            if state == "gameover":
-                break
             time.sleep(2)
-        ok = state == "gameover"
-        self.mark("gameover" if n == 1 else f"gameover#{n}", ok,
-                  f"event {n}: state={state!r} beat={self.telemetry().get('beat')}")
+        ok = ended == "gameover" or (ended is not None and (
+            "endgame" in ended or "cleanup" in ended or stage == "outro"))
+        self.mark("event_complete" if n == 1 else f"event_complete#{n}", ok,
+                  f"event {n}: {ended or 'stalled/timed out'}; state={state!r} "
+                  f"beat={self.telemetry().get('beat')}")
 
 # ---- log analysis ---------------------------------------------------------------
 TAG_RE = re.compile(r"^MILO_(WARN|NOTIFY|FAIL): (.*)$")
