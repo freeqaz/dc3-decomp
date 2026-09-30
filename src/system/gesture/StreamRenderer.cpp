@@ -657,6 +657,15 @@ void StreamRenderer::DrawToTexture() {
         // sequential temp lifetimes, and hence one reused slot -- costs
         // 98.74 -> 96.70 and 9 extra instructions; MSVC then keeps the whole
         // rect in registers across the block and re-permutes 12 stack slots.
+        // w8-r: two more spellings MEASURED INERT here, both byte-identical at
+        // 98.740 -- constructing the Rect as an unnamed temporary inside the
+        // DrawRect argument list, and hoisting Width()/Height() into named
+        // `int` locals first (distinct from w7-y's named FLOAT locals).  The residual is that the image stages BOTH
+        // int->float conversions through the SINGLE 8-byte temp at 0x50(r1)
+        // (store W, `lfd f0, 0x50`, store H over it, `lfd f13, 0x50`, then both
+        // fcfid) while we allocate a second temp at 0x58 and serialise the two
+        // chains on f0.  The image itself uses TWO temps at the blurRect site
+        // 80 instructions below, so one temp is not a property of Hmx::Rect.
         Hmx::Rect drawRect(0, 0, targetRT->Width(), targetRT->Height());
         TheNgRnd.DrawRect(drawRect, workMat, shaderType, Hmx::Color(), nullptr, nullptr);
 

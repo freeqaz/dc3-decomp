@@ -635,6 +635,13 @@ void Voice::Pause(bool b1) {
     }
 }
 
+// RESIDUAL (w8-r, 97.059, 272 B, 4 of 69 rows).  The image threads the
+// 0.01f literal's `lis`/`lfs` pair through r11 and only then overwrites r11
+// with `addi r11, r1, 0x10bc` (the homed `speed` parameter, above this
+// function's 0x10a0 frame -- the frame is that big because MILO_NOTIFY_ONCE's
+// MakeString buffer forces the `ld r12, -0x1000(r1)` stack probe).  We use r10
+// for the literal and compute the `addi` two instructions earlier, so it is
+// the same four instructions in a different order with one register renamed.
 void Voice::SetSpeed(float speed) {
     float min_speed = 0.01f;
     float *pSpeed = &speed;
@@ -823,6 +830,14 @@ void Voice::Init(bool b1) {
     ((float *)mPoolVoice.egParams)[1] = mReleaseRate;
     ((float *)mPoolVoice.egParams)[2] = 0.0f;
     ((float *)mPoolVoice.egParams)[3] = 0.0f;
+    // RESIDUAL (w8-r, 99.9925, 1072 B, 2 of 268 rows).  The image loads the
+    // vtable slot BEFORE the argument (`lwz r11, 0x18(r11)` then
+    // `lwz r5, 0x60(r30)`); we emit those two independent loads the other way
+    // round.  Both sides call slot 0x18 with the same four arguments, reload
+    // mPoolVoice.egParams from 0x60(r30) for each of the four stores above and
+    // once more here, and hoist the 0 / 0x10 constants to the same places --
+    // this is instruction scheduling of two loads with no dependency between
+    // them, and no spelling of the call expression has been found that moves it.
     hr = GetVoice()->SetEffectParameters(0, mPoolVoice.egParams, 0x10, 0);
     MILO_ASSERT(SUCCEEDED(hr), 0x1b0);
 }
@@ -845,8 +860,17 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
             fmt.ChannelMask = 0x60f;
         }
         fmt.SamplesEncoded = mNumSamples;
-        fmt.BytesPerBlock = 0x10000;
+        // RESIDUAL (w8-r, 99.960, 5 rows).  The image emits PlayBegin (0x20)
+        // BEFORE BytesPerBlock (0x1c) -- `stw r8, 0x20(r31)` then
+        // `stw r9, 0x1c(r31)` -- and loads buf.PlayBegin (0x9c(r1)) before
+        // buf.LoopCount (0xac(r1)).  We emit the constant store first whatever
+        // the source order: MEASURED, swapping these two lines is INERT
+        // (99.960 either way) and sinking BytesPerBlock past EncoderVersion
+        // costs 99.960 -> 97.950.  The values stored are identical on both
+        // sides; only the order of the constant store against the by-value
+        // parameter's loads differs.
         fmt.PlayBegin = buf.PlayBegin;
+        fmt.BytesPerBlock = 0x10000;
         fmt.PlayLength = buf.PlayLength;
         fmt.LoopBegin = buf.LoopBegin;
         fmt.LoopLength = buf.LoopLength;

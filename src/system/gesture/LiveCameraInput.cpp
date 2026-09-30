@@ -132,6 +132,14 @@ void CamTexClip::StoreTextureClip(RndTex *tex, float clipLeft, float clipTop, fl
     const float minY = 80.0f / 480.0f;
     const float maxY = 400.0f / 480.0f;
 
+    // RESIDUAL (w8-r, 99.919, 296 B, 10 of 74 rows) -- pure FPR colouring in
+    // the two trailing row scales, and the arithmetic is identical on both
+    // sides.  `m.y *= scaleY` loads 0x14 into f13 on both sides and then the
+    // image takes 0x10 into f12 / 0x18 into f0 where we take 0x18 into f12 /
+    // 0x10 into f0; `m.z *= scaleZ` (folded to a load/store triple because
+    // scaleZ is 1.0f) is the same story on 0x20/0x24/0x28.  The STORE order is
+    // ascending on both sides -- only which FPR carries which component
+    // differs, so there is no component swap here.
     float adjustedTop = gTempPortraitOffset * scaleY + clipTop;
     mTex = tex;
     mXfm = Transform::IDXfm();
@@ -397,6 +405,8 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     int startX = (int)(clipLeft * 640.0f);
     if (startX < 0)
         startX = 0;
+    // MEASURED INERT (w8-r): writing this `startX + texWidth`, to flip the
+    // image's `add r8, r10, r9` operand order, is byte-identical at 97.315.
     if (texWidth + startX - 1 >= 640) {
         startX = 640 - texWidth;
     }
@@ -459,6 +469,15 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     }
 }
 
+// RESIDUAL (w8-r, 98.182, 440 B, 22 of 111 rows) -- ONE callee-saved
+// colouring decision and nothing else.  The image puts clippedX in r27
+// (`subf r27, r11, r10`, the %640 remainder) and srcPitch in r28
+// (`srwi r28, r8, 1`); we colour them the other way round, and every later row
+// -- r8<->r9 and r10<->r11 in the inner pixel loop, the `mullw`, the `lhzx`,
+// the `sthu` -- inherits the swap.  The one non-rename row is the `mr r11,
+// r27` copy of clippedX, which the image emits BEFORE the `add`/`cmpw` pair
+// that bounds the row and we emit four instructions later.  No address,
+// constant or value differs on either side.
 void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
     LiveCameraInput *cam, float clipLeft, float clipTop
 ) {
@@ -1386,7 +1405,13 @@ void CameraDump(const char *filename) {
     void *buf = MemAlloc(texSize, "unknown", 0, "unknown", 0);
     // `= nullptr`, not a bare declaration: the image writes 0 into the slot
     // before the TexelsLock call (`li r11, 0x0` / `stw r11, 0x50(r31)` at
-    // 0x82434964..0x8243496C, reloaded as memcpy's r4 at 0x8243497C).
+    // 0x82434964..0x8243496C, reloaded as memcpy's r4 at 0x8243497C).  That
+    // took 94.737 from 6 charged rows to 5.  RESIDUAL (w8-r, 94.737): the
+    // image hoists tex's vtable load ABOVE the `mr r29, r3` / home store
+    // (`lwz r10, 0x0(r27)` is the instruction after `li r11, 0x0`) where we
+    // emit it two instructions after, and it reloads `lwz r4, 0x50(r31)` after
+    // `mr r3, r29` where we load it before -- a two-instruction hoist, no
+    // value or address differs.
     void *texels = nullptr;
     tex->TexelsLock(texels);
     memcpy(buf, texels, texSize);

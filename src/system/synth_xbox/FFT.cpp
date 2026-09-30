@@ -2223,6 +2223,10 @@ void SquareComplexTransposeVector(float* data, long size) {
             __stvx(outRowHi, rowHi, 0);
             rowHi += 16;
             __stvx(outColLo, colLo, 0);
+            // MEASURED INERT (w8-r): spelling these `colLo = rowStep + colLo`
+            // to flip the image's `add r7, r4, r7` / `add r6, r4, r6` operand
+            // order is byte-identical at 97.297.  Confirms the commutative
+            // operand-order floor for `add` as well as `fmuls`.
             colLo += rowStep;
             __stvx(outColHi, colHi, 0);
             colHi += rowStep;
