@@ -118,6 +118,70 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
 //    through r30). That is a live-range split under one more callee-saved
 //    register (__savegprlr_17 vs our _18), i.e. allocation, not a source
 //    shape: there is exactly one m_block load per round on both sides (66).
+//
+// FLOOR CERTIFICATE (w8-o 2026-09-30), 61.986 canonical / 55.7 raw.  The
+// residual is register-copy insertion and nothing else, and this is now
+// measured rather than inferred.  The OPCODE HISTOGRAMS OF THE TWO SIDES ARE
+// IDENTICAL IN EVERY ENTRY EXCEPT `mr`:
+//
+//   lwz 348  xor 312  add 285  rotlwi 144  rotrwi 80  stw 69  and 60
+//   subf 40  or 40  ori 4  lis 4  bl 2  stwu 1  mflr 1  li 1  b 1  addi 1
+//
+//   mr:  target 71   base 14        <- the ONLY difference, and 71-14 = 57
+//                                      is exactly the instruction-count gap
+//                                      (target 1464, base 1407).
+//
+// A 1,464-instruction function does not agree on all seventeen other opcode
+// counts by accident.  The arithmetic, the round structure, the blk() XOR
+// tree, the word type and the 66 m_block reloads are all already correct; the
+// image simply splits the m_block pointer's live range once per blk round
+// (e.g. 0x8253A4CC `lwz r31, 0xc0(r24)` / 0x8253A520 `mr r29, r31`, the last
+// operand load then clobbering r31 while the store goes through r29) under one
+// more callee-saved register than MSVC gives us.  There is no source edit left
+// to make: what remains is the allocator's choice.
+//
+// Two further negatives from that lane, so nobody re-derives them:
+//
+// 6. STATEMENT-SPLITTING THE ROUND MACRO IS WORSE, and it refutes the "e is
+//    added before w because the source says so" reading directly.  The image
+//    accumulates ((rol(v,5) + f) + z) + blk(i) + K -- `add r7, r9, r29` at
+//    0x8253A058 adds e BEFORE the block word is loaded at 0x8253A074 -- where
+//    we add w then e.  Splitting each macro into `z += rol(v,5) + f;` then
+//    `z += blk(i) + K;` does not produce the image's order; it LOWERS register
+//    pressure and moves the prologue the WRONG WAY, to __savegprlr_19 (the
+//    image is _17, we are _18).  62.0 -> 60.4, 1708 rows.
+// 7. THE COMDAT / `inline`-ON-THE-CALLEE LEVER IS OUT OF REACH HERE BY
+//    CONSTRUCTION, and the test is same-TU-ness, not the map class.  That
+//    lever (ham_xbox_r.map's COMDAT column: 79,320 bare `f` vs 31,754 `f i`)
+//    has closed rows in other units empirically, but it needs a SAME-TU callee
+//    for a clobber set to propagate in the first place.  This function calls
+//    exactly one thing -- `memcpy`, which the map puts in LIBCMT:memcpyp.obj at
+//    0x8299FBB0, bare `f`, a different translation unit -- so it has NO same-TU
+//    callee and there is nothing for the lever to act on.  Both sides emit the
+//    same `bl memcpy`.  (Do NOT restate this as "a COMDAT callee is link-time
+//    replaceable so the caller must spill": that mechanism was retracted
+//    2026-09-30.  MSVC/Xenon puts every function it compiles in its own COMDAT,
+//    so adding `inline` does not change the map class -- the carrier is the
+//    COMDAT SELECTION TYPE in the section symbol's aux record, and our objects
+//    emit NODUPLICATES for both classes.  The lever is empirical; the
+//    same-TU precondition is what is structural.)
+//
+//    Two figures for whoever comes back to this, both measured after the first
+//    version of this note was written.  (a) The selection-mismatch surface is
+//    LARGE, not small: `scripts/analysis/comdat_selection_audit.py` over all
+//    989 objects finds 1,898 mismatches -- 536 ours NODUPLICATES / image ANY
+//    and 1,362 the reverse -- over 78,352 functions compared, of which
+//    math/SHA1.obj contributes 2 (math/Geo.obj 2, utl/MemMgr.obj 2).  An
+//    earlier "7 mismatches in 1,396 functions, small surface" was a four-unit
+//    sample generalised to the binary and is withdrawn.  (b) It is
+//    nevertheless NOT a score lever on this class of row: all four closures
+//    anyone has made with it were FIDELITY-ONLY with zero score movement, and
+//    `BuildBeam` -- the textbook __savegprlr_N prologue symptom, the same
+//    symptom as this function's _17-vs-_18 -- stayed BYTE-IDENTICAL at 85.3415
+//    with its save set unchanged after its callee's selection class was
+//    matched.  So even in a unit where the lever DID apply, it did not move
+//    the save set.  That is independent corroboration of the certificate
+//    above, and the reason no selection-byte work was done in this lane.
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 #ifdef HX_NATIVE
     // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap

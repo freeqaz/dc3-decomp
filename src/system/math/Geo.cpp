@@ -173,6 +173,30 @@ void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
     Vector3 diff31, diff21, cross;
     Subtract(v3, v1, diff31);
     Subtract(v2, v1, diff21);
+    // The image computes diff21 x diff31, NOT diff31 x diff21.  Proof off
+    // build/373307D9/asm/system/math/Geo.s (this function at .text 0x174c,
+    // absolute 0x82535A28):
+    //   0x17ac / 0x82535A88  fmuls  f7, f11, f8      f11 = d21.x, f8  = d31.z
+    //   0x17b4 / 0x82535A90  fmuls  f6, f12, f13     f12 = d21.z, f13 = d31.y
+    //   0x17c8 / 0x82535AA4  fmsubs f0, f8, f10, f6  f10 = d21.y
+    //                                            -> d21.y*d31.z - d21.z*d31.y
+    //   0x17cc / 0x82535AA8  stfs   f0, 0x50(r1)     cross.x
+    // Cross(A,B).x is A.y*B.z - A.z*B.y, so A = diff21 and B = diff31.  Ours
+    // emitted the NEGATION of every component, so the plane normal -- and
+    // therefore d = -Dot(cross, v1) -- pointed the wrong way.
+    //
+    // This was behaviourally visible, not only a matching detail.  The only
+    // caller in the image is HamSkeletonConverter at 0x824C9784, and the
+    // consumer at HamSkeletonConverter.cpp:410 negates a/b/c AGAIN.  The
+    // four-float Set overwrites the plane only on the usePelvis branch, so on
+    // angle >= 0.2 the hip Z axis fed to IK came out as the image's value
+    // negated.
+    //
+    // Corroborated by the winding convention next door: Triangle::Set in
+    // math/Geo.h builds its normal as Cross(v1-v0, v2-v0), i.e. the same
+    // (second-minus-first) x (third-minus-first) order.  Before this fix a
+    // Plane built from three points had the OPPOSITE normal from a Triangle
+    // built from the same three points.
     Cross(diff21, diff31, cross);
     Normalize(cross, cross);
     a = cross.x;
@@ -358,7 +382,14 @@ void BSPFace::OnSide(const Plane &plane, bool &front, bool &back) {
         do {
             Vector3 pt(it->x, it->y, 0.0f);
             Multiply(pt, t, pt);
-            float dot = plane.a * pt.x + plane.b * pt.y + plane.c * pt.z + plane.d;
+            // Term grouping, not arithmetic.  Under /fp:fast MSVC rotates a FLAT
+            // 3-product sum (source a,b,c lowers as b,c,a -- measured over all
+            // six permutations, none of which reaches the image).  Parenthesising
+            // the a+b pair pins the image's fmuls a*x / fmadds b*y / fmadds c*z.
+            // The one residual row is the c-term's fmadds operand order
+            // (`f11,f10` vs `f10,f11`); writing `pt.z * plane.c` is inert, same
+            // backend floor as recorded in Intersect(Transform,Polygon,BSPNode).
+            float dot = (plane.a * pt.x + plane.b * pt.y) + plane.c * pt.z + plane.d;
             if (dot > posTol) {
                 front = true;
             }
@@ -747,12 +778,17 @@ void Multiply(const Plane &p, const Transform &t, Plane &out) {
     Hmx::Matrix3 invM;
     FastInvert(t.m, invM);
     float b = p.b;
-    float a = p.a;
     float c = p.c;
-    float nx = invM.x.y * b + invM.x.x * a + invM.x.z * c;
-    float ny = invM.y.y * b + invM.y.x * a + invM.y.z * c;
-    float nz = invM.z.y * b + invM.z.x * a + invM.z.z * c;
-    float scalar = -(p.d / (b * b + a * a + c * c));
+    float a = p.a;
+    // Local LOAD order is what pins the term order here, not the sum's spelling:
+    // with the old `b,a,c` decl order every permutation of the three products was
+    // INERT (22 rows either way).  Declaring b,c,a makes the image's p.c/p.a/p.b
+    // load order and its c*c/a*a/b*b denominator fall out, and the sum then wants
+    // its FIRST source term emitted LAST (b,c,a spelled -> c,a,b emitted).
+    float nx = b * invM.x.y + c * invM.x.z + a * invM.x.x;
+    float ny = b * invM.y.y + c * invM.y.z + a * invM.y.x;
+    float nz = b * invM.z.y + c * invM.z.z + a * invM.z.x;
+    float scalar = -(p.d / (a * a + b * b + c * c));
     Vector3 on(a * scalar, b * scalar, c * scalar);
     Vector3 pOut;
     Multiply(on, t, pOut);
@@ -804,12 +840,20 @@ void Frustum::Set(float near, float far, float fovY, float ratio) {
     float cy = std::cos((fovY * 0.5f));
     top.Set(0, sy, -cy, 0);
     bottom.Set(0, sy, cy, 0);
+    // Two variables, not one.  `len = 1.0f / len` in place lets MSVC leave the
+    // zero case as a fall-through; the image has an explicit else arm
+    // (0x82537... `beq cr6, L` / `fdivs f12, f29, f12` / `b done` /
+    // `L: fmr f12, f31`), which is what a SEPARATE accumulator initialised to
+    // zero emits -- the same idiom as Normalize() in math/Vec.h.
+    float inv;
     float len = std::sqrt(cy * cy + (sy / ratio) * (sy / ratio));
     if (len != 0.0f) {
-        len = 1.0f / len;
+        inv = 1.0f / len;
+    } else {
+        inv = 0.0f;
     }
-    float la = len * cy;
-    float lb = len * (sy / ratio);
+    float la = inv * cy;
+    float lb = inv * (sy / ratio);
     left.Set(la, lb, 0, 0);
     right.Set(-la, lb, 0, 0);
     if (fovY == 0.0f) {
@@ -820,6 +864,14 @@ void Frustum::Set(float near, float far, float fovY, float ratio) {
     }
 }
 
+// REFUTED (w8-o 2026-09-30): the image's tail materialises 0/1 into r11 and
+// truncates -- 0x82535D90 `li r11, 0x0` / `beq` / `li r11, 0x1` /
+// 0x82535D9C `clrlwi r3, r11, 24` -- where the two literals below compile to
+// `li r3, 0 / beqlr / li r3, 1`, one instruction fewer.  It is NOT reached by
+// returning the variable.  `return r;` in place of `return true;` makes MSVC
+// cross-jump every intermediate `if (r == 0)` exit into `bnelr` and costs
+// 4.3pp (98.280 -> 93.968, 364 B); dropping the innermost early-out as well
+// costs more (356 B, 17 rows).  Leave the literals.
 bool operator>(const Sphere &s, const Frustum &f) {
     float neg_r = -s.radius;
     bool r;
@@ -1404,6 +1456,24 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
 
     newPoints->reserve((poly.points.end() - poly.points.begin()) * 2);
 
+    // LEAD for the next lane (w8-o 2026-09-30, 96.094, 512 B target vs 492 B
+    // base -- FIVE instructions the image has and we do not, and they are all
+    // DEAD HOME STORES of these two loop-carried variables).  r31+0x50 holds
+    // lastPoint and r31+0x54 holds lastDot; both sides store 0x50 twice
+    // (rows 43 and 47 of the aligned diff are equal), but the image ALSO
+    // emits, target-only:
+    //   subi r10, r11, 0x8      a SECOND copy of the `end()-1` computation
+    //   stw  r9,  0x50(r31)     an extra home of lastPoint
+    //   mr   r9,  r11
+    //   stfs f0,  0x54(r31)     an extra home of lastDot (first one)
+    //   stfs f11, 0x54(r31)     an extra home of lastDot (second one)
+    // That is the documented signature of an expression WRITTEN TWICE in the
+    // source and CSE'd by MSVC, which homes the slot once per textual
+    // occurrence -- see docs/decomp/patterns/repeated-call-expression-home-stores
+    // and dead-home-slot-store.  The shape to try is spelling
+    // `poly.points.back()` (and the lastDot initialiser) more than once rather
+    // than through these two variables.  NOT attempted here, so it is a lead
+    // and not a refutation.
     const Vector2 *lastPoint = &poly.points.back();
     const Vector2 *dirPtr = &ray.dir;
     float yDiff = lastPoint->y - ray.base.y;
