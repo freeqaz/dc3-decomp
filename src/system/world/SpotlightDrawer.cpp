@@ -463,6 +463,17 @@ void SpotlightDrawer::ApplyLightingApprox(BoxMapLighting &boxMap, float f2) cons
         params->mPosition = xfm.v;
         params->mDirection = xfm.m.y;
         params->mColor = c50;
+        // The residual is a REGISTER BUDGET, not an expression (w8-q, measured):
+        // the image spends one more callee-saved GPR and one fewer callee-saved
+        // FPR than we do.  Target prologue: `bl __savegprlr_26` + a single
+        // `stfd f31, -0x40(r1)`, with `lis r26, __real@40000000@ha` hoisted
+        // pre-loop and `lfs f0, __real@40000000@l(r26)` reloaded every iteration.
+        // Ours: `bl __savegprlr_27` + `stfd f30` AND `stfd f31`, with the value
+        // itself parked in f30 for the whole function.  That accounts for all six
+        // prologue/epilogue rows (idx 1,2,3,133,134,135) and the three around the
+        // materialisation (35,37,92) -- nine of the twenty-nine.  Any fix has to
+        // make MSVC prefer the GPR-plus-reload trade, so it is about pressure, not
+        // about how `* 2.0f` is spelled.
         // RESIDUAL (w7-am, 94.2 canonical): MSVC hoists this 2.0f out of the
         // loop into a second callee-saved FPR (f30, plus the extra stfd), where
         // the image keeps only `lis r26, __real@40000000@ha` live and reloads
