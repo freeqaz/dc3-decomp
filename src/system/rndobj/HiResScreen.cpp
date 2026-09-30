@@ -20,6 +20,19 @@ void HiResScreen::BmpCache::DeleteCache() {
 int HiResScreen::GetPaddingX() const { return 480; }
 int HiResScreen::GetPaddingY() const { return 270; }
 
+// RESIDUAL (w9-f, 98.291 canonical / 98.12 raw, 468 B): 6 rows of 118, one
+// cause -- WHERE the __FILE__ address materialisation is scheduled.  The string
+// is used first by the MILO_ASSERT at 0x3B and again by the MemAlloc at 0x44, so
+// both builds keep it in callee-saved r25 across both.  The image splits the
+// lis/addi pair and interleaves it into the assert's modulo computation --
+// `lis r9, ...@ha` at 826266A0 sits BETWEEN `divwu r8, r26, r11` (82626690) and
+// `mullw r11, r8, r11` (826266A4), with the `addi r25, r9, ...@l` at 826266AC
+// after the `subf.` -- filling the divide's latency.  We emit the pair back to
+// back after the `subf.`.  The three register renames (r8/r9 on the divwu and
+// mullw, r11/r10 on the subf., r9/r11 on the addi) are all downstream of that
+// one placement.  The member store order already matches (mRowsPerCacheLine at
+// 0x10 before mByteSize at 0x20), so this is a scheduler slot fill with no
+// source handle found.
 HiResScreen::BmpCache::BmpCache(unsigned int ui1, unsigned int ui2) {
     mPixelsPerRow = ui1;
     mTotalRows = ui2;
