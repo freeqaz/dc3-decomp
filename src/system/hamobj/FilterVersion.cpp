@@ -47,17 +47,32 @@ FilterVersion *FilterVersion::Create(const DataArray *cfg) {
 void Ham1FilterVersion::NodeInput(
     int x, const DetectFrame *detectFrame, MoveMode mode, ErrorNodeInput &input
 ) const {
-    // RESIDUAL (w8-i, 85.00 canonical / 84.50000 fuzzy): 4 rows of 22, one
-    // scheduling decision.  The image sets up the NodeWeightHam1 arguments as
-    // `mr r5, r6` (mode) FIRST and only then loads the mirror straight into its
-    // argument register off the saved copy of detectFrame -- `lwz r6, 0xc(r30)`,
-    // one instruction before the call.  We read the mirror off the INCOMING r5
-    // before mode clobbers it (`lwz r11, 0xc(r5)`) and then need `mr r6, r11`,
-    // which is the extra instruction making our body 84 bytes against 80.
-    // REFUTED, both bit-identical to this body: hoisting the move frame into
-    // `const MoveFrame *mf = ...` (which would pull the `lwz r3, 0x4(r30)` the
-    // image emits LAST even earlier), and hoisting the mirror into a named
-    // MoveMirrored local.  Argument evaluation order is not reachable from here.
+    // RESIDUAL (w8-i, re-measured w9-c 2026-09-30): 85.000 canonical / 84.500
+    // fuzzy, 4 rows of 22, one scheduling decision.  The image sets up the
+    // NodeWeightHam1 arguments LEFT TO RIGHT -- `mr r5, r6` (mode) first, and only
+    // then loads the mirror straight into its own argument register off the saved
+    // copy of detectFrame, `lwz r6, 0xc(r30)`, one instruction before the call.
+    // MSVC gives us RIGHT TO LEFT: it reads the mirror off the still-live incoming
+    // r5 before mode overwrites it (`lwz r11, 0xc(r5)`) and then needs `mr r6, r11`
+    // to shuffle it into place.  That third instruction is the whole 84-vs-80-byte
+    // difference; every other row, both calls and the __savegprlr_28/__restgprlr_28
+    // pair, is equal.
+    //
+    // og-dc3-decomp carries this function with a BYTE-IDENTICAL body, so the source
+    // shape is not the variable -- argument evaluation order simply is not
+    // reachable from C++ here.  Nine spellings refuted, one full ninja each, all
+    // scoring exactly 85.000 / 84.500:
+    //   - hoist the move frame into `const MoveFrame *mf` (w8-i)
+    //   - hoist the mirror into a named `MoveMirrored` local (w8-i)
+    //   - inline the whole NodeWeightHam1 call into input.Set()'s second argument
+    //   - `MoveMode m = mode;` first
+    //   - take `const Ham1NodeWeight *` instead of a reference
+    //   - `int node = x;` first
+    //   - `const DetectFrame *df = detectFrame;` and read everything through df
+    //   - `const MoveFrame *mf = ...` AND inline into input.Set() together
+    //   - `ErrorNodeInput &out = input;` first
+    // Do not re-derive.  Ham2FilterVersion::NodeInput below is 100% because its
+    // two-argument call has no register-swap conflict to resolve.
     const Ham1NodeWeight &ham1 =
         detectFrame->GetMoveFrame()->NodeWeightHam1(x, mode, detectFrame->Mirror());
     input.Set(detectFrame->NodeComponentWeight(x), &ham1);
