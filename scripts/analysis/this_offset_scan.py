@@ -90,6 +90,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from coverage import CoverageReport, add_coverage_args, EXIT_NO_INPUT  # noqa: E402
+# The MSVC qualified-name tokeniser.  Imported, not copied: two hand-rolled
+# mangled-name parsers in one directory is how defect 2 happened.
+import access_specifier_scan as _mangle  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_OBJDIFF = os.path.join(REPO, "objdiff.json")
@@ -576,7 +579,6 @@ def classify(tgt, base):
 # forms Y,Z.
 NONSTATIC_MEMBER = set("ABEFGHIJMNOPQRUVWX")
 IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-SPECIAL_RE = re.compile(r"^\?\?(?:[0-9]|_[A-Za-z0-9])(.*)$")
 
 
 def classify_symbol(name):
@@ -602,32 +604,53 @@ def classify_symbol(name):
     names a class."  That was true when written and is no longer -- that file
     now tokenises.  Left visible rather than deleted, per the repo convention
     that a superseded claim gets a dated correction.)
+
+    ⚠ CORRECTION 2026-09-30: "Taking the FIRST `@@` is correct for the names
+    THIS function accepts" was FALSE for free special-name operators.
+    `??6@YAAAVBinStream@@AAV0@...` (a free operator<<) has an EMPTY qualified
+    name -- the `@` right after the operator code closes it, and `Y` is the
+    storage code -- so the first `@@` is inside the first PARAMETER's type.  The
+    split('@') parser read `YAAAVBinStream` as the class, found `A` after that
+    `@@`, and returned ('member', 'YAAAVBinStream'): r3, the BinStream, was
+    treated as `this`.  127 free operator<< / >> / > bodies in the paired corpus
+    were examined that way.  The same parser also named the OUTER class for a
+    nested class's special member (`??1SubMode@PartyModeMgr@@` -> PartyModeMgr,
+    267 bodies; annotation only), and sent 31 member operators whose code is a
+    letter (`??R`, `??A`, `??Y`, ...) to template-or-complex.
+
+    The access/storage character now comes from `access_specifier_scan
+    .code_index`, a real qualified-name tokeniser that raises instead of
+    guessing.  This function only reads the qualifier fragments it spans.
     """
     if not name.startswith("?"):
         return "unparsable", None
     if "$" in name:                 # `$4...` adjustor thunks, `?$` templates
         return ("thunk" if "@$" in name else "template-or-complex"), None
-    toks = name.split("@")
     try:
-        first_empty = toks.index("")
-    except ValueError:
+        ci = _mangle.code_index(name)
+    except _mangle.MangleError:
         return "unparsable", None
-    if first_empty + 1 >= len(toks) or not toks[first_empty + 1]:
-        return "unparsable", None
-    access = toks[first_empty + 1][0]
-    quals = toks[1:first_empty]
-    if any(not IDENT_RE.match(q) for q in quals):
-        return "template-or-complex", None
+    access = name[ci]
     if access not in NONSTATIC_MEMBER:
         return "free-or-static", None
-    if quals:
-        cls = quals[0]
-    else:
-        m = SPECIAL_RE.match(toks[0])       # ??0Class / ??1Class / ??_GClass
-        if not m or not IDENT_RE.match(m.group(1)):
-            return "template-or-complex", None
-        cls = m.group(1)
-    return "member", cls
+    special = name.startswith("??")
+    try:
+        start = _mangle._sptok(name, 1) if special else 1
+    except _mangle.MangleError:
+        return "unparsable", None
+    # name[start:ci] is the qualified name including its terminator:
+    # "Load@RndFlare@@" (ordinary) or "SubMode@PartyModeMgr@@" (special).
+    frags = name[start:ci].split("@")
+    if frags[-2:] != ["", ""]:
+        return "template-or-complex", None     # back-reference / odd fragment
+    quals = frags[:-2]
+    if not quals or any(not IDENT_RE.match(q) for q in quals):
+        return "template-or-complex", None
+    if special:
+        return "member", quals[0]              # ??0Class / ??1Inner@Outer
+    if len(quals) < 2:
+        return "unparsable", None              # member code with no class
+    return "member", quals[1]                  # ?Func@Class@Namespace
 
 
 def triage(pairs, norm):
