@@ -2188,6 +2188,15 @@ static const unsigned int kNumBloomTaps = 7;
 // different sections, which the image does NOT have (both are .rdata, adjacent,
 // 0x3C apart), so the fold is a backend register-pressure choice rather than
 // something the source reaches.  Do not retry the pointer spelling.
+// SECOND MEASURED NEGATIVE (w9-f), a different attack on the same fold: the
+// hoist is a register-PRESSURE decision, so the obvious next lever is to make
+// both bases needed before a call -- read `float w = sBloomWeights[i];` at the
+// TOP of the loop body instead of between the two SetPConstant calls, which
+// keeps `w` live across the first call and forces the weights base to be
+// materialised early.  It is much worse: 88.66129 -> 82.2 canonical, 16 rows ->
+// 35, and it perturbs the r28/r29 pair, the 0x9a/0 setup and three stack slots
+// on top of the original save-set difference.  Both attacks on the two-base
+// hoist are now spent; treat the save-set difference as the floor here.
 static const float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
                                    0.0612547919f, 0.0815124959f, 0.0999667868f,
                                    0.1129886061f, 0.1176957935f, 0.1129886061f,
