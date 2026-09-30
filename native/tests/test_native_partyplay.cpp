@@ -268,7 +268,10 @@ void RecordThenScore() {
 }
 } // namespace
 
-class MakeYourMoveRecorderTest : public EngineTestFixture {};
+// SymbolTestFixture, not EngineTestFixture: the threadsafe death-test child
+// re-runs the fixture setup, and a full engine init there died under ctest's
+// working directory (orig-assets) before the test body ran.
+class MakeYourMoveRecorderTest : public SymbolTestFixture {};
 
 TEST_F(MakeYourMoveRecorderTest, ScoringARecordingReadsAnAllocatedTake) {
     GTEST_FLAG_SET(death_test_style, "threadsafe"); // see test_object_lifetime.cpp
