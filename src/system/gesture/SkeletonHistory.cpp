@@ -33,13 +33,21 @@ bool SkeletonHistory::PrevFromArchive(
 #endif
     const std::vector<ArchiveSkeleton> &archive = archives.GetArchive(skel_idx);
     std::vector<ArchiveSkeleton>::const_iterator it = archive.begin();
-    std::vector<ArchiveSkeleton>::const_iterator itEnd;
     elapsedMs = skeleton.ElapsedMs();
-    while ((itEnd = archive.end(), it != itEnd) && elapsedMs < targetMs) {
+    // Spell end() at each test and let MSVC do the caching: it rotates the loop
+    // so the `it != end()` test IS the latch (0x8243EFB8) and the entry branches
+    // straight to it (`b .L_8243EFB8` at 0x8243EF84), with the elapsedMs test at
+    // the top of the body.  The old `(itEnd = archive.end(), it != itEnd)` form,
+    // which hoisted end() into a named local inside the condition, made MSVC peel
+    // the `it != end` test into an extra pre-header guard as well as keeping it at
+    // the latch -- two surplus instructions (a `cmplw`/`beq` pair) and no entry
+    // branch, 93.831%.  The trailing `it != archive.end()` is CSE'd onto the
+    // latch's own load, which is what 0x8243EFC4 reusing r11 shows.
+    while (it != archive.end() && elapsedMs < targetMs) {
         elapsedMs += it->ElapsedMs();
         ++it;
     }
-    if (it != itEnd) {
+    if (it != archive.end()) {
         archiveSkeleton = *it;
         return true;
     } else
