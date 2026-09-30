@@ -1147,6 +1147,23 @@ void HamCharacter::Poll() {
     _strlwr(texName);
     strcat(texName, ".tex");
 
+    // RESIDUAL (w9-f, 99.13386 canonical, 1016 B): exactly 3 rows of 255, and the
+    // branch structure below is already the image's.  At both Find sites the image
+    // emits the RECORD-FORM move `mr. r4, r3` (8249167C and 82491698), copying the
+    // result into r4 -- SetDiffuseTex's argument register, since the call inlines
+    // to `SetObjConcrete(&mat->..., tex)` with r3 = 0x40(mat) -- and testing it in
+    // the same instruction.  We test in place with `cmplwi r3, 0x0` and defer a
+    // single `mr r4, r3` to just before the call.  Ours is the cheaper codegen (one
+    // move, not two); making MSVC home the value in r4 early is not expressible.
+    // REFUTED (w9-f): folding the two finds into one condition,
+    //   if (!(tex = Find(texName)) && !(tex = Find("base.tex"))) notify; else set;
+    // is far worse -- 99.13386 -> 94.4, 3 rows -> 17 -- because the && chain moves
+    // the whole SetDiffuseTex block past the MILO_NOTIFY_ONCE block and inverts two
+    // branches.  Keep the nested-if form.
+    // (Aside, worth knowing: the target names that callee
+    // SetObjConcrete<AnimTask, ObjectDir> and we name it
+    // SetObjConcrete<RndTex, ObjectDir>.  That is an ICF fold -- the two bodies are
+    // identical -- and OUR name is the correct one for this call site.)
     RndTex *tex = Find<RndTex>(texName, false);
     if (!tex) {
         tex = Find<RndTex>("base.tex", false);
