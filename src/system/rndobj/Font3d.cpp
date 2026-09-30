@@ -89,15 +89,9 @@ BEGIN_LOADS(RndFont3d)
         CharInfo *info = new CharInfo(this);
         d >> info->unk0;
         d >> info->advance;
-#ifdef HX_NATIVE
-        // On native, CharInfo::mMesh has no owner (constructed with nullptr),
-        // so ObjPtr::Load cannot derive a directory from RefOwner().
-        // Pass the font's Dir() so char meshes (e.g. char_u0041.mesh)
-        // resolve within the font's .milo ObjectDir.
-        info->mMesh.Load(d.stream, true, Dir());
-#else
+        // mMesh's owner is this font (CharInfo(this)), so Load derives the
+        // font's Dir() itself; no native explicit-dir spelling is needed.
         info->mMesh.Load(d.stream, true, nullptr);
-#endif
         d >> info->visible;
         mCharInfoMap[key] = info;
     }

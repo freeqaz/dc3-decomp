@@ -126,38 +126,14 @@ bool ObjRefConcrete<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir) {
     if (!dir && refOwner) {
         dir = refOwner->Dir();
     }
-#ifdef HX_NATIVE
-    // On native, allow dir-only lookup (no refOwner needed) so ObjPtrs
-    // with null owners (e.g. Font3d CharInfo::mMesh) can resolve when
-    // the caller passes an explicit dir.
-    if (dir) {
-#else
+    // No native owner-less resolution and no parent-dir / Main() fallback
+    // (removed 2026-09-30): the image (every ObjRefConcrete::Load
+    // instantiation, 100% matched) resolves only with an owner, and only in
+    // `dir` and its subdirs.  Instrumented over the perform and dance-battle
+    // routes, the native fallbacks bound nothing at all; they could only bind
+    // what the Xbox leaves null.  Pinned by NativeSuspectsTest.ObjPtr*.
     if (refOwner && dir) {
-#endif
         SetObj(dir->FindObject(buf, false, true));
-#ifdef HX_NATIVE
-        // Native fallback: walk up the parent dir chain when not found locally.
-        // On Xbox, FileMerger flattens all objects into the same scope.
-        // On native, the merge pipeline is incomplete so objects may live in
-        // a parent dir that isn't reachable with parentDirs=false.
-        if (!mObject && buf[0] != '\0') {
-            ObjectDir *searchDir = dir;
-            while (!mObject && searchDir) {
-                ObjectDir *nextDir = nullptr;
-                if (searchDir->Dir() && searchDir->Dir() != searchDir) {
-                    nextDir = searchDir->Dir();
-                } else if (searchDir->Loader() && searchDir->Loader()->ParentDir()) {
-                    nextDir = searchDir->Loader()->ParentDir();
-                }
-                if (!nextDir || nextDir == searchDir) break;
-                SetObj(nextDir->FindObject(buf, false, true));
-                searchDir = nextDir;
-            }
-            if (!mObject) {
-                SetObj(ObjectDir::Main()->FindObject(buf, false, true));
-            }
-        }
-#endif
         if (!mObject && buf[0] != '\0') {
             if (print) {
                 MILO_NOTIFY(
@@ -447,30 +423,6 @@ bool ObjPtrVec<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir) {
         bs.ReadString(buf, 0x80);
         if (dir) {
             T1 *casted = dynamic_cast<T1 *>(dir->FindObject(buf, false, true));
-#ifdef HX_NATIVE
-            // Native fallback: walk up the parent dir chain when not found locally.
-            // On Xbox, FileMerger flattens all objects into the same scope.
-            // On native, the merge pipeline is incomplete so objects may live in
-            // a parent dir that isn't reachable with parentDirs=false.
-            if (!casted && buf[0] != '\0') {
-                ObjectDir *searchDir = dir;
-                while (!casted && searchDir) {
-                    ObjectDir *nextDir = nullptr;
-                    if (searchDir->Dir() && searchDir->Dir() != searchDir) {
-                        nextDir = searchDir->Dir();
-                    } else if (searchDir->Loader() && searchDir->Loader()->ParentDir()) {
-                        nextDir = searchDir->Loader()->ParentDir();
-                    }
-                    if (!nextDir || nextDir == searchDir) break;
-                    casted = dynamic_cast<T1 *>(nextDir->FindObject(buf, false, true));
-                    searchDir = nextDir;
-                }
-                if (!casted) {
-                    casted = dynamic_cast<T1 *>(
-                        ObjectDir::Main()->FindObject(buf, false, true));
-                }
-            }
-#endif
             if (!casted && buf[0] != '\0') {
                 if (print)
                     MILO_NOTIFY(
@@ -718,26 +670,6 @@ bool ObjPtrList<T1, T2>::Load(BinStream &bs, bool print, ObjectDir *dir, bool b4
         bs.ReadString(buf, 0x80);
         if (dir) {
             T1 *casted = dynamic_cast<T1 *>(dir->FindObject(buf, false, b4));
-#ifdef HX_NATIVE
-            if (!casted && buf[0] != '\0') {
-                ObjectDir *searchDir = dir;
-                while (!casted && searchDir) {
-                    ObjectDir *nextDir = nullptr;
-                    if (searchDir->Dir() && searchDir->Dir() != searchDir) {
-                        nextDir = searchDir->Dir();
-                    } else if (searchDir->Loader() && searchDir->Loader()->ParentDir()) {
-                        nextDir = searchDir->Loader()->ParentDir();
-                    }
-                    if (!nextDir || nextDir == searchDir) break;
-                    casted = dynamic_cast<T1 *>(nextDir->FindObject(buf, false, b4));
-                    searchDir = nextDir;
-                }
-                if (!casted) {
-                    casted = dynamic_cast<T1 *>(
-                        ObjectDir::Main()->FindObject(buf, false, b4));
-                }
-            }
-#endif
             if (!casted && buf[0] != '\0') {
                 if (print)
                     MILO_NOTIFY(
