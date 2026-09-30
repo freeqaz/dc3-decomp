@@ -1448,14 +1448,18 @@ DataNode HamDirector::OnSetDircut(DataArray *a) {
         std::vector<CameraManager::PropertyFilter> filters;
         if (a->Size() > 3) {
             const DataNode &node = a->Evaluate(3);
-            DataArray *arr;
+            // The image materialises the null with its own `li r5, 0x0` at
+            // 0x82476528 and branches to the SHARED call block at 0x82476588,
+            // rather than reusing the r28 zero it already holds for the four
+            // `stw` slots.  That is what a call duplicated into both arms and
+            // then cross-jumped by MSVC looks like; naming a `DataArray *arr`
+            // local and calling once gives `mr r5, r28` instead.
             if (node.Type() == kDataInt && node.Int() != 0) {
-                arr = nullptr;
+                AddNumPlayers(filters, nullptr);
             } else {
                 MILO_ASSERT(node.Type() == kDataArray, 0xE74);
-                arr = node.Array();
+                AddNumPlayers(filters, node.Array());
             }
-            AddNumPlayers(filters, arr);
         }
         SetDircut(sym, filters);
     }
@@ -2038,23 +2042,34 @@ bool HamDirector::GetPracticeFrames(Key<Symbol> *&startKey, Key<Symbol> *&endKey
         if (propKeys) {
             Keys<Symbol, Symbol> *keys = propKeys->AsSymbolKeys();
             int numKeys = keys->size();
-            int startIdx = 0;
-            for (; (unsigned int)startIdx < numKeys; startIdx++) {
-                if (mPracticeStart == (*keys)[startIdx].value)
+            // ONE counter reused by both searches, and a SEPARATE `startIdx`
+            // that the first search copies into.  The image's first loop lands
+            // its match in a block of its own -- `mr r6, r10` / `b` back to the
+            // second loop's init at 0x8246BED0..0x8246BED4 -- which only exists
+            // if the counter and the saved index are different variables; the
+            // second loop has no such block, because there the counter IS the
+            // result (`li r10, -0x1` writes the counter register).  Fusing
+            // counter and result in the first loop too drops both of those
+            // instructions and leaves us 8 bytes short of the image.
+            int idx = 0;
+            int startIdx;
+            for (; (unsigned int)idx < numKeys; idx++) {
+                if (mPracticeStart == (*keys)[idx].value) {
+                    startIdx = idx;
                     goto next;
+                }
             }
             startIdx = -1;
         next:
-            int endIdx = 0;
-            for (; (unsigned int)endIdx < numKeys; endIdx++) {
-                if (mPracticeEnd == (*keys)[endIdx].value)
+            for (idx = 0; (unsigned int)idx < numKeys; idx++) {
+                if (mPracticeEnd == (*keys)[idx].value)
                     goto end;
             }
-            endIdx = -1;
+            idx = -1;
         end:
-            if (startIdx < endIdx && startIdx != -1 && endIdx != -1) {
+            if (startIdx < idx && startIdx != -1 && idx != -1) {
                 startKey = &(*keys)[startIdx];
-                endKey = &(*keys)[endIdx];
+                endKey = &(*keys)[idx];
                 return true;
             }
         }
