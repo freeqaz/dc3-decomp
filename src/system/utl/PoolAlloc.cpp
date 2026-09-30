@@ -14,8 +14,17 @@ int gSmallHunk = 0xC800;
 int gPoolCapacity = 0;
 bool gPoolAllocInitted = 0;
 ChunkAllocator *gChunkAlloc = nullptr;
-static int *sPoolEnd;
-static int *sPoolBuf;
+// NOT file statics: the image hoists a SEPARATE `lis` for each of these and
+// keeps both @ha bases live across the calls in RawAlloc (r30 for sPoolBuf, r29
+// for sPoolEnd).  MSVC co-addresses internal-linkage statics it has laid out
+// itself -- which is what produced our `addi r31, r11, sPoolBuf@l` + 0x4(r31)
+// pair -- but gives each EXTERNAL symbol its own relocation.  The mirror image
+// of the gBigHunk/gSmallHunk case above, and between them the two halves of
+// RawAlloc's residual.  .bss order (image: gPoolCapacity 0x830E5728,
+// gPoolAllocInitted 0x572C, gChunkAlloc 0x5730, sPoolEnd 0x5734, sPoolBuf
+// 0x5738) is declaration order, so keep sPoolEnd first.
+int *sPoolEnd;
+int *sPoolBuf;
 
 void PoolAllocInit(DataArray *a) {
     a->FindData("big_hunk", gBigHunk);
@@ -88,45 +97,82 @@ void FixedSizeAlloc::Free(void *v) {
     mNumAllocs--;
 }
 
-// RESIDUAL (w7-al, 93.6 canonical): 27 rows, and every one of them is the
-// same single fact -- which PAIR of globals gets the shared `addi` anchor.
-// The image anchors the .data pair (0x...  `addi r31, r11, ?gBigHunk@@3HA@l`,
-// then gBigHunk at 0x0(r31) and gSmallHunk at 0x4(r31)) and reaches the two
-// .bss statics through their own `lis`+`@l` pairs; our build anchors the .bss
-// pair (`addi r31, r11, sPoolBuf@l`, sPoolEnd at 0x4(r31)) and spells
-// gBigHunk/gSmallHunk individually.  Both pairs are referenced six times, so
-// the choice is an MSVC tie-break, not a source shape: reversing the
-// sPoolEnd/sPoolBuf declaration order moves the anchor onto sPoolEnd and
-// costs 93.6 -> 87.5, and hoisting the two statics above the globals is
-// byte-inert.  Instruction ORDER and opcodes are otherwise identical from
-// idx 0 to idx 57; the lone `mr r3, r11` insert is the same anchor choice
-// leaving `buf` in r11 instead of loading it straight into r3.
+// 98.214% (normalized, full ninja) -- 55 of 56 instructions.  The single charged
+// row is an extra `mr r3, r11`: the image loads sPoolBuf straight into r3 and
+// keeps `buf` there through the phi, so both paths return without a copy
+// (`lwz r3, lbl_830E5738@l(r30)` at 0x827CF13C and `addi r3, r11, 0x40` at
+// 0x827CF1D4); MSVC gives us r11 for the phi and copies at the end.  Every other
+// difference is register naming, which the canonical ruler forgives.
+//
+// REFUTED at 98.214 (each a full ninja): `int *next = buf + words` temp; a named
+// bool for the bounds condition; a separate `ret` copy before the bump; and all
+// six orderings of the three head statements (buf / words / gPoolCapacity).  The
+// byte-wise spelling of the two adds gets the phi into r3 but then emits the
+// adds with the operands the other way round (`add r7, r11, r28` where the image
+// has `add r8, r28, r3`) -- same one charged instruction, worse fuzzy (95.714 ->
+// 96.786 is the only thing that moves).  Coalescing the phi onto r3 is an
+// allocator decision we have not found a source lever for.
 int *FixedSizeAlloc::RawAlloc(int size) {
     int *buf = sPoolBuf;
-    int alignedSize = (size >> 2) * 4;
+    // The pool is walked in INT UNITS, not bytes.  The image computes
+    // `srawi r11, r4, 2` then `slwi r28, r11, 2` -- two separate instructions --
+    // and reuses r28 for both the bounds check (`add r8, r28, r3`) and the bump
+    // (`add r11, r28, r3`).  MSVC folds the byte-wise spelling `(size >> 2) << 2`
+    // into a single `clrrwi`, so the image cannot have written that: a srawi/slwi
+    // pair that does NOT fold is the signature of `int *` pointer arithmetic --
+    // the `>> 2` is the source's, the `slwi 2` the compiler's sizeof(int)
+    // scaling, emitted by different passes so they never combine.  Writing it as
+    // pointer arithmetic also fixes the commutative operand order on both adds
+    // (the scaled index first, the base second) and lets `buf` live in r3 from
+    // the load, which is what removed our extra `mr r3, r11`.
+    int words = size >> 2;
     gPoolCapacity += size;
 
-    if ((unsigned int)((char *)buf + alignedSize) > (unsigned int)sPoolEnd) {
+    if (buf + words > sPoolEnd) {
+        // The image reaches gSmallHunk as a +4 displacement off ONE materialized
+        // base -- `addi r31, r11, ?gBigHunk@@3HA@l`, then 0x0(r31) / 0x4(r31),
+        // and `?gBigHunk@@3HA` is the only relocation it names.  Two independent
+        // external globals each get their own relocation, so MSVC will not
+        // co-address them on its own; taking the base once and indexing is what
+        // reproduces it.  Making them one struct also works but renames the
+        // relocation, which costs PoolAllocInit's `FindData("big_hunk", ...)`
+        // row -- measured: RawAlloc 98.036 / PoolAllocInit 99.583 for the
+        // aggregate vs RawAlloc 98.214 / PoolAllocInit 100.0 for this form.
+#ifdef HX_NATIVE
+        // Native addresses the two sizes by name.  The Xenon form below reads
+        // gSmallHunk as &gBigHunk + 1, which is only defined because MSVC lays
+        // this TU's two .data ints out adjacently; the C++ object model does not
+        // promise it, and clang is free to place them apart.
+        int &bigHunk = gBigHunk;
+        int &smallHunk = gSmallHunk;
+#else
+        int *hunkSizes = &gBigHunk; // [0] is gBigHunk, [1] is gSmallHunk
+        int &bigHunk = hunkSizes[0];
+        int &smallHunk = hunkSizes[1];
+#endif
         if (MemNumHeaps() > 0) {
-            if (gBigHunk == gSmallHunk) {
+            if (bigHunk == smallHunk) {
                 printf("PoolAlloc warning: allocating small pool chunk\n");
             }
             MemPushHeap(0);
         }
 
-        sPoolBuf = (int *)_MemAllocTemp(gBigHunk, __FILE__, 0x71, "PoolChunk", 0);
+        sPoolBuf = (int *)_MemAllocTemp(bigHunk, __FILE__, 0x71, "PoolChunk", 0);
 
         if (MemNumHeaps() > 0) {
             MemPopHeap();
         }
 
-        int hunkSize = gBigHunk;
-        buf = (int *)((char *)sPoolBuf + 0x40);
-        sPoolEnd = (int *)((char *)sPoolBuf + (hunkSize >> 2) * 4);
-        gBigHunk = gSmallHunk;
+        // gBigHunk is re-read from memory here rather than cached across the
+        // calls: the image loads it twice, once as the _MemAllocTemp argument and
+        // once again after MemPopHeap, which is what a plain global read either
+        // side of an opaque call produces.
+        buf = sPoolBuf + 0x10;
+        sPoolEnd = sPoolBuf + (bigHunk >> 2);
+        bigHunk = smallHunk;
     }
 
-    sPoolBuf = (int *)((char *)buf + alignedSize);
+    sPoolBuf = buf + words;
     return buf;
 }
 

@@ -61,19 +61,40 @@ DataNode KnownIssues::OnDisplayKnownIssues(DataArray *msg) {
     return 0;
 }
 
-// w8-g: 88.89% (normalized, full ninja).  Residue is one scheduling pair: the
-// image stores the float FIRST and only then masks the bool into the register
-// the store freed (`stfs f0, 0x10(r11)` / `clrlwi r11, r10, 24`); we mask into
-// r10 before the store.  REFUTED: rewriting the body as an explicit if/else that
-// assigns `ret` in both arms -- which does reproduce the image's `mr r10, r9`
-// on the not-taken path and drops an instruction -- leaves the score exactly
-// unchanged at 88.89, because the clrlwi/stfs pair simply swaps places.  Left in
-// the shorter form.
+// 88.889% (normalized, full ninja).  The whole residue is ONE scheduling pair at
+// the join: the image emits `stfs f0, 0x10(r11)` first and only then masks the
+// bool with `clrlwi r11, r10, 24` -- into r11, the register the store just freed
+// -- while we mask in place (`clrlwi r10, r10, 24`) before the store, which
+// forces the in-place destination.  The register choice is a CONSEQUENCE of the
+// order, not an independent difference: before the stfs, r11 still holds
+// &TheKnownIssues.  The sibling OnToggleAllowKnownIssues below is 100% and shows
+// the image's preferred shape (`stb r10, 0x14(r11)` / `clrlwi r11, r10, 24`).
+//
+// REFUTED, each measured by full ninja on this row (normalized):
+//   88.889  this form, and the older `bool ret = !TheKnownIssues.unk_0x10;`
+//           two-read spelling -- byte-identical objects, so the `!` read was
+//           pure noise and is gone
+//   88.889  arms reordered (bool assigned before the float) -- no effect
+//   88.889  `float &last = TheKnownIssues.unk_0x10;` anchor local -- no effect
+//   80.000  any single-`if` form with the values initialised at declaration
+//           (bool/unsigned char/int flag, explicit `(int)` cast, or a named
+//           `DataNode node(ret)` temp) -- all five lose the image's
+//           `mr r10, r9` on the not-taken path
+//   77.778  `return ret ? 1 : 0;`
+//   59.722  the test inverted to `!= 0` with the arms swapped
+//   44.056  `TheKnownIssues.unk_0x10 = ret ? -1.0f : 0.0f;` -- /fp:fast turns
+//           the select into fsel and the shape collapses
+// Treat the remaining pair as a scheduler floor unless a permuter sweep moves it.
 DataNode KnownIssues::OnToggleLastKnownIssues(DataArray *) {
-    float f10 = 0;
-    if (TheKnownIssues.unk_0x10 == 0)
+    float f10;
+    bool ret;
+    if (TheKnownIssues.unk_0x10 == 0) {
         f10 = -1;
-    bool ret = !TheKnownIssues.unk_0x10;
+        ret = true;
+    } else {
+        f10 = 0;
+        ret = false;
+    }
     TheKnownIssues.unk_0x10 = f10;
     return ret;
 }

@@ -198,6 +198,20 @@ void JoypadClient::Poll() {
             // Reset, and even writing the hold timer as explicit pointer
             // arithmetic off the repeat timer -- MSVC folds both back to
             // `r31 + constant` at the use site.
+            //
+            // CONFIRMED FLOOR (w9-a): rb3-xenon's os/JoypadClient.cpp carries a
+            // byte-identical body and its ?Poll@JoypadClient@@AAAXXZ reads the
+            // SAME 94.44827 -- two binaries, two lanes, one number.  Three more
+            // spellings refuted here, all 94.44827 with the same five rows,
+            // exploiting that Timer is 0x30 bytes so &mHoldTimer == &mRepeatTimer
+            // - 1: `Timer *t = &pRepeat->mRepeatTimer; t[-1].Reset(); t->Reset();`,
+            // the same with a named `holdTimer = t - 1`, and the reference form
+            // `(&repeatTimer)[-1]`.  MSVC re-folds every one of them to
+            // `addi r3, r31, 0x10`.  The residue is that the image spends one
+            // extra callee-saved register (__savegprlr_27) to hold
+            // &mRepeatTimer across the first Reset and then derives the hold
+            // timer as `subi r3, r28, 0x30`; two of the five rows are only the
+            // ThePlatformMgr anchor landing in r27 instead of r28 as a result.
             pRepeat->mHoldTimer.Reset();
             pRepeat->mRepeatTimer.Reset();
         } else {
