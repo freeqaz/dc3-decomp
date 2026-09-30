@@ -150,13 +150,21 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
 //    `z += blk(i) + K;` does not produce the image's order; it LOWERS register
 //    pressure and moves the prologue the WRONG WAY, to __savegprlr_19 (the
 //    image is _17, we are _18).  62.0 -> 60.4, 1708 rows.
-// 7. THE COMDAT LEVER DOES NOT APPLY HERE.  A COMDAT (`f i`) callee is
-//    link-time replaceable, so a caller cannot assume its clobber set and must
-//    spill to non-volatiles -- which is exactly the shape of a
-//    __savegprlr_17-vs-_18 gap.  This function's ONLY callee is `memcpy`, and
-//    ham_xbox_r.map records it as bare `f` (ordinary, LIBCMT:memcpyp.obj at
-//    0x8299FBB0), not `f i`.  Both sides emit the same `bl memcpy`.  So the
-//    extra callee-saved register is not a COMDAT artifact either.
+// 7. THE COMDAT / `inline`-ON-THE-CALLEE LEVER IS OUT OF REACH HERE BY
+//    CONSTRUCTION, and the test is same-TU-ness, not the map class.  That
+//    lever (ham_xbox_r.map's COMDAT column: 79,320 bare `f` vs 31,754 `f i`)
+//    has closed rows in other units empirically, but it needs a SAME-TU callee
+//    for a clobber set to propagate in the first place.  This function calls
+//    exactly one thing -- `memcpy`, which the map puts in LIBCMT:memcpyp.obj at
+//    0x8299FBB0, bare `f`, a different translation unit -- so it has NO same-TU
+//    callee and there is nothing for the lever to act on.  Both sides emit the
+//    same `bl memcpy`.  (Do NOT restate this as "a COMDAT callee is link-time
+//    replaceable so the caller must spill": that mechanism was retracted
+//    2026-09-30.  MSVC/Xenon puts every function it compiles in its own COMDAT,
+//    so adding `inline` does not change the map class -- the carrier is the
+//    COMDAT SELECTION TYPE in the section symbol's aux record, and our objects
+//    emit NODUPLICATES for both classes.  The lever is empirical; the
+//    same-TU precondition is what is structural.)
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 #ifdef HX_NATIVE
     // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap
