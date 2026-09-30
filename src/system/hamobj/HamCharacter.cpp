@@ -1124,6 +1124,20 @@ void HamCharacter::Poll() {
     }
 }
 #else
+// The CRT _strlwr the image calls (82491630) does not exist on the host; this
+// is its "C"-locale behaviour: ASCII A-Z lowered in place, nothing else.
+static char *HamCharacterStrLwr(char *s) {
+    for (char *p = s; *p; p++) {
+        if (*p >= 'A' && *p <= 'Z')
+            *p += 'a' - 'A';
+    }
+    return s;
+}
+
+// Native body. Same semantics as the image (?Poll@HamCharacter@@UAAXXZ,
+// 82491378) except for the ONE labelled workaround below. The prop-attach
+// blend and the robot viseme swap used to be missing here entirely: this body
+// predated the decompiled one (793a8a4e5) and stopped after Character::Poll.
 void HamCharacter::Poll() {
     int songAnim = SongAnimation();
     if (songAnim == -1 || InClipTest()) {
@@ -1132,15 +1146,92 @@ void HamCharacter::Poll() {
         if (mDriver) mDriver->SetWeight(0.0f);
     }
 
-    // On native, always force Showing(true) during poll so RndDir::Poll()
-    // runs child pollables (CharDriver, etc.) and animations advance.
-    // On Xbox, DTA scripts manage visibility; on native we skip that flow.
+    // NATIVE WORKAROUND -- NOT Xbox behaviour. The image force-shows a hidden
+    // character for the poll only when mPollWhenHidden is set (82491400 lbz
+    // r31,-0x108(r29); bne; 8249140C lbz r11,0x16c(r29); beq; 82491420 bl
+    // SetShowing). Native forces it whenever the character is hidden, so
+    // RndDir::Poll() runs child pollables (CharDriver, etc.) and animations
+    // advance. The Xbox-exact gate was tried natively in d07ce3782 and
+    // reverted in a37908240 (the character-animation convergence fix) within
+    // hours; it is kept until a native run shows the gated form still animates
+    // the dancers. Consequence: a hidden character polls (and animates) on
+    // native where the Xbox leaves it frozen.
     bool wasShowing = mShowing;
     if (!wasShowing) {
         SetShowing(true);
     }
     Character::Poll();
     SetShowing(wasShowing);
+
+    // Prop attach blend (82491438..82491558).
+    RndTransformable *boneProp = Find<RndTransformable>("bone_prop0.mesh", false);
+    if (boneProp) {
+        RndTransformable *spotProp = Find<RndTransformable>("spot_prop0.mesh", false);
+        if (spotProp) {
+            float blendWeight = 1.0f;
+            if (SongAnimation() != -1) {
+                blendWeight = 0.0f;
+            } else if (mDriver && mDriver->First()) {
+                // The image has no null test on mDriver here (82491488 lwz
+                // r3,0xa0(r29); lwz r11,0x58(r3)): a null driver reads the 360's
+                // zero page, First() comes back 0 and the weight stays 1. The
+                // guard reproduces that result instead of faulting.
+                blendWeight = mDriver->EvaluateFlags(2);
+            }
+
+            QuatXfm boneXfm(boneProp->WorldXfm());
+            QuatXfm spotXfm(spotProp->WorldXfm());
+
+            QuatXfm interpXfm;
+            Interp(spotXfm.v, boneXfm.v, blendWeight, interpXfm.v);
+            Interp(spotXfm.q, boneXfm.q, blendWeight, interpXfm.q);
+
+            Transform result;
+            result.v = interpXfm.v;
+            MakeRotMatrix(interpXfm.q, result.m);
+            boneProp->SetWorldXfm(result);
+        }
+    }
+
+    // Robot viseme texture swap (8249155C..8249175C).
+    RndMat *mat = Find<RndMat>("robot_face.mat", false);
+    if (!mat)
+        return;
+
+    CharLipSyncDriver *lipDrv = Find<CharLipSyncDriver>("face.lipdrv", false);
+    const char *clipName = "base";
+    // The image loads the playback with no null test on lipDrv (8249158C lwz
+    // r11,0x88(r3)); on the 360 a missing driver reads the zero page, the
+    // playback is 0 and the name stays "base". Guarded to the same result.
+    CharLipSync::PlayBack *pb = lipDrv ? lipDrv->GetPlayBack() : nullptr;
+    if (pb) {
+        float maxWeight = 0.0f;
+        for (int i = 0; i < pb->mWeights.size(); i++) {
+            CharLipSync::PlayBack::Weight &w = pb->mWeights[i];
+            if (!w.mClip)
+                continue;
+            float prevMax = maxWeight;
+            maxWeight = Max(maxWeight, w.mCurWeight);
+            if (maxWeight != prevMax) {
+                clipName = w.mClip->Name();
+            }
+        }
+    }
+
+    char texName[256];
+    strcpy(texName, clipName);
+    HamCharacterStrLwr(texName);
+    strcat(texName, ".tex");
+
+    RndTex *tex = Find<RndTex>(texName, false);
+    if (!tex) {
+        tex = Find<RndTex>("base.tex", false);
+    }
+    if (tex) {
+        mat->SetDiffuseTex(tex);
+    } else {
+        MILO_NOTIFY_ONCE("%s could not find viseme texture %s", PathName(this), texName);
+    }
 }
 #endif
 
