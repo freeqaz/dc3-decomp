@@ -297,35 +297,47 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
             do {
                 unsigned short depthPixel =
                     *(unsigned short *)(((int)x / 2) * 2 + srcBase);
+                // The `playerIdx <= 7` guard IS in the image -- `cmplwi cr6,
+                // r10, 0x7` / `bgt cr6` at 0x82432B8C -- so it is not the
+                // tautology it looks like; REMOVING it costs 93.940 -> 92.723.
+                // The residual is the dispatch: the image lowers the switch as
+                // a CTR countdown (`mtctr r10`, `cmpwi cr6, r10, 0x0`, six
+                // `bdzf cr6eq` and one `bne cr6`, 0x82432B94..0x82432BB8),
+                // which lays the eight `li r11, <colour>` blocks out in CASE
+                // order; we get a binary search (cmplwi 1/3/5/7 + blt/beq)
+                // which lays the same eight constants out in REVERSE case
+                // order.  The colour mapping is identical on both sides -- the
+                // reversed `li` sequence is block layout, NOT a reversed
+                // palette table.
                 unsigned short color = 0;
                 unsigned short playerIdx = depthPixel & 7;
                 if (playerIdx <= 7) {
-                    switch (playerIdx) {
-                    case 0:
-                        color = 0;
-                        break;
-                    case 1:
-                        color = 0xf800;
-                        break;
-                    case 2:
-                        color = 0x7e0;
-                        break;
-                    case 3:
-                        color = 0x1f;
-                        break;
-                    case 4:
-                        color = 0xf81f;
-                        break;
-                    case 5:
-                        color = 0x7ff;
-                        break;
-                    case 6:
-                        color = 0xffe0;
-                        break;
-                    default:
-                        color = 0xffff;
-                        break;
-                    }
+                switch (playerIdx) {
+                case 0:
+                    color = 0;
+                    break;
+                case 1:
+                    color = 0xf800;
+                    break;
+                case 2:
+                    color = 0x7e0;
+                    break;
+                case 3:
+                    color = 0x1f;
+                    break;
+                case 4:
+                    color = 0xf81f;
+                    break;
+                case 5:
+                    color = 0x7ff;
+                    break;
+                case 6:
+                    color = 0xffe0;
+                    break;
+                case 7:
+                    color = 0xffff;
+                    break;
+                }
                 }
                 x++;
                 destRow++;
@@ -1112,23 +1124,17 @@ bool LiveCameraInput::GetTweakedAutoexposure() const {
     if (!GetExposureRegion(configRegion)) {
         return false;
     }
-    if (!frameRateOk) {
-        return false;
-    }
-    bool leftOk = NearlyEqual(currentRegion.Left, configRegion.Left);
-    if (!leftOk) {
-        return false;
-    }
-    bool topOk = NearlyEqual(currentRegion.Top, configRegion.Top);
-    if (!topOk) {
-        return false;
-    }
-    bool widthOk = NearlyEqual(currentRegion.Width, configRegion.Width);
-    if (!widthOk) {
-        return false;
-    }
-    bool heightOk = NearlyEqual(currentRegion.Height, configRegion.Height);
-    return heightOk;
+    // ONE && chain, not five `if (!x) return false;` statements.  The image
+    // gives the GetExposureRegion test its own `li r3, 0x0` + branch to the
+    // epilogue (0x82430330), then funnels every later failure into a SINGLE
+    // `li r11, 0x0` at 0x824303E4 while the success path materialises
+    // `li r11, 0x1` at 0x824303E0 -- the short-circuit shape.  Separate early
+    // returns give each test its own zero block and drop the final 0/1
+    // normalisation (`clrlwi. ; li 1 ; bne ; li 0 ; clrlwi r3`).
+    return frameRateOk && NearlyEqual(currentRegion.Left, configRegion.Left)
+        && NearlyEqual(currentRegion.Top, configRegion.Top)
+        && NearlyEqual(currentRegion.Width, configRegion.Width)
+        && NearlyEqual(currentRegion.Height, configRegion.Height);
 }
 
 #define NUI_CAMERA_AE_ROI_MINIMUM_WIDTH 0.15f
@@ -1355,7 +1361,10 @@ void CameraDump(const char *filename) {
     RndTex *tex = cam->GetStreamTex(LiveCameraInput::kBufferDepth);
     int texSize = tex->Width() * tex->Height() * tex->Bpp() / 8;
     void *buf = MemAlloc(texSize, "unknown", 0, "unknown", 0);
-    void *texels;
+    // `= nullptr`, not a bare declaration: the image writes 0 into the slot
+    // before the TexelsLock call (`li r11, 0x0` / `stw r11, 0x50(r31)` at
+    // 0x82434964..0x8243496C, reloaded as memcpy's r4 at 0x8243497C).
+    void *texels = nullptr;
     tex->TexelsLock(texels);
     memcpy(buf, texels, texSize);
     tex->TexelsUnlock();

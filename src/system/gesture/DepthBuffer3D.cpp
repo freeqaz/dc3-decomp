@@ -170,6 +170,24 @@ void DepthBuffer3D::UpdateAttachment(
 
 void DepthBuffer3D::AddAttachment(const DepthBuffer3DAttachment &attachment) {
     MILO_ASSERT(attachment.obj, 0x390);
+    // RESIDUAL (w8-r, 97.714, 3 rows -- 1 branch-address, 2 real).  The
+    // image's post-loop test is `li r10, 0x0` immediately followed by
+    // `cmplwi cr6, r10, 0x0` (0x82DF14F8/0x82DF14FC): a compare of a register
+    // just set to zero AGAINST zero, which constant propagation would have
+    // deleted inside one function body.  It survives only across an inline
+    // boundary -- the `return nullptr` fall-off of an inlined helper plus the
+    // caller's own `if (!ret)` -- and the image's r10 doubles as the loop
+    // iterator, so the sentinel is a POINTER, never an iterator re-compared
+    // against end().  Two reconstructions MEASURED and both worse than this
+    // spelling: (a) an inline loop with a local `existing` pointer sentinel
+    // scores 95.714 -- MSVC folds the test away completely, leaving all three
+    // dispatch instructions target-only; (b) an anonymous-namespace
+    // `FindAttachment(vector&, RndTransformable*)` helper DOES reproduce the
+    // `li rN, 0` + `cmplwi 0` pair exactly, but scores 94.286: it moves `this`
+    // from r30 to r29 and `0x24` from r29 to r30 (21 rename rows) and forces
+    // `begin()` to be reloaded after the loop (`lwz r10, 0x0(r31)`) where the
+    // image keeps the pre-loop value live in r11.  The sentinel is real; the
+    // spelling that buys it has not been found.
     std::vector<DepthBuffer3DAttachment>::iterator it;
     for (it = mAttachments.begin(); it != mAttachments.end(); ++it) {
         if (it->obj == attachment.obj) {
