@@ -83,8 +83,16 @@ and, separately, rows that are not a PAIR of conditional branches:
   ONE-SIDED          a conditional branch on one side only (missing / extra
                      condition).  A LEAD, never a finding: an inline boundary,
                      a peeled loop, a CTR loop, a tail merge or cross-jump
-                     produce exactly this shape -- 11 of 11 hand-checked on
-                     2026-09-30 were one of those.
+                     produce exactly this shape -- every one of the 65
+                     functions hand-checked on 2026-09-30 was one of those.
+                     Four recognisers move the explained rows out of this
+                     pile into named ARTIFACT buckets, each only after finding
+                     the other side's test (see reclassify_one_sided):
+  STUB-BODY          the other side is a tiny body with no branch at all
+  agree-relocated    the same test at another address on the other side
+  agree-via-jump     the other side reaches the same test through a `b`
+                     (tail merge / cross-jump / rotated loop latch)
+  RETEST             this side re-tests a register it already tested
 
 WHAT IT CANNOT SEE  (read before calling the class exhausted)
 -----------------------------------------------------------
@@ -1034,7 +1042,265 @@ def classify_pair(T, B, t, b, brt, brb, pt_pos, pb_pos, prt, prb, state, row_ind
     })
 
 
-def analyse_function(fn, rcov, dropped=None):
+# --------------------------------------------------------------------------- #
+# ONE-SIDED recognisers
+# --------------------------------------------------------------------------- #
+# A ONE-SIDED row is a conditional branch that objdiff's row alignment put
+# against nothing (or against a non-branch).  The 2026-09-30 hand-check of the
+# whole pile (65 functions, 201 rows, docs/decomp/patterns/
+# wrong-condition-is-a-block-question.md) found the SAME test present on the
+# other side in almost every case -- just not on the same row.  Each
+# recogniser below names one of those refutation classes and moves the row out
+# of the lead pile into a named ARTIFACT bucket, ONLY when it can show the
+# other side's test.  Every recogniser re-runs the full classify_pair()
+# predicate + successor analysis on the counterpart it found and accepts the
+# row only on `agree`; a counterpart that disagrees leaves the row ONE-SIDED.
+# The exceptions are STUB-BODY (the other side has no body at all -- a class
+# 11 question, not a condition) and RETEST (see its docstring).
+#
+#   STUB-BODY        the other side is a <= STUB_MAX-instruction body with no
+#                    branch, call or store, and this side is >= 4x longer:
+#                    `return 0;` stubs (mmio*).  Not a condition;
+#                    fake_impl_scan / stub_flag_audit own these.
+#   agree-relocated  the same test (identical producer signature, balanced
+#                    count across the function) sits at another address on
+#                    the other side: block placement, a branch scheduled one
+#                    instruction earlier, a moved block (HamListRibbon::Draw,
+#                    UIListState::Scroll, FileMerger::Clear, Voice::UpdateMix).
+#   agree-via-jump   the other side reaches the same test through an
+#                    unconditional `b` near this row: a tail merge / cross-jump
+#                    (ChoosePlayerSides, MemAlloc) or a rotated loop entering
+#                    at its bottom latch (RndText::ConstructMeshes, DoPost).
+#   RETEST           the branch tests a register that the SAME side already
+#                    compared (same register, same immediate or operand pair,
+#                    no redefinition in between): a redundant re-test the
+#                    other side jump-threaded away (GetMatVariationName,
+#                    CharEyes::Poll).  The earlier compare is found by a
+#                    LINEAR walk, not a dominance proof -- it is an artifact
+#                    label, not an equivalence proof; read the row if the
+#                    function matters.
+STUB_MAX = 4
+
+
+def _is_stub(S, conds):
+    """A `return K;` / empty body: at most STUB_MAX instructions, no
+    conditional branch, no call, no store.  Deliberately strict -- a real
+    function that lost its only guard (`if (mX) Baz();` written as `Baz();`)
+    still calls Baz and must stay a ONE-SIDED lead, never a stub."""
+    if conds or len(S.ins) > STUB_MAX:
+        return False
+    for _r, x in S.ins:
+        op = x["opcode"]
+        if op in CALLS or op.startswith("st") or op == "b":
+            return False
+    return True
+ONE_SIDED_BUCKETS = ("STUB-BODY", "agree-relocated", "agree-via-jump", "RETEST")
+VIA_JUMP_WINDOW = 4
+RELOCATE_TRIES = 4
+RETEST_WALK = 32
+
+
+def _cond_positions(S):
+    """[(pos, parsed_branch)] for every conditional branch on one side."""
+    res = []
+    for p, (_r, x) in enumerate(S.ins):
+        if is_cond_branch_text(x["opcode"]):
+            br = parse_branch(x)
+            if br is not None:
+                res.append((p, br))
+    return res
+
+
+def _producer_key(S, p, br):
+    """(producer position, parsed producer, register-blind signature) or None."""
+    if br["kind"] != "cond":
+        return None
+    pr, _why = S.producer(p, br["cr"])
+    if pr is None:
+        return None
+    q, parsed = pr
+    return q, pr, S.sig(q)
+
+
+def _pair(A_is_target, T, B, pa, bra, pra, po, bro, pro, state, row_index):
+    if A_is_target:
+        return classify_pair(T, B, T.ins[pa][1], B.ins[po][1], bra, bro, pa, po,
+                             pra, pro, state, row_index)
+    return classify_pair(T, B, T.ins[po][1], B.ins[pa][1], bro, bra, po, pa,
+                         pro, pra, state, row_index)
+
+
+def _jump_dest(S, p):
+    for a in split_args(S.ins[p][1].get("args", "")):
+        if a.startswith("0x"):
+            return S.addr_pos.get(int(a, 16))
+    return None
+
+
+def _retest(S, qa, prod):
+    """True when the register(s) `prod` compares were already compared the
+    same way earlier on this side with no redefinition in between."""
+    if prod[0] == "icmp":
+        regs = {prod[3][1]} | ({prod[4][1]} if prod[4][0] == "reg" else set())
+    else:
+        regs = {prod[1][1], prod[2][1]}
+    q = qa - 1
+    steps = 0
+    while q >= 0 and steps < RETEST_WALK:
+        x = S.ins[q][1]
+        op = x["opcode"]
+        if op in CALLS:
+            for rg in regs:
+                m = REG_RE.match(rg)
+                vol = VOLATILE_GPR if m.group(1) == "r" else VOLATILE_FPR
+                if int(m.group(2)) in vol:
+                    return False
+        if dest_reg(x) in regs:
+            return False
+        if cr_written(x) is not None and cr_written(x) >= 0:
+            pr = parse_producer(x)
+            if pr is not None and pr[0] == prod[0]:
+                if prod[0] == "icmp":
+                    if pr[3] == prod[3] and pr[4] == prod[4] and pr[2] == prod[2]:
+                        return True
+                elif {pr[1][1], pr[2][1]} == regs:
+                    return True
+        q -= 1
+        steps += 1
+    return False
+
+
+def reclassify_one_sided(T, B, out, state):
+    """Move ONE-SIDED rows whose missing/extra test is demonstrably present on
+    the other side into the named artifact buckets above.  Rows keep their
+    place in `out`; only `bucket` changes (and a `recognised` detail is
+    added), so every row is still counted exactly once."""
+    one = [r for r in out if r["bucket"] == "ONE-SIDED"]
+    if not one:
+        return
+    conds = {"T": _cond_positions(T), "B": _cond_positions(B)}
+    keys = {k: {p: _producer_key(S, p, br) for p, br in conds[k]}
+            for k, S in (("T", T), ("B", B))}
+
+    def sig_count(k, sig):
+        return sum(1 for v in keys[k].values() if v is not None and v[2] == sig)
+
+    for r in one:
+        a_t = r["side"] == "target-only"
+        A, O = (T, B) if a_t else (B, T)
+        ka, ko = ("T", "B") if a_t else ("B", "T")
+        pa = A.pos_of_row.get(r["row"])
+        if pa is None:
+            continue
+        bra = parse_branch(A.ins[pa][1])
+        if bra is None:
+            continue
+        # ---- STUB-BODY --------------------------------------------------- #
+        if _is_stub(O, conds[ko]) and len(A.ins) >= 4 * len(O.ins):
+            r["bucket"] = "STUB-BODY"
+            r["recognised"] = (f"the other side is a {len(O.ins)}-instruction body "
+                               f"with no branch, call or store (a `return K;` stub) "
+                               f"against {len(A.ins)} here: not a condition")
+            continue
+        # ---- agree-relocated -------------------------------------------- #
+        if bra["kind"] == "ctr":
+            bs = A.block_sig(A.block_of[pa])
+            mine = [p for p, br in conds[ka] if br["kind"] == "ctr"
+                    and A.block_sig(A.block_of[p]) == bs]
+            theirs = [p for p, br in conds[ko] if br["kind"] == "ctr"
+                      and O.block_sig(O.block_of[p]) == bs]
+            if theirs and len(mine) == len(theirs):
+                theirs.sort(key=lambda p: (abs(O.ins[p][0] - r["row"]), p))
+                r["bucket"] = "agree-relocated"
+                r["recognised"] = (f"CTR latch: the identical loop block sits at "
+                                   f"{O.ins[theirs[0]][1].get('address')} on the other side")
+            continue
+        ka_key = keys[ka].get(pa)
+        if ka_key is not None:
+            _qa, pra, siga = ka_key
+            if sig_count(ka, siga) == sig_count(ko, siga):
+                cands = [p for p, v in keys[ko].items() if v is not None and v[2] == siga]
+                cands.sort(key=lambda p: (abs(O.ins[p][0] - r["row"]), p))
+                done = False
+                for po in cands[:RELOCATE_TRIES]:
+                    bro = parse_branch(O.ins[po][1])
+                    res = _pair(a_t, T, B, pa, bra, pra, po, bro, keys[ko][po][1],
+                                state, r["row"])
+                    if res[0] == "row" and res[1]["bucket"] == "agree":
+                        r["bucket"] = "agree-relocated"
+                        r["recognised"] = (
+                            f"same test at {O.ins[po][1].get('address')} (row "
+                            f"{O.ins[po][0]}) on the other side, producer "
+                            f"{' '.join(map(str, siga))}, count balanced; "
+                            f"successors {res[1]['successors']}")
+                        done = True
+                        break
+                if done:
+                    continue
+        # ---- agree-via-jump --------------------------------------------- #
+        if ka_key is not None:
+            _qa, pra, _siga = ka_key
+            jumps = [p for p, (row, x) in enumerate(O.ins)
+                     if x["opcode"] == "b" and abs(row - r["row"]) <= VIA_JUMP_WINDOW]
+            jumps.sort(key=lambda p: (abs(O.ins[p][0] - r["row"]), p))
+            done = False
+            for pj in jumps:
+                x0 = _jump_dest(O, pj)
+                if x0 is None:
+                    continue
+                qx, k = x0, 0
+                while qx < len(O.ins) and k < 4:
+                    op = O.ins[qx][1]["opcode"]
+                    if is_cond_branch_text(op) or op in UNCONDITIONAL or op in CALLS:
+                        break
+                    qx += 1
+                    k += 1
+                if qx >= len(O.ins) or not is_cond_branch_text(O.ins[qx][1]["opcode"]):
+                    continue
+                bro = parse_branch(O.ins[qx][1])
+                if bro is None or bro["kind"] != "cond":
+                    continue
+                pro = None
+                for q in range(qx - 1, x0 - 1, -1):
+                    w = cr_written(O.ins[q][1])
+                    if w == bro["cr"]:
+                        pp = parse_producer(O.ins[q][1])
+                        pro = (q, pp) if pp is not None else None
+                        break
+                    if w == -1:
+                        break
+                else:
+                    pr2, _why = O.producer(pj, bro["cr"])
+                    pro = pr2
+                if pro is None:
+                    continue
+                res = _pair(a_t, T, B, pa, bra, pra, qx, bro, pro, state, r["row"])
+                if res[0] == "row" and res[1]["bucket"] == "agree":
+                    kind = ("rotated loop: the jump enters at the latch"
+                            if _is_backward(O.ins[qx][1], bro)
+                            else "tail merge / cross-jump into a shared test")
+                    r["bucket"] = "agree-via-jump"
+                    r["recognised"] = (
+                        f"{kind}: the other side's `b` at "
+                        f"{O.ins[pj][1].get('address')} reaches the same test at "
+                        f"{O.ins[qx][1].get('address')}; successors "
+                        f"{res[1]['successors']}")
+                    done = True
+                    break
+            if done:
+                continue
+        # ---- RETEST ------------------------------------------------------ #
+        if ka_key is not None:
+            qa, (_q, prod), _siga = ka_key
+            if _retest(A, qa, prod):
+                r["bucket"] = "RETEST"
+                r["recognised"] = ("the same register(s) were already compared the "
+                                   "same way on this side with no redefinition in "
+                                   "between (linear walk): a re-test the other side "
+                                   "jump-threaded away")
+
+
+def analyse_function(fn, rcov, dropped=None, recognise_one_sided=True):
     """Classify every conditional-branch row.  Every row the universe regex
     counts is either examined (one bucket) or dropped (one reason).  When
     `dropped` is a list, each dropped row is also appended to it, so the drop
@@ -1104,6 +1370,8 @@ def analyse_function(fn, rcov, dropped=None):
             continue
         rcov.examine()
         out.append(res[1])
+    if recognise_one_sided:
+        reclassify_one_sided(T, B, out, state)
     return out
 
 
@@ -1120,7 +1388,8 @@ FINDING_BUCKETS = ("INVERTED", "OFF-BY-ONE", "STRICTNESS", "SIGNEDNESS",
                    "DIRECTION", "OTHER-PREDICATE")
 LEAD_BUCKETS = ("NAN-ONLY", "ORIENTATION-CONFLICT", "PRODUCER-SHAPE",
                 "LOOP-LOWERING", "SELECT", "UNPAIRED-DIFFERS")
-ALL_BUCKETS = FINDING_BUCKETS + LEAD_BUCKETS + ("agree", "agree-ctr", "ONE-SIDED")
+ALL_BUCKETS = (FINDING_BUCKETS + LEAD_BUCKETS + ("agree", "agree-ctr", "ONE-SIDED")
+               + ONE_SIDED_BUCKETS)
 
 
 def run_batch(objdiff_cli, symbols):
@@ -1150,6 +1419,9 @@ def main(argv=None):
     ap.add_argument("--json", default=None)
     ap.add_argument("--show-one-sided", action="store_true",
                     help="list the ONE-SIDED leads per function (counted always)")
+    ap.add_argument("--show-recognised", action="store_true",
+                    help="list every ONE-SIDED row a recogniser moved to a named "
+                         "artifact bucket, with the evidence it found")
     ap.add_argument("--show-agree", action="store_true")
     ap.add_argument("--show-dropped", default=None, metavar="REASON",
                     help="list the dropped rows for one drop reason (or 'all'); "
@@ -1255,6 +1527,9 @@ def main(argv=None):
               "blind spot (see the docstring and the sabotage control)")
     rcov.note("ONE-SIDED rows are LEADS: inline boundaries, peeled loops and CTR "
               "loops make the same shape")
+    rcov.note("STUB-BODY / agree-relocated / agree-via-jump / RETEST are ONE-SIDED "
+              "rows whose counterpart test was found on the other side (see "
+              "reclassify_one_sided); each row is still counted exactly once")
     rcov.note("branch-free conditionals (subic/subfe, cntlzw, fsel masks) are NOT "
               "branches and are outside this universe entirely")
 
@@ -1266,7 +1541,10 @@ def main(argv=None):
           f"(universe {len(universe)} functions / {rows_universe} branch rows)")
     for b in ALL_BUCKETS:
         tag = ("   <- finding bucket" if b in FINDING_BUCKETS
-               else "   (lead: listed, not a finding)" if b in LEAD_BUCKETS else "")
+               else "   (lead: listed, not a finding)" if b in LEAD_BUCKETS
+               else "   (lead: missing/extra condition shape)" if b == "ONE-SIDED"
+               else "   (artifact: a ONE-SIDED row the recognisers explained)"
+               if b in ONE_SIDED_BUCKETS else "")
         print(f"  {b:20s}: {counts.get(b, 0)}{tag}")
     print()
     for b in FINDING_BUCKETS + LEAD_BUCKETS:
@@ -1300,8 +1578,16 @@ def main(argv=None):
     for r in results:
         if r["bucket"] == "ONE-SIDED":
             one.setdefault((r["unit"], r["symbol"]), []).append(r)
+    n_rec = sum(counts.get(b, 0) for b in ONE_SIDED_BUCKETS)
     print(f"ONE-SIDED leads: {counts['ONE-SIDED']} rows in {len(one)} functions "
-          f"(missing/extra condition shape -- NOT findings)")
+          f"(missing/extra condition shape -- NOT findings); "
+          f"{n_rec} more one-sided rows explained by the recognisers ("
+          + ", ".join(f"{b} {counts.get(b, 0)}" for b in ONE_SIDED_BUCKETS) + ")")
+    if args.show_recognised:
+        for r in results:
+            if r["bucket"] in ONE_SIDED_BUCKETS:
+                print(f"  [{r['bucket']}] {r['symbol']} row {r['row']} {r['side']}: "
+                      f"{r['target']} | {r['ours']}  -- {r['recognised']}")
     if args.show_one_sided or args.explain:
         for (u, s), rs in sorted(one.items(), key=lambda kv: (-len(kv[1]), kv[0])):
             print(f"  {len(rs):3d}  {s}  [{u}]")
@@ -1348,10 +1634,11 @@ def _fn(pairs):
     return {"instructions": rows}
 
 
-def _classify(pairs):
+def _classify(pairs, recognise_one_sided=True):
     cov = CoverageReport("selftest", stream=open(os.devnull, "w"))
     cov.universe(10 ** 6)
-    return [r["bucket"] for r in analyse_function(_fn(pairs), cov)
+    return [r["bucket"] for r in analyse_function(_fn(pairs), cov,
+                                                  recognise_one_sided=recognise_one_sided)
             if r["bucket"] != "agree-ctr"]
 
 
@@ -1434,9 +1721,89 @@ def selftest():
     check("fcmpu a,b bge vs fcmpu b,a ble (operand swap) -> agree",
           _classify(ftwo + [("fcmpu cr6, f0, f13", "fcmpu cr6, f13, f0"),
                             ("bge cr6, @6", "ble cr6, @6")] + tail), ["agree"])
-    check("a compare with no branch counterpart -> ONE-SIDED lead",
-          _classify(body + [("cmpwi r11, 0x0", None), ("beq @5", None)] + tail),
-          ["ONE-SIDED"])
+    check("old tool: a compare against a `return 0;` stub body -> ONE-SIDED",
+          _classify(body + [("cmpwi r11, 0x0", None), ("beq @5", None)] + tail
+                    + [("stw r11, 0x14(r3)", None), ("stw r11, 0x18(r3)", None),
+                       ("stw r11, 0x1c(r3)", None)], False), ["ONE-SIDED"])
+    stub = [("lwz r11, 0x10(r3)", None), ("cmpwi r11, 0x0", None), ("beq @7", None),
+            ("stw r11, 0x14(r3)", None), ("stw r11, 0x18(r3)", None),
+            ("stw r11, 0x1c(r3)", None), ("stw r11, 0x20(r3)", None),
+            ("li r3, 0x0", "li r3, 0x0"), ("blr", "blr")]
+    check("...-> STUB-BODY (mmio*: `return 0;`), not a lead", _classify(stub),
+          ["STUB-BODY"])
+    stub_bug = [("lwz r11, 0x10(r3)", "lwz r11, 0x10(r3)"), ("cmpwi r11, 0x0", None),
+                ("beq @5", None), ("bl Baz", "bl Baz"), ("stw r3, 0x14(r31)", None),
+                ("li r3, 0x0", "li r3, 0x0"), ("blr", "blr"),
+                ("stw r11, 0x18(r3)", None), ("stw r11, 0x1c(r3)", None),
+                ("stw r11, 0x20(r3)", None)]
+    check("NEGATIVE CONTROL: a SHORT real body that lost its only guard "
+          "(`if (x) Baz();` written `Baz();`) is not a stub -> stays ONE-SIDED",
+          _classify(stub_bug), ["ONE-SIDED"])
+    # -- ONE-SIDED recognisers: each fixture below reads ONE-SIDED on the
+    #    pre-recogniser tool (analyse_function(..., recognise_one_sided=False)),
+    #    which the paired `*_old` checks pin, so a recogniser that stops firing
+    #    fails here instead of silently growing the lead pile again.
+    guard = [("lwz r11, 0x10(r3)", "lwz r11, 0x10(r3)"),
+             ("cmpwi cr6, r11, 0x0", None),
+             ("beq cr6, @11", None),
+             ("lwz r10, 0x14(r3)", "lwz r10, 0x14(r3)"),
+             ("stw r10, 0x18(r3)", "stw r10, 0x18(r3)"),
+             ("stw r10, 0x1c(r3)", "stw r10, 0x1c(r3)"),
+             ("stw r10, 0x20(r3)", "stw r10, 0x20(r3)"),
+             ("stw r10, 0x24(r3)", "stw r10, 0x24(r3)"),
+             ("stw r10, 0x28(r3)", "stw r10, 0x28(r3)"),
+             ("stw r10, 0x2c(r3)", "stw r10, 0x2c(r3)"),
+             ("stw r10, 0x30(r3)", "stw r10, 0x30(r3)"),
+             ("li r3, 0x0", "li r3, 0x0"), ("blr", "blr")]
+    check("NEGATIVE CONTROL: a guard the other side really lacks (a real body, no "
+          "counterpart test anywhere) stays ONE-SIDED", _classify(guard), ["ONE-SIDED"])
+    reloc = [("lwz r11, 0x10(r3)", "lwz r11, 0x10(r3)"),
+             ("cmpwi cr6, r11, 0x0", "cmpwi cr6, r11, 0x0"),
+             (None, "beq cr6, @8"),
+             ("lwz r10, 0x14(r3)", "lwz r10, 0x14(r3)"),
+             ("beq cr6, @8", None),
+             ("stw r10, 0x18(r3)", "stw r10, 0x18(r3)"),
+             ("stw r10, 0x1c(r3)", "stw r10, 0x1c(r3)"),
+             ("stw r10, 0x20(r3)", "stw r10, 0x20(r3)"),
+             ("li r3, 0x0", "li r3, 0x0"), ("blr", "blr")]
+    check("old tool: a branch scheduled one instruction earlier -> 2 x ONE-SIDED",
+          _classify(reloc, False), ["ONE-SIDED", "ONE-SIDED"])
+    check("...the same test at another address -> agree-relocated (UIListState::Scroll)",
+          _classify(reloc), ["agree-relocated", "agree-relocated"])
+    reloc_bug = [c if c != (None, "beq cr6, @8") else (None, "bne cr6, @8") for c in reloc]
+    check("NEGATIVE CONTROL: the relocated counterpart tests the COMPLEMENT -> "
+          "stays ONE-SIDED", _classify(reloc_bug), ["ONE-SIDED", "ONE-SIDED"])
+    xjump = [("lwz r11, 0x10(r3)", "lwz r11, 0x10(r3)"),
+             ("cmpwi cr6, r11, 0x0", "cmpwi cr6, r11, 0x0"),
+             ("beq cr6, @5", "b @7"),
+             ("li r4, 0x1", None), ("stw r4, 0x14(r3)", None),
+             ("li r3, 0x0", "li r3, 0x0"), ("blr", "blr"),
+             (None, "beq cr6, @5"), (None, "li r4, 0x1"),
+             (None, "stw r4, 0x14(r3)"), (None, "b @5")]
+    check("old tool: a test reached through the other side's `b` -> ONE-SIDED",
+          _classify(xjump, False), ["ONE-SIDED", "ONE-SIDED"])
+    check("...followed through the jump -> agree-via-jump (ChoosePlayerSides, "
+          "MemAlloc); the landing row itself has no producer on its own "
+          "fall-through chain and stays ONE-SIDED",
+          _classify(xjump), ["agree-via-jump", "ONE-SIDED"])
+    xjump_bug = [c if c != (None, "beq cr6, @5") else (None, "bne cr6, @5") for c in xjump]
+    check("NEGATIVE CONTROL: the jumped-to test is the COMPLEMENT -> stays ONE-SIDED",
+          _classify(xjump_bug), ["ONE-SIDED", "ONE-SIDED"])
+    retest = [("lwz r11, 0x10(r3)", "lwz r11, 0x10(r3)"),
+              ("cmpwi cr6, r11, 0x0", "cmpwi cr6, r11, 0x0"),
+              ("ble cr6, @7", "ble cr6, @7"),
+              ("cmplwi cr6, r11, 0x0", None), ("beq cr6, @7", None),
+              ("stw r11, 0x14(r3)", "stw r11, 0x14(r3)"), ("blr", "blr"),
+              ("li r3, 0x0", "li r3, 0x0"), ("blr", "blr")]
+    check("old tool: re-testing an already-tested register -> ONE-SIDED",
+          _classify(retest, False), ["ONE-SIDED"])
+    check("...-> RETEST (GetMatVariationName: `x > 0` then `x != 0`)",
+          _classify(retest), ["RETEST"])
+    retest_bug = (retest[:3] + [("addi r11, r11, 0x1", None)] + retest[3:])
+    retest_bug = [(t.replace("@7", "@8") if t else t, b.replace("@7", "@8") if b else b)
+                  for t, b in retest_bug]
+    check("NEGATIVE CONTROL: the register is redefined between the two tests -> "
+          "stays ONE-SIDED", _classify(retest_bug), ["ONE-SIDED"])
     check("NEGATIVE CONTROL: repairing the inverted row returns it to agree",
           _classify(body + [("cmpwi r11, 0x0", "cmpwi r11, 0x0"),
                             ("bne @5", "bne @5")] + tail), ["agree"])
@@ -1480,7 +1847,17 @@ def selftest():
             "?ThreadGetDir@CacheXbox@@IAAHVString@@0@Z": (143, "ORIENTATION-CONFLICT"),
             # blocks do not pair; oriented by arm effects alone, adjudicated:
             # `if (!n) return 0;` laid out inline vs out of line
-            "?SetHighlightID@NavListSort@@QAA_NPAVDataArray@@@Z": (11, "agree")}
+            "?SetHighlightID@NavListSort@@QAA_NPAVDataArray@@@Z": (11, "agree"),
+            # ONE-SIDED recognisers, each row adjudicated by hand against the
+            # listing on 2026-09-30 (leads-onesided lane):
+            # cross-jump: our `b 0x5ff0` into the shared `beq` tail
+            "?ChoosePlayerSides@SkeletonChooser@@AAAXXZ": (255, "agree-via-jump"),
+            # image cross-jumps site 2 into site 1's bne; we do the reverse
+            "?Scroll@UIListState@@QAAXH_N@Z": (135, "agree-relocated"),
+            # `cmpwi r11,0; ble` then `cmplwi r11,0; bne`: always taken
+            "?GetMatVariationName@UIFontImporter@@QBAPBDPAVRndFontBase@@@Z": (24, "RETEST"),
+            # mmio.cpp: `LONG mmioWrite(...) { return 0; }`
+            "mmioWrite": (8, "STUB-BODY")}
     if os.path.exists(DEFAULT_OBJDIFF_CLI) and os.path.exists(DEFAULT_REPORT):
         got = {d.get("symbol"): d for d in run_batch(DEFAULT_OBJDIFF_CLI, sorted(live))
                if "error" not in d}
