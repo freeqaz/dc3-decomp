@@ -665,13 +665,13 @@ B_CLASSES = (
 
 # (file, enclosing-or-defined function) -> why it is not this lane's to judge.
 # Keyed on names, not line numbers: line numbers drift with every edit.
-HANDLED_ANIMBYPASS = {
-    ("src/system/ui/UI.cpp", "UIManager::Poll", "sEnterWaitFrames"):
-        "force-completes a screen enter after 90 frames (native-animbypass)",
-    ("src/system/rndobj/Anim.cpp", "AnimTask::Poll", "mAnimTarget"):
-        "auto-nulls mAnimTarget on completion; same 'animations never settle' "
-        "belief (flagged to native-animbypass, not in its brief)",
-}
+# native-animbypass LANDED on main (7add51c15) and removed the regions this
+# table used to name (UIManager::Poll's 90-frame enter force-complete and the
+# rest of the "animations never settle" family).  AnimTask::Poll's mAnimTarget
+# auto-null was flagged to that lane but is not in its merge, so it is no
+# longer "handled elsewhere": it falls through to a suspect:* bucket.  The
+# bucket stays in B_CLASSES so the coverage schema does not change shape.
+HANDLED_ANIMBYPASS: Dict[Tuple[str, str, str], str] = {}
 HANDLED_JUDGED = {
     ("src/system/hamobj/HamDirector.cpp", "HamDirector::SongAnim"):
         "open lead in the native-shadow doc (expert-anim fallback)",

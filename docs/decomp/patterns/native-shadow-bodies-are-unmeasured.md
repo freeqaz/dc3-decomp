@@ -278,7 +278,9 @@ prove inert. Read those as unexamined, not clean.
 ring, lp64-endian, platform, native-def) and `suspect:*` (handler, timeout, hw-stub,
 null-guard, early-return, forced-state, extra-call, unrecognised). It is a triage aid,
 not a verdict: it reads shapes, not semantics. On `3f59e5b4c`: handled 13, plumbing 375,
-suspect 301 (of 689). Known confusions: a region with an unrecognised diagnostic line
+suspect 301 (of 689). After this branch's fixes, rebased on `7add51c15` (native-animbypass
+landed and removed its regions, so `handled:animbypass` is now empty): handled 11,
+plumbing 375, suspect 295 (of 681). Known confusions: a region with an unrecognised diagnostic line
 lands in `suspect:extra-call`; the `hw-stub` bucket keys on comment words. Contract:
 the bucket counts ride the coverage JSON as `b_classes` and must sum to the ADDS count or
 the run exits 4; tests in `scripts/analysis/tests/test_native_shadow_audit.py` fail on
@@ -320,7 +322,7 @@ the pre-extension tool (3 of 8).
   select and the campaign state step are skipped. Needs a native input path into the
   panel's own `start_game`; the harvest route currently relies on the auto-fire.
 - **`GamePanel::StartGame`** forces `game_stage playing` (image: `HasIntro/Start`, then
-  `mState=2`, no property). Natively `intro_over` does fire right after StartGame
+  `mState=2`, no property; the `HasIntro` half was restored by `a408e80a2`). Natively `intro_over` does fire right after StartGame
   (`Game::Poll: intro timer expired`), so deletion looks safe for perform, and the force
   clobbers rhythm_battle's intro and holla-back's `title`. `DtaFlowTest.GameplayReaches
   PlayingState` keys on the forced log line (tell 10) and must be re-pointed with it.
@@ -351,7 +353,7 @@ the pre-extension tool (3 of 8).
   if `select_camera` also fires -- count `OnSelectCamera` calls); `SetupRoutineBuilderAnims`
   `mLoop=false` (read the routine anim's EndFrame after `ResetRemixer`);
   `CharForeTwist`/`CharUpperTwist` write `mLocalXfm` (compare Xenia twist-bone telemetry).
-- **For `native-animbypass`:** `AnimTask::Poll` nulls `mAnimTarget` before the `ended`
+- **`AnimTask::Poll` (unowned -- flagged to `native-animbypass`, not in its merge):** it nulls `mAnimTarget` before the `ended`
   listener runs; the task is deleted on the same frame either way and `IsAnimating()` does
   not observe it, but a new AnimTask started from `ended` on the same target no longer
   finds the finishing task as its `mBlendTask`.
