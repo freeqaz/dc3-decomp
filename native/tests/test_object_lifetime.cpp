@@ -1480,4 +1480,80 @@ TEST_F(ObjectLifetimeTest, ObjPtrListIteratorDecrementWalksBackward) {
     delete listOwner;
 }
 
+// Native ObjPtrVec::erase used to be a bare `mNodes.erase(it)` that ignored
+// mEraseMode, so every native ObjPtrVec SHIFTED on erase. The image, for a
+// vector built with kEraseSwapLast, moves the last element into the hole and
+// pops. Pin both modes; the shift-mode half is the control that proves the
+// test can tell them apart.
+TEST_F(ObjectLifetimeTest, ObjPtrVecEraseHonoursEraseMode) {
+    Hmx::Object *owner = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *a = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *b = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *c = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *d = Hmx::Object::New<Hmx::Object>();
+    {
+        ObjPtrVec<Hmx::Object> swapVec(owner, kEraseSwapLast, kObjListNoNull);
+        ObjPtrVec<Hmx::Object> shiftVec(owner, kEraseShift, kObjListNoNull);
+        Hmx::Object *objs[] = { a, b, c, d };
+        for (Hmx::Object *o : objs) {
+            swapVec.push_back(o);
+            shiftVec.push_back(o);
+        }
+
+        swapVec.erase(swapVec.begin() + 1);
+        shiftVec.erase(shiftVec.begin() + 1);
+
+        ASSERT_EQ(swapVec.size(), 3);
+        EXPECT_EQ(swapVec[0], a);
+        EXPECT_EQ(swapVec[1], d) << "kEraseSwapLast must move the LAST element into the hole";
+        EXPECT_EQ(swapVec[2], c);
+
+        ASSERT_EQ(shiftVec.size(), 3);
+        EXPECT_EQ(shiftVec[0], a);
+        EXPECT_EQ(shiftVec[1], c) << "kEraseShift must keep the remaining order";
+        EXPECT_EQ(shiftVec[2], d);
+
+        // Erasing the last element is a plain pop in both modes.
+        swapVec.erase(swapVec.begin() + 2);
+        ASSERT_EQ(swapVec.size(), 2);
+        EXPECT_EQ(swapVec[0], a);
+        EXPECT_EQ(swapVec[1], d);
+    }
+    delete a;
+    delete b;
+    delete c;
+    delete d;
+    delete owner;
+}
+
+// The realistic trigger: an object held by a swap-last vector (e.g.
+// CharClipGroup::mClips) is destroyed, its refs are nullified, and the
+// kObjListNoNull vector removes the node through ReplaceNode -> erase.
+TEST_F(ObjectLifetimeTest, ObjPtrVecSwapLastOrderAfterNullify) {
+    Hmx::Object *owner = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *a = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *b = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *c = Hmx::Object::New<Hmx::Object>();
+    Hmx::Object *d = Hmx::Object::New<Hmx::Object>();
+    {
+        ObjPtrVec<Hmx::Object> vec(owner, kEraseSwapLast, kObjListNoNull);
+        vec.push_back(a);
+        vec.push_back(b);
+        vec.push_back(c);
+        vec.push_back(d);
+
+        b->NullifyAllRefs();
+
+        ASSERT_EQ(vec.size(), 3);
+        EXPECT_EQ(vec[0], a);
+        EXPECT_EQ(vec[1], d) << "deleting a swap-last element must move the last one into its slot";
+        EXPECT_EQ(vec[2], c);
+    }
+    delete a;
+    delete b;
+    delete c;
+    delete d;
+    delete owner;
+}
+
 } // namespace

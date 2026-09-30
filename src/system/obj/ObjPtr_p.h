@@ -1022,6 +1022,26 @@ T1 *ObjPtrList<T1, T2>::back() const {
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator
 ObjPtrVec<T1, T2>::erase(ObjPtrVec<T1, T2>::iterator it) {
+    // Same semantics as the Xbox erase above. This used to be a bare
+    // `mNodes.erase(it.it)` that ignored mEraseMode, so on native every
+    // ObjPtrVec shifted on erase -- but the image, for a vector built with
+    // kEraseSwapLast, moves the LAST element into the hole and pops instead
+    // (FlowManager.s, ObjPtrVec<FlowNode>::erase: `lwz r10,0x14(r30);
+    // cmpwi cr6,r10,1`, then pop_back and Set(begin()+idx, last)). The four
+    // swap-last owners -- CharClipGroup::mClips, HamWardrobe::mMainCharacters,
+    // FlowMultiSetProperty::mTargets, Waypoint::mConnections -- therefore
+    // ended up in a different ORDER than the shipped game after any erase in
+    // the middle, including the one an object deletion triggers.
+    int idx = it.it - mNodes.begin();
+    if (mEraseMode == kEraseSwapLast) {
+        unsigned int last = mNodes.size() - 1;
+        if ((unsigned int)idx != last) {
+            T1 *lastObj = mNodes.back().Obj();
+            mNodes.pop_back();
+            Set(begin() + idx, lastObj);
+            return begin() + idx;
+        }
+    }
     return iterator(mNodes.erase(it.it));
 }
 
