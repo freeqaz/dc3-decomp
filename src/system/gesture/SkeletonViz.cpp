@@ -483,7 +483,9 @@ void SkeletonViz::DrawJoints(
     SetLocalScale(mJointMesh, baseScale);
 
     int clippingFlags = skeleton.QualityFlags();
-    Hmx::Color textColor(1.0f, 1.0f, 1.0f, 1.0f);
+    // Red, not white: the image stores f31 (1.0) to .red/.alpha and f30 (0.0)
+    // to .green/.blue at 0x80-0x8c(r1) before the "clipped ..." strings.
+    Hmx::Color textColor(1.0f, 0.0f, 0.0f, 1.0f);
     Vector2 screenPos(0.1f, 0.1f);
     if (mUsePhysicalCam) {
         const Hmx::Rect &screenRect = mPhysicalCam->GetScreenRect();
