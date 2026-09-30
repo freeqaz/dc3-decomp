@@ -140,6 +140,28 @@ bool RndFont3d::CharWidthAdvanceMesh(
             } else {
                 advance = FontUnitInverse() * info->advance;
             }
+            // RESIDUAL (w9-c 2026-09-30): 96.875 canonical / 96.875 fuzzy, 2 rows
+            // of 65, and they are the SAME instruction on both sides -- the image
+            // emits `lwz r11, 0x30(r30)` / `stw r11, 0x0(r27)` / `li r3, 0x1`,
+            // while MSVC fills the load-use gap for us and emits `li r3, 0x1`
+            // BETWEEN the load and the store.  Instruction sets identical, sizes
+            // identical (256 B both sides), rows 0-55 100% equal.  A scheduler
+            // coin-flip on a two-instruction window.
+            // Refuted, one full ninja each, all exactly 96.875: binding the mesh
+            // to a local first (`RndMesh *m = info->mMesh; *mesh = m;`), writing
+            // the out-parameter as `mesh[0] = ...`, and parenthesising the loaded
+            // member.  Nothing in the source reaches this window.
+            //
+            // NOT A TEMPLATE MISMATCH: objdiff's "Function Call Diff" reports the
+            // image's `_M_find` instantiated over `pair<const unsigned short,
+            // RndFont::CharInfo>` where ours is over `pair<const unsigned short,
+            // RndFont3d::CharInfo *>`.  `_M_find`'s body depends only on the KEY
+            // type and the node layout, so every unsigned-short-keyed map folds to
+            // one body: both names resolve to 82703860 in icf_aliases.map.  The
+            // map below really is `map<unsigned short, CharInfo *>` -- the image
+            // loads a POINTER out of the node at 0x14 and then dereferences it at
+            // 0x10/0x20/0x30 -- and the listing's template argument is the ICF
+            // survivor's, not this call site's.
             *mesh = info->mMesh;
             return true;
         }

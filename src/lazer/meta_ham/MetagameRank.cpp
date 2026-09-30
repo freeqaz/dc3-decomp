@@ -55,6 +55,33 @@ namespace {
         String unk0; // 0x0 - user name?
         const Unlockable *unk8; // 0x8
     };
+    // AT LIMIT, MEASUREMENT ARTIFACT, NOT A SOURCE DEFECT (w9-c 2026-09-30).
+    // `gTiers`'s inner type drags in the copy constructor
+    // `vector<Unlockable *, StlNodeAlloc<Unlockable *> >::vector(const vector &)`,
+    // the ONLY row in this unit below 100%: report.json reads 99.8214 canonical
+    // (99.821 fuzzy) while objdiff under the normalized ruler reads 100.0 with
+    // ZERO mismatch rows -- all 28 instructions of all 112 bytes are equal.  The
+    // entire 0.179 is one RELOCATION NAME at index 8: the image's callee is dtk's
+    // synthetic ICF representative `OnlyReturns`, ours is
+    // `?get_allocator@?$vector@PAUUnlockable@?A0xf8e4b4b5@@V?$StlNodeAlloc@...@XZ`.
+    //
+    // The shipped MSVC linker map settles it.  orig/373307D9/ham_xbox_r.map lists
+    // OUR EXACT SYMBOL --
+    //   0005:000b3b70  ?get_allocator@?$vector@PAUUnlockable@?A0xf8e4b4b5@@...@XZ
+    //                  823e3b70  f i meta_ham:MetagameRank.obj
+    // -- at 823e3b70, and 769 other names share that address: the /OPT:ICF fold
+    // class whose survivor dtk names `OnlyReturns`.  So the callee is right, the
+    // name is the linker's own, and no source edit can change it.
+    //
+    // Why the alias map does not absolve it: build/373307D9/icf_aliases.map has an
+    // `OnlyReturns@0x823e3b70` group, but our get_allocator is not a member, and
+    // `scripts/retail_map_fold_reconcile.py` (dry run, this tree) does not offer
+    // it -- the 823e3b70 group is dropped in its census, never reaching the
+    // byte-identity gate, so the name is never admitted.  scripts/symbol_aliases.json
+    // says "Do not hand-edit", and widening a 769-member fold class by hand to buy
+    // one row would be laundering a measurement, so this row is left charged.
+    // Treat `lazer/meta_ham/MetagameRank` as complete in substance: 98 functions,
+    // 97 at 100% and the 98th byte-identical modulo an ICF survivor's name.
     std::vector<Unlockable> gUnlockables;
     std::vector<std::vector<Unlockable *>> gTiers;
     std::list<DeferredAward> gDeferredAwardQueue;

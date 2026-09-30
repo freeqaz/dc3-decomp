@@ -238,6 +238,27 @@ extern DebugNotifyOncePrinter TheDebugNotifyOncePrinter;
 #define MILO_PRINT_ONCE(...) TheDebugNotifyOncePrinter << MakeString(__VA_ARGS__)
 
 namespace {
+    // RESIDUAL (w9-c 2026-09-30): this function has exactly ONE instantiation in
+    // the whole binary (`default/system/char/CharFaceServo`, via
+    // DebugNotifyOncer::operator<<), and it is that unit's only sub-100 row:
+    // 96.552 canonical / 96.552 fuzzy, 2 of 59 instructions, 232 B both sides.
+    // The two rows are the SAME store moved: the image writes `it`'s home slot
+    // with begin() BEFORE the emptiness branch (`stw r11, 0x50(r31)` between the
+    // `cmplw` and the `beq`), MSVC SINKS it past the `count > 0x10` early return
+    // and emits it immediately before the second loop instead.  Both count loops,
+    // both compare loops, the String ctor, the insert and the dtor are all equal.
+    // Refuted, one full ninja each (this is a PCH-reached header, so each probe
+    // rebuilds 574 TUs):
+    //   96.552 (inert)  declaring `it` ahead of `count`
+    //   93.103 (WORSE)  giving the counting loop its own iterator and declaring
+    //                   `it` once at the top
+    //   94.828 (WORSE)  replacing the counting loop with `strings.size() > 0x10`
+    //                   -- stlport's size() is an O(n) distance loop, but it does
+    //                   not inline to the image's four instructions
+    // Declaration order does not move the store, which is consistent with
+    // docs/decomp/patterns/lexical-scope-controls-msvc-stack-slots: the slot SET
+    // is already right (objdiff reports 1 PERMUTED slot, not a missing one) and
+    // only the initialising store's placement differs.
     inline bool AddToStrings(const char *name, std::list<String> &strings) {
         unsigned int count = 0;
         std::list<String>::iterator it = strings.begin();
