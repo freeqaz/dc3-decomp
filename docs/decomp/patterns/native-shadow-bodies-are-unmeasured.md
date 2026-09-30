@@ -201,8 +201,9 @@ branch. The 688 (b) regions are the next triage pass.
 - **`HamPlayerData::IsPlaying` always true** (`HamPlayerData.cpp:185`) — player 2 always scored.
 - **`MoveDir` async detector never fed** (`MoveDir.cpp:2413`) — phrase meter / `rating_frac`
   never update from live play.
-- **`FreestyleMoveRecorder` Poll/Start/StopRecording emptied** (`:148`, `:414`) — including
-  the parts that need no camera (timers, dancer-take recording).
+- ~~**`FreestyleMoveRecorder` Poll/Start/StopRecording emptied** (`:148`, `:414`) — including
+  the parts that need no camera (timers, dancer-take recording).~~ **FIXED on
+  `native-partyplay`**: it crashed Make Your Move (see "Party mode" below).
 - **RESOLVED on `native-animbypass` (2026-09-30): the "animations never settle" family.**
   `HamNavList::Poll` select completion and `HamNavList::OnMsg(ButtonDownMsg)` now check
   `IsAnimating()`; `HamPanel::Exiting` runs the image body (`UIPanel::Exiting()` + nav-list
@@ -403,7 +404,7 @@ replays the list's enter animation. Party mode's `crew_throwdown_multiuser_scree
 be auto-fired too (gameplay with no song, bounced to main_screen through the silent
 `OnGotoScreen` fallback); it now waits, and both captains can pick a crew with the
 controller. It then waits in readywait: party mode's ready flags / `is_team_signed_in` were
-not pursued.
+not pursued. (Pursued on `native-partyplay`: see "Party mode" below.)
 
 **Fatalities: what runs and what cannot.** Nothing natively ACTIVATES a fatality: dance
 battle rates moves from MoveDir's async detector (`last_detector_result`), which returns 0
@@ -591,3 +592,53 @@ Its fallback rested on the same premise as the `ObjectDir::FindObject` fallback 
 | perform, `--mode-downs 0` | 24 of 24 (gameover at beat 267) | 96 distinct / 400 total | 0 | 96 / 400 |
 | dance battle, `--mode-downs 2` | 23 of 23 (gameover at beat 267) | 154 / 471 | 0 | 154 / 471 |
 | practice, `--mode-downs 1` | `game_screen` reached; ran to beat 1806 with no crash, then stopped by the run's own 1800 s timeout | not recorded | 0 | the same run on the baseline binary stalls on `practice_welcome_screen`: the documented practice route lacks that confirm, so pass `--confirm-screens ...,practice_welcome_screen` |
+
+
+## Party mode (branch `native-partyplay`, 2026-09-30)
+
+Crew Throwdown now plays end to end natively: crew select -> both teams' photo sign-in ->
+hub -> every event (3 rounds + showdown) -> final standings -> rematch -> `main_screen`.
+Route: `scripts/native_assert_harvest.py --route party`.
+
+**Why it waited in readywait.** Nothing was broken there. The image readies a side of
+crew select only while a skeleton stands on it (`multiuser.dta
+update_crew_throwdown_waiting_text` reads the side's `player_present`, which
+`SkeletonChooser::SetPlayerSkeletonNavData` derives from tracked skeletons). Headless
+native feeds one static dummy skeleton, so side 0 read ready and side 1 read
+`step_up_to_play`. The rest of the party is gated the same way: sign-in by a raised hand
+(`HandRaisedGestureFilter`), every event by a high five (`HighFiveGestureFilter`). The image
+has no controller path around any of it; the only other way is the ctrl+alt+S dev cheat
+`crew_throwdown_skip_step`. Pad association (`SetAssociatedPadNum`) does not apply:
+party sign-in is team membership (`PartyModeMgr::AddPlayerToTeam`), not a profile/pad
+binding.
+
+**The stand-in** is for the sensor, not for game logic: `scripts/synthetic_kinect.py`
+serves two static people over the existing external pose-provider socket (`DC3_POSE=external
+DC3_POSE_NO_SPAWN=1`, the `pose_server.py` v2 / DC3_20 protocol); one raises a hand, or both
+meet hands. Every decision stays with the decompiled gesture code. Pad presses that must
+wait on UI timers (photo confirm, final standings, rematch) go over `/api/input/press`,
+which was dead and is fixed (`HttpServer::DispatchInjectedButtons`).
+
+**Divergences fixed on the way** (tests in `native/tests/test_native_partyplay.cpp`, each
+watched failing; every PPC object touched hashes identically):
+
+| symptom on the route | cause | fix |
+|---|---|---|
+| SIGSEGV entering round 3 (perform, throneroom), every run | native cascade (`NullifyAllRefs`) never called `TypeProps::Replace`: a HamCharacter's cached `vo_bank` property kept a freed character_vo dir; `play_character_vo` called it | `NullifyAllRefs` runs the image's owner step for TypeProps / RndEnviron / RndGroup (`OwnerControlCascadeTest`) |
+| `$elem = <null>` from a sound_group's `get_group_children` | same bypass: `RndGroup::Replace` never erased the child node | same fix |
+| second `party_mode_signin_screen` rendered black; `RndEnviron::FogEnable` SIGSEGV every draw | `~ObjectDir`'s pre-nullify nulled the parent's `ObjDirPtr` in `mSubDirs` instead of releasing it, so a file-loaded subdir (`ui/augmented_photo.milo`) was never destroyed; the next panel load got the zombie back, fog owner cut | unlink/relink those DirPtrs around the pre-nullify so `mSubDirs.clear()` destroys the subdir (`CascadeSubDirTest`) |
+| SIGSEGV at Make Your Move's first score | `FreestyleMoveRecorder` Start/Stop/Poll emptied; `mFrames` never allocated | image bodies, camera/palette touches guarded (`MakeYourMoveRecorderTest`) |
+
+**What runs and what cannot.** Strike a Pose runs to its end (pose windows, `strikeapose_over`,
+outro, results 0-0): the synthetic people stand still and match no pose, and the sensor
+stand-in cannot produce the target poses. Every camera photo (sign-in, hub, standings,
+the in-game party HUD photo) renders as a white quad: there is no `LiveCameraInput`
+natively, and `HamUI`'s texture-store calls (100% matched) do nothing without it.
+`RhythmBattle::Poll` warns `bustajack recordings are getting big` thousands of times per
+Keep the Beat round once player 2 has a skeleton (100% matched; image behaviour).
+
+**Open leads.** Other owner-control owners bypassed by the cascade (Task, LightPreset,
+CharBonesMeshes, DefaultPhysicsManager) are unmeasured. A subdir that still holds a native
+"survivor" (an object with external DirPtrs) keeps the old leak, because
+`MergeLifecycleTest.CascadeSkipsObjectsWithExternalDirPtrs` pins that survival; in the image
+it would be deleted.
