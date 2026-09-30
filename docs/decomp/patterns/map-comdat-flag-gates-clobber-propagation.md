@@ -2,6 +2,60 @@
 
 **Status:** measured 2026-09-30 (lane w8-p), one-word fixes, three functions closed.
 
+> ## ⚠ MECHANISM CORRECTED the same day (lane w8-q) — read this before acting
+>
+> **The lever is real; the causal story below is not established.** Both halves
+> are stated because only one of them is evidenced.
+>
+> **What stands.** Adding `inline` to a same-TU callee genuinely closed three
+> rows in `rndobj/Mesh` / `rnddx9/Mesh` — 81.407 → 100.0, 96.778 → 100.0,
+> 63.267 → 93.333 — confirmed by the coordinator in a whole-binary row diff
+> against a baseline pinned to the lane's exact base. The map column is also
+> real and discriminating: **79,320 bare `f` against 31,754 `f i`**.
+>
+> **What is refuted: "if the map says `f i` and we define it out-of-line, add
+> `inline`" cannot be what matches the class.** MSVC/Xenon puts **every**
+> function we compile into its own COMDAT, so no `.cpp`-vs-header spelling moves
+> a symbol between the two map classes. The actual carrier of `f i` vs bare `f`
+> is the COMDAT **selection type** in the section symbol's aux record at
+> offset 14 — `f i` ↔ `IMAGE_COMDAT_SELECT_ANY`, bare `f` ↔ `NODUPLICATES`.
+> Measured against this page's own control pair, our objects emit
+> `NODUPLICATES` for **both**, so we reproduce **neither** class:
+>
+> ```
+> ?GreaterEq@PatchVerts@@IBAHH@Z   image `f i`     ours COMDAT sel=NODUPLICATES
+> ?FaceCenter@@YAXPAVRndMesh@@...  image bare `f`  ours COMDAT sel=NODUPLICATES
+> ```
+>
+> Positive control that our toolchain *can* reach `ANY`: `Spotlight.obj` emits
+> `sel=ANY` for `??$MakeString@…` and `?erase@?$vector@VFace@…`. And the
+> dtk-carved **target** objects record no Selection byte at all (section `/50`),
+> so the map is the only carrier — which is why this went unnoticed.
+>
+> **Two floors this lever was reached for, and did NOT move.**
+> `Spotlight::BuildBeam` is the textbook symptom of the Symptom section below
+> (image `bl __savegprlr_14`, frame `0x130`; ours `_16`, frame `0x120`), and
+> after matching its one same-TU callee's selection type it is **byte-identical
+> at 85.3415 with `__savegprlr_16` unchanged**.
+> `SpotlightDrawer::ApplyLightingApprox` is out of reach **by construction**:
+> same-TU clobber propagation needs a same-TU callee, and its callees live in
+> `os:Debug.obj`, `rndobj:Trans.obj` and `rndobj:BoxMap.obj`. Its
+> `__savegprlr_26` + 1 FPR against our `_27` + 2 FPRs **stands unexplained**.
+>
+> **How to use this page, in order.**
+> 1. Establish the callee is **same-TU**. If it is cross-TU, stop — the whole
+>    mechanism is unavailable, whatever the map says.
+> 2. If same-TU, try `inline` and **measure**. It has worked three times and
+>    nobody can presently explain it in terms of the emitted object, so treat it
+>    as an empirical lever, not a theory.
+> 3. Do **not** treat a prologue save-set difference as evidence *for* this
+>    lever. See `BuildBeam` above.
+> 4. For the real surface area, run the read-only
+>    `scripts/analysis/comdat_selection_audit.py` (no ninja, no DB). Over four
+>    units it found **7 mismatches among 1,396** mapped functions, only **4** in
+>    the actionable direction (ours `NODUPLICATES`, image `ANY`). Closing those
+>    four was **fidelity-only: 0 regressions, 0 score movement.**
+
 ## Symptom
 
 A caller is stuck well below 100% and the whole gap is its **prologue**. The image
