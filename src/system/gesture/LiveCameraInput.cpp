@@ -537,10 +537,33 @@ LiveCameraInput::LiveCameraInput()
     mSnapshotBatches.clear();
     mNumSnapshots = 0;
     SkeletonUpdate::Init();
+    // BEHAVIOURAL FIX (w8-r): SpeechMgr is constructed from the "speech"
+    // SUB-ARRAY, not from the whole "kinect" array.  The image keeps
+    // FindArray("speech")'s result in r25 (`mr r25, r3` at 0x82432F04-ish,
+    // idx 100 of the function) and that is the register it passes to
+    // SpeechMgr::SpeechMgr -- `mr r4, r25` at 0x82432FAC, immediately before
+    // `bl ??0SpeechMgr@@QAA@PBVDataArray@@@Z`.  kinectArr lives in r23 and is
+    // never passed there.  LiveCameraInput::Init corroborates it: the image
+    // feeds SpeechMgr::InitGrammars the same speech array.
+    //
+    // `speechArr` is also declared OUTSIDE the `if` and deliberately left
+    // uninitialised, because the image reads it back on the !kinectArr path:
+    // 0x82432EBC is `lwz r25, 0x54(r31)`, and 0x54(r1/r31) is the slot the
+    // "speech" Symbol temp occupies (`addi r3, r31, 0x54`), i.e. the stack
+    // packer shares it with speechArr's home.  The read is harmless in the
+    // shipped game -- b17 can only be true when kinectArr is non-null -- but
+    // it is what buys the `b` over the reload at target indices 110/111, and
+    // w7-bp's reading of those two rows as "the image spills and reloads a
+    // value across that join" is hereby RETRACTED: it is an uninitialised
+    // local, the same shape as LiveCameraInput::Init.
+    DataArray *speechArr;
+#ifdef HX_NATIVE
+    speechArr = nullptr;
+#endif
     DataArray *kinectArr = SystemConfig()->FindArray("kinect", false);
     bool b17 = false;
     if (kinectArr) {
-        DataArray *speechArr = kinectArr->FindArray("speech");
+        speechArr = kinectArr->FindArray("speech");
         b17 = speechArr->FindArray("enabled")->Int(1);
     }
     // RESIDUAL (w7-bp, ctor is 98.37369 canonical / 98.2 raw, 1520 B, 380/380
@@ -598,7 +621,7 @@ LiveCameraInput::LiveCameraInput()
     }
     MILO_ASSERT_FMT(SUCCEEDED(initRes), "NuiInitialize failed (0x%x)", initRes);
     if (b17) {
-        mSpeechMgr = new SpeechMgr(kinectArr);
+        mSpeechMgr = new SpeechMgr(speechArr);
     }
     mAudioInitialized = 0;
     if (SUCCEEDED(NuiAudioCreate(5, NuiAudioErrorCallback, 1, &mAudioHandle, nullptr))) {
