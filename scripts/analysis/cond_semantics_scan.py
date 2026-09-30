@@ -876,10 +876,27 @@ def _select_arm(S, p, br):
     return False
 
 
-def analyse_function(fn, rcov, collect_one_sided=True):
+def analyse_function(fn, rcov, dropped=None):
     """Classify every conditional-branch row.  Every row the universe regex
-    counts is either examined (one bucket) or dropped (one reason)."""
+    counts is either examined (one bucket) or dropped (one reason).  When
+    `dropped` is a list, each dropped row is also appended to it, so the drop
+    buckets can be READ -- they are where restructured class-2 bugs live."""
     rows = fn.get("instructions") or []
+    cur_row = {}
+    real = rcov
+
+    class _Drops:
+        def drop(self, reason, n=1, note=""):
+            real.drop(reason, n, note=note)
+            if dropped is not None:
+                r = cur_row.get("r")
+                dropped.append({"row": r["index"], "reason": reason,
+                                "target": _txt(r.get("target")),
+                                "ours": _txt(r.get("base"))})
+
+        def examine(self, n=1):
+            real.examine(n)
+    rcov = _Drops()
     T, B = Side(rows, "target"), Side(rows, "base")
     bmap = None
     out = []
@@ -889,6 +906,7 @@ def analyse_function(fn, rcov, collect_one_sided=True):
         bc = b is not None and is_cond_branch_text(b["opcode"])
         if not (tc or bc):
             continue
+        cur_row["r"] = r
         # ---- one of the universe's rows from here on ---------------------- #
         if not (tc and bc):
             rcov.examine()
@@ -949,30 +967,42 @@ def analyse_function(fn, rcov, collect_one_sided=True):
             return x
         mtk, mtf = mapped(tk), mapped(tf)
         cbk, cbf = canon_b(bk), canon_b(bf)
-        if mtk is None or mtf is None:
-            rcov.drop("successor-blocks-unpaired",
-                      note="a successor block of the target branch has no "
-                           "counterpart on our side -- restructured arms; the "
-                           "residue of class 2 lives here")
-            continue
-        if mtk == mtf:
-            rcov.drop("degenerate-successors")
-            continue
-        if mtk == cbk and mtf == cbf:
-            orient = "same"
-            sb_or = sb
-        elif mtk == cbf and mtf == cbk:
-            orient = "swapped"
-            full = frozenset(FLT_OUT if is_f_b else INT_OUT)
-            sb_or = full - sb
-        else:
-            rcov.drop("successors-map-to-a-third-block",
-                      note="the target's successors pair with blocks that are "
-                           "neither of our branch's successors")
-            continue
         eff, e_same, e_swap = effects_orientation(
             T, B, _arm_pos(T, pt_pos, brt, "taken"), _arm_pos(T, pt_pos, brt, "fall"),
             _arm_pos(B, pb_pos, brb, "taken"), _arm_pos(B, pb_pos, brb, "fall"))
+        # When the blocks do not pair, a DECISIVE arm-effects reading (at least
+        # two distinguishing tokens one way, none the other) orients the row on
+        # its own.  Such a row is never a finding: a non-agree verdict lands in
+        # the UNPAIRED-DIFFERS lead bucket.  Anything weaker stays a drop.
+        decisive = max(e_same, e_swap) >= 2 and min(e_same, e_swap) == 0
+        orient_by = "blocks"
+        if mtk is None or mtf is None or mtk == mtf or not (
+                (mtk == cbk and mtf == cbf) or (mtk == cbf and mtf == cbk)):
+            if not decisive:
+                if mtk is None or mtf is None:
+                    rcov.drop("successor-blocks-unpaired",
+                              note="a successor block of the target branch has no "
+                                   "counterpart on our side and the arms' effects "
+                                   "are not decisive -- restructured arms; the "
+                                   "residue of class 2 lives here")
+                elif mtk == mtf:
+                    rcov.drop("degenerate-successors")
+                else:
+                    rcov.drop("successors-map-to-a-third-block",
+                              note="the target's successors pair with blocks that "
+                                   "are neither of our branch's successors, and "
+                                   "the arms' effects are not decisive")
+                continue
+            orient_by = "arm-effects-only"
+            orient = eff
+        elif mtk == cbk and mtf == cbf:
+            orient = "same"
+        else:
+            orient = "swapped"
+        if orient == "same":
+            sb_or = sb
+        else:
+            sb_or = frozenset(FLT_OUT if is_f_b else INT_OUT) - sb
         order, order_how = ("n/a", "")
         if prod_t[-1][0] == "reg" and prod_b[-1][0] == "reg":
             order, order_how = operand_order(T, B, qt, qb, prod_t, prod_b)
@@ -1004,7 +1034,11 @@ def analyse_function(fn, rcov, collect_one_sided=True):
                       f"so which value wins also depends on the moved operands "
                       f"(min/max spelled a<b?a:b vs b<a?b:a) -- {detail}")
             bucket = "SELECT"
-        if eff != "undecided" and eff != orient:
+        if orient_by == "arm-effects-only" and bucket in FINDING_BUCKETS:
+            detail = (f"blocks did not pair; oriented by arm effects alone "
+                      f"({e_same} vs {e_swap} tokens) -> would be {bucket}: {detail}")
+            bucket = "UNPAIRED-DIFFERS"
+        elif eff != "undecided" and eff != orient:
             # The arms' distinguishing effects say the other orientation.  Under
             # that orientation the verdict flips agree <-> INVERTED, so neither
             # verdict can be trusted: a LEAD, never a finding and never agree.
@@ -1015,7 +1049,8 @@ def analyse_function(fn, rcov, collect_one_sided=True):
         rcov.examine()
         out.append({
             "bucket": bucket, "row": r["index"], "detail": detail,
-            "successors": orient, "arm_effects": f"{eff} ({e_same}/{e_swap})",
+            "successors": orient if orient_by == "blocks" else f"{orient} (arm effects only)",
+            "arm_effects": f"{eff} ({e_same}/{e_swap})",
             "block_pairing": ",".join(sorted({bhow.get(x, "?") for x in (tk, tf)
                                               if isinstance(x, int)})),
             "operand_order": order if order == "n/a" else f"{order} ({order_how})",
@@ -1038,7 +1073,7 @@ def _txt(x):
 FINDING_BUCKETS = ("INVERTED", "OFF-BY-ONE", "STRICTNESS", "SIGNEDNESS",
                    "DIRECTION", "OTHER-PREDICATE")
 LEAD_BUCKETS = ("NAN-ONLY", "ORIENTATION-CONFLICT", "PRODUCER-SHAPE",
-                "LOOP-LOWERING", "SELECT")
+                "LOOP-LOWERING", "SELECT", "UNPAIRED-DIFFERS")
 ALL_BUCKETS = FINDING_BUCKETS + LEAD_BUCKETS + ("agree", "agree-ctr", "ONE-SIDED")
 
 
@@ -1070,6 +1105,9 @@ def main(argv=None):
     ap.add_argument("--show-one-sided", action="store_true",
                     help="list the ONE-SIDED leads per function (counted always)")
     ap.add_argument("--show-agree", action="store_true")
+    ap.add_argument("--show-dropped", default=None, metavar="REASON",
+                    help="list the dropped rows for one drop reason (or 'all'); "
+                         "the drop buckets are where restructured arms live")
     ap.add_argument("--explain", default=None, metavar="SYMBOL",
                     help="print every classified conditional-branch row of one "
                          "function, agree rows included")
@@ -1150,11 +1188,17 @@ def main(argv=None):
                                  "in the examined functions")
     norms = {(u, fn.get("name", "")): fn.get("match_percent_normalized")
              for u, _s, fn in universe}
+    dropped_rows = []
     for unit, sym, d in per_fn:
-        for row in analyse_function(d, rcov):
+        dr = []
+        for row in analyse_function(d, rcov, dr):
             row.update({"unit": unit, "symbol": sym,
                         "match_percent_normalized": norms.get((unit, sym))})
             results.append(row)
+        for row in dr:
+            row.update({"unit": unit, "symbol": sym,
+                        "match_percent_normalized": norms.get((unit, sym))})
+            dropped_rows.append(row)
 
     counts = {b: 0 for b in ALL_BUCKETS}
     for row in results:
@@ -1199,6 +1243,13 @@ def main(argv=None):
             if r["bucket"] in ("agree", "agree-ctr"):
                 print(f"  [agree] {r['symbol']} row {r['row']}  {r.get('target', '')}"
                       f"  |  {r.get('ours', '')}  succ={r.get('successors', '')}")
+    if args.show_dropped:
+        for r in dropped_rows:
+            if args.show_dropped in ("all", r["reason"]):
+                nm = r["match_percent_normalized"]
+                print(f"  [dropped:{r['reason']}] {r['symbol']} row {r['row']} "
+                      f"norm={'n/a' if nm is None else f'{nm:.4f}'}  "
+                      f"{r['target']}  |  {r['ours']}")
     one = {}
     for r in results:
         if r["bucket"] == "ONE-SIDED":
@@ -1214,7 +1265,7 @@ def main(argv=None):
 
     if args.json:
         with open(args.json, "w") as fh:
-            json.dump({"rows": results, "buckets": counts,
+            json.dump({"rows": results, "buckets": counts, "dropped_rows": dropped_rows,
                        "_coverage_functions": fcov.as_dict(),
                        "_coverage_rows": rcov.as_dict()}, fh, indent=2, sort_keys=True)
     rc1 = fcov.emit(sys.stdout)
@@ -1380,7 +1431,10 @@ def selftest():
           "(JoypadPollCommon)", _classify(sel), ["SELECT"])
     # -- live corpus: two adjudicated rows, pinned ----------------------------
     live = {"?CacheResource@@YAPBDPBDAAW4CacheResourceResult@@@Z": (28, "agree"),
-            "?ThreadGetDir@CacheXbox@@IAAHVString@@0@Z": (143, "ORIENTATION-CONFLICT")}
+            "?ThreadGetDir@CacheXbox@@IAAHVString@@0@Z": (143, "ORIENTATION-CONFLICT"),
+            # blocks do not pair; oriented by arm effects alone, adjudicated:
+            # `if (!n) return 0;` laid out inline vs out of line
+            "?SetHighlightID@NavListSort@@QAA_NPAVDataArray@@@Z": (11, "agree")}
     if os.path.exists(DEFAULT_OBJDIFF_CLI) and os.path.exists(DEFAULT_REPORT):
         got = {d.get("symbol"): d for d in run_batch(DEFAULT_OBJDIFF_CLI, sorted(live))
                if "error" not in d}
