@@ -844,8 +844,18 @@ void MoveDir::PostUpdate(const SkeletonUpdateData *data) {
                     mDebugSkeleton.Poll(0, skeletonFrame);
                 }
             } else {
+                // BEHAVIOURAL FIX (w8-n).  mSkeletonsRight is a `Skeleton **`
+                // (gesture/Skeleton.h:128), so the array of pointers is what it
+                // POINTS AT.  Casting the member lvalue to a reference-to-array
+                // handed GetSkeleton `&data->mSkeletonsRight` -- the struct field
+                // itself -- so it read mSkeletonsRight/mFrame/mHistory/
+                // mCameraInput and two words PAST the 0x14-byte struct as if they
+                // were Skeleton pointers.  The image loads the pointer's VALUE:
+                // `lwz r31, 0x4(r30)` / `mr r4, r31` at 0x8250532C..0x82505334,
+                // where we emitted `addi r4, r30, 0x4`.  Game.cpp:192,194 already
+                // use the correct pointer-to-array-then-deref idiom.
                 const Skeleton *playerSkeleton = TheGameData->Player(0)->GetSkeleton(
-                    (const Skeleton *const(&)[6])data->mSkeletonsRight
+                    *(const Skeleton *const(*)[6])(data->mSkeletonsRight)
                 );
                 if (playerSkeleton) {
                     mDebugSkeleton = *playerSkeleton;
@@ -1811,6 +1821,18 @@ namespace {
     }
 }
 
+// RESIDUAL (w8-n, 93.3553 canonical): 1 cause, 6 rows -- BLOCK SINKING, believed unfixable.
+// The image emits the zero return INLINE: `cmplwi cr6, r30, 0x0` at 0x82500918 is
+// followed by `bne cr6, .L_8250092C` to the DetectRange path and FALLS THROUGH
+// into `lis r11, __real@00000000@h` / `lfs f1` / `b <epilogue>`, so the failure
+// block sits physically BETWEEN the tests and the success block.  With the
+// hoisted `float frac = 0.0f;` below, MSVC materialises the zero before the tests
+// and sends all three failures to the tail.
+// REFUTED: spelling it as the early exit -- `if (beat < 0 || (unsigned)beat >=
+// keys.size() || (move = keys[beat].move) == nullptr) return 0.0f;` with three
+// explicit `return`s after it -- DOES create the separate zero block, and MSVC
+// still SINKS it past the success path (`beq cr6, <tail>` again), for 92.0.
+// That is the docs/decomp/patterns block-sinking class, not a spelling problem.
 float MoveDir::DetectFrac(int player, int beat) {
     MILO_ASSERT_RANGE(player, 0, 2, 0x16a);
     int curMeasure = TheTaskMgr.CurrentMeasure();

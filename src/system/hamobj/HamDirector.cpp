@@ -920,7 +920,16 @@ void HamDirector::SetDircut(Symbol s, std::vector<CameraManager::PropertyFilter>
         mNextShot = dynamic_cast<HamCamShot *>(
             mVenue->GetCameraManager()->FindCameraShot(s, filters)
         );
-        MILO_LOG("   mNextShot = '%s'\n", SafeName(mNextShot));
+        // 100% (w8-n).  `SafeName(mNextShot)` takes `Hmx::Object *`, so the
+        // HamCamShot -> Hmx::Object conversion happens at the CALL and MSVC has to
+        // null-guard the virtual-base adjustment: `addic. r11, r11, 0x4` + a second
+        // `beq` to the "NULL" block, then `lwz r11, 0x20(r11)`.  Testing the DERIVED
+        // pointer first lets the adjustment be unguarded and folded into the
+        // displacement -- the image is `lwz r11, 0x24(r11)` at 0x8247163C with no
+        // `addic.` at all -- and the twice-mentioned `mNextShot` supplies the image's
+        // two dead home stores of the pointer at 0x50(r31) (0x82471624, 0x82471630).
+        // 94.6289 -> 100.0, 97 of 97 instructions equal.
+        MILO_LOG("   mNextShot = '%s'\n", mNextShot ? mNextShot->Name() : "NULL");
     }
 }
 
@@ -1653,6 +1662,18 @@ void HamDirector::BlendOutFaceOverrides(float blendTime) {
     }
 }
 
+// RESIDUAL (w8-n, 98.0392 canonical): 3 rows, 1 cause.  The image merges the bool into r11
+// and masks it into the return register -- `li r11, 0x0` / `b` / `li r11, 0x1` /
+// `clrlwi r3, r11, 24` at 0x8246881C..0x82468828 -- where we merge straight into
+// r3 and skip the mask.  The BRANCH structure already matches exactly.  REFUTED:
+//   `bool disabled = true; ... if (...) disabled = false; return disabled;`
+//        -> 92.9; `disabled` takes a CALLEE-SAVED register and the prologue
+//        grows from __savegprlr_29 to _28, which charges the prologue too.
+//   `if (mDisablePicking) return true; if (freecam) return true;
+//    return mPlayerFreestyle && !mFreestyleEnabled;` (semantically identical,
+//        and the branch polarities of the last line DO match the image)
+//        -> 92.8; MSVC then materialises the first `return true` as its own
+//        `li r3, 1` / `b` block instead of cross-jumping it.
 bool HamDirector::ShotsDisabled() {
     if (!mDisablePicking) {
         if (GetWorld() && GetWorld()->GetCameraManager()->HasFreeCam()) {
@@ -3194,6 +3215,31 @@ found:
     PoseIconMan(clip, poseBeat, tex, (bool)tex, NULL, 0.0f, 0.0f);
 }
 
+// RESIDUAL (w8-n, 99.4266 canonical): 44 rows but ONE cause, and the diagnosis is solid even
+// though the fix is not.  Both sides are 218 instructions; the only non-register
+// rows are idx 195/196, where the image recomputes the keys array address
+// (`slwi r10, r10, 3` / `lwzx r5, r10, r9`) and we keep its base in the
+// CALLEE-SAVED r28 (`add r8, r28, r10` / `lwz r5, 0x8(r8)`).  That one extra live
+// value is why the prologue is __savegprlr_25 against the image's _26 and the
+// frame is 0x10 larger, and every r27->r26 / r26->r25 rename below is the shift.
+// REFUTED: un-hoisting `Key<Symbol> &key = keys->at(clipIdx)` into two direct
+// `keys->at(clipIdx)` accesses DOES remove the extra callee-saved register (the
+// PROLOGUE_MISMATCH pattern disappears) but adds 6 instructions, for 96.4.
+// OUT OF REACH of the map-COMDAT lever (a COMDAT callee is link-time
+// replaceable, so MSVC will not propagate its clobber set and the caller has to
+// spill to non-volatiles -- which can make a save-set difference an `inline`
+// keyword on the callee).  That lever needs a SAME-TU callee, and here it has
+// none to work on: of this function's callees, the only three the image marks
+// `f i` in orig/373307D9/ham_xbox_r.map are ?Mod@@YAMMM@Z (char:
+// CharLipSyncDriver.obj), ?KeyLessEq@?$Keys@VSymbol@@V1@@@QBAHM@Z and
+// ?__stl_throw_out_of_range@stlpmtx_std@@YAXPBD@Z -- all CROSS-TU, where neither
+// side can propagate anything.  Every callee defined in HamDirector.cpp itself
+// (GetPropKeys, PoseIconMan, SetMasterClipAnim, DrawIconMan(Symbol,...)) is bare
+// `f`, so there is no in-TU COMDAT-ANY callee to match in the first place.
+// Do NOT read this as "our linkage classes already agree": MSVC/Xenon puts every
+// function we compile in its own COMDAT and our objects emit NODUPLICATES for
+// both classes, so we reproduce neither.  The claim here is only about which
+// callees are same-TU.
 void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, float duration, float beatExtra, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {
         SetMasterClipAnim();
