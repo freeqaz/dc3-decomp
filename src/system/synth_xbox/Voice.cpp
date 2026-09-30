@@ -889,21 +889,30 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
     }
 }
 
-// COMDAT-VISIBILITY LEVER SCREENED FOR THIS UNIT (w8-r), and it does not
-// apply.  ham_xbox_r.map splits the image's synth_xbox:Voice.obj into 61
-// ordinary (bare `f`) and 35 COMDAT (`f i`) symbols, and every one of the 35 is
-// an STL/template instantiation, a MakeString<...> instantiation, an EH
-// funclet, or ??3EnvelopeGenerator@@SAXPAX@Z -- the in-class POOL_OVERLOAD
-// operator delete this project's header already declares in-class.  All seven
-// of the unit's sub-100 rows (UpdateMix, StartVoiceThreadEntry, createOrReuse,
-// SetSpeed, IsPlaying, InitVoiceParameters, Init) are bare `f`, exactly as this
-// file defines them, so no `inline` is available to add or remove.  Target save
-// sets for reference: UpdateMix __savegprlr_22 + __savefpr_26; createOrReuse
-// __savegprlr_21; StartVoiceThreadEntry __savegprlr_14; SetSpeed
+// COMDAT-SELECTION LEVER: MEASURED for this unit (w8-r).  The mechanism is NOT
+// "add `inline` to make the callee a COMDAT" -- retracted; MSVC/Xenon puts every
+// compiled function in its own COMDAT, and ham_xbox_r.map's flag column reports
+// the COMDAT *selection type* from the section symbol's aux record at offset 14
+// (`f i` = IMAGE_COMDAT_SELECT_ANY, bare `f` = NODUPLICATES).  Measured over
+// build/373307D9/src/system/synth_xbox/Voice.obj with
+// scripts/analysis/comdat_selection_audit.py: 8 selection mismatches, and ALL
+// EIGHT are the reverse, non-actionable direction (ours ANY / image
+// NODUPLICATES) on dynamic-initialiser thunks -- ??__EgInProgressSyncVoices,
+// ??__EgInProgressVoices, ??__EgLockPendingLists, ??__EgPendingSyncVoices,
+// ??__EgPendingVoices, ??__EgVoiceGC, ??__Es_voiceGC, ??__Es_voiceGCInProgress.
+// ZERO in the actionable ours-NODUP / image-ANY direction, and not one of the
+// eight is a sub-100 row.  Nothing in this unit to match.
+//
+// Do NOT read this unit's save sets as a lead for it either: a sibling lane's
+// BuildBeam kept `__savegprlr_16` byte-identically at 85.3415 after its
+// same-TU callee's class was matched, and all four selection closures verified
+// anywhere so far were fidelity-only with zero score movement.  Target save
+// sets as reference only: UpdateMix __savegprlr_22 + __savefpr_26;
+// createOrReuse __savegprlr_21; StartVoiceThreadEntry __savegprlr_14; SetSpeed
 // __savegprlr_29.  createOrReuse's only helper-shaped row is an EPILOGUE
 // STRUCTURE difference, not a save-set one -- the image tail-branches
 // `b __restgprlr_21` after `addi r1, r31, 0x1910` where we branch to a shared
-// local epilogue block; the other 37 rows are a callee-saved rotation
+// local epilogue block; its other 37 rows are a callee-saved rotation
 // (r21->r23, r22->r21, r23->r22, r29<->r30) plus one target-only dead home
 // store `stw r30, 0x50(r31)`.
 //

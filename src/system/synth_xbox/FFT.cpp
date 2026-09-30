@@ -32,29 +32,48 @@ int fft_altivec(float* a, float* b, unsigned long size, long sign, float* twiddl
 int fft_real_forward_altivec(float* data, long size, float* context);
 void SquareComplexTransposeVector(float* data, long size);
 
-// COMDAT-VISIBILITY LEVER SCREENED AND REFUTED FOR THIS WHOLE UNIT (w8-r).
-// `orig/373307D9/ham_xbox_r.map` carries a COMDAT column after each address:
-// bare `f` is an ordinary out-of-line .cpp definition, `f i` is a COMDAT
-// (inline / in-class / template), and a COMDAT callee is link-time replaceable
-// so MSVC may not assume its register usage -- which can make a caller's save
-// set differ for reasons no amount of body rewriting will reach.
+// COMDAT-SELECTION LEVER: MEASURED, and the actionable direction is EMPTY for
+// this unit (w8-r).  Read the mechanism before reusing this note, because the
+// obvious one is WRONG and was retracted: it is NOT "add `inline` so the
+// definition becomes a COMDAT".  MSVC/Xenon puts EVERY function we compile into
+// its own COMDAT (function-level linking), so being a COMDAT does not
+// discriminate at all.  What ham_xbox_r.map's flag column reports is the COMDAT
+// *selection type*, carried in the section symbol's aux record at offset 14:
+// `f i` <-> IMAGE_COMDAT_SELECT_ANY (inline / template / in-class), bare `f`
+// <-> IMAGE_COMDAT_SELECT_NODUPLICATES (ordinary out-of-line).  The dtk-carved
+// TARGET objects record no selection byte at all, so the map is the only
+// carrier and there is nothing to diff object-to-object -- which is why
+// "our source defines it out-of-line, therefore our class matches" is not
+// evidence.  Use scripts/analysis/comdat_selection_audit.py instead.
 //
-// ALL THIRTEEN code symbols in the image's synth_xbox:FFT.obj are bare `f`:
-// CalculateSinCosTable, FFTComplex, FFTRealForward, SquareComplexTransposeVector,
-// fft_{matrix_forward_columnwise,matrix_inverse_columnwise,square_matrix,altivec,
-// scalar,pingpong,recursive,real_forward_altivec,real_forward_scalar}.  This file
-// defines every one of them as a plain external function -- no `inline`, no
-// `static`, no anonymous namespace -- so the linkage class ALREADY agrees with
-// the image in both directions and there is no `inline` keyword to add or
-// remove.  The 46.93 / 48.75 stall on fft_altivec / fft_recursive is therefore
-// NOT a COMDAT-visibility artifact, and neither is fft_scalar's save-set row
-// (which the stored REGISTER_SAVE_HELPER_MISMATCH scan flags on this unit).
-// Target save sets, for whoever picks this up: fft_altivec __savegprlr_14;
-// fft_recursive __savegprlr_15 + __savefpr_24 + __savevmx_124; fft_scalar
-// __savegprlr_24; fft_real_forward_altivec __savegprlr_23 + __savefpr_25 +
-// __savevmx_121; fft_matrix_forward_columnwise __savegprlr_20 + __savefpr_24 +
-// __savevmx_120; fft_matrix_inverse_columnwise __savegprlr_21 + __savefpr_24 +
-// __savevmx_124; fft_real_forward_scalar __savegprlr_29.
+// MEASURED over build/373307D9/src/system/synth_xbox/FFT.obj: ZERO selection
+// mismatches, in either direction.  Every FFT symbol our build emits already
+// carries the class ham_xbox_r.map records for it, so there is nothing here to
+// match and the 46.93 / 48.75 stall on fft_altivec / fft_recursive is not a
+// selection-class artifact.  (The FFT functions do all call each other, so the
+// same-TU precondition IS satisfied -- the lever is not ruled out by
+// construction, it is ruled out by the audit finding nothing to fix.)
+//
+// Two things that are NOT leads for this lever, both measured elsewhere and
+// worth not re-deriving: (1) a SAVE-SET difference is not evidence for it --
+// a sibling lane's RndSpotlight::BuildBeam is the textbook symptom (image
+// `bl __savegprlr_14`, ours `_16`) and stayed BYTE-IDENTICAL at 85.3415 with
+// `__savegprlr_16` unchanged after its same-TU callee's selection class was
+// matched; (2) all four selection closures verified anywhere so far were
+// FIDELITY-ONLY, zero score movement.  Whole-binary surface, for scale:
+// 1,898 selection mismatches over 78,352 functions compared, of which 536 are
+// the actionable ours-NODUP / image-ANY direction and 1,362 are the reverse.
+//
+// Target save sets, recorded for whoever picks this up -- as REFERENCE, not as
+// a lead, per (1) above: fft_altivec __savegprlr_14; fft_recursive
+// __savegprlr_15 + __savefpr_24 + __savevmx_124; fft_scalar __savegprlr_24;
+// fft_real_forward_altivec __savegprlr_23 + __savefpr_25 + __savevmx_121;
+// fft_matrix_forward_columnwise __savegprlr_20 + __savefpr_24 + __savevmx_120;
+// fft_matrix_inverse_columnwise __savegprlr_21 + __savefpr_24 + __savevmx_124;
+// fft_real_forward_scalar __savegprlr_29.  The stored
+// REGISTER_SAVE_HELPER_MISMATCH scan flags fft_scalar and fft_recursive in this
+// unit; its fft_recursive row still reads "STUB: no body emitted", which is
+// stale -- the function is implemented and scores 48.754.
 
 // Lazily-grown ping-pong scratch buffer shared by fft_pingpong / fft_recursive.
 struct FftScratch {
