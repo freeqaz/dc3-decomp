@@ -948,6 +948,18 @@ void HamDirector::SetupRoutineBuilderAnims() {
         RndPropAnim *anim = mSongAnims[LegacyDifficulty(hpd->GetDifficulty())];
         if (anim) {
             routineBuilderAnim->Copy(anim, kCopyDeep);
+#ifdef HX_NATIVE
+            // After Copy, PropKeys still target the source HamDirector.
+            // Retarget any pointing to a different HamDirector so camera
+            // shots and visibility commands fire on this director.
+            for (auto it = routineBuilderAnim->mPropKeys.begin();
+                 it != routineBuilderAnim->mPropKeys.end(); ++it) {
+                Hmx::Object *t = (*it)->Target();
+                if (t && t != this && dynamic_cast<HamDirector *>(t)) {
+                    (*it)->SetTarget(this);
+                }
+            }
+#endif
             Symbol syms[3] = { "clip", "move", "practice" };
             for (int j2 = 0; j2 < 3; j2++) {
                 DataArrayPtr ptr(syms[j2]);
