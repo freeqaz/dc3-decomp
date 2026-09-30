@@ -52,8 +52,9 @@ void WorldCrowd3DCharHandle::Set3DChar(
 }
 
 #ifdef HX_NATIVE
-// TODO: property synchronization
-bool WorldCrowd3DCharHandle::SyncProperty(DataNode &, DataArray *, int, PropOp) {
-    return false;
-}
+// The PPC build has no definition: the image's vtable slot is the ICF-folded
+// empty BEGIN_PROPSYNCS body (82711F80 -> 827118E0), so the class is left to
+// that fold.  The native link needs a body of its own -- the same empty one.
+BEGIN_PROPSYNCS(WorldCrowd3DCharHandle)
+END_PROPSYNCS
 #endif

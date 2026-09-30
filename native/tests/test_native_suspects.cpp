@@ -12,6 +12,7 @@
 #include "platform/FFmpegMovieImpl.h"
 #include "rndobj/Mesh.h"
 #include "utl/BufStream.h"
+#include "world/Crowd3DCharHandle.h"
 #include "world/Spotlight.h"
 
 #include <cstring>
@@ -201,6 +202,27 @@ TEST_F(NativeSuspectsTest, MovieWithNoPendingLoadIsReady) {
     EXPECT_TRUE(movie.Ready())
         << "after a synchronous (failed) open nothing is loading; the image's "
            "Ready() is true once its loader has finished";
+}
+
+// ----------------------------------------------------------------------------
+// WorldCrowd3DCharHandle::SyncProperty
+// ----------------------------------------------------------------------------
+
+// The image's vtable slot is the ICF-folded empty BEGIN_PROPSYNCS body
+// (82711F80 -> 827118E0: `_i == _prop->Size()` returns true -- the path
+// resolved to this object itself -- anything else returns false).  Native
+// returned false unconditionally ("TODO: property synchronization").
+TEST_F(NativeSuspectsTest, CrowdCharHandleSyncPropertyResolvesTheEmptyPath) {
+    WorldCrowd3DCharHandle *handle = Hmx::Object::New<WorldCrowd3DCharHandle>();
+    DataArray *prop = new DataArray(1);
+    prop->Node(0) = Symbol("suspects_prop");
+    DataNode val;
+    EXPECT_TRUE(handle->SyncProperty(val, prop, 1, kPropGet))
+        << "at _i == Size() the image's SyncProperty returns true";
+    EXPECT_FALSE(handle->SyncProperty(val, prop, 0, kPropGet))
+        << "control: an unknown property name is not handled";
+    prop->Release();
+    delete handle;
 }
 
 } // namespace
