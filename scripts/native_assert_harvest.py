@@ -316,6 +316,24 @@ class Harvest:
         # screen entered is recovered from the engine log afterwards.
         if not self.goto("game_screen", 300):
             return
+        # --gameplay-eval: (beat, DTA) pairs, each POSTed once when the song
+        # beat first reaches `beat`.
+        pending = []
+        for spec in a.gameplay_eval:
+            beat, _, expr = spec.partition(":")
+            pending.append((float(beat), expr))
+        pending.sort(key=lambda p: p[0])
+
+        def run_evals(beat):
+            while pending and beat is not None and beat >= pending[0][0]:
+                at, expr = pending.pop(0)
+                try:
+                    r = self.post("/dta/eval", expr).decode("utf-8", "replace")
+                except Exception as e:  # noqa: BLE001 -- report, keep harvesting
+                    r = f"error: {e}"
+                print(f"[harvest] gameplay-eval @beat {beat:.1f} (asked {at}) "
+                      f"{expr!r} -> {r}", flush=True)
+                self.mark(f"eval@{at:g}", True, r[:200])
         # gameplay: sample until the game reports gameover (idle PAST song end)
         # Wall-clock is the wrong bound: on a loaded box the frame rate (and so,
         # under DC3_FAST_TIME, song progress) varies ~10x.  Bound on PROGRESS
@@ -329,6 +347,7 @@ class Harvest:
             tel = self.telemetry()
             state = tel.get("state")
             beat = tel.get("beat")
+            run_evals(beat)
             if beat != last_beat:
                 last_beat, last_move = beat, time.time()
             elif time.time() - last_move > a.stall_timeout and state != "gameover":
@@ -547,6 +566,13 @@ def main():
                          "skip_waiting; duo = ready both sides (modes requiring 2 "
                          "players); auto = solo for perform, duo for dance battle, "
                          "none otherwise (practice does not pass multiuser_screen)")
+    ap.add_argument("--gameplay-eval", action="append", default=[],
+                    metavar="BEAT:DTA",
+                    help="POST DTA to /api/dta/eval once, when the song beat first "
+                         "reaches BEAT (repeatable; e.g. "
+                         "'0:{toggle_autoplay 0}{toggle_autoplay 1}').  Breaks the "
+                         "no-eval rule on purpose: any message it raises is the "
+                         "caller's, not the game's")
     ap.add_argument("--gameplay-timeout", type=int, default=3600,
                     help="hard cap on the gameplay stage, seconds")
     ap.add_argument("--stall-timeout", type=int, default=180,
