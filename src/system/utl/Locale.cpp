@@ -279,7 +279,7 @@ void Locale::Init() {
             for (int i = 0; i < numChunks; i++) {
                 Symbol curSym = chunks[i].node1.LiteralSym();
                 if (curSym != prevSym) {
-                    totalStrLen += strlen(chunks[i].node3.LiteralStr());
+                    totalStrLen += strlen(chunks[i].node3.LiteralStr()) + 1;
                     prevSym = curSym;
                     mSize++;
                 }

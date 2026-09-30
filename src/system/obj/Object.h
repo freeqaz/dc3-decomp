@@ -27,6 +27,13 @@ void MergeObjectsRecurse(ObjectDir *, ObjectDir *, MergeFilter &, bool);
 // Checked in ObjPtrVec::ReplaceNode and Transitions::Replace to suppress
 // structural mutations during ring walks.
 extern bool gInReplaceList;
+// Set (with gInReplaceList) only while Hmx::Object::ReplaceRefs walks its
+// SNAPSHOT of the ring, and cleared again for the duration of any nested live
+// ObjRef::ReplaceList.  In the snapshot walk every ref is self-looped before
+// Replace() and the snapshot holds no pointer INTO a list's node chain, so an
+// ObjPtrList (heap node per element) can erase exactly like the image does.
+// ObjPtrVec cannot: its erase shifts the nodes the snapshot still points at.
+extern bool gInRefSnapshot;
 
 /** Opt-in ref-ring audit (DC3_REFRING_AUDIT=1). Off by default and
  *  self-announcing on first use.

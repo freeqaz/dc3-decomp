@@ -24,6 +24,7 @@ Hmx::Object *Hmx::Object::sDeleting;
 extern bool SoundAudioTraceOn();
 bool Hmx::Object::sRingsDirty = false;
 bool gInReplaceList = false;
+bool gInRefSnapshot = false;
 
 // Check if an ObjRef's alive sentinel is still set. Reads potentially freed
 // memory during cascading destruction — suppress ASAN for this specific check.
@@ -220,6 +221,9 @@ void ObjRef::ReplaceList(Hmx::Object *obj) {
     // Suppress ObjPtrVec::erase and Transitions::RemoveNodes during ring walk.
     bool wasInReplace = gInReplaceList;
     gInReplaceList = true;
+    // A live ring walk: erasing a list node here WOULD free a ring neighbour.
+    bool wasInSnapshot = gInRefSnapshot;
+    gInRefSnapshot = false;
 
     while (next != this) {
         ObjRef *cur = next;
@@ -234,6 +238,7 @@ void ObjRef::ReplaceList(Hmx::Object *obj) {
     }
 
     gInReplaceList = wasInReplace;
+    gInRefSnapshot = wasInSnapshot;
 }
 #endif
 
@@ -557,7 +562,9 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
         // destructions). The mAliveSentinel field (set in ObjRef constructor,
         // cleared in ~ObjRef) detects freed entries in the snapshot.
         bool wasInReplace = gInReplaceList;
+        bool wasInSnapshot = gInRefSnapshot;
         gInReplaceList = true;
+        gInRefSnapshot = true;
         std::vector<ObjRef *> snapshot;
         SnapshotRing(&mRefs, snapshot);
         mRefs.Clear();
@@ -571,6 +578,7 @@ void Hmx::Object::ReplaceRefs(Hmx::Object *obj) {
             ref->Replace(obj);
         }
         gInReplaceList = wasInReplace;
+        gInRefSnapshot = wasInSnapshot;
 #else
         ObjRef other(mRefs);
         other.prev->next = &other;

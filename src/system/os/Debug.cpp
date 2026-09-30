@@ -66,6 +66,68 @@ template ScopedState<bool, 1, 0>::~ScopedState();
 
 const char *GetExpCode(int code);
 
+#if defined(HX_NATIVE) && !defined(HX_WEB)
+#include <cstdio>
+#include <cstdlib>
+#include <dlfcn.h>
+#include <execinfo.h>
+#include <set>
+#include <string>
+// Native-only harvest tap, OFF unless DC3_TAG_MODALS=1.
+//
+// On native MILO_ASSERT/MILO_FAIL are non-fatal and MILO_WARN/MILO_NOTIFY reach
+// stderr (if at all) through App.cpp's DebugModal as an UNPREFIXED MILO_LOG line
+// -- and a notify at notify_level 1 is routed to cheat_display and never printed.
+// So a log cannot tell a warning from ordinary chatter.  With the tap on, every
+// Warn/Notify/Fail is re-emitted as one `MILO_<KIND>: <msg>` line (newlines
+// escaped), and the first occurrence of each distinct message also dumps a raw
+// backtrace (`MILO_BT: ...` lines, resolvable with addr2line) so the site can be
+// found even when the message carries no file:line.  scripts/native_assert_harvest.py
+// consumes this.  Emits nothing and changes no control flow when disabled.
+static void NativeModalTap(const char *kind, const char *msg) {
+    static int sEnabled = -1;
+    if (sEnabled == -1) {
+        const char *env = getenv("DC3_TAG_MODALS");
+        sEnabled = (env && atoi(env) != 0) ? 1 : 0;
+    }
+    if (!sEnabled)
+        return;
+    std::string line(msg ? msg : "(null)");
+    std::string esc;
+    esc.reserve(line.size());
+    for (size_t i = 0; i < line.size(); i++) {
+        if (line[i] == '\n')
+            esc += "\\n";
+        else
+            esc += line[i];
+    }
+    fprintf(stderr, "MILO_%s: %s\n", kind, esc.c_str());
+    static std::set<std::string> sSeen;
+    static int sDumps = 0;
+    if (sDumps < 2000 && sSeen.insert(std::string(kind) + esc).second) {
+        if (sDumps++ == 0) {
+            // Load base of this executable, so a harvester can turn the raw
+            // return addresses below into addr2line offsets.
+            Dl_info info;
+            if (dladdr((void *)&NativeModalTap, &info) && info.dli_fbase) {
+                fprintf(stderr, "MILO_BT_BASE: %p %s\n", info.dli_fbase,
+                        info.dli_fname ? info.dli_fname : "?");
+            }
+        }
+        void *frames[32];
+        int n = backtrace(frames, 32);
+        for (int i = 1; i < n; i++) {
+            fprintf(stderr, "MILO_BT: %p\n", frames[i]);
+        }
+        fprintf(stderr, "MILO_BT_END\n");
+    }
+    fflush(stderr);
+}
+#define NATIVE_MODAL_TAP(kind, msg) NativeModalTap(kind, msg)
+#else
+#define NATIVE_MODAL_TAP(kind, msg)
+#endif
+
 long HmxGlobalHandler(_EXCEPTION_POINTERS *ep) {
     if (DmIsDebuggerPresent()) {
         return 1;
@@ -177,6 +239,7 @@ void Debug::Exit(int exitCode, bool call_exit) {
 }
 
 void Debug::Warn(const char *msg) {
+    NATIVE_MODAL_TAP("WARN", msg);
     // Declared here, assigned in the else: the slot (0x50) is reserved for the
     // whole function, so the MILO_LOG temporary in the other branch takes 0x54.
     ModalType type;
@@ -196,6 +259,7 @@ void Debug::Warn(const char *msg) {
 }
 
 void Debug::Notify(const char *msg) {
+    NATIVE_MODAL_TAP("NOTIFY", msg);
     // Declared here, assigned in the else: the slot (0x50) is reserved for the
     // whole function, so the MILO_LOG temporary in the other branch takes 0x54.
     ModalType type;
@@ -217,6 +281,7 @@ void Debug::Notify(const char *msg) {
 void Debug::Fail(const char *msg, void *v) {
 #ifdef HX_NATIVE
     fprintf(stderr, "FAIL: %s\n", msg);
+    NATIVE_MODAL_TAP("FAIL", msg);
 #ifdef HX_WEB
     // Web port: never fatal — matches Xbox "Continue" dialog behavior.
     // Many init paths trigger benign FAILs (missing assets, stubs).

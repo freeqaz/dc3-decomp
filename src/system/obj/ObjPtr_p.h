@@ -566,7 +566,18 @@ void ObjPtrList<T1, T2>::ReplaceNode(struct ObjPtrList::Node *node, Hmx::Object 
             // heap metadata ("corrupted double-linked list"). Suppress the erase;
             // the null entry persists until the list is destroyed or cleaned up.
             // Matches the guard in ObjPtrVec::ReplaceNode.
-            if (!gInReplaceList) {
+            //
+            // EXCEPT in ReplaceRefs' snapshot walk (gInRefSnapshot), where the
+            // hazard above does not exist -- and where suppressing is itself
+            // a crash: a kObjListNoNull list is left holding a NULL its owner
+            // was promised it can never hold.  Measured 2026-09-30 by the
+            // native harvest: leaving a song for song select,
+            // ~FaderGroup popped exactly such a NULL Fader out of mFaders and
+            // called RemoveClient on it -> SIGSEGV at 0xf0 (DirUnloader ->
+            // ~MoggClip -> ~StandardStream -> ~FaderGroup), immediately after
+            // this warning fired with owner=<null>.  The image erases
+            // unconditionally.
+            if (!gInReplaceList || gInRefSnapshot) {
                 erase(node);
             } else {
                 MILO_WARN("ObjPtrList::ReplaceNode: suppressed erase during ReplaceList (owner=%s)",
