@@ -509,11 +509,26 @@ findings in held units rather than edit them.
   content.
 - **Control.** One PPC-visible literal in `Spotlight::BuildBoard` moved `Spotlight.obj`
   (`6dd8c8ea` → `d7738027`) and the tree hash (→ `1b531a41…`). Reverting restored both.
-- **Line numbers moved one object.** Removing Font3d's `#ifdef HX_NATIVE` / `#else` lines
-  changed `Font3d.obj` (`0e675c83` → `dc6d0998`), although every `report.json` score was
-  identical. Something in that TU encodes a line number. **Deleting an `HX_NATIVE` block
-  is not PPC-neutral by construction; measure it.** That edit was reverted. The
-  HamDirector removal hashed neutrally.
+- **One deletion moved one object; the cause is UNDETERMINED.** Removing Font3d's
+  `#ifdef HX_NATIVE` / `#else` lines changed `Font3d.obj` (`0e675c83` → `dc6d0998`),
+  although every `report.json` score was identical. That edit was reverted. The
+  HamDirector removal hashed neutrally. **Deleting an `HX_NATIVE` block is not
+  PPC-neutral by construction; hash the object.**
+
+  > ⚠ **CORRECTED 2026-09-30.** This paragraph first said *"Something in that TU
+  > encodes a line number."* That was a guess, and both candidate mechanisms were then
+  > checked and refuted: (1) `__LINE__` in assert macros -- `os/Debug.h` contains no
+  > `__LINE__`; `MILO_ASSERT(cond, line)` takes the line as an explicit argument; neither
+  > `Font3d.cpp` nor `HamDirector.cpp` uses `__LINE__`; the one PCH-wide user,
+  > `utl/Std.h`'s `FOREACH_CONST_`, token-pastes (`container_##__LINE__`) so it never
+  > expands, and would only name a local. See
+  > [comments-are-inert-except-at-__LINE__.md](comments-are-inert-except-at-__LINE__.md)
+  > (a comment prepended to all 1,188 sources moved 1 function of 48,365). (2) CodeView
+  > line tables -- `Font3d.obj`'s `.debug$S` is 160 B, compile-unit metadata only. So
+  > the Font3d byte change is real and unexplained; do not infer a line-number rule from
+  > it (the HamDirector deletion, 40 asserts downstream, moved nothing). The misconception
+  > is already in the tree once: `src/system/obj/Dir.cpp:209` pads a deletion "to keep PPC
+  > `__LINE__` values fixed", which is unnecessary.
 
 ### `ObjRefConcrete::Load`: the verdict and what was measured
 
