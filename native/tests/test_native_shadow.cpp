@@ -80,4 +80,31 @@ TEST_F(NativeShadowTest, FlowQueueableQueuesListenerlessTriggers) {
     delete child;
 }
 
+// ---------------------------------------------------------------------------
+// RndText::FitTextEllipsis keeps shrinking while the character before the
+// "..." is in a trim set. The image's set is the literal L" .," --
+// Text.s 8269A640: lis/addi r23, ??_C@_17BKMGDHOL@?5?$AA?4?$AA?0?$AA?$AA?$AA@
+// (.string16 " .,"), then `lhz r4,-0x2(r27); bl wcschr` at 8269A670..78.
+// The native u16 port of that loop used {' ', '\t', '\n'}: "Hello, Wor..."
+// stopped at "Hello,..." where the Xbox trims to "Hello...", and tabs and
+// newlines were trimmed where the Xbox keeps them. wcschr also matches the
+// terminator, so a NUL before the ellipsis counts as trimmable too.
+// ---------------------------------------------------------------------------
+} // namespace
+
+bool RndTextEllipsisTrimsChar(unsigned short c);
+
+namespace {
+
+TEST(NativeShadowUnit, TextEllipsisTrimSetIsTheImagesLiteral) {
+    EXPECT_TRUE(RndTextEllipsisTrimsChar(' '));
+    EXPECT_TRUE(RndTextEllipsisTrimsChar('.')) << "image trims '.' before the ellipsis";
+    EXPECT_TRUE(RndTextEllipsisTrimsChar(',')) << "image trims ',' before the ellipsis";
+    EXPECT_FALSE(RndTextEllipsisTrimsChar('\t')) << "image does not trim tab";
+    EXPECT_FALSE(RndTextEllipsisTrimsChar('\n')) << "image does not trim newline";
+    EXPECT_FALSE(RndTextEllipsisTrimsChar('a'));
+    EXPECT_FALSE(RndTextEllipsisTrimsChar(0x3002)); // ideographic full stop: not in L" .,"
+    EXPECT_TRUE(RndTextEllipsisTrimsChar(0)) << "wcschr matches the terminator";
+}
+
 } // namespace

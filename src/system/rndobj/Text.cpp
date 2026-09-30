@@ -1804,7 +1804,11 @@ void RndText::UpdateScrollOffsets() {
 // On Linux, wchar_t is 4 bytes but our text buffers use unsigned short (2 bytes).
 // Use manual u16 operations instead of wchar_t string functions to avoid buffer overflow.
 static const unsigned short kEllipsisU16[] = {'.', '.', '.', 0};
-static const unsigned short kBreakCharsU16[] = {' ', '\t', '\n', 0};
+// The image's trim set is the literal L" .," (Text.s 8269A640, the
+// ??_C@_17BKMGDHOL@ string16 " .," handed to wcschr at 8269A678). This used
+// to be {' ', '\t', '\n'}, which kept a trailing '.' or ',' before the
+// ellipsis ("Hello,...") and trimmed tabs/newlines the Xbox keeps.
+static const unsigned short kBreakCharsU16[] = {' ', '.', ',', 0};
 
 static int u16len(const unsigned short *s) {
     int n = 0;
@@ -1823,6 +1827,13 @@ static const unsigned short *u16chr(const unsigned short *s, unsigned short ch) 
         s++;
     }
     return nullptr;
+}
+
+// The trim predicate FitTextEllipsis applies to the character before "...".
+// Extern (not static) so native/tests can pin it against the image. wcschr
+// also matches the terminator, which u16chr does not, so NUL is handled here.
+bool RndTextEllipsisTrimsChar(unsigned short c) {
+    return c == 0 || u16chr(kBreakCharsU16, c) != 0;
 }
 
 // Tag name constants for ParseMarkup (2 bytes per char, matching unsigned short buffers)
@@ -1978,7 +1989,7 @@ void RndText::FitTextEllipsis() {
         while (truncPos > 1
                && (lines.size() > 1 || bounds.w >= mWidth
 #ifdef HX_NATIVE
-                   || u16chr(kBreakCharsU16, buf[truncPos - 1]) != 0
+                   || RndTextEllipsisTrimsChar(buf[truncPos - 1])
 #else
                    || wcschr(L" .,", (wchar_t)buf[truncPos - 1]) != 0
 #endif
