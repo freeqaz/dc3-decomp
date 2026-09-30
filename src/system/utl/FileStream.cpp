@@ -1,3 +1,29 @@
+// ??_GFileStream@@UAAPAXI@Z (the scalar deleting destructor) is stuck at
+// 99.583%, and the whole residue is ONE string literal: the __FILE__ that
+// MEM_OVERLOAD's MemFree call passes.  The image has
+// "e:\lazer_build_gmc1\system\src\utl\FileStream.h", we emit
+// "...\src\utl/FileStream.h" -- a forward slash, because MSVC builds __FILE__ as
+// <search-dir> + '\' + <as-written> and the spelling that wins is the FIRST
+// include of the header in the TU.  This file's own line 1 is already a
+// backslash; it loses because os/Debug.h is force-included through the PCH and
+// pulls utl/FileStream.h in via `#include "utl/TextFileStream.h"` -> that
+// header's line 2 `#include "utl/FileStream.h"`.
+//
+// REFUTED (w9-a): flipping TextFileStream.h line 2 to a backslash does take this
+// row to 100.0% and costs SEVEN others.  Whole-binary A/B, full ninja both ways:
+//   UP 1    utl/FileStream  ??_GFileStream                  99.583 -> 100.0   96 B
+//   DOWN 7  synth/WavReader ??0WavReader ctor               100.0 -> 99.9505 808 B
+//           rndobj/HiResScreen ?Finish@HiResScreen          100.0 -> 99.9408 676 B
+//           gesture/SkeletonClip ?StopRecordingNoClear      100.0 -> 99.8667 300 B
+//           rndobj/Bitmap ?LoadBmp@RndBitmap                100.0 -> 99.8387 248 B
+//           os/HDCache ?OpenHeader@HDCache                  100.0 -> 99.7872 188 B
+//           rndobj/Bitmap ?SaveBmp@RndBitmap                100.0 -> 99.7297 148 B
+//           midi/MidiReader ??3FileStream@@SAXPAX@Z         100.0 -> 98.3333  24 B
+//   matched_functions 31374 -> 31368, matched_code 5,569,568 -> 5,567,272.
+// obj/Data.h's comment on the same trade says "6 want forward"; the measured
+// number is 7.  The retail build carried both spellings because it had per-TU
+// headers; one shared PCH cannot, so this unit cannot reach 100% without
+// splitting the PCH.  Do not re-try the flip.
 #include "utl\FileStream.h"
 #include "os\File.h"
 #include "os\Debug.h"
