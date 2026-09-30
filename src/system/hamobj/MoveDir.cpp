@@ -2352,11 +2352,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
             mDancerViz->SetUsePhysicalCam(true);
             // Grid visualization of multiple skeletons from unkf88
             int setSize = asyncCount;
-            // No `setSize > 0` guard: the image tests the size once (`cmpwi
-            // r30, 0x0; beq` above) and goes straight to the grid.  A guard we
-            // added here re-tested the same register (cond_semantics_scan
-            // RETEST, 2026-09-30); a set size is never negative, so it was dead.
-            {
+            if (setSize > 0) {
                 float gridF = std::ceil(std::sqrt((float)setSize));
                 int gridSize = (int)gridF;
                 float invGrid = 1.0f / (float)gridSize;
