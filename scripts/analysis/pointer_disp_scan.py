@@ -1323,23 +1323,56 @@ def _reaches(E, roots, target):
     return False
 
 
+def _aggregate_by_value(t):
+    """A class/struct/union passed or returned BY VALUE (not through * or &).
+    `class Foo * const` also lands here: strict, never wrong."""
+    t = t.strip()
+    return (t.startswith(("class ", "struct ", "union "))
+            and not t.endswith(("*", "&")))
+
+
 def arg_regs(demangled):
     """[('g'|'f', regno), ...] for a demangled MSVC signature, or None when the
-    register assignment cannot be stated with confidence."""
+    register assignment cannot be stated with confidence.
+
+    Three Xenon facts, each measured in the image (2026-09-30, lane
+    leads-disp-arith) and each a defect of the first version of this function:
+
+    * A BY-VALUE AGGREGATE PARAMETER is not one GPR.  `Vector3DESmoother::
+      Smooth(class Vector3, float, bool)` is called as `ld r4, 0x0(r11);
+      ld r5, 0x8(r11); fmr f1; li r7` (HandInvokeGestureFilter::CalcInPose,
+      0x82DFE04C-0x82DFE05C): the Vector3 takes TWO 64-bit GPRs, so the float
+      consumes slot r6 and the bool is r7.  One-GPR-per-parameter compared r6
+      (not an argument) and never compared r5 (the z/w half) or r7 -- a wrong
+      value there was invisible.  The size is not in the signature, so an
+      aggregate parameter now means "unknown" (strict).
+    * A CONSTRUCTOR / DESTRUCTOR has no return type: its head is the bare
+      "public:", which never matched the "public: " prefix, so `this` was not
+      counted and every argument was shifted down one register
+      (`Message::Message(class Symbol, class DataNode const &)` read r3, r4 and
+      never r5).
+    * A BY-VALUE AGGREGATE RETURN passes a hidden result pointer in r3, before
+      `this`: `Vector3DESmoother::Value()` is `addi r3, r1, 0x70; mr r4, r29`
+      (CalcInPose 0x82DFE0E4-0x82DFE0EC), `HiResScreen::ScreenRect(cam, rect)` is
+      r3 = result, r4 = this, r5 = cam, r6 = &rect (RndCam::
+      GetViewProjectXfms 0x82628CCC-0x82628CF4).  If some small aggregate
+      were instead returned in r3 with no hidden pointer, this layout names
+      one GPR MORE than the real one -- a superset, so still strict."""
     if not demangled or "..." in demangled or "__cdecl" not in demangled:
         return None
     head, rest = demangled.split("__cdecl", 1)
     head = head.strip()
-    member = head.startswith(ACCESS_WORDS) and " static " not in f" {head} "
-    ret = head.split(":", 1)[1] if head.startswith(ACCESS_WORDS) else head
+    access = head.startswith(tuple(w.strip() for w in ACCESS_WORDS))
+    member = access and " static " not in f" {head} "
+    ret = head.split(":", 1)[1] if access else head
     ret = ret.replace("virtual", "").strip()
-    if (("class " in ret or "struct " in ret or "union " in ret)
-            and not ret.endswith(("*", "&"))):
-        return None                        # hidden return pointer: do not guess
+    hidden_ret = _aggregate_by_value(ret)
     params = split_params(rest)
     if params is None:
         return None
-    slots = (["g"] if member else []) + [
+    if any(_aggregate_by_value(p) for p in params):
+        return None                        # GPR count depends on the size
+    slots = (["g"] if hidden_ret else []) + (["g"] if member else []) + [
         "f" if p in ("float", "double") else "g" for p in params]
     if len(slots) > 8:
         return None
@@ -2284,6 +2317,26 @@ def selftest(args):
           "reassociation) -> reordered",
           all(r["bucket"] == "reordered" for r in run(t, o, ctx=free))
           and len(run(t, o, ctx=free)) == 4)
+
+    # -- exact call-argument registers (measured Xenon layouts) ------------- #
+    check("a by-value aggregate parameter has no fixed GPR count -> strict "
+          "(Smooth(Vector3, float, bool) is r4+r5, f1, r7 -- not r4, f1, r6)",
+          arg_regs("public: void __cdecl Vector3DESmoother::Smooth(class Vector3, "
+                   "float, bool)") is None)
+    check("a constructor (no return type) still passes `this` in r3",
+          arg_regs("public: __cdecl Message::Message(class Symbol const &, "
+                   "class DataNode const &)") == [("g", 3), ("g", 4), ("g", 5)])
+    check("a by-value aggregate return puts the result pointer in r3, `this` "
+          "in r4 (Vector3DESmoother::Value, HiResScreen::ScreenRect)",
+          arg_regs("public: class Vector3 __cdecl Vector3DESmoother::Value(void)"
+                   "const") == [("g", 3), ("g", 4)]
+          and arg_regs("public: class Hmx::Rect __cdecl HiResScreen::ScreenRect("
+                       "class RndCam const *, class Hmx::Rect const &)const")
+          == [("g", 3), ("g", 4), ("g", 5), ("g", 6)])
+    check("...and a float after the hidden pointer and `this` still consumes "
+          "its GPR slot",
+          arg_regs("public: class Vector3 __cdecl Foo::Bar(float, int)")
+          == [("g", 3), ("g", 4), ("f", 1), ("g", 6)])
 
     check("link-pair naming: mNext/mPrev, _M_left/_M_right, next/prev",
           is_link_pair("mNext", "mPrev") and is_link_pair("_M_left", "_M_right")
