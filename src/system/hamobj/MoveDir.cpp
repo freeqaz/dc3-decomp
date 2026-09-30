@@ -664,6 +664,18 @@ void MoveDir::Poll() {
             filler[i] = oldMove;
             MovePlayerData &curPlayerData = mMovePlayerData[i];
             if (curMeasure >= 0 && curMeasure < curPlayerData.mMoveKeys.size()) {
+                // REFUTED (w9-d, BYTE-IDENTICAL): binding the element to a
+                // `const HamMoveKey &key` first, to coax out the image's
+                // `stw r11, 0x50(r31)` home store of mMoveKeys._M_start where we
+                // emit a plain register move `clrrwi r10, r9, 0`, leaves the
+                // object unchanged -- canonical 97.9607, fuzzy 96.41048, base
+                // 924 B, the same 62 rows (56 diff_arg / 1 diff_op / 1 replace /
+                // 1 delete / 3 insert) before and after.  The two charged rows
+                // in that window are the LOAD ORDER: the image reads _M_start
+                // (0x20(r10)) before _M_finish (0x24(r10)) and then reuses
+                // _M_start for the indexed load; we read _M_finish first and pay
+                // a move to get _M_start into place.  Not reachable from the
+                // subscript spelling.
                 mCurMove[i] = curPlayerData.mMoveKeys[curMeasure].move;
             }
             MoveRating oldRating = mCurMoveRating[i];
