@@ -193,6 +193,15 @@ a template. Standing check: `scripts/analysis/reloc_name_gate.py` (with a
 its "Check the instrument first" section before triaging a row, because three of
 the loudest findings there were config defects rather than source bugs.
 
+### An offset diff on an iterator step may be a DIRECTION bug, not a wrong field
+
+`HamCamShot::SetPreFrame` rewound its camera-shot list with `++` because
+`ObjPtrList::iterator` had no `operator--`, so the right spelling did not
+compile. It cost one `diff_arg` row (`0x18` vs `0x14` — `Node::prev` vs
+`Node::next`) and was first misread as a field substitution. When the two
+offsets are adjacent links of the same node, read the loop body before the
+field names. **[missing-container-operator-forces-wrong-spelling.md](missing-container-operator-forces-wrong-spelling.md)**.
+
 ### A wrong struct FIELD costs one displacement, and a biased `this` hides which field it was
 
 Taxonomy class 1 (121 bugs). A same-width wrong field emits a byte-identical
@@ -610,6 +619,7 @@ From 143 successful fine-tuning attempts (90%+ start, 100% end):
 - [verifiable-icf.md](verifiable-icf.md) — ICF, LTCG, float constant pooling
 - [harmful-avoid.md](harmful-avoid.md) — Member aliasing, child pointer in loop
 - [behavioral-divergence.md](behavioral-divergence.md) — **Metric-invisible bugs**: non-commutative swaps, float reassociation, dropped guards, aliased self-clobber, reversed container args, wrong 0%-stub bodies; the "regalloc floor" false-cert anti-pattern
+- [missing-container-operator-forces-wrong-spelling.md](missing-container-operator-forces-wrong-spelling.md) — **Behavioural bug, costs one row**: a container with no `operator--` forced `HamCamShot::SetPreFrame` to rewind with `++`. An offset diff between adjacent links of one node (`next`/`prev`) is a direction bug until proven otherwise
 - [wrong-field-at-100-percent.md](wrong-field-at-100-percent.md) — **Metric-invisible bugs**: a same-width wrong struct field costs one displacement and rounds to 100.0%. Why a raw offset comparison is worthless (MSVC biases `this`; the `this` register varies), the four artifact buckets, and `scripts/analysis/this_offset_scan.py`
 - [dropped-static-initializer.md](dropped-static-initializer.md) — **Metric-invisible bugs**: a static in our `.bss` that the image defines in `.data` with content. objdiff scores these 100% forever. `scripts/analysis/bss_initializer_scan.py`; all ten in the binary are fixed
 - [mutable-data-float-constants-are-unmetered.md](mutable-data-float-constants-are-unmetered.md) — **Metric-invisible bugs**: the VALUE of a `.data` float static costs 0% however wrong it is (`lfs` is byte-identical, and `name_check` exempts the `lbl_*` placeholder). `scripts/analysis/mutable_float_audit.py`. Its blind spots were **addressing modes** three times running — folded vs materialised base on each side, and float arrays — plus two walker defects worth knowing alone: *a call is a branch with **LK set**, not "opcode 18"* (and never `startswith("bl")`, which eats `ble`/`blt`/`blr`), and *`sc == 2` skips every `static` function*
