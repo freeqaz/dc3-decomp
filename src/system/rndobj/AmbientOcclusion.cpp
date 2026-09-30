@@ -290,6 +290,19 @@ BEGIN_LOADS(RndAmbientOcclusion)
     // lever that took SynthSample::PreLoad 99.54 -> 100.  It does not
     // generalise to this family -- the stream argument is not what these rows
     // are about.
+    //
+    // w9-d 2026-09-30, CONFIRMED AT LIMIT, do not spend a build here.  This row
+    // is one of ten named by hand in
+    // docs/decomp/patterns/relocation-names-are-unmetered.md, which refutes the
+    // whole family: 613 of the 645 sibling Loads are already at 100% with this
+    // exact spelling, so any change that reaches these ten breaks those 613.
+    // The anchor pick also FLIPS between siblings, which settles that it is
+    // MSVC-internal.  Here the image anchors gRev (r28) and reaches gAltRev as
+    // `addi r7, r28, 0x4` at 0x826DF4FC while we anchor gAltRev and reach gRev
+    // as `subi r7, r29, 0x4`; in HamDirector::Load (98.16216, 592 B, also on
+    // that list) it is the exact MIRROR -- the image does
+    // `subi r7, r29, 0x4` and we do `mr r7, r28`.  Same macro, same two
+    // file-statics, opposite pick, nothing in either source distinguishes them.
     LOAD_SUPERCLASS(Hmx::Object)
     d >> mDontReceiveAO;
     d >> mDontCastAO;

@@ -105,6 +105,42 @@ bool gbUseLowestMip; // +0xbd2
 // w8-g 2026-09-15: measured floor for that claim, normalized ruler, full ninja:
 //   MemPushTemp 91.46% (96 B), MemPopHeap 95.44% (180 B), MemPopTemp 95.44%
 //   (180 B).  Re-confirmed unchanged after this lane's other MemMgr work.
+//
+// w9-d 2026-09-30: the SAME family is the whole residual of six more rows in
+// this TU, and the anchor the image picks is NOT the one source order would
+// predict -- which is the strongest argument yet that it is an MSVC-internal
+// choice rather than a source lever.  Each row below reads "image anchors X and
+// reaches Y as a displacement; we materialise both":
+//
+//   AddHeap           96.894  264 B  anchors gNumHeaps, gHeaps = -0x294   (2 rows)
+//   MemFree           96.894  264 B  anchors gHeaps,    gNumHeaps = +0x294
+//   MemAllocSize      95.583  240 B  anchors gHeaps,    gNumHeaps = +0x294
+//   MemTruncate       95.667  300 B  anchors gHeaps,    gNumHeaps = +0x294
+//   MemPushHeap       97.387  248 B  anchors gInitted,  gNumHeaps = +0x13
+//   MemFindHeap       96.033  368 B  anchors gInitted,  gNumHeaps = +0x13,
+//                                            gHeaps = -0x281
+//   MemPrintOverview  95.929  508 B  anchors gHeaps,    gNumHeaps = +0x294
+//
+// Note AddHeap and MemAllocSize go OPPOSITE ways on the same pair: AddHeap's
+// source touches gHeaps first (`gHeaps[heapNum].Init(c3, gNumHeaps, ...)`) and
+// the image anchors gNumHeaps, while MemAllocSize's source touches gNumHeaps
+// first (the loop bound) and the image anchors gHeaps.  So "anchor whichever
+// global the source names first" is refuted outright, and so is "anchor the one
+// whose address is actually needed".
+//
+// Two of the three displacements are ALSO unavailable in our layout: the image's
+// gNumHeaps sits at +0xbe4 where ours sits at +0xbdc, so its gHeaps->gNumHeaps
+// distance is 0x294 and ours 0x28c, and its gInitted->gNumHeaps distance is 0x13
+// where ours is 0xb.  Closing that needs the three unidentified int-sized
+// globals the image has at +0xbdc/+0xbe0/+0xbe8 (they are exactly the 12 bytes
+// by which our .bss is short: ours ends at +0xbfc, the image's at +0xc08).
+// DO NOT REDO THAT EXPERIMENT: a byte-exact reproduction of the image's 3,080 B
+// (0xc08) section with external-linkage stand-ins was already measured and moved
+// MemInit 99.133 -> 99.145 and NOTHING else.  Verified here that the tree is
+// back in the un-padded state (MemMgr.obj .bss: gNumHeaps +0xbdc,
+// gNewOperatorAlign +0xbe0, gStlAllocNameLookup +0xbe4, gMemLock +0xbe8,
+// gMemStackLock +0xbec, gUseLowestMipExceptions +0xbf0), so the refutation is
+// about a layout we no longer have and re-testing it would only reproduce it.
 static bool gInitted; // +0xbd1
 // +0xbd0. The fourth byte is NOT padding and it is not unrecoverable -- nothing
 // forms its address because nothing needs to: both of its users reach it by a

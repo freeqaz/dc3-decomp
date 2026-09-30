@@ -1666,6 +1666,17 @@ void HamDirector::BlendOutFaceOverrides(float blendTime) {
 //        and the branch polarities of the last line DO match the image)
 //        -> 92.8; MSVC then materialises the first `return true` as its own
 //        `li r3, 1` / `b` block instead of cross-jumping it.
+//   `return mPlayerFreestyle && !mFreestyleEnabled;` as the LAST statement
+//        while KEEPING the `if (!mDisablePicking)` wrapper and the freecam
+//        `return true` -- i.e. the one combination the two spellings above did
+//        not cover, since it preserves the image's branch layout exactly and
+//        only turns the trailing `if (...) return false;` into the expression
+//        whose 0/1 materialisation the `clrlwi` is supposed to come from
+//        -> 92.90196 (w9-d, 2026-09-30), 204 -> 208 B, and the row count goes
+//        the wrong way too: 3 rows becomes 9 (1 replace, 1 delete, 2 insert,
+//        5 diff_arg).  So the `clrlwi r3, r11, 24` is NOT reachable by making
+//        the final return an expression; all three source shapes that produce
+//        it cost more than the mask is worth.
 bool HamDirector::ShotsDisabled() {
     if (!mDisablePicking) {
         if (GetWorld() && GetWorld()->GetCameraManager()->HasFreeCam()) {
