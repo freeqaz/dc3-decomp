@@ -201,10 +201,28 @@ void PracticeSection::AddStep(PracticeStep step) { mSteps.push_back(step); }
 // is already an induction variable rather than a body-derived address.
 // The permutation is a whole-set rotation, i.e. an allocator tie-break upstream
 // of anything the source can say.
+// BEHAVIOURAL FIX (w9-a): `idx` indexes mSeqs by the count of steps that have
+// BOTH symbols set, not by the raw step position.  The image increments it inside
+// the non-null test, and only on the path where the start/end match FAILS:
+//   824CD1BC  lwz r9, 0x4(r11)      ; it->mStart
+//   824CD1C0  cmplw cr6, r9, r7     ; == gNullStr?
+//   824CD1C4  beq cr6, 824CD1E8     ; -> straight to ++it, SKIPPING ++idx
+//   824CD1C8  lwz r10, 0x8(r11)     ; it->mEnd
+//   824CD1D0  beq cr6, 824CD1E8     ; -> same
+//   824CD1D4  cmplw cr6, r9, r4     ; mStart == start?
+//   824CD1D8  bne cr6, 824CD1E4     ; -> ++idx
+//   824CD1DC  cmplw cr6, r10, r5    ; mEnd == end?
+//   824CD1E0  beq cr6, 824CD1FC     ; -> found, idx NOT incremented
+//   824CD1E4  addi r6, r6, 0x1      ; ++idx
+//   824CD1E8  addi r11, r11, 0x18   ; ++it
+// A step with an unset mStart or mEnd therefore does not consume an mSeqs slot.
+// The old `++it, ++idx` in the for-increment counted every step, so any section
+// holding a partially-filled step returned the WRONG DancerSequence (or a
+// spurious null once idx ran past mSeqs.size()) for every later step.
 DancerSequence *PracticeSection::SequenceForDetection(Symbol start, Symbol end) {
     int idx = 0;
     for (std::vector<PracticeStep>::iterator it = mSteps.begin(); it != mSteps.end();
-         ++it, ++idx) {
+         ++it) {
         if (!it->mStart.Null() && !it->mEnd.Null()) {
             if (it->mStart == start && it->mEnd == end) {
                 if (idx < mSeqs.size()) {
@@ -212,6 +230,7 @@ DancerSequence *PracticeSection::SequenceForDetection(Symbol start, Symbol end) 
                 } else
                     return nullptr;
             }
+            ++idx;
         }
     }
     return nullptr;
