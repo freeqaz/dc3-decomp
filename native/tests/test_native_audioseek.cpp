@@ -25,11 +25,13 @@
 
 #include "os/BufFile.h"
 #include "os/File.h"
+#include "audio/AudioDevice.h"
 #include "platform/StreamReceiver_Native.h"
 #include "synth/StandardStream.h"
 #include "synth/Synth.h"
 
 #include <cstdint>
+#include <chrono>
 #include <cstdlib>
 #include <vector>
 
@@ -150,6 +152,44 @@ TEST_F(NativeAudioSeekTest, MidSongStartDecodesTheSongFromThere) {
 
     delete mid;
     delete whole;
+}
+
+// With no audio device (headless: MILO_HEADLESS / DC3_NO_AUDIO), nothing
+// renders the receivers. StandardStream::UpdateTime already runs song time on
+// mTimer alone in that case, but the receivers' rings were never played: once
+// full (64 KB = 32768 samples, 743 ms at 44.1 kHz) ConsumeData could hand them
+// nothing, so the decode position mCurrentSamp froze one ring past the start
+// while song time ran on -- and IsPastStreamJumpPointOfNoReturn() ("decoded
+// behind played") read true for the rest of the song: practice queued every
+// loop and set none. On the image a device always plays the stream. A
+// device-less stream must play its receivers at its own clock, so the decode
+// position stays one ring AHEAD of song time, as it does with a device.
+TEST_F(NativeAudioSeekTest, WithoutADeviceTheDecodePositionKeepsAheadOfSongTime) {
+    if (AudioDevice::GetInstance().IsInitialized())
+        GTEST_SKIP() << "an audio device is open; this is the device-less path";
+    // Real receivers (a ring that fills), not the sinks.
+    StreamReceiver::sFactory = StreamReceiverNative::Create;
+
+    StandardStream *s = MakeStream(0.0f);
+    s->Play(); // pumps the header, then pre-fills
+
+    const float kRunMs = 1500.0f; // two rings' worth of 743 ms
+    auto t0 = std::chrono::steady_clock::now();
+    float elapsed = 0.0f;
+    while (elapsed < kRunMs) {
+        s->PollStream();
+        elapsed = std::chrono::duration<float, std::milli>(
+                      std::chrono::steady_clock::now() - t0)
+                      .count();
+    }
+    const float songMs = s->GetTime();
+    const float decodedMs = s->GetBufferAheadTime();
+    printf("  song time %.1f ms, decode position %.1f ms\n", songMs, decodedMs);
+    EXPECT_GT(songMs, kRunMs * 0.9f) << "song time did not run on its clock";
+    EXPECT_GT(decodedMs, songMs)
+        << "the decode position fell behind song time: nothing played the rings";
+    EXPECT_FALSE(s->IsPastStreamJumpPointOfNoReturn());
+    delete s;
 }
 
 } // namespace

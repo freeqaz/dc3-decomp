@@ -485,7 +485,40 @@ void StandardStream::UpdateTime() {
     // never-paused, never-reset wall clock that switched to "fallback" whenever
     // audio lagged it by 10x: with a real device it fired after any long pause
     // or any Resync and jumped song time forward by the whole pause.
+    //
+    // Nothing renders the receivers either, and on the image a device always
+    // plays the stream: left alone, each ring fills (64 KB, 743 ms at 44.1 kHz)
+    // and ConsumeData can hand it nothing more, so the decode position
+    // mCurrentSamp froze one ring past the start while song time ran on --
+    // IsPastStreamJumpPointOfNoReturn() then read true for the rest of the song
+    // and practice never set a loop. Play the receivers here, on that same
+    // clock: render each one, as the device's mixer would (the output is
+    // discarded), up to the samples a device would have played by mTimer
+    // (GetRawTime's inverse). That keeps the decode position one ring ahead of
+    // song time, and RenderAudio keeps its own rules: a stopped or paused
+    // receiver plays nothing, a starved one plays nothing until EndData, then
+    // silence.
     if (!AudioDevice::GetInstance().IsInitialized()) {
+        float playedMs = mTimer.Ms() - mStartMs;
+        if (playedMs > 0.0f) {
+            int dueSamples = (int)(playedMs * mSampleRate / 1000.0f);
+            float discard[2 * 512];
+            for (int i = 0; i < mChannels.size(); i++) {
+                StreamReceiverNative *rcvr =
+                    dynamic_cast<StreamReceiverNative *>(mChannels[i]);
+                if (!rcvr)
+                    continue;
+                while (true) {
+                    int played = (int)(rcvr->GetBytesPlayed() / 2);
+                    int frames = Min(dueSamples - played, 512);
+                    if (frames <= 0)
+                        break;
+                    rcvr->RenderAudio(discard, frames);
+                    if ((int)(rcvr->GetBytesPlayed() / 2) == played)
+                        break; // stopped, paused or starved: nothing played
+                }
+            }
+        }
         mLastStreamTime = mTimer.Ms();
         return;
     }
