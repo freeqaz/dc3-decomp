@@ -458,7 +458,26 @@ void VorbisReader::DoRawSeek(int byte) {
         MILO_ASSERT(byte%16 == 0, 0x3F4);
         // this is the part where the word that makes up byte,
         // gets assigned to the word that makes up mNonce
+#ifdef HX_NATIVE
+        // The first nonce word is the CTR block index, and tomcrypt's counter
+        // is LITTLE-endian bytewise (ctr_encrypt bumps ctr[0] first). The image
+        // gets little-endian bytes by storing EndianSwap(byte/16) on a
+        // big-endian CPU (82E553B4..82E553E4: srawi/addze, rotate-swap, stw);
+        // on a little-endian host that same store writes the BIG-endian bytes,
+        // so every mid-file seek re-keyed the stream to garbage, no Ogg page
+        // ever synced, and the reader ran to EOF still owing mSamplesToSkip
+        // (practice's mid-song start: a frozen decode position). Store the
+        // block index's little-endian bytes on every host.
+        {
+            unsigned int block = (unsigned int)(byte / 16);
+            mNonce[0] = (unsigned char)block;
+            mNonce[1] = (unsigned char)(block >> 8);
+            mNonce[2] = (unsigned char)(block >> 16);
+            mNonce[3] = (unsigned char)(block >> 24);
+        }
+#else
         *(int *)mNonce = EndianSwap((unsigned int)(byte / 16));
+#endif
         int ret = ctr_reinit(gCipher, mNonce, mCtrState);
         MILO_ASSERT(ret == 0, 0x3F7);
     }

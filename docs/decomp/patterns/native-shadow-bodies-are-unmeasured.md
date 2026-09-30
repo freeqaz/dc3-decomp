@@ -770,3 +770,46 @@ thread pulling the mix as a device would, so it is not the missing headless audi
 device alone; the lead is the native `VorbisReader` after a start-position seek
 (`DoSeek` / `mSamplesToSkip`), not pursued here. Until it is, `--route practice` cannot
 reach `practice_endgame_screen`, performing or not.
+
+## Stream seeks and device-less playback (branch `native-audioseek`, 2026-09-30)
+
+The practice freeze above had two causes stacked on each other, and once both were fixed
+a third, unrelated native divergence became reachable. Tests in
+`native/tests/test_native_audioseek.cpp`, each watched failing first; every PPC object
+touched hashes identically with and without the edit, and a control edit moves the hash.
+
+| symptom | cause | fix |
+|---|---|---|
+| a stream started or jumped mid-song produces no PCM; its decode position stays at the seek target (practice, YMCA: `cur` 253679 = 5752.4 ms all session; the reader `done=1 eof=1` still owing `mSamplesToSkip` 25519) | `VorbisReader::DoRawSeek` re-keys the mogg's AES-CTR stream by writing the block index `byte/16` into the nonce's first word. tomcrypt's counter is little-endian bytewise; the image stores `EndianSwap(byte/16)` on a big-endian CPU (`VorbisReader.s` 82E553B4..82E553E4) and so writes little-endian bytes, the same source on x86 writes big-endian ones. Every mid-file seek decrypted garbage, no Ogg page ever synced, the reader ran to EOF. A seek to byte 0 (every looping MoggClip) is endian-neutral, which is why nothing else noticed | write the block index's little-endian bytes (`MidSongStartDecodesTheSongFromThere`: a v0xE song from 5752.352 ms must equal the from-0 decode at that offset, 4096/4096 samples) |
+| with the seek fixed, the decode position froze one ring past the start (6490.6 ms = 5752.4 + 743), so `IsPastStreamJumpPointOfNoReturn()` read true for the rest of the song and no stream jump could fire | headless there is no audio device and nothing ever played a `StreamReceiverNative`: each 64 KB ring filled and `ConsumeData` could hand it nothing more. `UpdateTime` already ran song time on `mTimer` for that case, but the rings never moved | the device-less branch of `StandardStream::UpdateTime` renders each receiver, as the device's mixer would (output discarded), up to the samples a device would have played by `mTimer`; `RenderAudio` keeps its own stopped / paused / starved / EndData rules (`WithoutADeviceTheDecodePositionKeepsAheadOfSongTime`: 1.5 s device-less, decode 743.0 ms -> 2243.0 ms). Done through the public `RenderAudio` because `StreamReceiverNative` links from the shared engine, not from `native/src/platform` |
+| 5 of 6 party runs died entering `meta_loading_party_cleanup_screen` after Strike a Pose: a ~161,000-frame stack overflow `RndTexRenderer::DrawToTexture -> player0 -> RndShadowMap::PrepShadow (kDrawExtrude) -> player0 -> projection_trans_draw.td (mForceDraw, mChars = {player0}) -> player0 -> ...`, reached through `FileMerger::Merger::Clear(shouldDraw)` -> `BeginDrawing` -> `DrawPreClear`. The base binary never reached that state (2 of 2 clean) | `NgRnd::Offscreen()` was the header's `return false`; the image's renderer is `DxRnd`, whose `Offscreen()` (`rnddx9/Rnd.s` 8260FE78) is `GetRenderTarget(0) != BackBuffer()`. `Character::DrawShowing` skips its self-shadow offscreen, so natively a character drawn into a texture prepped one, and the extrude pass (no `mShadow` -> `DrawOpaque`) reached the forced CharTransDraw that draws the character itself | native `Offscreen()` = the current camera has a target texture, which is how `RndTexRenderer::DrawToTexture` renders to one (`OffscreenWhileACameraRendersToATexture`) |
+
+**Shown working.** Practice (`--route practice --perform`, Starships Easy): 8/8 moves
+passed, `practice_endgame_screen` ("MOVES PASSED: 8/8"), back to `song_select`, 0 crash
+lines, 0 "point of no return" notifies (the base binary: 8+ and a session that never ends).
+Strike a Pose: the base binary's two party runs each show the stall (98 and 171 one-second
+samples with no pose resolved, beats 56..168 and 80..224, while the song clock crawls
+linearly); with the fixes the round's in-song beat jumps 55.6 -> 168.9 between two
+consecutive samples and poses resolve on both sides of it -- the "stall" was the stream
+jump that never happened, as the last lane inferred. Party on the audio clock
+(`--real-time`): 2/2 runs to `main_screen`, 0 crash lines, Strike a Pose scoring
+throughout.
+
+**DC3_FAST_TIME is a second song clock, and stream jumps race it.** The stream decides its
+jumps on its own clock (it jumps when its decode position reaches the jump point; it
+refuses loop points once past the point of no return) while under `DC3_FAST_TIME` the
+game's beat is `LiveInput`'s frame-stepped counter. On the image the two are one clock.
+Before this branch no native stream ever jumped, so nothing raced; now, under
+`DC3_FAST_TIME`, 1 of 10 Strike a Pose rounds still stalled, 2 of 7 party runs stalled on
+the final standings screen (one after a showdown whose beat ran to 804), and 1 of 2 battle
+runs ran to beat 493 without a fatality. The harvester's `battle`, `practice` and `party`
+presets therefore run song time on the audio clock (`--real-time`, see `ROUTE_PRESETS`);
+`perform` has no audio jump and keeps `DC3_FAST_TIME`. The coherent fix, not attempted
+here: make `DC3_FAST_TIME` step the device-less audio clock and have `LiveInput` read
+audio time, as the image does.
+
+**Not reproduced: `Fader::SetVolume` SIGSEGV loading party event 3.** 17 party runs loaded
+event 3 (2 base, 15 with these fixes; 16 of them under `--gdb`) and none crashed there. The
+only party crash seen, the Offscreen recursion above, is a stack overflow in draw code and
+is unreachable on the base binary (Strike a Pose never jumped there), so it is not the
+crash the last lane saw.

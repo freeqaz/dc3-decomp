@@ -31,6 +31,24 @@ NgRnd::NgRnd()
 
 NgRnd::~NgRnd() {}
 
+#ifdef HX_NATIVE
+// The image's renderer is DxRnd, whose Offscreen() (rnddx9/Rnd.s 8260FE78)
+// answers GetRenderTarget(0) != BackBuffer(): true while anything renders to a
+// texture. WgpuRnd inherited this class's `return false`, so a RndTexRenderer
+// drawing a character into a texture read as on-screen. Character::DrawShowing
+// then prepped a self-shadow there (the image skips it offscreen), and the
+// extrude pass -- DrawLodOrShadow mode 4 with no mShadow falls back to
+// DrawOpaque -- reached a forced CharTransDraw holding the character itself:
+// unbounded recursion (party route, after Strike a Pose: RndTexRenderer::
+// DrawToTexture -> player0 -> projection_trans_draw.td -> player0 -> ...).
+// Rendering to a texture is selecting a camera with a target texture
+// (RndTexRenderer::DrawToTexture: SetTargetTex, Select ... SetTargetTex(null)).
+bool NgRnd::Offscreen() const {
+    RndCam *cam = RndCam::Current();
+    return cam && cam->TargetTex();
+}
+#endif
+
 void NgRnd::PreInit() {
     if (!mInited) {
         mInited = true;
