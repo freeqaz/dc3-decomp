@@ -687,7 +687,15 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
                 return streq(first.UncheckedStr(), second.mValue.var->mValue.symbol);
             }
         } else if (secondType != kDataString && secondType != kDataSymbol) {
-            warn &= secondType != kDataObject;
+            // Keep warn only for an Object: the image's mask is `subi r11,r10,4;
+            // subic r11,r11,1; subfe r11,r11,r11` = (secondType == 4) ? -1 : 0.
+            // The old `warn &= secondType != kDataObject` compiled to
+            // `subfe r10,r8,r10` (CA itself) -- the opposite truth value, which
+            // warned for every OTHER second type instead.  Spelled as an if,
+            // MSVC if-converts it to exactly the image's mask (99.2%); `warn &=
+            // secondType == kDataObject` is also correct but emits cntlzw/extrwi.
+            if (secondType != kDataObject)
+                warn = false;
         }
         if (firstType == kDataUnhandled || secondType == kDataUnhandled) {
             warn = false;
