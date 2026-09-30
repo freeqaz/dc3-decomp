@@ -523,14 +523,8 @@ void HamNavList::Poll() {
 
     // Handle select mode completion
     if (mRibbonMode == HamListRibbon::kRibbonSelect) {
-#ifdef HX_NATIVE
-        // On native, ribbon animations never settle without Kinect input.
-        // Skip the IsAnimating() check to avoid soft-lock after selection.
-        if (!TheUI->InTransition() && !TheLoadMgr.EditMode()) {
-#else
         if (!RndAnimatable::IsAnimating() && !TheUI->InTransition()
             && !TheLoadMgr.EditMode()) {
-#endif
             SetRibbonMode(HamListRibbon::kRibbonSwell);
 
             // Reset all draw state smoothers
