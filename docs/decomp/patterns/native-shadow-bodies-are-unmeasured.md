@@ -813,3 +813,56 @@ event 3 (2 base, 15 with these fixes; 16 of them under `--gdb`) and none crashed
 only party crash seen, the Offscreen recursion above, is a stack overflow in draw code and
 is unreachable on the base binary (Strike a Pose never jumped there), so it is not the
 crash the last lane saw.
+
+## Notables re-adjudicated (branch `native-notables`, 2026-09-30)
+
+The "legitimate but notable" lists above were judged from the code. This pass re-judged
+the audio and boot items (and four lower-priority ones) with **runtime evidence**: a
+temporary instrumented `dc3-native` (never committed) run over the perform, practice and
+party routes (`--perform`, the synthetic sensor), plus tests. Four of the eight were real
+divergences. Verdicts: **(a)** divergent, fixed (test watched failing first);
+**(b)** behaviour-neutral or a named adaptation, with the measurement; **(c)** undecided.
+
+| item | verdict | runtime evidence | fix / test |
+|---|---|---|---|
+| `MoggClip::LoadNumChannels` channel count always -1 | **(a)** state; not audible on shipped content | the image path (`Play(0)` + synth poll) read 2 channels for 80 of the 81 distinct moggs the three routes loaded and 1 for `houseparty_tv_tone.mogg`; native read -1 for all. All 26,177 `MoggClip::SetPan(float)` calls carried pan 0, and 0 `Sound::SetPan`/`DisablePan` calls reached a mogg, so no sample differed on these routes -- the pan logic the count gates was simply dead | `f8d0d79e7`: the native `SynthPoll()` substitution was a workaround for the test harness, which never registered `StreamReceiver::sFactory`; the harness now registers `StreamReceiverNative::Create` after `SynthPreInit` and the guard is gone. `NativeNotablesMoggTest.LoadNumChannelsReadsTheMoggsChannelCount` (-1 before) |
+| `StreamReceiver::Poll` reports finished early | **(a)** | the image counts one done-buffer per 0x4000-byte buffer its voice finishes after `EndData()`; `kFinished` (count > `mNumBuffers + 2`) lands where the play cursor reaches the boundary one whole buffer past the one holding the last byte written -- a model of the image's Poll over 4000 random lengths / buffer counts 4..12 / frame sizes agrees to within one frame -- i.e. **8192..16384 samples** (186..372 ms at 44.1 kHz) of silence after the audio. Native counted one per Poll once drained: measured tails **1153..6765 samples** on 7 of the 8 streams that finished on perform + party (one read 11293). Those streams' `MoggClip`s (`rollerrink_opener`, `houseparty_opener`, crowd intros, `dclive/intro_cheer`) were `Stop()`ped that much early. With the fix, perform: 10226 and 14586 | `6cbc1a938`: native tracks the bytes `WriteData` handed the platform ring (a native-only member) and sets the count at that point. `NativeNotablesStreamTest.ReceiverFinishesOneBufferPastTheLastBuffer` (4 cases: 3 early, 1 late before) |
+| native `VorbisReader::Poll` never resyncs `mCurrentSamp` | **(b)** | the native comment's reason was wrong (it said the image's `unk100` "stays -1"; `DecodeThreadPoll` anchors it after every `DoRawSeek`). The image's snap was computed natively at the first sample delivered after `DoSeek`'s skip: **762 anchors** on practice + party (mid-song starts, loop wraps, Strike a Pose / practice stream jumps), ~949,000 delivered `ConsumeData` calls checked, **0 mismatches** -- `mSamplesToSkip` lands exactly on the OggMap sample the decoder restarts at, so the snap has nothing to do. Not a second defect behind `DoRawSeek` (64f20a202) | comment corrected, `58ec6dcb0` (no code change) |
+| `App::App` native boot skips `sfx/audio_mixer.milo` | **(b)** | `common_bank.milo` lists `sfx/audio_mixer.milo` as a subdir, and the image's standalone load is `share=true`, so both routes end in **one** instance: an A/B with the image's preload added (env-gated, instrumented build) gave the same dir pointer as the bank's subdir, and at gameplay beat 8 all **28** audio_mixer objects (16 faders, 8 sends, 2 PropAnims, the meter monitor, `drum_track_controller`) serialized identically, fader levels / pan / client counts equal; routes identical (2967 messages each) | none |
+| `MakeBSPTree` stubbed | **(a)** latent | 0 `SetVolume(kVolumeBSP)` on perform + practice + party (shipped meshes carry their BSP on disk, rev > 0x12); reachable through the `volume` property, `CopyGeometry` and rev-0x12 loads | `07f26aae6`: compile the image body; the one STLport-only call (`_S_sort`) becomes `std::list::sort` with the same area-descending comparator (both stable merge sorts). `NativeNotablesTest.BspVolumeMeshGetsATreeThatCollides` |
+| texture Pre/PostLoad drops revision handling | **(b)** for the revision gating | every `RndTex` loaded on perform + practice, **5,212**, was rev 11 / altRev 0 / cached (read from the revision the native `PreLoad` pushes, after it ran), which is the one revision the native reader assumes; for rev 11 it reads the image's bytes in the image's order. `RndTex_Native.cpp` is compiled from the **engine** (the DC3 copy is not linked), so two further differences seen there are reported, not fixed: `mNumMips` is the saved bool, not `mBitmap.NumMips()`, and `PresyncBitmap`/`UseBottomMip`/`SyncBitmap` are not run (natively the loaded `mNumMips` is only read back by `Save`/`Copy`; the `SetBitmap` paths recount it) | none (engine lead) |
+| native ignores `SetInControllerMode(false)` | **(b)** named adaptation, observably different by design | `SetInControllerMode(false)` itself is never called; the exits come through `ShellInput::ExitControllerMode`, early-returned natively: **23,133 / 27,724 / 107,493** calls on perform / practice / party -- the image's idle timeout (`unk_0x68.SplitMs() >= unk_0x98`, whose timer native never restarts) handing the UI back to the Kinect hand cursor. Native has no hand cursor, so the faithful exit would strand the UI; the image-visible consequences it forgoes are the swallowed first pad press after a timeout and Start leaving controller mode | none |
+| `HamPlayerData::IsPlaying` always true | **(a)** | the pin (March) predates every native skeleton source. On perform (one dancer): player 1 bound (id 5), player 2 unbound (id -1) -- the image says not playing -- while native drew player 2's score HUD and scored them; on party both are bound and the answer is the same both ways. With the image body the camera director switches to the solo `P<n>_area*` shot set (target-cache notifies on perform: solo `P<n>_area*` 0 -> 245, duo `area*` 245 -> 0) | `517b01d4d`: image body. `NativeNotablesTest.UnboundPlayerIsNotPlaying` |
+
+**Instrument notes.** The first texture probe peeked the revision word in `DirLoader`
+and rewound, which `ChunkStream` refuses ("Can't seek on chunkstream", non-fatal on
+native, 2,560 per perform run); those runs still loaded and played normally, but the
+revision figures above come from a clean re-probe that reads the revision the native
+`PreLoad` pushed on the rev stack (`PopRev`/`PushRev` after it returns). It agrees with the
+first probe (10,185 textures on three routes, all rev 11). Heavy stderr logging slowed the
+instrumented runs; the harvester's per-second move samples vary run to run (58..74 on
+perform) with or without these fixes, so the pose gate, not those samples, is the scoring
+evidence.
+
+### Gate, routes and PPC neutrality (final branch)
+
+- **Native gate.** `scripts/native_test.sh`: **620 registered / 551 executed / 551 passed
+  / 0 failed / 69 skipped** (budget 69, unchanged), exit 0.
+- **Routes** (`scripts/native_assert_harvest.py --perform`, final binary): perform 28/28
+  stages, gameover, player 1 1,833,168 / player 2 0 (not playing), 0 crash lines; dance
+  battle 28/28, both players 65 `move_perfect`, the fatality scored (405,000 -> 461,000),
+  0 crash lines; practice 23/23 through `practice_endgame_screen`, 0 crash lines; party
+  107/107 stages (57 checkpoints), 0 crash lines.
+- **Pose gate.** `scripts/pose_scoring_gate.sh` PASS: selftest 1.0000, sensor 1.0000,
+  dummy 0.1374..0.7264.
+- **PPC.** Full `ninja` in the worktree on the branch and on the branch with `main`'s copy
+  of all six touched `src/` files: `tree_sha256` `3916724ace0333f1` both, **0 of 989**
+  objects differing in content (9 differ only in mtime). Control: an assert line number in
+  `MoggClip::SetFile` moved the tree to `aee55d439b6fb596`; reverting restored
+  `3916724ace0333f1`. Per-object A/Bs with their own controls are in each commit message.
+  No PCH-reached header was changed (`synth/StreamReceiver.h` is not in the PCH closure;
+  its one change is an `HX_NATIVE` member).
+
+**Not done here.** `HamGameData::IsSkeletonPresent` (native: always true) is the same
+March-era pin as `IsPlaying` and now has skeleton sources to read; it was not on this
+list and was left alone.
