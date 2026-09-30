@@ -79,7 +79,11 @@ JsonObject *JsonConverter::LoadFromString(const String &str) {
     // `if (!obj)` only caught NULL, so a malformed payload slipped an error
     // sentinel through and crashed on deref. LP64-correct is_error: the original
     // Xbox `(int)obj > 0xfffff060` is the 32-bit form of (uintptr)obj > -4000.
-    if (!obj || (unsigned long)obj > (unsigned long)-4000L) {
+    // NULL is NOT rejected: the image wraps it (JsonUtils.s 82564214 li
+    // r11,-0xfa0; 8256421C cmplw; 82564220 ble -- no NULL test), and json-c
+    // returns NULL for the payload `null`. An earlier `!obj ||` here made
+    // native fail that payload.
+    if ((uintptr_t)obj > (uintptr_t)-4000) {
 #else
     if ((int)obj > 0xfffff060) { // ???
 #endif

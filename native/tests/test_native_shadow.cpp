@@ -24,6 +24,8 @@
 #include "os/Debug.h"
 #include "math/kdTree.h"
 #include "rndobj/AmbientOcclusion.h"
+#include "net/JsonUtils.h"
+#include "utl/Str.h"
 
 #include <cstdlib>
 #include <vector>
@@ -408,6 +410,22 @@ TEST(NativeShadowUnit, AmbientOcclusionEdgeOrderIsMinMajor) {
     RndAmbientOcclusion::Edge c = { 2, 1, 0 };
     EXPECT_FALSE(a < c);
     EXPECT_FALSE(c < a) << "the key is order-independent in the pair";
+}
+
+// ---------------------------------------------------------------------------
+// JsonConverter::LoadFromString rejects only json-c's error sentinels: the
+// image tests `(unsigned)obj > 0xFFFFF060` and nothing else (JsonUtils.s:
+// 82564210 bl json_tokener_parse; 82564214 li r11,-0xfa0; 8256421C cmplw
+// cr6,r3,r11; 82564220 ble), so a NULL object -- what json-c returns for the
+// payload `null` -- is wrapped and returned. The native LP64 test added
+// `!obj`, so native returned nullptr for `null` (DingoJob::ParseResponse
+// then reports -1001 where the Xbox reports -1000).
+// ---------------------------------------------------------------------------
+TEST(NativeShadowUnit, JsonLoadFromStringWrapsANullPayload) {
+    JsonConverter conv;
+    EXPECT_NE(conv.LoadFromString(String("{\"a\": 1}")), nullptr); // control
+    EXPECT_NE(conv.LoadFromString(String("null")), nullptr)
+        << "the image wraps a NULL json object instead of failing";
 }
 
 } // namespace
