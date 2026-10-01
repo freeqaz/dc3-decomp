@@ -82,7 +82,7 @@ def build_limits(args) -> Limits:
 
 def add_common_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--target", default="native",
-                    help="native | native:http://host:port | console")
+                    help="native | native:http://host:port | console | xenia:/path/to.sock")
     ap.add_argument("--transport", default="portable",
                     choices=["portable", "native_http", "post_eval",
                              "legacy_get", "unlimited"],

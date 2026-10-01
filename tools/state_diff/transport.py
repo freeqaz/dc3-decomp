@@ -649,9 +649,36 @@ class ConsoleTarget(Target):
             pass
         return tuple(errs)
 
+    #: The console contract's per-command refusal sentinel
+    #: (dc3_eval.REFUSED_PREFIX). The engine executed the slot but the command
+    #: failed or was refused, so there is NO value -- storing the sentence as
+    #: the object's state would be exactly the "empty state" laundering the
+    #: contract forbids.
+    REFUSED_PREFIX = "!! refused"
+
     def _wrap(self, text: str) -> EvalResult:
-        # Probes always end in {symbol ...}, so the payload is a string.
+        if text.startswith(self.REFUSED_PREFIX):
+            return EvalResult(ok=False, error=text)
+        # Probes return their payload as a kDataString (probe.py _program
+        # dropped the {symbol ...} wrapper), and the console `=> ` contract
+        # prints a string node WITH its quotes (RB3Enhanced DTAEval_PrintNode;
+        # it does not escape inner quotes, so stripping exactly one outer pair
+        # is lossless). Left quoted, the first scalar key became `"rnd.x` and
+        # the last value carried a stray `"`.
+        if len(text) >= 2 and text[0] == '"' and text[-1] == '"' \
+                and "\n" not in text:
+            return EvalResult(ok=True, type="string", value=text[1:-1])
         return EvalResult(ok=True, type="symbol", value=text)
+
+    def health(self) -> bool:
+        """Console results are TEXT, so the base class's ``value == 2`` can
+        never hold here: every ConsoleTarget used to report "not responding"
+        to ``capture`` while evaluating perfectly well."""
+        try:
+            res = self.eval_dta("{+ 1 1}", timeout=5.0)
+        except TransportError:
+            return False
+        return res.ok and str(res.value).strip() == "2"
 
     def eval_dta(self, expr: str, timeout: float = 15.0) -> EvalResult:
         try:
@@ -717,6 +744,33 @@ def console_target(spec: str = "", **kwargs) -> ConsoleTarget:
     return ConsoleTarget(client, name="console", meta={"host": host, "port": port})
 
 
+def xenia_target(socket_path: str, timeout: float = 30.0, **kwargs) -> ConsoleTarget:
+    """Build a :class:`ConsoleTarget` over the ORIGINAL debug.xex under Xenia.
+
+    ``socket_path`` is the dc3-oracle fork's ``--dc3_dta_channel`` socket.
+    The client is ``dc3_eval.XeniaTransport``: the RB3Enhanced ``=> `` body
+    contract over a unix socket, evaluated on the guest main thread with the
+    game's own parser. Batches, paging and attribution refusal are therefore
+    exactly the HTTP console client's.
+    """
+    import importlib.util
+    from pathlib import Path
+
+    mod = sys.modules.get("dc3_eval")
+    if mod is None:
+        mod_path = Path(__file__).resolve().parents[1] / "console" / "dc3_eval.py"
+        spec_ = importlib.util.spec_from_file_location("dc3_eval", mod_path)
+        mod = importlib.util.module_from_spec(spec_)
+        sys.modules["dc3_eval"] = mod
+        spec_.loader.exec_module(mod)  # type: ignore[union-attr]
+    if not socket_path:
+        raise ValueError("xenia target needs a socket path: 'xenia:/path/to.sock'")
+    client = mod.XeniaTransport(socket_path, timeout=timeout, **kwargs)
+    return ConsoleTarget(client, name="xenia-orig",
+                         meta={"transport": "xenia-dta-channel",
+                               "socket": socket_path})
+
+
 class ReplayTarget(Target):
     """Replays recorded eval responses. Used by the unit tests and for
     offline re-normalization of a raw capture."""
@@ -753,6 +807,8 @@ def make_target(spec: str, **kwargs) -> Target:
 
     ``native`` or ``native:http://host:port`` -> :class:`NativeHttpTarget`
     ``console`` -> :class:`ConsoleTarget` (stub, raises)
+    ``xenia:/path/to.sock`` -> :class:`ConsoleTarget` over the original
+    debug.xex under the dc3-oracle Xenia fork (:func:`xenia_target`)
     """
     if spec == "native":
         return NativeHttpTarget(**kwargs)
@@ -760,4 +816,6 @@ def make_target(spec: str, **kwargs) -> Target:
         return NativeHttpTarget(base=spec.split(":", 1)[1], **kwargs)
     if spec == "console" or spec.startswith("console:"):
         return console_target(spec.partition(":")[2], **kwargs)
+    if spec.startswith("xenia:"):
+        return xenia_target(spec.partition(":")[2], **kwargs)
     raise ValueError(f"unknown target spec: {spec!r}")
