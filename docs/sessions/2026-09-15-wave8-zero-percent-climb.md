@@ -1022,3 +1022,52 @@ Rather than reporting 41/48, or reading 124 as a failure, they derived the missi
 7 by `comm` against the passed list, confirmed the selecting regex matched exactly
 7, and re-ran those: 7/7, `CTEST_EXIT=0`. In a log summary exit 124 reads as a
 failure and 41/48 reads as a partial pass; neither is what happened.
+
+### `native-notables` landed: `c231d7e3f`
+
+Gate on the branch tip `a6c7b1a7a`, in **my** worktree rather than the handing
+session's, running alone: **620 registered / 551 executed / 551 passed / 0 FAILED /
+69 skipped against a budget of 69**, exit 0. 620 is 616 + the 4 tests
+`test_native_notables.cpp` adds, which is the arithmetic that made the peer's
+independently-measured 551 and this session's 547 agree instead of conflict. All 11
+DtaFlow tests passed, as did the 4 new notables tests.
+
+**A second gate after merging was skipped, on a checked claim rather than an
+assumption.** The branch was rebased onto main and then
+`git diff <gated> HEAD -- src/ native/ include/ config/` was required to come back
+**empty** — it did, so every compiled byte the gate exercised is identical to what
+landed. Stated precisely because the convenient version of this was wrong: when
+first claimed the delta was docs-only, but main moved twice more during the gate and
+the real delta is 4 docs files **plus 4 Python files** under `tools/console/` and
+`tools/state_diff/` (a concurrent Xenia-oracle spike). Those are outside both
+builds — `grep -c state_diff build.ninja` = 0, likewise `native/CMakeLists.txt` —
+so the gate's coverage still holds, but "docs only" was no longer true and the
+boundary is: `tools/state_diff/tests/test_state_diff.py` is pytest, not ctest, and
+**this session's gate did not run it**.
+
+### Font3d: staged, not run, and its instrument had a defect
+
+The probe is written (`~/tmp/dc3-wells/w8/font3d_probe.sh`) with its prediction
+recorded *before* execution — **byte-identical**, because the block is
+`#ifdef HX_NATIVE` so PPC never compiled it, the `#else` statement is kept verbatim,
+there is no CodeView line table, and `grep -c __LINE__` is 0 in that TU. If that
+holds, the original "the object changed" was a measurement artifact rather than a
+phenomenon.
+
+**It was not run, for two reasons worth recording.** First, a peer session has a
+`ctest -j6` and three `ninja` runs live and the box is at load ~170; adding four
+full PPC builds would risk exactly the load-induced DtaFlow flakes this session
+complained about receiving. Second, and more usefully: **the probe's instrument was
+broken and would have produced a false pass.**
+`obj_build_metadata_patcher.normalize(data, offsets)` **returns** masked bytes, it
+does not mutate in place. The probe passed a `bytearray` and hashed *that*, so it
+would have hashed unmodified data and reported every variant as IDENTICAL —
+including the positive control, which would then have read as "vacuous" and
+obscured the cause. Caught by checking the signature with `inspect.signature`
+before the first run, not by reading the code and assuming. The script now hashes
+the return value and carries a mask self-test.
+
+The probe retains the three controls it was written with: assert the compile edge is
+wired before trusting any hash; keep builds ≥2 s apart, because `TimeDateStamp` has
+1-second granularity and an *unwired* edge therefore agrees with itself inside one
+second; and a positive control that must move the bytes or the run proves nothing.
