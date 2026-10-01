@@ -97,6 +97,16 @@ void ShellInput::Init() {
     // SkeletonIdentifier, speech) but create SkeletonChooser so player assignment
     // logic works. Without it, GetSkeletonChooser() returns null and functions like
     // GetPlayerIndex/UpdateNavLists bail out with fallback values.
+    //
+    // The two gesture filters are NOT created here, and the constructor does
+    // not initialise them either: the image's ShellInput::ShellInput stores
+    // 0xc8/0xcc/0xd0/0xdc and skips 0xd4/0xd8, because the retail Init always
+    // assigns both. Native Poll() tests them for null, so they must be nulled
+    // here -- otherwise that test reads whatever the allocator left behind.
+    // glibc hands out zeroed pages this early, which hid it; ASan fills new
+    // blocks with 0xbe and Poll() faulted on the first frame of attract_screen.
+    mHandInvokeGestureFilter = nullptr;
+    mHandsUpGestureFilter = nullptr;
     mCursorPanel = ObjectDir::Main()->Find<UIPanel>("cursor_panel");
     if (mCursorPanel && mCursorPanel->CheckIsLoaded() && mCursorPanel->LoadedDir()) {
         mCursorPanel->Enter();

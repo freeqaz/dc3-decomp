@@ -14,9 +14,14 @@ MILO_HEADLESS=1 MILO_NORENDER=1 MILO_FATAL_FAILS=0 \
   MILO_MAX_FRAMES=3000 MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
   native/build/dc3-native
 
-# ASan build (catches use-after-free, double-free, buffer overflow)
-cmake -S native -B native/build-asan -G Ninja -DENABLE_ASAN=ON -DCMAKE_BUILD_TYPE=Debug
-cmake --build native/build-asan --target dc3-native -- -j$(nproc)
+# ASan build (catches use-after-free, double-free, buffer overflow).
+# native_configure.sh finds Dawn/ncnn/clang; a bare cmake does not.
+# ulimit -d: see "Running the gameplay routes under ASan" below.
+ulimit -d unlimited
+scripts/native_configure.sh "$PWD/native/build-asan" -DENABLE_ASAN=ON \
+  -DMILO_ENGINE_ENABLE_ASAN=ON \
+  -DCMAKE_C_FLAGS=-fsanitize-recover=address -DCMAKE_CXX_FLAGS=-fsanitize-recover=address
+ninja -C native/build-asan dc3-native milo-tests
 
 # Run with ASan (suppress the benign strcpy overlap in FileGetPath)
 echo "interceptor_via_fun:FileGetPath" > /tmp/asan_suppress.txt
@@ -68,6 +73,47 @@ ASan is the most important tool for native debugging. Most native-port bugs are 
 | Error | Cause | Suppression |
 |-------|-------|-------------|
 | `strcpy-param-overlap` in `FileGetPath` | Self-copy to static buffer (`strcpy(static_path, static_path)`) | `interceptor_via_fun:FileGetPath` |
+
+### Known allocator-convention reports (not suppressible by file)
+
+An ASan suppressions file cannot name `alloc-dealloc-mismatch` (it only takes
+`interceptor_*` and `odr_violation`), so these show up in every gameplay run.
+Both are benign on this toolchain: libstdc++'s `operator new(size_t)` is
+`malloc` and `operator delete(void*)` is `free`. On the 360 both sides went
+through MemMgr, so they matched there by construction. Silence the whole class
+with `alloc_dealloc_mismatch=0` only when you are sure you are not hunting it.
+
+| Report | Where | Why it is benign |
+|--------|-------|------------------|
+| `malloc vs operator delete` in `array_list_free` / `json_object_generic_delete` (json-c) | `DingoJob::~DingoJob` -> `JsonArray` teardown, once per `MetaPerformer::SendOmgDatapoint` | json-c allocates with `JsonCalloc` (MemAlloc, `malloc` under HX_NATIVE) and frees with `::operator delete`, as the image does |
+| `operator new vs free` in `ObjectDir::ReleaseCascadeBlock` | `HamDirector::UnloadMergers` -> `~MoveDir` -> `FlushDeferredFrees` | native cascade frees every object block with `free()`; classes without `OBJ_MEM_OVERLOAD` (e.g. `MoveGraph`) came from global `operator new` |
+
+### Running the gameplay routes under ASan
+
+`scripts/native_assert_harvest.py --binary <asan dc3-native>` drives the
+perform / battle / practice / party routes against an ASan build. Two things
+are needed that a normal run is not:
+
+- **`ulimit -d unlimited`.** This box's default `RLIMIT_DATA` is 32 GB, and
+  ASan's 15 TB `MAP_NORESERVE` shadow reservation counts against it: every
+  ASan binary dies at startup with `ReserveShadowMemoryRange failed ... ulimit
+  -v or ulimit -d`. This includes `milo-tests`' POST_BUILD `gtest_discover_tests`
+  step, so even the *build* fails without it.
+- **Recover mode, to get more than one report per run.** `halt_on_error=0` is
+  ignored unless the code was compiled with `-fsanitize-recover=address`; pass
+  `-DCMAKE_C_FLAGS=-fsanitize-recover=address -DCMAKE_CXX_FLAGS=...` at
+  configure time. Pass `-DMILO_ENGINE_ENABLE_ASAN=ON` as well (`ENABLE_ASAN`'s
+  `add_compile_options` already reaches the engine subdirectory, but say so).
+
+**ASan also changes UNINITIALISED reads.** Its allocator fills every new block
+with `0xbe` (`malloc_fill_byte`, first `max_malloc_fill_size` = 4 KB), where
+glibc tends to hand a young process zeroed pages. A member the image never
+initialises -- because retail code always assigns it later, and a native arm
+skips that assignment -- reads as null under glibc and as `0xbebebebe...`
+under ASan, so the first dereference is a SIGSEGV with `si_addr = 0`
+(non-canonical address), caught by the engine's own handler rather than
+reported by ASan. `ShellInput::Init`'s gesture filters were this
+(`NativeAsanTest`). Raise `max_malloc_fill_size` to widen the net.
 
 ### ASan vs Normal Allocator Behavior
 

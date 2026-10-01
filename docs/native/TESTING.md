@@ -76,8 +76,10 @@ Tests FAIL (not skip) on crashes, with `CrashSummary()` extracting signal, asser
 ### AddressSanitizer (ASan)
 
 ```bash
-cmake -S native -B native/build-asan -G Ninja -DENABLE_ASAN=ON -DCMAKE_BUILD_TYPE=Debug
-cmake --build native/build-asan -- -j$(nproc)
+ulimit -d unlimited   # ASan's shadow reservation exceeds this box's 32 GB RLIMIT_DATA
+scripts/native_configure.sh "$PWD/native/build-asan" -DENABLE_ASAN=ON -DMILO_ENGINE_ENABLE_ASAN=ON \
+  -DCMAKE_C_FLAGS=-fsanitize-recover=address -DCMAKE_CXX_FLAGS=-fsanitize-recover=address
+ninja -C native/build-asan dc3-native milo-tests
 ```
 
 ASan catches heap corruption, use-after-free, buffer overflows. Essential for finding real bugs hidden by memory corruption cascades. See [debugging/native.md](../debugging/native.md#addresssanitizer-asan) for the full ASan guide: suppressions, allocator behavior differences, and reading ASan output.
