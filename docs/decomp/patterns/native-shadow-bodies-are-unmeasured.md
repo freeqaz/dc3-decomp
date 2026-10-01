@@ -945,3 +945,66 @@ the full-detail group.
     They fail identically with the pre-change (main-equivalent) `dc3-native` swapped in, so
     they are not this change.
 
+
+### Independent re-validation (2026-10-01)
+
+The branch was held because the engine is shared with rb3-xenon. Re-checked from the
+target listings and at runtime.
+
+**DC3 call graph, from the target objects.**
+- `DxMesh::DrawShowing` (`rnddx9/Mesh.obj`, 308 B): `lwz r26,0x148(r3)` (geom owner),
+  `bl ?CanDraw@DxMesh@@IBA_NXZ`, `beq` to the epilogue. No load of `mShowing`.
+  `CanDraw` (17 instructions) reads only `0x1a4` / `0x1ac` / `0x160` (buffers, mutable).
+- `RndDrawable::Draw` (`rndobj/Draw.obj`): `lbz r11,0x8(r3)` / `beq` (the showing gate),
+  frustum cull, then the vcall. This is the only showing gate on the path.
+- `UIListMeshElement::Draw` (`ui/UIListMesh.obj`): `SetMat`, then `lwz r11,0x18(r11)` /
+  `bctrl` (DrawShowing). No `lbz`/`stb` of `0x8` anywhere in the body.
+- So a hidden mesh is drawn by every direct `DrawShowing()` caller in the image, and the
+  callee is the right place for the native fix.
+
+**RB3-Xenon, from rb3-xenon's own target.**
+- `DxMesh::DrawShowing` is `fn_82738E38` (DxMesh vtable `lbl_82101B14`, slot 5). It is the
+  same shape: `lwz r29,0x110(r3)`, `bl fn_82737440` (CanDraw), `beq` out. No showing test.
+- `RndDrawable::Draw` is non-virtual there (`?Draw@RndDrawable@@QAAXXZ`): `lbz r11,0x8(r3)`,
+  then `lwz r11,0x14(r11)` / `bctrl`, so slot `0x14` is DrawShowing.
+- `BandPatchMesh::Render` calls slot `0x14` on the patch directly, with no showing test.
+  Right after it, retail does `if (patch->Dir()) patch->mShowing = false` (`lwz 0x20` through
+  the vbase, `stb r11(=0),0x8(r30)`). rb3-xenon's source had dropped that store; fixed on
+  rb3-xenon branch `rb3x-patchmesh-showing` (Render 90.45 -> 94.7). After that store a
+  later compose redraws a now-hidden patch, so on RB3 too the removed engine test was
+  unfaithful, not protective.
+- rb3-xenon's own walkers (`main_render.cpp`'s two `DrawShowing()` loops) test `Showing()`
+  before each call. `rb3-render` against engine `a042fb9` and against `d2a4a17` gives
+  AE 0 on both default cells (`tracksystem_meshes`, `crowd_female01`).
+
+**DC3 runtime A/B (base = `20fa58b04` + engine `a042fb9`, branch = this branch).**
+- Settled `choose_mode_screen` (frames 400/450/500): AE 0, no fuzz. Frame capture at 450:
+  515 records (497 draws, 18 skips), identical line for line. The 17 list-mesh draws
+  (`icon_1p*`, `icon_2p*`, `bloom_block`) are present in both.
+- `milo-viewer` on emilia01 and rasa05: AE 0.
+- Gameplay (perform route, Starships): an env-gated probe logged every mesh the old tests
+  would have refused. Over 12,895 drawn frames: the 14 `*_lod*` mShadow meshes in
+  mode 4 (`NgLight::RenderShadows`, into `mShadowRT`) and 8 of them, or 6 for the
+  backups, in mode 2. In mode 0 only the five `list_choose_mode` meshes, from
+  `UIListMeshElement::Draw`.
+- At the same beat and the same camera shot, gameplay frames differ by 108 and 219 raw
+  pixels (beats 44.2 and 184.9). Both differences are in an animated floor particle.
+
+**Do not A/B gameplay frames by frame number.** `pick_intro_shot`
+(`world/world_objects.dta`) seeds `camera_random_seed` with `{get_date_time}`, so two runs
+of the same binary pick different shots. Frame-number diffs read about 3x the noise floor
+only because of this. Two branch runs agreed on a shot that two base runs did not, and
+`DC3_CAM_DIAG=1` shows the shot sequences diverging from the first post-intro cut, with
+identical cut beats. Match on the telemetry beat, and compare only frames that show the
+same shot.
+
+**Native gate**, run side by side on the same box:
+
+| tree | registered | executed | passed | failed | skipped |
+|---|---:|---:|---:|---:|---:|
+| branch (dc3 + engine `d2a4a17`) | 586 | 517 | 509 | 8 | 69 |
+| base (`20fa58b04` + engine `a042fb9`) | 584 | 515 | 507 | 8 | 69 |
+
+The 8 failures are the same set in both: seven `DtaFlowTest.*` and
+`DtaFlowIdleMultiuserTest.MultiuserScreenWaitsForInput`. The two extra registered tests are
+this branch's `NativeSuspectsTest.MeshDrawShowing*`, and both pass.
