@@ -931,3 +931,94 @@ to be falsified, and corrected the moment a disconfirming fact arrived. Three of
 the six phase-4 lanes used the same discipline on themselves — one reverted its
 own 100 % win after tracing callers, one retracted a "do not re-dig" note, one
 withdrew a metrics claim after checking the source.
+
+## Wave 9 close — pushed, and a cross-session hand-back landed on a valid instrument
+
+### The push, and the gap between "gated" and "pushed"
+
+`3b19971b4..4dc1df0ac`, **158 commits**. The gate that authorised it ran on
+`64f20a202`, alone on the box: **616 registered / 547 executed / 547 passed /
+0 FAILED / 69 skipped against a budget of 69**, exit 0.
+
+Main moved **twice** between the gate finishing and the push landing, so the tree
+pushed is not the tree gated. The delta is `44e39604b` + its merge `4dc1df0ac`,
+and it is **docs only** — `docs/INDEX.md` plus a 297-line `docs/plans/XENIA_ORACLE.md`,
+no source — so the gate still covers every line of code that went out. Recorded
+because "gated, then pushed" otherwise implies one tree, and on an actively-merged
+main that is the default case rather than the exception: the count I asked
+approval for was 115, the count at gate time was 156, the count pushed was 158.
+**Report the count actually pushed, not the count approved.**
+
+### The DtaFlow regression is independently confirmed fixed
+
+All **11** DtaFlow tests pass, including the two new regression tests
+`DtaFlowTest.SongSelectPicksYmca` and `DtaFlowSongSelectScrollTest.ScrollDownEdgeMatchesImage`.
+That is the check the earlier failure deserved and did not have: the test that
+would have caught the original defect — the "ymca" flow silently playing
+`starships` because the scroll comparison carried an extra `- 1` — now exists and
+passes. Source confirms the faithful form is what is in the tree
+(`src/system/hamobj/HamNavList.cpp:1638`, `>= firstShowing + HamListRibbon::sNumListSelectable`,
+**zero** occurrences of the `- 1` form), and `scripts/dc3-input-flows/ymca.txt`
+issues a single `+30 down` derived from the list rather than a bumped count.
+
+### Taking delivery of `native-notables`: the hash equality had to be re-measured at one path
+
+The peer session handed back a 6-commit branch and reported, as evidence of PPC
+inertness, `tree_sha256` **unchanged** at `3916724ace0333f1` while
+`MakeBSPTree` "now compiles the Xbox body". I flagged that as contradictory. **It
+was not, and the error was mine**: the guard was `#ifndef HX_NATIVE`, so PPC
+already compiled the Xbox body — the branch gives it to *native*. An unchanged PPC
+hash is the expected reading.
+
+Two facts make the inertness claim load-bearing rather than lucky, because line
+numbers genuinely shift (net **+5** for the `_S_sort` lines and everything after
+them inside `MakeBSPTree`):
+
+- **The PPC build carries no debug info at all.** Zero `/Z7` or `/Zi` anywhere in
+  `build.ninja`; `Geo.obj`'s cflags are `/nologo /wd4355 /wd4164 /c /GR /O1 /Oi
+  /EHsc /TP` plus includes. No CodeView means no line table for a shift to perturb.
+- `grep -c __LINE__` is **0** in all five source files the branch touches.
+
+**`tree_sha256` is only evidence at one path.** MSVC writes the source path into
+`S_OBJNAME`, so two worktrees legitimately disagree, and the peer's
+`3916724ace0333f1` is not comparable to anything measured here. The A/B was
+therefore run in **one** worktree (`/home/free/tmp/nn-verify`), full `ninja` at the
+base and then at the tip:
+
+| | base `64f20a202` | tip `a6c7b1a7a` |
+|---|---|---|
+| `tree_sha256` | `375f971236a09d06…fe02d93` | **identical** |
+| `matched_functions` | 31,393 | 31,393 |
+| row diff | — | **UP 0, DOWN 0**, 0 missing keys either direction |
+
+All four guards exit 0 at the tip. A cross-worktree equality would have been the
+wrong instrument *even if it had agreed*.
+
+**Two independently-measured numbers reconciling is itself a check.** The peer
+reported 551 executed; this session measured 547 at the base. `test_native_notables.cpp`
+adds exactly 4, and 547 + 4 = 551 — so those figures agree rather than conflict,
+which is worth confirming before trusting either.
+
+### A narrower hand-back rule than unit ownership
+
+Blanket "my wave surveyed this unit, so hand it back" would have blocked a
+productive session across 39 units, most of which this wave only *measured and
+refuted*. The rule proposed and used instead: **hand back only if the change
+touches a function my wave actually modified.** Two files came back on that basis
+(`math/Geo.cpp`, `synth/MoggClip.cpp`); `hamobj/HamPlayerData.cpp` was explicitly
+released even though it was offered.
+
+The branch then landed **whole, all 6 commits, rather than split** — MoggClip's fix
+depends on `native/tests/test_helpers.cpp` registering `StreamReceiver::sFactory`,
+without which the old 27-test segfault returns, and cutting that seam would mean
+rewriting commits across it. Landing two released files is cheaper than rewriting
+history to honour a rule about ownership.
+
+### A timeout is not a failure, and 41 of 48 is not a result
+
+Worth recording as a peer practice to copy: their off-by-default
+`GameplayTelemetry` run hit a 2700 s timeout after 41 of 48 tests, **exit 124**.
+Rather than reporting 41/48, or reading 124 as a failure, they derived the missing
+7 by `comm` against the passed list, confirmed the selecting regex matched exactly
+7, and re-ran those: 7/7, `CTEST_EXIT=0`. In a log summary exit 124 reads as a
+failure and 41/48 reads as a partial pass; neither is what happened.
