@@ -295,3 +295,56 @@ Open question for the owner: whether the Xenia DC3 work should live on a
 dedicated long-lived xenia branch (for example `dc3-oracle`), so that RB3
 bring-up commits on a shared branch cannot silently change the oracle. The
 provenance xxh3 detects that, but it does not prevent it.
+
+---
+
+## 8. Outcome of steps 1–2 (2026-10-01)
+
+**The channel exists.** The xenia branch `dc3-oracle` (`cf4011322`,
+`cc37b22af`, worktree `/home/free/tmp/xenia-dc3-oracle`, unpushed) adds
+`--dc3_dta_channel=<unix socket>`, off by default.
+
+- It overrides `HolmesClientPollKeyboard`, which `SystemPoll` calls once per
+  frame on the guest main thread.
+- It evaluates with the game's own `DataReadString` and `DataArray::Execute`.
+- It traps a failing command back into the channel and replies
+  `=> !! refused: script error: …`.
+
+The dc3 side is merge `27b49234d`, consumed through
+`make_target("xenia:<socket>")` or `dc3_eval.py -T xenia --socket <path>`.
+Measured inside `debug.xex`: `{+ 1 2}` → `3`;
+`{size {object_list main Object FALSE}}` → `702`.
+
+**Corrections to §1**, measured by the spike (details in the xenia branch's
+`docs/dc3-oracle/BASELINE.md`):
+
+- **Error semantics are perturbed for the whole run, not just the spin.**
+  The `Debug::Fail` thread-spin patch returns with `mFailing` still set, from
+  a boot-time `BinkMovieImpl::Ready called in the wrong thread` failure. So
+  every later `MILO_FAIL` or assert, on every thread, falls through silently.
+  *State the game builds outside the channel is suspect.* The channel clears
+  the flag only for the duration of a probe.
+- **Xenia cannot catch guest C++ exceptions.** A throw reaches a stub that
+  raises `SIGTRAP`, so `MILO_TRY`/`MILO_CATCH` (and `RndConsole`) do not work.
+  This also rules out the file-transport variant of §3.1, which additionally
+  needs a keyboard device (`flags=40000002 → DEVICE_NOT_CONNECTED`) and a
+  writable game directory.
+- The listed cvars do not exist on xenia `main`; that behaviour is hardcoded
+  on, for every title. The unpause nudge is not DC3-gated. Calibration,
+  `Movie::Poll` and a dummy audio driver patch were missing from the table.
+- **Baseline reproducibility depends on load.** A null-GPU boot reached
+  `game_screen` 4 of 4 times at load ~20, and 0 of 9 at load 100–220 (4 of
+  those hung during boot, 3 with no channel attached). Vulkan failed 2 of 2.
+  One crash under load was the predicted race: the main thread faulted in
+  `ObjectDir::FindObject` while the host navigation code was calling engine
+  functions from the skeleton worker thread.
+
+**Step 3 recommendation (unchanged in spirit, sharper in scope):**
+1. Boot to `title_screen` and have the probe load the asset itself into a new
+   `ObjectDir`, then dump it with probes scoped to that dir. The navigation
+   code, beat drives and song repair cannot reach that scope.
+2. Capture on a quiet box, twice from separate boots.
+
+Separately, fix the `Debug::Fail` patch so it no longer leaves `mFailing`
+set, and take a fresh baseline after that fix, before trusting any
+game-built state.
