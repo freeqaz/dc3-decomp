@@ -1008,3 +1008,6 @@ same shot.
 The 8 failures are the same set in both: seven `DtaFlowTest.*` and
 `DtaFlowIdleMultiuserTest.MultiuserScreenWaitsForInput`. The two extra registered tests are
 this branch's `NativeSuspectsTest.MeshDrawShowing*`, and both pass.
+
+After rebasing onto `c131e63ec` (which fixed the DtaFlow route), the branch gate reads
+**623 registered / 554 executed / 554 passed / 0 failed / 69 skipped**, exit 0.
