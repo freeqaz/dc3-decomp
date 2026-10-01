@@ -27,6 +27,12 @@ Transports (`-T/--transport`):
             serialised DataArrays).  Command injection only -- the wire protocol
             carries no result.  Requires launch arguments.
 
+  xenia     The ORIGINAL debug.xex running under the dc3-oracle Xenia fork
+            (`--dc3_dta_channel=<socket>`).  Same `=> ` body contract as
+            `--api eval`; the wire is a unix socket instead of HTTP, and the
+            game evaluates on its own main thread with its own parser.  The
+            host positional (or --socket) is the socket path.
+
 Every transport exposes `eval(script) -> str` and `eval_batch(scripts) -> [str]`,
 so the differ can swap transports without caring about the wire.
 
@@ -588,6 +594,68 @@ class HttpTransport:
 
     def eval(self, script: str) -> str:
         return self.eval_batch([script])[0]
+
+
+class XeniaTransport(HttpTransport):
+    """DTA eval inside the ORIGINAL debug.xex, under the dc3-oracle Xenia fork.
+
+    The fork's `--dc3_dta_channel=<path>` serves a unix socket.  Each request
+    is evaluated on the guest MAIN thread (an override of
+    HolmesClientPollKeyboard, called once per frame from SystemPoll), with the
+    game's own DataReadString + DataArray::Execute.  The reply body is the
+    RB3Enhanced /dta/eval contract -- one `=> ` line per top-level command,
+    `=> !! refused: script error: <msg>` for a command whose MILO_FAIL the
+    channel trapped, `!! parse error` for unparseable text -- so everything
+    above the wire (split_results, paging around the output cap, the
+    one-result-per-input rule) is HttpTransport's, unchanged.
+
+    Wire, little-endian: request `u32 len | body`; response
+    `u32 status | u32 len | body`.  status 200 is a normal body; 413 too
+    large, 503 the guest has not reached its main loop yet, 504 the main thread
+    did not drain the request in time.  Non-200 raises ConsoleError exactly as
+    an HTTP status would.
+    """
+
+    STATUS_REASONS = {200: "OK", 413: "Payload Too Large",
+                      503: "Guest Not Ready", 504: "Main Thread Timeout"}
+
+    def __init__(self, socket_path: str, timeout: float = 30.0,
+                 auto_page: bool = True):
+        super().__init__("xenia", 0, "eval", timeout, auto_page=auto_page)
+        self.socket_path = socket_path
+
+    def _request(self, method: str, path: str, body: bytes = None) -> str:
+        if method != "POST" or path != "/dta/eval":
+            # Only the eval contract exists on this wire; report it the way an
+            # HTTP server without the route would.
+            raise ConsoleError(404, "Not Found", "xenia channel: %s %s"
+                               % (method, path))
+        body = body or b""
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(self.timeout)
+        try:
+            sock.connect(self.socket_path)
+            sock.sendall(struct.pack("<I", len(body)) + body)
+            status, length = struct.unpack("<II", self._recv_exact(sock, 8))
+            text = self._recv_exact(sock, length).decode("utf-8",
+                                                         errors="replace")
+        finally:
+            sock.close()
+        if status != 200:
+            raise ConsoleError(status, self.STATUS_REASONS.get(status, "?"),
+                               text.strip())
+        return text
+
+    @staticmethod
+    def _recv_exact(sock, n: int) -> bytes:
+        buf = bytearray()
+        while len(buf) < n:
+            chunk = sock.recv(n - len(buf))
+            if not chunk:
+                raise ConnectionError("xenia channel closed mid-reply "
+                                      "(%d of %d bytes)" % (len(buf), n))
+            buf += chunk
+        return bytes(buf)
 
 
 def evaluate(host, script, port=DEFAULT_PORT, timeout=10.0):
@@ -1428,7 +1496,10 @@ def build_parser():
                    help="add one command to a batch; repeatable. One round trip, "
                         "one result line per command.")
     p.add_argument("-T", "--transport", default="http",
-                   choices=("http", "file", "appchild"))
+                   choices=("http", "file", "appchild", "xenia"))
+    p.add_argument("--socket", default=os.environ.get("DC3_XENIA_SOCKET"),
+                   help="xenia transport: the --dc3_dta_channel socket path "
+                        "(default: the host positional, or $DC3_XENIA_SOCKET)")
     p.add_argument("--no-auto-page", dest="auto_page", action="store_false",
                    help="do not re-issue the tail of a batch that the console "
                         "cut short at its %d-byte output cap; mark the un-run "
@@ -1492,6 +1563,12 @@ def build_parser():
 
 
 def make_transport(args, parser):
+    if args.transport == "xenia":
+        path = args.socket or args.host
+        if not path:
+            parser.error("the xenia transport needs --socket or a socket-path "
+                         "positional")
+        return XeniaTransport(path, args.timeout, auto_page=args.auto_page)
     if args.transport == "http":
         if not args.host:
             parser.error("the http transport needs a host")
@@ -1579,6 +1656,10 @@ def main(argv=None) -> int:
                      "arguments -- quote the script" % len(args.args))
     args.host = args.args[0] if args.args else None
     args.script = args.args[1] if len(args.args) > 1 else None
+    if (args.transport == "xenia" and args.socket and args.host
+            and args.script is None):
+        # `-T xenia --socket S '{script}'`: the lone positional is the script.
+        args.script, args.host = args.host, None
 
     if args.self_test:
         return self_test()

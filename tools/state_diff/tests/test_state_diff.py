@@ -829,6 +829,91 @@ def test_sweep_scripts_are_budget_valid():
     budget.validate_script(prog, Limits.portable(), "sweep")
 
 
+# --------------------------------------------------------------------------
+# ConsoleTarget over the `=> ` contract (and the Xenia unix-socket wire)
+# --------------------------------------------------------------------------
+
+class _FakeConsoleClient:
+    """eval/eval_batch client returning canned `=> ` values."""
+
+    def __init__(self, answers):
+        self.answers = answers
+
+    def eval(self, script):
+        return self.answers[script]
+
+    def eval_batch(self, scripts):
+        return [self.answers[s] for s in scripts]
+
+
+def test_console_target_unquotes_a_string_payload():
+    """Probes return kDataString; the console contract prints it quoted.
+    Left quoted, a scalars page parsed its first key as `"rnd.x`."""
+    from state_diff.transport import ConsoleTarget
+    t = ConsoleTarget(_FakeConsoleClient({"p": '"a=1;b=2;"'}))
+    r = t.eval_dta("p")
+    assert r.ok and r.type == "string" and r.value == "a=1;b=2;", r
+
+
+def test_console_target_refusal_is_a_failed_eval_not_a_value():
+    from state_diff.transport import ConsoleTarget
+    msg = "!! refused: script error: x not function or object"
+    t = ConsoleTarget(_FakeConsoleClient({"p": msg, "q": "3"}))
+    r, q = t.eval_batch(["p", "q"])
+    assert not r.ok and r.error == msg and r.value is None, r
+    assert q.ok and q.value == "3", q
+
+
+def test_console_target_health_passes_on_text_two():
+    """Console values are text: the base ``value == 2`` check could never
+    pass, so `capture` called every console target "not responding"."""
+    from state_diff.transport import ConsoleTarget
+    assert ConsoleTarget(_FakeConsoleClient({"{+ 1 1}": "2"})).health()
+    assert not ConsoleTarget(_FakeConsoleClient({"{+ 1 1}": "3"})).health()
+
+
+def test_xenia_transport_round_trip_over_a_unix_socket():
+    """Framing (u32 len | body -> u32 status | u32 len | body), the `=> `
+    split, and non-200 statuses raising ConsoleError."""
+    import os, socket, struct, tempfile, threading
+    from state_diff.transport import xenia_target
+
+    replies = [(200, "=> 3\n=> !! refused: script error: nope\n"),
+               (200, '=> "x=1;"\n'),
+               (504, "guest main thread did not drain the request in time")]
+    seen = []
+    path = os.path.join(tempfile.mkdtemp(), "x.sock")
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(path)
+    srv.listen(4)
+
+    def serve():
+        for status, body in replies:
+            c, _ = srv.accept()
+            n = struct.unpack("<I", c.recv(4))[0]
+            buf = b""
+            while len(buf) < n:
+                buf += c.recv(n - len(buf))
+            seen.append(buf.decode())
+            b = body.encode()
+            c.sendall(struct.pack("<II", status, len(b)) + b)
+            c.close()
+
+    th = threading.Thread(target=serve, daemon=True)
+    th.start()
+    t = xenia_target(path, timeout=5.0)
+    a, b = t.eval_batch(["{+ 1 2}", "{nope}"])
+    assert a.ok and a.value == "3", a
+    assert not b.ok and "nope" in b.error, b
+    s = t.eval_dta("{probe}")
+    assert s.ok and s.type == "string" and s.value == "x=1;", s
+    timed_out = t.eval_dta("{+ 1 1}")
+    assert not timed_out.ok and "504" in timed_out.error, timed_out
+    th.join(5)
+    assert seen == ["{+ 1 2}\n{nope}", "{probe}", "{+ 1 1}"], seen
+    srv.close()
+
+
 def _run_all():
     fns = [(n, f) for n, f in sorted(globals().items())
            if n.startswith("test_") and callable(f)]
