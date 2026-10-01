@@ -151,3 +151,51 @@ Put a cause note wherever it reads best. The only file in the tree where
 placement matters is `src/system/synth_xbox/SynthSample.cpp`, whose note is
 already correctly parked at end-of-file. If you add a `__LINE__` call site to a
 `.cpp`, say so at the top of that file.
+
+## Why, not just whether: the PPC build records no line numbers at all
+
+Everything above establishes inertness by **measurement** (1,188 files, one
+comment line each, exactly 1 function moved). The mechanism is worth stating too,
+because it is what lets you predict the answer for a new edit instead of running a
+whole-binary probe again.
+
+**There is no debug information in these objects.** `grep -cE '/Z[7iI]\b'
+build.ninja` returns **0** — no `/Z7`, no `/Zi`, nowhere. A representative compile
+line, `src/system/math/Geo.obj`:
+
+```
+/nologo /wd4355 /wd4164 /c /GR /O1 /Oi /EHsc /TP      (plus /I include paths)
+```
+
+No CodeView means **no line table**, so a shifted line number has nowhere in the
+object to be recorded. That is the structural reason the empirical result comes out
+the way it does, and it covers the whole class at once: inserting, deleting or
+reflowing lines; moving a function within a file; wrapping or unwrapping a
+preprocessor guard whose *token stream* is unchanged on the side being compiled.
+
+`run_diff_inspect(mode="stack-layout")` can still show base-side variable names
+because it performs **its own `/Z7` recompile** for that purpose. That is an extra
+pass over the tree, not a property of the objects the report measures — do not read
+its output as evidence that the measured objects carry line info.
+
+**What this does and does not license.** It licenses "a pure line shift cannot move
+a score or an object byte". It does **not** license "comments are free" in the TUs
+listed above, where `__LINE__` is passed as an *argument* and becomes an immediate
+in the instruction stream — that path does not involve the line table at all, which
+is exactly why it survives in a build with no debug info. The two mechanisms are
+independent, and only one of them is switched off by the absence of `/Z7`.
+
+### Worked case: a guard deletion that reads like it should change bytes
+
+`native-notables` (2026-10-01) deleted an outer `#ifndef HX_NATIVE` around
+`MakeBSPTree` in `src/system/math/Geo.cpp` and added an inner `#ifdef HX_NATIVE`
+around the sort only, shifting the `stlpmtx_std::_S_sort` line and everything after
+it by **+5**. Predicted inert on the above reasoning; measured inert, as a
+**same-path** A/B (one worktree, full `ninja` at each end): row diff **UP 0, DOWN 0**,
+`matched_functions` 31,393 both ends, and `tree_sha256` byte-identical at
+`375f971236a09d06…`.
+
+⚠ Same-path is not a detail. MSVC writes the source path into `S_OBJNAME`, so the
+same commit built in two different worktrees produces two different
+`tree_sha256` values. A cross-worktree hash comparison is the wrong instrument for
+this question **even when it happens to agree**.
