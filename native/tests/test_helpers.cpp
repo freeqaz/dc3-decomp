@@ -54,6 +54,8 @@
 #include "synth/ThreeDSound.h"
 #include "synth/AudioDucker.h"
 #include "synth/Synth.h"
+#include "synth/StreamReceiver.h"
+#include "platform/StreamReceiver_Native.h"
 #include "utl/Symbol.h"
 #include "utl/MakeString.h"
 
@@ -152,6 +154,11 @@ void EnsureEngineInit() {
 
     // Synth subsystem — SynthPreInit creates TheSynth singleton (needed by Sound ctor)
     SynthPreInit();
+    // NativeSynth::Init() registers the receiver factory (as the image's
+    // StreamReceiver360::Init does); the harness skips Init() because it also
+    // opens the audio device, so register the factory here: MoggClip's
+    // PostLoad starts a stream to count its channels.
+    StreamReceiver::sFactory = StreamReceiverNative::Create;
     SynthSample::Disable();
     SynthSample::Init();
     REGISTER_OBJ_FACTORY(Sound)

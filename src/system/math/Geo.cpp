@@ -1153,7 +1153,6 @@ void BSPFace::Update() {
     }
 }
 
-#ifndef HX_NATIVE
 // DIAGNOSIS (90.9 canonical, was 90.2).
 //
 // The anchor half of this note is SOLVED and the conclusion it drew is
@@ -1225,8 +1224,15 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
     // NB: default-initialised, NOT a value-initialised temporary. The target
     // passes the empty comparator without first storing a zero byte to its
     // stack slot; `less<BSPFace>()` emits that `stb`.
+#ifdef HX_NATIVE
+    // Native: host std::list. STLport's _S_sort (the specialisation above,
+    // compiled only for the 360) and std::list::sort are both stable merge
+    // sorts, so the same area-descending comparator yields the same order.
+    faces.sort([](const BSPFace &a, const BSPFace &b) { return a.area > b.area; });
+#else
     stlpmtx_std::less<BSPFace> cmp;
     stlpmtx_std::_S_sort<BSPFace, stlpmtx_std::StlNodeAlloc<BSPFace>, stlpmtx_std::less<BSPFace>>(faces, cmp);
+#endif
 
     // size(), not an open-coded count: list::size() is distance(begin(), end()),
     // whose by-const-ref `__first` parameter homes the begin() temporary at
@@ -1370,9 +1376,6 @@ bool MakeBSPTree(BSPNode *&node, std::list<BSPFace> &faces, int depth) {
         return false;
     return true;
 }
-#else
-bool MakeBSPTree(BSPNode *&, std::list<BSPFace> &, int) { return false; }
-#endif
 
 bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *node) {
     bool front = false;
