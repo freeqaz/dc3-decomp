@@ -7,6 +7,7 @@
 #include "platform/Rnd_Wgpu.h"
 #include "platform/BoneSetup.h"
 #include "platform/MaterialSetup.h"
+#include "platform/MeshDrawShowing.h"
 #include "platform/MeshFilter.h"
 #include "platform/TransformUtils.h"
 #include "platform/TexGpu.h"
@@ -120,35 +121,46 @@ static void RecordDrawCall(
     }
 }
 
+const char* RndMeshDrawShowingSkip(RndMesh* mesh) {
+    // No Showing() test, deliberately. The image's override is
+    // DxMesh::DrawShowing (826229B0; 100% matched in dc3-decomp's
+    // src/system/rnddx9/Mesh.cpp), and its only refusal is `!geom->CanDraw()`.
+    // Showing() is gated one level up, in RndDrawable::Draw(). Everything that
+    // calls DrawShowing() DIRECTLY draws the mesh whatever its flag says --
+    // UIListMeshElement::Draw on a list's hidden template mesh (the case that
+    // made dc3 carry a SetShowing(true)/restore workaround), RndText, RndLine,
+    // RndRibbon, RndMultiMeshProxy, CharFeedback. A native-only test here
+    // dropped every hidden *named* mesh on those paths.
+    //
+    // Tools that walk an ObjectDir and call DrawShowing() on every mesh (the
+    // viewers, render-test, rb3-xenon's main_render) are bypassing Draw(), so
+    // they must apply the showing gate themselves -- and do.
+
+    // Content filters are CONSUMER policy, not engine semantics, and the engine
+    // already owns a seam for them: ShouldSkipMesh (platform/MeshFilter.h), which
+    // every consumer defines for itself. Two game-specific name tests used to be
+    // hardcoded here instead -- a `strstr(Name(), "_lod")` LOD skip and a
+    // `grid_80by60` Kinect skip. Both are DC3 assumptions, and the LOD one is
+    // wrong for RB3: its crowd characters are authored *as* their LOD-2 asset
+    // (char/crowd/gen/crowd_female01 ships one body mesh,
+    // female_crowd_body01_lod02.mesh), so the blanket test deleted the whole
+    // character. They now live in DC3's MeshFilter.cpp, where the consumer that
+    // wants them can keep them and the consumers that do not are not taxed.
+    //
+    // DrawMeshImmediate calls ShouldSkipMesh again; it is a pure name/material
+    // predicate, so the second call is free. Testing here as well keeps the skip
+    // ahead of IncrementMeshDrawCalls, so the draw-call counter is unchanged.
+    if (ShouldSkipMesh(mesh->Name(), mesh->Mat())) return "filtered by consumer";
+
+    if (!mesh->Mat()) return "no material";
+    return nullptr;
+}
+
 void RndMesh::DrawShowing() {
     if (!gWgpuRnd || !gWgpuRnd->IsInPass()) return;
-    bool capturing = FrameCapture::Get().IsCapturing();
 
-    // Text meshes (created by RndText::FontMap) have empty names and may not have
-    // their Showing flag set since they're internal meshes drawn by RndText::DrawMesh.
-    if (!Showing() && Name()[0]) {
-        if (capturing) FrameCapture::Get().AddSkip(Name(), "not showing");
-        return;
-    }
-
-    // Skip LOD meshes (drawn by Character::DrawLod in the full engine,
-    // but we iterate all meshes directly in the viewer)
-    if (strstr(Name(), "_lod")) {
-        if (capturing) FrameCapture::Get().AddSkip(Name(), "LOD mesh");
-        return;
-    }
-
-    // Skip Kinect-specific meshes that have no data on native
-    // grid_80by60_cube = Kinect depth sensor visualization (80x60 resolution)
-    if (strstr(Name(), "grid_80by60")) {
-        if (capturing) FrameCapture::Get().AddSkip(Name(), "Kinect grid");
-        return;
-    }
-
-    // Get material
-    RndMat* mat = Mat();
-    if (!mat) {
-        if (capturing) FrameCapture::Get().AddSkip(Name(), "no material");
+    if (const char* skip = RndMeshDrawShowingSkip(this)) {
+        if (FrameCapture::Get().IsCapturing()) FrameCapture::Get().AddSkip(Name(), skip);
         return;
     }
 

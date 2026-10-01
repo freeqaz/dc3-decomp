@@ -253,8 +253,8 @@ idx	region	function	class	verdict	note
 251	src/system/ui/UIListDir.cpp:21-38		suspect:early-return	debug-optin	env/debug-gated; neutral by default (244: DC3_FAST_BOOT boot advance -- see leads)
 252	src/system/ui/UIListDir.cpp:417-419	UIListDir::BuildDrawState	suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
 253	src/system/ui/UIListDir.cpp:519-521	UIListDir::BuildDrawState	suspect:extra-call	plumbing	platform/API/ring/LP64/compat/declaration/test seam
-254	src/system/ui/UIListMesh.cpp:158-164	UIListMeshElement::Draw	suspect:forced-state	renderer-workaround	undoes native RndMesh::DrawShowing skipping hidden named meshes (image DxMesh::DrawShowing has no Showing test) -- open lead
-255	src/system/ui/UIListMesh.cpp:173-177	UIListMeshElement::Draw	suspect:forced-state	renderer-workaround	undoes native RndMesh::DrawShowing skipping hidden named meshes (image DxMesh::DrawShowing has no Showing test) -- open lead
+254	src/system/ui/UIListMesh.cpp:158-164	UIListMeshElement::Draw	suspect:forced-state	FIXED	removed (branch native-meshdraw): engine RndMesh::DrawShowing no longer tests Showing, matching DxMesh::DrawShowing 826229B0; choose_mode/song_select screenshots pixel-identical before/after
+255	src/system/ui/UIListMesh.cpp:173-177	UIListMeshElement::Draw	suspect:forced-state	FIXED	removed (branch native-meshdraw): engine RndMesh::DrawShowing no longer tests Showing, matching DxMesh::DrawShowing 826229B0; choose_mode/song_select screenshots pixel-identical before/after
 256	src/system/ui/UIListSlot.cpp:118-120	UIListSlot::Draw	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
 257	src/system/ui/UIListSlot.cpp:175-208	UIListSlot::Draw	suspect:extra-call	inert-measured	probe fired 0 times over perform + dance-battle routes
 258	src/system/ui/UIListSlot.cpp:228-232	UIListSlot::Fill	suspect:early-return	inert-measured	probe fired 0 times over perform + dance-battle routes

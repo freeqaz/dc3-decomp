@@ -553,15 +553,8 @@ Its fallback rested on the same premise as the `ObjectDir::FindObject` fallback 
 
 ### Open leads (what would decide each)
 
-- **Native `RndMesh::DrawShowing` (`native/src/platform/Mesh_Wgpu.cpp`) drops every hidden
-  *named* mesh, and every `*_lod*` mesh.**
-  - The image's `DxMesh::DrawShowing` (`826229B0`) tests only `CanDraw()`. `Draw()`, not
-    `DrawShowing()`, is what gates on showing.
-  - `UIListMeshElement::Draw`'s native show/restore undoes the skip for list meshes. The
-    probe counted between 400 and 599 forced draws per route, every one in
-    `list_choose_mode.milo`.
-  - **To decide:** move the viewer's direct mesh iteration onto `Draw()`, then remove both
-    skips. Also check whether `Character::DrawLod` ever reaches a `_lod` mesh natively.
+- ~~**Native `RndMesh::DrawShowing` drops every hidden *named* mesh, and every `*_lod*`
+  mesh.**~~ **FIXED on `native-meshdraw`**; see "Mesh draw pass" below.
 - **`UIManager::Poll` boot advance under `DC3_FAST_BOOT`.** Every harvest route sets
   `DC3_FAST_BOOT`.
   - It still force-advances `attract` / `autosave_warning` / `wait_main_after_saveload`, and
@@ -866,3 +859,155 @@ evidence.
 **Not done here.** `HamGameData::IsSkeletonPresent` (native: always true) is the same
 March-era pin as `IsPlaying` and now has skeleton sources to read; it was not on this
 list and was left alone.
+
+## Mesh draw pass (branch `native-meshdraw`, 2026-09-30)
+
+The open lead above, closed. Two native refusals sat in front of every mesh draw, and
+neither is in the image.
+
+**The image.** `DxMesh::DrawShowing` (`826229B0`, 100% matched, 77/77 instructions) refuses
+only `!geom->CanDraw()` (no GPU buffers and not mutable). It tests neither `Showing()` nor
+the name.
+- **Showing** is gated one level up, in `RndDrawable::Draw()`. Direct `DrawShowing()`
+  callers draw regardless: `UIListMeshElement::Draw` on the list's hidden template mesh,
+  `RndText`, `RndLine`, `RndRibbon`, `RndMultiMeshProxy`, `CharFeedback`.
+- **LOD** is chosen by `Character::DrawShowing` from `mLods` (screen size with hysteresis,
+  or `mForceLod`, which `HamCamShot` and `WorldCrowd` set). `DrawLodOrShadow` draws the
+  chosen group. `SyncObjects` has already removed every LOD drawable from `mDraws`.
+  Its shadow branch (character drawMode 4, used for Rnd extrude / shadow-colour /
+  occlusion passes) draws `mShadow`. On DC3's dancers `mShadow` holds the `*_lod` meshes.
+
+**Where native was.** The live code is the ENGINE's `src/platform/Mesh_Wgpu.cpp`.
+`native/src/platform/Mesh_Wgpu.cpp` compiles only into `dc3-web`, and it still hardcoded
+the engine's pre-`138e160` name tests.
+- The engine refused `!Showing() && Name()[0]`. `UIListMeshElement::Draw` papered over
+  that with a `SetShowing(true)` / restore.
+- dc3's `ShouldSkipMesh` refused any name containing `_lod` (`#ifndef MILO_VIEWER`).
+- `git log -S` traces the name test to March 2026, commented *"drawn by Character::DrawLod
+  in the full engine, but we iterate all meshes directly in the viewer"*. It dates from
+  when meshes were drawn by walking an ObjectDir. `fc40baecb` moved the viewer onto
+  `Character::mLods` and left the name test in place for dc3-native, "without this the
+  LOD copies double-draw". That claim was never measured.
+
+**Measured.** A probe build logged every refusal, with its backtrace. It also checked every
+mesh submitted inside `Character::DrawLodOrShadow` against that Character's `mLods`. Full
+perform route, 24/24 stages:
+
+| run | not-showing refusals | `_lod` refusals | non-chosen-LOD draws |
+|---|---:|---:|---:|
+| base behaviour | **0** on any path the UIListMesh workaround was not already undoing | **14** meshes (4 dancers) | -- |
+| both tests lifted | -- | -- | **14**, every one from `mShadow.Draw()` in `DrawLodOrShadow`'s shadow branch |
+
+The 14 are `rasa05_lod*`, `lima05_lod*`, `dci01_bd03_lod*` and `dci01_bd04_lod*`. A
+second probe keyed each draw by `TheRnd.DrawMode()`. They are drawn only in two passes,
+each of which renders into its own target, exactly as the image does:
+- mode 2 (`kDrawExtrude`), from `RndShadowMap::PrepShadow`;
+- mode 4 (`kDrawOcclusion`), from the `Lit_NG` spotlight shadow.
+
+None is drawn in mode 0, the main pass, so nothing was double-drawn. The name test was also wrong in its
+own terms: `milo-viewer -v` shows emilia01's `emilia_head_lod1.1.mesh` in LOD group **0**,
+the full-detail group.
+
+**Fix.**
+- Engine `d2a4a17` (branch `native-meshdraw`, on `cef251e`, which splits the decision
+  into a testable `RndMeshDrawShowingSkip`) drops the `Showing()` test.
+- dc3 drops the `_lod` name test and removes the UIListMesh workaround. `milo-viewer`
+  and `render-test` walk ObjectDirs, bypassing `Draw()`, so they now apply the showing
+  gate themselves. `render-test` also keeps the name heuristic as a property of its own
+  traversal.
+- `dc3-web`'s copy is synced to the engine file.
+- The native `ShadowPass` walks meshes itself with its own `Showing()` / `_lod` filter.
+  It is untouched: it is a native-invented shadow, not a draw-list path.
+
+**Verification.**
+- `choose_mode_screen` and `song_select_screen` are **pixel-identical** before and after
+  (ImageMagick AE 0 at 3% fuzz). The list meshes draw without the workaround.
+- Gameplay: the main-pass mesh set is unchanged. The 14 LOD meshes now fill the
+  shadow/occlusion targets, as in the image, and nothing else is newly drawn. The probe
+  found only the five `list_choose_mode` template meshes hidden-but-drawn, all via
+  `UIListMeshElement::Draw`.
+- Frames sampled every 10 s over the whole song show no doubled bodies, z-fighting,
+  missing props or LOD popping. No visible gameplay change is expected, or seen.
+- Post-fix perform route (`--mode-downs 0`): 24/24 stages, 0 crash lines, **101 distinct
+  / 408 total** messages. That is identical to the pre-fix run.
+- `NativeSuspectsTest.MeshDrawShowingDraws{AHiddenNamedMesh,LodNamedMeshes}` were watched
+  failing against `cef251e` ("not showing", "filtered by consumer" x3), with passing
+  controls (no-material refusal, `grid_80by60`).
+- The PPC `UIListMesh.obj` hash is unchanged.
+- `milo-viewer` renders emilia01 pixel-identically to main's viewer (AE 0). The viewer now
+  applies the showing gate itself.
+- Native gate: 586 registered, 517 executed, 508 passed, 9 failed, 69 skipped (budget 69).
+  - One failure was `RndCamProjectionTest.UIListMeshDrawTemporarilyShowsHiddenTemplateMesh`,
+    which pinned the workaround. It was re-adjudicated against the 100%-matched
+    `UIListMeshElement::Draw` (`827C2888`) and rewritten as
+    `...DrawsHiddenTemplateMeshAsShipped`.
+  - The other 8 were `DtaFlow*` tests, stuck on `song_select_screen` at the 5000-frame cap.
+    They fail identically with the pre-change (main-equivalent) `dc3-native` swapped in, so
+    they are not this change.
+
+
+### Independent re-validation (2026-10-01)
+
+The branch was held because the engine is shared with rb3-xenon. Re-checked from the
+target listings and at runtime.
+
+**DC3 call graph, from the target objects.**
+- `DxMesh::DrawShowing` (`rnddx9/Mesh.obj`, 308 B): `lwz r26,0x148(r3)` (geom owner),
+  `bl ?CanDraw@DxMesh@@IBA_NXZ`, `beq` to the epilogue. No load of `mShowing`.
+  `CanDraw` (17 instructions) reads only `0x1a4` / `0x1ac` / `0x160` (buffers, mutable).
+- `RndDrawable::Draw` (`rndobj/Draw.obj`): `lbz r11,0x8(r3)` / `beq` (the showing gate),
+  frustum cull, then the vcall. This is the only showing gate on the path.
+- `UIListMeshElement::Draw` (`ui/UIListMesh.obj`): `SetMat`, then `lwz r11,0x18(r11)` /
+  `bctrl` (DrawShowing). No `lbz`/`stb` of `0x8` anywhere in the body.
+- So a hidden mesh is drawn by every direct `DrawShowing()` caller in the image, and the
+  callee is the right place for the native fix.
+
+**RB3-Xenon, from rb3-xenon's own target.**
+- `DxMesh::DrawShowing` is `fn_82738E38` (DxMesh vtable `lbl_82101B14`, slot 5). It is the
+  same shape: `lwz r29,0x110(r3)`, `bl fn_82737440` (CanDraw), `beq` out. No showing test.
+- `RndDrawable::Draw` is non-virtual there (`?Draw@RndDrawable@@QAAXXZ`): `lbz r11,0x8(r3)`,
+  then `lwz r11,0x14(r11)` / `bctrl`, so slot `0x14` is DrawShowing.
+- `BandPatchMesh::Render` calls slot `0x14` on the patch directly, with no showing test.
+  Right after it, retail does `if (patch->Dir()) patch->mShowing = false` (`lwz 0x20` through
+  the vbase, `stb r11(=0),0x8(r30)`). rb3-xenon's source had dropped that store; fixed on
+  rb3-xenon branch `rb3x-patchmesh-showing` (Render 90.45 -> 94.7). After that store a
+  later compose redraws a now-hidden patch, so on RB3 too the removed engine test was
+  unfaithful, not protective.
+- rb3-xenon's own walkers (`main_render.cpp`'s two `DrawShowing()` loops) test `Showing()`
+  before each call. `rb3-render` against engine `a042fb9` and against `d2a4a17` gives
+  AE 0 on both default cells (`tracksystem_meshes`, `crowd_female01`).
+
+**DC3 runtime A/B (base = `20fa58b04` + engine `a042fb9`, branch = this branch).**
+- Settled `choose_mode_screen` (frames 400/450/500): AE 0, no fuzz. Frame capture at 450:
+  515 records (497 draws, 18 skips), identical line for line. The 17 list-mesh draws
+  (`icon_1p*`, `icon_2p*`, `bloom_block`) are present in both.
+- `milo-viewer` on emilia01 and rasa05: AE 0.
+- Gameplay (perform route, Starships): an env-gated probe logged every mesh the old tests
+  would have refused. Over 12,895 drawn frames: the 14 `*_lod*` mShadow meshes in
+  mode 4 (`NgLight::RenderShadows`, into `mShadowRT`) and 8 of them, or 6 for the
+  backups, in mode 2. In mode 0 only the five `list_choose_mode` meshes, from
+  `UIListMeshElement::Draw`.
+- At the same beat and the same camera shot, gameplay frames differ by 108 and 219 raw
+  pixels (beats 44.2 and 184.9). Both differences are in an animated floor particle.
+
+**Do not A/B gameplay frames by frame number.** `pick_intro_shot`
+(`world/world_objects.dta`) seeds `camera_random_seed` with `{get_date_time}`, so two runs
+of the same binary pick different shots. Frame-number diffs read about 3x the noise floor
+only because of this. Two branch runs agreed on a shot that two base runs did not, and
+`DC3_CAM_DIAG=1` shows the shot sequences diverging from the first post-intro cut, with
+identical cut beats. Match on the telemetry beat, and compare only frames that show the
+same shot.
+
+**Native gate**, run side by side on the same box:
+
+| tree | registered | executed | passed | failed | skipped |
+|---|---:|---:|---:|---:|---:|
+| branch (dc3 + engine `d2a4a17`) | 586 | 517 | 509 | 8 | 69 |
+| base (`20fa58b04` + engine `a042fb9`) | 584 | 515 | 507 | 8 | 69 |
+
+The 8 failures are the same set in both: seven `DtaFlowTest.*` and
+`DtaFlowIdleMultiuserTest.MultiuserScreenWaitsForInput`. The two extra registered tests are
+this branch's `NativeSuspectsTest.MeshDrawShowing*`, and both pass.
+
+After rebasing onto `c131e63ec` (which fixed the DtaFlow route), the branch gate reads
+**623 registered / 554 executed / 554 passed / 0 failed / 69 skipped**, exit 0.

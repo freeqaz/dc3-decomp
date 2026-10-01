@@ -13,19 +13,21 @@ bool ShouldSkipMesh(const char* name, RndMat* mat) {
     // Kinect depth-sensor visualisation (80x60 sensor grid) — no data on native.
     if (strstr(name, "grid_80by60")) return true;
 
-#ifndef MILO_VIEWER
-    // Lower-detail character geometry. In the full engine Character::DrawLod
-    // picks exactly one LOD; dc3-native reaches meshes by other routes too, so
-    // without this the LOD copies double-draw over the full-detail body.
-    //
-    // milo-viewer deliberately does NOT use this: it resolves LODs from the
-    // authoritative Character::mLods groups in ViewerScene::ResolveMeshVisibility
-    // and clears Showing() on the demoted ones. The name test cannot do that job
-    // — DC3's own emilia01 names its LOD-1 meshes `emilia01_lod1*` while the
-    // full-detail ones are `emilia01_outfit*`, and RB3's crowd body is a lone
-    // `*_lod02` mesh sitting in LOD group 0.
-    if (strstr(name, "_lod")) return true;
-#endif
+    // No `_lod` name test. dc3-native used to drop every mesh whose name holds
+    // "_lod" (a leftover of the milo-viewer era, when meshes were drawn by
+    // walking the ObjectDir rather than the draw lists). The image never looks
+    // at the name: DxMesh::DrawShowing (826229B0) refuses only !CanDraw(), and
+    // Character decides which LOD group to draw (Character::DrawShowing picks
+    // the LOD, DrawLodOrShadow draws that mLods group). Measured over the full
+    // perform route with the name test lifted and every draw checked against
+    // the drawing Character's mLods (branch native-meshdraw, 2026-09-30): the
+    // only `_lod` meshes that reach DrawShowing are the 14 in the four dancers'
+    // mShadow lists, drawn by DrawLodOrShadow's shadow branch (drawMode 4, the
+    // extrude/occlusion passes RndShadowMap::PrepShadow and the spotlight
+    // shadows render into their own targets) -- exactly what the image draws
+    // there. No mesh of a non-chosen LOD group was drawn by any other route.
+    // The name was also wrong on its own terms: emilia01's
+    // emilia_head_lod1.1.mesh is in LOD group 0, the full-detail group.
 
     // Skip Kinect-specific UI elements that render incorrectly without
     // the Xbox gesture/speech systems. On Xbox, controller_mode.flow and
