@@ -51,25 +51,14 @@ BEGIN_LOADS(FlowCommand)
     LOAD_REVS(bs)
     ASSERT_REVS(3, 0)
 
-    // MEASURED, 2026-09-14 (lane w7-aa).  The residual 6 rows of this function
-    // are these two lists sitting in each other's frame slot: the image has
-    // list<Symbol> at r31+0x70 and list<DataNode> at r31+0x80 (read the two
-    // insert() call sites at 0x8241D9DC / 0x8241DA08), we have them the other
-    // way round.  Swapping THESE TWO DECLARATIONS does not move the slots --
-    // it flips only the construction/destruction ORDER, taking the ctor block
-    // (idx 86-100) and the dtor block (408/410) with it: 6 rows -> 20 rows,
-    // 99.96619 -> 99.90.  So MSVC is not assigning these slots by declaration
-    // order here, and the lever is something else.  Do not re-try the swap.
-    // w8-l (2026-09-15): re-measured at 99.966190 normalized, still 35/36 and
-    // still the only function keeping this unit from 100%.  Confirmed the
-    // w7-aa reading with the stack-layout diff: frame sizes are IDENTICAL
-    // (0x110 both sides), there is no extra local, and exactly two slots are
-    // PERMUTED -- 0x70 and 0x80 -- i.e. the same slot SET with the two lists
-    // exchanged.  The remaining 6 rows are [125]/[126]/[141]/[152] (+/-16 on
-    // those two slots) and [181]/[182] (r28<->r29).  The declaration swap
-    // stays refuted; do not re-try it.
-    std::list<DataNode> datanodes;
+    // w16-d: 99.966 -> 100. The image declares symbols FIRST and drives the
+    // SetProperty loop off `sit != symbols.end()` (0x8241DAB0 compares r29, the
+    // list<Symbol> walker, against &symbols at r31+0x70). The slot pair follows
+    // the loop's controlling list, not declaration order -- which is why the
+    // declaration swap alone (w7-aa, w8-l) only moved the ctor/dtor order.
+    // Same trip count either way: both lists are pushed in lockstep above.
     std::list<Symbol> symbols;
+    std::list<DataNode> datanodes;
     if (d.rev > 2) {
         int count;
         bs >> count;
@@ -92,8 +81,8 @@ BEGIN_LOADS(FlowCommand)
     }
     FlowNode::Load(bs);
     ClearAllTypeProps();
-    auto sit = symbols.begin();
-    for (auto dit = datanodes.begin(); dit != datanodes.end(); ++sit, ++dit) {
+    auto dit = datanodes.begin();
+    for (auto sit = symbols.begin(); sit != symbols.end(); ++sit, ++dit) {
         SetProperty(*sit, *dit);
     }
     if (d.rev < 1) {
