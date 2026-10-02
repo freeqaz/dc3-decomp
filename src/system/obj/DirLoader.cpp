@@ -552,29 +552,17 @@ void DirLoader::WriteTypeMemDump(TextFileStream *file) {
          it != sMemPointMap.end();
          ++it) {
         MemPointDelta pt = it->second;
-        // `it->first`, not `(*it).first`: String has TextStream at +0 and
-        // FixedString (which owns mStr and c_str()) at +4, so calling c_str()
-        // on a String reached through a POINTER expression makes MSVC emit the
-        // null-guarded base adjustment the image has --
-        //   825A4500  addic. r11, r31, 0x10    <- operator->() result, tested
+        // w14-d (94.92 -> 100): the key is taken as a `const FixedString *`.
+        // String has TextStream at +0 and FixedString (mStr, c_str()) at +4, so
+        // an explicit String* -> FixedString* POINTER conversion is what makes
+        // MSVC emit the image's null-guarded base adjustment --
+        //   825A4500  addic. r11, r31, 0x10    <- &it->first, tested
         //   825A4504  addi   r11, r11, 0x4     <- String* -> FixedString*
         //   825A4508  bne    .L_825A4510
         //   825A450C  li     r11, 0x0
         //   825A4518  lwz    r4, 0x0(r11)      <- mStr
-        // Through the reference `(*it).first` MSVC folds it to one
-        // `lwz r4, 0x14(r31)` and the guard disappears.
-        // REFUTED, both byte-identical to the folded form: `it->first.c_str()`
-        // instead of `(*it).first.c_str()`, and an explicit
-        // `const String *key = &it->first; key->c_str();`.  MSVC proves the
-        // address-of non-null in every spelling reachable from here, so the
-        // four-instruction guarded conversion stays unreproduced (4 rows).
-        //
-        // LOSS NAMED: dropping the `if (file)` costs 0.7pp on the ruler
-        // (95.94 -> 94.94 canonical, 95.62 -> 94.62 raw, 7 rows either way) --
-        // objdiff charges a target-only instruction more than a substituted
-        // one, so the two `cmplwi`/`beq` rows that USED to pair with two of the
-        // image's guard instructions now read as deletes.  Taken anyway: the
-        // guard is not in the image.
+        // A member call through `it->first`, `(*it).first` or a `const String *`
+        // local adjusts `this` without a test (one `lwz r4, 0x14(r31)`).
         //
         // BEHAVIOURAL: there is no `if (file)` here.  The image goes straight
         // from that address computation into the virtual Print call with no
@@ -583,7 +571,8 @@ void DirLoader::WriteTypeMemDump(TextFileStream *file) {
         // unconditionally, and MILO_ASSERT(file) at the top of the function
         // says the argument is required -- so removing it changes no reachable
         // behaviour.
-        file->Print(it->first.c_str());
+        const FixedString *key = &it->first;
+        file->Print(key->c_str());
         *file << "," << pt.ToString(1) << "\n";
     }
     file->File().Flush();
@@ -629,6 +618,11 @@ void DirLoader::Cleanup(const char *str) {
     }
 }
 
+// w14-d (99.87, frame 0x180 vs our 0x190): the image gives the find() String
+// temp and the insert's String temp ONE slot (0x58); we give the find temp its
+// own (0x60) and shift every later slot by 0x10.  WORSE: `it = insert(...).first`
+// with a single `it->second += memDelta` (94.46); a reference bound to a
+// ?: of the two arms (80.75, adds a cleanup-flag word).
 void DirLoader::AddTypeObjectMemDelta(
     const Hmx::Object *object, const MemPointDelta &memDelta
 ) const {

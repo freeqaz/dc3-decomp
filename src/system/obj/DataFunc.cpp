@@ -1370,6 +1370,7 @@ DEF_DATA_FUNC(DataMacroSize) {
 // evaluates the three ternaries 3,4,5 before either GetObj, which only happens
 // if they are locals; written inline as call arguments MSVC's right-to-left
 // argument evaluation would run them 5,4,3.
+// w14-d: also INERT -- `int setProxyFile` passed as `setProxyFile != 0`.
 DEF_DATA_FUNC(DataReplaceObject) {
     bool copyDeep = array->Size() > 3 ? array->Int(3) : true;
     bool deleteFrom = array->Size() > 4 ? array->Int(4) : true;

@@ -70,9 +70,12 @@ void ArkHash::Read(BinStream &bs, int len) {
 
     int heapSize;
     bs >> heapSize;
-    mHeap = (char *)MemAlloc(heapSize + len, __FILE__, 0x112, "ArkHash");
+    // w14-d: the total is computed ONCE (the image's `add r29, r11, r29` feeds
+    // both MemAlloc and mHeapEnd); heapSize itself is re-read after the call.
+    int totalSize = heapSize + len;
+    mHeap = (char *)MemAlloc(totalSize, __FILE__, 0x112, "ArkHash");
     mFree = mHeap + heapSize;
-    mHeapEnd = mHeap + (heapSize + len);
+    mHeapEnd = mHeap + totalSize;
 
     bs.Read(mHeap, heapSize);
     memset(mFree, 0, mHeapEnd - mFree);
@@ -319,22 +322,17 @@ void Archive::Merge(Archive &shadow) {
             fileIt->mSize = it->mSize;
             fileIt->mUCSize = it->mUCSize;
         } else {
-            FileEntry toAdd;
-            // Residual (5 rows): the image schedules `ld r11, 0x0(r29)` AFTER
-            // both push_back address operands (`addi r4, r31, 0x70`,
-            // `addi r3, r31, 0x58`); we emit the load first.  REFUTED (wave 7,
-            // lane w7-y): sinking this statement to the END of the block, so
-            // the store order becomes exactly the image's
-            // name/path/UCSize/Size/Offset, makes it WORSE -- 96.47 -> 95.55
-            // and one instruction longer, because MSVC then keeps the 64-bit
-            // add live across the four stores instead of interleaving it.
-            // The image's store order already matches this source order; only
-            // the load is scheduled differently, which is below the source.
-            toAdd.mOffset = it->mOffset + totalSize;
-            toAdd.mHashedName = entry.HashedName();
-            toAdd.mHashedPath = entry.HashedPath();
-            toAdd.mUCSize = it->mUCSize;
-            toAdd.mSize = it->mSize;
+            // w14-d (96.50 -> 100): a 5-argument FileEntry ctor.  MSVC's
+            // right-to-left argument evaluation is what loads UCSize, Size and
+            // only then the 64-bit offset (the image's `ld r11, 0x0(r29)` after
+            // both push_back operands); member-by-member stores could not.
+            FileEntry toAdd(
+                it->mOffset + totalSize,
+                entry.HashedName(),
+                entry.HashedPath(),
+                it->mSize,
+                it->mUCSize
+            );
             extraFileEntries.push_back(toAdd);
         }
     }

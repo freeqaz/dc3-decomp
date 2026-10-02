@@ -144,6 +144,10 @@ Hmx::Object *PlatformMgr::spShowControllerObject;
 DWORD PlatformMgr::sdwShowControllerTrackingID;
 int PlatformMgr::snShowControllerPadNum;
 
+// w14-d (95.93, 13 rows): store scheduling of the anonymous-namespace globals
+// only -- the image stores mServiceIDOverlapped first, we last.  INERT: moving
+// that assignment above the mXuidCache loop.  WORSE (88.24): moving it after
+// mServiceIdState.
 PlatformMgr::PlatformMgr() : mSigninMask(0) {
     mScreenSaver = true;
     mSigninChangeMask = 0;
@@ -200,14 +204,18 @@ Friend::Friend() {}
 bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus() != 0; }
 
 void PlatformMgr::UpdateSigninState() {
-    XUID oldCache[4] = { mXuidCache[0], mXuidCache[1], mXuidCache[2], mXuidCache[3] };
+    // w14-d (92.16 -> 100): a block copy (the image copies through r1+0x50 with
+    // one base register, not four element loads), and the three clears in
+    // reverse member order -- the image stores SameGuest, 0x54, then 0x50.
+    XUID oldCache[4];
+    memcpy(oldCache, mXuidCache, sizeof(oldCache));
     int i;
-    mSigninMask = 0;
+    mSigninSameGuest = 0;
     // The image zeroes 0x54 too, at 825D3E18, right beside the 0x50 store --
     // without it mSigninChangeMask is sticky and every later SigninChangedMsg
     // reports every pad that has ever changed.
     mSigninChangeMask = 0;
-    mSigninSameGuest = 0;
+    mSigninMask = 0;
     for (i = 0; i < 4; i++) {
         if (XUserGetSigninState(i) != 0) {
             XUSER_SIGNIN_INFO info = {};
@@ -649,7 +657,7 @@ namespace {
         unsigned long param1, param2;
 
         while (XJSONReadToken(reader, &tokenType, &param1, &param2) == 0) {
-            DataNode node(0);
+            DataNode node(kDataInt, 0);
             char charBuf[256];
             charBuf[0] = '\0';
 
@@ -666,22 +674,22 @@ namespace {
                 fieldName = new DataArray(2);
                 fieldName->Node(0) = DataNode(Symbol(charBuf));
                 continue;
-            // REFUTED (w7-ag): the image re-materialises the DataNode temp's
-            // address for the operator= argument here (`addi r4, r31, 0xa0`
-            // @825D70F0 and `addi r4, r31, 0xb8` @825D7134) rather than reusing
-            // the ctor's returned `this`, which is what the unnamed temp below
-            // emits (`mr r4, r3`).  Naming both temps --
-            //   DataArrayPtr sub = JsonToDta(reader, false);
-            //   DataNode tmp(sub); node = tmp;
-            // does produce that form and removes the 0x10 frame delta, but it
-            // repacks the whole frame and costs far more than it pays:
-            // 98.3 -> 97.3.  The string case @825D715C uses `mr r4, r3` on BOTH
-            // sides, so the ctor is not what decides it.
+            // w14-d: the array/map results reach `node` by IMPLICIT conversion
+            // (DataNode(const DataArrayPtr &)).  That is what makes the image
+            // re-address the temp for operator= (`addi r4, r31, 0xa0` @825D70F0,
+            // `addi r4, r31, 0xb8` @825D7134) where an explicit `DataNode(...)`
+            // temp reuses the ctor's returned `this` (`mr r4, r3`), and it also
+            // closes the 0x10 frame delta.  98.32 -> 99.07 together with the
+            // fieldName conversion below and `node(kDataInt, 0)`.  RESIDUAL
+            // (8 rows): before the jump table the image re-loads only node's
+            // value (`lwz r3, 0x50`) and its shared `continue` dtor at 0x369c
+            // re-reads mType; we also cache mType in r10 and enter one
+            // instruction later.
             case kJSONTokenBeginArray:
-                node = DataNode(JsonToDta(reader, false));
+                node = JsonToDta(reader, false);
                 break;
             case kJSONTokenBeginMap:
-                node = DataNode(JsonToDta(reader, false));
+                node = JsonToDta(reader, false);
                 break;
             case kJSONTokenString:
                 node = DataNode(charBuf);
@@ -724,7 +732,7 @@ namespace {
 
             if (fieldName) {
                 fieldName->Node(1) = node;
-                node = DataNode(fieldName, kDataArray);
+                node = fieldName;
                 fieldName = 0;
             }
 

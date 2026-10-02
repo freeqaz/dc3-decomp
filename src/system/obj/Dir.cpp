@@ -408,6 +408,9 @@ inline BinStream &operator<<(BinStream &bs, const ObjectDir::Viewport &v) {
     return bs;
 }
 
+// w14-d (99.997, 2 rows): the only residual is two stores in the inlined
+// vector swap at the end (image stores the 0x58 swap temp before the 0xa4
+// finish pointer, we after).  `unused.swap(mInlinedDirs)` is byte-inert.
 void ObjectDir::Save(BinStream &bs) {
     SAVE_REVS(0x1C, 0)
     SaveType(bs);
