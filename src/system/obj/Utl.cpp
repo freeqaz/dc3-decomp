@@ -395,7 +395,9 @@ void MergeObjectsRecurse(
         default: {
             ObjRef refs;
             refs.DetachSelf();
-            FOREACH (it, fromDir->Refs()) {
+            // raw ring walk (see ObjRef: 'the way to iterate across refs'); the
+            // ObjRef::iterator spelling homes the end() temporary at 0x50(r31)
+            for (ObjRef *it = fromDir->Refs().next; it != &fromDir->Refs(); it = it->next) {
                 Hmx::Object *owner = it->RefOwner();
                 if (owner && owner->Dir() == fromDir) {
                     it = it->MoveBefore(&refs);

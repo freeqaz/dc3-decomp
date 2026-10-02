@@ -235,6 +235,21 @@ void MyFunction() {
 #pragma fp_contract(on)
 ```
 
+> ⚠ **Measured inert on `NgFur::Shell` — try the struct-member lever first.**
+> Bracketing the whole function with `#pragma fp_contract(off)` left it byte-identical
+> (96.86 %, same 9 rows), and the two *other* contractions in that function, which should
+> also have de-fused if the pragma were honoured, did not move either. This Xenon `cl`
+> accepts the pragma silently (no C4068). Reported independently twice: a 2026-03-05
+> permuter session, and the source comment this note replaces.
+> What *did* separate the four `fmuls` + four `fadds` (96.863 → 100.0, wave 10, 2026-10-02)
+> was holding the operands in **struct members** instead of scalar locals —
+> `Hmx::Color diff(...); diff.red *= fShell; ... roots.red + diff.red` — because the compiler
+> contracts a scalar-local `a*b+c` but not one whose product round-trips through a member.
+> As a bonus this is bit-faithful: a fused `fmadds` rounds once, the image rounds twice.
+> Still unmeasured: whether the pragma is doing anything in the three TUs that use it
+> (`BustAMovePanel.cpp`, `HamRibbon.cpp`, `Ribbon.cpp`). Delete it from one and full-`ninja`
+> before relying on it either way.
+
 #### Category 2: Pure ON (target fuses, our code doesn't)
 
 Fix: Restructure expressions so multiply and add are adjacent. The compiler can only fuse `a * b + c` when the multiply result flows directly into the add.

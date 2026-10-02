@@ -160,6 +160,7 @@ bool TexProc::CheckParams(DataArray *a, bool b) {
     for (int i = b ? 2 : 0; i < aSize && b7; i++) {
         switch (a->Type(i)) {
         case kDataFloat:
+            b7 &= true;
             break;
         case kDataArray:
             b7 &= CheckParams(a->Array(i), false);
@@ -172,6 +173,8 @@ bool TexProc::CheckParams(DataArray *a, bool b) {
                 } else {
                     b7 &= CheckParams(eval.Array(), false);
                 }
+            } else {
+                b7 &= true;
             }
             break;
         }

@@ -269,7 +269,9 @@ void RndGenerator::Generate(float frame) {
     if (scale < mScaleGenHigh)
         scale = RandomFloat(scale, mScaleGenHigh);
     inst.scale.Set(scale, scale, scale);
-    mInstances.push_back(inst);
+    // push_FRONT: the image passes begin() (lwz r11, 0x110(r31) = the list
+    // sentinel's next) to list::insert, so the newest instance leads the list.
+    mInstances.push_front(inst);
     if (mParticleSys) {
         mCurParticle = mParticleSys->AllocParticle();
         mParticleSys->InitParticle(mCurParticle, NULL);

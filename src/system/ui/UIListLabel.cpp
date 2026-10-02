@@ -148,7 +148,9 @@ void UIListLabelElement::Draw(const Transform &tf, float f, UIColor *col, Box *b
         }
         label->DrawShowing();
         for (unsigned int i = 0; i < label->NumStyles(); i++) {
-            label->Style(i).SetAlpha(savedAlphas[i]);
+            // field store, not SetAlpha(): the inline setter call keeps label in
+            // r11 + `mr r3` where the image loads it straight into r3
+            label->Style(i).mFontColor.alpha = savedAlphas[i];
         }
     }
 }
