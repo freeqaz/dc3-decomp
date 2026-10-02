@@ -1855,18 +1855,14 @@ namespace {
     }
 }
 
-// RESIDUAL (w8-n, 93.3553 canonical): 1 cause, 6 rows -- BLOCK SINKING, believed unfixable.
-// The image emits the zero return INLINE: `cmplwi cr6, r30, 0x0` at 0x82500918 is
-// followed by `bne cr6, .L_8250092C` to the DetectRange path and FALLS THROUGH
-// into `lis r11, __real@00000000@h` / `lfs f1` / `b <epilogue>`, so the failure
-// block sits physically BETWEEN the tests and the success block.  With the
-// hoisted `float frac = 0.0f;` below, MSVC materialises the zero before the tests
-// and sends all three failures to the tail.
-// REFUTED: spelling it as the early exit -- `if (beat < 0 || (unsigned)beat >=
-// keys.size() || (move = keys[beat].move) == nullptr) return 0.0f;` with three
-// explicit `return`s after it -- DOES create the separate zero block, and MSVC
-// still SINKS it past the success path (`beq cr6, <tail>` again), for 92.0.
-// That is the docs/decomp/patterns block-sinking class, not a spelling problem.
+// w19-b: 93.3553 -> 100.  The w8-n "block sinking, believed unfixable" note is
+// refuted.  The image's zero block sits between the tests and the success path
+// because the original selects the move first -- `move = nullptr`, set from
+// keys[beat] only when beat is in range -- and THEN tests `if (!move)`.  MSVC
+// jump-threads the two range failures straight into the null arm, which is the
+// fall-through of the null test (`bne` to the DetectRange path).  Both a single
+// `||` condition with the zero arm first (92.0) and the w8-n early-return
+// spelling (92.0) still sink the zero block to the tail.
 float MoveDir::DetectFrac(int player, int beat) {
     MILO_ASSERT_RANGE(player, 0, 2, 0x16a);
     int curMeasure = TheTaskMgr.CurrentMeasure();
@@ -1875,10 +1871,17 @@ float MoveDir::DetectFrac(int player, int beat) {
     }
     MovePlayerData &mpd = mMovePlayerData[player];
     std::vector<HamMoveKey> &keys = mpd.mMoveKeys;
-    HamMove *move;
-    float frac = 0.0f;
-    if (beat >= 0 && (unsigned int)beat < keys.size()
-        && (move = keys[beat].move) != nullptr) {
+    HamMove *move = nullptr;
+    if (beat >= 0 && (unsigned int)beat < keys.size()) {
+        move = keys[beat].move;
+    }
+    float frac;
+    if (!move) {
+        frac = 0.0f;
+#ifdef HX_NATIVE
+        Dc3DetectFracProbe(player, beat, keys.size(), "no-move-key", 0, frac);
+#endif
+    } else {
         std::pair<DetectFrame *, DetectFrame *> range(nullptr, nullptr);
         DetectRange(mpd.mDetectFrames, range, beat, beat);
         if (range.first == range.second) {
@@ -1897,11 +1900,6 @@ float MoveDir::DetectFrac(int player, int beat) {
 #endif
         }
     }
-#ifdef HX_NATIVE
-    else {
-        Dc3DetectFracProbe(player, beat, keys.size(), "no-move-key", 0, frac);
-    }
-#endif
     return frac;
 }
 
