@@ -189,8 +189,15 @@ public:
             mData.index = splitAxis;
 
             double fsum = 0.0;
-            if (!items.empty()) {
-                FOREACH (it, items) {
+            // The image tests begin() != end() with the iterator it then walks
+            // (lwz r29, 0x0(r25); cmplw r29, r25); `!items.empty()` + FOREACH
+            // loads begin twice-over through r11 and adds a mr.
+            // w14-a RESIDUAL (99.97): 4 rows, the x-component load order of
+            // v[1]/v[2] (origin.x vs frame.x.x); swapping the source operands,
+            // and ::Add(origin, frame, v), are both inert.
+            std::list<Triangle *>::const_iterator it = items.begin();
+            if (it != items.end()) {
+                for (; it != items.end(); ++it) {
                     Triangle *cur = *it;
                     // A Triangle is origin + two EDGE vectors (frame.x, frame.y);
                     // frame.z is the face normal, not a vertex. The three vertices
