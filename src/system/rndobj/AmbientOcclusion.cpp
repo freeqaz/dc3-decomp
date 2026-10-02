@@ -1049,31 +1049,24 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
 
     // Phase 2: Build vertex equivalence map (weld coincident vertices)
     std::vector<int> vertMap(mesh->Verts().size());
-    int v = 0;
-    if (0 < mesh->Verts().size()) {
-        do {
-            int equiv = 0;
-            if (0 < v) {
-                do {
-                    const Vector3 &posV = mesh->Verts(v).pos;
-                    const Vector3 &posE = mesh->Verts(equiv).pos;
-                    float dx = posV.x - posE.x;
-                    float dy = posV.y - posE.y;
-                    float dz = posV.z - posE.z;
-                    if (dx * dx + dy * dy + dz * dz <= 0.001f)
-                        break;
-                    equiv++;
-                } while (equiv < v);
-            }
-            vertMap[v] = equiv;
-            v++;
-        } while (v < mesh->Verts().size());
+    int v;
+    for (v = 0; v < mesh->Verts().size(); v++) {
+        int equiv;
+        for (equiv = 0; equiv < v; equiv++) {
+            const Vector3 &posV = mesh->Verts(v).pos;
+            const Vector3 &posE = mesh->Verts(equiv).pos;
+            float dx = posV.x - posE.x;
+            float dy = posV.y - posE.y;
+            float dz = posV.z - posE.z;
+            if (dx * dx + dy * dy + dz * dz <= 0.001f)
+                break;
+        }
+        vertMap[v] = equiv;
     }
 
     // Phase 3: Smooth AO by accumulating angle-weighted face AO per vertex
-    v = 0;
-    if (0 < mesh->Verts().size()) {
-        do {
+    for (v = 0; v < mesh->Verts().size(); v++) {
+        {
             float accR = 0.0f;
             float accG = 0.0f;
             float accB = 0.0f;
@@ -1082,10 +1075,9 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
             for (unsigned int fNum = 0; fNum < (unsigned int)mesh->Faces().size();
                  fNum++) {
                 {
-                    int j = 0;
                     unsigned short *faceVerts = (unsigned short *)&mesh->Faces(fNum);
                     Hmx::Color *faceColor = &faceAO[fNum];
-                    do {
+                    for (int j = 0; j < 3; j++) {
                         if (vertMap[faceVerts[j]] == vertMap[v]) {
                             // Get the two edges adjacent to this vertex
                             int cur = j % 3;
@@ -1122,8 +1114,7 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                             accA = accA + wA;
                             accB = accB + wB;
                         }
-                        j++;
-                    } while (j < 3);
+                    }
                 }
             }
 
@@ -1143,8 +1134,7 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                     vertColor.green = (wG + vertColor.green) * 0.5f;
                 }
             }
-            v++;
-        } while (v < mesh->Verts().size());
+        }
     }
 }
 
