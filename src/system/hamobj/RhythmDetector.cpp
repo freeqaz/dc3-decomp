@@ -758,10 +758,11 @@ void RhythmDetector::AddFrame(BaseSkeleton const &skel) {
 
     if (bestIdx != -1) {
         Frame newFrame;
-        mFrameHistory.insert(mFrameHistory.end(), newFrame);
+        std::list<Frame>::iterator it =
+            mFrameHistory.insert(mFrameHistory.end(), newFrame);
 
         // Trim history to 3 entries
-        std::list<Frame>::iterator it = mFrameHistory.begin();
+        it = mFrameHistory.begin();
         unsigned int count = 0;
         while (it != mFrameHistory.end()) {
             it++;
