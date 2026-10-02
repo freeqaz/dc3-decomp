@@ -1175,34 +1175,15 @@ void CharClip::LockAndDelete(CharClip **const clips, int numClips, int remaining
     loopIdx = 0;
 
     // Phase 1: Partition clips with flag 0x10000 set
-    if (numClips > 0) {
-        // readPtr trails one PAST the element under test and is stepped at the
-        // bottom of the loop, which is what gives the image's
-        // `addi r11, r29, 4` ... `lwz r7, -4(r11)` ... `addi r11, r11, 4`.
-        // Stepping it at the top instead folds into a single `lwzu`.
-        CharClip **readPtr = &clips[1];
-        CharClip **writeBackPtr = &clips[numClips];
-        do {
-            clip = readPtr[-1];
-            if ((clip->mPlayFlags & 0x10000) != 0) {
-                writeBackPtr--;
-                numClips--;
-                remaining--;
-                loopIdx--;
-                // The image fuses this rewind and store into one
-                // `stwu r8, -0x4(r11)`. We do not: MSVC precomputes
-                // `subi r9, r10, 0x4` before the `if`, because `readPtr[-1]` at
-                // the top of the loop needs the same address and it CSEs the
-                // two. Spelling this `*--readPtr = *writeBackPtr;` instead of
-                // the two statements below is byte-for-byte INERT (96.53% both
-                // ways) -- the hoist is a scheduling choice, not a syntax one.
-                readPtr--;
-                *readPtr = *writeBackPtr;
-                *writeBackPtr = clip;
-            }
-            loopIdx++;
-            readPtr++;
-        } while (loopIdx < numClips);
+    for (; loopIdx < numClips; loopIdx++) {
+        clip = clips[loopIdx];
+        if ((clip->mPlayFlags & 0x10000) != 0) {
+            numClips--;
+            remaining--;
+            clips[loopIdx] = clips[numClips];
+            clips[numClips] = clip;
+            loopIdx--;
+        }
     }
 
     // Phase 2: Mark additional clips with deletion flag

@@ -575,8 +575,9 @@ void SpeechMgr::AddDynamicRuleWord(
     MILO_ASSERT(it != mGrammars.end(), 0x3C9);
     Grammar grammar(*it);
     bool createSuccess = true;
+    HRESULT res;
     if (toState) {
-        HRESULT res = NuiSpeechCreateState(&grammar.mGrammar, *fromState, toState);
+        res = NuiSpeechCreateState(&grammar.mGrammar, *fromState, toState);
         createSuccess = SUCCEEDED(res);
         if (!createSuccess) {
             MILO_NOTIFY(
@@ -585,17 +586,29 @@ void SpeechMgr::AddDynamicRuleWord(
         }
     }
     if (createSuccess) {
-        wchar_t buffer2[1024];
-        wchar_t buffer[1024];
-        size_t ret;
-        mbstowcs_s(&ret, buffer2, 1024, c3, strlen(c3));
-        UTF8toWChar_t(buffer, c2);
+        // BUG FIX (w15-a): c3 is the transition's SEMANTIC VALUE.  The image
+        // converts it into its own wide buffer and points the
+        // NUI_SPEECH_SEMANTIC passed as the last argument at it:
+        //   0x8243B5B4  bl   mbstowcs_s            ; r4 = r31+0x80
+        //   0x8243B5B8  addi r11, r31, 0x80
+        //   0x8243B5C0  stw  r11, 0x58(r31)        ; s.pcwszValue = semantic
+        //   ...
+        //   0x8243B5E8  addi r10, r31, 0x58        ; pSemantic = &s
+        //   0x8243B600  bl   NuiSpeechAddWordTransition
+        // We converted c3 and then never used it, handing the recognizer an
+        // uninitialised pcwszValue.
         NUI_SPEECH_SEMANTIC s;
-        HRESULT res = NuiSpeechAddWordTransition(
+        wchar_t semantic[1024];
+        wchar_t word[1024];
+        size_t ret;
+        mbstowcs_s(&ret, semantic, 1024, c3, strlen(c3));
+        s.pcwszValue = semantic;
+        UTF8toWChar_t(word, c2);
+        res = NuiSpeechAddWordTransition(
             &grammar.mGrammar,
             *fromState,
             toState ? *toState : nullptr,
-            buffer,
+            word,
             nullptr,
             NUI_SPEECH_WORDTYPE_LEXICAL,
             1,
@@ -619,6 +632,12 @@ void SpeechMgr::Poll() {
         memset(&event[0], 0, sizeof(event));
         HRESULT res = NuiSpeechGetEvents(5, event, &fetched);
         if (SUCCEEDED(res) && fetched != 0) {
+            // w15-a (97.98 canonical): the image strength-reduces TWO pointers, one at
+            // &event[i].pResult (addi r31, r1, 0x70) and one at &event[i] (subi r30,
+            // r31, 0x10), costing r28 in the prologue; we use one.  Indexing event[i]
+            // directly is byte-identical; a `switch (eventId) { case 0x40: case 0x80: }`
+            // drops the image's `cmplwi 0x20 / ble` (94.1, an empty `case 0x20:` is
+            // folded away), so the explicit `> 0x20` test stays.
             for (ULONG i = 0; i < fetched; i++) {
                 NUI_SPEECH_EVENT &cur = event[i];
                 if (cur.eventId > 0x20 && (cur.eventId == 0x40 || cur.eventId == 0x80)

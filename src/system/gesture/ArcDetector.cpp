@@ -145,6 +145,11 @@ void ArcDetector::DrawPath(
     prev.y = prev.y + offset.y;
     prev.x = prev.x + offset.x;
     Vector3 cur;
+    // w15-a (95.26 canonical, 15 rows): the image stores cur.x straight after its
+    // fadds (offset.x + cur.x) and only then loads cur.y/cur.z; prev's stores go
+    // z, x, y.  Measured INERT or worse: `cur += offset;` (95.26), prev in z,x,y
+    // order plus `offset.x + cur.x` (95.3 normalized, more rows).  /fp:fast
+    // scheduling of the three adds; not steered from here so far.
     for (++it; it != path.end(); ++it) {
         cur = *it;
         cur.x = cur.x + offset.x;

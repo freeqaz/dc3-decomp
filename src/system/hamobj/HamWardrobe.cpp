@@ -539,22 +539,18 @@ void HamWardrobe::LoadCharacters(
             }
         } else {
             if (dancers == kBackupDancersOverride) {
-                auto overrideOutfit = GetBackupOutfitOverride(i);
-                backupOutfit = overrideOutfit;
+                backupOutfit = GetBackupOutfitOverride(i);
             } else {
                 MILO_ASSERT(dancers == kBackupDancersDanceBattle, 0x1ac);
-                auto battleBackup = GetDanceBattleBackupOutfit(outfit, crew);
-                backupOutfit = battleBackup;
+                backupOutfit = GetDanceBattleBackupOutfit(outfit, crew);
             }
         }
 
         HamCharacter *backup = GetBackup(i);
         backup->SetOutfit(backupOutfit);
-        const char *outfitDir = "char/main/backup";
-        if (dancers != kBackupDancersOutfit) {
-            outfitDir = "char/main/dancer";
-        }
-        backup->SetOutfitDir(Symbol(outfitDir));
+        backup->SetOutfitDir(
+            Symbol(dancers == kBackupDancersOutfit ? "char/main/backup" : "char/main/dancer")
+        );
         backup->StartLoad(asyncLoad);
     }
 

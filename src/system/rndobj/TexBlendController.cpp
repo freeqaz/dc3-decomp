@@ -162,6 +162,8 @@ RndTexBlendController::GetBlendState(float &blend, float influence) const {
             // LITERAL: MSVC rewrites any `a*3 + b*(-2)` we write into the
             // subtraction `a*3 - b*2` and loads 2.0f instead, so the constant
             // pair is downstream of the fusion choice, not a separate lever.
+            // w15-a (99.22 canonical): a named `float negTwo = -2.0f;` multiplier is
+            // INERT too -- the constant is still folded to 2.0f and the fmsubs stays.
             blend = t3 * (-2.0f) + t2 * 3.0f;
         }
     }

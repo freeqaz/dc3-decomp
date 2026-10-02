@@ -238,14 +238,17 @@ void CharClipDisplay::DrawTrack() {
                 Symbol channelName
                     = CharBones::ChannelName(data->Name(), CharBones::TYPE_POS);
                 void *channel = mClip->GetChannel(channelName);
-                float channelData[48];
-                mClip->EvaluateChannel(channelData, channel, mCursorBeat);
+                // A position channel evaluates to ONE Vector3: the image gives
+                // it a single 16-byte slot (0x140(r1) in a 0x200 frame whose
+                // save area starts at 0x150), and GetDataIndex() picks the axis.
+                Vector3 channelData;
+                mClip->EvaluateChannel(&channelData, channel, mCursorBeat);
                 Hmx::Color ikColor(1.0f, 1.0f, 0.0f, 1.0f);
                 float cursorX = GetX(mCursorBeat);
                 float posY = mDrawPosY;
                 if (leftIk != nullptr) {
                     const char *leftText
-                        = MakeString("L: %.1f", channelData[leftIk->GetDataIndex()]);
+                        = MakeString("L: %.1f", (&channelData.x)[leftIk->GetDataIndex()]);
                     TheRnd.DrawString(
                         leftText,
                         Vector2(cursorX - 90.0f, posY + 10.0f),
@@ -255,7 +258,7 @@ void CharClipDisplay::DrawTrack() {
                 }
                 if (rightIk != nullptr) {
                     const char *rightText
-                        = MakeString("R: %.1f", channelData[rightIk->GetDataIndex()]);
+                        = MakeString("R: %.1f", (&channelData.x)[rightIk->GetDataIndex()]);
                     TheRnd.DrawString(
                         rightText,
                         Vector2(cursorX - 40.0f, posY + 10.0f),

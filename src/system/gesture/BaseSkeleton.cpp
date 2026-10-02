@@ -276,6 +276,11 @@ void BaseSkeleton::MakeCameraToPlayerXfm(
         limbDir.y -= nearJoint.y;
         limbDir.x -= nearJoint.x;
         limbDir.z -= nearJoint.z;
+    // w15-a (95.93 canonical): in the image this arm's three subtractions
+    // share the other arms' stfs tail (f13=x, f12=y, f0=z, then `b` to the
+    // stores); we store y/x inside the arm.  Tried: y,x,z statement order
+    // (95.0), Subtract(limbDir, nearJoint, limbDir) (95.73), three float temps +
+    // Set (95.73).  All worse; kept the z,y,x form.
     } else if (cs == kUnk5) {
         Vector3 nearJoint = pj[kJointHipLeft];
         limbDir = pj[kJointHipRight];
