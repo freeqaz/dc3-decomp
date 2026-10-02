@@ -471,6 +471,10 @@ void DecompressMemHelper(
     MILO_ASSERT(dstLen == expectedDstLen, 0x3bb);
 }
 
+// w14-d (99.98, 4 rows): the image loads mDecompressedSize before mBuffer in
+// the third arm and computes (size - dataMsk) + buffer.  All INERT: the operand
+// order `(size - dataMsk) + buffer`, the expression inlined as the argument,
+// `buffer + size - dataMsk`, `buffer - dataMsk + size`.
 void ChunkStream::DecompressChunk(DecompressTask &task) {
     MILO_ASSERT(*task.mState == kDecompressing, 0x3c1);
     int data = *task.mChunk;

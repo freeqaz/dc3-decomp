@@ -118,6 +118,12 @@ void EQEffect::SetParameters(EQEffect::Params const &params) {
 // time constant. The target inlines it; it is not a named static.
 #define kSmoothBase 0.368f
 
+// w14-d (95.65, 12 rows): the residual is the crossover inner loop only.  The
+// image hoists `xover + 0x97` (the output-delay base) out of the tap loop but
+// forms the input index as `(xover + tap) + 0x5b` inside it, and moves xover
+// between r4 and r11 around the stage loop; we hoist both bases.  INERT:
+// `tap + xover` on the input subscript.  WORSE: input store first (95.64);
+// `tap++, xover++` with plain [xover] subscripts (86.2, a pointer walk).
 void EQEffect::Reset() {
     // Zero every per-channel filter delay line.  The crossover delay lines are
     // walked with a single flat index that keeps counting across channels

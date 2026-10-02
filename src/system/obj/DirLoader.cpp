@@ -618,6 +618,11 @@ void DirLoader::Cleanup(const char *str) {
     }
 }
 
+// w14-d (99.87, frame 0x180 vs our 0x190): the image gives the find() String
+// temp and the insert's String temp ONE slot (0x58); we give the find temp its
+// own (0x60) and shift every later slot by 0x10.  WORSE: `it = insert(...).first`
+// with a single `it->second += memDelta` (94.46); a reference bound to a
+// ?: of the two arms (80.75, adds a cleanup-flag word).
 void DirLoader::AddTypeObjectMemDelta(
     const Hmx::Object *object, const MemPointDelta &memDelta
 ) const {

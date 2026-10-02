@@ -144,6 +144,10 @@ Hmx::Object *PlatformMgr::spShowControllerObject;
 DWORD PlatformMgr::sdwShowControllerTrackingID;
 int PlatformMgr::snShowControllerPadNum;
 
+// w14-d (95.93, 13 rows): store scheduling of the anonymous-namespace globals
+// only -- the image stores mServiceIDOverlapped first, we last.  INERT: moving
+// that assignment above the mXuidCache loop.  WORSE (88.24): moving it after
+// mServiceIdState.
 PlatformMgr::PlatformMgr() : mSigninMask(0) {
     mScreenSaver = true;
     mSigninChangeMask = 0;

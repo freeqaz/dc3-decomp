@@ -155,6 +155,9 @@ void AsyncFileWin::_Close() {
 // in r11 and copy it (`mr r28, r11`).  Refuted at 99.3, full ninja each:
 // `aligned` declared before the memset, before `mWriteInProgress = true`,
 // `unsigned char aligned = 0`; declared above the asserts -> 95.6.
+// w14-d (99.29, 1 row): the image reuses `aligned`'s zero register (r28) for
+// the OVERLAPPED clear; we clear through r11 and copy.  Declaring `aligned`
+// above the memset is byte-inert.
 void AsyncFileWin::_WriteAsync(const void *buf, int count) {
     if (mFd >= 0) {
         int written = _write(mFd, buf, count);
