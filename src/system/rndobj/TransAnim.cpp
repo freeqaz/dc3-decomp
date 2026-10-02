@@ -105,7 +105,15 @@ BEGIN_LOADS(RndTransAnim)
         // mTransKeys;` before the statement (MSVC folds the reference, output
         // byte-identical) and spelling the chain as explicit
         // `operator>>(operator>>(d, mRotKeys), mTransKeys)` (also identical).
-        d >> mRotKeys >> mTransKeys;
+        // w16-a: closed (99.60 -> 100).  The image calls the std::vector
+        // BinStreamRev reader directly for both operands, and a nested
+        // free-function chain evaluates its arguments right to left, so
+        // &mTransKeys is formed before the first call.  Both refuted spellings
+        // still went through math/Key.h's inline Keys wrapper, whose inlining
+        // sequences the inner call first.  Binding the vector base is exactly
+        // what that wrapper does, so behaviour is unchanged.
+        d >> (std::vector<Key<Hmx::Quat> > &)mRotKeys
+          >> (std::vector<Key<Vector3> > &)mTransKeys;
     }
     d >> mKeysOwner;
     if (!mKeysOwner) {

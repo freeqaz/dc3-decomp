@@ -278,6 +278,11 @@ BEGIN_LOADS(RndText)
     // declarations costs 5.6pp (99.4 -> 93.8): it moves the whole frame by
     // 0x10 and de-schedules the TEXT_REV block. The target's slot order is
     // style-then-font.
+    // w16-a (99.56): what is left is a frame 0x10 SMALLER than the image's
+    // (0x1b0 vs 0x1c0; it predates the SetFixedLength(0) fix below) and the
+    // resulting slot shuffle, plus one `cmpwi r21, 0xd` scheduled two rows
+    // late.  With SetFixedLength(0) in place, font-before-style is still a
+    // loss (94.0).
     StyleData style;
     ObjPtr<RndFontBase> font(this);
     if (d.rev > 15) {
@@ -358,8 +363,13 @@ BEGIN_LOADS(RndText)
         d >> b;
         if (b) {
             SetFixedLength(mText.length());
-        } else if (mFixedLength != 0) {
-            mFixedLength = 0;
+        } else {
+            // w16-a: SetFixedLength(0), inlined here (and only here: the
+            // constant makes its loop dead).  The image materialises `this`
+            // for the store -- `subi r11, r30, 0xd0` / `stw r19, 0x2c(r11)` --
+            // which a hand-written `if (mFixedLength) mFixedLength = 0;` does
+            // not.  Same behaviour.
+            SetFixedLength(0);
         }
     }
     if (d.rev > 9 && d.rev < 22) {

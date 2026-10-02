@@ -968,6 +968,12 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
             // shAccum[k] first and rescaling that double in place.  MSVC
             // canonicalises the form before contraction, so the image's fmadd
             // is not reachable from source here; the faithful spelling is kept.
+            // w16-a: three more spellings byte-identical at 97.48 --
+            // `val / 2.0 + 0.5`, a `const double half = 0.5;` local for both
+            // the multiplier and the addend, and `shAccum[k] = val * 0.5;`
+            // followed by `shAccum[k] += 0.5;`.  The factoring into
+            // (val + 1.0) * 0.5 survives a statement boundary and a named
+            // constant, so it is not a front-end rewrite of one expression.
             float val = Clamp(-1.0f, 1.0f, (float)shAccum[k]);
             shAccum[k] = val * 0.5 + 0.5;
         }
@@ -1043,31 +1049,24 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
 
     // Phase 2: Build vertex equivalence map (weld coincident vertices)
     std::vector<int> vertMap(mesh->Verts().size());
-    int v = 0;
-    if (0 < mesh->Verts().size()) {
-        do {
-            int equiv = 0;
-            if (0 < v) {
-                do {
-                    const Vector3 &posV = mesh->Verts(v).pos;
-                    const Vector3 &posE = mesh->Verts(equiv).pos;
-                    float dx = posV.x - posE.x;
-                    float dy = posV.y - posE.y;
-                    float dz = posV.z - posE.z;
-                    if (dx * dx + dy * dy + dz * dz <= 0.001f)
-                        break;
-                    equiv++;
-                } while (equiv < v);
-            }
-            vertMap[v] = equiv;
-            v++;
-        } while (v < mesh->Verts().size());
+    int v;
+    for (v = 0; v < mesh->Verts().size(); v++) {
+        int equiv;
+        for (equiv = 0; equiv < v; equiv++) {
+            const Vector3 &posV = mesh->Verts(v).pos;
+            const Vector3 &posE = mesh->Verts(equiv).pos;
+            float dx = posV.x - posE.x;
+            float dy = posV.y - posE.y;
+            float dz = posV.z - posE.z;
+            if (dx * dx + dy * dy + dz * dz <= 0.001f)
+                break;
+        }
+        vertMap[v] = equiv;
     }
 
     // Phase 3: Smooth AO by accumulating angle-weighted face AO per vertex
-    v = 0;
-    if (0 < mesh->Verts().size()) {
-        do {
+    for (v = 0; v < mesh->Verts().size(); v++) {
+        {
             float accR = 0.0f;
             float accG = 0.0f;
             float accB = 0.0f;
@@ -1076,10 +1075,9 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
             for (unsigned int fNum = 0; fNum < (unsigned int)mesh->Faces().size();
                  fNum++) {
                 {
-                    int j = 0;
                     unsigned short *faceVerts = (unsigned short *)&mesh->Faces(fNum);
                     Hmx::Color *faceColor = &faceAO[fNum];
-                    do {
+                    for (int j = 0; j < 3; j++) {
                         if (vertMap[faceVerts[j]] == vertMap[v]) {
                             // Get the two edges adjacent to this vertex
                             int cur = j % 3;
@@ -1116,8 +1114,7 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                             accA = accA + wA;
                             accB = accB + wB;
                         }
-                        j++;
-                    } while (j < 3);
+                    }
                 }
             }
 
@@ -1137,8 +1134,7 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                     vertColor.green = (wG + vertColor.green) * 0.5f;
                 }
             }
-            v++;
-        } while (v < mesh->Verts().size());
+        }
     }
 }
 
@@ -1174,6 +1170,10 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
     // 0x64-stepped progress*100), together with the order in which their three
     // `addi`s are emitted at the bottom of the loop.  The instruction sequence
     // is otherwise identical.
+    // w16-a: closed (99.98 -> 100) by advancing progress in the for-increment
+    // alongside v (`v++, progress++`): the image steps the vertex offset, then
+    // progress, then progress*100.  Same semantics -- the body has no
+    // `continue`, so progress still advances once per vertex, after use.
     unsigned int progress = 0;
     unsigned int lastPercent = 0;
     for (std::vector<RndMesh *>::iterator it = mObjectsReceive.begin();
@@ -1184,7 +1184,7 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
         // `lwz r11, 0x148(r25)` off the MESH.  Caching GetGeomOwner() in a
         // local adds a second 0x148 hop (Verts() already goes through
         // mGeomOwner) and pins the owner in a callee-saved GPR.
-        for (unsigned int v = 0; v < (unsigned int)mesh->Verts().size(); v++) {
+        for (unsigned int v = 0; v < (unsigned int)mesh->Verts().size(); v++, progress++) {
             RndMesh::Vert &vert = mesh->Verts(v);
             Vector3 worldPos;
             Multiply(vert.pos, xfm, worldPos);
@@ -1195,7 +1195,6 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
             if (percent != lastPercent) {
                 lastPercent = percent;
             }
-            progress++;
         }
         SmoothResults(mesh);
         mesh->SetHasAOCalc(true);

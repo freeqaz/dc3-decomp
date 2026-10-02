@@ -67,6 +67,9 @@ void KerningTable::Save(BinStream &bs) {
 // mSecondChar (lhz 0x2) for the table index; we load them the other way round.
 // Byte-inert: TableIndex(first, second), and an inline `(a ^ b) & 0x1F` in both
 // operand orders.  MSVC canonicalises the xor operands.
+// w16-a: re-subscripting `info[i].mSecondChar, info[i].mFirstChar` for the
+// table index (instead of curInfo) does not change the load order and costs a
+// callee-saved renumbering (97.8).
 void KerningTable::SetKerning(
     const std::vector<RndFont::KernInfo> &info, RndFontBase *font
 ) {

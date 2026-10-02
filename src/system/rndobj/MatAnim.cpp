@@ -126,27 +126,24 @@ BEGIN_LOADS(RndMatAnim)
         // picks the generic operator>>(BinStream&, Key<TexPtr>&) rather than the
         // BinStreamRev specialization below, which is the one that does the deferred
         // TexPtr::Load(s, true, nullptr). Same spelling as LoadStage().
-        // Residual, 6 rows, 97.90393 canonical: the image computes all four
-        // member addresses BEFORE the first call, right-to-left, parking three
-        // of them in callee-saved registers (0x826EC53C-0x826EC544:
-        // `subi r29, r30, 0x14` / `subi r28, r30, 0x20` / `subi r30, r30, 0x2c`,
-        // then `mr r4, r30` / `mr r4, r28` / `mr r4, r29` at each call).  We
-        // recompute `subi r4, r30, N` inline at each call instead.  Everything
-        // else in this expression already matches, r3 included -- the chain is
-        // right and threads the returned BinStreamRev& exactly as the image does.
-        // REFUTED: binding the last three operands to named references first
-        // (`Keys<TexPtr, RndTex *> &texKeys = mTexKeys;` etc., declared in the
-        // image's right-to-left order) is byte-for-byte inert -- MSVC folds the
-        // references away before scheduling.
-        // REFUTED (2026-09-14, w7-ac): the same thing through POINTERS rather
-        // than references -- `Keys<Vector3, Vector3> *pt = &mTransKeys;` etc.,
-        // then `d >> *pt >> *ps >> *pr >> ...` -- is ALSO byte-for-byte inert,
-        // same six rows, same 97.9/97.9.  MSVC folds an address-of/deref pair
-        // exactly as it folds a reference, so no spelling of the operands moves
-        // the hoist; the decision is made by the scheduler on the anchor
-        // register (r30 = this + 0xE0-ish, every member reached at a NEGATIVE
-        // displacement off it).
-        d >> mTransKeys >> mScaleKeys >> mRotKeys >> (Keys<TexPtr, RndTex *> &)mTexKeys;
+        // w16-a (closes the 6-row residual w7-ac/earlier lanes recorded here,
+        // 97.90 -> 100): the image calls the std::vector BinStreamRev reader
+        // DIRECTLY for every operand, and a nested free-function call chain
+        // evaluates its arguments right to left -- hence all four member
+        // addresses formed before the first call (0x826EC53C-0x826EC544:
+        // `subi r29, r30, 0x14` / `subi r28, r30, 0x20` / `subi r30, r30,
+        // 0x2c`).  Going through math/Key.h's inline Keys wrapper sequences
+        // each call before the next operand is formed; the named-reference and
+        // named-pointer operand spellings earlier lanes refuted were inert
+        // because they still went through that wrapper.  Binding the vector
+        // base is exactly what the wrapper does, so behaviour is unchanged (the
+        // free vector reader is more specialized than the member template, and
+        // its per-element `bs >> *it` still picks the BinStreamRev Key<TexPtr>
+        // reader below).
+        typedef std::vector<Key<Vector3> > Vector3Keys;
+        typedef std::vector<Key<TexPtr> > TexPtrKeys;
+        d >> (Vector3Keys &)mTransKeys >> (Vector3Keys &)mScaleKeys
+          >> (Vector3Keys &)mRotKeys >> (TexPtrKeys &)mTexKeys;
     }
 END_LOADS
 
@@ -306,7 +303,11 @@ void RndMatAnim::LoadStage(BinStreamRev &d) {
         // are byte-for-byte inert against that -- named `Keys<Vector3,Vector3>&`
         // references, named pointers, and a mix -- which is the same refutation
         // already recorded above for RndMatAnim::Load's four-operand chain.
-        d >> mTransKeys >> mScaleKeys >> mRotKeys;
+        // w16-a: same cause and fix as RndMatAnim::Load -- bind the vector base
+        // so the image's direct std::vector reader calls evaluate right to left.
+        typedef std::vector<Key<Vector3> > Vector3Keys;
+        d >> (Vector3Keys &)mTransKeys >> (Vector3Keys &)mScaleKeys
+          >> (Vector3Keys &)mRotKeys;
     }
     if (d.rev > 1) {
         d >> (Keys<TexPtr, RndTex *> &)mTexKeys;

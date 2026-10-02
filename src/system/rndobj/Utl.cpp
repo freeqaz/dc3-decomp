@@ -1025,20 +1025,8 @@ void UtilDrawCigar(
     float sLen1;
     {
         float scaledLens[2];
-        {
-            int cnt = 2;
-            float *dst = scaledLens;
-            do {
-#ifdef HX_NATIVE
-                *dst = *(float *)((intptr_t)(lengths)
-                                  + ((intptr_t)dst - (intptr_t)scaledLens))
-                    * scale;
-#else
-                *dst = *(float *)((int)(lengths) + ((int)dst - (int)scaledLens)) * scale;
-#endif
-                dst++;
-                cnt--;
-            } while (cnt != 0);
+        for (int n = 0; n < 2; n++) {
+            scaledLens[n] = lengths[n] * scale;
         }
         memcpy(&basis, &tf, 0x40);
         Normalize(basis.m, basis.m);
@@ -1094,6 +1082,12 @@ void UtilDrawCigar(
     // loop (rows 153-161).  Both slot pairs are same-sized Vector3 temps that
     // MSVC assigns by use, not declaration order, and the documented pinned-region
     // slot order is still unresolved (docs/decomp/patterns/stack-slot-sharing.md).
+    // w16-a (95.25 -> 98.02): the scaledLens fill is a PLAIN `for (n < 2)`
+    // loop -- MSVC itself strength-reduces lengths[n] off the dst pointer,
+    // which is the odd `lengths + (dst - scaledLens)` address the old
+    // hand-stepped do/while spelled out.  Left: the top/bottom (0x90/0xa0) and
+    // v1/v2 (0x80/0x70) slot pairs and the h0 `fmr` placement listed above.
+    // Passing v1/v2 as unnamed Vector3 temporaries to Multiply is inert.
     Vector3 end;
     Vector3 top;
     Vector3 bottom;
@@ -1126,8 +1120,7 @@ void UtilDrawCigar(
     Vector3 verts2e0[18];
     Vector3 verts1c0[18];
 
-    int iIdx = 0;
-    do {
+    for (int iIdx = 0; iIdx < 3; iIdx++) {
         float latVal = (float)iIdx * anglePi6;
         float sinLatPi2 = FastSin(latVal + anglePiHalf);
         // These radii and the two sines below are single-precision in retail
@@ -1140,8 +1133,7 @@ void UtilDrawCigar(
         float r1 = sinLatPi2b * radii[1];
         float sinLatb = FastSin(latVal);
         float h1 = sinLatb * radii[1];
-        int iLon = 0;
-        do {
+        for (int iLon = 0; iLon < 6; iLon++) {
             float lonVal = (float)iLon * angle2Pi;
             float sinLon = FastSin((float)iLon * angle2Pi);
             float sinLonPi2 = FastSin(lonVal + anglePiHalf);
@@ -1153,22 +1145,16 @@ void UtilDrawCigar(
             // lonVal+pi/2 result) then f21 (the plain lonVal result).
             Vector3 v2(sLen1 + h1, sinLonPi2 * r1, sinLon * r1);
             Multiply(v2, basis, verts2e0[idx]);
-            iLon = iLon + 1;
-        } while (iLon < 6);
-        iIdx = iIdx + 1;
-    } while (iIdx < 3);
+        }
+    }
 
-    int i = 0;
-    do {
+    for (int i = 0; i < 6; i++) {
         TheRnd.DrawLine(verts2e0[i], verts1c0[i], col, false);
-        i = i + 1;
-    } while (i < 6);
+    }
 
-    int iRing = 0;
-    do {
-        int iJ = 0;
+    for (int iRing = 0; iRing < 3; iRing++) {
         int iK = 5;
-        do {
+        for (int iJ = 0; iJ < 6; iJ++) {
             int p1 = iRing * 6 + iJ;
             int p2 = iRing * 6 + iK;
             TheRnd.DrawLine(verts2e0[p1], verts2e0[p2], col, false);
@@ -1195,10 +1181,8 @@ void UtilDrawCigar(
             // iK trails iJ by one; retail keeps both in place (mr iK, iJ then
             // addi iJ, iJ, 1) rather than staging the old value in a temp.
             iK = iJ;
-            iJ = iJ + 1;
-        } while (iJ < 6);
-        iRing = iRing + 1;
-    } while (iRing < 3);
+        }
+    }
 }
 
 void UtilDrawPlane(
@@ -2168,71 +2152,44 @@ static const unsigned int kNumBloomTaps = 7;
 // Adding `const` is MEASURED SCORE-NEUTRAL (88.66129 canonical, same 16 rows,
 // w8-m 2026-09-30); it is landed for the section, not the number.
 //
-// RESIDUAL 88.66129, and all 16 rows are ONE root cause (w8-m):
-// the image hoists TWO INDEPENDENT .rdata bases into callee-saved registers --
-//   addi r27, r11, lbl_8208B100@l   (sBloomWeights)
-//   addi r26, r10, lbl_8208B13C@l   (sBloomOffsets)
-// and therefore saves r25-r31.  We hoist only sBloomWeights into r27 and let
-// MSVC derive the second base as `addi r11, r27, 0x3c` INSIDE the loop, in a
-// volatile register, recomputed every iteration -- so we save only r26-r31.
-// Everything else follows from that one decision: the __savegprlr_25 vs _26 and
-// __restgprlr_25 vs _26 pair, the 8-byte frame delta (`subi r12, r1, 0x40` vs
-// `0x38`), and the whole idx 8-25 lis/lfs/li shuffle, which is a REORDERING and
-// not missing code -- both sides load __real@00000000 into f31 and both set the
-// r30=0x9a / r31=0 pair, just at different slots.
-// MEASURED NEGATIVE: hoisting the second array into a named local pointer
-// (`const float *offsets = sBloomOffsets;` and indexing `offsets[i]`) is
-// BYTE-IDENTICAL -- same 65 instructions, same 16 rows, same 88.66129.  MSVC
-// sees through the pointer and still folds the two adjacent .rdata statics into
-// one base plus a displacement.  Defeating that fold needs the two arrays in
-// different sections, which the image does NOT have (both are .rdata, adjacent,
-// 0x3C apart), so the fold is a backend register-pressure choice rather than
-// something the source reaches.  Do not retry the pointer spelling.
-// SECOND MEASURED NEGATIVE (w9-f), a different attack on the same fold: the
-// hoist is a register-PRESSURE decision, so the obvious next lever is to make
-// both bases needed before a call -- read `float w = sBloomWeights[i];` at the
-// TOP of the loop body instead of between the two SetPConstant calls, which
-// keeps `w` live across the first call and forces the weights base to be
-// materialised early.  It is much worse: 88.66129 -> 82.2 canonical, 16 rows ->
-// 35, and it perturbs the r28/r29 pair, the 0x9a/0 setup and three stack slots
-// on top of the original save-set difference.  Both attacks on the two-base
-// hoist are now spent; treat the save-set difference as the floor here.
-static const float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
+// w16-a: CLOSED, 88.66129 -> 100.  The two tables are FUNCTION-LOCAL
+// `static const` arrays.  As file-scope statics MSVC knew their relative
+// layout and folded the offsets table into `addi r11, r27, 0x3c` off the
+// weights base (the w8-m residual: one hoisted base instead of the image's two,
+// __savegprlr_26 instead of _25, the 8-byte frame delta and the idx 8-25
+// shuffle).  Function-local statics are separate symbols to it, so it hoists
+// both bases (r26/r27) exactly as the image does.  The pointer-local and
+// early-weight-read attacks w8-m and w9-f recorded here were inert or worse
+// because they kept the file-scope pair.  The loop is also the plain
+// `for (i < 15)` form now (byte-identical to the hand-stepped one).
+void SetBloomBlurWeights(bool horizontal, float width, float height) {
+    static const float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
                                    0.0612547919f, 0.0815124959f, 0.0999667868f,
                                    0.1129886061f, 0.1176957935f, 0.1129886061f,
                                    0.0999667868f, 0.0815124959f, 0.0612547919f,
                                    0.0424231887f, 0.0270778369f, 0.0159283932f };
 
-static const float sBloomOffsets[15] = { -6.5f, -5.5f, -4.5f, -3.5f, -2.5f, -1.5f, -0.5f, 0.5f,
+    static const float sBloomOffsets[15] = { -6.5f, -5.5f, -4.5f, -3.5f, -2.5f, -1.5f, -0.5f, 0.5f,
                                    1.5f,  2.5f,  3.5f,  4.5f,  5.5f,  6.5f,  7.5f };
 
-void SetBloomBlurWeights(bool horizontal, float width, float height) {
-    int numTaps = 15;
-    int reg = 0x9a;
-    float one = 1.0f;
-    int i = 0;
     float invWidth = 1.0f / width;
     float invHeight = 1.0f / height;
-    TheShaderMgr.SetNumTaps(numTaps);
-    float zero = 0.0f;
-    do {
+    TheShaderMgr.SetNumTaps(15);
+    for (int i = 0; i < 15; i++) {
         float x, y;
         if (horizontal) {
             x = sBloomOffsets[i] * invWidth;
-            y = zero;
+            y = 0.0f;
         } else {
             y = sBloomOffsets[i] * invHeight;
-            x = zero;
+            x = 0.0f;
         }
-        Vector4 texOffset(x, y, one, one);
-        TheShaderMgr.SetPConstant((PShaderConstant)(reg - 0x10), texOffset);
+        Vector4 texOffset(x, y, 1.0f, 1.0f);
+        TheShaderMgr.SetPConstant((PShaderConstant)(0x8a + i), texOffset);
         float w = sBloomWeights[i];
         Vector4 weight(w, w, w, w);
-        TheShaderMgr.SetPConstant((PShaderConstant)reg, weight);
-        numTaps--;
-        i++;
-        reg++;
-    } while (numTaps != 0);
+        TheShaderMgr.SetPConstant((PShaderConstant)(0x9a + i), weight);
+    }
 }
 
 void SetBloomBlurWeightsStreak(
@@ -2946,24 +2903,10 @@ void TessellateMesh(RndMesh *mesh) {
     // call site); only the guard and the copy-back offset use the pre-loop r21.
     mesh->Verts().resize(mesh->Verts().size() + (int)newVerts.size());
 
-    if ((unsigned int)origNumVerts < nextVert) {
-        int offset = origNumVerts * 0x60;
-        int count = nextVert - origNumVerts;
-        RndMesh::Vert *src = &newVerts[0];
-        do {
-            memcpy(
-#ifdef HX_NATIVE
-                (void *)((intptr_t)mesh->Verts().mVerts + offset),
-#else
-                (void *)((int)(unsigned int)mesh->Verts().mVerts + offset),
-#endif
-                src,
-                sizeof(RndMesh::Vert)
-            );
-            count--;
-            offset += 0x60;
-            src++;
-        } while (count != 0);
+    // w16-a: a plain loop; MSVC strength-reduces it into the image's
+    // byte-offset/src-pointer pair itself (95.93 -> 96.6, copy loop now exact).
+    for (unsigned int i = origNumVerts; i < nextVert; i++) {
+        memcpy(&mesh->Verts(i), &newVerts[i - origNumVerts], sizeof(RndMesh::Vert));
     }
 
     mesh->Sync(0x3f);
@@ -3030,6 +2973,9 @@ void BuildVisit(BSPNode *node) {
     // spelling were all return values of an inlined accessor
     // (`mGeomOwner->` in TessellateMesh/UpdateGeometryBuffers), so an extra
     // inlined layer per mention is not by itself what creates them.
+    // w16-a: `(*lastIt).mTransform` (operator* returning a reference) instead
+    // of `lastIt->` for all nine mentions here is byte-identical (94.97, 121
+    // rows) -- operator-> vs operator* is not what homes them either.
     lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
     lastIt->mTransform.m.y.Set(0, 1, 0);
@@ -3214,40 +3160,18 @@ void BuildFromBSP(RndMesh *mesh) {
             vertIdx++;
         }
 
-        // RESIDUAL (w7-aq, 97.8 canonical): the image loads begin (0x8(r28))
-        // before end (0xc(r28)) for this size(); we load them the other way
-        // round.  Two rows, pure scheduling -- the image itself loads end first
-        // for the identical expression in the FIRST pass (target idx 15/17), so
-        // there is no consistent source spelling to copy.  The other residual is
-        // a callee-saved permutation: the image parks `mesh` in r26 and faceIdx
-        // in r25, we do the reverse (10 rows).  Both survive at 97.8.
+        // w16-a (97.81 -> 100 canonical, modulo register permutation): the
+        // fan is a PLAIN loop over v calling Face::Set.  The hand-stepped
+        // do/while it replaces (byte-offset facePtr, separate v1/v2 counters,
+        // `faceIdx += triCount` up front) is what kept the w7-aq residual
+        // alive -- with the plain loop MSVC itself strength-reduces it to the
+        // image's CTR loop, hoists `clrlwi firstVert`, seeds v-1 with the biased
+        // `addis r10, r11, 0x1 / subi r10, r10, 0x1`, and the size() load-order
+        // rows close too.  Left: the callee-saved swap mesh r26 / faceIdx r25
+        // (9 register-only rows, forgiven by the canonical ruler).
         int firstVert = vertIdx - (int)pit->mPoly.points.size();
-        int v2 = firstVert + 2;
-        if (v2 < vertIdx) {
-            int triCount = vertIdx - v2;
-            int faceOffset = faceIdx * 6;
-            // NEGATIVE RESULTS (w7-aq): the image seeds the second face index
-            // with a BIASED `addis r10, r11, 0x1 / subi r10, r10, 0x1`
-            // (= v2 + 0xFFFF, correct only because the value is masked to 16
-            // bits at every use) where we emit a plain `subi r10, r11, 0x1`.
-            // Spelling v1 `unsigned short` DOES produce the addis pair but then
-            // costs a `clrlwi` per increment -- 97.1%.  Dropping v1 entirely and
-            // writing `facePtr[1] = (unsigned short)(v2 - 1)` in the loop is
-            // worse again, 95.6%.  Plain int v1 is the best of the three.
-            int v1 = v2 - 1;
-            faceIdx += triCount;
-
-            do {
-                unsigned short *facePtr =
-                    (unsigned short *)((char *)&mesh->Faces()[0] + faceOffset);
-                facePtr[0] = (unsigned short)firstVert;
-                facePtr[1] = (unsigned short)v1;
-                facePtr[2] = (unsigned short)v2;
-                v2++;
-                v1++;
-                faceOffset += 6;
-                triCount--;
-            } while (triCount != 0);
+        for (int v = firstVert + 2; v < vertIdx; v++) {
+            mesh->Faces()[faceIdx++].Set(firstVert, v - 1, v);
         }
         ++pit;
     }

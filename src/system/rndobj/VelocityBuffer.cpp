@@ -76,16 +76,12 @@ bool RndXfmCache::CacheXfms(
         int startIndex = unk1b580;
 
         // Copy bone transform floats (12 floats/ints per bone = 3 float4 rows)
-        unsigned int totalFloats = numBones * 12;
-        unsigned int count = 0;
+        // w16-a: a plain indexed loop; MSVC derives the image's
+        // `boneFloats - dst` cursor itself (canonical unchanged, 96.296; the
+        // old spelling truncated both pointers through `int`).
         float *dst = (float *)&unk1f40[startIndex * 12];
-        if (totalFloats != 0) {
-            int diff = (int)boneFloats - (int)dst;
-            do {
-                count++;
-                *dst = *(float *)((int)dst + diff);
-                dst++;
-            } while (count < totalFloats);
+        for (unsigned int i = 0; i < numBones * 12; i++) {
+            dst[i] = boneFloats[i];
         }
 
         // Store mesh pointers (one per bone slot) and per-bone indices.
