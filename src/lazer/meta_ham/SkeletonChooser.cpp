@@ -1090,23 +1090,17 @@ void SkeletonChooser::ChoosePlayerSides() {
         MILO_ASSERT(pPlayer1Skeleton, 0x1cf);
         MILO_ASSERT(pPlayer2Skeleton, 0x1d0);
 
-        // RESIDUAL (w7-am, 97.1 canonical), three independent row groups:
+        // RESIDUAL (w12-c, 99.4 canonical), two row groups left:
         //   * 82909B7C/82909B80 load `__real@be19999a` into f30 and
         //     `__real@3e19999a` into f31; we get the two constants in the
-        //     other two registers.  8 rows, all of them the relocation NAME
-        //     on the paired lis/lfs plus the fcmpu operand.
-        //   * 82909C4C `clrlwi. r10, r11, 24` / `beq .L_82909D6C` -- the image
-        //     branches to the shared SwapPlayerSides() tail on the FALSE arm
-        //     and lets the true arm fall into the `side0 == kSkeletonLeft`
-        //     test below it; we emit `bne <end>` / `b <swap>`.
-        //   * 82909C80 loads TheGestureMgr above the `activeID` ternary, and
-        //     82909CA8 keeps `mr r30, r3` and `cmplwi cr6, r3, 0x0` separate
-        //     where we fuse them into `mr. r30, r3`.
-        // NEGATIVE RESULT (w7-am, 2026-09-14): hoisting the two thresholds into
-        // named `const float` locals declared -0.15f-first does NOT flip the
-        // f30/f31 assignment (still 97.1), and neither does inlining the
-        // `activeID` ternary into the GetSkeletonByTrackingID() argument so the
-        // object expression is evaluated first (still 97.1, same 19 rows).
+        //     other two registers (4 fcmpu rows).  Inert: thresholds as named
+        //     `const float` locals declared -0.15f-first (w7-am), and
+        //     inverting the side test so the +0.15 arm comes first (w12-c).
+        //   * 82909CA8 keeps `mr r30, r3` and `cmplwi cr6, r3, 0x0` separate
+        //     at the pPlayerSkeleton assert where we fuse them into `mr.`.
+        // Closed by w12-c: the swap tests are one `||` condition (the image's
+        // fall-through from the Right test into the Left test), and
+        // TheGestureMgr is read before the activeID select.
         SkeletonSide side0 = GetPlayerSide(0);
         int newSide0;
         if (side0 == kSkeletonRight) {
