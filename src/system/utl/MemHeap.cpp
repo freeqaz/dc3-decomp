@@ -78,32 +78,23 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
         rFrags,
         freeBytes
     );
-    // RESIDUAL (w7-aq, 96.601 canonical): the only structural rows left are
-    // this read's placement -- we hoist `lwz mStart` and its `stw ..., 0x50(r1)`
-    // spill above the FormatString block (idx 57/58) where the image does both
-    // after it (idx 66/73), which shifts the four `li 0` initialisers by two
-    // slots.  Everything else is register permutation.
-    // NEGATIVE RESULT (w7-aq, 2026-09-14): the image loads mSizeWords (0xc)
-    // first and mStart (0x4) second, both AFTER this MakeString("\n") write
-    // (`lwz r10, 0xc(r31)` / `lwz r11, 0x4(r31)` / `slwi` / `add r20, r10,
-    // r11`), while we hoist the 0x4 load above the call into r28.  Sinking
-    // `curPtr = mStart` below the write costs 2pp (91.796 -> 89.8), with or
-    // without an `int sizeWords = mSizeWords;` temp to force the load order --
-    // it converts one insert/delete pair into two and re-splits the r10/r11
-    // pair across the whole loop.  Same result w7-z measured independently.
+    // w17-d: 96.601 -> 100 (modulo register permutation). The image reads
+    // mSizeWords (0xc) then mStart (0x4) AFTER the MakeString("\n") write:
+    // `curPtr = mStart` sits below that write AND endPtr re-reads the member
+    // as `mSizeWords + mStart` (CSE'd with curPtr's load). w7-aq sank only
+    // the curPtr assignment, keeping `endPtr = curPtr + mSizeWords` (89.8).
     // curPtr is `int *`, not `unsigned int *`: MakeString takes every argument
     // by const reference, so the image passes `&curPtr` itself (`addi r4, r1,
     // 0x50`, idx 111) and therefore keeps the variable live in slot 0x50 --
     // written on loop entry (idx 72) and after every increment (idx 152).  A
     // `(int *)curPtr` cast at the call site materialises a *temporary* instead,
     // which is why our build spilled once, just before the call.
-    int *curPtr = mStart;
-
     ts << MakeString("\n");
+    int *curPtr = mStart;
     int curAllocCount = 0;
     int *curAllocPtr = nullptr;
     int curAllocSize = 0;
-    int *endPtr = curPtr + mSizeWords;
+    int *endPtr = mSizeWords + mStart;
     const AllocInfo *curAllocInfo = nullptr;
     unsigned int blockSizeWords = 0;
 
