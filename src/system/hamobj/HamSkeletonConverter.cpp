@@ -278,7 +278,9 @@ void HamSkeletonConverter::ScaleBone(
 
     float jointDist = Distance(pos1, pos2);
 
-    float meshDist = Distance(mesh1->WorldXfm().v, mesh2->WorldXfm().v);
+    // w14-b: sqrt(DistanceSquared) here (not Distance) is what makes MSVC sum
+    // the squares in the image's x,z,y order -- 99.897 -> 100; same value.
+    float meshDist = std::sqrt(DistanceSquared(mesh1->WorldXfm().v, mesh2->WorldXfm().v));
     float scale = meshDist / jointDist;
 
     Vector3 diff;
