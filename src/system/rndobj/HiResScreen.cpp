@@ -533,14 +533,13 @@ Hmx::Rect HiResScreen::ScreenRect(const RndCam *cam, const Hmx::Rect &r) const {
     // (idx 37/42).  A double literal here costs a `lfd __real@3ff00000...`,
     // a double `fdiv` and a trailing `frsp`.
     float invTiling = 1.0f / (float)tiling;
-    // RESIDUAL (w7-aq, 96.801 canonical): our frame is 0x10 bigger than the
-    // image's (0xc0 vs 0xb0) and all three Rects sit 0x10 higher, because the
-    // image coalesces the dead `tileRect` with the fourth GetBorderForTile
-    // out-param -- both live at 0x60(r1) there.  REFUTED: scoping tileRect
-    // into its own block around the CurrentTileRect call, which is the
-    // documented stack-slot lever, is byte-inert here (identical 20 rows).
+    // w13-a (96.8 -> 100): `ret`, the copy of r, is what the image hands
+    // CurrentTileRect (`addi r4, r1, 0x70`), and the result is accumRect
+    // adjusted in place (the stfs at 0x80..0x8c are CurrentTileRect's third
+    // out-param slot, copied to the return buffer from there).  With `ret`
+    // dead the image's frame was 0x10 smaller than ours.
     Hmx::Rect tileRect, accumRect;
-    CurrentTileRect(r, tileRect, accumRect);
+    CurrentTileRect(ret, tileRect, accumRect);
     int left, top, right, bottom;
     GetBorderForTile(tileX, tileY, left, top, right, bottom);
     float screenW = (float)TheRnd.Width();
@@ -564,11 +563,11 @@ Hmx::Rect HiResScreen::ScreenRect(const RndCam *cam, const Hmx::Rect &r) const {
     float rightOffset = widthScaled / (screenW - rightF) - invTiling;
     float topOffset = heightScaled / (screenH - topF) - invTiling;
     float bottomOffset = heightScaled / (screenH - bottomF) - invTiling;
-    ret.x = accumRect.x - leftOffset;
-    ret.w = rightOffset + accumRect.w + leftOffset;
-    ret.y = accumRect.y - topOffset;
-    ret.h = bottomOffset + accumRect.h + topOffset;
-    return ret;
+    accumRect.x = accumRect.x - leftOffset;
+    accumRect.w = rightOffset + accumRect.w + leftOffset;
+    accumRect.y = accumRect.y - topOffset;
+    accumRect.h = bottomOffset + accumRect.h + topOffset;
+    return accumRect;
 }
 
 Hmx::Rect HiResScreen::ScreenRect() const {
