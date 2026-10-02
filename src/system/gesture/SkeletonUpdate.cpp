@@ -524,6 +524,8 @@ void SkeletonUpdate::PostUpdate() {
     // Refuted: transposing the source order of the mFrame and mCameraInput
     // assignments here is byte-inert (2 rows before and after), so the store
     // schedule is not derived from the order these lines are written in.
+    // Also refuted (w12-d): an aggregate `= { ... }` initialiser, and
+    // assigning mCameraInput first -- both byte-inert.
     SkeletonUpdateData updateData;
     updateData.mSkeletonsLeft = &mSkeletonsLeft[0];
     updateData.mSkeletonsRight = &mSkeletonsRight[0];
