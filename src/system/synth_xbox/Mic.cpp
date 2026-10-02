@@ -116,24 +116,19 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
     float z1 = unkc;
     float z2 = unk10;
     unsigned int samps = size >> 1;
+    short *samples = (short *)data;
+    // Both loops index samples[i] off a hand-rotated counter: the indexing is
+    // what gives the image's biased-pointer `lha 0x2(rN)` / `sthu 0x2(rN)`
+    // pair (a `*++p` walk emits addi + sth), and the hand rotation keeps the
+    // compare-against-samps loop out of a CTR loop (97.6 -> 100).
     unsigned int i = 0;
     if (samps != 0) {
-        short *p = (short *)data - 1;
         do {
-            float in = (float)p[1];
+            float in = (float)samples[i];
             float out = (in - z1) * gain * 2.0f + z2 * coef;
             z1 = in;
             out = Clamp(-32767.0f, sMaxSample, out);
-            // Residual (97.60%, 5 charged rows, 636 B): the image fuses the
-            // pointer bump into the store -- `sthu r9, 0x2(r10)` at 82E3E538 --
-            // where we emit a separate `addi r10, r10, 0x2` plus `sth r9, 0x0(r10)`.
-            // Same in the second loop: the image keeps `lhz r11, 0x2(r8)` /
-            // `sthu r11, 0x2(r8)` off one biased pointer, we pre-increment at the
-            // loop head and read `lhz r9, 0x0(r11)`.  REFUTED: moving the counter
-            // increment ahead of the store (both loops) is completely inert.
-            // The rest is one callee-saved permutation, r31<->r30 (this vs samps)
-            // and r29<->r28 (&gNoiseThreshold vs maxSamp).
-            *++p = (short)out;
+            samples[i] = (short)out;
             z2 = (float)(short)out;
             i++;
         } while (i < samps);
@@ -147,16 +142,15 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
     float localRatio = DbToRatio(gLocalGain);
     unsigned int j = 0;
     if (samps != 0) {
-        short *p = (short *)data - 1;
         do {
-            short s = p[1];
+            short s = samples[j];
             if (s >= maxSamp) {
                 maxSamp = s;
             }
             if (s < minSamp) {
                 minSamp = s;
             }
-            *++p = (short)((float)s * localRatio);
+            samples[j] = (short)((float)s * localRatio);
             j++;
         } while (j < samps);
     }
