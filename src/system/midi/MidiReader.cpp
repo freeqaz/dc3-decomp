@@ -186,22 +186,26 @@ void MidiReader::ReadMidiEvent(
         QueueChannelMsg(tick, status, data1, data2);
 }
 
-float pow(float base, int exponent) {
-    int exp = exponent;
-    if (exponent < 0)
-        exp = -exponent;
-    float result = 1.0f;
-    for (;;) {
-        if (exp & 1)
-            result *= base;
-        exp = (unsigned)exp >> 1;
-        if (!exp) break;
-        base *= base;
+// w18-d: `pow(float, int)` is the XDK math.h overload, which forwards to the
+// CRT's `_Pow_int<float>` template; both are written here the way the header
+// writes them (the helper name is ours).  The forwarding level is what gives the
+// image's `fmr f13, f1` copy of x (85.0 -> 100).
+template <class T>
+inline T PowInt(T x, int y) {
+    unsigned int n;
+    if (y >= 0)
+        n = (unsigned int)y;
+    else
+        n = (unsigned int)(-y);
+    for (T z = T(1);; x *= x) {
+        if ((n & 1) != 0)
+            z *= x;
+        if ((n >>= 1) == 0)
+            return (y < 0 ? T(1) / z : z);
     }
-    if (exponent < 0)
-        result = 1.0f / result;
-    return result;
 }
+
+float pow(float x, int y) { return PowInt(x, y); }
 
 void MidiReader::ReadMetaEvent(int tick, unsigned char type, BinStream &bs) {
     MidiVarLenNumber num(bs);
