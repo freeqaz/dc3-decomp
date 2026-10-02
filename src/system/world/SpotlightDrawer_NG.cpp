@@ -542,17 +542,13 @@ void NgSpotlightDrawer::SetupForPostProcess() {
 
 void NgSpotlightDrawer::RenderFogProxy() {
     static float kFogScale = 10.0f;
-    // RESIDUAL 99.4595 canonical (444 B), ONE charged row: the image tests this
-    // null check SIGNED -- `cmpwi cr6, r29, 0x0` at 0x828306AC (function base
-    // 0x82830704 - 0x9a8 + 0x9a8; see SpotlightDrawer_NG.s) -- and we emit
-    // `cmplwi`.  The `lwz r29, 0x88(r3)` that feeds it is identical on both
-    // sides, so it is the same value; only the comparison's signedness differs,
-    // which on MSVC/Xenon means the image's operand is an `int`-typed
-    // expression, not a pointer.  MEASURED NEGATIVE (w8-q): `if (proxy != NULL)`
-    // is byte-inert -- still cmplwi, still 99.4595.  Whatever the image writes
-    // there is not a pointer-to-null comparison.
+    // w16-b: test the ObjPtr itself, not the raw `RndDrawable *` copied out of
+    // it: `if (objPtr)` compiles to the image's SIGNED `cmpwi cr6, r29, 0x0`
+    // (0x828306AC), a raw pointer test to `cmplwi` (same lever as
+    // CharHair::Strand::RootRef). MSVC CSEs the two loads, so the raw copy
+    // still rides in r29 for the Draw() call.
     RndDrawable *proxy = mParams.mProxy;
-    if (proxy) {
+    if (mParams.mProxy) {
         MILO_ASSERT(mFogDensityMap == SR().mDensityMap, 0x400);
         TheShaderMgr.SetPConstant((PShaderConstant)5, (RndTex *)0);
         float nearPlane = mSpotCam->NearPlane();

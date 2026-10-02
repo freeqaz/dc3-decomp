@@ -404,6 +404,9 @@ void SongCollision::CheckCollision(
     Vector3 normalDir;
     Normalize(dir, normalDir);
 
+    // w16-b (99.943, 23 rows = IV bump order + FPR permutation): a plain
+    // `for (i = 0; i < 2; i++)` and a Transform struct assignment in place of
+    // the memcpy are both byte-identical to this.
     int i = 0;
     do {
         memcpy(out._data + 0x60 + i * 0x40, &transforms[i], sizeof(Transform));

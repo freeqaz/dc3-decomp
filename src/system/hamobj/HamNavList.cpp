@@ -364,7 +364,7 @@ void HamNavList::Poll() {
         // When skipping poll but ribbon resource exists, reset slide sound anim
         if (mListRibbonResource) {
             const ObjPtr<RndAnimatable> &slideSoundAnim =
-                mListRibbonResource->SlideSoundAnim();
+                mListRibbonResource->mSlideSoundAnim;
             if (slideSoundAnim) {
                 slideSoundAnim->SetFrame(0.0f, 1.0f);
             }
@@ -477,36 +477,20 @@ void HamNavList::Poll() {
         if (mRibbonMode == HamListRibbon::kRibbonSlide
             && !mListRibbonResource->TestEntering()) {
             float level = mSlideSmoother.Level();
-            // The target null-tests the ObjPtr itself (unsigned compare on cr0
-            // plus the conversion temp's home-slot store at 0x50(r31)); a raw
-            // `RndAnimatable *` local gets a register and neither. Spelled the
-            // same way as the SkipPoll site above, which is byte-exact.
-            //
-            // Re-measured 2026-09-14 (w7-q).  THREE raw-pointer spellings --
-            // a plain local, `if (RndAnimatable *p = ...)`, and one local
-            // declared in the enclosing scope and assigned in both arms --
-            // produce BYTE-IDENTICAL code and all three score 98.98901 vs
-            // this spelling's 99.05180.  They do remove the surplus
-            // `addi r11, r3, 0x384` / `stw r11, 0x50(r31)` pair (the
-            // reference's own home slot, +16 B over the target), but they
-            // lose MORE: the image's `cmplwi r3, 0x0` on cr0 becomes
-            // `cmplwi cr6, r3, 0x0`, and `stw r3, 0x50(r31)` disappears
-            // entirely, at BOTH sites.  Net 2 inserts -> 6 replace/delete
-            // rows.  No spelling found that gives cr0 + the pointer home
-            // store without the reference's own home store.
-            //
-            // NOTE the two sites are genuinely different in the original:
-            // SkipPoll above compares SIGNED (`cmpwi cr6`) -- the ObjPtr
-            // shape -- and these two compare UNSIGNED on cr0.  Whatever the
-            // original wrote here, it is not the SkipPoll spelling.
+            // w16-b: bind the MEMBER, not the SlideSoundAnim() accessor's
+            // result. The accessor was one inline level too many: it homed its
+            // computed `this` (`addi r11, r3, 0x384` / `stw r11, 0x50(r31)`)
+            // on top of the ObjPtr conversion temp the image does home
+            // (`stw r3, 0x50(r31)`). Same at all four sites (Poll x3,
+            // SetSelecting x2 -- both functions now 100).
             const ObjPtr<RndAnimatable> &slideSoundAnim =
-                mListRibbonResource->SlideSoundAnim();
+                mListRibbonResource->mSlideSoundAnim;
             if (slideSoundAnim) {
                 slideSoundAnim->SetFrame(level, 1.0f);
             }
         } else {
             const ObjPtr<RndAnimatable> &slideSoundAnim =
-                mListRibbonResource->SlideSoundAnim();
+                mListRibbonResource->mSlideSoundAnim;
             if (slideSoundAnim) {
                 slideSoundAnim->SetFrame(0.0f, 1.0f);
             }
@@ -1368,34 +1352,12 @@ void HamNavList::SetSelecting(bool selecting) {
         }
     }
     if (mListRibbonResource) {
-        // Held as the ObjPtr reference SlideSoundAnim() actually returns, not
-        // decayed to a raw pointer: the `if` then runs ObjPtr's inlined
-        // conversion on a computed sub-object (+0x384), which is what puts the
-        // result in the 0x50 temp slot at 824487C4.
-        //
-        // Lane w7-ag, 2026-09-14: the 4 remaining inserts here are the
-        // fixable-inline-boundary "dead home-slot store" counter -- we home ONE
-        // inline level more than the image at each of the two sites:
-        //   target            base
-        //   -                 addi r11, r3, 0x384     <- extra level's `this`
-        //   lwz r3, 0x390(r3) lwz r3, 0x390(r3)
-        //   -                 stw r11, 0x50(r31)      <- extra home store
-        //   cmplwi r3, 0x0    cmplwi r3, 0x0          (cr0, both)
-        //   stw r3, 0x50(r31) stw r3, 0x50(r31)       (the image's one home)
-        // Two ways of removing a level were measured and both are WORSE:
-        //   `RndAnimatable *sla = ...->SlideSoundAnim();` removes BOTH homes
-        //     and flips the null test to cr6 -- 98.1982 -> 98.0 (the image's
-        //     own `stw r3, 0x50(r31)` then becomes a delete).
-        //   reference + a raw-pointer copy homes the REFERENCE instead of the
-        //     pointer -- 98.1982 -> 96.8.
-        // Closing it needs the count to drop by exactly one while the homed
-        // value stays r3, which this call chain (ObjDirPtr::operator-> ->
-        // inline SlideSoundAnim() -> inline ObjPtr conversion) cannot express
-        // without editing HamListRibbon.h, which another lane owns.
-        // w14-b: also measured -- SlideSoundAnim() returning RndAnimatable* (and
-        // every caller taking the pointer): SetSelecting 98.02, Poll 99.05 ->
-        // 98.89. Kept the reference accessor.
-        const ObjPtr<RndAnimatable> &sla = mListRibbonResource->SlideSoundAnim();
+        // The ObjPtr member itself (friend access), not the SlideSoundAnim()
+        // accessor: see Poll (w16-b). The `if` runs ObjPtr's inlined
+        // conversion, which is what puts the result in the 0x50 temp slot at
+        // 824487C4; the accessor added a second home store (w7-ag's "one inline
+        // level more than the image").
+        const ObjPtr<RndAnimatable> &sla = mListRibbonResource->mSlideSoundAnim;
         if (sla) {
             sla->SetFrame(1.0f, 1.0f);
         }
@@ -1403,7 +1365,7 @@ void HamNavList::SetSelecting(bool selecting) {
         mListRibbonResource->SetSelectToggle(skipSelectAnim);
     }
     if (mHeaderRibbonResource) {
-        const ObjPtr<RndAnimatable> &sla = mHeaderRibbonResource->SlideSoundAnim();
+        const ObjPtr<RndAnimatable> &sla = mHeaderRibbonResource->mSlideSoundAnim;
         if (sla) {
             sla->SetFrame(1.0f, 1.0f);
         }

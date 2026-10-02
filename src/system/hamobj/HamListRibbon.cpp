@@ -651,8 +651,11 @@ void HamListRibbon::Draw(
     // Save original transform and set up ribbon transform
     Transform savedXfm = xfm;
     Transform ribbonXfm;
-    ribbonXfm.Reset();
-    ribbonXfm.v.z = offset;
+    // w16-b: Identity() + v.Set(0, 0, offset) rather than Reset() + `v.z =`:
+    // the image stores v.x before v.y (0xb0 then 0xb4); Zero()'s chained
+    // assignment stores them the other way round.
+    ribbonXfm.m.Identity();
+    ribbonXfm.v.Set(0.0f, 0.0f, offset);
 
     unsigned int selectedIdx = 0xFFFFFFFF;
     Transform selectedXfm;
@@ -668,8 +671,12 @@ void HamListRibbon::Draw(
     // at index 70 is a base-only home store for `scrollable` (no target
     // instruction references 0x74(r31) at all); `int scrollable` instead of
     // `bool` removes it but costs 5.6pp of register allocation -- 96.2 -> 90.6.
-    // The (0xb0, 0xb4) store swap is inside the inlined Transform::Reset(), in
-    // PCH-reached math/Mtx.h, which this lane may not touch.
+    // w16-b (97.48 -> ~97.6, 13 -> 12 rows): dropping the named `scrollable`
+    // and spelling `numItems > 6` at both uses is 87.0 (refuted). Polarity
+    // flips of the loop body (`if (==) {body; tail} else {tail}`, and an empty
+    // then-arm with one shared tail) measured 95.8 and 89.0: the image's
+    // single select copy at the compare's fall-through, with both active arms
+    // `b`-ing back up to it, is still not reproduced.
     unsigned int totalPadded = paddedStates.size();
     for (unsigned int i = 0; i < totalPadded; i++) {
         bool inRange = ((int)i >= startOffset + paddingPerSide)

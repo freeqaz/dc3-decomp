@@ -893,6 +893,10 @@ ObjectDir *HamCharacter::GetNeutralSkeleton() {
 #endif
 zero_and_scale:
             bones->Zero();
+            // w16-b (98.77, 9 rows: r26/r27 swap + the cmplwi/addi order at
+            // 139/141): `*static_cast<CharBones *>(mSkeletonBones)` inline and
+            // a plain `CharBones *skBones = mSkeletonBones;` are byte-identical
+            // to this spelling.
             {
                 CharBones *skBones = mSkeletonBones ? static_cast<CharBones *>(mSkeletonBones) : nullptr;
                 sSkeletonClips[mGender == kHamFemale ? 1 : 0]->ScaleAdd(*skBones, 1.0f, 0.0f, 0.0f);
@@ -1164,6 +1168,8 @@ void HamCharacter::Poll() {
     // SetObjConcrete<AnimTask, ObjectDir> and we name it
     // SetObjConcrete<RndTex, ObjectDir>.  That is an ICF fold -- the two bodies are
     // identical -- and OUR name is the correct one for this call site.)
+    // w16-b: inverting the last test (`if (!tex) notify; else set;`) is 93.5,
+    // 15 structural rows -- refuted.
     RndTex *tex = Find<RndTex>(texName, false);
     if (!tex) {
         tex = Find<RndTex>("base.tex", false);

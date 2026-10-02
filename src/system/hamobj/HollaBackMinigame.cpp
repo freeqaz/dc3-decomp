@@ -398,6 +398,9 @@ void HollaBackMinigame::SetDefaultShot() {
     } else {
         TheHamDirector->Handle(Message("force_shot", "practice_center_p1.shot"), true);
     }
+    // w16-b (98.10, 19 rows): the image keeps only `lis r30, TheHamDirector@h`
+    // and loads `@l(r30)` where we materialise the full address in r30, in all
+    // four Handle arms. Chaining this lookup without the `anim` local is 90.2.
     RndPropAnim *anim = TheHamDirector->GetVenueWorld()->Find<RndPropAnim>(
         "bid_start_character_faded_out.anim", true
     );
@@ -613,6 +616,9 @@ void HollaBackMinigame::OnBeat() {
     // reference binding, `const`, declaring it after `songPos`/`theMoveDir`, and
     // dropping the local entirely (that last one also drops the `addi r10, r30, 0x78`
     // the target does emit, so it scores worse: 99.856 -> 99.855).
+    // w16-b: `master->TotalBeat2()` in the test (no local) deletes the image's
+    // `addi r10, r30, 0x78` too; a `const SongPos &` local is identical to
+    // this pointer. Same one-row residual either way.
     SongPos *prevSongPos = &master->SongPos2();
     SongPos *songPos = &master->SongPos1();
     MoveDir *theMoveDir = TheHamDirector->GetMoveDir();

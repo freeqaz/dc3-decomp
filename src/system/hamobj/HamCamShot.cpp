@@ -259,46 +259,23 @@ void HamCamShot::UpdateTargetsFlipped() {
                  kit != mKeyframes.end();
                  ++kit) {
                 CamShotFrame &frame = *kit;
-                // RESIDUAL at 98.26 (w7-at): the image carries a SECOND induction
-                // variable for this list. At 0x824A83A8 it forms `addi r25, r22, 0x88`
-                // (= &frame.mTargets + 4) BEFORE the keyframe loop and bumps it by
-                // 0x118 alongside the iterator at 0x824A8578, then reaches begin() as
-                // `0x4(r25)`, empty() as `0x0(r25)`, and the member calls through
-                // `subi r26, r25, 0x4`. We instead read begin() as `0x8c(r25)` off the
-                // keyframe iterator and form `addi r26, r25, 0x84` inside the loop, so
-                // MSVC never strength-reduces it. NEGATIVE RESULT: dropping this
-                // reference and spelling all four uses `frame.mTargets` does NOT create
-                // the induction variable -- it costs a whole extra register-swap
-                // cascade, 98.26 -> 97.6. Keep the binding.
-                // RE-CONFIRMED (w7-bp) at 98.62937 canonical, after the debug-loop
-                // row above was closed.  This is now the WHOLE residual: the three
-                // remaining structural rows are exactly this one decision --
-                //   [282] target `addi r25, r22, 0x88` before the loop, where we
-                //         emit `li r20, 0x31` (the pre-loop block is otherwise
-                //         instruction-for-instruction identical, just permuted);
-                //   [292] our `addi r26, r25, 0x84` INSIDE the loop, absent there;
-                //   [370] their `subi r26, r25, 0x4`, and [398] their second bump
-                //         `addi r22, r22, 0x118`, absent here.
-                // Everything else charged is register permutation (22 rows, 4
-                // pairs) plus 8 address-relocation rows on the function-local
-                // statics.  The w7-bp lever that closed the debug loop -- hoist the
-                // reference ABOVE the call that first uses it -- does not apply:
-                // `frame` is already the first statement of this loop body.
-                ObjPtrList<RndTransformable> &frameTargets = frame.mTargets;
+                // w16-b: 98.63 -> 100 canonical (modulo r9/r10 permutation and
+                // the lbl_ name of two function-local statics). The image's
+                // second induction variable (`addi r25, r22, 0x88`, bumped by 0x118
+                // with the frame pointer, `subi r26, r25, 0x4` only AFTER the read
+                // loop) is what MSVC makes when the read loop spells
+                // `frame.mTargets` directly and the list reference is bound only
+                // for the pop/push tail. Binding it at the top (w7-at/w7-bp) kept
+                // r26 live across the read loop instead. The name copy is the
+                // /Oi strcpy intrinsic (fixes the stbx operand order).
                 std::vector<RndTransformable *> newTargets;
-                for (ObjPtrList<RndTransformable>::iterator tit = frameTargets.begin();
-                     tit != frameTargets.end();
+                for (ObjPtrList<RndTransformable>::iterator tit = frame.mTargets.begin();
+                     tit != frame.mTargets.end();
                      ++tit) {
                     RndTransformable *target = *tit;
                     const char *name = target->Name();
                     char buf[256];
-                    const char *p = name;
-                    char c;
-                    do {
-                        c = *p;
-                        buf[p - name] = c;
-                        p++;
-                    } while (c != '\0');
+                    strcpy(buf, name);
 
                     RndTransformable *newTarget = target;
                     if (flipped) {
@@ -320,6 +297,7 @@ void HamCamShot::UpdateTargetsFlipped() {
                     }
                     newTargets.push_back(newTarget);
                 }
+                ObjPtrList<RndTransformable> &frameTargets = frame.mTargets;
                 while (!frameTargets.empty()) {
                     frameTargets.pop_back();
                 }

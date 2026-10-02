@@ -125,39 +125,15 @@ namespace {
                         if ((unsigned)midEnd <= 6) midEnd = 6;
 
                         // Z-score middle section with sliding window
-                        if (midEnd > 6) {
-                            // RESIDUAL (w7-bf, 99.70255 canonical, 4 rows in the
-                            // whole 1656-byte function, 3 of them here).  The
-                            // loop BODY is byte-identical to the image; only
-                            // the preheader's three independent `li`s are
-                            // rotated.  Image (^/* 824D33A4-824D33AC):
-                            //     li   r7, 0x18      ; rawOffset, byte-scaled
-                            //     li   r4, 0x1       ; windowStart
-                            //     subi r29, r30, 0x6 ; remaining
-                            // ours emits windowStart, remaining, rawOffset.
-                            // REFUTED, both bit-identical to this spelling:
-                            //   - declaring rawOffset before windowStart
-                            //     (plain decl reorder -- inert, as the
-                            //     project-wide note says);
-                            //   - one comma-declaration
-                            //     `int rawOffset = 6, windowStart = 1,
-                            //      remaining = midEnd - 6;`.
-                            // MSVC picks the preheader order after strength-
-                            // reducing rawOffset into the byte IV r7; nothing
-                            // in the source reaches that choice.
-                            int windowStart = 1;
-                            int rawOffset = 6;
-                            int remaining = midEnd - 6;
-                            do {
-                                float m = Mean(raw, windowStart, windowStart + 10);
-                                float diff = raw[rawOffset] - m;
-                                float quotient =
-                                    diff / Variance(raw, m, windowStart, windowStart + 10);
-                                remaining--;
-                                windowStart++;
-                                normalized[rawOffset] = quotient;
-                                rawOffset++;
-                            } while (remaining != 0);
+                        // w16-b: the plain loop (MSVC rotates it and
+                        // strength-reduces i into the byte IV r7 itself) gives
+                        // the image's preheader order `li r7, 0x18 / li r4, 0x1
+                        // / subi r29, r30, 0x6`; the hand-rotated do-while with
+                        // three named counters (w7-bf) emitted them rotated.
+                        for (int i = 6; i < midEnd; i++) {
+                            float m = Mean(raw, i - 5, i + 5);
+                            float diff = raw[i] - m;
+                            normalized[i] = diff / Variance(raw, m, i - 5, i + 5);
                         }
 
                         // Z-score tail section
@@ -545,6 +521,12 @@ INIT_REVS(2, 0)
 // It is NOT kAnalyzeJoints: the map puts that in .data (0x82F0E348, same values).
 // Restoring that const and going back to ASSERT_REVS(2, 0) should close this
 // row and retire the `*(&gAltRev - 2)` stand-in; its spelling is still open.
+// w16-b (measured): an unreferenced `const int kJointIndices[20] = {0..19}`
+// in the anonymous namespace is NOT emitted by MSVC, so ASSERT_REVS(2, 0)
+// still anchors on gRev (97.9-shape, 9 rows). The image's table must have had
+// a real (non-address) use, probably in a function /OPT:REF later discarded;
+// restoring it needs that use, not just the definition. Bytes confirmed in the
+// exe: 0x8204CD70 = 0,1,...,19 (int), 0x8204CDC0 gRev = 2, 0x8204CDC4 gAltRev = 0.
 BEGIN_LOADS(RhythmDetector)
     LOAD_REVS(bs)
     if (d.rev > 2) {
