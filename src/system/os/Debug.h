@@ -259,15 +259,15 @@ namespace {
     // docs/decomp/patterns/lexical-scope-controls-msvc-stack-slots: the slot SET
     // is already right (objdiff reports 1 PERMUTED slot, not a missing one) and
     // only the initialising store's placement differs.
+    // CLOSED (w17-c): 96.552 -> 100.  The count is `strings.size()` AND the
+    // compare loop owns its own for-scoped iterator.  The 0x50 store the image
+    // makes before the emptiness branch appears to be the begin() temporary of size()'s
+    // inlined distance(); the 94.828 probe above still shared one `it` between
+    // the size() test and the loop, which rotated the loop's pre-test away.
     inline bool AddToStrings(const char *name, std::list<String> &strings) {
-        unsigned int count = 0;
-        std::list<String>::iterator it = strings.begin();
-        for (; it != strings.end(); ++it)
-            count++;
-        if (count > 0x10)
+        if (strings.size() > 0x10)
             return false;
-        it = strings.begin();
-        for (; it != strings.end(); ++it) {
+        for (std::list<String>::iterator it = strings.begin(); it != strings.end(); ++it) {
             if (strcmp(it->c_str(), name) == 0)
                 return false;
         }
