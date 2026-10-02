@@ -1191,3 +1191,67 @@ original attempts. `scripts/addr_identity_witness.json` from `dc3-addrid-icf` an
 - **`obj_build_metadata_patcher.normalize()` returns its result**; it does not mutate.
   The staged Font3d probe hashed the unmodified input and would have called every variant
   identical, including its positive control. Found via `inspect.signature` before running.
+
+## Wave 11 — three-from-100 units (2026-10-02)
+
+### Result
+
+The one- and two-function tiers were spent going in: of 115 units one function from
+100 %, only 5 had never appeared in a wave 8–10 worklist; of 54 units two away, none.
+Each of the rest carries a recorded floor in-source. Wave 11 therefore took the fresh
+ground: **44 units three functions from 100 %** (132 rows, 87 KB) plus those 5 rows, in
+four directory-disjoint lanes.
+
+**31,449 → 31,488 matched (+39)**; all-100 authorable units **688 → 692 / 966**;
+remaining authorable **746 → 707 functions (562,668 → 548,580 B)**; XEX 49.164 % →
+49.278 %. Every landing UP-only, five build guards green, native gate 623 / 554 / 554 /
+0 / 69 with DtaFlow 11/11 on each.
+
+| lane | functions UP | units completed | matched |
+|---|---:|---:|---|
+| w11-d | 14 | 2 (ByteGrinder, Mic) | 31449 → 31460 |
+| w11-c | 8 | 0 | 31460 → 31467 |
+| w11-a | 12 | 1 (Pose) | 31467 → 31479 |
+| w11-b | 7 + 2 renamed | 1 (Memory_Xbox) | 31479 → 31488 |
+
+Unit yield is low by construction — a three-away unit completes only if all three close
+— but it is not the whole return: many of these units now sit one function away, which
+is the next wave's worklist.
+
+### Behaviour bugs, adjudicated against the target
+
+1. **`ByteGrinder` `op59`** had its two xor constants on the wrong halves: the image is
+   `((w >> 2) ^ 0x0F) | (((w & 3) << 6) ^ 0x19)` (`extrwi`/`xori 0xf`, `clrlslwi`/`xori
+   0x19` at `0x8276C930..3C`). The old code returned the wrong byte for **224 of 256**
+   inputs.
+2. **`DanceRemixer::JumpedMeasureStepsBetween`** advanced `from` in place, so its failure
+   message printed the current measure; the image passes from's untouched home slot.
+   Message text only.
+
+### Config: the hashless anon-namespace class is closed
+
+`?sDepthRectVerts@?A@@` (rnddx9/Rnd) was the second instance of last wave's
+`gXboxDeadzone` defect, from the same commit `391d1b080`. With it renamed, the config holds
+**0** hashless `?A@@` names (1 before the merge). Rnd.cpp had no other hashed anon-ns
+symbol to copy from, so the hash is `scripts/anon_ns_hash.py`'s prediction for that TU —
+which is what our build emits.
+
+Two further renames (w11-b) sit at **ICF-folded addresses**, where the retail map lists
+several names for one body and the config must use the name of the unit the split assigns
+the address to. Each checked twice: the address lies in that unit's `.text` range, and the
+map attributes exactly that name to that unit's object. A rename changes the report key,
+so the row diff shows "2 missing keys" — reconciled on `(unit, name)`: both old keys
+read 0.000, both new keys 100.000.
+
+### What the coordinator checked beyond each lane's report
+
+- `Mic.h` swaps two punned `int`s for one `unsigned long long` — layout-safe only because
+  it sits at offset 0 and 1016 bytes is a multiple of 8.
+- `SendOSCFloat`'s buffer shrinks 0x120 → 0x100 to match the image's frame;
+  `MakeOSCAddress` writes unbounded, so neither size was ever a guard.
+- `BuildSetOfPrevAdjacentMoveParents` calls `PrevAdjacents()` twice — safe because it
+  returns a `const&` (`MoveGraph.h:86`); by value, each call would build a new container.
+- `Memory_Xbox.cpp`'s `#line 15 "<retail path>"` sits on physical line 14, so it changes the
+  file name and not the line numbering.
+- Two PCH-reached header edits (`DirLoader.h`, `ObjPtr_p.h`) — whole-binary row diffs,
+  DOWN 0 both times.
