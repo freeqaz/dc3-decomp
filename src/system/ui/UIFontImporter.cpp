@@ -458,8 +458,12 @@ const char *UIFontImporter::GetMatVariationName(RndFontBase *font) const {
     if (font && font->Mat()) {
         RndMat *mat = font->Mat();
         if (mGennedFonts.size() > 0) {
-            RndFontBase *front =
-                mGennedFonts.size() != 0 ? *mGennedFonts.begin() : nullptr;
+            // The image re-tests the size as UNSIGNED (cmplwi after the signed
+            // cmpwi above) and keeps the dead null arm; the unsigned `<= 0`
+            // spelling is what stops MSVC folding it into the outer test.
+            RndFontBase *front = (unsigned int)mGennedFonts.size() <= 0
+                ? nullptr
+                : *mGennedFonts.begin();
             if (mat == front->Mat()) {
                 return "";
             }
