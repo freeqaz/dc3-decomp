@@ -1049,10 +1049,9 @@ void RndBitmap::DxtColor(
     MILO_ASSERT(dxt != 0, 0x6CC);
 
     int xQuotient = x / 4;
-    int xRemainder = x - xQuotient * 4;
-    int yQuotient = y / 4;
-    int blockIdx = (mWidth >> 2) * yQuotient + xQuotient;
-    int yRemainder = y - yQuotient * 4;
+    int blockIdx = (mWidth >> 2) * (y / 4) + xQuotient;
+    int xRemainder = x % 4;
+    int yRemainder = y % 4;
 
     if (dxt == 8) {
         DecodeDxtColor(mPixels + blockIdx * 8, xRemainder, yRemainder, true, r, g, b, a);
@@ -1061,9 +1060,20 @@ void RndBitmap::DxtColor(
         unsigned char unused;
         DecodeDxtColor(blockData + 8, xRemainder, yRemainder, false, r, g, b, unused);
         if (dxt == 0x10) {
+            // BEHAVIOURAL FIX (w12-a): the 4-bit DXT3 alpha is masked to its nibble
+            // BEFORE it is replicated -- `srw r11, r11, r10` / `clrlwi r11, r11, 28`
+            // / `slwi r10, r11, 4` / `or` (0x826731AC..0x826731B8).  This used to
+            // truncate to a byte instead, so the next texel's alpha nibble leaked
+            // into the high nibble of `a`.
+            // RESIDUAL (92.9 canonical): x/4 and y/4 are each computed twice (no
+            // CSE with x%4 / y%4 -- the image recomputes them too), but the image
+            // pairs the FIRST x/4 and y/4 with blockIdx and ours pairs them with
+            // the remainders.  Inert/worse: naming both quotients, naming only
+            // xQuotient, either operand order of the blockIdx add, declaring the
+            // remainders before blockIdx (89.7), rb3's declaration order with an
+            // inlined DecodeDxt3Alpha (88.5).
             unsigned short *alphaData = (unsigned short *)blockData;
-            unsigned char alphaBits =
-                (unsigned char)(alphaData[yRemainder] >> (xRemainder << 2));
+            int alphaBits = (alphaData[yRemainder] >> (xRemainder << 2)) & 0xF;
             a = alphaBits | (alphaBits << 4);
         } else {
             DecodeDxt5Alpha(blockData, xRemainder, yRemainder, a);
