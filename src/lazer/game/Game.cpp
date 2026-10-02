@@ -263,6 +263,11 @@ void Game::CheckPauseRequest() {
     }
 }
 
+// RESIDUAL (w12-b, 99.0 canonical), shared with LoadSong (99.5): inside
+// `new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s))` the image spills
+// the Symbol argument to a stack temp (`stw r30, 0x54(r31)`, LoadSong `stw r27,
+// 0x50(r31)`) before `mr r4, ...`; we pass it in a register only. Every other
+// row is the r29/r30 swap that one store causes. Not chased.
 void Game::LoadNewSongAudio(Symbol s) {
     if (mLoadedSongAudio != s) {
         mLoadedSongAudio = s;

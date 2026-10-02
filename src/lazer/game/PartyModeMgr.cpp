@@ -932,6 +932,10 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
     }
 }
 
+// RESIDUAL (w12-b, 98.84 canonical): register-only plus one `mr r30, r24`.
+// The image keeps `this` in r30 and reuses mode's r29 for maxplayers, which it
+// then counts down in place; we copy maxplayers into a fresh register for the
+// second loop. Rewriting both loops as `for (; n != 0; n--)` is byte-identical.
 void PartyModeMgr::DetermineSubModePlayers(
     Symbol mode, int *pPlayerFlags, int *pNumPlayers, std::vector<int> *vec
 ) {
@@ -1026,6 +1030,13 @@ void PartyModeMgr::AddPlayerToTeam(int team) {
     }
 }
 
+// RESIDUAL (w12-b, 99.92 canonical) -- same shape as FinalizeTeam: MSVC lays
+// the case-2 block before case 1, the image the reverse, so objdiff pairs the
+// two blocks against each other (every row +-12). Measured inert: swapping the
+// case order in source, and moving `default:` first. Worse: an if/else-if
+// chain (54.4), a `for` countdown loop (94.4). See
+// docs/decomp/patterns/fixable-control-flow.md (arm transposition is a
+// layout residual, not a polarity one).
 void PartyModeMgr::ClearTeam(int team) {
     switch (team) {
     case 1: {
@@ -1076,6 +1087,12 @@ void PartyModeMgr::ResetMicrogames() {
     mSubModePicker.Randomize();
 }
 
+// RESIDUAL (w12-b, 98.0 canonical): (1) both DataArray::Node calls in the
+// image use the Array() return still in r3; we re-copy it from r30 (`mr r3,
+// r30` / `mr r3, r29`). (2) team-2 index: the image does `li r4, 1` / ble /
+// `li r4, 0`, we emit the 0-then-1 form. Measured: `idx = 1; if (t1 > t2) idx
+// = 0;` turns branchless (95.2); passing the bool comparison straight into
+// Int() is worse (86.6); an empty-then/else spelling is identical to now.
 int PartyModeMgr::PickNextPlayer() {
     int ret = -1;
     if (mCurrentTeamSelector == 2) {

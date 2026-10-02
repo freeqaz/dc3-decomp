@@ -49,6 +49,10 @@ Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
     return nullptr;
 }
 
+// RESIDUAL (w12-b, 98.75 canonical): one row. After storing mStartBeat the
+// image re-reads it (`lfs f12, 0xc(r3)` right after the second `lwa` of
+// TheRnd.Width()) for mEndBeat's `+ mStartBeat`; we forward the stored value.
+// Byte-inert: writing the sum as `mStartBeat + (...)`.
 __declspec(noinline) void
 CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
     mViewStartBeat = start;

@@ -723,6 +723,11 @@ bool CharEyes::EyesOnTarget(float f) {
     return true;
 }
 
+// RESIDUAL (w12-b, 99.87 canonical): register/scheduling only. The image
+// computes the Subtract and the Length in y, z, x order; we do x, y, z. Same
+// order inversion shows up in CharCollide::GetRadius and Character::DrawShadow,
+// which points at the inlined math/Vec.h helpers (PCH-reached, not edited).
+// Byte-inert: computing the length via Distance(v2, v1).
 void CharEyes::EnforceMinimumTargetDistance(
     const Vector3 &v1, const Vector3 &v2, Vector3 &vout
 ) {

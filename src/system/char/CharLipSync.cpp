@@ -300,6 +300,9 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
             // that is what demotes numVisemes from r27 to r22 and permutes the
             // eight callee-saved registers above.  Moving the visemeIdx
             // increment out of the comma expression into the body is byte-inert.
+            // Measured WORSE (w12-b, 97.7 -> 97.4): the lever that closed Poll
+            // below -- `for (int i = numVisemes; i < newSize; i++)` with
+            // `Sym(i - numVisemes)` -- keeps the trip-count latch here.
             int visemeIdx = 0;
             for (; numVisemes < newSize; numVisemes++, visemeIdx++) {
                 Symbol visemeSym = result.Array(0)->Sym(visemeIdx);

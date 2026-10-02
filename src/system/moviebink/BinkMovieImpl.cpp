@@ -107,6 +107,10 @@ MovieInternalBuffers::~MovieInternalBuffers() {
     }
 }
 
+// (w12-b) The name_check rows here, `??3@YAXPAX@Z` vs
+// `?RadFree@?A0x6dfd0232@@YAXPAX@Z` and the MakeString array-size spellings,
+// are ICF folds (RadFree is listed in build/373307D9/icf_aliases.map), not
+// wrong callees.
 MovieInternalBuffers *MovieInternalBuffers::New(std::vector<BINK *> binks) {
     MovieInternalBuffers *ret = new MovieInternalBuffers();
 
