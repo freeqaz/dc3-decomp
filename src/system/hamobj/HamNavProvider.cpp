@@ -240,6 +240,11 @@ void HamNavProvider::SetLabel(int elementIndex, int i2, Symbol s) {
         // the Size() site with provData for the Clone, and provData taken
         // inside the if -- each CSEs the two Data() reads and instead parks
         // the DataArray* (r3) in 0x50 at both sites.
+        // w19-b: the image's dead `stw r11, 0x50(r31)` is the raw-receiver home
+        // store of an inlined call on the null-checked member pointer (see
+        // memory pattern dead-home-slot-store).  Measured: provData for Size()
+        // + mSubListProvider->Data() for the Clone 95.6; a DataProvider* local
+        // with Data() at both sites 94.5 (stores BOTH r11 and r3 to 0x50).
         DataArray *provData = curItem.mSubListProvider->Data();
         if (i2 < provData->Size()) {
             DataArray *cloned = provData->Clone(true, false, 0);
