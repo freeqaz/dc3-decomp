@@ -290,14 +290,14 @@ float MoveDetector::Last4BeatsDetectFrac(int player) const {
         return 0.0f;
     float avg = sum * 0.25f;
     avg = avg * 1.15f;
-    float clampedSum = 0.0f;
+    sum = 0.0f;
     for (int i = 0; i < 4; i++) {
         float val = mDetectThresholds[player][i];
         float absVal = -val < 0.0f ? val : 0.0f;
         float clamped = absVal - avg < 0.0f ? absVal : avg;
-        clampedSum += clamped;
+        sum += clamped;
     }
-    float result = -clampedSum < 0.0f ? clampedSum : 0.0f;
+    float result = -sum < 0.0f ? sum : 0.0f;
     return result - 1.0f < 0.0f ? result : 1.0f;
 }
 

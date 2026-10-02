@@ -382,17 +382,15 @@ void HamWardrobe::UpdateOverlay() {
                     // emits only one of those stores.
                     const char *name = cd->mClip ? cd->mClip->Name() : "<NULL>";
                     String s(name);
-                    // RESIDUAL (w7-ak, 99.1 canonical): 2 rows.  The image spells
-                    // this test as a branch DIAMOND -- `beq cr6, <insert>` then
-                    // `b <dtor>` -- where we emit the single inverted `bne`.
-                    // NEGATIVE RESULTS: a `bool isNew =` local lowers the compare
-                    // to subf/cntlzw/extrwi. (96.5), and an empty then-arm with the
-                    // body moved into an `else` is normalised back to this exact
-                    // `bne` (99.1, byte-identical rows).
-                    if (seen.find(s) == seen.end()) {
-                        seen.insert(s);
-                        *mOverlay << s.c_str() << " ";
+                    // w11-a: 99.1 -> 100.  The image's branch DIAMOND here
+                    // (`beq cr6, <insert>` then `b <dtor>`) is a `continue` out of
+                    // the loop body past the String's destructor; the plain
+                    // `if (find == end) { ... }` gave the single inverted `bne`.
+                    if (seen.find(s) != seen.end()) {
+                        continue;
                     }
+                    seen.insert(s);
+                    *mOverlay << s.c_str() << " ";
                 }
                 *mOverlay << "]\n";
             }

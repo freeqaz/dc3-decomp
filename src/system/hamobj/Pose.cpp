@@ -15,31 +15,25 @@ void Pose::Update(const Skeleton &skeleton) {
     for (std::vector<PoseElement *>::iterator it = mElements.begin(); it != mElements.end();
          ++it) {
         PoseElement *elem = *it;
-        weightedSum += elem->Score(skeleton) * elem->unk4;
+        float weight = elem->unk4;
+        weightedSum += elem->Score(skeleton) * weight;
         totalWeight += elem->unk4;
     }
     MILO_ASSERT(totalWeight != 0.0f, 0x95);
     float score = weightedSum / totalWeight;
     unk10.push_back(score);
-    unsigned int count = 0;
-    for (std::list<float>::iterator it = unk10.begin(); it != unk10.end(); ++it) {
-        count++;
-    }
+    unsigned int count = std::distance(unk10.begin(), unk10.end());
     if (count > (unsigned int)unk18) {
         unk10.erase(unk10.begin());
     }
 }
 
 float Pose::CurrentScore() const {
-    float minVal = 1.0f;
     float sum = 0.0f;
-    // RESIDUAL (w7-al, 87.5 canonical): the image enters this loop with a bare
-    // `b` to the bottom test (0x...  `b 0x9dc`), i.e. unrotated; MSVC rotates it
-    // for us and pays a guard -- `mr r9, r10` / `cmplw cr6, r10, r11` / `beq` --
-    // which is the whole insert cluster, and the copy into r9 is what repaints
-    // the FPR/GPR ranking below.  Byte-inert here: writing the loop as a `for`
-    // with an empty increment clause, and hoisting the iterator's declaration
-    // above minVal/sum.
+    float minVal = 1.0f;
+    // w11-a: 96.7 -> 100.  sum is declared before minVal (that fixes the
+    // r8/r9 pair the two constant loads land in), and case 1 returns a
+    // separate `score` local -- see there.
     std::list<float>::const_iterator it = unk10.begin();
     while (it != unk10.end()) {
         float val = *it;
@@ -62,12 +56,16 @@ float Pose::CurrentScore() const {
         // hand lets MSVC CSE the two begin() loads and costs the extra `mr`.
         unsigned int count = unk10.size();
         // ONE return, not an early `return 0.0f`: the image's short-count arm is
-        // `fmr f0, f31` (minVal = 0.0f) falling into the shared `fmr f1, f0`
-        // / `b` epilogue at 0x82528EE0-0x82528EE4.
+        // `fmr f0, f31` (score = 0.0f) falling into the shared `fmr f1, f0`
+        // / `b` epilogue at 0x82528EE0-0x82528EE4.  Assigning minVal itself let
+        // MSVC keep minVal in f1 and tail-merge this arm into the default's
+        // `fmr f1, f31`; the separate local keeps the loop's min in f0, which
+        // is also what fixes the f0/f1/f12/f13 assignment of the whole loop.
+        float score = minVal;
         if (count < (unsigned int)unk18) {
-            minVal = 0.0f;
+            score = 0.0f;
         }
-        return minVal;
+        return score;
     }
     default:
         MILO_FAIL("Bad Pose ScoreMode!");
@@ -118,7 +116,13 @@ float BoneAngleRangePoseElement::Score(const Skeleton &skeleton) const {
     // range-check macro leaves behind, and it names the member, not the local
     // alias -- so spell it that way here.
     MILO_ASSERT((1.0f)-(0.001f) <= (Length(mAngle)) && (Length(mAngle)) <= (1.0f)+(0.001f), 0x21);
-    float dot = Dot(boneDir, angle);
+    // w11-a: the dot product accumulated by hand.  The inlined Dot() lets
+    // /fp:fast pick the association per call site and here it picks y first;
+    // the image multiplies z, then fmadds x, then fmadds (boneDir.y * angle.y).
+    // This statement order is the one that reproduces it (99.95 -> 100).
+    float dot = angle.x * boneDir.x;
+    dot += angle.z * boneDir.z;
+    dot += boneDir.y * angle.y;
     float acosAngle = acosf(dot);
     if (acosAngle <= unk1c)
         return 1.0f;

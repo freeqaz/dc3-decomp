@@ -325,6 +325,9 @@ float DanceRemixer::JumpedBeat(float beat) const {
     // (float)fromBeat; return shifted + (float)toBeat), reversing the fadds
     // operands ((float)toBeat + (beat - (float)fromBeat)), and hoisting
     // (int)beat into a named local used by all three compares.
+    // w11-a: two more spellings inert at 90.88636 -- compound assignment on
+    // the parameter (beat -= fromBeat; beat += toBeat) and a float local for
+    // the converted toBeat.
     return (beat - (float)fromBeat) + (float)toBeat;
 }
 
@@ -342,12 +345,16 @@ int DanceRemixer::JumpedMeasureAdd(int measure, int count) const {
 int DanceRemixer::JumpedMeasureStepsBetween(int from, int to, int direction) const {
     MILO_ASSERT(direction == 1 || direction == -1, 0x1bd);
     int count = 0;
-    while (from != to) {
+    // The walk runs on a copy: the failure message reports the ORIGINAL
+    // `from`.  The image never writes the advanced measure back to from's
+    // home slot (0xbc(r1)), yet passes that slot's address to MakeString.
+    int measure = from;
+    while (measure != to) {
         count += direction;
         if ((count < 0 ? -count : count) > mTotalMeasures * 2) {
             TheDebug.Fail(MakeString("JumpedMeasureDifference: can't get from measure %d to measure %d\n", from, to), nullptr);
         }
-        from = JumpedMeasureAdd(from, direction);
+        measure = JumpedMeasureAdd(measure, direction);
     }
     return count;
 }
@@ -402,7 +409,6 @@ void BuildSetOfPrevAdjacentMoveParents(
     std::set<const MoveParent *>::const_iterator end = s2.end();
     while (it != end) {
         const MoveParent *moveParent = *it;
-        const std::vector<const MoveParent *> &prevAdjs = moveParent->PrevAdjacents();
         // w8-i: the index is a SIGNED int and the size is cast, not `unsigned int
         // i < prevAdjs.size()`.  95.04 -> 97.83 (184 B); all three opcode rows
         // closed together, because they are one decision seen three times: the
@@ -410,15 +416,13 @@ void BuildSetOfPrevAdjacentMoveParents(
         // count needs no arithmetic shift -- the image tests the BYTE span with
         // its low two bits cleared), its branch `beq` -> `ble`, and the loop-back
         // compare `cmplw` -> `cmpw`.
-        // RESIDUAL (w8-i, 97.83 canonical / 95.21739 fuzzy): 16 rows of 46, all
-        // allocation -- r10<->r11 (13) and r29<->r30 -- plus one target-only
-        // `lwz r11, 0x0(r31)` at idx 16 and the (0x0,0x4) pair at idx 31/33: the
-        // image reads the vector's finish before its start when it recomputes the
-        // size each iteration, we read start first.  Both sides DO recompute it
-        // per iteration, so hoisting the bound into a local would delete the
-        // reload the image keeps and is the wrong direction.
-        for (int i = 0; i < (int)prevAdjs.size(); i++) {
-            const MoveParent *prevAdj = prevAdjs[i];
+        // w11-a: 97.83 -> 100 by calling PrevAdjacents() at BOTH use sites
+        // instead of binding a reference local.  With the getter re-invoked the
+        // image re-reads the vector's start at the top of every iteration
+        // (`lwz r11, 0x0(r31)`) and reads finish-then-start in the loop test;
+        // the reference local let MSVC carry start from the test into the body.
+        for (int i = 0; i < (int)moveParent->PrevAdjacents().size(); i++) {
+            const MoveParent *prevAdj = moveParent->PrevAdjacents()[i];
             if (!prevAdj->HasRestMoveVariant() && !prevAdj->HasFinalMoveVariant()) {
                 s1.insert(prevAdj);
             }

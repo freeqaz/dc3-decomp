@@ -171,18 +171,19 @@ bool SongCollision::Equals(SongCollision *other) {
         if (mData[i].size() != other->mData[i].size())
             return false;
         for (unsigned int j = 0; j < mData[i].size(); j++) {
-            BeatCollisionData &a = mData[i][j];
-            BeatCollisionData &b = other->mData[i][j];
-            bool close = std::fabs(a.mMaxX - b.mMaxX) < 0.0001f;
+            // w11-a: the image forms other's element address first and indexes
+            // our own element inline for the first test (`add r8, r7, r10`,
+            // offset + begin); binding `a` up front, or declaring b then a,
+            // flips the add operands.
+            const BeatCollisionData &b = other->mData[i][j];
+            bool close = std::fabs(mData[i][j].mMaxX - b.mMaxX) < 0.0001f;
+            const BeatCollisionData &a = mData[i][j];
             if (!close)
                 return false;
             close = std::fabs(a.mMinX - b.mMinX) < 0.0001f;
             if (!close)
                 return false;
-            float dz = a.mOffset.z - b.mOffset.z;
-            float dx = a.mOffset.x - b.mOffset.x;
-            float dy = a.mOffset.y - b.mOffset.y;
-            close = std::fabs(std::sqrt(dz * dz + dx * dx + dy * dy)) < 0.0001f;
+            close = std::fabs(Distance(a.mOffset, b.mOffset)) < 0.0001f;
             if (!close)
                 return false;
         }
