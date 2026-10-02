@@ -156,6 +156,8 @@ void SuperEasyRemixer::DumpSongLayout() {
             Difficulty next = DifficultyOneHarder(d);
             if (next != kNumDifficulties) {
                 str += "\t";
+                // w16-b: `if (i > 0)` is 85.9 (refuted); MSVC's (i-1)*4 IV
+                // basis needs the `i - 1` spelling here.
                 if (i - 1 >= 0) {
                     // Each pair member is a named local: the image evaluates the
                     // FIRST argument's lookup first and holds the element itself

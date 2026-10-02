@@ -1796,6 +1796,9 @@ Symbol HamDirector::ClosestMove() {
                     DataArray *listArr = list.Array();
                     // 0x82474450 `li r25, -0x1` precedes 0x82474454
                     // `li r24, 0x0`: maxScore is initialised first.
+                    // w16-b: plain loops (for over i, `while (cand[m] && buf[m])`
+                    // over the match) move the zero test onto `extsb.` and lose
+                    // the image's cmplwi + redundant clrlwi: 3 rows vs 1.
                     int maxScore = -1;
                     int i = 0;
                     if (0 < listArr->Size()) {
@@ -2702,6 +2705,8 @@ bool HamDirector::ReactToCollision(float frame) {
                     "SONG_COLLISION_ABORT_SUPPRESSED_SHOT_IF_ANOTHER_WITHIN_X_BEATS"
                 )
                     ->Float(0);
+            // w16-b: flipping this if/else (MoveShot(beat) arm first) is 85.4
+            // -- refuted (and `>=` would change NaN behaviour anyway).
             if (beatSum
                 < beat3 - sSongCollisionAbortSuppressedShotIfAnotherWithinXBeats) {
                 ReactToCollision_MoveShot(keyIdx2, beatSum);

@@ -448,6 +448,9 @@ void RhythmBattlePlayer::SwagJackedBonus(Hmx::Object *, RhythmBattleJackState, i
 }
 
 void RhythmBattlePlayer::SwapObjs(RhythmBattlePlayer *player) {
+    // w16-b (95.8): the image loads player->mComboPosAnim (`lwz r28, 0x14(r4)`)
+    // before `mr r31, r4`; we after. A `RndAnimatable *temp;` declared
+    // separately and assigned is byte-identical. Only the first block differs.
     RndAnimatable *temp = player->mComboPosAnim;
     player->mComboPosAnim = mComboPosAnim;
     mComboPosAnim = temp;

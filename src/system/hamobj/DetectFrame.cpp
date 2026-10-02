@@ -114,6 +114,8 @@ float DetectFrame::LimbPSNR(const FilterVersion *filter_version, int i2) const {
             // byte-identical to Dot() -- MSVC canonicalises the sum.  This is the
             // math/Vec.h component-order family; the 3 MakeString name rows are
             // ICF naming noise (same strings both sides).
+            // w16-b: Dot(mBestNodeErrors[i], nodeWeight) is identical; Length()
+            // before the Dot is 89.9 (refuted).
             float d = Dot(nodeWeight, mBestNodeErrors[i]);
             f12 += d * d;
             f13 += Length(nodeWeight);
