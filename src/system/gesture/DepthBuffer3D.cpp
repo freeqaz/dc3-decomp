@@ -729,26 +729,31 @@ void DepthBuffer3D::DrawShowing() {
     TheShaderMgr.SetVConstant((VShaderConstant)0x41, paletteParams);
     TheShaderMgr.SetPConstant((PShaderConstant)0x41, paletteParams);
 
-    float p1Slot, p2Slot;
-    if (mForceDrawSkeletonIdx == -999) {
+    // w18-c: written straight into slotParams, as the image does (stfs to its
+    // 0xa0/0xa4 slots inside each arm, with the else arm's y = -1.0f sharing the
+    // -999 arm's store), and z/w computed in FLOAT: the image converts modf's
+    // double result first (`frsp f0, f1`) and then does `fmsubs f0, f0, f18,
+    // f19` -- (float)modf(...) * 2.0f - 1.0f.  We used to multiply the double
+    // (`fmsub` against 2.0 / 1.0 double literals) and round once at the end.
+    Vector4 slotParams;
+    if (mForceDrawSkeletonIdx != -999) {
+        slotParams.x = (mForceDrawSkeletonIdx < 0) ? -1.0f : (float)(mForceDrawSkeletonIdx + 1);
+        mDrawPlayer2 = false;
+        mDrawPlayer1 = true;
+        mDrawNonPlayers = mForceDrawEnabled;
+        slotParams.y = -1.0f;
+    } else {
         HamPlayerData *pd0 = TheGameData->Player(0);
         Skeleton *s0 = TheGestureMgr->GetSkeletonByTrackingID(pd0->GetSkeletonTrackingID());
         HamPlayerData *pd1 = TheGameData->Player(1);
         Skeleton *s1 = TheGestureMgr->GetSkeletonByTrackingID(pd1->GetSkeletonTrackingID());
-        p1Slot = (float)((s0 == nullptr) ? -1 : (s0->SkeletonIndex() + 1));
-        p2Slot = (float)((s1 == nullptr) ? -1 : (s1->SkeletonIndex() + 1));
-    } else {
-        p2Slot = -1.0f;
-        p1Slot = (mForceDrawSkeletonIdx < 0) ? -1.0f : (float)(mForceDrawSkeletonIdx + 1);
-        mDrawPlayer2 = false;
-        mDrawPlayer1 = true;
-        mDrawNonPlayers = mForceDrawEnabled;
+        slotParams.x = (s0 == nullptr) ? -1 : (s0->SkeletonIndex() + 1);
+        slotParams.y = (s1 == nullptr) ? -1 : (s1->SkeletonIndex() + 1);
     }
 
     double ip;
-    float anim1 = (float)(modf((double)mBoxymanPaletteAnim, &ip) * d42 - d43);
-    float anim2 = (float)(modf((double)mBoxymanPaletteAnim, &ip) * d42 - d43);
-    Vector4 slotParams(p1Slot, p2Slot, anim1, anim2);
+    slotParams.z = (float)modf((double)mBoxymanPaletteAnim, &ip) * d42 - d43;
+    slotParams.w = (float)modf((double)mBoxymanPaletteAnim, &ip) * d42 - d43;
     TheShaderMgr.SetVConstant((VShaderConstant)0x42, slotParams);
     TheShaderMgr.SetPConstant((PShaderConstant)0x42, slotParams);
 
@@ -818,10 +823,10 @@ void DepthBuffer3D::DrawShowing() {
     if ((!mDrawPlayer1) || mDrawPlayer2 || mDrawNonPlayers) {
         playerSel = d45;
         if ((!mDrawPlayer1) && mDrawPlayer2 && (!mDrawNonPlayers)) {
-            playerSel = p2Slot;
+            playerSel = slotParams.y;
         }
     } else {
-        playerSel = p1Slot;
+        playerSel = slotParams.x;
     }
     if (depthZoomParams[1] <= depthZoomParams[0]) {
         MILO_ASSERT(depthZoomParams[0] < depthZoomParams[1], 0x2ce);
