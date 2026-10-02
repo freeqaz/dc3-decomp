@@ -789,6 +789,15 @@ MemRealloc(void *mem, int size, const char *file, int line, const char *name, in
 
 MemHeapStack &ThreadMemStack(bool);
 
+// RESIDUAL (w14-l, 99.00): 4 rows, all one ANCHOR PICK.  Both globals are
+// static now, so MSVC does co-address them -- but the image anchors r30 on
+// &gInitted (lbz gInitted@l(r11), then gNumHeaps as 0x13(r30) and the
+// MakeString arg as `addi r5, r30, 0x13`), while we anchor on &gNumHeaps
+// (`lbz -0x13(r30)`, `lwz 0x0(r30)`, `mr r5, r30`).  Not linkage: MemFindHeap
+// and MemInit pick gInitted in both builds.  Tried: `if (gInitted &&
+// gNumHeaps > 0)` without the bool local -> 91.6 (loses the materialised
+// bool).  Same family as the gRev/gAltRev anchor pick (RhythmBattlePlayer.cpp)
+// and System.cpp's gUsingCD/gSystemConfig pair.
 void MemPushHeap(int iHeap) {
     bool proceed = gInitted && gNumHeaps > 0;
     if (proceed) {

@@ -9,8 +9,14 @@
 #include "utl\TextStream.h"
 #include "utl\Std.h"
 
-int gBigHunk = 0xC800;
-int gSmallHunk = 0xC800;
+// w14-l: FILE STATICS.  Neither is in the linker map (which names every public
+// global), and RawAlloc reaches gSmallHunk as +0x4 off the one base it
+// materializes for gBigHunk (827CF164 `addi r31, r11, gBigHunk@l`, then
+// 0x0(r31) / 0x4(r31)) -- MSVC only co-addresses two globals when both have
+// internal linkage.  Their .data is the image's 0x82F189D0 / 0x82F189D4, which
+// splits.txt used to file under MemMgr's range.
+static int gBigHunk = 0xC800;
+static int gSmallHunk = 0xC800;
 int gPoolCapacity = 0;
 bool gPoolAllocInitted = 0;
 ChunkAllocator *gChunkAlloc = nullptr;
@@ -129,35 +135,14 @@ int *FixedSizeAlloc::RawAlloc(int size) {
     gPoolCapacity += size;
 
     if (buf + words > sPoolEnd) {
-        // The image reaches gSmallHunk as a +4 displacement off ONE materialized
-        // base -- `addi r31, r11, ?gBigHunk@@3HA@l`, then 0x0(r31) / 0x4(r31),
-        // and `?gBigHunk@@3HA` is the only relocation it names.  Two independent
-        // external globals each get their own relocation, so MSVC will not
-        // co-address them on its own; taking the base once and indexing is what
-        // reproduces it.  Making them one struct also works but renames the
-        // relocation, which costs PoolAllocInit's `FindData("big_hunk", ...)`
-        // row -- measured: RawAlloc 98.036 / PoolAllocInit 99.583 for the
-        // aggregate vs RawAlloc 98.214 / PoolAllocInit 100.0 for this form.
-#ifdef HX_NATIVE
-        // Native addresses the two sizes by name.  The Xenon form below reads
-        // gSmallHunk as &gBigHunk + 1, which is only defined because MSVC lays
-        // this TU's two .data ints out adjacently; the C++ object model does not
-        // promise it, and clang is free to place them apart.
-        int &bigHunk = gBigHunk;
-        int &smallHunk = gSmallHunk;
-#else
-        int *hunkSizes = &gBigHunk; // [0] is gBigHunk, [1] is gSmallHunk
-        int &bigHunk = hunkSizes[0];
-        int &smallHunk = hunkSizes[1];
-#endif
         if (MemNumHeaps() > 0) {
-            if (bigHunk == smallHunk) {
+            if (gBigHunk == gSmallHunk) {
                 printf("PoolAlloc warning: allocating small pool chunk\n");
             }
             MemPushHeap(0);
         }
 
-        sPoolBuf = (int *)_MemAllocTemp(bigHunk, __FILE__, 0x71, "PoolChunk", 0);
+        sPoolBuf = (int *)_MemAllocTemp(gBigHunk, __FILE__, 0x71, "PoolChunk", 0);
 
         if (MemNumHeaps() > 0) {
             MemPopHeap();
@@ -168,8 +153,8 @@ int *FixedSizeAlloc::RawAlloc(int size) {
         // once again after MemPopHeap, which is what a plain global read either
         // side of an opaque call produces.
         buf = sPoolBuf + 0x10;
-        sPoolEnd = sPoolBuf + (bigHunk >> 2);
-        bigHunk = smallHunk;
+        sPoolEnd = sPoolBuf + (gBigHunk >> 2);
+        gBigHunk = gSmallHunk;
     }
 
     sPoolBuf = buf + words;
