@@ -64,7 +64,7 @@ void NetLoader::SetSize(int size) { mSize = size; }
 void NetLoader::PostDownload() { mIsLoaded = true; }
 const char *NetLoader::GetRemotePath() const { return mStrRemotePath.c_str(); }
 void NetLoader::SetFailType(NetLoaderFailType ft) { mFailType = ft; }
-char *NetLoader::GetBuffer() { return mBuffer; }
+char *NetLoader::GetBuffer() { return !mIsLoaded ? nullptr : mBuffer; }
 
 NetLoaderStub::NetLoaderStub(const String &str) : NetLoader(str), mFileLoader(nullptr) {
     FilePath path(
@@ -113,37 +113,16 @@ DataNetLoader::~DataNetLoader() {
     }
 }
 
-// RESIDUAL (w7-az, 94.77, 17 rows).  The shape is right; the whole gap is two
-// dead `stb r11, 0x50(r31)` home stores our build makes for the inlined
-// IsLoaded() return value, plus the callee-saved rotation they force.  The
-// image holds that byte in r11 across the whole block and never spills it:
-// `lbz r11, 0xc(r3)` at 0x827FCDE0, `cmplwi r11, 0x0` at 0x827FCDE4,
-// `clrlwi r11, r11, 24` at 0x827FCDEC, and the SECOND test is
-// `cmplwi r11, 0x0` at 0x827FCDF8 -- one load, two compares, no store.
-// Because 0x50 is free there, the image puts the Symbol temp in it
-// (`addi r3, r31, 0x50` at 0x827FCE4C); we push it to 0x54.  A /FAs listing
-// names our two homes `$T38991` and `$T38998`, both `= 80 ; size = 1`, each
-// written once and never read -- MSVC /Ogsu homes the bool result of an
-// inlined call used directly as an `if` condition, and there are two such
-// conditions.  Register assignment follows: image this=r29 size=r27
-// buffer=r28, ours this=r27 size=r28 buffer=r29.
-// NEGATIVES:
-//   * `bool isLoaded = mNetLoader->IsLoaded();` tested twice -- 86.9.  It also
-//     splits the `if (mNetLoader)` test off its own load (`lwz r11, 0x0(r3)`
-//     inserted, `lwz r3, 0x0(r3)` deleted), which the image does in one.
-//   * `char *buffer = mNetLoader->IsLoaded() ? mNetLoader->GetBuffer()
-//     : nullptr;` -- 88.3, adds a branch pair.
-//   * declaring `buffer` before `size` -- byte-inert, 94.77.
-//   * caching `NetLoader *loader = mNetLoader;` for every use -- byte-inert,
-//     94.77; it does NOT move the `this` register off r27.
+// GetBuffer() is the RB3 form (null unless loaded) and is fully inlined here;
+// the image tests the IsLoaded() byte once and reuses it for GetBuffer's test
+// (`clrlwi r11, r11, 24` / `cmplwi r11, 0x0` at 0x827FCDEC/0x827FCDF8).  The
+// `!mIsLoaded ? nullptr : mBuffer` spelling is what places this/size/buffer in
+// r29/r27/r28, and the duplicated delete tail (RB3's shape) is tail-merged.
 void DataNetLoader::PollLoading() {
     if (mNetLoader) {
         if (mNetLoader->IsLoaded()) {
             int size = mNetLoader->GetSize();
-            char *buffer = nullptr;
-            if (mNetLoader->IsLoaded()) {
-                buffer = mNetLoader->GetBuffer();
-            }
+            char *buffer = mNetLoader->GetBuffer();
             const char *remotePath = mNetLoader->GetRemotePath();
             if (streq(FileGetExt(remotePath), "dtz")) {
                 DataArray::SetFile(remotePath);
@@ -152,11 +131,14 @@ void DataNetLoader::PollLoading() {
                 BufStream bs(buffer, size, true);
                 mData = DataReadStream(&bs);
             }
+            TheNetCacheMgr->DeleteNetLoader(mNetLoader);
+            mNetLoader = nullptr;
         } else if (!mNetLoader->HasFailed()) {
             return;
+        } else {
+            TheNetCacheMgr->DeleteNetLoader(mNetLoader);
+            mNetLoader = nullptr;
         }
-        TheNetCacheMgr->DeleteNetLoader(mNetLoader);
-        mNetLoader = nullptr;
     }
 }
 
