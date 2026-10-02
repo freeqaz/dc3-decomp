@@ -203,6 +203,17 @@ void HamCharacter::PostLoad(BinStream &bs) {
     }
 }
 
+// w17-b: the blink-clip predicate is a separate INLINE bool function.  Its
+// result is materialised as 0/1 in r11 at the call boundary and the outer `&&`
+// re-tests it (`clrlwi. r11, r11, 24` / `li r4, 1` / `bne`, sharing the
+// `li r4, 0` with the null-servo arm, 0x824918B4..C0), which is the
+// "re-normalisation" every open-coded spelling missed (w8-n table below).
+// Name and home are ours -- nothing in the map says where it lived (a
+// CharFaceServo inline member is as likely); the predicate is the image's.
+static inline bool BlinkClipsOk(CharFaceServo *servo) {
+    return !servo->BlinkClipLeftName().Null() || servo->BlinkClipRightName().Null();
+}
+
 void HamCharacter::SyncObjects() {
     const char *meshes[2] = { "bone_pelvis.mesh", "spot_neck.mesh" };
     for (int i = 0; i < 2; i++) {
@@ -228,7 +239,8 @@ void HamCharacter::SyncObjects() {
         // short-circuit TRUE, not a fall-through into the second test; only the
         // left==null path reads 0xb0, and there `bne` (right != gNullStr) selects
         // `li r11, 0x0` while the fall-through selects `li r11, 0x1`.
-        // RESIDUAL (w8-n, 98.2990 canonical): 1 cause, 3 rows.  After the `||`
+        // CLOSED (w17-b, 98.30 -> 100): see BlinkClipsOk above.
+        // Former RESIDUAL (w8-n, 98.2990 canonical): 1 cause, 3 rows.  After the `||`
         // merges r11 the image RE-NORMALISES it -- `clrlwi. r11, r11, 24` / `li r4, 0x1` /
         // `bne .L_824918C4`, sharing the `li r4, 0x0` at 0x824918C0 with the else
         // arm -- where we mask straight into the argument (`clrlwi r4, r11, 24`)
@@ -241,14 +253,7 @@ void HamCharacter::SyncObjects() {
         //     bool blinking = false; if (servo) blinking = ...           95.8
         //     if (!servo) blinking = false; else blinking = ...          94.7
         //     ... with an extra `bool namesOk = ...; blinking = namesOk;` INERT
-        bool blinking;
-        if (servo) {
-            blinking = !servo->BlinkClipLeftName().Null()
-                || servo->BlinkClipRightName().Null();
-        } else {
-            blinking = false;
-        }
-        SetBlinking(blinking);
+        SetBlinking(servo && BlinkClipsOk(servo));
     }
     mCrewCardMesh = Find<RndMesh>(kCrewCardMeshName, false);
 }
