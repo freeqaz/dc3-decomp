@@ -168,6 +168,13 @@ protected:
     RndTransformable();
 
     virtual void UpdatedWorldXfm() {}
+    // w17-a: the world_xfm property's modify step.  An inline member, not
+    // `ComputeLocalXfm(mWorldXfm)` written at the sync site: the image forms the
+    // argument as `addi r4, r3, 0x48` off the `this` it materialised for the
+    // call (subi r3, r28, 0xc4), i.e. this-relative through an inlined callee's
+    // own `this`.  Written at the sync site, MSVC folds &mWorldXfm to
+    // r28-0x7c and CSEs it with PropSync's member argument (3 rows).
+    void ComputeLocalXfmFromWorld() { ComputeLocalXfm(mWorldXfm); }
 
     Transform mLocalXfm; // 0x8
     Transform mWorldXfm; // 0x48

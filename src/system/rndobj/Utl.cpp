@@ -744,6 +744,15 @@ void LinearizeKeys(
         }
 }
 
+// w17-a (94.911 canonical, left as is): the ScaleKeys loop below is NOT the
+// image's shape -- written like the other two (`it != tanim->ScaleKeys().end()`,
+// no hoisted _tmp3) rows 46-78 become 100% equal (begin then end off the owner
+// pointer the TransKeys loop already loaded, no reload of 0x58(r29)).  It still
+// scores LOWER (94.6) because the remaining diff is the inlined quaternion
+// Multiply (rows 79-108: the image evaluates Set()'s arguments w,z,y,x and stores
+// 0xc,0x8,0x4,0x0; we interleave and store y first) and the realigned rows weigh
+// more there.  Refuted at the call site: a temp Quat result copied back (81.9).
+// Fix the quat block first, then restore the plain ScaleKeys loop.
 void TransformKeys(RndTransAnim *tanim, const Transform &tf) {
     Vector3 v48;
     Hmx::Quat q58;
@@ -2690,6 +2699,11 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
     // 0x8262E17C) and reversing the three swaps to match moves three offset
     // rows around without changing the 46-row total (measured 2026-09-14), so
     // this keeps the same spelling ComputeFaceTangentBasis uses.
+    // w17-a: an in-place `normalMat.Set(x.x, y.x, z.x, x.y, ...)` (rb3's
+    // Transpose(Matrix3, Matrix3) shape) makes rows 21-33 match the image
+    // EXACTLY, but the loop's inlined Multiply(Vector3, Matrix3) then schedules
+    // its loads differently (4 insert / 4 delete) and the function drops
+    // 99.887 -> 95.1.  Reverted; the loop is where the remaining lever is.
     float xy = normalMat.x.y;
     normalMat.x.y = normalMat.y.x;
     normalMat.y.x = xy;

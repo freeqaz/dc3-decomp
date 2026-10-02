@@ -102,7 +102,17 @@ struct CompressedVertex_Xbox {
 // rndobj/Mesh one.
 static const unsigned int kBitsOutput = 32;
 
-// PackVector's 96.190475 residual is 28 rows and the cause IS identified: the
+// w17-a: CLOSED, 96.190475 -> 100 (all 126 rows equal) without touching the
+// parameter names.  The tree below was not the assert's doing: it was GLOBAL CSE
+// of the assert's leading `bitsX + bitsY` with `offsetZ = bitsY + bitsX` after
+// the join, which made MSVC re-associate the sum as (X+Y)+(Z+W) so the pair
+// could be shared.  The image recomputes offsetZ after the assert
+// (`add r27, r28, r31`), so its offsetZ was not that expression: spelled
+// `offsetY + bitsY` the CSE is gone and the assert's sum comes out as the
+// image's chain.  The four masks are then declared X,Y,Z,W (image register
+// assignment: maskX in r30 ... maskW in r25).  Same values, same callers.
+//
+// (historical) PackVector's 96.190475 residual is 28 rows and the cause IS identified: the
 // image's entry sum of the four bit counts is a right-to-left CHAIN over the
 // parameter registers,
 //     add r11, p(r8), p(r7)  /  add r11, r11, p(r6)  /  add r9, r11, p(r5)
@@ -136,7 +146,7 @@ static void PackVector(
     MILO_ASSERT((bitsX + bitsY + bitsZ + bitsW) == kBitsOutput, 0x39);
 
     int offsetY = bitsX;
-    int offsetZ = bitsY + bitsX;
+    int offsetZ = offsetY + bitsY;
     int normFactor = normalize ? 1 : 0;
     int kOffsetW = bitsZ + offsetZ;
 
@@ -145,10 +155,10 @@ static void PackVector(
     int shiftX = bitsX - normFactor;
     int shiftW = bitsW - normFactor;
 
+    u32 maskX = (1U << bitsX) - 1;
     u32 maskY = (1U << bitsY) - 1;
     u32 maskZ = (1U << bitsZ) - 1;
     u32 maskW = (1U << bitsW) - 1;
-    u32 maskX = (1U << bitsX) - 1;
     int maxX = (1 << shiftX) - 1;
     int maxY = (1 << shiftY) - 1;
     int maxZ = (1 << shiftZ) - 1;

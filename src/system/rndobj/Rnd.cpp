@@ -1239,9 +1239,12 @@ void Rnd::DrawPreClear() {
         sCompressData = nullptr;
         MILO_ASSERT(sTexture, 0x481);
         CompressTexDesc *desc = mCompressTexQueue.front();
-        RndTex *tex = desc->tex;
-        if (tex) {
-            ReplaceObject(desc->tex, sTexture, false, false, false);
+        // w17-a: test the ObjPtr itself and take the local inside the arm -- each
+        // conversion of desc->tex homes its value to 0x50, and the image has
+        // both stores (one before the branch, one in the arm).
+        if (desc->tex) {
+            RndTex *tex = desc->tex;
+            ReplaceObject(tex, sTexture, false, false, false);
             sTexture = static_cast<DxTex *>(tex);
         }
         mCompressTexQueue.erase(mCompressTexQueue.begin());
@@ -1252,6 +1255,8 @@ void Rnd::DrawPreClear() {
     }
     if (!sTexture) {
         // Drop queue entries whose texture went away or that lost their callback.
+        // w17-a: the start-next block sits INSIDE the !empty() arm -- the image's
+        // empty-queue branch skips straight past it rather than into size().
         if (!mCompressTexQueue.empty()) {
             std::list<CompressTexDesc *>::iterator it = mCompressTexQueue.begin();
             while (it != mCompressTexQueue.end()) {
@@ -1263,19 +1268,19 @@ void Rnd::DrawPreClear() {
                     delete desc;
                 }
             }
-        }
-        if (mCompressTexQueue.size() != 0) {
-            CompressTexDesc *first = mCompressTexQueue.front();
-            sTexture = static_cast<DxTex *>((RndTex *)first->tex);
-            RndTex *newTex;
-            {
-                MemTemp tmp;
-                newTex = Hmx::Object::New<RndTex>();
+            if (mCompressTexQueue.size() != 0) {
+                CompressTexDesc *first = mCompressTexQueue.front();
+                sTexture = static_cast<DxTex *>((RndTex *)first->tex);
+                RndTex *newTex;
+                {
+                    MemTemp tmp;
+                    newTex = Hmx::Object::New<RndTex>();
+                }
+                ReplaceObject(sTexture, newTex, false, false, false);
+                sCompressData = sTexture->StartCompress(first->alpha);
+                MILO_ASSERT(!sCompressDone, 0x4C3);
+                SetEvent(gRndTextureEvent);
             }
-            ReplaceObject(sTexture, newTex, false, false, false);
-            sCompressData = sTexture->StartCompress(first->alpha);
-            MILO_ASSERT(!sCompressDone, 0x4C3);
-            SetEvent(gRndTextureEvent);
         }
     }
 #endif // !HX_NATIVE

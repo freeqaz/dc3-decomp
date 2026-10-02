@@ -120,11 +120,9 @@ BEGIN_PROPSYNCS(RndTransformable)
     // self-referential -- mLocalXfm = mLocalXfm * inverse(parentWorld) -- so setting
     // world_xfm through a property never derived the local transform from the value
     // that had just been written.
-    // Residual cost: MSVC now CSEs &mWorldXfm across the PropSync call (r30) where the
-    // target rematerialises it from `this`; that is 3 address-formation instructions
-    // and no semantic difference. 99.96 -> 99.3 normalized, but the function was never
-    // at 100 either way, so nothing leaves the matched set.
-    SYNC_PROP_MODIFY(world_xfm, mWorldXfm, ComputeLocalXfm(mWorldXfm))
+    // w17-a: the 3-row &mWorldXfm CSE residual this used to carry (99.3) closes when
+    // the modify step goes through an inline member (Trans.h); 100, all rows equal.
+    SYNC_PROP_MODIFY(world_xfm, mWorldXfm, ComputeLocalXfmFromWorld())
     SYNC_VIRTUAL_SUPERCLASS(Hmx::Object)
 END_PROPSYNCS
 
