@@ -613,6 +613,10 @@ void GroupSeqInst::SetTranspose(float f) {
 #pragma endregion
 #pragma region RandomGroupSeqInst
 
+// w14-e (99.10, 27 register rows + the image's `stw r29, 0x50(r31)` of
+// childrenSize just before the NextIndex call, at an EH-table label).  The map
+// lists RandomGroupSeq::AddToPlayedHistory as `f i`; marking it inline (it is
+// reached through PickNextIndex) is byte-inert for this ctor, so not kept.
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
     : GroupSeqInst(seq, false), mIt(mSeqs.end()) {
     ObjPtrList<Sequence> &children = seq->Children();

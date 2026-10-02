@@ -163,6 +163,10 @@ void NavListSort::DeleteTree() {
 // use r4 as-is.  Both are MSVC's tail-merge/canonical-return choice, not a
 // spelling; the ggIt tail's `b .L_8297714C` (0x82977328) into the aSize==1
 // compare is reproduced.
+// w14-e (93.6, unchanged): routing every not-found exit through a
+// `notFound:` label inside the aSize==0 arm (so the image's inline
+// `li r3, 0; b epilogue` block exists in source) is byte-identical -- MSVC
+// re-sinks the shared return-false block regardless.
 bool NavListSort::SetHighlightID(DataArray *a) {
     // Retail clears mHighlightNode BEFORE reading a->Size(): the
     // stw r10,0x50(r3) sits between the load of the old value and the

@@ -523,6 +523,9 @@ SynthSample *Sound::Sample() { return mSynthSample; }
 // purely so the fsel chain can consume it; a version that clamps
 // CalcSpeedFromTranspose(mFaders.GetTranspose()) instead ignores the argument
 // entirely and still scores ~90%.
+// w14-e (91.17, unchanged): FOREACH_POST and an explicit
+// `it = begin(); mSpeed = clamped; while (it != end())` for the else arm are
+// both byte-identical to FOREACH -- MSVC canonicalises all three loops.
 void Sound::SetSpeed(float speed, Hmx::Object *obj) {
     float speedTranspose = CalcSpeedFromTranspose(mFaders.GetTranspose());
     // NEGATIVE RESULT (91.17%, two refuted variants). The residual is entirely
