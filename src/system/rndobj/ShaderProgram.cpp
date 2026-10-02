@@ -99,7 +99,12 @@ void RndShaderProgram::CopyErrorShader(ShaderType shader, const ShaderOptions &o
                 TheDebug.Fail(fs.Str(), nullptr);
             }
         }
-        Cache(errorType, newOpts, nullptr, nullptr);
+        // BUG FIX (w18-a): the error PROGRAM is the one that gets cached --
+        // `mr r3, r30` (r30 = FindShader's result) before `bl Cache` at
+        // 0x827327D8.  This used to call Cache on `this`, which marked the
+        // missing shader itself as cached and left the error program uncached
+        // for the Copy below.
+        program.Cache(errorType, newOpts, nullptr, nullptr);
     }
     Copy(program);
 }
