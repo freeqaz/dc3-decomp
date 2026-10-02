@@ -422,8 +422,29 @@ BEGIN_HANDLERS(Hmx::Object)
     Export(_msg, false);
 END_HANDLERS
 
+// w16-d: the image's function-static guard word $S9 tests bits 0x1 (name),
+// 0x4 (type) and 0x8 (sinks) -- bit 0x2 is allocated to a static that is never
+// initialized (no code tests it), and the scope ordinals of the three _s
+// symbols (?6 / ?BC / ?BN) leave no room for an extra block. An unreachable
+// static declared after the name arm's `return true` reproduces exactly that
+// (99.985 -> 100, name_check clean); a dead `if (0) { static ... }` block gets
+// the bit but shifts the scope ordinals by 5. Behaviour is unchanged: the
+// static is unreachable and emits no symbol.
 BEGIN_PROPSYNCS(Hmx::Object)
-    SYNC_PROP_SET(name, mName, SetName(_val.Str(), mDir))
+    {
+        static Symbol _s("name");
+        if (sym == _s) {
+            if (_op == kPropSet) {
+                SetName(_val.Str(), mDir);
+            } else {
+                if (_op == (PropOp)0x40)
+                    return false;
+                _val = mName;
+            }
+            return true;
+            static Symbol _unreachable("unreachable");
+        }
+    }
     SYNC_PROP_SET(type, Type(), SetType(_val.Sym()))
     SYNC_PROP(sinks, mSinks ? *mSinks : gSinks)
 END_PROPSYNCS
