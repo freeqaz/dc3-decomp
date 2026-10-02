@@ -893,7 +893,8 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     // than we do -- and the operator== argument setup (`addi r4, r11, 0x4` /
     // `addi r3, r31, 0x58`, 0x825F259C/0x825F25A0) three slots earlier, straddling
     // the writeTime `std` instead of following it. Refuted: declaring writeTime
-    // before fileExists (inert, same 6 rows).
+    // before fileExists (inert, same 6 rows). Also refuted (w12-d): a typed
+    // WIN32_FILE_ATTRIBUTE_DATA with `*(s64 *)&fileInfo.ftLastWriteTime` (inert).
     bool fileExists = (attrResult - 1) != (-1);
     s64 writeTime = *(s64 *)(fileInfo + 0x14);
     // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.
