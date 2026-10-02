@@ -52,19 +52,16 @@ GestureMgr::GestureMgr()
 #endif
     mPlayerSkeletonIDs[0] = -1;
     mPlayerSkeletonIDs[1] = -1;
-    int skeletonIdx = 0;
-    Skeleton *skeleton = mSkeletons;
-    SkeletonQualityFilter *qualityFilter = mFilters;
-    int *perSkeletonState = unk30 - 1;
-    int *identitySkeletonIndexSlot = (int *)((char *)mIdentityInfos - 4);
-    while (skeletonIdx < 6) {
-        skeleton->Init();
-        qualityFilter->Init(sConfidenceLossThreshold, sConfidenceRegainThreshold);
-        *(identitySkeletonIndexSlot += 4) = skeletonIdx;
-        ++skeletonIdx;
-        *++perSkeletonState = 0;
-        ++skeleton;
-        ++qualityFilter;
+    // w14-f: 97.74 -> 100.  A plain indexed loop; MSVC strength-reduces it to
+    // the image's four walking pointers itself.  The hand-reduced version
+    // (unk30 - 1 / mIdentityInfos - 4 pre-increment pointers) let MSVC CSE
+    // `this + 0x2c` with the SkeletonCallback subobject pointer, where the image
+    // re-derives it (`addi r24, r30, 0x2c` at 8242C3A4).
+    for (int i = 0; i < NUM_SKELETONS; i++) {
+        mSkeletons[i].Init();
+        mFilters[i].Init(sConfidenceLossThreshold, sConfidenceRegainThreshold);
+        mIdentityInfos[i].Init(i);
+        unk30[i] = 0;
     }
     mTrackingAllSkeletons = false;
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();

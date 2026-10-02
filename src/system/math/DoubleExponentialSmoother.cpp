@@ -48,20 +48,37 @@ void Vector3DESmoother::ForceValue(Vector3 v) {
     mZ.SetParams(v.z, v.z, 0);
 }
 
+// w14-f: 94.75 -> 97.4.  BEHAVIOUR FIX in the normalize tail (latent: the one
+// caller, PartyModeMgr, passes normalize = false).  The image normalises the way
+// Vector3DESmoother does: inv = 0 when the length is zero (`beq` to `fmr f13, f0`
+// with f0 = 0.0f), so a zero vector stays zero, and BOTH mLevel and mPrevLevel
+// receive the normalised value (`stfs f11, 0x4(r3)` / `stfs f11, 0x0(r3)`,
+// `stfs f13, 0x4(r11)` / `stfs f13, 0x0(r11)`).  We used to skip the write on a
+// zero length and never touched mPrevLevel.  Remaining 6 rows: the mY expansion
+// of the inlined DoubleExponentialSmoother::Smooth keeps mLevel in a register
+// (`fmr f10, f11`) where the image re-loads it (`lfs f12, 0x0(r11)`) for the
+// normalize; a Vector2 val(sx.mLevel, sy.mLevel) temp is worse (9 rows).
 void Vector2DESmoother::Smooth(Vector2 v, float dt, bool normalize) {
-    mX.Smooth(v.x, dt);
-    mY.Smooth(v.y, dt);
+    DoubleExponentialSmoother &sx = mX;
+    DoubleExponentialSmoother &sy = mY;
+    sx.Smooth(v.x, dt);
+    sy.Smooth(v.y, dt);
     if (normalize) {
-        float x = mX.mLevel;
-        float y = mY.mLevel;
+        float y = sy.mLevel;
+        float x = sx.mLevel;
         float len = std::sqrt(x * x + y * y);
-        if (len != 0.0f) {
-            float inv = 1.0f / len;
-            mX.mLevel = x * inv;
-            mY.mLevel = y * inv;
+        float inv;
+        if (len != 0) {
+            inv = 1.0f / len;
+        } else {
+            inv = 0;
         }
-        mX.mTrend = 0;
-        mY.mTrend = 0;
+        float normX = x * inv;
+        float normY = y * inv;
+        sx.mTrend = 0;
+        sx.mLevel = sx.mPrevLevel = normX;
+        sy.mLevel = sy.mPrevLevel = normY;
+        sy.mTrend = 0;
     }
 }
 

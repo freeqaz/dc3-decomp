@@ -17,9 +17,11 @@ public:
 private:
     Hmx::Rect GetViewBox() const;
 
-    float mMinX; // 0x2c
-    float mMinY; // 0x30
-    float mMaxX; // 0x34
-    float mMaxY; // 0x38
+    // w14-f: two Vector2s, not four floats.  StartTracking (inlined into Handle)
+    // builds each extent as a stack temp and copies it with one ld/std pair
+    // (`stfs f0, 0x58(r31)` x2 / `ld r11, 0x58(r31)` / `std r11, 0x34(r26)`);
+    // four float members store each component directly.
+    Vector2 mMin; // 0x2c
+    Vector2 mMax; // 0x34
     int mTrackingID; // 0x3c
 };

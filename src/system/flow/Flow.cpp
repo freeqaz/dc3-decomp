@@ -67,6 +67,13 @@ Flow::Flow()
 
 Flow::~Flow() {
     if (!mRunningNodes.empty()) {
+        // w14-f: 90.08 -> 100.  The image calls the virtual ProxyFile() through
+        // the full object (`lwz r11, 0x68(r29)` / slot 1 / bctrl) and homes r29
+        // in a frame slot; a call on `this` in a dtor is devirtualised and
+        // inlined to the mProxyFile read.  Same value: Flow does not override it.
+        // Declared above the native-only arm so the `else` below binds to the
+        // `if`, not to this declaration.
+        Flow *self = this;
 #ifdef HX_NATIVE
         if (ObjectDir::InDeleteObjects()) {
             // During cascade teardown, skip Deactivate (it sends messages to
@@ -75,7 +82,7 @@ Flow::~Flow() {
             mRunningNodes.clear();
         } else
 #endif
-        if (mProxyFile.empty()) {
+        if (self->ProxyFile().empty()) {
             FlowQueueable::Deactivate(true);
         }
     }
@@ -145,8 +152,16 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
         }
         mPrivate = c->mPrivate;
         mHardStop = c->mHardStop;
-        RefreshPortLabelLists();
-        if (!ProxyFile().empty()) {
+        // w14-f: 98.26 -> 98.79.  Full object named once for the tail (the image's
+        // `subi r31, r30, 0x180` at 823F7278 feeding RefreshPortLabelLists and the
+        // ProxyFile adjust).  Remaining 4 rows: both SetParent(this, true) calls
+        // schedule `subi r4, r30, 0x180` BEFORE `li r5, 1` in the image (823F71C8,
+        // 823F722C); ours puts the li first.  Tried: (FlowNode *)this, a block-local
+        // `FlowNode *parent = this`, a default `bool = true` param (no change), and
+        // a loop-hoisted `Flow *self` (pinned to r27, 95.8 -- worse).
+        Flow *self = this;
+        self->RefreshPortLabelLists();
+        if (!self->ProxyFile().empty()) {
             // mInterrupt, not mStartMode: the target stores 5 at -0x124(r30)
             // (0x823F72B8), i.e. Flow + 0x5c, while mStartMode is Flow + 0x170
             // and is the -0x10(r30) store at 0x823F7078.  5 is kPassThrough,
@@ -444,8 +459,13 @@ void Flow::PostLoad(BinStream &bs) {
     if (mStartMode != 0) {
         mPrivate = true;
     }
-    RefreshPortLabelLists();
-    if (!ProxyFile().empty()) {
+    // w14-f: 99.66 -> 100.  The image derives the full object here, once
+    // (`subi r29, r30, 0x180` at 823F6D68), for RefreshPortLabelLists and the
+    // ObjectDir adjust of ProxyFile (`addi r3, r29, 0x68`); without the name MSVC
+    // kept the ObjectDir subobject live in r23 across the whole function.
+    Flow *self = this;
+    self->RefreshPortLabelLists();
+    if (!self->ProxyFile().empty()) {
         mInterrupt = kPassThrough;
     }
 }
@@ -527,15 +547,12 @@ void Flow::Enter() {
         }
     }
 #endif
-    // NOTE (w7-av): 94.70 residual is one address derivation.  The image
-    // materialises `q` FIRST (`subi r31, r3, 0x104` at 0x823ED320) and then
-    // reaches the ObjectDir subobject as `addi r3, r31, 0x68` -- same address,
-    // derived from q rather than from `this` -- while MSVC here loads the
-    // ObjectDir vptr off r3 before q exists and does `subi r3, r3, 0x9c`.
-    // Naming the ObjectDir subobject (`ObjectDir *dir = this;`) is 90.72: a
-    // pointer conversion is null-checked (`subic.`/`bne`/`li r3, 0`), where the
-    // reference the call expression uses is not.
-    if (ProxyFile().empty() && mStartMode != 0) {
+    // w14-f: 94.69 -> 100.  The image materialises `q` FIRST (`subi r31, r3,
+    // 0x104`) and reaches the ObjectDir subobject from it (`addi r3, r31, 0x68`).
+    // Calling ProxyFile() through q -- FlowQueueable sits at offset 0, so the
+    // static_cast is a no-op with no null check -- reproduces that; the old
+    // (w7-av) `ObjectDir *dir = this;` attempt was null-checked (90.72).
+    if (static_cast<Flow *>(q)->ProxyFile().empty() && mStartMode != 0) {
         if (mStartMode == 1) {
             q->Execute(kQueue);
         } else {
@@ -554,11 +571,16 @@ void Flow::Exit() {
         }
     }
 #endif
-    if (IsRunning() && ProxyFile().empty()) {
+    // w14-f: 99.83 -> 100.  Exit() is entered through the RndPollable subobject
+    // (r3 = this + 0x104); naming the full object once makes the image's
+    // `subi r31, r3, 0x104` and routes IsRunning/ProxyFile/Deactivate/RequestStop
+    // through it, while mHardStop is still read off the entry pointer.
+    Flow *self = this;
+    if (self->IsRunning() && self->ProxyFile().empty()) {
         if (mHardStop) {
-            Deactivate(false);
+            self->Deactivate(false);
         } else {
-            RequestStop();
+            self->RequestStop();
         }
     }
 }
