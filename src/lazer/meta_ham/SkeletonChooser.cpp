@@ -1140,8 +1140,9 @@ void SkeletonChooser::ChoosePlayerSides() {
     } else {
         if ((id0 > 0) ^ (id1 > 0)) {
             if (locked) {
+                GestureMgr *gestureMgr = TheGestureMgr;
                 int activeID = (id0 > 0) ? id0 : id1;
-                Skeleton *pPlayerSkeleton = TheGestureMgr->GetSkeletonByTrackingID(activeID);
+                Skeleton *pPlayerSkeleton = gestureMgr->GetSkeletonByTrackingID(activeID);
                 MILO_ASSERT(pPlayerSkeleton, 0x1fb);
                 // Two GetPlayerSide calls that MSVC cross-jumps into one, with
                 // the argument register set by the branch (li r4,0 / bne /
