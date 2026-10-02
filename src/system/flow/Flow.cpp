@@ -449,8 +449,13 @@ void Flow::PostLoad(BinStream &bs) {
     if (mStartMode != 0) {
         mPrivate = true;
     }
-    RefreshPortLabelLists();
-    if (!ProxyFile().empty()) {
+    // w14-f: 99.66 -> 100.  The image derives the full object here, once
+    // (`subi r29, r30, 0x180` at 823F6D68), for RefreshPortLabelLists and the
+    // ObjectDir adjust of ProxyFile (`addi r3, r29, 0x68`); without the name MSVC
+    // kept the ObjectDir subobject live in r23 across the whole function.
+    Flow *self = this;
+    self->RefreshPortLabelLists();
+    if (!self->ProxyFile().empty()) {
         mInterrupt = kPassThrough;
     }
 }
