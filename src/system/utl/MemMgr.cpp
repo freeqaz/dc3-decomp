@@ -64,8 +64,24 @@ CriticalSection *gMemLock;
 // gNewOperatorAlign / gStlAllocNameLookup / gMemLock / gMemStackLock /
 // gUseLowestMipExceptions run.
 bool gStlAllocNameLookup;
-static int gNewOperatorAlign;
-static int gNumHeaps;
+// gNewOperatorAlign, gNumHeaps and gHeaps (below) are FILE STATICS: the linker
+// map, which names every public global, does not list them (their
+// symbols.txt entries are bare, MSVC's spelling for a static).  That is what
+// lets MSVC reach one from another by a compile-time displacement off a single
+// anchor register -- e.g. MemPushHeap's `lwz r11, 0x13(r30)` with r30 =
+// &gInitted -- instead of a lis/addi per global.
+static int gNewOperatorAlign; // +0xbec
+// Three int-sized objects the image has at +0xbdc, +0xbe0 and +0xbe8 that no
+// surviving code names (nothing in the image addresses them, so they were
+// presumably used only by functions /OPT:REF discarded).  They are stand-ins
+// that only reproduce the .bss layout -- and with it the anchor displacements
+// (gInitted->gNumHeaps 0x13, gHeaps->gNumHeaps 0x294) the statics above and
+// below are reached by.  External linkage on purpose: an unreferenced static
+// is dropped by the compiler and holds no space.
+int gMemMgrUnknownBE8; // +0xbe8
+static int gNumHeaps; // +0xbe4
+int gMemMgrUnknownBE0; // +0xbe0
+int gMemMgrUnknownBDC; // +0xbdc
 // The target's gThreadIds is not in this TU's .bss at all -- ThreadMemStack
 // references it as an undefined external, resolved to 0x82F18920, an
 // initialised int[32] whose first word is -1. That is the same array
@@ -83,64 +99,17 @@ bool gbUseLowestMip; // +0xbd2
 // functions whose relocations point there -- MemInit, MemPushHeap and
 // MemFindHeap, exactly the three that read or write it.
 //
-// ⚠ objdiff rows in MemPushHeap / MemPopHeap / MemPushTemp / MemPopTemp that
-// look like "we read gInitted where the target reads ?gNumHeaps@@3HA" are NOT
-// a wrong-variable read.  The target materialises ONE address register for
-// this pair and reaches the other member by a compile-time displacement, and
-// the relocation names only the anchor.  It anchors in BOTH directions,
-// within this one TU: MemPushTemp/MemPopTemp/MemPopHeap do
-// `addi r11, r11, ?gNumHeaps@@3HA@l` then `lbz r10, -0x13(r11)` (gInitted),
-// while MemPushHeap holds r30 = &gInitted and does `lwz r11, 0x13(r30)`
-// (gNumHeaps) plus `addi r5, r30, 0x13` for the MILO_ASSERT_FMT argument.
-// 0x13 is exactly gNumHeaps(+0xbe4) - gInitted(+0xbd1).  Our build reaches
-// each global through its own lis/addi, and 2026-09-11 measurement says that
-// choice does NOT follow the .bss layout: flipping the layout in System.cpp's
-// equivalent pair left MSVC anchoring on the same variable as before.  So the
-// residual rows here are codegen, not a source bug -- do not "fix" them by
-// renaming a global.  (Closing them would additionally need the three
-// unidentified int-sized globals the target has at +0xbdc, +0xbe0 and +0xbe8,
-// which are what make its gInitted->gNumHeaps distance 0x13 where ours is
-// 0xb.)
-//
-// w8-g 2026-09-15: measured floor for that claim, normalized ruler, full ninja:
-//   MemPushTemp 91.46% (96 B), MemPopHeap 95.44% (180 B), MemPopTemp 95.44%
-//   (180 B).  Re-confirmed unchanged after this lane's other MemMgr work.
-//
-// w9-d 2026-09-30: the SAME family is the whole residual of six more rows in
-// this TU, and the anchor the image picks is NOT the one source order would
-// predict -- which is the strongest argument yet that it is an MSVC-internal
-// choice rather than a source lever.  Each row below reads "image anchors X and
-// reaches Y as a displacement; we materialise both":
-//
-//   AddHeap           96.894  264 B  anchors gNumHeaps, gHeaps = -0x294   (2 rows)
-//   MemFree           96.894  264 B  anchors gHeaps,    gNumHeaps = +0x294
-//   MemAllocSize      95.583  240 B  anchors gHeaps,    gNumHeaps = +0x294
-//   MemTruncate       95.667  300 B  anchors gHeaps,    gNumHeaps = +0x294
-//   MemPushHeap       97.387  248 B  anchors gInitted,  gNumHeaps = +0x13
-//   MemFindHeap       96.033  368 B  anchors gInitted,  gNumHeaps = +0x13,
-//                                            gHeaps = -0x281
-//   MemPrintOverview  95.929  508 B  anchors gHeaps,    gNumHeaps = +0x294
-//
-// Note AddHeap and MemAllocSize go OPPOSITE ways on the same pair: AddHeap's
-// source touches gHeaps first (`gHeaps[heapNum].Init(c3, gNumHeaps, ...)`) and
-// the image anchors gNumHeaps, while MemAllocSize's source touches gNumHeaps
-// first (the loop bound) and the image anchors gHeaps.  So "anchor whichever
-// global the source names first" is refuted outright, and so is "anchor the one
-// whose address is actually needed".
-//
-// Two of the three displacements are ALSO unavailable in our layout: the image's
-// gNumHeaps sits at +0xbe4 where ours sits at +0xbdc, so its gHeaps->gNumHeaps
-// distance is 0x294 and ours 0x28c, and its gInitted->gNumHeaps distance is 0x13
-// where ours is 0xb.  Closing that needs the three unidentified int-sized
-// globals the image has at +0xbdc/+0xbe0/+0xbe8 (they are exactly the 12 bytes
-// by which our .bss is short: ours ends at +0xbfc, the image's at +0xc08).
-// DO NOT REDO THAT EXPERIMENT: a byte-exact reproduction of the image's 3,080 B
-// (0xc08) section with external-linkage stand-ins was already measured and moved
-// MemInit 99.133 -> 99.145 and NOTHING else.  Verified here that the tree is
-// back in the un-padded state (MemMgr.obj .bss: gNumHeaps +0xbdc,
-// gNewOperatorAlign +0xbe0, gStlAllocNameLookup +0xbe4, gMemLock +0xbe8,
-// gMemStackLock +0xbec, gUseLowestMipExceptions +0xbf0), so the refutation is
-// about a layout we no longer have and re-testing it would only reproduce it.
+// RESOLVED (w13-d): the "anchor + displacement" rows that earlier lanes
+// (w8-g, w9-d) measured as an MSVC-internal floor in MemPushHeap, MemPopHeap,
+// MemPushTemp, MemPopTemp, AddHeap, MemAllocSize, MemFindHeap, MemFree,
+// MemTruncate and MemPrintOverview were a LINKAGE question, not codegen: MSVC
+// only reaches one global from another by a displacement when both have
+// internal linkage, and gNumHeaps / gHeaps / gNewOperatorAlign had been
+// declared extern on the strength of hand-authored mangled names in
+// symbols.txt.  Making them static (and filling the three unknown ints above
+// so the displacements are the image's) took seven of those rows to 100.
+// The earlier padding experiment moved nothing only because the globals were
+// still external then.
 static bool gInitted; // +0xbd1
 // +0xbd0. The fourth byte is NOT padding and it is not unrecoverable -- nothing
 // forms its address because nothing needs to: both of its users reach it by a
