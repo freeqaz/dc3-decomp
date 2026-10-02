@@ -145,10 +145,10 @@ inline void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {
 // rndobj/Mesh.cpp.  Check the map flag before certifying any residual of this
 // shape as a clobber-propagation floor.
 //
-// RESIDUAL 93.333 / 6 rows: an r30<->r31 + f0<->f13 exchange in the inlined
-// ScaleAdd(tf1.v, tf2.v, f, tf1.v) expansion -- the image loads tf2 (r30)
-// before tf1 (r31) at idx 10/12 and we load tf1 first -- plus the `stfs f0,
-// 0x34(r31)` at idx 18 vs 20 that follows from it.
+// w13-o: 93.333 -> 100. The translation is ScaleAddEq(tf1.v, tf2.v, f)
+// (`v1.x += v2.x * f`), not ScaleAdd(tf1.v, tf2.v, f, tf1.v) -- same value,
+// but the += form is what loads tf2 (r30) before tf1 (r31) at idx 10/12 and
+// delays the `stfs f0, 0x34(r31)` past the z loads, as the image does.
 // `inline` here matches the map (82620268, `f i`) and is kept for fidelity, but
 // MEASURED (w8-p): it is inert for this function's own callers -- DxMesh::OnSync
 // stays at 95.08458 and CacheFurTransform at 99.55705.  Same for marking
@@ -157,7 +157,7 @@ inline void ScaleAddEq(Hmx::Matrix3 &m1, const Hmx::Matrix3 &m2, float f) {
 // conservative-prologue gap.
 inline void ScaleAddEq(Transform &tf1, const Transform &tf2, float f) {
     ScaleAddEq(tf1.m, tf2.m, f);
-    ScaleAdd(tf1.v, tf2.v, f, tf1.v);
+    ScaleAddEq(tf1.v, tf2.v, f);
 }
 
 
