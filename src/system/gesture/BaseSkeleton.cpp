@@ -67,21 +67,15 @@ void BaseSkeleton::BoneVec(SkeletonBone bone, SkeletonCoordSys cs, Vector3 &vres
 }
 
 float BaseSkeleton::BoneLength(SkeletonBone bone, SkeletonCoordSys cs) const {
-    // RESIDUAL (w8-i, 99.875 canonical, 2 rows of 16): the image associates the three
-    // squares as (y*y) seed, then fmadd x, then fmadd z -- `lfs 0x54` / `fmuls` /
-    // `lfs f13, 0x58` / `lfs f0, 0x50`.  MSVC does NOT follow source order here; the
-    // seed and the fmadd order are scheduler choices that move with the SPELLING of
-    // the reduction, not with the written operand order.  Four spellings measured:
-    //   Length(v)                                  99.875, swap (0x50,0x54) at idx 5/8
-    //   std::sqrt(LengthSquared(v))                99.875, swap (0x50,0x58) at idx 7/8
-    //                                              -- seeds on y correctly, x/z still swapped
-    //   std::sqrt(v.y*v.y + v.x*v.x + v.z*v.z)     99.792, 3 rows -- WORSE, and proof that
-    //                                              written order is not the lever
-    //   std::sqrt(Dot(v, v))                       99.792, 3 rows
-    // Keeping the shared helper: it is the cleanest and ties the best score.
+    // The image seeds on y*y, then fmadds x, then z (`lfs 0x54` / `fmuls` /
+    // `lfs f13, 0x58` / `lfs f0, 0x50`).  Length(v) and LengthSquared(v) both
+    // land one swap short (99.875, w8-i); a two-term seed plus a separate z
+    // accumulate gives the image's association.
     Vector3 v;
     BoneVec(bone, cs, v);
-    return Length(v);
+    float lengthSq = v.y * v.y + v.x * v.x;
+    lengthSq += v.z * v.z;
+    return std::sqrt(lengthSq);
 }
 
 void BaseSkeleton::CalcNormalizedOffset(SkeletonJoint joint, Vector3 &vres) const {
