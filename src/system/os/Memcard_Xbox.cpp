@@ -471,31 +471,31 @@ void MemcardXbox::ShowDeviceSelector(
     const ContainerId &c, Hmx::Object *o, int i3, bool b4
 ) {
     memset(&mXOverlapped, 0, sizeof(XOVERLAPPED));
+    // `= {0}` is the lever: it zeroes HighPart through the frame (stw
+    // r28,0x50(r31)) and LowPart through a precomputed address (addi
+    // r11,r31,0x54 / stw r28,0(r11)) before the `ld r7,0x50(r31)` that passes
+    // it by value, exactly as at 825F7148..825F7188. `u.QuadPart = 0` SROAs it.
+    ULARGE_INTEGER u = {0};
     mSelectorCallback = o;
-    mSelectedDevice = 0;
     int i1 = 0;
+    mSelectedDevice = 0;
     if (b4) {
         i1 = 0x200;
     }
-    // The image keeps the parameter and the chosen index in two separate
-    // registers -- `cmpwi cr6,r27,-1` / `mr r4,r27` / `bne` / `lwz r4,0x0(r26)`
-    // at 825F7174 -- i.e. it writes the argument register in both arms rather
-    // than reassigning the parameter.
-    int userIndex = i3;
-    if (i3 == -1) {
+    // if/else writing the argument register in both arms gives the image's
+    // `cmpwi cr6,r27,-1` / `mr r4,r27` / `bne` / `lwz r4,0x0(r26)`.
+    int userIndex;
+    if (i3 != -1) {
+        userIndex = i3;
+    } else {
         userIndex = c.mUserIndex;
     }
-    ULARGE_INTEGER u;
-    // RESIDUAL (w7-am, 88.1 canonical): as in XboxContent::Poll, the image
-    // builds the by-value ULARGE_INTEGER in memory with MSVC's 64-bit
-    // register-pair store idiom -- `addi r11,r31,0x54` / `stw r28,0x50(r31)` /
-    // `stw r28,0x0(r11)` / `ld r7,0x50(r31)` at 825F7148..825F7188 -- while we
-    // SROA the union and pass the constant in r7.
-    // NEGATIVE RESULT (w7-am, 2026-09-14): spelling the zeroing as the two
-    // halves defeats the SROA but schedules the stores differently and drops
-    // this to 81.9 canonical.  `userIndex = i3 == -1 ? c.mUserIndex : i3;`
-    // as a ternary instead of the if below: 86.6.
-    u.QuadPart = 0;
+    // RESIDUAL (w11-b, 96.8 canonical): the image stores u.LowPart before
+    // mSelectedDevice and the `mr r6,r28` after both; ours emits `mr r6`,
+    // mSelectedDevice, LowPart. Immune to the source position of
+    // `mSelectedDevice = 0` and of the declaration of u (tried before memset,
+    // before/after mSelectorCallback, after mSelectedDevice); a ternary or
+    // if/else for i1 drops it to 86.5, inlining both args into the call 72.2.
     if (ThePlatformMgr.ShowDeviceSelectorUI(
             userIndex, 1, i1, u, &mSelectedDevice, &mXOverlapped
         )
