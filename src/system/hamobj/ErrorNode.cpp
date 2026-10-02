@@ -365,7 +365,7 @@ void Ham1DisplacementNode::Errors(
     op.mRate = node_input.mNodeWeight->mRate2;
     float projLen = Length(ham1Data.unk4);
     errData.unk4 = ScaleDistToError(mPotentialAngleOp, ham1Data.unk0);
-    errData.unk4 = errData.unk4 - 1.0f < 0.0f ? errData.unk4 : 1.0f;
+    MinEq(errData.unk4, 1.0f);
     errData.unk8 = ScaleDistToError(op, angle);
     float ratio = 1.0f;
     if (0.0f < ham1Data.unk1c) {
