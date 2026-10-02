@@ -119,47 +119,48 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     float depthStep = depthDelta / rampSteps1;
     float rateStep = rateDelta / rampSteps2;
 
-    int frame = 0;
-    if (numSamples > 0) {
-        do {
-            float delay = (float)mDelaySamples;
-            int writeIdx = (mWritePos + frame) % 9600;
-            float center = (1.0f - depth * 0.5f) * delay;
-            float swing = delay * depth * 0.5f;
-            for (int chan = 0; chan < numChans; chan++) {
-                float lfo = sinf(phaseOffset[chan] + phase);
-                int i = frame * numChans + chan;
-                float *delayBuf = mDelayBuffers[chan];
-                float *feedbackBuf = mDelayBuffers[chan + 2];
-                int writePos = mWritePos;
-                float in = buf[i];
-                mDelayBuffers[chan][writeIdx] = in;
+    // w15-b (90.78 -> 91.7): a plain for loop, not the hand-rotated
+    // `if (numSamples > 0) do {...} while` -- same trip count.  Left: the
+    // f21/f22 naming of the two step quotients and the scheduling of the two
+    // `% 9600` read indices (idx 137-183); swapping the step statements is
+    // worse (84.6 instr-level).
+    for (int frame = 0; frame < numSamples; frame++) {
+        float delay = (float)mDelaySamples;
+        int writeIdx = (mWritePos + frame) % 9600;
+        float center = (1.0f - depth * 0.5f) * delay;
+        float swing = delay * depth * 0.5f;
+        for (int chan = 0; chan < numChans; chan++) {
+            float lfo = sinf(phaseOffset[chan] + phase);
+            int i = frame * numChans + chan;
+            float *delayBuf = mDelayBuffers[chan];
+            float *feedbackBuf = mDelayBuffers[chan + 2];
+            int writePos = mWritePos;
+            float in = buf[i];
+            mDelayBuffers[chan][writeIdx] = in;
 
-                // Modulated delay in samples, clamped to the line, read twice:
-                // once at the delay and once at double it.
-                float delayPos = Clamp(1.0f, 4799.0f, lfo * swing + center);
-                int intDelay = (int)delayPos;
-                float delayPos2 = delayPos * 2.0f;
-                int readBase = writePos - intDelay + frame;
-                int intDelay2 = (int)delayPos2;
-                float frac = delayPos - (float)intDelay;
-                float frac2 = delayPos2 - (float)intDelay2;
-                int readBase2 = writePos - intDelay2 + frame;
+            // Modulated delay in samples, clamped to the line, read twice:
+            // once at the delay and once at double it.
+            float delayPos = Clamp(1.0f, 4799.0f, lfo * swing + center);
+            int intDelay = (int)delayPos;
+            float delayPos2 = delayPos * 2.0f;
+            int readBase = writePos - intDelay + frame;
+            int intDelay2 = (int)delayPos2;
+            float frac = delayPos - (float)intDelay;
+            float frac2 = delayPos2 - (float)intDelay2;
+            int readBase2 = writePos - intDelay2 + frame;
 
-                buf[i] = delayBuf[(readBase + 9600) % 9600] * (1.0f - frac) + buf[i];
-                float mixed = (buf[i] + delayBuf[(readBase + 9599) % 9600] * frac) * 0.5f;
-                buf[i] = mixed;
-                buf[i] = feedbackBuf[(readBase2 + 9600) % 9600] * (1.0f - frac2) * mFeedbackFrac + mixed;
-                float out = feedbackBuf[(readBase2 + 9599) % 9600] * frac2 * mFeedbackFrac + buf[i];
-                buf[i] = out;
-                mDelayBuffers[chan + 2][writeIdx] = out;
-                buf[i] = buf[i] * 2.0f - in;
-            }
-            frame++;
-            phase += rate;
-            rate += rateStep;
-            depth += depthStep;
-        } while (frame < numSamples);
+            buf[i] = delayBuf[(readBase + 9600) % 9600] * (1.0f - frac) + buf[i];
+            float mixed = (buf[i] + delayBuf[(readBase + 9599) % 9600] * frac) * 0.5f;
+            buf[i] = mixed;
+            buf[i] = feedbackBuf[(readBase2 + 9600) % 9600] * (1.0f - frac2) * mFeedbackFrac + mixed;
+            float out = feedbackBuf[(readBase2 + 9599) % 9600] * frac2 * mFeedbackFrac + buf[i];
+            buf[i] = out;
+            mDelayBuffers[chan + 2][writeIdx] = out;
+            buf[i] = buf[i] * 2.0f - in;
+        }
+        phase += rate;
+        rate += rateStep;
+        depth += depthStep;
     }
     unk1c = depth;
     unk2c = rate;
