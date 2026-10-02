@@ -3149,6 +3149,13 @@ void HamDirector::OnPopulateFromMoveMgr() {
     }
 }
 
+// w17-b (stopped at 99.269 canonical, unchanged): the key searches now compare
+// `moveName == key.value` (the image's `cmplw cr6, r24, r8` operand order; a
+// register-only change, canonical-neutral).  Remaining: the image's frame is
+// 0x10 larger and it stores the vector's _M_start to 0x60(r31) on EVERY search
+// iteration (`stw r11, 0x60(r31)` at 0x82474D0C, never read back) -- some
+// address-taken temporary in the original search that we do not have; the
+// String/Symbol locals below are shifted by +0x20 as a result.  Not found.
 void HamDirector::DrawIconMan(Symbol moveName, Symbol nextClip, Symbol prevClip, float beatOffset, float beatExtra, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {
         SetMasterClipAnim();
