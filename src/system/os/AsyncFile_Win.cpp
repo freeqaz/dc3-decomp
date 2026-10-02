@@ -242,32 +242,29 @@ void AsyncFileWin::_ReadAsync(void *buf, int count) {
     }
 }
 
-// RESIDUAL (w11-b, 99.93 canonical, 4 rows): the shared fail tail stores
-// mReadInProgress before mFail in the image; we emit mFail first. Swapping the
-// source order in one or both copies breaks the tail merge (82.6); `= true`
-// inert; decomp-synth beam (6 rounds) found nothing.
+// w18-d (99.93 -> 100): ONE fail tail in the source -- the fake-error path
+// falls into it from an if/else instead of carrying its own copy. With two
+// copies MSVC tail-merged them but scheduled mFail before mReadInProgress
+// (w11-b's 4-row residual).
 bool AsyncFileWin::_ReadDone() {
     if (gFakeFileErrors) {
         SetLastError(0x20000002);
-        ReadError(mFilename.c_str());
-        mReadInProgress = false;
-        mFail = 1;
-        return false;
-    }
-    if (!mReadInProgress) {
-        return true;
-    }
-    if (mOverlapped.Internal == 0x103) {
-        return false;
-    }
-    DWORD bytesTransferred;
-    if (GetOverlappedResult(mFile, &mOverlapped, &bytesTransferred, false)) {
-        if (unk58 == 0) {
-            memcpy(unk5c, (char *)unk60 + unk68, unk64);
-            MemFree(unk60, "unknown", 0, "unknown");
+    } else {
+        if (!mReadInProgress) {
+            return true;
         }
-        mReadInProgress = false;
-        return true;
+        if (mOverlapped.Internal == 0x103) {
+            return false;
+        }
+        DWORD bytesTransferred;
+        if (GetOverlappedResult(mFile, &mOverlapped, &bytesTransferred, false)) {
+            if (unk58 == 0) {
+                memcpy(unk5c, (char *)unk60 + unk68, unk64);
+                MemFree(unk60, "unknown", 0, "unknown");
+            }
+            mReadInProgress = false;
+            return true;
+        }
     }
     ReadError(mFilename.c_str());
     mReadInProgress = false;
