@@ -15,7 +15,8 @@ void Pose::Update(const Skeleton &skeleton) {
     for (std::vector<PoseElement *>::iterator it = mElements.begin(); it != mElements.end();
          ++it) {
         PoseElement *elem = *it;
-        weightedSum += elem->Score(skeleton) * elem->unk4;
+        float weight = elem->unk4;
+        weightedSum += elem->Score(skeleton) * weight;
         totalWeight += elem->unk4;
     }
     MILO_ASSERT(totalWeight != 0.0f, 0x95);
