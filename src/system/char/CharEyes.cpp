@@ -34,8 +34,9 @@ bool CharEyes::sDisableEyeClamping;
 // w15-r: the image's TU .rdata is [30.0f, 3.0f, 1.0f (0x820108E8..F0), gRev,
 // gAltRev] -- three named file-scope consts, none loaded by name (every use
 // folds).  30 is the eye-cone half-angle: the ctor's cos() argument
-// 0x3FE0C15236000000 is exactly 30.0f * DEG2RAD folded in double (measured: the
-// ctor is unchanged).  3 and 1 are Poll's default look times: as named consts
+// 0x3FE0C15236000000 is exactly 30.0f * DEG2RAD multiplied in double (measured:
+// the ctor is unchanged; the explicit (double) keeps the native build's cos()
+// argument identical to the old literal instead of a float-rounded product).  3 and 1 are Poll's default look times: as named consts
 // the `: 1.0f` default is no longer CSE'd with Clamp's 1.0f (Poll 98.01 ->
 // 98.95, the four "real rows" below).  With gRev off offset 0 MSVC anchors
 // Load's ASSERT_REVS pair on gAltRev like the image (99.29 -> 100).
@@ -61,7 +62,7 @@ CharEyes::CharEyes()
       mDartEnabled(0), mDartInterval(-1), mEyeClampCount(-1),
       mBlinkEnabled(0), mBlinkTimer(-1), mBlinkCount(0),
       mUpperBlinkAngle(-1), mLowerBlinkAngle(-1), mEnabled(0), mHeadIKActive(1) {
-    mMaxEyeCang = std::cos(kMaxEyeAngle * DEG2RAD);
+    mMaxEyeCang = std::cos((double)kMaxEyeAngle * DEG2RAD);
     mEyeStatusOverlay = RndOverlay::Find("eye_status", false);
 }
 
