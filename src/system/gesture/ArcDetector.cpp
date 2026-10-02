@@ -235,6 +235,8 @@ float ArcDetector::GetPathError() const {
         // Also charged under name_check: the image loads sZErrorScale as
         // `lbl_82F446F8`, a .data float (value 2.0f, verified) that dtk
         // attributes to the StandingStillGestureFilter TU, not this one.
+        // Also inert (w12-d, same 19 rows): a zero-initialised
+        // `Vector3 err(0, 0, 0)` with .y/.z assigned and LengthSquared(err).
         error = errZ * errZ + (errY * errY + dz * dz) + error;
         ++it;
     } while (it != pathEnd);
