@@ -46,11 +46,11 @@ void DxCam::Select() {
         UINT clearColor = 0;
         UINT clearFlags = 0;
         // The image RELOADS mTargetTex->mType here (lwz r11, 0x54(r11) at
-        // 8261EAF4) rather than reusing the value it kept in r9 for the
-        // kShadowMap / kDepthVolumeMap compares -- the mask expression names
-        // GetType() again, and MSVC CSEs the two loads inside it into one.
-        bool setClear =
-            (mTargetTex->GetType() & RndTex::kRendered) && !(mTargetTex->GetType() & 0x20);
+        // 8261EAF4) rather than reusing `type`: the mask is read through a
+        // fresh local copy of the pointer, whose two GetType() loads MSVC CSEs
+        // into one (w10-e: 98.84 -> 100).
+        RndTex *tex = mTargetTex;
+        bool setClear = (tex->GetType() & RndTex::kRendered) && !(tex->GetType() & 0x20);
         if (setClear) {
             clearFlags = 0x30;
         }
