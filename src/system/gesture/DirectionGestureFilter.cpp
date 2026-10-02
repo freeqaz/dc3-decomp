@@ -153,17 +153,17 @@ float DirectionGestureFilterSingleUser::UpdateOverlay(RndOverlay *overlay, float
     return mArcDetector.UpdateOverlay(overlay, f1);
 }
 
-// .data:0x82F4453C / 0x40 / 0x44 / 0x48 -- four MUTABLE file-scope floats. The
-// target loads each from memory (`lis`/`lfs` on a .data label) instead of
-// materialising a literal, so they cannot be `const` and cannot be written
-// inline. They are the half-axes, in shoulder-widths, of the torso exclusion
-// ellipse the hand must be OUTSIDE of for the pose to count as a valid swipe.
-static float sSwipeEllipseWidth = 0.9f;
-static float sSwipeEllipseHeight = 1.3f;
-static float sSwipeEllipseWidthEngaged = 0.8f;
-static float sSwipeEllipseHeightEngaged = 1.1f;
-
 bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skeleton) const {
+    // .data:0x82F4453C / 0x40 / 0x44 / 0x48 -- four MUTABLE function-local
+    // statics: the half-axes, in shoulder-widths, of the torso exclusion ellipse
+    // the hand must be OUTSIDE of for the pose to count as a valid swipe.  The
+    // image addresses each one with its own `lis`/`lfs` pair; as file-scope
+    // statics MSVC anchors all four off one base (`addi r11, r11, sym@l` then
+    // 0x4/0x8/0xc displacements) -- 97.16 -> 99.98.
+    static float sSwipeEllipseWidth = 0.9f;
+    static float sSwipeEllipseHeight = 1.3f;
+    static float sSwipeEllipseWidthEngaged = 0.8f;
+    static float sSwipeEllipseHeightEngaged = 1.1f;
     const TrackedJoint *joints = skeleton.TrackedJoints();
 
     float shoulderRightY = joints[kJointShoulderRight].mJointPos[0].y;
