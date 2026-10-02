@@ -118,7 +118,9 @@ void Vector3DESmoother::Smooth(Vector3 v, float dt, bool normalize) {
     sy.Smooth(v.y, dt);
     sz.Smooth(v.z, dt);
     if (normalize) {
-        Vector3 val(sx.mLevel, sy.mLevel, sz.mLevel);
+        // w17-c: Value(), not a ctor from the three mLevels -- it is what
+        // makes the image reload mZ.mLevel (probe diff 302 -> 30).
+        Vector3 val = Value();
         Vector3 norm;
         Normalize(val, norm);
         sx.mTrend = 0;
