@@ -678,6 +678,10 @@ BEGIN_LOADS(HamMove)
         }
     }
     if (d.rev > 0x2A) {
+        // w15-i1: map<CRC, float>::insert_unique(hint, v) is 99.967 canonical; its
+        // two rows are the CRC key loads (image: node key 0x10(r30) first, then
+        // v's key). Spelling CRC::operator< as `c.mCRC > mCRC` in utl/Crc.h
+        // costs 99.967 -> 99.754 and was reverted.
         std::map<Hmx::CRC, float> confusabilities;
         d >> confusabilities;
         if (!mDirty) {

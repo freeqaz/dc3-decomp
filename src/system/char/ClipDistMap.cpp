@@ -516,6 +516,12 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
 // both hoisted after the ctor (96.6 -- flips our `add` to begin+off like the
 // image but the sum stays shared).  Whatever made the image not CSE the two
 // `begin + i*12` sums is not the evaluation order of the two reads.
+// w15-i1 (97.69 canonical after the node-reference fix): remaining rows are the
+// cell loop's int->float of cellRect.y (the image converts it AFTER the three
+// colour stores and loads mLastMinErr later; we hoist both), one cmpwi placement,
+// and the node loop's `add r10, r11, r30` operand order.  Tried: cellRect.y
+// assigned before the colour (inert); `Node *` / `const Node &` / begin()[i] /
+// *(begin()+i) (all inert); a float local for curBeat (back to 96.58).
 void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     Hmx::Rect rect;
 
@@ -603,7 +609,11 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     // Draw transition nodes
     for (unsigned int i = 0; i < mNodes.size(); i++) {
         Hmx::Color nodeColor(1.0f, 0.0f, 0.0f, 1.0f);
-        DrawDot(x + 1.0f, y - 1.0f, mNodes[i].curBeat, mNodes[i].nextBeat, nodeColor);
+        // One reference, not two mNodes[i] subscripts: the image computes the
+        // node address once from the begin() its loop test already loaded
+        // (w15-i1: two subscripts reload begin() in the body, 96.58 -> 97.69).
+        Node &node = mNodes[i];
+        DrawDot(x + 1.0f, y - 1.0f, node.curBeat, node.nextBeat, nodeColor);
     }
 
     // Draw current playback position if driver is provided

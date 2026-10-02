@@ -272,25 +272,10 @@ void kdTree<T>::kdTreeNode::Pack(
     kdTreeNode *pBase,
     unsigned char uc
 ) {
-    // One function-scope iterator, shared by the split pass and the leaf pass.
-    // NEGATIVE RESULT on the two target-only home stores (`stw r11, 0x5c(r31)`
-    // and `stw r11, 0x60(r31)`): the image uses TWO slots, so the obvious read
-    // is two separate declarations -- but splitting them back apart does NOT
-    // produce either store, leaves both deletes in place, and costs 0.2pp of
-    // raw by re-introducing an r20<->r21 swap across 15 instructions.  One
-    // declaration is the better-measuring shape even though it is the one that
-    // cannot explain the slots.
-    typename std::list<Triangle *>::iterator it;
-    if (uc < 0xF) {
-        it = items.begin();
-        unsigned int uCount = 0;
-        if (it != items.end()) {
-            do {
-                ++it;
-                uCount++;
-            } while (it != items.end());
-
-            if (uCount >= 10) {
+    // items.size() is STLport's distance(begin(), end()): its by-value iterator
+    // copy is the image's home store at 0x5c(r31) (w15-i1; the hand-written count
+    // loop it replaces could not produce that store, and neither could the leaf's).
+    if (uc < 0xF && items.size() >= 10) {
             bool bFound = false;
             if (s == 0) {
                 bFound = FindSplit_Mean(inDimensions, items);
@@ -340,7 +325,8 @@ void kdTree<T>::kdTreeNode::Pack(
                     std::list<Triangle *> leftList;
                     std::list<Triangle *> rightList;
                     bool bContinue = true;
-                    for (it = items.begin(); it != items.end();) {
+                    for (typename std::list<Triangle *>::iterator it = items.begin();
+                         it != items.end();) {
                         Triangle *pCurr = *it;
 
                         MILO_ASSERT(::Intersect(*pCurr, inDimensions), 0x166);
@@ -391,24 +377,15 @@ void kdTree<T>::kdTreeNode::Pack(
                     }
                 }
             }
-        }
-        }
     }
 
     MILO_ASSERT(GetIsLeaf(), 0x19F);
-    it = items.begin();
-    if (it == items.end()) {
+    if (items.empty()) {
         SetTriList(nullptr);
     } else {
-        unsigned int uCount = 0;
-        do {
-            ++it;
-            uCount++;
-        } while (it != items.end());
-
-        SetTriList(kdTriList::Allocate(uCount));
+        SetTriList(kdTriList::Allocate(items.size()));
         kdTriList *pCurr = GetTriList();
-        for (it = items.begin(); it != items.end();) {
+        for (typename std::list<Triangle *>::iterator it = items.begin(); it != items.end();) {
             MILO_ASSERT(!pCurr->IsEnd(), 0x1AE);
             pCurr->SetItem(*it);
             it = items.erase(it);

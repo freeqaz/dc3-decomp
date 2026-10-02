@@ -508,10 +508,16 @@ void RndAmbientOcclusion::BuildObjectLists() {
             mObjectsTessellate.push_back(cur);
         }
     }
+    // BEHAVIOUR FIX (w15-i1): the comparator ranks by position in the USER's
+    // tessellate list, not in the vector being sorted.  The image passes
+    // `addi r5, r31, 0x68` to sort -- the address of the local tessellateMeshes
+    // (the same 0x68(r31) the third GatherObject loop fills) -- where we passed
+    // &mObjectsTessellate.  Ranking by index in the vector std::sort is busy
+    // permuting is not an ordering at all.
     std::sort(
         mObjectsTessellate.begin(),
         mObjectsTessellate.end(),
-        VectorSort<RndMesh *>(mObjectsTessellate)
+        VectorSort<RndMesh *>(tessellateMeshes)
     );
 }
 

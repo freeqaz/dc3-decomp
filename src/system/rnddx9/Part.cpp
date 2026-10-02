@@ -112,6 +112,11 @@ void DxParticleSys::DrawParticles(const Hmx::Color &color) {
     TheNgStats->mPartSys += (unsigned int)numActive != 0;
 }
 
+// w15-i1 (98.62 canonical): the image computes `aligned`/`stretched` straight into
+// callee-saved r27/r29 (`clrlwi. r27, r11, 24`) with fancy in r28; we compute in
+// r11 and `mr` (fancy r27, aligned r28), plus one extra clrlwi on constantArea.
+// Tried: folding constantArea into the ternary (`stretched && mConstantArea ?
+// 1.0f : 0.0f`) -- 98.62 -> 93.62, reverted.
 void DxParticleSys::DrawShowing() {
     RndParticleSys::DrawShowing();
     if (!mActiveParticles)
