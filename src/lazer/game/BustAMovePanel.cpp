@@ -1552,6 +1552,10 @@ void BustAMovePanel::Poll() {
         // w16-e: `!(Side() != kSkeletonLeft || GetPlayerColor(0) != "pink")`
         // as the initialiser behaves exactly like the && form (97.78), and the
         // scoreGraph white Color as the 3-arg ctor is inert.
+        // w19-e: re-measured the && form: the downstream cost is exactly the
+        // two scoreGraph Color temps swapping slots (image: white 0xb0, black
+        // 0xc0; && form: black 0xb0, white 0xc0) plus one 0x8c reload.  `bool
+        // = false; if (A && B) = true;` is 99.5 (r21/r22 swap + polarity).
         bool isPlayer0Pink = true;
         if (TheGameData->Player(0)->Side() != kSkeletonLeft
             || GetPlayerColor(0) != "pink") {
