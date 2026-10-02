@@ -249,8 +249,10 @@ int GetOutfitGender(Symbol outfit, bool fail) {
 }
 
 const char *GetOutfitModel(Symbol outfit, bool fail) {
-    DataArray *entry;
-    GetEntriesForOutfit(outfit, nullptr, &entry, fail);
+    // Goes through GetOutfitEntry, inlined: the image's lone extra
+    // `stw r3, 0x50(r31)` is that callee's by-value Symbol parameter being
+    // homed into the slot `entry` then reuses.
+    DataArray *entry = GetOutfitEntry(outfit, fail);
     if (entry) {
         static Symbol model("model");
         DataArray *modelArr = entry->FindArray(model, false);
