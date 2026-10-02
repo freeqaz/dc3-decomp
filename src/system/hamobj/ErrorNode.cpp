@@ -258,23 +258,20 @@ bool BaseDisplacementNode::Displacements(
         const Vector3 &jointDisp = dispData.mJointDisplacement;
         float jdLen = Length(jointDisp);
         ham1Data.unk1c = jdLen;
-        float nx, ny, nz;
+        Vector3 n;
         if (0.0f < jdLen) {
             float inv = 1.0f / jdLen;
-            nx = jointDisp.x * inv;
-            ny = inv * jointDisp.y;
-            nz = jointDisp.z * inv;
+            n.x = jointDisp.x * inv;
+            n.y = inv * jointDisp.y;
+            n.z = jointDisp.z * inv;
         } else {
-            nx = 0.0f;
-            ny = 0.0f;
-            nz = 0.0f;
+            n.x = 0.0f;
+            n.y = 0.0f;
+            n.z = 0.0f;
         }
-        float dot = nx * dispData.mBaseJointDisplacement.x
-            + ny * dispData.mBaseJointDisplacement.y
-            + nz * dispData.mBaseJointDisplacement.z;
-        proj.x = nx * dot;
-        proj.y = ny * dot;
-        proj.z = nz * dot;
+        float dot = Dot(n, dispData.mBaseJointDisplacement);
+        Scale(n, dot, proj);
+        float nx = n.x, ny = n.y, nz = n.z;
         ham1Data.unk14 = (dot > 0.0f);
         const Vector3 &baseDisp = dispData.mBaseJointDisplacement;
         float bjdLen = Length(baseDisp);
