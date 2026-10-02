@@ -31,6 +31,18 @@ bool CharEyes::sDisableProceduralBlink;
 bool CharEyes::sDisableEyeClamping;
 // CharLookAt::sDisableJitter is defined in CharLookAt.cpp
 
+// w15-r: the image's TU .rdata is [30.0f, 3.0f, 1.0f (0x820108E8..F0), gRev,
+// gAltRev] -- three named file-scope consts, none loaded by name (every use
+// folds).  30 is the eye-cone half-angle: the ctor's cos() argument
+// 0x3FE0C15236000000 is exactly 30.0f * DEG2RAD folded in double (measured: the
+// ctor is unchanged).  3 and 1 are Poll's default look times: as named consts
+// the `: 1.0f` default is no longer CSE'd with Clamp's 1.0f (Poll 98.01 ->
+// 98.95, the four "real rows" below).  With gRev off offset 0 MSVC anchors
+// Load's ASSERT_REVS pair on gAltRev like the image (99.29 -> 100).
+const float kMaxEyeAngle = 30.0f;
+const float kDefaultMaxLookTime = 3.0f;
+const float kDefaultMinLookTime = 1.0f;
+
 INIT_REVS(18, 0)
 
 #if !defined(__EMSCRIPTEN__) && !defined(__APPLE__)
@@ -49,7 +61,7 @@ CharEyes::CharEyes()
       mDartEnabled(0), mDartInterval(-1), mEyeClampCount(-1),
       mBlinkEnabled(0), mBlinkTimer(-1), mBlinkCount(0),
       mUpperBlinkAngle(-1), mLowerBlinkAngle(-1), mEnabled(0), mHeadIKActive(1) {
-    mMaxEyeCang = std::cos(0.5235987715423107);
+    mMaxEyeCang = std::cos(kMaxEyeAngle * DEG2RAD);
     mEyeStatusOverlay = RndOverlay::Find("eye_status", false);
 }
 
@@ -1364,6 +1376,8 @@ void CharEyes::ProceduralBlinkUpdate() {
     }
 }
 
+// w15-r: 98.01 -> 98.95 -- the first bullet below (the 1.0f CSE) is closed by the
+// named kDefaultMinLookTime/kDefaultMaxLookTime consts (see INIT_REVS).
 // RESIDUAL at 98.0 canonical / 97.1 raw (w7-ax, 2026-09-14).  53 of the 63
 // remaining rows are one register permutation the canonical ruler forgives.
 // The four real rows, each verified against build/373307D9/asm/system/char/CharEyes.s:
@@ -1450,8 +1464,8 @@ void CharEyes::Poll() {
         TheTaskMgr.Seconds(TaskMgr::kRealTime);
         mAvDelta = (cang - mLastCang - mAvDelta) * 0.1f + mAvDelta;
 
-        float minLookTime = mCurrentInterest ? mCurrentInterest->mMinLookTime : 1.0f;
-        float maxLookTime = mCurrentInterest ? mCurrentInterest->mMaxLookTime : 3.0f;
+        float minLookTime = mCurrentInterest ? mCurrentInterest->mMinLookTime : kDefaultMinLookTime;
+        float maxLookTime = mCurrentInterest ? mCurrentInterest->mMaxLookTime : kDefaultMaxLookTime;
         float viewAngleCos =
             mCurrentInterest ? mCurrentInterest->mMaxViewAngleCos : mMaxEyeCang;
 
