@@ -646,11 +646,14 @@ inline void Multiply(const Vector3 &v, const Transform &t, Vector3 &out) {
 // (target -0x70, ours -0x60) so a `Matrix3 tmp` is out, and the +0xc pad copy
 // rules out `Set()` copies.  Built and measured, each a full ninja:
 // `Vector3 vz, vy, vx;` is inert (80.7, same rows); copy-out order z,y,x is
-// 77.8 and y,x,z is 80.0, so x,y,z stays.  One real lever surfaced: the copy
+// 77.8 and y,x,z is 80.0 against x,y,z's 80.7.  One real lever surfaced: the copy
 // order decides which b element MSVC hoists above the alias branch -- z,y,x
 // hoists b.y.x, x,y,z hoists nothing, and the target hoists b.y.y
-// (`lfs f7, 0x14(r4)` at 0x8236E970 in CharLookAt.s).  The remaining orders
-// were not built.
+// (`lfs f7, 0x14(r4)` at 0x8236E970 in CharLookAt.s).  w13-o built the
+// remaining three: x,z,y 81.05 (kept -- whole-binary A/B, full ninja both
+// sides: this row 80.706 -> 81.053, nothing else moved), z,x,y 78.3, y,z,x
+// 79.9.  None of the six reaches the image's b.y.y hoist, so the copy order is
+// not the whole story.
 inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
     if (&b != &out) {
         Multiply(a.x, b, out.x);
@@ -662,8 +665,8 @@ inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 
         Multiply(a.y, b, vy);
         Multiply(a.z, b, vz);
         out.x = vx;
-        out.y = vy;
         out.z = vz;
+        out.y = vy;
     }
 }
 
