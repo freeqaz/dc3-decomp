@@ -571,12 +571,8 @@ void HttpPost::StartSending() {
 void HttpPost::Sending() {
     MILO_ASSERT(mSocket, 0x3EF);
     String debugStr;
-    int start = mContentLength - mBytesRemaining;
-    if (start < (int)mContentLength) {
-        do {
-            debugStr += MakeString("%c", mContent[start]);
-            start = start + 1;
-        } while (start < (int)mContentLength);
+    for (int i = mContentLength - mBytesRemaining; i < mContentLength; i++) {
+        debugStr += MakeString("%c", mContent[i]);
     }
     int sent = mSocket->Send(
         mContent + mContentLength - mBytesRemaining, mBytesRemaining
