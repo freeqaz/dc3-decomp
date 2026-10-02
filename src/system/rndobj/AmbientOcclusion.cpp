@@ -18,7 +18,17 @@
 #include <set>
 #include "utl\Std.h"
 
-/* w8-e 2026-09-15 -- ADJUDICATED UNSCOREABLE, do not hunt these five.
+/* w18-a 2026-10-02 -- the five rows below are CLOSED (all 100.0) by a symbols.txt
+ * rebind, not by source.  The w8-e note was right that they are ICF folds and
+ * wrong that they cannot pair: ham_xbox_r.map lists the Key<M> (float) spelling
+ * at each of the five addresses, that spelling was bound NOWHERE in symbols.txt,
+ * and our AmbientOcclusion.obj emits exactly those five Key<float> helpers (this
+ * TU's sort is the Key<float> one -- see Tessellate).  Rebinding the five entries
+ * from the Key<_N>/Key<VSymbol> names to the Key<M> names (addresses unchanged,
+ * all five inside this unit's .text 0x826DABB8..0x826E2D70) took them 0.0 -> 100,
+ * +5 matched / +656 B, 0 rows down.  Historical note follows.
+ *
+ * w8-e 2026-09-15 -- ADJUDICATED UNSCOREABLE, do not hunt these five.
  *
  * report.json files five 0% rows against this unit, 656 B in total:
  *   ??$__introsort_loop@PAV?$Key@_N@@...           188 B  @826E0138
