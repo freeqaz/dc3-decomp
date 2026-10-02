@@ -876,8 +876,9 @@ int SkeletonChooser::RoundRobinForHandRaised(int i) {
 
     if (mNextSkelIdxToTrack >= 0) {
         Skeleton &skel = TheGestureMgr->GetSkeleton(mNextSkelIdxToTrack);
-        id = skel.TrackingID();
-        mSkeletonHandRaisedFilters[0]->Update(skel.TrackingID(), TheTaskMgr.DeltaUISeconds() * 1000.0f);
+        int trackingID = skel.TrackingID();
+        id = trackingID;
+        mSkeletonHandRaisedFilters[0]->Update(trackingID, TheTaskMgr.DeltaUISeconds() * 1000.0f);
         if (mSkeletonHandRaisedFilters[0]->HandRaised()) {
             static Symbol join_in_progress_complete("join_in_progress_complete");
             static Symbol none("none");
@@ -890,7 +891,7 @@ int SkeletonChooser::RoundRobinForHandRaised(int i) {
                 unk80 = 0.08f;
             } else {
                 unk80 -= TheTaskMgr.DeltaUISeconds();
-                if (0 <= id && unk8c < 2) {
+                if (0 <= trackingID && unk8c < 2) {
                     unk84 -= TheTaskMgr.DeltaUISeconds();
                     unk88 -= TheTaskMgr.DeltaUISeconds();
                     if (unk84 <= 0.0f && unk88 <= 0.0f
