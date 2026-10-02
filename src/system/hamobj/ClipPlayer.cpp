@@ -278,13 +278,16 @@ CharClip *ClipPlayer::GetPrevRoutineTransition(int idx) {
             beat += 1.0f;
         }
 
+        // The transition is looked up from the SECOND crossover clip (the
+        // 4th argument): the image passes &slot54 as r6 and &slot50 as r7 and
+        // then reads slot50 back (`lwz r11, 0x50(r1)` before `lwz r4, 0x20`).
         CharClip *c2 = nullptr;
         CharClip *c1 = nullptr;
 #ifdef HX_NATIVE
-        if (!GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c1, &c2))
+        if (!GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c2, &c1))
             return nullptr;
 #else
-        GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c1, &c2);
+        GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c2, &c1);
 #endif
 
         return GetRoutineTransition(c1->Name(), curKey);
