@@ -14,6 +14,11 @@
 // `zone->Volume() + RatioToDb(...)` fixes the fadds order but hoists the
 // Volume() load above the call into f31 (95.8); `db + zone->Volume()` and
 // `db += zone->Volume()` are byte-identical to the current spelling.
+// w16-e (97.95, 6 rows): the 0x39/0x3a/0x3b byte-store order, `fadds f1,
+// f1, f0` (image: db first) and the mSample reload before SetBankPan.
+// Measured: `db + zone->Volume()` with the named db is inert; inlining
+// RatioToDb into the expression fixes the fadds operand order but hoists the
+// Volume load above the call (95.9).  Not kept.
 NoteVoiceInst::NoteVoiceInst(
     MidiInstrument *owner,
     SampleZone *zone,

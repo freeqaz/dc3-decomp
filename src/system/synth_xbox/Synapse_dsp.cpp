@@ -232,21 +232,16 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     // Output buffers
     mOutputBuffers.resize((int)mVoices.size(), (float *)0);
 
-    // Resize each channel buffer to 0x2000 floats and set output buffer pointers
-    unsigned int i = 0;
-    if ((int)mChannelBuffers.size() != 0) {
-        int chanOffset = 0;
-        int outOffset = 0;
-        do {
-            ChannelBuffer *chan =
-                (ChannelBuffer *)((char *)mChannelBuffers.begin() + chanOffset);
-            chan->resize((size_t)0x2000, 0.0f);
-            i++;
-            *(float **)((char *)mOutputBuffers.begin() + outOffset) =
-                *(float **)((char *)mChannelBuffers.begin() + chanOffset);
-            chanOffset += 0xC;
-            outOffset += 4;
-        } while (i < (unsigned int)((int)mChannelBuffers.size()));
+    // Resize each channel buffer to 0x2000 floats and set output buffer pointers.
+    // w16-e: plain indexed loops here and below (was hand-stepped byte offsets
+    // inside a hand-rotated `if (n) do {} while`): MSVC rotates and
+    // strength-reduces them itself, and that also frees 0x50 so the scratch
+    // temps above coalesce onto 0x58 as in the image -- 99.21 -> 99.995.
+    // Residual (4 rows, voice loop below): `stfsx f31, r10, r9` operand order
+    // and the image loading mVoices._M_start before _M_finish for size().
+    for (unsigned int i = 0; i < (unsigned int)((int)mChannelBuffers.size()); i++) {
+        mChannelBuffers[i].resize((size_t)0x2000, 0.0f);
+        mOutputBuffers[i] = mChannelBuffers[i].begin();
     }
 
     // GranularSynth
@@ -254,14 +249,8 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     mGranularSynth.reset(gs);
 
     // Zero out voice gains in GranularSynth
-    unsigned int j = 0;
-    if ((int)mVoices.size() != 0) {
-        int voiceOffset = 0;
-        do {
-            j++;
-            *(float *)((char *)mGranularSynth->mVoices + voiceOffset) = 0.0f;
-            voiceOffset += 0x18;
-        } while (j < (unsigned int)((int)mVoices.size()));
+    for (unsigned int j = 0; j < (unsigned int)((int)mVoices.size()); j++) {
+        mGranularSynth->mVoices[j].mField_0x00 = 0.0f;
     }
 
     // Biquad filters.  The coefficient array shares the target's stack block
@@ -279,7 +268,14 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     }
 
     mIirSmooth = 0.0f;
-    mIirCoeff = Time2IirA(0.00811767578125f, mTargetPitch * 0.25f);
+    // BUG FIX (w16-e): the time constant is 8.16 ms -- the image loads
+    // __real@3c05b186 (0.0081600007f) at 82E4763C `lfs f1, ...` for the
+    // Time2IirA call at 82E47640.  We passed 0.00811767578125f (0x3c050000),
+    // a truncated mantissa, so mIirCoeff was computed from the wrong time
+    // constant.  0x3c05b186 is exactly the float product 8.16f * 0.001f (the
+    // ms-to-seconds idiom SetAttackSmoothing/SetReleaseSmoothing use); a bare
+    // 0.00816f rounds to 0x3c05b185, one ulp low.
+    mIirCoeff = Time2IirA(8.16f * 0.001f, mTargetPitch * 0.25f);
 
     SetAttackSmoothing(30.0f);
     SetReleaseSmoothing(80.0f);
@@ -287,6 +283,13 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
 
 Synapse::~Synapse() {}
 
+// w16-e: 96.75 -> 100 canonical (modulo register permutation: the image
+// adds the mVoices base FIRST in `stfsx`/`add`/`lwzx`, 5 commutative-operand
+// rows).  Levers: the two per-voice passes are plain indexed loops (were
+// m2c's hand-stepped byte offsets in a hand-rotated do-while), and the
+// threshold test reads the member mPitchConfidence after the two stores,
+// which keeps the confidence in f0 across the mPitchClarity copy (image
+// `lfs f12, 0x14(r11)` at 0x684).
 void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
     float temp_f30 = 0.0f;
     float temp_f31 = 4.0f;
@@ -323,11 +326,10 @@ void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
             if (!((mDetectionInterval - 1) & temp_r11_2)) {
                 (*(PitchDetector **)((char *)this + 0x28))->Detect(temp_r11_2 >> 2);
                 PitchDetector *pd = *(PitchDetector **)((char *)this + 0x28);
-                float temp_f0 = pd->mPitchConfidence;
-                mPitchConfidence = temp_f0;
+                mPitchConfidence = pd->mPitchConfidence;
                 mPitchClarity = pd->mPitchClarity;
 
-                if (temp_f0 > mPitchThreshold) {
+                if (mPitchConfidence > mPitchThreshold) {
                     float temp_f0_2 = pd->mDetectedPitch * temp_f31;
                     mDetectedPitch = temp_f0_2;
 
@@ -340,27 +342,12 @@ void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
                     (*(GranularSynth **)((char *)this + 0x68))->mPitchConfidence = mPitchConfidence;
                 }
 
-                void *vp = (char *)this + 0x5C;
-                unsigned int var_r27 = 0;
-                if ((int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56 != 0) {
-                    int var_r28 = 0;
-                    int var_r29 = 0;
-
-                    do {
-                        *(float *)((char *)(*(void **)vp) + var_r29) = mTargetPitch / mDetectedPitch;
-                        *(float *)((char *)(*(void **)vp) + var_r29 + 0x28) = mPitchConfidence;
-                        *(float *)((char *)(*(void **)vp) + var_r29 + 0x2C) = mPitchClarity;
-
-                        GranularSynth *gs = *(GranularSynth **)((char *)this + 0x68);
-                        float temp_f1 = ((PitchCorrectedVoice *)((char *)(*(void **)vp) + var_r29))->GetCorrection();
-
-                        var_r27++;
-                        GranularVoice *gv = (GranularVoice *)((char *)gs->mVoices + var_r28);
-                        var_r29 += 0x38;
-                        var_r28 += 0x18;
-
-                        gv->mCorrection = temp_f1;
-                    } while (var_r27 < (unsigned int)((int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56));
+                for (unsigned int v = 0; v < (unsigned int)((int)mVoices.size()); v++) {
+                    mVoices[v].mFreq0 = mTargetPitch / mDetectedPitch;
+                    mVoices[v].mField_0x28 = mPitchConfidence;
+                    mVoices[v].mFreqCounter = mPitchClarity;
+                    GranularSynth *gs = *(GranularSynth **)((char *)this + 0x68);
+                    gs->mVoices[v].mCorrection = mVoices[v].GetCorrection();
                 }
             }
 
@@ -388,20 +375,12 @@ void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
         memset(arg2, 0, arg1 * 4);
     }
 
-    void *vp2 = (char *)this + 0x5C;
-    unsigned int var_r29_2 = 0;
-    if ((int)((int)(*(void **)((char *)vp2 + 0x4)) - (int)(*(void **)vp2)) / 56 != 0) {
-        int var_r28_2 = 0;
-
-        do {
-            IPP::Add_InPlace(arg1, *(float **)((char *)mOutputBuffers.begin() + var_r28_2), arg2);
-            var_r29_2++;
-            var_r28_2 += 4;
-        } while (var_r29_2 < (unsigned int)((int)((int)(*(void **)((char *)vp2 + 0x4)) - (int)(*(void **)vp2)) / 56));
+    for (unsigned int v = 0; v < (unsigned int)((int)mVoices.size()); v++) {
+        IPP::Add_InPlace(arg1, mOutputBuffers[v], arg2);
     }
 
     mGain = 1.0f;
-    unsigned int final_count = ((int)((int)(*(void **)((char *)vp2 + 0x4)) - (int)(*(void **)vp2)) / 56);
+    unsigned int final_count = (int)mVoices.size();
     IPP::MulConstant_InPlace(arg1, arg2, 1.0f / (float)final_count);
 }
 

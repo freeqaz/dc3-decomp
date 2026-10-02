@@ -222,6 +222,9 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // instruction shorter, and the source cannot ask for the longer form.
     // Splitting this into `++mCurrentIndex;` + a separate `if` is BYTE-
     // IDENTICAL (measured 2026-09-14, w7-q, with a sabotage control).
+    // w16-e: `(int)mEntries.size() <= ++mCurrentIndex` 99.133 (vs 99.14),
+    // `mEntries.end() - mEntries.begin()` 98.43, reusing numEntries 98.80
+    // (the image does reload begin/end here).
     if (++mCurrentIndex >= (int)mEntries.size() || b2) {
         MILO_LOG("SongSequence::DoNext: terminating. forced=%s\n", b2 ? "T" : "F");
         static Symbol holla_back("holla_back");

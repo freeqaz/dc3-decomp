@@ -50,6 +50,10 @@ void CompressionEffect::SetParameters(CompressionEffect::Params const &params) {
     mMakeupGainRatio = DbToRatio(mThresholdDb / mRatio - mThresholdDb);
 }
 
+// w16-e (98.73): residual is the hoisted-constant FPR assignment (image
+// f27..f31 for 1.15/0.001/0.002/1.0/0.02, ours f3/f4/f27..f29) and the
+// f12/f13 relabelling it drags.  A plain `for (channel...)` without the
+// numChannels guard is worse (95.8, 161 vs 159 instructions).
 void CompressionEffect::Process(float *samples, int numFrames, int numChannels) {
     if (mRatio > 1.01f) {
         float envelope = mEnvelope;

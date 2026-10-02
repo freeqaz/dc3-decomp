@@ -1545,6 +1545,9 @@ void BustAMovePanel::Poll() {
         // initialiser is EXACTLY inert, so the coupling is not scope count.
         // Whatever third spelling gives both, it is not one of these three;
         // the if-guard below is kept only because it scores higher.
+        // w16-e: `!(Side() != kSkeletonLeft || GetPlayerColor(0) != "pink")`
+        // as the initialiser behaves exactly like the && form (97.78), and the
+        // scoreGraph white Color as the 3-arg ctor is inert.
         bool isPlayer0Pink = true;
         if (TheGameData->Player(0)->Side() != kSkeletonLeft
             || GetPlayerColor(0) != "pink") {

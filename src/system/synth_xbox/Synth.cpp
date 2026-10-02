@@ -103,6 +103,8 @@ extern "C" HRESULT XAudio2Create(IXAudio2 **, UINT32, UINT32);
 
 Synth360 *TheXboxSynth;
 
+// w16-e (99.989): one `int gain` at function scope instead of per-branch is
+// inert.
 void ReverbConvertI3DL2ToNative(
     const XAUDIO2FX_REVERB_I3DL2_PARAMETERS *pI3DL2, XAUDIO2FX_REVERB_PARAMETERS *pNative
 ) {

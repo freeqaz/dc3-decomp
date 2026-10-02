@@ -113,38 +113,20 @@ MovieInternalBuffers::~MovieInternalBuffers() {
 // wrong callees.
 MovieInternalBuffers *MovieInternalBuffers::New(std::vector<BINK *> binks) {
     MovieInternalBuffers *ret = new MovieInternalBuffers();
+    BINKFRAMEBUFFERS curBuffers;
 
     for (int i = 0; i < binks.size(); i++) {
         BINK *cur = binks[i];
         if (cur) {
-            BINKFRAMEBUFFERS curBuffers;
             memset(&curBuffers, 0, sizeof(BINKFRAMEBUFFERS));
             BinkGetFrameBuffersInfo(cur, &curBuffers);
-            // 99.97846, 8 rows, and all 8 are one load-scheduling tie in the
-            // four Max() calls below. Rows [41]/[42], [47]/[48], [53]/[54],
-            // [59]/[60] are the same two lwz in the opposite order: the target
-            // loads the accumulator (0x48/0x4c/0x50/0x54 off r30 = ret) first
-            // and curBuffers (0x74..0x80 off r31) second -- MSVC's
-            // right-to-left argument evaluation for Max(cur, acc) -- and we
-            // emit them the other way round. Everything else, including the
-            // register assignment (r10 = cur, r11 = acc), the cmplw operand
-            // order and all four stores, is equal, which confirms the argument
-            // order here is the target's. Note TotalFrames (rows [34]/[35]) is
-            // ALREADY in the target's order on both sides; only the four
-            // unsigned ones drift.
-            // Measured WORSE (w7-m, 99.97846 -> 99.9674, 8 rows -> 12):
-            // hoisting `BINKFRAMEBUFFERS &bufs = ret->mBuffers;` and writing
-            // the five statements through it. MSVC then materialises
-            // `addi r4, r30, 0x44` and stores through r4, adding four stw rows
-            // on top of the eight; the load order does not change. So the
-            // target addresses mBuffers off `ret` directly, as written here.
-            // Measured WORSE (w7-aa, 2026-09-14, 99.97846 -> 99.9, 8 rows ->
-            // 16): swapping the Max() arguments on the four unsigned fields to
-            // Max(acc, cur).  The two lwz stay in OUR order -- the load
-            // schedule is invariant to the argument order -- and the swap only
-            // flips the cmplw operands and the branch polarity (blt -> bge),
-            // adding 8 rows on top of the 8.  That settles it: the residual is
-            // a scheduler tie, not an evaluation order the source can state.
+            // w16-e: 99.978 -> 100.  `curBuffers` is declared at function
+            // scope, not inside the loop.  With the block-scoped declaration
+            // MSVC loaded curBuffers.X before ret->mBuffers.X in the four
+            // unsigned Max() calls (8 rows, which w7-m/w7-aa measured as a
+            // scheduler tie); at function scope the image's acc-first load
+            // order falls out.  Behaviour is unchanged: it is memset and
+            // refilled by BinkGetFrameBuffersInfo on every iteration.
             ret->mBuffers.TotalFrames =
                 Max(curBuffers.TotalFrames, ret->mBuffers.TotalFrames);
             ret->mBuffers.YABufferWidth =

@@ -334,6 +334,9 @@ bool AccomplishmentProgress::AddAward(Symbol award, Symbol reason) {
 // notify temp down into 0x54.  Refuted: introducing `const char *accName =
 // s.Str();` before the MILO_NOTIFY was exactly inert (99.989190 unchanged).
 // See the note on PlaylistSongProvider::DataSymbol for the shared family.
+// w16-e (99.989): dropping the `else` after the !pAcc early return (block
+// kept) is inert; an early `if (IsAccomplished(s)) return false;` is worse
+// (97.26).
 bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
     if (!IsAccomplished(s)) {
         Accomplishment *pAcc = TheAccomplishmentMgr->GetAccomplishment(s);
