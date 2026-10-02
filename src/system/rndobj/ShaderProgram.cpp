@@ -198,9 +198,16 @@ bool RndShaderProgram::Cache(
                     // 0x827321A0, where r26 is SystemConfig's return value saved
                     // by `mr r26, r3` at 0x82732198. We passed nullptr, which
                     // changes how a variable/property node resolves.
-                    char *dataRoot = (char *)cfg->Node(1).Str(cfg);
+                    // w18-a: const char *, not char * -- the image instantiates
+                    // MakeString<const char *> (??$MakeString@PBD@@) for the
+                    // report path; a char * local picked MakeString<char *>.
+                    const char *dataRoot = cfg->Node(1).Str(cfg);
+                    // w18-a: the image reads NgMat::sCurrent BEFORE the environ's
+                    // PathName call (`lwz r30, sCurrent` ahead of the first
+                    // `bl PathName`), so the material is fetched first.
+                    NgMat *curMat = NgMat::Current();
                     const char *envPath = PathName(envObj);
-                    const char *matPath2 = PathName(NgMat::Current());
+                    const char *matPath2 = PathName(curMat);
                     const char *shaderHex = MakeString("%s_%llx", shaderTypeName, opts.flags);
                     const char *flagsHex = MakeString("%llx", opts.flags);
                     shaderTypeName = ShaderTypeName(shaderType);
