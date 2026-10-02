@@ -659,13 +659,8 @@ int MemHeap::Free(int *ptr) {
 
     if (1 <= mDebugLevel) {
         int *end = (int *)newFree + newFree->mSizeWords;
-        int *end3 = (int *)newFree + 3;
-        if (end3 < end) {
-            int *cur = end3 - 1;
-            for (unsigned int count = (((unsigned int)end - (unsigned int)end3) - 1) / 4 + 1; count != 0; count--) {
-                cur++;
-                *cur = 0xDEADDEAD;
-            }
+        for (int *cur = (int *)newFree + 3; cur < end; cur++) {
+            *cur = 0xDEADDEAD;
         }
     }
 
