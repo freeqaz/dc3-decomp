@@ -423,6 +423,12 @@ BEGIN_COPYS(CharIKFoot)
     END_COPYING_MEMBERS
 END_COPYS
 
+// w15-r: the image's .rdata for this TU is [0.5f @0x82013490, gRev @0x82013494,
+// gAltRev].  DoFSM loads the 0.5 from that named slot (`lfs f0, lbl_82013490@l`,
+// 0x8238A318), not from a __real@ literal, and with gRev off offset 0 MSVC
+// anchors the ASSERT_REVS pair on gAltRev like the image.
+const float kPlantHeight = 0.5f;
+
 INIT_REVS(6, 0)
 
 BEGIN_LOADS(CharIKFoot)
@@ -632,7 +638,7 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
             if (mFootFsmState == 1) {
                 f10 = 0.6f;
             } else {
-                f10 = 0.5f;
+                f10 = kPlantHeight;
             }
             if (tf.v.z < f10) {
                 b2 = true;
