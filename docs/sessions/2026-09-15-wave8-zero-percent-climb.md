@@ -1501,3 +1501,69 @@ Two inline-flag lanes owning those 90 units (plus their fresh rows), two fresh l
 142 untouched rows outside them, and w15-r on the `gRev`/`gAltRev` family: four wave-14 lanes
 independently hit `Load`/`PreLoad` residuals where the image addresses `gRev` off `gAltRev`'s
 base, which points at the `INIT_REVS` macro in the PCH-reached `obj/Object.h`.
+
+## Wave 15 — two cross-cutting levers tested, one of them real (2026-10-02)
+
+Two inline-flag lanes owning the 90 units where the retail map flags a same-TU callee
+`f i` (COMDAT `SELECT_ANY`) but our object emits it `NODUPLICATES`
+(`scripts/analysis/comdat_selection_audit.py`), two fresh lanes over the untouched rows
+outside them, and w15-r on the `gRev`/`gAltRev` revision-constant family.
+
+**31,640 → 31,664 matched (+24)**; authorable canonical **31,600 → 31,624 / 32,221
+(98.07 % → 98.15 %)**; all-100 authorable units **706 → 710 / 967**; remaining authorable
+**621 → 597 functions (483,144 → 466,736 B)** (`progress_metrics.py` at `22a5192ac`).
+Another session landed a docs-only commit mid-wave (`93af1a873`); w15-r was rebased onto it
+with no `src/` or `config/` delta between the gated and pushed tree.
+
+| lane | UP | units completed | matched |
+|---|---:|---|---|
+| w15-i2 | 2 | 0 | 31640 → 31642 |
+| w15-a | 5 | 0 | 31642 → 31645 |
+| w15-r | 11 | 1 (CharIKFoot) | 31645 → 31654 |
+| w15-i1 | 3 | 0 | 31654 → 31656 |
+| w15-b | 9 | 3 (DataArray, DataFlex, MemTrack) | 31656 → 31664 |
+
+### Behaviour and data bugs, adjudicated against the target `.s`
+
+1. **`SpeechMgr::AddDynamicRuleWord`** converted the semantic string into a buffer and never
+   used it, so `NuiSpeechAddWordTransition` received an uninitialized `pcwszValue`; the image
+   stores the buffer's address into the semantic (`stw r11, 0x58(r31)` at `0x8243B5C0`).
+2. **`RndAmbientOcclusion::BuildObjectLists`** sorted `mObjectsTessellate` by its own
+   indices; the image sorts by the user's tessellate list (`addi r5, r31, 0x68`). The
+   stack-slot swap it caused had been read as a layout residual — **a slot swap can hide a
+   wrong argument**.
+3. **`CharIKHand` / `CharHair` revision constants**: the image's `gRev` is `0x000D0000` in
+   both (`0x82012C6C`, `0x820147F0`); ours were 0xC and 11, so the version-mismatch message
+   printed the wrong limit. Invisible to every function score.
+
+### The `gRev`/`gAltRev` rule (w15-r)
+
+MSVC anchors `ASSERT_REVS` on `gRev` when it sits at offset 0 of the file's non-COMDAT
+`.rdata`, and on `gAltRev` (reaching `gRev` as `subi rX, rA, 0x4`) when any file-scope const
+precedes it. Measured over all 248 `INIT_REVS` sites: 227/227 offset-0 sites anchor on `gRev`
+in the image, 8/8 already-matching offset>0 sites on `gAltRev`, and all 10 mismatches were
+files whose leading `.rdata` differed — each flipped both ways by adding or moving one const.
+Nine `Load`s to 100 by restoring the image's missing const at its address. The macro itself is
+right (an array-based variant lost 247 rows whole-binary). This overturns the "follows no
+source lever" note in `relocation-names-are-unmetered.md`.
+
+### The inline-flag lever is effectively exhausted
+
+Across 90 audited units and ~180 same-TU callees with a below-100 caller, marking the callee
+`inline` closed **one** caller (`DefaultMidiLess` 77.2 → 100 via `MidiRank`). Every other
+caller was unmoved (COMDAT selection confirmed flipped). It joins the static-linkage lever
+(w14-l) and helper-body reordering (w13-o) on the exhausted list.
+
+### Other levers (measured in-tree)
+
+- The XDK CRT declares `malloc`/`calloc`/`realloc`/`free` `__declspec(noalias)`; without it
+  MSVC reloads file statics after `realloc` (three functions to 100).
+- Hand-rotated loops (`if (n) do { } while`, hand-stepped pointers) written back as plain
+  loops let MSVC rotate them itself (four functions to 100).
+- `int abs()` in a float comparison is what survives as the image's runtime `int → float`
+  conversion of a constant (`EaseElasticIn`).
+
+### Wave 16
+
+Five directory-owning lanes, each with the remaining fresh rows (169) and a **second opinion**
+on the attempted rows at ≥ 99 % (122), briefed with every floor that has fallen since wave 12.
