@@ -242,6 +242,13 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
     }
 }
 
+// w19-b (99.753 canonical): 13 rows, all register numbering of the seven
+// loop-invariant addresses MSVC hoists above the ObjDirItr loop (target
+// kAssertStr=r25 ObjRef-vtable=r24 TheDebug=r28 file=r27 msg=r26; ours
+// r24/r28/r27/r26/r25) plus their uses.  The two call-name rows
+// (ObjDirPtr<ObjectDir>::operator-> and MakeString<char[19],int,char[5]>) are
+// ICF fold aliases at 0x82440E08 / 0x824D1870, not source differences.  Worse:
+// `ObjRef refs;` declared above the Find (97.5).
 void WorldInstance::DeleteTransientObjects() {
     if (Dir() && Dir() != DirLoader::TopSaveDir()
         && Dir()->InlineSubDirType() == kInlineAlways) {
