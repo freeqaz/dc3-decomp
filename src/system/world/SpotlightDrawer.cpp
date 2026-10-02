@@ -627,11 +627,10 @@ inline void DrawAccessories<LensExtract>(
 }
 
 void SpotlightDrawer::DrawWorld() {
-    int numLights = sLights.size();
-    if (numLights < TheNgStats->mSpotlights) {
-        numLights = TheNgStats->mSpotlights;
-    }
-    TheNgStats->mSpotlights = numLights;
+    // w17-b: one Max<int>() assignment.  The image loads TheNgStats (the
+    // store's base) BEFORE sLights.size() (0x82826990..A8); a local `numLights`
+    // computed first put the size loads ahead of it (9 rows).
+    TheNgStats->mSpotlights = Max<int>(sLights.size(), TheNgStats->mSpotlights);
     if ((!sLights.empty() || !sCans.empty()) && Showing()) {
         SortLights();
         DrawMeshVec(sCans);
