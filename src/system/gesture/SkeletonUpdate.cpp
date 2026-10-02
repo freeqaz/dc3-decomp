@@ -387,8 +387,11 @@ void SkeletonUpdate::UpdateCallbacks() {
                     if (tracked > 0)
                         offset.x = negHalf;
                     StubCameraInput::StubSkeletonData(sd[i], offset);
-                    tracked++;
                 }
+                // The count advances on EVERY slot, tracked or not: the image's
+                // `bne cr6, .L_8242DCD0` for a tracked slot lands ON the
+                // `addi r29, r29, 0x1` (0x8242DCD0), not past it.
+                tracked++;
                 if (tracked == 2 || tracked == unk5388) {
                     break;
                 }
