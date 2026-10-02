@@ -733,7 +733,11 @@ void GamePanel::SetGameOver(bool b1) {
 }
 
 void GamePanel::ReloadData() {
-    ObjectDir *hudPanel = DataVariable("hud_panel").Obj<ObjectDir>();
+    // Two statements: ending the full-expression after DataVariable() frees
+    // the "hud_panel" Symbol temp's slot, which the image reuses for "objects"
+    // (both at 0x50(r31)); one chained expression costs 16 bytes of frame.
+    DataNode &hudVar = DataVariable("hud_panel");
+    ObjectDir *hudPanel = hudVar.Obj<ObjectDir>();
     DataMacroWarning(false);
     DataArray *fileData = DataReadFile(SystemConfig()->File(), true);
     DataArray *objArr = fileData->FindArray("objects");
