@@ -153,6 +153,10 @@ void LoopVizCallback::DrawHashMarks(
 // `MakeString` rows are ICF folds (`MakeString<_D3DFORMAT>` / `MakeString<int,
 // SaveLoadManager::State>` are the same code as our `MakeString<int>` /
 // `MakeString<int,int>`).
+// w15-i2 (99.996, 2 rows): the second mDebugMeter2.DrawLine's white Color
+// stores alpha (0x9c) before blue (0x98); every value is f31 (1.0f).  INERT:
+// Color(1,1,1,1) for Color(1,1,1).  INERT (comdat lever): DrawHashMarks
+// marked `inline` (map `f i`).
 float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     if (!TheMaster || !TheMaster->GetAudio() || !TheMaster->GetAudio()->GetSongStream())
         return y;

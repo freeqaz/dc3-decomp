@@ -299,6 +299,8 @@ void ThreeDSound::CalculateFaderVolume() {
         // sinks the blocks.  Caching `int shape = mShape` so the re-test can
         // fold is worse (91.2: MSVC neither folds it nor keeps &mShape as
         // the MakeString argument).
+        // w15-i2: WORSE (47.0): the falloff block duplicated into each case
+        // arm (case 1 testing the radius first), hoping MSVC cross-jumps it.
         switch (mShape) {
         case 0:
             break;

@@ -148,6 +148,9 @@ int PlatformMgr::snShowControllerPadNum;
 // only -- the image stores mServiceIDOverlapped first, we last.  INERT: moving
 // that assignment above the mXuidCache loop.  WORSE (88.24): moving it after
 // mServiceIdState.
+// w15-i2: INERT as well -- declaring mServiceIDOverlapped2 above
+// mServiceIDOverlapped (the map's .bss order: 0x82F6763C / 0x82F67640), and
+// marking Friend::Friend `inline` (map `f i`; Poll's caller unchanged).
 PlatformMgr::PlatformMgr() : mSigninMask(0) {
     mScreenSaver = true;
     mSigninChangeMask = 0;
