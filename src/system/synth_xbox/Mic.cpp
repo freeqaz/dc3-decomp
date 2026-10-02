@@ -437,13 +437,18 @@ void MicXbox::ReadChatBuffer(void *data, unsigned int size) {
             // `out` may alias it), which costs the image's hoisted `lhzu`/`sthu`
             // pointer pair.
             const short *src = &unk3020[0];
-            for (unsigned int i = 0; i < samps; i++) {
-                out[i] = src[i * 3];
+            // Hand-rotated: the image keeps an explicit counter (`addi r8,r8,1` /
+            // `cmplw cr6,r8,r11` / `blt`, 0x82E3F6E0); a counted `for` becomes
+            // `mtctr`/`bdnz` (90.3).  A signed counter is worse (89.1).  The
+            // destination is walked (`*out++`): `out[i]` sets up the two biased
+            // pointers in the opposite order.
+            unsigned int i = 0;
+            if (samps != 0) {
+                do {
+                    *out++ = src[i * 3];
+                    i++;
+                } while (i < samps);
             }
-            // RESIDUAL (90.3 canonical): the image keeps an explicit counter
-            // (`addi r8,r8,1` / `cmplw cr6,r8,r11` / `blt`, 0x82E3F6E0) where MSVC
-            // gives us `mtctr`/`bdnz`.  A signed counter is WORSE (89.1 -- it turns
-            // the zero-trip guard into `cmpwi`/`ble`).
             unk3020.erase(unk3020.begin(), unk3020.begin() + samps * 3);
         }
     }
