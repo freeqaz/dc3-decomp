@@ -148,8 +148,12 @@ void CamTexClip::StoreTextureClip(RndTex *tex, float clipLeft, float clipTop, fl
     float clampedY = Clamp(minY, maxY, adjustedTop);
     mXfm.v.x = clampedX;
     mXfm.v.y = clampedY;
-    mXfm.m.y *= scaleY;
-    mXfm.m.z *= scaleZ;
+    // w17-c: Scale(), not `*=`, for the last two rows (99.919 -> 100 on a
+    // non-PCH probe; every per-component `*=` ordering was worse).  The
+    // three-argument Scale reads all three components before it writes,
+    // which is the load colouring described above.
+    Scale(mXfm.m.y, scaleY, mXfm.m.y);
+    Scale(mXfm.m.z, scaleZ, mXfm.m.z);
 }
 
 #pragma region TextureStore
