@@ -232,21 +232,16 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     // Output buffers
     mOutputBuffers.resize((int)mVoices.size(), (float *)0);
 
-    // Resize each channel buffer to 0x2000 floats and set output buffer pointers
-    unsigned int i = 0;
-    if ((int)mChannelBuffers.size() != 0) {
-        int chanOffset = 0;
-        int outOffset = 0;
-        do {
-            ChannelBuffer *chan =
-                (ChannelBuffer *)((char *)mChannelBuffers.begin() + chanOffset);
-            chan->resize((size_t)0x2000, 0.0f);
-            i++;
-            *(float **)((char *)mOutputBuffers.begin() + outOffset) =
-                *(float **)((char *)mChannelBuffers.begin() + chanOffset);
-            chanOffset += 0xC;
-            outOffset += 4;
-        } while (i < (unsigned int)((int)mChannelBuffers.size()));
+    // Resize each channel buffer to 0x2000 floats and set output buffer pointers.
+    // w16-e: plain indexed loops here and below (was hand-stepped byte offsets
+    // inside a hand-rotated `if (n) do {} while`): MSVC rotates and
+    // strength-reduces them itself, and that also frees 0x50 so the scratch
+    // temps above coalesce onto 0x58 as in the image -- 99.21 -> 99.995.
+    // Residual (4 rows, voice loop below): `stfsx f31, r10, r9` operand order
+    // and the image loading mVoices._M_start before _M_finish for size().
+    for (unsigned int i = 0; i < (unsigned int)((int)mChannelBuffers.size()); i++) {
+        mChannelBuffers[i].resize((size_t)0x2000, 0.0f);
+        mOutputBuffers[i] = mChannelBuffers[i].begin();
     }
 
     // GranularSynth
@@ -254,14 +249,8 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     mGranularSynth.reset(gs);
 
     // Zero out voice gains in GranularSynth
-    unsigned int j = 0;
-    if ((int)mVoices.size() != 0) {
-        int voiceOffset = 0;
-        do {
-            j++;
-            *(float *)((char *)mGranularSynth->mVoices + voiceOffset) = 0.0f;
-            voiceOffset += 0x18;
-        } while (j < (unsigned int)((int)mVoices.size()));
+    for (unsigned int j = 0; j < (unsigned int)((int)mVoices.size()); j++) {
+        mGranularSynth->mVoices[j].mField_0x00 = 0.0f;
     }
 
     // Biquad filters.  The coefficient array shares the target's stack block
