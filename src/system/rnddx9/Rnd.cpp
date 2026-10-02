@@ -280,6 +280,12 @@ void DxRnd::PostDeviceReset() {
     MakeDrawTarget();
     InitRenderState();
 }
+// w18-c: 86.44 -> one row (a commutative `add` in the node address, r28+r11 in
+// the image).  The clip plane is a Plane built from the transform's position and
+// its negated z axis (`Scale(m.z, -1.0f, n)`, the image's three `fmuls .., f31`
+// with f31 = -1.0f): Plane's ctor stores a,b,c before d, which is the image's
+// store order; the Vector4 copy goes through Multiply and back with Set().
+// Reading planes[i] twice instead of through `trans`: 99.4, worse.
 void DxRnd::PushClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
     int enableMask = 0;
     for (int i = 0; i < unk408; i++) {
@@ -292,15 +298,13 @@ void DxRnd::PushClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
         RndTransformable *trans = planes[i];
         if (trans) {
             const Transform &xfm = trans->WorldXfm();
-            float nx = xfm.m.z.x * -1.0f;
-            float ny = xfm.m.z.y * -1.0f;
-            float nz = xfm.m.z.z * -1.0f;
-            float d = -(nx * xfm.v.x + (nz * xfm.v.z + ny * xfm.v.y));
-            Vector4 planeClip(nx, ny, nz, d);
-            Vector4 planeObj(nx, ny, nz, d);
-            Multiply(planeObj, RndCam::Current()->GetInvViewProjMatrix(), planeObj);
-            planeClip.Set(planeObj.x, planeObj.y, planeObj.z, planeObj.w);
-            D3DDevice_SetClipPlane(mD3DDevice, unk408, &planeClip.x);
+            Vector3 normal;
+            Scale(xfm.m.z, -1.0f, normal);
+            Plane plane(xfm.v, normal);
+            Vector4 v(plane.a, plane.b, plane.c, plane.d);
+            Multiply(v, RndCam::Current()->GetInvViewProjMatrix(), v);
+            plane.Set(v.x, v.y, v.z, v.w);
+            D3DDevice_SetClipPlane(mD3DDevice, unk408, &plane.a);
             enableMask |= 1 << unk408;
             unk408++;
         }
