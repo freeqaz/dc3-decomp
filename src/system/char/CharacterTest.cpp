@@ -375,9 +375,16 @@ void CharacterTest::PlayNew() {
 void CharacterTest::Poll() {
     if (Clips() && mClip1) {
         if (!gClick) {
-            ObjectDir *clickdir = DirLoader::LoadObjects(
-                FilePath(MakeString("%s/char/chartest.milo", (char *)FileSystemRoot())), 0, 0
-            );
+            // w13-c: 99.386 -> 100.  FileSystemRoot() is passed uncast (the
+            // image calls MakeString<const char *>, not <char *>), and the
+            // FilePath is a NAMED local in its own block: the image re-derives
+            // `addi r3, r31, 0x58` for LoadObjects instead of forwarding the
+            // ctor's return, and destroys the path straight after the call.
+            ObjectDir *clickdir;
+            {
+                FilePath clickPath(MakeString("%s/char/chartest.milo", FileSystemRoot()));
+                clickdir = DirLoader::LoadObjects(clickPath, 0, 0);
+            }
             gClick = clickdir->Find<Hmx::Object>("click_hi.cue", true);
         }
         float beat = TheTaskMgr.Beat();
