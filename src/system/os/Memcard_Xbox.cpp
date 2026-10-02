@@ -475,10 +475,10 @@ void MemcardXbox::ShowDeviceSelector(
     // r28,0x50(r31)) and LowPart through a precomputed address (addi
     // r11,r31,0x54 / stw r28,0(r11)) before the `ld r7,0x50(r31)` that passes
     // it by value, exactly as at 825F7148..825F7188. `u.QuadPart = 0` SROAs it.
+    mSelectedDevice = 0;
     ULARGE_INTEGER u = {0};
     mSelectorCallback = o;
     int i1 = 0;
-    mSelectedDevice = 0;
     if (b4) {
         i1 = 0x200;
     }
@@ -490,12 +490,8 @@ void MemcardXbox::ShowDeviceSelector(
     } else {
         userIndex = c.mUserIndex;
     }
-    // RESIDUAL (w11-b, 96.8 canonical): the image stores u.LowPart before
-    // mSelectedDevice and the `mr r6,r28` after both; ours emits `mr r6`,
-    // mSelectedDevice, LowPart. Immune to the source position of
-    // `mSelectedDevice = 0` and of the declaration of u (tried before memset,
-    // before/after mSelectorCallback, after mSelectedDevice); a ternary or
-    // if/else for i1 drops it to 86.5, inlining both args into the call 72.2.
+    // mSelectedDevice is zeroed FIRST (before u and mSelectorCallback): that is
+    // what schedules the LowPart store ahead of it, as in the image.
     if (ThePlatformMgr.ShowDeviceSelectorUI(
             userIndex, 1, i1, u, &mSelectedDevice, &mXOverlapped
         )
