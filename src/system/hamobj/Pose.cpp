@@ -118,7 +118,13 @@ float BoneAngleRangePoseElement::Score(const Skeleton &skeleton) const {
     // range-check macro leaves behind, and it names the member, not the local
     // alias -- so spell it that way here.
     MILO_ASSERT((1.0f)-(0.001f) <= (Length(mAngle)) && (Length(mAngle)) <= (1.0f)+(0.001f), 0x21);
-    float dot = Dot(boneDir, angle);
+    // w11-a: the dot product accumulated by hand.  The inlined Dot() lets
+    // /fp:fast pick the association per call site and here it picks y first;
+    // the image multiplies z, then fmadds x, then fmadds (boneDir.y * angle.y).
+    // This statement order is the one that reproduces it (99.95 -> 100).
+    float dot = angle.x * boneDir.x;
+    dot += angle.z * boneDir.z;
+    dot += boneDir.y * angle.y;
     float acosAngle = acosf(dot);
     if (acosAngle <= unk1c)
         return 1.0f;
