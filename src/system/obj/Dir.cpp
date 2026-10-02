@@ -411,6 +411,8 @@ inline BinStream &operator<<(BinStream &bs, const ObjectDir::Viewport &v) {
 // w14-d (99.997, 2 rows): the only residual is two stores in the inlined
 // vector swap at the end (image stores the 0x58 swap temp before the 0xa4
 // finish pointer, we after).  `unused.swap(mInlinedDirs)` is byte-inert.
+// w17-d (99.997, same 2 rows): moving `gLoadingProxyFromDisk = oldProxy` above
+// the vector/swap is WORSE (99.3: the gLoading store moves into the swap).
 void ObjectDir::Save(BinStream &bs) {
     SAVE_REVS(0x1C, 0)
     SaveType(bs);
@@ -760,6 +762,11 @@ void ObjectDir::SaveProxy(BinStream &bs) {
     }
 }
 
+// w17-d (98.647, 11 rows): the image keeps -768 itself in f30 across
+// MakeRotMatrix and uses fmadds (m.y * -768); we fold the negative literal into
+// +768 / fmsubs. Tried: og-dc3's `Multiply(Vector3(0,-768,0), m, v)` (90.6, the
+// inline Multiply drops the *0 terms), `Vector3 v; v.Set(...)` (inert), copying
+// v from vp[5].mXfm.v before the call (82.6, spills to the stack).
 void ObjectDir::ResetViewports() {
     Viewport *vp = &mViewports[0];
     vp[1].mXfm.m.Set(0, -1, 0, 1, 0, 0, 0, 0, 1);

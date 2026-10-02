@@ -95,6 +95,8 @@ void GlitchPoker::PrintNestedStartTimes(TextStream &stream, float f1) {
 // and losing sites hold the same source expression, the order is not selected by
 // operand order in the source, and no source spelling of those two expressions is
 // available that changes only one of the five sites.
+// w17-d (99.995): `-smLastDumpTime + mTime` / `-mTime + mTimeEnd` at the two
+// failing sites are byte-inert (MSVC canonicalises the subtraction).
 void GlitchPoker::Dump(TextStream &stream, int i1) {
     if (mTime > smLastDumpTime + 0.005f) {
         PrintNestedStartTimes(stream, smLastDumpTime);

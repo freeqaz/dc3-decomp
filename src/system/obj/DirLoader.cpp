@@ -624,6 +624,8 @@ void DirLoader::Cleanup(const char *str) {
 // own (0x60) and shift every later slot by 0x10.  WORSE: `it = insert(...).first`
 // with a single `it->second += memDelta` (94.46); a reference bound to a
 // ?: of the two arms (80.75, adds a cleanup-flag word).
+// w17-d (99.866): `it` declared then assigned (inert); the find folded into the
+// if condition `(it = find(...)) != end()` (96.1, materialises a bool).
 void DirLoader::AddTypeObjectMemDelta(
     const Hmx::Object *object, const MemPointDelta &memDelta
 ) const {
@@ -648,6 +650,10 @@ void DirLoader::AddTypeObjectMemDelta(
     }
 }
 
+// w17-d (99.487, 11 rows: the image copies begin() through r11 into the loop
+// iterator and keeps &*it in r28): iterator instead of const_iterator for the
+// Save loop is WORSE (98.8, loses the const operator* home store); one shared
+// const_iterator assigned per loop is inert.
 void DirLoader::SaveObjects(BinStream &bs, ObjectDir *dir) {
     char name[256];
     MILO_ASSERT(sTopSaveDir != dir, 0x10C);

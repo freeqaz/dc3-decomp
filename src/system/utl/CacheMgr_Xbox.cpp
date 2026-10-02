@@ -376,6 +376,10 @@ void CacheMgrXbox::PollDelete() {
     }
 }
 
+// w17-d (99.911): `unsigned int res;` declared first then assigned is inert;
+// numFound hoisted to function scope 97.4; DWORD res + `(unsigned int)res` in the
+// FAIL makes the 0x50 store a call-site temp (98.7) -- the image's res is a real
+// home stored straight after XGetOverlappedResult.
 void CacheMgrXbox::PollSearch() {
     // w8-l: 99.911390 normalized, the only function keeping this unit from
     // 100% (23/24).  Known residual, 14 rows, all one slot apart and all the
