@@ -58,6 +58,13 @@ namespace {
                 // Brightness lerps 0.6 -> 1.0 across each metre. The span must be
                 // spelled `1.0f - 0.6f`: the target's constant is 0x3ECCCCCC, the
                 // float value of that subtraction, not 0.4f (0x3ECCCCCD).
+                // w14-f (99.67, 2 rows + 6 relocation-name rows under name_check):
+                // the image assigns the loop-invariant constants f11 = 0.4,
+                // f12 = 0.001, f13 = 0.6; ours f11 = 0.6, f12 = 0.4, f13 = 0.001.
+                // Bit-identical: `(1.0f - 0.6f) * meters + 0.6f`,
+                // `Interp(0.6f, 1.0f, meters)`, `/ 1000.0f`, a `minBright = 0.6f`
+                // local.  Inlining meters into one expression folds 0.001 * 0.4
+                // into one constant (92.7, worse).
                 float meters = (float)(depth % 1000) * 0.001f;
                 float ramp = meters * (1.0f - 0.6f) + 0.6f;
                 int r = depth ? (int)(ramp * 64.0f) : 0;
