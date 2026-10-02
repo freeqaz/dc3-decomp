@@ -439,8 +439,9 @@ u64 RndShaderSimple::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
         break;
     }
     opts = (opts & ~((u64)1 << 52)) | ((u64)(TheHiResScreen.IsActive() & 1) << 52);
-    int drawDiff = TheRnd.DrawMode() - Rnd::kDrawOcclusion;
-    return -(u64)(bool)drawDiff & opts;
+    if (TheRnd.DrawMode() == Rnd::kDrawOcclusion)
+        opts = 0;
+    return opts;
 }
 
 u64 RndShaderDrawRect::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
