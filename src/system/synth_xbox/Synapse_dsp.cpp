@@ -279,7 +279,14 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     }
 
     mIirSmooth = 0.0f;
-    mIirCoeff = Time2IirA(0.00811767578125f, mTargetPitch * 0.25f);
+    // BUG FIX (w16-e): the time constant is 8.16 ms -- the image loads
+    // __real@3c05b186 (0.0081600007f) at 82E4763C `lfs f1, ...` for the
+    // Time2IirA call at 82E47640.  We passed 0.00811767578125f (0x3c050000),
+    // a truncated mantissa, so mIirCoeff was computed from the wrong time
+    // constant.  0x3c05b186 is exactly the float product 8.16f * 0.001f (the
+    // ms-to-seconds idiom SetAttackSmoothing/SetReleaseSmoothing use); a bare
+    // 0.00816f rounds to 0x3c05b185, one ulp low.
+    mIirCoeff = Time2IirA(8.16f * 0.001f, mTargetPitch * 0.25f);
 
     SetAttackSmoothing(30.0f);
     SetReleaseSmoothing(80.0f);
