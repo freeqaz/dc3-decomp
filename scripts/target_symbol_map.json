@@ -2281,7 +2281,7 @@
 "0x8237a690": "?insert@?$ObjPtrList@VCharLookAt@@VObjectDir@@@@QAA?AViterator@1@V21@PAVCharLookAt@@@Z",
 "0x8237a778": "merged_8237A778",
 "0x8237a7b4": "__unwind__merged_8237A7B4",
-"0x8237a7e8": "merged_8237A7E8",
+"0x8237a7e8": "??$_Copy_Construct@UCharInterestState@CharEyes@@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
 "0x8237a83c": "__unwind__merged_8237A83C",
 "0x8237a868": "??$__destroy_range_aux@V?$reverse_iterator@PAUEyeDesc@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@YAXV?$reverse_iterator@PAUEyeDesc@CharEyes@@@0@0ABU__false_type@0@@Z",
 "0x8237a8c8": "??$__destroy_range_aux@V?$reverse_iterator@PAUCharInterestState@CharEyes@@@stlpmtx_std@@@stlpmtx_std@@YAXV?$reverse_iterator@PAUCharInterestState@CharEyes@@@0@0ABU__false_type@0@@Z",

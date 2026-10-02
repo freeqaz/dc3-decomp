@@ -80,8 +80,7 @@ void CharLipSync::Print(TextStream &ts) {
     ts << "; song: " << PathName(this) << "\n";
     ts << "(visemes\n";
     for (int i = 0; i < mVisemes.size(); i++) {
-        String str = mVisemes[i];
-        ts << "   " << str << "\n";
+        ts << "   " << mVisemes[i] << "\n";
     }
     ts << ")\n";
     ts << "(frames ; @ 30fps\n";
@@ -301,6 +300,9 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
             // that is what demotes numVisemes from r27 to r22 and permutes the
             // eight callee-saved registers above.  Moving the visemeIdx
             // increment out of the comma expression into the body is byte-inert.
+            // Measured WORSE (w12-b, 97.7 -> 97.4): the lever that closed Poll
+            // below -- `for (int i = numVisemes; i < newSize; i++)` with
+            // `Sym(i - numVisemes)` -- keeps the trip-count latch here.
             int visemeIdx = 0;
             for (; numVisemes < newSize; numVisemes++, visemeIdx++) {
                 Symbol visemeSym = result.Array(0)->Sym(visemeIdx);
@@ -323,15 +325,11 @@ void CharLipSync::PlayBack::Poll(float time) {
         int numVisemes = mLipSync->mVisemes.size();
         DataArray *arr = result.Array(0);
         int end = arr->Size() + numVisemes;
-        if (numVisemes < end) {
-            int visIdx = 0;
-            float one = 1.0f;
-            for (; numVisemes < end; visIdx++, numVisemes++) {
-                float weight =
-                    mLipSync->Property(result.Array(0)->Sym(visIdx), true)->Float(0);
-                if ((unsigned int)numVisemes < mWeights.size()) {
-                    mWeights[numVisemes].mCurWeight = Clamp(zero, one, weight);
-                }
+        for (int i = numVisemes; i < end; i++) {
+            float weight =
+                mLipSync->Property(result.Array(0)->Sym(i - numVisemes), true)->Float(0);
+            if ((unsigned int)i < mWeights.size()) {
+                mWeights[i].mCurWeight = Clamp(zero, 1.0f, weight);
             }
         }
     }

@@ -49,6 +49,10 @@ Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
     return nullptr;
 }
 
+// RESIDUAL (w12-b, 98.75 canonical): one row. After storing mStartBeat the
+// image re-reads it (`lfs f12, 0xc(r3)` right after the second `lwa` of
+// TheRnd.Width()) for mEndBeat's `+ mStartBeat`; we forward the stored value.
+// Byte-inert: writing the sum as `mStartBeat + (...)`.
 __declspec(noinline) void
 CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
     mViewStartBeat = start;
@@ -100,8 +104,8 @@ void CharClipDisplay::DrawBlend(float beat, float weight) {
     float x1 = GetX(beat);
     rect.x = x1;
     float x2 = GetX(beat + weight);
-    rect.w = x2 - x1;
     Hmx::Color blendColor(0.0f, 0.0f, 1.0f, 0.4f);
+    rect.w = x2 - x1;
     TheRnd.DrawRect(rect, blendColor, nullptr, nullptr, nullptr);
     rect.h = 4.0f;
     rect.y = mDrawPosY - 1.0f;
@@ -293,8 +297,12 @@ drawName:
 
 void CharClipDisplay::DrawCursor() {
     Hmx::Color yellow(1.0f, 1.0f, 0.0f, 1.0f);
+    Hmx::Rect rect;
     float x = GetX(mCursorBeat);
-    Hmx::Rect rect(x, mDrawPosY - 3.0f, 1.0f, 9.0f);
+    rect.w = 1.0f;
+    rect.x = x;
+    rect.h = 9.0f;
+    rect.y = mDrawPosY - 3.0f;
     TheRnd.DrawRect(rect, yellow, nullptr, nullptr, nullptr);
     const char *text;
     if (!(mBlendWeight >= 1.0f)) {

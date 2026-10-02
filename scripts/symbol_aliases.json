@@ -25694,13 +25694,14 @@
   },
   {
    "name": "retailmap:merged_8237A7E8",
-   "survivor": "merged_8237A7E8",
+   "survivor": "??$_Copy_Construct@UCharInterestState@CharEyes@@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
    "address": "0x8237a7e8",
    "folded": [
-    "??$_Copy_Construct@UCharInterestState@CharEyes@@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
-    "??$_Param_Construct@UCharInterestState@CharEyes@@U12@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z"
+    "??$_Param_Construct@UCharInterestState@CharEyes@@U12@@stlpmtx_std@@YAXPAUCharInterestState@CharEyes@@ABU12@@Z",
+    "merged_8237A7E8"
    ],
-   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it"
+   "evidence": "orig/373307D9/ham_xbox_r.map: our spellings share this address; the survivor is the splitter's name for it",
+   "reconciled": "w12-b 2026-10-02, RE-ANCHOR: the survivor was the splitter's synthetic label `merged_8237A7E8`, which ham_xbox_r.map prints nowhere, so the 84 B row read 0.0%. The map names two claimants at 0x8237a7e8, both char:CharEyes.obj (_Param_Construct and _Copy_Construct of CharEyes::CharInterestState); config/373307D9/splits.txt gives CharEyes .text [0x82375990, 0x8237FA28), which CONTAINS the address. _Copy_Construct is bound, mirroring the sibling EyeDesc fold at 0x8237a778 whose survivor is _Copy_Construct; neither spelling was bound anywhere else in symbols.txt. Whole-binary row diff: merged_8237A7E8 0.0 -> (gone), _Copy_Construct<CharInterestState> (new) -> 100.0."
   },
   {
    "name": "retailmap:merged_823AAA20",

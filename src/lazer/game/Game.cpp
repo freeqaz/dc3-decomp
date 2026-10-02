@@ -263,6 +263,10 @@ void Game::CheckPauseRequest() {
     }
 }
 
+// w12-b: inside `new SongInfoCopy(...)` the image spills the Symbol argument
+// of SongAudioData to a stack temp (`stw r30, 0x54(r31)`) before `mr r4, r30`;
+// an explicit `Symbol(s)` temporary is what reproduces that (99.0 -> 100).
+// LoadSong and LoadNewSong carry the same spill.
 void Game::LoadNewSongAudio(Symbol s) {
     if (mLoadedSongAudio != s) {
         mLoadedSongAudio = s;
@@ -285,7 +289,7 @@ void Game::LoadNewSongAudio(Symbol s) {
         }
         mSongInfo = new SongInfoCopy(audioData);
 #else
-        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s));
+        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(s)));
 #endif
         mMaster->Load(mSongInfo, false, 0, false, hsvd, nullptr);
         Fader *fader = TheSynth->Find<Fader>("per_song_sfx_level.fade", false);
@@ -740,7 +744,7 @@ void Game::LoadSong() {
         mMaster->GetAudio()->SetPracticeMode(false);
     }
 #else
-    mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(song));
+    mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(song)));
 #endif
     mMaster->Load(mSongInfo, false, 0, false, v, 0);
 }
@@ -846,7 +850,7 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
     mUseMoveGraph = TheGameMode->Property("use_movegraph")->Int();
     if (s1 != s2) {
         RELEASE(mSongInfo);
-        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s2));
+        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(s2)));
         mMaster->LoadOnlySongData(mSongInfo, true, (HamSongDataValidate)0);
         MultiTempoTempoMap *other =
             static_cast<MultiTempoTempoMap *>(HamSongData::sInstance->GetTempoMap());
@@ -1192,22 +1196,12 @@ DataNode OnCycleAutoplay(DataArray *a) {
         autoplay = sAutoplayStates.back();
     } else {
         int idx = 0;
-        int size = sAutoplayStates.size();
-        for (; (unsigned int)idx < (unsigned int)size; idx++) {
+        for (; idx < sAutoplayStates.size(); idx++) {
             if (sAutoplayStates[idx] == autoplay) {
                 break;
             }
         }
-        if (size == 0) {
-            idx = 0;
-        } else {
-            int mod = (idx + 1) % size;
-            if (mod < 0) {
-                mod += size;
-            }
-            idx = mod;
-        }
-        autoplay = sAutoplayStates[idx];
+        autoplay = sAutoplayStates[Mod(idx + 1, (int)sAutoplayStates.size())];
     }
     player_data->SetAutoplay(autoplay);
     return autoplay;

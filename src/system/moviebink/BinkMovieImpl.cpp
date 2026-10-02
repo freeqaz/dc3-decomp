@@ -107,6 +107,10 @@ MovieInternalBuffers::~MovieInternalBuffers() {
     }
 }
 
+// (w12-b) The name_check rows here, `??3@YAXPAX@Z` vs
+// `?RadFree@?A0x6dfd0232@@YAXPAX@Z` and the MakeString array-size spellings,
+// are ICF folds (RadFree is listed in build/373307D9/icf_aliases.map), not
+// wrong callees.
 MovieInternalBuffers *MovieInternalBuffers::New(std::vector<BINK *> binks) {
     MovieInternalBuffers *ret = new MovieInternalBuffers();
 
@@ -394,8 +398,8 @@ void BinkMovieImpl::Draw() {
         // modulo); the frame index is the buffer Bink last decompressed into.
         bool grayscale = flags & BINKGRAYSCALE;
         bool alpha = flags & BINKALPHA;
-        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
         int frame = mInternalBufs->mBuffers.FrameNum;
+        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
         mInternalBufs->unk40->SetDiffuseTex(mInternalBufs->YTex[frame][texSet]);
         mInternalBufs->unk40->SetSpecularMap(
             !grayscale ? mInternalBufs->CrTex[frame][texSet] : nullptr
@@ -718,6 +722,12 @@ void BinkMovieImpl::DiscContentionCheck(Loader *l) {
     }
 }
 
+// RESIDUAL (w12-b, 99.0 canonical): register-only. The image keeps `this` in
+// r30 (&mThreadId in r29) and later reuses r30 for the iterator (`mr r30, r11`
+// after `lwz r11, 0xc4(r30)`); we put `this` in r29 and fold it into
+// &unkbc. All six orders of {first, count, str} measured: (str, first, count)
+// fixes first/count = r28/r29 but sinks their `li`s below String(); none
+// moves `this` to r30.
 void BinkMovieImpl::DiscContentionPublish() {
     CHECK_THREAD;
     bool first = true;
@@ -757,8 +767,8 @@ void BinkMovieImpl::EndFrame() {
         // index is a bare `unk40 >= TotalFrames` with no modulo, unlike
         // BeginFrame's `(unk40 + 1) % (GetUnk10() * TotalFrames) >= TotalFrames`.
         // Written as the target has it rather than "tidied" into BeginFrame's form.
-        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
         int frame = mInternalBufs->mBuffers.FrameNum;
+        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
         StoreCache(mInternalBufs->YTex[frame][texSet]);
         StoreCache(mInternalBufs->CrTex[frame][texSet]);
         StoreCache(mInternalBufs->CbTex[frame][texSet]);
@@ -937,7 +947,11 @@ void BinkMovieImpl::MovieOpen(const char *name, unsigned int flags) {
             flags |= 0x4000;
         }
         flags |= 0x100000;
-        if ((flags >> 26) & 1) {
+        // The slow-frame timer wraps BinkOpen only when flag bit 26 is CLEAR:
+        // the image does `nor r11, r30, r30` / `extrwi. r11, r11, 1, 5` / beq
+        // to the plain BinkOpen.  The bool() cast is what materializes the
+        // extract-to-LSB form (docs/decomp/patterns/fixable-bool-mask.md).
+        if (bool(~flags & 0x4000000)) {
             AutoSlowFrame frame("BinkOpen", 200);
             mBink = BinkOpen(name, flags);
         } else {

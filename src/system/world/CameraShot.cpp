@@ -820,6 +820,10 @@ void CamShotCrowd::ClearCrowdChars() {
     mCrowd->Set3DCharList(m3DCharIndices, mCamShot);
 }
 
+// RESIDUAL (w12-b, 98.34 canonical): two rows. For `proxy->Refs().empty()`
+// the image forms the address of mRefs in two steps off the virtual-base
+// adjust (`addi r10, r11, 0x4` / `addi r10, r10, 0x4`); we fold to `+ 8`.
+// Spelling it `Refs().begin() != Refs().end()` keeps the fold.
 void CamShotCrowd::GetSelectedCrowd(
     std::list<std::pair<RndMultiMesh *, std::list<RndMultiMesh::Instance>::iterator> >
         &crowdChars
@@ -1882,6 +1886,12 @@ void CamShot::UnHide() {
     CAMERA_LOG(" ** %s CamShot::UnHide() stop\n", Name());
 }
 
+// RESIDUAL (w12-b, 98.91 canonical): the image runs this with a frame pointer
+// (`subi r31, r1, 0x90`) and EH data (except_data_828161A0 right after the
+// function), i.e. one more callee-saved GPR, and every other row is that
+// register shift. Nothing here has a destructor on our side, so the EH state
+// must come from something we do not see (likely how the two
+// MILO_NOTIFY_ONCE statics are constructed); not chased further.
 RndCam *CamShot::GetCam() {
     RndCam *ret = 0;
     WorldDir *crowdDir = GetCrowdDir();
