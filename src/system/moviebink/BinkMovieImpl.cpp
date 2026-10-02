@@ -718,6 +718,12 @@ void BinkMovieImpl::DiscContentionCheck(Loader *l) {
     }
 }
 
+// RESIDUAL (w12-b, 99.0 canonical): register-only. The image keeps `this` in
+// r30 (&mThreadId in r29) and later reuses r30 for the iterator (`mr r30, r11`
+// after `lwz r11, 0xc4(r30)`); we put `this` in r29 and fold it into
+// &unkbc. All six orders of {first, count, str} measured: (str, first, count)
+// fixes first/count = r28/r29 but sinks their `li`s below String(); none
+// moves `this` to r30.
 void BinkMovieImpl::DiscContentionPublish() {
     CHECK_THREAD;
     bool first = true;
