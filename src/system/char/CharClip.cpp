@@ -179,6 +179,12 @@ void CharClip::Transitions::Save(BinStream &bs) {
 }
 
 void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
+    // RESIDUAL (w13-c, 99.500): the four int count slots are assigned in
+    // exactly the reverse order (image 0x50/0x54 = old-branch counts,
+    // 0x58/0x5c = new-branch counts).  Inert, byte-identical: an early
+    // `return` out of the oldRev < 8 arm (the lever that fixed WorldDir::Poll),
+    // swapping the old arm's `num_nodes, num_node_vectors` declaration order,
+    // and swapping buf/buf2.
     Clear();
     static ObjectDir *sDir = nullptr;
     char buf[0x100];

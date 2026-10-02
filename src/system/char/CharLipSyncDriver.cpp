@@ -313,6 +313,14 @@ void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float weight, 
                 if (curWeight < 0.0f) {
                     MILO_FAIL("weight = %f", curWeight);
                 }
+                // RESIDUAL (w13-c, 96.505, 4 rows): the image re-tests after
+                // the fail and zeroes on a BRANCH (fcmpu f31,f30 / bge / fmr
+                // f31,f30) where Max() gives one fsel; the two differ only for
+                // a NaN weight.  Measured: `if (curWeight < 0) curWeight = 0;`
+                // 95.1 (MSVC threads it into the fail test and the frame loses
+                // a callee-saved FPR); the ternary `c < 0 ? 0 : c` is exactly
+                // this fsel (96.505); std::max(curWeight, 0.0f) goes through
+                // memory, 96.8 with a +0x10 frame.  Max() kept.
                 curWeight = Max(curWeight, 0.0f);
                 ScaleAddViseme(clip, curWeight);
             }

@@ -939,25 +939,38 @@ void Spotlight::Poll() {
     }
     Hmx::Matrix3 m;
     if (!mUpdating) {
+        // w13-c: 97.389 -> 100.  Poll() is entered through the RndPollable
+        // sub-object (r31 = this + 0x100); naming the full object once is what
+        // makes the image materialise `subi r29, r31, 0x100` a single time
+        // (82829758) and pass r29 to CalculateDirection / DoFloorSpot /
+        // UpdateTransforms / CheckFloorSpotTransform / UpdateSlaves and load
+        // mTarget through it (8282975C `lwz r30, 0x2e8(r29)`); without it we
+        // re-derived the pointer at each call and saved one callee-save fewer
+        // (frame 0xa0 vs 0xb0).  The `(int)` on the null test reproduces the
+        // image's signed `cmpwi cr6, r30, 0x0` (82829768) -- an equality test
+        // against zero either way (docs/decomp/patterns/fixable-casting.md,
+        // "Signed Pointer Comparison Cast").  The trailing UpdateTransforms
+        // stays on `this`: the image re-derives `subi r3, r31, 0x100` there.
+        Spotlight *self = this;
         RndTransformable *target = nullptr;
         if (mTargetLoaded)
-            target = mTarget;
-        if (!target
+            target = self->mTarget;
+        if (!(int)target
             || (!TheLoadMgr.EditMode() && !mSnapToTarget
                 && target->WorldXfm().v == mLastTargetPos)) {
-            if (!target && !mAnimateOrientationFromPreset && !DoFloorSpot()) {
-                UpdateTransforms();
+            if (!target && !mAnimateOrientationFromPreset && !self->DoFloorSpot()) {
+                self->UpdateTransforms();
             } else {
-                CheckFloorSpotTransform();
+                self->CheckFloorSpotTransform();
                 mOrientMatrix = WorldXfm().m;
-                UpdateSlaves();
+                self->UpdateSlaves();
             }
             Normalize(mLocalXfm.m, m);
             SetLocalRot(m);
             return;
         }
         mLastTargetPos = target->WorldXfm().v;
-        CalculateDirection(target, m);
+        self->CalculateDirection(target, m);
         if (!mSnapToTarget && mDampingConstant != 1.0f) {
             Interp(mOrientMatrix, m, TheTaskMgr.DeltaSeconds() * mDampingConstant, m);
         } else {

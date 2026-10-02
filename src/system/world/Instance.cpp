@@ -338,6 +338,8 @@ void WorldInstance::SyncDir() {
                 // Also checked: the 7 `ObjDirPtr<ObjectDir>::operator->` vs
                 // `ObjDirPtr<WorldInstance>::operator->` rows in the Function Call
                 // Diff are ICF folds -- the name_check ruler charges 0 of them.
+                // w13-c: `(RndDrawable *)dynamic_cast<RndMesh *>(&*it)` (an
+                // upcast to the offset-0 base) is also bit-identical here.
                 bool curMesh = dynamic_cast<RndMesh *>(&*it);
                 if (!grp || (it != grp && !GroupedUnder(grp, it))) {
                 lmao:

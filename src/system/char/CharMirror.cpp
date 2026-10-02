@@ -59,6 +59,13 @@ void CharMirror::Poll() {
 
     mBones.ScaleDown(*mServo, 1.0f - w);
     MirrorOp *curMirrorOp = &mOps[0];
+    // RESIDUAL (w13-c, 98.611): the image initialises the first loop's
+    // pointer as `extsw r10, r11` straight from mStart (it never loads
+    // mOffsets[TYPE_POS], which RecomputeSizes pins to 0), and reaches the
+    // mBones fields through `this + 0x30` in r29.  Measured: GetStart()/
+    // GetOffset() in every loop header, 96.8; `(Vector3 *)boneStart` and
+    // `(Vector3 *)(int)boneStart`, both 98.3 (an `mr` plus a rotated loop
+    // test, never the extsw).
     char *boneStart = mBones.mStart;
     for (Vector3 *it = (Vector3 *)(boneStart + mBones.mOffsets[CharBones::TYPE_POS]);
          it < (Vector3 *)(boneStart + mBones.mOffsets[CharBones::TYPE_SCALE]);

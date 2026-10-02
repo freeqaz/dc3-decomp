@@ -201,6 +201,8 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
                     // Residual (6 rows, 93.4%): MSVC schedules the `mBStart` load and
                     // the curBeat store two slots apart from the image. Hoisting
                     // BeatB into a local reads 90.5 -- worse. Scheduler residual.
+                    // w13-c: also inert -- BeatB spelled inline as
+                    // `mBStart + (float)rowIdx / (float)mSamplesPerBeat`.
                     node.nextBeat = BeatB(rowIdx);
                 }
                 rowIdx--;
@@ -294,6 +296,11 @@ int ClipDistMap::CalcWidth() {
         mAEnd = next;
     }
 
+    // NEGATIVE RESULT (w13-c, 95.506): the 7 rows are the image converting
+    // mSamplesPerBeat (std/lfd/fcfid) BEFORE loading mAStart for the
+    // subtraction.  Inert, byte-identical: dropping both locals for
+    // `(mAEnd - mAStart) * (float)mSamplesPerBeat`, and the commuted
+    // `spb * (mAEnd - mAStart)`.
     float aStart = mAStart;
     int spb = mSamplesPerBeat;
     int width = Max(0, (int)(float)floorf(((mAEnd - aStart) * (float)spb) + 0.5f)) + 1;

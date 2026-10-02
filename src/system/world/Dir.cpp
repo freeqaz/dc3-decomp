@@ -483,130 +483,122 @@ void WorldDir::DrawShowing() {
         MILO_ASSERT(TheWorld != this, 0x25c);
         if (Showing())
             RndDir::DrawShowing();
+        return;
+    }
+    SetTheWorld(this);
+
+    CamShot *shot = nullptr;
+    if (mCameraMgr) {
+        shot = mCameraMgr->MiloCamera();
+        if (!shot)
+            shot = mCameraMgr->CurrentShot();
+    }
+    if (shot)
+        shot = shot->CurrentShot();
+
+    RndCam *savedCam = CamOverride();
+    if (!savedCam) {
+        savedCam = RndCam::Current();
     } else {
-        SetTheWorld(this);
+        savedCam->Select();
+    }
 
-        CamShot *shot = nullptr;
-        if (mCameraMgr) {
-            shot = mCameraMgr->MiloCamera();
-            if (!shot)
-                shot = mCameraMgr->CurrentShot();
-        }
-        if (shot)
-            shot = shot->CurrentShot();
+    RndEnviron *env = GetEnv() ? GetEnv() : TheUI->GetEnv();
+    env->Select(nullptr);
 
-        RndCam *savedCam = CamOverride();
-        if (!savedCam) {
-            savedCam = RndCam::Current();
+    if (TheRnd.ProcCmds() & kProcessWorld) {
+        if (!shot || shot->mDrawOverrides.empty()) {
+            RndDir::DrawShowing();
         } else {
-            savedCam->Select();
-        }
-
-        RndEnviron *env = GetEnv() ? GetEnv() : TheUI->GetEnv();
-        env->Select(nullptr);
-
-        if (TheRnd.ProcCmds() & kProcessWorld) {
-            if (!shot || shot->mDrawOverrides.empty()) {
-                RndDir::DrawShowing();
-            } else {
-                FOREACH (it, shot->mDrawOverrides) {
-                    (*it)->DrawShowing();
-                }
-            }
-
-            if (shot) {
-                Spotlight *spot = shot->mGlowSpot;
-                if (spot && sGlowMat && spot->Showing() && spot->Intensity() > 0) {
-                    Hmx::Rect rect(0, 0, TheRnd.Width(), TheRnd.Height());
-                    Hmx::Color color(spot->Color());
-                    color.alpha = 0.25f;
-                    TheRnd.DrawRect(rect, color, sGlowMat, nullptr, nullptr);
-                }
-            }
-        }
-
-        TheRnd.CopyWorldCam(TheWorld->Cam());
-        if (mExplicitPostProc) {
-            TheRnd.EndWorld();
-        }
-
-        if (shot) {
-            savedCam->Select();
-            env->Select(nullptr);
-            FOREACH (it, shot->mPostProcOverrides) {
+            FOREACH (it, shot->mDrawOverrides) {
                 (*it)->DrawShowing();
             }
         }
 
-        RndGraph::SetCamera(RndCam::Current());
-
-        if (mHUDDir)
-            mHUDDir->DrawShowing();
-        // The 5-row residual in this function is all one root cause, and it
-        // is NOT a declaration-count or scoping difference. Both sides put
-        // Hmx::Rect at 0x50 and Hmx::Color at 0x60; both give each AutoTimer
-        // its own 0x10 slot; the frame is 0xf0 on both sides. Only the two
-        // AutoTimer slots are swapped: the target gives the outer
-        // "world_draw" timer 0x70 and this "hud_draw" timer 0x80 (declaration
-        // order ascending), we do the reverse. That is 4 of the 5 rows
-        // ([26], [258], [266], [279]).
-        // The 5th row ([54]) follows from the same ordering difference: after
-        // `if (Showing()) RndDir::DrawShowing();` the target's `beq` jumps to
-        // the shared `b <epilogue>` block, while ours folds the
-        // branch-to-branch and jumps straight to the epilogue. Both sides
-        // still emit that `b`, so it is a block-layout/peephole ordering
-        // artifact, not a control-flow difference.
-        // Measured inert (w7-m): wrapping this timer + call in an extra
-        // lexical block (deeper scope) -- 5 rows unchanged, byte-identical.
-        if (mHUD && mHUD->Showing()) {
-            START_AUTO_TIMER("hud_draw");
-            mHUD->DrawShowing();
+        if (shot) {
+            Spotlight *spot = shot->mGlowSpot;
+            if (spot && sGlowMat && spot->Showing() && spot->Intensity() > 0) {
+                Hmx::Rect rect(0, 0, TheRnd.Width(), TheRnd.Height());
+                Hmx::Color color(spot->Color());
+                color.alpha = 0.25f;
+                TheRnd.DrawRect(rect, color, sGlowMat, nullptr, nullptr);
+            }
         }
-
-        if ((TheRnd.ProcCmds() & kProcessPost) && SpotlightDrawer::Current()) {
-            SpotlightDrawer::Current()->DeSelect();
-        }
-
-        SetTheWorld(nullptr);
     }
+
+    TheRnd.CopyWorldCam(TheWorld->Cam());
+    if (mExplicitPostProc) {
+        TheRnd.EndWorld();
+    }
+
+    if (shot) {
+        savedCam->Select();
+        env->Select(nullptr);
+        FOREACH (it, shot->mPostProcOverrides) {
+            (*it)->DrawShowing();
+        }
+    }
+
+    RndGraph::SetCamera(RndCam::Current());
+
+    if (mHUDDir)
+        mHUDDir->DrawShowing();
+    // w13-c: the earlier 5-row residual (99.986: the "world_draw" and
+    // "hud_draw" AutoTimer slots swapped, plus a beq into the shared `b`
+    // epilogue block) closed when the TheWorld arm became an early `return`
+    // instead of `} else {` -- the same lever as WorldDir::Poll.
+    if (mHUD && mHUD->Showing()) {
+        START_AUTO_TIMER("hud_draw");
+        mHUD->DrawShowing();
+    }
+
+    if ((TheRnd.ProcCmds() & kProcessPost) && SpotlightDrawer::Current()) {
+        SpotlightDrawer::Current()->DeSelect();
+    }
+
+    SetTheWorld(nullptr);
 }
 
 void WorldDir::Poll() {
+    // w13-c: the early `return` (instead of `} else {`) is what gives the
+    // outer "world_poll" timer the lowest frame slot, the "phys_mgr_poll"
+    // timer the next and `deltas` the highest, as the image does; the
+    // if/else spelling reversed them (6 addi rows, 99.965).
     START_AUTO_TIMER("world_poll");
     if (TheWorld) {
         MILO_ASSERT(TheWorld != this, 0xC3);
         RndDir::Poll();
-    } else {
-        SetTheWorld(this);
-        float deltas[4];
-        AccumulateDeltas(deltas);
-        bool b = mFirstPoll || (TheRnd.ProcCmds() != kProcessWorld);
-        mFirstPoll = false;
-        if (b) {
-            for (int i = 0; i < 4; i++) {
-                TheTaskMgr.SetDeltaTime((TaskUnits)i, mDeltaSincePoll[i]);
-            }
-            static Message select_camera("select_camera");
-            HandleType(select_camera);
-            if (mCameraMgr) {
-                mCameraMgr->PrePoll();
-            }
-            m3DSoundMgr.Poll();
-            mLightPresetMgr.Poll();
-            RndDir::Poll();
-            if (mCameraMgr) {
-                mCameraMgr->Poll();
-            }
-            {
-                START_AUTO_TIMER("phys_mgr_poll");
-                if (mPhysicsMgr) {
-                    mPhysicsMgr->Poll();
-                }
-            }
-            RestoreDeltas(deltas);
-        }
-        SetTheWorld(nullptr);
+        return;
     }
+    SetTheWorld(this);
+    float deltas[4];
+    AccumulateDeltas(deltas);
+    bool b = mFirstPoll || (TheRnd.ProcCmds() != kProcessWorld);
+    mFirstPoll = false;
+    if (b) {
+        for (int i = 0; i < 4; i++) {
+            TheTaskMgr.SetDeltaTime((TaskUnits)i, mDeltaSincePoll[i]);
+        }
+        static Message select_camera("select_camera");
+        HandleType(select_camera);
+        if (mCameraMgr) {
+            mCameraMgr->PrePoll();
+        }
+        m3DSoundMgr.Poll();
+        mLightPresetMgr.Poll();
+        RndDir::Poll();
+        if (mCameraMgr) {
+            mCameraMgr->Poll();
+        }
+        {
+            START_AUTO_TIMER("phys_mgr_poll");
+            if (mPhysicsMgr) {
+                mPhysicsMgr->Poll();
+            }
+        }
+        RestoreDeltas(deltas);
+    }
+    SetTheWorld(nullptr);
 }
 
 void WorldDir::Enter() {

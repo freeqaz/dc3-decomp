@@ -679,8 +679,14 @@ void NgSpotlightDrawer::RenderScene() {
         // No lights this frame: reset post-process state and bail. The target
         // checks the light count separately from the showing/resource checks
         // (numLights==0 short-circuits to its own inline ClearPostProc + return).
+        // w13-c: spelled as an early `return` rather than `} else if`, which is
+        // what keeps this ClearPostProc call separate from the one below
+        // (the image has two bctrl sites) and gives the "world_draw" timer the
+        // image's frame slot; 99.493 -> 100.
         ClearPostProc();
-    } else if (Showing() && CheckSharedResources() && CheckFogTexture()) {
+        return;
+    }
+    if (Showing() && CheckSharedResources() && CheckFogTexture()) {
         MILO_ASSERT(sEnviron->GetUseApprox() == false, 0x595);
 
         sEnviron->Select(0);
