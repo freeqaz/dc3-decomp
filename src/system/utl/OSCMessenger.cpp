@@ -98,6 +98,9 @@ void OSCMessenger::Poll() {
 // spellings are behaviourally identical (str is destroyed exactly once on each
 // path either way); the higher-scoring one is kept. The same residual, and only
 // this residual, is what holds GetFloat below at 36.5.
+// w16-d (91.8): also measured -- `if (!val) {placeholder} else {found}` with a
+// single tail return lays the placeholder arm first (34.3); hoisting newValue
+// out of its block scope is byte-identical.
 int OSCMessenger::GetInt(String str, int intValue) {
     OSCValue *val = GetValue(str);
     if (val) {
