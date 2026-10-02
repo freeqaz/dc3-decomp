@@ -167,7 +167,14 @@ void RndAnimatable::StopAnimation() {
 
 void RndAnimatable::FireFlowLabel(Symbol s) {
     if (s.Null()) return;
-    FOREACH (it, Refs()) {
+    // w13-a (98.3 -> 99.2): the loop test compares against the ring header as
+    // a raw pointer, as EventTrigger::Cleanup does.  end() is an inlined
+    // by-value iterator on the computed &mRefs, and with this function's EH
+    // state (the Message locals) MSVC homes that address to 0x50(r31) -- the
+    // image has no such store.  RESIDUAL: one dead `stw r10, 0x50(r31)` from
+    // begin() on the same sub-object remains (also inert as a split
+    // declaration `ObjRef::iterator it; for (it = Refs().begin(); ...)`).
+    for (ObjRef::iterator it = Refs().begin(); (ObjRef *)it != &Refs(); ++it) {
         Hmx::Object *owner = it->RefOwner();
         if (owner && owner->ClassName() == "AnimTask") {
             // The event goes to the AnimTask's listener, not to the task
