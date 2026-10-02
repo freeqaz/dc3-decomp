@@ -1082,6 +1082,12 @@ void UtilDrawCigar(
     // loop (rows 153-161).  Both slot pairs are same-sized Vector3 temps that
     // MSVC assigns by use, not declaration order, and the documented pinned-region
     // slot order is still unresolved (docs/decomp/patterns/stack-slot-sharing.md).
+    // w16-a (95.25 -> 98.02): the scaledLens fill is a PLAIN `for (n < 2)`
+    // loop -- MSVC itself strength-reduces lengths[n] off the dst pointer,
+    // which is the odd `lengths + (dst - scaledLens)` address the old
+    // hand-stepped do/while spelled out.  Left: the top/bottom (0x90/0xa0) and
+    // v1/v2 (0x80/0x70) slot pairs and the h0 `fmr` placement listed above.
+    // Passing v1/v2 as unnamed Vector3 temporaries to Multiply is inert.
     Vector3 end;
     Vector3 top;
     Vector3 bottom;
