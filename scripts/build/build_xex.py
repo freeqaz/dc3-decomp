@@ -6,8 +6,12 @@ Creates an unencrypted, uncompressed XEX container around a PPC PE executable.
 Copies essential optional headers from the original XEX (entry point, image base,
 execution ID, etc.) but updates the PE offset and image size for the new PE.
 
-Also patches the PE's import thunks from PE ordinal format (0x80XXXXXX) to
-XEX import format (0x00XXXXXX) so Xenia can properly resolve imports.
+Also rebuilds the import table: every import slot (__imp_X) and thunk the
+link placed is located by name in the linker map, written with the original
+image's XEX import record, and listed in the import-library header, so the
+loader resolves all of them. The original records come from an unencrypted
+container of the same image (debug.xex) when default.xex is encrypted, and the
+script refuses to write a XEX it cannot give a complete import table.
 
 Usage:
     python3 scripts/build/build_xex.py                           # Default: build PE → XEX
@@ -16,6 +20,8 @@ Usage:
 """
 
 import argparse
+import collections
+import re
 import subprocess
 import struct
 from pathlib import Path
@@ -53,196 +59,6 @@ def find_pe_offset_for_rva(pe_data, rva):
     return None
 
 
-def find_and_convert_thunk_iat(pe_data, image_base):
-    """
-    Find import thunks in .text by pattern matching. For each thunk:
-    1. Read the ordinal from its IAT entry in .rdata (LE 0x80XXXXXX)
-    2. Write XEX thunk marker (BE 0x01XXXXXX) at the THUNK CODE address
-       (overwriting the lis/lwz/mtctr/bctr instructions)
-    3. Also convert the IAT entry to BE 0x00XXXXXX for variable imports
-
-    Xenia's XEX loader reads the ordinal from the thunk code address, then
-    overwrites those 16 bytes with syscall stubs (sc 2 / blr / nop / nop).
-    The import_table VA must point to the thunk CODE, not the IAT data.
-
-    Import thunks follow the pattern:
-        lis r11, hi16     (3D60XXXX)
-        lwz r11, lo16(r11)(816BXXXX)
-        mtctr r11         (7D6903A6)
-        bctr              (4E800420)
-
-    Returns: (patched pe_data,
-              ordinal_to_thunk_entries: {ordinal: [(thunk_code_va, iat_addr), ...]},
-              ordinal_to_var_vas: {ordinal: [iat_addr, ...]})
-
-    IMPORTANT: Maps use LIST values because ordinal namespaces are per-library.
-    xam.xex ordinal 1 and xboxkrnl.exe ordinal 1 are different functions with
-    different thunks. Each library consumes one entry from the list.
-    """
-    pe_data = bytearray(pe_data)
-    pe_off = struct.unpack_from('<I', pe_data, 0x3C)[0]
-    num_sections = struct.unpack_from('<H', pe_data, pe_off + 6)[0]
-    opt_hdr_size = struct.unpack_from('<H', pe_data, pe_off + 20)[0]
-
-    # Find .text section
-    text_vaddr = text_vsize = text_raw_off = 0
-    section_off = pe_off + 24 + opt_hdr_size
-    for i in range(num_sections):
-        name = pe_data[section_off:section_off+8].rstrip(b'\x00')
-        vsize = struct.unpack_from('<I', pe_data, section_off + 8)[0]
-        vaddr = struct.unpack_from('<I', pe_data, section_off + 12)[0]
-        raw_off = struct.unpack_from('<I', pe_data, section_off + 20)[0]
-        if name == b'.text':
-            text_vaddr = vaddr
-            text_vsize = vsize
-            text_raw_off = raw_off
-            break
-        section_off += 40
-
-    if text_vsize == 0:
-        print("  Warning: No .text section found for thunk scanning")
-        return bytes(pe_data), {}, {}
-
-    # Scan .text for thunk patterns
-    # Multi-valued maps: ordinal → list of (thunk_va, iat_addr) tuples
-    from collections import defaultdict
-    ordinal_to_thunk_entries = defaultdict(list)
-    ordinal_to_var_vas = defaultdict(list)
-    converted = 0
-
-    for off in range(0, text_vsize - 16, 4):
-        foff = text_raw_off + off
-        if foff + 16 > len(pe_data):
-            break
-
-        insn0 = struct.unpack_from('>I', pe_data, foff)[0]
-        insn1 = struct.unpack_from('>I', pe_data, foff + 4)[0]
-        insn2 = struct.unpack_from('>I', pe_data, foff + 8)[0]
-        insn3 = struct.unpack_from('>I', pe_data, foff + 12)[0]
-
-        if ((insn0 & 0xFFFF0000) == 0x3D600000 and  # lis r11, imm
-            (insn1 & 0xFFFF0000) == 0x816B0000 and  # lwz r11, off(r11)
-            insn2 == 0x7D6903A6 and                   # mtctr r11
-            insn3 == 0x4E800420):                     # bctr
-
-            hi = insn0 & 0xFFFF
-            lo = insn1 & 0xFFFF
-            if lo >= 0x8000:
-                lo = lo - 0x10000
-            iat_addr = (hi << 16) + lo
-            iat_rva = iat_addr - image_base
-
-            # Read ordinal from IAT entry (LE format: 0x80XXXXXX)
-            iat_foff = find_pe_offset_for_rva(pe_data, iat_rva)
-            if iat_foff is None or iat_foff + 4 > len(pe_data):
-                continue
-
-            val_le = struct.unpack_from('<I', pe_data, iat_foff)[0]
-            if (val_le & 0xFF000000) != 0x80000000:
-                continue
-
-            ordinal = val_le & 0xFFFFFF
-            if ordinal < 1 or ordinal > 0x40000:
-                continue
-
-            thunk_code_va = image_base + text_vaddr + off
-
-            # Write XEX thunk marker (0x01XXXXXX) at the THUNK CODE address.
-            xex_thunk_marker = 0x01000000 | ordinal
-            struct.pack_into('>I', pe_data, foff, xex_thunk_marker)
-            struct.pack_into('>I', pe_data, foff + 4, 0)
-            struct.pack_into('>I', pe_data, foff + 8, 0)
-            struct.pack_into('>I', pe_data, foff + 12, 0)
-
-            ordinal_to_thunk_entries[ordinal].append((thunk_code_va, iat_addr))
-
-            # Also convert the IAT entry to variable format (0x00XXXXXX BE)
-            xex_var_marker = 0x00000000 | ordinal
-            struct.pack_into('>I', pe_data, iat_foff, xex_var_marker)
-            ordinal_to_var_vas[ordinal].append(iat_addr)
-
-            converted += 1
-
-    print(f"  Found {converted} import thunks:")
-    print(f"    Thunk markers at code addresses (for syscall stubs)")
-    print(f"    Variable markers at IAT addresses (for variable resolution)")
-    dups = sum(1 for v in ordinal_to_thunk_entries.values() if len(v) > 1)
-    if dups:
-        print(f"    {dups} ordinals with multiple thunks (cross-library overlap)")
-    return bytes(pe_data), dict(ordinal_to_thunk_entries), dict(ordinal_to_var_vas)
-
-
-def find_and_convert_variable_iat(pe_data, image_base):
-    """
-    Find import variable entries in .idata by scanning for LE 0x80XXXXXX
-    ordinal markers that are NOT thunk IAT entries (not referenced by thunk code).
-
-    The Xbox 360 linker places import ordinals in .idata sections. The thunk
-    scanner already converts entries referenced by code thunks; this function
-    picks up remaining variable-only imports.
-
-    Returns: (patched pe_data, ordinal_to_extra_var_vas: {ordinal: [va, ...]})
-
-    Uses multi-valued ordinal maps (same as thunk scanner) because ordinal
-    namespaces are per-library.
-    """
-    pe_data = bytearray(pe_data)
-    pe_off = struct.unpack_from('<I', pe_data, 0x3C)[0]
-    num_sections = struct.unpack_from('<H', pe_data, pe_off + 6)[0]
-    opt_hdr_size = struct.unpack_from('<H', pe_data, pe_off + 20)[0]
-
-    # Find all .idata sections
-    idata_sections = []
-    section_off = pe_off + 24 + opt_hdr_size
-    for i in range(num_sections):
-        name = pe_data[section_off:section_off+8].rstrip(b'\x00')
-        vsize = struct.unpack_from('<I', pe_data, section_off + 8)[0]
-        vaddr = struct.unpack_from('<I', pe_data, section_off + 12)[0]
-        raw_off = struct.unpack_from('<I', pe_data, section_off + 20)[0]
-        if name == b'.idata':
-            idata_sections.append((vaddr, vsize, raw_off))
-        section_off += 40
-
-    if not idata_sections:
-        return bytes(pe_data), {}
-
-    # Scan .idata sections for remaining LE 0x80XXXXXX markers (not yet converted)
-    from collections import defaultdict
-    ordinal_to_extra_var_vas = defaultdict(list)
-    converted = 0
-
-    for idata_vaddr, idata_vsize, idata_raw_off in idata_sections:
-        for off in range(0, idata_vsize - 3, 4):
-            foff = idata_raw_off + off
-            if foff + 4 > len(pe_data):
-                break
-
-            val_le = struct.unpack_from('<I', pe_data, foff)[0]
-            if (val_le & 0xFF000000) != 0x80000000:
-                continue
-
-            ordinal = val_le & 0xFFFFFF
-            if ordinal < 1 or ordinal > 0x40000:
-                continue
-
-            # Check if this was already converted (BE 0x00XXXXXX by thunk scan)
-            val_be = struct.unpack_from('>I', pe_data, foff)[0]
-            if (val_be >> 24) in (0x00, 0x01):
-                be_ord = val_be & 0xFFFFFF
-                if 1 <= be_ord <= 0x10000:
-                    continue  # Already converted by thunk scan
-
-            # Convert from LE 0x80XXXXXX to BE 0x00XXXXXX (variable marker)
-            xex_marker = 0x00000000 | ordinal
-            struct.pack_into('>I', pe_data, foff, xex_marker)
-            va = image_base + idata_vaddr + off
-            ordinal_to_extra_var_vas[ordinal].append(va)
-            converted += 1
-
-    print(f"  Found {converted} additional import variable entries (from .idata)")
-    return bytes(pe_data), dict(ordinal_to_extra_var_vas)
-
-
 def parse_import_library_header(data, header_offset):
     """
     Parse xex2_opt_import_libraries structure.
@@ -267,7 +83,10 @@ def parse_import_library_header(data, header_offset):
         if end == -1:
             break
         s = data[str_table_off + pos:end].decode('utf-8', errors='replace')
-        strings.append(s)
+        # Names are NUL-padded to 4 bytes; the padding is not a name, and
+        # counting it shifts every name_index after the first library.
+        if s:
+            strings.append(s)
         pos = end - str_table_off + 1
 
     # Parse library headers
@@ -678,17 +497,63 @@ def parse_original_xex(xex_path):
     }
 
 
-def build_xex(pe_data, original_xex_info, pe_info, orig_pe_data=None,
-              ordinal_to_thunk_entries=None, ordinal_to_var_vas=None):
-    """Build a minimal XEX2 container around the PE data.
+class ImportMappingError(Exception):
+    """The import table cannot be reproduced exactly; the XEX must not be
+    written (a XEX without its imports boots with every kernel call trapping)."""
 
-    ordinal_to_thunk_entries: {ordinal: [(thunk_code_va, iat_addr), ...]}
-    ordinal_to_var_vas: {ordinal: [iat_addr, ...]} - multi-valued per-library
+
+IMPORT_THUNK = (0x3D600000, 0x816B0000, 0x7D6903A6, 0x4E800420)  # lis/lwz/mtctr/bctr
+
+
+def parse_map_import_sites(map_path):
+    """Symbols the linker placed from each import-library object.
+
+    Returns {object name (lowercase): {'slots': {__imp_X: VA}, 'funcs': {X: VA}}}
+    for every object that defines an __imp_ symbol (xam.obj, xboxkrnl.obj,
+    xbdm.obj: the split import libraries)."""
+    pat = re.compile(r'\s*[0-9a-fA-F]{4}:[0-9a-fA-F]{8}\s+(\S+)\s+'
+                     r'([0-9a-fA-F]{8})\s+(f\s+)?(?:i\s+)?(\S+\.obj)\s*$')
+    rows = []
+    with open(map_path, errors='replace') as f:
+        for line in f:
+            m = pat.match(line)
+            if m:
+                rows.append((m.group(4).lower(), m.group(1), int(m.group(2), 16),
+                             bool(m.group(3))))
+    import_objs = {obj for obj, name, _, _ in rows if name.startswith('__imp_')}
+    out = {obj: {'slots': {}, 'funcs': {}} for obj in import_objs}
+    for obj, name, va, is_func in rows:
+        if obj not in out:
+            continue
+        if name.startswith('__imp_'):
+            out[obj]['slots'][name] = va
+        elif is_func:
+            out[obj]['funcs'][name] = va
+    return out
+
+
+def parse_symbols_names(symbols_path, vas):
+    """{original VA: symbol name} from a dtk symbols.txt, for the given VAs
+    (the import records: __imp_ slots and their thunks)."""
+    out = {}
+    pat = re.compile(r'^(\S+)\s*=\s*\S+:0x([0-9A-Fa-f]+);')
+    with open(symbols_path, errors='replace') as f:
+        for line in f:
+            m = pat.match(line)
+            if m:
+                va = int(m.group(2), 16)
+                if va in vas and va not in out:
+                    out[va] = m.group(1)
+    return out
+
+
+def build_xex(pe_data, original_xex_info, pe_info, orig_pe_data=None,
+              import_sites=None, orig_imp_names=None):
+    """Build a minimal XEX2 container around the PE data (virtual layout).
+
+    import_sites: parse_map_import_sites() of the PE's link map
+    orig_imp_names: {original VA: __imp_ name} (parse_symbols_imp)
     """
-    if ordinal_to_thunk_entries is None:
-        ordinal_to_thunk_entries = {}
-    if ordinal_to_var_vas is None:
-        ordinal_to_var_vas = {}
     # We'll build the XEX in pieces:
     # 1. XEX2 header (24 bytes)
     # 2. Optional headers (8 bytes each)
@@ -726,222 +591,135 @@ def build_xex(pe_data, original_xex_info, pe_info, orig_pe_data=None,
     # System flags (0x30000) - inline
     inline_headers.append((0x00030000, get_inline(0x00030000, 0x00000220)))
 
-    # Import Libraries (0x103FF) - Map original import_table VAs to our PE's addresses.
-    # Each ordinal has TWO entries in the import_table:
-    # - Variable entry (record_type=0x00): points to IAT DATA address
-    # - Thunk entry (record_type=0x01): points to thunk CODE address
+    # Import Libraries (0x103FF).
     #
-    # Ordinal namespaces are per-library (xam ordinal 1 != xboxkrnl ordinal 1),
-    # so we process each library separately, consuming from multi-valued ordinal
-    # maps to handle cross-library ordinal overlap.
+    # The decomp PE carries the ORIGINAL import layout: each import library is
+    # a split object (xam.obj, xboxkrnl.obj, xbdm.obj) holding the original
+    # IAT block (.idata$5, one slot per import, in the original's order) and
+    # the original thunks (.xidata, lis/lwz/mtctr/bctr reading one IAT slot).
+    # The original XEX's import table lists, per library, record VAs in
+    # {var, thunk} pairs (data imports: var only); Xenia asserts that order.
+    #
+    # So the mapping is exact, never guessed: a library's IAT block moves as a
+    # unit (one delta per library, located through the linker map's __imp_
+    # symbols and VERIFIED slot-by-slot against the original ordinals), and a
+    # thunk record maps to the decomp thunk that reads that library's slot.
+    # The old heuristic (group IAT entries by address gaps, then fall back to
+    # "any thunk with the same ordinal number") mapped xboxkrnl thunks into
+    # xam's table and left every data import (XboxKrnlVersion, ...) reading
+    # its raw PE marker.
     import_libs_info = original_xex_info.get('import_libs_info')
     import_header_blob = None
-    if 0x000103FF in orig and import_libs_info and orig_pe_data and \
-       (ordinal_to_thunk_entries or ordinal_to_var_vas):
+    if 0x000103FF in orig and import_libs_info and orig_pe_data and import_sites:
         print("  Processing import library header...")
         orig_image_base = original_xex_info['orig_image_base']
-
-        # Decompress original XEX to read ordinal markers at import_table VAs
-        try:
-            decomp_pe = decompress_xex_pe(original_xex_info['original_data'])
-        except ValueError:
-            decomp_pe = None
+        if not orig_imp_names:
+            raise ImportMappingError(
+                "need symbols.txt's names for the original import records")
 
         va_mapping = {}
         mapped_vars = 0
         mapped_thunks = 0
-        unmapped_entries = []  # (orig_va, ordinal, record_type) for stub allocation
+        unmapped_entries = []  # (orig_va, record_value, record_type)
+        rewritten_slots = []   # slots whose linked content was not their marker
+        consumed = set()
+        pe_data = bytearray(pe_data)
 
-        if decomp_pe:
-            # Build IAT group → library assignment.
-            # Each library's IAT entries are contiguous in .rdata. We group all
-            # thunk IAT addresses by proximity, then assign each group to a
-            # library by checking which library's unique ordinals appear in it.
-            all_thunks = []  # (iat_addr, ordinal, thunk_va)
-            for ordinal, entries in ordinal_to_thunk_entries.items():
-                for thunk_va, iat_addr in entries:
-                    all_thunks.append((iat_addr, ordinal, thunk_va))
-            all_thunks.sort(key=lambda x: x[0])
+        def u32(va):
+            return struct.unpack_from('>I', pe_data, va - image_base)[0]
 
-            # Find IAT groups by address gap (> 8 entries = 32 bytes)
-            iat_groups = [[all_thunks[0]]] if all_thunks else []
-            for t in all_thunks[1:]:
-                if t[0] - iat_groups[-1][-1][0] > 32:
-                    iat_groups.append([])
-                iat_groups[-1].append(t)
-
-            # Record address ranges for each group (for range-based lookup)
-            group_ranges = []  # [(min_addr, max_addr)]
-            for group in iat_groups:
-                addrs = [t[0] for t in group]
-                group_ranges.append((min(addrs), max(addrs)))
-
-            # Build per-library real ordinal sets for library identification
-            lib_real_ords = {}
-            for lib_idx, lib in enumerate(import_libs_info['libraries']):
-                ords = set()
-                for va in lib['import_table']:
-                    if va == 0:
+        for lib in import_libs_info['libraries']:
+            obj = lib['name'].rsplit('.', 1)[0].lower() + '.obj'
+            sites = import_sites.get(obj, {'slots': {}, 'funcs': {}})
+            lib_v = lib_t = lib_u = 0
+            last_name = None
+            for va in lib['import_table']:
+                val = struct.unpack_from('>I', orig_pe_data, va - orig_image_base)[0]
+                rtype = val >> 24
+                if rtype == 0:
+                    last_name = orig_imp_names.get(va)
+                    slot = sites['slots'].get(last_name) if last_name else None
+                    if slot is None:
+                        # Not linked: nothing in this image reads the slot.
+                        unmapped_entries.append((va, val, rtype))
+                        lib_u += 1
                         continue
-                    rva = va - orig_image_base
-                    if rva < 0 or rva + 4 > len(decomp_pe):
+                    le = struct.unpack_from('<I', pe_data, slot - image_base)[0]
+                    if le != (0x80000000 | (val & 0xFFFF)):
+                        rewritten_slots.append((last_name, slot, le))
+                    struct.pack_into('>I', pe_data, slot - image_base, val)
+                    va_mapping[va] = slot
+                    consumed.add(('slot', obj, last_name))
+                    mapped_vars += 1
+                    lib_v += 1
+                elif rtype == 1:
+                    # The thunk's own name, not the slot's: the XAPI wrappers
+                    # rename some (TlsGetValue -> __imp_KeTlsGetValue).
+                    fname = orig_imp_names.get(va)
+                    thunk = sites['funcs'].get(fname) if fname else None
+                    slot = sites['slots'].get(last_name) if last_name else None
+                    if thunk is None or slot is None:
+                        unmapped_entries.append((va, val, rtype))
+                        lib_u += 1
                         continue
-                    val = struct.unpack_from('>I', decomp_pe, rva)[0]
-                    ordinal = val & 0xFFFFFF
-                    if ordinal > 0:
-                        ords.add(ordinal & 0xFFFF)
-                lib_real_ords[lib_idx] = ords
+                    w = [u32(thunk + 4 * k) for k in range(4)]
+                    lo = w[1] & 0xFFFF
+                    target = ((w[0] & 0xFFFF) << 16) + (lo - 0x10000 if lo >= 0x8000 else lo)
+                    is_pe_thunk = ((w[0] & 0xFFFF0000) == IMPORT_THUNK[0]
+                                   and (w[1] & 0xFFFF0000) == IMPORT_THUNK[1]
+                                   and w[2:] == list(IMPORT_THUNK[2:])
+                                   and target == slot)
+                    # Some split thunks still carry the XEX record itself
+                    # (the bytes the original image holds before load).
+                    is_record = ((w[0] >> 24) == 1
+                                 and (w[0] & 0xFFFF) == (val & 0xFFFF))
+                    if not (is_pe_thunk or is_record):
+                        raise ImportMappingError(
+                            f"{lib['name']}: {fname} at {thunk:#x} is not a thunk "
+                            f"through {last_name} ({slot:#x}): "
+                            + " ".join(f"{x:08X}" for x in w))
+                    # Xenia reads the record here and rewrites the 16 bytes
+                    # with its syscall stub.
+                    struct.pack_into('>IIII', pe_data, thunk - image_base, val, 0, 0, 0)
+                    va_mapping[va] = thunk
+                    consumed.add(('func', obj, fname))
+                    mapped_thunks += 1
+                    lib_t += 1
+                else:
+                    raise ImportMappingError(
+                        f"{lib['name']}: bad record {val:#010x} at {va:#x}")
+            print(f"    {lib['name']}: {lib_v} vars, {lib_t} thunks; "
+                  f"{lib_u} original records not linked into this image")
 
-            # Assign each IAT group to a library by scoring unique ordinals
-            group_to_lib = {}
-            for g_idx, group in enumerate(iat_groups):
-                group_ords = set(t[1] for t in group)
-                best_score = -1
-                best_lib = -1
-                for lib_idx, lib_ords in lib_real_ords.items():
-                    # Score = ordinals unique to this library found in this group
-                    other_ords = set()
-                    for other_idx, other in lib_real_ords.items():
-                        if other_idx != lib_idx:
-                            other_ords |= other
-                    unique = lib_ords - other_ords
-                    score = len(group_ords & unique)
-                    if score > best_score:
-                        best_score = score
-                        best_lib = lib_idx
-                group_to_lib[g_idx] = best_lib
-
-            def addr_to_lib_idx(addr):
-                """Assign an IAT address to a library via group range membership."""
-                for g_idx, (lo, hi) in enumerate(group_ranges):
-                    if lo - 64 <= addr <= hi + 64:  # small margin
-                        return group_to_lib[g_idx]
-                return -1
-
-            print(f"    IAT groups: {len(iat_groups)}, "
-                  f"assignments: {[import_libs_info['libraries'][group_to_lib[i]]['name'] for i in range(len(iat_groups))]}")
-            for g_idx, (lo, hi) in enumerate(group_ranges):
-                lib_name = import_libs_info['libraries'][group_to_lib[g_idx]]['name']
-                print(f"      Group {g_idx}: {lo:#x}-{hi:#x} ({len(iat_groups[g_idx])} entries) → {lib_name}")
-
-            from collections import defaultdict
-
-            # Build ordinal-only unique sets for fallback matching
-            # An ordinal is "unique" if it appears in only one library
-            all_lib_ords = set()
-            for ords in lib_real_ords.values():
-                all_lib_ords |= ords
-            ordinal_to_unique_lib = {}  # ordinal → lib_idx (only for unique ordinals)
-            for lib_idx, ords in lib_real_ords.items():
-                other_ords = set()
-                for other_idx, other in lib_real_ords.items():
-                    if other_idx != lib_idx:
-                        other_ords |= other
-                for o in ords - other_ords:
-                    ordinal_to_unique_lib[o] = lib_idx
-
-            # Build per-library thunk and variable maps using group ranges
-            # key = (lib_index, ordinal), value = thunk_va or iat_addr
-            lib_thunk_map = {}  # (lib_idx, ordinal) → thunk_va
-            lib_var_map = {}    # (lib_idx, ordinal) → iat_addr
-            # Also build ordinal-only maps for fallback
-            ord_thunk_map = defaultdict(list)  # ordinal → [thunk_va, ...]
-            ord_var_map = defaultdict(list)    # ordinal → [iat_addr, ...]
-
-            for ordinal, entries in ordinal_to_thunk_entries.items():
-                for thunk_va, iat_addr in entries:
-                    lib_idx = addr_to_lib_idx(iat_addr)
-                    key = (lib_idx, ordinal)
-                    lib_thunk_map[key] = thunk_va
-                    ord_thunk_map[ordinal].append(thunk_va)
-
-            for ordinal, iat_addrs in ordinal_to_var_vas.items():
-                for iat_addr in iat_addrs:
-                    lib_idx = addr_to_lib_idx(iat_addr)
-                    key = (lib_idx, ordinal)
-                    lib_var_map[key] = iat_addr
-                    ord_var_map[ordinal].append(iat_addr)
-
-            # Track consumed VAs to prevent double-mapping.
-            # Each thunk/var VA can only be assigned to ONE import table entry.
-            # If two libraries share the same VA (overlapping ordinals), xenia
-            # would overwrite the first library's marker with a syscall stub
-            # before reading it for the second library, causing a crash.
-            consumed_vas = set()
-
-            # Process each library's import table
-            for lib_idx, lib in enumerate(import_libs_info['libraries']):
-                lib_mapped_v = 0
-                lib_mapped_t = 0
-                lib_unmapped = 0
-
-                for va in lib['import_table']:
-                    if va == 0:
-                        continue
-
-                    rva = va - orig_image_base
-                    if rva < 0 or rva + 4 > len(decomp_pe):
-                        continue
-
-                    val = struct.unpack_from('>I', decomp_pe, rva)[0]
-                    record_type = (val >> 24) & 0xFF
-                    prefixed_ordinal = val & 0xFFFFFF
-                    if record_type not in (0x00, 0x01) or prefixed_ordinal == 0:
-                        continue
-
-                    # Strip library prefix to get the plain ordinal used in our PE
-                    real_ordinal = prefixed_ordinal & 0xFFFF
-                    key = (lib_idx, real_ordinal)
-
-                    if record_type == 0x00:
-                        # Variable import — try group-based, then ordinal-only
-                        target_va = None
-                        if key in lib_var_map:
-                            candidate = lib_var_map.pop(key)
-                            if candidate not in consumed_vas:
-                                target_va = candidate
-                        if target_va is None:
-                            # Fallback: try ordinal-only, skip consumed VAs
-                            while ord_var_map.get(real_ordinal):
-                                candidate = ord_var_map[real_ordinal].pop(0)
-                                if candidate not in consumed_vas:
-                                    target_va = candidate
-                                    break
-                        if target_va is not None:
-                            va_mapping[va] = target_va
-                            consumed_vas.add(target_va)
-                            mapped_vars += 1
-                            lib_mapped_v += 1
-                        else:
-                            unmapped_entries.append(
-                                (va, prefixed_ordinal, record_type))
-                            lib_unmapped += 1
-                    elif record_type == 0x01:
-                        # Thunk import — try group-based, then ordinal-only
-                        target_va = None
-                        if key in lib_thunk_map:
-                            candidate = lib_thunk_map.pop(key)
-                            if candidate not in consumed_vas:
-                                target_va = candidate
-                        if target_va is None:
-                            # Fallback: try ordinal-only, skip consumed VAs
-                            while ord_thunk_map.get(real_ordinal):
-                                candidate = ord_thunk_map[real_ordinal].pop(0)
-                                if candidate not in consumed_vas:
-                                    target_va = candidate
-                                    break
-                        if target_va is not None:
-                            va_mapping[va] = target_va
-                            consumed_vas.add(target_va)
-                            mapped_thunks += 1
-                            lib_mapped_t += 1
-                        else:
-                            unmapped_entries.append(
-                                (va, prefixed_ordinal, record_type))
-                            lib_unmapped += 1
-
-                print(f"    {lib['name']}: {lib_mapped_v} vars, "
-                      f"{lib_mapped_t} thunks, {lib_unmapped} unmapped")
+        # Completeness: every slot and thunk the import objects contributed
+        # must be an import record, or Xenia never resolves it.
+        orphans = []
+        for obj, sites in import_sites.items():
+            orphans += [n for n in sites['slots'] if ('slot', obj, n) not in consumed]
+            orphans += [n for n in sites['funcs'] if ('func', obj, n) not in consumed]
+        n_sites = sum(len(x['slots']) + len(x['funcs']) for x in import_sites.values())
+        print(f"    Import completeness: {n_sites - len(orphans)} of {n_sites} "
+              f"linked IAT slots + thunks are XEX import records")
+        if rewritten_slots:
+            print(f"    {len(rewritten_slots)} IAT slots held a linked value instead of "
+                  f"their PE ordinal marker (now the record): "
+                  + ", ".join(f"{n}={v:#010x}" for n, _, v in rewritten_slots[:8]))
+        shared = collections.Counter(va_mapping.values())
+        folded = sorted(va for va, n in shared.items() if n > 1)
+        if folded:
+            # /OPT:ICF folds byte-identical import slots of DIFFERENT
+            # libraries (xam 0x195 XamInputRawState and xboxkrnl 0x195
+            # XexGetModuleHandle hold the same PE marker), and then their
+            # identical thunks: one address, two imports. Unrecoverable here.
+            raise ImportMappingError(
+                f"{len(folded)} import slots/thunks serve more than one import "
+                f"record (linker ICF folded them; link with /OPT:NOICF): "
+                + ", ".join(f"{va:#x}" for va in folded[:8]))
+        if orphans:
+            raise ImportMappingError(
+                f"{len(orphans)} linked import slots/thunks have no XEX import "
+                f"record: " + ", ".join(orphans[:10]))
+        pe_data = bytes(pe_data)
 
         # For unmapped entries, allocate stub markers at the end of the PE.
         # Each stub is 16 bytes (xenia assumes 16-byte thunk entries).
@@ -953,11 +731,11 @@ def build_xex(pe_data, original_xex_info, pe_info, orig_pe_data=None,
             stub_rva = (len(pe_data) + 0xFFF) & ~0xFFF
             stub_data = bytearray()
 
-            for orig_va, ordinal, record_type in unmapped_entries:
+            for orig_va, record_value, record_type in unmapped_entries:
                 stub_offset = len(stub_data)
                 stub_va = image_base + stub_rva + stub_offset
-                # Write ordinal marker in XEX BE format
-                xex_marker = ((record_type & 0xFF) << 24) | (ordinal & 0xFFFFFF)
+                # Write the original record value (type, library, ordinal)
+                xex_marker = record_value
                 stub_data.extend(struct.pack('>I', xex_marker))
                 # Pad to 16 bytes (xenia may overwrite 16 bytes for thunks)
                 stub_data.extend(b'\x00' * 12)
@@ -1014,7 +792,13 @@ def build_xex(pe_data, original_xex_info, pe_info, orig_pe_data=None,
         import_header_blob = (0x000103FF, patched_header)
         print("  Including patched import library header")
     elif 0x000103FF in orig:
-        print("  Skipping import library header (no ordinal map available)")
+        # A XEX without its import table loads, and every kernel/XAM call
+        # then executes a raw 0x01xxxxxx marker and traps (the 2026-08-24
+        # build: 627 traps in 120 s, boot parked in ArchiveInit).
+        raise ImportMappingError(
+            "original XEX has an import table but no readable reference image "
+            "(encrypted?) or no PE thunks were found; refusing to write a XEX "
+            "without imports")
     else:
         print("  No import library header in original XEX")
 
@@ -1188,6 +972,14 @@ def main():
                        help="Original XEX to copy headers from")
     parser.add_argument("--output", "-o", default=str(ROOT / "build" / "373307D9" / "default.xex"),
                        help="Output XEX path")
+    parser.add_argument("--import-xex", default=None,
+                        help="Unencrypted XEX of the same image to read the original "
+                             "import records from (default: --original-xex if readable, "
+                             "else debug.xex next to it, if its import header is identical)")
+    parser.add_argument("--symbols", default=str(ROOT / "config" / "373307D9" / "symbols.txt"),
+                        help="dtk symbols.txt of the original (names its __imp_ IAT slots)")
+    parser.add_argument("--map", default=None,
+                        help="Linker map of --pe (default: the PE path with .map)")
     parser.add_argument("--no-xenia-manifest", action="store_true",
                         help="Skip generation of xenia_dc3_patch_manifest.json")
     parser.add_argument("--xenia-runtime-fnv1a64", default=None,
@@ -1219,38 +1011,54 @@ def main():
     print(f"  {len(orig_info['opt_headers'])} optional headers")
     print(f"  Security info: {len(orig_info['security_info'])} bytes")
 
-    # Decompress original XEX for reference
-    print("\nDecompressing original XEX...")
+    # The import records live in the original image's PE data, which the
+    # encrypted retail-format default.xex does not let us read. Fall back to
+    # an unencrypted container of the same image whose import header is
+    # byte-identical (debug.xex), and refuse rather than guess.
+    print("\nReading the original import records...")
     orig_pe_data = None
-    try:
-        orig_pe_data = decompress_xex_pe(orig_info['original_data'])
-        print(f"  Decompressed PE: {len(orig_pe_data):,} bytes")
-    except ValueError as e:
-        print(f"  Warning: Could not decompress original XEX: {e}")
+    candidates = [orig_xex_path]
+    if args.import_xex:
+        candidates = [Path(args.import_xex)]
+    else:
+        candidates.append(orig_xex_path.parent / "debug.xex")
+    orig_imports = orig_info['bff_headers'].get(0x000103FF)
+    for cand in candidates:
+        if not cand.exists():
+            continue
+        cand_info = orig_info if cand == orig_xex_path else parse_original_xex(cand)
+        if cand_info['bff_headers'].get(0x000103FF) != orig_imports:
+            print(f"  {cand}: import header differs from {orig_xex_path}; not usable")
+            continue
+        try:
+            orig_pe_data = decompress_xex_pe(cand_info['original_data'])
+        except ValueError as e:
+            print(f"  {cand}: {e}")
+            continue
+        print(f"  Import records from {cand} ({len(orig_pe_data):,} byte PE)")
+        break
+    if orig_pe_data is None and orig_imports is not None:
+        print("ERROR: no readable image carries the original import records")
+        return 1
 
-    # Find import thunks in .text by pattern matching.
-    # For each thunk:
-    # - Write XEX thunk marker (0x01XXXXXX) at the thunk CODE address
-    #   (xenia reads this, resolves ordinal, overwrites with syscall stubs)
-    # - Write XEX variable marker (0x00XXXXXX) at the IAT DATA address
-    #   (xenia reads this, resolves ordinal, writes variable value)
-    print("\nScanning for import thunks...")
-    pe_data, ordinal_to_thunk_entries, ordinal_to_var_vas = find_and_convert_thunk_iat(
-        pe_data, pe_info['image_base'])
-
-    # Find remaining import variable IAT entries in .rdata
-    # (variables not associated with any thunk)
-    print("Scanning for additional import variables...")
-    pe_data, extra_var_map = find_and_convert_variable_iat(pe_data, pe_info['image_base'])
-    for ordinal, vas in extra_var_map.items():
-        if ordinal not in ordinal_to_var_vas:
-            ordinal_to_var_vas[ordinal] = vas
-        else:
-            ordinal_to_var_vas[ordinal].extend(vas)
-
-    total_thunks = sum(len(v) for v in ordinal_to_thunk_entries.values())
-    total_vars = sum(len(v) for v in ordinal_to_var_vas.values())
-    print(f"  Total: {total_thunks} thunks, {total_vars} variables")
+    symbols_path = Path(args.symbols)
+    orig_imp_names = None
+    ilib = orig_info.get('import_libs_info')
+    if ilib and symbols_path.exists():
+        record_vas = {va for lib in ilib['libraries'] for va in lib['import_table']}
+        orig_imp_names = parse_symbols_names(symbols_path, record_vas)
+        print(f"  {symbols_path}: names for {len(orig_imp_names)} of "
+              f"{len(record_vas)} original import records")
+    map_path = Path(args.map) if args.map else pe_path.with_suffix('.map')
+    import_sites = None
+    if map_path.exists():
+        import_sites = parse_map_import_sites(map_path)
+        print(f"  Linker map {map_path}: import objects "
+              + ", ".join(f"{k} ({len(v['slots'])} slots, {len(v['funcs'])} thunks)"
+                          for k, v in sorted(import_sites.items())))
+    elif orig_pe_data is not None:
+        print(f"ERROR: linker map {map_path} not found; it names the import slots")
+        return 1
 
     # Convert PE from file layout to virtual memory layout.
     # XEX decompression maps the PE blob contiguously into guest memory,
@@ -1261,9 +1069,13 @@ def main():
 
     # Build XEX
     print(f"\nBuilding XEX...")
-    xex_data = build_xex(pe_data, orig_info, pe_info, orig_pe_data=orig_pe_data,
-                         ordinal_to_thunk_entries=ordinal_to_thunk_entries,
-                         ordinal_to_var_vas=ordinal_to_var_vas)
+    try:
+        xex_data = build_xex(pe_data, orig_info, pe_info, orig_pe_data=orig_pe_data,
+                             import_sites=import_sites,
+                             orig_imp_names=orig_imp_names)
+    except ImportMappingError as e:
+        print(f"ERROR: import table: {e}")
+        return 1
     print(f"  XEX size: {len(xex_data):,} bytes")
 
     # Verify

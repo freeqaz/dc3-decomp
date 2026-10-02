@@ -13,6 +13,7 @@
         "/NODEFAULTLIB",
         "/XEX:NO",
         "/FORCE:MULTIPLE",
+        "/OPT:NOICF",
         "/MERGE:.xidata=.text",
         "/MAP"
     ],
