@@ -29,6 +29,7 @@ public:
     /** Get the parser with the supplied name. */
     MidiParser *GetParser(Symbol name);
     const char *GetSongName() const { return mSongName.Str(); }
+    const char *GetFilename() const { return mFilename; }
 
 private:
     /** Strip the end bracket from the input string. (i.e. remove the ']')

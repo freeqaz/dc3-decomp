@@ -22,22 +22,9 @@ ScopedState<T, InitVal, DestroyVal>::~ScopedState() {
 //     (jeff src/util/config.rs) can bind a real name exactly once and PARKS the
 //     loser as fn_<addr>; config/373307D9/symbols.txt:117577 binds the App copy,
 //     so the Debug copy is permanently fn_825CCF20 and can never pair.
-//   * fn_825CE40C (40 B) is `__unwind$110265` -- an UNWIND DATA blob that the
-//     split carved into .text.  It is not a function at all and has no source
-//     spelling; unscoreable by construction.
-// Both measured 0.0%; neither is fixable from this file.
+//   * fn_825CE40C: see the w17-d note below -- it was a real funclet.
 //
-// w8-g 2026-09-15 addendum on fn_825CE40C: it does NOT disassemble as data.  Its
-// ten instructions are a well-formed EH funclet --
-//   subi r31, r12, 0x21e0 / mflr r12 / stw r12, -0x8(r1) / stwu r1, -0x60(r1) /
-//   addi r3, r31, 0x2194 / bl ??1MemHeapTracker@@QAA@XZ / epilogue
-// -- i.e. the cleanup for a `MemHeapTracker` local at +0x2194 of a parent whose
-// frame is 0x21e0 (8.4 KB, so a function with a multi-kilobyte stack buffer).
-// No function in this file declares a MemHeapTracker, and nothing in our build
-// emits a funclet of that shape, so the row is a genuinely missing cleanup path
-// rather than carved data.  It is still not scoreable in isolation (objdiff
-// flags UNVERIFIABLE_PAIRING and our side is empty): the lever is finding which
-// Debug function should hold the tracker, not editing the funclet.
+// w17-d: fn_825CE40C is Debug::Fail's MemHeapTracker cleanup (now 100).
 template ScopedState<bool, 1, 0>::~ScopedState();
 
 #include "os\Debug.h"
@@ -278,6 +265,15 @@ void Debug::Notify(const char *msg) {
     }
 }
 
+// w17-d: 98.019 -> 100 (and funclets fn_825CE39C/fn_825CE3C4 99.9 -> 100,
+// fn_825CE40C 0 -> 100). BEHAVIOUR FIX. The image's unwind funclets name two
+// RAII locals we were missing: __unwind$110261 runs
+// ??1?$ScopedState@_N$00$0A@@@ on r31+0x54 (mFailing set true on entry, false
+// on exit), and fn_825CE40C runs ??1MemHeapTracker on r31+0x2194. With the bare
+// `mFailing = true ... MemPopHeap(); mFailing = false;` a `throw msg` out of a
+// MILO_TRY left mFailing stuck at true (every later Fail silently ignored) and
+// the heap pushed; the image clears both on unwind. `t` is block-scoped so its
+// slot pools with the throw temp at 0x50.
 void Debug::Fail(const char *msg, void *v) {
 #ifdef HX_NATIVE
     fprintf(stderr, "FAIL: %s\n", msg);
@@ -300,13 +296,13 @@ void Debug::Fail(const char *msg, void *v) {
     return;
 #endif
     if (!mNoDebug && !mFailing) {
-        mFailing = true;
+        ScopedState<bool, true, false> failingState(&mFailing);
         StackString<256> msgStr(msg);
         StackString<4096> stackTrace;
         DataAppendStackTrace(stackTrace);
         MILO_LOG(stackTrace.c_str());
         static int heap = MemFindHeap("main");
-        MemPushHeap(heap);
+        MemHeapTracker tracker(heap);
         if (!MainThread()) {
             CaptureStackTrace(0x32, (StackData *)mFailThreadStack, v);
             mFailThreadMsg = msg;
@@ -324,13 +320,13 @@ void Debug::Fail(const char *msg, void *v) {
             (*it)();
         }
         mFailCallbacks.clear();
-        ModalType t = kModalFail;
-        Modal(t, msgStr.c_str(), v);
-        if (t != kModalFail) {
-            mFailing = false;
+        {
+            ModalType t = kModalFail;
+            Modal(t, msgStr.c_str(), v);
+            if (t != kModalFail) {
+                mFailing = false;
+            }
         }
-        MemPopHeap();
-        mFailing = false;
     }
 }
 

@@ -1387,29 +1387,25 @@ void PlatformMgr::Poll() {
         if (res != ERROR_IO_INCOMPLETE) {
             static PlatformMgrOpCompleteMsg msg(false);
             if (res == ERROR_SUCCESS) {
-                XONLINE_FRIEND *xf = (XONLINE_FRIEND *)mFriendsBuffer;
-                for (unsigned long i = 0; i < numFriends; i++, xf++) {
+                XONLINE_FRIEND *friends = (XONLINE_FRIEND *)mFriendsBuffer;
+                for (unsigned long i = 0; i < numFriends; i++) {
                     // Pending requests in either direction are not friends yet.
-                    if (!(xf->dwFriendState & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
-                        && !(xf->dwFriendState
+                    if (!(friends[i].dwFriendState & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
+                        && !(friends[i].dwFriendState
                              & XONLINE_FRIENDSTATE_FLAG_RECEIVEDREQUEST)) {
-                        // NOTE: the target's loop induction pointer is biased
-                        // +8, i.e. it IS &xf->szGamertag (disps 0x10 for
-                        // dwFriendState, -0x8 for xuid, 0 for the String arg),
-                        // formed in the preheader as `addi r29, mFriendsBuffer, 8`.
-                        // Two spellings refuted, both BYTE-FOR-BYTE INERT (MSVC
-                        // sinks the address back into the `if` and keeps xf as the
-                        // induction variable either way):
-                        //   1. a `const char *` named here, ahead of `new Friend()`
-                        //      (wave 6);
-                        //   2. the same name hoisted to the TOP of the loop body,
-                        //      above the pending-request test, so it is live on
-                        //      every iteration (wave 7, lane w7-y).
-                        // Six rows (528/533/550-553/562) are still owed to it.
+                        // w17-d (99.172 -> 99.249): the plain indexed loop, not
+                        // a hand-stepped `xf++` pointer -- MSVC now strength-
+                        // reduces it itself. Still open: the image biases the
+                        // induction pointer +8 (&szGamertag: disps 0x10/-0x8/0),
+                        // ours +0x18 (&dwFriendState, the first field read). A
+                        // `XONLINE_FRIEND &xf = friends[i]` alias is inert; the
+                        // older pointer-loop refutations (a named gamertag
+                        // pointer ahead of `new Friend()` or at the body top)
+                        // were measured against the hand-stepped loop.
                         Friend *f = new Friend();
-                        String name(xf->szGamertag);
+                        String name(friends[i].szGamertag);
                         f->SetName(name);
-                        f->mXUID = xf->xuid;
+                        f->mXUID = friends[i].xuid;
                         mFriendsList->push_back(f);
                     }
                 }

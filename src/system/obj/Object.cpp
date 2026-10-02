@@ -589,29 +589,32 @@ ObjectDir *Hmx::Object::DataDir() {
     return mDir ? mDir : ObjectDir::Main();
 }
 
+// w17-d: FindPathName 87.606 -> 100. The four "%s (%s)" arms go through an
+// inlined helper: each inline instance gets its own by-value `name` parameter,
+// which is why the image re-stores r29 into a fresh MakeString temp per arm
+// (0x54 in the Loader arm, 0x50 in the others) and keeps the Loader arm's
+// FileLocalize call separate from the shared one. Written inline at the call
+// sites, all four arms bound the same `name` home and tail-merged into one.
+// rb3-xenon has the same helper marked noinline; here it is inlined.
+static const char *FindPathNameHelper(const char *name, const char *path) {
+    return MakeString("%s (%s)", name, FileLocalize(path, nullptr));
+}
+
 const char *Hmx::Object::FindPathName() {
     const char *name = (mName && *mName) ? mName : ClassName().Str();
 
     ObjectDir *dataDir = DataDir();
     if (dataDir) {
         if (dataDir->Loader()) {
-            return MakeString(
-                "%s (%s)",
-                name,
-                FileLocalize(dataDir->Loader()->LoaderFile().c_str(), nullptr)
-            );
+            return FindPathNameHelper(name, dataDir->Loader()->LoaderFile().c_str());
         } else if (!dataDir->ProxyFile().empty()) {
-            return MakeString(
-                "%s (%s)", name, FileLocalize(dataDir->ProxyFile().c_str(), nullptr)
-            );
+            return FindPathNameHelper(name, dataDir->ProxyFile().c_str());
         } else if (*dataDir->GetPathName() != '\0') {
-            return MakeString(
-                "%s (%s)", name, FileLocalize(dataDir->GetPathName(), nullptr)
-            );
+            return FindPathNameHelper(name, dataDir->GetPathName());
         } else if (dataDir != this && dataDir->Name() && *dataDir->Name()) {
             return MakeString("%s/%s", dataDir->Name(), name);
         } else if (mDir && *mDir->GetPathName()) {
-            return MakeString("%s (%s)", name, FileLocalize(mDir->GetPathName(), nullptr));
+            return FindPathNameHelper(name, mDir->GetPathName());
         }
     }
     return name;

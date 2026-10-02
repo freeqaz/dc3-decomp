@@ -306,12 +306,16 @@ BEGIN_LOADS(Flow)
     PostLoad(bs);
 END_LOADS
 
+// w17-d: 89.613 -> 100. Two levers: the virtual ProxyFile() goes through the
+// full object (the image forms this-0x180 then +0x68, `Flow *self = this;`,
+// as in w14-f's dtor), and the mode is ONE call with a ternary argument (the
+// image loads r4 = kInlineCached before the IsProxy compare and overwrites it
+// with kInlineAlways on the fall-through).
 void Flow::PreSave(BinStream &bs) {
-    if (ProxyFile().empty() || !IsProxy()) {
-        SetInlineProxyType(kInlineAlways);
-    } else {
-        SetInlineProxyType(kInlineCached);
-    }
+    Flow *self = this;
+    SetInlineProxyType(
+        self->ProxyFile().empty() || !IsProxy() ? kInlineAlways : kInlineCached
+    );
 }
 
 INIT_REVS(7, 2)

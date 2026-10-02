@@ -475,6 +475,8 @@ void DecompressMemHelper(
 // the third arm and computes (size - dataMsk) + buffer.  All INERT: the operand
 // order `(size - dataMsk) + buffer`, the expression inlined as the argument,
 // `buffer + size - dataMsk`, `buffer - dataMsk + size`.
+// w17-d (99.980): also inert -- `&((char *)mBuffer)[size - dataMsk]` and RB3's
+// `dataOffset = &buf[size]; DecompressMem(dataOffset - dataMsk, ...)`.
 void ChunkStream::DecompressChunk(DecompressTask &task) {
     MILO_ASSERT(*task.mState == kDecompressing, 0x3c1);
     int data = *task.mChunk;

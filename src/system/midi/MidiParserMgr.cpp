@@ -154,39 +154,23 @@ const char *MidiParserMgr::StripEndBracket(char *c1, const char *cc2) {
     return c1;
 }
 
-// w8-l: 99.983604 normalized (re-measured), still the only function short of
-// 100% in this unit.  One row: [57] lwz r30, 0x54(r31) target vs 0x50(r31).
-// Same family as PlaylistSongProvider::DataSymbol / WebSvcMgrCurl::Poll --
-// the image frame is [0x50 = the assert line int (pooled only with the catch
-// funclet's const char* temp), 0x54 = parsed, 0x58 = errMsg] and ours pools
-// `parsed` with the assert int at 0x50.  The w7-ak refutations above still
-// hold; no new lever found.
+// w17-d: 99.983604 -> 100. The image's catch funclet copies mFilename into a
+// frame temp (lwz r11,0x54(r11); stw r11,0x50(r31); addi r4,r31,0x50) before
+// binding it to MakeString's `const char *const &` -- the argument was an
+// RVALUE (an accessor call), not the member lvalue. That temp is what pooled
+// with the assert-line int at 0x50 and pushed `parsed` to 0x54. A same-type
+// `(const char *)` cast is folded back to the lvalue and is inert.
 DataArray *MidiParserMgr::ParseText(const char *str, int tick) {
     MILO_ASSERT(strlen(str) < 256, 0xF3);
     char buf[256];
     StripEndBracket(buf, str + 1);
-    // RESIDUAL (w7-ak, 99.98 canonical): exactly ONE row, idx 57
-    // `lwz r30, 0x54(r31)` vs our `lwz r30, 0x50(r31)` -- the slot `parsed`
-    // lives in for the catch-resume path.  The image's scalar frame is
-    // [0x50 = a POOLED TEMP (the MILO_ASSERT line int, and in the catch funclet
-    // the `const char*` temp that binds TheMidiParserMgr->mFilename to
-    // MakeString's `PBD&` parameter), 0x54 = parsed, 0x58 = errMsg]; ours pools
-    // `parsed` with the assert int at 0x50 and puts the mFilename temp at 0x54.
-    // So it is a temp-vs-named-local pooling order, not a missing local.
-    // NEGATIVE RESULTS, both exactly inert (still 1 row, same offsets):
-    //   1. hoisting this declaration above the MILO_ASSERT so `parsed` would be
-    //      live across it -- MSVC dead-stores the nullptr init away, so the live
-    //      range still starts at the try and the pooling is unchanged.
-    //   2. dropping the initializer (`DataArray *parsed;`).
-    // The single remaining instruction is the catch funclet's resume load; the
-    // 244-byte body is otherwise instruction-identical.
     DataArray *parsed = nullptr;
     MILO_TRY { parsed = DataReadString(buf); }
     MILO_CATCH(errMsg) {
         parsed = nullptr;
         MILO_NOTIFY(MakeString(
             "MidiParser: %s, track %s, tick %d, event \"%s\" has bad format: %s",
-            TheMidiParserMgr->mFilename,
+            TheMidiParserMgr->GetFilename(),
             mTrackName,
             tick,
             buf,
