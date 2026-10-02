@@ -129,7 +129,14 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
         {
             static Symbol x_scale("x_scale");
             if (sym == x_scale) {
-                float len = Length(_m.x);
+                // w18-d: the three lengths are spelled out rather than through
+                // Length(): the extra inline level made MSVC lead the sum with z
+                // (y/z_scale) instead of the image's y-first schedule. 99.979 ->
+                // 99.995; x_scale still loads z before x (0x825BDD80/84), and the
+                // y.y/z.y products of Scale() and of `_m.y *= ratio` keep the
+                // other operand order (4 commutative rows); per-component
+                // `_m.y.x *= ratio` loses the r29 = &_m.y binding (97.8).
+                float len = std::sqrt(_m.x.x * _m.x.x + _m.x.y * _m.x.y + _m.x.z * _m.x.z);
                 float oldLen = len;
                 ret = PropSync(len, _val, _prop, _i + 1, _op);
                 if (_op != kPropGet) {
@@ -147,7 +154,7 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
         {
             static Symbol y_scale("y_scale");
             if (sym == y_scale) {
-                float len = Length(_m.y);
+                float len = std::sqrt(_m.y.x * _m.y.x + _m.y.y * _m.y.y + _m.y.z * _m.y.z);
                 float oldLen = len;
                 ret = PropSync(len, _val, _prop, _i + 1, _op);
                 if (_op != kPropGet) {
@@ -163,7 +170,7 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
         {
             static Symbol z_scale("z_scale");
             if (sym == z_scale) {
-                float len = Length(_m.z);
+                float len = std::sqrt(_m.z.x * _m.z.x + _m.z.y * _m.z.y + _m.z.z * _m.z.z);
                 float oldLen = len;
                 ret = PropSync(len, _val, _prop, _i + 1, _op);
                 if (_op != kPropGet) {
