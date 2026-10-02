@@ -566,8 +566,12 @@ inline void DrawAccessories<LensExtract>(
     if (it == spotEnd)
         return;
     do {
-        Spotlight *sl = it->mSpotlight;
-        if (sl->LensMesh() != nullptr) {
+        // w18-b: no `Spotlight *sl` local -- the image re-reads it->mSpotlight
+        // at each use (`lwz r11, 0x4(r25)` before LensXfm and again before the
+        // second LensMesh read); a local pinned sl in r31 and recoloured the
+        // loop (94.28 -> 100).  The two != tests are written disk/lensMat
+        // first to match the image's subf operand order.
+        if (it->mSpotlight->LensMesh() != nullptr) {
             RndMesh *disk = Spotlight::GetDiskMesh();
             RndMultiMesh *nextMesh;
             if (disk != curDisk) {
@@ -575,7 +579,7 @@ inline void DrawAccessories<LensExtract>(
             } else {
                 nextMesh = multiMesh;
             }
-            const Transform &lensXfm = sl->LensXfm();
+            const Transform &lensXfm = it->mSpotlight->LensXfm();
             bool visible;
             // MEASURED NEGATIVE (w8-q, 94.277 -> 92.858): flipping this to
             // `if (disk->Showing()) { sphere path } else { visible = false; }`.
@@ -597,9 +601,9 @@ inline void DrawAccessories<LensExtract>(
                 }
             }
             if (visible) {
-                bool diskChanged = (curDisk != disk);
-                RndMat *lensMat = sl->LensMesh();
-                bool matChanged = (curMat != lensMat);
+                bool diskChanged = (disk != curDisk);
+                RndMat *lensMat = it->mSpotlight->LensMesh();
+                bool matChanged = (lensMat != curMat);
                 if ((diskChanged || matChanged) && multiMesh != nullptr
                     && !multiMesh->Instances().empty()) {
                     multiMesh->DrawShowing();
