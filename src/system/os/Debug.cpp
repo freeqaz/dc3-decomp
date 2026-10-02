@@ -580,10 +580,12 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
         mainPoint.AddPair("version", DataNode(version));
     }
     detailPoint.AddPair("uptime", DataNode(SystemMs()));
-    const char *exeName = "";
-    if (!TheSystemArgs.empty()) {
-        exeName = TheSystemArgs.front();
-    }
+    // w16-d: the ternary (with THIS polarity) gives the image's register
+    // assignment -- &TheSystemArgs in r27, the TextStream vtable in r28; the
+    // `exeName = ""; if (!empty()) exeName = front();` statement form swapped
+    // them (20 rows). `!empty() ? front() : ""` fixes the registers but emits
+    // an extra branch.
+    const char *exeName = TheSystemArgs.empty() ? "" : TheSystemArgs.front();
     {
         StackString<256> exePath(exeName);
         StackString<256> exeBase(exePath.c_str());
@@ -605,6 +607,9 @@ void Debug::DoCrucible(ModalType type, const char *msg, void *addr) {
         // emit it after -- is byte-identical.  DoCrucible stays at 99.53052 with
         // the identical 22 rows, so the two-slot hoist is scheduler-owned, not
         // a conditional-expression-vs-statement difference.
+        // w16-d: also inert -- `DataNode(!mCrucibleApp ? exeBase.c_str() :
+        // mCrucibleApp)`; and `mCrucibleApp ? DataNode(..) : DataNode(..)`
+        // is far worse (92.6, frame +0x20).
         const char *appName = mCrucibleApp;
         if (!mCrucibleApp) {
             appName = exeBase.c_str();

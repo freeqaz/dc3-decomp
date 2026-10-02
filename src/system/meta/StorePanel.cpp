@@ -609,6 +609,10 @@ DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
     return 0;
 }
 
+// w16-d (99.968, 6 offset rows): the image gives the second loop's cur_type
+// slot 0x60 and songName its own 0x68 (OfferType temp 0x6c); we put cur_type
+// on 0x64 and songName on 0x60 (temp 0x68). Folding songName into the
+// MakeString call as a temp is worse (99.7).
 void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
     std::vector<Symbol> song_names;
     std::vector<StoreOffer *> song_offers;

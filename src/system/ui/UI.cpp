@@ -227,6 +227,9 @@ UIComponent *UIManager::FocusComponent() {
         return nullptr;
 }
 
+// w16-d (99.43 under name_check): only the __RTDynamicCast argument setup
+// order differs (image loads the UIScreen descriptor into r6 first). Spelling
+// the cast directly instead of via Obj<UIScreen>() is inert.
 void UIManager::GotoFirstScreen() {
     UIScreen *screen = DataVariable("first_screen").Obj<UIScreen>();
 #ifdef HX_NATIVE

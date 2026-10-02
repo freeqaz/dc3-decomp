@@ -122,6 +122,16 @@ void FlowQueueable::ChildFinished(FlowNode *node) {
         }
     } else {
         if (mListeners.size() > 1) {
+            // w16-d (99.53, 9 rows at 0x82xxxD50..D90): the image keeps the
+            // begin NODE in r10 and re-reads its value for ReleaseListener
+            // (`lwz r4, 0x8(r10)`), i.e. front is reached through the node, not
+            // copied. `Hmx::Object *&front = mListeners.front();` (or an
+            // iterator `first` with `*first`) reproduces every register, but
+            // MSVC then rotates the loop as a guarded do-while (cmplw/beq at
+            // entry) where the image enters with `b <cond>` -- 98.6, 3 rows.
+            // `for (++it; ...)` and `while (++it != end)` give the same
+            // rotation; comparing against `mListeners.front()` inside the loop
+            // is 99.1. Kept the higher-scoring value copy.
             Hmx::Object *front = mListeners.front();
             bool found = false;
 #ifdef HX_NATIVE
