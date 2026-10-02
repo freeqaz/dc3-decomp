@@ -101,21 +101,19 @@ bool DirectionGestureFilterSingleUser::HandAtSide(
     const TrackedJoint &knee = skeleton.KneeJoint(mHandSide);
     const TrackedJoint &elbow = skeleton.ElbowJoint(mHandSide);
 
-    float sumY = knee.mJointPos[0].y + hip.mJointPos[0].y;
-    float sumZ = knee.mJointPos[0].z + hip.mJointPos[0].z;
-    float elbowX = elbow.mJointPos[0].x;
-    float handY = hand.mJointPos[0].y;
-    float elbowOffset = radius * elbowBlend + elbowX;
-    float handX = hand.mJointPos[0].x;
-    float handZ = hand.mJointPos[0].z;
+    // The knee/hip midpoint lives in a Vector3: a scalar-local `sum * 0.5f`
+    // subtracted from the hand gets contracted into fnmsubs, the image keeps
+    // fmuls + fsubs (91.8 -> 100).
+    Vector3 hipMid;
+    Add(knee.mJointPos[0], hip.mJointPos[0], hipMid);
+    hipMid *= 0.5f;
+    float elbowOffset = radius * elbowBlend + elbow.mJointPos[0].x;
     float threshold = heightDiff * 0.591715931892395f;
-    sumY = sumY * 0.5f;
-    sumZ = sumZ * 0.5f;
-    float dx = handX - elbowOffset;
-    threshold = threshold * radius;
-    float dy = handY - sumY;
-    float dz = handZ - sumZ;
-    dx = dx * xScale;
+    float dx = hand.mJointPos[0].x - elbowOffset;
+    threshold *= radius;
+    dx *= xScale;
+    float dy = hand.mJointPos[0].y - hipMid.y;
+    float dz = hand.mJointPos[0].z - hipMid.z;
     float dist = sqrtf(dx * dx + dy * dy + dz * dz);
     return dist <= threshold;
 }
