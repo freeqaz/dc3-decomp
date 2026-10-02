@@ -723,16 +723,19 @@ bool CharEyes::EyesOnTarget(float f) {
     return true;
 }
 
-// RESIDUAL (w12-b, 99.87 canonical): register/scheduling only. The image
-// computes the Subtract and the Length in y, z, x order; we do x, y, z. Same
-// order inversion shows up in CharCollide::GetRadius and Character::DrawShadow,
-// which points at the inlined math/Vec.h helpers (PCH-reached, not edited).
-// Byte-inert: computing the length via Distance(v2, v1).
+// w13-o: 99.87 -> 100.0 (fuzzy 97.46 -> 100.0). The difference vector is built
+// with the three-float constructor -- the same idiom GenerateDartOffset uses
+// just below -- not with Subtract(). The y, z, x component order the image
+// shows is NOT a property of math/Vec.h's Length/Subtract bodies: the flat sum
+// in Length is canonicalised by /fp:fast (any written term order is
+// byte-identical), and RndFlare::CalcScale, whose source is RB3's verbatim, is
+// at 100 with the current Length. What moves the order is how the operand
+// vector was produced. Measured inert or worse here: Distance(v2, v1),
+// `diff = v2; diff -= v1` (55.5), moving the mBlinkActive store above Length.
 void CharEyes::EnforceMinimumTargetDistance(
     const Vector3 &v1, const Vector3 &v2, Vector3 &vout
 ) {
-    Vector3 diff;
-    Subtract(v2, v1, diff);
+    Vector3 diff(v2.x - v1.x, v2.y - v1.y, v2.z - v1.z);
     float vlen = Length(diff);
     mBlinkActive = false;
     float minDist;
