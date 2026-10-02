@@ -1201,25 +1201,19 @@ int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideC
 
     // Manual strlen to match target inline loop
     const char *s = str;
-    // RESIDUAL (w7-am, 91.9 canonical): this function is instruction-for-
-    // instruction the image's -- same blocks, same order, same seven live
-    // values (this, 0, 0x53, limit, str, &wideChars, out) -- with ONE
-    // difference that renames every register: 8269A004 `subi r31, r1, 0xb0`
-    // dedicates r31 to a frame pointer and addresses every local off it, so
-    // the image saves r24-r31 and its frame is 0xb0.  We get no frame pointer,
-    // address the same locals off r1, save r25-r31 and use r31 for `out`, so
-    // all seven values sit one register lower.  Nothing in this function's
-    // source chooses that; the other structural rows are the image's two spills
-    // of `_M_finish` to 0x54 around the resize.
-    // NEGATIVE RESULT (w7-am, 2026-09-14): reducing the manual strlen to an
-    // `int len` BEFORE MemPushTemp(), which is what 8269A030-8269A034 do (the
-    // count, not the walking pointer, lives across the call), is inert -- MSVC
-    // already sinks it.  Identical 79-row profile, still 91.9.
+    // w13-a (91.9 -> 100): the temp-heap bracket is a MemDoTempAllocations
+    // scope, not bare MemPushTemp()/MemPopTemp() calls.  Its destructor gives
+    // the function an EH state, which is what dedicates r31 to a frame
+    // pointer (8269A004 `subi r31, r1, 0xb0`) and makes the image save r24-r31.
+    // With the scope in place, the count computed before MemPushTemp
+    // (8269A030-8269A034) is a named `len`.
     while ('\0' != *s++) {}
-    MemPushTemp();
-    wideChars.resize(((s - str) - 1) * 2 + 1, (0));
-    wideChars[0] = 0;
-    MemPopTemp();
+    int len = (s - str) - 1;
+    {
+        MemDoTempAllocations tmp;
+        wideChars.resize(len * 2 + 1, (0));
+        wideChars[0] = 0;
+    }
 
     unsigned short *out = &wideChars[0];
 
@@ -3074,6 +3068,8 @@ void RndText::FontMap::SetupCharacter(
     // (`fmuls f12, f1, f26` at 0x261c, `fsubs f12, f27, f12` at 0x2638) where we
     // contract to one fnmsubs.  Splitting it into a named `aspectH` temporary is
     // exactly neutral -- MSVC re-fuses across the statement boundary.  Two rows.
+    // w13-a: moving this below the vert[0] Set() (the FontMap3d fusion lever)
+    // is inert here.
     float z1 = z0 - _tmp1 * size;
 
     // xPos is read straight out of the reference each time (`lfs f13, 0x0(r29)`
@@ -3135,7 +3131,6 @@ void RndText::FontMap::SetupCharacter(
     xPos = advW * state.mSize + xPos;
 }
 
-static const float _kFloat0_0 = 0.0f;
 void RndText::FontMap3d::SetupCharacter(
     unsigned short charCode,
     float &xPos,
@@ -3155,14 +3150,14 @@ void RndText::FontMap3d::SetupCharacter(
     xPos += (mFont->Kerning(prevChar, charCode) + state.mKerning) * state.mSize;
 
     // Use advance as display width if width <= 0
-    if (width <= _kFloat0_0) {
+    if (width <= 0.0f) {
         width = advance;
     }
 
     // Monospace centering
-    float centerOffset = _kFloat0_0;
+    float centerOffset = 0.0f;
     if (mFont->IsMonospace()) {
-        centerOffset = Max((advance - width) * 0.5f, _kFloat0_0);
+        centerOffset = Max((advance - width) * 0.5f, 0.0f);
     }
 
     float scaledCenter = state.mSize * centerOffset;
@@ -3172,7 +3167,7 @@ void RndText::FontMap3d::SetupCharacter(
     // back over it (`fmuls f12, f0, f12` / `stfs f12, 0x50(r1)` at 0x8268ffd4)
     // and reloaded at the circle-edge midpoint (`lfs f13, 0x50(r1)`).
     width = state.mSize * width;
-    if (width <= _kFloat0_0)
+    if (width <= 0.0f)
         return;
 
     yPos += state.mZOffset * state.mSize;
@@ -3192,28 +3187,29 @@ void RndText::FontMap3d::SetupCharacter(
         Transform xfm;
         xfm.v = mFont->CharOriginOffset();
         xfm.v *= state.mSize;
-        // NEGATIVE RESULT: the image keeps z's scale and its +yPos apart
-        // (`fmuls f10, f0, f10` at 0x8268ff5c, `fadds f0, f10, f30` at
-        // 0x8268ff6c) where we contract to one fmadds.  Spelling the scale as
-        // Scale(xfm.v, state.mSize, xfm.v) instead of `*=` is exactly inert.
-        xfm.v.z += yPos;
+        // The image keeps z's scale and its +yPos apart (`fmuls f10, f0, f10`
+        // at 0x8268ff5c, `fadds f0, f10, f30` at 0x8268ff6c).  w13-a: that
+        // needs the x statement FIRST -- with z first, MSVC contracts the
+        // `*=`'s last multiply and the `+= yPos` into one fmadds.
         xfm.v.x = xfm.v.x + scaledCenter + xPos;
+        xfm.v.z += yPos;
 
         // Scale matrix by cell height
         float cellHeight = mFont->FontUnitInverse() * state.mSize;
-        // NEGATIVE RESULT: the image writes the three diagonal slots (0x60,
-        // 0x74, 0x88) BEFORE the six zeros, and materialises the zero as
-        // `fmuls f0, f0, f31` -- cellHeight times the 0.0 it already holds in a
-        // callee-saved FPR (0x82690064) -- rather than storing the literal.
-        // Writing the nine fields as individual assignments in the image's
-        // order is EXACTLY inert (96.0% and an identical row table): MSVC sinks
-        // and groups the stores by value, not by statement order.  The source
-        // shape that produces a multiply by zero here is still unidentified.
-        xfm.m.x.Set(cellHeight, _kFloat0_0, _kFloat0_0);
-        xfm.m.y.Set(_kFloat0_0, cellHeight, _kFloat0_0);
-        xfm.m.z.Set(_kFloat0_0, _kFloat0_0, cellHeight);
+        // w13-a: an identity scaled by cellHeight.  The image writes the three
+        // diagonal slots (0x60, 0x74, 0x88) first and materialises every zero
+        // as `fmuls f0, f0, f31` -- cellHeight times the 0.0f it holds in a
+        // callee-saved FPR (0x82690064) -- which is what scaling Identity()'s
+        // rows gives under /fp:fast (x*1 folds, x*0 does not).  The 0.0f is a
+        // literal throughout this function: a `static const float` zero was
+        // addressed through a hoisted r27 instead of living in f31, which cost
+        // the image's fourth saved FPR and its 0x150 frame.
+        xfm.m.Identity();
+        xfm.m.x *= cellHeight;
+        xfm.m.y *= cellHeight;
+        xfm.m.z *= cellHeight;
 
-        if (size != _kFloat0_0) {
+        if (size != 0.0f) {
             float circlePos = width * 0.5f + xfm.v.x;
             Transform circleXfm = XfmOnCircleEdge(size, circlePos);
             xfm.v.x -= circlePos;
@@ -3237,17 +3233,10 @@ void RndText::FontMap3d::SetupCharacter(
         // `addi r3, r29, 0x88`; target's `addi r31, r28, 0x40` + `addi r3, r31,
         // 0x8` is the same address.
         //
-        // NEGATIVE RESULT on the r31 hoist itself: naming the upcast so the
-        // base is materialised once -- either `RndTransformable *t = mesh;` or
-        // `RndTransformable &t = *mesh;` -- REGRESSES 84.1 -> 83.2 (158 -> 161
-        // instructions, +3 inserts).  The named upcast makes MSVC keep the
-        // pointer in a frame slot across the XfmOnCircleEdge/Multiply calls
-        // instead of folding it into the two addressing modes.  Both spellings
-        // measured, both identical; lever exhausted, leave the two-row residual.
-        memcpy(&mesh->mLocalXfm, &xfm, sizeof(Transform));
-        if (!mesh->mDirty) {
-            mesh->SetDirty_Force();
-        }
+        // w13-a: it is the inline SetLocalXfm() -- its `this` is the
+        // RndTransformable base the image hoists into r31 (memcpy to r31+0x8,
+        // then SetDirty() on r31).  98.5 -> 100 (modulo register permutation).
+        mesh->SetLocalXfm(xfm);
     }
 
     xPos += state.mSize * advance;

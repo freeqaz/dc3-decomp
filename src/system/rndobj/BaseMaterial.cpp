@@ -238,6 +238,11 @@ const DataNode *BaseMaterial::GetDefaultPropVal(Symbol s) {
     return node;
 }
 
+// RESIDUAL (w13-a, 98.82 canonical, 2 rows): the assert's re-test of the
+// gDefaultMat load is `cmplwi cr6` in the image and `cmplwi` (cr0) here.
+// Inert: moving the MILO_ASSERT inside the `if (!base)` arm.  A ternary
+// `base ? base : gDefaultMat` gets the cr6 compare but un-threads the first
+// branch (86.6).
 bool BaseMaterial::PropValDifferent(Symbol s, BaseMaterial *base) {
     if (!base) {
         base = gDefaultMat;

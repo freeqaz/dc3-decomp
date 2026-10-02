@@ -18,7 +18,24 @@ public:
         unsigned short v0;
         unsigned short v1;
         unsigned short midpoint;
-        bool operator<(const Edge &) const;
+        // Inline (COMDAT) on purpose -- see the note in rndobj/Utl.cpp.
+        bool operator<(const Edge &e) const {
+            unsigned short aMax = v1, aMin = v0;
+            unsigned int a;
+            if (aMin < aMax) {
+                a = ((unsigned int)aMin << 16) | aMax;
+            } else {
+                a = ((unsigned int)aMax << 16) | aMin;
+            }
+            unsigned short bMax = e.v1, bMin = e.v0;
+            unsigned int b;
+            if (bMin < bMax) {
+                b = ((unsigned int)bMin << 16) | bMax;
+            } else {
+                b = ((unsigned int)bMax << 16) | bMin;
+            }
+            return a < b;
+        }
     };
 
     static void BlendVert(const RndMesh::Vert &, const RndMesh::Vert &, RndMesh::Vert &);

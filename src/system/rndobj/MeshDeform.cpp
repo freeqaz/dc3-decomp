@@ -157,10 +157,15 @@ void RndMeshDeform::Print() {
     for (; it < mVerts.end(); ++it, ++i) {
         TheDebug << "weights" << i << ": ";
         unsigned char *cData = (unsigned char *)it.Data();
-        unsigned char *w = cData;
+        // w13-a (98.8 -> 100): indexed, weight read first.  The image walks
+        // one pointer from cData-1 in steps of 2 and takes the update-form
+        // `lbzu` on the BONE byte (the last load of the iteration) with the
+        // weight as a plain `lbz 0x3` off the old pointer; reading bone then
+        // weight puts the lbzu on the weight instead, and the two `*++w`
+        // walk was two lbzu by 1.
         for (int j = 0; j < *cData; j++) {
-            unsigned char bone = *++w;
-            float weight = *++w * 0.003921568859368563f;
+            float weight = cData[j * 2 + 2] * 0.003921568859368563f;
+            unsigned char bone = cData[j * 2 + 1];
             TheDebug << "(" << bone << " " << weight << ") ";
         }
         TheDebug << "\n";

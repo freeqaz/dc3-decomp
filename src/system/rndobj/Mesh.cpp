@@ -1463,7 +1463,7 @@ void RndMesh::DeleteBones(bool findRoot) {
         return;
 
     std::vector<RndTransformable *> boneTransforms;
-    boneTransforms.insert(boneTransforms.begin(), bones.size(), NULL);
+    boneTransforms.resize(bones.size());
     for (unsigned int i = 0; i < boneTransforms.size(); i++) {
         boneTransforms[i] = bones[i].mBone;
     }

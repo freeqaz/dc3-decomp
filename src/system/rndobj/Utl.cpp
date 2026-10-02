@@ -2327,36 +2327,13 @@ const char *ResourceFileCacheHelper::CacheFile(const char *cc) {
     return CacheResource(cc, (const Hmx::Object *)0);
 }
 
-// FLOOR 89.613 canonical / 86.226 fuzzy for the _M_find<Edge> row (124 B) that
-// this operator is the callee of (w8-h).  Every one of its 18 diff_arg rows is
-// the same substitution: the image holds the tree node pointers in CALLEE-SAVED
-// r28-r31 and brackets the body with `bl __savegprlr_28` / `b __restgprlr_28`
-// (2 more rows, and a 0x80 vs 0x60 frame); we keep them in VOLATILE r5-r8
-// across both `bl ??MEdge` and inline the prologue.  Volatiles surviving a call
-// is MSVC's same-TU callee register-usage propagation: it only does that when
-// the callee's register usage is already known, i.e. when this definition has
-// been compiled.  MEASURED NEGATIVE (w8-h): moving this definition BELOW
-// TessellateMesh (the only std::set<Edge>::find user in the TU) is byte-inert,
-// 89.613 unchanged -- MSVC's propagation is not source-order sensitive for a
-// template instantiation, so compile order is NOT the discriminator.  The
-// remaining hypothesis is that the image compiled the two in different TUs.
-bool RndAmbientOcclusion::Edge::operator<(const Edge &e) const {
-    unsigned short aMax = v1, aMin = v0;
-    unsigned int a;
-    if (aMin < aMax) {
-        a = ((unsigned int)aMin << 16) | aMax;
-    } else {
-        a = ((unsigned int)aMax << 16) | aMin;
-    }
-    unsigned short bMax = e.v1, bMin = e.v0;
-    unsigned int b;
-    if (bMin < bMax) {
-        b = ((unsigned int)bMin << 16) | bMax;
-    } else {
-        b = ((unsigned int)bMax << 16) | bMin;
-    }
-    return a < b;
-}
+// RndAmbientOcclusion::Edge::operator< is defined INLINE in AmbientOcclusion.h
+// (w13-a).  Its out-of-line copy here is the COMDAT the set<Edge> templates
+// call; being a COMDAT, MSVC does not propagate its register usage into the
+// callers, so _M_find/_M_insert/insert_unique keep the tree pointers in
+// callee-saved registers across `bl ??MEdge` exactly as the image does.  The
+// old out-of-line definition here let the volatiles survive the call (w8-h's
+// 89.6 FLOOR on _M_find).
 
 #include "rndobj\CamAnim.h"
 

@@ -150,9 +150,7 @@ void RndSoftParticleBuffer::DoPost() {
             TheRenderState.SetTextureClamp(kPS_EnvironMap, (RndRenderState::ClampMode)2);
         }
     }
-    while (!mSoftParticleDrawList.empty()) {
-        mSoftParticleDrawList.pop_back();
-    }
+    mSoftParticleDrawList.clear();
 }
 
 void RndSoftParticleBuffer::Queue(RndDrawable *drawable, BaseMaterial::Blend blend) {

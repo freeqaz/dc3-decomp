@@ -69,23 +69,14 @@ void RndScreenMask::DrawShowing() {
     float height = (float)TheRnd.Height();
     RndCam *cam = RndCam::Current();
     RndTex *targetTex = cam->TargetTex();
-    // Residual in the targetTex branch (~5 rows) is a frame-size delta, not a
-    // source shape: the image keeps a SECOND int->float scratch slot here
-    //   build/373307D9/asm/system/rndobj/ScreenMask.s @82712A68
-    //     clrrwi r10, r11, 0          ; we address off r11 directly
-    //     lwa  r9, 0x5c(r10) / std r9, 0x60(r1)    ; height -> slot 0x60
-    //     lwa r10, 0x58(r10) / std r10, 0x50(r1)   ; width  -> slot 0x50
-    //     lfd f0, 0x50 / fcfid / frsp f31          ; width
-    //     lfd f13, 0x60 / fcfid / frsp f30         ; height
-    // i.e. both ints are stored before either is converted, so 0x50 cannot be
-    // reused and the frame is 0xd0 instead of our 0xc0.  We store/convert/
-    // store/convert through 0x50 twice.  Swapping the two assignments to
-    // `height` then `width` DOES move the first lwa to 0x5c and kills the
-    // OFFSET_SWAP, but it flips the conversion order too (new frsp f31<->f30
-    // swaps) and the row count goes 54 -> 64, raw 97.0 -> 96.8.  Refuted.
+    // w13-a (97.8 -> 100 modulo register permutation): inside the branch
+    // the image re-reads the texture through cam->TargetTex() for each
+    // dimension (82712A68 `clrrwi r10, r11, 0` is that re-read pointer); with
+    // both reads off the accessor, both ints are stored before either is
+    // converted (slots 0x60 and 0x50), which is the image's 0xd0 frame.
     if ((int)targetTex) {
-        width = (float)targetTex->Width();
-        height = (float)targetTex->Height();
+        width = (float)cam->TargetTex()->Width();
+        height = (float)cam->TargetTex()->Height();
     }
 
     if (!mUseCamRect && (int)targetTex) {
