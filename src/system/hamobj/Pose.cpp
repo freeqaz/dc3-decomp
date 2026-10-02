@@ -31,15 +31,11 @@ void Pose::Update(const Skeleton &skeleton) {
 }
 
 float Pose::CurrentScore() const {
-    float minVal = 1.0f;
     float sum = 0.0f;
-    // RESIDUAL (w7-al, 87.5 canonical): the image enters this loop with a bare
-    // `b` to the bottom test (0x...  `b 0x9dc`), i.e. unrotated; MSVC rotates it
-    // for us and pays a guard -- `mr r9, r10` / `cmplw cr6, r10, r11` / `beq` --
-    // which is the whole insert cluster, and the copy into r9 is what repaints
-    // the FPR/GPR ranking below.  Byte-inert here: writing the loop as a `for`
-    // with an empty increment clause, and hoisting the iterator's declaration
-    // above minVal/sum.
+    float minVal = 1.0f;
+    // w11-a: 96.7 -> 100.  sum is declared before minVal (that fixes the
+    // r8/r9 pair the two constant loads land in), and case 1 returns a
+    // separate `score` local -- see there.
     std::list<float>::const_iterator it = unk10.begin();
     while (it != unk10.end()) {
         float val = *it;
@@ -62,12 +58,16 @@ float Pose::CurrentScore() const {
         // hand lets MSVC CSE the two begin() loads and costs the extra `mr`.
         unsigned int count = unk10.size();
         // ONE return, not an early `return 0.0f`: the image's short-count arm is
-        // `fmr f0, f31` (minVal = 0.0f) falling into the shared `fmr f1, f0`
-        // / `b` epilogue at 0x82528EE0-0x82528EE4.
+        // `fmr f0, f31` (score = 0.0f) falling into the shared `fmr f1, f0`
+        // / `b` epilogue at 0x82528EE0-0x82528EE4.  Assigning minVal itself let
+        // MSVC keep minVal in f1 and tail-merge this arm into the default's
+        // `fmr f1, f31`; the separate local keeps the loop's min in f0, which
+        // is also what fixes the f0/f1/f12/f13 assignment of the whole loop.
+        float score = minVal;
         if (count < (unsigned int)unk18) {
-            minVal = 0.0f;
+            score = 0.0f;
         }
-        return minVal;
+        return score;
     }
     default:
         MILO_FAIL("Bad Pose ScoreMode!");
