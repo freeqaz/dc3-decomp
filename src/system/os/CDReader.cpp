@@ -89,8 +89,11 @@ int CDRead(int arkFile, int offset, int size, void *buffer) {
         DiskErrorLoop();
         return 1;
     } else {
-        if (ArkFilesInit()) {
-            return 1;
+        // The image returns ArkFilesInit()'s own result (0x82602B8C `bne` lands on
+        // the epilogue with r3 untouched); it only ever returns 0 or 1. (w19-x)
+        int initErr = ArkFilesInit();
+        if (initErr) {
+            return initErr;
         }
         u64 pos = (u64)offset << 0xB;
         gOverlapped.OffsetHigh = pos >> 0x20;
