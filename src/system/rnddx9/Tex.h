@@ -59,7 +59,20 @@ protected:
     D3DSurface *mDepthRT; // 0x8c
     int mMovieBufIdx;
     D3DTexture *mMovieTextures[2];
-    D3DLOCKED_RECT mLockedRect; // 0x9c
+    // A D3DLOCKED_RECT that clears itself as two pointer-sized words in a
+    // 2-iteration loop: both the ctor (at mLockedRect's init-list position) and
+    // UnlockBitmap leave that loop's dead `addi rN, this, 0x9c` base pointer in
+    // the image (0x82613844, and UnlockBitmap's tail), which no field-by-field
+    // or memset spelling produces (w12-c).  Pointer-sized so the two words
+    // still cover {Pitch, pBits} on an LP64 native build.
+    struct LockedRect : public D3DLOCKED_RECT {
+        LockedRect() { Clear(); }
+        void Clear() {
+            for (int i = 0; i < 2; i++) {
+                ((void **)this)[i] = nullptr;
+            }
+        }
+    } mLockedRect; // 0x9c
     D3DSurface *unka4; // 0xa4
     int unka8;
     bool unkac;
