@@ -360,18 +360,11 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
     float scaledR = color.red * intensity;
     float scaledG = color.green * intensity;
     float scaledB = color.blue * intensity;
-    // Known residual, 4 rows, all one decision: the image loads green (0x1b4)
-    // into f11 and blue (0x1b8) into f10, we do the reverse, and the two
-    // fctiwz conversions then swap their 0x50/0x58 scratch slots to match.
-    // The multiply sequence itself is already right (rows 14-24 equal), so this
-    // is purely which of the G/B chains the scheduler starts first.
-    // Refuted here, both byte-inert (4 rows, identical list, 99.981 each time):
-    //   * writing the packing expression least-significant-first (R | G<<8 |
-    //     B<<16) instead of B<<16 | G<<8 | R
-    //   * swapping the scaledB / scaledG declarations
-
-    uint packedColor = ((int)(scaledB * 255.0f) & 0xff) << 16
-        | ((int)(scaledG * 255.0f) & 0xff) << 8 | ((int)(scaledR * 255.0f) & 0xff);
+    // w13-c: packing through a Hmx::Color temporary's Pack() (same expression,
+    // alpha unused) is what makes the image load green before blue and gives
+    // the two fctiwz scratch slots the image's order; the hand-written packing
+    // expression (in either bit order) left a 4-row G/B load/slot swap at 99.981.
+    uint packedColor = Hmx::Color(scaledR, scaledG, scaledB).Pack();
 
     unsigned char byteR = packedColor;
     unsigned char byteG = packedColor >> 8;
