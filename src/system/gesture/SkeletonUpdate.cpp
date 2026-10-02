@@ -401,36 +401,34 @@ void SkeletonUpdate::UpdateCallbacks() {
 
     if (unk538c > 0) {
         UpdateFakeArmPos();
-        int i = 0;
-        int revBit = 1;
-        SkeletonData *sd2 = &mSkeletonFrame.mSkeletonDatas[0];
-        do {
+        // w19-c (96.69 -> 98.89): a plain index loop (MSVC derives the old
+        // hand-kept `revBit = 1 - i` counter itself, byte-identical), and the
+        // offset built as a zero Vector3 BEFORE the side select with x
+        // assigned after it: that is what lets the image store offset.y/.z
+        // (0x74/0x78) ahead of the select.  Writing a hand-stepped
+        // `j++, skel++` loop below as an index loop is worse (97.79).
+        for (int i = 0; i < NUM_SKELETONS; i++) {
+            SkeletonData &sd2 = mSkeletonFrame.mSkeletonDatas[i];
             if (((1 << i) & unk538c) != 0) {
                 float spacing = lbl_82F0BECC;
                 float halfSpacing = spacing * 0.5f;
+                Vector3 offset(0.0f, 0.0f, 0.0f);
                 int side;
                 if (i >= 2 || !mSwapSides) {
                     side = i;
                 } else {
-                    side = revBit;
+                    side = 1 - i;
                 }
-                // RESIDUAL (w12-d, 96.7): the image stores offset.y/.z (0x74/0x78)
-                // BEFORE the side select; we store them after. Inert: the
-                // select folded into the ctor argument as a ternary, and
-                // `offset(halfSpacing, 0, 0); offset.x -= side * spacing`.
-                Vector3 offset(halfSpacing - (float)side * spacing, 0.0f, 0.0f);
-                StubCameraInput::StubSkeletonData(*sd2, offset);
-                sd2->mTrackingID = i + 1;
+                offset.x = halfSpacing - (float)side * spacing;
+                StubCameraInput::StubSkeletonData(sd2, offset);
+                sd2.mTrackingID = i + 1;
                 if (i == unk5394) {
-                    InsertFakeArmPos(*sd2);
+                    InsertFakeArmPos(sd2);
                 }
             } else {
-                sd2->mTracking = kSkeletonNotTracked;
+                sd2.mTracking = kSkeletonNotTracked;
             }
-            revBit--;
-            i++;
-            sd2++;
-        } while (revBit > -5);
+        }
     }
 
 
@@ -464,6 +462,9 @@ void SkeletonUpdate::UpdateCallbacks() {
     data.mSkeletonsLeft = &mSkeletonsLeft[0];
     data.mSkeletonsRight = (Skeleton **)&mSkeletonsRight[0];
     data.mFrame = &mSkeletonFrame;
+    // w19-c: the image stores mHistory (0x8c) before mCameraInput (0x90); we
+    // store them the other way round.  Inert: swapping these two statements,
+    // and aggregate-initialising `data`.
     data.mHistory = this;
     data.mCameraInput = mCameraInput;
     FOREACH (it, mCallbacks) {
