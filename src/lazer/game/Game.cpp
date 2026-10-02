@@ -1192,22 +1192,12 @@ DataNode OnCycleAutoplay(DataArray *a) {
         autoplay = sAutoplayStates.back();
     } else {
         int idx = 0;
-        int size = sAutoplayStates.size();
-        for (; (unsigned int)idx < (unsigned int)size; idx++) {
+        for (; idx < sAutoplayStates.size(); idx++) {
             if (sAutoplayStates[idx] == autoplay) {
                 break;
             }
         }
-        if (size == 0) {
-            idx = 0;
-        } else {
-            int mod = (idx + 1) % size;
-            if (mod < 0) {
-                mod += size;
-            }
-            idx = mod;
-        }
-        autoplay = sAutoplayStates[idx];
+        autoplay = sAutoplayStates[Mod(idx + 1, (int)sAutoplayStates.size())];
     }
     player_data->SetAutoplay(autoplay);
     return autoplay;
