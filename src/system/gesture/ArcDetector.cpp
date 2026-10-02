@@ -247,6 +247,11 @@ float ArcDetector::GetSwipeAmount() const {
     float threshold = mSwipeThreshold * 0.3f;
     float adjustedThreshold = (float)mHoverTimer / (float)sDefaultHoverTimer * (mSwipeThreshold - threshold) + threshold;
     float exponent = _swipeRetentionFactor + 1.0f;
+    // RESIDUAL (w12-d, canonical 100 modulo register permutation): `powered`
+    // lives in f2 in the image and f3 here across the GetPathError() call.
+    // MSVC picks a volatile FPR the same-TU callee does not touch, so this row
+    // follows GetPathError's own register use (that function is 93.5), not
+    // anything in this body.
     float powered = (float)pow((double)GetPathLength(), (double)exponent);
     float pathErr = GetPathError();
     float swipeAmt = (powered - (pathErr / _acceptablePathErrorRatio)) / adjustedThreshold;
@@ -256,7 +261,9 @@ float ArcDetector::GetSwipeAmount() const {
     }
     if (!mJointPath.empty()) {
         Vector3 front = mJointPath.front();
-        Vector3 second = mJointPath.back();
+        // rbegin(), not back(): the image forms the last node from the list
+        // head it just compared against (`lwz r11, 0x4(r11)`).
+        Vector3 second = *mJointPath.rbegin();
         Vector3 dir(front.x - second.x, front.y - second.y, front.z - second.z);
         Normalize(dir, dir);
         Vector3 boneDir(unk40.z, 0.0f, unk40.x);
