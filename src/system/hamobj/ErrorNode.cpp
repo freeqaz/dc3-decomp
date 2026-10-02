@@ -256,7 +256,10 @@ bool BaseDisplacementNode::Displacements(
     ham1Data.unk1c = 0.0f;
     if (Displacements(frame_input, dispData)) {
         const Vector3 &jointDisp = dispData.mJointDisplacement;
-        float jdLen = Length(jointDisp);
+        float jdSq = jointDisp.z * jointDisp.z;
+        jdSq += jointDisp.x * jointDisp.x;
+        jdSq += jointDisp.y * jointDisp.y;
+        float jdLen = std::sqrt(jdSq);
         ham1Data.unk1c = jdLen;
         Vector3 n;
         if (0.0f < jdLen) {
@@ -274,7 +277,10 @@ bool BaseDisplacementNode::Displacements(
         float nx = n.x, ny = n.y, nz = n.z;
         ham1Data.unk14 = (dot > 0.0f);
         const Vector3 &baseDisp = dispData.mBaseJointDisplacement;
-        float bjdLen = Length(baseDisp);
+        float bjdSq = baseDisp.y * baseDisp.y;
+        bjdSq += baseDisp.z * baseDisp.z;
+        bjdSq += baseDisp.x * baseDisp.x;
+        float bjdLen = std::sqrt(bjdSq);
         ham1Data.unk0 = bjdLen;
         float bnx, bny, bnz;
         if (0.0f < bjdLen) {
@@ -287,7 +293,9 @@ bool BaseDisplacementNode::Displacements(
             bny = 0.0f;
             bnz = 0.0f;
         }
-        float cosAngle = bnz * nz + bny * ny + bnx * nx;
+        float cosAngle = bny * ny;
+        cosAngle += bnz * nz;
+        cosAngle += bnx * nx;
         float clamped = -1.0f - cosAngle < 0.0f ? cosAngle : -1.0f;
         clamped = clamped - 1.0f < 0.0f ? clamped : 1.0f;
         ham1Data.unk18 = fabsf(acosf(clamped));
