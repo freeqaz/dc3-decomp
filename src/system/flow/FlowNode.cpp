@@ -96,30 +96,19 @@ BEGIN_COPYS(FlowNode)
     END_COPYING_MEMBERS
 END_COPYS
 
+// w16-d: file-scope INIT_REVS + ASSERT_REVS (the image's lbl_820250D8 is the
+// 8-byte gRev/gAltRev pair) replaces a function-local gRevs[4] array; that
+// fixed the alt-version MakeString argument order (3 rows). Stopped at 99.5
+// with ONE row left: the image stores r29 (&mDrivenPropEntries) to the dead
+// home slot 0x60 just before `bl reserve`. Tried (inert): a named
+// `ObjVector<DrivenPropertyEntry> &entries` reference for clear/reserve/push_back.
+INIT_REVS(2, 0)
+
 void FlowNode::Load(BinStream &bs) {
     int revs;
     bs >> revs;
     BinStreamRev d(bs, revs);
-
-    static const unsigned short gRevs[4] = { 2, 0, 0, 0 };
-    if (d.rev > 2) {
-        MILO_FAIL(
-            "%s can't load new %s version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.rev,
-            gRevs[0]
-        );
-    }
-    if (d.altRev > 0) {
-        MILO_FAIL(
-            "%s can't load new %s alt version %d > %d",
-            PathName(this),
-            ClassName(),
-            d.altRev,
-            gRevs[2]
-        );
-    }
+    ASSERT_REVS(2, 0)
 
     if (!dynamic_cast<Flow *>(this)) {
         Hmx::Object::Load(d.stream);
