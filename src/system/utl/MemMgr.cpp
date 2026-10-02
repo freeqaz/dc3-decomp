@@ -64,8 +64,8 @@ CriticalSection *gMemLock;
 // gNewOperatorAlign / gStlAllocNameLookup / gMemLock / gMemStackLock /
 // gUseLowestMipExceptions run.
 bool gStlAllocNameLookup;
-int gNewOperatorAlign;
-int gNumHeaps;
+static int gNewOperatorAlign;
+static int gNumHeaps;
 // The target's gThreadIds is not in this TU's .bss at all -- ThreadMemStack
 // references it as an undefined external, resolved to 0x82F18920, an
 // initialised int[32] whose first word is -1. That is the same array
@@ -151,7 +151,7 @@ static bool gInitted; // +0xbd1
 // gate the tiny-heap fast path. So it is the flag that says "gHeaps[gNumHeaps-1]
 // is the tiny heap and is ready to serve small allocations".
 static bool gTinyHeapReady; // +0xbd0
-MemHeap gHeaps[MAX_HEAPS]; // +0x950 (8-aligned)
+static MemHeap gHeaps[MAX_HEAPS]; // +0x950 (8-aligned)
 // +0x94c. gHeaps is 8-aligned so a four-byte hole opens up behind gSingleHeap,
 // and it has to be an int that fills it. MSVC's .bss packer will otherwise
 // drop a byte-sized global in here -- it picked gInitted -- which leaves
