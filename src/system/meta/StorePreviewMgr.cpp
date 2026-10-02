@@ -128,10 +128,7 @@ BEGIN_HANDLERS(StorePreviewMgr)
 HANDLE_ACTION(clear_current_preview, ClearCurrentPreview())
 HANDLE_ACTION(set_current_preview_file, SetCurrentPreviewFile(_msg->Str(2), nullptr))
 HANDLE_ACTION(set_current_preview_movie, SetCurrentPreviewFile(_msg->Str(2), _msg->Obj<TexMovie>(3)))
-// w16-d (99.990, 3 rows): the image builds this handler's String temp at
-// r31+0x68 where every other String temp here (and ours) is at 0x58. An
-// explicit `String(_msg->Str(2))` temp is worse (99.3).
-HANDLE_ACTION(download_preview_file, AddToDownloadQueue(_msg->Str(2)))
+HANDLE_ACTION(download_preview_file, DownloadPreviewFile(_msg->Str(2)))
 HANDLE_EXPR(is_downloading_file, IsDownloadingFile(_msg->Str(2)))
 HANDLE_EXPR(allow_preview_download, AllowPreviewDownload(_msg->Str(2)))
 HANDLE_EXPR(is_playing, IsPlaying())
@@ -178,26 +175,10 @@ void StorePreviewMgr::Poll() {
         mDownloadQueue.pop_front();
     }
 }
-// w8-j 2026-09-15 -- FLOOR for three rows in this TU, all ONE phenomenon:
-// MSVC coalesces an EH-tracked object onto a stack slot the image kept separate.
-// Frame sizes match exactly on both functions, no instruction is inserted or
-// deleted, and every mismatched row is an `addi rN, r31, <slot>`.
-//
-//   ?Handle@StorePreviewMgr@@UAA?AVDataNode@@PAVDataArray@@_N@Z  99.9897%
-//     1164 B, 288 of 291 equal.  Three rows, all the temporary String built for
-//     HANDLE_ACTION(download_preview_file, AddToDownloadQueue(_msg->Str(2))):
-//     image 0x68, ours 0x58.  The image puts the OTHER THREE String temps of
-//     this dispatch (set_current_preview_file, set_current_preview_movie,
-//     is_downloading_file, allow_preview_download) at 0x58 exactly as we do --
-//     verified directly in build/373307D9/asm/system/meta/StorePreviewMgr.s at
-//     82E1E868, 82E1E8F0, 82E1EA08 and 82E1EA90 -- so this is not a base-offset
-//     shift, it is one temp of four that the image declined to coalesce.
-//
-//   fn_82E1ED0C  99.9%, 40 B -- the EH unwind funclet for exactly that temp
-//     (`addi r3, r31, 0x68` / `bl ??1String@@UAA@XZ`).  It moves if and only if
-//     the Handle row above moves; it is listed in the state-unwind table
-//     lbl_8225AFD0 and carries UNVERIFIABLE_PAIRING (objdiff paired it by masked
-//     byte signature, not by name), so it cannot be adjudicated on its own.
+// w8-j 2026-09-15 -- FLOOR claim for Handle/fn_82E1ED0C REFUTED by w18-d:
+// the download_preview_file handler goes through the inline forwarder
+// DownloadPreviewFile (og-dc3/rb3 name) -- one inline level more gives the
+// image's separate String temp at r31+0x68. Handle and its funclet are 100.
 //
 //   ?PlayCurrentPreview@StorePreviewMgr@@IAAXXZ  99.883%, 412 B, 91 of 103
 //     equal.  Every one of the 12 rows is a uniform -0x8: the image's first
