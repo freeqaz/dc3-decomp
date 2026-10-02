@@ -521,6 +521,12 @@ INIT_REVS(2, 0)
 // It is NOT kAnalyzeJoints: the map puts that in .data (0x82F0E348, same values).
 // Restoring that const and going back to ASSERT_REVS(2, 0) should close this
 // row and retire the `*(&gAltRev - 2)` stand-in; its spelling is still open.
+// w16-b (measured): an unreferenced `const int kJointIndices[20] = {0..19}`
+// in the anonymous namespace is NOT emitted by MSVC, so ASSERT_REVS(2, 0)
+// still anchors on gRev (97.9-shape, 9 rows). The image's table must have had
+// a real (non-address) use, probably in a function /OPT:REF later discarded;
+// restoring it needs that use, not just the definition. Bytes confirmed in the
+// exe: 0x8204CD70 = 0,1,...,19 (int), 0x8204CDC0 gRev = 2, 0x8204CDC4 gAltRev = 0.
 BEGIN_LOADS(RhythmDetector)
     LOAD_REVS(bs)
     if (d.rev > 2) {
