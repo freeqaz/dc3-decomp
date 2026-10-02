@@ -989,6 +989,7 @@ static SIZE_T sMinPhysFree = (SIZE_T)-1;
 void MemPrintOverview(int heapId, char *const buf) {
     char *p = buf;
     if ((int)-2 == heapId || heapId == -3) {
+        const char *physName = "physical";
         MEMORYSTATUS status;
         GlobalMemoryStatus(&status);
         if (sMinPhysFree >= status.dwAvailPhys) {
@@ -1009,7 +1010,7 @@ void MemPrintOverview(int heapId, char *const buf) {
         int usageKB = usage / 1024;
         const char *str = MakeString(
             " [%5s] KB free:%7u(%7u) usage:%5i\n",
-            (const char *)"physical", availKB, minFreeKB, usageKB
+            physName, availKB, minFreeKB, usageKB
         );
         strcpy(p, str);
         auto _tmp0 = strlen(p);
