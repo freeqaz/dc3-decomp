@@ -1872,8 +1872,14 @@ void HamDirector::UpdatePostProcOverlay(
     if (!ppOverlay->Showing())
         return;
     TextStream *reflect = TheDebug.SetReflect(ppOverlay);
-    if (procA == sPostProcA && procB == sPostProcB && blend == sPostProcBlend)
+    // BUG FIX (w19-x): the unchanged early-out still RESTORES the reflect --
+    // 0x82467D1C `beq cr6` on the blend compare lands on the `stw r25, 0x18(r31)`
+    // that puts the old TextStream back.  Returning straight out left every
+    // later TheDebug print redirected into the postproc overlay.
+    if (procA == sPostProcA && procB == sPostProcB && blend == sPostProcBlend) {
+        TheDebug.SetReflect(reflect);
         return;
+    }
     static int sHamDirID = 0;
     sHamDirID++;
     int displayId = sHamDirID % 100;
@@ -1893,8 +1899,8 @@ void HamDirector::UpdatePostProcOverlay(
         "           PostProc set by %s, blend is %.2f%%\n", source ? source : "", blend * 100.0f
     );
     sPostProcBlend = blend;
-    sPostProcB = procB;
     sPostProcA = procA;
+    sPostProcB = procB;
     TheDebug.SetReflect(reflect);
 }
 
