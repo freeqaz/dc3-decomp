@@ -368,6 +368,9 @@ unsigned int HolmesClientPollJoypad() {
     return ret;
 }
 
+// RESIDUAL (w12-d, 98.28): the image calls the deleting destructor with NO
+// null test (`cmplwi cr6, r30, 0` / `beq` are ours only). Measured INERT:
+// binding the stream as `TextFileStream &log = *new ...` and `delete &log`.
 DataNode DumpHolmesLog(DataArray *) {
     TextFileStream *log = new TextFileStream("holmes.csv", true);
     FileStream &fs = log->File();
