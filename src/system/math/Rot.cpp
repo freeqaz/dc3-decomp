@@ -113,6 +113,10 @@ void MakeEuler(const Hmx::Matrix3 &m, Vector3 &v) {
     }
 }
 
+// w17-c (99.776, 31 of 49 rows, all load order / FPR colouring): an explicit
+// Cross in any of its 6 statement orders x 7 Dot spellings is 4x WORSE
+// (1121 vs 281 probe diff); dot-before-length, Dot(m.z, cross), `!(d > 0)`,
+// a ternary, and assigning v.x/y/z directly are inert or worse.
 void MakeScale(const Hmx::Matrix3 &m, Vector3 &v) {
     Vector3 cross;
     Cross(m.x, m.y, cross);

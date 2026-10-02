@@ -394,6 +394,10 @@ void DxRnd::InitRenderState() {
     SetupGamma();
 }
 
+// w17-c (99.965, 4 rows: the image converts red before alpha in the
+// inlined MakeColor, we alpha before red; DrawString has the same rows):
+// inlining the pack by hand in any term order and all 24 term orders of
+// MakeColor itself in rnddx9/Rnd.h are byte-inert.
 void DxRnd::BeginTiling(const Hmx::Color &c, float f, unsigned int ui) {
     if (mNumTiles == 0) {
         D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(c), f, ui, 0);
@@ -1043,6 +1047,10 @@ void DxRnd::CreatePostTextures() {
     mPostProcessTex->SetDeviceTex(mPostProcessBuffer);
 }
 
+// w17-c: the device-load-first rows here (and in BeginDrawing) are NOT the
+// XDK's C++ member wrapper: giving D3DDevice an inline
+// SetDepthStencilSurface member and calling mD3DDevice->SetDepthStencilSurface
+// leaves the two rows and adds five more.
 void DxRnd::EndDrawing() {
     EndWorld();
     if (mShowSafeArea) {

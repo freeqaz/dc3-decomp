@@ -169,6 +169,11 @@ void ClosestPoint(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3, Vecto
     Add(v1, diff21, *vout);
 }
 
+// w17-c (99.887, 21 of 53 rows: the two Subtracts' load order and the cross
+// store order y,z,x): a non-PCH probe sweep of all 72 explicit per-component
+// Subtract orders (either difference first) x 6 explicit cross statement
+// orders found nothing under 154/5300 against 161 for this spelling; the
+// cross statement order is fully inert.
 void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
     Vector3 diff31, diff21, cross;
     Subtract(v3, v1, diff31);
@@ -1085,6 +1090,9 @@ void BSPFace::Set(const Vector3 &p1, const Vector3 &p2, const Vector3 &p3) {
     Update();
 }
 
+// w17-c (99.966): in the area loop all 64 operand orders of the six products
+// are inert; reassociating the three terms reaches a lower diff but changes
+// the image's (t1 + t2) + t3 float association, so it was not taken.
 void BSPFace::Update() {
     MILO_ASSERT(p.points.size() > 2, 0x6c2);
 
