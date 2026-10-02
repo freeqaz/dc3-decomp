@@ -407,9 +407,7 @@ void Rnd::PreInit() {
 
 void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
     char *dstEnd = dst + dstSize - 2;
-    const char *srcEnd = src;
-    while ('\0' != *srcEnd)
-        srcEnd++;
+    const char *srcEnd = src + strlen(src);
     while (true) {
         const char *lastSrcSpace = nullptr;
         char *lastSpace = nullptr;
@@ -418,8 +416,8 @@ void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
             if (src >= srcEnd || dst >= dstEnd || *src == '\n')
                 break;
             if (*src == ' ') {
-                lastSpace = dst;
                 lastSrcSpace = src;
+                lastSpace = dst;
             }
             *dst = *src;
             col++;
@@ -436,8 +434,8 @@ void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
                 wrapDst = dst;
                 src = src - 1;
             } else {
-                wrapDst = lastSpace;
                 src = lastSrcSpace;
+                wrapDst = lastSpace;
             }
         }
         src = src + 1;
@@ -599,11 +597,19 @@ void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
             flare->SetOcclusionResult(1.0f);
 #else
             PointTest pt = { 0, 0, 0, 0 };
-            std::list<PointTest>::iterator it = mPointTests.insert(mPointTests.end(), pt);
-            it->mFlare = flare;
-            it->x = (int)((float)mWidth * screen.x);
-            it->y = (int)((float)mHeight * screen.y);
-            it->z = cam->ProjectZ(depth);
+            mPointTests.push_back(pt);
+            PointTest &back = mPointTests.back();
+            back.mFlare = flare;
+            back.x = (int)((float)mWidth * screen.x);
+            back.y = (int)((float)mHeight * screen.y);
+            back.z = cam->ProjectZ(depth);
+            // BEHAVIOURAL FIX (w12-a): a queued point test is NOT marked
+            // occlusion-ready here -- the image's success path branches
+            // `b .L_826688FC` (0x826688E8) straight to the epilogue, past the
+            // `stb r11, 0x148(r27)` at 0x826688F8 that only the two
+            // SetVisible(false) arms reach.  Readiness comes later, from the
+            // point-test results.
+            return;
 #endif
         } else {
             flare->SetVisible(false);

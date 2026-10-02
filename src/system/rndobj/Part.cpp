@@ -888,29 +888,27 @@ void RndParticleSys::SetPersistentPool(int max, Type ty) {
     mMaxParticles = max;
     mType = ty;
 
-    // Allocate particle pool based on type
+    // Allocate particle pool based on type, chained into a free list.
     if (max != 0) {
+        RndParticle *cur = nullptr;
         if (ty == kFancy) {
             mPersistentParticles = new RndFancyParticle[max];
             RndFancyParticle *fp = (RndFancyParticle *)mPersistentParticles;
-            RndFancyParticle *cur;
-            // Build linked list: each particle points to the next
             for (int i = 0; i != max; i++) {
-                cur = fp++;
+                cur = fp;
+                fp++;
                 cur->next = fp;
             }
-            cur->next = nullptr;
         } else {
             mPersistentParticles = new RndParticle[max];
             RndParticle *p = (RndParticle *)mPersistentParticles;
-            RndParticle *cur;
-            // Build linked list: each particle points to the next
             for (int i = 0; i != max; i++) {
-                cur = p++;
+                cur = p;
+                p++;
                 cur->next = p;
             }
-            cur->next = nullptr;
         }
+        cur->next = nullptr;
     } else {
         mPersistentParticles = nullptr;
     }

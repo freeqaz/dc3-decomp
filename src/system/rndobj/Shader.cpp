@@ -60,37 +60,37 @@ void CheckShadow();
 void CheckExtrude();
 
 void RndShader::Init() {
-    sShaders[kBlurShader] = &gShaderSimple;
     sShaders[kBloomShader] = &gShaderSimple;
+    sShaders[kBlurShader] = &gShaderSimple;
     sShaders[kDepthVolumeShader] = &gShaderDepthVolume;
-    sShaders[kBloomGlareShader] = &gShaderSimple;
-    sShaders[kDrawRectShader] = &gShaderDrawRect;
     sShaders[kDownsampleShader] = &gShaderSimple;
-    sShaders[kDownsampleDepthShader] = &gShaderSimple;
     sShaders[kDownsample4xShader] = &gShaderSimple;
-    sShaders[kMultimeshShader] = &gShaderMultimesh;
-    sShaders[kFurShader] = &gShaderFur;
+    sShaders[kDownsampleDepthShader] = &gShaderSimple;
+    sShaders[kDrawRectShader] = &gShaderDrawRect;
     sShaders[kErrorShader] = &gShaderSimple;
+    sShaders[kFurShader] = &gShaderFur;
     sShaders[kLineNozShader] = &gShaderSimple;
-    sShaders[kMovieShader] = &gShaderSimple;
-    sShaders[kMultimeshBBShader] = &gShaderMultimesh;
     sShaders[kLineShader] = &gShaderSimple;
-    sShaders[kShadowmapShader] = &gShaderSimple;
-    sShaders[kPostprocessErrorShader] = &gShaderSimple;
-    sShaders[kPlayerDepthVisShader] = &gShaderSimple;
+    sShaders[kMovieShader] = &gShaderSimple;
+    sShaders[kMultimeshShader] = &gShaderMultimesh;
+    sShaders[kMultimeshBBShader] = &gShaderMultimesh;
     sShaders[kParticlesShader] = &gShaderParticles;
-    sShaders[kPlayerDepthShellShader] = &gShaderSimple;
-    sShaders[kSyncTrackShader] = &gShaderSyncTrack;
+    sShaders[kPostprocessErrorShader] = &gShaderSimple;
+    sShaders[kPostprocessShader] = &gShaderPostProc;
+    sShaders[kShadowmapShader] = &gShaderSimple;
     sShaders[kStandardShader] = &gShaderStandard;
     sShaders[kStandardBBShader] = &gShaderStandard;
-    sShaders[kPostprocessShader] = &gShaderPostProc;
+    sShaders[kSyncTrackShader] = &gShaderSyncTrack;
+    sShaders[kSyncTrackChargeEffectShader] = &gShaderSyncTrack;
+    sShaders[kUnwrapUVShader] = &gShaderUnwrapUV;
+    sShaders[kVelocityCameraShader] = &gShaderVelocityCamera;
+    sShaders[kVelocityObjectShader] = &gShaderVelocity;
+    sShaders[kPlayerDepthVisShader] = &gShaderSimple;
+    sShaders[kPlayerDepthShellShader] = &gShaderSimple;
+    sShaders[kBloomGlareShader] = &gShaderSimple;
     sShaders[kPlayerDepthShell2Shader] = &gShaderSimple;
     sShaders[kDepthBuffer3DShader] = &gShaderSimple;
     sShaders[kYUVtoRGBShader] = &gShaderSimple;
-    sShaders[kSyncTrackChargeEffectShader] = &gShaderSyncTrack;
-    sShaders[kVelocityCameraShader] = &gShaderVelocityCamera;
-    sShaders[kUnwrapUVShader] = &gShaderUnwrapUV;
-    sShaders[kVelocityObjectShader] = &gShaderVelocity;
     sShaders[kYUVtoBlackAndWhiteShader] = &gShaderSimple;
     sShaders[kPlayerGreenScreenShader] = &gShaderSimple;
     sShaders[kPlayerDepthGreenScreenShader] = &gShaderSimple;
@@ -156,6 +156,10 @@ void RndShader::WarnMatProp(const char *prop, NgMat *mat, NgEnviron *env, Shader
     sMatShadersOK = false;
 }
 
+static inline bool EnvFadesOut(NgEnviron *env) {
+    return env->FadeOut() && env->FadeEnd() != env->FadeStart();
+}
+
 bool RndShader::MatShaderFlagsOK(RndMat *mat, ShaderType s) {
     if (!mat || TheRnd.DefaultEnv() == RndEnviron::Current()
         || TheRnd.DrawMode() == Rnd::kDrawOcclusion) {
@@ -165,15 +169,20 @@ bool RndShader::MatShaderFlagsOK(RndMat *mat, ShaderType s) {
     sMatShadersOK = true;
     RndShader *curShader = sShaders[s];
     bool b1824 = mat->UseEnviron() && RndEnviron::Current()->NumLights_Real() != 0;
-    if (curShader->CheckError((MatFlagErrorType)0) && !mat->FadeOut()) {
-        bool fadeoutCheck = curEnv->FadeOut() && curEnv->FadeEnd() != curEnv->FadeStart();
-        if (fadeoutCheck) {
+    // BEHAVIOURAL FIX (w12-a): both fadeout warnings are gated on CheckError(0).
+    // The image's `beq` after that call (idx 44) jumps past BOTH arms to the
+    // CheckError(1) test; the old `CheckError(0) && !FadeOut() ... else if
+    // (FadeOut())` spelling warned "fadeout unchecked" for shaders that do
+    // not check fadeout at all.
+    // BEHAVIOURAL FIX (w12-a): both fadeout warnings are gated on CheckError(0).
+    // The image's `beq` straight after that call (idx 44) jumps past BOTH arms
+    // to the CheckError(1) test; the old `CheckError(0) && !FadeOut() ... else
+    // if (FadeOut())` spelling warned "fadeout unchecked" for shaders that do
+    // not check fadeout at all.
+    if (curShader->CheckError((MatFlagErrorType)0)) {
+        if (!mat->FadeOut() && EnvFadesOut(curEnv)) {
             WarnMatProp("fadeout checked", (NgMat *)mat, curEnv, s);
-        }
-    } else if (mat->FadeOut()) {
-        bool fadeoutUncheck =
-            curEnv->FadeOut() && curEnv->FadeEnd() != curEnv->FadeStart();
-        if (!fadeoutUncheck) {
+        } else if (mat->FadeOut() && !EnvFadesOut(curEnv)) {
             WarnMatProp("fadeout unchecked", (NgMat *)mat, curEnv, s);
         }
     }
@@ -439,8 +448,9 @@ u64 RndShaderSimple::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
         break;
     }
     opts = (opts & ~((u64)1 << 52)) | ((u64)(TheHiResScreen.IsActive() & 1) << 52);
-    int drawDiff = TheRnd.DrawMode() - Rnd::kDrawOcclusion;
-    return -(u64)(bool)drawDiff & opts;
+    if (TheRnd.DrawMode() == Rnd::kDrawOcclusion)
+        opts = 0;
+    return opts;
 }
 
 u64 RndShaderDrawRect::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
@@ -532,17 +542,12 @@ u64 RndShaderParticles::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
     if (TheRnd.DrawMode() == (Rnd::Mode)7) {
         opts.mSoftDepthBlend = 1;
     }
-    int drawDiff = TheRnd.DrawMode() - Rnd::kDrawOcclusion;
-    // RESIDUAL w7-at, 96.38 canonical.  The last cluster is the 0/-1 mask
-    // idiom.  The image builds it in two instructions straight off the
-    // subtraction -- `subfic r11, r11, 0x0` then `subfe r8, r7, r7`
-    // (0x8269EBA4/0x8269EBB0), never materialising a 0/1 bool.  We
-    // materialise one and widen it: subic/subfe/extsw/neg.  Four spellings
-    // measured, none reached it: `drawDiff != 0 ? opts.flags : (u64)0`
-    // (93.9, becomes a branch), `-(u64)(drawDiff != 0)` (94.2, branch),
-    // a named `u64 drawing = (drawDiff != 0)` (94.2, branch), and swapping
-    // the `&` operands (96.38, byte-identical -- MSVC canonicalises).
-    ShaderOptions result(-(u64)(bool)drawDiff & opts.flags);
+    // The image's subfic/subfe 0/-1 mask (0x8269EBA4/0x8269EBB0) is MSVC
+    // if-converting this zeroing; no spelling of the mask itself reaches it
+    // (w7-at measured four).
+    if (TheRnd.DrawMode() == Rnd::kDrawOcclusion)
+        opts.flags = 0;
+    ShaderOptions result(opts.flags);
     result.mShowShaderCost = TheRnd.ResourceCached();
     result.mHiResScreen = TheHiResScreen.IsActive();
     return result.flags;
