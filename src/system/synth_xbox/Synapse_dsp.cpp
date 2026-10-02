@@ -90,12 +90,8 @@ public:
     unsigned int mDetectionInterval; // 0x14
     unsigned int mSampleCount;       // 0x18
     unsigned char _pad[0x2C - 0x1C];
-#ifdef HX_NATIVE
-    std::vector<GranularVoice> mVoices; // 0x2C
-#else
-    stlpmtx_std::vector<GranularVoice, stlpmtx_std::StlNodeAlloc<GranularVoice> > mVoices; // 0x2C
-    unsigned char _pad2[0x44 - 0x38]; // pad to match sizeof = 0x44
-#endif
+    GranularVoice *mVoices;          // 0x2C
+    unsigned char _pad2[0x44 - 0x30]; // pad to match sizeof = 0x44
 };
 
 static const float kBiquadParams[] = { 7902.13f, 0.7071068f, 340.0f };
@@ -258,17 +254,12 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     // the hoisted pre-loop copy of the bound too).
     // w19-e: making the stand-in's `GranularVoice *mVoices` a vector (as the
     // real GranularSynth.h VoiceVec is) closes row 332 here (image `stfsx f31,
-    // r10, r9`, index first) but drops ProcessInPlace 100 -> 98.79: there the
-    // image evaluates GetCorrection() BEFORE loading gs->mVoices (82E4... the
-    // `lwz 0x2c` sits after the bl), which the raw pointer gives and inline
+    // r10, r9`, index first; still 99.995 on rows 333-335, the in-loop bound
+    // reload reads _M_start before _M_finish at 82E4755C/60) but drops
+    // ProcessInPlace 100 -> 98.79: there the image evaluates GetCorrection()
+    // BEFORE loading gs->mVoices, which the raw pointer gives and inline
     // operator[] does not; hoisting the call into a local was 98.1.  Reverted.
-    // w19-e: the local GranularSynth stand-in above declared mVoices as a raw
-    // `GranularVoice *`; the real class (GranularSynth.h) holds a VoiceVec.
-    // Making it a vector closes row 332 (image `stfsx f31, r10, r9`: index
-    // first, as operator[] emits).  Still 99.995 canonical: rows 333-335, the
-    // in-loop bound reload reads _M_start before _M_finish (82E4755C/60)
-    // while the pre-loop copy (82E4752C/34) reads _M_finish first.
-    for (unsigned int j = 0; j < mVoices.size(); j++) {
+    for (unsigned int j = 0; j < (unsigned int)((int)mVoices.size()); j++) {
         mGranularSynth->mVoices[j].mField_0x00 = 0.0f;
     }
 
