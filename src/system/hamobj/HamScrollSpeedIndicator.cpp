@@ -91,16 +91,14 @@ void HamScrollSpeedIndicator::Update(float scrollSpeed, float minSpeed, float ma
     float halfRange = (endFrame - startFrame) * 0.5f;
     float frame;
     if (scrollSpeed < 0.1f || scrollSpeed > 0.9f) {
-        float threshold = mSlowScrollThresholdFrame;
-        float range = halfRange - threshold;
         if (scrollSpeed > 0.5f) {
             float pct = (scrollSpeed - 0.9f) / (maxSpeed + 1.0f - 0.9f);
             pct = -pct;
-            frame = pct * range - threshold;
+            frame = pct * (halfRange - mSlowScrollThresholdFrame) - mSlowScrollThresholdFrame;
         } else {
             float pct = (scrollSpeed - 0.1f) / (minSpeed + 0.1f);
             pct = -pct;
-            frame = pct * range + threshold;
+            frame = pct * (halfRange - mSlowScrollThresholdFrame) + mSlowScrollThresholdFrame;
         }
     } else {
         float t = (scrollSpeed - 0.1f) * 1.25f;
