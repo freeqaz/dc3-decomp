@@ -242,10 +242,16 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         // The same helper as below, but through `this` (8242C804 `addi r10, r25,
         // 0xacc`), so the inlined search falls through to 8242C824 `li r11, -0x1`.
         // Open-coding the loop with `idx = i; break;` emits a branch there instead.
+        // w19-c (99.0 -> 100 modulo register permutation): name the full
+        // object once.  PostUpdate is entered through the SkeletonCallback
+        // subobject (this+0x2c); the image materialises `subi r29, r25, 0x2c`
+        // at the TOP of this block (before the inlined search), where calling
+        // GetSkeleton through `this` sinks it to the call.
+        GestureMgr *self = this;
         int idx = GetSkeletonIndexByTrackingID(mActiveSkelTrackingID);
         if (idx < 0) {
             for (int i = 0; i < 6; i++) {
-                Skeleton &skel = GetSkeleton(i);
+                Skeleton &skel = self->GetSkeleton(i);
                 if (skel.IsTracked()) {
                     mActiveSkelTrackingID = skel.TrackingID();
                     break;
