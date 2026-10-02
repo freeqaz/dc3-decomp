@@ -8,6 +8,10 @@
 #include "xdk\xapilibi\xbox.h"
 #include <cstdio>
 #include <cstring>
+// Retail __FILE__ for this TU is "..\..\..\system\src\os\Memory_Xbox.cpp"
+// (??_C@_0CH@IBIDAHHO, the only file string in the target object): it was
+// compiled from a directory three levels below the tree root.
+#line 15 "..\\..\\..\\system\\src\\os\\Memory_Xbox.cpp"
 
 extern "C" {
     void *XMemAllocDefault(unsigned long size, unsigned long attrs);
