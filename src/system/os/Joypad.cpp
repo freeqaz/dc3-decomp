@@ -199,6 +199,7 @@ namespace {
         }
     }
 
+    // w15-i2: map `f i`, but `inline` here is inert for JoypadPollCommon.
     void Export(const Message &msg) {
         if (gExportMsgs) {
             gJoypadMsgSource->Handle(msg, false);

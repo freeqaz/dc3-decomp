@@ -600,6 +600,10 @@ void PanelDir::SendTransition(Message const &msg, Symbol forward, Symbol back) {
     RndDir::Handle(dirMsg, false);
 }
 
+// w15-i2 (96.739, 4 rows): the image homes mFocusComponent to frame slot
+// 0x50 (`stw r4, 0x50(r31)`, never read) before entering the loop, and
+// shares the `li r3,0` epilogue with the loop exit.  REFUTED: RB3's
+// `while (comp = ComponentNav(...))` spelling with the same statics (75.33).
 bool PanelDir::PanelNav(JoypadAction act, JoypadButton btn, Symbol controller_type) {
     UIComponent *comp = mFocusComponent;
     if (!comp) {

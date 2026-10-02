@@ -24,6 +24,7 @@ PeakDetector::PeakDetector(const stlpmtx_std::vector<float, stlpmtx_std::StlNode
 
 // Magnitude of sample `i` attenuated by a Gaussian centred on mCenter+mCurWidth.
 // A zero width disables the window entirely and hands back the raw sample.
+// w15-i2: map `f i`, but `inline` here is inert for Detect (97.62).
 float PeakDetector::gaussianWindow(unsigned int i) const {
     if (mCurWidth == 0.0f) {
         return mInput->begin()[i];

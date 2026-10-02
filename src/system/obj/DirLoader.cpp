@@ -170,6 +170,7 @@ int DirLoader::ClassAndNameSort::ClassIndex(Hmx::Object *obj) {
     return cfg->Size();
 }
 
+// w15-i2: map `f i`, but `inline` here is inert for SaveObjects (99.487).
 void WriteDeadAndMark(BinStream &bs) {
     bs << (unsigned char)0xAD << (unsigned char)0xDE << (unsigned char)0xAD
        << (unsigned char)0xDE;
