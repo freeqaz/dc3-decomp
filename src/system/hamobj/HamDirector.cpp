@@ -357,6 +357,12 @@ BEGIN_COPYS(HamDirector)
     END_COPYING_MEMBERS
 END_COPYS
 
+// w15-r: the image's .rdata for this TU is [1.6f @0x8203A028, gRev, gAltRev];
+// Poll loads the 1.6 from that named slot (`lfs f0, lbl_8203A028@l` at
+// 0x824791D8).  With gRev off offset 0 MSVC anchors Load's ASSERT_REVS pair on
+// gAltRev like the image.
+const float kFreestyleVisualizerDelay = 1.6f;
+
 INIT_REVS(9, 0)
 
 BEGIN_LOADS(HamDirector)
@@ -3707,7 +3713,7 @@ void HamDirector::Poll() {
             // `fadds f13, f1, f0` at 0x824791B4 -- the call result is the LEFT
             // operand, so the accumulation is not spelled `+=`.
             mFreestyleTimer = TheTaskMgr.DeltaSeconds() + mFreestyleTimer;
-            if (mFreestyleTimer > 1.6f) {
+            if (mFreestyleTimer > kFreestyleVisualizerDelay) {
                 StartStopVisualizer();
             }
         }
