@@ -80,8 +80,7 @@ void WorldInstance::SavePersistentObjects(BinStream &bs) {
                 objects.push_back(it);
             }
         }
-        DirLoader::ClassAndNameSort sorter;
-        objects.sort(sorter);
+        objects.sort(DirLoader::ClassAndNameSort());
         bs << objects.size();
         FOREACH_CONST_POST (it, objects) {
             bs << (*it)->ClassName() << (*it)->Name();
