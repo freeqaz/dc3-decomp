@@ -224,7 +224,7 @@ bool Skeleton::Displacements(
         if (it->unk0 == i4) {
             memcpy(disps, it->unk8, sizeof(it->unk8));
             iref = it->unk4;
-            return 0 < (unsigned int)(iref + 1);
+            return it->unk4 + 1 != 0;
         }
     }
 
