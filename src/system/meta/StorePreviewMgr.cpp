@@ -80,6 +80,11 @@ bool StorePreviewMgr::AllowPreviewDownload(String const &str) {
         return std::find(mDownloadQueue.begin(), mDownloadQueue.end(), str) == mDownloadQueue.end();
 }
 
+// w16-d (99.883, 12 offset rows): the image keeps the IsLocalFile argument's
+// home slot (stw r4, 0x50) apart from `str`, giving str/fp/fp 0x58/0x60/0x68
+// where we pack str onto 0x50. Inert: the positive `!empty() && IsLocalFile()`
+// form with the String block first. A named `const char *file` drops the 0x50
+// store entirely (98.9).
 void StorePreviewMgr::PlayCurrentPreview() {
     MILO_ASSERT(mStreamPlayer, 0xd8);
     if (mCurrentPreviewFile.empty() || !TheNetCacheMgr->IsLocalFile(mCurrentPreviewFile.c_str())) {
@@ -123,6 +128,9 @@ BEGIN_HANDLERS(StorePreviewMgr)
 HANDLE_ACTION(clear_current_preview, ClearCurrentPreview())
 HANDLE_ACTION(set_current_preview_file, SetCurrentPreviewFile(_msg->Str(2), nullptr))
 HANDLE_ACTION(set_current_preview_movie, SetCurrentPreviewFile(_msg->Str(2), _msg->Obj<TexMovie>(3)))
+// w16-d (99.990, 3 rows): the image builds this handler's String temp at
+// r31+0x68 where every other String temp here (and ours) is at 0x58. An
+// explicit `String(_msg->Str(2))` temp is worse (99.3).
 HANDLE_ACTION(download_preview_file, AddToDownloadQueue(_msg->Str(2)))
 HANDLE_EXPR(is_downloading_file, IsDownloadingFile(_msg->Str(2)))
 HANDLE_EXPR(allow_preview_download, AllowPreviewDownload(_msg->Str(2)))
