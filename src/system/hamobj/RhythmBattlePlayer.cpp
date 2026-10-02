@@ -223,13 +223,15 @@ void RhythmBattlePlayer::Poll() {
             mFreshnessAccumulator += mFreshnessScore * f17;
             mMovePresenceAccumulator += f13 * f17;
             mWindowElapsedTime += f17;
-            // Residual row [261] is `fmr f1, f0`: the image loads
-            // mMaxRhythmInWindow straight into f1 (SetRatingFrac's first
-            // argument register) and conditionally overwrites it with 1.0f,
-            // where we compute into f0 and copy.  Giving this its own name and
-            // feeding the call directly is BYTE-IDENTICAL -- the copy is a
-            // register-allocation choice, not a spelling.
-            float ratingFrac = mMaxRhythmInWindow > 1.0f ? 1.0f : mMaxRhythmInWindow;
+            // The image loads mMaxRhythmInWindow straight into f1
+            // (SetRatingFrac's first argument) and conditionally overwrites it
+            // with 1.0f: a load-then-clamp statement pair, not a ternary (the
+            // ternary computes into f0 and adds an `fmr f1, f0`). Same result
+            // for NaN either way (NaN > 1.0f is false).
+            float ratingFrac = mMaxRhythmInWindow;
+            if (ratingFrac > 1.0f) {
+                ratingFrac = 1.0f;
+            }
             // BEHAVIOURAL FIX 2026-09-14 (w7-q): this used to read
             //     4.0f - mWindowElapsedTime - f17
             // which subtracts the frame delta TWICE -- `mWindowElapsedTime`
@@ -255,7 +257,7 @@ void RhythmBattlePlayer::Poll() {
                     if (!mActive) {
                         i7 = -1;
                     }
-                    if (i7 != 1) {
+                    if (i7 != mInTheZone) {
                         AnimateBoxyState(i7, true, false);
                     }
                 }

@@ -80,32 +80,21 @@ bool ClipPlayer::Init(int x) { return Init(TheHamDirector->SongAnim(x)); }
 bool ClipPlayer::CanUseRestStep() {
     // In non-edit mode (or when transitions are enabled), check if the out clip
     // is compatible with rest steps. Rest steps require a 3-beat clip with no flag 0x4.
-    // NOTE (w7-av): 97.14.  The residual is the bool materialisation: the image
-    // converges every true path on `li r11, 0x1` and masks once with
-    // `clrlwi r3, r11, 24`, i.e. the whole body is ONE returned short-circuit
-    // expression, which is
-    //   (TheLoadMgr.EditMode() && TheHamDirector->NoTransitions()) || !clip
-    //       || (ClipLength(clip) == 3 && !(clip->Flags() & 4))
-    // -- written that way with a `CharClip *clip = mOutClip;` local it closes
-    // the mask rows exactly and leaves only ONE difference, the position of
-    // `lwz r31, 0x2c(r3)`: the image loads mOutClip at the `beq` target, after
-    // the EditMode test, while the local hoists it into the prologue.  That
-    // insert/delete pair costs more on the canonical ruler than the three mask
-    // rows (94.29 vs 97.14), so the if-form is kept.  Also refuted: `return 0`/
-    // `return 1` instead of false/true (97.14, identical rows); a `bool ret`
-    // flag (82.16); `return !(clip && ...)` inside the if (94.05); an early
-    // `if (Edit && NoTrans) return true;` (94.05) -- MSVC will not tail-merge
-    // that `li r3, 1` with the expression's true path; and inlining mOutClip
-    // into the expression instead of a local (94.32, it then reloads 0x4c).
-    if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
-        CharClip *clip = mOutClip;
-        if (clip && (ClipLength(clip) != 3 || clip->Flags() & 4)) {
-            return false;
-        }
-    }
-    return true;
+    // The body is ONE returned short-circuit expression (the image converges
+    // every true path on `li r11, 1` + a single `clrlwi`). mOutClip is assigned
+    // INSIDE the expression so its load stays after the EditMode test, where
+    // the image has it; a `CharClip *clip = mOutClip;` initialiser hoists it
+    // into the prologue (w7-av measured that at 94.29).
+    CharClip *clip;
+    return (TheLoadMgr.EditMode() && TheHamDirector->NoTransitions())
+        || !(clip = mOutClip) || (ClipLength(clip) == 3 && !(clip->Flags() & 4));
 }
 
+// RESIDUAL (w12-d, 98.73): one insert/delete pair -- in the second
+// EditMode/NoTransitions test the image loads TheHamDirector (`lwz r10`)
+// BEFORE `lbz r11, 0xc(r27)`; we emit the lbz first. Measured INERT: a
+// `bool editMode` local hoisted above `f31 = mPracticeEnd`, a hoisted
+// `HamDirector *director` local, and `!(EditMode() && NoTransitions())`.
 DataNode ClipPlayer::AnnotatePractice() {
     bool cont = mPracticeEnd != kHugeFloat;
     if (!cont) {
@@ -143,56 +132,44 @@ DataNode ClipPlayer::AnnotatePractice() {
 
 DataNode ClipPlayer::AnnotateClip(float frame) {
     int idx = mClipKeys->KeyLessEq(frame);
-    if (idx < 0) goto fail;
-    {
+    DataArray *arr = nullptr;
+    if (idx >= 0) {
         Key<Symbol> &key = mClipKeys->at(idx);
-        DataArray *arr;
-        const char *name;
-        float annotBeat;
-
         if (mClipKeys == mMasterClipKeys) {
             const char *nextName = "";
-            auto _tmp0 = mClipKeys->size();
-            if ((unsigned int)(idx + 1) < _tmp0) {
+            if ((unsigned int)(idx + 1) < mClipKeys->size()) {
                 nextName = mClipKeys->at(idx + 1).value.Str();
             }
-            name = key.value.Str();
-            float clipBeat = FrameToBeat(key.frame);
+            const char *name = key.value.Str();
             float outStart, outEnd, outNextStart;
-            if (!GetClipRange(name, nextName, clipBeat, outStart, outEnd, outNextStart))
-                goto fail;
-            arr = new DataArray(0);
-            Annotate(arr, outStart, "start");
-            Annotate(arr, outEnd, "end");
-            if (outNextStart != kHugeFloat) {
-                name = "blend";
-                annotBeat = outNextStart;
-                goto do_annotate;
+            if (GetClipRange(
+                    name, nextName, FrameToBeat(key.frame), outStart, outEnd, outNextStart
+                )) {
+                arr = new DataArray(0);
+                Annotate(arr, outStart, "start");
+                Annotate(arr, outEnd, "end");
+                if (outNextStart != kHugeFloat) {
+                    Annotate(arr, outNextStart, "blend");
+                }
             }
-        } else {
-            if ((unsigned int)(idx + 1) >= mClipKeys->size())
-                goto fail;
+        } else if ((unsigned int)(idx + 1) < mClipKeys->size()) {
             Key<Symbol> &nextKey = mClipKeys->at(idx + 1);
             CharClip *transClip = GetTransitionBefore(&nextKey);
-            if (!transClip) goto fail;
-            arr = new DataArray(0);
-            float transLen = ClipLength(transClip);
-            name = transClip->Name();
-            annotBeat = FrameToBeat(nextKey.frame) - transLen + 1.0f;
-        do_annotate:
-            Annotate(arr, annotBeat, name);
+            if (transClip) {
+                arr = new DataArray(0);
+                float transLen = ClipLength(transClip);
+                Annotate(
+                    arr, FrameToBeat(nextKey.frame) - transLen + 1.0f, transClip->Name()
+                );
+            }
         }
-        // `new DataArray(0)` goes through PoolAlloc, which can return null; the
-        // image tests it here (825 1EF08 `cmplwi cr6, r29, 0x0` / `bne`) and
-        // joins the shared `return 0` block, which is what sinks that block past
-        // the Annotate call.
-        if (!arr) goto fail;
-        DataNode node(arr, kDataArray);
-        arr->Release();
-        return node;
     }
-fail:
-    return 0;
+    if (!arr) {
+        return 0;
+    }
+    DataNode node(arr, kDataArray);
+    arr->Release();
+    return node;
 }
 
 void ClipPlayer::PlayAnims(HamCharacter *c, float f1, float f2, int x) {
@@ -294,13 +271,16 @@ CharClip *ClipPlayer::GetPrevRoutineTransition(int idx) {
             beat += 1.0f;
         }
 
+        // The transition is looked up from the SECOND crossover clip (the
+        // 4th argument): the image passes &slot54 as r6 and &slot50 as r7 and
+        // then reads slot50 back (`lwz r11, 0x50(r1)` before `lwz r4, 0x20`).
         CharClip *c2 = nullptr;
         CharClip *c1 = nullptr;
 #ifdef HX_NATIVE
-        if (!GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c1, &c2))
+        if (!GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c2, &c1))
             return nullptr;
 #else
-        GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c1, &c2);
+        GetRoutineCrossoverClips(beat, prevKey->value.Str(), &c2, &c1);
 #endif
 
         return GetRoutineTransition(c1->Name(), curKey);

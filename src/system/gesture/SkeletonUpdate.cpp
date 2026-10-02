@@ -387,8 +387,11 @@ void SkeletonUpdate::UpdateCallbacks() {
                     if (tracked > 0)
                         offset.x = negHalf;
                     StubCameraInput::StubSkeletonData(sd[i], offset);
-                    tracked++;
                 }
+                // The count advances on EVERY slot, tracked or not: the image's
+                // `bne cr6, .L_8242DCD0` for a tracked slot lands ON the
+                // `addi r29, r29, 0x1` (0x8242DCD0), not past it.
+                tracked++;
                 if (tracked == 2 || tracked == unk5388) {
                     break;
                 }
@@ -411,6 +414,10 @@ void SkeletonUpdate::UpdateCallbacks() {
                 } else {
                     side = revBit;
                 }
+                // RESIDUAL (w12-d, 96.7): the image stores offset.y/.z (0x74/0x78)
+                // BEFORE the side select; we store them after. Inert: the
+                // select folded into the ctor argument as a ternary, and
+                // `offset(halfSpacing, 0, 0); offset.x -= side * spacing`.
                 Vector3 offset(halfSpacing - (float)side * spacing, 0.0f, 0.0f);
                 StubCameraInput::StubSkeletonData(*sd2, offset);
                 sd2->mTrackingID = i + 1;
@@ -524,6 +531,8 @@ void SkeletonUpdate::PostUpdate() {
     // Refuted: transposing the source order of the mFrame and mCameraInput
     // assignments here is byte-inert (2 rows before and after), so the store
     // schedule is not derived from the order these lines are written in.
+    // Also refuted (w12-d): an aggregate `= { ... }` initialiser, and
+    // assigning mCameraInput first -- both byte-inert.
     SkeletonUpdateData updateData;
     updateData.mSkeletonsLeft = &mSkeletonsLeft[0];
     updateData.mSkeletonsRight = &mSkeletonsRight[0];

@@ -235,6 +235,8 @@ float ArcDetector::GetPathError() const {
         // Also charged under name_check: the image loads sZErrorScale as
         // `lbl_82F446F8`, a .data float (value 2.0f, verified) that dtk
         // attributes to the StandingStillGestureFilter TU, not this one.
+        // Also inert (w12-d, same 19 rows): a zero-initialised
+        // `Vector3 err(0, 0, 0)` with .y/.z assigned and LengthSquared(err).
         error = errZ * errZ + (errY * errY + dz * dz) + error;
         ++it;
     } while (it != pathEnd);
@@ -245,29 +247,31 @@ float ArcDetector::GetSwipeAmount() const {
     float threshold = mSwipeThreshold * 0.3f;
     float adjustedThreshold = (float)mHoverTimer / (float)sDefaultHoverTimer * (mSwipeThreshold - threshold) + threshold;
     float exponent = _swipeRetentionFactor + 1.0f;
+    // RESIDUAL (w12-d, canonical 100 modulo register permutation): `powered`
+    // lives in f2 in the image and f3 here across the GetPathError() call.
+    // MSVC picks a volatile FPR the same-TU callee does not touch, so this row
+    // follows GetPathError's own register use (that function is 93.5), not
+    // anything in this body.
     float powered = (float)pow((double)GetPathLength(), (double)exponent);
     float pathErr = GetPathError();
     float swipeAmt = (powered - (pathErr / _acceptablePathErrorRatio)) / adjustedThreshold;
 
-    std::list<Vector3>::const_iterator it = mJointPath.begin();
-    unsigned int count = 0;
-    if (it != mJointPath.end()) {
-        do {
-            ++it;
-            count++;
-        } while (it != mJointPath.end());
-    }
-    if (count <= 2) {
+    if (mJointPath.size() <= 2) {
         swipeAmt = 0.5f - swipeAmt >= 0.0f ? swipeAmt : 0.5f;
     }
-    if (mJointPath.begin() != mJointPath.end()) {
+    if (!mJointPath.empty()) {
         Vector3 front = mJointPath.front();
-        Vector3 second = mJointPath.back();
+        // rbegin(), not back(): the image forms the last node from the list
+        // head it just compared against (`lwz r11, 0x4(r11)`).
+        Vector3 second = *mJointPath.rbegin();
         Vector3 dir(front.x - second.x, front.y - second.y, front.z - second.z);
         Normalize(dir, dir);
         Vector3 boneDir(unk40.z, 0.0f, unk40.x);
         Normalize(boneDir, boneDir);
-        if (fabsf(boneDir.y * dir.y + boneDir.z * dir.z + boneDir.x * dir.x) < 0.2f) {
+        float dot = dir.z * boneDir.z;
+        dot += dir.y * boneDir.y;
+        dot += dir.x * boneDir.x;
+        if (fabsf(dot) < 0.2f) {
             swipeAmt = 0.9f - swipeAmt >= 0.0f ? swipeAmt : 0.9f;
         }
     }
@@ -304,15 +308,14 @@ bool ArcDetector::IsPathAcceptable() const {
     }
     if (!IsLockedIn()) {
         Vector3 front = jointPath.front();
-        const Vector3 &back = jointPath.back();
         float sign = (float)(mSide != 0 ? 1 : -1);
-        float diffX = front.x - back.x;
-        // front-first: the image has a single `fsubs f12, f9, f12`
-        // (front.y - back.y). Spelled `-(back.y - front.y)` MSVC emits the
-        // subtraction the other way round plus an `fneg`.
-        float dy = front.y - back.y;
-        float diffZ = front.z - back.z;
-        float dx = sign * diffX;
+        // All three components are formed up front (the image computes
+        // front.z - back.z before the first early-out), i.e. one Subtract.
+        Vector3 diff;
+        Subtract(front, jointPath.back(), diff);
+        float dy = diff.y;
+        float diffZ = diff.z;
+        float dx = sign * diff.x;
         if (dx < 0.0f) {
             return false;
         }
@@ -410,6 +413,9 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             // byte-identical to `*mJointPath.begin()`; hoisting `distY * distY`
             // into its own local is byte-identical too.  Neither touches the
             // r11 liveness that drives cluster (1).
+            // Also tried (w12-d): the sum as accumulator statements seeded with
+            // distZ*distZ (moves the loads, 97.5) or distY*distY (byte-identical
+            // to the expression) -- neither reproduces the image's fmuls-y-first.
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
                 mJointPath.insert(mJointPath.begin(), boneVec);
             }

@@ -176,8 +176,11 @@ void Ham1EuclideanNode::CalcError(
     float diffZ = dancerVec.z - baseVec.z;
     Vector3 vToProcess;
     for (int i = 0; i < 3; i++) {
-        float set = Max(mComponentWeightRanges[i][0], node_input.mNodeComponentWeight[i]);
-        vToProcess[i] = Min(set, mComponentWeightRanges[i][1]);
+        vToProcess[i] = Clamp(
+            mComponentWeightRanges[i][0],
+            mComponentWeightRanges[i][1],
+            node_input.mNodeComponentWeight[i]
+        );
     }
     ScaleOp op;
     op.mPerfectDist = node_input.mNodeWeight->mPerfectDist;
@@ -238,6 +241,13 @@ bool BaseDisplacementNode::Displacements(
     return false;
 }
 
+// The sums below are written as accumulator statements on purpose: /fp:fast
+// reassociates a one-expression sum per call site, and the statement form pins
+// the association the target uses (docs/decomp/patterns/fixable-fsel-fma.md).
+// RESIDUAL (w12-d, canonical 100 modulo register permutation): 7 fmuls rows
+// carry swapped commutative operands (e.g. target `fmuls f9, f0, f12` for
+// inv*y). Flipping the source operand order of every one of them was measured
+// INERT -- MSVC canonicalises the operand order itself.
 bool BaseDisplacementNode::Displacements(
     const ErrorFrameInput &frame_input,
     DisplacementData &dispData,
@@ -253,28 +263,33 @@ bool BaseDisplacementNode::Displacements(
     ham1Data.unk1c = 0.0f;
     if (Displacements(frame_input, dispData)) {
         const Vector3 &jointDisp = dispData.mJointDisplacement;
-        float jdLen = Length(jointDisp);
+        float jdSq = jointDisp.z * jointDisp.z;
+        jdSq += jointDisp.x * jointDisp.x;
+        jdSq += jointDisp.y * jointDisp.y;
+        float jdLen = std::sqrt(jdSq);
         ham1Data.unk1c = jdLen;
-        float nx, ny, nz;
+        Vector3 n;
         if (0.0f < jdLen) {
             float inv = 1.0f / jdLen;
-            nx = jointDisp.x * inv;
-            ny = inv * jointDisp.y;
-            nz = jointDisp.z * inv;
+            n.x = jointDisp.x * inv;
+            n.y = inv * jointDisp.y;
+            n.z = jointDisp.z * inv;
         } else {
-            nx = 0.0f;
-            ny = 0.0f;
-            nz = 0.0f;
+            n.x = 0.0f;
+            n.y = 0.0f;
+            n.z = 0.0f;
         }
-        float dot = nx * dispData.mBaseJointDisplacement.x
-            + ny * dispData.mBaseJointDisplacement.y
-            + nz * dispData.mBaseJointDisplacement.z;
-        proj.x = nx * dot;
-        proj.y = ny * dot;
-        proj.z = nz * dot;
-        ham1Data.unk14 = (dot > 0.0f);
         const Vector3 &baseDisp = dispData.mBaseJointDisplacement;
-        float bjdLen = Length(baseDisp);
+        float dot = n.y * baseDisp.y;
+        dot += n.x * baseDisp.x;
+        dot += n.z * baseDisp.z;
+        Scale(n, dot, proj);
+        float nx = n.x, ny = n.y, nz = n.z;
+        ham1Data.unk14 = (dot > 0.0f);
+        float bjdSq = baseDisp.y * baseDisp.y;
+        bjdSq += baseDisp.z * baseDisp.z;
+        bjdSq += baseDisp.x * baseDisp.x;
+        float bjdLen = std::sqrt(bjdSq);
         ham1Data.unk0 = bjdLen;
         float bnx, bny, bnz;
         if (0.0f < bjdLen) {
@@ -287,7 +302,9 @@ bool BaseDisplacementNode::Displacements(
             bny = 0.0f;
             bnz = 0.0f;
         }
-        float cosAngle = bnz * nz + bny * ny + bnx * nx;
+        float cosAngle = bny * ny;
+        cosAngle += bnz * nz;
+        cosAngle += bnx * nx;
         float clamped = -1.0f - cosAngle < 0.0f ? cosAngle : -1.0f;
         clamped = clamped - 1.0f < 0.0f ? clamped : 1.0f;
         ham1Data.unk18 = fabsf(acosf(clamped));
@@ -365,7 +382,7 @@ void Ham1DisplacementNode::Errors(
     op.mRate = node_input.mNodeWeight->mRate2;
     float projLen = Length(ham1Data.unk4);
     errData.unk4 = ScaleDistToError(mPotentialAngleOp, ham1Data.unk0);
-    errData.unk4 = errData.unk4 - 1.0f < 0.0f ? errData.unk4 : 1.0f;
+    MinEq(errData.unk4, 1.0f);
     errData.unk8 = ScaleDistToError(op, angle);
     float ratio = 1.0f;
     if (0.0f < ham1Data.unk1c) {
@@ -400,7 +417,14 @@ void PositionNode::CalcError(
     float base_bone_len;
     Vector3 scaledBaseDiff;
 
-    // RESIDUAL (w7-ak, 99.98 canonical): all 14 rows come from ONE thing --
+    // FIXED (w12-d): the w7-ak residual below was the r10/r11 assignment of
+    // the two joint indices; binding the mJointPositions refs before the
+    // Subtract statements puts mJoint in r11 as the image has it. What is left
+    // (canonical 100 modulo register permutation) is two commutative operand
+    // orders in the inlined Scale (`fmuls f13, f30, f0` vs ours `f0, f30`).
+    // NEGATIVE RESULT: `scaledBaseDiff = baseJointDiff; scaledBaseDiff *= s;`
+    // drops it to 75.4 (spills baseJointDiff instead of holding it in f28-f30).
+    // Historical w7-ak note: all 14 rows came from ONE thing --
     // which of the two joint indices lands in r11 and which in r10.  The image
     // loads mJoint (0xc) into r11 and mBaseJoint (0x1c) into r10; we load them
     // the other way round, and every other row follows: the six `lfs` register
@@ -410,16 +434,14 @@ void PositionNode::CalcError(
     // This is NOT the "wrong field" the resolved-offset block reports.
     // NEGATIVE RESULT: reordering these two Subtract statements to match the
     // emission order (jointDiff first) makes it WORSE, 14 rows -> 15.
+    const Vector3 &jointPos = frame_input.mJointPositions[mJoint];
+    const Vector3 &baseJointPos = frame_input.mJointPositions[mBaseJoint];
     Subtract(
         frame_input.mBaseJointPositions[mJoint],
         frame_input.mBaseJointPositions[mBaseJoint],
         baseJointDiff
     );
-    Subtract(
-        frame_input.mJointPositions[mJoint],
-        frame_input.mJointPositions[mBaseJoint],
-        jointDiff
-    );
+    Subtract(jointPos, baseJointPos, jointDiff);
     NormBoneLengths(frame_input, mNormBones, desired_bone_len, base_bone_len);
     MILO_ASSERT(desired_bone_len > 0, 0x22C);
 

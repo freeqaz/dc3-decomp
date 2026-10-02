@@ -368,6 +368,9 @@ unsigned int HolmesClientPollJoypad() {
     return ret;
 }
 
+// RESIDUAL (w12-d, 98.28): the image calls the deleting destructor with NO
+// null test (`cmplwi cr6, r30, 0` / `beq` are ours only). Measured INERT:
+// binding the stream as `TextFileStream &log = *new ...` and `delete &log`.
 DataNode DumpHolmesLog(DataArray *) {
     TextFileStream *log = new TextFileStream("holmes.csv", true);
     FileStream &fs = log->File();
@@ -655,19 +658,16 @@ bool HolmesClientOpen(const char *filename, int mode, unsigned int &fileSize, in
         // lowers `<< val`, so the declarations have to precede that statement
         // in the source.  The extraction is UNSIGNED -- `extrwi`, not the
         // `srawi`+mask an `int` shift produces.
-        // RESIDUAL (w7-ar, 96.08 canonical): 22 of 146 rows, and 16 of them are one
-        // callee-saved pair. The image keeps `mode` in r29 and the
-        // gStreamBuffer@ha anchor in r30 (`lis r30, ...` at 0x825F1E3C); we
-        // allocate them the other way round. The remaining rows are the
-        // `li r5, 0x1` / `addi r4, r31, 0x50` pair, which the image schedules
-        // BEFORE the four extrwi (0x825F1E44/0x825F1E48) and we schedule after.
-        // No instruction, operand or branch differs beyond those two facts.
+        // FIXED (w12-d): the w7-ar r29/r30 residual came from chaining
+        // `<< val << filename`; the image reloads gStreamBuffer for the
+        // filename, i.e. two statements.
         unsigned int umode = mode;
         unsigned char isWriteMode = (umode >> 1) & 1;
         unsigned char writeFlag = (umode >> 8) & 1;
         unsigned char createFlag = (umode >> 9) & 1;
         unsigned char truncFlag = (umode >> 0x12) & 1;
-        *gStreamBuffer << val << filename;
+        *gStreamBuffer << val;
+        *gStreamBuffer << filename;
         // Chained, not two statements: the image gives each flag its own byte
         // slot (0x50, 0x51, ...), which only happens while both operator<<
         // reference arguments are alive inside one full expression.
@@ -803,10 +803,7 @@ void HolmesClientEnumerate(
     BeginCmd(Holmes::kEnumerate, true);
 
     *gStreamBuffer << u8(Holmes::kEnumerate);
-    BinStream &bs = *gStreamBuffer << path;
-    bs << u8(recurse);
-    BinStream &bs2 = bs << ext;
-    bs2 << u8(dirs);
+    *gStreamBuffer << path << recurse << ext << dirs;
     HolmesFlushStreamBuffer();
 
     std::vector<RecurseInfo> entries;
@@ -893,7 +890,8 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     // than we do -- and the operator== argument setup (`addi r4, r11, 0x4` /
     // `addi r3, r31, 0x58`, 0x825F259C/0x825F25A0) three slots earlier, straddling
     // the writeTime `std` instead of following it. Refuted: declaring writeTime
-    // before fileExists (inert, same 6 rows).
+    // before fileExists (inert, same 6 rows). Also refuted (w12-d): a typed
+    // WIN32_FILE_ATTRIBUTE_DATA with `*(s64 *)&fileInfo.ftLastWriteTime` (inert).
     bool fileExists = (attrResult - 1) != (-1);
     s64 writeTime = *(s64 *)(fileInfo + 0x14);
     // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.

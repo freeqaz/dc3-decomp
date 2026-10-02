@@ -441,9 +441,8 @@ RhythmDetector::Frame BlendFrameDataToBeat(
 
     for (int i = 0; i < kSize; i++) {
         for (int j = 0; j < 3; j++) {
-            float valB = b.mJointVelocities[i][j];
-            float valA = a.mJointVelocities[i][j];
-            result.mJointVelocities[i][j] = (valB - valA) * blend + valA;
+            result.mJointVelocities[i][j] =
+                Interp(a.mJointVelocities[i][j], b.mJointVelocities[i][j], blend);
         }
     }
     return result;
@@ -759,10 +758,11 @@ void RhythmDetector::AddFrame(BaseSkeleton const &skel) {
 
     if (bestIdx != -1) {
         Frame newFrame;
-        mFrameHistory.insert(mFrameHistory.end(), newFrame);
+        std::list<Frame>::iterator it =
+            mFrameHistory.insert(mFrameHistory.end(), newFrame);
 
         // Trim history to 3 entries
-        std::list<Frame>::iterator it = mFrameHistory.begin();
+        it = mFrameHistory.begin();
         unsigned int count = 0;
         while (it != mFrameHistory.end()) {
             it++;
@@ -780,18 +780,23 @@ void RhythmDetector::AddFrame(BaseSkeleton const &skel) {
             (Vector3 *)localJoints,
             seconds - mTimestamps[bestIdx]
         );
-
-        mLastBeatTime = beat;
-
-        // Copy local joints into circular buffer
-        for (int k = 0; k < kNumJoints; k++) {
-            mJointBuffer[mBufferIndex][k] = localJoints[k];
-        }
-
-        mTimestamps[mBufferIndex] = seconds;
-        mFrameCount += beatDiff;
-        mBufferIndex = (mBufferIndex + 1) % 8;
     }
+
+    // Everything below runs whether or not a frame was set up: the image's
+    // `cmpwi cr6, r28, -1` / `beq cr6, .L_824D5188` at 0x824D50E0/E4 lands on
+    // `stfs f28, 0xaa8(r30)` (0x824D5188, the mLastBeatTime store), not on
+    // the epilogue. Gating it on bestIdx made the ring buffer unfillable from a
+    // cleared state (all timestamps < 0 => bestIdx stays -1 forever).
+    mLastBeatTime = beat;
+
+    // Copy local joints into circular buffer
+    for (int k = 0; k < kNumJoints; k++) {
+        mJointBuffer[mBufferIndex][k] = localJoints[k];
+    }
+
+    mTimestamps[mBufferIndex] = seconds;
+    mFrameCount += beatDiff;
+    mBufferIndex = (mBufferIndex + 1) % 8;
 }
 
 // const RhythmDetector::RecordData &

@@ -181,6 +181,8 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 // target's own offsets (mTracking 0xaa0, mTrackingID 0xaac, unkac4 0xac4), so
 // permuting the list below cannot move these stores.  The reachable question is
 // what sits at 0xac8 and whether the image inlines the head of Init().
+// Refuted (w12-d): assigning the three members in the ctor BODY instead of the
+// init list -- 79.3, the vector is then built first and every store moves.
 Skeleton::Skeleton() : mTracking(kSkeletonNotTracked), mTrackingID(-1), unkac4(0) {
     Init();
 }
@@ -222,7 +224,7 @@ bool Skeleton::Displacements(
         if (it->unk0 == i4) {
             memcpy(disps, it->unk8, sizeof(it->unk8));
             iref = it->unk4;
-            return 0 < (unsigned int)(iref + 1);
+            return it->unk4 + 1 != 0;
         }
     }
 
