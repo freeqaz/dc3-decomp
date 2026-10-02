@@ -1950,8 +1950,12 @@ void HamDirector::HideBackups(bool player0Active, bool player1Active) {
 void HamDirector::LoadCrew(Symbol crew0, Symbol crew1) {
     char buffer[128];
     Symbol symbols[2] = { crew0, crew1 };
-    Symbol mind_control("mind_control");
-    bool isMindControl = mind_control == TheHamProvider->Property("gameplay_mode", true)->Sym();
+    // w13-b: the image builds Symbol("mind_control") FIRST and compares through
+    // the ctor's returned pointer (mr r31, r3 / lwz r9, 0x0(r31)): it is the
+    // operator== ARGUMENT temporary, which MSVC evaluates before the object
+    // expression.  A named local homed it on the stack (99.38 -> 100).
+    bool isMindControl =
+        TheHamProvider->Property("gameplay_mode", true)->Sym() == Symbol("mind_control");
     for (int i = 0; i < 2; i++) {
         HamPlayerData *hpd = TheGameData->Player(i);
         MILO_ASSERT(hpd, 0x98B);
