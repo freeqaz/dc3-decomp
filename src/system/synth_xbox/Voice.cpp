@@ -635,23 +635,17 @@ void Voice::Pause(bool b1) {
     }
 }
 
-// RESIDUAL (w8-r, 97.059, 272 B, 4 of 69 rows).  The image threads the
-// 0.01f literal's `lis`/`lfs` pair through r11 and only then overwrites r11
-// with `addi r11, r1, 0x10bc` (the homed `speed` parameter, above this
-// function's 0x10a0 frame -- the frame is that big because MILO_NOTIFY_ONCE's
-// MakeString buffer forces the `ld r12, -0x1000(r1)` stack probe).  We use r10
-// for the literal and compute the `addi` two instructions earlier, so it is
-// the same four instructions in a different order with one register renamed.
+// w17-e: 97.059 -> 100.  The lower clamp is std::max(0.01f, speed): both
+// operands bound by const reference, which is what homes `speed` at 0x10bc and
+// the literal at 0x50 and selects between their addresses (image 82E38A84
+// `fcmpu f1, f0` / `bgt` keeps &speed only when speed > 0.01f, so a NaN speed
+// takes the 0.01f arm -- the old hand-written `speed <= min ? &min : &speed`
+// kept the NaN).  The w8-r "literal through r11" residual was this.
 void Voice::SetSpeed(float speed) {
-    float min_speed = 0.01f;
-    float *pSpeed = &speed;
-    if (speed <= min_speed)
-        pSpeed = &min_speed;
-    float clamped = *pSpeed;
-    float max_speed = 2.0f;
-    if (clamped > max_speed && mXMA) {
+    float clamped = std::max(0.01f, speed);
+    if (clamped > 2.0f && mXMA) {
         MILO_NOTIFY_ONCE("can't pitch an XMA sound up more than one octave");
-        clamped = max_speed;
+        clamped = 2.0f;
     }
     mSpeed = clamped;
     if (mPoolVoice.sourceVoice != 0) {
