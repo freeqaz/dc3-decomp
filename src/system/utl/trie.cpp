@@ -16,14 +16,8 @@ int Trie::store(const char *str) {
     unsigned int curIdx = 1;
     unsigned int parentIdx = 0;
 
-    // Walk string to compute length
-    const char *p = str;
-    while (true) {
-        unsigned char c = *p;
-        p++;
-        if (c == 0) break;
-    }
-    int strLen = (int)(p - str) - 1;
+    // w14-d: a plain strlen (MSVC's inline lbz/addi/cmplwi walk), 95.28 -> 96.49.
+    int strLen = strlen(str) - 1;
     int i;
 
     // A `for`, not a `do`: the image guards loop entry with `clrrwi. r21, r11, 0`
