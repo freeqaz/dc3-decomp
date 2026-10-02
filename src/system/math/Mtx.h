@@ -478,32 +478,18 @@ void Invert(const Hmx::Matrix4 &, Hmx::Matrix4 &);
 
 bool operator>(const Sphere &, const Frustum &);
 
-// RESIDUAL (w8-i, 95.78 canonical / 92.30612 fuzzy, measured on this header
-// COMDAT as it lands in char/Character.obj): 21 rows of 50, 196 B both sides,
-// and every one of them is allocation or scheduling -- 7 FPR swap pairs led by
-// f10<->f12, r30<->r31 on the two matrix parameters, 3 offset swaps, and 2
-// commutative fmuls operand orders (idx 35, 37).  The single insert/delete pair
-// at idx 18-20 is the same reorder seen head-on: the image has `lfs f8,
-// 0x28(r30)` where we have `lfs f8, 0x18(r31)`, i.e. it reaches the out.z row a
-// load earlier than we do.  Arithmetic and instruction MULTISET are identical.
-// NOT ATTACKED by w8-i deliberately: this is an `inline` in a PCH-reached header
-// shared by the whole binary, so a spelling change here is not lane-local -- it
-// would have to be measured against every unit that instantiates it, not just
-// Character.obj.  Any lane that does take it on should start from the operand
-// order of the two fmuls, which is the cheapest of the three causes.
+// w13-o: written with Cross(), the spelling og-dc3 and rb3-xenon carry. The
+// previous body spelled the two cross products out as `out.x.Set(...)` with
+// the identical expressions, and that alone was 95.78 canonical (the w8-i
+// residual: the image stores out.x z, x, y and we stored z, y, x, with the
+// fmuls operand orders and an FPR permutation following from it). Going
+// through the inline Cross() is 100.0 for this COMDAT (char/Character.obj);
+// whole-binary A/B, full ninja both sides: 1 up, 0 down.
 inline void Normalize(const Hmx::Matrix3 &in, Hmx::Matrix3 &out) {
     Normalize(in.y, out.y);
-    out.x.Set(
-        out.y.y * in.z.z - out.y.z * in.z.y,
-        out.y.z * in.z.x - out.y.x * in.z.z,
-        out.y.x * in.z.y - out.y.y * in.z.x
-    );
+    Cross(out.y, in.z, out.x);
     Normalize(out.x, out.x);
-    out.z.Set(
-        out.y.z * out.x.y - out.y.y * out.x.z,
-        out.y.x * out.x.z - out.y.z * out.x.x,
-        out.y.y * out.x.x - out.y.x * out.x.y
-    );
+    Cross(out.x, out.y, out.z);
 }
 
 // Header inline, not out-of-line in mtx.cpp: the target's only copy of
