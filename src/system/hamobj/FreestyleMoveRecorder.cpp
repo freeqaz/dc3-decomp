@@ -715,7 +715,15 @@ void FreestyleMoveRecorder::CompareDisplacementVectors(
     float n2x = v2.x * invLen2;
     float n2y = v2.y * invLen2;
 
-    float dot = (n2x * n1x + n2y * n1y + n2z * n1z) * 0.87f;
+    // w11-a: accumulated by hand to pin the image's z,x,y association
+    // (the single-expression form lets /fp:fast pick y first).  Residual: 2
+    // commutative operand-order rows, `fmuls f9, f9, f13` (n1y) and
+    // `fmuls f7, f13, f11` (n2z), immune to swapping the source operands of
+    // n1y/n2z, of the dot terms, and to forming n1 with Scale().
+    float dot = n2x * n1x;
+    dot += n2z * n1z;
+    dot += n2y * n1y;
+    dot *= 0.87f;
     float angleDiff = -(dot - 1.0f);
 
     float clamped = (float)__fsel(-angleDiff, zero, angleDiff);
