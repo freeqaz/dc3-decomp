@@ -183,6 +183,24 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 // what sits at 0xac8 and whether the image inlines the head of Init().
 // Refuted (w12-d): assigning the three members in the ctor BODY instead of the
 // init list -- 79.3, the vector is then built first and every store moves.
+// w18-c (89.605 canonical, unchanged): the whole residual is EH, measured.  The
+// image's ctor has an unwind funclet that destroys mCamDisplacements (r31+0x94
+// -> this, +0xac8, ??1vector) and ours has none: MSVC inferred that Init() --
+// the only call after the vector is built -- cannot throw, so it needs no state
+// for the vector.  Probe: adding ANY possibly-throwing call to Init() (an
+// external `Symbol s("x")`) makes this ctor 100.0 with all 38 rows equal, and the
+// funclet appears.  So the image's Init() was NOT provably nothrow when this
+// ctor was compiled, while its code (100.0, calls only memset and the
+// __false_type _M_erase, which calls only memcpy) is identical to ours.  Not the
+// cause, each tested: source order (ctor moved after Poll, as in the image's
+// address order); `inline` Init; /EHs and /EHa on this TU (EHa adds funclets
+// everywhere); `resize(0)` for clear() (Init then builds a CameraDisplacement
+// temp, frame +0x140, 89.8).  Stronger probe: a CONSTANT-FOLDED throwing
+// statement in Init -- `MILO_ASSERT(sizeof(mCamBoneLengths) > 0, ...)`, no code of
+// its own -- also restores the funclet, so MSVC decides throw-ability before
+// folding.  The original Init very likely had such a statement (a folded assert,
+// or an inline call whose throwing arm dies); see DxShader::Compile
+// (rnddx9/ShaderMgr.cpp, w18-c) for one that was found.  Not landed: unknown.
 Skeleton::Skeleton() : mTracking(kSkeletonNotTracked), mTrackingID(-1), unkac4(0) {
     Init();
 }

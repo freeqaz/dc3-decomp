@@ -88,6 +88,22 @@ DxRnd::DxRnd()
     // the residual is the scheduling of the two vectors' EH-frame stores
     // (`stw rX, 0x50(r31)`): the image emits each right after its vector's
     // three zero stores, we defer them; not resolved.
+    // w18-c (70.8, unchanged): measured cause.  The image has unwind funclets
+    // destroying BOTH vectors (mPendingReleases, mPendingDeletes) and ours has
+    // none -- MSVC elides those EH states here because nothing after the
+    // vectors can throw.  Probe: appending one possibly-throwing call (an
+    // external `Symbol s("x")`) to this body gives 93.5 with EVERY remaining row
+    // the probe's own call/frame (+0x10); the store schedule then matches the
+    // image exactly.  So in the original something after the vectors was not
+    // provably nothrow yet emitted no call.  Same shape as Skeleton::Skeleton
+    // (gesture/Skeleton.cpp, w18-c note); cause not found.  Stronger probe: a
+    // statement whose throwing arm CONSTANT-FOLDS away -- e.g. appending
+    // `MILO_ASSERT(sizeof(mFrontBuffers) == 8, ...)` -- gives 100.0, 71/71 rows,
+    // with no code of its own (the EH states survive the folding; this is what
+    // closed DxShader::Compile, whose `new DxShaderBuffer(0)` has a dead
+    // D3DXCreateBuffer/MILO_FAIL arm).  So the original body very likely had such
+    // a statement after the vectors; we do not know which, and an invented
+    // assert is not landed.
     for (int i = 0; i < 2; i++) {
         mFrontBuffers[i] = nullptr;
     }
@@ -615,29 +631,25 @@ void CreateBackBuffers(
     DX_ASSERT(colorSurface, 0x2D4);
 }
 
+// w18-c: 66.78 -> 100, rb3-xenon's shape.  The zero is a function-local static
+// const: the image keeps its page base (`lis r29, __real@00000000`) across the
+// first Resolve and reloads it for both the w lane and the second call's
+// ClearDepth, where a plain literal makes MSVC hold 0.0 in f31 instead.  The w
+// lane is written before the first call (the old note's "dead store" bug fix is
+// kept: the second Resolve reads all four lanes through &vector).
 void DxRnd::SavePreBuffer() {
-    XMVECTOR vector;
+    static const float kZero = 0.0f;
     Hmx::Color c = mClearColor;
+    XMVECTOR vector;
     vector.x = c.red;
     vector.y = c.green;
     vector.z = c.blue;
+    vector.w = kZero;
     D3DDevice_Resolve(
         mD3DDevice, 0x14, nullptr, mFrontBufferDepth, nullptr, 0, 0, nullptr, 1, 0, nullptr
     );
-    // The clear colour handed to the second Resolve is (r, g, b, 0): the image
-    // stores 0.0 into the w lane (`stfs f0, 0x7c(r1)`) before any call.  This
-    // assignment used to sit AFTER the second Resolve, where it was a dead
-    // store and was dropped, so the w lane read through `&vector` was never
-    // written -- on Xbox it happened to hold mClearColor.alpha (the Color copy
-    // shares the slot), on native it is an uninitialised read.
-    //
-    // Placement: written here (66.8% canonical) rather than first or next to
-    // x/y/z (59.4% -- MSVC then holds 0.0 in a callee-saved FPR across the
-    // first call instead of re-anchoring the literal the way the image does).
-    // The baseline, carrying the bug, read 68.7%.
-    vector.w = 0.f;
     D3DDevice_Resolve(
-        mD3DDevice, 0x300, nullptr, mPreProcessBuffer, nullptr, 0, 0, &vector, 0, 0, nullptr
+        mD3DDevice, 0x300, nullptr, mPreProcessBuffer, nullptr, 0, 0, &vector, kZero, 0, nullptr
     );
 }
 
