@@ -44,34 +44,24 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
     TheShaderMgr.SetVConstant((VShaderConstant)kPS_FurGeometry, furGeom);
 
     // Constant 0xc: color interpolation between roots and ends tints
-    float diffRed = (mEndsTint.red - mRootsTint.red);
-    float diffGreen = (mEndsTint.green - mRootsTint.green);
-    float diffBlue = (mEndsTint.blue - mRootsTint.blue);
-    float diffAlpha = (mEndsTint.alpha - mRootsTint.alpha);
-    // Residual (96.86%, 9 rows, 16 B): the image does NOT contract these four
-    // multiply-adds.  It emits four grouped `fmuls fN, fN, f31` and then four
-    // separate `fadds` (827329 7C..A8); we emit four `fmadds fN*f31+roots`.
-    // The same function contracts in TWO other places and the image agrees
-    // there -- `fnmsubs f2, f13, f0, f30` (shellExponent) and
-    // `fmadds f2, f13, f0, f30` (alphaExp) -- so this is per-expression, which
-    // is what docs/decomp/patterns/fixable-fsel-fma.md already records for
-    // NgFur::Shell.
-    // REFUTED: `#pragma fp_contract(off)` bracketing the whole function is
-    // BYTE-INERT here -- identical 96.9%, identical 9 rows, and the two
-    // expressions that SHOULD have de-fused if the pragma were honoured did
-    // not move either.  This Xenon cl silently accepts and ignores the pragma
-    // (no C4068), so the doc's "Category 1: pure OFF" fix does not exist on
-    // this toolchain; only a volatile intermediate (which would add the stack
-    // traffic the image does not have) or a c2.dll patch would separate them.
-    diffRed = diffRed * fShell;
-    diffGreen = diffGreen * fShell;
-    diffBlue = diffBlue * fShell;
-    diffAlpha = diffAlpha * fShell;
+    // The tint delta lives in a Color: the image keeps the four products as
+    // separate fmuls + fadds (no contraction), which is what scaling struct
+    // members gives; four scalar locals get contracted into fmadds.
+    Hmx::Color diff(
+        mEndsTint.red - mRootsTint.red,
+        mEndsTint.green - mRootsTint.green,
+        mEndsTint.blue - mRootsTint.blue,
+        mEndsTint.alpha - mRootsTint.alpha
+    );
+    diff.red *= fShell;
+    diff.green *= fShell;
+    diff.blue *= fShell;
+    diff.alpha *= fShell;
     Vector4 furColor(
-        mRootsTint.red + diffRed,
-        mRootsTint.green + diffGreen,
-        mRootsTint.blue + diffBlue,
-        mRootsTint.alpha + diffAlpha
+        mRootsTint.red + diff.red,
+        mRootsTint.green + diff.green,
+        mRootsTint.blue + diff.blue,
+        mRootsTint.alpha + diff.alpha
     );
     TheShaderMgr.SetPConstant(kPS_FurColor, furColor);
 
