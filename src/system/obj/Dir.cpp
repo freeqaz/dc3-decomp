@@ -1452,6 +1452,8 @@ void ObjectDir::PreLoad(BinStream &bs) {
                 // `x/4 != 0 <=> x & ~3 != 0` peephole instead (`clrrwi.`),
                 // because the count is dead after the branch. Naming the count
                 // keeps it materialised.
+                // w16-d (99.897): the r9/r10 swap on the end/begin loads at
+                // [532-538] survives `intVec.end() - intVec.begin()` (inert).
                 int numFlags = intVec.size();
                 if (numFlags != 0) {
                     b17 = intVec[i] != 0;
