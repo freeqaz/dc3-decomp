@@ -32,7 +32,10 @@ namespace {
     const char *gPhysicalType = gNullStr;
 
     const char *AllocType(unsigned long p1) {
-        bool isPhys = (p1 & 0x80000000) != 0;
+        // `> 0`, not `!= 0` (same value for an unsigned mask): only this spelling
+        // keeps the image's clrrwi + subic/subfe normalisation; `!= 0`, `? true :
+        // false` and a bare bool conversion all fold to `srwi r11, r3, 31`.
+        bool isPhys = (p1 & 0x80000000) > 0;
         unsigned int type = p1 >> 0x10 & 0xff;
 
         // XTL allocator IDs start at 128 (eXALLOCAllocatorId_D3D = 0x80; 0-0x7f
