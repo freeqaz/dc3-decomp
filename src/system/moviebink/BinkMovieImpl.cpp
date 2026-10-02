@@ -394,8 +394,8 @@ void BinkMovieImpl::Draw() {
         // modulo); the frame index is the buffer Bink last decompressed into.
         bool grayscale = flags & BINKGRAYSCALE;
         bool alpha = flags & BINKALPHA;
-        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
         int frame = mInternalBufs->mBuffers.FrameNum;
+        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
         mInternalBufs->unk40->SetDiffuseTex(mInternalBufs->YTex[frame][texSet]);
         mInternalBufs->unk40->SetSpecularMap(
             !grayscale ? mInternalBufs->CrTex[frame][texSet] : nullptr
@@ -763,8 +763,8 @@ void BinkMovieImpl::EndFrame() {
         // index is a bare `unk40 >= TotalFrames` with no modulo, unlike
         // BeginFrame's `(unk40 + 1) % (GetUnk10() * TotalFrames) >= TotalFrames`.
         // Written as the target has it rather than "tidied" into BeginFrame's form.
-        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
         int frame = mInternalBufs->mBuffers.FrameNum;
+        int texSet = unk40 >= mInternalBufs->mBuffers.TotalFrames;
         StoreCache(mInternalBufs->YTex[frame][texSet]);
         StoreCache(mInternalBufs->CrTex[frame][texSet]);
         StoreCache(mInternalBufs->CbTex[frame][texSet]);
