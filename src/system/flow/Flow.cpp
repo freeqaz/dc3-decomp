@@ -527,15 +527,12 @@ void Flow::Enter() {
         }
     }
 #endif
-    // NOTE (w7-av): 94.70 residual is one address derivation.  The image
-    // materialises `q` FIRST (`subi r31, r3, 0x104` at 0x823ED320) and then
-    // reaches the ObjectDir subobject as `addi r3, r31, 0x68` -- same address,
-    // derived from q rather than from `this` -- while MSVC here loads the
-    // ObjectDir vptr off r3 before q exists and does `subi r3, r3, 0x9c`.
-    // Naming the ObjectDir subobject (`ObjectDir *dir = this;`) is 90.72: a
-    // pointer conversion is null-checked (`subic.`/`bne`/`li r3, 0`), where the
-    // reference the call expression uses is not.
-    if (ProxyFile().empty() && mStartMode != 0) {
+    // w14-f: 94.69 -> 100.  The image materialises `q` FIRST (`subi r31, r3,
+    // 0x104`) and reaches the ObjectDir subobject from it (`addi r3, r31, 0x68`).
+    // Calling ProxyFile() through q -- FlowQueueable sits at offset 0, so the
+    // static_cast is a no-op with no null check -- reproduces that; the old
+    // (w7-av) `ObjectDir *dir = this;` attempt was null-checked (90.72).
+    if (static_cast<Flow *>(q)->ProxyFile().empty() && mStartMode != 0) {
         if (mStartMode == 1) {
             q->Execute(kQueue);
         } else {
@@ -554,11 +551,16 @@ void Flow::Exit() {
         }
     }
 #endif
-    if (IsRunning() && ProxyFile().empty()) {
+    // w14-f: 99.83 -> 100.  Exit() is entered through the RndPollable subobject
+    // (r3 = this + 0x104); naming the full object once makes the image's
+    // `subi r31, r3, 0x104` and routes IsRunning/ProxyFile/Deactivate/RequestStop
+    // through it, while mHardStop is still read off the entry pointer.
+    Flow *self = this;
+    if (self->IsRunning() && self->ProxyFile().empty()) {
         if (mHardStop) {
-            Deactivate(false);
+            self->Deactivate(false);
         } else {
-            RequestStop();
+            self->RequestStop();
         }
     }
 }
