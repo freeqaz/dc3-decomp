@@ -268,9 +268,7 @@ void StorePanel::LoadArt(const char *cc, UIPanel *panel) {
         NetCacheLoader *loader = TheNetCacheMgr->AddNetCacheLoader(cc, (NetLoaderPos)0);
         mArtLoader = loader;
         if (loader) {
-            // w19-d: push_back = insert(end()), not insert(it): the image passes
-            // the list head (r30) as the position, not the found iterator.
-            mNetCacheLoaders.push_back(mArtLoader);
+            mNetCacheLoaders.insert(it, mArtLoader);
         }
     } else {
         mArtLoader = *it;
