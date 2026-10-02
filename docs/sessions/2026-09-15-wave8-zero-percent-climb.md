@@ -1567,3 +1567,78 @@ caller was unmoved (COMDAT selection confirmed flipped). It joins the static-lin
 
 Five directory-owning lanes, each with the remaining fresh rows (169) and a **second opinion**
 on the attempted rows at ≥ 99 % (122), briefed with every floor that has fallen since wave 12.
+
+**31,664 → 31,686 matched (+22)**; authorable canonical **31,624 → 31,646 / 32,221
+(98.15 % → 98.22 %)**; all-100 authorable units **710 → 713 / 967** (FlowCommand, PartAnim,
+TransAnim); remaining authorable **597 → 575 functions (466,736 → 446,748 B)**
+(`progress_metrics.py` at `a7cf32774`). Row diff of the wave-15 close (`cbc859d33`) against
+`a7cf32774`, both full builds: **31 UP, 0 DOWN**.
+
+| lane | owns | UP | units completed | matched |
+|---|---|---:|---|---|
+| w16-b | hamobj, world | 8 | 0 | 31664 → 31670 |
+| w16-d | os, utl, obj, flow, ui, meta | 5 | 1 (FlowCommand) | 31670 → 31673 |
+| w16-c | char, gesture, math, rnddx9 | 1 | 0 | 31673 → 31674 |
+| w16-a | rndobj | 12 | 2 (PartAnim, TransAnim) | 31674 → 31682 |
+| w16-e | lazer, synth, net, moviebink | 5 | 0 | 31682 → 31686 |
+
+### Behaviour bugs, adjudicated against the target `.s`
+
+1. **`UIListState::Scroll`**: on a circular list with `skipActive`, Scroll returned without
+   moving. In the image the skip test lands on the accept block's first instruction
+   (`lwz r28, 0x54(r1)`), which stores `mTargetShowing`. An earlier lane read the branch target
+   one instruction early and filed the accept block as a CSE leftover.
+2. **`Synapse::Synapse`**: `mIirCoeff`'s time constant was `0.00811767578125f` (`0x3c050000`).
+   The image loads `__real@3c05b186` at `0x82E4763C`, which is 8.16 ms; spelled `8.16f * 0.001f`,
+   which folds to exactly that value. **A literal that is close but not equal is still wrong**:
+   check every literal against the image's pool value.
+
+### Floors that fell in the second-opinion pass
+
+- **HamNavList::Poll / SetSelecting**: three lanes certified a floor here. The code called the
+  `SlideSoundAnim()` accessor where the image binds the member directly. The extra inline level
+  costs one home store per site.
+- **MovieInternalBuffers::New** "scheduler tie": the tie came from a block-scoped declaration.
+  Moving it to function scope closed the row.
+- **`vector<float, XboxAllocator>::_M_fill_assign`**: an empty user copy ctor and dtor on the
+  allocator stopped `get_allocator()` from inlining away. The original lacks both.
+- **SetBloomBlurWeights**: two file-scope static const tables were folded onto one base + 0x3c.
+  The image has function-local static consts.
+
+### The Keys-chain lever (w16-a)
+
+In `d >> keysA >> keysB`, the inline wrapper in `math/Key.h` sequences each call before it forms
+the next operand, but the image calls the vector reader directly. Reading through
+`(std::vector<Key<T>> &)` casts closed four `Load`s. Only a handful of chains remain
+(CamAnim, PartAnim, TransAnim), so they went into the wave-17 brief rather than their own lane.
+
+### Two HX_NATIVE shadow bodies retired
+
+`UtilDrawCigar` and `RndRibbon::ConstructMesh` each existed twice, because their int-cast
+pointer arithmetic could not run LP64. Plain loops now serve both builds. The coordinator
+re-derived the ConstructMesh face indices against the old byte offsets.
+
+### Tool defect found, not fixed
+
+dtk corrupts a conditional branch that carries an `IMAGE_REL_PPC_REL14` relocation to its own
+function. The shipped `40 9A FF 94` (`bne cr6`) at `0x82341FD4` becomes `43 FF FF 94` in the carved
+target object, because the branch's condition fields are overwritten with ones. This happens in
+CharLipSync's `fill<_Bit_iter>`, which reads 99.857 but matches, and in
+`CTReorderInstructions::Read`, the only other relocated conditional branch. The fix belongs in
+the shared `../jeff` dtk and is waiting on the owner.
+
+### Other
+
+- `Object::SyncProperty` reaches 100 with an **unreachable** `static Symbol`. The image reserves
+  static-guard bit 0x2 and never tests it. The change is behaviour-neutral, but it is an
+  invented spelling and is marked as such in the source.
+- Stale-branch sweep: every unmerged local branch from June through September was checked
+  against main. Each headline function those branches name (82 names, 38 branches) is at or
+  above the branch's own claim on main, and the four `ns-*` branches already landed as merges.
+  Nothing needed adopting.
+
+### Wave 17
+
+Five directory-owning lanes with the same ownership, briefed with the wave-16 floors. Each lane
+gets every fresh row at **any** percentage (148), plus a second opinion on the attempted rows at
+95–99.99 % that wave 16 did not re-examine (212).
