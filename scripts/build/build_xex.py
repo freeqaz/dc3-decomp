@@ -607,7 +607,7 @@ def build_xex(pe_data, original_xex_info, pe_info, orig_pe_data=None,
     # The old heuristic (group IAT entries by address gaps, then fall back to
     # "any thunk with the same ordinal number") mapped xboxkrnl thunks into
     # xam's table and left every data import (XboxKrnlVersion, ...) reading
-    # its raw PE marker; see docs/plans/DECOMP_XEX_BOOT_DEFECTS.md.
+    # its raw PE marker.
     import_libs_info = original_xex_info.get('import_libs_info')
     import_header_blob = None
     if 0x000103FF in orig and import_libs_info and orig_pe_data and import_sites:
