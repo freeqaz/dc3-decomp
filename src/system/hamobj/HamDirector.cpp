@@ -3166,7 +3166,7 @@ void HamDirector::DrawIconMan(Symbol moveName, Symbol nextClip, Symbol prevClip,
     int foundIdx = 0;
     unsigned int numKeys = (unsigned int)keys->size();
     for (; foundIdx < numKeys; foundIdx++) {
-        if ((*keys)[foundIdx].value == moveName) goto found;
+        if (moveName == (*keys)[foundIdx].value) goto found;
     }
     foundIdx = -1;
 found:
@@ -3182,7 +3182,7 @@ found:
         foundIdx = 0;
         numKeys = (unsigned int)keys->size();
         for (; foundIdx < numKeys; foundIdx++) {
-            if ((*keys)[foundIdx].value == moveSym) goto found2;
+            if (moveSym == (*keys)[foundIdx].value) goto found2;
         }
         foundIdx = -1;
     found2:;
