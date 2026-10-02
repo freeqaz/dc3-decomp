@@ -582,7 +582,9 @@ void CharHair::SimulateZeroTime() {
     }
 }
 
-INIT_REVS(11, 0)
+// w15-r: gRev is 13 in the image (0x000D0000 at 0x820147F0), matching SAVE_REVS and
+// ASSERT_REVS; it used to read 11, so the version-mismatch message printed 11.
+INIT_REVS(13, 0)
 
 void CharHair::Load(BinStream &bs) {
     LOAD_REVS(bs);
