@@ -181,12 +181,16 @@ void HiResScreen::BmpCache::SetPixelColor(
             minDirty = offset;
         }
         mDirtyStart = minDirty;
+        // w18-a: the high end mirrors the low end -- the image keeps the
+        // candidate (offset + 4) in the offset's register and conditionally
+        // replaces IT with mDirtyEnd (`cmplw cr6, r10, r11` / `blt` / `mr r11,
+        // r10`), so the accumulator is the candidate, not the member copy.
         unsigned int maxDirty = offset + 4;
         unsigned int curEnd = mDirtyEnd;
-        if (maxDirty >= curEnd) {
-            curEnd = maxDirty;
+        if (curEnd >= maxDirty) {
+            maxDirty = curEnd;
         }
-        mDirtyEnd = curEnd;
+        mDirtyEnd = maxDirty;
     }
 }
 
