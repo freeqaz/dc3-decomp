@@ -27,6 +27,11 @@ namespace IPP {
 // fadds/fmuls.  No source operand order can express "first in issue order, second
 // in operand order", which is why (b) and (c) are indistinguishable here.  This
 // is scheduler state, not source; it is permuter territory if anything.
+// w16-e: eleven more spellings measured, none moves the load order: no
+// `size == 0` guard (inert), dst/src named temps in either order (inert),
+// `f2[i] = f2[i] + f1[i]` (inert), an inline AddTo(float&, const float&) /
+// Sum(a, b) helper (inert), a const-ref / pointer to f2[i] (inert); pointer
+// walkers (`while (size--) *f2++ += *f1++;`) 70.0, signed `int i` 77.9.
     void Add_InPlace(unsigned int size, const float *f1, float *f2) {
         if (size == 0)
             return;

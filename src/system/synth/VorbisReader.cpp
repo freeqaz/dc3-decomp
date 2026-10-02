@@ -516,6 +516,9 @@ bool VorbisReader::CheckHmxHeader() {
                 // way -- it does not overlay two named 8-byte locals whose live
                 // ranges are disjoint, so a second variable cannot be the shape
                 // the original used here.
+                // w16-e (99.987): `s64 idx` at function scope is inert;
+                // a function-scope `magic` for the first read plus this idx
+                // for the other two is worse (99.92, frame changes).
                 s64 idx;
                 bs >> idx;
                 mMagicA = idx;

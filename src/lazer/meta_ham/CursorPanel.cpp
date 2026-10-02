@@ -21,6 +21,7 @@ CursorPanel::CursorPanel() {}
 
 CursorPanel::~CursorPanel() {}
 
+// w16-e: `CursorPanel *self = this;` (calls through self) is inert.
 void CursorPanel::Poll() {
     // RESIDUAL (w7-ao, 96.52 canonical): 3 of the remaining rows are one extra
     // spill of `this`. The image keeps it in r14 for the whole function; we

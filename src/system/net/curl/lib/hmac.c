@@ -49,6 +49,11 @@
  * reaches ipad as `subi r4, r29, 1` (ipad one byte BELOW opad) where we emit
  * `addi r4, r29, 1`.  Upstream order (ipad first) anchors on ipad: 96.95.
  * A combined declarator and an opad tentative definition are both inert. */
+/* w16-e (99.95, row [87] only): re-measured upstream order (96.2, the anchor
+ * follows the first-declared constant).  Also compiled this file with /O2, /Os
+ * and /Ox in place of /O1: /O1 is the only one near the image, so the
+ * "anchor the HIGHER-addressed constant" behaviour (shared with mprintf's
+ * null[] anchor) is not an optimisation-level difference. */
 static const unsigned char hmac_opad = 0x5C;
 static const unsigned char hmac_ipad = 0x36;
 

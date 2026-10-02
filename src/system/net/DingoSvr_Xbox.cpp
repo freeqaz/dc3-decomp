@@ -228,6 +228,9 @@ void DingoSvrXbox::FillAuthParams(DataPoint &pt) {
     pt.AddPair(platform_uid, str70.c_str());
 }
 
+// w16-e (99.91, 12 slot rows): moving `static Symbol platform_uid` inside
+// the str80 block is inert; `bool ret = false;` with no else arm is worse
+// (97.7).
 bool DingoSvrXbox::FillAuthParamsFromPadNum(DataPoint &pt, int padnum) {
     DingoServer::FillAuthParams(pt);
     if (padnum < 0) {
