@@ -38,6 +38,9 @@ float PeakDetector::gaussianWindow(unsigned int i) const {
 
     float q = (d * d) / (mCurWidth * mCurWidth * 0.0003f);
     if (q < 40.0f) {
+        // w13-e: the image negates q before it loads the sample (`fneg f1, f0`
+        // ahead of the lfsx); hoisting the negation into a local is the spelling.
+        float negQ = -q;
         float v = mInput->begin()[i];
         float mag;
         if (v < 0.0f) {
@@ -45,7 +48,7 @@ float PeakDetector::gaussianWindow(unsigned int i) const {
         } else {
             mag = v;
         }
-        return (float)exp(-q) * mag;
+        return (float)exp(negQ) * mag;
     }
     return 0.0f;
 }
