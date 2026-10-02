@@ -150,8 +150,16 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
         }
         mPrivate = c->mPrivate;
         mHardStop = c->mHardStop;
-        RefreshPortLabelLists();
-        if (!ProxyFile().empty()) {
+        // w14-f: 98.26 -> 98.79.  Full object named once for the tail (the image's
+        // `subi r31, r30, 0x180` at 823F7278 feeding RefreshPortLabelLists and the
+        // ProxyFile adjust).  Remaining 4 rows: both SetParent(this, true) calls
+        // schedule `subi r4, r30, 0x180` BEFORE `li r5, 1` in the image (823F71C8,
+        // 823F722C); ours puts the li first.  Tried: (FlowNode *)this, a block-local
+        // `FlowNode *parent = this`, a default `bool = true` param (no change), and
+        // a loop-hoisted `Flow *self` (pinned to r27, 95.8 -- worse).
+        Flow *self = this;
+        self->RefreshPortLabelLists();
+        if (!self->ProxyFile().empty()) {
             // mInterrupt, not mStartMode: the target stores 5 at -0x124(r30)
             // (0x823F72B8), i.e. Flow + 0x5c, while mStartMode is Flow + 0x170
             // and is the -0x10(r30) store at 0x823F7078.  5 is kPassThrough,
