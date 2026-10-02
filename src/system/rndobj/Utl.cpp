@@ -2152,71 +2152,44 @@ static const unsigned int kNumBloomTaps = 7;
 // Adding `const` is MEASURED SCORE-NEUTRAL (88.66129 canonical, same 16 rows,
 // w8-m 2026-09-30); it is landed for the section, not the number.
 //
-// RESIDUAL 88.66129, and all 16 rows are ONE root cause (w8-m):
-// the image hoists TWO INDEPENDENT .rdata bases into callee-saved registers --
-//   addi r27, r11, lbl_8208B100@l   (sBloomWeights)
-//   addi r26, r10, lbl_8208B13C@l   (sBloomOffsets)
-// and therefore saves r25-r31.  We hoist only sBloomWeights into r27 and let
-// MSVC derive the second base as `addi r11, r27, 0x3c` INSIDE the loop, in a
-// volatile register, recomputed every iteration -- so we save only r26-r31.
-// Everything else follows from that one decision: the __savegprlr_25 vs _26 and
-// __restgprlr_25 vs _26 pair, the 8-byte frame delta (`subi r12, r1, 0x40` vs
-// `0x38`), and the whole idx 8-25 lis/lfs/li shuffle, which is a REORDERING and
-// not missing code -- both sides load __real@00000000 into f31 and both set the
-// r30=0x9a / r31=0 pair, just at different slots.
-// MEASURED NEGATIVE: hoisting the second array into a named local pointer
-// (`const float *offsets = sBloomOffsets;` and indexing `offsets[i]`) is
-// BYTE-IDENTICAL -- same 65 instructions, same 16 rows, same 88.66129.  MSVC
-// sees through the pointer and still folds the two adjacent .rdata statics into
-// one base plus a displacement.  Defeating that fold needs the two arrays in
-// different sections, which the image does NOT have (both are .rdata, adjacent,
-// 0x3C apart), so the fold is a backend register-pressure choice rather than
-// something the source reaches.  Do not retry the pointer spelling.
-// SECOND MEASURED NEGATIVE (w9-f), a different attack on the same fold: the
-// hoist is a register-PRESSURE decision, so the obvious next lever is to make
-// both bases needed before a call -- read `float w = sBloomWeights[i];` at the
-// TOP of the loop body instead of between the two SetPConstant calls, which
-// keeps `w` live across the first call and forces the weights base to be
-// materialised early.  It is much worse: 88.66129 -> 82.2 canonical, 16 rows ->
-// 35, and it perturbs the r28/r29 pair, the 0x9a/0 setup and three stack slots
-// on top of the original save-set difference.  Both attacks on the two-base
-// hoist are now spent; treat the save-set difference as the floor here.
-static const float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
+// w16-a: CLOSED, 88.66129 -> 100.  The two tables are FUNCTION-LOCAL
+// `static const` arrays.  As file-scope statics MSVC knew their relative
+// layout and folded the offsets table into `addi r11, r27, 0x3c` off the
+// weights base (the w8-m residual: one hoisted base instead of the image's two,
+// __savegprlr_26 instead of _25, the 8-byte frame delta and the idx 8-25
+// shuffle).  Function-local statics are separate symbols to it, so it hoists
+// both bases (r26/r27) exactly as the image does.  The pointer-local and
+// early-weight-read attacks w8-m and w9-f recorded here were inert or worse
+// because they kept the file-scope pair.  The loop is also the plain
+// `for (i < 15)` form now (byte-identical to the hand-stepped one).
+void SetBloomBlurWeights(bool horizontal, float width, float height) {
+    static const float sBloomWeights[15] = { 0.0159283932f, 0.0270778369f, 0.0424231887f,
                                    0.0612547919f, 0.0815124959f, 0.0999667868f,
                                    0.1129886061f, 0.1176957935f, 0.1129886061f,
                                    0.0999667868f, 0.0815124959f, 0.0612547919f,
                                    0.0424231887f, 0.0270778369f, 0.0159283932f };
 
-static const float sBloomOffsets[15] = { -6.5f, -5.5f, -4.5f, -3.5f, -2.5f, -1.5f, -0.5f, 0.5f,
+    static const float sBloomOffsets[15] = { -6.5f, -5.5f, -4.5f, -3.5f, -2.5f, -1.5f, -0.5f, 0.5f,
                                    1.5f,  2.5f,  3.5f,  4.5f,  5.5f,  6.5f,  7.5f };
 
-void SetBloomBlurWeights(bool horizontal, float width, float height) {
-    int numTaps = 15;
-    int reg = 0x9a;
-    float one = 1.0f;
-    int i = 0;
     float invWidth = 1.0f / width;
     float invHeight = 1.0f / height;
-    TheShaderMgr.SetNumTaps(numTaps);
-    float zero = 0.0f;
-    do {
+    TheShaderMgr.SetNumTaps(15);
+    for (int i = 0; i < 15; i++) {
         float x, y;
         if (horizontal) {
             x = sBloomOffsets[i] * invWidth;
-            y = zero;
+            y = 0.0f;
         } else {
             y = sBloomOffsets[i] * invHeight;
-            x = zero;
+            x = 0.0f;
         }
-        Vector4 texOffset(x, y, one, one);
-        TheShaderMgr.SetPConstant((PShaderConstant)(reg - 0x10), texOffset);
+        Vector4 texOffset(x, y, 1.0f, 1.0f);
+        TheShaderMgr.SetPConstant((PShaderConstant)(0x8a + i), texOffset);
         float w = sBloomWeights[i];
         Vector4 weight(w, w, w, w);
-        TheShaderMgr.SetPConstant((PShaderConstant)reg, weight);
-        numTaps--;
-        i++;
-        reg++;
-    } while (numTaps != 0);
+        TheShaderMgr.SetPConstant((PShaderConstant)(0x9a + i), weight);
+    }
 }
 
 void SetBloomBlurWeightsStreak(
