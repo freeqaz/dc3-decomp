@@ -653,7 +653,7 @@ namespace {
         unsigned long param1, param2;
 
         while (XJSONReadToken(reader, &tokenType, &param1, &param2) == 0) {
-            DataNode node(0);
+            DataNode node(kDataInt, 0);
             char charBuf[256];
             charBuf[0] = '\0';
 
@@ -670,22 +670,22 @@ namespace {
                 fieldName = new DataArray(2);
                 fieldName->Node(0) = DataNode(Symbol(charBuf));
                 continue;
-            // REFUTED (w7-ag): the image re-materialises the DataNode temp's
-            // address for the operator= argument here (`addi r4, r31, 0xa0`
-            // @825D70F0 and `addi r4, r31, 0xb8` @825D7134) rather than reusing
-            // the ctor's returned `this`, which is what the unnamed temp below
-            // emits (`mr r4, r3`).  Naming both temps --
-            //   DataArrayPtr sub = JsonToDta(reader, false);
-            //   DataNode tmp(sub); node = tmp;
-            // does produce that form and removes the 0x10 frame delta, but it
-            // repacks the whole frame and costs far more than it pays:
-            // 98.3 -> 97.3.  The string case @825D715C uses `mr r4, r3` on BOTH
-            // sides, so the ctor is not what decides it.
+            // w14-d: the array/map results reach `node` by IMPLICIT conversion
+            // (DataNode(const DataArrayPtr &)).  That is what makes the image
+            // re-address the temp for operator= (`addi r4, r31, 0xa0` @825D70F0,
+            // `addi r4, r31, 0xb8` @825D7134) where an explicit `DataNode(...)`
+            // temp reuses the ctor's returned `this` (`mr r4, r3`), and it also
+            // closes the 0x10 frame delta.  98.32 -> 99.07 together with the
+            // fieldName conversion below and `node(kDataInt, 0)`.  RESIDUAL
+            // (8 rows): before the jump table the image re-loads only node's
+            // value (`lwz r3, 0x50`) and its shared `continue` dtor at 0x369c
+            // re-reads mType; we also cache mType in r10 and enter one
+            // instruction later.
             case kJSONTokenBeginArray:
-                node = DataNode(JsonToDta(reader, false));
+                node = JsonToDta(reader, false);
                 break;
             case kJSONTokenBeginMap:
-                node = DataNode(JsonToDta(reader, false));
+                node = JsonToDta(reader, false);
                 break;
             case kJSONTokenString:
                 node = DataNode(charBuf);
@@ -728,7 +728,7 @@ namespace {
 
             if (fieldName) {
                 fieldName->Node(1) = node;
-                node = DataNode(fieldName, kDataArray);
+                node = fieldName;
                 fieldName = 0;
             }
 
