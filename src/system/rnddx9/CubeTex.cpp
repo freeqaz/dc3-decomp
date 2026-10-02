@@ -23,29 +23,27 @@ void DxCubeTex::Reset() {
 void DxCubeTex::Sync() {
     PhysMemTypeTracker tracker("D3D(phys):CubeTex");
 
-    DX_ASSERT(mTex = D3DDevice_CreateTexture(
-        props.mWidth, props.mWidth, 6, props.mNumMips + 1, 0,
-        TheDxRnd.D3DFormatForBitmap(mBitmap[kCubeFaceRight]), 0,
-        D3DRTYPE_CUBETEXTURE
-    ), 0x38);
+    D3DFORMAT format = TheDxRnd.D3DFormatForBitmap(mBitmap[kCubeFaceRight]);
     int numMips = props.mNumMips + 1;
+    HRESULT hr = IDirect3DDevice9_CreateCubeTexture(
+        TheDxRnd.Device(), props.mWidth, numMips, 0, format, 0, &mTex, nullptr
+    );
+    DX_ASSERT_CODE(hr, 0x38);
 
     XGTEXTURE_DESC desc;
     XGGetTextureDesc(mTex, 0, &desc);
-
-    NgMat::SetCurrent(nullptr);
 
     for (int face = 0; face < 6; face++) {
         RndBitmap bitmap;
 
         RndBitmap *pWork = &mBitmap[face];
+        RndBitmap *bmp = pWork;
 
         if (pWork->Width() == 0 || pWork->Height() == 0) {
             MILO_NOTIFY("%s face %d width or height == 0 ", PathName(this), face);
         } else {
-            RndBitmap *bmp = pWork;
             if (pWork->Palette() != nullptr || pWork->Bpp() == 0x18) {
-                bitmap.Create(*pWork, 0x20, pWork->Order(), nullptr);
+                bitmap.Create(*bmp, 0x20, bmp->Order(), nullptr);
                 bmp = &bitmap;
             }
 
@@ -67,7 +65,6 @@ void DxCubeTex::Sync() {
 
             mBitmap[face].Reset();
         }
-
-        bitmap.Reset();
     }
+    NgMat::SetCurrent(nullptr);
 }
