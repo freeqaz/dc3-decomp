@@ -24,7 +24,7 @@ namespace {
             }
             ts << str;
             if (info != nullptr) {
-                for (int i = 0; i < 0x10 && info->mStackTrace[i] != 0; i++) {
+                for (int i = 0; i < 0x10 && (unsigned int)info->mStackTrace[i] != 0; i++) {
                     ts << *info;
                 }
             }
