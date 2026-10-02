@@ -106,18 +106,15 @@ bool WinSockSocket::Fail() const {
     val.tv_usec = 0;
     set.fd_count = 1;
     set.fd_array[0] = mSocket;
-    switch (select(0, nullptr, nullptr, &set, &val)) {
-    case -1:
-        MILO_LOG("select returned SOCKET_ERROR %d\n", WSAGetLastError());
-        // FALLTHROUGH -- deliberate, and it is what the image does: the
-        // SOCKET_ERROR arm has no `break`, so a failed select() also latches
-        // mFail. (Target 0x825EEA50 falls straight into the `stb` at
-        // 0x825EEA78 with no intervening branch.)
-    case 1:
+    // A failed select() (SOCKET_ERROR) also latches mFail: target 0x825EEA50
+    // logs and falls straight into the `stb` at 0x825EEA78.  Written as a
+    // switch with case -1 falling into case 1, MSVC inverts the `== 1` test
+    // (beq->stb / b->end vs the image's bne->end / b->stb); this form matches.
+    int res = select(0, nullptr, nullptr, &set, &val);
+    if (res == -1 || res == 1) {
+        if (res == -1)
+            MILO_LOG("select returned SOCKET_ERROR %d\n", WSAGetLastError());
         const_cast<WinSockSocket *>(this)->mFail = true;
-        break;
-    default:
-        break;
     }
     return mFail;
 }
@@ -272,18 +269,14 @@ int WinSockSocket::RecvFrom(
         if (err == 0x2733) {
             return 0;
         } else {
-            // NOTE (w7-av): 97.83 -- the one real row is that the image reuses
-            // the SAME `li r3, 0x0` for both the `ip` store and the return
-            // value (`li r3, 0` / `sth r11, 0x0(r30)` / `stw r3, 0x0(r31)`),
-            // while we materialise 0 twice, in r10 for the store and in r3 for
-            // the return.  Refuted: spelling the return as `return ip;`
-            // (97.83, identical rows) and collapsing the if/else so both
-            // WSAGetLastError paths share one `return 0;` (93.40 -- the
-            // 0x2733 test inverts and its `li r3, 0` / `b` block is deleted).
+            // The image reuses ONE `li r3, 0` for the `ip` store and the
+            // return value and then joins the common epilogue: the error arm
+            // zeroes `ret` and falls out to `return ret`, it has no return of
+            // its own (an explicit `return 0;` materialises 0 twice, 97.83).
             MILO_FAIL("error in RecvFrom: %i", err);
             port = -1;
             ip = 0;
-            return 0;
+            ret = 0;
         }
     } else {
         ip = addr.sin_addr.s_un.s_addr;

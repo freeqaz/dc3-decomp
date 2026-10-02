@@ -242,6 +242,7 @@ DataNode KinectSharePanel::OnMsg(const RockCentralOpCompleteMsg &msg) {
 }
 
 DataNode KinectSharePanel::OnPostLink(DataArray *a) {
+    DWORD dw;
     MILO_ASSERT_EXPR(!mBuf && ! mPreviewBuf, 0x163);
     MILO_LOG(
         "KinectSharePanel::OnUpload() - mTex:[%d %d %d %d]\n",
@@ -290,7 +291,6 @@ DataNode KinectSharePanel::OnPostLink(DataArray *a) {
         if (profile) {
             padnum = profile->GetPadNum();
         }
-        DWORD dw;
         DWORD res;
         if (PlatformMgr::sXShowCallback(dw)) {
             res = XShowNuiSocialNetworkLinkPostUI(
@@ -328,6 +328,7 @@ DataNode KinectSharePanel::OnCleanup(DataArray *a) {
 }
 
 DataNode KinectSharePanel::OnUpload(DataArray *arr) {
+    DWORD dw;
     MILO_ASSERT(!mBuf && ! mPreviewBuf, 0x115);
     MILO_LOG(
         "KinectSharePanel::OnUpload() - mTex:[%d %d %d %d]\n",
@@ -337,14 +338,17 @@ DataNode KinectSharePanel::OnUpload(DataArray *arr) {
         mTex->PowerOf2()
     );
     ConvertImages();
-    mOverlapped.InternalContext = (DWORD_PTR)this;
+    mOverlapped.InternalContext = 0;
     mOverlapped.InternalHigh = 0;
     mOverlapped.InternalLow = 0;
     mOverlapped.hEvent = CreateEventA(nullptr, true, false, "SocialNetworkImagePost");
     if (!mOverlapped.hEvent) {
         MILO_LOG("KinectSharePanel: mOverlapped.hEvent is null");
     } else {
-        mOverlapped.dwCompletionContext = 0;
+        // `this` goes in dwCompletionContext, InternalContext is zeroed (target
+        // 0x5c/0x60/0x64 get r25 = 0, `stw r30, 0x70(r30)` stores this), the
+        // same as OnPostLink.  We had the two fields swapped.
+        mOverlapped.dwCompletionContext = (DWORD_PTR)this;
         mOverlapped.pCompletionRoutine = nullptr;
         mOverlapped.dwExtendedError = 0;
 
@@ -371,7 +375,6 @@ DataNode KinectSharePanel::OnUpload(DataArray *arr) {
         if (pActiveProfile) {
             padNum = pActiveProfile->GetPadNum();
         }
-        DWORD dw;
         DWORD res;
         if (PlatformMgr::sXShowCallback(dw)) {
             res = XShowNuiSocialNetworkImagePostUI(

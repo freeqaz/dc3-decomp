@@ -12,11 +12,13 @@ HandInvokeGestureFilter::~HandInvokeGestureFilter() {}
 float HandInvokeGestureFilter::GetBend(
     const Vector3 &a, const Vector3 &b, const Vector3 &c
 ) const {
-    Vector3 d1(b.x - c.x, b.y - c.y, b.z - c.z);
+    Vector3 d1;
+    Subtract(b, c, d1);
     Normalize(d1, d1);
-    Vector3 d2(a.x - c.x, a.y - c.y, a.z - c.z);
+    Vector3 d2;
+    Subtract(a, c, d2);
     Normalize(d2, d2);
-    return std::acos(d2.x * d1.x + d2.y * d1.y + d2.z * d1.z);
+    return std::acos(Dot(d2, d1));
 }
 
 bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {

@@ -235,7 +235,7 @@ void ClipCollide::TestClips() {
         if (isValid) {
             const char *directions[4] = { "front", "back", "left", "right" };
             for (int i = 0; i < 4; i++) {
-                mPosition = directions[i];
+                mPosition = Symbol(directions[i]);
                 mClip = it;
                 Collide();
             }

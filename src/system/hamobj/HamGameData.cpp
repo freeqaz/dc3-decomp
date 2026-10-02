@@ -249,8 +249,10 @@ int GetOutfitGender(Symbol outfit, bool fail) {
 }
 
 const char *GetOutfitModel(Symbol outfit, bool fail) {
-    DataArray *entry;
-    GetEntriesForOutfit(outfit, nullptr, &entry, fail);
+    // Goes through GetOutfitEntry, inlined: the image's lone extra
+    // `stw r3, 0x50(r31)` is that callee's by-value Symbol parameter being
+    // homed into the slot `entry` then reuses.
+    DataArray *entry = GetOutfitEntry(outfit, fail);
     if (entry) {
         static Symbol model("model");
         DataArray *modelArr = entry->FindArray(model, false);
@@ -485,8 +487,13 @@ bool HamGameData::SetAssociatedPadNum(int player, int padnum) {
     }
 #endif
     if (padnum >= 0 && ThePlatformMgr.IsSignedIn(padnum)) {
-        if (pPlayer->PadNum() == padnum) {
-            pPlayer->SetAssociatedPadNum(-1, gNullStr);
+        // Steal the pad from the OTHER player if it holds it (target
+        // 0x8245233C: `subf r11, r31, r11` / `lwz r31, 0x4(r11)` is
+        // mPlayers[1 - player], then PadNum() at 0x7c and the -1 unassign go
+        // to that player, not to pPlayer).
+        HamPlayerData *pOther = mPlayers[1 - player];
+        if (pOther->PadNum() == padnum) {
+            pOther->SetAssociatedPadNum(-1, gNullStr);
         }
         return pPlayer->SetAssociatedPadNum(padnum, ThePlatformMgr.GetName(padnum));
     }
