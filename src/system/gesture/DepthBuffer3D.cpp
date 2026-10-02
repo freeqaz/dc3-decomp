@@ -714,12 +714,17 @@ void DepthBuffer3D::DrawShowing() {
     TheRenderState.SetTextureFilter(0, (RndRenderState::FilterMode)0, false);
     TheRenderState.SetTextureClamp(0, (RndRenderState::ClampMode)2);
 
+    // `pal` lives outside the loop and is only assigned for i == 0 and i == 1:
+    // the image tests `cmplwi i, 1` / blt / bne and its fall-through keeps the
+    // previous value, seeded from the shared, uninitialised frame slot
+    // (`lwz r27, 0x50(r31)` before the loop).  i never exceeds 1, so the third
+    // path is dead.  The i == 1 pick selects the ObjPtr itself, then reads it.
+    RndTex *pal;
     for (int i = 0; i < 2; ++i) {
-        RndTex *pal;
         if (i == 0) {
-            pal = mPlayerPalette.Ptr();
-        } else {
-            pal = (mBoxymanPalette.Ptr() == nullptr) ? mPlayerPalette.Ptr() : mBoxymanPalette.Ptr();
+            pal = mPlayerPalette;
+        } else if (i == 1) {
+            pal = mBoxymanPalette ? mBoxymanPalette : mPlayerPalette;
         }
         if (pal == nullptr) {
             pal = TheRnd.GetDefaultTex(Rnd::kDefaultTex_WhiteTransparent);
