@@ -132,56 +132,44 @@ DataNode ClipPlayer::AnnotatePractice() {
 
 DataNode ClipPlayer::AnnotateClip(float frame) {
     int idx = mClipKeys->KeyLessEq(frame);
-    if (idx < 0) goto fail;
-    {
+    DataArray *arr = nullptr;
+    if (idx >= 0) {
         Key<Symbol> &key = mClipKeys->at(idx);
-        DataArray *arr;
-        const char *name;
-        float annotBeat;
-
         if (mClipKeys == mMasterClipKeys) {
             const char *nextName = "";
-            auto _tmp0 = mClipKeys->size();
-            if ((unsigned int)(idx + 1) < _tmp0) {
+            if ((unsigned int)(idx + 1) < mClipKeys->size()) {
                 nextName = mClipKeys->at(idx + 1).value.Str();
             }
-            name = key.value.Str();
-            float clipBeat = FrameToBeat(key.frame);
+            const char *name = key.value.Str();
             float outStart, outEnd, outNextStart;
-            if (!GetClipRange(name, nextName, clipBeat, outStart, outEnd, outNextStart))
-                goto fail;
-            arr = new DataArray(0);
-            Annotate(arr, outStart, "start");
-            Annotate(arr, outEnd, "end");
-            if (outNextStart != kHugeFloat) {
-                name = "blend";
-                annotBeat = outNextStart;
-                goto do_annotate;
+            if (GetClipRange(
+                    name, nextName, FrameToBeat(key.frame), outStart, outEnd, outNextStart
+                )) {
+                arr = new DataArray(0);
+                Annotate(arr, outStart, "start");
+                Annotate(arr, outEnd, "end");
+                if (outNextStart != kHugeFloat) {
+                    Annotate(arr, outNextStart, "blend");
+                }
             }
-        } else {
-            if ((unsigned int)(idx + 1) >= mClipKeys->size())
-                goto fail;
+        } else if ((unsigned int)(idx + 1) < mClipKeys->size()) {
             Key<Symbol> &nextKey = mClipKeys->at(idx + 1);
             CharClip *transClip = GetTransitionBefore(&nextKey);
-            if (!transClip) goto fail;
-            arr = new DataArray(0);
-            float transLen = ClipLength(transClip);
-            name = transClip->Name();
-            annotBeat = FrameToBeat(nextKey.frame) - transLen + 1.0f;
-        do_annotate:
-            Annotate(arr, annotBeat, name);
+            if (transClip) {
+                arr = new DataArray(0);
+                float transLen = ClipLength(transClip);
+                Annotate(
+                    arr, FrameToBeat(nextKey.frame) - transLen + 1.0f, transClip->Name()
+                );
+            }
         }
-        // `new DataArray(0)` goes through PoolAlloc, which can return null; the
-        // image tests it here (825 1EF08 `cmplwi cr6, r29, 0x0` / `bne`) and
-        // joins the shared `return 0` block, which is what sinks that block past
-        // the Annotate call.
-        if (!arr) goto fail;
-        DataNode node(arr, kDataArray);
-        arr->Release();
-        return node;
     }
-fail:
-    return 0;
+    if (!arr) {
+        return 0;
+    }
+    DataNode node(arr, kDataArray);
+    arr->Release();
+    return node;
 }
 
 void ClipPlayer::PlayAnims(HamCharacter *c, float f1, float f2, int x) {
