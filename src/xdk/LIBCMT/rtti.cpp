@@ -149,10 +149,36 @@ const _s_RTTIBaseClassDescriptor *FindSITargetTypeInstance(
     return 0;
 }
 
+// CRT PMDtoOffset: RetOff is assigned pdisp and then incremented, which is
+// what homes it (`stw r11, 0x58(r31)`, 0x8299E300) before the vbase read
+// (86.0 with pdisp read twice, 87.7 with a named pdisp local, 88.9 with this
+// shape written inline in the caller).  Written inline it also puts
+// pCompleteObject first in `lwzx r10, r30, r11` / `add r30, r30, r11`
+// (0x8299E2F8 / 0x8299E314 want r11 first); swapping the operands in source
+// is inert, only the helper-call shape restores the order.
+static int PMDtoOffset(void *pThis, const PMD &pmd) {
+    int RetOff = 0;
+    if (pmd.pdisp >= 0) {
+        RetOff = pmd.pdisp;
+        RetOff += *(int *)(*(char **)((char *)pThis + RetOff) + pmd.vdisp);
+    }
+    RetOff += pmd.mdisp;
+    return RetOff;
+}
+
 // Multiple (non-virtual) inheritance: the same type can occur more than once,
 // so a candidate is only accepted when the source sub-object it was found
 // alongside actually lives at SrcOffset within the complete object.
 //
+// w14-e: 93.77 -> 95.2 canonical by testing the source sub-object's offset
+// through the CRT's PMDtoOffset helper (as FindVITargetTypeInstance and
+// __RTDynamicCast do) instead of open-coding the vbase read: that alone
+// removed the volatile r8/r9 naming swap through the scan loop and the
+// `clrrwi` the open-coded adjustment produced.  Still open: `add r11, r10,
+// r11` (image) vs `add r11, r11, r10` for `RetOff += mdisp`, plus the two
+// placement rows below.  Tail-duplicating the pBase NOTVISIBLE check into
+// both arms (so the else arm could merge back into the first copy, the way
+// 0x8299DF50's `beq` jumps back up) measured 85.7 -- reverted.
 // RESIDUAL w7-at, 93.77 canonical, 440 B.  The arithmetic and the control
 // flow are already the image's; what is left is block placement plus a
 // volatile r8/r9 naming swap through the whole scan loop.  Two placement
@@ -198,13 +224,7 @@ const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
         }
 
         if (TYPEIDS_EQ(pBase->pTypeDescriptor, pSrcType)) {
-            int adjustment = 0;
-            if (pBase->where.pdisp >= 0) {
-                adjustment = *(int *)(*(char **)((char *)pCompleteObject + pBase->where.pdisp) +
-                                      pBase->where.vdisp);
-                adjustment += pBase->where.pdisp;
-            }
-            if (adjustment + pBase->where.mdisp == SrcOffset) {
+            if (PMDtoOffset(pCompleteObject, pBase->where) == SrcOffset) {
                 if (pTargetBase) {
                     if (i - iTarget <= numTargetContained) {
                         // The source sub-object lives inside the target one.
@@ -268,13 +288,7 @@ const _s_RTTIBaseClassDescriptor *FindVITargetTypeInstance(
         }
 
         if (TYPEIDS_EQ(pBase->pTypeDescriptor, pSrcType)) {
-            int adjustment = 0;
-            if (pBase->where.pdisp >= 0) {
-                adjustment = *(int *)(*(char **)((char *)pCompleteObject + pBase->where.pdisp) +
-                                      pBase->where.vdisp);
-                adjustment += pBase->where.pdisp;
-            }
-            if (pBase->where.mdisp + adjustment == SrcOffset) {
+            if (PMDtoOffset(pCompleteObject, pBase->where) == SrcOffset) {
                 if (i - iTarget <= numTargetContained) {
                     // The source sub-object lives inside the target one.
                     if (!isVisible) {
@@ -298,15 +312,7 @@ const _s_RTTIBaseClassDescriptor *FindVITargetTypeInstance(
                         isAccessible = !(pContained->attributes & BCD_PRIVORPROTBASE);
                     }
                     if (isVisible && isAccessible) {
-                        int targetAdjustment = 0;
-                        if (pTargetBase->where.pdisp >= 0) {
-                            targetAdjustment =
-                                *(int *)(*(char **)((char *)pCompleteObject +
-                                                    pTargetBase->where.pdisp) +
-                                         pTargetBase->where.vdisp);
-                            targetAdjustment += pTargetBase->where.pdisp;
-                        }
-                        int offset = pTargetBase->where.mdisp + targetAdjustment;
+                        int offset = PMDtoOffset(pCompleteObject, pTargetBase->where);
                         if (pMatch && matchOffset != offset) {
                             return 0;
                         }
@@ -346,23 +352,6 @@ static void *FindCompleteObject(void **inptr) {
         pCompleteObject -= *(int *)((char *)inptr - pCompleteLocator->cdOffset);
     }
     return (void *)pCompleteObject;
-}
-
-// CRT PMDtoOffset: RetOff is assigned pdisp and then incremented, which is
-// what homes it (`stw r11, 0x58(r31)`, 0x8299E300) before the vbase read
-// (86.0 with pdisp read twice, 87.7 with a named pdisp local, 88.9 with this
-// shape written inline in the caller).  Written inline it also puts
-// pCompleteObject first in `lwzx r10, r30, r11` / `add r30, r30, r11`
-// (0x8299E2F8 / 0x8299E314 want r11 first); swapping the operands in source
-// is inert, only the helper-call shape restores the order.
-static int PMDtoOffset(void *pThis, const PMD &pmd) {
-    int RetOff = 0;
-    if (pmd.pdisp >= 0) {
-        RetOff = pmd.pdisp;
-        RetOff += *(int *)(*(char **)((char *)pThis + RetOff) + pmd.vdisp);
-    }
-    RetOff += pmd.mdisp;
-    return RetOff;
 }
 
 extern "C" void *__RTDynamicCast(
