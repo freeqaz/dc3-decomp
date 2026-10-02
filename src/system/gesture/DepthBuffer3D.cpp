@@ -402,6 +402,13 @@ void DepthBuffer3D::DrawShowing() {
         mBoxymanPaletteAnim = 1.0f;
     }
 
+    // w18-c (DrawShowing 72.6 canonical): the image keeps `mat` in a frame slot
+    // (stw to 0x60(r31) on both arms, `lwz r22, 0x60(r31)` where it is next
+    // needed) and we keep it in r22.  `mMinimalMat ? mMinimalMat.Ptr() :
+    // SetUpWorkingMat()` reproduces the image's two-store arm shape but scores
+    // 72.1 (the value is still register-held).  Other open items: d38/d44 (60.0f,
+    // 80.0f) are loaded into FPRs up front on our side only, and most of the
+    // remaining rows are the per-pixel loop's register assignment.
     RndMat *mat = mMinimalMat.Ptr();
     if (mat == nullptr) {
         mat = SetUpWorkingMat();
