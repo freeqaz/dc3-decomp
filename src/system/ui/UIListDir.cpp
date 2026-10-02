@@ -412,13 +412,16 @@ void UIListDir::BuildDrawState(
         }
 
         int data = state.Display2Data(dispIndex);
+        // w18-d: the empty element is declared at loop-body scope (live across
+        // the whole body), so MSVC gives it its own 0x40 slot at 0xe0(r1) next to
+        // `elem` at 0xa0(r1) -- the image's 0x220 frame (98.878 -> 98.916).
+        UIListElementDrawState emptyElem;
         if (data == -1) {
-            UIListElementDrawState elem;
 #ifdef HX_NATIVE
-            memset(&elem, 0, sizeof(elem));
+            memset(&emptyElem, 0, sizeof(emptyElem));
 #endif
-            elem.mActive = false;
-            drawState.mElements.push_back(elem);
+            emptyElem.mActive = false;
+            drawState.mElements.push_back(emptyElem);
             continue;
         }
 
@@ -510,7 +513,9 @@ void UIListDir::BuildDrawState(
         // 97.90 -> 98.17) and defining `prevData = 0` AFTER the StepPercent call
         // (the `mr r27, r23` lands at 0x8278924C, 98.17 -> 98.88).  A named
         // `scrollGap` local and `totalGap - scrollOffset * firstGap` were inert.
-        // Residual: one allocator choice -- retail splits numDisplayWithData
+        // w18-d: frame parity now comes from the loop-scope `emptyElem` above
+        // without moving `elem`; every 0x40 offset row is gone.
+        // Residual (98.916, 23 rows, all regalloc): one allocator choice -- retail splits numDisplayWithData
         // (homed at 0x54(r1) at 0x82789080/0x827891E8, r28 time-shared with
         // `showing`, reloaded at 0x82789554) and keeps fadeCountEnd in r17,
         // where we keep numDisplayWithData in r15 and split fadeCountEnd (r14,
