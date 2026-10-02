@@ -483,6 +483,20 @@ if [ ! -f "$WORKTREE_PATH/build.ninja" ]; then
     exit 1
 fi
 
+# ---- safety assertion : build.ninja must name THIS tree ---------------------
+# Every compile edge is `cd $in_dir && cl.exe /Fo$abs_out`, both absolute, while
+# the ninja node names stay relative. A manifest that survived from another tree
+# (a reused worktree path, a `cp -a` of a built tree, a configure.py that failed
+# after the old file was already there) therefore compiles the OTHER tree's
+# sources into the OTHER tree's object dir, silently, while this tree's objects
+# never move. Guarded on the checker existing so an older base ref still works.
+if [ -f "$WORKTREE_PATH/scripts/verify_ninja_root.py" ]; then
+    if ! python3 "$WORKTREE_PATH/scripts/verify_ninja_root.py" --check --root "$WORKTREE_PATH" --quiet; then
+        echo "FATAL: refusing to hand back a worktree that would build another tree." >&2
+        exit 1
+    fi
+fi
+
 # ---- prime ninja state : settle SPLIT + the configure generator edge --------
 # Without this, the worktree's first `ninja -t commands <obj>` query (used by
 # the permuter, MCP orchestrator, and objdiff scripts) can return commands
