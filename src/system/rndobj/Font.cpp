@@ -741,18 +741,23 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         // The first compare in each scan is against the RAW bound, not the
         // cursor (0x82703688 `cmpw r30, r29` is left vs right, while the loop
         // latch at 0x827036C4 is the cursor vs right).
+        // BEHAVIOURAL FIX (w12-a): ColumnNonTransparent is re-called for every
+        // column -- the latch `bne cr6, .L_82703690` at 0x827036C8 jumps back to
+        // the argument setup before the `bl` at 0x827036A4 (same at 0x8270372C
+        // for the right scan).  The previous spelling evaluated it ONCE into a
+        // temp, so a transparent first column walked the cursor straight to
+        // the far bound without testing any other column.
         if (left != right) {
             int dummy;
-            auto _tmp0 = bmap.ColumnNonTransparent(col, top, bottom, &dummy);
-            while (_tmp0 == 0) {
+            do {
+                if (bmap.ColumnNonTransparent(col, top, bottom, &dummy))
+                    break;
                 if (right > left) {
                     col++;
                 } else {
                     col--;
                 }
-                if (col == right)
-                    break;
-            }
+            } while (col != right);
         }
         float leftColF = (float)(long long)col;
         // 0x827036D0 / 0x827036E0 decrement IN PLACE (`subi r29, r29, 1` and
@@ -763,16 +768,15 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         col = right;
         if (right != left) {
             int dummy;
-            auto _tmp1 = bmap.ColumnNonTransparent(col, top, bottom, &dummy);
-            while (_tmp1 == 0) {
+            do {
+                if (bmap.ColumnNonTransparent(col, top, bottom, &dummy))
+                    break;
                 if (left > right) {
                     col++;
                 } else {
                     col--;
                 }
-                if (col == left)
-                    break;
-            }
+            } while (col != left);
         }
         float charW = (float)(long long)col + 1.0f - leftColF;
         int width = bmap.Width();
