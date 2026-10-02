@@ -254,21 +254,18 @@ Hmx::Rect &RndFlare::CalcRect(Vector2 &screenPos, float &visibleArea) {
     int width = TheRnd.Width();
     int height = TheRnd.Height();
     if (TheHiResScreen.IsActive()) {
-        width *= TheHiResScreen.GetTiling();
-        int paddingX = TheHiResScreen.GetPaddingX();
         int tiling = TheHiResScreen.GetTiling();
-        width -= paddingX * tiling;
-        height *= tiling;
-        int paddingY = TheHiResScreen.GetPaddingY();
-        height -= paddingY * TheHiResScreen.GetTiling();
+        width = width * tiling - TheHiResScreen.GetPaddingX() * TheHiResScreen.GetTiling();
+        height = height * tiling - TheHiResScreen.GetPaddingY() * TheHiResScreen.GetTiling();
         Hmx::Rect screenRect = TheHiResScreen.ScreenRect();
         screenPos.x -= screenRect.x;
         screenPos.y -= screenRect.y;
     }
     CalcScale();
 
-    mArea.w = (flareSize * (width * mScaleFactors.x));
-    mArea.h = ((height * (flareSize * (width * mScaleFactors.y)))) / (width * TheRnd.YRatio());
+    float sizeW = width * flareSize;
+    mArea.w = mScaleFactors.x * sizeW;
+    mArea.h = (mScaleFactors.y * height * sizeW) / (TheRnd.YRatio() * width);
     mArea.x = screenPos.x * width - mArea.w * 0.5f;
     mArea.y = screenPos.y * height - mArea.h * 0.5f;
 
