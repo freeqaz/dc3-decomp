@@ -68,7 +68,8 @@ bool MeasureMap::AddTimeSignature(int measure, int num, int denom, bool fail) {
         mTimeSigChanges.push_back(TimeSigChange(0, num, denom, 0));
     } else {
         TimeSigChange &sig = mTimeSigChanges.back();
-        if (measure - sig.Measure() <= 0) {
+        int measureDelta = measure - sig.Measure();
+        if (measureDelta <= 0) {
             if (fail)
                 MILO_FAIL("Multiple time signatures at measure %d", measure);
             else
@@ -78,7 +79,7 @@ bool MeasureMap::AddTimeSignature(int measure, int num, int denom, bool fail) {
             measure,
             num,
             denom,
-            sig.Tick() + (sig.Num() * (measure - sig.Measure()) * TICKS_PER_UNIT) / sig.Denom()
+            sig.Tick() + (sig.Num() * measureDelta * TICKS_PER_UNIT) / sig.Denom()
         ));
     }
     return true;
