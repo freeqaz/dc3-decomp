@@ -3217,40 +3217,18 @@ void BuildFromBSP(RndMesh *mesh) {
             vertIdx++;
         }
 
-        // RESIDUAL (w7-aq, 97.8 canonical): the image loads begin (0x8(r28))
-        // before end (0xc(r28)) for this size(); we load them the other way
-        // round.  Two rows, pure scheduling -- the image itself loads end first
-        // for the identical expression in the FIRST pass (target idx 15/17), so
-        // there is no consistent source spelling to copy.  The other residual is
-        // a callee-saved permutation: the image parks `mesh` in r26 and faceIdx
-        // in r25, we do the reverse (10 rows).  Both survive at 97.8.
+        // w16-a (97.81 -> 100 canonical, modulo register permutation): the
+        // fan is a PLAIN loop over v calling Face::Set.  The hand-stepped
+        // do/while it replaces (byte-offset facePtr, separate v1/v2 counters,
+        // `faceIdx += triCount` up front) is what kept the w7-aq residual
+        // alive -- with the plain loop MSVC itself strength-reduces it to the
+        // image's CTR loop, hoists `clrlwi firstVert`, seeds v-1 with the biased
+        // `addis r10, r11, 0x1 / subi r10, r10, 0x1`, and the size() load-order
+        // rows close too.  Left: the callee-saved swap mesh r26 / faceIdx r25
+        // (9 register-only rows, forgiven by the canonical ruler).
         int firstVert = vertIdx - (int)pit->mPoly.points.size();
-        int v2 = firstVert + 2;
-        if (v2 < vertIdx) {
-            int triCount = vertIdx - v2;
-            int faceOffset = faceIdx * 6;
-            // NEGATIVE RESULTS (w7-aq): the image seeds the second face index
-            // with a BIASED `addis r10, r11, 0x1 / subi r10, r10, 0x1`
-            // (= v2 + 0xFFFF, correct only because the value is masked to 16
-            // bits at every use) where we emit a plain `subi r10, r11, 0x1`.
-            // Spelling v1 `unsigned short` DOES produce the addis pair but then
-            // costs a `clrlwi` per increment -- 97.1%.  Dropping v1 entirely and
-            // writing `facePtr[1] = (unsigned short)(v2 - 1)` in the loop is
-            // worse again, 95.6%.  Plain int v1 is the best of the three.
-            int v1 = v2 - 1;
-            faceIdx += triCount;
-
-            do {
-                unsigned short *facePtr =
-                    (unsigned short *)((char *)&mesh->Faces()[0] + faceOffset);
-                facePtr[0] = (unsigned short)firstVert;
-                facePtr[1] = (unsigned short)v1;
-                facePtr[2] = (unsigned short)v2;
-                v2++;
-                v1++;
-                faceOffset += 6;
-                triCount--;
-            } while (triCount != 0);
+        for (int v = firstVert + 2; v < vertIdx; v++) {
+            mesh->Faces()[faceIdx++].Set(firstVert, v - 1, v);
         }
         ++pit;
     }
