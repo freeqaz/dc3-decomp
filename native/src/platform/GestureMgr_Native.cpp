@@ -545,12 +545,7 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
         skelPtrs[i] = &mgr->GetSkeleton(i);
     }
 
-    SkeletonUpdateData data;
-    data.mSkeletonsLeft = skelPtrs;
-    data.mSkeletonsRight = skelPtrs;
-    data.mFrame = nullptr;
-    data.mHistory = sNativeHistory;
-    data.mCameraInput = sNativeCameraInput;
+    SkeletonUpdateData data(skelPtrs, skelPtrs, nullptr, sNativeHistory, sNativeCameraInput);
 
     // GestureMgr::PostUpdate reads only mSkeletonsRight (the slot array), and it
     // refreshes the quality filter that Skeleton::IsValid consults -- so bind the

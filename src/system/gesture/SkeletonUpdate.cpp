@@ -458,15 +458,12 @@ void SkeletonUpdate::UpdateCallbacks() {
         rightSkeletons[i] = &mSkeletons[i];
     }
 
-    SkeletonUpdateData data;
-    data.mSkeletonsLeft = &mSkeletonsLeft[0];
-    data.mSkeletonsRight = (Skeleton **)&mSkeletonsRight[0];
-    data.mFrame = &mSkeletonFrame;
     // w19-c: the image stores mHistory (0x8c) before mCameraInput (0x90); we
-    // store them the other way round.  Inert: swapping these two statements,
-    // and aggregate-initialising `data`.
-    data.mHistory = this;
-    data.mCameraInput = mCameraInput;
+    // store them the other way round.  Inert: field stores in either order,
+    // an aggregate initialiser, and the constructor (which closed PostUpdate).
+    SkeletonUpdateData data(
+        &mSkeletonsLeft[0], (Skeleton **)&mSkeletonsRight[0], &mSkeletonFrame, this, mCameraInput
+    );
     FOREACH (it, mCallbacks) {
         (*it)->Update(data);
     }
@@ -523,23 +520,15 @@ void SkeletonUpdate::PostUpdate() {
     if (mHasNewFrame) {
         LiveCameraInput::sInstance->SetNewFrame(&mSkeletonFrame);
     }
-    // Known residual, 2 rows (99.988 canonical).  The image issues the five
-    // field stores as 0x6c(this), 0x60, 0x64, 0x68(&mSkeletonFrame),
-    // 0x70(mCameraInput); we issue 0x6c, 0x60, 0x64, 0x70, 0x68 -- the same
-    // five values into the same five slots, with only the last pair's issue
-    // order transposed.  Every instruction before and after matches, loads
-    // included, so this is a scheduler tie and not a value or slot bug.
-    // Refuted: transposing the source order of the mFrame and mCameraInput
-    // assignments here is byte-inert (2 rows before and after), so the store
-    // schedule is not derived from the order these lines are written in.
-    // Also refuted (w12-d): an aggregate `= { ... }` initialiser, and
-    // assigning mCameraInput first -- both byte-inert.
-    SkeletonUpdateData updateData;
-    updateData.mSkeletonsLeft = &mSkeletonsLeft[0];
-    updateData.mSkeletonsRight = &mSkeletonsRight[0];
-    updateData.mFrame = &mSkeletonFrame;
-    updateData.mHistory = this;
-    updateData.mCameraInput = mCameraInput;
+    // w19-c (99.988 -> 100): built through SkeletonUpdateData's five-argument
+    // constructor (Skeleton.h).  Field-by-field stores, in either order, or an
+    // aggregate `= { ... }` initialiser issue the 0x68 (&mSkeletonFrame) and
+    // 0x70 (mCameraInput) stores transposed; the constructor gives the image's
+    // order.  (UpdateCallbacks above keeps its own 2-row transposition of the
+    // 0x8c/0x90 pair either way.)
+    SkeletonUpdateData updateData(
+        &mSkeletonsLeft[0], &mSkeletonsRight[0], &mSkeletonFrame, this, mCameraInput
+    );
     FOREACH (it, mCallbacks) {
         AutoGlitchReport report(4.0f, SkeletonUpdateCallbackSlowdownCB, *it);
         (*it)->PostUpdate(mHasNewFrame ? &updateData : nullptr);
