@@ -25,6 +25,16 @@ public:
     // MoveFrame of Move().
     const std::vector<DancerFrame> &NativeDancerFrames() const { return mDancerFrames; }
 #endif
+    void Activate() {
+        if (mActive != true) {
+            for (int i = 0; i < 2; i++) {
+                *(int *)&mLastDetectFracs[i] = 0;
+            }
+            mLastDetectFrameIdx = -1;
+            mDetectFrameOffset = -1;
+            mActive = true;
+        }
+    }
     void Reset() {
         if (mActive) {
             for (int i = 0; i < 2; i++) {

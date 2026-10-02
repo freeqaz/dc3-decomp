@@ -230,39 +230,14 @@ void MoveAsyncDetector::EnableDetector(HamMove *move) {
     if (move != 0) {
         MoveDetector *detector = FindDetector(move);
         if (detector != 0) {
-            if (detector->mActive != true) {
-                // NOTE (w7-av): the image clears the two fracs with an UNROLLED
-                // LOOP -- that is what the otherwise-dead `addi r11, r3, 0x34`
-                // at 0x8252EA9C is (the induction pointer, folded back to
-                // base+disp in both stores).  Spelling it as a loop here, the way
-                // MoveDetector::Reset does, gets 48 of 50 rows equal but leaves
-                // the addi ONE SLOT late (after `stw r10, 0x8(r3)` instead of
-                // before) and the canonical ruler charges that insert/delete pair
-                // 95.92 -- worse than the 97.96 the two straight-line stores get
-                // with their r10/r11 permutation.  Kept the higher-scoring
-                // spelling; the loop is the truer one.  Moving `mActive = true`
-                // above the two -1 stores is 87.7.
-                // w8-i, refining the row count above: the loop spelling leaves
-                // exactly TWO rows (48 of 50 equal, base size 196 = target size),
-                // and the addi is NOT one slot late -- it lands at the image's
-                // index 22.  What is misplaced is `stw r10, 0x8(r3)`, one slot
-                // EARLY: MSVC schedules the dead pointer init BETWEEN our two -1
-                // stores, where the image emits both of them after it.  The loop
-                // also fixes the r10/r11 assignment that the straight-line form
-                // gets backwards.  Still kept out because the canonical ruler
-                // charges the insert/delete pair harder than six register rows:
-                // loop = 95.9, straight-line = 98.0, and neither is 100 so
-                // matched_code is indifferent.  Refuted on top of that: moving
-                // the two -1 stores ABOVE the loop is 95.8 (the addi then sinks
-                // past BOTH of them AND the registers go back to swapped), and
-                // the pointer-walking form `int *frac = ...; *frac++ = 0;` is
-                // bit-identical to the index form.
-                *(int *)&detector->mLastDetectFracs[0] = 0;
-                *(int *)&detector->mLastDetectFracs[1] = 0;
-                detector->mLastDetectFrameIdx = -1;
-                detector->mDetectFrameOffset = -1;
-                detector->mActive = true;
-            }
+            // w17-b: 97.96 -> 100.  The activation is an INLINE MoveDetector
+            // method (the mirror of the header's Reset()), not open code here.
+            // Written inline in this body, MSVC scheduled the dead loop pointer
+            // `addi r11, r3, 0x34` between the two -1 stores (loop form, 95.9)
+            // or dropped it and swapped r10/r11 (straight-line form, 97.96, see
+            // w7-av / w8-i history in git); through the inline call boundary the
+            // stores land exactly where the image has them (0x8252EA90..AAC).
+            detector->Activate();
             mActiveDetectors.insert(detector);
         } else {
             // w8-i: `const char *`, NOT a `(char *)` cast.  MakeString takes its
