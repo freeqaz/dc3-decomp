@@ -75,7 +75,12 @@ Flow::~Flow() {
             mRunningNodes.clear();
         } else
 #endif
-        if (mProxyFile.empty()) {
+        // w14-f: 90.08 -> 100.  The image calls the virtual ProxyFile() through
+        // the full object (`lwz r11, 0x68(r29)` / slot 1 / bctrl) and homes r29
+        // in a frame slot; a call on `this` in a dtor is devirtualised and
+        // inlined to the mProxyFile read.  Same value: Flow does not override it.
+        Flow *self = this;
+        if (self->ProxyFile().empty()) {
             FlowQueueable::Deactivate(true);
         }
     }
