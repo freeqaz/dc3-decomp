@@ -586,6 +586,9 @@ int CharBonesSamples::FracToSample(float *frac) const {
 // load/convert order (0x823E1328..0x823E1354), element 1 of the uncompressed
 // quat lerp, and the six-conversion schedule of the frac != 0 vects arm
 // (0x823E1474..0x823E153C).
+// w16-c: reading mCompression directly in the frac == 0 half (no local) is
+// the w7-by `int comp` result again, 82.2 / frame 0xb0; one function-scope
+// `int comp` for both halves is 79.8.
 void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, float frac) {
     char *src = mRawData + mTotalSize * sample + byteOffset;
     if (frac == 0.0f) {

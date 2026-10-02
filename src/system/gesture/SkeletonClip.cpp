@@ -379,6 +379,9 @@ END_COPYS
 // (&d.altRev); we emit them the other way round.  Inert, all measured:
 // `*(gRevs + 2)`, `gRevs[1 + 1]`, gRevs at file scope, comparing against
 // gRevs[0]/gRevs[2] instead of literals, `d.rev > 9` for `9 < d.rev`.
+// w16-c: the INIT_REVS spelling (two separately aligned static shorts gRev=9
+// / gAltRev=1 in place of gRevs[4]) re-anchors both MILO_FAILs off separate
+// lis/addi pairs and costs 98.0; the array stays.
 BEGIN_LOADS(SkeletonClip)
     const char *pathName = PathName(this);
     Symbol className = ClassName();

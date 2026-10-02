@@ -542,6 +542,9 @@ void DxTex::MakeDrawTarget() {
         // the bool into a named local moves the load but not the subi/subfe, and
         // swapping the two statements puts the `stb` before the `stw`, which the
         // target does not do.
+        // w16-c: `int type = mType;` read before SetCurrent plus
+        // `type - kShadowMap != 0` is inert (91.3) -- MSVC still sinks the
+        // lwz below the sCurrent store, so no aliasing order is involved.
         NgMat::SetCurrent(nullptr);
         TheDxRnd.SetReverseZ(mType != kShadowMap);
     }

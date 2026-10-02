@@ -392,6 +392,9 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
         // (the operand order the image's fmuls literally shows) is byte-inert
         // here, so the shared-header edit was reverted rather than landed on a
         // guess.
+        // w16-c: `pl70.d = -(-pl70.d + planeD)` after a Plane(worldPos, up)
+        // is 96.1 (fnmadds + fsubs).  The same unfactored x*0 + y*0 shape is
+        // CharIKFingers::CalculateHandDest's residual.
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
         Transform tf40;
         Transpose(xfm, tf40);

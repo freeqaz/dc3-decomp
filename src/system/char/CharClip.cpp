@@ -185,6 +185,11 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
     // `return` out of the oldRev < 8 arm (the lever that fixed WorldDir::Poll),
     // swapping the old arm's `num_nodes, num_node_vectors` declaration order,
     // and swapping buf/buf2.
+    // w16-c: stack-layout reading of the residual -- image 0x50 = the shared
+    // PathName / placement-new temp, 0x54 = old-arm count, 0x58/0x5c = new-arm
+    // node_vectors/nodes; ours is exactly reversed.  Inert: hoisting the
+    // new-arm pair to function scope (old pair renamed); swapping the arms
+    // (`oldRev >= 8` first) is 32.5 -- the image lays the old arm out first.
     Clear();
     static ObjectDir *sDir = nullptr;
     char buf[0x100];

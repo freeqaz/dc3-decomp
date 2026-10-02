@@ -125,6 +125,10 @@ void CharBones::RecomputeSizes() {
     }
     mTotalSize = (mOffsets[TYPE_END] + 0xFU) & 0xFFFFFFF0;
 #else
+    // w16-c: the plain `for (i < NUM_TYPES) mOffsets[i + 1] = mOffsets[i] +
+    // TypeSize(i) * (mCounts[i + 1] - mCounts[i]);` loop, with or without the
+    // count/offset named ahead of the call, is 75.4: MSVC then sinks the
+    // subtraction below the TypeSize call.  The hand-stepped form stays.
     int i = 0;
     int *offset = &mOffsets[0];
     *offset = 0;

@@ -130,6 +130,11 @@ namespace {
     }
 
     void ScreenSpace(Hmx::Rect &rect) {
+        // w16-c, measured: `rect.x = V.x;` first then y/z through locals
+        // reproduces the image's lfs/stfs x, lfs y, lfs z, stfs, stfs block
+        // exactly but drags the TheRnd lwz below it, 83.3 (same with an
+        // explicit `Rnd &rnd = TheRnd;` first); three plain member copies
+        // 74.9; computing scale first 64.9.
         // NOTE (w7-av): 94.42 is a one-slot scheduling floor.  The image stores
         // rect.x immediately after loading DrawUtlVec3.x (`lfs f0` / `stfs f0,
         // 0x0(r3)`) and only then loads y and z; we hoist all three loads.  Do
