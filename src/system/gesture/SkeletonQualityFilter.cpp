@@ -107,7 +107,10 @@ void SkeletonQualityFilter::UpdateIsSideways(const TrackedJoint *joint) {
     Vector3 vDiff2;
     Subtract(joint[4].mJointPos[0], joint[2].mJointPos[0], vDiff2);
     Normalize(vDiff2, vDiff2);
-    if (0.25f < Dot(vDiff, vDiff2)) {
+    // The image reads this from .data (0x82F0C194, a mutable static), not an
+    // __real@ literal.
+    static float sSidewaysDotThreshold = 0.25f;
+    if (vDiff.y * vDiff2.y + vDiff.x * vDiff2.x + vDiff.z * vDiff2.z > sSidewaysDotThreshold) {
         mSideways = true;
     }
 }
