@@ -2261,8 +2261,11 @@ void SquareComplexTransposeVector(float* data, long size) {
         char* colLo = col;
         char* colHi = col + halfStep;
         for (long j = 0; j < i; j++) {
-            XMVECTOR cHi = __lvx(colHi, 0);
+            // w17-e: cLo before cHi -- MSVC issues the two lvx in the reverse
+            // order, which is the image's (`lvx128 v62, r0, r6` colHi first):
+            // removes 4 register rows (raw 96.62 -> 96.96; canonical unchanged).
             XMVECTOR cLo = __lvx(colLo, 0);
+            XMVECTOR cHi = __lvx(colHi, 0);
             XMVECTOR rLo = __lvx(rowLo, 0);
             XMVECTOR rHi = __lvx(rowHi, 0);
             XMVECTOR outRowLo = __vperm(cLo, cHi, pm_lo);

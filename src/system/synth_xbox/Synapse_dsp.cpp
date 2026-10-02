@@ -249,6 +249,9 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     mGranularSynth.reset(gs);
 
     // Zero out voice gains in GranularSynth
+    // w17-e: still 99.995 (rows 332-335).  `j < mVoices.size()` (no casts) is
+    // byte-identical; `(mVoices.end() - mVoices.begin())` is 99.7 (it changes
+    // the hoisted pre-loop copy of the bound too).
     for (unsigned int j = 0; j < (unsigned int)((int)mVoices.size()); j++) {
         mGranularSynth->mVoices[j].mField_0x00 = 0.0f;
     }

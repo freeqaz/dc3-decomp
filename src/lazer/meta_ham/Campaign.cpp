@@ -557,6 +557,9 @@ bool Campaign::UpdateEraSongUnlockInstructions(
     // `campaign_song_hint_singular` is declared twice here (i8==1/i9==0 arm and
     // the fallthrough at the end); the image carries both, with the same scope
     // ordinals we emit -- ?EJ@ and ?FD@ -- so the duplication is the image's.
+    // w17-e: still 99.52.  Turning the i8 > 1 group's `else if` arms into
+    // plain `if`s (as the i8 == 0 group is written) is byte-identical: the
+    // cross-jump survivor is not decided by the if/else-if spelling.
     if (i8 > 1) {
         if (i9 > 1) {
             static Symbol campaign_song_hint_both("campaign_song_hint_both");

@@ -34,11 +34,12 @@ std::deque<PoolVoice> s_voiceGC;
 std::deque<PoolVoice> s_voiceGCInProgress;
 
 bool gShutdownVoiceThread = false;
-bool gCommitSyncVoices = false;
-int gCommitTag = 0;
 bool gHasPendingStopCommits = false;
+bool gCommitSyncVoices = false;
 bool gWasCommitSyncVoices = false;
-static int gVoiceCounters[2];
+static int gVoicesActive = 0;
+static int gVoicesPendingGC = 0;
+int gCommitTag = 0;
 int gWasCommitTag = 0;
 int rolling = 0;
 void StartSynchronizedVoices();
@@ -102,10 +103,12 @@ void Voice::dispose(PoolVoice *pv, unsigned int) {
         // docs/decomp/patterns/fixable-inline-boundary.md.
         CritSecTracker lock(&gVoiceGC);
         s_voiceGC.push_back(*pv);
-        // [1]++ before [0]--: the target loads gVoiceCounters[1] into the lower
-        // scratch register, which is a statement-order tell, not scheduling noise.
-        gVoiceCounters[1]++;
-        gVoiceCounters[0]--;
+        // PendingGC++ before Active--: the target loads the GC count into the
+        // lower scratch register, which is a statement-order tell, not
+        // scheduling noise (w17-e re-measured with the two separate statics:
+        // the swapped order makes MSVC anchor on the GC count, 99.77).
+        gVoicesPendingGC++;
+        gVoicesActive--;
     }
     pv->eg = 0;
     pv->egParams = 0;
@@ -118,7 +121,6 @@ long Voice::createOrReuse(
     if (!TheXboxSynth->OutputVoice()) {
         return 0;
     }
-    long result;
     MILO_ASSERT(pPoolVoice->eg == 0, 0x1c1);
     pPoolVoice->eg = new EnvelopeGenerator();
     MILO_ASSERT(mPoolVoice.egParams == 0, 0x1c3);
@@ -132,74 +134,52 @@ long Voice::createOrReuse(
     effectDesc.OutputChannels = mChannels;
     effectChain.pEffectDescriptors = &effectDesc;
 
-    MemPushTemp();
-
-    // The image almost certainly holds this in a CritSecTracker, not a bare
-    // pointer: right after the `addic. r30, r11, 0xb0` that both forms &unkb0
-    // and tests it, the image does `stw r30, 0x50(r31)` -- a store we have no
-    // reason to emit, and exactly CritSecTracker::mCritSec being materialised --
-    // and createOrReuse carries an unwind region (pdata 0xC000AF05, bit31 set)
-    // that a plain pointer local would not need.  The tracker's scope would end
-    // before the success bookkeeping, with MSVC duplicating the inlined
-    // destructor into both arms of the following `if (hr)`, which is what the
-    // two `bl Exit` sites look like (error one after MILO_FAIL, success one
-    // before the counter/memcpy work).
-    //
-    // MEASURED AND REJECTED (wave 7, lane w7-y): writing it that way -- tracker
-    // scope around the call plus the error print, then `if (hr) result = hr;
-    // else {...}` outside -- fixes the whole 16-row r29/r30 permutation, but our
-    // MSVC does NOT merge the second `if (hr)` into the duplicated destructor.
-    // It emits a fresh `cmpwi cr6, r28, 0x0` and re-lays the tail, losing the
-    // shared `bl MemPopTemp` block: 96.19 -> 94.06 (39 mismatch rows -> 26, but
-    // 7 of them deletes).  Kept the explicit spelling and named the loss.
-    CriticalSection *cs = &TheXboxSynth->unkb0;
-    if (cs) {
-        cs->Enter();
-    }
-
-    int *pEngine = (int *)TheXboxSynth->unkec;
-    HRESULT hr = ((HRESULT(*)(
-        int *,
-        IXAudio2SourceVoice **,
-        tWAVEFORMATEX *,
-        int,
-        float,
-        int,
-        XAUDIO2_VOICE_SENDS *,
-        XAUDIO2_EFFECT_CHAIN *
-    ))(*(int *)(*(int *)pEngine + 0x20)))(
-        pEngine,
-        (IXAudio2SourceVoice **)pPoolVoice,
-        &wfx,
-        0,
-        4.0f,
-        0,
-        sends,
-        &effectChain
-    );
-
-    if (hr) {
-        char buf[0x800] = "";
-        MEMORYSTATUS memStatus;
-        GlobalMemoryStatus(&memStatus);
-        Hx_snprintf(buf, 0x800, "XAudio2: CreateSourceVoice failed with 0x%X\n", hr);
-        MemPrintOverview(kNoHeap, buf + strlen(buf));
-        MILO_FAIL(buf);
-        if (cs) {
-            cs->Exit();
+    // w17-e: 96.19 -> 100 canonical (modulo register permutation: this/wfx/sends
+    // rotate r23/r21/r22 vs our r21/r22/r23, 11 rows).  The bare
+    // MemPushTemp/MemPopTemp pair is a MemDoTempAllocations scope and the
+    // engine lock is a CritSecTracker (the image's `stw r30, 0x50(r31)` right
+    // after `addic. r30, r11, 0xb0` is CritSecTracker::mCritSec, and the pdata
+    // carries an unwind region).  The failure path RETURNS from inside the
+    // tracker's scope: that is what makes MSVC duplicate the Exit into both
+    // arms and share the single `bl MemPopTemp` tail (82E36CDC), which the
+    // w7-y `if (hr) result = hr; else {...}` spelling could not reach.
+    MemDoTempAllocations tmp;
+    {
+        CritSecTracker lock(&TheXboxSynth->unkb0);
+        int *pEngine = (int *)TheXboxSynth->unkec;
+        HRESULT hr = ((HRESULT(*)(
+            int *,
+            IXAudio2SourceVoice **,
+            tWAVEFORMATEX *,
+            int,
+            float,
+            int,
+            XAUDIO2_VOICE_SENDS *,
+            XAUDIO2_EFFECT_CHAIN *
+        ))(*(int *)(*(int *)pEngine + 0x20)))(
+            pEngine,
+            (IXAudio2SourceVoice **)pPoolVoice,
+            &wfx,
+            0,
+            4.0f,
+            0,
+            sends,
+            &effectChain
+        );
+        if (hr) {
+            char buf[0x800] = "";
+            MEMORYSTATUS memStatus;
+            GlobalMemoryStatus(&memStatus);
+            Hx_snprintf(buf, 0x800, "XAudio2: CreateSourceVoice failed with 0x%X\n", hr);
+            MemPrintOverview(kNoHeap, buf + strlen(buf));
+            MILO_FAIL(buf);
+            return hr;
         }
-        result = hr;
-    } else {
-        if (cs) {
-            cs->Exit();
-        }
-        gVoiceCounters[0]++;
-        memcpy(&pPoolVoice->wfx, &wfx, 0x12);
-        unk54 = (sends == nullptr || sends->SendCount > 0);
-        result = 0;
     }
-    MemPopTemp();
-    return result;
+    gVoicesActive++;
+    memcpy(&pPoolVoice->wfx, &wfx, 0x12);
+    unk54 = (sends == nullptr || sends->SendCount > 0);
+    return 0;
 }
 
 // w7-bu (2026-09-15): 92.4 -> 95.0 canonical, three levers on the MONO arm:
@@ -635,23 +615,17 @@ void Voice::Pause(bool b1) {
     }
 }
 
-// RESIDUAL (w8-r, 97.059, 272 B, 4 of 69 rows).  The image threads the
-// 0.01f literal's `lis`/`lfs` pair through r11 and only then overwrites r11
-// with `addi r11, r1, 0x10bc` (the homed `speed` parameter, above this
-// function's 0x10a0 frame -- the frame is that big because MILO_NOTIFY_ONCE's
-// MakeString buffer forces the `ld r12, -0x1000(r1)` stack probe).  We use r10
-// for the literal and compute the `addi` two instructions earlier, so it is
-// the same four instructions in a different order with one register renamed.
+// w17-e: 97.059 -> 100.  The lower clamp is std::max(0.01f, speed): both
+// operands bound by const reference, which is what homes `speed` at 0x10bc and
+// the literal at 0x50 and selects between their addresses (image 82E38A84
+// `fcmpu f1, f0` / `bgt` keeps &speed only when speed > 0.01f, so a NaN speed
+// takes the 0.01f arm -- the old hand-written `speed <= min ? &min : &speed`
+// kept the NaN).  The w8-r "literal through r11" residual was this.
 void Voice::SetSpeed(float speed) {
-    float min_speed = 0.01f;
-    float *pSpeed = &speed;
-    if (speed <= min_speed)
-        pSpeed = &min_speed;
-    float clamped = *pSpeed;
-    float max_speed = 2.0f;
-    if (clamped > max_speed && mXMA) {
+    float clamped = std::max(0.01f, speed);
+    if (clamped > 2.0f && mXMA) {
         MILO_NOTIFY_ONCE("can't pitch an XMA sound up more than one octave");
-        clamped = max_speed;
+        clamped = 2.0f;
     }
     mSpeed = clamped;
     if (mPoolVoice.sourceVoice != 0) {
@@ -938,9 +912,20 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
 // hoist order and scratch registers (same hoist SET now, including the
 // header-path string in r15 and "EnvelopeGeneratorParams" in r14); the
 // image tests TheXboxSynth in cr0 at 0x82E39470 where every other test of it
-// in this TU is cr6 (nested `if`s: inert); and it reaches gVoiceCounters[1]
-// as a sym+4 relocation (`lwz r11, lbl_8316C734@l(r20)`, 0x82E39558) where
-// we hoist the array base and use 0x4(r20) (`-= 1`: inert).
+// in this TU is cr6 (nested `if`s: inert).
+// w17-e: 95.8 -> 99.59.  The "gVoiceCounters[2]" array was two separate
+// file-static ints, gVoicesActive (0x8316C730) and gVoicesPendingGC
+// (0x8316C734): the image reaches the GC count here as its own symbol
+// (`lis r20, lbl_8316C734@ha` hoisted, `lwz r11, lbl_8316C734@l(r20)` at
+// 0x82E39558), where an array made us hoist the full base (lis+addi) and
+// shifted the whole prologue hoist set by one register; dispose() reaches the
+// pair as anchor+displacement off gVoicesActive exactly as before.  Both are
+// written `= 0`: uninitialised file statics are laid out ahead of every
+// global, initialised ones in declaration order -- which is the image's
+// .bss order (the four bools, the two counts, gCommitTag, gWasCommitTag,
+// rolling).  RESIDUAL (99.59, 10 rows): rows 32-56 swap two hoisted string
+// /deque bases between r4/r5 and r29/r30 (lis scratch only), and the cr0
+// TheXboxSynth test (rows 135-136).
 unsigned long StartVoiceThreadEntry(void *) {
     rolling++;
     WaitForSingleObject(gEvent, INFINITE);
@@ -960,9 +945,12 @@ unsigned long StartVoiceThreadEntry(void *) {
 
             gWasCommitSyncVoices = false;
             if (gCommitSyncVoices) {
-                gCommitSyncVoices = false;
+                // w17-e: this store order is the image's register assignment
+                // (gCommitTag in r10, the 1 in r11 -- rows 74-81); the other
+                // five orders of these three stores each leave 2-5 rows.
                 gWasCommitSyncVoices = true;
                 gWasCommitTag = gCommitTag;
+                gCommitSyncVoices = false;
                 gInProgressSyncVoices = gPendingSyncVoices;
                 gPendingSyncVoices.clear();
             }
@@ -1026,7 +1014,7 @@ unsigned long StartVoiceThreadEntry(void *) {
                 }
                 s_voiceGCInProgress.push_back(s_voiceGC.front());
                 s_voiceGC.pop_front();
-                gVoiceCounters[1]--;
+                gVoicesPendingGC--;
                 gcCount++;
                 front = s_voiceGC.begin();
                 if (gcCount >= 4) {
