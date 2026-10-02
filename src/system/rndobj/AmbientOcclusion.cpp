@@ -968,6 +968,12 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
             // shAccum[k] first and rescaling that double in place.  MSVC
             // canonicalises the form before contraction, so the image's fmadd
             // is not reachable from source here; the faithful spelling is kept.
+            // w16-a: three more spellings byte-identical at 97.48 --
+            // `val / 2.0 + 0.5`, a `const double half = 0.5;` local for both
+            // the multiplier and the addend, and `shAccum[k] = val * 0.5;`
+            // followed by `shAccum[k] += 0.5;`.  The factoring into
+            // (val + 1.0) * 0.5 survives a statement boundary and a named
+            // constant, so it is not a front-end rewrite of one expression.
             float val = Clamp(-1.0f, 1.0f, (float)shAccum[k]);
             shAccum[k] = val * 0.5 + 0.5;
         }

@@ -1263,6 +1263,14 @@ bool RndBitmap::LoadBmp(const char *filename, bool wantMips, bool noAlpha) {
     }
 }
 
+// w16-a (stopped at 97.70 canonical): 23 rows -- an r26<->r27 swap between
+// `bs` and paletteBytes (18 rows), plus the `lis Bitmap.cpp` / `clrrwi r25`
+// order ahead of MemAlloc (4 rows).  Measured: a plain
+// `for (p = pixels; p != pEnd; p++)` nibble-swap loop REMOVES the r26/r27 swap
+// but becomes a CTR loop (93.6); `pEnd` declared before `p` with the do-while
+// kept is inert; paletteBytes as a ternary also removes the swap but moves
+// `li r26,0` into an else arm (96.0); hoisting `int paletteBytes;` to the top
+// and `* 4U` are both inert.  The swap is liveness-driven, not declaration-driven.
 bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
     tagBITMAPINFOHEADER infoheader;
     *bs >> infoheader;

@@ -3030,6 +3030,9 @@ void BuildVisit(BSPNode *node) {
     // spelling were all return values of an inlined accessor
     // (`mGeomOwner->` in TessellateMesh/UpdateGeometryBuffers), so an extra
     // inlined layer per mention is not by itself what creates them.
+    // w16-a: `(*lastIt).mTransform` (operator* returning a reference) instead
+    // of `lastIt->` for all nine mentions here is byte-identical (94.97, 121
+    // rows) -- operator-> vs operator* is not what homes them either.
     lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
     lastIt->mTransform.m.y.Set(0, 1, 0);

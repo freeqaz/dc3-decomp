@@ -174,6 +174,10 @@ void RndAnimatable::FireFlowLabel(Symbol s) {
     // image has no such store.  RESIDUAL: one dead `stw r10, 0x50(r31)` from
     // begin() on the same sub-object remains (also inert as a split
     // declaration `ObjRef::iterator it; for (it = Refs().begin(); ...)`).
+    // w16-a (99.17, still the one dead `stw r10, 0x50(r31)` of &mRefs):
+    // `mRefs.begin()` / `&mRefs` directly instead of through Refs() is inert,
+    // so the home is not the const-reference return of Refs().  Same row in
+    // EventTrigger::Cleanup (0x60(r31)).
     for (ObjRef::iterator it = Refs().begin(); (ObjRef *)it != &Refs(); ++it) {
         Hmx::Object *owner = it->RefOwner();
         if (owner && owner->ClassName() == "AnimTask") {
@@ -521,6 +525,11 @@ DataNode RndAnimatable::OnConvertFrames(DataArray *arr) {
 //      99.95220, same 25 rows, same offsets.
 // Neither the FindData call order nor the initialiser store order can be the
 // input either -- both already agree with the image instruction for instruction.
+// w16-a (stopped at 99.952): 25 rows, all frame-slot assignment among the
+// eight FindData out-locals (target: blend 0x88, ease_power 0x84, ease 0x80,
+// units 0x7c, name 0x78, delay 0x74, wait 0x72, wrap 0x71).  Declaring them in
+// exactly that order up front and assigning the initial values in place is
+// byte-identical (25 rows), so declaration order does not drive it.
 DataNode RndAnimatable::OnAnimate(DataArray *arr) {
     float local_blend = 0.0f; // 0x88
     float animTaskStart = StartFrame();

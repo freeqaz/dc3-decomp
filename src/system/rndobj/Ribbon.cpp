@@ -374,6 +374,10 @@ void RndRibbon::UpdateChase() {
             // than the diff_arg rows it removed: 99.757 -> 99.032.  The remaining
             // gap is loop-invariant code motion, not the addressing form, and no
             // behaviour-preserving spelling found here defeats it.
+            // w16-a: the plain loop `for (; i < numKeys; i++) { if (...) break;
+            // removeCount++; }` inside the guard is WORSE (99.757 -> 99.5): it
+            // keeps a separate size test ahead of the loop and the mBegin load
+            // still CSEs with size()'s.
             do {
                 if (mTransforms[i].frame >= cutoff) {
                     break;

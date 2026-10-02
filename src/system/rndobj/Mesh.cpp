@@ -825,6 +825,10 @@ float RndMesh::GetDistanceToPlane(const Plane &p, Vector3 &v) {
     }
 }
 
+// w16-a (99.982, 4 rows): the image loads mNumVerts (0x104) before mVerts
+// (0x100) for the loop's end() and adds size*0x60 + begin; we do the
+// reverse.  VertVector::end() spelled `mVerts + mNumVerts`, `&mVerts[size()]`
+// and `begin() + size()` are all inert here, so the order is not end()'s.
 bool RndMesh::MakeWorldSphere(Sphere &s, bool b) {
     if (b) {
         if (mShowing) {
