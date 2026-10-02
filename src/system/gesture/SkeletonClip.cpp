@@ -145,14 +145,14 @@ const RecordedFrame *SkeletonClip::RecordedFrameAt(
 const RecordedFrame *SkeletonClip::CurRecordedFrame(int &frameIdx, int &loopCount) const {
     if (!IsRecording()) {
         if (TheHamDirector) {
-            return RecordedFrameAt(*mRecordedFrames, MoveDir::SongSeconds(), frameIdx, loopCount);
+            float seconds = MoveDir::SongSeconds();
+            return RecordedFrameAt(*mRecordedFrames, seconds, frameIdx, loopCount);
         }
         if (mRecordedFrames->size() > 0) {
-            float frame = GetFrame();
-            if ((float)mRecordedFrames->size() > frame) {
+            if ((float)mRecordedFrames->size() > GetFrame()) {
                 loopCount = 0;
-                frameIdx = (int)frame;
-                return &(*mRecordedFrames)[(int)frame];
+                frameIdx = GetFrame();
+                return &(*mRecordedFrames)[frameIdx];
             }
         }
     }
