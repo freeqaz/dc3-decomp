@@ -428,15 +428,20 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
     bool temp = stack.mTempRefs != 0 ||
         (heap != nullptr && heap->GetStrategy() == MemHeap::kLastFit);
     void *allocated_mem;
+    // Function scope, not the heap arm's block: the image gives the heap arm's
+    // out-param its own frame slot (0x54) and lets the tiny-heap out-param and
+    // every MILO_ASSERT line temp share 0x50; block-scoped, ours coloured the
+    // two out-params together.
+    int allocatedWords;
     // Fast path: once MemInit has stood the "tiny" heap up as the last heap,
     // every small allocation gets one cheap TryAlloc against it before any of
     // the temp/strategy machinery below runs.
     if (gTinyHeapReady && gSingleHeap == 0 && iSizeBytes <= 0x6000) {
         int sizeWords = MemHeap::GetSizeWords(iSizeBytes);
         int alignWords = MemHeap::GetAlignWords(align);
-        int allocatedWords;
+        int tinyAllocatedWords;
         allocated_mem =
-            gHeaps[gNumHeaps - 1].TryAlloc(sizeWords, alignWords, allocatedWords);
+            gHeaps[gNumHeaps - 1].TryAlloc(sizeWords, alignWords, tinyAllocatedWords);
         if (allocated_mem != nullptr) {
             if (gMemTracker) {
                 MemTrackAlloc(
@@ -526,7 +531,6 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
             temp ? MemHeap::kLastFit : heap->GetStrategy();
         MemHeap::Strategy oldStrategy = heap->GetStrategy();
         heap->SetStrategy(newStrategy);
-        int allocatedWords;
         allocated_mem = heap->Alloc(sizeWords, alignWords, allocatedWords);
         if (gMemTracker) {
             MemTrackAlloc(
