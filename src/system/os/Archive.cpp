@@ -70,9 +70,12 @@ void ArkHash::Read(BinStream &bs, int len) {
 
     int heapSize;
     bs >> heapSize;
-    mHeap = (char *)MemAlloc(heapSize + len, __FILE__, 0x112, "ArkHash");
+    // w14-d: the total is computed ONCE (the image's `add r29, r11, r29` feeds
+    // both MemAlloc and mHeapEnd); heapSize itself is re-read after the call.
+    int totalSize = heapSize + len;
+    mHeap = (char *)MemAlloc(totalSize, __FILE__, 0x112, "ArkHash");
     mFree = mHeap + heapSize;
-    mHeapEnd = mHeap + (heapSize + len);
+    mHeapEnd = mHeap + totalSize;
 
     bs.Read(mHeap, heapSize);
     memset(mFree, 0, mHeapEnd - mFree);
