@@ -14,6 +14,10 @@ DSP::Synapse::PitchCorrectedVoice::PitchCorrectedVoice()
       mProximityEffect(0.0f), mProximityFocus(0.5f), mField_0x28(0.0f), mFreqCounter(0.0f),
       mPrevFreq(0.0f), mAbsPitchDeviation(0.0f) {}
 
+// w17-e (97.73, 26 rows): the non-register difference is that the image
+// RELOADS mSmoothedCorrection (`lfs f0, 0x8(r31)`) after the `mPrevFreq =
+// mFreqCounter` store, where we reuse the value loaded for the attack/release
+// test; the rest is the FPR renaming that follows.  Not chased further.
 float DSP::Synapse::PitchCorrectedVoice::GetCorrection() {
     // Interval between the two target frequencies, in semitones.
     float interval = Util::Log<float>(mFreq1) - Util::Log<float>(mFreq0);

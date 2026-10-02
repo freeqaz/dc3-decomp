@@ -295,6 +295,11 @@ DataNode SkeletonIdentifier::OnMsg(SkeletonEnrollmentChangedMsg const &msg) {
     return DATA_UNHANDLED;
 }
 
+// w17-e (99.17, 76 rows, all one register shift): the image keeps `this` in
+// r30 through the first (7-line) loop and then RELOADS it from its home slot
+// in the second loop (`lwz r10, 0x224(r1)`, r30 reused for the "%d. %d %s"
+// literal); we keep `this` in r14 for the whole function, which pushes every
+// other callee-saved value up by one.  Not chased further.
 void SkeletonIdentifier::DrawDebug() {
 #ifndef HX_NATIVE
     if (mDrawDebug) {

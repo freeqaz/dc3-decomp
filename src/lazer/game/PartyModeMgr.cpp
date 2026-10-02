@@ -1093,6 +1093,10 @@ void PartyModeMgr::ResetMicrogames() {
 // `li r4, 0`, we emit the 0-then-1 form. Measured: `idx = 1; if (t1 > t2) idx
 // = 0;` turns branchless (95.2); passing the bool comparison straight into
 // Int() is worse (86.6); an empty-then/else spelling is identical to now.
+// w17-e: still 98.0.  Two more spellings, both worse: the index as a
+// `t1 > t2 ? 1 : 0` / `? 0 : 1` argument straight into Int() (86.6), and the
+// Array() call folded into the Int() expression with idx computed first (69.9
+// -- the size compare must come AFTER the Array() call, as the image has it).
 int PartyModeMgr::PickNextPlayer() {
     int ret = -1;
     if (mCurrentTeamSelector == 2) {
@@ -1473,6 +1477,9 @@ DataNode PartyModeMgr::OnMsg(const RCJobCompleteMsg &msg) {
     return 1;
 }
 
+// w17-e (99.95, 6 rows: case-1/case-2 block order).  Measured byte-identical:
+// `case 2:` written before `case 1:`, and `default:` written first.  An
+// if / else-if / else chain is 84.3.  (ClearTeam has the same 8-row shape.)
 void PartyModeMgr::FinalizeTeam(int team) {
     std::vector<PartyModePlayer *> *players;
     PseudoRandomPicker<int> *picker;

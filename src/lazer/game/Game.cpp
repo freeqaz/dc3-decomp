@@ -1004,6 +1004,18 @@ bool Game::IsLoaded() {
     }
 }
 
+// w17-e (55.83, unchanged; 34 rows = the whole loop shape): the image's
+// 4-instruction test (clrlwi / subic / subfe / clrlwi.) is byte-for-byte the
+// body of the out-of-line Game::IsReady() (`IsLoaded() != false`, 82867F80)
+// followed by a bool test of its result, and RB3's OnSetShuttle loops on
+// `while (!IsReady())` -- so the image almost certainly INLINED IsReady here
+// (and in Game::Poll, same 4 rows at 8286827C) without re-folding it.
+// MEASURED, full ninja each: `while (!IsReady())`, `for(;;){ if (IsReady())
+// break; ...}`, IsReady spelled `IsLoaded() ? true : false`, and IsReady() in
+// Poll's `if` -- all byte-identical to now: our MSVC inlines IsReady and folds
+// the normalisation away.  Not compile order either: with the IsReady loop our
+// Game.obj emits IsReady (sec 697) before OnSetShuttle (724), as the image
+// lays them out (82867F80 < 82868500), and it still folds.
 DataNode Game::OnSetShuttle(DataArray *arr) {
     if (arr->Size() > 3) {
         mShuttle->SetController(arr->Int(3));
@@ -1224,6 +1236,9 @@ DataNode OnToggleSongRecordDouble(DataArray *a) {
     return MoveDir::sGameRecord;
 }
 
+// w17-e: still 98.9.  `while (i < size) { if (...) break; i = i + 1; }` is
+// byte-identical to the for loop (the image's `addi r10,r29,1` / `mr r29,r10`
+// increment-through-a-temp is not a spelling of the increment).
 DataNode OnCycleTestDancer(DataArray *) {
     HamPlayerData *player_data = TheGameData->Player(0);
     MILO_ASSERT(player_data, 0xaf);
