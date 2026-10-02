@@ -61,6 +61,9 @@ const char *CacheWav(const char *file, CacheResourceResult &result) {
     // an empty else-arm looked like the shape that produced it -- it is
     // byte-inert here (93.3%, the same 7 rows).  The arm-placement lever that
     // fixed ReadEditorDirDead does not reach an if-conversion decision.
+    // w13-e, also inert (93.3%, same 7 rows): `while (r > 0) { dst = 0; break; }`,
+    // `do { if (r <= 0) break; dst = 0; } while (0)`, a switch on the test, an
+    // `else dst = sCacheWavBuf;` arm, and the ternary.  Every one if-converts.
     if ((int)result > 0)
         dst = nullptr;
     return dst;
