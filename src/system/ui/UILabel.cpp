@@ -845,17 +845,17 @@ void UILabel::SetTokenFmtImp(
         if (found) {
             SuperFormatString str(localized, da1, b, TheLocale, gNullStr);
             if (da2) {
-                int size = da2->Size();
-                if (size > i) {
-                    do {
-                        const DataNode &n = da2->Evaluate(i);
-                        if (n.Type() == kDataSymbol) {
-                            str << Localize(n.Sym(da2), 0, TheLocale);
-                        } else {
-                            str << n;
-                        }
-                        i++;
-                    } while (i < size);
+                // w14-f: 96.85 -> 100.  The image re-reads da2->Size() every
+                // iteration (`lha r11, 0x8(r30)` before each compare), walks a
+                // copy of i, calls the NON-const Node (?Node@DataArray@@QAA...)
+                // and passes no source array to Sym() (`li r5, 0x0`).
+                for (int j = i; j < da2->Size(); j++) {
+                    const DataNode &n = const_cast<DataArray *>(da2)->Evaluate(j);
+                    if (n.Type() == kDataSymbol) {
+                        str << Localize(n.Sym(), 0, TheLocale);
+                    } else {
+                        str << n;
+                    }
                 }
             }
             SetDisplayText(str.FinalStr(), false);
