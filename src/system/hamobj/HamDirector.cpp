@@ -1764,12 +1764,14 @@ void HamDirector::EnableFacialAnimation() {
     }
 }
 
-// RESIDUAL (w7-aq, 99.3 canonical): 3 of the 4 remaining rows are the frame
-// size alone -- retail reserves 0x1e0, we reserve 0x1d0. Every user slot pairs
-// MATCH (0x50 playerDiff/Symbol temp, 0x58 DataNode, 0x60 Symbol, 0x70 buf),
-// so the extra 0x10 is dead space above buf that no live local explains.
+// w13-b: the image's frame is 0x1e0, ours was 0x1d0 with every slot paired
+// (0x50 playerDiff/Symbol temp, 0x58 DataNode, 0x60 Symbol, 0x70 buf), so the
+// extra 0x10 sits above buf: buf is longer than 256.  The frame only bounds it
+// (260 still gives 0x1d0; 272 gives 0x1e0), so 272 is the smallest 16-byte
+// multiple that reproduces it, not a recovered constant.  99.33 -> 99.35; the
+// one remaining row is the redundant `clrlwi r11, r11, 24` below.
 Symbol HamDirector::ClosestMove() {
-    char buf[256];
+    char buf[272];
     Symbol out = mPrevMove;
     Difficulty playerDiff = TheGameData->Player(0)->GetDifficulty();
     if (playerDiff != kDifficultyExpert) {
