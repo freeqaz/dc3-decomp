@@ -539,12 +539,10 @@ void HamWardrobe::LoadCharacters(
             }
         } else {
             if (dancers == kBackupDancersOverride) {
-                auto overrideOutfit = GetBackupOutfitOverride(i);
-                backupOutfit = overrideOutfit;
+                backupOutfit = GetBackupOutfitOverride(i);
             } else {
                 MILO_ASSERT(dancers == kBackupDancersDanceBattle, 0x1ac);
-                auto battleBackup = GetDanceBattleBackupOutfit(outfit, crew);
-                backupOutfit = battleBackup;
+                backupOutfit = GetDanceBattleBackupOutfit(outfit, crew);
             }
         }
 
