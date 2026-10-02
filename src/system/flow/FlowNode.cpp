@@ -292,26 +292,17 @@ void FlowNode::UpdateIntensity() {
 FlowNode *FlowNode::DuplicateChild(FlowNode *child) {
     Flow *childFlow = dynamic_cast<Flow *>(child);
     if (!(!childFlow)) {
-        Hmx::Object *newObj = Hmx::Object::NewObject(Flow::StaticClassName());
-        Flow *newFlow = dynamic_cast<Flow *>(newObj);
+        Flow *newFlow =
+            dynamic_cast<Flow *>(Hmx::Object::NewObject(Flow::StaticClassName()));
 
         // Copy the proxy file from old flow to new flow
         newFlow->SetProxyFile(childFlow->ProxyFile(), false);
 
         // Copy dynamic property values from old flow to new flow
-        // Residual, 24 rows, 99.9 canonical: the image's frame is 0xe0 and ours
-        // 0xd0.  Every row is an offset.  Per-slot diff (run_diff_inspect
-        // mode=stack-layout) says the image keeps FIVE four-byte user slots
-        // where we have four --
-        //   0x50 arr, 0x54 Flow::StaticClassName() Symbol temp,
-        //   0x58 the PoolAlloc result for `new DataArray(1)`,
-        //   0x5c/0x60 the two Symbol(it2->mName.c_str()) temps,
-        //   0x68 the DataNode temp
-        // -- while our build colours the StaticClassName temp onto arr's slot
-        // (base 0x50 is accessed at idx 16 AND idx 64..164; the image's 0x50 only
-        // at 64..164).  Refuted lever: rewriting this while+inner-block as a
-        // plain for loop, which moves arr out of its own block scope and the
-        // it2++ into the loop header -- bit-identical output, same 24 rows.
+        // w16-d: 99.926 -> 100. The NewObject/dynamic_cast is ONE expression;
+        // a named `Hmx::Object *newObj` local let the StaticClassName() Symbol
+        // temp share arr's frame slot (frame 0xd0 vs the image's 0xe0, 24
+        // offset rows).
         Flow::DynamicPropertyEntry *it2 = newFlow->mDynamicProperties.begin();
         while (it2 != newFlow->mDynamicProperties.end()) {
             {
