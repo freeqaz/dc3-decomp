@@ -94,6 +94,8 @@ void ClipCollide::SetTypeDef(DataArray *da) {
         // `Symbol modes("modes")` in an inner block to end its lifetime early
         // (91.60 -- the named local is stored to its slot instead of using the
         // ctor's return value, and the sret still lands at 0x54).
+        // w13-c: `FindArray(Symbol("modes"))` (explicit temporary) is also
+        // byte-inert, 94.42.
         DataArray *modesArr = da->FindArray("modes");
         mMode = modesArr->Array(1)->Sym(0);
     }

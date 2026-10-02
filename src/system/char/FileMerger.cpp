@@ -120,6 +120,9 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
                 mergerDir->RemoveSubDir(curSubdir);
             }
         } else {
+            // w13-c: the loop-unswitched spelling (one `while (!empty())`
+            // with `if (mergerDir) ... else pop_back();` inside) is NOT what
+            // MSVC unswitches into the image's shape: 93.3.
             // Residual (97.85%, 4 rows, 12 B): the image computes BOTH guards
             // before either branch --
             //   cmplwi r28, 0    (cr0, mergerDir)

@@ -55,6 +55,8 @@ void ThreeDSoundManager::Poll() {
     // 98.4 (vs 99.4): it moves the cr6 allocation onto the FIRST test instead of the
     // second, which is the wrong way round, and costs 30 more rows of r26<->r27.
     RndTransformable *listener = mListener.Ptr() ? mListener.Ptr() : mParent->Cam();
+    // w13-c: `if (!listener) return;` (early return instead of wrapping the
+    // body) measures 98.4 -- not the lever it was for WorldDir::Poll.
     if (listener) {
         const Transform &listenerXfm = listener->WorldXfm();
         bool listenerMoved = listenerXfm != mLastListenerXfm;

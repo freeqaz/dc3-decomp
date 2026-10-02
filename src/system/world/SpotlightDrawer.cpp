@@ -668,6 +668,8 @@ void SpotlightDrawer::DrawWorld() {
                     // change), and writing the three products as separate
                     // member assignments in blue/green/red order (94.1, it
                     // splits the Color() base load in two).
+                    // w13-c: the 3-arg Hmx::Color ctor (alpha from the init
+                    // list) in place of Set(r, g, b, 1.0f) is also inert, 98.47.
                     c.Set(
                         spot->Color().red * intensity,
                         spot->Color().green * intensity,
