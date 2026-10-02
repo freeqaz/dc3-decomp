@@ -85,8 +85,9 @@ GameEndedDataPointJob::GameEndedDataPointJob(
 
     if (lastMode != showdown && lastMode != playlist_perform && lastMode != perform &&
         lastMode != dance_battle && lastMode != perform_legacy && lastMode != challenge) {
-        MetaPerformer *perf = MetaPerformer::Current();
-        if (perf->GetMoveScores().size() != 0) {
+        const std::vector<HamMoveScore> &moveScores =
+            MetaPerformer::Current()->GetMoveScores();
+        if (moveScores.size() != 0) {
             MoveDir *moves = TheHamDirector->GetWorld()->Find<MoveDir>("moves", true);
             MILO_ASSERT(moves, 0x5a);
             PracticeSection *section = nullptr;
@@ -98,7 +99,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
             }
             MILO_ASSERT(section, 0x64);
             int num_steps = section->Steps().size();
-            unsigned long num_scores = perf->GetMoveScores().size();
+            unsigned long num_scores = moveScores.size();
             if (num_scores > num_steps) {
                 // The shipped build calls MakeString<int *, int>
                 // (??$MakeString@PAHH@@YAPBDPBDABQAHABH@Z), not <unsigned long, int>:
@@ -141,7 +142,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
         crew = pData->Crew();
         character = pData->Char();
         
-        char buf[32];
+        char buf[4];
         itoa(i, buf, 10);
 
         String crew_str(crew_str_base); crew_str += buf;
