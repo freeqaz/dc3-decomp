@@ -163,17 +163,13 @@ float MultiTempoTempoMap::TimeToTick(float time) const {
     if (time == 0.0f)
         return 0.0f;
 
-    // need to load up-front to prevent re-loads in the `else` block
-    float endTime; // = mEndLoopTime;
-
-    if (mStartLoopTick < 0.0f || mEndLoopTick < 0.0f
-        || time <= (endTime = mEndLoopTime)) {
+    if (mStartLoopTick < 0.0f || mEndLoopTick < 0.0f || time <= mEndLoopTime) {
         const TempoInfoPoint *pt = PointForTime(time);
         return pt->mTick + ((time - pt->mMs) * 1000.0f / (float)pt->mTempo) * 480.0f;
     } else {
         float loopTickLength = mEndLoopTick - mStartLoopTick;
-        float loopTime = time - endTime;
-        float loopTimeLength = endTime - mStartLoopTime;
+        float loopTime = time - mEndLoopTime;
+        float loopTimeLength = mEndLoopTime - mStartLoopTime;
         float loopPercent = std::floor(loopTime / loopTimeLength);
 
         float recurseTime = loopTime - loopTimeLength * loopPercent + mStartLoopTime;
@@ -187,18 +183,6 @@ float MultiTempoTempoMap::TimeToTick(float time) const {
         // the remainder subtracted from startTime instead of added.  That is a
         // real sign inversion in the loop-wrap recursion, not a spelling.
         loopTick += TimeToTick(recurseTime) - mStartLoopTick;
-        // RESIDUAL (w7-az, 97.3, 14 rows): the image computes loopTickLength
-        // straight out of the two comparison registers -- 0x827EE630 is
-        // `fsubs f30, f0, f13`, reusing the f13/f0 that 0x827EE60C and
-        // 0x827EE618 loaded for the compares -- and only then loads
-        // mStartLoopTime (`lfs f0, 0x18(r3)` at 0x827EE634).  We hoist that
-        // load ahead of the block and compute loopTickLength last, which
-        // permutes f0/f12/f13 across the compares and f29/f30 across the
-        // callee-saved pair.  NEGATIVE: naming startTick/endTick as locals
-        // assigned inside the condition (the RB3 spelling) does pin the compare
-        // registers, but it makes them live across the recursive call and buys a
-        // third callee-saved FPR (`bl __savefpr_26`) -- 83.5.  Swapping the
-        // loopTime / loopTimeLength declaration order is byte-inert.
         return loopTick;
     }
 }

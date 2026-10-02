@@ -899,6 +899,24 @@ inline HRESULT IDirect3DDevice9_CreateTexture(
     return (*ppTexture != 0) ? 0 : (HRESULT)0x8007000E; // S_OK : E_OUTOFMEMORY
 }
 
+// The XDK's inline IDirect3DDevice9::CreateCubeTexture wrapper, same shape:
+// a six-face D3DDevice_CreateTexture of EdgeLength x EdgeLength.
+inline HRESULT IDirect3DDevice9_CreateCubeTexture(
+    D3DDevice *pDevice,
+    UINT EdgeLength,
+    UINT Levels,
+    DWORD Usage,
+    D3DFORMAT Format,
+    UINT Pool,
+    D3DBaseTexture **ppCubeTexture,
+    HANDLE *pSharedHandle
+) {
+    *ppCubeTexture = D3DDevice_CreateTexture(
+        EdgeLength, EdgeLength, 6, Levels, Usage, Format, Pool, D3DRTYPE_CUBETEXTURE
+    );
+    return (*ppCubeTexture != 0) ? 0 : (HRESULT)0x8007000E; // S_OK : E_OUTOFMEMORY
+}
+
 D3DVertexDeclaration *
 D3DDevice_CreateVertexDeclaration(const D3DVERTEXELEMENT9 *pVertexElements);
 

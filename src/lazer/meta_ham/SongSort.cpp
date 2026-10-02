@@ -39,21 +39,12 @@ void SongSort::BuildTree() {
     }
     int count = 0;
     bool b = false;
-    // Residual (97.88%, 25 rows, 68 B): ONE callee-saved assignment cascades.
-    // The image binds count->r27, rangeStart->r25, rangeSize->r26,
-    // begin->r30 and the by_song/by_artist static-init guard->r29; we bind
-    // r29/r30/r25/r26/r27 respectively, so 20 of the 25 rows are the r27<->r29
-    // pair and its two followers.  The remaining rows are the image copying
-    // one value into TWO registers where MSVC coalesces for us
-    // (`mr r25,r4`+`mr r30,r4` at 53/54, `mr r30,r26`+`mr r25,r26` at 114/115).
-    // The `lbl_8311B348` vs `?$S1@...@4IA` relocation names in rows 61/74/87/
-    // 91/95 are the SAME static-init guard -- dtk simply has no name for that
-    // address -- not a wrong-global read.
-    // REFUTED: `auto rangeStart = begin;` instead of a second nodes.begin()
-    // call (which is what the image's duplicated `mr` from r4 looks like) is
-    // byte-inert, same 25 rows.
+    // `headerEnd` lives across iterations (the image keeps it in r25, seeded
+    // from begin and also written by the else arm), so when b && count > 12
+    // it still holds the previous range.second, which equals rangeStart.
     auto begin = nodes.begin();
-    auto rangeStart = nodes.begin();
+    auto headerEnd = begin;
+    auto rangeStart = begin;
 
     while (begin != nodes.end()) {
         auto range =
@@ -68,22 +59,22 @@ void SongSort::BuildTree() {
         if (leftover <= 0 || count >= 4
             || (mSortName != by_song
                 && (mSortName != by_artist || TheSongSortMgr->IsInHeaderMode()))) {
-            auto it = rangeStart;
             if ((b && count <= 12) || !b) {
-                it = range.second;
+                headerEnd = range.second;
             }
 
             NavListShortcutNode *shortcut = NewShortcutNode(*begin);
             mShortcutNodes.push_back(shortcut);
-            shortcut->InsertHeaderRange(begin, it, this);
+            shortcut->InsertHeaderRange(begin, headerEnd, this);
 
+            begin = headerEnd;
+            rangeStart = headerEnd;
             count = 0;
             b = false;
-            begin = it;
-            rangeStart = it;
         } else {
-            b = true;
             rangeStart = range.second;
+            headerEnd = range.second;
+            b = true;
         }
     }
 
