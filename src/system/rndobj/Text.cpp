@@ -358,8 +358,13 @@ BEGIN_LOADS(RndText)
         d >> b;
         if (b) {
             SetFixedLength(mText.length());
-        } else if (mFixedLength != 0) {
-            mFixedLength = 0;
+        } else {
+            // w16-a: SetFixedLength(0), inlined here (and only here: the
+            // constant makes its loop dead).  The image materialises `this`
+            // for the store -- `subi r11, r30, 0xd0` / `stw r19, 0x2c(r11)` --
+            // which a hand-written `if (mFixedLength) mFixedLength = 0;` does
+            // not.  Same behaviour.
+            SetFixedLength(0);
         }
     }
     if (d.rev > 9 && d.rev < 22) {
