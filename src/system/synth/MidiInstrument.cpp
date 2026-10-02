@@ -9,6 +9,11 @@
 
 #pragma region NoteVoiceInst
 
+// w14-e (97.95, 6 rows: the 0x39/0x3a/0x3b byte-store order, one fadds
+// operand order and one lwz schedule).  RB3's inline
+// `zone->Volume() + RatioToDb(...)` fixes the fadds order but hoists the
+// Volume() load above the call into f31 (95.8); `db + zone->Volume()` and
+// `db += zone->Volume()` are byte-identical to the current spelling.
 NoteVoiceInst::NoteVoiceInst(
     MidiInstrument *owner,
     SampleZone *zone,

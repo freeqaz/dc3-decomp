@@ -283,6 +283,11 @@ bool TimeStampCmp(ChallengeRow r1, ChallengeRow r2) {
     return r1.mTimeStamp < r2.mTimeStamp;
 }
 
+// w14-e (98.97, 21 rows): the image keeps a 4-byte local at 0x54 that the
+// inner compare loop writes with itRows' data pointer (`stw r11, 0x54(r31)`,
+// a dead home store) and puts DateTime dt at 0x58.  Spelling the compare as
+// rowIt->second[i] != it->second[i] without the two reference locals DOES
+// produce a homed store, but of the wrong value and with a 0x140 frame (93.1).
 void GetRows(
     JsonConverter &c,
     const JsonObject *o,

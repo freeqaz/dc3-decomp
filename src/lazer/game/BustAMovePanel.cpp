@@ -237,6 +237,14 @@ void BustAMovePanel::ResetScores() {
     TheGameData->Player(1)->Provider()->SetProperty(score, 0);
 }
 
+// w14-e (99.93, 5 stack rows): the image homes the `index` PARAMETER
+// (`stw r5, 0xb4(r1)`, &index passed to both MakeStrings) and keeps the
+// moveName Symbol (0x54) and the else-arm Symbol(gNullStr) temp (0x58) in
+// DISTINCT slots, frame 0x90.  Passing `index` directly homes it correctly
+// but MSVC then shares 0x54 between moveName and the temp, frame 0x80
+// (99.92, 6 rows); a plain `s = ...->Sym(1)` temp, a const-ref moveName, an
+// early return instead of the else, and a ternary argument were all equal or
+// worse.  flashCardIdx kept.
 void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
     int flashCardIdx = index;
     Symbol s(gNullStr);
