@@ -227,9 +227,12 @@ void HiResScreen::TakeShot(const char *c, int i) {
 // border where they expected the right one and vice versa.
 void HiResScreen::GetBorderForTile(int x, int y, int &left, int &top, int &right, int &bottom)
     const {
+    // w18-a: the image zeroes left, right, top, bottom in that order
+    // (`stw r11` to r6, r8, r7, r9); the out-params may alias, so MSVC keeps
+    // the source order of these stores.
     left = 0;
-    top = 0;
     right = 0;
+    top = 0;
     bottom = 0;
     int xStep = TheRnd.Width() - 480;
     int xPos = xStep * x + TheRnd.Width();
