@@ -932,12 +932,11 @@ void MoveDir::Draw(const BaseSkeleton &baseSkeleton, SkeletonViz &skeletonViz) {
             songSpeed
         );
         ErrorNode **nodePtr = mFilterVer->mErrorNodes;
-        // REFUTED (w7-i): hoisting `node` above the loop is byte-identical, and
-        // so is splitting the base off into its own `nodeBase` local. The
-        // residual is a target-only `mr r27, r29` -- the image splits nodePtr's
-        // live range between the loop guard and the loop body; we coalesce it.
-        for (int i = 0; i < mFilterVer->NumNodes(); i++, nodePtr++) {
-            ErrorNode *node = *nodePtr;
+        // w13-b: index the base (`nodePtr[i]`), do not walk it.  The image's
+        // `mr r27, r29` is MSVC's strength-reduced pointer split off the base;
+        // a hand-walked nodePtr coalesced the two.  99.57 -> 100.
+        for (int i = 0; i < mFilterVer->NumNodes(); i++) {
+            ErrorNode *node = nodePtr[i];
             if (node->IsTypeJointMatch(mErrorNodeInfo)) {
                 ErrorNodeInput nodeInput;
                 mFilterVer->NodeInput(i, mShowErrorFrames, moveMode, nodeInput);
