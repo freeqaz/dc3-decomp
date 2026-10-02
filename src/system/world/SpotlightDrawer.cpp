@@ -125,6 +125,10 @@ void SpotlightDrawer::Init() {
     //       store on its own, so writing it earlier buys nothing.
     //   `sDefault = New(); ptr = sDefault; ptr->...= 0.0f; sDefault->Select();`
     //       reads 90.7, WORSE: it adds a `clrrwi r3, r3, 0` for the read-back.
+    // w18-b: `(sDefault = New<SpotlightDrawer>())->mParams... = 0.0f;
+    // sDefault->Select();` (store the global, use the assignment's value for
+    // the field store) still sinks the global store past the field store and
+    // adds a `clrrwi r3, r3, 0` for the reload: 90.7, worse.
     // Reading the global for the field store is the only thing that moves the
     // store, and that is the 90.357 negative above.  Treat this as a floor until
     // someone finds a construct that pins the global store ahead of the field
