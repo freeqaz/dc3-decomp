@@ -47,9 +47,14 @@ void DingoJob::Start() {
     StartImpl();
 }
 
-void DingoJob::SendCallback(bool success, bool cancelled) {
+// w18-e (99.16 -> 100): the result is a LOCAL copied from the parameter.
+// Reassigning the parameter itself made MSVC copy r4 into r27 at the top of
+// the prologue; the image tests r4 (`clrlwi. r11, r4, 24`) and only then
+// copies it (`mr r27, r4` after `li r26, 0x0`).
+void DingoJob::SendCallback(bool succeeded, bool cancelled) {
+    bool success = succeeded;
     // Validate the response if the request succeeded
-    if (success) {
+    if (succeeded) {
         ParseResponse();
         // Check for error result codes
         if (!mJsonResponse || mResult == -1 || mResult == -4 || mResult == -0xb
