@@ -293,8 +293,12 @@ drawName:
 
 void CharClipDisplay::DrawCursor() {
     Hmx::Color yellow(1.0f, 1.0f, 0.0f, 1.0f);
+    Hmx::Rect rect;
     float x = GetX(mCursorBeat);
-    Hmx::Rect rect(x, mDrawPosY - 3.0f, 1.0f, 9.0f);
+    rect.w = 1.0f;
+    rect.x = x;
+    rect.h = 9.0f;
+    rect.y = mDrawPosY - 3.0f;
     TheRnd.DrawRect(rect, yellow, nullptr, nullptr, nullptr);
     const char *text;
     if (!(mBlendWeight >= 1.0f)) {
