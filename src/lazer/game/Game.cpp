@@ -263,11 +263,10 @@ void Game::CheckPauseRequest() {
     }
 }
 
-// RESIDUAL (w12-b, 99.0 canonical), shared with LoadSong (99.5): inside
-// `new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s))` the image spills
-// the Symbol argument to a stack temp (`stw r30, 0x54(r31)`, LoadSong `stw r27,
-// 0x50(r31)`) before `mr r4, ...`; we pass it in a register only. Every other
-// row is the r29/r30 swap that one store causes. Not chased.
+// w12-b: inside `new SongInfoCopy(...)` the image spills the Symbol argument
+// of SongAudioData to a stack temp (`stw r30, 0x54(r31)`) before `mr r4, r30`;
+// an explicit `Symbol(s)` temporary is what reproduces that (99.0 -> 100).
+// LoadSong and LoadNewSong carry the same spill.
 void Game::LoadNewSongAudio(Symbol s) {
     if (mLoadedSongAudio != s) {
         mLoadedSongAudio = s;
@@ -290,7 +289,7 @@ void Game::LoadNewSongAudio(Symbol s) {
         }
         mSongInfo = new SongInfoCopy(audioData);
 #else
-        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s));
+        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(s)));
 #endif
         mMaster->Load(mSongInfo, false, 0, false, hsvd, nullptr);
         Fader *fader = TheSynth->Find<Fader>("per_song_sfx_level.fade", false);
@@ -745,7 +744,7 @@ void Game::LoadSong() {
         mMaster->GetAudio()->SetPracticeMode(false);
     }
 #else
-    mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(song));
+    mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(song)));
 #endif
     mMaster->Load(mSongInfo, false, 0, false, v, 0);
 }
@@ -851,7 +850,7 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
     mUseMoveGraph = TheGameMode->Property("use_movegraph")->Int();
     if (s1 != s2) {
         RELEASE(mSongInfo);
-        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(s2));
+        mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(s2)));
         mMaster->LoadOnlySongData(mSongInfo, true, (HamSongDataValidate)0);
         MultiTempoTempoMap *other =
             static_cast<MultiTempoTempoMap *>(HamSongData::sInstance->GetTempoMap());
