@@ -183,7 +183,7 @@ public:
             // The split value shares its word with the 2-bit axis index: store
             // the float, then put the axis bits back (rlwimi in the target).
             float midSplit = idxDiff / 2.0f + box.mMin[mData.index];
-            unsigned int splitAxis = mData.index;
+            unsigned char splitAxis = mData.index;
             unsigned int numContains = 0;
             mData.real = midSplit;
             mData.index = splitAxis;
@@ -215,7 +215,7 @@ public:
                     }
                 }
                 if (numContains != 0) {
-                    unsigned int meanAxis = mData.index;
+                    unsigned char meanAxis = mData.index;
                     mData.real = (float)(fsum / numContains);
                     mData.index = meanAxis;
                 }
