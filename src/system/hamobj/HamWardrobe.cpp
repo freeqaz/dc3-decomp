@@ -548,11 +548,9 @@ void HamWardrobe::LoadCharacters(
 
         HamCharacter *backup = GetBackup(i);
         backup->SetOutfit(backupOutfit);
-        const char *outfitDir = "char/main/backup";
-        if (dancers != kBackupDancersOutfit) {
-            outfitDir = "char/main/dancer";
-        }
-        backup->SetOutfitDir(Symbol(outfitDir));
+        backup->SetOutfitDir(
+            Symbol(dancers == kBackupDancersOutfit ? "char/main/backup" : "char/main/dancer")
+        );
         backup->StartLoad(asyncLoad);
     }
 
