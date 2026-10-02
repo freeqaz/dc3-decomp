@@ -591,8 +591,8 @@ int CacheXbox::ThreadGetDir(String searchPath, String basePath) {
     if (err == 0x15 || err == 0x456 || err == 0x48f || err == 0x651) {
         return 8;
     }
-    if (IsDeviceConnected(mCacheID.DeviceID())) {
-        return -1;
+    if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        return 8;
     }
-    return 8;
+    return -1;
 }
