@@ -1071,3 +1071,123 @@ The probe retains the three controls it was written with: assert the compile edg
 wired before trusting any hash; keep builds ≥2 s apart, because `TimeDateStamp` has
 1-second granularity and an *unwired* edge therefore agrees with itself inside one
 second; and a positive control that must move the bytes or the run proves nothing.
+
+## Wave 10 — completion lanes, a crash, and a stale-work sweep (2026-10-02)
+
+### Result
+
+Five decomp lanes and one tooling lane, each verified and gated by the coordinator
+before landing. **31,393 → 31,449 matched (+56)**; authorable units with every function
+at canonical 100 **646 → 688 / 966 (+42)**; remaining authorable work **802 → 746
+functions (584,224 → 562,668 B)**; XEX headline 49.007 % → 49.164 %. Each landing was UP-only (0 DOWN rows
+in any of the five), all five build guards green at each, and a native gate per lane
+(623 registered / 554 executed / 554 passed / 0 failed / 69 skipped against a budget of
+69, DtaFlow 11/11, every time).
+
+| lane | worklist | functions UP | matched | notes |
+|---|---|---:|---|---|
+| w10-t | stale tooling | 0 | 31393 → 31393 | ninja-root guard wired; witness regenerated |
+| w10-a | 1 fn from 100 | 10 | 31393 → 31403 | `RndGenerator::Generate` behaviour fix |
+| w10-b | 1 fn from 100 | 10 | 31403 → 31412 | `SongLayout::SetDefaultPattern` missing store |
+| w10-c | 1 fn from 100 | 6 | 31412 → 31416 | no bugs |
+| w10-e | 2 fns from 100 | 23 | 31416 → 31439 | 3 behaviour fixes + a `symbols.txt` rename |
+| w10-d | 1 fn from 100 | 10 | 31439 → 31449 | `NetCacheLoader::SetState` behaviour fix |
+
+The worklists were derived from a baseline pinned to `a203218ed`: 143 units sat exactly
+**one** function from 100 %, 117 of them never named in a phase-1..4 worklist; 66 fresh
+units sat two functions away. Lanes were directory-disjoint, so no two lanes touched one
+`.cpp` and every rebase was mechanical.
+
+### Behaviour bugs, each adjudicated against the target listing, not taken on report
+
+1. **`RndGenerator::Generate`** inserted new instances at the back; the image passes
+   `begin()` (`lwz r11, 0x110(r31)`, the sentinel's `_M_next`, at `0x8270EA10`) to
+   `list::insert`. Reversed draw order and mispaired particles with expired instances.
+2. **`SongLayout::SetDefaultPattern`** never wrote `SongSection::mSongPattern`; the image
+   stores the address of the loop-local copy (`addi r11, r31, 0x90` / `stw r11, 0x74(r31)`).
+   A dangling pointer, faithfully: its one dereferencing reader is guarded on the image by
+   an assert that fails first, which on native does not stop execution — no less safe
+   than the uninitialised value it replaced.
+3. **`HamGameData::SetAssociatedPadNum`** unassigned `pPlayer` and reassigned it; the image
+   takes the pad from `mPlayers[1 - player]` (`subf r11, r31, r11` / `lwz r31, 0x4(r11)`).
+4. **`KinectSharePanel::OnUpload`** had `InternalContext` and `dwCompletionContext` swapped
+   (`stw r30, 0x70(r30)` stores `this` at `dwCompletionContext`).
+5. **`MetaPerformer::CheckRecommendedPracticeMove`** — **reported by its lane as "same
+   machine behaviour", and it was not.** For a move never attempted, `good/total` is
+   `0/0 = NaN`; the old `!lastGood && ratio <= 0.49 → false` returned **true**. The image's
+   `fcmpu` / `bgt <return 1>` sends the unordered case to `li r3, 0`: **false**.
+6. **`NetCacheLoader::SetState`** fell through into the FileLoader teardown for states 1
+   and 4; the image's `cmpwi cr6, r11, 3` / `bne cr6, .L_827FBBA0` goes straight to
+   `mState = state`.
+
+### Coordinator checks that changed what landed
+
+- **A deleted negative result, restored.** w10-a's `NgFur::Shell` fix removed the only
+  record that `#pragma fp_contract(off)` was byte-inert on that function, while
+  `docs/decomp/patterns/fixable-fsel-fma.md` recommends the pragma with "Success Rate:
+  HIGH". The measurement now lives in the doc, with the lever that worked (struct-member
+  products) and the honest gap: whether the pragma does anything in the three TUs that
+  still use it is unmeasured.
+- **A struct-layout claim checked, not trusted.** w10-c rewrote `StubSkeletonExtra` as
+  `{bool; Vector3}` on the claim that `Vector3` carries its own pad word. `Vec.h` shows only
+  `x, y, z` at first read; the `u32 PAD` member is 20 lines further down (`Vec.h:85`).
+  Checked before accepting, because if the claim were false the struct would shrink from
+  0x14 to 0x10.
+- **An out-of-line function given new semantics.** w10-d changed `NetLoader::GetBuffer`
+  to return null unless loaded. Safe only because the image carries no symbol for it (it
+  was inline in the original) and its one caller is already inside `if (IsLoaded())`; the
+  two other `GetBuffer` call sites found by grep belong to `NetCacheLoader`.
+- **A layout inversion, accepted openly.** w10-b's `Curl_HMAC_init` declares `hmac_opad`
+  before `hmac_ipad` so MSVC picks the image's anchor, which *inverts* the two constants'
+  placement relative to the image. Accepted because they sit in no measured data section
+  and the swap has no behavioural effect; the source comment states the inversion.
+
+### `report.json`'s `complete_units` does not measure completion
+
+It read **968 at wave start and 968 at wave end**, across 42 completed units. It counts
+units whose config flag says `complete: True`, which is set by hand — `system/rndobj/Gen`
+carried that flag at wave start while `RndGenerator::Generate` sat at 97.698. A claim,
+not a measurement. The completion figure above is the measured one: every function in the
+unit at canonical 100, as `scripts/progress_metrics.py:105` defines it. Quote that, not
+`measures.complete_units`.
+
+### The crash, and what it did and did not damage
+
+The server crashed mid-wave. Every lane had **zero commits and zero dirty files** — all
+progress existed only in memory, and the lanes restarted from a full rebuild. Lane briefs
+now say *commit as soon as each function closes*.
+
+`git fsck` afterwards reported 14 unreadable commits, which reads as object loss. It was
+not: no ref reaches any of them, `git -c core.commitGraph=false fsck` exits 0, and all 14
+sat in one stale commit-graph layer dated 2026-09-14 — commits pruned after becoming
+unreachable, still listed by a cache. `git commit-graph write --reachable` rebuilt it.
+**Disable the cache and re-run fsck before concluding a repository lost data.**
+
+### Stale work taken over
+
+Twenty-two stale worktrees removed; none of this session's remain. Every unique commit was measured for whether its added
+lines already exist on `main` before anything was removed, and dirty trees were committed
+or archived first.
+
+| branch | disposition |
+|---|---|
+| `fix/worktree-relative-ninja` | script had landed with **no caller**; wiring redone on current main as w10-t |
+| `selfdistill-scoring` witness | main's copy refused itself whole (52 of 53 addresses since named); regenerated in w10-t, `refused` → `validated` |
+| `w3-j-perm` (3 dirty edits) | `KinectSharePanel` superseded by w10-e (identical change); `UsbMidiGuitar` and `CameraShot` measured **inert** on current main (99.99357 and 99.99251, unchanged) — not landed |
+| `dc3-sweep` | all 23 added `symbols.txt` lines already on main, all 52 removed lines already gone |
+| `verify/mcp-gaps`, `verify/scanner-truthfulness`, `ik-test-charlocal` (code) | content already on main |
+| `harvest-threadtask-replace` | `ThreadTask::Replace` is 100.0 on main |
+| `fix/well-b-icf-attrib`, `ws3-dc3-relocname-measurement`, `verify/kinect-camera` doc, `fix/scope-idx-5` | adjudicated 2026-09-13 in `docs/analysis/stale-worktree-recovery-20260913.md`; verdicts unchanged |
+
+Directories removed; the unmerged branches are kept as the only record of their
+original attempts. `scripts/addr_identity_witness.json` from `dc3-addrid-icf` and the
+`dc3-sweep` dirty diff are archived under `~/tmp/dc3-wells/w8/archive/`.
+
+### Two instrument traps hit by the coordinator this wave
+
+- **zsh does not word-split** `$c` in `for c in "script --flag" ...; python3 scripts/$c`:
+  all five guards printed exit 2 (file not found) on a tree where all five pass. Caught
+  by the uniformity — five different checks do not fail identically.
+- **`obj_build_metadata_patcher.normalize()` returns its result**; it does not mutate.
+  The staged Font3d probe hashed the unmodified input and would have called every variant
+  identical, including its positive control. Found via `inspect.signature` before running.
