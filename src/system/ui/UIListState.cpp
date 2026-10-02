@@ -412,27 +412,23 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 BuildScroll(step, curFirst, curSel, state);
                 curFirst = state.mFirstShowing;
             } while (prevFirst != curFirst);
+            // A do-while that made no progress leaves WITHOUT touching
+            // mTargetShowing (the loop fallthrough at 0x827840... is
+            // `b <epilogue>`).
+            return;
         }
-        // Both `skipActive` and a do-while that made no progress leave WITHOUT
-        // touching mTargetShowing: 0x8287..`bne 0x12d4` (skipActive) and the
-        // loop fallthrough both land on `b 0x14b0`, the epilogue, one
-        // instruction short of the 0x12d8 accept block below.
-        return;
+        // w16-d BEHAVIOUR FIX: skipActive does NOT return here. The image's
+        // skipActive test (`clrlwi. r11, r30, 24` / `bne 0x12d4`, section
+        // offset 0x122c) branches to 0x12d4 = `lwz r28, 0x54(r1)`, the first
+        // instruction of the accept block, which then stores mTargetShowing
+        // (`stw r30, 0x34(r31)` at 0x12dc, r30 = state.mFirstShowing loaded at
+        // 0x1228) and runs the assert. The loop's IsActive exit enters one
+        // instruction later (`bne 0x12d8`) because r28 already holds
+        // state.mSelected there -- that is the "extra" reload an earlier lane
+        // read as a CSE residual. We returned, so a circular list scrolled
+        // with skipActive never moved.
     accept_circ:
         mTargetShowing = curFirst;
-        // RESIDUAL (w7-ak, 96.2 canonical): this is the ONE genuine instruction-count
-        // difference in the whole function (target 728 B, ours 724 B -- everything
-        // else is a move).  The image re-loads `state.mSelected` here
-        // (`lwz r28, 0x54(r1)` at 0x82784224, the first instruction of the accept
-        // block) even though the same slot is already live in r28 from the loop
-        // top; MSVC CSEs the two reads for us.  Both spellings are present in the
-        // source already -- `curSel` above and `state.mSelected` here -- so there is
-        // no second expression left to add, and writing `curSel` here would only
-        // make the CSE explicit.  The remaining two rows are the guard at 0x827840F4:
-        // the image schedules `lwz r30, 0x50(r1)` BETWEEN the skipActive test and
-        // its branch and then branches to the loop-exit's own `b <epilogue>`, where
-        // we sink the load past the branch and go straight to the epilogue -- i.e.
-        // MSVC simplified a branch-to-branch the image left in place.
         MILO_ASSERT(state.mSelected == mSelectedDisplay, 0x1d6);
     } else {
         bool hitBoundary = false;
