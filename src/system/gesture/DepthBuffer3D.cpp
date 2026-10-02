@@ -407,7 +407,14 @@ void DepthBuffer3D::DrawShowing() {
         mat = SetUpWorkingMat();
     }
 
-    RndTex *depthTex = nullptr;
+    // BEHAVIOUR FIX (w18-c): the depth texture defaults to mPlayerPaletteTex, not
+    // to null.  The image loads mPlayerPaletteTex (`lwz r11, 0x198(r26)`), tests
+    // it, and on the non-null path does `mr r21, r11` then branches straight to
+    // the SetDiffuseTex(r21) / SetVertShaderTex(r21) block at 0x82DF04xx; r21 is
+    // the camera's depth stream texture only on the null path (`mr. r21, r3`
+    // after GetStreamTex).  We used to hand a null texture to the material and
+    // the vertex shader whenever a palette texture was set.
+    RndTex *depthTex = mPlayerPaletteTex.Ptr();
 
     float d38 = 60.0f, d42 = 2.0f, d43 = 1.0f, d44 = 80.0f;
     float d45 = 0.0f, d46 = 8192.0f, d51 = 0.5f;
@@ -417,7 +424,7 @@ void DepthBuffer3D::DrawShowing() {
     bool has1, has2, has3;
     has1 = has2 = has3 = false;
 
-    if (mPlayerPaletteTex.Ptr() == nullptr) {
+    if (depthTex == nullptr) {
         LiveCameraInput *cam = TheGestureMgr->GetLiveCameraInput();
         if (!cam->mDepthPolled) {
             cam->PollNewStream(LiveCameraInput::kBufferDepth);
