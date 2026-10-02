@@ -75,6 +75,13 @@ const char *AmbientOcclusionSampleCountString(unsigned int samples, unsigned int
 
 void BuildSphereStratified(unsigned int, std::vector<Vector3> &);
 
+// w15-r: INIT_REVS precedes every other file-scope const here.  The image's
+// .rdata for this TU opens with gRev (0x820A6570) and gAltRev, and only then
+// 0.001f, {50, 0.5, 2}, 0.67625f and kQualityLUT (0x820A658C).  Defined below
+// kQualityLUT, gRev sat at offset 0x10 and MSVC anchored the ASSERT_REVS pair on
+// gAltRev; the image anchors on gRev.
+INIT_REVS(4, 0)
+
 // Quality parameters: [samples_q0, samples_q1, splitPlane_q0, splitPlane_q1]
 // Values read from the target's .rdata at 0x820A658C (16 bytes).
 static const int kQualityLUT[] = { 300, 150, 2, 0 };
@@ -275,8 +282,6 @@ BEGIN_COPYS(RndAmbientOcclusion)
         COPY_MEMBER(mQuality)
     END_COPYING_MEMBERS
 END_COPYS
-
-INIT_REVS(4, 0)
 
 BEGIN_LOADS(RndAmbientOcclusion)
     LOAD_REVS(bs)
