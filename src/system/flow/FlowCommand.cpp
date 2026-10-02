@@ -52,7 +52,7 @@ BEGIN_LOADS(FlowCommand)
     ASSERT_REVS(3, 0)
 
     // w16-d: 99.966 -> 100. The image declares symbols FIRST and drives the
-    // SetProperty loop off `sit != symbols.end()` (0x8241DAB0 compares r29, the
+    // SetProperty loop off `sit != symbols.end()` (0x8241DA98 compares r29, the
     // list<Symbol> walker, against &symbols at r31+0x70). The slot pair follows
     // the loop's controlling list, not declaration order -- which is why the
     // declaration swap alone (w7-aa, w8-l) only moved the ctor/dtor order.
