@@ -658,19 +658,16 @@ bool HolmesClientOpen(const char *filename, int mode, unsigned int &fileSize, in
         // lowers `<< val`, so the declarations have to precede that statement
         // in the source.  The extraction is UNSIGNED -- `extrwi`, not the
         // `srawi`+mask an `int` shift produces.
-        // RESIDUAL (w7-ar, 96.08 canonical): 22 of 146 rows, and 16 of them are one
-        // callee-saved pair. The image keeps `mode` in r29 and the
-        // gStreamBuffer@ha anchor in r30 (`lis r30, ...` at 0x825F1E3C); we
-        // allocate them the other way round. The remaining rows are the
-        // `li r5, 0x1` / `addi r4, r31, 0x50` pair, which the image schedules
-        // BEFORE the four extrwi (0x825F1E44/0x825F1E48) and we schedule after.
-        // No instruction, operand or branch differs beyond those two facts.
+        // FIXED (w12-d): the w7-ar r29/r30 residual came from chaining
+        // `<< val << filename`; the image reloads gStreamBuffer for the
+        // filename, i.e. two statements.
         unsigned int umode = mode;
         unsigned char isWriteMode = (umode >> 1) & 1;
         unsigned char writeFlag = (umode >> 8) & 1;
         unsigned char createFlag = (umode >> 9) & 1;
         unsigned char truncFlag = (umode >> 0x12) & 1;
-        *gStreamBuffer << val << filename;
+        *gStreamBuffer << val;
+        *gStreamBuffer << filename;
         // Chained, not two statements: the image gives each flag its own byte
         // slot (0x50, 0x51, ...), which only happens while both operator<<
         // reference arguments are alive inside one full expression.
