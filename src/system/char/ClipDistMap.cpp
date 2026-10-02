@@ -613,23 +613,19 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     // Draw current playback position if driver is provided
     if (driver && driver->First()) {
         float curBeatA = mClipA->StartBeat();
-        CharClipDriver *cd = driver->First();
-        do {
+        for (CharClipDriver *cd = driver->First(); cd != nullptr; cd = cd->Next()) {
             if (cd->GetClip() == mClipA) {
                 curBeatA = cd->mBeat;
             }
-            cd = cd->Next();
-        } while (cd != nullptr);
+        }
 
         float curBeatB = mClipB->StartBeat();
-        cd = driver->First();
-        do {
+        for (CharClipDriver *cd = driver->First(); cd != nullptr; cd = cd->Next()) {
             if (cd->GetClip() == mClipB) {
                 curBeatB = cd->mBeat;
                 break;
             }
-            cd = cd->Next();
-        } while (cd != nullptr);
+        }
 
         if (mClipA == mClipB && curBeatA == curBeatB) {
             curBeatB = mBStart;
