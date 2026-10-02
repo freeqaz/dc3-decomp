@@ -33,6 +33,9 @@ int HiResScreen::GetPaddingY() const { return 270; }
 // one placement.  The member store order already matches (mRowsPerCacheLine at
 // 0x10 before mByteSize at 0x20), so this is a scheduler slot fill with no
 // source handle found.
+// w19-a (still 98.29): no statement order of the independent member stores
+// (mPixelsPerRow/mTotalRows, the three initial stores, the two final stores)
+// moves the __FILE__ lis -- hill-climbed over every single move, all inert.
 HiResScreen::BmpCache::BmpCache(unsigned int ui1, unsigned int ui2) {
     mPixelsPerRow = ui1;
     mTotalRows = ui2;

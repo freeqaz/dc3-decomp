@@ -263,6 +263,10 @@ void NgMat::SetRegularShaderConst(bool perPixel) {
     // not the lever.  Refuted here: reversing the rimRed/rimGreen/rimBlue declaration
     // order, and splitting the copy into a default-construct plus assignment.  Both
     // left all 31 rows byte-identical.
+    // w19-a (still 99.99216): an explicit member-wise copy in the image's
+    // green/blue/alpha/red order is WORSE (94.96 -- the copy is folded away), and
+    // writing blendOffset as `-(blendRange * mWorldProjectionStartBlend)` leaves
+    // the commutative fmuls row (idx 407) untouched.
     Hmx::Color rimColor = mRimRGB;
 
     float rimRed = rimColor.red;
@@ -379,6 +383,9 @@ void NgMat::RefreshState() {
     //      Multiply/Darken arm into the Add arm's `stw 2`; ours schedules the
     //      int store first and merges the two zero-fill arms instead.  Writing
     //      `mFadeOut = N` first in each arm is byte-identical.
+    // w19-a (still 98.95): the statement order INSIDE each of the eleven arms is
+    // not the lever for cluster (1) either -- a hill-climb over every single
+    // move within every arm (132 builds) found no order better than this one.
     switch (mBlend) {
     case kBlendDest:
         mBlendSrc = (RndRenderState::Blend)0;

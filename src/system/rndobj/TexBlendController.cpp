@@ -164,6 +164,10 @@ RndTexBlendController::GetBlendState(float &blend, float influence) const {
             // pair is downstream of the fusion choice, not a separate lever.
             // w15-a (99.22 canonical): a named `float negTwo = -2.0f;` multiplier is
             // INERT too -- the constant is still folded to 2.0f and the fmsubs stays.
+            // w19-a (still 99.22): the -2.0f routed through an inline helper's
+            // PARAMETER (`t3 * a + t2 * b` called with -2.0f, 3.0f) is folded to
+            // the same fmuls 2.0 / fmsubs; the factored `t2 * (3.0f - 2.0f *
+            // blend)` is worse (96.47, fnmsubs).
             blend = t3 * (-2.0f) + t2 * 3.0f;
         }
     }

@@ -674,6 +674,9 @@ void RndPostProc::UpdateColorModulation() {
         // f0/f13 permutation.  Refuted: a named temp for the RandomFloat result
         // instead of the double write to mFlickerSeconds.y (97.94, identical
         // rows); spelling the += out as `x = x + mDeltaSecs` (97.94, identical).
+        // w19-a (still 97.94): `Max(mFlickerSeconds.x, RandomFloat(...))` in one
+        // statement and a named `r` temp are both inert; MaxEq(y, x) is worse
+        // (95.92).
         mFlickerSeconds.x += mDeltaSecs;
     } else {
         mColorModulation = 1.0f;
