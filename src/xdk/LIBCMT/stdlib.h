@@ -6,10 +6,19 @@
 extern "C" {
 #endif
 
-void *malloc(size_t size);
-void *calloc(size_t nitems, size_t size);
-void *realloc(void *ptr, size_t size);
-void free(void *);
+// w15-b: the XDK CRT declares the allocators _CRTNOALIAS _CRTRESTRICT, i.e.
+// __declspec(noalias) (the call touches no global state except through its
+// pointer arguments) and __declspec(restrict) (the result aliases nothing).
+// Without noalias MSVC must reload every cached file-static after a realloc;
+// the image does not: yy_get_next_buffer keeps yy_current_buffer in r31 across
+// `bl realloc` (0x825C8B44), and yy_create_buffer computes `size + 2` before
+// storing yy_buf_size because the store is no longer pinned above malloc.
+// Whole-binary A/B (full ninja): yy_get_next_buffer 93.56 -> 100,
+// yy_create_buffer 95.35 -> 100, MemTrackInit 96.40 -> 100, 0 rows down.
+__declspec(noalias) __declspec(restrict) void *malloc(size_t size);
+__declspec(noalias) __declspec(restrict) void *calloc(size_t nitems, size_t size);
+__declspec(noalias) __declspec(restrict) void *realloc(void *ptr, size_t size);
+__declspec(noalias) void free(void *);
 
 #pragma intrinsic(_alloca)
 void *_alloca(size_t size);
