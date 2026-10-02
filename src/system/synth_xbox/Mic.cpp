@@ -619,16 +619,16 @@ void MicManagerXbox::Poll() {
         ChatBuffer &cb = *it;
         if (cb.unk8[250] != 0) {
             UINT32 count = cb.unk8[250];
-            mXHVEngine->SubmitIncomingChatData(*(UINT64 *)&cb, (unsigned char *)cb.unk8, &count);
+            mXHVEngine->SubmitIncomingChatData(cb.mXuid, (unsigned char *)cb.unk8, &count);
             cb.unk8[250] -= count;
             memcpy(cb.unk8, (char *)cb.unk8 + count, cb.unk8[250]);
         } else if (!TheXboxSynth->mHeadsetSubmixes.empty() &&
-                   *(UINT64 *)&cb == 0x00DEADBEEFFACEF0ULL) {
+                   cb.mXuid == 0x00DEADBEEFFACEF0ULL) {
             unk38.Split();
             if (!unk38.Running() || unk38.Ms() > 2000.0f) {
                 unsigned char buf[0x14] = { 0 };
                 UINT32 count = sizeof(buf);
-                mXHVEngine->SubmitIncomingChatData(*(UINT64 *)&cb, buf, &count);
+                mXHVEngine->SubmitIncomingChatData(cb.mXuid, buf, &count);
                 unk38.Restart();
             }
         }
@@ -660,18 +660,10 @@ void MicManagerXbox::AddRemoteMic(unsigned long long const &xuid,
     DX_ASSERT_CODE(hr, 0x155);
 
     ChatBuffer chatBuffer;
-    // Residual (95.96%, 4 rows, 16 B): the image issues the xuid load FIRST in
-    // this five-instruction group --
-    //   ld   r11, 0x0(r26)      ; xuid
-    //   addi r4,  r31, 0x80     ; &chatBuffer
-    //   stw  r24, 0x470(r31)    ; unk8[250] = 0
-    //   addi r3,  r27, 0x20     ; &unk20
-    //   std  r11, 0x80(r31)
-    // -- where we issue the `stw` first and the `ld` third.  Everything else
-    // (both addis, the std, the push_back) is already in the image's order.
-    // REFUTED: swapping the two source statements does not move the load;
-    // the ordering is the scheduler's, not the statements'.
-    *(unsigned long long *)&chatBuffer = xuid;
+    // The XUID is a real u64 member, not a punned `*(u64 *)&chatBuffer`:
+    // through the cast MSVC schedules the `stw` of unk8[250] ahead of the
+    // xuid `ld`, the image issues the `ld` first (95.96 -> 100).
+    chatBuffer.mXuid = xuid;
     chatBuffer.unk8[250] = 0;
     unk20.push_back(chatBuffer);
 
