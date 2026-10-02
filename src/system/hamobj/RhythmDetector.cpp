@@ -125,39 +125,15 @@ namespace {
                         if ((unsigned)midEnd <= 6) midEnd = 6;
 
                         // Z-score middle section with sliding window
-                        if (midEnd > 6) {
-                            // RESIDUAL (w7-bf, 99.70255 canonical, 4 rows in the
-                            // whole 1656-byte function, 3 of them here).  The
-                            // loop BODY is byte-identical to the image; only
-                            // the preheader's three independent `li`s are
-                            // rotated.  Image (^/* 824D33A4-824D33AC):
-                            //     li   r7, 0x18      ; rawOffset, byte-scaled
-                            //     li   r4, 0x1       ; windowStart
-                            //     subi r29, r30, 0x6 ; remaining
-                            // ours emits windowStart, remaining, rawOffset.
-                            // REFUTED, both bit-identical to this spelling:
-                            //   - declaring rawOffset before windowStart
-                            //     (plain decl reorder -- inert, as the
-                            //     project-wide note says);
-                            //   - one comma-declaration
-                            //     `int rawOffset = 6, windowStart = 1,
-                            //      remaining = midEnd - 6;`.
-                            // MSVC picks the preheader order after strength-
-                            // reducing rawOffset into the byte IV r7; nothing
-                            // in the source reaches that choice.
-                            int windowStart = 1;
-                            int rawOffset = 6;
-                            int remaining = midEnd - 6;
-                            do {
-                                float m = Mean(raw, windowStart, windowStart + 10);
-                                float diff = raw[rawOffset] - m;
-                                float quotient =
-                                    diff / Variance(raw, m, windowStart, windowStart + 10);
-                                remaining--;
-                                windowStart++;
-                                normalized[rawOffset] = quotient;
-                                rawOffset++;
-                            } while (remaining != 0);
+                        // w16-b: the plain loop (MSVC rotates it and
+                        // strength-reduces i into the byte IV r7 itself) gives
+                        // the image's preheader order `li r7, 0x18 / li r4, 0x1
+                        // / subi r29, r30, 0x6`; the hand-rotated do-while with
+                        // three named counters (w7-bf) emitted them rotated.
+                        for (int i = 6; i < midEnd; i++) {
+                            float m = Mean(raw, i - 5, i + 5);
+                            float diff = raw[i] - m;
+                            normalized[i] = diff / Variance(raw, m, i - 5, i + 5);
                         }
 
                         // Z-score tail section
