@@ -275,6 +275,12 @@ template <class T1, class T2 = class ObjectDir>
 class ObjRefConcrete : public ObjRef {
 protected:
     T1 *mObject; // 0xc
+    /** Null ref with no AddRef path at all. Same behaviour as
+     *  ObjRefConcrete(nullptr), but ObjPtrVec::Node needs it: the dead
+     *  `mObject->AddRef(this)` in the T1* ctor makes MSVC treat the local as
+     *  escaped, and 13 ObjPtrVec::operator= instantiations then keep a null
+     *  test + ring unlink in ~Node that the image does not have (w12-o). */
+    ObjRefConcrete() : mObject(nullptr) {}
 public:
     ObjRefConcrete(T1 *obj);
     ObjRefConcrete(const ObjRefConcrete &o);
@@ -388,7 +394,7 @@ class ObjPtrVec : public ObjRefOwner {
 private:
     // Node size: 0x14
     struct Node : public ObjRefConcrete<T1, T2> {
-        Node(ObjRefOwner *owner) : ObjRefConcrete<T1>(nullptr), mOwner(owner) {}
+        Node(ObjRefOwner *owner) : mOwner(owner) {}
         Node(const Node &n);
         virtual ~Node() {}
         virtual Hmx::Object *RefOwner() const {

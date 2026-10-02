@@ -8,6 +8,14 @@ Quick reference for all documented decompilation patterns in DC3 (Dance Central 
 
 ## Corrections — read before trusting an older section
 
+- **2026-10-02 — a dead `AddRef(this)` branch in a constructor makes a stack local count as
+  ESCAPED, and the compiler then cannot fold a later null test on it.** See
+  **[dead-addref-branch-escapes-the-local.md](dead-addref-branch-escapes-the-local.md)**.
+  Constructing `ObjPtrVec::Node`'s base through a no-AddRef default constructor took all
+  **13** `ObjPtrVec<T>::operator=` instantiations 87.838 → 100.0 (three units completed,
+  0 regressions). Three earlier lanes had certified it a floor. Tell: an explicit `= 0` store
+  that removes the test (98.65 here) means the compiler lacks a proof, not a codegen choice.
+
 - **2026-09-30 — a conservative-prologue "clobber propagation floor" is often just the wrong
   LINKAGE CLASS, and `ham_xbox_r.map`'s flag column says which.** See
   **[map-comdat-flag-gates-clobber-propagation.md](map-comdat-flag-gates-clobber-propagation.md)**.

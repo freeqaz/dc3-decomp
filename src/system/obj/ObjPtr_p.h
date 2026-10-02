@@ -306,72 +306,27 @@ void ObjPtrVec<T1, T2>::operator=(const ObjPtrVec &other) {
     mNodes.clear();
     mNodes.reserve(other.mNodes.size());
     for (const_iterator it = other.begin(); it != other.end(); ++it) {
-        // The only residual on this function (13 instantiations, 87.83784%,
-        // 3,848 B) is this local's destructor: rows 69-77, base-only. Every
-        // other instruction lines up, including the ctor's three stores and the
-        // base-vptr store at the bottom of the loop; the rest is one uniform
-        // callee-saved rotation. The image's per-iteration ~Node emits ONLY that
-        // vptr store -- no `if (mObject) Release(this)` ring unlink -- while ours
-        // emits all nine instructions of it. Contrast ObjPtrVec::insert, whose
-        // Node local DOES get the unlink in the image (Waypoint 0x823CD750), so
-        // it is not that ~ObjRefConcrete is out of line here. Whole-image sweep:
-        // the split is exactly 13 operator= (folded) vs 19 insert (kept), i.e.
-        // per source shape, not per element type.
+        // Node(this) must NOT go through ObjRefConcrete(T1 *), even with a
+        // literal nullptr: see the protected default ctor in obj/Object.h.
         //
-        // AND IT IS NOT A LEVER ON THE REST OF THE ObjPtr/ObjRef FAMILY. Census
-        // over all 69,307 functions of the image
-        // (`scripts/analysis/objref_dtor_fold_census.py`): of the 94 ObjPtr<T> /
-        // ObjOwnerPtr<T> / ObjPtrVec::Node / ObjPtrList::Node / ObjRefConcrete<T>
-        // stack locals whose ctor AND base-vptr reset are both inlined, 81 carry
-        // the test and 13 do not -- and the 13 are exactly these operator=
-        // instantiations. Closing this is worth 3,848 B and nothing else.
-        // ⚠ Do not re-derive that with a grep. MSVC reuses one register (usually
-        // r11) for many `addi rX, rY, "??_7...@l"` materialisations per function,
-        // so a sweep that does not kill each register's binding at its next
-        // definition attributes unrelated stores to the slot: looser variants of
-        // this same sweep reported 268, then 102, then 20 third-state slots. The
-        // 7 survivors at 20 (Character::PostLoad, Flow::PostLoad x2,
-        // EventTrigger::Load x2, a UILabel PropSync, LightPreset::Load) all read
-        // as reachable-and-already-100% and were purely register-reuse artifacts.
+        // Why (w12-o, 2026-10-02): this compiler does intra-TU interprocedural
+        // escape analysis. It knows push_back(const Node &) only READS its
+        // argument, so as long as newNode never escapes, neither push_back nor
+        // Set can modify it, the ctor's mObject = 0 reaches the destructor, and
+        // ~ObjRefConcrete's `if (mObject) Release` folds away -- leaving only
+        // the base-vptr reset, which is exactly the image. But the escape
+        // analysis evidently runs before the ctor's dead `if (mObject) AddRef(this)`
+        // branch is folded, and AddRef stores `this` into the referent's ring,
+        // so ObjRefConcrete(nullptr) marks newNode escaped and the check (plus
+        // the ring unlink, rows 69-77, 87.83784%) comes back. Scratch-TU proof
+        // of the IPA: a callee that only reads `const S &` lets a later
+        // `if (s.a)` fold; a callee that passes &s to an extern does not.
         //
-        // WHEN MSVC FOLDS THIS DESTRUCTOR -- measured 2026-09-13 in this tree,
-        // three builds, each read off our own generated assembly:
-        //   (a) ZERO calls between the ctor and the dtor  -> the WHOLE dtor is
-        //       deleted: no `if (mObject)`, no unlink, AND no base-vptr reset.
-        //       Only the (dead) ctor stores survive, because MSVC's DSE does not
-        //       see the next iteration's overwrite across the backedge.
-        //       [probe: `{ Node probe(this); }` at the top of this loop body]
-        //   (b) ANY intervening call -> the test and the unlink are BOTH emitted,
-        //       and so is the vptr reset.
-        // The barrier is the CALL, not the escape. A call that provably cannot
-        // see the object blocks the fold exactly as hard as one that receives its
-        // address: with `Set()` deleted so only `mNodes.push_back(newNode)`
-        // remained (address passed as `const Node&`) the check stayed; with
-        // push_back deleted and only `mNodes.reserve(...)` left -- the Node's
-        // address never taken at all -- the check ALSO stayed. That is expected:
-        // the inlined ctor/dtor bodies themselves contain `mObject->AddRef(this)`
-        // / `mObject->Release(this)`, so MSVC marks every ObjRef-derived local
-        // address-taken before it folds the null branch, and no such local is
-        // ever non-escaping to it.
-        //
-        // The image is therefore in a THIRD state this compiler never produces:
-        // base-vptr reset present (so the destructor was not deleted outright)
-        // but the `if (mObject)` body absent, with TWO calls (vector::push_back,
-        // ObjPtrVec::Set) between the constructor and the destructor. Reaching it
-        // needs a shape with no call in that window, and push_back is what the
-        // image calls, so no rearrangement of these three statements can get
-        // there. Do not spend another lane on spellings of this loop; the next
-        // idea has to be about the destructor's emission, not the escape.
-        //
-        // MEASURED NEGATIVES, all 13 instantiations, canonical:
-        //   `const Node newNode(this);`      byte-inert, 87.83784 (prior lane)
-        //   `mNodes.push_back(Node(this));`  85.09460 -- an unnamed temporary
-        //       dies at the end of the full-expression, so the dtor lands between
-        //       push_back and Set instead of after Set; it still carries the
-        //       check, and it loses the vptr store's position. It does score the
-        //       callee-saved allocation closer to the image (one r24<->r26 swap
-        //       instead of a 5-register rotation), which is why the rotation here
-        //       is best read as downstream of the nine extra instructions.
+        // Measured negatives under the old ctor (all 13 instantiations):
+        //   `const Node newNode(this);`      byte-inert, 87.83784
+        //   `mNodes.push_back(Node(this));`  85.09460
+        //   explicit `mObject = 0` after Set 98.64865 (adds a store the image
+        //       lacks; it was the clue that the image knew mObject was null)
         Node newNode(this);
         mNodes.push_back(newNode);
         Set(--end(), *it);
