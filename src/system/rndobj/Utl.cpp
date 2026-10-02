@@ -2930,24 +2930,10 @@ void TessellateMesh(RndMesh *mesh) {
     // call site); only the guard and the copy-back offset use the pre-loop r21.
     mesh->Verts().resize(mesh->Verts().size() + (int)newVerts.size());
 
-    if ((unsigned int)origNumVerts < nextVert) {
-        int offset = origNumVerts * 0x60;
-        int count = nextVert - origNumVerts;
-        RndMesh::Vert *src = &newVerts[0];
-        do {
-            memcpy(
-#ifdef HX_NATIVE
-                (void *)((intptr_t)mesh->Verts().mVerts + offset),
-#else
-                (void *)((int)(unsigned int)mesh->Verts().mVerts + offset),
-#endif
-                src,
-                sizeof(RndMesh::Vert)
-            );
-            count--;
-            offset += 0x60;
-            src++;
-        } while (count != 0);
+    // w16-a: a plain loop; MSVC strength-reduces it into the image's
+    // byte-offset/src-pointer pair itself (95.93 -> 96.6, copy loop now exact).
+    for (unsigned int i = origNumVerts; i < nextVert; i++) {
+        memcpy(&mesh->Verts(i), &newVerts[i - origNumVerts], sizeof(RndMesh::Vert));
     }
 
     mesh->Sync(0x3f);
