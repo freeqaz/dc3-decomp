@@ -912,8 +912,10 @@ float HamMove::PSNRToDetectFrac(float psnr) const {
     }
     float t = (psnr - lowerThresh) / (upperThresh - lowerThresh);
     float clamped = Clamp(0.0f, 1.0f, t);
-    float upperDefault = 1.0f;
-    if (upper != (MoveRating)0) {
+    float upperDefault;
+    if (upper == (MoveRating)0) {
+        upperDefault = 1.0f;
+    } else {
         upperDefault = sDefaultRatingThresholds[upper - 1];
     }
     float lowerDefault;
