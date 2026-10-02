@@ -889,8 +889,11 @@ u64 RndShaderFur::CalcShaderOpts(NgMat *mat, ShaderType s, bool b) {
         colorAdjust = env->UseColorAdjust();
     }
     opts.mColorXfm = colorAdjust;
-    RndFur *fur = mat->GetFur();
-    bool furDetail = fur && fur->GetFurDetail();
+    // w17-a: an 8-bit unsigned local, not bool -- the image widens it to the u64
+    // bitfield with `rldicl r11,r11,0,56`; a bool local gives clrlwi, an int extsw.
+    // GetFur() is read through the accessor twice (CSE'd to one load): a named
+    // RndFur* local turns the image's `cmpwi` null test into cmplwi.
+    unsigned char furDetail = mat->GetFur() && mat->GetFur()->GetFurDetail();
     opts.mFurDetail = furDetail;
     bool fadeOut;
     if (b) {
