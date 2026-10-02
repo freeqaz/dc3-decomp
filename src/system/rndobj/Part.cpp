@@ -625,6 +625,15 @@ void RndParticleSys::Mats(std::list<RndMat *> &mats, bool) {
     }
 }
 
+// w15-r: the image's TU .rdata is [4.0f @0x820A13B8, gRev, gAltRev].  Nothing
+// loads that 4.0 by name -- every use folds to __real@40800000 -- which is the
+// shape of a named file-scope const used only in folded expressions (cf.
+// SkeletonViz's FOV).  Which use it was is not recoverable; UpdateParticles'
+// pause clamp is the only 4.0f in the TU that compiles identically through it
+// (still __real@40800000, measured).  Its presence takes gRev off offset 0 and
+// MSVC anchors Load's ASSERT_REVS pair on gAltRev like the image.
+const float kMaxFrameUpdate = 4.0f;
+
 INIT_REVS(0x29, 0)
 
 BEGIN_LOADS(RndParticleSys)
@@ -1479,10 +1488,10 @@ void RndParticleSys::UpdateParticles() {
 
         if (frameUpdate != 0.0f) {
             if (mPauseOffscreen != 0) {
-                if (frameUpdate > 4.0f) {
-                    float excess = frameUpdate - 4.0f;
+                if (frameUpdate > kMaxFrameUpdate) {
+                    float excess = frameUpdate - kMaxFrameUpdate;
                     mPausedTime += excess;
-                    frameUpdate = 4.0f;
+                    frameUpdate = kMaxFrameUpdate;
                 }
                 currentFrame -= mPausedTime;
             }
