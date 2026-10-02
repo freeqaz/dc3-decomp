@@ -83,25 +83,25 @@ long random(long l) {
     } while (0);
 
 void KeyChain::getMasher(unsigned char *uc) {
-    unsigned int m = 1;
+    unsigned int one = 1;
     // A BYTE slot (`stb r11, 0x54(r1)` at 0x823301CC) tested with a plain
     // `cmpwi r11, 0x0` against cr0 -- an `int` here is a word store and a
     // `cmpwi cr6`.
-    bool needs_byteswap = NEEDS_BYTESWAP(&m, 1);
+    bool needs_byteswap = NEEDS_BYTESWAP(&one, 1);
     // 0xEB is a NAMED local, initialised at 0x823301D0 into its own slot at
     // 0x5c(r1) before the loop; the ternary then loads it (0x82330210) instead
     // of materialising the literal.
     unsigned int seed = 0xEB;
-    unsigned int *masher_p = reinterpret_cast<unsigned int *>(uc);
+    unsigned int *masher = reinterpret_cast<unsigned int *>(uc);
 
     for (int i = 0; i < 8; i++) {
-        *masher_p = random((0 == i) ? seed : 0);
+        *masher = random((0 == i) ? seed : 0);
 
         if (needs_byteswap) {
-            BYTESWAP_32BIT(masher_p);
+            BYTESWAP_32BIT(masher);
         }
 
-        masher_p++;
+        masher++;
     }
     // RESIDUAL (w7-al, 98.1 canonical): all 70 instructions are present and in
     // order -- no inserts, no deletes, no opcode diffs.  What is left is one
