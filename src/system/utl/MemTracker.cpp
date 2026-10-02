@@ -349,7 +349,7 @@ void MemTracker::StartLog(TextStream &ts) {
         StopLog();
     }
     MILO_ASSERT(!mLog, 0x113);
-    *mLog = ts;
+    mLog = &ts;
     *mLog << "(elf " << TheSystemArgs.front() << ")\n";
     *mLog << "(data\n";
 }
