@@ -344,7 +344,7 @@ DataNode RndLine::OnSetMat(const DataArray *array) {
 void RndLine::MapVerts(int idx, VertsMap &vmap) {
     if (mHasCaps) {
         if (mLinePairs) {
-            vmap.t = (idx & 1) + 1;
+            vmap.t = (idx & 1) ? 2 : 1;
             vmap.v = &mMesh->Verts()[idx * 4];
         } else {
             if (0 == idx) {
