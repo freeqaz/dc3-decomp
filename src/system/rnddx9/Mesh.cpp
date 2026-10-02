@@ -259,24 +259,28 @@ bool DxMesh::CanDraw() const {
 void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
     MILO_ASSERT(mTransformCache.size() > i, 0x1ee);
     Transform &cached = mTransformCache[i];
-    // Declaration order is LOAD ORDER here, and it is measured rather than
-    // guessed: these three subtractions are the only thing that decides which
-    // of cached.v's three floats the image reads first at 0x30/0x34/0x38, and
-    // the offsets are charged (not a forgiven register permutation).  All six
-    // orders built and scored (w8-p 2026-09-30), norm / fuzzy:
-    //     dx/dy/dz  99.55705 / 98.08054      dx/dz/dy  99.57047 / 98.09396
-    //     dy/dx/dz  99.55705 / 98.14765      dy/dz/dx  99.55705 / 98.48322
-    //     dz/dx/dy  99.57047 / 98.16107      dz/dy/dx  99.57047 / 98.49664  <-- kept
-    // Note the two rulers disagree about the ranking, so picking on canonical
-    // alone would have stopped at dx/dz/dy and left 0.4pp of fuzzy on the table.
-    // The permutation the compiler applies is NOT a fixed function of
-    // declaration order -- dx/dy/dz loads (y,z,x) and dz/dx/dy loads (z,y,x) --
-    // so this had to be brute-forced.
-    float dz = cached.v.z - xfm.v.z;
-    float dy = cached.v.y - xfm.v.y;
-    float dx = cached.v.x - xfm.v.x;
-    if (Dot(xfm.m.y, cached.m.y) >= 0.8660254f
-        && dx * dx + dy * dy + dz * dz < 2500.0f) {
+    // w16-c (99.57047 -> 100.0 canonical, 6 commutative-fmuls rows left in the
+    // *= block, fuzzy 99.597).  Three levers, each measured:
+    //   * the distance test is Subtract(cached.v, xfm.v, delta) +
+    //     LengthSquared(delta), not three hand-written dz/dy/dx temporaries.
+    //     w8-p brute-forced all six declaration orders of the temporaries
+    //     (best 99.57047); none loads cached.v and xfm.v in the image's x,y,z
+    //     order, the helpers do.
+    //   * xfm.v is named once (`pos`) and used for the copy and the wind query:
+    //     that is what puts xfm in r29 and &xfm.v in r30 as the image does (the
+    //     whole r29<->r30 swap, 19 rows).
+    //   * the wind null test is SIGNED: the image is `cmpwi cr6, r29, 0x0` at
+    //     0x82620D10 right after `lwz r29, 0x94(r11)` (RndFur::mWind's pointer);
+    //     a plain pointer test emits `cmplwi`.  Spelled as an intptr_t test, the
+    //     same idiom CanDraw above uses for its buffer test; identical truth
+    //     value on both builds (intptr_t is pointer-sized, so native does not
+    //     truncate).
+    // NEGATIVE (w16-c): with `pos` but the temporaries kept, the six orders
+    // read zyx 99.97 / xyz 99.99 / xzy 99.97 / yxz 99.97 / yzx 99.96 / zxy 99.96.
+    const Vector3 &pos = xfm.v;
+    Vector3 delta;
+    Subtract(cached.v, pos, delta);
+    if (Dot(xfm.m.y, cached.m.y) >= 0.8660254f && LengthSquared(delta) < 2500.0f) {
         float invWeight = 1.0f - weight;
         cached.m.x *= invWeight;
         cached.m.y *= invWeight;
@@ -285,13 +289,13 @@ void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
         ScaleAddEq(cached, xfm, weight);
     } else {
         cached.m = xfm.m;
-        cached.v = xfm.v;
+        cached.v = pos;
     }
     RndWind *wind = Mat()->GetFur()->GetWind();
-    if (wind) {
+    if ((intptr_t)wind) {
         Vector3 windForce;
         float windTime = TheTaskMgr.Seconds(TaskMgr::kRealTime);
-        wind->GetWind(xfm.v, windTime, windForce);
+        wind->GetWind(pos, windTime, windForce);
         Vector3 &cachedPos = cached.v;
         cachedPos.x += windForce.x * 0.05f;
         cachedPos.y += windForce.y * 0.05f;
