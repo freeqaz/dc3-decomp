@@ -3185,12 +3185,12 @@ void RndText::FontMap3d::SetupCharacter(
         Transform xfm;
         xfm.v = mFont->CharOriginOffset();
         xfm.v *= state.mSize;
-        // NEGATIVE RESULT: the image keeps z's scale and its +yPos apart
-        // (`fmuls f10, f0, f10` at 0x8268ff5c, `fadds f0, f10, f30` at
-        // 0x8268ff6c) where we contract to one fmadds.  Spelling the scale as
-        // Scale(xfm.v, state.mSize, xfm.v) instead of `*=` is exactly inert.
-        xfm.v.z += yPos;
+        // The image keeps z's scale and its +yPos apart (`fmuls f10, f0, f10`
+        // at 0x8268ff5c, `fadds f0, f10, f30` at 0x8268ff6c).  w13-a: that
+        // needs the x statement FIRST -- with z first, MSVC contracts the
+        // `*=`'s last multiply and the `+= yPos` into one fmadds.
         xfm.v.x = xfm.v.x + scaledCenter + xPos;
+        xfm.v.z += yPos;
 
         // Scale matrix by cell height
         float cellHeight = mFont->FontUnitInverse() * state.mSize;
@@ -3201,9 +3201,7 @@ void RndText::FontMap3d::SetupCharacter(
         // rows gives under /fp:fast (x*1 folds, x*0 does not).  The 0.0f is a
         // literal throughout this function: a `static const float` zero was
         // addressed through a hoisted r27 instead of living in f31, which cost
-        // the image's fourth saved FPR and its 0x150 frame.  96.0 -> 97.4.
-        // RESIDUAL: z's `fmuls`+`fadds` (we fuse to fmadds; `z = z + yPos` is
-        // inert) and the mesh RndTransformable base hoist below.
+        // the image's fourth saved FPR and its 0x150 frame.
         xfm.m.Identity();
         xfm.m.x *= cellHeight;
         xfm.m.y *= cellHeight;
@@ -3233,17 +3231,10 @@ void RndText::FontMap3d::SetupCharacter(
         // `addi r3, r29, 0x88`; target's `addi r31, r28, 0x40` + `addi r3, r31,
         // 0x8` is the same address.
         //
-        // NEGATIVE RESULT on the r31 hoist itself: naming the upcast so the
-        // base is materialised once -- either `RndTransformable *t = mesh;` or
-        // `RndTransformable &t = *mesh;` -- REGRESSES 84.1 -> 83.2 (158 -> 161
-        // instructions, +3 inserts).  The named upcast makes MSVC keep the
-        // pointer in a frame slot across the XfmOnCircleEdge/Multiply calls
-        // instead of folding it into the two addressing modes.  Both spellings
-        // measured, both identical; lever exhausted, leave the two-row residual.
-        memcpy(&mesh->mLocalXfm, &xfm, sizeof(Transform));
-        if (!mesh->mDirty) {
-            mesh->SetDirty_Force();
-        }
+        // w13-a: it is the inline SetLocalXfm() -- its `this` is the
+        // RndTransformable base the image hoists into r31 (memcpy to r31+0x8,
+        // then SetDirty() on r31).  98.5 -> 100 (modulo register permutation).
+        mesh->SetLocalXfm(xfm);
     }
 
     xPos += state.mSize * advance;
