@@ -696,7 +696,7 @@ DataNode StorePanel::OnMsg(MultipleItemsEnumCompleteMsg const &msg) {
                 if (offer->songID == offerId) {
                     bool purchased = offer->isPurchased || msg.Purchased(i);
                     offer->isPurchased = purchased;
-                    success = success & (purchased ? -1 : 0);
+                    success = purchased ? success : false;
                     break;
                 }
             }
