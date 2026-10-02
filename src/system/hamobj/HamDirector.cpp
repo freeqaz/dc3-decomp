@@ -1660,39 +1660,16 @@ void HamDirector::BlendOutFaceOverrides(float blendTime) {
     }
 }
 
-// RESIDUAL (w8-n, 98.0392 canonical): 3 rows, 1 cause.  The image merges the bool into r11
-// and masks it into the return register -- `li r11, 0x0` / `b` / `li r11, 0x1` /
-// `clrlwi r3, r11, 24` at 0x8246881C..0x82468828 -- where we merge straight into
-// r3 and skip the mask.  The BRANCH structure already matches exactly.  REFUTED:
-//   `bool disabled = true; ... if (...) disabled = false; return disabled;`
-//        -> 92.9; `disabled` takes a CALLEE-SAVED register and the prologue
-//        grows from __savegprlr_29 to _28, which charges the prologue too.
-//   `if (mDisablePicking) return true; if (freecam) return true;
-//    return mPlayerFreestyle && !mFreestyleEnabled;` (semantically identical,
-//        and the branch polarities of the last line DO match the image)
-//        -> 92.8; MSVC then materialises the first `return true` as its own
-//        `li r3, 1` / `b` block instead of cross-jumping it.
-//   `return mPlayerFreestyle && !mFreestyleEnabled;` as the LAST statement
-//        while KEEPING the `if (!mDisablePicking)` wrapper and the freecam
-//        `return true` -- i.e. the one combination the two spellings above did
-//        not cover, since it preserves the image's branch layout exactly and
-//        only turns the trailing `if (...) return false;` into the expression
-//        whose 0/1 materialisation the `clrlwi` is supposed to come from
-//        -> 92.90196 (w9-d, 2026-09-30), 204 -> 208 B, and the row count goes
-//        the wrong way too: 3 rows becomes 9 (1 replace, 1 delete, 2 insert,
-//        5 diff_arg).  So the `clrlwi r3, r11, 24` is NOT reachable by making
-//        the final return an expression; all three source shapes that produce
-//        it cost more than the mask is worth.
+// w17-b: 98.04 -> 100.  ONE boolean expression, `A || (B && C) || (D && !E)`.
+// The image's `li r11, 0/1` + `clrlwi r3, r11, 24` tail is the 0/1
+// materialisation of a whole short-circuit expression; every earlier spelling
+// (w8-n, w9-d: if/return chains, a `disabled` flag, a trailing `return D && !E`
+// under the `if (!mDisablePicking)` wrapper) only made part of it an
+// expression.  Same truth table as the old if-chain.
 bool HamDirector::ShotsDisabled() {
-    if (!mDisablePicking) {
-        if (GetWorld() && GetWorld()->GetCameraManager()->HasFreeCam()) {
-            return true;
-        }
-        if (!mPlayerFreestyle || mFreestyleEnabled) {
-            return false;
-        }
-    }
-    return true;
+    return mDisablePicking
+        || (GetWorld() && GetWorld()->GetCameraManager()->HasFreeCam())
+        || (mPlayerFreestyle && !mFreestyleEnabled);
 }
 
 void HamDirector::SyncScene() {
