@@ -255,7 +255,7 @@ void RhythmBattlePlayer::Poll() {
                     if (!mActive) {
                         i7 = -1;
                     }
-                    if (i7 != 1) {
+                    if (i7 != mInTheZone) {
                         AnimateBoxyState(i7, true, false);
                     }
                 }
