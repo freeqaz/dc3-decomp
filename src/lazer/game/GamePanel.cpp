@@ -1069,6 +1069,13 @@ void GamePanel::UpdateNowBar() {
         // std::min by reference: the image keeps &val / &eq in r11 and loads
         // the winner through it (`addi r11, r1, 0x64` ... `lfs f0, 0x0(r11)`).
         val = std::min(eq, val);
+    } else {
+        // BUG FIX (w18-e, 98.17 -> 100): with no song duration the image shows
+        // 0.0%.  The `ble cr6` on `0 < songDuration` lands on the join, where
+        // `stfs f0, 0x64(r1)` stores f0 -- still the 0.0f loaded for the
+        // `durVal < 0` test -- into val.  We left val uninitialised on that
+        // path and printed stack garbage.
+        val = 0.0f;
     }
     *mTimeOverlay << MakeString(
         "MBT %d:%d:%03d [%s %c%s %4.1f%%] (%.2fsec %dtk)\n",
