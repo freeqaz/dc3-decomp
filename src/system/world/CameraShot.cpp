@@ -1886,6 +1886,15 @@ void CamShot::UnHide() {
     CAMERA_LOG(" ** %s CamShot::UnHide() stop\n", Name());
 }
 
+// w17-b correction (still 98.91): except_data_828161A0 is SetFrame's EH prefix
+// (it sits at 0x82816198, immediately BEFORE SetFrame at 0x828161A0), not
+// GetCam's.  GetCam's own is except_data_82816028 (before 0x82816028): its
+// funcinfo (0x820E4138) has 3 unwind states, ALL with null actions
+// (lbl_820E4120 = {-1,0},{0,0},{1,0}), no try blocks, one ip-map entry.  So the
+// original had objects whose destruction needed no code at all -- the frame
+// pointer is the price of that EH, not of a real cleanup.  A one-NOTIFY_ONCE
+// function (SpotlightDrawer::DrawShowing) has NO EH in the image, so the
+// statics alone do not explain it.
 // RESIDUAL (w12-b, 98.91 canonical): the image runs this with a frame pointer
 // (`subi r31, r1, 0x90`) and EH data (except_data_828161A0 right after the
 // function), i.e. one more callee-saved GPR, and every other row is that

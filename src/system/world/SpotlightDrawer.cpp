@@ -150,38 +150,30 @@ void SpotlightDrawer::ListDrawChildren(std::list<RndDrawable *> &draws) {
     draws.push_back(mParams.mProxy);
 }
 
-// RESIDUAL 97.705 canonical (352 B), and the two charged rows say we are calling
-// the WRONG VIRTUAL.  At 0x1D48..0x1D60 the image does
-//   li   r4, 0x0
-//   lwz  r30, 0x4(r31)        ; envMesh
-//   mr   r3, r30              ; this, UNADJUSTED
-//   lwz  r11, 0x0(r30)        ; vptr at object offset 0
-//   lwz  r11, 0x4(r11)        ; SLOT 1
-//   bctrl
-// and the same again at 0x1DB8.  We emit slot 0 and no r4.  Two things follow.
-// (1) The image dispatches on the UNADJUSTED pointer, so the reinterpret_cast
-//     below is faithful and must stay.  MEASURED NEGATIVE (w8-q): spelling it
-//     `envMesh->Highlight()` -- legal, since RndMesh -> RndDrawable ->
-//     virtual RndHighlightable really does expose Highlight() -- drops this row
-//     from 97.705 to 87.227, because MSVC then emits the full virtual-base
-//     adjustment the image has nowhere: `lwz r11,0x4(r30)` (vbptr),
-//     `lwz r11,0x8(r11)` (vbase displacement), `add r11,r11,r30`,
-//     `addi r3,r11,0x4`.  Reverted.
-// (2) `li r4, 0x0` is an ARGUMENT, and RndHighlightable::Highlight() has no
-//     parameter -- ?Highlight@RndDrawable@@UAAXXZ in ham_xbox_r.map is `XZ`,
-//     void(void).  So slot 1 of the unadjusted vptr is a ONE-ARGUMENT virtual
-//     and this call is not Highlight() at all.  Whatever it is, it is reached by
-//     a cast to some class whose slot 0 is occupied and whose slot 1 takes one
-//     pointer/bool; finding it is the next step, not another spelling of
-//     Highlight.
+// BEHAVIOURAL FIX (w17-b, 97.705 -> 100).  The two charged rows were the WRONG
+// VIRTUAL, and w8-q's analysis below them was right up to the last step:
+//   0x1D48  li   r4, 0x0
+//           lwz  r30, 0x4(r31)        ; entry +4
+//           mr   r3, r30              ; this, unadjusted
+//           lwz  r11, 0x0(r30)        ; primary vptr
+//           lwz  r11, 0x4(r11)        ; SLOT 1
+//           bctrl                     (and again at 0x1DB8)
+// Entry +4 is not a mesh: DrawLight stores RndEnviron::sCurrent there.  Slot 1
+// of RndEnviron's primary (RndTransformable) vtable is
+// ?Select@RndEnviron@@UAAXPBVVector3@@@Z (Env.s, ??_7RndEnviron@@6BRndTransformable@@@),
+// so the call is `env->Select(nullptr)`: the cans are drawn grouped by
+// environment and each group selects its environment first.  We had a
+// reinterpret_cast to RndHighlightable calling slot 0, which on the image's
+// layout is OnlyReturns -- the environment was never selected.  Field retyped
+// to RndEnviron * in SpotlightDrawer.h.
 void SpotlightDrawer::DrawMeshVec(std::vector<SpotMeshEntry> &entries) {
     if (entries.size() != 0) {
         std::vector<SpotMeshEntry>::iterator it = entries.begin();
         RndMesh *canMesh = it->mCanMesh;
         RndMultiMesh *multiMesh = canMesh->CreateMultiMesh();
         multiMesh->Instances().push_back(RndMultiMesh::Instance(it->mTransform));
-        RndMesh *envMesh = it->mEnvMesh;
-        reinterpret_cast<RndHighlightable *>(envMesh)->Highlight();
+        RndEnviron *envMesh = it->mEnvMesh;
+        envMesh->Select(nullptr);
         std::vector<SpotMeshEntry>::iterator itEnd = entries.end();
         for (++it; it != itEnd; ++it) {
             bool envChanged = it->mEnvMesh != envMesh;
@@ -190,7 +182,7 @@ void SpotlightDrawer::DrawMeshVec(std::vector<SpotMeshEntry> &entries) {
                 multiMesh->DrawShowing();
                 if (envChanged && envMesh) {
                     envMesh = it->mEnvMesh;
-                    reinterpret_cast<RndHighlightable *>(envMesh)->Highlight();
+                    envMesh->Select(nullptr);
                 }
                 if (canChanged) {
                     canMesh = it->mCanMesh;
@@ -412,7 +404,7 @@ void SpotlightDrawer::DrawLight(Spotlight *spot) {
         if (visible) {
             SpotMeshEntry meshEntry;
             meshEntry.mCanMesh = spot->mLightCanMesh;
-            meshEntry.mEnvMesh = reinterpret_cast<RndMesh *>(RndEnviron::sCurrent);
+            meshEntry.mEnvMesh = RndEnviron::sCurrent;
             meshEntry.mSpotlight = spot;
             meshEntry.mTransform = canXfm;
             sCans.push_back(meshEntry);
@@ -635,11 +627,10 @@ inline void DrawAccessories<LensExtract>(
 }
 
 void SpotlightDrawer::DrawWorld() {
-    int numLights = sLights.size();
-    if (numLights < TheNgStats->mSpotlights) {
-        numLights = TheNgStats->mSpotlights;
-    }
-    TheNgStats->mSpotlights = numLights;
+    // w17-b: one Max<int>() assignment.  The image loads TheNgStats (the
+    // store's base) BEFORE sLights.size() (0x82826990..A8); a local `numLights`
+    // computed first put the size loads ahead of it (9 rows).
+    TheNgStats->mSpotlights = Max<int>(sLights.size(), TheNgStats->mSpotlights);
     if ((!sLights.empty() || !sCans.empty()) && Showing()) {
         SortLights();
         DrawMeshVec(sCans);
