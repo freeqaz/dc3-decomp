@@ -7,6 +7,7 @@
 
 class SampleZone {
     friend bool __cdecl PropSync(SampleZone &, DataNode &, DataArray *, int, PropOp);
+    friend class NoteVoiceInst;
 
 public:
     SampleZone(Hmx::Object *);

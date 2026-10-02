@@ -14,11 +14,12 @@
 // `zone->Volume() + RatioToDb(...)` fixes the fadds order but hoists the
 // Volume() load above the call into f31 (95.8); `db + zone->Volume()` and
 // `db += zone->Volume()` are byte-identical to the current spelling.
-// w16-e (97.95, 6 rows): the 0x39/0x3a/0x3b byte-store order, `fadds f1,
-// f1, f0` (image: db first) and the mSample reload before SetBankPan.
-// Measured: `db + zone->Volume()` with the named db is inert; inlining
-// RatioToDb into the expression fixes the fadds operand order but hoists the
-// Volume load above the call (95.9).  Not kept.
+// w19-e: 97.95 -> 100.  The image reads SampleZone's mCenterNote, mVolume
+// and mPan as MEMBERS, not through the CenterNote()/Volume()/Pan() inline
+// accessors (one inline level fewer; friend access added in SampleZone.h).
+// mCenterNote direct put the 0x39 byte store back in order; mVolume direct
+// with RatioToDb inline in the sum gave `fadds f1, f1, f0` (db first) with the
+// Volume load after the call; mPan direct moved the mSample reload after it.
 NoteVoiceInst::NoteVoiceInst(
     MidiInstrument *owner,
     SampleZone *zone,
@@ -29,15 +30,14 @@ NoteVoiceInst::NoteVoiceInst(
     float fineTune
 )
     : mSample(nullptr), mVolume(0), mStartProgress(0), mTriggerNote(trigger),
-      mCenterNote(zone->CenterNote()), mStarted(false), mStopped(false),
+      mCenterNote(zone->mCenterNote), mStarted(false), mStopped(false),
       mGlideID(glideID), mGlideFrames(0), mGlideToNote(0), mGlideFromNote(0),
       mGlideFramesLeft(-1), mFineTune(fineTune), mDurationFramesLeft(durFramesLeft),
       mOwner(owner) {
     if (zone->Sample()) {
         mSample = zone->Sample()->NewInst(false, 0, -1);
-        float db = RatioToDb(ratio / 127.0f);
-        mSample->SetBankVolume(zone->Volume() + db);
-        mSample->SetBankPan(zone->Pan());
+        mSample->SetBankVolume(RatioToDb(ratio / 127.0f) + zone->mVolume);
+        mSample->SetBankPan(zone->mPan);
         mSample->SetBankSpeed(getCalculatedSpeed(mTriggerNote));
         mSample->SetFXCore(zone->GetFXCore());
         mSample->SetADSR(zone->ADSR());
