@@ -411,16 +411,25 @@ bool UIManager::IsGameScreenActive() {
     //   0x8277B674 subic r11, r11, 0x1 / 0x8277B678 subfe r11, r11, r11
     //   / 0x8277B67C and r9, r11, r9
     // i.e. CA-1, a -1/0 mask that is all-ones exactly when the difference is ZERO,
-    // so `ret` survives only when mCurrentScreen == BottomScreen().  Our `!=`
-    // spelling produced `subic r10, r11, 1 ; subfe r11, r10, r11` = CA = (diff != 0),
-    // the complement.  Spelling it `==` costs 2.5pp (97.50 -> 95.00) because MSVC
-    // lowers the equality with cntlzw/extrwi instead of the subic/subfe mask, but
-    // the mask form could not be recovered: `if (cur != BottomScreen()) ret = false;`
-    // (nested or as one `&&`) is if-converted differently and scores 89.2.
-    // Coordinator: `ret &= BottomScreen() == cur` (operand order) is inert, 95.00.
+    // so `ret` survives only when mCurrentScreen == BottomScreen().
+    // w13-d (95.0 -> 97.5): the conditional clear below is what emits that
+    // mask (the `ret &= cur == BottomScreen()` spelling gave cntlzw/extrwi).  It
+    // only does so once the null test is SIGNED, as the image's is (`cmpwi cr6,
+    // r11, 0x0` at 0x8277B650) -- with an unsigned `cur != nullptr` the same
+    // clear if-converts differently (89.2, w7-av).  Remaining 2 rows: the image
+    // puts that compare in cr6, we in cr0; `if ((int)cur)`, `!((int)cur == 0)`
+    // and `(int)cur != 0 && cur != BottomScreen()` all keep cr0, and reading
+    // mCurrentScreen twice instead of through `cur` gets cr6 but loses the
+    // separate return block (89.8).
     UIScreen *cur = mCurrentScreen;
-    if (cur != nullptr)
-        ret &= cur == BottomScreen();
+#ifdef HX_NATIVE
+    if (cur != nullptr) {
+#else
+    if ((int)cur != 0) {
+#endif
+        if (cur != BottomScreen())
+            ret = false;
+    }
     return ret;
 }
 
