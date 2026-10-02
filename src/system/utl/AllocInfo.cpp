@@ -39,6 +39,11 @@ AllocInfo::AllocInfo(
     // Putting `mFile = file` ahead of the bytes here is worth 6.3pp
     // (88.66 -> 95.0); an init list, or body assignments in declaration
     // order, both read 88.66 and hoist mStrat/mPooled to the very front.
+    // w15-b NEGATIVE (95.0): an exhaustive sweep of the six word stores
+    // (mReqSize/mActSize/mType/mMem/mFile/mLine, the three byte stores kept
+    // together just before mLine) -- ~700 of the 720 orders, each a per-TU
+    // build -- found no order reaching 100.  The source order is not the lever:
+    // MSVC re-sorts the first four stores (written 0,4,8,c it emits c,8,0,4).
     mReqSize = requestedSize;
     mActSize = actualSize;
     mType = type;

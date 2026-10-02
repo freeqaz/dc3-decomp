@@ -540,21 +540,11 @@ void BustAMovePanel::AdvanceFlashcards() {
     }
 }
 
-// RESIDUAL (w7-ar, 91.57 canonical, unchanged): every branch and every branch
-// TARGET already matches -- 0 diff_op, 0 branch-dest rows. What is left is two
-// induction-variable choices plus the register cascade they drag along:
-//   * first loop: the image walks a BYTE OFFSET off a live base
-//     (`li r11, 0` / `lwzx r8, r11, r7`, 0x82880DC0); MSVC gives us a walking
-//     POINTER (`mr r11, r5` / `lwz r8, 0x0(r11)`) for the same `data[count]`.
-//   * second loop: MSVC hoists `(nextIdx - size) + 1` into a THIRD induction
-//     variable incremented alongside nextIdx (the extra `addi r8, r8, 0x1`);
-//     the image recomputes `subf r10, r6, r11` / `addi r10, r10, 1` inside the
-//     loop each iteration (0x82880E18).
-// Refuted here, all measured: splitting the wrap into `wrappedIdx = nextIdx -
-// size; wrappedIdx++;` (inert, 91.57); indexing `mSongStructure[count]` instead
-// of `data[count]` (91.8 canonical but 89.5 -> 88.8 raw, adds a `clrrwi` and
-// reloads the vector base, and swaps the 0x97c/0x980 loads). objdiff classes the
-// residual RarelyHandFixable and asks for the permuter; this lane agrees.
+// w15-b (91.57 -> 100): two plain for-loops over mSongStructure.  w7-ar's
+// hand-rotated goto version with a cached `data` pointer gave MSVC a walking
+// pointer for the first loop and an extra induction variable for the wrap in
+// the second; written naturally, MSVC's own rotation produces the image's byte
+// offset (`lwzx r8, r11, r7`) and in-loop `subf`/`addi` wrap exactly.
 int BustAMovePanel::RepsToNextPhrase() {
     int beat = (int)(TheTaskMgr.Beat() + 0.5f);
     if (mStreamJumped) {
@@ -562,43 +552,30 @@ int BustAMovePanel::RepsToNextPhrase() {
         TheMaster->GetAudio()->GetCurrLoopBeats(beat, loopEnd);
     }
 
-    int *data = mSongStructure.begin();
-    int size = mSongStructure.end() - data;
-    unsigned int count = 0;
-    int repsInPhrase;
-
-    if (size != 0) {
-loop_top:
-        beat -= data[count] * 4;
-        if (beat >= 0) {
-            count++;
-            if (count < (unsigned int)size)
-                goto loop_top;
-            goto default_reps;
-        }
-        repsInPhrase = (3 - beat) / 4;
-        if (repsInPhrase != -1)
-            goto calc_total;
-    }
-default_reps:
-    repsInPhrase = data[1];
-
-calc_total:;
-    int total = 0;
-    int iter = 1;
-    unsigned int nextIdx = count + 1;
-    do {
-        unsigned int wrappedIdx = nextIdx;
-        if (nextIdx >= (unsigned int)size) {
-            wrappedIdx = (nextIdx - size) + 1;
-        }
-        if (total + repsInPhrase >= 3 && data[wrappedIdx] == 4) {
+    int repsInPhrase = -1;
+    unsigned int count;
+    for (count = 0; count < mSongStructure.size(); count++) {
+        beat -= mSongStructure[count] * 4;
+        if (beat < 0) {
+            repsInPhrase = (3 - beat) / 4;
             break;
         }
-        iter++;
-        nextIdx++;
-        total += data[wrappedIdx];
-    } while (iter < 10);
+    }
+    if (repsInPhrase == -1) {
+        repsInPhrase = mSongStructure[1];
+    }
+
+    int total = 0;
+    for (int i = 1; i < 10; i++) {
+        unsigned int idx = count + i;
+        if (idx >= mSongStructure.size()) {
+            idx = idx - mSongStructure.size() + 1;
+        }
+        if (total + repsInPhrase >= 3 && mSongStructure[idx] == 4) {
+            break;
+        }
+        total += mSongStructure[idx];
+    }
     return total + repsInPhrase;
 }
 

@@ -138,11 +138,11 @@ inline float EaseElasticIn(float t, float power, float f3) {
         float f7;
         // w13-d (92.86): the image compares `power` against a RUNTIME int->float
         // conversion of the constant 1 (`li r11,1; extsw; std; lfd; fcfid;
-        // frsp` at 0x82411A44) -- the only `li rN,K; extsw rN,rN` pair in the
-        // whole target binary.  Every spelling tried folds it to the 1.0f
-        // already held in f31: `power < 1`, `< true`, `< Max(1, 0)`, and an
-        // `int minPower = 1` local both inside the block and above the assert.
-        if (power < 1) {
+        // frsp` at 0x82411A44).  `power < 1`, `< true`, `< Max(1, 0)` and an
+        // `int minPower = 1` local all fold it to the 1.0f held in f31.
+        // w15-b: `abs(1)` -- the int abs() of Penner's `a < abs(c)` -- is what
+        // survives as a runtime conversion: 92.86 -> 100 (84/84 equal).
+        if (power < abs(1)) {
             f7 = f3 / 4;
             power = 1;
         } else {

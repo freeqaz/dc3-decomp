@@ -526,20 +526,19 @@ void DataArray::Save(BinStream &bs) const {
     }
 }
 
-// Mechanism behind the residual (w7-r, 2026-09-14), on top of the note below:
-// the seven missing `stw r11, 0x58(r31)` dead stores are not arbitrary. 0x58 is
-// the ADDRESS-ESCAPING temp for `mFile.Str()`, handed to
-// ??$MakeString@PBDPBDF@@YAPBDPBDABQBD1ABF@Z at 825A1F0C as `addi r5, r31, 0x58`.
-// Because its address escapes, MSVC's DSE may not remove the `node.Type()`
-// temporaries it coalesced into that same slot, so the image keeps 14 of them
-// and we keep 7 -- which is also the whole of our frame delta (-0x10).
+// w15-b (97.863 -> 100): every MemPushTemp/Resize/MemPopTemp triple is a
+// MemDoTempAllocations scope.  w7-r traced the residual to seven missing dead
+// stores of node.Type() into the address-escaping 0x58 temp (and 0x10 of
+// frame); with the RAII scopes the function carries an EH state and MSVC keeps
+// all fourteen stores, exactly as the image does.
 void DataArray::Load(BinStream &bs) {
     mFile = gFile;
     short size;
     bs >> size;
-    MemPushTemp();
-    Resize(size);
-    MemPopTemp();
+    {
+        MemDoTempAllocations tmp;
+        Resize(size);
+    }
     bs >> mLine;
     bs >> mDeprecated;
     DataArray *array = nullptr;
@@ -559,9 +558,10 @@ void DataArray::Load(BinStream &bs) {
         if (node.Type() == kDataSymbol
             && (array = DataGetMacro(node.UncheckedSym())) != 0) {
             size += array->Size() - 1;
-            MemPushTemp();
-            Resize(size);
-            MemPopTemp();
+            {
+                MemDoTempAllocations tmp;
+                Resize(size);
+            }
             for (int j = 0; j < array->Size(); j++) {
                 mNodes[i++] = array->Node(j);
             }
@@ -575,18 +575,6 @@ void DataArray::Load(BinStream &bs) {
         // use -- makes MSVC sort the cases and emit a binary search (`bgt` on
         // 0x21 first). 97.863 -> 55.5 canonical, 10 mismatch rows -> 172. Do not
         // retry.
-        //
-        // Open residual on this function (ours 97.863; og-dc3-decomp is at
-        // 97.91186 with a differently-shaped body, so it is not a spelling either
-        // tree has found): the target stores the type into the temp slot 0x58
-        // before EVERY comparison in this chain -- 14 stores against our 7. We
-        // emit them for the four Type() calls in the DataArrayDefined() test above
-        // and for the first two arms here (kDataAutorun, kDataDefine) and then
-        // stop; the target keeps going for kDataUndef, kDataIfdef, kDataIfndef,
-        // kDataElse, kDataEndif, kDataInclude and kDataMerge. They are dead
-        // stores to a slot whose address escapes into the MILO_FAIL MakeString
-        // below, and the 7 we lose are exactly the function's remaining 7 rows
-        // plus the 0x10 of frame the extra temp costs.
         if (node.Type() == kDataAutorun) {
             DataNode command;
             bs >> command;
@@ -651,9 +639,10 @@ void DataArray::Load(BinStream &bs) {
             }
             if (node.Type() == kDataInclude) {
                 size += macro->Size() - 1;
-                MemPushTemp();
-                Resize(size);
-                MemPopTemp();
+                {
+                    MemDoTempAllocations tmp;
+                    Resize(size);
+                }
                 for (int j = 0; j < macro->Size(); j++) {
                     mNodes[i++] = macro->Node(j);
                 }
@@ -662,15 +651,17 @@ void DataArray::Load(BinStream &bs) {
                     MILO_FAIL("Empty merge file (possibly a re-included file): %s", path);
                 }
                 int remaining = size - i - 1;
-                MemPushTemp();
-                Resize(i);
-                MemPopTemp();
+                {
+                    MemDoTempAllocations tmp;
+                    Resize(i);
+                }
                 DataMergeTags(this, macro);
                 i = mSize;
                 size = mSize + remaining;
-                MemPushTemp();
-                Resize(size);
-                MemPopTemp();
+                {
+                    MemDoTempAllocations tmp;
+                    Resize(size);
+                }
             }
             if (readFile) {
                 macro->Release();
