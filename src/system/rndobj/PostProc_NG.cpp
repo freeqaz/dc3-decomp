@@ -54,7 +54,13 @@ void Bloom_Downsample(ShaderType shader, RndTex *texSrc, RndTex *texDst) {
     texDst->FinishDrawTarget();
 }
 
-void Bloom_Blur(RndTex *texDst, RndTex *texSrc, BloomBlurStyle style, BloomBlurDirection direction, unsigned int pass, float attenuation, float angle) {
+// BUG FIX (w18-a): the SOURCE texture is the first parameter and the render
+// target the second.  The image keeps param 1 (r3) in r26 and param 2 (r4) in
+// r30, and every texDst use reads r30: the `texDst->Width() > 0` assert loads
+// 0x58(r4) first (0x826AA6A8), MakeDrawTarget and FinishDrawTarget are called on
+// r30, and SetDiffuseTex gets r26.  With the parameters named the other way
+// round every call site drew into the texture it meant to sample.
+void Bloom_Blur(RndTex *texSrc, RndTex *texDst, BloomBlurStyle style, BloomBlurDirection direction, unsigned int pass, float attenuation, float angle) {
     MILO_ASSERT(texDst->Width() > 0, 0x1b2);
     MILO_ASSERT(texDst->Height() > 0, 0x1b3);
     MILO_ASSERT(texDst->Width() == texSrc->Width(), 0x1b4);
