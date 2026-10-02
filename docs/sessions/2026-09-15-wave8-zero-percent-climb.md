@@ -1434,3 +1434,70 @@ component order at the call site. Negative results are recorded in both headers.
   pins the full object when a method is entered through a base-class thunk (Spotlight).
 - A bare MemPushTemp/MemPopTemp pair is a `MemDoTempAllocations` scope; a hand-written
   `while (!empty()) pop_back()` is the container's own `clear()`.
+
+## Wave 14 — the second fresh pass, and the linkage lever is exhausted (2026-10-02)
+
+Five directory-disjoint lanes over the 291 functions at ≥ 90 % that neither a lane commit
+nor a wave 8–13 tagged source comment named, plus w14-l sweeping the 102 config entries that
+spell file-scope data with a mangled name and no `scope:global` (the tell behind w13-d's
+MemMgr fix).
+
+**31,607 → 31,640 matched (+33)**; authorable canonical **31,568 → 31,600 / 32,221
+(97.97 % → 98.07 %)**; all-100 authorable units **702 → 706 / 967**; remaining authorable
+**653 → 621 functions (497,868 → 483,144 B)**; XEX matched code 49.70 % → 49.81 %
+(`scripts/progress_metrics.py` at `85fd337a3`). Every landing UP-only, five build guards
+green, native gate 623 / 554 / 554 / 0 / 69.
+
+| lane | UP | units completed | matched |
+|---|---:|---|---|
+| w14-l | 0 | 0 (lever exhausted; one hack removed) | 31607 |
+| w14-a | 6 | 0 | 31607 → 31610 |
+| w14-e | 4 | 0 | 31610 → 31612 |
+| w14-d | 13 | 2 (Archive, NetCacheMgr) | 31612 → 31623 |
+| w14-b | 8 | 1 (CharDriver) | 31623 → 31630 |
+| w14-f | 13 | 1 (UILabel) | 31630 → 31640 |
+
+Units completed measured by diffing the all-100 unit sets of the wave-14 BEFORE report
+(`c6509d70d`) and the close report: exactly these four, none lost.
+
+### Behaviour bugs, adjudicated against the target `.s`
+
+1. **`Rnd::OnToggleHeap`** never restarted the overlay timer when toggling off: the off arm
+   used `SetShowingOnly(false)`. In the image both arms reach one shared `Timer::Restart`
+   (the off arm branches to `.L_82663398`).
+2. **`Vector2DESmoother::Smooth`** (latent — the only caller passes `normalize = false`):
+   the normalize path skipped the write on a zero length and never set the previous level;
+   the image zeroes the inverse and stores both level and previous level on each axis.
+
+### The static-linkage lever is exhausted
+
+w14-l compared per-function relocation sets, target against ours, for all 102 candidates,
+with the known MemPushHeap case as a positive control. **No graded function below 100 is
+held there by a candidate's linkage.** One was made static anyway (`gBigHunk`/`gSmallHunk`,
+0 rows) because it deleted a `&gBigHunk + 1` pointer-arithmetic hack and its separate native
+spelling; the two ints moved from MemMgr's `.data` split to PoolAlloc's, the object that
+defines them. 34 candidates live in another unit's split; 60 show no displacement pattern.
+
+### A native-only break the PPC tools could not see
+
+w14-f inserted `Flow *self = this;` directly after an `#ifdef HX_NATIVE … } else #endif`.
+On PPC the native arm is absent, so the line was an ordinary statement and every PPC check
+passed; on native the declaration **became the else-body** and the build failed (native gate
+exit 6, "use of undeclared identifier 'self'"). Fixed by declaring it above the native arm;
+`Flow.obj` recompiled byte-identical. The wave-15 brief now names this trap.
+
+### Levers (measured in-tree)
+
+- The retail map's `f i` flag on a same-TU callee we define out of line: `inline` closed
+  `ObjVector<Strand>::resize` 57.6 → 100 (CharHair::Strand ctor) and moved
+  `SyncEffectParams` 96.4 → 99.9. `comdat_selection_audit.py` finds 533 such callees; 234
+  sit in 90 units that still have functions below 100 — wave 15's inline lanes.
+- `x << 1` instead of `x * 2` stops MSVC sharing the value with a later `(x − 1) * 2`.
+- Calling a virtual through a named pointer in a destructor keeps the image's real call.
+
+### Wave 15
+
+Two inline-flag lanes owning those 90 units (plus their fresh rows), two fresh lanes over the
+142 untouched rows outside them, and w15-r on the `gRev`/`gAltRev` family: four wave-14 lanes
+independently hit `Load`/`PreLoad` residuals where the image addresses `gRev` off `gAltRev`'s
+base, which points at the `INIT_REVS` macro in the PCH-reached `obj/Object.h`.
