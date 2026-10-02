@@ -826,20 +826,19 @@ int RndFont::CharPage(unsigned short c) const {
 bool RndFont::CharWidthAdvanceCoords(
     unsigned short c, float &charW, float &advW, Vector2 &uvMin, Vector2 &uvMax
 ) const {
-    const RndFont *owner = this;
-    while (owner->mTextureOwner != owner) {
-        owner = owner->mTextureOwner;
+    if (mTextureOwner != this) {
+        return mTextureOwner->CharWidthAdvanceCoords(c, charW, advW, uvMin, uvMax);
     }
-    std::map<unsigned short, CharInfo>::const_iterator it = owner->mCharInfoMap.find(c);
-    if (it != owner->mCharInfoMap.end()) {
+    std::map<unsigned short, CharInfo>::const_iterator it = mCharInfoMap.find(c);
+    if (it != mCharInfoMap.end()) {
         const CharInfo &info = it->second;
         if (info.mU != 0 || info.mV != 0 || info.mAdvance != 0) {
             charW = info.charWidth;
-            advW = owner->mMonospace ? 1.0f : info.mAdvance;
+            advW = mMonospace ? 1.0f : info.mAdvance;
             uvMin.x = info.mU;
-            uvMax.x = owner->mMaterialOffsets[info.mPage].x * info.charWidth + info.mU;
+            uvMax.x = mMaterialOffsets[info.mPage].x * info.charWidth + info.mU;
             uvMin.y = info.mV;
-            uvMax.y = owner->mMaterialOffsets[info.mPage].y + info.mV;
+            uvMax.y = mMaterialOffsets[info.mPage].y + info.mV;
             return true;
         }
     }
