@@ -256,7 +256,11 @@ bool CacheXbox::DeleteSync(const char *cc) {
         XContentFlush(mCacheID.Name(), nullptr);
         if (!res) {
             unsigned int err = GetLastError();
-            if (!IsDeviceConnected(mCacheID.DeviceID())) {
+            // Through ContentData()'s pointer, not DeviceID(): the image stores
+            // `err` to its home slot BEFORE loading the device id (lwz r3 right
+            // after the stw); reading the member through the object lets MSVC
+            // hoist the load above the store (w12-c, measured in-TU).
+            if (!IsDeviceConnected(mCacheID.ContentData()->DeviceID)) {
                 mLastResult = kCache_ErrorStorageDeviceMissing;
             } else {
                 MILO_NOTIFY(
@@ -473,7 +477,7 @@ int CacheXbox::ThreadRead() {
 
     if (!success) {
         unsigned int err = GetLastError();
-        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        if (!IsDeviceConnected(mCacheID.ContentData()->DeviceID)) {
             return 8;
         }
         MILO_NOTIFY(
@@ -516,7 +520,7 @@ int CacheXbox::ThreadDelete() {
     }
     if (!result) {
         unsigned int err = GetLastError();
-        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        if (!IsDeviceConnected(mCacheID.ContentData()->DeviceID)) {
             return 8;
         }
         MILO_NOTIFY(
