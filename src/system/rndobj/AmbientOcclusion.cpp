@@ -1174,6 +1174,10 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
     // 0x64-stepped progress*100), together with the order in which their three
     // `addi`s are emitted at the bottom of the loop.  The instruction sequence
     // is otherwise identical.
+    // w16-a: closed (99.98 -> 100) by advancing progress in the for-increment
+    // alongside v (`v++, progress++`): the image steps the vertex offset, then
+    // progress, then progress*100.  Same semantics -- the body has no
+    // `continue`, so progress still advances once per vertex, after use.
     unsigned int progress = 0;
     unsigned int lastPercent = 0;
     for (std::vector<RndMesh *>::iterator it = mObjectsReceive.begin();
@@ -1184,7 +1188,7 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
         // `lwz r11, 0x148(r25)` off the MESH.  Caching GetGeomOwner() in a
         // local adds a second 0x148 hop (Verts() already goes through
         // mGeomOwner) and pins the owner in a callee-saved GPR.
-        for (unsigned int v = 0; v < (unsigned int)mesh->Verts().size(); v++) {
+        for (unsigned int v = 0; v < (unsigned int)mesh->Verts().size(); v++, progress++) {
             RndMesh::Vert &vert = mesh->Verts(v);
             Vector3 worldPos;
             Multiply(vert.pos, xfm, worldPos);
@@ -1195,7 +1199,6 @@ void RndAmbientOcclusion::CalculateAO(float *outTime) {
             if (percent != lastPercent) {
                 lastPercent = percent;
             }
-            progress++;
         }
         SmoothResults(mesh);
         mesh->SetHasAOCalc(true);
