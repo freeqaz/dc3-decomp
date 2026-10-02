@@ -803,10 +803,7 @@ void HolmesClientEnumerate(
     BeginCmd(Holmes::kEnumerate, true);
 
     *gStreamBuffer << u8(Holmes::kEnumerate);
-    BinStream &bs = *gStreamBuffer << path;
-    bs << u8(recurse);
-    BinStream &bs2 = bs << ext;
-    bs2 << u8(dirs);
+    *gStreamBuffer << path << recurse << ext << dirs;
     HolmesFlushStreamBuffer();
 
     std::vector<RecurseInfo> entries;
