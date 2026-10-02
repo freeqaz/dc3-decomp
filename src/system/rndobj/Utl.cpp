@@ -2699,6 +2699,11 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
     // 0x8262E17C) and reversing the three swaps to match moves three offset
     // rows around without changing the 46-row total (measured 2026-09-14), so
     // this keeps the same spelling ComputeFaceTangentBasis uses.
+    // w17-a: an in-place `normalMat.Set(x.x, y.x, z.x, x.y, ...)` (rb3's
+    // Transpose(Matrix3, Matrix3) shape) makes rows 21-33 match the image
+    // EXACTLY, but the loop's inlined Multiply(Vector3, Matrix3) then schedules
+    // its loads differently (4 insert / 4 delete) and the function drops
+    // 99.887 -> 95.1.  Reverted; the loop is where the remaining lever is.
     float xy = normalMat.x.y;
     normalMat.x.y = normalMat.y.x;
     normalMat.y.x = xy;
