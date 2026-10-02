@@ -943,7 +943,11 @@ void BinkMovieImpl::MovieOpen(const char *name, unsigned int flags) {
             flags |= 0x4000;
         }
         flags |= 0x100000;
-        if ((flags >> 26) & 1) {
+        // The slow-frame timer wraps BinkOpen only when flag bit 26 is CLEAR:
+        // the image does `nor r11, r30, r30` / `extrwi. r11, r11, 1, 5` / beq
+        // to the plain BinkOpen.  The bool() cast is what materializes the
+        // extract-to-LSB form (docs/decomp/patterns/fixable-bool-mask.md).
+        if (bool(~flags & 0x4000000)) {
             AutoSlowFrame frame("BinkOpen", 200);
             mBink = BinkOpen(name, flags);
         } else {
