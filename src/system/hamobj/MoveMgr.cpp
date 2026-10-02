@@ -885,8 +885,11 @@ void MoveMgr::ComputeLoadedMoveSet() {
     mChoiceSets.resize(maxSize);
     std::pair<const MoveVariant *, const MoveVariant *> *routineData = &mRoutineMeasures[0][0];
     MoveChoiceSet *choiceData = &mChoiceSets[0];
-    int count = (int)maxSize;
-    if (count > 0) {
+    // w13-b: maxSize itself is the countdown (the image decrements r29 in place,
+    // `subic. r29, r29, 0x1`); a separate `int count` copy cost a `mr` and moved
+    // the two data-pointer loads.  96.88 -> 100.  A plain indexed for loop is
+    // much worse (86).
+    if ((int)maxSize > 0) {
         do {
             if (routineData->first) {
                 mVariants.insert(routineData->first);
@@ -905,10 +908,10 @@ void MoveMgr::ComputeLoadedMoveSet() {
                     choice++;
                 } while (j != 0);
             }
-            count--;
+            maxSize--;
             routineData++;
             choiceData++;
-        } while (count != 0);
+        } while (maxSize != 0);
     }
 }
 
