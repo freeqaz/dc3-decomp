@@ -521,6 +521,14 @@ inline void MultiplyTranspose(const Vector3 &v, const Transform &t, Vector3 &out
     out.Set(Dot(out, t.m.x), Dot(out, t.m.y), Dot(out, t.m.z));
 }
 
+// w13-o: the aliasing arm rotates into a temporary and adds the translation on
+// the way out, the shape rb3-xenon recovered for RB3 retail. The fused 4-term
+// `out.Set(... + t.v.x, ...)` it replaces scheduled the components z, y, x and
+// tail-merged with the fast arm; the image (char/Character.obj COMDAT) evaluates
+// x, y, z, reads t.v through the `&t.v` it already computed for the compare,
+// and returns from each arm separately. 94.53 -> 100.0; whole-binary A/B (full
+// ninja both sides): 1 up, 0 down -- every inlined copy at a call site where
+// the compiler can prove &t.v != &out is unaffected.
 inline void Multiply(const Vector3 &v, const Transform &t, Vector3 &out) {
     if (&t.v != &out) {
         out.Set(
@@ -530,11 +538,13 @@ inline void Multiply(const Vector3 &v, const Transform &t, Vector3 &out) {
         );
         Add(out, t.v, out);
     } else {
-        out.Set(
-            t.m.x.x * v.x + t.m.y.x * v.y + t.m.z.x * v.z + t.v.x,
-            t.m.x.y * v.x + t.m.y.y * v.y + t.m.z.y * v.z + t.v.y,
-            t.m.x.z * v.x + t.m.y.z * v.y + t.m.z.z * v.z + t.v.z
+        Vector3 tmp;
+        tmp.Set(
+            t.m.x.x * v.x + t.m.y.x * v.y + t.m.z.x * v.z,
+            t.m.x.y * v.x + t.m.y.y * v.y + t.m.z.y * v.z,
+            t.m.x.z * v.x + t.m.y.z * v.y + t.m.z.z * v.z
         );
+        Add(tmp, t.v, out);
     }
 }
 
