@@ -18,6 +18,19 @@ private:
 
 IUnknown *FxSendSynapse360::CreateFx() { return (IUnknown *)new DSP::SynapseAPO(); }
 
+// w14-e (96.4 -> 99.5 canonical, 32 -> 7 rows): the map lists
+// ??0SynapseAPOParams@DSP@@QAA@XZ as `f i` (synth_xbox:FxSendSynapse.obj),
+// i.e. an inline/SELECT_ANY definition, and marking the definition below
+// `inline` (docs/decomp/patterns/map-comdat-flag-gates-clobber-propagation.md)
+// is enough: `this`/`voice` now live in r31/r30 across the ctor call with the
+// image's 0xd0 frame, without moving the ctor to another object.  Two more
+// spellings closed the rest of the body: band 0 stores coeff1/gain before
+// freq (the image loads mProximityEffect ahead of mNote1Hz), and band 1's
+// unison test is a full if/else (`beq` to the zeroing `fmr` over a `b`) where
+// band 2's is a one-armed if (`bne` over it).  Left: 7 rows, the stfs order
+// of 0x58/0x54/0x60/0x68/0xa4/0x7c/0xa8 -- moving the low/high cutoff stores
+// above band 1, or to the end of the function, was inert or worse.
+// The history below predates the `inline` lever.
 // NOT YET 100% (96.4%, 32 rows of 89), and the residual is a *build-model*
 // finding rather than a source one.  Every remaining row follows from register
 // allocation: the target spends two callee-saved registers (r30 = voice,
@@ -47,10 +60,10 @@ void FxSendSynapse360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
 
     // Band 0: the primary target note, always at full gain.
     params.bands[0].enabled = 1;
-    params.bands[0].freq = mNote1Hz;
-    params.bands[0].gain = 1.0f;
-    params.bands[0].coeff0 = mAmount;
     params.bands[0].coeff1 = mProximityEffect;
+    params.bands[0].gain = 1.0f;
+    params.bands[0].freq = mNote1Hz;
+    params.bands[0].coeff0 = mAmount;
     params.bands[0].coeff2 = mProximityFocus;
 
     // Band 1: target note 2 (or a detuned copy of note 1 when note 2 is unset).
@@ -61,7 +74,9 @@ void FxSendSynapse360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
     params.highCutoffFreq = mReleaseSmoothing;
     float band1Gain = 1.0f;
     if (mNote2Hz == 0.0f) {
-        if (!mUnisonTrio)
+        if (mUnisonTrio)
+            band1Gain = 1.0f;
+        else
             band1Gain = 0.0f;
         params.bands[1].coeff1 = mProximityEffect;
         params.bands[1].freq = mNote1Hz * 0.9904912114143372f;
@@ -92,7 +107,7 @@ void FxSendSynapse360::SyncEffectParams(IXAudio2SubmixVoice *voice) const {
 
 namespace DSP {
 
-SynapseAPOParams::SynapseAPOParams() throw() {
+inline SynapseAPOParams::SynapseAPOParams() throw() {
     for (int i = 0; i < 3; i++) {
         bands[i].freq = 220.0f;
         bands[i].gain = 0.0f;
