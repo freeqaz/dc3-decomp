@@ -1301,8 +1301,8 @@ void Rnd::DrawPreClear() {
 }
 
 // BEHAVIOUR FIX (w14-a): the timer is restarted on BOTH arms. The image's
-// off-arm (0x82..5ff0: li r9,-1; stb r31,0x8(r11); stw r9,gCurHeap; b 0x6008)
-// branches to the shared `addi r3,r11,0x40; bl Timer::Restart` at 0x6008; the
+// off-arm (target Rnd.obj +0x5ff0: li r9,-1; stb r31,0x8(r11); stw r9,gCurHeap; b +0x6008)
+// branches to the shared `addi r3,r11,0x40; bl Timer::Restart` at +0x6008; the
 // old SetShowingOnly(false) arm skipped Restart. Same as RB3's SetShowing on
 // both arms; spelled with the store split from one shared Restart, 100 modulo
 // register permutation.
