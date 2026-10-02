@@ -194,8 +194,13 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 // __false_type _M_erase, which calls only memcpy) is identical to ours.  Not the
 // cause, each tested: source order (ctor moved after Poll, as in the image's
 // address order); `inline` Init; /EHs and /EHa on this TU (EHa adds funclets
-// everywhere).  Open question for the next lane: what made the image's Init (or
-// _M_erase) may-throw.
+// everywhere); `resize(0)` for clear() (Init then builds a CameraDisplacement
+// temp, frame +0x140, 89.8).  Stronger probe: a CONSTANT-FOLDED throwing
+// statement in Init -- `MILO_ASSERT(sizeof(mCamBoneLengths) > 0, ...)`, no code of
+// its own -- also restores the funclet, so MSVC decides throw-ability before
+// folding.  The original Init very likely had such a statement (a folded assert,
+// or an inline call whose throwing arm dies); see DxShader::Compile
+// (rnddx9/ShaderMgr.cpp, w18-c) for one that was found.  Not landed: unknown.
 Skeleton::Skeleton() : mTracking(kSkeletonNotTracked), mTrackingID(-1), unkac4(0) {
     Init();
 }
