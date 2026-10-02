@@ -342,12 +342,16 @@ int DanceRemixer::JumpedMeasureAdd(int measure, int count) const {
 int DanceRemixer::JumpedMeasureStepsBetween(int from, int to, int direction) const {
     MILO_ASSERT(direction == 1 || direction == -1, 0x1bd);
     int count = 0;
-    while (from != to) {
+    // The walk runs on a copy: the failure message reports the ORIGINAL
+    // `from`.  The image never writes the advanced measure back to from's
+    // home slot (0xbc(r1)), yet passes that slot's address to MakeString.
+    int measure = from;
+    while (measure != to) {
         count += direction;
         if ((count < 0 ? -count : count) > mTotalMeasures * 2) {
             TheDebug.Fail(MakeString("JumpedMeasureDifference: can't get from measure %d to measure %d\n", from, to), nullptr);
         }
-        from = JumpedMeasureAdd(from, direction);
+        measure = JumpedMeasureAdd(measure, direction);
     }
     return count;
 }
