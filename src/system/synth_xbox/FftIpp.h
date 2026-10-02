@@ -23,7 +23,7 @@ public:
     // trivially copyable, so vector<float,XboxAllocator<float> >::get_allocator()
     // inlines to nothing in _M_fill_assign, as in the image: it passes an
     // uninitialised r1+0x50 straight to _Vector_base(n, const alloc&)
-    // (82E4D75C `addi r5, r1, 0x50` / `bl _Vector_base`).  w7-as found removing
+    // (82E4D760 `addi r5, r1, 0x50` / `bl _Vector_base`).  w7-as found removing
     // the copy ctor ALONE inert -- the empty user dtor also has to go.
     // _M_fill_assign 94.4 -> 100, no other row moves.  Behaviour is unchanged:
     // all three were empty.
