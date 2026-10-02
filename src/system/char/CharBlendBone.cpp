@@ -93,10 +93,9 @@ void CharBlendBone::Poll() {
                 Interp(xfm1.m, xfm2.m, it->mWeight, tf48.m);
             }
             if (mSetLocal) {
-                RndTransformable *parent = target->TransParent();
-                if (parent) {
+                if (target->TransParent()) {
                     Transform inverted;
-                    Invert(parent->WorldXfm(), inverted);
+                    Invert(target->TransParent()->WorldXfm(), inverted);
                     Multiply(tf48, inverted, target->DirtyLocalXfm());
                 } else {
                     target->SetLocalXfm(tf48);
