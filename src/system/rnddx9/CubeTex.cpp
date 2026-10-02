@@ -53,8 +53,9 @@ void DxCubeTex::Sync() {
                 D3DCubeTexture_LockRect(
                     (D3DCubeTexture *)mTex, (D3DCUBEMAP_FACES)face, mip, &locked, nullptr, 0
                 );
+                DWORD gpuFormat = desc.Format & 0x3f;
                 XGTileTextureLevel(
-                    desc.Width, desc.Height, mip, desc.Format & 0x3f, 0, locked.pBits,
+                    desc.Width, desc.Height, mip, gpuFormat, 0, locked.pBits,
                     nullptr, bmp->Pixels(), bmp->DxtRowBytes(), nullptr
                 );
                 D3DCubeTexture_UnlockRect(
