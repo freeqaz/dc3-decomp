@@ -336,6 +336,10 @@ DataNode RndMultiMesh::OnAddXfms(const DataArray *da) {
 // in ObjRef::empty itself), a `const ObjRef &` local; a static_cast to
 // Hmx::Object* adds a null check (94.6). Unit also blocked by the PCH-fixed
 // utl\PoolAlloc.h __FILE__ spelling (see obj/Data.h).
+// w17-a (still 99.22): `static_cast<Hmx::Object &>(*sit->first).Refs().empty()`
+// DOES produce the image's two separate addi (vbptr displacement, then mRefs)
+// but MSVC keeps a null test on the reference conversion (94.6); an inline
+// proxy member `return Refs().empty();` folds back to one addi (99.22).
 void RndMultiMesh::CollideList(const Segment &seg, std::list<Collision> &colls) {
     static int stamp = 0;
     if (TheLoadMgr.EditMode() && CollideSphere(seg)) {
