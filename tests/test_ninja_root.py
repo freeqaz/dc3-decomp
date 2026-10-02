@@ -174,6 +174,115 @@ class TestCli(NinjaRootFixture):
         self.assertEqual(bad.returncode, 1)
         self.assertIn("was generated for", bad.stderr)
 
+        # A refused tree must not get a stamp at all: a stale stamp left behind
+        # by an earlier pass would let restat call the edge unchanged.
+        bad_stamp = self.copy / "build" / "373307D9" / "ninja_root_checked.stamp"
+        self.assertEqual(self._run(self.copy, "--quiet", "--stamp-out", str(bad_stamp)).returncode, 1)
+        self.assertFalse(bad_stamp.exists(), "a refusal wrote a stamp")
+
+    def test_stamp_is_tree_independent(self):
+        """A reflinked worktree inherits main's stamp; if the body named the
+        root, its first `ninja` would rewrite it and re-fire REPORT for no
+        reason. A pass is the only verdict a stamp can record."""
+        self.write_manifest(self.origin, generated_for=self.origin, with_var=True)
+        self.write_manifest(self.copy, generated_for=self.copy, with_var=True)
+        a = self.origin / "a.stamp"
+        b = self.copy / "b.stamp"
+        self.assertEqual(self._run(self.origin, "--quiet", "--stamp-out", str(a)).returncode, 0)
+        self.assertEqual(self._run(self.copy, "--quiet", "--stamp-out", str(b)).returncode, 0)
+        self.assertEqual(a.read_text(), b.read_text())
+
+
+class TestPatchGuardRefusesBeforeBuilding(NinjaRootFixture):
+    """`ensure_patched_tree` runs `ninja post-compile` -- the very command that
+    writes into the foreign tree -- so the root check has to fire BEFORE it, and
+    as an `UnpatchedTreeError` so the existing callers' handlers refuse."""
+
+    def setUp(self):
+        super().setUp()
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        self.addCleanup(sys.path.remove, str(REPO_ROOT / "scripts"))
+        from orchestrator import patch_guard
+        self.pg = patch_guard
+        scripts = self.copy / "scripts"
+        scripts.mkdir()
+        shutil.copy(CHECKER, scripts / "verify_ninja_root.py")
+        (scripts / "verify_objs_patched.py").write_text("import sys; sys.exit(0)\n")
+        # A "build tool" that records it was run. If it runs, the guard lost.
+        self.marker = self.tmp / "BUILD_RAN"
+        make = self.tmp / "fake_make.sh"
+        make.write_text(f"#!/bin/sh\ntouch {self.marker}\n")
+        make.chmod(0o755)
+        (self.copy / "objdiff.json").write_text(
+            '{"custom_make": "%s", "custom_args": []}' % make)
+
+    def test_foreign_manifest_refused_before_build(self):
+        self.assertTrue(issubclass(self.pg.ForeignNinjaRootError,
+                                   self.pg.UnpatchedTreeError))
+        self.write_manifest(self.copy, generated_for=self.origin, with_var=True)
+        with self.assertRaises(self.pg.ForeignNinjaRootError) as ctx:
+            self.pg.ensure_patched_tree(self.copy, build=True)
+        self.assertIn("was generated for", str(ctx.exception))
+        self.assertFalse(self.marker.exists(),
+                         "the build ran before the root check refused")
+
+    def test_own_manifest_passes_the_root_check(self):
+        self.write_manifest(self.copy, generated_for=self.copy, with_var=True)
+        self.assertIn("belongs to this tree", self.pg.ensure_ninja_root(self.copy))
+
+
+class TestWiredIntoGeneratedManifest(unittest.TestCase):
+    """The check enforces nothing unless the GENERATED build.ninja runs it.
+
+    It landed on 2026-09-13 with no caller at all; this reads the real manifest
+    of the tree the test runs in (skipped if unconfigured or unsplit, i.e. no
+    compile edges) and asserts every compile edge is ordered after it.
+    """
+
+    STAMP = "build/373307D9/ninja_root_checked.stamp"
+    # The three rules that run `cd $in_dir && cl.exe /Fo$abs_out` (msvc_link
+    # consumes objects that are already ordered after pre-compile).
+    COMPILE_RULES = ("msvc", "msvc_pch", "msvc_pch_create")
+
+    @classmethod
+    def setUpClass(cls):
+        bn = REPO_ROOT / "build.ninja"
+        if not bn.exists():
+            raise unittest.SkipTest("no build.ninja in this tree")
+        cls.text = vnr._unwrap(bn.read_text(encoding="utf-8", errors="replace"))
+        cls.edges = {}  # output -> (rule, inputs-line)
+        import re
+        for m in re.finditer(r"^build (.+?): (\S+)(.*)$", cls.text, re.MULTILINE):
+            for out in m.group(1).split(" | ")[0].split():
+                cls.edges[out] = (m.group(2), m.group(3))
+        if not any(r in cls.COMPILE_RULES for r, _ in cls.edges.values()):
+            raise unittest.SkipTest("manifest has no compile edges (unsplit tree)")
+
+    def test_check_edge_is_always_dirty(self):
+        self.assertIn(self.STAMP, self.edges, "no edge produces the root stamp")
+        rule, rest = self.edges[self.STAMP]
+        self.assertEqual(rule, "ninja_root_check")
+        self.assertIn("always", rest)
+        self.assertRegex(self.text, r"(?m)^ninja_root = /")
+
+    def test_pre_compile_requires_the_check(self):
+        rule, rest = self.edges["pre-compile"]
+        self.assertEqual(rule, "phony")
+        self.assertIn(self.STAMP, rest.split("||")[0])
+
+    def test_every_compile_edge_is_ordered_after_pre_compile(self):
+        compiles = {o: r for o, (rule, r) in self.edges.items() if rule in self.COMPILE_RULES}
+        self.assertGreater(len(compiles), 100)
+        missing = [o for o, r in compiles.items()
+                   if "||" not in r or "pre-compile" not in r.split("||", 1)[1].split()]
+        self.assertEqual(missing, [], f"{len(missing)} compile edges skip pre-compile")
+
+    def test_reports_depend_on_the_check(self):
+        for rep in ("report.json", "report_raw.json", "baseline.json"):
+            out = f"build/373307D9/{rep}"
+            self.assertIn(out, self.edges)
+            self.assertIn(self.STAMP, self.edges[out][1], f"{rep} does not depend on the check")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

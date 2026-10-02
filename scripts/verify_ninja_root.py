@@ -37,42 +37,44 @@ for every other way a tree gets copied.
 What this checks
 ----------------
 That the tree root `build.ninja` was generated for is the tree it is sitting in.
-The root is read from a `ninja_root` variable if `tools/project.py` emits one;
-`tools/project.py` does NOT emit one today (see below), so in practice the root
-is always RECOVERED from the first compile edge, by stripping the edge's
-relative output from its `abs_out`. That recovery path is the one under test and
-the one that matters: it works on every manifest already on disk, which is the
-whole population that can currently be wrong.
+The root is read from the `ninja_root` variable `tools/project.py` emits; on a
+manifest generated before that variable existed it is RECOVERED from the first
+compile edge, by stripping the edge's relative output from its `abs_out`. So the
+check works on manifests that predate it, which is the whole population that can
+currently be wrong.
 
-⚠ NOT WIRED INTO THE BUILD. THIS SCRIPT ENFORCES NOTHING BY ITSELF.
----------------------------------------------------------------------
-Nothing calls this. It is a standalone assertion in the same shape as
-`verify_split_current.py --check` and `verify_objs_patched.py --check`, but
-unlike those two it has NO ninja edge and NO `patch_guard` hook, so a mis-rooted
-tree still builds silently. Saying so here rather than describing the wiring it
-deserves is deliberate: a correct doc plus an uninstalled hook is zero
-enforcement, and this project has been bitten by exactly that shape before.
+Where it is enforced (wired 2026-10-02, lane w10-t)
+---------------------------------------------------
+Until 2026-10-02 this script was landed UNWIRED (2026-09-13) and said so here:
+nothing called it, so a mis-rooted tree still built silently. It is now hung on:
 
-It was landed unwired on purpose (2026-09-13). The wiring the hazard actually
-warrants -- an order-only dep on the `pre-compile` phony every compile edge
-already carries, an implicit input on report/baseline, a
-`patch_guard.ensure_ninja_root()` before `ninja post-compile`, and asserts in
-`setup_worktree.sh` / `configure_existing_worktree.sh` -- touches the compile
-graph of a tree that several lanes build concurrently, and the measured
-incidence did not justify doing that in a triage lane:
+* the `pre-compile` phony, which every compile edge and the PCH edge carry as an
+  ORDER-ONLY dependency. Order-only constrains order but never marks an edge
+  dirty, so the check runs before the first `cl.exe` at zero rebuild cost, and
+  a refusal stops every compile. The edge (`CHECK NINJA ROOT`) is `always` +
+  `restat`, like `CHECK SPLIT CURRENT`.
+* an implicit input of report.json / report_raw.json / baseline.json, so a
+  mis-rooted tree cannot produce a report over objects it never wrote.
+* `scripts/orchestrator/patch_guard.ensure_ninja_root()`, called first thing in
+  `ensure_patched_tree()` -- BEFORE its `ninja post-compile`, which is the very
+  command that would write into the other tree. Raises `ForeignNinjaRootError`,
+  a subclass of `UnpatchedTreeError`, so every existing caller refuses.
+* `scripts/setup_worktree.sh` and `scripts/configure_existing_worktree.sh`,
+  which refuse to hand back a tree that fails it.
 
-    2026-09-13, this box: 47 of 47 registered dc3 worktree manifests PASS.
-    Widening to every directory holding a 373307D9 manifest (31 of them, clones
-    included) turns up exactly one refusal, `dc3-decomp-backup` -- and that one
-    is the "cannot establish" branch, an unvouchable manifest, not a manifest
-    proven to name another tree.
+The one gap that cannot be closed from inside the manifest: a copy of a tree
+whose `build.ninja` was generated BEFORE this wiring has no such edge, so it
+will not refuse itself -- `patch_guard` (every MCP/orchestrator build) still
+does. Measured incidence when it was landed unwired: 47 of 47 registered dc3
+worktree manifests passed on 2026-09-13, against TWO genuinely mis-rooted of
+164 on 2026-08-26 (`fix/worktree-relative-ninja`, aa4b8f70d). The population
+shrank, not the hazard.
 
-Compare the branch that first wrote this (`fix/worktree-relative-ninja`,
-2026-08-26): auditing 164 dc3 worktrees then found TWO genuinely mis-rooted.
-The population has since shrunk, not the hazard.
-
-So: run it by hand before trusting a measurement from a tree you did not
-configure yourself, and wire it up as its own lane.
+Stamp: `--stamp-out` writes a CONSTANT body. A refusal exits 1 and writes
+nothing, so the only verdict a stamp can record is "passed"; making it depend
+on the root (as the 2026-08-26 draft did) only made a freshly reflinked
+worktree, whose stamp came from main, rewrite it and re-run REPORT once for no
+reason.
 
 Exit codes
 ----------
@@ -190,7 +192,7 @@ def main(argv: Optional[list] = None) -> int:
                     help="tree to check (default: cwd)")
     ap.add_argument("--quiet", action="store_true", help="print nothing on success")
     ap.add_argument("--stamp-out", metavar="PATH",
-                    help="write a digest of the verdict here (for a restat ninja edge)")
+                    help="on success, write a constant stamp here (for a restat ninja edge)")
     args = ap.parse_args(argv)
 
     try:
@@ -200,7 +202,8 @@ def main(argv: Optional[list] = None) -> int:
         return 1
 
     if args.stamp_out:
-        _write_stamp(Path(args.stamp_out), str(Path(args.root).resolve()))
+        # Constant on purpose: see "Stamp:" in the module docstring.
+        _write_stamp(Path(args.stamp_out), "build.ninja belongs to the tree it sits in")
     if not args.quiet:
         print(note)
     return 0

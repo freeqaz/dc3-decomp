@@ -487,6 +487,14 @@ def generate_build_ninja(
     n.variable("configure_args", [f'"\"{arg}\""' if ' ' in arg else arg for arg in sys.argv[1:]])
     # for arg in sys.argv[1:] if arg.contains(' ') wrap in quotes else arg
     n.variable("python", f'"{sys.executable}"')
+    # The tree this manifest was generated FOR. Every compile edge below is
+    # `cd $in_dir && cl.exe /Fo$abs_out` with both absolute, while the ninja node
+    # names stay relative -- so a copied build.ninja decides dirtiness from the
+    # COPY's files and then compiles the ORIGIN's sources into the ORIGIN's
+    # object tree. Recording the root is what lets
+    # scripts/verify_ninja_root.py refuse that before anything is written.
+    # Referenced by no rule, so adding it moves no command hash.
+    n.variable("ninja_root", str(Path.cwd()))
     n.newline()
 
     ###
@@ -535,6 +543,11 @@ def generate_build_ninja(
     # firing, not a change to objdiff. See scripts/verify_complete_units.py.
     complete_units_script = Path("scripts") / "verify_complete_units.py"
     complete_units_checked = build_path / "complete_units_checked.stamp"
+    # The tree-identity guard: this manifest's absolute paths must name the tree
+    # it is sitting in. See scripts/verify_ninja_root.py for the cross-tree
+    # write it refuses.
+    root_guard_script = Path("scripts") / "verify_ninja_root.py"
+    root_checked = build_path / "ninja_root_checked.stamp"
     build_tools_path = config.build_dir / "tools"
     download_tool = config.tools_dir / "download_tool.py"
     n.rule(
@@ -936,8 +949,9 @@ def generate_build_ninja(
         )
         n.newline()
 
-    def write_custom_step(step: str, prev_step: Optional[str] = None) -> None:
-        implicit: List[str | Path] = []
+    def write_custom_step(step: str, prev_step: Optional[str] = None,
+                          extra_inputs: Optional[List[str]] = None) -> None:
+        implicit: List[str | Path] = list(extra_inputs or [])
         if config.custom_build_steps and step in config.custom_build_steps:
             n.comment(f"Custom build steps ({step})")
             for custom_step in config.custom_build_steps[step]:
@@ -968,7 +982,20 @@ def generate_build_ninja(
         )
 
     # Add all build steps needed before we compile (e.g. processing assets)
-    write_custom_step("pre-compile")
+    #
+    # `pre-compile` is the ORDER-ONLY dependency every compile edge (and the PCH
+    # edge) already carries, which makes it the one place a precondition can be
+    # enforced for free: order-only constrains ORDER but never marks an edge
+    # dirty, so hanging the tree-identity check here costs zero rebuilds and
+    # still stops every compile if it fails. A manifest that names another tree
+    # must be refused BEFORE the first `cd $in_dir && cl.exe /Fo$abs_out`,
+    # because that command is the one that writes into the other tree. Only
+    # when `build_config` exists: the check's own edge is emitted inside the
+    # `if build_config:` block below, and an unsplit tree has no compile edges.
+    write_custom_step(
+        "pre-compile",
+        extra_inputs=[str(root_checked)] if build_config else None,
+    )
 
     ###
     # PCH build edge
@@ -1736,6 +1763,26 @@ def generate_build_ninja(
             implicit=[str(split_guard_script), str(split_stamp), "always"],
         )
 
+        n.comment("Assert this build.ninja was generated for THIS tree")
+        # `always` + `restat`, same shape and same reason as the split guard:
+        # the failure is mtime-invisible (a `cp -a` copy is byte-identical and
+        # older than everything), but the stamp must not move on a tree where
+        # nothing changed or every `ninja` re-runs REPORT. The digest is of the
+        # tree root, so it moves exactly when the answer does. The command runs
+        # with ninja's CWD -- the tree holding THIS manifest -- so a copied
+        # manifest checks the copy, which is the tree it would mis-build.
+        n.rule(
+            name="ninja_root_check",
+            command=f"$python {root_guard_script} --check --quiet --stamp-out $out",
+            description="CHECK NINJA ROOT",
+            restat=True,
+        )
+        n.build(
+            outputs=str(root_checked),
+            rule="ninja_root_check",
+            implicit=[str(root_guard_script), "always"],
+        )
+
         ###
         # Assert no unit is credited 100% without a base object to measure.
         #
@@ -1922,10 +1969,13 @@ def generate_build_ninja(
         # `split_current_check` block above for the 341-function reproduction.
         # ... and on the complete-unit check, because a unit credited 100% with
         # no base object inflates this very report and does it silently.
+        # ... and on the tree-identity check, because a manifest copied from
+        # another tree compiles THAT tree while this one's objects stand still,
+        # so the report here measures objects no edge in this tree ever wrote.
         report_implicit: List[Union[str, Path]] = [
             objdiff, "objdiff.json", "all_source",
             str(icf_map_path), str(icf_map_purged), str(split_checked),
-            str(complete_units_checked),
+            str(complete_units_checked), str(root_checked),
         ]
         if config.custom_build_steps and "post-compile" in config.custom_build_steps:
             report_implicit.append("post-compile")
@@ -1997,7 +2047,7 @@ def generate_build_ninja(
             implicit=[
                 objdiff, "objdiff.json", "all_source", "always",
                 str(icf_map_path), str(icf_map_purged), str(split_checked),
-                str(complete_units_checked),
+                str(complete_units_checked), str(root_checked),
             ],
             order_only="post-build",
         )

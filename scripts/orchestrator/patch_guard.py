@@ -75,8 +75,10 @@ from pathlib import Path
 __all__ = [
     "UnpatchedTreeError",
     "StaleSplitError",
+    "ForeignNinjaRootError",
     "ensure_patched_tree",
     "ensure_split_current",
+    "ensure_ninja_root",
     "POST_COMPILE_TARGET",
 ]
 
@@ -120,6 +122,52 @@ class UnpatchedTreeError(RuntimeError):
     measurement, it is a measurement of symbol names, storage classes and
     relocations that this project does not match against.
     """
+
+
+class ForeignNinjaRootError(UnpatchedTreeError):
+    """`build.ninja` names a different tree than the one it sits in.
+
+    Every compile edge is `cd $in_dir && cl.exe /Fo$abs_out` with both paths
+    absolute, so a manifest copied from another tree builds THAT tree: ninja
+    still decides dirtiness from the local relative node names, the build looks
+    like it worked, this tree's objects never move, and the other tree's object
+    dir is silently overwritten while somebody scores it.
+
+    A subclass of `UnpatchedTreeError` on purpose: every caller of
+    `ensure_patched_tree` already catches that and renders it as a refusal, so a
+    mis-rooted tree is refused by all of them without touching one call site.
+    """
+
+
+def ensure_ninja_root(project_dir: Path | str) -> str:
+    """Assert `project_dir`'s build.ninja was generated for `project_dir`.
+
+    Returns a one-line note, or raises `ForeignNinjaRootError`. Degrades to a
+    note (never a verdict) on a tree that predates the checker, matching
+    `ensure_split_current`.
+    """
+    project_dir = Path(project_dir).resolve()
+    checker = project_dir / "scripts" / "verify_ninja_root.py"
+    if not checker.exists():
+        return "ninja root NOT checked (scripts/verify_ninja_root.py absent)"
+
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(checker), "--check", "--root", str(project_dir)],
+            capture_output=True, text=True, timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        raise ForeignNinjaRootError(
+            f"{checker} timed out after 60s; cannot vouch for {project_dir}'s "
+            f"build.ninja."
+        ) from None
+    if proc.returncode != 0:
+        raise ForeignNinjaRootError(
+            "REFUSING TO BUILD OR MEASURE " + str(project_dir) + ":\n"
+            + ((proc.stderr or proc.stdout or "").strip()
+               or f"{checker} refused {project_dir} without a message")
+        )
+    return (proc.stdout or "").strip() or "ninja root verified"
 
 
 def _make_command(project_dir: Path) -> list[str]:
@@ -212,7 +260,11 @@ def ensure_patched_tree(project_dir: Path | str, *, build: bool = True) -> str:
             f"matches against."
         )
 
-    notes = []
+    # BEFORE the build, not after: `ninja post-compile` below is exactly the
+    # command that writes into the foreign tree, so this has to refuse first.
+    # Also with build=False: a foreign manifest means this tree's objects were
+    # not written by any edge in it.
+    notes = [ensure_ninja_root(project_dir)]
 
     if build:
         make = _make_command(project_dir)
