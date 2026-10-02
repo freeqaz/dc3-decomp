@@ -1631,6 +1631,9 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
     // first.  REFUTED as source-reachable by folding the post-increment into
     // the subscript (`sBlacklightPacketPool[sBlacklightPacketCount++]`) --
     // byte-inert, same two rows.  Pure scheduling of two independent loads.
+    // w18-a: two more inert/worse spellings of the reload order -- subscript
+    // first then a separate `sBlacklightPacketCount++` (19 rows), and the
+    // capacity test written `cursize <= count` (adds 2 rows).
     int idx = sBlacklightPacketCount++;
     BlacklightPacket &pkt = sBlacklightPacketPool[idx];
     pkt.mMesh = mesh;

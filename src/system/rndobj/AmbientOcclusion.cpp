@@ -443,6 +443,9 @@ void RndAmbientOcclusion::BuildSHCoeff(const Vector3 &inVector, float *fArr) con
     fArr[3] = inVector.x * 0.48860252f;
 }
 
+// w18-a: 100 normalized / 97.27 fuzzy -- 14 rows, all the 2.0f/1.0f constants
+// sitting in f13/f0 where the image has f0/f13.  Declaring `dot` after the three
+// SH differences is byte-identical.
 float RndAmbientOcclusion::DistanceSH(
     const Vector4 &sh1, const Vector3 &n1, const Vector4 &sh2, const Vector3 &n2
 ) const {
