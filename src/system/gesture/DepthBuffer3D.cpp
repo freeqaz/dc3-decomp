@@ -312,24 +312,16 @@ INIT_REVS(11, 0)
 // row IS that frame delta -- `subi r31, r12, 0x250` against our 0x260.  So
 // closing DrawShowing's frame banks 80 B and 2 functions with it.
 //
-// SURVEYED w8-r, Load is 77.336 canonical, 856 B, 87 of 230 rows.  Two
-// findings, neither actioned:
-//  * NOT a wrong global.  objdiff charges `lbl_82251220` (target) against
-//    `gRev` (ours) on the 4th MakeString argument, but that argument is the
-//    `const unsigned short&` INIT_REVS constant -- the image passes
-//    0x82251220 for the main rev and 0x82251224 (`addi r7, r29, 0x4`) for the
-//    alt rev, i.e. the 8-byte .rdata pair INIT_REVS(11, 0) emits, and the
-//    `cmpwi cr6, r10, 0xb` at the top confirms 11.  config/373307D9/symbols.txt
-//    names a DIFFERENT object `gRev` (0x820737F0, size 4) and leaves this pair
-//    as lbl_82251220 (size 8), so the row is a target-side NAMING artifact of
-//    the split config, not a source defect.  Do not "fix" it by renaming.
-//  * The real gap is storage class.  The image keeps `d.rev` and `d.altRev` in
-//    0x60(r1) / 0x64(r1) and the BinStream& in 0x68(r1), reloading each one at
-//    every use (`lwz r11, 0x60(r1)` before each compare, `lwz r3, 0x68(r1)`
-//    before each `operator>>`); we hoist all three into r26 / r27 / r30 and
-//    never reload.  Our frame is 0xb0 against the image's 0xa0 for the same
-//    reason.  That is the "reloaded value is a stack variable" lever applied to
-//    the LOAD_REVS/BEGIN_LOADS macro locals, and it is where the 87 rows live.
+// w18-c: Load 77.336 -> 100.  The reads are CHAINED `>>` expressions.  The image
+// feeds each call's returned reference straight into the next one -- `mr r29, r3`
+// after operator>>(BinStream &, Color &) and r29 as the stream for the three
+// reads after it; BinStreamRev::operator>>(bool &)'s r3 passed unchanged as the
+// next `this`; `lwz r4, 0x8(r3)` (the returned BinStreamRev's .stream) for
+// mMesh.  Because the chained calls hand &d to code that returns an opaque
+// reference, MSVC can no longer keep d.rev / d.stream in registers, which is
+// the "reloaded at every use" storage the w8-r survey saw (0x60/0x68(r1), frame
+// 0xa0).  Same reads, same order.  (The lbl_82251220-vs-gRev row is the
+// INIT_REVS .rdata pair's target-side name, not a defect.)
 BEGIN_LOADS(DepthBuffer3D)
     LOAD_REVS(bs)
     ASSERT_REVS(11, 0)
@@ -337,18 +329,14 @@ BEGIN_LOADS(DepthBuffer3D)
     LOAD_SUPERCLASS(RndDrawable)
     LOAD_SUPERCLASS(RndTransformable)
     if (d.rev > 1) {
-        d.stream >> mNobodyColor;
-        d >> mPlayerPalette;
-        d >> mPlayerPaletteOffset;
-        d >> mMinimalMat;
+        d.stream >> mNobodyColor >> mPlayerPalette >> mPlayerPaletteOffset >> mMinimalMat;
         if (d.rev < 3) {
             int dummy;
             d >> dummy;
         }
     }
     if (d.rev > 2) {
-        d >> mDrawSheet;
-        d >> mMesh;
+        d >> mDrawSheet >> mMesh;
     }
     if (d.rev > 3) {
         d >> mPlayerPaletteScale;
@@ -358,14 +346,10 @@ BEGIN_LOADS(DepthBuffer3D)
         d >> mOpacity;
     }
     if (d.rev > 5) {
-        d >> mDrawPlayer1;
-        d >> mDrawPlayer2;
-        d >> mDrawNonPlayers;
+        d >> mDrawPlayer1 >> mDrawPlayer2 >> mDrawNonPlayers;
     }
     if (d.rev > 6) {
-        d.stream >> mTile;
-        d >> mScaleVoxel;
-        d >> mScaleVoxelGap;
+        d.stream >> mTile >> mScaleVoxel >> mScaleVoxelGap;
     }
     if (d.rev > 7) {
         d >> mFishEyeX;
