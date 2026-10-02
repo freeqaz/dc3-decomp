@@ -87,50 +87,27 @@ void RndShaderMgr::Terminate() {
     mConstantCacheSize = 0;
 }
 
+// Stores the 3x4 transform transposed (column-major, GPU constant layout).
+// w10-e: 99.786 -> 100.  The image loads all twelve floats in STORE order
+// before any store; staging them in a local array reproduces that exactly,
+// where twelve named scalars always sank the displacement-0 load to the end.
 void RndShaderMgr::UpdateCache(const Transform &xfm, int idx) {
-    // Cache pointer - accessing mConstantCache[idx * 12]
+    float t[12] = { xfm.m.x.x, xfm.m.y.x, xfm.m.z.x, xfm.v.x,
+                    xfm.m.x.y, xfm.m.y.y, xfm.m.z.y, xfm.v.y,
+                    xfm.m.x.z, xfm.m.y.z, xfm.m.z.z, xfm.v.z };
     float *p = &mConstantCache[idx * 12];
-
-    // Load transform components - declaration order affects register allocation.
-    // FLOOR 99.786 canonical / 98.714 raw (w8-h).  Every store already writes the
-    // CORRECT value; the twelve loads are just coloured into rotated registers.
-    // The image's load order IS the store order -- 0x0, 0x10, 0x20, 0x30, 0x4,
-    // 0x14, 0x24, 0x34, 0x8, 0x18, 0x28, 0x38 into f0, f13, f12, f11, f10, f9, f8,
-    // f7, f6, f5, f4, f3 -- and MSVC does allocate those twelve FPRs strictly in
-    // LOAD order.  MEASURED NEGATIVE: declaring the temps in store order (the
-    // obvious fix) reads 99.571 / 97.429, WORSE, because MSVC sinks the
-    // displacement-0 load (`xfm.m.x.x`) to the END of the load block in every
-    // order tried -- with xx declared 7th it is loaded last, and with xx declared
-    // 1st it is STILL loaded last.  That rotates all twelve registers by one and
-    // turns 6 charged rows into 24.  The scrambled order below is the one that
-    // lands 6 of the 12 loads on the image's register; fixing the row needs
-    // whatever stops the 0x0 load sinking, not a declaration permutation.
-    float xz = xfm.m.x.z;
-    float yx = xfm.m.y.x;
-    float zx = xfm.m.z.x;
-    float yz = xfm.m.y.z;
-    float xy = xfm.m.x.y;
-    float tz = xfm.v.z;
-    float xx = xfm.m.x.x;
-    float zy = xfm.m.z.y;
-    float ty = xfm.v.y;
-    float yy = xfm.m.y.y;
-    float tx = xfm.v.x;
-    float zz = xfm.m.z.z;
-
-    // Store in column-major order for GPU shader constants (transpose)
-    p[0] = xx;
-    p[1] = yx;
-    p[2] = zx;
-    p[3] = tx;
-    p[4] = xy;
-    p[5] = yy;
-    p[6] = zy;
-    p[7] = ty;
-    p[8] = xz;
-    p[9] = yz;
-    p[10] = zz;
-    p[11] = tz;
+    p[0] = t[0];
+    p[1] = t[1];
+    p[2] = t[2];
+    p[3] = t[3];
+    p[4] = t[4];
+    p[5] = t[5];
+    p[6] = t[6];
+    p[7] = t[7];
+    p[8] = t[8];
+    p[9] = t[9];
+    p[10] = t[10];
+    p[11] = t[11];
 }
 
 void RndShaderMgr::ShaderPoolAlloc(int i) { mShaderPoolAlloc = i; }
