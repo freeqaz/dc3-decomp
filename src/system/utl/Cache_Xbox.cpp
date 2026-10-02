@@ -317,7 +317,7 @@ int CacheXbox::ThreadGetFileSize() {
     HANDLE file = CreateFileA(mThreadStr.c_str(), 0, 1, nullptr, 3, 0x80, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
         err = GetLastError();
-        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        if (!IsDeviceConnected(mCacheID.ContentData()->DeviceID)) {
             return 8;
         } else if (err == 2) {
             return 6;
@@ -351,10 +351,10 @@ int CacheXbox::ThreadGetFileSize() {
         //
         // The 95.83 residual is a 3-cycle of callee-saved registers, and it is
         // NOT a spelling: the image holds this=r30, file=r28, ret=r29, we hold
-        // this=r29, file=r30, ret=r28.  Plus one scheduling row -- we hoist the
-        // `lwz 0x1c` of mCacheID.DeviceID() above `mr r31, r3`, so the argument
-        // has to come back through r11, where the image loads it straight into
-        // r3 after err is parked.
+        // this=r29, file=r30, ret=r28.  The scheduling row that used to sit
+        // next to it (the `lwz 0x1c` hoisted above `mr r31, r3`) is closed by
+        // reading the device id through ContentData() in the CreateFile arm
+        // (w12-c): 100 modulo register permutation.
         DWORD fileSize = 0;
         DWORD res = GetFileSize(file, &fileSize);
         if (res != -1) {
