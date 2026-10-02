@@ -775,13 +775,27 @@ void MoveMgr::InitSong() {
     mRoutineMeasures[0].resize(i13 + 2);
     mChoiceSets.resize(i13 + 2);
     mVariants.clear();
-    FOREACH (it, mMoveParents[0]) {
+    // w13-b: each clearing loop reads end() ONCE, before begin() (the image
+    // hoists `lwz r10, 0x120/0x154/0x170(r30)` above each loop); FOREACH
+    // re-reads it every iteration because the element stores may alias it.
+    // 96.22 -> 100.
+    for (std::vector<const MoveParent *>::iterator end = mMoveParents[0].end(),
+                                                   it = mMoveParents[0].begin();
+         it != end;
+         ++it) {
         *it = nullptr;
     }
-    FOREACH (it, mRoutineMeasures[0]) {
+    for (std::vector<std::pair<const MoveVariant *, const MoveVariant *> >::iterator
+             end = mRoutineMeasures[0].end(),
+             it = mRoutineMeasures[0].begin();
+         it != end;
+         ++it) {
         *it = std::pair<const MoveVariant *, const MoveVariant *>();
     }
-    FOREACH (it, mChoiceSets) {
+    for (std::vector<MoveChoiceSet>::iterator end = mChoiceSets.end(),
+                                              it = mChoiceSets.begin();
+         it != end;
+         ++it) {
         it->mChoices[0] = 0;
         it->mChoices[1] = 0;
         it->mChoices[2] = 0;
