@@ -62,12 +62,15 @@
 #include <memory.h>
 #endif
 
+/* The Xbox build took min/max from the platform headers (stdlib.h /
+   windef.h spelling), not libvorbis's own fallback: seed_curve's clamp is
+   `choice > 0 ? choice : 0` / `choice < 7 ? choice : 7` in the image. */
 #ifndef min
-#define min(x, y) ((x) > (y) ? (y) : (x))
+#define min(x, y) (((x) < (y)) ? (x) : (y))
 #endif
 
 #ifndef max
-#define max(x, y) ((x) < (y) ? (y) : (x))
+#define max(x, y) (((x) > (y)) ? (x) : (y))
 #endif
 
 #if defined(__i386__) && defined(__GNUC__) && !defined(__BEOS__)
