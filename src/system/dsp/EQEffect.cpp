@@ -124,6 +124,8 @@ void EQEffect::SetParameters(EQEffect::Params const &params) {
 // between r4 and r11 around the stage loop; we hoist both bases.  INERT:
 // `tap + xover` on the input subscript.  WORSE: input store first (95.64);
 // `tap++, xover++` with plain [xover] subscripts (86.2, a pointer walk).
+// w18-d (95.65): per-channel indexing `[chan][(stage * 2 + pass) * 5 + tap]`
+// with no flat counter is worse (91.2).
 void EQEffect::Reset() {
     // Zero every per-channel filter delay line.  The crossover delay lines are
     // walked with a single flat index that keeps counting across channels
@@ -557,6 +559,8 @@ void EQEffect::SetParameter(int param, float value) {
         if (mBand2Gain > zero) {
             coeff1 = (mBand1B1 - one) / (mBand1B1 + one);
         } else {
+            // w18-d (99.335): `(mBand1B2 + mBand1B1)` is inert -- MSVC orders the
+            // commutative operands itself (f12/f13 regalloc).
             coeff1 = (mBand1B1 - mBand1B2) / (mBand1B1 + mBand1B2);
         }
         mBand1B0 = coeff1;

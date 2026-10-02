@@ -183,6 +183,9 @@ int JoypadClient::OnMsg(const ButtonUpMsg &msg) {
     return 0;
 }
 
+// w18-d (94.45, 5 rows): the plain indexed `for (i) mRepeats[i]...` loop makes
+// &mRepeats[i].mRepeatTimer the IV (`subi r3, r31, 0x30` / `subi r3, r31, 0x40`,
+// 94.2), with or without a `Timer &` local -- reverted.
 void JoypadClient::Poll() {
     int i = 0;
     JoypadRepeat *pRepeat = mRepeats;

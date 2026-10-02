@@ -198,6 +198,9 @@ void UsbMidiGuitar::Poll() {
                 // + mProgramChangeBit0`. `<< 2` still fuses into one rlwinm but
                 // `<< 1` does not, costing srwi+slwi; the load order does NOT
                 // change, which is what rules the term order out as the cause.
+                // w18-d (99.994, same 4 rows): `bool : 1` program-change bits with
+                // the named-field sum fuses all three rlwinm but still loads 0xc
+                // first (98.5 with locals, 99.5 inline) -- reverted.
                 unsigned char *pgRaw = (unsigned char *)proData;
                 int programChange = (pgRaw[0xb] >> 6 & 2)
                     + (pgRaw[0xc] >> 5 & 4) + (pgRaw[0xa] >> 7);

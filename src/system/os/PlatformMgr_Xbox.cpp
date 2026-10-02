@@ -540,6 +540,8 @@ DWORD PlatformMgr::ShowDeviceSelectorUI(
 // Also refuted (w12-d): `region = kRegionEurope; if (== 0xFF) region = kRegionNA;
 // SetRegion(region)` 70.4; an if/else assigning `region` 55.3 (branchless);
 // the inverted two-call if/else (`== 0xFF` first) 87.8.
+// w18-d (88.24): a `switch (XGetGameRegion()) { case 0xFF: ... default: ... }`
+// is byte-identical to the if/else.
 void PlatformMgr::RegionInit() {
     if (XGetGameRegion() != 0xFF) {
         SetRegion(kRegionEurope);

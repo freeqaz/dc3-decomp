@@ -163,6 +163,8 @@ __declspec(noinline) void FlowSlider::UpdateEase() {
     mEaseFunc = GetEaseFunction(mEaseType);
 }
 
+// w18-d (98.95, same 12 rows): both range-fraction guards as a real static
+// inline helper returning 0.0f is byte-identical to the open-coded form.
 void FlowSlider::UpdateActivations() {
     float savedIntensity = FlowNode::sIntensity;
 

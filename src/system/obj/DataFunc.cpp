@@ -1247,6 +1247,9 @@ DEF_DATA_FUNC(DataStrCat) {
     return n.Str();
 }
 
+// w18-d (96.02, 9 prologue-scheduling rows: the image does `mr r20, r3` first
+// and `li r24, 0` after `mr r30, r4`): `int i = 0;` hoisted out of the for is
+// inert; decomp-synth beam produced 0 proposals.
 DEF_DATA_FUNC(DataStringFlags) {
     int mask = array->Int(1);
     DataArray *arr = array->Array(2);
@@ -1371,6 +1374,8 @@ DEF_DATA_FUNC(DataMacroSize) {
 // if they are locals; written inline as call arguments MSVC's right-to-left
 // argument evaluation would run them 5,4,3.
 // w14-d: also INERT -- `int setProxyFile` passed as `setProxyFile != 0`.
+// w18-d (93.75): `int setProxyFile` plus a named `Hmx::Object *to = GetObj(2)`
+// is byte-inert.
 DEF_DATA_FUNC(DataReplaceObject) {
     bool copyDeep = array->Size() > 3 ? array->Int(3) : true;
     bool deleteFrom = array->Size() > 4 ? array->Int(4) : true;

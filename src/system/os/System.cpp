@@ -541,6 +541,8 @@ void SystemInit(const char *config) {
 
 static char sCommandLineBuffer[kCommandLineSz];
 
+// w18-d (96.74, 19 rows): a plain `while (*ptr != 0)` loop with inQuotes hoisted
+// to function scope is worse (92.8, extra frame 0x10).
 void SetSystemArgs(const char *commandLine) {
     MILO_ASSERT(commandLine && strlen(commandLine) < kCommandLineSz, 0x39A);
 

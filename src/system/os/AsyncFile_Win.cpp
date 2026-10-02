@@ -192,6 +192,8 @@ void AsyncFileWin::_WriteAsync(const void *buf, int count) {
     }
 }
 
+// w18-d (99.48, 25 rows, regalloc: the image shares the memset zero and
+// `aligned = 0` in r30): declaring `int aligned = 0` above mReadInProgress is inert.
 void AsyncFileWin::_ReadAsync(void *buf, int count) {
     MILO_ASSERT(!mReadInProgress && !mWriteInProgress, 0x139);
     MILO_ASSERT(count >= 0, 0x13a);
