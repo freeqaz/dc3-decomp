@@ -403,7 +403,12 @@ DataNode HamNavProvider::OnSetEnabled(const DataArray *a) {
     if (node.Type() == kDataInt) {
         SetEnabled(node.Int(), a->Int(3));
     } else {
-        SetEnabled(FindLabel(node.ForceSym()), a->Int(3));
+        // w11-a: 88.0 -> 100.  a->Int(3) is read first (right-to-left argument
+        // order), but the image converts it to bool only AFTER FindLabel,
+        // straight into r5; naming the raw int and the index reproduces that.
+        int raw = a->Int(3);
+        int index = FindLabel(node.ForceSym());
+        SetEnabled(index, raw);
     }
     return 0;
 }
@@ -413,17 +418,13 @@ DataNode HamNavProvider::OnSetHidden(const DataArray *a) {
     if (node.Type() == kDataInt) {
         SetHidden(node.Int(), a->Int(3));
     } else {
-        // NEGATIVE RESULT (w7-al, 2026-09-14): 88.0 canonical, 7 rows, all one
-        // fact -- where the int->bool conversion of a->Int(3) lands in the else
-        // arm.  The image keeps the raw int in r31 across `bl FindLabel` and
-        // emits the `subic`/`subfe` pair AFTER the call, straight into r5, while
-        // the if arm converts early and copies with `mr r5, r31`; we hoist the
-        // conversion above the call in BOTH arms and cross-jump the `mr r5`.
-        // Two spellings refuted, both byte-inert: an `int hidden = a->Int(3);`
-        // statement before the call, and an explicit `a->Int(3) != 0`.
-        // (The `?Node@DataArray@@QAA...` vs `QBA...` rows are an ICF fold of the
-        // const and non-const overloads, free under the canonical ruler.)
-        SetHidden(FindLabel(node.ForceSym()), a->Int(3));
+        // w11-a: 88.0 -> 100, same shape as OnSetEnabled.  The image keeps the
+        // raw int in r31 across `bl FindLabel` and converts it to bool AFTER the
+        // call, straight into r5.  Both the int AND the looked-up index have to
+        // be named locals; naming only the int (w7-al) was byte-inert.
+        int raw = a->Int(3);
+        int index = FindLabel(node.ForceSym());
+        SetHidden(index, raw);
     }
     return 0;
 }
