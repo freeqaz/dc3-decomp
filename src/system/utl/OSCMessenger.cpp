@@ -133,7 +133,7 @@ OSCMessenger::OSCValue *OSCMessenger::GetValue(String str) {
 
 void OSCMessenger::SendOSCFloat(String str, float value) {
     if (mSocket2) {
-        char buf[0x120];
+        char buf[0x100];
         int len = MakeOSCAddress(str, buf);
         int i = len;
         buf[i++] = ',';
