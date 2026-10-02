@@ -258,17 +258,15 @@ namespace {
             }
         } else {
             // Heap allocation alignment
-            if (alignField < 1U) {
-                return 0x10;
-            }
-            if (alignField < 3U) {
-                return 8;
-            }
-            if (alignField != 4U) {
+            switch (alignField) {
+            case 0: return 0x10;
+            case 1:
+            case 2: return 8;
+            case 4: return 0x10;
+            default:
                 MILO_FAIL("Invalid heap alignment (%d)", alignField);
                 return 0;
             }
-            return 0x10;
         }
     }
 
