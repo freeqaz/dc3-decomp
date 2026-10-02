@@ -407,9 +407,7 @@ void Rnd::PreInit() {
 
 void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
     char *dstEnd = dst + dstSize - 2;
-    const char *srcEnd = src;
-    while ('\0' != *srcEnd)
-        srcEnd++;
+    const char *srcEnd = src + strlen(src);
     while (true) {
         const char *lastSrcSpace = nullptr;
         char *lastSpace = nullptr;
@@ -418,8 +416,8 @@ void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
             if (src >= srcEnd || dst >= dstEnd || *src == '\n')
                 break;
             if (*src == ' ') {
-                lastSpace = dst;
                 lastSrcSpace = src;
+                lastSpace = dst;
             }
             *dst = *src;
             col++;
@@ -436,8 +434,8 @@ void WordWrap(const char *src, int lineWidth, char *dst, int dstSize) {
                 wrapDst = dst;
                 src = src - 1;
             } else {
-                wrapDst = lastSpace;
                 src = lastSrcSpace;
+                wrapDst = lastSpace;
             }
         }
         src = src + 1;
