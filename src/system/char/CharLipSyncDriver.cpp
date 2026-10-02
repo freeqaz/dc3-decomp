@@ -529,7 +529,7 @@ void CharLipSyncDriver::Poll() {
     ApplyBlinks();
 }
 
-void CharLipSyncDriver::ScaleAddViseme(CharClip *clip, float f1) {
+void CharLipSyncDriver::ScaleAddViseme(CharClip *clip, float weight) {
     float dVar2 = 0.0f;
     float length = 0.0f;
     if (clip->LengthSeconds() != 0.0) {
@@ -540,5 +540,11 @@ void CharLipSyncDriver::ScaleAddViseme(CharClip *clip, float f1) {
         dVar2 = 0.0f;
     }
     length = clip->FrameToBeat(clip->FramesPerSec() * dVar2);
-    mBones.Ptr()->ScaleAdd(clip, 0.0, length, f1);
+    // BUG FIX (w19-x): the WEIGHT is the second argument and the trailing
+    // dframe is 0 -- image 0x823B6618/0x823B661C `fmr f3, f31` (f31 = 0.0f,
+    // loaded at 0x823B65C0) / `fmr f1, f30` (f30 = the weight, `fmr f30, f1`
+    // at 0x823B65AC) before the slot-1 ScaleAdd(CharClip *, float weight,
+    // float frame, float dframe) bctrl.  We passed (0, beat, weight), so every
+    // viseme was blended at weight zero.  RB3's ScaleAddViseme agrees.
+    mBones.Ptr()->ScaleAdd(clip, weight, length, 0.0f);
 }
