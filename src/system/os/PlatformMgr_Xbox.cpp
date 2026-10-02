@@ -200,14 +200,18 @@ Friend::Friend() {}
 bool PlatformMgr::IsEthernetCableConnected() { return XNetGetEthernetLinkStatus() != 0; }
 
 void PlatformMgr::UpdateSigninState() {
-    XUID oldCache[4] = { mXuidCache[0], mXuidCache[1], mXuidCache[2], mXuidCache[3] };
+    // w14-d (92.16 -> 100): a block copy (the image copies through r1+0x50 with
+    // one base register, not four element loads), and the three clears in
+    // reverse member order -- the image stores SameGuest, 0x54, then 0x50.
+    XUID oldCache[4];
+    memcpy(oldCache, mXuidCache, sizeof(oldCache));
     int i;
-    mSigninMask = 0;
+    mSigninSameGuest = 0;
     // The image zeroes 0x54 too, at 825D3E18, right beside the 0x50 store --
     // without it mSigninChangeMask is sticky and every later SigninChangedMsg
     // reports every pad that has ever changed.
     mSigninChangeMask = 0;
-    mSigninSameGuest = 0;
+    mSigninMask = 0;
     for (i = 0; i < 4; i++) {
         if (XUserGetSigninState(i) != 0) {
             XUSER_SIGNIN_INFO info = {};
