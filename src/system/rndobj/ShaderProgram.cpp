@@ -76,14 +76,15 @@ void RndShaderProgram::CopyErrorShader(ShaderType shader, const ShaderOptions &o
     }
 
     // Build options mask for error shader, preserving specific flags
-    u64 mask = 0;
+    // w13-a (97.3 -> 100): the options are built in place.  The image homes
+    // each value of `flags` straight into the ShaderOptions slot (`std r11,
+    // 0x58(r1)`) and writes the display bit with an and/rldimi pair -- the
+    // mDisplayError bitfield store, bit 35.
+    ShaderOptions newOpts(0);
     if (errorType == kErrorShader && (opts.flags & 0x1000)) {
-        mask = 0x1000;
+        newOpts.flags = 0x1000;
     }
-    u64 display = TheShaderMgr.GetShaderErrorDisplay();
-    mask = ((display & 1) << 0x23) | (mask & 0xfffffff7ffffffff);
-
-    ShaderOptions newOpts(mask);
+    newOpts.mDisplayError = TheShaderMgr.GetShaderErrorDisplay();
     RndShaderProgram &program = TheShaderMgr.FindShader(errorType, newOpts);
     if (!program.Cached()) {
         if (!TheShaderMgr.CacheShaders()) {
