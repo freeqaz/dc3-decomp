@@ -70,43 +70,34 @@ void Multiply(const Transform &a, const Transform &b, Transform &out) {
     out.v.y = vy;
     out.v.z = vz;
 #else
-    float fVar1 = a.v.y;
-    float fVar2 = a.v.x;
-    float fVar3 = a.v.z;
-    float fVar4 = b.m.z.y;
-
-    float fVar10 = b.m.x.y * fVar2 + b.m.y.y * fVar1;
-
-    float fVar5;
-    // MEASURED NEGATIVE (2026-09-01): binding `Vector3 &ov = out.v;` here and
-    // writing ov.x/.y/.z -- to chase the target's otherwise-unexplained
-    // `addi r11, r5, 0x30` (= &out.v) at index 13 -- costs 11.3pp
-    // (67.77 -> 56.5, 63 -> 65 mismatch instructions). Do not retry.
-    if (&b != &out) {
-        float bzx = b.m.z.x;
-        float byx = b.m.y.x;
-        float bxx = b.m.x.x;
-        float fVar8 = b.m.z.z * fVar3 + b.m.x.z * fVar2 + b.m.y.z * fVar1;
-        out.v.z = fVar8;
-        out.v.y = fVar4 * fVar3 + fVar10;
-        out.v.x = fVar2 * bxx + byx * fVar1 + bzx * fVar3;
-        fVar5 = b.v.z;
-        float bvx = b.v.x;
-        out.v.y += b.v.y;
-        out.v.x += bvx;
-        fVar5 = fVar5 + fVar8;
+    // w19-c (67.77 -> 100, all 62 rows equal): the translation is the
+    // Multiply(const Vector3 &, const Transform &, Vector3 &) shape rb3-xenon
+    // carries -- rotate straight into out.v and add t.v when out does not
+    // alias b, rotate into a temporary otherwise -- with the add written
+    // t.v + out.v (the image's fadds operand order).  Measured spellings:
+    //   Multiply(a.v, b.m, out.v) + Add in the fast arm           60.1
+    //   a call to the Transform overload (not inlined)             12.5
+    //   spelled-out Set() written on a.v / b directly, no refs     2 lfs rows swapped
+    //   the else arm ALSO written through v / t                     62.7
+    //   this (refs in the fast arm only)                           100
+    // So the shared y-component partial the image hoists above the alias
+    // test, and the b.v.x / out.v.x load order, both hang on exactly this
+    // spelling; do not "tidy" the two arms into one style.
+    const Vector3 &v = a.v;
+    const Transform &t = b;
+    if (&t != &out) {
+        out.v.Set(
+            t.m.x.x * v.x + t.m.y.x * v.y + t.m.z.x * v.z,
+            t.m.x.y * v.x + t.m.y.y * v.y + t.m.z.y * v.z,
+            t.m.x.z * v.x + t.m.y.z * v.y + t.m.z.z * v.z
+        );
+        Add(t.v, out.v, out.v);
     } else {
-        float fVar6 = b.m.y.z;
-        float fVar7 = b.m.x.z;
-        float fVar8 = b.m.z.z;
-        float bvz = b.v.z;
-        float fVar9 = b.v.y;
-
-        out.v.x = b.v.x + fVar2 * b.m.x.x + b.m.y.x * fVar1 + b.m.z.x * fVar3;
-        out.v.y = fVar9 + fVar4 * fVar3 + fVar10;
-        fVar5 = bvz + fVar8 * fVar3 + fVar7 * fVar2 + fVar6 * fVar1;
+        // out aliases b, so rotate into a temporary and add on the way out.
+        Vector3 tmp;
+        Multiply(a.v, b.m, tmp);
+        Add(tmp, b.v, out.v);
     }
-    out.v.z = fVar5;
     Multiply(a.m, b.m, out.m);
 #endif
 }
