@@ -482,6 +482,11 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
 // r27` copy of clippedX, which the image emits BEFORE the `add`/`cmpw` pair
 // that bounds the row and we emit four instructions later.  No address,
 // constant or value differs on either side.
+// w17-c: the callee-saved colouring above came from the hand-rotated
+// `if (n) do {} while` loops and the pre-decremented destRow.  Written as two
+// plain for loops (MSVC rotates them and forms the same sthu itself) the
+// r27/r28 swap and the misplaced `mr r11, r27` are gone; what is left on a
+// non-PCH probe is one volatile r8/r9 swap in the inner pixel loop.
 void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
     LiveCameraInput *cam, float clipLeft, float clipTop
 ) {
@@ -498,33 +503,22 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
         int clippedY = (1 - (int)(clipTop * -480.0f)) & 0xfffe;
         clippedY = clippedY % 480;
         uintptr_t srcBase = (clippedY / 2) * srcPitch * 2 + (uintptr_t)lockedRect.mBits;
-        int rowIdx = 0;
-        if (mTex->Height() > 0) {
-            do {
-                int texWidth = mTex->Width();
-                if (clippedX < texWidth + clippedX) {
-                    unsigned short *destRow = (unsigned short *)(destBase - 2);
-                    int x = clippedX;
-                    do {
-                        unsigned short color = 0;
-                        unsigned short depthPixel =
-                            *(unsigned short *)((x / 2) * 2 + srcBase);
-                        if (depthPixel & 3) {
-                            int depth = 0x1f - ((depthPixel >> 10) & 0x1f);
-                            color = (((depth << 5) | depth) << 6) | depth;
-                        }
-                        destRow++;
-                        *destRow = color;
-                        x++;
-                    } while (x < mTex->Width() + clippedX);
-                }
-                unsigned int pitch = mTex->TexelsPitch();
-                destBase += (pitch & 0xfffffffe);
-                if ((rowIdx & 1) != 0) {
-                    srcBase += srcPitch * 2;
-                }
-                rowIdx++;
-            } while (rowIdx < mTex->Height());
+        for (int rowIdx = 0; rowIdx < mTex->Height(); rowIdx++) {
+            unsigned short *destRow = (unsigned short *)destBase;
+            for (int x = clippedX; x < mTex->Width() + clippedX; x++) {
+                    unsigned short color = 0;
+                    unsigned short depthPixel = *(unsigned short *)((x / 2) * 2 + srcBase);
+                    if (depthPixel & 3) {
+                        int depth = 0x1f - ((depthPixel >> 10) & 0x1f);
+                        color = (((depth << 5) | depth) << 6) | depth;
+                    }
+                    *destRow++ = color;
+            }
+            unsigned int pitch = mTex->TexelsPitch();
+            destBase += (pitch & 0xfffffffe);
+            if ((rowIdx & 1) != 0) {
+                srcBase += srcPitch * 2;
+            }
         }
         D3DTexture_UnlockRect((D3DTexture *)bufferData, 0);
     }
