@@ -433,10 +433,11 @@ MCResult MCContainerXbox::PrintDir(const char *cc, bool b2) {
 
 void MemcardXbox::Init() { Memcard::Init(); }
 
-// Out-of-line and empty: retail's ?Terminate@MemcardXbox@@UAAXXZ ICF-folded
-// with ?Terminate@VirtualKeyboard@@QAAXXZ (a bare blr), so it cannot have
-// contained the call to the out-of-line, also-empty Memcard::Terminate.
-void MemcardXbox::Terminate() {}
+// Retail body at 0x825F5AD8 is `b OnlyReturns`: a tail call to the
+// out-of-line, empty Memcard::Terminate (ICF-folded into OnlyReturns). The
+// body is ICF-shared with ?Terminate@VirtualKeyboard@@QAAXXZ, which tail-calls
+// its own empty PlatformTerminate the same way.
+void MemcardXbox::Terminate() { Memcard::Terminate(); }
 
 void MemcardXbox::Poll() {
     Memcard::Poll();
