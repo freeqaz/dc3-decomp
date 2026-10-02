@@ -341,22 +341,24 @@ void SongLayout::SetDefaultPattern(int totalMeasures) {
         measureStart += 5;
         mSongPatterns.push_back(pattern);
     }
-    int curMeasure = 5;
-    if (curMeasure < totalMeasures) {
+    for (int curMeasure = 5; curMeasure < totalMeasures;) {
+        SongPattern tempPattern(mSongPatterns[(curMeasure - 5) % 2]);
         SongSection section;
+        section.mMeasureRange.start = curMeasure + 1;
         section.mPatternRange.start = 0;
         section.mPatternRange.end = 0;
-        do {
-            SongPattern tempPattern(mSongPatterns[(curMeasure - 5) % 2]);
-            section.mMeasureRange.start = curMeasure + 1;
-            section.mPattern = tempPattern.mName;
-            int remaining = totalMeasures - curMeasure;
-            if (remaining > 4) {
-                remaining = 4;
-            }
-            curMeasure += remaining;
-            section.mMeasureRange.end = curMeasure;
-            mSongSections.push_back(section);
-        } while (curMeasure < totalMeasures);
+        section.mPattern = tempPattern.mName;
+        // The image really stores the address of the loop-local copy
+        // (`addi r11, r31, 0x90` / `stw r11, 0x74(r31)`, hoisted above the
+        // loop since the slot is invariant), so every pushed section carries
+        // a dangling mSongPattern until something re-links it.
+        section.mSongPattern = &tempPattern;
+        int remaining = totalMeasures - curMeasure;
+        if (remaining > 4) {
+            remaining = 4;
+        }
+        curMeasure += remaining;
+        section.mMeasureRange.end = curMeasure;
+        mSongSections.push_back(section);
     }
 }

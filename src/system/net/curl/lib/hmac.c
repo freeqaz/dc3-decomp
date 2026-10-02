@@ -43,8 +43,14 @@
  * context initialisation.
  */
 
-static const unsigned char hmac_ipad = 0x36;
+/* Declared opad-first: MSVC anchors the second loop's two `&hmac_*pad`
+ * arguments on the first-declared constant, and the image anchors on opad
+ * (`addi r29, r11, 0x8206E105@l`).  RESIDUAL (w10-b, 99.95): the image then
+ * reaches ipad as `subi r4, r29, 1` (ipad one byte BELOW opad) where we emit
+ * `addi r4, r29, 1`.  Upstream order (ipad first) anchors on ipad: 96.95.
+ * A combined declarator and an opad tentative definition are both inert. */
 static const unsigned char hmac_opad = 0x5C;
+static const unsigned char hmac_ipad = 0x36;
 
 
 

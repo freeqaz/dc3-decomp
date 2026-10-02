@@ -761,27 +761,23 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
     Delete3DCrowdHandles();
     FOREACH (it, mCharacters) {
         if (it->mMMesh) {
-            int instanceCount = (int)it->mMMesh->mInstances.size();
-            int backupCount = (int)it->mBackup.size();
+            int totalInstances = it->mMMesh->mInstances.size() + it->mBackup.size();
             int curInstances = (int)it->mMMesh->mInstances.size();
-            int targetInstances = (int)((float)(instanceCount + backupCount) * mFlatFullness);
-            // The image walks mInstances TWICE here --
-            // three count loops back to back before the fctiwz (mInstances into
-            // r7, mBackup into r8, mInstances again into r10), and it is that
-            // third result r10 which `cmpw cr6, r9, r10` and `subf r10, r10, r9`
-            // consume. Writing `it->mMMesh->mInstances.size()` a second time AT
-            // THE COMPARISON does not reproduce it (w7-af: MSVC CSEs the two
-            // walks back into one, 93.8 -> 91.3, six instructions longer) --
-            // but a THIRD NAMED LOCAL declared here, before any float work,
-            // does: 96.0 -> 96.3 and the instruction count goes 191 -> 195,
-            // exactly the target's.
-            if (instanceCount < targetInstances) {
+            int targetInstances = (int)((float)totalInstances * mFlatFullness);
+            // The image walks mInstances TWICE: three count loops back to
+            // back before the fctiwz (mInstances into r7, mBackup into r8, the
+            // `add r8, r8, r7` sum, then mInstances again into r10), and it is
+            // that second walk, r10, which BOTH comparisons and both
+            // subtractions consume (`cmpw cr6, r9, r10` / `subf r10, r10, r9`).
+            // w10-b: summing the first two walks in one expression and testing
+            // curInstances (not the first walk) on both arms -> 100.
+            if (targetInstances > curInstances) {
                 // do/while, not a counted for: the enclosing `<` has already
                 // proved the count >= 1, so the image's loop carries no
                 // zero-trip guard (0x8283A058 `subf r10, r10, r9` straight
                 // into mtctr/bdnz).  A `for (i = 0; i < n; i++)` makes MSVC
                 // emit the record-form `subf.` plus a `ble` around it.
-                int toMove = targetInstances - instanceCount;
+                int toMove = targetInstances - curInstances;
                 InstanceList::iterator backIt = it->mBackup.begin();
                 do {
                     ++backIt;

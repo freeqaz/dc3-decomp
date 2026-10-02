@@ -49,17 +49,16 @@ void FreestyleMove::CalcCentering(int frameIdx) {
         }
     }
     unk14 = (int)(totalVal / (float)totalCount);
-    int weightedSum = 0;
     int pixelCount = 0;
+    int weightedSum = 0;
     for (int i = 0; i < 80; i++) {
         pixelCount += histogram[i];
         weightedSum += histogram[i] * i;
     }
-    int center = 0;
     if (weightedSum != 0) {
-        center = weightedSum / pixelCount;
+        weightedSum /= pixelCount;
     }
-    unk10 = center - 40;
+    unk10 = weightedSum - 40;
 }
 
 void FreestyleMove::RecordSkeletonFrame(BaseSkeleton *skeleton, int i2, float f3) {
