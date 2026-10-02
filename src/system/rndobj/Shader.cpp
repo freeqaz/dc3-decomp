@@ -59,13 +59,21 @@ void SetColorWriteMask(const ShaderOptions &, RndMat *);
 void CheckShadow();
 void CheckExtrude();
 
+// w19-a (76.82 -> 100): the 38 stores are independent, but MSVC schedules them
+// from the SOURCE order, so the statement order is what the image encodes.  The
+// image's store order (sShaders[0], [2], [27], [1], [5], [4], [6], [3], ...) is
+// reproduced by putting BloomGlare right after Bloom and DownsampleDepth ahead
+// of Downsample/Downsample4x; everything else stays in enum order.  Found by a
+// local search over statement orders (each slot is still assigned exactly once,
+// with the same value).
 void RndShader::Init() {
     sShaders[kBloomShader] = &gShaderSimple;
+    sShaders[kBloomGlareShader] = &gShaderSimple;
     sShaders[kBlurShader] = &gShaderSimple;
     sShaders[kDepthVolumeShader] = &gShaderDepthVolume;
+    sShaders[kDownsampleDepthShader] = &gShaderSimple;
     sShaders[kDownsampleShader] = &gShaderSimple;
     sShaders[kDownsample4xShader] = &gShaderSimple;
-    sShaders[kDownsampleDepthShader] = &gShaderSimple;
     sShaders[kDrawRectShader] = &gShaderDrawRect;
     sShaders[kErrorShader] = &gShaderSimple;
     sShaders[kFurShader] = &gShaderFur;
@@ -87,7 +95,6 @@ void RndShader::Init() {
     sShaders[kVelocityObjectShader] = &gShaderVelocity;
     sShaders[kPlayerDepthVisShader] = &gShaderSimple;
     sShaders[kPlayerDepthShellShader] = &gShaderSimple;
-    sShaders[kBloomGlareShader] = &gShaderSimple;
     sShaders[kPlayerDepthShell2Shader] = &gShaderSimple;
     sShaders[kDepthBuffer3DShader] = &gShaderSimple;
     sShaders[kYUVtoRGBShader] = &gShaderSimple;
