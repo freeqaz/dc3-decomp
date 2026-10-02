@@ -25,7 +25,7 @@ bool MidiReader::sVerify = false;
 // because MEM_OVERLOAD's operator new is inlined straight into the call site.
 
 namespace {
-    int MidiRank(unsigned char status) {
+    inline int MidiRank(unsigned char status) {
         switch (status & 0xF0) {
         case kNoteOff:
             return 1;
@@ -597,6 +597,12 @@ FileStream *Dc3W8jMidiFileStreamProbe(const char *path) {
 // another source spelling.  Do not re-derive.
 #endif
 
+// w15-i2 2026-10-02: CLOSED 77.182 -> 100.0 by marking MidiRank `inline`
+// (the retail map flags it `f i`, a COMDAT).  The floor note below was the
+// right diagnosis -- same-TU register-footprint propagation -- with the wrong
+// conclusion: the callee does not have to be invisible, it has to be inline.
+// See docs/decomp/patterns/map-comdat-flag-gates-clobber-propagation.md.
+// Historical note follows.
 // w8-j 2026-09-15 -- FLOOR at 77.182% for
 // ?DefaultMidiLess@?A0x7d41cf68@@YA_NABUMidi@MidiReader@@0@Z, 88 B target vs
 // 68 B ours, 11 of 22 instructions equal.  This one is a COMPILER POLICY
