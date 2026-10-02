@@ -325,6 +325,9 @@ float DanceRemixer::JumpedBeat(float beat) const {
     // (float)fromBeat; return shifted + (float)toBeat), reversing the fadds
     // operands ((float)toBeat + (beat - (float)fromBeat)), and hoisting
     // (int)beat into a named local used by all three compares.
+    // w11-a: two more spellings inert at 90.88636 -- compound assignment on
+    // the parameter (beat -= fromBeat; beat += toBeat) and a float local for
+    // the converted toBeat.
     return (beat - (float)fromBeat) + (float)toBeat;
 }
 
