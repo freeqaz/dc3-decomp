@@ -126,19 +126,12 @@ void SpectralAnalysis::SetMode(unsigned int windowSize, unsigned int hop) {
     }
 
     // Grow the FFT size (power of two) until it spans the window plus hop.
-    if (windowSize + hop > 8) {
-        // RESIDUAL (w7-ak, 94.2 canonical): the image copies the doubled value into
-        // a second register with a no-op `clrrwi r10, r11, 0` and RE-LOADS
-        // mWindowSize from 0x0(r31) inside the loop; we fold both away. NEGATIVE
-        // RESULTS: `mFftSize = mFftSize * 2;` with the compare on
-        // `(unsigned int)mFftSize`, and the same with a trailing
-        // `doubled = mFftSize;`, both compile to the SAME worse code (93.6) --
-        // MSVC re-derives the shift instead of copying the stored value.
-        unsigned int doubled;
-        do {
-            doubled = (unsigned int)mFftSize * 2;
-            mFftSize = doubled;
-        } while (doubled < (unsigned int)mWindowSize + hop);
+    // w15-b (98.36 -> 100): a plain `while`, which MSVC rotates into the
+    // image's `windowSize + hop > 8` guard plus a do-while that re-reads
+    // mWindowSize every trip and keeps the doubled value in a `clrrwi` copy.
+    // w7-ak's hand-rotated if/do-while folded both away (see its notes in git).
+    while ((unsigned int)mFftSize < (unsigned int)mWindowSize + hop) {
+        mFftSize = (unsigned int)mFftSize * 2;
     }
 
     mHalfPlusOne = ((unsigned int)mFftSize >> 1) + 1;
@@ -153,15 +146,6 @@ void SpectralAnalysis::SetMode(unsigned int windowSize, unsigned int hop) {
     mCosTable.resize((unsigned int)mFftSize >> 1, 0.0f);
 
     // Precompute the analysis-window sin/cos table over [0, pi).
-    // RESIDUAL (w7-ak, 94.2 canonical): 7 of the remaining 22 rows are the
-    // schedule inside this loop.  The image loads mSinTable._M_start AFTER sin()
-    // returns (`fmr f0, f1` to park the result, then `lwz r11, 0x0(r27)` and
-    // `fmr f1, f31` to set up cos, then `frsp`/`stfsx`), where we pin the base in
-    // r25 before the call and store before setting up cos.  Dropping the explicit
-    // `(float)` casts is exactly inert (same 22 rows).  The other structural row
-    // is a frame 0x10 larger than the image's 0xa0: the image reuses the one
-    // 0x50(r1) temp for the `const float&` 0.0f argument of all six
-    // assign/resize calls AND for the two int64->double converts in this loop.
     for (unsigned int i = 0; i < ((unsigned int)mFftSize >> 1); i++) {
         double angle = (i * kPi) / (double)((unsigned int)mFftSize >> 1);
         double s = sin(angle);
