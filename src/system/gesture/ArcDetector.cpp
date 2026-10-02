@@ -261,9 +261,9 @@ float ArcDetector::GetSwipeAmount() const {
         Normalize(dir, dir);
         Vector3 boneDir(unk40.z, 0.0f, unk40.x);
         Normalize(boneDir, boneDir);
-        float dot = boneDir.z * dir.z;
-        dot += boneDir.y * dir.y;
-        dot += boneDir.x * dir.x;
+        float dot = dir.z * boneDir.z;
+        dot += dir.y * boneDir.y;
+        dot += dir.x * boneDir.x;
         if (fabsf(dot) < 0.2f) {
             swipeAmt = 0.9f - swipeAmt >= 0.0f ? swipeAmt : 0.9f;
         }
