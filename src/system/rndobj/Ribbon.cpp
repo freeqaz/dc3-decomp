@@ -128,128 +128,41 @@ void RndRibbon::ExposeMesh() {
     }
 }
 
-/** SURVEYED w7-aj, 75.3% canonical, 408 B.  The STATEMENT ORDER already
- *  matches the image one for one: ns -> nextVertOff -> v0 -> rem -> vNextRaw
- *  -> v0PlusNS -> vNextWrapRaw -> facePtr -> the three u16 truncations ->
- *  side++ -> the first face triple -> the SECOND `mMesh->Faces().begin()`
- *  reload -> the second triple -> faceOff += 12 -> the loop-tail mNumSides
- *  reload.  Every arithmetic instruction in 0x8265F5C0-0x8265F73C is
- *  accounted for, including the two division traps (`twllei` for ns == 0 and
- *  `twi 5` for the INT_MIN/-1 overflow) that the `% ns` emits.
- *
- *  The 25-point gap is a single register-allocation cascade.  The image calls
- *  __savegprlr_26 (six callee-saved GPRs) where we call __savegprlr_27
- *  (five): it parks `1 - baseVert2` in r30, a CALLEE-SAVED register, even
- *  though the inner loop contains no calls, and that one extra live register
- *  shifts r26-r30 by one on our side and re-schedules the three `sth` stores
- *  of the first face triple from after the truncations (image 0x86-0x90) to
- *  before them.  We are CHEAPER than the image; no re-spelling of these
- *  statements makes MSVC need a register it does not need.  This is the same
- *  floor recorded for the HamRibbon/RndRibbon ConstructMesh pair in
- *  docs/sessions/2026-06-10-asm-archaeology-wave1.md, re-confirmed here at
- *  75.3 (the note there was written at 73.3).
- *
- *  Two variants measured, both EXACTLY neutral -- do not re-derive:
- *    (1) moving `int oneMinusBV2 = 1 - baseVert2;` inside the do-loop, which
- *        is where the image computes it (its loop-top label 0xdc IS the
- *        `subfic r30, r3, 0x1`): 75.3.
- *    (2) commutative operand order on `vertIdx + ns` and `ns + vNextRaw`,
- *        both of which MSVC emits reversed from the source: 75.3.  MSVC
- *        normalises both, so the operand order is not the lever.
- *
- *  NOTE for anyone reading run_objdiff on this function: the "[56] lwz
- *  target 0x4c (mNumSides) vs base 0x50 (mMesh) -- wrong field?" row is a
- *  false positive of the offset resolver.  Both loads exist on both sides;
- *  the regalloc shift merely pairs them against each other. */
+/** w16-a (75.27 -> 79.8 canonical): written as the plain code it is -- a
+ *  faces.size() erase/insert (as BuildFromBSP has), plain for loops over seg
+ *  and side, and two Face::Set calls per quad re-reading mMesh->Faces() -- in
+ *  place of the hand-strength-reduced byte-offset version, whose int-cast
+ *  pointer arithmetic needed an HX_NATIVE shadow body (now gone).  Same
+ *  faces: (v0, v1, v1+ns) and (v1+ns, v0+ns, v0) with v1 = base + (side+1)%ns.
+ *  Left: the w7-aj register cascade -- the image keeps `1 - base` (from which
+ *  MSVC derives side+1 off the strength-reduced vertex index) in callee-saved
+ *  r30 (__savegprlr_26 vs our _27), and schedules all four u16 truncations
+ *  before the first triple's stores.  Holding the four indices in
+ *  `unsigned short` locals first is byte-identical to this. */
 void RndRibbon::ConstructMesh() {
     if (mNumSegments <= 0)
         return;
 
     mMesh->Verts().resize(mNumSides * mNumSegments * 2);
 
-    unsigned int numFacePairs = (unsigned int)(mNumSegments * mNumSides);
     RndMesh::Face emptyFace;
     std::vector<RndMesh::Face> &faces = mMesh->Faces();
-    unsigned int targetFaceCount = numFacePairs * 2;
-#ifdef HX_NATIVE
-    // LP64: the image's (end - begin) / 6 byte arithmetic (divw at 8271625C)
-    // is faces.size(); the int pointer casts below would truncate on x86_64.
-    unsigned int curFaceCount = (unsigned int)faces.size();
-    if (targetFaceCount < curFaceCount) {
+    unsigned int targetFaceCount = (unsigned int)(mNumSegments * mNumSides) * 2;
+    if (targetFaceCount < faces.size()) {
         faces.erase(faces.begin() + targetFaceCount, faces.end());
     } else {
-        faces.insert(faces.end(), targetFaceCount - curFaceCount, emptyFace);
+        faces.insert(faces.end(), targetFaceCount - faces.size(), emptyFace);
     }
-#else
-    int facesBegin = (int)faces.begin();
-    unsigned int curFaceCount = (unsigned int)(((int)faces.end() - facesBegin) / 6);
 
-    if (targetFaceCount < curFaceCount) {
-        faces.erase(
-            (RndMesh::Face *)(facesBegin + (int)targetFaceCount * 6),
-            (RndMesh::Face *)((int)faces.end())
-        );
-    } else {
-        faces.insert(
-            faces.end(),
-            targetFaceCount - (unsigned int)(((int)faces.end() - facesBegin) / 6),
-            emptyFace
-        );
-    }
-#endif
-
-    int seg = 0;
-    if (mNumSegments > 0) {
-        int numSides = mNumSides;
-        do {
-            int baseVert = numSides * seg;
-            int baseVert2 = baseVert * 2;
-            int side = 0;
-            if (numSides > 0) {
-                int faceOff = baseVert2 * 6;
-                int vertIdx = baseVert2;
-                int oneMinusBV2 = 1 - baseVert2;
-                do {
-                    int ns = mNumSides;
-                    int nextVertOff = oneMinusBV2 + vertIdx;
-                    unsigned short v0 = (unsigned short)vertIdx;
-                    int rem = nextVertOff % ns;
-                    int vNextRaw = rem + baseVert2;
-                    int v0PlusNS = vertIdx + ns;
-                    int vNextWrapRaw = ns + vNextRaw;
-#ifdef HX_NATIVE
-                    short *facePtr = (short *)((char *)mMesh->Faces().data() + faceOff);
-#else
-                    short *facePtr = (short *)((int)mMesh->Faces().begin() + faceOff);
-#endif
-                    unsigned short vNextWrap = (unsigned short)vNextWrapRaw;
-                    unsigned short vNext = (unsigned short)vNextRaw;
-                    unsigned short v0PlusNSu = (unsigned short)v0PlusNS;
-                    side++;
-                    facePtr[0] = v0;
-                    vertIdx = vertIdx + 1;
-                    facePtr[1] = vNext;
-                    facePtr[2] = vNextWrap;
-#ifdef HX_NATIVE
-                    // Second triple of the pair: the image re-reads the face
-                    // array (8271632C..38) and stores at +6/+8/+10 bytes.
-                    short *faceBase = (short *)((char *)mMesh->Faces().data() + faceOff);
-                    faceBase[3] = vNextWrap;
-                    faceBase[4] = v0PlusNSu;
-                    faceOff = faceOff + 12;
-                    faceBase[5] = v0;
-#else
-                    short *faceBase = (short *)((int)mMesh->Faces().begin() + faceOff);
-                    *(short *)((int)faceBase + 6) = vNextWrap;
-                    *(short *)((int)faceBase + 8) = v0PlusNSu;
-                    faceOff = faceOff + 12;
-                    *(short *)((int)faceBase + 10) = v0;
-#endif
-                    numSides = mNumSides;
-                } while (side < numSides);
-            }
-            seg++;
-        } while (seg < mNumSegments);
+    for (int seg = 0; seg < mNumSegments; seg++) {
+        int base = mNumSides * seg * 2;
+        for (int side = 0; side < mNumSides; side++) {
+            int ns = mNumSides;
+            int v0 = base + side;
+            int v1 = base + (side + 1) % ns;
+            mMesh->Faces()[base + side * 2].Set(v0, v1, v1 + ns);
+            mMesh->Faces()[base + side * 2 + 1].Set(v1 + ns, v0 + ns, v0);
+        }
     }
 
     mMesh->Sync(0x3f);
