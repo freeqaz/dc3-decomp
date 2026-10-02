@@ -59,8 +59,15 @@ GranularSynth::GranularSynth(const FloatVec &input, unsigned int numVoices, unsi
 
         for (unsigned int j = 0; j < window.size(); j++) {
             static const float sPi = 3.1415927410125732f;
+            // w15-b (98.65 -> 100): the value is computed into a local BEFORE
+            // the store -- assigning straight into window[j] makes MSVC form the
+            // element address first and pin _M_start across `bl cos`, where the
+            // image reloads it after the call -- and the size is converted
+            // before j (image: size to 0x88(r31), j to 0x90(r31)).
+            float size = (float)window.size();
             float angle = ((float)j + 0.5f) * sPi;
-            window[j] = ((float)cos(angle / (float)window.size()) + 1.0f) * 0.5f;
+            float value = ((float)cos(angle / size) + 1.0f) * 0.5f;
+            window[j] = value;
         }
     }
 
