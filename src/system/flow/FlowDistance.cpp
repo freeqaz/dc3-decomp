@@ -75,9 +75,7 @@ bool FlowDistance::Activate() {
             TheFlowMgr->AddPollable(this);
             mPolling = true;
         }
-        Vector3 diff;
-        Subtract(mObj1->WorldXfm().v, mObj2->WorldXfm().v, diff);
-        mOutOfRange = Length(diff) > mDistance;
+        mOutOfRange = Distance(mObj1->WorldXfm().v, mObj2->WorldXfm().v) > mDistance;
         Execute(kWhenAble);
         if (mPersistent) {
             return true;
@@ -114,9 +112,10 @@ void FlowDistance::ChildFinished(FlowNode *n) {
 void FlowDistance::Execute(QueueState qs) {
     bool shouldStop = false;
     bool shouldActivate = false;
-    Vector3 diff;
-    Subtract(mObj1->WorldXfm().v, mObj2->WorldXfm().v, diff);
-    float dist = Length(diff);
+    // Distance(), not Subtract()+Length(): the extra inline level is what
+    // makes /fp:fast start the sum-of-squares chain at z (image: fmuls z*z,
+    // fmadds x, fmadds y).
+    float dist = Distance(mObj1->WorldXfm().v, mObj2->WorldXfm().v);
     if (mDriveIntensity && mRunInRange) {
         float oldScale = mIntensityScale;
         float intensity = Clamp<float>(0.0f, 1.0f, 1.0f - dist / mDistance);
