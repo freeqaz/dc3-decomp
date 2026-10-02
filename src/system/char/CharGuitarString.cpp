@@ -65,7 +65,15 @@ void CharGuitarString::Poll() {
     Subtract(tf4.v, nutvec, tmp);
     Vector3 tmp2;
     Subtract(bridgevec, nutvec, tmp2);
-    float clamped = Clamp(0.0f, 1.0f, Dot(tmp, tmp2) / Dot(tmp2, tmp2));
+    // w14-b: the numerator is the image's own association, (z + x) + y
+    // (fmuls z, fmadds x, fmadds y); Dot(tmp, tmp2) sums x, z, y. MSVC honours
+    // the parentheses, so this is the same float result the image computes.
+    // 98.65 -> 99.96. Residual (12 rows): the denominator, image (y + z) + x,
+    // ours (x + y) + z; spelling it with explicit parentheses in any order is
+    // 87.9 (MSVC re-schedules every load), LengthSquared/flat sum inert.
+    float clamped = Clamp(
+        0.0f, 1.0f, ((tmp.z * tmp2.z + tmp.x * tmp2.x) + tmp.y * tmp2.y) / Dot(tmp2, tmp2)
+    );
     if (mOpen)
         clamped = 0.0f;
     Interp(nutvec, bridgevec, clamped, tf50.v);
