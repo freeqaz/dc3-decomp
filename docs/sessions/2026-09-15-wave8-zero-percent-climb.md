@@ -1642,3 +1642,82 @@ the shared `../jeff` dtk and is waiting on the owner.
 Five directory-owning lanes with the same ownership, briefed with the wave-16 floors. Each lane
 gets every fresh row at **any** percentage (148), plus a second opinion on the attempted rows at
 95–99.99 % that wave 16 did not re-examine (212).
+
+**31,686 → 31,720 matched (+34)**; authorable canonical **31,646 → 31,680 / 32,221
+(98.22 % → 98.32 %)**; all-100 authorable units **713 → 719 / 967**; remaining authorable
+**575 → 541 functions (446,748 → 433,060 B)** (`progress_metrics.py` at `5afc14a79`). Row diff
+of `a7cf32774` against `5afc14a79`, both full builds: **40 UP, 0 DOWN**. One of the +34 is a
+tool fix, not source: see "dtk self-loop branches" below.
+
+| lane | owns | UP | units completed | matched |
+|---|---|---:|---|---|
+| (dtk fix) | — | 1 | 0 | 31686 → 31687 |
+| w17-a | rndobj | 5 | 0 | 31687 → 31692 |
+| w17-c | char, gesture, math, rnddx9 | 10 | 4 (CharFaceServo, CharGuitarString, CharInterest, DoubleExponentialSmoother) | 31692 → 31701 |
+| w17-e | lazer, synth, net, moviebink | 3 | 0 | 31701 → 31703 |
+| w17-b | hamobj, world | 7 | 0 | 31703 → 31709 |
+| w17-d | os, utl, obj, flow, ui, meta, midi | 14 | 2 (MidiParserMgr, Loader) | 31709 → 31720 |
+
+Yield recovered from +22 to +34. Opening PART 1 to fresh rows at **any** percentage, rather than
+only ≥ 90 %, is what did it: `FindPathName` 87.6, `Flow::PreSave` 89.6 and `sIdentityXfm` 62.9
+all reached 100.
+
+### Behaviour bugs, adjudicated against the target `.s`
+
+1. **`SpotlightDrawer::DrawMeshVec`** called slot 0 on the entry's +4 field through a
+   `RndHighlightable` cast. That field is the `RndEnviron::sCurrent` that `DrawLight` records
+   (`0x828268A8`–`B0`). The image calls slot 1 with `r4 = 0` (`0x82825608`, `0x82825678`), which
+   is `RndEnviron::Select(const Vector3*)` in `??_7RndEnviron@@6BRndTransformable@@@`. So the
+   spotlight cans never selected their environment.
+2. **`Debug::Fail`**: after a throw out of the `MILO_TRY`, `mFailing` stayed true, so every later
+   `Fail` was ignored, and the heap stack stayed pushed. The image's unwind funclets call
+   `~ScopedState<bool,true,false>` (`0x825CE388`) and `~MemHeapTracker` (`0x825CE420`).
+3. **`TypeProps::Save`** had two problems:
+   - With a null `mMap` it wrote nothing, but `Load` always reads a `DataArray*`. The image
+     writes a null array (`0x825C7458` → `0x825C7A00`).
+   - It stripped EditorDir entries before the proxy test, and the proxy path never restored
+     them. In the image the proxy test runs first.
+
+### The unwind-funclet lever (w17-d)
+
+Each small `__unwind$`/`fn_` funclet after a target function calls one destructor on one frame
+offset. A handler the image has and we lack means a missing RAII local. That found
+`MemHeapTracker` in `PollFrontLoader`, `ScopedState` + `MemHeapTracker` in `Debug::Fail`, and
+`MemDoTempAllocations` in `Locale::Init`. Scanner: `~/tmp/dc3-wells/w8/funclets.py`.
+**Measured whole-binary at `5afc14a79`**, 2,223 units: 91 functions mismatch, but only **4** of
+them are authorable functions below 100. Most of the rest are folded target funclets on
+already-matched functions. The lever is effectively spent; the 4 are listed in wave 18.
+
+### Other levers (measured in-tree)
+
+- A Vec.h helper written out at the call site in the image's component order closed 5
+  functions. If the image uses a different float association, match the image's.
+- An inline member or helper reproduces stores or a 0/1 normalisation that the original got
+  from inlining: `MoveDetector::Activate()`, `ComputeLocalXfmFromWorld()`, `FindPathName`'s
+  static helper.
+- The type of a small-integer local decides how MSVC widens it: `unsigned char` → `rldicl`,
+  `bool` → `clrlwi`, `int` → `extsw`.
+- Two cases where the declared type was wrong: `sIdentityXfm` is a `Matrix4` of four
+  `Vector4` rows (the image has a 1.0f pad word), and `int gVoiceCounters[2]` was two file
+  statics.
+
+### dtk self-loop branches (tool fix, jeff `67e4a0f`)
+
+dtk's tracker tagged a `bc` back to its own function's first instruction as `Rel24`. The REL24
+fixup then wrote over the branch's BO/BI fields: CharLipSync `fill<_Bit_iter>` at `0x82341FD4`,
+`40 9A FF 94` → `43 FF FF 94`. MSVC writes no relocation on any non-linking branch to its own
+section, so dtk's COFF writer now drops these and leaves the bytes verbatim. Scratch splits
+with the old and new binaries:
+
+- **dc3:** 15 of 2,223 objects changed (18 relocations removed, 2 branch words restored).
+- **rb3-xenon:** 17 of 3,099 objects changed (24 relocations removed, 5 branch words restored).
+
+Both repos remain fixed points. The deployed binary is `xxh3 40060900ce5e01d0`, and the
+previous one is backed up at `~/tmp/dtk-deployed-2026-10-02-aa575e8.bak`. Effect on dc3: +1
+(`fill<_Bit_iter>` 99.857 → 100).
+
+### Wave 18
+
+The same five lanes take the 363 rows that carry no wave-16 or wave-17 tag: 123 never attempted
+and 240 attempted only before wave 16. Each lane got through roughly a third of its list in
+wave 17. The brief adds wave 17's levers and bug shapes.
