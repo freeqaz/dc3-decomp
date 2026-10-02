@@ -156,6 +156,10 @@ void RndShader::WarnMatProp(const char *prop, NgMat *mat, NgEnviron *env, Shader
     sMatShadersOK = false;
 }
 
+static inline bool EnvFadesOut(NgEnviron *env) {
+    return env->FadeOut() && env->FadeEnd() != env->FadeStart();
+}
+
 bool RndShader::MatShaderFlagsOK(RndMat *mat, ShaderType s) {
     if (!mat || TheRnd.DefaultEnv() == RndEnviron::Current()
         || TheRnd.DrawMode() == Rnd::kDrawOcclusion) {
@@ -165,15 +169,20 @@ bool RndShader::MatShaderFlagsOK(RndMat *mat, ShaderType s) {
     sMatShadersOK = true;
     RndShader *curShader = sShaders[s];
     bool b1824 = mat->UseEnviron() && RndEnviron::Current()->NumLights_Real() != 0;
-    if (curShader->CheckError((MatFlagErrorType)0) && !mat->FadeOut()) {
-        bool fadeoutCheck = curEnv->FadeOut() && curEnv->FadeEnd() != curEnv->FadeStart();
-        if (fadeoutCheck) {
+    // BEHAVIOURAL FIX (w12-a): both fadeout warnings are gated on CheckError(0).
+    // The image's `beq` after that call (idx 44) jumps past BOTH arms to the
+    // CheckError(1) test; the old `CheckError(0) && !FadeOut() ... else if
+    // (FadeOut())` spelling warned "fadeout unchecked" for shaders that do
+    // not check fadeout at all.
+    // BEHAVIOURAL FIX (w12-a): both fadeout warnings are gated on CheckError(0).
+    // The image's `beq` straight after that call (idx 44) jumps past BOTH arms
+    // to the CheckError(1) test; the old `CheckError(0) && !FadeOut() ... else
+    // if (FadeOut())` spelling warned "fadeout unchecked" for shaders that do
+    // not check fadeout at all.
+    if (curShader->CheckError((MatFlagErrorType)0)) {
+        if (!mat->FadeOut() && EnvFadesOut(curEnv)) {
             WarnMatProp("fadeout checked", (NgMat *)mat, curEnv, s);
-        }
-    } else if (mat->FadeOut()) {
-        bool fadeoutUncheck =
-            curEnv->FadeOut() && curEnv->FadeEnd() != curEnv->FadeStart();
-        if (!fadeoutUncheck) {
+        } else if (mat->FadeOut() && !EnvFadesOut(curEnv)) {
             WarnMatProp("fadeout unchecked", (NgMat *)mat, curEnv, s);
         }
     }
