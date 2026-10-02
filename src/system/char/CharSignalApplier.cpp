@@ -107,18 +107,12 @@ END_LOADS
 void CharSignalApplier::Poll() {
     if (0 == mBoneOps.size())
         return;
-    // RESIDUAL (w7-al, 96.7 canonical): 13 rows, all inside the 20-instruction
-    // clamp/mDoSmoothing region.  The image loads mSignalMin (0x2c) before
-    // mSignal (0x28), keeps the clamp result in f0 (we use f13), reads
-    // mDoSmoothing only AFTER `stfs f0, 0x28`, and reaches the smoothing block
-    // with `bne` over a `b` instead of one `beq`.  Refuted spellings, each
-    // byte-inert or worse: `Min(Max(mSignalMin, mSignal), mSignalMax)` written
-    // out longhand (inert); dropping the `clamped` local so both arms re-read
-    // mSignal (inert, kept -- the image does reload it at 0x823AB16C);
-    // `if (mDoSmoothing) A else B` (96.7 -> 94.6, see below).  The remainder is
-    // the scheduler filling the fsel dependence stalls with the lbz, plus the
-    // r3/r28 `this` copy switching over one block later than the image's.
-    mSignal = Clamp(mSignalMin, mSignalMax, mSignal);
+    // w13-c: 96.737 -> 100.  ClampEq (the in-place float specialisation,
+    // Min(Max(min, value), max) -- the same expression as Clamp) is what loads
+    // mSignalMin before mSignal, keeps the result in f0 and defers the
+    // mDoSmoothing lbz past `stfs f0, 0x28`; with `mSignal = Clamp(...)` the
+    // w7-al refutations below all held at 96.7 (13 rows).
+    ClampEq(mSignal, mSignalMin, mSignalMax);
     // NEGATIVE RESULT (w7-al, 2026-09-14): 0x823AB164 is `bne` over a `b`,
     // which looks like `if (mDoSmoothing) A else B`, but spelling it that way
     // costs more than it buys -- it flips the inner `fabs(...) < inc` branch
