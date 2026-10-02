@@ -505,9 +505,8 @@ void RndMat::UpdatePropertiesFromMetaMat() {
             static Symbol metamaterial("metamaterial");
             Symbol cur = *it;
             if (cur != metamaterial) {
-                MatPropEditAction action = GetMetaMatPropAction(
-                    (cur == "alpha_threshold") ? Symbol("alpha_cut") : cur
-                );
+                Symbol actionProp = (cur == "alpha_threshold") ? Symbol("alpha_cut") : cur;
+                MatPropEditAction action = GetMetaMatPropAction(actionProp);
                 if ((action == kPropDefault || action == kPropForce)
                     && PropValDifferent(cur, mMetaMaterial)) {
                     if (cur == "tex_xfm") {
