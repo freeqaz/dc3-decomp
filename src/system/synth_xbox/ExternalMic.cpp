@@ -147,17 +147,17 @@ namespace {
 void ExternalMic::dataReady(unsigned long, unsigned long, _XOVERLAPPED *pOverlapped) {
     XMicData *data = (XMicData *)pOverlapped->dwCompletionContext;
     if (data) {
-        // `total` lives outside the `0 < numFrames` guard: the image zeroes it
-        // with the same register as the buf[0] store, at 0x82E3A760, before the
-        // memset and before numFrames is loaded.  RESIDUAL (w7-az, 97.24): MSVC
-        // still sinks the `mr` past the guard for us, one insert + one delete;
-        // declaring `total` before `buf` instead is byte-inert.
+        // `i` and `total` both live outside the `0 < numFrames` guard: the
+        // image zeroes the loop counter with the same register as the buf[0]
+        // store (0x82E3A760) and copies it into `total` before the memset.
+        // Declaring `i` in the for-init sinks that copy past the guard.
+        unsigned int i = 0;
         unsigned int total = 0;
         unsigned char buf[2048] = {0};
         unsigned char *pSrc = data->pData;
         if (0 < data->numFrames) {
             unsigned short *pFrameSize = data->aFrameSizes;
-            for (unsigned int i = 0; i < data->numFrames; i++) {
+            for (; i < data->numFrames; i++) {
                 // Test the dereference, not a named local: the image compares the
                 // raw `lhz` result (`cmplwi r11, 0x0` at 0x82E3A790) and only then
                 // materialises the 16-bit copy (`clrlwi r31, r11, 16`).  Binding
