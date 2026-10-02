@@ -744,6 +744,15 @@ void LinearizeKeys(
         }
 }
 
+// w17-a (94.911 canonical, left as is): the ScaleKeys loop below is NOT the
+// image's shape -- written like the other two (`it != tanim->ScaleKeys().end()`,
+// no hoisted _tmp3) rows 46-78 become 100% equal (begin then end off the owner
+// pointer the TransKeys loop already loaded, no reload of 0x58(r29)).  It still
+// scores LOWER (94.6) because the remaining diff is the inlined quaternion
+// Multiply (rows 79-108: the image evaluates Set()'s arguments w,z,y,x and stores
+// 0xc,0x8,0x4,0x0; we interleave and store y first) and the realigned rows weigh
+// more there.  Refuted at the call site: a temp Quat result copied back (81.9).
+// Fix the quat block first, then restore the plain ScaleKeys loop.
 void TransformKeys(RndTransAnim *tanim, const Transform &tf) {
     Vector3 v48;
     Hmx::Quat q58;
