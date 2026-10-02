@@ -395,6 +395,15 @@ public:
 class Plane {
 public:
     Plane() {}
+    // w13-o: Character::DrawShadow's residual (the image keeps x*0 + y*0 as
+    // two products; we factor them into (x+y)*0) does not move with this body.
+    // Measured on DrawShadow + CharCollide::Highlight (the only two callers):
+    // `-::Dot(normal, point)` and `-::Dot(point, normal)` 97.32 -> 94.34;
+    // terms z,y,x flat: inert; `float dot = ...; d = -dot;` (named or via
+    // ::Dot): inert; accumulator statements and explicit parens cost Highlight
+    // its 100; delegating to Set(): inert.  Call-site respellings in DrawShadow
+    // (worldPos.z += planeD first, named point/normal temps, 0.0f literals) are
+    // inert too.
     Plane(const Vector3 &point, const Vector3 &normal) {
         a = normal.x;
         b = normal.y;
