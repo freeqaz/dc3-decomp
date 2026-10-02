@@ -1129,14 +1129,14 @@ float Rnd::DrawTimers(float f) {
     for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
          it != timers.end();
          ++it) {
-        if (!it->first.Draw()) {
-            continue;
-        }
-
         // The image materialises &it->first once per iteration (addi r30, r28, 8)
         // and reads every Timer member through it, so the timer is a named
-        // reference here rather than a repeated it->first.
+        // reference here rather than a repeated it->first -- bound BEFORE the
+        // Draw() test (w14-a: the addi sits above the cmplwi in the image).
         Timer &timer = it->first;
+        if (!timer.Draw()) {
+            continue;
+        }
 
         float budget = timer.Budget();
 
@@ -1159,6 +1159,9 @@ float Rnd::DrawTimers(float f) {
             DrawRectScreen(rect, worstExcessColor, nullptr, nullptr, nullptr);
         }
 
+        // w14-a RESIDUAL (99.99): the image stores rect.x (0x70) before
+        // rect.y (0x74) here; we store y first. Inert: `y += ...` hoisted above
+        // the rect.x store, and `rect.y = y += rowSpacing`.
         rect.x = bgLeft;
         y += rowSpacing;
         rect.y = y;
@@ -1189,22 +1192,33 @@ float Rnd::DrawTimers(float f) {
 
         float lastMs = it->first.GetLastMs();
 
-        const char *text;
         if (lastMs >= 0.05f) {
             if (mVerboseTimers && AutoTimer::CollectingStats()) {
                 Symbol name = it->first.Name();
                 TimerStats &stats = it->second;
-                text = MakeString("%s %2.1f (%.2f, %.2f) %.2f", name, lastMs, stats.mAvgMs, stats.mStdDevMs, stats.mMaxMs);
+                DrawStringScreen(
+                    MakeString(
+                        "%s %2.1f (%.2f, %.2f) %.2f",
+                        name,
+                        lastMs,
+                        stats.mAvgMs,
+                        stats.mStdDevMs,
+                        stats.mMaxMs
+                    ),
+                    pos,
+                    barColor,
+                    true
+                );
             } else {
                 Symbol name = it->first.Name();
                 float worstMs = it->first.GetWorstMs();
-                text = MakeString("%s %.2f (%.2f)", name, lastMs, worstMs);
+                DrawStringScreen(
+                    MakeString("%s %.2f (%.2f)", name, lastMs, worstMs), pos, barColor, true
+                );
             }
         } else {
-            text = it->first.Name().Str();
+            DrawStringScreen(it->first.Name().Str(), pos, barColor, true);
         }
-
-        DrawStringScreen(text, pos, barColor, true);
         pos.y += rowSpacing;
     }
 
