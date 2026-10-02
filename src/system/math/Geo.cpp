@@ -864,37 +864,29 @@ void Frustum::Set(float near, float far, float fovY, float ratio) {
     }
 }
 
-// REFUTED (w8-o 2026-09-30): the image's tail materialises 0/1 into r11 and
-// truncates -- 0x82535D90 `li r11, 0x0` / `beq` / `li r11, 0x1` /
-// 0x82535D9C `clrlwi r3, r11, 24` -- where the two literals below compile to
-// `li r3, 0 / beqlr / li r3, 1`, one instruction fewer.  It is NOT reached by
-// returning the variable.  `return r;` in place of `return true;` makes MSVC
-// cross-jump every intermediate `if (r == 0)` exit into `bnelr` and costs
-// 4.3pp (98.280 -> 93.968, 364 B); dropping the innermost early-out as well
-// costs more (356 B, 17 rows).  Leave the literals.
+// w15-i2 2026-10-02: 98.280 -> 100.0 (modulo three commutative fmadds operand
+// swaps).  The image's shape is a short-circuit `||` over six inline
+// bool-returning predicates: each step materialises its bool in r11
+// (`li r11,1 / blt / li r11,0 / clrlwi.`) and the chain's own result is
+// normalised once at the tail (0x82535D90 `li r11,0 / beq / li r11,1 /
+// clrlwi r3,r11,24`).  The negated radius is computed ONCE (`fneg f11` at the
+// top) and handed to every predicate -- spelling the predicate as
+// math/Mtx.h's `s < plane` recomputes -s.GetRadius() per operand (91.4), and a
+// bare `Dot(...) < negR || ...` chain never materialises the bools (72.2).
+// The w8-o note's nested if-chain (98.28) reproduced every step but not the
+// tail, because its literal returns compile to `li r3 / beqlr`.
+static inline bool BehindPlane(const Plane &p, const Vector3 &v, float negRadius) {
+    return p.Dot(v) < negRadius;
+}
+
 bool operator>(const Sphere &s, const Frustum &f) {
-    float neg_r = -s.radius;
-    bool r;
-    r = f.front.Dot(s.center) < neg_r;
-    if (r == 0) {
-        r = f.back.Dot(s.center) < neg_r;
-        if (r == 0) {
-            r = f.left.Dot(s.center) < neg_r;
-            if (r == 0) {
-                r = f.right.Dot(s.center) < neg_r;
-                if (r == 0) {
-                    r = f.top.Dot(s.center) < neg_r;
-                    if (r == 0) {
-                        r = f.bottom.Dot(s.center) < neg_r;
-                        if (r == 0) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return true;
+    float negRadius = -s.radius;
+    return BehindPlane(f.front, s.center, negRadius)
+        || BehindPlane(f.back, s.center, negRadius)
+        || BehindPlane(f.left, s.center, negRadius)
+        || BehindPlane(f.right, s.center, negRadius)
+        || BehindPlane(f.top, s.center, negRadius)
+        || BehindPlane(f.bottom, s.center, negRadius);
 }
 
 bool Intersect(const Segment &seg, const Sphere &sphere) {
