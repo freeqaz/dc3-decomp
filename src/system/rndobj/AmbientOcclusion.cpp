@@ -721,13 +721,14 @@ void RndAmbientOcclusion::BurnTransform(
     bool canBurn = Abs(1.0f - det) > 0.0001f;
     if (mQuality == 0) {
         canBurn = CanBurnXfm(mesh);
-    } else {
-        if (canBurn) {
-            MILO_NOTIFY_ONCE(
-                "%s: Mesh has scale or mirroring applied. Re-export mesh to ensure accurate AO calculation.",
-                PathName(mesh)
-            );
-        }
+    } else if (canBurn) {
+        // w18-a: the clear is inside the test -- the image's not-scaled path
+        // branches straight to the shared `if (canBurn)` test (0x826DFE44
+        // `beq .L_826DFEF0`) rather than being threaded past it.
+        MILO_NOTIFY_ONCE(
+            "%s: Mesh has scale or mirroring applied. Re-export mesh to ensure accurate AO calculation.",
+            PathName(mesh)
+        );
         canBurn = false;
     }
 
