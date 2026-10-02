@@ -1117,6 +1117,14 @@ const char *gDc3ExitReason = nullptr;
 
 void App::Run() { RunWithoutDebugging(); }
 
+// w19-e (99.25, 24 rows, all in the loop preheader 18-68): the image and we
+// hoist the SAME loop-invariant addresses into the SAME callee-saved
+// registers and frame slots (0x60 "none", 0x70 Message vtable, 0x78 PanelDir
+// RTTI, 0x7c "ACTIVE %s", 0x90 sSlowFrameTimer, 0xa0 Object RTTI); only the
+// ORDER of the lis/addi/stw pairs differs (image: sSlowFrameTimer, Object
+// RTTI, PanelDir RTTI, ... ; ours: Message vtable, PanelDir RTTI, ...).
+// Inert: the inner do/while rewritten as a block + `if (glitch <= ...)
+// continue;`.
 void App::RunWithoutDebugging() {
 #if defined(HX_NATIVE) && !defined(__EMSCRIPTEN__)
     MILO_LOG("DC3 Native: Entering main loop\n");
