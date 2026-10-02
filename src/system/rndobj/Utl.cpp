@@ -1114,8 +1114,7 @@ void UtilDrawCigar(
     Vector3 verts2e0[18];
     Vector3 verts1c0[18];
 
-    int iIdx = 0;
-    do {
+    for (int iIdx = 0; iIdx < 3; iIdx++) {
         float latVal = (float)iIdx * anglePi6;
         float sinLatPi2 = FastSin(latVal + anglePiHalf);
         // These radii and the two sines below are single-precision in retail
@@ -1128,8 +1127,7 @@ void UtilDrawCigar(
         float r1 = sinLatPi2b * radii[1];
         float sinLatb = FastSin(latVal);
         float h1 = sinLatb * radii[1];
-        int iLon = 0;
-        do {
+        for (int iLon = 0; iLon < 6; iLon++) {
             float lonVal = (float)iLon * angle2Pi;
             float sinLon = FastSin((float)iLon * angle2Pi);
             float sinLonPi2 = FastSin(lonVal + anglePiHalf);
@@ -1141,22 +1139,16 @@ void UtilDrawCigar(
             // lonVal+pi/2 result) then f21 (the plain lonVal result).
             Vector3 v2(sLen1 + h1, sinLonPi2 * r1, sinLon * r1);
             Multiply(v2, basis, verts2e0[idx]);
-            iLon = iLon + 1;
-        } while (iLon < 6);
-        iIdx = iIdx + 1;
-    } while (iIdx < 3);
+        }
+    }
 
-    int i = 0;
-    do {
+    for (int i = 0; i < 6; i++) {
         TheRnd.DrawLine(verts2e0[i], verts1c0[i], col, false);
-        i = i + 1;
-    } while (i < 6);
+    }
 
-    int iRing = 0;
-    do {
-        int iJ = 0;
+    for (int iRing = 0; iRing < 3; iRing++) {
         int iK = 5;
-        do {
+        for (int iJ = 0; iJ < 6; iJ++) {
             int p1 = iRing * 6 + iJ;
             int p2 = iRing * 6 + iK;
             TheRnd.DrawLine(verts2e0[p1], verts2e0[p2], col, false);
@@ -1183,10 +1175,8 @@ void UtilDrawCigar(
             // iK trails iJ by one; retail keeps both in place (mr iK, iJ then
             // addi iJ, iJ, 1) rather than staging the old value in a temp.
             iK = iJ;
-            iJ = iJ + 1;
-        } while (iJ < 6);
-        iRing = iRing + 1;
-    } while (iRing < 3);
+        }
+    }
 }
 
 void UtilDrawPlane(
