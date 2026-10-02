@@ -20,6 +20,9 @@ void DxCubeTex::Reset() {
     NgMat::SetCurrent(nullptr);
 }
 
+// 100 modulo register permutation (23 rows): the image binds the shared zero
+// to r27, face to r26 and &mBitmap[face] to r25; we bind r26/r25/r27.  A
+// permuter sweep (decl reorder / extraction / temp elimination) found nothing.
 void DxCubeTex::Sync() {
     PhysMemTypeTracker tracker("D3D(phys):CubeTex");
 
