@@ -133,15 +133,20 @@ unsigned long RndShaderMgr::InitShaders() {
 
 void RndShaderMgr::LoadShaders(const char *cc) {
     unsigned long shaders = InitShaders();
-    if (TheLoadMgr.GetPlatform() != kPlatformNone) {
-        String str(MakeString(cc, PlatformSymbol(TheLoadMgr.GetPlatform())));
+    Platform plat = TheLoadMgr.GetPlatform();
+    if (plat != kPlatformNone) {
+        String str(MakeString(cc, PlatformSymbol(plat)));
         FileStat stat;
         if (!mCacheShaders || !FileGetStat(str.c_str(), &stat) && stat.st_mtime > shaders || strstr(cc, "preinit")) {
                 FileStream stream(str.c_str(), FileStream::kRead, true);
                 if (!stream.Fail()) {
-                    // this check is made somewhere in here according to the asm
-                    // TheLoadMgr.GetPlatform() == kPlatformXBox;
-                    LoadShaderFile(stream);
+                    // Both arms are the same call; MSVC tail-merges them and
+                    // leaves the image's dead `cmpwi cr6, r11, 0x2` (0x826A3000).
+                    if (TheLoadMgr.GetPlatform() == kPlatformXBox) {
+                        LoadShaderFile(stream);
+                    } else {
+                        LoadShaderFile(stream);
+                    }
                 } else {
                     if (UsingCD() && GetGfxMode() == kNewGfx) {
                         MILO_NOTIFY("Can't load shader file %s!!", str.c_str());
