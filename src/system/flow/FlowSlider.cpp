@@ -173,12 +173,11 @@ void FlowSlider::UpdateActivations() {
     // NEGATIVE RESULT (w7-ap, 2026-09-14, 97.9 canonical): swapping these two
     // declarations is BYTE-IDENTICAL.  The residual f30/f31 swap (image
     // f31 = 1.0f, f30 = 0.0f; ours reversed, 10 rows) is a live-range
-    // assignment, not a declaration-order effect -- both sides already issue
-    // the two lfs in the same order.  The other 4 rows are the image's third
-    // range test in the FIRST helper (`fcmpu` + `bgt` against hi at
-    // 0x8242145C): MSVC proves `mValue > nextPos` false from the enclosing
-    // `mValue <= nextPos` and folds it away, so recovering it needs the outer
-    // test to be spelled differently, not the inner one.
+    // assignment, not a declaration-order effect.  w14-f re-checked after the
+    // fixes below: swapping them, and replacing both locals with literals, are
+    // still byte-identical (99.0 canonical, 12 rows: the f30/f31 swap plus the
+    // `lwz r11, 0(r30)` vtable load scheduled before `mr r3, r30` for
+    // curCase->IsRunning(); `IsRunning()` without `> 0` is also identical).
     float one = 1.0f;
     float zero = 0.0f;
 
@@ -197,16 +196,23 @@ void FlowSlider::UpdateActivations() {
         // inside the fraction: the image emits `fcmpu cr6, f0, f13` / blt,
         // `fcmpu cr6, f0, f12` / bgt and `fcmpu cr6, f13, f12` / beq at
         // 0x82421454-0x82421474 after the outer test has already passed.
+        // w14-f: the outer test is `!(mValue > nextPos)` -- the image's `bgt`
+        // skip, which ALSO enters on NaN.  Spelled `mValue <= nextPos`, MSVC
+        // proved the inner `mValue > nextPos` false and folded it (the missing
+        // fcmpu/bgt pair), and clang on native would skip the block on NaN where
+        // the image enters it.  Holding lo = curCase->Value() in a local, like the
+        // second helper below, gives the image's f13 (lo) / f12 (hi) assignment.
         if (next != mChildNodes.end()) {
             if (mValue >= curCase->Value()) {
                 float nextPos = nextCase->Value();
-                if (mValue <= nextPos) {
+                if (!(mValue > nextPos)) {
                     float f;
-                    if (mValue < curCase->Value() || mValue > nextPos
-                        || curCase->Value() == nextPos) {
+                    float lo = curCase->Value();
+                    if (mValue < lo || mValue > nextPos
+                        || lo == nextPos) {
                         f = zero;
                     } else {
-                        f = (mValue - curCase->Value()) / (nextPos - curCase->Value());
+                        f = (mValue - lo) / (nextPos - lo);
                     }
                     t = one - f;
                     goto ease;
