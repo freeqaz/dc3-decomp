@@ -414,6 +414,10 @@ void SkeletonUpdate::UpdateCallbacks() {
                 } else {
                     side = revBit;
                 }
+                // RESIDUAL (w12-d, 96.7): the image stores offset.y/.z (0x74/0x78)
+                // BEFORE the side select; we store them after. Inert: the
+                // select folded into the ctor argument as a ternary, and
+                // `offset(halfSpacing, 0, 0); offset.x -= side * spacing`.
                 Vector3 offset(halfSpacing - (float)side * spacing, 0.0f, 0.0f);
                 StubCameraInput::StubSkeletonData(*sd2, offset);
                 sd2->mTrackingID = i + 1;
