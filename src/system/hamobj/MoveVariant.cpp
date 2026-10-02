@@ -96,10 +96,10 @@ MoveVariant::MoveVariant(MoveGraph *graph, const MoveVariant *other, MoveParent 
     mEra = other->mEra;
     mFlags = other->mFlags & ~1;
     mLinkedTo.mVariantName = other->mLinkedTo.mVariant
-        ? other->mLinkedTo.mVariant->mVariantName.Str()
+        ? other->mLinkedTo.mVariant->Name().Str()
         : nullptr;
     mLinkedFrom.mVariantName = other->mLinkedFrom.mVariant
-        ? other->mLinkedFrom.mVariant->mVariantName.Str()
+        ? other->mLinkedFrom.mVariant->Name().Str()
         : nullptr;
     mPositionOffset = other->mPositionOffset;
     graph->mMoveVariants[mVariantName] = this;
