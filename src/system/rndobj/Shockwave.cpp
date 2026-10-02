@@ -26,7 +26,7 @@ BEGIN_PROPSYNCS(RndShockwave)
     // unconditionally.
     SYNC_PROP_SET(
         selected,
-        sSelected == this,
+        this == sSelected,
         RndShockwave *self = this;
         if (_val.Int() != 0) sSelected = self;
         else if (sSelected == self) sSelected = nullptr
