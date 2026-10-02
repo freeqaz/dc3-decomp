@@ -233,6 +233,13 @@ void HamNavProvider::SetLabel(int elementIndex, int i2, Symbol s) {
     curItem.mLabels.clear();
     curItem.mLabels.push_back(s);
     if (curItem.mSubListProvider) {
+        // RESIDUAL (w11-a, 97.80 canonical): 5 rows.  The image re-reads
+        // Data() for the Clone (`lwz r3, 0x4(r11)`) and parks the raw provider
+        // pointer in the 0x50 temp (`stw r11, 0x50(r31)`); we reuse provData.
+        // Refuted (all 95.6, worse): Data() written at both sites, Data() at
+        // the Size() site with provData for the Clone, and provData taken
+        // inside the if -- each CSEs the two Data() reads and instead parks
+        // the DataArray* (r3) in 0x50 at both sites.
         DataArray *provData = curItem.mSubListProvider->Data();
         if (i2 < provData->Size()) {
             DataArray *cloned = provData->Clone(true, false, 0);
