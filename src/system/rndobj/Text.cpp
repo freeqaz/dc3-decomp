@@ -1201,25 +1201,19 @@ int RndText::ConvertTextToWide(const char *str, HX_VECTOR(unsigned short) &wideC
 
     // Manual strlen to match target inline loop
     const char *s = str;
-    // RESIDUAL (w7-am, 91.9 canonical): this function is instruction-for-
-    // instruction the image's -- same blocks, same order, same seven live
-    // values (this, 0, 0x53, limit, str, &wideChars, out) -- with ONE
-    // difference that renames every register: 8269A004 `subi r31, r1, 0xb0`
-    // dedicates r31 to a frame pointer and addresses every local off it, so
-    // the image saves r24-r31 and its frame is 0xb0.  We get no frame pointer,
-    // address the same locals off r1, save r25-r31 and use r31 for `out`, so
-    // all seven values sit one register lower.  Nothing in this function's
-    // source chooses that; the other structural rows are the image's two spills
-    // of `_M_finish` to 0x54 around the resize.
-    // NEGATIVE RESULT (w7-am, 2026-09-14): reducing the manual strlen to an
-    // `int len` BEFORE MemPushTemp(), which is what 8269A030-8269A034 do (the
-    // count, not the walking pointer, lives across the call), is inert -- MSVC
-    // already sinks it.  Identical 79-row profile, still 91.9.
+    // w13-a (91.9 -> 100): the temp-heap bracket is a MemDoTempAllocations
+    // scope, not bare MemPushTemp()/MemPopTemp() calls.  Its destructor gives
+    // the function an EH state, which is what dedicates r31 to a frame
+    // pointer (8269A004 `subi r31, r1, 0xb0`) and makes the image save r24-r31.
+    // With the scope in place, the count computed before MemPushTemp
+    // (8269A030-8269A034) is a named `len`.
     while ('\0' != *s++) {}
-    MemPushTemp();
-    wideChars.resize(((s - str) - 1) * 2 + 1, (0));
-    wideChars[0] = 0;
-    MemPopTemp();
+    int len = (s - str) - 1;
+    {
+        MemDoTempAllocations tmp;
+        wideChars.resize(len * 2 + 1, (0));
+        wideChars[0] = 0;
+    }
 
     unsigned short *out = &wideChars[0];
 
