@@ -118,7 +118,6 @@ long Voice::createOrReuse(
     if (!TheXboxSynth->OutputVoice()) {
         return 0;
     }
-    long result;
     MILO_ASSERT(pPoolVoice->eg == 0, 0x1c1);
     pPoolVoice->eg = new EnvelopeGenerator();
     MILO_ASSERT(mPoolVoice.egParams == 0, 0x1c3);
@@ -132,74 +131,52 @@ long Voice::createOrReuse(
     effectDesc.OutputChannels = mChannels;
     effectChain.pEffectDescriptors = &effectDesc;
 
-    MemPushTemp();
-
-    // The image almost certainly holds this in a CritSecTracker, not a bare
-    // pointer: right after the `addic. r30, r11, 0xb0` that both forms &unkb0
-    // and tests it, the image does `stw r30, 0x50(r31)` -- a store we have no
-    // reason to emit, and exactly CritSecTracker::mCritSec being materialised --
-    // and createOrReuse carries an unwind region (pdata 0xC000AF05, bit31 set)
-    // that a plain pointer local would not need.  The tracker's scope would end
-    // before the success bookkeeping, with MSVC duplicating the inlined
-    // destructor into both arms of the following `if (hr)`, which is what the
-    // two `bl Exit` sites look like (error one after MILO_FAIL, success one
-    // before the counter/memcpy work).
-    //
-    // MEASURED AND REJECTED (wave 7, lane w7-y): writing it that way -- tracker
-    // scope around the call plus the error print, then `if (hr) result = hr;
-    // else {...}` outside -- fixes the whole 16-row r29/r30 permutation, but our
-    // MSVC does NOT merge the second `if (hr)` into the duplicated destructor.
-    // It emits a fresh `cmpwi cr6, r28, 0x0` and re-lays the tail, losing the
-    // shared `bl MemPopTemp` block: 96.19 -> 94.06 (39 mismatch rows -> 26, but
-    // 7 of them deletes).  Kept the explicit spelling and named the loss.
-    CriticalSection *cs = &TheXboxSynth->unkb0;
-    if (cs) {
-        cs->Enter();
-    }
-
-    int *pEngine = (int *)TheXboxSynth->unkec;
-    HRESULT hr = ((HRESULT(*)(
-        int *,
-        IXAudio2SourceVoice **,
-        tWAVEFORMATEX *,
-        int,
-        float,
-        int,
-        XAUDIO2_VOICE_SENDS *,
-        XAUDIO2_EFFECT_CHAIN *
-    ))(*(int *)(*(int *)pEngine + 0x20)))(
-        pEngine,
-        (IXAudio2SourceVoice **)pPoolVoice,
-        &wfx,
-        0,
-        4.0f,
-        0,
-        sends,
-        &effectChain
-    );
-
-    if (hr) {
-        char buf[0x800] = "";
-        MEMORYSTATUS memStatus;
-        GlobalMemoryStatus(&memStatus);
-        Hx_snprintf(buf, 0x800, "XAudio2: CreateSourceVoice failed with 0x%X\n", hr);
-        MemPrintOverview(kNoHeap, buf + strlen(buf));
-        MILO_FAIL(buf);
-        if (cs) {
-            cs->Exit();
+    // w17-e: 96.19 -> 100 canonical (modulo register permutation: this/wfx/sends
+    // rotate r23/r21/r22 vs our r21/r22/r23, 11 rows).  The bare
+    // MemPushTemp/MemPopTemp pair is a MemDoTempAllocations scope and the
+    // engine lock is a CritSecTracker (the image's `stw r30, 0x50(r31)` right
+    // after `addic. r30, r11, 0xb0` is CritSecTracker::mCritSec, and the pdata
+    // carries an unwind region).  The failure path RETURNS from inside the
+    // tracker's scope: that is what makes MSVC duplicate the Exit into both
+    // arms and share the single `bl MemPopTemp` tail (82E36CDC), which the
+    // w7-y `if (hr) result = hr; else {...}` spelling could not reach.
+    MemDoTempAllocations tmp;
+    {
+        CritSecTracker lock(&TheXboxSynth->unkb0);
+        int *pEngine = (int *)TheXboxSynth->unkec;
+        HRESULT hr = ((HRESULT(*)(
+            int *,
+            IXAudio2SourceVoice **,
+            tWAVEFORMATEX *,
+            int,
+            float,
+            int,
+            XAUDIO2_VOICE_SENDS *,
+            XAUDIO2_EFFECT_CHAIN *
+        ))(*(int *)(*(int *)pEngine + 0x20)))(
+            pEngine,
+            (IXAudio2SourceVoice **)pPoolVoice,
+            &wfx,
+            0,
+            4.0f,
+            0,
+            sends,
+            &effectChain
+        );
+        if (hr) {
+            char buf[0x800] = "";
+            MEMORYSTATUS memStatus;
+            GlobalMemoryStatus(&memStatus);
+            Hx_snprintf(buf, 0x800, "XAudio2: CreateSourceVoice failed with 0x%X\n", hr);
+            MemPrintOverview(kNoHeap, buf + strlen(buf));
+            MILO_FAIL(buf);
+            return hr;
         }
-        result = hr;
-    } else {
-        if (cs) {
-            cs->Exit();
-        }
-        gVoiceCounters[0]++;
-        memcpy(&pPoolVoice->wfx, &wfx, 0x12);
-        unk54 = (sends == nullptr || sends->SendCount > 0);
-        result = 0;
     }
-    MemPopTemp();
-    return result;
+    gVoiceCounters[0]++;
+    memcpy(&pPoolVoice->wfx, &wfx, 0x12);
+    unk54 = (sends == nullptr || sends->SendCount > 0);
+    return 0;
 }
 
 // w7-bu (2026-09-15): 92.4 -> 95.0 canonical, three levers on the MONO arm:
