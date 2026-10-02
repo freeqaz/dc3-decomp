@@ -25,14 +25,18 @@ int SkeletonRecoverer::GetTrackingIDWithRecovery(int id, int exclude) {
         return id;
     }
 
-    TrackingIDHistory *found = nullptr;
+    // Same inlined-lookup shape as Poll(): the image assigns found = nullptr
+    // only on the loop's natural exit and found = &*it on the match edge.
+    TrackingIDHistory *found;
     for (std::list<TrackingIDHistory>::iterator it = mIDHistory.begin(); it != mIDHistory.end();
          ++it) {
         if (it->mTrackingID == id) {
             found = &(*it);
-            break;
+            goto check_found;
         }
     }
+    found = nullptr;
+check_found:
     if (!found) {
         return 0;
     }
