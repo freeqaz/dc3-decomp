@@ -854,9 +854,10 @@ void RhythmBattle::OnBeat() {
                         <= mSkeletonHistory.size()) {
                     float f45 = 0.10f;
                     for (int i = 0; i < mSkeletonHistory.size(); i++) {
-                        // Max(i - 1, 0); the target compares against a register-held zero,
-                        // which neither Max() nor this spelling reproduces yet.
-                        int iPrev = (i - 1 > 0) ? (i - 1) : 0;
+                        // w16-b: Max(0, i - 1) -- `(0 < x) ? x : 0`, the full
+                        // two-register signed compare against the zero held in r17
+                        // (srwi/subfc/srwi/subfe), as in HamListRibbon::Draw.
+                        int iPrev = Max(0, i - 1);
                         ArchiveSkeleton &current = mSkeletonHistory[i];
                         ArchiveSkeleton &previous = mSkeletonHistory[iPrev];
                         DancerSkeleton dancerSkeleton;
