@@ -88,6 +88,15 @@ DxRnd::DxRnd()
     // the residual is the scheduling of the two vectors' EH-frame stores
     // (`stw rX, 0x50(r31)`): the image emits each right after its vector's
     // three zero stores, we defer them; not resolved.
+    // w18-c (70.8, unchanged): measured cause.  The image has unwind funclets
+    // destroying BOTH vectors (mPendingReleases, mPendingDeletes) and ours has
+    // none -- MSVC elides those EH states here because nothing after the
+    // vectors can throw.  Probe: appending one possibly-throwing call (an
+    // external `Symbol s("x")`) to this body gives 93.5 with EVERY remaining row
+    // the probe's own call/frame (+0x10); the store schedule then matches the
+    // image exactly.  So in the original something after the vectors was not
+    // provably nothrow yet emitted no call.  Same shape as Skeleton::Skeleton
+    // (gesture/Skeleton.cpp, w18-c note); cause not found.
     for (int i = 0; i < 2; i++) {
         mFrontBuffers[i] = nullptr;
     }
