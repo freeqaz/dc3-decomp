@@ -185,31 +185,25 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
         startCol = 0;
     }
     int maxCol = Min(endCol, mDists.mWidth);
-    while (startCol < maxCol) {
+    for (; startCol < maxCol; startCol++) {
         float curBeat = BeatA(startCol);
-        int rowIdx = mDists.mHeight - 1;
-        if (rowIdx >= 0) {
-            int rowCount = rowIdx + 1;
-            do {
-                float currentError = node.err;
-                float cellError = mDists(startCol, rowIdx);
-                float newError = (currentError - cellError >= 0.0f) ? cellError : currentError;
-                node.err = newError;
-                bool foundBetter = newError != currentError;
-                if (foundBetter) {
-                    node.curBeat = curBeat;
-                    // Residual (6 rows, 93.4%): MSVC schedules the `mBStart` load and
-                    // the curBeat store two slots apart from the image. Hoisting
-                    // BeatB into a local reads 90.5 -- worse. Scheduler residual.
-                    // w13-c: also inert -- BeatB spelled inline as
-                    // `mBStart + (float)rowIdx / (float)mSamplesPerBeat`.
-                    node.nextBeat = BeatB(rowIdx);
-                }
-                rowIdx--;
-                rowCount--;
-            } while (rowCount != 0);
+        for (int rowIdx = mDists.mHeight - 1; rowIdx >= 0; rowIdx--) {
+            float currentError = node.err;
+            float cellError = mDists(startCol, rowIdx);
+            float newError = (currentError - cellError >= 0.0f) ? cellError : currentError;
+            node.err = newError;
+            bool foundBetter = newError != currentError;
+            if (foundBetter) {
+                // w19-c: still the 6-row residual (93.41): the image stores
+                // curBeat and loads mBStart two slots later than we do.  Inert
+                // or worse: plain for-loops (this spelling, same rows as the old
+                // hand-rotated do/while), BeatB into a local first (90.53),
+                // nextBeat stored before curBeat (90.53); w13-c: BeatB spelled
+                // inline as `mBStart + (float)rowIdx / (float)mSamplesPerBeat`.
+                node.curBeat = curBeat;
+                node.nextBeat = BeatB(rowIdx);
+            }
         }
-        startCol++;
     }
 
     return node.err < maxError;
