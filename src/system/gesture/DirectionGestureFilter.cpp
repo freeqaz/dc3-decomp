@@ -68,6 +68,12 @@ void DirectionGestureFilterSingleUser::Update(const Skeleton &skeleton, int elap
     }
 }
 
+// RESIDUAL (w11-d, 99.77 canonical): the image pins 0.1f in f29 and 0.2f in
+// f28 and sets up the first DrawPoint3D's arguments this/radius/color/alpha
+// (`mr r3` before `mr r6`, f1 before f2); we get the constants the other way
+// round.  Inert: named radius/alpha locals in either order; the second call
+// without the `pos` reference is worse (92.25); a decomp-synth beam run
+// (6 rounds) found nothing.
 void DirectionGestureFilterSingleUser::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
     mArcDetector.Draw(skeleton, viz);
     bool valid = IsValidSwipePosition(skeleton);

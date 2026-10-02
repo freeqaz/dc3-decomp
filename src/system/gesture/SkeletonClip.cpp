@@ -374,6 +374,11 @@ BEGIN_COPYS(SkeletonClip)
     END_COPYING_MEMBERS
 END_COPYS
 
+// RESIDUAL (w11-d, 99.991 canonical, 2 rows): in the alt-version MILO_FAIL the
+// image sets up `addi r7, r27, 0x4` (&gRevs[2]) before `addi r6, r31, 0x5c`
+// (&d.altRev); we emit them the other way round.  Inert, all measured:
+// `*(gRevs + 2)`, `gRevs[1 + 1]`, gRevs at file scope, comparing against
+// gRevs[0]/gRevs[2] instead of literals, `d.rev > 9` for `9 < d.rev`.
 BEGIN_LOADS(SkeletonClip)
     const char *pathName = PathName(this);
     Symbol className = ClassName();
