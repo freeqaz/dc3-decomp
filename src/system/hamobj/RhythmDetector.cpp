@@ -441,9 +441,8 @@ RhythmDetector::Frame BlendFrameDataToBeat(
 
     for (int i = 0; i < kSize; i++) {
         for (int j = 0; j < 3; j++) {
-            float valB = b.mJointVelocities[i][j];
-            float valA = a.mJointVelocities[i][j];
-            result.mJointVelocities[i][j] = (valB - valA) * blend + valA;
+            result.mJointVelocities[i][j] =
+                Interp(a.mJointVelocities[i][j], b.mJointVelocities[i][j], blend);
         }
     }
     return result;
