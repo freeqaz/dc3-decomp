@@ -351,12 +351,36 @@ void TypeProps::Save(BinStream &bs) {
                     if (arr && arr->Type(1) != kDataCommand
                         && !arr->Node(1).CompatibleType(mMap->Type(i + 1))) {
                         ClearKeyValue(mMap->Sym(i));
+                        if (!mMap)
+                            break;
                     } else {
                         i += 2;
                     }
                 }
             }
         }
+    }
+    // w17-d: BEHAVIOUR FIX. The plain save -- the EditorDir extraction, `bs <<
+    // mMap` and the re-insert -- is the BODY of the negated proxy predicate and
+    // returns; the proxy save follows it (RB3's shape). The image's proxy-path
+    // return destroys only `classnames` (0x825C79E4 -> clear(r31+0x78)), so
+    // `keys`/`values` are scoped to the plain path; and a NULL mMap branches from
+    // the top (0x825C7458 beq .L_825C752C) into the plain path and writes a null
+    // DataArray at 0x825C7A00. Ours nested everything in `if (mMap)` -- writing
+    // NOTHING for a null map (TypeProps::Load always reads one) -- and ran the
+    // extraction before the proxy test, stripping EditorDir entries from mMap on
+    // the proxy path without restoring them.
+    // The predicate's order: the image tests `DataDir() == owner` first and only
+    // consults gLoadingProxyFromDisk once `Dir() == owner` (0x825C76E4..0x825C76F8).
+    // Shape (94.68 -> 98.8): the explicit `if (!mMap) break;` after ClearKeyValue
+    // is what lets MSVC thread a cleared map straight into this block (0x825C7520
+    // bne / fallthrough), and the `Size() < 1` exit after the two Removes is the
+    // image's own test at 0x825C7658..0x825C7664. Residual: the dead home store
+    // of `typeDef` (`stw r27, 0x64(r31)`, 0x825C7478), one extra callee-saved GPR
+    // (we hold the zero in r22, the image in r30) and the order of the two bool
+    // flag stores before GetSaveFlags.
+    if (!mMap || owner->DataDir() != owner
+        || (owner->Dir() == owner && !gLoadingProxyFromDisk)) {
         std::list<Symbol> keys;
         std::list<Hmx::Object *> values;
         if (mMap) {
@@ -364,90 +388,23 @@ void TypeProps::Save(BinStream &bs) {
                 Symbol key = mMap->Sym(j);
                 DataNode &value = mMap->Node(j + 1);
                 Hmx::Object *valObj;
-                ObjectDir *valObjDir;
                 // Every failing test in the image falls through to `j += 2`
                 // (0x825C79EC). Nested as separate `if`s without an else, a
                 // kDataObject holding a null object -- or an object with no Dir
                 // -- never advanced j and spun on the same index forever.
                 if (value.Type() == kDataObject && (valObj = value.GetObj()) != nullptr
-                    && (valObjDir = valObj->Dir()) != nullptr
-                    && valObjDir->ClassName() == "EditorDir") {
+                    && valObj->Dir() && valObj->Dir()->ClassName() == "EditorDir") {
                     keys.push_back(key);
                     values.push_back(valObj);
                     mMap->Remove(j);
                     mMap->Remove(j);
+                    if (mMap->Size() < 1)
+                        break;
                 } else {
                     j += 2;
                 }
             }
         }
-        // Not the grouping it looks like: the image tests `DataDir() == owner`
-        // first and only consults gLoadingProxyFromDisk once `Dir() == owner`
-        // (0x825C76E4..0x825C76F8), so gLoadingProxyFromDisk can never by itself
-        // force the proxy arm for an object whose DataDir is not itself. RB3's
-        // `if (!mMap || DataDir() != ref || ref == ref->Dir() && !gLoadingProxyFromDisk)`
-        // is the same predicate negated.
-        if (mMap && owner->DataDir() == owner
-            && (owner->Dir() != owner || gLoadingProxyFromDisk)) {
-            DataArray *typeDef = owner->TypeDef();
-            DataArray *arrToWrite = nullptr;
-            int keyIdx = 0;
-            std::list<Symbol> classnames;
-            ObjectDir *ownerDir = dynamic_cast<ObjectDir *>(owner);
-            if (ownerDir) {
-                for (ObjDirItr<ObjectDir> it(ownerDir, false); it != nullptr; ++it) {
-                    DataArrayPtr props = it->GetExposedProperties();
-                    for (int i = 0; i < props->Size(); i++) {
-                        classnames.push_back(props->Array(i)->Sym(0));
-                    }
-                }
-            }
-            // The type-def lookup and the array we are building are TWO different
-            // arrays (target keeps them in r3 and r28 respectively). Reusing one
-            // variable for both wrote the key/value pairs into the shared TypeDef
-            // array and then Resize()d and Release()d it.
-            for (int i = 0; i < mMap->Size(); i += 2) {
-                Symbol key = mMap->Sym(i);
-                DataArray *keyDef = nullptr;
-                if (typeDef) {
-                    keyDef = typeDef->FindArray(key, false);
-                }
-                bool isProxy = false;
-                bool none = false;
-                bool proxy = false;
-                if (keyDef) {
-                    GetSaveFlags(keyDef, proxy, none);
-                    isProxy = proxy;
-                }
-                // A key that some sub-dir exposes as a property is written on the
-                // side opposite to the one we are currently saving.
-                if (!none && !isProxy
-                    && std::find(classnames.begin(), classnames.end(), key)
-                        != classnames.end()) {
-                    isProxy = !gLoadingProxyFromDisk;
-                }
-                if (!none && isProxy != gLoadingProxyFromDisk) {
-                    if (!arrToWrite) {
-                        arrToWrite = new DataArray(mMap->Size());
-                    }
-                    arrToWrite->Node(keyIdx) = key;
-                    arrToWrite->Node(keyIdx + 1) = mMap->Node(i + 1);
-                    keyIdx += 2;
-                }
-            }
-            // An empty map (or one where nothing qualified) writes a NULL
-            // DataArray*, not the empty mMap -- the target's `ble` at 0x825C7814
-            // lands on the same `bs << arrToWrite` with r28 still zero.
-            if (arrToWrite && keyIdx > 0) {
-                arrToWrite->Resize(keyIdx);
-                bs << arrToWrite;
-                arrToWrite->Release();
-            } else {
-                bs << arrToWrite;
-            }
-            return;
-        }
-
         bs << mMap;
         auto keysIt = keys.begin();
         auto valsIt = values.begin();
@@ -458,6 +415,63 @@ void TypeProps::Save(BinStream &bs) {
         for (; keysIt != keys.end(); ++keysIt, ++valsIt) {
             mMap->Insert(0, *valsIt);
             mMap->Insert(0, *keysIt);
+        }
+    } else {
+        DataArray *typeDef = owner->TypeDef();
+        DataArray *arrToWrite = nullptr;
+        int keyIdx = 0;
+        std::list<Symbol> classnames;
+        ObjectDir *ownerDir = dynamic_cast<ObjectDir *>(owner);
+        if (ownerDir) {
+            for (ObjDirItr<ObjectDir> it(ownerDir, false); it != nullptr; ++it) {
+                DataArrayPtr props = it->GetExposedProperties();
+                for (int i = 0; i < props->Size(); i++) {
+                    classnames.push_back(props->Array(i)->Sym(0));
+                }
+            }
+        }
+        // The type-def lookup and the array we are building are TWO different
+        // arrays (target keeps them in r3 and r28 respectively). Reusing one
+        // variable for both wrote the key/value pairs into the shared TypeDef
+        // array and then Resize()d and Release()d it.
+        for (int i = 0; i < mMap->Size(); i += 2) {
+            Symbol key = mMap->Sym(i);
+            DataArray *keyDef = nullptr;
+            if (typeDef) {
+                keyDef = typeDef->FindArray(key, false);
+            }
+            bool isProxy = false;
+            bool none = false;
+            bool proxy = false;
+            if (keyDef) {
+                GetSaveFlags(keyDef, proxy, none);
+                isProxy = proxy;
+            }
+            // A key that some sub-dir exposes as a property is written on the
+            // side opposite to the one we are currently saving.
+            if (!none && !isProxy
+                && std::find(classnames.begin(), classnames.end(), key)
+                    != classnames.end()) {
+                isProxy = !gLoadingProxyFromDisk;
+            }
+            if (!none && isProxy != gLoadingProxyFromDisk) {
+                if (!arrToWrite) {
+                    arrToWrite = new DataArray(mMap->Size());
+                }
+                arrToWrite->Node(keyIdx) = key;
+                arrToWrite->Node(keyIdx + 1) = mMap->Node(i + 1);
+                keyIdx += 2;
+            }
+        }
+        // An empty map (or one where nothing qualified) writes a NULL
+        // DataArray*, not the empty mMap -- the target's `ble` at 0x825C7814
+        // lands on the same `bs << arrToWrite` with r28 still zero.
+        if (arrToWrite && keyIdx > 0) {
+            arrToWrite->Resize(keyIdx);
+            bs << arrToWrite;
+            arrToWrite->Release();
+        } else {
+            bs << arrToWrite;
         }
     }
 }
