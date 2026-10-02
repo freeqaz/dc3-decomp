@@ -105,22 +105,21 @@ BEGIN_LOADS(RndParticleSysAnim)
     if (!mKeysOwner)
         mKeysOwner = this;
     if (d.rev > 1) {
-        // 5-row residual (lane w7-w, 2026-09-14).  The shipped build materialises
-        // the second and third operand addresses into callee-saved registers
-        // BEFORE the first call, clobbering `this` in r30 on its last use:
-        //     subi r29, r30, 0x24 / subi r30, r30, 0x30 / bl >> / mr r4, r30
-        //     / bl >> / mr r4, r29 / bl >>
-        // where we rematerialise each one from `this` just before its own call
-        // (two instructions shorter, hence base 812 vs target 820).  The read
-        // order, the three offsets and the other 200 instructions are identical,
-        // so this is a scheduling/materialisation tie, not a source-shape one.
-        // REFUTED, both byte-identical to the plain chain below: naming
-        // `Keys<Vector2,Vector2> &lifeKeys = mLifeKeys;` +
-        // `&startSizeKeys = mStartSizeKeys;` before the statement, and the same
-        // two as POINTERS (`*lifeKeys`, `*startSizeKeys`) declared
-        // startSize-first so their init order matches the target's r29/r30 pair.
-        // MSVC folds both back into the member expression.
-        d >> mSpeedKeys >> mLifeKeys >> mStartSizeKeys;
+        // w16-a: the image calls the std::vector BinStreamRev reader DIRECTLY
+        // for each operand and, as for any nested free-function call chain,
+        // evaluates the arguments right to left -- materialising the third
+        // and second operand addresses into r29/r30 before the first call
+        // (subi r29,r30,0x24 / subi r30,r30,0x30 / bl >> / mr r4,r30 / bl >>
+        // / mr r4,r29 / bl >>).  Our math/Key.h routes Keys through an inline
+        // `operator>>(BinStreamRev &, Keys &)` wrapper (it is needed to beat
+        // BinStreamRev's generic member template, which the retail header
+        // evidently did not have), and inlining it sequences each call before
+        // the next operand is formed.  Binding the vector base directly is
+        // exactly what that wrapper does, so behaviour is unchanged; it closes
+        // the 5-row residual w7-w recorded here (99.0 -> 100).
+        typedef std::vector<Key<Vector2> > Vector2Keys;
+        d >> (Vector2Keys &)mSpeedKeys >> (Vector2Keys &)mLifeKeys
+          >> (Vector2Keys &)mStartSizeKeys;
     }
 END_LOADS
 
