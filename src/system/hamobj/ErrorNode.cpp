@@ -417,7 +417,14 @@ void PositionNode::CalcError(
     float base_bone_len;
     Vector3 scaledBaseDiff;
 
-    // RESIDUAL (w7-ak, 99.98 canonical): all 14 rows come from ONE thing --
+    // FIXED (w12-d): the w7-ak residual below was the r10/r11 assignment of
+    // the two joint indices; binding the mJointPositions refs before the
+    // Subtract statements puts mJoint in r11 as the image has it. What is left
+    // (canonical 100 modulo register permutation) is two commutative operand
+    // orders in the inlined Scale (`fmuls f13, f30, f0` vs ours `f0, f30`).
+    // NEGATIVE RESULT: `scaledBaseDiff = baseJointDiff; scaledBaseDiff *= s;`
+    // drops it to 75.4 (spills baseJointDiff instead of holding it in f28-f30).
+    // Historical w7-ak note: all 14 rows came from ONE thing --
     // which of the two joint indices lands in r11 and which in r10.  The image
     // loads mJoint (0xc) into r11 and mBaseJoint (0x1c) into r10; we load them
     // the other way round, and every other row follows: the six `lfs` register
