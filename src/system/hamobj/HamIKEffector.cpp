@@ -1309,6 +1309,8 @@ void HamIKEffector::ComputeElbowPullAndQuat(
     // into a local (which is what the image's load order at idx 24, BEFORE the
     // store, seems to ask for) = 94.31% and makes MSVC sink the q.v.x store
     // out of the block entirely.  Keep the faithful spelling.
+    // w14-b: also 95.11 -- writing q.v.x through a `Vector3 &qv`, a
+    // `float *`, or finishing with q.v.Set(...); none reproduces the reload.
     float dy = v.y - xfm.v.y;
     float dx = v.x - xfm.v.x;
     float dz = v.z - xfm.v.z;

@@ -470,6 +470,11 @@ void CharIKFingers::FixSingleFinger(
     Multiply(alignedXfm, invParent, t2->DirtyLocalXfm());
 }
 
+// w14-b (still 98.795): the residual is one target-only `fmr f12, f11` before
+// the forearm length plus f10/f11 colouring in the finger loop. Tried: the two
+// mInv2ab/mAAPlusBB statements swapped (fuzzy +0.6, canonical unchanged),
+// multiply-then-invert, an unrolled two-bone loop (78.0), five association
+// orders of the finger-length sum (<= 97.7 fuzzy).
 void CharIKFingers::MeasureLengths() {
     for (int i = 0; i < 5; i++) {
         auto& _sub0 = mFingers[i];

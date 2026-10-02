@@ -264,6 +264,9 @@ bool MoveGraph::FindVariantPair(
         // both.  The hit also `break`s rather than returning: 0x824F937C
         // branches to the same `li r3, 0x1` at .L_824F9314 the fall-through
         // and the s.Null() and empty-size exits all reach.
+        // w14-b (still 98.10): all inert or worse -- no local (every use via
+        // p1->Variants()), a vector pointer, front()/[0], size()==0 or
+        // begin()==end() for the empty test, empty() via p1 then the local.
         const std::vector<MoveVariant *> &variants = p1->Variants();
         if (variants.empty()) {
             return false;

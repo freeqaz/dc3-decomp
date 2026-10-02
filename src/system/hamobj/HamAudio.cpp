@@ -589,6 +589,10 @@ void HamAudio::PollCrossfade() {
                 ratio = 1.0f;
             }
             float clamped = Clamp(0.0f, 1.0f, ratio);
+            // w14-b: Interp(1.0f, 0.5f/halfFade, clamped) here and
+            // Interp(halfFade, 1.0f, clamped) below compile byte-identically
+            // to these spellings (97.128 either way); the image's un-factored
+            // `fmadds f30, f0, f30, f30` is not reached by either.
             fadePos = clamped * -0.5f + 1.0f;
         } else {
             float end = mActiveCrossfade.mDuration * halfFade + mActiveCrossfade.mEnd;

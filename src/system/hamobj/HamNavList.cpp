@@ -226,6 +226,14 @@ BEGIN_LOADS(HamNavList)
     PostLoad(bs);
 END_LOADS
 
+// w14-b (PreLoad still 98.51, the gAltRev-anchor family -- see RhythmBattlePlayer
+// ::Load / RndSpline::Load): declaring the pair here by hand in REVERSE order
+// (gAltRev first) makes MSVC anchor on gAltRev like the image (98.51 -> 99.92),
+// but lays gAltRev out FIRST, so gRev becomes anchor+4 (`addi r7, r30, 0x4`)
+// where the image has anchor-4 (`subi`, gRev at 0x820326DC, gAltRev at
+// 0x820326E0). Not taken: it misplaces the data and hand-spells a shared macro.
+// Note symbols.txt sizes ?sListStateMinDisplay@HamNavList@@0HB at 0x8, which
+// swallows the gRev word at 0x820326DC (candidate for lane w14-l).
 INIT_REVS(10, 0)
 
 void HamNavList::PreLoad(BinStream &bs) {
@@ -1385,6 +1393,9 @@ void HamNavList::SetSelecting(bool selecting) {
         // value stays r3, which this call chain (ObjDirPtr::operator-> ->
         // inline SlideSoundAnim() -> inline ObjPtr conversion) cannot express
         // without editing HamListRibbon.h, which another lane owns.
+        // w14-b: also measured -- SlideSoundAnim() returning RndAnimatable* (and
+        // every caller taking the pointer): SetSelecting 98.02, Poll 99.05 ->
+        // 98.89. Kept the reference accessor.
         const ObjPtr<RndAnimatable> &sla = mListRibbonResource->SlideSoundAnim();
         if (sla) {
             sla->SetFrame(1.0f, 1.0f);
