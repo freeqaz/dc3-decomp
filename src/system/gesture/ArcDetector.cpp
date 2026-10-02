@@ -413,6 +413,9 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             // byte-identical to `*mJointPath.begin()`; hoisting `distY * distY`
             // into its own local is byte-identical too.  Neither touches the
             // r11 liveness that drives cluster (1).
+            // Also tried (w12-d): the sum as accumulator statements seeded with
+            // distZ*distZ (moves the loads, 97.5) or distY*distY (byte-identical
+            // to the expression) -- neither reproduces the image's fmuls-y-first.
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
                 mJointPath.insert(mJointPath.begin(), boneVec);
             }
