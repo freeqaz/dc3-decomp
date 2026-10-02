@@ -427,16 +427,14 @@ void PositionNode::CalcError(
     // This is NOT the "wrong field" the resolved-offset block reports.
     // NEGATIVE RESULT: reordering these two Subtract statements to match the
     // emission order (jointDiff first) makes it WORSE, 14 rows -> 15.
+    const Vector3 &jointPos = frame_input.mJointPositions[mJoint];
+    const Vector3 &baseJointPos = frame_input.mJointPositions[mBaseJoint];
     Subtract(
         frame_input.mBaseJointPositions[mJoint],
         frame_input.mBaseJointPositions[mBaseJoint],
         baseJointDiff
     );
-    Subtract(
-        frame_input.mJointPositions[mJoint],
-        frame_input.mJointPositions[mBaseJoint],
-        jointDiff
-    );
+    Subtract(jointPos, baseJointPos, jointDiff);
     NormBoneLengths(frame_input, mNormBones, desired_bone_len, base_bone_len);
     MILO_ASSERT(desired_bone_len > 0, 0x22C);
 
