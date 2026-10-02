@@ -84,7 +84,8 @@ void StarsDisplay::OldResourcePreload(BinStream &bs) {
 void StarsDisplay::SetAlphaColor(float alpha, UIColor *) { mAlpha = alpha; }
 
 void StarsDisplay::DrawShowing() {
-    mStarsLabel->Style(0).SetAlpha(mAlpha);
+    HamLabel *stars = mStarsLabel;
+    stars->Style(0).SetAlpha(mAlpha);
     mDiffLabel->Style(0).SetAlpha(mAlpha);
     mNoFlashcardsLabel->Style(0).SetAlpha(mAlpha);
     if (mStarsLabel->Showing()) {
