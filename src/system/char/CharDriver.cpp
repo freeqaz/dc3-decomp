@@ -501,8 +501,11 @@ float CharDriver::Display(float f) {
 
     int idx = 0;
     CharClipDriver *prev = mFirst;
-    CharClipDriver *next;
-    while (prev && (next = prev->Next()) != nullptr) {
+    // w14-b: Next() is called twice, in the test and again for `next`; the
+    // image homes the second result (`stw r17, 0x50(r31)` at the loop head,
+    // which also pushes the loop's fcfid temp to 0x98). 99.49 -> 100.
+    while (prev && prev->Next()) {
+        CharClipDriver *next = prev->Next();
         CharClipDisplay *prevDisplay = &displays[idx];
         CharClipDisplay *nextDisplay = &displays[idx + 1];
         CharClip::NodeVector *nodes =

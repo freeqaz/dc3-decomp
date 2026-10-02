@@ -46,6 +46,10 @@ public:
     int GetFlags() const { return mFlags; }
     Shape GetShape() const { return mShape; }
     const Vector3 &Axis() const { return unk1fc; }
+    // w14-b: 99.954%, 15 register-only rows in the cigar arm -- the image sums
+    // Dot(out, unk1fc) as y,z,x, we emit y,x,z. Tried: swapped Dot args, all
+    // six explicit term orders (break the plane arm, 96.1), Dot temp, axis ref,
+    // Axis() accessor, explicit ScaleAdd, Dot*unk1f8: none better.
     float GetRadius(const Vector3 &pos, Vector3 &out) const {
         Subtract(pos, unk20c, out);
         float ret = mCurRadius[0];

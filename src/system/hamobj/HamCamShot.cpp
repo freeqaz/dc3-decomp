@@ -963,6 +963,11 @@ HamCharacter *CharacterNameToCharacter(Symbol s) {
 // named `end` iterator used by both loops and both tail tests is WORSE (raw
 // 90.7 -> 90.2) -- it pins &mTargets in a callee-saved register and permutes
 // r28/r29 back through the Symbol constructors.
+// w14-b (still 93.46): the image re-loads begin() for the second loop
+// (`lwz r9, 0x0(r11)`) and rotates both loops as jump-to-test; we CSE begin()
+// across the loops and guard the first. Inert: `p != end && p->mTarget != s`
+// for-conditions, decl-initialised iterators, while loops, a Symbol copy of
+// player0; a Target* result for the second search is 83.3.
 void HamCamShot::FlipTargetAnimGroups() {
     static Symbol player0("player0");
     static Symbol player1("player1");

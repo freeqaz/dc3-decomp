@@ -926,9 +926,11 @@ void FreestyleMoveRecorder::CalcFrameScore(
     // Debug OSC send
     TheOSCMessenger.SendOSCFloat(String("/framescore"), clampedScore);
     // Store max(clampedScore, existing) at bestIdx in scores
-    float *scoreData = scores.unk0.begin();
-    float prev = scoreData[bestIdx];
-    scoreData[bestIdx] = (float)__fsel(clampedScore - prev, clampedScore, prev);
+    // w14-b: indexed through the vector twice (read, then write), not via a
+    // cached begin(): each operator[] homes the begin pointer, the image's two
+    // `stw r9, 0x50(r31)` at 0x82526BD8 and 0x82526BE0. 98.87 -> 100.
+    float prev = scores.unk0[bestIdx];
+    scores.unk0[bestIdx] = (float)__fsel(clampedScore - prev, clampedScore, prev);
     // Update unkc = max(unkc, bestIdx + 1)
     int newCount = bestIdx + 1;
     int maxCount = newCount;

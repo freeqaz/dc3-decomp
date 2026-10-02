@@ -192,6 +192,10 @@ void MoveAsyncDetector::EnqueueDetectFrames(int i1, int i2, float f3, int i4) {
         // GPR (`stfd f31, -0x48` / __savegprlr_23) and score worse.  Passing
         // PlayerDetectFrames inline too is 84.2 and proves the arg order: MSVC
         // evaluates this call right-to-left, so `frames` has to be a named local.
+        // w14-b (still 90.53): also inert -- `inline` on every MoveDetector
+        // method the map lists `f i` (Poll, PlayerDetectFrames, ctor/dtor, the
+        // Frac getters); frames-first + cur->Move()->FilterVer() in the call,
+        // a separate `ver` local, (*it)-> everywhere, a frames pointer: 86.0-86.7.
         const HamMove *move = cur->Move();
         std::vector<DetectFrame> &frames = cur->PlayerDetectFrames(i4);
         mDir->EnqueueDetectFrames(f3, i4, frames, move->FilterVer());

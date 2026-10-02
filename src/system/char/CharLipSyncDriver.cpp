@@ -176,13 +176,15 @@ bool CharLipSyncDriver::SetLipSync(CharLipSync *sync) {
         && (streq(sync->Name(), "player1_cam.lipsync")
             || streq(sync->Name(), "player2_cam.lipsync")
             || streq(sync->Name(), "dancer_face.lipsync"))) {
-        // RESIDUAL (w7-ak, 98.2 canonical): 5 rows. (1) The image home-stores the
-        // old pointer into 0x50(r31) between the null test and the scalar-deleting
-        // destructor call inside this RELEASE, which our expansion does not emit.
-        // (2) At the Set() call below the image loads mOverridePlayback back out
-        // of 0x94(r30) BEFORE moving the last argument into r5; we schedule the
-        // load after.
-        RELEASE(mOverridePlayback);
+        // w14-b: a guarded delete, not RELEASE(). The image clears the member
+        // only inside the taken arm (beq skips the `stw r29, 0x94(r30)` at
+        // 0x823B9158) and homes the old pointer at 0x50(r31) for the deleting
+        // dtor; RELEASE's unconditional `x = null` merges the store below the
+        // test. Same behaviour either way. 98.22 -> 100.
+        if (mOverridePlayback) {
+            delete mOverridePlayback;
+            mOverridePlayback = nullptr;
+        }
         mOverridePlayback = new CharLipSync::PlayBack();
         mOverridePlayback->Set(sync, mClips);
         mOverridePlayback->Reset();

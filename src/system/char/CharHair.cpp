@@ -722,23 +722,15 @@ CharHair::Point::Point(const Point &p) : bone(p.bone), collides(p.collides) {
 #pragma endregion CharHair::Point
 #pragma region CharHair::Strand
 
-// w8-i: this ctor is the reason `?resize@?$ObjVector@VStrand@CharHair@@@@QAAXI@Z`
-// sits at 57.65 canonical / 56.18 fuzzy, and the residual is NOT in ObjVector::resize.
-// Our build of it is byte-identical to the image except that MSVC parks `this` in the
-// VOLATILE r6 across `bl ??0Strand@CharHair@@QAA@PAVObject@Hmx@@@Z` and `bl
-// ?resize@?$vector@VStrand...`, which is only legal because the Xenon compiler
-// propagated this ctor's register footprint intra-TU -- it touches none of r6/r29/r30/r31
-// (measured by self-diffing CharHair.obj).  That saves a callee-save, so we emit an
-// inline 2-register prologue where the image emits `bl __savegprlr_29` / `b
-// __restgprlr_29` with r29=size, r30=this.  CharHair::Point::Point DOES clobber r30/r31,
-// so `?resize@?$ObjVector@UPoint@CharHair@@@@QAAXI@Z` -- same template, same TU, same
-// 68 bytes -- matches at 100.0.  Both ctors are themselves 100%, so this cannot be fixed
-// from either ctor's body.
-// REFUTED (w8-i): instantiation order is not the lever.  An explicit
-// `template void ObjVector<CharHair::Strand>::resize(unsigned int);` placed at the top
-// of this TU, ahead of every definition below, left the row at 57.647 canonical /
-// 56.176 fuzzy -- bit-for-bit the same 13 mismatches.
-CharHair::Strand::Strand(Hmx::Object *o)
+// w14-b: `inline` -- the map lists this ctor `f i` (char:CharHair.obj), i.e. an
+// inline COMDAT. Defined plain out-of-line, MSVC propagated its register footprint
+// into same-TU callers (w8-i measured it touches none of r6/r29/r30/r31), so
+// ObjVector<Strand>::resize parked `this` in volatile r6 across the call and
+// PropSync<Strand> kept i/node in volatile regs; the image saves them
+// (`bl __savegprlr_29` / `_25`). With `inline` both match: resize 57.65 -> 100,
+// PropSync(ObjVector<Strand>&...) 98.18 -> 100; the ctor itself stays 100.
+// (See docs/decomp/patterns/map-comdat-flag-gates-clobber-propagation.md.)
+inline CharHair::Strand::Strand(Hmx::Object *o)
     : mShowSpheres(0), mShowCollide(0), mShowPose(0), mRoot(o, 0), mAngle(0.0f),
       mPoints(o), mHookupFlags(0) {
     mBaseMat.Identity();

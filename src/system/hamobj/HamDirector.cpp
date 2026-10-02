@@ -2669,6 +2669,10 @@ bool HamDirector::ReactToCollision(float frame) {
         // once beat2 is dead (fmr f31,f0 at 0x8247A428).  Materialising it
         // before the test keeps four FPRs live at once and turns the three
         // inline stfd of the prologue into bl __savefpr_28.
+        // w14-b (still 99.18): the image tail-merges the shared
+        // InsertRealShot call into THIS arm and the abort arm branches to it;
+        // we merge it the other way. Hoisting the call below the if/else with
+        // an early `return true` on the MoveShot(beat) path costs 96.79.
         if (sSongCollisionForXBeatsSuppressNextShot + beat < beat2) {
             ReactToCollision_InsertRealShot(cat, beat);
         } else {
