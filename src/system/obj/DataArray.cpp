@@ -958,13 +958,24 @@ DataNode DataArray::Execute(bool fail) {
     static Timer *_t = AutoTimer::GetTimer("array_exec");
     AutoTimer _at(_t, 17.0f, DataArrayGlitchCB, this);
     DataNode &node = (DataNode &)Evaluate(0);
-    Hmx::Object *deferredObject = 0;
     switch (node.Type()) {
     case kDataFunc:
         return node.UncheckedFunc()(this);
     case kDataObject: {
-        deferredObject = node.UncheckedObj();
-        break;
+        // The image tests the value word as an INT (`cmpwi r4, 0` at
+        // 0x825A1734, signed, and the word is also spilled to 0x5c) before
+        // dispatching through it as an object -- a pointer null-test spelt
+        // through the union's integer member.  Reading it as a pointer gives
+        // cmplwi and no spill.  LP64: the int member is only the low half of
+        // the pointer, so native tests the whole pointer (same predicate on
+        // the 32-bit target).
+#ifdef HX_NATIVE
+        if (!node.UncheckedObj())
+#else
+        if (!node.UncheckedInt())
+#endif
+            break;
+        return node.UncheckedObj()->Handle(this, true);
     }
     case kDataSymbol: {
         const char *rawSymbolText = node.UncheckedStr();
@@ -994,49 +1005,40 @@ DataNode DataArray::Execute(bool fail) {
     default:
         break;
     }
-    Hmx::Object *handledObject = deferredObject;
-    // (int) cast produces signed cmpwi; direct comparison produces unsigned cmplwi
-#ifdef HX_NATIVE
-    if (handledObject == 0) {
-#else
-    if ((int)handledObject == 0) {
-#endif
-        if (sDefaultHandler) {
-            DataNode n = sDefaultHandler(this);
-            if (n.Type() != kDataUnhandled) {
-                return n;
-            }
+    if (sDefaultHandler) {
+        DataNode n = sDefaultHandler(this);
+        if (n.Type() != kDataUnhandled) {
+            return n;
         }
-        if (fail) {
-            String str;
-            Node(0).Print(str, true, 0);
-            String str2;
-            node.Print(str2, true, 0);
-            // Retail formats straight into MILO_FAIL_DTA: the only MakeString
-            // instantiations reachable from here are
-            // MakeString<const char*, Symbol, short> and
-            // MakeString<const char*, const char*, Symbol, short>. Routing
-            // through a `const char *msg` temp adds a MakeString<const char*>
-            // that the target does not have.
-            if (str == str2) {
-                MILO_FAIL_DTA(
-                    "%s not function or object (file %s, line %d)", str.c_str(), mFile, mLine
-                );
-            } else {
-                // Node(0) first, then its evaluated value: the target stores
-                // str.c_str() in the first argument slot.
-                MILO_FAIL_DTA(
-                    "%s = %s not function or object (file %s, line %d)",
-                    str.c_str(),
-                    str2.c_str(),
-                    mFile,
-                    mLine
-                );
-            }
-        }
-        return 0;
     }
-    return handledObject->Handle(this, true);
+    if (fail) {
+        String str;
+        Node(0).Print(str, true, 0);
+        String str2;
+        node.Print(str2, true, 0);
+        // Retail formats straight into MILO_FAIL_DTA: the only MakeString
+        // instantiations reachable from here are
+        // MakeString<const char*, Symbol, short> and
+        // MakeString<const char*, const char*, Symbol, short>. Routing
+        // through a `const char *msg` temp adds a MakeString<const char*>
+        // that the target does not have.
+        if (str == str2) {
+            MILO_FAIL_DTA(
+                "%s not function or object (file %s, line %d)", str.c_str(), mFile, mLine
+            );
+        } else {
+            // Node(0) first, then its evaluated value: the target stores
+            // str.c_str() in the first argument slot.
+            MILO_FAIL_DTA(
+                "%s = %s not function or object (file %s, line %d)",
+                str.c_str(),
+                str2.c_str(),
+                mFile,
+                mLine
+            );
+        }
+    }
+    return 0;
 }
 
 DataNode DataArray::ExecuteBlock(int len) {

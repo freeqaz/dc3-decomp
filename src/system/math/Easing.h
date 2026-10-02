@@ -136,6 +136,12 @@ inline float EaseElasticIn(float t, float power, float f3) {
             f3 = 0.45f;
         }
         float f7;
+        // w13-d (92.86): the image compares `power` against a RUNTIME int->float
+        // conversion of the constant 1 (`li r11,1; extsw; std; lfd; fcfid;
+        // frsp` at 0x82411A44) -- the only `li rN,K; extsw rN,rN` pair in the
+        // whole target binary.  Every spelling tried folds it to the 1.0f
+        // already held in f31: `power < 1`, `< true`, `< Max(1, 0)`, and an
+        // `int minPower = 1` local both inside the block and above the assert.
         if (power < 1) {
             f7 = f3 / 4;
             power = 1;
@@ -328,6 +334,11 @@ inline float EaseStairstep(float t, float power, float f3) {
     float tmp_f30 = t * f3;
     float tmp_f26 = floor(tmp_f30);
     f3 = 1.0f / f3; // this is SUPPOSED to be here, but it's getting scheduled for later
+    // w13-d (96.15, 3 rows: the image's fdivs sits before the EasePolyInOut
+    // call into f31, ours after it).  Refuted, all bit-identical or worse:
+    // a named `inv` before the call; `tmp_f30 -= tmp_f26` as its own statement
+    // between the fdivs and the call; `/ f3` in the return (89.2 -- the 1.0f
+    // stops being held in f28).
     return (EasePolyInOut(tmp_f30 - tmp_f26, power, 0.0f) + tmp_f26) * f3;
 }
 

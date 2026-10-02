@@ -404,87 +404,63 @@ void Debug::Init() {
     mHostName = NetworkSocket::GetHostName();
 }
 
+// BEHAVIOUR FIX (w13-d, 96.75 -> 100): this used to be a hand-unrolled if/switch
+// tree whose first half (codes <= 0xC000008D) ended in `default: break;` and then
+// FELL OFF THE END of the function -- an unknown code such as 0x80000005
+// returned whatever was in r3.  The image sends every unmatched code to the
+// "Unhandled Exception %d" MakeString (0x825CC524: reached from the
+// `bne cr6` at 0x825CC38C, 0x825CC404 and the `bgt cr6` at 0x825CC470).  It is
+// one plain switch; MSVC builds the whole compare tree from it.
 const char *GetExpCode(int code) {
-    if (code <= (int)0xC000008D) {
-        if (code != (int)0xC000008D) {
-            if (code <= (int)0xC0000006) {
-                if (code != (int)0xC0000006) {
-                    int temp = code - (int)0x80000001;
-                    if (temp != 0) {
-                        switch ((unsigned int)temp) {
-                        case 0x40000004:
-                            return "EXCEPTION_ACCESS_VIOLATION";
-                        case 0x3:
-                            return "EXCEPTION_SINGLE_STEP";
-                        case 0x2:
-                            return "EXCEPTION_BREAKPOINT";
-                        case 0x1:
-                            return "EXCEPTION_DATATYPE_MISALIGNMENT";
-                        default:
-                            break;
-                        }
-                    } else {
-                        return "EXCEPTION_GUARD_PAGE";
-                    }
-                } else {
-                    return "EXCEPTION_IN_PAGE_ERROR";
-                }
-            } else {
-                int temp = code - (int)0xC0000008;
-                if (temp != 0) {
-                    switch ((unsigned int)temp) {
-                    case 0x15:
-                        return "EXCEPTION_ILLEGAL_INSTRUCTION";
-                    case 0x1D:
-                        return "EXCEPTION_NONCONTINUABLE_EXCEPTION";
-                    case 0x1E:
-                        return "EXCEPTION_INVALID_DISPOSITION";
-                    case 0x84:
-                        return "EXCEPTION_ARRAY_BOUNDS_EXCEEDED";
-                    default:
-                        break;
-                    }
-                } else {
-                    return "EXCEPTION_INVALID_HANDLE";
-                }
-            }
-        } else {
-            return "EXCEPTION_FLT_DENORMAL_OPERAND";
-        }
-    } else {
-        if (code <= (int)0xC00000FD) {
-            if (code != (int)0xC00000FD) {
-                int temp = code + 0x3FFFFF72;
-                if ((unsigned int)temp <= 8U) {
-                    switch (temp) {
-                    case 0:
-                        return "EXCEPTION_FLT_DIVIDE_BY_ZERO";
-                    case 1:
-                        return "EXCEPTION_FLT_INEXACT_RESULT";
-                    case 2:
-                        return "EXCEPTION_FLT_INVALID_OPERATION";
-                    case 3:
-                        return "EXCEPTION_FLT_OVERFLOW";
-                    case 4:
-                        return "EXCEPTION_FLT_STACK_CHECK";
-                    case 5:
-                        return "EXCEPTION_FLT_UNDERFLOW";
-                    case 6:
-                        return "EXCEPTION_INT_DIVIDE_BY_ZERO";
-                    case 7:
-                        return "EXCEPTION_INT_OVERFLOW";
-                    case 8:
-                        return "EXCEPTION_PRIV_INSTRUCTION";
-                    }
-                }
-            } else {
-                return "EXCEPTION_STACK_OVERFLOW";
-            }
-        }
-        if (code != (int)0xC000013A) {
-            return MakeString("Unhandled Exception %d", (const CamShotFrame::BlendEaseMode &)code);
-        }
+    switch (code) {
+    case (int)0xC0000005:
+        return "EXCEPTION_ACCESS_VIOLATION";
+    case (int)0x80000004:
+        return "EXCEPTION_SINGLE_STEP";
+    case (int)0x80000003:
+        return "EXCEPTION_BREAKPOINT";
+    case (int)0x80000002:
+        return "EXCEPTION_DATATYPE_MISALIGNMENT";
+    case (int)0x80000001:
+        return "EXCEPTION_GUARD_PAGE";
+    case (int)0xC0000006:
+        return "EXCEPTION_IN_PAGE_ERROR";
+    case (int)0xC000008C:
+        return "EXCEPTION_ARRAY_BOUNDS_EXCEEDED";
+    case (int)0xC0000026:
+        return "EXCEPTION_INVALID_DISPOSITION";
+    case (int)0xC0000025:
+        return "EXCEPTION_NONCONTINUABLE_EXCEPTION";
+    case (int)0xC000001D:
+        return "EXCEPTION_ILLEGAL_INSTRUCTION";
+    case (int)0xC0000008:
+        return "EXCEPTION_INVALID_HANDLE";
+    case (int)0xC000008D:
+        return "EXCEPTION_FLT_DENORMAL_OPERAND";
+    case (int)0xC000008E:
+        return "EXCEPTION_FLT_DIVIDE_BY_ZERO";
+    case (int)0xC000008F:
+        return "EXCEPTION_FLT_INEXACT_RESULT";
+    case (int)0xC0000090:
+        return "EXCEPTION_FLT_INVALID_OPERATION";
+    case (int)0xC0000091:
+        return "EXCEPTION_FLT_OVERFLOW";
+    case (int)0xC0000092:
+        return "EXCEPTION_FLT_STACK_CHECK";
+    case (int)0xC0000093:
+        return "EXCEPTION_FLT_UNDERFLOW";
+    case (int)0xC0000094:
+        return "EXCEPTION_INT_DIVIDE_BY_ZERO";
+    case (int)0xC0000095:
+        return "EXCEPTION_INT_OVERFLOW";
+    case (int)0xC0000096:
+        return "EXCEPTION_PRIV_INSTRUCTION";
+    case (int)0xC00000FD:
+        return "EXCEPTION_STACK_OVERFLOW";
+    case (int)0xC000013A:
         return "CONTROL_C_EXIT";
+    default:
+        return MakeString("Unhandled Exception %d", (const CamShotFrame::BlendEaseMode &)code);
     }
 }
 

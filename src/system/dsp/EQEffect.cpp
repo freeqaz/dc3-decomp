@@ -519,9 +519,9 @@ void EQEffect::SetParameter(int param, float value) {
 
     if (updateBand0) {
         // Low shelf filter (band 0)
-        double tanFreq = tan((double)(mBand1Freq * 6.544985e-05f));
+        float tanFreq = tan((double)(mBand1Freq * 6.544985e-05f));
         mBand0B0 = (float)tanFreq;
-        double gainTarget = pow(10.0, (double)(mBand1Gain * 0.05f));
+        float gainTarget = pow(10.0, (double)(mBand1Gain * 0.05f));
         float gainFf = (float)gainTarget;
         mBand0B1 = (float)gainTarget;
         float shelfTarget = (gainFf - one) * half;
@@ -538,9 +538,9 @@ void EQEffect::SetParameter(int param, float value) {
         mBand0Z1 = (allpassBase - one) / (allpassBase + one);
     } else if (updateBand1) {
         // Bell/peaking filter (band 1)
-        double tanFreq = tan((double)(mBand2Freq * 6.544985e-05f));
+        float tanFreq = tan((double)(mBand2Freq * 6.544985e-05f));
         mBand1B1 = (float)tanFreq;
-        double gainTarget = pow(10.0, (double)(mBand2Gain * 0.05f));
+        float gainTarget = pow(10.0, (double)(mBand2Gain * 0.05f));
         float gainFf = (float)gainTarget;
         mBand1B2 = (float)gainTarget;
         mBand1A2 = (gainFf - one) * half;
@@ -549,17 +549,17 @@ void EQEffect::SetParameter(int param, float value) {
         mBand1Enabled = (mBand1Z1 != zero || mBand1A2 != zero);
         float coeff1;
         if (mBand2Gain > zero) {
-            coeff1 = ((float)tanFreq - one) / ((float)tanFreq + one);
+            coeff1 = (mBand1B1 - one) / (mBand1B1 + one);
         } else {
-            coeff1 = ((float)tanFreq - mBand1B2) / ((float)tanFreq + mBand1B2);
+            coeff1 = (mBand1B1 - mBand1B2) / (mBand1B1 + mBand1B2);
         }
         mBand1B0 = coeff1;
         mBand1Z2 = (one - coeff1) * (-(float)cosQ);
     } else if (updateBand2) {
         // High shelf filter (band 2)
-        double tanFreq = tan((double)(mBand2Q * 6.544985e-05f));
+        float tanFreq = tan((double)(mBand2Q * 6.544985e-05f));
         mBand2B0 = (float)tanFreq;
-        double gainTarget = pow(10.0, (double)(mBand3Freq * 0.05f));
+        float gainTarget = pow(10.0, (double)(mBand3Freq * 0.05f));
         float gainFf = (float)gainTarget;
         mBand2B1 = (float)gainTarget;
         float shelfTarget = (gainFf - one) * half;
@@ -606,7 +606,7 @@ void EQEffect::SetParameter(int param, float value) {
         mBand4A2 = k * 2.0f;
         float cosKhalf = (float)cosWc * (k + half);
         mBand4A1 = cosKhalf * -2.0f;
-        float fk4 = (float)((double)(cosKhalf + k) + (double)half) * 0.25f;
+        float fk4 = (cosKhalf + k + half) * 0.25f;
         float fk2 = fk4 * 2.0f;
         mBand4B0 = fk2;
         mBand4B1 = fk4 * -4.0f;

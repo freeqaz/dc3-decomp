@@ -298,17 +298,10 @@ bool UIListState::CanScrollNext(bool b) const {
 bool UIListState::ShouldHoldDisplayInPlace(int i2) const {
     bool shouldCheck = (mTargetShowing > mFirstShowing && i2 == 0)
         || (mTargetShowing < mFirstShowing && i2 == -1);
-    if (shouldCheck) {
-        if (SnappedDataForDisplay(i2) >= 0) {
-            int nextDisp = i2 + 1;
-            if (nextDisp != mNumDisplay && Display2Data(nextDisp) != -1) {
-                if (!Provider()->IsSnappableAtData(Display2Data(nextDisp))) {
-                    return true;
-                }
-            }
-        }
-    }
-    return false;
+    if (!shouldCheck)
+        return false;
+    return SnappedDataForDisplay(i2) >= 0 && ++i2 != mNumDisplay
+        && Display2Data(i2) != -1 && !Provider()->IsSnappableAtData(Display2Data(i2));
 }
 
 bool UIListState::BuildScroll(int direction, int firstShowing, int selectedDisplay, ScrollState &state) const {
