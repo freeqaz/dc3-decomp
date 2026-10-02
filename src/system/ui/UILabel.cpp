@@ -617,9 +617,16 @@ void UILabel::DrawShowing() {
                 LabelStyle &curLabelStyle = mLabelStyles[i];
                 RndText::Style &curStyle = Style(i);
                 curStyle.mFontColorOverride = true;
+#ifdef HX_NATIVE
+                // LP64: an (int) cast would truncate the pointer; same null test.
+                UIColor *curColor = (UIColor *)curLabelStyle.mColorOverride
+                    ? (UIColor *)curLabelStyle.mColorOverride
+                    : color;
+#else
                 UIColor *curColor = (int)(UIColor *)curLabelStyle.mColorOverride
                     ? (UIColor *)curLabelStyle.mColorOverride
                     : color;
+#endif
                 const Hmx::Color &curColorColor = curColor->GetColor();
                 curStyle.mFontColor.red = curColorColor.red;
                 curStyle.mFontColor.green = curColorColor.green;
