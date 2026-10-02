@@ -247,7 +247,7 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
         }
     } else {
         mStart = mRawData;
-        ReadChunks(d.stream, mRawData, mNumSamples * mTotalSize, mTotalSize << 7);
+        ReadChunks(d.stream, mStart, mNumSamples * mTotalSize, mTotalSize << 7);
 #ifdef HX_NATIVE
         // ReadChunks reads raw big-endian data — byte-swap all samples using
         // each section's true component width (see SwapBE_Section above; mirrors

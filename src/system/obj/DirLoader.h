@@ -14,6 +14,11 @@ class DirLoader : public Loader, public ObjRefOwner {
 
 public:
     struct ClassAndNameSort {
+        // User-provided (empty) default ctor: a ClassAndNameSort() temporary
+        // is then NOT value-initialised, which is the image's shape at both
+        // sort sites -- `lbz r4,0x50 / stb r4,0x50` (the by-value copy) with no
+        // preceding zero `stb` (WorldInstance::SavePersistentObjects ->100).
+        ClassAndNameSort() {}
         bool operator()(Hmx::Object *, Hmx::Object *);
 
     protected:

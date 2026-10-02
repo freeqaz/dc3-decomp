@@ -258,9 +258,9 @@ void BinkInit() {
 
 #ifndef HX_NATIVE
 unsigned int BinkFileReadHeader(BINKIO *bink, int, void *header, unsigned int length) {
-    File **ppFile = &bink->io.pFile;
-    File *file = *ppFile;
-    BINKENCRYPTIONHEADER *encHeader = (BINKENCRYPTIONHEADER *)((char *)ppFile + 0x30);
+    BINKIOFILE *bf = &bink->io;
+    File *file = bf->pFile;
+    BINKENCRYPTIONHEADER *encHeader = &bf->mEncHeader;
     // If we haven't read the encryption header yet (mSignature == 0), read it now
     if (encHeader->mSignature == 0) {
         int encRead = file->Read(encHeader, sizeof(BINKENCRYPTIONHEADER));
@@ -274,7 +274,7 @@ unsigned int BinkFileReadHeader(BINKIO *bink, int, void *header, unsigned int le
         // Check if this is an encrypted BIK ("BIKE" = 0x4542494b)
         if (encHeader->mSignature == 0x4542494b) {
             XTEABlockEncrypter *decrypter = new XTEABlockEncrypter;
-            bink->io.pXTEADecrypter = decrypter;
+            bf->pXTEADecrypter = decrypter;
 
             // Key derivation — same DTA obfuscation pattern as VorbisReader::setupCypher
             DataArray *arr = DataReadString("{Na 42 'O32'}");
@@ -299,9 +299,9 @@ unsigned int BinkFileReadHeader(BINKIO *bink, int, void *header, unsigned int le
             }
 
             EndianSwapBlock<unsigned int>((unsigned int *)key, 4);
-            bink->io.pXTEADecrypter->SetKey(key);
-            bink->io.pXTEADecrypter->SetNonce(encHeader->mNonce, 0);
-            bink->io.iFileBufPos += encRead;
+            bf->pXTEADecrypter->SetKey(key);
+            bf->pXTEADecrypter->SetNonce(bf->mEncHeader.mNonce, 0);
+            bf->iFileBufPos += encRead;
         } else {
             // Not an encrypted BIK — seek back and pretend we never read the header
             memset(encHeader, 0, encRead);
@@ -317,9 +317,9 @@ unsigned int BinkFileReadHeader(BINKIO *bink, int, void *header, unsigned int le
     if (bytesRead != length) {
         bink->ReadError = 1;
     }
-    bink->io.iHeaderSize += bytesRead;
-    bink->io.iFileBufPos += bytesRead;
-    int remaining = file->Size() - (int)bink->io.iFileBufPos;
+    bf->iHeaderSize += bytesRead;
+    bf->iFileBufPos += bytesRead;
+    int remaining = file->Size() - (int)bf->iFileBufPos;
     if ((unsigned int)remaining >= bink->BufSize) {
         remaining = (int)bink->BufSize;
     }
