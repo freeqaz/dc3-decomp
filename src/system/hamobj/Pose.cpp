@@ -22,10 +22,7 @@ void Pose::Update(const Skeleton &skeleton) {
     MILO_ASSERT(totalWeight != 0.0f, 0x95);
     float score = weightedSum / totalWeight;
     unk10.push_back(score);
-    unsigned int count = 0;
-    for (std::list<float>::iterator it = unk10.begin(); it != unk10.end(); ++it) {
-        count++;
-    }
+    unsigned int count = std::distance(unk10.begin(), unk10.end());
     if (count > (unsigned int)unk18) {
         unk10.erase(unk10.begin());
     }
