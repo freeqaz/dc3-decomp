@@ -395,6 +395,15 @@ public:
 class Plane {
 public:
     Plane() {}
+    // w13-o: Character::DrawShadow's residual (the image keeps x*0 + y*0 as
+    // two products; we factor them into (x+y)*0) does not move with this body.
+    // Measured on DrawShadow + CharCollide::Highlight (the only two callers):
+    // `-::Dot(normal, point)` and `-::Dot(point, normal)` 97.32 -> 94.34;
+    // terms z,y,x flat: inert; `float dot = ...; d = -dot;` (named or via
+    // ::Dot): inert; accumulator statements and explicit parens cost Highlight
+    // its 100; delegating to Set(): inert.  Call-site respellings in DrawShadow
+    // (worldPos.z += planeD first, named point/normal temps, 0.0f literals) are
+    // inert too.
     Plane(const Vector3 &point, const Vector3 &normal) {
         a = normal.x;
         b = normal.y;
@@ -478,32 +487,18 @@ void Invert(const Hmx::Matrix4 &, Hmx::Matrix4 &);
 
 bool operator>(const Sphere &, const Frustum &);
 
-// RESIDUAL (w8-i, 95.78 canonical / 92.30612 fuzzy, measured on this header
-// COMDAT as it lands in char/Character.obj): 21 rows of 50, 196 B both sides,
-// and every one of them is allocation or scheduling -- 7 FPR swap pairs led by
-// f10<->f12, r30<->r31 on the two matrix parameters, 3 offset swaps, and 2
-// commutative fmuls operand orders (idx 35, 37).  The single insert/delete pair
-// at idx 18-20 is the same reorder seen head-on: the image has `lfs f8,
-// 0x28(r30)` where we have `lfs f8, 0x18(r31)`, i.e. it reaches the out.z row a
-// load earlier than we do.  Arithmetic and instruction MULTISET are identical.
-// NOT ATTACKED by w8-i deliberately: this is an `inline` in a PCH-reached header
-// shared by the whole binary, so a spelling change here is not lane-local -- it
-// would have to be measured against every unit that instantiates it, not just
-// Character.obj.  Any lane that does take it on should start from the operand
-// order of the two fmuls, which is the cheapest of the three causes.
+// w13-o: written with Cross(), the spelling og-dc3 and rb3-xenon carry. The
+// previous body spelled the two cross products out as `out.x.Set(...)` with
+// the identical expressions, and that alone was 95.78 canonical (the w8-i
+// residual: the image stores out.x z, x, y and we stored z, y, x, with the
+// fmuls operand orders and an FPR permutation following from it). Going
+// through the inline Cross() is 100.0 for this COMDAT (char/Character.obj);
+// whole-binary A/B, full ninja both sides: 1 up, 0 down.
 inline void Normalize(const Hmx::Matrix3 &in, Hmx::Matrix3 &out) {
     Normalize(in.y, out.y);
-    out.x.Set(
-        out.y.y * in.z.z - out.y.z * in.z.y,
-        out.y.z * in.z.x - out.y.x * in.z.z,
-        out.y.x * in.z.y - out.y.y * in.z.x
-    );
+    Cross(out.y, in.z, out.x);
     Normalize(out.x, out.x);
-    out.z.Set(
-        out.y.z * out.x.y - out.y.y * out.x.z,
-        out.y.x * out.x.z - out.y.z * out.x.x,
-        out.y.y * out.x.x - out.y.x * out.x.y
-    );
+    Cross(out.x, out.y, out.z);
 }
 
 // Header inline, not out-of-line in mtx.cpp: the target's only copy of
@@ -519,23 +514,6 @@ void Multiply(const Vector3 &, const Transform &, Vector3 &);
 inline void MultiplyTranspose(const Vector3 &v, const Transform &t, Vector3 &out) {
     Subtract(v, t.v, out);
     out.Set(Dot(out, t.m.x), Dot(out, t.m.y), Dot(out, t.m.z));
-}
-
-inline void Multiply(const Vector3 &v, const Transform &t, Vector3 &out) {
-    if (&t.v != &out) {
-        out.Set(
-            t.m.x.x * v.x + t.m.y.x * v.y + t.m.z.x * v.z,
-            t.m.x.y * v.x + t.m.y.y * v.y + t.m.z.y * v.z,
-            t.m.x.z * v.x + t.m.y.z * v.y + t.m.z.z * v.z
-        );
-        Add(out, t.v, out);
-    } else {
-        out.Set(
-            t.m.x.x * v.x + t.m.y.x * v.y + t.m.z.x * v.z + t.v.x,
-            t.m.x.y * v.x + t.m.y.y * v.y + t.m.z.y * v.z + t.v.y,
-            t.m.x.z * v.x + t.m.y.z * v.y + t.m.z.z * v.z + t.v.z
-        );
-    }
 }
 
 void Multiply(const Plane &, const Transform &, Plane &);
@@ -621,6 +599,28 @@ inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
     );
 }
 
+// w13-o: the aliasing arm rotates into a temporary and adds the translation on
+// the way out, the shape rb3-xenon recovered for RB3 retail. The fused 4-term
+// `out.Set(... + t.v.x, ...)` it replaces scheduled the components z, y, x and
+// tail-merged with the fast arm; the image (char/Character.obj COMDAT) evaluates
+// x, y, z, reads t.v through the `&t.v` it already computed for the compare,
+// and returns from each arm separately. 94.53 -> 100.0; whole-binary A/B (full
+// ninja both sides): 1 up, 0 down -- every inlined copy at a call site where
+// the compiler can prove &t.v != &out is unaffected.  Both arms then written
+// through Multiply(v, t.m, .) (og-dc3's shape; it needs that overload's body
+// above it): whole-binary byte-inert, 0 up / 0 down.
+inline void Multiply(const Vector3 &v, const Transform &t, Vector3 &out) {
+    if (&t.v != &out) {
+        Multiply(v, t.m, out);
+        Add(out, t.v, out);
+    } else {
+        Vector3 tmp;
+        Multiply(v, t.m, tmp);
+        Add(tmp, t.v, out);
+    }
+}
+
+
 // Declared above; defined here so the row helper's body is already visible.
 //
 // NOTE for whoever is chasing Spotlight::UpdateTransforms: the lane that moved
@@ -655,11 +655,14 @@ inline void Multiply(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &vout) {
 // (target -0x70, ours -0x60) so a `Matrix3 tmp` is out, and the +0xc pad copy
 // rules out `Set()` copies.  Built and measured, each a full ninja:
 // `Vector3 vz, vy, vx;` is inert (80.7, same rows); copy-out order z,y,x is
-// 77.8 and y,x,z is 80.0, so x,y,z stays.  One real lever surfaced: the copy
+// 77.8 and y,x,z is 80.0 against x,y,z's 80.7.  One real lever surfaced: the copy
 // order decides which b element MSVC hoists above the alias branch -- z,y,x
 // hoists b.y.x, x,y,z hoists nothing, and the target hoists b.y.y
-// (`lfs f7, 0x14(r4)` at 0x8236E970 in CharLookAt.s).  The remaining orders
-// were not built.
+// (`lfs f7, 0x14(r4)` at 0x8236E970 in CharLookAt.s).  w13-o built the
+// remaining three: x,z,y 81.05 (kept -- whole-binary A/B, full ninja both
+// sides: this row 80.706 -> 81.053, nothing else moved), z,x,y 78.3, y,z,x
+// 79.9.  None of the six reaches the image's b.y.y hoist, so the copy order is
+// not the whole story.
 inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
     if (&b != &out) {
         Multiply(a.x, b, out.x);
@@ -671,8 +674,8 @@ inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 
         Multiply(a.y, b, vy);
         Multiply(a.z, b, vz);
         out.x = vx;
-        out.y = vy;
         out.z = vz;
+        out.y = vy;
     }
 }
 

@@ -258,6 +258,32 @@ inline void Subtract(const Vector3 &v1, const Vector3 &v2, Vector3 &dst) {
     dst.Set(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z);
 }
 
+// w13-o (2026-10-02): the "image computes y, z, x where we compute x, y, z"
+// residuals are NOT a term-order property of these helper bodies.  A flat sum
+// is canonicalised under /fp:fast -- writing Dot's terms y, z, x is
+// byte-identical -- and the canonical order MSVC picks depends on the
+// surrounding function (measured in an isolated TU: Length alone -> y,x,z;
+// Dot alone -> y,z,x; Subtract-then-Length -> z,x,y; and in one function the
+// order of a Dot changes when a later ScaleAdd consumes its operands).  Two
+// natural-source witnesses pin the current bodies: RndFlare::CalcScale (RB3's
+// source verbatim) is 100 with this Length, and MultiplyTranspose /
+// ClosestPoint / ComputeAngle / FastInvert are 100 with this Dot.
+// Measured LOSSES, do not retry (per-target probe of ~34 functions, plus a
+// full-ninja whole-binary A/B where noted):
+//   Length = sqrt(LengthSquared(v))        whole-binary 2 up / 7 down, -2 matched
+//     (fixes CharEyes::EnforceMinimumTargetDistance and ScaleBone, but
+//     MakeScale 99.78->87.49, CalcScale 100->97.30, SimulateInternal -4.7)
+//   Length with x/y/z temps, = sqrt(Dot(v,v)), right-assoc, ((x+y)+z): same
+//     profile or worse (4 functions fall off 100)
+//   LengthSquared = Dot(v, v): probe-inert
+//   Dot right-assoc / explicit left parens / named products: 5 fall off 100
+//     (explicit parens are honoured by MSVC: `(a+b)+c` is NOT `a+b+c`)
+//   Subtract / Add / Scale as statements, ScaleAdd via Set: all lose
+//   Distance/DistanceSquared via a 3-float-ctor diff: 1 up / 5 down
+//   Distance = sqrt(DistanceSquared(...)): probe-inert
+//   Vector3(f,f,f) ctor via Set(): loses; with assignments: inert
+// The lever that DID fix EnforceMinimumTargetDistance is at its call site:
+// build the difference with Vector3(a.x - b.x, ...) instead of Subtract().
 inline float LengthSquared(const Vector3 &v) { return v.x * v.x + v.y * v.y + v.z * v.z; }
 
 inline float Length(const Vector3 &v) {
