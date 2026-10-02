@@ -526,6 +526,9 @@ DWORD PlatformMgr::ShowDeviceSelectorUI(
 // `SetRegion(XGetGameRegion() != 0xFF ? kRegionEurope : kRegionNA);` -- which should
 // force `this` to be set up after the join -- measured 55.29%, a 32.9pp regression.
 // The two-call if/else is the better spelling. Reverted.
+// Also refuted (w12-d): `region = kRegionEurope; if (== 0xFF) region = kRegionNA;
+// SetRegion(region)` 70.4; an if/else assigning `region` 55.3 (branchless);
+// the inverted two-call if/else (`== 0xFF` first) 87.8.
 void PlatformMgr::RegionInit() {
     if (XGetGameRegion() != 0xFF) {
         SetRegion(kRegionEurope);
