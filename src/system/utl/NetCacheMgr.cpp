@@ -371,9 +371,9 @@ NetLoaderRef &NetLoaderRef::operator=(const NetLoaderRef &other) {
 }
 
 NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoaderPos pos) {
-    NetLoaderRef *pNetLoaderRef = NULL;
     if (*name == '\0' || !IsReady())
         return NULL;
+    NetLoaderRef *pNetLoaderRef = NULL;
     std::list<NetLoaderRef>::iterator listEnd = mNetLoaderRefs.end();
     std::list<NetLoaderRef>::iterator it = mNetLoaderRefs.begin();
     for (; it != listEnd; ++it) {
@@ -384,7 +384,7 @@ NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoade
             } else if ((RefType)1 == type && ref.mNetLoader) {
                 MILO_ASSERT(ref.mCacheLoader == NULL, 0x180);
             } else {
-                TheDebug << MakeString("Found loader for %s, but it was not type %d.\n", ref.mName.c_str(), (int)type);
+                TheDebug << MakeString("Found loader for %s, but it was not type %d.\n", ref.mName.c_str(), type);
                 continue;
             }
             pNetLoaderRef = &ref;
@@ -393,32 +393,30 @@ NetLoaderRef *NetCacheMgr::AddLoaderRef(const char *name, RefType type, NetLoade
     }
 
     NetLoaderRef newRef;
-    newRef.mRefCount = 0;
-    newRef.mNetLoader = NULL;
-    newRef.mCacheLoader = NULL;
 
     if (!pNetLoaderRef) {
         switch ((unsigned int)type) {
-        // RESIDUAL (w7-as, 97.2 canonical): the image re-addresses the String
-        // argument with `addi r3, r31, 0x58` / `addi r5, r31, 0x68` instead of
-        // consuming String::String's return register, which is the named-local
-        // signature.  NEGATIVE RESULT (2026-09-14): both spellings of that lose
-        // a callee-saved register (prologue r17-r31 -> r18-r31) and 0x20 of
-        // frame -- `String cacheName(name);` as a plain local reads 87.1, and
-        // the same name inside its own braces (which is what the dtor placement
-        // at 0x825B7994 argues for) reads 90.2.  Kept the temp.
+        // w14-d: 97.17 -> 100. Three levers, all behaviour-neutral:
+        // (1) Create/NetCacheLoader take `name` by IMPLICIT conversion -- that,
+        //     not a named local, is what makes the image re-address the String
+        //     temp (`addi r3, r31, 0x58` / `addi r5, r31, 0x68`) instead of
+        //     consuming the ctor's return register;
+        // (2) NetLoaderRef has an inline (String, refcount, net, cache) ctor and
+        //     a zeroing default ctor: a named aggregate `tmp` made MSVC share
+        //     the two arms' `s` slot (0x58) where the image gives each arm its
+        //     own (0x60 / 0x70, frame 0x160 not 0x150);
+        // (3) the "Found loader" MakeString takes `type` itself (its param home
+        //     0x184 is the int& the image passes), not an `(int)type` temp.
         case 0: {
-            NetCacheLoader *ncl = new NetCacheLoader(mCache, String(name));
+            NetCacheLoader *ncl = new NetCacheLoader(mCache, name);
             String s(name);
-            NetLoaderRef tmp = { String(s), 0, NULL, ncl };
-            newRef = tmp;
+            newRef = NetLoaderRef(s, 0, NULL, ncl);
             break;
         }
         case 1: {
-            NetLoader *nl = NetLoader::Create(String(name));
+            NetLoader *nl = NetLoader::Create(name);
             String s(name);
-            NetLoaderRef tmp = { String(s), 0, nl, NULL };
-            newRef = tmp;
+            newRef = NetLoaderRef(s, 0, nl, NULL);
             break;
         }
         default:

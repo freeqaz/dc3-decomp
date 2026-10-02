@@ -62,6 +62,12 @@ enum NetLoaderPos {
 // same masked bytes, NOT a missing symbol.  Left as a lead; do not spend a row
 // budget on it without first matching the parent function.
 struct NetLoaderRef {
+    NetLoaderRef() : mRefCount(0), mNetLoader(nullptr), mCacheLoader(nullptr) {}
+    NetLoaderRef(
+        const String &name, int refCount, NetLoader *netLoader, NetCacheLoader *cacheLoader
+    )
+        : mName(name), mRefCount(refCount), mNetLoader(netLoader),
+          mCacheLoader(cacheLoader) {}
     void Poll();
     bool NeedsToDownload();
     bool IsDownloading();
