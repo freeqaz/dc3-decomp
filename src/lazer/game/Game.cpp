@@ -1263,6 +1263,9 @@ DataNode OnCycleTestDancer(DataArray *) {
             if (i < 0) {
                 i = size + i;
             }
+            // w13-e: NOT math/Utl.h Mod() -- Mod's `div += modbase` emits
+            // `add r10, r10, r11`, the image's 82865DDC is `add r10, r11, r10`
+            // (size first).  Same canonical score, wrong operand order; reverted.
         }
         // The re-read of the vector is INSIDE the empty guard: 82865D44
         // `beq cr6, .L_82865DF4` jumps the whole body, landing directly on the

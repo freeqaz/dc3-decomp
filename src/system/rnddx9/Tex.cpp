@@ -626,8 +626,7 @@ void DxTex::ResetSurfaces() {
     }
 
     // Delete main texture for certain types
-    bool _bit0 = (mType & kRendered) != 0;
-    if (((_bit0) && mNumMips) || ((mType & kMovie) && (mType & 0x20))
+    if (((bool)(mType & kRendered) && mNumMips) || ((bool)(mType & kMovie) && (mType & 0x20))
         || (mType & kScratch) || (mType & kRegularLinear)) {
         TheDxRnd.AutoDelete(mTexture);
         mTexture = nullptr;

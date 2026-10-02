@@ -225,7 +225,8 @@ private:
     bool mSuspended;
     bool mPrintGlitches;
     bool mCaptureNextFrame;
-    u8 mPIXCaptureState;
+    // bool, not u8: Present stores a normalized 0/1 (see DxRnd::Present).
+    bool mPIXCaptureState;
     RegisterAlloc mRegAlloc; // 0x3f8
     int mDefaultVSRegAlloc; // 0x3fc
     int mDefaultPSRegAlloc; // 0x400

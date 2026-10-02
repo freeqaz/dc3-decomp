@@ -292,7 +292,9 @@ void DxRnd::Present() {
         D3DDevice_BlockUntilIdle(mD3DDevice);
         D3DDevice_SetSwapMode(mD3DDevice, mAsyncSwapCurrent);
     }
-    mPIXCaptureState = PIXGetCaptureState() & 2;
+    // w13-e: the image stores 0/1, not the raw 0/2 mask (rlwinm 30,30 then
+    // subic/subfe at 82615AD0..82615AD8); `> 0` on the unsigned mask is the spelling.
+    mPIXCaptureState = (PIXGetCaptureState() & 2) > 0;
 }
 
 void DxRnd::UpdateScalerParams() {
@@ -333,8 +335,10 @@ void DxRnd::SetupGamma() {
         do {
             float fval = (float)(int)i * 0.00390625f;
             float fpow = std::pow(fval, gamma);
-            unsigned long long ival = (long long)(fpow * 1024.0f);
-            unsigned short usVal = (unsigned short)((unsigned short)ival << 6);
+            // w13-e: converted straight to u16 -- the image reads only the low
+            // halfword of the fctidz result (`lhz r11, 0x5e(r1)` at 0x82615DBC).
+            unsigned short ival = (unsigned short)(fpow * 1024.0f);
+            unsigned short usVal = (unsigned short)(ival << 6);
             ramp.red[i] = usVal;
             ramp.green[i] = usVal;
             ramp.blue[i] = usVal;
