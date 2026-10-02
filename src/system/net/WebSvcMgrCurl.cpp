@@ -35,31 +35,31 @@ void WebSvcMgrCurl::Poll() {
 #endif
     MILO_ASSERT(mCurlMultiHandle, 0xFE);
     int running_handles;
-    if (curl_multi_perform(mCurlMultiHandle, &running_handles) == CURLM_OK) {
-        static int sRunningHandles;
-        if (sRunningHandles != running_handles) {
-            sRunningHandles = running_handles;
-        }
-        int msgs_in_queue = 0;
-        int maxMessages = 100;
-        CURLMsg *msg;
-        while (msg = curl_multi_info_read(mCurlMultiHandle, &msgs_in_queue), msg) {
-            if (msg->msg == CURLMSG_DONE) {
-                CURL *handle = msg->easy_handle;
-                bool success = false;
-                unsigned int httpStatus = 0;
-                MILO_ASSERT(handle, 0x11D);
-                if (msg->data.result == 0
-                    && curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &httpStatus) == 0
-                    && httpStatus == 200) {
-                    success = true;
-                }
-                FindAndFinish(handle, success, httpStatus);
+    if (curl_multi_perform(mCurlMultiHandle, &running_handles) != CURLM_OK)
+        return;
+    static int sRunningHandles;
+    if (sRunningHandles != running_handles) {
+        sRunningHandles = running_handles;
+    }
+    int msgs_in_queue = 0;
+    int maxMessages = 100;
+    CURLMsg *msg;
+    while (msg = curl_multi_info_read(mCurlMultiHandle, &msgs_in_queue), msg) {
+        if (msg->msg == CURLMSG_DONE) {
+            CURL *handle = msg->easy_handle;
+            bool success = false;
+            unsigned int httpStatus = 0;
+            MILO_ASSERT(handle, 0x11D);
+            if (msg->data.result == 0
+                && curl_easy_getinfo(handle, CURLINFO_RESPONSE_CODE, &httpStatus) == 0
+                && httpStatus == 200) {
+                success = true;
             }
-            maxMessages--;
-            if (maxMessages == 0)
-                return;
+            FindAndFinish(handle, success, httpStatus);
         }
+        maxMessages--;
+        if (maxMessages == 0)
+            return;
     }
 }
 
