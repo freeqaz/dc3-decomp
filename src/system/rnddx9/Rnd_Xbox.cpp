@@ -292,7 +292,9 @@ void DxRnd::Present() {
         D3DDevice_BlockUntilIdle(mD3DDevice);
         D3DDevice_SetSwapMode(mD3DDevice, mAsyncSwapCurrent);
     }
-    mPIXCaptureState = PIXGetCaptureState() & 2;
+    // w13-e: the image stores 0/1, not the raw 0/2 mask (rlwinm 30,30 then
+    // subic/subfe at 82615AD0..82615AD8); `> 0` on the unsigned mask is the spelling.
+    mPIXCaptureState = (PIXGetCaptureState() & 2) > 0;
 }
 
 void DxRnd::UpdateScalerParams() {
