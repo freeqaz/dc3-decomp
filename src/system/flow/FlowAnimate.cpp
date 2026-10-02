@@ -332,17 +332,17 @@ void FlowAnimate::RequestStop() {
         case kStopLastFrame:
             mStopDeferred = true;
             break;
+        case kStopBetweenMarkers:
+            if (mBetweenStopMarkers) {
+                TheFlowMgr->QueueCommand(this, kIgnore);
+            } else {
+                mDeferredStopMode = kStopBetweenMarkers;
+                mStopDeferred = true;
+            }
+            break;
         case kStopOnMarker:
             mDeferredStopMode = kStopOnMarker;
             mStopDeferred = true;
-            break;
-        case kStopBetweenMarkers:
-            if (!mBetweenStopMarkers) {
-                mStopDeferred = true;
-                mDeferredStopMode = kStopBetweenMarkers;
-                break;
-            }
-            TheFlowMgr->QueueCommand(this, kIgnore);
             break;
         case kReleaseAndContinue:
             TheFlowMgr->QueueCommand(this, kIgnore);
