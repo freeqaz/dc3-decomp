@@ -74,7 +74,9 @@ bool gHostCached;
 // the layout (it survived this reorder unchanged), nor by reading gUsingCD
 // directly instead of through UsingCD(), nor by binding a `int &` to gUsingCD
 // to force its address temp.  The residual rows are codegen -- do not "fix"
-// them by renaming a global.
+// them by renaming a global.  w18-d: what DOES drive it is the writes --
+// InitSystem/PreInitSystem store through SetUsingCD() in the image; with plain
+// `gUsingCD = ...` stores MSVC anchors on gSystemConfig instead.
 static int gUsingCD;
 static DataArray *gSystemTitles;
 static DataArray *gSystemConfig;
@@ -424,7 +426,7 @@ void InitSystem(const char *config) {
         bool oldCD = UsingCD();
         Archive *oldArchive = TheArchive;
         if (gHostConfig) {
-            gUsingCD = false;
+            SetUsingCD(false);
             TheArchive = nullptr;
         }
         DataArray *systemConfig = ReadSystemConfig(config);
@@ -434,7 +436,7 @@ void InitSystem(const char *config) {
         gSystemConfig->Release();
         gSystemConfig = systemConfig;
         DataVariable("syscfg") = gSystemConfig;
-        gUsingCD = oldCD;
+        SetUsingCD(oldCD);
         TheArchive = oldArchive;
         StripEditorData();
     }
@@ -442,18 +444,13 @@ void InitSystem(const char *config) {
 }
 
 void PreInitSystem(const char *config) {
-    // Residual (97.51%, 10 rows): 4 are the anchor rows the comment above
-    // gUsingCD already refutes; the other 6 are the prologue load order --
-    // the image reads gUsingCD through its OWN lis/reloc, then gHostConfig,
-    // then TheArchive, then compares, while we read gHostConfig first and
-    // reach gUsingCD through the r30 anchor.  REFUTED: hoisting gHostConfig
-    // into a named `bool hostConfig` read between UsingCD() and TheArchive --
-    // exactly the image's order -- is byte-inert (same 10 rows).  The order
-    // follows from which global r30 anchors, not from statement order.
+    // w18-d (97.51 -> 100, and InitSystem 93.67 -> 100): both writes of
+    // gUsingCD go through SetUsingCD(), as the reads go through UsingCD().
+    // With the accessor pair MSVC anchors r30 on gUsingCD like the image.
     bool oldCD = UsingCD();
     Archive *oldArchive = TheArchive;
     if (gHostConfig) {
-        gUsingCD = false;
+        SetUsingCD(false);
         TheArchive = nullptr;
     }
     DataArrayPtr ptr(1);
@@ -474,7 +471,7 @@ void PreInitSystem(const char *config) {
     gSystemConfig = ReadSystemConfig(config);
     MILO_ASSERT(gSystemConfig, 0x1FF);
     DataVariable("syscfg") = gSystemConfig;
-    gUsingCD = oldCD;
+    SetUsingCD(oldCD);
     TheArchive = oldArchive;
     DataRegisterFunc("system_language", OnSystemLanguage);
     DataRegisterFunc("system_locale", OnSystemLocale);
