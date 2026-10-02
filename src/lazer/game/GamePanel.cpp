@@ -733,7 +733,11 @@ void GamePanel::SetGameOver(bool b1) {
 }
 
 void GamePanel::ReloadData() {
-    ObjectDir *hudPanel = DataVariable("hud_panel").Obj<ObjectDir>();
+    // Two statements: ending the full-expression after DataVariable() frees
+    // the "hud_panel" Symbol temp's slot, which the image reuses for "objects"
+    // (both at 0x50(r31)); one chained expression costs 16 bytes of frame.
+    DataNode &hudVar = DataVariable("hud_panel");
+    ObjectDir *hudPanel = hudVar.Obj<ObjectDir>();
     DataMacroWarning(false);
     DataArray *fileData = DataReadFile(SystemConfig()->File(), true);
     DataArray *objArr = fileData->FindArray("objects");
@@ -1058,9 +1062,9 @@ void GamePanel::UpdateNowBar() {
         // it into the same multiply in the backend, but written as a multiply it
         // becomes a common subexpression with durVal above and costs the fmsubs.
         float eq = secondsval / (songDuration / 1000.0f);
-        if (eq <= 100.0f) {
-            val = eq;
-        }
+        // std::min by reference: the image keeps &val / &eq in r11 and loads
+        // the winner through it (`addi r11, r1, 0x64` ... `lfs f0, 0x0(r11)`).
+        val = std::min(eq, val);
     }
     *mTimeOverlay << MakeString(
         "MBT %d:%d:%03d [%s %c%s %4.1f%%] (%.2fsec %dtk)\n",

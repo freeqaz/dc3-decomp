@@ -226,15 +226,12 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
 
         if (mTrackingAllSkeletons
             && data->mSkeletonsRight[i]->TrackingID() == mSkeletons[i].TrackingID()) {
-            // `&=`, not `=`: 8242C790 is `and r10, r11, r10`, folding the mask into the
-            // register that still holds the `true` initialiser.  A plain assignment
-            // normalises the mask with subic/subfe instead and loses the `and` row.
-            // Measured negatives on 8242C788's mask-and-`and` shape, all reverted:
-            // `updateSkeleton &= X` and `updateSkeleton = updateSkeleton && X` both
-            // measure 96.4, `X && updateSkeleton` 97.7, against 98.2 for the plain
-            // assignment.  None reproduces `subfic/subfe` + `and r10, r11, r10`;
-            // each adds a redundant clrlwi instead.
-            updateSkeleton = data->mSkeletonsRight[i]->TrackingState() != kSkeletonPositionOnly;
+            // 8242C788..90 is `subfic/subfe` + `and r10, r11, r10`: the compare
+            // result becomes a mask ANDed into the register still holding the
+            // `true` initialiser.  That is the conditional `X ? updateSkeleton :
+            // false` (98.2 -> 99.0); a plain `= X` normalises with subic/subfe,
+            // and `&=` / `&&` / `X & updateSkeleton` add a clrlwi (96.4-97.7).
+            updateSkeleton = data->mSkeletonsRight[i]->TrackingState() != kSkeletonPositionOnly ? updateSkeleton : false;
         }
         if (updateSkeleton) {
             mSkeletons[i] = *data->mSkeletonsRight[i];

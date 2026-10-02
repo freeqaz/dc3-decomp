@@ -116,24 +116,19 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
     float z1 = unkc;
     float z2 = unk10;
     unsigned int samps = size >> 1;
+    short *samples = (short *)data;
+    // Both loops index samples[i] off a hand-rotated counter: the indexing is
+    // what gives the image's biased-pointer `lha 0x2(rN)` / `sthu 0x2(rN)`
+    // pair (a `*++p` walk emits addi + sth), and the hand rotation keeps the
+    // compare-against-samps loop out of a CTR loop (97.6 -> 100).
     unsigned int i = 0;
     if (samps != 0) {
-        short *p = (short *)data - 1;
         do {
-            float in = (float)p[1];
+            float in = (float)samples[i];
             float out = (in - z1) * gain * 2.0f + z2 * coef;
             z1 = in;
             out = Clamp(-32767.0f, sMaxSample, out);
-            // Residual (97.60%, 5 charged rows, 636 B): the image fuses the
-            // pointer bump into the store -- `sthu r9, 0x2(r10)` at 82E3E538 --
-            // where we emit a separate `addi r10, r10, 0x2` plus `sth r9, 0x0(r10)`.
-            // Same in the second loop: the image keeps `lhz r11, 0x2(r8)` /
-            // `sthu r11, 0x2(r8)` off one biased pointer, we pre-increment at the
-            // loop head and read `lhz r9, 0x0(r11)`.  REFUTED: moving the counter
-            // increment ahead of the store (both loops) is completely inert.
-            // The rest is one callee-saved permutation, r31<->r30 (this vs samps)
-            // and r29<->r28 (&gNoiseThreshold vs maxSamp).
-            *++p = (short)out;
+            samples[i] = (short)out;
             z2 = (float)(short)out;
             i++;
         } while (i < samps);
@@ -147,16 +142,15 @@ void ChatReceiver::ProcessChatData(void *data, unsigned int size, int *flag) {
     float localRatio = DbToRatio(gLocalGain);
     unsigned int j = 0;
     if (samps != 0) {
-        short *p = (short *)data - 1;
         do {
-            short s = p[1];
+            short s = samples[j];
             if (s >= maxSamp) {
                 maxSamp = s;
             }
             if (s < minSamp) {
                 minSamp = s;
             }
-            *++p = (short)((float)s * localRatio);
+            samples[j] = (short)((float)s * localRatio);
             j++;
         } while (j < samps);
     }
@@ -443,13 +437,18 @@ void MicXbox::ReadChatBuffer(void *data, unsigned int size) {
             // `out` may alias it), which costs the image's hoisted `lhzu`/`sthu`
             // pointer pair.
             const short *src = &unk3020[0];
-            for (unsigned int i = 0; i < samps; i++) {
-                out[i] = src[i * 3];
+            // Hand-rotated: the image keeps an explicit counter (`addi r8,r8,1` /
+            // `cmplw cr6,r8,r11` / `blt`, 0x82E3F6E0); a counted `for` becomes
+            // `mtctr`/`bdnz` (90.3).  A signed counter is worse (89.1).  The
+            // destination is walked (`*out++`): `out[i]` sets up the two biased
+            // pointers in the opposite order.
+            unsigned int i = 0;
+            if (samps != 0) {
+                do {
+                    *out++ = src[i * 3];
+                    i++;
+                } while (i < samps);
             }
-            // RESIDUAL (90.3 canonical): the image keeps an explicit counter
-            // (`addi r8,r8,1` / `cmplw cr6,r8,r11` / `blt`, 0x82E3F6E0) where MSVC
-            // gives us `mtctr`/`bdnz`.  A signed counter is WORSE (89.1 -- it turns
-            // the zero-trip guard into `cmpwi`/`ble`).
             unk3020.erase(unk3020.begin(), unk3020.begin() + samps * 3);
         }
     }
@@ -620,16 +619,16 @@ void MicManagerXbox::Poll() {
         ChatBuffer &cb = *it;
         if (cb.unk8[250] != 0) {
             UINT32 count = cb.unk8[250];
-            mXHVEngine->SubmitIncomingChatData(*(UINT64 *)&cb, (unsigned char *)cb.unk8, &count);
+            mXHVEngine->SubmitIncomingChatData(cb.mXuid, (unsigned char *)cb.unk8, &count);
             cb.unk8[250] -= count;
             memcpy(cb.unk8, (char *)cb.unk8 + count, cb.unk8[250]);
         } else if (!TheXboxSynth->mHeadsetSubmixes.empty() &&
-                   *(UINT64 *)&cb == 0x00DEADBEEFFACEF0ULL) {
+                   cb.mXuid == 0x00DEADBEEFFACEF0ULL) {
             unk38.Split();
             if (!unk38.Running() || unk38.Ms() > 2000.0f) {
                 unsigned char buf[0x14] = { 0 };
                 UINT32 count = sizeof(buf);
-                mXHVEngine->SubmitIncomingChatData(*(UINT64 *)&cb, buf, &count);
+                mXHVEngine->SubmitIncomingChatData(cb.mXuid, buf, &count);
                 unk38.Restart();
             }
         }
@@ -661,18 +660,10 @@ void MicManagerXbox::AddRemoteMic(unsigned long long const &xuid,
     DX_ASSERT_CODE(hr, 0x155);
 
     ChatBuffer chatBuffer;
-    // Residual (95.96%, 4 rows, 16 B): the image issues the xuid load FIRST in
-    // this five-instruction group --
-    //   ld   r11, 0x0(r26)      ; xuid
-    //   addi r4,  r31, 0x80     ; &chatBuffer
-    //   stw  r24, 0x470(r31)    ; unk8[250] = 0
-    //   addi r3,  r27, 0x20     ; &unk20
-    //   std  r11, 0x80(r31)
-    // -- where we issue the `stw` first and the `ld` third.  Everything else
-    // (both addis, the std, the push_back) is already in the image's order.
-    // REFUTED: swapping the two source statements does not move the load;
-    // the ordering is the scheduler's, not the statements'.
-    *(unsigned long long *)&chatBuffer = xuid;
+    // The XUID is a real u64 member, not a punned `*(u64 *)&chatBuffer`:
+    // through the cast MSVC schedules the `stw` of unk8[250] ahead of the
+    // xuid `ld`, the image issues the `ld` first (95.96 -> 100).
+    chatBuffer.mXuid = xuid;
     chatBuffer.unk8[250] = 0;
     unk20.push_back(chatBuffer);
 

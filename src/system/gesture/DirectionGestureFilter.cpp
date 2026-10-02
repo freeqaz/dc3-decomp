@@ -68,6 +68,12 @@ void DirectionGestureFilterSingleUser::Update(const Skeleton &skeleton, int elap
     }
 }
 
+// RESIDUAL (w11-d, 99.77 canonical): the image pins 0.1f in f29 and 0.2f in
+// f28 and sets up the first DrawPoint3D's arguments this/radius/color/alpha
+// (`mr r3` before `mr r6`, f1 before f2); we get the constants the other way
+// round.  Inert: named radius/alpha locals in either order; the second call
+// without the `pos` reference is worse (92.25); a decomp-synth beam run
+// (6 rounds) found nothing.
 void DirectionGestureFilterSingleUser::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
     mArcDetector.Draw(skeleton, viz);
     bool valid = IsValidSwipePosition(skeleton);
@@ -101,21 +107,19 @@ bool DirectionGestureFilterSingleUser::HandAtSide(
     const TrackedJoint &knee = skeleton.KneeJoint(mHandSide);
     const TrackedJoint &elbow = skeleton.ElbowJoint(mHandSide);
 
-    float sumY = knee.mJointPos[0].y + hip.mJointPos[0].y;
-    float sumZ = knee.mJointPos[0].z + hip.mJointPos[0].z;
-    float elbowX = elbow.mJointPos[0].x;
-    float handY = hand.mJointPos[0].y;
-    float elbowOffset = radius * elbowBlend + elbowX;
-    float handX = hand.mJointPos[0].x;
-    float handZ = hand.mJointPos[0].z;
+    // The knee/hip midpoint lives in a Vector3: a scalar-local `sum * 0.5f`
+    // subtracted from the hand gets contracted into fnmsubs, the image keeps
+    // fmuls + fsubs (91.8 -> 100).
+    Vector3 hipMid;
+    Add(knee.mJointPos[0], hip.mJointPos[0], hipMid);
+    hipMid *= 0.5f;
+    float elbowOffset = radius * elbowBlend + elbow.mJointPos[0].x;
     float threshold = heightDiff * 0.591715931892395f;
-    sumY = sumY * 0.5f;
-    sumZ = sumZ * 0.5f;
-    float dx = handX - elbowOffset;
-    threshold = threshold * radius;
-    float dy = handY - sumY;
-    float dz = handZ - sumZ;
-    dx = dx * xScale;
+    float dx = hand.mJointPos[0].x - elbowOffset;
+    threshold *= radius;
+    dx *= xScale;
+    float dy = hand.mJointPos[0].y - hipMid.y;
+    float dz = hand.mJointPos[0].z - hipMid.z;
     float dist = sqrtf(dx * dx + dy * dy + dz * dz);
     return dist <= threshold;
 }
@@ -155,17 +159,17 @@ float DirectionGestureFilterSingleUser::UpdateOverlay(RndOverlay *overlay, float
     return mArcDetector.UpdateOverlay(overlay, f1);
 }
 
-// .data:0x82F4453C / 0x40 / 0x44 / 0x48 -- four MUTABLE file-scope floats. The
-// target loads each from memory (`lis`/`lfs` on a .data label) instead of
-// materialising a literal, so they cannot be `const` and cannot be written
-// inline. They are the half-axes, in shoulder-widths, of the torso exclusion
-// ellipse the hand must be OUTSIDE of for the pose to count as a valid swipe.
-static float sSwipeEllipseWidth = 0.9f;
-static float sSwipeEllipseHeight = 1.3f;
-static float sSwipeEllipseWidthEngaged = 0.8f;
-static float sSwipeEllipseHeightEngaged = 1.1f;
-
 bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skeleton) const {
+    // .data:0x82F4453C / 0x40 / 0x44 / 0x48 -- four MUTABLE function-local
+    // statics: the half-axes, in shoulder-widths, of the torso exclusion ellipse
+    // the hand must be OUTSIDE of for the pose to count as a valid swipe.  The
+    // image addresses each one with its own `lis`/`lfs` pair; as file-scope
+    // statics MSVC anchors all four off one base (`addi r11, r11, sym@l` then
+    // 0x4/0x8/0xc displacements) -- 97.16 -> 99.98.
+    static float sSwipeEllipseWidth = 0.9f;
+    static float sSwipeEllipseHeight = 1.3f;
+    static float sSwipeEllipseWidthEngaged = 0.8f;
+    static float sSwipeEllipseHeightEngaged = 1.1f;
     const TrackedJoint *joints = skeleton.TrackedJoints();
 
     float shoulderRightY = joints[kJointShoulderRight].mJointPos[0].y;

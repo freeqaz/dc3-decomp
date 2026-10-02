@@ -145,14 +145,14 @@ const RecordedFrame *SkeletonClip::RecordedFrameAt(
 const RecordedFrame *SkeletonClip::CurRecordedFrame(int &frameIdx, int &loopCount) const {
     if (!IsRecording()) {
         if (TheHamDirector) {
-            return RecordedFrameAt(*mRecordedFrames, MoveDir::SongSeconds(), frameIdx, loopCount);
+            float seconds = MoveDir::SongSeconds();
+            return RecordedFrameAt(*mRecordedFrames, seconds, frameIdx, loopCount);
         }
         if (mRecordedFrames->size() > 0) {
-            float frame = GetFrame();
-            if ((float)mRecordedFrames->size() > frame) {
+            if ((float)mRecordedFrames->size() > GetFrame()) {
                 loopCount = 0;
-                frameIdx = (int)frame;
-                return &(*mRecordedFrames)[(int)frame];
+                frameIdx = GetFrame();
+                return &(*mRecordedFrames)[frameIdx];
             }
         }
     }
@@ -278,36 +278,21 @@ bool SkeletonClip::PrevSkeleton(
             // out-param index -- `lwz r8,0x50(r31)` / `mulli r10,r8,0x1c8` /
             // `lwz r11,0x0(r3)` / `add r11,r10,r11` / `lfs f10,0x1c4(r11)` at
             // 825??? (idx 21/36/44/49/52 of the listing).  Spelling it that way
-            // makes our object exactly the target's size (320 == 320), gives it
-            // the target's frame, and leaves the two sides with an IDENTICAL
-            // instruction multiset in this block -- 11 inserts against 11
-            // deletes of the same opcodes.
-            // RESIDUAL (w7-am, 71.0 canonical): what is left is slot colouring.
-            // The image gives frameIdx and the int->double conversion scratch
-            // the SAME slot (0x50) and puts loopCount at 0x58, so it is forced
-            // to reload frameIdx before `std r10,0x50(r31)` clobbers it; we get
-            // three disjoint slots (frameIdx 0x50, loopCount 0x54, scratch
-            // 0x58) and therefore schedule the FP conversions ahead of the
-            // element address computation.
-            // NEGATIVE RESULT (w7-am, 2026-09-14): keeping the shorter, less
-            // faithful `curRecorded->mSongSeconds` scores 88.2 canonical, but
-            // it is 304 bytes against the target's 320 and is missing the
-            // mulli/add entirely; the faithful spelling is kept.  Swapping the
-            // declaration order of frameIdx/loopCount is inert.
+            // makes our object exactly the target's size (320 == 320).  The
+            // slot colouring that kept this at 71.0 (w7-am) was the second
+            // call's out-params, below.
             const std::vector<RecordedFrame> &frames = *mRecordedFrames;
             float curTime = frames.back().mSongSeconds * loopCount
                 + frames[frameIdx].mSongSeconds;
             float prevTime = curTime - targetMs * 0.00100000005f;
 
-            // The image passes the two out-params to RecordedFrameAt in the
-            // OPPOSITE order to the one it passed them to CurRecordedFrame:
-            // `addi r4,r31,0x50` / `addi r5,r31,0x58` for the first call
-            // against `addi r5,r31,0x58` / `addi r6,r31,0x50` for this one,
-            // with 0x50 holding the index (it feeds the mulli) and 0x58 the
-            // loop count (it feeds the fcfid).  Both are dead after this
-            // point, so it only shows up in the argument registers.
+            // Fresh out-params: the image passes &0x58 / &0x50 here, i.e. it
+            // recolours two NEW (uninitialised, so slot-shareable) ints into the
+            // slots of loopCount / frameIdx, which are dead by now.  Re-passing
+            // the first call's variables pins frameIdx in its own slot.
+            int prevFrameIdx, prevLoopCount;
             const RecordedFrame *prevRecorded =
-                RecordedFrameAt(*mRecordedFrames, prevTime, loopCount, frameIdx);
+                RecordedFrameAt(*mRecordedFrames, prevTime, prevFrameIdx, prevLoopCount);
             if (prevRecorded) {
                 elapsedMs = (curTime - prevTime) * 1000.0f;
                 SkeletonFrame frame;
@@ -389,6 +374,11 @@ BEGIN_COPYS(SkeletonClip)
     END_COPYING_MEMBERS
 END_COPYS
 
+// RESIDUAL (w11-d, 99.991 canonical, 2 rows): in the alt-version MILO_FAIL the
+// image sets up `addi r7, r27, 0x4` (&gRevs[2]) before `addi r6, r31, 0x5c`
+// (&d.altRev); we emit them the other way round.  Inert, all measured:
+// `*(gRevs + 2)`, `gRevs[1 + 1]`, gRevs at file scope, comparing against
+// gRevs[0]/gRevs[2] instead of literals, `d.rev > 9` for `9 < d.rev`.
 BEGIN_LOADS(SkeletonClip)
     const char *pathName = PathName(this);
     Symbol className = ClassName();
