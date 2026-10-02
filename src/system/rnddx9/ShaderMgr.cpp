@@ -363,24 +363,21 @@ void DxShaderMgr::SetPConstant(PShaderConstant psc, int i) {
     D3DDevice_SetPixelShaderConstantI(TheDxRnd.Device(), psc, &i, 1);
 }
 
-// FLOOR 70.0 canonical / 69.5 raw, and SetPConstant(PShaderConstant, const Vector4 &)
-// below is the same row for the same reason (w8-h).  One instruction carries the
-// whole gap: the image computes `start` with `srwi r8,r4,2` (a 32-bit rlwinm),
-// we emit `rldicl r8,r4,62,34`, which is MSVC fusing the same 32-bit shift with
-// the zero-extension its 64-bit consumer (`srd r9,r7,r8`) needs.  The three
-// scheduling rows (`addi r10,r4,0x78` hoisted to slot 2, `li r11,1` sunk) all
-// hang off that one dependency-chain difference.  MEASURED NEGATIVE: spelling it
-// as the file's own `ShaderConstantDirtyMask(vsc)` helper -- whose `unsigned int
-// reg` parameter was the hypothesis for what keeps the shift 32-bit -- is
-// BYTE-INERT (70.000 / 69.545, identical instruction table).  Note SetVConstant4x3
-// DOES get `srwi` (0x8261BA98) from the two-argument helper, but only because
-// `start` there has a SECOND, 32-bit use in the `span` subtraction; with a single
-// use feeding `srd`, MSVC always fuses.
+// 85.2 canonical (w12-c; was 70.0 at w8-h's floor), SetPConstant(PShaderConstant,
+// const Vector4 &) below likewise.  `start` is a SIGNED int holding the logical
+// shift: that is what keeps MSVC from fusing the 32-bit `srwi r8,r4,2` with the
+// zero-extension its 64-bit consumer (`srd`) needs (an `unsigned int` start
+// gives `rldicl r8,r4,62,34`; measured in a scratch TU, every unsigned spelling
+// fuses).  What remains is scheduling: the image computes the VertexShaderF
+// index (`addi r10,r4,0x78`) at slot 2 and `li r11,1` after the TheDxRnd addi;
+// we emit `li` first.  A `__restrict` dst moves the addi up but also hoists
+// the `slwi` and scores lower (72.7); statement order, a reference dev, a
+// mask temp and a no-dst spelling are all inert (scratch TU).
 void DxShaderMgr::SetVConstant(VShaderConstant vsc, const Vector4 &v) {
     D3DDevice *dev = TheDxRnd.Device();
     float x = v.x, y = v.y, z = v.z, w = v.w;
     float *dst = (float *)&dev->m_Constants.VertexShaderF[vsc];
-    unsigned int start = (unsigned int)vsc >> 2;
+    int start = (unsigned int)vsc >> 2;
     dev->m_Pending.m_Mask[0] |= (UINT64)0x8000000000000000 >> start;
     dst[0] = x;
     dst[1] = y;
@@ -392,7 +389,7 @@ void DxShaderMgr::SetPConstant(PShaderConstant psc, const Vector4 &v) {
     D3DDevice *dev = TheDxRnd.Device();
     float x = v.x, y = v.y, z = v.z, w = v.w;
     float *dst = (float *)&dev->m_Constants.PixelShaderF[psc];
-    unsigned int start = (unsigned int)psc >> 2;
+    int start = (unsigned int)psc >> 2;
     dev->m_Pending.m_Mask[1] |= (UINT64)0x8000000000000000 >> start;
     dst[0] = x;
     dst[1] = y;
