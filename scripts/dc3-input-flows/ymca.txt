@@ -30,19 +30,26 @@
 # and attract_movie_panel's handler goes to next_screen -- what the image does
 # with a movie that did not open (BinkMovieImpl::Poll returns false).
 
+# Press spacing is set for BOTH the native port and the original game under
+# Xenia (xenia tools/fork-regress/flows/dc3-ymca.txt is this file). On the
+# original, a menu list ignores confirms for ~0.55 s while its enter animation
+# plays, a rejected press blocks the next ~1 s, and multiuser panes switch ~0.5 s
+# later than native; native's +30 presses missed there. Hence +45 per menu and
+# the wider multiuser spacing.
+
 # autosave_warning_screen auto-transitions to title_screen.
 # Title screen -- press confirm to proceed.
 wait_screen title_screen
-+30 confirm
++45 confirm
 
 # wait_main_after_saveload_screen auto-transitions to main_screen.
 # Main screen -- select "gameplay" (first item).
 wait_screen main_screen
-+30 confirm
++45 confirm
 
 # Choose mode -- select "perform" (first item).
 wait_screen choose_mode_screen
-+30 confirm
++45 confirm
 
 # Song select -- ONE down, derived from the list, not tuned until green.
 # In perform mode song_select.dta's enter handler runs
@@ -58,8 +65,8 @@ wait_screen choose_mode_screen
 # carried an invented `- 1` that fired one row early and jumped the cursor
 # over index 6 to starships (so this flow was playing starships, not ymca).
 wait_screen song_select_screen
-+30 down
-+90 confirm
++45 down
++105 confirm
 
 # multiuser_screen is driven by the controller, as on the 360: the focused
 # list (right_hand_p1) is seldiff_pane -> confirm the highlighted difficulty;
@@ -68,8 +75,8 @@ wait_screen song_select_screen
 # list's enter animation (presses dropped meanwhile), hence the spacing.
 wait_screen multiuser_screen
 +40 confirm
-+110 confirm
-+180 confirm
++150 confirm
++270 confirm
 
 # Loading screens auto-advance via DTA handlers:
 #   loading -> preloading -> real_loading -> game_screen
