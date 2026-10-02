@@ -46,7 +46,10 @@ public:
         // (mulli r10, r31 / add r4 before the dest); the hand-written memcpy
         // computed the dest first. __adjust_heap 94.67 -> 100.
         RndMesh *mCanMesh;
-        RndMesh *mEnvMesh;
+        // w17-b: the ENVIRONMENT the can was queued under (DrawLight stores
+        // RndEnviron::sCurrent here), not a mesh -- RB3's `RndMesh *mEnvMesh`
+        // type was wrong.  DrawMeshVec selects it with Select(nullptr).
+        RndEnviron *mEnvMesh;
         Spotlight *mSpotlight;
         int unkc;
         Transform mTransform;
