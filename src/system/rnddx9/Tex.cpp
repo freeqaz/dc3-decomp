@@ -110,21 +110,13 @@ static inline D3DSurface *CreateEdramSurface(
 
 DxTex::DxTex()
     : mFormat((D3DFORMAT)-1), mTexture(0), unk84(0), mRenderTarget(0), mDepthRT(0),
-      mMovieBufIdx(0), mLockedRect(), unka4(0), unka8(0), unkac(0) {
+      mMovieBufIdx(0), unka4(0), unka8(0), unkac(0) {
     gAllTextures.push_back(this);
-    // FLOOR at 97.674416 (40/43 equal). Residual is one target-only dead
-    // `addi r11, r30, 0x9c` at 0x82613844 (immediately before the push_back)
-    // plus a pure scheduling swap of `addi r4, r31, 0x50` / `addi r3, gAllTextures`
-    // at 0x82613818 / 0x82613820. 0x9c is BOTH `&mLockedRect` and
-    // `mMovieTextures + 2`, and neither reading is reachable from source:
-    //   - `memset(&mLockedRect, 0, sizeof(mLockedRect))` in the body, no init-list
-    //     entry: 91.6 -- the two stores sink BELOW unka4/unka8.
-    //   - init list `mLockedRect()` plus `for (i<2) ((int*)&mLockedRect)[i] = 0;`
-    //     before the push_back: 95.3 -- emits the addi AND kills the 24/26 swap,
-    //     but leaves a duplicate `stw r29, 0xa0(r30)` the image does not have.
-    //   - the same loop with the init-list entry dropped: 90.6 -- stores sink again.
-    //   - pointer loop `for (p = mMovieTextures; p != mMovieTextures + 2; p++)`:
-    //     88.2 -- MSVC does not unroll it, emits a real branch and burns r28.
+    // 100 (w12-c): mLockedRect is cleared by its own LockedRect() ctor at its
+    // init-list position (see Tex.h), which is where the image's 0x9c/0xa0
+    // stores sit and what leaves the dead `addi r11, r30, 0x9c` at 0x82613844.
+    // w7's measured alternatives (memset in the body, an explicit loop with or
+    // without `mLockedRect()` in the init list, a pointer loop) all missed.
     for (int i = 0; i < 2; i++) {
         mMovieTextures[i] = 0;
     }
@@ -408,12 +400,9 @@ void DxTex::UnlockBitmap() {
                 DX_ASSERT_CODE(hr, 0x618);
             }
         }
-        // Residual: the image also materializes `addi r11, r31, 0x9c`
-        // (&mLockedRect) here and never uses it. `memset(&mLockedRect, 0,
-        // sizeof(mLockedRect))` is byte-inert against this spelling (measured),
-        // so the dead address comes from something else.
-        mLockedRect.Pitch = 0;
-        mLockedRect.pBits = nullptr;
+        // LockedRect::Clear()'s 2-word loop is the dead `addi r11, r31, 0x9c`
+        // the image materializes here; memset and field stores do not emit it.
+        mLockedRect.Clear();
         unka4 = nullptr;
         unka8 = 0;
     }

@@ -9,7 +9,8 @@
             "keygen_xbox.cpp": {
                 "status": "Matching",
                 "extra_cflags": [
-                    "/Od"
+                    "/Od",
+                    "/Os"
                 ]
             },
             "Main.cpp": "Matching",

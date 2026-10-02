@@ -256,7 +256,11 @@ bool CacheXbox::DeleteSync(const char *cc) {
         XContentFlush(mCacheID.Name(), nullptr);
         if (!res) {
             unsigned int err = GetLastError();
-            if (!IsDeviceConnected(mCacheID.DeviceID())) {
+            // Through ContentData()'s pointer, not DeviceID(): the image stores
+            // `err` to its home slot BEFORE loading the device id (lwz r3 right
+            // after the stw); reading the member through the object lets MSVC
+            // hoist the load above the store (w12-c, measured in-TU).
+            if (!IsDeviceConnected(mCacheID.ContentData()->DeviceID)) {
                 mLastResult = kCache_ErrorStorageDeviceMissing;
             } else {
                 MILO_NOTIFY(
@@ -313,7 +317,7 @@ int CacheXbox::ThreadGetFileSize() {
     HANDLE file = CreateFileA(mThreadStr.c_str(), 0, 1, nullptr, 3, 0x80, nullptr);
     if (file == INVALID_HANDLE_VALUE) {
         err = GetLastError();
-        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        if (!IsDeviceConnected(mCacheID.ContentData()->DeviceID)) {
             return 8;
         } else if (err == 2) {
             return 6;
@@ -347,10 +351,10 @@ int CacheXbox::ThreadGetFileSize() {
         //
         // The 95.83 residual is a 3-cycle of callee-saved registers, and it is
         // NOT a spelling: the image holds this=r30, file=r28, ret=r29, we hold
-        // this=r29, file=r30, ret=r28.  Plus one scheduling row -- we hoist the
-        // `lwz 0x1c` of mCacheID.DeviceID() above `mr r31, r3`, so the argument
-        // has to come back through r11, where the image loads it straight into
-        // r3 after err is parked.
+        // this=r29, file=r30, ret=r28.  The scheduling row that used to sit
+        // next to it (the `lwz 0x1c` hoisted above `mr r31, r3`) is closed by
+        // reading the device id through ContentData() in the CreateFile arm
+        // (w12-c): 100 modulo register permutation.
         DWORD fileSize = 0;
         DWORD res = GetFileSize(file, &fileSize);
         if (res != -1) {
@@ -473,7 +477,7 @@ int CacheXbox::ThreadRead() {
 
     if (!success) {
         unsigned int err = GetLastError();
-        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        if (!IsDeviceConnected(mCacheID.ContentData()->DeviceID)) {
             return 8;
         }
         MILO_NOTIFY(
@@ -516,7 +520,7 @@ int CacheXbox::ThreadDelete() {
     }
     if (!result) {
         unsigned int err = GetLastError();
-        if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        if (!IsDeviceConnected(mCacheID.ContentData()->DeviceID)) {
             return 8;
         }
         MILO_NOTIFY(
@@ -587,8 +591,8 @@ int CacheXbox::ThreadGetDir(String searchPath, String basePath) {
     if (err == 0x15 || err == 0x456 || err == 0x48f || err == 0x651) {
         return 8;
     }
-    if (IsDeviceConnected(mCacheID.DeviceID())) {
-        return -1;
+    if (!IsDeviceConnected(mCacheID.DeviceID())) {
+        return 8;
     }
-    return 8;
+    return -1;
 }

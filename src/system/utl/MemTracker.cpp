@@ -63,14 +63,13 @@ void DiffTblReport(const char *name, BlockStatTable &curTable, BlockStatTable &p
 
     int curIdx = 0;
     int prevIdx = 0;
-    std::vector<MemDiffEntry> diffs;
     int curNum = curTable.GetNumStats();
     int prevNum = prevTable.GetNumStats();
-    // Sole residual row (98.83%): the image emits `add r4, r20, r22` BEFORE
-    // `addi r3, r31, 0x58`, we emit the object address first.  Both operand
-    // orders (`prevNum + curNum`) and hoisting the sum into its own unsigned
-    // local are exactly INERT -- 98.8 / same two rows / same registers -- so
-    // the ordering is the scheduler's, not the source's.
+    std::vector<MemDiffEntry> diffs;
+    // `diffs` is declared AFTER the two counts (w12-c): that is what lets the
+    // scheduler emit `add r4, r20, r22` before `addi r3, r31, 0x58` for the
+    // reserve call, as the image does.  Operand order and an unsigned sum
+    // local were inert (w7).
     diffs.reserve(curNum + prevNum);
 
     while (curIdx < curNum) {
@@ -349,7 +348,7 @@ void MemTracker::StartLog(TextStream &ts) {
         StopLog();
     }
     MILO_ASSERT(!mLog, 0x113);
-    *mLog = ts;
+    mLog = &ts;
     *mLog << "(elf " << TheSystemArgs.front() << ")\n";
     *mLog << "(data\n";
 }

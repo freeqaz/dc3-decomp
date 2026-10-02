@@ -464,22 +464,17 @@ void SkeletonChooser::SwitchActiveToPlayerIndexImmediate(int playerIndex) {
 bool SkeletonChooser::ShouldWaitForRecovery() {
     int id0 = TheGameData->Player(0)->GetSkeletonTrackingID();
     int id1 = TheGameData->Player(1)->GetSkeletonTrackingID();
-    // The `&& skel0` the image's `and r28, r11, r28` (0x82904D28) implies is
-    // unreachable from source: skel0 provably holds 1 there, so MSVC folds the
-    // AND away whichever way it is spelled. Measured at 91.44 for `skel0 &&
-    // ptr`, `skel0 &= ptr != nullptr` and `(ptr != nullptr) & skel0` alike (all
-    // three collapse to clrlwi 24/31); the plain assignment below is 92.90 and
-    // is what the folded form actually means. The two residual rows are the
-    // image's -1/0 MASK idiom (`subfic r11, r3, 0` + `subfe r11, r11, r11`)
-    // where we emit the 0/1 idiom (`subic r11, r3, 1` + `subfe r11, r11, r3`),
-    // plus the `and` that consumes the mask.
+    // `if (... && !skel) flag = false;` is the image's spelling: MSVC turns
+    // the conditional clear into a select, `subfic`/`subfe` mask + `and`
+    // (0x82904D20..28), which it cannot fold against the literal `true`.
+    // Assigning `skel0 = ptr != nullptr` gives the 0/1 idiom instead (w12-c).
     bool skel0 = true;
-    if (id0 > 0) {
-        skel0 = TheGestureMgr->GetSkeletonByTrackingID(id0) != nullptr;
+    if (id0 > 0 && !TheGestureMgr->GetSkeletonByTrackingID(id0)) {
+        skel0 = false;
     }
     bool skel1 = true;
-    if (id1 > 0) {
-        skel1 = TheGestureMgr->GetSkeletonByTrackingID(id1) != nullptr;
+    if (id1 > 0 && !TheGestureMgr->GetSkeletonByTrackingID(id1)) {
+        skel1 = false;
     }
     if ((!skel0 || !skel1) && TheGestureMgr->Recoverer().WaitingToRecover()) {
         return true;
@@ -881,8 +876,9 @@ int SkeletonChooser::RoundRobinForHandRaised(int i) {
 
     if (mNextSkelIdxToTrack >= 0) {
         Skeleton &skel = TheGestureMgr->GetSkeleton(mNextSkelIdxToTrack);
-        id = skel.TrackingID();
-        mSkeletonHandRaisedFilters[0]->Update(skel.TrackingID(), TheTaskMgr.DeltaUISeconds() * 1000.0f);
+        int trackingID = skel.TrackingID();
+        id = trackingID;
+        mSkeletonHandRaisedFilters[0]->Update(trackingID, TheTaskMgr.DeltaUISeconds() * 1000.0f);
         if (mSkeletonHandRaisedFilters[0]->HandRaised()) {
             static Symbol join_in_progress_complete("join_in_progress_complete");
             static Symbol none("none");
@@ -895,7 +891,7 @@ int SkeletonChooser::RoundRobinForHandRaised(int i) {
                 unk80 = 0.08f;
             } else {
                 unk80 -= TheTaskMgr.DeltaUISeconds();
-                if (0 <= id && unk8c < 2) {
+                if (0 <= trackingID && unk8c < 2) {
                     unk84 -= TheTaskMgr.DeltaUISeconds();
                     unk88 -= TheTaskMgr.DeltaUISeconds();
                     if (unk84 <= 0.0f && unk88 <= 0.0f
@@ -1094,23 +1090,17 @@ void SkeletonChooser::ChoosePlayerSides() {
         MILO_ASSERT(pPlayer1Skeleton, 0x1cf);
         MILO_ASSERT(pPlayer2Skeleton, 0x1d0);
 
-        // RESIDUAL (w7-am, 97.1 canonical), three independent row groups:
+        // RESIDUAL (w12-c, 99.4 canonical), two row groups left:
         //   * 82909B7C/82909B80 load `__real@be19999a` into f30 and
         //     `__real@3e19999a` into f31; we get the two constants in the
-        //     other two registers.  8 rows, all of them the relocation NAME
-        //     on the paired lis/lfs plus the fcmpu operand.
-        //   * 82909C4C `clrlwi. r10, r11, 24` / `beq .L_82909D6C` -- the image
-        //     branches to the shared SwapPlayerSides() tail on the FALSE arm
-        //     and lets the true arm fall into the `side0 == kSkeletonLeft`
-        //     test below it; we emit `bne <end>` / `b <swap>`.
-        //   * 82909C80 loads TheGestureMgr above the `activeID` ternary, and
-        //     82909CA8 keeps `mr r30, r3` and `cmplwi cr6, r3, 0x0` separate
-        //     where we fuse them into `mr. r30, r3`.
-        // NEGATIVE RESULT (w7-am, 2026-09-14): hoisting the two thresholds into
-        // named `const float` locals declared -0.15f-first does NOT flip the
-        // f30/f31 assignment (still 97.1), and neither does inlining the
-        // `activeID` ternary into the GetSkeletonByTrackingID() argument so the
-        // object expression is evaluated first (still 97.1, same 19 rows).
+        //     other two registers (4 fcmpu rows).  Inert: thresholds as named
+        //     `const float` locals declared -0.15f-first (w7-am), and
+        //     inverting the side test so the +0.15 arm comes first (w12-c).
+        //   * 82909CA8 keeps `mr r30, r3` and `cmplwi cr6, r3, 0x0` separate
+        //     at the pPlayerSkeleton assert where we fuse them into `mr.`.
+        // Closed by w12-c: the swap tests are one `||` condition (the image's
+        // fall-through from the Right test into the Left test), and
+        // TheGestureMgr is read before the activeID select.
         SkeletonSide side0 = GetPlayerSide(0);
         int newSide0;
         if (side0 == kSkeletonRight) {
@@ -1136,21 +1126,17 @@ void SkeletonChooser::ChoosePlayerSides() {
             }
         } else {
             bool swapTest = pPlayer1Skeleton->GetUnkab0().x >= pPlayer2Skeleton->GetUnkab0().x;
-            if (side0 == kSkeletonRight) {
-                if (!swapTest) {
-                    SwapPlayerSides();
-                }
-            } else if (side0 == kSkeletonLeft) {
-                if (swapTest) {
-                    SwapPlayerSides();
-                }
+            if ((side0 == kSkeletonRight && !swapTest)
+                || (side0 == kSkeletonLeft && swapTest)) {
+                SwapPlayerSides();
             }
         }
     } else {
         if ((id0 > 0) ^ (id1 > 0)) {
             if (locked) {
+                GestureMgr *gestureMgr = TheGestureMgr;
                 int activeID = (id0 > 0) ? id0 : id1;
-                Skeleton *pPlayerSkeleton = TheGestureMgr->GetSkeletonByTrackingID(activeID);
+                Skeleton *pPlayerSkeleton = gestureMgr->GetSkeletonByTrackingID(activeID);
                 MILO_ASSERT(pPlayerSkeleton, 0x1fb);
                 // Two GetPlayerSide calls that MSVC cross-jumps into one, with
                 // the argument register set by the branch (li r4,0 / bne /
@@ -1165,14 +1151,9 @@ void SkeletonChooser::ChoosePlayerSides() {
                 }
                 bool xGtThresh = pPlayerSkeleton->GetUnkab0().x > 0.15f;
                 bool xLtNegThresh = pPlayerSkeleton->GetUnkab0().x < -0.15f;
-                if (side == kSkeletonRight) {
-                    if (xLtNegThresh) {
-                        SwapPlayerSides();
-                    }
-                } else if (side == kSkeletonLeft) {
-                    if (xGtThresh) {
-                        SwapPlayerSides();
-                    }
+                if ((side == kSkeletonRight && xLtNegThresh)
+                    || (side == kSkeletonLeft && xGtThresh)) {
+                    SwapPlayerSides();
                 }
             }
         }
