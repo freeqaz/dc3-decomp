@@ -1132,14 +1132,9 @@ void SkeletonChooser::ChoosePlayerSides() {
             }
         } else {
             bool swapTest = pPlayer1Skeleton->GetUnkab0().x >= pPlayer2Skeleton->GetUnkab0().x;
-            if (side0 == kSkeletonRight) {
-                if (!swapTest) {
-                    SwapPlayerSides();
-                }
-            } else if (side0 == kSkeletonLeft) {
-                if (swapTest) {
-                    SwapPlayerSides();
-                }
+            if ((side0 == kSkeletonRight && !swapTest)
+                || (side0 == kSkeletonLeft && swapTest)) {
+                SwapPlayerSides();
             }
         }
     } else {
@@ -1161,14 +1156,9 @@ void SkeletonChooser::ChoosePlayerSides() {
                 }
                 bool xGtThresh = pPlayerSkeleton->GetUnkab0().x > 0.15f;
                 bool xLtNegThresh = pPlayerSkeleton->GetUnkab0().x < -0.15f;
-                if (side == kSkeletonRight) {
-                    if (xLtNegThresh) {
-                        SwapPlayerSides();
-                    }
-                } else if (side == kSkeletonLeft) {
-                    if (xGtThresh) {
-                        SwapPlayerSides();
-                    }
+                if ((side == kSkeletonRight && xLtNegThresh)
+                    || (side == kSkeletonLeft && xGtThresh)) {
+                    SwapPlayerSides();
                 }
             }
         }
