@@ -1025,20 +1025,8 @@ void UtilDrawCigar(
     float sLen1;
     {
         float scaledLens[2];
-        {
-            int cnt = 2;
-            float *dst = scaledLens;
-            do {
-#ifdef HX_NATIVE
-                *dst = *(float *)((intptr_t)(lengths)
-                                  + ((intptr_t)dst - (intptr_t)scaledLens))
-                    * scale;
-#else
-                *dst = *(float *)((int)(lengths) + ((int)dst - (int)scaledLens)) * scale;
-#endif
-                dst++;
-                cnt--;
-            } while (cnt != 0);
+        for (int n = 0; n < 2; n++) {
+            scaledLens[n] = lengths[n] * scale;
         }
         memcpy(&basis, &tf, 0x40);
         Normalize(basis.m, basis.m);
