@@ -95,6 +95,12 @@ BEGIN_LOADS(SkeletonViz)
     PostLoad(bs);
 END_LOADS
 
+// w15-r: file-scope .rdata ahead of INIT_REVS.  The image holds 45.58f (0x423651EC)
+// at 0x82031C08, immediately before gRev (0x82031C0C); SetFrustum's 0x3F4BA745 is
+// exactly 45.58f * DEG2RAD.  With it, gRev is no longer at offset 0 of this TU's
+// .rdata, and MSVC anchors the ASSERT_REVS pair on gAltRev like the image.
+const float kPhysicalCamFovDeg = 45.58f;
+
 INIT_REVS(6, 1)
 
 // w15-a (98.45 canonical): the whole residual is the INIT_REVS anchor pick
@@ -276,7 +282,7 @@ void SkeletonViz::SetCamera(
             float tiltRad = frame.TiltAngle();
             float tilt = tiltRad * RAD2DEG;
             mPhysicalCam->SetLocalRot(Vector3(tilt, 0.0f, mPhysicalCamRotation));
-            mPhysicalCam->SetFrustum(0.01f, 10.0f, 0.7955211f, 1.0f);
+            mPhysicalCam->SetFrustum(0.01f, 10.0f, kPhysicalCamFovDeg * DEG2RAD, 1.0f);
         } else {
             Transform xfm;
             xfm.Reset();

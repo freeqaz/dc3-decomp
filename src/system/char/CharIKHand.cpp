@@ -131,15 +131,20 @@ BEGIN_COPYS(CharIKHand)
     END_COPYING_MEMBERS
 END_COPYS
 
-INIT_REVS(0xC, 0)
+// w15-r: ONE file-scope 144.0f shared by Poll and Highlight -- both load it from
+// the same named .rdata slot (lfs ..., lbl_82012C68@l at 0x823857A8 and
+// 0x82386FC0), which sits directly before gRev (0x82012C6C).  With gRev off
+// offset 0 of this TU's .rdata MSVC anchors ASSERT_REVS on gAltRev like the image.
+const float kMaxWeight = 144.0f;
+
+// gRev is 0xD in the image (0x000D0000 at 0x82012C6C), matching SAVE_REVS and
+// ASSERT_REVS; it used to read 0xC here, so the version-mismatch message printed 12.
+INIT_REVS(0xD, 0)
 
 BEGIN_LOADS(CharIKHand)
     LOAD_REVS(bs)
-    // AT LIMIT at 99.216 -- same 7 rows, same cause, as CharEyes::Load. Every
-    // mismatch is inside this macro's two MakeString calls and is the gRev /
-    // gAltRev CSE anchor pick (target anchors gAltRev and reaches gRev by
-    // `subi r7, r29, 0x4`; we anchor gRev). Shared-macro bound, not source
-    // shape: docs/decomp/patterns/relocation-names-are-unmetered.md:708.
+    // w15-r: was 99.216 on the gRev/gAltRev anchor pick; closed by restoring the
+    // file-scope kMaxWeight above INIT_REVS (see there).
     ASSERT_REVS(0xD, 0)
     LOAD_SUPERCLASS(Hmx::Object)
     LOAD_SUPERCLASS(CharWeightable)
@@ -268,7 +273,6 @@ void CharIKHand::PollDeps(
 
 void CharIKHand::Poll() {
     float charWeight = Weight();
-    static const float kMaxWeight = 144.0f;
     RndTransformable *hand = mHand;
     if (!hand || mTargets.empty())
         return;
@@ -641,7 +645,7 @@ void CharIKHand::Highlight() {
                  ++it, i++) {
                 RndTransformable *curTarget = it->mTarget;
                 if (curTarget) {
-                    float w = 144.0f / LengthSquared(curTarget->LocalXfm().v);
+                    float w = kMaxWeight / LengthSquared(curTarget->LocalXfm().v);
                     localWeights[i] = w;
                     leftover += w;
                 }

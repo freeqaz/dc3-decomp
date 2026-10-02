@@ -43,6 +43,11 @@ DECLARE_MESSAGE(LeftHandListEngagementMsg, "left_hand_list_engagement")
 LeftHandListEngagementMsg(bool b);
 END_MESSAGE
 
+// w15-r: ?sListStateMinDisplay@HamNavList@@0HB is in ham_xbox_r.map at 0x820326D8
+// (value 7), the word directly before gRev.  Without it gRev sat at offset 0 of
+// this TU's .rdata and MSVC anchored PreLoad's ASSERT_REVS pair on gRev; the image
+// anchors on gAltRev (`subi r7, r29, 0x4`).
+const int HamNavList::sListStateMinDisplay = 7;
 const int HamNavList::sListStateMaxDisplay = HamListRibbon::sNumListSelectable + 6;
 bool HamNavList::sForceDisengage;
 /** Distinct file-scope gate the retail build reads before running the scroll
@@ -226,14 +231,8 @@ BEGIN_LOADS(HamNavList)
     PostLoad(bs);
 END_LOADS
 
-// w14-b (PreLoad still 98.51, the gAltRev-anchor family -- see RhythmBattlePlayer
-// ::Load / RndSpline::Load): declaring the pair here by hand in REVERSE order
-// (gAltRev first) makes MSVC anchor on gAltRev like the image (98.51 -> 99.92),
-// but lays gAltRev out FIRST, so gRev becomes anchor+4 (`addi r7, r30, 0x4`)
-// where the image has anchor-4 (`subi`, gRev at 0x820326DC, gAltRev at
-// 0x820326E0). Not taken: it misplaces the data and hand-spells a shared macro.
-// Note symbols.txt sizes ?sListStateMinDisplay@HamNavList@@0HB at 0x8, which
-// swallows the gRev word at 0x820326DC (candidate for lane w14-l).
+// w14-b/w15-r: PreLoad's gAltRev-anchor residual (98.51) closed by defining
+// sListStateMinDisplay (above), which the map places just ahead of gRev.
 INIT_REVS(10, 0)
 
 void HamNavList::PreLoad(BinStream &bs) {
