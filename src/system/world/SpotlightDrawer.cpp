@@ -248,7 +248,7 @@ void SpotlightDrawer::DrawLenses(
     SpotlightDrawer::SpotlightEntry *const &spotEnd
 ) {
     MILO_ASSERT(spotIter != spotEnd, 0x2b1);
-    for (; spotEnd != spotIter; ++spotIter) {
+    for (; spotIter != spotEnd; ++spotIter) {
         Spotlight *sl = spotIter->mSpotlight;
         // The guard is the LENS MATERIAL and the assert is on sDiskMesh -- that
         // is the image's nesting, not the other way round, and it is a
