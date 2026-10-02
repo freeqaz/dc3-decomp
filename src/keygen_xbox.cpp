@@ -116,10 +116,10 @@ void KeyChain::getMasher(unsigned char *uc) {
 }
 
 void mash(unsigned char *uc1, unsigned char *uc2) {
-    unsigned int *ui1 = (unsigned int *)uc1;
-    unsigned int *ui2 = (unsigned int *)uc2;
+    unsigned int *in = (unsigned int *)uc2;
+    unsigned int *out = (unsigned int *)uc1;
     for (int i = 0; i < 8; i++) {
-        ui1[i] = ui1[i] ^ ui2[i];
+        out[i] = out[i] ^ in[i];
     }
 }
 
