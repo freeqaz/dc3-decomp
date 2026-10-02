@@ -334,31 +334,32 @@ void HamRibbon::UpdateMesh() {
         ObjPtrList<RndTransformable>::iterator it = mSegTrans.begin();
         float lastFrame = mChaseKeys.back().frame;
         Key<Transform> *keyPtr;
+        // RESIDUAL (w13-b, 98.81): the image tests this in cr0 (`cmpwi r23, 0x0`
+        // / `bgt`), we use cr6.  `>= 1` is worse; the loop below is now exact.
         if (histSize > 0) {
             keyPtr = &mChaseKeys[0];
         }
-        int segIdx = 0;
-        if (mNumSegments > 0) {
-            do {
-                MILO_ASSERT(histSize > 0, 0x12A);
-                Key<Transform> keyLocal = *keyPtr;
-                Transform xfm = keyLocal.value;
-                if (mTaper) {
-                    float scale = 1.0f - (lastFrame - keyLocal.frame) / mDecay;
-                    Hmx::Matrix3 taperMtx;
-                    taperMtx.x.Set(scale, 0, 0);
-                    taperMtx.y.Set(0, scale, 0);
-                    taperMtx.z.Set(0, 0, scale);
-                    Multiply(taperMtx, xfm.m, xfm.m);
-                }
-                RndTransformable *t = *it;
-                t->SetLocalXfm(xfm);
-                ++segIdx;
-                ++it;
-                if (segIdx < histSize) {
-                    keyPtr++;
-                }
-            } while (segIdx < mNumSegments);
+        // w13-b: a counted for loop testing `segIdx + 1 < histSize`; the image
+        // computes segIdx+1 once (addi r11, r25, 0x1) and commits it as the
+        // increment (mr r25, r11).  96.68 -> 98.81.
+        for (int segIdx = 0; segIdx < mNumSegments; segIdx++) {
+            MILO_ASSERT(histSize > 0, 0x12A);
+            Key<Transform> keyLocal = *keyPtr;
+            Transform xfm = keyLocal.value;
+            if (mTaper) {
+                float scale = 1.0f - (lastFrame - keyLocal.frame) / mDecay;
+                Hmx::Matrix3 taperMtx;
+                taperMtx.x.Set(scale, 0, 0);
+                taperMtx.y.Set(0, scale, 0);
+                taperMtx.z.Set(0, 0, scale);
+                Multiply(taperMtx, xfm.m, xfm.m);
+            }
+            RndTransformable *t = *it;
+            t->SetLocalXfm(xfm);
+            ++it;
+            if (segIdx + 1 < histSize) {
+                keyPtr++;
+            }
         }
     }
 }
