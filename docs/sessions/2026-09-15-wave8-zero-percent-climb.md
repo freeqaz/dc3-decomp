@@ -1359,3 +1359,75 @@ function-level census says otherwise: of the 704 remaining authorable functions,
 file). Wave 13 dispatched five directory-disjoint lanes over them, plus one lane (w13-o)
 owning `math/Vec.h` / `math/Mtx.h` to chase the y, z, x component order several wave-12
 lanes observed in the image.
+
+## Wave 13 — fresh near-misses, and a linkage lever (2026-10-02)
+
+Wave 13 worked the census from the end of wave 12: functions at ≥ 90 % that no lane commit
+since 2026-09-15 had named (372 rows), in five directory-disjoint lanes, plus w13-o owning
+`math/Vec.h` / `math/Mtx.h` to test the y, z, x component-order residuals. Another session
+landed and pushed two unrelated changes to main mid-wave (`decomp-xex`, `d3ddecl`: XDK data
+symbol sizes, the XEX builder, one `d3d9types.h` constant); each lane was rebased onto them
+and the baseline re-pinned, and they moved no function rows.
+
+**31,554 → 31,607 matched (+53)**; authorable canonical **31,517 → 31,568 / 32,221
+(97.82 % → 97.97 %)**; all-100 authorable units **697 → 702 / 967**; remaining authorable
+**704 → 653 functions (523,472 → 497,868 B)**; XEX matched code 49.51 % → 49.70 %
+(`scripts/progress_metrics.py` at `c6509d70d`). Every landing UP-only, five build guards
+green, native gate 623 / 554 / 554 / 0 / 69 each time.
+
+| lane | UP | units completed | matched |
+|---|---:|---|---|
+| w13-e | 6 | 0 | 31554 → 31560 |
+| w13-a | 14 | 0 | 31560 → 31572 |
+| w13-o | 5 | 0 | 31572 → 31576 |
+| w13-b | 9 | 0 | 31576 → 31583 |
+| w13-c | 8 | 0 | 31583 → 31591 |
+| w13-d | 21 | MemMgr-adjacent units | 31591 → 31607 |
+
+Yield per lane was lower than wave 12's (≈ 15 % of the rows listed closed): a "fresh" row is
+fresh to the commit log, not necessarily easy, and many carried wave 1–7 refutations.
+
+### Behaviour bugs, adjudicated against the target `.s`
+
+1. **`GetExpCode`** (os/Debug.cpp) fell off the end of the function for any unknown code
+   ≤ `0xC000008D` — the hand-unrolled tree's first half ended in `default: break;` — so it
+   returned whatever was in r3. Every unmatched code in the image reaches the
+   "Unhandled Exception %d" block at `.L_825CC524` (`bne` at `825CC38C` / `825CC404`, `bgt`
+   at `825CC470`).
+2. **`DxRnd::Present`** stored `PIXGetCaptureState() & 2` raw (0/2) into its flag; the image
+   normalizes to 0/1 (`rlwinm` / `subic` / `subfe` / `stb` at `82615AD0..DC`).
+3. **`EQEffect::SetParameter`** band 4 added in double where the image uses `fadds`
+   (precision only).
+
+### The linkage lever (w13-d)
+
+MemMgr's "anchor + displacement" rows had been certified a floor by two lanes. The cause was
+linkage: MSVC addresses one global as a fixed offset off another's base register only when
+**both are `static`** in the TU. `gHeaps` / `gNumHeaps` / `gNewOperatorAlign` were `extern`
+only because someone had hand-written mangled names for them in `symbols.txt` — and those
+entries carried no `scope:global`, while the retail map lists no static data at all. Made
+static (bare spellings in `symbols.txt`, addresses inside MemMgr's `.bss` split), with three
+unreferenced image ints filled by stand-ins so the offsets line up: **eleven functions to
+100**. The config holds **102** more file-scope mangled data names without `scope:global`;
+wave 14 lane w14-l works through them.
+
+### The math-header question (w13-o)
+
+The y, z, x residuals do **not** come from term order inside the Vec.h / Mtx.h helper
+bodies. Under `/fp:fast` MSVC re-sorts a flat sum itself — writing `Dot`'s terms as y, z, x is
+byte-identical — and the order it emits depends on surrounding code (scratch TUs: `Length`
+alone y, x, z; `Dot` alone y, z, x; `Subtract` then `Length` z, x, y). Every body reordering
+lost whole-binary (`Length = sqrt(LengthSquared)`: 2 up, 7 down; explicit parentheses in `Dot`:
+5 functions off 100). What worked was changing how a body is **built** — `Multiply(v, t, out)`'s
+aliasing arm through a temporary plus `Add`, `Normalize(Matrix3)` via `Cross()` — and fixing
+component order at the call site. Negative results are recorded in both headers.
+
+### Other levers (all measured in-tree)
+
+- Moving a small operator inline into the header (COMDAT) stops MSVC propagating its register
+  usage into callers: `Edge::operator<` overturned w8-h's 89.6 floor on the `set<Edge>`
+  templates (`_M_find` 89.6 → 100). The retail map has no out-of-line copy, so no row is lost.
+- Early `return` instead of `else` orders AutoTimer frame slots (WorldDir); `T *self = this`
+  pins the full object when a method is entered through a base-class thunk (Spotlight).
+- A bare MemPushTemp/MemPopTemp pair is a `MemDoTempAllocations` scope; a hand-written
+  `while (!empty()) pop_back()` is the container's own `clear()`.
