@@ -100,8 +100,8 @@ void CharClipDisplay::DrawBlend(float beat, float weight) {
     float x1 = GetX(beat);
     rect.x = x1;
     float x2 = GetX(beat + weight);
-    rect.w = x2 - x1;
     Hmx::Color blendColor(0.0f, 0.0f, 1.0f, 0.4f);
+    rect.w = x2 - x1;
     TheRnd.DrawRect(rect, blendColor, nullptr, nullptr, nullptr);
     rect.h = 4.0f;
     rect.y = mDrawPosY - 1.0f;
