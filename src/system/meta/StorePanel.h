@@ -86,8 +86,11 @@ public:
     StorePreviewMgr *mStorePreviewMgr; // 0x6c
     bool mNeedsReEnum;
     StorePurchaser *mPurchaser; // 0x74
-    StorePurchaseable *mCheckoutItem;
-    Profile *mCheckoutProfile;
+    // w14-f: one pair, not two loose pointers.  The ctor's inlined pair ctor
+    // reaches `this + 0x78` twice and leaves the image's dead home store of that
+    // address (`stw r9, 0x58(r31)`, StorePanel ctor); two plain members fold it
+    // away.  The same item/profile pairing is what mCartOffers holds.
+    std::pair<StorePurchaseable *, Profile *> mCheckout; // 0x78
     std::vector<std::pair<StorePurchaseable *, const Profile *>> mCartOffers;
     Symbol mPurchaseSource;
     Symbol mBackupPurchaseSource;

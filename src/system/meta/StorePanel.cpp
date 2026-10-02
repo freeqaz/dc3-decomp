@@ -24,7 +24,7 @@
 StorePanel::StorePanel()
     : mNeedsCacheLoad(false), mLoadOk(false), mShowTestOffers(false), mArtLoader(0),
       mAlbumTex(Hmx::Object::New<RndTex>()), mPendingArtCallback(0), mEnumJobID(-1),
-      mStorePreviewMgr(0), mNeedsReEnum(false), mPurchaser(0), mCheckoutItem(nullptr), mCheckoutProfile(0),
+      mStorePreviewMgr(0), mNeedsReEnum(false), mPurchaser(0),
       mPurchaseSource(gNullStr), mBackupPurchaseSource(gNullStr), unk94(0), mPostPurchaseJob(0) {}
 
 StorePanel::~StorePanel() {
@@ -198,18 +198,18 @@ void StorePanel::Poll() {
                     }
                 } else {
                     // Single item checkout
-                    if (mCheckoutItem != 0 && !mCheckoutItem->isPurchased) {
+                    if (mCheckout.first != 0 && !mCheckout.first->isPurchased) {
                         if (mPurchaser->PurchaseMade()) {
                             enumFinished = true;
-                            mCheckoutItem->isPurchased = true;
+                            mCheckout.first->isPurchased = true;
                             static Message msg("enum_finished");
                             HandleType(msg.mData);
                             TheUI->Handle(msg.mData, false);
-                        } else if (mPurchaser->NeedsEnum() && mCheckoutProfile != 0) {
+                        } else if (mPurchaser->NeedsEnum() && mCheckout.second != 0) {
                             PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
                                     this,
-                                    mCheckoutProfile->GetPadNum(),
-                                    mCheckoutItem->songID,
+                                    mCheckout.second->GetPadNum(),
+                                    mCheckout.first->songID,
                                     mPurchaser->Source(),
                                     mPurchaser->UserIndex()
                                 );
@@ -228,8 +228,8 @@ void StorePanel::Poll() {
 
             delete mPurchaser;
             mPurchaser = 0;
-            mCheckoutItem = 0;
-            mCheckoutProfile = 0;
+            mCheckout.first = 0;
+            mCheckout.second = 0;
             mCartOffers.clear();
         }
     }
@@ -246,8 +246,8 @@ void StorePanel::Unload() {
     }
     mEnumJobID = -1;
     RELEASE(mPurchaser);
-    mCheckoutItem = 0;
-    mCheckoutProfile = 0;
+    mCheckout.first = 0;
+    mCheckout.second = 0;
     mCartOffers.clear();
     mStorePreviewMgr->RemoveSink(this);
     RELEASE(mStorePreviewMgr);
@@ -282,8 +282,8 @@ void StorePanel::CheckOut(StorePurchaseable *p) {
     Profile *profile = StoreProfile();
     MILO_ASSERT(profile, 0x2c4);
 
-    mCheckoutItem = p;
-    mCheckoutProfile = profile;
+    mCheckout.first = p;
+    mCheckout.second = profile;
     mPurchaser =
         new XboxPurchaser(profile->GetPadNum(), p->SongID(), 0, 0, mPurchaseSource, 0);
     mPurchaser->Initiate();
