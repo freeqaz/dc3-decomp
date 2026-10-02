@@ -209,34 +209,49 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
     return node.err < maxError;
 }
 
+// BUG FIX (w19-x): every use was shifted one parameter to the left -- the
+// assert, the break test, both search bounds, the recursion offset and the new
+// endBeat used param 1 where the image uses param 2 and param 2 where it uses
+// param 3, and param 3 was only ever forwarded.  The image (prologue binds
+// f26=p1 f30=p2 f29=p3 f28=startBeat f31=endBeat):
+//   0x823E5EC0 `fcmpu cr6, f30, f25`   MILO_ASSERT(p2 > 0) -- its message is
+//                                       the image's "minDist > 0" string
+//   `fsubs f0, f31, f28` / `fcmpu cr6, f0, f29`  break if end - start <= p3
+//   `fadds f0, f30, f29` / `fadds f0, f0, f28`   searchEnd = p2 + p3 + start
+//   `fsubs f13, f31, f29` / `fsubs f13, f13, f30` searchStart = end - p3 - p2
+//   `fmr f1, f26`                                FindBestNode(p1, ...)
+//   0x823E5F8C `fadds f4, f27, f30`, `fsubs f31, f27, f30`: recurse at cur + p2, end = cur - p2
+// RB3's FindBestNodeRecurse(maxError, searchRadius, minGap, ...) has the same
+// shape.  The caller passes (minErr, 0.45 * maxDist, maxDist - 0.9 * maxDist).
 void ClipDistMap::FindBestNodeRecurse(
-    float minDist, float searchRadius, float minGap, float startBeat, float endBeat
+    float maxError, float minDist, float minGap, float startBeat, float endBeat
 ) {
     while (true) {
         MILO_ASSERT(minDist > 0, 0x26c);
-        if (endBeat - startBeat <= searchRadius) break;
+        if (endBeat - startBeat <= minGap) break;
 
-        float searchEnd = minDist + searchRadius + startBeat;
-        float searchStart = endBeat - searchRadius - minDist;
+        float searchEnd = minDist + minGap + startBeat;
+        float searchStart = endBeat - minGap - minDist;
         searchEnd = (endBeat - searchEnd >= 0.0f) ? endBeat : searchEnd;
         searchStart = (startBeat - searchStart >= 0.0f) ? searchStart : startBeat;
 
         Node node;
-        if (!FindBestNode(minDist, searchStart, searchEnd, node)) break;
+        if (!FindBestNode(maxError, searchStart, searchEnd, node)) break;
 
-        // Check for duplicate curBeat in mNodes
+        // A node already in mNodes ENDS the search: 0x823E5F68 `beq cr6,
+        // .L_823E5FA8` jumps straight to the epilogue (BUG FIX w19-x -- this
+        // used to skip only the push_back and keep recursing, as RB3 does).
         float curBeat = node.curBeat;
         unsigned int count = mNodes.size();
         unsigned int i = 0;
         for (; i < count; i++) {
             if (mNodes[i].curBeat == curBeat)
-                goto skip;
+                return;
         }
         mNodes.push_back(node);
-    skip:;
 
         // Recurse on right half, loop on left half
-        FindBestNodeRecurse(minDist, searchRadius, minGap, curBeat + minDist, endBeat);
+        FindBestNodeRecurse(maxError, minDist, minGap, curBeat + minDist, endBeat);
         endBeat = curBeat - minDist;
     }
 }
