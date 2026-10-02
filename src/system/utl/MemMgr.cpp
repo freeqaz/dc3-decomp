@@ -216,14 +216,13 @@ void MemFree(void *mem, const char *file, int line, const char *name) {
         CritSecTracker tracker(gMemLock);
         int i;
         int freed = 0;
-        MemHeap *heap = gHeaps;
-        for (i = 0; i < gNumHeaps; i++, heap++) {
+        for (i = 0; i < gNumHeaps; i++) {
             // No `if (heap)` here: the image's loop body at 0x827CB148 is
             // `mr r4, r26; mr r3, r29; bl Free` -- there is no compare and no
             // branch between the loop top and the call, so the original calls
             // Free unconditionally. `heap` walks a static array, so the guard
             // could never fire anyway.
-            freed = heap->Free((int *)mem);
+            freed = gHeaps[i].Free((int *)mem);
             if (freed)
                 break;
         }
