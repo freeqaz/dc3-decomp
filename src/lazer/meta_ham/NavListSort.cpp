@@ -167,6 +167,9 @@ void NavListSort::DeleteTree() {
 // `notFound:` label inside the aSize==0 arm (so the image's inline
 // `li r3, 0; b epilogue` block exists in source) is byte-identical -- MSVC
 // re-sinks the shared return-false block regardless.
+// w18-e: `switch (aSize) { case 0: return false; case 1: {...} }` is
+// much worse (66.6, the dispatch becomes cmplwi/blt).  Note the image's
+// `cmpwi r24, 0x0` is a cr0 compare.
 bool NavListSort::SetHighlightID(DataArray *a) {
     // Retail clears mHighlightNode BEFORE reading a->Size(): the
     // stw r10,0x50(r3) sits between the load of the old value and the

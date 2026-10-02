@@ -617,6 +617,9 @@ void GroupSeqInst::SetTranspose(float f) {
 // childrenSize just before the NextIndex call, at an EH-table label).  The map
 // lists RandomGroupSeq::AddToPlayedHistory as `f i`; marking it inline (it is
 // reached through PickNextIndex) is byte-inert for this ctor, so not kept.
+// w18-e (99.10): `next % children.size()` reloads the size after NextIndex
+// (98.2); std::min(mNumSeqs, childrenSize) homes childrenSize before the
+// compare and selects addresses (95.3).  The image's min is a value select.
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
     : GroupSeqInst(seq, false), mIt(mSeqs.end()) {
     ObjPtrList<Sequence> &children = seq->Children();

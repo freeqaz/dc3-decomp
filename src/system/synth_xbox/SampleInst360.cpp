@@ -27,6 +27,8 @@ bool SampleInst360::IsPlaying() { return mVoice->IsPlaying(); }
 
 void SampleInst360::SetFXCore(FXCore core) {}
 
+// w18-e (98.507): binding the loop-end select to `const int &` turns it
+// into a real address select (87.7) -- not the source of the clrrwi.
 float SampleInst360::GetProgress() {
     XAUDIO2_VOICE_STATE state;
     ((IXAudio2SourceVoice *)mVoice->mPoolVoice.sourceVoice)->GetState(&state, 0);

@@ -9,6 +9,8 @@ extern int CalculateSinCosTable(long, float *);
 int FFTRealForward(float *data, unsigned long size, float *context);
 extern "C" int _vsprintf_s_l(void *, char *, unsigned int, const char *, void *, va_list);
 
+// w18-e (97.55): routing the third copy through a static inline
+// `if (n != 0) memcpy(...)` helper is inert (still cr6).
 void FftIpp::FftRealCcs(const float *__restrict in, float *__restrict out) {
     if ((unsigned int)mSize != 0) {
         memcpy(&mBuf3[0], in, mSize * 4);

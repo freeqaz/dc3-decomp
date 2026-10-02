@@ -215,6 +215,9 @@ long Voice::createOrReuse(
 // `!= 6 && != 2` with the arms swapped: the image falls through into the
 // cos/sin arm (`bne cr6` at 0x82E374F8), we fall through into the fill-1.0
 // arm, and neither spelling of the condition moves that.
+// w18-e (94.97): a static inline OutputFor(mFxSend) helper for the six
+// ternaries is worse (93.3 -- its null tests come out as cr0 compares);
+// declaring the stereo destChannels above the assert is worse (94.8).
 void Voice::UpdateMix() {
     if (mPoolVoice.sourceVoice == 0)
         return;

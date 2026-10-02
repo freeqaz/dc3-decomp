@@ -162,6 +162,11 @@ uint FIRFilter::evaluateFilterMono(
 // Set filter coeffiecients and length.
 //
 // Throws an exception if filter length isn't divisible by 8
+// w18-e (97.5, 2 rows): the image schedules `stw r26, 0xc(r30)`
+// (resultDivFactor) after the `lis` of __real@40000000; we store first.
+// Inert: pow(2.0f, (int)uResultDivFactor), the assignment folded into the
+// pow argument, a const parameter.  The ??_V/RadFree and MakeString call-name
+// rows are ICF folds.
 void FIRFilter::setCoefficients(
     const SAMPLETYPE *coeffs, uint newLength, uint uResultDivFactor
 ) {
