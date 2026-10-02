@@ -94,9 +94,16 @@ CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
 }
 
 void CharClipDisplay::DrawBeatString(char const *c, float f1, Hmx::Color const &color) {
-    float posY = mDrawPosY - 4.0f;
-    float posX = GetX(f1) - 18.0f;
-    TheRnd.DrawString(c, Vector2(posY, posX), color, true);
+    // BUG FIX (w19-x): x is the beat's column minus 4, y is the row minus 18.
+    // Image 0x823DF25C `fsubs f0, f12, f0` (f12 = mDrawPosY, 0x18; f0 = 18.0f)
+    // stored to the Vector2's .y (0x54(r1)), then 0x823DF264 `fsubs f0, f1, f13` (f1 =
+    // GetX(), f13 = 4.0f) stored to .x (0x50(r1)).  We had both the axes and
+    // the offsets crossed (x = mDrawPosY - 4, y = GetX - 18).  RB3 agrees.
+    float x = GetX(f1);
+    Vector2 pos;
+    pos.y = mDrawPosY - 18.0f;
+    pos.x = x - 4.0f;
+    TheRnd.DrawString(c, pos, color, true);
 }
 
 void CharClipDisplay::DrawBlend(float beat, float weight) {
