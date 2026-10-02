@@ -572,6 +572,17 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
     // dies at the end of the full expression, so the image reuses that slot
     // (0x64) for the MILO_ASSERT line number and again for Symbol("crew01").
     // Naming it shifted every later local by 4 and cost 33 instructions.
+    // w17-b (stopped at 99.906): the whole residual is that the image puts
+    // Venue()'s result in the SAME slot (0x64) as the return-value EH flag
+    // (`stw r30, 0x64` before the Obj<> call), the MILO_ASSERT line temp and
+    // Symbol("crew01"), and reads venueName back from that slot (`lwz r20,
+    // 0x64(r31)`, after the gNullStr load).  Ours gives the Venue temp its own
+    // slot (0x68) and every later local shifts.  Measured, all no better: a
+    // block-scoped `Symbol venue` (reads from the slot, but venue at 0x64 and
+    // the flag pool moves to 0x68: 99.2), function-scope `Symbol venue` (same
+    // 99.2), `const Symbol &venue = Venue()` (99.2), `Symbol venue; venue =
+    // Venue();` and `static_cast<Symbol>(Venue()).Str()` (both = this, 99.906),
+    // `gNullStr == venueName` operand order (inert).
     const char *venueName = TheGameData->Venue().Str();
     if (venueName == gNullStr && TheWorld) {
         String worldPath(TheWorld->GetPathName());
