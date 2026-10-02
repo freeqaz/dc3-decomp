@@ -107,9 +107,15 @@ void AllocInfo::Print(TextStream &ts) const {
             ts << "(pooled) ";
         ts << "(actual " << mActSize << ") (heap_number " << mHeap << ") (location "
            << mFile << " " << mLine << ") ";
+        // w14-d (94.05 -> 100): the frame value is loaded once and printed
+        // from the register it was tested in (`lwz r4` / `lwzu r4, 0x4`), and
+        // the counter is initialised ahead of the "(stack " write (`li r28, 0`
+        // sits above that call in the image).
+        int i = 0;
         ts << "(stack ";
-        for (int i = 0; mStackTrace[i] != 0 && i < 16; i++) {
-            ts << mStackTrace[i] << " ";
+        int frame;
+        for (; (frame = mStackTrace[i]) != 0 && i < 16; i++) {
+            ts << frame << " ";
         }
         ts << ") ";
     }
