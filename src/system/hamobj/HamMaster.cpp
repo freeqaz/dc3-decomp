@@ -26,7 +26,7 @@ HamMaster *TheMaster;
 HamMaster::HamMaster(HamSongData *data, MidiParserMgr *mgr)
     : mSongData(data), mAudio(nullptr), mMidiParserMgr(mgr), mSongInfo(nullptr),
       mLoader(0), mLoaded(0), mSongMs(0), mStreamMs(-1), mStreamJumped(0), mPreJumpMs(-1), mPostJumpMs(-1),
-      mStreamMsAtJump(-1), unk9c(0), unka0(0), unka4(0), unkb0(0), mMetronome(0) {
+      mStreamMsAtJump(-1), unk9c(0, 0), unka4(0), unkb0(0), mMetronome(0) {
     Reset();
     mAudio = new HamAudio();
 }
