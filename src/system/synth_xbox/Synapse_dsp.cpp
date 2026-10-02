@@ -283,6 +283,13 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
 
 Synapse::~Synapse() {}
 
+// w16-e: 96.75 -> 100 canonical (modulo register permutation: the image
+// adds the mVoices base FIRST in `stfsx`/`add`/`lwzx`, 5 commutative-operand
+// rows).  Levers: the two per-voice passes are plain indexed loops (were
+// m2c's hand-stepped byte offsets in a hand-rotated do-while), and the
+// threshold test reads the member mPitchConfidence after the two stores,
+// which keeps the confidence in f0 across the mPitchClarity copy (image
+// `lfs f12, 0x14(r11)` at 0x684).
 void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
     float temp_f30 = 0.0f;
     float temp_f31 = 4.0f;
@@ -319,11 +326,10 @@ void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
             if (!((mDetectionInterval - 1) & temp_r11_2)) {
                 (*(PitchDetector **)((char *)this + 0x28))->Detect(temp_r11_2 >> 2);
                 PitchDetector *pd = *(PitchDetector **)((char *)this + 0x28);
-                float temp_f0 = pd->mPitchConfidence;
-                mPitchConfidence = temp_f0;
+                mPitchConfidence = pd->mPitchConfidence;
                 mPitchClarity = pd->mPitchClarity;
 
-                if (temp_f0 > mPitchThreshold) {
+                if (mPitchConfidence > mPitchThreshold) {
                     float temp_f0_2 = pd->mDetectedPitch * temp_f31;
                     mDetectedPitch = temp_f0_2;
 
@@ -336,27 +342,12 @@ void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
                     (*(GranularSynth **)((char *)this + 0x68))->mPitchConfidence = mPitchConfidence;
                 }
 
-                void *vp = (char *)this + 0x5C;
-                unsigned int var_r27 = 0;
-                if ((int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56 != 0) {
-                    int var_r28 = 0;
-                    int var_r29 = 0;
-
-                    do {
-                        *(float *)((char *)(*(void **)vp) + var_r29) = mTargetPitch / mDetectedPitch;
-                        *(float *)((char *)(*(void **)vp) + var_r29 + 0x28) = mPitchConfidence;
-                        *(float *)((char *)(*(void **)vp) + var_r29 + 0x2C) = mPitchClarity;
-
-                        GranularSynth *gs = *(GranularSynth **)((char *)this + 0x68);
-                        float temp_f1 = ((PitchCorrectedVoice *)((char *)(*(void **)vp) + var_r29))->GetCorrection();
-
-                        var_r27++;
-                        GranularVoice *gv = (GranularVoice *)((char *)gs->mVoices + var_r28);
-                        var_r29 += 0x38;
-                        var_r28 += 0x18;
-
-                        gv->mCorrection = temp_f1;
-                    } while (var_r27 < (unsigned int)((int)((int)(*(void **)((char *)vp + 0x4)) - (int)(*(void **)vp)) / 56));
+                for (unsigned int v = 0; v < (unsigned int)((int)mVoices.size()); v++) {
+                    mVoices[v].mFreq0 = mTargetPitch / mDetectedPitch;
+                    mVoices[v].mField_0x28 = mPitchConfidence;
+                    mVoices[v].mFreqCounter = mPitchClarity;
+                    GranularSynth *gs = *(GranularSynth **)((char *)this + 0x68);
+                    gs->mVoices[v].mCorrection = mVoices[v].GetCorrection();
                 }
             }
 
@@ -384,20 +375,12 @@ void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
         memset(arg2, 0, arg1 * 4);
     }
 
-    void *vp2 = (char *)this + 0x5C;
-    unsigned int var_r29_2 = 0;
-    if ((int)((int)(*(void **)((char *)vp2 + 0x4)) - (int)(*(void **)vp2)) / 56 != 0) {
-        int var_r28_2 = 0;
-
-        do {
-            IPP::Add_InPlace(arg1, *(float **)((char *)mOutputBuffers.begin() + var_r28_2), arg2);
-            var_r29_2++;
-            var_r28_2 += 4;
-        } while (var_r29_2 < (unsigned int)((int)((int)(*(void **)((char *)vp2 + 0x4)) - (int)(*(void **)vp2)) / 56));
+    for (unsigned int v = 0; v < (unsigned int)((int)mVoices.size()); v++) {
+        IPP::Add_InPlace(arg1, mOutputBuffers[v], arg2);
     }
 
     mGain = 1.0f;
-    unsigned int final_count = ((int)((int)(*(void **)((char *)vp2 + 0x4)) - (int)(*(void **)vp2)) / 56);
+    unsigned int final_count = (int)mVoices.size();
     IPP::MulConstant_InPlace(arg1, arg2, 1.0f / (float)final_count);
 }
 
