@@ -1255,3 +1255,107 @@ read 0.000, both new keys 100.000.
   file name and not the line numbering.
 - Two PCH-reached header edits (`DirLoader.h`, `ObjPtr_p.h`) — whole-binary row diffs,
   DOWN 0 both times.
+
+## Wave 12 — four-plus units and a certified floor reopened (2026-10-02)
+
+With the one- to three-away tiers worked, wave 12 took units **four or more functions from
+100 %** in four directory-disjoint lanes (w12-a..d), plus one lane (w12-o) that reopened a
+floor three earlier lanes had certified: `ObjPtrVec<T>::operator=`. A server crash mid-wave
+interrupted the lanes; all resumed from their committed state with nothing lost.
+
+**31,488 → 31,554 matched (+66)**; authorable canonical **31,451 → 31,517 / 32,221
+(97.61 % → 97.82 %)**; all-100 authorable units **692 → 697 / 967**; remaining authorable
+**770 → 704 functions (550,264 → 523,472 B)**; XEX matched code 49.28 % → 49.51 %. Every
+landing gated on a full ninja in both trees, a whole-binary row diff, five build guards
+and the native gate (623 / 554 / 554 / 0 / 69 each time).
+
+| lane | UP | DOWN | units completed | matched |
+|---|---:|---:|---|---|
+| w12-o | 13 | 0 | 3 (all ObjPtrVec instantiations' units) | 31488 → 31501 |
+| w12-b | 11 + 1 renamed | 0 | 0 | 31501 → 31513 |
+| w12-c | 18 | 0 | 1 (Cache_Xbox) | 31513 → 31528 |
+| w12-d | 16 | 0 | 1 (ErrorNode) | 31528 → 31544 |
+| w12-a | 11 | 2 (both bug fixes) | 0 | 31544 → 31554 |
+
+**Correction to the wave 10 and 11 sections.** Their "remaining authorable" figures (802 →
+746 → 707) were derived by subtracting each wave's matched delta, not measured:
+746 − 39 = 707 exactly. `scripts/progress_metrics.py` (unchanged since 2026-09-28) run on the
+wave-12 BEFORE report at `5c7c5fbb7` gives **770 functions / 550,264 B**, and 770 − 66 =
+704 reconciles with the measured end figure. Quote the script's output, not a subtraction.
+
+### ObjPtrVec<T>::operator= — 87.838 → 100 on all 13 instantiations
+
+`Node newNode(this)` built its base through `ObjRefConcrete(T1 *)`, whose body is
+`if (mObject) mObject->AddRef(this)`. With `nullptr` that branch is dead, but because it
+passes the node's address to code the compiler cannot see, X360 MSVC treated `newNode` as
+escaped, could not prove `mObject` still null at `~Node`, and kept the null test plus the
+ring unlink — 9 instructions the image does not have, and 16 register-only rows they forced.
+A protected `ObjRefConcrete() : mObject(nullptr) {}` with no AddRef path lets it fold.
+Identical behaviour: with a null argument the old ctor's AddRef and native ref-audit call
+both sat inside `if (mObject)`. The tell was the earlier 98.65 % from an explicit `= 0` store:
+a store that removes the test means the compiler lacked a proof, not that the image made a
+different codegen choice. Written up as
+`docs/decomp/patterns/dead-addref-branch-escapes-the-local.md`.
+
+### Behaviour bugs, each adjudicated by the coordinator against the target `.s`
+
+1. **`BinkMovieImpl::MovieOpen`** ran the AutoSlowFrame wrapper when flag bit 26 was set;
+   the image (`nor` / `extrwi. r11,r11,1,5` / `beq` to the plain `BinkOpen`) runs it when
+   the bit is clear. Only the timing wrapper moved.
+2. **`MemTracker::StartLog`** did `*mLog = ts;` right after asserting `mLog` null, so `mLog`
+   stayed null; the image stores the stream's address (`stw r30, 0x0(r31)` at `827DADC4`).
+3. **`ClipPlayer::GetPrevRoutineTransition`** read the wrong out-parameter of
+   `GetRoutineCrossoverClips` — the image reads back `0x50(r1)`, the 4th argument.
+4. **`SkeletonUpdate::UpdateCallbacks`** advanced the stub-placement count only on untracked
+   slots; the tracked-slot `bne .L_8242DCD0` lands *on* the `addi r29, r29, 1`.
+5. **`RhythmDetector::AddFrame`** gated its whole tail on `bestIdx != -1`; the image's
+   `beq .L_824D5188` skips only the insert and `SetupFrame`. From a cleared state the old
+   code could never fill its buffer.
+6. **`RndBitmap::DxtColor`** leaked the next texel's DXT3 alpha nibble into the high nibble
+   (image masks with `clrlwi r11,r11,28` before `slwi 4` / `or`).
+7. **`RndFont::SetCharInfo`** evaluated `ColumnNonTransparent` once outside both edge scans;
+   the image's latches jump back above the `bl` and re-test every column.
+8. **`Rnd::TestPoint`** marked every queued point test ready; the in-view path branches past
+   `stb r11, 0x148(r27)`.
+9. **`RndShader::MatShaderFlagsOK`** warned "fadeout unchecked" for shaders that do not
+   check fadeout (debug warning only).
+
+Fixes 6 and 7 cost a fraction of a point each (93.10 → 92.86, 95.87 → 95.60) — the two
+DOWN rows of the wave, kept deliberately.
+
+### Levers worth reusing (all measured in-tree)
+
+- A conditional clear `if (c) flag = false;` produces the image's `subfic`/`subfe` −1/0
+  mask select; hand-writing the mask never does (three functions, two lanes).
+- Reading a member through a pointer accessor (`ContentData()->DeviceID`, not
+  `DeviceID()`) stops MSVC hoisting the load above an earlier store (four Cache_Xbox fns).
+- Under `/Od`, frame slots follow local variable **names**; `keygen_xbox` now builds
+  `/Od /Os` (18 of 20 functions byte-identical; the w8-g note that `/Os` broke 16 functions
+  does not reproduce).
+- A jump-to-test loop over an owner chain can be a tail call MSVC eliminated
+  (`RndFont::CharWidthAdvanceCoords`).
+- An explicit `Symbol(s)` temporary reproduces a stack spill of a by-value argument
+  (three `Game` functions).
+
+### What the coordinator checked beyond each lane's report
+
+- `symbols.txt` rename `merged_8237A7E8` → `_Copy_Construct<CharInterestState>`: the retail
+  map prints two claimants at `0x8237a7e8`, both `char:CharEyes.obj`, inside CharEyes'
+  `.text` range; bound once; the second ninja ran no SPLIT.
+- Every lane-labelled "same behaviour" respelling re-derived: e.g. `i7 != mInTheZone` sits
+  inside `if (mInTheZone == 1 …)` with `i7 ∈ {0, −1}`; `BinStream << bool` writes the same
+  one byte as `u8(b)`; `CreateEventA`'s `vec[i]` equals `mPlayerIndices[i]` because the
+  vector was inserted at `begin()` of a fresh SubMode; `RndShader::Init`'s reorder assigns
+  the same 38 slots (set hash compared).
+- `DxTex::mLockedRect` became a struct deriving from `D3DLOCKED_RECT` that clears two
+  pointer-sized words — covers `{Pitch, pBits}` on PPC and LP64 and still converts to
+  `D3DLOCKED_RECT *`.
+
+### Wave 13 — the frontier was larger than the tiers suggested
+
+The completion tiers (units N functions from 100 %) had made the frontier look spent. A
+function-level census says otherwise: of the 704 remaining authorable functions, **~370 at
+≥ 90 % had never been named by a lane commit since 2026-09-15** (`git log` per source
+file). Wave 13 dispatched five directory-disjoint lanes over them, plus one lane (w13-o)
+owning `math/Vec.h` / `math/Mtx.h` to chase the y, z, x component order several wave-12
+lanes observed in the image.
