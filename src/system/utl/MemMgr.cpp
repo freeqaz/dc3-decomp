@@ -798,6 +798,9 @@ MemHeapStack &ThreadMemStack(bool);
 // gNumHeaps > 0)` without the bool local -> 91.6 (loses the materialised
 // bool).  Same family as the gRev/gAltRev anchor pick (RhythmBattlePlayer.cpp)
 // and System.cpp's gUsingCD/gSystemConfig pair.
+// w18-d (99.00): reading gNumHeaps through MemNumHeaps() at both sites is
+// inert -- the anchor still lands on gNumHeaps (unlike System.cpp, where routing
+// the gUsingCD WRITES through SetUsingCD() moved it).
 void MemPushHeap(int iHeap) {
     bool proceed = gInitted && gNumHeaps > 0;
     if (proceed) {

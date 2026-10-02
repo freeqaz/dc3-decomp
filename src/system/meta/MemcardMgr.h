@@ -50,6 +50,7 @@ private:
     MCResult ThreadCall_CheckForSaveContainer();
     MCResult ThreadCall_SaveGame();
     MCResult ThreadCall_LoadGame();
+    MCResult ThreadCall_DeleteSaves(); // name is ours (inlined in the image)
     MCResult PerformRead(MCContainer *);
     MCResult PerformWrite(MCContainer *);
 

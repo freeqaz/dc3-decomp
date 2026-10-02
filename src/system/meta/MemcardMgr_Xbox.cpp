@@ -49,6 +49,10 @@ void MemcardMgr::Init() {
     ThePlatformMgr.AddSink(this);
 }
 
+inline MCResult MemcardMgr::ThreadCall_DeleteSaves() {
+    return TheMC.DeleteContainer(mContainerIDs[mPadNum]);
+}
+
 int MemcardMgr::ThreadStart() {
     int ret = 0;
     switch (mState) {
@@ -68,56 +72,11 @@ int MemcardMgr::ThreadStart() {
         ret = ThreadCall_LoadGame();
         break;
     case kS_DeleteSaves:
-        // RESIDUAL (w7-az, 94.18, 15 rows).  Identical arithmetic, different
-        // addressing form.  The image MATERIALISES the adjusted this and adds
-        // the array's displacement last: `subi r11, r3, 0x2c` (0x82E0D0D0),
-        // `lwz r10, 0x94(r11)` (0x82E0D0DC), `mulli r10, r10, 0xc`,
-        // `add r11, r10, r11`, `addi r4, r11, 0x44` (0x82E0D0E8) -- and it
-        // schedules the `lis`/`addi` of &TheMC (0x82E0D0D4-0x82E0D0D8) between
-        // the subi and the index load.  We keep the UNADJUSTED this, read
-        // mPadNum as 0x68(r3), and fold 0x44 - 0x2c = 0x18 into the index as
-        // `addi r10, r10, 0x2` -- legal only because 0x18 happens to be 2 * the
-        // 0xc element size.  That forces a `mr r11, r3` hoisted above the whole
-        // switch and turns the other four arms' `subi r3, r3, 0x2c`
-        // (0x82E0D0F4 and on) into `subi r3, r11, 0x2c`.
-        // NEGATIVES:
-        //   - `const ContainerId &id = mContainerIDs[mPadNum];` on its own line:
-        //     byte-inert, 94.18.
-        //   - `MemcardMgr *mgr = this; ... mgr->mContainerIDs[mgr->mPadNum]`
-        //     DOES recover the materialised form -- `subi r11, r3, 0x2c` and
-        //     `addi r4, r11, 0x44` both appear and the row count falls 15 -> 6 --
-        //     but MSVC still reads the index as `lwz r10, 0x68(r3)` and hoists
-        //     it above the subi, and the surviving rows are inserts/deletes
-        //     rather than register renames, so canonical DROPS to 92.71.
-        //   - additionally naming `MemcardXbox &mc = TheMC;` is far worse
-        //     (86.21): the call through the reference stops being a direct call
-        //     and goes through the vtable.
-        //
-        // VALUE-EQUIVALENCE ADJUDICATED (w9-c 2026-09-30).  Of this function's 15
-        // mismatch rows, 11 are register-only and 2 are branches;
-        // scripts/analysis/arith_semantics_scan.py (run FROM this worktree -- run
-        // from the main checkout it silently diffs main's objects and quotes main's
-        // percentages) reports exactly ONE value-carrying row:
-        //     [operand-source] operand r11 vs r11: the image's value comes from
-        //     `subi r11, r3, 0x2c`, ours from `mr r11, r3`
-        //         target: add r11, r10, r11      ours: add r4, r10, r11
-        // That IS a different value in r11, and the two chains still reconverge on
-        // the same byte.  Entry r3 is the base sub-object at MemcardMgr + 0x2c, so:
-        //   image, 0x82E0D0D0-0x82E0D0E8:
-        //     subi r11, r3, 0x2c  ;  lwz r10, 0x94(r11)  ;  mulli r10, r10, 0xc
-        //     add r11, r10, r11   ;  addi r4, r11, 0x44
-        //     => r4 = (r3 - 0x2c) + idx*0xc + 0x44  =  r3 + idx*0xc + 0x18
-        //   ours:
-        //     mr r11, r3  ;  lwz r10, 0x68(r3)  ;  addi r10, r10, 0x2
-        //     mulli r10, r10, 0xc  ;  add r4, r10, r11
-        //     => r4 = r3 + (idx + 2)*0xc        =  r3 + idx*0xc + 0x18
-        // Identical, and the index itself is the same word both sides: mPadNum is
-        // at 0x94 of MemcardMgr, and 0x94(r3 - 0x2c) == 0x68(r3).  So this is an
-        // INTERMEDIATE value difference with an equal result -- the addressing form
-        // the note above describes -- and not a behavioural divergence.  The other
-        // 11 register-only rows are all the r3/r11 renaming that one `mr` forces,
-        // and the scan classifies none of them as value-carrying.
-        ret = TheMC.DeleteContainer(mContainerIDs[mPadNum]);
+        // w18-d (94.18 -> 100): the delete arm goes through an inline member
+        // (ThreadCall_DeleteSaves, name ours), entered on the adjusted `this`.
+        // That is what materialises `subi r11, r3, 0x2c` and reads mPadNum /
+        // mContainerIDs off it, the addressing form w7-az/w9-c documented.
+        ret = ThreadCall_DeleteSaves();
         break;
     }
     return ret;

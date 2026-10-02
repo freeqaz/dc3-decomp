@@ -23,6 +23,9 @@ public:
     bool IsDownloadingFile(String const &);
     bool AllowPreviewDownload(String const &);
     void Poll();
+    // w18-d: inline forwarder (og-dc3/rb3 name); the extra inline level is what
+    // gives the image's separate String temp slot in Handle.
+    void DownloadPreviewFile(String const &s) { AddToDownloadQueue(s); }
 
     float mAttenuation;
     bool mLoopForever;

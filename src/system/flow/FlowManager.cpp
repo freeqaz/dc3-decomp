@@ -49,6 +49,8 @@
 // takes it: make the change there, run a FULL ninja, and diff the whole binary,
 // because the blast radius is the whole binary.
 
+// w18-d (80.58): an explicit instantiation of ObjPtrVec<FlowNode>::Set ahead of
+// the erase instantiation does not stop Set being inlined into erase (inert).
 template Hmx::Object *ObjPtrVec<RndTransformable, ObjectDir>::Node::RefOwner() const;
 template ObjPtrVec<FlowNode, ObjectDir>::iterator
 ObjPtrVec<FlowNode, ObjectDir>::erase(ObjPtrVec<FlowNode, ObjectDir>::iterator);

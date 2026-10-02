@@ -374,6 +374,9 @@ void HDCache::Init() {
                     sha.Update(blockBuf, blockSize);
                 }
             }
+            // w18-d (99.975, 9 lwzx/stwx base<->index operand rows): `i[readFiles]`
+            // is byte-inert; indexing mReadArkFiles/mWriteArkFiles directly
+            // instead of the two pointer locals costs 94.2.
             // Check if read/write files are valid
             File **readFiles = &mReadArkFiles[0];
             File **writeFiles = &mWriteArkFiles[0];

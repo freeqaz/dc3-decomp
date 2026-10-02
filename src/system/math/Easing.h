@@ -339,6 +339,8 @@ inline float EaseStairstep(float t, float power, float f3) {
     // a named `inv` before the call; `tmp_f30 -= tmp_f26` as its own statement
     // between the fdivs and the call; `/ f3` in the return (89.2 -- the 1.0f
     // stops being held in f28).
+    // w18-d (96.15, same 3 rows): also inert -- the reciprocal moved above
+    // floor(), and the call result in its own `ret` local.
     return (EasePolyInOut(tmp_f30 - tmp_f26, power, 0.0f) + tmp_f26) * f3;
 }
 

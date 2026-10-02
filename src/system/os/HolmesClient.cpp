@@ -892,6 +892,7 @@ bool HolmesClientCacheFile(char *arg0, const char *arg1) {
     // the writeTime `std` instead of following it. Refuted: declaring writeTime
     // before fileExists (inert, same 6 rows). Also refuted (w12-d): a typed
     // WIN32_FILE_ATTRIBUTE_DATA with `*(s64 *)&fileInfo.ftLastWriteTime` (inert).
+    // w18-d: `attrResult != 0` (equal semantics) is byte-inert, same 6 rows.
     bool fileExists = (attrResult - 1) != (-1);
     s64 writeTime = *(s64 *)(fileInfo + 0x14);
     // `==` is correct here and is NOT the rb3-xenon drift bug it looks like.
