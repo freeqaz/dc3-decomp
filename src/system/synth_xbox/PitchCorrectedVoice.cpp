@@ -48,7 +48,8 @@ float DSP::Synapse::PitchCorrectedVoice::GetCorrection() {
             k = (k * 2.0f) / (1.0f - k);
             float shaped = (k + 1.0f) * norm / (fabsf(norm) * k + 1.0f);
             float win = (float)cos((double)(shaped * 3.1415927410125732f));
-            amount = (win + 1.0f) * 0.5f * amount;
+            float scale = (win + 1.0f) * 0.5f;
+            amount = scale * amount;
         } else {
             amount = 0.0f;
         }
