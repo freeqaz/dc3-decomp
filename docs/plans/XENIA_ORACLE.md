@@ -348,3 +348,52 @@ Measured inside `debug.xex`: `{+ 1 2}` → `3`;
 Separately, fix the `Debug::Fail` patch so it no longer leaves `mFailing`
 set, and take a fresh baseline after that fix, before trusting any
 game-built state.
+
+---
+
+## 9. Milestone: the song clock and the asserts are the game's own (2026-10-02)
+
+xenia main `abed23403` (pushed). Of the perturbations listed in §1, these
+are now **gone**:
+
+- **Both 120 BPM host beat drives**, the unpause nudge, `HamAudio::IsReady`,
+  `HandleWait`, the `XMAHALAllocateContexts` stub and the dummy audio driver.
+  The game unpauses itself (`Game::PostWaitStart`), and the song clock is
+  driven by real XMA contexts through the paced nop driver. With the drives
+  on, song end landed anywhere from 189 to 213 s. Now it lands at
+  198.2–201.5 s over 5/5 runs, even at load 103.
+- **The latched `mFailing`.** The faithful `Debug::Fail` spin is restored,
+  and menu automation runs on the guest **main** thread
+  (`--dc3_headless_autonav`). A tripwire reports every main-thread FAIL.
+  Six FAILs the latch had hidden are recorded as findings in xenia
+  `docs/fork/dc3/BASELINE.md`.
+- **Movie/Bink/Splash/boot gates** (10 hacks). `BinkMovieSys::Init`'s stub
+  itself caused the song_select "preview.tmov" FAIL.
+
+Two core Xenia bugs were fixed along the way:
+- Overrides were bypassed by every indirect (vtable) call.
+- The MMIO handler livelocked on a 128-bit `stvx128`, which is how the XMA
+  HAL kicks its contexts.
+
+**What is still perturbed, so the differ must still refuse it:**
+- Kinect/NUI: 56 SDK overrides with a constant pose. Retiring them needs a
+  NUI HLE device.
+- Calibration patches.
+- `SongAnim → EXPERT`.
+- `ContentMgr::RefreshDone` and `SaveLoadManager::Activate`.
+- The autonav itself: it presses buttons, but on the main thread.
+- The headless null-GPU / capture path. Use `--headless_inline_render` for
+  frames, because deferred replay produces artifacts (xenia
+  `docs/fork/gpu/`).
+
+**Consequence for Tier C (§5).** Prerequisite 1, a single clock keyed to the
+song, is now satisfied by the game itself. Prerequisites 2 (a shared
+skeleton stream) and 3 (flow) remain. Each hack now has an id, so a golden's
+patch manifest can list exactly which ones were active (`--dc3_disable_hacks`
+and the logged gate lines).
+
+Related dc3 fixes this wave:
+- `add619a39` and `2b92f12ab` made our *rebuilt* xex boot under Xenia with
+  0 traps, down from 627.
+- 149 of the 173 decomp-pack hacks were defects in our own image, not in
+  Xenia.
