@@ -16,8 +16,13 @@ int Trie::store(const char *str) {
     unsigned int curIdx = 1;
     unsigned int parentIdx = 0;
 
-    // w14-d: a plain strlen (MSVC's inline lbz/addi/cmplwi walk), 95.28 -> 96.49.
-    int strLen = strlen(str) - 1;
+    // w14-d: strLen is the plain strlen.  The hand-written walk this replaces
+    // computed `(p - str) - 1` with p one PAST the terminator -- i.e. strlen --
+    // and the image's `subi r11, r11, 0x1` / `clrrwi. r21, r11, 0` is exactly
+    // MSVC's inline strlen, zero-extended into r21.  (An intermediate w14-d
+    // commit wrote `strlen(str) - 1` here: that is one SHORT, a behaviour
+    // change, and is corrected by this one.)
+    int strLen = strlen(str);
     int i;
 
     // A `for`, not a `do`: the image guards loop entry with `clrrwi. r21, r11, 0`
