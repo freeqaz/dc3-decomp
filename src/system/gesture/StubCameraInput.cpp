@@ -7,10 +7,8 @@ StubCameraInput::StubCameraInput() {
     frame->mFrameNumber = 0;
     frame->mElapsedMs = 33;
     for (int i = 0; i < 6; i++) {
-        unk239c[i].unk0 = 0;
-        unk239c[i].unkC = 0.0f;
-        unk239c[i].unk8 = 0.0f;
-        unk239c[i].unk4 = 0.0f;
+        unk239c[i].unk0 = false;
+        unk239c[i].unk4.Zero();
     }
 }
 
@@ -25,7 +23,7 @@ const SkeletonFrame *StubCameraInput::PollNewFrame() {
     for (int i = 0; i < 6; i++) {
         auto& skelData = unk11d4.mSkeletonDatas[i];
         if (unk239c[i].unk0) {
-            StubSkeletonData(skelData, *(Vector3 *)&unk239c[i].unk4);
+            StubSkeletonData(skelData, unk239c[i].unk4);
         } else {
             skelData.mTracking = kSkeletonNotTracked;
         }
