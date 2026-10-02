@@ -20,6 +20,7 @@ Usage:
 """
 
 import argparse
+import collections
 import re
 import subprocess
 import struct
@@ -703,6 +704,17 @@ def build_xex(pe_data, original_xex_info, pe_info, orig_pe_data=None,
             print(f"    {len(rewritten_slots)} IAT slots held a linked value instead of "
                   f"their PE ordinal marker (now the record): "
                   + ", ".join(f"{n}={v:#010x}" for n, _, v in rewritten_slots[:8]))
+        shared = collections.Counter(va_mapping.values())
+        folded = sorted(va for va, n in shared.items() if n > 1)
+        if folded:
+            # /OPT:ICF folds byte-identical import slots of DIFFERENT
+            # libraries (xam 0x195 XamInputRawState and xboxkrnl 0x195
+            # XexGetModuleHandle hold the same PE marker), and then their
+            # identical thunks: one address, two imports. Unrecoverable here.
+            raise ImportMappingError(
+                f"{len(folded)} import slots/thunks serve more than one import "
+                f"record (linker ICF folded them; link with /OPT:NOICF): "
+                + ", ".join(f"{va:#x}" for va in folded[:8]))
         if orphans:
             raise ImportMappingError(
                 f"{len(orphans)} linked import slots/thunks have no XEX import "
