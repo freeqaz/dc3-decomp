@@ -221,6 +221,18 @@ void Locale::SetMagnuStrings(DataArray *da) {
 //     higher.  Declaration order of the named locals above already matches the
 //     image's addresses (altCfg 0x68 < devkitPath 0x80), so the difference is
 //     in the temp pool, not in the source's declaration list.
+// w17-d (98.928, canonical unchanged): two structural corrections read off the
+// image, neither of which moves the forgiving ruler. (1) The temp-heap push/pop
+// is a MemDoTempAllocations scope -- __unwind$103222 destroys one at r31+0xbc.
+// (2) The sort and the unique-count loop sit INSIDE `if (mInitialized)`: the
+// image's not-initialized branch at 827E9918 lands on .L_827E9DC0 (the arrVec
+// teardown), skipping both. Still open: the temp-slot pool. The image has
+// devkitPath at 0x80 and its five DataNode temps at 0x88 (locale), 0x90/0x98
+// (node1/node2), 0xa0 (DataNode(devkitPath)), 0xa8 (node3), arrVec 0xb0, the
+// MemDoTempAllocations 0xbc; ours runs devkitPath 0x88, locale 0x90, node1-3
+// 0x98-0xa8, DataNode(devkitPath) 0xb0, arrVec 0xb8, tmp 0xc4 -- one extra
+// 4-byte temp below devkitPath (our SystemLanguage() Symbol temp is not pooled
+// with the `chunks` new-temp at 0x74 the way the image's is).
 void Locale::Init() {
     MILO_ASSERT(!mStrTable, 0x58);
     MILO_ASSERT(!mSymTable, 0x59);
@@ -261,8 +273,8 @@ void Locale::Init() {
             }
         }
 
-        MemPushTemp();
         {
+            MemDoTempAllocations tmp;
             std::vector<DataArray *> arrVec(cfg->Size() - 1);
             mNumFilesLoaded = arrVec.size();
 
@@ -302,23 +314,22 @@ void Locale::Init() {
                     }
                     curArr->Release();
                 }
-            }
 
-            if (cfg->Size() > 1) {
-                LocaleChunkSort::Sort(chunks, numChunks);
-            }
+                if (cfg->Size() > 1) {
+                    LocaleChunkSort::Sort(chunks, numChunks);
+                }
 
-            mSize = 0;
-            for (int i = 0; i < numChunks; i++) {
-                Symbol curSym = chunks[i].node1.LiteralSym();
-                if (curSym != prevSym) {
-                    totalStrLen += strlen(chunks[i].node3.LiteralStr()) + 1;
-                    prevSym = curSym;
-                    mSize++;
+                mSize = 0;
+                for (int i = 0; i < numChunks; i++) {
+                    Symbol curSym = chunks[i].node1.LiteralSym();
+                    if (curSym != prevSym) {
+                        totalStrLen += strlen(chunks[i].node3.LiteralStr()) + 1;
+                        prevSym = curSym;
+                        mSize++;
+                    }
                 }
             }
         }
-        MemPopTemp();
     }
 
     mSymTable = new Symbol[mSize];
