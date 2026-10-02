@@ -46,8 +46,8 @@ extern String gMemLogType;
 //   +0xbf0 gStlAllocNameLookup  +0xbf4 gMemLock  +0xbf8 gMemStackLock
 //   +0xbfc gUseLowestMipExceptions
 //
-// gNullMemStack, gNumThreads, gThreadBufCurrentIndex, gInitted and
-// gCheckConsistency have internal linkage: the linker map named every public
+// gNullMemStack, gNumThreads, gThreadBufCurrentIndex, gInitted,
+// gCheckConsistency, gNumHeaps, gHeaps and gNewOperatorAlign have internal linkage: the linker map named every public
 // global in this TU and left exactly those as bare lbl_ addresses, and nothing
 // outside MemMgr.cpp refers to them.
 std::vector<String> gUseLowestMipExceptions;
@@ -71,14 +71,16 @@ bool gStlAllocNameLookup;
 // anchor register -- e.g. MemPushHeap's `lwz r11, 0x13(r30)` with r30 =
 // &gInitted -- instead of a lis/addi per global.
 static int gNewOperatorAlign; // +0xbec
-// Three int-sized objects the image has at +0xbdc, +0xbe0 and +0xbe8 that no
-// surviving code names (nothing in the image addresses them, so they were
-// presumably used only by functions /OPT:REF discarded).  They are stand-ins
-// that only reproduce the .bss layout -- and with it the anchor displacements
-// (gInitted->gNumHeaps 0x13, gHeaps->gNumHeaps 0x294) the statics above and
-// below are reached by.  External linkage on purpose: an unreferenced static
-// is dropped by the compiler and holds no space.
-int gMemMgrUnknownBE8; // +0xbe8
+// gCheckConsistency is at +0xbe8, not in the gHeaps alignment hole: MemInit
+// reaches it as `addi r5, r21, 0x17` with r21 = &gInitted (+0xbd1).
+static int gCheckConsistency; // +0xbe8
+// Two int-sized objects the image has at +0xbdc and +0xbe0 (and a third in
+// the +0x94c hole below) that no surviving code names -- nothing in the image
+// addresses them, so they were presumably used only by functions /OPT:REF
+// discarded.  These are stand-ins that only reproduce the .bss layout, and
+// with it the anchor displacements (gInitted->gNumHeaps 0x13,
+// gHeaps->gNumHeaps 0x294) the statics around them are reached by.  External
+// linkage on purpose: an unreferenced static is dropped and holds no space.
 static int gNumHeaps; // +0xbe4
 int gMemMgrUnknownBE0; // +0xbe0
 int gMemMgrUnknownBDC; // +0xbdc
@@ -125,8 +127,10 @@ static MemHeap gHeaps[MAX_HEAPS]; // +0x950 (8-aligned)
 // and it has to be an int that fills it. MSVC's .bss packer will otherwise
 // drop a byte-sized global in here -- it picked gInitted -- which leaves
 // nothing between gHeaps and gThreadBufCurrentIndex and slides
-// gThreadBufCurrentIndex / gNumThreads down to +0xbd0 / +0xbd4.
-static int gCheckConsistency; // +0x94c
+// gThreadBufCurrentIndex / gNumThreads down to +0xbd0 / +0xbd4.  Earlier
+// lanes put gCheckConsistency here; MemInit's displacement says it lives at
+// +0xbe8, so this is the third unnamed stand-in.
+int gMemMgrUnknown94C; // +0x94c
 int gSingleHeap; // +0x948
 
 #ifdef HX_NATIVE
@@ -582,15 +586,11 @@ void MemInit() {
     // address-taken local), which extends disableMgr's live range past the
     // block and is what puts it at 0x54; and `sDefaultHeap = 0` sits INSIDE
     // the `!disableMgr` arm (see below). With both, every slot lands.
-    // RESIDUAL (98.4, 38 rows): every remaining row is the .bss
-    // anchor+displacement pattern documented at the top of this file -- the
-    // image reaches gCheckConsistency / gNumHeaps / gTinyHeapReady as
-    // +0x17 / +0x13 / -0x1 off r21 = &gInitted (827CD308, 827CD330,
-    // 827CD3B8) where we need a separate lis/addi for gNumHeaps, and that
-    // extra anchor is what flips the r18/r19/r20/r21 callee-saved assignment
-    // (image: r18 = 0, r19 = &gSingleHeap, r20 = mem, r21 = &gInitted) and
-    // the lis/cmpwi schedule at 827CD314..827CD328 -- plus one `li r10, 0x0`
-    // for an argument the image leaves undefined (see the "tiny" AddHeap).
+    // RESOLVED (w13-d): the remaining rows were the .bss anchor+displacement
+    // pattern -- the image reaches gCheckConsistency / gNumHeaps /
+    // gTinyHeapReady as +0x17 / +0x13 / -0x1 off r21 = &gInitted (827CD308,
+    // 827CD330, 827CD3B8).  Closed by giving those globals internal linkage
+    // and the image's layout (see the declarations at the top of the file).
     bool disableMgr = false;
     bool enableTracking = false;
     bool noTrackImmediate = true;
