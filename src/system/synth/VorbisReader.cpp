@@ -34,9 +34,7 @@ namespace {
         while (true) {
             WaitForSingleObject(gEvent, -1);
             gLock.Enter();
-            if (!gNewReaders.empty()) {
-                gReaders.splice(gReaders.begin(), gNewReaders);
-            }
+            gReaders.splice(gReaders.begin(), gNewReaders);
             gLock.Exit();
 
             bool b2;
