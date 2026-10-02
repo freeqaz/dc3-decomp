@@ -153,20 +153,9 @@ float CharInterest::ComputeScore(
     int filterFlags,
     bool b
 ) {
-    if (!IsMatchingFilterFlags(filterFlags)) {
-        // The image MATERIALISES this subexpression into a bool (li 0 / b /
-        // li 1 / clrlwi. / bne) inside the short-circuit, rather than
-        // branching straight out of the && -- hence the nested if.
-        // Residual rows 25-28 (4 of 21): the image lays the diamond out with
-        // the FALSE arm first (li r11,0 / b / li r11,1), we emit li 1 then a
-        // conditional beq over li 0.  REFUTED: spelling it as an explicit
-        // if/else with the false arm written first
-        // (`if (!b || mCategoryFlags != 0) x = false; else x = true;`) is
-        // byte-inert -- MSVC canonicalises it back to the same shape.
-        bool categoryOverride = b && mCategoryFlags == 0;
-        if (!categoryOverride) {
-            return -1.0f;
-        }
+    bool interested = IsMatchingFilterFlags(filterFlags) || (b && mCategoryFlags == 0);
+    if (!interested) {
+        return -1.0f;
     }
 
     // Residual rows 45-91 (15 of 21): a Vector3 COMPONENT ORDER permutation.
@@ -180,15 +169,15 @@ float CharInterest::ComputeScore(
     Vector3 v7c(WorldXfm().v);
     Vector3 v88;
     Subtract(v7c, v2, v88);
-    float lensq = LengthSquared(v88);
+    float lensq = v88.z * v88.z + v88.x * v88.x + v88.y * v88.y;
     Normalize(v88, v88);
 
-    float dot = Dot(v1, v88);
+    float dot = v1.z * v88.z + v1.x * v88.x + v1.y * v88.y;
     float f1 = 0.0f;
     if (dot >= mMaxViewAngleCos)
         f1 = 1.0f;
 
-    float dot2 = Dot(v3, v88);
+    float dot2 = v3.z * v88.z + v3.x * v88.x + v3.y * v88.y;
     float f2 = 0.0f;
     if (dot2 >= mMaxViewAngleCos)
         f2 = 1.0f;
