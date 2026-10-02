@@ -964,22 +964,18 @@ void HamCharacter::SetFaceOverrideClip(Symbol clipName, bool notify) {
             found = true;
             driver->mOverrideClip = nullptr;
         } else {
-            // RESIDUAL (w8-n, 96.6316): the image loads mOverrideOptions into r11,
-            // tests it on CR0, HOMES it at 0x54(r31) and only then `mr r4, r11`
-            // into the ObjDirItr argument (0x82490214..0x8249022C; the identical
-            // sequence in BlendInFaceOverrideClip starts at 0x824903D0); we load
-            // straight into r4 on CR6 and emit neither extra row.  REFUTED: the
-            // ternary `driver->mOverrideOptions ? driver->mOverrideOptions
-            // : driver->mClips` is 92.6 -- MSVC stops folding the ObjPtr read
-            // and instead materialises each ObjPtr's ADDRESS (`addi r11, r30,
-            // 0xf0` / `0x44` then `lwz r4, 0xc(r11)`), i.e. it costs three rows
-            // rather than gaining two.  Also INERT: splitting the first read into
-            // its own `ObjectDir *overrideOptions` local.  The same six rows sit
-            // on BlendInFaceOverrideClip, which uses the identical idiom.
-            ObjectDir *clipDir = driver->mOverrideOptions;
-            if (!clipDir) {
-                clipDir = driver->mClips;
-            }
+            // w17-b: 96.63 -> 100 (and BlendInFaceOverrideClip 96.73 -> 100).
+            // A ternary whose arms are each CONVERTED to ObjectDir* --
+            // `opts ? (ObjectDir *)opts : (ObjectDir *)clips`.  The image's
+            // cr0 test + dead `stw r11, 0x54(r31)` + `mr r4, r11` is MSVC
+            // CSE-ing the ObjPtr conversion written twice (condition and
+            // true arm) and still homing it at the second textual site.  The
+            // un-cast ternary (w8-n, 92.6) yields an ObjPtr LVALUE and
+            // materialises each ObjPtr's address instead; the if-assign form
+            // (96.63) never writes the read twice.
+            ObjectDir *clipDir = driver->mOverrideOptions
+                ? (ObjectDir *)driver->mOverrideOptions
+                : (ObjectDir *)driver->mClips;
             for (ObjDirItr<CharClip> it(clipDir, false); it != nullptr; ++it) {
                 if (clipName == it->Name()) {
                     found = true;
@@ -1015,10 +1011,9 @@ void HamCharacter::BlendInFaceOverrideClip(Symbol clipName, float blendIn, float
             found = true;
             driver->mOverrideClip = nullptr;
         } else {
-            ObjectDir *clipDir = driver->mOverrideOptions;
-            if (!clipDir) {
-                clipDir = driver->mClips;
-            }
+            ObjectDir *clipDir = driver->mOverrideOptions
+                ? (ObjectDir *)driver->mOverrideOptions
+                : (ObjectDir *)driver->mClips;
             for (ObjDirItr<CharClip> it(clipDir, false); it != nullptr; ++it) {
                 if (clipName == it->Name()) {
                     found = true;
