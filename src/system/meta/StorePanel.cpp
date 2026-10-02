@@ -268,7 +268,7 @@ void StorePanel::LoadArt(const char *cc, UIPanel *panel) {
         NetCacheLoader *loader = TheNetCacheMgr->AddNetCacheLoader(cc, (NetLoaderPos)0);
         mArtLoader = loader;
         if (loader) {
-            mNetCacheLoaders.insert(it, mArtLoader);
+            mNetCacheLoaders.push_back(mArtLoader);
         }
     } else {
         mArtLoader = *it;
