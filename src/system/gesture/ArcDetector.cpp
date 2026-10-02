@@ -251,18 +251,10 @@ float ArcDetector::GetSwipeAmount() const {
     float pathErr = GetPathError();
     float swipeAmt = (powered - (pathErr / _acceptablePathErrorRatio)) / adjustedThreshold;
 
-    std::list<Vector3>::const_iterator it = mJointPath.begin();
-    unsigned int count = 0;
-    if (it != mJointPath.end()) {
-        do {
-            ++it;
-            count++;
-        } while (it != mJointPath.end());
-    }
-    if (count <= 2) {
+    if (mJointPath.size() <= 2) {
         swipeAmt = 0.5f - swipeAmt >= 0.0f ? swipeAmt : 0.5f;
     }
-    if (mJointPath.begin() != mJointPath.end()) {
+    if (!mJointPath.empty()) {
         Vector3 front = mJointPath.front();
         Vector3 second = mJointPath.back();
         Vector3 dir(front.x - second.x, front.y - second.y, front.z - second.z);
