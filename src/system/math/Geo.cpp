@@ -169,6 +169,11 @@ void ClosestPoint(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3, Vecto
     Add(v1, diff21, *vout);
 }
 
+// w17-c (99.887, 21 of 53 rows: the two Subtracts' load order and the cross
+// store order y,z,x): a non-PCH probe sweep of all 72 explicit per-component
+// Subtract orders (either difference first) x 6 explicit cross statement
+// orders found nothing under 154/5300 against 161 for this spelling; the
+// cross statement order is fully inert.
 void Plane::Set(const Vector3 &v1, const Vector3 &v2, const Vector3 &v3) {
     Vector3 diff31, diff21, cross;
     Subtract(v3, v1, diff31);
@@ -954,58 +959,62 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
             return true;
         }
         return Intersect(seg, n->right, t, p);
-    }
-
-    // `t2` must be declared BEFORE denom: it owns the lowest local slot (0x50)
-    // in the image, and both alternatives cost ~1pp -- declaring it after `frac`
-    // and hoisting it above startDot each give 99.0 canonical (16 f28<->f29
-    // swaps plus a moved `stfs`) against 99.99 for this order.
-    float t2 = 0.0f;
-    float denom = startDot - endDot;
-    if (denom == 0.0f)
-        return false;
-
-    float frac = startDot / denom;
-    Segment seg1;
-    Segment seg2;
-    Interp(seg.start, seg.end, frac, seg1.end);
-    seg1.start = seg.start;
-    seg2.start = seg1.end;
-    seg2.end = seg.end;
-
-    if (startDot > endDot) {
-        if (n->left && Intersect(seg1, n->left, t2, p)) {
-            t = frac * t2;
-        } else if (!n->right) {
-            t = frac;
-        } else if (Intersect(seg2, n->right, t2, p)) {
-            t = (1.0f - frac) * t2 + frac;
-        } else {
-            return false;
-        }
-        if (t2 == 0.0f && t != 0.0f) {
-            p = n->plane;
-        }
     } else {
-        if (!n->right) {
-            t = 0.0f;
-            return true;
-        }
-        if (Intersect(seg1, n->right, t2, p)) {
-            t = frac * t2;
-        } else {
-            if (!n->left || !Intersect(seg2, n->left, t2, p))
+        // w17-c: this tail is an `else` block.  The assert's int temp and t2
+        // share frame slot 0x50 in the image, which needs t2 in a scope
+        // disjoint from the assert's (stack-slot-sharing.md); at function
+        // scope t2 enclosed it and the temp was pushed to 0x54.
+        // `t2` must be declared BEFORE denom: it owns the lowest local slot (0x50)
+        // in the image, and both alternatives cost ~1pp -- declaring it after `frac`
+        // and hoisting it above startDot each give 99.0 canonical (16 f28<->f29
+        // swaps plus a moved `stfs`) against 99.99 for this order.
+        float t2 = 0.0f;
+        float denom = startDot - endDot;
+        if (denom == 0.0f)
+            return false;
+
+        float frac = startDot / denom;
+        Segment seg1;
+        Segment seg2;
+        Interp(seg.start, seg.end, frac, seg1.end);
+        seg1.start = seg.start;
+        seg2.start = seg1.end;
+        seg2.end = seg.end;
+
+        if (startDot > endDot) {
+            if (n->left && Intersect(seg1, n->left, t2, p)) {
+                t = frac * t2;
+            } else if (!n->right) {
+                t = frac;
+            } else if (Intersect(seg2, n->right, t2, p)) {
+                t = (1.0f - frac) * t2 + frac;
+            } else {
                 return false;
-            t = (1.0f - frac) * t2 + frac;
-        }
-        if (t2 == 0.0f && t != 0.0f) {
-            // One Set(), not four field assignments.  MSVC evaluates the
-            // arguments right to left, so the image loads d, c, b, a
-            // (Geo.s: lfs 0xc / 0x8 / 0x4 / 0x0 off r31), negates them in that
-            // order, and only then stores a, b, c, d in ascending order.  Four
-            // separate assignments interleave load/fneg/store per component.
-            const Plane &np = n->plane;
-            p.Set(-np.a, -np.b, -np.c, -np.d);
+            }
+            if (t2 == 0.0f && t != 0.0f) {
+                p = n->plane;
+            }
+        } else {
+            if (!n->right) {
+                t = 0.0f;
+                return true;
+            }
+            if (Intersect(seg1, n->right, t2, p)) {
+                t = frac * t2;
+            } else {
+                if (!n->left || !Intersect(seg2, n->left, t2, p))
+                    return false;
+                t = (1.0f - frac) * t2 + frac;
+            }
+            if (t2 == 0.0f && t != 0.0f) {
+                // One Set(), not four field assignments.  MSVC evaluates the
+                // arguments right to left, so the image loads d, c, b, a
+                // (Geo.s: lfs 0xc / 0x8 / 0x4 / 0x0 off r31), negates them in that
+                // order, and only then stores a, b, c, d in ascending order.  Four
+                // separate assignments interleave load/fneg/store per component.
+                const Plane &np = n->plane;
+                p.Set(-np.a, -np.b, -np.c, -np.d);
+            }
         }
     }
     return true;
@@ -1081,6 +1090,9 @@ void BSPFace::Set(const Vector3 &p1, const Vector3 &p2, const Vector3 &p3) {
     Update();
 }
 
+// w17-c (99.966): in the area loop all 64 operand orders of the six products
+// are inert; reassociating the three terms reaches a lower diff but changes
+// the image's (t1 + t2) + t3 float association, so it was not taken.
 void BSPFace::Update() {
     MILO_ASSERT(p.points.size() > 2, 0x6c2);
 

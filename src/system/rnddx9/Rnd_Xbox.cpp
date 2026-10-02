@@ -83,8 +83,14 @@ DxRnd::DxRnd()
       mPreInited(false),
       unk408(0) {
     mInited = 1;
-    mFrontBuffers[0] = nullptr;
-    mFrontBuffers[1] = nullptr;
+    // w17-c: a loop, not two assignments -- the image keeps the unrolled
+    // loop's dead base `addi r11, r30, 0x350` (70.28 -> 70.8).  The rest of
+    // the residual is the scheduling of the two vectors' EH-frame stores
+    // (`stw rX, 0x50(r31)`): the image emits each right after its vector's
+    // three zero stores, we defer them; not resolved.
+    for (int i = 0; i < 2; i++) {
+        mFrontBuffers[i] = nullptr;
+    }
     mBackBuffer = nullptr;
     mWorldDepth = nullptr;
     mOffscreenRT = nullptr;
@@ -388,6 +394,10 @@ void DxRnd::InitRenderState() {
     SetupGamma();
 }
 
+// w17-c (99.965, 4 rows: the image converts red before alpha in the
+// inlined MakeColor, we alpha before red; DrawString has the same rows):
+// inlining the pack by hand in any term order and all 24 term orders of
+// MakeColor itself in rnddx9/Rnd.h are byte-inert.
 void DxRnd::BeginTiling(const Hmx::Color &c, float f, unsigned int ui) {
     if (mNumTiles == 0) {
         D3DDevice_Clear(mD3DDevice, 0, nullptr, 0x31, MakeColor(c), f, ui, 0);
@@ -1037,6 +1047,10 @@ void DxRnd::CreatePostTextures() {
     mPostProcessTex->SetDeviceTex(mPostProcessBuffer);
 }
 
+// w17-c: the device-load-first rows here (and in BeginDrawing) are NOT the
+// XDK's C++ member wrapper: giving D3DDevice an inline
+// SetDepthStencilSurface member and calling mD3DDevice->SetDepthStencilSurface
+// leaves the two rows and adds five more.
 void DxRnd::EndDrawing() {
     EndWorld();
     if (mShowSafeArea) {

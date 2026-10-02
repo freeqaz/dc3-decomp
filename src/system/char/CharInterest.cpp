@@ -165,10 +165,17 @@ float CharInterest::ComputeScore(
     // both Dot() calls do the same.  We walk x,z,y.  All three of Subtract,
     // LengthSquared and Dot are inlines in the SHARED header math/Vec.h, and
     // per-component reordering there is measured harmful binary-wide
-    // (4 functions up / 20 down), so this is deliberately NOT fixed here.
+    // (4 functions up / 20 down), so this is deliberately NOT fixed there --
+    // it is fixed at the call site below instead.
     Vector3 v7c(WorldXfm().v);
+    // w17-c: Subtract spelled out at the call site, in x, z, y statement order
+    // -- the order that makes MSVC issue the image's z, y, x loads and stores
+    // (0x68/0x64/0x60).  Measured (non-PCH probe, diff score /15400): xyz 12
+    // (= Subtract), xzy 0, yxz 15, yzx 12, zxy 6, zyx 9, 3-float ctor 6.
     Vector3 v88;
-    Subtract(v7c, v2, v88);
+    v88.x = v7c.x - v2.x;
+    v88.z = v7c.z - v2.z;
+    v88.y = v7c.y - v2.y;
     float lensq = v88.z * v88.z + v88.x * v88.x + v88.y * v88.y;
     Normalize(v88, v88);
 

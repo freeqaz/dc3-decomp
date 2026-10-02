@@ -58,23 +58,25 @@ void Vector3DESmoother::ForceValue(Vector3 v) {
 // of the inlined DoubleExponentialSmoother::Smooth keeps mLevel in a register
 // (`fmr f10, f11`) where the image re-loads it (`lfs f12, 0x0(r11)`) for the
 // normalize; a Vector2 val(sx.mLevel, sy.mLevel) temp is worse (9 rows).
+// w17-c: `Vector2 val = Value();` (the out-of-line accessor, inlined) gives the
+// reload, and the length sums y*y first: non-PCH probe diff 235 -> 10, the one
+// row left is the commutative fmadds inside the inlined mY Smooth().
 void Vector2DESmoother::Smooth(Vector2 v, float dt, bool normalize) {
     DoubleExponentialSmoother &sx = mX;
     DoubleExponentialSmoother &sy = mY;
     sx.Smooth(v.x, dt);
     sy.Smooth(v.y, dt);
     if (normalize) {
-        float y = sy.mLevel;
-        float x = sx.mLevel;
-        float len = std::sqrt(x * x + y * y);
+        Vector2 val = Value();
+        float len = std::sqrt(val.y * val.y + val.x * val.x);
         float inv;
         if (len != 0) {
             inv = 1.0f / len;
         } else {
             inv = 0;
         }
-        float normX = x * inv;
-        float normY = y * inv;
+        float normX = val.x * inv;
+        float normY = val.y * inv;
         sx.mTrend = 0;
         sx.mLevel = sx.mPrevLevel = normX;
         sy.mLevel = sy.mPrevLevel = normY;
@@ -116,7 +118,9 @@ void Vector3DESmoother::Smooth(Vector3 v, float dt, bool normalize) {
     sy.Smooth(v.y, dt);
     sz.Smooth(v.z, dt);
     if (normalize) {
-        Vector3 val(sx.mLevel, sy.mLevel, sz.mLevel);
+        // w17-c: Value(), not a ctor from the three mLevels -- it is what
+        // makes the image reload mZ.mLevel (probe diff 302 -> 30).
+        Vector3 val = Value();
         Vector3 norm;
         Normalize(val, norm);
         sx.mTrend = 0;

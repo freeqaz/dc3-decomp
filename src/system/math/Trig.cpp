@@ -48,6 +48,13 @@ void TrigTableInit() {
         // all.  Every spelling that buys `cmpw` also turns the limit into a
         // loop-invariant int, where the image recomputes `addi r11, r29, 0x7fc`
         // inside the loop.
+        // w17-c: an index loop `for (j = -1; j < 511; j += 2, i++)` storing
+        // gBigSinTable[j + 1] / [j] / reading [j - 1] DOES buy the signed
+        // `cmpw` with the limit rematerialised inside the loop, but MSVC then
+        // strength-reduces on &table[j + 1] (base, limit 0x800) where the
+        // image uses &table[j] (base - 4, limit 0x7fc): 5 offset rows, probe
+        // diff 64 vs 60 for this spelling.  Writing the [j] store first or
+        // through a `float *p = &table[j]` was worse.
     } while (tablePtr < &gBigSinTable[511]);
     float sineValue = std::sin(0.024543693f * i);
     // Peeled last half-iteration: writes the odd (delta) slot 2i-1 and reads the

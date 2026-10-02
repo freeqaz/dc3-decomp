@@ -216,6 +216,10 @@ void Waypoint::ShapeDelta(const Vector3 &v, Vector3 &vout) {
     ShapeDeltaBox(v, mRadius, mYRadius, vout);
 }
 
+// w17-c (99.968, 20 rows in the f2 > 0 arm): all 49 explicit Dot spellings
+// are inert; spelling the Subtract per component through a named WorldXfm().v
+// (reference or copy) and spelling Scale/ScaleAdd per component are both far
+// worse (910+ vs 114 probe diff).
 void Waypoint::ShapeDeltaBox(const Vector3 &v1, float f1, float f2, Vector3 &res) {
     const Transform &world = WorldXfm();
     if (f2 > 0.0f) {
