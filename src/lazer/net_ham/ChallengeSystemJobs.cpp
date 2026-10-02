@@ -288,6 +288,8 @@ bool TimeStampCmp(ChallengeRow r1, ChallengeRow r2) {
 // a dead home store) and puts DateTime dt at 0x58.  Spelling the compare as
 // rowIt->second[i] != it->second[i] without the two reference locals DOES
 // produce a homed store, but of the wrong value and with a 0x140 frame (93.1).
+// w18-e (98.97): `rowItRows[i] != it->second[i]` is 98.0 (frame +0x10);
+// `rowIt->second[i] != itRows[i]` is 95.7 (homes &rowIt->second instead).
 void GetRows(
     JsonConverter &c,
     const JsonObject *o,

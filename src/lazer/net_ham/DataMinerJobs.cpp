@@ -85,8 +85,9 @@ GameEndedDataPointJob::GameEndedDataPointJob(
 
     if (lastMode != showdown && lastMode != playlist_perform && lastMode != perform &&
         lastMode != dance_battle && lastMode != perform_legacy && lastMode != challenge) {
-        MetaPerformer *perf = MetaPerformer::Current();
-        if (perf->GetMoveScores().size() != 0) {
+        const std::vector<HamMoveScore> &moveScores =
+            MetaPerformer::Current()->GetMoveScores();
+        if (moveScores.size() != 0) {
             MoveDir *moves = TheHamDirector->GetWorld()->Find<MoveDir>("moves", true);
             MILO_ASSERT(moves, 0x5a);
             PracticeSection *section = nullptr;
@@ -98,7 +99,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
             }
             MILO_ASSERT(section, 0x64);
             int num_steps = section->Steps().size();
-            unsigned long num_scores = perf->GetMoveScores().size();
+            unsigned long num_scores = moveScores.size();
             if (num_scores > num_steps) {
                 // The shipped build calls MakeString<int *, int>
                 // (??$MakeString@PAHH@@YAPBDPBDABQAHABH@Z), not <unsigned long, int>:
@@ -115,48 +116,38 @@ GameEndedDataPointJob::GameEndedDataPointJob(
             num_stars_int = (int)pNode->Float();
         }
         dataP.AddPair(perf_current_stars, num_stars_int);
+        // w18-e: 99.6 -- the last rows of this function are here.  The image
+        // stores the DataNode type word (`stw r19, 0x5c`) straight after
+        // `mr r11, r3`, before the lbz of the flag; we store it after.  Inert:
+        // dropping the (int) cast, DataNode(kDataInt, flag).  Worse (98.7): a
+        // named DataNode local (adds a copy-ctor + Release).
         dataP.AddPair(perf_no_flashcard, (int)MetaPerformer::Current()->CompletedSongWithNoFlashcards());
     }
 
     Symbol crew(gNullStr);
     Symbol character(gNullStr);
-    const char *perf_move_ratings_str = "perf_move_ratings";
-    const char *perf_calories_str = "perf_calories";
-    const char *new_rank_str_base = "new_rank";
-    const char *move_ratings_prefix = "move_ratings=";
-    const char *perf_current_score_str = "perf_current_score";
-    const char *diff_str_base = "diff";
-    const char *new_content_str_base = "new_content";
-    const char *comma_str = ",";
-    const char *pract_move_ratings_str = "pract_move_ratings";
-    const char *character_str_base = "character";
-    const char *crew_str_base = "crew";
-    const char *num_playlists_str_base = "num_playlists";
-    const char *perf_fitness_mode_str = "perf_fitness_mode";
-    const char *player_name_str_base = "player_name";
-    const char *xuid_str_base = "xuid";
 
     for (int i = 0; i < 2; i++) {
         HamPlayerData *pData = TheGameData->Player(i);
         crew = pData->Crew();
         character = pData->Char();
         
-        char buf[32];
+        char buf[4];
         itoa(i, buf, 10);
 
-        String crew_str(crew_str_base); crew_str += buf;
-        String char_str(character_str_base); char_str += buf;
-        String diff_str(diff_str_base); diff_str += buf;
-        String score_str(perf_current_score_str); score_str += buf;
+        String crew_str("crew"); crew_str += buf;
+        String char_str("character"); char_str += buf;
+        String diff_str("diff"); diff_str += buf;
+        String score_str("perf_current_score"); score_str += buf;
         String ratings_str;
-        String move_ratings_str(move_ratings_prefix); move_ratings_str += buf;
+        String move_ratings_str("move_ratings="); move_ratings_str += buf;
 
         bool hasRatings = true;
         if (lastMode == perform || lastMode == dance_battle || lastMode == perform_legacy) {
-            ratings_str = perf_move_ratings_str;
+            ratings_str = "perf_move_ratings";
             ratings_str += buf;
         } else if (lastMode == practice) {
-            ratings_str = pract_move_ratings_str;
+            ratings_str = "pract_move_ratings";
             ratings_str += buf;
         } else {
             hasRatings = false;
@@ -180,10 +171,10 @@ GameEndedDataPointJob::GameEndedDataPointJob(
         if (prof != nullptr && prof->HasValidSaveData()) {
             if (prof->IsSignedIn()) {
                 const char *xuid = GetXUIDStrFromProfile(prof);
-                String xuid_str(xuid_str_base); xuid_str += buf;
+                String xuid_str("xuid"); xuid_str += buf;
                 dataP.AddPair(xuid_str.c_str(), DataNode(xuid));
 
-                String name_str(player_name_str_base); name_str += buf;
+                String name_str("player_name"); name_str += buf;
                 dataP.AddPair(name_str.c_str(), DataNode(ThePlatformMgr.GetName(padNum)));
             }
 
@@ -192,13 +183,13 @@ GameEndedDataPointJob::GameEndedDataPointJob(
             const std::list<std::pair<Symbol, Symbol> > &newAwards = accProg.GetNewAwards();
             for (std::list<std::pair<Symbol, Symbol> >::const_iterator it = newAwards.begin(); it != newAwards.end(); ++it) {
                 if (it != newAwards.begin()) {
-                    acc_str += comma_str;
+                    acc_str += ",";
                 }
                 acc_str += it->first.Str();
             }
 
             if (!acc_str.empty()) {
-                String new_content_str(new_content_str_base); new_content_str += buf;
+                String new_content_str("new_content"); new_content_str += buf;
                 dataP.AddPair(new_content_str.c_str(), DataNode(acc_str));
             }
 
@@ -207,7 +198,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
                 rank_title = prof->GetMetagameRank()->GetRankTitle().Str();
             }
             if (rank_title != gNullStr) {
-                String new_rank_str(new_rank_str_base); new_rank_str += buf;
+                String new_rank_str("new_rank"); new_rank_str += buf;
                 dataP.AddPair(new_rank_str.c_str(), DataNode(rank_title));
             }
 
@@ -216,11 +207,11 @@ GameEndedDataPointJob::GameEndedDataPointJob(
                 float tmp1, tmp2, cals;
                 prof->GetFitnessStats(tmp1, tmp2, cals);
                 if (inFit) {
-                    String cals_str(perf_calories_str); cals_str += buf;
+                    String cals_str("perf_calories"); cals_str += buf;
                     dataP.AddPair(cals_str.c_str(), cals);
                 }
 
-                String fitness_mode_str(perf_fitness_mode_str); fitness_mode_str += buf;
+                String fitness_mode_str("perf_fitness_mode"); fitness_mode_str += buf;
                 dataP.AddPair(fitness_mode_str.c_str(), (int)inFit);
             }
 
@@ -229,7 +220,7 @@ GameEndedDataPointJob::GameEndedDataPointJob(
                 p.GetNumSongs();
             }
 
-            String num_playlists_str(num_playlists_str_base); num_playlists_str += buf;
+            String num_playlists_str("num_playlists"); num_playlists_str += buf;
             dataP.AddPair(num_playlists_str.c_str(), 0);
         }
     }

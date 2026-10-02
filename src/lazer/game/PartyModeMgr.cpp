@@ -936,6 +936,8 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
 // The image keeps `this` in r30 and reuses mode's r29 for maxplayers, which it
 // then counts down in place; we copy maxplayers into a fresh register for the
 // second loop. Rewriting both loops as `for (; n != 0; n--)` is byte-identical.
+// w18-e (98.84): dropping the `&& maxplayers != 0` guard (it is the rotated
+// while's own entry test) is byte-identical.
 void PartyModeMgr::DetermineSubModePlayers(
     Symbol mode, int *pPlayerFlags, int *pNumPlayers, std::vector<int> *vec
 ) {

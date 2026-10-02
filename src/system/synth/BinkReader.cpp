@@ -63,6 +63,9 @@ BinkReader::~BinkReader() {
     BinkClose(mBink);
 }
 
+// w18-e (98.05): BinkOpenTrack(mBink, (int)i) is inert; the loop-carried
+// copy of i into r4 (ours) vs `mr r4, r28` at the loop top (image) is not
+// moved by the argument's type.
 void BinkReader::Poll(float) {
     START_AUTO_TIMER("bink_audio");
 
