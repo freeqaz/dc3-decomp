@@ -45,6 +45,12 @@ void Hmx::Quat::Set(const Vector3 &v, float f) {
     z = v.z * scale;
 }
 
+// w16-c (96.87692, 15 rows in the z-rotation half): the image's standalone
+// products are z*s, y*s, y*c, z*c (s/c = Sine/Cosine of stack.z, f30/f1) with
+// x and w fused; ours fuse every c-product.  Inert, all 96.9: four member
+// writes from saved ox/oy/oz/ow in the image's w,x,y,z store order; the Set
+// args with the y/z terms written s-first.  The zeros a Quat-multiply
+// spelling would add are absent from the image, so it is not Multiply().
 void Hmx::Quat::Set(const Vector3 &v) {
     Vector3 stack;
     Scale(v, 0.5f, stack);
@@ -258,6 +264,8 @@ void RotateAboutZ(const Hmx::Matrix3 &min, float f, Hmx::Matrix3 &mout) {
 
 // MakeRotMatrixX/Y/Z moved to Rot.h as `inline` -- see the note there.
 
+// w16-c (90.30645, 13 rows, all FP colouring inside the inlined Cross /
+// LengthSquared / Dot block): Dot(v2, v1) for Dot(v1, v2) is byte-identical.
 void MakeRotQuat(const Vector3 &v1, const Vector3 &v2, Hmx::Quat &q) {
     Vector3 vec;
     Cross(v1, v2, vec);

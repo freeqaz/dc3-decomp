@@ -140,6 +140,9 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
             // the else arm its own top-of-block `cmpwi cr6` which MSVC still
             // did not CSE with the if arm's, and additionally sank the
             // `addi r30, r29, 0x50`.  clear() is the best spelling found.
+            // w16-c: `while (mLoadedSubdirs.size() != 0)` for the if-arm guard
+            // (same expression shape as clear()'s) is byte-inert; inverting
+            // to `if (!mergerDir) clear(); else while ...` is 88.4.
             mLoadedSubdirs.clear();
         }
     }

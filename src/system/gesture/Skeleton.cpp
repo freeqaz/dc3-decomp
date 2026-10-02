@@ -481,6 +481,9 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
         // i*0x74 an offset IV.  `tj` itself is bound here, at the head,
         // so that `&mTrackedJoints[i]` is `add r28, r24, r29` (r24 = this+4)
         // and stays live across the inner loop's calls.
+        // w16-c: indexing data.mJointPositions[i] directly instead of
+        // through this pointer is 96.7 (the image's extra callee-saved r20
+        // holds an i*16 OFFSET IV added to two bases; neither spelling gets it).
         const Vector3 *jointPositions = (const Vector3 *)data.mJointPositions;
         for (int i = 0; i < kNumJoints; i++) {
             TrackedJoint &tj = mTrackedJoints[i];
