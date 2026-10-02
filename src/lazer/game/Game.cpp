@@ -1244,11 +1244,34 @@ DataNode OnCycleTestDancer(DataArray *) {
                 break;
             }
         }
-        // w13-e: the size-0 arm, the `% size` and the negative fold-back
-        // (82865DAC..82865DDC) are math/Utl.h Mod() inlined.
         int size = (int)dancers.size();
+        // `i + 1` is computed BEFORE the size test -- 82865D9C `addi r10, r29,
+        // 0x1` sits between the two `lwz`s of the size computation, above the
+        // `srawi.`/`bne` -- so it is a separate value, not an expression inside
+        // the modulo arm.
         int next = i + 1;
-        name = dancers[Mod(next, size)];
+        // Zero arm first: 82865DAC is `bne .L_82865DB8` INTO the divw block,
+        // with `li r10, 0x0` as the fall-through, so the image tests
+        // `size == 0` and MSVC lays that arm first.
+        if (size == 0) {
+            i = 0;
+        } else {
+            i = next % size;
+            // 82865DD0 `subf. r10, r7, r10` / 82865DD8 `bge .L_82865DE0` /
+            // 82865DDC `add r10, r11, r10`: the image folds the remainder back
+            // into [0, size) rather than trusting C's sign rule.
+            if (i < 0) {
+                i = size + i;
+            }
+            // w13-e: NOT math/Utl.h Mod() -- Mod's `div += modbase` emits
+            // `add r10, r10, r11`, the image's 82865DDC is `add r10, r11, r10`
+            // (size first).  Same canonical score, wrong operand order; reverted.
+        }
+        // The re-read of the vector is INSIDE the empty guard: 82865D44
+        // `beq cr6, .L_82865DF4` jumps the whole body, landing directly on the
+        // `CurrentDancer() = name` assignment, so an empty dancer list leaves
+        // the name unchanged instead of indexing element 0 of an empty vector.
+        name = dancers[i];
     }
     player_data->CurrentDancer() = name;
     return DataNode(name);
