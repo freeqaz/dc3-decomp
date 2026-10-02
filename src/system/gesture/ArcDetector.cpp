@@ -306,15 +306,14 @@ bool ArcDetector::IsPathAcceptable() const {
     }
     if (!IsLockedIn()) {
         Vector3 front = jointPath.front();
-        const Vector3 &back = jointPath.back();
         float sign = (float)(mSide != 0 ? 1 : -1);
-        float diffX = front.x - back.x;
-        // front-first: the image has a single `fsubs f12, f9, f12`
-        // (front.y - back.y). Spelled `-(back.y - front.y)` MSVC emits the
-        // subtraction the other way round plus an `fneg`.
-        float dy = front.y - back.y;
-        float diffZ = front.z - back.z;
-        float dx = sign * diffX;
+        // All three components are formed up front (the image computes
+        // front.z - back.z before the first early-out), i.e. one Subtract.
+        Vector3 diff;
+        Subtract(front, jointPath.back(), diff);
+        float dy = diff.y;
+        float diffZ = diff.z;
+        float dx = sign * diff.x;
         if (dx < 0.0f) {
             return false;
         }
