@@ -775,10 +775,10 @@ void ObjPtrList<T1, T2>::Link(iterator it, Node *node) {
 }
 
 template <class T1, class T2>
-typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *node) {
-    MILO_ASSERT(node != NULL && mNodes != NULL, 0x26B);
+typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *n) {
+    MILO_ASSERT(n != NULL && mNodes != NULL, 0x26B);
     Node *next;
-    if (node == mNodes) {
+    if (n == mNodes) {
         // Removing head: the successor (or NULL) becomes the new head, and is
         // also what we return. The target keeps a single `mSize--` and a single
         // return for all three arms, so do not early-return from any of them.
@@ -789,16 +789,17 @@ typename ObjPtrList<T1, T2>::Node *ObjPtrList<T1, T2>::Unlink(Node *node) {
             mNodes = nullptr;
         }
         next = mNodes;
-    } else if (node == mNodes->prev) {
+    } else if (n == mNodes->prev) {
         // Removing tail
         mNodes->prev = mNodes->prev->prev;
         mNodes->prev->next = nullptr;
         next = mNodes->prev;
     } else {
-        // Middle node
-        node->prev->next = node->next;
-        node->next->prev = node->prev;
-        next = node->next;
+        // Middle node. The parameter is `n`: the retail assert string is
+        // "n != NULL && mNodes != NULL" (??_C@_0BM@NPEFHGCK, UIList.obj).
+        n->prev->next = n->next;
+        n->next->prev = n->prev;
+        next = n->next;
     }
     mSize--;
     return next;

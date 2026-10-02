@@ -882,6 +882,12 @@ DataNode UIList::OnSetData(DataArray *da) {
     return 1;
 }
 
+// RESIDUAL (w11-b, 98.15 canonical, 21 rows): the image stores the raw mParent
+// to 0x50(r31) TWICE (before and after the `beq` of the null test, with a cr0
+// `cmplwi r29,0`), we store it once; the r28/r29 permutation and one fmuls
+// operand order follow from that. Inert: `mParent && mParent->ChildList() ==
+// this`, `this == mParent->ChildList()`, a `UIList *parent` local (loses the
+// store entirely, 97.3), ChildList() as a header inline, `(float)n * spacing`.
 void UIList::DrawShowing() {
     if (mScrollPending) {
         mListState.Poll(TheTaskMgr.UISeconds());
@@ -1020,7 +1026,7 @@ RndDrawable *UIList::CollideShowing(const Segment &seg, float &fref, Plane &p) {
             p.a = tri.frame.z.x;
             p.b = tri.frame.z.y;
             p.c = tri.frame.z.z;
-            p.d = -(p.a * tri.origin.x + p.b * tri.origin.y + p.c * tri.origin.z);
+            p.d = -Dot(tri.frame.z, tri.origin);
             intersects = true;
         }
     }

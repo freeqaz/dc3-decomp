@@ -239,6 +239,10 @@ void AsyncFileWin::_ReadAsync(void *buf, int count) {
     }
 }
 
+// RESIDUAL (w11-b, 99.93 canonical, 4 rows): the shared fail tail stores
+// mReadInProgress before mFail in the image; we emit mFail first. Swapping the
+// source order in one or both copies breaks the tail merge (82.6); `= true`
+// inert; decomp-synth beam (6 rounds) found nothing.
 bool AsyncFileWin::_ReadDone() {
     if (gFakeFileErrors) {
         SetLastError(0x20000002);

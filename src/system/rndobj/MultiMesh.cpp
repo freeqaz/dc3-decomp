@@ -329,6 +329,13 @@ DataNode RndMultiMesh::OnAddXfms(const DataArray *da) {
     return 0;
 }
 
+// RESIDUAL (w11-b, 99.22 canonical, 2 rows): `Refs().empty()` on the proxy's
+// virtual-base Hmx::Object -- the image keeps the vbase adjust and the mRefs
+// offset as two `addi rX,..,0x4`; we fold them into one `addi 0x8`. Same shape
+// in CamShotCrowd::GetSelectedCrowd (98.34). Inert: begin()==end() (inline and
+// in ObjRef::empty itself), a `const ObjRef &` local; a static_cast to
+// Hmx::Object* adds a null check (94.6). Unit also blocked by the PCH-fixed
+// utl\PoolAlloc.h __FILE__ spelling (see obj/Data.h).
 void RndMultiMesh::CollideList(const Segment &seg, std::list<Collision> &colls) {
     static int stamp = 0;
     if (TheLoadMgr.EditMode() && CollideSphere(seg)) {

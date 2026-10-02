@@ -82,21 +82,12 @@ void XboxContent::Poll() {
         }
         mOverlapped = new XOVERLAPPED;
         memset(mOverlapped, 0, sizeof(XOVERLAPPED));
-        ULARGE_INTEGER contentSize;
-        // RESIDUAL (w7-am, 90.98 canonical): 825EA4FC-825EA528 is a 15-row
-        // insert/delete cluster.  The image builds the by-value argument in
-        // memory -- `addi r11,r1,0x64` / `stw r29,0x60(r1)` / `stw r29,0x0(r11)`
-        // / `ld r10,0x60(r1)` -- which is MSVC's 64-bit register-PAIR store
-        // idiom (stw hi, d(b) / addi t,b,d+4 / stw lo, 0(t)), i.e. ONE 64-bit
-        // store of QuadPart, not two field stores.  Ours SROAs the union and
-        // passes the constant straight in r10.
-        // NEGATIVE RESULT (w7-am, 2026-09-14): spelling it as the two halves
-        // (`contentSize.HighPart = 0; contentSize.LowPart = 0;`) does defeat
-        // the SROA and restores all three memory instructions, but the second
-        // store comes out as `stw r29,0x64(r1)` (d-form, no addi) and the
-        // argument setup schedules differently: 87.0 canonical, both in
-        // HighPart-first and LowPart-first order.  Kept the QuadPart spelling.
-        contentSize.QuadPart = 0;
+        // `= {0}` (w11-b): zeroes HighPart through the frame and LowPart
+        // through a precomputed address, then `ld`s it for the by-value
+        // argument -- the image's `addi r11,r1,0x64` / `stw r29,0x60(r1)` /
+        // `stw r29,0x0(r11)` / `ld r10,0x60(r1)` at 825EA4FC-825EA528.
+        // `contentSize.QuadPart = 0` let MSVC SROA the union away.
+        ULARGE_INTEGER contentSize = {0};
         if (XContentCrossTitleCreate(
                 pad,
                 mRoot.c_str(),
@@ -435,10 +426,13 @@ bool XboxContentMgr::MountContent(Symbol name) {
     if (!found) {
         MILO_NOTIFY("\"%s\" not found to mount.", name.Str());
     }
+    // mountingCount lives across iterations and is re-zeroed at the BOTTOM of
+    // the loop: the image's back-edge is `mr r26,r27` / `li r27,0` / `beq`
+    // into the `lwz r31` (begin()) after the three entry `li`s.
+    int mountingCount = 0;
     int prevCount = 0;
     bool done = false;
     do {
-        int mountingCount = 0;
         Content *oldest = nullptr;
         unsigned int oldestLRM = 0xFFFFFFFF;
         FOREACH (it, mContents) {
@@ -461,6 +455,7 @@ bool XboxContentMgr::MountContent(Symbol name) {
             mState = kContentMgrState7;
         }
         prevCount = mountingCount;
+        mountingCount = 0;
     } while (!done);
     return alreadyMounted;
 }

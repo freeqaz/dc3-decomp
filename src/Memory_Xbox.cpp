@@ -8,6 +8,10 @@
 #include "xdk\xapilibi\xbox.h"
 #include <cstdio>
 #include <cstring>
+// Retail __FILE__ for this TU is "..\..\..\system\src\os\Memory_Xbox.cpp"
+// (??_C@_0CH@IBIDAHHO, the only file string in the target object): it was
+// compiled from a directory three levels below the tree root.
+#line 15 "..\\..\\..\\system\\src\\os\\Memory_Xbox.cpp"
 
 extern "C" {
     void *XMemAllocDefault(unsigned long size, unsigned long attrs);
@@ -28,7 +32,10 @@ namespace {
     const char *gPhysicalType = gNullStr;
 
     const char *AllocType(unsigned long p1) {
-        bool isPhys = (p1 & 0x80000000) != 0;
+        // `> 0`, not `!= 0` (same value for an unsigned mask): only this spelling
+        // keeps the image's clrrwi + subic/subfe normalisation; `!= 0`, `? true :
+        // false` and a bare bool conversion all fold to `srwi r11, r3, 31`.
+        bool isPhys = (p1 & 0x80000000) > 0;
         unsigned int type = p1 >> 0x10 & 0xff;
 
         // XTL allocator IDs start at 128 (eXALLOCAllocatorId_D3D = 0x80; 0-0x7f
@@ -254,17 +261,15 @@ namespace {
             }
         } else {
             // Heap allocation alignment
-            if (alignField < 1U) {
-                return 0x10;
-            }
-            if (alignField < 3U) {
-                return 8;
-            }
-            if (alignField != 4U) {
+            switch (alignField) {
+            case 0: return 0x10;
+            case 1:
+            case 2: return 8;
+            case 4: return 0x10;
+            default:
                 MILO_FAIL("Invalid heap alignment (%d)", alignField);
                 return 0;
             }
-            return 0x10;
         }
     }
 
