@@ -141,6 +141,10 @@ void RndFlare::DrawShowing() {
             // offset by +0x10 and costing 98.9 -> 97.8 canonical (w7-n, 2026-09-14).
             // Keep the comma-operator form until someone finds a spelling that gets the
             // clrlwi without moving the slots.
+            // w15-a re-measured: `useOccResult = !mOcclusionPending && mOcclusionReady;`
+            // gives the image's 0x130 frame and its clrlwi, but the int->float scratch
+            // then takes its own slot at 0x60 instead of sharing 0x50 with `scale`, which
+            // pushes `dir` from the image's 0x60 to 0x70: 97.8 vs 98.94.
             if (mOcclusionPending || (useOccResult = true, !mOcclusionReady)) {
                 useOccResult = false;
             }

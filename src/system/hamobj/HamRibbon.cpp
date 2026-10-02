@@ -177,6 +177,13 @@ void HamRibbon::UpdateChase() {
             Interp(followed, mFollowB->WorldXfm().v, mFollowWeight, followed);
         }
 
+        // w15-a (97.97 -> 98.12 canonical): both loops are bounded by size() --
+        // the image keeps the count in a VOLATILE r11 and reuses the copy loop's
+        // last size() for the resize, so a cached `numKeys` pinned in r26 across the
+        // memcpy calls was wrong; the shift-down is a struct assignment (image
+        // computes &src before &dst).  Still open: the image reloads _M_start inside
+        // this search loop (`lwz r8, 0x0(r31)`) where we hoist it; a `&&` loop
+        // condition instead of the break is byte-identical.
         unsigned int removeCount = 0;
         for (unsigned int i = 0; i < mChaseKeys.size() && mChaseKeys[i].frame < now - mDecay;
              i++) {

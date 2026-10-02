@@ -1107,6 +1107,10 @@ void HamIKEffector::ComputeHandPullAndQuat(
     float parentLen = parent->LocalXfm().v.x;
     float maxReach = (parentLen + effectorLen) * 0.99f;
     float maxReachSq = maxReach * maxReach;
+    // w15-a (94.14 canonical): the image squares dz first and parks dx in f11
+    // (`fmr f11, f0`) before loading 0.99f into f0; we square dx first.
+    // `dx*dx + dy*dy + dz*dz` measured 94.2 normalized, same rows -- MSVC
+    // re-sorts the /fp:fast sum itself.
     float distSq = dz * dz + dy * dy + dx * dx;
 
     if (distSq <= maxReachSq

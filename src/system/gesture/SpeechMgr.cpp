@@ -632,6 +632,12 @@ void SpeechMgr::Poll() {
         memset(&event[0], 0, sizeof(event));
         HRESULT res = NuiSpeechGetEvents(5, event, &fetched);
         if (SUCCEEDED(res) && fetched != 0) {
+            // w15-a (97.98 canonical): the image strength-reduces TWO pointers, one at
+            // &event[i].pResult (addi r31, r1, 0x70) and one at &event[i] (subi r30,
+            // r31, 0x10), costing r28 in the prologue; we use one.  Indexing event[i]
+            // directly is byte-identical; a `switch (eventId) { case 0x40: case 0x80: }`
+            // drops the image's `cmplwi 0x20 / ble` (94.1, an empty `case 0x20:` is
+            // folded away), so the explicit `> 0x20` test stays.
             for (ULONG i = 0; i < fetched; i++) {
                 NUI_SPEECH_EVENT &cur = event[i];
                 if (cur.eventId > 0x20 && (cur.eventId == 0x40 || cur.eventId == 0x80)

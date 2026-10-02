@@ -97,6 +97,13 @@ END_LOADS
 
 INIT_REVS(6, 1)
 
+// w15-a (98.45 canonical): the whole residual is the INIT_REVS anchor pick
+// (image anchors &gAltRev and reaches gRev as -4; we anchor &gRev) -- see the
+// w9-f note in rndobj/Spline.cpp.  Of the 18 image functions that anchor on
+// gAltRev, 8 already do so in our build at 100% (CharClip, HamIKEffector,
+// HamListRibbon::PreLoad, HamRegulate, CharLookAt, ThreeDSound, InlineHelp,
+// RndShockwave), so it IS reproducible from source; the discriminator is
+// still unknown.
 void SkeletonViz::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(6, 1)
