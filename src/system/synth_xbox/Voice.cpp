@@ -923,9 +923,9 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
 // written `= 0`: uninitialised file statics are laid out ahead of every
 // global, initialised ones in declaration order -- which is the image's
 // .bss order (the four bools, the two counts, gCommitTag, gWasCommitTag,
-// rolling).  RESIDUAL (99.59, 15 rows): rows 32-56 swap two hoisted string
-// /deque bases between r4/r5 and r29/r30, rows 74-81 rotate r9/r10/r11 in the
-// gCommitSyncVoices block, and the cr0 TheXboxSynth test (rows 135-136).
+// rolling).  RESIDUAL (99.59, 10 rows): rows 32-56 swap two hoisted string
+// /deque bases between r4/r5 and r29/r30 (lis scratch only), and the cr0
+// TheXboxSynth test (rows 135-136).
 unsigned long StartVoiceThreadEntry(void *) {
     rolling++;
     WaitForSingleObject(gEvent, INFINITE);
@@ -945,9 +945,12 @@ unsigned long StartVoiceThreadEntry(void *) {
 
             gWasCommitSyncVoices = false;
             if (gCommitSyncVoices) {
-                gCommitSyncVoices = false;
+                // w17-e: this store order is the image's register assignment
+                // (gCommitTag in r10, the 1 in r11 -- rows 74-81); the other
+                // five orders of these three stores each leave 2-5 rows.
                 gWasCommitSyncVoices = true;
                 gWasCommitTag = gCommitTag;
+                gCommitSyncVoices = false;
                 gInProgressSyncVoices = gPendingSyncVoices;
                 gPendingSyncVoices.clear();
             }
