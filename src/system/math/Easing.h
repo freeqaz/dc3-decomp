@@ -328,6 +328,11 @@ inline float EaseStairstep(float t, float power, float f3) {
     float tmp_f30 = t * f3;
     float tmp_f26 = floor(tmp_f30);
     f3 = 1.0f / f3; // this is SUPPOSED to be here, but it's getting scheduled for later
+    // w13-d (96.15, 3 rows: the image's fdivs sits before the EasePolyInOut
+    // call into f31, ours after it).  Refuted, all bit-identical or worse:
+    // a named `inv` before the call; `tmp_f30 -= tmp_f26` as its own statement
+    // between the fdivs and the call; `/ f3` in the return (89.2 -- the 1.0f
+    // stops being held in f28).
     return (EasePolyInOut(tmp_f30 - tmp_f26, power, 0.0f) + tmp_f26) * f3;
 }
 
