@@ -1134,9 +1134,18 @@ void SkeletonChooser::ChoosePlayerSides() {
     } else {
         if ((id0 > 0) ^ (id1 > 0)) {
             if (locked) {
+                // w18-e (99.30 -> 100 modulo the f30/f31 constant swap noted
+                // above): two calls that MSVC cross-jumps into the image's one
+                // `bl` (r4 chosen by `bgt`), not one call on a selected ID.  The
+                // merged call leaves the assert's `cmplwi cr6, r3, 0x0` in the
+                // join block, so it is not fused into `mr. r30, r3` as before.
                 GestureMgr *gestureMgr = TheGestureMgr;
-                int activeID = (id0 > 0) ? id0 : id1;
-                Skeleton *pPlayerSkeleton = gestureMgr->GetSkeletonByTrackingID(activeID);
+                Skeleton *pPlayerSkeleton;
+                if (id0 > 0) {
+                    pPlayerSkeleton = gestureMgr->GetSkeletonByTrackingID(id0);
+                } else {
+                    pPlayerSkeleton = gestureMgr->GetSkeletonByTrackingID(id1);
+                }
                 MILO_ASSERT(pPlayerSkeleton, 0x1fb);
                 // Two GetPlayerSide calls that MSVC cross-jumps into one, with
                 // the argument register set by the branch (li r4,0 / bne /
