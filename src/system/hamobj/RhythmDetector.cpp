@@ -533,6 +533,10 @@ END_COPYS
 
 INIT_REVS(2, 0)
 
+// RESIDUAL (w13-b, 99.89): the hand-expanded rev check anchors on gAltRev like
+// the image, but the image computes the `gAltRev - 4` argument (subi r7) before
+// r4/r6.  Replacing it with ASSERT_REVS(2, 0) is WORSE (97.9): the macro anchors
+// on gRev (see RhythmBattlePlayer::Load for the anchor-pick family).
 BEGIN_LOADS(RhythmDetector)
     LOAD_REVS(bs)
     if (d.rev > 2) {

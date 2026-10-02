@@ -108,6 +108,12 @@ float DetectFrame::LimbPSNR(const FilterVersion *filter_version, int i2) const {
         // mask is tested even when i2 == -1 (beq lands on the Type() load).
         if ((i2 == -1 || _tmp0 & i2) && curErrorNode->Type() & typeMask) {
             const Vector3 &nodeWeight = mMoveFrame->NodeWeight(i, mMirror);
+            // RESIDUAL (w13-b, 99.985): 4 rows, the image consumes the Dot terms
+            // as z, x, y (`lfs f13, -0x4(r31)` / `lfs f12, 0x0(r31)`), we as
+            // z, y, x.  Spelling the dot product out in x,y,z or y,x,z order is
+            // byte-identical to Dot() -- MSVC canonicalises the sum.  This is the
+            // math/Vec.h component-order family; the 3 MakeString name rows are
+            // ICF naming noise (same strings both sides).
             float d = Dot(nodeWeight, mBestNodeErrors[i]);
             f12 += d * d;
             f13 += Length(nodeWeight);

@@ -498,6 +498,8 @@ BEGIN_COPYS(HamMove)
         //     cmplw r29,r28
         // where our build hoists the list-head load between them:
         //     lbz 0x7c / stb -0x8c / lwz r29,-0xf8 / lbz 0x7e / cmplw / stb
+        // (w13-b: caching end() before begin() in an explicit for -- the lever
+        // that closed MoveMgr::InitSong -- is byte-inert here.)
         // The FOREACH is already textually after both COPY_MEMBERs, so the
         // hoist is the scheduler's, not the source's, and objdiff charges it as
         // 2 inserts + 2 deletes.

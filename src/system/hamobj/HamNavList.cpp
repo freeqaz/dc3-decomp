@@ -1031,6 +1031,8 @@ float HamNavList::GetTargetSwellAmount(int display) {
             // 92.30: MSVC then tail-merges the 1.0f return into a different
             // block and the two shared branches, the 0.0f epilogue and the
             // frame teardown all move with it (25 rows instead of 6).
+            // w13-b: the ternary `== kRibbonSwell ? GetFrame() : 1.0f` is
+            // worse again (91.6, 23 rows).
             if (mRibbonMode != HamListRibbon::kRibbonSwell) {
                 return 1.0f;
             }

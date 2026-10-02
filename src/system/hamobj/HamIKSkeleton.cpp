@@ -201,6 +201,11 @@ void HamIKSkeleton::SetBone(RndTransformable *t1, RndTransformable *t2) {
     if (!t2)
         return;
 #endif
+    // RESIDUAL (w13-b, 99.23): the image's guard for this NOTIFY_ONCE static
+    // tests bit 0x2 (`rlwinm. r9, r11, 0, 30, 30` / `ori r11, r11, 0x2`), ours
+    // bit 0x1: something in the original claimed the first bit of this
+    // function's guard word (lbl_82F60FE0, referenced only from here) and was
+    // optimised away.  Not reconstructed: no observable statement explains it.
     if (t2->Dirty()) {
         if (!t1) {
             MILO_NOTIFY_ONCE("%s bone is NULL, neutral is %s", PathName(this), t2->Name());

@@ -775,13 +775,27 @@ void MoveMgr::InitSong() {
     mRoutineMeasures[0].resize(i13 + 2);
     mChoiceSets.resize(i13 + 2);
     mVariants.clear();
-    FOREACH (it, mMoveParents[0]) {
+    // w13-b: each clearing loop reads end() ONCE, before begin() (the image
+    // hoists `lwz r10, 0x120/0x154/0x170(r30)` above each loop); FOREACH
+    // re-reads it every iteration because the element stores may alias it.
+    // 96.22 -> 100.
+    for (std::vector<const MoveParent *>::iterator end = mMoveParents[0].end(),
+                                                   it = mMoveParents[0].begin();
+         it != end;
+         ++it) {
         *it = nullptr;
     }
-    FOREACH (it, mRoutineMeasures[0]) {
+    for (std::vector<std::pair<const MoveVariant *, const MoveVariant *> >::iterator
+             end = mRoutineMeasures[0].end(),
+             it = mRoutineMeasures[0].begin();
+         it != end;
+         ++it) {
         *it = std::pair<const MoveVariant *, const MoveVariant *>();
     }
-    FOREACH (it, mChoiceSets) {
+    for (std::vector<MoveChoiceSet>::iterator end = mChoiceSets.end(),
+                                              it = mChoiceSets.begin();
+         it != end;
+         ++it) {
         it->mChoices[0] = 0;
         it->mChoices[1] = 0;
         it->mChoices[2] = 0;
@@ -885,8 +899,11 @@ void MoveMgr::ComputeLoadedMoveSet() {
     mChoiceSets.resize(maxSize);
     std::pair<const MoveVariant *, const MoveVariant *> *routineData = &mRoutineMeasures[0][0];
     MoveChoiceSet *choiceData = &mChoiceSets[0];
-    int count = (int)maxSize;
-    if (count > 0) {
+    // w13-b: maxSize itself is the countdown (the image decrements r29 in place,
+    // `subic. r29, r29, 0x1`); a separate `int count` copy cost a `mr` and moved
+    // the two data-pointer loads.  96.88 -> 100.  A plain indexed for loop is
+    // much worse (86).
+    if ((int)maxSize > 0) {
         do {
             if (routineData->first) {
                 mVariants.insert(routineData->first);
@@ -905,10 +922,10 @@ void MoveMgr::ComputeLoadedMoveSet() {
                     choice++;
                 } while (j != 0);
             }
-            count--;
+            maxSize--;
             routineData++;
             choiceData++;
-        } while (count != 0);
+        } while (maxSize != 0);
     }
 }
 
