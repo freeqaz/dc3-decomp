@@ -3129,7 +3129,6 @@ void RndText::FontMap::SetupCharacter(
     xPos = advW * state.mSize + xPos;
 }
 
-static const float _kFloat0_0 = 0.0f;
 void RndText::FontMap3d::SetupCharacter(
     unsigned short charCode,
     float &xPos,
@@ -3149,14 +3148,14 @@ void RndText::FontMap3d::SetupCharacter(
     xPos += (mFont->Kerning(prevChar, charCode) + state.mKerning) * state.mSize;
 
     // Use advance as display width if width <= 0
-    if (width <= _kFloat0_0) {
+    if (width <= 0.0f) {
         width = advance;
     }
 
     // Monospace centering
-    float centerOffset = _kFloat0_0;
+    float centerOffset = 0.0f;
     if (mFont->IsMonospace()) {
-        centerOffset = Max((advance - width) * 0.5f, _kFloat0_0);
+        centerOffset = Max((advance - width) * 0.5f, 0.0f);
     }
 
     float scaledCenter = state.mSize * centerOffset;
@@ -3166,7 +3165,7 @@ void RndText::FontMap3d::SetupCharacter(
     // back over it (`fmuls f12, f0, f12` / `stfs f12, 0x50(r1)` at 0x8268ffd4)
     // and reloaded at the circle-edge midpoint (`lfs f13, 0x50(r1)`).
     width = state.mSize * width;
-    if (width <= _kFloat0_0)
+    if (width <= 0.0f)
         return;
 
     yPos += state.mZOffset * state.mSize;
@@ -3195,19 +3194,22 @@ void RndText::FontMap3d::SetupCharacter(
 
         // Scale matrix by cell height
         float cellHeight = mFont->FontUnitInverse() * state.mSize;
-        // NEGATIVE RESULT: the image writes the three diagonal slots (0x60,
-        // 0x74, 0x88) BEFORE the six zeros, and materialises the zero as
-        // `fmuls f0, f0, f31` -- cellHeight times the 0.0 it already holds in a
-        // callee-saved FPR (0x82690064) -- rather than storing the literal.
-        // Writing the nine fields as individual assignments in the image's
-        // order is EXACTLY inert (96.0% and an identical row table): MSVC sinks
-        // and groups the stores by value, not by statement order.  The source
-        // shape that produces a multiply by zero here is still unidentified.
-        xfm.m.x.Set(cellHeight, _kFloat0_0, _kFloat0_0);
-        xfm.m.y.Set(_kFloat0_0, cellHeight, _kFloat0_0);
-        xfm.m.z.Set(_kFloat0_0, _kFloat0_0, cellHeight);
+        // w13-a: an identity scaled by cellHeight.  The image writes the three
+        // diagonal slots (0x60, 0x74, 0x88) first and materialises every zero
+        // as `fmuls f0, f0, f31` -- cellHeight times the 0.0f it holds in a
+        // callee-saved FPR (0x82690064) -- which is what scaling Identity()'s
+        // rows gives under /fp:fast (x*1 folds, x*0 does not).  The 0.0f is a
+        // literal throughout this function: a `static const float` zero was
+        // addressed through a hoisted r27 instead of living in f31, which cost
+        // the image's fourth saved FPR and its 0x150 frame.  96.0 -> 97.4.
+        // RESIDUAL: z's `fmuls`+`fadds` (we fuse to fmadds; `z = z + yPos` is
+        // inert) and the mesh RndTransformable base hoist below.
+        xfm.m.Identity();
+        xfm.m.x *= cellHeight;
+        xfm.m.y *= cellHeight;
+        xfm.m.z *= cellHeight;
 
-        if (size != _kFloat0_0) {
+        if (size != 0.0f) {
             float circlePos = width * 0.5f + xfm.v.x;
             Transform circleXfm = XfmOnCircleEdge(size, circlePos);
             xfm.v.x -= circlePos;
