@@ -1378,11 +1378,14 @@ green, native gate 623 / 554 / 554 / 0 / 69 each time.
 | lane | UP | units completed | matched |
 |---|---:|---|---|
 | w13-e | 6 | 0 | 31554 → 31560 |
-| w13-a | 14 | 0 | 31560 → 31572 |
+| w13-a | 14 | 1 (ScreenMask) | 31560 → 31572 |
 | w13-o | 5 | 0 | 31572 → 31576 |
-| w13-b | 9 | 0 | 31576 → 31583 |
-| w13-c | 8 | 0 | 31583 → 31591 |
-| w13-d | 21 | MemMgr-adjacent units | 31591 → 31607 |
+| w13-b | 9 | 2 (HamMaster, MoveMgr) | 31576 → 31583 |
+| w13-c | 8 | 2 (CharacterTest, world/Dir) | 31583 → 31591 |
+| w13-d | 21 | 0 (MemMgr keeps MemTruncate, MemPushHeap) | 31591 → 31607 |
+
+Units completed, measured by diffing the all-functions-100 unit sets of the wave-13 BEFORE
+report (`79c3f58e7`) and the close report (`c6509d70d`): exactly these five, none lost.
 
 Yield per lane was lower than wave 12's (≈ 15 % of the rows listed closed): a "fresh" row is
 fresh to the commit log, not necessarily easy, and many carried wave 1–7 refutations.
