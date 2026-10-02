@@ -1312,7 +1312,7 @@ PartyModeMgr::SubMode *PartyModeMgr::CreateEventA() {
     event->mPlayerIndices.insert(event->mPlayerIndices.begin(), vec.begin(), vec.end());
     DataArray *a = new DataArray(numPlayers);
     for (int i = 0; i < numPlayers; i++) {
-        a->Node(i) = event->mPlayerIndices[i];
+        a->Node(i) = vec[i];
     }
     event->mPlayers = a;
     return event;
