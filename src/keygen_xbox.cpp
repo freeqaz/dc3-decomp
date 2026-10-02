@@ -103,16 +103,11 @@ void KeyChain::getMasher(unsigned char *uc) {
 
         masher++;
     }
-    // RESIDUAL (w7-al, 98.1 canonical): all 70 instructions are present and in
-    // order -- no inserts, no deletes, no opcode diffs.  What is left is one
-    // /Od allocator artifact: the image reuses r11 (and r10) for every
-    // statement's temp, while our build hands each statement a fresh volatile
-    // and counts down r10..r3 before wrapping, which repaints 48 rows; the four
-    // outer locals then land in a permuted slot order (image
-    // masher_p/needs_byteswap/m/seed at 0x50/0x54/0x58/0x5c, ours
-    // needs_byteswap/seed/masher_p/m), and the two `replace` rows are the same
-    // test compiled against cr0 in the image and cr6 here.  Neither `int` nor
-    // `bool` for needs_byteswap changes the cr field.
+    // w12-c: byte-identical once the unit is built /Od /Os (objects.json) --
+    // that flag is what makes the image recycle r11/r10 per statement and test
+    // needs_byteswap against cr0.  The outer locals' frame slots are assigned
+    // from a hash of their NAMES under /Od (not declaration order), so `one`
+    // and `masher` are the names that land at 0x58/0x50 as in the image.
 }
 
 void mash(unsigned char *uc1, unsigned char *uc2) {
@@ -192,14 +187,16 @@ extern volatile long lbl_82F5E180;
 // two share one cause, so they stand or fall together.  The image materializes a
 // global's address in three instructions -- `lis r11, sym@ha` / `addi r11, r11,
 // sym@l` / `lwz r10, 0(r11)` -- where we fold the displacement into the load:
-// `lis r11, sym@ha` / `lwz r10, sym@l(r11)`.  REFUTED as a config change:
-// `/Od /Os` on this object reproduces the image's REGISTER ALLOCATION exactly but
-// still folds the addi, and it moves 16 keygen functions that are already 100%
-// under plain `/Od` off their match -- a net loss even if it had worked.  About
-// 40 compiler-flag combinations and 15 source spellings were tried; the only
-// construct that makes MSVC emit the split form is a struct/array member at a
-// NON-ZERO offset, and an offset of 0 always folds.  `volatile`, an explicit
-// `&lbl`, a local pointer copy and an inline-asm barrier are all inert.
+// `lis r11, sym@ha` / `lwz r10, sym@l(r11)`.
+// w12-c: the unit is now built /Od /Os, which is the image's flag set (18 of
+// the 20 functions are byte-identical under it; the w8-g note that /Os moved 16
+// functions off their match did not reproduce).  It still folds the addi.  Also
+// inert under /Od /Os, probed in a scratch TU: a definition in this TU (plain,
+// static, volatile, initialised, __declspec(align(16)), selectany, a #pragma
+// bss_seg / __declspec(allocate) section), extern "C", a 1-element array at
+// constant index, a struct member at offset 0, `(&g)[0]`, a char* offset of 0,
+// and /Ou /Oz /Oc /Og /GF /Gy /Zi /GS- /Qfast_transcendentals.  Only a
+// non-constant array index or a nonzero struct offset splits it.
 void opaquePredicate() {
     lbl_82F5E180++;
 }
