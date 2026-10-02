@@ -537,6 +537,14 @@ INIT_REVS(2, 0)
 // the image, but the image computes the `gAltRev - 4` argument (subi r7) before
 // r4/r6.  Replacing it with ASSERT_REVS(2, 0) is WORSE (97.9): the macro anchors
 // on gRev (see RhythmBattlePlayer::Load for the anchor-pick family).
+// w15-r: ROOT CAUSE, not yet reproduced.  MSVC anchors the ASSERT_REVS pair on
+// gRev iff gRev is at offset 0 of the TU's non-COMDAT .rdata (all 248 INIT_REVS
+// sites in the image obey this).  Here the image holds an 80-byte int table
+// {0, 1, ..., 19} at 0x8204CD70..0x8204CDBF directly before gRev (0x8204CDC0);
+// nothing references it by lis/addi, so it is a const used only in folded form.
+// It is NOT kAnalyzeJoints: the map puts that in .data (0x82F0E348, same values).
+// Restoring that const and going back to ASSERT_REVS(2, 0) should close this
+// row and retire the `*(&gAltRev - 2)` stand-in; its spelling is still open.
 BEGIN_LOADS(RhythmDetector)
     LOAD_REVS(bs)
     if (d.rev > 2) {
