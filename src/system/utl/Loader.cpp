@@ -310,21 +310,11 @@ void LoadMgr::PollFrontLoader() {
     mLoaderPos = savedPos;
 }
 #else
-// Known residual, 3 rows, all of them the frame size: the image reserves 0x130
-// and we reserve 0x120.  Everything in between is byte-identical -- 156 of 159
-// instructions equal, and stack-layout reports 9 of 9 user slots MATCH, same
-// offsets on both sides (locals at 0x50-0x5c, `ctx` at 0x60, `hang` at 0x80,
-// 11 callee-saved GPRs on both sides).  So the target reserves 16 bytes of tail
-// space that nothing reads, between the end of `hang` (0xc0) and the register
-// save area.
-//
-// Refuted: "AutoGlitchReport is 16 bytes larger in the image".  It is not --
-// SpeechMgr::SetRule (608 B), UIScreen::ReenterScreen (228 B) and
-// HamDirector::UnloadAll all hold an AutoGlitchReport local and all three are
-// at 100.0% with the current 0x40-byte layout.  Do not grow Timer or
-// AutoGlitchReport to chase this; it would break those three.
-// Also refuted: growing LoaderGlitchContext.  `hang` sits at 0x80 whether ctx
-// is 0x18 or 0x20 (8-byte alignment), so ctx cannot move the frame at all.
+// w17-d: 99.981 -> 100 (and its unwind funclet fn_827D15BC 99.9 -> 100). The
+// image's missing 16 bytes of frame were a MemHeapTracker at 0xc0: the
+// function's second unwind funclet (__unwind$106779) calls
+// ??1MemHeapTracker@@QAA@XZ on r31+0xc0. The push/pop is that RAII scope,
+// not a bare MemPushHeap/MemPopHeap pair.
 void LoadMgr::PollFrontLoader() {
     Loader *front = mLoading.front();
     LoaderPos savedPos = mLoaderPos;
@@ -350,22 +340,23 @@ void LoadMgr::PollFrontLoader() {
     int savedStartMs = front->mLoadStartMs;
     bool isLoaded = false;
     bool deleted = false;
-    MemPushHeap(front->mHeap);
-    if (UsingCD()) {
-        AutoGlitchReport hang(mPeriod * 3.0f, FrontLoaderGlitchCB, &ctx);
-        front->PollLoading();
-        if (!ListFind(mLoading, front)) {
-            isLoaded = true;
-            deleted = true;
-            ctx.fromState = "deleted";
+    {
+        MemHeapTracker tmp(front->mHeap);
+        if (UsingCD()) {
+            AutoGlitchReport hang(mPeriod * 3.0f, FrontLoaderGlitchCB, &ctx);
+            front->PollLoading();
+            if (!ListFind(mLoading, front)) {
+                isLoaded = true;
+                deleted = true;
+                ctx.fromState = "deleted";
+            } else {
+                ctx.fromState = front->StateName();
+                isLoaded = front->IsLoaded();
+            }
         } else {
-            ctx.fromState = front->StateName();
-            isLoaded = front->IsLoaded();
+            front->PollLoading();
         }
-    } else {
-        front->PollLoading();
     }
-    MemPopHeap();
 
     if (TheArchive && Archive::DebugArkOrder() && isLoaded) {
         int endMs = SystemMs();
