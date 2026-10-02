@@ -83,8 +83,14 @@ DxRnd::DxRnd()
       mPreInited(false),
       unk408(0) {
     mInited = 1;
-    mFrontBuffers[0] = nullptr;
-    mFrontBuffers[1] = nullptr;
+    // w17-c: a loop, not two assignments -- the image keeps the unrolled
+    // loop's dead base `addi r11, r30, 0x350` (70.28 -> 70.8).  The rest of
+    // the residual is the scheduling of the two vectors' EH-frame stores
+    // (`stw rX, 0x50(r31)`): the image emits each right after its vector's
+    // three zero stores, we defer them; not resolved.
+    for (int i = 0; i < 2; i++) {
+        mFrontBuffers[i] = nullptr;
+    }
     mBackBuffer = nullptr;
     mWorldDepth = nullptr;
     mOffscreenRT = nullptr;
