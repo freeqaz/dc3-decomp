@@ -7,22 +7,23 @@
 #include "rnddx9\RenderState.h"
 
 namespace {
-    Transform sIdentityXfm(
-        Hmx::Matrix3(
-            Vector3(1.0f, 0.0f, 0.0f),
-            Vector3(0.0f, 1.0f, 0.0f),
-            Vector3(0.0f, 0.0f, 1.0f)
-        ),
-        Vector3(0.0f, 0.0f, 0.0f)
+    // w17-a: a Matrix4 built from four Vector4 rows, not a Transform.  The
+    // target object (lbl_830A8870, 0x40, unnamed so its type is not in the map)
+    // is initialised with word copies of four 16-byte temporaries -- (1,0,0,0),
+    // (0,1,0,0), (0,0,1,0) and (0,0,0,1): the 4th row's pad word is 1.0f, which
+    // a Transform's Vector3 v can never hold -- and no memcpy (the implicit
+    // Matrix3 copy in Transform(const Matrix3 &, const Vector3 &) is one).  Both
+    // users already read it as a Matrix4.  62.88 -> 100.
+    Hmx::Matrix4 sIdentityXfm(
+        Vector4(1.0f, 0.0f, 0.0f, 0.0f),
+        Vector4(0.0f, 1.0f, 0.0f, 0.0f),
+        Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+        Vector4(0.0f, 0.0f, 0.0f, 1.0f)
     );
 
     void ClearLightTransforms() {
-        TheShaderMgr.SetVConstant4x3(
-            (VShaderConstant)0xdd, *(const Hmx::Matrix4 *)&sIdentityXfm
-        );
-        TheShaderMgr.SetPConstant4x3(
-            (PShaderConstant)0xdd, *(const Hmx::Matrix4 *)&sIdentityXfm
-        );
+        TheShaderMgr.SetVConstant4x3((VShaderConstant)0xdd, sIdentityXfm);
+        TheShaderMgr.SetPConstant4x3((PShaderConstant)0xdd, sIdentityXfm);
     }
 
     void ClearPointCubeTex() {
