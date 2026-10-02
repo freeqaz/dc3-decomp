@@ -241,6 +241,13 @@ bool BaseDisplacementNode::Displacements(
     return false;
 }
 
+// The sums below are written as accumulator statements on purpose: /fp:fast
+// reassociates a one-expression sum per call site, and the statement form pins
+// the association the target uses (docs/decomp/patterns/fixable-fsel-fma.md).
+// RESIDUAL (w12-d, canonical 100 modulo register permutation): 7 fmuls rows
+// carry swapped commutative operands (e.g. target `fmuls f9, f0, f12` for
+// inv*y). Flipping the source operand order of every one of them was measured
+// INERT -- MSVC canonicalises the operand order itself.
 bool BaseDisplacementNode::Displacements(
     const ErrorFrameInput &frame_input,
     DisplacementData &dispData,
@@ -272,11 +279,13 @@ bool BaseDisplacementNode::Displacements(
             n.y = 0.0f;
             n.z = 0.0f;
         }
-        float dot = Dot(n, dispData.mBaseJointDisplacement);
+        const Vector3 &baseDisp = dispData.mBaseJointDisplacement;
+        float dot = n.y * baseDisp.y;
+        dot += n.x * baseDisp.x;
+        dot += n.z * baseDisp.z;
         Scale(n, dot, proj);
         float nx = n.x, ny = n.y, nz = n.z;
         ham1Data.unk14 = (dot > 0.0f);
-        const Vector3 &baseDisp = dispData.mBaseJointDisplacement;
         float bjdSq = baseDisp.y * baseDisp.y;
         bjdSq += baseDisp.z * baseDisp.z;
         bjdSq += baseDisp.x * baseDisp.x;
