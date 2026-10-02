@@ -133,10 +133,8 @@ MMRESULT mmioFlush(HMMIO hmmio, UINT fuFlush) {
             info->dwFlags &= ~MMIO_DIRTY;
         }
         if (fuFlush & MMIO_EMPTYBUF) {
-            LONG cchUsed = info->pchNext - info->pchBuffer;
-            info->pchEndRead = info->pchBuffer;
-            info->pchNext = info->pchBuffer;
-            info->lBufOffset += cchUsed;
+            info->lBufOffset += (info->pchNext - info->pchBuffer);
+            info->pchNext = info->pchEndRead = info->pchBuffer;
         }
     }
     return 0;
