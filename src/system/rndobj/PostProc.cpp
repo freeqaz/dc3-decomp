@@ -46,6 +46,11 @@ void ProcCounter::SetEvenOddDisabled(bool eod) {
 // Configure frame rate emulation by calculating frame skip pattern
 // For 24fps on 60Hz: 120/24=5 -> switch every 2-3 frames (alternating via mOdd)
 // For 30fps on 60Hz: 120/30=4 -> switch every 2 frames (mOdd=0)
+// RESIDUAL (w13-a, 96.55 canonical, 2 rows): the image copies the return value
+// (`mr r3, r4`) right after the fdivs setup, BEFORE Round()'s branch; we place
+// it after the mCount compare.  Inert: `return mFPS` at both tail returns, and
+// Round(120.0f / mFPS).  Worse (91.0): a single tail `if (mCount >= mSwitch)
+// mCount = 0; return fps/mFPS;` -- it loses the conditional `beqlr`/`bltlr`.
 unsigned int ProcCounter::SetEmulateFPS(int fps) {
     // Disable emulation
     if (fps <= 0) {

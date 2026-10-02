@@ -3068,6 +3068,8 @@ void RndText::FontMap::SetupCharacter(
     // (`fmuls f12, f1, f26` at 0x261c, `fsubs f12, f27, f12` at 0x2638) where we
     // contract to one fnmsubs.  Splitting it into a named `aspectH` temporary is
     // exactly neutral -- MSVC re-fuses across the statement boundary.  Two rows.
+    // w13-a: moving this below the vert[0] Set() (the FontMap3d fusion lever)
+    // is inert here.
     float z1 = z0 - _tmp1 * size;
 
     // xPos is read straight out of the reference each time (`lfs f13, 0x0(r29)`

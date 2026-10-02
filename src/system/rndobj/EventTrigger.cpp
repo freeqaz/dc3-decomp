@@ -701,6 +701,9 @@ DataNode EventTrigger::Cleanup(DataArray *arr) {
                 // away, and the canonical ruler forgives register permutation --
                 // the whole 99.73822 is the ONE surviving row, a dead
                 // `stw r10, 0x60(r31)` at index 92 that the image does not emit.
+                // w13-a: a `const ObjRef &refs = filter->Refs();` local for all
+                // three uses is WORSE (97.9): the image recomputes the vbase
+                // adjust for &Refs() inside the loop after each RefOwner() call.
                 // Do not read a row-count drop here as progress against the
                 // headline; only that store is worth anything.
                 if ((ObjRef *)ref == &filter->Refs()
