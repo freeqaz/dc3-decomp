@@ -301,27 +301,33 @@ void ThreeDSound::CalculateFaderVolume() {
         // the MakeString argument).
         // w15-i2: WORSE (47.0): the falloff block duplicated into each case
         // arm (case 1 testing the radius first), hoping MSVC cross-jumps it.
+        // w19-e: 94.5 -> 100.  The radius test lives inside `case 1:` and
+        // leaves through an early `SetVolume(-96.0f); return;` -- MSVC
+        // cross-jumps that call into the first arm's `vol = -96.0f` ->
+        // SetVolume tail (image: 0x827661FC `bgt cr6` back to 0x82766190),
+        // and the default arm's FAIL falls straight into the falloff.  Same
+        // behaviour as the flag/goto spellings above, with no re-test.
         switch (mShape) {
         case 0:
             break;
         case 1:
+            if (unk210 > mRadius) {
+                mDistanceFader->SetVolume(-96.0f);
+                return;
+            }
             break;
         default:
             MILO_FAIL("Calculating volume for unknown shape %d\n", mShape);
         }
-        if (mShape != 1 || unk210 <= mRadius) {
-            float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
-            float t = invRange * unk20c + (1.0f - mMinFalloffDistance * invRange);
-            // The assert and the gEaseFuncs load are GetEaseFunction()'s, from
-            // math/Easing.h; open-coding them here put ThreeDSound.cpp in the
-            // image's __FILE__ slot where the original has Easing.h.
-            float eased = GetEaseFunction(mFalloffType)(t, mFalloffParameter, 0);
-            eased = Clamp(0.0f, 1.0f, eased);
-            vol = RatioToDb(eased);
-            vol = Max(vol, -96.0f);
-        } else {
-            vol = -96.0f;
-        }
+        float invRange = 1.0f / (mMinFalloffDistance - mSilenceDistance);
+        float t = invRange * unk20c + (1.0f - mMinFalloffDistance * invRange);
+        // The assert and the gEaseFuncs load are GetEaseFunction()'s, from
+        // math/Easing.h; open-coding them here put ThreeDSound.cpp in the
+        // image's __FILE__ slot where the original has Easing.h.
+        float eased = GetEaseFunction(mFalloffType)(t, mFalloffParameter, 0);
+        eased = Clamp(0.0f, 1.0f, eased);
+        vol = RatioToDb(eased);
+        vol = Max(vol, -96.0f);
     }
     mDistanceFader->SetVolume(vol);
 }
