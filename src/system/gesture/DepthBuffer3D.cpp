@@ -139,25 +139,22 @@ void DepthBuffer3D::UpdateAttachment(
         TheGameData->Player(attachment.player)->GetSkeletonTrackingID()
     );
     Vector3 newPos;
+    // w14-f: 93.47 -> 100.  The image tests skelIdx + 1 and passes
+    // (skelIdx + 1) - 1 to GetSkeleton (`addic. r11, r3, 0x1` / `subi r4, r11,
+    // 0x1`), and accumulates into newPos in place: newPos is seeded with
+    // localXfm.v (its 0x50 slot is the localXfm.v copy) and `+= pos`.  The old
+    // NEGATIVE RESULT note (separate localPos/pos locals, Add into newPos) is
+    // superseded.  b5 declared after skelNum keeps it out of a callee-saved reg.
+    int skelNum = skelIdx + 1;
     bool b5 = false;
-    if (skelIdx + 1 > 0) {
+    if (skelNum > 0) {
         const Transform &localXfm = LocalXfm();
-        Skeleton &skeleton = TheGestureMgr->GetSkeleton(skelIdx);
-        // NEGATIVE RESULT (93.47%, two refuted variants). The image keeps the
-        // localXfm.v copy at 0x50(r1) and the JointToVertexData output at
-        // 0x60(r1) -- `addi r9, r1, 0x50` / `addi r3, r1, 0x60` in
-        // build/373307D9/asm/src/system/gesture/DepthBuffer3D.s -- so newPos,
-        // which always lands on 0x50, shares localPos's slot there and pos's
-        // slot here. Swapping the two declarations is byte-identical, and so is
-        // scoping pos into its own block: neither the order nor the lexical
-        // scope moves this pair. That one swap accounts for the 0x50/0x60
-        // offset rows and the f0/f11, f13/f10, f12/f13 pairs that read from
-        // them, i.e. 11 of the 20 mismatch rows.
-        Vector3 localPos = localXfm.v;
+        Skeleton &skeleton = TheGestureMgr->GetSkeleton(skelNum - 1);
+        newPos = localXfm.v;
         Vector3 pos;
         JointToVertexData(pos, skeleton, (SkeletonJoint)attachment.mJoint, v1);
         VertexToWorld(pos, localXfm, mStretchNearCamera, v2);
-        Add(pos, localPos, newPos);
+        newPos += pos;
         attachment.obj->SetTransConstraint(mConstraint, nullptr, false);
         Normalize(localXfm.m, attachment.obj->DirtyLocalXfm().m);
         b5 = true;
