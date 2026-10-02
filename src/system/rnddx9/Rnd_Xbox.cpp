@@ -96,7 +96,14 @@ DxRnd::DxRnd()
     // the probe's own call/frame (+0x10); the store schedule then matches the
     // image exactly.  So in the original something after the vectors was not
     // provably nothrow yet emitted no call.  Same shape as Skeleton::Skeleton
-    // (gesture/Skeleton.cpp, w18-c note); cause not found.
+    // (gesture/Skeleton.cpp, w18-c note); cause not found.  Stronger probe: a
+    // statement whose throwing arm CONSTANT-FOLDS away -- e.g. appending
+    // `MILO_ASSERT(sizeof(mFrontBuffers) == 8, ...)` -- gives 100.0, 71/71 rows,
+    // with no code of its own (the EH states survive the folding; this is what
+    // closed DxShader::Compile, whose `new DxShaderBuffer(0)` has a dead
+    // D3DXCreateBuffer/MILO_FAIL arm).  So the original body very likely had such
+    // a statement after the vectors; we do not know which, and an invented
+    // assert is not landed.
     for (int i = 0; i < 2; i++) {
         mFrontBuffers[i] = nullptr;
     }
