@@ -783,16 +783,14 @@ bool kdTree<Triangle>::kdTreeNode::FindSplit_SAH(
     do {
         float step = (box.mMax[axis] - box.mMin[axis]) * invSteps;
         float current = box.mMin[axis];
-        int splits = 16;
-        do {
+        for (int i = 0; i < 16; i++) {
             current += step;
             float cost = EvaluateSplit(box, items, axis, current);
             if (cost < bestCost[axis]) {
                 bestCost[axis] = cost;
                 bestPos[axis] = current;
             }
-            splits--;
-        } while (splits != 0);
+        }
         axis = (axis + 1) & 0xff;
     } while (axis < 3);
 
@@ -804,8 +802,10 @@ bool kdTree<Triangle>::kdTreeNode::FindSplit_SAH(
 
     if (!(bestCost[bestAxis] < fCount))
         return false;
-    mData.real = bestPos[bestAxis];
     mData.index = bestAxis;
+    unsigned char splitAxis = mData.index;
+    mData.real = bestPos[bestAxis];
+    mData.index = splitAxis;
     return true;
 }
 

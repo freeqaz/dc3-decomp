@@ -1129,14 +1129,14 @@ float Rnd::DrawTimers(float f) {
     for (std::list<std::pair<Timer, TimerStats> >::iterator it = timers.begin();
          it != timers.end();
          ++it) {
-        if (!it->first.Draw()) {
-            continue;
-        }
-
         // The image materialises &it->first once per iteration (addi r30, r28, 8)
         // and reads every Timer member through it, so the timer is a named
-        // reference here rather than a repeated it->first.
+        // reference here rather than a repeated it->first -- bound BEFORE the
+        // Draw() test (w14-a: the addi sits above the cmplwi in the image).
         Timer &timer = it->first;
+        if (!timer.Draw()) {
+            continue;
+        }
 
         float budget = timer.Budget();
 
@@ -1159,6 +1159,9 @@ float Rnd::DrawTimers(float f) {
             DrawRectScreen(rect, worstExcessColor, nullptr, nullptr, nullptr);
         }
 
+        // w14-a RESIDUAL (99.99): the image stores rect.x (0x70) before
+        // rect.y (0x74) here; we store y first. Inert: `y += ...` hoisted above
+        // the rect.x store, and `rect.y = y += rowSpacing`.
         rect.x = bgLeft;
         y += rowSpacing;
         rect.y = y;
@@ -1189,22 +1192,33 @@ float Rnd::DrawTimers(float f) {
 
         float lastMs = it->first.GetLastMs();
 
-        const char *text;
         if (lastMs >= 0.05f) {
             if (mVerboseTimers && AutoTimer::CollectingStats()) {
                 Symbol name = it->first.Name();
                 TimerStats &stats = it->second;
-                text = MakeString("%s %2.1f (%.2f, %.2f) %.2f", name, lastMs, stats.mAvgMs, stats.mStdDevMs, stats.mMaxMs);
+                DrawStringScreen(
+                    MakeString(
+                        "%s %2.1f (%.2f, %.2f) %.2f",
+                        name,
+                        lastMs,
+                        stats.mAvgMs,
+                        stats.mStdDevMs,
+                        stats.mMaxMs
+                    ),
+                    pos,
+                    barColor,
+                    true
+                );
             } else {
                 Symbol name = it->first.Name();
                 float worstMs = it->first.GetWorstMs();
-                text = MakeString("%s %.2f (%.2f)", name, lastMs, worstMs);
+                DrawStringScreen(
+                    MakeString("%s %.2f (%.2f)", name, lastMs, worstMs), pos, barColor, true
+                );
             }
         } else {
-            text = it->first.Name().Str();
+            DrawStringScreen(it->first.Name().Str(), pos, barColor, true);
         }
-
-        DrawStringScreen(text, pos, barColor, true);
         pos.y += rowSpacing;
     }
 
@@ -1286,26 +1300,22 @@ void Rnd::DrawPreClear() {
     }
 }
 
+// BEHAVIOUR FIX (w14-a): the timer is restarted on BOTH arms. The image's
+// off-arm (target Rnd.obj +0x5ff0: li r9,-1; stb r31,0x8(r11); stw r9,gCurHeap; b +0x6008)
+// branches to the shared `addi r3,r11,0x40; bl Timer::Restart` at +0x6008; the
+// old SetShowingOnly(false) arm skipped Restart. Same as RB3's SetShowing on
+// both arms; spelled with the store split from one shared Restart, 100 modulo
+// register permutation.
 DataNode Rnd::OnToggleHeap(const DataArray *) {
     int numHeaps = MemNumHeaps() + 1;
     RndOverlay *overlay = mHeapOverlay;
     if (overlay->Showing() && ++lbl_82F14008 >= numHeaps) {
-        // SetShowingOnly, not SetShowing: turning the overlay off does not
-        // restart the timer in the target (only one Restart is emitted, in
-        // the inlined SetShowing(true) below).
         overlay->SetShowingOnly(false);
         lbl_82F14008 = -1;
     } else {
-        // NOTE (w7-av): 93.55 is a scheduling floor.  14 of the 16 rows are a
-        // pure r9/r10/r11 permutation (the image parks `overlay` in r11 and the
-        // gCurHeap anchor in r10; we do the reverse), which the canonical ruler
-        // forgives.  The whole 6.45pp is one insert/delete pair inside this
-        // inlined SetShowing: the image stores mShowing and only then forms
-        // `addi r3, r11, 0x40` for Timer::Restart, while we compute the Timer
-        // address first.  Refuted: spelling the body out as SetShowingOnly(true)
-        // + TimerRef().Restart() -- 93.55, byte-identical row set.
-        overlay->SetShowing(true);
+        overlay->SetShowingOnly(true);
     }
+    overlay->TimerRef().Restart();
     return 0;
 }
 

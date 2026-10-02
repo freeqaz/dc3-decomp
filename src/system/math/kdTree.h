@@ -183,14 +183,21 @@ public:
             // The split value shares its word with the 2-bit axis index: store
             // the float, then put the axis bits back (rlwimi in the target).
             float midSplit = idxDiff / 2.0f + box.mMin[mData.index];
-            unsigned int splitAxis = mData.index;
+            unsigned char splitAxis = mData.index;
             unsigned int numContains = 0;
             mData.real = midSplit;
             mData.index = splitAxis;
 
             double fsum = 0.0;
-            if (!items.empty()) {
-                FOREACH (it, items) {
+            // The image tests begin() != end() with the iterator it then walks
+            // (lwz r29, 0x0(r25); cmplw r29, r25); `!items.empty()` + FOREACH
+            // loads begin twice-over through r11 and adds a mr.
+            // w14-a RESIDUAL (99.97): 4 rows, the x-component load order of
+            // v[1]/v[2] (origin.x vs frame.x.x); swapping the source operands,
+            // and ::Add(origin, frame, v), are both inert.
+            std::list<Triangle *>::const_iterator it = items.begin();
+            if (it != items.end()) {
+                for (; it != items.end(); ++it) {
                     Triangle *cur = *it;
                     // A Triangle is origin + two EDGE vectors (frame.x, frame.y);
                     // frame.z is the face normal, not a vertex. The three vertices
@@ -215,7 +222,7 @@ public:
                     }
                 }
                 if (numContains != 0) {
-                    unsigned int meanAxis = mData.index;
+                    unsigned char meanAxis = mData.index;
                     mData.real = (float)(fsum / numContains);
                     mData.index = meanAxis;
                 }
