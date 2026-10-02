@@ -603,7 +603,11 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     // Draw transition nodes
     for (unsigned int i = 0; i < mNodes.size(); i++) {
         Hmx::Color nodeColor(1.0f, 0.0f, 0.0f, 1.0f);
-        DrawDot(x + 1.0f, y - 1.0f, mNodes[i].curBeat, mNodes[i].nextBeat, nodeColor);
+        // One reference, not two mNodes[i] subscripts: the image computes the
+        // node address once from the begin() its loop test already loaded
+        // (w15-i1: two subscripts reload begin() in the body, 96.58 -> 97.69).
+        Node &node = mNodes[i];
+        DrawDot(x + 1.0f, y - 1.0f, node.curBeat, node.nextBeat, nodeColor);
     }
 
     // Draw current playback position if driver is provided
