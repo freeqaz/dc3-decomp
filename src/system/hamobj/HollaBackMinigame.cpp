@@ -533,6 +533,10 @@ void HollaBackMinigame::SetMoveState(int measure, Symbol state) {
                 }
                 if (!b2) {
                     mFlashcardDockPanel->SetShowing(true);
+                    // RESIDUAL (w13-b, 99.40): the image reloads
+                    // mRoutineMoves._M_start (lwz 0x488(r30)) at the top of every
+                    // iteration of this search; we keep it live from the size().
+                    // Same shape as MoveGraph::FindVariantPair.  Equivalent.
                     u32 numMoves = mRoutineMoves.size();
                     for (u32 i = 0; i < numMoves; i++) {
                         if (move == mRoutineMoves[i]) {

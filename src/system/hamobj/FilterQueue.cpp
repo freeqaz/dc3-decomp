@@ -19,6 +19,9 @@ bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused
     MILO_ASSERT(qframes.size() == oframes.size(), 0x42);
     frames[1] = nullptr;
     frames[0] = nullptr;
+    // RESIDUAL (w13-b, 99.98): the loop guard loads _M_start before _M_finish in
+    // the image, _M_finish first here (the stlport size() order family, see
+    // SuperEasyRemixer::LoadAllVariants).  An `unsigned int` index is inert.
     for (int frameIdx = 0; frameIdx < qframes.size(); frameIdx++) {
         FilterInputFrame &frame = qframes[frameIdx];
         frame.mDetectFrame->AddError(oframes[frameIdx].mErrors, frame.mSongBeats);

@@ -990,6 +990,10 @@ void RhythmBattle::OnBeat() {
         remainingValue = -1;
     }
     play_vo[0] = none;
+    // w13-b: we emit four extra `stw r11, 0x64(r31)` home stores of the player
+    // pointer inside this test that the image does not.  Reading
+    // mInTheZone/mPrevInTheZone directly instead of through the inline
+    // accessors is byte-inert, so they are not accessor `this` homes.
     if (i27 || i35 || (mPlayerOne->ZoneValue() != 0 && mPlayerOne->GetPrevInTheZone() == 0)
         || (mPlayerTwo->ZoneValue() != 0 && mPlayerTwo->GetPrevInTheZone() == 0)) {
         static Symbol rhythmbattle_off_beat_p1p2("rhythmbattle_off_beat_p1p2");
