@@ -63,6 +63,10 @@ void KerningTable::Save(BinStream &bs) {
     }
 }
 
+// w15-i1 (99.978 canonical, 2 rows): the image reloads mFirstChar (lhz 0x0) then
+// mSecondChar (lhz 0x2) for the table index; we load them the other way round.
+// Byte-inert: TableIndex(first, second), and an inline `(a ^ b) & 0x1F` in both
+// operand orders.  MSVC canonicalises the xor operands.
 void KerningTable::SetKerning(
     const std::vector<RndFont::KernInfo> &info, RndFontBase *font
 ) {
@@ -799,6 +803,10 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
     MILO_ASSERT(info->charWidth >= 0, 422);
 }
 
+// w15-i1 (98.73 canonical, 1 delete + 2 reg rows): the image re-materialises the
+// non-null mat with a no-op `clrrwi r11, r9, 0` before `lwz r11, 0x4c(r11)`
+// (GetDiffuseTex) inside the ternary's true arm; we use r11 directly.  Tried:
+// `static_cast<BaseMaterial *>(mat)->GetDiffuseTex()` -- byte-inert.
 void RndFont::SetBitmapSize(const Vector2 &cs) {
     mCellSize = cs;
     if (mMaterialOffsets.size() != mMats.size()) {

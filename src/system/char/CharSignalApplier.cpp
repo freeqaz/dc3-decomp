@@ -232,6 +232,12 @@ void CharSignalApplier::PollDeps(
     }
 }
 
+// w15-i1: vector<BoneOp>::_M_insert_overflow_aux sits at 97.85 canonical.  The
+// image stores __new_finish to its EH home (`stw r3, 0x54(r31)`) right after the
+// first __uninitialized_copy, before the fill_len==1 _Copy_Construct; we only
+// store it at the join, i.e. our build treats that window as unable to throw.
+// Marking BoneOp::operator= and this __uninitialized_fill_n `inline` (both are
+// `f i` in the map; COMDAT selection verified flipped to ANY) is inert.
 #ifndef HX_NATIVE
 // Minimal __uninitialized_fill_n implementation for BoneOp
 namespace stlpmtx_std {
