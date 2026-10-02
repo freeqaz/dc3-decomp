@@ -22,6 +22,8 @@ bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused
     // RESIDUAL (w13-b, 99.98): the loop guard loads _M_start before _M_finish in
     // the image, _M_finish first here (the stlport size() order family, see
     // SuperEasyRemixer::LoadAllVariants).  An `unsigned int` index is inert.
+    // w18-b: `qframes.size() > frameIdx` is worse (99.9, flips the loop's
+    // cmplw/blt and leaves the guard's load order as it was).
     for (int frameIdx = 0; frameIdx < qframes.size(); frameIdx++) {
         FilterInputFrame &frame = qframes[frameIdx];
         frame.mDetectFrame->AddError(oframes[frameIdx].mErrors, frame.mSongBeats);

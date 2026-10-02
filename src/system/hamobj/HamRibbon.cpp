@@ -331,6 +331,8 @@ void HamRibbon::UpdateMesh() {
         Key<Transform> *keyPtr;
         // RESIDUAL (w13-b, 98.81): the image tests this in cr0 (`cmpwi r23, 0x0`
         // / `bgt`), we use cr6.  `>= 1` is worse; the loop below is now exact.
+        // w18-b: `keyPtr = histSize > 0 ? &mChaseKeys[0] : keyPtr;` is inert
+        // (same 2 rows, still cr6).
         if (histSize > 0) {
             keyPtr = &mChaseKeys[0];
         }

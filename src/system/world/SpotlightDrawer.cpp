@@ -125,6 +125,10 @@ void SpotlightDrawer::Init() {
     //       store on its own, so writing it earlier buys nothing.
     //   `sDefault = New(); ptr = sDefault; ptr->...= 0.0f; sDefault->Select();`
     //       reads 90.7, WORSE: it adds a `clrrwi r3, r3, 0` for the read-back.
+    // w18-b: `(sDefault = New<SpotlightDrawer>())->mParams... = 0.0f;
+    // sDefault->Select();` (store the global, use the assignment's value for
+    // the field store) still sinks the global store past the field store and
+    // adds a `clrrwi r3, r3, 0` for the reload: 90.7, worse.
     // Reading the global for the field store is the only thing that moves the
     // store, and that is the 90.357 negative above.  Treat this as a floor until
     // someone finds a construct that pins the global store ahead of the field
@@ -566,8 +570,12 @@ inline void DrawAccessories<LensExtract>(
     if (it == spotEnd)
         return;
     do {
-        Spotlight *sl = it->mSpotlight;
-        if (sl->LensMesh() != nullptr) {
+        // w18-b: no `Spotlight *sl` local -- the image re-reads it->mSpotlight
+        // at each use (`lwz r11, 0x4(r25)` before LensXfm and again before the
+        // second LensMesh read); a local pinned sl in r31 and recoloured the
+        // loop (94.28 -> 100).  The two != tests are written disk/lensMat
+        // first to match the image's subf operand order.
+        if (it->mSpotlight->LensMesh() != nullptr) {
             RndMesh *disk = Spotlight::GetDiskMesh();
             RndMultiMesh *nextMesh;
             if (disk != curDisk) {
@@ -575,7 +583,7 @@ inline void DrawAccessories<LensExtract>(
             } else {
                 nextMesh = multiMesh;
             }
-            const Transform &lensXfm = sl->LensXfm();
+            const Transform &lensXfm = it->mSpotlight->LensXfm();
             bool visible;
             // MEASURED NEGATIVE (w8-q, 94.277 -> 92.858): flipping this to
             // `if (disk->Showing()) { sphere path } else { visible = false; }`.
@@ -597,9 +605,9 @@ inline void DrawAccessories<LensExtract>(
                 }
             }
             if (visible) {
-                bool diskChanged = (curDisk != disk);
-                RndMat *lensMat = sl->LensMesh();
-                bool matChanged = (curMat != lensMat);
+                bool diskChanged = (disk != curDisk);
+                RndMat *lensMat = it->mSpotlight->LensMesh();
+                bool matChanged = (lensMat != curMat);
                 if ((diskChanged || matChanged) && multiMesh != nullptr
                     && !multiMesh->Instances().empty()) {
                     multiMesh->DrawShowing();

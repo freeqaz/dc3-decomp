@@ -419,8 +419,16 @@ void HamSkeletonConverter::SetLeg(
         Subtract(kneePos, _sub0, dir);
         Normalize(dir, dir);
 
-        PaddedJointPos *hipZAxis = &mLeftHipZAxis + side;
-        RotateTowards(*hipZAxis, *hipZAxisInit, 1000.0f, *hipZAxis);
+        // w18-b: the axis is INDEXED at each use, not held in a pointer local.
+        // The image loads hz.x through the RotateTowards argument (824C98C0
+        // `lfs f0, 0x0(r30)`, r30 = this + (side+0x73)*16) but hz.y/hz.z
+        // through a re-derived `this + side*16` (824C98D8 `lfs f13, 0x734(r11)`,
+        // `lfs f12, 0x738(r11)`) -- exactly what `(&mLeftHipZAxis)[side].y`
+        // lowers to.  A `PaddedJointPos *hipZAxis` local read all three off r30
+        // (95.25 -> 99.9).
+        RotateTowards(
+            (&mLeftHipZAxis)[side], *hipZAxisInit, 1000.0f, (&mLeftHipZAxis)[side]
+        );
 
         // The axis is COPIED into a Vector3 local before use.  The image
         // writes it to its own 16-byte frame slot at 0x80 (0x824C9768
@@ -429,7 +437,9 @@ void HamSkeletonConverter::SetLeg(
         // 16-byte locals -- 0x50 (dir), 0x70 (cross1) and 0x80 -- into
         // 0xb0/0xc0/0xd0.  That slot is the whole 0x10 frame shift: every
         // local above it sits 0x10 higher in the image than in our build.
-        Vector3 hipZ(hipZAxis->x, hipZAxis->y, hipZAxis->z);
+        Vector3 hipZ(
+            (&mLeftHipZAxis)[side].x, (&mLeftHipZAxis)[side].y, (&mLeftHipZAxis)[side].z
+        );
 
         // Cross(hipZ, dir), NOT Cross(dir, hipZ): the image's y row is
         // hz.z*dir.x - hz.x*dir.z (824C98D0 `fmuls f8, f11, f0` = dir.z*hz.x,
@@ -439,12 +449,21 @@ void HamSkeletonConverter::SetLeg(
         // NEGATIVE RESULT (w7-ba): Cross(*hipZAxis, dir, cross1) reading the
         // member through its conversion operator drops the 0x80 copy's early
         // `stfs f0, 0x80(r1)` and reorders the three fmsubs rows: 94.6 vs 95.3.
-        // The image loads hz.x through the RotateTowards pointer (824C98C0
-        // `lfs f0, 0x0(r30)`) but hz.y/hz.z through a re-derived
-        // `this + side*16` (824C98D8 `lfs f13, 0x734(r11)`); neither the local
-        // copy nor the direct read reproduces that split.
+        // w18-b: Cross written out with the dir operand first in every product
+        // (the image's operand order: `fmuls f8, f11, f0` = dir.z*hz.x,
+        // `fmsubs f0, f11, f13, f6` = dir.z*hz.y - ...), same values as
+        // Cross(hipZ, dir).  99.9 -> 99.96.  RESIDUAL (w18-b, 99.96): 4 rows,
+        // 164/165/168/170 still put the hz operand first; they do not follow
+        // source operand order (the Cross(hipZ, dir) spelling leaves the same
+        // three hz.y/hz.z products hz-first and flips only the hz.x ones).
+        // Cross((&mLeftHipZAxis)[side], dir, ...) is 95.8 and
+        // `Vector3 hipZ = (&mLeftHipZAxis)[side];` (one 16-byte copy) is 93.1.
         Vector3 cross1;
-        Cross(hipZ, dir, cross1);
+        cross1.Set(
+            dir.z * hipZ.y - dir.y * hipZ.z,
+            dir.x * hipZ.z - dir.z * hipZ.x,
+            dir.y * hipZ.x - dir.x * hipZ.y
+        );
         Normalize(cross1, cross1);
 
         Hmx::Matrix3 mat;

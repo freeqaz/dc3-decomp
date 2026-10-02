@@ -425,6 +425,12 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
             me->mTargetXfm = localParent;
         }
 
+        // w18-b (99.993, 4 rows): rows 74/75 store the 16-byte mLastTargetPos
+        // copy as 0,4,c,8 in the image (0,4,8,c ours) -- a scheduler tie around
+        // the assert's reload; rows 192/193 are the y/z fadds of `tf.v +=` with
+        // the operands the other way round.  Refuted: Add(tf.v, localParent.v,
+        // tf.v) (99.98, reorders the loads), x via += with y/z written as
+        // `local + tf` (99.6, adds an addi and flips x too).
         if (mUseParentRotation) {
             Multiply(tf, localParent, tf);
         } else {
