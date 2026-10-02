@@ -145,6 +145,7 @@ private:
     HamListRibbon::RibbonMode RibbonMode() const { return mRibbonMode; }
     float GetTargetSwellAmount(int);
 
+    static const int sListStateMinDisplay;
     static const int sListStateMaxDisplay;
     static float sSlideSmoothAmount;
     static float sSlideTrendAmount;
