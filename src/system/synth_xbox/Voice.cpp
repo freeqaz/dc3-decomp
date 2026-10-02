@@ -34,11 +34,12 @@ std::deque<PoolVoice> s_voiceGC;
 std::deque<PoolVoice> s_voiceGCInProgress;
 
 bool gShutdownVoiceThread = false;
-bool gCommitSyncVoices = false;
-int gCommitTag = 0;
 bool gHasPendingStopCommits = false;
+bool gCommitSyncVoices = false;
 bool gWasCommitSyncVoices = false;
-static int gVoiceCounters[2];
+static int gVoicesActive = 0;
+static int gVoicesPendingGC = 0;
+int gCommitTag = 0;
 int gWasCommitTag = 0;
 int rolling = 0;
 void StartSynchronizedVoices();
@@ -102,10 +103,12 @@ void Voice::dispose(PoolVoice *pv, unsigned int) {
         // docs/decomp/patterns/fixable-inline-boundary.md.
         CritSecTracker lock(&gVoiceGC);
         s_voiceGC.push_back(*pv);
-        // [1]++ before [0]--: the target loads gVoiceCounters[1] into the lower
-        // scratch register, which is a statement-order tell, not scheduling noise.
-        gVoiceCounters[1]++;
-        gVoiceCounters[0]--;
+        // PendingGC++ before Active--: the target loads the GC count into the
+        // lower scratch register, which is a statement-order tell, not
+        // scheduling noise (w17-e re-measured with the two separate statics:
+        // the swapped order makes MSVC anchor on the GC count, 99.77).
+        gVoicesPendingGC++;
+        gVoicesActive--;
     }
     pv->eg = 0;
     pv->egParams = 0;
@@ -173,7 +176,7 @@ long Voice::createOrReuse(
             return hr;
         }
     }
-    gVoiceCounters[0]++;
+    gVoicesActive++;
     memcpy(&pPoolVoice->wfx, &wfx, 0x12);
     unk54 = (sends == nullptr || sends->SendCount > 0);
     return 0;
@@ -909,9 +912,20 @@ void Voice::InitVoiceParameters(XMA2WAVEFORMATEX &fmt, XAUDIO2_BUFFER buf) {
 // hoist order and scratch registers (same hoist SET now, including the
 // header-path string in r15 and "EnvelopeGeneratorParams" in r14); the
 // image tests TheXboxSynth in cr0 at 0x82E39470 where every other test of it
-// in this TU is cr6 (nested `if`s: inert); and it reaches gVoiceCounters[1]
-// as a sym+4 relocation (`lwz r11, lbl_8316C734@l(r20)`, 0x82E39558) where
-// we hoist the array base and use 0x4(r20) (`-= 1`: inert).
+// in this TU is cr6 (nested `if`s: inert).
+// w17-e: 95.8 -> 99.59.  The "gVoiceCounters[2]" array was two separate
+// file-static ints, gVoicesActive (0x8316C730) and gVoicesPendingGC
+// (0x8316C734): the image reaches the GC count here as its own symbol
+// (`lis r20, lbl_8316C734@ha` hoisted, `lwz r11, lbl_8316C734@l(r20)` at
+// 0x82E39558), where an array made us hoist the full base (lis+addi) and
+// shifted the whole prologue hoist set by one register; dispose() reaches the
+// pair as anchor+displacement off gVoicesActive exactly as before.  Both are
+// written `= 0`: uninitialised file statics are laid out ahead of every
+// global, initialised ones in declaration order -- which is the image's
+// .bss order (the four bools, the two counts, gCommitTag, gWasCommitTag,
+// rolling).  RESIDUAL (99.59, 15 rows): rows 32-56 swap two hoisted string
+// /deque bases between r4/r5 and r29/r30, rows 74-81 rotate r9/r10/r11 in the
+// gCommitSyncVoices block, and the cr0 TheXboxSynth test (rows 135-136).
 unsigned long StartVoiceThreadEntry(void *) {
     rolling++;
     WaitForSingleObject(gEvent, INFINITE);
@@ -997,7 +1011,7 @@ unsigned long StartVoiceThreadEntry(void *) {
                 }
                 s_voiceGCInProgress.push_back(s_voiceGC.front());
                 s_voiceGC.pop_front();
-                gVoiceCounters[1]--;
+                gVoicesPendingGC--;
                 gcCount++;
                 front = s_voiceGC.begin();
                 if (gcCount >= 4) {
