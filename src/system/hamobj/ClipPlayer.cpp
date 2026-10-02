@@ -90,6 +90,11 @@ bool ClipPlayer::CanUseRestStep() {
         || !(clip = mOutClip) || (ClipLength(clip) == 3 && !(clip->Flags() & 4));
 }
 
+// RESIDUAL (w12-d, 98.73): one insert/delete pair -- in the second
+// EditMode/NoTransitions test the image loads TheHamDirector (`lwz r10`)
+// BEFORE `lbz r11, 0xc(r27)`; we emit the lbz first. Measured INERT: a
+// `bool editMode` local hoisted above `f31 = mPracticeEnd`, a hoisted
+// `HamDirector *director` local, and `!(EditMode() && NoTransitions())`.
 DataNode ClipPlayer::AnnotatePractice() {
     bool cont = mPracticeEnd != kHugeFloat;
     if (!cont) {
