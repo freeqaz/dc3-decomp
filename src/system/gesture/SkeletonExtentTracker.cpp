@@ -14,7 +14,6 @@ SkeletonExtentTracker::SkeletonExtentTracker() : mTrackingID(-1) {
 }
 
 BEGIN_HANDLERS(SkeletonExtentTracker)
-    char _slotpad[96]; (void)_slotpad;
     HANDLE_ACTION(start_tracking, StartTracking(_msg->Int(2)))
     HANDLE_ACTION(stop_tracking, mTrackingID = -1)
     HANDLE_ACTION(
@@ -25,10 +24,10 @@ END_HANDLERS
 
 void SkeletonExtentTracker::StartTracking(int i1) {
     mTrackingID = i1;
-    mMaxX = FLT_MIN;
-    mMaxY = FLT_MIN;
-    mMinX = FLT_MAX;
-    mMinY = FLT_MAX;
+    // Written min-first: MSVC emits the two temp copies in the opposite order,
+    // which is the image's (mMax = FLT_MIN first at 0x34, then mMin at 0x2c).
+    mMin = Vector2(FLT_MAX, FLT_MAX);
+    mMax = Vector2(FLT_MIN, FLT_MIN);
 }
 
 void SkeletonExtentTracker::Poll() {
@@ -38,38 +37,38 @@ void SkeletonExtentTracker::Poll() {
             for (int i = 0; i < kNumJoints; i++) {
                 Vector2 pos;
                 skeleton->ScreenPos((SkeletonJoint)i, pos);
-                mMinX = Min(mMinX, pos.x);
-                mMinY = Min(mMinY, pos.y - 0.10f);
-                mMaxX = Max(mMaxX, pos.x);
-                mMaxY = Max(mMaxY, pos.y);
+                mMin.x = Min(mMin.x, pos.x);
+                mMin.y = Min(mMin.y, pos.y - 0.10f);
+                mMax.x = Max(mMax.x, pos.x);
+                mMax.y = Max(mMax.y, pos.y);
             }
-            mMinX = Max(0.0f, mMinX);
-            mMinY = Max(0.0f, mMinY);
-            mMaxX = Min(1.0f, mMaxX);
-            mMaxY = Min(1.0f, mMaxY);
+            mMin.x = Max(0.0f, mMin.x);
+            mMin.y = Max(0.0f, mMin.y);
+            mMax.x = Min(1.0f, mMax.x);
+            mMax.y = Min(1.0f, mMax.y);
         }
     }
 }
 
 Hmx::Rect SkeletonExtentTracker::GetViewBox() const {
     Hmx::Rect ret;
-    if (mMinX != FLT_MIN && mMinX != FLT_MAX && mMinY != FLT_MIN && mMinY != FLT_MAX) {
-        float val = Min(mMaxY - mMinY, 1.0f);
-        // w8-i BUG FIX: the y component is mMinY, not mMaxY.  0x82DFE79C loads
-        // `lfs f0, 0x30(r4)` (mMinY) for the FLT_MIN/FLT_MAX guards and the image
+    if (mMin.x != FLT_MIN && mMin.x != FLT_MAX && mMin.y != FLT_MIN && mMin.y != FLT_MAX) {
+        float val = Min(mMax.y - mMin.y, 1.0f);
+        // w8-i BUG FIX: the y component is mMin.y, not mMax.y.  0x82DFE79C loads
+        // `lfs f0, 0x30(r4)` (mMin.y) for the FLT_MIN/FLT_MAX guards and the image
         // stores that same f0 into the rect at 0x82DFE7BC (`stfs f0, 0x4(r3)`);
-        // mMaxY (0x38, loaded at 0x82DFE7B0) is consumed only by the
+        // mMax.y (0x38, loaded at 0x82DFE7B0) is consumed only by the
         // `fsubs f12, f12, f0` height on the next line and never stored.  We
-        // passed mMaxY, so every view box sat at the TOP of the tracked extent
+        // passed mMax.y, so every view box sat at the TOP of the tracked extent
         // instead of the bottom -- a full box-height offset on the mesh UVs that
         // ApplyToMeshVerts lays out.
         // RESIDUAL after the fix (w8-i, 94.87 canonical / 94.74359 fuzzy): 3 rows
-        // of 40, all one scheduling slot -- `lfs f0, 0x34(r4)` (mMaxX) is emitted
+        // of 40, all one scheduling slot -- `lfs f0, 0x34(r4)` (mMax.x) is emitted
         // before the `lis r10, __real@3f000000@h` anchor where the image emits
-        // `lfs f11, 0x34(r4)` after it.  Pure FPR choice: in the image mMaxX
+        // `lfs f11, 0x34(r4)` after it.  Pure FPR choice: in the image mMax.x
         // lands in f11 (dead since the FLT_MIN guard), in ours in f0 (dead since
-        // the mMinY store one instruction earlier).  Was 89.74 before the fix.
-        ret.Set(((mMaxX + mMinX) / 2.0f) - (val / 2.0f), mMinY, val, val);
+        // the mMin.y store one instruction earlier).  Was 89.74 before the fix.
+        ret.Set(((mMax.x + mMin.x) / 2.0f) - (val / 2.0f), mMin.y, val, val);
     } else {
         ret.Set(0, 0, 1, 1);
     }
