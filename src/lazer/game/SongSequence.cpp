@@ -250,7 +250,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // matches, but begin is kept and re-truncated with clrrwi); and
     // `mEntries.end() - mEntries.begin()` for numEntries at the top is 97.8
     // (r17/r18 swap).  The image's OnSongLoaded DOES home an &mEntries local
-    // (`addi r18, r3, 0x8; stw r18, 0x50(r31)` @8288BE20) -- DoNext's image
+    // (`addi r18, r3, 0x8` @8288BE14, `stw r18, 0x50(r31)` @8288BE24) -- DoNext's image
     // has no such home, so whatever forces the begin reload here is not a
     // named local.
     const std::vector<Entry> &entries = mEntries;
