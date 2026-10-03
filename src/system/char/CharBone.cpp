@@ -58,7 +58,8 @@ void CharBone::ClearContext(int mask) {
 // Measured, all byte-inert (identical 20-row set): `const Symbol &name =
 // ChannelName(...)` (lifetime-extended temporary instead of a named local);
 // moving each block into a `static inline` helper (inlinee locals are pooled
-// exactly like block locals); declaring the Bone before the Symbol.  The RB3
+// exactly like block locals); declaring the Bone before the Symbol; the
+// two-arg `CharBones::Bone bone(name, GetWeight(mask))` ctor.  The RB3
 // one-liner `push_back(Bone(ChannelName(...), GetWeight(mask)))` is 58.8: MSVC
 // evaluates GetWeight first (f31 spill), the image calls ChannelName first.
 // rb3-xenon's CharBone.cpp records the same 20 rows and a 0-for-3 record for
