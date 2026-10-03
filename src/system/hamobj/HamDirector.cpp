@@ -3522,6 +3522,7 @@ void HamDirector::Poll() {
         TheHamWardrobe->UpdateOverlay();
     }
     if (!mPollEnabled) return;
+    RndPostProc *overlayB = nullptr;
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
     RndPropAnim *songAnim = SongAnim(0);
@@ -3670,7 +3671,6 @@ void HamDirector::Poll() {
             float blend = 1.0f;
             const char *overlayName;
             RndPostProc *overlayA = nullptr;
-            RndPostProc *overlayB = nullptr;
             if (mCamPostProc) {
                 mWorldPostProc->Copy(mCamPostProc, Hmx::Object::kCopyDeep);
                 mActivePostProc.CopyRef(mCamPostProc);
