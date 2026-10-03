@@ -1174,6 +1174,12 @@ BEGIN_LOADS(CamShot)
         // two Vector2 scalars was measured: 88 rows -> 87, and the scalars still
         // do not merge with tempDraws, so it is not array-vs-scalar. The read
         // order and every field offset already match the target exactly.
+        // w21-av (stopped at 99.89, same 88 frame-offset rows): declaring
+        // `vec` first in this block is bit-identical (MSVC orders these
+        // slots itself, not by declaration). Target slots for reference:
+        // vec 0x90/0x98 (= tempDraws 0x90), parentPtr 0xa0, targetList 0x120,
+        // tf 0x150..0x1c0, frame2 0x1d0, frame1 0x2f0, iter 0x140,
+        // oldAnimSym 0x80, targetCount 0x84 (ours: 0x84/0x80).
         Vector2 vec[2];
         d >> vec[0];
         d >> vec[1];
