@@ -722,6 +722,22 @@ const Transform &RndTransformable::WorldXfm_Force() {
 // refObj/refWorld as RB3 has it (95.9, inert); `mWorldXfm.m[2] = refWorld.m.z`
 // through Matrix3::operator[] to force the address temp (95.9 with 73 diff_arg and 3
 // commutative rows -- strictly worse, and the FPR schedule did not move).
+// w21-y (95.88 -> 99.93 normalized): the "allocation rotation" above FELL to three
+// call-site spellings, none of which changes a value:
+//   - the three billboard cases build m.y with an explicit `m.y.Set(v.x - ref.x,
+//     ...)` instead of Subtract() (rb3-xenon's spelling; 95.88 -> 97.75 alone);
+//   - `mWorldXfm.m.z = refWorld.m.z` goes through a block-scoped `Vector3 &z`
+//     (rb3-xenon again) -- that is the image's dead `addi r11, r31, 0x68` at
+//     0x82646D94 (-> 98.30 with the Set spelling);
+//   - the two SkyBox Adds read mLocalXfm.v through a block-scoped const ref
+//     (lever (a): bind the sub-object once) -- refWorld moves to r30 and the
+//     address temps line up (-> 99.93).
+// Left (40 diff_arg, all register/load-order only): each Subtract/Add pair loads
+// the refWorld component before the local one (image: local first; same fsubs /
+// fadds operands), and the tail Scale() rows (see above).  MEASURED NEGATIVE on
+// top of this: const-ref binding mWorldXfm.v or refWorld.v for the Subtracts
+// (94.80 / 96.97), non-const `Vector3 &pos = mWorldXfm.v` anywhere (96.27 at
+// best), Set spelling for the Adds (97.50), Add(refWorld.v, local, ...) (inert).
 void RndTransformable::ApplyDynamicConstraint() {
     if (mConstraint == kConstraintTargetWorld) {
         if (mTarget)
@@ -766,12 +782,23 @@ void RndTransformable::ApplyDynamicConstraint() {
             mWorldXfm.m = refWorld.m;
             break;
         case kConstraintBillboardXYZ:
-            Subtract(mWorldXfm.v, refWorld.v, mWorldXfm.m.y);
-            mWorldXfm.m.z = refWorld.m.z;
+            mWorldXfm.m.y.Set(
+                mWorldXfm.v.x - refWorld.v.x,
+                mWorldXfm.v.y - refWorld.v.y,
+                mWorldXfm.v.z - refWorld.v.z
+            );
+            {
+                Vector3 &z = mWorldXfm.m.z;
+                z = refWorld.m.z;
+            }
             Normalize(mWorldXfm.m, mWorldXfm.m);
             break;
         case kConstraintBillboardZ:
-            Subtract(mWorldXfm.v, refWorld.v, mWorldXfm.m.y);
+            mWorldXfm.m.y.Set(
+                mWorldXfm.v.x - refWorld.v.x,
+                mWorldXfm.v.y - refWorld.v.y,
+                mWorldXfm.v.z - refWorld.v.z
+            );
             if (mPreserveScale)
                 Normalize(mWorldXfm.m.z, mWorldXfm.m.z);
             Cross(mWorldXfm.m.y, mWorldXfm.m.z, mWorldXfm.m.x);
@@ -779,7 +806,11 @@ void RndTransformable::ApplyDynamicConstraint() {
             Cross(mWorldXfm.m.z, mWorldXfm.m.x, mWorldXfm.m.y);
             break;
         case kConstraintBillboardXZ:
-            Subtract(mWorldXfm.v, refWorld.v, mWorldXfm.m.y);
+            mWorldXfm.m.y.Set(
+                mWorldXfm.v.x - refWorld.v.x,
+                mWorldXfm.v.y - refWorld.v.y,
+                mWorldXfm.v.z - refWorld.v.z
+            );
             Normalize(mWorldXfm.m.y, mWorldXfm.m.y);
             Cross(mWorldXfm.m.y, mWorldXfm.m.z, mWorldXfm.m.x);
             Normalize(mWorldXfm.m.x, mWorldXfm.m.x);
@@ -798,11 +829,17 @@ void RndTransformable::ApplyDynamicConstraint() {
             // f12/f13 to 0x78/0x7c and falls into the shared tail 0x82646D40,
             // whose `stfs f0, 0x80(r31)` writes the *sum* f0; case 0xc reloads
             // `lfs f0, 0x40(r31)` (mLocalXfm.v.z) first.
-            Add(mLocalXfm.v, refWorld.v, mWorldXfm.v);
+            {
+                const Vector3 &lv = mLocalXfm.v;
+                Add(lv, refWorld.v, mWorldXfm.v);
+            }
             mWorldXfm.m = mLocalXfm.m;
             break;
         case kConstraintSkyBoxXY:
-            Add(mLocalXfm.v, refWorld.v, mWorldXfm.v);
+            {
+                const Vector3 &lv = mLocalXfm.v;
+                Add(lv, refWorld.v, mWorldXfm.v);
+            }
             mWorldXfm.v.z = mLocalXfm.v.z;
             mWorldXfm.m = mLocalXfm.m;
             break;
