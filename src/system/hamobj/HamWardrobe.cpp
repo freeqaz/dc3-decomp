@@ -583,6 +583,9 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
     // 99.2), `const Symbol &venue = Venue()` (99.2), `Symbol venue; venue =
     // Venue();` and `static_cast<Symbol>(Venue()).Str()` (both = this, 99.906),
     // `gNullStr == venueName` operand order (inert).
+    // w21-l (value-scan row, ARTIFACT): the scan reads the image's `lwz r20,
+    // 0x64(r31)` as the flag's 0 stored there earlier; Venue() writes that slot
+    // through its hidden return pointer (`addi r3, r31, 0x64`), so it is the venue.
     const char *venueName = TheGameData->Venue().Str();
     if (venueName == gNullStr && TheWorld) {
         String worldPath(TheWorld->GetPathName());

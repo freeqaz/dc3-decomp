@@ -785,6 +785,9 @@ void ObjectDir::ResetViewports() {
     vp[6].mXfm.m.Set(-1, 0, 0, 0, -1, 0, 0, 0, 1);
     vp[6].mXfm.v.Set(0, 768, 0);
     MakeRotMatrix(Vector3(1, 1, -1), Vector3(0, 0, 1), vp[0].mXfm.m);
+    // w21-l (value-scan row, ARTIFACT): the image keeps -768 (__real@c4400000)
+    // in f30 and does fmadds m.y*(-768); we fold the sign into fmsubs with +768.
+    // Same products and same summation order -- only the constant's sign moved.
     Vector3 v(0, -768.0f, 0);
     Hmx::Matrix3 &m = vp[0].mXfm.m;
     vp[0].mXfm.v.Set(

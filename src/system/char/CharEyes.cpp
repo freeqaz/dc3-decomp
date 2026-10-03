@@ -1545,6 +1545,8 @@ storeState:
     // register for &mEyes.  Left: one commutative fmadds, and the
     // TheWorld->Cam() test is a signed `cmpwi` in the image (ours `cmplwi`;
     // RB3's do/while(false) camera chain is byte-inert).
+    // w21-l (value-scan row, ARTIFACT): the image's non-null Cam() branch lands
+    // on the redundant `cmplwi r30,0` before the TheRnd fallback; same cam value.
     RndTransformable *eyeTarget = GetTarget();
 
     if (eyeTarget) {
