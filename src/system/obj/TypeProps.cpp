@@ -380,7 +380,7 @@ void TypeProps::Save(BinStream &bs) {
     // (we hold the zero in r22, the image in r30) and the order of the two bool
     // flag stores before GetSaveFlags.
     if (!mMap || owner->DataDir() != owner
-        || (owner->Dir() == owner && !gLoadingProxyFromDisk)) {
+        || (owner == owner->Dir() && !gLoadingProxyFromDisk)) {
         std::list<Symbol> keys;
         std::list<Hmx::Object *> values;
         if (mMap) {
