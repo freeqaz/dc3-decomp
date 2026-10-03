@@ -344,8 +344,8 @@ void TypeProps::Save(BinStream &bs) {
     Hmx::Object *owner = RefOwner();
     if (mMap) {
         if (TheLoadMgr.EditMode()) {
-            DataArray *typeDef = owner->TypeDef();
-            if (typeDef) {
+            if (owner->TypeDef()) {
+                DataArray *typeDef = owner->TypeDef();
                 for (int i = 0; mMap && i < mMap->Size();) {
                     DataArray *arr = typeDef->FindArray(mMap->Sym(i), false);
                     if (arr && arr->Type(1) != kDataCommand
