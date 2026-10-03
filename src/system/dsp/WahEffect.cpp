@@ -55,7 +55,8 @@ void WahEffect::SetParameters(WahEffect::Params const &params) {
 // shape is byte-identical.  The name objdiff shows is just whichever
 // instantiation won the fold.  (w7-bh's "indexed-vs-auto-update addressing
 // floor" at 93.29% was the `sampleIdx += numChans` spelling; `i * numChans + ch`
-// reaches the indexed form -- see w7-bx notes in the body.  RESIDUAL at 99.0:
+// reaches the indexed form -- see w7-bx notes in the body.  RESIDUAL at 99.0
+// (the parameter-homing part closed by w20-e, see the body):
 // callee-saved homing of the three parameters (image r28/r30/r27 = buf /
 // numSamples / numChans, ours r29/r27/r28) and of the sample base (r29 vs
 // r30), the f12/f13 colouring of `1 - newFreq` vs mGain at 0x82E5A1A0-1C0,
@@ -150,8 +151,18 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
         // subscript a reducible IV and yields the `stfsu f12, 0x4(r10)` /
         // `add r30, r28, r30` pointer walk (93.3); `unsigned` sampleIdx is
         // identical.  The countdown on numSamples (`subic. r30, r30, 0x1`,
-        // 0x82E5A278) is kept as a separate decrement: a counting
-        // `i < numSamples` loop keeps i live and costs r25 (94.1).
+        // 0x82E5A278) comes from MSVC itself: w20-e (raw 98.28 -> 98.6)
+        // measured the plain `for (int i = 0; i < numSamples; i++)` over the
+        // indexed subscript and it closes every callee-saved homing row
+        // (image r28/r30/r27/r29 = buf/numSamples/numChans/i*numChans).  The
+        // old note that a counting loop "costs r25 (94.1)" was measured
+        // against the sampleIdx walker, not this indexed form.
+        // RESIDUAL w20-e (15 rows): the mGain/`1 - newFreq` f10/f12/f13
+        // colouring (rows 128-136), `fmuls f29, f17, f17` one slot before
+        // `bl cos`, the r9/r10 swap of ch vs &stack50 in the inner loop, and
+        // `fmuls f12, f13, f12` operand order.  Inert: `out * f13_gain`;
+        // worse: `for (int ch ...)` inside the guard (98.1), no numChans
+        // guard (98.1).  decomp-synth hill_climb (4 rounds x 60) found nothing.
         for (int i = 0; i < numSamples; i++) {
             // Compute sin of phase
             float sinVal = sin(f27);
