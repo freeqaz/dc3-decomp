@@ -143,6 +143,11 @@ void HamNavProvider::Text(int i1, int i2, UIListLabel *list, UILabel *label) con
             plbl->Handle(msg, false);
             return;
         }
+        // BUG FIX (w19-x): a song row with no format args still gets its label
+        // -- 0x824869EC `beq cr6, .L_82486958` on mFormatArgs == 0 lands on `lwzx r4, r30, r11`
+        // (mNavItems[idx].mLabel) and the shared SetTextToken call.  We left
+        // the label untouched.
+        plbl->SetTextToken(mNavItems[idx].mLabel);
     } else {
         plbl->SetTextToken(gNullStr);
     }

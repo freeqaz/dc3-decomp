@@ -965,25 +965,30 @@ void WorldCrowd::Mats(std::list<RndMat *> &mats, bool additive) {
 
             for (std::list<CharData>::iterator charIt = mCharacters.begin();
                  charIt != mCharacters.end(); ++charIt) {
+                // BUG FIX (w19-x): the per-material shader-variant loop is INSIDE
+                // the random-colour test -- 0x82838E8C `beq` on mUseRandomColor (lbz
+                // 0x28) jumps to the character-list latch, past SetMatColorFlags
+                // AND the material loop.  We built colour variants for every
+                // crowd character, random-coloured or not.
                 if (charIt->mDef.mUseRandomColor) {
                     SetMatColorFlags(charIt->mDef.mMats, (BaseMaterial::ColorModFlags)colorIdx, &colors);
-                }
 
-                for (ObjPtrList<RndMat>::iterator matIt = charIt->mDef.mMats.begin();
-                     matIt != charIt->mDef.mMats.end(); ++matIt) {
-                    std::list<unsigned int> flags;
-                    GetMeshShaderFlags(*matIt, flags);
-                    for (std::list<unsigned int>::iterator flagIt = flags.begin();
-                         flagIt != flags.end(); ++flagIt) {
-                        unsigned int flag = *flagIt;
-                        opts.pack = 0x12;
-                        opts.SetHasBones(flag & 1);
-                        opts.SetHasAOCalc((flag >> 1) & 1);
-                        RndMat *newMat = Hmx::Object::New<RndMat>();
-                        newMat->Copy(*matIt, kCopyDeep);
-                        opts.mTempMat = true;
-                        newMat->SetShaderOpts(opts);
-                        mats.insert(mats.end(), newMat);
+                    for (ObjPtrList<RndMat>::iterator matIt = charIt->mDef.mMats.begin();
+                         matIt != charIt->mDef.mMats.end(); ++matIt) {
+                        std::list<unsigned int> flags;
+                        GetMeshShaderFlags(*matIt, flags);
+                        for (std::list<unsigned int>::iterator flagIt = flags.begin();
+                             flagIt != flags.end(); ++flagIt) {
+                            unsigned int flag = *flagIt;
+                            opts.pack = 0x12;
+                            opts.SetHasBones(flag & 1);
+                            opts.SetHasAOCalc((flag >> 1) & 1);
+                            RndMat *newMat = Hmx::Object::New<RndMat>();
+                            newMat->Copy(*matIt, kCopyDeep);
+                            opts.mTempMat = true;
+                            newMat->SetShaderOpts(opts);
+                            mats.insert(mats.end(), newMat);
+                        }
                     }
                 }
             }

@@ -869,7 +869,7 @@ void FreestyleMoveRecorder::CalcFrameScore(
                 TemporalWindow tw;
                 tw.frameIdx = i;
                 // Gaussian weight: exp(-dist^2 / (oscTimeout*0.5)^2)
-                float distSq = (float)pow((double)dist, 2.0);
+                float distSq = (float)pow((double)absDist, 2.0);
                 float halfSq = (float)pow((double)(oscTimeout * 0.5f), 2.0);
                 float ratio = distSq / halfSq;
                 tw.weight = (float)pow((double)kE, (double)(-ratio));

@@ -416,7 +416,11 @@ void ShellInput::SyncVoiceControl() { // almost done
     } else {
         prop = nullptr;
     }
-    if (!(!mInputPanel || !prop || 1 != prop->Int() || TheProfileMgr.DisableVoice()
+    // BUG FIX (w19-x): a panel WITHOUT the allow_voice_control property is
+    // allowed -- 0x82901EE4 `beq cr6, .L_82901EF8` on prop == 0 skips the Int() test and goes on
+    // to the DisableVoice check; only a present property that is not 1
+    // disables.  We treated a missing property as "disallowed".
+    if (!(!mInputPanel || (prop && 1 != prop->Int()) || TheProfileMgr.DisableVoice()
         || TheUIEventMgr->HasActiveDialogEvent() || !TheSpeechMgr->SpeechSupported())) {
         TheSpeechMgr->SetRecognizing(true);
         mVoiceControlEnabled = true;

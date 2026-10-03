@@ -828,6 +828,10 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
                 loopSym, nullptr, kEaseLinear, 0.0f, false
             );
         } else if (state == 0) {
+            // BUG FIX (w19-x): the 4-beat delay belongs to the transition
+            // Animate, not to `transition` -- when neither zone matches the
+            // image skips the `lfs f30, 4.0f` (0x824D6F98 `bne cr6` after `cmpwi cr6,
+            // r10, 0x1` lands past it) and the loop starts with delay 0.
             if (transition) {
                 if (mInTheZone == -1) {
                     mRhythmBattleAnim->Animate(
@@ -835,14 +839,15 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
                         36.0f, 40.0f, 0.0f, 1.0f,
                         noneSym, nullptr, kEaseLinear, 0.0f, false
                     );
+                    delay = 4.0f;
                 } else if (mInTheZone == 1) {
                     mRhythmBattleAnim->Animate(
                         0.0f, false, 0.0f, rate,
                         20.0f, 24.0f, 0.0f, 1.0f,
                         noneSym, nullptr, kEaseLinear, 0.0f, false
                     );
+                    delay = 4.0f;
                 }
-                delay = 4.0f;
             }
             static Symbol loop("loop");
             Symbol loopSym = loop;
@@ -852,6 +857,8 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
                 loopSym, nullptr, kEaseLinear, 0.0f, false
             );
         } else if (state < 0) {
+            // BUG FIX (w19-x): as above -- delay only after a transition Animate
+            // (0x824D70D8 `bne cr6, .L_824D7128` skips the `lfs f30, 4.0f`).
             if (transition) {
                 if (mInTheZone == 0) {
                     mRhythmBattleAnim->Animate(
@@ -859,14 +866,15 @@ void RhythmBattlePlayer::AnimateBoxyState(int state, bool transition, bool bad) 
                         24.0f, 28.0f, 0.0f, 1.0f,
                         noneSym, nullptr, kEaseLinear, 0.0f, false
                     );
+                    delay = 4.0f;
                 } else if (mInTheZone == 1) {
                     mRhythmBattleAnim->Animate(
                         0.0f, false, 0.0f, rate,
                         20.0f, 28.0f, 0.0f, 2.0f,
                         noneSym, nullptr, kEaseLinear, 0.0f, false
                     );
+                    delay = 4.0f;
                 }
-                delay = 4.0f;
             }
             static Symbol loop("loop");
             Symbol loopSym = loop;

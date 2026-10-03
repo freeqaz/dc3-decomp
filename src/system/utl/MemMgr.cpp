@@ -981,10 +981,10 @@ int MemFindHeap(const char *name) {
             return i;
         }
     }
-    if (strcmp(name, "char") == 0) {
+    if (strcmp("char", name) == 0) {
         return 0;
     }
-    if (strcmp(name, "physical") == 0) {
+    if (strcmp("physical", name) == 0) {
         return -2;
     }
     if (gSingleHeap) {
