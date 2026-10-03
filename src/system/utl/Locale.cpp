@@ -21,6 +21,8 @@
 // DataArray (`lwz r3, 0x50(r31)` / `bl ??3DataArray@@SAXPAX@Z`).  So it is a
 // funclet of a DIFFERENT parent function in the same object; nothing can be
 // fixed here until the parent it belongs to is matched.
+// w21-ag: it WAS Locale::Init's funclet (frame 0x160, devkitPath String at
+// r31+0x80); with Init's slot layout fixed it reads 100.
 Locale TheLocale;
 
 // ~Locale() is inline in Locale.h (compiler inlines it into atexit destructor)
