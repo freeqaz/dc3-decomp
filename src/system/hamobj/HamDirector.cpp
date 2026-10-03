@@ -1219,7 +1219,8 @@ DataNode HamDirector::OnToggleCamshotFlag() { return mCamshotFlag = !mCamshotFla
 // mLoadedNewSong and the EH state), kAssertStr hi=r23, file name=r24; ours
 // this=r23, r26, r24, r25. Every store/load (0x2fc crews, 0x304, 0x336, 0x330,
 // 0xe0, 0x11c) and branch target checked against the image; the MakeString rows
-// are ICF-folded instantiations. Regalloc priority, no value divergence.
+// are ICF-folded instantiations. Regalloc priority, no value divergence. A
+// `Symbol crew = hpd->Crew();` local in the loop drops to 98.7 -- reverted.
 DataNode HamDirector::OnLoadSong(DataArray *a) {
     FilePathTracker tracker(FileRoot());
     MILO_ASSERT(TheGameData, 0xC1D);
