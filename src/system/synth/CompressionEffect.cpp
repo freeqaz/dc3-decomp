@@ -54,6 +54,12 @@ void CompressionEffect::SetParameters(CompressionEffect::Params const &params) {
 // f27..f31 for 1.15/0.001/0.002/1.0/0.02, ours f3/f4/f27..f29) and the
 // f12/f13 relabelling it drags.  A plain `for (channel...)` without the
 // numChannels guard is worse (95.8, 161 vs 159 instructions).
+// w21-av: the gate update writes mGateMin directly in both arms and the 1.15
+// test reads mGateMin back (the image stores, then multiplies the stored
+// value: stfs f0,0x2c(r3); fmuls f0,f0,f27).  The `attack_release` local was
+// ours; dropping it fixed the whole hoisted-constant FPR colouring.  Left:
+// one `fmuls f0,f12,f0` operand order (sample*mDCBlock) in the output loop;
+// `mDCBlock * samples[idx]` and a `float sample` local are inert.
 void CompressionEffect::Process(float *samples, int numFrames, int numChannels) {
     if (mRatio > 1.01f) {
         float envelope = mEnvelope;
@@ -109,15 +115,13 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
             }
 
             float min_level = mGateMin;
-            float attack_release;
             if (peak_level < min_level) {
-                attack_release = (((peak_level - min_level) * 0.05f) + min_level);
+                mGateMin = (((peak_level - min_level) * 0.05f) + min_level);
             } else {
-                attack_release = (((mGateMax - min_level) * 0.001f) + min_level);
+                mGateMin = (((mGateMax - min_level) * 0.001f) + min_level);
             }
-            mGateMin = attack_release;
 
-            if (peak_level < (attack_release * 1.15f)) {
+            if (peak_level < (mGateMin * 1.15f)) {
                 detect_peak = 1;
                 gain_reduction = 0.0f;
             }
