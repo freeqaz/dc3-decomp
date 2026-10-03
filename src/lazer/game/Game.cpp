@@ -326,7 +326,19 @@ void Game::ReloadSong() {
     LoadSong();
 }
 
-bool Game::IsReady() { return IsLoaded() != false; }
+// w21-k: written as an if/return pair (RB3's Game::IsReady shape, minus its
+// per-player loop), NOT `return IsLoaded() != false;`.  Out of line both
+// spellings emit the same 11 instructions (82867F80), but inlined into a
+// caller they differ (measured; the mechanism is inferred): presumably the
+// if/return keeps a branch inside the inlined
+// condition until late, so MSVC neither re-folds the 0/1 normalisation
+// (`clrlwi / subic / subfe / clrlwi.`) nor rotates the while loop around it.
+// That is the image's shape at both inlined sites, OnSetShuttle and Poll.
+bool Game::IsReady() {
+    if (!IsLoaded())
+        return false;
+    return true;
+}
 
 void Game::Restart(bool b) {
     mRestartCount++;
@@ -447,23 +459,12 @@ void Game::Poll() {
         }
         TheTaskMgr.SetSecondsAndBeat(songMs * 0.001f, beat, false);
     }
-    // REFUTED (w7-ag): the image normalises IsLoaded()'s return to 0/1 before
-    // testing it -- build/373307D9/asm/lazer/game/Game.s @8286827C
-    //   clrlwi  r11, r3, 24 / subic r10, r11, 0x1 / subfe r11, r10, r11
-    //   clrlwi. r11, r11, 24 / beq .L_828682F0
-    // We emit the two-instruction form (`clrlwi. r11, r3, 24 / beq`), 3 rows short.
-    // Neutral (still 3 rows): `!!IsLoaded()` (folded away), and hoisting the call
-    // into `bool loaded = IsLoaded();` inside a nested `if (!mPaused && !mRealTime)`.
-    // `IsLoaded() == true` is wrong in a different way: it gets the non-recording
-    // `clrlwi` right but lowers the test to `cmplwi cr6, r11, 0x1` / `bne`.
-    // w21-e (98.77 normalized / 98.77 fuzzy after the drift/songMs decl swap
-    // above, which only moved fuzzy 98.73 -> 98.77; these 4 rows are left):
-    // the 4 rows are byte-for-byte the body of the out-of-line Game::IsReady()
-    // (82867F80, defined just before Poll, plain `f` in the map, not COMDAT),
-    // so the image inlined IsReady() here. Re-measured with a full post-compile
-    // build: `IsReady()` and `IsLoaded() != false` both fold to the 1-row test
-    // exactly like `IsLoaded()`. Not chased further.
-    if (!mPaused && !mRealTime && IsLoaded()) {
+    // w21-k: the image's `clrlwi / subic / subfe / clrlwi.` test at 8286827C
+    // is the INLINED Game::IsReady() (see the comment above IsReady), not a
+    // normalised IsLoaded(); calling IsReady() here closed the three rows
+    // that w7-ag certified as a floor (98.77 -> 100 modulo one fadds
+    // register-permutation row at idx 90).
+    if (!mPaused && !mRealTime && IsReady()) {
         float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
         // Not a fresh local: the image writes the re-derived ms back into songMs,
         // so the `songMs >= 0` test, mMaster->Poll(songMs) and `unk64 = songMs`
@@ -1014,25 +1015,9 @@ bool Game::IsLoaded() {
     }
 }
 
-// w17-e (55.83, unchanged; 34 rows = the whole loop shape): the image's
-// 4-instruction test (clrlwi / subic / subfe / clrlwi.) is byte-for-byte the
-// body of the out-of-line Game::IsReady() (`IsLoaded() != false`, 82867F80)
-// followed by a bool test of its result, and RB3's OnSetShuttle loops on
-// `while (!IsReady())` -- so the image almost certainly INLINED IsReady here
-// (and in Game::Poll, same 4 rows at 8286827C) without re-folding it.
-// MEASURED, full ninja each: `while (!IsReady())`, `for(;;){ if (IsReady())
-// break; ...}`, IsReady spelled `IsLoaded() ? true : false`, and IsReady() in
-// Poll's `if` -- all byte-identical to now: our MSVC inlines IsReady and folds
-// the normalisation away.  Not compile order either: with the IsReady loop our
-// Game.obj emits IsReady (sec 697) before OnSetShuttle (724), as the image
-// lays them out (82867F80 < 82868500), and it still folds.
-// w21-h (55.83, unchanged): `while (!IsReady())` with IsReady's definition
-// moved BELOW OnSetShuttle (so it is not yet defined at the call) is
-// byte-identical too -- MSVC still inlines and folds it.  The image's inlined
-// sequence ends in `clrlwi.` (the caller-side bool test of a RETURN value),
-// while its out-of-line IsReady (82867F80) ends at `subfe r3` with no clrlwi:
-// i.e. the image tests the inlined result exactly as if a call had returned it.
-// IsReady is a plain `f` (not `f i`) in the map.
+// w21-k: 55.83 -> 100.  The w17-e reading was right (the image inlines
+// IsReady() here, as RB3's `while (!IsReady())` does) and the missing piece
+// was IsReady's own spelling -- see the comment above Game::IsReady().
 DataNode Game::OnSetShuttle(DataArray *arr) {
     if (arr->Size() > 3) {
         mShuttle->SetController(arr->Int(3));
@@ -1048,18 +1033,9 @@ DataNode Game::OnSetShuttle(DataArray *arr) {
         // test BEFORE the first Poll (`bne .L_8286859C` straight out to the
         // SetActive tail).  A do/while polls the synth once even when the song
         // is already loaded.
-        // REFUTED here as well as at Game::Poll (w7-ag), five spellings, all
-        // producing a byte-identical 81-instruction body: `while (!IsLoaded())`,
-        // `for(;;){ if (IsLoaded()) break; ... }`, a named `bool loaded`, an
-        // `(int)` cast, an explicit int->bool two-step, and a `goto` loop.  MSVC
-        // peels the first IsLoaded() test and bottom-tests the loop in every one
-        // of them, while the image keeps the test at the loop head with an
-        // unconditional `b` back-edge and normalises the bool
-        // (clrlwi / subic / subfe / clrlwi.) that we test with a bare `clrlwi.`.
-        // The two are one fact: the image's condition is 6 instructions, ours 4,
-        // and the peel heuristic is downstream of that.  Not reachable from
-        // source spelling in this TU.
-        while (!IsLoaded()) {
+        // The 4-instruction 0/1 test at the loop head is the inlined
+        // IsReady() (w21-k); with it MSVC no longer peels the first test.
+        while (!IsReady()) {
             TheSynth->Poll();
         }
     }
