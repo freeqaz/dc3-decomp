@@ -770,11 +770,7 @@ void MoveDir::Enter() {
     if (!TheLoadMgr.EditMode()) {
         mGamePanel = ObjectDir::Main()->Find<Hmx::Object>("game_panel", false);
         mErrorNodeInfo = 0;
-        MoveDir *self = this;
-        self->mFiltersEnabled = true;
-        if (self->mFiltersEnabled && TheLoadMgr.EditMode()) {
-            self->MiloInit();
-        }
+        SetFiltersEnabled(true);
         mDebugLoopMarker = -1;
     } else {
         mGamePanel = nullptr;
