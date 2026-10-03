@@ -81,14 +81,12 @@ int Trie::store(const char *str) {
             newNode[0x10] = ch;
             check_index(nodeIdx);
             *(unsigned int *)(newNode + 0x08) = parentIdx;
-            unsigned int firstChildIdx;
             if ((int)parentIdx > 0) {
                 check_index(parentIdx);
-                firstChildIdx = FirstChild(NodePtr(this, parentIdx));
+                inc_count(FirstChild(NodePtr(this, parentIdx)));
             } else {
-                firstChildIdx = 1;
+                inc_count(1);
             }
-            inc_count(firstChildIdx);
             parentIdx = nodeIdx;
             curIdx = nodeIdx;
             if (str[i] != '\0') goto fast_path;
