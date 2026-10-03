@@ -1350,31 +1350,27 @@ void MoveDir::ResetDetectFrames(int player, Difficulty diff) {
                 );
             } else {
                 const DancerFrame *dfIt = dfBegin;
-                int prevCapacity = mpd.mMoveKeys.capacity();
-                TheHamDirector->MoveKeys(diff, this, mpd.mMoveKeys);
-                if (mpd.mMoveKeys.size() > prevCapacity) {
+                std::vector<HamMoveKey> &moveKeys = mpd.mMoveKeys;
+                int prevCapacity = moveKeys.capacity();
+                TheHamDirector->MoveKeys(diff, this, moveKeys);
+                if (moveKeys.size() > prevCapacity) {
                     MILO_NOTIFY(
                         "%s move keys size (%i) above capacity (%i)",
                         PathName(this),
-                        mpd.mMoveKeys.size(),
+                        moveKeys.size(),
                         prevCapacity
                     );
                 }
                 int detectCapacity = mpd.mDetectFrames.capacity();
-                // REFUTED (w7-i): two levers are byte-identical here --
-                // hoisting `&*mpd.mMoveKeys.begin()` above the `if` (MSVC sinks
-                // it straight back in), and folding this capacity read into the
-                // for-init next to the counter. The residual is two scheduling
-                // ties the image wins on register assignment alone: it
-                // evaluates mDetectFrames.capacity() before mMoveKeys.size()
-                // in this preheader (we do the reverse, so divw/srawi. swap),
-                // and its back-edge loads _M_start before _M_finish, which
-                // leaves _M_start live into the loop head -- we load _M_finish
-                // first and reload _M_start inside the body.
-                for (int moveKeyIdx = 0; moveKeyIdx < mpd.mMoveKeys.size();
+                // w21-m: binding `moveKeys` once (before prevCapacity, used
+                // for every mMoveKeys access) closes both scheduling ties w7-i
+                // recorded here -- the capacity()-before-size() preheader and
+                // the back-edge that keeps _M_start live into the loop head.
+                // Binding it only at the loop left the preheader tie (99.1).
+                for (int moveKeyIdx = 0; moveKeyIdx < moveKeys.size();
                      moveKeyIdx++) {
                     if (dfIt->mMoveIdx == moveKeyIdx) {
-                        const HamMoveKey &key = mpd.mMoveKeys[moveKeyIdx];
+                        const HamMoveKey &key = moveKeys[moveKeyIdx];
                         HamMove *curMove = key.move;
                         const std::vector<MoveFrame> &moveFrames =
                             ((const HamMove *)curMove)->GetMoveFrames();
