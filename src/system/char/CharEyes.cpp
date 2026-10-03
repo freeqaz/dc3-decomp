@@ -1559,12 +1559,12 @@ storeState:
         Vector3 localTarget;
         float interpWeight;
         if (camWeight > 0.0f) {
-            RndCam *cam = 0;
-            if (TheWorld)
+            RndCam *cam;
+            if (TheWorld && TheWorld->Cam())
                 cam = TheWorld->Cam();
-            if (!cam)
+            else if (RndCam::Current())
                 cam = RndCam::Current();
-            if (!cam)
+            else
                 cam = TheRnd.GetDefaultCam();
             if (!cam)
                 goto skipInterp;
