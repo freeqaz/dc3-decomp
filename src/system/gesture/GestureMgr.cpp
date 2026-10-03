@@ -675,7 +675,7 @@ void GestureMgr::DrawSkeletonKinectData() {
         }
     }
 
-    if (debugDir) {
-        debugDir->DrawShowing();
+    if (mDebugDir) {
+        mDebugDir->DrawShowing();
     }
 }
