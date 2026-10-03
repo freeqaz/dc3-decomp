@@ -402,6 +402,19 @@ BEGIN_COPYS(DepthBuffer3D)
 END_COPYS
 
 #ifndef HX_NATIVE
+// STOP POINT (w21-f, 80.3 normalized, was 72.54; ~730 rows, 449 of them
+// arg-only regalloc).  Levers that landed, each measured on its own:
+//   - one `valid` flag cleared in each reset arm (image: li r29,1 / mr r29,r19)
+//     instead of three has1/has2/has3 bools                       72.54 -> 74.2
+//   - mat / depthTex as if/else assignments, not ternaries          -> 75.4
+//   - `s0 ? (s0->SkeletonIndex() + 1) : -1` polarity (beq -> li -1)  -> 76.4
+//   - percentile indices via Round() (fctiwz inside each arm)        -> 80.3
+// Inert: a ForceValue(float) inline in DoubleExponentialSmoother.h for the
+// image's dead `stw &smoother, 0x50(r31)` in the SetParams arm.  Remaining:
+// image keeps 60/80 (d38/d44) in memory, not FPRs (we save from f17, image
+// __savefpr_18); vector slots p1Cols/rows/depths/p2Cols at 0x70/0x80/0x90/0xb0
+// vs ours 0x70/0x90/0xb0/0xc0; mat slot 0x60 vs 0x80; our extra
+// `stfs Level, 0x50(r31)` homes in the zoom-clamp section.
 void DepthBuffer3D::DrawShowing() {
     if (TheRnd.DrawMode() != Rnd::kDrawNormal || !Showing()) {
         return;
