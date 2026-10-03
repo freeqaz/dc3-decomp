@@ -1107,6 +1107,10 @@ void PartyModeMgr::ResetMicrogames() {
 // `t1 > t2 ? 1 : 0` / `? 0 : 1` argument straight into Int() (86.6), and the
 // Array() call folded into the Int() expression with idx computed first (69.9
 // -- the size compare must come AFTER the Array() call, as the image has it).
+// w20-s (98.0, branch-landing adjudication): rows 43/93 are NOT a behaviour
+// difference.  Row 93 inverts consistently: image `li r4,1; ble -> Node; li
+// r4,0` = ours `li r4,0; bgt -> Node; li r4,1`, both idx = (team1 <= team2).
+// Both landings differ only by our extra `mr r3, rN` (image reuses Array()'s r3).
 int PartyModeMgr::PickNextPlayer() {
     int ret = -1;
     if (mCurrentTeamSelector == 2) {

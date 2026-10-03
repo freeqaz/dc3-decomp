@@ -186,6 +186,10 @@ void RndTexBlender::DrawBlendList(
 // under the Rect at 0xb0; we put that temp at 0x70, which pushes the vectors to
 // 0x78/0x88/0x98 and the Color above the Rect (0xc0), +0x10 for every slot
 // after.  Naming the Color as a local before DrawRect is byte-identical.
+// w20-s: branch rows 476/610 land one row apart only because the image loads
+// customList's begin (`lwz r25, 0x70(r31)`) into r25 before DrawBlendList and
+// reuses it for the deallocate; we reload it after (0x78(r31) in our frame).
+// DrawBlendList takes the vector by const&, same value.  ARTIFACT.
 void RndTexBlender::DrawShowing() {
     if (TheRnd.DrawMode() == Rnd::kDrawNormal
         && ((TheRnd.ProcCmds() & kProcessWorld) != 0 || TheRnd.ProcCmds() == 0)

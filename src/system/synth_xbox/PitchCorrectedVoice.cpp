@@ -18,6 +18,9 @@ DSP::Synapse::PitchCorrectedVoice::PitchCorrectedVoice()
 // RELOADS mSmoothedCorrection (`lfs f0, 0x8(r31)`) after the `mPrevFreq =
 // mFreqCounter` store, where we reuse the value loaded for the attack/release
 // test; the rest is the FPR renaming that follows.  Not chased further.
+// w20-s: branch row 100 lands on the image's `stfs f12,0x30(r31); lfs f0,
+// 0x8(r31)` vs our fmsubs -- the w17-e reload above, reached on both arms on
+// both sides; mSmoothedCorrection = (f28*f27 - s)*coef + s either way.  ARTIFACT.
 float DSP::Synapse::PitchCorrectedVoice::GetCorrection() {
     // Interval between the two target frequencies, in semitones.
     float interval = Util::Log<float>(mFreq1) - Util::Log<float>(mFreq0);
