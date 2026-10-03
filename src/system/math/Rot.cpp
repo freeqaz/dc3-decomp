@@ -270,11 +270,26 @@ void RotateAboutZ(const Hmx::Matrix3 &min, float f, Hmx::Matrix3 &mout) {
 
 // w16-c (90.30645, 13 rows, all FP colouring inside the inlined Cross /
 // LengthSquared / Dot block): Dot(v2, v1) for Dot(v1, v2) is byte-identical.
+// w21-ac (90.30645, unchanged): the image (0x82533978) sums |v1|^2 as
+// (xx + zz) + yy and the dot as (x + z) + y, |v2|^2 as (xx + yy) + zz.  Both
+// are now written out in that order so the native build evaluates in the
+// image's association (fidelity fix); on PPC the spelling is byte-identical
+// (/fp:fast re-sorts).  Remaining rows: the four `fmr` copies MSVC makes of
+// v1.z/v2.y/v2.z/v1.y while inlining (the image copies the other operand of
+// each pair) and the load order v1.z, v2.y, v2.z (ours v2.z, v1.z, v2.y).
+// Inert (probe, all byte-identical): all 64 operand orders of the Cross
+// products written as a Vector3 ctor; Dot(v1,v1)*Dot(v2,v2) for the lengths;
+// LengthSquared(v2) * LengthSquared(v1); separate l1/l2 locals; the dot as a
+// local after sq; q.x/y/z/w member stores; early return.  Worse: dot local
+// before sq 71.7; sq before Cross 65.3; Scale/`*=` of vec 88.8; rb3-xenon's
+// six component locals 50.8.
 void MakeRotQuat(const Vector3 &v1, const Vector3 &v2, Hmx::Quat &q) {
     Vector3 vec;
     Cross(v1, v2, vec);
-    float sq = std::sqrt(LengthSquared(v1) * LengthSquared(v2));
-    float sq2 = std::sqrt(((Dot(v1, v2) / sq + 1.0f) * 0.5f));
+    float lenSq1 = v1.x * v1.x + v1.z * v1.z + v1.y * v1.y;
+    float sq = std::sqrt(lenSq1 * LengthSquared(v2));
+    float dot = v1.x * v2.x + v1.z * v2.z + v1.y * v2.y;
+    float sq2 = std::sqrt(((dot / sq + 1.0f) * 0.5f));
     if (sq2 > 1e-7f) {
         float f1 = 0.5f / (sq * sq2);
         q.Set(vec.x * f1, vec.y * f1, vec.z * f1, sq2);
