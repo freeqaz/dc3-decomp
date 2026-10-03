@@ -1063,60 +1063,38 @@ void HamIKEffector::Poll() {
 done:;
 }
 
-// 94.2% canonical / 93.4% raw, 20 rows.  Residual, measured wave 7 lane w7-y:
+// w21-b: 98.3 canonical (was 94.14), 6 rows left, all in the xfmOut tail:
+//   the mEffector reload (`lwz r11, 0x50(r29)`) is scheduled one slot early
+//   (before the m.y.y store at 0x14 instead of after it), and MSVC sinks our
+//   `xfmOut.m.y.x = -sinAngle` store (0x10) below the three z-row stores
+//   where the image issues it right after the fneg.  Same instructions, same
+//   values.  The head rows the w7-y note below described (mEffector load
+//   order, dz register pair, distSq chain) are closed by building the pull
+//   in quatOut.v -- see the comment in the body.  Tail spellings measured
+//   with a standalone /FAs probe and all inert or worse: the effLocalV
+//   binding at each of the 10 statement positions or inline in the Multiply
+//   call, m.y.x as -sinAngle / -m.x.y / a positive sqrt local, and all 720
+//   orders of {binding, m.y.y, m.y.z, m.y.x, z-row} x z-row component order.
 //
-//   [11][12][14] an f12<->f13 swap across the dz subtraction pair -- the image
-//     is `lfs f12, 0x8(r7) / lfs f13, 0x38(r6) / fsubs f13, f12, f13`, we load
-//     into the other two registers and subtract the other way round.
-//   [5][7] and [101][103] `lwz r11, 0x50(r3)` / `0x50(r29)` (the mEffector
-//     load, and its reload before Multiply) scheduled one slot EARLIER by us.
-//   [27]-[40] the distance-squared fmadds chain.  The shape is identical on
-//     both sides -- square, fmadds, fmadds -- only the register assignment
-//     differs, and it is downstream of the [11][12][14] swap.  The image also
-//     carries `fmr f11, f0` to keep dx alive across the 0.99f literal load,
-//     where we keep it in place.
-//   [107]-[110] MSVC sinks our `xfmOut.m.y.x = -sinAngle` store past the three
-//     z-row stores even though the source order already matches the image.
-//
-// Two attempts, both REFUTED, both reverted:
-//
-//   1. Reassociating `distSq` as `dx*dx + dy*dy + dz*dz` (the order the image
-//      EMITS the squares in, reading the fmadds chain bottom-up) is exactly
-//      INERT: 94.2 -> 94.2, all 20 rows byte-for-byte the same.  /fp:fast
-//      canonicalises the chain, so term order in the source is not a lever here.
-//      Writing the dx/dz statements in the image's emission order is worse:
-//      `dx` first, `dz` second, with the quatOut stores reordered to x,z,y to
-//      match, gives 94.2 -> 94.1 and ADDS three offset-swap rows ([6][8][19][20],
-//      the 0x0/0x8 pair).  MSVC emits the SECOND-declared difference first, so
-//      the `dz`-first spelling below is already the one that produces the
-//      image's `dx`-first schedule.
-//   2. Moving `const Vector3 &effLocalV = mEffector->LocalXfm().v;` one
-//      statement later -- after `xfmOut.m.y.y = clampedCos;`, which is where the
-//      image puts its `lwz r11, 0x50(r29)`, between the 0x14 and 0x18 stores --
-//      is much worse: 94.2 -> 92.5, 20 rows -> 28, and it turns the tail into a
-//      9-instruction f0<->f13 swap.  The reload's position is scheduled, not
-//      pinned to the reference's declaration.
+// Earlier history (w7-y, at 94.2): reassociating distSq and moving the
+// effLocalV binding below the m.y.y store were both refuted there.
 void HamIKEffector::ComputeHandPullAndQuat(
     QuatXfm &quatOut, Transform &xfmOut, const Transform &parentXfm, const Vector3 &targetPos
 ) {
-    float dz = targetPos.z - parentXfm.v.z;
-    RndTransformable *effector = mEffector;
-    float dx = targetPos.x - parentXfm.v.x;
-    RndTransformable *parent = effector->TransParent();
-    float dy = targetPos.y - parentXfm.v.y;
-    quatOut.v.z = dz;
-    quatOut.v.x = dx;
-    quatOut.v.y = dy;
-
-    float effectorLen = effector->LocalXfm().v.x;
-    float parentLen = parent->LocalXfm().v.x;
+    // w21-b: the pull is built IN quatOut.v (as in ComputeElbowPullAndQuat)
+    // and both lengths are read through mEffector directly; the squared
+    // distance is accumulated y, z, x.  This gives the image's load order
+    // (mEffector after the first lfs), the dz register pair, and its
+    // dz*dz / fmadds dy / fmadds dx chain with dx parked in f11.  Values are
+    // unchanged: (dy^2 + dz^2) + dx^2 is the image's own association.
+    Subtract(targetPos, parentXfm.v, quatOut.v);
+    float effectorLen = mEffector->LocalXfm().v.x;
+    float parentLen = mEffector->TransParent()->LocalXfm().v.x;
     float maxReach = (parentLen + effectorLen) * 0.99f;
     float maxReachSq = maxReach * maxReach;
-    // w15-a (94.14 canonical): the image squares dz first and parks dx in f11
-    // (`fmr f11, f0`) before loading 0.99f into f0; we square dx first.
-    // `dx*dx + dy*dy + dz*dz` measured 94.2 normalized, same rows -- MSVC
-    // re-sorts the /fp:fast sum itself.
-    float distSq = dz * dz + dy * dy + dx * dx;
+    float distSq = quatOut.v.y * quatOut.v.y;
+    distSq += quatOut.v.z * quatOut.v.z;
+    distSq += quatOut.v.x * quatOut.v.x;
 
     if (distSq <= maxReachSq
         || (GetType() != kEffectorTypeHand && GetType() != kEffectorTypeAnkle)) {
@@ -1304,29 +1282,20 @@ void HamIKEffector::ComputeElbowPullAndQuat(
     MultiplyTranspose(v, xfm, v40);
     const Vector3 &effectorV = mEffector->TransParent()->LocalXfm().v;
     MakeRotQuat(effectorV, v40, q.q);
-    // w7-bb: 96.43%, 5 real rows.  Two coupled residuals, both traced, neither
-    // reachable from source: (1) the image RELOADS q.v.x (stfs f12,0x0(r31) at
-    // 824BF90C then lfs f11,0x0(r31) at 824BF918) where MSVC forwards our
-    // store; and
-    // because the middle term of the sum is then anchored in memory, the image
-    // cannot reassociate and emits the chain in source order (dy*dy, then
-    // fmadds q.v.x, then fmadds dz*dz).  We get all three terms in registers,
-    // so /fp:fast reverses the chain to dz*dz, dx*dx, dy*dy -- which is the
-    // whole f11<->f12 swap set and both (0x4,0x8)/(0x34,0x38) offset swaps.
-    // Measured, all WORSE than this spelling: dropping the dx local and
-    // assigning q.v.x directly = 95.13%; additionally hoisting effectorV.x
-    // into a local (which is what the image's load order at idx 24, BEFORE the
-    // store, seems to ask for) = 94.31% and makes MSVC sink the q.v.x store
-    // out of the block entirely.  Keep the faithful spelling.
-    // w14-b: also 95.11 -- writing q.v.x through a `Vector3 &qv`, a
-    // `float *`, or finishing with q.v.Set(...); none reproduces the reload.
-    float dy = v.y - xfm.v.y;
-    float dx = v.x - xfm.v.x;
-    float dz = v.z - xfm.v.z;
-    q.v.x = dx;
-    float len = sqrtf(dy * dy + q.v.x * q.v.x + dz * dz);
-    float factor = 1.0f - effectorV.x / len;
-    q.v.x = q.v.x * factor;
-    q.v.y = dy * factor;
-    q.v.z = dz * factor;
+    // w21-b: 96.43 -> closed.  The w7-bb/w14-b residual (the image RELOADS
+    // q.v.x after storing it, and squares in dy, x, dz order) is the pull
+    // being built IN q.v: Subtract() writes all three components, the length
+    // is summed from q.v, and q.v is scaled in place.  MSVC forwards y and z
+    // (and drops their first stores as dead) but reloads x.  effectorV.x is
+    // read before the Subtract: the image loads it (824BF900, lfs f10,0x0(r30))
+    // ahead of the q.v.x store.  Found with a standalone /FAs probe over 364
+    // spellings; same values as before on every component.
+    float effectorLen = effectorV.x;
+    Subtract(v, xfm.v, q.v);
+    float lenSq = q.v.x * q.v.x + q.v.y * q.v.y;
+    lenSq += q.v.z * q.v.z;
+    float factor = 1.0f - effectorLen / sqrtf(lenSq);
+    q.v.x *= factor;
+    q.v.y *= factor;
+    q.v.z *= factor;
 }

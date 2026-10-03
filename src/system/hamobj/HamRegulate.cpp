@@ -110,18 +110,13 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
     // here, and every arm loads all three components before storing any:
     // the Set()-shaped Subtract() from math/Vec.h.
     //
-    // RESIDUAL (w7-bv, 94.2 canonical / 93.4 raw, up from 89.18): the only
-    // rows left are the else arm's interleave after Multiply (824C5338..
-    // 824C539C).  The image issues the posFactor product first, hoists
-    // facing.v.z/y/x (0x88/0x84/0x80) above the rotDelta store and loads
-    // facing.m.x.y late; we hoist facing.m.x.y and load facing.v.z after the
-    // store.  Same instructions, one scheduler ordering.  Refuted spellings:
-    // posFactor before the calls (89.8, held in an FPR across them), the
-    // Clamp before/after rotDelta (neutral), rotDelta as c*d - a*b without
-    // the outer negation (92.0), explicit x/z/y component stores (90.2, a
-    // reload of mWaypoint per component), dx/dz/dy temps then x/z/y stores
-    // (93.3 raw), posDelta = v; posDelta -= facing.v (88.2), Scale() for
-    // the tail (neutral).
+    // w21-b: CLOSED (94.23 -> 100, 150/150 equal).  The w7-bv residual (the
+    // else arm's load/store interleave after Multiply) was the rotDelta
+    // statement reading mWaypoint->LocalXfm() twice inline; binding it ONCE to
+    // a `const Transform &` (one mWaypoint load, as the image has at
+    // 824C5338) gives the image's schedule.  Subtract() below still goes
+    // through mWaypoint again, which is the image's reload after the store
+    // through rotDelta.
     if (mRegulateMode == 1) {
         if (character->Teleported()) {
             const Transform &wpXfm = mWaypoint->WorldXfm();
@@ -142,8 +137,8 @@ void HamRegulate::Regulate(Vector3 &posDelta, float &rotDelta) {
 
         float posFactor = Clamp(0.0f, 1.0f, absDt * invRadius);
 
-        rotDelta = -(mWaypoint->LocalXfm().m.x.x * facing.m.x.y
-                    - mWaypoint->LocalXfm().m.x.y * facing.m.x.x);
+        const Transform &wpXfm = mWaypoint->LocalXfm();
+        rotDelta = -(wpXfm.m.x.x * facing.m.x.y - wpXfm.m.x.y * facing.m.x.x);
 
         Subtract(mWaypoint->LocalXfm().v, facing.v, posDelta);
 
