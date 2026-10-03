@@ -96,6 +96,10 @@ void ClipCollide::SetTypeDef(DataArray *da) {
         // ctor's return value, and the sret still lands at 0x54).
         // w13-c: `FindArray(Symbol("modes"))` (explicit temporary) is also
         // byte-inert, 94.42.
+        // w21-i (stopped at 94.42, same 3 rows): wrapping the FindArray
+        // statement in its own `{ }` block (so the "modes" temporary's scope is
+        // disjoint from the Sym(0) sret's, per stack-slot-sharing.md) is
+        // byte-inert.  og-dc3 and rb3-xenon both spell it as here.
         DataArray *modesArr = da->FindArray("modes");
         mMode = modesArr->Array(1)->Sym(0);
     }
