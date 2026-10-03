@@ -116,12 +116,12 @@ GameEndedDataPointJob::GameEndedDataPointJob(
             num_stars_int = (int)pNode->Float();
         }
         dataP.AddPair(perf_current_stars, num_stars_int);
-        // w18-e: 99.6 -- the last rows of this function are here.  The image
-        // stores the DataNode type word (`stw r19, 0x5c`) straight after
-        // `mr r11, r3`, before the lbz of the flag; we store it after.  Inert:
-        // dropping the (int) cast, DataNode(kDataInt, flag).  Worse (98.7): a
-        // named DataNode local (adds a copy-ctor + Release).
-        dataP.AddPair(perf_no_flashcard, (int)MetaPerformer::Current()->CompletedSongWithNoFlashcards());
+        // w21-bh: 99.6 -> 100 -- name the MetaPerformer in a local (w18-e had
+        // the call inline in the argument, which put the DataNode type-word
+        // store `stw r19, 0x5c` after the lbz of the flag; the image stores it
+        // straight after `mr r11, r3`).
+        MetaPerformer *mp = MetaPerformer::Current();
+        dataP.AddPair(perf_no_flashcard, (int)mp->CompletedSongWithNoFlashcards());
     }
 
     Symbol crew(gNullStr);
