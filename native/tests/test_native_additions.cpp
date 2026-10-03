@@ -351,3 +351,44 @@ TEST_F(NativeAdditionsTutorialTest, ControlScreenEntersAnOrdinaryPanel) {
     TheUI = savedUI;
     delete p;
 }
+
+// ---------------------------------------------------------------------------
+// Hmx::Object::PropertySize on a property the object's type does not define.
+//
+// Image (?PropertySize@Object@Hmx@@QAAHPAVDataArray@@@Z, 825AE0E8): with no
+// TypeProps hit and a typedef present, 825AE20C calls
+// DataArray::FindArray(name, true) and passes the result straight to
+// Node(1)/Evaluate (825AE214/825AE218) with NO null check. That is sound on
+// the Xbox only because FindArray(.., true) MILO_FAILs and Debug::Fail never
+// returns into this frame there (it throws under a TRY, else the fail modal
+// halts the title). On native Debug::Fail RETURNS (non-fatal unless
+// MILO_FATAL_FAILS=1), FindArray hands back null, and the next instruction
+// dereferenced it: `{$o size (missing)}` on any typed object was a SIGSEGV
+// (found by the Xenia-golden loader probe on drum_track_controller).
+// The no-typedef branch already bails with 0 on native for the same reason.
+class NativeAdditionsPropertySizeTest : public EngineTestFixture {};
+
+TEST_F(NativeAdditionsPropertySizeTest, MissingTypedefPropertyFailsWithoutCrashing) {
+    Hmx::Object *o = Hmx::Object::New<Hmx::Object>();
+    DataArray *def = DataReadString("(present (1 2 3))");
+    o->SetTypeDef(def);
+    def->Release();
+
+    DataArrayPtr present(new DataArray(1));
+    present->Node(0) = Symbol("present");
+    ASSERT_EQ(o->PropertySize(present), 3) << "harness broken: typedef property not sized";
+
+    // Before the fix this call segfaulted the test process.
+    DataArrayPtr missing(new DataArray(1));
+    missing->Node(0) = Symbol("na_propsize_missing");
+    EXPECT_EQ(o->PropertySize(missing), 0);
+
+    // The same path through the DTA handler the probe used: {$o size (missing)}.
+    // DataReadString wraps what it parses in one outer array.
+    DataArray *file = DataReadString("(nil size (na_propsize_missing))");
+    DataNode r = o->Handle(file->Array(0), true);
+    file->Release();
+    EXPECT_EQ(r.Type(), kDataInt);
+    EXPECT_EQ(r.Int(), 0);
+    delete o;
+}
