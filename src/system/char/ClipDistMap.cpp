@@ -375,6 +375,11 @@ void ClipDistMap::SetNodes(ClipDistMap::Node *node1, ClipDistMap::Node *node2) {
     }
 }
 
+// w20-j: normalized 100 / fuzzy 99.985. One row: idx 529 (the final
+// `mDists(i, j) = err` store) is `mullw r11, r22, r11` (j * width) in the
+// image vs `mullw r11, r11, r22` here; same value, the other two mDists(i, j)
+// sites emit width * j on both sides. Commutative operand order; spelling the
+// index out explicitly made it worse (99.4).
 void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
     CharBoneDir *rsrcA = mClipA->GetResource();
     CharUtlBoneSaver saver(rsrcA);
