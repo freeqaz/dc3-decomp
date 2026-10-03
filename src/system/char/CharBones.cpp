@@ -1050,6 +1050,17 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
 // Measured on that arm: source operand order inside the seeds is normalised
 // (byte-identical); declaring z before y re-orders the emission to y, w, x, z
 // (99.08, worse).  Not a source-visible knob that was found.
+// w21-ap: 99.66 -> 100 normalized.  The knob is the BLOCK order in the
+// uncompressed helper: computing w, then z, then y, then x (results still
+// stored x, y, z, w by Set) gives the image's a.y, a.z, b.w load order and
+// the cmplw slot.  Found with a standalone cl.exe probe of the uncompressed
+// loop over all 24 block orders x seed-term swaps: exactly four orders (wzyx,
+// wzxy, wxzy, xwzy) reproduce the image's load/op sequence, none with a seed
+// swap.  Each component's expression is unchanged, so native results are
+// bit-identical.  Remaining (fuzzy only, register operand order of a
+// commutative op): six fmuls/fmadds/fnmsubs from 0x823C6F08 and the two
+// Vector3 += fadds in the vector arms; swapping the source operands of the
+// six affected products is byte-identical (MSVC canonicalises them).
 static void RotateByMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out) {
     float rw = a.w * b.w - a.x * b.x;
     rw -= a.y * b.y;
@@ -1072,17 +1083,17 @@ static void RotateByMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &
 static void RotateByMultiplyUncompressed(
     const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out
 ) {
-    float ry = a.z * b.x;
-    ry += a.y * b.w;
-    ry += a.w * b.y;
-    ry -= a.x * b.z;
+    float rw = a.w * b.w - a.x * b.x;
+    rw -= a.y * b.y;
+    rw -= a.z * b.z;
     float rz = a.w * b.z;
     rz += a.z * b.w;
     rz += a.x * b.y;
     rz -= a.y * b.x;
-    float rw = a.w * b.w - a.x * b.x;
-    rw -= a.y * b.y;
-    rw -= a.z * b.z;
+    float ry = a.z * b.x;
+    ry += a.y * b.w;
+    ry += a.w * b.y;
+    ry -= a.x * b.z;
     float rx = a.x * b.w;
     rx += a.w * b.x;
     rx += a.y * b.z;
