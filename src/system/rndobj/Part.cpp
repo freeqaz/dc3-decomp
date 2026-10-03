@@ -688,7 +688,11 @@ BEGIN_LOADS(RndParticleSys)
             // of the innermost sum, so naming C first is what puts c*z in the
             // fmuls; the parentheses on their own do nothing, /fp:fast
             // reassociates them away.
-            p150.d = -(p150.a * v1.x + (p150.c * v1.z + p150.b * v1.y));
+            // w21-bj: the C term's two operands are spelled z-first: the image's
+            // `fmuls f0, f0, f13` is c(0x88) * z(0xc8), and MSVC emits the
+            // product of `v1.z * p150.c` in that order (row [221] closed;
+            // commutative, exact in IEEE, so no behaviour change).
+            p150.d = -(p150.a * v1.x + (v1.z * p150.c + p150.b * v1.y));
         }
         if (ba7) {
             bool old = TheLoadMgr.EditMode();
