@@ -93,6 +93,17 @@ static inline float DotZYX(const Vector3 &a, const Vector3 &b) {
 // 0x80/0x90 temps but reads it through r1 (98.9); naming the 1st/2nd/3rd
 // instead is 95.2-95.7; declaring `lateral` early (three placements) is
 // inert; building the spine in `lateral` is 98.53 fuzzy (worse).
+// w21-ao (99.0368 canonical after the DotZYX fidelity fix, 37 of 327 rows):
+// still the 16-byte frame slot (image temps 0x80/0x90/0x90/0x80 for the
+// spine/forward Value() calls; ours 0x70/0x80/0x80/0x50 -- MSVC packs our
+// temps into lateral's not-yet-live slot and rightArmDir's dead one), plus
+// the inner-pair pick of the FORWARD dots and the left elevation (image
+// rounds the y product first in both forwards and the z product in the left
+// elevation; ours z, z, y -- no text order of the inner pair moved it, MSVC
+// canonicalises it) and the tilt-test bool tail.  Measured in a real-flag
+// probe, none better: spine built in `lateral`, `lateral` declared before
+// the spine, `lateral = spine; lateral -= proj`, a DotZYX-style helper on the
+// forwards (57 vs 20 probe rows), Dot argument order on the forwards.
 bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
     // 0x82DFE038 `li r25, 0x0` seeds the result in a callee-saved register and
     // 0x82DFE514 `mr r3, r25` returns it -- one result variable, not two
