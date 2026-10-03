@@ -566,11 +566,14 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
         }
     }
 
-    // Interpolate zoom FOV and apply
+    // Interpolate zoom FOV and apply. w21-av: the image sums
+    // (ZoomFovOffset() + zoomFOV) first, then adds blendedFOV (82813B94
+    // fadds f0,f1,f0; 82813B9C fadds f3,f0,f29); the parens give native the
+    // same rounding. Same PPC either way (/fp:fast re-sorts a flat sum).
     float zoomFOV;
     ::Interp(mZoomFOV, other.mZoomFOV, blendT, zoomFOV);
     cam->SetFrustum(
-        mCamShot->mNearPlane, mCamShot->mFarPlane, blendedFOV + zoomFOV + mCamShot->ZoomFovOffset(), 1.0f
+        mCamShot->mNearPlane, mCamShot->mFarPlane, blendedFOV + (zoomFOV + mCamShot->ZoomFovOffset()), 1.0f
     );
 
     // Depth of field
@@ -598,6 +601,14 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
         // declarations (neutral, 99.687); moving `otherFocalDist` below the focus
         // block (99.0, +0x10 stack frame); `float otherFocalDist = thisFocalDist;`
         // (constant-propagated back to `= 0`, bit-identical).
+        // w21-av (stopped at 99.687, same 22 rows: f28/f29/f30 rotation from
+        // row 14, plus rows 281/283/285 here): thisFocalDist's `= 0` is a dead
+        // store on every path (each path reassigns it before the Interp), which
+        // is why the image can colour it onto the constant. Refuted: dropping
+        // the `= 0` (97.1, MSVC spills the uninitialised value to the frame);
+        // `else if (hasTarget) ... else thisFocalDist = 0;` (99.4, +0x10 frame,
+        // f23 save). Both inits must stay up front; declaring them at the top
+        // of the doDOF block is bit-identical.
         float thisFocalDist = 0;
         float otherFocalDist = 0;
         if (focus) {
@@ -1164,6 +1175,12 @@ BEGIN_LOADS(CamShot)
         // two Vector2 scalars was measured: 88 rows -> 87, and the scalars still
         // do not merge with tempDraws, so it is not array-vs-scalar. The read
         // order and every field offset already match the target exactly.
+        // w21-av (stopped at 99.89, same 88 frame-offset rows): declaring
+        // `vec` first in this block is bit-identical (MSVC orders these
+        // slots itself, not by declaration). Target slots for reference:
+        // vec 0x90/0x98 (= tempDraws 0x90), parentPtr 0xa0, targetList 0x120,
+        // tf 0x150..0x1c0, frame2 0x1d0, frame1 0x2f0, iter 0x140,
+        // oldAnimSym 0x80, targetCount 0x84 (ours: 0x84/0x80).
         Vector2 vec[2];
         d >> vec[0];
         d >> vec[1];

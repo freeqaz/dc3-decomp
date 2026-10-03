@@ -249,6 +249,12 @@ void WorldInstance::LoadPersistentObjects(BinStreamRev &bs) {
 // (ObjDirPtr<ObjectDir>::operator-> and MakeString<char[19],int,char[5]>) are
 // ICF fold aliases at 0x82440E08 / 0x824D1870, not source differences.  Worse:
 // `ObjRef refs;` declared above the Find (97.5).
+// w21-av (stopped at 99.753, same 13 rows): the image also hoists the two
+// RTTI addresses ABOVE the assert's file/cond strings (lis order vtable,
+// TheDebug, RTTI Object, RTTI RndMesh, file, cond, kAssertStr; ours puts
+// file/cond before the RTTI pair), so the ObjRef vtable lands in r24 not
+// r28. Inert: `dynamic_cast<...>(...) == nullptr`, MILO_ASSERT_IF (lever o).
+// Worse: binding `Hmx::Object *o = obj;` for the loop body (98.8).
 void WorldInstance::DeleteTransientObjects() {
     if (Dir() && Dir() != DirLoader::TopSaveDir()
         && Dir()->InlineSubDirType() == kInlineAlways) {
