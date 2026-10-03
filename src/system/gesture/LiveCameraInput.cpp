@@ -539,25 +539,23 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
 #pragma endregion
 #pragma region LiveCameraInput
 
-// w20-p branch-landing row 122 (image `subic.`/`bne` down-counter vs ours
-// `mtctr`/`bdnz`, 4 iterations both): ARTIFACT -- same six stores to
-// 0x1448..0x145c per iteration, only the loop-counter lowering and pointer bias differ.
+// w21-bd (98.908 -> 100, all 380 rows equal, name_check too).  Three levers:
+//  * CamTexClip has an inline default ctor (mTex = nullptr), so mTexClips is
+//    built by MSVC's member-init phase (the image's unfolded
+//    `addi r10, r30, 0x1224` / `subi r10, r10, 0x4` CTR loop) and mSpeechMgr's
+//    single store follows it from the init list; the body loop and the body
+//    `mSpeechMgr = nullptr` (the duplicate store w7-aa measured) are gone.
+//  * mNumSnapshots = 0 written LAST before clear(): MSVC emits the last of the
+//    four member stores first, giving the image's 1200,14a8,14ac,14b0.
+//  * mFrames[] cleared by an inner 2-trip loop: MSVC hands CTR to the inner
+//    loop and unrolls it, leaving the outer stream loop on the image's GPR
+//    down-counter (li 4 / subic. / bne, +0xc-biased pointer).  Not an
+//    artifact after all (w20-p).  Same pattern: FreestyleMoveRecorder::
+//    ClearFrameScores.
+// Behaviour identical to before on every path.
 LiveCameraInput::LiveCameraInput()
     : mConnected(true), mColorPolled(0), mDepthPolled(0), mColorReceived(0), mDepthReceived(0), mSpeechMgr(0) {
-    // MEASURED, 2026-09-14 (lane w7-aa).  We emit the mSpeechMgr (0x1444) store
-    // TWICE -- once at idx 56, fused into the mTexClips loop preamble where it
-    // displaces the image's `subi r10, r10, 0x4`, and once at idx 60 where the
-    // image has its single store.  Both one-sided removals score WORSE:
-    //   drop `mSpeechMgr(0)` from the init list  -> 98.37369 -> 97.9
-    //     (idx 56 becomes a bare `delete` of the subi, and an insert appears)
-    //   drop this `mSpeechMgr = nullptr;` line   -> 98.37369 -> 97.6
-    //     (idx 60's store is the BODY one, so removing it loses that row AND
-    //      the 0x14b0 store, +1 insert/-1 delete around the erase() args)
-    // So the init-list entry is emitted at 56 and the body one at 60; the image
-    // has only the second.  Neither spelling reproduces that, and the residual
-    // rotation at idx 62-65 (we emit 14b0,1200,14a8,14ac; the image emits
-    // 1200,14a8,14ac,14b0, which is OUR source order) survives both -- so the
-    // rotation is not caused by the duplicate store and is not decl-ordered.
+    // w7-aa's duplicate-mSpeechMgr analysis is superseded by the CamTexClip ctor (w21-bd).
     mColorStreamTex = 0;
     mDepthStreamTex = 0;
     mDebugDepthTex = 0;
@@ -594,43 +592,14 @@ LiveCameraInput::LiveCameraInput()
         speechArr = kinectArr->FindArray("speech");
         b17 = speechArr->FindArray("enabled")->Int(1);
     }
-    // RESIDUAL (w7-bp, ctor is 98.37369 canonical / 98.2 raw, 1520 B, 380/380
-    // instructions).  Unmoved by this lane.  Beyond the mSpeechMgr/rotation
-    // finding recorded above by w7-aa, the only other charged cluster is THIS
-    // loop's lowering, target indices 110-122, and it is pure backend:
-    //   the image biases the induction variable to the MIDDLE of the struct --
-    //   `addi r11, r30, 0x1454` and then displacements -0xc, -0x8, -0x4, 0x0,
-    //   +0x4, +0x8 -- and counts down with `li r10, 0x4` / `subic. r10, r10,
-    //   0x1` / `bne` plus a separate `addi r11, r11, 0x18`;
-    //   we bias to the START (`addi r11, r30, 0x1444`, displacements 0x4..0x18)
-    //   and use the counted form, `mtctr` / `stwu` / `bdnz`.
-    // The SIX STORE ADDRESSES ARE IDENTICAL on both sides (0x1448, 0x144c,
-    // 0x1450, 0x1454, 0x1458, 0x145c) and the value registers line up field for
-    // field -- the 5th store is the 1 that initialises mReadIdx in both -- so
-    // the field order below is right and only the loop form differs.
-    // Deletes [110]/[111] are the image's `b` over a `lwz r25, 0x54(r31)`
-    // reload on the `!kinectArr` path above; it spills and reloads a value
-    // across that join where our build keeps it in a register.
-    // w7-bs (2026-09-15): two more loop spellings measured against the same
-    // rows, neither reaches the image's GPR-counted form:
-    //   - six explicit `mStreams[i].field = ...` stores (no `cur` reference):
-    //     BYTE-IDENTICAL, 98.4 -- MSVC folds the six addresses into the one
-    //     stwu cursor exactly as it folds `verts[i*4+k]` in
-    //     Spotlight::BuildBeam;
-    //   - `Buffer *cur = mStreams; int n = kBufferNum; do { cur->... ; cur++; }
-    //     while (--n);` -- still `mtctr`/`stwu`/`bdnz` (MSVC converts the
-    //     explicit down-counter to CTR anyway), and it keeps `&mStreams[0]` in
-    //     r23 for reuse at idx 247 (`mr r8, r23` where the image re-materialises
-    //     `addi r8, r30, 0x1448`): 98.3.
-    // The image's `li r10, 4` / `subic. r10, r10, 1` / `bne` (0x3d48-0x3d68 in
-    // the diff, a GPR counter alongside the +0xc-biased pointer) is therefore
-    // not a source-order or a reference-vs-index choice; nothing here makes
-    // MSVC decline the CTR conversion it applies to the mTexClips loop above.
+    // w7-bp/w7-bs/w20-p read this loop's GPR down-counter (vs our mtctr/bdnz)
+    // as backend-only; it was the inner mFrames loop below (w21-bd).
     for (int i = 0; i < kBufferNum; i++) {
         Buffer &cur = mStreams[i];
         cur.mHandle = nullptr;
-        cur.mFrames[0] = nullptr;
-        cur.mFrames[1] = nullptr;
+        for (int j = 0; j < 2; j++) {
+            cur.mFrames[j] = nullptr;
+        }
         cur.mWriteIdx = 0;
         cur.mReadIdx = 1;
         cur.mMat = nullptr;
