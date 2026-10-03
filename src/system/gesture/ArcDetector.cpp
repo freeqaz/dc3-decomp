@@ -413,26 +413,25 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             mArcOffset = GetCurveStart();
             Vector3 frontPt = *mJointPath.begin();
             float distX = dx - frontPt.x;
-            float distZ = dz - frontPt.z;
             float distY = dy - frontPt.y;
-            // RESIDUAL (w7-an, 97.5 canonical): 19 rows in two clusters, both
-            // scheduling.  (1) The `Vector3 frontPt` 16-byte copy: the image
-            // issues all four `lwz` (w,y,x,z off the node) before all four
-            // `stw`, clobbering r11 -- the head-node pointer -- with the last
-            // load, so it must RELOAD `lwz r11, 0x0(r30)` for the insert()
-            // below.  We keep r11 live, CSE the second begin() away, and
-            // interleave one store into the loads.  (2) f11/f12 are swapped
-            // across the three fsubs and the image squares distY with `fmuls`
-            // immediately after its fsubs, while we defer and square distZ.
-            // NEGATIVE RESULT: `mJointPath.front()` for the copy is
-            // byte-identical to `*mJointPath.begin()`; hoisting `distY * distY`
-            // into its own local is byte-identical too.  Neither touches the
-            // r11 liveness that drives cluster (1).
-            // Also tried (w12-d): the sum as accumulator statements seeded with
-            // distZ*distZ (moves the loads, 97.5) or distY*distY (byte-identical
-            // to the expression) -- neither reproduces the image's fmuls-y-first.
+            float distZ = dz - frontPt.z;
+            // w21-n: push_front, not insert(begin(), ...) -- one inline level
+            // deeper.  The image reloads the head node (`lwz r11, 0x0(r30)`)
+            // right before the insert because push_front forms its own
+            // begin(); with the spelled-out begin() MSVC CSE'd it with the
+            // frontPt copy's head load and kept r11 live (the w7-an cluster
+            // (1)).  97.18 -> 98.72 fuzzy; distX, distY, distZ declared in
+            // that order then gives the image's z, x, y float loads (98.75).
+            // STOP (w21-n, 98.75 fuzzy, 18 rows): the 16-byte frontPt copy's
+            // load/store order (image w,y,x,z; ours z,x,w,y) and the image's
+            // `fmuls` of distY straight after its fsubs, with f11/f12/f13
+            // permuted.  Inert/worse here: copy-ctor, assignment, outer-scope
+            // frontPt, iterator local (all 98.75), a `const Vector3 &` then
+            // copy (96.82), Vector3 dist + LengthSquared (98.72),
+            // DistanceSquared(boneVec, frontPt) (98.53), the y,z,x / z,x,y
+            // declaration orders (98.69).
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
-                mJointPath.insert(mJointPath.begin(), boneVec);
+                mJointPath.push_front(boneVec);
             }
             const TrackedJoint &armSecondary = skeleton.TrackedJoints()[mSecondaryJoint];
             const TrackedJoint &armPrimary = skeleton.TrackedJoints()[mPrimaryJoint];
