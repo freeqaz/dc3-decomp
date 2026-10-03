@@ -82,6 +82,19 @@ REFUSED_PREFIX = "!! refused"    # e.g. "=> !! refused: bad command pointer"
 # up first.  Distinct from a refusal: these did not run at all.
 NOT_EXECUTED = ("<not executed: batch was cut short by the console's %d-byte "
                 "output cap>" % MAX_RESULT_BYTES)
+# Placeholder for a batch element that RAN but whose output the cap clipped:
+# the last `=> ` marker before the truncation banner.  Its text is a prefix of
+# the real value, so it must never be attributed as the value.
+CLIPPED = ("<truncated: this command's output was clipped at the console's "
+           "%d-byte output cap; narrow it>" % MAX_RESULT_BYTES)
+#: Every placeholder this client puts in a result slot instead of a value.
+#: A consumer must treat a slot starting with one of these as "no value".
+PLACEHOLDER_PREFIXES = ("<truncated:", "<not executed:")
+
+
+def is_placeholder(result: str) -> bool:
+    """True if this slot carries no value: clipped, oversize or never run."""
+    return result.startswith(PLACEHOLDER_PREFIXES)
 
 
 def is_refusal(result: str) -> bool:
@@ -282,6 +295,12 @@ def split_results(body: str, count: int):
             "console returned %d result markers for %d commands and did not "
             "report truncation; refusing to attribute results to commands"
             % (len(results), count))
+    if truncated:
+        # The console checks the cap AFTER a command's `=> ` line is written
+        # and then clips the body, so the last marker's text is (in general)
+        # a prefix of that command's value. It did run, so it is not re-issued
+        # (that would repeat its side effects); it carries no value instead.
+        results[-1] = CLIPPED
     return results[:count], truncated
 
 
@@ -1414,9 +1433,12 @@ def self_test() -> int:
                          is_refusal("83")), (True, False))
 
     # Case 1: fewer markers WITH the banner == legitimate partial result.
+    # The last marker before the banner is the command the cap clipped.
     check("split truncated partial",
           split_results("=> 1\n=> 2\n" + TRUNCATION_NOTICE, 5),
-          (["1", "2"], True))
+          (["1", CLIPPED], True))
+    check("is_placeholder", (is_placeholder(CLIPPED), is_placeholder(NOT_EXECUTED),
+                             is_placeholder("83")), (True, True, False))
     check("split truncated none", split_results(TRUNCATION_NOTICE, 4), ([], True))
 
     # Case 2: count mismatch WITHOUT the banner == protocol violation.

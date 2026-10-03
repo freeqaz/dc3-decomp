@@ -655,9 +655,14 @@ class ConsoleTarget(Target):
     #: the object's state would be exactly the "empty state" laundering the
     #: contract forbids.
     REFUSED_PREFIX = "!! refused"
+    #: dc3_eval.PLACEHOLDER_PREFIXES: slots the client fills when there is no
+    #: value -- clipped by the console's output cap, or never executed because
+    #: the batch was cut short. Same reasoning as a refusal: no value.
+    PLACEHOLDER_PREFIXES = ("<truncated:", "<not executed:")
 
     def _wrap(self, text: str) -> EvalResult:
-        if text.startswith(self.REFUSED_PREFIX):
+        if text.startswith(self.REFUSED_PREFIX) or \
+                text.startswith(self.PLACEHOLDER_PREFIXES):
             return EvalResult(ok=False, error=text)
         # Probes return their payload as a kDataString (probe.py _program
         # dropped the {symbol ...} wrapper), and the console `=> ` contract
