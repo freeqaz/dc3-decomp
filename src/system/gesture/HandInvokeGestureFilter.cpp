@@ -72,6 +72,16 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
 }
 // w20-p branch-landing row 292 (image `bne` onto `li r11, 0x1`, ours one row
 // past it): ARTIFACT -- jump threading; on that edge r11 already holds 1.
+// w21-n (99.02 canonical, unchanged): every value re-checked against the image
+// (both elevations/forwards, the -0.0 atan2 denominators, GetBend's
+// shoulder/elbow/hand args, the tilt acos) -- same operands, register and
+// component order only.  The residual is ONE 16-byte frame slot (image 0x130,
+// ours 0x120): the image never lets a later unk4.Value() temporary reuse a
+// named slot (temps at 0x80/0x90; ours 0x70, 0x80, 0x80, 0x50).  Measured:
+// naming only the 4th Value() result restores the 0x130 frame and the
+// 0x80/0x90 temps but reads it through r1 (98.9); naming the 1st/2nd/3rd
+// instead is 95.2-95.7; declaring `lateral` early (three placements) is
+// inert; building the spine in `lateral` is 98.53 fuzzy (worse).
 bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
     // 0x82DFE038 `li r25, 0x0` seeds the result in a callee-saved register and
     // 0x82DFE514 `mr r3, r25` returns it -- one result variable, not two
