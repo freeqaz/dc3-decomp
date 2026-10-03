@@ -195,10 +195,14 @@ float ArcDetector::GetPathLength() const {
                     arcY2 = sqrtf(comp2);
                 }
                 Vector3 p2(dx, arcY2, mSwipeExtentY);
-                float ex = p2.x - p1.x;
-                float ey = p2.y - p1.y;
-                float ez = p2.z - p1.z;
-                length = sqrtf(ez * ez + ey * ey + ex * ex) + length;
+                // w20-c: Subtract then Length at the call site gives the
+                // image's term order (fsubs ez first, fmuls ez*ez, fmadds ey
+                // then ex); hand-written ex/ey/ez gave a y-first sum (fuzzy
+                // 99.33, f0/f13 swap).  Distance(p2, p1) -- the same two
+                // helpers one inline level deeper -- is WORSE (6 rows).
+                Vector3 d;
+                Subtract(p2, p1, d);
+                length = Length(d) + length;
             }
             prev = *it;
             ++it;
