@@ -225,8 +225,12 @@ void FreestyleMoveRecorder::Poll() {
                     col++;
                     colSrc += 4;
                 } while (col < 0x50);
+                // Unlock only on a successful lock: 0x82524D8C `beq cr6,
+                // 0x82524E1C` (texels == 0) jumps PAST the vtable+0x74 call
+                // at 0x82524E08.  We used to unlock unconditionally, i.e. an
+                // extra TexelsUnlock after a failed TexelsLock (w20-a).
+                streamTex->TexelsUnlock();
             }
-            streamTex->TexelsUnlock();
         }
 #ifdef HX_NATIVE
         }
