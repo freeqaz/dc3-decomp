@@ -910,7 +910,9 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
 // identical calls, arguments and branch targets in both arms; the only
 // difference remains our EH "sret constructed" flag (li 1 / stw 0x50 after
 // each copy-ctor) and the +0x10 frame it costs.  Not re-measured: every
-// spelling listed above.  No new lever found in this wave's catalogue (local
+// spelling listed above.  Also inert (92.77, byte-identical): `const DataNode
+// ret`, `DataNode ret(flowArr, kDataArray)` + `return DataNode(ret)`, and the
+// second arm as a bare block after the first arm's return.  No new lever found in this wave's catalogue (local
 // ref binding, early-return polarity and tail-merge placement do not touch
 // the EH-state decision).
 DataNode RndPropAnim::OnListFlowLabels(DataArray *arr) {
