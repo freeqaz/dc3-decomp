@@ -1143,16 +1143,24 @@ void SkeletonChooser::ChoosePlayerSides() {
         //   named const did not move this.
         //   * 82909CA8 keeps `mr r30, r3` and `cmplwi cr6, r3, 0x0` separate
         //     at the pPlayerSkeleton assert where we fuse them into `mr.`.
+        // w21-bd (99.924 -> 100, all 263 rows equal): closed the f30/f31 rows
+        // with lever (u) from SetPlayerSkeletonNavData -- an explicit forward
+        // goto to the Right arm keeps the 0.15f (Left) compare first in
+        // MSVC's IR (-> f31) while the layout stays Right-arm first.  Behaviour
+        // is identical to the if/else.  Player 2's literals are already
+        // hoisted, so its block stays structured.
         // Closed by w12-c: the swap tests are one `||` condition (the image's
         // fall-through from the Right test into the Left test), and
         // TheGestureMgr is read before the activeID select.
         SkeletonSide side0 = GetPlayerSide(0);
         int newSide0;
-        if (side0 == kSkeletonRight) {
-            newSide0 = (pPlayer1Skeleton->GetUnkab0().x < -0.15f) ? 0 : 1;
-        } else {
-            newSide0 = (pPlayer1Skeleton->GetUnkab0().x > 0.15f) ? 1 : 0;
-        }
+        if (side0 == kSkeletonRight)
+            goto p1Right;
+        newSide0 = (pPlayer1Skeleton->GetUnkab0().x > 0.15f) ? 1 : 0;
+        goto p1Done;
+    p1Right:
+        newSide0 = (pPlayer1Skeleton->GetUnkab0().x < -0.15f) ? 0 : 1;
+    p1Done:
 
         SkeletonSide side1 = GetPlayerSide(1);
         int newSide1;
