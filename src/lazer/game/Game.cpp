@@ -407,8 +407,11 @@ void Game::Poll() {
         }
         return;
     }
-    float drift = 0;
+    // w21-e: songMs declared before drift (and the beat sum written
+    // drift + songMs) gives the image's `fadds f1, f30, f31` at 82868120
+    // (f30 = drift, f31 = songMs); the old drift-first order swapped them.
     float songMs = 0;
+    float drift = 0;
     if (TheGamePanel->Unkf8()) {
         songMs = mGameInput->CurrentMs(mRealTime);
 #ifdef HX_NATIVE
@@ -427,7 +430,7 @@ void Game::Poll() {
                 drift = TheMaster->GetAudio()->GetSongStream()->GetJumpBackTotalTime(songMs);
             }
         }
-        float beat = MsToBeat(songMs + drift);
+        float beat = MsToBeat(drift + songMs);
         if (fabs(beat - sLastBeat) > 4.0f) {
             TheTaskMgr.ResetBeatTaskTime(beat);
         }
@@ -453,6 +456,12 @@ void Game::Poll() {
     // into `bool loaded = IsLoaded();` inside a nested `if (!mPaused && !mRealTime)`.
     // `IsLoaded() == true` is wrong in a different way: it gets the non-recording
     // `clrlwi` right but lowers the test to `cmplwi cr6, r11, 0x1` / `bne`.
+    // w21-e (99.6x after the drift/songMs decl swap above, these 4 rows left):
+    // the 4 rows are byte-for-byte the body of the out-of-line Game::IsReady()
+    // (82867F80, defined just before Poll, plain `f` in the map, not COMDAT),
+    // so the image inlined IsReady() here. Re-measured with a full post-compile
+    // build: `IsReady()` and `IsLoaded() != false` both fold to the 1-row test
+    // exactly like `IsLoaded()`. Not chased further.
     if (!mPaused && !mRealTime && IsLoaded()) {
         float seconds = TheTaskMgr.Seconds(TaskMgr::kRealTime);
         // Not a fresh local: the image writes the re-derived ms back into songMs,
