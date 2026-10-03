@@ -2597,7 +2597,10 @@ void HamDirector::Reteleport() {
     }
 }
 
-// NOTE (w7-ai): residual at 99.2%.  What is left is 22 rows of one
+// w21-m: CLOSED (99.18 -> 100, all 258 rows equal). The residuals were a
+// named `nextIdx2` local and an explicit `return true` in the
+// InsertRealShot arm, found with a standalone cl.exe probe.
+// NOTE (w7-ai, superseded): residual at 99.2%.  What is left is 22 rows of one
 // callee-saved swap -- retail puts propKeys in r29 (recycling the register
 // that held the `shot` static's address) and keyIdx in r28, we do the
 // opposite -- plus the cross-jump direction of the two
@@ -2673,8 +2676,13 @@ bool HamDirector::ReactToCollision(float frame) {
         // InsertRealShot call into THIS arm and the abort arm branches to it;
         // we merge it the other way. Hoisting the call below the if/else with
         // an early `return true` on the MoveShot(beat) path costs 96.79.
+        // w21-m: the explicit `return true` here is what puts the shared
+        // InsertRealShot call in THIS arm (0x8247A41C) with the abort arm
+        // branching back to it (b at 0x8247A550); without it MSVC
+        // cross-jumps the other way.
         if (sSongCollisionForXBeatsSuppressNextShot + beat < beat2) {
             ReactToCollision_InsertRealShot(cat, beat);
+            return true;
         } else {
             float beatSum = sSongCollisionForXBeatsSuppressNextShot + beat;
             static bool sSongCollisionRoundUpSuppressedShotToMeasure =
@@ -2687,7 +2695,12 @@ bool HamDirector::ReactToCollision(float frame) {
                 float rounded = ceil(beatSum / 4.0f);
                 beatSum = rounded * 4.0f;
             }
-            if (!propKeys->FrameFromIndex(keyIdx2 + 1, frame3)) {
+            // w21-m: a named next index (not `keyIdx2 + 1` inline) is what
+            // gives propKeys r29 / keyIdx r28 across the whole function and
+            // the image's `addi r4,r27,0x1` before `addi r5,r31,0x5c`
+            // (0x8247A4A8/0x8247A4AC); declaration order of keyIdx was inert.
+            int nextIdx2 = keyIdx2 + 1;
+            if (!propKeys->FrameFromIndex(nextIdx2, frame3)) {
                 return false;
             }
             float beat3 = FrameToBeat(frame3);
