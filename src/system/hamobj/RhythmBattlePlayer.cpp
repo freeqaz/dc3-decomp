@@ -447,61 +447,33 @@ void RhythmBattlePlayer::SwagJackedBonus(Hmx::Object *, RhythmBattleJackState, i
     }
 }
 
+// w21-k: the name is ours (the map has no out-of-line copy, so it was always
+// inlined).  Passing each pair by reference through an inline helper is what
+// let MSVC read player->mComboPosAnim straight off r4 (`lwz r28, 0x14(r4)`)
+// before `mr r31, r4`, as the image does; the open-coded swap was 97.82.
+template <class T>
+inline void SwapObjPtr(ObjPtr<T> &a, ObjPtr<T> &b) {
+    T *temp = a;
+    a = b;
+    b = temp;
+}
+
 void RhythmBattlePlayer::SwapObjs(RhythmBattlePlayer *player) {
-    // w16-b (95.8): the image loads player->mComboPosAnim (`lwz r28, 0x14(r4)`)
-    // before `mr r31, r4`; we after. A `RndAnimatable *temp;` declared
-    // separately and assigned is byte-identical. Only the first block differs.
-    RndAnimatable *temp = player->mComboPosAnim;
-    player->mComboPosAnim = mComboPosAnim;
-    mComboPosAnim = temp;
-
-    temp = player->mComboColorAnim;
-    player->mComboColorAnim = mComboColorAnim;
-    mComboColorAnim = temp;
-
-    temp = player->mResetComboAnim;
-    player->mResetComboAnim = mResetComboAnim;
-    mResetComboAnim = temp;
-
-    temp = player->m2xMultAnim;
-    player->m2xMultAnim = m2xMultAnim;
-    m2xMultAnim = temp;
-
-    temp = player->m3xMultAnim;
-    player->m3xMultAnim = m3xMultAnim;
-    m3xMultAnim = temp;
-
-    temp = player->m4xMultAnim;
-    player->m4xMultAnim = m4xMultAnim;
-    m4xMultAnim = temp;
-
-    temp = player->mBattleMeterStaleAnim;
-    player->mBattleMeterStaleAnim = mBattleMeterStaleAnim;
-    mBattleMeterStaleAnim = temp;
-
-    temp = player->mBattleMeterInAnim;
-    player->mBattleMeterInAnim = mBattleMeterInAnim;
-    mBattleMeterInAnim = temp;
-
-    temp = player->mShowScoreAnim;
-    player->mShowScoreAnim = mShowScoreAnim;
-    mShowScoreAnim = temp;
-
-    temp = player->mBattleMeterOutAnim;
-    player->mBattleMeterOutAnim = mBattleMeterOutAnim;
-    mBattleMeterOutAnim = temp;
-
-    HamLabel *tempLabel = player->mBattleLabel;
-    player->mBattleLabel = mBattleLabel;
-    mBattleLabel = tempLabel;
-
-    tempLabel = player->mScoreLabel;
-    player->mScoreLabel = mScoreLabel;
-    mScoreLabel = tempLabel;
-
-    temp = player->mBattleMeterAnim;
-    player->mBattleMeterAnim = mBattleMeterAnim;
-    mBattleMeterAnim = temp;
+    // Each line: temp = player->X; player->X = X (CopyRef); X = temp
+    // (SetObjConcrete) -- the call order the image makes for every pair.
+    SwapObjPtr(player->mComboPosAnim, mComboPosAnim);
+    SwapObjPtr(player->mComboColorAnim, mComboColorAnim);
+    SwapObjPtr(player->mResetComboAnim, mResetComboAnim);
+    SwapObjPtr(player->m2xMultAnim, m2xMultAnim);
+    SwapObjPtr(player->m3xMultAnim, m3xMultAnim);
+    SwapObjPtr(player->m4xMultAnim, m4xMultAnim);
+    SwapObjPtr(player->mBattleMeterStaleAnim, mBattleMeterStaleAnim);
+    SwapObjPtr(player->mBattleMeterInAnim, mBattleMeterInAnim);
+    SwapObjPtr(player->mShowScoreAnim, mShowScoreAnim);
+    SwapObjPtr(player->mBattleMeterOutAnim, mBattleMeterOutAnim);
+    SwapObjPtr(player->mBattleLabel, mBattleLabel);
+    SwapObjPtr(player->mScoreLabel, mScoreLabel);
+    SwapObjPtr(player->mBattleMeterAnim, mBattleMeterAnim);
 
     mSwapped = !mSwapped;
     player->mSwapped = !player->mSwapped;
