@@ -745,11 +745,19 @@ BEGIN_LOADS(RndParticleSys)
         d.stream >> mBubblePeriod >> mBubbleSize >> mBubble;
     }
     if (d.rev > 0x1D) {
-        d >> mRotate;
-        // mRPM and mRPMDrag ride the same BinStream&: the target's ReadEndian
-        // for mRPMDrag reuses the stream returned by the Key<float> read
-        // instead of reloading bs from its spill slot.
-        d.stream >> mRPM >> mRPMDrag;
+        // w19-a (99.99613 -> 99.99742): the image takes the stream for mRPM from
+        // the BinStreamRev& the bool read RETURNS (`lwz r3, 0x8(r3)` right after
+        // `bl ??5BinStreamRev@@QAAAAV0@AA_N@Z`), and mRPMDrag's ReadEndian then
+        // reuses the BinStream& the mRPM read returns.  `d >> mRotate >> mRPM >>
+        // mRPMDrag` reloads stream from the saved BinStreamRev for mRPMDrag
+        // (99.48); `(d >> mRotate).stream >> mRPM >> mRPMDrag` in one expression
+        // computes &mRPM before the bool call (99.79).  Naming the returned
+        // stream first gives both.  A whole-binary A/B of the BinStreamRev
+        // template returning BinStream& instead (`return stream >> t;`) was 29
+        // DOWN / 0 UP -- the header is right, this site is just spelled this way.
+        // Remaining: the 0x84/0x88 load order in p150.On() below (2 rows).
+        BinStream &rotStream = (d >> mRotate).stream;
+        rotStream >> mRPM >> mRPMDrag;
         if (d.rev > 0x24) {
             d >> mRandomDirection;
         }

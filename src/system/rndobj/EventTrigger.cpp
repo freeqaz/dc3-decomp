@@ -625,6 +625,12 @@ void EventTrigger::UnregisterEvents() {
 // (`Symbol &sym = *it;` and using sym throughout); an explicit pointer local
 // (`Symbol *sym = it.operator->();`); and spelling the second access as a
 // second `it.operator->()->Str()` so the call expression appears twice.
+// w19-a (still 89.66): four more spellings, none emits the 0x54 home stores:
+// RB3's `const char *lightStr = strstr(...); if (lightStr)` (inert);
+// `(*it).Str()` at both uses (inert); `String str(*it)` (89.71 canonical but
+// calls the String(Symbol) ctor where the image calls String(const char *) --
+// wrong callee); `*it = Symbol(str.c_str())` (89.63).  The image has only the
+// ~String unwind funclet, so 0x54 is not an RAII local.
 void EventTrigger::CleanupEventCase(std::list<Symbol> &syms) {
     FOREACH (it, syms) {
         if (strstr(it->Str(), "lighting_")) {
@@ -706,6 +712,9 @@ DataNode EventTrigger::Cleanup(DataArray *arr) {
                 // adjust for &Refs() inside the loop after each RefOwner() call.
                 // Do not read a row-count drop here as progress against the
                 // headline; only that store is worth anything.
+                // w19-a: `ref != filter->Refs().end()` as the loop test and a
+                // `(ObjRef *)filter->Refs().end()` cast both read 98.38 (worse);
+                // a `const ObjRef &` local for begin() alone is inert (99.74).
                 if ((ObjRef *)ref == &filter->Refs()
                     && filter->GetType() != RndAnimFilter::kShuttle) {
                     anim->mAnim = filter->Anim();

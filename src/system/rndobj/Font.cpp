@@ -810,6 +810,9 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
 // non-null mat with a no-op `clrrwi r11, r9, 0` before `lwz r11, 0x4c(r11)`
 // (GetDiffuseTex) inside the ternary's true arm; we use r11 directly.  Tried:
 // `static_cast<BaseMaterial *>(mat)->GetDiffuseTex()` -- byte-inert.
+// w19-a (still 98.73): reading the element twice,
+// `mMats[i] ? mMats[i]->GetDiffuseTex() : nullptr`, does not produce the clrrwi
+// copy -- it turns the null test into a signed cmpwi (97.97, worse).
 void RndFont::SetBitmapSize(const Vector2 &cs) {
     mCellSize = cs;
     if (mMaterialOffsets.size() != mMats.size()) {
