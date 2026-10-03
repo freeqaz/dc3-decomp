@@ -1240,6 +1240,15 @@ void MetaPerformer::SaveDanceBattleScores(Symbol s1) {
 // 2. If skeleton tracking differs -> prioritize active skeleton
 // 3. If one has preference -> use that player as primary
 // 4. Otherwise -> use tracking age (newer player gets priority)
+// w21-ar: 99.988 normalized / 99.498 fuzzy, 22 rows, all register naming or
+// argument-load order, no value difference (adjudicated row by row):
+//   image r22 = primaryChar (from r9), r24 = primaryOutfit (from r10),
+//   r23 = the hoisted gNullStr `lis`; ours r23 / r22 / r24 -- a three-way
+//   rotation that accounts for rows 13/14/24/32/41/45/80/91/150/152/159/175/
+//   210/214/221/226/227/232/233.  Rows 237-240 are the same four argument
+//   loads for CalcSecondarySongCharacter (r6 = *primaryOutfit, r7/r8 from the
+//   0x13c/0x144 stack params) issued in a different order.  No source lever
+//   tried here; recorded as the allocator tie it appears to be.
 void MetaPerformer::CalcCharacters(
     const HamSongMetadata *data,
     bool b,

@@ -302,6 +302,8 @@ void HamStoreProvider::SetFilter(StoreOffer const *pack) {
 // found for it in any of the three.
 // w16-e: `if (!IsAvailable() && !IsDebug()) continue;` before the static is
 // inert (same two lis rows).
+// w21-ar (99.955, same rows): reading the member `offer->isAvailable`
+// directly (one inline level fewer, as RefreshOffers spells it) is inert.
 void HamStoreProvider::PopulateOffersInCart() {
     HamStorePanel *storePanel = dynamic_cast<HamStorePanel *>(TheHamUI.FocusPanel());
     MILO_ASSERT(storePanel, 0x206);

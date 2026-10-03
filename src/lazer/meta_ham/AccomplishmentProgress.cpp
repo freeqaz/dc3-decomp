@@ -337,6 +337,12 @@ bool AccomplishmentProgress::AddAward(Symbol award, Symbol reason) {
 // w16-e (99.989): dropping the `else` after the !pAcc early return (block
 // kept) is inert; an early `if (IsAccomplished(s)) return false;` is worse
 // (97.26).
+// w21-ar (99.989, same 2 rows [19]/[21]; name_check charges nothing else --
+// the target-only MakeString/_M_find/Parent/PostDownload callees are ICF
+// folds of byte-identical bodies).  Inert: IsAccomplished spelled
+// `find(s) != end()` instead of count(s).  Worse (87.0, block order flips):
+// `if (pAcc) { ...; return true; } MILO_NOTIFY(...);` with one shared
+// `return false`.
 bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
     if (!IsAccomplished(s)) {
         Accomplishment *pAcc = TheAccomplishmentMgr->GetAccomplishment(s);
