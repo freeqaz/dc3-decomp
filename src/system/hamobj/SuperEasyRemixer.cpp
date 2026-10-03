@@ -293,6 +293,10 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
     mDataError = !ok;
 }
 
+// w20-t (99.6, branch-scan row 219 adjudicated ARTIFACT): the image keeps the
+// layouts vector's _M_start in r11 from the loop-condition block (lwz r11,
+// 0x0(r28)) where we re-read it at the body top (lwz r11, 0x0(r29)); both reads
+// follow the same InsertVariants/Notify calls, so the value is identical.
 void SuperEasyRemixer::LoadAllVariants() {
     std::set<const MoveVariant *> vars;
     // `Symbol song`, and `song.Str()` at each use -- NOT a `const char *`
