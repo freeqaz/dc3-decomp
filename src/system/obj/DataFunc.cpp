@@ -1359,7 +1359,7 @@ DEF_DATA_FUNC(DataMacroSize) {
     return macro->Size();
 }
 
-// RESIDUAL (w7-az, 93.75, 5 rows).  Only the third int->bool conversion is
+// HISTORY (w7-az, 93.75, 5 rows -- superseded by w21-s below).  Only the third int->bool conversion is
 // placed differently.  The image defers it past the `bl Node` for GetObj(1) and
 // lands it in r31 -- `subic r11, r30, 0x1` at 0x825B8A70 and
 // `subfe r31, r11, r30` at 0x825B8A78 straddle `mr r4, r31` at 0x825B8A74,
@@ -1376,11 +1376,25 @@ DEF_DATA_FUNC(DataMacroSize) {
 // w14-d: also INERT -- `int setProxyFile` passed as `setProxyFile != 0`.
 // w18-d (93.75): `int setProxyFile` plus a named `Hmx::Object *to = GetObj(2)`
 // is byte-inert.
+// w21-s: CLOSED by one more inline level on the object reads.  Reading each
+// object as `array->Node(i).Obj<Hmx::Object>(array)` (the DataNode template,
+// whose dynamic_cast to the same type folds away, through the NON-const Node --
+// the image calls ?Node@DataArray@@QAA... here, never the const QBA one) moves
+// the third int->bool conversion past `bl Node` for GetObj(1) into r31, exactly
+// as at 0x825B8A70..0x825B8A8C.  `array->Obj<Hmx::Object>(i)` gives the same
+// placement but calls the const Node, which this file's image never does.
+// Behaviour unchanged: same calls, same arguments.
 DEF_DATA_FUNC(DataReplaceObject) {
     bool copyDeep = array->Size() > 3 ? array->Int(3) : true;
     bool deleteFrom = array->Size() > 4 ? array->Int(4) : true;
     bool setProxyFile = array->Size() > 5 ? array->Int(5) : true;
-    ReplaceObject(array->GetObj(1), array->GetObj(2), copyDeep, deleteFrom, setProxyFile);
+    ReplaceObject(
+        array->Node(1).Obj<Hmx::Object>(array),
+        array->Node(2).Obj<Hmx::Object>(array),
+        copyDeep,
+        deleteFrom,
+        setProxyFile
+    );
     return 0;
 }
 
