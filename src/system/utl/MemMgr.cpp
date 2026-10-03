@@ -1002,6 +1002,10 @@ int MemFindHeap(const char *name) {
 }
 static SIZE_T sMinPhysFree = (SIZE_T)-1;
 
+// w20-d: 100 normalized, fuzzy 99.06: p/i trade r30/r31 as a consistent
+// bijection (21 diff_arg rows); every MakeString/MemFreeBlockStats slot,
+// compare and branch checked against the image.  Fuzzy also charges the target's
+// unnamed lbl_82F189CC for sMinPhysFree (no map name).  Inert: hoisting `i`.
 void MemPrintOverview(int heapId, char *const buf) {
     char *p = buf;
     if ((int)-2 == heapId || heapId == -3) {

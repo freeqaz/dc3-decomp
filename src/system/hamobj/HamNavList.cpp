@@ -942,22 +942,28 @@ void HamNavList::Disengage() {
 // (mFirstShowing != mTargetShowing).  Single caller, the 0x313 assert.
 bool HamNavList::IsScrollable() const { return mListState.ScrollPastMinDisplay(); }
 
-int HamNavList::GetDisabledCount(int count) const {
-    int disabled = 0;
-    for (int i = 0; i < count; i++) {
-        UIListProvider *provider = mListState.Provider();
-        if (!provider->IsActive(i))
-            disabled++;
+// w20-d BEHAVIOUR FIX: the 0x313 assert tests the DISABLED counter, not the
+// display index.  Image: `cmpwi cr6, r28, 0x0` where r28 is the counter that
+// `li r28, 0x0` seeds and the two `addi r28, r28, 0x1` advance, and that is
+// returned via `mr r3, r28`; we compared the parameter (r31) instead.  The
+// assert text "count == 0" names the counter `count`.
+int HamNavList::GetDisabledCount(int display) const {
+    int count = 0;
+    for (int i = 0; i < display; i++) {
+        if (!mListState.Provider()->IsActive(i))
+            count++;
     }
-    while (count < mListState.NumShowing()) {
-        UIListProvider *provider = mListState.Provider();
-        if (provider->IsActive(count))
+    while (display < mListState.NumShowing()) {
+        if (mListState.Provider()->IsActive(display))
             break;
-        disabled++;
         count++;
+        display++;
     }
     MILO_ASSERT(!IsScrollable() || count == 0, 0x313);
-    return disabled;
+    // w20-d: 100 normalized, fuzzy 99.30: counter/&mListState trade r27/r28
+    // (7 diff_arg rows, values verified equal).  Inert: provider local vs inline
+    // call, hoisting the loop index declaration.
+    return count;
 }
 
 bool HamNavList::IsElementBig(int display) const {

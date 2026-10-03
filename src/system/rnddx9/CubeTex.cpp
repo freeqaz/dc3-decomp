@@ -20,9 +20,10 @@ void DxCubeTex::Reset() {
     NgMat::SetCurrent(nullptr);
 }
 
-// 100 modulo register permutation (23 rows): the image binds the shared zero
-// to r27, face to r26 and &mBitmap[face] to r25; we bind r26/r25/r27.  A
-// permuter sweep (decl reorder / extraction / temp elimination) found nothing.
+// w20-d: one pointer, not a pWork/bmp pair.  With a separate pWork MSVC fed
+// Create's source/Order from pWork (r27) where the image reads the working
+// pointer (`mr r28, r25`, then `lwz r6, 0xc(r28)` / `mr r4, r28`), and the
+// zero/face/bitmap registers rotated (23 diff_arg rows, values equal).
 void DxCubeTex::Sync() {
     PhysMemTypeTracker tracker("D3D(phys):CubeTex");
 
@@ -39,13 +40,12 @@ void DxCubeTex::Sync() {
     for (int face = 0; face < 6; face++) {
         RndBitmap bitmap;
 
-        RndBitmap *pWork = &mBitmap[face];
-        RndBitmap *bmp = pWork;
+        RndBitmap *bmp = &mBitmap[face];
 
-        if (pWork->Width() == 0 || pWork->Height() == 0) {
+        if (bmp->Width() == 0 || bmp->Height() == 0) {
             MILO_NOTIFY("%s face %d width or height == 0 ", PathName(this), face);
         } else {
-            if (pWork->Palette() != nullptr || pWork->Bpp() == 0x18) {
+            if (bmp->Palette() != nullptr || bmp->Bpp() == 0x18) {
                 bitmap.Create(*bmp, 0x20, bmp->Order(), nullptr);
                 bmp = &bitmap;
             }
