@@ -481,6 +481,16 @@ void HamAudio::PollCrossfade() {
     // literal moves it -- both produced byte-identical output (97.1 / 96.3, same
     // 45 rows).  Callee-saved FPR numbering here is regalloc, not declaration
     // order.
+    // w21-j: 97.13 -> 98.1. The image does NOT CSE mStart in jumpPoint (it
+    // reloads 0x5c(r31) after the fadeStart fnmsubs) nor mEnd in case 2 (reload
+    // of 0x70(r31) for the start<end test), and SetLoop's end argument is read
+    // off the member (0x60(r31)), not cf (0x4(r30)). Stopped at 36 rows: the
+    // f29<->f30 swap above, r10/r11 in the four-word copy, and the fade tail --
+    // the image keeps `fmadds f30,f0,f13,f31` with a LOADED -0.5f
+    // (__real@bf000000) and an unfactored `fmadds f30,f0,f30,f30`, i.e. it
+    // never treats f30 as the constant 0.5 there. REFUTED (byte-identical):
+    // `-0.5f * clamped + 1.0f`, Interp(1.0f, 0.5f, c) / Interp(0.5f, 1.0f, c),
+    // reusing halfFade itself as the fadePos variable.
     float currentTime = mSongStream->GetInSongTime();
     float kEpsilon = 1.0f / 120.0f;
     float halfFade = 0.5f;
