@@ -102,17 +102,17 @@ int Trie::store(const char *str) {
 fast_path:
     do {
         i++;
-        unsigned int newIdx = get_free_node();
+        curIdx = get_free_node();
+        check_index(parentIdx);
+        FirstChild(NodePtr(this, parentIdx)) = curIdx;
         check_index(curIdx);
-        FirstChild(NodePtr(this, curIdx)) = newIdx;
-        check_index(newIdx);
-        char *newNode = NodePtr(this, newIdx);
-        *(unsigned int *)(newNode + 0x08) = curIdx;
+        char *newNode = NodePtr(this, curIdx);
+        *(unsigned int *)(newNode + 0x08) = parentIdx;
         char c2 = str[i];
-        check_index(newIdx);
+        check_index(curIdx);
         newNode[0x10] = c2;
-        inc_count(newIdx);
-        curIdx = newIdx;
+        inc_count(curIdx);
+        parentIdx = curIdx;
     } while (i < strLen);
 
 done:
