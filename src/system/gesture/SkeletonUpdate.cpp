@@ -305,9 +305,22 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
         data.mJointPositions[kJointElbowRight].z = data.mJointPositions[kJointShoulderRight].z;
         data.mJointPositions[kJointElbowRight].y = data.mJointPositions[kJointShoulderRight].y - 0.3f;
         data.mJointPositions[kJointElbowRight].x = data.mJointPositions[kJointShoulderRight].x + 0.3f;
-        wrist.z = data.mJointPositions[kJointElbowRight].z;
-        wrist.x = data.mJointPositions[kJointElbowRight].x + 0.3f;
-        wrist.y = data.mJointPositions[kJointElbowRight].y - 0.3f;
+        // w21-f (89.45 -> 89.9 canonical): the three wrist values are read
+        // into locals BEFORE the first store through `wrist`, as the image
+        // reads elbow.y/x/z (0x1d8, forwarded x, 0x1dc) ahead of its first
+        // wrist store at 0x1ec.  Storing wrist.z first (HEAD) made the later
+        // elbow loads follow an opaque-reference store.  Remaining here: the
+        // image still RELOADS elbow.y/z (lfs 0x1d8/0x1dc) and forwards only x;
+        // we now forward all three.  Measured, worse: an `elbow` reference too
+        // (85.1); wrist stores x,z,y (86.4); a function-scope `wrist` ref also
+        // used by the trigger arm (82.4).  Flipping every `a + b` to `b + a`
+        // in the trigger/left arms is byte-inert (MSVC canonicalises).
+        float wristZ = data.mJointPositions[kJointElbowRight].z;
+        float wristX = data.mJointPositions[kJointElbowRight].x + 0.3f;
+        float wristY = data.mJointPositions[kJointElbowRight].y - 0.3f;
+        wrist.z = wristZ;
+        wrist.x = wristX;
+        wrist.y = wristY;
         data.mJointPositions[kJointHandRight] = data.mJointPositions[kJointWristRight];
     } else if (ry < -0.5f) {
         data.mJointPositions[kJointHandRight].y = 0.65f;
@@ -346,8 +359,12 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
             // different word order (0x200, 0x1f8, 0x1f4, 0x1fc, ... vs our
             // 0x1f0, 0x200, 0x1f4, 0x1f8, ...).  That is backend scheduling,
             // not a source shape: 39 of the 81 rows are the r9/r10 pairing.
+            // w21-f: a block-scoped `wrist` reference (the image materialises a
+            // dead `addi r11, r31, 0x1e4` in this arm too) -- +0.1, the addi
+            // itself still does not appear in ours.
+            PaddedJointPos &wrist = data.mJointPositions[kJointWristRight];
             data.mJointPositions[kJointHandRight] = rightPos;
-            data.mJointPositions[kJointWristRight] = rightPos;
+            wrist = rightPos;
         } else {
             data.mJointPositions[kJointHandRight].y = 0.65f;
             data.mJointPositions[kJointWristRight].y = 0.6f;
