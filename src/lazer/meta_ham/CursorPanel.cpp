@@ -42,6 +42,12 @@ void CursorPanel::Poll() {
     // 82-83, 184-188), the r16..r21 constant permutation and the r28..r30
     // permutation that follows from it -- all register-only, behaviour
     // checked: every call gets the same values as the image.
+    // w21-aa (96.57, not reworked): re-read every branch target and argument
+    // against the image (crown-loss ||, MILO_LOG arg = &sCrownPlayerIndex,
+    // SetProperty(ui_crown_player, -1) via the 0x5c spill, ScreenPos joints
+    // 3/2, MakeRotMatrix(v, m, true), Scale x4): no behaviour difference.
+    // The three name rows (MakeString<char[19],int,char[5]>, <_D3DFORMAT>,
+    // SetObjConcrete<AnimTask>) are ICF aliases of ours.  Left as w21-e left it.
     PassiveMessagesPanel::Poll();
     static Symbol ui_crown_player("ui_crown_player");
     const DataNode *pCrownPlayerNode = TheHamProvider->Property(ui_crown_player);
