@@ -972,6 +972,12 @@ WorldDir *CamShot::GetCrowdDir() const {
         }                                                                                \
     }
 
+// w20-g: normalized 100.0, fuzzy 99.97 (name_check). Every operand and branch
+// target checked: no divergence. The 4 charged rows (0xa208/0xa210, 0xa28c/
+// 0xa294) are only the NAMES of the `disabled` / `anims` `static Symbol _s`:
+// symbols.txt (since 46d4ade86, not in the map) calls them ?_s@?HP@ / ?_s@?IK@,
+// we mangle ?JD@ / ?JO@ -- MSVC's per-function scope ordinal, which here moves
+// with how many scopes SYNC_PROP_BITFIELD expands to. Same guard bits/strings.
 BEGIN_PROPSYNCS(CamShot)
     SYNC_PROP_MODIFY(keyframes, mKeyframes, CacheFrames())
     SYNC_PROP(looping, mLooping)
