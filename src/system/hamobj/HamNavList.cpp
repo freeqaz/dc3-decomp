@@ -1556,6 +1556,22 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
     mDirectionGestureFilter->ClearSwipe();
 }
 
+// w21-r (98.36 canonical, 2 rows): behaviour checked against the image --
+// every branch lands on the same block (loop exits, ScrollUp/ScrollDown and
+// the confirm path all reach the one `stw r26, 0x4(ret)` DataNode(0) block,
+// kDataUnhandled stores type 6).  Reading FirstShowing() at both compares
+// (no local) fixed the image's `add r11, r11, r10` operand order.  Remaining:
+// the shared DataNode(0) block sits after SetHighlight in the image and after
+// ScrollUp here (1 insert + 1 delete), plus an r27/r28/r29 rotation (this /
+// dir / return slot) that normalized forgives.  Measured, all no better:
+// early returns in the scroll arms (98.4, regs worse); `if
+// (!ScrollPastMinDisplay())` first (byte-identical); a while(true)/break
+// loop (96.7); no bool locals (95.1, loses the image's 0/1 materialisation
+// of the gesturing test); a static inline gesturing helper (identical); one
+// shared `return DataNode(0)` after an `else if (Confirm)` chain
+// (identical); a combined `ScrollPastMinDisplay() && (< || >=)` test (90.1).
+// A `goto` to one shared SetHighlight fixes the whole register rotation
+// (fuzzy 97.4 -> 98.1) but not the block, so it was not kept.
 DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
     if (mRefreshPending)
         RealRefresh();
@@ -1577,8 +1593,7 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                 } while (!mListState.Provider()->IsActive(selected));
 
                 if (mListState.ScrollPastMinDisplay()) {
-                    int firstShowing = mListState.FirstShowing();
-                    if (selected < firstShowing) {
+                    if (selected < mListState.FirstShowing()) {
                         mScrollBehavior.ScrollUp(false);
                         // NOT `- 1`.  The image computes the threshold with a
                         // single add and no subtract -- `lwz r10,
@@ -1589,9 +1604,10 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                         // it showed up as a `subi r11, r11, 0x1` the image does
                         // not have; it made the list scroll down one item too
                         // soon on the controller path.
-                        // The remaining commutative row (target `add r11, r11,
-                        // r10`, ours `add r11, r10, r11`) is NOT source-
-                        // reachable: writing the sum the other way round is
+                        // The commutative row (target `add r11, r11, r10`) was
+                        // closed by w21-r: read FirstShowing() at both compare
+                        // sites instead of through a local (see the note above
+                        // the function).  Swapping the sum's operands alone is
                         // byte-inert.
                         // Landing this once broke 8 DtaFlow tests and it was
                         // reverted (54365d0c3) on the theory that the `- 1`
@@ -1606,7 +1622,7 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                         // scripts now use one down (-> ymca, index 3), and
                         // DtaFlowSongSelectScrollTest pins this edge.
                     } else if (selected
-                        >= firstShowing + HamListRibbon::sNumListSelectable) {
+                        >= mListState.FirstShowing() + HamListRibbon::sNumListSelectable) {
                         mScrollBehavior.ScrollDown(false);
                     } else {
                         SetHighlight(selected);

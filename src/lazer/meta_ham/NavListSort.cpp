@@ -174,6 +174,12 @@ void NavListSort::DeleteTree() {
 // li r3,1; epilogue` block vs our `li r3,1; stw; b epilogue` -- same store, same
 // return; epilogue tail-duplication only.  Every return-false edge lands on
 // `li r3,0` on both sides.  ARTIFACT, no behaviour difference.
+// w21-r (93.6 -> 100, 151/151 equal): the two tails are MSVC tail merges and
+// each merged copy lands where the LAST-written copy of that tail sits.  The
+// aSize==1 arm returns true INSIDE a positive `if (it != end)` and false
+// after it; the four-token path ends `if (it == end) return false;` then the
+// store and `return true`.  Same behaviour as before (every not-found path
+// returns false, every found path stores the found node and returns true).
 bool NavListSort::SetHighlightID(DataArray *a) {
     // Retail clears mHighlightNode BEFORE reading a->Size(): the
     // stw r10,0x50(r3) sits between the load of the old value and the
@@ -188,12 +194,11 @@ bool NavListSort::SetHighlightID(DataArray *a) {
     if (aSize == 1) {
         Symbol token = a->Sym(0);
         auto it = std::find_if(mAllNodes.begin(), mAllNodes.end(), NodeFind(token));
-        if (it == mAllNodes.end())
-            return false;
-        else {
+        if (it != mAllNodes.end()) {
             mHighlightNode = *it;
             return true;
         }
+        return false;
     }
     Symbol token = a->Sym(0);
     auto si = std::find_if(mShortcutNodes.begin(), mShortcutNodes.end(), NodeFind(token));
@@ -229,11 +234,10 @@ bool NavListSort::SetHighlightID(DataArray *a) {
     // grandchild one: its tail is shared with the aSize==1 arm
     // (`lwz r11, 0x8(found); stw r11, 0x50(this)`), and the value it
     // loads is the result slot the last __find_if wrote.
-    if (it != greatGrandChildren.end()) {
-        mHighlightNode = *it;
-        return true;
-    }
-    return false;
+    if (it == greatGrandChildren.end())
+        return false;
+    mHighlightNode = *it;
+    return true;
 }
 
 int NavListSort::GetCurrentShortcut() {

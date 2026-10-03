@@ -268,6 +268,13 @@ bool MoveGraph::FindVariantPair(
         // both.  The hit also `break`s rather than returning: 0x824F937C
         // branches to the same `li r3, 0x1` at .L_824F9314 the fall-through
         // and the s.Null() and empty-size exits all reach.
+        // w21-r (still 98.10; 4 delete rows = the two begin reloads per
+        // block, rest is volatile-register renaming): behaviour re-checked
+        // (same exits, same stores).  Measured: `i < variants.size()` as the
+        // loop condition (no count local) byte-identical; front() plus an
+        // element local in the loop identical; both single-parent blocks
+        // through one shared static inline helper 97.1 (worse, and the CSE of
+        // the begin load is unchanged).
         // w14-b (still 98.10): all inert or worse -- no local (every use via
         // p1->Variants()), a vector pointer, front()/[0], size()==0 or
         // begin()==end() for the empty test, empty() via p1 then the local.
