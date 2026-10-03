@@ -621,7 +621,16 @@ DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &msg) {
         }
     } else if (msg.Job() == mJobs[2]) {
         if (!msg.Success()) {
+            // The image errors out here too: 0x82934EB4 `b 0x82934D80` joins
+            // the remove-failure tail, which prints and then calls
+            // ExitError(3) at 0x82934DA8 (`this` stays live in r30/r31 for
+            // it).  Ours only logged (w20-a).  The early `return 1` is
+            // behaviour-neutral (the chain falls to `return 1` anyway); it
+            // makes MSVC keep the mJobs[1] copy of the shared tail, as the
+            // image does, instead of this one.
             MILO_LOG("[HamStorePanel::OnMsg] Cart failed to clear.\n");
+            ExitError(kStoreErrorCacheRemoved);
+            return 1;
         } else {
             MILO_LOG("[HamStorePanel::OnMsg] Cart emptied successfully.\n");
         }

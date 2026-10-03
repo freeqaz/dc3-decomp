@@ -44,9 +44,11 @@ BEGIN_PROPSYNCS(PracticeSection)
         test_step_sequence,
         mTestStepSequence,
         {
-            if (mTestStepSequence <= (int)mSeqs.size() - 1) {
-                mTestStepSequence = ((((unsigned int)mTestStepSequence >> 31) - 1) & mTestStepSequence);
-            }
+            // A full clamp: the image's 0x824CF388 `bgt cr6, 0x824CF398` (index > size-1)
+            // lands on the store `stw r10, 0(r30)` with r10 = size-1.  Ours
+            // skipped the store there, so an out-of-range index was kept
+            // instead of clamped to the last sequence (w20-a).
+            mTestStepSequence = Clamp<int>(0, mSeqs.size() - 1, mTestStepSequence);
         }
     )
     SYNC_SUPERCLASS(RndAnimatable)
