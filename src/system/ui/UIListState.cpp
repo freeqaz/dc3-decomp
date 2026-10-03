@@ -429,6 +429,11 @@ void UIListState::Scroll(int direction, bool skipActive) {
         // with skipActive never moved.
     accept_circ:
         mTargetShowing = curFirst;
+        // Assert text verified against the image (0x827840C4..D0):
+        // "UIListState.cpp" (??_C@_0BA@) and "state.mSelected == mSelectedDisp..."
+        // (??_C@_0CE@) -- MakeString<char[16],int,char[36]>.  The target's
+        // MakeString<char[19],int,char[5]> callee name is only dtk's label for
+        // the ICF-folded address 0x824D1870 (both names are in icf_aliases.map).
         MILO_ASSERT(state.mSelected == mSelectedDisplay, 0x1d6);
     } else {
         bool hitBoundary = false;
