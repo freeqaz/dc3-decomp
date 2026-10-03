@@ -3539,12 +3539,13 @@ void HamDirector::Poll() {
                 // Deliberately uninitialised: GetPracticeFrames writes both
                 // through references. The image emits no zero-store for either
                 // slot (0x50/0x58), and `= nullptr` adds two it does not have.
-                // RESIDUAL (w7-aq, 98.3 canonical): the two slots are swapped
-                // relative to the image (4 rows).  Swapping the declaration
-                // order of these two is BYTE-INERT -- MSVC is not colouring
-                // them by declaration order here.
-                Key<Symbol> *practiceEnd;
-                Key<Symbol> *practiceStart;
+                // w21-ad: each GetPracticeFrames call has its OWN pair of
+                // out-params, scoped to that call.  With one shared pair the
+                // image's (0x50, 0x58) then (0x58, 0x50) argument slots came
+                // out swapped (MSVC keyed the slots on call position: renaming
+                // the arguments moved nothing); a fresh pair per call lands
+                // them where the image has them.  Unobservable either way --
+                // both outputs are discarded.
                 if (p0anim != -1) {
                     bool clipInited = player0Clip.Init(0);
                     if (clipInited) {
@@ -3552,6 +3553,8 @@ void HamDirector::Poll() {
                     }
                 }
                 if (p1anim != -1) {
+                    Key<Symbol> *practiceStart;
+                    Key<Symbol> *practiceEnd;
                     bool hasPractice = GetPracticeFrames(practiceStart, practiceEnd);
                     if (!hasPractice) {
                         bool clipInited = player1Clip.Init(1);
@@ -3567,7 +3570,9 @@ void HamDirector::Poll() {
                 Difficulty p1diff = TheGameData->Player(1)->GetDifficulty();
                 ClipPlayer *backupClipPlayer =
                     IsEasierDifficulty(p0diff, p1diff) ? &player0Clip : &player1Clip;
-                bool hasPractice2 = GetPracticeFrames(practiceEnd, practiceStart);
+                Key<Symbol> *practiceStart;
+                Key<Symbol> *practiceEnd;
+                bool hasPractice2 = GetPracticeFrames(practiceStart, practiceEnd);
                 if (!hasPractice2) {
                     const float sBackupDriftScale = 0.14f;
                     const float sBackupDriftOffset = 0.5f;
