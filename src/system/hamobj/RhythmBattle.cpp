@@ -943,8 +943,8 @@ void RhythmBattle::OnBeat() {
     int i28 = mPlayerOne->GetZoneLevel() > mPlayerTwo->GetZoneLevel()
         ? mPlayerOne->GetZoneLevel()
         : mPlayerTwo->GetZoneLevel();
-    bool i35 = mPlayerTwo->GetZoneLevel() == i6b4;
     bool i27 = mPlayerOne->GetZoneLevel() == i6b4;
+    bool i35 = mPlayerTwo->GetZoneLevel() == i6b4;
     bool b6f0 = i35;
     if (goofy) {
         bool tmp = i27;
