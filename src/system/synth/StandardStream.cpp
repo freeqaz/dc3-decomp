@@ -969,9 +969,8 @@ void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {
     }
 }
 
-// w20-r branch-landing scan (row 36): ARTIFACT, shared vs duplicated
-// `li r3, 0x0` (see NOTE below); the image's `blt` from fromTime < curTime
-// lands on that `bge`, which re-tests the same cr6 and falls to `li r3, 0x1`.
+// w20-r branch-landing scan (row 36): shared vs duplicated `li r3, 0x0`,
+// closed by w21-af (see below).
 __declspec(noinline) bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
     if (mState == kInit)
         return false;
@@ -981,38 +980,22 @@ __declspec(noinline) bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
     float curTime = GetInSongTime();
     if (curTime <= 0.0f)
         return false;
-    if (fromTime < curTime)
+    // w21-af: 97.727 -> 100. ONE condition for the true exit, with the two
+    // jump-point tests written as negated `>=` so NaN still falls through to
+    // true exactly as the image's two `bge`s do. Every earlier spelling (kept
+    // in the history below) returned false from the jump-point tests as
+    // separate statements, which let MSVC tail-duplicate a `li r3, 0x0`
+    // before the last `bge`; as one || / && the false exit is the single
+    // shared `li r3, 0x0` block at the top, as in the image.
+    // History: w7-av/w9-c measured 97.727 for `if (curTime >= mJumpFromMs)
+    // return false; if (mJumpFromMs >= fromTime) return false; return true;`;
+    // a merged `curTime >= mJumpFromMs || mJumpFromMs >= fromTime -> false`
+    // read 86.02, `return mJumpFromMs < fromTime;` 90.659, and w19-e's nested
+    // `if (curTime < mJumpFromMs) { if (mJumpFromMs < fromTime) return true; }`
+    // 86.0 (those `<` spellings also return false on NaN, unlike the image).
+    if (fromTime < curTime || (!(curTime >= mJumpFromMs) && !(mJumpFromMs >= fromTime)))
         return true;
-    if (curTime >= mJumpFromMs)
-        return false;
-    // NOTE (w7-av, re-measured w9-c 2026-09-30): 97.727 canonical / 97.614 fuzzy
-    // -- 2 rows of 45, both from the LAST exit, and 43 of 45 instructions equal.
-    // The image sends this `bge` to the same `li r3, 0x0` block as every other
-    // false exit (the one at the top, from `mState == kInit`).  MSVC
-    // tail-DUPLICATES it for us: it emits its own `li r3, 0x0` BEFORE the branch
-    // and then branches forward to the epilogue, skipping the `li r3, 0x1` -- one
-    // instruction more, one taken branch fewer.  A layout heuristic, on a
-    // `__declspec(noinline)` function whose every other row already matches.
-    // Refuted, one full ninja each:
-    //   86.02  merging the two tests into one `||` (inverts the whole block
-    //          layout -- `bne` becomes `beq` and three bge/blt flip)
-    //   86.00  flipping the polarity, `if (mJumpFromMs < fromTime) return true;
-    //          return false;`
-    //   90.659 `return mJumpFromMs < fromTime;`
-    //   90.659 `return !(mJumpFromMs >= fromTime);`
-    //   90.659 `return fromTime > mJumpFromMs;` (also loses the operand order --
-    //          the image compares (mJumpFromMs, fromTime), which is what the
-    //          spelling kept below produces)
-    //   97.727 (inert) `if (...) { return false; } else { return true; }`
-    //   97.727 (inert) `if (!(mJumpFromMs < fromTime)) return false; return true;`
-    // Every spelling that changes the comparison also changes its operand order or
-    // its polarity, and each costs more than the duplicated `li`.  Keep this one.
-    // w19-e: also 86.0 -- the tail as `if (curTime < mJumpFromMs) { if
-    // (mJumpFromMs < fromTime) return true; } return false;` (a fall-through
-    // false flips the kInit block's layout exactly like the polarity flip).
-    if (mJumpFromMs >= fromTime)
-        return false;
-    return true;
+    return false;
 }
 
 void StandardStream::DoJump() {
