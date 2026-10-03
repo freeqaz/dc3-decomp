@@ -1532,22 +1532,20 @@ DataNode PartyModeMgr::OnMsg(const RCJobCompleteMsg &msg) {
 // w17-e (99.95, 6 rows: case-1/case-2 block order).  Measured byte-identical:
 // `case 2:` written before `case 1:`, and `default:` written first.  An
 // if / else-if / else chain is 84.3.  (ClearTeam has the same 8-row shape.)
+// w21-az (99.95 -> 100): same lever as ClearTeam -- MILO_ASSERT first, then
+// an if / else-if with no else.  The 84.3 chain above had the assert in the
+// trailing else; first, MSVC threads its exits into the arms in image order.
+// Behaviour unchanged: players/picker stay unset on a bad team either way.
 void PartyModeMgr::FinalizeTeam(int team) {
     std::vector<PartyModePlayer *> *players;
     PseudoRandomPicker<int> *picker;
-    switch (team) {
-    case 1:
+    MILO_ASSERT(team == 1 || team == 2, 0x1ee);
+    if (team == 1) {
         players = &mTeam1Players;
         picker = &mTeam1PlayerPicker;
-        break;
-    case 2:
+    } else if (team == 2) {
         players = &mTeam2Players;
         picker = &mTeam2PlayerPicker;
-        break;
-
-    default:
-        MILO_ASSERT(team == 1 || team == 2, 0x1ee);
-        break;
     }
 
     std::vector<int> vals;
