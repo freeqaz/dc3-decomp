@@ -88,7 +88,20 @@ bool BoxMapLighting::QueueLight(RndLight *light, float colorScale) {
  *  at 0x14(r11) vs the image's -0x8 / 0x8(r11); and the stfd f27/f29 spill
  *  order.  Tried and neutral or worse: hoisting `-dir.red` etc. into locals
  *  before the Max() calls (97.5, no change); declaring/reading c20g/c20b
- *  before c0r (97.4, more offset diffs). */
+ *  before c0r (97.4, more offset diffs)
+ *
+ *  w21-bg: 97.457 -> 100 normalized (49 register-only rows left: the
+ *  accumulators' FPR numbering; loads, stores, spill slots and the fmadds
+ *  sequence all line up).  Two spellings: (a) posX, posY, posZ clamped in
+ *  component order -- the image's light1 walker loads red, green, blue with
+ *  the `lfsu` on blue (bias -8); posZ first put the update on green (bias
+ *  -0xc) and rotated every register role.  (b) the c20 (-Z face) updates are
+ *  the LAST statements of the loop body: MSVC spills the accumulators of the
+ *  last two statements to 0x50/0x54(r31), and the image spills exactly
+ *  c20g/c20b (the "color[5].green/blue loaded first" note above).  c16g
+ *  before c20r gives the image's emission order.  Each accumulator's own
+ *  expression is unchanged, so the reorder is behaviour-neutral.
+ *  Declaration order of the c-locals is fully inert (5 orders probed). */
 void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vector3 *v3) const {
     START_AUTO_TIMER("draw_light_approx");
     gLightIndex = 0;
@@ -152,15 +165,15 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
             c8g += wPosY * y2;
             c4b += wNegX * z2;
             c12b += wNegY * z2;
-            c20g = wNegZ * y2 + c20g;
-            c20b = wNegZ * z2 + c20b;
-            c20r = wNegZ * x2 + c20r;
             c16r += wPosZ * x2;
             c4r += wNegX * x2;
             c4g += wNegX * y2;
             c12r += wNegY * x2;
             c12g += wNegY * y2;
             c16g = wPosZ * y2 + c16g;
+            c20r = wNegZ * x2 + c20r;
+            c20g = wNegZ * y2 + c20g;
+            c20b = wNegZ * z2 + c20b;
         }
 
         color[0].red = c0r;
