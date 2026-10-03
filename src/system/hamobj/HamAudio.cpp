@@ -547,7 +547,8 @@ void HamAudio::PollCrossfade() {
         mActiveCrossfade.mFlag = 2;
         break;
     case 2: {
-        bool ready = currentTime >= mActiveCrossfade.mEnd;
+        HamCrossfade &active = mActiveCrossfade;
+        bool ready = currentTime >= active.mEnd;
         bool startBeforeEnd = mActiveCrossfade.mStart < mActiveCrossfade.mEnd;
         if (!startBeforeEnd) {
             ready = ready
