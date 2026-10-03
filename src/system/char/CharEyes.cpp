@@ -1550,6 +1550,16 @@ storeState:
     // RB3's do/while(false) camera chain is byte-inert).
     // w21-l (value-scan row, ARTIFACT): the image's non-null Cam() branch lands
     // on the redundant `cmplwi r30,0` before the TheRnd fallback; same cam value.
+    // w21-ai (99.58 -> 100 modulo one row): the camera chain is rb3-xenon's
+    // `if (TheWorld && TheWorld->Cam()) cam = TheWorld->Cam(); else if ...`.
+    // Testing Cam() in the condition and re-reading it gives the image's signed
+    // `cmpwi cr6, r30, 0` and its unthreaded branch onto the final null test;
+    // the `cam = 0; if (TheWorld) cam = Cam(); if (!cam) ...` chain (also with
+    // the two fallbacks nested) threaded that branch straight to the use.
+    // Same behaviour: Cam() is a plain member read.  Remaining: the Dot()
+    // x-term `fmadds` operand order (image fx*tx, ours tx*fx); Dot(targetDir,
+    // facingDir) is byte-inert, and open-coding the sum (image association
+    // fy*ty + (fx*tx + fz*tz), or x-swapped) reorders the six loads instead.
     RndTransformable *eyeTarget = GetTarget();
 
     if (eyeTarget) {
