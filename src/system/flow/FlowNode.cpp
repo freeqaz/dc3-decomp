@@ -102,6 +102,7 @@ END_COPYS
 // with ONE row left: the image stores r29 (&mDrivenPropEntries) to the dead
 // home slot 0x60 just before `bl reserve`. Tried (inert): a named
 // `ObjVector<DrivenPropertyEntry> &entries` reference for clear/reserve/push_back.
+// w21-ae: closed to 100 -- see the std::vector reference at the reserve call.
 INIT_REVS(2, 0)
 
 void FlowNode::Load(BinStream &bs) {
@@ -130,7 +131,12 @@ void FlowNode::Load(BinStream &bs) {
     }
 #endif
     mDrivenPropEntries.clear();
-    mDrivenPropEntries.reserve(numEntries);
+    // w21-ae: reserve through a base-vector reference. The image stores
+    // &mDrivenPropEntries to the dead home slot 0x60 AFTER `bl erase` and just
+    // before `bl reserve`; binding the reference here reproduces it (binding it
+    // before clear() moves the store above erase instead). Same calls, same args.
+    std::vector<DrivenPropertyEntry> &entries = mDrivenPropEntries;
+    entries.reserve(numEntries);
     for (int i = 0; i < numEntries; i++) {
         DrivenPropertyEntry entry(this);
         entry.Load(d.stream, this);
