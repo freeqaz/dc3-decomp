@@ -108,15 +108,26 @@ float DetectFrame::LimbPSNR(const FilterVersion *filter_version, int i2) const {
         // mask is tested even when i2 == -1 (beq lands on the Type() load).
         if ((i2 == -1 || _tmp0 & i2) && curErrorNode->Type() & typeMask) {
             const Vector3 &nodeWeight = mMoveFrame->NodeWeight(i, mMirror);
-            // RESIDUAL (w13-b, 99.985): 4 rows, the image consumes the Dot terms
-            // as z, x, y (`lfs f13, -0x4(r31)` / `lfs f12, 0x0(r31)`), we as
-            // z, y, x.  Spelling the dot product out in x,y,z or y,x,z order is
-            // byte-identical to Dot() -- MSVC canonicalises the sum.  This is the
-            // math/Vec.h component-order family; the 3 MakeString name rows are
-            // ICF naming noise (same strings both sides).
-            // w16-b: Dot(mBestNodeErrors[i], nodeWeight) is identical; Length()
-            // before the Dot is 89.9 (refuted).
-            float d = Dot(nodeWeight, mBestNodeErrors[i]);
+            // RESIDUAL (w13-b, 99.985): the image consumes the Dot terms as
+            // z, x, y.  w16-b: Dot(mBestNodeErrors[i], nodeWeight) is identical;
+            // Length() before the Dot is 89.9 (refuted).
+            // w21-at (fidelity fix, same 99.98529): the image's dot product is
+            // ((err.z*w.z + err.x*w.x) + err.y*w.y) -- 82531984 `fmuls f0,
+            // err.z, w.z`, 82531994 `fmadds f0, err.x, w.x, f0`, 8253199C
+            // `fmadds f0, err.y, w.y, f0`.  The flat Dot() is ((x + y) + z) on
+            // native and was re-sorted to ((z + y) + x) on PPC -- both round
+            // differently from the image.  Written out with the image's
+            // parentheses the association now matches on both.  The
+            // 4 rows left are LOAD ORDER only: the image loads w.y into f11
+            // first and squares it first in Length ((y*y + x*x) + z*z, which
+            // is the same value as Length's (x*x + y*y) + z*z -- a single
+            // commutative swap), we load w.x first.  Tried 14 spellings (term
+            // order, multiply operand order, a w.y local, LengthSquared+sqrt,
+            // explicit Length in both pair orders, Length before/after the
+            // f12 update, += chain): all either this exact pair of rows or
+            // worse (96.6-98.5).
+            const Vector3 &err = mBestNodeErrors[i];
+            float d = (err.z * nodeWeight.z + err.x * nodeWeight.x) + err.y * nodeWeight.y;
             f12 += d * d;
             f13 += Length(nodeWeight);
         }

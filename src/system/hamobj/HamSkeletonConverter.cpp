@@ -359,7 +359,12 @@ void HamSkeletonConverter::SetLeg(
     // Accumulated y, z, x like CalcRotzBone's z, y, x: the image multiplies
     // dir.y*dir2.y first (824C9718 `fmuls f0, f0, f11` off 0x54/0x64), then
     // fmadds the z and x products.  Dot() is x, y, z and comes out z, y, x.
-    float angle = acos(Dot(dir, dir2));
+    // w21-at: written with the image's parentheses ((y + z) + x) -- Dot()'s
+    // flat sum is ((x + y) + z) natively, so this is also a native fidelity
+    // fix.  The operand order inside each product is what reproduces the
+    // image's `dir.y, dir2.y` / `dir2.z, dir.z` / `dir2.x, dir.x` rows
+    // (MSVC emits these operands reversed); all 8 orders measured.
+    float angle = acos((dir2.y * dir.y + dir.z * dir2.z) + dir.x * dir2.x);
     angle = -angle;
     int isNaN = (angle != angle) ? 1 : 0;
     if ((isNaN & 0xFF) == 0) {
@@ -388,15 +393,14 @@ void HamSkeletonConverter::SetLeg(
             // dead `addi r11, r25, 0x71` hoisted above it).
             // `plane = Plane(hipRel, pelvisZ)` is the same code plus a 4-word
             // temporary copy (91.2).
-            // Still open: the image evaluates the products c*dz, a*dx, b*dy
-            // (824C97B0 `lfs f0, 0x8(r30)` first, 824C97C8 `stfs f0, 0x68(r1)`
-            // right after loading c) and we emit b*dy, c*dz, a*dx.  The sum is
-            // canonicalised under /fp:fast -- x,y,z and y,z,x term orders are
-            // byte-identical, and so were a*x+c*z vs c*z+a*x and ydiff/xdiff/
-            // zdiff locals under the old spelling (w7-an) -- and the
-            // three-assignment spelling only rotates it (statements b,c,a give
-            // a,c,b; a,b,c and c,a,b give b,c,a).  12 rows, all offset swaps
-            // between 0x60/0x64/0x68.
+            // CLOSED (w21-at): the image's d is -((c*dz + a*dx) + b*dy) --
+            // 824C97EC `fmuls f0, c, dz`, `fmadds f0, a, dx, f0`, `fnmadds f0,
+            // b, dy, f0` -- a different ASSOCIATION from the flat sum, which
+            // MSVC re-sorted to ((y + z) + x) and native evaluates as
+            // ((x + y) + z).  Explicit parentheses fix both the 12 offset-swap
+            // rows (0x60/0x64/0x68) and the native rounding.  (w7-an had found
+            // the flat term orders all byte-identical: /fp:fast re-sorts a flat
+            // sum but keeps parentheses.)
             Vector3 hipRel;
             Subtract(_sub0, kneePos, hipRel);
             const Vector3 &pelvisZ = mPelvisTransform.m.z;
@@ -404,7 +408,7 @@ void HamSkeletonConverter::SetLeg(
                 pelvisZ.x,
                 pelvisZ.y,
                 pelvisZ.z,
-                -(pelvisZ.x * hipRel.x + pelvisZ.y * hipRel.y + pelvisZ.z * hipRel.z)
+                -((pelvisZ.z * hipRel.z + pelvisZ.x * hipRel.x) + pelvisZ.y * hipRel.y)
             );
         }
         PaddedJointPos *hipZAxisInit = &mLeftHipZAxisInit + side;
@@ -458,6 +462,15 @@ void HamSkeletonConverter::SetLeg(
         // three hz.y/hz.z products hz-first and flips only the hz.x ones).
         // Cross((&mLeftHipZAxis)[side], dir, ...) is 95.8 and
         // `Vector3 hipZ = (&mLeftHipZAxis)[side];` (one 16-byte copy) is 93.1.
+        // w21-at STOP (normalized 100, fuzzy 99.8): once the knee-angle dot
+        // is written with the image's parentheses, ALL six cross rows
+        // (160/164/165/168/170/172) put the hz operand first, whatever the
+        // source operand order -- dir-first, hz-first, Cross(hipZ, dir),
+        // three member assignments and a `const Vector3 &d = dir` alias all
+        // emit the same rows.  Register-operand order of commutative
+        // multiplies only; same values.  The flat Dot() spelling had 4 of
+        // these rows but rounds the knee angle differently natively, so the
+        // explicit dot stays.
         Vector3 cross1;
         cross1.Set(
             dir.z * hipZ.y - dir.y * hipZ.z,
