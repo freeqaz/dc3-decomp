@@ -693,6 +693,16 @@ void RhythmBattle::Begin() {
     }
 }
 
+// w20-b: the helper and its name are ours. Spelled inline in the two zone
+// tests, `mPlayerX->ZoneValue() && !mPlayerX->GetPrevInTheZone()` kept the
+// operator-> result in a $T home slot (four dead `stw rN, 0x64/0x68(r31)` per
+// test); passing the player as a parameter to an if/return helper gives the
+// image's code exactly (a `return a && !b` helper materialises the bool).
+static inline int JustEnteredZone(const RhythmBattlePlayer *p) {
+    if (p->ZoneValue() && !p->GetPrevInTheZone()) return true;
+    return false;
+}
+
 void RhythmBattle::OnBeat() {
     MILO_ASSERT(mActive, 0x290);
     static Symbol playing("playing");
@@ -991,12 +1001,9 @@ void RhythmBattle::OnBeat() {
         remainingValue = -1;
     }
     play_vo[0] = none;
-    // w13-b: we emit four extra `stw r11, 0x64(r31)` home stores of the player
-    // pointer inside this test that the image does not.  Reading
-    // mInTheZone/mPrevInTheZone directly instead of through the inline
-    // accessors is byte-inert, so they are not accessor `this` homes.
-    if (i27 || i35 || (mPlayerOne->ZoneValue() != 0 && mPlayerOne->GetPrevInTheZone() == 0)
-        || (mPlayerTwo->ZoneValue() != 0 && mPlayerTwo->GetPrevInTheZone() == 0)) {
+    // w13-b's four extra `stw r11, 0x64(r31)` home stores here closed via
+    // JustEnteredZone (w20-b).
+    if (i27 || i35 || JustEnteredZone(mPlayerOne) || JustEnteredZone(mPlayerTwo)) {
         static Symbol rhythmbattle_off_beat_p1p2("rhythmbattle_off_beat_p1p2");
         static Symbol rhythmbattle_off_beat_p1("rhythmbattle_off_beat_p1");
         static Symbol rhythmbattle_off_beat_p2("rhythmbattle_off_beat_p2");
@@ -1178,8 +1185,7 @@ void RhythmBattle::OnBeat() {
         if (play_vo[0].Sym() != stole_congrats && remainingValue > 0) {
             static Symbol inzone("inzone");
             static Symbol inzone_warning("inzone_warning");
-            if ((mPlayerOne->ZoneValue() && !mPlayerOne->GetPrevInTheZone())
-                || (mPlayerTwo->ZoneValue() && !mPlayerTwo->GetPrevInTheZone())) {
+            if (JustEnteredZone(mPlayerOne) || JustEnteredZone(mPlayerTwo)) {
                 // The target materialises the pair as one zero copied into the other
                 // (li r29, 0; mr r30, r29), i.e. a chained assignment.
                 bool b42, b43;
