@@ -48,13 +48,8 @@ END_COPYS
 
 INIT_REVS(8, 0)
 
-// w8-l: 99.964860 normalized, the only function short of 100% in this unit
-// (32/33).  11 charged rows out of 313, every one an `addi` frame displacement
-// in the +32 / -48 / -16 family, and the stack-layout diff reports 7 PERMUTED
-// slots -- the SAME SET of slots on both sides, no frame-size difference and
-// no extra local, just different variables living in them.  MSVC slot-
-// allocation shaping rather than a declaration-count difference.  Measured
-// only in this wave; no source lever attempted.
+// w21-at: 100 (was 99.96, 7 PERMUTED Vector3-sized slots): the discarded
+// Key<float>'s storage is float[3], not float[4] -- see the note at the key.
 BEGIN_LOADS(DancerSequence)
     LOAD_REVS(bs)
     ASSERT_REVS(8, 0)
@@ -95,7 +90,9 @@ BEGIN_LOADS(DancerSequence)
         //     arms.  The polarity matters: `if (skeletonRev < 4) ms = -1; else
         //     d >> ms;` reproduces the shared stw but lays the ReadEndian arm
         //     inline and branches forward to the call (91.6).
-        // What is left: the nine Vector3-sized slots 0xb0..0x130 are the same
+        // CLOSED by w21-at (key storage float[3]); the w7-ba analysis below
+        // is kept for the record.
+        // What was left: the nine Vector3-sized slots 0xb0..0x130 are the same
         // SET on both sides, permuted (image pos(rev<7)=0xc0 disp(rev>=7)=0xd0
         // pos(rev>=7)=0xe0 disp(rev<7)=0xf0 Key=0x100 v1=0x110 v=0x120; ours
         // disp(rev<7)=0xc0 pos(rev>=7)=0xd0 pos(rev<7)=0xe0 disp(rev>=7)=0xf0
@@ -187,12 +184,18 @@ BEGIN_LOADS(DancerSequence)
                     // regresses 25 others by up to 25.1pp
                     // (docs/sessions/2026-09-13-band-lane-wave.md).
                     //
-                    // The storage is four floats, not two, because that is the
-                    // slot width the image gave it: 0x100 sits on a 16-byte
-                    // boundary inside the Vector3 block (0xf0 disp, 0x110 v1).
-                    // A two-float array lets MSVC pack the slot and shrinks the
-                    // frame by 0x10 against the image's 0x490.
-                    float unusedKeyStorage[4];
+                    // The storage is three floats -- Vector3-sized, which is
+                    // what the image's slot is: 0x100 sits inside the 16-byte
+                    // Vector3 block (0xf0 disp, 0x110 v1).  A two-float array
+                    // lets MSVC pack the slot and shrinks the frame by 0x10
+                    // against the image's 0x490; a four-float array (w7-ba,
+                    // 99.96) keeps the frame but MSVC orders a 16-byte local
+                    // differently from the 12-byte Vector3s, which permuted
+                    // seven slots (key last instead of first, and both
+                    // pos/disp pairs).  w21-at: float[3] -> 100, all 313 rows
+                    // equal under name_check.  Key<float> is 8 bytes, so the
+                    // read stays inside the storage on PPC and native alike.
+                    float unusedKeyStorage[3];
                     Key<float> &unusedKey = *(Key<float> *)unusedKeyStorage;
                     d.stream >> unusedKey;
                     int unusedVal;
