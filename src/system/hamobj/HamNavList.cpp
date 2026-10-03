@@ -1577,8 +1577,7 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                 } while (!mListState.Provider()->IsActive(selected));
 
                 if (mListState.ScrollPastMinDisplay()) {
-                    int firstShowing = mListState.FirstShowing();
-                    if (selected < firstShowing) {
+                    if (selected < mListState.FirstShowing()) {
                         mScrollBehavior.ScrollUp(false);
                         // NOT `- 1`.  The image computes the threshold with a
                         // single add and no subtract -- `lwz r10,
@@ -1606,7 +1605,7 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                         // scripts now use one down (-> ymca, index 3), and
                         // DtaFlowSongSelectScrollTest pins this edge.
                     } else if (selected
-                        >= firstShowing + HamListRibbon::sNumListSelectable) {
+                        >= mListState.FirstShowing() + HamListRibbon::sNumListSelectable) {
                         mScrollBehavior.ScrollDown(false);
                     } else {
                         SetHighlight(selected);
