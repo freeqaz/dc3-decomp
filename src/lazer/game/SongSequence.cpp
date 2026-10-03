@@ -235,7 +235,7 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // w21-m: a const reference bound here (the w21-b/ResetDetectFrames lever)
     // gives the image's compare shape -- size() dies in the subf and
     // _M_start is RELOADED for mEntries[mCurrentIndex] (`lwz r10, 0x0(r30)`
-    // @8288D9D4) -- 13 rows -> 10, 99.14 -> ~99.9.  Left: start/finish load
+    // @8288D9D4) -- 13 rows -> 10, 99.14 -> 99.84.  Left: start/finish load
     // order here and at the numEntries load above (both flip as a pair), one
     // dead `stw r30, 0x50(r31)` home of the reference, the 138/139 lis
     // pair and the p0/p1 r28/r29 pair (195/201).  Measured worse: binding at the top for numEntries too (p0/p1 fixed
