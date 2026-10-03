@@ -1167,6 +1167,13 @@ void Spotlight::UpdateFloorSpotTransform(const Transform &tf) {
 // 0x8282D734 name "Spotlight.cpp" (_0O@ = 14) and
 // "!SpotlightDrawer::DrawNGSpotligh..." (_0CF@ = 37), which is exactly the
 // instantiation we emit.
+// w21-d (2026-10-03): still 85.342 canonical / 83.179 fuzzy (137 diff_arg,
+// 25 insert, 29 delete, 9 replace).  The image's face-index IV is n2 = c0+6
+// with six hoisted 16-bit addends (0xfffa/0xfffe/0xffff/0xfffb/...); tried
+// spelling the family off that representative directly (`int s = 6; c0 =
+// s-6 .. n3 = s+1; s += 4`): 66.16, MSVC re-derives everything from s and
+// loses the vertex cursor.  `unsigned int` for the whole c0..n3 family: 84.49.
+// n0/n1/n3 derived from n2 (`n2 = c0+6; n0 = n2-2 ...`): 82.03.  Reverted.
 void Spotlight::BuildBeam(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x609);
     def.mIsCone = false;
@@ -1465,6 +1472,23 @@ void Spotlight::BuildCone(BeamDef &def) {
 // (inert). Do not respell the face indices as short/unsigned short -- the
 // image's cur/nextRow arithmetic is untruncated int (add r6,r7,r11 at
 // 0x8282C6D4) and the wave-1 archaeology pass already measured that regression.
+// w21-d (2026-10-03): still 78.967 canonical / 75.080 fuzzy, 466 rows (224
+// diff_arg, 39 insert, 43 delete). Behaviour re-checked row by row against
+// the target listing and FAITHFUL: side vertices (x=r*cosH, z=r*sinH), the
+// cross-section arm, tex (segU at +0x40, 0.5*v at +0x44), both winding arms
+// of the face loop (tail-merged `sth 0x8`), cap faces (baseIdx-2,
+// baseIdx+sideWidth-2, numVerts) / (baseIdx+sideWidth, baseIdx, numVerts+1).
+// Structural residual: the image keeps ONE vertex byte cursor r30 across
+// segments (we derive a per-segment IV r15 += 0x120), recomputes nextRow as
+// (sideWidth-1)+cur each pass (we strength-reduce it into its own IV), keeps
+// halfAngle memory-resident at 0x50 and spills numVerts at 0x80.  Measured
+// here, all inert or worse: capBase/topBase/baseVertIdx after faces.resize
+// (78.28); baseVertIdx at its use (77.74); nextRow spelled cur+sideWidth-1 /
+// sideWidth-1+cur / cur+(sideWidth-1) (inert, canonicalised); short or
+// unsigned short for cur (75.87/76.56), nextRow (77.56), baseIdx (78.12),
+// sideWidth (78.78); `unsigned v` hoisted out of the seg loop (inert);
+// unsigned iVert (inert); int v (78.70); verts[iVert++] (78.96); iVert++ in
+// the for-increment (inert).
 void Spotlight::BuildNGCone(BeamDef &def, int numSegments) {
     Hmx::Matrix3 identMtx;
     identMtx.x.Set(1.0f, 0.0f, 0.0f);

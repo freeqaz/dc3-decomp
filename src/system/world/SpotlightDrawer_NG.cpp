@@ -795,6 +795,20 @@ void PlaneEquation(Vector3 n, float inv, float d, Vector4 &out) {
 // here: hoisting all five corner copies above the slides (copies first, slides
 // after) drops the function to 67.9 with 76 inserts / 72 deletes. Interleaved
 // copy-then-slide, as written, is the closer shape.
+// w21-d (2026-10-03): still 79.249 canonical (526 rows: 236 diff_arg, 46
+// insert, 48 delete, 23 replace).  Re-read the image's value flow end to end
+// and found nothing behavioural: viewDir lives in f21/f20/f22 from the first
+// Normalize to the closing Dot(beamDir, viewDir) (82821xxx rows 73-76 /
+// 508-516), so the image reusing viewDir's 0x60 slot for a perp copy is slot
+// sharing, not a different operand; bisector = rightPlane + leftPlane is built
+// in place on a copy at 0x60, copied to 0x80 and normalised into 0xa0, exactly
+// our NormalizeCopy; both plane divides and the fsel min-radius clamp agree.
+// The gap is still the 16-byte-copy layout (frame 0x220 vs ours 0x200, r17 vs
+// r20 save point: the image keeps two more Vector3 copies in flight).
+// Measured this pass: `Vector3 eye = camXfm.v;` (a whole 16-byte copy, to add
+// a copy in flight) 68.83; the five corners as plain Vec.h ScaleAdd calls
+// instead of the by-value slide helpers 58.84.  Both reverted; see w7-bj
+// below for the copies-first refutation.
 void NgSpotlightDrawer::SetupXSection(Spotlight *sl, const Spotlight::BeamDef &def) {
     Vector3 lightPos;
     GetLightPosition(sl, lightPos);
