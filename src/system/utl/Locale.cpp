@@ -248,9 +248,8 @@ void Locale::Init() {
     Symbol prevSym;        // Tracks previous symbol to deduplicate
 
     // Check for alternate devkit locale file
-    String devkitPath(FileMakePath(
-        "devkit:\\locale", MakeString("%s\\locale_keep.dta", SystemLanguage())
-    ));
+    const char *keepFile = MakeString("%s\\locale_keep.dta", SystemLanguage());
+    String devkitPath(FileMakePath("devkit:\\locale", keepFile));
     FileQualifiedFilename(devkitPath, devkitPath.c_str());
 
     static Symbol locale("locale");
