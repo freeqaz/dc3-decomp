@@ -520,6 +520,12 @@ void UIListDir::BuildDrawState(
         // `showing`, reloaded at 0x82789554) and keeps fadeCountEnd in r17,
         // where we keep numDisplayWithData in r15 and split fadeCountEnd (r14,
         // freed for the Vector3-copy scratch) onto 0x54(r1) instead.
+        // w21-z (stop at 98.916, same 23 rows): behaviour re-checked -- all 38
+        // branches land on the same aligned row on both sides and every
+        // mismatch is register/home-slot only.  Measured: guarded do/while
+        // loop (inert, 98.916); fadeCountEnd re-spelled as the min expression
+        // (98.1); halfDisplay computed before NumDisplayWithData() (96.0 --
+        // NumDisplay() inlines differently).
         UIListElementDrawState elem;
 #ifdef HX_NATIVE
         memset(&elem, 0, sizeof(elem));
