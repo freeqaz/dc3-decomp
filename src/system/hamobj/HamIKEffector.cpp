@@ -1063,6 +1063,13 @@ void HamIKEffector::Poll() {
 done:;
 }
 
+// w21-am (98.31 -> 100.0, fuzzy 100): the rotation matrix is ONE
+//   `xfmOut.m.Set(c, s, 0, -s, c, 0, 0, 0, 1)` -- the same call IKElbow makes
+//   for its elbow matrix -- not nine member stores.  Through Set() MSVC
+//   issues m.y.x right after the fneg and reloads mEffector after the m.y.y
+//   store, which is the image's tail.  The separate early `m.x.z = 0` store
+//   and the `effLocalV` binding are gone (Set writes m.x.z; the Multiply
+//   reads mEffector->LocalXfm().v directly).  Same nine values.
 // w21-b: 98.3 canonical (was 94.14), 6 rows left, all in the xfmOut tail:
 //   the mEffector reload (`lwz r11, 0x50(r29)`) is scheduled one slot early
 //   (before the m.y.y store at 0x14 instead of after it), and MSVC sinks our
@@ -1115,24 +1122,14 @@ void HamIKEffector::ComputeHandPullAndQuat(
     float sumSq = effectorLen * effectorLen + parentLen * parentLen;
     float cosAngle = (distSq - sumSq) / (parentLen * effectorLen * 2.0f);
 
-    xfmOut.m.x.z = 0.0f;
-
     float clampedCos = -1.0f - cosAngle < 0.0f ? cosAngle : -1.0f;
     clampedCos = clampedCos - 1.0f < 0.0f ? clampedCos : 1.0f;
 
-    xfmOut.m.x.x = clampedCos;
     float sinAngle = -sqrtf(-(clampedCos * clampedCos - 1.0f));
-    xfmOut.m.x.y = sinAngle;
-    const Vector3 &effLocalV = mEffector->LocalXfm().v;
-    xfmOut.m.y.y = clampedCos;
-    xfmOut.m.y.z = 0.0f;
-    xfmOut.m.y.x = -sinAngle;
-    xfmOut.m.z.x = 0.0f;
-    xfmOut.m.z.y = 0.0f;
-    xfmOut.m.z.z = 1.0f;
+    xfmOut.m.Set(clampedCos, sinAngle, 0, -sinAngle, clampedCos, 0, 0, 0, 1);
 
     Vector3 localDir;
-    Multiply(effLocalV, xfmOut, localDir);
+    Multiply(mEffector->LocalXfm().v, xfmOut, localDir);
     Vector3 localTarget;
     MultiplyTranspose(targetPos, parentXfm, localTarget);
     MakeRotQuat(localDir, localTarget, quatOut.q);

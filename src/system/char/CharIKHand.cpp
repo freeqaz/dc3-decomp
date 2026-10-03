@@ -587,24 +587,60 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 // multiply plus two `fmr`.
                 float sinHalf = sin(tiltAngle / 2.0);
                 float cosHalf = cos(tiltAngle / 2.0);
-                // w21-j: stopped at 96.24 -- every remaining row (idx 533-624)
-                // is this quaternion block. The image computes all 16 q1*q2
-                // products UNFUSED up front and shares them (and the
-                // `x*w' + w*x'` partial sums) between quatDir*quatRot and
-                // quatRot*quatDir; ours fuses some into fmadds/fmsubs + fneg, so
-                // the two orders stop CSE-ing. That is the summation order
-                // inside math/Mtx.h's Quat Multiply, which w5-f measured as the
-                // whole-binary optimum -- do not reorder it there. REFUTED here:
-                // a separate result quat for the quatRot*quatDir chain (95.8).
+                // w21-am (96.24 -> 100.0 canonical, fuzzy 99.97): the four quat
+                // products are written out here in the IMAGE's association
+                // instead of through math/Mtx.h's Multiply(Quat, Quat, Quat).
+                // Read off the target (0x823863BC-0x823864F0): all 16 r*d
+                // products are plain fmuls, then each component is summed as
+                // ((p1 + p2) + p3) - p4 with no fneg, and the two w terms
+                // `rw*dw - rx*dx` are computed TWICE (no CSE between d*r and
+                // r*d).  Through Mtx.h's `-(a - (b + c + d))` spelling MSVC
+                // re-sorts the flat sums, shares partial sums between d*r and
+                // r*d and fuses them into fmadds/fmsubs + fneg (96.24).  The
+                // r*d w term is spelled `-(rx*dx) + rw*dw` (== rw*dw - rx*dx
+                // exactly) only to keep MSVC from CSE-ing it with d*r's w, as
+                // the image does not; every component is the same product set
+                // and sign as Multiply(), and the parenthesised association is
+                // what the image computes, so native now rounds like the image.
+                // Remaining 2 rows are commutative fadds operand order (idx 367
+                // Add(axisProj, mWorldDst) x, idx 550 rz*dy + rw*dx): swapping
+                // the source operands is inert.
+                // (w21-j's earlier stop note: a separate result quat for the
+                // r*d chain was 95.8 -- REFUTED as the lever; association was.)
                 Hmx::Quat quatDir(tiltDir.x, tiltDir.y, tiltDir.z, 0.0f);
                 Hmx::Quat quatRot(axisDir.x * sinHalf, axisDir.y * sinHalf, axisDir.z * sinHalf, cosHalf);
                 Hmx::Quat quatResult;
-                Multiply(quatDir, quatRot, quatResult);
-                Multiply(quatResult, quatRot, quatResult);
+                // quatResult = quatDir * quatRot, then * quatRot
+                const Hmx::Quat &qd = quatDir;
+                const Hmx::Quat &qr = quatRot;
+                Hmx::Quat &q = quatResult;
+                q.Set(
+                    ((qr.z * qd.y + qr.w * qd.x) + qr.x * qd.w) - qr.y * qd.z,
+                    ((qr.w * qd.y + qr.y * qd.w) + qr.x * qd.z) - qr.z * qd.x,
+                    ((qr.w * qd.z + qr.z * qd.w) + qr.y * qd.x) - qr.x * qd.y,
+                    ((qr.w * qd.w - qr.x * qd.x) - qr.y * qd.y) - qr.z * qd.z
+                );
+                q.Set(
+                    ((qr.w * q.x + q.w * qr.x) + qr.z * q.y) - qr.y * q.z,
+                    ((q.w * qr.y + qr.w * q.y) + qr.x * q.z) - qr.z * q.x,
+                    ((qr.w * q.z + qr.y * q.x) + q.w * qr.z) - qr.x * q.y,
+                    ((q.w * qr.w - q.x * qr.x) - q.y * qr.y) - q.z * qr.z
+                );
                 Vector3 v1(quatResult.x, quatResult.y, quatResult.z);
                 Add(v1, axisProj, v1);
-                Multiply(quatRot, quatDir, quatResult);
-                Multiply(quatRot, quatResult, quatResult);
+                // quatResult = quatRot * quatDir, then quatRot * that
+                q.Set(
+                    ((qr.y * qd.z + qr.w * qd.x) + qr.x * qd.w) - qr.z * qd.y,
+                    ((qr.z * qd.x + qr.w * qd.y) + qr.y * qd.w) - qr.x * qd.z,
+                    ((qr.x * qd.y + qr.w * qd.z) + qr.z * qd.w) - qr.y * qd.x,
+                    (-(qr.x * qd.x) + qr.w * qd.w) - qr.y * qd.y - qr.z * qd.z
+                );
+                q.Set(
+                    ((qr.w * q.x + q.w * qr.x) + qr.y * q.z) - qr.z * q.y,
+                    ((qr.w * q.y + qr.z * q.x) + q.w * qr.y) - qr.x * q.z,
+                    ((q.w * qr.z + qr.w * q.z) + qr.x * q.y) - qr.y * q.x,
+                    ((qr.w * q.w - qr.x * q.x) - qr.y * q.y) - qr.z * q.z
+                );
                 Vector3 v2(quatResult.x, quatResult.y, quatResult.z);
                 Add(v2, axisProj, v2);
                 Vector3 elbowLocal, targetLocal;

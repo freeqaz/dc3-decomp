@@ -113,6 +113,16 @@ void CharClipGroup::AddClip(CharClip *clip) {
 // compared as `f != e` (56.81), and end() taken through the NON-const overload
 // via const_cast (56.81 -- so const vs non-const end() is not what separates
 // this from LightPreset::SyncKeyframeTargets).  Behaviour matches the image.
+// w21-am (56.81, unchanged; same 23 rows): eight more measured with the
+// built object, all 56.81 / 55.41 -- `if (end != find) return true; return
+// false;`, named e/f iterators compared as `e != f`, a named bool, `!(end ==
+// find)`, `? true : false`, `if (end == find) return false;`, and
+// `begin() + n` with a named size; a `const &clips` binding is 43.0 again.
+// The `find != end` swap changes only the subf operand order (image is end -
+// find, so the current `end != find` is the image's order).  Only one const
+// find caller exists in the whole image, so there is no matched sibling to
+// copy; the non-const sites (LightPreset::SyncNewSpotlights, 100) compare
+// inside an `if`, which the `if` spellings above did not reproduce here.
 bool CharClipGroup::HasClip(CharClip *clip) const {
     return mClips.end() != mClips.find(clip);
 }
