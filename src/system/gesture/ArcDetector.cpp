@@ -430,6 +430,13 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             // copy (96.82), Vector3 dist + LengthSquared (98.72),
             // DistanceSquared(boneVec, frontPt) (98.53), the y,z,x / z,x,y
             // declaration orders (98.69).
+            // w21-ao (99.08 canonical / 98.75 fuzzy, same 18 rows): values
+            // re-checked -- the image sums x + (z + y) with distY squared first,
+            // exactly as ours; only the frontPt copy order and the fsubs
+            // registers differ.  Probe-measured (real cl.exe flags, 84
+            // spellings): frontPt via ctor, assignment, iterator,
+            // const_iterator, front(), a const& alias, x 6 declaration orders
+            // x 5 sum groupings -- the copy order (image w,y,x,z) never moves.
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
                 mJointPath.push_front(boneVec);
             }
