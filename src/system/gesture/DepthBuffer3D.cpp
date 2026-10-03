@@ -261,7 +261,8 @@ void DepthBuffer3D::DrawMesh() {
 // Only the DRAW is native-stubbed: Kinect depth rendering is not available on
 // native. Save/Load/Copy used to be stubbed here too, and an empty Load leaves
 // every DepthBuffer3D field at its constructor default -- measured by the
-// Xenia loader golden (tools/state_diff/goldens/xenia/loader_venue_song_v1):
+// Xenia loader golden (loader_venue_song_v1, kept in the gitignored
+// archive/state_diff/goldens/xenia/):
 // in world/default.milo the original resolves boxyman1_p1.db3d's `mesh` to
 // grid_80by60_cube.mesh, so RndDir::SyncDrawables drops that mesh from
 // boxyman's draws (it is the DepthBuffer3D's draw child); native kept it as a
