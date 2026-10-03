@@ -227,11 +227,13 @@ UIComponent *UIManager::FocusComponent() {
         return nullptr;
 }
 
-// w16-d (99.43 under name_check): only the __RTDynamicCast argument setup
-// order differs (image loads the UIScreen descriptor into r6 first). Spelling
-// the cast directly instead of via Obj<UIScreen>() is inert.
+// w21-z: 99.43 -> 100.  The GetObj() result held in a NAMED local before the
+// dynamic_cast (the shape OnGotoScreen/OnGoBackScreen use, both 100) issues the
+// UIScreen descriptor first, as the image does; Obj<UIScreen>() and a direct
+// dynamic_cast of the call expression both issue the Object descriptor first.
 void UIManager::GotoFirstScreen() {
-    UIScreen *screen = DataVariable("first_screen").Obj<UIScreen>();
+    Hmx::Object *obj = DataVariable("first_screen").GetObj();
+    UIScreen *screen = dynamic_cast<UIScreen *>(obj);
 #ifdef HX_NATIVE
     if (DebugUIFlow()) printf("DC3 UI: GotoFirstScreen -> '%s'\n", screen ? screen->Name() : "<null>");
 #endif
@@ -1329,18 +1331,6 @@ END_HANDLERS
 // a scoring row for an fn_ row and the map names neither as the "wrong" one).
 // Measured 0.0%, refuted as a rename target, left as-is deliberately.
 
-// w8-j 2026-09-15 -- FLOOR at 99.430% for ?GotoFirstScreen@UIManager@@QAAXXZ
-// (140 B, 31 of 35 instructions equal).  All four residual rows are the
-// ARGUMENT MATERIALISATION ORDER of the __RTDynamicCast call behind
-// DataVariable("first_screen").Obj<UIScreen>():
-//     target   addi r6, r11, ??_R0?AVUIScreen@@@8@l
-//              addi r5, r10, ??_R0?AVObject@Hmx@@@8@l
-//              li   r7, 0x0   /  li r4, 0x0
-//     ours     addi r5, ... Object   /  addi r6, ... UIScreen
-//              li   r4, 0x0   /  li r7, 0x0
-// The two `lis` that feed them (idx 13/14) already pair, and every operand and
-// every register is right -- only the issue order of four independent
-// instructions differs, so the cast itself is correct.  That order is produced
-// inside the Obj<T>() template expansion in a PCH-reached header, not in this
-// file, so there is no local lever: any change would reshape every Obj<T>()
-// call site in the binary.  Permuter territory.
+// w8-j 2026-09-15 -- FLOOR claim at 99.430% for ?GotoFirstScreen@UIManager@@QAAXXZ
+// (__RTDynamicCast argument issue order) was REFUTED by w21-z: a named local for
+// the GetObj() result closes it to 100 -- see the comment above the function.
