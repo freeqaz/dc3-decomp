@@ -375,9 +375,18 @@ config.pch_eligible_dirs = {
 #     Whole-binary A/B (w21-bj): UP 2 (??3CriticalSection 98.333 -> 100,
 #     HDCache::Init 99.975 -> 100), DOWN 0.  Without the HDCache.h respelling,
 #     OpenHeader went 100 -> 99.787.
+#   rndobj/MultiMesh.cpp -- the image's PoolAlloc.h literal is the FORWARD one
+#     (??_C@_0CP@ODNEEFIH, "...\src\utl/PoolAlloc.h"); through the PCH it is the
+#     backslash one obj/Data.h fixes for all PCH TUs (and utl/PoolAlloc.obj
+#     needs).  Built without the PCH, with MultiMesh.h (which declares the
+#     ReclaimableAlloc gTransListAlloc) including "utl/PoolAlloc.h" before
+#     obj\Data.h.  Whole-binary A/B (w21-bj): UP 2 (??3FixedSizeAlloc
+#     98.333 -> 100, ??_GFixedSizeAlloc 99.545 -> 100), DOWN 0.  The PCH exclusion
+#     alone moved nothing (0 UP / 0 DOWN): the first opener was still Data.h.
 config.pch_excluded_sources = {
     "src/system/utl/FileStream.cpp",
     "src/system/os/HDCache.cpp",
+    "src/system/rndobj/MultiMesh.cpp",
 }
 
 # *** ONE PASS RUNS INSIDE THE COMPILE EDGE, NOT ONLY AFTER IT. ***
