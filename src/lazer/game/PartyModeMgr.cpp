@@ -955,6 +955,14 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
 // totalplayers with an inner `--maxplayers` break (35/51).  Root cause as
 // measured: loop 2's counter is a separate web that coalesces with min's, so
 // that web outranks `this` for r30; nothing tried merges it into max's.
+// w21-ah (98.84 -> 100): the fix is on LOOP 1, not loop 2 -- count loop 1
+// down on its own copy `for (int i = minplayers; i != 0; i--)`.  With min
+// itself as loop 1's counter, loop 2's counter coalesces into min's web and
+// splits off from max (`mr r30, r24`); with a separate loop-1 counter, max
+// stays one web, takes mode's r29 and is counted down in place, exactly as
+// at 0x82871444 `subic. r29, r29, 0x1`.  ~400 other combinations (decl order,
+// loop/increment/flag spellings, early return) were all inert.  minplayers is
+// dead after the loop, so behaviour is unchanged.
 void PartyModeMgr::DetermineSubModePlayers(
     Symbol mode, int *pPlayerFlags, int *pNumPlayers, std::vector<int> *vec
 ) {
@@ -966,11 +974,10 @@ void PartyModeMgr::DetermineSubModePlayers(
         if (minplayers != 0) {
             totalplayers -= minplayers;
             maxplayers -= minplayers;
-            while (minplayers != 0) {
+            for (int i = minplayers; i != 0; i--) {
                 int player = PickNextPlayer();
                 *pPlayerFlags |= 1 << player;
                 vec->push_back(player);
-                minplayers--;
                 ++*pNumPlayers;
             }
         }
