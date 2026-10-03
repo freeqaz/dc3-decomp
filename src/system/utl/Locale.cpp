@@ -253,7 +253,7 @@ void Locale::Init() {
     FileQualifiedFilename(devkitPath, devkitPath.c_str());
 
     static Symbol locale("locale");
-    DataArrayPtr altCfg((DataNode(locale)), DataNode(devkitPath));
+    DataArrayPtr altCfg(DataNode(locale), devkitPath);
 
     // The image branches the no-config case to the ALLOCATION block, not past it:
     // `cmplwi r3, 0x0` / `beq .L_827E9DE8` at 827E99C0 lands on `mSymTable = new
