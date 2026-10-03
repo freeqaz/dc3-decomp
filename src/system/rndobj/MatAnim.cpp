@@ -70,6 +70,14 @@ BEGIN_SAVES(RndMatAnim)
     bs << mTransKeys << mScaleKeys << mRotKeys << mTexKeys;
 END_SAVES
 
+// w21-y (stopped at 97.89, 2 rows: the `stw sOwner` sits one slot later in the
+// image, after `subi r4, r31, 0x88` for mKeysOwner = this).  Behaviour checked
+// against the image: ty==1 / ty==2 && owner!=m take the CopyRef branch, the deep
+// path sets sOwner, mKeysOwner and the six key vectors -- identical; the
+// remaining call-name rows are ICF folds.  MEASURED NEGATIVE: SetObjConcrete
+// directly (inert), static_cast<Hmx::Object *>(this) (inert), swapping the two
+// assignments (93.67, store after the call), `RndMatAnim *self = this;` for
+// both (98.87 canonical but CSEs the image's second `this` and drops a row).
 BEGIN_COPYS(RndMatAnim)
     CREATE_COPY_AS(RndMatAnim, m)
     MILO_ASSERT(m, 0xF2);
