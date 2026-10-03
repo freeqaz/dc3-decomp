@@ -942,6 +942,14 @@ void CharEyes::NextLook() {
         // headXfm.v, oldDir)` homes a reference instead, 98.0) and the
         // `mTarget.z < dirXfm.v.z` load order (`dirXfm.v.z > mTarget.z` flips
         // the branch to ble, 98.0).
+        // w21-ai (99.57, 62 rows, 60 of them register permutation r22/r23/r24
+        // = headXfm/zero/guard-base in the image vs zero/guard/headXfm ours):
+        // RB3's `Vector3 extrap(...)` with member updates and `newFacing +=
+        // extrap` (99.2, adds two load/fsubs rows); `const Vector3 &headPos`
+        // bound at function top (99.2).  The (0x4,0x8) load-order rows at the
+        // first `mCurrentInterest = 0` (bestState == 0 arm) are the inlined
+        // ObjRef::Release unlink; the second, identical `mCurrentInterest = 0`
+        // already matches, so it is the surrounding allocation, not the source.
         Vector3 newFacing = facingDir;
         float dz = (facingDir.z - lastFacing.z) * 45.0f;
         float dx = (facingDir.x - lastFacing.x) * 45.0f;
@@ -1141,6 +1149,10 @@ stateReset:
 // lowerBlinkPos one slot off). REFUTED this pass: Distance(lidPos, srcPos) for
 // the lid distance (inert/one row worse), declaring lowerDir before upperDir
 // (inert), Dot(srcXfm.m.x, cross) for notLidsOK (4 rows worse).
+// w21-ai (99.57, same rows): `Vector3 srcPos, lidPos` declared once at function
+// scope and reused by the final llidnorm block grows the frame by 0x20 (99.4);
+// `(cond ? up : down) * -eyeRot` without the negEyeRot local lets /fp:fast fold
+// it into fneg(sel * eyeRot) and moves the slot set (99.3).
 void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
     if (DataVariable("no_lids").Int(0))
         return;

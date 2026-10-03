@@ -208,6 +208,18 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
                 // plus `Node &`, `Array2d &`, `const float &aStart` (RB3),
                 // an outer do/while and RB3's curBeat: none moves the curBeat
                 // store past the extsw or the mBStart load past the fcfids.
+                // w21-ai (93.41, same 6 rows, w21-q's probe, ~35 more
+                // variants): function-scope curBeat / rowIdx; `const float &`
+                // to mBStart; mBStart, mSamplesPerBeat, (float)rowIdx or the
+                // quotient read into a local before the curBeat store (reading
+                // mBStart first DOES put the extsw ahead of the stfs, as in the
+                // image, but then hoists the lfs to the top, 87/91 either way);
+                // `nb = q; nb += mBStart`; a `Node &` alias; inline
+                // SetNode(node, curBeat, rowIdx) helpers (int or float param);
+                // `__restrict` on the Node (ignored on a reference, hoists
+                // everything on a pointer).  The image's lfs mBStart behaves as
+                // if it depended on the stfs (it issues last) while the stfs
+                // itself is NOT prioritised -- no spelling found gives both.
                 node.curBeat = curBeat;
                 node.nextBeat = BeatB(rowIdx);
             }
