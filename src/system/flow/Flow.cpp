@@ -159,6 +159,12 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
         // 823F722C); ours puts the li first.  Tried: (FlowNode *)this, a block-local
         // `FlowNode *parent = this`, a default `bool = true` param (no change), and
         // a loop-hoisted `Flow *self` (pinned to r27, 95.8 -- worse).
+        // w21-p (98.79, same 4 rows): behaviour re-read against the image -- all
+        // 18 branches land on the same blocks (function-relative offsets equal ours), the
+        // delete loop, both SetParent(this, true) calls, Copy(kCopyDeep=0) and
+        // MoveIntoDir(this, c) carry the image's values.  Also byte-identical:
+        // SetParent(this, 1); a static inline reparent(child, parent) helper with
+        // `true` inside it; the same helper taking the bool as a parameter.
         Flow *self = this;
         self->RefreshPortLabelLists();
         if (!self->ProxyFile().empty()) {

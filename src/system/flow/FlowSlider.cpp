@@ -165,6 +165,11 @@ __declspec(noinline) void FlowSlider::UpdateEase() {
 
 // w18-d (98.95, same 12 rows): both range-fraction guards as a real static
 // inline helper returning 0.0f is byte-identical to the open-coded form.
+// w21-p (98.95, same 12 rows; behaviour re-read against the image: every
+// permuted f30/f31 row carries the same VALUE -- image f31 = 1.0f, f30 = 0.0f
+// -- and every branch lands on the same block): `zero` replaced by the 0.0f
+// literal (one stays a local), and the first fraction guard written
+// `if (!(...)) f = ...; else f = zero;`, are both byte-identical.
 void FlowSlider::UpdateActivations() {
     float savedIntensity = FlowNode::sIntensity;
 

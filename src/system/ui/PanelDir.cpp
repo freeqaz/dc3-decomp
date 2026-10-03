@@ -604,30 +604,36 @@ void PanelDir::SendTransition(Message const &msg, Symbol forward, Symbol back) {
 // 0x50 (`stw r4, 0x50(r31)`, never read) before entering the loop, and
 // shares the `li r3,0` epilogue with the loop exit.  REFUTED: RB3's
 // `while (comp = ComponentNav(...))` spelling with the same statics (75.33).
+// w21-p: 96.74 -> 100 (92 of 92 rows equal).  Two levers: (1) null-test the
+// MEMBER and only then copy it into comp -- that is the image's dead
+// `stw r4, 0x50(r31)`, MSVC homing the raw member receiver after its null
+// check; a `comp = mFocusComponent; if (!comp)` local never gets it.  (2) A
+// structured `if (mFocusComponent) { ... break; ... } return false;` instead
+// of two `goto fail`s puts the single epilogue right after the `li r3, 0`
+// exit, with the success path branching back to it, as in the image.  Same
+// behaviour as the goto form: every non-success exit returns false.
 bool PanelDir::PanelNav(JoypadAction act, JoypadButton btn, Symbol controller_type) {
-    UIComponent *comp = mFocusComponent;
-    if (!comp) {
-        goto fail;
+    if (mFocusComponent) {
+        UIComponent *comp = mFocusComponent;
+        do {
+            comp = ComponentNav(comp, act, btn, controller_type);
+            if (!comp)
+                return false;
+            if (comp == mFocusComponent)
+                break;
+            if (comp->GetState() == UIComponent::kDisabled) {
+                continue;
+            }
+            static Symbol none("none");
+            if (controller_type != none) {
+                static Symbol panelNavigated("panel_navigated");
+                static Message panelNavigatedMsg(panelNavigated);
+                TheUI->Handle(panelNavigatedMsg, false);
+            }
+            SetFocusComponent(comp, controller_type);
+            return true;
+        } while (true);
     }
-    do {
-        comp = ComponentNav(comp, act, btn, controller_type);
-        if (!comp)
-            return false;
-        if (comp == mFocusComponent)
-            goto fail;
-        if (comp->GetState() == UIComponent::kDisabled) {
-            continue;
-        }
-        static Symbol none("none");
-        if (controller_type != none) {
-            static Symbol panelNavigated("panel_navigated");
-            static Message panelNavigatedMsg(panelNavigated);
-            TheUI->Handle(panelNavigatedMsg, false);
-        }
-        SetFocusComponent(comp, controller_type);
-        return true;
-    } while (true);
-fail:
     return false;
 }
 
