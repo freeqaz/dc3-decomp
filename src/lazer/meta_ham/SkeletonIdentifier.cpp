@@ -506,6 +506,15 @@ DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
             //     String(Localize(...)) temp rather than an implicit conversion;
             //   turning this `else if` into `else { if (...) }` to add one
             //     lexical scope around the temp.
+            // w21-ba (still 99.83, same rows 320/327; the MakeString row 48 is
+            //   an ICF-folded template name, not charged): the select
+            //   `mIdentityStatus = cond ? kIdentityStatus_WaitingForSignIn :
+            //   kIdentityStatus_None` is WORSE (97.9 -- MSVC stores inside
+            //   the flag test instead of the image's subfic/subfe/and after the
+            //   deallocate).  The static-guard bits ($S7, 0x1..0x20) are a
+            //   separate counter and already agree.  No natural source spelling
+            //   found for an earlier conditionally-destructed temp; not
+            //   inventing one.
             mWaitingPlayerIndex = enrollmentIdx;
             UpdateEnrolledPlayers();
             TheGameData->SetAssociatedPadNum(
