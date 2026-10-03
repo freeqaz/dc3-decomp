@@ -697,7 +697,13 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
             if (secondType != kDataObject)
                 warn = false;
         }
-        if (firstType == kDataUnhandled || secondType == kDataUnhandled) {
+        // w21-s: spelled on the fields (first.mType / second.mType), not the
+        // firstType/secondType locals -- same values.  With the locals MSVC
+        // jump-threads the Int/Object/Symbol arms' fall-outs past the
+        // `firstType == 6` test; the image does not (its bne at 0x8259EBE4,
+        // 0x8259EC70, 0x8259ECB0 all land on 0x8259ED08, the first test), and
+        // the field spelling also gives the image's type registers (r9/r10).
+        if (first.mType == kDataUnhandled || second.mType == kDataUnhandled) {
             warn = false;
         }
         if (warn) {
@@ -709,8 +715,8 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
                 "DataNode::Equal: DataNodes %s and %s (%s and %s) are not compatible (file %s, line %d)",
                 str1,
                 str2,
-                DataTypeString(first.Type()),
-                DataTypeString(second.Type()),
+                DataTypeString(first.mType), // w21-s: field, not Type() (load order)
+                DataTypeString(second.mType),
                 a ? a->File() : "",
                 a ? a->Line() : -1
             );
