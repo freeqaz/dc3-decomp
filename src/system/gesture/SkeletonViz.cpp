@@ -350,6 +350,17 @@ void SkeletonViz::SetCamera(
     // it is passed to out-of-line Multiply/UtilDrawPlane exactly like pos and
     // shares in both builds.  Whatever the original wrote for pos, it is not
     // a named local whose address escapes.
+    //
+    // w21-bk (still 95.083336): standalone cl.exe probes of the rule itself --
+    // two address-escaping 16-byte locals in SEQUENTIAL scopes never share a
+    // slot (if/if, nested if/if, plain struct or with ctor, via an inline
+    // helper's named local: frame always +0x10), while the two ARMS of one
+    // if/else do share.  So in the image pos and plane cannot both be named
+    // escaping locals in sequential scopes.  Measured in the tree: reusing pos
+    // for the SetLocalRot argument (`pos.Set(tilt, 0, rot); SetLocalRot(pos)`)
+    // lands pos on 0x50 but pushes plane off it (93.6, worse; reverted).  The
+    // two fmadds/fadds operand-order rows in the floor-normal block are
+    // commutative-only (same association as the image); `normal += v` inert.
     if (unk218) {
         Plane plane = *(const Plane *)&frame.mFloorClipPlane;
         Transform localXfm = unk1d4;
