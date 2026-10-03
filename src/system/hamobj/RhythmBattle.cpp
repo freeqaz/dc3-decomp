@@ -693,6 +693,16 @@ void RhythmBattle::Begin() {
     }
 }
 
+// w20-b: the helper and its name are ours. Spelled inline in the two zone
+// tests, `mPlayerX->ZoneValue() && !mPlayerX->GetPrevInTheZone()` kept the
+// operator-> result in a $T home slot (four dead `stw rN, 0x64/0x68(r31)` per
+// test); passing the player as a parameter to an if/return helper gives the
+// image's code exactly (a `return a && !b` helper materialises the bool).
+static inline int JustEnteredZone(const RhythmBattlePlayer *p) {
+    if (p->ZoneValue() && !p->GetPrevInTheZone()) return true;
+    return false;
+}
+
 void RhythmBattle::OnBeat() {
     MILO_ASSERT(mActive, 0x290);
     static Symbol playing("playing");
@@ -702,9 +712,9 @@ void RhythmBattle::OnBeat() {
         return;
     static Symbol gameplay_mode("gameplay_mode");
     static Symbol mind_control("mind_control");
-    // The whole residual of this function is one stack word: the target packs
-    // inMindControl at 0x8c and goofy at 0x8d into a single word, and our build
-    // gives each its own. See docs/decomp/patterns/stack-slot-sharing.md.
+    // w20-b: the target packs inMindControl at 0x8c and goofy at 0x8d into one
+    // word. That was NOT a slot-allocation floor: it fell out once the missing
+    // `i6d8 = 0` below was restored (frame 0x760 -> 0x750, as in the target).
     bool inMindControl = TheHamProvider->Property(gameplay_mode)->Sym() == mind_control;
     if (mFullKTB && !mFinale && !inMindControl) {
         mPlayerOne->SetAutoPass(false);
@@ -933,8 +943,8 @@ void RhythmBattle::OnBeat() {
     int i28 = mPlayerOne->GetZoneLevel() > mPlayerTwo->GetZoneLevel()
         ? mPlayerOne->GetZoneLevel()
         : mPlayerTwo->GetZoneLevel();
-    bool i35 = mPlayerTwo->GetZoneLevel() == i6b4;
     bool i27 = mPlayerOne->GetZoneLevel() == i6b4;
+    bool i35 = mPlayerTwo->GetZoneLevel() == i6b4;
     bool b6f0 = i35;
     if (goofy) {
         bool tmp = i27;
@@ -966,6 +976,11 @@ void RhythmBattle::OnBeat() {
                 } else {
                     mSwagJackState = 6;
                 }
+                // w20-b: last residual (4 rows): the image loads mSwagJackState
+                // into r5 after `mr r3, r29`; we load it before. Tried and inert:
+                // a state local, an Hmx::Object*/UIPanel* local, a named receiver,
+                // (int) cast, enum-typed member, result in i6b4; the nested call
+                // form is worse (the panel conversion gets CSE'd).
                 int jacked = second->SwagJacked(focusPanel, (RhythmBattleJackState)mSwagJackState);
                 first->SwagJackedBonus(focusPanel, (RhythmBattleJackState)mSwagJackState, jacked);
                 i6b4 = (int)mSwagJackState;
@@ -991,12 +1006,9 @@ void RhythmBattle::OnBeat() {
         remainingValue = -1;
     }
     play_vo[0] = none;
-    // w13-b: we emit four extra `stw r11, 0x64(r31)` home stores of the player
-    // pointer inside this test that the image does not.  Reading
-    // mInTheZone/mPrevInTheZone directly instead of through the inline
-    // accessors is byte-inert, so they are not accessor `this` homes.
-    if (i27 || i35 || (mPlayerOne->ZoneValue() != 0 && mPlayerOne->GetPrevInTheZone() == 0)
-        || (mPlayerTwo->ZoneValue() != 0 && mPlayerTwo->GetPrevInTheZone() == 0)) {
+    // w13-b's four extra `stw r11, 0x64(r31)` home stores here closed via
+    // JustEnteredZone (w20-b).
+    if (i27 || i35 || JustEnteredZone(mPlayerOne) || JustEnteredZone(mPlayerTwo)) {
         static Symbol rhythmbattle_off_beat_p1p2("rhythmbattle_off_beat_p1p2");
         static Symbol rhythmbattle_off_beat_p1("rhythmbattle_off_beat_p1");
         static Symbol rhythmbattle_off_beat_p2("rhythmbattle_off_beat_p2");
@@ -1178,8 +1190,7 @@ void RhythmBattle::OnBeat() {
         if (play_vo[0].Sym() != stole_congrats && remainingValue > 0) {
             static Symbol inzone("inzone");
             static Symbol inzone_warning("inzone_warning");
-            if ((mPlayerOne->ZoneValue() && !mPlayerOne->GetPrevInTheZone())
-                || (mPlayerTwo->ZoneValue() && !mPlayerTwo->GetPrevInTheZone())) {
+            if (JustEnteredZone(mPlayerOne) || JustEnteredZone(mPlayerTwo)) {
                 // The target materialises the pair as one zero copied into the other
                 // (li r29, 0; mr r30, r29), i.e. a chained assignment.
                 bool b42, b43;
@@ -1192,6 +1203,11 @@ void RhythmBattle::OnBeat() {
                     }
                     b42 = mPlayerOne->InTheZone();
                     b43 = mPlayerTwo->InTheZone();
+                    // w20-b: the image zeroes the VO threshold here
+                    // (`stw r29, 0x78(r31)` with r29 == 0, just before
+                    // `subfe r29` computes b43; 0x78 is i6d8's slot), so an
+                    // inzone VO plays whenever remainingValue > 0.
+                    i6d8 = 0;
                 }
                 if (goofy) {
                     bool tmp = b42;
