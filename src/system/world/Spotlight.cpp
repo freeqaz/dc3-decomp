@@ -1720,11 +1720,12 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
                 (1.0f - absSegFrac) * kSheetFade
             );
 
-            Vector3 &p = verts[iVert].pos;
-            float px = p.x, pz = p.z, py = p.y;
-            p.z = pz * orientMtx.z.z + px * orientMtx.x.z + py * orientMtx.y.z;
-            p.y = pz * orientMtx.z.y + px * orientMtx.x.y + py * orientMtx.y.y;
-            p.x = pz * orientMtx.z.x + px * orientMtx.x.x + py * orientMtx.y.x;
+            // w21-bi: the position goes through the same inline Multiply as
+            // the normal. The image's pos and norm blocks (0x8282CBE4..,
+            // 0x8282CC48..) are the same 15 instructions, loads z, x, y; the
+            // hand-expanded sum this replaced scheduled x, y, z and kept both
+            // blocks off by 15 rows each.
+            Multiply(verts[iVert].pos, orientMtx, verts[iVert].pos);
 
             verts[iVert].norm.Set(0.0f, 0.0f, 1.0f);
 
