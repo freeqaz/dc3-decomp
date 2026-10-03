@@ -354,7 +354,24 @@ void BoxMapLighting::ApplyLight(
  *      it follows the materialisation order of the two buffer bases (rows
  *      12-19: the image forms gLightBuffer2's address before the `subi r11,
  *      r4, 0x44` bias, we form gLightBuffer1's first), which no source order
- *      of the stores moved. */
+ *      of the stores moved.
+ *
+ *  w21-bg (still 99.22, 3 charged rows: the 14/16 addi/subi swap and the
+ *  row-72 stfs/stfsx; the other 18 are register/fmuls-operand permutation).
+ *  Observation: in the two 100% siblings MSVC materialises the buffer that
+ *  the source uses SECOND first (Directional and Point both reference
+ *  gLightBuffer1 first and the image forms lbl_830E0BE0 = gLightBuffer2
+ *  first), so the image's order here says gLightBuffer1 is mentioned first
+ *  in the original -- but every spelling that does that while keeping the
+ *  image's memory order failed (standalone cl.exe probe, exact-row count vs
+ *  the target listing, baseline 22): `Hmx::Color &dir` / `Hmx::Color *dir`
+ *  bound at the top of the body, before `light`, or just before `col` (36:
+ *  six stfsx bases); the three gLightBuffer1 stores written first (48: the
+ *  mColor loads can no longer cross them); red through the subscript with
+ *  `col` after it plus `dir` at the top (36); a per-iteration
+ *  `unsigned idx = gLightIndex` local (22, inert) or `idx = gLightIndex++`
+ *  (32); flipping ndz/ndx/ndy, the three colour products, or the atten
+ *  product (22, inert -- MSVC canonicalises them). */
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Spot, 50> &arr, const Vector3 &viewPos
 ) const {
