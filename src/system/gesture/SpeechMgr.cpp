@@ -642,6 +642,14 @@ void SpeechMgr::Poll() {
             // directly is byte-identical; a `switch (eventId) { case 0x40: case 0x80: }`
             // drops the image's `cmplwi 0x20 / ble` (94.1, an empty `case 0x20:` is
             // folded away), so the explicit `> 0x20` test stays.
+            // w21-z (stop at 97.98, 11 rows: r29/r30 regswap x5 + the +0x10 IV pair):
+            // behaviour re-checked against 8243BAC0..BB88 -- same tests, same order,
+            // same args.  15 standalone cl.exe spellings of the loop all keep ONE
+            // pointer at &event[i]: direct event[i], EV &/const EV & ref, EV *pe,
+            // RR *&r = .pResult, pResult/id hoisted to locals (loads at the top),
+            // pointer-stepped e++, `int i`, do/while, event + i, a named union,
+            // nested switch with/without the <=0x20 cases, /Ox.  None reproduce
+            // the image's second (pResult-based) induction pointer.
             for (ULONG i = 0; i < fetched; i++) {
                 NUI_SPEECH_EVENT &cur = event[i];
                 if (cur.eventId > 0x20 && (cur.eventId == 0x40 || cur.eventId == 0x80)

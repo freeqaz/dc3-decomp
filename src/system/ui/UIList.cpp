@@ -229,6 +229,8 @@ int UIList::Selected() const { return mListState.Selected(); }
 
 UIListState &UIList::GetListState() { return mListState; }
 
+inline UIList *UIList::ParentList() { return mParent; }
+
 UIList *UIList::ChildList() {
     return mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
 }
@@ -882,29 +884,31 @@ DataNode UIList::OnSetData(DataArray *da) {
     return 1;
 }
 
-// RESIDUAL (w11-b, 98.15 canonical, 21 rows): the image stores the raw mParent
-// to 0x50(r31) TWICE (before and after the `beq` of the null test, with a cr0
-// `cmplwi r29,0`), we store it once; the r28/r29 permutation and one fmuls
-// operand order follow from that. Inert: `mParent && mParent->ChildList() ==
-// this`, `this == mParent->ChildList()`, a `UIList *parent` local (loses the
-// store entirely, 97.3), ChildList() as a header inline, `(float)n * spacing`.
+// w21-z: 98.15 -> 100.  The image's double home store of mParent to
+// 0x50(r31) and its cr0 `cmplwi r29, 0` are the return temp of an inlined
+// ParentList() accessor (RB3's spelling, rb3 UIList.cpp:249), called three
+// times; offset is built as `offset = spacing; offset *= (float)n;` (the
+// CalcBoundingBox shape), which gives the image's `fmuls f31, f1, f0` operand
+// order -- `spacing * (float)n` and `n * spacing` both give f0, f1.  w11-b's
+// residual note (mParent && ..., parent local, header-inline ChildList,
+// (float)n * spacing all inert) is superseded.
 void UIList::DrawShowing() {
     if (mScrollPending) {
         mListState.Poll(TheTaskMgr.UISeconds());
         mScrollPending = false;
     }
     bool b = mDrawManuallyControlledWidgets;
-    if (mParent) {
-        if (mParent->ChildList() == this) {
-            b = mParent->mDrawManuallyControlledWidgets;
+    if (ParentList()) {
+        if (ParentList()->ChildList() == this) {
+            b = ParentList()->mDrawManuallyControlledWidgets;
         }
     }
     float offset;
     UIList *subList = mListDir->SubList(mListState.SelectedDisplay(), mWidgets);
     if (subList != NULL) {
         int subSelectedDisplay = subList->mListState.SelectedDisplay();
-        float spacing = subList->GetUIListDir()->ElementSpacing();
-        offset = spacing * (float)subSelectedDisplay;
+        offset = subList->GetUIListDir()->ElementSpacing();
+        offset *= (float)subSelectedDisplay;
     } else {
         offset = 0.0f;
     }
