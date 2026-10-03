@@ -304,10 +304,14 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
             // below -- `for (int i = numVisemes; i < newSize; i++)` with
             // `Sym(i - numVisemes)` -- keeps the trip-count latch here.
             int visemeIdx = 0;
-            for (; numVisemes < newSize; numVisemes++, visemeIdx++) {
-                Symbol visemeSym = result.Array(0)->Sym(visemeIdx);
-                ObjPtr<CharClip> &clip = _ref2[numVisemes].mClip;
-                clip = mClips->Find<CharClip>(visemeSym.Str(), false);
+            if (numVisemes < newSize) {
+                do {
+                    Symbol visemeSym = result.Array(0)->Sym(visemeIdx);
+                    ObjPtr<CharClip> &clip = _ref2[numVisemes].mClip;
+                    clip = mClips->Find<CharClip>(visemeSym.Str(), false);
+                    numVisemes++;
+                    visemeIdx++;
+                } while (numVisemes < newSize);
             }
         }
     }
