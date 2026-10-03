@@ -233,6 +233,18 @@ void Locale::SetMagnuStrings(DataArray *da) {
 // 0x98-0xa8, DataNode(devkitPath) 0xb0, arrVec 0xb8, tmp 0xc4 -- one extra
 // 4-byte temp below devkitPath (our SystemLanguage() Symbol temp is not pooled
 // with the `chunks` new-temp at 0x74 the way the image's is).
+// w21-ag: 98.93 -> 100 canonical (fuzzy 99.6; 39 register-only rows left:
+// this r20 vs our r19 against the kDataSymbol constant 5, the chunk counter /
+// k loop index r27<->r28, one stbx operand order, and the "redefined" notify
+// storing prevSym's register where we store curSym's -- the two are equal on
+// that path).  The stack layout above is now slot-for-slot the image's.  What
+// closed it: (1) LiteralArray's source argument is the previous chunkArr
+// (behaviour, see the note in the loop); (2) the locale_keep MakeString is its
+// own statement; (3) altCfg's devkitPath argument is the implicit String ->
+// DataNode conversion; (4) the chunk loops count with their own `n`.
+// Inert for the register rows: `int n` at function scope; assigning numChunks
+// after the Sort instead of before it costs 100 -> 99.3 (the image's
+// `mr r26, r27` sits before the cfg->Size() > 1 test).
 void Locale::Init() {
     MILO_ASSERT(!mStrTable, 0x58);
     MILO_ASSERT(!mSymTable, 0x59);
