@@ -154,6 +154,22 @@ float Det(const Hmx::Matrix4 &m) {
     return det;
 }
 
+// w21-ac (2026-10-03): 70.67 -> 71.25 canonical (fuzzy 67.27 -> 67.49).
+// CORRECTNESS, checked term by term: a symbolic evaluator run over the
+// target listing and over ours gives all 16 outputs as expression trees;
+// expanded as polynomials, all 16 were already equal (no wrong cofactor
+// term, no wrong sign).  Rounding was not: the c10 acc chain had terms 4
+// and 5 swapped, and 12 of the y/z/w cofactors were associated differently
+// on PPC (and 10 natively).  Both are fixed (see the two w21-ac notes below);
+// PPC and native association now equal the image's for all 16.  Measured
+// negatives: the twelve y/z/w cofactors as locals with all four Sets at the
+// end (the image's store placement) 31.2 even with the parenthesised trees
+// (MSVC still hoists the operator[] block); a local Matrix4 copied to out at
+// the end 62.7 (not scalar-replaced, stores to the stack); writing every
+// element through row refs / operator[] without the inline_depth pragma
+// inlines all 88 calls (22.5) -- so the image's out-of-line operator[] calls
+// are not an inline-budget effect.
+//
 // AT_LIMIT as of 2026-09-01, 70.67% normalized, with codegen evidence:
 // 759 instruction rows, `diff_op: none`, and ALL 245 diff_arg rows are
 // accounted for by register renaming (477 swaps over 207 pairs, e.g.
@@ -204,32 +220,38 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     float a20 = m.z.x, a21 = m.z.y, a22 = m.z.z, a23 = m.z.w;
     float a30 = m.w.x, a31 = m.w.y, a32 = m.w.z, a33 = m.w.w;
 
-    // Pre-computed shared sub-expressions
-    float wx_zy = a30 * a21;
-    float wy_zx = a31 * a20;
-    float zx_wz = a20 * a32;
-    float zx_ww = a20 * a33;
-
-    // Cofactors for columns 1,2,3 stored directly to output rows y,z,w
+    // Cofactors for columns 1,2,3 stored directly to output rows y,z,w.
+    // w21-ac: every term, product and sum here is the image's own expression
+    // tree (0x825390C0), read off its fmuls/fmadds/fmsubs/fnmsubs chain by a
+    // symbolic evaluator and checked as a polynomial against the inverse --
+    // all 16 outputs were already mathematically right, but 12 rounded
+    // differently from the image: MSVC's /fp:fast re-sorts a flat sum and a
+    // flat product, and only an explicitly PARENTHESISED grouping survives.
+    // The redundant-looking parentheses are therefore load-bearing: with
+    // them the PPC build's association equals the image's for all 16 outputs
+    // (it was 8 of 16), and the native build evaluates the same trees (it was
+    // 6 of 16) -- a fidelity fix for both.  Commutative operand order and the
+    // `x + -y` / `x - y` spellings were then hill-climbed for match with the
+    // association held exact: 70.68 -> see the function comment.
     out.y.Set(
-        -(a22 * a33 * a10 - (zx_ww * a12 + a23 * a32 * a10 + -(zx_wz * a13 - (a22 * a30 * a13 - a23 * a30 * a12)))) * invDet,
-         (a22 * a33 * a00 + -(zx_ww * a02 - -(a23 * a32 * a00 - (zx_wz * a03 + (a23 * a30 * a02 - a22 * a30 * a03))))) * invDet,
-        -(a00 * a33 * a12 - (a00 * a32 * a13 + a33 * a10 * a02 + -(a10 * a32 * a03 - (a03 * a12 * a30 - a02 * a13 * a30)))) * invDet,
-         (a23 * a00 * a12 + -(a23 * a10 * a02 - -(a13 * a22 * a00 - (a03 * a22 * a10 + (a13 * a20 * a02 - a03 * a12 * a20))))) * invDet
+        (-(((a22 * a33) * a10) - ((((a23 * a32) * a10) - (((a20 * a32) * a13) - (((a22 * a30) * a13) + -((a23 * a30) * a12)))) + ((a20 * a33) * a12))) * invDet),
+        ((((a22 * a33) * a00) + -(((a20 * a33) * a02) - -(((a23 * a32) * a00) - ((((a23 * a30) * a02) - ((a22 * a30) * a03)) + ((a20 * a32) * a03))))) * invDet),
+        (-(((a00 * a33) * a12) - ((((a10 * a33) * a02) + -(((a10 * a32) * a03) - (((a03 * a12) * a30) - ((a13 * a02) * a30)))) + ((a00 * a32) * a13))) * invDet),
+        ((((a00 * a23) * a12) + -(((a10 * a23) * a02) + (((a13 * a22) * a00) - ((((a13 * a20) * a02) - ((a12 * a20) * a03)) + ((a10 * a22) * a03))))) * invDet)
     );
 
     out.z.Set(
-         (a10 * a33 * a21 + -(a11 * a33 * a20 - -(a10 * a23 * a31 - (a13 * wy_zx + (a11 * a23 * a30 - a13 * wx_zy))))) * invDet,
-        -(a00 * a33 * a21 - (a01 * a33 * a20 + a00 * a23 * a31 + -(a03 * wy_zx - (a03 * wx_zy - a01 * a23 * a30)))) * invDet,
-         (a33 * a00 * a11 + -(a33 * a10 * a01 - -(a13 * a31 * a00 - (a03 * a31 * a10 + (a13 * a30 * a01 - a03 * a30 * a11))))) * invDet,
-        -(a23 * a00 * a11 - (a23 * a10 * a01 + a13 * a00 * a21 + -(a03 * a10 * a21 - (a03 * a11 * a20 - a13 * a20 * a01)))) * invDet
+        ((((a21 * a33) * a10) - (((a20 * a33) * a11) + (((a23 * a31) * a10) - ((((a23 * a30) * a11) - ((a21 * a30) * a13)) - -((a20 * a31) * a13))))) * invDet),
+        (-(((a21 * a33) * a00) + -((((a23 * a31) * a00) + -(((a20 * a31) * a03) - (((a21 * a30) * a03) - ((a23 * a30) * a01)))) + ((a20 * a33) * a01))) * invDet),
+        ((((a00 * a33) * a11) + -(((a10 * a33) * a01) + (((a13 * a31) * a00) - ((((a13 * a30) * a01) - ((a11 * a30) * a03)) + ((a10 * a31) * a03))))) * invDet),
+        (-(((a00 * a23) * a11) - ((((a00 * a13) * a21) + -(((a10 * a21) * a03) - (((a11 * a20) * a03) - ((a13 * a20) * a01)))) + ((a10 * a23) * a01))) * invDet)
     );
 
     out.w.Set(
-        -(a32 * a21 * a10 - (a32 * a20 * a11 + a31 * a22 * a10 + -(wy_zx * a12 - (wx_zy * a12 - a30 * a22 * a11)))) * invDet,
-         (a32 * a21 * a00 + -(a32 * a20 * a01 - -(a31 * a22 * a00 - (wy_zx * a02 + (a30 * a22 * a01 - wx_zy * a02))))) * invDet,
-        -(a32 * a00 * a11 - (a31 * a00 * a12 + a32 * a10 * a01 + -(a31 * a10 * a02 - (a30 * a11 * a02 - a30 * a01 * a12)))) * invDet,
-         (a22 * a00 * a11 + -(a22 * a10 * a01 - -(a00 * a21 * a12 - (a10 * a21 * a02 + (a01 * a12 * a20 - a02 * a11 * a20))))) * invDet
+        (-(((a21 * a32) * a10) - ((((a22 * a31) * a10) + -(((a20 * a31) * a12) - (((a21 * a30) * a12) - ((a22 * a30) * a11)))) + ((a20 * a32) * a11))) * invDet),
+        ((((a21 * a32) * a00) + -(((a20 * a32) * a01) - -(((a22 * a31) * a00) - ((((a22 * a30) * a01) - ((a21 * a30) * a02)) + ((a20 * a31) * a02))))) * invDet),
+        (-(((a00 * a32) * a11) - ((((a10 * a32) * a01) - (((a10 * a31) * a02) - (((a11 * a30) * a02) - ((a30 * a01) * a12)))) + ((a00 * a31) * a12))) * invDet),
+        ((((a00 * a22) * a11) + -(((a10 * a22) * a01) - -(((a00 * a21) * a12) - ((((a12 * a20) * a01) - ((a11 * a20) * a02)) + ((a10 * a21) * a02))))) * invDet)
     );
 
     // Cofactors for column 0 via operator[] (cols 1,2,3) -> out.x (transposed)
@@ -258,11 +280,14 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     float c20 = acc * invDet;
 
     // c10: minor removing row 1, col 0 -> rows 0,2,3 cols 1,2,3 (sign: -)
+    // w21-ac: terms 4 and 5 were in the opposite order -- the image
+    // (0x825390C0) adds row3[3]*row2[1]*row0[2] before row3[2]*row2[3]*row0[1]
+    // (read off its acc chain); fixed, both builds now round like the image.
     acc = row3[1] * row2[2] * row0[3];
     acc = -(row3[1] * row2[3] * row0[2] - acc);
     acc = -(row3[2] * row2[1] * row0[3] - acc);
-    acc = row3[2] * row2[3] * row0[1] + acc;
     acc = row3[3] * row2[1] * row0[2] + acc;
+    acc = row3[2] * row2[3] * row0[1] + acc;
     acc = -(row3[3] * row2[2] * row0[1] - acc);
     float c10 = acc * invDet;
 
