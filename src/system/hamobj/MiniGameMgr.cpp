@@ -98,6 +98,10 @@ void MiniGameMgr::InitCascade(int numMovesNeeded, int blockingFactor) {
 // _M_erase, vector<UILabel*> erase).  The string literals those MakeStrings
 // actually load, rows [40] and [41], MATCH -- these are ICF folds of
 // byte-identical instantiations from other TUs, not wrong callees.
+// w19-b (99.90): 5 rows, all register numbering -- the hoisted kAssertStr/
+// TheGameData lis pair in the other order and the 0x2c/0x30 loads into
+// r9/r10 swapped.  Inert: `mNumMovesNeeded + mBlockingFactor` (MSVC
+// canonicalises the sum).  Worse: the i == 0 arm first (76.0).
 void MiniGameMgr::UpdateCascadeMovePool(
     MoveGraph &graph,
     std::vector<const MoveVariant *> &allMoves,

@@ -170,6 +170,11 @@ void HamRegulate::Poll() {
     // posDelta.x/.y straight into the callee-saved f29/f30
     // (build/373307D9/asm/system/hamobj/HamRegulate.s, `lfs f29, 0x60(r1)` /
     // `lfs f30, 0x64(r1)`) where we land them in scratch and copy.
+    // w19-b (98.81, same 2 inserted fmr + the f28/f29/f30 renumbering they
+    // cause): the copy is MSVC propagating the loaded temp into the sqrt and
+    // the scale products, so temp and moveX interfere.  Inert: the sqrt over
+    // posDelta.x/.y instead of moveX/moveY (identical bytes).  Worse: moveZ
+    // declared after moveY (97.6, moves the z=0 fmr below the call).
     float moveZ = 0.0f;
     float dt = TheTaskMgr.DeltaSeconds();
     float moveX = posDelta.x;

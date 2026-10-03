@@ -651,6 +651,11 @@ DataNode FreestyleMoveRecorder::OnReadCreated(DataArray *a) {
     // statements only is WORSE (96.7 raw -- it buys a `mr r9, r11` copy and
     // shifts r9->r8), and `FreestyleMove &take = sInstance->mTakes[...];` is
     // exactly inert (the subscript already forms the address).
+    // w19-b: an inline member on sInstance doing both stores (name ours) DOES
+    // stop the sInstance reload -- 43 of 44 rows equal -- but MSVC then emits
+    // a dead `addi r10, r11, 0xb8` (&mCurrentTakeIndex) the image lacks; same
+    // canonical score, so not kept.  Variants with a const int& parameter, a
+    // FreestyleMove& local, or the second store in its own inline: identical.
     sInstance->mTakes[sInstance->mCurrentTakeIndex].mNumFrames = framecount;
     sInstance->mLastFrameIndex = sInstance->mCurrentTakeIndex;
     return 0;

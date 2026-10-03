@@ -23,6 +23,22 @@
  * real map symbol and already the right one, so the same move would merely shuffle
  * the 0% among the eleven.  Leave it. */
 
+/* w19-b 2026-10-02 -- REBOUND, 0.0000 -> 83.115944.  The w8-k "shuffle" step was
+ * wrong: report rows come from TARGET symbols, so the HamMove name (which no
+ * object in this unit emits) could only ever score 0, while the Spotlight
+ * spelling LightPreset.obj does emit had no target row at all.  Address-range
+ * test: 0x82848AD0 lies in LightPreset .text [0x8283DA50, 0x82850940)
+ * (splits.txt), and ham_xbox_r.map:62540 lists the Spotlight spelling at that
+ * address from world:LightPreset.obj.  symbols.txt:161597 now binds it (the
+ * w18-a ICF-spelling lever).  Whole-binary row diff: 0 UP / 0 DOWN, one key
+ * renamed.  RESIDUAL 83.12: the image inlines Set() into erase() (the
+ * `obj != 0 || mListMode != 0` test, a recursive `bl erase` and the
+ * SetObjConcrete call at rows 39-55); ours calls Set out of line -- the mirror
+ * image of FlowManager's ObjPtrVec<FlowNode>::erase (ours inlines, the image
+ * does not).  Font.obj's ObjPtrVec<RndMat>::erase inlines and reads 100, so it
+ * is a per-TU inlining-order decision.  Inert here: an explicit instantiation of
+ * Set<Spotlight>, or of erase<Spotlight>, after the vector instantiation below. */
+
 #include "SpotlightDrawer.h"
 #include "obj\ObjPtrVec_impl.h"
 #include "math\Mtx.h"
