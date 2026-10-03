@@ -341,6 +341,14 @@ float DanceRemixer::JumpedBeat(float beat) const {
     // `return beat`, a `result` local, an inline Shift(float,int,int) helper
     // (int or float params), one `float fJump` for both jumpSize arms, and
     // implicit int->float conversions.  Values match the image on every path.
+    // w21-al (still 90.88636, same 4 rows): standalone probe, ~25 more
+    // spellings, all leave the tail's second conversion on -0x8: every
+    // association of the tail sum (explicit parens both ways, flat sums),
+    // float locals hoisted to function scope, (float)(__int64) conversions,
+    // ternary forms of both blocks, if/else-if chains, a single `beat +=` /
+    // `beat -=` exit, inline FromBeat()/ToBeat() accessors, and re-reading
+    // mFromMeasure*4 in the tail.  Only a tail-first layout (w21-b) gives one
+    // slot, and it reorders the blocks.
     return (beat - (float)fromBeat) + (float)toBeat;
 }
 
