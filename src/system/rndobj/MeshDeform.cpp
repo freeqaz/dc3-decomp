@@ -197,16 +197,7 @@ void RndMeshDeform::VertArray::SetSize(int size) {
 
 int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, float *const weights) {
     MILO_ASSERT(num < VertArray::kMaxWeights, 0x5F);
-    // count existing verts
-    auto& _ref0 = mData;
-    u8 *ptr = (u8 *)_ref0;
-    u8 *end = ptr + mSize;
-    int count = 0;
-    while (ptr < end) {
-        count++;
-        ptr += (*ptr * 2) + 1;
-    }
-    int vertCount = count;
+    int vertCount = NumVerts();
     float sum = 0.0f;
     // The counting loop's result reaches the two MILO_NOTIFYs by REFERENCE
     // (MakeString<char const*,int,float> takes `const int&`), so `vertCount`
@@ -281,7 +272,7 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
     float scale = 1.0f / sum;
     // append (num*2+1) bytes at end of buffer
     u8 *newEntry = (u8 *)MemResizeElem(
-        _ref0, mSize, (void *)((char *)_ref0 + mSize), 0, (num * 2) + 1, __FILE__, 0x85, "RndMeshDeform"
+        mData, mSize, end(), 0, (num * 2) + 1, __FILE__, 0x85, "RndMeshDeform"
     );
     *newEntry = (u8)num;
     for (int i = 0; i < num; i++) {
