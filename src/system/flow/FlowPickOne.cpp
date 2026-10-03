@@ -84,6 +84,11 @@ END_COPYS
 // empty(), and all later uses go through r29.  For mChoiceHistory the image
 // does the same at the top of the >1 arm; we only materialise it for the
 // clear() call.  Not chased further: the lever is in ObjPtrVec's accessors.
+// w21-an (98.55, same 9 rows): two more spellings for the r26 placement,
+// both worse -- `ObjPtrVec<FlowNode> &history = mChoiceHistory;` for every
+// jukebox use (96.47; lever (a) binds this+0x5c, not &mNodes), and a named
+// `int historySize = mChoiceHistory.size();` before the bool (98.11: the
+// size loads hoist above the `mIndex >= 0` test and r26 is still lazy).
 bool FlowPickOne::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;

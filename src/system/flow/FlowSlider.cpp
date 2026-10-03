@@ -170,6 +170,15 @@ __declspec(noinline) void FlowSlider::UpdateEase() {
 // -- and every branch lands on the same block): `zero` replaced by the 0.0f
 // literal (one stays a local), and the first fraction guard written
 // `if (!(...)) f = ...; else f = zero;`, are both byte-identical.
+// w21-an (98.95, same 12 rows): the f30/f31 constant assignment is NOT
+// decided by declaration order or by constant value -- re-measured: decls
+// swapped inert; zero changed to 3.0f / 0.5f / -1.0f (probe only) still lands
+// in f31.  Also inert: a static inline RangeFraction() helper used as
+// `t = one - RangeFraction(...)`, literal 1.0f to mEaseFunc, no casts on the
+// mEaseFunc call, `zero` in the sIntensity compares, one/zero declared in the
+// loop body, the two intensity=one arms joined with ||, an else-if for the
+// ActivateChild arm, a FlowNode* copy for IsRunning().  Worse: savedIntensity
+// declared after one/zero (95.71), `intensity = zero;` as a default (97.38).
 void FlowSlider::UpdateActivations() {
     float savedIntensity = FlowNode::sIntensity;
 

@@ -117,6 +117,11 @@ static const int sJointTrackingMap[] = { 0, 1, 2 };
 // image's per-iteration reloads, so the trigger is the second USE being
 // anticipated on every path (MSVC hoists a very-busy expression to the
 // common dominator); no faithful spelling found that makes it non-busy.
+// w21-an (74.05, unchanged): five more scratch-TU spellings (w21-n's probe)
+// all still CSE the row loads above loop 1: `XMMATRIX mat; mat = ...`
+// (split decl/assign), `transformed` declared before `mat`, `const XMMATRIX
+// &mat =` bound to the returned temp, the hip read through
+// nui_frame.SkeletonData[s] instead of the nuiSkel reference, `++s` latch.
 static XMVECTOR XMVector3Transform(XMVECTOR V, const XMMATRIX &M) {
     XMVECTOR Z = __vspltw(V, 2);
     XMVECTOR Y = __vspltw(V, 1);
