@@ -220,12 +220,24 @@ void Waypoint::ShapeDelta(const Vector3 &v, Vector3 &vout) {
 // are inert; spelling the Subtract per component through a named WorldXfm().v
 // (reference or copy) and spelling Scale/ScaleAdd per component are both far
 // worse (910+ vs 114 probe diff).
+// w21-as: dotx and doty are written in the image's associations, (z + y) + x
+// and (z + x) + y (doty: target
+// 0x823CBE8C fmuls 0x18*dz, 0x823CBE94 fmadds 0x10*res.x, 0x823CBE9C fmadds dy*0x14) --
+// a native-fidelity fix; Dot() sums (x + y) + z.  (dotx alone is probe-inert.)  Normalized unchanged at
+// 99.96774, fuzzy 99.081 -> 99.121, 20 -> 15 rows; it also restores the
+// image's x, y, z store order after the subtract.  REMAINING: inside the
+// {z, x} pair MSVC emits the res.x product first (image: z first), which
+// drags the load order and f8/f9 allocation of the clamp block.  Probed
+// (standalone cl.exe, exact repro of the old listing): both pair operand
+// orders, every association of dotx and doty, Dot arg orders, the subtract as
+// z/y/x-declared locals through a named WorldXfm().v (all 6 orders), and the
+// dots over those locals instead of res: none emits z first in that pair.
 void Waypoint::ShapeDeltaBox(const Vector3 &v1, float f1, float f2, Vector3 &res) {
     const Transform &world = WorldXfm();
     if (f2 > 0.0f) {
         Subtract(v1, WorldXfm().v, res);
-        float dotx = Dot(res, world.m.x);
-        float doty = Dot(world.m.y, res);
+        float dotx = (res.z * world.m.x.z + res.y * world.m.x.y) + res.x * world.m.x.x;
+        float doty = (world.m.y.z * res.z + world.m.y.x * res.x) + world.m.y.y * res.y;
         float clamped1 = Clamp(-f1, f1, dotx);
         float clamped2 = Clamp(-f2, f2, doty);
         Scale(world.m.x, clamped1 - dotx, res);

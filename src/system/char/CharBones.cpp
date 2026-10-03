@@ -144,6 +144,16 @@ void CharBones::RecomputeSizes() {
         // the image's load order (`int prev = offset[-7]; int next = offset[-6];`)
         // leaves all 3 rows bit-identical -- MSVC schedules the two loads
         // independently of statement order.
+        // w21-as (still 99.926, same 3 rows): ~30 standalone cl.exe probe
+        // spellings (TypeSize defined in-TU so the call clobbers only volatiles,
+        // reproducing this exact listing) -- `-(a - b)`, `a + -b`, `-b + a`,
+        // `x = a; x -= b`, unsigned diff, named TypeSize result, `++i < 7`
+        // latch, end-pointer latch, `++offset; *offset =`, `offset[-1]` source,
+        // a separate counts pointer (stays a second induction register), an
+        // mCounts[i] index (adds lwzu on r9), `offset[1] = ...; offset++` and the
+        // og-dc3/RB3 plain loop (both load -0x1c first like the image, but sink
+        // the subf below the bl).  Only `*++offset = ...` keeps subf above the
+        // call, and every such spelling loads the minuend (-0x18) first.
         int count_diff = offset[-6] - offset[-7];
         *++offset = cur_offset + TypeSize(i) * count_diff;
         i++;

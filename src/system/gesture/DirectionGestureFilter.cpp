@@ -170,81 +170,60 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     static float sSwipeEllipseHeight = 1.3f;
     static float sSwipeEllipseWidthEngaged = 0.8f;
     static float sSwipeEllipseHeightEngaged = 1.1f;
-    const TrackedJoint *joints = skeleton.TrackedJoints();
-
-    float shoulderRightY = joints[kJointShoulderRight].mJointPos[0].y;
-    float shoulderLeftY = joints[kJointShoulderLeft].mJointPos[0].y;
-
-    float shoulderRightZ = joints[kJointShoulderRight].mJointPos[0].z;
-    float shoulderLeftZ = joints[kJointShoulderLeft].mJointPos[0].z;
-
-    float hipX = joints[kJointHipCenter].mJointPos[0].x;
-    float shoulderX = joints[kJointShoulderCenter].mJointPos[0].x;
-    float deltaX = hipX - shoulderX;
-
-    float hipY = joints[kJointHipCenter].mJointPos[0].y;
-    float shoulderY = joints[kJointShoulderCenter].mJointPos[0].y;
-    float deltaY = hipY - shoulderY;
-
-    float hipZ = joints[kJointHipCenter].mJointPos[0].z;
-    float shoulderZ = joints[kJointShoulderCenter].mJointPos[0].z;
-    float deltaZ = hipZ - shoulderZ;
-
-    float shoulderLeftX = joints[kJointShoulderLeft].mJointPos[0].x;
-    float shoulderRightX = joints[kJointShoulderRight].mJointPos[0].x;
-    float dx = shoulderLeftX - shoulderRightX;
-    float dy = shoulderLeftY - shoulderRightY;
-    float dz = shoulderLeftZ - shoulderRightZ;
-
-    float shoulderDist = sqrtf(dx * dx + dz * dz + dy * dy);
-
-    // Build corners with reassignments. NEGATIVE RESULT (w7-af): the image's
-    // `fadds f12, f11, f9` puts the hip term first, but writing `hipX + deltaX`
-    // is byte-identical -- /fp:fast normalises the operand order of a plain
-    // two-term fadds, so all three of these are a backend floor (97.2 either
-    // way).
+    // w21-as: written with Vector3 helpers over skeleton.TrackedJoints() (no
+    // `joints` local), the closest-point delta and the hip direction as
+    // Subtract()s, and the ellipse sum as two statements: 10 -> 3 rows
+    // (normalized 99.979866 unchanged, fuzzy 99.409 -> 99.879).  The
+    // value-numbering order MSVC uses for its /fp:fast operand
+    // canonicalisation followed the old over-named locals (hipX,
+    // deltaX, closestDeltaX, ...) and emitted every commutative pair the
+    // other way round: `hipX + deltaX` (target 0x82DEA580 fadds f12, f11, f9),
+    // the rotation products (0x82DEA660..70) and the ellipse sum.
+    const Vector3 &hip = skeleton.TrackedJoints()[kJointHipCenter].mJointPos[0];
+    const Vector3 &shoulder = skeleton.TrackedJoints()[kJointShoulderCenter].mJointPos[0];
+    Vector3 delta;
+    Subtract(hip, shoulder, delta);
     Vector3 corner1, corner2;
-    corner1.x = shoulderX - deltaX;
-    deltaX = deltaX + hipX;  // reassign (swap operands)
-    corner2.x = deltaX;
+    Subtract(shoulder, delta, corner1);
+    Add(hip, delta, corner2);
+    Vector3 shoulderVec;
+    Subtract(
+        skeleton.TrackedJoints()[kJointShoulderLeft].mJointPos[0],
+        skeleton.TrackedJoints()[kJointShoulderRight].mJointPos[0],
+        shoulderVec
+    );
+    // The image's association (fidelity; listing-neutral): fmuls y, fmadds z,
+    // fmadds x (0x82DEA564, 0x82DEA5A0, 0x82DEA5AC).
+    float shoulderDist = sqrtf(
+        (shoulderVec.y * shoulderVec.y + shoulderVec.z * shoulderVec.z)
+        + shoulderVec.x * shoulderVec.x
+    );
 
-    corner1.y = shoulderY - deltaY;
-    deltaY = deltaY + hipY;  // reassign (swap operands)
-    corner2.y = deltaY;
-
-    corner1.z = shoulderZ - deltaZ;
-    deltaZ = deltaZ + hipZ;  // reassign (swap operands)
-    corner2.z = deltaZ;
-
-    // NOW call HandJoint for ClosestPoint
-    const TrackedJoint &handJoint = skeleton.HandJoint(mHandSide);
+    // REMAINING (w21-as, 3 rows): the image sets up ClosestPoint's address
+    // arguments r4 (corner2), r3 (corner1), r6 (&closest); we emit r6 first.
+    // Same three frame slots.  Probe-inert: the hand joint as a named ref (to
+    // the joint or to its Vector3), `closest` declared before the corners or
+    // with them, corners declared separately or in the other order, &closest
+    // through a named pointer, the corners through const refs.
     Vector3 closest;
-    ClosestPoint(corner1, corner2, handJoint.mJointPos[0], &closest);
-
-    // Call HandJoint AGAIN for delta calculation
-    const TrackedJoint &handJoint2 = skeleton.HandJoint(mHandSide);
-    float closestDeltaX = closest.x - handJoint2.mJointPos[0].x;
-    float closestDeltaZ = closest.z - handJoint2.mJointPos[0].z;
-
-    float hipLeftX = joints[kJointHipLeft].mJointPos[0].x;
-    float hipRightX = joints[kJointHipRight].mJointPos[0].x;
-    float hipLeftY = joints[kJointHipLeft].mJointPos[0].y;
-    float hipRightY = joints[kJointHipRight].mJointPos[0].y;
-    float hipLeftZ = joints[kJointHipLeft].mJointPos[0].z;
-    float hipRightZ = joints[kJointHipRight].mJointPos[0].z;
+    ClosestPoint(corner1, corner2, skeleton.HandJoint(mHandSide).mJointPos[0], &closest);
+    Vector3 closestDelta;
+    Subtract(closest, skeleton.HandJoint(mHandSide).mJointPos[0], closestDelta);
 
     Vector3 direction;
-    direction.x = hipRightX - hipLeftX;
-    direction.y = hipRightY - hipLeftY;
-    direction.z = hipRightZ - hipLeftZ;
+    Subtract(
+        skeleton.TrackedJoints()[kJointHipRight].mJointPos[0],
+        skeleton.TrackedJoints()[kJointHipLeft].mJointPos[0],
+        direction
+    );
     Normalize(direction, direction);
 
     float angle = atan2(direction.z, direction.x);
-    float s1 = Sine(1.5707963705062866f - angle);  // Use exact constant from binary
+    float s1 = Sine(1.5707963705062866f - angle); // Use exact constant from binary
     float s2 = Sine(-angle);
 
-    float rotX = closestDeltaX * s2 + closestDeltaZ * s1;
-    float rotY = closestDeltaX * s1 - closestDeltaZ * s2;
+    float rotX = closestDelta.x * s2 + closestDelta.z * s1;
+    float rotY = closestDelta.x * s1 - closestDelta.z * s2;
 
     float width, height;
     if (mEngaged) {
@@ -258,7 +237,8 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     height *= shoulderDist;
     width *= shoulderDist;
 
-    float ellipseTest = (rotX * rotX) / (width * width) + (rotY * rotY) / (height * height);
+    float ellipseTest = (rotX * rotX) / (width * width);
+    ellipseTest += (rotY * rotY) / (height * height);
 
     if (ellipseTest < 1.0f) {
         return 0;
@@ -267,7 +247,7 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     if (!mAllowAboveShoulder || mHighButtonMode) {
         // Call HandJoint AGAIN for Y-test
         const TrackedJoint &handJoint3 = skeleton.HandJoint(mHandSide);
-        // Re-derived from `skeleton`, NOT from the `joints` local: the image
+        // Re-derived from `skeleton` (an earlier `joints` local existed): the image
         // reads this through the skeleton pointer it already keeps in r31
         // (`lfs f0, 0xf0(r31)`). Reusing `joints` here is its only use after the
         // calls, so MSVC pins it in a third callee-saved GPR for the whole

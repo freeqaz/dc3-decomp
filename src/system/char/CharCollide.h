@@ -50,12 +50,36 @@ public:
     // Dot(out, unk1fc) as y,z,x, we emit y,x,z. Tried: swapped Dot args, all
     // six explicit term orders (break the plane arm, 96.1), Dot temp, axis ref,
     // Axis() accessor, explicit ScaleAdd, Dot*unk1f8: none better.
+    // w21-as: 99.954 -> 99.969, 15 -> 4 rows.  Three changes, found with a
+    // standalone cl.exe probe that reproduced the old listing exactly:
+    //  - the target's dead `addi r11, r3, 0x1fc` is a reference bound to the
+    //    axis (`const Vector3 &axis = unk1fc;`);
+    //  - the cigar dot is written with the image's association (y + z) + x
+    //    (fmuls 0x200, fmadds 0x204, fmadds 0x1fc); any non-Dot spelling here
+    //    otherwise reshuffles the PLANE arm too;
+    //  - the subtraction is spelled as three locals declared z, y, x (any order
+    //    with z before y keeps the image's z-first subtract and puts the x term
+    //    last with the image's operand order; Subtract() does not).
+    // REMAINING (4 rows): inside the y/z pair MSVC emits the z product first
+    // (`lfs 0x204; fmuls ..., f0`) where the image emits y first.  Every probe
+    // spelling gave z first: both pair operand orders, x + (pair), separate
+    // accumulator statements, named products, locals for the axis components,
+    // dy/dz instead of out.y/out.z, Clamp vs Min(Max()), a named projection,
+    // componentwise ScaleAdd, all six subtract declaration orders.
     float GetRadius(const Vector3 &pos, Vector3 &out) const {
-        Subtract(pos, unk20c, out);
+        float dz = pos.z - unk20c.z;
+        float dy = pos.y - unk20c.y;
+        float dx = pos.x - unk20c.x;
+        out.Set(dx, dy, dz);
         float ret = mCurRadius[0];
         if (mShape >= kCollideCigar) {
-            float clamped = Clamp(mCurLength[0], mCurLength[1], unk1f8 * Dot(out, unk1fc));
-            ScaleAdd(out, unk1fc, -clamped, out);
+            const Vector3 &axis = unk1fc;
+            float clamped = Clamp(
+                mCurLength[0],
+                mCurLength[1],
+                unk1f8 * ((axis.y * out.y + axis.z * out.z) + axis.x * out.x)
+            );
+            ScaleAdd(out, axis, -clamped, out);
             Interp(ret, mCurRadius[1], unk1f4 * (clamped - mCurLength[0]), ret);
         } else if (mShape == kCollidePlane) {
             ret = Dot(out, unk1fc);
