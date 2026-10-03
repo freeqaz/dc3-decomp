@@ -21,6 +21,15 @@ inline void Multiply(const Hmx::Matrix3 &m, const Vector3 &v, Vector3 &out) {
     out.Set(Dot(v, m.x), Dot(v, m.y), Dot(v, m.z));
 }
 
+// w21-an (?Multiply@@YAXABVMatrix3@Hmx@@0AAV12@@Z, emitted in this unit,
+// body in math/Mtx.h -- not edited, another lane owned src/system/math/):
+// stays 81.05. Standalone cl.exe probe of lever (n): all 18 trees of each
+// arm written with explicit parens in the image's grouping (the fast and
+// aliasing arms group differently, so the original was a flat sum MSVC
+// re-sorted). The pair grouping then matches, but MSVC canonicalises the
+// operand order inside each pair, so it still picks a different product for
+// the fmuls (row 0 y: image fmuls a.x.z*b.z.y, probe a.x.y*b.y.y) and
+// schedules differently; no better than the flat body. Not shipped.
 const float sMaxThreshold = 80;
 bool CharLookAt::sDisableJitter = false;
 
