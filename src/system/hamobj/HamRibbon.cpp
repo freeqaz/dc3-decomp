@@ -409,8 +409,13 @@ void HamRibbon::ConstructMesh() {
                 int nextIdxUp = mNumSides + nextIdx;
                 int idxUp = idx + mNumSides;
                 int faceIdx = base + side * 2;
-                mMesh->Faces()[faceIdx].Set(idx, nextIdx, nextIdxUp);
-                mMesh->Faces()[faceIdx + 1].Set(nextIdxUp, idxUp, idx);
+                // w21-t (90.21 -> 90.97): one Face pointer, re-pointed for the
+                // second face, puts `base` in volatile r3 as the image does.
+                // Two separate pointers, or references, are 90.21.
+                RndMesh::Face *f = &mMesh->Faces()[faceIdx];
+                f->Set(idx, nextIdx, nextIdxUp);
+                f = &mMesh->Faces()[faceIdx + 1];
+                f->Set(nextIdxUp, idxUp, idx);
             }
         }
 
