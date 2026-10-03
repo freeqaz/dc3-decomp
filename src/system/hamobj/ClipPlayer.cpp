@@ -101,6 +101,14 @@ bool ClipPlayer::CanUseRestStep() {
 // swapped pair is the reload block after the "" Annotate only.  Inert: one
 // function-scope `f31` shared by both blocks; `if (EditMode && NoTransitions)
 // {} else {...}`.  Worse: a static inline predicate for the test (91.1).
+// w21-bb (98.73, same 2 rows): the swapped pair is in the block MSVC
+// duplicates onto the inClip-taken path only (both skip arms land on
+// `lfs f31`), so it is the order of that partial-redundancy reload.  Inert:
+// `LoadMgr &` alias for either test; the f30 literal inlined / f30 declared
+// late; folding `&& (outClip = mOutClip)` into the second test; re-storing
+// the "" Annotate's value into the block-1 local; a leading
+// `TheHamDirector,` comma operand on the second test.  Worse: `if (mInClip)`
+// read twice by member (95.4).
 DataNode ClipPlayer::AnnotatePractice() {
     bool cont = mPracticeEnd != kHugeFloat;
     if (!cont) {

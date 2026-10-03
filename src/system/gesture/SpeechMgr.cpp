@@ -650,6 +650,10 @@ void SpeechMgr::Poll() {
             // pointer-stepped e++, `int i`, do/while, event + i, a named union,
             // nested switch with/without the <=0x20 cases, /Ox.  None reproduce
             // the image's second (pResult-based) induction pointer.
+            // w21-bb (97.98, same 11 rows): 3 more probe spellings keep the one
+            // &event[i] pointer -- pResult loaded into a local BEFORE eventId,
+            // fully nested ifs, and an extra `cur.pResult = 0` store after the
+            // destroy (not shipped; it only adds a store).
             for (ULONG i = 0; i < fetched; i++) {
                 NUI_SPEECH_EVENT &cur = event[i];
                 if (cur.eventId > 0x20 && (cur.eventId == 0x40 || cur.eventId == 0x80)
