@@ -484,14 +484,25 @@ void HamSongMgr::InitializePlaylists() {
     // (r31+0x90 for "%d0s", r31+0xa0 for "%s_dynamic_playlist"), so the
     // original had two separate char arrays, not one shared scratch buffer.
     // The 0x10/0x60 split is what keeps the frame at the image's 0x1c0.
-    char decadeBuffer[0x10];
-    char buffer[0x60];
+    // w21-az (99.857 -> 100): three changes, measured in this order.  (1)
+    // crewSym is a `const Symbol &` bound to GetCrewForCharacter's returned
+    // temporary: as a named Symbol MSVC colours the loop-2 `new` home into
+    // 0x54 ahead of it; as a lifetime-extended temporary it takes 0x54 and
+    // the `new` homes go to 0x88, exactly the image's slot map (63 -> 9
+    // rows, only the buffers left +0x10).  (2) Both char arrays scoped in
+    // the if-block: decadeBuffer then shares 0x90 with the map-ctor temp, as
+    // in the image (3 rows, frame 0x1a0 vs 0x1c0).  (3) buffer is 0x80, not
+    // 0x60: with the arrays at the image's 0x90/0xa0, the image's 0x1c0
+    // frame leaves exactly 0x80 for buffer.  (Natively only a larger
+    // scratch buffer.)
     std::map<Symbol, Playlist *> playlistMap;
     FOREACH (it, TheHamSongMgr.mRankedSongs) {
         const HamSongMetadata *data = TheHamSongMgr.Data(*it);
         if (data->IsComplete() && !data->IsFake()
             && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
             const Symbol &crewSym = GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
+            char decadeBuffer[0x10];
+            char buffer[0x80];
             sprintf(decadeBuffer, "%d0s", data->YearReleased() / 10);
             Symbol decadeSym = decadeBuffer;
             if (playlistMap.find(crewSym) == playlistMap.end()) {
