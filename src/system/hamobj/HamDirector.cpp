@@ -1805,6 +1805,20 @@ Symbol HamDirector::ClosestMove() {
                                     // a named `char bufChar = bufCh;`
                                     // intermediate, and widening bufCh to
                                     // `unsigned int` -- both byte-inert.
+                                    // w21-m (still 99.35, the one clrlwi row):
+                                    // ~35 spellings in a standalone cl.exe
+                                    // probe, none emit clrlwi+extsb: char /
+                                    // int / unsigned int / unsigned short
+                                    // locals, (char)(unsigned char) chains,
+                                    // `& 0xff`, inline Lc(char)/LcU(uchar)/
+                                    // const char& helpers, a second load
+                                    // through (unsigned char *)buf, og's
+                                    // p[buf - candidate] index, an
+                                    // outer-scope bufCh, and indexed
+                                    // for/while loops (MSVC strength-reduces
+                                    // them to this exact pointer form).  The
+                                    // only clrlwi seen was tolower(uchar)
+                                    // into r3 with no extsb.
                                     int bufLower = tolower((char)bufCh);
                                     // 0x824744BC is `cmpw cr6, r3, r22`:
                                     // tolower(*p) is the left operand.
