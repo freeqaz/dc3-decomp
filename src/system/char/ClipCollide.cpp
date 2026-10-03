@@ -101,7 +101,8 @@ void ClipCollide::SetTypeDef(DataArray *da) {
         // disjoint from the Sym(0) sret's, per stack-slot-sharing.md) is
         // byte-inert.  og-dc3 and rb3-xenon both spell it as here.
         DataArray *modesArr = da->FindArray("modes");
-        mMode = modesArr->Array(1)->Sym(0);
+        DataArray *modeArr = modesArr->Array(1);
+        mMode = modeArr->Sym(0);
     }
 }
 
