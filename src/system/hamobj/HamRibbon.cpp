@@ -228,6 +228,9 @@ void HamRibbon::UpdateChase() {
             float step = mDecay / mNumSegments;
             float minDistSq = mWidth * mWidth * 0.125f;
             float nextTime = mChaseKeys.back().frame + step;
+            // w21-l (value-scan row, ARTIFACT): the image re-derives back() from a
+            // fresh `lwz r11, 0x90(r23)` each pass; ours keeps _M_finish from the
+            // reload after push_back.  Nothing in between writes the vector.
             while (now > nextTime) {
                 key.frame = mChaseKeys.back().frame + step;
                 Interp(
