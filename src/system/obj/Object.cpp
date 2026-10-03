@@ -1233,20 +1233,17 @@ DataNode Hmx::Object::OnGetTypeList(const DataArray *a) {
     return ptr;
 }
 
-// w21-s (98.88, 36 register-only rows + 1 replace/1 insert in the loop).
-// Behaviour checked against the image (0x825AD690): AddSink args in the loop
-// are obj, s7, s6, mode, chain (r29/r20/r30/r27/r28); the arr3->Size()==0 arm
-// passes a literal `true` (li r28,1 at idx 53), not chain; the Size()<=3 arm is
-// the inlined Object::AddSink wrapper (two by-value Symbol spills to 0x58).
-// The image's LOOP has no by-value spill stores, i.e. it calls
-// GetOrAddSinks()->AddSink(...) directly, and that spelling does remove the
-// replace/insert rows -- but it measures 98.62 (register permutation moves:
-// the zero constant takes r29 instead of r22, and the dead `mr r29,r22` /
-// `mr r11,r3` copies vanish), so the wrapper call is kept.  Also measured with
-// the direct call, all 98.62 or lower: MsgSinks *local, s6/s7 declared outside
-// the loop or swapped, inverted Type() test (89.6), int mode/chain, early
-// return on !obj, default-arg wrapper in the Size()<=3 arm, ternary symbols
-// (92.2); `AddSink(obj, Symbol(s7), Symbol(s6), ...)` direct = 98.88 (tie).
+// w21-ay (98.88 -> 100): og-dc3's shape -- one GetOrAddSinks()->AddSink call
+// per arm, which MSVC tail-merges at the by-value s7 load (0x825AD690 image's
+// join) -- is what fixes the whole register permutation; the array arm's s6
+// must be ASSIGNED (`Symbol s6; s6 = ...LiteralSym(1);`) so its value is loaded
+// right after the first LiteralSym call as the image does (`mr r11,r3` /
+// `lwz r30,0(r11)`).  `Symbol s6 = ...` (constructed in its sret slot) reloads
+// from the stack (97.9); passing LiteralSym(1) inline holds the address (98.6).
+// Behaviour unchanged: LiteralSym(1) is still evaluated before LiteralSym(0).
+// Earlier note (w21-s): the arr3->Size()==0 arm passes a literal `true`
+// (li r28,1), and the Size()<=3 arm is the inlined Object::AddSink wrapper
+// (two by-value Symbol spills to 0x58).
 DataNode Hmx::Object::OnAddSink(DataArray *a) {
     if (a->Size() > 3) {
         SinkMode mode = (a->Size() > 4) ? (SinkMode)a->Int(4) : kHandle;
@@ -1259,16 +1256,17 @@ DataNode Hmx::Object::OnAddSink(DataArray *a) {
             } else {
                 for (int i = 0; i < arr3->Size(); i++) {
                     DataNode eval = arr3->Evaluate(i);
-                    Symbol s7;
-                    Symbol s6;
                     if (eval.Type() == kDataArray) {
+                        Symbol s6;
                         s6 = eval.LiteralArray()->LiteralSym(1);
-                        s7 = eval.LiteralArray()->LiteralSym(0);
+                        GetOrAddSinks()->AddSink(
+                            obj, eval.LiteralArray()->LiteralSym(0), s6, mode, chain
+                        );
                     } else {
-                        s6 = Symbol();
-                        s7 = eval.LiteralSym();
+                        GetOrAddSinks()->AddSink(
+                            obj, eval.LiteralSym(), Symbol(), mode, chain
+                        );
                     }
-                    AddSink(obj, s7, s6, mode, chain);
                 }
             }
         }
