@@ -327,7 +327,11 @@ void GetRows(
             if (rowIt != rows.end()) {
                 std::vector<ChallengeRow> &itRows = it->second;
                 std::vector<ChallengeRow> &rowItRows = rowIt->second;
-                if (rowItRows.size() == itRows.size()) {
+                // w20-q: a size change is itself a change -- 0x8299577C
+                // `bne cr6, .L_829957DC` lands on `stb r22(=1), 0(r23)`.
+                if (rowItRows.size() != itRows.size()) {
+                    bref = true;
+                } else {
                     for (int i = 0; i < it->second.size(); i++) {
                         if (rowItRows[i] != itRows[i]) {
                             bref = true;
