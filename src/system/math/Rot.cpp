@@ -45,12 +45,19 @@ void Hmx::Quat::Set(const Vector3 &v, float f) {
     z = v.z * scale;
 }
 
-// w16-c (96.87692, 15 rows in the z-rotation half): the image's standalone
-// products are z*s, y*s, y*c, z*c (s/c = Sine/Cosine of stack.z, f30/f1) with
-// x and w fused; ours fuse every c-product.  Inert, all 96.9: four member
-// writes from saved ox/oy/oz/ow in the image's w,x,y,z store order; the Set
-// args with the y/z terms written s-first.  The zeros a Quat-multiply
-// spelling would add are absent from the image, so it is not Multiply().
+// w21-ac (96.87692 -> 100): the z-rotation half reads TWO of the old
+// components -- x in the new y, w in the new w -- through a reference to
+// *this, the rest directly.  MSVC's load forwarding keys on the object
+// expression (lever: bind the object to a local reference), and only that
+// mix gives the image's schedule: z*s, y*s, y*c, z*c standalone with x*s,
+// w*s, x*c, w*c fused, stores w, x, y, z.  The selection is measured, not
+// read off anything: of the 256 this/q mixes, 30 reach 100 (every one has q
+// on s*x in y and c*w in w), all q is 94.97, no q is 94.88.  Behaviour is the
+// same for every mix (Set evaluates all four arguments before storing); the
+// fused-product choice now matches the image too (we used to fuse y*c and
+// z*c instead).  w16-c had recorded as inert: member writes from saved
+// ox/oy/oz/ow in w,x,y,z order; the y/z args written s-first; not Multiply()
+// (the image has no zero terms).
 void Hmx::Quat::Set(const Vector3 &v) {
     Vector3 stack;
     Scale(v, 0.5f, stack);
@@ -59,9 +66,10 @@ void Hmx::Quat::Set(const Vector3 &v) {
     float f3 = Sine(stack.y);
     float f4 = Cosine(stack.y);
     Set(f1 * f4, f2 * f3, f1 * f3, f2 * f4);
-    f1 = Sine(stack.z);
-    f2 = Cosine(stack.z);
-    Set(f2 * x - f1 * y, f2 * y + f1 * x, f2 * z + f1 * w, f2 * w - f1 * z);
+    float s = Sine(stack.z);
+    float c = Cosine(stack.z);
+    Hmx::Quat &q = *this;
+    Set(c * x - s * y, c * y + s * q.x, c * z + s * w, c * q.w - s * z);
 }
 
 void Hmx::Quat::Set(const Hmx::Matrix3 &m) {
