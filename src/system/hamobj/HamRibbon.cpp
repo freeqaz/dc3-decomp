@@ -304,14 +304,18 @@ void HamRibbon::UpdateChase() {
                 // off-diagonal s*(1-invCos)/2 terms to m02 (0x128) and m20
                 // (0x140) and leaves row 1 as the identity row
                 // (0, 1, 0) at 0x130-0x138.
+                // w21-t: the off-diagonal term is ONE value -- the image computes
+                // it once and stores the same f0 to 0x128 and 0x140; written out
+                // twice, MSVC multiplies it twice (99.0 -> 99.5).
+                float offDiag = (s * (1.0f - invCos)) * 0.5f;
                 Hmx::Matrix3 bend(
                     ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
                     0.0f,
-                    (s * (1.0f - invCos)) * 0.5f,
+                    offDiag,
                     0.0f,
                     1.0f,
                     0.0f,
-                    (s * (1.0f - invCos)) * 0.5f,
+                    offDiag,
                     0.0f,
                     ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
                 );
