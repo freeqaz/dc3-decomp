@@ -1099,24 +1099,20 @@ done:;
 void HamIKEffector::ComputeHandPullAndQuat(
     QuatXfm &quatOut, Transform &xfmOut, const Transform &parentXfm, const Vector3 &targetPos
 ) {
-    float dz = targetPos.z - parentXfm.v.z;
-    RndTransformable *effector = mEffector;
-    float dx = targetPos.x - parentXfm.v.x;
-    RndTransformable *parent = effector->TransParent();
-    float dy = targetPos.y - parentXfm.v.y;
-    quatOut.v.z = dz;
-    quatOut.v.x = dx;
-    quatOut.v.y = dy;
-
-    float effectorLen = effector->LocalXfm().v.x;
-    float parentLen = parent->LocalXfm().v.x;
+    // w21-b: the pull is built IN quatOut.v (as in ComputeElbowPullAndQuat)
+    // and both lengths are read through mEffector directly; the squared
+    // distance is accumulated y, z, x.  This gives the image's load order
+    // (mEffector after the first lfs), the dz register pair, and its
+    // dz*dz / fmadds dy / fmadds dx chain with dx parked in f11.  Values are
+    // unchanged: (dy^2 + dz^2) + dx^2 is the image's own association.
+    Subtract(targetPos, parentXfm.v, quatOut.v);
+    float effectorLen = mEffector->LocalXfm().v.x;
+    float parentLen = mEffector->TransParent()->LocalXfm().v.x;
     float maxReach = (parentLen + effectorLen) * 0.99f;
     float maxReachSq = maxReach * maxReach;
-    // w15-a (94.14 canonical): the image squares dz first and parks dx in f11
-    // (`fmr f11, f0`) before loading 0.99f into f0; we square dx first.
-    // `dx*dx + dy*dy + dz*dz` measured 94.2 normalized, same rows -- MSVC
-    // re-sorts the /fp:fast sum itself.
-    float distSq = dz * dz + dy * dy + dx * dx;
+    float distSq = quatOut.v.y * quatOut.v.y;
+    distSq += quatOut.v.z * quatOut.v.z;
+    distSq += quatOut.v.x * quatOut.v.x;
 
     if (distSq <= maxReachSq
         || (GetType() != kEffectorTypeHand && GetType() != kEffectorTypeAnkle)) {
