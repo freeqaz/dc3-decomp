@@ -456,7 +456,8 @@ void Game::Poll() {
     // into `bool loaded = IsLoaded();` inside a nested `if (!mPaused && !mRealTime)`.
     // `IsLoaded() == true` is wrong in a different way: it gets the non-recording
     // `clrlwi` right but lowers the test to `cmplwi cr6, r11, 0x1` / `bne`.
-    // w21-e (99.6x after the drift/songMs decl swap above, these 4 rows left):
+    // w21-e (98.77 normalized / 98.77 fuzzy after the drift/songMs decl swap
+    // above, which only moved fuzzy 98.73 -> 98.77; these 4 rows are left):
     // the 4 rows are byte-for-byte the body of the out-of-line Game::IsReady()
     // (82867F80, defined just before Poll, plain `f` in the map, not COMDAT),
     // so the image inlined IsReady() here. Re-measured with a full post-compile
