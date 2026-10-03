@@ -17,13 +17,16 @@ bool FilterQueue::GetResults(float &outValue, DetectFrame **frames, float unused
     outValue = mQueuedJob.songSeconds;
     std::vector<FilterOutputFrame> &oframes = mOutput.frames;
     MILO_ASSERT(qframes.size() == oframes.size(), 0x42);
-    frames[1] = nullptr;
-    frames[0] = nullptr;
-    // RESIDUAL (w13-b, 99.98): the loop guard loads _M_start before _M_finish in
-    // the image, _M_finish first here (the stlport size() order family, see
-    // SuperEasyRemixer::LoadAllVariants).  An `unsigned int` index is inert.
-    // w18-b: `qframes.size() > frameIdx` is worse (99.9, flips the loop's
-    // cmplw/blt and leaves the guard's load order as it was).
+    // w21-at: 99.98 -> 100.  The two result slots are cleared by a loop (the
+    // caller's DetectFrame *resultFrames[2], one per player); MSVC unrolls it
+    // into the same two stores, but only the loop form gives the following
+    // size() guard the image's _M_start-then-_M_finish load order.  Two
+    // straight-line stores in either order, or a chained `=`, kept the swap
+    // (w13-b had called it the stlport size() order family; an unsigned
+    // index and w18-b's `size() > frameIdx` were inert / worse).
+    for (int i = 0; i < 2; i++) {
+        frames[i] = nullptr;
+    }
     for (int frameIdx = 0; frameIdx < qframes.size(); frameIdx++) {
         FilterInputFrame &frame = qframes[frameIdx];
         frame.mDetectFrame->AddError(oframes[frameIdx].mErrors, frame.mSongBeats);
