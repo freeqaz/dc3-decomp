@@ -330,15 +330,15 @@ void HamRibbon::UpdateChase() {
 }
 
 void HamRibbon::UpdateMesh() {
-    int histSize = mChaseKeys.size();
-    if (histSize != 0) {
+    if (mChaseKeys.size() != 0) {
+        int histSize = mChaseKeys.size();
         ObjPtrList<RndTransformable>::iterator it = mSegTrans.begin();
         float lastFrame = mChaseKeys.back().frame;
         Key<Transform> *keyPtr;
-        // RESIDUAL (w13-b, 98.81): the image tests this in cr0 (`cmpwi r23, 0x0`
-        // / `bgt`), we use cr6.  `>= 1` is worse; the loop below is now exact.
-        // w18-b: `keyPtr = histSize > 0 ? &mChaseKeys[0] : keyPtr;` is inert
-        // (same 2 rows, still cr6).
+        // w21-t (98.81 -> 100): the image's cr0 `cmpwi r23, 0x0` / `bgt` here
+        // comes from the outer test calling size() itself and histSize being a
+        // second, CSE'd size() call inside the block.  Testing a histSize
+        // local (w13-b) put this compare in cr6.
         if (histSize > 0) {
             keyPtr = &mChaseKeys[0];
         }
