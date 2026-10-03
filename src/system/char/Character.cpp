@@ -364,6 +364,16 @@ void Character::UpdateSphere() {
     SetSphere(s78);
 }
 
+inline void ProbePlane(Plane &p, const Vector3 &point, const Vector3 &normal) {
+    p.a = normal.x;
+    p.b = normal.y;
+    p.c = normal.z;
+    float dot = normal.x * point.x;
+    dot += normal.y * point.y;
+    dot += normal.z * point.z;
+    p.d = -dot;
+}
+
 void Character::DrawShadow(const Transform &xfm, float planeD) {
     if (mShowing && !mShadow.empty()) {
         Vector3 worldPos = WorldXfm().v;
@@ -373,11 +383,30 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
         // `fneg` -- the constructor's
         // `d = -(n.x*p.x + n.y*p.y + n.z*p.z)` with n = (0,0,1) and the point's
         // z already offset by planeD (n.z*p.z folds away, n.x/n.y do not).
-        Plane pl70(
-            Vector3(worldPos.x, worldPos.y, worldPos.z + planeD), Vector3(0, 0, 1)
-        );
+        // w21-u: the plane through (worldPos.x, worldPos.y, worldPos.z +
+        // planeD) with normal (0, 0, 1), i.e. Plane(point, normal) with its
+        // dot product accumulated one term per statement.  A single-statement
+        // sum (the header ctor, or any flat `0*x + 0*y + ...` spelling) lets
+        // /fp:fast factor x*0 + y*0 into (x+y)*0 and fuse the negate; the image
+        // keeps `fmuls x*0` / `fmadds y*0 + that` (statement boundaries stop
+        // the factoring).  Same value on every input: the two zero-weighted
+        // terms are +-0 or NaN whatever the grouping.  97.32 -> 98.6.
+        Plane pl70;
+        float dot = 0.0f * worldPos.x;
+        dot += 0.0f * worldPos.y;
+        dot += worldPos.z + planeD;
+        pl70.Set(0, 0, 1, -dot);
 
-        // Residual here, 8 rows / 8 B at 97.32 canonical = 97.32 raw: the
+        // w21-u residual at 98.6 (4 rows): load order (image y,z,x; ours
+        // x,z,y) and the last two adds -- the image adds (z + planeD) as one
+        // term, we emit (dot + z) + planeD.  Measured, all 97.0-97.2 or worse:
+        // a separate `shadowZ = z + planeD` statement before or after the
+        // products, `-(dot + (z + planeD))` in the Set call, a Vector3 point
+        // temp, a local inline Plane(point, normal) with an accumulator body,
+        // y-product first; `dot += z; dot += planeD;` is identical (98.6).
+        // Every spelling that keeps (z + planeD) as one term schedules it
+        // before the products and flips the fmadds operands.
+        // Old residual (before w21-u), 8 rows / 8 B at 97.32 canonical: the
         // image does NOT reassociate the two zero-weighted terms of the plane
         // constant.  With normal = (0,0,1) constant-propagated, f31 = 0.0f:
         //   image  fmuls f12, f12, f31 / fmadds f0, f0, f31, f12 / fadds f13,
