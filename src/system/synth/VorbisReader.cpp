@@ -670,10 +670,10 @@ bool VorbisReader::DecodeThreadPoll() {
             if (unk100 != -1 && pos >= 0 && pos != unk100 + queued) {
                 printf("start = %i cur = %i got = %i\n", (int)unk100, queued, (int)pos);
             }
-            space = Min(space, got);
+            int n = Min(space, got);
             for (int c = 0; c < mNumChannels; c++) {
-                unkf4[c].resize(queued + space);
-                for (int i = 0; i < space; i++) {
+                unkf4[c].resize(queued + n);
+                for (int i = 0; i < n; i++) {
                     unkf4[c][queued + i] =
                         (short)Clamp(-32767.0f, 32767.0f, pcmPtr[c][i] * 32767.0f);
                 }
