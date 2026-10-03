@@ -2179,10 +2179,12 @@ bool HamDirector::InPracticeMode() {
     return GetPracticeFrames(start, end);
 }
 
-// w20-s (97.2): branch row 39 -- we hoist the two `lis __real@0/__real@1.0`
-// above `if (clip2)`; the image materialises them in each arm.  Same
-// ScaleAdd arguments on both arms (1-blend/frame1/0 then blend/frame2/0, or
-// 1.0/frame1/0).  ARTIFACT.
+// w21-aa: 97.19 -> 100 (modulo register permutation).  The clip1 weight
+// `1.0f - blendFrac` is computed into its own local BEFORE the call: the
+// image loads 1.0 (r11) ahead of 0.0 (r10) in the blend arm, so the two
+// arms disagree on registers and MSVC cannot hoist the `lis` pair above
+// `beq` (the residual w7-q / w20-s filed as an artifact).  Same float
+// subtraction, same arguments.
 void HamDirector::PoseIconMan(
     CharClip *clip1, float frame1, RndTex *tex, bool applyFacing, CharClip *clip2, float frame2, float blendFrac
 ) {
@@ -2199,12 +2201,11 @@ void HamDirector::PoseIconMan(
         //     `fadds f0,f13,f0` where the image has `fadds f0,f0,f13`).
         //   * Scoping those same locals INTO the blend arm does not move the
         //     constant anchors either, and brings that distant row back.
-        // Literals close idx 198.  The remaining residual is the two `lis`
-        // anchor loads: the image re-materialises `__real@3f800000` /
-        // `__real@00000000` inside each arm, our build CSEs them into the
-        // branch-delay window above `beq`.  Not source-controlled here.
+        // Literals close idx 198.  (The `lis` residual this comment used
+        // to call uncontrollable closed via `weight1` below -- w21-aa.)
         if (clip2) {
-            clip1->ScaleAdd(meshes, 1.0f - blendFrac, frame1, 0.0f);
+            float weight1 = 1.0f - blendFrac;
+            clip1->ScaleAdd(meshes, weight1, frame1, 0.0f);
             clip2->ScaleAdd(meshes, blendFrac, frame2, 0.0f);
         } else {
             clip1->ScaleAdd(meshes, 1.0f, frame1, 0.0f);
@@ -3197,6 +3198,19 @@ void HamDirector::OnPopulateFromMoveMgr() {
 // iteration (`stw r11, 0x60(r31)` at 0x82474D0C, never read back) -- some
 // address-taken temporary in the original search that we do not have; the
 // String/Symbol locals below are shifted by +0x20 as a result.  Not found.
+// w21-aa (99.27 -> 99.27 canonical; fuzzy up): BEHAVIOUR FIX -- the image
+// tests `keyBeat + beatExtra < 0` and zeroes beatExtra (0x82474E64 `fadds
+// f0,f1,f29`, 0x82474E78 `fmr f29,f30`; f29 = 2nd float param, 0x82474BD0
+// `fmr f29,f2`); ours tested/zeroed beatOffset.  The beat sum is keyBeat +
+// beatOffset + beatExtra (0x82474E88/8C).  Normalized could not see this: it
+// read as an f28<->f29 permutation.  MILO_NOTIFY arg is const char*
+// (MakeString<PBD>, name_check row).  Store probes for the dead
+// `stw r11,0x60(r31)` (r11 = _M_start, per iteration): `keys->at(i)` DOES
+// produce it and the image's frame size, but also a range check + a second
+// store of the element address (95.1); a named `Key<Symbol> &` in the loop
+// stores the ELEMENT address, not begin; `(keys->begin()+i)->value` and a
+// `size()` loop bound: no store.  Remaining: that store x2, frame +0x10, the
+// r28<->r30 / r10<->r11 renaming it implies.
 void HamDirector::DrawIconMan(Symbol moveName, Symbol nextClip, Symbol prevClip, float beatOffset, float beatExtra, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {
         SetMasterClipAnim();
@@ -3238,11 +3252,11 @@ found:
 
     Key<Symbol> &foundKey = (*keys)[foundIdx];
     float keyBeat = SecondsToBeat(foundKey.frame / 30.0f);
-    if (keyBeat + beatOffset < 0.0f) {
-        beatOffset = 0.0f;
+    if (keyBeat + beatExtra < 0.0f) {
+        beatExtra = 0.0f;
     }
 
-    float beat = SecondsToBeat(foundKey.frame / 30.0f) + beatExtra + beatOffset;
+    float beat = SecondsToBeat(foundKey.frame / 30.0f) + beatOffset + beatExtra;
     float frame = BeatToSeconds(beat) * 30.0f;
     SecondsToBeat(foundKey.frame / 30.0f);
 
@@ -3254,7 +3268,7 @@ found:
 
     CharClip *clip = mClipDir->Find<CharClip>(clipKey.value.Str(), false);
     if (!clip) {
-        MILO_NOTIFY("Could not draw IconMan for %s", (char *)moveName.Str());
+        MILO_NOTIFY("Could not draw IconMan for %s", moveName.Str());
         return;
     }
 
@@ -3269,31 +3283,12 @@ found:
     PoseIconMan(clip, poseBeat, tex, (bool)tex, NULL, 0.0f, 0.0f);
 }
 
-// RESIDUAL (w8-n, 99.4266 canonical): 44 rows but ONE cause, and the diagnosis is solid even
-// though the fix is not.  Both sides are 218 instructions; the only non-register
-// rows are idx 195/196, where the image recomputes the keys array address
-// (`slwi r10, r10, 3` / `lwzx r5, r10, r9`) and we keep its base in the
-// CALLEE-SAVED r28 (`add r8, r28, r10` / `lwz r5, 0x8(r8)`).  That one extra live
-// value is why the prologue is __savegprlr_25 against the image's _26 and the
-// frame is 0x10 larger, and every r27->r26 / r26->r25 rename below is the shift.
-// REFUTED: un-hoisting `Key<Symbol> &key = keys->at(clipIdx)` into two direct
-// `keys->at(clipIdx)` accesses DOES remove the extra callee-saved register (the
-// PROLOGUE_MISMATCH pattern disappears) but adds 6 instructions, for 96.4.
-// OUT OF REACH of the map-COMDAT lever (a COMDAT callee is link-time
-// replaceable, so MSVC will not propagate its clobber set and the caller has to
-// spill to non-volatiles -- which can make a save-set difference an `inline`
-// keyword on the callee).  That lever needs a SAME-TU callee, and here it has
-// none to work on: of this function's callees, the only three the image marks
-// `f i` in orig/373307D9/ham_xbox_r.map are ?Mod@@YAMMM@Z (char:
-// CharLipSyncDriver.obj), ?KeyLessEq@?$Keys@VSymbol@@V1@@@QBAHM@Z and
-// ?__stl_throw_out_of_range@stlpmtx_std@@YAXPBD@Z -- all CROSS-TU, where neither
-// side can propagate anything.  Every callee defined in HamDirector.cpp itself
-// (GetPropKeys, PoseIconMan, SetMasterClipAnim, DrawIconMan(Symbol,...)) is bare
-// `f`, so there is no in-TU COMDAT-ANY callee to match in the first place.
-// Do NOT read this as "our linkage classes already agree": MSVC/Xenon puts every
-// function we compile in its own COMDAT and our objects emit NODUPLICATES for
-// both classes, so we reproduce neither.  The claim here is only about which
-// callees are same-TU.
+// w21-aa: 99.43 -> 100 (modulo register permutation).  The w8-n residual
+// (we kept clipIdx*8 in callee-saved r28 and read the next key as
+// `lwz r5, 0x8(r8)`; the image recomputes `slwi r10, r10, 3` / `lwzx`)
+// closed by naming `nextIdx = clipIdx + 1` before the bound test: MSVC then
+// no longer CSEs (clipIdx+1)*8 into clipIdx*8 + 8.  Same unsigned compare
+// (int converted to size_type), same index.
 void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, float duration, float beatExtra, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {
         SetMasterClipAnim();
@@ -3339,8 +3334,9 @@ void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, floa
             float clipBeat = SecondsToBeat(key.frame / 30.0f);
             Symbol nextValue;
             Symbol prevValue;
-            if ((unsigned)(clipIdx + 1) < keys->size()) {
-                nextValue = (*keys)[clipIdx + 1].value;
+            int nextIdx = clipIdx + 1;
+            if (nextIdx < keys->size()) {
+                nextValue = (*keys)[nextIdx].value;
             }
             if (clipIdx > 0) {
                 prevValue = keys->at(clipIdx - 1).value;
