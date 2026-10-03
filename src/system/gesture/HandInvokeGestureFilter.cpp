@@ -70,6 +70,17 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
     }
     return _result;
 }
+// w21-ao: the image sums both elevation dot products as x + (y + z), the z
+// product first (0x82DFE234-0x82DFE260: `fmuls` uz*rz, `fmadds` y, `fnmadds` x;
+// left arm 0x82DFE268-0x82DFE2A8).  The engine Dot() compiled to y + (x + z) for the right
+// arm -- /fp:fast re-sorts a flat sum per context -- which is a different
+// rounding on every target.  This helper pins the image's association; it
+// takes references like Dot(), so MSVC still materialises the dead &unk40
+// (`addi r11, r30, 0x40`).  The name is mine.
+static inline float DotZYX(const Vector3 &a, const Vector3 &b) {
+    return (a.z * b.z + a.y * b.y) + a.x * b.x;
+}
+
 // w20-p branch-landing row 292 (image `bne` onto `li r11, 0x1`, ours one row
 // past it): ARTIFACT -- jump threading; on that edge r11 already holds 1.
 // w21-n (99.02 canonical, unchanged): every value re-checked against the image
@@ -143,9 +154,9 @@ bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
 
     // Project the arm directions onto the body side vector (unk40) and onto
     // the body normal.
-    float rightElevation = -Dot(unk40, rightArmDir);
+    float rightElevation = -DotZYX(unk40, rightArmDir);
     float rightForward = Dot(rightArmDir, unk4.Value());
-    float leftElevation = -Dot(unk40, leftArmDir);
+    float leftElevation = -DotZYX(unk40, leftArmDir);
     float leftForward = Dot(unk4.Value(), leftArmDir);
 
     float negZero = -0.0f;
