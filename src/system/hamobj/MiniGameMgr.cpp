@@ -122,10 +122,13 @@ void MiniGameMgr::UpdateCascadeMovePool(
                && allMoves.size() > mBlockingFactor + mNumMovesNeeded) {
             const MoveVariant *mv = *it;
             bool b8 = true;
-            if (i != 0) {
-                MILO_ASSERT(0, 0xB3);
-            } else {
+            switch (i) {
+            case 0:
                 b8 = mv->Song() == TheGameData->GetSong();
+                break;
+            default:
+                MILO_ASSERT(0, 0xB3);
+                break;
             }
             if (b8) {
                 ++it;
