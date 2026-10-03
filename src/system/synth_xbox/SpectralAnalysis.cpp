@@ -66,6 +66,13 @@ void SpectralAnalysis::Analyze(const float *in, float *out) {
     // unsigned i (identical), pc before ps (fixes the lwz pair, kept),
     // walking lo/hi pointers for data (93.3), mSinTable[i]/mCosTable[i]
     // read directly in the loop (92.2, loads land inside the loop).
+    // w20-e (still 95.48387, same 15 rows 54-88): also tried and refuted --
+    // `for (int i = 1; i < quarter; ++i)` (93.2: trip count becomes bdnz),
+    // s/c table loads hoisted to the top of the body or swapped (identical),
+    // `const float *` tables (identical), table loads folded into the pc/ps
+    // products (identical), a separate decrementing hi index for
+    // data[half - i] (94.2).  The cos-off-sin bias chain survives every
+    // spelling of the loop body.
     float *data = &mData0[0];
     int half = (unsigned int)mFftSize >> 1;
     float *sinT = &mSinTable[0];
