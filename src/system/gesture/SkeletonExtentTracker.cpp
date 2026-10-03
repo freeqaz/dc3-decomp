@@ -50,8 +50,11 @@ void SkeletonExtentTracker::Poll() {
     }
 }
 
+// w21-w: 94.87 -> 100 by returning a constructed Rect from each arm instead of
+// filling a named `ret` with Set() (lever (b): build the result directly in the
+// output object).  The w8-i "mMax.x lands in f0 instead of f11" residual was a
+// consequence of the named local, not an FPR floor.  Same values on every path.
 Hmx::Rect SkeletonExtentTracker::GetViewBox() const {
-    Hmx::Rect ret;
     if (mMin.x != FLT_MIN && mMin.x != FLT_MAX && mMin.y != FLT_MIN && mMin.y != FLT_MAX) {
         float val = Min(mMax.y - mMin.y, 1.0f);
         // w8-i BUG FIX: the y component is mMin.y, not mMax.y.  0x82DFE79C loads
@@ -62,17 +65,10 @@ Hmx::Rect SkeletonExtentTracker::GetViewBox() const {
         // passed mMax.y, so every view box sat at the TOP of the tracked extent
         // instead of the bottom -- a full box-height offset on the mesh UVs that
         // ApplyToMeshVerts lays out.
-        // RESIDUAL after the fix (w8-i, 94.87 canonical / 94.74359 fuzzy): 3 rows
-        // of 40, all one scheduling slot -- `lfs f0, 0x34(r4)` (mMax.x) is emitted
-        // before the `lis r10, __real@3f000000@h` anchor where the image emits
-        // `lfs f11, 0x34(r4)` after it.  Pure FPR choice: in the image mMax.x
-        // lands in f11 (dead since the FLT_MIN guard), in ours in f0 (dead since
-        // the mMin.y store one instruction earlier).  Was 89.74 before the fix.
-        ret.Set(((mMax.x + mMin.x) / 2.0f) - (val / 2.0f), mMin.y, val, val);
+        return Hmx::Rect(((mMax.x + mMin.x) / 2.0f) - (val / 2.0f), mMin.y, val, val);
     } else {
-        ret.Set(0, 0, 1, 1);
+        return Hmx::Rect(0, 0, 1, 1);
     }
-    return ret;
 }
 
 void SkeletonExtentTracker::ApplyToMeshVerts(RndMesh *mesh, bool mirrored) const {

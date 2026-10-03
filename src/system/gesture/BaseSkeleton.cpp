@@ -124,6 +124,13 @@ void BaseSkeleton::NormPos(SkeletonCoordSys cs, SkeletonJoint joint, Vector3 &v)
 // take, not a live range we can shorten from source.
 // Both MakeString rows in the Function Call Diff are ICF folds (the assert
 // format string and the "Unsupported joint %i" one), not wrong callees.
+// w21-w (98.28 canonical, 5 of 175 rows, unchanged): behaviour re-read against
+// the image (index ternaries, root/joint compare chain, MILO_FAIL path branches
+// to the epilogue, `normalize && len > 0` guard on the fdivs) -- ours agrees;
+// the source is token-identical to og-dc3-decomp's.  Measured byte-inert:
+// early `if (joint == rootJoint) return;`, bone locals declared first, int
+// bone locals cast at the call, `totalLength = 0; totalLength += ...` (not
+// shippable anyway: -0.0f -> +0.0f).
 void BaseSkeleton::LimbNormPos(
     SkeletonCoordSys cs,
     SkeletonJoint joint,
@@ -231,6 +238,13 @@ void BaseSkeleton::LimbNormPos(
 // tail vs ours into the last store): ARTIFACT -- shared vs duplicated tail;
 // both store v60-v80, v64-v84, v68-v88. The MakeString name diff is an ICF
 // fold (824d1870 in the map carries both spellings).
+// w21-w (95.93 canonical, 44 of 222 rows, unchanged): behaviour re-read against
+// the image -- z is always (v - v) = 0 on arm/leg (branch-selected `lfs` then
+// `fsubs f0, f0, f0`), kUnk5 subtracts all three, the default case skips the
+// stores -- ours agrees.  Measured, all no better: `limbDir -= nearJoint` in
+// kUnk5 (95.73) or all three arms (95.00); kUnk5 subtraction orders xzy 94.55,
+// yxz 95.00, yzx 95.73, zxy 95.72; arm/leg copy-statement orders nol/onl 95.93,
+// lno/lon 95.86, oln 95.85; `limbDir.z = -nearJoint.z + limbDir.z` byte-inert.
 void BaseSkeleton::MakeCameraToPlayerXfm(
     SkeletonCoordSys cs,
     Transform &xfm,

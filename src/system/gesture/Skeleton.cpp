@@ -241,6 +241,13 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 // MILO_ASSERT left a Skeleton-specific literal behind to name.
 // Still no evidence for WHICH throwing statement Init had, and the brief
 // forbids inventing one, so the 10-row EH residual stays.
+// w21-w (89.605, unchanged; not re-attacked beyond reading): the image's own
+// Init (0x824368C8) and _M_erase are call-for-call ours (memset; _M_erase ->
+// memcpy only), and the target object's compile order (_M_erase, Init, Poll,
+// ctor) is the same as ours, so neither the bodies nor the definition order
+// explain why the original ctor treated Init() as may-throw.  Behaviour of the
+// ctor itself (vtable, 20x ??_H TrackedJoint init, mTracking=0,
+// mTrackingID=-1, unkac4=0.0f, empty vector, Init()) agrees with the image.
 Skeleton::Skeleton() : mTracking(kSkeletonNotTracked), mTrackingID(-1), unkac4(0) {
     Init();
 }
