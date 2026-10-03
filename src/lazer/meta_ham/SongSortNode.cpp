@@ -293,6 +293,13 @@ bool SongSortNode::IsFake() const {
     }
 }
 
+// w20-f: normalized 100 / fuzzy 99.9165, 479/479 instructions equal; no
+// operand or branch divergence.  The 8 charged rows are ham1/ham2/ham3
+// (?BH@ vs our ?CP@) and song_select_song_prefix (?FF@ vs our ?HK@) scope
+// indices -- but ham_xbox_r.map has NO local statics for this function, so
+// those symbols.txt names were synthesised from an early build of ours
+// (f821f972f) and are not evidence (fixable-scope-index.md, "The target side
+// is ham_xbox_r.map").  Left alone.
 void SongSortNode::Text(UIListLabel *ull, UILabel *ul) const {
     static Symbol score("score");
     static Symbol disc("disc");
