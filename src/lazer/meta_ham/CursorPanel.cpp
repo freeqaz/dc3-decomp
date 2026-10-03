@@ -91,15 +91,14 @@ void CursorPanel::Poll() {
             float angle = tanned + (PI / 2);
             Vector3 v110(0, 0, angle);
             MakeRotMatrix(v110, trans.m, true);
-            // 18 rows of residual live here and neither obvious lever moves them:
-            // `Scale(trans.m.x, 4, trans.m.x)` x3 (Vector3::Set batched form) is
-            // byte-identical, and reversing the three statements to z,y,x measures
-            // 95.5.  The image loads 0xa8,0xa4,0x90,0xb8,0x94,0xb4,0x98,0xa0,0xb0
-            // and stores 0x90,0x94,0x98,0xa0,0xb0,0xa8,0xa4,0xb8,0xb4 -- neither
-            // sequence is a program order, so this reads as MSVC scheduling.
-            trans.m.x *= 4;
-            trans.m.y *= 4;
-            trans.m.z *= 4;
+            // w21-e: the image's scrambled 9-load/9-store block (loads 0xa8,0xa4,
+            // 0x90,0xb8,...; stores 0x90,0x94,0x98,0xa0,0xb0,...) is the math/Mtx.h
+            // Scale(const Vector3 &, const Matrix3 &, Matrix3 &) inline with a
+            // (4,4,4) vector -- closes all 18 rows.  Same values as scaling each
+            // row by 4.  (Scale(trans.m, Vector3(4,4,4), trans.m), the other
+            // overload, is far worse: 85.1.)  Earlier refuted spellings:
+            // `trans.m.x *= 4` x3 (95.5 reversed), Scale(trans.m.x, 4, ...) x3.
+            Scale(Vector3(4, 4, 4), trans.m, trans.m);
             pMat->SetTexXfm(trans);
         } else {
             trans.v.x = 2;
