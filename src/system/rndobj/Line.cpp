@@ -399,7 +399,8 @@ inline void Add(const Vector3 &v, const Vector2 &d, Vector3 &dst) {
  *  (w21-c): the image only shows it inlined into UpdateLinePair, with the same
  *  `len == 0 -> 0` join (beq to `fmr f0, f11`) and y-then-x stores that
  *  RndLine::UpdateLinePair's hand-written version had.  Same shape as the
- *  Vector3 Normalize in math/Vec.h. */
+ *  Vector3 Normalize in math/Vec.h.  Safe in place (in == out): each
+ *  component is read before it is written, and y is never read again. */
 inline void NormalizeDir(const Vector2 &in, Vector2 &out) {
     float inv = 0;
     float len = std::sqrt(in.x * in.x + in.y * in.y);
