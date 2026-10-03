@@ -459,9 +459,11 @@ void SkeletonUpdate::UpdateCallbacks() {
     }
 
     for (int i = 0; i < 2; i++) {
+        // w21-w: the null store comes BEFORE the cursor setup -- the image
+        // issues `stw r25, 0x0(r11)` ahead of `mr r10, r27` (98.89 -> 99.99).
+        mSkeletonsLeft[i] = nullptr;
         int j = 0;
         Skeleton *skel = &mSkeletons[0];
-        mSkeletonsLeft[i] = nullptr;
         for (; j < NUM_SKELETONS; j++, skel++) {
             if (mSkeletonTrackingIDs[i] == skel->TrackingID()) {
                 mSkeletonsLeft[i] = skel;
@@ -470,16 +472,19 @@ void SkeletonUpdate::UpdateCallbacks() {
         }
     }
 
-    Skeleton **rightSkeletons = (Skeleton **)&mSkeletonsRight[0];
     for (int i = 0; i < NUM_SKELETONS; i++) {
-        rightSkeletons[i] = &mSkeletons[i];
+        mSkeletonsRight[i] = &mSkeletons[i];
     }
 
     // w19-c: the image stores mHistory (0x8c) before mCameraInput (0x90); we
     // store them the other way round.  Inert: field stores in either order,
     // an aggregate initialiser, and the constructor (which closed PostUpdate).
+    // w21-w (99.989, these 2 rows are all that is left): also inert -- a
+    // `CameraInput *cam = mCameraInput;` local, array-decay arguments, the
+    // ctor with a null camera then `data.mCameraInput = ...`, an explicit
+    // iterator loop instead of FOREACH.
     SkeletonUpdateData data(
-        &mSkeletonsLeft[0], (Skeleton **)&mSkeletonsRight[0], &mSkeletonFrame, this, mCameraInput
+        &mSkeletonsLeft[0], &mSkeletonsRight[0], &mSkeletonFrame, this, mCameraInput
     );
     FOREACH (it, mCallbacks) {
         (*it)->Update(data);
