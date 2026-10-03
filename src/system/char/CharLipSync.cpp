@@ -309,8 +309,8 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
                     Symbol visemeSym = result.Array(0)->Sym(visemeIdx);
                     ObjPtr<CharClip> &clip = _ref2[numVisemes].mClip;
                     clip = mClips->Find<CharClip>(visemeSym.Str(), false);
-                    numVisemes++;
                     visemeIdx++;
+                    numVisemes++;
                 } while (numVisemes < newSize);
             }
         }
