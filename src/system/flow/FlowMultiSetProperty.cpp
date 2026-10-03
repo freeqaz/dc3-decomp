@@ -63,7 +63,11 @@ bool FlowMultiSetProperty::Activate() {
     if (!mTargets.empty()) {
         DrivenPropertyEntry *node = GetDrivenEntry("value");
         if (node != nullptr) {
-            mPropertyValue = mTargets[0]->Property(mProperty.Array(), true)->Evaluate();
+            // w21-u: copied into a local -- the image reads the element
+            // before evaluating mProperty.Array() (with the by-reference
+            // subscript a direct `mTargets[0]->` reads it after).
+            Hmx::Object *target = mTargets[0];
+            mPropertyValue = target->Property(mProperty.Array(), true)->Evaluate();
         }
     }
     FlowNode::PushDrivenProperties();

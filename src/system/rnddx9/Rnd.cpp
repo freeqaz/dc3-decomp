@@ -324,7 +324,11 @@ void DxRnd::PopClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
         if (i * 0x14 >= 0x78) {
             break;
         }
-        if (planes[i]) {
+        // w21-u: element copied into a local (image `cmpwi` on the loaded
+        // value; a direct `if (planes[i])` through the by-reference
+        // subscript is `cmplwi`).
+        RndTransformable *plane = planes[i];
+        if (plane) {
             unk408--;
         }
     }

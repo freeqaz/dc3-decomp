@@ -649,81 +649,26 @@ int HamCharacter::SongAnimation() {
     return -1;
 }
 
-// RESIDUAL (w8-i, 95.24 canonical / 94.76 fuzzy): 3 rows of 21, all one artefact.
-// The image keeps the loaded node pointer in r10 and makes a SEPARATE zero-extended
-// copy to address through -- `lwz r10, 0xc(r11)` / `cmplwi cr6, r10, 0` /
-// `clrrwi r11, r10, 0` / `lbz r11, 0x8(r11)` -- where we load straight into r11 and
-// address through that, dropping the copy.  Two spellings measured, both WORSE:
-//   `size() > prop && mShowableProps[prop] && mShowableProps[prop]->Showing()`
-//        -> 92.38 canonical; the double subscript does NOT produce the clrrwi, it only
-//           turns the null test from `cmplwi` into a signed `cmpwi`.
-//   ... `mShowableProps[prop] != nullptr && ...` -> 92.38, identical rows.
-// The assignment-expression form below is what keeps the test unsigned.
-// w21-g (stopped at 95.24 canonical, same 3 rows): the `clrrwi` is NOT
-// function-local -- RndFont::SetBitmapSize (98.73, `mat ? mat->GetDiffuseTex()
-// : nullptr` over ObjPtrVec<RndMat>) and the four SetPropShowing copies in
-// SyncProperty carry the identical image-only `clrrwi rB, rA, 0` after the
-// null test of an ObjPtrVec element, and no ObjPtrVec element site in our
-// build emits it.  Two whole-binary experiments on ObjPtrVec::operator[] in
-// obj/Object.h (full ninja each): `return mNodes[idx];` (conversion operator
-// instead of Obj()) and returning `ObjRefConcrete<T1,T2> &` -- both 0 UP /
-// 0 DOWN over 48,365 functions, so the inline path is not the handle.  Also
-// measured here: `d = size() > prop ? v[prop] : nullptr; return d &&
-// d->Showing();` 85.7; nested `if (d) return d->Showing() != 0;` 81.9; `d ?
-// d->Showing() : false` 78.1 (drops the image's bool re-normalisation).
-// w21-u (95.24, same 3 rows): where the clrrwi DOES come from in our build --
-// a pointer that is re-read from a RAW member and CSE'd: HamAudio::IsFinished
-// (`mSongStream && mSongStream->IsFinished()`), HamAudio::GetTime, and
-// HamAudio::Play's `if (mStreams[i]) mStreams[i]->...` all emit `cmplwi rA /
-// beq / clrrwi r3, rA, 0` and are 100.  Re-reading an ObjPtrVec element does
-// not: the double subscript gives a SIGNED cmpwi and no copy, and stays so
-// with ObjPtrVec::operator[] returning `Node &` (conversion operator +
-// operator-> at the use, full ninja: whole binary 0 UP / 0 DOWN besides this
-// row at 92.38).  A copy local (`RndDrawable *shown = d; d && shown->...`)
-// is 85.7.  So the image re-reads something that is NOT an inline accessor
-// result -- 126 image functions carry this shape (scan of
-// build/373307D9/asm for `cmplwi rA,0 / beq / clrrwi rB,rA,0`).
+// w21-u: 100.  The element is read twice through ObjPtrVec::operator[], which
+// returns the stored pointer by reference (see its comment in obj/Object.h):
+// the image's `cmplwi r10 / beq / clrrwi r11, r10, 0 / lbz 0x8(r11)` is that
+// double read.  Earlier lanes (w8-i, w21-g) measured the double read only with
+// the by-value subscript, where it gives a signed cmpwi (92.38).
 bool HamCharacter::GetPropShowing(int prop) {
-    RndDrawable *d;
-    auto _tmp0 = mShowableProps.size();
-    return _tmp0 > prop && (d = mShowableProps[prop]) && d->Showing();
+    return mShowableProps.size() > prop && mShowableProps[prop]
+        && mShowableProps[prop]->Showing();
 }
 
 void HamCharacter::SetPropShowing(int prop, bool show) {
-    // NOTE (w7-x): HamCharacter::SyncProperty inlines this four times and sits at
-    // 97.93% on exactly those four copies. The image keeps `cmplwi/beq/clrrwi`
-    // inline in each copy and cross-jumps only the shared `bl SetShowing`; our
-    // build cross-jumps one instruction deeper, merging the null test too (12
-    // target-only instructions, 2276 vs 2324 bytes).
-    //
-    // MECHANISM (w9-f, read off the listing at 82490C34-82490C48): the image
-    // loads the element into a SCRATCH (`lwz r10, 0xc(r11)`), tests r10, and
-    // only then copies it into the argument register (`clrrwi r3, r10, 0`), so
-    // the `beq` cannot be part of the shared tail -- only `bl SetShowing; b`
-    // at .L_82490B50 is, and that block is shared with the crew_card_showing
-    // setter.  We load straight into r3, which makes our per-site tail
-    // `cmplwi cr6, r3, 0 / beq / bl / b` identical across sites, so MSVC
-    // cross-jumps three instructions deep instead of two.  The r10->r3
-    // register "swap" objdiff reports is the consequence, not the cause: once
-    // the shared block tests r3, the load has to target r3.
-    //
-    // THREE MORE SPELLINGS MEASURED, none reaches it (w9-f):
-    //   `if (mShowableProps[prop]) mShowableProps[prop]->SetShowing(show);`
-    //        (nested ifs, repeated subscript)   -> 97.43, WORSE: the merge gets
-    //        deeper still (site 1 loses its cmplwi too) and a subfe moves.
-    //   `RndDrawable *d; if (size() > prop && (d = mShowableProps[prop]) != 0)`
-    //        (the assignment-expression idiom that fixed GetPropShowing)
-    //                                          -> byte-identical, 97.93, same
-    //        21 rows.  MSVC folds it back to the nested-if form.
-    //   w7-x's `mShowableProps[prop] && mShowableProps[prop]->...` with &&
-    //                                          -> 97.37, WORSE.
-    // Cross-jump DEPTH is a backend decision with no source handle found; the
-    // four copies are identical by construction, so no per-site spelling can
-    // make their tails differ.
+    // w21-u: element read twice through the by-reference subscript; this is
+    // what takes HamCharacter::SyncProperty (four inlined copies) from 97.93
+    // to 99.8.  The image's `lwz r10 / cmplwi r10 / beq / clrrwi r3, r10, 0`
+    // per copy is the re-read copied into the argument register, so only
+    // `bl SetShowing; b` is cross-jumped (w9-f read that mechanism correctly
+    // but measured the double read with the by-value subscript: 97.43).
     if (mShowableProps.size() > prop) {
-        RndDrawable *drawable = mShowableProps[prop];
-        if (drawable)
-            drawable->SetShowing(show);
+        if (mShowableProps[prop])
+            mShowableProps[prop]->SetShowing(show);
     }
 }
 
