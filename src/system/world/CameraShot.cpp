@@ -607,7 +607,8 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
         // is why the image can colour it onto the constant. Refuted: dropping
         // the `= 0` (97.1, MSVC spills the uninitialised value to the frame);
         // `else if (hasTarget) ... else thisFocalDist = 0;` (99.4, +0x10 frame,
-        // f23 save). Both inits must stay up front.
+        // f23 save). Both inits must stay up front; declaring them at the top
+        // of the doDOF block is bit-identical.
         float thisFocalDist = 0;
         float otherFocalDist = 0;
         if (focus) {
