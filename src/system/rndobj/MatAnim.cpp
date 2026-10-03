@@ -20,6 +20,16 @@ Hmx::Object *RndMatAnim::sOwner;
 // divergence.  MEASURED NEGATIVE (w8-h): a named temp for the global,
 // `Hmx::Object *owner = sOwner; mOwner = owner;`, is byte-inert (89.500,
 // identical instruction table) -- the same folding w7-ac recorded for this TU.
+// w21-y (stopped at 89.50, same 4 rows idx 15-18): behaviour re-checked -- both
+// sides store the same 5 words (ObjRefConcrete vptr, mObject, ring links, TexPtr
+// vptr, mOwner=sOwner).  MEASURED NEGATIVE: (1) the RB3/rb3-xenon spelling
+// `ObjPtr<RndTex>(sOwner, tex)` = 74.0 (sOwner loaded at function entry, before
+// the AddRef block; the image loads it in the join); (2) a DeferOwner overload
+// taking the owner by `Hmx::Object *const &` (load deferred into the base
+// mem-init) = 85.0 -- the load then sits between the ObjPtr and TexPtr vptr
+// stores, so the dead ObjPtr vptr store survives (image has none).  The image
+// needs the load AFTER the AddRef block yet with sOwner's address taking r11
+// before the TexPtr vptr; no tried spelling gives both.
 RndMatAnim::TexPtr::TexPtr(RndTex *tex) : ObjPtr<RndTex>(DeferOwner(), tex) {
     mOwner = sOwner;
 }
@@ -60,6 +70,16 @@ BEGIN_SAVES(RndMatAnim)
     bs << mTransKeys << mScaleKeys << mRotKeys << mTexKeys;
 END_SAVES
 
+// w21-y (was 97.89, 2 rows: the `stw sOwner` sits one slot later in the
+// image, after `subi r4, r31, 0x88` for mKeysOwner = this).  Behaviour checked
+// against the image: ty==1 / ty==2 && owner!=m take the CopyRef branch, the deep
+// path sets sOwner, mKeysOwner and the six key vectors -- identical; the
+// remaining call-name rows are ICF folds.  MEASURED NEGATIVE: SetObjConcrete
+// directly (inert), static_cast<Hmx::Object *>(this) (inert), swapping the two
+// assignments (93.67, store after the call), `RndMatAnim *self = this;` for
+// both = 98.87 (shipped): the store pair then matches, but MSVC CSEs the
+// image's second `this` (`subi r4, r31, 0x88`) into the conversion's register,
+// so 5 rows remain (the conversion reads via r4 instead of r31).
 BEGIN_COPYS(RndMatAnim)
     CREATE_COPY_AS(RndMatAnim, m)
     MILO_ASSERT(m, 0xF2);
@@ -69,8 +89,10 @@ BEGIN_COPYS(RndMatAnim)
     if (ty == kCopyShallow || (ty == kCopyFromMax && m->mKeysOwner != m))
         COPY_MEMBER_FROM(m, mKeysOwner)
     else {
-        sOwner = this;
-        mKeysOwner = this;
+        // w21-y: one named `self` for both stores (97.89 -> 98.87).
+        RndMatAnim *self = this;
+        sOwner = self;
+        mKeysOwner = self;
         mColorKeys = m->mKeysOwner->mColorKeys;
         mAlphaKeys = m->mKeysOwner->mAlphaKeys;
         mTransKeys = m->mKeysOwner->mTransKeys;

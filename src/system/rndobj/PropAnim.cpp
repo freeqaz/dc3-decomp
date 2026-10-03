@@ -906,6 +906,15 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
 // object when there is more than one class-typed return site) that the
 // image did not make from a source we have not found; every instruction of
 // the body already pairs.
+// w21-y (still 92.77, same 35 rows): behaviour re-checked against the image --
+// identical calls, arguments and branch targets in both arms; the only
+// difference remains our EH "sret constructed" flag (li 1 / stw 0x50 after
+// each copy-ctor) and the +0x10 frame it costs.  Not re-measured: every
+// spelling listed above.  Also inert (92.77, byte-identical): `const DataNode
+// ret`, `DataNode ret(flowArr, kDataArray)` + `return DataNode(ret)`, and the
+// second arm as a bare block after the first arm's return.  No new lever found in this wave's catalogue (local
+// ref binding, early-return polarity and tail-merge placement do not touch
+// the EH-state decision).
 DataNode RndPropAnim::OnListFlowLabels(DataArray *arr) {
     if (mFlowLabels.size() != 0) {
         DataArray *flowArr = new DataArray(mFlowLabels.size());

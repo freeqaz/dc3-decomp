@@ -200,9 +200,16 @@ void RndMorph::SetFrame(float frame, float blend) {
         for (ObjVector<Pose>::reverse_iterator it = mPoses.rbegin(); it != mPoses.rend();
              ++it) {
             if ((*it).mesh) {
+                // w21-y: targetIt declared FIRST (99.06 -> 100 normalized).  With
+                // the pose pair first, MSVC strength-reduced the Scale loop with
+                // the TARGET pointer as the primary induction (pose.x via a
+                // derived index) and swapped the vertEnd/itVertEnd callee-saved
+                // registers; the image indexes target.x off the pose pointer
+                // (`stfsx f11, r9, r11`).  Two fmuls/fmadds commutative operand
+                // swaps remain (fuzzy 99.90); same products bit-for-bit.
+                RndMesh::Vert *targetIt = mTarget->Verts().begin();
                 RndMesh::Vert *itVert = (*it).mesh->Verts().begin();
                 RndMesh::Vert *itVertEnd = (*it).mesh->Verts().end();
-                RndMesh::Vert *targetIt = mTarget->Verts().begin();
                 float intenseInterp;
                 if (it + 1 == mPoses.rend()) {
                     intenseInterp = f1;
