@@ -466,31 +466,21 @@ void FreestyleMoveRecorder::ClearDancerTake() { mDancerTakeFrameCount = 0; }
 void FreestyleMoveRecorder::AssignStaticInstance() { sInstance = this; }
 
 BaseSkeleton *FreestyleMoveRecorder::GetLiveSkeleton() {
-    int numFrames = mClipFrameCount;
-    if (numFrames > 0) {
+    if (mClipFrameCount > 0) {
+        // Skip to the requested beat: a beat boundary is where the beat value
+        // wraps (frame i's beat above frame i+1's).
         int count = 0;
-        int idx = 0;
-        int byteOff = 0;
-        while (idx < numFrames && mBeatIndex != count) {
-            float *base = (float *)((char *)mClipFrames + byteOff);
-            if (base[0x2d8 / 4] > base[0x5b4 / 4]) {
+        int i;
+        for (i = 0; i < mClipFrameCount && count != mBeatIndex; i++) {
+            if (mClipFrames[i].mBeat > mClipFrames[i + 1].mBeat) {
                 count++;
             }
-            idx++;
-            byteOff += 0x2dc;
         }
-
-        if (idx < numFrames) {
-            int off = idx * 0x2dc;
-            do {
-                if (*(float *)((char *)mClipFrames + off + 0x2d8) > mPlaybackSpeed * 1000.0f)
-                    break;
-                idx++;
-                off += 0x2dc;
-            } while (idx < numFrames);
+        for (; i < mClipFrameCount; i++) {
+            if (mClipFrames[i].mBeat > mPlaybackSpeed * 1000.0f)
+                break;
         }
-
-        return (BaseSkeleton *)((char *)mClipFrames + idx * 0x2dc);
+        return &mClipFrames[i].skeleton;
     }
     return mSkeletonIndex >= 0 ? &TheGestureMgr->GetSkeleton(mSkeletonIndex) : NULL;
 }
