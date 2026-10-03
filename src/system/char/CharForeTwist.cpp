@@ -99,6 +99,13 @@ void CharForeTwist::Poll() {
     // whole load order from the expression and the fourth callee-saved FPR
     // still does not appear.  The standalone term is not source-addressable
     // through the association either.
+    // w21-i (stopped at 91.29 canonical, same 52 rows): the image's first Dot
+    // IS `y + (x + z)` (fmuls y.z*z.z, fmadds x, fmadds y) -- the association
+    // that closed CharIKFingers::CalculateHandDest's factoring cluster -- but
+    // spelling it that way here, parenthesised, costs 91.29 -> 87.6 (14 non-
+    // register rows).  Swapping the second Dot's operands (Dot(v98, m.x)) is
+    // byte-inert.  `Transform &` (RB3's spelling) does not compile: WorldXfm()
+    // returns const.  The fourth callee-saved FPR is still not source-reachable.
     float clamped = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.y, handxfm.m.z));
     Vector3 v98;
     Cross(parentxfm.m.y, handxfm.m.z, v98);
