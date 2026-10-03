@@ -2179,10 +2179,12 @@ bool HamDirector::InPracticeMode() {
     return GetPracticeFrames(start, end);
 }
 
-// w20-s (97.2): branch row 39 -- we hoist the two `lis __real@0/__real@1.0`
-// above `if (clip2)`; the image materialises them in each arm.  Same
-// ScaleAdd arguments on both arms (1-blend/frame1/0 then blend/frame2/0, or
-// 1.0/frame1/0).  ARTIFACT.
+// w21-aa: 97.19 -> 100 (modulo register permutation).  The clip1 weight
+// `1.0f - blendFrac` is computed into its own local BEFORE the call: the
+// image loads 1.0 (r11) ahead of 0.0 (r10) in the blend arm, so the two
+// arms disagree on registers and MSVC cannot hoist the `lis` pair above
+// `beq` (the residual w7-q / w20-s filed as an artifact).  Same float
+// subtraction, same arguments.
 void HamDirector::PoseIconMan(
     CharClip *clip1, float frame1, RndTex *tex, bool applyFacing, CharClip *clip2, float frame2, float blendFrac
 ) {
@@ -2199,12 +2201,11 @@ void HamDirector::PoseIconMan(
         //     `fadds f0,f13,f0` where the image has `fadds f0,f0,f13`).
         //   * Scoping those same locals INTO the blend arm does not move the
         //     constant anchors either, and brings that distant row back.
-        // Literals close idx 198.  The remaining residual is the two `lis`
-        // anchor loads: the image re-materialises `__real@3f800000` /
-        // `__real@00000000` inside each arm, our build CSEs them into the
-        // branch-delay window above `beq`.  Not source-controlled here.
+        // Literals close idx 198.  (The `lis` residual this comment used
+        // to call uncontrollable closed via `weight1` below -- w21-aa.)
         if (clip2) {
-            clip1->ScaleAdd(meshes, 1.0f - blendFrac, frame1, 0.0f);
+            float weight1 = 1.0f - blendFrac;
+            clip1->ScaleAdd(meshes, weight1, frame1, 0.0f);
             clip2->ScaleAdd(meshes, blendFrac, frame2, 0.0f);
         } else {
             clip1->ScaleAdd(meshes, 1.0f, frame1, 0.0f);
