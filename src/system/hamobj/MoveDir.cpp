@@ -706,6 +706,13 @@ void MoveDir::Poll() {
                 mCurMoveNormalizedResult[i] =
                     DetectFracToRatingFrac(frac, mCurMove[i]->RatingOverride());
             }
+            // w21-o: binding `std::vector<HamMoveKey> &keys` above fixed the
+            // _M_start-first load order and produced the image's _M_start home
+            // store (it lands at 0x54 because our TaskMgr spill still takes
+            // 0x50).  Left: the TheMaster@h hoist / TaskMgr spill below and the
+            // f30/f31 swap of 4.0f/0.0f, i.e. one register-pressure choice.
+            // Inert: the ternary in a `float dt` local; curPlayerData bound
+            // before oldMove.  Worse: no curPlayerData (97.8).
             // REFUTED (w7-i): binding TheMaster to a local `master` here costs
             // 0.56pp -- it flips the null-check branch polarity (2 extra
             // beq<->beq replace rows) without touching the two rows that
@@ -736,6 +743,15 @@ void MoveDir::Poll() {
     }
 }
 
+// w21-o: 99.27 -> 1 row left (the filters block is SetFiltersEnabled(true),
+// which /O1's /Ob2 inlines -- the image's `subi r11, this, 0x1ac` / `mr r3, r11`
+// is the inlined callee's this copy; closing it removed 35 rows).  Last row:
+// the image's dead `stw r11, 0x50(r31)` of numKeys right after `subic. r28`
+// (keyIdx = numKeys - 1); 0x50 is later the fctiwz temp and MakeString's `i`
+// home.  Measured inert: plain `for (keyIdx = numKeys - 1; keyIdx > 0;
+// keyIdx--)`, `keyIdx = hamMoveKeys.size()`, a `(int)` cast in place of
+// `tmp`.  Worse: std::max for i13 (97.1), indexing without the curKey ref
+// (98.5).
 void MoveDir::Enter() {
     PanelDir::Enter();
     int i13 = 0;
