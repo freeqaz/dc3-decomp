@@ -700,6 +700,23 @@ BEGIN_LOADS(RndParticleSys)
             const char *bounceName = MakeString("%s_bounce.trans", FileGetBase(Name()));
             mBounce = Dir()->New<RndTransformable>(bounceName);
             TheLoadMgr.SetEditMode(old);
+            // w21-bj: v is assigned BEFORE m.z: with m.z first the two 16-byte
+            // copies (p150 -> m.z at r31+0x100, the On() temp at 0xa0 -> v at
+            // 0x110) took each other's pointer registers (r8/r9, 11 rows).
+            // Stopped at 10 rows (canonical 99.997, all register-only or
+            // commutative): the image loads p150.b (0x84) before p150.c (0x88)
+            // and squares b first in On()'s sum (fmuls b*b; fmadds c*c + bb;
+            // fmadds a*a + ..), and keeps source operand order in On()'s
+            // c*scalar / b*scalar and both Cross() products; ours loads c first
+            // and flips each of those.  Only On()'s sum differs in value (an
+            // FMA rounds the other square: image fma(c,c,b*b), ours
+            // fma(b,b,c*c)).  Inert (measured): no v128 local (m.z used
+            // directly), v128 as a const Vector3 & alias of p150, v128 declared
+            // after On(), and swapping the operand order of the legacy d terms.
+            // On() and Cross() are math/ inlines (Mtx.h / Vec.h), not touched;
+            // expanding On() at the call site was not tried -- the image keeps
+            // On()'s 0xa0 return temp and its 16-byte copy, which an expansion
+            // would not reproduce.
             Transform worldXfm;
             Vector3 v128(reinterpret_cast<Vector3 &>(p150));
             worldXfm.v = p150.On();
@@ -756,6 +773,7 @@ BEGIN_LOADS(RndParticleSys)
         // template returning BinStream& instead (`return stream >> t;`) was 29
         // DOWN / 0 UP -- the header is right, this site is just spelled this way.
         // Remaining: the 0x84/0x88 load order in p150.On() below (2 rows).
+        // (w21-bj: see the stop note at the bounce transform.)
         BinStream &rotStream = (d >> mRotate).stream;
         rotStream >> mRPM >> mRPMDrag;
         if (d.rev > 0x24) {
