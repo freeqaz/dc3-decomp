@@ -491,7 +491,7 @@ void HamSongMgr::InitializePlaylists() {
         const HamSongMetadata *data = TheHamSongMgr.Data(*it);
         if (data->IsComplete() && !data->IsFake()
             && TheProfileMgr.IsContentUnlocked(data->ShortName())) {
-            Symbol crewSym = GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
+            const Symbol &crewSym = GetCrewForCharacter(GetOutfitCharacter(data->Outfit()));
             sprintf(decadeBuffer, "%d0s", data->YearReleased() / 10);
             Symbol decadeSym = decadeBuffer;
             if (playlistMap.find(crewSym) == playlistMap.end()) {
