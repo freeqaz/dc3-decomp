@@ -24,26 +24,17 @@ void DistortionEffect::Process(float *f, int numSamples, int numChans) {
 
     float amount = (drive / *divisor) * 2.0f;
 
-    if (numSamples > 0) {
+    // w19-d: fuzzy 99.85 -> 100 (byte-identical): plain indexed loop (MSVC
+    // makes the r9/r10 walkers itself); `gain` is loop-scoped -- hoisted above
+    // the loop it is computed before the numSamples guard and recolours f12/f13.
+    for (int i = 0; i < numSamples; i++) {
         float gain = amount + 1.0f;
-        int stride = numChans << 2;
-        int count = numSamples;
-        float *left = f;
-        float *right = f + 1;
-
-        do {
-            float sampleL = *left;
-            *left = (sampleL * gain) / ((fabsf(sampleL) * amount) + 1.0f);
-
-            if (numChans == 2) {
-                float sampleR = *right;
-                *right = (sampleR * gain) / ((fabsf(sampleR) * amount) + 1.0f);
-            }
-
-            left = (float*)((char*)left + stride);
-            right += 2;
-            count -= 1;
-        } while (count != 0);
+        float sampleL = f[i * numChans];
+        f[i * numChans] = (sampleL * gain) / ((fabsf(sampleL) * amount) + 1.0f);
+        if (numChans == 2) {
+            float sampleR = f[i * numChans + 1];
+            f[i * numChans + 1] = (sampleR * gain) / ((fabsf(sampleR) * amount) + 1.0f);
+        }
     }
 }
 

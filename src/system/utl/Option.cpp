@@ -27,10 +27,14 @@ const char *OptionStr(const char *option, const char *def) {
     if (i == TheSystemArgs.end())
         return def;
     else {
-        std::vector<char *>::iterator erased = TheSystemArgs.erase(i);
+        // w19-d: `i` is REASSIGNED from the first erase -- the image's assert
+        // compares erase's return (r3, then r30) with end(), and the second
+        // erase takes that same register.  (Same value either way: vector
+        // erase(pos) returns pos.)
+        i = TheSystemArgs.erase(i);
         MILO_ASSERT(i != TheSystemArgs.end(), 0x5C);
-        def = *erased;
-        TheSystemArgs.erase(erased);
+        def = *i;
+        TheSystemArgs.erase(i);
         return def;
     }
 }

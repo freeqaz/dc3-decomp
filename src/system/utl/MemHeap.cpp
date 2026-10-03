@@ -561,16 +561,20 @@ int *MemHeap::Alloc(int sizeWords, int align, int &allocSize) {
     return result;
 }
 
+// w19-d: fuzzy 98.125 -> 100 (byte-identical).  Two levers: the timestamp is
+// Max() (the image loads next's stamp first and keeps the result in r10, the
+// inline's `x < y ? y : x` shape), and the size is summed from a `thisSize`
+// local read before the adjacency test (RB3's spelling), which fixes the add's
+// operand order.  The hand-rotated do/while below is still needed: a plain
+// `while` costs 26 points here.
 bool FreeBlock::AttemptMerge(FreeBlock *next, int debugLevel) {
-    if ((int *)this + mSizeWords == (int *)next) {
-        unsigned int ts = mTimeStamp;
-        if (mTimeStamp < next->mTimeStamp) {
-            ts = next->mTimeStamp;
-        }
+    int thisSize = mSizeWords;
+    if ((int *)this + thisSize == (int *)next) {
+        unsigned int ts = Max(mTimeStamp, next->mTimeStamp);
         int nextSize = next->mSizeWords;
         FreeBlock *nextNext = next->mNextBlock;
         mTimeStamp = ts;
-        mSizeWords += nextSize;
+        mSizeWords = thisSize + nextSize;
         mNextBlock = nextNext;
         if (1 <= debugLevel) {
             int *ptr = (int *)next;
