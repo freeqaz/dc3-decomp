@@ -946,13 +946,13 @@ void RndText::WrapText(
         const unsigned short *cur = wideChars;
         int wpI = 0;
         for (;;) {
-            unsigned short ch = *cur;
+            unsigned int ch = *cur;
             const wchar_t *brkW = &BRKWIDE_BASE[cCount];
             int prevI = wpI;
             WrapPoint *nxt = &wps[numWp];
             if (ch != 0 && ch != '\n') {
-                unsigned short mc = ch;
-                if (ch == 0x3c) {
+                unsigned short mc = *cur;
+                if (mc == 0x3c) {
                     if (mMarkup) {
                     cur = ParseMarkup(cur, style, mc);
                     cur--;
