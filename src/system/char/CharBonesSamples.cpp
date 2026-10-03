@@ -601,6 +601,14 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
         } else {
             // `short` on purpose: see the w7-by note above (int shrinks the
             // frame to 0xb0 and repacks the four 16-byte locals).
+            // w21-i re-check (stopped at 92.47): the image does NOT truncate
+            // -- 0x823E1248 `lwz r11, 0x4(r11)` feeds `cmpwi r11, 0x3` at
+            // 0x823E1254 directly; our two `extsh` there are the only cost
+            // of this spelling.  Behaviour is identical for every
+            // CompressionType value (0..4); it differs only for an int outside
+            // short range, which Load would have to read from a corrupt file.
+            // So the short is a matching artifact, not a behaviour bug.  Re-measured: `int comp` with q0/q1/sv0/sv1 hoisted
+            // to function scope is 82.2 (frame 0xb0), the same as w7-by's.
             short comp = mCompression;
             if (byteOffset >= mOffsets[TYPE_QUAT]) {
                 if (comp >= kCompressQuats) {

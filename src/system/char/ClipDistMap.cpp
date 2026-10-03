@@ -310,6 +310,11 @@ int ClipDistMap::CalcWidth() {
     // subtraction.  Inert, byte-identical: dropping both locals for
     // `(mAEnd - mAStart) * (float)mSamplesPerBeat`, and the commuted
     // `spb * (mAEnd - mAStart)`.
+    // w21-i (stopped at 95.506, same 7 rows): hoisting the conversion into
+    // its own local ahead of aStart (`float fspb = (float)mSamplesPerBeat;`)
+    // is byte-inert; RB3's final line `aStart + (float)(width - 1) / spb`
+    // costs 95.5 -> 86.5 (the image reloads mAStart and mSamplesPerBeat
+    // after the floor call, so the members, not the locals, are read there).
     float aStart = mAStart;
     int spb = mSamplesPerBeat;
     int width = Max(0, (int)(float)floorf(((mAEnd - aStart) * (float)spb) + 0.5f)) + 1;
