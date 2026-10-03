@@ -232,21 +232,26 @@ float ArcDetector::GetPathError() const {
         } else {
             arcY = sqrtf(comp);
         }
-        float errY = arcZBase - arcY;
-        float errZ = (1.0f / sZErrorScale) * (pt.y - mSwipeExtentY);
-        float dz = 0.0f;
-        // RESIDUAL (w7-az, 93.55 canonical, 3 rows): 0x82E00B98 spends a DEAD
-        // `fmr f4, f13` (f4 = 0.0f) that `fmuls f4, f8, f3` overwrites two
-        // instructions later, and schedules `cmplw cr6, r11, r10` three
-        // instructions later than we do.  Writing errZ as `float errZ = 0.0f;`
-        // followed by the assignment is byte-inert -- MSVC deletes the dead
-        // store -- so the zero comes from somewhere else in the original.
-        // Also charged under name_check: the image loads sZErrorScale as
-        // `lbl_82F446F8`, a .data float (value 2.0f, verified) that dtk
-        // attributes to the StandingStillGestureFilter TU, not this one.
-        // Also inert (w12-d, same 19 rows): a zero-initialised
-        // `Vector3 err(0, 0, 0)` with .y/.z assigned and LengthSquared(err).
-        error = errZ * errZ + (errY * errY + dz * dz) + error;
+        // w21-n: one error VECTOR, not three scalars.  The image's dead
+        // `fmr f4, f13` (0x82E00B98) and its unfolded `fmuls f12, f13, f13`
+        // (0*0) are the late-folded `dx - dx` of a component that the two
+        // points share: MSVC only folds x - x to 0 after its constant folder
+        // has run, so the zero is squared at run time and its copy survives.
+        // Component order (depth, height, side) is what puts the zero term
+        // first in the image's sum (fmuls 0*0, fmadds depth, fmadds height).
+        // 93.55 canonical / 91.61 fuzzy -> 99.68 fuzzy; the remaining 4 rows
+        // are an f8/f9 swap (extentY vs 1/sZErrorScale), register only.
+        // Measured worse: three scalars plus `dz = 0` (w7-az), Vector3(0, y, z)
+        // (zero folds at compile time), Subtract() into a separate dst (zero
+        // squared via its copy), and the (side, depth, height) order (92.42).
+        // Semantics: the side term is exactly 0 for any finite dx (joint
+        // positions and mArcOffset always are); /fp:fast folds it to 0 on the
+        // Xbox unconditionally, an IEEE native build would give NaN only for
+        // an infinite/NaN dx.
+        Vector3 err(arcZBase, pt.y, dx);
+        err -= Vector3(arcY, mSwipeExtentY, dx);
+        err.y /= sZErrorScale;
+        error += LengthSquared(err);
         ++it;
     } while (it != pathEnd);
     return error;
@@ -260,7 +265,8 @@ float ArcDetector::GetSwipeAmount() const {
     // lives in f2 in the image and f3 here across the GetPathError() call.
     // MSVC picks a volatile FPR the same-TU callee does not touch, so this row
     // follows GetPathError's own register use (that function is 93.5), not
-    // anything in this body.
+    // anything in this body.  CONFIRMED (w21-n): fixing GetPathError's own
+    // shape (one error vector) made this function byte-identical (f2).
     float powered = (float)pow((double)GetPathLength(), (double)exponent);
     float pathErr = GetPathError();
     float swipeAmt = (powered - (pathErr / _acceptablePathErrorRatio)) / adjustedThreshold;
