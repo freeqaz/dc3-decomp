@@ -955,6 +955,14 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
 // totalplayers with an inner `--maxplayers` break (35/51).  Root cause as
 // measured: loop 2's counter is a separate web that coalesces with min's, so
 // that web outranks `this` for r30; nothing tried merges it into max's.
+// w21-ah (98.84 -> 100): the fix is on LOOP 1, not loop 2 -- count loop 1
+// down on its own copy `for (int i = minplayers; i != 0; i--)`.  With min
+// itself as loop 1's counter, loop 2's counter coalesces into min's web and
+// splits off from max (`mr r30, r24`); with a separate loop-1 counter, max
+// stays one web, takes mode's r29 and is counted down in place, exactly as
+// at 0x82871444 `subic. r29, r29, 0x1`.  ~400 other combinations (decl order,
+// loop/increment/flag spellings, early return) were all inert.  minplayers is
+// dead after the loop, so behaviour is unchanged.
 void PartyModeMgr::DetermineSubModePlayers(
     Symbol mode, int *pPlayerFlags, int *pNumPlayers, std::vector<int> *vec
 ) {
@@ -966,11 +974,10 @@ void PartyModeMgr::DetermineSubModePlayers(
         if (minplayers != 0) {
             totalplayers -= minplayers;
             maxplayers -= minplayers;
-            while (minplayers != 0) {
+            for (int i = minplayers; i != 0; i--) {
                 int player = PickNextPlayer();
                 *pPlayerFlags |= 1 << player;
                 vec->push_back(player);
-                minplayers--;
                 ++*pNumPlayers;
             }
         }
@@ -1138,6 +1145,12 @@ void PartyModeMgr::ResetMicrogames() {
 // unrelated playtest modulo block above (divwu/twllei/mullw order, rows
 // 61-70, 95.67 overall), so team 2 keeps the idx form: 4 rows left
 // (li r4 order + the `mr r3, r29` reload).
+// w21-ah (98.97 -> 100): team 2 as two whole arms with the call FIRST,
+// `ret = arr->Int(k) + mTeam1Players.size()`.  The size-first spelling
+// (`size + Int(k)`, tried by w21-e) and every if/else/?: form with a
+// separate teamCount re-allocated the playtest modulo block (divisor r8 ->
+// r11, twllei hoisted: 10 rows); call-first keeps it.  Same semantics: the
+// image reads mTeam1Players' size after Int() returns (0x8287003C `lwz r11, 0x4(r30)`).
 int PartyModeMgr::PickNextPlayer() {
     int ret = -1;
     if (mCurrentTeamSelector == 2) {
@@ -1161,11 +1174,10 @@ int PartyModeMgr::PickNextPlayer() {
         mCurrentTeamSelector = 2;
         if (mPlayerSequences) {
             DataArray *arr = mPlayerSequences->Array(mRoundsPlayed + 1);
-            int idx = 0;
             if (mTeam1Players.size() <= mTeam2Players.size())
-                idx = 1;
-            int teamCount = arr->Int(idx);
-            ret = mTeam1Players.size() + teamCount;
+                ret = arr->Int(1) + mTeam1Players.size();
+            else
+                ret = arr->Int(0) + mTeam1Players.size();
         }
     }
     return ret;

@@ -588,8 +588,18 @@ int HamCharacter::SongAnimation() {
         // used to be behind #ifdef HX_NATIVE (added because native reaches here
         // before PlayAnims has run); it is what the Xbox build does too, and
         // without it the PPC build dereferences a null clip.
+        //
+        // w21-ah: MILO_ASSERT_IF (no do/while(0) wrapper), not MILO_ASSERT.
+        // The four address constants both asserts share are hoisted to
+        // function entry; the image materialises "main" FIRST (lis r11/addi
+        // r25 = "main", then TheDebug r29, __FILE__ r28, #cond r27).  With the
+        // do/while form here MSVC orders "main" last (4 rows).  MILO_ASSERT_EXPR
+        // also fixes the order but moves the Symbol temps from 0x50(r1) to
+        // 0x54(r1) (4 other rows); MILO_ASSERT_IF gives both.  No
+        // function-local statics here, so the scope-count difference between
+        // the forms is moot.  Same behaviour: identical condition and Fail.
         if (c) {
-            MILO_ASSERT(c->Type() == "main", 0x3AB);
+            MILO_ASSERT_IF(c->Type() == "main", 0x3AB);
         }
     }
     // -1 is the FALL-THROUGH result, not an `else if` arm. In the image the two
@@ -628,21 +638,33 @@ int HamCharacter::SongAnimation() {
     // the image does NOT have replaces the 63/64 delete pair -- rejected as
     // further from the image, not closer.  The 4 lis/addi rows (image hoists
     // "main" first) moved with none of these.
+    // w21-ah (96.5 -> 100 with the assert form above): the image's block
+    // order -- `li r3,-1; b` right after the InClipTest() arm's Property() tail
+    // (0x8248E3EC), `return 0` last, the shared Property()/Int() tail kept at
+    // site 1 -- comes from an explicit `return -1` closing the InClipTest()
+    // arm plus TWO separate early-outs `if (mUseCameraSkeleton) return -1;
+    // if (c) return -1;`.  The combined `mUseCameraSkeleton || c` test (w21-g's
+    // flat-ifs spelling) moves the merged -1 block to the tail and flips the
+    // cross-jump to site 2.  Behaviour identical to the previous else-if form:
+    // InClipTest() with a null clip or a clip in this dir returns -1.
     if (InClipTest()) {
         if (c && c->Dir()->Dir() != this) {
             return c->Property("clip_skeleton_index", false)->Int();
         }
-    } else if (!mUseCameraSkeleton && !c) {
-        if (SongDriver()) {
-            c = SongDriver()->FirstClip();
-            if (c) {
-                MILO_ASSERT(c->Type() == "main", 0x3C8);
-                return c->Property("clip_skeleton_index", false)->Int();
-            }
-        }
-        return 0;
+        return -1;
     }
-    return -1;
+    if (mUseCameraSkeleton)
+        return -1;
+    if (c)
+        return -1;
+    if (SongDriver()) {
+        c = SongDriver()->FirstClip();
+        if (c) {
+            MILO_ASSERT(c->Type() == "main", 0x3C8);
+            return c->Property("clip_skeleton_index", false)->Int();
+        }
+    }
+    return 0;
 }
 
 // w21-u: 100.  The element is read twice through ObjPtrVec::operator[], which
