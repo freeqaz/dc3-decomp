@@ -395,6 +395,22 @@ inline void Add(const Vector3 &v, const Vector2 &d, Vector3 &dst) {
     dst.Set(v.x + d.x, v.y, v.z + d.y);
 }
 
+/** Normalizes a 2D direction; a zero vector becomes zero.  The name is ours
+ *  (w21-c): the image only shows it inlined into UpdateLinePair, with the same
+ *  `len == 0 -> 0` join (beq to `fmr f0, f11`) and y-then-x stores that
+ *  RndLine::UpdateLinePair's hand-written version had.  Same shape as the
+ *  Vector3 Normalize in math/Vec.h.  Safe in place (in == out): each
+ *  component is read before it is written, and y is never read again. */
+inline void NormalizeDir(const Vector2 &in, Vector2 &out) {
+    float inv = 0;
+    float len = std::sqrt(in.x * in.x + in.y * in.y);
+    if (len != 0) {
+        inv = 1.0f / len;
+    }
+    out.y = inv * in.y;
+    out.x = inv * in.x;
+}
+
 inline void Subtract(const Vector3 &v, const Vector2 &d, Vector3 &dst) {
     dst.Set(v.x - d.x, v.y, v.z - d.y);
 }
@@ -410,6 +426,16 @@ inline void Subtract(const Vector3 &v, const Vector2 &d, Vector3 &dst) {
 // dir1.y and proj2.x but reloads dir1.x and proj2.y (82678B18, 82678AFC) --
 // the mirror of what our spelling forwards -- and the residual is that
 // register-allocation cascade, not a missing statement.
+// w21-c (80.63 -> 82.59): the dir normalisation written as a call to an
+// inline Vector2 normalize (NormalizeDir above; inv = 0, if (len != 0)
+// inv = 1/len, y then x) in place of the hand-forwarded dirZ/dirX locals.
+// Measured and worse: the `else inv = 0` form (81.49), x then y or Set()
+// (80.42), `float x = in.x` local as rb3-xenon's out-of-line copy (78.95 /
+// 79.83 with else), proj2.y stored before proj2.x (76.70).  Same helper in
+// UpdateLine phase 2 LOSES there (85.35 -> 83.21 / 84.40), so UpdateLine
+// keeps its hand-written spelling.  Remaining: the image reloads dir.x for
+// the length and dir.y for the scale (82678B18 area), we reload dir.y for
+// the length and dir.x for the scale; plus the cap register cascade.
 void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
     VertsMap vmap;
     MapVerts((pt1 - &mPoints[0]), vmap);
@@ -457,19 +483,9 @@ void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
         proj2.x = vx2 * invY2;
         proj2.y = vz2 * invY2;
 
-        float dirZ = proj2.y - proj1.y;
-        dir1.y = dirZ;
-        float dirX = proj2.x - proj1.x;
-        dir1.x = dirX;
-        dirZ = dir1.y;
-        dirX = dir1.x;
-        float len = std::sqrt(dirX * dirX + dirZ * dirZ);
-        float invLen = 0.0f;
-        if (len != 0.0f) {
-            invLen = 1.0f / len;
-        }
-        dir1.y = invLen * dir1.y;
-        dir1.x = invLen * dirX;
+        dir1.y = proj2.y - proj1.y;
+        dir1.x = proj2.x - proj1.x;
+        NormalizeDir(dir1, dir1);
 
         side1.y = dir1.x;
         side1.x = -dir1.y;
@@ -543,6 +559,16 @@ void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
 // 826787A4, 6 inserts / 3 deletes where this spelling has 2 / 1), so the net
 // is 84.9.  The two have to be solved together; the int-copy spelling below
 // keeps the better total.
+//
+// w21-c (2026-10-03): still 85.35 canonical / 82.27 fuzzy.  Re-read phases 3-5
+// against 82678548-826787A0 (fold test, flip, prevRay/oldPrevRay copy order,
+// Intersect(new, old, side) argument order, both phase-4 bounds, start-cap
+// perp): no behaviour difference found.  Measured: the inline Vector2
+// normalize that lifted UpdateLinePair, in phase 2 here: 83.21 (inv = 0 form),
+// 84.40 (else form), 84.70 / 85.35 with rb3-xenon's `float x = in.x` local --
+// none better than this hand-written spelling, whose reload pattern (dir.y
+// reloaded for the scale, dirX forwarded) already matches the image row for
+// row.  Phase-1 proj addressed off pt->unk[4] instead of &viewPos + 1: inert.
 void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
     // Phase 1: project every point (x, z over y in view space). The three
     // view-space components are read before either projected value is

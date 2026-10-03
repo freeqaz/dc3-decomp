@@ -138,7 +138,18 @@ void RndRibbon::ExposeMesh() {
  *  MSVC derives side+1 off the strength-reduced vertex index) in callee-saved
  *  r30 (__savegprlr_26 vs our _27), and schedules all four u16 truncations
  *  before the first triple's stores.  Holding the four indices in
- *  `unsigned short` locals first is byte-identical to this. */
+ *  `unsigned short` locals first is byte-identical to this.
+ *  w21-c (79.79 -> 80.78): read mNumSides directly (no per-iteration `ns`
+ *  local, which MSVC PRE'd onto the loop-bottom compare load) and name all
+ *  four indices before the two Sets -- the image reloads 0x4c at the loop top
+ *  and the prologue becomes __savegprlr_26 like the image.  Stopped at 80.78
+ *  (fuzzy 79.31): 19 insert/delete rows in the inner loop -- the image does all
+ *  four u16 truncations (clrlwi r27/r26/r6/r5) before the first sth, keeps
+ *  base in r3 and 1-base in r30; ours keeps base in r30, 1-base in r29 and
+ *  interleaves the first triple's stores.  Measured and no better:
+ *  unsigned short locals (74.0; 69.1 with an ns local), Face& locals (79.79),
+ *  local Face copies (75.2 / 67.1), a named face index, four base-expression
+ *  spellings, (side+1)%n+base, Face::Set(unsigned short...) (no change). */
 void RndRibbon::ConstructMesh() {
     if (mNumSegments <= 0)
         return;
@@ -157,11 +168,12 @@ void RndRibbon::ConstructMesh() {
     for (int seg = 0; seg < mNumSegments; seg++) {
         int base = mNumSides * seg * 2;
         for (int side = 0; side < mNumSides; side++) {
-            int ns = mNumSides;
             int v0 = base + side;
-            int v1 = base + (side + 1) % ns;
-            mMesh->Faces()[base + side * 2].Set(v0, v1, v1 + ns);
-            mMesh->Faces()[base + side * 2 + 1].Set(v1 + ns, v0 + ns, v0);
+            int v1 = base + (side + 1) % mNumSides;
+            int v2 = v1 + mNumSides;
+            int v3 = v0 + mNumSides;
+            mMesh->Faces()[base + side * 2].Set(v0, v1, v2);
+            mMesh->Faces()[base + side * 2 + 1].Set(v2, v3, v0);
         }
     }
 

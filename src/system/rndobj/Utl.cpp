@@ -1410,6 +1410,19 @@ const char *CacheResource(const char *cc, const Hmx::Object *o) {
 // the function, so the aligner pairs our ~String against it.  It is not a wrong callee.
 // (With 2' landed the charge is gone from the pattern list anyway -- our ~String no
 // longer sits where the aligner would pair it against MovieExtension.)
+//
+// w21-c (2026-10-03): still 71.49383 canonical / 71.33951 fuzzy, the same single
+// residual (movie arm inline at idx 29-51 vs the image's 0x8262E6E0 tail block).
+// Five more spellings measured, none moves the block:
+//   - strieq() for the two tests, `!a && !b` and `!(a || b)`: byte-identical;
+//   - main arm first with duplicated returns + trailing movie arm, and the lever-2
+//     goto split (`bmp==0 goto cached; png!=0 goto movie;`, scoped blocks, movie
+//     last): byte-identical, so MSVC is reordering these blocks itself;
+//   - a single `ret` local assigned on every path, one `return ret;`: 67.30 (worse);
+//   - `const char *ret = nullptr` inside the movie arm: byte-identical;
+//   - `if (!movieExt) { res = ...; return nullptr; }` first: 72.11, but only because
+//     it flips the INNER arm order away from the image (image: beq to the unknown
+//     arm at the very end), so it is an aligner artifact, not kept.
 const char *CacheResource(const char *cc, CacheResourceResult &res) {
     Platform thisPlatform = TheLoadMgr.GetPlatform();
     res = kCacheUnnecessary;

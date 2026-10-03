@@ -71,6 +71,16 @@ RndTex *NgLight::CreateShadowTex() {
 // is the whole +0x38 of callee-saved area plus the register permutation that
 // dominates the row count (90 instructions across 20 pairs).  Fixing it needs
 // the copies re-ordered so each address dies immediately, not a slot removed.
+// w21-c (2026-10-03): still 63.15 canonical / 60.33 fuzzy.  Re-read the image
+// (0x826B91B8..0x826B9440): its post-Normalize op order is dirTop*=, topPoint+=,
+// dirBot*=, axisRange*=, botPoint+=, conePoint=botPoint, toSphere-=topPoint,
+// conePoint+=dirBot, closest=toSphere, edgeDir=conePoint, edgeDir-=topPoint.
+// Writing the statements in exactly that order (and with toSphere-= before the
+// conePoint copy) is BYTE-IDENTICAL to the order below -- MSVC schedules this
+// block itself, so statement order here is inert.  The image never stores
+// topPoint back (0x80 is reused by conePoint/edgeDir) and reuses 0xb0 for both
+// closest and the scaled edge copy; ours keeps xfm2.m.y in r26-r28 and five
+// floats in f26-f29 across the block.  Not a statement-order problem.
 bool NgLight::SphereConeTest(const Vector3 &sphereCenter, float sphereRadius) {
     const Transform &xfm1 = WorldXfm();
     const Transform &xfm2 = WorldXfm();
