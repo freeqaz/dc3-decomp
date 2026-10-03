@@ -189,62 +189,17 @@ void BaseSkeleton::LimbNormPos(
     }
 }
 
-// RESIDUAL (w7-br, 95.9 canonical, 44 of 222 rows; w7-bl left it at 95.70/45):
-// two scheduling residuals, both inside the joint-copy blocks.
-//  (1) The kUnk5 branch is 3 instructions SHORT because MSVC cross-jumps our
-//      `limbDir.x -= nearJoint.x` into the arm/leg tail (our `b` lands on the
-//      shared `lfs 0x60 / lfs 0x80 / fsubs f13` pair instead of on the store
-//      block).  It merges because our two branches assign the same FPRs to x;
-//      the image's do not (kUnk5 `fsubs f13, f10, f13` vs arm/leg
-//      `fsubs f13, f12, f13`), so it emits all three subtractions inline and
-//      jumps straight to the stfs triple.  No source spelling reached that.
-//  (2) The image loads nearJoint's three components BEFORE limbDir's and
-//      round-robins the three 16-byte joint copies limb/near/origin; we
-//      complete near+origin first.  Pure store scheduling -- same set, same
-//      slots (limbDir 0x60, upDir 0x70, nearJoint/crossDir 0x80, origin 0x90).
-// Lever that DID pay (0.7pp, 3 rows): the kUnk5 subtraction is written z,y,x
-// below -- that order is what the image emits, and writing it x,y,z made MSVC
-// spill two intermediates to 0x60/0x68 inside the branch (2 extra stfs).
-// Failed spellings, all measured in this worktree:
-//   - `Subtract(limbDir, nearJoint, limbDir)` in all three branches: byte-inert
-//     (95.00, identical 37/1/6/4 row split) -- MSVC canonicalises Set() back to
-//     three component subtractions.
-//   - assigning limbDir before nearJoint in all three branches: same 95.70 but
-//     48->63 rows, and it moves nearJoint off the 0x80 slot (`addi r4, r31,
-//     0xc0` picks up a +48 offset diff at index 48).
-//   - arm/leg subtraction reordered z,x,y to match the image's emission order
-//     there: same 95.70, 45->48 rows.
-// w7-br: the arm/leg subtraction is written y,x,z below.  The image computes
-// z (the branch-selected `fsubs f0, f0, f0` at 0x82434270), then x
-// (`fsubs f13, f12, f13` at 0x82434278), then y (0x82434284); with x,y,z in
-// the source MSVC emitted z, y, x and with z,x,y (w7-bl) 48 rows.  y,x,z gives
-// the image's z, x, y emission: 95.70 -> 95.9, and the kUnk5 block stops
-// cross-jumping into the x subtraction (its `b` now lands on the stfs triple
-// at 0x82434288 like the image's) at the cost of the x/y fsubs register
-// colouring and two moved stores.  NEGATIVE RESULTS (w7-br): kUnk5 in x,y,z
-// with the arm/leg y,x,z is 95.7 (47 rows); `Vector3 nearJoint;` declared
-// first and assigned AFTER limbDir in all three branches is 95.7 with 63
-// rows -- the image's dead `addi r4, r31, 0xc0` at 0x824340F8 (the
-// PaddedJointPos -> const Vector3& conversion of pj[kJointHipLeft]) moves
-// to +0xf0, which pins nearJoint = pj[HipLeft] as the FIRST statement of
-// the kUnk5 block.  What is left is which 16-byte copy's stores the
-// scheduler issues first (image: limb/near/origin round-robin from
-// 0x8243422C; ours: near+origin, then limb) and, downstream of that, which
-// of limb.{x,y} / near.{x,y} is loaded first for the subtraction.
-// The MakeString<char const(&)[13], int const&, char const(&)[5]> vs our
-// <[11], int const&, [49]> in the Function Call Diff is an ICF fold -- both
-// sides load the SAME two string symbols at indices 14/15 -- not a wrong callee.
-// w20-p branch-landing row 88 (case 5 `b` into the image's shared 3-store
-// tail vs ours into the last store): ARTIFACT -- shared vs duplicated tail;
-// both store v60-v80, v64-v84, v68-v88. The MakeString name diff is an ICF
-// fold (824d1870 in the map carries both spellings).
-// w21-w (95.93 canonical, 44 of 222 rows, unchanged): behaviour re-read against
-// the image -- z is always (v - v) = 0 on arm/leg (branch-selected `lfs` then
-// `fsubs f0, f0, f0`), kUnk5 subtracts all three, the default case skips the
-// stores -- ours agrees.  Measured, all no better: `limbDir -= nearJoint` in
-// kUnk5 (95.73) or all three arms (95.00); kUnk5 subtraction orders xzy 94.55,
-// yxz 95.00, yzx 95.73, zxy 95.72; arm/leg copy-statement orders nol/onl 95.93,
-// lno/lon 95.86, oln 95.85; `limbDir.z = -nearJoint.z + limbDir.z` byte-inert.
+// w21-ao: 95.93 -> 100 (probe).  The joints are two BLOCK-scoped working
+// copies, near and far, and the limb direction is written component-wise as
+// far - near into limbDir; origin is copied first.  Block scope is what lets
+// MSVC pack far into limbDir's frame slot (0x60) and near into crossDir's
+// (0x80): the image's round-robin limb/near/origin store order and its
+// separate kUnk5 subtraction (z, y, x into near's registers, then `b` to the
+// shared stfs triple at 0x82434288) both follow from it.  The previous
+// spelling (limbDir holding far and subtracting in place) computed the same
+// values -- every component is one fsubs of the same two operands -- so this
+// is a pure shape change.  Earlier lanes' scheduling-floor notes (w7-bl,
+// w7-br, w15-a, w20-p, w21-w) are superseded.
 void BaseSkeleton::MakeCameraToPlayerXfm(
     SkeletonCoordSys cs,
     Transform &xfm,
@@ -255,61 +210,47 @@ void BaseSkeleton::MakeCameraToPlayerXfm(
 
     const PaddedJointPos *pj = (const PaddedJointPos *)joints;
 
-    // Two working vectors, each used for two things in turn: limbDir starts out
-    // holding the far joint and becomes (far - near) in place, and crossDir
-    // starts out holding the near joint and is then overwritten by the cross
-    // product.  The shipped code has exactly four Vector3 frame slots here.
     Vector3 limbDir;
     Vector3 upDir = floorNormal;
     Normalize(upDir, upDir);
 
-    Vector3 crossDir;
     Vector3 origin;
-
     if (cs == kCoordLeftArm || cs == kCoordRightArm) {
-        int originIdx = (cs == kCoordLeftArm) ? kJointShoulderLeft : kJointShoulderRight;
-        // The near joint is a block-scoped working copy: it shares the frame word
-        // with crossDir, whose first definition is the Cross() output below.
+        origin = pj[(cs == kCoordLeftArm) ? kJointShoulderLeft : kJointShoulderRight];
         Vector3 nearJoint = pj[kJointShoulderLeft];
-        limbDir = pj[kJointShoulderRight];
-        origin = pj[originIdx];
+        Vector3 farJoint = pj[kJointShoulderRight];
         // Both shoulders are forced to a common depth, so the limb direction is
         // always flat in z; which joint's z wins depends on the side.
         if (cs == kCoordLeftArm)
-            limbDir.z = nearJoint.z;
+            farJoint.z = nearJoint.z;
         else
-            nearJoint.z = limbDir.z;
-        limbDir.y -= nearJoint.y;
-        limbDir.x -= nearJoint.x;
-        limbDir.z -= nearJoint.z;
+            nearJoint.z = farJoint.z;
+        limbDir.x = farJoint.x - nearJoint.x;
+        limbDir.y = farJoint.y - nearJoint.y;
+        limbDir.z = farJoint.z - nearJoint.z;
     } else if (cs == kCoordLeftLeg || cs == kCoordRightLeg) {
-        int originIdx = (cs == kCoordLeftLeg) ? kJointHipLeft : kJointHipRight;
+        origin = pj[(cs == kCoordLeftLeg) ? kJointHipLeft : kJointHipRight];
         Vector3 nearJoint = pj[kJointHipLeft];
-        limbDir = pj[kJointHipRight];
-        origin = pj[originIdx];
+        Vector3 farJoint = pj[kJointHipRight];
         if (cs == kCoordLeftLeg)
-            limbDir.z = nearJoint.z;
+            farJoint.z = nearJoint.z;
         else
-            nearJoint.z = limbDir.z;
-        limbDir.y -= nearJoint.y;
-        limbDir.x -= nearJoint.x;
-        limbDir.z -= nearJoint.z;
-    // w15-a (95.93 canonical): in the image this arm's three subtractions
-    // share the other arms' stfs tail (f13=x, f12=y, f0=z, then `b` to the
-    // stores); we store y/x inside the arm.  Tried: y,x,z statement order
-    // (95.0), Subtract(limbDir, nearJoint, limbDir) (95.73), three float temps +
-    // Set (95.73).  All worse; kept the z,y,x form.
+            nearJoint.z = farJoint.z;
+        limbDir.x = farJoint.x - nearJoint.x;
+        limbDir.y = farJoint.y - nearJoint.y;
+        limbDir.z = farJoint.z - nearJoint.z;
     } else if (cs == kUnk5) {
-        Vector3 nearJoint = pj[kJointHipLeft];
-        limbDir = pj[kJointHipRight];
         origin = pj[kJointHipCenter];
-        limbDir.z -= nearJoint.z;
-        limbDir.y -= nearJoint.y;
-        limbDir.x -= nearJoint.x;
+        Vector3 nearJoint = pj[kJointHipLeft];
+        Vector3 farJoint = pj[kJointHipRight];
+        limbDir.x = farJoint.x - nearJoint.x;
+        limbDir.y = farJoint.y - nearJoint.y;
+        limbDir.z = farJoint.z - nearJoint.z;
     }
 
     Normalize(limbDir, limbDir);
 
+    Vector3 crossDir;
     Cross(upDir, limbDir, crossDir);
     Normalize(crossDir, crossDir);
 
