@@ -172,12 +172,12 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     static float sSwipeEllipseHeightEngaged = 1.1f;
     // w21-as: written with Vector3 helpers over skeleton.TrackedJoints() (no
     // `joints` local), the closest-point delta and the hip direction as
-    // Subtract()s, and the ellipse sum as two statements -- 99.98 -> see the
-    // note below.  The value-numbering order MSVC uses for its /fp:fast
-    // operand canonicalisation followed the old over-named locals (hipX,
+    // Subtract()s, and the ellipse sum as two statements: 10 -> 3 rows.  The
+    // value-numbering order MSVC uses for its /fp:fast operand
+    // canonicalisation followed the old over-named locals (hipX,
     // deltaX, closestDeltaX, ...) and emitted every commutative pair the
     // other way round: `hipX + deltaX` (target 0x82DEA580 fadds f12, f11, f9),
-    // the rotation products (0x82DEA65C..68) and the ellipse sum.
+    // the rotation products (0x82DEA660..70) and the ellipse sum.
     const Vector3 &hip = skeleton.TrackedJoints()[kJointHipCenter].mJointPos[0];
     const Vector3 &shoulder = skeleton.TrackedJoints()[kJointShoulderCenter].mJointPos[0];
     Vector3 delta;
@@ -191,8 +191,19 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
         skeleton.TrackedJoints()[kJointShoulderRight].mJointPos[0],
         shoulderVec
     );
-    float shoulderDist = Length(shoulderVec);
+    // The image's association (fidelity; listing-neutral): fmuls y, fmadds z,
+    // fmadds x (0x82DEA564, 0x82DEA5A0, 0x82DEA5AC).
+    float shoulderDist = sqrtf(
+        (shoulderVec.y * shoulderVec.y + shoulderVec.z * shoulderVec.z)
+        + shoulderVec.x * shoulderVec.x
+    );
 
+    // REMAINING (w21-as, 3 rows): the image sets up ClosestPoint's address
+    // arguments r4 (corner2), r3 (corner1), r6 (&closest); we emit r6 first.
+    // Same three frame slots.  Probe-inert: the hand joint as a named ref (to
+    // the joint or to its Vector3), `closest` declared before the corners or
+    // with them, corners declared separately or in the other order, &closest
+    // through a named pointer, the corners through const refs.
     Vector3 closest;
     ClosestPoint(corner1, corner2, skeleton.HandJoint(mHandSide).mJointPos[0], &closest);
     Vector3 closestDelta;
@@ -235,7 +246,7 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     if (!mAllowAboveShoulder || mHighButtonMode) {
         // Call HandJoint AGAIN for Y-test
         const TrackedJoint &handJoint3 = skeleton.HandJoint(mHandSide);
-        // Re-derived from `skeleton`, NOT from the `joints` local: the image
+        // Re-derived from `skeleton` (an earlier `joints` local existed): the image
         // reads this through the skeleton pointer it already keeps in r31
         // (`lfs f0, 0xf0(r31)`). Reusing `joints` here is its only use after the
         // calls, so MSVC pins it in a third callee-saved GPR for the whole
