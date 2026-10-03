@@ -104,9 +104,9 @@ void CharClipGroup::AddClip(CharClip *clip) {
 // register; we keep begin/size in two and sink the add.  Contrast: LightPreset::
 // SyncKeyframeTargets' `mSpotlights.find(key) == mSpotlights.end()` (non-const)
 // materialises end() before the call in OUR build too and reads 100, so the
-// inline end() itself is not wrong.  Note find<CharClip> is `f i` in the map and
-// same-TU; the `inline` lever was not tried because find lives in a header
-// template shared by every ObjPtrVec instantiation.
+// inline end() itself is not wrong.  find<CharClip> is `f i` in the map and
+// same-TU: marking both ObjPtrVec::find templates `inline` (ObjPtrVec_impl.h)
+// was measured with a full ninja + whole-binary compare -- UP 0 / DOWN 0, inert.
 bool CharClipGroup::HasClip(CharClip *clip) const {
     return mClips.end() != mClips.find(clip);
 }
