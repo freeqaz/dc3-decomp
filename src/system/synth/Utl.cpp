@@ -18,6 +18,9 @@ const char *WavFileCacheHelper::CacheFile(const char *file) {
 
 static char sCacheWavBuf[0x100];
 
+// w20-r branch-landing scan (row 70, the shared `b` after ~String): ARTIFACT,
+// if-conversion. Ours subic/srwi/subfze/and yields null iff result > 0, the
+// image's cmpwi/ble/li r29,0 does the same; both then return through ~String.
 const char *CacheWav(const char *file, CacheResourceResult &result) {
     result = (CacheResourceResult)0;
     Platform platform = TheLoadMgr.GetPlatform();

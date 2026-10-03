@@ -212,6 +212,9 @@ void DxMesh::Copy(const Hmx::Object *src, Hmx::Object::CopyType ty) {
 // Both D3DVertexBuffer_Lock's free-function form and D3DVertexBuffer::Lock are
 // declared in src/xdk/d3d9i/d3d9.h; the member form would round-trip the result
 // through memory, which the image does not do (it takes r3 straight into r29).
+// w20-r branch-landing scan (row 25, `bne` on unk1b0 != 0): ARTIFACT, the
+// image keeps the loaded unk1b0 in r3 and branches straight to the epilogue;
+// we land one row earlier on a reload of the same member. Same return value.
 D3DVertexBuffer *DxMesh::GetMultimeshFaces() {
     MILO_ASSERT(!Mutable(), 0x1A7);
     if (!unk1b0) {

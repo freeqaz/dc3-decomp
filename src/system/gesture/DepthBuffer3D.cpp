@@ -165,6 +165,9 @@ void DepthBuffer3D::UpdateAttachment(
     attachment.obj->SetLocalPos(newPos);
 }
 
+// w20-r branch-landing scan (row 32, image `beq` -> 0x82DF14FC cmplwi):
+// ARTIFACT, pointer sentinel vs iterator!=end; found -> return, not found ->
+// resize+append on both sides (see RESIDUAL below).
 void DepthBuffer3D::AddAttachment(const DepthBuffer3DAttachment &attachment) {
     MILO_ASSERT(attachment.obj, 0x390);
     // RESIDUAL (w8-r, 97.714, 3 rows -- 1 branch-address, 2 real).  The

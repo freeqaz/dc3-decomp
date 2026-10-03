@@ -190,6 +190,10 @@ static int PMDtoOffset(void *pThis, const PMD &pmd) {
 // unconditional `b`.  Hoisting the BCD_HASPCHD arm to a positive early
 // return (so the `iTarget != 0` test becomes the fallthrough) was measured
 // and is WORSE: 93.77 -> 88.3.
+// w20-r branch-landing scan (row 108, image 0x8299DF4C `beq` -> 0x8299DF0C):
+// ARTIFACT, shared vs duplicated tail. Both sides return 0 when pTargetBase
+// has NOTVISIBLE|AMBIGUOUS and otherwise test pBase NOTVISIBLE; the image
+// jumps back to the one copy of that test, we fall into our own copy.
 const _s_RTTIBaseClassDescriptor *FindMITargetTypeInstance(
     void *pCompleteObject, const _s_RTTICompleteObjectLocator *pCompleteLocator,
     TypeDescriptor *pSrcType, int SrcOffset, TypeDescriptor *pTargetType
