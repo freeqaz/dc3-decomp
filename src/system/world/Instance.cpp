@@ -347,7 +347,13 @@ void WorldInstance::SyncDir() {
                 // Diff are ICF folds -- the name_check ruler charges 0 of them.
                 // w13-c: `(RndDrawable *)dynamic_cast<RndMesh *>(&*it)` (an
                 // upcast to the offset-0 base) is also bit-identical here.
-                bool curMesh = dynamic_cast<RndMesh *>(&*it);
+                // w21-ae: CLOSED (99.43 -> 100, 524/524 rows): the comparison is
+                // written null-FIRST, `nullptr != dynamic_cast<...>`.  With the
+                // constant on the left MSVC copies the call result
+                // (`addi r11, r3, 0x0`) before the subic/subfe, exactly as the
+                // image does; found with a standalone cl.exe probe (`0 != p`
+                // emits the addi, `p != 0` / plain bool conversion do not).
+                bool curMesh = nullptr != dynamic_cast<RndMesh *>(&*it);
                 if (!grp || (it != grp && !GroupedUnder(grp, it))) {
                 lmao:
                     if (it->ClassName() != Tex && it->ClassName() != CubeTex
