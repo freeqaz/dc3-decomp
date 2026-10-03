@@ -84,6 +84,23 @@ static const int sJointTrackingMap[] = { 0, 1, 2 };
 // three tried (z,y,x / x,y,z / y,x,z) that reproduces the image's z, y, x
 // stores at 0x82435CDC-0x82435CF0; the remaining rows there are which
 // element is held in f13 across the other two, scheduling only.
+// w21-f (74.05, unchanged) -- MECHANISM FOUND, lever not: the hoist is a
+// CROSS-LOOP CSE, not loop-invariant motion.  Compiled standalone with /FAs
+// (same cl.exe, same flags), deleting ONLY the hip-centre transform in the
+// second loop makes the first loop come out exactly as the image's: four
+// per-iteration `addi rN, r1, 0x60..0x90` + `lvx128 v63/v61/v60/v59` inside
+// the CTR loop and the vmaddcfp128/vmaddfp128 forms.  A one-loop scratch TU
+// (real XMMATRIX header) does the same; adding a second loop that transforms
+// with the same matrix makes MSVC CSE the two loops' row loads into
+// v0/v13/v12/v11 above loop 1.  So in the image the two loops' matrix reads
+// were NOT the same expressions to MSVC.  Also inert here (scratch TU or
+// objdiff): `const XMMATRIX &mat =` binding the returned temp; a matrix
+// copy for the second loop; a by-value matrix with a user copy ctor;
+// __forceinline on the helper; storing loop-1 results through __stvx;
+// letting &mat escape to an external call (still hoisted -- MSVC does no
+// store-based kill here).  Note src/xdk/LIBCMT/vectorintrinsics.h's __lvx /
+// __stvx are plain inline functions: this cl.exe rejects them as intrinsics
+// (C4163) and `extern` declarations become real `bl __stvx` calls.
 static XMVECTOR XMVector3Transform(XMVECTOR V, const XMMATRIX &M) {
     XMVECTOR Z = __vspltw(V, 2);
     XMVECTOR Y = __vspltw(V, 1);
@@ -201,6 +218,13 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 // folding.  The original Init very likely had such a statement (a folded assert,
 // or an inline call whose throwing arm dies); see DxShader::Compile
 // (rnddx9/ShaderMgr.cpp, w18-c) for one that was found.  Not landed: unknown.
+// w21-f (89.605, unchanged): re-checked, not re-attacked.  rb3-xenon and
+// og-dc3-decomp carry the same ctor and the same Init body; the target
+// object's string-literal set (??_C@) equals ours apart from our extra
+// utl/StlAlloc.h path (dtk may pool that one elsewhere), so no folded
+// MILO_ASSERT left a Skeleton-specific literal behind to name.
+// Still no evidence for WHICH throwing statement Init had, and the brief
+// forbids inventing one, so the 10-row EH residual stays.
 Skeleton::Skeleton() : mTracking(kSkeletonNotTracked), mTrackingID(-1), unkac4(0) {
     Init();
 }

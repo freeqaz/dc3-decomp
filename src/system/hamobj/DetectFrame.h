@@ -27,6 +27,9 @@ public:
     float Seconds() const { return mSeconds; }
 
 protected:
+    // w21-f: Ham1FilterVersion::NodeInput reads mMoveFrame/mMirror directly
+    // (see the note there).
+    friend class Ham1FilterVersion;
     const DancerFrame *mDancerFrame; // 0x0
     const MoveFrame *mMoveFrame; // 0x4
     float mSeconds; // 0x8

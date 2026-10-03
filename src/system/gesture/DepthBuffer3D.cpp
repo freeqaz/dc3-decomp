@@ -402,6 +402,19 @@ BEGIN_COPYS(DepthBuffer3D)
 END_COPYS
 
 #ifndef HX_NATIVE
+// STOP POINT (w21-f, 80.3 normalized, was 72.54; ~730 rows, 449 of them
+// arg-only regalloc).  Levers that landed, each measured on its own:
+//   - one `valid` flag cleared in each reset arm (image: li r29,1 / mr r29,r19)
+//     instead of three has1/has2/has3 bools                       72.54 -> 74.2
+//   - mat / depthTex as if/else assignments, not ternaries          -> 75.4
+//   - `s0 ? (s0->SkeletonIndex() + 1) : -1` polarity (beq -> li -1)  -> 76.4
+//   - percentile indices via Round() (fctiwz inside each arm)        -> 80.3
+// Inert: a ForceValue(float) inline in DoubleExponentialSmoother.h for the
+// image's dead `stw &smoother, 0x50(r31)` in the SetParams arm.  Remaining:
+// image keeps 60/80 (d38/d44) in memory, not FPRs (we save from f17, image
+// __savefpr_18); vector slots p1Cols/rows/depths/p2Cols at 0x70/0x80/0x90/0xb0
+// vs ours 0x70/0x90/0xb0/0xc0; mat slot 0x60 vs 0x80; our extra
+// `stfs Level, 0x50(r31)` homes in the zoom-clamp section.
 void DepthBuffer3D::DrawShowing() {
     if (TheRnd.DrawMode() != Rnd::kDrawNormal || !Showing()) {
         return;
@@ -419,8 +432,10 @@ void DepthBuffer3D::DrawShowing() {
     // 72.1 (the value is still register-held).  Other open items: d38/d44 (60.0f,
     // 80.0f) are loaded into FPRs up front on our side only, and most of the
     // remaining rows are the per-pixel loop's register assignment.
-    RndMat *mat = mMinimalMat.Ptr();
-    if (mat == nullptr) {
+    RndMat *mat;
+    if (mMinimalMat) {
+        mat = mMinimalMat;
+    } else {
         mat = SetUpWorkingMat();
     }
 
@@ -431,17 +446,17 @@ void DepthBuffer3D::DrawShowing() {
     // the camera's depth stream texture only on the null path (`mr. r21, r3`
     // after GetStreamTex).  We used to hand a null texture to the material and
     // the vertex shader whenever a palette texture was set.
-    RndTex *depthTex = mPlayerPaletteTex.Ptr();
+    RndTex *depthTex;
 
     float d38 = 60.0f, d42 = 2.0f, d43 = 1.0f, d44 = 80.0f;
     float d45 = 0.0f, d46 = 8192.0f, d51 = 0.5f;
     float depthZoomParams[2] = { 0.0f, 1.0f };
     float d47 = 0.0f, d48 = 1.0f, d50 = 0.0f, d53 = 1.0f;
     float d41, d49, d52, d39, d40;
-    bool has1, has2, has3;
-    has1 = has2 = has3 = false;
 
-    if (depthTex == nullptr) {
+    if (mPlayerPaletteTex) {
+        depthTex = mPlayerPaletteTex;
+    } else {
         LiveCameraInput *cam = TheGestureMgr->GetLiveCameraInput();
         if (!cam->mDepthPolled) {
             cam->PollNewStream(LiveCameraInput::kBufferDepth);
@@ -468,8 +483,8 @@ void DepthBuffer3D::DrawShowing() {
             Skeleton *s0 = TheGestureMgr->GetSkeletonByTrackingID(pd0->GetSkeletonTrackingID());
             HamPlayerData *pd1 = TheGameData->Player(1);
             Skeleton *s1 = TheGestureMgr->GetSkeletonByTrackingID(pd1->GetSkeletonTrackingID());
-            int p1idx = (s0 == nullptr) ? -1 : (s0->SkeletonIndex() + 1);
-            int p2idx = (s1 == nullptr) ? -1 : (s1->SkeletonIndex() + 1);
+            int p1idx = s0 ? (s0->SkeletonIndex() + 1) : -1;
+            int p2idx = s1 ? (s1->SkeletonIndex() + 1) : -1;
 
             void *bits = nullptr;
             texSource->TexelsLock(bits);
@@ -540,31 +555,27 @@ void DepthBuffer3D::DrawShowing() {
             }
             if (!rows.empty()) {
                 std::sort(rows.begin(), rows.end());
+                // w21-f: Round() from math/Utl.h -- the image converts to int
+                // inside each arm (fadds/fsubs 0.5 -> fctiwz on both paths).
                 int n = (int)rows.size() - 1;
-                depthZoomParams[0] = (float)(n * 10) * 0.005f;
-                depthZoomParams[0] = (depthZoomParams[0] <= d45) ? (depthZoomParams[0] - d51) : (depthZoomParams[0] + d51);
-                depthZoomParams[1] = (float)(n * 0x14) * 0.005f;
-                depthZoomParams[1] = (depthZoomParams[1] <= d45) ? (depthZoomParams[1] - d51) : (depthZoomParams[1] + d51);
-                d41 = (float)n * 0.995f;
-                d41 = (d41 <= d45) ? (d41 - d51) : (d41 + d51);
-                int a = rows[(int)d41] + 1;
-                int b = rows[(int)depthZoomParams[0]] - 1;
-                int c = (rows[(int)depthZoomParams[1]] - 1) - (rows[(int)depthZoomParams[0]] - 1);
+                int i5 = Round((float)(n * 10) * 0.005f);
+                int i10 = Round((float)(n * 0x14) * 0.005f);
+                int i995 = Round((float)n * 0.995f);
+                int a = rows[i995] + 1;
+                int b = rows[i5] - 1;
+                int c = (rows[i10] - 1) - (rows[i5] - 1);
                 depthZoomParams[1] = (float)a;
                 depthZoomParams[0] = (float)(depthZoomParams[1] - (float)(depthZoomParams[1] - ((float)b - (float)c)));
             }
             if (!depths.empty()) {
                 std::sort(depths.begin(), depths.end());
                 float dn = (float)((int)depths.size() - 1);
-                d47 = dn * 0.009999999776482582f;
-                d47 = (d47 <= d45) ? (d47 - d51) : (d47 + d51);
-                d41 = dn * 0.9900000095367432f;
-                d41 = (d41 <= d45) ? (d41 - d51) : (d41 + d51);
-                d50 = dn * d51;
-                d50 = (d50 <= d45) ? (d50 - d51) : (d50 + d51);
-                float lo = (float)depths[(int)d50];
-                float hi = (float)depths[(int)d41];
-                float spread = lo - (float)depths[(int)d47];
+                int i1 = Round(dn * 0.009999999776482582f);
+                int i99 = Round(dn * 0.9900000095367432f);
+                int i50 = Round(dn * d51);
+                float lo = (float)depths[i50];
+                float hi = (float)depths[i99];
+                float spread = lo - (float)depths[i1];
                 if (spread <= (hi - lo)) {
                     spread = hi - lo;
                 }
@@ -573,19 +584,20 @@ void DepthBuffer3D::DrawShowing() {
                 d47 = half + lo;
             }
 
-            has1 = d48 < d53;
-            if (!has1) {
+            bool valid = true;
+            if (d53 <= d48) {
                 d53 = d44;
+                valid = false;
                 d48 = d45;
             }
-            has2 = depthZoomParams[0] < depthZoomParams[1];
-            if (!has2) {
-                depthZoomParams[0] = d45;
+            if (depthZoomParams[1] <= depthZoomParams[0]) {
                 depthZoomParams[1] = d38;
+                valid = false;
+                depthZoomParams[0] = d45;
             }
-            has3 = d50 < d47;
-            if (!has3) {
+            if (d47 <= d50) {
                 d47 = d46;
+                valid = false;
                 d50 = 256.0f;
             }
             d46 = d50 - 256.0f;
@@ -610,14 +622,14 @@ void DepthBuffer3D::DrawShowing() {
                 smoothDt = TheTaskMgr.DeltaUISeconds();
             }
 
-            if (has3 && has2 && has1 && !unk28c) {
+            if (valid && !unk28c) {
                 unk270.SetParams(d49, d49, d45);
                 unk25c.SetParams(depthZoomParams[0], depthZoomParams[0], d45);
                 unk234.SetParams(d52, d52, d45);
                 unk248.SetParams(depthZoomParams[1], depthZoomParams[1], d45);
                 unk20c.SetParams(d47, d47, d45);
                 unk220.SetParams(d48, d48, d45);
-            } else if (has3 && has2 && has1) {
+            } else if (valid) {
                 if (100.0f < Abs(unk270.Level() - d49) ||
                     50.0f < Abs(unk25c.Level() - depthZoomParams[0]) ||
                     3.0f < Abs(unk234.Level() - d52) ||
@@ -633,7 +645,7 @@ void DepthBuffer3D::DrawShowing() {
                     unk220.Smooth(d48, smoothDt);
                 }
             }
-            unk28c = has3 && has2 && has1;
+            unk28c = valid;
 
             d53 = d43 / mMaxZoom;
             d48 = d41 / mMaxDepthZoom;
@@ -776,8 +788,8 @@ void DepthBuffer3D::DrawShowing() {
         Skeleton *s0 = TheGestureMgr->GetSkeletonByTrackingID(pd0->GetSkeletonTrackingID());
         HamPlayerData *pd1 = TheGameData->Player(1);
         Skeleton *s1 = TheGestureMgr->GetSkeletonByTrackingID(pd1->GetSkeletonTrackingID());
-        slotParams.x = (s0 == nullptr) ? -1 : (s0->SkeletonIndex() + 1);
-        slotParams.y = (s1 == nullptr) ? -1 : (s1->SkeletonIndex() + 1);
+        slotParams.x = s0 ? (s0->SkeletonIndex() + 1) : -1;
+        slotParams.y = s1 ? (s1->SkeletonIndex() + 1) : -1;
     }
 
     double ip;
