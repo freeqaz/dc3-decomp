@@ -930,8 +930,22 @@ zero_and_scale:
             // 139/141): `*static_cast<CharBones *>(mSkeletonBones)` inline and
             // a plain `CharBones *skBones = mSkeletonBones;` are byte-identical
             // to this spelling.
+            // w21-r (98.77 -> 99.2): an if-form null select (`skBones = nullptr;
+            // if (mSkeletonBones) skBones = mSkeletonBones;`) puts the cmplwi
+            // where the image has it; the image still computes `addi r4, r11,
+            // 0x10` speculatively and patches `li r4, 0` on the null arm, we
+            // do the reverse (3 rows instead of the ternary's 2-row
+            // insert/delete, cheaper on the ruler).  Same value either way.
+            // Also measured: `!mSkeletonBones ? nullptr : ...` (same as the
+            // if-form), a CharBonesMeshes* local (byte-identical to the
+            // ternary), the gender index hoisted into a local first (90.4).
+            // The r26/r27 rotation in the mClipWeightMap loop (7 rows) is
+            // untouched.
             {
-                CharBones *skBones = mSkeletonBones ? static_cast<CharBones *>(mSkeletonBones) : nullptr;
+                CharBones *skBones = nullptr;
+                if (mSkeletonBones) {
+                    skBones = mSkeletonBones;
+                }
                 sSkeletonClips[mGender == kHamFemale ? 1 : 0]->ScaleAdd(*skBones, 1.0f, 0.0f, 0.0f);
             }
             mSkeletonBones->Poll();
