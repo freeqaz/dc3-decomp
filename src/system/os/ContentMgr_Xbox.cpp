@@ -491,8 +491,16 @@ void XboxContentMgr::PollRefresh() {
                             gIgnoredContent.begin(), gIgnoredContent.end(), xdata->szFileName
                         );
                         char *filename = xdata->szFileName;
+                        // BEHAVIOURAL (w20-p): BREAK, not `continue`.  The image's
+                        // hit arm leaves the per-item loop entirely:
+                        //     825EB95C  cmplw cr6, r3, r11       ; found vs end()
+                        //     825EB960  bne   cr6, .L_825EBABC   ; -> memset(...)
+                        // and .L_825EBABC is the post-loop memset/XEnumerateCrossTitle
+                        // block, not the `j++` at 825EBAA8.  The first ignored
+                        // item stops discovery of every item after it in the
+                        // batch.  We had `continue`, which skipped only that item.
                         if (found != gIgnoredContent.end())
-                            continue;
+                            break;
 
                         bool discovered = false;
                         // NEGATIVE RESULT (residual ~3.5pp).  Both dispatch loops

@@ -1865,6 +1865,9 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     // before the branch is the 88.4 state.  The rot lowering in the vertex
     // loop (fmadds f9 vs fsubs, and the store order z,y,x vs x,z,y) is in
     // the off-limits math header's Multiply and is the ae-recorded floor.
+    // w20-p: branch-landing rows 207/224 re-adjudicated value by value --
+    // ARTIFACT (shared [2] store tail in the image, loop-top base+n in ours);
+    // all six halfwords per quad carry the same values on both arms.
     int iFace = 0;
     for (int row = 0; row < nMinus1; row++) {
         for (int col = 0; col < nMinus1; col++) {

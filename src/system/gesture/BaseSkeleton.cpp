@@ -227,6 +227,10 @@ void BaseSkeleton::LimbNormPos(
 // The MakeString<char const(&)[13], int const&, char const(&)[5]> vs our
 // <[11], int const&, [49]> in the Function Call Diff is an ICF fold -- both
 // sides load the SAME two string symbols at indices 14/15 -- not a wrong callee.
+// w20-p branch-landing row 88 (case 5 `b` into the image's shared 3-store
+// tail vs ours into the last store): ARTIFACT -- shared vs duplicated tail;
+// both store v60-v80, v64-v84, v68-v88. The MakeString name diff is an ICF
+// fold (824d1870 in the map carries both spellings).
 void BaseSkeleton::MakeCameraToPlayerXfm(
     SkeletonCoordSys cs,
     Transform &xfm,

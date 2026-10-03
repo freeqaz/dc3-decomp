@@ -539,6 +539,9 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
 #pragma endregion
 #pragma region LiveCameraInput
 
+// w20-p branch-landing row 122 (image `subic.`/`bne` down-counter vs ours
+// `mtctr`/`bdnz`, 4 iterations both): ARTIFACT -- same six stores to
+// 0x1448..0x145c per iteration, only the loop-counter lowering and pointer bias differ.
 LiveCameraInput::LiveCameraInput()
     : mConnected(true), mColorPolled(0), mDepthPolled(0), mColorReceived(0), mDepthReceived(0), mSpeechMgr(0) {
     for (int i = 0; i < DIM(mTexClips); i++) {
