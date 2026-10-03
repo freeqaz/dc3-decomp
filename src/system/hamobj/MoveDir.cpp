@@ -131,6 +131,17 @@ namespace {
             // residual is 30 diff_arg rows that are pure FPR renaming
             // (f11<->f12, f7<->f8, ...) plus load scheduling inside this one
             // block; regions 0-56 and 90-141 are 100%.
+            // w21-bl (94.9, same 30 diff_arg / 2 ins / 5 del): standalone
+            // cl.exe probe of this function. darkColor.Set(r*.5f, g*.5f, b*.5f,
+            // a) reproduces the image's LOAD order exactly up to the red
+            // loads (b,g per colour first -- args evaluate right to left) but
+            // also gives none of the three 0x50 alpha parks; Set with
+            // const float & params, a (float) cast rvalue alpha, an inline
+            // Halve(out, in) helper, and `x = Hmx::Color(...)` (three 16-byte
+            // temp copies) all give no park either. The parks share the
+            // MakeString temp's slot, which is address-exposed, so they are
+            // stores of a float temp that survived until stack packing; no
+            // spelling found that creates one. Field writes stay (best score).
             darkColor.red = sDarkerGray.red * 0.5f;
             darkColor.green = sDarkerGray.green * 0.5f;
             darkColor.blue = sDarkerGray.blue * 0.5f;
