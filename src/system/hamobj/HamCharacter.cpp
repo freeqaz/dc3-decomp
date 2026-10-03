@@ -671,6 +671,18 @@ int HamCharacter::SongAnimation() {
 // measured here: `d = size() > prop ? v[prop] : nullptr; return d &&
 // d->Showing();` 85.7; nested `if (d) return d->Showing() != 0;` 81.9; `d ?
 // d->Showing() : false` 78.1 (drops the image's bool re-normalisation).
+// w21-u (95.24, same 3 rows): where the clrrwi DOES come from in our build --
+// a pointer that is re-read from a RAW member and CSE'd: HamAudio::IsFinished
+// (`mSongStream && mSongStream->IsFinished()`), HamAudio::GetTime, and
+// HamAudio::Play's `if (mStreams[i]) mStreams[i]->...` all emit `cmplwi rA /
+// beq / clrrwi r3, rA, 0` and are 100.  Re-reading an ObjPtrVec element does
+// not: the double subscript gives a SIGNED cmpwi and no copy, and stays so
+// with ObjPtrVec::operator[] returning `Node &` (conversion operator +
+// operator-> at the use, full ninja: whole binary 0 UP / 0 DOWN besides this
+// row at 92.38).  A copy local (`RndDrawable *shown = d; d && shown->...`)
+// is 85.7.  So the image re-reads something that is NOT an inline accessor
+// result -- 126 image functions carry this shape (scan of
+// build/373307D9/asm for `cmplwi rA,0 / beq / clrrwi rB,rA,0`).
 bool HamCharacter::GetPropShowing(int prop) {
     RndDrawable *d;
     auto _tmp0 = mShowableProps.size();
