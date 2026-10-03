@@ -478,6 +478,21 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 // build: its `cmpwi` frees a slot for `li r11,0x1` before the branch,
                 // so it lowers to `li 1 / beq <done> / li 0` instead, and that arm
                 // already matches instruction for instruction.
+                //
+                // w21-p: 97.80 -> 100 normalized (1 row left, a branch TARGET).
+                // The mScrollPastMinDisplay/else pair as ONE conditional
+                // expression, not an if/else of two assignments: the 4 merge
+                // rows and both insert/delete pairs disappear, both builds are
+                // 182 instructions.  The one remaining row is still the
+                // cross-jump: the image's second arm ends `b 0x827841C8` (back
+                // into the direction==1 arm's `bne / li 1 / b`), ours ends
+                // `b` into the third arm's `li 1 / beq <done> / li 0`.  Same
+                // value on every path: r11 = (curSel == mMinDisplay) into the
+                // shared `clrlwi r30, r11, 24`.  Tried and worse: the RB3
+                // nested-if `hitBoundary = 0; if (...) hitBoundary = 1;` shape
+                // (91.6), `curFirst == maxFirst ? curSel == ScrollMaxDisplay()
+                // : false` (99.0, cntlzw form), `atZero ? curSel == 0 : false`
+                // in an if/else (96.8); `atZero && !curSel` is identical.
                 if (direction == 1) {
                     int maxFirst = MaxFirstShowing();
                     curFirst = state.mFirstShowing;
@@ -487,10 +502,8 @@ void UIListState::Scroll(int direction, bool skipActive) {
                     curFirst = state.mFirstShowing;
                     bool atZero = curFirst == 0;
                     curSel = state.mSelected;
-                    if (mScrollPastMinDisplay)
-                        hitBoundary = atZero && curSel == mMinDisplay;
-                    else
-                        hitBoundary = atZero && curSel == 0;
+                    hitBoundary = mScrollPastMinDisplay ? atZero && curSel == mMinDisplay
+                                                        : atZero && curSel == 0;
                 }
             }
         }
