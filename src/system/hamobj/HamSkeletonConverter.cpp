@@ -462,6 +462,15 @@ void HamSkeletonConverter::SetLeg(
         // three hz.y/hz.z products hz-first and flips only the hz.x ones).
         // Cross((&mLeftHipZAxis)[side], dir, ...) is 95.8 and
         // `Vector3 hipZ = (&mLeftHipZAxis)[side];` (one 16-byte copy) is 93.1.
+        // w21-at STOP (normalized 100, fuzzy 99.8): once the knee-angle dot
+        // is written with the image's parentheses, ALL six cross rows
+        // (160/164/165/168/170/172) put the hz operand first, whatever the
+        // source operand order -- dir-first, hz-first, Cross(hipZ, dir),
+        // three member assignments and a `const Vector3 &d = dir` alias all
+        // emit the same rows.  Register-operand order of commutative
+        // multiplies only; same values.  The flat Dot() spelling had 4 of
+        // these rows but rounds the knee angle differently natively, so the
+        // explicit dot stays.
         Vector3 cross1;
         cross1.Set(
             dir.z * hipZ.y - dir.y * hipZ.z,
