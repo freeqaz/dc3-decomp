@@ -1249,6 +1249,12 @@ void MetaPerformer::SaveDanceBattleScores(Symbol s1) {
 //   loads for CalcSecondarySongCharacter (r6 = *primaryOutfit, r7/r8 from the
 //   0x13c/0x144 stack params) issued in a different order.  No source lever
 //   tried here; recorded as the allocator tie it appears to be.
+// w21-bn (99.988, same 22 rows; re-adjudicated: r22/r23/r24 carry
+// primaryChar / gNullStr-hi / primaryOutfit consistently on every row, and
+// the final CalcSecondarySongCharacter loads read the same four values).
+// Inert: `Symbol primaryPlayerChar, secondaryPlayerChar;` hoisted to function
+// scope; the conflict-free branch ending in `return;` with the rest at
+// function scope (no else).
 void MetaPerformer::CalcCharacters(
     const HamSongMetadata *data,
     bool b,
