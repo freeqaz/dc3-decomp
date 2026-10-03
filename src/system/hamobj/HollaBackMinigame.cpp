@@ -635,6 +635,15 @@ void HollaBackMinigame::OnBeat() {
     // w16-b: `master->TotalBeat2()` in the test (no local) deletes the image's
     // `addi r10, r30, 0x78` too; a `const SongPos &` local is identical to
     // this pointer. Same one-row residual either way.
+    // w21-ax: stopped at 99.85694 (2 rows: this store + the add below). The
+    // target DOES materialise `addi r10, r30, 0x78` (824EAEEC) and folds both
+    // compare loads onto r30 (lfs 0x7c/0x64), so this local existed; only its
+    // home store is ours. Also inert/worse: declaring it after the
+    // GetCurrLoopBeats call / after currentBeat (99.5, store moves later), a
+    // by-value SongPos copy (99.0, memcpy), `master->SongPos2().GetTotalBeat()`
+    // in the test with no local (drops the addi). `currentBeat =
+    // master->TotalBeat1()` makes the volatile re-reads below unnecessary (the
+    // r29-based reload then differs by expression) but costs 17 regswap rows.
     SongPos *prevSongPos = &master->SongPos2();
     SongPos *songPos = &master->SongPos1();
     MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
@@ -678,6 +687,8 @@ void HollaBackMinigame::OnBeat() {
         // the commutative operands: `= subStateIdx + (...)`, a named delta local, and
         // `-= subBeatInMeasure - currentBeatInMeasure` all emit byte-identical code.
         // Plain 2-term same-register swap = backend floor.
+        // w21-ax: `mSubStateIndex += delta` (99.5, cmp/blt reshuffle) and
+        // `mSubStateIndex = (cur - sub) + subStateIdx` (identical) also tried.
         subStateIdx += currentBeatInMeasure - subBeatInMeasure;
         mSubStateIndex = subStateIdx;
     }
