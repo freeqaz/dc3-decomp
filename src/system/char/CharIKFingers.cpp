@@ -288,7 +288,12 @@ void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
             for (int i = 0; i < 5; i++) {
                 FingerDesc &finger = mFingers[i];
                 if (finger.mIsEngaged) {
-                    Add(finger.mTargetWorldPos, avgPos, avgPos);
+                    // w21-i: avgPos first -- the image's x add is `fadds f11, f27, f11`
+                    // (avg.x + pos.x); closes one commutative row.  The two left
+                    // (fmuls side.z/side.y * (i - 2) at idx 102-103) did not move;
+                    // `Vector3 sideScaled(sideOffsetBase); sideScaled *= i - 2.0f`
+                    // costs 100 -> 88.3 (frame +0x10).
+                    Add(avgPos, finger.mTargetWorldPos, avgPos);
                     Vector3 sideScaled;
                     Scale(sideOffsetBase, i - 2.0f, sideScaled);
                     Add(sideScaled, avgPos, avgPos);
