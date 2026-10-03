@@ -179,24 +179,33 @@ void HamRegulate::Poll() {
     // the loads, DeltaSeconds() folded into Max, `scale * moveX` order,
     // scale products re-reading posDelta, moveRot defaulted before the
     // clamp.  The image loads straight into f29/f30; no spelling found.
+    // w21-au: CLOSED (98.81 -> 100).  moveX/moveY are NOT copies of
+    // posDelta.x/.y made up front: they are assigned in each arm (scaled,
+    // unscaled, teleported) and the sqrt reads posDelta directly.  With the
+    // up-front copy MSVC propagated the load temp into the sqrt and the scale
+    // products, so temp and moveX interfered (the two fmr); assigned per arm,
+    // the temp dies at the copy and coalesces into f29/f30.  Same values on
+    // every path (x * scale order kept).
     float moveZ = 0.0f;
     float dt = TheTaskMgr.DeltaSeconds();
-    float moveX = posDelta.x;
-    float moveY = posDelta.y;
+    float moveX;
+    float moveY;
     int footState = 0;
     float absDt = Max(0.0f, dt);
     float moveRot;
 
     if (!mCharacter->Teleported()) {
         float maxMove = mMaxSpeed * absDt;
-        float posMag = sqrtf(moveX * moveX + moveY * moveY);
+        float posMag = sqrtf(posDelta.x * posDelta.x + posDelta.y * posDelta.y);
         if (posMag > 0.0f && posMag > maxMove) {
             float scale = maxMove / posMag;
-            moveX = moveX * scale;
-            moveY = moveY * scale;
+            moveX = posDelta.x * scale;
+            moveY = posDelta.y * scale;
             moveZ = scale * moveZ;
             moveRot = scale * rotDelta;
         } else {
+            moveX = posDelta.x;
+            moveY = posDelta.y;
             moveRot = rotDelta;
         }
 
@@ -229,6 +238,8 @@ void HamRegulate::Poll() {
             }
         }
     } else {
+        moveX = posDelta.x;
+        moveY = posDelta.y;
         moveRot = rotDelta;
     }
 
