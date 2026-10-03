@@ -219,7 +219,8 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // begin register die in the `subf`, then RELOADS _M_start for the
     // mEntries[mCurrentIndex] below (`lwz r10, 0x0(r30)` @8288D9D4).  We load
     // _M_finish first, so begin survives in r9 and gets reused -- one
-    // instruction shorter, and the source cannot ask for the longer form.
+    // instruction shorter.  (Superseded by w21-m below: a const vector& bound
+    // just before the compare DOES produce the image's longer form.)
     // Splitting this into `++mCurrentIndex;` + a separate `if` is BYTE-
     // IDENTICAL (measured 2026-09-14, w7-q, with a sabotage control).
     // w16-e: `(int)mEntries.size() <= ++mCurrentIndex` 99.133 (vs 99.14),
