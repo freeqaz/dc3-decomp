@@ -880,6 +880,11 @@ void HamIKEffector::Poll() {
                         totalWeight += remaining;
                     }
 
+                    // w20-l: normalized 100 / fuzzy 99.94. Only rows: y/z `fmuls`
+                    // operand order (image f12*f0 / f11*f0, ours f0*f12 / f0*f11) --
+                    // commutative, value-identical. `q.v *= invWeight`, Scale(), and
+                    // `q.v /= totalWeight` all emit the same code. Values and branch
+                    // targets of the whole function checked against the image.
                     float invWeight = 1.0f / totalWeight;
                     q.v.x *= invWeight;
                     q.v.y *= invWeight;
