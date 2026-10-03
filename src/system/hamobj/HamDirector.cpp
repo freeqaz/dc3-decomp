@@ -3283,31 +3283,12 @@ found:
     PoseIconMan(clip, poseBeat, tex, (bool)tex, NULL, 0.0f, 0.0f);
 }
 
-// RESIDUAL (w8-n, 99.4266 canonical): 44 rows but ONE cause, and the diagnosis is solid even
-// though the fix is not.  Both sides are 218 instructions; the only non-register
-// rows are idx 195/196, where the image recomputes the keys array address
-// (`slwi r10, r10, 3` / `lwzx r5, r10, r9`) and we keep its base in the
-// CALLEE-SAVED r28 (`add r8, r28, r10` / `lwz r5, 0x8(r8)`).  That one extra live
-// value is why the prologue is __savegprlr_25 against the image's _26 and the
-// frame is 0x10 larger, and every r27->r26 / r26->r25 rename below is the shift.
-// REFUTED: un-hoisting `Key<Symbol> &key = keys->at(clipIdx)` into two direct
-// `keys->at(clipIdx)` accesses DOES remove the extra callee-saved register (the
-// PROLOGUE_MISMATCH pattern disappears) but adds 6 instructions, for 96.4.
-// OUT OF REACH of the map-COMDAT lever (a COMDAT callee is link-time
-// replaceable, so MSVC will not propagate its clobber set and the caller has to
-// spill to non-volatiles -- which can make a save-set difference an `inline`
-// keyword on the callee).  That lever needs a SAME-TU callee, and here it has
-// none to work on: of this function's callees, the only three the image marks
-// `f i` in orig/373307D9/ham_xbox_r.map are ?Mod@@YAMMM@Z (char:
-// CharLipSyncDriver.obj), ?KeyLessEq@?$Keys@VSymbol@@V1@@@QBAHM@Z and
-// ?__stl_throw_out_of_range@stlpmtx_std@@YAXPBD@Z -- all CROSS-TU, where neither
-// side can propagate anything.  Every callee defined in HamDirector.cpp itself
-// (GetPropKeys, PoseIconMan, SetMasterClipAnim, DrawIconMan(Symbol,...)) is bare
-// `f`, so there is no in-TU COMDAT-ANY callee to match in the first place.
-// Do NOT read this as "our linkage classes already agree": MSVC/Xenon puts every
-// function we compile in its own COMDAT and our objects emit NODUPLICATES for
-// both classes, so we reproduce neither.  The claim here is only about which
-// callees are same-TU.
+// w21-aa: 99.43 -> 100 (modulo register permutation).  The w8-n residual
+// (we kept clipIdx*8 in callee-saved r28 and read the next key as
+// `lwz r5, 0x8(r8)`; the image recomputes `slwi r10, r10, 3` / `lwzx`)
+// closed by naming `nextIdx = clipIdx + 1` before the bound test: MSVC then
+// no longer CSEs (clipIdx+1)*8 into clipIdx*8 + 8.  Same unsigned compare
+// (int converted to size_type), same index.
 void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, float duration, float beatExtra, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {
         SetMasterClipAnim();
@@ -3353,8 +3334,9 @@ void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, floa
             float clipBeat = SecondsToBeat(key.frame / 30.0f);
             Symbol nextValue;
             Symbol prevValue;
-            if ((unsigned)(clipIdx + 1) < keys->size()) {
-                nextValue = (*keys)[clipIdx + 1].value;
+            int nextIdx = clipIdx + 1;
+            if (nextIdx < keys->size()) {
+                nextValue = (*keys)[nextIdx].value;
             }
             if (clipIdx > 0) {
                 prevValue = keys->at(clipIdx - 1).value;
