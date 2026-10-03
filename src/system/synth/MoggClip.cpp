@@ -352,11 +352,8 @@ void MoggClip::LoadFile(BinStream *bs) {
     mNumChannels = -1;
     if (!mMoggFile.empty()) {
         bool loadingMusic = IsLoadingMusicMogg(mMoggFile.c_str());
-        bool useless = IsUselessMogg(mMoggFile.c_str());
-        if (!useless) {
-            if (!(bs && bs->Cached()) || loadingMusic) {
-                bs = nullptr;
-            }
+        if (!IsUselessMogg(mMoggFile.c_str())) {
+            BinStream *bsToUse = (bs && bs->Cached() && !loadingMusic) ? bs : nullptr;
             mLoader = new FileLoader(
                 mMoggFile,
                 FileLocalize(mMoggFile.c_str(), nullptr),
@@ -364,7 +361,7 @@ void MoggClip::LoadFile(BinStream *bs) {
                 0,
                 false,
                 true,
-                bs,
+                bsToUse,
                 0
             );
             if (!mLoader) {
