@@ -1721,3 +1721,107 @@ previous one is backed up at `~/tmp/dtk-deployed-2026-10-02-aa575e8.bak`. Effect
 The same five lanes take the 363 rows that carry no wave-16 or wave-17 tag: 123 never attempted
 and 240 attempted only before wave 16. Each lane got through roughly a third of its list in
 wave 17. The brief adds wave 17's levers and bug shapes.
+
+**Result: 31,720 → 31,743 matched (+23), 0 DOWN.** Four lanes landed between `c82baa31a` and
+`3865d7d70` (+17). w18-a (+5, rndobj) was held for the native gate while the box had an NVIDIA
+userspace/kernel-module mismatch (5 GPU tests skipped, 74 vs the budget of 69; the budget was not
+raised). It landed after the reboot as `1d450108c`.
+
+| lane | owns | matched |
+|---|---|---|
+| w18-b | hamobj, world | +2 |
+| w18-c | gesture, rnddx9, math, char | +6 |
+| w18-d | os, utl, obj, flow, ui, meta, midi | +7 |
+| w18-e | lazer, synth, net, moviebink | +2 |
+| w18-a | rndobj | +5 (five ICF sort helpers rebound in symbols.txt) |
+
+Behaviour bugs, adjudicated against the target `.s`:
+
+1. **`RndShaderProgram::CopyErrorShader`** cached `this` instead of the error program
+   (image `mr r3, r30`, r30 = FindShader's result).
+2. **`Bloom_Blur`** named its two `RndTex` parameters in the wrong order. Parameter 2 is the
+   render target (assert, MakeDrawTarget, FinishDrawTarget).
+3. **`HamDirector::CollideList`** called `RndDrawable::CollideList` through the drawable
+   subobject. The image calls slot 11 of the primary vtable, which is `CollideListSubParts`.
+4. **`DepthBuffer3D::DrawShowing`** dropped the image's default `depthTex = mPlayerPaletteTex`.
+5. **`GamePanel::UpdateNowBar`** printed an uninitialised float on the no-duration path. The
+   image stores `0.0f` at the join.
+
+Bugs 1 and 2 read **100 normalized**: the canonical ruler forgives register permutation, so a
+wrong operand that lives in a permuted register costs nothing. That observation is wave 19's
+correctness lane.
+
+### Wave 19
+
+Five directory lanes, plus **w19-x**, a correctness lane over rows at normalized 100 /
+fuzzy < 100 (294 such rows) and the 111 functions `arith_semantics_scan.py` flagged.
+
+**31,737 → 31,756 matched (+19), 0 DOWN.** w19-a +1 (`RndShader::Init` 76.8 → 100: the 38
+independent `sShaders` stores are scheduled from source order), w19-c +8, w19-b +1, w19-d +1,
+w19-e +3, w19-x +0.
+
+**Finding (w19-x): the normalized ruler also forgives BRANCH-TARGET mismatches.** A `b`/`bc`
+row whose two sides land on different code still counts as a match if the opcode and the
+register-masked operands agree. About 20 functions at normalized 100 had such rows, and they held
+eight real behaviour bugs. Each one was re-verified against the target listing before landing:
+
+- `CharLipSyncDriver::ScaleAddViseme`: the weight and dframe arguments were swapped, so every
+  viseme blended at weight 0.
+- `CharClipDisplay::DrawBeatString`: x and y were crossed, offsets included.
+- `ClipDistMap::FindBestNodeRecurse`: every parameter use was shifted by one, and a duplicate
+  node recursed instead of returning.
+- `RhythmBattlePlayer::AnimateBoxyState`: the 4-beat delay applied after any transition, not
+  only after a transition Animate.
+- `WorldCrowd::Mats`: the material-variant loop ran outside the `mUseRandomColor` test.
+- `HamDirector::UpdatePostProcOverlay`: the unchanged early-out skipped restoring TheDebug's
+  reflect.
+- `HamNavProvider::Text`: a "song" row without format args never set its label.
+- `ShellInput::SyncVoiceControl`: a panel without `allow_voice_control` had voice disabled.
+
+Also from w19-c: `CharPollableSorter::Dep()` left `obj` and `poll` uninitialised, while
+`AddDeps` relies on `obj == null` for a new map entry.
+
+### Wave 20: small tasks
+
+At the user's request, wave 20 was dispatched as **small tasks of at most five named
+functions** each, plus read-only verifier tasks that re-check every claimed bug against the
+target before it lands. 13 tasks and 3 verifiers ran in about two hours. They landed through a
+new **stacked landing** (`~/tmp/dc3-wells/w8/land-stack.sh`): each lane is rebased onto the
+stack tip and merged `--no-ff`, with a full ninja and row diff after every merge for per-lane
+attribution, then guards and **one** native gate over the final tree. Main is then advanced to
+the stack tip. That replaced eleven ~25-minute serial gates with one.
+
+**31,756 → 31,755 matched (−1, deliberate).** The −1 is a correctness fix that costs its row.
+Behaviour bugs, all verified by a separate read-only task:
+
+- `RhythmBattle::OnBeat` (w20-b): a dropped `i6d8 = 0` in the in-zone VO block (image
+  `0x824E3524`). Restoring it also fixed the 0x10 frame-size gap and ~470 shifted slot rows
+  (99.557 → 99.951).
+- `FreestyleMoveRecorder::Poll` (w20-a): the depth texture was unlocked even when the lock
+  failed.
+- `PracticeSection::SyncProperty` (w20-a): `test_step_sequence` was not clamped to `size-1`.
+- `HamStorePanel::OnMsg(RCJobCompleteMsg)` (w20-a): a cart-clear failure never called
+  `ExitError(3)`.
+- `HamNavList::GetDisabledCount` (w20-d): the `count == 0` assert tested the display index.
+- `ReadSingleXinputJoypad` (w20-d): the trigger threshold was read through a hardcoded image
+  address. It is now a named `.bss` byte bound in symbols.txt.
+- `HamNavList::DetermineHighlightedItem` (w20-f): the hand position was clamped only on the
+  negative side.
+- `UIFontImporter::Load` (w20-f): the DC3-only fields were gated on `rev`, not `altRev`.
+- `SkeletonChooser::SetPlayerSkeletonNavData` (w20-i): player 1's ±0.15 thresholds were
+  swapped. This is the −1 row: 100 → 99.941, because the correct code loads the two constants
+  into swapped registers.
+
+Yield of the correctness pass by input: about 9 bugs in the first 25 functions from the
+w19-x REVIEW list, then 0 in the last 25 (all of them register, commutative-operand, ICF or
+scope-ordinal noise). A follow-up scan (w20-n) of **branch landings in functions at
+90–99.99** examined 388 functions and kept 52 rows in 34 functions after three noise filters.
+Its quick read of the top 10 found 1 real bug (`CharEyes::NextLook`). The list is at
+`~/tmp/dc3-wells/w8/w20-branchscan.txt`.
+
+Two tool notes:
+
+- **Never edit a running bash script.** bash reads a script as it executes, so editing
+  land-stack.sh mid-run broke its last lines after the gate had already passed.
+- **Re-stacking breaks a plain commit-count check.** A lane rebased onto an earlier stack
+  carries that stack's old commits, so the count now uses `--cherry-pick --right-only`.
