@@ -445,6 +445,22 @@ void CharHair::SimulateInternal(float fps) {
                 // only way to move the 16-byte copy ahead of the subtraction
                 // without changing semantics, adds a second 16-byte copy for
                 // exactly that reason and was not pursued.
+                //
+                // w21-ae (stopped at 99.57076, same 3 charged rows 531/533/540;
+                // fuzzy 99.00311): re-measured the floor with 20 spellings, none
+                // better.  Friction block: three-float ctor 96.91, `Vector3 &force`
+                // ref 97.31, copy-ctor + `-=` 91.92, save-old-then-copy 93.02,
+                // Set() 94.51, memcpy 95.65, ref to lastFriction 95.68; force
+                // ref over the whole tail 94.55/94.66; per-component
+                // Subtract(idealPos, pt.pos, pt.force) in yzx/xyz order
+                // 98.10/97.35; frictionDiff/movement declaration scope and
+                // `oldPos = pt.pos` inert.  The slack-check chain upstream
+                // (rows 168-237, register-only, forgiven) is the image summing
+                // y*y + (x*x + z*z) where we sum x*x + (z*z + y*y) -- it follows
+                // the ORDER the three vRes differences are scheduled (image z,x,y;
+                // ours y,z,x), not the LengthSquared spelling: writing the image's
+                // association inline costs 94.2 / 98.96.  `pt.pos.z += gravity`
+                // and `gravity + pt.pos.z` are inert.
                 Vector3 frictionDiff;
                 Subtract(pt.lastFriction, pt.force, frictionDiff);
                 pt.lastFriction = pt.force;
