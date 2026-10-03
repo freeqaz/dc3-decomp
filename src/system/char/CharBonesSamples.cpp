@@ -592,7 +592,7 @@ int CharBonesSamples::FracToSample(float *frac) const {
 // w21-am (92.47, unchanged; ~44 rows): measured inert, each with the built
 // object -- ROTX compressed arm as scalar Interp(...) * k, via short locals,
 // via short* locals, as `(v1 - v0) * frac + v0`, and as `*out = ...; *out *=
-// k` (the image loads src before srcNext at 0x823E1258; every spelling keeps
+// k` (the image loads src before srcNext at 0x823E1328; every spelling keeps
 // srcNext first); vects arm with `Vector3 sv1, sv0`, ShortVector3* locals,
 // Vector3 3-float ctors, and an interleaved x0/x1/y0/y1/z0/z1 conversion
 // (92.49 canonical / fuzzy down).  `CompressionType comp` / `long comp` =
