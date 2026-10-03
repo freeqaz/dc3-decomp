@@ -408,11 +408,9 @@ void SkeletonViz::DrawJoints(
     }
     Hmx::Color tintColor(tint, tint, tint, 1.0f);
 
-    float len4 = skeleton.BoneLength((SkeletonBone)4, kCoordCamera);
-    float len3 = skeleton.BoneLength((SkeletonBone)3, kCoordCamera);
-    float boneSum = len4 + len3;
-    float len2 = skeleton.BoneLength((SkeletonBone)2, kCoordCamera);
-    float depthSpan = len2 + boneSum;
+    float depthSpan = (skeleton.BoneLength((SkeletonBone)4, kCoordCamera)
+                       + skeleton.BoneLength((SkeletonBone)3, kCoordCamera))
+        + skeleton.BoneLength((SkeletonBone)2, kCoordCamera);
 
     float minZ = 1.0e30f;
     for (int i = 0; i < kNumBones; i++) {
@@ -424,23 +422,27 @@ void SkeletonViz::DrawJoints(
 
     Hmx::Color shadedColor;
     for (int i = 0; i < kNumBones; i++) {
-        // Endpoint 0 receives the unscaled tint; only endpoint 1 is depth-shaded.
-        float c0 = (camPos[BaseSkeleton::sBones[i].joint1].z - maxDepth) * invRange;
+        // Endpoint 0 receives the unscaled tint; only endpoint 1 is depth-shaded
+        // (image 0x82441228: SetPointColor(0) gets &tintColor at 0x60(r1)).
+        // shadedColor.alpha is never initialised (Hmx::Color() is empty) and
+        // the image multiplies it in place too.  ONE reused `c`, not c0/c1:
+        // two locals flip the second block's fmuls operand order.
+        float c = (camPos[BaseSkeleton::sBones[i].joint1].z - maxDepth) * invRange;
         shadedColor.alpha *= tintColor.alpha;
-        c0 = Clamp(0.0f, 1.0f, c0);
-        c0 = c0 * 0.8f + 0.2f;
-        shadedColor.red = tintColor.red * c0;
-        shadedColor.green = tintColor.green * c0;
-        shadedColor.blue = tintColor.blue * c0;
+        c = Clamp(0.0f, 1.0f, c);
+        c = c * 0.8f + 0.2f;
+        shadedColor.red = tintColor.red * c;
+        shadedColor.green = tintColor.green * c;
+        shadedColor.blue = tintColor.blue * c;
         mBoneLines[i]->SetPointColor(0, tintColor, true);
 
-        float c1 = (camPos[BaseSkeleton::sBones[i].joint2].z - maxDepth) * invRange;
+        c = (camPos[BaseSkeleton::sBones[i].joint2].z - maxDepth) * invRange;
         shadedColor.alpha *= tintColor.alpha;
-        c1 = Clamp(0.0f, 1.0f, c1);
-        c1 = c1 * 0.8f + 0.2f;
-        shadedColor.red = tintColor.red * c1;
-        shadedColor.green = tintColor.green * c1;
-        shadedColor.blue = tintColor.blue * c1;
+        c = Clamp(0.0f, 1.0f, c);
+        c = c * 0.8f + 0.2f;
+        shadedColor.red = tintColor.red * c;
+        shadedColor.green = tintColor.green * c;
+        shadedColor.blue = tintColor.blue * c;
         mBoneLines[i]->SetPointColor(1, shadedColor, true);
 
         mBoneLines[i]->SetPointPos(0, drawPos[BaseSkeleton::sBones[i].joint1]);
@@ -451,20 +453,14 @@ void SkeletonViz::DrawJoints(
         mBoneLines[i]->SetWidth(baseWidth);
     }
 
-    // RESIDUAL (DrawJoints, 98.4 canonical / 97.8 raw). Remaining rows, all
-    // measured, none closed:
-    //   - `addi r24, r27, 0x114` + `mr r30, r24` where the image writes r30
-    //     directly (0x824412xx); declaring lineIt before jointPair is inert.
-    //   - `cmpw cr6, r31, r10` (SIGNED) on the loop bound where we emit
-    //     `cmplw`; the source compares two pointers, which MSVC lowers
-    //     unsigned.
-    //   - `fadds f30, f30, f1` (boneSum) where we emit `fadds f30, f1, f30`;
-    //     writing `len3 + len4` instead of `len4 + len3` is INERT.
-    //   - the three `fmuls` of the SECOND colour block come out (c1, tint)
-    //     where the image has (tint, c1); the first block already matches with
-    //     the identical spelling, and writing `c1 * tintColor.red` is INERT.
-    //   - the baseScale/scaledScale store schedule below (x,y,z vs y,x,z and
-    //     y,z,x vs x,y,z) and one extra saved FPR (f23).
+    // w21-bm: 98.45 -> 100 canonical (one register-only row left: the
+    // SetWidth `fmuls f0, f0, f24` comes out with its operands swapped; writing
+    // `baseWidth * mLineWidthScale`, or reusing `c` for the width, is inert).
+    // Levers: both loops plain and indexed (the image's signed `cmpw` bone
+    // latch and the joint loop's `li r30,0 / mr r31,r26` are MSVC's strength
+    // reduction), the confidence colour as a flat if/else-if/else, baseScale
+    // built straight from the local diagonal with Scale() for scaledScale,
+    // `(len4 + len3) + len2` as one parenthesised sum, and one reused `c`.
     Vector3 baseScale(
         mJointMesh->LocalXfm().m.x.x,
         mJointMesh->LocalXfm().m.y.y,
@@ -474,7 +470,6 @@ void SkeletonViz::DrawJoints(
     Scale(baseScale, mLineWidthScale, scaledScale);
     SetLocalScale(mJointMesh, scaledScale);
 
-    Vector3 *jointIt = drawPos;
     for (int i = 0; i < kNumJoints; i++) {
         JointConfidence conf = skeleton.JointConf((SkeletonJoint)i);
         float red;
@@ -489,10 +484,9 @@ void SkeletonViz::DrawJoints(
             red = tint;
             green = 0.0f;
         }
-        mJointMesh->SetLocalPos(*jointIt);
+        mJointMesh->SetLocalPos(drawPos[i]);
         mJointMat->SetColor(red, green, 0.0f);
         mJointMesh->DrawShowing();
-        jointIt++;
     }
 
     SetLocalScale(mJointMesh, baseScale);
