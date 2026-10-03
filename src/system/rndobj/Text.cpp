@@ -1053,8 +1053,8 @@ void RndText::WrapText(
                 nxt->isLineEnd = true;
                 nxt->nextIdx = -1;
                 nxt->charIdx = (int)(cur - wideChars);
-                nxt->isHardBreak = true;
                 numWp++; wpI++;
+                nxt->isHardBreak = true;
                 wps[bestWp].isLineEnd = false;
                 if (*cur == 0) goto buildLines;
             }
