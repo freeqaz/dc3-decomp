@@ -500,8 +500,9 @@ void CharIKFingers::FixSingleFinger(
 // multiply-then-invert, an unrolled two-bone loop (78.0), five association
 // orders of the finger-length sum (<= 97.7 fuzzy).
 // w21-q: 98.795 -> 100 canonical with the reused `len` in the hand/forearm
-// tail (the image's `fmr f12, f11`).  Left: 8 register-only rows in the finger
-// loop (tip.x / f2.y and tip.z / f2.x land in f10/f11 and f7/f8 swapped).  Probe
+// tail (the image's `fmr f12, f11`).  Left: 9 register-only rows -- 8 in the finger
+// loop (tip.x / f2.y and tip.z / f2.x land in f10/f11 and f7/f8 swapped) and
+// one commutative fmuls operand swap (f0/f11) in the hand/forearm tail.  Probe
 // (standalone cl.exe, all 12 orderings/associations of the three-length sum,
 // all 6 declaration orders of f2/f3/tip, no FingerDesc ref, a function-scope
 // `len` shared with the loop): none closer than the current spelling, which
