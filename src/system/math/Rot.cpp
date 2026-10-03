@@ -290,7 +290,11 @@ void RotateAboutZ(const Hmx::Matrix3 &min, float f, Hmx::Matrix3 &mout) {
 // LengthSquared(v2) * LengthSquared(v1); separate l1/l2 locals; the dot as a
 // local after sq; q.x/y/z/w member stores; early return.  Worse: dot local
 // before sq 71.7; sq before Cross 65.3; Scale/`*=` of vec 88.8; rb3-xenon's
-// six component locals 50.8.
+// six component locals 50.8.  Binding v1/v2 to local references (the lever
+// that closed Quat::Set(Vector3)): 192 placements measured; the only ones
+// that keep the image's association move fuzzy 89.42 -> 89.68 (the dot read
+// as a.x * b.x + ... through refs; the v2.y copy then matches) and leave
+// canonical at 90.31 -- not shipped.
 void MakeRotQuat(const Vector3 &v1, const Vector3 &v2, Hmx::Quat &q) {
     Vector3 vec;
     Cross(v1, v2, vec);
