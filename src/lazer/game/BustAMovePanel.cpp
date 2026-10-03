@@ -1569,7 +1569,9 @@ void BustAMovePanel::Poll() {
         // w21-ba (still 99.60107): `Side() == kSkeletonLeft ? GetPlayerColor(0)
         // == "pink" : false` is 99.2 (r26/r28 swap + a branch); `&& !(color !=
         // "pink")` (an extra inline operator!= level) is exactly the && form
-        // (97.8, same 10 PERMUTED slots), so inline depth is not the coupling.
+        // (97.8, same 10 PERMUTED slots), so inline depth is not the coupling;
+        // the && form plus `const Symbol &color = GetPlayerColor(activePlayer)`
+        // in the else-if arm is 97.0.
         bool isPlayer0Pink = true;
         if (TheGameData->Player(0)->Side() != kSkeletonLeft
             || GetPlayerColor(0) != "pink") {
