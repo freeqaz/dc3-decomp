@@ -587,6 +587,15 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 // multiply plus two `fmr`.
                 float sinHalf = sin(tiltAngle / 2.0);
                 float cosHalf = cos(tiltAngle / 2.0);
+                // w21-j: stopped at 96.24 -- every remaining row (idx 533-624)
+                // is this quaternion block. The image computes all 16 q1*q2
+                // products UNFUSED up front and shares them (and the
+                // `x*w' + w*x'` partial sums) between quatDir*quatRot and
+                // quatRot*quatDir; ours fuses some into fmadds/fmsubs + fneg, so
+                // the two orders stop CSE-ing. That is the summation order
+                // inside math/Mtx.h's Quat Multiply, which w5-f measured as the
+                // whole-binary optimum -- do not reorder it there. REFUTED here:
+                // a separate result quat for the quatRot*quatDir chain (95.8).
                 Hmx::Quat quatDir(tiltDir.x, tiltDir.y, tiltDir.z, 0.0f);
                 Hmx::Quat quatRot(axisDir.x * sinHalf, axisDir.y * sinHalf, axisDir.z * sinHalf, cosHalf);
                 Hmx::Quat quatResult;
