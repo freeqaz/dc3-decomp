@@ -654,7 +654,12 @@ dprintf_Pass1(const char *format, va_stack_t *vto, char **endpos, va_list arglis
      anchor is the lowest-addressed static of the section, not the earliest
      declared one; the image anchoring the HIGHEST (null[]) is not reachable
      from any declaration order here.  (An unsized `static const char null[];`
-     is C2133 on this compiler.) */
+     is C2133 on this compiler.)
+   w20-e (2026-10-03, still 98.2, same 19 rows): strnil[] and null[] both
+   moved to FILE scope after upper_digits (declared strnil, null; null then
+   lands at +0x50, so the layout is wrong too) still anchors lower_digits
+   (`addi r30, r18, 0x50` for null).  Confirms the anchor is the
+   lowest-addressed static whatever scope the others have; not taken. */
 static int dprintf_formatf(
     void *data, /* untouched by format(), just sent to the stream() function in
                    the second argument */
