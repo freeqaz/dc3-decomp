@@ -168,6 +168,12 @@ void JoypadResetXboxPC(int pad) {
 //  * r31 <-> r7 (5 rows): `rx` is held in the callee-saved r31 for us and in
 //    the volatile r7 in the image, which is the same one liveness decision
 //    seen twice.
+//  w20-d: the r24/r25 and r9/r10 permutations and the lbl_83099C7C row were
+//  ONE cause -- the threshold was read through a hardcoded image address;
+//  naming it (gTriggerThreshold) cleared all three.  At 100 normalized only
+//  the 7 r31/r7 rows remain; values checked (image: setup_flag r31, rx r7;
+//  ours the reverse; TranslateStick is same-TU, so r7 survives its calls on
+//  both sides).  Inert: hoisting `rx` beside `lx`.
 
 JoypadType ReadSingleXinputJoypad(
     int pad,
