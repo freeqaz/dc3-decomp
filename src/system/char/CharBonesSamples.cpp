@@ -421,10 +421,16 @@ void CharBonesSamples::Relativize(CharClip *clip) {
                 // "unfixable FPR regswap floor" were that one literal's type.
                 //
                 // Inert, measured: declaring v before/after evalPos; spelling the
-                // subtraction per component in the image's x,z,y store order.
+                // subtraction per component in the image's x,z,y store order;
+                // `Subtract(v, evalPos, v)` in place.
+                // w21-aq: subtracting into a FRESH Vector3 (`Subtract(v, evalPos,
+                // d); pos->Set(d)`) closes all 16 rows of this block (the image's
+                // x,z,y subtract order and evalPos load order) -- same values,
+                // same 0x90 slot for the Set argument.
                 pos->ToVector3(v);
-                v -= evalPos;
-                pos->Set(v);
+                Vector3 d;
+                Subtract(v, evalPos, d);
+                pos->Set(d);
                 bone++;
             }
         } else {
