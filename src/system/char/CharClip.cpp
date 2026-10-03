@@ -202,6 +202,12 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
     // node_vectors/nodes; ours is exactly reversed.  Inert: hoisting the
     // new-arm pair to function scope (old pair renamed); swapping the arms
     // (`oldRev >= 8` first) is 32.5 -- the image lays the old arm out first.
+    // w21-ad (99.9 after the NodeVector placement-new fix below): only the
+    // slot permutation remains -- image [0x50 it/PathName temp, 0x54 old
+    // num_nodes, 0x58 new num_node_vectors, 0x5c new num_nodes], ours [0x50
+    // new num_nodes, 0x54 new num_node_vectors, 0x58 it, 0x5c old num_nodes].
+    // Also inert: swapping the new arm's declaration order, declaring `it` at
+    // function scope, scoping the old arm's num_node_vectors into its loop.
     Clear();
     static ObjectDir *sDir = nullptr;
     char buf[0x100];
