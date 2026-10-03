@@ -303,13 +303,25 @@ void RndBitmap::SetPixelIndex(int x, int y, unsigned char idx) {
 // is applied to the phi instead of inside each arm where it folds into the
 // load.  Statement order inside the compressed arm is inert (nibble store
 // moved before blockWidth, rowOffset moved before offsetMod: byte-identical).
-// RESIDUAL (w7-bt, 92.29 canonical): the compressed arm's schedule.  The
-// image stores `nibble` at 0x82671A10, before `addi r11, r11, 0x4`
-// (blockWidth), and holds y / blockSize in r30; we store it 8 instructions
-// later and hold the nibble in r30 instead, so `divw`, `addi r9, r9, 0x1`,
-// `lhz r28, 0x8(r3)` and `divwu r8, r8, r27` (0x82671AB0) each land a few
-// slots off -- 6 inserts / 6 deletes over one basic block whose DAG we cannot
-// change from the source.
+// w21-bh: 92.29 -> 99.02.  The w7-bt "compressed arm schedule" residual was
+// two source facts, both value-identical: (1) `width` is an int local, not an
+// unsigned short, and `nibble = x & 1` comes after pixelScale -- that puts
+// the image's `stb` at 0x82671A10 and its `divw r30, r5, r10` (y / blockSize)
+// in place; (2) `x % blockWidth` is added at the END of the tiledBaseOffset
+// expression rather than computed up front into a local -- the image's five
+// divide-overflow traps run width/bw, y/bs, x/bw, y/bs, x/bw (0x82671AB8..
+// 0x82671AF4), i.e. x % blockWidth is evaluated last.  (2) also cleared every
+// r3/r7/r31 swap in the tiled arm.  The `_ref0`/`_ref3` reference aliases for
+// mOrder/mHeight were inert and are gone.
+// RESIDUAL (w21-bh, 99.02 canonical, 5 rows): three `mullw` operand orders
+// (image width*pixelScale, mBpp*mod, mRowBytes*quotient; we emit each the
+// other way round) and the second `divwu r8, r8, r27` two slots late.
+// Measured inert in a standalone cl.exe probe: flipping each multiply's source
+// operand order (all 8 combinations), unsigned/int variants of width,
+// pixelScale, scaledWidth and mBpp, inlining scaledWidth, all 120 orders of
+// the blockSize/width/blockWidth/pixelScale/nibble statements (12 tie at
+// 99.02, the rest lower), and in the tiled arm all declaration and statement
+// orders, `%` spellings and tiledBase operand orders.
 // NEGATIVE RESULT (w7-am, 2026-09-14): writing the subscript on the left,
 // `(idx)[cond ? bytes13 : bytes02]`, is byte-identical -- MSVC's operand
 // evaluation order here is not reachable from the source spelling.
@@ -353,9 +365,7 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
         0x6d, 0x75, 0x7d, 0x47, 0x4f, 0x57, 0x5f, 0x67, 0x6f, 0x77, 0x7f
     };
 
-    auto& _ref3 = mHeight;
-    auto& _ref0 = mOrder;
-    if (_ref0 & 4) {
+    if (mOrder & 4) {
         if (mBpp == 8) {
             int yHalf = y >> 1;
             int xHalf = x >> 1;
@@ -374,19 +384,19 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
         }
         int yQuadMod = (y >> 2) % 4;
         int tiledOffsetX, tiledOffsetY, tiledStride;
-        if ((mWidth > 0x80U) && (_ref3 > 0x80U)) {
+        if ((mWidth > 0x80U) && (mHeight > 0x80U)) {
             tiledOffsetX = (((int)(y - ((y / 128) << 7)) >> 1) & 0xFFFFFFF8)
                 + ((x >> 1) & 0xFFFFFFC0);
             tiledOffsetY = (((int)(x - ((x / 128) << 7)) >> 2) & 0xFFFFFFF8)
                 + ((y >> 2) & 0xFFFFFFE0) + (yQuadMod * 2);
-            int heightVal = _ref3;
+            int heightVal = mHeight;
             tiledStride = (((heightVal - ((heightVal / 128) << 7)) & 0xFFFFFFF0)
                            + (mWidth & 0xFFFFFF80))
                 * 2;
         } else {
             tiledOffsetX = (y >> 1) & 0xFFFFFFF8;
             tiledOffsetY = ((x >> 2) & 0xFFFFFFF8) + (yQuadMod * 2);
-            tiledStride = (int)_ref3 * 2;
+            tiledStride = mHeight * 2;
         }
         int tiledBase = (tiledStride * tiledOffsetY) + (tiledOffsetX * 4);
         int nibbleOffset;
@@ -402,27 +412,26 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
         }
         return offsetShifted + tiledBase;
     }
-    if (_ref0 & 0x40) {
+    if (mOrder & 0x40) {
         unsigned char bpp = mBpp;
         int blockSize = 8;
         if (bpp != 4) {
             blockSize = 4;
         }
-        unsigned short width = mWidth;
+        int width = mWidth;
         int blockWidth = bpp < 0x10 ? 8 : 4;
-        nibble = x & 1;
         int pixelScale = (((bpp - 0x20) == 0) & 1) + 1;
-        int xModBlockWidth = x % blockWidth;
+        nibble = x & 1;
         int tiledBaseOffset =
-            ((((((int)width / blockWidth) * (y / blockSize)) + (x / blockWidth))
+            (((((width / blockWidth) * (y / blockSize)) + (x / blockWidth))
               * pixelScale * blockSize)
              + (y % blockSize))
-            * blockWidth;
+            * blockWidth + x % blockWidth;
         unsigned int scaledWidth = width * pixelScale;
-        int offsetMod = (int)(mBpp * ((tiledBaseOffset + xModBlockWidth) % scaledWidth))
+        int offsetMod = (int)(mBpp * (tiledBaseOffset % scaledWidth))
             >> (pixelScale + 2);
         int rowOffset =
-            mRowBytes * ((unsigned int)(tiledBaseOffset + xModBlockWidth) / scaledWidth);
+            mRowBytes * ((unsigned int)tiledBaseOffset / scaledWidth);
         return offsetMod + rowOffset;
     }
     nibble = x & 1;
@@ -955,22 +964,23 @@ void DecodeDxt3Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     alpha = ((i1 << 4) & 0xF0) | (i1 & 0xF);
 }
 
-// RESIDUAL (w7-am, 94.6 canonical): every remaining row is the array-init
-// store schedule.  Both 16-byte tables land in the right slots (-0x60(r1) and
-// -0x50(r1)) with the right values, and the 32 `stb`s are the same 32 stores
-// -- MSVC just interleaves them in a different order and therefore assigns the
-// eight constant-holding registers differently, which also drags the one
-// `addi rN, r3, 0x2` a few slots.  From 82671F00 to the epilogue our listing is
-// instruction-for-instruction the target's.  Nothing in the source picks that
-// interleave: the declaration order is already the one that produces the
-// matching slot assignment, and reordering the two arrays or the `uc[0]`/`uc[1]`
-// reads around them is inert (measured, see the 2026-09-14 negative result
-// below).
-// NEGATIVE RESULT (w7-am, 2026-09-14): moving both `a0`/`a1` reads below both
-// array declarations -- which is where the image reads them, 82671ED8/EDC,
-// after the whole init block -- produces a byte-identical object.  The reads
-// are already scheduled there; their source position does not reach the
-// scheduler.
+// w21-bh: 94.56 -> 98.41.  The w7-am "array-init store schedule" residual
+// was not about the arrays: `byte` (the byteOffsets lookup) is an `int`, not
+// an `unsigned char`.  As a uchar, MSVC coalesced the swizzle copy with it and
+// speculated the `swizByte--` arm above the branch (`mr r11, r8; addi r8, r8,
+// -1; bne`), which also reshuffled every table-init `stb`; as an int the copy
+// stays `mr r10, r11` with both arms branched (image 82671EEC..EF8) and the
+// 32 stores land in the image's order.  Value-identical: byte is 0..5.
+// RESIDUAL (w21-bh, 98.41 canonical, 1 insert + 1 delete): one `clrlwi rN,
+// rN, 24` -- we truncate at the swizzle copy (`mr r10, r11; clrlwi r10`), the
+// image truncates `byte` at the head of the bit >= 6 arm instead (before its
+// `addi r11, r11, 0x1`).  Measured inert in a standalone cl.exe probe: every
+// type combination of byte/swizByte/next/bit over {uchar, int, uint, ushort}
+// (int/uint/long byte all 98.41), in-place `byte++` for next, `next = byte;
+// next++`, a uchar copy of an int byte, ternary / `-= 1` / test-swizByte
+// spellings, inline Swiz helpers (by ref and by value), and all 90 orders of
+// the a0/a1/array/lookup declarations (byteOffsets before bitOffsets is
+// required; otherwise inert).
 void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     // The two alpha endpoints live in the block's first 16-bit word, and the
     // Xbox 360 stores that word byte-swapped -- the same swizzle the index
@@ -988,7 +998,7 @@ void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
         3, 3, 3, 4, 4, 4, 5, 5,
     };
     unsigned char a1 = uc[0];
-    unsigned char byte = byteOffsets[i + (j << 2)];
+    int byte = byteOffsets[i + (j << 2)];
     unsigned char bitOffsets[16] = {
         0, 3, 6, 1, 4, 7, 2, 5,
         0, 3, 6, 1, 4, 7, 2, 5,
