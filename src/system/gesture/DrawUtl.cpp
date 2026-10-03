@@ -264,6 +264,12 @@ bool UpdateBufferTex(LiveCameraInput *cam, RndTex *tex, LiveCameraInput::BufferT
     int height = tex->Height();
     void *texelsPtr = nullptr;
     tex->TexelsLock(texelsPtr);
+    // w20-c: the colour and player-colour blits advance `texels` itself; a
+    // separate dst/dstRow copy cost a callee-saved register and recoloured
+    // r26..r30 through the whole function (fuzzy 98.91, 62 register-only rows,
+    // every value adjudicated consistent).  texels is not read after either
+    // blit, so this is the same behaviour.  The remaining relocation rows are
+    // the ICF-folded MakeString<char[N],int,char[M]> spellings.
     unsigned short *texels = (unsigned short *)texelsPtr;
 
     if (bufType == LiveCameraInput::kBufferColor) {
@@ -274,7 +280,6 @@ bool UpdateBufferTex(LiveCameraInput *cam, RndTex *tex, LiveCameraInput::BufferT
             const unsigned int *src = (const unsigned int *)lockedRect.mBits;
             int dstExtraStride = tex->TexelsPitch() / 2 - 640;
             int srcExtraStride = lockedRect.mPitch / 4 - 320;
-            unsigned short *dst = texels;
             for (int y = 0; y < 480; y++) {
                 for (int x = 0; x < 320; x++) {
                     // UYVY: one 32-bit word carries U, Y0, V, Y1 -- two pixels.
@@ -283,10 +288,10 @@ bool UpdateBufferTex(LiveCameraInput *cam, RndTex *tex, LiveCameraInput::BufferT
                     int v = ((packed >> 8) & 0xff) - 128;
                     int y0 = (packed >> 16) & 0xff;
                     int y1 = packed & 0xff;
-                    *dst++ = YUVtoRGB(y0, u, v);
-                    *dst++ = YUVtoRGB(y1, u, v);
+                    *texels++ = YUVtoRGB(y0, u, v);
+                    *texels++ = YUVtoRGB(y1, u, v);
                 }
-                dst += dstExtraStride;
+                texels += dstExtraStride;
                 src += srcExtraStride;
             }
             cam->UnlockStream(bufStream);
@@ -300,20 +305,19 @@ bool UpdateBufferTex(LiveCameraInput *cam, RndTex *tex, LiveCameraInput::BufferT
         cam->LockStream(depthStream, depthRect);
         const unsigned int *colorRow = (const unsigned int *)colorRect.mBits;
         const unsigned short *depthRow = (const unsigned short *)depthRect.mBits;
-        unsigned short *dstRow = texels;
         for (int y = 0; y < 480; y++) {
             for (int x = 0; x < 640; x++) {
                 if (depthRow[x / 2] & 3) {
                     // 0xAARRGGBB -> RGB565.
                     unsigned int packed = colorRow[x];
-                    dstRow[x] = (unsigned short
+                    texels[x] = (unsigned short
                     )(((packed >> 8) & 0xf800) | ((packed >> 5) & 0x7e0)
                       | ((packed >> 3) & 0x1f));
                 } else {
-                    dstRow[x] = 0;
+                    texels[x] = 0;
                 }
             }
-            dstRow += tex->TexelsPitch() / 2;
+            texels += tex->TexelsPitch() / 2;
             colorRow += colorRect.mPitch / 4;
             if (y & 1) {
                 depthRow += depthRect.mPitch / 2;
