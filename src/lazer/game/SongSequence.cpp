@@ -225,6 +225,13 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // w16-e: `(int)mEntries.size() <= ++mCurrentIndex` 99.133 (vs 99.14),
     // `mEntries.end() - mEntries.begin()` 98.43, reusing numEntries 98.80
     // (the image does reload begin/end here).
+    // w21-e (99.14, same 13 rows): `int newIndex = ++mCurrentIndex;` then
+    // `if (newIndex >= (int)mEntries.size() || b2)` is byte-identical too.  The
+    // tell is our `clrrwi r10, r9, 0` (a 32-bit re-truncation of the kept begin
+    // pointer) where the image does a fresh `lwz r10, 0x0(r30)` -- our begin
+    // survives as a 64-bit value from the size() subtraction.  Behaviour checked
+    // against the image on all 13 rows: lis pair 138/139 and p0/p1 195/201 are
+    // register-only (p0+p1 sum is commutative), 271-288 is the same size/index.
     if (++mCurrentIndex >= (int)mEntries.size() || b2) {
         MILO_LOG("SongSequence::DoNext: terminating. forced=%s\n", b2 ? "T" : "F");
         static Symbol holla_back("holla_back");
