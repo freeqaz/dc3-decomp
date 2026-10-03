@@ -152,9 +152,7 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
         // identical.  The countdown on numSamples (`subic. r30, r30, 0x1`,
         // 0x82E5A278) is kept as a separate decrement: a counting
         // `i < numSamples` loop keeps i live and costs r25 (94.1).
-        int i = 0;
-
-        do {
+        for (int i = 0; i < numSamples; i++) {
             // Compute sin of phase
             float sinVal = sin(f27);
             sinVal = (float)sinVal;
@@ -257,10 +255,8 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
             }
 
             // Update phase
-            numSamples--;
             f27 = f18 + f27;
-            i++;
-        } while (numSamples != 0);
+        }
     }
 
     // Store phase - compare f27 with 2*PI, subtract if greater
