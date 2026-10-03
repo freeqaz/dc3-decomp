@@ -512,14 +512,17 @@ void CharIKFingers::MeasureLengths() {
     }
 
     if (mHand && mHand->TransParent() && mHand->TransParent()->TransParent()) {
+        // w21-q: ONE `len` local reused for both bones -- the image's
+        // `fmr f12, f11` is the first square moved out of the register the
+        // second length then reuses; two named locals never produce it.
         mInv2ab = 2.0f;
         mAAPlusBB = 0;
-        float handLen = Length(mHand->LocalXfm().v);
-        mAAPlusBB += handLen * handLen;
-        mInv2ab *= handLen;
-        float foreArmLen = Length(mHand->TransParent()->LocalXfm().v);
-        mAAPlusBB += foreArmLen * foreArmLen;
-        mInv2ab = 1.0f / (mInv2ab * foreArmLen);
+        float len = Length(mHand->LocalXfm().v); // hand bone
+        mAAPlusBB += len * len;
+        mInv2ab *= len;
+        len = Length(mHand->TransParent()->LocalXfm().v); // forearm bone
+        mAAPlusBB += len * len;
+        mInv2ab = 1.0f / (mInv2ab * len);
     }
 }
 
