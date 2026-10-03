@@ -353,23 +353,30 @@ void Intersect(const Hmx::Ray &ray1, const Hmx::Ray &ray2, Vector2 &vec) {
     }
 }
 
+// w21-ac (91.51 -> 100 canonical): the test reads the two components back out of
+// ray.dir after storing them (image 0x82534E04: fabs f9 of the stored dir.x
+// register, the fmr of dir.y), which is what put the dotZ fmadds after the
+// dir stores -- the residual an earlier lane called allocator scheduling.
+// Every combination of ray.dir.N / dotN in the test and the two divisors was
+// measured (16): only the test through ray.dir with the divisors through the
+// locals reaches it.  Same values natively: ray.dir holds exactly dotX/dotY.
+// The three dots are written in the image's association, (y + z) + x (read
+// off the fmuls/fmadds chain: n.y*m.N.y + n.z*m.N.z, then n.x*m.N.x), so
+// the native build evaluates them in the image's order (fidelity fix); on PPC
+// that spelling costs one more commutative-operand row than Dot() (canonical
+// 100 either way, modulo register permutation; fuzzy 99.72 vs 99.86 in the
+// probe) -- the two rows left are `fmadds f13,f8,f6` / `fmadds f12,f8,f3`
+// (n.x * m.N.x with the factors swapped), inert under all 8 operand orders.
 void Intersect(const Transform &trans, const Plane &plane, Hmx::Ray &ray) {
     Vector3 on = plane.On();
     Vector3 point;
     MultiplyTranspose(on, trans, point);
     const Vector3 &normal = (const Vector3 &)plane.a;
-    float dotX = Dot(trans.m.x, normal);
-    float dotY = Dot(trans.m.y, normal);
-    // Declaring dotZ AFTER the ray.dir.Set() call -- which is where the image
-    // finishes it (fmadds f12,f8,f3,f11 at 0x82534E10, after both dir stores and
-    // after fabs(dotX)) -- is a REGRESSION, 90.7 -> 80.0 raw: it also splits the
-    // twelve-load block the image emits as one batch.  The residual five rows are
-    // MSVC's scheduling of that last fmadds plus a provably DEAD `fmr f12, f0`
-    // (a copy of dotX killed by the very next instruction), which is a register
-    // allocator artifact, not a source shape.
-    float dotZ = Dot(trans.m.z, normal);
+    float dotX = trans.m.x.y * normal.y + trans.m.x.z * normal.z + trans.m.x.x * normal.x;
+    float dotY = trans.m.y.y * normal.y + trans.m.y.z * normal.z + trans.m.y.x * normal.x;
+    float dotZ = trans.m.z.y * normal.y + trans.m.z.z * normal.z + trans.m.z.x * normal.x;
     ray.dir.Set(dotX, dotY);
-    if (fabsf(dotY) > fabsf(dotX)) {
+    if (fabsf(ray.dir.y) > fabsf(ray.dir.x)) {
         ray.base.Set(point.x, point.y + (dotZ / dotY) * point.z);
     }
     else {
