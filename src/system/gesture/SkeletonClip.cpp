@@ -374,14 +374,19 @@ BEGIN_COPYS(SkeletonClip)
     END_COPYING_MEMBERS
 END_COPYS
 
-// RESIDUAL (w11-d, 99.991 canonical, 2 rows): in the alt-version MILO_FAIL the
-// image sets up `addi r7, r27, 0x4` (&gRevs[2]) before `addi r6, r31, 0x5c`
-// (&d.altRev); we emit them the other way round.  Inert, all measured:
-// `*(gRevs + 2)`, `gRevs[1 + 1]`, gRevs at file scope, comparing against
-// gRevs[0]/gRevs[2] instead of literals, `d.rev > 9` for `9 < d.rev`.
-// w16-c: the INIT_REVS spelling (two separately aligned static shorts gRev=9
-// / gAltRev=1 in place of gRevs[4]) re-anchors both MILO_FAILs off separate
-// lis/addi pairs and costs 98.0; the array stays.
+// w21-bm: 99.991 -> 100.  INIT_REVS at FILE scope, right here.  The image's
+// rev pair (lbl_82251B80: 0x0009,pad,0x0001,pad) is the FIRST object of this
+// TU's .rdata (splits.txt starts SkeletonClip's .rdata at 0x82251C08, but
+// 0x82251B80..0x82251C08 holds this pair plus DateTimeStr/IsFailClip unwind
+// tables, i.e. SkeletonClip's own .rdata), so per the w15-r rule above
+// INIT_REVS in obj/Object.h gRev is the lis/addi anchor and gAltRev is
+// reached as anchor+4 (`addi r7, r27, 0x4`), scheduled before &d.altRev.
+// Replaces w11-d's `static const unsigned short gRevs[4] = {9,0,1,0}` (2 rows:
+// &d.altRev set up before &gRevs[2]); w16-c had measured an INIT_REVS spelling
+// at 98.0 (placement not recorded).  Same values, same reads.  The rev checks
+// stay hand-written: the image remaps rev 10 to 9/alt 1 before them.
+INIT_REVS(9, 1)
+
 BEGIN_LOADS(SkeletonClip)
     const char *pathName = PathName(this);
     Symbol className = ClassName();
@@ -394,10 +399,9 @@ BEGIN_LOADS(SkeletonClip)
         d.altRev = 1;
         d.rev = 9;
     }
-    static const unsigned short gRevs[4] = { 9, 0, 1, 0 };
     if (9 < d.rev) {
         MILO_FAIL(
-            "%s can't load new %s version %d > %d", pathName, className, d.rev, gRevs[0]
+            "%s can't load new %s version %d > %d", pathName, className, d.rev, gRev
         );
     }
     if (d.altRev > 1) {
@@ -406,7 +410,7 @@ BEGIN_LOADS(SkeletonClip)
             pathName,
             className,
             d.altRev,
-            gRevs[2]
+            gAltRev
         );
     }
     RndAnimatable::Load(bs);

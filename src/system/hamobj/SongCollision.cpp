@@ -361,6 +361,22 @@ void SongCollision::Update(MoveDir *moveDir) {
     // a cast WorldXfm call, end()-begin() for size, mData[0].size() direct
     // (all 92.79-92.82).  The Timer::Ms rows (sradi/clrrwi order) come from
     // the PCH inline CyclesToMs and were not touched.
+    // w21-bm (floor held at 94.2, 80 rows; same /FAs probe, 30 more spellings,
+    // none above 94.24).  The stack layout says what the image did: its base
+    // value is an UNNAMED compiler temp spilled to 0x50 (pooled with the
+    // assert line temps), which is why minX/maxX sit together at 0x60/0x64
+    // and the DifficultyToSym Symbol temp at 0x78 -- whereas the named `data`
+    // here gets its own home at 0x64 and pushes minX down onto 0x50.  An
+    // unnamed base (`mData[i]` + `easy`) reproduces the slots but MSVC then
+    // spills `dancer` instead of the base, every time: invariant (92.79 to
+    // three places) under loop-local vs outer Transform/minX/maxX, decl order
+    // of current_beat/startXfm/minX/maxX, a renamed bcd, an explicit (int)
+    // on SecondsToBeat, a literal 4 bound, while(it){...++it;}, an enum
+    // loop counter (88.6), a dancer declared at function scope or split
+    // decl/assign, a WorldXfm reference local, RndTransformable::WorldXfm(),
+    // a function-scope pointer assigned after the Timer (92.44).  Timer::Ms
+    // rows: the image's sradi/clrrwi order varies per caller (CameraTilt vs
+    // FlowWhile), so it is context scheduling in the PCH inline.
     auto& data = mData;
     if (moveDir) {
         MILO_ASSERT(TheGameData, 0xFB);
