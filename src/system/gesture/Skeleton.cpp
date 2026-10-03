@@ -248,6 +248,16 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 // explain why the original ctor treated Init() as may-throw.  Behaviour of the
 // ctor itself (vtable, 20x ??_H TrackedJoint init, mTracking=0,
 // mTrackingID=-1, unkac4=0.0f, empty vector, Init()) agrees with the image.
+// w21-ak (89.605 -> 89.868 canonical, by the alias-map fix only: the two
+// lis/addi rows naming OnlyReturns vs ??0PaddedJointPos@@QAA@XZ are now
+// forgiven -- see the note above SkeletonFrame in Skeleton.h).  The 10-row EH
+// residual is untouched.  One more datum for whoever retries it: the target
+// object's section order is IsValid..KneeJoint, CamBoneLengths,
+// CamJointPositions, ..., Init, Poll, ctor, IsTracked, ElapsedMs, ??_G -- so
+// Init was compiled BEFORE the ctor in the original too (compile order cannot
+// be why it was may-throw), and IsTracked/ElapsedMs are emitted only after the
+// ctor references the vtable, i.e. they were most likely header-inline in the
+// original while QualityFlags (emitted early) was in this .cpp.
 Skeleton::Skeleton() : mTracking(kSkeletonNotTracked), mTrackingID(-1), unkac4(0) {
     Init();
 }
