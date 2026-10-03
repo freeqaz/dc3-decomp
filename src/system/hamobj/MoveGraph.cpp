@@ -278,6 +278,11 @@ bool MoveGraph::FindVariantPair(
         // w14-b (still 98.10): all inert or worse -- no local (every use via
         // p1->Variants()), a vector pointer, front()/[0], size()==0 or
         // begin()==end() for the empty test, empty() via p1 then the local.
+        // w21-au (still 98.10): `s == variants[i]->Song()` and a `Symbol
+        // song` local are inert; int count/index 97.5.  Same no-CSE/no-LICM
+        // reload of _M_start as HollaBackMinigame::SetMoveState (see the
+        // w21-au note there: splitting member/reference spellings breaks the
+        // CSE but MSVC then hoists the load).  Stopped.
         const std::vector<MoveVariant *> &variants = p1->Variants();
         if (variants.empty()) {
             return false;
