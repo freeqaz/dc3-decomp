@@ -7,6 +7,7 @@
 #include "xdk\NUI.h"
 
 struct CamTexClip {
+    CamTexClip() : mTex(nullptr) {}
     void StoreTextureClip(RndTex *, float, float, float, float);
 
     Transform mXfm; // 0x0

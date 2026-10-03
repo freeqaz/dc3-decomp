@@ -544,9 +544,6 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
 // 0x1448..0x145c per iteration, only the loop-counter lowering and pointer bias differ.
 LiveCameraInput::LiveCameraInput()
     : mConnected(true), mColorPolled(0), mDepthPolled(0), mColorReceived(0), mDepthReceived(0), mSpeechMgr(0) {
-    for (int i = 0; i < DIM(mTexClips); i++) {
-        mTexClips[i].mTex = nullptr;
-    }
     // MEASURED, 2026-09-14 (lane w7-aa).  We emit the mSpeechMgr (0x1444) store
     // TWICE -- once at idx 56, fused into the mTexClips loop preamble where it
     // displaces the image's `subi r10, r10, 0x4`, and once at idx 60 where the
@@ -561,7 +558,6 @@ LiveCameraInput::LiveCameraInput()
     // rotation at idx 62-65 (we emit 14b0,1200,14a8,14ac; the image emits
     // 1200,14a8,14ac,14b0, which is OUR source order) survives both -- so the
     // rotation is not caused by the duplicate store and is not decl-ordered.
-    mSpeechMgr = nullptr;
     mNumSnapshots = 0;
     mColorStreamTex = 0;
     mDepthStreamTex = 0;
