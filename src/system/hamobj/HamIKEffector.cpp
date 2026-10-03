@@ -1304,29 +1304,20 @@ void HamIKEffector::ComputeElbowPullAndQuat(
     MultiplyTranspose(v, xfm, v40);
     const Vector3 &effectorV = mEffector->TransParent()->LocalXfm().v;
     MakeRotQuat(effectorV, v40, q.q);
-    // w7-bb: 96.43%, 5 real rows.  Two coupled residuals, both traced, neither
-    // reachable from source: (1) the image RELOADS q.v.x (stfs f12,0x0(r31) at
-    // 824BF90C then lfs f11,0x0(r31) at 824BF918) where MSVC forwards our
-    // store; and
-    // because the middle term of the sum is then anchored in memory, the image
-    // cannot reassociate and emits the chain in source order (dy*dy, then
-    // fmadds q.v.x, then fmadds dz*dz).  We get all three terms in registers,
-    // so /fp:fast reverses the chain to dz*dz, dx*dx, dy*dy -- which is the
-    // whole f11<->f12 swap set and both (0x4,0x8)/(0x34,0x38) offset swaps.
-    // Measured, all WORSE than this spelling: dropping the dx local and
-    // assigning q.v.x directly = 95.13%; additionally hoisting effectorV.x
-    // into a local (which is what the image's load order at idx 24, BEFORE the
-    // store, seems to ask for) = 94.31% and makes MSVC sink the q.v.x store
-    // out of the block entirely.  Keep the faithful spelling.
-    // w14-b: also 95.11 -- writing q.v.x through a `Vector3 &qv`, a
-    // `float *`, or finishing with q.v.Set(...); none reproduces the reload.
-    float dy = v.y - xfm.v.y;
-    float dx = v.x - xfm.v.x;
-    float dz = v.z - xfm.v.z;
-    q.v.x = dx;
-    float len = sqrtf(dy * dy + q.v.x * q.v.x + dz * dz);
-    float factor = 1.0f - effectorV.x / len;
-    q.v.x = q.v.x * factor;
-    q.v.y = dy * factor;
-    q.v.z = dz * factor;
+    // w21-b: 96.43 -> closed.  The w7-bb/w14-b residual (the image RELOADS
+    // q.v.x after storing it, and squares in dy, x, dz order) is the pull
+    // being built IN q.v: Subtract() writes all three components, the length
+    // is summed from q.v, and q.v is scaled in place.  MSVC forwards y and z
+    // (and drops their first stores as dead) but reloads x.  effectorV.x is
+    // read before the Subtract: the image loads it (824BF900, lfs f10,0x0(r30))
+    // ahead of the q.v.x store.  Found with a standalone /FAs probe over 364
+    // spellings; same values as before on every component.
+    float effectorLen = effectorV.x;
+    Subtract(v, xfm.v, q.v);
+    float lenSq = q.v.x * q.v.x + q.v.y * q.v.y;
+    lenSq += q.v.z * q.v.z;
+    float factor = 1.0f - effectorLen / sqrtf(lenSq);
+    q.v.x *= factor;
+    q.v.y *= factor;
+    q.v.z *= factor;
 }
