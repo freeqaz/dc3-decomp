@@ -808,6 +808,12 @@ DataNode HamCharacter::OnCamTeleport(DataArray *a) {
 //      Ternary, implicit derived-to-base, and inline
 //      `*static_cast<CharBones *>(mSkeletonBones)` spellings are all
 //      byte-identical.
+//  w21-ax (stopped at 99.23313, same 10 rows): re-measured the ternary at
+//  zero_and_scale (98.8: the image's addi-then-null-select shape, but cmplwi
+//  scheduled first -- 2-row insert/delete); for (3) all inert: `it++`,
+//  `weight` declared before `clipEntry`, `totalWeight` declared before the
+//  map copy; dropping the clipEntry/weight locals (`it->first`/`it->second`
+//  inline) costs a 4th CSR and an FPR (94.5).
 ObjectDir *HamCharacter::GetNeutralSkeleton() {
 #ifdef HX_NATIVE
     {
