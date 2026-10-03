@@ -87,6 +87,14 @@ Symbol GetSystemLanguage(Symbol s) {
     //    Colombia or Mexico (0x825E0B74 `bne cr6, .L_825E0B94`, and
     //    .L_825E0B94 is `lwz r11, 0x0(r15)` = esl).  We left `s` untouched
     //    there, returning the caller's fallback instead of Spanish.
+    //
+    // w20-m (normalized 100, fuzzy 99.84): 10 diff_arg rows are a 3-way
+    // callee-saved rotation {hidden return ptr, &dan, &cht} = image r26/r24/r25,
+    // ours r24/r25/r26. Every row carries the same value on both sides; all
+    // branch targets agree (constant +0x208 bias) and the language jump table
+    // (jumptable_8207D4C0) maps each XC_LANGUAGE to the arm the source names.
+    // Tried: dropping `default:` from the locale switch, `default: return s;`
+    // in the language switch -- both inert.
     switch (locale) {
     case XC_LOCALE_SWEDEN:
         if (IsSupportedLanguage(swe, false))

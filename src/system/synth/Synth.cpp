@@ -532,11 +532,11 @@ void Synth::DrawMeter(float &y, float level, float peakHold, const char *name) {
 }
 
 void Synth::DrawMeterScale(float &y) {
+    int screenWidth = TheRnd.Width();
     int db = -40;
-    float height = (float)TheRnd.Width();
     Hmx::Color color(1.0f, 1.0f, 1.0f, 1.0f);
-    float left = height * sMeterConsts[0];
-    float width = height * sMeterConsts[2];
+    float left = (float)screenWidth * sMeterConsts[0];
+    float width = (float)screenWidth * sMeterConsts[2];
     Vector2 pos(left, y);
     TheRnd.DrawString(MakeString("%i", db), pos, color, true);
     db = -20;
