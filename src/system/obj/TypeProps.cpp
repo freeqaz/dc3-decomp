@@ -344,8 +344,8 @@ void TypeProps::Save(BinStream &bs) {
     Hmx::Object *owner = RefOwner();
     if (mMap) {
         if (TheLoadMgr.EditMode()) {
-            DataArray *typeDef = owner->TypeDef();
-            if (typeDef) {
+            if (owner->TypeDef()) {
+                DataArray *typeDef = owner->TypeDef();
                 for (int i = 0; mMap && i < mMap->Size();) {
                     DataArray *arr = typeDef->FindArray(mMap->Sym(i), false);
                     if (arr && arr->Type(1) != kDataCommand
@@ -379,8 +379,16 @@ void TypeProps::Save(BinStream &bs) {
     // of `typeDef` (`stw r27, 0x64(r31)`, 0x825C7478), one extra callee-saved GPR
     // (we hold the zero in r22, the image in r30) and the order of the two bool
     // flag stores before GetSaveFlags.
+    // w21-ay (98.77 -> 99.3): `if (owner->TypeDef())` then a second
+    // `owner->TypeDef()` for the local (written twice, CSE'd) gives the image's
+    // cr0 test + dead home store at 0x825C7478; `owner == owner->Dir()` gives the
+    // image's cmplw operand order.  Left: register-only (zero constant in r22,
+    // image r30, coalesced with the plain-path j -> one extra `mr r30, r22`) and
+    // the bool-store order before GetSaveFlags.  Inert: const typeDef, typeDef
+    // declared in the if-condition, bool decl orders, j declared before the
+    // `if (mMap)` or at function top.
     if (!mMap || owner->DataDir() != owner
-        || (owner->Dir() == owner && !gLoadingProxyFromDisk)) {
+        || (owner == owner->Dir() && !gLoadingProxyFromDisk)) {
         std::list<Symbol> keys;
         std::list<Hmx::Object *> values;
         if (mMap) {

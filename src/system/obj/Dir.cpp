@@ -788,6 +788,17 @@ void ObjectDir::ResetViewports() {
     // w21-l (value-scan row, ARTIFACT): the image keeps -768 (__real@c4400000)
     // in f30 and does fmadds m.y*(-768); we fold the sign into fmsubs with +768.
     // Same products and same summation order -- only the constant's sign moved.
+    // w21-ay (98.65, same 11 rows: 3 fmsubs-vs-fmadds + 8 f12/f30 swaps that
+    // follow from which of +-768 must survive the call).  Standalone cl.exe probe
+    // reproduces our build exactly; MSVC folds `a + b*(-768)` into `a - b*768` for
+    // EVERY spelling measured: int vs float literal, v.x*m vs m*v operand order,
+    // (y+z)+x / x+(y+z) association, Multiply-style inline helper taking the
+    // Vector3 by const& (temp or named), v declared at function top and stored
+    // into vp[5], `-(m.y.x*768)`, `m.y.x*-768`, `x*0 - (y*768 - z*0)`.  Only
+    // reading vp[5].mXfm.v's components into locals before the call keeps
+    // fmadds, but then they are real loads + a third FPR (not the image).
+    // `#pragma float_control(precise)` defeats inlining of Set.  Numerically
+    // identical (exact negation; fused single rounding either way).
     Vector3 v(0, -768.0f, 0);
     Hmx::Matrix3 &m = vp[0].mXfm.m;
     vp[0].mXfm.v.Set(
