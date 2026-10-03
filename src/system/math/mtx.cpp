@@ -154,7 +154,7 @@ float Det(const Hmx::Matrix4 &m) {
     return det;
 }
 
-// w21-ac (2026-10-03): 70.67 -> 71.2 canonical (fuzzy 67.27 -> 68.0).
+// w21-ac (2026-10-03): 70.67 -> 71.25 canonical (fuzzy 67.27 -> 67.49).
 // CORRECTNESS, checked term by term: a symbolic evaluator run over the
 // target listing and over ours gives all 16 outputs as expression trees;
 // expanded as polynomials, all 16 were already equal (no wrong cofactor
