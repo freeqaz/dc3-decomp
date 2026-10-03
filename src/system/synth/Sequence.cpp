@@ -627,6 +627,9 @@ void GroupSeqInst::SetTranspose(float f) {
 // conversion slot). Inert: the rb3-xenon ternary for numSeqs; `const int &`
 // childrenSize. Worse: childrenLeft declared at function scope (registers
 // rotate back, 97.7 fuzzy).
+// w21-bf (still 99.10, the same one row): `int target = seq->NextIndex() %
+// childrenSize;` (no `next` local) is inert; function-scope childrenLeft
+// re-measured at 98.20 canonical (adds `mr r26, r29`, permutes r26/r28/r29).
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
     : GroupSeqInst(seq, false), mIt(mSeqs.end()) {
     ObjPtrList<Sequence> &children = seq->Children();

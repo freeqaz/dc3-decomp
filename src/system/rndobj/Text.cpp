@@ -792,7 +792,19 @@ struct WrapPoint {
     bool isHardBreak;
 };
 
-/** w7-bs (2026-09-15): 94.759 -> 95.354 canonical (93.234 -> 93.8 raw), 686 rows,
+/** w21-bf (2026-10-03): 95.35 -> ~97.05 canonical with three source-order/type
+ *  levers (see the commits): cur-- right after ParseMarkup; the markup/break arm
+ *  BEFORE the end/newline arm (the assert line numbers 0x65d..0x6a2 precede
+ *  0x6ed/0x6ef); isHardBreak after numWp++/wpI++ in the newline arm; the loop
+ *  char an `unsigned int` with `mc` read from *cur and tested itself.
+ *  Measured and NOT kept: reusing `cur` as the strip loop's cursor (declared
+ *  before `if (mMarkup)`, reset to wideChars at the end of the block) DOES
+ *  reproduce the image's callee-saved strip cursor, its `mr r21, r15` reset and
+ *  the `mr r14, r25` numWp copy, but costs 97.05 -> 96.46 elsewhere; deriving
+ *  the successor as `&wps[wp->nextIdx]` with no `nx` local 94.17; unsigned int
+ *  / mixed types for the strip loop's c/t all lower (96.76..96.91).
+ *
+ *  w7-bs (2026-09-15): 94.759 -> 95.354 canonical (93.234 -> 93.8 raw), 686 rows,
  *  target 2700 B / ours 2672 B.  The lever is not in the statements either --
  *  it is in the EH tables.  Text.obj carries except_record_82697768 for this
  *  function with ONE unwind entry, `__unwind$170467`, whose body is

@@ -1118,6 +1118,10 @@ void RndParticleSys::UpdateRelativeXfm() {
         // and a+b on Y from the SAME source expression).
         // NEGATIVE RESULT: swapping the first two arguments (Add is
         // commutative, and the out param aliases either way) is exactly inert.
+        // w21-bf (still 99.98, same 2 rows): `mRelativeXfm.v += mLastWorldXfm.v`
+        // stores per component (96.4); og-dc3's named `Hmx::Quat q; q.Set(m)`
+        // instead of the temp is inert; `Vector3 &rel = mRelativeXfm.v;
+        // rel.Set(last.x + rel.x, ...)` costs a callee-saved swap (96.9).
         Add(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
     }
     Subtract(mMotionParent->WorldXfm().v, mLastWorldXfm.v, mMotionParentDelta);

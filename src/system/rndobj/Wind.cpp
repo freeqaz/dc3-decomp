@@ -80,6 +80,15 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
             // so the order is the allocator's, not the source's -- and the
             // scheduler's load order after the Normalize call (image loads
             // c.z/z.y/c.y/z.x/ry first, we load c.y/z.x/c.z/z.y/rz).
+            // w21-bf (still 96.29444, ~36 rows), measured: naming the three
+            // m.x cross terms as float locals is canonical-inert (fuzzy
+            // 94.60 -> 94.66); writing every product component-first instead
+            // of scalar-first is byte-identical (the image's operand order is
+            // scalar-first everywhere, ours mixed -- MSVC picks it); declaring
+            // rx/ry/rz AFTER the cross terms 93.8; `Vector3 r = result;`
+            // copy 88.9; Cross(m.y, m.z, m.x) + Multiply(result, m, result)
+            // re-measured 92.7 (it does give scalar-first operands, but MSVC
+            // re-sorts the flat sums x,y,z and stores x first).
             Hmx::Matrix3 m;
             m.z = xfm.m.z;
             Vector3 diff(pos.x - xfm.v.x, pos.y - xfm.v.y, pos.z - xfm.v.z);
