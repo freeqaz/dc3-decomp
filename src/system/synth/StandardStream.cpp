@@ -1004,6 +1004,9 @@ __declspec(noinline) bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
     //   97.727 (inert) `if (!(mJumpFromMs < fromTime)) return false; return true;`
     // Every spelling that changes the comparison also changes its operand order or
     // its polarity, and each costs more than the duplicated `li`.  Keep this one.
+    // w19-e: also 86.0 -- the tail as `if (curTime < mJumpFromMs) { if
+    // (mJumpFromMs < fromTime) return true; } return false;` (a fall-through
+    // false flips the kInit block's layout exactly like the polarity flip).
     if (mJumpFromMs >= fromTime)
         return false;
     return true;

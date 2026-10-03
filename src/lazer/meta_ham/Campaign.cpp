@@ -560,57 +560,53 @@ bool Campaign::UpdateEraSongUnlockInstructions(
     // w17-e: still 99.52.  Turning the i8 > 1 group's `else if` arms into
     // plain `if`s (as the i8 == 0 group is written) is byte-identical: the
     // cross-jump survivor is not decided by the if/else-if spelling.
-    if (i8 > 1) {
-        if (i9 > 1) {
-            static Symbol campaign_song_hint_both("campaign_song_hint_both");
-            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both, i8, i9);
-            return true;
-        } else if (i9 == 1) {
-            static Symbol campaign_song_hint_both_singular_move(
-                "campaign_song_hint_both_singular_move"
-            );
-            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both_singular_move, i8);
-            return true;
-        } else if (i9 == 0) {
-            static Symbol campaign_song_hint("campaign_song_hint");
-            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint, i8);
-            return true;
-        }
+    // w19-e: 99.52 -> 100 canonical (all 429 instructions equal) by writing
+    // the nine hints as ONE flat if/else-if chain with a single `return true`
+    // (same behaviour: i9 = Max(..., 0) >= 0, so every path picks the same
+    // hint as the nested early-return version did, including i8 == 0 &&
+    // i9 == 0 -> campaign_song_hint_singular).  The image's arms all branch
+    // to one shared `li r3, 1` (8291DC80), which the single return gives.
+    // CAVEAT, measured: the function-local-static scope ordinals are now
+    // ?DB@..?EP@ where the image has ?DE@ ?DI@ ?DM@ ?EC@ ?EF@ ?EJ@ ?FA@ ?FD@
+    // ?FD@ -- exactly the counts the old nested form produced (if = 2,
+    // `{` = 1, `else` = 1), so the image's SOURCE was the nested early-return
+    // shape.  The ruler folds scope ordinals (name_check shows 18 lis/addi
+    // rows, canonical 100); behaviour and code are identical either way.
+    if (i8 > 1 && i9 > 1) {
+        static Symbol campaign_song_hint_both("campaign_song_hint_both");
+        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both, i8, i9);
+    } else if (i8 > 1 && i9 == 1) {
+        static Symbol campaign_song_hint_both_singular_move(
+            "campaign_song_hint_both_singular_move"
+        );
+        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both_singular_move, i8);
+    } else if (i8 > 1 && i9 == 0) {
+        static Symbol campaign_song_hint("campaign_song_hint");
+        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint, i8);
+    } else if (i8 == 1 && i9 > 1) {
+        static Symbol campaign_song_hint_both_singular_star(
+            "campaign_song_hint_both_singular_star"
+        );
+        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both_singular_star, i9);
+    } else if (i8 == 1 && i9 == 1) {
+        static Symbol campaign_song_hint_both_singular_both(
+            "campaign_song_hint_both_singular_both"
+        );
+        i_pInstructionsLabel->SetTextToken(campaign_song_hint_both_singular_both);
+    } else if (i8 == 1 && i9 == 0) {
+        static Symbol campaign_song_hint_singular("campaign_song_hint_singular");
+        i_pInstructionsLabel->SetTextToken(campaign_song_hint_singular);
+    } else if (i8 == 0 && i9 > 1) {
+        static Symbol campaign_song_hint_moves("campaign_song_hint_moves");
+        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_moves, i9);
+    } else if (i8 == 0 && i9 == 1) {
+        static Symbol campaign_song_hint_moves_singular(
+            "campaign_song_hint_moves_singular"
+        );
+        i_pInstructionsLabel->SetTextToken(campaign_song_hint_moves_singular);
+    } else {
+        static Symbol campaign_song_hint_singular("campaign_song_hint_singular");
+        i_pInstructionsLabel->SetTextToken(campaign_song_hint_singular);
     }
-    if (i8 == 1) {
-        if (i9 > 1) {
-            static Symbol campaign_song_hint_both_singular_star(
-                "campaign_song_hint_both_singular_star"
-            );
-            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both_singular_star, i9);
-            return true;
-        }
-        if (i9 == 1) {
-            static Symbol campaign_song_hint_both_singular_both(
-                "campaign_song_hint_both_singular_both"
-            );
-            i_pInstructionsLabel->SetTextToken(campaign_song_hint_both_singular_both);
-            return true;
-        } else if (i9 == 0) {
-            static Symbol campaign_song_hint_singular("campaign_song_hint_singular");
-            i_pInstructionsLabel->SetTextToken(campaign_song_hint_singular);
-            return true;
-        }
-    } else if (i8 == 0) {
-        if (i9 > 1) {
-            static Symbol campaign_song_hint_moves("campaign_song_hint_moves");
-            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_moves, i9);
-            return true;
-        }
-        if (i9 == 1) {
-            static Symbol campaign_song_hint_moves_singular(
-                "campaign_song_hint_moves_singular"
-            );
-            i_pInstructionsLabel->SetTextToken(campaign_song_hint_moves_singular);
-            return true;
-        }
-    }
-    static Symbol campaign_song_hint_singular("campaign_song_hint_singular");
-    i_pInstructionsLabel->SetTextToken(campaign_song_hint_singular);
     return true;
 }

@@ -100,6 +100,13 @@ void PeakDetector::Detect(unsigned int pos) {
         //    six; forcing it globally (a `const float *b = begin();` temp) would
         //    flip the six integer-context sites the wrong way, which currently
         //    all match. Per-site scheduler noise, not a spelling.
+        // w19-e: 97.62 -> 99.99.  Both residuals above were ONE thing: Size()
+        // spelled `end() - begin()` (two inline calls) where the image uses
+        // the vector's own size() (`_M_finish - _M_start`, one inline level
+        // fewer).  Remaining: 3 rows at the `mOrigin >= Size()` test below,
+        // where the image loads _M_finish first (0x82E4AE98 `lwz r8, 0x4(r11)`)
+        // and we load _M_start first.  Inert there: an explicit
+        // `end() - begin()`; worse: `Size() <= mOrigin` (99.97, flips blt).
         float prev = gaussianWindow((mPeakPos + Size() - 1) % Size());
         float center = gaussianWindow(mPeakPos);
         float next = gaussianWindow((mPeakPos + 1) % Size());

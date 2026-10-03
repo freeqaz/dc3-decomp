@@ -252,6 +252,13 @@ Synapse::Synapse(float sampleRate) : mDetectionInterval(64), mTargetPitch(sample
     // w17-e: still 99.995 (rows 332-335).  `j < mVoices.size()` (no casts) is
     // byte-identical; `(mVoices.end() - mVoices.begin())` is 99.7 (it changes
     // the hoisted pre-loop copy of the bound too).
+    // w19-e: making the stand-in's `GranularVoice *mVoices` a vector (as the
+    // real GranularSynth.h VoiceVec is) closes row 332 here (image `stfsx f31,
+    // r10, r9`, index first; still 99.995 on rows 333-335, the in-loop bound
+    // reload reads _M_start before _M_finish at 82E4755C/60) but drops
+    // ProcessInPlace 100 -> 98.79: there the image evaluates GetCorrection()
+    // BEFORE loading gs->mVoices, which the raw pointer gives and inline
+    // operator[] does not; hoisting the call into a local was 98.1.  Reverted.
     for (unsigned int j = 0; j < (unsigned int)((int)mVoices.size()); j++) {
         mGranularSynth->mVoices[j].mField_0x00 = 0.0f;
     }

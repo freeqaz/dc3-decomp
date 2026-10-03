@@ -245,6 +245,10 @@ void BustAMovePanel::ResetScores() {
 // (99.92, 6 rows); a plain `s = ...->Sym(1)` temp, a const-ref moveName, an
 // early return instead of the else, and a ternary argument were all equal or
 // worse.  flashCardIdx kept.
+// w19-e: index direct + plain `s = ...->Sym(1)` is 99.9 (frame 0x80, the
+// Sym temp shares 0x54); index direct + a `cond ? s : Symbol(gNullStr)`
+// argument is 93.0 (the image's two SetTextToken arms are separate calls
+// tail-merged at the bctrl, not one call on a selected value).
 void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
     int flashCardIdx = index;
     Symbol s(gNullStr);
@@ -1548,6 +1552,10 @@ void BustAMovePanel::Poll() {
         // w16-e: `!(Side() != kSkeletonLeft || GetPlayerColor(0) != "pink")`
         // as the initialiser behaves exactly like the && form (97.78), and the
         // scoreGraph white Color as the 3-arg ctor is inert.
+        // w19-e: re-measured the && form: the downstream cost is exactly the
+        // two scoreGraph Color temps swapping slots (image: white 0xb0, black
+        // 0xc0; && form: black 0xb0, white 0xc0) plus one 0x8c reload.  `bool
+        // = false; if (A && B) = true;` is 99.5 (r21/r22 swap + polarity).
         bool isPlayer0Pink = true;
         if (TheGameData->Player(0)->Side() != kSkeletonLeft
             || GetPlayerColor(0) != "pink") {

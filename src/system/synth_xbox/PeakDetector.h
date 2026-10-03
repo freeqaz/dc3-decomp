@@ -32,7 +32,7 @@ public:
     float mNextCenter;          // 0x30 mCenter biased back by 0.4 * mCurWidth
 
 private:
-    unsigned int Size() const { return (unsigned int)(mInput->end() - mInput->begin()); }
+    unsigned int Size() const { return mInput->size(); }
     float gaussianWindow(unsigned int i) const;
 };
 
