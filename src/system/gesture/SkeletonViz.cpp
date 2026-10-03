@@ -423,38 +423,32 @@ void SkeletonViz::DrawJoints(
     float invRange = 1.0f / (minZ - maxDepth);
 
     Hmx::Color shadedColor;
-    // Walk a cursor over sBones[].joint2, so jointPair[-1] is the bone's joint1
-    // and jointPair[0] is its joint2 (BoneJoints = {bone, joint1, joint2}).
-    const SkeletonJoint *jointPair = &BaseSkeleton::sBones[0].joint2;
-    RndLine **lineIt = mBoneLines - 1;
-    while (jointPair < &BaseSkeleton::sBones[kNumBones].joint2) {
+    for (int i = 0; i < kNumBones; i++) {
         // Endpoint 0 receives the unscaled tint; only endpoint 1 is depth-shaded.
-        float c0 = (camPos[jointPair[-1]].z - maxDepth) * invRange;
+        float c0 = (camPos[BaseSkeleton::sBones[i].joint1].z - maxDepth) * invRange;
         shadedColor.alpha *= tintColor.alpha;
         c0 = Clamp(0.0f, 1.0f, c0);
         c0 = c0 * 0.8f + 0.2f;
         shadedColor.red = tintColor.red * c0;
         shadedColor.green = tintColor.green * c0;
         shadedColor.blue = tintColor.blue * c0;
-        lineIt[1]->SetPointColor(0, tintColor, true);
+        mBoneLines[i]->SetPointColor(0, tintColor, true);
 
-        float c1 = (camPos[jointPair[0]].z - maxDepth) * invRange;
+        float c1 = (camPos[BaseSkeleton::sBones[i].joint2].z - maxDepth) * invRange;
         shadedColor.alpha *= tintColor.alpha;
         c1 = Clamp(0.0f, 1.0f, c1);
         c1 = c1 * 0.8f + 0.2f;
         shadedColor.red = tintColor.red * c1;
         shadedColor.green = tintColor.green * c1;
         shadedColor.blue = tintColor.blue * c1;
-        lineIt[1]->SetPointColor(1, shadedColor, true);
+        mBoneLines[i]->SetPointColor(1, shadedColor, true);
 
-        lineIt[1]->SetPointPos(0, drawPos[jointPair[-1]]);
-        lineIt[1]->SetPointPos(1, drawPos[jointPair[0]]);
-        float baseWidth = lineIt[1]->GetWidth();
-        lineIt[1]->SetWidth(mLineWidthScale * baseWidth);
-        lineIt[1]->DrawShowing();
-        lineIt[1]->SetWidth(baseWidth);
-        lineIt++;
-        jointPair = (const SkeletonJoint *)((const char *)jointPair + sizeof(BoneJoints));
+        mBoneLines[i]->SetPointPos(0, drawPos[BaseSkeleton::sBones[i].joint1]);
+        mBoneLines[i]->SetPointPos(1, drawPos[BaseSkeleton::sBones[i].joint2]);
+        float baseWidth = mBoneLines[i]->GetWidth();
+        mBoneLines[i]->SetWidth(mLineWidthScale * baseWidth);
+        mBoneLines[i]->DrawShowing();
+        mBoneLines[i]->SetWidth(baseWidth);
     }
 
     // RESIDUAL (DrawJoints, 98.4 canonical / 97.8 raw). Remaining rows, all
