@@ -293,6 +293,7 @@ void SuperEasyRemixer::SaveSuperEasyMoveParents() {
     mDataError = !ok;
 }
 
+// (w21-ae: closed to 100 -- see the `routine` reference in the mRoutine loop.)
 // w20-t (99.6, branch-scan row 219 adjudicated ARTIFACT): the image keeps the
 // layouts vector's _M_start in r11 from the loop-condition block (lwz r11,
 // 0x0(r28)) where we re-read it at the body top (lwz r11, 0x0(r29)); both reads
@@ -370,7 +371,14 @@ void SuperEasyRemixer::LoadAllVariants() {
         // for 2 inserted `stw r11, 0x68(r31)` home stores of `_M_start` right
         // after each size computation (99.57 -> 99.2), exactly the 99.16 the
         // header experiment (c) recorded for this function.  Left as size().
-        for (int i = 0; i < data->mRoutine.size(); i++) {
+        // w21-ae: CLOSED (99.57 -> 100, 238/238 rows, raw 100 too): bind the
+        // vector to a local reference ONCE and index/size() through it.  With
+        // `data->mRoutine` re-spelled at each use MSVC reloaded `_M_start` at
+        // the body top and loaded `_M_finish` first at the latch; through the
+        // reference it keeps `_M_start` live in r11 like the image.  The
+        // floor notes above are superseded.
+        std::vector<HamSupereasyMeasure> &routine = data->mRoutine;
+        for (int i = 0; i < routine.size(); i++) {
             // BEHAVIOURAL FIX 2026-09-14 (w7-q): this read `.second` (offset
             // 0x4, "MoveVariant to use for transition OUT of measure").  The
             // image reads offset 0x8 -- `.preferred`, "Preferred MoveVariant
@@ -386,9 +394,9 @@ void SuperEasyRemixer::LoadAllVariants() {
             // This is the same preferred -> first order the sibling loader
             // above documents for this very function.  Reading `.second` made
             // every supereasy measure request the transition-out variant.
-            Symbol name = data->mRoutine[i].preferred;
+            Symbol name = routine[i].preferred;
             if (name.Null())
-                name = data->mRoutine[i].first;
+                name = routine[i].first;
             if (!InsertVariants(vars, name)) {
                 MILO_NOTIFY(
                     "%s's supereasy layout, at index %d, (%s) not found in move graph",
