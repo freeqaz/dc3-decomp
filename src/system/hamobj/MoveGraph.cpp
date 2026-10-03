@@ -152,6 +152,10 @@ bool MoveGraph::HasVariantPair(const MoveParent *p1, const MoveParent *p2) const
     return FindVariantPair(v1, v2, p1, p2, nullptr, nullptr, gNullStr, true);
 }
 
+// w20-s (98.1): rows 165/204 -- the image reloads the vector begin
+// (`lwz r9, 0x0(r11)`) at the head of each index loop and re-derives *begin
+// from &vec; we hoist begin into r9.  No stores in the loop, same values,
+// all exits land on the same blocks.  ARTIFACT (loop-invariant reload).
 bool MoveGraph::FindVariantPair(
     const MoveVariant *&vref1,
     const MoveVariant *&vref2,

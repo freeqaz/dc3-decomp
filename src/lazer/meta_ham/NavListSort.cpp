@@ -170,6 +170,10 @@ void NavListSort::DeleteTree() {
 // w18-e: `switch (aSize) { case 0: return false; case 1: {...} }` is
 // much worse (66.6, the dispatch becomes cmplwi/blt).  Note the image's
 // `cmpwi r24, 0x0` is a cr0 compare.
+// w20-s (93.6): rows 113/134 land on the image's inline `stw r11,0x50(r28);
+// li r3,1; epilogue` block vs our `li r3,1; stw; b epilogue` -- same store, same
+// return; epilogue tail-duplication only.  Every return-false edge lands on
+// `li r3,0` on both sides.  ARTIFACT, no behaviour difference.
 bool NavListSort::SetHighlightID(DataArray *a) {
     // Retail clears mHighlightNode BEFORE reading a->Size(): the
     // stw r10,0x50(r3) sits between the load of the old value and the

@@ -2165,6 +2165,10 @@ bool HamDirector::InPracticeMode() {
     return GetPracticeFrames(start, end);
 }
 
+// w20-s (97.2): branch row 39 -- we hoist the two `lis __real@0/__real@1.0`
+// above `if (clip2)`; the image materialises them in each arm.  Same
+// ScaleAdd arguments on both arms (1-blend/frame1/0 then blend/frame2/0, or
+// 1.0/frame1/0).  ARTIFACT.
 void HamDirector::PoseIconMan(
     CharClip *clip1, float frame1, RndTex *tex, bool applyFacing, CharClip *clip2, float frame2, float blendFrac
 ) {
