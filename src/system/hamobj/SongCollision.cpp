@@ -477,7 +477,11 @@ void SongCollision::CheckCollision(
         i++;
     } while (i < 2);
 
-    float distance = Length(dir);
+    // w21-aw: Length(dir) written out in the image's association -- the
+    // image sums y*y, then z*z, then x*x (fmuls f0,f26,f26 / fmadds f25 /
+    // fmadds f27); the Vec.h inline gave z, x, y here.  Also moves native
+    // rounding toward the image's.
+    float distance = std::sqrt((dir.y * dir.y + dir.z * dir.z) + dir.x * dir.x);
     float totalExtent = 0.0f;
     for (int j = 0; j < 2; j++) {
         totalExtent += Length(out.mPush[j]);
