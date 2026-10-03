@@ -2582,18 +2582,15 @@ scan_close:
     return cur;
 }
 
-// Residual 31 rows (98.7952) but only TWO are charged by the canonical ruler --
-// the other 29 are one r29<->r30 exchange between `this` and the style loop's
-// byte-offset induction variable (target binds `this` to r30, we bind it to
-// r29), which normalization forgives.  The two live rows are a single store
-// position inside the MILO_NOTIFY argument marshalling:
-//     target   lwz r10, 0x4(r30) / stw r11, 0x50(r31) / lwz r11, 0x4(r10)
-//     base     stw r11, 0x50(r31) / lwz r11, 0x4(r29) / lwz r11, 0x4(r11)
-// i.e. the image begins inlining Name() BEFORE homing the previous MakeString
-// argument.  Same shape as DxMesh::DrawFur (an allocation order that follows
-// from where one computation sits), so the lever to look for is a statement
-// that moves the `this`/IV creation order, not a declaration reorder.
-// Diagnosed only (w9-e 2026-09-30), nothing attempted.
+// w21-x: 98.7952 -> 100 (all 166 rows equal).  The earlier 31-row residual
+// (this in r29 instead of r30, and the fontName home stored before the
+// vbptr load of the inlined Name()) came from spelling the font check as a
+// three-armed if/else that assigned a `fontName` local.  The original is one
+// combined test with the "NULL" fallback as a ternary inside the
+// MILO_NOTIFY arguments; MSVC jump-threads the second `font` test away, so
+// the block shape is identical and only the allocation order changes.
+// Same behaviour on every path: null font -> "NULL"; a non-RndFont font ->
+// its Name(); an RndFont -> next style.
 void RndText::UpdateText() {
     if (mFitType == kFitEllipsis) {
         FitTextJust();
@@ -2611,23 +2608,15 @@ void RndText::UpdateText() {
             for (unsigned int i = 0; i < (unsigned int)mStyles.size(); i++) {
                 RndFontBase *font =
                     mStyles[i].mFont ? mStyles[i].mFont : mStyles[0].mFont;
-                const char *fontName;
-                if (font != 0) {
-                    if (font->ClassName() != RndFont::StaticClassName()) {
-                        fontName = font->Name();
-                    } else {
-                        continue;
-                    }
-                } else {
-                    fontName = "NULL";
+                if (!font || font->ClassName() != RndFont::StaticClassName()) {
+                    MILO_NOTIFY(
+                        "%s %s requests scrolling, but uses a font that does not support it (%s)",
+                        PathName(this), Name(), font ? font->Name() : "NULL"
+                    );
+                    mFitType = kFitStretch;
+                    FitTextEllipsis();
+                    return;
                 }
-                MILO_NOTIFY(
-                    "%s %s requests scrolling, but uses a font that does not support it (%s)",
-                    PathName(this), Name(), fontName
-                );
-                mFitType = kFitStretch;
-                FitTextEllipsis();
-                return;
             }
             FitTextScroll();
             return;
