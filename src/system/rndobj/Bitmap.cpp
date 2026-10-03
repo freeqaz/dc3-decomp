@@ -408,13 +408,13 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
         if (bpp != 4) {
             blockSize = 4;
         }
-        unsigned short width = mWidth;
+        int width = mWidth;
         int blockWidth = bpp < 0x10 ? 8 : 4;
-        nibble = x & 1;
         int pixelScale = (((bpp - 0x20) == 0) & 1) + 1;
+        nibble = x & 1;
         int xModBlockWidth = x % blockWidth;
         int tiledBaseOffset =
-            ((((((int)width / blockWidth) * (y / blockSize)) + (x / blockWidth))
+            (((((width / blockWidth) * (y / blockSize)) + (x / blockWidth))
               * pixelScale * blockSize)
              + (y % blockSize))
             * blockWidth;
