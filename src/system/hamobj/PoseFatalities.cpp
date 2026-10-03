@@ -793,6 +793,12 @@ void PoseFatalities::DrawDebug() {
 
             static DebugMeter meterB(0.1f, 0.3f, 0.5f, 0.1f, Hmx::Color(0, 0, 0, 1));
             meterB.Draw();
+            // w21-bl stop (99.943 normalized, 5 rows): the image stores this
+            // colour blue, red, green, alpha and loads the by-value halves
+            // 0x60 then 0x68; ours stores alpha before red/green and loads 0x68
+            // first. Passing Hmx::Color(...) as a call temporary (the lever that
+            // closed meterA above) is byte-identical here; meterC's identical
+            // redColor spelling below already matches.
             Hmx::Color greenColor(0, 0, normalizedScore * normalizedScore, 1);
             meterB.DrawBar(0.0f, 1.0f, greenColor, 1.0f, 0.0f);
             // (0, 1, 0, 1): the image stores f30 (1.0) into .green at
