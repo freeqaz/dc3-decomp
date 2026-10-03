@@ -1420,16 +1420,19 @@ void HamNavList::DetermineHighlightedItem() {
         }
     }
 
-    unsigned int posU = (int)(maxItemF * mHandHeight + 0.5f);
+    // w20-f BEHAVIOUR FIX: the image clamps the hand position to [0, maxItem]
+    // (0x8244A5C0 `cmpw cr6, r11, r31` / 0x8244A5D0 `bgt` leaves r31 = maxItem on the
+    // high side, else `srwi/subi/and` masks a negative to 0).  The old spelling
+    // only masked the low side, so a hand above the last item indexed past it.
+    // Remaining fuzzy row (w20-f): the threshold's `fnmsubs` multiplies
+    // maxItemF*margin where ours emits margin*maxItemF -- commutative operand
+    // order; swapping the source operands is inert.
+    int pos = (int)(maxItemF * mHandHeight + 0.5f);
     float targetPos = (float)highlightItem / maxItemF;
-    if ((int)posU <= maxItem) {
-        posU &= (posU >> 31) - 1;
-    }
-
-    unsigned int adjustedPos = posU;
+    unsigned int adjustedPos = Clamp(0, maxItem, pos);
     if (mListState.ScrollPastMinDisplay()) {
         if (!mScrollBehavior.AtTop()) {
-            adjustedPos = posU - 1;
+            adjustedPos--;
         }
         int iPos = (int)adjustedPos;
         if (iPos == -1) {
