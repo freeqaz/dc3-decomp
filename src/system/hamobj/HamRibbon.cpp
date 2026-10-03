@@ -161,6 +161,16 @@ void HamRibbon::SetActive(bool active) {
 // w20-t (98.1, branch-scan row 87 adjudicated ARTIFACT): the back-edge lands on
 // the image's in-loop `lwz r8, 0x0(r31)` reload of _M_start (see w15-a below);
 // the search loop stores nothing, so the hoisted value is the same.
+// w21-t (98.12 -> 99.48 canonical): the dirty-key pass is a plain for loop
+// (the old `if (firstDirty < size())` was MSVC's rotated guard) and the bend
+// off-diagonal is one local.  Remaining rows: the w15-a search-loop _M_start
+// reload (begin()[i], break form, int index, while form, local vector ref,
+// hoisted cutoff: all inert or worse), the w7-an back() addressing, the
+// prevDir/Dot association (the image is ((z + x) + y): source
+// `dir.y*prevDir.y + dir.z*prevDir.z + dir.x*prevDir.x` reproduces it exactly
+// but only moves fuzzy (+0.16), and would make native sum y,z,x instead of
+// Dot's x,y,z -- not shipped), and one commutative fmuls in the in-place
+// Multiply(smoothDir, inv) (an inline expansion costs 0.26).
 void HamRibbon::UpdateChase() {
     if (!mFollowA) {
         return;
