@@ -1232,6 +1232,18 @@ DataNode OnToggleSongRecordDouble(DataArray *a) {
 // w17-e: still 98.9.  `while (i < size) { if (...) break; i = i + 1; }` is
 // byte-identical to the for loop (the image's `addi r10,r29,1` / `mr r29,r10`
 // increment-through-a-temp is not a spelling of the increment).
+// w21-bn (98.936, same 14 rows: the `mr r29, r10` delete plus the r8/r9/r10
+// rename it causes).  Standalone cl.exe probe with the real STLport vector
+// reproduces our loop exactly; 20 loop spellings in it all keep the in-place
+// `addi r29, r29, 1`: int/unsigned/`(int)` compare, `++i`, `i = i + 1`,
+// while/for/do-while (guarded and `while (++i < size)`), `i = -1;
+// while (++i < size)`, a goto exit, a `const String &` element alias, an
+// iterator loop with a side counter, an empty-body for with the test in the
+// condition, a bool `found` flag, `int i;` hoisted to function scope, `next`
+// computed before `size`, and Mod()/a size-first Mod in the tail (those move
+// `i + 1` into the divide arm -- worse).  Only a SECOND counter
+// (`i = j + 1` at the bottom of a `j` loop) produces an increment-through-a-
+// temp, and it emits two copies (r27 and r28), not the image's one.
 DataNode OnCycleTestDancer(DataArray *) {
     HamPlayerData *player_data = TheGameData->Player(0);
     MILO_ASSERT(player_data, 0xaf);

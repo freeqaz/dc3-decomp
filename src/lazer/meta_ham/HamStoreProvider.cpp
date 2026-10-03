@@ -304,6 +304,15 @@ void HamStoreProvider::SetFilter(StoreOffer const *pack) {
 // inert (same two lis rows).
 // w21-ar (99.955, same rows): reading the member `offer->isAvailable`
 // directly (one inline level fewer, as RefreshOffers spells it) is inert.
+// w21-bn (99.955, same two `lis` rows).  Standalone cl.exe probe reproduces
+// our order (guard `lis` before TheNetCacheMgr's).  Inert there: the test
+// hoisted into a `bool ok`, `== false && == false) continue;`, `!= 0` on
+// IsDebug, the raw member, an earlier/later function in the TU that also
+// references TheNetCacheMgr.  The ONLY spelling that flips the two `lis` is
+// declaring `static Symbol song` ABOVE the IsAvailable/IsDebug test -- which
+// moves the guard check ahead of the test (the image checks it after
+// IsDebug: 8297FC78 `lwz r11, lbl_8311B160` follows the 8297FC6C IsDebug
+// call), so it is a different function.  Not shipped.
 void HamStoreProvider::PopulateOffersInCart() {
     HamStorePanel *storePanel = dynamic_cast<HamStorePanel *>(TheHamUI.FocusPanel());
     MILO_ASSERT(storePanel, 0x206);

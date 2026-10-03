@@ -57,15 +57,25 @@ int PlaylistSongProvider::NumData() const {
 // rotation -- image ret=r31, this=r30, i=r29; ours ret=r29, this=r31, i=r30).
 // Inert: MILO_ASSERT_EXPR (no do/while scope) for the 0x6d assert; dropping
 // the `else` around `return gNullStr`.
+// w21-bn: SLOT CLOSED, 99.966 -> 100 normalized.  The negated early return
+// puts `shortName` in FUNCTION scope, where its lifetime overlaps the
+// MILO_ASSERT's do/while temp, so MSVC stops pooling the two and gives it
+// 0x54 as the image does (the image's block order -- valid path first,
+// gNullStr ctor last -- is unchanged).  Same behaviour: every operand of the
+// && chain is an int/pointer/bool, so the negation is exact.  The 14 rows
+// left are the r29/r30/r31 rotation (image ret=r31 this=r30 i=r29), which
+// the canonical ruler forgives; each register carries the same value on both
+// sides row by row.  Standalone cl.exe probes of the register rotation
+// (`Symbol(gNullStr)`, inlining songID, `const Symbol &` binding, De Morgan
+// form of the test) were all inert.
 Symbol PlaylistSongProvider::DataSymbol(int i) const {
     MILO_ASSERT(m_pPlaylist, 0x6d);
-    if (i >= 0 && i < NumData() && m_pPlaylist && m_pPlaylist->IsValidSong(i)) {
-        int songID = m_pPlaylist->GetSong(i);
-        Symbol shortName = TheHamSongMgr.GetShortNameFromSongID(songID);
-        return shortName;
-    } else {
+    if (!(i >= 0 && i < NumData() && m_pPlaylist && m_pPlaylist->IsValidSong(i))) {
         return gNullStr;
     }
+    int songID = m_pPlaylist->GetSong(i);
+    Symbol shortName = TheHamSongMgr.GetShortNameFromSongID(songID);
+    return shortName;
 }
 
 void PlaylistSongProvider::Text(

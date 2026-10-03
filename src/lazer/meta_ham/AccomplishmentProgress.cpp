@@ -343,56 +343,64 @@ bool AccomplishmentProgress::AddAward(Symbol award, Symbol reason) {
 // `find(s) != end()` instead of count(s).  Worse (87.0, block order flips):
 // `if (pAcc) { ...; return true; } MILO_NOTIFY(...);` with one shared
 // `return false`.
+// w21-bn: CLOSED, 99.989 -> 100 (185/185 rows equal).  The `else` after the
+// !pAcc early return is gone AND its braces with it, so `category`/`group`
+// live in the same scope as the MILO_NOTIFY's block.  Their scope now
+// overlaps the notify temp, so MSVC can no longer pool it into 0x54 (the
+// IsAccomplished key / `group` slot) and it lands on 0x58 with `award` and
+// the assert ints, exactly as in the image.  w16-e's "drop the else, keep
+// the block" was inert because the block kept the scope.  Same behaviour.
+// Not the outer test: `if (IsAccomplished(s)) return false;` still costs
+// 97.3 (block order flips).
 bool AccomplishmentProgress::AddAccomplishment(Symbol s) {
     if (!IsAccomplished(s)) {
         Accomplishment *pAcc = TheAccomplishmentMgr->GetAccomplishment(s);
         if (!pAcc) {
             MILO_NOTIFY("No Accomplishment for %s", s.Str());
             return false;
-        } else {
-            NotifyPlayerOfAccomplishment(s, pAcc->GetIconArt());
-            TheAccomplishmentMgr->AddGoalAcquisitionInfo(
-                s,
-                ThePlatformMgr.GetName(mParentProfile->GetPadNum()),
-                TheGameData->GetSong()
-            );
-            if (pAcc->HasAward()) {
-                // `award` is a NAMED local in the image, not an inline
-                // temporary, and that is measured rather than assumed:
-                // collapsing this to `AddAward(pAcc->GetAward(), s)` regresses
-                // the function 99.989 -> 99.4 (2 rows -> 6), because the
-                // temporary loses its own stack slot.  Leave it named.
-                Symbol award = pAcc->GetAward();
-                AddAward(award, s);
-            }
-            mCompletedAchievements.insert(s);
-            mHardcoreAchievements.insert(s);
-            Symbol category = pAcc->GetCategory();
-            AccomplishmentCategory *pCategory =
-                TheAccomplishmentMgr->GetAccomplishmentCategory(category);
-            MILO_ASSERT(pCategory, 0xBB);
-            if (TheAccomplishmentMgr->IsCategoryComplete(mParentProfile, category)
-                && pCategory->HasAward()) {
-                AddAward(pCategory->GetAward(), category);
-            }
-            Symbol group = pCategory->GetGroup();
-            AccomplishmentGroup *pGroup =
-                TheAccomplishmentMgr->GetAccomplishmentGroup(group);
-            MILO_ASSERT(pGroup, 0xCA);
-            if (TheAccomplishmentMgr->IsGroupComplete(mParentProfile, group)
-                && pGroup->HasAward()) {
-                AddAward(pGroup->GetAward(), group);
-            }
-            if (pAcc->HasGamerpicReward()) {
-                GiveGamerpic(pAcc);
-            }
-            if (pAcc->HasAvatarAssetReward()) {
-                GiveAvatarAsset(pAcc);
-            }
-            MILO_ASSERT(mParentProfile, 0xE4);
-            mParentProfile->MakeDirty();
-            return true;
         }
+        NotifyPlayerOfAccomplishment(s, pAcc->GetIconArt());
+        TheAccomplishmentMgr->AddGoalAcquisitionInfo(
+            s,
+            ThePlatformMgr.GetName(mParentProfile->GetPadNum()),
+            TheGameData->GetSong()
+        );
+        if (pAcc->HasAward()) {
+            // `award` is a NAMED local in the image, not an inline
+            // temporary, and that is measured rather than assumed:
+            // collapsing this to `AddAward(pAcc->GetAward(), s)` regresses
+            // the function 99.989 -> 99.4 (2 rows -> 6), because the
+            // temporary loses its own stack slot.  Leave it named.
+            Symbol award = pAcc->GetAward();
+            AddAward(award, s);
+        }
+        mCompletedAchievements.insert(s);
+        mHardcoreAchievements.insert(s);
+        Symbol category = pAcc->GetCategory();
+        AccomplishmentCategory *pCategory =
+            TheAccomplishmentMgr->GetAccomplishmentCategory(category);
+        MILO_ASSERT(pCategory, 0xBB);
+        if (TheAccomplishmentMgr->IsCategoryComplete(mParentProfile, category)
+            && pCategory->HasAward()) {
+            AddAward(pCategory->GetAward(), category);
+        }
+        Symbol group = pCategory->GetGroup();
+        AccomplishmentGroup *pGroup =
+            TheAccomplishmentMgr->GetAccomplishmentGroup(group);
+        MILO_ASSERT(pGroup, 0xCA);
+        if (TheAccomplishmentMgr->IsGroupComplete(mParentProfile, group)
+            && pGroup->HasAward()) {
+            AddAward(pGroup->GetAward(), group);
+        }
+        if (pAcc->HasGamerpicReward()) {
+            GiveGamerpic(pAcc);
+        }
+        if (pAcc->HasAvatarAssetReward()) {
+            GiveAvatarAsset(pAcc);
+        }
+        MILO_ASSERT(mParentProfile, 0xE4);
+        mParentProfile->MakeDirty();
+        return true;
     } else {
         return false;
     }
