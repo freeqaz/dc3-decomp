@@ -387,6 +387,13 @@ void HollaBackMinigame::StartShoutOut(const char *cc) {
 // kEaseLinear, 0, false)).  decomp-synth beam search (3 depths, ~310
 // builds, 1480 s) found nothing above baseline; a `static inline
 // ForceShot(const char *)` helper was not inlined (26.6).  Stopped here.
+// w21-au (still 98.10, same 19 rows): six more spellings, all byte-inert
+// (98.09524): a __forceinline ForceShot helper (it does inline -- same
+// four-block shape, same full-address PRE into r30); the tail in a
+// __forceinline helper; `HamDirector *&dir = TheHamDirector;` for every
+// access; `RndPropAnim *anim;` hoisted to function scope; the whole tail
+// chained in one expression (98.095 now, not the 90.2 w16-b measured).
+// Behaviour re-checked: same four shots, same Animate args.  Stopped.
 void HollaBackMinigame::SetDefaultShot() {
     if (TheGameData->Player(1)->IsPlaying()) {
         if (TheGameData->Player(0)->IsPlaying()) {
