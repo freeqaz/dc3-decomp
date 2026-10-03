@@ -238,8 +238,8 @@ void HamRegulate::Poll() {
             }
         }
     } else {
-        moveX = posDelta.x;
         moveY = posDelta.y;
+        moveX = posDelta.x;
         moveRot = rotDelta;
     }
 
