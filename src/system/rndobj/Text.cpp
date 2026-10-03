@@ -996,9 +996,9 @@ void RndText::WrapText(
                 if (ch == 0x3c) {
                     if (mMarkup) {
                     cur = ParseMarkup(cur, style, mc);
+                    cur--;
                     cCount--;
                     brkW = &BRKWIDE_BASE[cCount];
-                    cur--;
                     if (style.brk) {
                         activeMarkup = true;
                     }
