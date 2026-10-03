@@ -263,6 +263,11 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
 // be why it was may-throw), and IsTracked/ElapsedMs are emitted only after the
 // ctor references the vtable, i.e. they were most likely header-inline in the
 // original while QualityFlags (emitted early) was in this .cpp.
+// w21-bd (89.868, unchanged, 10 rows): not re-attacked beyond one datum --
+// MSVC's nothrow inference here is whole-TU (our Init is defined AFTER this
+// ctor in the source, line order notwithstanding, and is still proven nothrow),
+// so no definition-order spelling can bring the funclet back; it needs the
+// original's may-throw construct inside Init, which nothing in the image names.
 Skeleton::Skeleton() : mTracking(kSkeletonNotTracked), mTrackingID(-1), unkac4(0) {
     Init();
 }
