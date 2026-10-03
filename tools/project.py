@@ -194,6 +194,7 @@ class ProjectConfig:
         self.pch_header: Optional[str] = None  # PCH boundary header name (e.g. "decomp_pch.h")
         self.pch_source: Optional[Path] = None  # PCH source file (e.g. Path("src/system/decomp_pch.cpp"))
         self.pch_eligible_dirs: Optional[Set[str]] = None  # Directory basenames eligible for PCH
+        self.pch_excluded_sources: Set[str] = set()  # Source paths (posix, repo-relative) never built with the PCH
 
         # Command appended (with `&&`) to every MSVC compile edge, with the
         # object's absolute path substituted for `{obj}`.  It exists so a
@@ -1288,7 +1289,10 @@ def generate_build_ninja(
                 and config.pch_eligible_dirs
             ):
                 src_dir_name = src_path.parent.name
-                if src_dir_name in config.pch_eligible_dirs:
+                if (
+                    src_dir_name in config.pch_eligible_dirs
+                    and src_path.as_posix() not in config.pch_excluded_sources
+                ):
                     build_rule = "msvc_pch"
                     variables["pch_file"] = str(pch_path.resolve())
                     # msvc_pch builds need the .pch binary as an input

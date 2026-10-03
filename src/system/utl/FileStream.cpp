@@ -24,6 +24,11 @@
 // number is 7.  The retail build carried both spellings because it had per-TU
 // headers; one shared PCH cannot, so this unit cannot reach 100% without
 // splitting the PCH.  Do not re-try the flip.
+//
+// w21-bc: CLOSED (99.583 -> 100) by building this one TU without the shared
+// PCH (configure.py `pch_excluded_sources`), so line 1 below is the first
+// include of utl\FileStream.h and fixes its __FILE__ spelling, as in retail.
+// Whole-binary A/B: UP 1, DOWN 0.
 #include "utl\FileStream.h"
 #include "os\File.h"
 #include "os\Debug.h"
