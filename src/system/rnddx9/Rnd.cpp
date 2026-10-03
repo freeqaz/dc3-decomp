@@ -200,6 +200,13 @@ void DxRnd::DrawLargeQuad(
     D3DDevice_SetTexture(mD3DDevice, 0x10, nullptr, 0x8000);
 }
 
+// w20-m (normalized 100, fuzzy 99.77): 5 diff_arg rows are the index loop's
+// two strength-reduced induction registers swapped -- image r7 = y*w1 (quad
+// index) / r8 = y*width, ours the reverse; every store writes the same value
+// (y*w+x, y*w+x+1, (y+1)*w+x+1, (y+1)*w+x) and all branch targets agree. The
+// vertex loop's 1/height and 1/width also land on v[4]/v[3] as in the image.
+// Tried (inert or worse): x-first operand order, an `int base` temp, and an
+// int index instead of a pointer (94.9).
 void DxRnd::CreateLargeQuad(int width, int height, LargeQuadRenderData &data) {
     int w1 = width - 1;
     int h1 = height - 1;
