@@ -938,6 +938,12 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
 // second loop. Rewriting both loops as `for (; n != 0; n--)` is byte-identical.
 // w18-e (98.84): dropping the `&& maxplayers != 0` guard (it is the rotated
 // while's own entry test) is byte-identical.
+// w21-e (98.84, 1 inserted `mr r30, r24` + register-only rows): two more
+// byte-identical spellings -- `if (0 < total) while (max != 0 && total != 0)`
+// and `for (; max != 0; max--)` with the in-loop return.  Image allocation:
+// this=r30, mode->max share r29, &showdown->min share r28, `1` in r24; ours
+// merges the second loop's counter into min's web (r30) instead of max's.
+// Behaviour checked row by row against the image: identical.
 void PartyModeMgr::DetermineSubModePlayers(
     Symbol mode, int *pPlayerFlags, int *pNumPlayers, std::vector<int> *vec
 ) {
