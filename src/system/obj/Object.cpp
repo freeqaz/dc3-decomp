@@ -999,7 +999,18 @@ int Hmx::Object::PropertySize(DataArray *prop) {
     }
     if (!a) {
         if (mTypeDef) {
+#ifdef HX_NATIVE
+            // The image (825AE20C) feeds FindArray(name, true) straight into
+            // Node(1): its MILO_FAIL never returns here on the Xbox (TRY throw
+            // or the fail modal). Native Debug::Fail returns, so FindArray
+            // hands back null; bail like the no-typedef branch below.
+            DataArray *found = mTypeDef->FindArray(name);
+            if (!found)
+                return 0;
+            a = &found->Evaluate(1);
+#else
             a = &mTypeDef->FindArray(name)->Evaluate(1);
+#endif
         } else {
             MILO_FAIL_DTA("%s: property %s not found", PathName(this), name);
 #ifdef HX_NATIVE
