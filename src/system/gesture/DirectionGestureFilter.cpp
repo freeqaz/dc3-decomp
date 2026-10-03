@@ -172,7 +172,8 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
     static float sSwipeEllipseHeightEngaged = 1.1f;
     // w21-as: written with Vector3 helpers over skeleton.TrackedJoints() (no
     // `joints` local), the closest-point delta and the hip direction as
-    // Subtract()s, and the ellipse sum as two statements: 10 -> 3 rows.  The
+    // Subtract()s, and the ellipse sum as two statements: 10 -> 3 rows
+    // (normalized 99.979866 unchanged, fuzzy 99.409 -> 99.879).  The
     // value-numbering order MSVC uses for its /fp:fast operand
     // canonicalisation followed the old over-named locals (hipX,
     // deltaX, closestDeltaX, ...) and emitted every commutative pair the

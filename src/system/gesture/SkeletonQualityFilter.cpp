@@ -90,7 +90,7 @@ void SkeletonQualityFilter::UpdateIsConfident(const TrackedJoint *joints) {
 // drags f0/f13, f30/f13 and f29/f12 along with it, plus 4 slot swaps including
 // (0x4, 0xec).  A single liveness/scheduling cause upstream of all of them;
 // measured only in this wave, no source lever tried.
-// w21-as (still 99.914894, same rows): a standalone cl.exe probe reproduces
+// w21-as (still 99.95744 canonical, same rows): a standalone cl.exe probe reproduces
 // this listing exactly once Normalize is the Vec.h inline (an extern
 // Normalize makes MSVC reload joint[2] after the call).  Probe-inert, all
 // keeping this <-> r28 / joint <-> r29 where the image has joint in r28:
