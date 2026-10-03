@@ -54,6 +54,19 @@ void CharBone::ClearContext(int mask) {
 // keeps the declaration-order allocation (sym1, iterator, sym2, sym3) while
 // stopping the reuse is the open lead; three-at-function-scope does not, because
 // it would allocate the three Symbols contiguously ahead of the iterator temp.
+// w21-aq (stopped at 99.70149, same 20 r1-slot rows as w9-b; no new lever).
+// Measured, all byte-inert (identical 20-row set): `const Symbol &name =
+// ChannelName(...)` (lifetime-extended temporary instead of a named local);
+// moving each block into a `static inline` helper (inlinee locals are pooled
+// exactly like block locals); declaring the Bone before the Symbol.  The RB3
+// one-liner `push_back(Bone(ChannelName(...), GetWeight(mask)))` is 58.8: MSVC
+// evaluates GetWeight first (f31 spill), the image calls ChannelName first.
+// rb3-xenon's CharBone.cpp records the same 20 rows and a 0-for-3 record for
+// the "make the slots match" direction.  The image keeps three DISTINCT Symbol
+// slots (0x50/0x58/0x5c) while pooling the push_back temps (0x54/0x60/0x68),
+// which reads like the Symbols interfering with each other -- a spelling with
+// function-lifetime Symbols that does not default-construct them is the only
+// lead left, and none is known.
 void CharBone::StuffBones(std::list<CharBones::Bone> &bones, int mask) const {
     if (mPositionContext & mask) {
         Symbol name = CharBones::ChannelName(Name(), CharBones::TYPE_POS);
