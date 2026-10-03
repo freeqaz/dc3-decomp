@@ -664,6 +664,9 @@ bool FileDiscSpinUp() { return TheBlockMgr.SpinUp(); }
 
 bool FileReadOnly(const char *filepath) { return true; }
 
+// w20-d: 100 normalized, fuzzy 99.40: iFilename/theFile trade r27/r28 as a
+// consistent bijection over all 17 diff_arg rows; every branch target and
+// value checked against the image.  Inert: declaring theFile at block top.
 File *NewFile(const char *iFilename, int iMode) {
     if (gNullFiles) {
         return new NullFile();
