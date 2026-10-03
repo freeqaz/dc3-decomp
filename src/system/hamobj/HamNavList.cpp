@@ -1572,6 +1572,14 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
 // (identical); a combined `ScrollPastMinDisplay() && (< || >=)` test (90.1).
 // A `goto` to one shared SetHighlight fixes the whole register rotation
 // (fuzzy 97.4 -> 98.1) but not the block, so it was not kept.
+// w21-ak (98.36 -> 100.0 canonical, fuzzy 99.26): the block WAS a spelling --
+// the two loop exits are one `selected < 0 || selected >= NumShowing()` test.
+// With two separate `return DataNode(0)`s MSVC kept the merged DataNode(0)
+// block after ScrollUp; with one it sits after SetHighlight as in the image.
+// Remaining: a consistent register rotation (image r27 this / r28 dir / r29
+// return slot; ours r28 / r29 / r27), every branch target equal.  Early
+// returns in the scroll arms + one trailing SetHighlight on top of this put the
+// block back after ScrollUp (98.36), so they were not kept.
 DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
     if (mRefreshPending)
         RealRefresh();
