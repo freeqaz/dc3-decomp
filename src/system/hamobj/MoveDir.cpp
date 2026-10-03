@@ -664,6 +664,14 @@ void MoveDir::PostLoad(BinStream &bs) {
     }
 }
 
+// w21-aj (stopped at 98.24, 50 rows; one register-pressure choice: ours
+// hoists `lis TheMaster@h` into r14 and therefore spills the &TheTaskMgr
+// anchor to 0x50, the image keeps &TheTaskMgr in r14 and rematerialises
+// TheMaster@h per iteration; 17 callee-saved values vs our 18).  Inert in a
+// /FAs probe: a `TaskMgr &taskMgr = TheTaskMgr` local, a dead `float frac =
+// 0` hoisted to loop scope, parenthesised / inverted ternary condition, a
+// do/while loop.  Worse: reading mCurMoveNormalizedResult[i] into a local
+// before Smooth (97.0 probe vs 97.7 probe baseline).
 void MoveDir::Poll() {
     SkeletonDir::Poll();
     mDancerViz->Poll();
@@ -744,6 +752,13 @@ void MoveDir::Poll() {
     }
 }
 
+// w21-aj (still 99.63, the dead `stw r11, 0x50(r31)` row): /FAs shows 0x50
+// is the second loop's `i` (homed for MakeString's const T&) and the fctiwz
+// temp; the image stores numKeys there on the Easy path only.  Inert:
+// sharing ONE function-scope int between keyIdx and that loop's i (all its
+// keyIdx stores still dead-eliminated), MaxEq(i13, numKeys), i13 = Max(..),
+// `int tmp = numKeys;` hoisted above the while and reassigned by the
+// conversion, and reusing numKeys itself as the conversion result.
 // w21-o: 99.27 -> 1 row left (the filters block is SetFiltersEnabled(true),
 // which /O1's /Ob2 inlines -- the image's `subi r11, this, 0x1ac` / `mr r3, r11`
 // is the inlined callee's this copy; closing it removed 35 rows).  Last row:

@@ -1757,6 +1757,15 @@ void HamDirector::EnableFacialAnimation() {
 // (260 still gives 0x1d0; 272 gives 0x1e0), so 272 is the smallest 16-byte
 // multiple that reproduces it, not a recovered constant.  99.33 -> 99.35; the
 // one remaining row is the redundant `clrlwi r11, r11, 24` below.
+// w21-aj (still 99.35, same single clrlwi row at target 0x824744A0): a
+// binary-wide scan of the target listings finds `clrlwi rX,rX,24` directly
+// followed by `extsb` only 6 times, and this is the only one outside the
+// XDK/CRT (ccodec x2, identityprivateapi, LIBCMT input/inputs), so there is
+// no matched game function to copy the spelling from.  8 more standalone
+// probe spellings, all clrlwi-free: char/uchar-returning inline accessors
+// (At/UAt), an inline IsEnd(char) predicate, assignment-in-condition
+// `if (!(bufCh = buf[..]))`, const uchar -> const char copy, `(bool)c ==
+// false`, `!(unsigned char)c` with a (char)(uchar) argument.
 Symbol HamDirector::ClosestMove() {
     char buf[272];
     Symbol out = mPrevMove;
@@ -3008,6 +3017,17 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
     }
 }
 
+// w21-aj (stopped at 99.63717, 48 rows: 46 diff_arg frame-slot offsets in
+// 0xa0..0x118 + one `mr r3, r14` scheduled two rows early). The slots are
+// MSVC SPILL slots of callee-saved values interleaved with the five
+// DataArrayPtr temporaries (target: charclips 0xa0, DAP2 0xa4, transition
+// 0xa8, moveKeys 0xac, file-name 0xb0, hammoves 0xb8, movesDir 0xc0, DAP1
+// 0xc4, clipKeys 0xc8, &TheDebug 0xcc, DAP3 0xd0, "%s_%s" 0xd4, DAP4 0xd8,
+// clipSymKeys 0xdc, DAP5 0xe0); see docs/decomp/patterns/stack-slot-sharing.md
+// for the full map.  Measured with a /FAs probe (canonical, baseline
+// 99.63717): AsSymbolKeys order moveSym/clipSym/moveInst 99.25; a bound
+// `std::vector<Merger> &mergers` local 97.38; `Symbol transName` scoped into
+// `if (i > 0)` 99.05; clipName before hamMoveName 98.37; `!(x != "")` inert.
 void HamDirector::OnPopulateMoves() {
     if (!mMasterClipAnim.Ptr()) {
         MILO_NOTIFY("No MasterClipAnim in HamDirector.  Did you load a song?");
