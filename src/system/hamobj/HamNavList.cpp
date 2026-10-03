@@ -1556,6 +1556,22 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
     mDirectionGestureFilter->ClearSwipe();
 }
 
+// w21-r (98.36 canonical, 2 rows): behaviour checked against the image --
+// every branch lands on the same block (loop exits, ScrollUp/ScrollDown and
+// the confirm path all reach the one `stw r26, 0x4(ret)` DataNode(0) block,
+// kDataUnhandled stores type 6).  Reading FirstShowing() at both compares
+// (no local) fixed the image's `add r11, r11, r10` operand order.  Remaining:
+// the shared DataNode(0) block sits after SetHighlight in the image and after
+// ScrollUp here (1 insert + 1 delete), plus an r27/r28/r29 rotation (this /
+// dir / return slot) that normalized forgives.  Measured, all no better:
+// early returns in the scroll arms (98.4, regs worse); `if
+// (!ScrollPastMinDisplay())` first (byte-identical); a while(true)/break
+// loop (96.7); no bool locals (95.1, loses the image's 0/1 materialisation
+// of the gesturing test); a static inline gesturing helper (identical); one
+// shared `return DataNode(0)` after an `else if (Confirm)` chain
+// (identical); a combined `ScrollPastMinDisplay() && (< || >=)` test (90.1).
+// A `goto` to one shared SetHighlight fixes the whole register rotation
+// (fuzzy 97.4 -> 98.1) but not the block, so it was not kept.
 DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
     if (mRefreshPending)
         RealRefresh();
