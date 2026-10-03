@@ -336,7 +336,7 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
 // stays safe.  Declaration order and operand order inside each product/sum
 // are a measured search (hill-climb over commutative swaps and independent
 // declaration swaps, keeping the association exact): fuzzy 75.6 for the
-// first parenthesised spelling -> 85.2 here, vs 84.8 for the old flat body.
+// first parenthesised spelling -> 85.7 here, vs 84.8 for the old flat body.
 //
 // w7-av (91.5 canonical, the old flat body): a pure FP-scheduling residual.
 // The image's emission order is: q.x, q.z, qx*qx, qz*qz, q.y, q.w, qy*qx,
@@ -348,10 +348,10 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
 // inline 46.5; the reference-binding lever is inert (every component is
 // loaded once into a local).
 void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
+    float qw = q.w;
     float qx = q.x;
     float qz = q.z;
     float qy = q.y;
-    float qw = q.w;
     float vinx = vin.x;
     float qzqw = qz * qw;
     float viny = vin.y;
