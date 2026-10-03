@@ -380,6 +380,13 @@ void HollaBackMinigame::StartShoutOut(const char *cc) {
 // spelling chooses between the @ha anchor and the full address: the four
 // branch bodies and the join already read the global exactly once each, which
 // is what the image does.  Permuter-class residual; 98.09524.
+// w21-k (still 98.10, same 19 rows: 4x lis/addi/lwz anchor triples + the
+// join `lwz r3, 0x0(r30)` + one f1/f2 fmr order pair in the Animate call):
+// behaviour re-checked against the listing (same four shots, same
+// Handle slot through the virtual base, Animate(0, false, 0, nullptr,
+// kEaseLinear, 0, false)).  decomp-synth beam search (3 depths, ~310
+// builds, 1480 s) found nothing above baseline; a `static inline
+// ForceShot(const char *)` helper was not inlined (26.6).  Stopped here.
 void HollaBackMinigame::SetDefaultShot() {
     if (TheGameData->Player(1)->IsPlaying()) {
         if (TheGameData->Player(0)->IsPlaying()) {
