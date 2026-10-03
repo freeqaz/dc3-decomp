@@ -431,9 +431,9 @@ const char *FileRelativePathBuf(const char *iRoot, const char *iFilepath, char *
         }
 
         if (!fpToks.empty() && !rootToks.empty()) {
-            if (strcmp(fpToks.front(), rootToks.front()) == 0) {
+            if (strcmp(rootToks.front(), fpToks.front()) == 0) {
                 while (rootToks.size() > 0 && fpToks.size() > 0
-                       && strcmp(fpToks.front(), rootToks.front()) == 0) {
+                       && strcmp(rootToks.front(), fpToks.front()) == 0) {
                     rootToks.pop_front();
                     fpToks.pop_front();
                 }
