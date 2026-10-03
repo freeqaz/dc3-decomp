@@ -20,6 +20,11 @@
 namespace {
     XINPUT_CAPABILITIES gCaps[kNumJoypads];
     float gXboxDeadzone;
+    // w20-d: the analog-trigger threshold byte at 0x83099C7C, between
+    // gXboxDeadzone (0x83099C78) and gCapsValid (0x83099C80) in this TU's .bss
+    // (split 0x83099C28..0x83099CA4).  Nothing in the image writes it; its only
+    // reader is ReadSingleXinputJoypad (0x825FD0AC/0x825FD0B4).  The name is ours.
+    unsigned char gTriggerThreshold;
     bool gCapsValid[kNumJoypads];
     CriticalSection gCritSection;
 }
@@ -344,7 +349,9 @@ JoypadType ReadSingleXinputJoypad(
     if (joypad_type == kJoypadAnalog) {
         unsigned char lt = state.Gamepad.bLeftTrigger;
         unsigned char rt = state.Gamepad.bRightTrigger;
-        unsigned char threshold = *(unsigned char *)0x83099C7C;
+        // w20-d: was `*(unsigned char *)0x83099C7C` -- a hardcoded image
+        // address, which in OUR link reads whatever happens to live there.
+        unsigned char threshold = gTriggerThreshold;
 
         if (lt > threshold) {
             *buttons |= 1;
