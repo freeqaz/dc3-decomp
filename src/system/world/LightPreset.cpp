@@ -939,6 +939,10 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
         int after = mKeyframes.size() - 1;
         int before;
         for (before = 0; after > before + 1;) {
+            // w20-h: image `add r10, r25, r29` (after + before) vs ours
+            // before + after -- the only row (100 normalized, fuzzy 99.948).
+            // Same value. Inert: swapping the operands, RB3's declaration
+            // order (before first). Noise class: commutative operand order.
             int mid = (before + after) >> 1;
             if (frame == mKeyframes[mid].mFrame) {
                 prevIdx = -1;
