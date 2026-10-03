@@ -1205,6 +1205,17 @@ void UtilDrawPlane(
     Transform tf88;
     ScaleAdd(v, *(const Vector3 *)&p, -p.Dot(v), tf88.v);
     tf88.m.y = *(const Vector3 *)&p;
+    // STOP (w21-bi) at 99.98 normalized, 6 rows (0x8262F624..0x8262F648):
+    // the inlined Dot(mb0[idx], m.y) below. The image's fma chain is
+    // ((z*z') + x*x') + y*y' off the row pointer biased to .z; ours is
+    // ((y*y') + z*z') + x*x' off the same pointer. Probed (standalone cl.exe,
+    // all inert at 6 rows): Dot argument order, a named float for the dot,
+    // block-scoped idx / ++idx, (&mb0.x)[idx] and a const Matrix3 view instead
+    // of operator[], a const Matrix3 ctor instead of Identity(), Transform
+    // declared before mb0, a const& cast on m.y. All 24 explicit
+    // order/association/operand spellings of the sum get the image's chain at
+    // best by moving the row-pointer bias to .x and swapping a Cross operand
+    // (157 vs 156 equal rows) -- not shipped.
     int minIdx = 0;
     int idx = 0;
     float minDotProduct = 10000.0f;
