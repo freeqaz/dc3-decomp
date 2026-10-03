@@ -469,6 +469,11 @@ public:
      * @returns The resulting Hmx::Object.
      */
     Hmx::Object *GetObj(int i) const { return Node(i).GetObj(this); }
+    // w21-ab NEGATIVE: `return Node(i).Obj<Hmx::Object>(this);` (the extra
+    // inline level that closed DataReplaceObject) does not compile here --
+    // Hmx::Object is incomplete in Data.h, so non-PCH TUs (Memory_Xbox,
+    // HttpGet) fail C2680 on DataNode::Obj's dynamic_cast.  Spell it at the
+    // call site instead, as DataReplaceObject does.
     Hmx::Object *GetObj(int i) { return Node(i).GetObj(this); }
 
     /** Get the DataArray at the given node index.
