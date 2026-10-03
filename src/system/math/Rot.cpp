@@ -352,7 +352,14 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
 // the three sums in the image's association (og-dc3 shape, vx/vy/vz term
 // order) 67.8 -- it is the image's association modulo -(a+b) for -a + -b
 // but loses the load schedule; plain vin locals 26.2; locals for the three
-// squares only 67.9; neg locals with the products inline 46.5.
+// squares only 67.9; neg locals with the products inline 46.5.  All 216
+// left-associated term orders compile identically (MSVC sorts a flat sum);
+// of 216 right-grouped `a + (b + c)` orders, only `vz-term + (vx-term +
+// vy-term)` gives the image's PPC association too, at fuzzy 75.6 (best
+// right-grouped order 88.5, wrong association).  The PPC association gap is
+// the /fp:fast class w19-x adjudicated as noise, so the 91.5 body stays; the
+// reference-binding lever (all 128 q/vin read mixes) is inert here because
+// every component is loaded once into a local.
 void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
     // Load quaternion components
     float qx = q.x;
