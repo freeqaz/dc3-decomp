@@ -1264,7 +1264,12 @@ DEF_DATA_FUNC(DataStringFlags) {
             s += arr->Str(i);
         }
     }
-    return s;
+    // w21-s: a NAMED result (`DataNode ret(s); return ret;`) closes the
+    // prologue order (mr r20,r3 / stw r3,0xe4 / mr r30,r4 / li r24,0 /
+    // mr r3,r4 / stw r24,0x54 at 0x825B7DE8..) that `return s;` scheduled
+    // differently.  Same construction into the return slot, same behaviour.
+    DataNode ret(s);
+    return ret;
 }
 
 DEF_DATA_FUNC(DataStrToLower) {
