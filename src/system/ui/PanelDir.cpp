@@ -605,10 +605,10 @@ void PanelDir::SendTransition(Message const &msg, Symbol forward, Symbol back) {
 // shares the `li r3,0` epilogue with the loop exit.  REFUTED: RB3's
 // `while (comp = ComponentNav(...))` spelling with the same statics (75.33).
 bool PanelDir::PanelNav(JoypadAction act, JoypadButton btn, Symbol controller_type) {
-    UIComponent *comp = mFocusComponent;
-    if (!comp) {
+    if (!mFocusComponent) {
         goto fail;
     }
+    UIComponent *comp = mFocusComponent;
     do {
         comp = ComponentNav(comp, act, btn, controller_type);
         if (!comp)
