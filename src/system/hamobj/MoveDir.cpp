@@ -1236,6 +1236,12 @@ void MoveDir::FinalPoseStateMachine() {
     // other_player declared after `move` or at its first use, `[1 - i]` in place
     // of `[other_player]`.  Do NOT bind `mMovePlayerData[i]` to a reference --
     // it then lives in a register and the walker base moves to 0x318 (95.6).
+    // w21-aw (stop at 99.95, same 6 rows 270-278): a `MovePlayerData &other =
+    // mMovePlayerData[other_player];` declared at the top of the body and used
+    // in the inner test is inert.  name_check's MakeString<char[19],int,char[5]>
+    // vs our <char[12],int,char[46]> call row is an ICF fold, not a bug: both
+    // names sit at 824d1870 in ham_xbox_r.map, and the args (r17 = "MoveDir.cpp",
+    // r16 = the other_player assert text) are identical on both sides.
     for (int i = 0; i < 2; i++) {
         int other_player = 1 - i;
         HamMove *move = mMovePlayerData[i].mCurMove;
