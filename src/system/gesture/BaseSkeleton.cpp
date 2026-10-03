@@ -124,6 +124,13 @@ void BaseSkeleton::NormPos(SkeletonCoordSys cs, SkeletonJoint joint, Vector3 &v)
 // take, not a live range we can shorten from source.
 // Both MakeString rows in the Function Call Diff are ICF folds (the assert
 // format string and the "Unsupported joint %i" one), not wrong callees.
+// w21-w (98.28 canonical, 5 of 175 rows, unchanged): behaviour re-read against
+// the image (index ternaries, root/joint compare chain, MILO_FAIL path branches
+// to the epilogue, `normalize && len > 0` guard on the fdivs) -- ours agrees;
+// the source is token-identical to og-dc3-decomp's.  Measured byte-inert:
+// early `if (joint == rootJoint) return;`, bone locals declared first, int
+// bone locals cast at the call, `totalLength = 0; totalLength += ...` (not
+// shippable anyway: -0.0f -> +0.0f).
 void BaseSkeleton::LimbNormPos(
     SkeletonCoordSys cs,
     SkeletonJoint joint,
