@@ -249,6 +249,16 @@ void BustAMovePanel::ResetScores() {
 // Sym temp shares 0x54); index direct + a `cond ? s : Symbol(gNullStr)`
 // argument is 93.0 (the image's two SetTextToken arms are separate calls
 // tail-merged at the bctrl, not one call on a selected value).
+// w21-az (99.93, same 5 stack rows): index direct + `switch (mState)` with
+// fallthrough cases is 93.4 (compare order flips, frame 0x80); index direct +
+// a NAMED else-arm `Symbol nullSym(gNullStr)` is 93.0 (breaks the image's
+// bctrl tail merge, frame still 0x80).  The image needs three distinct word
+// slots (s 0x50, Sym temp 0x54, else temp 0x58) with &index homed at 0xb4;
+// no spelling found makes MSVC stop sharing the two Symbol temps.  Also
+// measured with index direct: `const Symbol &moveName = ...->Sym(1)` (the
+// lever that closed HamSongMgr::InitializePlaylists) and the inverted
+// `!= && !=` test with the gNullStr arm first -- both 99.9, frame 0x80,
+// 6 rows (the two Symbol temps still share 0x54).
 void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
     int flashCardIdx = index;
     Symbol s(gNullStr);

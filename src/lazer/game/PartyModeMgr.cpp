@@ -1071,9 +1071,15 @@ void PartyModeMgr::AddPlayerToTeam(int team) {
 // erase<PartyModePlayer*> are both 0x827BD118.  Branch landings agree:
 // team==1 -> the 0x68 (mTeam1Players) block, team==2 -> the 0x74 block, on
 // both sides.
+// w21-az (99.92 -> 100): the assert comes FIRST and an if / else-if follows
+// (no switch).  MSVC jump-threads the assert's team==1 / team==2 exits
+// straight into the arms, and the failed-assert path (team known to be
+// neither) straight to the epilogue, which lays the team-1 arm first as in
+// the image.  Same behaviour natively: a non-fatal assert falls into an
+// if / else-if that matches neither value.
 void PartyModeMgr::ClearTeam(int team) {
-    switch (team) {
-    case 1: {
+    MILO_ASSERT(team == 1 || team == 2, 0x20F);
+    if (team == 1) {
         int n = (int)mTeam1Players.size();
         while (n != 0) {
             n--;
@@ -1081,9 +1087,7 @@ void PartyModeMgr::ClearTeam(int team) {
             mPlayers.pop_back();
         }
         mTeam1Players.clear();
-        break;
-    }
-    case 2: {
+    } else if (team == 2) {
         int n = (int)mTeam2Players.size();
         while (n != 0) {
             n--;
@@ -1091,11 +1095,6 @@ void PartyModeMgr::ClearTeam(int team) {
             mPlayers.pop_back();
         }
         mTeam2Players.clear();
-        break;
-    }
-    default:
-        MILO_ASSERT(team == 1 || team == 2, 0x20F);
-        break;
     }
 }
 
@@ -1533,22 +1532,20 @@ DataNode PartyModeMgr::OnMsg(const RCJobCompleteMsg &msg) {
 // w17-e (99.95, 6 rows: case-1/case-2 block order).  Measured byte-identical:
 // `case 2:` written before `case 1:`, and `default:` written first.  An
 // if / else-if / else chain is 84.3.  (ClearTeam has the same 8-row shape.)
+// w21-az (99.95 -> 100): same lever as ClearTeam -- MILO_ASSERT first, then
+// an if / else-if with no else.  The 84.3 chain above had the assert in the
+// trailing else; first, MSVC threads its exits into the arms in image order.
+// Behaviour unchanged: players/picker stay unset on a bad team either way.
 void PartyModeMgr::FinalizeTeam(int team) {
     std::vector<PartyModePlayer *> *players;
     PseudoRandomPicker<int> *picker;
-    switch (team) {
-    case 1:
+    MILO_ASSERT(team == 1 || team == 2, 0x1ee);
+    if (team == 1) {
         players = &mTeam1Players;
         picker = &mTeam1PlayerPicker;
-        break;
-    case 2:
+    } else if (team == 2) {
         players = &mTeam2Players;
         picker = &mTeam2PlayerPicker;
-        break;
-
-    default:
-        MILO_ASSERT(team == 1 || team == 2, 0x1ee);
-        break;
     }
 
     std::vector<int> vals;
