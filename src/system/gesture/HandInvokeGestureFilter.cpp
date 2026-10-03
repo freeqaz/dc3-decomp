@@ -70,6 +70,17 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
     }
     return _result;
 }
+// w21-ao: the image sums both elevation dot products as x + (y + z), the z
+// product first (0x82DFE234-0x82DFE260: `fmuls` uz*rz, `fmadds` y, `fnmadds` x;
+// left arm 0x82DFE268-0x82DFE2A8).  The engine Dot() compiled to y + (x + z) for the right
+// arm -- /fp:fast re-sorts a flat sum per context -- which is a different
+// rounding on every target.  This helper pins the image's association; it
+// takes references like Dot(), so MSVC still materialises the dead &unk40
+// (`addi r11, r30, 0x40`).  The name is mine.
+static inline float DotZYX(const Vector3 &a, const Vector3 &b) {
+    return (a.z * b.z + a.y * b.y) + a.x * b.x;
+}
+
 // w20-p branch-landing row 292 (image `bne` onto `li r11, 0x1`, ours one row
 // past it): ARTIFACT -- jump threading; on that edge r11 already holds 1.
 // w21-n (99.02 canonical, unchanged): every value re-checked against the image
@@ -82,6 +93,17 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
 // 0x80/0x90 temps but reads it through r1 (98.9); naming the 1st/2nd/3rd
 // instead is 95.2-95.7; declaring `lateral` early (three placements) is
 // inert; building the spine in `lateral` is 98.53 fuzzy (worse).
+// w21-ao (99.0368 canonical after the DotZYX fidelity fix, 37 of 327 rows):
+// still the 16-byte frame slot (image temps 0x80/0x90/0x90/0x80 for the
+// spine/forward Value() calls; ours 0x70/0x80/0x80/0x50 -- MSVC packs our
+// temps into lateral's not-yet-live slot and rightArmDir's dead one), plus
+// the inner-pair pick of the FORWARD dots and the left elevation (image
+// rounds the y product first in both forwards and the z product in the left
+// elevation; ours z, z, y -- no text order of the inner pair moved it, MSVC
+// canonicalises it) and the tilt-test bool tail.  Measured in a real-flag
+// probe, none better: spine built in `lateral`, `lateral` declared before
+// the spine, `lateral = spine; lateral -= proj`, a DotZYX-style helper on the
+// forwards (57 vs 20 probe rows), Dot argument order on the forwards.
 bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
     // 0x82DFE038 `li r25, 0x0` seeds the result in a callee-saved register and
     // 0x82DFE514 `mr r3, r25` returns it -- one result variable, not two
@@ -143,9 +165,9 @@ bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
 
     // Project the arm directions onto the body side vector (unk40) and onto
     // the body normal.
-    float rightElevation = -Dot(unk40, rightArmDir);
+    float rightElevation = -DotZYX(unk40, rightArmDir);
     float rightForward = Dot(rightArmDir, unk4.Value());
-    float leftElevation = -Dot(unk40, leftArmDir);
+    float leftElevation = -DotZYX(unk40, leftArmDir);
     float leftForward = Dot(unk4.Value(), leftArmDir);
 
     float negZero = -0.0f;
