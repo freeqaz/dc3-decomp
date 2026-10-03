@@ -258,11 +258,14 @@ void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     float c20 = acc * invDet;
 
     // c10: minor removing row 1, col 0 -> rows 0,2,3 cols 1,2,3 (sign: -)
+    // w21-ac: terms 4 and 5 were in the opposite order -- the image
+    // (0x825390C0) adds row3[3]*row2[1]*row0[2] before row3[2]*row2[3]*row0[1]
+    // (read off its acc chain); fixed, both builds now round like the image.
     acc = row3[1] * row2[2] * row0[3];
     acc = -(row3[1] * row2[3] * row0[2] - acc);
     acc = -(row3[2] * row2[1] * row0[3] - acc);
-    acc = row3[2] * row2[3] * row0[1] + acc;
     acc = row3[3] * row2[1] * row0[2] + acc;
+    acc = row3[2] * row2[3] * row0[1] + acc;
     acc = -(row3[3] * row2[2] * row0[1] - acc);
     float c10 = acc * invDet;
 
