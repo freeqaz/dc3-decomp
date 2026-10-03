@@ -663,6 +663,18 @@ inline void Multiply(const Vector3 &v, const Transform &t, Vector3 &out) {
 // sides: this row 80.706 -> 81.053, nothing else moved), z,x,y 78.3, y,z,x
 // 79.9.  None of the six reaches the image's b.y.y hoist, so the copy order is
 // not the whole story.
+// w21-q (81.05, unchanged): read the image's 18 output trees symbolically
+// (fast arm row a.x: x=((Y+Z)+X), y=((Z+Y)+X), z=((Y+X)+Z); the alias arm and
+// the other rows use other associations) -- the image's association is NOT
+// uniform per row, so MSVC chose it, and this flat-sum body already produces
+// 10 of the 18 trees.  Standalone cl.exe probe (reproduces this build
+// exactly), each scored on raw registers and on tree identity: all 216
+// per-component term orders of the Vector3 x Matrix3 row helper as
+// accumulators (best 105/170 raw rows but only 5/18 trees), parenthesised
+// (89 raw, fewer trees), flat (canonicalised: every order identical),
+// per-component float temps in all 6 statement orders; inverted branch,
+// early return, separate Vector3 decls, a Matrix3 temp (direct or recursive).
+// None beats this body on trees; same 80.7 floor in rb3-xenon's mtx.cpp copy.
 inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 &out) {
     if (&b != &out) {
         Multiply(a.x, b, out.x);

@@ -499,6 +499,14 @@ void CharIKFingers::FixSingleFinger(
 // mInv2ab/mAAPlusBB statements swapped (fuzzy +0.6, canonical unchanged),
 // multiply-then-invert, an unrolled two-bone loop (78.0), five association
 // orders of the finger-length sum (<= 97.7 fuzzy).
+// w21-q: 98.795 -> 100 canonical with the reused `len` in the hand/forearm
+// tail (the image's `fmr f12, f11`).  Left: 9 register-only rows -- 8 in the finger
+// loop (tip.x / f2.y and tip.z / f2.x land in f10/f11 and f7/f8 swapped) and
+// one commutative fmuls operand swap (f0/f11) in the hand/forearm tail.  Probe
+// (standalone cl.exe, all 12 orderings/associations of the three-length sum,
+// all 6 declaration orders of f2/f3/tip, no FingerDesc ref, a function-scope
+// `len` shared with the loop): none closer than the current spelling, which
+// already carries the image's association (f3 + tip) + f2.
 void CharIKFingers::MeasureLengths() {
     for (int i = 0; i < 5; i++) {
         auto& _sub0 = mFingers[i];
@@ -512,14 +520,17 @@ void CharIKFingers::MeasureLengths() {
     }
 
     if (mHand && mHand->TransParent() && mHand->TransParent()->TransParent()) {
+        // w21-q: ONE `len` local reused for both bones -- the image's
+        // `fmr f12, f11` is the first square moved out of the register the
+        // second length then reuses; two named locals never produce it.
         mInv2ab = 2.0f;
         mAAPlusBB = 0;
-        float handLen = Length(mHand->LocalXfm().v);
-        mAAPlusBB += handLen * handLen;
-        mInv2ab *= handLen;
-        float foreArmLen = Length(mHand->TransParent()->LocalXfm().v);
-        mAAPlusBB += foreArmLen * foreArmLen;
-        mInv2ab = 1.0f / (mInv2ab * foreArmLen);
+        float len = Length(mHand->LocalXfm().v); // hand bone
+        mAAPlusBB += len * len;
+        mInv2ab *= len;
+        len = Length(mHand->TransParent()->LocalXfm().v); // forearm bone
+        mAAPlusBB += len * len;
+        mInv2ab = 1.0f / (mInv2ab * len);
     }
 }
 

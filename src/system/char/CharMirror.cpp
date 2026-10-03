@@ -59,26 +59,20 @@ void CharMirror::Poll() {
 
     mBones.ScaleDown(*mServo, 1.0f - w);
     MirrorOp *curMirrorOp = &mOps[0];
-    // RESIDUAL (w13-c, 98.611): the image initialises the first loop's
-    // pointer as `extsw r10, r11` straight from mStart (it never loads
-    // mOffsets[TYPE_POS], which RecomputeSizes pins to 0), and reaches the
-    // mBones fields through `this + 0x30` in r29.  Measured: GetStart()/
-    // GetOffset() in every loop header, 96.8; `(Vector3 *)boneStart` and
-    // `(Vector3 *)(int)boneStart`, both 98.3 (an `mr` plus a rotated loop
-    // test, never the extsw).
-    char *boneStart = mBones.mStart;
-    for (Vector3 *it = (Vector3 *)(boneStart + mBones.mOffsets[CharBones::TYPE_POS]);
-         it < (Vector3 *)(boneStart + mBones.mOffsets[CharBones::TYPE_SCALE]);
+    // w21-q: 98.61 -> 100 with rb3-xenon's shape -- the section bounds read
+    // through CharBones' Start()/ScaleOffset()/... accessors.  The image starts
+    // the POS loop at mStart itself (`extsw r10, r11`, no mOffsets[TYPE_POS]
+    // load; the ctor, ClearBones and RecomputeSizes all keep that offset 0 and
+    // AddBoneInternal only bumps later sections, so this is the same address).
+    for (Vector3 *it = (Vector3 *)mBones.Start(); it < (Vector3 *)mBones.ScaleOffset();
          curMirrorOp++, it++) {
         *it = *(Vector3 *)curMirrorOp->ptr;
         if (!curMirrorOp->op.Null() && curMirrorOp->op == x) {
             it->x = -it->x;
         }
-        boneStart = mBones.mStart;
     }
-    for (Hmx::Quat *it =
-             (Hmx::Quat *)(boneStart + mBones.mOffsets[CharBones::TYPE_QUAT]);
-         it < (Hmx::Quat *)(boneStart + mBones.mOffsets[CharBones::TYPE_ROTX]);
+    for (Hmx::Quat *it = (Hmx::Quat *)mBones.QuatOffset();
+         it < (Hmx::Quat *)mBones.RotXOffset();
          curMirrorOp++, it++) {
         *it = *(Hmx::Quat *)curMirrorOp->ptr;
         if (!curMirrorOp->op.Null()) {
@@ -93,11 +87,8 @@ void CharMirror::Poll() {
             } else
                 MILO_NOTIFY("Unknown operation %s", curMirrorOp->op);
         }
-        boneStart = mBones.mStart;
     }
-    int endOffset = mBones.mOffsets[CharBones::TYPE_END];
-    for (float *it = (float *)(boneStart + mBones.mOffsets[CharBones::TYPE_ROTX]);
-         it < (float *)(boneStart + endOffset);
+    for (float *it = (float *)mBones.RotXOffset(); it < (float *)mBones.EndOffset();
          curMirrorOp++, it++) {
         *it = *(float *)curMirrorOp->ptr;
     }
