@@ -20,6 +20,16 @@ Hmx::Object *RndMatAnim::sOwner;
 // divergence.  MEASURED NEGATIVE (w8-h): a named temp for the global,
 // `Hmx::Object *owner = sOwner; mOwner = owner;`, is byte-inert (89.500,
 // identical instruction table) -- the same folding w7-ac recorded for this TU.
+// w21-y (stopped at 89.50, same 4 rows idx 15-18): behaviour re-checked -- both
+// sides store the same 5 words (ObjRefConcrete vptr, mObject, ring links, TexPtr
+// vptr, mOwner=sOwner).  MEASURED NEGATIVE: (1) the RB3/rb3-xenon spelling
+// `ObjPtr<RndTex>(sOwner, tex)` = 74.0 (sOwner loaded at function entry, before
+// the AddRef block; the image loads it in the join); (2) a DeferOwner overload
+// taking the owner by `Hmx::Object *const &` (load deferred into the base
+// mem-init) = 85.0 -- the load then sits between the ObjPtr and TexPtr vptr
+// stores, so the dead ObjPtr vptr store survives (image has none).  The image
+// needs the load AFTER the AddRef block yet with sOwner's address taking r11
+// before the TexPtr vptr; no tried spelling gives both.
 RndMatAnim::TexPtr::TexPtr(RndTex *tex) : ObjPtr<RndTex>(DeferOwner(), tex) {
     mOwner = sOwner;
 }
