@@ -955,22 +955,23 @@ void DecodeDxt3Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     alpha = ((i1 << 4) & 0xF0) | (i1 & 0xF);
 }
 
-// RESIDUAL (w7-am, 94.6 canonical): every remaining row is the array-init
-// store schedule.  Both 16-byte tables land in the right slots (-0x60(r1) and
-// -0x50(r1)) with the right values, and the 32 `stb`s are the same 32 stores
-// -- MSVC just interleaves them in a different order and therefore assigns the
-// eight constant-holding registers differently, which also drags the one
-// `addi rN, r3, 0x2` a few slots.  From 82671F00 to the epilogue our listing is
-// instruction-for-instruction the target's.  Nothing in the source picks that
-// interleave: the declaration order is already the one that produces the
-// matching slot assignment, and reordering the two arrays or the `uc[0]`/`uc[1]`
-// reads around them is inert (measured, see the 2026-09-14 negative result
-// below).
-// NEGATIVE RESULT (w7-am, 2026-09-14): moving both `a0`/`a1` reads below both
-// array declarations -- which is where the image reads them, 82671ED8/EDC,
-// after the whole init block -- produces a byte-identical object.  The reads
-// are already scheduled there; their source position does not reach the
-// scheduler.
+// w21-bh: 94.56 -> 98.41.  The w7-am "array-init store schedule" residual
+// was not about the arrays: `byte` (the byteOffsets lookup) is an `int`, not
+// an `unsigned char`.  As a uchar, MSVC coalesced the swizzle copy with it and
+// speculated the `swizByte--` arm above the branch (`mr r11, r8; addi r8, r8,
+// -1; bne`), which also reshuffled every table-init `stb`; as an int the copy
+// stays `mr r10, r11` with both arms branched (image 82671EEC..EF8) and the
+// 32 stores land in the image's order.  Value-identical: byte is 0..5.
+// RESIDUAL (w21-bh, 98.41 canonical, 1 insert + 1 delete): one `clrlwi rN,
+// rN, 24` -- we truncate at the swizzle copy (`mr r10, r11; clrlwi r10`), the
+// image truncates `byte` at the head of the bit >= 6 arm instead (before its
+// `addi r11, r11, 0x1`).  Measured inert in a standalone cl.exe probe: every
+// type combination of byte/swizByte/next/bit over {uchar, int, uint, ushort}
+// (int/uint/long byte all 98.41), in-place `byte++` for next, `next = byte;
+// next++`, a uchar copy of an int byte, ternary / `-= 1` / test-swizByte
+// spellings, inline Swiz helpers (by ref and by value), and all 90 orders of
+// the a0/a1/array/lookup declarations (byteOffsets before bitOffsets is
+// required; otherwise inert).
 void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
     // The two alpha endpoints live in the block's first 16-bit word, and the
     // Xbox 360 stores that word byte-swapped -- the same swizzle the index
