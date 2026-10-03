@@ -38,15 +38,15 @@ void bones_min_max_x(
 
 namespace {
     void SetSongCollisionOffset(SongCollisionOutput &out, int idx, const Vector3 &pos) {
-        *reinterpret_cast<Vector3 *>(out._data + idx * 0x10) = pos;
+        const_cast<Vector3 &>(out.Offset(idx)) = pos;
     }
 
     void SetSongCollisionWorldPos(SongCollisionOutput &out, int idx, const Vector3 &pos) {
-        *reinterpret_cast<Vector3 *>(out._data + 0x90 + idx * 0x40) = pos;
+        out.mXfms[idx].v = pos;
     }
 
     void SetSongCollisionColliding(SongCollisionOutput &out, bool colliding) {
-        *reinterpret_cast<bool *>(out._data + 0xE0) = colliding;
+        out.mColliding = colliding;
     }
 }
 
@@ -429,14 +429,27 @@ void SongCollision::CheckCollision(
     // w16-b (99.943, 23 rows = IV bump order + FPR permutation): a plain
     // `for (i = 0; i < 2; i++)` and a Transform struct assignment in place of
     // the memcpy are both byte-identical to this.
+    // w21-aw (23 -> 12 rows): binding `const Transform &xfm = transforms[i]`
+    // once fixed the induction-pointer bump order, and Length(dir) written
+    // out fixed its sum order.  Stop: the 12 left are the min/max diff loads
+    // (f12/f13 permutation, image loads xfm.v.y before minEdge->y), the min
+    // projection's commuted fmuls/fmadds operands (image normalDir first),
+    // and the max projection's term order (image z, y, x; ours z, x, y).
+    // Inert or worse: products commuted (`minDz * normalDir.z`, inert);
+    // explicit `(z + y) + x` / `(y + z) + x` on the max projection (sorted
+    // to y, z inside the group); Vector3 minDiff/maxDiff by member stores in
+    // this order (98.8 -- operands then come out normalDir-first, but the
+    // walker bases move) or by the 3-float ctor (98.5); the image's own issue
+    // order minDz, minDy, minDx, maxDx, maxDz, maxDy (98.4, see below).
     int i = 0;
     do {
-        memcpy(out._data + 0x60 + i * 0x40, &transforms[i], sizeof(Transform));
+        const Transform &xfm = transforms[i];
+        out.mXfms[i] = xfm;
 
         const BeatCollisionData *bd = BeatData(beat, diffs[i]);
-        Vector3 *minEdge = reinterpret_cast<Vector3 *>(out._data + i * 0x10);
-        Vector3 *maxEdge = reinterpret_cast<Vector3 *>(out._data + (i + 2) * 0x10);
-        Vector3 *push = reinterpret_cast<Vector3 *>(out._data + (i + 4) * 0x10);
+        Vector3 *minEdge = &out.mMinEdge[i];
+        Vector3 *maxEdge = &out.mMaxEdge[i];
+        Vector3 *push = &out.mPush[i];
 
         if (!bd) {
             minEdge->Zero();
@@ -444,10 +457,10 @@ void SongCollision::CheckCollision(
             push->Zero();
         } else {
             Vector3 minVec(bd->mMinX, 0.0f, 0.0f);
-            Multiply(minVec, transforms[i], *minEdge);
+            Multiply(minVec, xfm, *minEdge);
 
             Vector3 maxVec(bd->mMaxX, 0.0f, 0.0f);
-            Multiply(maxVec, transforms[i], *maxEdge);
+            Multiply(maxVec, xfm, *maxEdge);
 
             // Pre-compute all differences (target interleaves min/max loads).
             //
@@ -458,12 +471,12 @@ void SongCollision::CheckCollision(
             // delete), because the tidier order costs a stack slot and shifts
             // nine `stfs` and the whole loop-pointer block by 4.  Measured
             // 2026-09-14 in this tree.
-            float minDz = minEdge->z - transforms[i].v.z;
-            float minDy = minEdge->y - transforms[i].v.y;
-            float maxDy = maxEdge->y - transforms[i].v.y;
-            float minDx = minEdge->x - transforms[i].v.x;
-            float maxDx = maxEdge->x - transforms[i].v.x;
-            float maxDz = maxEdge->z - transforms[i].v.z;
+            float minDz = minEdge->z - xfm.v.z;
+            float minDy = minEdge->y - xfm.v.y;
+            float maxDy = maxEdge->y - xfm.v.y;
+            float minDx = minEdge->x - xfm.v.x;
+            float maxDx = maxEdge->x - xfm.v.x;
+            float maxDz = maxEdge->z - xfm.v.z;
 
             float proj = normalDir.z * minDz + normalDir.y * minDy + normalDir.x * minDx;
 
@@ -476,10 +489,14 @@ void SongCollision::CheckCollision(
         i++;
     } while (i < 2);
 
-    float distance = Length(dir);
+    // w21-aw: Length(dir) written out in the image's association -- the
+    // image sums y*y, then z*z, then x*x (fmuls f0,f26,f26 / fmadds f25 /
+    // fmadds f27); the Vec.h inline gave z, x, y here.  Also moves native
+    // rounding toward the image's.
+    float distance = std::sqrt((dir.y * dir.y + dir.z * dir.z) + dir.x * dir.x);
     float totalExtent = 0.0f;
     for (int j = 0; j < 2; j++) {
-        totalExtent += Length(*reinterpret_cast<Vector3 *>(out._data + 0x40 + j * 0x10));
+        totalExtent += Length(out.mPush[j]);
     }
 
     SetSongCollisionColliding(out, totalExtent - sCollisionTolerance > distance);

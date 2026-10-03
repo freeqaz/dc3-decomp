@@ -364,6 +364,18 @@ namespace {
 
 }
 
+// w21-aw: the image's .rdata holds this table at 0x8204CD70..0x8204CDBF,
+// directly ahead of gRev, and unnamed in ham_xbox_r.map (so a file-scope
+// `static`, not an anonymous-namespace const, which the map would name).
+// Nothing addresses it with lis/addi, so the image only used it in folded
+// form; MSVC emits a const array for a constant-index use but NOT for an
+// unreferenced one or a sizeof-only one (both measured).  Its presence ahead
+// of gRev is what makes ASSERT_REVS anchor on gAltRev (see INIT_REVS in
+// obj/Object.h).  The one use, in SetupFrame's resize just below, is our
+// spelling; it folds to the same constant 20.
+static const int kJointIndices[] = { 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+                                     10, 11, 12, 13, 14, 15, 16, 17, 18, 19 };
+
 void SetupFrame(
     RhythmDetector::Frame &frame,
     float prev_beat,
@@ -381,7 +393,7 @@ void SetupFrame(
         ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
     minJointSpeedVector();
 
-    frame.mJointVelocities.resize(20);
+    frame.mJointVelocities.resize(kJointIndices[19] + 1);
     float invDelta = 1.0f / deltaTime;
     for (int i = 0; i < 20; i++) {
         int joint = kAnalyzeJoints[i];
@@ -516,50 +528,13 @@ END_COPYS
 
 INIT_REVS(2, 0)
 
-// RESIDUAL (w13-b, 99.89): the hand-expanded rev check anchors on gAltRev like
-// the image, but the image computes the `gAltRev - 4` argument (subi r7) before
-// r4/r6.  Replacing it with ASSERT_REVS(2, 0) is WORSE (97.9): the macro anchors
-// on gRev (see RhythmBattlePlayer::Load for the anchor-pick family).
-// w15-r: ROOT CAUSE, not yet reproduced.  MSVC anchors the ASSERT_REVS pair on
-// gRev iff gRev is at offset 0 of the TU's non-COMDAT .rdata (all 248 INIT_REVS
-// sites in the image obey this).  Here the image holds an 80-byte int table
-// {0, 1, ..., 19} at 0x8204CD70..0x8204CDBF directly before gRev (0x8204CDC0);
-// nothing references it by lis/addi, so it is a const used only in folded form.
-// It is NOT kAnalyzeJoints: the map puts that in .data (0x82F0E348, same values).
-// Restoring that const and going back to ASSERT_REVS(2, 0) should close this
-// row and retire the `*(&gAltRev - 2)` stand-in; its spelling is still open.
-// w16-b (measured): an unreferenced `const int kJointIndices[20] = {0..19}`
-// in the anonymous namespace is NOT emitted by MSVC, so ASSERT_REVS(2, 0)
-// still anchors on gRev (97.9-shape, 9 rows). The image's table must have had
-// a real (non-address) use, probably in a function /OPT:REF later discarded;
-// restoring it needs that use, not just the definition. Bytes confirmed in the
-// exe: 0x8204CD70 = 0,1,...,19 (int), 0x8204CDC0 gRev = 2, 0x8204CDC4 gAltRev = 0.
+// w21-aw (99.89 -> 100): with the image's {0..19} .rdata table restored
+// ahead of gRev (kJointIndices, top of file) ASSERT_REVS(2, 0) anchors on
+// gAltRev like the image, which retires the w13-b `*(&gAltRev - 2)`
+// stand-in (an out-of-bounds read on native) and the hand expansion.
 BEGIN_LOADS(RhythmDetector)
     LOAD_REVS(bs)
-    if (d.rev > 2) {
-        TheDebug.Fail(
-            MakeString(
-                "%s can't load new %s version %d > %d",
-                PathName(this),
-                ClassName(),
-                d.rev,
-                *(&gAltRev - 2)
-            ),
-            0
-        );
-    }
-    if (d.altRev > 0) {
-        TheDebug.Fail(
-            MakeString(
-                "%s can't load new %s alt version %d > %d",
-                PathName(this),
-                ClassName(),
-                d.altRev,
-                gAltRev
-            ),
-            0
-        );
-    }
+    ASSERT_REVS(2, 0)
     LOAD_SUPERCLASS(RndPollable)
     if (d.rev >= 1) {
         d >> mBeats;

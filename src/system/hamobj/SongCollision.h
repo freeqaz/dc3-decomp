@@ -17,31 +17,21 @@ struct BeatCollisionData {
 };
 
 struct SongCollisionOutput {
-    // Raw storage - 228 bytes (0xE4)
-    // Layout:
-    //   0x00-0x5F: offset arrays (6 entries at 16-byte stride)
-    //   0x60-0x8F: player collision data (48 bytes)
-    //   0x90-0x9B: world pos player 0
-    //   0x9C-0xCF: padding (52 bytes)
-    //   0xD0-0xDB: world pos player 1
-    //   0xDC-0xDF: padding (4 bytes)
-    //   0xE0: mColliding flag
-    //   0xE1-0xE3: padding
-    char _data[0xE4];
+    // Names are ours; offsets and roles from SongCollision::CheckCollision.
+    Vector3 mMinEdge[2]; // 0x00: each player's min-X extent, world space
+    Vector3 mMaxEdge[2]; // 0x20: each player's max-X extent, world space
+    Vector3 mPush[2]; // 0x40: extent projected onto the inter-player axis
+    Transform mXfms[2]; // 0x60: each player's world transform
+    bool mColliding; // 0xE0
 
-    // Get world position for player (0 or 1) at 64-byte stride from 0x90
-    const Vector3 &WorldPos(int playerIdx) const {
-        return *reinterpret_cast<const Vector3 *>(
-            _data + 0x90 + playerIdx * 0x40);
-    }
+    const Vector3 &WorldPos(int playerIdx) const { return mXfms[playerIdx].v; }
 
-    // Get offset at index (0-5) at 16-byte stride
+    // idx 0-5 walks mMinEdge, mMaxEdge, mPush as one 16-byte-stride array.
     const Vector3 &Offset(int idx) const {
-        return *reinterpret_cast<const Vector3 *>(_data + idx * 0x10);
+        return reinterpret_cast<const Vector3 *>(this)[idx];
     }
 
-    // Get collision flag
-    bool Colliding() const { return *reinterpret_cast<const bool *>(_data + 0xE0); }
+    bool Colliding() const { return mColliding; }
 };
 static_assert(sizeof(SongCollisionOutput) == 0xE4, "SongCollisionOutput size mismatch");
 
