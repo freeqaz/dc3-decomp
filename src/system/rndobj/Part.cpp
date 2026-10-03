@@ -702,8 +702,8 @@ BEGIN_LOADS(RndParticleSys)
             TheLoadMgr.SetEditMode(old);
             Transform worldXfm;
             Vector3 v128(reinterpret_cast<Vector3 &>(p150));
-            worldXfm.m.z = v128;
             worldXfm.v = p150.On();
+            worldXfm.m.z = v128;
             Cross(Vector3(0, 1, 0), v128, worldXfm.m.x);
             Cross(v128, worldXfm.m.x, worldXfm.m.y);
             Normalize(worldXfm.m.x, worldXfm.m.x);
