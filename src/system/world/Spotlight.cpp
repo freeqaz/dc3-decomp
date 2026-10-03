@@ -1167,6 +1167,13 @@ void Spotlight::UpdateFloorSpotTransform(const Transform &tf) {
 // 0x8282D734 name "Spotlight.cpp" (_0O@ = 14) and
 // "!SpotlightDrawer::DrawNGSpotligh..." (_0CF@ = 37), which is exactly the
 // instantiation we emit.
+// w21-d (2026-10-03): still 85.342 canonical / 83.179 fuzzy (137 diff_arg,
+// 25 insert, 29 delete, 9 replace).  The image's face-index IV is n2 = c0+6
+// with six hoisted 16-bit addends (0xfffa/0xfffe/0xffff/0xfffb/...); tried
+// spelling the family off that representative directly (`int s = 6; c0 =
+// s-6 .. n3 = s+1; s += 4`): 66.16, MSVC re-derives everything from s and
+// loses the vertex cursor.  `unsigned int` for the whole c0..n3 family: 84.49.
+// n0/n1/n3 derived from n2 (`n2 = c0+6; n0 = n2-2 ...`): 82.03.  Reverted.
 void Spotlight::BuildBeam(BeamDef &def) {
     MILO_ASSERT(!SpotlightDrawer::DrawNGSpotlights(), 0x609);
     def.mIsCone = false;
