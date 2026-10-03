@@ -438,8 +438,6 @@ void DepthBuffer3D::DrawShowing() {
     float depthZoomParams[2] = { 0.0f, 1.0f };
     float d47 = 0.0f, d48 = 1.0f, d50 = 0.0f, d53 = 1.0f;
     float d41, d49, d52, d39, d40;
-    bool has1, has2, has3;
-    has1 = has2 = has3 = false;
 
     if (depthTex == nullptr) {
         LiveCameraInput *cam = TheGestureMgr->GetLiveCameraInput();
@@ -573,19 +571,20 @@ void DepthBuffer3D::DrawShowing() {
                 d47 = half + lo;
             }
 
-            has1 = d48 < d53;
-            if (!has1) {
+            bool valid = true;
+            if (d53 <= d48) {
                 d53 = d44;
+                valid = false;
                 d48 = d45;
             }
-            has2 = depthZoomParams[0] < depthZoomParams[1];
-            if (!has2) {
-                depthZoomParams[0] = d45;
+            if (depthZoomParams[1] <= depthZoomParams[0]) {
                 depthZoomParams[1] = d38;
+                valid = false;
+                depthZoomParams[0] = d45;
             }
-            has3 = d50 < d47;
-            if (!has3) {
+            if (d47 <= d50) {
                 d47 = d46;
+                valid = false;
                 d50 = 256.0f;
             }
             d46 = d50 - 256.0f;
@@ -610,14 +609,14 @@ void DepthBuffer3D::DrawShowing() {
                 smoothDt = TheTaskMgr.DeltaUISeconds();
             }
 
-            if (has3 && has2 && has1 && !unk28c) {
+            if (valid && !unk28c) {
                 unk270.SetParams(d49, d49, d45);
                 unk25c.SetParams(depthZoomParams[0], depthZoomParams[0], d45);
                 unk234.SetParams(d52, d52, d45);
                 unk248.SetParams(depthZoomParams[1], depthZoomParams[1], d45);
                 unk20c.SetParams(d47, d47, d45);
                 unk220.SetParams(d48, d48, d45);
-            } else if (has3 && has2 && has1) {
+            } else if (valid) {
                 if (100.0f < Abs(unk270.Level() - d49) ||
                     50.0f < Abs(unk25c.Level() - depthZoomParams[0]) ||
                     3.0f < Abs(unk234.Level() - d52) ||
@@ -633,7 +632,7 @@ void DepthBuffer3D::DrawShowing() {
                     unk220.Smooth(d48, smoothDt);
                 }
             }
-            unk28c = has3 && has2 && has1;
+            unk28c = valid;
 
             d53 = d43 / mMaxZoom;
             d48 = d41 / mMaxDepthZoom;
