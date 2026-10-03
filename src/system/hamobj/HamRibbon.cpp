@@ -400,6 +400,12 @@ void HamRibbon::ConstructMesh() {
         // (float)boneIdx extsw/std/lfd/fcfid chain first after Normalize
         // (824C889C) and sign-extends the bone index with extsh (824C88A8)
         // before the sth; a `short` local for the index is byte-identical.
+        // w21-t (stop at 90.97): also inert -- Face field assignments (85.6,
+        // worse), the RndRibbon v0..v3 spelling, a named float for
+        // (float)boneIdx before the norm copy, `int s = (short)boneIdx`,
+        // (int)(short) casts, a named texX.  Remaining: the face-loop store/
+        // trap scheduling above, the vert-loop fcfid/extsh placement, and
+        // the norm/boneWeights copy word order (image 4,8,0,c).
         for (int seg = 0; seg < mNumSegments; seg++) {
             int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
