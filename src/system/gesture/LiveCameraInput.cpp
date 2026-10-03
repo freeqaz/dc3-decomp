@@ -295,6 +295,12 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
     }
 }
 
+// w20-c (normalized 100, fuzzy 98.675, 18 register-only rows): volatile
+// r10/r11 swap of playerIdx vs colour in the switch; every case constant, the
+// CTR dispatch and every branch target agree with the image (constant
+// 0x276c offset), so no value differs.  Tried and inert: colour declared after
+// playerIdx; colour declared first in the body.  Plain for loops: worse
+// (98.6).  The UnlockRect name row is the 0x82B9BEC0 ICF fold.
 void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) {
     void *texels = nullptr;
     mTex->TexelsLock(texels);
@@ -489,6 +495,10 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
 // plain for loops (MSVC rotates them and forms the same sthu itself) the
 // r27/r28 swap and the misplaced `mr r11, r27` are gone; what is left on a
 // non-PCH probe is one volatile r8/r9 swap in the inner pixel loop.
+// w20-c (normalized 100, fuzzy 99.227, 12 register-only rows): volatile r8/r9
+// swap of destRow vs depthPixel in the inner loop; values and branch targets
+// all agree with the image.  Inert: depthPixel declared before colour.
+// Storing in each arm instead of via `color`: 94.3.
 void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
     LiveCameraInput *cam, float clipLeft, float clipTop
 ) {
