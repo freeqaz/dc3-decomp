@@ -517,6 +517,9 @@ void HollaBackMinigame::EndMinigame(bool b1) {
     }
 }
 
+// w20-t (99.4, branch-scan row 98 adjudicated ARTIFACT): the back-edge lands on
+// the image's in-loop `lwz r8, 0x488(r30)` reload of mRoutineMoves._M_start
+// (see w13-b below); the search loop stores nothing, same value.
 void HollaBackMinigame::SetMoveState(int measure, Symbol state) {
     if (measure >= 0 && measure < 0x40) {
         static Symbol powered_up("powered_up");

@@ -245,6 +245,9 @@ void RndRibbon::UpdateMesh() {
 }
 
 #pragma fp_contract(off)
+// w20-t (99.8, branch-scan row 87 adjudicated ARTIFACT): the back-edge lands on
+// the image's in-loop `lwz r8, 0x0(r31)` reload of mBegin (see w7-j below);
+// the search loop stores nothing, so the hoisted value is the same.
 void RndRibbon::UpdateChase() {
     if (!mFollowA) {
         return;

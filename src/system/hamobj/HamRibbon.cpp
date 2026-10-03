@@ -158,6 +158,9 @@ void HamRibbon::SetActive(bool active) {
 // write off &back()), but MSVC then keeps _M_finish loop-carried in r30 where the
 // image reloads 0x90(r23) at the top of every iteration, and the resulting
 // scheduling rotation costs more than the addressing gains: 98.0 -> 96.8.
+// w20-t (98.1, branch-scan row 87 adjudicated ARTIFACT): the back-edge lands on
+// the image's in-loop `lwz r8, 0x0(r31)` reload of _M_start (see w15-a below);
+// the search loop stores nothing, so the hoisted value is the same.
 void HamRibbon::UpdateChase() {
     if (!mFollowA) {
         return;

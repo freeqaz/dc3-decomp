@@ -22,6 +22,11 @@ CursorPanel::CursorPanel() {}
 CursorPanel::~CursorPanel() {}
 
 // w16-e: `CursorPanel *self = this;` (calls through self) is inert.
+// w20-t (96.6, branch-scan rows 129/269 adjudicated ARTIFACT): row 129 is the
+// image hoisting `addi r3, r3, 0x40` (&pMat->mDiffuseTex) above `bne` on
+// GetMiscArt(), both arms reach the same SetObjConcrete with the same r3/r4;
+// row 269's back-edge lands one row earlier in ours only because of the
+// `lwz r29, 0x1a4(r31)` reload of `this` described below. No behaviour change.
 void CursorPanel::Poll() {
     // RESIDUAL (w7-ao, 96.52 canonical): 3 of the remaining rows are one extra
     // spill of `this`. The image keeps it in r14 for the whole function; we

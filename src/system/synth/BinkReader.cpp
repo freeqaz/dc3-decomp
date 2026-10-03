@@ -66,6 +66,10 @@ BinkReader::~BinkReader() {
 // w18-e (98.05): BinkOpenTrack(mBink, (int)i) is inert; the loop-carried
 // copy of i into r4 (ours) vs `mr r4, r28` at the loop top (image) is not
 // moved by the argument's type.
+// w20-t (98.1, branch-scan row 298 adjudicated ARTIFACT): the BinkOpenTrack
+// loop's back-edge lands on `mr r4, r28` in the image and past it in ours,
+// because ours carries i into r4 on the back-edge (clrlwi r4) and in the
+// preheader; r4 == i at every BinkOpenTrack call on both sides.
 void BinkReader::Poll(float) {
     START_AUTO_TIMER("bink_audio");
 
