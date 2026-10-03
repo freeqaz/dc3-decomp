@@ -988,7 +988,7 @@ void DecodeDxt5Alpha(unsigned char *uc, int i, int j, unsigned char &alpha) {
         3, 3, 3, 4, 4, 4, 5, 5,
     };
     unsigned char a1 = uc[0];
-    unsigned char byte = byteOffsets[i + (j << 2)];
+    int byte = byteOffsets[i + (j << 2)];
     unsigned char bitOffsets[16] = {
         0, 3, 6, 1, 4, 7, 2, 5,
         0, 3, 6, 1, 4, 7, 2, 5,
