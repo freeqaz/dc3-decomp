@@ -583,6 +583,12 @@ void HamListRibbon::Draw(
 
     // Calculate sizes
     int numItems = (int)drawStates.size();
+    // w21-t: `const` drops the base-only `stb r25, 0x74(r31)` home store of
+    // scrollable (w7-as: `int scrollable` also dropped it but cost 5.6pp).
+    // The one row left in this function is `add r4, r29, r11` (image) vs
+    // `add r4, r11, r29` at the drawStates[i] push_back: begin()[i], *(begin()
+    // + i), i[begin()], (&front())[i], a named reference and an unsigned index
+    // are all inert or worse.  Fuzzy-only (canonical 100).
     const bool scrollable = numItems > 6;
     // The image keeps `li r17, 0x4` (0x82483648) when numItems > 6, and only
     // assigns `mr r17, r23` (= numItems) on the fall-through when it is not
@@ -660,6 +666,8 @@ void HamListRibbon::Draw(
     unsigned int selectedIdx = 0xFFFFFFFF;
     Transform selectedXfm;
 
+    // (CLOSED by w21-t, see the if/else advance in the loop; the history below
+    // is kept for the refuted spellings.)
     // RESIDUAL (w7-as, 96.2 canonical; w7-bm 96.8, see the loop): what is left is one block-placement
     // difference plus its register knock-on.  The image parks the
     // `inRange ? mSpacing : mPaddedSpacing` select at 0x82483890, i.e. BELOW the
@@ -695,9 +703,17 @@ void HamListRibbon::Draw(
         // layout. (2) `selectedIdx = i` BEFORE the Transform copy matches the
         // image's `mr r25, r30` ahead of `bl memcpy` (0x82483908): 97.5.
         // `int scrollable` re-measured on this state: 91.9, still refuted.
+        // w21-t (97.68 -> 100): the advance is an if/else on inRange with the
+        // subtraction in each arm, written on BOTH paths.  Cross-jumping then
+        // keeps the inactive path's test + mSpacing arm at the compare's
+        // fall-through (0x824838B0) and merges the mPaddedSpacing arm and the
+        // fsubs tail below the body, which every ternary `step` spelling
+        // (w7-as, w7-bm, w16-b) could not reproduce.
         if (entering != paddedStates[i].mActive) {
-            float step = inRange ? mSpacing : mPaddedSpacing;
-            ribbonXfm.v.z -= step;
+            if (inRange)
+                ribbonXfm.v.z -= mSpacing;
+            else
+                ribbonXfm.v.z -= mPaddedSpacing;
             continue;
         }
         if (!paddedStates[i].mSelected) {
@@ -707,12 +723,10 @@ void HamListRibbon::Draw(
             selectedXfm = ribbonXfm;
         }
 
-        // NEGATIVE RESULT (w7-as, 2026-09-14): inlining this as
-        // `ribbonXfm.v.z -= inRange ? mSpacing : mPaddedSpacing;` keeps the same
-        // 96.2 canonical but adds a commutative-operand row at the
-        // `add r29, r11` index computation -- kept the named `step`.
-        float step = inRange ? mSpacing : mPaddedSpacing;
-        ribbonXfm.v.z -= step;
+        if (inRange)
+            ribbonXfm.v.z -= mSpacing;
+        else
+            ribbonXfm.v.z -= mPaddedSpacing;
     }
 
     // Draw selected ribbon last (on top)
