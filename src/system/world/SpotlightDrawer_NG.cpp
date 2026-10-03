@@ -277,6 +277,19 @@ void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &viewProj) {
             // same three `addi` out of the loop, so this is allocation order
             // inside the shared MILO_ASSERT expansion, not anything this
             // function spells.
+            // STOP (w21-bi, still 3 rows, 99.76 normalized): the image emits
+            // the three `lis` as "false", TheDebug, __FILE__; we emit TheDebug,
+            // __FILE__, "false". A standalone cl.exe probe of this loop
+            // reproduces ours and shows the order follows the assert
+            // EXPRESSION, not the code around it. Inert there or in the build:
+            // MILO_ASSERT_IF / MILO_ASSERT_EXPR / bare `TheDebugFailer <<`, a
+            // named msg local, the switch in a static inline helper, if/else
+            // chain, default arm first, assert after `shaderShape = 0`, a plain
+            // for loop instead of the rotated do/while, sl->HasBeam() for the
+            // bool (identical code), an earlier "false" literal in the TU.
+            // `TheDebug.Fail(MakeString(...), 0)` reorders to __FILE__, "false",
+            // TheDebug -- a third order, not the image's. `int shaderShape = 0`
+            // with no-op arms costs 93.2.
             if (hasBeam) {
                 unsigned int shape = sl->mBeam.mShape;
                 int shaderShape;

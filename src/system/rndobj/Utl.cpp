@@ -1205,6 +1205,17 @@ void UtilDrawPlane(
     Transform tf88;
     ScaleAdd(v, *(const Vector3 *)&p, -p.Dot(v), tf88.v);
     tf88.m.y = *(const Vector3 *)&p;
+    // STOP (w21-bi) at 99.98 normalized, 6 rows (0x8262F624..0x8262F648):
+    // the inlined Dot(mb0[idx], m.y) below. The image's fma chain is
+    // ((z*z') + x*x') + y*y' off the row pointer biased to .z; ours is
+    // ((y*y') + z*z') + x*x' off the same pointer. Probed (standalone cl.exe,
+    // all inert at 6 rows): Dot argument order, a named float for the dot,
+    // block-scoped idx / ++idx, (&mb0.x)[idx] and a const Matrix3 view instead
+    // of operator[], a const Matrix3 ctor instead of Identity(), Transform
+    // declared before mb0, a const& cast on m.y. All 24 explicit
+    // order/association/operand spellings of the sum get the image's chain at
+    // best by moving the row-pointer bias to .x and swapping a Cross operand
+    // (157 vs 156 equal rows) -- not shipped.
     int minIdx = 0;
     int idx = 0;
     float minDotProduct = 10000.0f;
@@ -1217,35 +1228,30 @@ void UtilDrawPlane(
     Normalize(tf88.m.z, tf88.m.z);
     Cross(tf88.m.y, tf88.m.z, tf88.m.x);
     for (int i = 0; i < i4; i++) {
-        // NOTE (w7-x): the image gives these four vectors 0x90/0xa0/0xb0/0xc0 --
-        // exactly tf88's own m.x/m.y/m.z/v slots, which it has already hoisted
-        // into f23-f31 before the loop (lfs 0xa0..0xc8 at 8262F6B8-8262F700).
-        // That is MSVC stack-slot COLOURING over a dead local, not a
-        // declaration order we can spell: our build keeps tf88 at 0x50-0x90 and
-        // puts these at 0x90-0xd0, which is the whole +0x40 frame delta.
-        // Refuted: reversing the declaration order to vece0/vecd4/vecc8/vecbc
-        // is byte-for-byte inert (identical 80-row diff).
-        // NEGATIVE (w7-bx): scoping tf88 in a block and copying v/m.x/m.z out
-        // to three outer Vector3 locals (so the loop scope is lexically
-        // disjoint from tf88's) does NOT pack: the copies fold into f23-f31
-        // as in the image, but the frame stays 0x190 (tf88 keeps its own
-        // 0x60-0x8c) and the fmadds operands swap. Still 99.7421.
-        Vector3 vecbc, vecc8, vecd4, vece0;
+        // w21-bi: the quad's four corners are ONE array local. The image
+        // gives them 0x90/0xa0/0xb0/0xc0 -- tf88's own slots, tf88 being dead
+        // in memory once its fields are hoisted into f23-f31 -- and four
+        // separate Vector3 locals never share that slot (frame 0x190 vs the
+        // image's 0x150, the whole +0x40 delta the w7-x/w7-bx notes chased).
+        // Measured in a standalone cl.exe probe and in the build: `Vector3
+        // pts[4]` packs onto tf88 exactly. `-scalar` written at each call
+        // instead of a named `negscalar` local gives the image's
+        // `fmadds f0, f13(-s), f25(m.x), f26(v)` operand order (lever p).
+        Vector3 pts[4];
         float scalar = (float)(i + 1) * f;
-        ScaleAdd(tf88.v, tf88.m.x, scalar, vece0);
-        ScaleAdd(tf88.v, tf88.m.z, scalar, vecd4);
-        float negscalar = -scalar;
-        ScaleAdd(tf88.v, tf88.m.x, negscalar, vecc8);
-        ScaleAdd(tf88.v, tf88.m.z, negscalar, vecbc);
+        ScaleAdd(tf88.v, tf88.m.x, scalar, pts[0]);
+        ScaleAdd(tf88.v, tf88.m.z, scalar, pts[1]);
+        ScaleAdd(tf88.v, tf88.m.x, -scalar, pts[2]);
+        ScaleAdd(tf88.v, tf88.m.z, -scalar, pts[3]);
         // BUG FIX (w7-bx): the sixth parameter is forwarded to every DrawLine
         // -- `mr r28, r8` in the prologue (0x8262F550) and `mr r7, r28` at
         // each call (0x8262F70C, 0x8262F7AC, 0x8262F7D0, 0x8262F7F4); a
         // literal false dropped it and cost the callee-saved register
         // (93.39474 -> 99.7).
-        TheRnd.DrawLine(vece0, vecd4, c, b);
-        TheRnd.DrawLine(vecd4, vecc8, c, b);
-        TheRnd.DrawLine(vecc8, vecbc, c, b);
-        TheRnd.DrawLine(vecbc, vece0, c, b);
+        TheRnd.DrawLine(pts[0], pts[1], c, b);
+        TheRnd.DrawLine(pts[1], pts[2], c, b);
+        TheRnd.DrawLine(pts[2], pts[3], c, b);
+        TheRnd.DrawLine(pts[3], pts[0], c, b);
     }
 }
 
