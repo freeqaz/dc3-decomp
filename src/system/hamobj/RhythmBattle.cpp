@@ -702,9 +702,9 @@ void RhythmBattle::OnBeat() {
         return;
     static Symbol gameplay_mode("gameplay_mode");
     static Symbol mind_control("mind_control");
-    // The whole residual of this function is one stack word: the target packs
-    // inMindControl at 0x8c and goofy at 0x8d into a single word, and our build
-    // gives each its own. See docs/decomp/patterns/stack-slot-sharing.md.
+    // w20-b: the target packs inMindControl at 0x8c and goofy at 0x8d into one
+    // word. That was NOT a slot-allocation floor: it fell out once the missing
+    // `i6d8 = 0` below was restored (frame 0x760 -> 0x750, as in the target).
     bool inMindControl = TheHamProvider->Property(gameplay_mode)->Sym() == mind_control;
     if (mFullKTB && !mFinale && !inMindControl) {
         mPlayerOne->SetAutoPass(false);
@@ -1192,6 +1192,11 @@ void RhythmBattle::OnBeat() {
                     }
                     b42 = mPlayerOne->InTheZone();
                     b43 = mPlayerTwo->InTheZone();
+                    // w20-b: the image zeroes the VO threshold here
+                    // (`stw r29, 0x78(r31)` with r29 == 0, just before
+                    // `subfe r29` computes b43; 0x78 is i6d8's slot), so an
+                    // inzone VO plays whenever remainingValue > 0.
+                    i6d8 = 0;
                 }
                 if (goofy) {
                     bool tmp = b42;
