@@ -586,6 +586,15 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
     // w21-l (value-scan row, ARTIFACT): the scan reads the image's `lwz r20,
     // 0x64(r31)` as the flag's 0 stored there earlier; Venue() writes that slot
     // through its hidden return pointer (`addi r3, r31, 0x64`), so it is the venue.
+    // w21-ax (stopped at 99.9058, same 35 rows: 12 regswap + 23 frame offsets):
+    // frame-cell reading of the target -- 0x64 {flag, Venue, line, crew01},
+    // 0x68 {"venues", Symbol(venueName)}, 0x6c {crew02}, 0x70[8] {substr temp,
+    // emilia01}, 0x78[8] {worldPath, mo01}. Ours opens two extra 4-byte cells
+    // (Venue at 0x68 is never reused; crew02/emilia01 get fresh 0x70/0x74), so
+    // worldPath lands 8 higher. Inert here: the Venue statement in its own
+    // `{}` block, `Symbol(TheGameData->Venue()).Str()`, and
+    // `SetDir(a->Obj<ObjectDir>(2))` with no `dir` local. Named `Symbol venue`
+    // re-measured: venue 0x64, flag/line pool 0x68, worldPath still +8 (98.4 raw).
     const char *venueName = TheGameData->Venue().Str();
     if (venueName == gNullStr && TheWorld) {
         String worldPath(TheWorld->GetPathName());
