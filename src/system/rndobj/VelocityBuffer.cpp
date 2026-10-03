@@ -48,6 +48,13 @@ bool RndXfmCache::GetXfms(
     // canonical and 73.5 raw, i.e. no better on the canonical ruler and one row
     // WORSE on the relocation-sensitive one.  MSVC re-sinks the second load behind
     // the first branch regardless of how the source is blocked.
+    // w18-a (75.0 canonical, rows 6-17 unchanged): three more spellings, none
+    // hoists the second mMeshPtrs load above the first compare: index written
+    // `startIndex + numBones - 1` (inert); an early-return nested form with
+    // both loads in named locals (inert); `(a != mesh) | (b != mesh)` DOES put
+    // both loads in the image's order but lowers the test to subf/subfe/or.
+    // (73.3).  The image's two compare-and-branch pairs after both loads are a
+    // shape none of the short-circuit spellings reach.
     bool valid;
     const float *floats;
     unsigned int endIndex = startIndex + numBones;

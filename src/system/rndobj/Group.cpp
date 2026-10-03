@@ -397,6 +397,11 @@ int RndGroup::CollidePlane(const Plane &p) {
     return ret;
 }
 
+// w18-a: 100 normalized, 1 fuzzy row (idx 31).  The delta == 0 edge (`beq cr6`
+// off the delta compare) lands on the shared `cmplw r29, r31` in the image; we
+// jump-thread it straight to Update() because target == node is known on that
+// path.  Inert: the negative walk as a pre-tested `while (remaining != 0)`, and
+// `else if (delta < 0)` (becomes bge, still threaded).
 int RndGroup::MoveObject(Hmx::Object *obj, int delta) {
     typedef ObjPtrList<Hmx::Object>::Node Node;
     // The image's search is ObjPtrList::find(), not a hand-rolled walk: the

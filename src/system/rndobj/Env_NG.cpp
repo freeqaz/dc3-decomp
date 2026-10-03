@@ -207,8 +207,10 @@ void NgEnviron::UpdateApproxLighting(const Vector3 *pos) {
         }
     }
     if (mNumLightsReal > 0) {
-        if (mNumLightsApprox <= 1)
-            mNumLightsApprox = 1;
+        // w18-a: an unconditional store of the clamped count -- the image's
+        // `bgt` (0x826A48B8) lands ON the `stw r11, 0x2a0(r26)` and stores the
+        // loaded value back, rather than skipping the store.
+        mNumLightsApprox = mNumLightsApprox > 1 ? mNumLightsApprox : 1;
     }
 }
 

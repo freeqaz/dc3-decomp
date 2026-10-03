@@ -9,6 +9,15 @@
 #include "utl/Loader.h"
 #include "utl\TextStream.h"
 
+// w18-a: ??_GFixedSizeAlloc (99.545) and ??3FixedSizeAlloc (98.333) differ ONLY
+// in the __FILE__ string MEM_OVERLOAD passes to MemFree: the image's literal is
+// "e:\lazer_build_gmc1\system\src\utl/PoolAlloc.h" (forward slash -- the
+// original TU first included it as "utl/PoolAlloc.h"), ours has the backslash
+// spelling because this TU is compiled with decomp_pch.h, which reaches
+// PoolAlloc.h through obj/ObjPtr_p.h's "utl\PoolAlloc.h".  utl/PoolAlloc.obj
+// (also a PCH TU) needs the BACKSLASH spelling, so no single PCH include
+// spelling serves both; closing these needs this TU built without the PCH
+// (configure.py has no per-file opt-out today).
 ReclaimableAlloc gTransListAlloc(0x4C, "InstanceListNode");
 std::list<std::pair<class RndMultiMeshProxy *, int> > RndMultiMesh::sProxyPool;
 

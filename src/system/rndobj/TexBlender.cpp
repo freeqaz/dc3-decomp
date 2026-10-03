@@ -179,6 +179,13 @@ void RndTexBlender::DrawBlendList(
     }
 }
 
+// w18-a (99.13 canonical, 128 rows, frame 0x250 vs the image's 0x240): the
+// whole residual is one compiler spill slot.  The image keeps a CSE'd
+// &TheDebug / Name() temp at 0x7c -- inside customList's 4-byte tail pad
+// (vectors at 0x70/0x80/0x90) -- so the DrawRect Hmx::Color temp fits at 0xa0
+// under the Rect at 0xb0; we put that temp at 0x70, which pushes the vectors to
+// 0x78/0x88/0x98 and the Color above the Rect (0xc0), +0x10 for every slot
+// after.  Naming the Color as a local before DrawRect is byte-identical.
 void RndTexBlender::DrawShowing() {
     if (TheRnd.DrawMode() == Rnd::kDrawNormal
         && ((TheRnd.ProcCmds() & kProcessWorld) != 0 || TheRnd.ProcCmds() == 0)

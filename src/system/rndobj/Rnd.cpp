@@ -1311,6 +1311,12 @@ void Rnd::DrawPreClear() {
 // old SetShowingOnly(false) arm skipped Restart. Same as RB3's SetShowing on
 // both arms; spelled with the store split from one shared Restart, 100 modulo
 // register permutation.
+// w18-a: 100 normalized / 96.77 fuzzy -- 14 volatile-register rows only (the
+// image keeps the overlay in r11, we in r9).  Tried: the RB3 shape
+// (`if (!Showing()) SetShowing(true); else { ++; if (>=) ... }`, with and
+// without an overlay local) -- moves this/sret onto r31/r29 (worse); an
+// uninitialised overlay local assigned after MemNumHeaps (inert);
+// mHeapOverlay read directly at every use (reloads it, worse).
 DataNode Rnd::OnToggleHeap(const DataArray *) {
     int numHeaps = MemNumHeaps() + 1;
     RndOverlay *overlay = mHeapOverlay;

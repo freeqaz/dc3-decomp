@@ -18,7 +18,17 @@
 #include <set>
 #include "utl\Std.h"
 
-/* w8-e 2026-09-15 -- ADJUDICATED UNSCOREABLE, do not hunt these five.
+/* w18-a 2026-10-02 -- the five rows below are CLOSED (all 100.0) by a symbols.txt
+ * rebind, not by source.  The w8-e note was right that they are ICF folds and
+ * wrong that they cannot pair: ham_xbox_r.map lists the Key<M> (float) spelling
+ * at each of the five addresses, that spelling was bound NOWHERE in symbols.txt,
+ * and our AmbientOcclusion.obj emits exactly those five Key<float> helpers (this
+ * TU's sort is the Key<float> one -- see Tessellate).  Rebinding the five entries
+ * from the Key<_N>/Key<VSymbol> names to the Key<M> names (addresses unchanged,
+ * all five inside this unit's .text 0x826DABB8..0x826E2D70) took them 0.0 -> 100,
+ * +5 matched / +656 B, 0 rows down.  Historical note follows.
+ *
+ * w8-e 2026-09-15 -- ADJUDICATED UNSCOREABLE, do not hunt these five.
  *
  * report.json files five 0% rows against this unit, 656 B in total:
  *   ??$__introsort_loop@PAV?$Key@_N@@...           188 B  @826E0138
@@ -433,6 +443,9 @@ void RndAmbientOcclusion::BuildSHCoeff(const Vector3 &inVector, float *fArr) con
     fArr[3] = inVector.x * 0.48860252f;
 }
 
+// w18-a: 100 normalized / 97.27 fuzzy -- 14 rows, all the 2.0f/1.0f constants
+// sitting in f13/f0 where the image has f0/f13.  Declaring `dot` after the three
+// SH differences is byte-identical.
 float RndAmbientOcclusion::DistanceSH(
     const Vector4 &sh1, const Vector3 &n1, const Vector4 &sh2, const Vector3 &n2
 ) const {
@@ -711,13 +724,14 @@ void RndAmbientOcclusion::BurnTransform(
     bool canBurn = Abs(1.0f - det) > 0.0001f;
     if (mQuality == 0) {
         canBurn = CanBurnXfm(mesh);
-    } else {
-        if (canBurn) {
-            MILO_NOTIFY_ONCE(
-                "%s: Mesh has scale or mirroring applied. Re-export mesh to ensure accurate AO calculation.",
-                PathName(mesh)
-            );
-        }
+    } else if (canBurn) {
+        // w18-a: the clear is inside the test -- the image's not-scaled path
+        // branches straight to the shared `if (canBurn)` test (0x826DFE44
+        // `beq .L_826DFEF0`) rather than being threaded past it.
+        MILO_NOTIFY_ONCE(
+            "%s: Mesh has scale or mirroring applied. Re-export mesh to ensure accurate AO calculation.",
+            PathName(mesh)
+        );
         canBurn = false;
     }
 
