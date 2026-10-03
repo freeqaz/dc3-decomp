@@ -674,7 +674,8 @@ void MoveDir::Poll() {
             mCurMove[i] = nullptr;
             filler[i] = oldMove;
             MovePlayerData &curPlayerData = mMovePlayerData[i];
-            if (curMeasure >= 0 && curMeasure < curPlayerData.mMoveKeys.size()) {
+            std::vector<HamMoveKey> &keys = curPlayerData.mMoveKeys;
+            if (curMeasure >= 0 && curMeasure < keys.size()) {
                 // REFUTED (w9-d, BYTE-IDENTICAL): binding the element to a
                 // `const HamMoveKey &key` first, to coax out the image's
                 // `stw r11, 0x50(r31)` home store of mMoveKeys._M_start where we
@@ -687,7 +688,7 @@ void MoveDir::Poll() {
                 // _M_start for the indexed load; we read _M_finish first and pay
                 // a move to get _M_start into place.  Not reachable from the
                 // subscript spelling.
-                mCurMove[i] = curPlayerData.mMoveKeys[curMeasure].move;
+                mCurMove[i] = keys[curMeasure].move;
             }
             MoveRating oldRating = mCurMoveRating[i];
             mCurMoveRating[i] = kMoveRatingOk;
