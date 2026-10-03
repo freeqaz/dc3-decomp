@@ -1200,18 +1200,12 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         Vector3 upperBlinkPos = upperBlink->WorldXfm().v;
         Vector3 lowerBlinkPos = lowerBlink->WorldXfm().v;
 
-        Vector3 upperDir(
-            upperBlinkPos.x - sourcePos.x,
-            upperBlinkPos.y - sourcePos.y,
-            upperBlinkPos.z - sourcePos.z
-        );
+        Vector3 upperDir;
+        Subtract(upperBlinkPos, sourcePos, upperDir);
         Normalize(upperDir, upperDir);
 
-        Vector3 lowerDir(
-            lowerBlinkPos.x - sourcePos.x,
-            lowerBlinkPos.y - sourcePos.y,
-            lowerBlinkPos.z - sourcePos.z
-        );
+        Vector3 lowerDir;
+        Subtract(lowerBlinkPos, sourcePos, lowerDir);
         Normalize(lowerDir, lowerDir);
 
         Vector3 cross;
