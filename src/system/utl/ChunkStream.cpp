@@ -440,6 +440,10 @@ void DecompressMemHelper(
 // `buffer + size - dataMsk`, `buffer - dataMsk + size`.
 // w17-d (99.980): also inert -- `&((char *)mBuffer)[size - dataMsk]` and RB3's
 // `dataOffset = &buf[size]; DecompressMem(dataOffset - dataMsk, ...)`.
+// w21-bc: closed (99.98 -> 100) by binding mBuffer to a block-local `buffer`
+// in the third arm only (lever: bind a member to a local once). A
+// function-scope local instead hoists the load into a callee-saved register
+// and breaks the first two arms (probed).
 void ChunkStream::DecompressChunk(DecompressTask &task) {
     MILO_ASSERT(*task.mState == kDecompressing, 0x3c1);
     int data = *task.mChunk;
@@ -455,8 +459,9 @@ void ChunkStream::DecompressChunk(DecompressTask &task) {
         DecompressMem(dataOffset, dataMsk - 0x12, task.mBuffer, out_len, task.mTempBuf);
     } else {
         MILO_ASSERT(task.mID == CHUNKSTREAM_Z_ID, 0x3d7);
-        char *dataOffset = (char *)task.mBuffer + (task.mDecompressedSize - dataMsk);
-        DecompressMem(dataOffset, dataMsk, task.mBuffer, out_len, task.mTempBuf);
+        char *buffer = (char *)task.mBuffer;
+        char *dataOffset = buffer + (task.mDecompressedSize - dataMsk);
+        DecompressMem(dataOffset, dataMsk, buffer, out_len, task.mTempBuf);
     }
     *task.mChunk = out_len;
     *task.mState = kReady;

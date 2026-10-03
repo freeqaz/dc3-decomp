@@ -358,6 +358,17 @@ config.pch_eligible_dirs = {
     "rndobj", "hamobj", "char", "synth", "dsp", "ui", "flow", "gesture",
     "world", "meta", "obj", "os", "utl", "movie",
 }
+# Sources in an eligible dir that must NOT use the shared PCH.  The retail build
+# had per-TU include order, so __FILE__ for a header is spelled the way the
+# TU's FIRST include of it was written; the shared PCH fixes that spelling for
+# every TU at once.  Each entry needs a measured reason (whole-binary A/B):
+#   utl/FileStream.cpp -- MEM_OVERLOAD's MemFree in ??_GFileStream passes
+#     "...\src\utl\FileStream.h" (backslash, the TU's own line 1); through
+#     the PCH it got "utl/FileStream.h" from TextFileStream.h.  99.583 -> 100,
+#     0 DOWN rows (w21-bc), where flipping the header spelling cost 7 (w9-a).
+config.pch_excluded_sources = {
+    "src/system/utl/FileStream.cpp",
+}
 
 # *** ONE PASS RUNS INSIDE THE COMPILE EDGE, NOT ONLY AFTER IT. ***
 # Everything in `post-compile` below hangs off a phony keyed on `all_source`,

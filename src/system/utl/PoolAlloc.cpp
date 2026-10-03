@@ -103,38 +103,23 @@ void FixedSizeAlloc::Free(void *v) {
     mNumAllocs--;
 }
 
-// 98.214% (normalized, full ninja) -- 55 of 56 instructions.  The single charged
-// row is an extra `mr r3, r11`: the image loads sPoolBuf straight into r3 and
-// keeps `buf` there through the phi, so both paths return without a copy
-// (`lwz r3, lbl_830E5738@l(r30)` at 0x827CF13C and `addi r3, r11, 0x40` at
-// 0x827CF1D4); MSVC gives us r11 for the phi and copies at the end.  Every other
-// difference is register naming, which the canonical ruler forgives.
+// w21-bc: 98.214 -> 100 with RB3's ChunkAllocator::RawPoolAlloc shape: no
+// `buf` local held across the refill -- the refill bumps the GLOBAL
+// (`sPoolBuf += 0x10`) and the tail reads it back (`ret = sPoolBuf; sPoolBuf +=
+// words`). MSVC then coalesces the phi onto r3 (image 0x827CF13C `lwz r3,
+// sPoolBuf` / 0x827CF1D4 `addi r3, r11, 0x40`) and the extra `mr r3, r11` is
+// gone. Same values stored and returned as the old `buf` spelling.
 //
-// REFUTED at 98.214 (each a full ninja): `int *next = buf + words` temp; a named
-// bool for the bounds condition; a separate `ret` copy before the bump; and all
-// six orderings of the three head statements (buf / words / gPoolCapacity).  The
-// byte-wise spelling of the two adds gets the phi into r3 but then emits the
-// adds with the operands the other way round (`add r7, r11, r28` where the image
-// has `add r8, r28, r3`) -- same one charged instruction, worse fuzzy (95.714 ->
-// 96.786 is the only thing that moves).  Coalescing the phi onto r3 is an
-// allocator decision we have not found a source lever for.
+// The pool is walked in INT UNITS: the image's `srawi r11, r4, 2` / `slwi r28,
+// r11, 2` pair (which MSVC would fold to one clrrwi for the byte-wise
+// `(size >> 2) << 2`) is the source's `>> 2` plus the compiler's sizeof(int)
+// scaling of `int *` arithmetic. Same at sPoolEnd. gBigHunk is read again after
+// the calls (the image loads it twice).
 int *FixedSizeAlloc::RawAlloc(int size) {
-    int *buf = sPoolBuf;
-    // The pool is walked in INT UNITS, not bytes.  The image computes
-    // `srawi r11, r4, 2` then `slwi r28, r11, 2` -- two separate instructions --
-    // and reuses r28 for both the bounds check (`add r8, r28, r3`) and the bump
-    // (`add r11, r28, r3`).  MSVC folds the byte-wise spelling `(size >> 2) << 2`
-    // into a single `clrrwi`, so the image cannot have written that: a srawi/slwi
-    // pair that does NOT fold is the signature of `int *` pointer arithmetic --
-    // the `>> 2` is the source's, the `slwi 2` the compiler's sizeof(int)
-    // scaling, emitted by different passes so they never combine.  Writing it as
-    // pointer arithmetic also fixes the commutative operand order on both adds
-    // (the scaled index first, the base second) and lets `buf` live in r3 from
-    // the load, which is what removed our extra `mr r3, r11`.
     int words = size >> 2;
     gPoolCapacity += size;
 
-    if (buf + words > sPoolEnd) {
+    if (sPoolBuf + words > sPoolEnd) {
         if (MemNumHeaps() > 0) {
             if (gBigHunk == gSmallHunk) {
                 printf("PoolAlloc warning: allocating small pool chunk\n");
@@ -148,17 +133,14 @@ int *FixedSizeAlloc::RawAlloc(int size) {
             MemPopHeap();
         }
 
-        // gBigHunk is re-read from memory here rather than cached across the
-        // calls: the image loads it twice, once as the _MemAllocTemp argument and
-        // once again after MemPopHeap, which is what a plain global read either
-        // side of an opaque call produces.
-        buf = sPoolBuf + 0x10;
         sPoolEnd = sPoolBuf + (gBigHunk >> 2);
+        sPoolBuf += 0x10;
         gBigHunk = gSmallHunk;
     }
 
-    sPoolBuf = buf + words;
-    return buf;
+    int *ret = sPoolBuf;
+    sPoolBuf += words;
+    return ret;
 }
 
 void FixedSizeAlloc::Refill() {
