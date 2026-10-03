@@ -1915,6 +1915,16 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 // (the `lwz r4, 0x184(r22)` reload is now row-equal), [29]/[31] and [174]
 // remain as described in the w7-bs residual.
 //
+// w21-be STOP at 98.50 (same 48 diff_arg / 1 insert / 2 delete): the whole
+// residual is one allocator decision -- the image keeps the hoisted zero
+// (`li r21, 0x0`, row 12) in its OWN lowest-priority register and copies it
+// into the loop counter (`mr r28, r21`, row 174); we coalesce i5 onto the zero
+// web, which lifts that web to r28 and shifts this/d/kAssertStr/Mesh.cpp/c8/i9
+// down by one.  MEASURED INERT this wave: `if ((++i5 & 0x1FF) == 0)`;
+// declaring i9 before i88.  WORSE: `while (it != end()) d >> *it++;` (97.5).
+// Not tried on purpose: seeding i5 from another zero-valued local (i9/i88)
+// would invent a use -- flagged, not shipped.
+//
 // NOT A DEFECT: rows 62 and 159 call different MakeString instantiations
 // (`$$BY0BD@...$$BY04` vs our `$$BY08...$$BY0DH@`) while referencing the SAME
 // `??_C@` string symbols on both sides.  Those instantiations are ICF-folded
