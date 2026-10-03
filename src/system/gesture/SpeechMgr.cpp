@@ -185,6 +185,10 @@ void SpeechMgr::DisableAndUnloadGrammars() {
     }
 }
 
+// w20-j: normalized 100 / fuzzy 99.90. The 2 rows (idx 67/68) are the
+// E_NUI_DATABASE_VERSION_MISMATCH constant 0x8301000E, which the target
+// listing symbolises as `lbl_8301000E` (a constant that equals an address).
+// MakeString<unsigned int> vs <long> is an ICF fold (both at 0x823B2008).
 void SpeechMgr::Enable(bool english) {
     if (mSpeechSupported) {
         MILO_ASSERT(mEnabled == false, 0x13F);

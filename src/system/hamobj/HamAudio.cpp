@@ -357,6 +357,10 @@ DataNode HamAudio::OnSetCrossfadeJump(DataArray *a) {
     return 0;
 }
 
+// w20-j: normalized 100 / fuzzy 99.83. Six rows (idx 145/152/165/218/254/285)
+// are indexed loads with base and index swapped (`lfsx f1, r11, r31` vs
+// `lfsx f1, r31, r11`): same vector element on both sides, every branch target
+// checked. `*(ch + vols.begin())` did not move it. Noise: indexed-load operand order.
 void HamAudio::FinishLoad() {
     if (mFileLoader) {
         mRawBuffer = mFileLoader->GetBuffer(&mRawBufferSize);

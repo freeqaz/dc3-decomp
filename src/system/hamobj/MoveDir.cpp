@@ -1688,6 +1688,11 @@ float MoveDir::DetectFrac(
     return frac;
 }
 
+// w20-j: normalized 100 / fuzzy 99.49. 11 rows are a callee-saved permutation:
+// player r26 / filterVer r25 and range.second r29 / &filterVer->mScaleOp r27
+// in the image, the other way round here. Each value carries the same operand
+// to the same call; branch targets agree. A hoisted ScaleOp ref and a do/while
+// with an `end` local both left it unchanged.
 void MoveDir::EnqueueDetectFrames(
     float adjustedSecs,
     int player,
