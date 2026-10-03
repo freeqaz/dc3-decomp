@@ -107,6 +107,12 @@ BEGIN_CUSTOM_PROPSYNC(WorldDir::PresetOverride)
     SYNC_PROP_OVERRIDE(hue, o.hue, o.Sync)
 END_CUSTOM_PROPSYNC
 
+// w20-k (100 normalized, 6 diff_arg rows in the !b preamble): values checked --
+// both sides put &localRing into prev (0x60) then next (0x5c) and compare the
+// begin node against replacement+4; only the three scratch registers r8/r9/r11
+// are permuted. Branch targets and the RefOwner() null test (present only on
+// the b arm in the image too) agree. Measured: declaring `it` before Clear()
+// drops to 96.0. Noise class: volatile-register permutation.
 void WorldDir::BitmapOverride::Sync(bool b) {
     if (!original)
         return;

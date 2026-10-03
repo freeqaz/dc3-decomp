@@ -86,6 +86,14 @@ bool OriginalChoreoRemixer::ScoredDanceMeasure(int x, int y) const {
         return false;
 }
 
+// w20-k (100 normalized, 1 diff_arg row): values checked against the image --
+// unkec[player][idx] vs mDesiredDiffs[player] (0xe4 + player*4), HasVariantPair
+// on slot 0x7c's vector, mp_next/mv_next via slots 0x7c/0x80 indexed by
+// measure*4, `bl OnlyReturns` = ICF fold of the empty DanceRemixer::SelectMove.
+// The one row is `lwzx r27, r10, r29` (image) vs `lwzx r27, r29, r10`: same
+// data pointer and byte index, operands swapped. Measured: `*(v.begin() +
+// measure)` on mp_next leaves it and flips the mv_next load too; on mv_next it
+// is inert. Noise class: commutative operand order of an indexed load.
 void OriginalChoreoRemixer::SelectMove(int player, int measure) {
     if (ValidMoveIdx(measure)) {
         if (JumpedMoveIdx(measure) != measure) {

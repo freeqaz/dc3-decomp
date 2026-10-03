@@ -102,6 +102,13 @@ namespace {
                         // Frame stride) already matches, so this is MSVC's
                         // operand order for one address sum, not a source `+`
                         // that can be written backwards.
+                        // w20-k (100 normalized, 1 diff_arg row): values
+                        // checked -- both sides add the hoisted jointIdx*16
+                        // byte offset (0x54(r1)) to the frame's
+                        // mJointVelocities base, so no value or branch
+                        // divergence. Measured inert: `(jointIdx + v.begin())[0]`
+                        // and a `const Vector3 &` local. Noise class:
+                        // commutative operand order of one address add.
                         for (unsigned int f = 0; f < raw.size(); f++) {
                             float val = frames[f].mJointVelocities[jointIdx][comp];
                             float absVal = fabs(val);
