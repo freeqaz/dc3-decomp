@@ -118,20 +118,16 @@ BEGIN_PROPSYNCS(HamCharacter)
     SYNC_PROP_MODIFY(
         tex_blenders_active, mTexBlendersActive, SetTexBlendersActive(mTexBlendersActive)
     )
-    // The 12th SyncProperty row is here, not in SetPropShowing: the image masks
-    // the materialised bool with `clrlwi r11, r11, 24` at 82490B88 before
-    // storing it into the DataNode, even though its own `li r11, 0x1` /
-    // `li r11, 0x0` pair (82490B78 / 82490B84) makes the mask redundant; we
-    // drop it.  MEASURED (w9-f): the mask IS reachable -- spelling this getter
-    // `mCrewCardMesh ? mCrewCardMesh->Showing() : false` emits it -- but the
-    // ternary replaces the `li r11, 0x1` with a `b` and costs four rows net
-    // (97.93 -> 97.71), because MSVC then merges the two arms instead of
-    // computing 0/1 in place.  Not worth chasing on its own: the other 11 rows
-    // are the SetPropShowing cross-jump above, so closing the mask alone cannot
-    // cross this function.
+    // w21-u: the getter is a small inline bool member (CrewCardShowing, name
+    // ours).  The image masks the materialised 0/1 with `clrlwi r11, r11, 24`
+    // at 82490B88 before storing it into the DataNode -- the bool-return
+    // normalisation of an INLINED call, the same mask the GetPropShowing(n)
+    // rows apply to an out-of-line return.  Open-coded `mCrewCardMesh &&
+    // mCrewCardMesh->Showing()` drops it; w9-f's ternary emitted it but merged
+    // the arms (97.71).  Closes SyncProperty to 100.
     SYNC_PROP_SET(
         crew_card_showing,
-        mCrewCardMesh && mCrewCardMesh->Showing(),
+        CrewCardShowing(),
         bool showCrewCard = _val.Int();
         if (mCrewCardMesh) mCrewCardMesh->SetShowing(showCrewCard)
     )

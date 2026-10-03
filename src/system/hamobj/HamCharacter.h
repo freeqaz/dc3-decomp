@@ -114,6 +114,8 @@ protected:
 
     void ApplyBlendedSkeletons(HamDriver *, CharClip *, float);
     bool GetPropShowing(int);
+    // name ours (w21-u): inlined into SyncProperty's crew_card_showing getter
+    bool CrewCardShowing() { return mCrewCardMesh && mCrewCardMesh->Showing(); }
 
     DataNode OnConfigureFileMerger(DataArray *);
     DataNode OnCamTeleport(DataArray *);
