@@ -407,30 +407,38 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
  *  clippedY-first, rounding startX/startY in place, and swapping the add
  *  operands were all re-measured in this shape and are inert or worse.
  *
+ *  w21-bk (97.315 -> 100, all 149 rows equal; raw <100 only for the ICF
+ *  UnlockRect name below): two spellings, found with a real-TU cl.exe probe.
+ *  (1) Read mTex->Width()/Height() AFTER the startX/startY clamp-to-zero, not
+ *  before: that is the image's `add r8, r10, r9` (texWidth first) at both
+ *  edge tests.  (2) Round startX/startY IN PLACE instead of into new
+ *  clippedX/clippedY locals: that gives the image's r7=X / r6=Y masks and the
+ *  counter `lis` after both `+1`s.  (The in-place rounding was measured inert
+ *  in the earlier shape; it needs (1) first.)  Same values throughout.
+ *
  *  Not a bug: the final `D3DCubeTexture_UnlockRect` vs our
  *  `D3DTexture_UnlockRect` (index 153) are the SAME address 0x82B9BEC0 in
  *  build/373307D9/icf_aliases.map -- a proven ICF fold. */
 void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
     LiveCameraInput *cam, float clipLeft, float clipTop
 ) {
-    int texWidth = mTex->Width();
     int startX = (int)(clipLeft * 640.0f);
     if (startX < 0)
         startX = 0;
-    // MEASURED INERT (w8-r): writing this `startX + texWidth`, to flip the
-    // image's `add r8, r10, r9` operand order, is byte-identical at 97.315.
+    int texWidth = mTex->Width();
     if (texWidth + startX - 1 >= 640) {
         startX = 640 - texWidth;
     }
-    int texHeight = mTex->Height();
     int startY = (int)(clipTop * 480.0f);
     if (startY < 0)
         startY = 0;
+    int texHeight = mTex->Height();
     if (texHeight + startY - 1 >= 480) {
         startY = 480 - texHeight;
     }
-    int clippedX = ((startX + 1) & 0xfffe) % 640;
-    int clippedY = ((startY + 1) & 0xfffe) % 480;
+    // startX/startY now become the even-aligned clip origin (w21-bk: in place).
+    startX = ((startX + 1) & 0xfffe) % 640;
+    startY = ((startY + 1) & 0xfffe) % 480;
     g_colorBufferUpdate3++;
     if (!g_startMetering) {
         // The image materialises 0 FIRST (0x82430970 `li r10, 0x0`, then
@@ -458,14 +466,14 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
         int destWidth = mTex->Width();
         unsigned int srcPitch = lockedRect.mPitch >> 2;
         uintptr_t srcBits = (uintptr_t)lockedRect.mBits;
-        unsigned int *srcPtr = (unsigned int *)(srcPitch * clippedY * 4 + srcBits);
+        unsigned int *srcPtr = (unsigned int *)(srcPitch * startY * 4 + srcBits);
         unsigned int destPitch = mTex->TexelsPitch();
         int destStride = (int)((destPitch >> 1) - destWidth);
         int srcStride = (int)(srcPitch - 320);
         for (int row = 0; row < mTex->Height(); row++) {
             for (int col = 0; col < 320; col++) {
                 unsigned int pixel = *srcPtr++;
-                if (col >= clippedX / 2 && col < (mTex->Width() + clippedX) / 2) {
+                if (col >= startX / 2 && col < (mTex->Width() + startX) / 2) {
                     int cr = (pixel >> 24) - 0x80;
                     int cb = (pixel >> 8 & 0xff) - 0x80;
                     *(unsigned short *)destPtr = YUVtoRGB(pixel >> 16 & 0xff, cr, cb);
