@@ -18,9 +18,10 @@
 // Two SCALAR consts, not `const float sSpeedCaps[2]` (w21-af; the names are
 // ours). The image anchors them as base + 4 (lbl_820B6C60 / lbl_820B6C64), which
 // an array also gives, but MSVC treats a global ARRAY as aliased by any store
-// through a pointer and a scalar as not (standalone cl.exe probe): with the array, Sound::SetSpeed's
-// `mSpeed = clamped` store killed the clamp's caps loads, so the else-loop could
-// not reuse them on entry and the whole register assignment shifted (91.17).
+// through a pointer and a scalar as not (standalone cl.exe probe): with the
+// array, Sound::SetSpeed's `mSpeed = clamped` store killed the clamp's caps
+// loads, so the else-loop could not reuse them on entry and the whole register
+// assignment shifted (91.17).
 // Two scalars reproduce the image's guarded loop entry that jumps past the caps
 // reloads, and SetSpeed goes to 100. Same values, same .rdata layout.
 const float sSpeedCapMin = 0.00390625f;
