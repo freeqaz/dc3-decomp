@@ -914,6 +914,93 @@ def test_xenia_transport_round_trip_over_a_unix_socket():
     srv.close()
 
 
+
+def _dc3_eval():
+    """tools/console/dc3_eval.py, loaded once under the same module name
+    transport.xenia_target registers it as."""
+    import importlib.util
+    mod = sys.modules.get("dc3_eval")
+    if mod is None:
+        path = Path(__file__).resolve().parents[2] / "console" / "dc3_eval.py"
+        spec = importlib.util.spec_from_file_location("dc3_eval", path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["dc3_eval"] = mod
+        spec.loader.exec_module(mod)
+    return mod
+
+def _serve_unix(replies):
+    """One-shot unix-socket console: answers each connection with the next
+    (status, body) in ``replies`` and records the request bodies."""
+    import os, socket, struct, tempfile, threading
+    seen = []
+    path = os.path.join(tempfile.mkdtemp(), "x.sock")
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(path)
+    srv.listen(4)
+
+    def serve():
+        for status, body in replies:
+            c, _ = srv.accept()
+            n = struct.unpack("<I", c.recv(4))[0]
+            buf = b""
+            while len(buf) < n:
+                buf += c.recv(n - len(buf))
+            seen.append(buf.decode())
+            b = body.encode()
+            c.sendall(struct.pack("<II", status, len(b)) + b)
+            c.close()
+
+    th = threading.Thread(target=serve, daemon=True)
+    th.start()
+    return path, seen, th, srv
+
+
+def test_console_target_placeholders_are_failed_evals_not_values():
+    """dc3_eval fills a slot with a placeholder when there is no value
+    (clipped by the output cap, or never run). The target used to hand that
+    sentence on as an ok=True symbol value."""
+    from state_diff.transport import ConsoleTarget
+    dc3_eval = _dc3_eval()
+    assert ConsoleTarget.PLACEHOLDER_PREFIXES == dc3_eval.PLACEHOLDER_PREFIXES
+    t = ConsoleTarget(_FakeConsoleClient({"c": dc3_eval.CLIPPED,
+                                          "n": dc3_eval.NOT_EXECUTED, "v": "7"}))
+    c, n, v = t.eval_batch(["c", "n", "v"])
+    assert not c.ok and c.value is None and "clipped" in c.error, c
+    assert not n.ok and n.value is None, n
+    assert v.ok and v.value == "7", v
+
+
+def test_xenia_batch_clipped_by_the_output_cap_is_not_a_value():
+    """The channel checks its 32 KB cap AFTER writing a command's `=> ` line,
+    then clips the body and appends the banner, so the LAST marker holds a
+    prefix of that command's value. Measured on the original game under
+    Xenia: a 41 KB array result came back as a 32,690-char ok=True value. It
+    must be ok=False, not re-run (it already ran), and the batch must page on
+    to the command after it."""
+    dc3_eval = _dc3_eval()
+    from state_diff.transport import xenia_target
+    clipped = '=> 1\n=> ("' + "x" * 200 + dc3_eval.TRUNCATION_NOTICE
+    path, seen, th, srv = _serve_unix([(200, clipped), (200, "=> 3\n")])
+    t = xenia_target(path, timeout=5.0)
+    a, b, c = t.eval_batch(["{one}", "{big}", "{three}"])
+    th.join(5)
+    srv.close()
+    assert a.ok and a.value == "1", a
+    assert not b.ok and b.value is None and "clipped" in b.error, b
+    assert c.ok and c.value == "3", c
+    assert seen == ["{one}\n{big}\n{three}", "{three}"], seen
+
+
+def test_xenia_single_eval_over_the_cap_fails():
+    dc3_eval = _dc3_eval()
+    from state_diff.transport import xenia_target
+    path, seen, th, srv = _serve_unix(
+        [(200, '=> "' + "x" * 200 + dc3_eval.TRUNCATION_NOTICE)])
+    r = xenia_target(path, timeout=5.0).eval_dta("{big}")
+    th.join(5)
+    srv.close()
+    assert not r.ok and r.value is None and "truncated" in r.error, r
+
 def _run_all():
     fns = [(n, f) for n, f in sorted(globals().items())
            if n.startswith("test_") and callable(f)]
