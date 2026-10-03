@@ -229,6 +229,10 @@ String RecordClipName(const char *cc, int i2) {
     // exactly that; as inline MakeString arguments MSVC evaluated Player(0)
     // before GetSong().  Residual 5 rows: the image sets up r9 (&cc) LAST,
     // we set it first; same values (pure argument-setup schedule).
+    // w21-aw (stop at 99.94, same 5 addi rows): Player(0)->CurrentDancer()
+    // inline in the argument list -> 98.8 (adds a mr r11,r3 save and moves
+    // the format-string lis); a `const char *name = cc;` alias -> 96.4 (new
+    // slot, cc no longer homed).  name_check charges no relocation here.
     unsigned int code = dt.ToCode();
     Symbol song = TheGameData->GetSong();
     const String &dancer = TheGameData->Player(0)->CurrentDancer();
