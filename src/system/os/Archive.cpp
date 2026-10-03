@@ -34,7 +34,7 @@ int ArkHash::AddString(const char *str) {
         hashIdx++;
         if (hashIdx == mTableSize)
             hashIdx = 0;
-        if (startIdx == hashIdx) {
+        if (hashIdx == startIdx) {
             MILO_FAIL("ERROR: Hash table full!!!");
         }
     }

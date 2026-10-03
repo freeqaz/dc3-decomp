@@ -939,6 +939,10 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
         int after = mKeyframes.size() - 1;
         int before;
         for (before = 0; after > before + 1;) {
+            // w20-h: image `add r10, r25, r29` (after + before) vs ours
+            // before + after -- the only row (100 normalized, fuzzy 99.948).
+            // Same value. Inert: swapping the operands, RB3's declaration
+            // order (before first). Noise class: commutative operand order.
             int mid = (before + after) >> 1;
             if (frame == mKeyframes[mid].mFrame) {
                 prevIdx = -1;
@@ -1240,6 +1244,13 @@ static float ComputeSpotBlend(int i, float f) {
         return Min(Max((f - min / 5.0f) * 5.0f, 0.0f), 1.0f);
 }
 
+// w20-h: 100 normalized, fuzzy 99.796. The 6 remaining rows are commutative
+// address adds in loops 2-4 (`add rD, iv, base` vs ours `add rD, base, iv`,
+// e.g. image `add r11, r29, r11` / `add r5, r11, r30`); every operand carries
+// the same value on both sides (i*stride + vector begin), loop 1 already
+// matches. Tried: `int i` in loops 2-4 (cmplw -> cmpw, 99.4), a named
+// RndEnviron* local in loop 2 (99.99, IVs re-ordered). Noise class: commutative
+// operand order.
 void LightPreset::Animate(float f) {
     if (f < 1.1920929E-7f)
         return;
