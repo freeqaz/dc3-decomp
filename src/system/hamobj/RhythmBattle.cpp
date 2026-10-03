@@ -981,6 +981,13 @@ void RhythmBattle::OnBeat() {
                 // a state local, an Hmx::Object*/UIPanel* local, a named receiver,
                 // (int) cast, enum-typed member, result in i6b4; the nested call
                 // form is worse (the panel conversion gets CSE'd).
+                // w21-ax: re-adjudicated at 99.95106 normalized: these 4 rows
+                // (idx 1316-1320, 824E1FD0..1FE0) are the ONLY charged rows; the
+                // other name_check rows are function-local-static scope ordinals
+                // (?PC@ vs ?PP@, ?NC@/?NH@, ?BEG@/?BEL@, ?BJK@/?BJP@; folded noise)
+                // and ICF-folded MakeString/AnimateOut names. Same values reach
+                // r4/r5/r6 on both sides -- no behaviour difference. Also inert: a
+                // RhythmBattleJackState local for the SECOND call only.
                 int jacked = second->SwagJacked(focusPanel, (RhythmBattleJackState)mSwagJackState);
                 first->SwagJackedBonus(focusPanel, (RhythmBattleJackState)mSwagJackState, jacked);
                 i6b4 = (int)mSwagJackState;
