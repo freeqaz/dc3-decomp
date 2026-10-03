@@ -418,6 +418,11 @@ static const float sMeterConsts[] = { 0.2f, 40.0f, 0.7f, 0.0f };
  *      `lfs f26, 0.025` two slots late -- same block, same cause.
  *    - idx 67, 115: `fadds f29, f0` vs `f0, f29` on `x + sMeterConsts[1]`,
  *      commutative, refuted by the flip above.
+ *  w20-e (still 91.26, same 29 rows): also inert -- `/ 40.0f` instead of
+ *  `* 0.025f` for both norms (/fp:fast folds it to the same 0.025 literal,
+ *  same schedule); bgRect constructed BEFORE the levelNorm/ClampEq pair;
+ *  one named `screenW = (float)TheRnd.Width()` feeding barLeft/barWidth
+ *  (only renames f11/f13 in row 83).
  *    - idx 160-168: the image spends `lwz r11, TheRnd; mr r3, r11` where we
  *      load r3 directly (688 vs 684 B); GPR choice around the MakeString
  *      call, no source expression for it.
