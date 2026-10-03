@@ -143,6 +143,12 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
             // w16-c: `while (mLoadedSubdirs.size() != 0)` for the if-arm guard
             // (same expression shape as clear()'s) is byte-inert; inverting
             // to `if (!mergerDir) clear(); else while ...` is 88.4.
+            // w21-u (97.85, same 4 rows): `if (!empty()) clear();` here is
+            // 95.8 (the else arm grows its own reload + `b`); an inline
+            // template helper spelled `while (!l.empty()) l.pop_back();` or as
+            // a guarded do/while is byte-inert (MSVC canonicalises the loop the
+            // same way as clear()); the single unswitched while with the
+            // if/else inside re-measured at 93.3 (not unswitched, r28/r29 swap).
             mLoadedSubdirs.clear();
         }
     }

@@ -550,6 +550,12 @@ void HollaBackMinigame::SetMoveState(int measure, Symbol state) {
                     // mRoutineMoves._M_start (lwz 0x488(r30)) at the top of every
                     // iteration of this search; we keep it live from the size().
                     // Same shape as MoveGraph::FindVariantPair.  Equivalent.
+                    // w21-u (99.40, same 6 rows): `i < mRoutineMoves.size()`
+                    // in the condition is 98.8 (spills a temp to 0x50); a
+                    // `std::vector<HamMove *> &moves = mRoutineMoves;` binding
+                    // is 97.8 (dead `addi r8, r30, 0x488` + spill); `int i` is
+                    // byte-inert.  Behaviour re-checked against the listing:
+                    // same size snapshot, same break target, same Message args.
                     u32 numMoves = mRoutineMoves.size();
                     for (u32 i = 0; i < numMoves; i++) {
                         if (move == mRoutineMoves[i]) {

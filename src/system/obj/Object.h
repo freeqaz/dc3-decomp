@@ -423,6 +423,9 @@ private:
 #endif
 
         T1 *Obj() const { return mObject; }
+        /** The node's stored pointer by reference (name ours; see
+         *  ObjPtrVec::operator[] below). */
+        T1 *const &ObjSlot() const { return this->mObject; }
         Node &operator=(const Node &n) {
             CopyRef(n);
             mOwner = n.mOwner;
@@ -556,7 +559,22 @@ public:
      *  no size() division at all.  That is STLport's `back()` = `*(end() - 1)`
      *  on mNodes, reading Node::mObject at +0xc of the 0x14-byte node. */
     T1 *back() const { return mNodes.back().Obj(); }
-    T1 *operator[](int idx) { return mNodes[idx].Obj(); }
+    /** w21-u: the non-const subscript yields the element's stored pointer
+     *  BY REFERENCE, not a copy.  Evidence (image, all five sites): an element
+     *  read twice -- `v[i] && v[i]->F()`, `if (v[i]) v[i]->F()` -- is one
+     *  load, an UNSIGNED `cmplwi`, and a `clrrwi rB, rA, 0` copy into the use
+     *  register (HamCharacter::GetPropShowing 0x2C0 node read, the four
+     *  SetPropShowing copies inlined in HamCharacter::SyncProperty,
+     *  RndFont::SetBitmapSize), which is what MSVC emits for a re-read of a
+     *  raw pointer member (HamAudio::IsFinished/GetTime/Play).  Returning by
+     *  value turns the same double read into a signed `cmpwi` with no copy.
+     *  Whole binary (full ninja) the change moves only those three functions
+     *  up and two down (FlowMultiSetProperty::Activate, DxRnd::
+     *  PopClipPlanesInternal), and those two return to 100 with the element
+     *  copied into a local first.  The only semantic difference from a copy
+     *  is WHEN the pointer is read; every other PPC object is byte-identical
+     *  under the change, and all 769 native TUs pass clang -fsyntax-only. */
+    T1 *const &operator[](int idx) { return mNodes[idx].ObjSlot(); }
     const T1 *operator[](int idx) const { return mNodes[idx].Obj(); }
 
     template <class S>

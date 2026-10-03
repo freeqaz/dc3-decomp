@@ -806,21 +806,17 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
     MILO_ASSERT(info->charWidth >= 0, 422);
 }
 
-// w15-i1 (98.73 canonical, 1 delete + 2 reg rows): the image re-materialises the
-// non-null mat with a no-op `clrrwi r11, r9, 0` before `lwz r11, 0x4c(r11)`
-// (GetDiffuseTex) inside the ternary's true arm; we use r11 directly.  Tried:
-// `static_cast<BaseMaterial *>(mat)->GetDiffuseTex()` -- byte-inert.
-// w19-a (still 98.73): reading the element twice,
-// `mMats[i] ? mMats[i]->GetDiffuseTex() : nullptr`, does not produce the clrrwi
-// copy -- it turns the null test into a signed cmpwi (97.97, worse).
+// w21-u: 100.  `mMats[i]` read twice is the image's `clrrwi r11, r9, 0` copy
+// after the null test, once ObjPtrVec::operator[] returns the stored pointer
+// by reference (obj/Object.h).  w19-a's 97.97 for this spelling was measured
+// with the by-value subscript.
 void RndFont::SetBitmapSize(const Vector2 &cs) {
     mCellSize = cs;
     if (mMaterialOffsets.size() != mMats.size()) {
         mMaterialOffsets.resize(mMats.size());
     }
     for (int i = 0; i < (int)mMats.size(); i++) {
-        RndMat *mat = mMats[i];
-        RndTex *tex = mat ? mat->GetDiffuseTex() : nullptr;
+        RndTex *tex = mMats[i] ? mMats[i]->GetDiffuseTex() : nullptr;
         if (tex && tex->Width() != 0 && tex->Height() != 0) {
             mMaterialOffsets[i].x = mCellSize.x / (float)tex->Width();
             mMaterialOffsets[i].y = mCellSize.y / (float)tex->Height();
