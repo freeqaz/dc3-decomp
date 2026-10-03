@@ -484,13 +484,12 @@ void SkeletonViz::DrawJoints(
         if (conf == kConfidenceTracked) {
             red = 0.0f;
             green = tint;
+        } else if (conf == kConfidenceInferred) {
+            red = tint;
+            green = tint;
         } else {
             red = tint;
-            if (conf == kConfidenceInferred) {
-                green = tint;
-            } else {
-                green = 0.0f;
-            }
+            green = 0.0f;
         }
         mJointMesh->SetLocalPos(*jointIt);
         mJointMat->SetColor(red, green, 0.0f);
