@@ -648,12 +648,13 @@ RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
         }
         mIt = mSeqs.begin();
     } else {
+        int childrenLeft = childrenSize;
         while (numSeqs != 0) {
             for (ObjPtrList<Sequence>::iterator it = children.begin();
                  it != children.end();
                  ++it) {
-                if (numSeqs == childrenSize
-                    || RandomFloat() <= (float)numSeqs / (float)childrenSize) {
+                if (numSeqs == childrenLeft
+                    || RandomFloat() <= (float)numSeqs / (float)childrenLeft) {
                     SeqInst *si = (*it)->MakeInst();
                     if (si) {
                         mSeqs.push_back();
@@ -661,7 +662,7 @@ RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
                     }
                     numSeqs--;
                 }
-                childrenSize--;
+                childrenLeft--;
             }
         }
         mIt = mSeqs.begin();
