@@ -95,6 +95,18 @@ void CharClipGroup::AddClip(CharClip *clip) {
 //   - `return mClips.find(clip) != mClips.end();` (operand swap)          56.81 / 55.19
 // Binding end() to a named local does not materialise it -- the value is a bare
 // pointer, so MSVC re-sinks the arithmetic regardless of statement boundaries.
+// w21-h (56.81, unchanged; same 23 rows): three more spellings measured, all
+// 56.81 canonical -- `!(mClips.find(clip) == mClips.end())`, an
+// `if (find == end()) return false; return true;`, and a named
+// `const_iterator it = mClips.begin() + mClips.size()` compared against find.
+// Same residual as ObjPtrVec<RndDrawable>::merge (ObjPtrVec_impl.h): the image
+// finishes end() (`mulli`/`add r31`) before `bl find` and holds ONE callee-saved
+// register; we keep begin/size in two and sink the add.  Contrast: LightPreset::
+// SyncKeyframeTargets' `mSpotlights.find(key) == mSpotlights.end()` (non-const)
+// materialises end() before the call in OUR build too and reads 100, so the
+// inline end() itself is not wrong.  Note find<CharClip> is `f i` in the map and
+// same-TU; the `inline` lever was not tried because find lives in a header
+// template shared by every ObjPtrVec instantiation.
 bool CharClipGroup::HasClip(CharClip *clip) const {
     return mClips.end() != mClips.find(clip);
 }

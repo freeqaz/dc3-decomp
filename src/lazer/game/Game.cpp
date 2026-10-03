@@ -1026,6 +1026,13 @@ bool Game::IsLoaded() {
 // the normalisation away.  Not compile order either: with the IsReady loop our
 // Game.obj emits IsReady (sec 697) before OnSetShuttle (724), as the image
 // lays them out (82867F80 < 82868500), and it still folds.
+// w21-h (55.83, unchanged): `while (!IsReady())` with IsReady's definition
+// moved BELOW OnSetShuttle (so it is not yet defined at the call) is
+// byte-identical too -- MSVC still inlines and folds it.  The image's inlined
+// sequence ends in `clrlwi.` (the caller-side bool test of a RETURN value),
+// while its out-of-line IsReady (82867F80) ends at `subfe r3` with no clrlwi:
+// i.e. the image tests the inlined result exactly as if a call had returned it.
+// IsReady is a plain `f` (not `f i`) in the map.
 DataNode Game::OnSetShuttle(DataArray *arr) {
     if (arr->Size() > 3) {
         mShuttle->SetController(arr->Int(3));
