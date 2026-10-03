@@ -161,6 +161,16 @@ void HamRibbon::SetActive(bool active) {
 // w20-t (98.1, branch-scan row 87 adjudicated ARTIFACT): the back-edge lands on
 // the image's in-loop `lwz r8, 0x0(r31)` reload of _M_start (see w15-a below);
 // the search loop stores nothing, so the hoisted value is the same.
+// w21-t (98.12 -> 99.48 canonical): the dirty-key pass is a plain for loop
+// (the old `if (firstDirty < size())` was MSVC's rotated guard) and the bend
+// off-diagonal is one local.  Remaining rows: the w15-a search-loop _M_start
+// reload (begin()[i], break form, int index, while form, local vector ref,
+// hoisted cutoff: all inert or worse), the w7-an back() addressing, the
+// prevDir/Dot association (the image is ((z + x) + y): source
+// `dir.y*prevDir.y + dir.z*prevDir.z + dir.x*prevDir.x` reproduces it exactly
+// but only moves fuzzy (+0.16), and would make native sum y,z,x instead of
+// Dot's x,y,z -- not shipped), and one commutative fmuls in the in-place
+// Multiply(smoothDir, inv) (an inline expansion costs 0.26).
 void HamRibbon::UpdateChase() {
     if (!mFollowA) {
         return;
@@ -252,76 +262,77 @@ void HamRibbon::UpdateChase() {
         }
     }
 
-    int firstDirty = mChaseKeys.size() - added;
-    if (firstDirty < mChaseKeys.size()) {
-        for (int i = firstDirty; i < mChaseKeys.size(); ++i) {
-            if (i != 0) {
-                Key<Transform> &cur = mChaseKeys[i];
-                Key<Transform> &prev = mChaseKeys[i - 1];
-                Vector3 dir;
-                Subtract(cur.value.v, prev.value.v, dir);
-                Normalize(dir, dir);
+    for (int i = mChaseKeys.size() - added; i < mChaseKeys.size(); ++i) {
+        if (i != 0) {
+            Key<Transform> &cur = mChaseKeys[i];
+            Key<Transform> &prev = mChaseKeys[i - 1];
+            Vector3 dir;
+            Subtract(cur.value.v, prev.value.v, dir);
+            Normalize(dir, dir);
 
-                Vector3 smoothDir;
-                float angle = -1.0f;
-                if (2 < i) {
-                    Vector3 prevDir;
-                    Subtract(prev.value.v, (&cur)[-2].value.v, prevDir);
-                    float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
-                    angle = std::acos(dot);
-                    // The scale is the LITERAL -1.0f (a negation of prevDir), not a
-                    // loop-carried previous angle: the image loads -1.0 once into
-                    // f29 (0x824C7C7C) and never rewrites it, using the same
-                    // register both for this multiply (0x824C7DB8/0x824C7DBC) and
-                    // for the `angle != -1.0f` compare (0x824C7E80).
-                    Vector3 scaledPrev = prevDir;
-                    scaledPrev *= -1.0f;
-                    Interp(dir, scaledPrev, 0.5f, smoothDir);
-                    Normalize(smoothDir, smoothDir);
-                }
-
-                static Vector3 up(0.0f, 0.0f, 1.0f);
-                Transform invPrev;
-                Invert(prev.value, invPrev);
-                Vector3 localPos;
-                Multiply(cur.value.v, invPrev, localPos);
-                Transform tf = Transform::IDXfm();
-                tf.LookAt(localPos, up);
-                Transform result;
-                Multiply(tf, prev.value.m, result);
-                Normalize(result.m, result.m);
-                result.v = cur.value.v;
-
-                if (angle != -1.0f) {
-                    Hmx::Matrix3 inv;
-                    Invert(result.m, inv);
-                    Multiply(smoothDir, inv, smoothDir);
-                    smoothDir.x = Clamp(0.0f, 1.0f, smoothDir.x);
-                    float a = std::acos(smoothDir.x);
-                    float cosHalf = std::cos(angle * 0.5f);
-                    float invCos = 1.0f / cosHalf;
-                    float c = std::cos(a * 2.0f);
-                    float s = std::sin(a * 2.0f);
-                    // The bend is in the X-Z plane, NOT X-Y: the image writes the
-                    // off-diagonal s*(1-invCos)/2 terms to m02 (0x128) and m20
-                    // (0x140) and leaves row 1 as the identity row
-                    // (0, 1, 0) at 0x130-0x138.
-                    Hmx::Matrix3 bend(
-                        ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
-                        0.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
-                        0.0f,
-                        1.0f,
-                        0.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
-                        0.0f,
-                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
-                    );
-                    Multiply(bend, result.m, result.m);
-                }
-
-                cur.value.m = result.m;
+            Vector3 smoothDir;
+            float angle = -1.0f;
+            if (2 < i) {
+                Vector3 prevDir;
+                Subtract(prev.value.v, (&cur)[-2].value.v, prevDir);
+                float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
+                angle = std::acos(dot);
+                // The scale is the LITERAL -1.0f (a negation of prevDir), not a
+                // loop-carried previous angle: the image loads -1.0 once into
+                // f29 (0x824C7C7C) and never rewrites it, using the same
+                // register both for this multiply (0x824C7DB8/0x824C7DBC) and
+                // for the `angle != -1.0f` compare (0x824C7E80).
+                Vector3 scaledPrev = prevDir;
+                scaledPrev *= -1.0f;
+                Interp(dir, scaledPrev, 0.5f, smoothDir);
+                Normalize(smoothDir, smoothDir);
             }
+
+            static Vector3 up(0.0f, 0.0f, 1.0f);
+            Transform invPrev;
+            Invert(prev.value, invPrev);
+            Vector3 localPos;
+            Multiply(cur.value.v, invPrev, localPos);
+            Transform tf = Transform::IDXfm();
+            tf.LookAt(localPos, up);
+            Transform result;
+            Multiply(tf, prev.value.m, result);
+            Normalize(result.m, result.m);
+            result.v = cur.value.v;
+
+            if (angle != -1.0f) {
+                Hmx::Matrix3 inv;
+                Invert(result.m, inv);
+                Multiply(smoothDir, inv, smoothDir);
+                smoothDir.x = Clamp(0.0f, 1.0f, smoothDir.x);
+                float a = std::acos(smoothDir.x);
+                float cosHalf = std::cos(angle * 0.5f);
+                float invCos = 1.0f / cosHalf;
+                float c = std::cos(a * 2.0f);
+                float s = std::sin(a * 2.0f);
+                // The bend is in the X-Z plane, NOT X-Y: the image writes the
+                // off-diagonal s*(1-invCos)/2 terms to m02 (0x128) and m20
+                // (0x140) and leaves row 1 as the identity row
+                // (0, 1, 0) at 0x130-0x138.
+                // w21-t: the off-diagonal term is ONE value -- the image computes
+                // it once and stores the same f0 to 0x128 and 0x140; written out
+                // twice, MSVC multiplies it twice (99.0 -> 99.5).
+                float offDiag = (s * (1.0f - invCos)) * 0.5f;
+                Hmx::Matrix3 bend(
+                    ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
+                    0.0f,
+                    offDiag,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    offDiag,
+                    0.0f,
+                    ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
+                );
+                Multiply(bend, result.m, result.m);
+            }
+
+            cur.value.m = result.m;
         }
     }
 
@@ -330,15 +341,15 @@ void HamRibbon::UpdateChase() {
 }
 
 void HamRibbon::UpdateMesh() {
-    int histSize = mChaseKeys.size();
-    if (histSize != 0) {
+    if (mChaseKeys.size() != 0) {
+        int histSize = mChaseKeys.size();
         ObjPtrList<RndTransformable>::iterator it = mSegTrans.begin();
         float lastFrame = mChaseKeys.back().frame;
         Key<Transform> *keyPtr;
-        // RESIDUAL (w13-b, 98.81): the image tests this in cr0 (`cmpwi r23, 0x0`
-        // / `bgt`), we use cr6.  `>= 1` is worse; the loop below is now exact.
-        // w18-b: `keyPtr = histSize > 0 ? &mChaseKeys[0] : keyPtr;` is inert
-        // (same 2 rows, still cr6).
+        // w21-t (98.81 -> 100): the image's cr0 `cmpwi r23, 0x0` / `bgt` here
+        // comes from the outer test calling size() itself and histSize being a
+        // second, CSE'd size() call inside the block.  Testing a histSize
+        // local (w13-b) put this compare in cr6.
         if (histSize > 0) {
             keyPtr = &mChaseKeys[0];
         }
@@ -389,6 +400,12 @@ void HamRibbon::ConstructMesh() {
         // (float)boneIdx extsw/std/lfd/fcfid chain first after Normalize
         // (824C889C) and sign-extends the bone index with extsh (824C88A8)
         // before the sth; a `short` local for the index is byte-identical.
+        // w21-t (stop at 90.97): also inert -- Face field assignments (85.6,
+        // worse), the RndRibbon v0..v3 spelling, a named float for
+        // (float)boneIdx before the norm copy, `int s = (short)boneIdx`,
+        // (int)(short) casts, a named texX.  Remaining: the face-loop store/
+        // trap scheduling above, the vert-loop fcfid/extsh placement, and
+        // the norm/boneWeights copy word order (image 4,8,0,c).
         for (int seg = 0; seg < mNumSegments; seg++) {
             int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
@@ -398,8 +415,13 @@ void HamRibbon::ConstructMesh() {
                 int nextIdxUp = mNumSides + nextIdx;
                 int idxUp = idx + mNumSides;
                 int faceIdx = base + side * 2;
-                mMesh->Faces()[faceIdx].Set(idx, nextIdx, nextIdxUp);
-                mMesh->Faces()[faceIdx + 1].Set(nextIdxUp, idxUp, idx);
+                // w21-t (90.21 -> 90.97): one Face pointer, re-pointed for the
+                // second face, puts `base` in volatile r3 as the image does.
+                // Two separate pointers, or references, are 90.21.
+                RndMesh::Face *f = &mMesh->Faces()[faceIdx];
+                f->Set(idx, nextIdx, nextIdxUp);
+                f = &mMesh->Faces()[faceIdx + 1];
+                f->Set(nextIdxUp, idxUp, idx);
             }
         }
 
