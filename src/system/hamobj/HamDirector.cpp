@@ -3124,9 +3124,8 @@ void HamDirector::OnPopulateMoves() {
                 DataArray *prevEntry = prevCandidates->FindArray(prevClipName, false);
                 if (prevEntry) {
                     if (prevEntry->Int(2) != 0) {
-                        transName = Symbol(
-                            MakeString("%s_%s", prevClipName.Str(), clipName.Str())
-                        );
+                        transName =
+                            MakeString("%s_%s", prevClipName.Str(), clipName.Str());
                     }
                 }
 
