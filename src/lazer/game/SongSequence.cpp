@@ -243,6 +243,16 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // but 11 rows / 99.7 with a second home), binding at the top and using it
     // for nextEntry or everywhere (r17/r18 + r29/r30 swaps, 99.7), binding at
     // the top used only here (98.6).
+    // w21-az (99.84, same 10 rows): a `const std::vector<Entry> *` bound here
+    // is byte-identical to the reference (still homed at 0x50(r31)); an inline
+    // header helper `int NumEntries() const { return mEntries.size(); }` used
+    // in the compare is the pre-w21-m shape (99.2: numEntries site 102-104
+    // matches, but begin is kept and re-truncated with clrrwi); and
+    // `mEntries.end() - mEntries.begin()` for numEntries at the top is 97.8
+    // (r17/r18 swap).  The image's OnSongLoaded DOES home an &mEntries local
+    // (`addi r18, r3, 0x8; stw r18, 0x50(r31)` @8288BE20) -- DoNext's image
+    // has no such home, so whatever forces the begin reload here is not a
+    // named local.
     const std::vector<Entry> &entries = mEntries;
     if (++mCurrentIndex >= (int)entries.size() || b2) {
 
