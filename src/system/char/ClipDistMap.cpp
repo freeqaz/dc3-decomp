@@ -200,6 +200,14 @@ bool ClipDistMap::FindBestNode(float maxError, float startBeat, float endBeat, C
                 // hand-rotated do/while), BeatB into a local first (90.53),
                 // nextBeat stored before curBeat (90.53); w13-c: BeatB spelled
                 // inline as `mBStart + (float)rowIdx / (float)mSamplesPerBeat`.
+                // w21-q (93.41, same 6 rows): standalone cl.exe probe that
+                // reproduces this build exactly; 28 inner-loop combinations
+                // (foundBetter as bool / int / if-else / inline test x seven
+                // nextBeat spellings: locals for (float)rowIdx, (float)spb,
+                // mBStart or the quotient, before or after the curBeat store)
+                // plus `Node &`, `Array2d &`, `const float &aStart` (RB3),
+                // an outer do/while and RB3's curBeat: none moves the curBeat
+                // store past the extsw or the mBStart load past the fcfids.
                 node.curBeat = curBeat;
                 node.nextBeat = BeatB(rowIdx);
             }
