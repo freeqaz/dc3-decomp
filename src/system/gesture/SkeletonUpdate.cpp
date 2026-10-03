@@ -348,10 +348,31 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
             // `fnmsubs f0, f13, f11, f0` at 0x8242CF98 (c - a*b is the fnmsubs
             // idiom; x + -(a*b - c) and x - (a*b - c) both canonicalise to
             // fmsubs+fsubs).  The unk5398 load order is still the image's.
+            // w21-ak (89.861 -> 91.318 canonical): both temps are built with
+            // PaddedJointPos::Set.  MSVC evaluates Set's arguments right to
+            // left, which reproduces the left arm's y, z, x compute-and-store
+            // order exactly (three field assignments in that order do not), and
+            // is byte-identical to a probe 3-float ctor.  Here the image
+            // computes z first; field assignments z, y, x reproduce that block
+            // but lose more in the two copies below (91.19).  Remaining, 91.318:
+            // (1) every `field + other` fadds has the joint field as the image's
+            // FIRST operand and ours second -- flipping the spelling, float
+            // locals for the other operand, and a `const Vector3 &` elbow are all
+            // inert; only routing the other operand through a stored temp
+            // (`Vector3 off(...)`, then `elbow.y + off.y`) flips it, at 88.5
+            // overall; (2) word order of the 16-byte copies in arms 3 and 4;
+            // (3) the arm-1 forwarding pattern: wrist stores x, y, z through the
+            // `wrist` ref reproduce the image's forward-x / reload-y,z exactly
+            // but emit the stores in source order (88.1).  Also measured worse:
+            // `elbow` + `wrist` refs in arm 1 (83.1); `wrist` ref declared before
+            // the Set (inert); wrist copied before hand (90.2); hand before wrist
+            // in arm 4 (89.85).
             PaddedJointPos rightPos;
-            rightPos.z = data.mJointPositions[kJointElbowRight].z - 0.5f;
-            rightPos.y = data.mJointPositions[kJointElbowRight].y + unk5398;
-            rightPos.x = data.mJointPositions[kJointElbowRight].x + (0.1f - rt * 0.5f);
+            rightPos.Set(
+                data.mJointPositions[kJointElbowRight].x + (0.1f - rt * 0.5f),
+                data.mJointPositions[kJointElbowRight].y + unk5398,
+                data.mJointPositions[kJointElbowRight].z - 0.5f
+            );
             // RESIDUAL (w7-an, 82.1 canonical): both sides assign handRight
             // from the first materialised `addi rN, r1, 0x50` and wristRight
             // from the second -- same registers, same eight words -- but the
@@ -378,9 +399,11 @@ void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
         // right-hand block above; the image's compute-and-store order here is
         // y (0x54), z (0x58), x (0x50).
         PaddedJointPos leftPos;
-        leftPos.y = data.mJointPositions[kJointElbowLeft].y + unk5398;
-        leftPos.z = data.mJointPositions[kJointElbowLeft].z - 0.5f;
-        leftPos.x = data.mJointPositions[kJointElbowLeft].x + (lt * 0.5f - 0.25f);
+        leftPos.Set(
+            data.mJointPositions[kJointElbowLeft].x + (lt * 0.5f - 0.25f),
+            data.mJointPositions[kJointElbowLeft].y + unk5398,
+            data.mJointPositions[kJointElbowLeft].z - 0.5f
+        );
         data.mJointPositions[kJointWristLeft] = leftPos;
         data.mJointPositions[kJointHandLeft] = leftPos;
     }

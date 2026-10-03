@@ -151,6 +151,10 @@ struct SkeletonUpdateData {
 // missing that membership (group 348 in scripts/symbol_aliases.json), so the
 // name_check ruler charges a fold it should forgive.  Fix the alias map, not
 // this header; hand-editing the map was deliberately NOT done here.
+// w21-ak: DONE -- ??0PaddedJointPos@@QAA@XZ added to the OnlyReturns@0x823e3b70
+// group in scripts/symbol_aliases.json on body-test evidence (both bodies are the
+// single word 4e800020, blr; record under that group's "body_extended").  This
+// ctor now reads 100.0 normalized and fuzzy; ??0Skeleton@@QAA@XZ 89.605 -> 89.868.
 struct SkeletonFrame {
     void Create(const NUI_SKELETON_FRAME &, int);
     float TiltAngle() const;

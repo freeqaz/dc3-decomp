@@ -8723,6 +8723,7 @@
    "folded": [
     "??0Vector3@@QAA@XZ",
     "??0Vector4@@QAA@XZ",
+    "??0PaddedJointPos@@QAA@XZ",
     "??1CriticalSection@@QAA@XZ",
     "??1PeakDetector@Synapse@DSP@@QAA@XZ",
     "??1PitchCorrectedVoice@Synapse@DSP@@QAA@XZ",
@@ -9256,6 +9257,16 @@
     "why": "The body-test tier had no witness for this name -- probe_icf_foldtest scores per CALL SITE, and this build's only reference to MemTerminate is the one inside ?SystemTerminate@@YAXXZ, whose row was itself below 100% when the probe corpus was minted. The linker map states the fold outright, so the member is added in place on that evidence instead. A regeneration of the body-test tier (decomp-synth tools/il_witness/build_icf_alias_inputs.py, which needs a fresh probe_icf_foldtest --folded corpus and mints the body-test class ONLY) would drop it -- re-apply from this record.",
     "worth": "216 B ?SystemTerminate@@YAXXZ, whose last charge under functionRelocDiffs=name_check is target bl OnlyReturns vs ours bl ?MemTerminate@@YAXXZ.",
     "why_not_a_source_fix": "MemTerminate is a real empty function (src/system/utl/MemMgr.cpp:325) that SystemTerminate really calls; the target names the fold survivor because /OPT:ICF kept one spelling out of 769. There is nothing to fix in the source."
+   },
+   "body_extended": {
+    "added": [
+     "??0PaddedJointPos@@QAA@XZ"
+    ],
+    "date": "2026-10-03",
+    "lane": "w21-ak",
+    "why": "BODY-TEST evidence, checked by hand rather than by probe_icf_foldtest: our ??0PaddedJointPos@@QAA@XZ (src/system/math/Vec.h, `PaddedJointPos() {}`) compiles to the single word 4e800020 (blr) in build/373307D9/src/system/gesture/Skeleton.obj, and the retail survivor OnlyReturns at 0x823e3b70 (target build/373307D9/obj/system/char/ClipDistMap.obj) is the same single word 4e800020. PaddedJointPos is a decomp-chosen name for the 16-byte joint-position element (the image's ??_H element size is 0x10), so the linker map cannot name it; the original element type's trivial ctor is one of the 769 spellings at this address (??0Vector4@@QAA@XZ and ??0_XMFLOAT4@@QAA@XZ are the 16-byte candidates). A regeneration of the body-test tier would drop this member -- re-apply from this record.",
+    "worth": "??0SkeletonFrame@@QAA@XZ (100 B), whose only charges under name_check are its two lis/addi pairs naming OnlyReturns vs ours ??0PaddedJointPos@@QAA@XZ; the same pair in ??0Skeleton@@QAA@XZ and the other TUs that construct PaddedJointPos arrays.",
+    "why_not_a_source_fix": "The original element type is not determinable from the image (several 16-byte trivial ctors fold to this address), and renaming PaddedJointPos would not change one instruction byte."
    }
   },
   {
