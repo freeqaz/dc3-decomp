@@ -292,36 +292,41 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
     }
 }
 
+// w21-ac: ONE body for PPC and native.  An `#ifdef HX_NATIVE` arm used to run
+// a different formula natively (vx * (1 - 2(yy+zz)) + ...): algebraically the
+// same rotation but a different float evaluation order from the image.  The
+// image (0x82533AF0) computes every component as
+//   ((vx-term + vy-term) + vz-term) * 2 + v
+// e.g. out.x = fmadds(f13 = (xz+yw), vz, f11 = (-zz + -yy)*vx + (xy-zw)*vy),
+// then fmadds(f13, 2.0f, vx) -- and the three neg-squares are fneg'd
+// separately and added.  The statements below are written in exactly that
+// association, so the native build now evaluates in the image's order
+// (fidelity fix); every vin component is read into a local before any vout
+// store, so &vout == &vin (HamSkeletonConverter) stays safe.  On PPC this
+// spelling compiles byte-identically to the previous z,x,y-term spelling:
+// /fp:fast re-sorts the three-term sum itself (ours lands as
+// (vz + vx) + vy), which is the remaining 91.5 residual below.
+//
+// w7-av: 91.5%, a pure FP-scheduling residual (44 register swaps, 0 diff_op).
+// The image's emission order is: q.x, q.z, qx*qx, qz*qz, q.y, q.w, qy*qx,
+// qz*qw, vin.y, qz*qy, vin.x, qx*qw, vin.z, qy*qy, 2.0f, qz*qx, qy*qw --
+// ours starts with q.z/q.y and squares qz/qy first. Measured, all rejected:
+//   * writing the three output expressions with the terms in x,y,z order
+//     instead of z,x,y -- byte-identical diff (/fp:fast reassociates the
+//     add tree, so term order inside one statement is inert here);
+//   * reordering the three neg_* declarations -- byte-identical diff;
+//   * swapping the vout.x / vout.y statements -- 87.3%;
+//   * hoisting the three squares to the top of the product block -- 75.0%
+//     (this DOES fix the load order to q.x/q.z/q.y, and wrecks everything
+//     downstream, so first-use order is the lever but not by itself enough);
+//   * transcribing the image's full emission order as the declaration
+//     order, with and without the component loads interleaved -- 83.2%.
+// w21-ac also measured (standalone cl.exe probe, fuzzy): a vout.Set() of
+// the three sums in the image's association (og-dc3 shape, vx/vy/vz term
+// order) 67.8 -- it is the image's association modulo -(a+b) for -a + -b
+// but loses the load schedule; plain vin locals 26.2; locals for the three
+// squares only 67.9; neg locals with the products inline 46.5.
 void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
-#ifdef HX_NATIVE
-    // Standard quaternion rotation formula: v' = v * R(q)
-    // Alias-safe: read vin into locals BEFORE writing vout (callers may pass
-    // vout aliased to vin; the PPC path below loads all inputs up front).
-    // Same hazard class as the Transform Multiply aliasing bug (mtx.cpp,
-    // 2026-07-02 feet ankle-solve round 2).
-    float qx = q.x, qy = q.y, qz = q.z, qw = q.w;
-    float xx = qx * qx, yy = qy * qy, zz = qz * qz;
-    float xy = qx * qy, xz = qx * qz, xw = qx * qw;
-    float yz = qy * qz, yw = qy * qw, zw = qz * qw;
-    float vx = vin.x, vy = vin.y, vz = vin.z;
-    vout.x = vx * (1 - 2*(yy+zz)) + vy * 2*(xy-zw)      + vz * 2*(yw+xz);
-    vout.y = vx * 2*(xy+zw)       + vy * (1 - 2*(xx+zz)) + vz * 2*(yz-xw);
-    vout.z = vx * 2*(xz-yw)       + vy * 2*(yz+xw)      + vz * (1 - 2*(xx+yy));
-#else
-    // w7-av: 91.5%, a pure FP-scheduling residual (44 register swaps, 0 diff_op).
-    // The image's emission order is: q.x, q.z, qx*qx, qz*qz, q.y, q.w, qy*qx,
-    // qz*qw, vin.y, qz*qy, vin.x, qx*qw, vin.z, qy*qy, 2.0f, qz*qx, qy*qw --
-    // ours starts with q.z/q.y and squares qz/qy first. Measured, all rejected:
-    //   * writing the three output expressions with the terms in x,y,z order
-    //     instead of z,x,y -- byte-identical diff (/fp:fast reassociates the
-    //     add tree, so term order inside one statement is inert here);
-    //   * reordering the three neg_* declarations -- byte-identical diff;
-    //   * swapping the vout.x / vout.y statements -- 87.3%;
-    //   * hoisting the three squares to the top of the product block -- 75.0%
-    //     (this DOES fix the load order to q.x/q.z/q.y, and wrecks everything
-    //     downstream, so first-use order is the lever but not by itself enough);
-    //   * transcribing the image's full emission order as the declaration
-    //     order, with and without the component loads interleaved -- 83.2%.
     // Load quaternion components
     float qx = q.x;
     float qz = q.z;
@@ -344,11 +349,10 @@ void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
     float neg_qzqz = -(qz * qz);
     float neg_qyqy = -(qy * qy);
 
-    // Quaternion rotation formula
-    vout.z = ((neg_qyqy + neg_qxqx) * vinz + (qxqz - qyqw) * vinx + (qyqz + qxqw) * viny) * 2.0f + vinz;
-    vout.x = ((qxqz + qyqw) * vinz + (neg_qzqz + neg_qyqy) * vinx + (qxqy - qzqw) * viny) * 2.0f + vinx;
-    vout.y = ((qyqz - qxqw) * vinz + (qxqy + qzqw) * vinx + (neg_qzqz + neg_qxqx) * viny) * 2.0f + viny;
-#endif
+    // Quaternion rotation formula, in the image's association
+    vout.z = ((qxqz - qyqw) * vinx + (qyqz + qxqw) * viny + (neg_qyqy + neg_qxqx) * vinz) * 2.0f + vinz;
+    vout.x = ((neg_qzqz + neg_qyqy) * vinx + (qxqy - qzqw) * viny + (qxqz + qyqw) * vinz) * 2.0f + vinx;
+    vout.y = ((qxqy + qzqw) * vinx + (neg_qzqz + neg_qxqx) * viny + (qyqz - qxqw) * vinz) * 2.0f + viny;
 }
 
 void FastInterp(const Hmx::Quat &q1, const Hmx::Quat &q2, float f, Hmx::Quat &qout) {
