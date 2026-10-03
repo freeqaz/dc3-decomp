@@ -49,10 +49,10 @@ Hmx::Object *CharClipDisplay::FindSource(Hmx::Object *obj) {
     return nullptr;
 }
 
-// RESIDUAL (w12-b, 98.75 canonical): one row. After storing mStartBeat the
-// image re-reads it (`lfs f12, 0xc(r3)` right after the second `lwa` of
-// TheRnd.Width()) for mEndBeat's `+ mStartBeat`; we forward the stored value.
-// Byte-inert: writing the sum as `mStartBeat + (...)`.
+// w12-b residual (one row: the image re-reads mStartBeat after storing it)
+// closed by w21-bb, see the reference in the resetZoom arm.  Inert: writing
+// the sum as `mStartBeat + (...)`; the RB3 trailing `GetX(mCursorBeat);`
+// (dead, folds away).
 __declspec(noinline) void
 CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
     mViewStartBeat = start;
@@ -64,7 +64,14 @@ CharClipDisplay::SetStartEnd(float start, float end, bool resetZoom) {
         float margin = sEm * 3.0f;
         float screenWidth = (float)(long long)TheRnd.Width();
         float textOffset = mPadding + mTextWidth + margin;
-        mStartBeat =
+        // w21-bb: 98.75 -> 100.  Storing through a reference and reading the
+        // member back by name stops MSVC forwarding the stored value, so it
+        // re-reads mStartBeat (`lfs f12, 0xc(r3)` after the second lwa) as the
+        // image does.  The reference name is ours; the same object is written
+        // and read, so behaviour is unchanged.  Reading through the same
+        // reference forwards again (93.5).
+        float &startBeat = mStartBeat;
+        startBeat =
             mCursorBeat - ((screenWidth * 0.5f - textOffset) * zoomRange) / screenWidth;
         mEndBeat = (((screenWidth - margin) - textOffset) * zoomRange)
                 / (float)(long long)TheRnd.Width()
