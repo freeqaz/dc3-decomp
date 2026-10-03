@@ -3017,17 +3017,12 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
     }
 }
 
-// w21-aj (stopped at 99.63717, 48 rows: 46 diff_arg frame-slot offsets in
-// 0xa0..0x118 + one `mr r3, r14` scheduled two rows early). The slots are
-// MSVC SPILL slots of callee-saved values interleaved with the five
-// DataArrayPtr temporaries (target: charclips 0xa0, DAP2 0xa4, transition
-// 0xa8, moveKeys 0xac, file-name 0xb0, hammoves 0xb8, movesDir 0xc0, DAP1
-// 0xc4, clipKeys 0xc8, &TheDebug 0xcc, DAP3 0xd0, "%s_%s" 0xd4, DAP4 0xd8,
-// clipSymKeys 0xdc, DAP5 0xe0); see docs/decomp/patterns/stack-slot-sharing.md
-// for the full map.  Measured with a /FAs probe (canonical, baseline
-// 99.63717): AsSymbolKeys order moveSym/clipSym/moveInst 99.25; a bound
-// `std::vector<Merger> &mergers` local 97.38; `Symbol transName` scoped into
-// `if (i > 0)` 99.05; clipName before hamMoveName 98.37; `!(x != "")` inert.
+// w21-bm: 99.637 -> 100.  w21-aj had stopped here on 46 frame-slot rows it read as
+// MSVC spill-slot packing; they were all one cause: `transName =
+// Symbol(MakeString(...))` read the new Symbol back through the ctor's returned
+// pointer, where the image (0x8247B41C `lwz r27, 0xe4(r31)`) reads the implicit
+// temporary from its frame slot -- `transName = MakeString(...)` does that, and
+// every spill slot falls into place.  The last row was the name lookup below.
 void HamDirector::OnPopulateMoves() {
     if (!mMasterClipAnim.Ptr()) {
         MILO_NOTIFY("No MasterClipAnim in HamDirector.  Did you load a song?");
@@ -3092,15 +3087,14 @@ void HamDirector::OnPopulateMoves() {
             // Find matching move variant in move_data.dta
             DataArray *pVariant = NULL;
             for (int j = 0; j < pMoveData->Size(); j++) {
-                DataArray *arr = pMoveData->Node(j).Array(pMoveData);
-                arr = arr->FindArray("name", true);
-                const char *entryName = arr->Str(1);
-                arr = pMoveData;
+                // Two named entry pointers, not one `arr` reassigned: reusing the
+                // local moved `mr r3, r14` ahead of the Symbol("name") setup.
+                DataArray *entry = pMoveData->Node(j).Array(pMoveData);
+                const char *entryName = entry->FindArray("name", true)->Str(1);
                 if (strcmp(entryName, (*moveInstSymKeys)[i].value.Str()) == 0) {
-                    arr = pMoveData->Node(j).Array(arr);
-                    DataArray *varArr = arr->FindArray("variant", true);
+                    DataArray *match = pMoveData->Node(j).Array(pMoveData);
+                    DataArray *varArr = match->FindArray("variant", true);
                     pVariant = varArr->Node(1).Array(varArr);
-                    if (pVariant) break;
                     break;
                 }
             }
