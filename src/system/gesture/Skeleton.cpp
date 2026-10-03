@@ -507,6 +507,19 @@ bool Skeleton::NeedIdentify() const {
 // beside jointPositions, and a head-bound `const Vector3 &` to the joint;
 // re-reaching the raw array through frame.mSkeletonDatas[skel_idx] is worse
 // (92.94).
+// w21-ah (97.53 canonical / 96.27 fuzzy, unchanged; same 49 rows): a
+// standalone recompile of this TU reproduces our rows, and ~30 more spellings
+// were inert or worse: both arrays via data (43 probe rows vs 46 -- joint is
+// then derived from the raw walker, still two walkers), a rawPositions /
+// PaddedJointPos* / array-reference local, a `const int *` state local, a
+// Transform* / TrackedJoint* member binding (61-67), the jointPositions local
+// moved to feed the MakeCameraToPlayerXfm loop (42, still walkers), tj as a
+// pointer, every tj-vs-subscript mix for the two tail stores (97-109), a
+// separate `k` counter for either array, a byte-offset raw read, a guarded
+// do/while, `j != 0` arm order, and the decomp-synth permuter (497 variants,
+// best +0.06 fuzzy via member_ref_bind -- not taken).  The clip-plane copy at
+// the tail (image z,w,x,y order) is a scheduling knock-on of the same
+// register cascade.
 // The three MakeString rows in the Function Call Diff are ICF folds (the assert
 // format strings), not wrong callees.  Control flow is faithful: the `beq` at
 // 0x82436B24 goes to Init() and the `bne` two instructions later returns.
