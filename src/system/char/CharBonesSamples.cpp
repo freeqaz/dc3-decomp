@@ -386,6 +386,17 @@ void CharBonesSamples::Print() {
     }
 }
 
+// w21-aq: stopped with 16 rows left (99.7 normalized), none of them a value:
+// (1) the image forms every `mStart + mOffsets[TYPE_ROTX]` at a loop ENTRY as
+// off+start (`add rX, rRotx, rStart`) where ours forms start+off, plus the
+// register naming that follows (rows 70/163/202/236-247/273-275/320); the
+// QUAT/END entries agree.  (2) the kCompressNone quat loop: the image computes
+// the ROTX end bound before `b` into the loop test, ours jumps one instruction
+// earlier onto the shared loop-bottom `add` (1 delete + 1 branch row) --
+// identical behaviour, a tail-merge choice.  Measured inert: spelling the ROTX
+// expressions offset-first (`mOffsets[TYPE_ROTX] + mStart`), and through the
+// CharBones::RotXOffset() accessor.  MSVC canonicalises the operand order, so
+// the source text of the sum does not reach it.
 void CharBonesSamples::Relativize(CharClip *clip) {
     auto& bones = mBones;
     if (bones.empty())
