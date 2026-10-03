@@ -67,6 +67,19 @@ const char *CacheWav(const char *file, CacheResourceResult &result) {
     // w13-e, also inert (93.3%, same 7 rows): `while (r > 0) { dst = 0; break; }`,
     // `do { if (r <= 0) break; dst = 0; } while (0)`, a switch on the test, an
     // `else dst = sCacheWavBuf;` arm, and the ternary.  Every one if-converts.
+    // w21-bc (93.3, same 7 rows; stopped). Standalone cl.exe probe, ~40
+    // spellings. The ONLY shape that stops the if-conversion is a third arm:
+    //   if ((int)result > 0) dst = nullptr;
+    //   else if ((int)result < 0) dst = sCacheWavBuf;   // a no-op: dst already is
+    // -> 98.6 in the real build, 2 rows left (retail's `ble` lands on an empty
+    // `b` trampoline at 0x82768B08 we do not emit). NOT shipped: the extra arm
+    // is an invented no-op statement; flagged to the coordinator instead.
+    // Also inert here (all if-convert or duplicate ~String): strcpy() for the
+    // copy loop (byte-identical loop, kept the original spelling), a block-
+    // scoped String, `bool failed`, `0 < result`, `>= kCacheUnknownExtension`,
+    // `!= kCacheUnnecessary && != kCacheSuccessful` (different code), an
+    // if (!UsingCD()) { ... } wrapper with one return, `ret = 0; if (<= 0)
+    // ret = dst;` (bgt + mr: different), for(;;)/break, goto to a label.
     if ((int)result > 0)
         dst = nullptr;
     return dst;
