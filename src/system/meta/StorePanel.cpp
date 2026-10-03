@@ -113,6 +113,13 @@ bool StorePanel::Exiting() const {
     return UIPanel::Exiting();
 }
 
+// w20-f: the image's three local statics sit at scope indices 30/65/69
+// (?BO@/?EB@/?EF@, map atexit names); the do/while MILO_ASSERT spelling gave
+// 34/70/74.  Two MILO_ASSERT_IF (3 scopes each, see
+// docs/decomp/patterns/fixable-scope-index.md) plus the `else if` for the
+// single-item branch reproduce all three; the instructions are unchanged.
+// Which -1 construct the original used in the second span is not
+// determined by the indices alone.
 void StorePanel::Poll() {
     UIPanel::Poll();
     if (!mLoadOk)
@@ -138,10 +145,10 @@ void StorePanel::Poll() {
         NetCacheLoader *loader = *cur;
         if (loader->IsLoaded()) {
             if (loader == mArtLoader) {
-                MILO_ASSERT(mPendingArtCallback, 0x167);
+                MILO_ASSERT_IF(mPendingArtCallback, 0x167);
                 int size = loader->GetSize();
                 char *pBuffer = loader->GetBuffer();
-                MILO_ASSERT(pBuffer, 0x16d);
+                MILO_ASSERT_IF(pBuffer, 0x16d);
                 RndBitmap bmap;
                 BufStream stream(pBuffer, size, true);
                 bmap.Load(stream);
@@ -196,26 +203,24 @@ void StorePanel::Poll() {
                         mPostPurchaseJob = job;
                         purchaseMade = true;
                     }
-                } else {
+                } else if (mCheckout.first != 0 && !mCheckout.first->isPurchased) {
                     // Single item checkout
-                    if (mCheckout.first != 0 && !mCheckout.first->isPurchased) {
-                        if (mPurchaser->PurchaseMade()) {
-                            enumFinished = true;
-                            mCheckout.first->isPurchased = true;
-                            static Message msg("enum_finished");
-                            HandleType(msg.mData);
-                            TheUI->Handle(msg.mData, false);
-                        } else if (mPurchaser->NeedsEnum() && mCheckout.second != 0) {
-                            PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
-                                    this,
-                                    mCheckout.second->GetPadNum(),
-                                    mCheckout.first->songID,
-                                    mPurchaser->Source(),
-                                    mPurchaser->UserIndex()
-                                );
-                            mPostPurchaseJob = job;
-                            purchaseMade = true;
-                        }
+                    if (mPurchaser->PurchaseMade()) {
+                        enumFinished = true;
+                        mCheckout.first->isPurchased = true;
+                        static Message msg("enum_finished");
+                        HandleType(msg.mData);
+                        TheUI->Handle(msg.mData, false);
+                    } else if (mPurchaser->NeedsEnum() && mCheckout.second != 0) {
+                        PostPurchaseEnumJob *job = new PostPurchaseEnumJob(
+                                this,
+                                mCheckout.second->GetPadNum(),
+                                mCheckout.first->songID,
+                                mPurchaser->Source(),
+                                mPurchaser->UserIndex()
+                            );
+                        mPostPurchaseJob = job;
+                        purchaseMade = true;
                     }
                 }
             }
