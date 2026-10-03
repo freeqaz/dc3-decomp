@@ -178,6 +178,20 @@ void RndAnimatable::FireFlowLabel(Symbol s) {
     // `mRefs.begin()` / `&mRefs` directly instead of through Refs() is inert,
     // so the home is not the const-reference return of Refs().  Same row in
     // EventTrigger::Cleanup (0x60(r31)).
+    // w21-x (99.17, same single row): behaviour re-checked against the image
+    // (null-owner and null-listener arms continue the loop, a delivered event
+    // breaks to the flow_label_fired export).  Standalone cl.exe probe of
+    // this loop reproduces the store exactly; it needs BOTH the begin() init
+    // and the &Refs() test on the vbase-adjusted &mRefs plus an EH state
+    // (gone when the test is `!= 0` or the init is a constant).  Inert or
+    // worse, all measured in the probe: `it != Refs().end()` (2 stores),
+    // const-ref operator!=, `&Refs() != it`, `it.operator ObjRef*()`,
+    // `it.operator++()`, Hmx::Object::Refs() qualified, mRefs direct,
+    // begin() returning `next` implicitly, a member-init vs body-assign
+    // iterator ctor, non-const operator ObjRef*/->, `iterator &operator++`.
+    // Removing it only via shapes the image does not have: a
+    // `const ObjRef &refs` local (latch stops recomputing &mRefs) or a
+    // static_cast<const Hmx::Object &> on the init (adds a null test).
     for (ObjRef::iterator it = Refs().begin(); (ObjRef *)it != &Refs(); ++it) {
         Hmx::Object *owner = it->RefOwner();
         if (owner && owner->ClassName() == "AnimTask") {

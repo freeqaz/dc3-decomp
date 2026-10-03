@@ -2049,33 +2049,19 @@ void RndText::FitTextScroll() {
         mWidth = 0.0f;
         mWrapEnabled = true;
 
-        // Residual 7 rows (98.276).  The image READS mStyles[0].mFont TWICE and
-        // tests it twice, the first read into a VOLATILE register that is then
-        // discarded, with a dead home of the Style base between them:
-        //     lwz    r10, 0x40(r11)      first read, volatile, test only
-        //     cmplwi cr6, r10, 0x0
-        //     bne    cr6, .L_second      (skips ONLY the store below)
-        //     stw    r11, 0x54(r31)      dead home of the Style base
-        //  .L_second:
-        //     lwz    r23, 0x40(r11)      second read, kept for CharAdvance
-        //     cmplwi cr6, r23, 0x0
-        //     bne    cr6, .L_body
-        //     <MILO_ASSERT fail>
-        // The assert's stringified expression is the 4-byte literal "font"
-        // (??_C@_04EFPADHIC@font?$AA@, equal on both sides), so a local named
-        // `font` really does exist -- it is not `MILO_ASSERT(mStyles[0].mFont)`.
-        // With a raw-pointer copy MSVC CSEs the assert's test with the `if`'s
-        // and emits ONE read, which is where our 7 rows come from.
-        // THREE REFUTATIONS, all measured here (w9-e 2026-09-30):
-        //   `RndFontBase *&font = mStyles[0].mFont;`  does not compile --
-        //       Style::mFont is ObjPtr<RndFontBase> (0x34), not a raw pointer.
-        //   `const ObjPtr<RndFontBase> &font = ...;`  98.276 -> 95.595.
-        //   keep `font` for the assert and re-spell the guard as
-        //       `if (mStyles[0].mFont)`                98.276 -> 96.099.
-        // So the second read is real but neither an ObjPtr reference nor a
-        // second textual mention reproduces it.  Left as the shape that scores
-        // best.
-        RndFontBase *font = mStyles[0].mFont;
+        // w21-x: 98.276 -> 100 (all 232 rows equal).  This is the same
+        // style-font fallback every other RndText site writes
+        // (`s->mFont ? s->mFont : mStyles[0].mFont`, see ParseMarkup and
+        // UpdateText), here with the style pinned to index 0.  The image keeps
+        // both ternary arms: the condition reads 0x40(r11) and the else arm
+        // re-evaluates mStyles[0] (its dead `stw r11, 0x54(r31)` home), then
+        // the join reads the pointer again -- the "two reads" earlier lanes
+        // could not reproduce with a plain `font = mStyles[0].mFont` (98.276),
+        // an ObjPtr reference (95.6), `.Ptr()` or a `Style &` binding (inert).
+        // Writing both arms as mStyles[0] lets MSVC merge them (98.9).  Same
+        // value on every path: both arms name mStyles[0].mFont.
+        Style *style = &mStyles[0];
+        RndFontBase *font = style->mFont ? style->mFont : mStyles[0].mFont;
         MILO_ASSERT(font, 2718);
         if (font) {
             unsigned short charCode;
@@ -2571,18 +2557,15 @@ scan_close:
     return cur;
 }
 
-// Residual 31 rows (98.7952) but only TWO are charged by the canonical ruler --
-// the other 29 are one r29<->r30 exchange between `this` and the style loop's
-// byte-offset induction variable (target binds `this` to r30, we bind it to
-// r29), which normalization forgives.  The two live rows are a single store
-// position inside the MILO_NOTIFY argument marshalling:
-//     target   lwz r10, 0x4(r30) / stw r11, 0x50(r31) / lwz r11, 0x4(r10)
-//     base     stw r11, 0x50(r31) / lwz r11, 0x4(r29) / lwz r11, 0x4(r11)
-// i.e. the image begins inlining Name() BEFORE homing the previous MakeString
-// argument.  Same shape as DxMesh::DrawFur (an allocation order that follows
-// from where one computation sits), so the lever to look for is a statement
-// that moves the `this`/IV creation order, not a declaration reorder.
-// Diagnosed only (w9-e 2026-09-30), nothing attempted.
+// w21-x: 98.7952 -> 100 (all 166 rows equal).  The earlier 31-row residual
+// (this in r29 instead of r30, and the fontName home stored before the
+// vbptr load of the inlined Name()) came from spelling the font check as a
+// three-armed if/else that assigned a `fontName` local.  The original is one
+// combined test with the "NULL" fallback as a ternary inside the
+// MILO_NOTIFY arguments; MSVC jump-threads the second `font` test away, so
+// the block shape is identical and only the allocation order changes.
+// Same behaviour on every path: null font -> "NULL"; a non-RndFont font ->
+// its Name(); an RndFont -> next style.
 void RndText::UpdateText() {
     if (mFitType == kFitEllipsis) {
         FitTextJust();
@@ -2600,23 +2583,15 @@ void RndText::UpdateText() {
             for (unsigned int i = 0; i < (unsigned int)mStyles.size(); i++) {
                 RndFontBase *font =
                     mStyles[i].mFont ? mStyles[i].mFont : mStyles[0].mFont;
-                const char *fontName;
-                if (font != 0) {
-                    if (font->ClassName() != RndFont::StaticClassName()) {
-                        fontName = font->Name();
-                    } else {
-                        continue;
-                    }
-                } else {
-                    fontName = "NULL";
+                if (!font || font->ClassName() != RndFont::StaticClassName()) {
+                    MILO_NOTIFY(
+                        "%s %s requests scrolling, but uses a font that does not support it (%s)",
+                        PathName(this), Name(), font ? font->Name() : "NULL"
+                    );
+                    mFitType = kFitStretch;
+                    FitTextEllipsis();
+                    return;
                 }
-                MILO_NOTIFY(
-                    "%s %s requests scrolling, but uses a font that does not support it (%s)",
-                    PathName(this), Name(), fontName
-                );
-                mFitType = kFitStretch;
-                FitTextEllipsis();
-                return;
             }
             FitTextScroll();
             return;

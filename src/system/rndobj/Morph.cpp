@@ -126,6 +126,32 @@ float RndMorph::InterpWeight(const Keys<float, float> &keys, float frame) {
     // rows instead of 17.  Writing the else arm as
     // `Interp(prev->value, ...)` rather than `Interp(prevVal, ...)` makes no
     // difference: 90.74 either way.
+    // w21-x (94.41, same 17 rows): behaviour re-checked against the image --
+    // null prev -> 0; spline arm returns 0 when both values compare equal to
+    // 0 (NaN takes the body on both sides) and otherwise
+    // ((f2*ref + (f2*-3)*0.5)*ref)*ref + prev; Interp arm (next-prev)*ref+prev.
+    // Mechanism, from a standalone cl.exe probe that reproduces our listing
+    // exactly: the Interp arm's register choice is already the image's
+    // (prev in f0, ref f13, next f12); what differs is the SPLINE arm, where
+    // MSVC gives prevVal f12 / ref f13 / the f2 chain f0 while the image has
+    // prevVal f0 / ref f12 / f2 chain f13.  Once both arms load prev into f0
+    // the image's post-allocation hoist of that one `lfs f0` falls out.
+    // Probe-measured inert (spline-arm allocation never moves): RB3's shared
+    // function-scope `prevVal` assigned in each arm (also 88.9 in-tree: its
+    // `f2 * -3.0f * 0.5f` folds to -1.5); `ret` declared first; prev->value
+    // read directly; an early `return 0`; a nextVal local; the result written
+    // `(X) * ref * ref + prevVal` / `prevVal + ...` / `ref * (ref * X)`;
+    // `2.0f * prevVal`; `!= 0` tests; a __forceinline spline helper taking
+    // (Key*, Key*, float), (const float &, const float &, float),
+    // (float, const float &, float) or (ref, prev, next).  Worse: hoisting
+    // prevVal above `if (mSpline)` (prev lands in f12 and the next-pointer
+    // load hoists with it, whatever the else arm reads), `if (!mSpline)`
+    // first, or a shared `ret` with one exit.
+    // Native note: the image multiplies (X*ref)*ref; `ref * ref * (X)` is the
+    // same instruction stream here but clang evaluates (ref*ref)*X, so the
+    // native result can differ in the last ulp (it already does through the
+    // fused fmadds).  Left as is: no PPC gain, and the rule is no native
+    // behaviour change without one.
     if (prev) {
         if (mSpline) {
             float prevVal = prev->value;
