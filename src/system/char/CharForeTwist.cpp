@@ -106,7 +106,7 @@ void CharForeTwist::Poll() {
     // register rows).  Swapping the second Dot's operands (Dot(v98, m.x)) is
     // byte-inert.  `Transform &` (RB3's spelling) does not compile: WorldXfm()
     // returns const.  The fourth callee-saved FPR is still not source-reachable.
-    // w21-al: 91.29 -> 93.8 (32 rows left: 23 diff_arg, 2 replace, 4 insert,
+    // w21-al: 91.29 -> 93.67 (32 rows left: 23 diff_arg, 2 replace, 4 insert,
     // 3 delete, all still inside the Dot/Cross/Dot block).  Binding
     // parentxfm.m.y to a local reference ONCE (lever (a); rb3-xenon spells
     // py/hz this way) is what buys the image's fourth callee-saved FPR: the
