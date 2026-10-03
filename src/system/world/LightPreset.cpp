@@ -39,6 +39,25 @@
  * is a per-TU inlining-order decision.  Inert here: an explicit instantiation of
  * Set<Spotlight>, or of erase<Spotlight>, after the vector instantiation below. */
 
+/* w21-d 2026-10-03 -- still 83.115944 (rows 39-55: the inlined Set body, the
+ * `bl erase` recursion and SetObjConcrete; plus an r26/r28/r29 permutation).
+ * MEASURED RULE, 19 of 19 TUs in our build: erase<T> inlines Set<T> exactly
+ * when erase's COMDAT section is numbered BEFORE Set's (MSVC compiles in that
+ * order; Set already compiled => not inlined).  The image follows the same
+ * rule: in its LightPreset.obj erase<Spotlight> (dtk sec 400) precedes
+ * Set<Spotlight> (421).  Ours numbers all four Set<T> together at ~1298-1304
+ * (just after deque::_M_pop_front_aux), erase<T> at 2214-2353.  The image
+ * keeps E/L/SD non-inlined (map: 0x823EA0B8, folded with FlowManager) and only
+ * Spotlight inlined, so whatever pulls Set<Spotlight> early here is per-type.
+ * Tried, all inert on the section order and the score: explicit erase<Spotlight>
+ * instantiation at file top and at file end; `template class
+ * ObjPtrVec<Spotlight, ObjectDir>;` (moves erase to 1995, Set stays ~1319);
+ * removing Replace's direct mSpotlights.Set call (diagnostic only -- Set moved
+ * EARLIER, to 861, so Replace is not what pulls it); reordering the Remove*
+ * definitions to the image's S/E/L/SD compile order.  Same rule explains the
+ * other mismatches: CharClipGroup, RhythmDetectorGroup (ours call, image
+ * inlines) and FlowManager<FlowNode> (ours inlines, image calls). */
+
 #include "SpotlightDrawer.h"
 #include "obj\ObjPtrVec_impl.h"
 #include "math\Mtx.h"
