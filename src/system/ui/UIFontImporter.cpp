@@ -217,7 +217,14 @@ BEGIN_LOADS(UIFontImporter)
     d >> mPunctuation;
     d >> mUpperEuro;
     d >> mLowerEuro;
-    if (d.rev > 0) {
+    // w20-f BEHAVIOUR FIX: the DC3-only fields are gated on the ALT rev, not
+    // rev.  Image: rev lives in r26 (clrlwi r26,r11,16), altRev in r25
+    // (srwi r25,r11,16), and these four tests read r25 -- 0x827ACA6C
+    // `cmpwi cr6, r25, 0x0`, 0x827ACAD0 `cmpwi cr6, r25, 0x4`, 0x827ACB7C
+    // `cmpwi cr6, r25, 0x1`, 0x827ACB94 `cmpwi cr6, r25, 0x2`.  RB3's importer
+    // has none of these fields and gates mFontSupersample on rev > 1, which
+    // stays on rev here.
+    if (d.altRev > 0) {
         d >> mRussian;
         d >> mPolish;
         d >> mIncludeLocale;
@@ -227,7 +234,7 @@ BEGIN_LOADS(UIFontImporter)
     String minus;
     d >> plus;
     d >> minus;
-    if (d.rev < 4) {
+    if (d.altRev < 4) {
         ASCIItoWideVector(mPlus, plus.c_str());
         ASCIItoWideVector(mMinus, minus.c_str());
     } else {
@@ -244,10 +251,10 @@ BEGIN_LOADS(UIFontImporter)
     }
     d >> mFontWeight;
     d >> mItalics;
-    if (d.rev > 1) {
+    if (d.altRev > 1) {
         d >> mDropShadow;
     }
-    if (d.rev > 2) {
+    if (d.altRev > 2) {
         d >> mDropShadowOpacity;
     }
     d >> mPitchAndFamily;
