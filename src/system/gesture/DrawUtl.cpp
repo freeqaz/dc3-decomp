@@ -65,6 +65,13 @@ namespace {
                 // `Interp(0.6f, 1.0f, meters)`, `/ 1000.0f`, a `minBright = 0.6f`
                 // local.  Inlining meters into one expression folds 0.001 * 0.4
                 // into one constant (92.7, worse).
+                // w21-bl (still 99.67): standalone cl.exe probe reproduces ours
+                // (f11 0.6 / f12 0.4 / f13 0.001) for 15 spellings -- 0.6f
+                // first (`0.6f + meters * 0.4f`), `ramp = 0.6f; ramp += ...`,
+                // function-scope lo/range/scale locals (const and not), operand
+                // order flips, Interp(0.6f, 1.0f, meters). The image's order
+                // (0.6, 0.001, 0.4 from f13 down) never appears; an inline
+                // Interp over the whole expression folds 0.001*0.4 (0x39d1b717).
                 float meters = (float)(depth % 1000) * 0.001f;
                 float ramp = meters * (1.0f - 0.6f) + 0.6f;
                 int r = depth ? (int)(ramp * 64.0f) : 0;

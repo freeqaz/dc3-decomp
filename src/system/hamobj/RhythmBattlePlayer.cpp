@@ -677,6 +677,13 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
 // the li 0 above the mStealPart test), after the mStealPart block 99.1, after
 // skelIdx 99.1, just before `if (mTrickSymbol == none)` 99.3 (zero and i10
 // split, extra mr); ShouldAutoPass as if/return true/return false: identical.
+// w21-bl: `int i10 = 0;` declared just before `mTrickSymbol = none;` (after
+// the static Symbol block) closes the li 1/li 0 order, the this=r30 cascade and
+// the autotrick addi slot at once (99.554 -> 100.000 normalized, i.e. 100
+// modulo register permutation) -- 15 rows left, all one f29<->f30 swap: the
+// image keeps 1.0f in f29 and -1.0f in f30, ours the reverse. Same values, same
+// uses. Tried: explicit 1.0f/-1.0f literals (identical); Min/Max helpers are
+// fsel shapes the image does not have.
 void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     mFramesSinceLastTrigger++;
     if (mStealPart) {
@@ -687,7 +694,6 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     );
     static UIPanel *sRhythmDetectorPanel =
         ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
-    int i10 = 0;
     if (sRhythmDetectorPanel && skelIdx != -1 && sRhythmDetectorPanel->LoadedDir()) {
         String name = MakeString("RhythmDetectorX%d.rhy", skelIdx);
         RhythmDetector *rd =
@@ -732,6 +738,7 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     static Symbol rhythmbattle_trickpose("rhythmbattle_trickpose");
     static Symbol rhythmbattle_trickgetlow("rhythmbattle_trickgetlow");
     static Symbol rhythmbattle_trickjump("rhythmbattle_trickjump");
+    int i10 = 0;
     mTrickSymbol = none;
     mMoveConsistencyScore = mMovePresenceAccumulator / mWindowElapsedTime;
     // REFUTED (w7-i): hoisting `none` into a local read before the division and
