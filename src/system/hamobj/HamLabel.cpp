@@ -68,41 +68,23 @@ void HamLabel::PostLoad(BinStream &bs) {
 }
 
 void HamLabel::Count(int i1, int i2, float f3, Symbol s) {
+    // w21-at: 99.96 -> 100 (fuzzy 100).  ONE Key<float> local, reused for both
+    // pushes, with the second frame formed by `+= f3` on the stored first
+    // frame.  The image's f30/f31 assignment, its frame-before-value store
+    // order into 0x54/0x50(r1) for BOTH keys, and `fadds f0, f31, f30` all
+    // follow from that; two temporaries (named or not), a hoisted sum, or a
+    // reused key assigned `f1 + f3` from a separate local all kept the
+    // allocator swap that w7-ak/w8-i/w9-a recorded as a floor.  Same values:
+    // the default ctor's zeroes are dead stores, and frame + f3 is the same
+    // single add.
     mCountKeys.clear();
-    float f1 = TheTaskMgr.UISeconds() * 1000;
-    mCountKeys.push_back(Key<float>(i1, f1));
-    // RESIDUAL (w7-ak, 99.96 canonical): 5 rows, ONE cause -- the two
-    // callee-saved FPRs are assigned the other way round.  The image puts the
-    // `f3` parameter in f30 (`fmr f30, f1`, idx 6) and the UISeconds()*1000
-    // product in f31; we do the reverse.  Everything else follows: the two
-    // `stfs` into the Key<float> temp at 0x50(r1)/0x54(r1) are emitted in the
-    // opposite order for the FIRST key only (the second key's pair is already
-    // instruction-identical), and idx 30's `fadds f0, f31, f30` vs our
-    // `fadds f0, f30, f31` is the SAME source expression `f1 + f3` -- the
-    // COMMUTATIVE_OP_ORDER detector is reading the register swap, not an
-    // operand-order difference.  Both live ranges start where the image's do,
-    // so this is an allocator tie-break, not a liveness difference.
-    // NEGATIVE RESULT: inlining `f2` (push_back(Key<float>(i2, f1 + f3))) is
-    // exactly inert -- same 5 rows, same registers.
-    // NEGATIVE RESULT (w8-i): hoisting `float f2 = f1 + f3;` ABOVE the first
-    // push_back -- so that the sum, not the parameter, is the value whose live
-    // range opens first -- is equally inert: same 5 rows, same f30/f31
-    // assignment, 99.96.  The allocator is not reading source live-range order.
-    // NEGATIVE RESULT (w9-a): five more spellings, each a full ninja.  Four are
-    // exactly inert at 99.95556 with the same 5 rows -- an explicit `float base
-    // = f3;` copy at the top so the product's live range opens first, both
-    // floats declared (uninitialised) at the top and assigned later, and two
-    // NAMED `Key<float>` temporaries instead of unnamed arguments.  Two are
-    // worse and say what the shape is load-bearing for: hoisting the
-    // UISeconds()*1000 product ABOVE mCountKeys.clear() is 64.644 (it has to be
-    // computed after the clear() call), and moving `mCountToken = s;` to the
-    // front is 86.489 (the Symbol store belongs at the end).  The use counts
-    // say the image is right and we are not -- the product is read twice, `f3`
-    // once, so the product should be allocated first and take f31 -- but no
-    // source ordering we can write changes which of the two MSVC processes
-    // first.  Allocator floor.
-    float f2 = f1 + f3;
-    mCountKeys.push_back(Key<float>(i2, f2));
+    Key<float> key;
+    key.frame = TheTaskMgr.UISeconds() * 1000;
+    key.value = i1;
+    mCountKeys.push_back(key);
+    key.frame += f3;
+    key.value = i2;
+    mCountKeys.push_back(key);
     mCountToken = s;
 }
 
