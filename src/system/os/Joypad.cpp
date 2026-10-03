@@ -654,6 +654,21 @@ void JoypadPollCommon() {
                 Symbol type = JoypadControllerTypePadNum(i);
             }
 
+            // w21-bg: 96.699 -> 97.003 normalized.  The "one cause" below was
+            // not the only one: the sensors copy further down was a memcpy,
+            // the image copies element by element (unrolled lwz/stw through
+            // &sensors with a dead `addi r11, r23, 0x24` dest pointer), and
+            // that alone moved the 0xb0..0x108 slot block (sensors 0xf8,
+            // pro_guitar 0xd0, Symbol temp 0xe8) to the image's layout.
+            // Still open: the third FPR (0.0f hoisted to entry; frame 0x12e0
+            // vs 0x12d0) and the r23/r24 + r18/r19 renumbering it drags
+            // (~165 rows, mostly register-only).  Inert this wave (standalone
+            // cl.exe probe, FPR count + frame): dequant else-arm as `x = 0`,
+            // default-then-override, ternary, `k < n`, direct member stores,
+            // 1/127 multiply; y computed/declared before x; pressures reset
+            // as `= 0`; sensors `= { 0 }` declared in the loop (frame 0x12d0
+            // but padData moves to 0x120, wrong); a nested 2-iteration stick
+            // quantise loop (not unrolled like the image).
             // RESIDUAL ROOT CAUSE (w7-bf, 96.72617 canonical, 125 rows -- ONE
             // cause).  We hold the literal 0.0f in a THIRD callee-saved FPR for
             // the whole function; the image does not, and every other row falls
