@@ -334,13 +334,14 @@ EofType ChunkStream::Eof() {
         // temp as at every scalar swap site, instead of the reversed pair we
         // emitted.  24 rows -> 20, raw 96.993 -> 97.093, nothing regressed.
         File *file = mFile;
-        // w21-ag: 97.97 -> 100 (all 300 rows equal).  mCurBufOffset is read
-        // THROUGH the freshly stored mCurChunk, not from mChunkInfo.mMaxChunkSize:
-        // mCurChunk = mChunks - 1 points at mMaxChunkSize (the int just before
-        // mChunks[0] in ChunkInfo), so it is the same word -- but a read through
-        // a pointer cannot be hoisted above the two pointer stores, which is
-        // exactly why the image's `lwz r11, 0x30(r31)` sits after the 0x8ac /
-        // 0x8b0 stores (827E0A10) and the 0x888 store comes last.  The earlier
+        // w21-ag: 97.97 -> 100 (all 300 rows equal).  mCurBufOffset is spelled
+        // as a read through the freshly stored mCurChunk, not as
+        // mChunkInfo.mMaxChunkSize: mCurChunk = mChunks - 1 points at
+        // mMaxChunkSize (the int just before mChunks[0] in ChunkInfo), so it is
+        // the same word.  MSVC folds the address back to the direct
+        // `lwz r11, 0x30(r31)` the image has, but the dependence on the pointer
+        // store keeps that load after the 0x8ac / 0x8b0 stores (827E0A10), and
+        // the 0x888 store comes last -- the image's order.  The earlier
         // RESIDUAL note (w7-bp/w7-bs, "no member-store order reaches it",
         // "ordering dependence the literal does not carry") was this load.
         // Statement order is RB3's.
