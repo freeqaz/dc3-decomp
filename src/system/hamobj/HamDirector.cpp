@@ -3508,6 +3508,17 @@ void Dc3KneeLog(const char *evt) {
 }
 #endif
 
+// w21-ad (98.53 -> 99.4): two levers -- a fresh, call-scoped out-param pair
+// per GetPracticeFrames call (closed the 0x50/0x58 swap) and `overlayB`
+// declared nullptr at FUNCTION scope (after player1): the image's `li r28, 0`
+// at the top IS overlayB's web, so the post-proc block no longer needs the
+// extra `mr` of the zero across.  Remaining: 41 register rows (zero r28 vs
+// r25, songAnim r25 vs r26, p1anim, backupClipPlayer, &TheTaskMgr) and the
+// fmuls/fmadds operand choice (3 rows).  Inert at 99.4: overlayA hoisted too;
+// overlayB placed after songAnim; both orders of the noise sum and a
+// constant-first `dt * frame`.  Not tried on purpose: `frame / 300.0f` -- the
+// image multiplies by the 0x3b5a740e reciprocal, so a division would move
+// native rounding away from it.
 // RESIDUAL (w7-aq, 98.3 canonical): 40 of the remaining 52 rows are one
 // callee-saved 4-cycle -- the image colours {0-const: r28, player1: r27,
 // songAnim: r25, p1anim: r26} where we get {r25, r28, r26, r27}, and it keeps
