@@ -107,6 +107,12 @@ void CharClipGroup::AddClip(CharClip *clip) {
 // inline end() itself is not wrong.  find<CharClip> is `f i` in the map and
 // same-TU: marking both ObjPtrVec::find templates `inline` (ObjPtrVec_impl.h)
 // was measured with a full ninja + whole-binary compare -- UP 0 / DOWN 0, inert.
+// w21-q (56.81, unchanged; same 23 rows): three more measured, each with the
+// built object -- `const ObjPtrVec<CharClip> &clips = mClips;` bound once
+// (43.0, worse: the reference splits the mNodes loads), named `e`/`f` iterators
+// compared as `f != e` (56.81), and end() taken through the NON-const overload
+// via const_cast (56.81 -- so const vs non-const end() is not what separates
+// this from LightPreset::SyncKeyframeTargets).  Behaviour matches the image.
 bool CharClipGroup::HasClip(CharClip *clip) const {
     return mClips.end() != mClips.find(clip);
 }
