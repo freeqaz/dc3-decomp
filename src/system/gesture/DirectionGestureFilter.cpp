@@ -74,6 +74,16 @@ void DirectionGestureFilterSingleUser::Update(const Skeleton &skeleton, int elap
 // round.  Inert: named radius/alpha locals in either order; the second call
 // without the `pos` reference is worse (92.25); a decomp-synth beam run
 // (6 rounds) found nothing.
+// w21-bk: ROOT CAUSE FOUND, not fixable in this file. The constant order is
+// decided by PaddedJointPos's `operator const Vector3 &()` (math/Vec.h): that
+// inline conversion is one call level the original did not have.  Standalone
+// cl.exe probe (this function, real flags): mJointPos as a plain Vector3, or
+// `struct PaddedJointPos : Vector3 { float _pad; }` (derived-to-base, no call),
+// gives the image's exact order in BOTH calls (f1<-f29 then f2<-f28; second
+// call f2 first); the conversion-operator struct reproduces our rows.  Same
+// result compiling the real TU with the PCH and only that type swapped.  The fix
+// belongs in math/Vec.h (PCH-reached, out of scope for this lane) -- flagged to
+// the coordinator; it may move every TrackedJoint reader in gesture/.
 void DirectionGestureFilterSingleUser::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
     mArcDetector.Draw(skeleton, viz);
     bool valid = IsValidSwipePosition(skeleton);

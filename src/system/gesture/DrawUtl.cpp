@@ -143,6 +143,15 @@ namespace {
         // rect.x = vx;` as the first two score 83.33, because moving the store
         // ahead of the other loads also pushes the `__real@3faaaaab` anchor
         // materialisation past the DrawUtlVec3 anchor and costs an extra `lis`.
+        // w21-bk (94.42, 4 rows: idx 5/6/10/11 -- the image's `stfs f0, 0x0(r3)`
+        // straight after the x load, ours after the y store): real-TU probe
+        // search, none reproduces the image -- all 90 dependency-valid orders
+        // of {load x/y/z into locals, store x/y/w}; Rnd&/Rnd* aliases of
+        // TheRnd; a Hmx::Rect& alias; rect.Set(); Vector2 xy pair; a
+        // `const Vector3 &` alias; Min(rect.w, 4/3 / scale) (math/Utl.h's float
+        // Min is the same fsel); fsel operand from rect.w vs vz.  The shapes
+        // that store x before loading y/z all move `lwz TheRnd` below that
+        // store (the image keeps it above), the rest leave stfs x after stfs y.
         float vx = DrawUtlVec3.x;
         float vy = DrawUtlVec3.y;
         float vz = DrawUtlVec3.z;

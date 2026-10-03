@@ -141,20 +141,15 @@ void ArcDetector::DrawPath(
 ) const {
     std::list<Vector3>::const_iterator it = path.begin();
     Vector3 prev = *it;
-    prev.z = prev.z + offset.z;
-    prev.y = prev.y + offset.y;
-    prev.x = prev.x + offset.x;
+    // w21-bk: Add(v, offset, v) in place (95.26 -> 100 in a real-TU probe):
+    // the inline Set() computes all three sums before storing, which is the
+    // image's z/x/y prev stores and its x-store-first loop body.  Same math as
+    // the earlier per-component `v.c = v.c + offset.c` spelling.
+    Add(prev, offset, prev);
     Vector3 cur;
-    // w15-a (95.26 canonical, 15 rows): the image stores cur.x straight after its
-    // fadds (offset.x + cur.x) and only then loads cur.y/cur.z; prev's stores go
-    // z, x, y.  Measured INERT or worse: `cur += offset;` (95.26), prev in z,x,y
-    // order plus `offset.x + cur.x` (95.3 normalized, more rows).  /fp:fast
-    // scheduling of the three adds; not steered from here so far.
     for (++it; it != path.end(); ++it) {
         cur = *it;
-        cur.x = cur.x + offset.x;
-        cur.y = cur.y + offset.y;
-        cur.z = cur.z + offset.z;
+        Add(cur, offset, cur);
         viz.DrawLine3D(prev, cur, 0.01f, color, NULL);
         prev = cur;
     }
