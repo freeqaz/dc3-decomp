@@ -542,31 +542,27 @@ void DepthBuffer3D::DrawShowing() {
             }
             if (!rows.empty()) {
                 std::sort(rows.begin(), rows.end());
+                // w21-f: Round() from math/Utl.h -- the image converts to int
+                // inside each arm (fadds/fsubs 0.5 -> fctiwz on both paths).
                 int n = (int)rows.size() - 1;
-                depthZoomParams[0] = (float)(n * 10) * 0.005f;
-                depthZoomParams[0] = (depthZoomParams[0] <= d45) ? (depthZoomParams[0] - d51) : (depthZoomParams[0] + d51);
-                depthZoomParams[1] = (float)(n * 0x14) * 0.005f;
-                depthZoomParams[1] = (depthZoomParams[1] <= d45) ? (depthZoomParams[1] - d51) : (depthZoomParams[1] + d51);
-                d41 = (float)n * 0.995f;
-                d41 = (d41 <= d45) ? (d41 - d51) : (d41 + d51);
-                int a = rows[(int)d41] + 1;
-                int b = rows[(int)depthZoomParams[0]] - 1;
-                int c = (rows[(int)depthZoomParams[1]] - 1) - (rows[(int)depthZoomParams[0]] - 1);
+                int i5 = Round((float)(n * 10) * 0.005f);
+                int i10 = Round((float)(n * 0x14) * 0.005f);
+                int i995 = Round((float)n * 0.995f);
+                int a = rows[i995] + 1;
+                int b = rows[i5] - 1;
+                int c = (rows[i10] - 1) - (rows[i5] - 1);
                 depthZoomParams[1] = (float)a;
                 depthZoomParams[0] = (float)(depthZoomParams[1] - (float)(depthZoomParams[1] - ((float)b - (float)c)));
             }
             if (!depths.empty()) {
                 std::sort(depths.begin(), depths.end());
                 float dn = (float)((int)depths.size() - 1);
-                d47 = dn * 0.009999999776482582f;
-                d47 = (d47 <= d45) ? (d47 - d51) : (d47 + d51);
-                d41 = dn * 0.9900000095367432f;
-                d41 = (d41 <= d45) ? (d41 - d51) : (d41 + d51);
-                d50 = dn * d51;
-                d50 = (d50 <= d45) ? (d50 - d51) : (d50 + d51);
-                float lo = (float)depths[(int)d50];
-                float hi = (float)depths[(int)d41];
-                float spread = lo - (float)depths[(int)d47];
+                int i1 = Round(dn * 0.009999999776482582f);
+                int i99 = Round(dn * 0.9900000095367432f);
+                int i50 = Round(dn * d51);
+                float lo = (float)depths[i50];
+                float hi = (float)depths[i99];
+                float spread = lo - (float)depths[i1];
                 if (spread <= (hi - lo)) {
                     spread = hi - lo;
                 }
