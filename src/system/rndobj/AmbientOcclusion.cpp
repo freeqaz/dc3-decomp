@@ -157,6 +157,14 @@ bool IsValidObject(Hmx::Object *obj) {
     return mesh || group || dynamic_cast<WorldInstance *>(obj);
 }
 
+// w21-bi: name is ours. The image's hoisted RTTI constants in both gatherers
+// below are materialised as if the WorldInstance cast reached the loop body
+// AFTER the dynamic_cast<T *> (it is executed before it) -- the shape MSVC
+// gives an inlined callee, whose IR is spliced in after the caller's own.
+inline bool IsWorldInstance(Hmx::Object *obj) {
+    return dynamic_cast<WorldInstance *>(obj);
+}
+
 template <class T>
 unsigned int GatherObjectsFromDir(ObjectDir *dir, std::vector<T *> &objects) {
     RndDir *rDir = dynamic_cast<RndDir *>(dir);
@@ -164,8 +172,7 @@ unsigned int GatherObjectsFromDir(ObjectDir *dir, std::vector<T *> &objects) {
     if (showing) {
         for (ObjDirItr<Hmx::Object> it(dir, true); it != NULL; ++it) {
             ObjectDir *curDir = dynamic_cast<ObjectDir *>(&*it);
-            if (curDir && curDir != dir
-                && dynamic_cast<WorldInstance *>((Hmx::Object *)curDir)) {
+            if (curDir && curDir != dir && IsWorldInstance(curDir)) {
                 GatherObjectsFromDir(curDir, objects);
             }
             T *curObj = dynamic_cast<T *>(&*it);
@@ -189,7 +196,7 @@ unsigned int GatherObjectsFromGroup(RndGroup *grp, std::vector<T *> &objects) {
                 GatherObjectsFromGroup(subGrp, objects);
             }
             ObjectDir *curDir = dynamic_cast<ObjectDir *>(*it);
-            if (curDir && dynamic_cast<WorldInstance *>((Hmx::Object *)curDir)) {
+            if (curDir && IsWorldInstance(curDir)) {
                 GatherObjectsFromDir(curDir, objects);
             }
             T *curObj = dynamic_cast<T *>(*it);
