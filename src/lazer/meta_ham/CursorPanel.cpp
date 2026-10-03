@@ -36,6 +36,12 @@ void CursorPanel::Poll() {
     // / `lwz r15, 0x5c(r31)`), which we hold in r14 with no store -- so this is
     // one register too few, not a missing statement. The rest is the r16..r21
     // constant-pointer permutation and the `trans.m.x *= 4` scheduling below.
+    // w21-e: the `trans.m.x *= 4` block is closed (Scale, below).  Re-tested
+    // the `this` spill: still there, and `Skeleton *skeleton` hoisted to
+    // function scope is byte-identical.  Left: the spill/split (rows 6-12,
+    // 82-83, 184-188), the r16..r21 constant permutation and the r28..r30
+    // permutation that follows from it -- all register-only, behaviour
+    // checked: every call gets the same values as the image.
     PassiveMessagesPanel::Poll();
     static Symbol ui_crown_player("ui_crown_player");
     const DataNode *pCrownPlayerNode = TheHamProvider->Property(ui_crown_player);
