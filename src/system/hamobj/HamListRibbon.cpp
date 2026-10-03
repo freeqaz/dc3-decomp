@@ -583,7 +583,7 @@ void HamListRibbon::Draw(
 
     // Calculate sizes
     int numItems = (int)drawStates.size();
-    bool scrollable = numItems > 6;
+    const bool scrollable = numItems > 6;
     // The image keeps `li r17, 0x4` (0x82483648) when numItems > 6, and only
     // assigns `mr r17, r23` (= numItems) on the fall-through when it is not
     // (the `bne` at 0x8248366C skips that assignment).  We had the two arms
