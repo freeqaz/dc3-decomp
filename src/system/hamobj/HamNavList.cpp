@@ -1604,9 +1604,10 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                         // it showed up as a `subi r11, r11, 0x1` the image does
                         // not have; it made the list scroll down one item too
                         // soon on the controller path.
-                        // The remaining commutative row (target `add r11, r11,
-                        // r10`, ours `add r11, r10, r11`) is NOT source-
-                        // reachable: writing the sum the other way round is
+                        // The commutative row (target `add r11, r11, r10`) was
+                        // closed by w21-r: read FirstShowing() at both compare
+                        // sites instead of through a local (see the note above
+                        // the function).  Swapping the sum's operands alone is
                         // byte-inert.
                         // Landing this once broke 8 DtaFlow tests and it was
                         // reverted (54365d0c3) on the theory that the `- 1`
