@@ -490,26 +490,14 @@ BEGIN_COPYS(HamMove)
         COPY_MEMBER(mSmallTex)
         COPY_MEMBER(mScored)
         COPY_MEMBER(mFinalPose)
-        // 4-row residual (lane w7-w, 2026-09-14), 97.77% canonical.  Both sides
-        // emit the SAME 181 instructions and the same 716 bytes; only two of
-        // them are ordered differently.  The image finishes both byte copies
-        // before starting the loop:
-        //     lbz 0x7c / stb -0x8c / lbz 0x7e / stb -0x8a / lwz r29,-0xf8 /
-        //     cmplw r29,r28
-        // where our build hoists the list-head load between them:
-        //     lbz 0x7c / stb -0x8c / lwz r29,-0xf8 / lbz 0x7e / cmplw / stb
-        // (w13-b: caching end() before begin() in an explicit for -- the lever
-        // that closed MoveMgr::InitSong -- is byte-inert here.)
-        // The FOREACH is already textually after both COPY_MEMBERs, so the
-        // hoist is the scheduler's, not the source's, and objdiff charges it as
-        // 2 inserts + 2 deletes.
-        //
-        // Lane w7-ag, 2026-09-14: source position of the FOREACH does matter in
-        // this block, but only against the wrong thing -- moving it one slot
-        // later (after COPY_MEMBER(mTexState)) does NOT reunite the two byte
-        // copies, it just drags mTexState's own lwz/stw pair across 20
-        // instructions: 4 rows -> 5, 97.765 -> 97.72.  Reverted.
-        FOREACH (it, mPropKeys) {
+        // w21-k (97.77 -> 100): iterate through a named reference to the
+        // list.  With FOREACH straight over the member, MSVC hoisted the list
+        // head load (`lwz r29, -0xf8(r31)`) between the two byte copies above;
+        // the image finishes both copies first (w7-w/w7-ag/w13-b had certified
+        // that 4-row scheduling residual as a floor).  FOREACH_CONST over the
+        // member, which binds a const reference the same way, also measures 100.
+        std::list<PropKeys *> &keys = mPropKeys;
+        FOREACH (it, keys) {
             (*it)->SetTarget(this);
         }
         COPY_MEMBER(mTexState)
