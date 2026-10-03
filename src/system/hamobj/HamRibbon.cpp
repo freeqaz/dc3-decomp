@@ -252,76 +252,73 @@ void HamRibbon::UpdateChase() {
         }
     }
 
-    int firstDirty = mChaseKeys.size() - added;
-    if (firstDirty < mChaseKeys.size()) {
-        for (int i = firstDirty; i < mChaseKeys.size(); ++i) {
-            if (i != 0) {
-                Key<Transform> &cur = mChaseKeys[i];
-                Key<Transform> &prev = mChaseKeys[i - 1];
-                Vector3 dir;
-                Subtract(cur.value.v, prev.value.v, dir);
-                Normalize(dir, dir);
+    for (int i = mChaseKeys.size() - added; i < mChaseKeys.size(); ++i) {
+        if (i != 0) {
+            Key<Transform> &cur = mChaseKeys[i];
+            Key<Transform> &prev = mChaseKeys[i - 1];
+            Vector3 dir;
+            Subtract(cur.value.v, prev.value.v, dir);
+            Normalize(dir, dir);
 
-                Vector3 smoothDir;
-                float angle = -1.0f;
-                if (2 < i) {
-                    Vector3 prevDir;
-                    Subtract(prev.value.v, (&cur)[-2].value.v, prevDir);
-                    float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
-                    angle = std::acos(dot);
-                    // The scale is the LITERAL -1.0f (a negation of prevDir), not a
-                    // loop-carried previous angle: the image loads -1.0 once into
-                    // f29 (0x824C7C7C) and never rewrites it, using the same
-                    // register both for this multiply (0x824C7DB8/0x824C7DBC) and
-                    // for the `angle != -1.0f` compare (0x824C7E80).
-                    Vector3 scaledPrev = prevDir;
-                    scaledPrev *= -1.0f;
-                    Interp(dir, scaledPrev, 0.5f, smoothDir);
-                    Normalize(smoothDir, smoothDir);
-                }
-
-                static Vector3 up(0.0f, 0.0f, 1.0f);
-                Transform invPrev;
-                Invert(prev.value, invPrev);
-                Vector3 localPos;
-                Multiply(cur.value.v, invPrev, localPos);
-                Transform tf = Transform::IDXfm();
-                tf.LookAt(localPos, up);
-                Transform result;
-                Multiply(tf, prev.value.m, result);
-                Normalize(result.m, result.m);
-                result.v = cur.value.v;
-
-                if (angle != -1.0f) {
-                    Hmx::Matrix3 inv;
-                    Invert(result.m, inv);
-                    Multiply(smoothDir, inv, smoothDir);
-                    smoothDir.x = Clamp(0.0f, 1.0f, smoothDir.x);
-                    float a = std::acos(smoothDir.x);
-                    float cosHalf = std::cos(angle * 0.5f);
-                    float invCos = 1.0f / cosHalf;
-                    float c = std::cos(a * 2.0f);
-                    float s = std::sin(a * 2.0f);
-                    // The bend is in the X-Z plane, NOT X-Y: the image writes the
-                    // off-diagonal s*(1-invCos)/2 terms to m02 (0x128) and m20
-                    // (0x140) and leaves row 1 as the identity row
-                    // (0, 1, 0) at 0x130-0x138.
-                    Hmx::Matrix3 bend(
-                        ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
-                        0.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
-                        0.0f,
-                        1.0f,
-                        0.0f,
-                        (s * (1.0f - invCos)) * 0.5f,
-                        0.0f,
-                        ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
-                    );
-                    Multiply(bend, result.m, result.m);
-                }
-
-                cur.value.m = result.m;
+            Vector3 smoothDir;
+            float angle = -1.0f;
+            if (2 < i) {
+                Vector3 prevDir;
+                Subtract(prev.value.v, (&cur)[-2].value.v, prevDir);
+                float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
+                angle = std::acos(dot);
+                // The scale is the LITERAL -1.0f (a negation of prevDir), not a
+                // loop-carried previous angle: the image loads -1.0 once into
+                // f29 (0x824C7C7C) and never rewrites it, using the same
+                // register both for this multiply (0x824C7DB8/0x824C7DBC) and
+                // for the `angle != -1.0f` compare (0x824C7E80).
+                Vector3 scaledPrev = prevDir;
+                scaledPrev *= -1.0f;
+                Interp(dir, scaledPrev, 0.5f, smoothDir);
+                Normalize(smoothDir, smoothDir);
             }
+
+            static Vector3 up(0.0f, 0.0f, 1.0f);
+            Transform invPrev;
+            Invert(prev.value, invPrev);
+            Vector3 localPos;
+            Multiply(cur.value.v, invPrev, localPos);
+            Transform tf = Transform::IDXfm();
+            tf.LookAt(localPos, up);
+            Transform result;
+            Multiply(tf, prev.value.m, result);
+            Normalize(result.m, result.m);
+            result.v = cur.value.v;
+
+            if (angle != -1.0f) {
+                Hmx::Matrix3 inv;
+                Invert(result.m, inv);
+                Multiply(smoothDir, inv, smoothDir);
+                smoothDir.x = Clamp(0.0f, 1.0f, smoothDir.x);
+                float a = std::acos(smoothDir.x);
+                float cosHalf = std::cos(angle * 0.5f);
+                float invCos = 1.0f / cosHalf;
+                float c = std::cos(a * 2.0f);
+                float s = std::sin(a * 2.0f);
+                // The bend is in the X-Z plane, NOT X-Y: the image writes the
+                // off-diagonal s*(1-invCos)/2 terms to m02 (0x128) and m20
+                // (0x140) and leaves row 1 as the identity row
+                // (0, 1, 0) at 0x130-0x138.
+                Hmx::Matrix3 bend(
+                    ((c + 1.0f) * (invCos - 1.0f)) * 0.5f + 1.0f,
+                    0.0f,
+                    (s * (1.0f - invCos)) * 0.5f,
+                    0.0f,
+                    1.0f,
+                    0.0f,
+                    (s * (1.0f - invCos)) * 0.5f,
+                    0.0f,
+                    ((1.0f - c) * (invCos - 1.0f)) * 0.5f + 1.0f
+                );
+                Multiply(bend, result.m, result.m);
+            }
+
+            cur.value.m = result.m;
         }
     }
 
