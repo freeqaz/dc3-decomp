@@ -1913,6 +1913,12 @@ void CamShot::UnHide() {
 // register shift. Nothing here has a destructor on our side, so the EH state
 // must come from something we do not see (likely how the two
 // MILO_NOTIFY_ONCE statics are constructed); not chased further.
+// w21-ad (98.91): behaviour re-read vs 82816028..82816194 -- agrees (ret
+// defaults to 0, Cam() at 0x210, the two notify arms tail-merged). The two
+// NOTIFY_ONCE statics are NOT the EH source: FracToSample@CharBonesSamples
+// builds two `_dw` with the identical std/ld/std/stw/stw/atexit sequence and
+// has no frame pointer and no EH. Whatever owns the two null-action states is
+// something with an empty destructor whose lifetime spans no call.
 RndCam *CamShot::GetCam() {
     RndCam *ret = 0;
     WorldDir *crowdDir = GetCrowdDir();
