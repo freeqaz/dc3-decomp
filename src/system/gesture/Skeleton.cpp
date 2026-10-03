@@ -491,6 +491,15 @@ bool Skeleton::NeedIdentify() const {
 // `const Vector3 &pos = jointPositions[i];` at the head instead of the two
 // inline subscripts (identical 49 rows); `if (mTracking)` for the dispatch
 // (identical to the != spelling).
+// w21-n (97.53 canonical, unchanged; now __savegprlr_22 vs the image's _20):
+// behaviour re-read against the image -- dispatch, the j==0 copy vs
+// MultiplyTranspose, mJointConf then mSmoothedPos from mRawPositions[i], the
+// hip-height average plus clip-plane w -- all agree.  Still walkers, not the
+// image's shared i*16 offset: inert (96.22 fuzzy) were a cast-pointer
+// subscript for the raw copy, a rawPositions local before the Xfm loop or
+// beside jointPositions, and a head-bound `const Vector3 &` to the joint;
+// re-reaching the raw array through frame.mSkeletonDatas[skel_idx] is worse
+// (92.94).
 // The three MakeString rows in the Function Call Diff are ICF folds (the assert
 // format strings), not wrong callees.  Control flow is faithful: the `beq` at
 // 0x82436B24 goes to Init() and the `bne` two instructions later returns.
