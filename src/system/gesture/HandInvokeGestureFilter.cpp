@@ -70,6 +70,8 @@ bool HandInvokeGestureFilter::UpdateBodyPlane(const Skeleton &skel, float dt) {
     }
     return _result;
 }
+// w20-p branch-landing row 292 (image `bne` onto `li r11, 0x1`, ours one row
+// past it): ARTIFACT -- jump threading; on that edge r11 already holds 1.
 bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
     // 0x82DFE038 `li r25, 0x0` seeds the result in a callee-saved register and
     // 0x82DFE514 `mr r3, r25` returns it -- one result variable, not two

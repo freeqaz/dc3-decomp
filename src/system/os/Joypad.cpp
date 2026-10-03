@@ -509,6 +509,9 @@ JoypadAction ButtonToAction(JoypadButton btn, Symbol sym) {
 //   - turns the button delta into button_up / button_down messages, with
 //     velocity-bucketed drum hits sorted loudest-first,
 // then polls the USB MIDI peripherals and the controller keep-alive timer.
+// w20-p branch-landing row 152 (image `stwx r30` / `b` to loop tail vs ours
+// `li r11, 0x2` / `b` to the shared `stwx r11` store): ARTIFACT -- r30 holds the
+// constant 2 (`li r30, 0x2` at the pad-loop top), so both store state = 2.
 void JoypadPollCommon() {
     if (!gJoypadLibInitialized) {
         MILO_NOTIFY(" Can't call JoypadPoll before initialization...");
