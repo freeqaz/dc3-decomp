@@ -56,10 +56,12 @@ void ThreeDSoundManager::Poll() {
     // `if (listener)` test (our `bne` landed on the WorldXfm dirty check); the image
     // re-tests both arms at one `cmplwi cr6 / beq` join, which the if/else gives.
     // `p = Ptr(); if (!p) p = Cam();` measures 98.4 (cr6 lands on the first test).
-    // Stop: fuzzy 99.90 -- 4 register-only rows, the hoisted MILO_NOTIFY_ONCE
-    // anchors: the image keeps &kMaxLoopingSounds in r25 and the format string in
-    // r24, ours the other way round (same MakeString(fmt, kMax) call). A
-    // function-local or non-static kMaxLoopingSounds is inert.
+    // Stop: report 99.90 (name_check), 100 normalized -- the three hoisted
+    // MILO_NOTIFY_ONCE anchors come out in a different order: image `lis` order
+    // &kMaxLoopingSounds, TheDebug, format string (kMax in r25, string in r24),
+    // ours TheDebug, string, kMax (kMax r24, string r25); 7 name_check rows, 4
+    // normalized, same MakeString(fmt, kMax) call. A function-local or
+    // non-static kMaxLoopingSounds is inert.
     RndTransformable *listener;
     if (mListener.Ptr())
         listener = mListener.Ptr();
