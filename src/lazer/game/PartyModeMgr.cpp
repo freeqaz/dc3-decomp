@@ -1138,6 +1138,12 @@ void PartyModeMgr::ResetMicrogames() {
 // unrelated playtest modulo block above (divwu/twllei/mullw order, rows
 // 61-70, 95.67 overall), so team 2 keeps the idx form: 4 rows left
 // (li r4 order + the `mr r3, r29` reload).
+// w21-ah (98.97 -> 100): team 2 as two whole arms with the call FIRST,
+// `ret = arr->Int(k) + mTeam1Players.size()`.  The size-first spelling
+// (`size + Int(k)`, tried by w21-e) and every if/else/?: form with a
+// separate teamCount re-allocated the playtest modulo block (divisor r8 ->
+// r11, twllei hoisted: 10 rows); call-first keeps it.  Same semantics: the
+// image reads mTeam1Players' size after Int() returns (0x8287003C `lwz r11, 0x4(r30)`).
 int PartyModeMgr::PickNextPlayer() {
     int ret = -1;
     if (mCurrentTeamSelector == 2) {
@@ -1161,11 +1167,10 @@ int PartyModeMgr::PickNextPlayer() {
         mCurrentTeamSelector = 2;
         if (mPlayerSequences) {
             DataArray *arr = mPlayerSequences->Array(mRoundsPlayed + 1);
-            int idx = 0;
             if (mTeam1Players.size() <= mTeam2Players.size())
-                idx = 1;
-            int teamCount = arr->Int(idx);
-            ret = mTeam1Players.size() + teamCount;
+                ret = arr->Int(1) + mTeam1Players.size();
+            else
+                ret = arr->Int(0) + mTeam1Players.size();
         }
     }
     return ret;
