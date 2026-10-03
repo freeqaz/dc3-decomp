@@ -589,6 +589,18 @@ int CharBonesSamples::FracToSample(float *frac) const {
 // w16-c: reading mCompression directly in the frac == 0 half (no local) is
 // the w7-by `int comp` result again, 82.2 / frame 0xb0; one function-scope
 // `int comp` for both halves is 79.8.
+// w21-am (92.47, unchanged; ~44 rows): measured inert, each with the built
+// object -- ROTX compressed arm as scalar Interp(...) * k, via short locals,
+// via short* locals, as `(v1 - v0) * frac + v0`, and as `*out = ...; *out *=
+// k` (the image loads src before srcNext at 0x823E1258; every spelling keeps
+// srcNext first); vects arm with `Vector3 sv1, sv0`, ShortVector3* locals,
+// Vector3 3-float ctors, and an interleaved x0/x1/y0/y1/z0/z1 conversion
+// (92.49 canonical / fuzzy down).  `CompressionType comp` / `long comp` =
+// 82.19 (the int result), `int comp = (short)mCompression` 87.87.  With an
+// int comp the frame is 0xb0 because the frac != 0 vects arm REUSES its
+// double-conversion temps; the image keeps all six live at once
+// (0x50/0x58/0x60/0x70/0x80/0x90) and that is what puts q0/q1 at 0x90/0x80
+// -- so the frame and the vects-arm schedule are one residual, not two.
 void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, float frac) {
     char *src = mRawData + mTotalSize * sample + byteOffset;
     if (frac == 0.0f) {
