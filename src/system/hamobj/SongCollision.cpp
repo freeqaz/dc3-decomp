@@ -429,6 +429,18 @@ void SongCollision::CheckCollision(
     // w16-b (99.943, 23 rows = IV bump order + FPR permutation): a plain
     // `for (i = 0; i < 2; i++)` and a Transform struct assignment in place of
     // the memcpy are both byte-identical to this.
+    // w21-aw (23 -> 12 rows): binding `const Transform &xfm = transforms[i]`
+    // once fixed the induction-pointer bump order, and Length(dir) written
+    // out fixed its sum order.  Stop: the 12 left are the min/max diff loads
+    // (f12/f13 permutation, image loads xfm.v.y before minEdge->y), the min
+    // projection's commuted fmuls/fmadds operands (image normalDir first),
+    // and the max projection's term order (image z, y, x; ours z, x, y).
+    // Inert or worse: products commuted (`minDz * normalDir.z`, inert);
+    // explicit `(z + y) + x` / `(y + z) + x` on the max projection (sorted
+    // to y, z inside the group); Vector3 minDiff/maxDiff by member stores in
+    // this order (98.8 -- operands then come out normalDir-first, but the
+    // walker bases move) or by the 3-float ctor (98.5); the image's own issue
+    // order minDz, minDy, minDx, maxDx, maxDz, maxDy (98.4, see below).
     int i = 0;
     do {
         const Transform &xfm = transforms[i];
