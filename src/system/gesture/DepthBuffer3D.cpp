@@ -419,8 +419,10 @@ void DepthBuffer3D::DrawShowing() {
     // 72.1 (the value is still register-held).  Other open items: d38/d44 (60.0f,
     // 80.0f) are loaded into FPRs up front on our side only, and most of the
     // remaining rows are the per-pixel loop's register assignment.
-    RndMat *mat = mMinimalMat.Ptr();
-    if (mat == nullptr) {
+    RndMat *mat;
+    if (mMinimalMat) {
+        mat = mMinimalMat;
+    } else {
         mat = SetUpWorkingMat();
     }
 
@@ -431,7 +433,7 @@ void DepthBuffer3D::DrawShowing() {
     // the camera's depth stream texture only on the null path (`mr. r21, r3`
     // after GetStreamTex).  We used to hand a null texture to the material and
     // the vertex shader whenever a palette texture was set.
-    RndTex *depthTex = mPlayerPaletteTex.Ptr();
+    RndTex *depthTex;
 
     float d38 = 60.0f, d42 = 2.0f, d43 = 1.0f, d44 = 80.0f;
     float d45 = 0.0f, d46 = 8192.0f, d51 = 0.5f;
@@ -439,7 +441,9 @@ void DepthBuffer3D::DrawShowing() {
     float d47 = 0.0f, d48 = 1.0f, d50 = 0.0f, d53 = 1.0f;
     float d41, d49, d52, d39, d40;
 
-    if (depthTex == nullptr) {
+    if (mPlayerPaletteTex) {
+        depthTex = mPlayerPaletteTex;
+    } else {
         LiveCameraInput *cam = TheGestureMgr->GetLiveCameraInput();
         if (!cam->mDepthPolled) {
             cam->PollNewStream(LiveCameraInput::kBufferDepth);
