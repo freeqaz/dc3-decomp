@@ -2032,6 +2032,15 @@ void ResetNormals(RndMesh *m) {
                 //      -- REGRESSES to 97.4%.  It does not produce the image's
                 //      two-address multiplies; it gives the three ints their own
                 //      stack slots and perturbs the whole surrounding schedule.
+                // w21-bf (still 99.032326, 54 rows) -- all measured, none kept:
+                //   * the angle dot: flat (y,z,x), Dot(d1,d2), Dot(d2,d1) give one
+                //     schedule; explicit parens y+(x+z), y+(z+x), (z+x)+y, x+(z+y),
+                //     z+(x+y) never give the image's z-then-x inner pair: MSVC always
+                //     emits the inner pair's LOWER-offset component as the fmuls.
+                //   * `pTangent->x = ft.x + pTangent->x` (image adds ft first): inert.
+                //   * the handedness sign as Cross(basis.z, basis.x, cross) + Dot or
+                //     explicit parens: 99.0 with 4-5 more rows; swapping the
+                //     `crossZ * basis.y.x` operands: inert.
                 //   2. Sinking the `v2` declaration below d1's construction, so that
                 //      d1 is fully built before v2's address is formed, is exactly
                 //      SCORE-NEUTRAL: 54 rows -> 53 rows but canonical 99.032326

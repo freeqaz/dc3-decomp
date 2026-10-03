@@ -792,7 +792,19 @@ struct WrapPoint {
     bool isHardBreak;
 };
 
-/** w7-bs (2026-09-15): 94.759 -> 95.354 canonical (93.234 -> 93.8 raw), 686 rows,
+/** w21-bf (2026-10-03): 95.35 -> ~97.05 canonical with three source-order/type
+ *  levers (see the commits): cur-- right after ParseMarkup; the markup/break arm
+ *  BEFORE the end/newline arm (the assert line numbers 0x65d..0x6a2 precede
+ *  0x6ed/0x6ef); isHardBreak after numWp++/wpI++ in the newline arm; the loop
+ *  char an `unsigned int` with `mc` read from *cur and tested itself.
+ *  Measured and NOT kept: reusing `cur` as the strip loop's cursor (declared
+ *  before `if (mMarkup)`, reset to wideChars at the end of the block) DOES
+ *  reproduce the image's callee-saved strip cursor, its `mr r21, r15` reset and
+ *  the `mr r14, r25` numWp copy, but costs 97.05 -> 96.46 elsewhere; deriving
+ *  the successor as `&wps[wp->nextIdx]` with no `nx` local 94.17; unsigned int
+ *  / mixed types for the strip loop's c/t all lower (96.76..96.91).
+ *
+ *  w7-bs (2026-09-15): 94.759 -> 95.354 canonical (93.234 -> 93.8 raw), 686 rows,
  *  target 2700 B / ours 2672 B.  The lever is not in the statements either --
  *  it is in the EH tables.  Text.obj carries except_record_82697768 for this
  *  function with ONE unwind entry, `__unwind$170467`, whose body is
@@ -946,59 +958,18 @@ void RndText::WrapText(
         const unsigned short *cur = wideChars;
         int wpI = 0;
         for (;;) {
-            unsigned short ch = *cur;
+            unsigned int ch = *cur;
             const wchar_t *brkW = &BRKWIDE_BASE[cCount];
             int prevI = wpI;
             WrapPoint *nxt = &wps[numWp];
-            if (ch == 0 || ch == '\n') {
-                int bestWp = -1, bestC = 100000;
-                bool ovf = false;
-                float bestLineLen = 0.0f;
-                for (int wi = wpI; wi >= 0; wi--) {
-                    float lineLen = SegmentLength(
-                        wps[wi].charIdx, (int)(cur - wideChars), charWidths, wideChars, scale
-                    );
-                    unsigned int pen = 10;
-                    if (lineLen > _ref0) {
-                        if (wi != prevI) {
-                            pen = 2010;
-                            if (bestWp != -1) { ovf = true; }
-                        }
-                    } else {
-                        if (_ref1 & 0x20) {
-                            float fw = SegmentLength(wps[wi].charIdx, wLen, charWidths, wideChars, scale);
-                            if (fw >= _ref0) {
-                                pen = (unsigned int)(int)((1.0f - lineLen / _ref0) * 30.0f);
-                                if (lineLen < minW) pen += 100;
-                            }
-                        } else {
-                            if ((int)(cur - wideChars) - wps[wi].charIdx <= 4) pen = 50;
-                        }
-                    }
-                    int tc = (int)pen + wps[wi].cost;
-                    if (tc < bestC) { bestWp = wi; bestLineLen = lineLen; bestC = tc; }
-                    if (wps[wi].isHardBreak || ovf) break;
-                }
-                MILO_ASSERT(bestWp != -1, 0x6ed);
-                MILO_ASSERT(numWp < wLen + 1, 0x6ef);
-                nxt->lineWidth = bestLineLen;
-                nxt->cost = bestC;
-                nxt->bestPrevIdx = bestWp;
-                nxt->isLineEnd = true;
-                nxt->nextIdx = -1;
-                nxt->charIdx = (int)(cur - wideChars);
-                nxt->isHardBreak = true;
-                numWp++; wpI++;
-                wps[bestWp].isLineEnd = false;
-                if (*cur == 0) goto buildLines;
-            } else {
-                unsigned short mc = ch;
-                if (ch == 0x3c) {
+            if (ch != 0 && ch != '\n') {
+                unsigned short mc = *cur;
+                if (mc == 0x3c) {
                     if (mMarkup) {
                     cur = ParseMarkup(cur, style, mc);
+                    cur--;
                     cCount--;
                     brkW = &BRKWIDE_BASE[cCount];
-                    cur--;
                     if (style.brk) {
                         activeMarkup = true;
                     }
@@ -1057,6 +1028,47 @@ void RndText::WrapText(
                         activeMarkup = false;
                     }
                 }
+            } else {
+                int bestWp = -1, bestC = 100000;
+                bool ovf = false;
+                float bestLineLen = 0.0f;
+                for (int wi = wpI; wi >= 0; wi--) {
+                    float lineLen = SegmentLength(
+                        wps[wi].charIdx, (int)(cur - wideChars), charWidths, wideChars, scale
+                    );
+                    unsigned int pen = 10;
+                    if (lineLen > _ref0) {
+                        if (wi != prevI) {
+                            pen = 2010;
+                            if (bestWp != -1) { ovf = true; }
+                        }
+                    } else {
+                        if (_ref1 & 0x20) {
+                            float fw = SegmentLength(wps[wi].charIdx, wLen, charWidths, wideChars, scale);
+                            if (fw >= _ref0) {
+                                pen = (unsigned int)(int)((1.0f - lineLen / _ref0) * 30.0f);
+                                if (lineLen < minW) pen += 100;
+                            }
+                        } else {
+                            if ((int)(cur - wideChars) - wps[wi].charIdx <= 4) pen = 50;
+                        }
+                    }
+                    int tc = (int)pen + wps[wi].cost;
+                    if (tc < bestC) { bestWp = wi; bestLineLen = lineLen; bestC = tc; }
+                    if (wps[wi].isHardBreak || ovf) break;
+                }
+                MILO_ASSERT(bestWp != -1, 0x6ed);
+                MILO_ASSERT(numWp < wLen + 1, 0x6ef);
+                nxt->lineWidth = bestLineLen;
+                nxt->cost = bestC;
+                nxt->bestPrevIdx = bestWp;
+                nxt->isLineEnd = true;
+                nxt->nextIdx = -1;
+                nxt->charIdx = (int)(cur - wideChars);
+                numWp++; wpI++;
+                nxt->isHardBreak = true;
+                wps[bestWp].isLineEnd = false;
+                if (*cur == 0) goto buildLines;
             }
             cur++; cCount++;
         }
