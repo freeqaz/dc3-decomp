@@ -219,7 +219,8 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // begin register die in the `subf`, then RELOADS _M_start for the
     // mEntries[mCurrentIndex] below (`lwz r10, 0x0(r30)` @8288D9D4).  We load
     // _M_finish first, so begin survives in r9 and gets reused -- one
-    // instruction shorter, and the source cannot ask for the longer form.
+    // instruction shorter.  (Superseded by w21-m below: a const vector& bound
+    // just before the compare DOES produce the image's longer form.)
     // Splitting this into `++mCurrentIndex;` + a separate `if` is BYTE-
     // IDENTICAL (measured 2026-09-14, w7-q, with a sabotage control).
     // w16-e: `(int)mEntries.size() <= ++mCurrentIndex` 99.133 (vs 99.14),
@@ -232,7 +233,19 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // survives as a 64-bit value from the size() subtraction.  Behaviour checked
     // against the image on all 13 rows: lis pair 138/139 and p0/p1 195/201 are
     // register-only (p0+p1 sum is commutative), 271-288 is the same size/index.
-    if (++mCurrentIndex >= (int)mEntries.size() || b2) {
+    // w21-m: a const reference bound here (the w21-b/ResetDetectFrames lever)
+    // gives the image's compare shape -- size() dies in the subf and
+    // _M_start is RELOADED for mEntries[mCurrentIndex] (`lwz r10, 0x0(r30)`
+    // @8288D9D4) -- 13 rows -> 10, 99.14 -> 99.84.  Left: start/finish load
+    // order here and at the numEntries load above (both flip as a pair), one
+    // dead `stw r30, 0x50(r31)` home of the reference, the 138/139 lis
+    // pair and the p0/p1 r28/r29 pair (195/201).  Measured worse: binding at the top for numEntries too (p0/p1 fixed
+    // but 11 rows / 99.7 with a second home), binding at the top and using it
+    // for nextEntry or everywhere (r17/r18 + r29/r30 swaps, 99.7), binding at
+    // the top used only here (98.6).
+    const std::vector<Entry> &entries = mEntries;
+    if (++mCurrentIndex >= (int)entries.size() || b2) {
+
         MILO_LOG("SongSequence::DoNext: terminating. forced=%s\n", b2 ? "T" : "F");
         static Symbol holla_back("holla_back");
         Symbol mode = TheGameMode->Property(gameplay_mode)->Sym();

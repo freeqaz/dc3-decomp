@@ -944,6 +944,17 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
 // this=r30, mode->max share r29, &showdown->min share r28, `1` in r24; ours
 // merges the second loop's counter into min's web (r30) instead of max's.
 // Behaviour checked row by row against the image: identical.
+// w21-m (98.84, same 28 rows; behaviour re-read vs 0x82871308..0x8287145C,
+// identical): a standalone cl.exe probe reproduces our 28 rows exactly, and
+// ~25 spellings leave them unchanged -- early `return` on showdown, `int
+// player` hoisted to function/if scope, inline AddPlayer helpers (by value
+// and by reference), `(*pNumPlayers)++`, do/while(--n) for either loop, loop 2
+// as `for (int i = maxplayers; ...)`, `!(mode == showdown)`, `break` for the
+// in-loop return.  Worse: subtracting minplayers outside the `if` (50 rows),
+// counting loop 1 up with `for (i < minplayers)` (33), driving loop 2 on
+// totalplayers with an inner `--maxplayers` break (35/51).  Root cause as
+// measured: loop 2's counter is a separate web that coalesces with min's, so
+// that web outranks `this` for r30; nothing tried merges it into max's.
 void PartyModeMgr::DetermineSubModePlayers(
     Symbol mode, int *pPlayerFlags, int *pNumPlayers, std::vector<int> *vec
 ) {
