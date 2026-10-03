@@ -424,6 +424,16 @@ bool UIManager::IsGameScreenActive() {
     // and `(int)cur != 0 && cur != BottomScreen()` all keep cr0, and reading
     // mCurrentScreen twice instead of through `cur` gets cr6 but loses the
     // separate return block (89.8).
+    // w21-s (97.5, same 2 rows): behaviour re-checked vs 0x8277B5C8.. (null
+    // BottomScreen -> false; mask keeps ret only when cur == BottomScreen();
+    // null cur returns ret unchanged).  Also measured, none closes the cr6:
+    // `(int)cur > 0 || (int)cur < 0` (gets cmpwi cr6 but adds a test, 93.3),
+    // `!= (int)nullptr`, `!= zero` local, `(long)`, `(bool)cur`, switch on
+    // (int)cur, `!((int)cur == 0)`, a named bottom local, operand-swapped
+    // compare, int-cast or subtract-form inner compare, ternary select (all
+    // 97.5); `ret &= cur ? ... : true` (86.7), `!cur || cur == Bottom` (84.1 /
+    // 87.5), early return on null cur (93.3), cur loaded first (93.3),
+    // `int ret` (92.1), `int cur` (89.1).
     UIScreen *cur = mCurrentScreen;
 #ifdef HX_NATIVE
     if (cur != nullptr) {
