@@ -470,8 +470,8 @@ void DepthBuffer3D::DrawShowing() {
             Skeleton *s0 = TheGestureMgr->GetSkeletonByTrackingID(pd0->GetSkeletonTrackingID());
             HamPlayerData *pd1 = TheGameData->Player(1);
             Skeleton *s1 = TheGestureMgr->GetSkeletonByTrackingID(pd1->GetSkeletonTrackingID());
-            int p1idx = (s0 == nullptr) ? -1 : (s0->SkeletonIndex() + 1);
-            int p2idx = (s1 == nullptr) ? -1 : (s1->SkeletonIndex() + 1);
+            int p1idx = s0 ? (s0->SkeletonIndex() + 1) : -1;
+            int p2idx = s1 ? (s1->SkeletonIndex() + 1) : -1;
 
             void *bits = nullptr;
             texSource->TexelsLock(bits);
@@ -779,8 +779,8 @@ void DepthBuffer3D::DrawShowing() {
         Skeleton *s0 = TheGestureMgr->GetSkeletonByTrackingID(pd0->GetSkeletonTrackingID());
         HamPlayerData *pd1 = TheGameData->Player(1);
         Skeleton *s1 = TheGestureMgr->GetSkeletonByTrackingID(pd1->GetSkeletonTrackingID());
-        slotParams.x = (s0 == nullptr) ? -1 : (s0->SkeletonIndex() + 1);
-        slotParams.y = (s1 == nullptr) ? -1 : (s1->SkeletonIndex() + 1);
+        slotParams.x = s0 ? (s0->SkeletonIndex() + 1) : -1;
+        slotParams.y = s1 ? (s1->SkeletonIndex() + 1) : -1;
     }
 
     double ip;
