@@ -3239,11 +3239,11 @@ found:
 
     Key<Symbol> &foundKey = (*keys)[foundIdx];
     float keyBeat = SecondsToBeat(foundKey.frame / 30.0f);
-    if (keyBeat + beatOffset < 0.0f) {
-        beatOffset = 0.0f;
+    if (keyBeat + beatExtra < 0.0f) {
+        beatExtra = 0.0f;
     }
 
-    float beat = SecondsToBeat(foundKey.frame / 30.0f) + beatExtra + beatOffset;
+    float beat = SecondsToBeat(foundKey.frame / 30.0f) + beatOffset + beatExtra;
     float frame = BeatToSeconds(beat) * 30.0f;
     SecondsToBeat(foundKey.frame / 30.0f);
 
