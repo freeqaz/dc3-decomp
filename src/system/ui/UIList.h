@@ -89,6 +89,7 @@ public:
     UIListState &GetListState();
     const std::vector<UIListWidget *> &GetWidgets() const;
     UIList *ChildList();
+    UIList *ParentList();
 
     int NumDisplay() const;
     int GridSpan() const { return mListState.GridSpan(); }
