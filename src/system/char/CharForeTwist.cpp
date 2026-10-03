@@ -106,9 +106,10 @@ void CharForeTwist::Poll() {
     // register rows).  Swapping the second Dot's operands (Dot(v98, m.x)) is
     // byte-inert.  `Transform &` (RB3's spelling) does not compile: WorldXfm()
     // returns const.  The fourth callee-saved FPR is still not source-reachable.
-    float clamped = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.y, handxfm.m.z));
+    const Vector3 &py = parentxfm.m.y;
+    float clamped = Clamp(-1.0f, 1.0f, Dot(py, handxfm.m.z));
     Vector3 v98;
-    Cross(parentxfm.m.y, handxfm.m.z, v98);
+    Cross(py, handxfm.m.z, v98);
     float clamp2 = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.x, v98));
     float newbias = mBias * DEG2RAD;
     float tan2res = std::atan2(clamp2, clamped);
