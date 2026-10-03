@@ -371,6 +371,14 @@ unsigned int HolmesClientPollJoypad() {
 // RESIDUAL (w12-d, 98.28): the image calls the deleting destructor with NO
 // null test (`cmplwi cr6, r30, 0` / `beq` are ours only). Measured INERT:
 // binding the stream as `TextFileStream &log = *new ...` and `delete &log`.
+// w20-o (98.28, rows 103-104 only): `delete static_cast<TextStream *>(log)`
+// is also inert.  This is NOT a guard our source adds: it is the implicit null
+// test of the `delete` expression itself, and the image omits it (deleting
+// dtor `lwz r11, 0(r30)` / `li r4, 1` / `bctrl` straight after the Flush
+// vcall).  Behaviourally dead on both sides: on the null-`new` path
+// (`mr r30, r24`, r24 = 0) both builds already dereference r30 for File()/
+// Fail() (`lwz r11, 0x4(r30)` / `bctrl`) before reaching the delete.  Native
+// needs nothing here -- `delete` of null is a no-op in standard C++.
 DataNode DumpHolmesLog(DataArray *) {
     TextFileStream *log = new TextFileStream("holmes.csv", true);
     FileStream &fs = log->File();

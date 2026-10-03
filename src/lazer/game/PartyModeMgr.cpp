@@ -1039,6 +1039,14 @@ void PartyModeMgr::AddPlayerToTeam(int team) {
 // chain (54.4), a `for` countdown loop (94.4). See
 // docs/decomp/patterns/fixable-control-flow.md (arm transposition is a
 // layout residual, not a polarity one).
+// w20-o (99.92, same 8 rows): name_check's callee differences are ALL ICF
+// folds, not wrong callees -- RadFree@?A0x6dfd0232 (BinkMovieSys) and our
+// operator delete are both 0x82E21268 in ham_xbox_r.map (with OggFree,
+// JsonFree, operator delete[]); the MakeString<char[19],int,char[5]> /
+// <char[17],int,char[23]> pair are both 0x824D1870, and erase<UILabel*> /
+// erase<PartyModePlayer*> are both 0x827BD118.  Branch landings agree:
+// team==1 -> the 0x68 (mTeam1Players) block, team==2 -> the 0x74 block, on
+// both sides.
 void PartyModeMgr::ClearTeam(int team) {
     switch (team) {
     case 1: {

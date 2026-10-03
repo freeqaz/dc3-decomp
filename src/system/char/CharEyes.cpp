@@ -1047,8 +1047,17 @@ void CharEyes::NextLook() {
                     }
 
                     mDartOffset = targetDir;
-                    goto stateReset;
                 }
+                // w20-o: no clear here.  When interests exist but every one sits
+                // at the head (maxDistSq <= 0), the image keeps mCurrentInterest
+                // and mData: `ble cr6, 0x4234` (in-function, after the distance
+                // loop) and the loop-skip `beq cr6, 0x4234` both land on the
+                // state-reset stores (`lis r10, __real@7149f2ca@h` ...), past the
+                // `mCurrentInterest = 0; ClearToDefaults` block at 0x4200, which
+                // only the size()/sDisableInterestObjects/cheat failures reach
+                // (`beq/bne 0x4200` x3).  The earlier `goto stateReset` spelling
+                // (also RB3's) cleared on that path.
+                goto stateReset;
             }
         }
 
