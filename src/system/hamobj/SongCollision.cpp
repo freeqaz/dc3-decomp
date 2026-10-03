@@ -339,6 +339,16 @@ void SongCollision::Update(MoveDir *moveDir) {
     //    is byte-identical to the `mData[i]` spelling.
     // What is left is which of {dancer, hoisted base} gets r14; nothing in the
     // source order tried so far moves that.  Kept the higher-canonical spelling.
+    //
+    // w21-g (floor held at 94.2, 80 rows; behaviour re-read against the image
+    // listing 0x82510D98-0x825112C8 -- Set(minX, maxX) argument order, the
+    // maxX/minX resets, bones_min_max_x(minX, maxX, ...), the 0x48 size and the
+    // 1/30 frame scale all agree; no defect).  One more spelling measured:
+    // `auto &data = mData;` declared right after `Timer timer;` but used ONLY
+    // for the final `data[0].size()`, with `mData[i]` in the loop -- the image's
+    // home slot 0x50 for the base suggests exactly that lifetime -- 92.4, and
+    // `dancer` is evicted to r28 with a home store at 0x68 (same failure as
+    // w7-ak's move).
     auto& data = mData;
     if (moveDir) {
         MILO_ASSERT(TheGameData, 0xFB);
