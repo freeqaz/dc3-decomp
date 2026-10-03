@@ -129,9 +129,9 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
             // Six box-map axes: +Z, +X, +Y, -X, -Y, -Z. Each face accumulates the
             // light colour weighted by the squared clamped projection of the light
             // direction onto that face's axis.
-            float posZ = Max(0.0f, dir.blue);
             float posX = Max(0.0f, dir.red);
             float posY = Max(0.0f, dir.green);
+            float posZ = Max(0.0f, dir.blue);
             float negX = Max(0.0f, -dir.red);
             float negY = Max(0.0f, -dir.green);
             float negZ = Max(0.0f, -dir.blue);
