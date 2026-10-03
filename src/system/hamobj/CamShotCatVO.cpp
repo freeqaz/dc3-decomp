@@ -168,7 +168,11 @@ void CamShotVOData(
                 // mangle as scope `?FG@` in the image and `?FI@` here (MSVC's
                 // per-function scope ordinal -- two more numbered scopes reach
                 // this block in our spelling), a class the canonical ruler
-                // folds.
+                // folds.  w20-g: the image-side ?FG@ names are not image
+                // data -- symbols.txt took them from a build of the earlier
+                // spelling (58bfcfcfb), where this block sat OUTSIDE the
+                // else chain (two fewer enclosing scopes).  Not a value or
+                // control-flow difference; all operands/branches re-checked.
                 if (subStrings.size() > 2) {
                     // One address for the two comparisons: the target computes
                     // `addi r29, r3, 0x10` once and reuses it (`mr r3, r29`

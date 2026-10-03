@@ -942,6 +942,11 @@ bool Intersect(const Segment &seg, const BSPNode *n, float &t, Plane &p) {
     // MakeString<char[8],int,char[2]> is the documented benign ICF fold of the
     // assert instantiations, NOT evidence of a longer name -- renaming to
     // `node` to chase it changes the literal and ADDS two charged rows.
+    // w20-g: normalized 100.0, fuzzy 99.95. Every branch lands on the image's
+    // targets and every operand was checked; the one charged row (0x10e8,
+    // `fmadds f0, f10, f6, f0` vs ours f6, f10) is a commutative multiplicand
+    // swap inside endDot = plane.Dot(seg.end) (a*end.x), value-identical; MSVC
+    // canonicalises that order (see the NEGATIVE RESULT in the Triangle overload).
     MILO_ASSERT(n, 0x4e6);
 
     float startDot = n->plane.Dot(seg.start);

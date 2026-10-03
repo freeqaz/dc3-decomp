@@ -36,6 +36,12 @@ BEGIN_HANDLERS(ThreeDSound)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+// w20-g: normalized 100.0, fuzzy 99.95 (name_check). Every operand and branch
+// target checked against the image: no divergence. The 4 charged rows (0x160c/
+// 0x1614, 0x16a0/0x16a8) are only the NAMES of the radius / doppler_power
+// `static Symbol _s`: the image's ?_s@?DM@ / ?_s@?EP@ are config names in
+// symbols.txt (since 4abc61f0f, not in the map), ours mangle ?FE@ / ?FP@ --
+// MSVC's per-function scope ordinal. Same guard bits (0x80/0x100), same strings.
 BEGIN_PROPSYNCS(ThreeDSound)
     SYNC_PROP_SET(enable_doppler, mDopplerEnabled, EnableDoppler(_val.Int()))
     SYNC_PROP_SET(enable_pan, mPanEnabled, EnablePan(_val.Int()))

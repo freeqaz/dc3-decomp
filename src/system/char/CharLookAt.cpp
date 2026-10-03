@@ -261,6 +261,14 @@ void CharLookAt::Poll() {
                     // so the orders below are the image's orders pre-swapped.
                     // See the note above Multiply(const Vector3 &, const
                     // Hmx::Matrix3 &, Vector3 &) in math/Mtx.h.
+                    // w20-g: normalized 100.0, fuzzy 99.86. The 10 charged FP rows
+                    // (0x822f4..0x82338, 0x823ec/0x823f4, 0x826b8) are pure
+                    // multiplicand swaps of the same products (value-identical;
+                    // every operand mapped to its frame slot and checked). Writing
+                    // the seven mismatched terms below as pivotFwd.? * rotMat.?.?
+                    // was byte-for-byte INERT (measured): MSVC canonicalises the
+                    // order. The other 2 rows are the MILO_NOTIFY_ONCE `_dw`
+                    // static's scope-ordinal name (?DI@ config vs ?DO@ ours).
                     const Vector3 &pivotFwd = pivotXfm.m.y;
                     float dirZ = rotMat.y.z * pivotFwd.y;
                     dirZ += rotMat.z.z * pivotFwd.z;
