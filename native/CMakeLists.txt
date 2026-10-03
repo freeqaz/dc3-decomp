@@ -2216,6 +2216,33 @@ if(BUILD_TESTS)
         PROPERTIES
             ENVIRONMENT "${MILO_TEST_ENV}"
     )
+
+    # XeniaGolden.*: the native port against state recorded from the ORIGINAL
+    # debug.xex under Xenia (docs/plans/XENIA_ORACLE.md, Tier A). Each test
+    # boots dc3-native headless to title_screen on a private port, runs the
+    # loader probe over the golden's .milo files and compares every field with
+    # ${DC3_XENIA_GOLDEN_DIR}/<bundle>/golden.json. No Xenia is needed.
+    # The bundles are property dumps of shipped game content, so they live in
+    # the gitignored archive/ (setup_worktree.sh symlinks it into worktrees),
+    # never in git. Exit 1 = an unadjudicated disagreement; 77 = skip (bundle
+    # absent, or dc3-native not built), with the reason printed.
+    set(DC3_XENIA_GOLDEN_DIR "${CMAKE_SOURCE_DIR}/../archive/state_diff/goldens/xenia"
+        CACHE PATH "Directory holding the Xenia golden bundles (game-derived, not in git)")
+    find_program(MILO_PYTHON3 python3)
+    if(MILO_PYTHON3)
+        foreach(_golden loader_char_v1 loader_venue_song_v1)
+            add_test(NAME XeniaGolden.${_golden}
+                COMMAND ${MILO_PYTHON3} -m state_diff.golden check
+                    "${DC3_XENIA_GOLDEN_DIR}/${_golden}"
+                    --native-binary "$<TARGET_FILE:dc3-native>"
+                    --work-dir "${CMAKE_CURRENT_BINARY_DIR}/xenia_golden/${_golden}"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/../tools")
+            set_tests_properties(XeniaGolden.${_golden} PROPERTIES
+                LABELS XeniaGolden
+                SKIP_RETURN_CODE 77
+                TIMEOUT 600)
+        endforeach()
+    endif()
 endif()
 
 endif() # NOT EMSCRIPTEN

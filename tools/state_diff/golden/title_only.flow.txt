@@ -1,0 +1,9 @@
+# title_only — boot the ORIGINAL debug.xex to title_screen and stop driving.
+#
+# Used by the Xenia golden recorder (tools/state_diff/golden/boot_xenia.sh).
+# The only host input left is the fork's input.attract_press (A on the attract
+# screen while this wait_screen blocks, behind --dc3_headless_autonav). After
+# title_screen nothing is pressed, so none of the gameplay-state hacks are
+# exercised, and the loader probes run against a fresh ObjectDir that no
+# host-driven code can reach.
+wait_screen title_screen

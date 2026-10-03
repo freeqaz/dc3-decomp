@@ -27,6 +27,7 @@ probes/*.dta ──compile──► paged DTA ──transport──► raw recor
 | `tools/state_diff/diff.py` | Ranked, collapsed differ |
 | `tools/state_diff/noise.py` | Run-to-run noise floor measurement |
 | `tools/state_diff/sweep.py` | Property sweep + pixel measurement (`--sweep` mode) |
+| `tools/state_diff/loader.py`, `editor_schema.py`, `golden.py`, `golden/` | Xenia goldens: loader probe, schema, record/check, boot scripts (bundles live in the gitignored `archive/state_diff/goldens/xenia/`) |
 | `tools/state_diff/tests/` | 66 unit tests, no engine required |
 
 ---
@@ -696,6 +697,63 @@ hardware from this lane.
 ```bash
 python3 tools/state_diff/tests/test_state_diff.py   # 66/66 passed
 ```
+
+---
+
+## Xenia goldens: the original game as the reference (`golden.py`)
+
+Tier A of `docs/plans/XENIA_ORACLE.md`. The **loader probe** (`loader.py`)
+loads a `.milo` into a FRESH ObjectDir (`{set $xg_dN {load_objects "<milo>"}}`)
+and reads every object `object_list` returns from it: `_class`, `_type`, `_dir`,
+and every property the Milo editor schema names for the class chain
+(`editor_schema.py`, parsed from `orig-assets/extracted/(..)/(..)/system/run/**/*objects.dta`),
+plus array sizes and the first 64 elements (`ELEM_CAPS` lowers that for
+`verts`/`faces`/`frames`). Values are formatted **inside the engine** with a type
+tag, `<DataType>:<value>` (floats `%.9g`), so the same program runs on both sides.
+
+```bash
+cd tools
+# record (unsandboxed, under fr-slot): one Xenia boot -> one capture, twice
+FR_SLOT_OWNER=xenia-golden /home/free/tmp/fr-slot.sh \
+  state_diff/golden/record_xenia.sh <xenia-headless> <run-dir> <capture.json> <milo>...
+python3 -m state_diff.golden record --bundle ../archive/state_diff/goldens/xenia/<name> \
+  --capture a.json --capture b.json --run-dir <run-a> --run-dir <run-b> [--milo ...]
+# check the native port against a bundle (no Xenia): what ctest runs
+python3 -m state_diff.golden check ../archive/state_diff/goldens/xenia/loader_char_v1
+ctest -L XeniaGolden            # in native/build
+```
+
+* **Where bundles live.** `archive/state_diff/goldens/xenia/<name>/`, in the
+  gitignored `archive/` (`setup_worktree.sh` symlinks it into worktrees), the
+  same convention as the pose goldens. They are property dumps of shipped
+  `.milo` content and this repo is public, so they are **never committed**.
+  `ctest` reads `DC3_XENIA_GOLDEN_DIR` (CMake cache path, defaulting there);
+  a missing bundle makes `check` exit 77, a ctest SKIP with the reason
+  printed. With `archive/` present both tests execute, so the skip budget
+  is unchanged.
+* **Bundle** = `golden.json` (only fields equal across BOTH Xenia boots),
+  `manifest.json` (xex sha256, xenia xxh3, effective cvars, the 74 active
+  `DC3 HACK on:` ids mapped to perturbed subsystems, probe-spec and schema
+  hashes, noise floor) and `adjudications.json`.
+* **Refusal.** `check`/`compare` refuse a bundle whose manifest marks a
+  subsystem the loader reads (`dirloader`, `object_load`, `propsync`,
+  `dta_interpreter`) as perturbed, or names a hack id with no known subsystem.
+* **Boot state is an input.** DTA type handlers that run during a load consult
+  UI globals (`{exists game_panel}`, `$hamdirector`), so `check` boots native with
+  `DC3_FAST_BOOT=0` and waits for `title_screen`, matching the Xenia boot.
+* **Tolerated, counted, never silent:** `crt_exponent` (MS CRT `1e-007` vs glibc
+  `1e-07`), `crt_round` (same float32, a `%.9g` tie rounded differently),
+  `fp_eval` (<= 1e-6 relative; derived euler/scale values only). Everything else
+  fails unless an adjudication entry matches it. Entries are narrow by design:
+  `exact` (both values), `int_delta`, `golden_is`, `multiset` (same members,
+  any order), `extra_object`.
+* **Xenia channel limits** (measured): a string result is cut at **4096 bytes
+  with no sentinel**, so every payload ends in `~$~` and a page without it is
+  bisected; the dc3_eval client refuses a whole batch whose joined body is
+  >= 16384, so pages are packed by size.
+
+Noise floor, 2026-10-02: Xenia 0 of 34,496 cells unstable across two boots;
+native 39 (all RndDir `draws` order, pointer tie-break).
 
 ---
 

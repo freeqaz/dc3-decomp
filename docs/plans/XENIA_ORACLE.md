@@ -397,3 +397,65 @@ Related dc3 fixes this wave:
   0 traps, down from 627.
 - 149 of the 173 decomp-pack hacks were defects in our own image, not in
   Xenia.
+
+---
+
+## 10. Step 3: the first goldens (2026-10-02)
+
+Branch `xenia-golden`. Xenia: a Checked `xenia-headless` built from xenia
+`main` `3cf2e27c3` (xxh3 `ea159cf92a56f3c3`), unmodified. Boot: the fork-regress
+S2 cvars with the flow cut to `wait_screen title_screen`
+(`tools/state_diff/golden/`), null GPU, private storage and config copy.
+
+**What was captured.** The loader probe (`tools/state_diff/loader.py`) loads
+each `.milo` into a fresh ObjectDir and reads every editor-schema property of
+every object. Two bundles in the gitignored `archive/state_diff/goldens/xenia/` (game-derived, never committed: the repo is public):
+
+| bundle | milos | cells |
+|---|---|---|
+| `loader_char_v1` | rasa05 viseme, neutral_skeleton, shared main_resource | 10,232 |
+| `loader_venue_song_v1` | ymca expert + midi_bank, houseparty_peakstate, world/default (HamCamShot, Sound, SynthSample, CharLipSync, PropAnim excluded to keep it small) | 24,264 |
+
+Two independent Xenia boots agreed on **all 34,496 cells** (0 unstable, 0 key
+churn). Two native boots disagreed on 39, all of them RndDir draw order. Active
+hacks: 74 `DC3 HACK on:` ids (NUI, calibration, skeleton thread, speech,
+content/XAM, pause-for-skeleton-loss, attract press, decomp-only MMIO range);
+none touches the subsystems the loader reads, so the differ accepts the bundles.
+
+**Native test.** `ctest -L XeniaGolden` (`XeniaGolden.loader_char_v1`,
+`XeniaGolden.loader_venue_song_v1`): boot dc3-native to title_screen, capture,
+compare. Sabotage proof: a native-only `size + 1` in CharClip's PropSync and a
+flipped `mShowBox` in HamCharacter::PostLoad gave 36 and 4 OPEN rows and both
+tests failed; reverted, both pass.
+
+**Adjudication, every disagreement:**
+
+| finding | rows | verdict | action |
+|---|---|---|---|
+| DepthBuffer3D Load/Save/Copy were empty `HX_NATIVE` stubs: native lost every field, so its `mesh` (grid_80by60_cube.mesh, confirmed in the original) was null and boxyman's draws had 31 entries instead of 30 | 15 | **(a) native bug** | fixed: only DrawShowing stays native-stubbed; PPC objects byte-identical (tree_sha256 unchanged) |
+| HamCharacter `gender` 1 on the original, 0 native, for 3 characters | 3 | **(a), rooted in UB in the original** | not fixed. `FileMerger::Merger` never initialises `mForceReload` (target ctor 0x823BEAC8 skips +0x21); the original's stack garbage made the empty merge run and `on_pre_merge` set gender. Forcing `true` natively fixed these 3 and broke another (expert hud `postprocs_before_draw`), so there is no faithful constant. Exact-value waiver. |
+| battle_p0/p1 Spotlight `world_xfm` rotation and `sphere` | 14 | **unresolved** | LookAt constraint only applies when `RndCam::Current()` is set at read time; candidate (c). Exact-value waiver. |
+| Mesh `num_faces` 0 on the original | 63 | (d) | DxMesh::OnSync frees CPU faces after upload; the native renderer uploads lazily and keeps them |
+| RndDir/PanelDir `draws` order | 39-44 | (d) | SortDraws ties broken by RndMat pointer; compared as a multiset |
+| CharClip `size` +292 | 36 | (d) LP64 | AllocSize includes sizeof(CharClip) |
+| float spelling (`e-007` vs `e-07`, a `%.9g` tie) and <=1e-6 derived euler/scale | ~1,000 | (d)/(c) | normalised, counted |
+
+**Instrument gaps found.**
+
+* Xenia channel: string results are cut at 4096 bytes with no truncation
+  sentinel (`dc3_dta_channel.cc` `ReadCString(addr, max = 4096)`); top-level
+  floats print with `%f`. Worked around on the dc3 side (payload terminator,
+  in-engine `%.9g`); the fix belongs in xenia.
+* dc3_eval `eval_batch` rejects a joined body >= 16384 for the whole batch
+  instead of paging it; ConsoleTarget turns that into per-page failures.
+* Native `{$o size (missing)}` SIGSEGVs where the original MILO_FAILs
+  (`Hmx::Object::PropertySize`, `mTypeDef->FindArray(name)` returns null
+  natively).
+* `DC3_FAST_BOOT=1` puts native on main_screen; boot state is an input to
+  load-time DTA handlers, so `check` boots to title_screen.
+
+**Next golden.** HamCamShot and PropAnim from world/default (184k cells;
+needs a smaller cut or a content hash per object), then a character
+`.milo` with outfits merged through `configure_file_merger`, and the
+clip-evaluation probe of §3.3 (bone transforms at beat *b*), which needs a
+raw-matrix reader on both sides.

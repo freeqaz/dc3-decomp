@@ -258,13 +258,19 @@ void DepthBuffer3D::DrawMesh() {
 }
 
 #ifdef HX_NATIVE
+// Only the DRAW is native-stubbed: Kinect depth rendering is not available on
+// native. Save/Load/Copy used to be stubbed here too, and an empty Load leaves
+// every DepthBuffer3D field at its constructor default -- measured by the
+// Xenia loader golden (loader_venue_song_v1, kept in the gitignored
+// archive/state_diff/goldens/xenia/):
+// in world/default.milo the original resolves boxyman1_p1.db3d's `mesh` to
+// grid_80by60_cube.mesh, so RndDir::SyncDrawables drops that mesh from
+// boxyman's draws (it is the DepthBuffer3D's draw child); native kept it as a
+// 31st top-level drawable. Serialization has nothing platform-specific.
 void DepthBuffer3D::DrawShowing() {
     // Kinect depth rendering not available on native
 }
-void DepthBuffer3D::Save(BinStream &) {}
-void DepthBuffer3D::Copy(const Hmx::Object *, Hmx::Object::CopyType) {}
-void DepthBuffer3D::Load(BinStream &) {}
-#else
+#endif
 
 BEGIN_SAVES(DepthBuffer3D)
     SAVE_REVS(11, 0)
@@ -392,6 +398,7 @@ BEGIN_COPYS(DepthBuffer3D)
     END_COPYING_MEMBERS
 END_COPYS
 
+#ifndef HX_NATIVE
 void DepthBuffer3D::DrawShowing() {
     if (TheRnd.DrawMode() != Rnd::kDrawNormal || !Showing()) {
         return;
