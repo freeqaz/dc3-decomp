@@ -103,6 +103,18 @@ CharClip::NodeVector *CharClip::Transitions::FindNodes(CharClip *clip) const {
 // (size+4)*8, 97.5): two Next() calls, `next` + a second Next() in either
 // argument, an intptr_t round-trip, `nodes + size (+1)`. Tried
 // `(CharGraphNode *)next + 1`: same 99.2.
+// w21-ap (99.17, same 3 rows; the SetObjConcrete<AnimTask> vs <CharClip>
+// row is an ICF-folded name). Standalone cl.exe probe of the whole function,
+// ~40 spellings: every form either CSEs to ONE add (`next` local, `char *`
+// or `void *` locals, dst declared first, `&next->clip`, `&next->clip.p`,
+// `next->nodes - 2`, `end + 1` over a CharGraphNode *, byte-offset `off`
+// locals, Resize result copied through `nodes`/a second variable) or
+// re-derives both with the +8 folded into (size+4)*8 (two Next() calls,
+// &nodes[size(+1)], member-of-Next(), four alternative Next() bodies). None
+// keeps the shared (size+3)*8 with two adds and a separate addi as the image
+// does -- it looks like a register-allocator rematerialisation, not a source
+// shape. Behaviour re-read against the image: same moved count (computed
+// before Resize), same dst/src, same insertion and ring fix-up.
 void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
     NodeVector *nodes = FindNodes(clip);
     NodeVector *resized;
