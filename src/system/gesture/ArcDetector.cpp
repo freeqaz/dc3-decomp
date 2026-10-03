@@ -235,17 +235,22 @@ float ArcDetector::GetPathError() const {
         float errY = arcZBase - arcY;
         float errZ = (1.0f / sZErrorScale) * (pt.y - mSwipeExtentY);
         float dz = 0.0f;
-        // RESIDUAL (w7-az, 93.55 canonical, 3 rows): 0x82E00B98 spends a DEAD
-        // `fmr f4, f13` (f4 = 0.0f) that `fmuls f4, f8, f3` overwrites two
-        // instructions later, and schedules `cmplw cr6, r11, r10` three
-        // instructions later than we do.  Writing errZ as `float errZ = 0.0f;`
-        // followed by the assignment is byte-inert -- MSVC deletes the dead
-        // store -- so the zero comes from somewhere else in the original.
-        // Also charged under name_check: the image loads sZErrorScale as
-        // `lbl_82F446F8`, a .data float (value 2.0f, verified) that dtk
-        // attributes to the StandingStillGestureFilter TU, not this one.
-        // Also inert (w12-d, same 19 rows): a zero-initialised
-        // `Vector3 err(0, 0, 0)` with .y/.z assigned and LengthSquared(err).
+        // RESIDUAL (w7-az, 93.55 canonical): the image squares the literal
+        // __real@00000000 (`fmuls f12, f13, f13`) and keeps a dead
+        // `fmr f4, f13` at 0x82E00B98.
+        // KNOWN 100% SPELLING, DELIBERATELY NOT USED (w21-n, coordinator
+        // decision 2026-10-03): `Vector3 err(arcZBase, pt.y, dx);
+        // err -= Vector3(arcY, mSwipeExtentY, dx); err.y /= sZErrorScale;
+        // error += LengthSquared(err);` reads 100 normalized / 99.68 fuzzy and
+        // makes GetSwipeAmount byte-identical, but native (clang -O2, IEEE)
+        // then really computes (dx - dx)^2 -- NaN for inf/NaN dx where the
+        // image adds 0.  The image never computes dx - dx; we do not ship a
+        // decompilation-introduced NaN path for a match point.  Every literal-
+        // zero spelling (0.0f sides, zero local, err.z = 0, Subtract, direct
+        // ctor, named arcPt, Zero() then -=) folds 0*0 at compile time (91.61
+        // fuzzy) or is worse (68.2-88.3); finite-safe non-literal zeros (int
+        // mSide, mSwipeExtentX on both sides) read 84.8 / 86.0.  Also inert
+        // (w12-d): zero-initialised `Vector3 err(0, 0, 0)` + LengthSquared.
         error = errZ * errZ + (errY * errY + dz * dz) + error;
         ++it;
     } while (it != pathEnd);
@@ -260,7 +265,8 @@ float ArcDetector::GetSwipeAmount() const {
     // lives in f2 in the image and f3 here across the GetPathError() call.
     // MSVC picks a volatile FPR the same-TU callee does not touch, so this row
     // follows GetPathError's own register use (that function is 93.5), not
-    // anything in this body.
+    // anything in this body.  CONFIRMED (w21-n): GetPathError's one-error-vector
+    // spelling (not used, see there) makes this function byte-identical (f2).
     float powered = (float)pow((double)GetPathLength(), (double)exponent);
     float pathErr = GetPathError();
     float swipeAmt = (powered - (pathErr / _acceptablePathErrorRatio)) / adjustedThreshold;
@@ -407,26 +413,25 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             mArcOffset = GetCurveStart();
             Vector3 frontPt = *mJointPath.begin();
             float distX = dx - frontPt.x;
-            float distZ = dz - frontPt.z;
             float distY = dy - frontPt.y;
-            // RESIDUAL (w7-an, 97.5 canonical): 19 rows in two clusters, both
-            // scheduling.  (1) The `Vector3 frontPt` 16-byte copy: the image
-            // issues all four `lwz` (w,y,x,z off the node) before all four
-            // `stw`, clobbering r11 -- the head-node pointer -- with the last
-            // load, so it must RELOAD `lwz r11, 0x0(r30)` for the insert()
-            // below.  We keep r11 live, CSE the second begin() away, and
-            // interleave one store into the loads.  (2) f11/f12 are swapped
-            // across the three fsubs and the image squares distY with `fmuls`
-            // immediately after its fsubs, while we defer and square distZ.
-            // NEGATIVE RESULT: `mJointPath.front()` for the copy is
-            // byte-identical to `*mJointPath.begin()`; hoisting `distY * distY`
-            // into its own local is byte-identical too.  Neither touches the
-            // r11 liveness that drives cluster (1).
-            // Also tried (w12-d): the sum as accumulator statements seeded with
-            // distZ*distZ (moves the loads, 97.5) or distY*distY (byte-identical
-            // to the expression) -- neither reproduces the image's fmuls-y-first.
+            float distZ = dz - frontPt.z;
+            // w21-n: push_front, not insert(begin(), ...) -- one inline level
+            // deeper.  The image reloads the head node (`lwz r11, 0x0(r30)`)
+            // right before the insert because push_front forms its own
+            // begin(); with the spelled-out begin() MSVC CSE'd it with the
+            // frontPt copy's head load and kept r11 live (the w7-an cluster
+            // (1)).  97.18 -> 98.72 fuzzy; distX, distY, distZ declared in
+            // that order then gives the image's z, x, y float loads (98.75).
+            // STOP (w21-n, 98.75 fuzzy, 18 rows): the 16-byte frontPt copy's
+            // load/store order (image w,y,x,z; ours z,x,w,y) and the image's
+            // `fmuls` of distY straight after its fsubs, with f11/f12/f13
+            // permuted.  Inert/worse here: copy-ctor, assignment, outer-scope
+            // frontPt, iterator local (all 98.75), a `const Vector3 &` then
+            // copy (96.82), Vector3 dist + LengthSquared (98.72),
+            // DistanceSquared(boneVec, frontPt) (98.53), the y,z,x / z,x,y
+            // declaration orders (98.69).
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
-                mJointPath.insert(mJointPath.begin(), boneVec);
+                mJointPath.push_front(boneVec);
             }
             const TrackedJoint &armSecondary = skeleton.TrackedJoints()[mSecondaryJoint];
             const TrackedJoint &armPrimary = skeleton.TrackedJoints()[mPrimaryJoint];
