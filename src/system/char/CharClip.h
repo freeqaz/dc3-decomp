@@ -24,6 +24,7 @@ class CharClip : public Hmx::Object {
 public:
     class NodeVector {
     public:
+        NodeVector(ObjRefOwner *owner) : clip(owner, (CharClip *)nullptr) {}
         NodeVector *Next() const { return (NodeVector *)(this->nodes + size); }
 
         ObjOwnerPtr<CharClip> clip; // 0x0

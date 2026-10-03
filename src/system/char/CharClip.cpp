@@ -94,6 +94,15 @@ CharClip::NodeVector *CharClip::Transitions::FindNodes(CharClip *clip) const {
     return nullptr;
 }
 
+// w21-j: 96.15 -> 99.2 normalized. Levers: the else-arm is a placement new
+// of the WHOLE NodeVector (its inline ctor builds clip(owner, NULL)) -- the
+// image keeps that guarded result in r30 (`mr. r30,r3 ... li r30,0`) and uses
+// it as the vector afterwards; and the tail start is one local. Remaining
+// 3 rows: the image computes Next() twice (`add r10,r11,r3` / `add r4,r11,r3`
+// then `addi r3,r10,0x8`); we CSE to one add. REFUTED (each folds the +8 into
+// (size+4)*8, 97.5): two Next() calls, `next` + a second Next() in either
+// argument, an intptr_t round-trip, `nodes + size (+1)`. Tried
+// `(CharGraphNode *)next + 1`: same 99.2.
 void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
     NodeVector *nodes = FindNodes(clip);
     NodeVector *resized;
@@ -101,12 +110,15 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
         int bytes = BytesInMemory();
         intptr_t moved = (intptr_t)mNodeEnd - (intptr_t)nodes->Next();
         resized = Resize(bytes + 8, nodes);
-        memmove((char *)resized->Next() + 8, resized->Next(), moved);
+        // The image computes the old tail start twice (`add r10,r11,r3` and
+        // `add r4,r11,r3`) and offsets the destination from the first
+        // (`addi r3,r10,0x8`); writing Next() twice in source instead lets MSVC
+        // fold the +8 into the index ((size+4)*8), so one local is closer.
+        NodeVector *next = resized->Next();
+        memmove((char *)next + 8, next, moved);
     } else {
-        resized = Resize(BytesInMemory() + 0x20, mNodeEnd);
-        ObjOwnerPtr<CharClip> *newClip =
-            new (&resized->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
-        *newClip = clip;
+        resized = new (Resize(BytesInMemory() + 0x20, mNodeEnd)) NodeVector(this);
+        resized->clip = clip;
         resized->size = 0;
     }
     int &size = resized->size;

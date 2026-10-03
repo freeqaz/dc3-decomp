@@ -481,25 +481,36 @@ void HamAudio::PollCrossfade() {
     // literal moves it -- both produced byte-identical output (97.1 / 96.3, same
     // 45 rows).  Callee-saved FPR numbering here is regalloc, not declaration
     // order.
+    // w21-j: 97.13 -> 98.1. The image does NOT CSE mStart in jumpPoint (it
+    // reloads 0x5c(r31) after the fadeStart fnmsubs) nor mEnd in case 2 (reload
+    // of 0x70(r31) for the start<end test), and SetLoop's end argument is read
+    // off the member (0x60(r31)), not cf (0x4(r30)). Stopped at 36 rows: the
+    // f29<->f30 swap above, r10/r11 in the four-word copy, and the fade tail --
+    // the image keeps `fmadds f30,f0,f13,f31` with a LOADED -0.5f
+    // (__real@bf000000) and an unfactored `fmadds f30,f0,f30,f30`, i.e. it
+    // never treats f30 as the constant 0.5 there. REFUTED (byte-identical):
+    // `-0.5f * clamped + 1.0f`, Interp(1.0f, 0.5f, c) / Interp(0.5f, 1.0f, c),
+    // reusing halfFade itself as the fadePos variable.
     float currentTime = mSongStream->GetInSongTime();
     float kEpsilon = 1.0f / 120.0f;
     float halfFade = 0.5f;
 
     if (mCrossfade.mFlag == 1 && mActiveCrossfade.mFlag <= 1) {
         MILO_ASSERT_FMT(mStreams[1], "Crossfade requires 2 song streams");
-        // &mCrossfade is materialised ONCE into a callee-saved register and every
-        // later read goes through it: 0x82529EA4 `addi r30, r31, 0x5c`, then
+        // &mCrossfade is materialised ONCE into a callee-saved register and most
+        // reads go through it (the mStart/mEnd reloads noted below come off r31
+        // instead): 0x82529EA4 `addi r30, r31, 0x5c`, then
         // 0x0(r30)/0x4(r30)/0x8(r30) at 0x82529F14, 0x82529F44, 0x82529F4C,
         // 0x82529F64 and the four-word copy at 0x82529FAC.  r30 stays live across
         // the GetTime/IsReady/Resync/SetLoop calls, which is what makes it
         // callee-saved and the prologue `bl __savegprlr_29`.
         HamCrossfade &cf = mCrossfade;
         float jumpPoint = cf.mEnd
-            - (cf.mStart - (-(cf.mDuration * halfFade - cf.mStart)));
+            - (mCrossfade.mStart - (-(cf.mDuration * halfFade - cf.mStart)));
         if (mStreams[1]->GetTime() != jumpPoint) {
             if (mStreams[1]->IsReady()) {
                 mStreams[1]->Resync(jumpPoint);
-                SetLoop(cf.mStart, cf.mEnd, mStreams[1]);
+                SetLoop(cf.mStart, mCrossfade.mEnd, mStreams[1]);
             } else {
                 MILO_NOTIFY("HamAudio::PollCrossFade() - almost tried to resync stream before it was ready");
             }
@@ -547,7 +558,8 @@ void HamAudio::PollCrossfade() {
         mActiveCrossfade.mFlag = 2;
         break;
     case 2: {
-        bool ready = currentTime >= mActiveCrossfade.mEnd;
+        HamCrossfade &active = mActiveCrossfade;
+        bool ready = currentTime >= active.mEnd;
         bool startBeforeEnd = mActiveCrossfade.mStart < mActiveCrossfade.mEnd;
         if (!startBeforeEnd) {
             ready = ready

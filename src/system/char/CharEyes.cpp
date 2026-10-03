@@ -1132,6 +1132,15 @@ stateReset:
 // (a 16-byte Transform copy whose three word loads/stores are scheduled in a rotated
 // order; the "wrong field" story in the resolved-offsets block is the base-register
 // defect noted in CLAUDE.md, not a finding).
+// w21-j: 98.35 -> 99.6. The upper/lower blink directions are Subtract() calls:
+// the image re-tests the next WorldXfm dirty byte (`lbz 0xbd`) only AFTER each
+// 16-byte position copy, i.e. the positions are address-taken; the field-by-
+// field spelling let MSVC hoist that lbz ~10 instructions (the idx 179-209 rows
+// above are gone). The stack-slot permutation remains (~95 offset rows; now
+// 0x60/0x70 lidPos<->Symbol-temp and lowerDir/upperBlinkPos/sourcePos/
+// lowerBlinkPos one slot off). REFUTED this pass: Distance(lidPos, srcPos) for
+// the lid distance (inert/one row worse), declaring lowerDir before upperDir
+// (inert), Dot(srcXfm.m.x, cross) for notLidsOK (4 rows worse).
 void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
     if (DataVariable("no_lids").Int(0))
         return;
@@ -1200,18 +1209,12 @@ void CharEyes::LidTrackAndClampingUpdate(EyeDesc &desc, float blinkWeight) {
         Vector3 upperBlinkPos = upperBlink->WorldXfm().v;
         Vector3 lowerBlinkPos = lowerBlink->WorldXfm().v;
 
-        Vector3 upperDir(
-            upperBlinkPos.x - sourcePos.x,
-            upperBlinkPos.y - sourcePos.y,
-            upperBlinkPos.z - sourcePos.z
-        );
+        Vector3 upperDir;
+        Subtract(upperBlinkPos, sourcePos, upperDir);
         Normalize(upperDir, upperDir);
 
-        Vector3 lowerDir(
-            lowerBlinkPos.x - sourcePos.x,
-            lowerBlinkPos.y - sourcePos.y,
-            lowerBlinkPos.z - sourcePos.z
-        );
+        Vector3 lowerDir;
+        Subtract(lowerBlinkPos, sourcePos, lowerDir);
         Normalize(lowerDir, lowerDir);
 
         Vector3 cross;
