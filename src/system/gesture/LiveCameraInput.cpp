@@ -558,10 +558,10 @@ LiveCameraInput::LiveCameraInput()
     // rotation at idx 62-65 (we emit 14b0,1200,14a8,14ac; the image emits
     // 1200,14a8,14ac,14b0, which is OUR source order) survives both -- so the
     // rotation is not caused by the duplicate store and is not decl-ordered.
-    mNumSnapshots = 0;
     mColorStreamTex = 0;
     mDepthStreamTex = 0;
     mDebugDepthTex = 0;
+    mNumSnapshots = 0;
     mSnapshotBatches.clear();
     mNumSnapshots = 0;
     SkeletonUpdate::Init();
