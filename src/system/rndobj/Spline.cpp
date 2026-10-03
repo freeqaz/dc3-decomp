@@ -296,8 +296,9 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int iStartIndex, int iEndIndex) cons
             Add(last.mPos, delta, mDummyAfter.mPos);
             mDummyAfter.mRoll = last.mRoll;
             Subtract(mDummyAfter.mPos, mDeformedCtrlPoints[lastIdx].mPos, delta);
-            Add(mDummyAfter.mPos, delta, mDummyAfterEnd.mPos);
-            mDummyAfterEnd.mRoll = mDummyAfter.mRoll;
+            CtrlPoint &afterEnd = mDummyAfterEnd;
+            Add(mDummyAfter.mPos, delta, afterEnd.mPos);
+            afterEnd.mRoll = mDummyAfter.mRoll;
             mDeformedCtrlPoints[lastIdx - 1].mDirtyConstants = true;
             mDeformedCtrlPoints[lastIdx].mDirtyConstants = true;
         }
