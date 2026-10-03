@@ -281,6 +281,12 @@ void FitnessGoalMgr::SendPassiveMsg(Symbol sym) {
     );
 }
 
+// w20-l: normalized 100 / fuzzy 99.70. 7 rows, all one callee-saved swap r27<->r28:
+// image r28 = hidden DataNode return pointer, r27 = hoisted 0 (stored to
+// mCurrentRCJob 0x48, to the front node's cmd slot, and as the return's kDataInt
+// type); ours swaps the two. Values, stores and all branch targets checked vs the
+// image; the RadFree callee row is ICF (82E21268 = operator delete). Inlining
+// `cmd` into the switch emits identical code.
 DataNode FitnessGoalMgr::OnMsg(const RCJobCompleteMsg &msg) {
     if (!msg.Success()) {
         MILO_ASSERT(!mCommands.empty(), 0x163);

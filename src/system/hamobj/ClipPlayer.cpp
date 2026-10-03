@@ -556,9 +556,12 @@ void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
             Keys<Symbol, Symbol> *savedKeys = mClipKeys;
             mClipKeys = mMasterClipKeys;
 
-            float practBeat = FrameToBeat(practiceKey->frame);
-            float beatDiff = practBeat - beat;
+            float beatDiff = FrameToBeat(practiceKey->frame) - beat;
 
+            // w20-l: values and branch targets verified vs image (0x1a84); fuzzy
+            // 99.83 -> one row: `fadds f0, f31, f0` (beatDiff + mBeatOffset) vs ours
+            // `f0, f0, f31` -- commutative operand order, source spelling and
+            // statement order both tried, no change / regresses.
             mBeatOffset += beatDiff;
             mBeat += beatDiff;
             mPracticeStart += beatDiff;
