@@ -75,6 +75,15 @@ END_COPYS
 // an explicit `this` temp, back() through the member) lives in how the
 // ObjPtrVec accessors were spelled in the original header, which is
 // PCH-reached and out of scope for this row.
+// w21-p (98.55, same 9 rows): behaviour re-read against the image -- every
+// branch lands on the corresponding block (targets differ only by the
+// constant function-base delta, plus -4 inside the r26 insert/delete
+// window), and the r26 rows are all the same address, this+0x60.  Note the
+// same shape exists for mChildNodes in BOTH builds: r29 = this+0x18 is
+// materialised at 0x82405D44 between the two displacement loads of
+// empty(), and all later uses go through r29.  For mChoiceHistory the image
+// does the same at the top of the >1 arm; we only materialise it for the
+// clear() call.  Not chased further: the lever is in ObjPtrVec's accessors.
 bool FlowPickOne::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
