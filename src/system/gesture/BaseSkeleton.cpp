@@ -231,6 +231,13 @@ void BaseSkeleton::LimbNormPos(
 // tail vs ours into the last store): ARTIFACT -- shared vs duplicated tail;
 // both store v60-v80, v64-v84, v68-v88. The MakeString name diff is an ICF
 // fold (824d1870 in the map carries both spellings).
+// w21-w (95.93 canonical, 44 of 222 rows, unchanged): behaviour re-read against
+// the image -- z is always (v - v) = 0 on arm/leg (branch-selected `lfs` then
+// `fsubs f0, f0, f0`), kUnk5 subtracts all three, the default case skips the
+// stores -- ours agrees.  Measured, all no better: `limbDir -= nearJoint` in
+// kUnk5 (95.73) or all three arms (95.00); kUnk5 subtraction orders xzy 94.55,
+// yxz 95.00, yzx 95.73, zxy 95.72; arm/leg copy-statement orders nol/onl 95.93,
+// lno/lon 95.86, oln 95.85; `limbDir.z = -nearJoint.z + limbDir.z` byte-inert.
 void BaseSkeleton::MakeCameraToPlayerXfm(
     SkeletonCoordSys cs,
     Transform &xfm,
