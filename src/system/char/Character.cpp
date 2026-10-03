@@ -364,16 +364,6 @@ void Character::UpdateSphere() {
     SetSphere(s78);
 }
 
-inline void ProbePlane(Plane &p, const Vector3 &point, const Vector3 &normal) {
-    p.a = normal.x;
-    p.b = normal.y;
-    p.c = normal.z;
-    float dot = normal.x * point.x;
-    dot += normal.y * point.y;
-    dot += normal.z * point.z;
-    p.d = -dot;
-}
-
 void Character::DrawShadow(const Transform &xfm, float planeD) {
     if (mShowing && !mShadow.empty()) {
         Vector3 worldPos = WorldXfm().v;
