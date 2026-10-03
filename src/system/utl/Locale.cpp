@@ -297,15 +297,24 @@ void Locale::Init() {
                 numChunks = 0;
                 for (int j = cfg->Size() - 2; j >= 0; j--) {
                     DataArray *curArr = arrVec[j];
+                    // BEHAVIOURAL (w21-ag): LiteralArray's error-context argument is
+                    // the PREVIOUS chunk array, not curArr, from the second entry on.
+                    // Image 827E9BDC `mr r30, r26` (curArr) before the k loop, then in
+                    // the loop 827E9C04 `mr r4, r30` / bl LiteralArray / 827E9C10
+                    // `mr r30, r3` -- one register carries both.  Only the file/line
+                    // of a "Data %s is not Array" failure depends on it.  The size
+                    // test re-reads Size() (lha 0x8 is CSE'd; the image spills it to
+                    // 0x6c only inside the MILO_FAIL arm, which a named `size` local
+                    // would not do).
+                    DataArray *chunkArr = curArr;
                     for (int k = curArr->Size() - 1; k >= 0; k--, numChunks++) {
-                        DataArray *chunkArr = curArr->Node(k).LiteralArray(curArr);
-                        int size = chunkArr->Size();
-                        if (size < 2) {
+                        chunkArr = curArr->Node(k).LiteralArray(chunkArr);
+                        if (chunkArr->Size() < 2) {
                             MILO_FAIL(
                                 "%s line %d should have 2 entries, has %d, mismatched quotes?",
                                 chunkArr->File(),
                                 chunkArr->Line(),
-                                size
+                                chunkArr->Size()
                             );
                         }
                         chunks[numChunks].node1 = chunkArr->LiteralSym(0);
