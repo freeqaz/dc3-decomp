@@ -124,6 +124,15 @@ struct SkeletonData {
 };
 
 struct SkeletonUpdateData {
+    // w19-c: an inline constructor -- SkeletonUpdate::PostUpdate's store order
+    // (0x68 before 0x70) only comes out of a constructor call; field stores
+    // and an aggregate initialiser transpose the last pair.
+    SkeletonUpdateData(
+        Skeleton **left, Skeleton **right, SkeletonFrame *frame, SkeletonHistory *history,
+        CameraInput *cam
+    )
+        : mSkeletonsLeft(left), mSkeletonsRight(right), mFrame(frame), mHistory(history),
+          mCameraInput(cam) {}
     Skeleton **mSkeletonsLeft; // 0x0
     Skeleton **mSkeletonsRight; // 0x4
     SkeletonFrame *mFrame; // 0x8

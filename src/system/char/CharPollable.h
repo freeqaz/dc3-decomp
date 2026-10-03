@@ -13,6 +13,13 @@ public:
 class CharPollableSorter {
 public:
     struct Dep {
+        // w19-c BEHAVIOUR FIX: the image's map<Object*, Dep>::operator[]
+        // (char/Character.obj) stores 0 to the default value's obj (0x60(r31))
+        // and poll (0x6c(r31)) and leaves searchID alone, i.e. this ctor.
+        // Without it MSVC's value-initialisation of this non-POD left obj as
+        // stack garbage, and AddDeps tests `if (!mapDep.obj)` to recognise a
+        // freshly inserted entry.  rb3-xenon recovered the same ctor.
+        Dep() : obj(nullptr), poll(nullptr) {}
         Hmx::Object *obj; // 0x0
         std::list<Dep *> changedBy; // 0x4
         RndPollable *poll; // 0xc

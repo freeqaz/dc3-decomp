@@ -6,61 +6,26 @@
 
 float gBigSinTable[0x200];
 
+// w19-c (98.72 -> 100): a plain INDEX loop.  The image's signed pointer test
+// (`cmpw cr6, r30, r11` against `addi r11, r29, 0x7fc` recomputed in the loop)
+// is MSVC's own linear-function-test replacement of `i < 256` onto the
+// strength-reduced &gBigSinTable[i * 2 - 1] cursor -- it keeps the signedness
+// of the int compare it replaced, which is why no hand-written pointer loop
+// (cmplw), cast (a fourth GPR) or j-stepped index loop (wrong cursor) reached
+// it.  The final half-iteration (the delta slot 511) is peeled after the loop.
 void TrigTableInit() {
-    float *tablePtr = gBigSinTable - 1;
-    int i = 0;
-    do {
-        float sineValue = std::sin(0.024543693f * i);
-        tablePtr[1] = sineValue;
+    int i;
+    for (i = 0; i < 256; i++) {
+        float s = std::sin(0.024543693f * i);
+        gBigSinTable[i * 2] = s;
         if (i != 0) {
-            tablePtr[0] = sineValue - tablePtr[-1];
+            gBigSinTable[i * 2 - 1] = s - gBigSinTable[i * 2 - 2];
         }
-        tablePtr += 2;
-        i++;
-        // FLOOR, 98.72: the image's loop test is `cmpw cr6, r30, r11` --
-        // SIGNED -- and a plain pointer `<` gives us `cmplw`.  Four spellings
-        // measured, none better than this one:
-        //   tablePtr < &gBigSinTable[511]      98.72  (1 row: cmpw vs cmplw)
-        //   tablePtr < gBigSinTable + 511      98.72  inert, same row
-        //   (int)tablePtr < (int)&gBigSinTable[511]        95.6
-        //   (int)tablePtr < (int)gBigSinTable + 0x7fc      95.6
-        //   i < 256                                        96.6
-        // Both casts do buy the signed compare, and both cost a fourth
-        // callee-saved GPR: the limit becomes a loop-invariant int in r28, the
-        // prologue goes r29-r31 -> r28-r31 and the frame grows 0x10, where the
-        // image recomputes `addi r11, r29, 0x7fc` inside the loop.  The index
-        // form just compares i (`cmpwi cr6, r31, 0x100`) and drops the pointer
-        // test altogether.
-        // w9-b 2026-09-30: floor re-confirmed.  Two more spellings and a permuter
-        // sweep, none better:
-        //   int tablePtr = (int)gBigSinTable - 4, accesses through
-        //     *(float *)(tablePtr + 4), test tablePtr < (int)gBigSinTable + 0x7fc
-        //     -- 95.574.  Making the CURSOR an int rather than casting it at the
-        //     comparison costs exactly the same fourth GPR.
-        //   float *table = gBigSinTable; ... (int)tablePtr < (int)table + 0x7fc
-        //     -- 87.043.  Hoisting the base into a named local so the limit would
-        //     have to be rematerialised from an already-live register -- the
-        //     two-axis idea that closed UILabelDir::GetStateColor -- is much worse.
-        //   decomp-synth beam search, 3 depths, 86 viable variants, with
-        //     signed_unsigned and comparison_flip both in the selected pattern
-        //     set: 0 improved over the 98.72 baseline.
-        // Still unexplained: how MSVC reaches a SIGNED compare of two pointers at
-        // all.  Every spelling that buys `cmpw` also turns the limit into a
-        // loop-invariant int, where the image recomputes `addi r11, r29, 0x7fc`
-        // inside the loop.
-        // w17-c: an index loop `for (j = -1; j < 511; j += 2, i++)` storing
-        // gBigSinTable[j + 1] / [j] / reading [j - 1] DOES buy the signed
-        // `cmpw` with the limit rematerialised inside the loop, but MSVC then
-        // strength-reduces on &table[j + 1] (base, limit 0x800) where the
-        // image uses &table[j] (base - 4, limit 0x7fc): 5 offset rows, probe
-        // diff 64 vs 60 for this spelling.  Writing the [j] store first or
-        // through a `float *p = &table[j]` was worse.
-    } while (tablePtr < &gBigSinTable[511]);
+    }
     float sineValue = std::sin(0.024543693f * i);
-    // Peeled last half-iteration: writes the odd (delta) slot 2i-1 and reads the
-    // even (sine) slot 2i-2, exactly as the loop body does.  Spelled through two
-    // separate bases because that is what the target emits -- `gBigSinTable[i*2-1]`
-    // lets MSVC CSE them into one base and costs four rows.
+    // Spelled through two separate bases because that is what the target
+    // emits -- `gBigSinTable[i*2-1]` lets MSVC CSE them into one base and
+    // costs four rows.
     (gBigSinTable + 1)[i * 2 - 2] = sineValue - gBigSinTable[i * 2 - 2];
 }
 

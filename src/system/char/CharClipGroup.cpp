@@ -107,31 +107,28 @@ int CharClipGroup::QueueRandom(int pos, int end) const {
     return result - ((result >= size) ? size : 0);
 }
 
+// w19-c: ClampTo is OUR name -- the image only shows that both clamps below
+// went through an inlined by-reference helper: each stores its Min()
+// unconditionally (`blt`/`bge` over one `mr`, then the `stw`) and the member is
+// RELOADED afterwards instead of forwarded.  Written as plain
+// `mWhich = Min(...)` MSVC forwards the value into a callee-saved register and
+// renumbers r24-r31 (93.2); through the reference it does not (100).
+static inline void ClampTo(int &x, int max) { x = Min(x, max); }
+
+// w19-c (94.87 -> 100): three changes, each measured.  (1) the two scans are
+// plain `while` loops, not hand-rotated `if (c) do {} while (c)` (-> 96.1, the
+// r30/r31 `this`/`pos` swap is a rotation artefact); (2) the clamps go through
+// ClampTo above (-> 97.5); (3) each scan advances through a fresh `next`
+// local, wrapped and then assigned back, which is the image's xoris-before-subf
+// order for the branchless wrap (-> 100); `pos++; pos -= ...` schedules the
+// subf first.
 CharClip *CharClipGroup::GetClip(int flags) {
     if (!mClips.size()) {
         return nullptr;
     }
 
-    // RESIDUAL (w7-ak, 94.87 canonical): 61 rows, 39 of them one r30<->r31
-    // permutation -- the image holds `this` in r31 and `pos` in r30, we hold them
-    // the other way round, and every use of either register is charged. The only
-    // two non-regalloc rows are here: the image clamps with an UNCONDITIONAL store
-    // (`cmpw size-1, mWhich` / `blt` skips a `mr`, then one `stw`) where this
-    // conditional store emits `bge` around the store itself.
-    // NEGATIVE RESULT: `mWhich = Min((int)mClips.size() - 1, mWhich);` does emit
-    // the image's blt+mr+stw, and costs 94.87 -> 92.9: it pushes mWhich into the
-    // callee-saved r26 and shifts the whole r24..r31 assignment by one, trading
-    // 2 rows for 8. The clamp spelling is therefore NOT independently testable
-    // until the r30/r31 assignment is solved.
-    {
-        int sz = (int)mClips.size() - 1;
-        if (sz < mWhich)
-            mWhich = sz;
-    }
-    // Min(x, y) is (y < x) ? y : x, and the image keeps the MEMBER in the result
-    // register here (cmpw size-1, unk24 / bge skips the move), so unk24 is the
-    // first argument.  The if-form (a conditional store) costs 2 points.
-    unk24 = Min(unk24, (int)mClips.size() - 1);
+    ClampTo(mWhich, (int)mClips.size() - 1);
+    ClampTo(unk24, (int)mClips.size() - 1);
 
     int origWhich = mWhich;
 
@@ -139,37 +136,35 @@ CharClip *CharClipGroup::GetClip(int flags) {
     pos -= (pos >= mClips.size()) ? mClips.size() : 0;
     mWhich = pos;
 
-    if (pos != unk24) {
-        do {
-            int swapIdx = QueueRandom(pos, unk24);
-            mClips.swap(pos, swapIdx);
-            CharClip *clip = mClips[pos];
-            if ((clip->Flags() & flags) == flags) {
-                mClips.swap(pos, mWhich);
-                return clip;
-            }
-            pos++;
-            pos -= (pos >= mClips.size()) ? mClips.size() : 0;
-        } while (pos != unk24);
+    while (pos != unk24) {
+        int swapIdx = QueueRandom(pos, unk24);
+        mClips.swap(pos, swapIdx);
+        CharClip *clip = mClips[pos];
+        if ((clip->Flags() & flags) == flags) {
+            mClips.swap(pos, mWhich);
+            return clip;
+        }
+        int next = pos + 1;
+        next -= (next >= mClips.size()) ? mClips.size() : 0;
+        pos = next;
     }
 
     CharClip *clip = nullptr;
-    if (pos != origWhich) {
-        do {
-            int swapIdx = QueueRandom(pos, origWhich);
-            mClips.swap(pos, swapIdx);
-            clip = mClips[pos];
-            if ((clip->Flags() & flags) == flags) {
-                mClips.swap(pos, mWhich);
-                mClips.swap(pos, unk24);
-                int newUnk24 = unk24 + 1;
-                newUnk24 -= (newUnk24 >= mClips.size()) ? mClips.size() : 0;
-                unk24 = newUnk24;
-                return clip;
-            }
-            pos++;
-            pos -= (pos >= mClips.size()) ? mClips.size() : 0;
-        } while (pos != origWhich);
+    while (pos != origWhich) {
+        int swapIdx = QueueRandom(pos, origWhich);
+        mClips.swap(pos, swapIdx);
+        clip = mClips[pos];
+        if ((clip->Flags() & flags) == flags) {
+            mClips.swap(pos, mWhich);
+            mClips.swap(pos, unk24);
+            int newUnk24 = unk24 + 1;
+            newUnk24 -= (newUnk24 >= mClips.size()) ? mClips.size() : 0;
+            unk24 = newUnk24;
+            return clip;
+        }
+        int next = pos + 1;
+        next -= (next >= mClips.size()) ? mClips.size() : 0;
+        pos = next;
     }
 
     clip = mClips[pos];

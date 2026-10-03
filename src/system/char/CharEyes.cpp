@@ -618,6 +618,17 @@ RndTransformable *CharEyes::GetTarget() {
     }
 }
 
+// RB3's name and body (rb3 src/system/char/CharEyes.cpp).  Called from Poll(),
+// where it inlines on the FULL object pointer (`0x30(r25)`), not the
+// CharPollable subobject Poll() is entered through.
+bool CharEyes::EitherEyeClamped() {
+    for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
+        if (it->mEye && it->mEye->mDisableRoll)
+            return true;
+    }
+    return false;
+}
+
 void CharEyes::ClearAllInterestObjects() { mInterests.clear(); }
 
 void CharEyes::ListPollChildren(std::list<RndPollable *> &plist) const {
@@ -1482,18 +1493,7 @@ void CharEyes::Poll() {
                 goto storeState;
             if (!blinkDetected) {
                 if (canSeeTarget) {
-                    bool anyEyeClamped;
-                    auto eyesEnd = mEyes.end();
-                    for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != eyesEnd;
-                         ++it) {
-                        if (it->mEye && it->mEye->mDisableRoll) {
-                            anyEyeClamped = true;
-                            goto haveClamped;
-                        }
-                    }
-                    anyEyeClamped = false;
-                haveClamped:
-                    if (!anyEyeClamped)
+                    if (!EitherEyeClamped())
                         goto storeState;
                 }
                 if (mAvDelta >= 0.0f)
@@ -1529,12 +1529,14 @@ storeState:
         EnforceMinimumTargetDistance(headPos, mTarget, mTarget);
     }
 
-    RndTransformable *eyeTarget;
-    if (!mEyes.empty() && mEyes[0].mEye) {
-        eyeTarget = mEyes[0].mEye->mTarget;
-    } else {
-        eyeTarget = 0;
-    }
+    // w19-c (98.95 -> 99.58): GetTarget() and EitherEyeClamped() as CALLS, as
+    // RB3 writes them.  Inlined, their member reads go through the FULL object
+    // pointer (`0x30(r25)`), where the open-coded versions read through the
+    // CharPollable subobject Poll() is entered on and cost a callee-saved
+    // register for &mEyes.  Left: one commutative fmadds, and the
+    // TheWorld->Cam() test is a signed `cmpwi` in the image (ours `cmplwi`;
+    // RB3's do/while(false) camera chain is byte-inert).
+    RndTransformable *eyeTarget = GetTarget();
 
     if (eyeTarget) {
         float weight = Weight();

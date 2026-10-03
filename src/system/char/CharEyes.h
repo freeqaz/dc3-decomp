@@ -120,6 +120,7 @@ protected:
     CharEyes();
     RndTransformable *GetHead();
     RndTransformable *GetTarget();
+    bool EitherEyeClamped();
     bool IsHeadIKWeightIncreasing();
     void ProceduralBlinkUpdate();
     void UpdateOverlay();

@@ -261,13 +261,20 @@ void DxMultiMesh::DrawBatchedNewGfx() {
         D3DDevice_SetVertexDeclaration(TheDxRnd.Device(), sMutableVertexDecl);
         numFaces = owner->Faces().size();
     } else {
+        // w19-c (99.15 -> 100 modulo register permutation): device, buffer
+        // and the call result each in a named local before the call, as in
+        // DxMesh's own draw path.  With the VertSize()/GetMultimeshFaces()
+        // call left inside the argument list MSVC materialises the constant
+        // arguments in the wrong order (`li r8, 1` last instead of first, 8
+        // rows); with the device fetched inside the argument list it is
+        // loaded after the call instead of held across it.
         D3DVertexBuffer *verts = owner->unk1a4.buffer;
-        D3DDevice_SetStreamSource(
-            TheDxRnd.Device(), 0, verts, 0, owner->VertSize(), 1
-        );
-        D3DDevice_SetStreamSource(
-            TheDxRnd.Device(), 1, owner->GetMultimeshFaces(), 0, 4, 1
-        );
+        D3DDevice *dev = TheDxRnd.Device();
+        unsigned int vertSize = owner->VertSize();
+        D3DDevice_SetStreamSource(dev, 0, verts, 0, vertSize, 1);
+        dev = TheDxRnd.Device();
+        D3DVertexBuffer *faces = owner->GetMultimeshFaces();
+        D3DDevice_SetStreamSource(dev, 1, faces, 0, 4, 1);
         D3DDevice_SetVertexDeclaration(TheDxRnd.Device(), sVertexDecl);
         numFaces = owner->mNumFaces;
     }
