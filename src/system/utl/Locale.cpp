@@ -293,7 +293,7 @@ void Locale::Init() {
 
                 chunks = new LocaleChunkSort::OrderedLocaleChunk[totalChunks];
 
-                numChunks = 0;
+                int n = 0;
                 for (int j = cfg->Size() - 2; j >= 0; j--) {
                     DataArray *curArr = arrVec[j];
                     // BEHAVIOURAL (w21-ag): LiteralArray's error-context argument is
@@ -306,7 +306,7 @@ void Locale::Init() {
                     // 0x6c only inside the MILO_FAIL arm, which a named `size` local
                     // would not do).
                     DataArray *chunkArr = curArr;
-                    for (int k = curArr->Size() - 1; k >= 0; k--, numChunks++) {
+                    for (int k = curArr->Size() - 1; k >= 0; k--, n++) {
                         chunkArr = curArr->Node(k).LiteralArray(chunkArr);
                         if (chunkArr->Size() < 2) {
                             MILO_FAIL(
@@ -316,12 +316,14 @@ void Locale::Init() {
                                 chunkArr->Size()
                             );
                         }
-                        chunks[numChunks].node1 = chunkArr->LiteralSym(0);
-                        chunks[numChunks].node2 = numChunks;
-                        chunks[numChunks].node3 = chunkArr->LiteralStr(1);
+                        chunks[n].node1 = chunkArr->LiteralSym(0);
+                        chunks[n].node2 = n;
+                        chunks[n].node3 = chunkArr->LiteralStr(1);
                     }
                     curArr->Release();
                 }
+
+                numChunks = n;
 
                 if (cfg->Size() > 1) {
                     LocaleChunkSort::Sort(chunks, numChunks);
