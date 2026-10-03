@@ -18,6 +18,18 @@ AccomplishmentOneShot::AccomplishmentOneShot(DataArray *d, int i)
 
 AccomplishmentOneShot::~AccomplishmentOneShot() {}
 
+// w20-m (normalized 100, 0 mismatched instructions, fuzzy 99.93): behaviour
+// verified against the image -- every arm's branch target (Beginner/difficulty
+// gate, cross-jumped flawless/nices calls, NumDays 0x114 / NumWeekends 0x11c,
+// s == omg gate, shared Int() >= val tail, notify-and-return-false default).
+// The charged relocations are names only: NumVerts@RndMesh vs
+// GetFlawlessMoveCount and the two MakeString instantiations are ICF folds
+// (same address in icf_aliases.map), and the second stars_earned / omg statics
+// carry scope ordinal ?CP@/?CM@ (47/44) in the image vs ours ?EF@/?EC@ (69/66):
+// the original opened 22 fewer scopes between the stars and hardest_stars
+// arms. A shared `int count` + `||`-merged arms reproduced the ordinals exactly
+// (44/47) but broke the cross-jumped block layout (85.0), so the separate-arm
+// spelling stays; the original arm spelling is still unknown.
 bool AccomplishmentOneShot::AreOneShotConditionsMet(
     HamPlayerData *hpd, HamProfile *profile, Symbol s, Difficulty d
 ) {
