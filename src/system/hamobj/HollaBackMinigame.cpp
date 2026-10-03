@@ -573,6 +573,13 @@ void HollaBackMinigame::SetMoveState(int measure, Symbol state) {
                     // stores mShowing first), a find-then-test split 98.4, a
                     // panel local 98.2, size() in the condition 98.8 (the
                     // _M_start reload DOES appear, but with a stw spill to 0x50).
+                    // Closest miss: size() through the member and the read
+                    // through a `(const) std::vector<HamMove *> &` bound before
+                    // the loop (or before SetShowing) stops the CSE with the
+                    // size load, but MSVC then hoists the reference load above
+                    // the loop (98.80, 5 rows: the lwz sits before `li r11, 0`
+                    // instead of at the loop head); bound inside the loop body
+                    // 98.1.
                     u32 numMoves = mRoutineMoves.size();
                     for (u32 i = 0; i < numMoves; i++) {
                         if (move == mRoutineMoves[i]) {
