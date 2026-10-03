@@ -367,6 +367,13 @@ void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
                 // swapped within (x,y) and (z,w)); Set(...) with the four
                 // expressions as arguments measures 89.7 and disturbs the
                 // mCoeff1 copy. Kept on the one natural helper pair.
+                // w21-be STOP at 98.24 (22 diff_arg / 3 insert / 2 delete,
+                // all in this block plus one /fp:fast fadds operand order on
+                // the last mCoeff0 x term, 826B3644).  MEASURED, all worse:
+                // a `Vector4 &c2 = pt.mCoeff2` binding for the two helpers
+                // (stores merge away, 96.6 raw); two Set() calls per stage
+                // (96.6 raw); add-then-sub (also different rounding);
+                // `pt.mCoeff3 = curVec` hoisted above this block (85.3 raw).
                 ScaleSubEq(pt.mCoeff2, prevVec, 0.5f);
                 ScaleAddEq(pt.mCoeff2, nextVec, 0.5f);
 
