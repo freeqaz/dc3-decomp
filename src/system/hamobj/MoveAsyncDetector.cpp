@@ -196,6 +196,16 @@ void MoveAsyncDetector::EnqueueDetectFrames(int i1, int i2, float f3, int i4) {
         // method the map lists `f i` (Poll, PlayerDetectFrames, ctor/dtor, the
         // Frac getters); frames-first + cur->Move()->FilterVer() in the call,
         // a separate `ver` local, (*it)-> everywhere, a frames pointer: 86.0-86.7.
+        // w21-b (still 90.53): the image loads mMove straight into r3 AFTER
+        // `mr r24, r3` (so cur stays live in r25 and frames takes r24); every
+        // spelling that loads Move() after the call lets MSVC's pre-RA
+        // scheduler hoist the load above the frames copy, so frames reuses
+        // cur's register (86.8, __savegprlr_25).  Re-measured: frames first +
+        // cur->Move()->FilterVer() inline (86.8), `cur` declared at function
+        // scope (86.8), PlayerDetectFrames inline with `move` named first
+        // (84.2; confirms right-to-left argument evaluation).  Behaviour is
+        // the image's: Poll(i1, i2, mDir), then EnqueueDetectFrames(f3, i4,
+        // frames, mMove->FilterVer()).
         const HamMove *move = cur->Move();
         std::vector<DetectFrame> &frames = cur->PlayerDetectFrames(i4);
         mDir->EnqueueDetectFrames(f3, i4, frames, move->FilterVer());

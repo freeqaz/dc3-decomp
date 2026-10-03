@@ -328,6 +328,19 @@ float DanceRemixer::JumpedBeat(float beat) const {
     // w11-a: two more spellings inert at 90.88636 -- compound assignment on
     // the parameter (beat -= fromBeat; beat += toBeat) and a float local for
     // the converted toBeat.
+    // w21-b (still 90.88636, same 4 rows): measured in a standalone /FAs probe
+    // with the project's cl.exe flags.  The second slot is caused by the
+    // EARLIER conversions: this tail alone, or with only the `< fromBeat`
+    // early-out above it, reuses -0x10 for both; any (float) conversion in a
+    // block that comes before it in source order pushes the first of these two
+    // onto -0x8.  Writing this case BEFORE the jumpSize block (`if (b >= to)
+    // { if (to < from) return ...; return beat; }`) does give one slot for all
+    // four conversions -- but MSVC then lays the block out first (the image
+    // falls through into the jumpSize block), so it is not the image's source.
+    // Also inert: jumpSize hoisted to function scope, nested if/else with one
+    // `return beat`, a `result` local, an inline Shift(float,int,int) helper
+    // (int or float params), one `float fJump` for both jumpSize arms, and
+    // implicit int->float conversions.  Values match the image on every path.
     return (beat - (float)fromBeat) + (float)toBeat;
 }
 
