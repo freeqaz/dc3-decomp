@@ -976,6 +976,11 @@ void RhythmBattle::OnBeat() {
                 } else {
                     mSwagJackState = 6;
                 }
+                // w20-b: last residual (4 rows): the image loads mSwagJackState
+                // into r5 after `mr r3, r29`; we load it before. Tried and inert:
+                // a state local, an Hmx::Object*/UIPanel* local, a named receiver,
+                // (int) cast, enum-typed member, result in i6b4; the nested call
+                // form is worse (the panel conversion gets CSE'd).
                 int jacked = second->SwagJacked(focusPanel, (RhythmBattleJackState)mSwagJackState);
                 first->SwagJackedBonus(focusPanel, (RhythmBattleJackState)mSwagJackState, jacked);
                 i6b4 = (int)mSwagJackState;
