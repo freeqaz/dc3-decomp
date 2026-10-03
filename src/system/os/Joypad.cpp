@@ -717,7 +717,8 @@ void JoypadPollCommon() {
                 changed |= data.mTriggers[t] != v;
                 data.mTriggers[t] = v;
             }
-            memcpy(data.mSensors, sensors, sizeof(sensors));
+            for (int s = 0; s < 3; s++)
+                data.mSensors[s] = sensors[s];
             for (int p = 0; p < kNumPressureButtons; p++) {
                 changed |= data.mPressures[p] != pressures[p];
                 data.mPressures[p] = pressures[p];
