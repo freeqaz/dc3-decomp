@@ -159,7 +159,11 @@ float RndMorph::InterpWeight(const Keys<float, float> &keys, float frame) {
             if (prevVal || next->value) {
                 float f2 = prevVal * 2.0f - next->value * 2.0f;
                 float neg3f2 = f2 * -3.0f;
-                ret = ref * ref * (f2 * ref + neg3f2 * 0.5f) + prevVal;
+                // The image's association is ((X * ref) * ref) + prev:
+                // fmuls X*ref, then fmadds (X*ref)*ref + prev (0x82716E54..5C).
+                // Spelled that way so native rounds what the original rounded
+                // (ref * ref * X would square ref first).
+                ret = (f2 * ref + neg3f2 * 0.5f) * ref * ref + prevVal;
             }
             return ret;
         } else
