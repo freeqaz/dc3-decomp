@@ -495,11 +495,11 @@ void HamAudio::PollCrossfade() {
         // callee-saved and the prologue `bl __savegprlr_29`.
         HamCrossfade &cf = mCrossfade;
         float jumpPoint = cf.mEnd
-            - (cf.mStart - (-(cf.mDuration * halfFade - cf.mStart)));
+            - (mCrossfade.mStart - (-(cf.mDuration * halfFade - cf.mStart)));
         if (mStreams[1]->GetTime() != jumpPoint) {
             if (mStreams[1]->IsReady()) {
                 mStreams[1]->Resync(jumpPoint);
-                SetLoop(cf.mStart, cf.mEnd, mStreams[1]);
+                SetLoop(cf.mStart, mCrossfade.mEnd, mStreams[1]);
             } else {
                 MILO_NOTIFY("HamAudio::PollCrossFade() - almost tried to resync stream before it was ready");
             }
