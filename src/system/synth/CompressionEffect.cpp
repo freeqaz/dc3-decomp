@@ -149,7 +149,7 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
                 int idx = frame * numChannels + channel2;
                 // Left-to-right: the image multiplies the SAMPLE by mDCBlock
                 // (`fmuls f0, f12, f0`), then by envelope, then by the gain.
-                samples[idx] = samples[idx] * mDCBlock * envelope * mOutputGainRatio;
+                samples[idx] = ((samples[idx] * mDCBlock) * envelope) * mOutputGainRatio;
                 channel2 += 1;
             }
         }
