@@ -687,7 +687,6 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     );
     static UIPanel *sRhythmDetectorPanel =
         ObjectDir::Main()->Find<UIPanel>("rhythm_detector_panel", false);
-    int i10 = 0;
     if (sRhythmDetectorPanel && skelIdx != -1 && sRhythmDetectorPanel->LoadedDir()) {
         String name = MakeString("RhythmDetectorX%d.rhy", skelIdx);
         RhythmDetector *rd =
@@ -732,6 +731,7 @@ void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     static Symbol rhythmbattle_trickpose("rhythmbattle_trickpose");
     static Symbol rhythmbattle_trickgetlow("rhythmbattle_trickgetlow");
     static Symbol rhythmbattle_trickjump("rhythmbattle_trickjump");
+    int i10 = 0;
     mTrickSymbol = none;
     mMoveConsistencyScore = mMovePresenceAccumulator / mWindowElapsedTime;
     // REFUTED (w7-i): hoisting `none` into a local read before the division and
