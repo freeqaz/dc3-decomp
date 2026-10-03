@@ -1586,9 +1586,7 @@ DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
                 int selected = mListState.Selected();
                 do {
                     selected += dir;
-                    if (selected < 0)
-                        return DataNode(0);
-                    if (selected >= mListState.NumShowing())
+                    if (selected < 0 || selected >= mListState.NumShowing())
                         return DataNode(0);
                 } while (!mListState.Provider()->IsActive(selected));
 
