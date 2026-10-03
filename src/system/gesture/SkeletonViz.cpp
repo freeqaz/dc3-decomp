@@ -465,15 +465,13 @@ void SkeletonViz::DrawJoints(
     //     the identical spelling, and writing `c1 * tintColor.red` is INERT.
     //   - the baseScale/scaledScale store schedule below (x,y,z vs y,x,z and
     //     y,z,x vs x,y,z) and one extra saved FPR (f23).
-    float baseScaleZ = mJointMesh->LocalXfm().m.z.z;
-    float baseScaleY = mJointMesh->LocalXfm().m.y.y;
-    float baseScaleX = mJointMesh->LocalXfm().m.x.x;
-    Vector3 baseScale(baseScaleX, baseScaleY, baseScaleZ);
-    Vector3 scaledScale(
-        mLineWidthScale * baseScaleX,
-        mLineWidthScale * baseScaleY,
-        mLineWidthScale * baseScaleZ
+    Vector3 baseScale(
+        mJointMesh->LocalXfm().m.x.x,
+        mJointMesh->LocalXfm().m.y.y,
+        mJointMesh->LocalXfm().m.z.z
     );
+    Vector3 scaledScale;
+    Scale(baseScale, mLineWidthScale, scaledScale);
     SetLocalScale(mJointMesh, scaledScale);
 
     Vector3 *jointIt = drawPos;
