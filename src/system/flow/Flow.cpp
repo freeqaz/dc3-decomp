@@ -165,6 +165,13 @@ void Flow::Copy(const Hmx::Object *o, CopyType ty) {
         // MoveIntoDir(this, c) carry the image's values.  Also byte-identical:
         // SetParent(this, 1); a static inline reparent(child, parent) helper with
         // `true` inside it; the same helper taking the bool as a parameter.
+        // w21-ap (98.79, same 4 rows): a `FlowNode *parent = this` local just
+        // above the copy loop pins it in a callee-saved GPR (96.3, worse).  A
+        // standalone cl.exe probe of the loop (virtual-base Copy override,
+        // SetParent through the child's vtable) emits `li r5, 1` before the
+        // parent operand for plain `this`, static_cast<FlowQueueable-level *>,
+        // a block-local parent/bool pair and a function-scope `self` alike, so
+        // no source spelling of the two arguments reorders them.
         Flow *self = this;
         self->RefreshPortLabelLists();
         if (!self->ProxyFile().empty()) {
