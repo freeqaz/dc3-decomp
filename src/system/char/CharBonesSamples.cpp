@@ -386,6 +386,17 @@ void CharBonesSamples::Print() {
     }
 }
 
+// w21-aq: stopped with 16 rows left (99.7 normalized), none of them a value:
+// (1) the image forms every `mStart + mOffsets[TYPE_ROTX]` at a loop ENTRY as
+// off+start (`add rX, rRotx, rStart`) where ours forms start+off, plus the
+// register naming that follows (rows 70/163/202/236-247/273-275/320); the
+// QUAT/END entries agree.  (2) the kCompressNone quat loop: the image computes
+// the ROTX end bound before `b` into the loop test, ours jumps one instruction
+// earlier onto the shared loop-bottom `add` (1 delete + 1 branch row) --
+// identical behaviour, a tail-merge choice.  Measured inert: spelling the ROTX
+// expressions offset-first (`mOffsets[TYPE_ROTX] + mStart`), and through the
+// CharBones::RotXOffset() accessor.  MSVC canonicalises the operand order, so
+// the source text of the sum does not reach it.
 void CharBonesSamples::Relativize(CharClip *clip) {
     auto& bones = mBones;
     if (bones.empty())
@@ -421,10 +432,16 @@ void CharBonesSamples::Relativize(CharClip *clip) {
                 // "unfixable FPR regswap floor" were that one literal's type.
                 //
                 // Inert, measured: declaring v before/after evalPos; spelling the
-                // subtraction per component in the image's x,z,y store order.
+                // subtraction per component in the image's x,z,y store order;
+                // `Subtract(v, evalPos, v)` in place.
+                // w21-aq: subtracting into a FRESH Vector3 (`Subtract(v, evalPos,
+                // d); pos->Set(d)`) closes all 16 rows of this block (the image's
+                // x,z,y subtract order and evalPos load order) -- same values,
+                // same 0x90 slot for the Set argument.
                 pos->ToVector3(v);
-                v -= evalPos;
-                pos->Set(v);
+                Vector3 d;
+                Subtract(v, evalPos, d);
+                pos->Set(d);
                 bone++;
             }
         } else {

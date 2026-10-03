@@ -100,8 +100,18 @@ void ClipCollide::SetTypeDef(DataArray *da) {
         // statement in its own `{ }` block (so the "modes" temporary's scope is
         // disjoint from the Sym(0) sret's, per stack-slot-sharing.md) is
         // byte-inert.  og-dc3 and rb3-xenon both spell it as here.
+        // w21-aq: naming the Array(1) result (`modeArr`) closes the sret row --
+        // Sym(0)'s sret now reuses r1+0x50 like the image (the chained
+        // `FindArray("modes")->Array(1)` + `modeArr->Sym(0)` split does not).
+        // One row pair left: `li r5, 0x1` scheduled before `mr r3, r31`
+        // (image: after).  Not a source-shape property: the same idiom compiles
+        // both ways inside ONE matched function in the image (MetagameRank::Init
+        // "repeatable" is mr-first, "one_time" li-first; Synth::SetFX likewise),
+        // 27 mr-first vs 100 li-first sites binary-wide.  Explicit
+        // `FindArray(Symbol("modes"), true)` re-measured inert in this shape.
         DataArray *modesArr = da->FindArray("modes");
-        mMode = modesArr->Array(1)->Sym(0);
+        DataArray *modeArr = modesArr->Array(1);
+        mMode = modeArr->Sym(0);
     }
 }
 
