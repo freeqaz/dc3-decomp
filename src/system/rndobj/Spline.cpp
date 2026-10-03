@@ -258,14 +258,11 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int iStartIndex, int iEndIndex) cons
             const CtrlPoint &pt0 = mDeformedCtrlPoints[0];
             const CtrlPoint &pt1 = mDeformedCtrlPoints[1];
             unk144 = false;
-            float y0 = pt0.mPos.y;
-            float z0 = pt0.mPos.z;
-            float y1 = pt1.mPos.y;
-            float z1 = pt1.mPos.z;
-            mDummyBefore.mPos.x = pt0.mPos.x + (pt0.mPos.x - pt1.mPos.x);
-            mDummyBefore.mPos.z = z0 + (z0 - z1);
-            mDummyBefore.mPos.y = y0 + (y0 - y1);
-            mDummyBefore.mRoll = pt0.mRoll;
+            Vector3 delta;
+            Subtract(pt0.mPos, pt1.mPos, delta);
+            CtrlPoint &before = mDummyBefore;
+            Add(pt0.mPos, delta, before.mPos);
+            before.mRoll = pt0.mRoll;
             mDeformedCtrlPoints[0].mDirtyConstants = true;
         }
         int lastIdx = (int)mDeformedCtrlPoints.size() - 1;
@@ -298,7 +295,7 @@ void RndSpline::SyncDeformedDummyCtrlPoints(int iStartIndex, int iEndIndex) cons
             Subtract(last.mPos, prev.mPos, delta);
             Add(last.mPos, delta, mDummyAfter.mPos);
             mDummyAfter.mRoll = last.mRoll;
-            Subtract(mDummyAfter.mPos, last.mPos, delta);
+            Subtract(mDummyAfter.mPos, mDeformedCtrlPoints[lastIdx].mPos, delta);
             Add(mDummyAfter.mPos, delta, mDummyAfterEnd.mPos);
             mDummyAfterEnd.mRoll = mDummyAfter.mRoll;
             mDeformedCtrlPoints[lastIdx - 1].mDirtyConstants = true;
