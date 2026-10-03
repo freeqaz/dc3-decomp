@@ -18,7 +18,11 @@ void BinkSetVideoOnOff(BINK *, int);
 const char *BinkGetError(void);
 void BinkNextFrame(BINK *);
 unsigned int BinkGetTrackData(BINKTRACK *, void *);
-BINKTRACK *BinkOpenTrack(BINK *, unsigned char);
+// w21-ay: U32 trackindex, as in the RAD SDK (src/binkxenon/bink.h:734).  With
+// an `unsigned char` parameter MSVC carried `i` into r4 around the kInit loop
+// (clrlwi r4 on the back-edge); the u32 argument is a separate value copied at
+// the loop top (`mr r4, r28`) exactly as the image does.
+BINKTRACK *BinkOpenTrack(BINK *, unsigned int);
 void BinkCloseTrack(BINKTRACK *);
 void BinkClose(BINK *);
 void BinkGoto(void *bink, unsigned int frame, int mode);
@@ -63,9 +67,9 @@ BinkReader::~BinkReader() {
     BinkClose(mBink);
 }
 
-// w18-e (98.05): BinkOpenTrack(mBink, (int)i) is inert; the loop-carried
-// copy of i into r4 (ours) vs `mr r4, r28` at the loop top (image) is not
-// moved by the argument's type.
+// w18-e (98.05): BinkOpenTrack(mBink, (int)i) is inert -- the cast was
+// truncated straight back by the old `unsigned char` prototype; w21-ay fixed
+// the PROTOTYPE (U32, as in bink.h) and that closed the function.
 // w20-t (98.1, branch-scan row 298 adjudicated ARTIFACT): the BinkOpenTrack
 // loop's back-edge lands on `mr r4, r28` in the image and past it in ours,
 // because ours carries i into r4 on the back-edge (clrlwi r4) and in the
@@ -162,25 +166,13 @@ void BinkReader::Poll(float) {
             unsigned char *mem = (unsigned char *)MemAlloc(
                 hBinkTrack->MaxSize, __FILE__, 0x78, "Bink Audio", 0x80
             );
-            // MEASURED, 2026-09-14 (lane w7-aa).  98.05195, 17 rows, and every
-            // one of them is scheduling or register naming:
-            //   idx 285-298: both sides compute the 0x14 index first and the
-            //     0x24 index second, store in that order, and increment `i`
-            //     before the stores.  Only the two scratch GPRs are swapped
-            //     (r10<->r11) and our `clrlwi` of the incremented `i` lands one
-            //     slot earlier, in r4 instead of r11.  Swapping THESE TWO
-            //     STATEMENTS does not renumber the registers -- it only adds an
-            //     offset swap (0x14,0x24), 98.05195 -> 98.0.  Do not re-try it.
-            //   idx 217/218 vs 225/230: `li r28, 0x0` (i = 0) and `mr r4, r28`
-            //     sit before the four loop-invariant `lis` of the MILO_ASSERT
-            //     message strings on our side and after them in the image.
-            // Separately, and NOT charged by the canonical ruler: the image
-            // reaches one MakeString<char[19], int, char[5]> instantiation from
-            // all five assert sites while we emit five per-site instantiations
-            // sized from the real strings.  That is the known per-TU MakeString
-            // /ICF class, not a defect in this function.
-            mPCMOffsets[i] = mem;
+            // w21-ay (98.05 -> 100): with BinkOpenTrack's u32 prototype the
+            // r10/r11 naming lined up and left only the (0x14,0x24) offset swap,
+            // which this Buffers-then-Offsets order closes.  (w7-aa's note that
+            // the swap "only adds an offset swap" was measured under the old
+            // unsigned-char prototype.)
             mPCMBuffers[i] = mem;
+            mPCMOffsets[i] = mem;
         }
         mState = kSetup;
         break;
