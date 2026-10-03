@@ -157,11 +157,12 @@ void RndRibbon::ConstructMesh() {
     for (int seg = 0; seg < mNumSegments; seg++) {
         int base = mNumSides * seg * 2;
         for (int side = 0; side < mNumSides; side++) {
-            int ns = mNumSides;
             int v0 = base + side;
-            int v1 = base + (side + 1) % ns;
-            mMesh->Faces()[base + side * 2].Set(v0, v1, v1 + ns);
-            mMesh->Faces()[base + side * 2 + 1].Set(v1 + ns, v0 + ns, v0);
+            int v1 = base + (side + 1) % mNumSides;
+            int v2 = v1 + mNumSides;
+            int v3 = v0 + mNumSides;
+            mMesh->Faces()[base + side * 2].Set(v0, v1, v2);
+            mMesh->Faces()[base + side * 2 + 1].Set(v2, v3, v0);
         }
     }
 
