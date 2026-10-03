@@ -138,7 +138,18 @@ void RndRibbon::ExposeMesh() {
  *  MSVC derives side+1 off the strength-reduced vertex index) in callee-saved
  *  r30 (__savegprlr_26 vs our _27), and schedules all four u16 truncations
  *  before the first triple's stores.  Holding the four indices in
- *  `unsigned short` locals first is byte-identical to this. */
+ *  `unsigned short` locals first is byte-identical to this.
+ *  w21-c (79.79 -> 80.78): read mNumSides directly (no per-iteration `ns`
+ *  local, which MSVC PRE'd onto the loop-bottom compare load) and name all
+ *  four indices before the two Sets -- the image reloads 0x4c at the loop top
+ *  and the prologue becomes __savegprlr_26 like the image.  Stopped at 80.78
+ *  (fuzzy 79.31): 19 insert/delete rows in the inner loop -- the image does all
+ *  four u16 truncations (clrlwi r27/r26/r6/r5) before the first sth, keeps
+ *  base in r3 and 1-base in r30; ours keeps base in r30, 1-base in r29 and
+ *  interleaves the first triple's stores.  Measured and no better:
+ *  unsigned short locals (74.0; 69.1 with an ns local), Face& locals (79.79),
+ *  local Face copies (75.2 / 67.1), a named face index, four base-expression
+ *  spellings, (side+1)%n+base, Face::Set(unsigned short...) (no change). */
 void RndRibbon::ConstructMesh() {
     if (mNumSegments <= 0)
         return;
