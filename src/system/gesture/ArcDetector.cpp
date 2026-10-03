@@ -232,36 +232,26 @@ float ArcDetector::GetPathError() const {
         } else {
             arcY = sqrtf(comp);
         }
-        // w21-n: one error VECTOR, not three scalars (93.55 -> 100 normalized,
-        // remaining f8/f9 swap register only; also makes GetSwipeAmount
-        // byte-identical).  What the IMAGE shows: it squares the literal
+        float errY = arcZBase - arcY;
+        float errZ = (1.0f / sZErrorScale) * (pt.y - mSwipeExtentY);
+        float dz = 0.0f;
+        // RESIDUAL (w7-az, 93.55 canonical): the image squares the literal
         // __real@00000000 (`fmuls f12, f13, f13`) and keeps a dead
-        // `fmr f4, f13` at 0x82E00B98 -- it never computes dx - dx.  That the
-        // original wrote a self-cancelling side term which MSVC /fp:fast folded
-        // to 0 only after its constant folder ran is a HYPOTHESIS that explains
-        // those two instructions; nothing in the image proves it.
-        // KNOWN SEMANTIC DIFFERENCE (decompilation-introduced): the native build
-        // (clang -O2, IEEE) really computes (dx - dx)^2, which is NaN when dx is
-        // inf/NaN; the image adds 0 there.  For finite dx (Kinect joint
-        // positions and mArcOffset always are) the two agree exactly.
-        // No literal-zero spelling reproduces the image (w21-n, all measured):
-        // Vector3(.., 0.0f) on both sides, a `float zero` local, err.z = 0.0f
-        // after the subtraction, Subtract() into err with 0.0f sides, a direct
-        // Vector3(arcZBase - arcY, ..., 0.0f), a named arcPt with 0.0f, and
-        // err.Zero() then -= all fold the 0*0 at compile time (91.61 fuzzy, the
-        // pre-w21-n state) or worse (copying from a zero Vector3, 68.2;
-        // Zero() then -=, 88.3).  A finite-safe non-literal zero -- an int
-        // mSide on both sides (84.8), mSwipeExtentX on both sides (86.0) --
-        // does not match either; pt.z on both sides matches (99.68) but has
-        // the same NaN path.  Reverting to the scalar form keeps none of the
-        // gain (93.55), so this spelling stays, with the difference recorded.
-        // Measured worse earlier: three scalars plus `dz = 0` (w7-az),
-        // Subtract() into a separate dst (zero squared via its copy), and the
-        // (side, depth, height) component order (92.42).
-        Vector3 err(arcZBase, pt.y, dx);
-        err -= Vector3(arcY, mSwipeExtentY, dx);
-        err.y /= sZErrorScale;
-        error += LengthSquared(err);
+        // `fmr f4, f13` at 0x82E00B98.
+        // KNOWN 100% SPELLING, DELIBERATELY NOT USED (w21-n, coordinator
+        // decision 2026-10-03): `Vector3 err(arcZBase, pt.y, dx);
+        // err -= Vector3(arcY, mSwipeExtentY, dx); err.y /= sZErrorScale;
+        // error += LengthSquared(err);` reads 100 normalized / 99.68 fuzzy and
+        // makes GetSwipeAmount byte-identical, but native (clang -O2, IEEE)
+        // then really computes (dx - dx)^2 -- NaN for inf/NaN dx where the
+        // image adds 0.  The image never computes dx - dx; we do not ship a
+        // decompilation-introduced NaN path for a match point.  Every literal-
+        // zero spelling (0.0f sides, zero local, err.z = 0, Subtract, direct
+        // ctor, named arcPt, Zero() then -=) folds 0*0 at compile time (91.61
+        // fuzzy) or is worse (68.2-88.3); finite-safe non-literal zeros (int
+        // mSide, mSwipeExtentX on both sides) read 84.8 / 86.0.  Also inert
+        // (w12-d): zero-initialised `Vector3 err(0, 0, 0)` + LengthSquared.
+        error = errZ * errZ + (errY * errY + dz * dz) + error;
         ++it;
     } while (it != pathEnd);
     return error;
@@ -275,8 +265,8 @@ float ArcDetector::GetSwipeAmount() const {
     // lives in f2 in the image and f3 here across the GetPathError() call.
     // MSVC picks a volatile FPR the same-TU callee does not touch, so this row
     // follows GetPathError's own register use (that function is 93.5), not
-    // anything in this body.  CONFIRMED (w21-n): fixing GetPathError's own
-    // shape (one error vector) made this function byte-identical (f2).
+    // anything in this body.  CONFIRMED (w21-n): GetPathError's one-error-vector
+    // spelling (not used, see there) makes this function byte-identical (f2).
     float powered = (float)pow((double)GetPathLength(), (double)exponent);
     float pathErr = GetPathError();
     float swipeAmt = (powered - (pathErr / _acceptablePathErrorRatio)) / adjustedThreshold;
