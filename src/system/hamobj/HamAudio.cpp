@@ -491,6 +491,15 @@ void HamAudio::PollCrossfade() {
     // never treats f30 as the constant 0.5 there. REFUTED (byte-identical):
     // `-0.5f * clamped + 1.0f`, Interp(1.0f, 0.5f, c) / Interp(0.5f, 1.0f, c),
     // reusing halfFade itself as the fadePos variable.
+    // w21-au (still 98.10, same 36 rows): the tail is the tell -- the image
+    // treats the 0.5 in f30 as an OPAQUE value (no c*k+k -> (c+1)*k factoring,
+    // no -0.5 -> fnmsubs-with-+0.5 rewrite), our MSVC constant-propagates it.
+    // Inert (byte-identical): `clamped * halfFade + 0.5f`, `clamped * 0.5f +
+    // halfFade`, `clamped * 0.5f + 0.5f`, `clamped * -halfFade + 1.0f`,
+    // `1.0f - clamped * 0.5f`; taking halfFade's address through the
+    // out-parameter Interp(a, b, t, float &) overload (as the result, or as
+    // fadePos) -- MSVC still folds it after inlining.  Values identical on
+    // every path (fma vs factored forms round the same: *0.5 is exact).
     float currentTime = mSongStream->GetInSongTime();
     float kEpsilon = 1.0f / 120.0f;
     float halfFade = 0.5f;
