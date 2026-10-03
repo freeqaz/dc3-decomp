@@ -110,9 +110,10 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
         int bytes = BytesInMemory();
         intptr_t moved = (intptr_t)mNodeEnd - (intptr_t)nodes->Next();
         resized = Resize(bytes + 8, nodes);
-        // The image computes the old tail start once (`add r10,r11,r3`) and
-        // offsets the destination from it (`addi r3,r10,0x8`); writing
-        // Next() twice lets MSVC fold the +8 into the index ((size+4)*8).
+        // The image computes the old tail start twice (`add r10,r11,r3` and
+        // `add r4,r11,r3`) and offsets the destination from the first
+        // (`addi r3,r10,0x8`); writing Next() twice in source instead lets MSVC
+        // fold the +8 into the index ((size+4)*8), so one local is closer.
         NodeVector *next = resized->Next();
         memmove((char *)next + 8, next, moved);
     } else {

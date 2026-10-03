@@ -497,8 +497,9 @@ void HamAudio::PollCrossfade() {
 
     if (mCrossfade.mFlag == 1 && mActiveCrossfade.mFlag <= 1) {
         MILO_ASSERT_FMT(mStreams[1], "Crossfade requires 2 song streams");
-        // &mCrossfade is materialised ONCE into a callee-saved register and every
-        // later read goes through it: 0x82529EA4 `addi r30, r31, 0x5c`, then
+        // &mCrossfade is materialised ONCE into a callee-saved register and most
+        // reads go through it (the mStart/mEnd reloads noted below come off r31
+        // instead): 0x82529EA4 `addi r30, r31, 0x5c`, then
         // 0x0(r30)/0x4(r30)/0x8(r30) at 0x82529F14, 0x82529F44, 0x82529F4C,
         // 0x82529F64 and the four-word copy at 0x82529FAC.  r30 stays live across
         // the GetTime/IsReady/Resync/SetLoop calls, which is what makes it
