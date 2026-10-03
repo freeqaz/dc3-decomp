@@ -969,6 +969,9 @@ void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {
     }
 }
 
+// w20-r branch-landing scan (row 36): ARTIFACT, shared vs duplicated
+// `li r3, 0x0` (see NOTE below); the image's `blt` from fromTime < curTime
+// lands on that `bge`, which re-tests the same cr6 and falls to `li r3, 0x1`.
 __declspec(noinline) bool StandardStream::IsPastStreamJumpPointOfNoReturn() {
     if (mState == kInit)
         return false;

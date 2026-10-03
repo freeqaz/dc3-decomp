@@ -526,6 +526,11 @@ SynthSample *Sound::Sample() { return mSynthSample; }
 // w14-e (91.17, unchanged): FOREACH_POST and an explicit
 // `it = begin(); mSpeed = clamped; while (it != end())` for the else arm are
 // both byte-identical to FOREACH -- MSVC canonicalises all three loops.
+// w20-r branch-landing scan (row 54, image `b` into the else-loop body past
+// two `lfs` of sSpeedCaps): ARTIFACT, loop-invariant loads scheduled across
+// the loop-entry edge -- the image's first iteration reuses the caps still
+// in f13/f0 from the clamp and reloads them only after each bctrl. Same
+// values, same SetSpeed(Clamp(caps, transpose * mSpeed)) per sample.
 void Sound::SetSpeed(float speed, Hmx::Object *obj) {
     float speedTranspose = CalcSpeedFromTranspose(mFaders.GetTranspose());
     // NEGATIVE RESULT (91.17%, two refuted variants). The residual is entirely
