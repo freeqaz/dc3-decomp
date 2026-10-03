@@ -620,6 +620,13 @@ void GroupSeqInst::SetTranspose(float f) {
 // w18-e (99.10): `next % children.size()` reloads the size after NextIndex
 // (98.2); std::min(mNumSeqs, childrenSize) homes childrenSize before the
 // compare and selects addresses (95.3).  The image's min is a value select.
+// w21-av (99.10 normalized, fuzzy 97.66 -> 99.10): a separate `childrenLeft`
+// counter for the reservoir loop (rb3-xenon's shape) fixed every register row.
+// One row left: the image's dead `stw r29,0x50(r31)` of childrenSize just
+// before `bl NextIndex` (8274C4F4; 0x50 is the else-arm's (float)childrenLeft
+// conversion slot). Inert: the rb3-xenon ternary for numSeqs; `const int &`
+// childrenSize. Worse: childrenLeft declared at function scope (registers
+// rotate back, 97.7 fuzzy).
 RandomGroupSeqInst::RandomGroupSeqInst(RandomGroupSeq *seq)
     : GroupSeqInst(seq, false), mIt(mSeqs.end()) {
     ObjPtrList<Sequence> &children = seq->Children();
