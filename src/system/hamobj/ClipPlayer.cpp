@@ -95,6 +95,12 @@ bool ClipPlayer::CanUseRestStep() {
 // BEFORE `lbz r11, 0xc(r27)`; we emit the lbz first. Measured INERT: a
 // `bool editMode` local hoisted above `f31 = mPracticeEnd`, a hoisted
 // `HamDirector *director` local, and `!(EditMode() && NoTransitions())`.
+// w21-o (98.73, unchanged): behaviour re-read against the image -- every
+// Annotate value/label and both tests match.  Both sides jump-thread the
+// first test's skip arms onto `lfs f31` (reusing the r10/r11 loads), so the
+// swapped pair is the reload block after the "" Annotate only.  Inert: one
+// function-scope `f31` shared by both blocks; `if (EditMode && NoTransitions)
+// {} else {...}`.  Worse: a static inline predicate for the test (91.1).
 DataNode ClipPlayer::AnnotatePractice() {
     bool cont = mPracticeEnd != kHugeFloat;
     if (!cont) {

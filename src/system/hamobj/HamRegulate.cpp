@@ -170,6 +170,15 @@ void HamRegulate::Poll() {
     // the scale products, so temp and moveX interfere.  Inert: the sqrt over
     // posDelta.x/.y instead of moveX/moveY (identical bytes).  Worse: moveZ
     // declared after moveY (97.6, moves the z=0 fmr below the call).
+    // w21-o (98.81, unchanged): behaviour re-read against the image (scale,
+    // foot-state mask, accum y/z/x sum, EditMode/teleported/absDt gate all
+    // match).  Reproduced the two `fmr f28/f29` copies in a standalone cl.exe
+    // probe and tried 11 more shapes there -- all keep the load temp + copy:
+    // sqrt over posDelta.x/.y, Teleported() test flipped, a Vector3 `move`
+    // aggregate (with and without z zeroed first), declarations split from
+    // the loads, DeltaSeconds() folded into Max, `scale * moveX` order,
+    // scale products re-reading posDelta, moveRot defaulted before the
+    // clamp.  The image loads straight into f29/f30; no spelling found.
     float moveZ = 0.0f;
     float dt = TheTaskMgr.DeltaSeconds();
     float moveX = posDelta.x;
