@@ -79,6 +79,12 @@ void ObjPtrVec<T1, T2>::merge(const ObjPtrVec<T1, T2> &other) {
         // induction variable to the node's object field (`addi r27, r11, 0xc`,
         // un-biased again with `subi r10, r27, 0xc` for the end compare), which
         // is MSVC strength reduction with no source lever.
+        // w21-h (83.7, unchanged): `find(obj) == begin() + size()` spelled out is
+        // byte-identical.  The extra register is a CSE difference, not a
+        // scheduling one: in the image the non-empty arm of begin() RELOADS
+        // _M_start (`lwz r10, 0x4(r29)` after the `beq`), while we reuse the load
+        // that fed size()/empty() (`clrrwi r31, r10, 0`), so begin and size both
+        // stay live across `bl find`.  Same family as CharClipGroup::HasClip.
         if (find(obj) == end()) {
             push_back(obj);
         }

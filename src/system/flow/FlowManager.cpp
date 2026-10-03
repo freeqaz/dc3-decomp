@@ -49,6 +49,17 @@
 // takes it: make the change there, run a FULL ninja, and diff the whole binary,
 // because the blast radius is the whole binary.
 
+// w21-h (80.58, unchanged): the image is NOT uniform about inlining Set into
+// erase -- three distinct erase bodies exist: FlowManager's (calls Set; ICF-folded
+// with LightPreset's RndEnviron/RndLight/SpotlightDrawer copies), Font's RndMat
+// and LightPreset's Spotlight (both inline Set).  Ours is the MIRROR image in
+// two TUs: FlowManager inlines, LightPreset calls Set for all four types,
+// CharClipGroup calls Set (image inlines).  In our objects the copy whose COMDAT
+// is emitted FIRST of the erase/Set pair is the one that gets the other inlined
+// (Font: erase sec 995 < Set 997, inlined; LightPreset: Set 1298 < erase 2214,
+// not).  Measured inert here: dropping the explicit erase instantiation below,
+// and replacing it with an explicit Set<FlowNode> instantiation -- section order
+// (erase 563 < Set 585) and the inlining did not move.
 // w18-d (80.58): an explicit instantiation of ObjPtrVec<FlowNode>::Set ahead of
 // the erase instantiation does not stop Set being inlined into erase (inert).
 template Hmx::Object *ObjPtrVec<RndTransformable, ObjectDir>::Node::RefOwner() const;
