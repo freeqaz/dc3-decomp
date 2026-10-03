@@ -238,21 +238,15 @@ void HamNavProvider::SetLabel(int elementIndex, int i2, Symbol s) {
     curItem.mLabels.clear();
     curItem.mLabels.push_back(s);
     if (curItem.mSubListProvider) {
-        // RESIDUAL (w11-a, 97.80 canonical): 5 rows.  The image re-reads
-        // Data() for the Clone (`lwz r3, 0x4(r11)`) and parks the raw provider
-        // pointer in the 0x50 temp (`stw r11, 0x50(r31)`); we reuse provData.
-        // Refuted (all 95.6, worse): Data() written at both sites, Data() at
-        // the Size() site with provData for the Clone, and provData taken
-        // inside the if -- each CSEs the two Data() reads and instead parks
-        // the DataArray* (r3) in 0x50 at both sites.
-        // w19-b: the image's dead `stw r11, 0x50(r31)` is the raw-receiver home
-        // store of an inlined call on the null-checked member pointer (see
-        // memory pattern dead-home-slot-store).  Measured: provData for Size()
-        // + mSubListProvider->Data() for the Clone 95.6; a DataProvider* local
-        // with Data() at both sites 94.5 (stores BOTH r11 and r3 to 0x50).
-        DataArray *provData = curItem.mSubListProvider->Data();
-        if (i2 < provData->Size()) {
-            DataArray *cloned = provData->Clone(true, false, 0);
+        // w21-r (97.80 -> 100, 91/91 equal): the Size() test reads the member
+        // directly and the Clone goes through a provider pointer declared
+        // INSIDE the if -- that local is the image's `stw r11, 0x50(r31)`
+        // (its home store sits at the Clone site, after the re-read of
+        // Data()).  Earlier refutations (w11-a/w19-b) all declared the local
+        // before the test or used it at the Size() site.
+        if (i2 < curItem.mSubListProvider->Data()->Size()) {
+            DataProvider *prov = curItem.mSubListProvider;
+            DataArray *cloned = prov->Data()->Clone(true, false, 0);
             cloned->Node(i2) = s;
             curItem.mSubListProvider->SetData(cloned);
             cloned->Release();
