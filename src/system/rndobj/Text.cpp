@@ -2075,6 +2075,17 @@ void RndText::FitTextScroll() {
         // So the second read is real but neither an ObjPtr reference nor a
         // second textual mention reproduces it.  Left as the shape that scores
         // best.
+        // w21-x (98.276, same 7 rows): behaviour re-checked against the image --
+        // both reads test the same field and the assert-fail arm branches past
+        // the CharAdvance body exactly as ours does, so the residual is shape
+        // only.  Two more spellings inert (identical 7 rows): binding
+        // `Style &style = mStyles[0];` and reading `style.mFont`, and
+        // `mStyles[0].mFont.Ptr()`.  Note the dead `stw r11, 0x54(r31)` stores
+        // the mStyles element pointer (r11 = lwz 0x98(r30)) -- the same shape
+        // as the two `stw r11, 0x60(r31)` homes the body's mStyles[0].mKerning
+        // / mStyles[0].mSize emit -- so the image evaluates one more
+        // `mStyles[0]` on the null arm of the first test only.  The MakeString
+        // row (BD vs 08) is an ICF fold of identical instantiations.
         RndFontBase *font = mStyles[0].mFont;
         MILO_ASSERT(font, 2718);
         if (font) {
