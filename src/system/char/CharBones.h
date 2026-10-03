@@ -112,6 +112,13 @@ public:
     Bone GetBonesAt(int index) { return mBones[index]; }
     char *GetStart() const { return mStart; }
     int GetOffset(Type type) const { return mOffsets[type]; }
+    // Typed-section accessors, rb3-xenon's names (its CharMirror::Poll reads 100
+    // through them).  TYPE_POS is always at offset 0, so Start() is the POS section.
+    char *Start() const { return mStart; }
+    char *ScaleOffset() const { return mStart + mOffsets[TYPE_SCALE]; }
+    char *QuatOffset() const { return mStart + mOffsets[TYPE_QUAT]; }
+    char *RotXOffset() const { return mStart + mOffsets[TYPE_ROTX]; }
+    char *EndOffset() const { return mStart + mOffsets[TYPE_END]; }
     int GetCount(int idx) const { return mCounts[idx]; }
 
     static Type TypeOf(Symbol);
