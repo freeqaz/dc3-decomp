@@ -352,21 +352,15 @@ void DxRnd::SetupGamma() {
     float gamma;
     if (cfg->FindData("gamma", gamma, false)) {
         D3DGAMMARAMP ramp;
-        unsigned int i = 0;
-        unsigned short i16;
-        do {
-            float fval = (float)(int)i * 0.00390625f;
-            float fpow = std::pow(fval, gamma);
+        for (unsigned short i = 0; i < 0x100; i++) {
+            float fpow = std::pow(i * 0.00390625f, gamma);
             // w13-e: converted straight to u16 -- the image reads only the low
             // halfword of the fctidz result (`lhz r11, 0x5e(r1)` at 0x82615DBC).
-            unsigned short ival = (unsigned short)(fpow * 1024.0f);
-            unsigned short usVal = (unsigned short)(ival << 6);
+            unsigned short usVal = (unsigned short)(fpow * 1024.0f) << 6;
             ramp.red[i] = usVal;
             ramp.green[i] = usVal;
             ramp.blue[i] = usVal;
-            i16 = (unsigned short)((i + 1) & 0xffff);
-            i = i16;
-        } while (i16 < 0x100);
+        }
         D3DDevice_SetGammaRamp(mD3DDevice, 0, &ramp);
     }
 }
