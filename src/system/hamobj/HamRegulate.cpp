@@ -185,7 +185,14 @@ void HamRegulate::Poll() {
     // up-front copy MSVC propagated the load temp into the sqrt and the scale
     // products, so temp and moveX interfered (the two fmr); assigned per arm,
     // the temp dies at the copy and coalesces into f29/f30.  Same values on
-    // every path (x * scale order kept).
+    // every path (x * scale order kept).  100 MODULO REGISTER PERMUTATION:
+    // fuzzy 98.04 after the teleported arm's y-before-x order put x/y in the
+    // image's f29/f30.  Left: moveZ/moveRot in f27/f28 (image f28/f27) and
+    // footState in r11 (image r10), so the xor/and operands read swapped.
+    // Inert for those (measured): all 67 orders of the declarations after
+    // DeltaSeconds(), the 36 assignment orders of the two unscaled arms,
+    // `moveZ * scale`; worse: `float moveRot = rotDelta` + `scale * moveRot`
+    // (96.4), moveZ declared after dt (98.8).
     float moveZ = 0.0f;
     float dt = TheTaskMgr.DeltaSeconds();
     float moveX;
