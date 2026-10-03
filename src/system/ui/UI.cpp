@@ -436,13 +436,12 @@ bool UIManager::IsGameScreenActive() {
     // 97.5); `ret &= cur ? ... : true` (86.7), `!cur || cur == Bottom` (84.1 /
     // 87.5), early return on null cur (93.3), cur loaded first (93.3),
     // `int ret` (92.1), `int cur` (89.1).
-    UIScreen *cur = mCurrentScreen;
-#ifdef HX_NATIVE
-    if (cur != nullptr) {
-#else
-    if ((int)cur != 0) {
-#endif
-        if (cur != BottomScreen())
+    // w21-ay (97.5 -> 100): the image's signed `cmpwi cr6` null test, the
+    // reused value in the BottomScreen() fallback (`mr r10, r11`) and the
+    // separate `mr r3, r9` return block all come from testing the inline
+    // CurrentScreen() accessor twice (no named local).  Same behaviour as before.
+    if (CurrentScreen()) {
+        if (CurrentScreen() != BottomScreen())
             ret = false;
     }
     return ret;
