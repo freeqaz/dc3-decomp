@@ -268,7 +268,17 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
         cam->LockStream(bufferData, lockedRect);
         g_colorBufferUpdate2++;
         unsigned int *srcPtr = (unsigned int *)((uintptr_t)lockedRect.mBits - 4);
-        unsigned int pitch = mTex->TexelsPitch();
+        // w20-c: both strides named as ints BEFORE the loop, the spelling
+        // DrawUtl's UpdateBufferTex uses for the same blit.  Same values as the
+        // old in-loop `(int)((pitch >> 1) - 640)` form (the unsigned
+        // subtraction is converted to int before it steps the pointer, so the
+        // LP64 native build still steps backwards when the pitch is narrow),
+        // but it flips the image's r22/r23 (src/dest stride) and r10/r11
+        // colouring: fuzzy 99.054 -> all 74 rows equal.  The one remaining
+        // relocation row is D3DCubeTexture_UnlockRect vs D3DTexture_UnlockRect,
+        // a proven ICF fold at 0x82B9BEC0 (icf_aliases.map).
+        int dstExtraStride = mTex->TexelsPitch() / 2 - 640;
+        int srcExtraStride = lockedRect.mPitch / 4 - 320;
         for (int row = 0; row < 480; row++) {
             for (int col = 0; col < 320; col++) {
                 srcPtr++;
@@ -278,16 +288,8 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
                 *destPtr++ = YUVtoRGB(pixel >> 16 & 0xff, cr, cb);
                 *destPtr++ = YUVtoRGB(pixel & 0xff, cr, cb);
             }
-            // (int) casts, matching UpdateFromColorBufferClip's destStride
-            // below. Both right-hand sides are `unsigned int` subtractions: if
-            // the texel pitch is narrower than 640 texels (or the source pitch
-            // narrower than 320 dwords) the result wraps to ~4e9 instead of
-            // going negative. On 32-bit PPC that wrap still steps the pointer
-            // correctly backwards, so this is codegen-neutral there; on the
-            // LP64 native build it zero-extends and jumps ~8 GB / ~16 GB
-            // forward.
-            destPtr += (int)((pitch >> 1) - 640);
-            srcPtr += (int)((lockedRect.mPitch >> 2) - 320);
+            destPtr += dstExtraStride;
+            srcPtr += srcExtraStride;
         }
         D3DTexture_UnlockRect((D3DTexture *)bufferData, 0);
     }
@@ -467,7 +469,7 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
                 }
             }
             destPtr += destStride * 2;
-            srcPtr += srcStride;  // same unsigned-wrap hazard as line 267
+            srcPtr += srcStride;  // unsigned subtraction, converted to int (see UpdateFromColorBuffer)
         }
         D3DTexture_UnlockRect((D3DTexture *)bufferData, 0);
     }
