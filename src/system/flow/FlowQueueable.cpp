@@ -132,6 +132,16 @@ void FlowQueueable::ChildFinished(FlowNode *node) {
             // `for (++it; ...)` and `while (++it != end)` give the same
             // rotation; comparing against `mListeners.front()` inside the loop
             // is 99.1. Kept the higher-scoring value copy.
+            // w21-ad (still 99.53; behaviour re-read vs 823F82C4..823F8368:
+            // agrees, incl. the size()<=1 fallthrough to the !empty arm):
+            // the rotation is LICM's -- whenever the value load sits INSIDE the
+            // loop (reference `front`, `*first`-in-loop) MSVC hoists it into a
+            // guarded preheader (98.6, 3 rows), and whenever it is a copy
+            // before the loop the release reuses the copy. Measured: iterator
+            // `first` + `front = *first` + ReleaseListener(*first) = CSE'd, same
+            // 9 rows; ReleaseListener(mListeners.front()) re-reads begin AND
+            // value (99.5, 8 rows); ref + value copy 98.1; `for (it++; ..; it++)`
+            // with ref 98.6; `!found &&` in the condition 96.6; std::find 96.6.
             Hmx::Object *front = mListeners.front();
             bool found = false;
 #ifdef HX_NATIVE
