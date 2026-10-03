@@ -3508,6 +3508,17 @@ void Dc3KneeLog(const char *evt) {
 }
 #endif
 
+// w21-ad (98.53 -> 99.4): two levers -- a fresh, call-scoped out-param pair
+// per GetPracticeFrames call (closed the 0x50/0x58 swap) and `overlayB`
+// declared nullptr at FUNCTION scope (after player1): the image's `li r28, 0`
+// at the top IS overlayB's web, so the post-proc block no longer needs the
+// extra `mr` of the zero across.  Remaining: 41 register rows (zero r28 vs
+// r25, songAnim r25 vs r26, p1anim, backupClipPlayer, &TheTaskMgr) and the
+// fmuls/fmadds operand choice (3 rows).  Inert at 99.4: overlayA hoisted too;
+// overlayB placed after songAnim; both orders of the noise sum and a
+// constant-first `dt * frame`.  Not tried on purpose: `frame / 300.0f` -- the
+// image multiplies by the 0x3b5a740e reciprocal, so a division would move
+// native rounding away from it.
 // RESIDUAL (w7-aq, 98.3 canonical): 40 of the remaining 52 rows are one
 // callee-saved 4-cycle -- the image colours {0-const: r28, player1: r27,
 // songAnim: r25, p1anim: r26} where we get {r25, r28, r26, r27}, and it keeps
@@ -3524,6 +3535,7 @@ void HamDirector::Poll() {
     if (!mPollEnabled) return;
     HamCharacter *player0 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(0) : nullptr;
     HamCharacter *player1 = TheHamWardrobe ? TheHamWardrobe->GetCharacter(1) : nullptr;
+    RndPostProc *overlayB = nullptr;
     RndPropAnim *songAnim = SongAnim(0);
     if (songAnim) {
         // Song.anim frame advancement is driven by the world root's DTA path:
@@ -3539,12 +3551,13 @@ void HamDirector::Poll() {
                 // Deliberately uninitialised: GetPracticeFrames writes both
                 // through references. The image emits no zero-store for either
                 // slot (0x50/0x58), and `= nullptr` adds two it does not have.
-                // RESIDUAL (w7-aq, 98.3 canonical): the two slots are swapped
-                // relative to the image (4 rows).  Swapping the declaration
-                // order of these two is BYTE-INERT -- MSVC is not colouring
-                // them by declaration order here.
-                Key<Symbol> *practiceEnd;
-                Key<Symbol> *practiceStart;
+                // w21-ad: each GetPracticeFrames call has its OWN pair of
+                // out-params, scoped to that call.  With one shared pair the
+                // image's (0x50, 0x58) then (0x58, 0x50) argument slots came
+                // out swapped (MSVC keyed the slots on call position: renaming
+                // the arguments moved nothing); a fresh pair per call lands
+                // them where the image has them.  Unobservable either way --
+                // both outputs are discarded.
                 if (p0anim != -1) {
                     bool clipInited = player0Clip.Init(0);
                     if (clipInited) {
@@ -3552,6 +3565,8 @@ void HamDirector::Poll() {
                     }
                 }
                 if (p1anim != -1) {
+                    Key<Symbol> *practiceStart;
+                    Key<Symbol> *practiceEnd;
                     bool hasPractice = GetPracticeFrames(practiceStart, practiceEnd);
                     if (!hasPractice) {
                         bool clipInited = player1Clip.Init(1);
@@ -3567,7 +3582,9 @@ void HamDirector::Poll() {
                 Difficulty p1diff = TheGameData->Player(1)->GetDifficulty();
                 ClipPlayer *backupClipPlayer =
                     IsEasierDifficulty(p0diff, p1diff) ? &player0Clip : &player1Clip;
-                bool hasPractice2 = GetPracticeFrames(practiceEnd, practiceStart);
+                Key<Symbol> *practiceStart;
+                Key<Symbol> *practiceEnd;
+                bool hasPractice2 = GetPracticeFrames(practiceStart, practiceEnd);
                 if (!hasPractice2) {
                     const float sBackupDriftScale = 0.14f;
                     const float sBackupDriftOffset = 0.5f;
@@ -3665,7 +3682,6 @@ void HamDirector::Poll() {
             float blend = 1.0f;
             const char *overlayName;
             RndPostProc *overlayA = nullptr;
-            RndPostProc *overlayB = nullptr;
             if (mCamPostProc) {
                 mWorldPostProc->Copy(mCamPostProc, Hmx::Object::kCopyDeep);
                 mActivePostProc.CopyRef(mCamPostProc);

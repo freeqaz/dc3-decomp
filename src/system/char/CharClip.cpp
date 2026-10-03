@@ -202,6 +202,12 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
     // node_vectors/nodes; ours is exactly reversed.  Inert: hoisting the
     // new-arm pair to function scope (old pair renamed); swapping the arms
     // (`oldRev >= 8` first) is 32.5 -- the image lays the old arm out first.
+    // w21-ad (99.9 after the NodeVector placement-new fix below): only the
+    // slot permutation remains -- image [0x50 it/PathName temp, 0x54 old
+    // num_nodes, 0x58 new num_node_vectors, 0x5c new num_nodes], ours [0x50
+    // new num_nodes, 0x54 new num_node_vectors, 0x58 it, 0x5c old num_nodes].
+    // Also inert: swapping the new arm's declaration order, declaring `it` at
+    // function scope, scoping the old arm's num_node_vectors into its loop.
     Clear();
     static ObjectDir *sDir = nullptr;
     char buf[0x100];
@@ -265,22 +271,16 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
                 // Owner is the Transitions container, not mOwner: the target
                 // passes `this` (823D5830 `mr r4, r25`, r25 being the same
                 // register 0xc(r25) is loaded from for mOwner->Dir()).
-                // Assign through the NEW-EXPRESSION's result, not through
-                // `it->clip`.  MSVC guards a placement new with
-                //     stw p,tmp / cmplwi p,0 / beq / bl ctor / b / li p,0
-                // and the image's assignment reads that guarded value; naming
-                // `it->clip` instead discards it and cost 25 register rows
-                // (r27<->r29 through the whole loop body), 99.1 -> 99.5.
-                // Two rows remain: the image keeps the guarded value in r27 and
-                // moves it to r3, we materialise `li r3, 0` in place.  REFUTED:
-                // feeding the result back into `it` itself
-                // (`it = (NodeVector *)new (&it->clip) ...`, legal since clip is
-                // NodeVector's first member) makes it WORSE -- 29 rows, raw
-                // 99.4 -> 99.1, and adds an `mr r27, r3` reload of the ctor
-                // return.
-                ObjOwnerPtr<CharClip> *clipPtr =
-                    new (&it->clip) ObjOwnerPtr<CharClip>(this, (CharClip *)NULL);
-                *clipPtr = clip;
+                // w21-ad: the image placement-news the whole NodeVector through
+                // its inline ctor (NodeVector(ObjRefOwner *) builds `clip`), and
+                // every later access goes through the new-expression's value:
+                // the guard's null arm is `li r27, 0` (823D5840) into the SAME
+                // register `it` lives in, and the assignment, size reads and
+                // Next() all use r27 (823D5848..823D58B4). The earlier
+                // `new (&it->clip) ObjOwnerPtr<CharClip>(...)` spelling used the
+                // out-of-line ctor's return in r3 instead (99.50 -> 99.9).
+                it = new (it) NodeVector(this);
+                it->clip = clip;
                 d >> it->size;
                 for (int j = 0; j < it->size; j++) {
                     d >> it->nodes[j].curBeat;

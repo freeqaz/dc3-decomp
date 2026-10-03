@@ -667,6 +667,16 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
     }
 }
 
+// w21-ad: behaviour re-read against the image (824D9DD0..824DA4E0): every
+// branch, constant and store target agrees (ShouldAutoPass inlined twice,
+// unk14 > 1.0f, min/max foot Y, the four accumulator clears, SetRatingFrac(0,-1),
+// kDataInt test). Stopped at 99.554 normalized / fuzzy 98.41: the charged rows
+// are the li 1/li 0 order at 824D9E90 (ours materialises the i10 zero first)
+// and the autotrick addi one slot ahead of the 0x27c store. Measured spellings:
+// `int i10 = 0;` at function top 99.0 (fixes the this=r30 cascade but hoists
+// the li 0 above the mStealPart test), after the mStealPart block 99.1, after
+// skelIdx 99.1, just before `if (mTrickSymbol == none)` 99.3 (zero and i10
+// split, extra mr); ShouldAutoPass as if/return true/return false: identical.
 void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     mFramesSinceLastTrigger++;
     if (mStealPart) {
