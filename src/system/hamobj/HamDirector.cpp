@@ -3198,6 +3198,19 @@ void HamDirector::OnPopulateFromMoveMgr() {
 // iteration (`stw r11, 0x60(r31)` at 0x82474D0C, never read back) -- some
 // address-taken temporary in the original search that we do not have; the
 // String/Symbol locals below are shifted by +0x20 as a result.  Not found.
+// w21-aa (99.27 -> 99.27 canonical; fuzzy up): BEHAVIOUR FIX -- the image
+// tests `keyBeat + beatExtra < 0` and zeroes beatExtra (0x82474E64 `fadds
+// f0,f1,f29`, 0x82474E78 `fmr f29,f30`; f29 = 2nd float param, 0x82474BD0
+// `fmr f29,f2`); ours tested/zeroed beatOffset.  The beat sum is keyBeat +
+// beatOffset + beatExtra (0x82474E88/8C).  Normalized could not see this: it
+// read as an f28<->f29 permutation.  MILO_NOTIFY arg is const char*
+// (MakeString<PBD>, name_check row).  Store probes for the dead
+// `stw r11,0x60(r31)` (r11 = _M_start, per iteration): `keys->at(i)` DOES
+// produce it and the image's frame size, but also a range check + a second
+// store of the element address (95.1); a named `Key<Symbol> &` in the loop
+// stores the ELEMENT address, not begin; `(keys->begin()+i)->value` and a
+// `size()` loop bound: no store.  Remaining: that store x2, frame +0x10, the
+// r28<->r30 / r10<->r11 renaming it implies.
 void HamDirector::DrawIconMan(Symbol moveName, Symbol nextClip, Symbol prevClip, float beatOffset, float beatExtra, RndTex *tex) {
     if (!mMasterClipAnim.Ptr()) {
         SetMasterClipAnim();
@@ -3255,7 +3268,7 @@ found:
 
     CharClip *clip = mClipDir->Find<CharClip>(clipKey.value.Str(), false);
     if (!clip) {
-        MILO_NOTIFY("Could not draw IconMan for %s", (char *)moveName.Str());
+        MILO_NOTIFY("Could not draw IconMan for %s", moveName.Str());
         return;
     }
 
