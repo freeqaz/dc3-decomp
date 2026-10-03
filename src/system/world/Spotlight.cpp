@@ -1769,23 +1769,20 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
             int baseNext = base + numCols;
             int nextNext = baseNext + 1;
             if (iFace & 2) {
-                faces[iFace].Set(
+                faces[iFace++].Set(
                     (unsigned short)baseNext, (unsigned short)base, (unsigned short)nextNext
                 );
-                iFace++;
-                faces[iFace].Set(
+                faces[iFace++].Set(
                     (unsigned short)nextNext, (unsigned short)base, (unsigned short)next
                 );
             } else {
-                faces[iFace].Set(
+                faces[iFace++].Set(
                     (unsigned short)base, (unsigned short)next, (unsigned short)baseNext
                 );
-                iFace++;
-                faces[iFace].Set(
+                faces[iFace++].Set(
                     (unsigned short)baseNext, (unsigned short)next, (unsigned short)nextNext
                 );
             }
-            iFace++;
         }
         rowStart += numCols;
     }
