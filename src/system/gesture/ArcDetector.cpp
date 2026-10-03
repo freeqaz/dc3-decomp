@@ -232,22 +232,32 @@ float ArcDetector::GetPathError() const {
         } else {
             arcY = sqrtf(comp);
         }
-        // w21-n: one error VECTOR, not three scalars.  The image's dead
-        // `fmr f4, f13` (0x82E00B98) and its unfolded `fmuls f12, f13, f13`
-        // (0*0) are the late-folded `dx - dx` of a component that the two
-        // points share: MSVC only folds x - x to 0 after its constant folder
-        // has run, so the zero is squared at run time and its copy survives.
-        // Component order (depth, height, side) is what puts the zero term
-        // first in the image's sum (fmuls 0*0, fmadds depth, fmadds height).
-        // 93.55 canonical / 91.61 fuzzy -> 99.68 fuzzy; the remaining 4 rows
-        // are an f8/f9 swap (extentY vs 1/sZErrorScale), register only.
-        // Measured worse: three scalars plus `dz = 0` (w7-az), Vector3(0, y, z)
-        // (zero folds at compile time), Subtract() into a separate dst (zero
-        // squared via its copy), and the (side, depth, height) order (92.42).
-        // Semantics: the side term is exactly 0 for any finite dx (joint
-        // positions and mArcOffset always are); /fp:fast folds it to 0 on the
-        // Xbox unconditionally, an IEEE native build would give NaN only for
-        // an infinite/NaN dx.
+        // w21-n: one error VECTOR, not three scalars (93.55 -> 100 normalized,
+        // remaining f8/f9 swap register only; also makes GetSwipeAmount
+        // byte-identical).  What the IMAGE shows: it squares the literal
+        // __real@00000000 (`fmuls f12, f13, f13`) and keeps a dead
+        // `fmr f4, f13` at 0x82E00B98 -- it never computes dx - dx.  That the
+        // original wrote a self-cancelling side term which MSVC /fp:fast folded
+        // to 0 only after its constant folder ran is a HYPOTHESIS that explains
+        // those two instructions; nothing in the image proves it.
+        // KNOWN SEMANTIC DIFFERENCE (decompilation-introduced): the native build
+        // (clang -O2, IEEE) really computes (dx - dx)^2, which is NaN when dx is
+        // inf/NaN; the image adds 0 there.  For finite dx (Kinect joint
+        // positions and mArcOffset always are) the two agree exactly.
+        // No literal-zero spelling reproduces the image (w21-n, all measured):
+        // Vector3(.., 0.0f) on both sides, a `float zero` local, err.z = 0.0f
+        // after the subtraction, Subtract() into err with 0.0f sides, a direct
+        // Vector3(arcZBase - arcY, ..., 0.0f), a named arcPt with 0.0f, and
+        // err.Zero() then -= all fold the 0*0 at compile time (91.61 fuzzy, the
+        // pre-w21-n state) or worse (copying from a zero Vector3, 68.2;
+        // Zero() then -=, 88.3).  A finite-safe non-literal zero -- an int
+        // mSide on both sides (84.8), mSwipeExtentX on both sides (86.0) --
+        // does not match either; pt.z on both sides matches (99.68) but has
+        // the same NaN path.  Reverting to the scalar form keeps none of the
+        // gain (93.55), so this spelling stays, with the difference recorded.
+        // Measured worse earlier: three scalars plus `dz = 0` (w7-az),
+        // Subtract() into a separate dst (zero squared via its copy), and the
+        // (side, depth, height) component order (92.42).
         Vector3 err(arcZBase, pt.y, dx);
         err -= Vector3(arcY, mSwipeExtentY, dx);
         err.y /= sZErrorScale;
