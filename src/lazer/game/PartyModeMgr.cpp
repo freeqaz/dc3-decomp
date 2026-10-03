@@ -938,6 +938,12 @@ void PartyModeMgr::DetermineSubMode(Symbol *pMode, Symbol *pSubMode) {
 // second loop. Rewriting both loops as `for (; n != 0; n--)` is byte-identical.
 // w18-e (98.84): dropping the `&& maxplayers != 0` guard (it is the rotated
 // while's own entry test) is byte-identical.
+// w21-e (98.84, 1 inserted `mr r30, r24` + register-only rows): two more
+// byte-identical spellings -- `if (0 < total) while (max != 0 && total != 0)`
+// and `for (; max != 0; max--)` with the in-loop return.  Image allocation:
+// this=r30, mode->max share r29, &showdown->min share r28, `1` in r24; ours
+// merges the second loop's counter into min's web (r30) instead of max's.
+// Behaviour checked row by row against the image: identical.
 void PartyModeMgr::DetermineSubModePlayers(
     Symbol mode, int *pPlayerFlags, int *pNumPlayers, std::vector<int> *vec
 ) {
@@ -1111,6 +1117,16 @@ void PartyModeMgr::ResetMicrogames() {
 // difference.  Row 93 inverts consistently: image `li r4,1; ble -> Node; li
 // r4,0` = ours `li r4,0; bgt -> Node; li r4,1`, both idx = (team1 <= team2).
 // Both landings differ only by our extra `mr r3, rN` (image reuses Array()'s r3).
+// w21-e (98.01 -> ~98.9): team 1 written as two whole `ret = arr->Int(k)`
+// arms, then-arm Int(0) under `t1 <= t2`: MSVC tail-merges the two calls into
+// one Node/Int pair with r4 picked by the branch and r3 = Array()'s return
+// still live -- exactly the image's `li r4,0 / ble / li r4,1 / bl Node` with
+// no `mr r3, r30`.  Same idx semantics (1 iff t1 > t2).  The same spelling on
+// team 2 (if/else arms, `?:` arms, `ret = ..; ret += size`, sum in each arm)
+// also closes rows 88-95 there, but every one of them re-schedules the
+// unrelated playtest modulo block above (divwu/twllei/mullw order, rows
+// 61-70, 95.67 overall), so team 2 keeps the idx form: 4 rows left
+// (li r4 order + the `mr r3, r29` reload).
 int PartyModeMgr::PickNextPlayer() {
     int ret = -1;
     if (mCurrentTeamSelector == 2) {
@@ -1121,10 +1137,10 @@ int PartyModeMgr::PickNextPlayer() {
         mCurrentTeamSelector = 1;
         if (mPlayerSequences) {
             DataArray *arr = mPlayerSequences->Array(mRoundsPlayed + 1);
-            int idx = 0;
-            if (mTeam1Players.size() > mTeam2Players.size())
-                idx = 1;
-            ret = arr->Int(idx);
+            if (mTeam1Players.size() <= mTeam2Players.size())
+                ret = arr->Int(0);
+            else
+                ret = arr->Int(1);
         }
     } else if (mCurrentTeamSelector == 1) {
         ret = mTeam2PlayerPicker.GetNext();
