@@ -197,50 +197,23 @@ void RndMeshDeform::VertArray::SetSize(int size) {
 
 int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, float *const weights) {
     MILO_ASSERT(num < VertArray::kMaxWeights, 0x5F);
-    // count existing verts
-    auto& _ref0 = mData;
-    u8 *ptr = (u8 *)_ref0;
-    u8 *end = ptr + mSize;
-    int count = 0;
-    while (ptr < end) {
-        count++;
-        ptr += (*ptr * 2) + 1;
-    }
-    int vertCount = count;
+    int vertCount = NumVerts();
     float sum = 0.0f;
-    // The counting loop's result reaches the two MILO_NOTIFYs by REFERENCE
-    // (MakeString<char const*,int,float> takes `const int&`), so `vertCount`
-    // needs a home slot.  The image homes it exactly ONCE, at 0x826D8D64 --
-    // after the loop -- and runs the loop itself on a register (r18).  Writing
-    // the loop directly into `vertCount` makes MSVC home it at its definition,
-    // i.e. eagerly before the loop, which cost an extra `stw` AND rotated the
-    // loop (we peeled a top test where the image branches straight to the
-    // bottom one, `b .L_826D8D58` at 0x826D8D40) AND flipped the (0x50,0x54)
-    // slot pair.  Splitting the loop counter out into `count` and defining
-    // `vertCount` after the loop fixes all three at once: 91.8 -> 95.2.
-    //
-    // RESIDUAL (w7-bi, 95.2 canonical, was 71.2): 18 of the 29 remaining rows
-    // are ONE register-pair inversion and its scheduling fallout.  The image
-    // gives the EARLIER-defined value the HIGHER callee-saved register in two
-    // pairs -- `this` r24 / outer index r23, and `&mData` r22 / the format
-    // string r21 -- and our build assigns both pairs the other way round.  Use
-    // counts are identical on both sides (8 and 5), so this is a tie-break
-    // inside MSVC's allocator, not a liveness difference.  It cascades into the
-    // MemResizeElem tail (rows 130-145), where the same two loads and the
-    // `num*2` shift are merely scheduled around the swapped registers.
-    // REFUTED, do not re-try (each measured, all byte-identical unless noted):
-    //   - `float sum;` declared above the counting loop (91.8, neutral);
-    //   - the whole `float sum = 0.0f;` moved above the counting loop (82.5 --
-    //     it drags the 0.0f anchor and the init store in front of the loop;
-    //     the image's anchor is at 0x826D8D60, AFTER the loop);
-    //   - `float sum;` declared BEFORE `vertCount` and assigned after the loop
-    //     (byte-identical, so the slot pair is a coloring result, not
-    //     declaration order -- the image reuses 0x50 for `sum` AND for the
-    //     first PathName temp, 0x826D8D70 vs 0x826D8E24, which only a
-    //     liveness-based coloring produces);
-    //   - `mSize + ptr` for `ptr + mSize` (row 33) and `weights[i] + sum` for
-    //     `sum += weights[i]` (row 74): MSVC normalises both commutative
-    //     orders, exactly 95.2 either way.
+    // w21-be (95.2 -> 2 rows left): the count is the class's own NumVerts()
+    // inline and the MemResizeElem insert position is end() -- both header
+    // inlines that read mData/mSize straight off `this` (`lwz r11, 0x4(r24)` /
+    // `lwz r10, 0x0(r24)` at 0x826D8D2C, `add r10, r11, r10` = mData + mSize
+    // through the intptr_t add) instead of through a `&mData` reference.  That
+    // one change resolved the whole r23/r24 + r21/r22 "allocator tie-break"
+    // that w7-bi certified, the add operand order, and the MemResizeElem tail
+    // scheduling.  Behaviour identical (same count, same insert pointer).
+    // LEFT: two /fp:fast commutative operand orders, both with the long-lived
+    // f30 on the other side -- `fadds f30, f0, f30` (sum += weights[i]) and
+    // `fmuls f12, f12, f30` (weights[i] * scale).  MEASURED INERT: `sum =
+    // weights[i] + sum`, `scale * weights[i]`, Clamp on the inline product,
+    // `sum = 1.0f / sum` reused as the scale.  `weights[i] / sum` (letting
+    // fp:fast form the reciprocal) is much worse (85.6 raw) and would move
+    // native rounding away from the image -- not shipped.
     //
     // One fused loop: the dedup scan, the negative-weight report and the sum all
     // live in the same `for (i)` -- 0x826D8D98..0x826D8E68 is a single loop with
@@ -281,7 +254,7 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
     float scale = 1.0f / sum;
     // append (num*2+1) bytes at end of buffer
     u8 *newEntry = (u8 *)MemResizeElem(
-        _ref0, mSize, (void *)((char *)_ref0 + mSize), 0, (num * 2) + 1, __FILE__, 0x85, "RndMeshDeform"
+        mData, mSize, end(), 0, (num * 2) + 1, __FILE__, 0x85, "RndMeshDeform"
     );
     *newEntry = (u8)num;
     for (int i = 0; i < num; i++) {

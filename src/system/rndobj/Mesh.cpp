@@ -1496,6 +1496,10 @@ void RndMesh::DeleteBones(bool findRoot) {
     }
 }
 
+// CLOSED (w21-be): 100 modulo register permutation -- the two "unreachable"
+// scheduling rows below were a `?:` that the original wrote as two calls; see
+// the per-arm SetTransParent at the bottom.  History kept for the levers:
+//
 // RESIDUAL (w7-bp): 97.38 -> 98.4 canonical (97.7 raw), 1012 B, 255/255
 // instructions.  Remaining: 35 arg diffs (all register permutation, which the
 // canonical ruler forgives) + 2 insert + 2 delete, and nothing else.
@@ -1616,26 +1620,21 @@ void RndMesh::InstanceGeomOwnerBones() {
         // reloads 0x148(this) (mGeomOwner) at 0x82643230 and indexes 0x150 off *that*,
         // where we were indexing our own mBones.
         int parentIdx = mGeomOwner->GetBoneIndex(mGeomOwner->mBones[i].mBone->TransParent());
-        // `bone` must be bound BEFORE the ?: below.  The image computes
-        // &mBones[i] (`lwz r11, 0x0(r26)` / `add r11, r11, r29`) and the
-        // `false` argument between `bl GetBoneIndex` and the `bne` that
-        // selects the parent -- i.e. above the branch, with only the
-        // `lwz r3, 0xc(r11)` member read left in the join at 0x82643244.
-        RndBone &bone = bones[i];
-#ifdef HX_NATIVE
-        // Clang sees the ?: as ambiguous (ObjPtr<RndTransformable> <-> RndTransformable*
-        // convert both directions); make the ObjPtr branch an explicit pointer. Same
-        // conversion MSVC picks implicitly — no PPC-side change.
-        RndTransformable *boneParent = parentIdx == -1
-            ? newRoot
-            : (RndTransformable *)mGeomOwner->mBones[parentIdx].mBone;
-#else
-        RndTransformable *boneParent =
-            parentIdx == -1 ? newRoot : mGeomOwner->mBones[parentIdx].mBone;
-#endif
-        // The image re-reads mBones[i].mBone as the callee (`lwz r3, 0xc(r11)` at
-        // 0x82643244, r11 = &mBones[i]) rather than reusing newBone.
-        bone.mBone->SetTransParent(boneParent, false);
+        // w21-be (98.42 -> 100 modulo register permutation): TWO calls, one per
+        // arm, not one call on a `?:` result.  MSVC hoists the instructions the
+        // arms share -- `li r5, 0x0` and &bones[i] -- above the `bne` at
+        // 0x82643238 and tail-merges the `lwz r3, 0xc(r11)` / `bl SetTransParent`
+        // join, which is exactly the image's shape (the "unreachable scheduling"
+        // rows w7-bp recorded: `li r5` before the branch, and the i++ issued
+        // between the two `bones` loads).  Also removes the HX_NATIVE `?:` cast.
+        // Arm order matters: `!= -1` first flips the bne and moves the
+        // newRoot arm (measured 98.4).  Left: r9/r10 swapped on the three
+        // mGeomOwner->mBones[parentIdx] address rows (volatile only).
+        if (parentIdx == -1) {
+            bones[i].mBone->SetTransParent(newRoot, false);
+        } else {
+            bones[i].mBone->SetTransParent(mGeomOwner->mBones[parentIdx].mBone, false);
+        }
     }
 }
 
@@ -1915,6 +1914,16 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 // [141]/[144] ReadChunks argument-order pair closed with the RAII change above
 // (the `lwz r4, 0x184(r22)` reload is now row-equal), [29]/[31] and [174]
 // remain as described in the w7-bs residual.
+//
+// w21-be STOP at 98.50 (same 48 diff_arg / 1 insert / 2 delete): the whole
+// residual is one allocator decision -- the image keeps the hoisted zero
+// (`li r21, 0x0`, row 12) in its OWN lowest-priority register and copies it
+// into the loop counter (`mr r28, r21`, row 174); we coalesce i5 onto the zero
+// web, which lifts that web to r28 and shifts this/d/kAssertStr/Mesh.cpp/c8/i9
+// down by one.  MEASURED INERT this wave: `if ((++i5 & 0x1FF) == 0)`;
+// declaring i9 before i88.  WORSE: `while (it != end()) d >> *it++;` (97.5).
+// Not tried on purpose: seeding i5 from another zero-valued local (i9/i88)
+// would invent a use -- flagged, not shipped.
 //
 // NOT A DEFECT: rows 62 and 159 call different MakeString instantiations
 // (`$$BY0BD@...$$BY04` vs our `$$BY08...$$BY0DH@`) while referencing the SAME
