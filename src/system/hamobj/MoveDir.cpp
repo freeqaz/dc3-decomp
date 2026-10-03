@@ -712,7 +712,8 @@ void MoveDir::Poll() {
             // 0x50).  Left: the TheMaster@h hoist / TaskMgr spill below and the
             // f30/f31 swap of 4.0f/0.0f, i.e. one register-pressure choice.
             // Inert: the ternary in a `float dt` local; curPlayerData bound
-            // before oldMove.  Worse: no curPlayerData (97.8).
+            // before oldMove.  Worse: no curPlayerData (97.8).  decomp-synth
+            // beam depth 1 (19 proposals, 16 built): none above baseline.
             // REFUTED (w7-i): binding TheMaster to a local `master` here costs
             // 0.56pp -- it flips the null-check branch polarity (2 extra
             // beq<->beq replace rows) without touching the two rows that
