@@ -107,20 +107,24 @@ void LocaleChunkSort::Sort(OrderedLocaleChunk *chunks, int count) {
 }
 
 namespace LocaleChunkSort {
+// Compares N keys, each the leading 4-byte word of an 8-byte (Xbox DataNode)
+// element: node1/node2/node3's values for an OrderedLocaleChunk.
+// w21-bc: a plain indexed loop with the two keys named closes the last rows
+// (94.44 -> 100); the earlier hand-stepped `b += 8` / `a - b` offset loop made
+// MSVC step the parameter register itself instead of a copy (`mr r11, r4`).
+// Same 8-byte stride, same signed compare -- behaviour unchanged.
 template <int N>
 int FastSort(const void *a, const void *b) {
-    int i = 0;
-    int offset = (int)a - (int)b;
-    do {
-        int valA = *(int *)((char *)b + offset);
-        int valB = *(int *)b;
-        if (valA < valB)
+    const int *keysA = (const int *)a;
+    const int *keysB = (const int *)b;
+    for (int i = 0; i < N; i++) {
+        int keyA = keysA[i * 2];
+        int keyB = keysB[i * 2];
+        if (keyA < keyB)
             return -1;
-        if (valA > valB)
+        if (keyA > keyB)
             return 1;
-        i++;
-        b = (const char *)b + 8;
-    } while (i < N);
+    }
     return 0;
 }
 
