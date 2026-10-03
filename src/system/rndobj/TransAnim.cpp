@@ -239,6 +239,12 @@ void RndTransAnim::SetKeysOwner(RndTransAnim *o) {
 
 void RndTransAnim::SetTrans(RndTransformable *trans) { mTrans = trans; }
 
+// w20-l: normalized 100 / fuzzy 99.71. 9 rows, all /fp:fast commutative operand
+// order (one fadds in the follow-path Add, two fmuls in the 1/scale rows, six in
+// the closing Scale(v9c, tf.m, tf.m)); each row multiplies/adds the same pair as
+// the image. Branch targets, the uninitialised-v70 Interp (image reads 0x90 too)
+// and the AtFrame callee (ICF 826307C8: Vector3/Color/Quat) checked. Writing the
+// Scale out as `tf.m.x *= v9c.x` etc. drops to 96.7 -- reverted.
 void RndTransAnim::MakeTransform(float frame, Transform &tf, bool whole, float blend) {
     if (mKeysOwner != this) {
         mKeysOwner->MakeTransform(frame, tf, whole, blend);
