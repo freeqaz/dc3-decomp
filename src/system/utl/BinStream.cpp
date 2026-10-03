@@ -268,53 +268,27 @@ bool BinStream::WaitUntilReady(int sleepMs) {
 }
 #endif
 
-// RESIDUAL (w7-az, 94.74, 3 rows).  Our build emits one extra instruction,
-// `stw r30, 0x50(r31)` -- a dead zero-store to a compiler temp -- ahead of the
-// `if`, and that forces `li r30, 0x0` up with it.  The image has no such store:
-// slot 0x50 is written exactly once, by `stw r11, 0x50(r31)` at 0x827DE9CC
-// (r11 = r3+8, the homed `this` of the inlined _STLP_alloc_proxy ctor), inside
-// the new-succeeded arm, and its `li r30, 0x0` sits at 0x827DE9A0 immediately
-// before `cmplwi cr6, r11, 0x0` at 0x827DE9A4.  A /FAs listing names our extra
-// slot `$T38365 = 80 ; size = 4`, a temp distinct from `$T38376` (the proxy
-// this, same offset), written once and never read, attributed to the `if` line.
-// NEGATIVES, all three byte-inert (94.74 unchanged, same 3 rows):
-//   * `new std::vector<ObjVersion>` without the `()`.
-//   * hoisting the allocation into a named local
-//     (`std::vector<ObjVersion> *revStack = new ...; mRevStack = revStack;`).
-//   * deleting `~ObjVersion() {}` from obj/Object.h:1861 (RB3's ObjVersion has
-//     no user destructor, so this was worth testing as a lineage question --
-//     it changes nothing here, and the header is PCH-reached, so it was
-//     reverted rather than landed unverified).
-// The temp is manufactured inside STLport's `_VECTOR_IMPL(const allocator_type&
-// __a = allocator_type())` default-argument expansion, not at this call site.
-// w9-b re-measured two of the three negatives above independently (both still
-// exactly inert at 94.73684): `new std::vector<ObjVersion>` without the `()`,
-// and the allocation through a named local.  One NEW negative, also inert:
-// naming the ObjVersion temporary (`ObjVersion rev(revs, obj);
-// mRevStack->push_back(rev);`).  Confirms the diagnosis: the dead slot is not
-// produced by anything at this call site, so the remaining lead is STLport's
-// own ctor shape in src/system/stlport/stl/_vector.h:226 -- and that header is
-// PCH-reached by 574 TUs, so it needs a whole-binary A/B in both directions
-// before anyone touches it, not a local edit.
-// w9-b ATTEMPTED that STLport experiment and ABANDONED it -- it is UNTESTED, not
-// refuted, and produced NO measurement.  The edit tried was splitting the
-// default argument into two overloads at src/system/stlport/stl/_vector.h:226:
-//     _VECTOR_IMPL() : _Vector_base<_Tp, _Alloc>(allocator_type()) {}
-//     explicit _VECTOR_IMPL(const allocator_type& __a) : _Vector_base<...>(__a) {}
-// in place of
-//     explicit _VECTOR_IMPL(const allocator_type& __a = allocator_type())
-// The theory is that the dead zero-store is the default-argument temporary, so a
-// no-arg overload would never materialise it.  The full `ninja` this needs was
-// killed at 606/849 because the box was at load ~240 with six lanes building, so
-// no number exists in either direction.  Whoever resumes it: `_vector.h` IS in
-// the decomp_pch.h closure (confirmed via `ninja -t deps
-// build/373307D9/pch/decomp_pch.obj`), so it needs a full `ninja` and a
-// whole-binary per-function row diff in BOTH directions -- the change touches
-// every default-constructed std::vector in the binary, so it can pay or cost far
-// beyond these 3 rows, and a per-target build would read LOW and silent.
+// w21-af: 94.74 -> 100. The vector is built from a NAMED allocator local.
+// With `new std::vector<ObjVersion>()` the allocator comes from STLport's
+// default argument (`const allocator_type& __a = allocator_type()`), a
+// temporary created inside the new-expression's conditional construct arm;
+// StlNodeAlloc has a user-declared destructor, and MSVC zero-inits a 4-byte
+// temp ahead of the `if` (the dead `stw r30, 0x50(r31)` w7-az found, which also
+// pulled `li r30, 0x0` up) -- most likely the conditional-destruction flag for
+// that temporary. A named local is constructed unconditionally and needs none.
+// Still 94.74: the temp spelled at the call site,
+// `new std::vector<ObjVersion>(std::vector<ObjVersion>::allocator_type())`.
+// Refuted on the way (one full ninja, whole binary): deleting
+// `~StlNodeAlloc() {}` from utl/StlAlloc.h also closes this function but costs
+// 65 others (DOWN 65 / UP 1), so the destructor is real. Earlier inert
+// spellings (w7-az, w9-b): `new std::vector<ObjVersion>` without `()`, a named
+// vector-pointer local, a named ObjVersion temp, deleting `~ObjVersion() {}`.
+// (w9-b's split-_VECTOR_IMPL-ctor experiment in stl/_vector.h was never
+// measured and is now unnecessary.)
 void BinStream::PushRev(int revs, Hmx::Object *obj) {
     if (!mRevStack) {
-        mRevStack = new std::vector<ObjVersion>();
+        std::vector<ObjVersion>::allocator_type alloc;
+        mRevStack = new std::vector<ObjVersion>(alloc);
     }
     mRevStack->push_back(ObjVersion(revs, obj));
 }

@@ -15,7 +15,17 @@
 #include "synth\Utl.h"
 #include "utl\Std.h"
 
-const float sSpeedCaps[2] = { 0.00390625f, 4.0f };
+// Two SCALAR consts, not `const float sSpeedCaps[2]` (w21-af; the names are
+// ours). The image anchors them as base + 4 (lbl_820B6C60 / lbl_820B6C64), which
+// an array also gives, but MSVC treats a global ARRAY as aliased by any store
+// through a pointer and a scalar as not (standalone cl.exe probe): with the
+// array, Sound::SetSpeed's `mSpeed = clamped` store killed the clamp's caps
+// loads, so the else-loop could not reuse them on entry and the whole register
+// assignment shifted (91.17).
+// Two scalars reproduce the image's guarded loop entry that jumps past the caps
+// reloads, and SetSpeed goes to 100. Same values, same .rdata layout.
+const float sSpeedCapMin = 0.00390625f;
+const float sSpeedCapMax = 4.0f;
 
 Sound::Sound()
     : mVolume(0), mSpeed(1), mPan(0), mSend(this), mReverbMixDb(kDbSilence),
@@ -140,7 +150,7 @@ BEGIN_LOADS(Sound)
     bs >> mVolume;
     float transpose;
     bs >> transpose;
-    mSpeed = Clamp(sSpeedCaps[0], sSpeedCaps[1], CalcSpeedFromTranspose(transpose));
+    mSpeed = Clamp(sSpeedCapMin, sSpeedCapMax, CalcSpeedFromTranspose(transpose));
     bs >> mPan;
     d >> unk3d;
     bs >> mSynthSample;
@@ -214,12 +224,12 @@ void Sound::SynthPoll() {
             float faderPan, faderVol, faderTranspose;
             mFaders.GetVal(faderVol, faderPan, faderTranspose);
             (*it)->SetVolume(mVolume + faderVol);
-            // sSpeedCaps[1] is 4.0f; this is the +/-4 pan range, not a speed cap.
-            faderPan = Clamp(-4.0f, sSpeedCaps[1], mPan + faderPan);
+            // sSpeedCapMax is 4.0f; this is the +/-4 pan range, not a speed cap.
+            faderPan = Clamp(-4.0f, sSpeedCapMax, mPan + faderPan);
             (*it)->SetPan(faderPan);
             float faderSpeed = Clamp(
-                sSpeedCaps[0],
-                sSpeedCaps[1],
+                sSpeedCapMin,
+                sSpeedCapMax,
                 CalcSpeedFromTranspose(faderTranspose) * mSpeed
             );
             (*it)->SetSpeed(faderSpeed);
@@ -289,10 +299,10 @@ void Sound::Play(
             float faderVol, faderPan, faderTranspose;
             mFaders.GetVal(faderVol, faderPan, faderTranspose);
             sample->Play(mVolume + faderVol + volume);
-            sample->SetPan(Clamp(-4.0f, sSpeedCaps[1], mPan + faderPan + pan));
+            sample->SetPan(Clamp(-4.0f, sSpeedCapMax, mPan + faderPan + pan));
             sample->SetSpeed(Clamp(
-                sSpeedCaps[0],
-                sSpeedCaps[1],
+                sSpeedCapMin,
+                sSpeedCapMax,
                 CalcSpeedFromTranspose(faderTranspose + transpose) * mSpeed
             ));
             sample->SetEventReceiver(obj ? obj : mEventReceiver.Ptr());
@@ -523,41 +533,20 @@ SynthSample *Sound::Sample() { return mSynthSample; }
 // purely so the fsel chain can consume it; a version that clamps
 // CalcSpeedFromTranspose(mFaders.GetTranspose()) instead ignores the argument
 // entirely and still scores ~90%.
-// w14-e (91.17, unchanged): FOREACH_POST and an explicit
-// `it = begin(); mSpeed = clamped; while (it != end())` for the else arm are
-// both byte-identical to FOREACH -- MSVC canonicalises all three loops.
-// w20-r branch-landing scan (row 54, image `b` into the else-loop body past
-// two `lfs` of sSpeedCaps): ARTIFACT, loop-invariant loads scheduled across
-// the loop-entry edge -- the image's first iteration reuses the caps still
-// in f13/f0 from the clamp and reloads them only after each bctrl. Same
-// values, same SetSpeed(Clamp(caps, transpose * mSpeed)) per sample.
+// w14-e/w20-r chased the else-loop entry and the register shift as loop-shape
+// and scheduling artifacts; both were the caps being an array (see the comment
+// on sSpeedCapMin). w21-af: 100 normalized, fuzzy 99.87 -- one commutative row,
+// the obj-branch `fmuls f12, f30, f31` (image: transpose * clamped) where ours
+// emits the operands the other way round. Both source orders of the product
+// emit ours; `speed = Clamp(...)` too. Register-only, same product.
 void Sound::SetSpeed(float speed, Hmx::Object *obj) {
     float speedTranspose = CalcSpeedFromTranspose(mFaders.GetTranspose());
-    // NEGATIVE RESULT (91.17%, two refuted variants). The residual is entirely
-    // register naming plus one loop shape. The image holds `this` in r31 and
-    // the clamped speed in f31, giving the CalcSpeedFromTranspose result f30
-    // and the sSpeedCaps anchor r28 (`fmr f31, f1` / `fsel f31, f11, f0, f12`,
-    // build/373307D9/asm/src/system/synth/Sound.s); MSVC ranks the transpose
-    // result first and shifts every one of those by a register --
-    // this->r30, clamped->f30, transpose->f31, caps->r29 -- which is 32 of the
-    // 36 mismatch rows. Tried:
-    //   * clamping back into the PARAMETER (`speed = Clamp(...)`), which is the
-    //     shape f31's live range implies: byte-identical, 91.17.
-    //   * moving the clamp ABOVE the CalcSpeedFromTranspose call so the clamped
-    //     value is the one live across it: 91.17 -> 57.8, because MSVC then has
-    //     to materialise the caps anchor before the call too and the whole
-    //     prologue diverges.
-    // The other real row is the else-branch loop guard: the image tests the
-    // list for empty before entering (`cmplw cr6, r30, r29` / `beq`) where
-    // FOREACH gives us a rotated loop that branches straight to the bottom
-    // test. That costs 2 instructions (292 B vs the image's 300 B) and is a
-    // property of the macro, not of this function.
-    float clamped = Clamp(sSpeedCaps[0], sSpeedCaps[1], speed);
+    float clamped = Clamp(sSpeedCapMin, sSpeedCapMax, speed);
     if (obj) {
         FOREACH (it, mSamples) {
             if ((*it)->GetEventReceiver() == obj) {
                 (*it)->SetSpeed(
-                    Clamp(sSpeedCaps[0], sSpeedCaps[1], speedTranspose * clamped)
+                    Clamp(sSpeedCapMin, sSpeedCapMax, speedTranspose * clamped)
                 );
                 return;
             }
@@ -565,7 +554,7 @@ void Sound::SetSpeed(float speed, Hmx::Object *obj) {
     } else {
         mSpeed = clamped;
         FOREACH (it, mSamples) {
-            (*it)->SetSpeed(Clamp(sSpeedCaps[0], sSpeedCaps[1], speedTranspose * mSpeed));
+            (*it)->SetSpeed(Clamp(sSpeedCapMin, sSpeedCapMax, speedTranspose * mSpeed));
         }
     }
 }
