@@ -26,6 +26,12 @@
 #include "utl\Symbol.h"
 #include <stdio.h>
 
+// w21-ar: the image reads the 5-second nav idle threshold from a FILE-SCOPE
+// const (unnamed .rdata word lbl_82118680 at the head of this TU's .rdata,
+// `lfs f13, lbl_82118680@l(r10)` at 829097D0), not from a pooled
+// __real@40a00000 literal.  The name is ours.
+const float kNavIdleResetSeconds = 5.0f;
+
 SkeletonChooser::SkeletonChooser()
     : mDrawDebug(false), mActivePlayerIndex(0), mSwitchDelay(1), unk48(true), unk80(0), unk84(0), unk88(0),
       unk8c(0), unk90(0), mNextSkelIdxToTrack(-1), mInMultiPlayerUpdateMode(false),
@@ -1069,7 +1075,7 @@ void SkeletonChooser::SetPlayerSkeletonNavData(int p1ID, int p2ID) {
         sFloat = 0.0f;
     } else {
         sFloat += TheTaskMgr.DeltaUISeconds();
-        if (sFloat > 5.0f) {
+        if (sFloat > kNavIdleResetSeconds) {
             TheHamProvider->SetProperty(ui_nav_player, 0);
             mActivePlayerIndex = 0;
             HamPlayerData *pPlayer = TheGameData->Player(0);
@@ -1107,6 +1113,17 @@ void SkeletonChooser::ChoosePlayerSides() {
         //     other two registers (4 fcmpu rows).  Inert: thresholds as named
         //     `const float` locals declared -0.15f-first (w7-am), and
         //     inverting the side test so the +0.15 arm comes first (w12-c).
+        // w21-ar (99.924, same 4 fcmpu rows + the 4 lis/lfs relocation-name
+        //   rows they imply): standalone cl.exe probes of this block, all
+        //   inert -- `-kT`/`kT` file const, two float locals, nested-if
+        //   defaults, single ternary, `!(x < -0.15f)`, `-0.15f > x`,
+        //   double literals, a prior TU use of -0.15f.  Every Right-arm-first
+        //   layout gives the FIRST-compared constant f31; the image gives it
+        //   f30.  Only the arm-swapped forms (switch, `!= kSkeletonRight`
+        //   ternary) hoist -0.15 first, and they also flip the block order.
+        //   Also checked: the TU's float pool differed from the image by one
+        //   literal (5.0f, see kNavIdleResetSeconds); restoring the image's
+        //   named const did not move this.
         //   * 82909CA8 keeps `mr r30, r3` and `cmplwi cr6, r3, 0x0` separate
         //     at the pPlayerSkeleton assert where we fuse them into `mr.`.
         // Closed by w12-c: the swap tests are one `||` condition (the image's

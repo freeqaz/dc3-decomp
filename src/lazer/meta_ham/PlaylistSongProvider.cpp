@@ -53,6 +53,10 @@ int PlaylistSongProvider::NumData() const {
 //   95.593  the Symbol temp inlined into the return, songID kept
 //   94.576  everything inlined into one return expression
 // Keep the two named locals; the slot pairing is an allocator decision.
+// w21-ar (99.966, same 16 rows: the 0x50/0x54 slot pair plus the r29/r30/r31
+// rotation -- image ret=r31, this=r30, i=r29; ours ret=r29, this=r31, i=r30).
+// Inert: MILO_ASSERT_EXPR (no do/while scope) for the 0x6d assert; dropping
+// the `else` around `return gNullStr`.
 Symbol PlaylistSongProvider::DataSymbol(int i) const {
     MILO_ASSERT(m_pPlaylist, 0x6d);
     if (i >= 0 && i < NumData() && m_pPlaylist && m_pPlaylist->IsValidSong(i)) {
