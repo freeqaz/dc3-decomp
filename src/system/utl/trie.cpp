@@ -9,6 +9,19 @@
 // image carries.  A bare #include "trie.h" resolves out of the compiler's cwd
 // and yields the basename instead.
 
+// w21-ag: 100 canonical (fuzzy 99.5), 13 rows left, all register-only or a
+// branch target, none a value difference:
+//  - i <-> sibCount in r26/r27 (image i=r27, sibCount=r26), 12 rows.  Moving
+//    `int i;` above `strLen` is inert.
+//  - the zero-trip `blt` (diff idx 21): the image jump-threads it straight to
+//    the inc_dup_count tail (curIdx is 1 there, so the `result == 0` test is
+//    provably false); we land on that test, which then falls through.  Same
+//    behaviour.
+// Levers that took it 95.31 -> 100: the fast path is written with the trie's
+// own two cursors (curIdx = new node in r30, parentIdx = its parent in r28,
+// exactly the image's registers) instead of a fresh temp, and the insert path
+// calls inc_count in each arm rather than through a shared local (the image's
+// `mr r3, r31` sits in both arms around a cross-jumped `bl inc_count`).
 int Trie::store(const char *str) {
     if (str == 0 || *str == 0)
         goto return_zero;
@@ -81,14 +94,12 @@ int Trie::store(const char *str) {
             newNode[0x10] = ch;
             check_index(nodeIdx);
             *(unsigned int *)(newNode + 0x08) = parentIdx;
-            unsigned int firstChildIdx;
             if ((int)parentIdx > 0) {
                 check_index(parentIdx);
-                firstChildIdx = FirstChild(NodePtr(this, parentIdx));
+                inc_count(FirstChild(NodePtr(this, parentIdx)));
             } else {
-                firstChildIdx = 1;
+                inc_count(1);
             }
-            inc_count(firstChildIdx);
             parentIdx = nodeIdx;
             curIdx = nodeIdx;
             if (str[i] != '\0') goto fast_path;
@@ -102,17 +113,17 @@ int Trie::store(const char *str) {
 fast_path:
     do {
         i++;
-        unsigned int newIdx = get_free_node();
+        curIdx = get_free_node();
+        check_index(parentIdx);
+        FirstChild(NodePtr(this, parentIdx)) = curIdx;
         check_index(curIdx);
-        FirstChild(NodePtr(this, curIdx)) = newIdx;
-        check_index(newIdx);
-        char *newNode = NodePtr(this, newIdx);
-        *(unsigned int *)(newNode + 0x08) = curIdx;
+        char *newNode = NodePtr(this, curIdx);
+        *(unsigned int *)(newNode + 0x08) = parentIdx;
         char c2 = str[i];
-        check_index(newIdx);
+        check_index(curIdx);
         newNode[0x10] = c2;
-        inc_count(newIdx);
-        curIdx = newIdx;
+        inc_count(curIdx);
+        parentIdx = curIdx;
     } while (i < strLen);
 
 done:

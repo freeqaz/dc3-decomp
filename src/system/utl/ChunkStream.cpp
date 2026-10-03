@@ -334,58 +334,21 @@ EofType ChunkStream::Eof() {
         // temp as at every scalar swap site, instead of the reversed pair we
         // emitted.  24 rows -> 20, raw 96.993 -> 97.093, nothing regressed.
         File *file = mFile;
-        // RESIDUAL (w7-bp, 97.97 canonical, 1200 B, 15 rows) -- the whole
-        // remaining residual is ONE scheduling cluster, target indices 213-228
-        // (0x824... region ending at the `lwz r11, 0x0(r3)` Seek vcall).  The
-        // image emits the four stores below in the order
-        //   0x8ac mCurChunk / 0x8b0 mChunkEnd / 0x8a4 mCurBufOffset /
-        //   0x888 mCurBufferIdx
-        // and loads BOTH Seek arguments early (`lwz r3, 0x10` mFile at target
-        // 214, `lwz r4, 0x28` mChunkInfoSize at 219) with
-        // `lwz r11, 0x30` mMaxChunkSize LATE, at 225, immediately before its
-        // one use.  We emit 0x888 / 0x8ac / 0x8a4 / 0x8b0 and hoist
-        // mMaxChunkSize to 214 instead.
-        //
-        // NEGATIVE RESULTS (w7-bp, three source spellings, all measured):
-        //   (a) source order mCurChunk, mChunkEnd, mCurBufOffset,
-        //       mCurBufferIdx -- i.e. LITERALLY the image's store order:
-        //       98.0 -> 97.3.  Putting mCurChunk first is the part that hurts;
-        //       it shifts the whole block by one and adds an OFFSET_SWAP of
-        //       (0x888,0x8ac).
-        //   (b) source order mCurBufOffset, mCurChunk, mChunkEnd,
-        //       mCurBufferIdx: BYTE-IDENTICAL to the form below -- same 98.0,
-        //       same 8 diff_arg / 1 diff_op / 3 insert / 3 delete at the same
-        //       indices.
-        //   (c) hoisting the second Seek argument into a named local
-        //       (`int infoSize = mChunkInfo.mChunkInfoSize;` before the stores,
-        //       `file->Seek(infoSize, 0)`), which is what target index 219
-        //       looks like: also BYTE-IDENTICAL, 98.0, same row set.
-        // So MSVC normalises source order across these four independent
-        // member stores and schedules the block itself; the emitted order is
-        // not reachable from the statement order.  Do not re-derive.
-        //
-        // RE-MEASURED (w7-bs, still 97.97 canonical / 97.80 raw, 15 rows,
-        // 303/303).  Six of the 24 statement orders are now measured and
-        // they produce exactly TWO object shapes:
-        //   - mCurChunk NOT first (this order, (b), (c), and
-        //     mChunkEnd/mCurChunk/mCurBufOffset/mCurBufferIdx): byte-identical
-        //     15-row residual, `stw r27, 0x888` emitted FIRST at 0x2544;
-        //   - mCurChunk first ((a) and mCurChunk/mChunkEnd/mCurBufferIdx/
-        //     mCurBufOffset): 97.3, and the (0x888,0x8ac) OFFSET_SWAP appears
-        //     in the TAIL block too (target 0x827E0B20-28, our rows 294/296),
-        //     which is not touched by the edit -- the tie-break is a
-        //     function-wide property of the fields, not this block's order.
-        // The image stores 0x888 LAST (0x827E0A1C) even though r27 = 2 has
-        // been available since 0x827E08B4, while in the mID-fixup block at
-        // 0x827E083C-40 the same compiler stores its ready constants FIRST;
-        // so the late 0x888 store is an ordering dependence in the image's
-        // IR that the literal `2` does not carry, and no member-store order
-        // reaches it.  The `lwz r11, 0x30` placed after two stores at
-        // 0x827E0A10 is the same dependence seen from the load side.
-        mCurBufferIdx = 2;
-        mCurBufOffset = mChunkInfo.mMaxChunkSize & kChunkSizeMask;
+        // w21-ag: 97.97 -> 100 (all 300 rows equal).  mCurBufOffset is spelled
+        // as a read through the freshly stored mCurChunk, not as
+        // mChunkInfo.mMaxChunkSize: mCurChunk = mChunks - 1 points at
+        // mMaxChunkSize (the int just before mChunks[0] in ChunkInfo), so it is
+        // the same word.  MSVC folds the address back to the direct
+        // `lwz r11, 0x30(r31)` the image has, but the dependence on the pointer
+        // store keeps that load after the 0x8ac / 0x8b0 stores (827E0A10), and
+        // the 0x888 store comes last -- the image's order.  The earlier
+        // RESIDUAL note (w7-bp/w7-bs, "no member-store order reaches it",
+        // "ordering dependence the literal does not carry") was this load.
+        // Statement order is RB3's.
         mChunkEnd = chunks + mChunkInfo.mNumChunks;
         mCurChunk = chunks - 1;
+        mCurBufOffset = *mCurChunk & kChunkSizeMask;
+        mCurBufferIdx = 2;
         file->Seek(mChunkInfo.mChunkInfoSize, 0);
         ReadChunkAsync();
     }

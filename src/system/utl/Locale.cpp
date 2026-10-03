@@ -21,6 +21,8 @@
 // DataArray (`lwz r3, 0x50(r31)` / `bl ??3DataArray@@SAXPAX@Z`).  So it is a
 // funclet of a DIFFERENT parent function in the same object; nothing can be
 // fixed here until the parent it belongs to is matched.
+// w21-ag: it WAS Locale::Init's funclet (frame 0x160, devkitPath String at
+// r31+0x80); with Init's slot layout fixed it reads 100.
 Locale TheLocale;
 
 // ~Locale() is inline in Locale.h (compiler inlines it into atexit destructor)
@@ -233,6 +235,18 @@ void Locale::SetMagnuStrings(DataArray *da) {
 // 0x98-0xa8, DataNode(devkitPath) 0xb0, arrVec 0xb8, tmp 0xc4 -- one extra
 // 4-byte temp below devkitPath (our SystemLanguage() Symbol temp is not pooled
 // with the `chunks` new-temp at 0x74 the way the image's is).
+// w21-ag: 98.93 -> 100 canonical (fuzzy 99.6; 39 register-only rows left:
+// this r20 vs our r19 against the kDataSymbol constant 5, the chunk counter /
+// k loop index r27<->r28, one stbx operand order, and the "redefined" notify
+// storing prevSym's register where we store curSym's -- the two are equal on
+// that path).  The stack layout above is now slot-for-slot the image's.  What
+// closed it: (1) LiteralArray's source argument is the previous chunkArr
+// (behaviour, see the note in the loop); (2) the locale_keep MakeString is its
+// own statement; (3) altCfg's devkitPath argument is the implicit String ->
+// DataNode conversion; (4) the chunk loops count with their own `n`.
+// Inert for the register rows: `int n` at function scope; assigning numChunks
+// after the Sort instead of before it costs 100 -> 99.3 (the image's
+// `mr r26, r27` sits before the cfg->Size() > 1 test).
 void Locale::Init() {
     MILO_ASSERT(!mStrTable, 0x58);
     MILO_ASSERT(!mSymTable, 0x59);
@@ -248,13 +262,12 @@ void Locale::Init() {
     Symbol prevSym;        // Tracks previous symbol to deduplicate
 
     // Check for alternate devkit locale file
-    String devkitPath(FileMakePath(
-        "devkit:\\locale", MakeString("%s\\locale_keep.dta", SystemLanguage())
-    ));
+    const char *keepFile = MakeString("%s\\locale_keep.dta", SystemLanguage());
+    String devkitPath(FileMakePath("devkit:\\locale", keepFile));
     FileQualifiedFilename(devkitPath, devkitPath.c_str());
 
     static Symbol locale("locale");
-    DataArrayPtr altCfg((DataNode(locale)), DataNode(devkitPath));
+    DataArrayPtr altCfg(DataNode(locale), devkitPath);
 
     // The image branches the no-config case to the ALLOCATION block, not past it:
     // `cmplwi r3, 0x0` / `beq .L_827E9DE8` at 827E99C0 lands on `mSymTable = new
@@ -294,26 +307,37 @@ void Locale::Init() {
 
                 chunks = new LocaleChunkSort::OrderedLocaleChunk[totalChunks];
 
-                numChunks = 0;
+                int n = 0;
                 for (int j = cfg->Size() - 2; j >= 0; j--) {
                     DataArray *curArr = arrVec[j];
-                    for (int k = curArr->Size() - 1; k >= 0; k--, numChunks++) {
-                        DataArray *chunkArr = curArr->Node(k).LiteralArray(curArr);
-                        int size = chunkArr->Size();
-                        if (size < 2) {
+                    // BEHAVIOURAL (w21-ag): LiteralArray's error-context argument is
+                    // the PREVIOUS chunk array, not curArr, from the second entry on.
+                    // Image 827E9BDC `mr r30, r26` (curArr) before the k loop, then in
+                    // the loop 827E9C04 `mr r4, r30` / bl LiteralArray / 827E9C10
+                    // `mr r30, r3` -- one register carries both.  Only the file/line
+                    // of a "Data %s is not Array" failure depends on it.  The size
+                    // test re-reads Size() (lha 0x8 is CSE'd; the image spills it to
+                    // 0x6c only inside the MILO_FAIL arm, which a named `size` local
+                    // would not do).
+                    DataArray *chunkArr = curArr;
+                    for (int k = curArr->Size() - 1; k >= 0; k--, n++) {
+                        chunkArr = curArr->Node(k).LiteralArray(chunkArr);
+                        if (chunkArr->Size() < 2) {
                             MILO_FAIL(
                                 "%s line %d should have 2 entries, has %d, mismatched quotes?",
                                 chunkArr->File(),
                                 chunkArr->Line(),
-                                size
+                                chunkArr->Size()
                             );
                         }
-                        chunks[numChunks].node1 = chunkArr->LiteralSym(0);
-                        chunks[numChunks].node2 = numChunks;
-                        chunks[numChunks].node3 = chunkArr->LiteralStr(1);
+                        chunks[n].node1 = chunkArr->LiteralSym(0);
+                        chunks[n].node2 = n;
+                        chunks[n].node3 = chunkArr->LiteralStr(1);
                     }
                     curArr->Release();
                 }
+
+                numChunks = n;
 
                 if (cfg->Size() > 1) {
                     LocaleChunkSort::Sort(chunks, numChunks);

@@ -600,6 +600,20 @@ void GestureMgr::DrawSkeletonKinectData() {
                     // counter's init precedes the 0.2f constant is inert too:
                     // the r28/r29 vs r9 assignment of "(active)"/"not tracked"
                     // and the 0.0f/1.0f pool registers do not move.
+                    // w21-ag (98.8 canonical, 6 rows, all in the two SetInt
+                    // calls below): the image's shape -- `addi r3, r3, 0x110`,
+                    // args, then `lwz r11, 0x0(r3)` -- is exactly what MSVC emits
+                    // for `Find<UILabel>(..)->SetInt(..)` with NO null test in
+                    // between (standalone cl.exe probe, and the image's own
+                    // BustAMovePanel/HelpBarPanel Find(..,true)->SetX sites); any
+                    // tested pointer folds the vtable load to `lwz r11,
+                    // 0x110(r3)`.  Probed and inert/worse: if-init declaration,
+                    // `!l goto`, `l && (..)`, TextHolder*/TextHolder& locals, the
+                    // argument hoisted into a local, an inline
+                    // SetLabelInt(TextHolder*/UILabel*, int) helper (the
+                    // TextHolder* one re-creates the null-preserving select).
+                    // The epilogue closed (96.0 -> 98.8) by reading mDebugDir
+                    // directly -- see the end of the function.
                     UILabel *idLabel =
                         marker->Find<UILabel>("id.lbl", false);
                     if (idLabel) {
@@ -675,7 +689,12 @@ void GestureMgr::DrawSkeletonKinectData() {
         }
     }
 
-    if (debugDir) {
-        debugDir->DrawShowing();
+    // w21-ag: the member itself, twice, not the `debugDir` reference: the
+    // image's `clrrwi r11, r11, 0` copy before `addi r3, r11, 0x9c` is MSVC
+    // CSE-ing a re-read raw member (the w21-u shape), and dropping the
+    // reference's last use here also put the prologue's constant-pool
+    // registers back on the image's (96.0 -> 98.8).
+    if (mDebugDir) {
+        mDebugDir->DrawShowing();
     }
 }
