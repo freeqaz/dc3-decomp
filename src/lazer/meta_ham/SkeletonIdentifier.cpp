@@ -433,7 +433,17 @@ DataNode SkeletonIdentifier::OnMsg(const SigninChangedMsg &msg) {
 }
 
 DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
-    if (mIdentityStatus != kIdentityStatus_None) {
+    // w21-ba (99.83 -> 100): an early return, not an enclosing `if`.  With
+    // TWO by-value return statements MSVC evidently spends destructor-flag
+    // bit 0 on the return object, so the conditionally-built GetSignedIn()
+    // vector temp below lands on bit 1 -- the image's `li r28, 0x2` /
+    // `rlwinm. r10, r28, 0, 30, 30`.  With one return it was bit 0.
+    // Both returns are DataNode(0) (DataNode(kDataInt, 0) at the tail swaps the
+    // two return-slot stores).  The braces keep the block's lexical scope: the
+    // function-local statics' scope ordinals (?BN@, ?CC@) depend on it.
+    if (mIdentityStatus == kIdentityStatus_None)
+        return DataNode(0);
+    {
         TheGestureMgr->RemoveSink(this, "skeleton_identified");
         int enrollmentIdx = msg.GetVal2();
         int skeletonIndex = msg.GetIndex();
@@ -506,15 +516,10 @@ DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
             //     String(Localize(...)) temp rather than an implicit conversion;
             //   turning this `else if` into `else { if (...) }` to add one
             //     lexical scope around the temp.
-            // w21-ba (still 99.83, same rows 320/327; the MakeString row 48 is
-            //   an ICF-folded template name, not charged): the select
-            //   `mIdentityStatus = cond ? kIdentityStatus_WaitingForSignIn :
-            //   kIdentityStatus_None` is WORSE (97.9 -- MSVC stores inside
-            //   the flag test instead of the image's subfic/subfe/and after the
-            //   deallocate).  The static-guard bits ($S7, 0x1..0x20) are a
-            //   separate counter and already agree.  No natural source spelling
-            //   found for an earlier conditionally-destructed temp; not
-            //   inventing one.
+            // w21-ba: closed by the early return at the top of this function
+            //   (the earlier temp is the return object's flag).  Refuted on
+            //   the way: `mIdentityStatus = cond ? kIdentityStatus_WaitingForSignIn
+            //   : kIdentityStatus_None` (97.9).
             mWaitingPlayerIndex = enrollmentIdx;
             UpdateEnrolledPlayers();
             TheGameData->SetAssociatedPadNum(
@@ -530,5 +535,5 @@ DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
             }
         }
     }
-    return DataNode(kDataInt, 0);
+    return DataNode(0);
 }
