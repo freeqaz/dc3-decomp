@@ -102,6 +102,11 @@ void MiniGameMgr::InitCascade(int numMovesNeeded, int blockingFactor) {
 // TheGameData lis pair in the other order and the 0x2c/0x30 loads into
 // r9/r10 swapped.  Inert: `mNumMovesNeeded + mBlockingFactor` (MSVC
 // canonicalises the sum).  Worse: the i == 0 arm first (76.0).
+// w21-aw (5 -> 3 rows): `switch (i)` with case 0 / default MILO_ASSERT fixed
+// the hoisted lis pair order ([43]/[44]).  Stop: the 0x2c/0x30 r9/r10 rows
+// remain.  Inert with the switch: the sum in either order, a
+// `(unsigned int)(...)` cast, the size test as an `if (...) break;` at the
+// top of the body.  Worse: `end() - begin() >` in place of size() (99.4).
 void MiniGameMgr::UpdateCascadeMovePool(
     MoveGraph &graph,
     std::vector<const MoveVariant *> &allMoves,
