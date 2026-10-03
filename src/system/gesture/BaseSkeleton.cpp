@@ -131,6 +131,14 @@ void BaseSkeleton::NormPos(SkeletonCoordSys cs, SkeletonJoint joint, Vector3 &v)
 // early `if (joint == rootJoint) return;`, bone locals declared first, int
 // bone locals cast at the call, `totalLength = 0; totalLength += ...` (not
 // shippable anyway: -0.0f -> +0.0f).
+// w21-ao (98.28 canonical, same 5 of 175 rows: the bone1 `mr r4, r7`
+// coalesce and the second xori slot): measured in a real-flag cl.exe probe,
+// all no better -- the 21 single-statement moves of bone1/bone3/joint3
+// within both ternary blocks (current order is the unique minimum), bones
+// declared before joints, `left`/`!right` ternaries, no bool local, int or
+// const bool, a function-scope `bool right`, `result = pos` hoisted, a
+// separate bone1Len local, `result *= totalLength`.  Not a source-shape
+// lead left that I can see.
 void BaseSkeleton::LimbNormPos(
     SkeletonCoordSys cs,
     SkeletonJoint joint,
