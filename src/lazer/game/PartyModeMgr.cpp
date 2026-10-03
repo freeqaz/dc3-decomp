@@ -1071,9 +1071,15 @@ void PartyModeMgr::AddPlayerToTeam(int team) {
 // erase<PartyModePlayer*> are both 0x827BD118.  Branch landings agree:
 // team==1 -> the 0x68 (mTeam1Players) block, team==2 -> the 0x74 block, on
 // both sides.
+// w21-az (99.92 -> 100): the assert comes FIRST and an if / else-if follows
+// (no switch).  MSVC jump-threads the assert's team==1 / team==2 exits
+// straight into the arms, and the failed-assert path (team known to be
+// neither) straight to the epilogue, which lays the team-1 arm first as in
+// the image.  Same behaviour natively: a non-fatal assert falls into an
+// if / else-if that matches neither value.
 void PartyModeMgr::ClearTeam(int team) {
-    switch (team) {
-    case 1: {
+    MILO_ASSERT(team == 1 || team == 2, 0x20F);
+    if (team == 1) {
         int n = (int)mTeam1Players.size();
         while (n != 0) {
             n--;
@@ -1081,9 +1087,7 @@ void PartyModeMgr::ClearTeam(int team) {
             mPlayers.pop_back();
         }
         mTeam1Players.clear();
-        break;
-    }
-    case 2: {
+    } else if (team == 2) {
         int n = (int)mTeam2Players.size();
         while (n != 0) {
             n--;
@@ -1091,11 +1095,6 @@ void PartyModeMgr::ClearTeam(int team) {
             mPlayers.pop_back();
         }
         mTeam2Players.clear();
-        break;
-    }
-    default:
-        MILO_ASSERT(team == 1 || team == 2, 0x20F);
-        break;
     }
 }
 
