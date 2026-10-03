@@ -1,5 +1,6 @@
 #pragma once
 #include "math\Mtx.h"
+#include "utl/PoolAlloc.h"
 #include "obj\Data.h"
 #include "obj/Object.h"
 #include "rndobj\Draw.h"

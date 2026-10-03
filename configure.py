@@ -366,8 +366,27 @@ config.pch_eligible_dirs = {
 #     "...\src\utl\FileStream.h" (backslash, the TU's own line 1); through
 #     the PCH it got "utl/FileStream.h" from TextFileStream.h.  99.583 -> 100,
 #     0 DOWN rows (w21-bc), where flipping the header spelling cost 7 (w9-a).
+#   os/HDCache.cpp -- the image's CritSec.h literal is the BACKSLASH one
+#     (??_C@_0CM@BHOIGAFK, "...\src\os\CritSec.h", in exactly this one object;
+#     5 other objects use the forward-slash one the PCH fixes via
+#     os/ThreadCall.h).  Built without the PCH, HDCache.h line 2 opens it.
+#     HDCache.h's FileStream.h include was respelled "utl/FileStream.h" in the
+#     same change so that literal stays the forward one the image has.
+#     Whole-binary A/B (w21-bj): UP 2 (??3CriticalSection 98.333 -> 100,
+#     HDCache::Init 99.975 -> 100), DOWN 0.  Without the HDCache.h respelling,
+#     OpenHeader went 100 -> 99.787.
+#   rndobj/MultiMesh.cpp -- the image's PoolAlloc.h literal is the FORWARD one
+#     (??_C@_0CP@ODNEEFIH, "...\src\utl/PoolAlloc.h"); through the PCH it is the
+#     backslash one obj/Data.h fixes for all PCH TUs (and utl/PoolAlloc.obj
+#     needs).  Built without the PCH, with MultiMesh.h (which declares the
+#     ReclaimableAlloc gTransListAlloc) including "utl/PoolAlloc.h" before
+#     obj\Data.h.  Whole-binary A/B (w21-bj): UP 2 (??3FixedSizeAlloc
+#     98.333 -> 100, ??_GFixedSizeAlloc 99.545 -> 100), DOWN 0.  The PCH exclusion
+#     alone moved nothing (0 UP / 0 DOWN): the first opener was still Data.h.
 config.pch_excluded_sources = {
     "src/system/utl/FileStream.cpp",
+    "src/system/os/HDCache.cpp",
+    "src/system/rndobj/MultiMesh.cpp",
 }
 
 # *** ONE PASS RUNS INSIDE THE COMPILE EDGE, NOT ONLY AFTER IT. ***

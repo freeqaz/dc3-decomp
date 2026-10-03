@@ -18,6 +18,9 @@
 // (also a PCH TU) needs the BACKSLASH spelling, so no single PCH include
 // spelling serves both; closing these needs this TU built without the PCH
 // (configure.py has no per-file opt-out today).
+// w21-bj: CLOSED (both 100) -- this TU is now in config.pch_excluded_sources and
+// MultiMesh.h includes "utl/PoolAlloc.h" (forward slash) before obj\Data.h, so
+// it is the first opener.  Whole-binary A/B: UP 2, DOWN 0.
 ReclaimableAlloc gTransListAlloc(0x4C, "InstanceListNode");
 std::list<std::pair<class RndMultiMeshProxy *, int> > RndMultiMesh::sProxyPool;
 
