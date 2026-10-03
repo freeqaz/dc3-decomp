@@ -349,6 +349,18 @@ void SongCollision::Update(MoveDir *moveDir) {
     // home slot 0x50 for the base suggests exactly that lifetime -- 92.4, and
     // `dancer` is evicted to r28 with a home store at 0x68 (same failure as
     // w7-ak's move).
+    // w21-al (floor held at 94.2): a standalone /FAs probe of this TU scored
+    // with objdiff against the target object reproduces every number above
+    // (94.24 / 92.79 / 92.44), so the probe is faithful.  Thirteen more
+    // spellings, none above 94.24: `easy = data[0]` at the end with `data` at
+    // function scope (byte-identical) or after the Timer (92.44); `data`
+    // bound before the Timer / before usefulBones (91.67), before `dancer`
+    // (93.90), inside `if (moveDir)` or before the first MILO_ASSERT (93.23);
+    // a function-scope `std::vector<BeatCollisionData> *` (identical); with
+    // `mData[i]` + `easy`: function-scope `int i`, `HamCharacter *const`,
+    // a cast WorldXfm call, end()-begin() for size, mData[0].size() direct
+    // (all 92.79-92.82).  The Timer::Ms rows (sradi/clrrwi order) come from
+    // the PCH inline CyclesToMs and were not touched.
     auto& data = mData;
     if (moveDir) {
         MILO_ASSERT(TheGameData, 0xFB);

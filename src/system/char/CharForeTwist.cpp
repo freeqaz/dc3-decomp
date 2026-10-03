@@ -106,9 +106,26 @@ void CharForeTwist::Poll() {
     // register rows).  Swapping the second Dot's operands (Dot(v98, m.x)) is
     // byte-inert.  `Transform &` (RB3's spelling) does not compile: WorldXfm()
     // returns const.  The fourth callee-saved FPR is still not source-reachable.
-    float clamped = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.y, handxfm.m.z));
+    // w21-al: 91.29 -> 93.67 (32 rows left: 23 diff_arg, 2 replace, 4 insert,
+    // 3 delete, all still inside the Dot/Cross/Dot block).  Binding
+    // parentxfm.m.y to a local reference ONCE (lever (a); rb3-xenon spells
+    // py/hz this way) is what buys the image's fourth callee-saved FPR: the
+    // prologue now opens `subi r12,r1,0x28; bl __savefpr_28` with the 0x110
+    // frame, and f28 = newbias, f31 = DEG2RAD as in the image.  What is left:
+    // we load handxfm.m.z.x twice (Dot's copy and Cross's copy) where the image
+    // loads it once into f10, and the load order still starts h.z.y, not p.y.z.
+    // Measured in a standalone /FAs probe of this TU (same cl.exe flags):
+    // binding hz as well (rb3-xenon's exact spelling) removes the double load
+    // and gives the image's y + (x + z) association, but MSVC then schedules
+    // the block worse (+13 rows); all 24 explicit-paren spellings of the first
+    // dot with both refs, and all 18 with py only, are worse than Dot(); a
+    // Matrix3 & binding, px bound, Vector3 COPIES of py/hz (they stay in
+    // memory), Cross written out three ways, newbias in four positions, Clamp
+    // before/after Cross, and Dot operand order are inert or worse.
+    const Vector3 &py = parentxfm.m.y;
+    float clamped = Clamp(-1.0f, 1.0f, Dot(py, handxfm.m.z));
     Vector3 v98;
-    Cross(parentxfm.m.y, handxfm.m.z, v98);
+    Cross(py, handxfm.m.z, v98);
     float clamp2 = Clamp(-1.0f, 1.0f, Dot(parentxfm.m.x, v98));
     float newbias = mBias * DEG2RAD;
     float tan2res = std::atan2(clamp2, clamped);

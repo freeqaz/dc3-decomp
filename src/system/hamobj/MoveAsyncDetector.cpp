@@ -182,33 +182,15 @@ void MoveAsyncDetector::EnqueueDetectFrames(int i1, int i2, float f3, int i4) {
     for (std::set<MoveDetector *>::iterator it = mActiveDetectors.begin(); it != mActiveDetectors.end(); ++it) {
         MoveDetector *cur = *it;
         cur->Poll(i1, i2, mDir);
-        // NOTE (w7-av): 90.53 is a register-allocation floor, not a statement-order
-        // one.  The image keeps `cur` in r25 across the PlayerDetectFrames call and
-        // does the Move() load inline at 0x8252D3B8 (`lwz r3, 0x0(r25)`), putting
-        // `frames` in r24; we kill `cur` early and put `frames` in r25.  Measured:
-        // deferring Move() below `frames` (86.8), spelling it inline as
-        // `cur->Move()->FilterVer()` in the call (86.8), and hoisting it to a
-        // separate `ver` statement (86.8) all make MSVC take a NINTH callee-saved
-        // GPR (`stfd f31, -0x48` / __savegprlr_23) and score worse.  Passing
-        // PlayerDetectFrames inline too is 84.2 and proves the arg order: MSVC
-        // evaluates this call right-to-left, so `frames` has to be a named local.
-        // w14-b (still 90.53): also inert -- `inline` on every MoveDetector
-        // method the map lists `f i` (Poll, PlayerDetectFrames, ctor/dtor, the
-        // Frac getters); frames-first + cur->Move()->FilterVer() in the call,
-        // a separate `ver` local, (*it)-> everywhere, a frames pointer: 86.0-86.7.
-        // w21-b (still 90.53): the image loads mMove straight into r3 AFTER
-        // `mr r24, r3` (so cur stays live in r25 and frames takes r24); every
-        // spelling that loads Move() after the call lets MSVC's pre-RA
-        // scheduler hoist the load above the frames copy, so frames reuses
-        // cur's register (86.8, __savegprlr_25).  Re-measured: frames first +
-        // cur->Move()->FilterVer() inline (86.8), `cur` declared at function
-        // scope (86.8), PlayerDetectFrames inline with `move` named first
-        // (84.2; confirms right-to-left argument evaluation).  Behaviour is
-        // the image's: Poll(i1, i2, mDir), then EnqueueDetectFrames(f3, i4,
-        // frames, mMove->FilterVer()).
-        const HamMove *move = cur->Move();
+        // w21-al: 90.53 -> 100.  The image reads the MEMBER straight into r3
+        // after the PlayerDetectFrames copy (`mr r24, r3; lwz r3, 0x0(r25)`,
+        // 0x8252D3B4..B8): one inline level fewer than Move().  Every earlier
+        // lane went through the Move() accessor, which lets MSVC hoist the load
+        // above the frames copy (w7-av/w14-b/w21-b: 86.0-90.53).  Same values,
+        // same call order: Poll, PlayerDetectFrames, mMove->FilterVer(),
+        // EnqueueDetectFrames(f3, i4, frames, ver).
         std::vector<DetectFrame> &frames = cur->PlayerDetectFrames(i4);
-        mDir->EnqueueDetectFrames(f3, i4, frames, move->FilterVer());
+        mDir->EnqueueDetectFrames(f3, i4, frames, cur->mMove->FilterVer());
     }
 }
 
