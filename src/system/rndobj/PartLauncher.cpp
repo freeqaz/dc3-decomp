@@ -4,33 +4,13 @@
 #include "rndobj/MultiMesh.h"
 #include "rndobj\Poll.h"
 
-// RESIDUAL (w7-bl, 85.40 canonical, 22 of 88 rows): pure instruction
-// SCHEDULING inside the vbase/member-init block, plus the register swaps it
-// induces.  Both sides emit exactly the same 12 instructions there; the image
-// materialises every vtable address first (`lis r9, ??_7RndPartLauncher@@
-// 6BObject@Hmx@@` at index 28, unused until index 54) and only then bunches
-// the four inlined-ctor `this` home stores -- `addi rX, r30, {0x8,0x1c,0x30,
-// 0x48}` / `stw rX, 0x50(r31)` -- at indices 41-51.  We interleave the home
-// stores from index 26 and push the Object-vtable `lis` down to 38/42.  That
-// ordering is the whole gap: 6 inserts + 6 deletes are the same instructions
-// in different slots, and the 10 diff_args are the r7<->r9 / r5<->r11
-// renumbering that falls out of it (all volatile registers -- no value is
-// live across a call, so this is scheduling, not liveness).
-// Failed spellings, both measured in this worktree and both byte-inert
-// (85.40, identical 10/6/6 row split): writing the init list in a different
-// textual order (`mNumParts, mEmitRate, mEmitCount` before the three
-// ObjPtrs -- MSVC re-sorts to declaration order and schedules identically);
-// and the one-argument `mPart(this)` / `mTrans(this)` / `mMeshEmitter(this)`
-// ObjPtr ctor instead of `(this, 0)`.
-// NEGATIVE RESULT (w7-br): og-dc3's spelling -- one-argument ObjPtr ctors plus
-// integer `mEmitRate(0, 0)` / `mEmitCount(0)` -- is byte-inert too (85.40,
-// same 10/6/6).  Re-diagnosis: the sibling PhotoSpotlightPositioner ctor
-// (two ObjPtr members, 100%) shows the image INTERLEAVING its home stores
-// early (`addi r7, r30, 0xc` at 0x82509B78, `stw r7, 0x50(r31)` at
-// 0x82509B84), exactly the shape we produce here; only in this ctor does the
-// image hoist every vtable/constant `lis` (0x82700140 .. 0x82700168) ahead of
-// the four home stores (first `addi r5, r30, 0x8` at 0x8270018C).  Nothing in the init list distinguishes the two
-// beyond the float members, and spelling those as ints does not move it.
+// w21-bh: 84.93 -> 100.  The w7-bl/w7-br "scheduling" residual (home stores
+// of the inlined ObjPtr ctors bunched after every vtable `lis`) was the
+// PartOverride ctor's LINKAGE: the retail map lists ??0PartOverride@@QAA@XZ as
+// `f i` (inline/COMDAT, kept from Part.obj), so it was an inline header ctor
+// that MSVC declines to inline here, not an out-of-line `throw()` ctor in
+// Part.cpp.  Defining it in Part.h closes every row; Part.obj's copy and
+// ??__EgNoPartOverride stay at 100.
 RndPartLauncher::RndPartLauncher()
     : mPart(this, 0), mTrans(this, 0), mMeshEmitter(this, 0), mNumParts(0),
       mEmitRate(0.0f, 0.0f), mEmitCount(0.0f)
