@@ -51,10 +51,20 @@ static const int kMaxLoopingSounds = 100;
 
 void ThreeDSoundManager::Poll() {
     START_AUTO_TIMER("sound_mgr_poll");
-    // Keep the ternary.  Splitting it into `p = Ptr(); if (!p) p = Cam();` measures
-    // 98.4 (vs 99.4): it moves the cr6 allocation onto the FIRST test instead of the
-    // second, which is the wrong way round, and costs 30 more rows of r26<->r27.
-    RndTransformable *listener = mListener.Ptr() ? mListener.Ptr() : mParent->Cam();
+    // w21-af: an if/else that assigns in BOTH arms, not the ternary (99.41 -> 100).
+    // With `Ptr() ? Ptr() : Cam()` MSVC threads the non-null arm past the
+    // `if (listener)` test (our `bne` landed on the WorldXfm dirty check); the image
+    // re-tests both arms at one `cmplwi cr6 / beq` join, which the if/else gives.
+    // `p = Ptr(); if (!p) p = Cam();` measures 98.4 (cr6 lands on the first test).
+    // Stop: fuzzy 99.90 -- 4 register-only rows, the hoisted MILO_NOTIFY_ONCE
+    // anchors: the image keeps &kMaxLoopingSounds in r25 and the format string in
+    // r24, ours the other way round (same MakeString(fmt, kMax) call). A
+    // function-local or non-static kMaxLoopingSounds is inert.
+    RndTransformable *listener;
+    if (mListener.Ptr())
+        listener = mListener.Ptr();
+    else
+        listener = mParent->Cam();
     // w13-c: `if (!listener) return;` (early return instead of wrapping the
     // body) measures 98.4 -- not the lever it was for WorldDir::Poll.
     if (listener) {
