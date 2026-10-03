@@ -616,6 +616,22 @@ int HamCharacter::SongAnimation() {
     // the shared Property()/Int() tail moves to the second call site.  The four
     // branch-destination rows and the 63/64-vs-111/112 insert/delete pair are
     // therefore ONE cause with the cross-jump, not two independent ones.
+    // w21-g (stopped at 96.5 canonical / 96.1 fuzzy, 12 rows): MSVC places a
+    // `return -1` block at the function tail in EVERY spelling measured, even
+    // when the statement sits textually between the two arms -- the og-dc3
+    // chain (`if (InClipTest() && (c && ...)) ... else if (mUseCameraSkeleton
+    // || c) return -1; ... return 0;`, which is ALSO behaviourally wrong: a
+    // null clip under InClipTest() reaches the SongDriver() arm) still emits
+    // `li r3,-1` last, 96.5.  Measured: two `return -1`s (if/else-if, flat
+    // ifs, or a `?:` in the InClipTest() arm) all 87.6 -- the merged -1 block
+    // goes to the tail and the cross-jump flips to site 2; `if (!InClipTest())`
+    // first 7.9; `if (Driver()) c = Driver()->FirstClip()` turns the driver
+    // test signed (cmpwi), 95.9; drv/c declaration swap no change.  A cached
+    // `bool inClip` with `else if (inClip || mUseCameraSkeleton || c) return
+    // -1;` reads 97.2 but only because a redundant `cmplwi r9; bne` re-test
+    // the image does NOT have replaces the 63/64 delete pair -- rejected as
+    // further from the image, not closer.  The 4 lis/addi rows (image hoists
+    // "main" first) moved with none of these.
     if (InClipTest()) {
         if (c && c->Dir()->Dir() != this) {
             return c->Property("clip_skeleton_index", false)->Int();
@@ -643,6 +659,18 @@ int HamCharacter::SongAnimation() {
 //           turns the null test from `cmplwi` into a signed `cmpwi`.
 //   ... `mShowableProps[prop] != nullptr && ...` -> 92.38, identical rows.
 // The assignment-expression form below is what keeps the test unsigned.
+// w21-g (stopped at 95.24 canonical, same 3 rows): the `clrrwi` is NOT
+// function-local -- RndFont::SetBitmapSize (98.73, `mat ? mat->GetDiffuseTex()
+// : nullptr` over ObjPtrVec<RndMat>) and the four SetPropShowing copies in
+// SyncProperty carry the identical image-only `clrrwi rB, rA, 0` after the
+// null test of an ObjPtrVec element, and no ObjPtrVec element site in our
+// build emits it.  Two whole-binary experiments on ObjPtrVec::operator[] in
+// obj/Object.h (full ninja each): `return mNodes[idx];` (conversion operator
+// instead of Obj()) and returning `ObjRefConcrete<T1,T2> &` -- both 0 UP /
+// 0 DOWN over 48,365 functions, so the inline path is not the handle.  Also
+// measured here: `d = size() > prop ? v[prop] : nullptr; return d &&
+// d->Showing();` 85.7; nested `if (d) return d->Showing() != 0;` 81.9; `d ?
+// d->Showing() : false` 78.1 (drops the image's bool re-normalisation).
 bool HamCharacter::GetPropShowing(int prop) {
     RndDrawable *d;
     auto _tmp0 = mShowableProps.size();

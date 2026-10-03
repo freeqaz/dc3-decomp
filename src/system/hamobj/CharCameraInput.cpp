@@ -42,33 +42,22 @@ bool CharCameraInput::NatalToWorld(Transform &world) const {
 }
 
 void CharCameraInput::ResetSkeletonCharOrigin() {
-    // Residual 95.55% canonical / 95.05% raw, 13 rows / 8 B, two clusters:
-    //
-    // Rows 5-12 (6 rows): the image emits two DEAD sub-object addresses right
-    // after `addi r11, r3, 0x23f0` -- `addi r10, r11, 0x10` (m.y) and
-    // `addi r11, r11, 0x20` (m.z) -- and then never reads r10, clobbering r11
-    // at the next instruction.  Every Reset() store below uses a full r3
-    // displacement on both sides, so this is dead address material inside the
-    // INLINED Transform::Reset, i.e. it belongs to math/Mtx.h, not here.
-    // REFUTED: binding `Transform &xfm = mNatalXfm;` and using it throughout
-    // does produce the two addi's -- but MSVC then parks the transform base in
-    // a CALLEE-SAVED register (r30) across the two DrawScale() calls, adds a
-    // second std/ld pair to the prologue and epilogue, and the function drops
-    // 95.5% -> 90.0% (28 rows).  The image keeps nothing live across those
-    // calls; it re-derives everything off r31 = this.
-    //
-    // Rows 77-85 (7 rows): the final `mNatalXfm.v = worldPos` 4-word copy.
-    // Both sides load the same four words from 0x50(r1) and store the same
-    // four words to 0x2420(r31); only the interleave differs -- the image
-    // loads z,w,x then y and stores z,w,x,y, we load w,x,z, store z, then load
-    // y and store x,w,y.  Pure scheduling of one copy; no source order
-    // expresses it (the two `worldPos` adjustments must stay in this order,
-    // they are two separate virtual DrawScale() calls at 62 and 72).
+    // 100 (w21-g, was 95.55 canonical / 13 rows).  The image's two dead
+    // `addi r10, r11, 0x10` / `addi r11, r11, 0x20` after `addi r11, r3,
+    // 0x23f0` are &m.y and &m.z formed off a MATRIX reference: the three
+    // Set() calls go through a local `Hmx::Matrix3 &m`, while Reset() is
+    // still called on the member.  That one binding also fixes the final
+    // 4-word `mNatalXfm.v = worldPos` copy schedule (rows 77-85, which the
+    // earlier note filed as "pure scheduling, no source order expresses it").
+    // Binding the whole Transform instead (`Transform &xfm`) parks the base
+    // in r30 across the DrawScale() calls -- 90.0; `m.Identity(); v.Zero();`
+    // spelled at the call site -- 94.4.
+    Hmx::Matrix3 &m = mNatalXfm.m;
     mNatalXfm.Reset();
     float s = DrawScale();
-    mNatalXfm.m.x.Set(-s, 0.0f, 0.0f);
-    mNatalXfm.m.y.Set(0.0f, 0.0f, s);
-    mNatalXfm.m.z.Set(0.0f, -s, 0.0f);
+    m.x.Set(-s, 0.0f, 0.0f);
+    m.y.Set(0.0f, 0.0f, s);
+    m.z.Set(0.0f, -s, 0.0f);
     Vector3 worldPos = mChar->WorldXfm().v;
     worldPos.y += DrawScale() * 2.0f;
     worldPos.z += DrawScale();

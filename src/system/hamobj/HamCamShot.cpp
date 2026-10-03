@@ -946,6 +946,12 @@ HamCharacter *CharacterNameToCharacter(Symbol s) {
 // across the loops and guard the first. Inert: `p != end && p->mTarget != s`
 // for-conditions, decl-initialised iterators, while loops, a Symbol copy of
 // player0; a Target* result for the second search is 83.3.
+// w21-g: 100 canonical (99.2 raw = the unnamed target-side static guard
+// labels only).  The tell was the image's loop-2 begin: `lwz r9, 0x0(r11)`
+// off the &mTargets register, where loop 1 loads `lwz r10, 0x284(r28)` off
+// `this` -- two different address expressions, so MSVC does not CSE begin()
+// across the loops and needs neither our `mr r9, r11` copy nor the peeled
+// guard.  Loop 2 walks the list through a local `ObjList<Target> &`.
 void HamCamShot::FlipTargetAnimGroups() {
     static Symbol player0("player0");
     static Symbol player1("player1");
@@ -956,8 +962,9 @@ void HamCamShot::FlipTargetAnimGroups() {
             break;
     }
 
+    ObjList<Target> &targets = mTargets;
     ObjList<Target>::iterator p1;
-    for (p1 = mTargets.begin(); p1 != mTargets.end(); ++p1) {
+    for (p1 = targets.begin(); p1 != targets.end(); ++p1) {
         if (p1->mTarget == player1)
             break;
     }
