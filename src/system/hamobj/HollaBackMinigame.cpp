@@ -387,6 +387,13 @@ void HollaBackMinigame::StartShoutOut(const char *cc) {
 // kEaseLinear, 0, false)).  decomp-synth beam search (3 depths, ~310
 // builds, 1480 s) found nothing above baseline; a `static inline
 // ForceShot(const char *)` helper was not inlined (26.6).  Stopped here.
+// w21-au (still 98.10, same 19 rows): six more spellings, all byte-inert
+// (98.09524): a __forceinline ForceShot helper (it does inline -- same
+// four-block shape, same full-address PRE into r30); the tail in a
+// __forceinline helper; `HamDirector *&dir = TheHamDirector;` for every
+// access; `RndPropAnim *anim;` hoisted to function scope; the whole tail
+// chained in one expression (98.095 now, not the 90.2 w16-b measured).
+// Behaviour re-checked: same four shots, same Animate args.  Stopped.
 void HollaBackMinigame::SetDefaultShot() {
     if (TheGameData->Player(1)->IsPlaying()) {
         if (TheGameData->Player(0)->IsPlaying()) {
@@ -556,6 +563,23 @@ void HollaBackMinigame::SetMoveState(int measure, Symbol state) {
                     // is 97.8 (dead `addi r8, r30, 0x488` + spill); `int i` is
                     // byte-inert.  Behaviour re-checked against the listing:
                     // same size snapshot, same break target, same Message args.
+                    // w21-au (still 99.40, same 6 rows): 16 more spellings, none
+                    // above it -- inert: begin()[i], a const-vector cast on the
+                    // read, `mRoutineMoves[i] == move`, an element local, `u32 i`
+                    // outside the for, `for (i = 0, n = size(); ...)`, a while
+                    // loop, `continue` on mismatch, `(int)i` in the Message.
+                    // Worse: end()-begin() 98.8, int count/index 99.0, a const&
+                    // binding 97.8, size() before SetShowing 96.4 (the image
+                    // stores mShowing first), a find-then-test split 98.4, a
+                    // panel local 98.2, size() in the condition 98.8 (the
+                    // _M_start reload DOES appear, but with a stw spill to 0x50).
+                    // Closest miss: size() through the member and the read
+                    // through a `(const) std::vector<HamMove *> &` bound before
+                    // the loop (or before SetShowing) stops the CSE with the
+                    // size load, but MSVC then hoists the reference load above
+                    // the loop (98.80, 5 rows: the lwz sits before `li r11, 0`
+                    // instead of at the loop head); bound inside the loop body
+                    // 98.1.
                     u32 numMoves = mRoutineMoves.size();
                     for (u32 i = 0; i < numMoves; i++) {
                         if (move == mRoutineMoves[i]) {
