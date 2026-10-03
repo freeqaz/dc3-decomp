@@ -221,13 +221,24 @@ String RecordClipName(const char *cc, int i2) {
     default:
         break;
     }
+    // w20-e (93.05 -> 99.9): the image calls ToCode, then copies
+    // TheGameData->mSong into a stack temp (`lwz r10, 0x30(r11)` /
+    // `stw r10, 0x58(r31)`), and only THEN calls Player(0) -- with the
+    // dancer String address taken straight off r3 (`addi r8, r3, 0x2c`)
+    // before r3 becomes the format string.  Named locals in that order give
+    // exactly that; as inline MakeString arguments MSVC evaluated Player(0)
+    // before GetSong().  Residual 5 rows: the image sets up r9 (&cc) LAST,
+    // we set it first; same values (pure argument-setup schedule).
+    unsigned int code = dt.ToCode();
+    Symbol song = TheGameData->GetSong();
+    const String &dancer = TheGameData->Player(0)->CurrentDancer();
     String ret(MakeString(
         "%s%d~%s~%c~%s~%s",
         prefix,
-        dt.ToCode(),
-        TheGameData->GetSong(),
+        code,
+        song,
         diff,
-        TheGameData->Player(0)->CurrentDancer(),
+        dancer,
         cc
     ));
     if (ret.length() > 38) {
