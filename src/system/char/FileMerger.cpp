@@ -149,6 +149,19 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
             // a guarded do/while is byte-inert (MSVC canonicalises the loop the
             // same way as clear()); the single unswitched while with the
             // if/else inside re-measured at 93.3 (not unswitched, r28/r29 swap).
+            // w21-aq (97.85, same 4 rows): the image's else arm is clear()
+            // inlined in its usual GUARD form (`addi r30,r29,0x50; beq cr6`
+            // then pop_back / `lwz 0x4(r30)` / bne) -- every ObjPtrList dtor in
+            // the image inlines clear() the same way -- with the guard's
+            // compare CSE'd against the if arm's `0x54(r29)` load and hoisted
+            // above the mergerDir branch (hence cr0 for mergerDir).  Ours
+            // rotates the inlined loop into jump-to-bottom-test instead.
+            // Measured: `ObjPtrList<ObjectDir> &subdirs = mLoadedSubdirs;` bound
+            // once for both arms is 95.0 (r28/r29 swap); `if (ObjectDir
+            // *mergerDir = MergerDir())` is byte-inert; an explicit
+            // `while (mLoadedSubdirs.size() != 0) pop_back();` else arm gets
+            // the guard back but recomputes its own cmpwi and loads through
+            // r29 at the bottom, 97.2.
             mLoadedSubdirs.clear();
         }
     }
