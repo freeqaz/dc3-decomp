@@ -563,6 +563,16 @@ void HollaBackMinigame::SetMoveState(int measure, Symbol state) {
                     // is 97.8 (dead `addi r8, r30, 0x488` + spill); `int i` is
                     // byte-inert.  Behaviour re-checked against the listing:
                     // same size snapshot, same break target, same Message args.
+                    // w21-au (still 99.40, same 6 rows): 16 more spellings, none
+                    // above it -- inert: begin()[i], a const-vector cast on the
+                    // read, `mRoutineMoves[i] == move`, an element local, `u32 i`
+                    // outside the for, `for (i = 0, n = size(); ...)`, a while
+                    // loop, `continue` on mismatch, `(int)i` in the Message.
+                    // Worse: end()-begin() 98.8, int count/index 99.0, a const&
+                    // binding 97.8, size() before SetShowing 96.4 (the image
+                    // stores mShowing first), a find-then-test split 98.4, a
+                    // panel local 98.2, size() in the condition 98.8 (the
+                    // _M_start reload DOES appear, but with a stw spill to 0x50).
                     u32 numMoves = mRoutineMoves.size();
                     for (u32 i = 0; i < numMoves; i++) {
                         if (move == mRoutineMoves[i]) {
