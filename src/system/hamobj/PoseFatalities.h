@@ -52,6 +52,17 @@ public:
 #endif
 
 private:
+    // Name is ours (w21-bl). InFatality(player) minus its MILO_ASSERT_RANGE:
+    // DrawDebug's two player tests inline this. The early-return shape puts the
+    // result's `li 0` AFTER the compare, reusing the start-beat register
+    // (824933BC `cmpw cr6, r10, r11` / `li r11, 0x0` / `blt` / `lbz r11, 0x2c`);
+    // the `bool b = false; if (...) b = ...;` spelling hoisted the li and cost a
+    // 30-row register cascade.
+    bool ActiveInFatality(int i) const {
+        if (mCurrentBeat < mFatalStartBeats[i])
+            return false;
+        return mInFatality[i];
+    }
     Symbol GetFatalityFace();
     bool InStrikeAPose();
     void SetCombo(int, int);

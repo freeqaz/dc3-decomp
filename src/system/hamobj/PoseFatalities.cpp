@@ -746,24 +746,12 @@ void PoseFatalities::DrawDebug() {
     float screenScale = sDebugRectW / TheRnd.YRatio();
 
     // Player 0
-    // The `= false` initializer must stay a separate statement AHEAD of the
-    // test, even though the image emits `li r11, 0x0` AFTER the compare
-    // (824933BC: `cmpw cr6, r10, r11` / `li r11, 0x0` / ... / `blt` /
-    // `lbz r11, 0x2c(r25)`).  The image can put it there because its allocator
-    // reuses r11 -- the register that held mFatalStartBeats[0] -- which creates
-    // an anti-dependency on the compare; ours picks a fresh register and the
-    // scheduler hoists the `li` one slot.  Two refuted rewrites (w7-ag):
-    //   * `= cond ? mInFatality[0] : false` -- collapses the ENTIRE 30-row
-    //     r21/r22 + r18/r19 register cascade to zero (37 rows -> 16), which is
-    //     how we know the cascade is downstream of this one `li`, but a real
-    //     ternary emits an else arm: `b` + `li r11, 0` on the far side of the
-    //     branch, 2 extra instructions and 99.07 -> 98.6.
-    //   * `= cond && mInFatality[0]` -- adds a bool normalisation
-    //     (`cmplwi` / `li 1` / `bne` / `li 0`), 4 extra instructions, 97.7.
-    bool player0Active = false;
-    if (mCurrentBeat >= mFatalStartBeats[0]) {
-        player0Active = mInFatality[0];
-    }
+    // w21-bl: was `bool player0Active = false; if (mCurrentBeat >=
+    // mFatalStartBeats[0]) player0Active = mInFatality[0];` (99.07, a 30-row
+    // r21/r22 + r18/r19 cascade off one hoisted `li r11, 0`). w7-ag refuted the
+    // `cond ? x : false` and `cond && x` spellings; an inline member with an
+    // early `return false` (ActiveInFatality) emits the image's li-after-cmpw.
+    bool player0Active = ActiveInFatality(0);
 
     if (player0Active) {
         if (DataVariable("fatal_debug").Int()) {
@@ -776,11 +764,17 @@ void PoseFatalities::DrawDebug() {
             // `stfs f31/f30, 0x60..0x6c(r31)` at 824934E0..824934F8 sit between
             // `bl Draw@DebugMeter` and `bl CompareSkeletonPositions`, and the
             // DrawBar argument is then two `ld`s off the same slot.
-            Hmx::Color whiteColor(0, 1, 0, 1);
-            float rawCompare = mRecorder.CompareSkeletonPositions(
-                playerSkel, &mPlayerSkeletons[0], 1.0f
+            // w21-bl: the colour is a temporary in the call, and the compare
+            // result is the argument itself: args evaluate right to left, so
+            // the four colour stores land before CompareSkeletonPositions
+            // (824934E0..F8) and f1 is set after `fmr f2, f1` (82493514).
+            meterA.DrawBar(
+                0.0f,
+                mRecorder.CompareSkeletonPositions(playerSkel, &mPlayerSkeletons[0], 1.0f),
+                Hmx::Color(0, 1, 0, 1),
+                1.0f,
+                0.0f
             );
-            meterA.DrawBar(0.0f, rawCompare, whiteColor, 1.0f, 0.0f);
 
             float errorWeight = TheOSCMessenger.GetFloat("/fatalposeerrorweight", 0.0f);
             float weightedCompare = mRecorder.CompareSkeletonPositions(
@@ -835,10 +829,7 @@ void PoseFatalities::DrawDebug() {
     }
 
     // Player 1
-    bool player1Active = false;
-    if (mCurrentBeat >= mFatalStartBeats[1]) {
-        player1Active = mInFatality[1];
-    }
+    bool player1Active = ActiveInFatality(1);
 
     if (player1Active) {
         if (DataVariable("fatal_debug").Int()) {
