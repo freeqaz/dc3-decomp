@@ -101,6 +101,22 @@ static const int sJointTrackingMap[] = { 0, 1, 2 };
 // store-based kill here).  Note src/xdk/LIBCMT/vectorintrinsics.h's __lvx /
 // __stvx are plain inline functions: this cl.exe rejects them as intrinsics
 // (C4163) and `extern` declarations become real `bl __stvx` calls.
+// w21-n (74.05 canonical, rows unchanged apart from one): the second loop's
+// bound is a SIGNED compare in the image -- `cmpwi cr6, r30, 0x78` at the
+// loop-2 latch (s*20 < 120) -- where `s < (unsigned long)6` emitted cmplwi;
+// now `s < 6` (same trip count, same behaviour).  The first loop's latch IS
+// unsigned (`cmplwi cr6, r9, 0xad`), so its cast stays.  Behaviour re-checked
+// against the image end to end: the joint-remap/tracking tables at
+// lbl_82F0BFD0 match ours word for word, field offsets and the hip
+// z*r2+r3 / y*r1 / x*r0 chain agree.  Cross-loop CSE (w21-f) re-attacked in a
+// scratch TU (/FAs, same cl.exe): still hoisted with &mat escaping to an
+// external call, the hip transform moved to the top of loop 2, loop 1 moved
+// into a static helper taking `const XMMATRIX &`, a pointer-aliased output
+// buffer, a `const XMMATRIX *` for the hip only, and `hipResult` assigned
+// after declaration.  Deleting the hip transform alone still restores the
+// image's per-iteration reloads, so the trigger is the second USE being
+// anticipated on every path (MSVC hoists a very-busy expression to the
+// common dominator); no faithful spelling found that makes it non-busy.
 static XMVECTOR XMVector3Transform(XMVECTOR V, const XMMATRIX &M) {
     XMVECTOR Z = __vspltw(V, 2);
     XMVECTOR Y = __vspltw(V, 1);
@@ -150,7 +166,7 @@ void SkeletonFrame::Create(const NUI_SKELETON_FRAME &nui_frame, int elapsed) {
     }
 
     // Second pass: copy NUI data to SkeletonData
-    for (int s = 0; s < (unsigned long)6; s++) {
+    for (int s = 0; s < 6; s++) {
         const NUI_SKELETON_DATA &nuiSkel = nui_frame.SkeletonData[s];
         SkeletonData &data = mSkeletonDatas[s];
         data.mTracking = sTrackingMap[nuiSkel.eTrackingState];
