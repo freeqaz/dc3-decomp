@@ -147,6 +147,14 @@ void SuperEasyRemixer::DumpSongLayout() {
     // `[prev]`/`[prev + 1]` does produce the `li -4` IV but keeps the homed
     // locals, 96.7.  The two `>= 0` / `+ 2` uses of `i - 1` (r23) are CSE'd
     // by MSVC on its own from the anonymous form.
+    // w21-bd (97.93714, same 17 rows: li r25,-4 IV, addi r27,r25,4 vs our
+    // slwi, and the r25/r26 + r27/r28 colouring that follows).  Inert or
+    // worse, re-measured: `int prev = i - 1` at the loop top with `[prev]`
+    // only (95.1, frame +0x10 -- register pressure spills the "<" literal
+    // address, not a homed local); `[prev]`/`[prev + 1]` everywhere (96.7,
+    // reproduces w7-bv: the IV appears but prev and i both stay live);
+    // `[i + -1]`, `[i - 1 + 1]` (folded by the front end, identical bytes);
+    // the Name() element bound to a local first (identical).
     for (int i = 0; i < mTotalMeasures; i++) {
         str = MakeString("%d", i + 1);
         for (Difficulty d = EasiestDifficulty(); d != kNumDifficulties;
