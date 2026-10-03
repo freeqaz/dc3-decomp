@@ -57,6 +57,22 @@ protected:
 // Declared extern in math/Easing.h. Retail emitted the out-of-line easing
 // COMDATs from this object (ham_xbox_r.map: ?EaseBackIn@@YAMMMM@Z at
 // 82411d50, flow:FlowSetProperty.obj), so this is where the table lives.
+//
+// w21-ap: ?EaseStairstep@@YAMMMM@Z (body in math/Easing.h, which this lane
+// may not edit) stops at 96.15 normalized, 3 rows: the image computes
+// `fdivs f31, f28, f31` (1/steps into a callee-saved FPR) right after
+// floor() and before the EasePolyInOut call; ours sinks it to `fdivs f13`
+// after the call.  Standalone cl.exe probe (/fp:fast, /O1): the ONLY one of
+// 13 spellings that reproduces the image byte for byte is TWO divisions,
+//     return fl / steps + EasePolyInOut(x - fl, power, 0.0f) / steps;
+// which MSVC folds into one reciprocal and (p + fl) * inv.  Not shipped:
+// natively (clang, no fast-math) that is two rounded divisions plus an add,
+// while the image -- and the current code -- compute (p + fl) * (1/steps), so
+// it would move native rounding AWAY from the image.  Inert: named reciprocal
+// before/after floor(), `/ steps` once (plain fdivs), stepSize first with
+// x = t / stepSize, distributed fl*inv + p*inv (refolded or fmadds), an extra
+// local for the call result.  The MakeString row is an ICF-folded template
+// name (char[19]/char[5] vs our char[45]/char[17], same body), not a bug.
 EaseFunc *gEaseFuncs[35] = {
     EaseLinear,
     EasePolyIn,
