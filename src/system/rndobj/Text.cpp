@@ -2049,44 +2049,19 @@ void RndText::FitTextScroll() {
         mWidth = 0.0f;
         mWrapEnabled = true;
 
-        // Residual 7 rows (98.276).  The image READS mStyles[0].mFont TWICE and
-        // tests it twice, the first read into a VOLATILE register that is then
-        // discarded, with a dead home of the Style base between them:
-        //     lwz    r10, 0x40(r11)      first read, volatile, test only
-        //     cmplwi cr6, r10, 0x0
-        //     bne    cr6, .L_second      (skips ONLY the store below)
-        //     stw    r11, 0x54(r31)      dead home of the Style base
-        //  .L_second:
-        //     lwz    r23, 0x40(r11)      second read, kept for CharAdvance
-        //     cmplwi cr6, r23, 0x0
-        //     bne    cr6, .L_body
-        //     <MILO_ASSERT fail>
-        // The assert's stringified expression is the 4-byte literal "font"
-        // (??_C@_04EFPADHIC@font?$AA@, equal on both sides), so a local named
-        // `font` really does exist -- it is not `MILO_ASSERT(mStyles[0].mFont)`.
-        // With a raw-pointer copy MSVC CSEs the assert's test with the `if`'s
-        // and emits ONE read, which is where our 7 rows come from.
-        // THREE REFUTATIONS, all measured here (w9-e 2026-09-30):
-        //   `RndFontBase *&font = mStyles[0].mFont;`  does not compile --
-        //       Style::mFont is ObjPtr<RndFontBase> (0x34), not a raw pointer.
-        //   `const ObjPtr<RndFontBase> &font = ...;`  98.276 -> 95.595.
-        //   keep `font` for the assert and re-spell the guard as
-        //       `if (mStyles[0].mFont)`                98.276 -> 96.099.
-        // So the second read is real but neither an ObjPtr reference nor a
-        // second textual mention reproduces it.  Left as the shape that scores
-        // best.
-        // w21-x (98.276, same 7 rows): behaviour re-checked against the image --
-        // both reads test the same field and the assert-fail arm branches past
-        // the CharAdvance body exactly as ours does, so the residual is shape
-        // only.  Two more spellings inert (identical 7 rows): binding
-        // `Style &style = mStyles[0];` and reading `style.mFont`, and
-        // `mStyles[0].mFont.Ptr()`.  Note the dead `stw r11, 0x54(r31)` stores
-        // the mStyles element pointer (r11 = lwz 0x98(r30)) -- the same shape
-        // as the two `stw r11, 0x60(r31)` homes the body's mStyles[0].mKerning
-        // / mStyles[0].mSize emit -- so the image evaluates one more
-        // `mStyles[0]` on the null arm of the first test only.  The MakeString
-        // row (BD vs 08) is an ICF fold of identical instantiations.
-        RndFontBase *font = mStyles[0].mFont;
+        // w21-x: 98.276 -> 100 (all 232 rows equal).  This is the same
+        // style-font fallback every other RndText site writes
+        // (`s->mFont ? s->mFont : mStyles[0].mFont`, see ParseMarkup and
+        // UpdateText), here with the style pinned to index 0.  The image keeps
+        // both ternary arms: the condition reads 0x40(r11) and the else arm
+        // re-evaluates mStyles[0] (its dead `stw r11, 0x54(r31)` home), then
+        // the join reads the pointer again -- the "two reads" earlier lanes
+        // could not reproduce with a plain `font = mStyles[0].mFont` (98.276),
+        // an ObjPtr reference (95.6), `.Ptr()` or a `Style &` binding (inert).
+        // Writing both arms as mStyles[0] lets MSVC merge them (98.9).  Same
+        // value on every path: both arms name mStyles[0].mFont.
+        Style *style = &mStyles[0];
+        RndFontBase *font = style->mFont ? style->mFont : mStyles[0].mFont;
         MILO_ASSERT(font, 2718);
         if (font) {
             unsigned short charCode;
