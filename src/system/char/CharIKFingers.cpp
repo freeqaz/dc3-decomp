@@ -262,7 +262,26 @@ void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
             // hoisting the Scale above the Add is inert on the cluster and adds
             // 3 commutative rows; folding the target position into sideScaled
             // costs 93.53 -> 92.04. The cluster is the header's.
-            Multiply(sideOffsetBase, mKeyboardRefBone->WorldXfm().m, sideOffsetBase);
+            // w21-i (93.53 -> 100 canonical): the cluster above WAS the
+            // factoring, and it is source-addressable at the call site.  With
+            // the Mtx.h Multiply inlined, MSVC sees y and z of sideOffsetBase
+            // are the same zero and folds `m.y.c*0 + m.z.c*0` into one
+            // `(m.y.c + m.z.c) * 0`.  The image (0x823827A4..) computes
+            // m.z.c*0 first, fmadds m.x.c*off onto it, and adds m.y.c*0 last:
+            // `m.y*y + (m.x*x + m.z*z)`.  Spelled that way here (same values,
+            // the image's association), the two zero products stay separate.
+            // Writing it as a flat `z + x + y` sum was inert (93.53).
+            {
+                const Hmx::Matrix3 &refM = mKeyboardRefBone->WorldXfm().m;
+                sideOffsetBase.Set(
+                    refM.y.x * sideOffsetBase.y
+                        + (refM.x.x * sideOffsetBase.x + refM.z.x * sideOffsetBase.z),
+                    refM.y.y * sideOffsetBase.y
+                        + (refM.x.y * sideOffsetBase.x + refM.z.y * sideOffsetBase.z),
+                    refM.y.z * sideOffsetBase.y
+                        + (refM.x.z * sideOffsetBase.x + refM.z.z * sideOffsetBase.z)
+                );
+            }
             Hmx::Matrix3 refRotMat;
             Multiply(mtx, mKeyboardRefBone->WorldXfm().m, refRotMat);
             Normalize(refRotMat, mDestHandTrans.m);
