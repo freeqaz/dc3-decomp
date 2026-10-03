@@ -34,6 +34,11 @@
 // CritSec.h per TU and disagreed with itself; a single PCH cannot reproduce
 // that, and changing ThreadCall.h's spelling would fix this 24-byte row and
 // break the five that are currently right.
+// w21-bj: CLOSED (100) by building this TU without the shared PCH
+// (config.pch_excluded_sources in configure.py), so HDCache.h's own
+// backslash `#include "os\CritSec.h"` opens it first.  HDCache.h's FileStream.h
+// include is spelled with a forward slash to keep that literal on the image's
+// spelling.  Whole-binary A/B: UP 2, DOWN 0.
 HDCache TheHDCache;
 
 HDCache::HDCache()

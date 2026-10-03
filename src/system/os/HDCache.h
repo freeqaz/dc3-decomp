@@ -1,6 +1,6 @@
 #pragma once
 #include "os\CritSec.h"
-#include "utl\FileStream.h"
+#include "utl/FileStream.h"
 #include "utl\MemStream.h"
 #include "utl\Str.h"
 #include "xdk\win_types.h"
