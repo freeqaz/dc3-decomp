@@ -966,9 +966,13 @@ void SkeletonChooser::SetPlayerSkeletonNavData(int p1ID, int p2ID) {
                 // players (82909544 fcmpu cr6,f0,f30 / blt, f30 = __real@be19999a =
                 // -0.15f, on the right side; 82909554 fcmpu cr6,f0,f31 / bgt,
                 // f31 = __real@3e19999a = 0.15f, otherwise). Player 1's constants
-                // were swapped. Remaining: f30/f31 and r28/r29 allocation swap only
-                // (12 diff_arg rows, normalized 100); a static inline per-player
-                // helper made it worse (97.6), `x > 0.15f` vs `0.15f < x` inert.
+                // were swapped. Stopped at normalized 99.941 (fuzzy 99.765): 16 rows,
+                // the two literals are lis/lfs'd into f30/f31 in the opposite order
+                // (rows 119-124, the only charged rows) plus an r28/r29 swap
+                // (side1 vs p2Skel) present before the fix too. Tried, all inert or
+                // worse: `x > 0.15f` vs `0.15f < x`; one `const float` threshold;
+                // two float locals declared 0.15 first; a static inline per-player
+                // helper (97.6); `side != kSkeletonRight` arm order (worse).
                 if (p1Skel->GetUnkab0().x < -0.15f) {
                     side1 = 0;
                 } else {
