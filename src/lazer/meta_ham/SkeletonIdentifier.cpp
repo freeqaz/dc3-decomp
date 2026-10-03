@@ -433,7 +433,17 @@ DataNode SkeletonIdentifier::OnMsg(const SigninChangedMsg &msg) {
 }
 
 DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
-    if (mIdentityStatus != kIdentityStatus_None) {
+    // w21-ba (99.83 -> 100): an early return, not an enclosing `if`.  With
+    // TWO by-value return statements MSVC evidently spends destructor-flag
+    // bit 0 on the return object, so the conditionally-built GetSignedIn()
+    // vector temp below lands on bit 1 -- the image's `li r28, 0x2` /
+    // `rlwinm. r10, r28, 0, 30, 30`.  With one return it was bit 0.
+    // Both returns are DataNode(0) (DataNode(kDataInt, 0) at the tail swaps the
+    // two return-slot stores).  The braces keep the block's lexical scope: the
+    // function-local statics' scope ordinals (?BN@, ?CC@) depend on it.
+    if (mIdentityStatus == kIdentityStatus_None)
+        return DataNode(0);
+    {
         TheGestureMgr->RemoveSink(this, "skeleton_identified");
         int enrollmentIdx = msg.GetVal2();
         int skeletonIndex = msg.GetIndex();
@@ -506,6 +516,10 @@ DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
             //     String(Localize(...)) temp rather than an implicit conversion;
             //   turning this `else if` into `else { if (...) }` to add one
             //     lexical scope around the temp.
+            // w21-ba: closed by the early return at the top of this function
+            //   (the earlier temp is the return object's flag).  Refuted on
+            //   the way: `mIdentityStatus = cond ? kIdentityStatus_WaitingForSignIn
+            //   : kIdentityStatus_None` (97.9).
             mWaitingPlayerIndex = enrollmentIdx;
             UpdateEnrolledPlayers();
             TheGameData->SetAssociatedPadNum(
@@ -521,5 +535,5 @@ DataNode SkeletonIdentifier::OnMsg(const SkeletonIdentifiedMsg &msg) {
             }
         }
     }
-    return DataNode(kDataInt, 0);
+    return DataNode(0);
 }

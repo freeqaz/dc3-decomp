@@ -1566,6 +1566,12 @@ void BustAMovePanel::Poll() {
         // two scoreGraph Color temps swapping slots (image: white 0xb0, black
         // 0xc0; && form: black 0xb0, white 0xc0) plus one 0x8c reload.  `bool
         // = false; if (A && B) = true;` is 99.5 (r21/r22 swap + polarity).
+        // w21-ba (still 99.60107): `Side() == kSkeletonLeft ? GetPlayerColor(0)
+        // == "pink" : false` is 99.2 (r26/r28 swap + a branch); `&& !(color !=
+        // "pink")` (an extra inline operator!= level) is exactly the && form
+        // (97.8, same 10 PERMUTED slots), so inline depth is not the coupling;
+        // the && form plus `const Symbol &color = GetPlayerColor(activePlayer)`
+        // in the else-if arm is 97.0.
         bool isPlayer0Pink = true;
         if (TheGameData->Player(0)->Side() != kSkeletonLeft
             || GetPlayerColor(0) != "pink") {
@@ -1670,6 +1676,11 @@ void BustAMovePanel::Poll() {
         // 0x82610090 -- one ICF fold of every 4-byte-scalar instantiation, so
         // the name is the linker's pick, not evidence that mSongStructure holds
         // an enum.  The row is not charged.
+        // w21-ba: also inert (in-tree and in a standalone cl.exe probe that
+        // reproduces `add r4, <4*i>, <begin>`): `mSongStructure.begin()[i]`,
+        // `*(i + mSongStructure.begin())`, a `std::vector<int> &` local, the raw
+        // `_M_start[i]`, MakeString hoisted to a local, the Color select hoisted
+        // to a local, an unsigned loop index.
         for (int i = 0; i < mSongStructure.size(); i++) {
             graph->AddScreenString(
                 MakeString("%d", mSongStructure[i]),
