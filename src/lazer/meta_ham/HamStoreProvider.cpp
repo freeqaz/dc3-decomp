@@ -79,7 +79,7 @@ int HamStoreProvider::NumOffersInCart() {
 
 bool HamStoreProvider::IsOfferInCart(StoreOffer *offer) {
     FOREACH (it, mCartOffers) {
-        if (*it == offer)
+        if (offer == *it)
             return true;
     }
     return false;

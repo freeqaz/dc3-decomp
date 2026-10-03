@@ -272,7 +272,7 @@ Symbol NavListHeaderNode::SelectChildren(std::list<NavListSortNode*>& lst, int l
         Symbol sym = (*it)->Select();
         if (sym == gNullStr) {
             count += (*it)->GetItemCount();
-        } else if (sym == incomplete_add_header_screen) {
+        } else if (incomplete_add_header_screen == sym) {
             count++;
         }
     }

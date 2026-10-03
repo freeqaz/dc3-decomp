@@ -1402,6 +1402,14 @@ void MetaPerformer::HandleGameplayEnded(const EndGameResult &egr) {
     TheRockCentral.ManageJob(new GameEndedDataPointJob(this, egr));
 }
 
+// w20-i: normalized 100, fuzzy 99.75. Checked every permuted row against the image:
+// the 20 remaining rows (177-206) are the hoisted lis/addi materialisation of the
+// alert_unlockedhard/move_perfect/move_awesome/expert static and string addresses in
+// different VOLATILE registers; each address lands in the same callee-saved register
+// (r17/r21/r16/r18) and each string in the same frame slot (0xd4/0xd0/0xcc/0xc8) as the
+// image, and the .bss order reproduces the image's (expert lowest .. guard highest).
+// The 4 `sym` rows are lbl_83118E24..30 vs our per-variable .bss names. No value or
+// branch divergence; the bl rows at 281/367/423 are ICF folds (82545670, 82e2ab00).
 void MetaPerformer::SaveAndUploadScores(Symbol song, int totalScore, int stars) {
     static Symbol score("score");
     int count = 0;
