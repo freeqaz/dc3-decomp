@@ -521,6 +521,11 @@ float CharDriver::Display(float f) {
                         curOfs += 11;
                     }
                 }
+                // w20-h: the image adds (float)curOfs + mDrawPosY (fadds f0, f13, f0
+                // at row 249); ours emits the commutative operands swapped.  Same
+                // value (fadds is exactly commutative).  Tried: swapping the source
+                // operands (no change), an accumulator (96.8), RB3's
+                // `mY + (1.0f + ofs)` (re-associates -- not the image's sum).
                 curPos.y = nextDisplay->mDrawPosY + (float)curOfs + 1.0f;
                 Hmx::Color curColor(1, 0, 0);
                 TheRnd.DrawString(MakeString("%d", i), curPos, curColor, true);
@@ -539,10 +544,13 @@ float CharDriver::Display(float f) {
         }
 
         nextDisplay->DrawBlend(next->mBeat + prev->mRampIn, prev->mBlendWidth);
+        // w20-h: the select written inline in the argument puts the image's
+        // operand order on the add (fadds f1, f0, f12: clamped rampIn first).
+        // Value unchanged: rampIn clamped to <= 0 (fsel on -rampIn, f30 = 0.0f).
         float rampIn = prev->mRampIn;
-        float negRampIn = -rampIn;
-        rampIn = negRampIn >= 0.0f ? rampIn : 0.0f;
-        prevDisplay->DrawBlend(prev->mBeat + rampIn, prev->mBlendWidth);
+        prevDisplay->DrawBlend(
+            prev->mBeat + (-rampIn >= 0.0f ? rampIn : 0.0f), prev->mBlendWidth
+        );
         prev = prev->Next();
         idx++;
     }
