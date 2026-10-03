@@ -679,7 +679,8 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
 // split, extra mr); ShouldAutoPass as if/return true/return false: identical.
 // w21-bl: `int i10 = 0;` declared just before `mTrickSymbol = none;` (after
 // the static Symbol block) closes the li 1/li 0 order, the this=r30 cascade and
-// the autotrick addi slot at once -- 15 rows left, all one f29<->f30 swap: the
+// the autotrick addi slot at once (99.554 -> 100.000 normalized, i.e. 100
+// modulo register permutation) -- 15 rows left, all one f29<->f30 swap: the
 // image keeps 1.0f in f29 and -1.0f in f30, ours the reverse. Same values, same
 // uses. Tried: explicit 1.0f/-1.0f literals (identical); Min/Max helpers are
 // fsel shapes the image does not have.
