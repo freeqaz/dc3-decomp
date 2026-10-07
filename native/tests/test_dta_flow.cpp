@@ -15,6 +15,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -66,8 +67,11 @@ static bool FileExists(const std::string &p) {
     return ::stat(p.c_str(), &st) == 0;
 }
 
+// `extraEnv` is prepended to the command as further VAR=value assignments
+// (e.g. "DC3_CONTROLLER_MODE=faithful").
 static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120,
-                               const char *scriptName = "ymca.txt") {
+                               const char *scriptName = "ymca.txt",
+                               const char *extraEnv = "") {
     std::string binary = GetDc3NativePath();
     std::string script = GetScriptDir() + "/" + scriptName;
 
@@ -91,7 +95,8 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120,
     std::ostringstream cmd;
     // DC3_TEL at interval 1: GameplayReachesPlayingState reads the real
     // hamprovider game_stage off the per-frame telemetry line.
-    cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
+    cmd << extraEnv << (extraEnv[0] ? " " : "")
+        << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
         << " DC3_TEL=1 DC3_TEL_INTERVAL=1"
         << " MILO_INPUT_SCRIPT=" << script
         << " MILO_MAX_FRAMES=" << maxFrames
@@ -404,5 +409,202 @@ TEST_F(DtaFlowSongSelectScrollTest, ScrollDownEdgeMatchesImage) {
            "showing 4 (four highlight moves, then two ScrollDowns)";
     EXPECT_TRUE(outputContains("Screen 'song_select_screen' Exit (to 'multiuser_screen')"))
         << "the selected row was not a song (a header does not leave song select)";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// ===========================================================================
+// Controller mode policy (DC3_CONTROLLER_MODE) and the `wake` directive
+// ===========================================================================
+//
+// docs/debugging/native.md "Controller mode policy".  On the 360 a pad press
+// outside controller mode only enters it (ShellInput::OnMsg(ButtonDownMsg)),
+// and ShellInput::Poll exits it once unk_0x68.SplitMs() >= unk_0x98 (the
+// helpbar's controller_mode_timeout) with no pad input.  Native defaults to
+// `forced` (controller mode pinned on); `faithful` runs the image's bodies.
+// controller-mode-wake.txt idles on main_screen for ~1900 frames with a
+// `wake` every 120 frames, then wake + confirm to choose_mode_screen.  Both
+// runs set DC3_CONTROLLER_MODE_TIMEOUT_MS=750 so the idle window spans
+// several timeouts at any plausible headless frame rate; under `forced` the
+// override is not even read.
+
+static const int kWakeTimeoutMs = 750;
+
+// The engine's lines, in output order, from the first line containing `from`.
+static std::vector<std::string> LinesFrom(const std::string &out, const char *from) {
+    std::vector<std::string> lines;
+    size_t start = out.find(from);
+    if (start == std::string::npos) return lines;
+    start = out.rfind('\n', start);
+    start = (start == std::string::npos) ? 0 : start + 1;
+    std::istringstream in(out.substr(start));
+    std::string line;
+    while (std::getline(in, line)) lines.push_back(line);
+    return lines;
+}
+
+static bool StartsWith(const std::string &line, const char *prefix) {
+    return line.compare(0, strlen(prefix), prefix) == 0;
+}
+
+static const char *kWakeLine = "DC3 Input: wake at frame ";
+static const char *kModeLine = "DC3 ControllerMode: ";
+static const char *kMainSatisfied = "DC3 Input: wait_screen 'main_screen' satisfied";
+
+class ControllerModeFlowTest : public ::testing::Test {
+protected:
+    static void RunOnce(DtaRunResult &result, bool &ran, const char *policyEnv) {
+        if (!getenv("DC3_DTA_FLOW_TESTS") || ran) return;
+        std::string env = std::string(policyEnv) + " DC3_CONTROLLER_MODE_TIMEOUT_MS=" +
+                          std::to_string(kWakeTimeoutMs);
+        result = RunDtaFlow(2400, 180, "controller-mode-wake.txt", env.c_str());
+        ran = true;
+    }
+
+    void CheckRan(const DtaRunResult &result, bool ran) {
+        if (!getenv("DC3_DTA_FLOW_TESTS"))
+            GTEST_SKIP() << "Set DC3_DTA_FLOW_TESTS=1 to enable (requires game assets)";
+        if (!ran) GTEST_SKIP() << "Engine did not run (SetUpTestSuite failed)";
+        if (!result.setupError.empty())
+            GTEST_FAIL() << "ControllerModeFlowTest could not run the engine.\n"
+                         << result.setupError;
+    }
+
+    static void Dump(const DtaRunResult &result) {
+        auto *info = ::testing::UnitTest::GetInstance()->current_test_info();
+        std::string path = "/tmp/claude-1000/dta_flow_";
+        if (info) path += info->name();
+        path += ".log";
+        std::ofstream f(path);
+        if (f.is_open()) {
+            f << result.output;
+            fprintf(stderr, "Full output dumped to: %s\n", path.c_str());
+        }
+    }
+};
+
+class ControllerModeFaithfulTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        RunOnce(sResult, sRanEngine, "DC3_CONTROLLER_MODE=faithful");
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult ControllerModeFaithfulTest::sResult = {};
+bool ControllerModeFaithfulTest::sRanEngine = false;
+
+class ControllerModeForcedTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        // No DC3_CONTROLLER_MODE at all (even if the caller's environment
+        // has one): the default must be `forced`.
+        RunOnce(sResult, sRanEngine, "env -u DC3_CONTROLLER_MODE");
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult ControllerModeForcedTest::sResult = {};
+bool ControllerModeForcedTest::sRanEngine = false;
+
+// An exit while in controller mode on main_screen is the idle timeout: nothing
+// else on that screen exits (the DTA's own exit_controller_mode calls fire on
+// screen changes).  Each one must have waited the configured timeout.
+TEST_F(ControllerModeFaithfulTest, IdleTimeoutExitsAfterConfiguredTimeout) {
+    const std::string &out = sResult.output;
+    ASSERT_NE(out.find("DC3 Native: controller mode policy = faithful"), std::string::npos)
+        << "precondition: DC3_CONTROLLER_MODE=faithful did not reach the engine";
+    std::vector<std::string> lines = LinesFrom(out, kMainSatisfied);
+    ASSERT_FALSE(lines.empty()) << "precondition: the route never reached main_screen";
+
+    int timeoutExits = 0;
+    for (const std::string &line : lines) {
+        if (StartsWith(line, "DC3 UI: Screen 'main_screen' Exit")) break;
+        int immediate, wasIn, idleMs, timeoutMs;
+        if (sscanf(line.c_str(),
+                   "DC3 ControllerMode: exit (immediate=%d, was_in=%d, idle_ms=%d, "
+                   "timeout_ms=%d)", &immediate, &wasIn, &idleMs, &timeoutMs) != 4)
+            continue;
+        if (!wasIn) continue;
+        timeoutExits++;
+        EXPECT_EQ(timeoutMs, kWakeTimeoutMs)
+            << "DC3_CONTROLLER_MODE_TIMEOUT_MS did not reach ShellInput: " << line;
+        EXPECT_GE(idleMs, timeoutMs)
+            << "controller mode exited before the idle timeout elapsed: " << line;
+    }
+    EXPECT_GE(timeoutExits, 1)
+        << "controller mode never timed out on main_screen in ~1900 idle frames "
+           "(ExitControllerMode still pinned, or the Poll timeout never fires)";
+}
+
+// After each timeout exit the next `wake` must press (L3) and the next
+// controller-mode event must be an enter; a wake inside controller mode is a
+// no-op; and the closing wake + confirm reaches choose_mode_screen.
+TEST_F(ControllerModeFaithfulTest, WakeReentersControllerMode) {
+    std::vector<std::string> lines = LinesFrom(sResult.output, kMainSatisfied);
+    ASSERT_FALSE(lines.empty()) << "precondition: the route never reached main_screen";
+
+    int reentries = 0, noOps = 0;
+    for (size_t i = 0; i < lines.size(); i++) {
+        if (StartsWith(lines[i], "DC3 UI: Screen 'main_screen' Exit")) break;
+        if (StartsWith(lines[i], kWakeLine)
+            && lines[i].find("no-op (already awake)") != std::string::npos)
+            noOps++;
+        if (!StartsWith(lines[i], "DC3 ControllerMode: exit (immediate=1, was_in=1"))
+            continue;
+        // the first wake after this exit
+        size_t w = i + 1;
+        while (w < lines.size() && !StartsWith(lines[w], kWakeLine)
+               && !StartsWith(lines[w], "DC3 UI: Screen 'main_screen' Exit"))
+            w++;
+        if (w >= lines.size() || !StartsWith(lines[w], kWakeLine)) continue;
+        EXPECT_NE(lines[w].find("pressed button"), std::string::npos)
+            << "the first wake after a timeout exit did not press:\n  "
+            << lines[i] << "\n  " << lines[w];
+        // the next controller-mode event after that wake
+        size_t e = w + 1;
+        while (e < lines.size() && !StartsWith(lines[e], kModeLine)) e++;
+        ASSERT_LT(e, lines.size()) << "no controller-mode event after " << lines[w];
+        EXPECT_TRUE(StartsWith(lines[e], "DC3 ControllerMode: enter"))
+            << "the wake press did not re-enter controller mode:\n  " << lines[w]
+            << "\n  " << lines[e];
+        reentries++;
+    }
+    EXPECT_GE(reentries, 1) << "no timeout exit was followed by a wake";
+    EXPECT_GE(noOps, 1) << "no wake landed inside controller mode as a no-op";
+    EXPECT_NE(sResult.output.find("Screen 'main_screen' Exit (to 'choose_mode_screen')"),
+              std::string::npos)
+        << "wake + confirm did not leave main_screen for choose_mode_screen";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// The native default: `wake` never presses, controller mode never runs the
+// image's bodies (they are the only source of "DC3 ControllerMode:" lines),
+// and the same script still navigates.
+TEST_F(ControllerModeForcedTest, WakeIsANoOpUnderForcedDefault) {
+    const std::string &out = sResult.output;
+    ASSERT_NE(out.find("DC3 Native: controller mode policy = forced"), std::string::npos)
+        << "the default policy is not `forced`";
+    int wakes = 0, noOps = 0;
+    for (const std::string &line : LinesFrom(out, "DC3 Native: controller mode policy")) {
+        if (!StartsWith(line, kWakeLine)) continue;
+        wakes++;
+        if (line.find("no-op (already awake)") != std::string::npos) noOps++;
+        else ADD_FAILURE() << "wake pressed under forced: " << line;
+    }
+    EXPECT_EQ(wakes, 17) << "controller-mode-wake.txt has 17 wake directives";
+    EXPECT_EQ(noOps, wakes);
+    EXPECT_EQ(out.find(kModeLine), std::string::npos)
+        << "the faithful Enter/ExitControllerMode body ran under forced";
+    EXPECT_NE(out.find("Screen 'main_screen' Exit (to 'choose_mode_screen')"),
+              std::string::npos)
+        << "confirm did not leave main_screen for choose_mode_screen";
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }

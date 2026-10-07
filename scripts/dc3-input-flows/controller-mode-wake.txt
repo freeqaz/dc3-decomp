@@ -1,0 +1,43 @@
+# Controller-mode wake + idle timeout (DtaFlowControllerMode* tests).
+#
+# On the 360 a pad press outside controller mode only ENTERS controller mode
+# (ShellInput::OnMsg(ButtonDownMsg)) and controller mode exits after the
+# helpbar's controller_mode_timeout without pad input (ShellInput::Poll).
+# `wake` is "the player presses the wake button" (L3 unless
+# MILO_INPUT_WAKE_BUTTON): a no-op while the game is in controller mode, a
+# press otherwise.  See docs/debugging/native.md "Controller mode policy".
+#
+# Run under DC3_CONTROLLER_MODE=faithful DC3_CONTROLLER_MODE_TIMEOUT_MS=750
+# (the test does), main_screen idles for ~1900 frames with a wake every 120:
+# each timeout exit must be followed by a wake that presses and re-enters,
+# and wakes inside controller mode must be no-ops.  The closing wake+confirm
+# pair must reach choose_mode_screen whatever state the cycle is in.  Under
+# the default DC3_CONTROLLER_MODE=forced every wake is a no-op.
+
+# Boot is out of controller mode under faithful: wake, then confirm.
+wait_screen title_screen
++30 wake
++45 confirm
+
+wait_screen main_screen
++120 wake
++240 wake
++360 wake
++480 wake
++600 wake
++720 wake
++840 wake
++960 wake
++1080 wake
++1200 wake
++1320 wake
++1440 wake
++1560 wake
++1680 wake
++1800 wake
+
+# Wake, then the real press: reaches choose_mode_screen in either policy.
++1900 wake
++1915 confirm
+
+wait_screen choose_mode_screen

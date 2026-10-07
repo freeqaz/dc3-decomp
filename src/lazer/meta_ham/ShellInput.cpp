@@ -178,6 +178,20 @@ void ShellInput::Poll() {
         lastHasSkeleton = hasSkel;
     }
 
+    // Controller mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
+    // under `faithful`, the image's gameplay-panel exit -- the one piece of
+    // the image's FocusPanel() == TheGamePanel arm (below, #else) that is
+    // about controller mode; the rest of that arm needs the Kinect filters.
+    // Under `forced` ExitControllerMode is a no-op, so the arm is skipped.
+    {
+        extern bool Dc3ControllerModeForced();
+        if (!Dc3ControllerModeForced() && TheUI->FocusPanel() == TheGamePanel
+            && TheGestureMgr->InControllerMode()
+            && !TheUIEventMgr->HasActiveDialogEvent()) {
+            ExitControllerMode(true);
+        }
+    }
+    // The idle timeout. Under `forced` ExitControllerMode returns at once.
     if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
         ExitControllerMode(true);
     }
@@ -455,14 +469,23 @@ void ShellInput::SyncVoiceControl() { // almost done
 
 void ShellInput::EnterControllerMode(bool b) {
 #ifdef HX_NATIVE
-    // Native stays permanently in controller mode — skip the RockCentral/profile/
-    // skeleton-chooser Xbox body. Route helpbar controller_mode.flow activation
-    // through the shared one-shot guard so the boot hook, HamScreen::Enter's
-    // sControllerModeForced path, and repeat enter_controller_mode messages all
-    // share the single sActivated latch — the flow activates exactly once.
-    TheGestureMgr->SetInControllerMode(true);
-    NativeBootControllerModeOnce();
-    return;
+    // Controller mode policy, DC3_CONTROLLER_MODE (docs/debugging/native.md
+    // "Controller mode policy").
+    extern bool Dc3ControllerModeForced();
+    if (Dc3ControllerModeForced()) {
+        // forced (default): native stays permanently in controller mode — skip
+        // the RockCentral/profile/skeleton-chooser Xbox body. Route helpbar
+        // controller_mode.flow activation through the shared one-shot guard so
+        // the boot hook, HamScreen::Enter's sControllerModeForced path, and
+        // repeat enter_controller_mode messages all share the single
+        // sActivated latch — the flow activates exactly once.
+        TheGestureMgr->SetInControllerMode(true);
+        NativeBootControllerModeOnce();
+        return;
+    }
+    // faithful: the image body below, unchanged.
+    printf("DC3 ControllerMode: enter (force=%d, was_in=%d)\n", (int)b,
+           (int)TheGestureMgr->InControllerMode());
 #endif
     HelpBarPanel *pHelpbarPanel = TheHamUI.GetHelpBarPanel();
     MILO_ASSERT(pHelpbarPanel, 0x230);
@@ -494,10 +517,22 @@ void ShellInput::EnterControllerMode(bool b) {
 
 void ShellInput::ExitControllerMode(bool b) {
 #ifdef HX_NATIVE
-    // Native: no Kinect — never exit controller mode.
-    // DTA scripts fire exit_controller_mode during screen transitions,
-    // but without gesture input there's no way to re-enter.
-    return;
+    // Controller mode policy, DC3_CONTROLLER_MODE (docs/debugging/native.md
+    // "Controller mode policy").
+    extern bool Dc3ControllerModeForced();
+    if (Dc3ControllerModeForced()) {
+        // forced (default): no Kinect — never exit controller mode. DTA scripts
+        // fire exit_controller_mode during screen transitions, and Poll's idle
+        // timeout fires every frame, but without gesture input there's no way
+        // to re-enter.
+        return;
+    }
+    // faithful: the image body below. The idle/timeout pair is logged so a
+    // test can tell the timeout exit from the others.
+    printf("DC3 ControllerMode: exit (immediate=%d, was_in=%d, idle_ms=%d, "
+           "timeout_ms=%d)\n",
+           (int)b, (int)TheGestureMgr->InControllerMode(), (int)unk_0x68.SplitMs(),
+           (int)unk_0x98);
 #endif
     if (TheHamUI.GetHelpBarPanel())
         TheHamUI.GetHelpBarPanel()->ExitControllerMode(b);
@@ -564,6 +599,16 @@ void ShellInput::SyncToCurrentScreen() {
             unk_0x98 = prop->Int();
         }
     }
+#ifdef HX_NATIVE
+    {
+        // Controller mode policy (docs/debugging/native.md): under `faithful`,
+        // DC3_CONTROLLER_MODE_TIMEOUT_MS overrides the helpbar's idle timeout.
+        extern bool Dc3ControllerModeForced();
+        extern int Dc3ControllerModeTimeoutMs();
+        if (!Dc3ControllerModeForced() && Dc3ControllerModeTimeoutMs() > 0)
+            unk_0x98 = Dc3ControllerModeTimeoutMs();
+    }
+#endif
     LetterboxPanel *lbp = TheHamUI.GetLetterboxPanel();
     if (lbp) {
         lbp->SyncToPanel(mInputPanel);

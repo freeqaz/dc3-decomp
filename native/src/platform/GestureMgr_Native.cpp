@@ -1,7 +1,8 @@
 #ifdef HX_NATIVE
 
 #include "Skeleton_Native.h"
-#include "NativeSettings.h" // Dc3EnvFlag
+#include "NativeSettings.h" // Dc3EnvFlag, Dc3ControllerModeForced
+#include "platform/JoypadScriptHook.h"
 #include "gesture/CameraInput.h"
 #include "gesture/GestureMgr.h"
 #include "gesture/Skeleton.h" // SkeletonCallback
@@ -75,10 +76,19 @@ static void ResetSlotMap() {
         sSlotTrackId[s] = -1;
 }
 
+// The scripted-input `wake` directive's question: would pressing the
+// controller-mode wake button change anything? Only outside controller mode
+// (never under DC3_CONTROLLER_MODE=forced, where controller mode is pinned on),
+// which keeps `wake` a no-op for the native default.
+static bool NativeWakeNeeded() {
+    return !TheGestureMgr || !TheGestureMgr->InControllerMode();
+}
+
 // Native implementation of GestureMgr::Init — replaces the early return stub.
 // Called from game startup to initialize skeleton tracking via webcam + MediaPipe pose.
 void GestureMgr_NativeInit() {
     ResetSlotMap();
+    JoypadScriptSetWakeNeeded(NativeWakeNeeded);
 
     // Always create the camera input stub -- needed for PostUpdate pipeline.
     if (!sNativeCameraInput)
@@ -98,7 +108,10 @@ void GestureMgr_NativeInit() {
     // live-provider path against a synthetic pose server.
     if (getenv("MILO_HEADLESS") && !getenv("DC3_POSE")) {
         printf("Native: headless mode, using dummy skeleton (no pose server)\n");
-        if (TheGestureMgr) {
+        // Controller-mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
+        // only `forced` pins controller mode here; `faithful` boots out of it,
+        // as GestureMgr::GestureMgr does on the 360.
+        if (TheGestureMgr && Dc3ControllerModeForced()) {
             TheGestureMgr->SetInControllerMode(true);
         }
         return;
@@ -152,7 +165,9 @@ void GestureMgr_NativeInit() {
 
 pose_ready:
 
-    if (TheGestureMgr) {
+    // Controller-mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
+    // only `forced` pins controller mode here.
+    if (TheGestureMgr && Dc3ControllerModeForced()) {
         TheGestureMgr->SetInControllerMode(true);
     }
 }

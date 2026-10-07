@@ -78,5 +78,7 @@ private:
 // rest position. Activate it exactly once at boot, from the earliest hook where the
 // helpbar dir is loaded and TheGestureMgr exists. Idempotent (function-local once
 // guard); no-ops until both preconditions hold, so safe to call from multiple hooks.
+// A no-op under DC3_CONTROLLER_MODE=faithful (docs/debugging/native.md
+// "Controller mode policy"), where the image's EnterControllerMode runs instead.
 void NativeBootControllerModeOnce();
 #endif
