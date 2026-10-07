@@ -209,4 +209,29 @@ TEST_F(NativeMemoryLP64, MemHeapMinimumFreeBlockHoldsAWholeFreeBlock) {
         << sizeof(FreeBlock) << ")";
 }
 
+// ---------------------------------------------------------------------------
+// MemTracker: the hash table is 2 * numAllocs AllocInfo* entries, all cleared
+// by the KeylessHash ctor, in a block of numAllocs * 8 bytes -- half the table
+// natively.
+// ---------------------------------------------------------------------------
+void MemTrackerHashChild() {
+    alarm(30);
+    MemTracker *t = new MemTracker(0, 64);
+    const size_t need = (size_t)t->mHashTable->Size() * sizeof(AllocInfo *);
+    const size_t have = malloc_usable_size(t->mHashMem);
+    if (have < need) {
+        fprintf(stderr, "hash table needs %zu bytes, mHashMem holds %zu\n", need, have);
+        _exit(2);
+    }
+    _exit(0);
+}
+
+TEST_F(NativeMemoryLP64, MemTrackerHashBlockHoldsTheWholeTable) {
+    if (!TmpWritable())
+        GTEST_SKIP() << "/tmp not writable (sandbox) - ASSERT_EXIT needs /tmp access";
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
+    ASSERT_EXIT(MemTrackerHashChild(), ::testing::ExitedWithCode(0), "")
+        << "MemTracker's hash block is smaller than its KeylessHash table";
+}
+
 } // namespace

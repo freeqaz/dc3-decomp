@@ -191,7 +191,10 @@ MemTracker::MemTracker(int x, int y)
     : mHashMem(nullptr), mHashTable(nullptr), mTimeSlice(0), mCurStatTable(0),
       mFreedInfos(y), mLog(0), mReport(0), mHeap(x) {
     int hashSize = y * 2;
-    mHashMem = DebugHeapAlloc(y * 8);
+    // hashSize AllocInfo* entries. The image's `y * 8` is two 4-byte pointers
+    // per alloc; on a 64-bit host that is half the table, and the KeylessHash
+    // ctor below clears past the block (rb3-xenon W16-UB, d3ffc7e97).
+    mHashMem = DebugHeapAlloc(hashSize * sizeof(AllocInfo *));
     MILO_ASSERT(mHashMem, 0x4E);
     mHashTable = new KeylessHash<void *, AllocInfo *>(
         hashSize, (AllocInfo *)0, (AllocInfo *)-1, (AllocInfo **)mHashMem
