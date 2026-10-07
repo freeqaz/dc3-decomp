@@ -234,4 +234,42 @@ TEST_F(NativeMemoryLP64, MemTrackerHashBlockHoldsTheWholeTable) {
         << "MemTracker's hash block is smaller than its KeylessHash table";
 }
 
+// ---------------------------------------------------------------------------
+// MemTrack name stacks: 65 pointer slots each (STACK_SIZE 64, slot 0 unused by
+// Begin).  char[260] holds 32 eight-byte pointers, and MemTrackInit stored the
+// slot buffers through `(int)CharArrayArray + i`, a truncated .bss address,
+// at a 4-byte stride.
+// ---------------------------------------------------------------------------
+void MemTrackStacksChild() {
+    alarm(30);
+    MemTrackInit(0, 64, false);
+    if (!gMemTracker)
+        _exit(2);
+    static char names[65][16];
+    for (int i = 1; i <= 64; i++) {
+        snprintf(names[i], sizeof(names[i]), "lp64_f%02d", i);
+        BeginMemTrackFileName(names[i]);
+    }
+    // Each Begin pushed the previous name; each End pops back to it.
+    int wrong = 0;
+    for (int i = 64; i >= 1; i--) {
+        EndMemTrackFileName();
+        const char *want = i > 1 ? names[i - 1] : "";
+        wrong += strcmp(gMemTracker->unk181ac.c_str(), want) != 0;
+    }
+    if (wrong) {
+        fprintf(stderr, "%d of 64 pops restored the wrong file name\n", wrong);
+        _exit(3);
+    }
+    _exit(0);
+}
+
+TEST_F(NativeMemoryLP64, MemTrackNameStacksHold65Pointers) {
+    if (!TmpWritable())
+        GTEST_SKIP() << "/tmp not writable (sandbox) - ASSERT_EXIT needs /tmp access";
+    GTEST_FLAG_SET(death_test_style, "threadsafe");
+    ASSERT_EXIT(MemTrackStacksChild(), ::testing::ExitedWithCode(0), "")
+        << "MemTrackInit / the name stacks are sized for 4-byte pointers";
+}
+
 } // namespace

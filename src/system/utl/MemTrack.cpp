@@ -17,7 +17,14 @@
 // by an int stack position counter. This ensures counter is at array_base + 0x104 so the
 // compiler can access it as lwz r11, 0x104(r_array_base).
 struct MemTrackStack {
+#ifdef HX_NATIVE
+    // 65 slots of one pointer each. A literal 260 holds only 32 eight-byte
+    // pointers on a 64-bit host, so Begin/End's slots 32..64 would overwrite
+    // `pos` and the other stack (rb3-xenon W16-UB, 63407036c).
+    char ptrs[65 * sizeof(void *)];
+#else
     char ptrs[260]; // (STACK_SIZE+1) * sizeof(void*) = 65 * 4 = 260 bytes
+#endif
     int pos;        // stack position, at offset 0x104 from ptrs base
 };
 
@@ -318,6 +325,21 @@ void MemTrackInit(int heap, int numAllocs, bool heapOnly) {
     DataRegisterFunc("mem_log", MemTrackLogDF);
     MemTrackReport(0, false);
     AllocInfoInit();
+#ifdef HX_NATIVE
+    // One 0x80-byte name buffer per slot, slots 0..STACK_SIZE, indexed as
+    // pointers. The image's form below walks a byte offset `i += 4` up to 0x100
+    // through `(int)CharArrayArray + i`, which truncates the .bss address to 32
+    // bits and steps half a pointer at a time on a 64-bit host
+    // (rb3-xenon W16-UB, 63407036c).
+    for (int i = 0; i <= STACK_SIZE; i++) {
+        void *fileNameMem = MemAlloc(0x80, __FILE__, 0x9a, "MemTrackStack", 0);
+        ((void **)CharArrayArray)[i] = fileNameMem;
+        memset(fileNameMem, 0, 0x80);
+        void *objectNameMem = MemAlloc(0x80, __FILE__, 0x9c, "MemTrackStack", 0);
+        ((void **)MemTrackObjectName)[i] = objectNameMem;
+        memset(objectNameMem, 0, 0x80);
+    }
+#else
     int i = 0;
     do {
         void *fileNameMem = MemAlloc(0x80, __FILE__, 0x9a, "MemTrackStack", 0);
@@ -328,4 +350,5 @@ void MemTrackInit(int heap, int numAllocs, bool heapOnly) {
         memset(objectNameMem, 0, 0x80);
         i += 4;
     } while (i <= 0x100);
+#endif
 }
