@@ -68,10 +68,12 @@ static bool FileExists(const std::string &p) {
 }
 
 // `extraEnv` is prepended to the command as further VAR=value assignments
-// (e.g. "DC3_CONTROLLER_MODE=faithful").
+// (e.g. "DC3_CONTROLLER_MODE=faithful").  `fastBoot` false leaves
+// DC3_FAST_BOOT out, so boot screens advance as the image's do -- title_screen
+// in particular then waits for a confirm instead of auto-advancing.
 static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120,
                                const char *scriptName = "ymca.txt",
-                               const char *extraEnv = "") {
+                               const char *extraEnv = "", bool fastBoot = true) {
     std::string binary = GetDc3NativePath();
     std::string script = GetScriptDir() + "/" + scriptName;
 
@@ -96,7 +98,9 @@ static DtaRunResult RunDtaFlow(int maxFrames, int timeout = 120,
     // DC3_TEL at interval 1: GameplayReachesPlayingState reads the real
     // hamprovider game_stage off the per-frame telemetry line.
     cmd << extraEnv << (extraEnv[0] ? " " : "")
-        << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_FAST_BOOT=1"
+        << (fastBoot ? "" : "env -u DC3_FAST_BOOT ")
+        << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0"
+        << (fastBoot ? " DC3_FAST_BOOT=1" : "")
         << " DC3_TEL=1 DC3_TEL_INTERVAL=1"
         << " MILO_INPUT_SCRIPT=" << script
         << " MILO_MAX_FRAMES=" << maxFrames
@@ -623,5 +627,52 @@ TEST_F(ControllerModeForcedTest, WakeIsANoOpUnderForcedDefault) {
     EXPECT_NE(out.find("Screen 'main_screen' Exit (to 'choose_mode_screen')"),
               std::string::npos)
         << "confirm did not leave main_screen for choose_mode_screen";
+    EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
+}
+
+// ymca.txt under `faithful` WITHOUT fast boot: its title wake must stay.
+//
+// The DtaFlowTest run cannot see a lost title wake.  Under `faithful` the game
+// boots out of controller mode, so without the wake title_screen's confirm is
+// swallowed (it only enters controller mode) -- but DC3_FAST_BOOT auto-advances
+// title_screen after 60 frames, which carries the flow on regardless.  Without
+// fast boot nothing advances title_screen but a confirm, so a flow that lost
+// its title wake strands there (measured: the main_screen wait times out after
+// 1801 frames).  choose_mode_screen is reached by frame ~270 with the wakes in
+// place; the run stops at 450 frames, since nothing after it is in question.
+// The flow is shared with the original game under Xenia
+// (tools/fork-regress/flows/dc3-ymca.txt), where every wake is needed.
+class YmcaFaithfulNoFastBootTest : public ControllerModeFlowTest {
+protected:
+    static DtaRunResult sResult;
+    static bool sRanEngine;
+    static void SetUpTestSuite() {
+        if (!getenv("DC3_DTA_FLOW_TESTS")) return;
+        sResult = RunDtaFlow(450, 60, "ymca.txt", "DC3_CONTROLLER_MODE=faithful",
+                             /*fastBoot=*/false);
+        sRanEngine = true;
+    }
+    void SetUp() override { CheckRan(sResult, sRanEngine); }
+    void TearDown() override {
+        if (HasFailure() && sRanEngine) Dump(sResult);
+    }
+};
+DtaRunResult YmcaFaithfulNoFastBootTest::sResult = {};
+bool YmcaFaithfulNoFastBootTest::sRanEngine = false;
+
+TEST_F(YmcaFaithfulNoFastBootTest, TitleWakeReachesChooseMode) {
+    const std::string &out = sResult.output;
+    ASSERT_NE(out.find("DC3 Native: controller mode policy = faithful"), std::string::npos)
+        << "precondition: DC3_CONTROLLER_MODE=faithful did not reach the engine";
+    ASSERT_EQ(out.find("DC3 UI: Fast boot enabled"), std::string::npos)
+        << "precondition: fast boot is on, so title_screen auto-advances and this "
+           "test cannot see a swallowed title confirm";
+    EXPECT_NE(out.find("DC3 Input: wait_screen 'choose_mode_screen' satisfied"),
+              std::string::npos)
+        << "ymca.txt did not reach choose_mode_screen under faithful without fast "
+           "boot.  If it stranded on title_screen, the flow's title `wake` is "
+           "missing or no longer lands before the confirm: the confirm was "
+           "swallowed into entering controller mode.";
+    EXPECT_FALSE(sResult.timedOut) << "the engine hit the 60 s timeout";
     EXPECT_EQ(sResult.signal, 0) << "Engine crashed with signal " << sResult.signal;
 }
