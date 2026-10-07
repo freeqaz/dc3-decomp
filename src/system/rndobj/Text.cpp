@@ -47,10 +47,26 @@ static float gGuitarZOffset = 0.2f;
 float SegmentLength(
     int start, int end, const float *widths, const unsigned short *chars, float scale
 ) {
+#ifdef HX_NATIVE
+    // Test the bound before the char (rb3-xenon 12d4ebdfe, W16-UO, found the
+    // same defect in its segmentLength under ASan). Retail loads the char
+    // first; WrapText's hard-break arm calls SegmentLength(0, 0, ...) for text
+    // that starts with '\n', so the trailing-space loop reads chars[-1], one
+    // unsigned short before the string. The result cannot depend on that byte:
+    // once start < end is false the && is false. Natively the string is a heap
+    // block and the load is out of bounds -- clang -O2 happens to drop it, but
+    // -O0 (the web debug build) and ASan builds perform it. The leading loop is
+    // reordered too, so it never reads chars[end].
+    while (start < end && chars[start] == ' ')
+        start++;
+    while (start < end && chars[end - 1] == ' ')
+        end--;
+#else
     while (chars[start] == ' ' && start < end)
         start++;
     while (chars[end - 1] == ' ' && start < end)
         end--;
+#endif
     return (widths[end] - widths[start]) * scale;
 }
 
