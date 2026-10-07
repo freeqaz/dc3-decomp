@@ -59,4 +59,78 @@ TEST(Lp64Literals, VelocityBufferCtorClearsThroughCam) {
     std::free(mem);
 }
 
+// ---------------------------------------------------------------------------
+// RndBitmap::LoadDIB reads a bottom-up BMP row by row into
+// (void *)((int)pixels + i * rowBytes): the int truncates a 64-bit heap pointer.
+// The fixture's pixels encode their own coordinates, so a misplaced or short
+// row shows up as a mismatch.
+const int kBmpW = 3;
+const int kBmpH = 4;
+
+void PutU16(std::vector<unsigned char> &v, unsigned int x) {
+    v.push_back(x & 0xFF);
+    v.push_back((x >> 8) & 0xFF);
+}
+void PutU32(std::vector<unsigned char> &v, unsigned int x) {
+    PutU16(v, x & 0xFFFF);
+    PutU16(v, x >> 16);
+}
+
+std::vector<unsigned char> BuildBottomUpBmp() {
+    const int rowBytes = kBmpW * 4;
+    std::vector<unsigned char> v;
+    PutU16(v, 0x4D42); // "BM"
+    PutU32(v, 14 + 40 + rowBytes * kBmpH); // bfSize
+    PutU16(v, 0);
+    PutU16(v, 0);
+    PutU32(v, 14 + 40); // bfOffBits
+    PutU32(v, 40); // biSize
+    PutU32(v, kBmpW);
+    PutU32(v, kBmpH); // positive = bottom-up
+    PutU16(v, 1); // biPlanes
+    PutU16(v, 32); // biBitCount
+    PutU32(v, 0); // biCompression
+    PutU32(v, rowBytes * kBmpH);
+    PutU32(v, 0xB11); // biXPelsPerMeter: skip the alpha fill
+    PutU32(v, 0);
+    PutU32(v, 0);
+    PutU32(v, 0);
+    for (int y = kBmpH - 1; y >= 0; y--) { // file rows run bottom to top
+        for (int x = 0; x < kBmpW; x++) {
+            v.push_back(x);
+            v.push_back(y);
+            v.push_back(0x5A);
+            v.push_back(0xA5);
+        }
+    }
+    return v;
+}
+
+void LoadBottomUpBmpThenExit() {
+    std::vector<unsigned char> file = BuildBottomUpBmp();
+    BufStream bs(file.data(), (int)file.size(), true);
+    RndBitmap bmp;
+    if (!bmp.LoadBmp(&bs))
+        _exit(2);
+    if (bmp.Width() != kBmpW || bmp.Height() != kBmpH || bmp.Bpp() != 32)
+        _exit(3);
+    int misplaced = 0;
+    for (int y = 0; y < kBmpH; y++) {
+        const unsigned char *row = bmp.Pixels() + y * bmp.RowBytes();
+        for (int x = 0; x < kBmpW; x++) {
+            const unsigned char *px = row + x * 4;
+            if (px[0] != x || px[1] != y || px[2] != 0x5A || px[3] != 0xA5)
+                misplaced++;
+        }
+    }
+    _exit(misplaced == 0 ? 0 : 4);
+}
+
+TEST_F(Lp64LiteralTest, LoadDibReadsBottomUpRowsIntoTheHeapBlock) {
+    GTEST_FLAG_SET(death_test_style, "threadsafe"); // see test_object_lifetime.cpp
+    ASSERT_EXIT(LoadBottomUpBmpThenExit(), ::testing::ExitedWithCode(0), "")
+        << "exit 2 = LoadBmp failed, 3 = wrong dimensions, 4 = misplaced pixels; "
+           "a signal means the row reads went through a truncated pointer";
+}
+
 } // namespace
