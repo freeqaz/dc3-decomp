@@ -11,6 +11,21 @@
 #include "utl\MemTrack.h"
 #include <cstdio>
 
+#ifdef HX_NATIVE
+// The heap is managed in 4-byte words and every free block starts with a
+// FreeBlock header {mSizeWords, mTimeStamp, mNextBlock}. On the 360 that
+// header is exactly 3 words, and the image writes the 3 as a literal: the
+// smallest block (GetSizeWords) and the first word the debug fills may
+// overwrite. On a 64-bit host mNextBlock is 8 bytes and the header is 4 words,
+// so a freed 3-word block spilled mNextBlock into the next block's header, and
+// the fills overwrote the high half of mNextBlock with 0xDEADDEAD.
+// (rb3-xenon W16-UB, 63407036c.)
+static const int kFreeBlockWords = (sizeof(FreeBlock) + 3) / 4;
+#define FREE_BLOCK_WORDS kFreeBlockWords
+#else
+#define FREE_BLOCK_WORDS 3
+#endif
+
 namespace {
     int gTimeStamp;
 
@@ -35,9 +50,9 @@ namespace {
 
 int MemHeap::GetSizeWords(int size) {
     unsigned int words = ((size + 3) >> 2) + 1;
-    if (words >= 3)
+    if (words >= FREE_BLOCK_WORDS)
         return words;
-    return 3;
+    return FREE_BLOCK_WORDS;
 }
 
 void MemHeap::FreeBlockStats(int &lFrags, int &rFrags, int &freeBytes, int &i4, int &i5) {
@@ -155,7 +170,12 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
                 timeStamp,
                 freeStr
             );
+#ifdef HX_NATIVE
+            // Word 2 is only the low half of mNextBlock on a 64-bit host.
+            curFreeBlock = (unsigned int *)((FreeBlock *)curFreeBlock)->mNextBlock;
+#else
             curFreeBlock = (unsigned int *)curFreeBlock[2];
+#endif
             blockSizeWords = sizeWords;
         }
     }
@@ -264,7 +284,7 @@ void MemHeap::Init(
         FreeBlock *blockStart = mFreeBlockChain;
         int *blockStartInt = (int *)blockStart;
         int *blockEnd = blockStartInt + blockStart->mSizeWords;
-        for (int *ptr = blockStartInt + 3; ptr < blockEnd; ptr++) {
+        for (int *ptr = blockStartInt + FREE_BLOCK_WORDS; ptr < blockEnd; ptr++) {
             *ptr = 0xDEADDEAD;
         }
     }
@@ -578,7 +598,7 @@ bool FreeBlock::AttemptMerge(FreeBlock *next, int debugLevel) {
         mNextBlock = nextNext;
         if (1 <= debugLevel) {
             int *ptr = (int *)next;
-            int *end = ptr + 3;
+            int *end = ptr + FREE_BLOCK_WORDS;
             if (ptr < end) {
                 do {
                     *ptr = 0xDEADDEAD;
@@ -616,7 +636,7 @@ int *MemHeap::Truncate(int *ptr, int newSizeWords, int &allocSize) {
         InsertFreeBlock(newFree, truncWords, prev, next, ts);
         if (1 <= mDebugLevel) {
             int *end = (int *)newFree + newFree->mSizeWords;
-            for (int *cur = (int *)newFree + 3; cur < end; cur++) {
+            for (int *cur = (int *)newFree + FREE_BLOCK_WORDS; cur < end; cur++) {
                 *cur = 0xDEADDEAD;
             }
         }
@@ -654,7 +674,7 @@ int MemHeap::Free(int *ptr) {
 
     if (1 <= mDebugLevel) {
         int *end = (int *)newFree + newFree->mSizeWords;
-        for (int *cur = (int *)newFree + 3; cur < end; cur++) {
+        for (int *cur = (int *)newFree + FREE_BLOCK_WORDS; cur < end; cur++) {
             *cur = 0xDEADDEAD;
         }
     }
