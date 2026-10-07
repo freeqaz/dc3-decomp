@@ -97,15 +97,32 @@ public:
     }
     BS_READ_OP(int)
     BS_READ_OP(uint)
+#ifndef HX_NATIVE
     BS_READ_OP(long)
+#endif
     BS_READ_OP(s16)
     BS_READ_OP(u16)
 #ifndef HX_NATIVE
     // On native, u32=unsigned int=uint, so this would be a redeclaration
     BS_READ_OP(u32)
 #else
-    // On native LP64, unsigned long (size_t) is 8 bytes, distinct from unsigned int and unsigned long long
-    BS_READ_OP(unsigned long)
+    // On native LP64, long and unsigned long (so size_t) are 8 bytes; the
+    // 360's are 4, and every stream format the game reads or writes carries
+    // them as 4. A sizeof()-wide operator wrote `bs << list.size()` as 8
+    // bytes, which a retail-shaped reader sees as a count of 0. The wire
+    // width stays 32 bits (same fix as rb3-xenon 2117aa92e).
+    BinStream &operator>>(long &rhs) {
+        int v;
+        ReadEndian(&v, sizeof(v));
+        rhs = v;
+        return *this;
+    }
+    BinStream &operator>>(unsigned long &rhs) {
+        unsigned int v;
+        ReadEndian(&v, sizeof(v));
+        rhs = v;
+        return *this;
+    }
 #endif
     BS_READ_OP(s64)
     BS_READ_OP(u64)
@@ -131,15 +148,26 @@ public:
 
     BS_WRITE_OP(int)
     BS_WRITE_OP(uint)
+#ifndef HX_NATIVE
     BS_WRITE_OP(long)
+#endif
     BS_WRITE_OP(s16)
     BS_WRITE_OP(u16)
 #ifndef HX_NATIVE
     // On native, u32=unsigned int=uint, so this would be a redeclaration
     BS_WRITE_OP(u32)
 #else
-    // On native LP64, unsigned long (size_t) is 8 bytes, distinct from unsigned int and unsigned long long
-    BS_WRITE_OP(unsigned long)
+    // 32 bits on the wire, as on the 360 (see the matching operator>>).
+    BinStream &operator<<(long rhs) {
+        int v = (int)rhs;
+        WriteEndian(&v, sizeof(v));
+        return *this;
+    }
+    BinStream &operator<<(unsigned long rhs) {
+        unsigned int v = (unsigned int)rhs;
+        WriteEndian(&v, sizeof(v));
+        return *this;
+    }
 #endif
     BS_WRITE_OP(s64)
     BS_WRITE_OP(u64)

@@ -288,3 +288,49 @@ TEST(BinStreamEndian, ReadBE_VectorOfInts) {
     EXPECT_EQ(vec[2], 30);
     EXPECT_EQ(ms.Tell(), 16);
 }
+
+// ============================================================================
+// long / unsigned long (so size_t) are 32 bits on the wire, as on the 360.
+// On LP64 they are 8 bytes in memory, and a sizeof()-wide operator wrote
+// `bs << list.size()` as 8 bytes: a retail reader then saw a count of 0.
+// ============================================================================
+
+TEST(BinStreamEndian, WriteSizeT_Is32BitOnTheWire) {
+    MemBinStream writer(/*littleEndian=*/false);
+    std::vector<int> three(3);
+    writer << three.size();
+    ASSERT_EQ(writer.Size(), 4);
+
+    MemBinStream reader(writer.Buffer(), writer.Size(), false);
+    int count;
+    reader >> count;
+    EXPECT_EQ(count, 3);
+}
+
+TEST(BinStreamEndian, WriteLong_Is32BitOnTheWire) {
+    MemBinStream writer(/*littleEndian=*/false);
+    long negative = -2;
+    writer << negative;
+    ASSERT_EQ(writer.Size(), 4);
+
+    MemBinStream reader(writer.Buffer(), writer.Size(), false);
+    int value;
+    reader >> value;
+    EXPECT_EQ(value, -2);
+}
+
+TEST(BinStreamEndian, ReadLongs_Consume32Bits) {
+    std::vector<uint8_t> buf;
+    PutBE32(buf, 0xFFFFFFFE);  // long -2
+    PutBE32(buf, 7);           // unsigned long 7
+
+    MemBinStream ms(buf.data(), buf.size(), false);
+    long l;
+    unsigned long ul;
+    ms >> l;
+    ms >> ul;
+    EXPECT_EQ(l, -2);
+    EXPECT_EQ(ul, 7u);
+    EXPECT_EQ(ms.Tell(), 8);
+    EXPECT_FALSE(ms.Fail());
+}
