@@ -133,4 +133,59 @@ TEST_F(Lp64LiteralTest, LoadDibReadsBottomUpRowsIntoTheHeapBlock) {
            "a signal means the row reads went through a truncated pointer";
 }
 
+// ---------------------------------------------------------------------------
+// LoadDtz reads the decompressed size from a little-endian 4-byte trailer.
+// The X360 spelling stores its bytes most-significant first, which is a
+// little-endian read only on a big-endian host. The payload is padded until
+// the size's low byte is >= 0x80, so the byte-reversed read is negative rather
+// than an oversized buffer that happens to decompress correctly.
+std::vector<char> SerializeArray(const DataArray *da) {
+    std::vector<char> bytes(0x10000);
+    BufStream out(bytes.data(), (int)bytes.size(), true);
+    out << da;
+    bytes.resize(out.Tell());
+    return bytes;
+}
+
+void LoadDtzRoundTripThenExit() {
+    std::vector<char> payload;
+    DataArray *src = nullptr;
+    for (int pad = 0; pad < 0x200; pad++) {
+        std::string text = "(w16ub (size 1 2 3) (label \"" + std::string(pad, 'x') + "\"))";
+        if (src)
+            src->Release();
+        src = DataReadString(text.c_str());
+        payload = SerializeArray(src);
+        if ((payload.size() & 0xFF) >= 0x80)
+            break;
+    }
+    if ((payload.size() & 0xFF) < 0x80)
+        _exit(2);
+
+    std::vector<char> dtz(payload.size() * 2 + 0x100);
+    int compLen = (int)dtz.size() - 4;
+    CompressMem(payload.data(), (int)payload.size(), dtz.data(), compLen, "w16ub");
+    unsigned int size = (unsigned int)payload.size();
+    dtz[compLen + 0] = (char)(size & 0xFF);
+    dtz[compLen + 1] = (char)((size >> 8) & 0xFF);
+    dtz[compLen + 2] = (char)((size >> 16) & 0xFF);
+    dtz[compLen + 3] = (char)((size >> 24) & 0xFF);
+
+    DataArray *loaded = LoadDtz(dtz.data(), compLen + 4);
+    if (!loaded)
+        _exit(3);
+    std::vector<char> again = SerializeArray(loaded);
+    bool same = again == payload;
+    loaded->Release();
+    src->Release();
+    _exit(same ? 0 : 4);
+}
+
+TEST_F(Lp64LiteralTest, LoadDtzReadsTheSizeTrailerLittleEndian) {
+    GTEST_FLAG_SET(death_test_style, "threadsafe"); // see test_object_lifetime.cpp
+    ASSERT_EXIT(LoadDtzRoundTripThenExit(), ::testing::ExitedWithCode(0), "")
+        << "exit 2 = could not pad the payload, 3 = LoadDtz returned null, "
+           "4 = round trip differs; a signal means the size was misread";
+}
+
 } // namespace
