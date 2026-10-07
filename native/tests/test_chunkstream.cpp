@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static const char *kTestDir = "/tmp/claude-1000/milo_tests";
 
@@ -508,4 +509,41 @@ TEST_F(ChunkStreamTest, SingleReadSpanningAllChunksWaitsForPendingReadAhead) {
                 mismatches++;
     EXPECT_EQ(mismatches, 0);
     EXPECT_EQ(cs.Tell(), total);
+}
+
+// ============================================================================
+// ReadDead stops on a failed stream instead of spinning
+//
+// Port of rb3-xenon e58933c62 (W16-UJ hardening). A failed BinStream reads
+// zeros forever, so ReadDead's 0xADDEADDE hunt never ends -- the "spin" that
+// rb3-xenon saw after a load's stream failed. Here the only chunk is garbage
+// with no marker, so the hunt runs off the end (RealEof -> mFail). The body
+// runs in a death-test child under alarm(), so the pre-fix spin fails this
+// test with SIGALRM instead of hanging the suite.
+// ============================================================================
+
+namespace {
+    void ReadDeadOffTheEndThenExit(const char *path) {
+        alarm(20);
+        ChunkStream cs(path, ChunkStream::kRead, 0x8000, false, kPlatformNone, false);
+        if (cs.Fail() || !cs.WaitUntilReady())
+            _exit(2);
+        ReadDead(cs);
+        _exit(cs.Fail() ? 0 : 3);
+    }
+}
+
+TEST_F(ChunkStreamTest, ReadDeadReturnsOnFailedStream) {
+    std::vector<uint8_t> chunkData;
+    PutGarbage(chunkData, 64);
+    for (auto &b : chunkData)
+        if (b == 0xAD)
+            b = 0x11; // no marker can start anywhere
+    std::string path = TestPath("dead_no_marker.milo_xbox");
+    ASSERT_TRUE(WriteSyntheticMilo(path.c_str(), {chunkData}));
+
+    GTEST_FLAG_SET(death_test_style, "threadsafe"); // see test_object_lifetime.cpp
+    ASSERT_EXIT(ReadDeadOffTheEndThenExit(path.c_str()), ::testing::ExitedWithCode(0), "")
+        << "exit 2 = stream did not open, 3 = ReadDead returned with the stream "
+           "still good; SIGALRM means ReadDead spun on the failed stream";
 }
