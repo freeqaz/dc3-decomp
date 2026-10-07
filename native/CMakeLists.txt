@@ -1998,6 +1998,7 @@ if(BUILD_TESTS)
         tests/test_native_notables.cpp
         tests/test_native_asan.cpp
         tests/test_lp64_literals.cpp
+        tests/test_clamp_fsel_nan.cpp
         src/dc3_render_hook.cpp       # Phase 0.2a: HamRenderHook (registers with milo-engine)
         ${DC3_ENGINE_SOURCES}
         ${DC3_NATIVE_CORE_SOURCES_ENGINE}
