@@ -222,19 +222,30 @@ void ChunkStream::ReadImpl(void *data, int bytes) {
         int chunkSize = *mCurChunk & kChunkSizeMask;
         int available = chunkSize - mCurBufOffset;
         if (available <= 0) {
-            // Current chunk exhausted, advance to next
+            // Current chunk exhausted, advance to next.
+            //
+            // TempEof is NOT impossible here (ported from rb3-xenon e58933c62,
+            // lane W16-UJ, where treating it as end of stream failed shipped
+            // venue loads). Eof() issues the read-ahead for a chunk only once
+            // an old buffer has been released, and the buffered AsyncFile
+            // completes a read that crosses its 0x20000-byte buffer over
+            // several ReadDone() calls -- one per Eof(). A read that crosses a
+            // whole chunk without a poll in between (ReadDead's byte-by-byte
+            // marker hunt, or one large Read) can reach the boundary with the
+            // next buffer still kReading; in dc3 that takes a chunk of more
+            // than two AsyncFile buffers, and shipped milos have thousands.
+            // Retail polls `while (Eof() == TempEof)` around the same pipeline
+            // (ReadChunks above); keep polling here, bounded as
+            // BinStream::WaitUntilReady is.
             EofType eof = Eof();
-            if (eof == RealEof) {
-                // Past end of stream — zero remaining, mark failed to prevent
-                // infinite caller loops (MILO_FAIL doesn't halt on native)
-                memset(dst, 0, remaining);
-                mTell += remaining;
-                mFail = true;
-                return;
+            for (int polls = 0; eof == TempEof && polls < 100000; polls++) {
+                Timer::Sleep(0);
+                eof = Eof();
             }
-            if (eof == TempEof) {
-                // On native all I/O is synchronous, TempEof should not happen.
-                // Treat as RealEof to prevent infinite spin.
+            if (eof != NotEof) {
+                // A real end of stream, or a read-ahead that never completed:
+                // zero the rest and fail the stream so callers stop
+                // (MILO_FAIL doesn't halt on native).
                 memset(dst, 0, remaining);
                 mTell += remaining;
                 mFail = true;
