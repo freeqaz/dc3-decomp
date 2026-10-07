@@ -28,7 +28,9 @@
 #include "utl\UTF8.h"
 #include <cmath>
 
-KerningTable::KerningTable() : mNumEntries(0), mEntries(0) { memset(mTable, 0, 0x80); }
+// mTable is 32 Entry pointers: 0x80 bytes on the 360 (the size retail clears
+// here, in SetKerning and in Load), 0x100 on a 64-bit host. sizeof keeps both.
+KerningTable::KerningTable() : mNumEntries(0), mEntries(0) { memset(mTable, 0, sizeof(mTable)); }
 KerningTable::~KerningTable() { delete mEntries; }
 
 KerningTable::Entry *KerningTable::Find(unsigned short us1, unsigned short us2) {
@@ -84,7 +86,7 @@ void KerningTable::SetKerning(
         delete[] mEntries;
         mEntries = new Entry[mNumEntries];
     }
-    memset(mTable, 0, 0x80);
+    memset(mTable, 0, sizeof(mTable));
     int entryIdx = 0;
     for (int i = 0; i < info.size(); i++) {
         const RndFont::KernInfo &curInfo = info[i];
@@ -121,7 +123,7 @@ void KerningTable::Load(BinStreamRev &d, RndFontBase *f) {
             delete mEntries;
             mEntries = new Entry[mNumEntries];
         }
-        memset(&mTable, 0, 0x80);
+        memset(&mTable, 0, sizeof(mTable));
         for (int i = 0; i < mNumEntries; i++) {
             Entry &curEntry = mEntries[i];
             d >> curEntry.key;
