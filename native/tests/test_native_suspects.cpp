@@ -10,6 +10,7 @@
 #include "obj/Dir.h"
 #include "obj/Object.h"
 #include "platform/FFmpegMovieImpl.h"
+#include "rndobj/Font.h"
 #include "platform/MeshDrawShowing.h"
 #include "rndobj/Mat.h"
 #include "rndobj/Mesh.h"
@@ -295,3 +296,21 @@ TEST_F(NativeSuspectsTest, MeshDrawShowingDrawsLodNamedMeshes) {
 }
 
 } // namespace
+
+// KerningTable::mTable is 32 Entry pointers: 0x80 bytes on the 360, 0x100 on
+// a 64-bit host. Clearing a literal 0x80 left buckets 16-31 holding whatever
+// the allocator returned, and Find() follows a bucket head for any character
+// pair hashing there (rb3-xenon W16-TY: RndText::Load crashed in Find on a
+// shipped font). Construct over poisoned memory so the stale half is visible.
+TEST(NativeSuspects, KerningTableCtorClearsEveryBucket) {
+    alignas(KerningTable) unsigned char storage[sizeof(KerningTable)];
+    memset(storage, 0xAB, sizeof(storage));
+    KerningTable *table = new (storage) KerningTable();
+    for (int i = 0; i < 32; i++) {
+        EXPECT_EQ(table->mTable[i], nullptr) << "bucket " << i;
+    }
+    // Find() would follow the poison; only ask once bucket 0x12 is known clear.
+    ASSERT_EQ(table->mTable[0x12], nullptr);
+    EXPECT_EQ(table->Find(0x20, 0x32), nullptr);  // bucket 0x12
+    table->~KerningTable();
+}
