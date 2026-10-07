@@ -25,6 +25,18 @@
 #     MILO_INPUT_SCRIPT=scripts/dc3-input-flows/ymca.txt \
 #     native/build/dc3-native
 
+# WAKE: on the 360 (and the original under Xenia, and native under
+# DC3_CONTROLLER_MODE=faithful) a pad press outside controller mode does not
+# act: ShellInput::OnMsg(ButtonDownMsg) swallows it and only enters controller
+# mode, which lapses after controller_mode_timeout (5 s) with no pad input.
+# `wake` = "the player presses the wake button" (l3): a no-op while the game is
+# in controller mode -- always, under the native default
+# DC3_CONTROLLER_MODE=forced -- else a one-frame press.  A no-op wake does not
+# restart the idle timer, so each screen's first real press gets a wake 2
+# frames ahead of it, never earlier.  No later gap on a screen reaches 5 s (the
+# longest is ~120 frames), so no other press needs one.  See
+# docs/debugging/native.md "Controller Mode Policy".
+
 # attract_screen needs no input: its movie (no .bik ships in the extracted
 # tree) fails to open, so MoviePanel::Poll sends movie_done on the first poll
 # and attract_movie_panel's handler goes to next_screen -- what the image does
@@ -40,15 +52,18 @@
 # autosave_warning_screen auto-transitions to title_screen.
 # Title screen -- press confirm to proceed.
 wait_screen title_screen
++43 wake
 +45 confirm
 
 # wait_main_after_saveload_screen auto-transitions to main_screen.
 # Main screen -- select "gameplay" (first item).
 wait_screen main_screen
++43 wake
 +45 confirm
 
 # Choose mode -- select "perform" (first item).
 wait_screen choose_mode_screen
++43 wake
 +45 confirm
 
 # Song select -- ONE down, derived from the list, not tuned until green.
@@ -65,6 +80,7 @@ wait_screen choose_mode_screen
 # carried an invented `- 1` that fired one row early and jumped the cursor
 # over index 6 to starships (so this flow was playing starships, not ymca).
 wait_screen song_select_screen
++43 wake
 +45 down
 +105 confirm
 
@@ -74,6 +90,7 @@ wait_screen song_select_screen
 # `skip_waiting` -> start_game -> enter_gameplay.  Each pane change replays the
 # list's enter animation (presses dropped meanwhile), hence the spacing.
 wait_screen multiuser_screen
++38 wake
 +40 confirm
 +150 confirm
 +270 confirm
