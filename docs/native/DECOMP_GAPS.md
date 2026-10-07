@@ -593,7 +593,7 @@ AnimTask created → mAnimTarget = anim->AnimTarget() (non-null)
 These are correct adaptations for a non-Kinect platform:
 - **ShellInput Kinect guards** — mSkelIdentifier/mSkelExtTracker are genuinely absent
 - **SyncVoiceControl fallback** — no voice hardware
-- **ExitControllerMode no-op** — no gesture input to re-enter from
+- **ExitControllerMode no-op** — no gesture input to re-enter from (the default, `DC3_CONTROLLER_MODE=forced`; `faithful` runs the image body -- see [debugging/native.md](../debugging/native.md#controller-mode-policy))
 - **8 stub managers** — Xbox Live, challenges, speech — not applicable on native
 
 ### Full plan: [PLATFORM_HACKS_ANALYSIS.md](../plans/dc3-native/PLATFORM_HACKS_ANALYSIS.md)

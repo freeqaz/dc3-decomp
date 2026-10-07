@@ -33,6 +33,71 @@ bool Dc3EnvFlag(const char *name, bool defaultOn) {
              strcasecmp(v, "off") == 0 || strcasecmp(v, "no") == 0);
 }
 
+// Dc3ControllerModeForced — the native controller-mode policy, DC3_CONTROLLER_MODE.
+//
+//   unset / empty / "forced"  -> true  (the default; native stays in controller
+//                                       mode permanently, as it always has)
+//   "faithful"                -> false (run the image's Enter/ExitControllerMode
+//                                       bodies and the helpbar's
+//                                       controller_mode_timeout idle exit)
+//   anything else             -> true, with a warning
+//
+// Read once, on first call, and logged once. On the 360 (and under Xenia) a
+// pad press outside controller mode only ENTERS controller mode and is
+// otherwise swallowed (ShellInput::OnMsg(ButtonDownMsg)), and controller mode
+// exits after controller_mode_timeout (5000 ms) without pad input
+// (ShellInput::Poll), handing the UI back to the Kinect hand cursor. Without a
+// Kinect that is not playable, so `forced` is the default. Every site that
+// consults this names it; see docs/debugging/native.md "Controller mode
+// policy". PPC units declare it with a local `extern bool
+// Dc3ControllerModeForced();` inside their #ifdef HX_NATIVE blocks, like
+// Dc3EnvFlag.
+bool Dc3ControllerModeForced() {
+    static int sForced = -1;
+    if (sForced < 0) {
+        const char *v = getenv("DC3_CONTROLLER_MODE");
+        if (!v || !*v || strcasecmp(v, "forced") == 0) {
+            sForced = 1;
+        } else if (strcasecmp(v, "faithful") == 0) {
+            sForced = 0;
+        } else {
+            fprintf(stderr,
+                    "DC3 Native: DC3_CONTROLLER_MODE='%s' is not 'forced' or "
+                    "'faithful'; using forced\n", v);
+            sForced = 1;
+        }
+        fprintf(stderr, "DC3 Native: controller mode policy = %s\n",
+                sForced ? "forced" : "faithful");
+    }
+    return sForced != 0;
+}
+
+// Dc3ControllerModeTimeoutMs — DC3_CONTROLLER_MODE_TIMEOUT_MS, a positive
+// override of the helpbar's controller_mode_timeout (ShellInput::unk_0x98,
+// default 5000) for DC3_CONTROLLER_MODE=faithful. Returns -1 when unset or not
+// a positive integer (the helpbar value stands). Read once.
+int Dc3ControllerModeTimeoutMs() {
+    static int sTimeoutMs = -2;
+    if (sTimeoutMs == -2) {
+        sTimeoutMs = -1;
+        const char *v = getenv("DC3_CONTROLLER_MODE_TIMEOUT_MS");
+        if (v && *v) {
+            char *end = nullptr;
+            long ms = strtol(v, &end, 10);
+            if (end && *end == '\0' && ms > 0 && ms < 0x7fffffff) {
+                sTimeoutMs = (int)ms;
+                fprintf(stderr, "DC3 Native: controller mode timeout override = %d ms\n",
+                        sTimeoutMs);
+            } else {
+                fprintf(stderr,
+                        "DC3 Native: DC3_CONTROLLER_MODE_TIMEOUT_MS='%s' is not a "
+                        "positive integer; ignored\n", v);
+            }
+        }
+    }
+    return sTimeoutMs;
+}
+
 namespace {
     DiscErrorCallbackFunc *gCallback;
 }

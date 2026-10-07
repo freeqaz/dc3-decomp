@@ -8,6 +8,15 @@
 //   can disable them (plain getenv() truthiness treats DC3_FOO=0 as "set" = on).
 bool Dc3EnvFlag(const char *name, bool defaultOn);
 
+// Dc3ControllerModeForced — DC3_CONTROLLER_MODE=forced (default) | faithful
+// (defined in System_Native.cpp; see docs/debugging/native.md "Controller mode
+// policy"). True: native stays in controller mode permanently. False: the
+// image's controller-mode enter/exit logic and idle timeout run as on the 360.
+bool Dc3ControllerModeForced();
+// DC3_CONTROLLER_MODE_TIMEOUT_MS: faithful-mode override of the helpbar's
+// controller_mode_timeout; -1 when unset.
+int Dc3ControllerModeTimeoutMs();
+
 // Native-only runtime settings. These are enhancements or toggles that don't
 // exist on Xbox 360 — the original build has no equivalent options.
 // On by default where they improve the experience; togglable for fidelity.

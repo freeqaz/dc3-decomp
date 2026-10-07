@@ -37,9 +37,13 @@ void HamScreen::Enter(UIScreen *screen) {
     //   - controller_mode_entered message → DTA hides gesture tutorial UI
     //   - in_controller_mode property → DTA reads this for flow decisions
     // Must happen after HelpBarPanel is up, before UIScreen::Enter DTA handlers.
+    // Controller mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
+    // `forced` (default) only; under `faithful` the first screen is entered out
+    // of controller mode, as on the 360, and a pad press enters it.
     {
+        extern bool Dc3ControllerModeForced();
         static bool sControllerModeForced = false;
-        if (!sControllerModeForced) {
+        if (!sControllerModeForced && Dc3ControllerModeForced()) {
             sControllerModeForced = true;
             ShellInput *si = TheHamUI.GetShellInput();
             if (si) {

@@ -277,6 +277,9 @@ The delete triggers a full destructor cascade. If the deleted ObjectDir has memb
 | `MILO_TRACE_DELETE_OBJECTS=1` | Log each object deletion in `DeleteObjects()` |
 | `MILO_DEBUG_MERGE=1` | Log merge operations (MergeObject source/target/action) |
 | `DC3_FAST_TIME=1` | Advance song time at frame rate instead of wall-clock (see below) |
+| `DC3_CONTROLLER_MODE=forced\|faithful` | Controller-mode policy, default `forced` (see [Controller Mode Policy](#controller-mode-policy)) |
+| `DC3_CONTROLLER_MODE_TIMEOUT_MS=N` | `faithful` only: override the helpbar's `controller_mode_timeout` (5000 ms) |
+| `MILO_INPUT_WAKE_BUTTON=name` | Button a script `wake` presses (default `l3`) |
 
 ## Fast Time Mode
 
@@ -337,11 +340,13 @@ wait_screen song_select_screen
 
 Note: Milo uses PlayStation-style internal names (`kPad_X` = confirm, `kPad_Circle` = cancel) but the Xbox 360 layout maps A to confirm and B to cancel. Buttons are pressed for exactly 1 frame (press on N, auto-release on N+1). Events don't need to be in order — the file is sorted by frame at load time.
 
+**Wake** (`N wake` / `+N wake`) means "the player presses the controller-mode wake button". If the game is already in controller mode it does nothing; otherwise it presses the wake button for one frame (`l3`, or `MILO_INPUT_WAKE_BUTTON`). It exists so one flow can drive both the original game under Xenia -- where a screen's first press must be preceded by a wake, see [Controller Mode Policy](#controller-mode-policy) -- and the native port, where under the default `forced` policy every wake is a no-op. Each one logs `DC3 Input: wake at frame N: pressed button B` or `... no-op (already awake)`.
+
 ### How It Works
 
 In headless mode (`gNativeWindow == NULL`), `JoypadPoll()` reads from the script instead of GLFW. On first poll, `LoadInputScript()` reads and parses the `MILO_INPUT_SCRIPT` file. Each frame, `GetScriptedButtons()` returns a bitmask of buttons active on that frame. The existing delta computation (`mNewPressed`, `mNewReleased`) handles press/release edges. Windowed mode is unaffected — GLFW gamepad + keyboard fallback works as before.
 
-Source: `native/src/platform/Joypad_Native.cpp`. Screenshot capture: `native/src/platform/Rnd_Wgpu.cpp`.
+Source: `Joypad_Native.cpp` in milo-native-engine (`src/platform/`), which is what `dc3-native` links; `native/src/platform/Joypad_Native.cpp` is a byte-identical copy that only `dc3-web` compiles -- edit both. Screenshot capture: `native/src/platform/Rnd_Wgpu.cpp`.
 
 **Troubleshooting**: Create `MILO_SCREENSHOT_DIR` before launch (capture fails silently if missing). If scripted input doesn't work, verify frame numbers align with where the game actually is — the attract screen runs for a while before accepting input. In windowed mode, scripted input is disabled; use keyboard instead: arrow keys, Enter (confirm), Escape (cancel), Space (start), Tab (back).
 
@@ -351,6 +356,59 @@ Source: `native/src/platform/Joypad_Native.cpp`. Screenshot capture: `native/src
 |--------|-------|---------|
 | `scripts/dc3-input-flows/song-scroll-test.txt` | boot -> main -> choose_mode -> song_select -> 8x down | Verify list scrolling |
 | `scripts/dc3-input-flows/ymca.txt` | boot -> gameplay | Full song load test |
+| `scripts/dc3-input-flows/controller-mode-wake.txt` | boot -> main (idle, a `wake` every 120 frames) -> choose_mode | `ControllerMode*` tests in `test_dta_flow.cpp` |
+
+## Controller Mode Policy
+
+On the 360 (and the original under Xenia) the UI has two input modes. Outside
+**controller mode** the Kinect hand cursor drives menus, and a pad press only
+*enters* controller mode -- `ShellInput::OnMsg(ButtonDownMsg)` swallows it
+(B excepted). In controller mode, `ShellInput::Poll` exits back to the cursor
+once `controller_mode_timeout` ms (helpbar property, default 5000) pass with no
+pad input (every `ButtonDownMsg` restarts the timer via
+`reset_controller_mode_timeout`), and entering gameplay or pressing Start exits
+it too. Without a Kinect, that leaves menus stranded behind a cursor nobody can
+move, so the native port stays in controller mode permanently by default.
+
+`DC3_CONTROLLER_MODE` (read once at startup by `Dc3ControllerModeForced()`,
+`native/src/platform/System_Native.cpp`; logged as
+`DC3 Native: controller mode policy = ...`):
+
+| Value | Behaviour |
+|-------|-----------|
+| `forced` (default; also unset/empty/unknown) | Today's native behaviour, unchanged: `GestureMgr` boots in controller mode and ignores `SetInControllerMode(false)`; `ShellInput::ExitControllerMode` returns at once; `EnterControllerMode` only re-asserts the mode and activates the helpbar's `controller_mode.flow` once (`NativeBootControllerModeOnce`); the first `HamScreen::Enter` forces it on. Controller mode never times out, so no pad press is swallowed to re-enter it. |
+| `faithful` | The image's logic: boot out of controller mode; `ShellInput::Enter/ExitControllerMode` run their image bodies (helpbar flows, `controller_mode_entered/exited`, `in_controller_mode`, RockCentral counters, active player); the idle timeout and the gameplay-panel exit in `ShellInput::Poll` fire. Each enter/exit logs `DC3 ControllerMode: enter/exit (...)` with the idle time and timeout. `DC3_CONTROLLER_MODE_TIMEOUT_MS` overrides the timeout (the tests use 750). |
+
+What `faithful` leaves out: the rest of the image's gameplay-panel arm of
+`ShellInput::Poll` (practice-options hand invoke, wrong-hand-position anim,
+`SetIdentificationEnabled`) needs the Kinect gesture filters and anim that
+native `ShellInput::Init` never creates. The Enter/Exit bodies themselves
+needed no new guards -- everything they touch exists natively (the helpbar is
+loaded by `UIManager::Init` before the first screen, and `TheRockCentral`,
+`TheProfileMgr`, `TheGameData` and the `SkeletonChooser` are all live).
+
+Sites that consult the policy, each with a pointer comment:
+`src/lazer/meta_ham/ShellInput.cpp` (Enter/ExitControllerMode, the native
+`Poll` arm, `SyncToCurrentScreen`'s timeout override),
+`src/system/gesture/GestureMgr.cpp` (constructor, `SetInControllerMode`),
+`src/lazer/meta_ham/HamScreen.cpp` (first-enter force),
+`src/lazer/meta_ham/HelpBarPanel.cpp` (`NativeBootControllerModeOnce`),
+`native/src/platform/GestureMgr_Native.cpp` (boot `SetInControllerMode(true)`).
+All of them are inside `#ifdef HX_NATIVE` or `native/`; the PPC build is untouched.
+
+The script **`wake`** directive is the input-side half: under `forced` it is
+always a no-op; under `faithful` (and on the original under Xenia, where the
+flow's author must place one before each screen's first press) it presses the
+wake button whenever controller mode has been left. A no-op wake presses
+nothing, so it does not restart the idle timer: keep the real press a frame or
+two behind its wake, or the timeout can fall between them and swallow it. The engine asks the game
+through `JoypadScriptSetWakeNeeded` (`platform/JoypadScriptHook.h` in
+milo-native-engine); DC3 registers `NativeWakeNeeded` (= not
+`TheGestureMgr->InControllerMode()`) in `GestureMgr_NativeInit`.
+
+Tests: `ControllerModeFaithfulTest.*` (timeout after the configured timeout;
+a wake re-enters) and `ControllerModeForcedTest.WakeIsANoOpUnderForcedDefault`
+in `native/tests/test_dta_flow.cpp`, gated by `DC3_DTA_FLOW_TESTS`.
 
 ## Unit Tests
 

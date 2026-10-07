@@ -143,7 +143,15 @@ void HelpBarPanel::FinishLoad() {
 }
 
 #ifdef HX_NATIVE
+extern bool Dc3ControllerModeForced();
+
 void NativeBootControllerModeOnce() {
+    // Controller mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
+    // only `forced` needs this boot activation; under `faithful` the image's
+    // ShellInput::EnterControllerMode activates controller_mode.flow itself,
+    // every time controller mode is entered.
+    if (!Dc3ControllerModeForced())
+        return;
     static bool sActivated = false;
     if (sActivated)
         return;
