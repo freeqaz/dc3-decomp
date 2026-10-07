@@ -62,9 +62,24 @@ inline T Min(T x, T y) {
 }
 
 // float specialization for the use of fsel instructions
+//
+// HX_NATIVE (ported from rb3-xenon e58933c62, W16-UJ): retail computes these
+// with `fsel fD,fA,fC,fB`, i.e. `fA >= 0 ? fC : fB`, and an unordered (NaN)
+// fA selects fB. Read in dc3's image, RndHiResScreen's Clamp(0.0f, 1.0f, x0)
+// at 0x826270A8..0x826270C8:
+//     Max(0, v): fneg f5,f12     ; fsel f12,f5,f13,f12  -> NaN gives v
+//     Min(v, 1): fsubs f8,f12,f0 ; fsel f12,f8,f0,f12   -> NaN gives v
+// The C++ `x - y < 0 ? ... : ...` is false for NaN and so returns the OTHER
+// operand, which made native Clamp map NaN to its lower bound. The native arms
+// spell the select the way fsel does; for every non-NaN input the two forms
+// are identical (x - y >= 0 is exactly !(x - y < 0)).
 template <>
 inline float Min(float x, float y) {
+#ifdef HX_NATIVE
+    return (x - y >= 0) ? y : x;
+#else
     return (x - y < 0) ? x : y;
+#endif
 }
 
 template <class T>
@@ -75,7 +90,11 @@ inline T Max(T x, T y) {
 // float specialization for the use of fsel instructions
 template <>
 inline float Max(float x, float y) {
+#ifdef HX_NATIVE
+    return (x - y >= 0) ? x : y; // fsel: NaN selects y (see Min above)
+#else
     return (x - y < 0) ? y : x;
+#endif
 }
 
 template <class T>

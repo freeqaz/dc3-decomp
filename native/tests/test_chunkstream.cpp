@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static const char *kTestDir = "/tmp/claude-1000/milo_tests";
 
@@ -411,4 +412,138 @@ TEST_F(ChunkStreamTest, MultiChunkStrings) {
     cs >> v2;
     EXPECT_STREQ(sym2.Str(), "RndMesh");
     EXPECT_EQ(v2, 99);
+}
+
+// ============================================================================
+// A read that crosses a WHOLE chunk while the next chunk is still in flight
+//
+// Port of rb3-xenon e58933c62 (W16-UJ). The native ReadImpl used to treat
+// TempEof at a chunk boundary as end of stream ("on native all I/O is
+// synchronous"). It is not: Eof() issues the next chunk's read-ahead only once
+// the old buffer is released, and the buffered AsyncFile completes a read
+// larger than its 0x20000-byte buffer over SEVERAL ReadDone() calls -- one per
+// Eof(). A reader that never polls Eof() inside a chunk (ReadDead's byte-by-
+// byte marker hunt over a skipped object, or one big Read) therefore reaches
+// the boundary with the next buffer still kReading. Retail polls
+// `while (Eof() == TempEof)` (ReadChunks); native must too.
+//
+// dc3 keeps THREE read-ahead buffers natively (rb3-xenon keeps two), so the
+// next chunk's read has been in flight since the previous boundary and gets one
+// ReadDone() inside ReadAsync plus one per Eof(). A chunk that crosses two
+// AsyncFile buffer refills (> 2 * 0x20000 bytes) is therefore still kReading
+// at the boundary. Shipped dc3 milos carry 5,257 such chunks (largest
+// 0x495971), e.g. char/crowd/gen/crowd_f_01.milo_xbox (358,720 B). Measured:
+// 0x20040-byte chunks (rb3-xenon's trigger size) do NOT reach TempEof in dc3.
+// ============================================================================
+
+namespace {
+    const int kBigChunkSize = 0x40100;
+    const int kBigChunkCount = 5;
+
+    uint8_t BigChunkByte(int chunk, int i) {
+        return (uint8_t)((i * 31 + chunk * 7 + (i >> 8)) & 0xFF);
+    }
+
+    std::string WriteBigChunkMilo(const std::string &path) {
+        std::vector<std::vector<uint8_t>> chunks(kBigChunkCount);
+        for (int c = 0; c < kBigChunkCount; c++) {
+            chunks[c].resize(kBigChunkSize);
+            for (int i = 0; i < kBigChunkSize; i++)
+                chunks[c][i] = BigChunkByte(c, i);
+        }
+        return WriteSyntheticMilo(path.c_str(), chunks) ? path : std::string();
+    }
+}
+
+TEST_F(ChunkStreamTest, ByteReadsAcrossWholeChunksWaitForPendingReadAhead) {
+    std::string path = WriteBigChunkMilo(TestPath("big_chunks_bytes.milo_xbox"));
+    ASSERT_FALSE(path.empty());
+
+    ChunkStream cs(path.c_str(), ChunkStream::kRead, 0x8000, false, kPlatformNone, false);
+    ASSERT_FALSE(cs.Fail());
+    // The first chunk itself needs several ReadDone() polls; wait for it the
+    // way DirLoader does, then read with no further polling.
+    ASSERT_TRUE(cs.WaitUntilReady());
+
+    // Read every byte one at a time with no Eof() poll in between, as
+    // ReadDead does when it skips an object native has no factory for.
+    int mismatches = 0;
+    int firstBad = -1;
+    for (int c = 0; c < kBigChunkCount; c++) {
+        for (int i = 0; i < kBigChunkSize; i++) {
+            unsigned char b;
+            cs >> b;
+            if (b != BigChunkByte(c, i)) {
+                if (firstBad < 0)
+                    firstBad = c * kBigChunkSize + i;
+                mismatches++;
+            }
+        }
+        ASSERT_FALSE(cs.Fail()) << "stream failed inside/at the end of chunk " << c
+                                << " (tell " << cs.Tell() << ")";
+    }
+    EXPECT_EQ(mismatches, 0) << "first bad byte at stream offset " << firstBad;
+    EXPECT_EQ(cs.Tell(), kBigChunkSize * kBigChunkCount);
+    EXPECT_EQ(cs.Eof(), RealEof);
+}
+
+TEST_F(ChunkStreamTest, SingleReadSpanningAllChunksWaitsForPendingReadAhead) {
+    std::string path = WriteBigChunkMilo(TestPath("big_chunks_one_read.milo_xbox"));
+    ASSERT_FALSE(path.empty());
+
+    ChunkStream cs(path.c_str(), ChunkStream::kRead, 0x8000, false, kPlatformNone, false);
+    ASSERT_FALSE(cs.Fail());
+    // The first chunk itself needs several ReadDone() polls; wait for it the
+    // way DirLoader does, then read with no further polling.
+    ASSERT_TRUE(cs.WaitUntilReady());
+
+    const int total = kBigChunkSize * kBigChunkCount;
+    std::vector<uint8_t> buf(total, 0xEE);
+    cs.Read(buf.data(), total);
+    ASSERT_FALSE(cs.Fail()) << "one Read() across " << kBigChunkCount
+                            << " chunks failed the stream";
+    int mismatches = 0;
+    for (int c = 0; c < kBigChunkCount; c++)
+        for (int i = 0; i < kBigChunkSize; i++)
+            if (buf[c * kBigChunkSize + i] != BigChunkByte(c, i))
+                mismatches++;
+    EXPECT_EQ(mismatches, 0);
+    EXPECT_EQ(cs.Tell(), total);
+}
+
+// ============================================================================
+// ReadDead stops on a failed stream instead of spinning
+//
+// Port of rb3-xenon e58933c62 (W16-UJ hardening). A failed BinStream reads
+// zeros forever, so ReadDead's 0xADDEADDE hunt never ends -- the "spin" that
+// rb3-xenon saw after a load's stream failed. Here the only chunk is garbage
+// with no marker, so the hunt runs off the end (RealEof -> mFail). The body
+// runs in a death-test child under alarm(), so the pre-fix spin fails this
+// test with SIGALRM instead of hanging the suite.
+// ============================================================================
+
+namespace {
+    void ReadDeadOffTheEndThenExit(const char *path) {
+        alarm(20);
+        ChunkStream cs(path, ChunkStream::kRead, 0x8000, false, kPlatformNone, false);
+        if (cs.Fail() || !cs.WaitUntilReady())
+            _exit(2);
+        ReadDead(cs);
+        _exit(cs.Fail() ? 0 : 3);
+    }
+}
+
+TEST_F(ChunkStreamTest, ReadDeadReturnsOnFailedStream) {
+    std::vector<uint8_t> chunkData;
+    PutGarbage(chunkData, 64);
+    for (auto &b : chunkData)
+        if (b == 0xAD)
+            b = 0x11; // no marker can start anywhere
+    std::string path = TestPath("dead_no_marker.milo_xbox");
+    ASSERT_TRUE(WriteSyntheticMilo(path.c_str(), {chunkData}));
+
+    GTEST_FLAG_SET(death_test_style, "threadsafe"); // see test_object_lifetime.cpp
+    ASSERT_EXIT(ReadDeadOffTheEndThenExit(path.c_str()), ::testing::ExitedWithCode(0), "")
+        << "exit 2 = stream did not open, 3 = ReadDead returned with the stream "
+           "still good; SIGALRM means ReadDead spun on the failed stream";
 }

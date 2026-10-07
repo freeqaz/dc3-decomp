@@ -363,6 +363,14 @@ void ReadDead(BinStream &bs) {
     unsigned char val;
     bs >> val;
     while (true) {
+#ifdef HX_NATIVE
+        // Ported from rb3-xenon e58933c62 (W16-UJ): a failed stream reads
+        // zeros forever, so the marker hunt below never ends. Retail never
+        // reaches it on shipped data; native stops and lets the load report
+        // the failure.
+        if (bs.Fail())
+            return;
+#endif
         if (val == 0xAD) {
             bs >> val;
             if (val == 0xDE) {
