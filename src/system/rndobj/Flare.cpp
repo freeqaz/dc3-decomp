@@ -208,11 +208,24 @@ void RndFlare::DrawShowing() {
             }
 
             if (mMat && mMat->GetTexGen() == kTexGenXfm) {
+#ifdef HX_NATIVE
+                // Retail copies a whole 0x40-byte Transform into a 0x30-byte
+                // Matrix3 local and back, overrunning the local by 16 bytes; the
+                // retail binary has this overrun too, so the X360 arm keeps it.
+                // Natively keep a Transform: the rotation is rebuilt and the
+                // translation is carried through unchanged (rb3-xenon W16-UB,
+                // 63407036c).
+                Transform texXfm = mMat->TexXfm();
+                MakeRotMatrixZ(screenPos.x - 0.5f, texXfm.m);
+                RndMat *mat = mMat;
+                mat->TexXfm() = texXfm;
+#else
                 Hmx::Matrix3 texMat;
                 memcpy(&texMat, &mMat->TexXfm(), 0x40);
                 MakeRotMatrixZ(screenPos.x - 0.5f, texMat);
                 RndMat *mat = mMat;
                 memcpy(&mat->TexXfm(), &texMat, 0x40);
+#endif
                 mat->MarkDirty(2);
             }
 
