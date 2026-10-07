@@ -8,11 +8,14 @@
 # press otherwise.  See docs/debugging/native.md "Controller mode policy".
 #
 # Run under DC3_CONTROLLER_MODE=faithful DC3_CONTROLLER_MODE_TIMEOUT_MS=750
-# (the test does), main_screen idles for ~1900 frames with a wake every 120:
-# each timeout exit must be followed by a wake that presses and re-enters,
-# and wakes inside controller mode must be no-ops.  The closing wake+confirm
-# pair must reach choose_mode_screen whatever state the cycle is in.  Under
-# the default DC3_CONTROLLER_MODE=forced every wake is a no-op.
+# (the test does), main_screen idles for ~1900 frames with a pair of wakes,
+# 10 frames apart, every 120 frames: each timeout exit must be followed by a
+# wake that presses and re-enters, and the second wake of a pair whose first
+# one pressed lands inside controller mode and must be a no-op (10 frames is
+# far below the 750 ms timeout at any frame rate the engine reaches, which
+# the 120-frame spacing is not).  The closing wake+confirm pairs must reach
+# choose_mode_screen whatever state the cycle is in.  Under the default
+# DC3_CONTROLLER_MODE=forced every wake is a no-op.
 
 # Boot is out of controller mode under faithful: wake, then confirm.
 wait_screen title_screen
@@ -21,23 +24,43 @@ wait_screen title_screen
 
 wait_screen main_screen
 +120 wake
++130 wake
 +240 wake
++250 wake
 +360 wake
++370 wake
 +480 wake
++490 wake
 +600 wake
++610 wake
 +720 wake
++730 wake
 +840 wake
++850 wake
 +960 wake
++970 wake
 +1080 wake
++1090 wake
 +1200 wake
++1210 wake
 +1320 wake
++1330 wake
 +1440 wake
++1450 wake
 +1560 wake
++1570 wake
 +1680 wake
++1690 wake
 +1800 wake
++1810 wake
 
 # Wake, then the real press: reaches choose_mode_screen in either policy.
+# A no-op wake does not restart the idle timer, so under faithful the timeout
+# can still fall between it and the press (the press is then swallowed and
+# only re-enters).  Keep the press 2 frames behind the wake, and try twice;
+# once main_screen has gone, the second pair lands on choose_mode_screen,
+# which the tests do not look at.
 +1900 wake
-+1915 confirm
-
-wait_screen choose_mode_screen
++1902 confirm
++1960 wake
++1962 confirm

@@ -421,8 +421,9 @@ TEST_F(DtaFlowSongSelectScrollTest, ScrollDownEdgeMatchesImage) {
 // and ShellInput::Poll exits it once unk_0x68.SplitMs() >= unk_0x98 (the
 // helpbar's controller_mode_timeout) with no pad input.  Native defaults to
 // `forced` (controller mode pinned on); `faithful` runs the image's bodies.
-// controller-mode-wake.txt idles on main_screen for ~1900 frames with a
-// `wake` every 120 frames, then wake + confirm to choose_mode_screen.  Both
+// controller-mode-wake.txt idles on main_screen for ~1900 frames with a pair
+// of `wake`s (10 frames apart) every 120 frames, then wake + confirm (twice)
+// to choose_mode_screen.  Both
 // runs set DC3_CONTROLLER_MODE_TIMEOUT_MS=750 so the idle window spans
 // several timeouts at any plausible headless frame rate; under `forced` the
 // override is not even read.
@@ -545,23 +546,38 @@ TEST_F(ControllerModeFaithfulTest, IdleTimeoutExitsAfterConfiguredTimeout) {
 }
 
 // After each timeout exit the next `wake` must press (L3) and the next
-// controller-mode event must be an enter; a wake inside controller mode is a
-// no-op; and the closing wake + confirm reaches choose_mode_screen.
+// controller-mode event must be an enter; the wake 10 frames after a press
+// lands inside controller mode and is a no-op (the 120-frame spacing between
+// pairs is NOT used for that: whether 120 frames outlast 750 ms depends on
+// the frame rate); and the closing wake + confirm reaches choose_mode_screen.
 TEST_F(ControllerModeFaithfulTest, WakeReentersControllerMode) {
     std::vector<std::string> lines = LinesFrom(sResult.output, kMainSatisfied);
     ASSERT_FALSE(lines.empty()) << "precondition: the route never reached main_screen";
 
     int reentries = 0, noOps = 0;
+    const std::string *prevWake = nullptr;
+    int prevWakeFrame = -1000;
     for (size_t i = 0; i < lines.size(); i++) {
         if (StartsWith(lines[i], "DC3 UI: Screen 'main_screen' Exit")) break;
-        if (StartsWith(lines[i], kWakeLine)
-            && lines[i].find("no-op (already awake)") != std::string::npos)
-            noOps++;
+        int wakeFrame = -1;
+        if (sscanf(lines[i].c_str(), "DC3 Input: wake at frame %d", &wakeFrame) == 1) {
+            if (prevWake && wakeFrame - prevWakeFrame <= 10
+                && prevWake->find("pressed button") != std::string::npos) {
+                EXPECT_NE(lines[i].find("no-op (already awake)"), std::string::npos)
+                    << "a wake right after a wake press was not a no-op:\n  "
+                    << *prevWake << "\n  " << lines[i];
+                noOps++;
+            }
+            prevWake = &lines[i];
+            prevWakeFrame = wakeFrame;
+        }
         if (!StartsWith(lines[i], "DC3 ControllerMode: exit (immediate=1, was_in=1"))
             continue;
-        // the first wake after this exit
+        // the first wake after this exit, unless something else (a real press
+        // swallowed into an enter) re-entered controller mode first
         size_t w = i + 1;
         while (w < lines.size() && !StartsWith(lines[w], kWakeLine)
+               && !StartsWith(lines[w], kModeLine)
                && !StartsWith(lines[w], "DC3 UI: Screen 'main_screen' Exit"))
             w++;
         if (w >= lines.size() || !StartsWith(lines[w], kWakeLine)) continue;
@@ -578,7 +594,7 @@ TEST_F(ControllerModeFaithfulTest, WakeReentersControllerMode) {
         reentries++;
     }
     EXPECT_GE(reentries, 1) << "no timeout exit was followed by a wake";
-    EXPECT_GE(noOps, 1) << "no wake landed inside controller mode as a no-op";
+    EXPECT_GE(noOps, 1) << "no wake followed a wake press";
     EXPECT_NE(sResult.output.find("Screen 'main_screen' Exit (to 'choose_mode_screen')"),
               std::string::npos)
         << "wake + confirm did not leave main_screen for choose_mode_screen";
@@ -599,7 +615,8 @@ TEST_F(ControllerModeForcedTest, WakeIsANoOpUnderForcedDefault) {
         if (line.find("no-op (already awake)") != std::string::npos) noOps++;
         else ADD_FAILURE() << "wake pressed under forced: " << line;
     }
-    EXPECT_EQ(wakes, 17) << "controller-mode-wake.txt has 17 wake directives";
+    EXPECT_EQ(wakes, 33) << "controller-mode-wake.txt has 33 wake directives "
+                            "(1 on title, 15 pairs on main, 2 closing)";
     EXPECT_EQ(noOps, wakes);
     EXPECT_EQ(out.find(kModeLine), std::string::npos)
         << "the faithful Enter/ExitControllerMode body ran under forced";

@@ -399,7 +399,9 @@ All of them are inside `#ifdef HX_NATIVE` or `native/`; the PPC build is untouch
 The script **`wake`** directive is the input-side half: under `forced` it is
 always a no-op; under `faithful` (and on the original under Xenia, where the
 flow's author must place one before each screen's first press) it presses the
-wake button whenever controller mode has been left. The engine asks the game
+wake button whenever controller mode has been left. A no-op wake presses
+nothing, so it does not restart the idle timer: keep the real press a frame or
+two behind its wake, or the timeout can fall between them and swallow it. The engine asks the game
 through `JoypadScriptSetWakeNeeded` (`platform/JoypadScriptHook.h` in
 milo-native-engine); DC3 registers `NativeWakeNeeded` (= not
 `TheGestureMgr->InControllerMode()`) in `GestureMgr_NativeInit`.
