@@ -376,7 +376,15 @@ void GlitchFinder::CheckDump() {
 
         int strLen = strlen(str.c_str());
         if (strLen > 0x400) {
+#ifdef HX_NATIVE
+            // buf[0x400] = '\0' (and buf[strLen - i] when the tail is exactly
+            // 0x400) writes one past a 1024-byte buffer. The retail binary has
+            // this overrun too, so the X360 arm keeps it (rb3-xenon W16-UB,
+            // 63407036c).
+            char buf[0x401];
+#else
             char buf[1024];
+#endif
             int i = 0;
             for (; i + 0x400 < strLen; i += 0x400) {
                 strncpy(buf, str.c_str() + i, 0x400);
