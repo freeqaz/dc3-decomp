@@ -268,10 +268,16 @@ TEST_F(NativeSuspectsTest, MeshDrawShowingDrawsAHiddenNamedMesh) {
     EXPECT_EQ(nullptr, skip) << "refused a hidden named mesh: " << (skip ? skip : "");
     EXPECT_EQ(nullptr, RndMeshDrawShowingSkip(f.Mesh("suspects_shown.mesh", true)))
         << "control: a showing mesh with a material is drawn";
+    // DxMesh::DrawShowing (rnddx9/Mesh.cpp) hands a null material straight to
+    // RndShader::SelectConfig, whose Select swaps in TheRnd.DefaultMat(), so a
+    // material-less mesh is drawn too. (This used to be the "can refuse"
+    // control, which only held while native skipped such meshes.)
     RndMesh *noMat = f.Mesh("suspects_no_mat.mesh", true);
     noMat->SetMat(nullptr);
-    EXPECT_NE(nullptr, RndMeshDrawShowingSkip(noMat))
-        << "control: the predicate can refuse (a mesh with no material)";
+    skip = RndMeshDrawShowingSkip(noMat);
+    EXPECT_EQ(nullptr, skip) << "refused a mesh with no material: " << (skip ? skip : "");
+    EXPECT_NE(nullptr, RndMeshDrawShowingSkip(f.Mesh("grid_80by60_cube.mesh", true)))
+        << "control: the predicate can refuse (consumer content filter, Kinect depth grid)";
 }
 
 TEST_F(NativeSuspectsTest, MeshDrawShowingDrawsLodNamedMeshes) {
