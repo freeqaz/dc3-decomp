@@ -2551,11 +2551,21 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         partsys->SetBubblePeriod(
             partsys->BubblePeriod().x * fovScale, partsys->BubblePeriod().y * fovScale
         );
+        // w22-a16: the image computes ONE reciprocal (`fdivs f0, f0, f30` at
+        // 0x82630018) and multiplies by it everywhere -- EmitRate
+        // (`fmuls f13, f6, f0` / `fmuls f7, f7, f0`), the force-dir factor
+        // (`fmuls f12, f0, f0` then `fmuls f13, f12, f31`) and Speed
+        // (`fmuls f13, f13, f0` then `fmuls f13, f13, f31`).  `/ fovScale`
+        // compiled the same on Xbox only because /fp:fast rewrites it; the
+        // native build has no /fp:fast and divided for real, rounding
+        // differently.  Naming the reciprocal is byte-identical here and gives
+        // native the image's arithmetic.
+        float invFov = 1.0f / fovScale;
         partsys->SetEmitRate(
-            partsys->EmitRate().x / fovScale, partsys->EmitRate().y / fovScale
+            partsys->EmitRate().x * invFov, partsys->EmitRate().y * invFov
         );
         partsys->SetLife(partsys->Life().x * fovScale, partsys->Life().y * fovScale);
-        vb *= (1.0f / fovScale / fovScale) * scale;
+        vb *= (invFov * invFov) * scale;
         partsys->SetForceDir(vb);
         // Retail coalesces box2 into vb's dead stack slot (0x50) and gives box1
         // its own (0x70); declaring box2 first does NOT reproduce that (measured
@@ -2589,8 +2599,8 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         Scale(partsys->BoxExtent1(), scale, box1);
         Scale(partsys->BoxExtent2(), scale, box2);
         partsys->SetBoxExtent(box1, box2);
-        float speedX = partsys->Speed().x / fovScale;
-        float speedY = partsys->Speed().y / fovScale;
+        float speedX = partsys->Speed().x * invFov;
+        float speedY = partsys->Speed().y * invFov;
         float startX = partsys->StartSize().x * scale;
         float startY = partsys->StartSize().y * scale;
         float deltaX = partsys->DeltaSize().x * scale;
