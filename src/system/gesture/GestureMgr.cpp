@@ -97,7 +97,7 @@ BEGIN_HANDLERS(GestureMgr)
         if (sym == "init_snapshots" || sym == "clear_snapshots"
             || sym == "start_snapshot_batch" || sym == "set_autoexposure_region"
             || sym == "set_autoexposure" || sym == "dump_camera_properties"
-            || sym == "draw_skeletons" || sym == "set_tracked_skeletons") {
+            || sym == "draw_skeletons") {
             return 0;
         }
         if (sym == "toggle_autoexposure_tweak" || sym == "using_autoexposure_tweak"
@@ -204,13 +204,21 @@ void GestureMgr::Terminate() {
 
 void GestureMgr::Poll() {
 #ifdef HX_NATIVE
+    // Native skeleton source (pose provider / dummy) and the SkeletonUpdate
+    // callback fan-out -- PLATFORM: there is no NUI skeleton stream.  It used
+    // to REPLACE the body below (eeb43f6a8, no reason recorded), so natively
+    // WaveToTurnOnLight::Poll never ran: its no-world and 40 s timeout arms,
+    // which send wave_gesture_complete to TheHamProvider, are game logic that
+    // runs on the image with or without a Kinect (mWaveStateEnabled stays false
+    // natively because NuiWaveSetEnabled fails, exactly as on a 360 with no
+    // sensor).  TheSpeechMgr is null natively (no LiveCameraInput), guarded by
+    // the image; TheCameraTilt only acts once a camera_scan has been started.
     GestureMgr_NativePoll(this);
-#else
+#endif
     if (TheSpeechMgr)
         TheSpeechMgr->Poll();
     TheCameraTilt->Poll();
     TheWaveToTurnOnLight->Poll();
-#endif
 }
 
 LiveCameraInput *GestureMgr::GetLiveCameraInput() const { return mLiveCamInput; }

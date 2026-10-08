@@ -183,13 +183,12 @@ void SkeletonViz::LoadResource(bool postload) {
 void SkeletonViz::UpdateResource() {
     Transform xfm;
     xfm.Reset();
-#ifdef HX_NATIVE
-    if (!mResource.IsLoaded()) {
-        MILO_LOG("SkeletonViz::UpdateResource - skeleton resource not loaded, skipping\n");
-        return;
-    }
-#else
     MILO_ASSERT(mResource.IsLoaded(), 0x1E8);
+#ifdef HX_NATIVE
+    // MILO_ASSERT is print-and-continue natively (MILO_FATAL_FAILS=1 aborts);
+    // the image stops at the assert, so do not run on into a null resource.
+    if (!mResource.IsLoaded())
+        return;
 #endif
     mSkeletonEnv = mResource->Find<RndEnviron>("skeleton.env", true);
     mCamMesh = mResource->Find<RndMesh>("camera.mesh", true);
@@ -544,18 +543,14 @@ void SkeletonViz::Visualize(
     bool faded
 ) {
     if (!mResource) {
-#ifdef HX_NATIVE
-        Init();
-        if (!mResource.IsLoaded()) return;
-#else
         MILO_ASSERT(TheLoadMgr.EditMode(), 0x72);
         Init();
-#endif
     }
-#ifdef HX_NATIVE
-    if (!mResource.IsLoaded()) return;
-#else
     MILO_ASSERT(mResource.IsLoaded(), 0x76);
+#ifdef HX_NATIVE
+    // Assert first (the image stops there); MILO_ASSERT is non-fatal natively.
+    if (!mResource.IsLoaded())
+        return;
 #endif
 
     RndEnvironTracker environTracker(mSkeletonEnv, nullptr);
