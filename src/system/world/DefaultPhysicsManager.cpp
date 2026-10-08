@@ -124,9 +124,7 @@ DetectionVolume *DefaultPhysicsManager::MakeDetectionVolume(
 }
 
 void DefaultPhysicsManager::CastRays(RayCast *, int) {
-#ifndef HX_NATIVE
     MILO_FAIL("not implemented");
-#endif
 }
 
 void DefaultPhysicsManager::CastRays(
