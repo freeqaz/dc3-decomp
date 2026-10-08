@@ -139,11 +139,7 @@ Symbol GetOutfitRemap(Symbol outfit, bool fail) {
     if (outfitArr) {
         return outfitArr->Sym(1);
     } else if (fail) {
-#ifdef HX_NATIVE
-        MILO_WARN("No remap entry for outfit: %s\n", outfit.Str());
-#else
         MILO_FAIL("No remap entry for outfit: %s\n", outfit.Str());
-#endif
     }
     return "";
 }
@@ -456,12 +452,12 @@ bool HamGameData::SidesSwapped() {
 }
 
 bool HamGameData::IsSkeletonPresent(int index) const {
-#ifdef HX_NATIVE
-    return true; // No Kinect on native — always report skeleton present
-#else
+    // Native too: under the default DC3_CONTROLLER_MODE=forced policy
+    // GestureMgr::SetInControllerMode pins InControllerMode() true, so this is
+    // true exactly as the old native `return true` was; under =faithful it
+    // follows the tracked skeleton like the image.
     return TheGestureMgr->InControllerMode()
         || Player(index)->GetSkeletonTrackingID() > 0;
-#endif
 }
 
 int HamGameData::GetPlayerFromSkeleton(const Skeleton &skeleton) const {
