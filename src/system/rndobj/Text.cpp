@@ -1853,12 +1853,16 @@ static const unsigned short kTag_nobreak[] = {'n', 'o', 'b', 'r', 'e', 'a', 'k',
 static const unsigned short kTag_alt[] = {'a', 'l', 't', 0};
 
 // Parse up to 'max_vals' space-separated decimal integers from a u16 string buffer.
-// Returns the number of values successfully parsed.
+// Returns the number of values successfully parsed.  Stand-in for the image's
+// swscanf(L"%d ...") on a 2-byte buffer: %d skips all leading white space
+// (\t \n \v \f \r and ' ') and takes an optional '+' or '-'.  This used to
+// skip only ' '/'\t' and reject '+', so "<color 255\n0 0>" or "<&#+65>" parsed
+// differently from the image.
 static int u16_scan_ints(const unsigned short *s, int *vals, int max_vals) {
     int count = 0;
     while (count < max_vals) {
-        // skip spaces
-        while (*s == ' ' || *s == '\t')
+        // skip white space
+        while (*s == ' ' || (*s >= '\t' && *s <= '\r'))
             s++;
         if (*s == 0 || *s == '>')
             break;
@@ -1866,6 +1870,8 @@ static int u16_scan_ints(const unsigned short *s, int *vals, int max_vals) {
         bool neg = false;
         if (*s == '-') {
             neg = true;
+            s++;
+        } else if (*s == '+') {
             s++;
         }
         if (*s < '0' || *s > '9')
