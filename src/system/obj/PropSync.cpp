@@ -136,7 +136,13 @@ bool PropSync(Hmx::Matrix3 &_m, DataNode &_val, DataArray *_prop, int _i, PropOp
                 // y.y/z.y products of Scale() and of `_m.y *= ratio` keep the
                 // other operand order (4 commutative rows); per-component
                 // `_m.y.x *= ratio` loses the r29 = &_m.y binding (97.8).
-                float len = std::sqrt(_m.x.x * _m.x.x + _m.x.y * _m.x.y + _m.x.z * _m.x.z);
+                // w22-a25: the image sums (y*y + x*x) + z*z (0x825BDD74..
+                // 0x825BDD9C: fmuls y*y, fmadds x, fmadds z); the flat spelling
+                // let /fp:fast build (y*y + z*z) + x*x instead. The parens keep
+                // the image's association (normalized 99.890 -> 99.995); only
+                // which of x*x / y*y is fused remains. Native (no fast-math,
+                // no FMA) computes (x*x + y*y) + z*z either way.
+                float len = std::sqrt((_m.x.x * _m.x.x + _m.x.y * _m.x.y) + _m.x.z * _m.x.z);
                 float oldLen = len;
                 ret = PropSync(len, _val, _prop, _i + 1, _op);
                 if (_op != kPropGet) {
