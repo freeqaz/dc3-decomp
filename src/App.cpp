@@ -171,7 +171,14 @@ public:
 };
 
 // PlatformMgr stub — DTA calls add_sink/remove_sink for Xbox Live events
-// and queries guide/signin state. Base Hmx::Object handles add_sink/remove_sink.
+// and queries guide/signin state.  Only registered while ThePlatformMgr is
+// unnamed: the image names it "platform_mgr" in PlatformMgr::Init, which native
+// SystemInit does not call on main yet (lane w23-g14 restores that; then
+// registerStub finds the real object and this class is dead).  Everything it
+// does not override is answered by ThePlatformMgr's own (image) handlers, so
+// sign-in queries -- {platform_mgr is_pad_signed_in}, get_signin_mask,
+// is_pad_a_guest, ... -- agree with the C++ side (one sign-in stand-in:
+// XUserGetSigninState in native/src/xdk_shims.cpp).
 class NativePlatformMgrStub : public Hmx::Object {
 public:
     NativePlatformMgrStub() {}
@@ -192,7 +199,7 @@ public:
         // results screen in the 2026-09-30 native harvest.
         if (sym == "query_xsocial_capabilities") return DataNode(0);
         if (sym == "poll_xsocial_capabilities") return DataNode(0);
-        return Hmx::Object::Handle(msg, rev);
+        return ThePlatformMgr.Handle(msg, rev);
     }
 };
 

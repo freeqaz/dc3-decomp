@@ -716,8 +716,19 @@ DWORD XUserCheckPrivilege(DWORD, unsigned int, BOOL *pfResult) {
     return 0;
 }
 
-XUSER_SIGNIN_STATE XUserGetSigninState(DWORD) {
-    return eXUserSigninState_NotSignedIn;
+// THE native sign-in stand-in -- the one place native decides who is signed in.
+// Native has one local player and no Xbox user service, so it reports what an
+// Xbox with one offline gamer profile on controller 1 reports: user index 0 is
+// signed in LOCALLY (never to LIVE), every other index is not signed in.
+// PlatformMgr::UpdateSigninState (native/src/platform/PlatformMgr_Native.cpp)
+// derives mSigninMask from this exactly as the image's
+// PlatformMgr_Xbox.cpp:UpdateSigninState does, so IsSignedIn(0), SignInMask(),
+// {platform_mgr is_pad_signed_in 0} and GetSignedIn[Profiles]() all agree, and
+// IsSignedIntoLive(0) stays false (SignedInLocally != SignedInToLive), which
+// keeps every LIVE path (leaderboards, Rock Central, challenges, party,
+// friends, XSocial) on its image offline branch.
+XUSER_SIGNIN_STATE XUserGetSigninState(DWORD dwUserIndex) {
+    return dwUserIndex == 0 ? eXUserSigninState_SignedInLocally : eXUserSigninState_NotSignedIn;
 }
 
 DWORD XUserGetXUID(DWORD, XUID *pxuid) {
