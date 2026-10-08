@@ -28,15 +28,25 @@ Sequence::Sequence()
       mCanStop(true) {}
 
 Sequence::~Sequence() {
-    while (!mInsts.empty()) {
 #ifdef HX_NATIVE
-        if (!mInsts.front() || ObjectDir::InDeleteObjects()) {
-            mInsts.erase(mInsts.begin());
-            continue;
-        }
-#endif
+    // The image deletes every instance and lets the delete unlink it from
+    // mInsts. Native deletes every instance too -- this used to skip them
+    // during an ObjectDir cascade, leaking each SeqInst (and whatever sample
+    // or child instances it owns) on every dir unload. SeqInsts are made by
+    // MakeInst with no dir, so no cascade destroys them for us. Pop the node
+    // BEFORE the delete: on native a delete inside a ReplaceList walk nulls
+    // the node instead of erasing it, and `delete front()` would never
+    // advance (pattern_native_objptrlist_drain). delete of a NULL is a no-op.
+    while (!mInsts.empty()) {
+        SeqInst *inst = mInsts.front();
+        mInsts.pop_front();
+        delete inst;
+    }
+#else
+    while (!mInsts.empty()) {
         delete mInsts.front();
     }
+#endif
 }
 
 BEGIN_HANDLERS(Sequence)
