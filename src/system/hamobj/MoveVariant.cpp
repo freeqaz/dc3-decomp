@@ -41,12 +41,6 @@ void MoveCandidate::Load(BinStream &bs) {
     int rev;
     bs >> rev;
     bs >> mAdjacencyFlag;
-#ifdef HX_NATIVE
-    // Binary data may have bit 0 set (cached/linked state from Xbox save).
-    // After Load, the union is always in name mode — clear the "pointer" flag
-    // so CacheLinks takes the correct branch.
-    mAdjacencyFlag &= ~1;
-#endif
     Symbol s1, s2, s3;
     bs >> s1;
     bs >> s2;
