@@ -1554,7 +1554,7 @@ float CamShot::GetDurationSeconds() const {
         return 0.0f;
     } else {
         MILO_ASSERT(Units() == kTaskSeconds, 0x5cc);
-        return mDuration / 30.0f;
+        return mDuration * (1.0f / 30.0f);
     }
 }
 

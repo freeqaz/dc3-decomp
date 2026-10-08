@@ -92,7 +92,7 @@ void UITrigger::Trigger() {
             } else {
                 f4 = fabsf(it->mAnim->StartFrame() - it->mAnim->EndFrame());
             }
-            MaxEq(mEndTime, (it->mDelay * 30.0f + f4) / 30.0f);
+            MaxEq(mEndTime, (it->mDelay * 30.0f + f4) * (1.0f / 30.0f));
         }
     }
     if (mBlockTransition && mEndTime > 5.0f) {

@@ -16,7 +16,7 @@ void RndColorXfm::AdjustHue() {
     tf68.Reset();
     float hue = mHue;
     if (hue >= 120.0f) {
-        hue = ((hue - 120.0f) / 120.0f) * 1.5707964f;
+        hue = ((hue - 120.0f) * (1.0f / 120.0f)) * 1.5707964f;
         float cosHue = std::cos(hue);
         float sinHue = std::sin(hue);
         for (int i = 0; i < 3; i++) {
@@ -25,7 +25,7 @@ void RndColorXfm::AdjustHue() {
             tf68.m[ModChan(i + 2)][i] = sinHue;
         }
     } else if (hue > 0) {
-        hue = (hue / 120.0f) * 1.5707964f;
+        hue = (hue * (1.0f / 120.0f)) * 1.5707964f;
         float cosHue = std::cos(hue);
         float sinHue = std::sin(hue);
         for (int i = 0; i < 3; i++) {
@@ -34,7 +34,7 @@ void RndColorXfm::AdjustHue() {
             tf68.m[ModChan(i + 2)][i] = 0;
         }
     } else if (hue <= -120.0f) {
-        hue = ((-hue - 120.0f) / 120.0f) * 1.5707964f;
+        hue = ((-hue - 120.0f) * (1.0f / 120.0f)) * 1.5707964f;
         float cosHue = std::cos(hue);
         float sinHue = std::sin(hue);
         for (int i = 0; i < 3; i++) {
@@ -43,7 +43,7 @@ void RndColorXfm::AdjustHue() {
             tf68.m[ModChan(i + 2)][i] = cosHue;
         }
     } else if (hue < 0) {
-        hue = (-hue / 120.0f) * 1.5707964f;
+        hue = (-hue * (1.0f / 120.0f)) * 1.5707964f;
         float cosHue = std::cos(hue);
         float sinHue = std::sin(hue);
         for (int i = 0; i < 3; i++) {
@@ -86,7 +86,7 @@ void RndColorXfm::AdjustLevels() {
 void RndColorXfm::AdjustBrightness() {
     Transform tf;
     tf.Reset();
-    float set = (mBrightness + 100.0f) / 200.0f + -0.5f;
+    float set = (mBrightness + 100.0f) * (1.0f / 200.0f) + -0.5f;
     tf.v.Set(set, set, set);
     Multiply(mColorXfm, tf, mColorXfm);
 }
@@ -124,7 +124,7 @@ RndColorXfm::RndColorXfm()
 void RndColorXfm::AdjustLightness() {
     Transform tf58;
     tf58.Reset();
-    float lit = mLightness / 100.0f;
+    float lit = mLightness * (1.0f / 100.0f);
     float f1 = 0;
     float f3;
     if (lit >= 0) {
@@ -143,7 +143,7 @@ void RndColorXfm::AdjustLightness() {
 void RndColorXfm::AdjustContrast() {
     Transform tf58;
     tf58.Reset();
-    float contrast = mContrast / 100.0f;
+    float contrast = mContrast * (1.0f / 100.0f);
     if (contrast > 0) {
         contrast = 1.0f / (contrast * -0.9921875f + 1.0f);
     } else {
@@ -160,7 +160,7 @@ void RndColorXfm::AdjustContrast() {
 void RndColorXfm::AdjustSaturation() {
     Transform tf68;
     tf68.Reset();
-    float sat = mSaturation / 100.0f;
+    float sat = mSaturation * (1.0f / 100.0f);
     if (sat > 0) {
         sat += 1.0f;
     } else {

@@ -1043,7 +1043,7 @@ void LightPreset::SetFrameEx(float frame, float blend, bool b) {
             sManualEvents.pop_front();
         }
         if (!sManualEvents.empty()) {
-            float fadeTime = kfCur->mFadeOutTime / 480.0f;
+            float fadeTime = kfCur->mFadeOutTime * (1.0f / 480.0f);
             float eventBeat = sManualEvents.front().second;
             float beat = TheTaskMgr.Beat();
             if (eventBeat - fadeTime <= beat) {
@@ -1260,7 +1260,7 @@ static float ComputeSpotBlend(int i, float f) {
         // sign-extends and converts r11 (the clamped Min<int>((int)(f*5),4)),
         // not r30 (the loop counter): `extsw r11,r11 / fcfid / fnmsubs f0,f0,
         // 0.2f,f`.
-        return Min(Max((f - min / 5.0f) * 5.0f, 0.0f), 1.0f);
+        return Min(Max((f - min * (1.0f / 5.0f)) * 5.0f, 0.0f), 1.0f);
 }
 
 // w20-h: 100 normalized, fuzzy 99.796. The 6 remaining rows are commutative
