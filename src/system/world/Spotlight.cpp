@@ -1189,10 +1189,16 @@ void Spotlight::BuildBeam(BeamDef &def) {
     std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
     float bottomSideBorderVal = def.mBottomSideBorder * def.mBottomRadius;
 
-    int numSectionsTop = (int)((def.mLength - bottomBorderLen) / 15.0f);
+    // w22-a03: `* (1.0f / 15.0f)`, not `/ 15.0f`.  The image multiplies by the
+    // reciprocal (0x8282D774 `lis r11, __real@3d888889` / 0x8282D7AC `fmuls
+    // f13, f13, f0` and 0x8282D7CC `fmuls f0, f31, f0`, before each fctiwz):
+    // /fp:fast folds the constant division.  Same Xbox bytes either way; the
+    // native build (no fast-math) otherwise truly divides, and a quotient just
+    // under an integer can truncate to a different section count.
+    int numSectionsTop = (int)((def.mLength - bottomBorderLen) * (1.0f / 15.0f));
     if (numSectionsTop <= 4) numSectionsTop = 4;
 
-    int numSectionsBottom = (int)(bottomBorderLen / 15.0f);
+    int numSectionsBottom = (int)(bottomBorderLen * (1.0f / 15.0f));
     if (numSectionsBottom <= 1) numSectionsBottom = 1;
 
     int totalSections = numSectionsBottom + numSectionsTop;
