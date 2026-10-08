@@ -2469,7 +2469,13 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
         // Latency offset text
         const char *offsetStr = mDebugLatencyOffset ? "ON" : "OFF";
-        TheRnd.DrawStringScreen(
+        // BEHAVIOUR FIX (w22-a00): the rotation line goes at the y the latency
+        // line's DrawStringScreen RETURNS, not at debugRect.y + 0.02f.  Image:
+        // `bl DrawStringScreen` / `mr r30, r3` (0x82502308/0x8250230C), then
+        // `lfs f0, 0x4(r30)` (0x82502318) stored as the new Vector2's y
+        // (`stfs f0, 0x194(r31)`, 0x82502334); x is debugRect.x (0x110(r31)).
+        // There is no 0.02f constant in the image's body.
+        const Vector2 &nextLine = TheRnd.DrawStringScreen(
             MakeString("latency offset: %s", offsetStr),
             Vector2(debugRect.x, debugRect.y),
             sLightGray,
@@ -2478,7 +2484,7 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
         float rotation = mDancerViz->PhysicalCamRotation();
         TheRnd.DrawStringScreen(
             MakeString("rotation: %.2f", rotation),
-            Vector2(debugRect.x, debugRect.y + 0.02f),
+            Vector2(debugRect.x, nextLine.y),
             sLightGray,
             true
         );
