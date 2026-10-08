@@ -535,15 +535,16 @@ StoreError StorePanel::UpdateOffers(std::list<EnumProduct> const &enumList, bool
 
         if (enumIt != enumList.end()) {
             result = kStoreErrorSuccess;
-            // Virtual call through vtable slot 0x70 (ILP32), passing the
-            // matched EnumProduct.
-#ifdef HX_NATIVE
-            // On LP64, vtable offsets shift — skip this call, offer handling is stubbed
-#else
-            typedef void (*UpdateFn)(void *, void *, const void *);
-            UpdateFn func = (UpdateFn)(*(void ***)this)[0x70 / 4];
-            func(this, offer, &*enumIt);
-#endif
+            // w22-ng: the image's call at 82E141FC..82E14218 is `lwz r11,
+            // 0x70(vptr)` / bctrl with r4 = offer, r5 = &node->_M_data -- slot
+            // 0x70 of ??_7StorePanel@@6BUIPanel@@@ is UpdateFromEnumProduct
+            // (the slot after UpdateOffers, before the 0x74 _purecall).  Named
+            // so native makes the same call: it used to be a raw (*vptr)[0x70/4]
+            // that native skipped outright because LP64 shifts the offsets,
+            // which left every enumerated offer's price/purchased/available
+            // unset.  StoreOffer derives singly from StorePurchaseable, so the
+            // upcast is a no-op (`mr r4, r31`, no null test).
+            UpdateFromEnumProduct(offer, &*enumIt);
         } else if (offer->IsTest()) {
             offer->isAvailable = false;
             offer->isPurchased = false;
