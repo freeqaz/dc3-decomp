@@ -2077,8 +2077,14 @@ void ResetNormals(RndMesh *m) {
                 Normalize(crossProd, crossProd);
                 Normalize(d1, d1);
                 Normalize(d2, d2);
+                // w22-a31: the image sums the angle dot as (z + x) + y --
+                // `fmuls z*z'; fmadds x*x' + that; fmadds y*y' + that` -- so the
+                // explicit parens give native (no FMA, no reassociation) the
+                // image's association; the old flat x+y+z summed in another
+                // order.  Xbox: 99.032326 -> 99.03636 (MSVC still fuses the
+                // inner pair the other way round, see w21-bf above).
                 float angle = (float)acos(
-                    (double)(d2.x * d1.x + d2.y * d1.y + d2.z * d1.z)
+                    (double)((d2.z * d1.z + d2.x * d1.x) + d2.y * d1.y)
                 );
 
                 Vector3 weighted;
