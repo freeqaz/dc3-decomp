@@ -2,7 +2,6 @@
 
 #ifdef HX_NATIVE
 inline double __fsel(double a, double b, double c) { return a >= 0.0 ? b : c; }
-#include "obj\Dir.h"
 #endif
 #include "math/Easing.h"
 #include "obj/Object.h"
@@ -238,27 +237,24 @@ void Fader::AddDuckedVolume(float vol) {
 FaderGroup::FaderGroup(Hmx::Object *owner) : mFaders(owner), mDirty(true) {}
 
 FaderGroup::~FaderGroup() {
-#ifdef HX_NATIVE
-    if (ObjectDir::InDeleteObjects()) {
-        // During cascade, local Faders (owned by this group) may already be
-        // destroyed — skip delete. But non-local Faders (e.g. TheSynth's
-        // master fader) survive the cascade and still hold this FaderGroup
-        // in their mClients set. We MUST call RemoveClient on surviving
-        // faders, otherwise Fader::UpdateValue() iterates mClients and
-        // calls SetDirty() on freed memory (heap-use-after-free).
-        while (!mFaders.empty()) {
-            Fader *f = mFaders.front();
-            mFaders.pop_front();
-            if (f && f->IsRefAlive()) {
-                f->RemoveClient(this);
-            }
-        }
-        return;
-    }
-#endif
     while (!mFaders.empty()) {
         Fader *frontObj = mFaders.front();
         mFaders.pop_front();
+#ifdef HX_NATIVE
+        // A kObjListNoNull list can still hand back a NULL on native: a Fader
+        // destroyed while a ReplaceList walk is in progress has its node
+        // nulled but not erased (ObjPtrList::Node::NullifyObj / ReplaceNode,
+        // ObjPtr_p.h). The image erases it unconditionally, so it never sees
+        // one. Everything else runs the image's body -- including during an
+        // ObjectDir cascade, where this used to skip deleting the group's
+        // LOCAL faders. Those are Object::New'd with no dir (AddLocal), so no
+        // cascade ever destroys them: only this loop does, and skipping it
+        // leaked them (still SynthPollable while easing). ~Object nullifies
+        // a dying Fader's refs during a cascade (Object.cpp), which unlinks
+        // it from this list, so a pointer still here is a live Fader.
+        if (!frontObj)
+            continue;
+#endif
         frontObj->RemoveClient(this);
         if (!frontObj->LocalName().Null()) {
             delete frontObj;
