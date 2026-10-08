@@ -273,6 +273,10 @@ void ObjRef::ReplaceList(Hmx::Object *obj) {
     while (next != this) {
         ObjRef *cur = next;
         cur->Replace(obj);
+        // The image's (inline, Object.h) ReplaceList asserts here; keep the
+        // assert so a non-advancing Replace is reported, then unlink so the
+        // native build (non-fatal assert) does not spin.
+        MILO_ASSERT_FMT(cur != next, "ReplaceList stuck in infinite loop");
         if (cur == next) {
             // Replace didn't advance — force-unlink to prevent infinite loop.
             cur->prev->next = cur->next;
