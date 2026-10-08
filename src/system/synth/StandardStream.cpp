@@ -487,17 +487,18 @@ void StandardStream::UpdateTime() {
     // or any Resync and jumped song time forward by the whole pause.
     //
     // Nothing renders the receivers either, and on the image a device always
-    // plays the stream: left alone, each ring fills (64 KB, 743 ms at 44.1 kHz)
-    // and ConsumeData can hand it nothing more, so the decode position
-    // mCurrentSamp froze one ring past the start while song time ran on --
+    // plays the stream: left alone, each receiver's buffers fill and
+    // ConsumeData can hand them nothing more, so the decode position
+    // mCurrentSamp froze one buffer cycle past the start while song time ran on --
     // IsPastStreamJumpPointOfNoReturn() then read true for the rest of the song
     // and practice never set a loop. Play the receivers here, on that same
     // clock: render each one, as the device's mixer would (the output is
     // discarded), up to the samples a device would have played by mTimer
-    // (GetRawTime's inverse). That keeps the decode position one ring ahead of
-    // song time, and RenderAudio keeps its own rules: a stopped or paused
-    // receiver plays nothing, a starved one plays nothing until EndData, then
-    // silence.
+    // (GetRawTime's inverse), topping the platform ring up from the receiver's
+    // staged PCM as a device-driven Poll() would. That keeps the decode
+    // position the image's buffer cycle ahead of song time, and RenderAudio
+    // keeps its own rules: a stopped or paused receiver plays nothing, a
+    // starved one plays nothing until EndData, then silence.
     if (!AudioDevice::GetInstance().IsInitialized()) {
         float playedMs = mTimer.Ms() - mStartMs;
         if (playedMs > 0.0f) {
@@ -513,6 +514,7 @@ void StandardStream::UpdateTime() {
                     int frames = Min(dueSamples - played, 512);
                     if (frames <= 0)
                         break;
+                    rcvr->NativePump();
                     rcvr->RenderAudio(discard, frames);
                     if ((int)(rcvr->GetBytesPlayed() / 2) == played)
                         break; // stopped, paused or starved: nothing played
@@ -761,112 +763,10 @@ float StandardStream::GetBufferAheadTime() const {
     return time;
 }
 
-// TODO: implement
-#ifdef HX_NATIVE
-// Same control flow as the image (?ConsumeData@StandardStream@@QAAHPAPAXHH@Z,
-// 82770C10..82770F64) and the #else body below. The one native adaptation is
-// the receiver flow-control query: StreamReceiverNative's ring buffer reports
-// its free space through AvailableWriteBytes() rather than the Xbox
-// StreamReceiver::BytesWriteable().
-int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
-    if (mGetInfoOnly)
-        return 0;
-    int numChannels = mChannels.size();
-    int realChannels = numChannels - mVirtualChans;
-    MILO_ASSERT(numChannels != 0, 0x1A9);
-    if (startSamp >= 0 && startSamp != mCurrentSamp) {
-        MILO_LOG("sample mismatch: expected %i, got %i\n", mCurrentSamp, startSamp);
-        mCurrentSamp = startSamp;
-    }
-    // Real slots are the reader's buffers, virtual slots are mVirtBufs
-    // (82770D48..82770D70); v[] is never read past realChannels.
-    void *pcm[0x1E];
-    MILO_ASSERT(numChannels < DIM(pcm), 0x1B3);
-    for (int i = 0; i < numChannels; i++) {
-        if (i < realChannels)
-            pcm[i] = v[i];
-        else
-            pcm[i] = mVirtBufs[i - realChannels];
-    }
-
-    // One call consumes at most 0x800 samples (82770D74); the readers loop.
-    int samplesToConsume = numSamples;
-    if (samplesToConsume >= 0x800)
-        samplesToConsume = 0x800;
-
-    // Jump cap, as the image computes it (82770D80..82770E08): only a positive
-    // jump-from caps. A forward jump (from < to) caps only while cur < to --
-    // DoJump() leaves an in-memory jump armed with cur = to > from, and the
-    // stream must keep flowing past it; from < cur < to consumes nothing.
-    // from == to takes no cap. Only a backward jump asserts cur <= from. The
-    // remaining-count compare is unsigned (82770E00 cmplw), so a negative
-    // remainder never caps.
-    if (mJumpFromSamples > 0) {
-        if (mJumpFromSamples < mJumpToSamples) {
-            if (mCurrentSamp < mJumpToSamples) {
-                if (mCurrentSamp > mJumpFromSamples) {
-                    samplesToConsume = 0;
-                } else {
-                    int remaining = mJumpFromSamples - mCurrentSamp;
-                    if ((unsigned int)remaining < (unsigned int)samplesToConsume)
-                        samplesToConsume = remaining;
-                }
-            }
-        } else if (mJumpFromSamples > mJumpToSamples) {
-            MILO_ASSERT(mCurrentSamp <= mJumpFromSamples, 0x1CF);
-            int remaining = mJumpFromSamples - mCurrentSamp;
-            if ((unsigned int)remaining < (unsigned int)samplesToConsume)
-                samplesToConsume = remaining;
-        }
-    }
-
-    // Flow control: never hand a receiver more than its ring buffer can take
-    // (the image's BytesWriteable() >> 1 loop, 82770E14..82770E38).
-    for (int i = 0; i < numChannels; i++) {
-        StreamReceiverNative *rcvr = static_cast<StreamReceiverNative *>(mChannels[i]);
-        int availSamples = rcvr->AvailableWriteBytes() / 2; // bytes -> 16-bit samples
-        if (availSamples < samplesToConsume)
-            samplesToConsume = availSamples;
-    }
-
-    if (samplesToConsume > 0) {
-        int bytesPerSample = mFloatSamples ? 4 : 2;
-        // RemapChannel(first, second) COPIES slot first into slot second
-        // (82770E6C..82770EA0: memcpy(pcm[second], pcm[first], n * bps)).
-        for (std::vector<std::pair<int, int> >::iterator mapIt = mChanMaps.begin();
-             mapIt != mChanMaps.end();
-             ++mapIt) {
-            memcpy(
-                pcm[mapIt->second], pcm[mapIt->first], samplesToConsume * bytesPerSample
-            );
-        }
-        // Every receiver, virtual ones included, gets its own slot
-        // (82770EC4..82770F44). Float PCM is converted only when the reader
-        // declared it (82770EC4 lbz r11,0xe0(r30) / beq): x*32767 clamped to
-        // +/-32767 (82770EF4 fmuls, fsel x2, fctiwz); int16 PCM goes through
-        // unchanged (.L_82770F24). The native VorbisReader hands
-        // vorbis_synthesis_pcmout's float** and declares floatSamples=true;
-        // FFmpegAudioReader hands int16 and declares false.
-        int16_t convBuf[0x800];
-        for (int ch = 0; ch < numChannels; ch++) {
-            const void *data = pcm[ch];
-            if (mFloatSamples) {
-                const float *src = (const float *)pcm[ch];
-                for (int j = 0; j < samplesToConsume; j++) {
-                    float f = Clamp(-32767.0f, 32767.0f, src[j] * 32767.0f);
-                    convBuf[j] = (int16_t)f;
-                }
-                data = convBuf;
-            }
-            mChannels[ch]->WriteData(data, samplesToConsume << 1);
-        }
-    } else {
-        samplesToConsume = 0;
-    }
-    mCurrentSamp += samplesToConsume;
-    return samplesToConsume;
-}
-#else
+// Native shares this body with the image (?ConsumeData@StandardStream@@QAAHPAPAXHH@Z,
+// 82770C10..82770F64): StreamReceiver keeps the image's local-ring count
+// natively too (StreamReceiver::WriteData / Poll), so BytesWriteable() is the
+// image's flow control on both builds.
 int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     if (mGetInfoOnly)
         return 0;
@@ -953,7 +853,6 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
     mCurrentSamp += samplesToConsume;
     return samplesToConsume;
 }
-#endif
 
 void StandardStream::setJumpSamplesFromMs(float fromMs, float toMs) {
     mJumpFromSamples = kStreamEndSamples;

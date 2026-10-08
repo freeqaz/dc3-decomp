@@ -1,8 +1,10 @@
 // Native-shadow regression tests for StandardStream::ConsumeData.
 //
-// StandardStream.cpp compiles a separate `#ifdef HX_NATIVE` ConsumeData body;
-// every decomp ruler measures only the `#else` body (100% matched), so a
-// semantic drift in the native body is invisible to objdiff by construction.
+// StandardStream.cpp used to compile a separate `#ifdef HX_NATIVE` ConsumeData
+// body, which every decomp ruler ignored (they measure only the `#else` body,
+// 100% matched), so a semantic drift in it was invisible to objdiff by
+// construction. Since w23-sr both builds share the image body (StreamReceiver
+// keeps the image's BytesWriteable() natively); these tests keep it honest.
 // Ground truth is the image: build/373307D9/asm/system/synth/StandardStream.s,
 // `.fn "?ConsumeData@StandardStream@@QAAHPAPAXHH@Z"` (82770C10..82770F64).
 //
@@ -27,8 +29,8 @@
 namespace {
 
 // StreamReceiverNative that records every byte WriteData() forwards (native
-// WriteData -> StartSendImpl), then lets the real ring buffer advance so
-// AvailableWriteBytes() stays honest.
+// WriteData -> staged -> NativePump -> StartSendImpl), then lets the real ring
+// buffer advance so AvailableWriteBytes() stays honest.
 class CapturingReceiver : public StreamReceiverNative {
 public:
     CapturingReceiver(int numBuffers, bool slip) : StreamReceiverNative(numBuffers, slip) {}
