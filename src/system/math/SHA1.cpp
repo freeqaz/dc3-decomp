@@ -8,7 +8,18 @@ static Licenses sLicense("system/src/math/SHA1.h", Licenses::kRequirementNotific
 
 // shoutouts to clibs' implementation of sha1: https://github.com/clibs/sha1
 
+// w22-a01: retail is Dominik Reichl's CSHA1, whose ROL32 is MSVC's _rotl
+// intrinsic under _MSC_VER (rb3-xenon c0254f3cf took Transform to 100 with this
+// spelling, the SHABLK operand order below and natural a..e / pState[0..4]
+// order).  _rotl and the shift-or idiom compute the same 32-bit rotate; the
+// intrinsic only changes MSVC's register allocation.  Native keeps shift-or.
+#ifdef HX_NATIVE
 #define rol(value, bits) (((value) << (bits)) | ((value) >> (32 - (bits))))
+#else
+extern "C" unsigned int __cdecl _rotl(unsigned int, int);
+#pragma intrinsic(_rotl)
+#define rol(value, bits) _rotl(value, bits)
+#endif
 #ifdef HX_NATIVE
 // The Xbox 360 target is big-endian: a 32-bit word memcpy'd from the message
 // buffer is read in big-endian order, which is the byte order SHA1 expects. The
@@ -25,8 +36,8 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
 #endif
 #define blk(i)                                                                           \
     (m_block->l[i & 15] =                                                                \
-         rol(m_block->l[i & 15] ^ m_block->l[(i + 2) & 15]                               \
-                 ^ m_block->l[(i + 8) & 15] ^ m_block->l[(i + 13) & 15],                 \
+         rol(m_block->l[(i + 13) & 15] ^ m_block->l[(i + 8) & 15]                        \
+                 ^ m_block->l[(i + 2) & 15] ^ m_block->l[i & 15],                        \
              1))
 
 /* (R0+R1), R2, R3, R4 are the different operations used in SHA1 */
@@ -46,142 +57,14 @@ static inline unsigned int Sha1Bswap32(unsigned int v) {
     z += (w ^ x ^ y) + blk(i) + 0xCA62C1D6 + rol(v, 5);                                  \
     w = rol(w, 30);
 
-// The PPC arm of this function is behaviourally exact and does not need
-// another look. Verified 2026-08-19 by driving both the decompiled .text and
-// the original .obj's .text through the unicorn harness with a real fixture
-// (m_block and pState pointed inside the compared object region, seeded with
-// the padded single block for "abc"): both sides produce
-// a9993e36 4706816a ba3e2571 7850c26c 9cd0d89d -- the published SHA-1("abc")
-// digest -- and the whole 64KB object region comes out byte-identical.
-// The unicorn row for ?Transform@CSHA1@@AAAXPAIPBE@Z is nevertheless
-// DIVERGENT/return_value: the comparator checks r3 unconditionally, and this
-// is a void function, so the r3 residue is dead by ABI.
-//
-// The residual ~55.7% objdiff score is instruction scheduling and register
-// allocation inside the 80-round unrolled block (both sides prefetch
-// m_block->l[] into a long chain of registers and interleave the prefetch
-// differently, offset by one register). It is unrelated to the HX_NATIVE
-// guards below, which are compile-time: the PPC build sees only the #else
-// arms and is byte-identical to what it was before those guards landed
-// (55.7% was reached in 979aabcc0, the guards landed later in 97b649d25).
-// The "Source accesses 'm_reserved1'/'m_buffer' but target accesses ..."
-// notes objdiff prints for this function are false positives -- those loads
-// are indexed off m_block, not off `this`.
-//
-// MEASURED NEGATIVES (2026-09-13, lane w3-m), all read off
-// build/373307D9/asm/system/math/SHA1.s and all reverted. Baseline 61.99.
-//
-// 1. ROUND ACCUMULATION ORDER IS NOT SOURCE-CONTROLLABLE. The target's round 0
-//    accumulates `(rol(v,5) + f) + e + w[0] + K` -- it adds `e` at index 22,
-//    BEFORE `m_block->l` is even addressed (the `lwz r22, 0xc0(r24)` is index
-//    29) -- which is the FIPS-180 grouping, not Reid's `z += f + w + K + rol`.
-//    Rewriting all five macros as `z = rol(v,5) + f + z + blk(i) + K` (exact
-//    for unsigned 32-bit) emits a BYTE-IDENTICAL round 0: still `add r8,r7,r8`
-//    (+w) then `add r8,r8,r29` (+e). MSVC canonicalises the add chain before
-//    scheduling, so the 27 `diff_op` rows attributed to the `rol(v,5)` /
-//    `w = rol(w,30)` pair are a scheduling artifact, not a source shape. Net
-//    61.99 -> 61.1 from unrelated downstream drift.
-// 2. PROLOGUE + EPILOGUE ORDER: the target loads pState[0..4] into a,b,c,d,e in
-//    index order (r28,r27,r31,r30,r29) and its epilogue loads 0x0,0x4,0x8,0xc,
-//    0x10 in order too, so the original source really is `a = pState[0]; ...`
-//    and `pState[0] += a; ...` forward, where ours is `c,b,a,d,e` and a reversed
-//    epilogue. Making BOTH forward does exactly what it should locally --
-//    instructions 0-19 become fully equal and the r27/r28 naming of a and b
-//    matches -- and still costs 0.6pp overall (61.99 -> 61.4), because the
-//    80-round body reschedules around it. Reordering the five declarations to
-//    a,b,c,d,e on top of that is inert (61.4, identical row set). This is worth
-//    revisiting ONLY together with a fix for the body's r9/r11 scratch
-//    allocation (88 of the 104 swap pairs), which is what actually costs the
-//    ~230 extra instructions.
-//
-// RE-CONFIRMED 2026-09-14 (lane w7-aj) at 62.0 canonical / 55.7 raw, 1698
-// instructions: 1721 instructions across 99 REGISTER_SWAP pairs, 47 offset
-// swaps, 17 commutative rows. Both leads above still read exactly as recorded,
-// so neither was re-derived. The class that remains is the body's scratch
-// allocation, which is register permutation and is not source-reachable.
-//
-// MEASURED NEGATIVES (2026-09-14, lane w7-bm), baseline 62.0 canonical:
-// 3. blk() XOR OPERAND ORDER IS INERT. Parsing every blk round of both sides
-//    (64 rounds, 8253A4C0..8253B680) shows the target's XOR tree is ALWAYS
-//    `(((hi ^ next) ^ next) ^ lo)` by folded index -- round 79 is
-//    (l[15]^l[12])^l[7]^l[1] -- while ours is scheduling-dependent whenever an
-//    index wraps (round 24 and round 40 order the same four words differently).
-//    Respelling the macro in Dominik Reichl's CSHA1 SHABLK order
-//    (l[i+13]^l[i+8]^l[i+2]^l[i]) emits the IDENTICAL tree in all 64 rounds
-//    (MSVC canonicalises the chain), 62.0 -> 61.0 from downstream drift.
-// 4. WORD TYPE IS INERT: reading/writing the block words as `unsigned int&`
-//    and declaring a..e `unsigned int` (Reichl's UINT_32) gives 62.0 with the
-//    identical 1698-row set (910/27/47/234/291).
-// 5. The 57 extra instructions the target carries are 57 `mr` copies of the
-//    block pointer, one per blk round (e.g. 8253A4CC `lwz r31,0xc0(r24)` /
-//    `mr r30,r31`, then the LAST operand load clobbers r31 and the store goes
-//    through r30). That is a live-range split under one more callee-saved
-//    register (__savegprlr_17 vs our _18), i.e. allocation, not a source
-//    shape: there is exactly one m_block load per round on both sides (66).
-//
-// FLOOR CERTIFICATE (w8-o 2026-09-30), 61.986 canonical / 55.7 raw.  The
-// residual is register-copy insertion and nothing else, and this is now
-// measured rather than inferred.  The OPCODE HISTOGRAMS OF THE TWO SIDES ARE
-// IDENTICAL IN EVERY ENTRY EXCEPT `mr`:
-//
-//   lwz 348  xor 312  add 285  rotlwi 144  rotrwi 80  stw 69  and 60
-//   subf 40  or 40  ori 4  lis 4  bl 2  stwu 1  mflr 1  li 1  b 1  addi 1
-//
-//   mr:  target 71   base 14        <- the ONLY difference, and 71-14 = 57
-//                                      is exactly the instruction-count gap
-//                                      (target 1464, base 1407).
-//
-// A 1,464-instruction function does not agree on all seventeen other opcode
-// counts by accident.  The arithmetic, the round structure, the blk() XOR
-// tree, the word type and the 66 m_block reloads are all already correct; the
-// image simply splits the m_block pointer's live range once per blk round
-// (e.g. 0x8253A4CC `lwz r31, 0xc0(r24)` / 0x8253A520 `mr r29, r31`, the last
-// operand load then clobbering r31 while the store goes through r29) under one
-// more callee-saved register than MSVC gives us.  There is no source edit left
-// to make: what remains is the allocator's choice.
-//
-// Two further negatives from that lane, so nobody re-derives them:
-//
-// 6. STATEMENT-SPLITTING THE ROUND MACRO IS WORSE, and it refutes the "e is
-//    added before w because the source says so" reading directly.  The image
-//    accumulates ((rol(v,5) + f) + z) + blk(i) + K -- `add r7, r9, r29` at
-//    0x8253A058 adds e BEFORE the block word is loaded at 0x8253A074 -- where
-//    we add w then e.  Splitting each macro into `z += rol(v,5) + f;` then
-//    `z += blk(i) + K;` does not produce the image's order; it LOWERS register
-//    pressure and moves the prologue the WRONG WAY, to __savegprlr_19 (the
-//    image is _17, we are _18).  62.0 -> 60.4, 1708 rows.
-// 7. THE COMDAT / `inline`-ON-THE-CALLEE LEVER IS OUT OF REACH HERE BY
-//    CONSTRUCTION, and the test is same-TU-ness, not the map class.  That
-//    lever (ham_xbox_r.map's COMDAT column: 79,320 bare `f` vs 31,754 `f i`)
-//    has closed rows in other units empirically, but it needs a SAME-TU callee
-//    for a clobber set to propagate in the first place.  This function calls
-//    exactly one thing -- `memcpy`, which the map puts in LIBCMT:memcpyp.obj at
-//    0x8299FBB0, bare `f`, a different translation unit -- so it has NO same-TU
-//    callee and there is nothing for the lever to act on.  Both sides emit the
-//    same `bl memcpy`.  (Do NOT restate this as "a COMDAT callee is link-time
-//    replaceable so the caller must spill": that mechanism was retracted
-//    2026-09-30.  MSVC/Xenon puts every function it compiles in its own COMDAT,
-//    so adding `inline` does not change the map class -- the carrier is the
-//    COMDAT SELECTION TYPE in the section symbol's aux record, and our objects
-//    emit NODUPLICATES for both classes.  The lever is empirical; the
-//    same-TU precondition is what is structural.)
-//
-//    Two figures for whoever comes back to this, both measured after the first
-//    version of this note was written.  (a) The selection-mismatch surface is
-//    LARGE, not small: `scripts/analysis/comdat_selection_audit.py` over all
-//    989 objects finds 1,898 mismatches -- 536 ours NODUPLICATES / image ANY
-//    and 1,362 the reverse -- over 78,352 functions compared, of which
-//    math/SHA1.obj contributes 2 (math/Geo.obj 2, utl/MemMgr.obj 2).  An
-//    earlier "7 mismatches in 1,396 functions, small surface" was a four-unit
-//    sample generalised to the binary and is withdrawn.  (b) It is
-//    nevertheless NOT a score lever on this class of row: all four closures
-//    anyone has made with it were FIDELITY-ONLY with zero score movement, and
-//    `BuildBeam` -- the textbook __savegprlr_N prologue symptom, the same
-//    symptom as this function's _17-vs-_18 -- stayed BYTE-IDENTICAL at 85.3415
-//    with its save set unchanged after its callee's selection class was
-//    matched.  So even in a unit where the lever DID apply, it did not move
-//    the save set.  That is independent corroboration of the certificate
-//    above, and the reason no selection-byte work was done in this lane.
+// w22-a01 (2026-10-08): 61.99 -> 100 (1464/1464 rows equal) with rb3-xenon's
+// shape -- the _rotl intrinsic above, SHABLK operand order, natural a..e and
+// pState[0..4] order.  This REFUTES the earlier "floor certificate" (w8-o)
+// that put the 57 extra `mr` copies down to unreachable register allocation:
+// they come from the intrinsic.  Behaviour was already exact (unicorn, 2026-08-19:
+// SHA-1("abc") = a9993e36 4706816a ba3e2571 7850c26c 9cd0d89d on both sides);
+// the native arm was re-checked on a host harness against the FIPS 180 vectors
+// ("abc", "", the 448-bit message, one million 'a').
 void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
 #ifdef HX_NATIVE
     // `unsigned long` is 64-bit on the LP64 host, so rol()/blk() would not wrap
@@ -200,10 +83,9 @@ void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
     unsigned long b;
     unsigned long a;
 #endif
-    c = pState[2];
-
-    b = pState[1];
     a = pState[0];
+    b = pState[1];
+    c = pState[2];
     d = pState[3];
     e = pState[4];
     memcpy(m_block->c, pBuffer, 0x40);
@@ -288,11 +170,11 @@ void CSHA1::Transform(unsigned int *pState, const unsigned char *pBuffer) {
     R4(c, d, e, a, b, 78);
     R4(b, c, d, e, a, 79);
 
-    pState[4] += e;
-    pState[3] += d;
-    pState[2] += c;
-    pState[1] += b;
     pState[0] += a;
+    pState[1] += b;
+    pState[2] += c;
+    pState[3] += d;
+    pState[4] += e;
 }
 
 void CSHA1::Update(const unsigned char *data, unsigned int len) {
