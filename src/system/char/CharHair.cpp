@@ -293,7 +293,20 @@ void CharHair::SimulateInternal(float fps) {
                     // letting the three differences stay in f0/f12/f13.  The
                     // accumulator lever only pays where the vector is dead
                     // after the reduction.
-                    float lensq = LengthSquared(vRes);
+                    // w22-hc: written y, z, x on purpose.  The image sums
+                    // (z*z + x*x) + y*y (rows 183-186: fmuls f11,f0,f0 with
+                    // f0 = z diff; fmadds x; fmadds y).  /fp:fast MSVC rotates a
+                    // flat 3-term sum -- measured: written x,y,z (LengthSquared)
+                    // emits y,z,x; written z,x,y emits x,y,z; written y,z,x
+                    // emits z,x,y -- so only this order gives the image's
+                    // rounding, and it takes the whole function from 99.57 to
+                    // 100 (the 531-540 "floor" below goes with it).  Explicit
+                    // parentheses in the image's association (inline or as a
+                    // helper) re-schedule pt.pos.z's gravity add and the vRes
+                    // stores: 94.2.  Native (clang, left-assoc, no FMA) gets
+                    // (y*y + z*z) + x*x -- still not the image's association,
+                    // and no single spelling gives both (BUG-OPEN, sub-ulp).
+                    float lensq = vRes.y * vRes.y + vRes.z * vRes.z + vRes.x * vRes.x;
                     float minLenSq = minLen * minLen;
                     if (lensq < minLenSq) {
                         vRes *= (minLenSq / (minLenSq + lensq) - 0.5f);
@@ -418,49 +431,12 @@ void CharHair::SimulateInternal(float fps) {
                 if (pt.bone)
                     pt.bone->SetWorldXfm(t100);
                 Subtract(idealPos, pt.pos, pt.force);
-                // FLOOR (lane w7-bb, 2026-09-14), 99.57076 canonical.  After
-                // w7-a's three refutations above, every remaining CHARGED row in
-                // SimulateInternal is here, and there are exactly three: idx 531
-                // (target-only `lwz r10, 0xc(r30)`), idx 533 (ours-only
-                // `lfs f10, 0x20(r31)`) and idx 540 (`lfs f13, 0xe0(r1)` vs
-                // `lwz r8, 0x4(r30)`).  All 48 other rows are register
-                // permutation, which the canonical ruler forgives.
-                //
-                // The two sides emit the IDENTICAL instruction multiset across
-                // 531-540 -- the four `lwz` of this 16-byte Vector3 copy (r30 =
-                // &pt.force, dest r31+0x20 = pt.lastFriction) interleaved with
-                // the three `fsubs` operands of the Subtract above and three
-                // stack `lfs`.  Only the interleave differs: the image issues
-                // the copy's loads in the order 0xc, 0x4, 0x8, 0x0 starting one
-                // slot earlier, we issue 0x8, 0xc, 0x0, 0x4 -- and the four
-                // `stw` that consume them (0x28, 0x2c, 0x20, 0x24) are in the
-                // SAME order on both sides, so it is not the copy's expansion
-                // that differs, only where the scheduler placed each load.
-                //
-                // That makes this a floor rather than a spelling: both sides are
-                // 644 instructions, so any rewrite that reaches a different
-                // interleave has to add or remove instructions and loses more
-                // than the three rows it could win.  A `Vector3
-                // frictionDiff(pt.lastFriction);` copy-ctor form, which is the
-                // only way to move the 16-byte copy ahead of the subtraction
-                // without changing semantics, adds a second 16-byte copy for
-                // exactly that reason and was not pursued.
-                //
-                // w21-ae (stopped at 99.57076, same 3 charged rows 531/533/540;
-                // fuzzy 99.00311): re-measured the floor with 20 spellings, none
-                // better.  Friction block: three-float ctor 96.91, `Vector3 &force`
-                // ref 97.31, copy-ctor + `-=` 91.92, save-old-then-copy 93.02,
-                // Set() 94.51, memcpy 95.65, ref to lastFriction 95.68; force
-                // ref over the whole tail 94.55/94.66; per-component
-                // Subtract(idealPos, pt.pos, pt.force) in yzx/xyz order
-                // 98.10/97.35; frictionDiff/movement declaration scope and
-                // `oldPos = pt.pos` inert.  The slack-check chain upstream
-                // (rows 168-237, register-only, forgiven) is the image summing
-                // y*y + (x*x + z*z) where we sum x*x + (z*z + y*y) -- it follows
-                // the ORDER the three vRes differences are scheduled (image z,x,y;
-                // ours y,z,x), not the LengthSquared spelling: writing the image's
-                // association inline costs 94.2 / 98.96.  `pt.pos.z += gravity`
-                // and `gravity + pt.pos.z` are inert.
+                // CLOSED (w22-hc): this was recorded as a scheduling floor
+                // (w7-bb, 99.57076; w21-ae, 20 spellings) on rows 531/533/540,
+                // the pt.force -> pt.lastFriction copy's load interleave.  It
+                // was not owned here: it followed the slack-check sum upstream
+                // (see the lensq comment), and spelling that sum in the
+                // image's order removes these rows with it.
                 Vector3 frictionDiff;
                 Subtract(pt.lastFriction, pt.force, frictionDiff);
                 pt.lastFriction = pt.force;
