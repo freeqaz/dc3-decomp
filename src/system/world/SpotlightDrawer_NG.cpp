@@ -1124,23 +1124,13 @@ SpotMeshEntry* vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_erase(
     // discarding the tail instead of moving it down.
     int __count = this->_M_finish - __src;
 
-    // FLOOR 95.833 canonical / 93.958 fuzzy (w8-h).  One real row left: the
-    // image tests the division result in a VOLATILE (`divw. r11`) and copies it
-    // into the callee-saved loop counter inside the taken branch (`mr r29,
-    // r11`); we let the allocator write divw. straight into r30.  The other 8
-    // rows are the r27<->r28 / r29<->r30 renaming that follows.  MEASURED
-    // NEGATIVE (w8-h): `int __n = __count;` inside the if -- the lever that
-    // takes the SINGLE-position overload in SpotlightDrawer.cpp from 96.429 to
-    // 100.0 -- reads 91.667 HERE, worse.  The two overloads want opposite
-    // spellings: this one has three values live across the memcpy (this, first,
-    // src) and the extra name costs a fourth callee-saved register.
-    if (__count > 0) {
-        do {
-            memcpy(__pos, __src, 0x50);
-            __count--;
-            __pos += 1;
-            __src += 1;
-        } while (__count != 0);
+    // w22-a18: rb3-xenon 561a44549's for-loop shape closes the w8-h
+    // "floor" (95.833 -> 100): the image's `divw. r11` + `mr r29, r11` is
+    // what a for-loop counter emits.  Same behaviour as the do/while.
+    for (; __count > 0; __count--) {
+        memcpy(__pos, __src, 0x50);
+        __pos += 1;
+        __src += 1;
     }
 
     this->_M_finish = __pos;
