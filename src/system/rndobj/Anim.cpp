@@ -525,6 +525,10 @@ DataNode RndAnimatable::OnConvertFrames(DataArray *arr) {
 // Same slot SET, same frame size (0x160), same store order, same FindData call
 // order -- only the assignment of variables to slots differs.  That is the whole
 // residual: 25 rows, every one of them a displacement, 99.95220 canonical.
+// w22-a27: two of those "slot" rows were a real bug -- the AnimTask ctor took
+// local_wait where the image passes wrap (see the call below). With that fixed,
+// wait/wrap land on the image's 0x72/0x71 and 20 displacement rows remain
+// (blend, delay, units, name, ease_power, ease).
 //
 // Two levers measured and REFUTED here (lane w7-j, 2026-09-14):
 //   1. Declaration order is INERT.  Permuting all thirteen declarations (both
@@ -626,7 +630,16 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
         local_listener,
         local_ease,
         local_ease_power,
-        local_wait
+        // w22-a27: the image passes WRAP here, not wait. At 0x8264EED4 the
+        // ctor's last argument is `lbz r11, 0x71(r31)` (stored to the stack
+        // arg slot 0x67(r1)), and 0x71 is the slot FindData(wrap) filled
+        // (`addi r5, r31, 0x71` at 0x8264EC84); wait lives at 0x72
+        // (`addi r5, r31, 0x72` at 0x8264EC70) and is read only by the
+        // BlendTask/TimeUntilEnd test below (`lbz r10, 0x72(r31)`, 0x8264EFF0).
+        // The ctor stores this flag as AnimTask's frame-wrap switch (Poll's
+        // fmod-into-the-animatable's-range branch). Passing local_wait made
+        // `(wait TRUE)` wrap and left `(wrap ...)` read but ignored.
+        local_wrap
     );
     ObjPtr<AnimTask> taskPtr(nullptr, task);
     if (local_name && taskPtr) {
