@@ -525,6 +525,10 @@ DataNode RndAnimatable::OnConvertFrames(DataArray *arr) {
 // Same slot SET, same frame size (0x160), same store order, same FindData call
 // order -- only the assignment of variables to slots differs.  That is the whole
 // residual: 25 rows, every one of them a displacement, 99.95220 canonical.
+// w22-a27: two of those "slot" rows were a real bug -- the AnimTask ctor took
+// local_wait where the image passes wrap (see the call below). With that fixed,
+// wait/wrap land on the image's 0x72/0x71 and 20 displacement rows remain
+// (blend, delay, units, name, ease_power, ease).
 //
 // Two levers measured and REFUTED here (lane w7-j, 2026-09-14):
 //   1. Declaration order is INERT.  Permuting all thirteen declarations (both
