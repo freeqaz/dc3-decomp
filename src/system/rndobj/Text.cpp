@@ -627,9 +627,6 @@ void RndText::FontMap::IncrementDisplayableChars(unsigned short num) {
 
 void ResetFontMapPageMeshFaces(RndMesh *mesh, int numFaces) {
     MILO_ASSERT(mesh, 0x96);
-#ifdef HX_NATIVE
-    if (numFaces <= 0 || numFaces > 100000) return;
-#endif
     mesh->Faces().resize(numFaces);
     std::vector<RndMesh::Face>::iterator it = mesh->Faces().begin();
     std::vector<RndMesh::Face>::iterator itEnd = mesh->Faces().end();
@@ -643,12 +640,6 @@ void ResetFontMapPageMeshFaces(RndMesh *mesh, int numFaces) {
 void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
     for (int i = 0; i < mPages.size(); i++) {
         Page &page = *(mPages[i]);
-#ifdef HX_NATIVE
-        // Guard against garbage displayableChars from font loading issues
-        if (page.displayableChars < 0 || page.displayableChars > 10000) {
-            page.displayableChars = 0;
-        }
-#endif
         if (!page.mesh && mFont && page.displayableChars > 0) {
             page.mesh = Hmx::Object::New<RndMesh>();
 #ifdef HX_NATIVE
@@ -689,19 +680,19 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 page.mSyncFlags |= 0xA0;
                 mesh->Verts().resize(fixedLength * 4);
             }
+            page.mVertStart = mesh->Verts().begin();
+            MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
 #ifdef HX_NATIVE
-            // Clamp to available verts in native builds
+            // The assert above stops the 360; native Debug::Fail prints and
+            // returns, and SetupCharacter would then write past Verts().
+            // Backstop only -- it cannot fire unless the assert just did.
             if (mesh->Verts().size() < page.displayableChars * 4)
                 page.displayableChars = mesh->Verts().size() / 4;
 #endif
-            page.mVertStart = mesh->Verts().begin();
-#ifndef HX_NATIVE
-            MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
-#endif
         }
-#ifndef HX_NATIVE
         MILO_ASSERT(!fixedLength || (page.displayableChars <= fixedLength), 0xD5);
-#else
+#ifdef HX_NATIVE
+        // Same non-fatal-assert backstop as above (0xD5).
         if (fixedLength && page.displayableChars > fixedLength)
             page.displayableChars = fixedLength;
 #endif
@@ -1215,8 +1206,6 @@ void RndText::BuildFontMaps(bool b1) {
                 }
             }
         }
-#ifdef HX_NATIVE
-#endif
     }
 }
 
