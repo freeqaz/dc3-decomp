@@ -109,9 +109,6 @@ void CharEyes::Enter() {
         Normalize(mLastFacing, mLastFacing);
     }
     for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
-#ifdef HX_NATIVE
-        if (!it->mEye) continue;
-#endif
         it->mEye->Enter();
     }
     for (ObjVector<CharInterestState>::iterator it = mInterests.begin();
@@ -1614,9 +1611,6 @@ skipInterp:
 
     CharLookAt::sDisableJitter = sDisableEyeJitter;
     for (ObjVector<EyeDesc>::iterator it = mEyes.begin(); it != mEyes.end(); ++it) {
-#ifdef HX_NATIVE
-        if (!it->mEye) continue;
-#endif
         it->mEye->Poll();
         LidTrackAndClampingUpdate(*it, blinkWeight);
     }
