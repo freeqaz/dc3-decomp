@@ -132,7 +132,7 @@ void MeterDisplay::Init() { REGISTER_OBJ_FACTORY(MeterDisplay); }
 
 void MeterDisplay::AnimateToValue(int x, int y) {
     unk50 = Min(x, mMaxValue);
-    unk4c = (y / 1000.0f) + TheTaskMgr.UISeconds();
+    unk4c = (y * (1.0f / 1000.0f)) + TheTaskMgr.UISeconds();
 }
 
 void MeterDisplay::UpdateDisplay() {

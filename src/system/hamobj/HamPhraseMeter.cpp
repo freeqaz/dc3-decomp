@@ -103,7 +103,7 @@ void HamPhraseMeter::SetBounds(float startBeat, float endBeat, const TempoMap *t
     float beat = TheTaskMgr.Beat();
     if (tempoMap) {
         float ms = TheTaskMgr.Seconds(TaskMgr::kRealTime) * 1000.0f;
-        beat = tempoMap->TimeToTick(ms) / 480.0f;
+        beat = tempoMap->TimeToTick(ms) * (1.0f / 480.0f);
     }
 
     float span = endBeat - startBeat;

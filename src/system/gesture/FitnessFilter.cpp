@@ -91,7 +91,7 @@ bool FitnessFilter::GetFitnessData(float &f1, float &f2) const {
         HRESULT hr = NuiFitnessGetCurrentFitnessData(mTrackingID, &data);
         if (SUCCEEDED(hr)) {
             f1 = data.Joules * 0.00023900573f;
-            f2 = data.DurationInMS / 1000.0f;
+            f2 = data.DurationInMS * (1.0f / 1000.0f);
         } else {
             MILO_NOTIFY("NuiFitnessGetCurrentFitnessData failed with error 0x%08x", hr);
         }

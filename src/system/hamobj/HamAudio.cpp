@@ -255,8 +255,8 @@ bool HamAudio::GetCurrLoopBeats(int &i1, int &i2) const {
     if (!GetCurrLoopMarkers(f1, f2)) {
         return false;
     } else {
-        i1 = SecondsToBeat(f1 / 1000.0f) + 0.5f;
-        i2 = SecondsToBeat(f2 / 1000.0f) + 0.5f;
+        i1 = SecondsToBeat(f1 * (1.0f / 1000.0f)) + 0.5f;
+        i2 = SecondsToBeat(f2 * (1.0f / 1000.0f)) + 0.5f;
         return true;
     }
 }

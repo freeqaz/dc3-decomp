@@ -435,9 +435,9 @@ void CharIKFingers::MoveFinger(FingerNum num) {
         float blendFactor = 1.0f;
         if (finger.mBlendFrames > 0 || finger.mBlendOutFrames > 0) {
             if (finger.mBlendFrames > 0) {
-                blendFactor = 1.0f - finger.mBlendFrames / 5.0f;
+                blendFactor = 1.0f - finger.mBlendFrames * (1.0f / 5.0f);
             } else if (finger.mBlendOutFrames > 0) {
-                blendFactor = 1.0f - finger.mBlendOutFrames / 5.0f;
+                blendFactor = 1.0f - finger.mBlendOutFrames * (1.0f / 5.0f);
             }
         }
 
@@ -626,9 +626,9 @@ void CharIKFingers::Poll() {
             }
             CalculateHandDest(i3, i1);
             if (mBlendInFrames > 0) {
-                f8 = 1.0f - mBlendInFrames / 5.0f;
+                f8 = 1.0f - mBlendInFrames * (1.0f / 5.0f);
             } else if (mBlendOutFrames > 0) {
-                f8 = 1.0f - mBlendOutFrames / 5.0f;
+                f8 = 1.0f - mBlendOutFrames * (1.0f / 5.0f);
             }
             Interp(mCurHandTrans.v, mDestHandTrans.v, f8, mCurHandTrans.v);
             Interp(mCurHandTrans.m, mDestHandTrans.m, f8, mCurHandTrans.m);

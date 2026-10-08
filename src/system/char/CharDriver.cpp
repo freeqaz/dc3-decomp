@@ -618,7 +618,7 @@ void CharDriver::Poll() {
     float beat = mBeatScale * TheTaskMgr.Beat();
     float deltaBeat = mBeatScale * TheTaskMgr.DeltaBeat();
     if (mRealign && 0 < beat) {
-        beat = mBeatScale * ((float)(TheTaskMgr.CurrentBeat()) + (float)(TheTaskMgr.CurrentTick()) / 480.0f);
+        beat = mBeatScale * ((float)(TheTaskMgr.CurrentBeat()) + (float)(TheTaskMgr.CurrentTick()) * (1.0f / 480.0f));
         if (mOldBeat == kHugeFloat)
             mOldBeat = beat;
         if ((float)std::floor(mOldBeat) != (float)std::floor(beat)) {

@@ -357,7 +357,7 @@ void MoveFrame::SetNodeScale(int node, MoveMirrored mirror, const Vector3 &v) {
 
 float MoveFrame::QuantizedSeconds(float f) const {
     float seconds = floor(BeatToSeconds(mBeat + f) * 30.0f + 0.5f);
-    return seconds / 30.0f;
+    return seconds * (1.0f / 30.0f);
 }
 
 #pragma endregion
