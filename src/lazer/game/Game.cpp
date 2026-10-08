@@ -239,15 +239,7 @@ void Game::SetIntroRealTime(float f) {
 void Game::PostLoad() {
     WorldDir *world = TheHamDirector->GetWorld();
     MILO_ASSERT(world, 0x259);
-#ifdef HX_NATIVE
-    if (!world) {
-        mMoveDir = nullptr;
-        return;
-    }
-    mMoveDir = world->Find<MoveDir>("moves", false);
-#else
     mMoveDir = world->Find<MoveDir>("moves");
-#endif
     RELEASE(mOvershell);
     mOvershell = new Overshell();
     mOvershell->Init();
@@ -281,16 +273,7 @@ void Game::LoadNewSongAudio(Symbol s) {
             }
         }
         RELEASE(mSongInfo);
-#ifdef HX_NATIVE
-        SongInfo *audioData = TheHamSongMgr.SongMgr::SongAudioData(s);
-        if (!audioData) {
-            MILO_WARN("Game::LoadNewSongAudio: no audio data for '%s'\n", s.Str());
-            return;
-        }
-        mSongInfo = new SongInfoCopy(audioData);
-#else
         mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(s)));
-#endif
         mMaster->Load(mSongInfo, false, 0, false, hsvd, nullptr);
         Fader *fader = TheSynth->Find<Fader>("per_song_sfx_level.fade", false);
         if (fader) {
@@ -300,17 +283,11 @@ void Game::LoadNewSongAudio(Symbol s) {
 }
 
 void Game::FlushMoveRecord() {
-#ifdef HX_NATIVE
-    if (!mMoveDir) return;
-#endif
     MILO_ASSERT(mMoveDir, 0x3a7);
     mMoveDir->FlushMoveRecord();
 }
 
 void Game::SwapMoveRecord() {
-#ifdef HX_NATIVE
-    if (!mMoveDir) return;
-#endif
     MILO_ASSERT(mMoveDir, 0x3af);
     mMoveDir->SwapMoveRecord();
 }
@@ -318,9 +295,6 @@ void Game::SwapMoveRecord() {
 void Game::ReloadSong() {
     WorldDir *world = TheHamDirector->GetWorld();
     MILO_ASSERT(world, 0x1c7);
-#ifdef HX_NATIVE
-    if (!world) return;
-#endif
     mMoveDir = world->Find<MoveDir>("moves");
     mLoadState = 0;
     LoadSong();
@@ -411,9 +385,6 @@ void Game::Poll() {
 
     if (!HandleWait()) {
         if (!TheSongSequence.Done()) {
-#ifdef HX_NATIVE
-            if (!mGameInput) return;
-#endif
             float songMs = mGameInput->CurrentMs(mRealTime);
             TheTaskMgr.SetSeconds(songMs * 0.001f, false);
         }
@@ -447,11 +418,7 @@ void Game::Poll() {
             TheTaskMgr.ResetBeatTaskTime(beat);
         }
         sLastBeat = beat;
-        if (!unk68 && songMs >= 0
-#ifdef HX_NATIVE
-            && TheHamDirector
-#endif
-            && !TheHamDirector->GetGameStartHold()) {
+        if (!unk68 && songMs >= 0 && !TheHamDirector->GetGameStartHold()) {
             MILO_LOG("Game::Poll: intro timer expired\n");
             static Message intro_over("intro_over");
             TheGamePanel->Handle(intro_over, true);
@@ -643,9 +610,6 @@ void Game::Reset() {
     mHasIntro = false;
     unk68 = false;
     TheHamDirector->SetPickingDisabled(false);
-#ifdef HX_NATIVE
-    if (mMoveDir)
-#endif
     {
         for (int i = 0; i < 2; i++) {
             mMoveDir->SetCurrentMove(i, nullptr);
@@ -734,9 +698,6 @@ void Game::LoadSong() {
     if (fader) {
         fader->SetVolume(0);
     }
-#ifdef HX_NATIVE
-    if (TheMoveMgr)
-#endif
     {
         TheMoveMgr->Clear();
         if (mUseMoveGraph) {
@@ -744,19 +705,7 @@ void Game::LoadSong() {
         }
     }
     RELEASE(mSongInfo);
-#ifdef HX_NATIVE
-    SongInfo *songAudioData = TheHamSongMgr.SongMgr::SongAudioData(song);
-    if (!songAudioData) {
-        MILO_WARN("Game::LoadSong: no audio data for '%s', skipping load\n", song.Str());
-        return;
-    }
-    mSongInfo = new SongInfoCopy(songAudioData);
-    if (mMaster && mMaster->GetAudio()) {
-        mMaster->GetAudio()->SetPracticeMode(false);
-    }
-#else
     mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(song)));
-#endif
     mMaster->Load(mSongInfo, false, 0, false, v, 0);
 }
 
@@ -873,9 +822,6 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
     LoadNewSongAudio(s1);
     Symbol s48(TheMaster->GetAudio()->Name());
     LoadNewSongMoves(s2, true);
-#ifdef HX_NATIVE
-    if (TheMoveMgr)
-#endif
     {
         if (mUseMoveGraph) {
             TheMoveMgr->SetSong(s2);
@@ -949,22 +895,6 @@ bool Game::IsLoaded() {
             TheSongDB->PostLoad(mMaster->GetMidiParserMgr()->GetEventsList());
             PostLoad();
             if (mUseMoveGraph) {
-#ifdef HX_NATIVE
-                if (!mMoveDir) {
-                    MILO_LOG("Game::IsLoaded() - mMoveDir is null, proceeding without MoveGraph\n");
-                    mUseMoveGraph = false;
-                } else {
-                    ObjectDir *moveData = mMoveDir->Find<ObjectDir>("move_data", false);
-                    if (moveData) {
-                        MILO_LOG("Game::IsLoaded() - Loading MoveGraph from move_data dir\n");
-                        TheMoveMgr->LoadMoveData(moveData);
-                        SuperEasyRemixer::LoadAllVariants();
-                    } else {
-                        MILO_LOG("Game::IsLoaded() - move_data not found in moves dir\n");
-                        mUseMoveGraph = false;
-                    }
-                }
-#else
                 MILO_ASSERT(mMoveDir, 0x224);
                 ObjectDir *moveData = mMoveDir->Find<ObjectDir>("move_data", false);
                 MILO_ASSERT_FMT(
@@ -973,7 +903,6 @@ bool Game::IsLoaded() {
                 );
                 TheMoveMgr->LoadMoveData(moveData);
                 SuperEasyRemixer::LoadAllVariants();
-#endif
             } else {
                 MILO_LOG("Game::IsLoaded() - not using MoveGraph");
             }
@@ -1046,9 +975,6 @@ DataNode Game::OnSetShuttle(DataArray *arr) {
 }
 
 DataNode Game::OnResetDetection(DataArray *a) {
-#ifdef HX_NATIVE
-    if (!mMoveDir) return 0;
-#endif
     MILO_ASSERT(mMoveDir, 0x392);
     if (a->Size() > 2) {
         int index = a->Int(2);
@@ -1159,20 +1085,12 @@ bool Game::HandleWait() {
         if (worldFm->HasPendingFiles()) {
             return false;
         }
-#ifdef HX_NATIVE
-        mMoveDir = TheHamDirector->GetWorld()->Find<MoveDir>("moves", false);
-        if (mMoveDir) {
-            mMoveDir->Enter();
-            mMoveDir->ResetDetection();
-        }
-#else
         if (!TheHamDirector->GetWorld()->Find<MoveDir>("moves", false)) {
             return false;
         }
         mMoveDir = TheHamDirector->GetWorld()->Find<MoveDir>("moves", true);
         mMoveDir->Enter();
         mMoveDir->ResetDetection();
-#endif
         TheHamDirector->SetupAnims();
         if (mAltTempoMap) {
             TheHamDirector->RemapSongAnimToTempoMap(mAltTempoMap);
