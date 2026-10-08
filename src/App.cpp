@@ -392,11 +392,30 @@ App::App(int argc, char **argv) {
     bool showSplash = !splashEnv || strcmp(splashEnv, "0") != 0;
 #endif
     Splash splash;
+    // The image's splash setup, verbatim: -fast (or a loose-file run) does not
+    // wait for the splash, -fast also disables SynthSample, and the ESRB
+    // screen follows the system locale / region (native: en-US / NA, so the
+    // eng ESRB screen). The image calls PrepareRemaining after its Kinect
+    // init, which native does not have, so it follows BeginSplasher directly.
+    bool fastBoot = OptionBool("fast", false);
+    if (fastBoot || !UsingCD()) {
+        splash.SetWaitForSplash(false);
+    }
+    if (fastBoot) {
+        SynthSample::Disable();
+    }
     if (showSplash) {
-        splash.AddScreen("ui/splash/eng/esrb_keep.milo", 0x12C0);
+        PlatformRegion region = ThePlatformMgr.GetRegion();
+        unsigned long systemLocale = ULSystemLocale();
+        if (systemLocale == 0x14) {
+            splash.AddScreen("ui/splash/jpn/esrb_keep.milo", 0x12C0);
+        } else if (region == kRegionNA) {
+            splash.AddScreen("ui/splash/eng/esrb_keep.milo", 0x12C0);
+        }
         splash.AddScreen("ui/splash/harmonix_keep.milo", 3000);
-        splash.PrepareRemaining();
+        splash.PrepareNext();
         splash.BeginSplasher();
+        splash.PrepareRemaining();
     }
 #ifdef __EMSCRIPTEN__
     // Yield immediately after splash Draw() so the browser can present the
