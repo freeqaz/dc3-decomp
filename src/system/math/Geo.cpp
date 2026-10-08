@@ -1399,35 +1399,32 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
     for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
         Vector3 v(i->x, i->y, 0.0f);
         Multiply(v, tf, v);
-        // Not Plane::Dot: that inline is spelled flat (a*x + b*y + c*z + d) and
-        // lowers to fmuls b*y / fmadds a*x / fmadds c*z.  The image emits
-        // fmuls a*v.x / fmadds c*v.z / fmadds b*v.y / fadds d, which is the
-        // term order below -- under /fp:fast MSVC evaluates the second operand
-        // of each `+` first and contracts the first into fmadds, so a flat sum
-        // P+Q+R lowers as Q,P,R and the source order is readable off the listing.
-        const Plane &plane = node->plane;
-        // NEUTRAL: the b-term's operand order is a backend floor.  The image's
-        // fmadds is `fmadds f0, f10, f11, f0` with f10 = v.y (0x64) and
-        // f11 = plane.b (0x4(r30)); spelling it `v.y * plane.b` changes nothing
-        // (96.2 either way, same 12 mismatch rows).
-        float dot = plane.b * v.y + (plane.c * v.z + plane.a * v.x) + plane.d;
+        // Not Plane::Dot (flat a*x + b*y + c*z + d).  The image emits fmuls
+        // a*v.x / fmadds c*v.z / fmadds v.y*b / fadds d -- this grouping.
+        const Plane &pl = node->plane;
+        float dot = (pl.a * v.x + pl.c * v.z) + v.y * pl.b + pl.d;
         if (0.0f < dot)
             front = true;
         if (dot < 0.0f)
             back = true;
     }
 
-    const BSPNode *child;
+    // w22-a09: rb3-xenon's shape (100 there).  Each one-sided arm owns its
+    // own `child` and folds the recursive call into the condition, which is
+    // what lets MSVC share the image's single `li r3, 0x1` / `li r3, 0x0`
+    // return blocks instead of lowering the last call branchlessly.
     if (!back) {
         // Entirely in front (or empty polygon)
-        child = node->left;
-        if (!child)
-            return false;
+        const BSPNode *child = node->left;
+        if (child && Intersect(tf, poly, child))
+            return true;
+        return false;
     } else if (!front) {
         // Entirely behind
-        child = node->right;
-        if (!child)
+        const BSPNode *child = node->right;
+        if (!child || Intersect(tf, poly, child))
             return true;
+        return false;
     } else {
         // Polygon straddles the plane - clip and test both sides
         if (!node->right)
@@ -1437,7 +1434,8 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
         Hmx::Polygon splitPoly;
         if (node->left) {
             Clip(poly, r, splitPoly);
-            if (Intersect(tf, splitPoly, node->left)) {
+            bool res = Intersect(tf, splitPoly, node->left);
+            if (res) {
                 return true;
             }
         }
@@ -1448,23 +1446,15 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
         bool res = Intersect(tf, splitPoly, node->right);
         return res;
     }
-    // NEGATIVE RESULT (96.2 floor).  The image shares ONE `li r3, 0x1` block
-    // (Geo.s, the instruction at function+0x180) between the `!node->right`
-    // early exit and this call's true arm, and falls through to a shared
-    // `li r3, 0x0` at function+0xd0:
-    //     beq cr6, +0x180        ; if (!child) return true
-    //     mr r4, r28 / mr r3, r27 / bl Intersect
-    //     clrlwi. r11, r3, 24
-    //     bne +0x180             ; return true
-    //     b   +0xd0              ; return false
-    // We instead duplicate `li r3, 0x1; b epilogue` for the !child case and
-    // lower this test branchlessly (`clrlwi` without the dot, then
-    // `subic`/`subfe`).  Writing it as `if (!Intersect(...)) return false;
-    // return true;` is exactly neutral (96.2, same 12 rows), as is swapping
-    // the b-term's operands above.  Two neutral variants -- stopping.
-    if (Intersect(tf, poly, child))
-        return true;
-    return false;
+}
+
+// w22-a09: rb3-xenon's Clip shape (98.39 there).  Stands in for a Vector2
+// subtraction the original read `.y` off (math/Vec.h has no Vector2 operator-);
+// the y-differences go through it and MSVC homes the temporary's y in the
+// image's 0x54 slot.  Numerically identical to the plain spelling (the two
+// products and their sum are the same, fp add commutes).  96.09 -> 98.4.
+static inline Vector2 SubV2(const Vector2 &a, const Vector2 &b) {
+    return Vector2(a.x - b.x, a.y - b.y);
 }
 
 void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
@@ -1512,14 +1502,15 @@ void Clip(const Hmx::Polygon &poly, const Hmx::Ray &ray, Hmx::Polygon &out) {
     // The five dead-home-store deletes above remain the only live lead.
     const Vector2 *lastPoint = &poly.points.back();
     const Vector2 *dirPtr = &ray.dir;
-    float yDiff = lastPoint->y - ray.base.y;
-    float lastDot = dirPtr->x * (lastPoint->x - ray.base.x)
-                  + dirPtr->y * yDiff;
+
+    float yDiff = SubV2(poly.points.back(), ray.base).y;
+    float lastDot = dirPtr->y * yDiff
+                  + (lastPoint->x - ray.base.x) * dirPtr->x;
 
     Vector2 v;
     for (const Vector2 *i = poly.points.begin(); i != poly.points.end(); i++) {
-        float yDelta = i->y - ray.base.y;
-        float dot = dirPtr->x * (i->x - ray.base.x) + yDelta * dirPtr->y;
+        float xDelta = i->x - ray.base.x;
+        float dot = SubV2(*i, ray.base).y * dirPtr->y + dirPtr->x * xDelta;
 
         if (!(dot < 0.0f)) {
             if (dot > 0.0f && lastDot < 0.0f) {
