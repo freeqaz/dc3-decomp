@@ -164,6 +164,7 @@ public:
     MetaMaterial *CreateMetaMaterial(bool);
     MetaMaterial *GetMetaMaterial() const { return mMetaMaterial; }
     int GetColorModFlags() const { return mColorModFlags; }
+    const std::vector<Hmx::Color> &GetColorMods() const { return mColorMod; }
     void SetColorModFlags(ColorModFlags flags) {
         mColorModFlags = flags;
         mDirty |= 2;
