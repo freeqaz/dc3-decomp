@@ -215,13 +215,12 @@ DataArray *TypeProps::GetArray(Symbol prop) {
     DataNode *n = KeyValue(prop, false);
     DataArray *ret;
     if (!n) {
-#ifdef HX_NATIVE
-        if (!typeDef) {
-            MILO_WARN("TypeProps::GetArray: %s has no TypeDef for key %s", PathName(mOwner), prop);
-            return nullptr;
-        }
-#endif
         MILO_ASSERT(typeDef, 0x18);
+#ifdef HX_NATIVE
+        // Image-fatal assert above; native asserts are non-fatal.
+        if (!typeDef)
+            return nullptr;
+#endif
         DataArray *keyArray = typeDef->FindArray(prop);
         DataArray *cloned = keyArray->Array(1)->Clone(true, false, 0);
         SetKeyValue(prop, cloned, true);
