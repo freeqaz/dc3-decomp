@@ -248,25 +248,15 @@ void UIManager::ToggleLoadTimes() {
 
 void UIManager::Draw() {
 #ifdef HX_NATIVE
-    if (false) {
-        printf("DC3 UI::Draw: cam=%p env=%p screen=%s pushed=%d\n",
-               mCam, mEnv,
-               mCurrentScreen ? mCurrentScreen->Name() : "<null>",
-               (int)mPushedScreens.size());
-        if (mCam) {
-            const Vector3& cp = mCam->WorldXfm().v;
-            const Hmx::Matrix3& cm = mCam->WorldXfm().m;
-            printf("  UI cam pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f fov=%.1f\n",
-                   cp.x, cp.y, cp.z, mCam->NearPlane(), mCam->FarPlane(), mCam->YFov());
-            printf("  UI cam rot: fwd=(%.2f,%.2f,%.2f) up=(%.2f,%.2f,%.2f) right=(%.2f,%.2f,%.2f)\n",
-                   cm.z.x, cm.z.y, cm.z.z, cm.y.x, cm.y.y, cm.y.z, cm.x.x, cm.x.y, cm.x.z);
-        }
-    }
-    // Select the UI camera and environment for screen-space rendering.
-    // On Xbox 360, NgRnd's draw pipeline did this per-panel. Our native
-    // renderer uses a single pass, so we select once before UI draws.
-    RndCam* savedCam = RndCam::Current();
-    RndEnviron* savedEnv = RndEnviron::Current();
+    // w23-g10: the image's Draw selects no camera or environment -- each
+    // PanelDir::DrawShowing selects its CamOverride() (its own cam, else
+    // TheUI->GetCam()) and TheUI->GetEnv(), and restores the caller's cam.
+    // Native used to pre-select [ui.cam] + the UI env here and restore after;
+    // removing that made no visible difference over a boot -> gameplay
+    // screenshot tour (the residual pixel diffs are the animated album-art /
+    // background textures, which differ run to run on the same binary too).
+    // What remains is the env-gated MILO_UI_CAM_MODE diagnostic, which only
+    // mutates [ui.cam]; the default (original) leaves it untouched.
     if (mCam) {
         switch (GetNativeUICamMode()) {
         case kNativeUICamOriginal:
@@ -303,9 +293,7 @@ void UIManager::Draw() {
             break;
         }
         }
-        mCam->Select();
     }
-    if (mEnv) mEnv->Select(nullptr);
 #endif
     for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
          it != mPushedScreens.end();
@@ -314,11 +302,6 @@ void UIManager::Draw() {
     }
     if (mCurrentScreen)
         mCurrentScreen->Draw();
-#ifdef HX_NATIVE
-    // Restore previous camera/environment
-    if (savedCam) savedCam->Select();
-    if (savedEnv) savedEnv->Select(nullptr);
-#endif
 }
 
 void UIManager::GotoScreen(const char *name, bool b2, bool b3) {
