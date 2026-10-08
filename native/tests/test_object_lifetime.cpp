@@ -1,4 +1,5 @@
 // Native lifetime/merge safety regression tests.
+#include "char/CharClip.h"
 #include "flow/Flow.h"
 #include "flow/FlowAnimate.h"
 #include "rndobj/Group.h"
@@ -1638,6 +1639,53 @@ TEST_F(ObjectLifetimeTest, ObjPtrVecDestroyedMidWalkIsNotCompactedAfterward) {
         << "a destroyed ObjPtrVec is still queued for compaction; the end of "
            "the walk would erase through freed memory";
     EXPECT_EQ(PendingVecCompactCount(), 0u);
+}
+
+// A CharClip's transition graph holds one NodeVector per destination clip, each
+// with an owner-control ObjOwnerPtr<CharClip>. When a destination clip is
+// deleted (outside a cascade, the image's ReplaceRefs path) the image's
+// Transitions::Replace erases that NodeVector (RemoveNodes). Native used to
+// skip the erase for every ref walk and keep a NULL-clip NodeVector forever --
+// whose ref was self-looped at its old address, so the ring fix-up in a later
+// AddNode/RemoveNodes wrote through it. The erase is now deferred to the end of
+// the walk, as ObjPtrVec's no-null erase is.
+TEST_F(ObjectLifetimeTest, CharClipTransitionsDropNodesOfDeletedClip) {
+    CharClip *from = Hmx::Object::New<CharClip>();
+    CharClip *b = Hmx::Object::New<CharClip>();
+    CharClip *c = Hmx::Object::New<CharClip>();
+    CharClip *d = Hmx::Object::New<CharClip>();
+    CharClip::Transitions &t = from->GetTransitions();
+    CharGraphNode node;
+    node.curBeat = 1.0f;
+    node.nextBeat = 2.0f;
+    t.AddNode(b, node);
+    t.AddNode(c, node);
+    node.curBeat = 3.0f;
+    t.AddNode(b, node);
+    ASSERT_EQ(t.Size(), 2);
+    ASSERT_FALSE(ObjectDir::InDeleteObjects());
+
+    delete b; // ~Object -> ReplaceRefs(nullptr) -> Transitions::Replace
+
+    EXPECT_EQ(PendingVecCompactCount(), 0u);
+    ASSERT_EQ(t.Size(), 1) << "Transitions kept the NodeVector of a deleted clip";
+    EXPECT_EQ(t.FindNodes(nullptr), nullptr);
+    CharClip::NodeVector *cv = t.FindNodes(c);
+    ASSERT_NE(cv, nullptr);
+    EXPECT_EQ(cv->size, 1);
+    EXPECT_EQ(cv->nodes[0].curBeat, 1.0f);
+
+    // Grow (realloc + ring fix-up over every NodeVector), then delete the rest:
+    // the surviving refs must still be well-formed ring members.
+    t.AddNode(d, node);
+    ASSERT_EQ(t.Size(), 2);
+    delete c;
+    ASSERT_EQ(t.Size(), 1);
+    EXPECT_NE(t.FindNodes(d), nullptr);
+    delete d;
+    EXPECT_EQ(t.Size(), 0);
+    EXPECT_EQ(PendingVecCompactCount(), 0u);
+    delete from;
 }
 
 } // namespace

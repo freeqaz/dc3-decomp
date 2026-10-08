@@ -25,17 +25,48 @@ bool CharClip::Transitions::Replace(ObjRef *from, Hmx::Object *to) {
     NodeVector *vector = reinterpret_cast<NodeVector *>(from);
     if (!vector->clip.SetObj(to)) {
 #ifdef HX_NATIVE
-        // During ReplaceList, RemoveNodes' memmove shifts subsequent NodeVectors
-        // into the current position. The ReplaceList walker then sees the shifted
-        // NodeVector at the same address, triggers force-unlink (self-loop) without
-        // nulling mObject → use-after-free on teardown. Skip the removal; the null
-        // NodeVector is harmless and cleaned up by Clear().
-        if (!gInReplaceList)
+        // Inside a native ref walk (ReplaceRefs' snapshot, or ReplaceList) the
+        // erase is DEFERRED, as ObjPtrVec's kObjListNoNull erase is: RemoveNodes
+        // memmoves the following NodeVectors -- their ObjRefs -- down over this
+        // one, and the walk may still hold those addresses. The outermost
+        // ReplaceRefs runs CompactNullNodes once no walk is live, so the
+        // Transitions ends in the image's state (no NodeVector with a NULL clip).
+        // Leaving the NULL vector in place for good (the old behaviour) was not
+        // harmless: a NULL clip ref is self-looped at its OLD address, so the ring
+        // fix-up loop in a later AddNode/RemoveNodes wrote through it into the
+        // shifted or reallocated buffer.
+        if (gInReplaceList) {
+            DeferVecCompact(this, &Transitions::CompactNullNodes);
+            return true;
+        }
 #endif
-            RemoveNodes(vector);
+        RemoveNodes(vector);
     }
     return true;
 }
+
+#ifdef HX_NATIVE
+void CharClip::Transitions::CompactNullNodes(void *p) {
+    Transitions *t = static_cast<Transitions *>(p);
+    for (;;) {
+        NodeVector *dead = nullptr;
+        for (NodeVector *it = t->mNodeStart; it < t->mNodeEnd; it = it->Next()) {
+            if (!it->clip.Ptr()) {
+                // A NULL ref is in no ring: re-home its links at its CURRENT
+                // address so RemoveNodes' ring fix-up only writes to itself.
+                ObjRef *ref = (ObjRef *)&it->clip;
+                *(ObjRef **)((char *)ref + sizeof(void *)) = ref;
+                *(ObjRef **)((char *)ref + sizeof(void *) * 2) = ref;
+                if (!dead)
+                    dead = it;
+            }
+        }
+        if (!dead)
+            return;
+        t->RemoveNodes(dead);
+    }
+}
+#endif
 
 void CharClip::Transitions::Clear() {
     for (NodeVector *it = mNodeStart; it < mNodeEnd; it = it->Next()) {

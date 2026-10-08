@@ -35,7 +35,17 @@ public:
     public:
         Transitions(Hmx::Object *owner)
             : mNodeStart(nullptr), mNodeEnd(nullptr), mOwner(owner) {}
+#ifdef HX_NATIVE
+        // A Transitions destroyed with a deferred compaction pending (see
+        // Replace) must not be compacted after it is gone.
+        virtual ~Transitions() {
+            ForgetVecCompact(this);
+            Clear();
+        }
+        static void CompactNullNodes(void *);
+#else
         virtual ~Transitions() { Clear(); }
+#endif
         virtual Hmx::Object *RefOwner() const { return mOwner; }
         virtual bool Replace(ObjRef *, Hmx::Object *);
 
