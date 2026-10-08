@@ -13,6 +13,7 @@
 #include <cstring>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #endif
 
 #pragma region CharIKHand
@@ -362,18 +363,8 @@ void CharIKHand::Poll() {
     Interp(mHand->WorldXfm().v, destPos, charWeight, mWorldDst);
     RndTransformable *elbowParent = 0;
     RndTransformable *shoulderParent = mHand->TransParent();
-#ifdef HX_NATIVE
-    // FEET-IN-FLOOR TEST (DC3_IK_MOVEELBOW=1): native reads mMoveElbow=false for the
-    // leg ikfoot, so the foot-plant IK never bends the knee (it teleports the ankle
-    // via a discarded SetWorldXfm) and the leg over-extends -> foot sinks. Xbox bends
-    // the knee (~-58deg local). Force the elbow-move path to test whether bending the
-    // knee re-plants the foot.
     if (!mMoveElbow)
         shoulderParent = 0;
-#else
-    if (!mMoveElbow)
-        shoulderParent = 0;
-#endif
     if (charWeight != 0 || mAlwaysIKElbow) {
         if (shoulderParent) {
             elbowParent = shoulderParent->TransParent();
@@ -397,8 +388,12 @@ void CharIKHand::Poll() {
         // shoulderParent == the knee bone (mHand=ankle). IKElbow writes its
         // LOCAL m (a Z-rotation) iff charWeight!=0. Compare the post-IK knee
         // local rotZ to the Xbox ground truth (~-58deg planted).
+        // Opt-in (DC3_IK_DIAG): PathName builds a string, so it is not run every poll.
+        static int sDiag = -1;
+        if (sDiag < 0)
+            sDiag = getenv("DC3_IK_DIAG") ? 1 : 0;
         static int sIKc = 0, sLogged = 0;
-        const char *pn = PathName(this);
+        const char *pn = sDiag ? PathName(this) : nullptr;
         if (pn && std::strstr(pn, "ikfoot") && std::strstr(pn, "main.milo")) {
             sIKc++;
             if (sLogged < 40) {
