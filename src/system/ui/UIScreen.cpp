@@ -145,16 +145,18 @@ void UIScreen::LoadPanels() {
 
 void UIScreen::UnloadPanels() {
 #ifdef HX_NATIVE
-    // Clear UI animation tasks before panel destruction. On Xbox, ~Object's
-    // ReplaceRefs triggers AnimTask::Replace → QueueTaskDelete for each dying
-    // object. On native, cascade skips ReplaceRefs (ring corruption), so tasks
-    // holding refs to panel objects survive with stale pointers → use-after-free.
+    // w23-g10: the image does NOT clear any task timeline here.  Native used
+    // to wipe the whole kTaskSeconds and kTaskUISeconds timelines on every
+    // screen unload, on the premise that the native cascade skipped
+    // ReplaceRefs so an AnimTask holding a dying panel object outlived it.
+    // That premise is gone: since 2026-08-20 ~Object runs NullifyAllRefs in a
+    // cascade, which steps every OWNER-CONTROL holder (AnimTask among them,
+    // Object.cpp "Owner-control holders during the native cascade") through
+    // its Replace(nullptr) exactly as the image's ReplaceRefs does.  The wipe
+    // also killed every unrelated seconds/UI-seconds task (DTA-scheduled
+    // MessageTasks, other screens' anims) at each transition, which the image
+    // keeps running.
     //
-    // Only clear seconds/UI timelines — preserve beat-synced and tutorial tasks
-    // which may be driven by audio/music systems independent of panels.
-    // Safe because this runs BEFORE the new screen's Enter() creates tasks.
-    TheTaskMgr.ClearTimelineTasks(kTaskSeconds);
-    TheTaskMgr.ClearTimelineTasks(kTaskUISeconds);
     // Suppress FlushDeferredFrees between panel cascades. Without this,
     // panel A's cascade frees memory, then panel B's NullifyAllRefs walks
     // ring nodes in that freed memory → heap corruption. Deferring the
