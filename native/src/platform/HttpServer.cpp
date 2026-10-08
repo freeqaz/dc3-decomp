@@ -36,6 +36,7 @@ static const size_t kMaxHttpBodyBytes = 1024 * 1024; // hard transport ceiling
 #include <httplib.h>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <chrono>
 #include <algorithm>
 #include <signal.h>
@@ -150,7 +151,21 @@ bool HttpServer::Start(int port) {
     RegisterEndpoints();
 
     // Bind on calling thread so we fail fast if port is taken.
-    if (!svr->bind_to_port("0.0.0.0", port)) {
+    //
+    // port == 0 means "let the kernel pick a free one" (DC3_HTTP_PORT=0 or
+    // =auto). That is the only race-free way for a harness to get a private
+    // port: picking one itself and passing it in (bind 0, read, close,
+    // exec) leaves a window in which any ephemeral socket on the box can
+    // take it, and under fleet load one did -- dc3-native aborted with
+    // "port N already in use" before ready. The chosen port is reported on
+    // the DC3_HTTP_PORT= stdout line below, which is what scripts parse.
+    if (port == 0) {
+        port = svr->bind_to_any_port("0.0.0.0");
+        if (port <= 0) {
+            fprintf(stderr, "[HttpServer] FATAL: could not bind any port\n");
+            abort();
+        }
+    } else if (!svr->bind_to_port("0.0.0.0", port)) {
         fprintf(stderr, "[HttpServer] FATAL: port %d already in use\n", port);
         abort();
     }
@@ -1369,10 +1384,19 @@ void HttpServerInit() {
     const char* env = getenv("DC3_HTTP");
     if (!env || atoi(env) == 0) return;
 
+    // Unset -> 9090. "0" or "auto" -> kernel-assigned ephemeral port, reported
+    // on stdout as DC3_HTTP_PORT=<n> (see Start). Anything else unparseable or
+    // non-positive keeps the historical 9090 fallback.
     int port = 9090;
     const char* portEnv = getenv("DC3_HTTP_PORT");
-    if (portEnv) port = atoi(portEnv);
-    if (port <= 0) port = 9090;
+    if (portEnv) {
+        if (strcmp(portEnv, "auto") == 0 || strcmp(portEnv, "0") == 0) {
+            port = 0;
+        } else {
+            port = atoi(portEnv);
+            if (port <= 0) port = 9090;
+        }
+    }
 
     TheHttpServer = new HttpServer();
     TheHttpServer->Start(port);
