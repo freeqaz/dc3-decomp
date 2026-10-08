@@ -70,22 +70,10 @@ void NavListSortNode::Custom(UIListCustom *custom, Hmx::Object *obj) const {
 }
 
 void NavListSortNode::DeleteAll() {
-#ifdef HX_NATIVE
-    for (auto it = mChildren.begin(); it != mChildren.end(); ++it) {
-        NavListSortNode *child = *it;
-        if (!child) {
-            fprintf(stderr, "DC3 DeleteAll: null child in mChildren of %p\n", this);
-            continue;
-        }
-        child->DeleteAll();
-        RELEASE(child);
-    }
-#else
     FOREACH (it, mChildren) {
         (*it)->DeleteAll();
         RELEASE(*it);
     }
-#endif
     mChildren.clear();
 }
 
