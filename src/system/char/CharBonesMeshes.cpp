@@ -103,20 +103,6 @@ void CharBonesMeshes::PoseMeshes() {
     // frame's first PoseMeshes so the legit pose runs; a LATER PoseMeshes this frame skips a
     // freshly-planted leg bone (in the QUAT loop below) so the plant survives the poll order.
     { extern void Dc3PlantGuardTick(); Dc3PlantGuardTick(); }
-    { static int sPoseMeshLog = 0;
-      if (sPoseMeshLog < 3 && mMeshes.size() > 20) {
-        sPoseMeshLog++;
-        fprintf(stderr, "POSEMESHES dir='%s' servo='%s' meshCount=%d boneCount=%d\n",
-                Dir() ? Dir()->Name() : "null", Name(), (int)mMeshes.size(), (int)mBones.size());
-        // Dump ALL bone mesh mappings
-        for (int k = 0; k < (int)mMeshes.size(); k++) {
-            RndTransformable* bt = mMeshes[k];
-            fprintf(stderr, "  servo_mesh[%2d] '%s' bone='%s'\n",
-                    k, bt ? bt->Name() : "NULL",
-                    k < (int)mBones.size() ? mBones[k].name.Str() : "?");
-        }
-      }
-    }
 #endif
 
     // Set positions
@@ -175,19 +161,6 @@ void CharBonesMeshes::PoseMeshes() {
 
         // Apply Z rotations
         float *endOff = (float *)(start + mOffsets[TYPE_END]);
-#ifdef HX_NATIVE
-        { static int sRotzLog = 0;
-          if (sRotzLog < 3) {
-            sRotzLog++;
-            float *rp = rotIt;
-            int idx = mCounts[TYPE_ROTZ];
-            for (; rp < endOff; rp++, idx++) {
-                fprintf(stderr, "  ROTZ[%d] '%s' value=%.4f\n",
-                        idx, idx < (int)mBones.size() ? mBones[idx].name.Str() : "?", *rp);
-            }
-          }
-        }
-#endif
         for (; rotIt < endOff; rotIt++, ++curMesh) {
             MakeRotMatrixZ(*rotIt, (*curMesh)->DirtyLocalXfm().m);
         }
