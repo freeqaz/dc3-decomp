@@ -148,49 +148,69 @@ void ShellInput::Draw() { mCursorPanel->Draw(); }
 
 void ShellInput::Poll() {
 #ifdef HX_NATIVE
-    // Native poll: skip gesture filters (HandInvoke, HandsUp) and Kinect-specific
-    // subsystems (DepthBuffer, SkeletonIdentifier, SkeletonExtentTracker) that
-    // aren't initialized. But poll the SkeletonChooser and cursor panel.
+    // PLATFORM: the image's body (#else, below) with each Kinect-only member
+    // tested for null. Native never creates the HandInvoke / HandsUp gesture
+    // filters, the DepthBuffer, the SkeletonIdentifier, the
+    // SkeletonExtentTracker or mWrongHandPosAnim (ShellInput::Init), so every
+    // statement that reads one of them is skipped -- for the practice-options
+    // arms that is exactly what the image does with no invoke gesture
+    // detected. Everything else runs in the image's order.
+    static Symbol is_in_shell_pause("is_in_shell_pause");
+    static Symbol is_in_party_mode("is_in_party_mode");
+    static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");
+    static bool sPracticeOptionsInvokedPartyMode = false;
+    static bool sPracticeOptionsInvoked = false;
+    static bool sHasSkeleton = false;
 
-    // No hands-up gesture filter on native — keep NavList disengage off
-    HamNavList::sForceDisengage = false;
-
-    if (mCursorPanel)
-        mCursorPanel->Poll();
-
-    // Poll SkeletonChooser when there are tracked skeletons (native pose server).
-    // With default properties now set in HamInit, SkeletonChooser code paths
-    // that read ui_nav_mode etc. are safe.
-    if (mSkelChooser && NumTrackedSkeletons() > 0)
-        mSkelChooser->Poll();
-
-    // Track skeleton presence changes — drives "has_skeleton" property on
-    // hamprovider which UI scripts use for Kinect-vs-controller mode switching.
-    {
-        static bool lastHasSkeleton = false;
-        bool hasSkel = HasSkeleton();
-        if (hasSkel != lastHasSkeleton) {
-            static Symbol has_skeleton_sym("has_skeleton");
-            static Message updateSkeletonStatus("update_skeleton_status");
-            Handle(updateSkeletonStatus, false);
-            TheHamProvider->SetProperty(has_skeleton_sym, hasSkel);
+    if (TheUI->FocusPanel() == TheGamePanel) {
+        if (mWrongHandPosAnim && mWrongHandPosAnim->GetFrame() > 0.0f) {
+            mWrongHandPosAnim->SetFrame(0.0f, 1.0f);
+            unk_0xA4 = false;
         }
-        lastHasSkeleton = hasSkel;
-    }
-
-    // Controller mode policy (DC3_CONTROLLER_MODE, docs/debugging/native.md):
-    // under `faithful`, the image's gameplay-panel exit -- the one piece of
-    // the image's FocusPanel() == TheGamePanel arm (below, #else) that is
-    // about controller mode; the rest of that arm needs the Kinect filters.
-    // Under `forced` ExitControllerMode is a no-op, so the arm is skipped.
-    {
-        extern bool Dc3ControllerModeForced();
-        if (!Dc3ControllerModeForced() && TheUI->FocusPanel() == TheGamePanel
-            && TheGestureMgr->InControllerMode()
-            && !TheUIEventMgr->HasActiveDialogEvent()) {
+        // Under DC3_CONTROLLER_MODE=forced ExitControllerMode returns at once.
+        if (TheGestureMgr->InControllerMode() && !TheUIEventMgr->HasActiveDialogEvent()) {
             ExitControllerMode(true);
         }
+        if (!TheHamUI.InTransition()) {
+            TheGestureMgr->SetIdentificationEnabled(false);
+        }
+        static Symbol practice("practice");
+        static Symbol gameplay_mode("gameplay_mode");
+        static Symbol suppress_practice_options("suppress_practice_options");
+        if (mHandInvokeGestureFilter
+            && TheGameMode->Property(gameplay_mode)->Sym() == practice) {
+            if (mHandInvokeGestureFilter->GetInvokeDetected() && !sPracticeOptionsInvoked) {
+                if (TheHamProvider->Property(suppress_practice_options)->Int() == 0) {
+                    TheHamProvider->Export(Message("invoke_practice_options"), true);
+                    sPracticeOptionsInvoked = true;
+                }
+            }
+            if (!mHandInvokeGestureFilter->GetInvokeDetected()
+                || TheHamProvider->Property(suppress_practice_options)->Int()) {
+                if (sPracticeOptionsInvoked) {
+                    TheHamProvider->Export(Message("deinvoke_practice_options"), true);
+                    sPracticeOptionsInvoked = false;
+                }
+            }
+        }
+    } else if (TheHamProvider->Property(is_in_infinite_party_mode)->Int()
+               || TheHamProvider->Property(is_in_party_mode)->Int()) {
+        TheGestureMgr->SetIdentificationEnabled(false);
+        if (mHandInvokeGestureFilter
+            && TheHamProvider->Property(is_in_shell_pause)->Int() == 0) {
+            if (mHandInvokeGestureFilter->GetInvokeDetected()
+                && !sPracticeOptionsInvokedPartyMode) {
+                TheHamProvider->Export(Message("invoke_practice_options"), true);
+                sPracticeOptionsInvokedPartyMode = true;
+            }
+            if (!mHandInvokeGestureFilter->GetInvokeDetected()
+                && sPracticeOptionsInvokedPartyMode) {
+                TheHamProvider->Export(Message("deinvoke_practice_options"), true);
+                sPracticeOptionsInvokedPartyMode = false;
+            }
+        }
     }
+
     // The idle timeout. Under `forced` ExitControllerMode returns at once.
     if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
         ExitControllerMode(true);
@@ -219,16 +239,6 @@ void ShellInput::Poll() {
 
     OverlayPanel *panel = TheHamUI.GetOverlayPanel();
     if (panel) {
-        // Sibling of the MoveDir::PostUpdateFilters null-`this` class, found by
-        // the same analyzer sweep. This whole arm is the HX_NATIVE copy of
-        // Poll(), and the native copy already treats mHandsUpGestureFilter as
-        // nullable on both sides of this line -- `mHandsUpGestureFilter && ...
-        // GetHandsUp()` above, `mHandsUpGestureFilter && ...GetRaisedMs()`
-        // below (retail's #else arm dereferences it bare in both places, which
-        // is why the native arm exists). Only this Clear() was missed; `panel`
-        // is a different pointer and guards nothing about it. Fixed as the
-        // missing test it is, not wrapped in a nested #ifdef, because the PPC
-        // build compiles the #else arm and never sees this line.
         if (mHandsUpGestureFilter) {
             mHandsUpGestureFilter->Clear();
         }
@@ -236,21 +246,23 @@ void ShellInput::Poll() {
             panel->Dismiss();
         }
     }
-    bool raised = mHandsUpGestureFilter && mHandsUpGestureFilter->GetRaisedMs() > 0;
+    bool raised = mHandsUpGestureFilter && mHandsUpGestureFilter->GetRaisedMs() > 0.0f;
     HamNavList::sForceDisengage = raised != false;
-    // Headless native builds don't initialize Kinect: cursor/depth/skeleton
-    // subsystems' Poll() bodies call into DataNode lookups that crash without
-    // Kinect state. Skip them entirely under HX_NATIVE so we can run automated
-    // gameplay tests. (If/when Kinect is available, gate this on a runtime flag.)
-#ifndef HX_NATIVE
-    if (mCursorPanel) mCursorPanel->Poll();
-    if (mDepthBuffer) mDepthBuffer->Poll();
-    if (mSkelIdentifier) mSkelIdentifier->Poll();
-    if (mSkelChooser) mSkelChooser->Poll();
-    if (mSkelExtTracker) mSkelExtTracker->Poll();
-#endif
+    if (mCursorPanel)
+        mCursorPanel->Poll();
+    if (mDepthBuffer)
+        mDepthBuffer->Poll();
+    if (mSkelIdentifier)
+        mSkelIdentifier->Poll();
+    // PLATFORM: the chooser is polled only while the native pose server
+    // supplies tracked skeletons; with none, its body would only drive
+    // Kinect tracking selection (UpdateTrackedSkeletonsElective) and
+    // high-five detection over absent skeletons.
+    if (mSkelChooser && NumTrackedSkeletons() > 0)
+        mSkelChooser->Poll();
+    if (mSkelExtTracker)
+        mSkelExtTracker->Poll();
 
-    static bool sHasSkeleton = false;
     bool hasSkel = HasSkeleton();
     if (hasSkel != sHasSkeleton) {
         static Symbol has_skeleton("has_skeleton");
@@ -586,9 +598,6 @@ void ShellInput::SyncToCurrentScreen() {
         mInputPanel = TheHamUI.FocusPanel();
     }
     TheGestureMgr->SetInShellMode(!IsGameplayPanel());
-#ifdef HX_NATIVE
-    if (TheHamUI.GetHelpBarPanel())
-#endif
     TheHamUI.GetHelpBarPanel()->SyncToPanel(mInputPanel);
     unk_0x98 = 5000;
     if (TheHamUI.GetHelpBarPanel()) {
