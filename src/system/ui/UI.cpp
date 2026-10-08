@@ -590,29 +590,6 @@ DataNode UIManager::OnGotoScreen(DataArray const *arr) {
     if (screen == nullptr && obj)
         MILO_FAIL("%s is not a screen", obj->Name());
 
-#ifdef HX_NATIVE
-    // If DTA resolves to null screen (e.g., tutorial exit with missing state),
-    // try falling back to main_screen to avoid dead-end.  NOT the image: its
-    // OnGotoScreen hands the null straight to GotoScreen.  Kept so a native
-    // state gap is not a dead end, but it must never be SILENT: it hid
-    // party mode's bounce (the MultiUserGesturePanel auto-fire started
-    // gameplay with no song, `gamemode get game_screen` was null, and the
-    // player landed on main_screen with nothing logged).  Every hit is a
-    // state gap upstream of this line -- find it, do not trust the bounce.
-    if (screen == nullptr && !obj) {
-        UIScreen *fallback = ObjectDir::Main()->Find<UIScreen>("main_screen", false);
-        if (fallback) {
-            MILO_WARN(
-                "goto_screen from '%s' resolved to no screen (%s:%d); native "
-                "falls back to main_screen",
-                mCurrentScreen ? mCurrentScreen->Name() : "<none>", arr->File(),
-                arr->Line()
-            );
-            screen = fallback;
-        }
-    }
-#endif
-
     if (arr->Size() > 4) {
         GotoScreen(screen, arr->Int(3), arr->Int(4));
     } else if (arr->Size() > 3) {
@@ -748,6 +725,17 @@ void UIManager::Poll() {
                         if (DebugUIFlow() || fast)
                             fprintf(stderr, "DC3 UI: Boot advance '%s' -> '%s' (after %d frames)\n",
                                    curName, sBoot[i].to, delay);
+                        // This skip stands in for title_screen's NAV_SELECT_MSG on
+                        // title_screen_menu (ui/title/title.dta), which sets
+                        // $post_load_dest_screen to main_screen before going to
+                        // wait_main_after_saveload_screen; that screen's
+                        // saveload_complete then does
+                        // {ui goto_screen $post_load_dest_screen}.  Skipping
+                        // without it handed OnGotoScreen a null screen, which only
+                        // the (now removed, w23-g10) native main_screen fallback
+                        // papered over.
+                        if (!strcmp(sBoot[i].from, "title_screen"))
+                            DataVariable("post_load_dest_screen") = DataNode(Symbol("main_screen"));
                         sStuckScreen = nullptr;
                         sStuckFrames = 0;
                         GotoScreen(next, false, false);
