@@ -303,24 +303,14 @@ float ProfileMgr::GetExcessVideoLag() const {
 void ProfileMgr::SetVenuePreference(Symbol venue) { mVenuePreference = venue; }
 
 #ifdef HX_NATIVE
-// Native-only lightweight init. The full Init() below is skipped on native
-// (its call in MetaPanel::Init is #ifndef HX_NATIVE) because of heavy Xbox
-// side-effects: TheGameData Player(0/1) asserts, MemcardMgr save-buffer alloc,
-// MILO_ASSERT(TheSynth)/Dolby, RndOverlay::Find, weight-units/region. This
-// creates the profile objects + minimal sinks so per-profile unlock/award
-// state can populate, and marks pad-0 loaded so HasValidSaveData() is true.
-// NO save buffer, NO signin machinery, NO GameData/Synth dependencies.
+// Native entry point: the image's Init() (below, shared with the Xbox build)
+// plus the one native-only fiction -- pad-0's profile is marked loaded so
+// HasValidSaveData() is true and endgame grants land on a real profile
+// (native has no Xbox signin/save-device flow to load it). ctor left
+// mState = kMetaProfileUnloaded (0), so the SetSaveState assert
+// (mState != kMetaProfileUnchanged) does not fire.
 void ProfileMgr::InitNative() {
-    for (int i = 0; i < 4; i++) {
-        mProfiles.push_back(new HamProfile(i));
-    }
-    SetName("profile_mgr", ObjectDir::Main());
-    ThePlatformMgr.AddSink(this, SigninChangedMsg::Type());
-    InitSliders();
-    // Mark the local pad-0 profile as loaded so HasValidSaveData() reports true
-    // and endgame EarnXForAll grants land on a real, valid profile. ctor left
-    // mState = kMetaProfileUnloaded (0), so the SetSaveState assert
-    // (mState != kMetaProfileUnchanged) does not fire.
+    Init();
     mProfiles[0]->SetSaveState(kMetaProfileLoaded);
 }
 #endif
@@ -356,15 +346,27 @@ void ProfileMgr::Init() {
         mWeightUnits = 1;
     }
     MILO_ASSERT(mProfileSaveBuffer == NULL, 0xBC);
+#ifndef HX_NATIVE
+    // PLATFORM: the profile save buffer feeds the Xbox memcard save flow,
+    // which native does not run (no SaveLoadManager). Native's App also runs
+    // FixedSizeSaveable::Init after MetaPanel::Init, so GetSymbolTableSize
+    // would assert sMaxSymbols >= 0 here.
     int size = FixedSizeSaveableStream::GetSymbolTableSize(0x5C) + 8;
     size += HamProfile::SaveSize(0x5C);
     mProfileSaveBuffer = MemAlloc(size, __FILE__, 0xBE, "ProfileSaveBuffer");
     TheMemcardMgr.SetProfileSaveBuffer(mProfileSaveBuffer, size);
+#endif
     static Symbol defaultSym("default");
     mVenuePreference = defaultSym;
     MILO_ASSERT(TheSynth, 0xCA);
     mDolby = TheSynth->IsUsingDolby();
+#ifdef HX_NATIVE
+    // PLATFORM: no Kinect speech on native, TheSpeechMgr is never created;
+    // the image takes this branch whenever speech is unsupported.
+    if (!TheSpeechMgr || !TheSpeechMgr->SpeechSupported()) {
+#else
     if (!TheSpeechMgr->SpeechSupported()) {
+#endif
         mDisableVoiceCommander = true;
         mDisableVoice = true;
         mDisableVoicePause = true;
@@ -413,12 +415,6 @@ std::vector<HamProfile *> ProfileMgr::GetSignedInProfiles() {
 }
 
 float ProfileMgr::SliderIxToDb(int ixVol) const {
-#ifdef HX_NATIVE
-    // On native, Init() may not have run yet when Game ctor queries volume
-    if (!mSliderConfig) {
-        const_cast<ProfileMgr *>(this)->InitSliders();
-    }
-#endif
     MILO_ASSERT(mSliderConfig, 0x34B);
     MILO_ASSERT(0 <= ixVol && ixVol < mSliderConfig->Size() - 1, 0x34C);
     return mSliderConfig->Float(ixVol + 1);
@@ -877,14 +873,6 @@ bool ProfileMgr::IsDifficultyUnlocked(Symbol s1, Symbol s2) const {
 }
 
 bool ProfileMgr::IsContentUnlocked(Symbol s) const {
-#ifdef HX_NATIVE
-    // Temporary native bring-up fallback: until profile/save initialization is
-    // restored, treat content as unlocked so shell and song-select providers
-    // can populate instead of collapsing to empty lists.
-    if (mProfiles.empty()) {
-        return true;
-    }
-#endif
     if (MetaPanel::sUnlockAll) {
         return true;
     } else if (!TheAccomplishmentMgr->IsUnlockableAsset(s)) {
@@ -916,12 +904,6 @@ void ProfileMgr::UpdateUsingFitnessState() {
 }
 
 void ProfileMgr::UploadDeferredFitnessGoal() {
-#ifdef HX_NATIVE
-    // TheFitnessGoalMgr is null on native (FitnessGoalMgr::Init is #ifndef
-    // HX_NATIVE), so UpdateFitnessGoal(profile) would be a vtable call through
-    // null. No fitness-goal upload is meaningful on native — bail early.
-    return;
-#endif
     if (mPendingFitnessGoalUpload) {
         mPendingFitnessGoalUpload = false;
         FOREACH (it, mProfiles) {
@@ -1134,7 +1116,6 @@ float ProfileMgr::GetPadExtraLag(int padNum, LagContext ctx) const {
     return lag;
 }
 
-#ifndef HX_NATIVE
 void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &fs) {
     int version;
     fs >> version;
@@ -1182,11 +1163,6 @@ void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &fs) {
     }
     PushAllOptions();
 }
-#endif
-
-#ifdef HX_NATIVE
-void ProfileMgr::LoadGlobalOptions(FixedSizeSaveableStream &) {}
-#endif
 
 DataNode ProfileMgr::OnMsg(const SigninChangedMsg &msg) {
     unsigned int mask = msg.GetMask();

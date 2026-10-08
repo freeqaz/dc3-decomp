@@ -94,15 +94,9 @@ bool MetaPanel::sMotdCheat;
 bool MetaPanel::sUnlockAll;
 
 MetaPanel::MetaPanel() : mLoopHistoryCursor(0), mSongPreview(TheHamSongMgr), mXMPPlaying(false) {
-#ifdef HX_NATIVE
-    mMetaMusicManager = nullptr;
-    mCampaign = nullptr;
-    mHAQManager = nullptr;
-#else
     mMetaMusicManager = new MetaMusicManager(SystemConfig("synth", "metamusic"));
     mCampaign = new Campaign(SystemConfig("campaign"));
     mHAQManager = new HAQManager();
-#endif
     mSongPreview.SetName("song_preview", ObjectDir::Main());
     // These provider managers back shell/song-selection UI. Native originally
     // skipped them along with deeper metagame systems, which left DTA-visible
@@ -172,41 +166,36 @@ void MetaPanel::Init() {
     REGISTER_OBJ_FACTORY(SongSelectPanel)
     REGISTER_OBJ_FACTORY(SongSelectPlaylistCustomizePanel)
     REGISTER_OBJ_FACTORY(SongSelectPlaylistPanel)
-#ifndef HX_NATIVE
     SongStatusMgr::Init();
-#endif
     REGISTER_OBJ_FACTORY(TexLoadPanel)
     REGISTER_OBJ_FACTORY(Hmx::Object)
 #ifndef HX_NATIVE
+    // PLATFORM: native's MemcardMgr is a filesystem stub whose Init creates a
+    // save directory under $HOME; nothing on native reads or writes it.
     TheMemcardMgr.Init();
+#endif
     MetagameRank::Preinit();
+#ifdef HX_NATIVE
+    // PLATFORM: native runs ProfileMgr::Init() through InitNative(), which is
+    // Init() plus marking pad-0's profile loaded (no Xbox signin/save flow).
+    // Leaderboards (Xbox Live score upload/download) are not created.
+    //
+    // BUG-OPEN (w23-g04): sUnlockAll = true surfaces all content as unlocked
+    // and not-new; the image starts with it false. It dates from before
+    // native had profiles (9c98fbef0); native still has no persistent profile
+    // save, so a fresh-profile lock set would be permanent. Read-only -- no
+    // grant/save/signin machinery is touched.
+    sUnlockAll = true;
+    TheProfileMgr.InitNative();
+#else
     TheProfileMgr.Init();
     Leaderboards::Init();
-#endif
-#ifdef HX_NATIVE
-    // ProfileMgr::Init() above is #ifndef HX_NATIVE, so on native mProfiles is
-    // empty and per-profile unlock state never populates. Direct C++ callers of
-    // HamProfile::IsContentUnlockedForProfile / IsContentNew /
-    // CampaignSongProvider::IsSongAvailable bypass the DTA stub
-    // (App.cpp is_content_unlocked->1) and would otherwise hit
-    // MILO_ASSERT(pProfile) on the null native profile. sUnlockAll is the
-    // engine's own read-side override (see ToggleUnlockAll / UnlockAll): it
-    // surfaces all content as unlocked-and-not-new and short-circuits those
-    // asserts. Read-only — no grant/save/signin machinery is touched.
-    sUnlockAll = true;
-    // Create native profiles BEFORE anything queries them. The full
-    // ProfileMgr::Init() is Xbox-only (heavy side-effects); InitNative() creates
-    // the profile objects + marks pad-0 loaded so completing a song can register
-    // an accomplishment/award to a valid local profile. No save/signin machinery.
-    TheProfileMgr.InitNative();
 #endif
     // Challenges reads DTA config only (no Xbox Live calls) — safe on native.
     // Without this, TheChallenges is null and MainMenuProvider::Text() crashes
     // when the main menu "challenges" item renders its "new" badge.
     Challenges::Init();
-#ifndef HX_NATIVE
     FitnessGoalMgr::Init();
-#endif
     REGISTER_OBJ_FACTORY(HamStarsDisplay)
     REGISTER_OBJ_FACTORY(WeightInputPanel)
     REGISTER_OBJ_FACTORY(AppNavProvider)
@@ -255,9 +244,6 @@ void MetaPanel::Load() {
     int loopIndex = PickLoopIndex(sysConfig->Size());
     DataArray *loopArray = sysConfig->Array(loopIndex);
     if (!TheMetaMusic) {
-#ifdef HX_NATIVE
-        if (!sHamMaster) return;
-#endif
         TheMetaMusic = new MetaMusic(sHamMaster, "sfx/shell_fx.milo");
         TheMetaMusic->Load(0.0f, true, true);
         sHamMaster->Load(
@@ -292,9 +278,6 @@ void MetaPanel::FinishLoad() {
         }
     }
     UIPanel::FinishLoad();
-#ifdef HX_NATIVE
-    if (!TheMetaMusic) return;
-#endif
     auto bgMusicFader = TheSynth->Find<Fader>("background_music_level.fade", true);
     TheMetaMusic->AddFader(bgMusicFader);
 }
@@ -305,9 +288,6 @@ bool MetaPanel::IsLoaded() const {
             return true;
         }
     }
-#ifdef HX_NATIVE
-    if (!TheMetaMusic) return UIPanel::IsLoaded();
-#endif
     return UIPanel::IsLoaded() && TheMetaMusic->Loaded();
 }
 
@@ -319,9 +299,6 @@ void MetaPanel::Poll() {
     }
     UIPanel::Poll();
     mSongPreview.Poll();
-#ifdef HX_NATIVE
-    if (!TheMetaMusic || !sHamMaster) return;
-#endif
     MILO_ASSERT(TheMetaMusic, 0x176);
     TheMetaMusic->Poll();
     float beat = MsToBeat(sHamMaster->StreamMs());
@@ -337,9 +314,6 @@ void MetaPanel::Enter() {
         }
     }
     UIPanel::Enter();
-#ifdef HX_NATIVE
-    if (!sHamMaster) return;
-#endif
     sHamMaster->SetMaps();
     TheTaskMgr.SetAutoSecondsBeats(true);
     // (An HX_NATIVE hack here used to call TheMetaMusic->Start() on every enter,
@@ -357,9 +331,6 @@ void MetaPanel::Exit() {
     }
     UIPanel::Exit();
     mSongPreview.Start(gNullStr, nullptr);
-#ifdef HX_NATIVE
-    if (TheMetaMusic)
-#endif
     TheMetaMusic->Stop();
     ThePlatformMgr.DisableXMP();
 }
@@ -455,22 +426,12 @@ void MetaPanel::CycleVenuePreference() {
 
 BEGIN_HANDLERS(MetaPanel)
     HANDLE_EXPR(meta_music, TheMetaMusic)
-#ifdef HX_NATIVE
-    HANDLE_ACTION_IF(
-        load_meta_music,
-        sHamMaster && TheMetaMusic,
-        sHamMaster->Load(
-            TheMetaMusic->SongInfo(), true, 0, false, (HamSongDataValidate)0, 0
-        )
-    )
-#else
     HANDLE_ACTION(
         load_meta_music,
         sHamMaster->Load(
             TheMetaMusic->SongInfo(), true, 0, false, (HamSongDataValidate)0, 0
         )
     )
-#endif
     HANDLE_ACTION(init_songpreview, mSongPreview.Init())
     HANDLE_ACTION(unlock_all, UnlockAll())
     HANDLE_ACTION(unlock_classic, UnlockClassicOutfit(_msg->Sym(2)))
