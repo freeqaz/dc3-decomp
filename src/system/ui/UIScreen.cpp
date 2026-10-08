@@ -298,13 +298,8 @@ void UIScreen::Enter(UIScreen *scr) {
 #ifdef HX_WEB
     fprintf(stderr, "DC3 Web: UIScreen '%s' 'enter' msg done\n", Name());
     fflush(stderr);
-    // Web: skip the synchronous Poll() call here. On web, async file loading
-    // (fetch) needs the browser event loop to progress, so calling Poll()
-    // synchronously during Enter() causes a deadlock if panels are still loading.
-    // The main loop will call Poll() on subsequent frames.
-#else
-    Poll();
 #endif
+    Poll();
 
 #ifdef HX_NATIVE
     // Dump screen typeDef handlers for debugging
