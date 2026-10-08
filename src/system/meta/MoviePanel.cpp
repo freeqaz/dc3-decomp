@@ -232,17 +232,16 @@ lol:
 }
 
 bool MoviePanel::IsLoaded() const {
-#ifdef __EMSCRIPTEN__
-    // Web only: WebMovieImpl's Ready() is "the <video> element's metadata has
-    // arrived", which only its Poll() observes -- a panel waiting on it before
-    // it polls could wait forever.  Native (FFmpegMovieImpl) answers the
-    // image's question -- no load pending -- and runs the image body below,
-    // including the subtitles-loader wait.
-    return UIPanel::IsLoaded();
-#endif
+#ifndef __EMSCRIPTEN__
+    // Web skips only the movie half: WebMovieImpl's Ready() is "the <video>
+    // element's metadata has arrived", which only its Poll() observes -- a
+    // panel waiting on it before it polls could wait forever.  The image's
+    // subtitles-loader wait below runs on every build (w23-web: web used to
+    // return UIPanel::IsLoaded() before it).
     if (!mMovie.Ready()) {
         return false;
     }
+#endif
     if (mSubtitlesLoader && !mSubtitlesLoader->IsLoaded()) {
         return false;
     }
