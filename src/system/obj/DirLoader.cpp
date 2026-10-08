@@ -411,6 +411,11 @@ void ReadEditorDirDead(BinStream &bs) {
     unsigned int i = 0;
     while (true) {
 #ifdef HX_NATIVE
+        // Same exit as ReadDead's (ported from rb3-xenon f5c780a61, W16-UL): a
+        // failed stream reads zeros, and the terminator has no zero byte, so the
+        // hunt would never end. Retail never reaches it on shipped data.
+        if (bs.Fail())
+            return;
         bs.WaitUntilReady();
 #else
         EofType t;
