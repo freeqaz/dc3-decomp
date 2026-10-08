@@ -97,7 +97,7 @@ BEGIN_HANDLERS(GestureMgr)
         if (sym == "init_snapshots" || sym == "clear_snapshots"
             || sym == "start_snapshot_batch" || sym == "set_autoexposure_region"
             || sym == "set_autoexposure" || sym == "dump_camera_properties"
-            || sym == "draw_skeletons" || sym == "set_tracked_skeletons") {
+            || sym == "draw_skeletons") {
             return 0;
         }
         if (sym == "toggle_autoexposure_tweak" || sym == "using_autoexposure_tweak"
