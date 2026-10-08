@@ -178,7 +178,7 @@ void CharServoBone::RegulateInternal(Character *me) {
         CharClipDriver *driver = me->Driver()->Before(me->Driver()->Last());
         CharClipDriver *next = driver && driver->mRampIn > 0 ? driver->Next() : nullptr;
         if (next) {
-            DoRegulate(me, mRegulate, next, driver->mRampIn, Max(2.0f, driver->mRampIn / 1.5f));
+            DoRegulate(me, mRegulate, next, driver->mRampIn, Max(2.0f, driver->mRampIn * (1.0f / 1.5f)));
         }
         mRegulate->Constrain(me->DirtyLocalXfm());
     }

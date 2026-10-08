@@ -44,7 +44,7 @@ DataNode LightHue::OnSaveDefault(DataArray *da) {
     bmap.Create(0x100, 8, 0, 0x18, 0, 0, 0, 0);
     for (int i = 0; i < 0x100; i++) {
         Hmx::Color color;
-        MakeColor((float)i / 255.0f, 1.0f, 0.5f, color);
+        MakeColor((float)i * (1.0f / 255.0f), 1.0f, 0.5f, color);
         unsigned char red = color.red * 255.0f;
         unsigned char green = color.green * 255.0f;
         unsigned char blue = color.blue * 255.0f;
@@ -115,7 +115,7 @@ void LightHue::Sync() {
                     float h, s, l;
                     MakeHSL(
                         Hmx::Color(
-                            (float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f
+                            (float)r * (1.0f / 255.0f), (float)g * (1.0f / 255.0f), (float)b * (1.0f / 255.0f)
                         ),
                         h,
                         s,

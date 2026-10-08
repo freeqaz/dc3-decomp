@@ -690,7 +690,7 @@ void StandardStream::Destroy() {
 
 int StandardStream::MsToSamp(float ms) const {
     MILO_ASSERT(mSampleRate, 0x459);
-    return mSampleRate * ms / 1000.0f;
+    return mSampleRate * ms * (1.0f / 1000.0f);
 }
 
 float StandardStream::SampToMs(int samples) const {

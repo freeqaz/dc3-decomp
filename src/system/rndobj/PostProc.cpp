@@ -620,7 +620,7 @@ bool RndPostProc::BlendPrevious() const {
 
 float RndPostProc::BloomIntensity() const {
     if (mBloomGlare && TheHiResScreen.IsActive()) {
-        return mBloomIntensity / 3.0f;
+        return mBloomIntensity * (1.0f / 3.0f);
     } else
         return mBloomIntensity;
 }

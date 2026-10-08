@@ -36,7 +36,7 @@ NoteVoiceInst::NoteVoiceInst(
       mOwner(owner) {
     if (zone->Sample()) {
         mSample = zone->Sample()->NewInst(false, 0, -1);
-        mSample->SetBankVolume(RatioToDb(ratio / 127.0f) + zone->mVolume);
+        mSample->SetBankVolume(RatioToDb(ratio * (1.0f / 127.0f)) + zone->mVolume);
         mSample->SetBankPan(zone->mPan);
         mSample->SetBankSpeed(getCalculatedSpeed(mTriggerNote));
         mSample->SetFXCore(zone->GetFXCore());
@@ -85,7 +85,7 @@ void NoteVoiceInst::SetVolume(float volume) {
 }
 
 float NoteVoiceInst::getCalculatedSpeed(float f1) {
-    return CalcSpeedFromTranspose(mFineTune / 100.0f + (f1 - mCenterNote));
+    return CalcSpeedFromTranspose(mFineTune * (1.0f / 100.0f) + (f1 - mCenterNote));
 }
 
 void NoteVoiceInst::Poll() {
@@ -102,7 +102,7 @@ void NoteVoiceInst::Poll() {
                 (float)(mGlideFrames - mGlideFramesLeft--) / (float)mGlideFrames
             );
             mSample->SetBankSpeed(
-                CalcSpeedFromTranspose(mFineTune / 100.0f + (interped - mCenterNote))
+                CalcSpeedFromTranspose(mFineTune * (1.0f / 100.0f) + (interped - mCenterNote))
             );
         }
     }

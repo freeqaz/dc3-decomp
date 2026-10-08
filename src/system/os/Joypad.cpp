@@ -328,7 +328,7 @@ int JoypadData::GetPressureBucket(JoypadButton b) const {
     float val = mPressures[b];
     if (mType == kJoypadPs3RoDrums) {
         val = val * 255.0f;
-        val = 1.0f - Clamp<float>(0.0f, 100.0f, val - 22.0f) / 100.0f;
+        val = 1.0f - Clamp<float>(0.0f, 100.0f, val - 22.0f) * (1.0f / 100.0f);
     }
     return FloatToBucket(val);
     return 0;

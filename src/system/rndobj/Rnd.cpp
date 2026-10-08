@@ -859,9 +859,9 @@ DataNode Rnd::OnSetClearColor(const DataArray *da) {
 DataNode Rnd::OnSetClearColorPacked(const DataArray *da) {
     SetClearColor(
         Hmx::Color(
-            (da->Int(2) & 255) / 255.0f,
-            ((da->Int(2) >> 8) & 255) / 255.0f,
-            ((da->Int(2) >> 0x10) & 255) / 255.0f
+            (da->Int(2) & 255) * (1.0f / 255.0f),
+            ((da->Int(2) >> 8) & 255) * (1.0f / 255.0f),
+            ((da->Int(2) >> 0x10) & 255) * (1.0f / 255.0f)
         )
     );
     return 0;
@@ -1380,7 +1380,7 @@ RndTex *Rnd::CreateDefaultTexture(DefaultTextureType textureType) {
     case kDefaultTex_Hue:
         for (int i = 0; i < width; i++) {
             Hmx::Color color;
-            MakeColor((float)i / 255.0f, 1.0f, 0.5f, color);
+            MakeColor((float)i * (1.0f / 255.0f), 1.0f, 0.5f, color);
             unsigned char thisRed = color.red * 255.0f;
             unsigned char thisGreen = color.green * 255.0f;
             unsigned char thisBlue = color.blue * 255.0f;

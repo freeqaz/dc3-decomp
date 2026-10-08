@@ -83,8 +83,8 @@ BEGIN_LOADS(FxSend)
         if (d.rev >= 2) {
             float x;
             d >> x;
-            mDryGain = RatioToDb((100.0f - x) / 100.0f);
-            mWetGain = RatioToDb(x / 100.0f);
+            mDryGain = RatioToDb((100.0f - x) * (1.0f / 100.0f));
+            mWetGain = RatioToDb(x * (1.0f / 100.0f));
         }
         if (d.rev >= 3) {
             d >> mBypass;

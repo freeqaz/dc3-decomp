@@ -521,7 +521,7 @@ void GamePanel::Poll() {
         }
         if (TheMaster) {
             float ms = TheMaster->StreamMs();
-            sFloat2 = (ms - sFloat1) / 1000.0f;
+            sFloat2 = (ms - sFloat1) * (1.0f / 1000.0f);
             sFloat1 = ms;
         } else {
             sFloat2 = 0;

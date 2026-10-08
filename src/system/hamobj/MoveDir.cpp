@@ -1555,7 +1555,7 @@ void MoveDir::SetCurrentMove(int player, HamMove *move) {
         }
         if (move->SuppressPracticeOptions()) {
             static Message suppressMsg("begin_suppress_practice_options", 0);
-            suppressMsg[0] = f9 / 1000.0f;
+            suppressMsg[0] = f9 * (1.0f / 1000.0f);
             TheHamProvider->Handle(suppressMsg, false);
         }
     }

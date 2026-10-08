@@ -482,7 +482,7 @@ void CharBonesSamples::Relativize(CharClip *clip) {
                 void *channel = clip->GetChannel(bone->name);
                 float evalRot;
                 clip->EvaluateChannel(&evalRot, channel, startBeat);
-                float rotVal = (float)*rot / 1638.4f;
+                float rotVal = (float)*rot * (1.0f / 1638.4f);
                 *rot = MakeShortAng(LimitAng(rotVal - evalRot));
                 bone++;
             }
@@ -510,7 +510,7 @@ void CharBonesSamples::Relativize(CharClip *clip) {
                 void *channel = clip->GetChannel(bone->name);
                 float evalRot;
                 clip->EvaluateChannel(&evalRot, channel, startBeat);
-                float rotVal = (float)*rot / 1638.4f;
+                float rotVal = (float)*rot * (1.0f / 1638.4f);
                 *rot = MakeShortAng(LimitAng(rotVal - evalRot));
                 bone++;
             }

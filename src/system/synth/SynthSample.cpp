@@ -37,7 +37,7 @@ BEGIN_HANDLERS(SynthSample)
     HANDLE_EXPR(num_markers, NumMarkers())
     HANDLE_EXPR(marker_name, mSampleData.GetMarker(_msg->Int(2)).Name())
     HANDLE_EXPR(marker_sample, mSampleData.GetMarker(_msg->Int(2)).Sample())
-    HANDLE_EXPR(sample_length, LengthMs() / 1000.0f)
+    HANDLE_EXPR(sample_length, LengthMs() * (1.0f / 1000.0f))
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 

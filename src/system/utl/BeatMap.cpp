@@ -48,7 +48,7 @@ int BeatMap::IsDownbeat(int i1) const {
 // matches in retail with the right inline settings
 float BeatMap::Beat(int tick) const {
     if (mInfos.empty())
-        return (float)tick / 480.0f;
+        return (float)tick * (1.0f / 480.0f);
     else {
         int i2;
         if (tick <= mInfos[0].mTick)
@@ -70,7 +70,7 @@ float BeatMap::Beat(int tick) const {
 // also matches in retail with the right inline settings
 float BeatMap::Beat(float tick) const {
     if (mInfos.empty())
-        return tick / 480.0f;
+        return tick * (1.0f / 480.0f);
 
     int firstTick = mInfos[0].mTick;
     int i2 = tick;

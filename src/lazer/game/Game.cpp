@@ -617,7 +617,7 @@ void Game::Jump(float f1, bool b2) {
     if (b2) {
         mMaster->Jump(f1);
     }
-    TheTaskMgr.ResetTaskTime(f1 / 1000.0f, MsToBeat(f1));
+    TheTaskMgr.ResetTaskTime(f1 * (1.0f / 1000.0f), MsToBeat(f1));
     mJumpMs = f1;
     mWaitState = 2;
 }
@@ -654,7 +654,7 @@ void Game::Reset() {
     TheGamePanel->ResetJitter();
     RELEASE(mGameInput);
     mGameInput = new LiveInput(*mMaster->GetAudio());
-    TheTaskMgr.SetAVOffset(mGameInput->GetSongToTaskMgrMs() / 1000.0f);
+    TheTaskMgr.SetAVOffset(mGameInput->GetSongToTaskMgrMs() * (1.0f / 1000.0f));
     TheTaskMgr.SetSeconds(0, true);
     mMaster->SetMaps();
 }
@@ -762,7 +762,7 @@ void Game::LoadSong() {
 
 void Game::SetPaused(bool b1, bool b2) {
     if (!b1) {
-        TheTaskMgr.SetAVOffset(mGameInput->GetSongToTaskMgrMs() / 1000.0f);
+        TheTaskMgr.SetAVOffset(mGameInput->GetSongToTaskMgrMs() * (1.0f / 1000.0f));
     }
     if (b2) {
         mGameInput->SetPaused(b1);

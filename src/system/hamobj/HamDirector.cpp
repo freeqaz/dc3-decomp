@@ -2976,7 +2976,7 @@ void HamDirector::ChangeNextShotIfCharacterCollisionLikely() {
         shotKeys->FrameFromIndex(keyIdx, frame);
     }
 
-    int nextBeatPlusOne = (int)SecondsToBeat(frame / 30.0f) + 1;
+    int nextBeatPlusOne = (int)SecondsToBeat(frame * (1.0f / 30.0f)) + 1;
 
     Difficulty diffs[2];
     Transform transforms[2];
@@ -3074,7 +3074,7 @@ void HamDirector::OnPopulateMoves() {
             if ((*moveInstSymKeys)[i].value == "") continue;
 
             float keyFrame = (*moveInstSymKeys)[i].frame;
-            float beat = SecondsToBeat((*moveInstSymKeys)[i].frame / 30.0f);
+            float beat = SecondsToBeat((*moveInstSymKeys)[i].frame * (1.0f / 30.0f));
             float roundedBeat = (float)floor(beat + 0.5f);
             if (i != 0) {
                 roundedBeat -= 1.0f;
@@ -3264,14 +3264,14 @@ found:
     }
 
     Key<Symbol> &foundKey = (*keys)[foundIdx];
-    float keyBeat = SecondsToBeat(foundKey.frame / 30.0f);
+    float keyBeat = SecondsToBeat(foundKey.frame * (1.0f / 30.0f));
     if (keyBeat + beatExtra < 0.0f) {
         beatExtra = 0.0f;
     }
 
-    float beat = SecondsToBeat(foundKey.frame / 30.0f) + beatOffset + beatExtra;
+    float beat = SecondsToBeat(foundKey.frame * (1.0f / 30.0f)) + beatOffset + beatExtra;
     float frame = BeatToSeconds(beat) * 30.0f;
-    SecondsToBeat(foundKey.frame / 30.0f);
+    SecondsToBeat(foundKey.frame * (1.0f / 30.0f));
 
     PropKeys *clipKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(clip_sym));
     Keys<Symbol, Symbol> *clipKeysData = clipKeys->AsSymbolKeys();
@@ -3285,7 +3285,7 @@ found:
         return;
     }
 
-    float clipBeat = SecondsToBeat(clipKey.frame / 30.0f);
+    float clipBeat = SecondsToBeat(clipKey.frame * (1.0f / 30.0f));
     float alignOff = 0.0f;
     int beatAlign = (clip->PlayFlags() >> 12) & 0xf;
     if ((float)beatAlign != 0.0f) {
@@ -3321,7 +3321,7 @@ void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, floa
 
             CharClip *clip = mClipDir->Find<CharClip>(key.value.Str(), false);
             if (clip) {
-                float clipBeat = SecondsToBeat(key.frame / 30.0f);
+                float clipBeat = SecondsToBeat(key.frame * (1.0f / 30.0f));
                 if (startBeat + beatExtra < clipBeat) {
                     beatExtra = 0.0f;
                 }
@@ -3344,7 +3344,7 @@ void HamDirector::DrawIconMan(Difficulty diff, float beat, float startBeat, floa
             float frame = BeatToSeconds(beat) * 30.0f;
             int clipIdx = keys->KeyLessEq(frame);
             Key<Symbol> &key = keys->at(clipIdx);
-            float clipBeat = SecondsToBeat(key.frame / 30.0f);
+            float clipBeat = SecondsToBeat(key.frame * (1.0f / 30.0f));
             Symbol nextValue;
             Symbol prevValue;
             int nextIdx = clipIdx + 1;

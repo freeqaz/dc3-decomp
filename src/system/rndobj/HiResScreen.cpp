@@ -434,7 +434,7 @@ void HiResScreen::Merge(
                         float invBlend = (1.0f - blend) * 255.0f;
                         a = (unsigned char)invBlend;
                         if (ca != 0) {
-                            float t = ca / 255.0f;
+                            float t = ca * (1.0f / 255.0f);
                             int dr = cr - r;
                             int dg = cg - g;
                             int db = cb - b;

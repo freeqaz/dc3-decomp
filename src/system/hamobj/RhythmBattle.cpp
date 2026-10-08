@@ -490,7 +490,7 @@ void RhythmBattle::UpdateMindControl() {
             }
         }
     } else if (mPlayerOne->GetZoneLevel() || mPlayerTwo->GetZoneLevel()) {
-        mMindControlIntensity += TheTaskMgr.DeltaBeat() / 10.0f;
+        mMindControlIntensity += TheTaskMgr.DeltaBeat() * (1.0f / 10.0f);
     }
     for (int i = 0; i < 2; i++) {
         HamCharacter *hc = TheHamDirector->GetCharacter(i);
@@ -875,7 +875,7 @@ void RhythmBattle::OnBeat() {
                             // The target calls ElapsedMs() twice here and discards the first
                             // result (two consecutive vtable slot 0x1c calls on `current`).
                             current.ElapsedMs();
-                            f45 += (float)current.ElapsedMs() / 1000.0f;
+                            f45 += (float)current.ElapsedMs() * (1.0f / 1000.0f);
                         }
                         for (int j = 0; j < kNumJoints; j++) {
                             Vector3 v;

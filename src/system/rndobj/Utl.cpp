@@ -510,7 +510,7 @@ void UtilDrawAxes(const Transform &tf, float f, const Hmx::Color &c) {
 
 void UtilDrawLine(const Vector2 &v1, const Vector2 &v2, const Hmx::Color &color) {
     RndCam *cam = RndCam::Current();
-    float planeRatio = (cam->FarPlane() - cam->NearPlane()) / 10.0f + cam->NearPlane();
+    float planeRatio = (cam->FarPlane() - cam->NearPlane()) * (1.0f / 10.0f) + cam->NearPlane();
     Vector3 v3_1, v3_2;
     cam->ScreenToWorld(v1, planeRatio, v3_1);
     cam->ScreenToWorld(v2, planeRatio, v3_2);

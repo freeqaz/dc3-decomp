@@ -156,7 +156,7 @@ void HollaBackMinigame::Poll() {
                 if (mSound) {
                     SynthSample *sample = mSound->Sample();
                     float f23 = mSound->ElapsedTime() - 1.0f;
-                    if (f23 >= sample->LengthMs() / 1000.0f)
+                    if (f23 >= sample->LengthMs() * (1.0f / 1000.0f))
                         goto next;
                 }
                 TheMaster->GetAudio()->SetPaused(false);

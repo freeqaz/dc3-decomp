@@ -451,7 +451,7 @@ void HamProfile::SetFitnessMode(bool inMode) {
 }
 
 float HamProfile::GetFitnessPounds() { return mFitnessPounds; }
-float HamProfile::GetKgFromPounds(float lbs) { return lbs / 2.2046227f; }
+float HamProfile::GetKgFromPounds(float lbs) { return lbs * (1.0f / 2.2046227f); }
 float HamProfile::GetPoundsFromKgs(float kgs) { return kgs * 2.2046227f; }
 
 void HamProfile::SetFitnessPounds(float lbs) {
