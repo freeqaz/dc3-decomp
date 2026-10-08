@@ -718,8 +718,13 @@ void JoypadPollCommon() {
                 float x;
                 float y;
                 if (data.mNumAnalogSticks > k) {
-                    x = sticks[k][0] / 127.0f;
-                    y = sticks[k][1] / 127.0f;
+                    // w22-a11: the image multiplies by the folded reciprocal
+                    // __real@3c010204 (= 1.0f/127.0f) under /fp:fast, e.g.
+                    // ^/* row `fmuls f13, f13, f31` with f31 = __real@3c010204;
+                    // a true `/ 127.0f` rounds differently natively for 16 of
+                    // the 256 byte values (+-9, 13, 18, 26, 36, 52, 72, 104).
+                    x = sticks[k][0] * (1.0f / 127.0f);
+                    y = sticks[k][1] * (1.0f / 127.0f);
                 } else {
                     x = 0.0f;
                     y = 0.0f;
@@ -728,7 +733,7 @@ void JoypadPollCommon() {
                 data.mSticks[k][1] = y;
             }
             for (int t = 0; t < 2; t++) {
-                float v = triggers[t] / 127.0f;
+                float v = triggers[t] * (1.0f / 127.0f); // w22-a11: same reciprocal
                 changed |= data.mTriggers[t] != v;
                 data.mTriggers[t] = v;
             }
