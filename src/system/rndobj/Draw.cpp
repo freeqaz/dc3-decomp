@@ -107,14 +107,11 @@ END_LOADS
 
 void RndDrawable::Draw() {
     if (mShowing) {
-#ifndef HX_NATIVE
-        // Frustum culling — disabled for native build (frustum setup not yet matching)
         Sphere s;
         bool hasSphere = MakeWorldSphere(s, false);
         if (hasSphere && s > RndCam::Current()->WorldFrustum()) {
             return;
         }
-#endif
         TheRnd.PushClipPlanes(mClipPlanes);
         DrawShowing();
         TheRnd.PopClipPlanes(mClipPlanes);
