@@ -1,5 +1,6 @@
 #include "Skeleton_Native.h"
 #include "gesture/GestureMgr.h" // NUM_SKELETONS
+#include <cstdint>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -585,9 +586,39 @@ void NativeSkeletonProvider::FillDummySkeletonData(SkeletonData &data) {
         { kJointFootRight,       0.12f, 0.00f, 2.0f },
     };
 
+    // Sensor noise floor.  A physical camera never delivers the same joint
+    // position bit-for-bit on two frames, and the image's code relies on that:
+    // RhythmDetector's AnalyzeData z-scores every analysed joint's speed over
+    // a 10-sample window and divides by the variance with no zero guard, so a
+    // perfectly still skeleton yields 0 * (1/0) = NaN.  That NaN becomes
+    // RhythmBattlePlayer's rating frac, and HamPhraseMeter's phrase_meter.anim
+    // SymbolKeys::SetFrame(NaN) indexes one key past the end and hands
+    // DataGetMacro a garbage symbol (null DataArray -> SIGSEGV).  The image
+    // runs the same code; only a synthetic sensor can be that still.  So the
+    // dummy carries a deterministic +/-1 micrometre jitter per joint axis per
+    // frame (a few float ulps at 2 m): far below anything the gesture or move
+    // scoring resolves -- the pose gate's dummy DetectFrac samples match the
+    // static dummy's to 4 decimals outside its usual wall-clock noise, where
+    // 10 um already moved them by 1e-4 -- but enough that every speed window
+    // has non-zero variance.  The jitter is a pure function of a frame
+    // counter, so it adds no run-to-run variation of its own.
+    static uint32_t sDummyFrame = 0;
+    sDummyFrame++;
+    const float kJitterMetres = 1.0e-6f;
+
     for (const auto &j : kPose) {
-        data.mJointPositions[j.joint].Set(j.x, j.y, j.z);
-        data.mRawPositions[j.joint].Set(j.x, j.y, j.z);
+        float pos[3] = { j.x, j.y, j.z };
+        for (int axis = 0; axis < 3; axis++) {
+            uint32_t h = sDummyFrame * 0x9E3779B1u ^ (uint32_t)(j.joint * 3 + axis) * 0x85EBCA77u;
+            h ^= h >> 15;
+            h *= 0xC2B2AE3Du;
+            h ^= h >> 13;
+            // [-1, 1)
+            float unit = (float)(h & 0xFFFFu) / 32768.0f - 1.0f;
+            pos[axis] += unit * kJitterMetres;
+        }
+        data.mJointPositions[j.joint].Set(pos[0], pos[1], pos[2]);
+        data.mRawPositions[j.joint].Set(pos[0], pos[1], pos[2]);
         data.mJointTrackingState[j.joint] = kConfidenceTracked;
     }
 
