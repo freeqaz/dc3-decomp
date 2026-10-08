@@ -1938,16 +1938,6 @@ void HamNavList::DrawShowing() {
         }
     }
 
-#ifdef __EMSCRIPTEN__
-    // Web fix: re-fill widget text content every frame.
-    // Xbox fills once on Enter() then uses StartScroll/CompleteScroll to rotate
-    // elements one-by-one during scroll animation. On web, the scroll callback
-    // path misses Fill updates — re-filling per-frame ensures text matches
-    // selection state. Benchmarked at ~0.08ms for 16 widgets × 10 display
-    // slots (<0.5% of 30fps budget).
-    mListDirResource->FillElements(mListState, mListWidgets);
-#endif
-
     mListDirResource->DrawWidgets(
         widgetState, mListState, mListWidgets, WorldXfm(),
         GetState(), nullptr, false
