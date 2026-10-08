@@ -642,15 +642,6 @@ DataNode TaskMgr::OnTimeTilNext(DataArray *arr) {
 }
 
 void TaskMgr::Start(Task *t, TaskUnits u, float f) {
-#ifdef HX_NATIVE
-    // During cascade, destructors may execute scripts that create tasks.
-    // These tasks reference objects about to be freed — they'd become
-    // stale ObjPtrs in TaskTimeline, crashing in Poll. Skip them.
-    if (ObjectDir::InDeleteObjects()) {
-        delete t;
-        return;
-    }
-#endif
     mTimelines[u].AddTask(t, f);
 }
 
@@ -735,9 +726,12 @@ void TaskMgr::QueueTaskDelete(Task *task) {
         // Note this is NOT reachable by fixing ~Object: the object is already
         // gone before we are called. It has to be refused at the door.
         //
-        // The pre-existing InDeleteObjects() check below is kept, but it was
-        // never the relevant predicate for this failure -- the observed depth
-        // is 0 every time.
+        // There used to be an InDeleteObjects() refusal after this check (and
+        // a matching one in Start()). It dated from 2026-03, when ~Object
+        // skipped its ref walk during a cascade, so a task queued or started
+        // mid-cascade could be left holding a stale ObjPtr. ~Object has
+        // nullified every ring during a cascade since 2026-08-20, which closes
+        // that; the image queues (and starts) the task, and so do we now.
         if (!Task::IsLive(task)) {
             RefAudit::Backtrace("QueueTaskDelete refused a dead task");
             Task::DescribeDeath(task);
@@ -750,12 +744,6 @@ void TaskMgr::QueueTaskDelete(Task *task) {
             }
             return;
         }
-        // During cascade, tasks are being destroyed by Phase 1 and their
-        // memory is deferred-freed. Don't queue them — the ObjPtr<Task>
-        // constructor calls AddRef which may write to freed ring neighbors,
-        // and the deferred memory will be freed before Poll can delete it.
-        if (ObjectDir::InDeleteObjects())
-            return;
 #endif
         for (int i = 0; i < unk84.size(); i++) {
             if (unk84[i] == task)
