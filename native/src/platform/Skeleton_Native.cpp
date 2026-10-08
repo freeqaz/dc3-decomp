@@ -25,7 +25,7 @@ NativeSkeletonProvider *TheSkeletonProvider = nullptr;
 // Stubs — no Kinect skeleton tracking on web
 NativeSkeletonProvider::NativeSkeletonProvider() { memset(mFront, 0, sizeof(mFront)); memset(mBack, 0, sizeof(mBack)); memset(mPersons, 0, sizeof(mPersons)); }
 NativeSkeletonProvider::~NativeSkeletonProvider() {}
-bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int, const std::string&) { return false; }
+bool NativeSkeletonProvider::Start(const std::string&, const std::string&, int) { return false; }
 void NativeSkeletonProvider::Stop() {}
 void NativeSkeletonProvider::Poll() {}
 int NativeSkeletonProvider::FindByTrackId(int) const { return -1; }

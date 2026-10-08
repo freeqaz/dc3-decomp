@@ -259,9 +259,6 @@ void UIPanel::FinishLoad() {
 }
 
 bool UIPanel::Exiting() const {
-#ifdef __EMSCRIPTEN__
-    return false;
-#else
     if (mDir && !mLoaded && mDir->Exiting()) {
         return true;
     }
@@ -271,7 +268,6 @@ bool UIPanel::Exiting() const {
         return node.Int();
     } else
         return false;
-#endif
 }
 
 void UIPanel::Enter() {

@@ -742,9 +742,7 @@ void UIManager::Poll() {
             // the image's short-circuited condition below on every new
             // transition.
             bool printTrans = (sTransCount < 3 || sTransCount % 500 == 0);
-#ifndef HX_WEB
             printTrans = printTrans && DebugUIFlow();
-#endif
             if (printTrans) {
                 bool loaded = !mTransitionScreen || mTransitionScreen->CheckIsLoaded();
                 bool exited = !mCurrentScreen || !mCurrentScreen->Exiting();

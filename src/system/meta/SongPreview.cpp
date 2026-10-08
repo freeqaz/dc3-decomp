@@ -251,6 +251,10 @@ void SongPreview::PrepareSong(Symbol song) {
         mTexMovie->SetVolume(-mAttenuation);
         mTexMovie->AddFader(mFader);
         mTexMovie->AddFader(mMusicFader);
+        // The image returns once the preview movie is set (its audio is the
+        // preview); without this web also opened the song stream below, which
+        // Poll never plays while HasMovie() (w23-web).
+        return;
 #else
         if (FileExists(str.c_str(), 0, nullptr)) {
             mTexMovie->SetFile(str.c_str());

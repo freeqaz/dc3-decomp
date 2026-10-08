@@ -298,13 +298,8 @@ void UIScreen::Enter(UIScreen *scr) {
 #ifdef HX_WEB
     fprintf(stderr, "DC3 Web: UIScreen '%s' 'enter' msg done\n", Name());
     fflush(stderr);
-    // Web: skip the synchronous Poll() call here. On web, async file loading
-    // (fetch) needs the browser event loop to progress, so calling Poll()
-    // synchronously during Enter() causes a deadlock if panels are still loading.
-    // The main loop will call Poll() on subsequent frames.
-#else
-    Poll();
 #endif
+    Poll();
 
 #ifdef HX_NATIVE
     // Dump screen typeDef handlers for debugging
@@ -372,11 +367,6 @@ void UIScreen::Exit(UIScreen *to) {
 }
 
 bool UIScreen::Exiting() const {
-#ifdef __EMSCRIPTEN__
-    // Web: exit animations never complete (Flow/timer/movie subsystems not
-    // fully functional). Skip all exit waits to prevent stuck transitions.
-    return false;
-#else
     FOREACH (it, mPanelList) {
         if (it->Active() && it->mPanel->Exiting()) {
 #ifdef HX_NATIVE
@@ -391,7 +381,6 @@ bool UIScreen::Exiting() const {
     }
 
     return false;
-#endif
 }
 
 void UIScreen::Print(TextStream &s) {

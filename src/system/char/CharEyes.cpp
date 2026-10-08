@@ -826,7 +826,12 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
         }
         if (desc != mEyes.end()) {
             if (!desc->mEye.SetObj(obj))
+#ifdef _LIBCPP_VERSION
+                // libc++ (web) keeps __wrap_iter's pointer constructor private; same element.
+                _ref0.erase(_ref0.begin() + (desc - (EyeDesc *)_ref0.begin()));
+#else
                 _ref0.erase(ObjVector<EyeDesc>::iterator(desc));
+#endif
             return true;
         }
     }
@@ -848,7 +853,11 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
         }
         if (state != mInterests.end()) {
             if (!state->mInterest.SetObj(obj))
+#ifdef _LIBCPP_VERSION
+                _ref1.erase(_ref1.begin() + (state - (CharInterestState *)_ref1.begin()));
+#else
                 _ref1.erase(ObjVector<CharInterestState>::iterator(state));
+#endif
             return true;
         }
     }
