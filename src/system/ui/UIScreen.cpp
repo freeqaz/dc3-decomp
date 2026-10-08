@@ -372,11 +372,6 @@ void UIScreen::Exit(UIScreen *to) {
 }
 
 bool UIScreen::Exiting() const {
-#ifdef __EMSCRIPTEN__
-    // Web: exit animations never complete (Flow/timer/movie subsystems not
-    // fully functional). Skip all exit waits to prevent stuck transitions.
-    return false;
-#else
     FOREACH (it, mPanelList) {
         if (it->Active() && it->mPanel->Exiting()) {
 #ifdef HX_NATIVE
@@ -391,7 +386,6 @@ bool UIScreen::Exiting() const {
     }
 
     return false;
-#endif
 }
 
 void UIScreen::Print(TextStream &s) {
