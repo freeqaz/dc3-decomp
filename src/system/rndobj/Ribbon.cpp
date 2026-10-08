@@ -353,7 +353,11 @@ void RndRibbon::UpdateChase() {
                 );
                 Vector3 delta;
                 Subtract(last.value.v, key.value.v, delta);
-                if (LengthSquared(delta) < minDistSq) {
+                // w22-a30: the image's association, parenthesised so native sums
+                // in the same order (0x827159D0..DC: `fmuls f0, f0, f0` = z*z,
+                // `fmadds f0, f13, f13, f0` += x*x, `fmadds f0, f12, f12, f0`
+                // += y*y).  LengthSquared() sums x, y, z.
+                if ((delta.z * delta.z + delta.x * delta.x) + delta.y * delta.y < minDistSq) {
                     last.frame = key.frame;
                 } else {
                     mTransforms.push_back(key);
@@ -382,7 +386,19 @@ void RndRibbon::UpdateChase() {
             if (2 < i) {
                 Vector3 prevDir;
                 Subtract(prev.value.v, (&cur)[-2].value.v, prevDir);
-                float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
+                // w22-a30: the image's association, written out with explicit
+                // parentheses so native sums in the same order (0x82715B10..18:
+                // `fmuls f0, f0, f12` = z*z, `fmadds f0, f28, f11, f0` += x*x,
+                // `fmadds f0, f13, f10, f0` += y*y) -- the sibling of w22-a21's
+                // HamRibbon fix.  Dot() sums x, y, z.  Normalized unchanged
+                // (99.75728); the Xbox build's in-place Multiply(smoothDir, inv)
+                // now swaps two commutative fmadds operand pairs (0x82715C98,
+                // 0x82715CA0), which native does not see.
+                float dot = Clamp(
+                    0.0f,
+                    1.0f,
+                    (dir.z * prevDir.z + dir.x * prevDir.x) + dir.y * prevDir.y
+                );
                 angle = std::acos(dot);
                 Vector3 scaledPrev = prevDir;
                 scaledPrev *= -1.0f;
