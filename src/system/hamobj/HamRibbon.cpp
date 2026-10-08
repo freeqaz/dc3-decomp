@@ -169,7 +169,8 @@ void HamRibbon::SetActive(bool active) {
 // prevDir/Dot association (the image is ((z + x) + y): source
 // `dir.y*prevDir.y + dir.z*prevDir.z + dir.x*prevDir.x` reproduces it exactly
 // but only moves fuzzy (+0.16), and would make native sum y,z,x instead of
-// Dot's x,y,z -- not shipped), and one commutative fmuls in the in-place
+// Dot's x,y,z -- not shipped; w22-a21 ships the parenthesised z,x,y form
+// instead, see the dot below), and one commutative fmuls in the in-place
 // Multiply(smoothDir, inv) (an inline expansion costs 0.26).
 void HamRibbon::UpdateChase() {
     if (!mFollowA) {
@@ -275,7 +276,16 @@ void HamRibbon::UpdateChase() {
             if (2 < i) {
                 Vector3 prevDir;
                 Subtract(prev.value.v, (&cur)[-2].value.v, prevDir);
-                float dot = Clamp(0.0f, 1.0f, Dot(prevDir, dir));
+                // w22-a21: the image's association, written out with explicit
+                // parentheses so native sums in the same order (0x824C7D68..70:
+                // `fmuls f0, f0, f12` = z*z, `fmadds f0, f28, f11, f0` += x*x,
+                // `fmadds f0, f13, f10, f0` += y*y).  Dot() sums x, y, z.
+                // 99.483 -> 99.498 normalized; MSVC now rounds the in-place
+                // Multiply(smoothDir, inv)'s z term on the other product (one
+                // fmadds operand pair, 0x824C7EF0), which native does not see.
+                float dot = Clamp(
+                    0.0f, 1.0f, (dir.z * prevDir.z + dir.x * prevDir.x) + dir.y * prevDir.y
+                );
                 angle = std::acos(dot);
                 // The scale is the LITERAL -1.0f (a negation of prevDir), not a
                 // loop-carried previous angle: the image loads -1.0 once into
