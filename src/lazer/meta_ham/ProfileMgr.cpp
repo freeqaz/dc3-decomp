@@ -391,16 +391,6 @@ std::vector<HamProfile *> ProfileMgr::GetSignedIn() {
 std::vector<HamProfile *> ProfileMgr::GetSignedInProfiles() {
     std::vector<HamProfile *> profiles;
     FOREACH (it, mProfiles) {
-#ifdef HX_NATIVE
-        // Native has no signin (mSigninMask stays 0), so the endgame's
-        // EarnXForAll would grant to nobody. Scope a "signed in" fiction to the
-        // local pad-0 profile ONLY here — this does NOT touch global
-        // mSigninMask, so ShellInput/UI/nav are unaffected.
-        if ((*it)->GetPadNum() == 0) {
-            profiles.push_back(*it);
-            continue;
-        }
-#endif
         if (ThePlatformMgr.IsSignedIn((*it)->GetPadNum())) {
             profiles.push_back(*it);
         }
@@ -945,10 +935,11 @@ HamProfile *ProfileMgr::GetActiveProfile(bool b) const {
 
 void ProfileMgr::UpdateFriendsList() {
 #ifdef HX_NATIVE
-    // GetSignedInProfiles is now non-empty on native (pad-0 fiction), so this
-    // would heap-allocate an UpdateFriendsListJob per profile whose
-    // EnumerateFriends() -> ThePlatformMgr.EnumerateFriends() is a native no-op
-    // ({}), leaking the job. No friends-list has meaning on native — bail early.
+    // PLATFORM: pad 0 is signed in (locally) on native, so GetSignedInProfiles
+    // is non-empty and this would heap-allocate an UpdateFriendsListJob per
+    // profile whose EnumerateFriends() -> ThePlatformMgr.EnumerateFriends() is
+    // a native no-op ({}: no Xbox Live friends service), so the job would
+    // never complete and leak. Its RC upload is LIVE-only anyway.
     return;
 #endif
     std::vector<HamProfile *> profiles = GetSignedInProfiles();
