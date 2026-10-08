@@ -129,7 +129,21 @@ void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
         NodeVector *next = resized->Next();
         memmove((char *)next + 8, next, moved);
     } else {
+#ifdef HX_NATIVE
+        // w22-a23: the image's 0x20 (`addi r4, r11, 0x20` before Resize) is the
+        // Xbox size of a ONE-node vector -- the 0x18 header (ObjOwnerPtr + size)
+        // plus one CharGraphNode, i.e. the Next() of the vector built here. On
+        // LP64 the header is 0x34 (ObjOwnerPtr<CharClip> is 48 bytes), so the
+        // literal under-allocated by 28 bytes and the placement new + nodes[0]
+        // store below wrote past the end of the block. Same quantity, native
+        // layout.
+        resized = new (Resize(
+            BytesInMemory() + (int)offsetof(NodeVector, nodes) + (int)sizeof(CharGraphNode),
+            mNodeEnd
+        )) NodeVector(this);
+#else
         resized = new (Resize(BytesInMemory() + 0x20, mNodeEnd)) NodeVector(this);
+#endif
         resized->clip = clip;
         resized->size = 0;
     }
