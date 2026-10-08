@@ -1140,7 +1140,10 @@ void BSPFace::Update() {
     facePlane.a = zAxis.x;
     facePlane.b = zAxis.y;
     facePlane.c = zAxis.z;
-    facePlane.d = -(zAxis.x * t.v.x + zAxis.y * t.v.y + zAxis.z * t.v.z);
+    // w22-a26: x + (y + z), the image's order (0x82536B6C `fmuls f13` y*vy,
+    // `fmadds f0` z*vz + that, `fnmadds f0` -(x*vx + that)); the flat sum gave
+    // native (x + y) + z.  Xbox rows unchanged (measured).
+    facePlane.d = -(zAxis.x * t.v.x + (zAxis.y * t.v.y + zAxis.z * t.v.z));
     planes.insert(planes.end(), facePlane);
 
     Vector3 prevPt(p.points.back().x, p.points.back().y, 0.0f);
