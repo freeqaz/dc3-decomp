@@ -33,6 +33,7 @@ import json
 import math
 import os
 import re
+import shutil
 import signal
 import socket
 import struct
@@ -400,6 +401,10 @@ def xenia_provenance(run_dir: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 def _free_port() -> int:
+    """Pick a port by binding :0 and releasing it. RACY: between close() and
+    dc3-native's bind any ephemeral socket on the box can take it (measured
+    under fleet load: 'port 49627/39117/57309 already in use'). Only used as a
+    fallback for a dc3-native too old to accept DC3_HTTP_PORT=0."""
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
     p = s.getsockname()[1]
@@ -407,54 +412,136 @@ def _free_port() -> int:
     return p
 
 
+#: dc3-native's machine-readable bind report (HttpServer::Start, stdout).
+_PORT_LINE = re.compile(rb"^DC3_HTTP_PORT=(\d+)\s*$", re.M)
+#: HttpServer::Start's abort message when an explicit port is taken.
+_PORT_IN_USE = b"already in use"
+
+
+def _tail(path: Path, n: int = 40) -> str:
+    try:
+        data = path.read_bytes()
+    except OSError as e:
+        return f"<could not read {path}: {e}>"
+    lines = data.decode("utf-8", "replace").splitlines()
+    return "\n".join(lines[-n:]) if lines else "<empty>"
+
+
 class NativeBoot:
-    """dc3-native headless with the HTTP server on a private port."""
+    """dc3-native headless with the HTTP server on a private port.
+
+    The port is chosen by the KERNEL inside dc3-native (DC3_HTTP_PORT=0) and
+    read back from its ``DC3_HTTP_PORT=<n>`` stdout line, so no other process
+    can take it between choice and bind. A boot that still dies with "already
+    in use" before ready (a dc3-native predating DC3_HTTP_PORT=0, which maps 0
+    to 9090) is relaunched on a harness-picked port, up to ``attempts`` total.
+    """
 
     def __init__(self, binary: Path, log_path: Path, timeout_s: int = 600,
-                 extra_env: dict | None = None):
+                 extra_env: dict | None = None, attempts: int = 3):
         self.binary = binary
-        self.port = _free_port()
+        self.log_path = log_path
+        self.timeout_s = timeout_s
+        self.extra_env = dict(extra_env or {})
+        self.attempts = attempts
+        self.attempt = 0
+        self.boot_screen = "title_screen"
+        self.proc = None
+        self.log = None
+        self.port: int | None = None
+        self.url: str | None = None
+        self._launch("0")
+
+    def _launch(self, port_spec: str) -> None:
+        self.attempt += 1
         env = dict(os.environ)
         env.update({"MILO_HEADLESS": "1", "DC3_FAST_TIME": "1", "DC3_HTTP": "1",
-                    "DC3_HTTP_PORT": str(self.port), "DC3_FAST_BOOT": "0", "DC3_TEL": "0",
+                    "DC3_HTTP_PORT": port_spec, "DC3_FAST_BOOT": "0", "DC3_TEL": "0",
                     "DC3_SHOW_SPLASH": "0", "MILO_MAX_FRAMES": "0"})
         env.pop("MILO_INPUT_SCRIPT", None)
-        env.update(extra_env or {})
-        self.log = open(log_path, "wb")
+        env.update(self.extra_env)
+        if self.log is not None:
+            self.log.close()
+        # Keep every attempt's log: attempt 1 is native.log, later ones .2, .3.
+        path = self.log_path if self.attempt == 1 else \
+            self.log_path.with_name(f"{self.log_path.name}.{self.attempt}")
+        self.cur_log_path = path
+        self.log = open(path, "wb")
+        self.port, self.url = None, None
         self.proc = subprocess.Popen(
-            ["timeout", "-k", "5", str(timeout_s), str(binary)],
-            cwd=str(binary.parent), env=env, stdout=self.log, stderr=subprocess.STDOUT,
+            ["timeout", "-k", "5", str(self.timeout_s), str(self.binary)],
+            cwd=str(self.binary.parent), env=env, stdout=self.log, stderr=subprocess.STDOUT,
             start_new_session=True)
-        self.url = f"http://127.0.0.1:{self.port}"
-        self.boot_screen = "title_screen"
+
+    def _fail(self, what: str) -> RuntimeError:
+        return RuntimeError(
+            f"{what} (attempt {self.attempt}/{self.attempts}, log {self.cur_log_path}); "
+            f"last lines of dc3-native's output:\n{_tail(self.cur_log_path)}")
+
+    def _read_port(self) -> int | None:
+        try:
+            m = _PORT_LINE.search(self.cur_log_path.read_bytes())
+        except OSError:
+            return None
+        return int(m.group(1)) if m else None
 
     def wait_ready(self, deadline_s: float = 180.0) -> NativeHttpTarget:
-        t = NativeHttpTarget(self.url, timeout=30.0)
         end = time.time() + deadline_s
+        t = None
         while time.time() < end:
             if self.proc.poll() is not None:
-                raise RuntimeError(f"dc3-native exited rc={self.proc.returncode} before ready")
+                rc = self.proc.returncode
+                in_use = False
+                try:
+                    in_use = _PORT_IN_USE in self.cur_log_path.read_bytes()
+                except OSError:
+                    pass
+                # An explicit --env DC3_HTTP_PORT pins every attempt to the same
+                # port, so retrying it would only collide again.
+                if in_use and self.attempt < self.attempts \
+                        and "DC3_HTTP_PORT" not in self.extra_env:
+                    _log(f"dc3-native: port collision on attempt {self.attempt} "
+                         f"(rc={rc}); relaunching on another port")
+                    self._launch(str(_free_port()))
+                    t = None
+                    continue
+                raise self._fail(f"dc3-native exited rc={rc} before ready")
+            if t is None:
+                port = self._read_port()
+                if port is None:
+                    time.sleep(0.2)
+                    continue
+                self.port = port
+                self.url = f"http://127.0.0.1:{port}"
+                t = NativeHttpTarget(self.url, timeout=30.0)
             try:
                 r = t.eval_dta("{+ 1 1}", timeout=5.0)
                 if r.ok and str(r.value) == "2":
                     # Let boot settle past the first screen.
                     scr = t.eval_dta("{if_else {ui current_screen} {{ui current_screen} name} none}")
-                    if scr.ok and scr.text == self.boot_screen:
+                    # ...and out of the transition: UIManager::Handle returns 0
+                    # for every UI read while InTransition() (UI.cpp), so a probe
+                    # that starts mid-transition reads suppressed values.
+                    trn = t.eval_dta("{ui in_transition}")
+                    if scr.ok and scr.text == self.boot_screen and trn.ok \
+                            and str(trn.value) in ("0", "False", "false"):
                         time.sleep(2.0)  # let the screen's enter settle
                         return t
             except TransportError:
                 pass
             time.sleep(1.0)
-        raise RuntimeError(f"dc3-native not ready on {self.url} in {deadline_s}s")
+        raise self._fail(f"dc3-native not ready on {self.url or '<no port reported>'} "
+                         f"in {deadline_s}s")
 
     def stop(self):
-        if self.proc.poll() is None:
+        if self.proc is not None and self.proc.poll() is None:
             try:
                 os.killpg(self.proc.pid, signal.SIGTERM)
                 self.proc.wait(timeout=15)
             except Exception:  # noqa: BLE001
                 os.killpg(self.proc.pid, signal.SIGKILL)
-        self.log.close()
+        if self.log is not None:
+            self.log.close()
 
 
 # ---------------------------------------------------------------------------
@@ -590,6 +677,12 @@ def cmd_check(a):
         sys.exit(77)
     work = Path(a.work_dir or f"/tmp/xenia-golden-check-{os.getpid()}")
     work.mkdir(parents=True, exist_ok=True)
+    # A previous run's capture/compare must not survive a run that dies before
+    # writing its own: the work dir is fixed per test, and a stale passing
+    # compare.json next to a failed boot is exactly what a diagnosis reads.
+    for stale in _CHECK_OUTPUTS:
+        for f in work.glob(stale):
+            f.unlink()
     extra_env = dict(kv.split("=", 1) for kv in a.env)
     boot = NativeBoot(binary, work / "native.log", extra_env=extra_env)
     try:
@@ -600,6 +693,10 @@ def cmd_check(a):
                "probe_spec_sha256": probe_spec_hash(), "milos": {}}
         for i, milo in enumerate(manifest["milos"]):
             cap["milos"][milo] = probe.capture_milo(milo, f"$xg_d{i}")
+    except BaseException as e:
+        boot.stop()
+        _keep_failure(work, f"boot/capture failed: {type(e).__name__}: {e}")
+        raise
     finally:
         boot.stop()
     (work / "native_capture.json").write_text(json.dumps(cap, indent=1, sort_keys=True))
@@ -614,7 +711,30 @@ def cmd_check(a):
           f"perturbed {manifest['perturbed_subsystems']}")
     print_report(res, limit=a.limit)
     (work / "compare.json").write_text(json.dumps(res, indent=1))
+    if res["open"]:
+        _keep_failure(work, f"{res['open']} open row(s)")
     sys.exit(1 if res["open"] else 0)
+
+
+#: What one `check` run writes into its work dir.
+_CHECK_OUTPUTS = ("native.log", "native.log.*", "native_capture.json", "compare.json")
+_KEEP_FAILURES = 10
+
+
+def _keep_failure(work: Path, why: str) -> None:
+    """Copy this run's outputs to work/failures/<stamp>/ so the next run (the
+    gate's rerun, typically) cannot overwrite the only evidence of a flake.
+    The 2026-10-08 stack-33/37 XeniaGolden failures were lost exactly that way."""
+    dst = work / "failures" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
+    dst.mkdir(parents=True, exist_ok=True)
+    for pat in _CHECK_OUTPUTS:
+        for f in work.glob(pat):
+            shutil.copy2(f, dst / f.name)
+    (dst / "why.txt").write_text(why + "\n")
+    kept = sorted((work / "failures").iterdir())
+    for old in kept[:-_KEEP_FAILURES]:
+        shutil.rmtree(old, ignore_errors=True)
+    print(f"failure evidence kept in {dst}", file=sys.stderr)
 
 
 def main(argv=None):

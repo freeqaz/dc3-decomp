@@ -740,7 +740,33 @@ ctest -L XeniaGolden            # in native/build
   `dta_interpreter`) as perturbed, or names a hack id with no known subsystem.
 * **Boot state is an input.** DTA type handlers that run during a load consult
   UI globals (`{exists game_panel}`, `$hamdirector`), so `check` boots native with
-  `DC3_FAST_BOOT=0` and waits for `title_screen`, matching the Xenia boot.
+  `DC3_FAST_BOOT=0` and waits for `title_screen` with `{ui in_transition}` 0,
+  then 2 s, matching the Xenia boot.
+* **Port.** `check` boots dc3-native with `DC3_HTTP_PORT=0` and reads the
+  kernel-assigned port from its `DC3_HTTP_PORT=<n>` stdout line. (It used to
+  pick a port itself and pass it in; under fleet load an ephemeral socket took
+  it first and dc3-native aborted, rc 134, `port N already in use`.) A boot
+  that still dies "already in use" before ready is relaunched on another port,
+  up to 3 attempts (`native.log`, `native.log.2`, `.3`), and every boot failure
+  quotes the last 40 lines of dc3-native's output.
+* **Failure evidence is kept.** Each test's work dir is fixed
+  (`native/build/xenia_golden/<bundle>/`), so a rerun used to overwrite the
+  only record of a flake. A failing run now copies its log, capture and
+  `compare.json` to `failures/<stamp>/` (last 10 kept) with a `why.txt`, and a
+  run starts by deleting the previous run's outputs so a dead boot cannot sit
+  next to a stale passing `compare.json`.
+* **What decides the snapshot moment (measured 2026-10-08, w23-pf).** Not frame
+  count or wall time: `load_objects` is `DirLoader::LoadObjects` ->
+  `TheLoadMgr.PollUntilLoaded`, synchronous, and `SortDraws` runs inside it.
+  The boot world (houseparty, `default.milo` sub-dirs the probe shares via
+  `DirLoader::Find`) is loaded before the HTTP server even starts. Native never
+  frees CPU faces, so `num_faces` live-nonzero vs golden-0 and the `draws`
+  order rows are the standing adjudications (`mesh-cpu-faces-freed-after-upload`,
+  `draws-order-pointer-tiebreak`) present in EVERY passing venue report
+  (344-354 disagreements, 0 open). Across 37 native venue boots at load ~20-25
+  (8 in parallel) every cell was identical except `draws` order, with
+  identical `draws` multisets. A report quoting those rows is not evidence of a
+  load race; read the `[OPEN]` rows (printed first) or `failures/*/compare.json`.
 * **Tolerated, counted, never silent:** `crt_exponent` (MS CRT `1e-007` vs glibc
   `1e-07`), `crt_round` (same float32, a `%.9g` tie rounded differently),
   `fp_eval` (<= 1e-6 relative; derived euler/scale values only). Everything else
