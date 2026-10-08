@@ -463,7 +463,9 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                 // MetaPerformer::OnMovePassed), now DEFAULT-ON (opt-out
                 // DC3_REAL_MOVE_PASSED=0). Detection is wired: the live-pose
                 // pipeline landed 2026-07-02, the move_passed gateway crash is
-                // fixed (TheGameMode gameplay_mode defaulted in GameModeInit).
+                // fixed (the GameMode ctor's SetMode("init", "none") installs
+                // the modes.dta defaults, gameplay_mode included, as the image's
+                // does).
                 // The async detectors that perform/battle rate from
                 // (`last_detector_result` -> MoveAsyncDetector::MoveRatingFrac)
                 // are fed and polled as on the 360 since native-posesynth; the
@@ -1185,16 +1187,9 @@ void GameInit() {
     TheDebug.AddExitCallback(GameTerminate);
     TheSongSequence.Init();
     sAutoplayStates.push_back("maximum");
-#ifdef HX_NATIVE
-    sAutoplayStates.push_back("move_perfect");
-    sAutoplayStates.push_back("move_awesome");
-    sAutoplayStates.push_back("move_ok");
-    sAutoplayStates.push_back("move_bad");
-#else
     for (int i = 0; i < 4; i++) {
         sAutoplayStates.push_back(RatingState(i));
     }
-#endif
     DataRegisterFunc("toggle_move_overlay", OnToggleMoveOverlay);
     DataRegisterFunc("toggle_autoplay", OnToggleAutoplay);
     DataRegisterFunc("cycle_autoplay", OnCycleAutoplay);
