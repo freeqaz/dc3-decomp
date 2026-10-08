@@ -14,8 +14,13 @@ void XTEABlockEncrypter::SetNonce(const unsigned long long *nonce, unsigned int 
 }
 
 unsigned long long XTEABlockEncrypter::Encipher(unsigned long long nonce, unsigned int *key) {
-    unsigned long v1 = nonce & 0xFFFFFFFF;
-    unsigned long v2 = nonce >> 32;
+    // w22-a12: the halves are 32-bit words (the image does every round in 32-bit
+    // `slwi`/`srwi`/`add` arithmetic).  `unsigned long` is 64 bits on an LP64
+    // host, so natively v1/v2 carried past bit 31 and `v >> 5` shifted those
+    // carries back in -- a different cipher.  `unsigned int` is the same type
+    // width as the image's `unsigned long` on the 360.
+    unsigned int v1 = nonce & 0xFFFFFFFF;
+    unsigned int v2 = nonce >> 32;
     unsigned int sum = 0;
     for (int i = 0; i < 4; i++) {
         v1 += (v2 + (v2 << 4 ^ v2 >> 5)) ^ sum + key[sum & 3];
