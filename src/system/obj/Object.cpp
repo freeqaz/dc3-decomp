@@ -273,6 +273,10 @@ void ObjRef::ReplaceList(Hmx::Object *obj) {
     while (next != this) {
         ObjRef *cur = next;
         cur->Replace(obj);
+        // The image's (inline, Object.h) ReplaceList asserts here; keep the
+        // assert so a non-advancing Replace is reported, then unlink so the
+        // native build (non-fatal assert) does not spin.
+        MILO_ASSERT_FMT(cur != next, "ReplaceList stuck in infinite loop");
         if (cur == next) {
             // Replace didn't advance — force-unlink to prevent infinite loop.
             cur->prev->next = cur->next;
@@ -792,19 +796,7 @@ void Hmx::Object::ReplaceRefsFrom(Hmx::Object *from, Hmx::Object *to) {
     ObjRef other;
     other.DetachSelf();
     FOREACH (it, mRefs) {
-#ifdef HX_NATIVE
-        // Virtual base offsets can make RefOwner() != from even for the same
-        // object (Itanium ABI vbase adjustment). Use dynamic_cast<void*> to
-        // compare most-derived addresses.
-        bool match = (it->RefOwner() == from);
-        if (!match && it->RefOwner() && from) {
-            match = dynamic_cast<const void *>(it->RefOwner())
-                 == dynamic_cast<const void *>(from);
-        }
-        if (match) {
-#else
         if (it->RefOwner() == from) {
-#endif
             // move `it` from mRefs to the end of `other`, then resume from
             // its old predecessor in mRefs
             it = it->MoveBefore(&other);

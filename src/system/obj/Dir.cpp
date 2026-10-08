@@ -560,13 +560,6 @@ BEGIN_COPYS(ObjectDir)
             if (!IsProxy()) {
                 COPY_MEMBER(mViewports)
                 COPY_MEMBER(mCurViewportID)
-#ifdef HX_NATIVE
-                // During MergeDirs, skip mSubDirs — MergeObjectsRecurse handles
-                // subdirs separately. Copying here triggers cascading deletion of
-                // old subdirs whose objects have live ring refs in the parent dir,
-                // corrupting ref rings and causing OOM in SnapshotRing.
-                if (!InMergeDirs()) {
-#endif
                 for (int i = 0; i < mSubDirs.size(); i++) {
                     RemovingSubDir(mSubDirs[i]);
                 }
@@ -574,9 +567,6 @@ BEGIN_COPYS(ObjectDir)
                 for (int i = 0; i < mSubDirs.size(); i++) {
                     AddedSubDir(mSubDirs[i]);
                 }
-#ifdef HX_NATIVE
-                }
-#endif
             }
             COPY_MEMBER(mInlineProxyType)
             COPY_MEMBER(mInlineSubDirType)
