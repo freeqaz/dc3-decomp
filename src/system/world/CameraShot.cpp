@@ -285,14 +285,7 @@ void CamShotFrame::GetCurrentTargetPosition(Vector3 &v) const {
 
 void CamShotFrame::ApplyScreenOffset(Transform &xfm, RndCam *cam) const {
     if (HasTargets()) {
-#ifdef HX_NATIVE
-        // Guard: LookAt normalizes direction; zero distance produces NaN
-        Vector3 delta;
-        Subtract(mLastTargetPos, xfm.v, delta);
-        float distSq = delta.x * delta.x + delta.y * delta.y + delta.z * delta.z;
-        if (distSq > 1e-6f)
-#endif
-            xfm.LookAt(mLastTargetPos, xfm.m.z);
+        xfm.LookAt(mLastTargetPos, xfm.m.z);
     }
     Vector3 v;
     Subtract(xfm.v, mLastTargetPos, v);
@@ -357,13 +350,6 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
 
     Vector2 screenPos;
     cam->WorldToScreen(targetPos, screenPos);
-
-#ifdef HX_NATIVE
-    // Guard: WorldToScreen may produce NaN when projection is degenerate
-    if (screenPos.x != screenPos.x || screenPos.y != screenPos.y) {
-        screenPos.Set(0.0f, 0.0f);
-    }
-#endif
 
     screenPos.x = -(-(screenPos.x - (mScreenOffset.x + 1.0f) * 0.5f));
     screenPos.y = -((1.0f - mScreenOffset.y) * 0.5f - screenPos.y);
@@ -527,18 +513,10 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
             Transform thisLook(resultTf);
             Transform otherLook(resultTf);
             if (hasTarget) {
-#ifdef HX_NATIVE
-                Vector3 d1; Subtract(mLastTargetPos, resultTf.v, d1);
-                if (d1.x * d1.x + d1.y * d1.y + d1.z * d1.z > 1e-6f)
-#endif
-                    thisLook.LookAt(mLastTargetPos, resultTf.m.z);
+                thisLook.LookAt(mLastTargetPos, resultTf.m.z);
             }
             if (thasTarget) {
-#ifdef HX_NATIVE
-                Vector3 d2; Subtract(other.mLastTargetPos, resultTf.v, d2);
-                if (d2.x * d2.x + d2.y * d2.y + d2.z * d2.z > 1e-6f)
-#endif
-                    otherLook.LookAt(other.mLastTargetPos, resultTf.m.z);
+                otherLook.LookAt(other.mLastTargetPos, resultTf.m.z);
             }
             ::Interp(thisLook.m, otherLook.m, blendT, resultTf.m);
         }
@@ -641,20 +619,8 @@ void CamShotFrame::Interp(const CamShotFrame &other, float f1, float f2, RndCam 
     }
 
     // Blend with current camera position
-#ifdef HX_NATIVE
-    // Guard: if camera's world transform is already poisoned with NaN/inf,
-    // skip the blend to avoid propagating bad values
-    {
-        const Transform &cwx = cam->WorldXfm();
-        if (cwx.v.x == cwx.v.x && cwx.v.x > -1e30f && cwx.v.x < 1e30f) {
-            ::Interp(cwx.v, resultTf.v, f2, resultTf.v);
-            ::Interp(cwx.m, resultTf.m, f2, resultTf.m);
-        }
-    }
-#else
     ::Interp(cam->WorldXfm().v, resultTf.v, f2, resultTf.v);
     ::Interp(cam->WorldXfm().m, resultTf.m, f2, resultTf.m);
-#endif
 
     // Shake
     float shakeAmp, shakeFreq;
@@ -1437,11 +1403,6 @@ void CamShot::EndAnim() {
 
 void CamShot::SetFrame(float frame, float blend) {
     START_AUTO_TIMER("camera");
-#ifdef HX_NATIVE
-    // Guard: reject NaN/inf frame values that would poison camera transforms
-    if (frame != frame || frame > 1e15f || frame < -1e15f)
-        return;
-#endif
     if (mSetFrameActive) {
         return;
     } else {
