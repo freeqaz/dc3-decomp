@@ -626,7 +626,16 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
         local_listener,
         local_ease,
         local_ease_power,
-        local_wait
+        // w22-a27: the image passes WRAP here, not wait. At 0x8264EED4 the
+        // ctor's last argument is `lbz r11, 0x71(r31)` (stored to the stack
+        // arg slot 0x67(r1)), and 0x71 is the slot FindData(wrap) filled
+        // (`addi r5, r31, 0x71` at 0x8264EC84); wait lives at 0x72
+        // (`addi r5, r31, 0x72` at 0x8264EC70) and is read only by the
+        // BlendTask/TimeUntilEnd test below (`lbz r10, 0x72(r31)`, 0x8264EFF0).
+        // The ctor stores this flag as AnimTask's frame-wrap switch (Poll's
+        // fmod-into-the-animatable's-range branch). Passing local_wait made
+        // `(wait TRUE)` wrap and left `(wrap ...)` read but ignored.
+        local_wrap
     );
     ObjPtr<AnimTask> taskPtr(nullptr, task);
     if (local_name && taskPtr) {
