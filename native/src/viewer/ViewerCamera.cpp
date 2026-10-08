@@ -105,7 +105,7 @@ void OrbitCamera::Update(RndCam* cam) {
     // Set on camera (bypass stubbed UpdateLocal)
     Hmx::Matrix4 vp;
     memcpy(&vp, viewProj, 64);
-    cam->SetViewProj(vp);
+    cam->SetToolViewProj(vp);
 }
 
 // ============================================================================
