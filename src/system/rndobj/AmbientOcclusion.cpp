@@ -957,8 +957,12 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
                 occlusion = hitDist * hitDist;
             }
             BuildSHCoeff(sampleDir, shCoeffs);
+            // w22-a13: 826DC820 `fmuls f0, f0, f29` (occlusion) then 826DC828
+            // `fmuls f0, f0, f27` (dot) -- the image multiplies by occlusion
+            // FIRST.  Flat `c * occlusion * dot` let /fp:fast reorder it to
+            // (c * dot) * occlusion; the parentheses pin the image's order.
             for (int j = 0; j <= 3; j++) {
-                shAccum[j] += (double)(shCoeffs[j] * occlusion * dot);
+                shAccum[j] += (double)((shCoeffs[j] * occlusion) * dot);
             }
         }
     }
