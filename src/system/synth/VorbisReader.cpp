@@ -287,13 +287,6 @@ bool VorbisReader::TryReadHeader() {
         int pageOut = ogg_sync_pageout(mOggSync, &page);
         if (pageOut < 0) {
             VORBIS_FAIL("StreamInit", pageOut);
-#ifdef HX_NATIVE
-            // Persistent page sync failure means data is corrupt (likely bad
-            // mogg decryption). Mark the reader as failed so the native Poll
-            // loop can break out instead of blocking forever.
-            mFail = true;
-            return false;
-#endif
         }
         if (pageOut > 0) {
             mOggStream = new ogg_stream_state;
@@ -704,29 +697,30 @@ static void NativeDecrypt(VorbisReader *reader, unsigned char *data, int bytes,
     memcpy(data, tmp, bytes);
     delete[] tmp;
 
-    // Step 2: Scan for all HMXA page headers and apply anti-tamper reversal.
-    // v0xE encryption replaces OggS with HMXA and XORs bytes 12-15 and 20-23
-    // with magicHash values. The XOR was designed for big-endian (Xbox 360),
-    // so we must byte-swap the hash values on little-endian before XORing.
-    if (magicHashA != 0 || magicHashB != 0) {
+    // Step 2: HMXA anti-tamper reversal, where the image applies it: only to
+    // a page header at the START of the decrypted block. The image's Decrypt
+    // (#else above) tests out[0..3] once per 0x4000-byte chunk, and every
+    // block it is handed is one DoFileRead of at most 0x4000 bytes, so an
+    // "HMXA" anywhere else in the block is left alone. (This used to scan
+    // every byte offset, which could rewrite an "HMXA" that merely occurs in
+    // decrypted audio data.) v0xE encryption replaces OggS with HMXA and XORs
+    // bytes 12-15 and 20-23 with the magic hashes; the image XORs them as
+    // big-endian longs, so byte-swap the hashes on a little-endian host.
+    if ((magicHashA != 0 || magicHashB != 0) && bytes >= 4 && data[0] == 'H'
+        && data[1] == 'M' && data[2] == 'X' && data[3] == 'A') {
         unsigned int xorA = __builtin_bswap32((unsigned int)magicHashA);
         unsigned int xorB = __builtin_bswap32((unsigned int)magicHashB);
-        for (int i = 0; i <= bytes - 4; i++) {
-            if (data[i] == 'H' && data[i+1] == 'M'
-                && data[i+2] == 'X' && data[i+3] == 'A') {
-                data[i]   = 'O';
-                data[i+1] = 'g';
-                data[i+2] = 'g';
-                data[i+3] = 'S';
-                if (i + 16 <= bytes) {
-                    unsigned int *ui = (unsigned int *)&data[i + 12];
-                    *ui ^= xorA;
-                }
-                if (i + 24 <= bytes) {
-                    unsigned int *ui = (unsigned int *)&data[i + 20];
-                    *ui ^= xorB;
-                }
-            }
+        data[0] = 'O';
+        data[1] = 'g';
+        data[2] = 'g';
+        data[3] = 'S';
+        if (bytes >= 16) {
+            unsigned int *ui = (unsigned int *)&data[12];
+            *ui ^= xorA;
+        }
+        if (bytes >= 24) {
+            unsigned int *ui = (unsigned int *)&data[20];
+            *ui ^= xorB;
         }
     }
 }

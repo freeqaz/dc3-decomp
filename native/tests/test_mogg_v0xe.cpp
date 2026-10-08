@@ -125,6 +125,10 @@ TEST_F(MoggV0xETest, DecodeBoyfriendMogg) {
     }
 
     EXPECT_FALSE(stream.Fail()) << "v0xE mogg decryption failed";
+    // A bad key no longer sets the reader's mFail (TryReadHeader keeps
+    // retrying a page-sync failure, as the image does), so a wrong decrypt
+    // shows up as a stream that never becomes ready -- check that directly.
+    EXPECT_TRUE(ready) << "v0xE mogg never became ready after " << polls << " polls";
 }
 
 // ============================================================================
