@@ -38,9 +38,9 @@ static float kSampleRate = 48000.0f;
 void FlangerEffect::SetParameters(FlangerEffect::Params const &params) {
     mDelaySamples = (int)(params.mDelayMs * 48.0f);
     mRateRadians = (params.mRate / kSampleRate) * 6.2831853f;
-    mDepthFrac = params.mDepth / 100.0f;
-    mFeedbackFrac = params.mFeedback / 100.0f;
-    mWetFrac = params.mWet / 100.0f;
+    mDepthFrac = params.mDepth * (1.0f / 100.0f);
+    mFeedbackFrac = params.mFeedback * (1.0f / 100.0f);
+    mWetFrac = params.mWet * (1.0f / 100.0f);
 }
 
 /** RESIDUAL (w7-ba, 90.78 canonical, 182/215 rows equal; was 85.0 under

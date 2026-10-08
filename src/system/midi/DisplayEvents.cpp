@@ -15,7 +15,7 @@ float DisplayEvents(DataEventList *events, float f1, float f2) {
     while (min < events->Size() && events->Event(min).end < f2)
         min++;
     float f10 = -1.0f;
-    float fsum = f2 + (float)TheRnd.Width() / 200.0f;
+    float fsum = f2 + (float)TheRnd.Width() * (1.0f / 200.0f);
     Hmx::Rect rect;
     for (; min < events->Size() && events->Event(min).start < fsum; min++) {
         DataEvent curEvent(events->Event(min));

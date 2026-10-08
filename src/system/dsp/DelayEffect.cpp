@@ -17,7 +17,7 @@ void DelayEffect::Reset() { DspClearBuffer(mBuffer, 0x2ee00); }
 void DelayEffect::SetParameters(DelayEffect::Params const &params) {
     SetParameter(0, params.mDelaySamples);
     mDecay = DbToRatio(params.mDecayDb);
-    mWetAmount = params.mWetPercent / 100.0f;
+    mWetAmount = params.mWetPercent * (1.0f / 100.0f);
 }
 
 void DelayEffect::SetParameter(int param, float value) {

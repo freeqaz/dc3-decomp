@@ -293,8 +293,8 @@ void MetaMusic::UpdateMix() {
         if (mPreMix) {
             DataArray *vols8c = mPreMix->FindArray(vols);
             DataArray *pans8c = mPreMix->FindArray(pans);
-            float f16 = ((float)mCrossfadeFrame / 90.0f);
-            float f15 = 1.0f - ((float)mCrossfadeFrame / 90.0f);
+            float f16 = ((float)mCrossfadeFrame * (1.0f / 90.0f));
+            float f15 = 1.0f - ((float)mCrossfadeFrame * (1.0f / 90.0f));
             if (NumChans() == 2) {
                 if (mPostMix && mCrossfadeFrame <= 90) {
                     DataArray *vols90 = mPostMix->FindArray(vols);
