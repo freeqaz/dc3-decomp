@@ -76,8 +76,8 @@ void RndSoftParticleBuffer::BlurSurface() {
         //    `invW / 2.0f` instead of `invW * 0.5f` is INERT (still 95.7) --
         //    /fp:fast folds it to the same multiply by the same literal.
         //  * The image emits only NINE stores into kBlurTaps, 0x4 through 0x24:
-        //    it elides the `0.0f` store to element [0].x because the static
-        //    already reads zero in .bss.  We emit ten.
+        //    element [0].x is never stored because the image keeps it
+        //    statically initialised in .data.  We emit ten.
         //
         // The SetObjConcrete row (target ObjRefConcrete<AnimTask,ObjectDir>, we
         // ObjRefConcrete<RndTex,ObjectDir>) is an ICF fold, and kBlurTaps
@@ -85,8 +85,15 @@ void RndSoftParticleBuffer::BlurSurface() {
         // target side, i.e. missing from config/373307D9/symbols.txt.
         //
         // (weight, offset) pairs for the five taps.
+        // w22-a15: tap 0's weight is 0.1, not 0.0.  The image's table
+        // (lbl_82F16D28, .data, size 0x28) reads `.float 0.1` at +0x0 and the
+        // nine dynamic stores (BlurSurface rows `stfs f26, 0x4(r25)` ..
+        // `stfs f21, 0x24(r25)`) fill the rest; weights 0.1/0.25/0.3/0.25/0.1
+        // sum to 1.  The old 0.0 (from a misread of that elided store as a
+        // .bss zero) dropped the first tap from the blur.  rb3-xenon's
+        // W16-PU (2f6d26cda) reads the same 0.1 out of its retail .data.
         static Vector2 kBlurTaps[5] = {
-            Vector2(0.0f, -1.5f),
+            Vector2(0.1f, -1.5f),
             Vector2(0.25f, -0.5f),
             Vector2(0.3f, 0.5f),
             Vector2(0.25f, 1.5f),
