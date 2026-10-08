@@ -758,7 +758,16 @@ void UIManager::Poll() {
                 sLastTrans = curTrans;
                 sTransCount = 0;
             }
-            if (sTransCount < 3 || sTransCount % 500 == 0) {
+            // w23-g10: evaluate the probes only when they will be printed.  Run
+            // unconditionally they called Exiting() (a DTA `exiting` HandleType
+            // per panel) and IsBlockingTransition() ahead of -- and, unlike --
+            // the image's short-circuited condition below on every new
+            // transition.
+            bool printTrans = (sTransCount < 3 || sTransCount % 500 == 0);
+#ifndef HX_WEB
+            printTrans = printTrans && DebugUIFlow();
+#endif
+            if (printTrans) {
                 bool loaded = !mTransitionScreen || mTransitionScreen->CheckIsLoaded();
                 bool exited = !mCurrentScreen || !mCurrentScreen->Exiting();
                 bool blocked = IsBlockingTransition();
@@ -770,7 +779,7 @@ void UIManager::Poll() {
                        mCurrentScreen ? mCurrentScreen->Name() : "<null>");
                 fflush(stdout);
 #else
-                if (DebugUIFlow()) printf("DC3 UI: TransitionTo check: loaded=%d exited=%d blocked=%d "
+                printf("DC3 UI: TransitionTo check: loaded=%d exited=%d blocked=%d "
                        "trans='%s' cur='%s'\n",
                        loaded, exited, (int)blocked,
                        curTrans,
