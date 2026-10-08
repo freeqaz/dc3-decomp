@@ -109,35 +109,7 @@ END_LOADS
 #pragma endregion
 #pragma region RndAnimatable
 
-#ifdef HX_NATIVE
-void Song::PollAsyncState() {
-    if (mAsyncState == kAsyncNone || !mHxMaster)
-        return;
-
-    HxAudio *audio = mHxMaster->GetHxAudio();
-    TheSynth->Poll();
-    audio->Poll();
-
-    if (!audio->IsReady())
-        return; // not yet — try next frame
-
-    if (mAsyncState == kAsyncWaitPlay) {
-        audio->SetPaused(false);
-    } else if (mAsyncState == kAsyncWaitSync) {
-        SetSpeed();
-        audio->SetPaused(mSavedWasPaused);
-        TheSynth->StopAllSfx(false);
-        TheSynth->SetMasterVolume(mSavedVolume);
-        SetStateDirty(false);
-    }
-    mAsyncState = kAsyncNone;
-}
-#endif
-
 void Song::SetFrame(float frame, float blend) {
-#ifdef HX_NATIVE
-    PollAsyncState();
-#endif
     float curFrame = GetFrame();
     bool paused = false;
     if (mHxMaster) {
@@ -288,17 +260,10 @@ void Song::Play() {
     if (mHxMaster) {
         sCallback->SongPlay(true);
         mHxMaster->Jump(GetFrame() * 1000.0f);
-#ifdef HX_NATIVE
-        if (!mHxMaster->GetHxAudio()->IsReady()) {
-            mAsyncState = kAsyncWaitPlay;
-            return;
-        }
-#else
         while (!mHxMaster->GetHxAudio()->IsReady()) {
             TheSynth->Poll();
             mHxMaster->GetHxAudio()->Poll();
         }
-#endif
         mHxMaster->GetHxAudio()->SetPaused(false);
     }
 }
