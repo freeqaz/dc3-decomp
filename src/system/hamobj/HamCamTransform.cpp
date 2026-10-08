@@ -17,7 +17,24 @@ HamCamTransform::HamCamTransform() : mAreas(this) {}
 
 HamCamTransform::~HamCamTransform() {
 #ifdef HX_NATIVE
-    if (!ObjectDir::InDeleteObjects())
+    // CASCADE-PROBE (temporary, w23-cas)
+    for (int i = 0; i != mAreas.size(); i++) {
+        TransformArea &area = mAreas[i];
+        if (area.mArea && !area.mArea->IsRefAlive())
+            fprintf(stderr, "CASCADE-PROBE HamCamTransform dead area %p\n", (void *)area.mArea.Ptr());
+        if (area.mArea) {
+            for (ObjPtrList<HamCamShot>::iterator sit = area.mCamshots.begin();
+                 sit != area.mCamshots.end(); ++sit) {
+                HamCamShot *shot = *sit;
+                if (shot && !shot->IsRefAlive()) {
+                    fprintf(stderr, "CASCADE-PROBE HamCamTransform dead shot %p\n", (void *)shot);
+                    return;
+                }
+            }
+        }
+    }
+    fprintf(stderr, "CASCADE-PROBE HamCamTransform ClearOldCrowds runs inDelete=%d\n",
+            (int)ObjectDir::InDeleteObjects());
 #endif
         ClearOldCrowds();
 }
