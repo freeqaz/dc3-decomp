@@ -334,6 +334,15 @@ App::App(int argc, char **argv) {
 
     SystemInit("config/ham_keep.dta");
 
+    // The image's App ctor runs these two right after TheRnd/TheServer/
+    // TheRockCentral.Init and BEFORE SynthInit, i.e. long before HamInit,
+    // MetaPanel::Init (-> ProfileMgr::Init sizes its save buffer from
+    // FixedSizeSaveableStream::GetSymbolTableSize, which asserts
+    // sMaxSymbols >= 0) and GameInit. Native used to run them after GameInit,
+    // so everything in between saw sMaxSymbols == -1 and TheUserMgr == null.
+    FixedSizeSaveable::Init(0x5C, 0x1662);
+    HamUserMgrInit(false);
+
     // Audio system (Fader/MoggClip factories need to be registered)
     SynthInit();
 
@@ -483,11 +492,10 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
-    // Subsystem inits that other code dereferences without null checks.
-    // Order matches Xbox init sequence (FixedSizeSaveable/HamUserMgr early,
-    // AccomplishmentManager before MetagameRank since Init() uses TheAccomplishmentMgr).
-    FixedSizeSaveable::Init(0x5C, 0x1662);
-    HamUserMgrInit(false);
+    // Subsystem inits that other code dereferences without null checks
+    // (AccomplishmentManager before MetagameRank since Init() uses
+    // TheAccomplishmentMgr). FixedSizeSaveable/HamUserMgr moved up to the
+    // image's position, after SystemInit.
     AccomplishmentManager::Init(SystemConfig("accomplishment_info"));
     MetagameRank::Preinit(); // sets gRanksArray, needed by MetagameRank methods
     MetagameRank::Init();
