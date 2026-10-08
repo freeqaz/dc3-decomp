@@ -33,7 +33,12 @@ void NetStream::ReadImpl(void *v, int i) {
             break;
         }
 
+#ifdef HX_NATIVE
+        // (uint)v truncates a 64-bit pointer (ported from rb3-xenon 63407036c, W16-UB).
+        v = (void *)((const char *)v + bytes);
+#else
         v = (void *)((uint)v + bytes);
+#endif
         i -= bytes;
     }
     if (!mFail) {
@@ -54,7 +59,12 @@ void NetStream::WriteImpl(const void *v, int i) {
             break;
         }
 
+#ifdef HX_NATIVE
+        // (uint)v truncates a 64-bit pointer (ported from rb3-xenon 63407036c, W16-UB).
+        v = (void *)((const char *)v + bytes);
+#else
         v = (void *)((uint)v + bytes);
+#endif
         i -= bytes;
     }
     if (!mFail) {

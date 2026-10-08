@@ -567,11 +567,15 @@ long ogg_sync_pageseek(ogg_sync_state *oy,ogg_page *og){
   
   if(oy->bodybytes+oy->headerbytes>bytes)return(0);
   
-  /* The whole test page is buffered.  Verify the checksum */
-#ifndef HX_NATIVE
-  /* On Xbox, v0xE mogg decryption (HMXA→OggS + magicHash XOR) intentionally
-     corrupts the CRC field as an anti-tamper measure. The game never validates
-     Ogg CRCs — skip the check on native to match Xbox behavior. */
+  /* The whole test page is buffered.  Verify the checksum.
+     Native too (ported from rb3-xenon 041aa1d95, W16-TM): this used to be
+     skipped under HX_NATIVE on the claim that v0xE decryption leaves the CRC
+     corrupt and the game never validates it. The Xbox build compiles this
+     block, and the HMXA magic-hash XOR over bytes 20-23 (CRC bytes 22-23) is
+     undone by VorbisReader before the page reaches here. Measured (w22-hn):
+     all 249 shipped moggs decode to their EOS page with 0 CRC mismatches in
+     73,273 pages, so a correctly decrypted stream loses nothing, and a wrong
+     key or hash now fails the decode as it does on the 360. */
   {
     /* Grab the checksum bytes, set the header field to zero */
     char chksum[4];
@@ -598,7 +602,6 @@ long ogg_sync_pageseek(ogg_sync_state *oy,ogg_page *og){
       goto sync_fail;
     }
   }
-#endif
   
   /* yes, have a whole page all ready to go */
   {
