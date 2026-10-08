@@ -1108,8 +1108,16 @@ void BSPFace::Set(const Vector3 &p1, const Vector3 &p2, const Vector3 &p3) {
 }
 
 // w17-c (99.966): in the area loop all 64 operand orders of the six products
-// are inert; reassociating the three terms reaches a lower diff but changes
-// the image's (t1 + t2) + t3 float association, so it was not taken.
+// are inert.
+// w22-a26: the image's association is (A + C) + B, not (A + B) + C, with
+// A = anchor x prev, B = prev x curr, C = curr x anchor (0x82536B2C.. area
+// loop: `fmsubs f10` = A, `fmsubs f11` = C, `fmsubs f13` = B, then
+// `fadds f12, f10, f11` / `fadds f13, f12, f13`).  MSVC /fp:fast re-sorted
+// the flat A + B + C into that order on its own, so the old spelling matched
+// the Xbox bytes but native (no fast-math) summed (A + B) + C.  The explicit
+// grouping keeps the image's order on both builds (99.966 -> 99.98 normalized,
+// fuzzy 99.448 -> 99.690).  Swapping the edge plane's (y, z) pair in `d`
+// below is inert (measured).
 void BSPFace::Update() {
     MILO_ASSERT(p.points.size() > 2, 0x6c2);
 
@@ -1118,9 +1126,9 @@ void BSPFace::Update() {
     const Vector2 *prev = curr++;
     area = 0.0f;
     while (curr != p.points.end()) {
-        area += ((anchor->x * prev->y - anchor->y * prev->x) +
-                 (prev->x * curr->y - prev->y * curr->x) +
-                 (curr->x * anchor->y - curr->y * anchor->x)) * 0.5f;
+        area += (((anchor->x * prev->y - anchor->y * prev->x) +
+                  (curr->x * anchor->y - curr->y * anchor->x)) +
+                 (prev->x * curr->y - prev->y * curr->x)) * 0.5f;
         prev = curr;
         curr++;
     }
