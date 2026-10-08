@@ -84,7 +84,11 @@ void ByteQuat::Set(const Hmx::Quat &quat) {
 
 void CharBones::Zero() {
 #ifdef HX_NATIVE
-    if (!mStart) return;
+    // memset(nullptr, 0, 0) is UB in C even though the image's call is a no-op;
+    // skip only that case. A null mStart with a non-zero size faults exactly as
+    // the image would (this used to return on any null mStart, masking it).
+    if (!mStart && mTotalSize == 0)
+        return;
 #endif
     memset(mStart, 0, mTotalSize);
 }

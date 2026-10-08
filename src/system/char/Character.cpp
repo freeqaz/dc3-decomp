@@ -770,10 +770,14 @@ DataNode Character::OnCopyBoundingSphere(DataArray *da) {
 }
 
 void Character::MergeDraws(const Character *c) {
-#ifdef HX_NATIVE
-    if (!c) return;
-#endif
     MILO_ASSERT(c, 0x57D);
+#ifdef HX_NATIVE
+    // The image's assert is fatal; native MILO_ASSERT is non-fatal (MILO_FATAL_FAILS=1
+    // restores abort), so report it as the image would, THEN stop short of the null
+    // deref below. This guard used to sit above the assert and swallowed it silently.
+    if (!c)
+        return;
+#endif
     int numLods = Max<int>(c->mLods.size(), mLods.size());
     mLods.resize(numLods);
     for (int i = 0; i < c->mLods.size(); i++) {
@@ -1010,51 +1014,6 @@ void Character::DrawLod(int lod) {
 
 void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
     mPollState = (PollState)5;
-#ifdef HX_NATIVE
-    // mLastLod is stored BEFORE the shadow branch on PPC (target 82353E1C stores
-    // 0x20c ahead of the `cmpwi r29, 4` at 82353E20), and the shadow branch falls
-    // back to the virtual DrawOpaque (vtable slot 0x3c) when mShadow is empty.
-    // Both were missing here, so characters with no dedicated shadow geometry cast
-    // no floor shadow and mLastLod went stale across shadow passes.
-    mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
-    Lod *curLod = mLods.empty() ? nullptr : &mLods[mLastLod];
-
-    if (drawMode == 4) {
-        if (mShadow.size() != 0) {
-            mShadow.Draw();
-        } else {
-            DrawOpaque();
-        }
-        return;
-    }
-
-    if (drawMode & 1) {
-        RndEnvironTracker tracker(mEnv, &WorldXfm().v);
-        RndDir::DrawShowing();
-        if (curLod) {
-            curLod->mOpaque.Draw();
-        }
-        if (drawMode == 1) {
-            unk2a0 = RndEnviron::Current();
-            unk2b4 = RndEnviron::CurrentPos();
-        }
-    }
-
-    if (drawMode & 2) {
-        if (drawMode == 2) {
-            RndEnvironTracker tracker(unk2a0, unk2b4);
-            mTranslucent.Draw();
-            if (curLod) {
-                curLod->mTranslucent.Draw();
-            }
-        } else {
-            mTranslucent.Draw();
-            if (curLod) {
-                curLod->mTranslucent.Draw();
-            }
-        }
-    }
-#else
     mLastLod = Clamp<int>(0, mLods.size() - 1, lod);
     if (drawMode == 4) {
         if (mShadow.size() != 0) {
@@ -1080,15 +1039,11 @@ void Character::DrawLodOrShadow(int lod, DrawMode drawMode) {
             }
         }
     }
-#endif
 }
 
 void DrawPtrVec::Draw() const {
     for (const_iterator it = begin(); it != end(); ++it) {
-#ifdef HX_NATIVE
-        if (it->Obj())
-#endif
-            it->Obj()->Draw();
+        it->Obj()->Draw();
     }
 }
 
