@@ -474,15 +474,17 @@ bool HamGameData::SetAssociatedPadNum(int player, int padnum) {
     HamPlayerData *pPlayer = mPlayers[player];
     MILO_ASSERT(pPlayer, 0x2D0);
 #ifdef HX_NATIVE
-    // Native has no signin (IsSignedIn always false), so the Xbox path below
-    // would always reject a real pad and force -1. Associate the local player
-    // with the pad directly so per-profile scoring/rewards resolve. Scoped here
-    // (not via global mSigninMask) to avoid rippling into ShellInput/SigninScreen.
+    // Native has no signin service (mSigninMask stays 0, IsSignedIn always
+    // false), so the image's test would always reject a real pad and force -1.
+    // Treat every real pad as signed in -- scoped here, not via the global
+    // mSigninMask, to avoid rippling into ShellInput/SigninScreen -- and run
+    // the image's signed-in arm, INCLUDING the steal from the other player.
+    // (The native branch used to return straight after the assign, so two
+    // players could hold one pad, which the image never allows.)
     if (padnum >= 0) {
-        return pPlayer->SetAssociatedPadNum(padnum, ThePlatformMgr.GetName(padnum));
-    }
-#endif
+#else
     if (padnum >= 0 && ThePlatformMgr.IsSignedIn(padnum)) {
+#endif
         // Steal the pad from the OTHER player if it holds it (target
         // 0x8245233C: `subf r11, r31, r11` / `lwz r31, 0x4(r11)` is
         // mPlayers[1 - player], then PadNum() at 0x7c and the -1 unassign go
