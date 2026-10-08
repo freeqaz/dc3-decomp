@@ -1075,7 +1075,12 @@ inline void vector<SpotMeshEntry, StlNodeAlloc<SpotMeshEntry>>::_M_fill_insert_a
         // Manual backward copy loop to match target codegen
         pointer src = __old_finish - __n;
         pointer dst = __old_finish;
-        for (int count = (src - __pos) / sizeof(SpotMeshEntry); count > 0; count--) {
+        // w22-hx BEHAVIOURAL FIX (port of rb3-xenon 561a44549): `src - __pos`
+        // is already an element count.  DC3 image 0x82822968 has ONE divide
+        // (`divw. r11, r11, r25` with r25 = 0x50, feeding the `ble`); the extra
+        // `/ sizeof` added a second `divwu.`, so the backward shift moved only
+        // 1/80 of the tail (none at all for fewer than 80 elements).
+        for (int count = src - __pos; count > 0; count--) {
             dst--;
             src--;
             memcpy(dst, src, sizeof(SpotMeshEntry));
