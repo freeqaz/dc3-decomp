@@ -142,8 +142,14 @@ void HamIKSkeleton::NeutralWorldXfm(RndTransformable *t, Transform &xfm) {
             // charTrans is null, t stays = the live (sunk) finger, and the
             // neutral xfm collapses onto the live pose -> the clamp loses its
             // planting anchor.
+            // DC3_IK_DIAG-gated like the rest of the IK forensics (83c0520d1):
+            // ungated, every call paid a PathName() plus a toe WorldXfm()
+            // evaluation the image does not do, and printed to stderr by default.
+            static int sNwxDiag = -1;
+            if (sNwxDiag < 0)
+                sNwxDiag = getenv("DC3_IK_DIAG") ? 1 : 0;
             static int sNwxLog = 0;
-            const char *p = PathName(this);
+            const char *p = sNwxDiag ? PathName(this) : nullptr;
             bool isMain = p && !strstr(p, "backup");
             // Capture the VENUE-PLACED player (live X large), not iconman.
             if (sNwxLog < 8 && isMain && t && strstr(t->Name(), "toe")
