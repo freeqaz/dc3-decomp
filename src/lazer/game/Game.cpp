@@ -68,9 +68,6 @@
 
 Game *TheGame;
 static bool sMoveOverlayToggle;
-#if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
-static int sNativeAudioPollCount = 0;
-#endif
 std::vector<Symbol> sAutoplayStates;
 
 Game::Game()
@@ -239,15 +236,7 @@ void Game::SetIntroRealTime(float f) {
 void Game::PostLoad() {
     WorldDir *world = TheHamDirector->GetWorld();
     MILO_ASSERT(world, 0x259);
-#ifdef HX_NATIVE
-    if (!world) {
-        mMoveDir = nullptr;
-        return;
-    }
-    mMoveDir = world->Find<MoveDir>("moves", false);
-#else
     mMoveDir = world->Find<MoveDir>("moves");
-#endif
     RELEASE(mOvershell);
     mOvershell = new Overshell();
     mOvershell->Init();
@@ -281,16 +270,7 @@ void Game::LoadNewSongAudio(Symbol s) {
             }
         }
         RELEASE(mSongInfo);
-#ifdef HX_NATIVE
-        SongInfo *audioData = TheHamSongMgr.SongMgr::SongAudioData(s);
-        if (!audioData) {
-            MILO_WARN("Game::LoadNewSongAudio: no audio data for '%s'\n", s.Str());
-            return;
-        }
-        mSongInfo = new SongInfoCopy(audioData);
-#else
         mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(s)));
-#endif
         mMaster->Load(mSongInfo, false, 0, false, hsvd, nullptr);
         Fader *fader = TheSynth->Find<Fader>("per_song_sfx_level.fade", false);
         if (fader) {
@@ -300,17 +280,11 @@ void Game::LoadNewSongAudio(Symbol s) {
 }
 
 void Game::FlushMoveRecord() {
-#ifdef HX_NATIVE
-    if (!mMoveDir) return;
-#endif
     MILO_ASSERT(mMoveDir, 0x3a7);
     mMoveDir->FlushMoveRecord();
 }
 
 void Game::SwapMoveRecord() {
-#ifdef HX_NATIVE
-    if (!mMoveDir) return;
-#endif
     MILO_ASSERT(mMoveDir, 0x3af);
     mMoveDir->SwapMoveRecord();
 }
@@ -318,9 +292,6 @@ void Game::SwapMoveRecord() {
 void Game::ReloadSong() {
     WorldDir *world = TheHamDirector->GetWorld();
     MILO_ASSERT(world, 0x1c7);
-#ifdef HX_NATIVE
-    if (!world) return;
-#endif
     mMoveDir = world->Find<MoveDir>("moves");
     mLoadState = 0;
     LoadSong();
@@ -383,22 +354,6 @@ void Game::PostWaitStart() {
         MetaPerformer::Current()->StartGameplayTimer();
         mRealTime = false;
     }
-#ifdef HX_NATIVE
-    else {
-        // Audio failed (mogg not found or decode error). Unpause and start
-        // gameplay anyway so the beat advances from wall-clock time and
-        // character animation can play even without music.
-        // mRealTime=true makes CurrentMs() use the wall-clock timer
-        // instead of mAudio.GetTime() (which returns 0 on a dead stream).
-        fprintf(stderr, "DC3 Game::PostWaitStart — audio failed, proceeding with wall-clock timing\n");
-        mPaused = false;
-        MetaPerformer::Current()->StartGameplayTimer();
-        mRealTime = true;
-        if (mGameInput) {
-            mGameInput->SetTimeOffset();
-        }
-    }
-#endif
 }
 
 void Game::SetMusicVolume(float vol) {
@@ -411,9 +366,6 @@ void Game::Poll() {
 
     if (!HandleWait()) {
         if (!TheSongSequence.Done()) {
-#ifdef HX_NATIVE
-            if (!mGameInput) return;
-#endif
             float songMs = mGameInput->CurrentMs(mRealTime);
             TheTaskMgr.SetSeconds(songMs * 0.001f, false);
         }
@@ -447,11 +399,7 @@ void Game::Poll() {
             TheTaskMgr.ResetBeatTaskTime(beat);
         }
         sLastBeat = beat;
-        if (!unk68 && songMs >= 0
-#ifdef HX_NATIVE
-            && TheHamDirector
-#endif
-            && !TheHamDirector->GetGameStartHold()) {
+        if (!unk68 && songMs >= 0 && !TheHamDirector->GetGameStartHold()) {
             MILO_LOG("Game::Poll: intro timer expired\n");
             static Message intro_over("intro_over");
             TheGamePanel->Handle(intro_over, true);
@@ -515,7 +463,9 @@ void Game::SetHamMove(int i1, HamMove *move, bool b3) {
                 // MetaPerformer::OnMovePassed), now DEFAULT-ON (opt-out
                 // DC3_REAL_MOVE_PASSED=0). Detection is wired: the live-pose
                 // pipeline landed 2026-07-02, the move_passed gateway crash is
-                // fixed (TheGameMode gameplay_mode defaulted in GameModeInit).
+                // fixed (the GameMode ctor's SetMode("init", "none") installs
+                // the modes.dta defaults, gameplay_mode included, as the image's
+                // does).
                 // The async detectors that perform/battle rate from
                 // (`last_detector_result` -> MoveAsyncDetector::MoveRatingFrac)
                 // are fed and polled as on the 360 since native-posesynth; the
@@ -643,9 +593,6 @@ void Game::Reset() {
     mHasIntro = false;
     unk68 = false;
     TheHamDirector->SetPickingDisabled(false);
-#ifdef HX_NATIVE
-    if (mMoveDir)
-#endif
     {
         for (int i = 0; i < 2; i++) {
             mMoveDir->SetCurrentMove(i, nullptr);
@@ -734,9 +681,6 @@ void Game::LoadSong() {
     if (fader) {
         fader->SetVolume(0);
     }
-#ifdef HX_NATIVE
-    if (TheMoveMgr)
-#endif
     {
         TheMoveMgr->Clear();
         if (mUseMoveGraph) {
@@ -744,19 +688,7 @@ void Game::LoadSong() {
         }
     }
     RELEASE(mSongInfo);
-#ifdef HX_NATIVE
-    SongInfo *songAudioData = TheHamSongMgr.SongMgr::SongAudioData(song);
-    if (!songAudioData) {
-        MILO_WARN("Game::LoadSong: no audio data for '%s', skipping load\n", song.Str());
-        return;
-    }
-    mSongInfo = new SongInfoCopy(songAudioData);
-    if (mMaster && mMaster->GetAudio()) {
-        mMaster->GetAudio()->SetPracticeMode(false);
-    }
-#else
     mSongInfo = new SongInfoCopy(TheHamSongMgr.SongMgr::SongAudioData(Symbol(song)));
-#endif
     mMaster->Load(mSongInfo, false, 0, false, v, 0);
 }
 
@@ -873,9 +805,6 @@ void Game::LoadNewSong(Symbol s1, Symbol s2) {
     LoadNewSongAudio(s1);
     Symbol s48(TheMaster->GetAudio()->Name());
     LoadNewSongMoves(s2, true);
-#ifdef HX_NATIVE
-    if (TheMoveMgr)
-#endif
     {
         if (mUseMoveGraph) {
             TheMoveMgr->SetSong(s2);
@@ -949,22 +878,6 @@ bool Game::IsLoaded() {
             TheSongDB->PostLoad(mMaster->GetMidiParserMgr()->GetEventsList());
             PostLoad();
             if (mUseMoveGraph) {
-#ifdef HX_NATIVE
-                if (!mMoveDir) {
-                    MILO_LOG("Game::IsLoaded() - mMoveDir is null, proceeding without MoveGraph\n");
-                    mUseMoveGraph = false;
-                } else {
-                    ObjectDir *moveData = mMoveDir->Find<ObjectDir>("move_data", false);
-                    if (moveData) {
-                        MILO_LOG("Game::IsLoaded() - Loading MoveGraph from move_data dir\n");
-                        TheMoveMgr->LoadMoveData(moveData);
-                        SuperEasyRemixer::LoadAllVariants();
-                    } else {
-                        MILO_LOG("Game::IsLoaded() - move_data not found in moves dir\n");
-                        mUseMoveGraph = false;
-                    }
-                }
-#else
                 MILO_ASSERT(mMoveDir, 0x224);
                 ObjectDir *moveData = mMoveDir->Find<ObjectDir>("move_data", false);
                 MILO_ASSERT_FMT(
@@ -973,7 +886,6 @@ bool Game::IsLoaded() {
                 );
                 TheMoveMgr->LoadMoveData(moveData);
                 SuperEasyRemixer::LoadAllVariants();
-#endif
             } else {
                 MILO_LOG("Game::IsLoaded() - not using MoveGraph");
             }
@@ -985,9 +897,6 @@ bool Game::IsLoaded() {
             }
             MILO_LOG("Game::IsLoaded() - Done waiting for MoveGraph\n");
             mLoadState = 2;
-#if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
-            sNativeAudioPollCount = 0;
-#endif
         }
         if (mLoadState == 2) {
             if (mMaster->GetAudio()->Fail()) {
@@ -995,18 +904,7 @@ bool Game::IsLoaded() {
             }
             if (!mMaster->GetAudio()->IsReady()) {
                 TheSynth->Poll();
-#if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
-                // On native/web, audio uses StandardStream (real decoding) rather
-                // than StreamNull, so IsReady() requires stream buffering via
-                // PollStream(). TheSynth->Poll() drives this each frame. Timeout
-                // after ~2 seconds as a safety net for broken/missing mogg files.
-                if (sNativeAudioPollCount++ >= 120) {
-                    fprintf(stderr, "Game::IsLoaded() — audio not ready after %d polls, proceeding\n", sNativeAudioPollCount);
-                } else
-#endif
-                {
-                    return false;
-                }
+                return false;
             }
             mLoadState = 3;
             TheProfileMgr.PushAllOptions();
@@ -1046,9 +944,6 @@ DataNode Game::OnSetShuttle(DataArray *arr) {
 }
 
 DataNode Game::OnResetDetection(DataArray *a) {
-#ifdef HX_NATIVE
-    if (!mMoveDir) return 0;
-#endif
     MILO_ASSERT(mMoveDir, 0x392);
     if (a->Size() > 2) {
         int index = a->Int(2);
@@ -1098,29 +993,14 @@ bool Game::HandleWait() {
     }
     // Common audio readiness check for all non-zero states
     HamAudio *audio = mMaster->GetAudio();
-#ifdef HX_NATIVE
-    static int sWaitLog = 0;
-    if (sWaitLog++ < 10) {
-        fprintf(stderr, "DC3 Game::HandleWait — state=%d audioFail=%d audioReady=%d audio=%p\n",
-                mWaitState, audio->Fail(), audio->IsReady(), (void*)audio);
-    }
-#endif
     if (audio->Fail()) {
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 Game::HandleWait — audio FAILED, dispatching state=%d anyway\n", mWaitState);
-        // Fall through to dispatch — PostWaitStart handles Fail() gracefully
-        // by skipping Play(). Without this, mPaused stays true and the beat
-        // never advances, freezing character animation.
-#else
         return true;
-#endif
     } else if (!audio->IsReady()) {
         TheSynth->Poll();
         return false;
     }
 #ifdef HX_NATIVE
-    if (!audio->Fail())
-        fprintf(stderr, "DC3 Game::HandleWait — audio ready! dispatching state=%d\n", mWaitState);
+    fprintf(stderr, "DC3 Game::HandleWait — audio ready! dispatching state=%d\n", mWaitState);
 #endif
     // Audio is ready, dispatch based on state
     switch (mWaitState) {
@@ -1159,20 +1039,12 @@ bool Game::HandleWait() {
         if (worldFm->HasPendingFiles()) {
             return false;
         }
-#ifdef HX_NATIVE
-        mMoveDir = TheHamDirector->GetWorld()->Find<MoveDir>("moves", false);
-        if (mMoveDir) {
-            mMoveDir->Enter();
-            mMoveDir->ResetDetection();
-        }
-#else
         if (!TheHamDirector->GetWorld()->Find<MoveDir>("moves", false)) {
             return false;
         }
         mMoveDir = TheHamDirector->GetWorld()->Find<MoveDir>("moves", true);
         mMoveDir->Enter();
         mMoveDir->ResetDetection();
-#endif
         TheHamDirector->SetupAnims();
         if (mAltTempoMap) {
             TheHamDirector->RemapSongAnimToTempoMap(mAltTempoMap);
@@ -1315,16 +1187,9 @@ void GameInit() {
     TheDebug.AddExitCallback(GameTerminate);
     TheSongSequence.Init();
     sAutoplayStates.push_back("maximum");
-#ifdef HX_NATIVE
-    sAutoplayStates.push_back("move_perfect");
-    sAutoplayStates.push_back("move_awesome");
-    sAutoplayStates.push_back("move_ok");
-    sAutoplayStates.push_back("move_bad");
-#else
     for (int i = 0; i < 4; i++) {
         sAutoplayStates.push_back(RatingState(i));
     }
-#endif
     DataRegisterFunc("toggle_move_overlay", OnToggleMoveOverlay);
     DataRegisterFunc("toggle_autoplay", OnToggleAutoplay);
     DataRegisterFunc("cycle_autoplay", OnCycleAutoplay);

@@ -61,8 +61,6 @@
 #include "utl\TimeConversion.h"
 #include "world\Dir.h"
 #ifdef HX_NATIVE
-#include "rndobj\Text.h"
-#include "ui\UILabel.h"
 #include <cstdio>
 #endif
 GamePanel *TheGamePanel = nullptr;
@@ -375,25 +373,6 @@ void GamePanel::SetTypeDef(DataArray *def) {
     static Message exit("exit_mode");
     Handle(exit, false);
     UIPanel::SetTypeDef(def);
-#ifdef HX_NATIVE
-    // After SetTypeDef, the WorldDir's inline mHUD may fire its DTA enter
-    // handler which overwrites $hud_panel with itself (an empty PanelDir
-    // without merged children). Restore $hud_panel to the merger's PanelDir
-    // before triggering common_reset, so all DTA handlers reference the
-    // fully-merged HUD.
-    if (def && TheHamDirector) {
-        FileMerger *fm = TheHamDirector->GetGameModeMerger();
-        if (fm) {
-            FileMerger::Merger *gm = fm->FindMerger("game_hud", false);
-            PanelDir *mergerHud = gm ? dynamic_cast<PanelDir *>(gm->MergerDir()) : nullptr;
-            if (mergerHud) {
-                DataVariable("hud_panel") = (Hmx::Object *)mergerHud;
-                static Message resetMsg("common_reset");
-                Handle(resetMsg, false);
-            }
-        }
-    }
-#endif
 }
 
 void GamePanel::Load() {
@@ -482,21 +461,6 @@ void GamePanel::Poll() {
             && !TheHamDirector->IsGameStartHold()) {
             StartGame();
         }
-#ifdef HX_NATIVE
-        // (Removed) Former native autoplay-scoring hack: it fabricated 100-500
-        // points/beat, wrote them into the REAL player provider `score` property
-        // and pushed them into the HUD labels/screenshots, which lied to anyone
-        // validating gameplay/HUD against Xbox. Native scoring is now honest: the
-        // genuine Xbox scoring pipeline (Game::SetHamMove -> move_passed DTA
-        // handler -> MetaPerformer::OnMovePassed) is DEFAULT-ON via
-        // DC3_REAL_MOVE_PASSED (opt-out DC3_REAL_MOVE_PASSED=0) now that live-pose
-        // detection is wired. The provider `score` and HUD label are driven by the
-        // real move_passed path — with a live pose provider they reflect the
-        // player's performance; with no provider the static tracked dummy yields a
-        // deterministic near-zero score (correct "standing still" signal), so the
-        // HUD label stays truthfully low. This block therefore leaves `score`
-        // untouched (it is written by the genuine OnMovePassed path, not here).
-#endif
         for (int i = 0; i < 2; i++) {
             FitnessFilter *filt = GetFitnessFilter(i);
             if (filt) {
@@ -596,11 +560,7 @@ float GamePanel::DeJitter(float ms) {
             result = unkf4;
         }
     }
-#ifdef HX_NATIVE
-    mFrameTimeSamples[mJitterSampleCount & 0x1F] = ms;
-#else
     mFrameTimeSamples[mJitterSampleCount] = ms;
-#endif
     if (result != sentinel) {
         ms = result;
     }
