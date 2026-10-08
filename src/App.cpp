@@ -359,6 +359,15 @@ App::App(int argc, char **argv) {
     // Initialize renderer
     TheRnd.Init();
 
+    // The image clears to opaque black: TheRnd.SetClearColor(black) right
+    // after Movie::Init (the #else arm). Native has to init the renderer
+    // earlier (the splash draws through it) and WgpuRnd::Init re-runs PreInit
+    // and then forces its own teal default, so the image's colour is applied
+    // after Init. MILO_CLEAR_COLOR (a native diagnostic) still wins.
+    if (!getenv("MILO_CLEAR_COLOR")) {
+        TheRnd.SetClearColor(Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f));
+    }
+
 #ifdef __EMSCRIPTEN__
     // Yield to browser so WebGPU adapter/device async callbacks fire.
     // After resume, mDevice is valid and we can create GPU resources.
