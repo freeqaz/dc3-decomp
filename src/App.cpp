@@ -170,39 +170,6 @@ public:
     }
 };
 
-// PlatformMgr stub — DTA calls add_sink/remove_sink for Xbox Live events
-// and queries guide/signin state.  Only registered while ThePlatformMgr is
-// unnamed: the image names it "platform_mgr" in PlatformMgr::Init, which native
-// SystemInit does not call on main yet (lane w23-g14 restores that; then
-// registerStub finds the real object and this class is dead).  Everything it
-// does not override is answered by ThePlatformMgr's own (image) handlers, so
-// sign-in queries -- {platform_mgr is_pad_signed_in}, get_signin_mask,
-// is_pad_a_guest, ... -- agree with the C++ side (one sign-in stand-in:
-// XUserGetSigninState in native/src/xdk_shims.cpp).
-class NativePlatformMgrStub : public Hmx::Object {
-public:
-    NativePlatformMgrStub() {}
-    virtual DataNode Handle(DataArray *msg, bool rev) {
-        Symbol sym = msg->Sym(1);
-        if (sym == "is_guide_showing") return DataNode(0);
-        if (sym == "is_pad_signed_into_live") return DataNode(0);
-        if (sym == "show_controller_required") return DataNode(0);
-        if (sym == "enable_xmp") return DataNode(0);
-        if (sym == "disable_xmp") return DataNode(0);
-        if (sym == "guide_showing") return DataNode(0);
-        // Kinect hardware — not present on native
-        if (sym == "has_kinect") return DataNode(0);
-        if (sym == "is_kinect_connected") return DataNode(0);
-        // Xbox LIVE social sharing — no capabilities on native.  The endgame
-        // results panel polls this EVERY frame (perform_endgame.dta), so
-        // leaving it unhandled logged ~55k "unhandled msg" notifies per
-        // results screen in the 2026-09-30 native harvest.
-        if (sym == "query_xsocial_capabilities") return DataNode(0);
-        if (sym == "poll_xsocial_capabilities") return DataNode(0);
-        return ThePlatformMgr.Handle(msg, rev);
-    }
-};
-
 // SpeechMgr stub — Kinect voice recognition. No microphone on native.
 class NativeSpeechMgrStub : public Hmx::Object {
 public:
@@ -359,6 +326,15 @@ App::App(int argc, char **argv) {
     // Initialize renderer
     TheRnd.Init();
 
+    // The image clears to opaque black: TheRnd.SetClearColor(black) right
+    // after Movie::Init (the #else arm). Native has to init the renderer
+    // earlier (the splash draws through it) and WgpuRnd::Init re-runs PreInit
+    // and then forces its own teal default, so the image's colour is applied
+    // after Init. MILO_CLEAR_COLOR (a native diagnostic) still wins.
+    if (!getenv("MILO_CLEAR_COLOR")) {
+        TheRnd.SetClearColor(Hmx::Color(0.0f, 0.0f, 0.0f, 1.0f));
+    }
+
 #ifdef __EMSCRIPTEN__
     // Yield to browser so WebGPU adapter/device async callbacks fire.
     // After resume, mDevice is valid and we can create GPU resources.
@@ -383,11 +359,30 @@ App::App(int argc, char **argv) {
     bool showSplash = !splashEnv || strcmp(splashEnv, "0") != 0;
 #endif
     Splash splash;
+    // The image's splash setup, verbatim: -fast (or a loose-file run) does not
+    // wait for the splash, -fast also disables SynthSample, and the ESRB
+    // screen follows the system locale / region (native: en-US / NA, so the
+    // eng ESRB screen). The image calls PrepareRemaining after its Kinect
+    // init, which native does not have, so it follows BeginSplasher directly.
+    bool fastBoot = OptionBool("fast", false);
+    if (fastBoot || !UsingCD()) {
+        splash.SetWaitForSplash(false);
+    }
+    if (fastBoot) {
+        SynthSample::Disable();
+    }
     if (showSplash) {
-        splash.AddScreen("ui/splash/eng/esrb_keep.milo", 0x12C0);
+        PlatformRegion region = ThePlatformMgr.GetRegion();
+        unsigned long systemLocale = ULSystemLocale();
+        if (systemLocale == 0x14) {
+            splash.AddScreen("ui/splash/jpn/esrb_keep.milo", 0x12C0);
+        } else if (region == kRegionNA) {
+            splash.AddScreen("ui/splash/eng/esrb_keep.milo", 0x12C0);
+        }
         splash.AddScreen("ui/splash/harmonix_keep.milo", 3000);
-        splash.PrepareRemaining();
+        splash.PrepareNext();
         splash.BeginSplasher();
+        splash.PrepareRemaining();
     }
 #ifdef __EMSCRIPTEN__
     // Yield immediately after splash Draw() so the browser can present the
@@ -403,6 +398,16 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
+    // The image runs these right after MagnuInit/TheRnd.Init. TheServer is
+    // DingoServerNative (native/src/platform/DingoSvr_Native.cpp: no-op
+    // auth/jobs); Init names it "server" and sinks ThePlatformMgr.
+    // RockCentral::Init names "rock_central" in ObjectDir::Main (DTA asks
+    // {rock_central is_online} from main/store/challenges/tutorial screens),
+    // hooks TheDataPointMgr and arms its login/upload timers; with
+    // ThePlatformMgr never connected natively it never logs in.
+    TheServer.Init();
+    TheRockCentral.Init();
+
     // Flow system - manages game state machine
     FlowInit();
     if (showSplash && TheSplasher) TheSplasher->Poll();
@@ -410,8 +415,13 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
-    // Load common sound bank (Faders, FxSend, Sound objects used by gameplay)
+    // Load common sound bank (Faders, FxSend, Sound objects used by gameplay).
+    // The image loads sfx/audio_mixer.milo first and keeps it referenced while
+    // the common bank loads (same block, same order as the #else arm).
     {
+        ObjDirPtr<ObjectDir> audioMixerDir;
+        audioMixerDir.LoadFile("sfx/audio_mixer.milo", false, true, kLoadFront, false);
+
         ObjDirPtr<ObjectDir> commonBankDir;
         DataArray *soundBanksConfig = SystemConfig("sound", "banks", "common");
         const char *soundBankPath = soundBanksConfig->Node(1).Str(soundBanksConfig);
@@ -425,6 +435,10 @@ App::App(int argc, char **argv) {
 #ifdef __EMSCRIPTEN__
     if (showSplash) emscripten_sleep(0);
 #endif
+
+    // MidiParser factory, in the image's position (after CharInit, before
+    // WorldInit/HamInit -- native used to register it after the UI init).
+    MidiParser::Init();
 
     // World system
     WorldInit();
@@ -440,49 +454,12 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
-    // Override HamLabel factory → AppLabel (DC3-specific subclass).
-    // HamInit() registers HamLabel::NewObject for "HamLabel"; we replace it
-    // with AppLabel::NewObject so .milo deserialization creates AppLabel
-    // instances, which MainMenuProvider::Text dynamic_casts to.
-    REGISTER_OBJ_FACTORY(AppLabel)
+    // (The AppLabel factory is registered by MetaPanel::Init, as in the image;
+    // native used to register it a second time here.)
 
-    // Ensure player providers exist — ham_init.dta normally creates these via DTA,
-    // but if the config chain fails on native, players have null mProvider which
-    // breaks SkeletonChooser::GetPlayerSide(), HamPlayerData::Side(), etc.
-    if (TheGameData) {
-        for (int i = 0; i < 2; i++) {
-            HamPlayerData *pd = TheGameData->Player(i);
-            if (pd && !pd->Provider()) {
-                char providerName[32];
-                snprintf(providerName, sizeof(providerName), "player_provider_%d", i + 1);
-                // Check if DTA already created it but didn't wire it up
-                PropertyEventProvider *provider =
-                    ObjectDir::Main()->Find<PropertyEventProvider>(providerName, false);
-                if (!provider) {
-                    provider = Hmx::Object::New<PropertyEventProvider>();
-                    provider->SetName(providerName, ObjectDir::Main());
-                }
-                // Wire provider to player data via property sync
-                DataNode provNode(provider);
-                pd->SetProperty(Symbol("provider"), provNode);
-                // Set side: player 0 = right, player 1 = left (matches ham_init.dta)
-                static Symbol side("side");
-                static Symbol player_present("player_present");
-                provider->SetProperty(side, i == 0 ? 1 : 0); // kSkeletonRight=1, kSkeletonLeft=0
-                // Mark both players as present so the full HUD renders
-                // (hud_left for player 1, hud_right for player 0).
-                // On Xbox, both sides show in crew/party mode.
-                provider->SetProperty(player_present, 1);
-                MILO_LOG("DC3 Native: Created player provider '%s' (side=%d)\n",
-                        providerName, i == 0 ? 1 : 0);
-            }
-        }
-    }
-
-    // MoveMgr — creates SuperEasyRemixer, SongLayout, loads category.dta.
-    // Must be after HamInit() which registers the SongLayout factory.
-    MoveMgr::Init(0);
-    MiniGameMgr::Init();
+    // (player_provider_1/2 are created and wired by config/ham_init.dta,
+    // which HamInit executes -- native used to re-create them here "if the
+    // config chain fails", forcing player_present=1; it never fired.)
 
     // Song manager
     TheHamSongMgr.Init();
@@ -499,42 +476,49 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
-    // Subsystem inits that other code dereferences without null checks
-    // (AccomplishmentManager before MetagameRank since Init() uses
-    // TheAccomplishmentMgr). FixedSizeSaveable/HamUserMgr moved up to the
-    // image's position, after SystemInit.
-    AccomplishmentManager::Init(SystemConfig("accomplishment_info"));
-    MetagameRank::Preinit(); // sets gRanksArray, needed by MetagameRank methods
-    MetagameRank::Init();
-    PartyModeMgr::Init();
-
-    // Register MidiParser factory so .milo files can deserialize MidiParser objects.
-    // Missing this caused silent null returns from NewObject("MidiParser").
-    MidiParser::Init();
-
-    // Set path eval callback to skip loading unnecessary assets based on game mode.
-    // Same callback used in PPC path — filters out mode-specific loads.
+    // Image order from here: SetPathEvalCallback right after GameInit, then
+    // ContextCheckerInit, (Kinect sXShowCallback), AccomplishmentManager::Init,
+    // MetagameRank::Init. MetagameRank::Preinit already ran in MetaPanel::Init
+    // (image position); native used to call it a second time here.
+    // FixedSizeSaveable/HamUserMgr run earlier, after SystemInit (w23-g12).
     DirLoader::SetPathEvalCallback(IsUselessLoad);
 
     // Register DTA script functions (random_context, etc.) so DTA handlers that
     // reference them don't silently fail. This is critical for DTA handler execution.
     ContextCheckerInit();
 
-    // Trigger content refresh to load base game songs from ark.
-    // This must happen after HamSongMgr.Init() (registers callback) and
-    // MetaPanel::Init() (registers SongSortMgr etc.) so all callbacks fire.
-    MILO_LOG("DC3 Native: About to call ContentMgr::RefreshSynchronously\n");
-    TheContentMgr.RefreshSynchronously();
-    MILO_LOG("DC3 Native: ContentMgr::RefreshSynchronously returned\n");
+    AccomplishmentManager::Init(SystemConfig("accomplishment_info"));
+    MetagameRank::Init();
 
-    // UI system — use the global TheHamUI (game-specific UIManager subclass)
-    // for proper two-pass draw pipeline (letterbox, blacklight, helpbar, shell input)
-    // HamUI::Init() calls UIEventMgr::Init() + UIManager::Init() internally
-    TheUI = &TheHamUI;
-    TheHamUI.Init();
+    // $extra_songs, as the image sets it before TheUI->Init (ContentMgr's
+    // refresh reads it to decide how many content alt dirs to enumerate;
+    // cheats.dta toggles it).
+    static DataNode &extraSongs = DataVariable("extra_songs");
+    if (UsingCD()) {
+        DataNode extraSongsValue(0);
+        extraSongs = extraSongsValue;
+    } else {
+        DataNode extraSongsValue(1);
+        extraSongs = extraSongsValue;
+    }
+
+    // (No boot-time content refresh: the image's first refresh is
+    // MainMenuPanel::Enter / SongSelectPanel's StartRefresh, or DTA
+    // setup_game_mode's refresh_synchronously. Native used to run
+    // TheContentMgr.RefreshSynchronously() here.)
+
     // Register smart stub objects for DTA scripts that reference Xbox managers.
     // These return sensible defaults so DTA handlers execute correctly instead
     // of silently failing. See DTA_FLOW_V2_PLAN.md Phase 1.
+    // Registered BEFORE the UI init: in the image the real managers are named
+    // long before it (SaveLoadManager right after the common bank, SpeechMgr
+    // in the Kinect init), and the UI init's DTA already runs.
+    // profile_mgr/content_mgr/challenges already exist by now
+    // (ProfileMgr/ContentMgr/Challenges Init), so those stubs are deleted
+    // again, as before. There is no platform_mgr stub any more: native
+    // SystemInit runs ThePlatformMgr.Init (w23-g14), which names the real
+    // object "platform_mgr" (PlatformMgr_Native.cpp, w23-si), so DTA reaches
+    // the image's PlatformMgr handlers.
     {
         auto registerStub = [](const char *name, Hmx::Object *obj) {
             if (!ObjectDir::Main()->FindObject(name, false, false)) {
@@ -545,12 +529,26 @@ App::App(int argc, char **argv) {
         };
         registerStub("saveload_mgr", new NativeSaveLoadStub());
         registerStub("profile_mgr", new NativeProfileMgrStub());
-        registerStub("platform_mgr", new NativePlatformMgrStub());
         // These don't need smart handlers — bare stubs are sufficient
         registerStub("content_mgr", new Hmx::Object());
         registerStub("challenges", new Hmx::Object());
         registerStub("speech_mgr", new NativeSpeechMgrStub());
     }
+
+    // UI system — use the global TheHamUI (game-specific UIManager subclass)
+    // for proper two-pass draw pipeline (letterbox, blacklight, helpbar, shell input)
+    // HamUI::Init() calls UIEventMgr::Init() + UIManager::Init() internally
+    TheUI = &TheHamUI;
+    TheHamUI.Init();
+
+    // MoveMgr (creates SuperEasyRemixer/SongLayout, loads category.dta) and
+    // MiniGameMgr, in the image's position: after TheUI->Init and before
+    // GotoFirstScreen (native used to create them right after HamInit).
+    MoveMgr::Init(0);
+    MiniGameMgr::Init();
+    // PartyModeMgr last, right before GotoFirstScreen, as in the image (native
+    // used to run it before the UI init).
+    PartyModeMgr::Init();
 
     // Inject native-only locale strings via MagnuStrings (checked first by
     // Locale::Localize, English-only, normally unused on native).
@@ -1314,8 +1312,21 @@ void App::RunWithoutDebugging() {
         // Draw UI panels (menus, transitions, flashcards, HUD overlays).
         // With FileMerger convergence, game_screen panels are loaded via
         // the engine pipeline and DTA flow controls visibility.
+        //
+        // The SIGSEGV-skip crash guard around TheUI->Draw is OPT-IN
+        // (DC3_DRAW_CRASH_GUARD=1). The image has no such net -- a draw fault
+        // ends the title -- and leaving it on by default let a real draw crash
+        // pass every gate as a skipped frame (only the first 3 were logged).
+        // Off, a draw fault reaches main_native.cpp's SignalHandler and is
+        // reported as a fatal_signal DC3_EXIT like any other crash.
+        static const bool sDrawCrashGuard = [] {
+            extern bool Dc3EnvFlag(const char *, bool);
+            return Dc3EnvFlag("DC3_DRAW_CRASH_GUARD", false);
+        }();
         if (TheUI && !getenv("DC3_HUD_ONLY") && !getenv("DC3_NO_UI")) {
-            if (sigsetjmp(gDrawJmpBuf, 1) == 0) {
+            if (!sDrawCrashGuard) {
+                TheUI->Draw();
+            } else if (sigsetjmp(gDrawJmpBuf, 1) == 0) {
                 gDrawJmpBufSet = true;
                 TheUI->Draw();
                 gDrawJmpBufSet = false;
