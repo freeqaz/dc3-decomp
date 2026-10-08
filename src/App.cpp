@@ -431,6 +431,16 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
+    // The image runs these right after MagnuInit/TheRnd.Init. TheServer is
+    // DingoServerNative (native/src/platform/DingoSvr_Native.cpp: no-op
+    // auth/jobs); Init names it "server" and sinks ThePlatformMgr.
+    // RockCentral::Init names "rock_central" in ObjectDir::Main (DTA asks
+    // {rock_central is_online} from main/store/challenges/tutorial screens),
+    // hooks TheDataPointMgr and arms its login/upload timers; with
+    // ThePlatformMgr never connected natively it never logs in.
+    TheServer.Init();
+    TheRockCentral.Init();
+
     // Flow system - manages game state machine
     FlowInit();
     if (showSplash && TheSplasher) TheSplasher->Poll();
