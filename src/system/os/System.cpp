@@ -494,21 +494,6 @@ void SystemInit(const char *config) {
     gSystemTimer.Start();
     Symbol::Init();
     InitSystem(config);
-#ifdef HX_NATIVE
-    gSystemTitles = SystemConfig("system", "titles");
-    ObjectDir::Init();
-    TrigTableInit();
-    ThreadCallInit();
-    GeoInit();
-    TrigInit();
-    SpewInit();
-    TheLocale.Terminate();
-    TheLocale.Init();
-    CheatsInit();
-    FileCache::Init();
-    TheContentMgr.Init();
-    TheDebug.AddExitCallback(SystemTerminate);
-#else
     gSystemTitles = SystemConfig("system", "titles");
     ObjectDir::Init();
     TrigTableInit();
@@ -521,8 +506,10 @@ void SystemInit(const char *config) {
     CheatsInit();
     TheMC.Init();
     FileCache::Init();
-    CacheMgrInit();
 #ifndef HX_NATIVE
+    // Native has no CacheMgrXbox / NetCacheMgrXbox (XContent + XNet): their
+    // TUs are not in the native build, and SystemPoll null-checks both.
+    CacheMgrInit();
     NetCacheMgrInit();
 #endif
     TheDataPointMgr.Init();
@@ -536,7 +523,6 @@ void SystemInit(const char *config) {
         Licenses::PrintAll();
         TheDebug.Exit(0, true);
     }
-#endif
 }
 
 static char sCommandLineBuffer[kCommandLineSz];

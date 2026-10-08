@@ -278,6 +278,16 @@ void Debug::Fail(const char *msg, void *v) {
 #ifdef HX_NATIVE
     fprintf(stderr, "FAIL: %s\n", msg);
     NATIVE_MODAL_TAP("FAIL", msg);
+    // A fail inside MILO_TRY is not a stop in the image either: it throws the
+    // message to the MILO_CATCH (DataReadString of a bad MIDI text event in
+    // MidiParserMgr, a bad mathop expression in DrivenPropertyMathOps, a
+    // failing cheat script). That is data semantics, not the fatal-modal
+    // platform choice below, so native unwinds exactly where the image does
+    // instead of running the rest of the try body on a half-built result.
+    if (!mNoDebug && !mFailing && MainThread() && mTry) {
+        mTry--;
+        throw msg;
+    }
 #ifdef HX_WEB
     // Web port: never fatal — matches Xbox "Continue" dialog behavior.
     // Many init paths trigger benign FAILs (missing assets, stubs).
