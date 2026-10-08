@@ -1347,8 +1347,21 @@ void App::RunWithoutDebugging() {
         // Draw UI panels (menus, transitions, flashcards, HUD overlays).
         // With FileMerger convergence, game_screen panels are loaded via
         // the engine pipeline and DTA flow controls visibility.
+        //
+        // The SIGSEGV-skip crash guard around TheUI->Draw is OPT-IN
+        // (DC3_DRAW_CRASH_GUARD=1). The image has no such net -- a draw fault
+        // ends the title -- and leaving it on by default let a real draw crash
+        // pass every gate as a skipped frame (only the first 3 were logged).
+        // Off, a draw fault reaches main_native.cpp's SignalHandler and is
+        // reported as a fatal_signal DC3_EXIT like any other crash.
+        static const bool sDrawCrashGuard = [] {
+            extern bool Dc3EnvFlag(const char *, bool);
+            return Dc3EnvFlag("DC3_DRAW_CRASH_GUARD", false);
+        }();
         if (TheUI && !getenv("DC3_HUD_ONLY") && !getenv("DC3_NO_UI")) {
-            if (sigsetjmp(gDrawJmpBuf, 1) == 0) {
+            if (!sDrawCrashGuard) {
+                TheUI->Draw();
+            } else if (sigsetjmp(gDrawJmpBuf, 1) == 0) {
                 gDrawJmpBufSet = true;
                 TheUI->Draw();
                 gDrawJmpBufSet = false;
