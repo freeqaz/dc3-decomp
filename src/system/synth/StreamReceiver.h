@@ -36,7 +36,9 @@ public:
     virtual bool SendDoneImpl() = 0;
 #ifdef HX_NATIVE
     /** True when the audio output has consumed all buffered data.
-     *  Used by Poll() to pace mDoneBufferCounter after mEndData. */
+     *  Nothing calls it any more (Poll() places kFinished from byte counts,
+     *  051646060); it stays because both StreamReceiver_Native.h copies --
+     *  this repo's and the shared engine's -- override it. */
     virtual bool IsOutputDrained() const { return true; }
 #endif
 
