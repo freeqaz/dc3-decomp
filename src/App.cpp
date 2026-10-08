@@ -535,12 +535,10 @@ App::App(int argc, char **argv) {
         extraSongs = extraSongsValue;
     }
 
-    // Trigger content refresh to load base game songs from ark.
-    // This must happen after HamSongMgr.Init() (registers callback) and
-    // MetaPanel::Init() (registers SongSortMgr etc.) so all callbacks fire.
-    MILO_LOG("DC3 Native: About to call ContentMgr::RefreshSynchronously\n");
-    TheContentMgr.RefreshSynchronously();
-    MILO_LOG("DC3 Native: ContentMgr::RefreshSynchronously returned\n");
+    // (No boot-time content refresh: the image's first refresh is
+    // MainMenuPanel::Enter / SongSelectPanel's StartRefresh, or DTA
+    // setup_game_mode's refresh_synchronously. Native used to run
+    // TheContentMgr.RefreshSynchronously() here.)
 
     // Register smart stub objects for DTA scripts that reference Xbox managers.
     // These return sensible defaults so DTA handlers execute correctly instead
