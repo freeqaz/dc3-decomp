@@ -86,32 +86,6 @@ void UIListSlot::CreateElements(UIList *uilist, int count) {
     }
 }
 
-#ifdef HX_WEB
-// Lazy element creation for async loading: if RootTrans() is now valid
-// but CreateElements was skipped (assets weren't loaded yet), create them now.
-// w23-g10: web-only.  Added for the web port's fetch-driven async loading
-// (e1d68a447, "web port gameplay fixes"); desktop native loads the way the
-// image does and never needed it -- a probe that logged every lazy creation,
-// every Draw short-circuit and every Fill/StartScroll early return fired ZERO
-// times over a boot -> main -> choose_mode -> song_select -> multiuser ->
-// gameplay tour.  Desktop native now runs the image's bodies (Draw fails on a
-// short element list, Fill asserts the index) like the PPC build.
-void UIListSlot::EnsureElements() {
-    if (!RootTrans() || !mElements.empty() || mNextElement)
-        return;
-    UIList *list = ParentList();
-    if (!list)
-        return;
-    int count = list->NumDisplay();
-    if (count <= 0)
-        return;
-    for (int i = 0; i < count; i++) {
-        mElements.push_back(CreateElement(list));
-    }
-    mNextElement = CreateElement(list);
-}
-#endif
-
 void UIListSlot::Draw(
     const UIListWidgetDrawState &drawstate,
     const UIListState &liststate,
@@ -122,19 +96,12 @@ void UIListSlot::Draw(
 ) {
     RndTransformable *root = RootTrans();
     if (root) {
-#ifdef HX_WEB
-        EnsureElements();
-#endif
         int thesize = drawstate.mElements.size();
         if (thesize > mElements.size()) {
-#ifdef HX_WEB
-            return;
-#else
             // The retail build instantiates MakeString<unsigned long, int> here,
             // so the first argument is mElements.size() itself -- not an `int`
             // temporary. RB3's UIListSlot::Draw spells it the same way.
             MILO_FAIL("%i isn't enough elements (need %i)", mElements.size(), thesize);
-#endif
         }
         const Transform &rootWorldXfm = root->WorldXfm();
         Transform tf78(rootWorldXfm);
@@ -232,11 +199,6 @@ void UIListSlot::Draw(
 
 void UIListSlot::Fill(const UIListProvider &prov, int display, int j, int k) {
     if (RootTrans()) {
-#ifdef HX_WEB
-        EnsureElements();
-        if ((size_t)display >= mElements.size())
-            return;
-#endif
         MILO_ASSERT(display < mElements.size(), 0x98);
         mElements[display]->Fill(prov, j, k);
     }
@@ -244,11 +206,6 @@ void UIListSlot::Fill(const UIListProvider &prov, int display, int j, int k) {
 
 void UIListSlot::StartScroll(int i, bool b) {
     if (b && RootTrans()) {
-#ifdef HX_WEB
-        EnsureElements();
-        if (!mNextElement)
-            return;
-#endif
         mElements.insert(i < 0 ? mElements.begin() : mElements.end(), mNextElement);
         mNextElement = 0;
     }
