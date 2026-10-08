@@ -328,7 +328,7 @@ extern "C" long _stub_fn_813() { HX_STUB_TRACE("NetCacheMgrXbox::NetCacheMgrXbox
 // DxTex::SetDeviceTex(D3DTexture*)
 extern "C" __attribute__((weak, used)) long _stub_fn_967() __asm__(ASM_SYM("_ZN5DxTex12SetDeviceTexEP10D3DTexture"));
 extern "C" long _stub_fn_967() { HX_STUB_TRACE("DxTex::SetDeviceTex"); return 0; }
-// RndTex::Load, PreLoad, PostLoad: provided by RndTex_Native.cpp
+// RndTex::Load, PreLoad, PostLoad: the image bodies in src/system/rndobj/Tex.cpp
 // LoadMgr::PollFrontLoader() - now implemented in Loader.cpp
 // RndBitmap::Load: provided by RndTex_Native.cpp
 // LightPreset::GetKey stub removed — real impl in LightPreset.cpp

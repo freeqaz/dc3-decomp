@@ -116,12 +116,10 @@ BEGIN_COPYS(RndTex)
     END_COPYING_MEMBERS
 END_COPYS
 
-#ifndef HX_NATIVE
 BEGIN_LOADS(RndTex)
     PreLoad(bs);
     PostLoad(bs);
 END_LOADS
-#endif
 
 void RndTex::Print() {
     TheDebug << "   width: " << mWidth << "\n";
@@ -134,7 +132,6 @@ void RndTex::Print() {
 
 INIT_REVS(11, 0)
 
-#ifndef HX_NATIVE
 void RndTex::PreLoad(BinStream &bs) {
     LOAD_REVS(bs)
     ASSERT_REVS(11, 0)
@@ -244,7 +241,6 @@ void RndTex::PostLoad(BinStream &bs) {
         RELEASE(mLoader);
     }
 }
-#endif // !HX_NATIVE
 
 void RndTex::LockBitmap(RndBitmap &bmap, int i) {
     if (mBitmap.Order() & 0x38) {
