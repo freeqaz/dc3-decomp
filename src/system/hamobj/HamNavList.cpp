@@ -87,6 +87,13 @@ HamNavList::~HamNavList() {
 #ifdef HX_NATIVE
     if (ObjectDir::InDeleteObjects()) {
         mListWidgets.clear();
+        // SkeletonUpdate is a global singleton, not a sibling in the dying
+        // dir, so unregistering is safe mid-cascade -- and skipping it left a
+        // dangling callback whenever a list was torn down while still entered.
+        SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+        if (handle.HasCallback(this)) {
+            handle.RemoveCallback(this);
+        }
         delete mDirectionGestureFilter;
         delete mHandHeightFilter;
         return;
@@ -657,19 +664,16 @@ void HamNavList::OldResourcePreload(BinStream &bs) {
 void HamNavList::HideItem(int index, bool b) {
     if (mRefreshPending)
         RealRefresh();
+    MILO_ASSERT_RANGE(index, 0, mRibbonDrawStates.size(), 0x527);
 #ifdef HX_NATIVE
-    // Resize ribbon draw states if provider grew since last Update()
-    // (e.g. DTA append_nav_item doesn't trigger Update)
-    int numShowing = mListState.Provider() ? mListState.NumShowing() : 0;
-    if ((int)mRibbonDrawStates.size() < numShowing) {
-        HamListRibbonDrawState defaultState;
-        mRibbonDrawStates.resize(numShowing, defaultState);
-    }
+    // The image's assert is fatal; native's reports and returns, so stop here
+    // rather than write past the vector. No resize: the image sizes
+    // mRibbonDrawStates only in Update() (NumDisplay) and LinkRibbonDrawState
+    // (the widget element count), never from the provider's data count.
     if (index < 0 || index >= (int)mRibbonDrawStates.size()) {
         return;
     }
 #endif
-    MILO_ASSERT_RANGE(index, 0, mRibbonDrawStates.size(), 0x527);
     mRibbonDrawStates[index].mHidden = b;
     if (mNavProvider)
         mNavProvider->SetEnabled(index, b == false);

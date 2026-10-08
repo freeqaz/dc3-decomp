@@ -551,8 +551,10 @@ void HamIKEffector::Poll() {
     // This is the key question: if pelvis runs AFTER ankle, its SetWorldXfm
     // cascades dirty through the leg chain, overwriting ankle IK corrections.
     {
+        // Diagnostic only (DC3_IK_DIAG): this printed 30 lines in every native run.
         static int sPollOrderCount = 0;
-        if (sPollOrderCount < 30) {
+        static const bool sPollOrderDiag = getenv("DC3_IK_DIAG") != nullptr;
+        if (sPollOrderDiag && sPollOrderCount < 30) {
             sPollOrderCount++;
             EffectorType tDbg = mEffector ? GetType() : kEffectorTypeNone;
             const char* typeNames[] = {"none","pelvis","ankle","hand","forearm","head"};
@@ -781,11 +783,15 @@ void HamIKEffector::Poll() {
                                     // un-dropped (~+4) planted ankle; if it has
                                     // collapsed onto effZ (the sunk live ankle),
                                     // Interp returns the sunk pose regardless.
+                                    // Diagnostic only (DC3_IK_DIAG): the AnkleClamp
+                                    // and ChainZ probes printed in every native run.
                                     static int sClampLog = 0;
+                                    static const bool sClampDiag =
+                                        getenv("DC3_IK_DIAG") != nullptr;
                                     const char *p = PathName(this);
                                     bool isMain = p && strstr(p, "main.milo")
                                                   && !strstr(p, "backup");
-                                    if (sClampLog < 24 && isMain) {
+                                    if (sClampDiag && sClampLog < 24 && isMain) {
                                         sClampLog++;
                                         fprintf(stderr,
                                             "DC3_IK_DIAG AnkleClamp[%d]: eff=%s "
@@ -811,7 +817,7 @@ void HamIKEffector::Poll() {
                                     extern int HamDirector_SelectCameraSetFrameCount();
                                     static int sChainLog = 0;
                                     bool isLeftAnkle = p && strstr(p, "bone_L-ankle.ikf");
-                                    if (sChainLog < 60 && isMain && isLeftAnkle
+                                    if (sClampDiag && sChainLog < 60 && isMain && isLeftAnkle
                                         && HamDirector_SelectCameraSetFrameCount() > 3000) {
                                         sChainLog++;
                                         ObjectDir *d = Dir();
@@ -929,11 +935,13 @@ void HamIKEffector::Poll() {
 #ifdef HX_NATIVE
                     {
                         extern int HamDirector_SelectCameraSetFrameCount();
+                        // Diagnostic only (DC3_IK_DIAG): printed in every native run.
                         static int sBackLog = 0;
+                        static const bool sBackDiag = getenv("DC3_IK_DIAG") != nullptr;
                         const char *bp = PathName(this);
                         bool bMain = bp && strstr(bp, "main.milo") && !strstr(bp, "backup");
                         bool bLA = bp && strstr(bp, "bone_L-ankle.ikf");
-                        if (sBackLog < 40 && bMain && bLA
+                        if (sBackDiag && sBackLog < 40 && bMain && bLA
                             && HamDirector_SelectCameraSetFrameCount() > 800) {
                             sBackLog++;
                             const Transform &fingW = finger->WorldXfm();

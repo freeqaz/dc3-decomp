@@ -164,37 +164,12 @@ void MoveMgr::InsertMoveInSong(const MoveVariant *var, int measure, int player) 
         float f4 = BeatToFrame(beat);
         float f6 = BeatToFrame(measure > 0 ? beat - 1 : 0);
 #ifdef HX_NATIVE
-        RndPropAnim *anim = nullptr;
-        static Symbol merge_moves("merge_moves");
-        if (TheHamDirector && TheHamProvider
-            && TheHamProvider->Property(merge_moves, true)->Int()) {
-            // HACK(native): populate the routine-builder anim directly. The
-            // SongAnim() fallback for native/web clip playback can otherwise
-            // redirect these initial remixer writes into the authored song.anim,
-            // leaving player_song_anim() with no move timeline for HUD sync.
-            WorldDir *world = TheHamDirector->GetWorld();
-            if (world) {
-                anim = world->Find<RndPropAnim>(
-                    player == 0 ? "player_1_routine_builder.anim"
-                                : "player_2_routine_builder.anim",
-                    true
-                );
-            }
-        }
-        // TheHamDirector is tested for null in the merge_moves condition above,
-        // which is what proves it can be null here -- and this fallback used to
-        // call straight through it. That is the same shape as the retail
-        // MoveDir::PostUpdateFilters bug, but this block is native-added code,
-        // not decompiled from the target, so there is nothing to stay faithful
-        // to and nothing to wrap in #ifdef: it is simply a missing test.
-        if (!anim && TheHamDirector) {
-            anim = TheHamDirector->SongAnim(player);
-        }
-        // The original PPC binary does not null-check anim here; SongAnim
-        // never returns null on Xbox. Native SongAnim/Find can, so guard it.
-        // With no HamDirector at all, anim stays null and we bail here, which
-        // also keeps the null out of the SetKeyVal(TheHamDirector, ...) calls
-        // at the bottom of this function.
+        // The image calls straight through both pointers. Natively
+        // TheHamDirector can be null and SongAnim() returns null before the
+        // song anims are set up -- states where the console would fault --
+        // so bail instead (this also keeps the null out of the
+        // SetKeyVal(TheHamDirector, ...) calls below).
+        RndPropAnim *anim = TheHamDirector ? TheHamDirector->SongAnim(player) : nullptr;
         if (!anim) {
             return;
         }

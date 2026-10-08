@@ -298,10 +298,6 @@ MoveDir::MoveDir()
 MoveDir::~MoveDir() {
     RELEASE(mFilterQueue);
     RELEASE(mAsyncDetector);
-#ifdef HX_NATIVE
-    if (ObjectDir::InDeleteObjects())
-        return;
-#endif
     mMoveOverlay = RndOverlay::Find("ham_move", false);
     if (mMoveOverlay && mMoveOverlay->GetCallback() == this) {
         mMoveOverlay->SetCallback(nullptr);
@@ -309,6 +305,14 @@ MoveDir::~MoveDir() {
             mMoveOverlay->SetShowing(false);
         }
     }
+#ifdef HX_NATIVE
+    // Native two-phase dir teardown: skip only the SkeletonViz delete while a
+    // cascade is destroying objects (c6dad61c8). The "ham_move" overlay and the
+    // skeleton callback list are globals, not siblings in the dying dir, so
+    // they are released on both paths as in the image -- returning before them
+    // left the overlay's callback and the native skeleton callback dangling.
+    if (!ObjectDir::InDeleteObjects())
+#endif
     delete mDancerViz;
 #ifdef HX_NATIVE
     SkeletonUpdate::RemoveNativeCallback(this);
