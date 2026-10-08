@@ -1,5 +1,18 @@
 #include "utl\MemStream.h"
 
+// Native only (ported from rb3-xenon 2117aa92e, W16-TW): `&mBuffer[mTell]` with
+// mTell == size() is operator[] one past the end. The 360's STLport vector indexes
+// a raw pointer, so a 0-byte access at the end (an empty Symbol or String body,
+// or a read clamped to 0 at EOF) is harmless there; libstdc++'s checked
+// operator[] (_GLIBCXX_ASSERTIONS, which the host libstdc++ turns on for any
+// unoptimized build, e.g. a -O0 debug or ASan native build) aborts on
+// it. The native spelling forms the same address through data().
+#ifdef HX_NATIVE
+#define MEMSTREAM_AT(i) (mBuffer.data() + (i))
+#else
+#define MEMSTREAM_AT(i) (&mBuffer[i])
+#endif
+
 void MemStream::Flush() {}
 
 bool MemStream::Fail() { return mFail; }
@@ -9,7 +22,7 @@ void MemStream::ReadImpl(void *data, int bytes) {
         bytes = mBuffer.size() - mTell;
         mFail = true;
     }
-    memcpy(data, &mBuffer[mTell], bytes);
+    memcpy(data, MEMSTREAM_AT(mTell), bytes);
     mTell += bytes;
 }
 
@@ -62,7 +75,7 @@ void MemStream::WriteImpl(const void *data, int bytes) {
     if (mTell + bytes > mBuffer.size()) {
         mBuffer.resize(mTell + bytes);
     }
-    memcpy(&mBuffer[mTell], data, bytes);
+    memcpy(MEMSTREAM_AT(mTell), data, bytes);
     mTell += bytes;
 }
 
@@ -74,6 +87,6 @@ void MemStream::WriteStream(BinStream &bs, int bytes) {
     if (mTell + bytes > mBuffer.size()) {
         mBuffer.resize(mTell + bytes);
     }
-    bs.Read(&mBuffer[mTell], bytes);
+    bs.Read(MEMSTREAM_AT(mTell), bytes);
     mTell += bytes;
 }
