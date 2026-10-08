@@ -563,6 +563,18 @@ App::App(int argc, char **argv) {
     // reference them don't silently fail. This is critical for DTA handler execution.
     ContextCheckerInit();
 
+    // $extra_songs, as the image sets it before TheUI->Init (ContentMgr's
+    // refresh reads it to decide how many content alt dirs to enumerate;
+    // cheats.dta toggles it).
+    static DataNode &extraSongs = DataVariable("extra_songs");
+    if (UsingCD()) {
+        DataNode extraSongsValue(0);
+        extraSongs = extraSongsValue;
+    } else {
+        DataNode extraSongsValue(1);
+        extraSongs = extraSongsValue;
+    }
+
     // Trigger content refresh to load base game songs from ark.
     // This must happen after HamSongMgr.Init() (registers callback) and
     // MetaPanel::Init() (registers SongSortMgr etc.) so all callbacks fire.
