@@ -1463,13 +1463,6 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
 }
 
 int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths, bool marqueeWrap) {
-#ifdef HX_NATIVE
-    // Reset displayable char counts before recomputing — prevents unbounded growth
-    // when UpdateText() is called every frame (ResetDisplayableChars was never called)
-    for (auto *fm : mFontMaps) {
-        fm->ResetDisplayableChars();
-    }
-#endif
     StyleState styleState(this, 1.0f);
     std::vector<unsigned short> negWidthChars;
     std::vector<unsigned short> missingChars;
@@ -2797,27 +2790,23 @@ void RndText::DrawShowing() {
 // Diagnosed only (w9-e 2026-09-30), nothing attempted: there is no source
 // operator between `mesh` and `&screenHeight` to reorder.
 void RndText::SizeCheck() {
-#ifdef HX_NATIVE
-    // On Xbox this hook only emitted an "oversized font" warning; the native
-    // port repurposed it to re-lay-out the text every frame. That is safe for
-    // static labels but destructive for the scrolling fit types: FitTextScroll()
-    // resets mScrollTimer to 0 and mScrollPos to the start offset, so redoing it
-    // once per frame pins a marquee at frame 0 forever. (DC3 main_screen's
-    // motd.lbl therefore never scrolled and permanently showed the message with
-    // its head parked under the authored left-edge gradient mask.)
-    //
-    // Once a scrolling label has been fitted (mWrapEnabled, set only by
-    // FitTextScroll) leave it alone — UILabel::LabelUpdate() and the LOAD/COPY
-    // paths still call UpdateText() explicitly whenever the string or a layout
-    // property actually changes.
-    if (!mWrapEnabled)
-        UpdateText();
-#else
+    // w22-ng: native runs the image's body too.  It used to replace it with
+    // `if (!mWrapEnabled) UpdateText();` -- a re-layout of every non-scrolling
+    // label on every draw -- added in the 2026-03 bring-up on the belief that
+    // the original "checks mDirtyFlags ... on native we always rebuild".  It
+    // does not: this is a diagnostics-only hook (the 0x82691498 body only
+    // measures CalcScreenHeight and MILO_NOTIFYs "oversized"), and the image
+    // lays text out only from Load, Copy, the update_text handler and
+    // UILabel::LabelUpdate -- all of which native now reaches.  Measured
+    // before/after with a headless screenshot tour: choose mode, song select
+    // (scrolled), multiuser x3 are pixel-identical; main_screen differs only
+    // in the time-dependent MOTD ticker offset; the gameplay score label
+    // still counts up.
     static float sLastHeight;
     static RndText *sLastText;
 
     StyleState ss(this, mConstructScale);
-    for (FontMapBase **it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
+    for (auto it = mFontMaps.begin(); it != mFontMaps.end(); ++it) {
         RndFontBase *font = (*it)->Font();
         if (font != nullptr && font->BitmapFont()) {
             for (int i = 0; i < (*it)->NumMeshes(); i++) {
@@ -2858,7 +2847,6 @@ void RndText::SizeCheck() {
             }
         }
     }
-#endif
 }
 
 void RndText::GetWidthHeightBox(Box &box) const {
