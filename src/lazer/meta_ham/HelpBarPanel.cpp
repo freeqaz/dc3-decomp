@@ -50,9 +50,6 @@ END_PROPSYNCS
 
 void HelpBarPanel::Draw() {
     bool show = (!ShouldHideHelpbar() && !mDisabled) || TheGestureMgr->InControllerMode();
-#ifdef HX_NATIVE
-    if (mAll)
-#endif
     mAll->SetShowing(show);
     UIPanel::Draw();
 }
@@ -122,19 +119,14 @@ void HelpBarPanel::Unload() {
 void HelpBarPanel::FinishLoad() {
     UIPanel::FinishLoad();
 #ifdef HX_NATIVE
-    // TheSaveLoadMgr and TheWaveToTurnOnLight may not be initialized yet —
-    // HelpBarPanel can finish loading during UIManager::Init(), which runs
-    // before SaveLoadManager::Init() and GestureInit() in the App constructor.
+    // PLATFORM: native never creates TheSaveLoadMgr (no Xbox save-device
+    // flow; App registers a NativeSaveLoadStub object instead).
     if (TheSaveLoadMgr)
 #endif
     TheSaveLoadMgr->AddSink(this);
-#ifdef HX_NATIVE
-    if (TheWaveToTurnOnLight) {
-#endif
     TheWaveToTurnOnLight->AddSink(this, "wave_gesture_enabled");
     TheWaveToTurnOnLight->AddSink(this, "wave_gesture_disabled");
 #ifdef HX_NATIVE
-    }
     // Fallback boot hook: the dir is loaded here, but TheGestureMgr may still be
     // null this early — NativeBootControllerModeOnce() no-ops until gesture exists,
     // at which point the ShellInput::Init hook fires it instead.
@@ -274,9 +266,6 @@ bool HelpBarPanel::IsWriteIconShowing() {
 
 void HelpBarPanel::SyncToPanel(UIPanel *panel) {
     mSyncedPanel = panel;
-#ifdef HX_NATIVE
-    if (!DataDir() || !mLeftHandNavList) return;
-#endif
     bool updateback = UpdateBackButton(panel);
     bool updatetert = UpdateTertiaryButton(panel);
     if (updateback || updatetert) {
