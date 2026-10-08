@@ -185,6 +185,14 @@ void MetaPanel::Init() {
     // native had profiles (9c98fbef0); native still has no persistent profile
     // save, so a fresh-profile lock set would be permanent. Read-only -- no
     // grant/save/signin machinery is touched.
+    // Measured (w23-misc, headless DC3_HTTP boot to main_screen, flipping it
+    // with {toggle_unlock_all}): with false, all 54 rank unlockables
+    // (metagame_rank.dta: crew/outfits, venues incl. throneroom, avatar
+    // items) read locked and 1 of 66 songs (blackandtan) leaves the library;
+    // has_finished_campaign goes 1 -> 0 (credits play as text, campaign eras
+    // gate on in-memory CampaignProgress). Every unlock earned in a session is
+    // lost at exit (TheMemcardMgr.Init is not run natively). Difficulties are
+    // unaffected (HamProfile::IsDifficultyUnlockedForProfile returns true).
     sUnlockAll = true;
     TheProfileMgr.InitNative();
 #else
