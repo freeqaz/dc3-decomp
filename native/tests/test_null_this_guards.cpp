@@ -412,10 +412,11 @@ const GuardSite kSites[] = {
      "this loop, which calls through it regardless."},
 
     {"MoveMgr.cpp InsertMoveInSong", "/system/hamobj/MoveMgr.cpp",
-     "void MoveMgr::InsertMoveInSong(", "anim = TheHamDirector->SongAnim(player);",
-     "if (!anim && TheHamDirector) {",
-     "Native-added code: the merge_moves condition tests `TheHamDirector &&`, then "
-     "the SongAnim fallback called straight through it."},
+     "void MoveMgr::InsertMoveInSong(", "TheHamDirector->SongAnim(player)",
+     "TheHamDirector ? ",
+     "The image calls TheHamDirector->SongAnim() unguarded; natively TheHamDirector "
+     "can be null here (the old native merge_moves bypass tested it, then called "
+     "straight through it), so the native arm must test it before the call."},
 
     {"ShellInput.cpp ShellInput::Poll", "/lazer/meta_ham/ShellInput.cpp",
      "OverlayPanel *panel = TheHamUI.GetOverlayPanel();", "mHandsUpGestureFilter->Clear();",
