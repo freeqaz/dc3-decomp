@@ -1,6 +1,9 @@
 #pragma once
 #include "synth\ADSR.h"
 #include "utl\MemMgr.h"
+#ifdef HX_NATIVE
+#include <vector>
+#endif
 
 class StreamReceiver;
 typedef StreamReceiver *StreamReceiverFactoryFunc(int, int, bool, int);
@@ -89,9 +92,22 @@ protected:
     int mDoneBufferCounter; // 0x8024
     int mLastPlayCursor; // 0x8028
 #ifdef HX_NATIVE
-    /** Native only: bytes handed to WriteData(), which on native go straight to
-     *  the platform receiver's ring. Poll() needs it to place kFinished where the
-     *  image's buffer cycle does. */
+    /** Native only: bytes handed to WriteData(). Poll() needs it to place
+     *  kFinished where the image's buffer cycle does. */
     int mNativeBytesWritten;
+    /** Native only: bytes the image's voice ring would have taken from the
+     *  local ring so far -- Poll()'s model of the image's buffer cycle, which
+     *  keeps mRingFreeSpace (and so BytesWriteable(), ConsumeData's flow
+     *  control) the image's count. */
+    unsigned long long mNativeVoiceBytes;
+    /** Native only: PCM handed to WriteData() that the platform receiver's
+     *  ring has not taken yet (main thread only; the audio thread never reads
+     *  it). The image keeps up to mNumBuffers * 0x4000 + 0x8000 bytes in
+     *  flight; the platform ring is smaller, so the rest waits here. */
+    std::vector<unsigned char> mNativeStage;
+    int mNativeStageHead;
+    /** Native only: EndData() arrived while PCM was still staged. */
+    bool mNativeEndPending;
+    void NativePump();
 #endif
 };

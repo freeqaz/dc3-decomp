@@ -16,6 +16,9 @@ StreamReceiver::StreamReceiver(int numBuffers, bool slip)
     MILO_ASSERT(numBuffers > 0, 0x33);
 #ifdef HX_NATIVE
     mNativeBytesWritten = 0;
+    mNativeVoiceBytes = 0;
+    mNativeStageHead = 0;
+    mNativeEndPending = false;
 #endif
 }
 
@@ -30,7 +33,16 @@ void StreamReceiver::EndData() {
             memset(&mBuffer[mRingFreeSpace], 0, kStreamRcvrBufSize - mRingFreeSpace);
             mRingFreeSpace = kStreamRcvrBufSize;
         }
+#ifdef HX_NATIVE
+        // The platform receiver plays silence (and counts it as played) once
+        // mEndData is set and its ring is empty, so the flag must not reach it
+        // while PCM is still staged for it: NativePump() sets it once the last
+        // staged byte is in the platform ring.
+        mNativeEndPending = true;
+        NativePump();
+#else
         mEndData = true;
+#endif
     }
 }
 
@@ -76,13 +88,18 @@ u64 StreamReceiver::GetBytesPlayed() {
 
 void StreamReceiver::WriteData(const void *data, int bytes) {
 #ifdef HX_NATIVE
-    // On native, forward data directly to the platform receiver's ring buffer
-    // via StartSendImpl. The base class mBuffer is not used — audio output
-    // reads from StreamReceiverNative::mPCMBuf instead.
-    StartSendImpl((unsigned char *)data, bytes, 0);
+    // The image copies into its 0x8000-byte local ring (#else) and Poll() hands
+    // that ring to the voice one 0x4000-byte buffer at a time. Natively the
+    // bytes queue in mNativeStage and NativePump() moves them into the platform
+    // receiver's ring (StreamReceiverNative's, which the audio thread plays) as
+    // it has room; mRingFreeSpace counts them as the image's local ring does, so
+    // BytesWriteable() -- the flow control StandardStream::ConsumeData reads --
+    // is the image's.
+    const unsigned char *src = (const unsigned char *)data;
+    mNativeStage.insert(mNativeStage.end(), src, src + bytes);
+    mRingFreeSpace += bytes;
     mNativeBytesWritten += bytes;
-    mSending = true;
-    mWantToSend = false;
+    NativePump();
 #else
     MILO_ASSERT(bytes > 0 && bytes <= BytesWriteable(), 0x51);
     XMemCpy(mBuffer + mRingFreeSpace, data, bytes);
@@ -95,6 +112,28 @@ void StreamReceiver::Poll() {
     if (mSending && SendDoneImpl()) {
         mSending = false;
         mBuffersSent++;
+    }
+    NativePump();
+    // The image's buffer cycle (#else): the voice ring holds mNumBuffers
+    // 0x4000-byte buffers, and each Poll() moves at most one buffer from the
+    // local ring into it -- while priming, then each time the play cursor has
+    // left a buffer (activeBuf != mSendTarget, refilling the buffer just
+    // played), and only when the local ring holds a whole buffer. So the voice
+    // never runs more than mNumBuffers buffers past the start of the buffer
+    // being played, and the local ring then refills to 0x8000: in steady state
+    // ConsumeData has decoded (mNumBuffers + 2) * 0x4000 bytes past that point.
+    // After EndData() the local ring stays zero-padded full. (Slip channels,
+    // which refill mNumBuffers / 2 behind, are not modelled: nothing in DC3
+    // enables slip streaming and the native receiver cannot slip.)
+    {
+        unsigned long long voiceLimit =
+            (GetBytesPlayed() / 0x4000 + (unsigned long long)mNumBuffers) * 0x4000;
+        if (mNativeVoiceBytes < voiceLimit && mRingFreeSpace >= 0x4000) {
+            mNativeVoiceBytes += 0x4000;
+            mRingFreeSpace -= 0x4000;
+            if (mEndData || mNativeEndPending)
+                mRingFreeSpace = kStreamRcvrBufSize;
+        }
     }
     // On the image, after EndData() every 0x4000-byte buffer the voice
     // finishes is refilled from the zero-padded local ring and counted in
@@ -176,6 +215,42 @@ void StreamReceiver::Poll() {
     }
 #endif
 }
+
+#ifdef HX_NATIVE
+// Move staged PCM into the platform receiver's ring, as much as it has room
+// for. StreamReceiverNative's ring is a fixed 64 KB (743 ms of 44.1 kHz) that
+// StartSendImpl silently truncates at, so ask it first; any other receiver (a
+// test sink, StreamReceiverFile) takes everything.
+void StreamReceiver::NativePump() {
+    int staged = (int)mNativeStage.size() - mNativeStageHead;
+    if (staged > 0) {
+        int room = staged;
+        StreamReceiverNative *rcvr = dynamic_cast<StreamReceiverNative *>(this);
+        if (rcvr)
+            room = rcvr->AvailableWriteBytes();
+        int n = staged < room ? staged : room;
+        if (n > 0) {
+            StartSendImpl(&mNativeStage[mNativeStageHead], n, 0);
+            mNativeStageHead += n;
+            mSending = true;
+            mWantToSend = false;
+            if (mNativeStageHead == (int)mNativeStage.size()) {
+                mNativeStage.clear();
+                mNativeStageHead = 0;
+            } else if (mNativeStageHead >= 0x10000) {
+                mNativeStage.erase(
+                    mNativeStage.begin(), mNativeStage.begin() + mNativeStageHead
+                );
+                mNativeStageHead = 0;
+            }
+        }
+    }
+    if (mNativeEndPending && mNativeStageHead == (int)mNativeStage.size()) {
+        mNativeEndPending = false;
+        mEndData = true;
+    }
+}
+#endif
 
 #ifndef HX_NATIVE
 StreamReceiver *StreamReceiver::New(int i1, int i2, bool b3, int i4) {

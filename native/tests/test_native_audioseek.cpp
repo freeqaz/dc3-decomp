@@ -17,8 +17,8 @@
 //
 // Harness: two real StandardStreams over the same in-memory song mogg, one
 // from 0 and one from a mid-song start. Their receivers are sinks that record
-// what WriteData() forwards and never fill, so decode is not throttled by a
-// missing audio device. The mid-song stream's output must be the from-0
+// what WriteData() forwards and play it at once, so decode is not throttled by
+// a missing audio device. The mid-song stream's output must be the from-0
 // stream's output at that offset.
 
 #include "test_helpers.h"
@@ -33,6 +33,8 @@
 #include "synth/StandardStream.h"
 #include "synth/Synth.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <chrono>
 #include <cstdlib>
@@ -42,14 +44,20 @@ extern File *NewFile(const char *, int);
 
 namespace {
 
-// Records every sample WriteData() forwards and never passes them on, so the
-// ring never fills: AvailableWriteBytes() stays at its full 64 KB.
+// Records every sample WriteData() forwards and never passes them on, and
+// reports everything recorded as already played, so the image's buffer cycle
+// (StreamReceiver::Poll, one 0x4000-byte buffer per poll) never holds decode
+// back for a playback that is not happening.
 class SinkReceiver : public StreamReceiverNative {
 public:
     SinkReceiver(int numBuffers, bool slip) : StreamReceiverNative(numBuffers, slip) {}
     void StartSendImpl(unsigned char *data, int size, int) override {
         const int16_t *s = reinterpret_cast<const int16_t *>(data);
         mWritten.insert(mWritten.end(), s, s + size / 2);
+    }
+    int GetPlayCursor() override {
+        mLastPlayCursor = (int)(mWritten.size() * 2);
+        return mLastPlayCursor;
     }
     std::vector<int16_t> mWritten;
 };
@@ -159,9 +167,9 @@ TEST_F(NativeAudioSeekTest, MidSongStartDecodesTheSongFromThere) {
 
 // With no audio device (headless: MILO_HEADLESS / DC3_NO_AUDIO), nothing
 // renders the receivers. StandardStream::UpdateTime already runs song time on
-// mTimer alone in that case, but the receivers' rings were never played: once
-// full (64 KB = 32768 samples, 743 ms at 44.1 kHz) ConsumeData could hand them
-// nothing, so the decode position mCurrentSamp froze one ring past the start
+// mTimer alone in that case, but the receivers were never played: once their
+// buffers were full (then a fixed 64 KB, 743 ms at 44.1 kHz) ConsumeData could
+// hand them nothing, so the decode position mCurrentSamp froze one ring past the start
 // while song time ran on -- and IsPastStreamJumpPointOfNoReturn() ("decoded
 // behind played") read true for the rest of the song: practice queued every
 // loop and set none. On the image a device always plays the stream. A
@@ -176,7 +184,9 @@ TEST_F(NativeAudioSeekTest, WithoutADeviceTheDecodePositionKeepsAheadOfSongTime)
     StandardStream *s = MakeStream(0.0f);
     s->Play(); // pumps the header, then pre-fills
 
-    const float kRunMs = 1500.0f; // two rings' worth of 743 ms
+    // Over twice the image's lead: (numBuffers + 2) * 0x4000 bytes, ~1.5 s at
+    // stream_buf_size 1.0 (DecodeLeadReachesTheImageSteadyState below).
+    const float kRunMs = 3500.0f;
     auto t0 = std::chrono::steady_clock::now();
     float elapsed = 0.0f;
     while (elapsed < kRunMs) {
@@ -193,6 +203,114 @@ TEST_F(NativeAudioSeekTest, WithoutADeviceTheDecodePositionKeepsAheadOfSongTime)
         << "the decode position fell behind song time: nothing played the rings";
     EXPECT_FALSE(s->IsPastStreamJumpPointOfNoReturn());
     delete s;
+}
+
+// How far the decode position (GetBufferAheadTime, mCurrentSamp) leads playback
+// is set by the receivers' flow control, and on the image that is the
+// StreamReceiver buffer cycle (build/373307D9/asm/system/synth/StreamReceiver.s,
+// ?Poll@StreamReceiver@@UAAXXZ; StreamReceiver360 voice ring
+// numBuffers << 14, synth_xbox/StreamReceiver.s ??0StreamReceiver360): a
+// voice ring of mNumBuffers 0x4000-byte buffers, refilled one buffer per Poll
+// from a 0x8000-byte local ring as the play cursor leaves each buffer, and
+// StandardStream::ConsumeData stops at the local ring's BytesWriteable(). So in
+// steady state the stream has decoded (mNumBuffers + 2) * 0x4000 bytes past the
+// start of the buffer being played: a lead of (N + 2) * 0x2000 samples minus
+// the part of the playing buffer already played, i.e. between
+// (N + 1) * 0x2000 and (N + 2) * 0x2000 samples. GamePanel's practice-loop
+// meter and IsPastStreamJumpPointOfNoReturn() read exactly that lead.
+// Native used to cap it at its fixed 64 KB platform ring (32768 samples,
+// 743 ms at 44.1 kHz) whatever mNumBuffers was.
+int gLastNumBuffers = 0;
+
+StreamReceiver *CreateNotingReceiver(int numBuffers, int sampleRate, bool slip, int channel) {
+    gLastNumBuffers = numBuffers;
+    return StreamReceiverNative::Create(numBuffers, sampleRate, slip, channel);
+}
+
+TEST_F(NativeAudioSeekTest, DecodeLeadReachesTheImageSteadyState) {
+    if (AudioDevice::GetInstance().IsInitialized())
+        GTEST_SKIP() << "an audio device is open; this measures the device-less clock";
+    StreamReceiver::sFactory = CreateNotingReceiver;
+    gLastNumBuffers = 0;
+
+    StandardStream *s = MakeStream(0.0f);
+    s->Play(); // pumps the header, then pre-fills
+    ASSERT_GT(gLastNumBuffers, 0) << "no receiver was created";
+
+    const int numBuffers = gLastNumBuffers;
+    const float rate = (float)s->GetSampleRate();
+    const float imageMaxMs = (numBuffers + 2) * 0x2000 / rate * 1000.0f;
+    const float imageMinMs = (numBuffers + 1) * 0x2000 / rate * 1000.0f;
+    const float chunkMs = 0x800 / rate * 1000.0f; // one ConsumeData call
+
+    const float kWarmMs = 1500.0f;
+    const float kRunMs = 4000.0f;
+    float minLead = 1e9f, maxLead = -1e9f;
+    auto t0 = std::chrono::steady_clock::now();
+    float elapsed = 0.0f;
+    while (elapsed < kRunMs) {
+        s->PollStream();
+        elapsed = std::chrono::duration<float, std::milli>(
+                      std::chrono::steady_clock::now() - t0)
+                      .count();
+        if (elapsed < kWarmMs)
+            continue;
+        float lead = s->GetBufferAheadTime() - s->GetTime();
+        minLead = std::min(minLead, lead);
+        maxLead = std::max(maxLead, lead);
+    }
+    printf("  numBuffers=%d rate=%.0f lead %.1f..%.1f ms (image %.1f..%.1f ms)\n",
+           numBuffers, rate, minLead, maxLead, imageMinMs, imageMaxMs);
+    EXPECT_GE(maxLead, imageMaxMs - chunkMs)
+        << "the decode position never got the image's (numBuffers + 2) * 0x4000 "
+           "bytes ahead of playback";
+    EXPECT_GE(minLead, imageMinMs - chunkMs)
+        << "the decode lead fell below the image's floor in steady state";
+    EXPECT_LE(maxLead, imageMaxMs + 1.0f)
+        << "native decoded further ahead than the image's buffer cycle allows";
+    delete s;
+}
+
+// The image's flow control lets (numBuffers + 2) * 0x4000 bytes be in flight,
+// more than StreamReceiverNative's fixed 64 KB platform ring, whose
+// StartSendImpl silently truncates. Every byte BytesWriteable() admits must
+// still be played, in order: what the ring has no room for waits in the
+// receiver's stage until it does.
+TEST_F(NativeAudioSeekTest, ReceiverPlaysEveryByteTheImageCycleAdmits) {
+    const int kNumBuffers = 6;
+    const int kFrames = 735; // 60 fps at 44.1 kHz
+    StreamReceiverNative r(kNumBuffers, false);
+    r.Play();
+    int next = 0; // samples written so far; sample i carries (int16_t)i
+    std::vector<int16_t> played;
+    std::vector<float> out(2 * kFrames);
+    int maxInFlight = 0;
+    for (int frame = 0; frame < 400; frame++) {
+        int writable = r.BytesWriteable();
+        if (writable > 0) {
+            std::vector<int16_t> pcm(writable / 2);
+            for (int16_t &s : pcm)
+                s = (int16_t)next++;
+            r.WriteData(pcm.data(), writable);
+        }
+        r.Poll();
+        maxInFlight = std::max(maxInFlight, (int)(next * 2 - (int)r.GetBytesPlayed()));
+        r.RenderAudio(out.data(), kFrames);
+        for (int i = 0; i < kFrames; i++)
+            played.push_back((int16_t)lrintf(out[2 * i] * 32768.0f));
+    }
+    printf("  wrote %d samples, max in flight %d bytes (image cap %d)\n", next,
+           maxInFlight, (kNumBuffers + 2) * 0x4000);
+    EXPECT_GT(maxInFlight, 0x10000) << "the image cycle never ran past the 64 KB ring";
+    EXPECT_LE(maxInFlight, (kNumBuffers + 2) * 0x4000);
+    int16_t expect = 0;
+    int gaps = 0;
+    for (int16_t s : played) {
+        if (s != expect)
+            gaps++;
+        expect++;
+    }
+    EXPECT_EQ(gaps, 0) << "staged PCM was lost or reordered on its way to the ring";
 }
 
 // NgRnd::Offscreen() is "the current render target is not the back buffer"
