@@ -439,19 +439,6 @@ RndPropAnim::AddKeys(Hmx::Object *obj, DataArray *prop, PropKeys::AnimKeysType t
     return theKeys;
 }
 
-#ifdef HX_NATIVE
-// On Itanium ABI, virtual base pointers for the same object can differ
-// (e.g. HamDirector via Hmx::Object base vs RndPollable base = +0x780).
-// dynamic_cast<void*> returns the most-derived object address.
-static inline bool SameObject(const Hmx::Object *a, const Hmx::Object *b) {
-    if (a == b) return true;
-    if (!a || !b) return false;
-    return dynamic_cast<const void *>(a) == dynamic_cast<const void *>(b);
-}
-#else
-#define SameObject(a, b) ((a) == (b))
-#endif
-
 std::list<PropKeys *>::iterator RndPropAnim::FindKeys(Hmx::Object *obj, DataArray *prop) {
     FOREACH (it, mPropKeys) {
         PropKeys *cur = *it;
@@ -464,7 +451,7 @@ std::list<PropKeys *>::iterator RndPropAnim::FindKeys(Hmx::Object *obj, DataArra
         if (!prop && !cur->mProp) {
             return it;
         }
-        if (SameObject(cur->Target(), obj) && PathCompare(prop, cur->Prop())) {
+        if (cur->Target() == obj && PathCompare(prop, cur->Prop())) {
             return it;
         }
     }
@@ -475,7 +462,7 @@ PropKeys *RndPropAnim::GetKeys(const Hmx::Object *obj, DataArray *prop) {
     if (prop && obj) {
         FOREACH (it, mPropKeys) {
             PropKeys *cur = *it;
-            if (SameObject(cur->Target(), obj) && PathCompare(prop, cur->Prop()))
+            if (cur->Target() == obj && PathCompare(prop, cur->Prop()))
                 return cur;
         }
     }
@@ -564,7 +551,7 @@ int RndPropAnim::GetNumKeys(Hmx::Object *obj, Symbol sym) {
     for (std::list<PropKeys *>::iterator it = mPropKeys.begin(); it != mPropKeys.end();
          ++it) {
         PropKeys *cur = *it;
-        if (SameObject(cur->Target(), obj) && cur->Prop()->Node(0).Sym(nullptr) == sym) {
+        if (cur->Target() == obj && cur->Prop()->Node(0).Sym(nullptr) == sym) {
             return cur->NumKeys();
         }
     }
