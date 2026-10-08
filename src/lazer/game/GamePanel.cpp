@@ -61,8 +61,6 @@
 #include "utl\TimeConversion.h"
 #include "world\Dir.h"
 #ifdef HX_NATIVE
-#include "rndobj\Text.h"
-#include "ui\UILabel.h"
 #include <cstdio>
 #endif
 GamePanel *TheGamePanel = nullptr;
@@ -463,21 +461,6 @@ void GamePanel::Poll() {
             && !TheHamDirector->IsGameStartHold()) {
             StartGame();
         }
-#ifdef HX_NATIVE
-        // (Removed) Former native autoplay-scoring hack: it fabricated 100-500
-        // points/beat, wrote them into the REAL player provider `score` property
-        // and pushed them into the HUD labels/screenshots, which lied to anyone
-        // validating gameplay/HUD against Xbox. Native scoring is now honest: the
-        // genuine Xbox scoring pipeline (Game::SetHamMove -> move_passed DTA
-        // handler -> MetaPerformer::OnMovePassed) is DEFAULT-ON via
-        // DC3_REAL_MOVE_PASSED (opt-out DC3_REAL_MOVE_PASSED=0) now that live-pose
-        // detection is wired. The provider `score` and HUD label are driven by the
-        // real move_passed path — with a live pose provider they reflect the
-        // player's performance; with no provider the static tracked dummy yields a
-        // deterministic near-zero score (correct "standing still" signal), so the
-        // HUD label stays truthfully low. This block therefore leaves `score`
-        // untouched (it is written by the genuine OnMovePassed path, not here).
-#endif
         for (int i = 0; i < 2; i++) {
             FitnessFilter *filt = GetFitnessFilter(i);
             if (filt) {
@@ -577,11 +560,7 @@ float GamePanel::DeJitter(float ms) {
             result = unkf4;
         }
     }
-#ifdef HX_NATIVE
-    mFrameTimeSamples[mJitterSampleCount & 0x1F] = ms;
-#else
     mFrameTimeSamples[mJitterSampleCount] = ms;
-#endif
     if (result != sentinel) {
         ms = result;
     }
