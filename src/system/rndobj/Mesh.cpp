@@ -1400,8 +1400,23 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
 // register usage first and re-measure this function.  No behavioural
 // divergence: the arithmetic rows (142-217) are structurally identical and
 // differ only in which FPR holds each value.
-#ifndef HX_NATIVE
 void RndMesh::OnSync(int flags) {
+#ifdef HX_NATIVE
+    // The image's concrete mesh is DxMesh, whose OnSync (rnddx9/Mesh.cpp, not
+    // built natively) forwards a non-owner's sync to its geometry owner and
+    // otherwise runs this body before refilling its D3D buffers.  Natively the
+    // D3D refill is the WebGPU cache invalidation; the forward and this body
+    // (patch list + the 0x20 face reorder) are mesh-data bookkeeping and run
+    // exactly as on the 360.
+    extern void InvalidateGpuMesh(RndMesh *);
+    InvalidateGpuMesh(this);
+    if (this != mGeomOwner) {
+        if (Mutable() & 0x1f) {
+            mGeomOwner->Sync(flags);
+        }
+        return;
+    }
+#endif
     if (mGeomOwner != this || (flags & 0x80U) || !(flags & 0x20U))
         return;
     mPatches.clear();
@@ -1471,7 +1486,6 @@ void RndMesh::OnSync(int flags) {
         mFaces.swap(faces);
     }
 }
-#endif
 
 void RndMesh::DeleteBones(bool findRoot) {
     auto& bones = mBones;

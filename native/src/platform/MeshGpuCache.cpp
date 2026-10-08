@@ -76,9 +76,10 @@ GpuMeshData* GetMeshGpuData(RndMesh* mesh) {
     return nullptr;
 }
 
-// Invalidate GPU cache when mesh data changes (called from RndMesh::Sync)
-void RndMesh::OnSync(int flags) {
-    auto it = sMeshGpuData.find(this);
+// Invalidate GPU cache when mesh data changes (called from RndMesh::OnSync,
+// where DxMesh::OnSync would refill its D3D vertex/index buffers on the 360)
+void InvalidateGpuMesh(RndMesh* mesh) {
+    auto it = sMeshGpuData.find(mesh);
     if (it != sMeshGpuData.end()) {
         it->second.uploaded = false;
     }
