@@ -2065,7 +2065,11 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
 
     // Draw smoothed overlay bar
     DrawOverlayBar(y, xMin, 0.99f, sDarkGray, sLineHeight);
-    DrawOverlayBar(y, xMin, mLastPollMs * 0.0625f * barRange + xMin, sGreen, sLineHeight);
+    // w22-a00: explicit parens keep the image's association -- it rounds
+    // mLastPollMs * 0.0625f first (`fmuls f0, f13, f0`) and fuses * barRange + xMin
+    // (`fmadds f3, f0, f28, f31`); the flat spelling let /fp:fast round
+    // barRange * mLastPollMs first.  87.536 -> 87.8.
+    DrawOverlayBar(y, xMin, (mLastPollMs * 0.0625f) * barRange + xMin, sGreen, sLineHeight);
 
     // Timer text
     {
