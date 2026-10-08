@@ -31,7 +31,7 @@ int NativeSkeletonProvider::FindByTrackId(int) const { return -1; }
 Vector3 NativeSkeletonProvider::NormalizedToMeters(float, float) const { return Vector3(0,0,0); }
 void NativeSkeletonProvider::MapCOCOToDC3(const float[][3], PersonData&) {}
 void NativeSkeletonProvider::ResetJointHold(int) {}
-void NativeSkeletonProvider::FillSkeleton(Skeleton&, int) const {}
+void NativeSkeletonProvider::FillSkeletonData(SkeletonData&, const PersonData&, int) {}
 #else
 
 // COCO keypoint indices
@@ -507,14 +507,8 @@ void NativeSkeletonProvider::MapCOCOToDC3(const float cocoKpts[][3], PersonData 
     out.confidence[kJointSpine] = minConf(out.confidence[kJointHipCenter], out.confidence[kJointShoulderCenter]);
 }
 
-void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, int personIdx) const {
-    if (personIdx < 0 || personIdx >= mNumPersons || !mPersons[personIdx].valid)
-        return;
-    FillSkeleton(skel, mPersons[personIdx]);
-}
-
 // Last-good camera-space position per skeleton slot, for the confidence hold in
-// FillSkeleton. Nothing under src/system/hamobj/ reads JointConf -- the scorer
+// FillSkeletonData. Nothing under src/system/hamobj/ reads JointConf -- the scorer
 // consumes mJointPos unconditionally -- so a keypoint the detector has no
 // confidence in is otherwise graded as ground truth. A real Kinect never presents
 // a garbage joint: it fills occluded joints from its own skeletal model and flags
@@ -531,14 +525,10 @@ void NativeSkeletonProvider::ResetJointHold(int skelIdx) {
         sHaveLastGoodJoint[skelIdx][j] = false;
 }
 
-void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, const PersonData &person) const {
-    // mSkeletonIdx is assigned by FinalizeSkeletonFrame, which runs AFTER this, so
-    // on the very first fill of a slot it may still be -1; hold is simply disabled
-    // until the slot is known.
-    int slot = skel.mSkeletonIdx;
+void NativeSkeletonProvider::FillSkeletonData(
+    SkeletonData &data, const PersonData &person, int slot
+) {
     bool canHold = (slot >= 0 && slot < NUM_SKELETONS);
-
-    // Access protected members directly via friend declaration (LP64-safe)
     for (int j = 0; j < kNumJoints; j++) {
         Vector3 pos = person.joints[j];
         JointConfidence conf = person.confidence[j];
@@ -552,18 +542,23 @@ void NativeSkeletonProvider::FillSkeleton(Skeleton &skel, const PersonData &pers
             }
         }
 
-        skel.mTrackedJoints[j].mJointPos[kCoordCamera] = pos;
-        skel.mTrackedJoints[j].mSmoothedPos = pos;
-        skel.mTrackedJoints[j].mJointConf = conf;
+        data.mJointPositions[j].Set(pos.x, pos.y, pos.z);
+        data.mRawPositions[j].Set(pos.x, pos.y, pos.z);
+        data.mJointTrackingState[j] = conf;
     }
-
-    skel.mTracking = kSkeletonTracked;
-    skel.mTrackingID = person.trackId;
+    data.mTracking = kSkeletonTracked;
+    data.mTrackingID = person.trackId;
+    data.mQualityFlags = 0;
+    // Xbox sets this from the NUI body position; SkeletonQualityFilter treats a
+    // zero root as "no data" and forces mValid/mSitting/mSideways all false,
+    // which makes Skeleton::IsValid() permanently false (breaking
+    // ShellInput::HasSkeleton and the player binding).
+    data.mHipCenter = data.mJointPositions[kJointHipCenter];
 }
 
 #endif // !__EMSCRIPTEN__
 
-void NativeSkeletonProvider::FillDummySkeleton(Skeleton &skel) {
+void NativeSkeletonProvider::FillDummySkeletonData(SkeletonData &data) {
     // Neutral standing pose — hands at sides, below hip height.
     // Passes quality filter (20 confident joints, not sitting/sideways)
     // but gesture filters see disengaged player (hands below hips).
@@ -591,65 +586,13 @@ void NativeSkeletonProvider::FillDummySkeleton(Skeleton &skel) {
     };
 
     for (const auto &j : kPose) {
-        Vector3 pos(j.x, j.y, j.z);
-        skel.mTrackedJoints[j.joint].mJointPos[kCoordCamera] = pos;
-        skel.mTrackedJoints[j.joint].mSmoothedPos = pos;
-        skel.mTrackedJoints[j.joint].mJointConf = kConfidenceTracked;
+        data.mJointPositions[j.joint].Set(j.x, j.y, j.z);
+        data.mRawPositions[j.joint].Set(j.x, j.y, j.z);
+        data.mJointTrackingState[j.joint] = kConfidenceTracked;
     }
 
-    skel.mTracking = kSkeletonTracked;
-    skel.mTrackingID = 1;
-}
-
-void NativeSkeletonProvider::FinalizeSkeletonFrame(Skeleton &skel, int skelIdx, int elapsedMs) {
-    // Hand the filled pose to the image's own Skeleton::Poll, as one
-    // SkeletonFrame, exactly as SkeletonUpdate does on the 360 with the NUI
-    // frame.  Poll is what derives everything past camera space: the four
-    // limb coordinate systems (mPlayerXfms, and mJointPos[cs] by
-    // MultiplyTranspose), bone lengths, the displacement cache reset, the hip
-    // centre, the tracking id.  This used to be a hand-written subset --
-    // mSkeletonIdx, mElapsedMs, mCamBoneLengths, unkab0, mCamDisplacements --
-    // and it never filled the limb systems, so every NormPos a scorer took on a
-    // live native skeleton (FreestyleMoveRecorder::CompareSkeletonPositions,
-    // the fatality / Strike a Pose match) read stale zeros.  Each earlier gap
-    // (the zero bone lengths that pinned DetectFrac at 0, the zero hip centre
-    // that made IsValid() false) was the same omission, fixed one field at a
-    // time.  NativeSkeletonPollTest pins the whole set against Poll.
-    static SkeletonFrame sFrame; // 0x11c8 bytes, main thread only
-    memset(&sFrame, 0, sizeof(sFrame));
-    sFrame.mElapsedMs = elapsedMs;
-    // The providers are upright cameras: floor plane y = 0, up = +y (the same
-    // frame CharCameraInput hands Poll for the fatality targets).
-    sFrame.mFloorNormal.Set(0.0f, 1.0f, 0.0f);
-    sFrame.mFloorClipPlane.Set(0.0f, 1.0f, 0.0f, 0.0f);
-    SkeletonData &data = sFrame.mSkeletonDatas[skelIdx];
     data.mTracking = kSkeletonTracked;
-    data.mTrackingID = skel.mTrackingID;
-    data.mQualityFlags = skel.mQualityFlags;
-    for (int j = 0; j < kNumJoints; j++) {
-        const Vector3 &cam = skel.mTrackedJoints[j].mJointPos[kCoordCamera];
-        data.mJointPositions[j].Set(cam.x, cam.y, cam.z);
-        const Vector3 &smoothed = skel.mTrackedJoints[j].mSmoothedPos;
-        data.mRawPositions[j].Set(smoothed.x, smoothed.y, smoothed.z);
-        data.mJointTrackingState[j] = skel.mTrackedJoints[j].mJointConf;
-    }
-    // Xbox sets this from the NUI body position; SkeletonQualityFilter treats a
-    // zero root as "no data" and forces mValid/mSitting/mSideways all false,
-    // which makes Skeleton::IsValid() permanently false (breaking
-    // ShellInput::HasSkeleton and HamGameData::AutoAssignSkeletons binding).
+    data.mTrackingID = 1;
+    data.mQualityFlags = 0;
     data.mHipCenter = data.mJointPositions[kJointHipCenter];
-    // mClippedFlags is read by Poll as the slot's NUI enrollment index; native
-    // has no enrollment, so hand back the one the slot already has rather than
-    // re-enrolling it every frame.
-    if (TheGestureMgr) {
-        IdentityInfo *info = TheGestureMgr->GetIdentityInfo(skelIdx);
-        if (info)
-            data.mClippedFlags = info->EnrollmentIndex();
-    }
-    skel.Poll(skelIdx, sFrame);
-}
-
-void NativeSkeletonProvider::MarkUntracked(Skeleton &skel) {
-    skel.Init();
-    skel.mTrackingID = -1;
 }

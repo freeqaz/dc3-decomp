@@ -89,13 +89,23 @@ XMMATRIX NuiTransformMatrixLevel(XMVECTOR) {
 
 extern "C" {
 
+// The native sensor's frame clock (native/src/platform/GestureMgr_Native.cpp):
+// SkeletonUpdate::Update calls this once per PostUpdate natively, and must see
+// "no new frame" when the sensor delivered none, or it re-polls the previous
+// frame and integrates it twice.  Null outside the sensor's lifetime.
+extern HRESULT (*gNativeNuiSkeletonFrameSource)(NUI_SKELETON_FRAME *);
+
 HRESULT NuiSkeletonGetNextFrame(DWORD, NUI_SKELETON_FRAME *pSkeletonFrame) {
     HX_STUB_TRACE("NuiSkeletonGetNextFrame");
     // Zero the frame rather than leaving it uninitialised: SkeletonUpdate.cpp
-    // treats a 0 return as success and reads the frame straight away.
+    // treats a 0 return as success and reads the frame straight away.  It only
+    // reads it when no override camera is active (SkeletonFrame::Create), and
+    // the native sensor is an override camera, so zeroes are never consumed.
     if (pSkeletonFrame) {
         std::memset(pSkeletonFrame, 0, sizeof(*pSkeletonFrame));
     }
+    if (gNativeNuiSkeletonFrameSource)
+        return gNativeNuiSkeletonFrameSource(pSkeletonFrame);
     return 0;
 }
 

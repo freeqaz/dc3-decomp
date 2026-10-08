@@ -47,6 +47,13 @@ ShellInput::ShellInput()
 
 ShellInput::~ShellInput() {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+#ifdef HX_NATIVE
+    // PLATFORM: native ShellInput::Init never registers (its PostUpdate drives
+    // the Kinect hand-invoke/hands-up filters it does not create), and now that
+    // the SkeletonUpdate instance exists natively an unconditional
+    // RemoveCallback would assert (0xA8, non-fatal) and then erase end().
+    if (handle.HasCallback(this))
+#endif
     handle.RemoveCallback(this);
     delete mDepthBuffer;
     delete mSkelIdentifier;

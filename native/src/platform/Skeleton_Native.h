@@ -56,23 +56,18 @@ public:
     // Find person by BOTSORT track ID, returns -1 if not found
     int FindByTrackId(int trackId) const;
 
-    // Fill a Skeleton object from person data (by index or direct PersonData)
-    void FillSkeleton(Skeleton &skel, int personIdx) const;
-    void FillSkeleton(Skeleton &skel, const PersonData &person) const;
+    // Write one TRACKED slot of a SkeletonFrame from person data, in the shape
+    // SkeletonFrame::Create gives a NUI-tracked slot: camera-space joints in
+    // mJointPositions and mRawPositions, per-joint confidence, tracking id, hip
+    // centre.  SkeletonUpdate::UpdateCallbacks then hands the frame to the
+    // image's own Skeleton::Poll, which derives everything past camera space.
+    // `slot` keys the low-confidence joint hold.  mClippedFlags (the NUI
+    // enrollment index) is left to the caller.
+    static void FillSkeletonData(SkeletonData &data, const PersonData &person, int slot);
 
-    // Fill a skeleton with a neutral standing pose (hands at sides).
-    // Used as fallback when no pose server is connected.
-    static void FillDummySkeleton(Skeleton &skel);
-
-    // Apply Skeleton::Poll's per-frame bookkeeping to a slot that had its pose
-    // filled this frame (mirrors Skeleton.cpp Poll: mSkeletonIdx/mElapsedMs set,
-    // mCamDisplacements cache cleared). Required so PrevTrackedSkeleton /
-    // displacement scoring index the correct history slot instead of -1.
-    static void FinalizeSkeletonFrame(Skeleton &skel, int skelIdx, int elapsedMs);
-
-    // Reset a slot to the untracked contract (Init + mTrackingID = -1) so
-    // tracking-ID rotation can't resolve a dead slot. Call only on tracked slots.
-    static void MarkUntracked(Skeleton &skel);
+    // The same for a neutral standing pose (hands at sides), tracking id 1.
+    // Used as the native sensor's frame when no pose provider is running.
+    static void FillDummySkeletonData(SkeletonData &data);
 
     // Drop the low-confidence joint-hold cache for a slot. Must be called when a
     // slot changes occupants, or the incoming person inherits the previous
