@@ -696,7 +696,7 @@ RndCam* SetupVenueCamera(RndDir* dir, ObjectDir* venueDir) {
 
     Hmx::Matrix4 vp;
     memcpy(&vp, viewProj, 64);
-    cam->SetViewProj(vp);
+    cam->SetToolViewProj(vp);
 
     return cam;
 }
@@ -790,7 +790,7 @@ RndCam* SetupTestCamera(RndDir* dir) {
 
     Hmx::Matrix4 vp;
     memcpy(&vp, viewProj, 64);
-    cam->SetViewProj(vp);
+    cam->SetToolViewProj(vp);
 
     printf("Render Test: camera at (%.1f, %.1f, %.1f) looking at (%.1f, %.1f, %.1f)\n",
            eyeX, eyeY, eyeZ, targetX, targetY, targetZ);

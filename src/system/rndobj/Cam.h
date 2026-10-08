@@ -75,6 +75,25 @@ public:
     static float MaxFarNearPlaneRatio() { return sMaxFarNearPlaneRatio; }
     const Hmx::Matrix4 &GetViewProjMatrix() const { return mViewProjMatrix; }
     const Hmx::Matrix4 &GetInvViewProjMatrix() const { return mInvViewProjMatrix; }
+#ifdef HX_NATIVE
+    // Native-only: a view-projection a native TOOL drives directly
+    // (milo-viewer's orbit cam, render-test's fixed cams), bypassing the
+    // camera's own frustum. Stored in mViewProjMatrix exactly as SetViewProj
+    // stores it, and flagged, so the WebGPU renderer can tell "a tool set
+    // this" apart from the camera's own view-projection, which RndCam::Select
+    // stores natively the way DxCam::Select does on the image. The renderer
+    // used to tell the two apart by testing mViewProjMatrix for identity,
+    // which only works while native never computes it. The flag clears when
+    // Select stores the camera's own matrix (the image's SetViewProj there
+    // is the last writer). Game code never calls this.
+    void SetToolViewProj(const Hmx::Matrix4 &m) {
+        SetViewProj(m);
+        mHasToolViewProj = true;
+    }
+    const Hmx::Matrix4 *ToolViewProj() const {
+        return mHasToolViewProj ? &mViewProjMatrix : nullptr;
+    }
+#endif
 
 protected:
     RndCam();
@@ -137,4 +156,7 @@ protected:
     Rnd::Aspect mAspect; // 0x2fc
     Hmx::Matrix4 mViewProjMatrix; // 0x300
     Hmx::Matrix4 mInvViewProjMatrix; // 0x340
+#ifdef HX_NATIVE
+    bool mHasToolViewProj = false; // native-only, see SetToolViewProj
+#endif
 };
