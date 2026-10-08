@@ -114,6 +114,21 @@ HRESULT NuiIdentityEnroll(DWORD, int, DWORD, NUI_IDENTITY_CALLBACK *, VOID *) {
     return 0;
 }
 
+// PLATFORM: no Kinect identity store natively, so no enrollment slot is in
+// use -- report every slot empty (dwEnrollmentFlags == 0), which is what
+// SkeletonIdentifier::UpdateEnrolledPlayers reads as "nobody enrolled" (pad -1).
+// The untyped generated stub returned 0 without writing the struct, so the
+// caller read its own uninitialised stack.
+HRESULT NuiIdentityGetEnrollmentInformation(
+    DWORD, NUI_ENROLLMENT_INFORMATION *pEnrollmentInformation
+) {
+    HX_STUB_TRACE("NuiIdentityGetEnrollmentInformation");
+    if (pEnrollmentInformation) {
+        std::memset(pEnrollmentInformation, 0, sizeof(*pEnrollmentInformation));
+    }
+    return 0;
+}
+
 } // extern "C"
 
 // ============================================================================

@@ -104,7 +104,7 @@ int NuiFitnessResumeTracking() { HX_STUB_TRACE("NuiFitnessResumeTracking"); retu
 int NuiFitnessStartTracking() { HX_STUB_TRACE("NuiFitnessStartTracking"); return 0; }
 int NuiFitnessStopTracking() { HX_STUB_TRACE("NuiFitnessStopTracking"); return 0; }
 int NuiIdentityAbort() { HX_STUB_TRACE("NuiIdentityAbort"); return 0; }
-int NuiIdentityGetEnrollmentInformation() { HX_STUB_TRACE("NuiIdentityGetEnrollmentInformation"); return 0; }
+// NuiIdentityGetEnrollmentInformation: typed definition in xbox_link_stubs.cpp.
 int NuiIdentityIdentify() { HX_STUB_TRACE("NuiIdentityIdentify"); return 0; }
 int NuiImageStreamGetNextFrame() { HX_STUB_TRACE("NuiImageStreamGetNextFrame"); return 0; }
 int NuiImageStreamOpen() { HX_STUB_TRACE("NuiImageStreamOpen"); return 0; }
