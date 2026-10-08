@@ -284,7 +284,7 @@ JoypadType ReadSingleXinputJoypad(
         // at 0x54(r1), and 0x825FD004 `subfic r4, r11, -0x8000` is the
         // argument, with no `extsh` behind it.  `(unsigned short)(int)` costs
         // that extsh (w7-br, note above).
-        float scaled = (f3 - 27.0f) / 95.0f;
+        float scaled = (f3 - 27.0f) * (1.0f / 95.0f);
         TranslateStick(
             stick_ly, -0x8000 - (unsigned short)(short)(scaled * -26539.0f), 1, 0
         );
@@ -297,7 +297,7 @@ JoypadType ReadSingleXinputJoypad(
         float f = (float)rx;
         float f2 = (27.0f - f >= 0.0f) ? 27.0f : f;
         float f3 = (f2 - 122.0f >= 0.0f) ? 122.0f : f2;
-        float scaled = (f3 - 27.0f) / 95.0f;
+        float scaled = (f3 - 27.0f) * (1.0f / 95.0f);
         TranslateStick(
             stick_rx, -0x8000 - (unsigned short)(short)(scaled * -26539.0f), 1, 0
         );

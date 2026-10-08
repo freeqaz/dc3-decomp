@@ -39,7 +39,7 @@ void HAQManager::RawPrint(const char *c1, const char *c2) {
 
 void HAQManager::PrintSongInfo(Symbol s, float f) {
     if (TheHAQMgr && TheHAQMgr->Enabled()) {
-        String text = String(MakeString("%s %f", s, f / 1000.0f));
+        String text = String(MakeString("%s %f", s, f * (1.0f / 1000.0f)));
         String label = TheHAQMgr->GetLabelForType(kHAQType_Song);
         RawPrint(label.c_str(), text.c_str());
     }

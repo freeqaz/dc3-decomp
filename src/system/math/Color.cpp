@@ -68,7 +68,7 @@ void MakeHSL(const Hmx::Color &color, float &h, float &s, float &l) {
         } else {
             h = (color.red - color.green) / deltaCol + 4.0f;
         }
-        h /= 6.0f;
+        h *= (1.0f / 6.0f);
         if (h < 0.0f)
             h += 1.0f;
     }

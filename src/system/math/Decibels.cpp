@@ -6,7 +6,7 @@ float DbToRatio(float db) {
     if (db <= -96.0f)
         return 0.0f;
     else
-        return pow(10.0f, db / 20.0f);
+        return pow(10.0f, db * (1.0f / 20.0f));
 }
 
 float RatioToDb(float ratio) {

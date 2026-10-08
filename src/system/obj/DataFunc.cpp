@@ -317,9 +317,9 @@ DEF_DATA_FUNC(DataPackColor) {
 
 DEF_DATA_FUNC(DataUnpackColor) {
     int packed = array->Int(1);
-    *array->Var(2) = (float)(packed & 0xFF) / 255.0f;
-    *array->Var(3) = (float)(packed >> 8 & 0xFF) / 255.0f;
-    *array->Var(4) = (float)(packed >> 0x10 & 0xFF) / 255.0f;
+    *array->Var(2) = (float)(packed & 0xFF) * (1.0f / 255.0f);
+    *array->Var(3) = (float)(packed >> 8 & 0xFF) * (1.0f / 255.0f);
+    *array->Var(4) = (float)(packed >> 0x10 & 0xFF) * (1.0f / 255.0f);
     return 0;
 }
 

@@ -363,7 +363,7 @@ void Song::JumpTo(Symbol section) {
 void Song::JumpTo(int tick) {
     float f = 0;
     if (mHxSongData) {
-        f = mHxSongData->GetTempoMap()->TickToTime(tick) / 1000.0f;
+        f = mHxSongData->GetTempoMap()->TickToTime(tick) * (1.0f / 1000.0f);
     }
     MILO_ASSERT(sCallback, 0x1AB);
     sCallback->SongSetFrame(this, f);
@@ -377,7 +377,7 @@ void Song::LoadSong() {
         RndPollable *poll = dynamic_cast<RndPollable *>(MainDir());
         if (poll)
             poll->Enter();
-        mSongEndFrame = mHxMaster->SongDurationMs() / 1000.0f;
+        mSongEndFrame = mHxMaster->SongDurationMs() * (1.0f / 1000.0f);
         if (mSongName != mLastLoadedSong) {
             SetLoopStart(0);
             SetLoopEnd(mSongEndFrame);
@@ -450,7 +450,7 @@ ObjectDir *Song::MainDir() const {
 float Song::GetFrameFromMBT(int m, int b, int t) {
     int tick = GetTickFromMBT(m, b, t);
     if (GetTempoMap()) {
-        return GetTempoMap()->TickToTime(tick) / 1000.0f;
+        return GetTempoMap()->TickToTime(tick) * (1.0f / 1000.0f);
     } else {
         return 0;
     }

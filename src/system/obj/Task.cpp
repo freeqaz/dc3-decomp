@@ -548,7 +548,7 @@ void TaskMgr::Poll() {
 #endif
     mTime.Split();
     if (mAutoSecondsBeats) {
-        float secs = mTime.Ms() / 1000.0f;
+        float secs = mTime.Ms() * (1.0f / 1000.0f);
         mTimelines[kTaskSeconds].SetTime(secs, false);
         mTimelines[kTaskBeats].SetTime(secs * 2.0f, false);
     }

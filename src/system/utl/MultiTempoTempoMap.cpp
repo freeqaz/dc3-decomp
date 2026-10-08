@@ -122,7 +122,7 @@ const MultiTempoTempoMap::TempoInfoPoint *MultiTempoTempoMap::PointForTime(float
 float MultiTempoTempoMap::GetTempo(int tick) const {
     const TempoInfoPoint *pt = PointForTick(tick);
     if (pt != mTempoPoints.end())
-        return (float)pt->mTempo / 1000.0f;
+        return (float)pt->mTempo * (1.0f / 1000.0f);
     else
         return 800.0f;
 }
@@ -144,8 +144,12 @@ float MultiTempoTempoMap::TickToTime(float tick) const {
         if (pt == mTempoPoints.end())
             return 0.0f;
         else
+            // w22-rc: the image folds both divisions into ONE reciprocal
+            // (0x827EE59C `lfs f0, __real@360bcf65`, 0x827EE5B0 `fmadds f1, f12, f0,
+            // f13`); 0x360bcf65 is (1.0f / 480.0f) / 1000.0f rounded once.
+            // Same Xbox bytes; native (no fast-math) otherwise divides twice.
             return pt->mMs
-                + (pt->mTempo * (tick - pt->mTick) / 480.0f / 1000.0f);
+                + (pt->mTempo * (tick - pt->mTick) * (1.0f / 480.0f / 1000.0f));
     } else {
         float loopTickLength = mEndLoopTick - mStartLoopTick;
         float loopTimeLength = mEndLoopTime - mStartLoopTime;
