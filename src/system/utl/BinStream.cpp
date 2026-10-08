@@ -214,7 +214,11 @@ BinStream &BinStream::operator>>(String &str) {
     int siz;
     *this >> siz;
 #ifdef HX_NATIVE
-    if (siz > 10000 || siz < 0) {
+    // Diagnostic only: the image hands a negative length straight to
+    // String::resize as a ~4 GB request and dies there. There is NO upper
+    // bound in the image -- a native-only `siz > 10000` cap used to abort on
+    // any legitimately long string the Xbox loads fine.
+    if (siz < 0) {
         fprintf(stderr, "BinStream::operator>>(String) ABORT: bad size=%d at stream pos=%d\n", siz, Tell());
         abort();
     }
