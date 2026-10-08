@@ -957,8 +957,12 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
                 occlusion = hitDist * hitDist;
             }
             BuildSHCoeff(sampleDir, shCoeffs);
+            // w22-a13: 826DC820 `fmuls f0, f0, f29` (occlusion) then 826DC828
+            // `fmuls f0, f0, f27` (dot) -- the image multiplies by occlusion
+            // FIRST.  Flat `c * occlusion * dot` let /fp:fast reorder it to
+            // (c * dot) * occlusion; the parentheses pin the image's order.
             for (int j = 0; j <= 3; j++) {
-                shAccum[j] += (double)(shCoeffs[j] * occlusion * dot);
+                shAccum[j] += (double)((shCoeffs[j] * occlusion) * dot);
             }
         }
     }
@@ -1122,8 +1126,14 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
                             Normalize(edge2, edge2);
 
                             // Weight by the angle subtended at this vertex
-                            float dot = (float)(edge2.y * edge1.y
-                                + edge2.x * edge1.x + edge2.z * edge1.z);
+                            // w22-a13: 826DFC1C..C34 the image sums z*z, then
+                            // `fmadds f0, f11(e2.x), f13(e1.x), f0`, then
+                            // `fmadds f1, f10(e2.y), f12(e1.y), f0` -- i.e.
+                            // ((zz + xx) + yy).  The old flat y,x,z spelling made
+                            // native round as ((yy + xx) + zz); the parentheses
+                            // pin the image's association on both builds.
+                            float dot = (float)((edge2.z * edge1.z
+                                + edge2.x * edge1.x) + edge2.y * edge1.y);
                             float angle = (float)acos((double)dot);
                             float wG = faceColor->green * angle;
                             float wR = angle * faceColor->red;
