@@ -67,14 +67,6 @@ bool HamAudio::IsReady() {
         if (mFileLoader && mFileLoader->IsLoaded()) {
             FinishLoad();
         } else {
-#ifdef HX_NATIVE
-            // On native, the FileLoader may not be polled by TheLoadMgr
-            // (e.g. after Game::Restart when there's no loading screen).
-            // Drive it from here so IsReady() is self-contained.
-            if (mFileLoader) {
-                mFileLoader->PollLoading();
-            }
-#endif
             return false;
         }
     }
