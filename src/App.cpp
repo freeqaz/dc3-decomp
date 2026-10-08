@@ -791,38 +791,128 @@ App::App(int argc, char **argv) {
 }
 
 #ifdef HX_NATIVE
-void App::RunOneFrame() {
+// w22-ml: the per-frame poll sequence of the image's App::RunWithoutDebugging
+// (?RunWithoutDebugging@App@@QAAXXZ, the do/while body), shared by BOTH native
+// loops -- the desktop/headless loop in RunWithoutDebugging below and the web
+// loop's RunOneFrame. Native cannot run the image's loop body itself (it draws
+// through DrawRegular with no crash guard / ImGui / HTTP hooks, and derefs
+// managers native never creates), so this mirrors its POLL part call for call,
+// in the image's order. What the image does, per frame, from the target listing:
+//
+//   SystemPoll(false)                                   bl ?SystemPoll@@YAX_N@Z
+//   "misc_poll": TheAchievements->Poll()                bl ?Poll@Achievements@@QAAXXZ
+//                TheAccomplishmentMgr->Poll()           bl ?Poll@AccomplishmentManager@@QAAXXZ
+//                if (TheLeaderboards) ->Poll()          beq cr6 / bl ?Poll@Leaderboards@@QAAXXZ
+//                if (TheChallenges) ->Poll()            beq cr6 / bl ?Poll@Challenges@@QAAXXZ
+//                TheSaveLoadMgr->Poll()                 bl ?Poll@SaveLoadManager@@QAAXXZ
+//   "synth_poll": TheSynth->Poll()                      bctrl
+//   "rock_central_poll": TheRockCentral.Poll()          bl ?Poll@RockCentral@@QAAXXZ
+//   "gesture_poll": TheGestureMgr->Poll()               bl ?Poll@GestureMgr@@QAAXXZ
+//   TheUI->Poll()                                       bctrl
+//   $hud_panel <- "update_all_flashcard_dance_pct"      DataVariable/CompatibleType/
+//                                                       __RTDynamicCast PanelDir/Handle
+//   TheTaskMgr.Poll(); TheFlowMgr->Poll()               bl ?Poll@TaskMgr / ?Poll@FlowManager
+//   "skeleton_post_update": SkeletonUpdate PostUpdate   bl ?PostUpdate@SkeletonUpdateHandle
+//   FileDiscSpinUp()                                    bl FileDiscSpinUp
+//   then CaptureHiRes()/DrawRegular() and the GLITCH report (callers' business).
+//
+// Before w22-ml the native loops ran only SystemPoll, Gesture, UI, Task, Flow,
+// Synth (Synth LAST, where the image polls it before the UI), and skipped the
+// misc/RockCentral/skeleton polls and the hud_panel message entirely -- nothing
+// else sends update_all_flashcard_dance_pct (ui/hud/hud_objects.dta:1011), so a
+// mystery flashcard's dance_pct.anim never moved on native. None of the skips
+// had a recorded reason (git log -S: the native loop was written from scratch in
+// 3e7fed8b5 and Synth appended in c09c65e61 with no ordering rationale).
+//
+// Native-only differences that remain, each because native lacks the subsystem:
+//  - TheSaveLoadMgr is null on native (SaveLoadManager::Init is in the Xbox-only
+//    App ctor block; DTA "saveload_mgr" is NativeSaveLoadStub), so it is guarded.
+//    TheLeaderboards is likewise null (MetaPanel::Init, #ifndef HX_NATIVE); the
+//    image already guards it.
+//  - TheRockCentral is polled un-Init'd: ThePlatformMgr.IsConnected() is false on
+//    native, so it never logs in; its only other work goes to DingoServerNative,
+//    whose ManageJob/Poll are no-ops (native/src/platform/DingoSvr_Native.cpp).
+//  - SkeletonUpdate::sInstance is never created on native (LiveCameraInput is
+//    Xbox-only), so the PostUpdate handle is the native no-op null handle.
+//  - The gesture poll keeps its DC3_NATIVE_SCORING / DC3_POSE_SELFTEST gate.
+//  - The callers keep their own draw (crash guard, ImGui, HTTP, PumpAudio) in
+//    place of DrawRegular, and do not reproduce TheHiResScreen/CaptureHiRes or
+//    the image's per-frame "GLITCH: %g ms" report (a frame over 83.33 ms minus
+//    the slow-frame waiver shows text on cheat_display when notify_level != 0,
+//    which native sets to 1): native frame time is not Xbox frame time, and
+//    headless/uncapped runs would put dev-kit overlay text on screen.
+static void Dc3NativeFramePoll() {
     SystemPoll(false);
-
-#ifdef HX_NATIVE
-    // Move-scoring pipeline (DEFAULT-ON; opt-out DC3_NATIVE_SCORING=0). See the
-    // native headless loop below for the full rationale. This drives the
-    // pose->skeleton->scoring pipeline every frame: with a real pose provider
-    // (DC3_POSE=external|internal) it scores the live player; with NO provider
-    // GestureMgr_NativePoll fills a static tracked dummy skeleton, so the whole
-    // pipeline (archive-before-fill -> FilterQueue::Poll -> MoveDir callback
-    // fan-out) runs deterministically and DetectFrac is ~0 — that near-zero score
-    // is the CORRECT "player standing still" signal, not a bug (its exact value is
-    // a blessed regression signal). DC3_POSE_SELFTEST is OR'd in so the self-test
-    // still forces the poll even under DC3_NATIVE_SCORING=0. This is the web loop
-    // too; web goes default-on (CheckForSkeletonLoss early-returns on __EMSCRIPTEN__).
     {
+        START_AUTO_TIMER("misc_poll");
+        if (TheAchievements)
+            TheAchievements->Poll();
+        if (TheAccomplishmentMgr)
+            TheAccomplishmentMgr->Poll();
+        if (TheLeaderboards) {
+            TheLeaderboards->Poll();
+        }
+        if (TheChallenges) {
+            TheChallenges->Poll();
+        }
+        if (TheSaveLoadMgr)
+            TheSaveLoadMgr->Poll();
+    }
+    {
+        START_AUTO_TIMER("synth_poll");
+        if (TheSynth)
+            TheSynth->Poll();
+    }
+    {
+        START_AUTO_TIMER("rock_central_poll");
+        TheRockCentral.Poll();
+    }
+    {
+        START_AUTO_TIMER("gesture_poll");
+        // Move-scoring pipeline (DEFAULT-ON; opt-out DC3_NATIVE_SCORING=0).
+        // App::Run (Xbox) polls TheGestureMgr every frame; the native loops once
+        // omitted it, so GestureMgr_NativePoll -- which drives the pose->skeleton
+        // pipeline AND the move-scoring callback fan-out (MoveDir) -- never ran,
+        // leaving DetectFrac identically 0. With a real provider
+        // (DC3_POSE=external|internal) it scores the live player; with
+        // DC3_POSE_SELFTEST the choreography's own reference pose is fed and
+        // DetectFrac -> ~1.0; with NO provider GestureMgr_NativePoll fills a static
+        // TRACKED dummy skeleton so the entire pipeline (archive-before-fill ->
+        // FilterQueue::Poll -> MoveDir callback fan-out) runs deterministically and
+        // DetectFrac is ~0 -- that near-zero is the correct "standing still"
+        // signal (a blessed regression number), NOT a scoring bug.
+        // DC3_POSE_SELFTEST is OR'd so it still forces the poll under
+        // DC3_NATIVE_SCORING=0. Web goes default-on too (CheckForSkeletonLoss
+        // early-returns on __EMSCRIPTEN__).
         extern bool Dc3EnvFlag(const char *, bool);
-        if (TheGestureMgr && (Dc3EnvFlag("DC3_NATIVE_SCORING", true) || Dc3EnvFlag("DC3_POSE_SELFTEST", false)))
+        if (TheGestureMgr
+            && (Dc3EnvFlag("DC3_NATIVE_SCORING", true)
+                || Dc3EnvFlag("DC3_POSE_SELFTEST", false)))
             TheGestureMgr->Poll();
     }
-#endif
-
     if (TheUI)
         TheUI->Poll();
-
+    DataNode &hud_panel = DataVariable("hud_panel");
+    if (hud_panel.CompatibleType(kDataObject)) {
+        PanelDir *dir = hud_panel.Obj<PanelDir>();
+        if (dir) {
+            dir->Handle(Message("update_all_flashcard_dance_pct"), true);
+        }
+    }
     TheTaskMgr.Poll();
-
     if (TheFlowMgr)
         TheFlowMgr->Poll();
+    {
+        START_AUTO_TIMER("skeleton_post_update");
+        SkeletonUpdateHandle h = SkeletonUpdate::InstanceHandle();
+        h.PostUpdate();
+    }
+    FileDiscSpinUp();
+}
 
-    if (TheSynth)
-        TheSynth->Poll();
+void App::RunOneFrame() {
+    // w22-ml: the image's per-frame poll sequence (see Dc3NativeFramePoll).
+    Dc3NativeFramePoll();
 
     // Deterministic post-poll foot plant (default ON; opt-out DC3_FEET_POST_PLANT_OFF=1).
     // Same hook as the desktop loop below (App.cpp RunWithoutDebugging): must run after
@@ -1165,39 +1255,11 @@ void App::RunWithoutDebugging() {
         );
 
     while (true) {
-        SystemPoll(false);
-
-        // App::Run (Xbox) polls TheGestureMgr every frame; the native loops
-        // omitted it, so GestureMgr_NativePoll — which drives the pose->skeleton
-        // pipeline AND the move-scoring callback fan-out (MoveDir) — never ran,
-        // leaving DetectFrac identically 0. Now DEFAULT-ON (opt-out
-        // DC3_NATIVE_SCORING=0): the live-pose pipeline landed 2026-07-02
-        // (ErrorFrameInput -> SkeletonHistory::PrevFromArchive displacement path is
-        // wired) so this is an already-exercised path, not new machinery. With a
-        // real provider (DC3_POSE=external|internal) it scores the live player;
-        // with DC3_POSE_SELFTEST the choreography's own reference pose is fed and
-        // DetectFrac -> ~1.0; with NO provider GestureMgr_NativePoll fills a static
-        // TRACKED dummy skeleton so the entire pipeline runs deterministically and
-        // DetectFrac is ~0 — that near-zero is the correct "standing still" signal
-        // (a blessed regression number), NOT a scoring bug. DC3_POSE_SELFTEST is
-        // OR'd so it still forces the poll under DC3_NATIVE_SCORING=0. Poll before
-        // the UI so DetectFrac is fresh this frame.
-        {
-            extern bool Dc3EnvFlag(const char *, bool);
-            if (TheGestureMgr && (Dc3EnvFlag("DC3_NATIVE_SCORING", true) || Dc3EnvFlag("DC3_POSE_SELFTEST", false)))
-                TheGestureMgr->Poll();
-        }
-
-        if (TheUI)
-            TheUI->Poll();
-
-        TheTaskMgr.Poll();
-
-        if (TheFlowMgr)
-            TheFlowMgr->Poll();
-
-        if (TheSynth)
-            TheSynth->Poll();
+        // w22-ml: the image's per-frame poll sequence, in the image's order
+        // (SystemPoll .. misc .. Synth .. RockCentral .. Gesture .. UI ..
+        // hud_panel flashcard pct .. Task .. Flow .. skeleton post-update ..
+        // FileDiscSpinUp). See Dc3NativeFramePoll.
+        Dc3NativeFramePoll();
 
 #ifdef HX_NATIVE
         // WAVE 6 LANE A: deterministic post-poll foot plant (default ON; opt-out
