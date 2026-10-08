@@ -170,39 +170,6 @@ public:
     }
 };
 
-// PlatformMgr stub — DTA calls add_sink/remove_sink for Xbox Live events
-// and queries guide/signin state.  Only registered while ThePlatformMgr is
-// unnamed: the image names it "platform_mgr" in PlatformMgr::Init, which native
-// SystemInit does not call on main yet (lane w23-g14 restores that; then
-// registerStub finds the real object and this class is dead).  Everything it
-// does not override is answered by ThePlatformMgr's own (image) handlers, so
-// sign-in queries -- {platform_mgr is_pad_signed_in}, get_signin_mask,
-// is_pad_a_guest, ... -- agree with the C++ side (one sign-in stand-in:
-// XUserGetSigninState in native/src/xdk_shims.cpp).
-class NativePlatformMgrStub : public Hmx::Object {
-public:
-    NativePlatformMgrStub() {}
-    virtual DataNode Handle(DataArray *msg, bool rev) {
-        Symbol sym = msg->Sym(1);
-        if (sym == "is_guide_showing") return DataNode(0);
-        if (sym == "is_pad_signed_into_live") return DataNode(0);
-        if (sym == "show_controller_required") return DataNode(0);
-        if (sym == "enable_xmp") return DataNode(0);
-        if (sym == "disable_xmp") return DataNode(0);
-        if (sym == "guide_showing") return DataNode(0);
-        // Kinect hardware — not present on native
-        if (sym == "has_kinect") return DataNode(0);
-        if (sym == "is_kinect_connected") return DataNode(0);
-        // Xbox LIVE social sharing — no capabilities on native.  The endgame
-        // results panel polls this EVERY frame (perform_endgame.dta), so
-        // leaving it unhandled logged ~55k "unhandled msg" notifies per
-        // results screen in the 2026-09-30 native harvest.
-        if (sym == "query_xsocial_capabilities") return DataNode(0);
-        if (sym == "poll_xsocial_capabilities") return DataNode(0);
-        return ThePlatformMgr.Handle(msg, rev);
-    }
-};
-
 // SpeechMgr stub — Kinect voice recognition. No microphone on native.
 class NativeSpeechMgrStub : public Hmx::Object {
 public:
@@ -544,13 +511,14 @@ App::App(int argc, char **argv) {
     // These return sensible defaults so DTA handlers execute correctly instead
     // of silently failing. See DTA_FLOW_V2_PLAN.md Phase 1.
     // Registered BEFORE the UI init: in the image the real managers are named
-    // long before it (PlatformMgr in SystemInit, SaveLoadManager right after
-    // the common bank), and ui/init.dta already sends
-    // {platform_mgr set_notify_ui_location ...} during TheUI->Init -- which
-    // failed natively with "platform_mgr not function or object" when the stub
-    // was registered after it. profile_mgr/content_mgr/challenges already
-    // exist by now (ProfileMgr/ContentMgr/Challenges Init), so those stubs are
-    // deleted again, as before.
+    // long before it (SaveLoadManager right after the common bank, SpeechMgr
+    // in the Kinect init), and the UI init's DTA already runs.
+    // profile_mgr/content_mgr/challenges already exist by now
+    // (ProfileMgr/ContentMgr/Challenges Init), so those stubs are deleted
+    // again, as before. There is no platform_mgr stub any more: native
+    // SystemInit runs ThePlatformMgr.Init (w23-g14), which names the real
+    // object "platform_mgr" (PlatformMgr_Native.cpp, w23-si), so DTA reaches
+    // the image's PlatformMgr handlers.
     {
         auto registerStub = [](const char *name, Hmx::Object *obj) {
             if (!ObjectDir::Main()->FindObject(name, false, false)) {
@@ -561,7 +529,6 @@ App::App(int argc, char **argv) {
         };
         registerStub("saveload_mgr", new NativeSaveLoadStub());
         registerStub("profile_mgr", new NativeProfileMgrStub());
-        registerStub("platform_mgr", new NativePlatformMgrStub());
         // These don't need smart handlers — bare stubs are sufficient
         registerStub("content_mgr", new Hmx::Object());
         registerStub("challenges", new Hmx::Object());
