@@ -1916,8 +1916,13 @@ void MakeNormals(RndMesh *m) {
                             Normalize(crossProd, crossProd);
                             Normalize(e1, e1);
                             Normalize(e2, e2);
-                            float angle = (float)acos((double)(e2.x * e1.x + e2.y * e1.y
-                                                               + e2.z * e1.z));
+                            // w22-a31: the image sums the dot as (y + z) + x
+                            // (fmuls y*y'; fmadds z; fmadds x before bl acos);
+                            // the parens give native that association. Xbox
+                            // object unchanged (99.98799, same 9 rows).
+                            float angle = (float)acos(
+                                (double)((e2.y * e1.y + e2.z * e1.z) + e2.x * e1.x)
+                            );
 
                             Vector3 weighted;
                             Scale(crossProd, angle, weighted);
