@@ -121,7 +121,13 @@ void SkeletonQualityFilter::UpdateIsSideways(const TrackedJoint *joint) {
     // The image reads this from .data (0x82F0C194, a mutable static), not an
     // __real@ literal.
     static float sSidewaysDotThreshold = 0.25f;
-    if (vDiff.y * vDiff2.y + vDiff.x * vDiff2.x + vDiff.z * vDiff2.z > sSidewaysDotThreshold) {
+    // w22-a20: the image sums the dot as (y + z) + x (0x8243DECC `fmuls f13,
+    // f10, f13` y*y, 0x8243DEE4 `fmadds f13, f10, f12, f13` +z*z, 0x8243DEE8
+    // `fmadds f13, f9, f11, f13` +x*x).  The parentheses pin that association
+    // for the native build (/fp:fast re-sorted the old flat y + x + z to the
+    // same listing, so this is listing-neutral: 99.95744 canonical before and
+    // after).
+    if ((vDiff.y * vDiff2.y + vDiff.z * vDiff2.z) + vDiff.x * vDiff2.x > sSidewaysDotThreshold) {
         mSideways = true;
     }
 }
