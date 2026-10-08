@@ -851,7 +851,12 @@ bool RndMesh::MakeWorldSphere(Sphere &s, bool b) {
                 Multiply(it->pos, worldXfm, v50);
                 Vector3 v5c;
                 Subtract(v50, s.center, v5c);
-                s.radius = Max(s.GetRadius(), Dot(v5c, v5c));
+                // w22-a29 FLOAT-TOWARD-IMAGE: the image sums |v|^2 as
+                // (y*y + z*z) + x*x (`fmuls f0,f0,f0` on y, then
+                // `fmadds f0,f13,f13,f0` z, `fmadds f0,f12,f12,f0` x);
+                // Dot()'s flat x+y+z is what native evaluated.  Xbox bytes
+                // unchanged by this spelling.
+                s.radius = Max(s.GetRadius(), (v5c.y * v5c.y + v5c.z * v5c.z) + v5c.x * v5c.x);
             }
             s.radius = sqrtf(s.GetRadius());
             return true;
