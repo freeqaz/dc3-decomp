@@ -698,8 +698,13 @@ bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     hitPoint.z = hitPoint.z - tri.origin.z;
 
     dotXY += triFrameY.z * triFrameX.z;
-    float dotX3B = Dot(triFrameX, hitPoint);
-    float dotY3B = Dot(triFrameY, hitPoint);
+    // w22-a10: explicit ((x + y) + z) association, not Dot(). The image
+    // (idx 81-88) builds both projections as fx.x*hx, fmadds fx.y*hy, then
+    // fmadds fx.z*hz; under /fp:fast Dot()'s flat sum was re-sorted to
+    // (x + z) + y (`fmadds f10, f28, f11, f10` = fx.z*hz first), a different
+    // rounding. Native (left-to-right) already had this association.
+    float dotX3B = (triFrameX.x * hitPoint.x + triFrameX.y * hitPoint.y) + triFrameX.z * hitPoint.z;
+    float dotY3B = (triFrameY.x * hitPoint.x + triFrameY.y * hitPoint.y) + triFrameY.z * hitPoint.z;
 
     float inv = 1.0f / (dotXY * dotXY - dotYY * dotXX);
     float k = (dotY3B * dotXY - dotX3B * dotYY) * inv;
