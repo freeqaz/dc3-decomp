@@ -273,10 +273,6 @@ void MultiUserGesturePanel::RefreshUI() {
 
 int MultiUserGesturePanel::GetPlayerIndex(int idx) const {
     SkeletonChooser *pSkeletonChooser = TheHamUI.GetShellInput()->GetSkeletonChooser();
-#ifdef HX_NATIVE
-    if (!pSkeletonChooser)
-        return idx; // No Kinect on native — side maps directly to player index
-#endif
     MILO_ASSERT(pSkeletonChooser, 0x68);
     SkeletonSide playerSide = pSkeletonChooser->GetPlayerSide(0);
     const DataNode *prop = TheHamProvider->Property("is_in_party_mode", true);
@@ -345,10 +341,6 @@ void MultiUserGesturePanel::SetRandomCharacter(int idx) {
 void MultiUserGesturePanel::DropPlayerOnSide(int idx) {
     int index = GetPlayerIndex(idx);
     SkeletonChooser *pSkeletonChooser = TheHamUI.GetShellInput()->GetSkeletonChooser();
-#ifdef HX_NATIVE
-    if (!pSkeletonChooser)
-        return; // No Kinect on native
-#endif
     MILO_ASSERT(pSkeletonChooser, 0x3d);
     pSkeletonChooser->ClearPlayerSkeletonID(index);
 }
@@ -524,10 +516,6 @@ Symbol MultiUserGesturePanel::GetVoiceCommandOutfitTag(int playerIndex, Symbol s
 void MultiUserGesturePanel::UpdateNavLists(int player) {
     MILO_ASSERT_RANGE(player, 0, 2, 0x9d);
     SkeletonChooser *skeletonChooser = TheHamUI.GetShellInput()->GetSkeletonChooser();
-#ifdef HX_NATIVE
-    if (!skeletonChooser)
-        return; // No Kinect on native
-#endif
     MILO_ASSERT(skeletonChooser, 0xa0);
     HamPlayerData *pPlayerData = TheGameData->Player(player);
     int trackingID = pPlayerData->GetSkeletonTrackingID();
