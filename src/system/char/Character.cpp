@@ -770,10 +770,14 @@ DataNode Character::OnCopyBoundingSphere(DataArray *da) {
 }
 
 void Character::MergeDraws(const Character *c) {
-#ifdef HX_NATIVE
-    if (!c) return;
-#endif
     MILO_ASSERT(c, 0x57D);
+#ifdef HX_NATIVE
+    // The image's assert is fatal; native MILO_ASSERT is non-fatal (MILO_FATAL_FAILS=1
+    // restores abort), so report it as the image would, THEN stop short of the null
+    // deref below. This guard used to sit above the assert and swallowed it silently.
+    if (!c)
+        return;
+#endif
     int numLods = Max<int>(c->mLods.size(), mLods.size());
     mLods.resize(numLods);
     for (int i = 0; i < c->mLods.size(); i++) {
