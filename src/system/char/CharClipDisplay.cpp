@@ -225,29 +225,28 @@ void CharClipDisplay::DrawTrack() {
     {
         CharIKFoot *leftIk = sDir->Find<CharIKFoot>("left.ikfoot", false);
         CharIKFoot *rightIk = sDir->Find<CharIKFoot>("right.ikfoot", false);
-
-        if (leftIk == nullptr) {
-            if (rightIk == nullptr) {
-                // No IK feet - draw sample markers
-                Hmx::Rect sampleRect(0.0f, drawY + 1.0f, 1.0f, 1.0f);
-                float frac;
-                int startSample = mClip->BeatToSample(startBeat, &frac);
-                int endSample = mClip->BeatToSample(endBeat, &frac);
-                for (; startSample <= endSample; startSample++) {
-                    float sampleBeat = mClip->SampleToBeat(startSample);
-                    sampleRect.x = GetX(sampleBeat);
-                    TheRnd.DrawRect(sampleRect, black, nullptr, nullptr, nullptr);
-                }
-            } else {
-                RndTransformable *data = rightIk->GetData();
-                goto drawIKData;
+        if (leftIk == nullptr && rightIk == nullptr) {
+            // No IK feet - draw sample markers
+            Hmx::Rect sampleRect(0.0f, drawY + 1.0f, 1.0f, 1.0f);
+            float frac;
+            int startSample = mClip->BeatToSample(startBeat, &frac);
+            int endSample = mClip->BeatToSample(endBeat, &frac);
+            for (; startSample <= endSample; startSample++) {
+                float sampleBeat = mClip->SampleToBeat(startSample);
+                sampleRect.x = GetX(sampleBeat);
+                TheRnd.DrawRect(sampleRect, black, nullptr, nullptr, nullptr);
             }
         } else {
             MILO_ASSERT(
                 !rightIk || !leftIk || (rightIk->GetData() == leftIk->GetData()), 0xd1
             );
-            RndTransformable *data = leftIk->GetData();
-        drawIKData:
+            // w22-a07 BUG FIX: the right-foot-only case used to declare its own
+            // block-local `data` and `goto` past the left arm's initializer, so
+            // the IK readout read an uninitialized stack slot (ours:
+            // `lwz r11, 0x50(r1)`).  The image loads rightIk->GetData() there:
+            // `lwz r11, 0xd4(r28)` at 0x823DF880 (r28 = rightIk), reached from
+            // `bne cr6, 0xb88` right after the right.ikfoot Find.
+            RndTransformable *data = leftIk ? leftIk->GetData() : rightIk->GetData();
             if (data != nullptr) {
                 Symbol channelName
                     = CharBones::ChannelName(data->Name(), CharBones::TYPE_POS);
