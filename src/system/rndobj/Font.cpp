@@ -31,7 +31,18 @@
 // mTable is 32 Entry pointers: 0x80 bytes on the 360 (the size retail clears
 // here, in SetKerning and in Load), 0x100 on a 64-bit host. sizeof keeps both.
 KerningTable::KerningTable() : mNumEntries(0), mEntries(0) { memset(mTable, 0, sizeof(mTable)); }
-KerningTable::~KerningTable() { delete mEntries; }
+// mEntries comes from `new Entry[]` (SetKerning, Load), but the dtor and Load
+// free it with the scalar delete; retail does the same, and there both reach
+// MemAlloc/MemFree, so the mix is harmless. Natively new[] and delete are
+// different libstdc++ operators (ASan alloc-dealloc-mismatch, "operator new []
+// vs operator delete"), so the native build frees with delete[] -- as
+// SetKerning already does. Port of rb3-xenon 12d4ebdfe (W16-UO).
+#ifdef HX_NATIVE
+#define KERNING_DELETE_ENTRIES(p) delete[] (p)
+#else
+#define KERNING_DELETE_ENTRIES(p) delete (p)
+#endif
+KerningTable::~KerningTable() { KERNING_DELETE_ENTRIES(mEntries); }
 
 KerningTable::Entry *KerningTable::Find(unsigned short us1, unsigned short us2) {
     if (mNumEntries == 0) {
@@ -120,7 +131,7 @@ void KerningTable::Load(BinStreamRev &d, RndFontBase *f) {
         d >> num;
         if (num != mNumEntries) {
             mNumEntries = num;
-            delete mEntries;
+            KERNING_DELETE_ENTRIES(mEntries);
             mEntries = new Entry[mNumEntries];
         }
         memset(&mTable, 0, sizeof(mTable));
