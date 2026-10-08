@@ -346,16 +346,10 @@ void ProfileMgr::Init() {
         mWeightUnits = 1;
     }
     MILO_ASSERT(mProfileSaveBuffer == NULL, 0xBC);
-#ifndef HX_NATIVE
-    // PLATFORM: the profile save buffer feeds the Xbox memcard save flow,
-    // which native does not run (no SaveLoadManager). Native's App also runs
-    // FixedSizeSaveable::Init after MetaPanel::Init, so GetSymbolTableSize
-    // would assert sMaxSymbols >= 0 here.
     int size = FixedSizeSaveableStream::GetSymbolTableSize(0x5C) + 8;
     size += HamProfile::SaveSize(0x5C);
     mProfileSaveBuffer = MemAlloc(size, __FILE__, 0xBE, "ProfileSaveBuffer");
     TheMemcardMgr.SetProfileSaveBuffer(mProfileSaveBuffer, size);
-#endif
     static Symbol defaultSym("default");
     mVenuePreference = defaultSym;
     MILO_ASSERT(TheSynth, 0xCA);
