@@ -448,8 +448,13 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
-    // Load common sound bank (Faders, FxSend, Sound objects used by gameplay)
+    // Load common sound bank (Faders, FxSend, Sound objects used by gameplay).
+    // The image loads sfx/audio_mixer.milo first and keeps it referenced while
+    // the common bank loads (same block, same order as the #else arm).
     {
+        ObjDirPtr<ObjectDir> audioMixerDir;
+        audioMixerDir.LoadFile("sfx/audio_mixer.milo", false, true, kLoadFront, false);
+
         ObjDirPtr<ObjectDir> commonBankDir;
         DataArray *soundBanksConfig = SystemConfig("sound", "banks", "common");
         const char *soundBankPath = soundBanksConfig->Node(1).Str(soundBanksConfig);
