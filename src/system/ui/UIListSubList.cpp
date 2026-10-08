@@ -44,7 +44,8 @@ BEGIN_LOADS(UIListSubList)
 END_LOADS
 
 UIList *UIListSubList::SubList(int index) {
-#ifdef HX_NATIVE
+#ifdef HX_WEB
+    // w23-g18: web-only, like UIListSlot's lazy elements (w23-g10).
     if ((size_t)index >= mElements.size())
         return nullptr;
 #endif
@@ -66,7 +67,7 @@ void UIListSubList::Draw(
         for (int i = 0; i < numElements; i++) {
             const UIListElementDrawState &cur = drawstate.mElements[i];
             UIList *uilist = SubList(i);
-#ifdef HX_NATIVE
+#ifdef HX_WEB
             if (!uilist) continue;
 #endif
             // Dispatches on the element state (+0x28), not the component

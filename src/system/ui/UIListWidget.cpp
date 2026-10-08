@@ -186,18 +186,17 @@ void UIListWidget::SetColor(UIListWidgetState ws, UIComponent::State cs, UIColor
 UIColor *UIListWidget::DisplayColor(
     UIListWidgetState element_state, UIComponent::State list_state
 ) const {
-#ifdef HX_NATIVE
-    // HamListRibbon::DrawRibbon repurposes UIListElementDrawState fields
-    // (mElementState, mComponentState, etc.) as a Hmx::Color overlay.
-    // DrawWidgets then reads the corrupted mElementState. On Xbox,
-    // MILO_ASSERT doesn't abort; on native it does. Return default color.
-    if (element_state < 0 || element_state >= kNumUIListWidgetStates)
-        return mDefaultColor;
-    if (list_state < 0 || list_state >= UIComponent::kNumStates)
-        return mDefaultColor;
-#else
     MILO_ASSERT_RANGE(element_state, 0, kNumUIListWidgetStates, 0x64);
     MILO_ASSERT_RANGE(list_state, 0, UIComponent::kNumStates, 0x65);
+#ifdef HX_NATIVE
+    // Image-fatal asserts above; native asserts are non-fatal, so do not index
+    // mColors out of range.  (The old reason for skipping the asserts --
+    // HamListRibbon::DrawRibbon writing a colour over mElementState -- was a
+    // decomp bug, fixed in HamListRibbon: it writes mAlpha and the scale
+    // Vector3 at 0x14..0x20, never 0x28.)
+    if (element_state < 0 || element_state >= kNumUIListWidgetStates
+        || list_state < 0 || list_state >= UIComponent::kNumStates)
+        return mDefaultColor;
 #endif
     UIColor *color = mColors[element_state][list_state];
     if (color)

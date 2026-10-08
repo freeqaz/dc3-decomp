@@ -307,7 +307,9 @@ void UIList::AutoScroll() {
 
 void UIList::Enter() {
     UIComponent::Enter();
-#ifdef HX_NATIVE
+#ifdef HX_WEB
+    // w23-g18: web-only (fetch-driven async resource loading can leave the
+    // list resource unresolved); desktop native runs the image's body.
     if (!mListDir) return;
 #endif
     Reset();
@@ -316,7 +318,9 @@ void UIList::Enter() {
 
 void UIList::Poll() {
     UIComponent::Poll();
-#ifdef HX_NATIVE
+#ifdef HX_WEB
+    // w23-g18: web-only (fetch-driven async resource loading can leave the
+    // list resource unresolved); desktop native runs the image's body.
     if (!mListDir) return;
 #endif
     if (mAutoScrolling) {
@@ -459,20 +463,6 @@ bool UIList::SetSelected(Symbol sym, bool b, int i) {
 }
 
 void UIList::Refresh(bool b) {
-#ifdef HX_NATIVE
-    // Re-evaluate display count — async provider may have more data now than
-    // when SetProvider() originally called LimitCircularDisplay()
-    if (Circular() && mLimitCircularDisplayNumToDataNum) {
-        int numprov = NumProviderData();
-        int val = mUncappedNumDisplay;
-        if (numprov < val)
-            val = numprov;
-        if (val < 1)
-            val = 1;
-        if (val != mListState.NumDisplay())
-            SetNumDisplay(val);
-    }
-#endif
     mListDir->FillElements(mListState, mWidgets);
     if (b) {
         int nowrap = mListState.SelectedNoWrap();
@@ -678,10 +668,10 @@ bool UIList::SetSelectedSimulateScroll(Symbol sym, bool b) {
 
 void UIList::Update() {
     if (!gLoading) {
-#ifdef HX_NATIVE
+        MILO_ASSERT(mListDir, 0x238);
+#ifdef HX_WEB
         if (!mListDir) return;
 #endif
-        MILO_ASSERT(mListDir, 0x238);
         mListDir->CreateElements(this, mWidgets, mListState.NumDisplay());
 
         if (TheLoadMgr.EditMode())
