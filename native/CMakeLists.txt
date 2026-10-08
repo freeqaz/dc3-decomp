@@ -358,6 +358,14 @@ if(EMSCRIPTEN)
         ImGuiBackend_Web.cpp)
 endif()
 add_subdirectory(${MILO_ENGINE_PATH} ${CMAKE_BINARY_DIR}/milo-engine)
+if(EMSCRIPTEN)
+    # dc3-web TUs compile with HX_WEB=1 and link libmilo-engine.a; the engine's
+    # StreamReceiver_Native.h and audio/AudioDevice.h change class layout under
+    # HX_WEB, so the archive must see the same define or the two sides disagree
+    # on those objects' layout (and StreamReceiverNative::SetDebugLabel is
+    # never compiled).
+    target_compile_definitions(milo-engine PRIVATE HX_WEB=1)
+endif()
 
 # ============================================================================
 # Source files from decomp (generated from config/373307D9/objects.json)
@@ -1333,6 +1341,33 @@ set(DC3_EXPORT_SOURCES
 # Build targets
 # ============================================================================
 
+# (Shared by dc3-web and the native targets -- source properties are
+# directory-scoped; this used to sit in the native-only branch, so dc3-web
+# compiled json-c as C and failed on `::operator delete`.)
+# json-c third-party sources: named .c, but the PPC build compiles every one of
+# them as C++ (`/TP` — see the msvc cflags in build.ninja), and the sources rely
+# on it: since 38e9e7655 they free through `::operator delete` to reproduce the
+# ??3@YAXPAX@Z relocations retail's objects carry. Clang picks the language from
+# the .c suffix, so LANGUAGE C made those lines "expected expression". Compile
+# them as CXX to match the PPC translation mode. Every json-c header already
+# wraps its declarations in `extern "C"`, so the exported symbols stay C-mangled
+# and the C++ callers link unchanged.
+#
+# Still skip the C++ PCH and disable -fms-compatibility (its __sigbits/global-
+# inline quirk plus the win_types.h shim breaks these vendor TUs the same way it
+# breaks tomcrypt).
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/arraylist.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/debug.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/json_object.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/json_tokener.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/linkhash.c
+    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/printbuf.c
+    PROPERTIES LANGUAGE CXX
+               SKIP_PRECOMPILE_HEADERS ON
+               COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility"
+)
+
 if(EMSCRIPTEN)
 
 # ============================================================================
@@ -1340,8 +1375,27 @@ if(EMSCRIPTEN)
 # ============================================================================
 
 # Web-specific platform sources (replace native platform files)
+# The engine-clean platform/gfx TUs (AsyncFile/Joypad/Keyboard/Synth stubs,
+# StreamReceiver_Native, SampleInst, FxSend, BoneSetup, MaterialSetup, Mesh_Wgpu,
+# TransparentQueue, Part_Wgpu, Tex_Wgpu, Cam, RndTex, Rnd_Wgpu, MeshGpuCache,
+# Memory/ThreadCall and the whole gfx/ set) come from libmilo-engine.a, exactly
+# as for dc3-native (DC3_NATIVE_CORE_SOURCES_ENGINE). dc3-web used to compile
+# the stale DC3-local copies of these plus the engine's Rnd_Wgpu.cpp, which
+# stopped compiling once the engine's gfx passes moved on (2026-10: PostProcPass
+# ::Run arity, SetSpotBeams, PipelineManager::SetAlphaBlendMax), and meant web
+# ran a different renderer/audio backend from desktop. w23-web.
 set(DC3_WEB_CORE_SOURCES
     src/xdk_shims.cpp
+    # Present in DC3_NATIVE_CORE_SOURCES_ENGINE but missing here: without them
+    # 75 Xbox entry points (Bink*, Nui*, Dm*, XAudio/XMA, ...) were left as
+    # unresolved wasm imports that abort on first call.
+    src/xbox_link_stubs.cpp
+    src/telemetry/GameplayTelemetry.cpp
+    src/platform/DtaEvalSupport.cpp
+    # Web stand-ins for the XDK/NUI/XNet entry points (exact XDK signatures).
+    # Dropped in 466a3a591 as a "deleted file" -- it was not deleted, and its
+    # absence left those symbols as unresolved wasm imports.
+    src/web_stubs.cpp
     # Memory_Native.cpp lifted to milo-engine (engine 0.2b drop-xdk graduation);
     # compiled via DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/PlatformMgr_Native.cpp
@@ -1350,10 +1404,6 @@ set(DC3_WEB_CORE_SOURCES
     src/platform/System_Native.cpp
     # File_Web.cpp / CDReader_Web.cpp / WebAssets.cpp lifted to milo-engine
     # (MILO_BUILD_WEB platform layer, W0).
-    src/platform/AsyncFile_Native.cpp
-    src/platform/Joypad_Native.cpp
-    src/platform/Keyboard_Native.cpp
-    src/platform/Synth_Stub.cpp
     src/platform/Skeleton_Native.cpp
     src/platform/GestureMgr_Native.cpp
     src/platform/NuiImageSurface_Native.cpp
@@ -1364,37 +1414,17 @@ set(DC3_WEB_CORE_SOURCES
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/CameraCapture.cpp>
     $<$<BOOL:${ENABLE_NCNN}>:src/pose/InternalPoseProvider.cpp>
     # AudioDevice_Web.cpp lifted to milo-engine (MILO_BUILD_WEB, W0).
-    src/platform/StreamReceiver_Native.cpp
-    src/platform/SampleInst_Native.cpp
     src/platform/StbVorbisImpl.cpp
-    src/platform/FxSendNative.cpp
     # Rnd_Wgpu.cpp / MeshGpuCache.cpp lifted to milo-engine; compiled via
     # DC3_WEB_LIFTED_ENGINE_SOURCES below.
     src/platform/MeshFilter.cpp
-    src/platform/BoneSetup.cpp
-    src/platform/MaterialSetup.cpp
-    src/platform/Mesh_Wgpu.cpp
-    src/platform/TransparentQueue.cpp
-    src/platform/Part_Wgpu.cpp
-    src/platform/Tex_Wgpu.cpp
-    src/platform/Cam_Native.cpp
-    src/platform/Net_Stub.cpp
     src/platform/Memcard_Stub.cpp
     src/platform/ContentMgr_Stub.cpp
-    src/platform/MapFile_Stub.cpp
-    src/platform/VirtualKeyboard_Stub.cpp
     src/platform/Achievements_Stub.cpp
     src/platform/MemcardMgr_Stub.cpp
-    src/platform/BinkMovie_Stub.cpp
     src/platform/WebMovieImpl.cpp
     src/platform/NetXbox_Stub.cpp
     src/platform/KinectShare_Stub.cpp
-    src/platform/Cache_Stub.cpp
-    src/platform/ChecksumData_Stub.cpp
-    src/platform/Keygen_Stub.cpp
-    src/platform/NetworkSocket_Stub.cpp
-    src/platform/SynthCommon_Stub.cpp
-    src/platform/RndTex_Native.cpp
     src/platform/RenderState_Native.cpp
     src/engine_stubs_generated.cpp
     src/StubTrace.cpp
@@ -1444,25 +1474,19 @@ set(DC3_WEB_LIFTED_ENGINE_SOURCES
     ${MILO_ENGINE_PATH}/src/platform/GpuDevice_Web.cpp
     ${MILO_ENGINE_PATH}/src/audio/AudioDevice_Web.cpp
     ${MILO_ENGINE_PATH}/src/gfx/ImGuiBackend_Web.cpp
-    # Platform TUs that diverged from the DC3-local copies: source them from the
-    # engine (single source of truth) instead of the stale local duplicates,
-    # which are now deleted. Absolute ${MILO_ENGINE_PATH}/src/... paths are
-    # required — the engine's ${MILO_ENGINE_*_SOURCES} sets are plain set()s in
-    # the engine subdir (no PARENT_SCOPE) and use engine-relative paths.
-    ${MILO_ENGINE_PATH}/src/platform/Memory_Native.cpp
-    ${MILO_ENGINE_PATH}/src/platform/ThreadCall_Native.cpp
-    ${MILO_ENGINE_PATH}/src/platform/MeshGpuCache.cpp
-    ${MILO_ENGINE_PATH}/src/platform/Rnd_Wgpu.cpp
+    # Memory_Native / ThreadCall_Native / MeshGpuCache / Rnd_Wgpu now come from
+    # libmilo-engine.a (linked below), like every desktop target.
 )
 
 add_executable(dc3-web
     src/main_web.cpp
     src/platform/WebSvcMgr_Stub.cpp
     src/platform/DebugPanel.cpp
+    src/dc3_render_hook.cpp       # HamRenderHook (registers with milo-engine's WgpuRnd)
     ${DC3_WEB_LIFTED_ENGINE_SOURCES}
     ${DC3_WEB_ENGINE_SOURCES}
     ${DC3_WEB_CORE_SOURCES}
-    ${DC3_WEB_GFX_SOURCES}
+    # gfx set now provided by milo-engine (DC3_WEB_GFX_SOURCES is unused)
 )
 
 target_compile_options(dc3-web PRIVATE
@@ -1499,6 +1523,7 @@ target_include_directories(dc3-web SYSTEM BEFORE PRIVATE
 )
 target_include_directories(dc3-web PRIVATE
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/web_compat   # <execinfo.h> stand-in (Emscripten has none)
     ${CMAKE_SOURCE_DIR}/../src
     ${CMAKE_SOURCE_DIR}/../src/system
     ${CMAKE_SOURCE_DIR}/../src/lazer
@@ -1524,6 +1549,11 @@ target_include_directories(dc3-web PRIVATE
 milo_engine_apply_web_target_options(dc3-web ${CMAKE_CURRENT_SOURCE_DIR}/web/build)
 target_link_options(dc3-web PRIVATE
     -sEXPORTED_FUNCTIONS=["_main","_dc3MainLoopTick"]
+    # Same as DC3_PLATFORM_LINK_OPTIONS on desktop: the decomp has intentional
+    # stub/real pairs (engine_stubs_generated.cpp vs the real TU, dc3 TUs vs
+    # libmilo-engine.a copies). First definition wins, in the same object order
+    # as dc3-native (decomp TUs, then core/stubs, then the engine archive).
+    -Wl,--allow-multiple-definition
     # dc3-local pre-js (URL ?env= → ENV bridge). Stacks with the engine's
     # missing_stubs.js pre-js from milo_engine_apply_web_target_options.
     "SHELL:--pre-js ${CMAKE_CURRENT_SOURCE_DIR}/web/dc3_pre.js"
@@ -1544,7 +1574,25 @@ target_compile_definitions(dc3-web PRIVATE
     MILO_WEB_AUDIO_NS=dc3
 )
 
-target_link_libraries(dc3-web PRIVATE imgui)
+target_link_libraries(dc3-web PRIVATE milo-engine imgui)
+
+# Same precompiled/force-included header every native target uses (and the
+# MSVC decomp build's /FI): decomp TUs rely on Object.h + Debug.h arriving
+# without an #include (e.g. utl/BinkIntegration.cpp's os/Endian.h MILO_ASSERTs).
+# The lifted engine *_Web.cpp TUs keep compiling without it (see the
+# MILO_ENGINE_DECOMP_PLATFORM_EXCLUDE note above: the PCH locks <sys/stat.h>'s
+# st_mtime macro state).
+target_precompile_headers(dc3-web PRIVATE
+    "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/../src/system/decomp_pch.h>"
+)
+set_source_files_properties(${DC3_WEB_LIFTED_ENGINE_SOURCES}
+    PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
+# Jpeg.cpp / engine_stubs_generated.cpp: same PCH conflicts the native targets
+# skip them for (see the list in the native branch).
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/../src/system/jpeg/Jpeg.cpp
+    ${CMAKE_SOURCE_DIR}/src/engine_stubs_generated.cpp
+    PROPERTIES SKIP_PRECOMPILE_HEADERS ON)
 
 # ============================================================================
 # Web release/debug split (mirrors rb3's RB3_WEB_RELEASE). Default OFF = debug:
@@ -1635,30 +1683,6 @@ target_link_libraries(dc3-native PRIVATE
 set_source_files_properties(
     ${CMAKE_SOURCE_DIR}/../src/system/obj/DataFlex.c
     PROPERTIES LANGUAGE C
-)
-
-# json-c third-party sources: named .c, but the PPC build compiles every one of
-# them as C++ (`/TP` — see the msvc cflags in build.ninja), and the sources rely
-# on it: since 38e9e7655 they free through `::operator delete` to reproduce the
-# ??3@YAXPAX@Z relocations retail's objects carry. Clang picks the language from
-# the .c suffix, so LANGUAGE C made those lines "expected expression". Compile
-# them as CXX to match the PPC translation mode. Every json-c header already
-# wraps its declarations in `extern "C"`, so the exported symbols stay C-mangled
-# and the C++ callers link unchanged.
-#
-# Still skip the C++ PCH and disable -fms-compatibility (its __sigbits/global-
-# inline quirk plus the win_types.h shim breaks these vendor TUs the same way it
-# breaks tomcrypt).
-set_source_files_properties(
-    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/arraylist.c
-    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/debug.c
-    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/json_object.c
-    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/json_tokener.c
-    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/linkhash.c
-    ${CMAKE_SOURCE_DIR}/../src/system/net/json-c/printbuf.c
-    PROPERTIES LANGUAGE CXX
-               SKIP_PRECOMPILE_HEADERS ON
-               COMPILE_OPTIONS "-fno-ms-extensions;-fno-ms-compatibility"
 )
 
 # macOS: files that include macOS SDK/framework headers (ObjC++, GLFW native,
