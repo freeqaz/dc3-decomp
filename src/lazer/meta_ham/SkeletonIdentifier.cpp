@@ -300,8 +300,15 @@ DataNode SkeletonIdentifier::OnMsg(SkeletonEnrollmentChangedMsg const &msg) {
 // in the second loop (`lwz r10, 0x224(r1)`, r30 reused for the "%d. %d %s"
 // literal); we keep `this` in r14 for the whole function, which pushes every
 // other callee-saved value up by one.  Not chased further.
+// w22-a19: this body used to sit entirely inside `#ifndef HX_NATIVE`, so the
+// native port silently dropped the whole `toggle_draw_debug` overlay the image
+// draws (DrawRectScreen @ idx 65, seven DrawStringScreen lines, then the eight
+// enrolled-player lines).  The only non-portable construct is the two
+// `EnrollmentIndexString(...)` Strings handed BY VALUE to sprintf_s's `...`:
+// the image passes the 8-byte String {vfptr, mStr} in one GPR (`ld r6, 0x0(r10)`
+// before `bl sprintf_s<200>`), and `%s` reads the slot's low word -- mStr.  On
+// native that is a non-trivial object through varargs, so pass c_str() there.
 void SkeletonIdentifier::DrawDebug() {
-#ifndef HX_NATIVE
     if (mDrawDebug) {
         static Hmx::Color bgColor(0.2f, 0.2f, 0.2f, 0.7f);
         static Hmx::Color textColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -328,7 +335,11 @@ void SkeletonIdentifier::DrawDebug() {
                         buf,
                         "Active skeleton tracked: %d %s",
                         mEnrolledPlayers[enrollmentIdx].mPadNum,
+#ifdef HX_NATIVE
+                        EnrollmentIndexString(enrollmentIdx).c_str()
+#else
                         EnrollmentIndexString(enrollmentIdx)
+#endif
                     );
                 } else {
                     sprintf_s(buf, "Skeleton not tracked");
@@ -346,7 +357,11 @@ void SkeletonIdentifier::DrawDebug() {
                         buf,
                         "Other skeleton tracked: %d %s",
                         mEnrolledPlayers[enrollmentIdx].mPadNum,
+#ifdef HX_NATIVE
+                        EnrollmentIndexString(enrollmentIdx).c_str()
+#else
                         EnrollmentIndexString(enrollmentIdx)
+#endif
                     );
                 }
                 break;
@@ -394,7 +409,6 @@ void SkeletonIdentifier::DrawDebug() {
             );
         }
     }
-#endif
 }
 
 DataNode SkeletonIdentifier::OnMsg(const SigninChangedMsg &msg) {
