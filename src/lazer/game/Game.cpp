@@ -68,9 +68,6 @@
 
 Game *TheGame;
 static bool sMoveOverlayToggle;
-#if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
-static int sNativeAudioPollCount = 0;
-#endif
 std::vector<Symbol> sAutoplayStates;
 
 Game::Game()
@@ -357,22 +354,6 @@ void Game::PostWaitStart() {
         MetaPerformer::Current()->StartGameplayTimer();
         mRealTime = false;
     }
-#ifdef HX_NATIVE
-    else {
-        // Audio failed (mogg not found or decode error). Unpause and start
-        // gameplay anyway so the beat advances from wall-clock time and
-        // character animation can play even without music.
-        // mRealTime=true makes CurrentMs() use the wall-clock timer
-        // instead of mAudio.GetTime() (which returns 0 on a dead stream).
-        fprintf(stderr, "DC3 Game::PostWaitStart — audio failed, proceeding with wall-clock timing\n");
-        mPaused = false;
-        MetaPerformer::Current()->StartGameplayTimer();
-        mRealTime = true;
-        if (mGameInput) {
-            mGameInput->SetTimeOffset();
-        }
-    }
-#endif
 }
 
 void Game::SetMusicVolume(float vol) {
@@ -914,9 +895,6 @@ bool Game::IsLoaded() {
             }
             MILO_LOG("Game::IsLoaded() - Done waiting for MoveGraph\n");
             mLoadState = 2;
-#if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
-            sNativeAudioPollCount = 0;
-#endif
         }
         if (mLoadState == 2) {
             if (mMaster->GetAudio()->Fail()) {
@@ -924,18 +902,7 @@ bool Game::IsLoaded() {
             }
             if (!mMaster->GetAudio()->IsReady()) {
                 TheSynth->Poll();
-#if defined(HX_NATIVE) || defined(__EMSCRIPTEN__)
-                // On native/web, audio uses StandardStream (real decoding) rather
-                // than StreamNull, so IsReady() requires stream buffering via
-                // PollStream(). TheSynth->Poll() drives this each frame. Timeout
-                // after ~2 seconds as a safety net for broken/missing mogg files.
-                if (sNativeAudioPollCount++ >= 120) {
-                    fprintf(stderr, "Game::IsLoaded() — audio not ready after %d polls, proceeding\n", sNativeAudioPollCount);
-                } else
-#endif
-                {
-                    return false;
-                }
+                return false;
             }
             mLoadState = 3;
             TheProfileMgr.PushAllOptions();
@@ -1024,29 +991,14 @@ bool Game::HandleWait() {
     }
     // Common audio readiness check for all non-zero states
     HamAudio *audio = mMaster->GetAudio();
-#ifdef HX_NATIVE
-    static int sWaitLog = 0;
-    if (sWaitLog++ < 10) {
-        fprintf(stderr, "DC3 Game::HandleWait — state=%d audioFail=%d audioReady=%d audio=%p\n",
-                mWaitState, audio->Fail(), audio->IsReady(), (void*)audio);
-    }
-#endif
     if (audio->Fail()) {
-#ifdef HX_NATIVE
-        fprintf(stderr, "DC3 Game::HandleWait — audio FAILED, dispatching state=%d anyway\n", mWaitState);
-        // Fall through to dispatch — PostWaitStart handles Fail() gracefully
-        // by skipping Play(). Without this, mPaused stays true and the beat
-        // never advances, freezing character animation.
-#else
         return true;
-#endif
     } else if (!audio->IsReady()) {
         TheSynth->Poll();
         return false;
     }
 #ifdef HX_NATIVE
-    if (!audio->Fail())
-        fprintf(stderr, "DC3 Game::HandleWait — audio ready! dispatching state=%d\n", mWaitState);
+    fprintf(stderr, "DC3 Game::HandleWait — audio ready! dispatching state=%d\n", mWaitState);
 #endif
     // Audio is ready, dispatch based on state
     switch (mWaitState) {
