@@ -169,11 +169,11 @@
                   {profile_mgr get_active_profile}}}
             skip_select_anim)
          (option_camera_blend
-            {profile_mgr toggle_camera_blend}
+            {native_settings toggle_camera_blend}
             {$this update_all}
             skip_select_anim)
          (option_debug_panel
-            {profile_mgr toggle_debug_panel}
+            {native_settings toggle_debug_panel}
             {$this update_all}
             skip_select_anim)
          (back
@@ -213,11 +213,11 @@
       {[provider]
          set_checked
          option_camera_blend
-         {profile_mgr get_camera_blend}}
+         {native_settings get_camera_blend}}
       {[provider]
          set_checked
          option_debug_panel
-         {profile_mgr get_debug_panel}})
+         {native_settings get_debug_panel}})
    (update_description
       ($name)
       {switch

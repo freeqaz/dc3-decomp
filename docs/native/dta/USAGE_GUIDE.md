@@ -32,12 +32,12 @@ To add a new overlay file:
 
 The Camera Blend toggle is the reference implementation. Here's the pattern for adding more native-only settings.
 
-### 1. Add the handler to NativeProfileMgrStub
+### 1. Add the handler to NativeSettingsObject
 
-In `src/App.cpp`, the `NativeProfileMgrStub` class handles DTA queries from settings panels. Add a getter and toggler:
+In `src/App.cpp`, the native-only `NativeSettingsObject` (registered as `native_settings`) handles DTA queries from settings panels. Add a getter and toggler, and call them from the overlay as `{native_settings get_my_setting}` / `{native_settings toggle_my_setting}`. Do **not** put native-only messages on `profile_mgr`: that name belongs to the real `ProfileMgr` (named by `ProfileMgr::InitNative`), whose handler table is the image's. (A `NativeProfileMgrStub` used to hold these, but it was deleted every boot because the real object already had the name, so its handlers never ran.)
 
 ```cpp
-// In NativeProfileMgrStub::Handle()
+// In NativeSettingsObject::Handle()
 if (sym == "get_my_setting") return DataNode(NativeSettings::Get().mySetting ? 1 : 0);
 if (sym == "toggle_my_setting") {
     NativeSettings::Get().mySetting = !NativeSettings::Get().mySetting;
@@ -130,7 +130,7 @@ Quick reference for patterns used in overlay files:
 | `{[provider] set (nav_items IDX checkbox) VAL}` | Set checkbox mode (0=none, 1=unchecked, 2=checked) |
 | `{[provider] set_checked SYMBOL BOOL}` | Set checkbox state by label symbol |
 | `{[provider] set_enabled SYMBOL BOOL}` | Enable/disable item by label symbol |
-| `{profile_mgr HANDLER}` | Call NativeProfileMgrStub handler |
+| `{native_settings HANDLER}` | Call a NativeSettingsObject handler (native-only settings) |
 | `{description.lbl set text_token SYMBOL}` | Set description label to locale token |
 
 ## How Overlay Detection Works
