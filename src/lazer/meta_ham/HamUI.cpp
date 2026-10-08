@@ -268,13 +268,8 @@ void HamUI::Draw() {
             static bool sPollAugmentedPhoto = true;
             if (sPollAugmentedPhoto) {
                 sPollAugmentedPhoto = false;
-#ifdef HX_NATIVE
-                if (mAugmentedPhoto)
-#endif
-                {
-                    mAugmentedPhoto->Poll();
-                    mAugmentedPhoto->Draw();
-                }
+                mAugmentedPhoto->Poll();
+                mAugmentedPhoto->Draw();
             }
             if (unk_0xFC || unk_0xFD) {
                 LiveCameraInput *cam = TheGestureMgr->GetLiveCameraInput();
