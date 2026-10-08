@@ -59,10 +59,7 @@ void NgRnd::PreInit() {
         REGISTER_OBJ_FACTORY(NgFur)
         RndShadowMap::Init();
         REGISTER_OBJ_FACTORY(RndSoftParticleBuffer)
-#ifndef HX_NATIVE
-        // On native, skip re-creating defaults with Ng types — basic Rnd types suffice
         CreateDefaults();
-#endif
     }
 }
 

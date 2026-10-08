@@ -31,17 +31,10 @@ HamVisDir::HamVisDir()
     : mFilter(0), mRunning(0), mPlayer1Right(this),
       mPlayer1Left(this), mPlayer2Right(this), mPlayer2Left(this), mMiloManualFrame(1),
       mGrooviness(0) {
-#ifndef HX_NATIVE
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     if (!handle.HasCallback(this)) {
         handle.AddCallback(this);
     }
-#endif
-    // NOTE: HamVisDir intentionally does NOT register in the native scoring
-    // fan-out. Its PostUpdate drives gesture/freestyle motion filters
-    // (FreestyleMotionFilter + Y-pose/squat) that read skeleton velocity from the
-    // NUI history archive, which native has no feed for (Skeleton::Velocity ->
-    // PrevFromArchive null-derefs). Move scoring only needs MoveDir's callback.
     for (int i = 0; i < 2; i++) {
         mSquatPoses[i].name = MakeString("pose_squat_%i", i);
         mSquatPoses[i].pose = new Pose(10, (Pose::ScoreMode)1);
@@ -119,13 +112,10 @@ HamVisDir::HamVisDir()
 
 HamVisDir::~HamVisDir() {
     RELEASE(mFilter);
-#ifndef HX_NATIVE
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     if (handle.HasCallback(this)) {
         handle.RemoveCallback(this);
     }
-#endif
-    // Native: never registered (see ctor).
 }
 
 BEGIN_HANDLERS(HamVisDir)

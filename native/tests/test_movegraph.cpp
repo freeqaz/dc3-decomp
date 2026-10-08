@@ -166,8 +166,15 @@ TEST_F(MoveGraphTest, MoveCandidateLoadBasic) {
     EXPECT_EQ(cand.mAdjacencyFlag & 0x04, 0x04u) << "original_adjacent bit preserved";
 }
 
-TEST_F(MoveGraphTest, MoveCandidateLoadClearsBit0) {
-    // Simulate binary data where bit 0 is set (as if saved after CacheLinks)
+TEST_F(MoveGraphTest, MoveCandidateLoadKeepsFlagWordAsRead) {
+    // The image's MoveCandidate::Load (hamobj/MoveVariant.s, 8251A090) stores
+    // the adjacency word exactly as read -- ReadEndian into +4, three Symbol
+    // reads, the rev<1 Adjacency() or, nothing else. It does NOT clear bit 0
+    // (the "union holds a MoveVariant*" flag). A native-only `&= ~1` used to
+    // live here (b9719618e) and this test pinned it; shipped move graphs never
+    // carry bit 0 (the image's CacheLinks would otherwise read the name as a
+    // pointer), measured by AssetLoadingTest.BetterOffAloneMoveGraph* loading
+    // and linking a real graph with no "Could not find link".
     std::vector<uint8_t> buf;
     BuildMoveCandidate(buf, /*rev=*/1, /*adjacencyFlag=*/0x05, // bit 0 + original_adjacent
                        "unused", "variant_B", "unused");
@@ -176,10 +183,8 @@ TEST_F(MoveGraphTest, MoveCandidateLoadClearsBit0) {
     MoveCandidate cand;
     cand.Load(ms);
 
-    // Bit 0 must be cleared — union is in name mode after Load
-    EXPECT_EQ(cand.mAdjacencyFlag & 1, 0u)
-        << "Bit 0 must be cleared after Load (union is name, not pointer)";
-    EXPECT_EQ(cand.mAdjacencyFlag & 0x04, 0x04u) << "Other flags preserved";
+    EXPECT_EQ(cand.mAdjacencyFlag, 0x05u) << "Load keeps the flag word as read (image)";
+    EXPECT_STREQ(cand.mValue.mVariantName, "variant_B");
 }
 
 TEST_F(MoveGraphTest, MoveCandidateLoadRev0AddsAdjacency) {
@@ -498,26 +503,4 @@ TEST_F(MoveGraphTest, MoveCandidateCacheLinksResolvesName) {
 
     delete var1;
     delete graph;
-}
-
-TEST_F(MoveGraphTest, MoveCandidateCacheLinksWithBit0SetWouldCrash) {
-    // This test documents the crash scenario: if bit 0 is set after Load,
-    // CacheLinks dereferences mValue.mVariantName (a const char*) as a
-    // MoveVariant*. Without the bit-clearing fix, this would SIGSEGV.
-    std::vector<uint8_t> buf;
-    // adjacencyFlag=0x05 has bit 0 set — dangerous without the fix
-    BuildMoveCandidate(buf, 1, 0x05, "unused", "some_variant", "unused");
-
-    MemBinStream ms(buf.data(), buf.size(), false);
-    MoveCandidate cand;
-    cand.Load(ms);
-
-    // With the fix, bit 0 is cleared. Verify:
-    EXPECT_EQ(cand.mAdjacencyFlag & 1, 0u)
-        << "Load must clear bit 0 to prevent CacheLinks from misinterpreting "
-           "const char* as MoveVariant*";
-
-    // The union should hold a valid const char* (from Symbol interning)
-    EXPECT_NE(cand.mValue.mVariantName, nullptr);
-    EXPECT_STREQ(cand.mValue.mVariantName, "some_variant");
 }

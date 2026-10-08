@@ -1,7 +1,8 @@
-// DC3 Native Port - RndTex & RndBitmap loading
-// Replaces engine_stubs_generated.cpp stubs for RndTex::Load/PreLoad/PostLoad
-// and RndBitmap::Load. These must consume the correct bytes from the stream
-// to keep it aligned for subsequent object loading in .milo files.
+// DC3 Native Port - RndBitmap loading
+// Replaces the engine_stubs_generated.cpp stub for RndBitmap::Load. It must
+// consume the correct bytes from the stream to keep it aligned for subsequent
+// object loading in .milo files. (RndTex::Load/PreLoad/PostLoad used to be
+// shadowed here too; native now runs the image's bodies in rndobj/Tex.cpp.)
 
 #include "rndobj/Tex.h"
 #include "rndobj/Bitmap.h"
@@ -38,49 +39,5 @@ void RndBitmap::Load(BinStream &bs) {
         working_h = working_h >> 1;
         newMip->Create(working_w, working_h, 0, mBpp, mOrder, mPalette, 0, 0);
         ReadChunks(bs, newMip->Pixels(), newMip->PixelBytes(), 0x8000);
-    }
-}
-
-// --- RndTex::Load ---
-void RndTex::Load(BinStream &bs) {
-    PreLoad(bs);
-    PostLoad(bs);
-}
-
-// --- RndTex::PreLoad ---
-// Reads revision, superclass, and texture properties.
-// Pushes revision to rev stack for PostLoad to pop.
-// Based on DC3 Save: SAVE_REVS(11, 0), SAVE_SUPERCLASS(Object),
-//   bs << mWidth << mHeight << mBpp << mFilepath
-void RndTex::PreLoad(BinStream &bs) {
-    LOAD_REVS(bs);
-#ifdef HX_NATIVE
-    if (d.rev > 20) {
-        printf("  RndTex::PreLoad '%s': BAD REVISION %d, stream desync!\n", Name(), d.rev);
-        return;
-    }
-#endif
-    LOAD_SUPERCLASS(Hmx::Object)
-    d.stream >> mWidth >> mHeight >> mBpp >> mFilepath;
-    bs.PushRev(packRevs(d.altRev, d.rev), this);
-}
-
-// --- RndTex::PostLoad ---
-// Reads remaining properties and bitmap data.
-// Based on DC3 Save: bs << mMipMapK << mType << (bool)mNumMips << mOptimizeForPS3;
-//   if (bs.Cached()) mBitmap.Save(bs);
-void RndTex::PostLoad(BinStream &bs) {
-    int revs = bs.PopRev(this);
-    unsigned short rev = getHmxRev(revs);
-
-    bs >> mMipMapK;
-    bs >> (int &)mType;
-    bool numMips;
-    bs >> numMips;
-    mNumMips = numMips;
-    bs >> mOptimizeForPS3;
-
-    if (bs.Cached()) {
-        mBitmap.Load(bs);
     }
 }
