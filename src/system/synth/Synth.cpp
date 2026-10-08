@@ -42,10 +42,6 @@
 #include "synth\Sfx.h"
 #include "synth\StreamNull.h"
 #include "synth\SynthSample.h"
-#ifdef HX_NATIVE
-#include "synth\StandardStream.h"
-#include "synth\VorbisReader.h"
-#endif
 #include "synth\WavMgr.h"
 #include "utl\Cache.h"
 #include "utl/Loader.h"
@@ -237,55 +233,26 @@ void Synth::Poll() {
     }
 }
 
+// The null synth's streams. Native's real streams come from NativeSynth
+// (native/src/platform/Synth_Stub.cpp), which overrides all four of these the
+// way Synth360 does; the base class is only ever the null synth
+// (use_null_synth, or a platform synth that Fail()s), and there the image
+// hands out StreamNull and a fake file.
 Stream *Synth::NewStream(const char *filename, float f1, float f2, bool) {
-#ifdef HX_NATIVE
-    File *file;
-    Symbol ext;
-    NewStreamFile(filename, file, ext);
-    return new StandardStream(file, f1, f2, ext, true, true, false);
-#else
     return new StreamNull(f1);
-#endif
 }
 
 Stream *Synth::NewBufStream(const void *buf, int size, Symbol ext, float f1, bool b1) {
-#ifdef HX_NATIVE
-    File *file = new BufFile(buf, size);
-    return new StandardStream(file, 0, f1, ext, b1, true, false);
-#else
     return new StreamNull(f1);
-#endif
 }
 
 void Synth::NewStreamFile(const char *cc, File *&file, Symbol &sym) {
-#ifdef HX_NATIVE
-    // Resolve mogg file from ark/filesystem
-    String path(MakeString("%s.mogg", cc));
-    file = NewFile(path.c_str(), 2); // 2 = kRead
-    sym = "mogg";
-    if (!file) {
-        // Fallback: try without .mogg extension
-        file = NewFile(cc, 2);
-        sym = "mogg";
-    }
-    if (!file) {
-        static char gFakeFile[16];
-        file = new BufFile(gFakeFile, sizeof(gFakeFile));
-        sym = "fake";
-    }
-#else
     static char gFakeFile[16];
     file = new BufFile(gFakeFile, sizeof(gFakeFile));
     sym = "fake";
-#endif
 }
 
 StreamReader *Synth::NewStreamDecoder(File *file, StandardStream *stream, Symbol ext) {
-#ifdef HX_NATIVE
-    if (ext == "mogg" || ext == "main") {
-        return new VorbisReader(file, true, stream, true);
-    }
-#endif
     return nullptr;
 }
 
