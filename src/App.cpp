@@ -509,22 +509,19 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
-    // Subsystem inits that other code dereferences without null checks
-    // (AccomplishmentManager before MetagameRank since Init() uses
-    // TheAccomplishmentMgr). FixedSizeSaveable/HamUserMgr moved up to the
-    // image's position, after SystemInit.
-    AccomplishmentManager::Init(SystemConfig("accomplishment_info"));
-    MetagameRank::Preinit(); // sets gRanksArray, needed by MetagameRank methods
-    MetagameRank::Init();
-    PartyModeMgr::Init();
-
-    // Set path eval callback to skip loading unnecessary assets based on game mode.
-    // Same callback used in PPC path — filters out mode-specific loads.
+    // Image order from here: SetPathEvalCallback right after GameInit, then
+    // ContextCheckerInit, (Kinect sXShowCallback), AccomplishmentManager::Init,
+    // MetagameRank::Init. MetagameRank::Preinit already ran in MetaPanel::Init
+    // (image position); native used to call it a second time here.
+    // FixedSizeSaveable/HamUserMgr run earlier, after SystemInit (w23-g12).
     DirLoader::SetPathEvalCallback(IsUselessLoad);
 
     // Register DTA script functions (random_context, etc.) so DTA handlers that
     // reference them don't silently fail. This is critical for DTA handler execution.
     ContextCheckerInit();
+
+    AccomplishmentManager::Init(SystemConfig("accomplishment_info"));
+    MetagameRank::Init();
 
     // $extra_songs, as the image sets it before TheUI->Init (ContentMgr's
     // refresh reads it to decide how many content alt dirs to enumerate;
@@ -584,6 +581,9 @@ App::App(int argc, char **argv) {
     // GotoFirstScreen (native used to create them right after HamInit).
     MoveMgr::Init(0);
     MiniGameMgr::Init();
+    // PartyModeMgr last, right before GotoFirstScreen, as in the image (native
+    // used to run it before the UI init).
+    PartyModeMgr::Init();
 
     // Inject native-only locale strings via MagnuStrings (checked first by
     // Locale::Localize, English-only, normally unused on native).
