@@ -136,6 +136,7 @@ FAKE_DC3 = textwrap.dedent("""\
         def do_POST(self):
             expr = self.rfile.read(int(self.headers["Content-Length"])).decode()
             data = {"type": "int", "value": 2} if expr == "{+ 1 1}" else \\
+                   {"type": "int", "value": 0} if expr == "{ui in_transition}" else \\
                    {"type": "string", "value": "title_screen"}
             body = json.dumps({"ok": True, "data": data}).encode()
             self.send_response(200)
@@ -232,6 +233,23 @@ class NativeBootPort(unittest.TestCase):
             b.wait_ready(deadline_s=20)
         self.assertEqual(b.attempt, 1)
         self.assertIn("FAKE_CRASH_MARKER", str(cm.exception))
+
+
+class KeepFailure(unittest.TestCase):
+    def test_outputs_are_copied_and_bounded(self):
+        with tempfile.TemporaryDirectory() as d:
+            work = Path(d)
+            for n in ("native.log", "native.log.2", "compare.json", "native_capture.json"):
+                (work / n).write_text(n)
+            for i in range(G._KEEP_FAILURES + 3):
+                (work / "failures" / f"0000-{i:03d}").mkdir(parents=True)
+            G._keep_failure(work, "3 open row(s)")
+            kept = sorted((work / "failures").iterdir())
+            self.assertEqual(len(kept), G._KEEP_FAILURES)
+            newest = kept[-1]
+            self.assertEqual((newest / "why.txt").read_text(), "3 open row(s)\n")
+            for n in ("native.log", "native.log.2", "compare.json", "native_capture.json"):
+                self.assertEqual((newest / n).read_text(), n)
 
 
 if __name__ == "__main__":

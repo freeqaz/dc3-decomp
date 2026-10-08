@@ -12,7 +12,16 @@ DC3_HTTP=1 ./dc3-native
 
 # Custom port (default 9090)
 DC3_HTTP=1 DC3_HTTP_PORT=8080 ./dc3-native
+
+# Kernel-assigned free port; the chosen one is printed on stdout as
+# DC3_HTTP_PORT=<n> (the race-free choice for scripts and parallel tests)
+DC3_HTTP=1 DC3_HTTP_PORT=0 ./dc3-native | grep -m1 '^DC3_HTTP_PORT='
 ```
+
+An explicit port that is already taken aborts the process (`[HttpServer] FATAL:
+port N already in use`, rc 134). A harness that picks a "free" port itself and
+passes it in is racy under load — any ephemeral socket can take it before
+dc3-native binds; use `DC3_HTTP_PORT=0` and read the stdout line instead.
 
 ## Endpoints
 
@@ -421,5 +430,5 @@ print(f"Frame {tel['data']['frame']}, beat {tel['data']['beat']}")
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DC3_HTTP` | `0` | Set to `1` to enable the server |
-| `DC3_HTTP_PORT` | `9090` | Port to listen on |
+| `DC3_HTTP_PORT` | `9090` | Port to listen on. `0` or `auto` = kernel-assigned, reported on stdout as `DC3_HTTP_PORT=<n>` |
 | `DC3_FAST_BOOT` | `0` | Set to `1` to skip boot screens in 10 frames instead of ~360 |

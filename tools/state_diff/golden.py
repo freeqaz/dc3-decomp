@@ -33,6 +33,7 @@ import json
 import math
 import os
 import re
+import shutil
 import signal
 import socket
 import struct
@@ -495,7 +496,10 @@ class NativeBoot:
                     in_use = _PORT_IN_USE in self.cur_log_path.read_bytes()
                 except OSError:
                     pass
-                if in_use and self.attempt < self.attempts:
+                # An explicit --env DC3_HTTP_PORT pins every attempt to the same
+                # port, so retrying it would only collide again.
+                if in_use and self.attempt < self.attempts \
+                        and "DC3_HTTP_PORT" not in self.extra_env:
                     _log(f"dc3-native: port collision on attempt {self.attempt} "
                          f"(rc={rc}); relaunching on another port")
                     self._launch(str(_free_port()))
@@ -515,7 +519,12 @@ class NativeBoot:
                 if r.ok and str(r.value) == "2":
                     # Let boot settle past the first screen.
                     scr = t.eval_dta("{if_else {ui current_screen} {{ui current_screen} name} none}")
-                    if scr.ok and scr.text == self.boot_screen:
+                    # ...and out of the transition: UIManager::Handle returns 0
+                    # for every UI read while InTransition() (UI.cpp), so a probe
+                    # that starts mid-transition reads suppressed values.
+                    trn = t.eval_dta("{ui in_transition}")
+                    if scr.ok and scr.text == self.boot_screen and trn.ok \
+                            and str(trn.value) in ("0", "False", "false"):
                         time.sleep(2.0)  # let the screen's enter settle
                         return t
             except TransportError:
@@ -668,6 +677,12 @@ def cmd_check(a):
         sys.exit(77)
     work = Path(a.work_dir or f"/tmp/xenia-golden-check-{os.getpid()}")
     work.mkdir(parents=True, exist_ok=True)
+    # A previous run's capture/compare must not survive a run that dies before
+    # writing its own: the work dir is fixed per test, and a stale passing
+    # compare.json next to a failed boot is exactly what a diagnosis reads.
+    for stale in _CHECK_OUTPUTS:
+        for f in work.glob(stale):
+            f.unlink()
     extra_env = dict(kv.split("=", 1) for kv in a.env)
     boot = NativeBoot(binary, work / "native.log", extra_env=extra_env)
     try:
@@ -678,6 +693,10 @@ def cmd_check(a):
                "probe_spec_sha256": probe_spec_hash(), "milos": {}}
         for i, milo in enumerate(manifest["milos"]):
             cap["milos"][milo] = probe.capture_milo(milo, f"$xg_d{i}")
+    except BaseException as e:
+        boot.stop()
+        _keep_failure(work, f"boot/capture failed: {type(e).__name__}: {e}")
+        raise
     finally:
         boot.stop()
     (work / "native_capture.json").write_text(json.dumps(cap, indent=1, sort_keys=True))
@@ -692,7 +711,30 @@ def cmd_check(a):
           f"perturbed {manifest['perturbed_subsystems']}")
     print_report(res, limit=a.limit)
     (work / "compare.json").write_text(json.dumps(res, indent=1))
+    if res["open"]:
+        _keep_failure(work, f"{res['open']} open row(s)")
     sys.exit(1 if res["open"] else 0)
+
+
+#: What one `check` run writes into its work dir.
+_CHECK_OUTPUTS = ("native.log", "native.log.*", "native_capture.json", "compare.json")
+_KEEP_FAILURES = 10
+
+
+def _keep_failure(work: Path, why: str) -> None:
+    """Copy this run's outputs to work/failures/<stamp>/ so the next run (the
+    gate's rerun, typically) cannot overwrite the only evidence of a flake.
+    The 2026-10-08 stack-33/37 XeniaGolden failures were lost exactly that way."""
+    dst = work / "failures" / f"{time.strftime('%Y%m%dT%H%M%S')}-{os.getpid()}"
+    dst.mkdir(parents=True, exist_ok=True)
+    for pat in _CHECK_OUTPUTS:
+        for f in work.glob(pat):
+            shutil.copy2(f, dst / f.name)
+    (dst / "why.txt").write_text(why + "\n")
+    kept = sorted((work / "failures").iterdir())
+    for old in kept[:-_KEEP_FAILURES]:
+        shutil.rmtree(old, ignore_errors=True)
+    print(f"failure evidence kept in {dst}", file=sys.stderr)
 
 
 def main(argv=None):
