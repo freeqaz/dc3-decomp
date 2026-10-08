@@ -87,6 +87,13 @@ HamNavList::~HamNavList() {
 #ifdef HX_NATIVE
     if (ObjectDir::InDeleteObjects()) {
         mListWidgets.clear();
+        // SkeletonUpdate is a global singleton, not a sibling in the dying
+        // dir, so unregistering is safe mid-cascade -- and skipping it left a
+        // dangling callback whenever a list was torn down while still entered.
+        SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+        if (handle.HasCallback(this)) {
+            handle.RemoveCallback(this);
+        }
         delete mDirectionGestureFilter;
         delete mHandHeightFilter;
         return;
