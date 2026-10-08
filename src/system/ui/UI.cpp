@@ -248,25 +248,15 @@ void UIManager::ToggleLoadTimes() {
 
 void UIManager::Draw() {
 #ifdef HX_NATIVE
-    if (false) {
-        printf("DC3 UI::Draw: cam=%p env=%p screen=%s pushed=%d\n",
-               mCam, mEnv,
-               mCurrentScreen ? mCurrentScreen->Name() : "<null>",
-               (int)mPushedScreens.size());
-        if (mCam) {
-            const Vector3& cp = mCam->WorldXfm().v;
-            const Hmx::Matrix3& cm = mCam->WorldXfm().m;
-            printf("  UI cam pos=(%.1f,%.1f,%.1f) near=%.1f far=%.1f fov=%.1f\n",
-                   cp.x, cp.y, cp.z, mCam->NearPlane(), mCam->FarPlane(), mCam->YFov());
-            printf("  UI cam rot: fwd=(%.2f,%.2f,%.2f) up=(%.2f,%.2f,%.2f) right=(%.2f,%.2f,%.2f)\n",
-                   cm.z.x, cm.z.y, cm.z.z, cm.y.x, cm.y.y, cm.y.z, cm.x.x, cm.x.y, cm.x.z);
-        }
-    }
-    // Select the UI camera and environment for screen-space rendering.
-    // On Xbox 360, NgRnd's draw pipeline did this per-panel. Our native
-    // renderer uses a single pass, so we select once before UI draws.
-    RndCam* savedCam = RndCam::Current();
-    RndEnviron* savedEnv = RndEnviron::Current();
+    // w23-g10: the image's Draw selects no camera or environment -- each
+    // PanelDir::DrawShowing selects its CamOverride() (its own cam, else
+    // TheUI->GetCam()) and TheUI->GetEnv(), and restores the caller's cam.
+    // Native used to pre-select [ui.cam] + the UI env here and restore after;
+    // removing that made no visible difference over a boot -> gameplay
+    // screenshot tour (the residual pixel diffs are the animated album-art /
+    // background textures, which differ run to run on the same binary too).
+    // What remains is the env-gated MILO_UI_CAM_MODE diagnostic, which only
+    // mutates [ui.cam]; the default (original) leaves it untouched.
     if (mCam) {
         switch (GetNativeUICamMode()) {
         case kNativeUICamOriginal:
@@ -303,9 +293,7 @@ void UIManager::Draw() {
             break;
         }
         }
-        mCam->Select();
     }
-    if (mEnv) mEnv->Select(nullptr);
 #endif
     for (std::vector<UIScreen *>::iterator it = mPushedScreens.begin();
          it != mPushedScreens.end();
@@ -314,11 +302,6 @@ void UIManager::Draw() {
     }
     if (mCurrentScreen)
         mCurrentScreen->Draw();
-#ifdef HX_NATIVE
-    // Restore previous camera/environment
-    if (savedCam) savedCam->Select();
-    if (savedEnv) savedEnv->Select(nullptr);
-#endif
 }
 
 void UIManager::GotoScreen(const char *name, bool b2, bool b3) {
@@ -475,11 +458,6 @@ bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) {
 
 void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
 #ifdef HX_NATIVE
-    // Skip screens that require campaign/performer session state.
-    if (scr && strstr(scr->Name(), "campaign")) {
-        MILO_WARN("Skipping screen '%s' on native (campaign not supported)", scr->Name());
-        return;
-    }
     if (DebugUIFlow()) printf("DC3 UI: GotoScreenImpl -> '%s' (force=%d, b2=%d)\n",
            scr ? scr->Name() : "<null>", b1, b2);
 #endif
@@ -589,29 +567,6 @@ DataNode UIManager::OnGotoScreen(DataArray const *arr) {
     UIScreen *screen = dynamic_cast<UIScreen *>(obj);
     if (screen == nullptr && obj)
         MILO_FAIL("%s is not a screen", obj->Name());
-
-#ifdef HX_NATIVE
-    // If DTA resolves to null screen (e.g., tutorial exit with missing state),
-    // try falling back to main_screen to avoid dead-end.  NOT the image: its
-    // OnGotoScreen hands the null straight to GotoScreen.  Kept so a native
-    // state gap is not a dead end, but it must never be SILENT: it hid
-    // party mode's bounce (the MultiUserGesturePanel auto-fire started
-    // gameplay with no song, `gamemode get game_screen` was null, and the
-    // player landed on main_screen with nothing logged).  Every hit is a
-    // state gap upstream of this line -- find it, do not trust the bounce.
-    if (screen == nullptr && !obj) {
-        UIScreen *fallback = ObjectDir::Main()->Find<UIScreen>("main_screen", false);
-        if (fallback) {
-            MILO_WARN(
-                "goto_screen from '%s' resolved to no screen (%s:%d); native "
-                "falls back to main_screen",
-                mCurrentScreen ? mCurrentScreen->Name() : "<none>", arr->File(),
-                arr->Line()
-            );
-            screen = fallback;
-        }
-    }
-#endif
 
     if (arr->Size() > 4) {
         GotoScreen(screen, arr->Int(3), arr->Int(4));
@@ -748,6 +703,17 @@ void UIManager::Poll() {
                         if (DebugUIFlow() || fast)
                             fprintf(stderr, "DC3 UI: Boot advance '%s' -> '%s' (after %d frames)\n",
                                    curName, sBoot[i].to, delay);
+                        // This skip stands in for title_screen's NAV_SELECT_MSG on
+                        // title_screen_menu (ui/title/title.dta), which sets
+                        // $post_load_dest_screen to main_screen before going to
+                        // wait_main_after_saveload_screen; that screen's
+                        // saveload_complete then does
+                        // {ui goto_screen $post_load_dest_screen}.  Skipping
+                        // without it handed OnGotoScreen a null screen, which only
+                        // the (now removed, w23-g10) native main_screen fallback
+                        // papered over.
+                        if (!strcmp(sBoot[i].from, "title_screen"))
+                            DataVariable("post_load_dest_screen") = DataNode(Symbol("main_screen"));
                         sStuckScreen = nullptr;
                         sStuckFrames = 0;
                         GotoScreen(next, false, false);
@@ -770,7 +736,16 @@ void UIManager::Poll() {
                 sLastTrans = curTrans;
                 sTransCount = 0;
             }
-            if (sTransCount < 3 || sTransCount % 500 == 0) {
+            // w23-g10: evaluate the probes only when they will be printed.  Run
+            // unconditionally they called Exiting() (a DTA `exiting` HandleType
+            // per panel) and IsBlockingTransition() ahead of -- and, unlike --
+            // the image's short-circuited condition below on every new
+            // transition.
+            bool printTrans = (sTransCount < 3 || sTransCount % 500 == 0);
+#ifndef HX_WEB
+            printTrans = printTrans && DebugUIFlow();
+#endif
+            if (printTrans) {
                 bool loaded = !mTransitionScreen || mTransitionScreen->CheckIsLoaded();
                 bool exited = !mCurrentScreen || !mCurrentScreen->Exiting();
                 bool blocked = IsBlockingTransition();
@@ -782,7 +757,7 @@ void UIManager::Poll() {
                        mCurrentScreen ? mCurrentScreen->Name() : "<null>");
                 fflush(stdout);
 #else
-                if (DebugUIFlow()) printf("DC3 UI: TransitionTo check: loaded=%d exited=%d blocked=%d "
+                printf("DC3 UI: TransitionTo check: loaded=%d exited=%d blocked=%d "
                        "trans='%s' cur='%s'\n",
                        loaded, exited, (int)blocked,
                        curTrans,
