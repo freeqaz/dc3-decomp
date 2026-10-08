@@ -627,9 +627,6 @@ void RndText::FontMap::IncrementDisplayableChars(unsigned short num) {
 
 void ResetFontMapPageMeshFaces(RndMesh *mesh, int numFaces) {
     MILO_ASSERT(mesh, 0x96);
-#ifdef HX_NATIVE
-    if (numFaces <= 0 || numFaces > 100000) return;
-#endif
     mesh->Faces().resize(numFaces);
     std::vector<RndMesh::Face>::iterator it = mesh->Faces().begin();
     std::vector<RndMesh::Face>::iterator itEnd = mesh->Faces().end();
@@ -643,12 +640,6 @@ void ResetFontMapPageMeshFaces(RndMesh *mesh, int numFaces) {
 void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
     for (int i = 0; i < mPages.size(); i++) {
         Page &page = *(mPages[i]);
-#ifdef HX_NATIVE
-        // Guard against garbage displayableChars from font loading issues
-        if (page.displayableChars < 0 || page.displayableChars > 10000) {
-            page.displayableChars = 0;
-        }
-#endif
         if (!page.mesh && mFont && page.displayableChars > 0) {
             page.mesh = Hmx::Object::New<RndMesh>();
 #ifdef HX_NATIVE
@@ -689,19 +680,19 @@ void RndText::FontMap::AllocateMeshes(RndText *text, int fixedLength) {
                 page.mSyncFlags |= 0xA0;
                 mesh->Verts().resize(fixedLength * 4);
             }
+            page.mVertStart = mesh->Verts().begin();
+            MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
 #ifdef HX_NATIVE
-            // Clamp to available verts in native builds
+            // The assert above stops the 360; native Debug::Fail prints and
+            // returns, and SetupCharacter would then write past Verts().
+            // Backstop only -- it cannot fire unless the assert just did.
             if (mesh->Verts().size() < page.displayableChars * 4)
                 page.displayableChars = mesh->Verts().size() / 4;
 #endif
-            page.mVertStart = mesh->Verts().begin();
-#ifndef HX_NATIVE
-            MILO_ASSERT(mesh->Verts().size() >= page.displayableChars * 4, 0xD2);
-#endif
         }
-#ifndef HX_NATIVE
         MILO_ASSERT(!fixedLength || (page.displayableChars <= fixedLength), 0xD5);
-#else
+#ifdef HX_NATIVE
+        // Same non-fatal-assert backstop as above (0xD5).
         if (fixedLength && page.displayableChars > fixedLength)
             page.displayableChars = fixedLength;
 #endif
@@ -1215,8 +1206,6 @@ void RndText::BuildFontMaps(bool b1) {
                 }
             }
         }
-#ifdef HX_NATIVE
-#endif
     }
 }
 
@@ -1864,12 +1853,16 @@ static const unsigned short kTag_nobreak[] = {'n', 'o', 'b', 'r', 'e', 'a', 'k',
 static const unsigned short kTag_alt[] = {'a', 'l', 't', 0};
 
 // Parse up to 'max_vals' space-separated decimal integers from a u16 string buffer.
-// Returns the number of values successfully parsed.
+// Returns the number of values successfully parsed.  Stand-in for the image's
+// swscanf(L"%d ...") on a 2-byte buffer: %d skips all leading white space
+// (\t \n \v \f \r and ' ') and takes an optional '+' or '-'.  This used to
+// skip only ' '/'\t' and reject '+', so "<color 255\n0 0>" or "<&#+65>" parsed
+// differently from the image.
 static int u16_scan_ints(const unsigned short *s, int *vals, int max_vals) {
     int count = 0;
     while (count < max_vals) {
-        // skip spaces
-        while (*s == ' ' || *s == '\t')
+        // skip white space
+        while (*s == ' ' || (*s >= '\t' && *s <= '\r'))
             s++;
         if (*s == 0 || *s == '>')
             break;
@@ -1877,6 +1870,8 @@ static int u16_scan_ints(const unsigned short *s, int *vals, int max_vals) {
         bool neg = false;
         if (*s == '-') {
             neg = true;
+            s++;
+        } else if (*s == '+') {
             s++;
         }
         if (*s < '0' || *s > '9')
