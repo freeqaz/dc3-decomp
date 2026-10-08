@@ -1031,7 +1031,12 @@ void Spotlight::UpdateTransforms() {
     if (mBeam.mBeam) {
         Vector3 ve4(0.0f, mBeam.mOffset, 0.0f);
         mBeam.mBeam->SetLocalPos(ve4);
-        Hmx::Matrix3 m6c(mBeam.mIsCone ? rot : ident);
+        // w22-hx (port of rb3-xenon e7bbfb0f8): a cone keeps the identity
+        // rotation, anything else takes `rot`.  DC3 image 0x828284D8 (objdiff rows 284-288):
+        // `lbz r11, 0x1f8(r30)` (mIsCone); `mr r4, r28` (ident, initialised
+        // first); `bne` keeps it; else `mr r4, r29` (rot).  The arms were
+        // swapped here -- normalized scored the swap as a register permutation.
+        Hmx::Matrix3 m6c(mBeam.mIsCone ? ident : rot);
         Hmx::Matrix3 m90;
         MakeRotMatrix(
             Vector3(
