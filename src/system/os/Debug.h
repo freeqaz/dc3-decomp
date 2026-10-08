@@ -55,6 +55,10 @@ public:
     void Poll();
     void SetDisabled(bool);
     void SetTry(bool);
+#ifdef HX_NATIVE
+    // Native-only: NativeFailDta (MILO_FAIL_DTA) asks whether a MILO_TRY is open.
+    bool InTry() const { return mTry != 0; }
+#endif
     void AddExitCallback(ExitCallbackFunc *func) { mExitCallbacks.push_front(func); }
     void AddFailAppendCallback(FixedStringFunc *func) { mFailAppendCallbacks.push_front(func); }
     void RemoveExitCallback(ExitCallbackFunc *);
@@ -159,9 +163,19 @@ extern const char *kAssertStr;
 
 #define MILO_FAIL(...) TheDebugFailer << MakeString(__VA_ARGS__)
 #define MILO_WARN(...) TheDebugWarner << MakeString(__VA_ARGS__)
-// DTA runtime errors: FAIL on Xbox (shows dialog + Continue), WARN on native
+// DTA runtime errors (DataNode "Data %s is not Int" etc.). The image routes
+// them through TheDebugFailer: inside MILO_TRY that throws the message to the
+// MILO_CATCH (FlowMathOp::Apply keeps result = val, Cheats/Console/Watcher
+// report the bad script); outside it is the fatal modal.
+// Native: inside MILO_TRY the failer, so it throws exactly where the image
+// does (native Debug::Fail throws under the image's conditions). Outside
+// MILO_TRY native fails are non-fatal anyway (platform choice, see
+// Debug::Fail), so the only difference left would be presentation -- and the
+// DTA errors native does hit there are platform absences (net_cache_mgr, no
+// NetCacheMgrXbox; skeleton_identifier, no SkeletonIdentifier) that the
+// HeadlessBootTest FAIL: gate would read as assertions. Those keep warning.
 #ifdef HX_NATIVE
-#define MILO_FAIL_DTA(...) TheDebugWarner << MakeString(__VA_ARGS__)
+#define MILO_FAIL_DTA(...) NativeFailDta(MakeString(__VA_ARGS__))
 #else
 #define MILO_FAIL_DTA(...) TheDebugFailer << MakeString(__VA_ARGS__)
 #endif
@@ -220,6 +234,17 @@ public:
 };
 
 extern DebugFailer TheDebugFailer;
+
+#ifdef HX_NATIVE
+// MILO_FAIL_DTA, native: the image's failer inside MILO_TRY (throws to the
+// MILO_CATCH), a non-fatal warning outside it.
+inline void NativeFailDta(const char *msg) {
+    if (TheDebug.InTry())
+        TheDebugFailer << msg;
+    else
+        TheDebugWarner << msg;
+}
+#endif
 
 class DebugNotifyOncePrinter {
     char msg[0x100];

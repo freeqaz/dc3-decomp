@@ -11,6 +11,7 @@
 #include "os/Debug.h"
 #include "utl/BufStream.h"
 
+#include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #include <string>
@@ -381,5 +382,72 @@ TEST_F(DtaIncludeTest, MultipleIncludesInSequence) {
     EXPECT_EQ(arr->Int(0), 1);
     EXPECT_EQ(arr->Int(1), 2);
     EXPECT_EQ(arr->Int(2), 3);
+    arr->Release();
+}
+
+// ============================================================================
+// DTA type errors and MILO_TRY (w23-dta)
+// ============================================================================
+// MILO_FAIL_DTA is the "Data %s is not Int/Symbol/String/..." diagnostic in
+// DataNode/DataArray/Object. In the image it is TheDebugFailer, so inside a
+// MILO_TRY the type error throws to the MILO_CATCH (Debug::Fail: `if (mTry)
+// { mTry--; throw msg; }`) -- e.g. FlowMathOp::Apply's bad script expression
+// keeps result = val and posts a notify. Native used to route it through
+// TheDebugWarner, which never throws: the try body carried on with the
+// reinterpreted value (a Symbol's pointer bits read as an int) and the
+// MILO_CATCH never ran.
+
+class DtaTypeErrorTest : public SymbolTestFixture {};
+
+TEST_F(DtaTypeErrorTest, TypeErrorInsideMiloTryReachesCatch) {
+    DataArray *arr = ParseDTA("not_an_int");
+    ASSERT_NE(arr, nullptr);
+    ASSERT_EQ(arr->Size(), 1);
+    ASSERT_EQ(arr->Type(0), kDataSymbol);
+
+    bool bodyFinished = false;
+    bool caught = false;
+    std::string caughtMsg;
+    MILO_TRY {
+        int bogus = arr->Int(0); // "Data not_an_int is not Int"
+        (void)bogus;
+        bodyFinished = true;
+    }
+    MILO_CATCH(msg) {
+        caught = true;
+        caughtMsg = msg ? msg : "";
+    }
+    arr->Release();
+
+    EXPECT_TRUE(caught) << "a DTA type error inside MILO_TRY must throw to MILO_CATCH, "
+                           "as the image's MILO_FAIL_DTA (TheDebugFailer) does";
+    EXPECT_FALSE(bodyFinished) << "the try body must not run past the type error";
+    EXPECT_NE(caughtMsg.find("is not Int"), std::string::npos) << caughtMsg;
+
+    // The try depth must be balanced afterwards: a second, clean MILO_TRY
+    // body runs to completion and does not throw.
+    bool secondFinished = false;
+    bool secondCaught = false;
+    MILO_TRY { secondFinished = true; }
+    MILO_CATCH(msg2) {
+        (void)msg2;
+        secondCaught = true;
+    }
+    EXPECT_TRUE(secondFinished);
+    EXPECT_FALSE(secondCaught);
+}
+
+TEST_F(DtaTypeErrorTest, TypeErrorOutsideMiloTryIsNonFatal) {
+    const char *fatal = getenv("MILO_FATAL_FAILS");
+    if (fatal && atoi(fatal) != 0)
+        GTEST_SKIP() << "MILO_FATAL_FAILS is set: native fails abort by request";
+    DataArray *arr = ParseDTA("not_an_int");
+    ASSERT_NE(arr, nullptr);
+    // Native fails are non-fatal outside MILO_TRY (platform choice): the call
+    // returns and does not throw.
+    EXPECT_NO_THROW({
+        int bogus = arr->Int(0);
+        (void)bogus;
+    });
     arr->Release();
 }

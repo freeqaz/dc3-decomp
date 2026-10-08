@@ -1006,7 +1006,7 @@ int Hmx::Object::PropertySize(DataArray *prop) {
         } else {
             MILO_FAIL_DTA("%s: property %s not found", PathName(this), name);
 #ifdef HX_NATIVE
-            return 0; // MILO_FAIL_DTA warns on native, so we must bail before null deref
+            return 0; // MILO_FAIL_DTA is non-fatal on native outside MILO_TRY, so bail before the null deref
 #endif
         }
     }
