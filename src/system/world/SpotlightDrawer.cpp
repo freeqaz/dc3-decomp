@@ -710,7 +710,13 @@ void SpotlightDrawer::DrawWorld() {
                     // back through sLights.begin() keeps &sLights live across the
                     // whole loop, which costs one extra callee-saved register and
                     // 16 bytes of frame.
+#ifdef _LIBCPP_VERSION
+                    // libc++ (web) keeps __wrap_iter's pointer constructor private.
+                    it = sLights.begin()
+                        + (const_cast<SpotlightEntry *>(e2) - (SpotlightEntry *)sLights.begin());
+#else
                     it = std::vector<SpotlightEntry>::iterator(const_cast<SpotlightEntry *>(e2));
+#endif
                 } while (it != itEnd);
             }
             if (cur) {
