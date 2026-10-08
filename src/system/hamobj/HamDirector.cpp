@@ -740,28 +740,6 @@ RndPropAnim *HamDirector::SongAnim(int playerIndex) {
     if (TheHamProvider->Property("merge_moves", true)->Int()) {
         RndPropAnim *routineAnim = playerIndex == 0 ? mPlayer1RoutineBuilderAnim
                                                      : mPlayer2RoutineBuilderAnim;
-#ifdef HX_NATIVE
-        // Fallback: the routine builder anim's clip keys are cleared by
-        // SetupRoutineBuilderAnims() and repopulated by the DanceRemixer
-        // (OriginalChoreoRemixer::Reset → SelectMove → InsertMoveInSong).
-        // If the remixer never ran (DTA handlers didn't fire), the routine
-        // builder has zero clip keys. Fall back to the pre-authored song.anim
-        // which has all clip keyframes baked in for the difficulty.
-        if (routineAnim) {
-            static Symbol sClip("clip");
-            PropKeys *clipKeys = routineAnim->GetKeys(this, DataArrayPtr(sClip));
-            if (!clipKeys || clipKeys->NumKeys() == 0) {
-                static int sLog = 0;
-                if (sLog++ < 3)
-                    MILO_LOG("SongAnim(%d): routine builder empty, falling back to expert anim\n", playerIndex);
-                // Use the expert/master anim so mClipKeys == mMasterClipKeys
-                // in ClipPlayer, which routes to PushExpertClip (direct clip
-                // lookup). The PushClip path requires practice-frame mapping
-                // that fails without the full remixer pipeline.
-                return SongAnimByDifficulty(kDifficultyExpert);
-            }
-        }
-#endif
         return routineAnim;
     }
     // With merge_moves=0 (holla_back, campaign outro, practice), use the
@@ -951,18 +929,6 @@ void HamDirector::SetupRoutineBuilderAnims() {
         RndPropAnim *anim = mSongAnims[LegacyDifficulty(hpd->GetDifficulty())];
         if (anim) {
             routineBuilderAnim->Copy(anim, kCopyDeep);
-#ifdef HX_NATIVE
-            // After Copy, PropKeys still target the source HamDirector.
-            // Retarget any pointing to a different HamDirector so camera
-            // shots and visibility commands fire on this director.
-            for (auto it = routineBuilderAnim->mPropKeys.begin();
-                 it != routineBuilderAnim->mPropKeys.end(); ++it) {
-                Hmx::Object *t = (*it)->Target();
-                if (t && t != this && dynamic_cast<HamDirector *>(t)) {
-                    (*it)->SetTarget(this);
-                }
-            }
-#endif
             Symbol syms[3] = { "clip", "move", "practice" };
             for (int j2 = 0; j2 < 3; j2++) {
                 DataArrayPtr ptr(syms[j2]);
