@@ -86,9 +86,16 @@ void UIListSlot::CreateElements(UIList *uilist, int count) {
     }
 }
 
-#ifdef HX_NATIVE
+#ifdef HX_WEB
 // Lazy element creation for async loading: if RootTrans() is now valid
 // but CreateElements was skipped (assets weren't loaded yet), create them now.
+// w23-g10: web-only.  Added for the web port's fetch-driven async loading
+// (e1d68a447, "web port gameplay fixes"); desktop native loads the way the
+// image does and never needed it -- a probe that logged every lazy creation,
+// every Draw short-circuit and every Fill/StartScroll early return fired ZERO
+// times over a boot -> main -> choose_mode -> song_select -> multiuser ->
+// gameplay tour.  Desktop native now runs the image's bodies (Draw fails on a
+// short element list, Fill asserts the index) like the PPC build.
 void UIListSlot::EnsureElements() {
     if (!RootTrans() || !mElements.empty() || mNextElement)
         return;
@@ -115,12 +122,12 @@ void UIListSlot::Draw(
 ) {
     RndTransformable *root = RootTrans();
     if (root) {
-#ifdef HX_NATIVE
+#ifdef HX_WEB
         EnsureElements();
 #endif
         int thesize = drawstate.mElements.size();
         if (thesize > mElements.size()) {
-#ifdef HX_NATIVE
+#ifdef HX_WEB
             return;
 #else
             // The retail build instantiates MakeString<unsigned long, int> here,
@@ -225,7 +232,7 @@ void UIListSlot::Draw(
 
 void UIListSlot::Fill(const UIListProvider &prov, int display, int j, int k) {
     if (RootTrans()) {
-#ifdef HX_NATIVE
+#ifdef HX_WEB
         EnsureElements();
         if ((size_t)display >= mElements.size())
             return;
@@ -237,7 +244,7 @@ void UIListSlot::Fill(const UIListProvider &prov, int display, int j, int k) {
 
 void UIListSlot::StartScroll(int i, bool b) {
     if (b && RootTrans()) {
-#ifdef HX_NATIVE
+#ifdef HX_WEB
         EnsureElements();
         if (!mNextElement)
             return;

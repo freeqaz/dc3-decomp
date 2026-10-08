@@ -59,7 +59,7 @@ public:
 
 private:
     void ClearElements();
-#ifdef HX_NATIVE
+#ifdef HX_WEB
     void EnsureElements();
 #endif
 
