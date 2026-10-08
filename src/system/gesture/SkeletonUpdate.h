@@ -63,15 +63,16 @@ public:
     static SkeletonUpdateHandle InstanceHandle();
 
 #ifdef HX_NATIVE
-    // Native never instantiates sInstance (its ctor needs Xbox LiveCameraInput),
-    // so the SkeletonUpdateHandle-based callback list is never populated. These
-    // static members provide a parallel registry that the native GestureMgr
-    // driver fans out to (see GestureMgr_NativePoll). Static/non-virtual: no
-    // effect on the PPC class ABI or layout.
-    static void AddNativeCallback(SkeletonCallback *cb);
-    static void RemoveNativeCallback(SkeletonCallback *cb);
-    static bool HasNativeCallback(SkeletonCallback *cb);
-    static std::vector<SkeletonCallback *> &NativeCallbacks();
+    // PLATFORM: the image's default camera input is LiveCameraInput::sInstance
+    // (the Kinect NUI device: SkeletonUpdate's ctor, Replace and
+    // SkeletonDir::SetSkeletonClip all fall back to it).  Natively there is no
+    // NUI device; the native sensor (pose provider / static dummy,
+    // native/src/platform/GestureMgr_Native.cpp) is that default, and
+    // SetCameraInput substitutes it for a null argument.  Static: no effect on
+    // the PPC class layout.
+    static void SetNativeDefaultCameraInput(CameraInput *cam) {
+        sNativeDefaultCameraInput = cam;
+    }
 #endif
 
 private:
@@ -91,17 +92,7 @@ private:
     static HANDLE sSkeletonUpdatedEvent;
 
 #ifdef HX_NATIVE
-    static std::vector<SkeletonCallback *> sNativeCallbacks;
-#endif
-
-#ifdef HX_NATIVE
-    // Native-only fallback: provides SkeletonHistory when sInstance is null
-    // (SkeletonUpdate is not instantiated on native because it requires Xbox
-    // threading and NUI hardware). Set by GestureMgr_NativeInit().
-    static const SkeletonHistory *sNativeHistoryFallback;
-public:
-    static void SetNativeHistoryFallback(const SkeletonHistory *h) { sNativeHistoryFallback = h; }
-private:
+    static CameraInput *sNativeDefaultCameraInput;
 #endif
 
     bool mHasNewFrame; // 0x78

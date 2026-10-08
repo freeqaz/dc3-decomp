@@ -11,6 +11,7 @@
 #include "hamobj/HamGameData.h"   // TheGameData (player->skeleton binding)
 #include "hamobj/HamPlayerData.h" // GetSkeletonTrackingID
 #include "obj/Task.h"
+#include "os/Debug.h" // TheDebug.AddExitCallback
 #include <vector>
 #ifdef ENABLE_NCNN
 #include "pose/InternalPoseProvider.h"
@@ -19,47 +20,49 @@
 #include <cstdio>
 #include <cstring>
 
-// Lightweight SkeletonHistory for native -- follows the MocapSkeletonIterator
-// pattern. Inherits SkeletonHistoryArchive (ring buffer storage) and
-// SkeletonHistory (PrevSkeleton lookup). Populated each frame in
-// GestureMgr_NativePoll() to mirror Xbox's SkeletonUpdate::UpdateCallbacks().
-class NativeSkeletonHistory : public SkeletonHistoryArchive, public SkeletonHistory {
+// The native sensor.  On the 360, SkeletonUpdate (the image's skeleton hub:
+// history archive, Skeleton::Poll of six slots, the per-player binding, the
+// callback fan-out) is fed by the Kinect NUI device.  Natively that device is
+// replaced -- PLATFORM -- by this CameraInput, an override camera
+// (IsOverride() true, as CameraInput's own default) whose PollNewFrame()
+// builds a SkeletonFrame from the pose provider (DC3_POSE=internal|external)
+// or, with no provider, the static tracked dummy skeleton.  Everything
+// downstream of that frame is the image's own code: SkeletonUpdate::PostUpdate
+// copies it into mSkeletonFrame, runs Update() itself (the update thread is
+// inactive natively) -> UpdateCallbacks (archive-then-Poll, mSkeletonsLeft by
+// player tracking id, every callback's Update) -> every callback's PostUpdate
+// in registration order -> Skeleton::PostUpdate.  App's "skeleton_post_update"
+// step drives it once per frame, as in the image's main loop.
+class NativeSensorCameraInput : public CameraInput {
 public:
-    bool PrevSkeleton(
-        const Skeleton &s, int targetMs, ArchiveSkeleton &out, int &elapsedMs
-    ) const override {
-        bool found = PrevFromArchive(*this, s, targetMs, out, elapsedMs);
-        // DC3_SCORING_DEBUG=1: once-per-second archive-lookup liveness counters,
-        // so a crash-free run can be distinguished from silently-dead lookups.
-        static bool sDebug = Dc3EnvFlag("DC3_SCORING_DEBUG", false);
-        if (sDebug) {
-            static unsigned sCalls = 0, sHits = 0;
-            static std::chrono::steady_clock::time_point sLastPrint;
-            sCalls++;
-            if (found)
-                sHits++;
-            std::chrono::steady_clock::time_point now =
-                std::chrono::steady_clock::now();
-            if (now - sLastPrint > std::chrono::seconds(1)) {
-                sLastPrint = now;
-                fprintf(stderr, "DC3 SCORING: PrevSkeleton calls=%u hits=%u\n",
-                    sCalls, sHits);
-            }
-        }
-        return found;
-    }
+    const SkeletonFrame *PollNewFrame() override;
 };
 
-static NativeSkeletonHistory *sNativeHistory = nullptr;
+static NativeSensorCameraInput *sSensor = nullptr;
+// App.cpp's move-scoring gate (DC3_NATIVE_SCORING default on, DC3_POSE_SELFTEST
+// forces it): with it off the sensor delivers no frames at all.
+static bool sSensorFeedEnabled = true;
 
-// Minimal CameraInput for native -- reports connected, no real frame data.
-// Only used to satisfy SkeletonUpdateData::mCameraInput pointer.
-class NativeCameraInput : public CameraInput {
-public:
-    const SkeletonFrame *PollNewFrame() override { return nullptr; }
-};
+// The NUI frame clock.  SkeletonUpdate::Update asks NuiSkeletonGetNextFrame
+// whether the sensor produced a new skeleton frame; when it did not and the
+// camera is connected, Update returns without UpdateCallbacks, and the
+// callbacks' PostUpdate get null.  native/src/xbox_link_stubs.cpp's stub calls
+// this hook (it used to report a frame on every call): natively the stream
+// ticks exactly when the active camera input delivered a new frame this
+// PostUpdate, so one provider frame is integrated once however fast the game
+// loop runs.  Defined here, not in the stub file, because dc3-web compiles this
+// file but not xbox_link_stubs.cpp.
+extern "C" {
+HRESULT (*gNativeNuiSkeletonFrameSource)(NUI_SKELETON_FRAME *) = nullptr;
+}
 
-static NativeCameraInput *sNativeCameraInput = nullptr;
+static HRESULT NativeNuiSkeletonFrameSource(NUI_SKELETON_FRAME *) {
+    SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
+    CameraInput *cam = handle.GetCameraInput();
+    // 0x83010001: any failure HRESULT; the image only tests for 0.
+    return (cam && cam->NewFrame()) ? 0 : (HRESULT)0x83010001;
+}
+
 #ifdef ENABLE_NCNN
 static InternalPoseProvider *sInternalPose = nullptr;
 #endif
@@ -84,22 +87,42 @@ static bool NativeWakeNeeded() {
     return !TheGestureMgr || !TheGestureMgr->InControllerMode();
 }
 
-// Native implementation of GestureMgr::Init — replaces the early return stub.
-// Called from game startup to initialize skeleton tracking via webcam + MediaPipe pose.
+// Exit callback, the stand-in for LiveCameraInput::Terminate (which deletes the
+// NUI device and, in its dtor, SkeletonUpdate::Terminate).  Registered before
+// GestureMgr::Terminate, and exit callbacks run LIFO, so the GestureMgr dtor
+// unregisters from a live SkeletonUpdate first, as in the image.  The sensor
+// goes last: SkeletonUpdate's ObjOwnerPtr to it would otherwise re-point the
+// camera input at a dying object.
+static void GestureMgr_NativeSensorTerminate() {
+    gNativeNuiSkeletonFrameSource = nullptr;
+    SkeletonUpdate::Terminate();
+    SkeletonUpdate::SetNativeDefaultCameraInput(nullptr);
+    delete sSensor;
+    sSensor = nullptr;
+}
+
+// Native stand-in for LiveCameraInput::PreInit (GestureMgr::Init calls it
+// before constructing TheGestureMgr): the sensor replaces the NUI device as the
+// default CameraInput, then SkeletonUpdate::Init (the image runs it from the
+// LiveCameraInput ctor) and SkeletonUpdate::CreateInstance, exactly once.
+void GestureMgr_NativePreInit() {
+    if (SkeletonUpdate::HasInstance())
+        return;
+    sSensorFeedEnabled = Dc3EnvFlag("DC3_NATIVE_SCORING", true)
+        || Dc3EnvFlag("DC3_POSE_SELFTEST", false);
+    sSensor = new NativeSensorCameraInput();
+    SkeletonUpdate::SetNativeDefaultCameraInput(sSensor);
+    SkeletonUpdate::Init();
+    SkeletonUpdate::CreateInstance();
+    gNativeNuiSkeletonFrameSource = NativeNuiSkeletonFrameSource;
+    TheDebug.AddExitCallback(GestureMgr_NativeSensorTerminate);
+}
+
+// Native implementation of GestureMgr::Init's device half: the pose provider
+// (webcam + MediaPipe / ncnn) that the sensor reads.
 void GestureMgr_NativeInit() {
     ResetSlotMap();
     JoypadScriptSetWakeNeeded(NativeWakeNeeded);
-
-    // Always create the camera input stub -- needed for PostUpdate pipeline.
-    if (!sNativeCameraInput)
-        sNativeCameraInput = new NativeCameraInput();
-
-    // Create skeleton history so displacement-based scoring works on native.
-    // This replaces SkeletonUpdate's history (which requires Xbox NUI hardware).
-    if (!sNativeHistory) {
-        sNativeHistory = new NativeSkeletonHistory();
-        SkeletonUpdate::SetNativeHistoryFallback(sNativeHistory);
-    }
 
     // In headless mode (tests, CLI tools), skip the pose server entirely.
     // The dummy skeleton in GestureMgr_NativePoll provides a neutral standing
@@ -185,19 +208,16 @@ void GestureMgr_NativeTerminate() {
         delete TheSkeletonProvider;
         TheSkeletonProvider = nullptr;
     }
-    SkeletonUpdate::SetNativeHistoryFallback(nullptr);
+    // The sensor and SkeletonUpdate outlive TheGestureMgr; see
+    // GestureMgr_NativeSensorTerminate.  With the providers gone the sensor
+    // falls back to the dummy frame.
     ResetSlotMap();
-    delete sNativeHistory;
-    sNativeHistory = nullptr;
-    delete sNativeCameraInput;
-    sNativeCameraInput = nullptr;
 }
 
 // Resolve stable slot assignments for this frame's persons. trackIds[k] is the
 // identity of the k-th valid person (k in [0,numValid)); on return
 // personForSlot[slot] is the person index k filling that slot, or -1. Slots
-// whose owner departed are released here (caller MarkUntracked's them). A slot
-// that changes occupants drops its archived poses immediately (see step 3).
+// whose owner departed are released here (the frame reports them untracked).
 // Returns the number of newly-assigned slots (slot reassignments this frame).
 static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
     for (int s = 0; s < NUM_SKELETONS; s++)
@@ -220,30 +240,33 @@ static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
     }
 
     // 2. Release slots whose owner is no longer present.
+    bool releasedNow[NUM_SKELETONS];
     for (int s = 0; s < NUM_SKELETONS; s++) {
-        if (sSlotTrackId[s] >= 0 && personForSlot[s] < 0)
+        releasedNow[s] = false;
+        if (sSlotTrackId[s] >= 0 && personForSlot[s] < 0) {
             sSlotTrackId[s] = -1;
+            releasedNow[s] = true;
+        }
     }
 
-    // 3. New trackIds claim the lowest free slot. A slot changing occupants must
-    //    drop its archived poses HERE, not rely on MarkUntracked's next-frame
-    //    ClearHistory: ArchivePrevFrame already ran this accepted frame, so a
-    //    same-frame free+reclaim (person A leaves, person B enters, both in one
-    //    accepted frame) would otherwise leave A's history under B and corrupt B's
-    //    displacement lookback. ClearHistory is idempotent, so clearing a slot that
-    //    was already free (empty history) is harmless. trackId < 0 is a transient
-    //    untracked detection and never claims a persistent slot (mirrors step 1).
+    // 3. New trackIds claim the lowest free slot -- but never one released in
+    //    THIS frame.  SkeletonUpdate::UpdateCallbacks archives each slot's
+    //    previous pose before polling the new frame (AddToHistory if it was
+    //    tracked, else ClearHistory), so a same-frame free+reclaim (person A
+    //    leaves, person B enters) would file A's last pose as B's history and
+    //    corrupt B's displacement lookback.  Held off one frame, the slot reads
+    //    untracked once and the image's own ClearHistory empties it.  trackId < 0
+    //    is a transient untracked detection and never claims a persistent slot
+    //    (mirrors step 1).
     int reassignments = 0;
     for (int k = 0; k < numValid; k++) {
         if (placed[k] || trackIds[k] < 0) continue;
         for (int s = 0; s < NUM_SKELETONS; s++) {
-            if (sSlotTrackId[s] < 0 && personForSlot[s] < 0) {
+            if (sSlotTrackId[s] < 0 && personForSlot[s] < 0 && !releasedNow[s]) {
                 sSlotTrackId[s] = trackIds[k];
                 personForSlot[s] = k;
-                if (sNativeHistory) sNativeHistory->ClearHistory(s);
-                // Same reasoning applies to the low-confidence joint-hold cache:
-                // a new occupant must not inherit the previous person's held
-                // joint positions.
+                // A new occupant must not inherit the previous person's held
+                // low-confidence joint positions either.
                 NativeSkeletonProvider::ResetJointHold(s);
                 reassignments++;
                 break;
@@ -253,93 +276,51 @@ static int AssignSlots(const int *trackIds, int numValid, int *personForSlot) {
     return reassignments;
 }
 
-// Archive each slot's PREVIOUS finalized pose before it is overwritten, matching
-// Xbox SkeletonUpdate::UpdateCallbacks archive-then-poll ordering. Untracked
-// slots ClearHistory (the Xbox tracking-gap contract). Called once per ACCEPTED
-// frame -- per new provider frame, or every game frame for the static dummy.
-static void ArchivePrevFrame(GestureMgr *mgr) {
-    if (!sNativeHistory) return;
-    for (int i = 0; i < NUM_SKELETONS; i++) {
-        Skeleton &skel = mgr->GetSkeleton(i);
-        if (skel.IsTracked()) {
-            sNativeHistory->AddToHistory(i, skel);
-        } else {
-            sNativeHistory->ClearHistory(i);
-        }
-    }
-}
-
 // Xbox builds SkeletonUpdateData::mSkeletonsLeft as a 2-entry array indexed by
-// PLAYER, by matching each player's assigned skeleton tracking ID against the 6
-// hardware slots (SkeletonUpdate::Update, src/system/gesture/SkeletonUpdate.cpp
-// :390-398; the IDs are snapshotted from HamPlayerData::GetSkeletonTrackingID at
-// :455). mSkeletonsRight is the flat 6-entry SLOT array. Consumers depend on the
-// distinction: FilterQueue::Poll indexes mSkeletonsLeft by inFrame->mSlot, which
-// is a PLAYER index, and HamSkeletonConverter / HamVisDir / FreestyleMotionFilter
-// all loop i < 2 over players.
-//
-// Native previously passed the slot array for BOTH, so player 0 scored only
-// because it happened to occupy slot 0, while player 1 read an untracked slot 1
-// and therefore always took the errors=1.0 short-circuit -- it could never score.
-//
-// SkeletonChooser normally performs the binding (TheGameData->AssignSkeleton), but
-// that UI flow does not necessarily complete in a headless/fast-boot run, so fall
-// back to auto-binding each unbound player to the first unclaimed slot. That
-// mirrors the intent of HamGameData::AutoAssignSkeletons, which has no caller in
-// the decompiled tree. Leaving an entry null is CORRECT when nobody is present --
-// the errors=1.0 path is the right answer for an absent player.
-static Skeleton *sPlayerSkeletons[2];
-
-static void BindPlayerSkeletons(GestureMgr *mgr) {
-    for (int p = 0; p < 2; p++)
-        sPlayerSkeletons[p] = nullptr;
-
-    // Tier 1: the faithful path -- explicit tracking-ID match per player.
+// PLAYER, by matching each player's assigned skeleton tracking ID
+// (HamPlayerData::GetSkeletonTrackingID, snapshotted in SkeletonUpdate::
+// PostUpdate) against the 6 slots in UpdateCallbacks -- natively that is now the
+// image's own code.  The assignment itself comes from SkeletonChooser
+// (TheGameData->AssignSkeleton) and, in EditMode, HamGameData::
+// AutoAssignSkeletons.  NATIVE POLICY, not image behaviour: that UI flow does
+// not complete in a headless/fast-boot run with no gesture input, so a player
+// with no live skeleton is auto-assigned the first unclaimed slot, preferring a
+// quality-filter-valid skeleton and falling back to merely tracked (the static
+// dummy is tracked before its filter has seen enough frames to be valid).  It
+// runs on GestureMgr's skeletons (last frame's, post quality filter) before the
+// frame is handed over, so the binding lands in this frame's snapshot.
+static void NativeAutoAssignPlayers() {
+    if (!TheGameData || !TheGestureMgr)
+        return;
+    const Skeleton *bound[2] = { nullptr, nullptr };
     for (int p = 0; p < 2; p++) {
-        int wantId = -1;
-        if (TheGameData) {
-            HamPlayerData *playerData = TheGameData->Player(p);
-            if (playerData)
-                wantId = playerData->GetSkeletonTrackingID();
-        }
+        HamPlayerData *playerData = TheGameData->Player(p);
+        int wantId = playerData ? playerData->GetSkeletonTrackingID() : -1;
         if (wantId < 0)
             continue;
         for (int s = 0; s < NUM_SKELETONS; s++) {
-            Skeleton &skel = mgr->GetSkeleton(s);
-            if (skel.TrackingID() == wantId) {
-                sPlayerSkeletons[p] = &skel;
+            const Skeleton &skel = TheGestureMgr->GetSkeleton(s);
+            if (skel.IsTracked() && skel.TrackingID() == wantId) {
+                bound[p] = &skel;
                 break;
             }
         }
     }
-
-    // Tiers 2 and 3: auto-bind an unbound player to the first unclaimed slot,
-    // preferring a quality-filter-valid skeleton and falling back to merely
-    // tracked. Tier 3 matters for the static dummy, which is tracked but whose
-    // validity depends on the quality filter having seen enough frames.
     for (int pass = 0; pass < 2; pass++) {
         bool requireValid = (pass == 0);
         for (int p = 0; p < 2; p++) {
-            if (sPlayerSkeletons[p])
+            if (bound[p])
                 continue;
             for (int s = 0; s < NUM_SKELETONS; s++) {
-                Skeleton &skel = mgr->GetSkeleton(s);
+                const Skeleton &skel = TheGestureMgr->GetSkeleton(s);
                 if (requireValid ? !skel.IsValid() : !skel.IsTracked())
                     continue;
-                bool claimed = false;
-                for (int q = 0; q < 2; q++) {
-                    if (sPlayerSkeletons[q] == &skel)
-                        claimed = true;
-                }
-                if (claimed)
+                if (bound[0] == &skel || bound[1] == &skel)
                     continue;
-                sPlayerSkeletons[p] = &skel;
-                if (TheGameData) {
-                    HamPlayerData *playerData = TheGameData->Player(p);
-                    if (playerData
-                        && playerData->GetSkeletonTrackingID() != skel.TrackingID())
-                        TheGameData->AssignSkeleton(p, skel.TrackingID());
-                }
+                bound[p] = &skel;
+                HamPlayerData *playerData = TheGameData->Player(p);
+                if (playerData && playerData->GetSkeletonTrackingID() != skel.TrackingID())
+                    TheGameData->AssignSkeleton(p, skel.TrackingID());
                 break;
             }
         }
@@ -350,7 +331,7 @@ static void BindPlayerSkeletons(GestureMgr *mgr) {
         static int sPrevIdx[2] = { -2, -2 };
         int idx[2];
         for (int p = 0; p < 2; p++)
-            idx[p] = sPlayerSkeletons[p] ? sPlayerSkeletons[p]->SkeletonIndex() : -1;
+            idx[p] = bound[p] ? (int)(bound[p] - &TheGestureMgr->GetSkeleton(0)) : -1;
         if (idx[0] != sPrevIdx[0] || idx[1] != sPrevIdx[1]) {
             sPrevIdx[0] = idx[0];
             sPrevIdx[1] = idx[1];
@@ -411,18 +392,76 @@ static void ScoringDebugTick(bool accepted, bool skipped, int reassigns) {
     }
 }
 
-// Called each frame by GestureMgr::Poll() to update skeleton slots
-// from the pose server (or a dummy skeleton), then run the
-// filtering pipeline.
-void GestureMgr_NativePoll(GestureMgr *mgr) {
+// The sensor's frame.  memset gives every slot the untracked contract the
+// image's own sensorless path (SkeletonUpdate::Update's StubSkeletonFrame arm)
+// uses, except the tracking id, set to -1 per slot below as that arm does.
+static SkeletonFrame sFrame; // 0x11c8 bytes, main thread only
+
+static void BeginSensorFrame(int elapsedMs) {
+    static int sFrameNumber = 0;
+    memset(&sFrame, 0, sizeof(sFrame));
+    sFrame.mFrameNumber = ++sFrameNumber;
+    sFrame.mElapsedMs = elapsedMs;
+    // The providers are upright cameras: floor plane y = 0, up = +y (the same
+    // frame CharCameraInput hands Poll for the fatality targets).
+    sFrame.mFloorNormal.Set(0.0f, 1.0f, 0.0f);
+    sFrame.mFloorClipPlane.Set(0.0f, 1.0f, 0.0f, 0.0f);
+    for (int s = 0; s < NUM_SKELETONS; s++)
+        sFrame.mSkeletonDatas[s].mTrackingID = -1;
+}
+
+// mClippedFlags is read by Skeleton::Poll as the slot's NUI enrollment index;
+// native has no enrollment, so hand back the one the slot already has rather
+// than re-enrolling it every frame.
+static void FinishTrackedSlot(int s) {
+    if (TheGestureMgr) {
+        IdentityInfo *info = TheGestureMgr->GetIdentityInfo(s);
+        if (info)
+            sFrame.mSkeletonDatas[s].mClippedFlags = info->EnrollmentIndex();
+    }
+}
+
+// Lay this frame's persons into their persistent slots.
+static int FillPersonSlots(const NativeSkeletonProvider::PersonData *persons, int numPersons) {
+    int trackIds[NUM_SKELETONS], origIdx[NUM_SKELETONS], numValid = 0;
+    for (int i = 0; i < numPersons && numValid < NUM_SKELETONS; i++) {
+        if (persons[i].valid) {
+            trackIds[numValid] = persons[i].trackId;
+            origIdx[numValid] = i;
+            numValid++;
+        }
+    }
+    int personForSlot[NUM_SKELETONS];
+    int reassigns = AssignSlots(trackIds, numValid, personForSlot);
+    for (int s = 0; s < NUM_SKELETONS; s++) {
+        int k = personForSlot[s];
+        if (k >= 0) {
+            NativeSkeletonProvider::FillSkeletonData(
+                sFrame.mSkeletonDatas[s], persons[origIdx[k]], s
+            );
+            FinishTrackedSlot(s);
+        }
+    }
+    return reassigns;
+}
+
+// A new frame when the provider produced one (it runs at camera rate, slower
+// than the game loop: re-integrating the same generation would dilute the
+// displacement lookback), null otherwise.  With no provider running, the static
+// tracked dummy in slot 0 is a new frame every game frame.  Since move scoring
+// is DEFAULT-ON (App.cpp's DC3_NATIVE_SCORING gate) that dummy is the
+// default-run SCORING INPUT: it drives the whole pipeline (archive-before-poll
+// -> FilterQueue::Poll -> MoveDir) every frame and yields a deterministic
+// DetectFrac ~0 -- the correct "player standing still" signal.  Keep it TRACKED:
+// untracked would break ShellInput::HasSkeleton()/SkeletonChooser::Poll and drop
+// scoring to the errors=1.0 short-circuit.  A transient 0-person dropout from a
+// running provider stays on the provider branch (every slot reads untracked)
+// and never reaches the dummy.
+static const SkeletonFrame *BuildSensorFrame() {
     bool providerRunning = false;
+    bool newFrame = false;
 
 #ifdef ENABLE_NCNN
-    // Try internal pose pipeline first. Gate the archive+fill+finalize block on
-    // a NEW worker frame: the worker runs at camera rate, so re-integrating the
-    // same generation at game rate would dilute the displacement lookback. When
-    // no new frame arrived, tracked slots keep their pose+history untouched
-    // (the camera is just slower than the game loop -- nobody disappeared).
     if (sInternalPose && sInternalPose->IsRunning()) {
         providerRunning = true;
         sInternalPose->Poll();
@@ -430,51 +469,22 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
         static unsigned sNcnnLastGen = 0;
         static bool sNcnnHaveGen = false;
         unsigned gen = sInternalPose->Generation();
-        bool newFrame = !sNcnnHaveGen || gen != sNcnnLastGen;
+        newFrame = !sNcnnHaveGen || gen != sNcnnLastGen;
         sNcnnHaveGen = true;
         sNcnnLastGen = gen;
 
         if (newFrame) {
-            int elapsedMs = AcceptedFrameElapsed();
-            ArchivePrevFrame(mgr);
-
+            BeginSensorFrame(AcceptedFrameElapsed());
             NativeSkeletonProvider::PersonData persons[NativeSkeletonProvider::kMaxPersons];
             int numPersons = 0;
             sInternalPose->FillPersonData(persons, NativeSkeletonProvider::kMaxPersons, numPersons);
-
-            int trackIds[NUM_SKELETONS], origIdx[NUM_SKELETONS], numValid = 0;
-            for (int i = 0; i < numPersons && numValid < NUM_SKELETONS; i++) {
-                if (persons[i].valid) {
-                    trackIds[numValid] = persons[i].trackId;
-                    origIdx[numValid] = i;
-                    numValid++;
-                }
-            }
-            int personForSlot[NUM_SKELETONS];
-            int reassigns = AssignSlots(trackIds, numValid, personForSlot);
-
-            // Use a temporary NativeSkeletonProvider to access FillSkeleton
-            // (which has friend access to Skeleton's protected members)
-            static NativeSkeletonProvider sFillHelper;
-            for (int s = 0; s < NUM_SKELETONS; s++) {
-                Skeleton &skel = mgr->GetSkeleton(s);
-                int k = personForSlot[s];
-                if (k >= 0) {
-                    sFillHelper.FillSkeleton(skel, persons[origIdx[k]]);
-                    NativeSkeletonProvider::FinalizeSkeletonFrame(skel, s, elapsedMs);
-                } else if (skel.IsTracked()) {
-                    NativeSkeletonProvider::MarkUntracked(skel);
-                }
-            }
-            ScoringDebugTick(true, false, reassigns);
+            ScoringDebugTick(true, false, FillPersonSlots(persons, numPersons));
         } else {
             ScoringDebugTick(false, true, 0);
         }
     }
 #endif
 
-    // Fall back to external pose server. Same new-frame gating on the socket
-    // packet frame_id.
     if (!providerRunning && TheSkeletonProvider && TheSkeletonProvider->IsRunning()) {
         providerRunning = true;
         TheSkeletonProvider->Poll();
@@ -482,105 +492,51 @@ void GestureMgr_NativePoll(GestureMgr *mgr) {
         static uint32_t sExtLastFrameId = 0;
         static bool sExtHaveFrame = false;
         uint32_t frameId = TheSkeletonProvider->FrameId();
-        bool newFrame = !sExtHaveFrame || frameId != sExtLastFrameId;
+        newFrame = !sExtHaveFrame || frameId != sExtLastFrameId;
         sExtHaveFrame = true;
         sExtLastFrameId = frameId;
 
         if (newFrame) {
-            int elapsedMs = AcceptedFrameElapsed(TheSkeletonProvider->Timestamp());
-            ArchivePrevFrame(mgr);
-
+            BeginSensorFrame(AcceptedFrameElapsed(TheSkeletonProvider->Timestamp()));
+            static NativeSkeletonProvider::PersonData sPersons[NativeSkeletonProvider::kMaxPersons];
             int numPersons = TheSkeletonProvider->NumPersons();
-            int trackIds[NUM_SKELETONS], origIdx[NUM_SKELETONS], numValid = 0;
-            for (int i = 0; i < numPersons && numValid < NUM_SKELETONS; i++) {
-                if (TheSkeletonProvider->GetPerson(i).valid) {
-                    trackIds[numValid] = TheSkeletonProvider->GetPerson(i).trackId;
-                    origIdx[numValid] = i;
-                    numValid++;
-                }
-            }
-            int personForSlot[NUM_SKELETONS];
-            int reassigns = AssignSlots(trackIds, numValid, personForSlot);
-
-            for (int s = 0; s < NUM_SKELETONS; s++) {
-                Skeleton &skel = mgr->GetSkeleton(s);
-                int k = personForSlot[s];
-                if (k >= 0) {
-                    TheSkeletonProvider->FillSkeleton(skel, origIdx[k]);
-                    NativeSkeletonProvider::FinalizeSkeletonFrame(skel, s, elapsedMs);
-                } else if (skel.IsTracked()) {
-                    NativeSkeletonProvider::MarkUntracked(skel);
-                }
-            }
-            ScoringDebugTick(true, false, reassigns);
+            for (int i = 0; i < numPersons; i++)
+                sPersons[i] = TheSkeletonProvider->GetPerson(i);
+            ScoringDebugTick(true, false, FillPersonSlots(sPersons, numPersons));
         } else {
             ScoringDebugTick(false, true, 0);
         }
     }
 
     if (!providerRunning) {
-        // No pose provider running at all — provide a dummy skeleton in slot 0
-        // so skeleton-gated code paths (scroll behavior, enter anims) still run.
-        // Now that move-scoring is DEFAULT-ON (App.cpp DC3_NATIVE_SCORING gate),
-        // this static tracked dummy is the default-run SCORING INPUT: it exercises
-        // the whole pipeline (archive-before-fill -> FilterQueue::Poll -> MoveDir
-        // fan-out) every frame, yielding a deterministic DetectFrac ~0 (the correct
-        // "player standing still" signal). Keep it TRACKED — MarkUntracked would
-        // break ShellInput::HasSkeleton()/SkeletonChooser::Poll and silently drop
-        // scoring coverage to the errors=1.0 short-circuit.
-        // The static dummy pose treats every game frame as a new frame (harmless
-        // -- it never moves). Remaining slots stay untracked. A transient
-        // 0-person dropout from a running provider intentionally does NOT reach
-        // here (see MarkUntracked above) so slot 0 history is never poisoned.
         ResetSlotMap();
-        int elapsedMs = AcceptedFrameElapsed();
-        ArchivePrevFrame(mgr);
-        Skeleton &slot0 = mgr->GetSkeleton(0);
-        NativeSkeletonProvider::FillDummySkeleton(slot0);
-        NativeSkeletonProvider::FinalizeSkeletonFrame(slot0, 0, elapsedMs);
-        for (int i = 1; i < NUM_SKELETONS; i++) {
-            Skeleton &skel = mgr->GetSkeleton(i);
-            if (skel.IsTracked()) {
-                NativeSkeletonProvider::MarkUntracked(skel);
-            }
-        }
+        BeginSensorFrame(AcceptedFrameElapsed());
+        NativeSkeletonProvider::FillDummySkeletonData(sFrame.mSkeletonDatas[0]);
+        FinishTrackedSlot(0);
+        newFrame = true;
     }
 
-    // Set active skeleton so GetActiveSkeletonTrackingID() returns a
-    // valid ID and HamNavList::Poll() finds our skeleton.
+    if (!newFrame)
+        return nullptr;
+    NativeAutoAssignPlayers();
+    return &sFrame;
+}
+
+const SkeletonFrame *NativeSensorCameraInput::PollNewFrame() {
+    if (!sSensorFeedEnabled)
+        return nullptr;
+    return BuildSensorFrame();
+}
+
+// Called each frame by GestureMgr::Poll().  The skeleton pipeline no longer runs
+// here -- it is SkeletonUpdate's, driven from App's skeleton_post_update step.
+void GestureMgr_NativePoll(GestureMgr *mgr) {
+    // NATIVE POLICY (pre-existing, not image behaviour): seed the active
+    // skeleton id so GetActiveSkeletonTrackingID() is valid and HamNavList::Poll
+    // finds a skeleton; the image gets it from the Kinect shell flow.
     if (mgr->GetActiveSkeletonTrackingID() <= 0) {
         mgr->SetActiveSkeletonTrackingID(1);
     }
-
-    // Run the quality filter + identity tracking pipeline.
-    // On Xbox this is done by SkeletonUpdate's thread; on native we
-    // do it synchronously here.
-    Skeleton *skelPtrs[NUM_SKELETONS];
-    for (int i = 0; i < NUM_SKELETONS; i++) {
-        skelPtrs[i] = &mgr->GetSkeleton(i);
-    }
-
-    SkeletonUpdateData data(skelPtrs, skelPtrs, nullptr, sNativeHistory, sNativeCameraInput);
-
-    // GestureMgr::PostUpdate reads only mSkeletonsRight (the slot array), and it
-    // refreshes the quality filter that Skeleton::IsValid consults -- so bind the
-    // per-PLAYER array after it, and before the scoring callbacks that consume
-    // mSkeletonsLeft.
-    mgr->PostUpdate(&data);
-    BindPlayerSkeletons(mgr);
-    data.mSkeletonsLeft = sPlayerSkeletons;
-
-    // Drive the SkeletonUpdate scoring callbacks (MoveDir/Game/HamVisDir) that
-    // Xbox runs from SkeletonUpdate::UpdateCallbacks/PostUpdate. Update() must
-    // run before PostUpdate() (PostUpdateFilters reads the FilterQueue::Poll
-    // output produced by Update). mgr->PostUpdate above (GestureMgr identity
-    // tracking) is orthogonal and intentionally kept.
-    std::vector<SkeletonCallback *> cbs =
-        SkeletonUpdate::NativeCallbacks(); // copy: callbacks may register/unregister
-    for (size_t i = 0; i < cbs.size(); i++)
-        cbs[i]->Update(data);
-    for (size_t i = 0; i < cbs.size(); i++)
-        cbs[i]->PostUpdate(&data);
 }
 
 #endif // HX_NATIVE

@@ -34,9 +34,14 @@ SkeletonUpdateHandle::~SkeletonUpdateHandle() { sCritSec.Exit(); }
 
 std::vector<SkeletonCallback *> &SkeletonUpdateHandle::Callbacks() {
 #ifdef HX_NATIVE
-    // Native never creates sInstance (CreateInstance only runs in the Xbox
-    // LiveCameraInput path), so InstanceHandle() hands back a handle wrapping a
-    // null mInst. Mirror every sibling accessor's null-guard instead of deref'ing.
+    // Natively sInstance exists from GestureMgr::Init (GestureMgr_NativePreInit,
+    // the stand-in for LiveCameraInput::PreInit) until its exit callback.  The
+    // null-instance arms in this region only serve handles taken OUTSIDE that
+    // window -- native unit-test processes that never boot the gesture system,
+    // and teardown after SkeletonUpdate::Terminate -- where the image would
+    // assert (InstanceHandle, 0x146) and fault; MILO_ASSERT is non-fatal
+    // natively, so they keep those processes alive.  A running game never
+    // takes them.
     static std::vector<SkeletonCallback *> sEmpty;
     if (!mInst) return sEmpty;
 #endif
@@ -88,9 +93,6 @@ void SkeletonUpdateHandle::PostUpdate() {
 }
 
 const SkeletonHistory *SkeletonUpdateHandle::History() const {
-#ifdef HX_NATIVE
-    if (!mInst) return SkeletonUpdate::sNativeHistoryFallback;
-#endif
     return mInst;
 }
 
@@ -109,8 +111,7 @@ SkeletonUpdate *SkeletonUpdate::sInstance;
 HANDLE SkeletonUpdate::sNewSkeletonEvent;
 HANDLE SkeletonUpdate::sSkeletonUpdatedEvent;
 #ifdef HX_NATIVE
-const SkeletonHistory *SkeletonUpdate::sNativeHistoryFallback = nullptr;
-std::vector<SkeletonCallback *> SkeletonUpdate::sNativeCallbacks;
+CameraInput *SkeletonUpdate::sNativeDefaultCameraInput = nullptr;
 #endif
 
 DWORD SkeletonUpdateThread(LPVOID) {
@@ -147,7 +148,15 @@ SkeletonUpdate::SkeletonUpdate()
     );
     memset(mNUISkeletonFrame, 0, sizeof(NUI_SKELETON_FRAME));
     memset(&mSkeletonFrame, 0, sizeof(SkeletonFrame));
-#ifndef HX_NATIVE
+#ifdef HX_NATIVE
+    // PLATFORM: no NUI skeleton thread natively (nothing signals
+    // sNewSkeletonEvent).  This is the image's own thread-inactive mode
+    // (toggle_skeletal_update_thread): PostUpdate runs Update() itself, on the
+    // main thread, before the callbacks' PostUpdate.  A null handle makes the
+    // dtor's WaitForSingleObject/CloseHandle fail fast instead of blocking.
+    mIsUpdateThreadActive = false;
+    mUpdateThread = nullptr;
+#else
     mUpdateThread = CreateThread(nullptr, 0, SkeletonUpdateThread, nullptr, 4, nullptr);
     XSetThreadProcessor(mUpdateThread, 5);
     ResumeThread(mUpdateThread);
@@ -184,6 +193,13 @@ bool SkeletonUpdate::Replace(ObjRef *from, Hmx::Object *to) {
 }
 
 void SkeletonUpdate::SetCameraInput(CameraInput *cam_input) {
+#ifdef HX_NATIVE
+    // PLATFORM: every caller's fallback is LiveCameraInput::sInstance, the NUI
+    // device, which is null natively; the native sensor stands in for it (see
+    // SetNativeDefaultCameraInput).
+    if (!cam_input)
+        cam_input = sNativeDefaultCameraInput;
+#endif
     MILO_ASSERT(cam_input, 0x165);
     mCameraInput = cam_input;
     FOREACH (it, mCallbacks) {
@@ -200,29 +216,6 @@ void SkeletonUpdate::Terminate() { RELEASE(sInstance); }
 bool SkeletonUpdate::HasInstance() { return sInstance; }
 void *SkeletonUpdate::NewSkeletonEvent() { return sNewSkeletonEvent; }
 
-#ifdef HX_NATIVE
-std::vector<SkeletonCallback *> &SkeletonUpdate::NativeCallbacks() {
-    return sNativeCallbacks;
-}
-
-bool SkeletonUpdate::HasNativeCallback(SkeletonCallback *cb) {
-    return VectorFind(sNativeCallbacks, cb);
-}
-
-void SkeletonUpdate::AddNativeCallback(SkeletonCallback *cb) {
-    if (!VectorFind(sNativeCallbacks, cb)) {
-        sNativeCallbacks.push_back(cb);
-    }
-}
-
-void SkeletonUpdate::RemoveNativeCallback(SkeletonCallback *cb) {
-    std::vector<SkeletonCallback *>::iterator it =
-        std::find(sNativeCallbacks.begin(), sNativeCallbacks.end(), cb);
-    if (it != sNativeCallbacks.end()) {
-        sNativeCallbacks.erase(it);
-    }
-}
-#endif
 
 void SkeletonUpdate::Update() {
     LONGLONG prevFrame = mNUISkeletonFrame->liTimeStamp.QuadPart;
@@ -563,6 +556,11 @@ void SkeletonUpdate::PostUpdate() {
         Update();
     }
     if (mHasNewFrame) {
+#ifdef HX_NATIVE
+        // PLATFORM: no LiveCameraInput (NUI device) natively to mirror the
+        // frame into; the active camera input already holds it.
+        if (LiveCameraInput::sInstance)
+#endif
         LiveCameraInput::sInstance->SetNewFrame(&mSkeletonFrame);
     }
     // w19-c (99.988 -> 100): built through SkeletonUpdateData's five-argument

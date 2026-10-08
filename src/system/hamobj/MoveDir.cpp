@@ -310,20 +310,16 @@ MoveDir::~MoveDir() {
     // cascade is destroying objects (c6dad61c8). The "ham_move" overlay and the
     // skeleton callback list are globals, not siblings in the dying dir, so
     // they are released on both paths as in the image -- returning before them
-    // left the overlay's callback and the native skeleton callback dangling.
+    // left the overlay's callback and the skeleton callback dangling.
     if (!ObjectDir::InDeleteObjects())
 #endif
     delete mDancerViz;
-#ifdef HX_NATIVE
-    SkeletonUpdate::RemoveNativeCallback(this);
-#else
     if (SkeletonUpdate::HasInstance()) {
         SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
         if (handle.HasCallback(this)) {
             handle.RemoveCallback(this);
         }
     }
-#endif
 }
 
 BEGIN_HANDLERS(MoveDir)
@@ -1333,20 +1329,12 @@ void MoveDir::ReloadScoring() {
 
 void MoveDir::ResetDetection() {
     if (TheHamDirector) {
-#ifdef HX_NATIVE
-        // sInstance is never created on native, so register into the native
-        // callback registry that GestureMgr_NativePoll fans out to instead.
-        if (!SkeletonUpdate::HasNativeCallback(this)) {
-            SkeletonUpdate::AddNativeCallback(this);
-        }
-#else
         if (SkeletonUpdate::HasInstance()) {
             SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
             if (!handle.HasCallback(this)) {
                 handle.AddCallback(this);
             }
         }
-#endif
         MILO_ASSERT(TheGameData, 0x642);
         for (int i = 0; i < 2; i++) {
             HamPlayerData *player_data = TheGameData->Player(i);

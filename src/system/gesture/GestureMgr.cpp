@@ -160,12 +160,21 @@ BEGIN_HANDLERS(GestureMgr)
     HANDLE_SUPERCLASS(Hmx::Object)
 END_HANDLERS
 
+#ifdef HX_NATIVE
+void GestureMgr_NativePreInit();
+#endif
 void GestureMgr_NativeInit();
 void GestureMgr_NativeTerminate();
 void GestureMgr_NativePoll(GestureMgr *);
 
 void GestureMgr::Init() {
 #ifdef HX_NATIVE
+    // PLATFORM stand-in for LiveCameraInput::PreInit: no NUI device, so the
+    // native sensor becomes the default CameraInput, then -- as the image's
+    // PreInit does -- SkeletonUpdate::Init/CreateInstance and the exit callback
+    // that terminates them, all BEFORE the GestureMgr ctor registers itself as
+    // the first SkeletonUpdate callback.
+    GestureMgr_NativePreInit();
     TheGestureMgr = new GestureMgr();
     TheGestureMgr->SetName("gesture_mgr", ObjectDir::Main());
     TheDebug.AddExitCallback(GestureMgr::Terminate);
@@ -204,9 +213,10 @@ void GestureMgr::Terminate() {
 
 void GestureMgr::Poll() {
 #ifdef HX_NATIVE
-    // Native skeleton source (pose provider / dummy) and the SkeletonUpdate
-    // callback fan-out -- PLATFORM: there is no NUI skeleton stream.  It used
-    // to REPLACE the body below (eeb43f6a8, no reason recorded), so natively
+    // Native-only active-skeleton seeding (GestureMgr_Native.cpp).  The native
+    // skeleton source is the SkeletonUpdate camera input, driven from App's
+    // skeleton_post_update step as on the 360.  This call used to
+    // REPLACE the body below (eeb43f6a8, no reason recorded), so natively
     // WaveToTurnOnLight::Poll never ran: its no-world and 40 s timeout arms,
     // which send wave_gesture_complete to TheHamProvider, are game logic that
     // runs on the image with or without a Kinect (mWaveStateEnabled stays false

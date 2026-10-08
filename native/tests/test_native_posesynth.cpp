@@ -73,14 +73,16 @@ TEST(HamUserPadNumTest, EnrolledPadStillComesFromTheIdentifier) {
 // native provider hand-filled mJointPos[kCoordCamera] only (FillSkeleton +
 // FinalizeSkeletonFrame), so every limb coordinate of a live native skeleton
 // was a stale zero -- the target, polled by the image's Poll from
-// CharCameraInput, had real ones.
+// CharCameraInput, had real ones.  The sensor now hands SkeletonUpdate a
+// SkeletonFrame (FillSkeletonData) and the image's Poll does the rest; this
+// pins that the slot data it writes is the NUI-shaped data Poll expects.
 // ---------------------------------------------------------------------------
 #include "platform/Skeleton_Native.h"
 #include "math/Mtx.h"
 
 namespace {
 
-// FillDummySkeleton's standing pose, one arm raised so the limbs are not
+// FillDummySkeletonData's standing pose, one arm raised so the limbs are not
 // degenerate.
 void StandingPose(NativeSkeletonProvider::PersonData &p) {
     static const float kPose[kNumJoints][3] = {
@@ -104,11 +106,15 @@ TEST(NativeSkeletonPollTest, LiveSkeletonCarriesTheLimbCoordinateSystems) {
     NativeSkeletonProvider::PersonData person;
     StandingPose(person);
 
-    // native: the provider's fill + finalize, as GestureMgr_NativePoll does it
-    static NativeSkeletonProvider helper;
+    // native: the sensor's slot data (GestureMgr_Native.cpp BuildSensorFrame),
+    // then the image's Skeleton::Poll, as SkeletonUpdate::UpdateCallbacks runs it
+    static SkeletonFrame nativeFrame; // 0x11c8 bytes
+    memset(&nativeFrame, 0, sizeof(nativeFrame));
+    nativeFrame.mElapsedMs = 33;
+    nativeFrame.mFloorNormal.Set(0, 1, 0);
+    NativeSkeletonProvider::FillSkeletonData(nativeFrame.mSkeletonDatas[2], person, 2);
     Skeleton native;
-    helper.FillSkeleton(native, person);
-    NativeSkeletonProvider::FinalizeSkeletonFrame(native, 2, 33);
+    native.Poll(2, nativeFrame);
 
     // image: Skeleton::Poll on the equivalent SkeletonFrame
     static SkeletonFrame frame; // 0x11c8 bytes

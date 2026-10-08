@@ -840,8 +840,10 @@ App::App(int argc, char **argv) {
 //  - TheRockCentral is polled un-Init'd: ThePlatformMgr.IsConnected() is false on
 //    native, so it never logs in; its only other work goes to DingoServerNative,
 //    whose ManageJob/Poll are no-ops (native/src/platform/DingoSvr_Native.cpp).
-//  - SkeletonUpdate::sInstance is never created on native (LiveCameraInput is
-//    Xbox-only), so the PostUpdate handle is the native no-op null handle.
+//  - SkeletonUpdate is created natively by GestureMgr::Init (behind the native
+//    sensor CameraInput, GestureMgr_Native.cpp), so skeleton_post_update runs
+//    the image's whole skeleton step: sensor frame -> Update -> every
+//    callback's Update, then PostUpdate in registration order.
 //  - The gesture poll keeps its DC3_NATIVE_SCORING / DC3_POSE_SELFTEST gate.
 //  - The callers keep their own draw (crash guard, ImGui, HTTP, PumpAudio) in
 //    place of DrawRegular, and do not reproduce TheHiResScreen/CaptureHiRes or
@@ -877,14 +879,13 @@ static void Dc3NativeFramePoll() {
     }
     {
         START_AUTO_TIMER("gesture_poll");
-        // Move-scoring pipeline (DEFAULT-ON; opt-out DC3_NATIVE_SCORING=0).
-        // App::Run (Xbox) polls TheGestureMgr every frame; the native loops once
-        // omitted it, so GestureMgr_NativePoll -- which drives the pose->skeleton
-        // pipeline AND the move-scoring callback fan-out (MoveDir) -- never ran,
-        // leaving DetectFrac identically 0. With a real provider
+        // Move-scoring pipeline (DEFAULT-ON; opt-out DC3_NATIVE_SCORING=0, which
+        // also stops the native sensor's frames -- GestureMgr_Native.cpp).
+        // The skeleton feed and the callback fan-out (MoveDir, Game, ...) run in
+        // skeleton_post_update below, as in the image. With a real provider
         // (DC3_POSE=external|internal) it scores the live player; with
         // DC3_POSE_SELFTEST the choreography's own reference pose is fed and
-        // DetectFrac -> ~1.0; with NO provider GestureMgr_NativePoll fills a static
+        // DetectFrac -> ~1.0; with NO provider the native sensor feeds a static
         // TRACKED dummy skeleton so the entire pipeline (archive-before-fill ->
         // FilterQueue::Poll -> MoveDir callback fan-out) runs deterministically and
         // DetectFrac is ~0 -- that near-zero is the correct "standing still"
