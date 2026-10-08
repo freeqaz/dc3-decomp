@@ -205,20 +205,6 @@ void HamRibbon::UpdateChase() {
         }
 
         Key<Transform> key;
-#ifdef HX_NATIVE
-        unsigned int numKeys = mChaseKeys.size();
-        // Native: copy elements down first, then resize.
-        // STLport doesn't bounds-check operator[], libstdc++ does —
-        // the original code accesses past-end-of-vector after resize.
-        key.frame = 0.0f;
-        key.value = Transform::IDXfm();
-        if (removeCount > 0 && removeCount < numKeys) {
-            for (int i = 0; i < numKeys - removeCount; ++i) {
-                mChaseKeys[i] = mChaseKeys[i + removeCount];
-            }
-        }
-        mChaseKeys.resize(numKeys - removeCount, key);
-#else
         for (unsigned int srcIdx = removeCount, dstIdx = 0; srcIdx < mChaseKeys.size();
              srcIdx++, dstIdx++) {
             mChaseKeys[dstIdx] = mChaseKeys[srcIdx];
@@ -230,7 +216,6 @@ void HamRibbon::UpdateChase() {
         // the `followed` copy (stfs at 0x824C7AFC).
         key.frame = 0.0f;
         key.value = Transform::IDXfm();
-#endif
         if (mChaseKeys.size() == 0) {
             key.frame = now;
             key.value.v = followed;
