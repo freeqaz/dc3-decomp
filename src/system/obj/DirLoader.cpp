@@ -456,69 +456,18 @@ void SyncObjectsGlitchCB(float ms, void *v) {
     MILO_LOG("%s %s SyncObjects took %.2f ms\n", dir->ClassName(), path, ms);
 }
 
-#ifdef HX_NATIVE
-// Normalize a file path by resolving ".." and "." segments, lowercasing,
-// and converting backslashes. Used so DirLoader sharing works even when
-// the same milo file is referenced via different relative paths
-// (e.g. "world/shared/gen/director.milo_xbox" vs
-//  "world/glitterati/gen/../../shared/gen/director.milo_xbox").
-static bool PathsEqualNormalized(const FilePath &a, const FilePath &b) {
-    if (a == b)
-        return true;
-    char bufA[256], bufB[256], tmpA[256], tmpB[256];
-    strncpy(tmpA, a.c_str(), sizeof(tmpA) - 1);
-    tmpA[sizeof(tmpA) - 1] = '\0';
-    strncpy(tmpB, b.c_str(), sizeof(tmpB) - 1);
-    tmpB[sizeof(tmpB) - 1] = '\0';
-    FileMakePathBuf(".", tmpA, bufA);
-    FileMakePathBuf(".", tmpB, bufB);
-    bool eq = strcmp(bufA, bufB) == 0;
-    // Log matches for director sharing debugging
-    static int sLogCount = 0;
-    if (sLogCount < 5 && (strstr(tmpA, "director") || strstr(tmpB, "director"))) {
-        if (eq) {
-            sLogCount++;
-            fprintf(stderr, "DC3 DirLoader MATCH #%d: '%s' == '%s'\n", sLogCount, tmpA, tmpB);
-        }
-    }
-    return eq;
-}
-#endif
 
 DirLoader *DirLoader::Find(const FilePath &fp) {
     if (!fp.empty()) {
-#ifdef HX_NATIVE
-        static int sFindLog = 0;
-        bool isDirector = strstr(fp.c_str(), "director") != nullptr;
-        if (isDirector && sFindLog < 3) {
-            sFindLog++;
-            const std::list<Loader *> &ldrs2 = TheLoadMgr.Loaders();
-            fprintf(stderr, "DC3 DirLoader::Find('%s') — %d active loaders:\n",
-                    fp.c_str(), (int)ldrs2.size());
-            int i = 0;
-            for (auto it = ldrs2.begin(); it != ldrs2.end() && i < 10; ++it, ++i) {
-                fprintf(stderr, "  [%d] '%s'\n", i, (*it)->LoaderFile().c_str());
-            }
-        }
-#endif
         const std::list<Loader *> &ldrs = TheLoadMgr.Loaders();
         for (std::list<Loader *>::const_iterator it = ldrs.begin(); it != ldrs.end();
              ++it) {
-#ifdef HX_NATIVE
-            if (PathsEqualNormalized((*it)->LoaderFile(), fp)) {
-#else
             if ((*it)->LoaderFile() == fp) {
-#endif
                 DirLoader *dl = dynamic_cast<DirLoader *>(*it);
                 if (dl)
                     return dl;
             }
         }
-#ifdef HX_NATIVE
-        if (isDirector && sFindLog <= 3) {
-            fprintf(stderr, "DC3 DirLoader::Find('%s') — NOT FOUND\n", fp.c_str());
-        }
-#endif
     }
     return nullptr;
 }
@@ -545,11 +494,7 @@ DirLoader *DirLoader::FindLast(const FilePath &fp) {
         for (std::list<Loader *>::const_reverse_iterator it = ldrs.rbegin();
              it != ldrs.rend();
              ++it) {
-#ifdef HX_NATIVE
-            if (PathsEqualNormalized((*it)->LoaderFile(), fp)) {
-#else
             if ((*it)->LoaderFile() == fp) {
-#endif
                 DirLoader *dl = dynamic_cast<DirLoader *>(*it);
                 if (dl)
                     return dl;
@@ -835,18 +780,6 @@ void DirLoader::LoadObjs() {
 #endif
         } else {
             Hmx::Object *obj = mObjects.front();
-#ifdef HX_NATIVE
-            if (obj) {
-                void **vptr = *(void ***)obj;
-                if (!vptr || !vptr[0]) {
-                    MILO_NOTIFY("DirLoader: STUB vtable '%s' class='%s' in '%s'",
-                                obj->Name(), obj->ClassName().Str(), mFile.c_str());
-                    if (mRev > 1) ReadDead(*mStream);
-                    mObjects.pop_front();
-                    continue;
-                }
-            }
-#endif
             if (obj) {
                 if (!mPostLoad) {
                     MemPoint pt(MemPoint::kInitType0);
@@ -1026,22 +959,11 @@ void DirLoader::CreateObjects() {
             obj = Hmx::Object::NewObject(classSym);
             EndMemTrackObjectName();
 #ifdef HX_NATIVE
-            bool nativeStub = false;
+            // NewObject asserts "Unknown class" (fatal on the 360) and returns
+            // null natively; the image never reaches SetName with a null.
             if (!obj) {
                 MILO_NOTIFY("DirLoader: NewObject returned null for class %s in %s",
                             classSym.Str(), mFile.c_str());
-                nativeStub = true;
-            } else {
-                void **vptr = *(void ***)obj;
-                if (!vptr || !vptr[0]) {
-                    MILO_NOTIFY("DirLoader: STUB vtable for class %s in %s",
-                                classSym.Str(), mFile.c_str());
-                    obj = nullptr;
-                    nativeStub = true;
-                }
-            }
-            if (nativeStub) {
-                RELEASE(obj);
             } else
 #endif
                 if (mRev == 0x16 && dynamic_cast<class ObjectDir *>(obj)) {
