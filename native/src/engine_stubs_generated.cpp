@@ -103,9 +103,9 @@ int NuiFitnessPauseTracking() { HX_STUB_TRACE("NuiFitnessPauseTracking"); return
 int NuiFitnessResumeTracking() { HX_STUB_TRACE("NuiFitnessResumeTracking"); return 0; }
 int NuiFitnessStartTracking() { HX_STUB_TRACE("NuiFitnessStartTracking"); return 0; }
 int NuiFitnessStopTracking() { HX_STUB_TRACE("NuiFitnessStopTracking"); return 0; }
-int NuiIdentityAbort() { HX_STUB_TRACE("NuiIdentityAbort"); return 0; }
+// NuiIdentityAbort: typed definition in xbox_link_stubs.cpp (desktop + web).
 // NuiIdentityGetEnrollmentInformation: typed definition in xbox_link_stubs.cpp.
-int NuiIdentityIdentify() { HX_STUB_TRACE("NuiIdentityIdentify"); return 0; }
+// NuiIdentityIdentify: typed definition in xbox_link_stubs.cpp (desktop + web).
 int NuiImageStreamGetNextFrame() { HX_STUB_TRACE("NuiImageStreamGetNextFrame"); return 0; }
 int NuiImageStreamOpen() { HX_STUB_TRACE("NuiImageStreamOpen"); return 0; }
 int NuiImageStreamReleaseFrame() { HX_STUB_TRACE("NuiImageStreamReleaseFrame"); return 0; }

@@ -114,6 +114,23 @@ HRESULT NuiIdentityEnroll(DWORD, int, DWORD, NUI_IDENTITY_CALLBACK *, VOID *) {
     return 0;
 }
 
+// PLATFORM: no Kinect identity pipeline.  Moved here from the untyped
+// generated stubs (which are compiled out under __EMSCRIPTEN__) so web links a
+// definition too: ShellInput::Init now builds the SkeletonIdentifier, whose
+// Poll reaches Skeleton::RequestIdentity -> NuiIdentityIdentify, and
+// GestureMgr::SetIdentificationEnabled can reach NuiIdentityAbort.  Same
+// return as before (0): Identify "completes" synchronously with no
+// enrollment, which IdentityInfo::PostUpdate reports as unidentified.
+HRESULT NuiIdentityIdentify(DWORD, DWORD, NUI_IDENTITY_CALLBACK *, VOID *) {
+    HX_STUB_TRACE("NuiIdentityIdentify");
+    return 0;
+}
+
+HRESULT NuiIdentityAbort() {
+    HX_STUB_TRACE("NuiIdentityAbort");
+    return 0;
+}
+
 // PLATFORM: no Kinect identity store natively, so no enrollment slot is in
 // use -- report every slot empty (dwEnrollmentFlags == 0), which is what
 // SkeletonIdentifier::UpdateEnrolledPlayers reads as "nobody enrolled" (pad -1).
