@@ -458,11 +458,6 @@ bool UIManager::BlockHandlerDuringTransition(Symbol s, DataArray *da) {
 
 void UIManager::GotoScreenImpl(UIScreen *scr, bool b1, bool b2) {
 #ifdef HX_NATIVE
-    // Skip screens that require campaign/performer session state.
-    if (scr && strstr(scr->Name(), "campaign")) {
-        MILO_WARN("Skipping screen '%s' on native (campaign not supported)", scr->Name());
-        return;
-    }
     if (DebugUIFlow()) printf("DC3 UI: GotoScreenImpl -> '%s' (force=%d, b2=%d)\n",
            scr ? scr->Name() : "<null>", b1, b2);
 #endif
