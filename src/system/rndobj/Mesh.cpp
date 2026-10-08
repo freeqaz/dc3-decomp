@@ -812,10 +812,18 @@ float RndMesh::GetDistanceToPlane(const Plane &p, Vector3 &v) {
         Vector3 v58;
         Multiply(Verts()[0].pos, world, v58);
         v = v58;
-        float dot = p.Dot(v);
+        // w22-a29 FLOAT-TOWARD-IMAGE: the image sums each plane distance as
+        // (b*y + c*z) + a*x + d -- fmuls/fmadds on the y,z pair first, then
+        // `fmadds f0,f10,f0,f13` (a*x) and `fadds f31,f0,f9` (+d), and the
+        // same (pair) + a*x + d shape in the loop.  Plane::Dot's flat
+        // a*x + b*y + c*z + d is re-sorted by /fp:fast on the Xbox but
+        // evaluated left-to-right natively, so it is spelled out here with
+        // the image's grouping.  Order INSIDE the pair is inert on MSVC
+        // (both spellings emit the same fmuls/fmadds pick).
+        float dot = (p.c * v.z + p.b * v.y) + p.a * v.x + p.d;
         for (auto it = Verts().begin(); it != Verts().end(); ++it) {
             Multiply(it->pos, world, v58);
-            float dotted = p.Dot(v58);
+            float dotted = (p.b * v58.y + p.c * v58.z) + p.a * v58.x + p.d;
             if (std::fabs(dotted) < std::fabs(dot)) {
                 dot = dotted;
                 v = v58;
