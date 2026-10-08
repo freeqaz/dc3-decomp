@@ -469,6 +469,10 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
+    // MidiParser factory, in the image's position (after CharInit, before
+    // WorldInit/HamInit -- native used to register it after the UI init).
+    MidiParser::Init();
+
     // World system
     WorldInit();
     if (showSplash && TheSplasher) TheSplasher->Poll();
@@ -483,49 +487,12 @@ App::App(int argc, char **argv) {
     if (showSplash) emscripten_sleep(0);
 #endif
 
-    // Override HamLabel factory → AppLabel (DC3-specific subclass).
-    // HamInit() registers HamLabel::NewObject for "HamLabel"; we replace it
-    // with AppLabel::NewObject so .milo deserialization creates AppLabel
-    // instances, which MainMenuProvider::Text dynamic_casts to.
-    REGISTER_OBJ_FACTORY(AppLabel)
+    // (The AppLabel factory is registered by MetaPanel::Init, as in the image;
+    // native used to register it a second time here.)
 
-    // Ensure player providers exist — ham_init.dta normally creates these via DTA,
-    // but if the config chain fails on native, players have null mProvider which
-    // breaks SkeletonChooser::GetPlayerSide(), HamPlayerData::Side(), etc.
-    if (TheGameData) {
-        for (int i = 0; i < 2; i++) {
-            HamPlayerData *pd = TheGameData->Player(i);
-            if (pd && !pd->Provider()) {
-                char providerName[32];
-                snprintf(providerName, sizeof(providerName), "player_provider_%d", i + 1);
-                // Check if DTA already created it but didn't wire it up
-                PropertyEventProvider *provider =
-                    ObjectDir::Main()->Find<PropertyEventProvider>(providerName, false);
-                if (!provider) {
-                    provider = Hmx::Object::New<PropertyEventProvider>();
-                    provider->SetName(providerName, ObjectDir::Main());
-                }
-                // Wire provider to player data via property sync
-                DataNode provNode(provider);
-                pd->SetProperty(Symbol("provider"), provNode);
-                // Set side: player 0 = right, player 1 = left (matches ham_init.dta)
-                static Symbol side("side");
-                static Symbol player_present("player_present");
-                provider->SetProperty(side, i == 0 ? 1 : 0); // kSkeletonRight=1, kSkeletonLeft=0
-                // Mark both players as present so the full HUD renders
-                // (hud_left for player 1, hud_right for player 0).
-                // On Xbox, both sides show in crew/party mode.
-                provider->SetProperty(player_present, 1);
-                MILO_LOG("DC3 Native: Created player provider '%s' (side=%d)\n",
-                        providerName, i == 0 ? 1 : 0);
-            }
-        }
-    }
-
-    // MoveMgr — creates SuperEasyRemixer, SongLayout, loads category.dta.
-    // Must be after HamInit() which registers the SongLayout factory.
-    MoveMgr::Init(0);
-    MiniGameMgr::Init();
+    // (player_provider_1/2 are created and wired by config/ham_init.dta,
+    // which HamInit executes -- native used to re-create them here "if the
+    // config chain fails", forcing player_present=1; it never fired.)
 
     // Song manager
     TheHamSongMgr.Init();
@@ -550,10 +517,6 @@ App::App(int argc, char **argv) {
     MetagameRank::Preinit(); // sets gRanksArray, needed by MetagameRank methods
     MetagameRank::Init();
     PartyModeMgr::Init();
-
-    // Register MidiParser factory so .milo files can deserialize MidiParser objects.
-    // Missing this caused silent null returns from NewObject("MidiParser").
-    MidiParser::Init();
 
     // Set path eval callback to skip loading unnecessary assets based on game mode.
     // Same callback used in PPC path — filters out mode-specific loads.
@@ -582,14 +545,17 @@ App::App(int argc, char **argv) {
     TheContentMgr.RefreshSynchronously();
     MILO_LOG("DC3 Native: ContentMgr::RefreshSynchronously returned\n");
 
-    // UI system — use the global TheHamUI (game-specific UIManager subclass)
-    // for proper two-pass draw pipeline (letterbox, blacklight, helpbar, shell input)
-    // HamUI::Init() calls UIEventMgr::Init() + UIManager::Init() internally
-    TheUI = &TheHamUI;
-    TheHamUI.Init();
     // Register smart stub objects for DTA scripts that reference Xbox managers.
     // These return sensible defaults so DTA handlers execute correctly instead
     // of silently failing. See DTA_FLOW_V2_PLAN.md Phase 1.
+    // Registered BEFORE the UI init: in the image the real managers are named
+    // long before it (PlatformMgr in SystemInit, SaveLoadManager right after
+    // the common bank), and ui/init.dta already sends
+    // {platform_mgr set_notify_ui_location ...} during TheUI->Init -- which
+    // failed natively with "platform_mgr not function or object" when the stub
+    // was registered after it. profile_mgr/content_mgr/challenges already
+    // exist by now (ProfileMgr/ContentMgr/Challenges Init), so those stubs are
+    // deleted again, as before.
     {
         auto registerStub = [](const char *name, Hmx::Object *obj) {
             if (!ObjectDir::Main()->FindObject(name, false, false)) {
@@ -606,6 +572,18 @@ App::App(int argc, char **argv) {
         registerStub("challenges", new Hmx::Object());
         registerStub("speech_mgr", new NativeSpeechMgrStub());
     }
+
+    // UI system — use the global TheHamUI (game-specific UIManager subclass)
+    // for proper two-pass draw pipeline (letterbox, blacklight, helpbar, shell input)
+    // HamUI::Init() calls UIEventMgr::Init() + UIManager::Init() internally
+    TheUI = &TheHamUI;
+    TheHamUI.Init();
+
+    // MoveMgr (creates SuperEasyRemixer/SongLayout, loads category.dta) and
+    // MiniGameMgr, in the image's position: after TheUI->Init and before
+    // GotoFirstScreen (native used to create them right after HamInit).
+    MoveMgr::Init(0);
+    MiniGameMgr::Init();
 
     // Inject native-only locale strings via MagnuStrings (checked first by
     // Locale::Localize, English-only, normally unused on native).
