@@ -239,14 +239,9 @@ void MemFree(void *mem, const char *file, int line, const char *name) {
         }
         if (gMemTracker) {
             MemTrackFree(mem);
-#ifdef HX_NATIVE
-            // On LP64, mHeapOnly is at a different offset and mHeapStats shifts
-            // Skip heap stats tracking on native — not critical for functionality
-#else
             if (((char *)gMemTracker)[0x18195]) {
                 ((HeapStats *)((char *)gMemTracker + 0xC))[(signed char)i].Free(freed, freed);
             }
-#endif
         }
 #endif
     }
@@ -415,9 +410,12 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
 #ifdef HX_NATIVE
     // Native keeps the host allocator: gHeaps/MemHeap are Xbox boot state that
     // never gets built here, so the heap walk below has nothing to walk.
-    if (iSizeBytes <= 0)
+    // A zero-byte request still gets a distinct live block, as the image's
+    // heap gives one (GetSizeWords rounds 0 up to a minimum block); only a
+    // negative size, which the image asserts on, comes back null.
+    if (iSizeBytes < 0)
         return nullptr;
-    return malloc(iSizeBytes);
+    return malloc(iSizeBytes ? iSizeBytes : 1);
 #else
     MILO_ASSERT(iSizeBytes >= 0, 0x384);
     CritSecTracker tracker(gMemLock);
