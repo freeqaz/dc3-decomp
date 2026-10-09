@@ -1098,6 +1098,13 @@ DataNode OnToggleSongRecordDouble(DataArray *a) {
 // `i + 1` into the divide arm -- worse).  Only a SECOND counter
 // (`i = j + 1` at the bottom of a `j` loop) produces an increment-through-a-
 // temp, and it emits two copies (r27 and r28), not the image's one.
+// w24-c2 (98.936, unchanged, nothing built): re-read the listing -- 1 delete
+// (`mr r29, r10` at row 53) + 13 register-only rows (r8/r9/r10 rename the
+// extra copy causes); every value, address and branch target agrees, so no
+// behaviour question. The image's in-loop `i + 1` is NOT CSE'd with the
+// post-loop `addi r10, r29, 1` (row 59), and r29 must survive the operator==
+// call, so the scratch is a genuine second value -- consistent with w21-bn's
+// probe. Floor stands.
 DataNode OnCycleTestDancer(DataArray *) {
     HamPlayerData *player_data = TheGameData->Player(0);
     MILO_ASSERT(player_data, 0xaf);
