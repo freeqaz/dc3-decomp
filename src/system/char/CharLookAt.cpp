@@ -30,6 +30,14 @@ inline void Multiply(const Hmx::Matrix3 &m, const Vector3 &v, Vector3 &out) {
 // operand order inside each pair, so it still picks a different product for
 // the fmuls (row 0 y: image fmuls a.x.z*b.z.y, probe a.x.y*b.y.y) and
 // schedules differently; no better than the flat body. Not shipped.
+// w24-c2: re-read at 81.05 (fuzzy 74.88; 128 diff_arg, 15 insert / 14
+// delete, all FPR scheduling + the f24 vs f25 save count). The vy/vz shared
+// stack slot is NOT a source-scope tell: our build shares a slot too (vx/vy
+// at -0x60), so slot coloring follows the schedule. Every b element is
+// loaded before the first out store in the image's alias arm, so all three
+// Multiply calls precede the copies (an early `out.y = vy` would force a b.y
+// reload, since b == out there). rb3-xenon mtx.cpp, rb3 Rot.cpp/Mtx.h and
+// og-dc3 checked: no other shape. Floor stands; nothing built.
 const float sMaxThreshold = 80;
 bool CharLookAt::sDisableJitter = false;
 

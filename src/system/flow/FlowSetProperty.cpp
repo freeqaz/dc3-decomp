@@ -73,6 +73,8 @@ protected:
 // x = t / stepSize, distributed fl*inv + p*inv (refolded or fmadds), an extra
 // local for the call result.  The MakeString row is an ICF-folded template
 // name (char[19]/char[5] vs our char[45]/char[17], same body), not a bug.
+// w24-c2: SHIPPED the two-division spelling in math/Easing.h -> 100.000
+// (whole-binary 1 UP / 0 DOWN). Native rounding note kept next to the body.
 EaseFunc *gEaseFuncs[35] = {
     EaseLinear,
     EasePolyIn,

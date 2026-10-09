@@ -333,7 +333,6 @@ inline float EaseStairstep(float t, float power, float f3) {
     }
     float tmp_f30 = t * f3;
     float tmp_f26 = floor(tmp_f30);
-    f3 = 1.0f / f3; // this is SUPPOSED to be here, but it's getting scheduled for later
     // w13-d (96.15, 3 rows: the image's fdivs sits before the EasePolyInOut
     // call into f31, ours after it).  Refuted, all bit-identical or worse:
     // a named `inv` before the call; `tmp_f30 -= tmp_f26` as its own statement
@@ -341,7 +340,14 @@ inline float EaseStairstep(float t, float power, float f3) {
     // stops being held in f28).
     // w18-d (96.15, same 3 rows): also inert -- the reciprocal moved above
     // floor(), and the call result in its own `ret` local.
-    return (EasePolyInOut(tmp_f30 - tmp_f26, power, 0.0f) + tmp_f26) * f3;
+    // w24-c2: TWO divisions, the w21-ap probe spelling.  MSVC (/fp:fast is
+    // the Xenon default, see docs/decomp/patterns/fixable-fsel-fma.md) folds
+    // them into one `fdivs f31, f28, f31` reciprocal right after floor() and
+    // (p + fl) * inv -- the image's exact sequence.  Natively (no fast-math)
+    // this is two rounded divisions and an add, at most ~1 ulp from the
+    // image's (p + fl) * (1/steps); the same trade the NgMat per-division
+    // temps made.
+    return tmp_f26 / f3 + EasePolyInOut(tmp_f30 - tmp_f26, power, 0.0f) / f3;
 }
 
 inline float EaseThirdStairstep(float t, float power, float) {

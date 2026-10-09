@@ -1398,9 +1398,13 @@ void CameraDump(const char *filename) {
     // emit it two instructions after, and it reloads `lwz r4, 0x50(r31)` after
     // `mr r3, r29` where we load it before -- a two-instruction hoist, no
     // value or address differs.
-    void *texels = nullptr;
-    tex->TexelsLock(texels);
-    memcpy(buf, texels, texSize);
+    // w24-c2: closed (94.737 -> 100) by scoping texels to a BLOCK around the
+    // lock/copy -- declaration scope, not order, moved both hoists.
+    {
+        void *texels = nullptr;
+        tex->TexelsLock(texels);
+        memcpy(buf, texels, texSize);
+    }
     tex->TexelsUnlock();
     FileStream fs(filename, FileStream::kWrite, true);
     if (fs.Fail()) {
