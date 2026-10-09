@@ -1222,7 +1222,8 @@ float sFloat4 = 0.1f;
 float sFloat5 = 0.25f;
 
 // w18-e (98.54): the image puts trackingID0/1 at 0x58/0x5c and the
-// MILO_ASSERT line temp at 0x60; ours has the temp at 0x58.  Worse:
+// MILO_ASSERT line temp at 0x60; ours had the temp at 0x58 (closed by
+// w24-c1's case 4 if/else, below).  Worse:
 // `int &` for trackingID (96.0) or for both selects (95.4); making the
 // sFloatN globals static (87.5 -- the image reloads them, so they are
 // external).
@@ -1317,15 +1318,31 @@ void SkeletonChooser::DrawDebug() {
                     // is worse again (97.8) -- the extra locals re-shuffle the
                     // 0x58/0x5c slots.  Both reverted; the 4 structural rows
                     // that remain are that block placement.
+                    // w24-c1 (98.54 -> 100 normalized, modulo an r15/r16/r17
+                    // permutation of sFloat4/sFloat2/&TheRnd): the image's
+                    // shape is TWO whole sprintf_s calls in an if/else on i,
+                    // which MSVC tail-merges -- the else arm's `bl
+                    // IsBehindPlayer` is cross-jumped into the then arm's,
+                    // which is why the join follows the i==0 arm and the i!=0
+                    // loads sit at the end with a backwards `b`.  The single
+                    // ternary of two calls lays the join out after the else
+                    // arm instead (98.6), and also fixes the trackingID0/1
+                    // slots at 0x58/0x5c (the w18-e row).
                     case 4: {
                         if (skelIdx0 >= 0 && skelIdx1 >= 0) {
-                            sprintf_s<50>(
-                                buf,
-                                "Is behind: %d",
-                                IsBehindPlayer(
-                                    trackingID, (i != 0) ? trackingID0 : trackingID1
-                                )
-                            );
+                            if (i == 0) {
+                                sprintf_s<50>(
+                                    buf,
+                                    "Is behind: %d",
+                                    IsBehindPlayer(trackingID0, trackingID1)
+                                );
+                            } else {
+                                sprintf_s<50>(
+                                    buf,
+                                    "Is behind: %d",
+                                    IsBehindPlayer(trackingID1, trackingID0)
+                                );
+                            }
                         }
                         break;
                     }
