@@ -889,13 +889,15 @@ void PoseFatalities::UpdateMatchingPose(int player) {
         float rawScore = mRecorder.CompareSkeletonPositions(
             playerSkel, &mPlayerSkeletons[player], errorWeight
         );
-
-        float thresh = TheOSCMessenger.GetFloat("/fatalposethresh", 0.5f);
-        unk1710[player] = rawScore / thresh;
+        unk1710[player] = rawScore / TheOSCMessenger.GetFloat("/fatalposethresh", 0.5f);
         if (unk1710[player] != unk1710[player]) {
             unk1710[player] = 0.0f;
         }
-        unk1710[player] = Clamp(0.0f, 1.0f, unk1710[player]);
+        // w25-gk: ClampEq (same Min(Max()) as Clamp, result unused) and the
+        // threshold read inline in the division: both move the COLOR priority
+        // of the hoisted &unk1710[player] index (pri -3 -> 8), so it takes r29
+        // as in the image instead of r25.
+        ClampEq(unk1710[player], 0.0f, 1.0f);
 
         matching = (unk1710[player] >= 1.0f && unk1718[player] >= 0.0f);
 
