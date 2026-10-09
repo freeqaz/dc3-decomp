@@ -193,6 +193,17 @@ void HamRegulate::Poll() {
     // DeltaSeconds(), the 36 assignment orders of the two unscaled arms,
     // `moveZ * scale`; worse: `float moveRot = rotDelta` + `scale * moveRot`
     // (96.4), moveZ declared after dt (98.8).
+    // w25-gk (fuzzy, 121 -> 153 of 168 equal in a c2rs-tap listing compare):
+    // the accumulation is Add() into posDelta and the threshold test reads
+    // posDelta back (same y, z, x sum order, so native rounding is unchanged).
+    // With three named accum floats the image's 16.0f constant lost its f11
+    // (the accums were demoted to regasg temps) and footState took r11; with
+    // Add() both land as in the image.  Left: moveZ (pri 14) colours after
+    // moveRot (pri 21), so they read f27/f28 swapped; the scale products and
+    // the final `xfm.v +=` adds read operand-swapped (C2RS-BRIDGE 8.7 key:
+    // the image orders the move value first).  Inert or worse (measured): a
+    // Vector3 `move` aggregate (153, same rows), `scale * posDelta.x`, and
+    // per-component `xfm.v.x = move.x + xfm.v.x` (105).
     float moveZ = 0.0f;
     float dt = TheTaskMgr.DeltaSeconds();
     float moveX;
@@ -231,11 +242,10 @@ void HamRegulate::Poll() {
                 if ((mFootState ^ footState) & footState) {
                     mAccumVelocity.Zero();
                 }
-                float accumX = mAccumVelocity.x + moveX;
-                float accumY = mAccumVelocity.y + moveY;
-                float accumZ = mAccumVelocity.z + moveZ;
-                posDelta.Set(accumX, accumY, accumZ);
-                if (accumY * accumY + accumZ * accumZ + accumX * accumX > 16.0f) {
+                Add(mAccumVelocity, Vector3(moveX, moveY, moveZ), posDelta);
+                if (posDelta.y * posDelta.y + posDelta.z * posDelta.z
+                        + posDelta.x * posDelta.x
+                    > 16.0f) {
                     moveZ = 0.0f;
                     moveY = 0.0f;
                     moveX = 0.0f;
