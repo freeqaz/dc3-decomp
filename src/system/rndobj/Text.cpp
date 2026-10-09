@@ -1335,8 +1335,19 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                     // when the loop runs out. Carrying the character in a local that
                     // is re-seeded from curChar each iteration added a `mr r11, r26`
                     // inside the loop and dropped that skip branch.
-                    unsigned int j = 0;
+                    //
+                    // count is declared (minted) before j so j gets the higher
+                    // candidate id: the `j < count` compare then emits as
+                    // `cmplw j, count` / `blt`, as at .L_82699a48. Still open:
+                    // count (pri 2 tie 142) pops after c (pri 2 tie 154), so they
+                    // take r7/r8 the other way round from the image; and p (id 2)
+                    // vs curChar's id-10 version, both pri -17, give r26/r25
+                    // swapped. Each pair moved in lockstep under every respelling
+                    // tried (tail duplication, goto merges, loop forms); the open
+                    // question is a block that references one but not the other
+                    // without changing the emitted code.
                     unsigned int count = fontChars.size();
+                    unsigned int j = 0;
                     if (count != 0) {
                         unsigned short *fp = &fontChars[0];
                         do {
@@ -1415,10 +1426,7 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                     // (0x82699818): 97.51 -> 98.27; with `curChar = 0` ahead of
                     // the replacements array, pluralS as a conditional expression
                     // and qp taken inside the size test, 100.0 (regperm only).
-                    const char *sep = "";
-                    if (setIt != missing.begin()) {
-                        sep = ", ";
-                    }
+                    const char *sep = setIt == missing.begin() ? "" : ", ";
                     msg += MakeString("%s\'%c\' 0x%02X", sep, displayChar, ch);
                 }
 
