@@ -766,8 +766,10 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
                         }
                         otherVecItr++;
                     }
-                    ScaleAddEq(*otherVecItr, v, f2);
-                    otherBonesItr->weight += myBonesItr->weight * f2;
+                    Vector3 &ov = *otherVecItr;
+                    Bone &ob = *otherBonesItr;
+                    ScaleAddEq(ov, v, f2);
+                    ob.weight += myBonesItr->weight * f2;
                     myBonesItr++;
                     if (myBonesItr == myBonesEnd) {
                         break;
@@ -856,18 +858,24 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
                         myQuatItr->z * absConstant,
                         myQuatItr->w * notAbsConstant
                     );
-                    if (q * *otherQuatItr < 0) {
-                        otherQuatItr->x -= q.x;
-                        otherQuatItr->y -= q.y;
-                        otherQuatItr->z -= q.z;
-                        otherQuatItr->w -= q.w;
+                    float dot = q.x * otherQuatItr->x;
+                    dot += q.y * otherQuatItr->y;
+                    dot += q.z * otherQuatItr->z;
+                    dot += q.w * otherQuatItr->w;
+                    Hmx::Quat &oq = *otherQuatItr;
+                    if (dot < 0) {
+                        oq.x -= q.x;
+                        oq.y -= q.y;
+                        oq.z -= q.z;
+                        oq.w -= q.w;
                     } else {
-                        otherQuatItr->x += q.x;
-                        otherQuatItr->y += q.y;
-                        otherQuatItr->z += q.z;
-                        otherQuatItr->w += q.w;
+                        oq.x += q.x;
+                        oq.y += q.y;
+                        oq.z += q.z;
+                        oq.w += q.w;
                     }
-                    otherBonesItr->weight += myBonesItr->weight * f2;
+                    float weight = myBonesItr->weight * f2;
+                    otherBonesItr->weight += weight;
                     myBonesItr++;
                     if (myBonesItr == myBonesEnd) {
                         break;
@@ -910,10 +918,19 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
                     // uncompressed arm below both match with the header form --
                     // their components are ready in one instruction, so the
                     // scheduler has nothing to reorder around.)
-                    float quatDot = q.y * otherQuatItr->y;
-                    quatDot += q.z * otherQuatItr->z;
-                    quatDot += q.w * otherQuatItr->w;
-                    quatDot += q.x * otherQuatItr->x;
+                    // Each product's operand order is c2 §8.7's commutative key:
+                    // named q.c is 0x10000|sid<<5, the otherQuat load temp is
+                    // 0x10000|(sid<<6 & 0xffff), which wraps at sid 1024.  The
+                    // image puts the temp first only for x, so the x load temp has
+                    // to be minted just below 1024 and the y/z/w ones just above.
+                    // The references `ov`/`ob` in the ShortVector3 arm, `oq` and
+                    // the named `weight` in the ByteQuat arm, and `oq` here are
+                    // what place them there (x 1021; z/y/w 1024-1030).
+                    Hmx::Quat &oq = *otherQuatItr;
+                    float quatDot = q.y * oq.y;
+                    quatDot += q.z * oq.z;
+                    quatDot += q.w * oq.w;
+                    quatDot += q.x * oq.x;
                     if (quatDot < 0) {
                         otherQuatItr->x -= q.x;
                         otherQuatItr->y -= q.y;
