@@ -546,7 +546,11 @@ void AccomplishmentManager::Poll() {
     FOREACH (it, profiles) {
         HamProfile *pProfile = *it;
         MILO_ASSERT(pProfile, 0x88);
-        const_cast<AccomplishmentProgress &>(pProfile->GetAccomplishmentProgress()).Poll();
+        // Named reference: one more demoted one-block local (F 2->3), so the
+        // hoisted assert address halves pop in the image's order.
+        AccomplishmentProgress &progress =
+            const_cast<AccomplishmentProgress &>(pProfile->GetAccomplishmentProgress());
+        progress.Poll();
     }
 }
 
