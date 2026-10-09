@@ -1328,13 +1328,15 @@ void Rnd::DrawPreClear() {
 DataNode Rnd::OnToggleHeap(const DataArray *) {
     int numHeaps = MemNumHeaps() + 1;
     RndOverlay *overlay = mHeapOverlay;
-    if (overlay->Showing() && ++lbl_82F14008 >= numHeaps) {
+    if (!overlay->Showing()) {
+        overlay->SetShowing(true);
+    } else if (++lbl_82F14008 >= numHeaps) {
         overlay->SetShowingOnly(false);
         lbl_82F14008 = -1;
+        overlay->TimerRef().Restart();
     } else {
-        overlay->SetShowingOnly(true);
+        overlay->SetShowing(true);
     }
-    overlay->TimerRef().Restart();
     return 0;
 }
 

@@ -1627,8 +1627,14 @@ int RndText::OnComputeCharWidths(const unsigned short *wideChars, float *widths,
 }
 
 void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
+    // w25-gb: the count is read into a named local BEFORE capacity().  That
+    // makes the reloads after resize() come out count-first, then the pool's
+    // mStart, as in the image (it was the other way round when capacity() was
+    // read first).  The packet count is still re-read for the post-increment,
+    // since resize() is an opaque call.
+    int count = sBlacklightPacketCount;
     u32 cursize = sBlacklightPacketPool.capacity();
-    if ((u32)sBlacklightPacketCount >= cursize) {
+    if ((u32)count >= cursize) {
         int newsize = 8;
         if (cursize != 0) {
             newsize = cursize * 2;
@@ -1636,14 +1642,6 @@ void RndText::QueueBlacklightPacket(RndMesh *mesh, float f2, int i3) {
         BlacklightPacket packet;
         sBlacklightPacketPool.resize(newsize, packet);
     }
-    // Residual (2 rows, and the only thing keeping fuzzy at 99.51): the image
-    // loads sBlacklightPacketCount BEFORE the pool's mStart, we load mStart
-    // first.  REFUTED as source-reachable by folding the post-increment into
-    // the subscript (`sBlacklightPacketPool[sBlacklightPacketCount++]`) --
-    // byte-inert, same two rows.  Pure scheduling of two independent loads.
-    // w18-a: two more inert/worse spellings of the reload order -- subscript
-    // first then a separate `sBlacklightPacketCount++` (19 rows), and the
-    // capacity test written `cursize <= count` (adds 2 rows).
     int idx = sBlacklightPacketCount++;
     BlacklightPacket &pkt = sBlacklightPacketPool[idx];
     pkt.mMesh = mesh;

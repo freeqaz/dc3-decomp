@@ -213,16 +213,14 @@ bool DataArray::PrintUnused(TextStream &ts, DataType ty, bool b) const {
 }
 
 DataArray::~DataArray() {
-    int i2;
     if (mSize < 0) {
-        i2 = -mSize;
+        NodesFree(-mSize, mNodes);
     } else {
         for (int i = 0; i < mSize; i++) {
             mNodes[i].~DataNode();
         }
-        i2 = mSize * 8;
+        NodesFree(mSize * 8, mNodes);
     }
-    NodesFree(i2, mNodes);
 }
 
 void DataArray::SetFileLine(Symbol file, int line) {
