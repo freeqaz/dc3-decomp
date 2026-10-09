@@ -251,8 +251,8 @@ bool BaseDisplacementNode::Displacements(
 // w25-fc stop note (~440 variants through the c2rs tap): all 8 rows are fmuls/
 // fmadds whose u{} operand order is fixed in the IL before both allocators
 // (C2RS-BRIDGE 8.3); registers and candidate keys are already the image's.
-// Naming the three jointDisp loads (float jx = jointDisp.x; ...) flips the
-// dot rows and the bn rows to the image (98 -> 94 of 98 equal), but n.y and
+// Naming the three jointDisp loads (jx/jy/jz below) flips the dot rows and
+// the bn rows to the image (98 -> 94 of 98 equal; kept), but n.y and
 // n.z then always share one orientation (the image has them opposite), and
 // the three proj = n * dot rows keep `dot` (a regasg temp) first in every
 // spelling tried: Scale/Set/per-component, plain-float n, named copies of
@@ -281,9 +281,12 @@ bool BaseDisplacementNode::Displacements(
         Vector3 n;
         if (0.0f < jdLen) {
             float inv = 1.0f / jdLen;
-            n.x = jointDisp.x * inv;
-            n.y = inv * jointDisp.y;
-            n.z = jointDisp.z * inv;
+            float jx = jointDisp.x;
+            n.x = jx * inv;
+            float jy = jointDisp.y;
+            n.y = inv * jy;
+            float jz = jointDisp.z;
+            n.z = jz * inv;
         } else {
             n.x = 0.0f;
             n.y = 0.0f;
