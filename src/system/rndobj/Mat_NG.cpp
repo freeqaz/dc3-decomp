@@ -151,6 +151,13 @@ void NgMat::SetBasicState() {
 }
 
 void NgMat::SetRegularShaderConst(bool perPixel) {
+    // w25-mb: defined here, at the top, so its symbol id is small.  c2 orders
+    // a commutative multiply's operands by key (C2RS-BRIDGE section 8.7): a
+    // named local keys 0x10000|sid<<5.  Defined where it is computed, it was
+    // sid 446 (key 0x137c0), above the CSE temp for mWorldProjectionStartBlend
+    // (0x11300), so blendOffset's fmuls came out range * start; the image has
+    // start * range.  The 0 is dead: every read follows the assignment below.
+    float blendRange = 0.0f;
     // Texture params: emissive multiplier, intensify, bloom
     if (mEmissiveMap || mIntensify || AllowHDR()) {
         Vector4 texParams(
@@ -208,7 +215,14 @@ void NgMat::SetRegularShaderConst(bool perPixel) {
     // NgMat custom constants
     TheShaderMgr.SetPConstant(kPS_NgMatCustom, *(const Vector4 *)&mTexHalfPixelX);
 
-    // Specular - copy to local Color structs
+    // Specular - copy to local Color structs.
+    // w25-mb: the per-pixel scale is applied to the copies in place.  With six
+    // separate rgb floats assigned in both arms of the if, each was a merge
+    // variable, so COLOR ranked the spec rgb trio (pri 23) above spec2Pow (pri
+    // 20): spec2Pow took f27 instead of the image's f30, which permuted 25 FPR
+    // rows here and in the rim block, and moved the rim copy's word order.
+    // Scaled in place, specPow/spec2Pow pop at 37/32, above the trio, and all
+    // of it matches.
     Hmx::Color specColor = mSpecularRGB;
     Hmx::Color spec2Color = mSpecular2RGB;
 
@@ -218,33 +232,23 @@ void NgMat::SetRegularShaderConst(bool perPixel) {
     float spec2Pow = spec2Color.alpha;
     spec2Pow = (spec2Pow - 0.5f >= 0.0f) ? spec2Pow : 0.5f;
 
-    float specRed, specGreen, specBlue;
-    float spec2Red, spec2Green, spec2Blue;
-
     if (!perPixel && mPerPixelLit && mSpecularMap) {
-        specRed = specColor.red * 0.4f;
-        specGreen = specColor.green * 0.4f;
-        specBlue = specColor.blue * 0.4f;
+        specColor.red *= 0.4f;
+        specColor.green *= 0.4f;
+        specColor.blue *= 0.4f;
         specPow *= 0.4f;
-        spec2Red = spec2Color.red * 0.4f;
-        spec2Green = spec2Color.green * 0.4f;
-        spec2Blue = spec2Color.blue * 0.4f;
+        spec2Color.red *= 0.4f;
+        spec2Color.green *= 0.4f;
+        spec2Color.blue *= 0.4f;
         spec2Pow *= 0.4f;
-    } else {
-        specBlue = specColor.blue;
-        specGreen = specColor.green;
-        specRed = specColor.red;
-        spec2Blue = spec2Color.blue;
-        spec2Green = spec2Color.green;
-        spec2Red = spec2Color.red;
     }
 
     {
-        Vector4 specV(specRed, specGreen, specBlue, specPow);
+        Vector4 specV(specColor.red, specColor.green, specColor.blue, specPow);
         TheShaderMgr.SetVConstant(kVS_Specular, specV);
     }
     {
-        Vector4 specP(specRed, specGreen, specBlue, specPow);
+        Vector4 specP(specColor.red, specColor.green, specColor.blue, specPow);
         TheShaderMgr.SetPConstant(kPS_Specular, specP);
     }
 
@@ -253,20 +257,9 @@ void NgMat::SetRegularShaderConst(bool perPixel) {
         TheRenderState.SetTextureFilter(2, (RndRenderState::FilterMode)1, false);
     }
 
-    // Rim light - copy to local.
-    // NOTE (w7-b, 2026-09-14): the residual 4 charged rows on this function are the
-    // element ORDER of this 4-word struct copy.  The image loads
-    // 0x168,0x16c,0x170,0x164 and stores 0x4,0x8,0xc,0x0 (red handled last); we load
-    // 0x164,0x16c,0x170,0x168 and store 0x0,0x8,0xc,0x4 (green handled last).  Both
-    // are "rotated" relative to the natural 0,4,8,c that the mColor / mSpecularRGB /
-    // mSpecular2RGB copies above get on BOTH sides, so the spelling of the copy is
-    // not the lever.  Refuted here: reversing the rimRed/rimGreen/rimBlue declaration
-    // order, and splitting the copy into a default-construct plus assignment.  Both
-    // left all 31 rows byte-identical.
-    // w19-a (still 99.99216): an explicit member-wise copy in the image's
-    // green/blue/alpha/red order is WORSE (94.96 -- the copy is folded away), and
-    // writing blendOffset as `-(blendRange * mWorldProjectionStartBlend)` leaves
-    // the commutative fmuls row (idx 407) untouched.
+    // Rim light - copy to local.  (w7-b and w19-a chased this copy's word
+    // order, 0x168/0x16c/0x170/0x164 in the image; w25-mb found it follows the
+    // FPR assignment of the specular block above, and it matches now.)
     Hmx::Color rimColor = mRimRGB;
 
     float rimRed = rimColor.red;
@@ -309,14 +302,14 @@ void NgMat::SetRegularShaderConst(bool perPixel) {
     // Specular2 / shader variation
     if (mShaderVariation != kShaderVariationNone) {
         {
-            Vector4 spec2V(spec2Red, spec2Green, spec2Blue, spec2Pow);
+            Vector4 spec2V(spec2Color.red, spec2Color.green, spec2Color.blue, spec2Pow);
             TheShaderMgr.SetVConstant(kVS_Specular2, spec2V);
         }
         {
-            Vector4 spec2P(spec2Red, spec2Green, spec2Blue, spec2Pow);
+            Vector4 spec2P(spec2Color.red, spec2Color.green, spec2Color.blue, spec2Pow);
             TheShaderMgr.SetPConstant(kPS_Specular2, spec2P);
         }
-        float blendRange = 1.0f / (mWorldProjectionEndBlend - mWorldProjectionStartBlend);
+        blendRange = 1.0f / (mWorldProjectionEndBlend - mWorldProjectionStartBlend);
         float blendOffset = -(mWorldProjectionStartBlend * blendRange);
         Vector4 wpParams(mWorldProjectionTiling, blendRange, blendOffset, 0.0f);
         TheShaderMgr.SetPConstant(kPS_WorldProjection, wpParams);

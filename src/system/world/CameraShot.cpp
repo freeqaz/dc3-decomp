@@ -369,6 +369,17 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
             ::Interp(mLastTargetPos, targetPos, filterDist, targetPos);
         }
     }
+    // w25-mb, rows 74/75 (open): the image stores this 16-byte copy as words
+    // 0,4,c,8 (ours 0,4,8,c) around the assert's `lfs` reload of .x.  Both sides
+    // load the words in the same order.  Hypothesis: the two stores tie on
+    // scheduler priority and the tie goes by tuple index, so the image's copy
+    // lowering numbers the 0xc pair before the 0x8 pair.  Inert: const_cast at
+    // the store, a Vector3& to the member, a named Vector3 copy, Interp
+    // through `me`, `me` declared first or last, and the copy duplicated into
+    // both arms of the kHugeFloat test (which also breaks the register
+    // assignment), dt inlined, screenPos declared first, `me->` in the
+    // kHugeFloat test, the if without braces.  Worse: an Interp temp output,
+    // a `targetPos(0, 0, 0)` constructor.
     me->mLastTargetPos = targetPos;
 
     MILO_ASSERT(mLastTargetPos.x != kHugeFloat, 0x7ce);
@@ -400,8 +411,7 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
             parentXfm = &mTargetXfm;
         }
 
-        Transform localParent;
-        localParent = *parentXfm;
+        Transform localParent(*parentXfm);
 
         if (useLiveParent) {
             if (mCamShot->mFilter != 0.0f) {
@@ -411,12 +421,18 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
             me->mTargetXfm = localParent;
         }
 
-        // w18-b (99.993, 4 rows): rows 74/75 store the 16-byte mLastTargetPos
-        // copy as 0,4,c,8 in the image (0,4,8,c ours) -- a scheduler tie around
-        // the assert's reload; rows 192/193 are the y/z fadds of `tf.v +=` with
-        // the operands the other way round.  Refuted: Add(tf.v, localParent.v,
-        // tf.v) (99.98, reorders the loads), x via += with y/z written as
-        // `local + tf` (99.6, adds an addi and flips x too).
+        // w25-mb: localParent is copy-constructed from *parentXfm (it was
+        // default-constructed, then assigned).  That closed rows 192/193, the
+        // y/z fadds of `tf.v +=` below, whose operands came out the other way
+        // round.  c2 sorts a commutative add's operands by key (C2RS-BRIDGE
+        // section 8.7); for y/z the tf.v side is a memory leaf keyed by its base
+        // temp's sid mod 4, and the old spelling's two base temps (V628, V632)
+        // were both 0 mod 4, so the scalar-replaced localParent.v.y/.z, keyed
+        // 0x13140/0x131a0, went first.  The copy constructor mints two more
+        // temps upstream, so the bases become V630/V634 (2 mod 4, key 0x18008)
+        // and tf.v goes first, as in the image (cqlo3 dump, read before and
+        // after).  Rows 74/75 are still open; see the note at the
+        // mLastTargetPos copy above.
         if (mUseParentRotation) {
             Multiply(tf, localParent, tf);
         } else {
