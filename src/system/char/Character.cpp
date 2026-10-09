@@ -345,7 +345,8 @@ void Character::PostLoad(BinStream &bs) {
     if (d.rev < 8) {
         float rad = GetSphere().GetRadius();
         for (int i = 0; i < mLods.size(); i++) {
-            mLods[i].mScreenSize /= rad;
+            Character::Lod &lod = mLods[i];
+            lod.mScreenSize /= rad;
         }
     }
 }
