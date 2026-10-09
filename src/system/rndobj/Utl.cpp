@@ -1678,15 +1678,21 @@ void MakeTangentsLate(RndMesh *m) {
     for (unsigned int i = 0; i < m->Faces().size(); i++) {
         Hmx::Matrix3 basis;
         ComputeFaceTangentBasis(m, i, basis);
-        // The three cofactors are named, and both products of each one are
+        // Two cofactors are named, and both products of each one are
         // commuted relative to the formula as written -- that is what
         // reproduces retail's fmuls/fmsubs operand order (same spelling as
         // ResetNormals). The sum associates as t1 + (t2 + t3).
+        //
+        // The z cofactor is written inline: c2 orders a commutative multiply's
+        // operands by a key in which an inline subexpression outranks every
+        // named local or load (C2RS-BRIDGE 8.7), so the image's
+        // `fmadds f0, f0(cofactor), f11(basis.y.x)` needs the cofactor as a
+        // subexpression. A named `crossZ` put the basis.y.x load first.
         float crossX = basis.z.x * basis.x.y - basis.x.x * basis.z.y;
         float crossY = basis.z.z * basis.x.x - basis.x.z * basis.z.x;
-        float crossZ = basis.x.z * basis.z.y - basis.z.z * basis.x.y;
-        float w =
-            ((crossZ * basis.y.x + (basis.y.y * crossY + basis.y.z * crossX)) < 0.0f)
+        float w = (((basis.x.z * basis.z.y - basis.z.z * basis.x.y) * basis.y.x
+                    + (basis.y.y * crossY + basis.y.z * crossX))
+                   < 0.0f)
             ? -1.0f
             : 1.0f;
         // Retail normalizes into a STACK TEMP (r31+0x80), copies all four words
