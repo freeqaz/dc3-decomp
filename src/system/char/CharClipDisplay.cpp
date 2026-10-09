@@ -206,10 +206,13 @@ void CharClipDisplay::DrawTrack() {
         float eventLabelOffset = 10.0f;
         while ((unsigned int)idx < (unsigned int)mClip->NumBeatEvents()) {
             const CharClip::BeatEvent &ev = mClip->BeatEvents()[idx];
-            float eventX = GetX(ev.beat);
-            Vector2 labelPos(eventX, drawY);
+            // w24-c3: labelPos is built from GetX() directly and the event
+            // rect reads labelPos.x -- the image stores both labelPos halves
+            // first (0x5c then 0x58), then the rect/colour; with a separate
+            // `eventX` local MSVC sank the labelPos.x store below the colour.
+            Vector2 labelPos(GetX(ev.beat), drawY);
             float halfEmVal = sEm * 0.5f;
-            Hmx::Rect eventRect(eventX, drawY - halfEmVal, 1.0f, halfEmVal);
+            Hmx::Rect eventRect(labelPos.x, drawY - halfEmVal, 1.0f, halfEmVal);
             Hmx::Color eventColor(eventAlpha, eventAlpha, 1.0f, 1.0f);
             TheRnd.DrawRect(eventRect, eventColor, nullptr, nullptr, nullptr);
 
