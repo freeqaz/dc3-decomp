@@ -141,18 +141,22 @@ bool AsyncFile::WriteAsync(const void *v, int i) {
     } else {
         // Buffered write: split across buffer boundaries if needed
         int remaining = i;
+        // A separate source cursor rather than advancing the parameter: the
+        // gBufferSize reload then outranks the chunk size for r29 (c2 pri 42
+        // tie 83 vs pri 40 tie 0; was 38 vs 40), as in the image.
+        const char *src = (const char *)v;
         while ((mOffset + remaining) > gBufferSize) {
             int size = gBufferSize - mOffset;
-            memcpy(mBuffer + mOffset, v, size);
+            memcpy(mBuffer + mOffset, src, size);
             mOffset = gBufferSize;
             remaining -= size;
             mTell += size;
-            v = (void *)((intptr_t)v + size);
+            src += size;
             Flush();
             if (mFail)
                 return false;
         }
-        memcpy(mBuffer + mOffset, v, remaining);
+        memcpy(mBuffer + mOffset, src, remaining);
         mTell += remaining;
         mOffset += remaining;
         if (mTell > mSize)
