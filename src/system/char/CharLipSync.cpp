@@ -289,27 +289,23 @@ void CharLipSync::PlayBack::Set(CharLipSync *lipsync, ObjPtr<ObjectDir> clips) {
         int newSize = result.Array(0)->Size() + numVisemes;
         if (_ref2.size() != newSize) {
             _ref2.resize(newSize);
-            // numVisemes IS the loop variable: the image reuses the register
-            // that held it (r27, from `srawi r27, r11, 3`) as `i` and keeps a
-            // separate Sym index counting up from 0 in r29; its latch is
-            // `addi r27,1 / addi r29,1 / addi r28,0x20 / cmpw r27,r26 / blt`.
-            // w21-j: a for-loop (any spelling: comma increments, increment in
-            // the body, `for (int i = numVisemes; ...)`, `_ref2[numVisemes++]`)
-            // lets MSVC replace that compare with a subf/subic. trip count
-            // (97.1-97.7); the guarded do/while keeps the compare (97.7 -> 100
-            // normalized). Remaining: a pure r24..r27 rotation (19 rows, ours
-            // gives numVisemes r24 where the image has r27). Inert/worse for
-            // it: `unsigned int i` in the first loop (inert), a separate
-            // `int i = numVisemes` counter (99.7).
-            int visemeIdx = 0;
-            if (numVisemes < newSize) {
+            // The loop gets its own index `i`, seeded from numVisemes, and the
+            // Sym index is `i - numVisemes` (strength-reduced to the r29 counter
+            // from 0). With numVisemes advanced in place it was one COLOR
+            // candidate spanning the first loop (pri 1) and popped after that
+            // loop's clip/cursor/index, landing in r24. As a separate copy
+            // source it pops last but wants i's register (r27), so the
+            // first-loop candidates avoid r27 and take r26/r25/r24 as the image
+            // does. The guarded do/while keeps the signed compare (a for-loop
+            // turns it into a subf. trip count).
+            int i = numVisemes;
+            if (i < newSize) {
                 do {
-                    Symbol visemeSym = result.Array(0)->Sym(visemeIdx);
-                    ObjPtr<CharClip> &clip = _ref2[numVisemes].mClip;
+                    Symbol visemeSym = result.Array(0)->Sym(i - numVisemes);
+                    ObjPtr<CharClip> &clip = _ref2[i].mClip;
                     clip = mClips->Find<CharClip>(visemeSym.Str(), false);
-                    visemeIdx++;
-                    numVisemes++;
-                } while (numVisemes < newSize);
+                    i++;
+                } while (i < newSize);
             }
         }
     }
