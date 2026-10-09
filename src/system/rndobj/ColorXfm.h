@@ -17,6 +17,11 @@ public:
     void Save(BinStream &) const;
     bool Load(BinStream &);
 
+    RndColorXfm &operator=(const RndColorXfm &c) {
+        memcpy(this, &c, sizeof(*this));
+        return *this;
+    }
+
     float mHue; // 0x0
     float mSaturation; // 0x4
     float mLightness; // 0x8
