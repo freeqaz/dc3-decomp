@@ -62,13 +62,20 @@ void CharIKHead::Poll() {
         }
         Vector3 correction(0, 0, 0);
         for (int i = 1; i < mPoints.size(); i++) {
-            mPoints[i].mPos += correction;
+            // pos and prev are named so that the x-component adds load
+            // through a named base (c2 commutative-operand key, C2RS-BRIDGE
+            // 8.7: a memory leaf keys on its base variable's sid).  pos's sid
+            // sorts the image's `pos.x + correction.x`, prev's sid the image's
+            // `diff.x + prev.x`; the y and z rows are unchanged.
+            Vector3 &pos = mPoints[i].mPos;
+            pos += correction;
             Vector3 diff;
             Subtract(mPoints[i].mPos, mPoints[i - 1].mPos, diff);
             correction -= diff;
             NormalizeScale(diff, mPoints[i - 1].mLen, diff);
             correction += diff;
-            Add(mPoints[i - 1].mPos, diff, mPoints[i].mPos);
+            const Vector3 &prev = mPoints[i - 1].mPos;
+            Add(prev, diff, mPoints[i].mPos);
         }
         for (int i = 1; i < mPoints.size(); i++) {
             ScaleAddEq(mPoints[i].mPos, correction, mPoints[i].mLenRatio - 1.0f);
