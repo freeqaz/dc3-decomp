@@ -123,6 +123,13 @@ void CharClipGroup::AddClip(CharClip *clip) {
 // find caller exists in the whole image, so there is no matched sibling to
 // copy; the non-const sites (LightPreset::SyncNewSpotlights, 100) compare
 // inside an `if`, which the `if` spellings above did not reproduce here.
+// w24-c1 (56.81, unchanged; same 23 rows): `mClips.find(clip) !=
+// mClips.end()` re-measured -- it only flips the subf operands (it then
+// computes end - find, the image's order) and the end() add is still sunk
+// past `bl find`; 56.8 canonical either way.  The image finishes
+// begin()+size()*0x14 into r31 before the call; we hold begin and size in
+// r30/r31 and add after.  Not reachable from this function's source without
+// touching ObjPtrVec::end() const in obj/Object.h (PCH header, whole-binary).
 bool CharClipGroup::HasClip(CharClip *clip) const {
     return mClips.end() != mClips.find(clip);
 }

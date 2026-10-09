@@ -48,6 +48,12 @@ void CursorPanel::Poll() {
     // 3/2, MakeRotMatrix(v, m, true), Scale x4): no behaviour difference.
     // The three name rows (MakeString<char[19],int,char[5]>, <_D3DFORMAT>,
     // SetObjConcrete<AnimTask>) are ICF aliases of ours.  Left as w21-e left it.
+    // w24-c1 (96.52, unchanged; same 43 rows: the `this` home-slot spill
+    // 6-12/82-83/184-188 and the r16..r21 / r28..r30 permutations).
+    // Re-read the crown-loss branch targets (8292F8FC..) against the image:
+    // same truth table.  Measured: reading `mDir` directly instead of
+    // LoadedDir() (one inline level fewer) at all three Find sites is
+    // byte-inert.  og-dc3-decomp spells the function identically.
     PassiveMessagesPanel::Poll();
     static Symbol ui_crown_player("ui_crown_player");
     const DataNode *pCrownPlayerNode = TheHamProvider->Property(ui_crown_player);

@@ -109,6 +109,14 @@ void ClipCollide::SetTypeDef(DataArray *da) {
         // "repeatable" is mr-first, "one_time" li-first; Synth::SetFX likewise),
         // 27 mr-first vs 100 li-first sites binary-wide.  Explicit
         // `FindArray(Symbol("modes"), true)` re-measured inert in this shape.
+        // w24-c1 (94.42, unchanged; same li/mr row pair): an early
+        // `if (!da) return;` instead of the `if (da) {}` block is byte-inert.
+        // Binary-wide census of `bl Symbol ctor; ...; bl FindArray(Symbol,
+        // bool)`: 29 mr-first sites in 11 functions, among them matched
+        // GeoInit, Synth::SetFX, SynthInit, CheatsInit, DingoSvrXbox::Init.
+        // In SetFX the order flips between sites of identical source
+        // (coreArr->FindArray("mode"/"volume"/... ), so it is a scheduler
+        // tie, not a source shape.
         DataArray *modesArr = da->FindArray("modes");
         DataArray *modeArr = modesArr->Array(1);
         mMode = modeArr->Sym(0);
