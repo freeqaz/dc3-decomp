@@ -94,7 +94,13 @@ END_HANDLERS
         }                                                                                \
     }
 
-// same editability gate as SYNC_MAT_PROP, but the property does not dirty the material
+// same editability gate as SYNC_MAT_PROP, but the property does not dirty the material.
+// `PropSync(...) != 0`, not a bare `return PropSync(...)`: the image normalizes the
+// result (clrlwi/addic/subfe) and cross-jumps every one of these arms into the
+// SYNC_SUPERCLASS tail's identical normalization, where a bare return hands back
+// r3 untouched and branches past it.  Same value on every platform (PropSync
+// returns bool); an `if (...) return true; return false;` spelling gives the same
+// code but two extra scopes per arm, shifting every later `_s` static's name.
 #define SYNC_MAT_EDIT_PROP(s, member)                                                    \
     {                                                                                    \
         _NEW_STATIC_SYMBOL(s)                                                            \
@@ -103,8 +109,18 @@ END_HANDLERS
             if (!(_op & (kPropSize | kPropGet)) && !IsEditable(action)) {                \
                 return true;                                                             \
             }                                                                            \
-            return PropSync(member, _val, _prop, _i + 1, _op);                           \
+            return PropSync(member, _val, _prop, _i + 1, _op) != 0;                      \
         }                                                                                \
+    }
+
+// SYNC_PROP with SYNC_MAT_EDIT_PROP's normalized result: the bool edit props share
+// this arm's PropSync call, so it has to normalize too (no braces, so it opens the
+// same number of scopes as SYNC_PROP).
+#define SYNC_MAT_NORMALIZED_PROP(s, member)                                              \
+    {                                                                                    \
+        _NEW_STATIC_SYMBOL(s)                                                            \
+        if (sym == _s)                                                                   \
+            return PropSync(member, _val, _prop, _i + 1, _op) != 0;                      \
     }
 
 #define SYNC_PERF_PROP(s, member)                                                        \
@@ -147,7 +163,7 @@ BEGIN_PROPSYNCS(RndMat)
     SYNC_MAT_PROP(alpha_cut, mAlphaCut, 2)
     SYNC_PROP_MODIFY(alpha_threshold, mAlphaThreshold, mDirty |= 2)
     SYNC_MAT_PROP(alpha_write, mAlphaWrite, 2)
-    SYNC_PROP(force_alpha_write, mForceAlphaWrite)
+    SYNC_MAT_NORMALIZED_PROP(force_alpha_write, mForceAlphaWrite)
     SYNC_MAT_EDIT_PROP(next_pass, mNextPass)
     SYNC_MAT_PROP(cull, (int &)mCull, 2)
     SYNC_MAT_PROP(per_pixel_lit, mPerPixelLit, 2)
