@@ -684,38 +684,23 @@ DataNode EventTrigger::Cleanup(DataArray *arr) {
         FOREACH (anim, it->mAnims) {
             RndAnimFilter *filter = dynamic_cast<RndAnimFilter *>(anim->mAnim.Ptr());
             if (filter) {
-                ObjRef::iterator ref = filter->Refs().begin();
-                // The ring's end() is the ObjRef header itself; testing the raw
-                // pointer keeps the loop test at the top the way the target has it
-                // (an iterator temporary here homes a dead copy to the stack).
-                while ((ObjRef *)ref != &filter->Refs()) {
+                ObjRef *ref = filter->Refs().Next();
+                // Raw ObjRef* ring walk (w24-pch, 99.738 -> 100).  The ring's
+                // end is the ObjRef header itself.  An ObjRef::iterator here --
+                // even with the raw-pointer loop test (w13-a, 10 rows -> 1) --
+                // homes a dead `stw r10, 0x60(r31)` of the vbase-adjusted
+                // &mRefs; with no iterator object there is nothing to home.
+                // Kept from w13-a: a `const ObjRef &refs` local is WORSE
+                // (97.9), the image recomputes the vbase adjust for &Refs()
+                // inside the loop after each RefOwner() call; and an end()
+                // loop test reads 98.38 (w19-a).
+                while (ref != &filter->Refs()) {
                     if (ref->RefOwner() && ref->RefOwner() != it) {
                         break;
                     }
-                    ++ref;
+                    ref = ref->Next();
                 }
-                // Same reason as the loop test above: end() returns an
-                // iterator BY VALUE, and MSVC hoists that loop-invariant
-                // temporary to before the loop and homes a dead copy of it to
-                // the stack.  Testing the ring header as a raw pointer leaves
-                // nothing to home.
-                //
-                // ⚠ That change took the diff from 10 rows to 1 and moved the
-                // canonical score by EXACTLY ZERO: report.json reads 99.73822
-                // before and after.  Nine of the ten rows were the r10<->r11
-                // permutation in the MILO_NOTIFY argument setup 150 instructions
-                // away, and the canonical ruler forgives register permutation --
-                // the whole 99.73822 is the ONE surviving row, a dead
-                // `stw r10, 0x60(r31)` at index 92 that the image does not emit.
-                // w13-a: a `const ObjRef &refs = filter->Refs();` local for all
-                // three uses is WORSE (97.9): the image recomputes the vbase
-                // adjust for &Refs() inside the loop after each RefOwner() call.
-                // Do not read a row-count drop here as progress against the
-                // headline; only that store is worth anything.
-                // w19-a: `ref != filter->Refs().end()` as the loop test and a
-                // `(ObjRef *)filter->Refs().end()` cast both read 98.38 (worse);
-                // a `const ObjRef &` local for begin() alone is inert (99.74).
-                if ((ObjRef *)ref == &filter->Refs()
+                if (ref == &filter->Refs()
                     && filter->GetType() != RndAnimFilter::kShuttle) {
                     anim->mAnim = filter->Anim();
                     anim->mEnable = true;
