@@ -919,6 +919,14 @@ void RhythmDetector::ProcessFrames() {
                     // operands but is no longer LICM'd: its addi lands before
                     // j's `mr r28, r19` instead of after it and drags eight
                     // registers with it (96.3 raw).
+                    // c2 key (w25-gu, C2RS-BRIDGE 8.7): the operands are the
+                    // LICM'd temp prevTick+1 (sid 959, key 0x1efc0) and the
+                    // variable j (sid 13, key 0x101a0); higher key first, so
+                    // the temp leads.  j can only lead if the temp's sid moves
+                    // to 1024..1030 (key wraps below 0x101a0) or the hoisted
+                    // value becomes a named variable with a lower sid than j
+                    // (flips the row, but changes COLOR priorities as above).
+                    // Open: what mints the LICM temp's sid.
                     float beatTime = (float)(prevTick + j + 1) * 0.1f;
                     // push_back takes the callee's sret buffer straight
                     // through (mr r4,r3 at 0x82489D48); a named `blended`
