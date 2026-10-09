@@ -281,12 +281,12 @@ void FitnessGoalMgr::SendPassiveMsg(Symbol sym) {
     );
 }
 
-// w20-l: normalized 100 / fuzzy 99.70. 7 rows, all one callee-saved swap r27<->r28:
-// image r28 = hidden DataNode return pointer, r27 = hoisted 0 (stored to
-// mCurrentRCJob 0x48, to the front node's cmd slot, and as the return's kDataInt
-// type); ours swaps the two. Values, stores and all branch targets checked vs the
-// image; the RadFree callee row is ICF (82E21268 = operator delete). Inlining
-// `cmd` into the switch emits identical code.
+// w25-rc: the failure arm returns on its own.  With one shared `return 1` the
+// hidden DataNode return pointer (image r28) had colour priority -24 against
+// the hoisted 0's -14 (image r27), so the 0 took r28.  The extra return
+// references the return pointer in a second block: both reach -9 and the
+// return pointer wins the tie (tie key 15 > 0), as in the image.  The RadFree
+// callee row is ICF (82E21268 = operator delete).
 DataNode FitnessGoalMgr::OnMsg(const RCJobCompleteMsg &msg) {
     if (!msg.Success()) {
         MILO_ASSERT(!mCommands.empty(), 0x163);
@@ -310,6 +310,7 @@ DataNode FitnessGoalMgr::OnMsg(const RCJobCompleteMsg &msg) {
         RELEASE(mCommands.front());
         mCommands.pop_front();
         ProcessNextCommand();
+        return 1;
     } else {
         if (msg.Job() == mCurrentRCJob) {
             QueueableCommand *cmd = mCommands.front();

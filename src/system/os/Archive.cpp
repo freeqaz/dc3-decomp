@@ -356,8 +356,9 @@ void ArchiveInit() {
         if (UsingCD()) {
             String titlePath(TheContentMgr.TitleContentPath());
             if (!titlePath.empty()) {
+                // Image order: `li r29, 1` (hardDrive) before `li r30, 1` (b4).
+                hardDrive = true;
                 b4 = true;
-                hardDrive = b4;
                 hdrName = MakeString("%s/gen/patch_%s", titlePath.c_str(), plat);
             }
         } else {

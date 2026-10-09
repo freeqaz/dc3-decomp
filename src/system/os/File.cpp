@@ -664,9 +664,11 @@ bool FileDiscSpinUp() { return TheBlockMgr.SpinUp(); }
 
 bool FileReadOnly(const char *filepath) { return true; }
 
-// w20-d: 100 normalized, fuzzy 99.40: iFilename/theFile trade r27/r28 as a
-// consistent bijection over all 17 diff_arg rows; every branch target and
-// value checked against the image.  Inert: declaring theFile at block top.
+// w25-rc: the capture write is guarded by the positive condition and both
+// paths share ONE `return theFile`.  The early `return theFile` gave theFile
+// an extra reference in its own block (colour priority 7 vs iFilename's 2), so
+// theFile took r28; with the single return theFile drops to -6 and iFilename
+// (image r28) is coloured first.
 File *NewFile(const char *iFilename, int iMode) {
     if (gNullFiles) {
         return new NullFile();
@@ -700,12 +702,11 @@ File *NewFile(const char *iFilename, int iMode) {
                 delete theFile;
                 return nullptr;
             } else {
-                if (!gOpenCaptureFile || !(iMode & 2) || 1 <= (unsigned int)(int)gCaptureFileMode) {
-                    return theFile;
+                if (gOpenCaptureFile && (iMode & 2) && 1 > (unsigned int)(int)gCaptureFileMode) {
+                    sprintf(pathBuf, "'%s'\n", FileMakePath(".", iFilename));
+                    gOpenCaptureFile->Write(pathBuf, strlen(pathBuf));
+                    gOpenCaptureFile->Flush();
                 }
-                sprintf(pathBuf, "'%s'\n", FileMakePath(".", iFilename));
-                gOpenCaptureFile->Write(pathBuf, strlen(pathBuf));
-                gOpenCaptureFile->Flush();
                 return theFile;
             }
         }

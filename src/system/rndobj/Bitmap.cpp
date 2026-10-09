@@ -252,10 +252,17 @@ void RndBitmap::Create(void *buffer) {
 
         int pbytes = PaletteBytes();
         mPalette = pbytes ? i5 : 0;
-        mPixels = i5 + pbytes;
+        // w25-rc: `pixels` is seeded here, before `pixbytes` exists, so its
+        // colour candidate is minted first (id 6, pixbytes id 7).  The image
+        // emits both pointer adds with pixbytes as the first operand
+        // (`add r25, r28, r11` / `add r25, r28, r25`); with `pixels` first
+        // introduced as `mPixels + pixbytes` the ids were reversed and so
+        // were both operand orders.
+        u8 *pixels = i5 + pbytes;
+        mPixels = pixels;
 
         int pixbytes = PixelBytes();
-        u8 *pixels = mPixels + pixbytes;
+        pixels += pixbytes;
         RELEASE(mMip);
         int width = mWidth;
         int height = mHeight;
