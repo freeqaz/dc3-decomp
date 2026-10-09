@@ -26,26 +26,6 @@ RndTransformable::~RndTransformable() {
     if (mParent) {
         mParent->mChildren.remove(this);
     }
-#ifdef HX_NATIVE
-    // CASCADE-PROBE (temporary, w23-cas): the image loop below runs; report
-    // any child that is not a live transformable parented to this.
-    {
-        bool skip = false;
-        FOREACH (it, mChildren) {
-            RndTransformable *c = *it;
-            if (!c || !c->IsRefAlive() || c->mParent != this) {
-                fprintf(stderr, "CASCADE-PROBE Trans: parent=%p child=%p alive=%d parentMatch=%d inDelete=%d\n",
-                        (void *)this, (void *)c, c ? (int)c->IsRefAlive() : -1,
-                        c ? (int)(c->mParent == this) : -1, (int)ObjectDir::InDeleteObjects());
-                skip = true;
-            }
-        }
-        if (skip) {
-            mChildren.clear();
-            return;
-        }
-    }
-#endif
     FOREACH (it, mChildren) {
         (*it)->mParent = nullptr;
         (*it)->SetDirty();
