@@ -174,6 +174,18 @@ void JoypadResetXboxPC(int pad) {
 //  the 7 r31/r7 rows remain; values checked (image: setup_flag r31, rx r7;
 //  ours the reverse; TranslateStick is same-TU, so r7 survives its calls on
 //  both sides).  Inert: hoisting `rx` beside `lx`.
+//  w25-gq (c2rs tap): a COLOR pop-order question, not a value difference.
+//  The narrowed setup_flag (the clrlwi CSE temp, k03 id32, pri -8 tie 106)
+//  pops before `rx` (k04 id24, pri -9 tie 92) and takes r7, the only volatile
+//  that survives the same-TU TranslateStick calls; rx then falls to r31.  The
+//  image needs rx popped first: pri(rx) >= pri(temp) + 1, i.e. +2 on the
+//  difference.  Open: the source form that adds one candidate of pressure in
+//  the rx-test block (rx referenced, the temp only spanning) or removes one
+//  from the post-switch block (temp referenced twice, rx once).  ~37
+//  spellings measured inert or code-changing (else-arm param named/ternary/
+//  split, deadzone_apply/apply2 respellings, rx decl placement, compare
+//  spellings, named drum-arm temps); `int setup_flag` and a split param_a
+//  flip the pop order but change the code.
 
 JoypadType ReadSingleXinputJoypad(
     int pad,
