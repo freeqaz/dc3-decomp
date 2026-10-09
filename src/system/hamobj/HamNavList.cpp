@@ -1582,76 +1582,85 @@ void HamNavList::UpdateGestures(const Skeleton *skeleton) {
 // the two loop exits are one `selected < 0 || selected >= NumShowing()` test.
 // With two separate `return DataNode(0)`s MSVC kept the merged DataNode(0)
 // block after ScrollUp; with one it sits after SetHighlight as in the image.
-// Remaining: a consistent register rotation (image r27 this / r28 dir / r29
-// return slot; ours r28 / r29 / r27), every branch target equal.  Early
-// returns in the scroll arms + one trailing SetHighlight on top of this put the
-// block back after ScrollUp (98.36), so they were not kept.
+// w25-gi (fuzzy 99.26 -> 100): the r27 this / r28 dir / r29 return-slot
+// rotation was the guard spelling. Each early `return DataNode(kDataUnhandled,
+// 0)` is one more reference to the hidden return-slot pointer (the copies are
+// cross-jumped back into one block after colouring, so the code is the same):
+// with five guard clauses its colour priority goes -22 -> 8, above dir (-1),
+// while `this` stays at -4. Early returns in the scroll arms (tried by w21-ak)
+// also raise `this` above dir, and they move the DataNode(0) block.
 DataNode HamNavList::OnMsg(const ButtonDownMsg &msg) {
     if (mRefreshPending)
         RealRefresh();
 
     bool inControllerMode = InControllerMode();
-    if ((inControllerMode || TheLoadMgr.EditMode())
-        && !RndAnimatable::IsAnimating() && mEnabled) {
-        bool gesturing = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
-        if (!gesturing && TheUI->FocusComponent() == this) {
-            int dir = ScrollDirection(msg, false, true, 1);
-            if (dir != 0) {
-                int selected = mListState.Selected();
-                do {
-                    selected += dir;
-                    if (selected < 0 || selected >= mListState.NumShowing())
-                        return DataNode(0);
-                } while (!mListState.Provider()->IsActive(selected));
+    if (!inControllerMode && !TheLoadMgr.EditMode())
+        return DataNode(kDataUnhandled, 0);
+    if (RndAnimatable::IsAnimating())
+        return DataNode(kDataUnhandled, 0);
+    if (!mEnabled)
+        return DataNode(kDataUnhandled, 0);
+    bool gesturing = TheGestureMgr && TheGestureMgr->GesturingWithVoice();
+    if (gesturing)
+        return DataNode(kDataUnhandled, 0);
+    if (TheUI->FocusComponent() != this)
+        return DataNode(kDataUnhandled, 0);
 
-                if (mListState.ScrollPastMinDisplay()) {
-                    if (selected < mListState.FirstShowing()) {
-                        mScrollBehavior.ScrollUp(false);
-                        // NOT `- 1`.  The image computes the threshold with a
-                        // single add and no subtract -- `lwz r10,
-                        // sNumListSelectable` / `add r11, r11, r10` (0x5824) /
-                        // `cmpw cr6, r31, r11` (0x5828) / `blt` -- so the
-                        // ScrollDown edge is firstShowing + sNumListSelectable,
-                        // not one item earlier.  Our `- 1` was an invention and
-                        // it showed up as a `subi r11, r11, 0x1` the image does
-                        // not have; it made the list scroll down one item too
-                        // soon on the controller path.
-                        // The commutative row (target `add r11, r11, r10`) was
-                        // closed by w21-r: read FirstShowing() at both compare
-                        // sites instead of through a local (see the note above
-                        // the function).  Swapping the sum's operands alone is
-                        // byte-inert.
-                        // Landing this once broke 8 DtaFlow tests and it was
-                        // reverted (54365d0c3) on the theory that the `- 1`
-                        // compensated for a native scroll divergence.  There was
-                        // none: instrumented per press, native computes exactly
-                        // what this listing does.  The flows were counting on
-                        // the bug -- song select enters on index 2 (the
-                        // song_tier_0 header; headers are active rows), four
-                        // downs reach index 6 (the song_tier_1 header), and only
-                        // the early `- 1` edge made the fourth press ScrollDown
-                        // and hop the cursor over it to starships.  The input
-                        // scripts now use one down (-> ymca, index 3), and
-                        // DtaFlowSongSelectScrollTest pins this edge.
-                    } else if (selected
-                        >= mListState.FirstShowing() + HamListRibbon::sNumListSelectable) {
-                        mScrollBehavior.ScrollDown(false);
-                    } else {
-                        SetHighlight(selected);
-                    }
-                } else {
-                    SetHighlight(selected);
-                }
+    int dir = ScrollDirection(msg, false, true, 1);
+    if (dir != 0) {
+        int selected = mListState.Selected();
+        do {
+            selected += dir;
+            if (selected < 0 || selected >= mListState.NumShowing())
                 return DataNode(0);
-            }
+        } while (!mListState.Provider()->IsActive(selected));
 
-            if (msg.GetAction() == kAction_Confirm) {
-                if (mSelectionEnabled) {
-                    SetSelecting(true);
-                }
-                return DataNode(0);
+        if (mListState.ScrollPastMinDisplay()) {
+            if (selected < mListState.FirstShowing()) {
+                mScrollBehavior.ScrollUp(false);
+                // NOT `- 1`.  The image computes the threshold with a
+                // single add and no subtract -- `lwz r10,
+                // sNumListSelectable` / `add r11, r11, r10` (0x5824) /
+                // `cmpw cr6, r31, r11` (0x5828) / `blt` -- so the
+                // ScrollDown edge is firstShowing + sNumListSelectable,
+                // not one item earlier.  Our `- 1` was an invention and
+                // it showed up as a `subi r11, r11, 0x1` the image does
+                // not have; it made the list scroll down one item too
+                // soon on the controller path.
+                // The commutative row (target `add r11, r11, r10`) was
+                // closed by w21-r: read FirstShowing() at both compare
+                // sites instead of through a local (see the note above
+                // the function).  Swapping the sum's operands alone is
+                // byte-inert.
+                // Landing this once broke 8 DtaFlow tests and it was
+                // reverted (54365d0c3) on the theory that the `- 1`
+                // compensated for a native scroll divergence.  There was
+                // none: instrumented per press, native computes exactly
+                // what this listing does.  The flows were counting on
+                // the bug -- song select enters on index 2 (the
+                // song_tier_0 header; headers are active rows), four
+                // downs reach index 6 (the song_tier_1 header), and only
+                // the early `- 1` edge made the fourth press ScrollDown
+                // and hop the cursor over it to starships.  The input
+                // scripts now use one down (-> ymca, index 3), and
+                // DtaFlowSongSelectScrollTest pins this edge.
+            } else if (selected
+                >= mListState.FirstShowing() + HamListRibbon::sNumListSelectable) {
+                mScrollBehavior.ScrollDown(false);
+            } else {
+                SetHighlight(selected);
             }
+        } else {
+            SetHighlight(selected);
         }
+        return DataNode(0);
+    }
+
+    if (msg.GetAction() == kAction_Confirm) {
+        if (mSelectionEnabled) {
+            SetSelecting(true);
+        }
+        return DataNode(0);
     }
     return DataNode(kDataUnhandled, 0);
 }
