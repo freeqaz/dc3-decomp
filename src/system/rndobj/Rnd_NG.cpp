@@ -113,7 +113,27 @@ void NgRnd::RemovePointTest(RndFlare *flare) {
     }
 }
 
-void NgRnd::DoPostProcess() { Rnd::DoPostProcess(); }
+#ifdef HX_NATIVE
+extern void FlushPostProcessingForOverlay();
+#endif
+
+void NgRnd::DoPostProcess() {
+    Rnd::DoPostProcess();
+#ifdef HX_NATIVE
+    // The image's NgRnd runs the post chain here, at Rnd::EndWorld: the world
+    // is resolved and graded, and whatever the frame draws after EndWorld
+    // (WorldDir's mHUD -- WorldDir::DrawShowing calls TheRnd.EndWorld() before
+    // mHUD->DrawShowing() when explicit_postproc is set -- and the UI) lands on
+    // the graded frame, ungraded. The WebGPU backend composites the post chain
+    // in a separate pass; FlushPostProcessingForOverlay() is that pass, run at
+    // the same point. Without it the dc3 backend graded at EndDrawing, so the
+    // game HUD (postprocs_before_draw FALSE in its .milo) was drawn into the
+    // world target and graded with it, and the grade itself ran with whatever
+    // camera/postproc was current by then.
+    if (!Offscreen())
+        FlushPostProcessingForOverlay();
+#endif
+}
 
 void NgRnd::CreateLargeQuad(int, int, LargeQuadRenderData &) {
 #ifndef HX_NATIVE
