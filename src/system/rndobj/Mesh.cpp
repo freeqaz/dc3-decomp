@@ -1657,6 +1657,19 @@ void RndMesh::InstanceGeomOwnerBones() {
         // Arm order matters: `!= -1` first flips the bne and moves the
         // newRoot arm (measured 98.4).  Left: r9/r10 swapped on the three
         // mGeomOwner->mBones[parentIdx] address rows (volatile only).
+        // w25-rl stop note (c2rs tap): the else arm's address add has two
+        // code-band colour candidates, all pri 14 tie 0 with ref 2: the
+        // owner's mBones begin load (code#113, id 66) and parentIdx*84
+        // (code#114, id 67); bones' begin (code#115, id 68) is the third.
+        // C=30 code mints, F=22 `ben` frees, so all three take fresh ids
+        // and pop in reverse mint order: 68 r11, 67 (mulli) r10, 66 r9.
+        // The image needs begin popped before the mulli (begin r10, mulli
+        // r9; its add also lists begin first), i.e. begin minted after the
+        // product, or C-F <= 1 so both recycle and pop in mint order.
+        // Inert (11 spellings): index-first `parentIdx + begin()`,
+        // `parentIdx[begin()]`, BoneTransAt(), a named owner/begin/bone/
+        // parent local, `RndBone &` ref, `!= -1` arm order. Open question:
+        // what puts the product ahead of the base in the code-band walk.
         if (parentIdx == -1) {
             bones[i].mBone->SetTransParent(newRoot, false);
         } else {
