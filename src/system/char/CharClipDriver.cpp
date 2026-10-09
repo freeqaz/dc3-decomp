@@ -214,7 +214,10 @@ void CharClipDriver::PlayEvents(float oldBeat) {
         CharClip::BeatEvent &ev = mClip->mBeatEvents[mNextEvent];
         if (ev.beat > mBeat)
             return;
-        ExecuteEvent(ev.event);
+        // Named copy: one more demoted one-block local (F 4->5), so mNextEvent
+        // loads ahead of mClip as in the image.
+        Symbol event = ev.event;
+        ExecuteEvent(event);
         mNextEvent++;
     }
 }

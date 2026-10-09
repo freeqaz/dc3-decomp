@@ -678,9 +678,10 @@ int Voice::GetAddr() {
     // cmplwi only for an unsigned integer one.
     if ((unsigned int)mBuffer != 0) {
         int bytesPerSample = mChannels * 2;
-        int samplesInBuffer = mAudioBytes / bytesPerSample;
-        unsigned int uaddr = (unsigned int)addr;
-        addr = (int)(uaddr - (uaddr / (unsigned int)samplesInBuffer) * (unsigned int)samplesInBuffer) * mChannels;
+        // `%`, not a hand-expanded remainder: one fewer demoted local (F 2->1),
+        // so the hoisted address halves pop in the image's order.
+        unsigned int samplesInBuffer = mAudioBytes / bytesPerSample;
+        addr = (int)((unsigned int)addr % samplesInBuffer) * mChannels;
     } else {
         addr = mChannels * addr;
     }

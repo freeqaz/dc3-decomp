@@ -242,10 +242,11 @@ END_HANDLERS
 
 int ChallengeSortNode::GetChallengeExp() {
     ChallengeRecord *rec = mChallengeRecord;
-    return TheChallenges->CalculateChallengeXp(
-        rec->GetChallengeRow().mScore,
-        rec->GetChallengeRow().mDiff
-    );
+    // Named field loads, difficulty first (the image's load order): two more
+    // demoted locals (F 3->5) in the inlined ChallengeHeaderNode::GetChallengeExp.
+    int difficulty = rec->GetChallengeRow().mDiff;
+    int score = rec->GetChallengeRow().mScore;
+    return TheChallenges->CalculateChallengeXp(score, difficulty);
 }
 
 int ChallengeSortNode::GetSongID() { return mChallengeRecord->GetChallengeRow().mSongID; }
