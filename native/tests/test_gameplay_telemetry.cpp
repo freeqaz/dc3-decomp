@@ -75,12 +75,17 @@ static bool Dc3NativeIsPresent() {
     return false;
 }
 
-static TelRunResult RunWithTelemetry(int maxFrames, const char *script, int timeout = 120) {
+// extraEnv: further VAR=value assignments (space separated) for this run only.
+static TelRunResult RunWithTelemetry(
+    int maxFrames, const char *script, int timeout = 120, const char *extraEnv = ""
+) {
     if (!Dc3NativeIsPresent()) return TelRunResult{-1, 0, "", false};
     std::string binary = GetDc3NativePath();
     std::ostringstream cmd;
     cmd << "MILO_HEADLESS=1 MILO_FATAL_FAILS=0 DC3_SHOW_SPLASH=0 DC3_TEL=1 DC3_FAST_BOOT=1"
         << " MILO_MAX_FRAMES=" << maxFrames;
+    if (extraEnv && extraEnv[0])
+        cmd << " " << extraEnv;
     if (script)
         cmd << " MILO_INPUT_SCRIPT=" << script;
     cmd << " timeout " << timeout << " " << binary << " 2>&1";
@@ -1616,4 +1621,92 @@ TEST_F(GameplayTelemetryTest, AnkleSeparationNotExplodingDuringGameplay) {
         << "Worst separation: " << worstSep << " units. "
         << "One or both ankles have flown to a garbage position. "
         << progressSummary();
+}
+
+// ---------------------------------------------------------------------------
+// Empty sensor: a whole song with move scoring off
+// ---------------------------------------------------------------------------
+//
+// DC3_NATIVE_SCORING=0 stops App.cpp from polling TheGestureMgr, so the sensor
+// never reports a tracked skeleton: the state of a 360 with the Kinect in view
+// of nobody. Every Kinect-facing object ShellInput::Init builds (the
+// SkeletonIdentifier, SkeletonChooser, gesture filters, SkeletonExtentTracker,
+// DepthBuffer) is still polled each frame, now on the image's own bodies, and
+// those are written to cope with an empty sensor -- but GameplayTelemetryTest
+// always runs with the tracked headless dummy, so nothing else drives this
+// path through a song. (w25-n1 makes ShellInput::Poll poll the SkeletonChooser
+// unconditionally, as the image does at 0x82903454; before it, native skipped
+// the chooser while no skeleton was tracked.)
+//
+// ONE test case on purpose: ctest runs every gtest case in its own process, so
+// each case would replay the ~31k-frame song from scratch.
+//
+// Measured on the first run (ymca.txt, w25-n2): game_screen at frame ~1150,
+// perform_endgame_screen at ~30110, perform_final_results_screen at ~31730,
+// ~200 s wall clock headless.
+TEST(EmptySensorGameplayTest, SongWithScoringOffRunsCleanToTheEnd) {
+    if (!getenv("DC3_GAMEPLAY_TESTS")) {
+        GTEST_SKIP() << "Set DC3_GAMEPLAY_TESTS=1 to enable (requires game assets; "
+                        "one ~200 s engine run)";
+    }
+    const std::string script = GetScriptDir() + "/ymca.txt";
+    // DC3_SCORING_DEBUG makes the gesture feed announce itself ("DC3 SCORING:
+    // player->slot binding ..." as soon as it binds the dummy), which is how
+    // this test proves its own precondition below.
+    TelRunResult run = RunWithTelemetry(
+        33500, script.c_str(), 480, "DC3_NATIVE_SCORING=0 DC3_SCORING_DEBUG=1"
+    );
+    ASSERT_TRUE(sTelSetupError.empty()) << sTelSetupError;
+    const std::string &out = run.output;
+
+    // Precondition: the sensor really was empty. If scoring stayed on (an env
+    // parsing change, a new default) this run would be the tracked-dummy path
+    // GameplayTelemetryTest already covers, and a pass would mean nothing.
+    EXPECT_EQ(out.find("DC3 SCORING:"), std::string::npos)
+        << "The gesture feed ran (a 'DC3 SCORING:' line was printed), so the "
+           "sensor was not empty: DC3_NATIVE_SCORING=0 no longer disables it.";
+
+    EXPECT_EQ(run.signal, 0) << "Engine crashed with signal " << run.signal;
+    EXPECT_FALSE(run.timedOut) << "Engine timed out (hung)";
+    EXPECT_EQ(run.exitCode, 0) << "Engine exited with code " << run.exitCode;
+
+    // Reaches the end: the song was played and finished. perform_endgame_screen
+    // is what game_screen hands over to when the song ends.
+    std::vector<TelemetrySample> samples = ParseTelemetry(out);
+    bool sawPlaying = false;
+    bool sawGameOver = false;
+    for (const TelemetrySample &s : samples) {
+        const std::string state = s.getString("state");
+        if (state == "playing") sawPlaying = true;
+        if (sawPlaying && state == "gameover") sawGameOver = true;
+    }
+    EXPECT_TRUE(sawPlaying) << "Never observed gameplay (state=playing)";
+    EXPECT_TRUE(sawGameOver) << "Gameplay never reached state=gameover";
+    EXPECT_NE(out.find("Screen 'game_screen' Enter"), std::string::npos)
+        << "Never reached game_screen";
+    EXPECT_NE(out.find("Screen 'perform_endgame_screen' Enter"), std::string::npos)
+        << "The song never ended: perform_endgame_screen was not entered";
+
+    // No asserts: native prints every MILO_ASSERT / MILO_FAIL as "FAIL: <msg>"
+    // (Debug::Fail) and keeps running, so the exit code alone cannot see them.
+    std::istringstream lines(out);
+    std::string line;
+    int failCount = 0;
+    int dtaUnresolved = 0;
+    std::string firstFails;
+    std::string firstUnresolved;
+    while (std::getline(lines, line)) {
+        if (line.rfind("FAIL: ", 0) == 0 || line.find("THREAD-FAIL: ") != std::string::npos) {
+            if (failCount++ < 5) firstFails += "  " + line + "\n";
+        }
+        // A DTA call on an object native never registered (net_cache_mgr and
+        // skeleton_identifier both used to be this).
+        if (line.find("not function or object") != std::string::npos) {
+            if (dtaUnresolved++ < 5) firstUnresolved += "  " + line + "\n";
+        }
+    }
+    EXPECT_EQ(failCount, 0) << failCount << " assert/fail line(s), first:\n" << firstFails;
+    EXPECT_EQ(dtaUnresolved, 0) << dtaUnresolved
+                                << " DTA reference(s) to an unregistered object, first:\n"
+                                << firstUnresolved;
 }
