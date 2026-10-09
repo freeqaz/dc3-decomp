@@ -101,7 +101,15 @@ bool BoxMapLighting::QueueLight(RndLight *light, float colorScale) {
  *  c20g/c20b (the "color[5].green/blue loaded first" note above).  c16g
  *  before c20r gives the image's emission order.  Each accumulator's own
  *  expression is unchanged, so the reorder is behaviour-neutral.
- *  Declaration order of the c-locals is fully inert (5 orders probed). */
+ *  Declaration order of the c-locals is fully inert (5 orders probed).
+ *
+ *  w25-gk: fuzzy 98.02 -> 100.  The 16 register-held accumulators all have
+ *  COLOR priority 77, so the tie key (program position of the update
+ *  statement) decides their pop order, and pop order is register order
+ *  (f11, f10, ..., f1, f31, ...).  The image's registers give the pop order
+ *  c0r c0g c0b c8r c8g c8b c16r c4r c4g c4b c12r c12g c12b c16g c16b c20r;
+ *  writing the updates in that order gives those ties, and the scheduler
+ *  still emits the fmadds in the image's order (c16b first). */
 void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vector3 *v3) const {
     START_AUTO_TIMER("draw_light_approx");
     gLightIndex = 0;
@@ -156,21 +164,21 @@ void BoxMapLighting::ApplyQueuedLights(Hmx::Color * __restrict color, const Vect
             float wNegY = negY * negY;
             float wNegZ = negZ * negZ;
 
-            c16b += wPosZ * z2;
-            c0b += wPosX * z2;
-            c8b += wPosY * z2;
             c0r += wPosX * x2;
             c0g += wPosX * y2;
+            c0b += wPosX * z2;
             c8r += wPosY * x2;
             c8g += wPosY * y2;
-            c4b += wNegX * z2;
-            c12b += wNegY * z2;
+            c8b += wPosY * z2;
             c16r += wPosZ * x2;
             c4r += wNegX * x2;
             c4g += wNegX * y2;
+            c4b += wNegX * z2;
             c12r += wNegY * x2;
             c12g += wNegY * y2;
+            c12b += wNegY * z2;
             c16g = wPosZ * y2 + c16g;
+            c16b += wPosZ * z2;
             c20r = wNegZ * x2 + c20r;
             c20g = wNegZ * y2 + c20g;
             c20b = wNegZ * z2 + c20b;
