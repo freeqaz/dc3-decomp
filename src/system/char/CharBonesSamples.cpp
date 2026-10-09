@@ -185,13 +185,19 @@ void CharBonesSamples::LoadData(BinStreamRev &d) {
                 }
 #endif
             } else {
+                // The image adds mStart first here (`add r29, r4, r11`) but the
+                // section offset first in the later loops.  A named reference
+                // minted here is sid 9, so the offset load keys 0x12008, below
+                // the mStart temp (0x18900); through _sub1 (sid 5) it keys
+                // 0x1a008 and comes first (c2rs 8.7 memory-leaf key).
+                const int &quatStart = mOffsets[TYPE_QUAT];
                 if (mCompression >= kCompressVects) {
-                    short *quatOffset = (short *)(mStart + _sub1);
+                    short *quatOffset = (short *)(mStart + quatStart);
                     for (short *p = (short *)mStart; p < quatOffset; p += 3) {
                         d >> p[0] >> p[1] >> p[2];
                     }
                 } else {
-                    Vector3 *quatOffset = (Vector3 *)(mStart + _sub1);
+                    Vector3 *quatOffset = (Vector3 *)(mStart + quatStart);
                     for (Vector3 *p = (Vector3 *)mStart; p < quatOffset; p++) {
                         d >> *p;
                     }
