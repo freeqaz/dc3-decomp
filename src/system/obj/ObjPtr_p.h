@@ -778,6 +778,13 @@ Hmx::Object *ObjPtrList<T1, T2>::Node::RefOwner() const {
 }
 
 // -- ObjPtrVec Xbox template implementations --
+// w24-pch (B4, open): whether erase<T> inlines Set<T> follows COMDAT compile
+// order per TU (w21-d rule; image inlines for Font RndMat, LightPreset
+// Spotlight, CharClipGroup; calls for FlowManager FlowNode and LightPreset
+// E/L/SD).  Defining erase BEFORE Set in this header is inert on all of them
+// (per-object probe: erase<Spotlight> 83.12, erase<FlowNode> 80.58, control
+// erase<RndMat> 100, unchanged).  Definition order is not the input; the open
+// question is what reference makes the front end queue Set<T> ahead of erase<T>.
 
 template <class T1, class T2>
 typename ObjPtrVec<T1, T2>::iterator

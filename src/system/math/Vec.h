@@ -174,6 +174,13 @@ TextStream &operator<<(TextStream &, const Vector3 &);
 TextStream &operator<<(TextStream &, const Vector2 &);
 
 // 16-byte padded Vector3 for structs that need XMVECTOR-compatible stride
+// w24-pch: do NOT make this `struct PaddedJointPos : Vector3` (Vector3 is
+// already 16 bytes with its PAD).  A/B'd with a full ninja: it fixes the two
+// DirectionGestureFilter readers the conversion operator's inline level hurt,
+// but takes StandingStillGestureFilter::Update 100 -> 90.16 -- the image holds
+// joint x/y/z across Normalize(), which MSVC stops doing once they ARE
+// Vector3::x/y/z.  The original type is not Vector3-derived; readers that need
+// no inline level bind `*(const Vector3 *)&joint.mJointPos[0]` instead.
 struct PaddedJointPos {
     float x, y, z, _pad;
     PaddedJointPos() {}
