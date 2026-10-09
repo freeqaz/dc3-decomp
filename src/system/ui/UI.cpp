@@ -777,8 +777,13 @@ void UIManager::Poll() {
             printf("DC3 UI: transition complete, will enter '%s'\n", trans ? trans->Name() : "<null>");
             fflush(stdout);
 #endif
-            if (trans) {
-                if (trans->AllPanelsDown() && mPushedScreens.empty()
+            // Re-reading mCurrentScreen (== trans) instead of trans keeps one
+            // fewer lowering temp ahead of mLoadTimer.Stop() below; that moves
+            // the &mCycles base temp to sid 743 (mod 4 = 3), so the memory
+            // leaf outranks the named `cycles` in the 64-bit add (c2 §8.7) and
+            // the ld/rldicl pair pops in the image's order (r9/r10).
+            if (mCurrentScreen) {
+                if (mCurrentScreen->AllPanelsDown() && mPushedScreens.empty()
                     && IsTimelineResetAllowed()) {
                     mTimer.Restart();
                     TheTaskMgr.SetUISeconds(0, true);
