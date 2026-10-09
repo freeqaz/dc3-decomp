@@ -1297,11 +1297,22 @@ void RndMesh::SetVolume(RndMesh::Volume vol) {
                     // writing the product out by hand, explicitly right-associated
                     // the way the image accumulates it,
                     // `-(vb0.x*planePoint.x + (vb0.y*planePoint.y + vb0.z*planePoint.z))`.
-                    // MSVC canonicalises all three spellings to the same bytes; the
-                    // scheduler, not the source, picks which pair is the innermost
-                    // fmuls.  Same class as FillCompressedVertex in
-                    // rndobj/MeshVertCompress.h.  1132 B of matched_code is parked
-                    // behind it.
+                    // MSVC canonicalises all three spellings to the same bytes.
+                    // OPEN (w25-mc), mechanism from the c2rs tap (C2RS-BRIDGE 8.7):
+                    // c2 sorts the three products by key and emits the list's
+                    // second entry innermost. Ours sorts [z 0x0104070e,
+                    // y 0x01040686, x 0x0103a438]: x has count 3 (planePoint.x is
+                    // a memory leaf on the planePoint variable itself), y and z
+                    // count 4 (their bases are planePoint+4 / +8 temps), and z's
+                    // hash is higher. The image needs [y, z, x]. Measured inert:
+                    // named px/pz/py copies (folded back into the loads before
+                    // the last sort), a named partial sum, a named result, a
+                    // Vector3& alias for vb0. Open question: a spelling that
+                    // changes the y or z product's tree shape (its count) without
+                    // changing the loads. A hash-only fix needs z's hash to wrap
+                    // past 0xffff while y's does not: a common shift in
+                    // [0xf8f2, 0xf97a), about 100 field-sid steps away.  Same class as
+                    // FillCompressedVertex in rndobj/MeshVertCompress.h.
                     plane.d = -Dot(vb0, planePoint);
                     bspIt->left = 0;
                     if (i == 5) {

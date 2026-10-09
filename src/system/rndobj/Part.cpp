@@ -1127,24 +1127,24 @@ void RndParticleSys::UpdateRelativeXfm() {
         FastInterp(q28, Hmx::Quat(mLastWorldXfm.m), mRelativeMotion, q28);
         MakeRotMatrix(q28, mLastWorldXfm.m);
         Subtract(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
-        Multiply(mRelativeXfm, mLastWorldXfm.m, mRelativeXfm);
-        Normalize(mRelativeXfm.m, mRelativeXfm.m);
-        Interp(mLastWorldXfm.v, worldXfm.v, mRelativeMotion, mLastWorldXfm.v);
-        // RESIDUAL (w7-ak, 99.98 canonical): the only 2 rows in this 524-byte
-        // function are idx 88/90, the two Y-component loads of this Add --
-        // the image loads 0x290 (mLastWorldXfm.v.y) before 0x250
-        // (mRelativeXfm.v.y), we load them the other way round.  Pure
-        // scheduling of two loads around the intervening 0x28c load: the X and
-        // Z components are instruction-identical on both sides, and the
-        // `fadds` register order is a consequence, not a source operand order
-        // (the image is b+a on all three components, ours is b+a on X and Z
-        // and a+b on Y from the SAME source expression).
-        // NEGATIVE RESULT: swapping the first two arguments (Add is
-        // commutative, and the out param aliases either way) is exactly inert.
-        // w21-bf (still 99.98, same 2 rows): `mRelativeXfm.v += mLastWorldXfm.v`
-        // stores per component (96.4); og-dc3's named `Hmx::Quat q; q.Set(m)`
-        // instead of the temp is inert; `Vector3 &rel = mRelativeXfm.v;
-        // rel.Set(last.x + rel.x, ...)` costs a callee-saved swap (96.9).
+        // The three named references below are behaviour-neutral (each names
+        // the member the call already took by reference). They exist for the
+        // Add() at the end: c2 orders the operands of each fadds by a key
+        // (c2rs W-STAGETAP-11, C2RS-BRIDGE 8.7), and for two memory operands
+        // with temp bases that key is the base temp's sid mod 4. Each
+        // reference mints one more lowering temp ahead of the Add's address
+        // temps, so the three of them move the Y and Z base sids by +3
+        // (mod 4: A.y 558->561, B.y 560->563; A.z 541->544, B.z 543->546).
+        // That gives mLastWorldXfm.v.y the higher key, so the image's
+        // b+a order (lfs 0x290 before 0x250) now holds on Y as on X and Z,
+        // while Z keeps it. One or two references flip Z the wrong way
+        // (+1/+2 measured), which is how the +3 was predicted (w25-mc).
+        Transform &relXfm = mRelativeXfm;
+        Multiply(relXfm, mLastWorldXfm.m, relXfm);
+        Hmx::Matrix3 &relRot = mRelativeXfm.m;
+        Normalize(relRot, relRot);
+        Vector3 &lastPos = mLastWorldXfm.v;
+        Interp(lastPos, worldXfm.v, mRelativeMotion, lastPos);
         Add(mRelativeXfm.v, mLastWorldXfm.v, mRelativeXfm.v);
     }
     Subtract(mMotionParent->WorldXfm().v, mLastWorldXfm.v, mMotionParentDelta);

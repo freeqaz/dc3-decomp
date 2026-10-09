@@ -1219,6 +1219,18 @@ void UtilDrawPlane(
     // order/association/operand spellings of the sum get the image's chain at
     // best by moving the row-pointer bias to .x and swapping a Cross operand
     // (157 vs 156 equal rows) -- not shipped.
+    // OPEN (w25-mc), mechanism read from the c2rs tap (C2RS-BRIDGE 8.7):
+    // the three products are sorted by key and the list's second entry is
+    // emitted innermost. Each product is (row-load temp) * (m.y field), and
+    // its key's hash is 64 * (temp sid + field sid) mod 0x10000, so the order
+    // is that of (t + s) mod 1024: x 729+26 = 755, y 727+274 = 1001,
+    // z 746+273 = 1019 (the m.y y/z fields are renamed copies, x keeps its
+    // field symbol -- the same pattern as MakeNormals' e1/e2). Sorted
+    // [z, y, x] gives our y-innermost chain; the image needs [x, z, y]. A
+    // uniform shift of the row-load temp sids by +23..+267 wraps y and z past
+    // 1024 but not x and gives exactly that order. Open question: a spelling
+    // that mints that many more lowering temps ahead of this loop without
+    // changing the code around it.
     int minIdx = 0;
     int idx = 0;
     float minDotProduct = 10000.0f;
@@ -1933,44 +1945,49 @@ void MakeNormals(RndMesh *m) {
                                 (double)((e2.y * e1.y + e2.z * e1.z) + e2.x * e1.x)
                             );
 
-                            Vector3 weighted;
-                            Scale(crossProd, angle, weighted);
-                            // 99.98797, 9 rows, two clusters, both commutative
-                            // /scheduling ties with no source lever left:
-                            //  * [222]/[223] -- the crossProd fmuls/fmsubs
-                            //    multiply operands are the same two registers in
-                            //    the other order (f9/f13, f9/f0). The plain
-                            //    two-term same-register swap is the documented
-                            //    backend floor (stream3_fmuls_operand_order).
-                            //  * [249]/[250] + [265]..[270] -- the Add() below.
-                            //    The target adds and stores x, y, z; we add and
-                            //    store x, z, y, and the y/z halves of `weighted`
-                            //    land in the other FPR. The x row [265] is a bare
-                            //    commutative swap: the target emits
-                            //    norm.x + weighted.x (v1 first, as written), we
-                            //    emit weighted.x + norm.x.
-                            // Measured INERT (w7-m): swapping this call's first
-                            // two arguments to Add(weighted, norm, norm). The
-                            // object is byte-identical -- same 9 rows, same
-                            // registers -- which is the stop signal for the
-                            // commutative-order lever: the backend picks the
-                            // operand order here and source cannot reach it.
-                            // REFUTED (w9-f) -- and it is the y/z ORDER, not
-                            // Vec.h, that the four offset rows report.  Add()
-                            // ends in `dst.Set(v1.x+v2.x, v1.y+v2.y, v1.z+v2.z)`
-                            // and Vector3::Set assigns x, then y, then z, so the
-                            // source order is ALREADY the image's; MSVC reorders
-                            // the y and z halves on our side while inlining.
-                            // Expanding the call by hand to dodge the 3-argument
-                            // Set --
-                            //     Vector3 &norm = m->Verts()[i].norm;
-                            //     norm.x = norm.x + weighted.x;  (y, z likewise)
-                            // -- costs a callee-saved GPR for the reference and
-                            // collapses the function: 99.98799 -> 94.5 canonical,
-                            // 9 rows -> 86, the whole repVerts loop reallocated.
-                            // Do NOT reach for math/Vec.h here either: its order
-                            // is correct, it is PCH-reached, and there is nothing
-                            // in it to change.
+                            // w25-mc: built in place rather than through
+                            // Scale(crossProd, angle, weighted). Same three
+                            // products, but fewer symbols ahead of the Add()
+                            // below, which fixes its x row ([265]) to the
+                            // image's norm.x + weighted.x. c2 orders those two
+                            // operands by key (c2rs W-STAGETAP-11): weighted.x
+                            // is a variable (0x10000 | sid<<5), norm.x a memory
+                            // operand whose key carries its base variable's
+                            // sid mod 8 in bits 13-15. With Scale() the norm
+                            // base was sid 592 (0 mod 8, key 0x10008, below
+                            // weighted.x 0x149e0); built in place it is 564
+                            // (4 mod 8, key 0x18008, above weighted.x 0x14600).
+                            Vector3 weighted(
+                                crossProd.x * angle, crossProd.y * angle, crossProd.z * angle
+                            );
+                            // OPEN (w25-mc, 8 rows), two mechanisms:
+                            //  * [222]/[223], the crossProd fmuls/fmsubs operand
+                            //    order. c2's commutative key (C2RS-BRIDGE 8.7)
+                            //    puts the higher-sid variable first. At cqil1
+                            //    every product reads the field symbols in
+                            //    declaration order (e1 21/23/25, e2 27/29/31),
+                            //    but by cqlo0 the y and z fields have been
+                            //    renamed to fresh symbols (e1.z 315, e1.y 576,
+                            //    e2.z 578, e2.y 579) while both x fields keep
+                            //    theirs. So e2.x (27) sorts below e1.z and e1.y
+                            //    and those two products come out e1-first; the
+                            //    image has e2 first in all six. Open question:
+                            //    which pass renames y/z and spares x (offset 0,
+                            //    the struct's own symbol?), and what spelling
+                            //    makes e2.x a renamed symbol too.
+                            //  * [249]/[250] + [267]..[270], the y/z halves of
+                            //    the Add(). Operand order is right on all three
+                            //    rows; the image just runs the y chain (crossProd.y
+                            //    load, scale, add, store 0x14) before z, and we
+                            //    run z first. regasg hands out FPRs first-fit in
+                            //    sched3 order (RT 271/272), so this is the
+                            //    scheduler's y/z tie, not a key.
+                            // Measured inert earlier: Add(weighted, norm, norm)
+                            // (w7-m); expanding Add by hand through a Vector3&
+                            // collapses the function (w9-f, 94.5). w25-mc also
+                            // measured Cross(e1, e2, ...), Subtract() for e1/e2,
+                            // IsZero()/operator== for the tests (fixes [265] but
+                            // breaks the acos dot) and four Add spellings.
                             Add(m->Verts()[i].norm, weighted, m->Verts()[i].norm);
                         }
                     }
