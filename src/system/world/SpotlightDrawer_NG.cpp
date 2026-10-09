@@ -187,15 +187,26 @@ void NgSpotlightDrawer::RenderSphere(Spotlight *sl) {
     Vector4 sphereParams(zero, zero, 0.625f, def.mTopRadius * sSphereScale);
     TheShaderMgr.SetPConstant((PShaderConstant)0x5b, sphereParams);
 
+    // w25-gh: ownerColor, brighten and mat are named for c2's commutative
+    // operand sort (C2RS-BRIDGE 8.7).  A red channel read at displacement 0
+    // from a named Color reference stays a memory leaf keyed by the
+    // reference's sid; with ownerColor at sid 8 and matColor at sid 16 (both
+    // 0 mod 8) the key is 0x10008, below intensity's and r's variable keys,
+    // so both red multiplies come out `fmuls f0,f8,f12` / `fmuls f0,f0,f10`
+    // as in the image.  green/blue/alpha are displaced loads (subexpressions)
+    // and keep the load first.
     Spotlight *colorOwner = sl->mColorOwner;
-    float intensity = colorOwner->mIntensity * def.mBrighten * sBeamBrighten;
-    float r = intensity * colorOwner->mColor.red;
-    float g = colorOwner->mColor.green * intensity;
-    float b = colorOwner->mColor.blue * intensity;
-    float a = colorOwner->mColor.alpha * intensity;
+    const Hmx::Color &ownerColor = colorOwner->mColor;
+    float brighten = def.mBrighten;
+    float intensity = colorOwner->mIntensity * brighten * sBeamBrighten;
+    float r = intensity * ownerColor.red;
+    float g = ownerColor.green * intensity;
+    float b = ownerColor.blue * intensity;
+    float a = ownerColor.alpha * intensity;
 
     if (!sl->mAnimateColorFromPreset && sl->mBeam.mMat) {
-        const Hmx::Color &matColor = sl->mBeam.mMat->GetColor();
+        RndMat *mat = sl->mBeam.mMat;
+        const Hmx::Color &matColor = mat->GetColor();
         r = r * matColor.red;
         g = matColor.green * g;
         b = matColor.blue * b;

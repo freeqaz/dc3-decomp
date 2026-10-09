@@ -188,8 +188,15 @@ void RndGenerator::SetFrame(float frame, float blend) {
         mCurParticle = mParticleSys ? mParticleSys->ActiveParticles() : NULL;
         for (std::list<Instance>::iterator it = mInstances.begin();
              it != mInstances.end();) {
-            float elapsed = frame - it->startFrame;
-            if (elapsed > (float)dir * (mPathEndFrame - mPathStartFrame) || elapsed < 0) {
+            // w25-gh: instFrame and life are named, as in rb3's spelling.  Each
+            // adds one lowering temp ahead of the `frame + mRateGenHigh` add
+            // below; two of them move the mRateGenHigh load's base temp to a sid
+            // that is 0 mod 4, so its sort key (0x10008) drops below frame's
+            // (0x10060) and the add is emitted `fadds f0,f31,f0` as the image.
+            float instFrame = it->startFrame;
+            float elapsed = frame - instFrame;
+            float life = (float)dir * (mPathEndFrame - mPathStartFrame);
+            if (elapsed > life || elapsed < 0) {
                 if (elapsed < 0)
                     mNextFrameGen = it->startFrame;
                 it = mInstances.erase(it);

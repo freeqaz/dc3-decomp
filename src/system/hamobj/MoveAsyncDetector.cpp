@@ -297,8 +297,7 @@ float MoveAsyncDetector::MoveRatingFrac(int player, RatingBar bar, const HamMove
         }
         MoveDir *dir = mDir;
         int beat = dir->MoveBeat();
-        int idx = mDir->MoveIdx();
-        detector->Poll(idx, beat, dir);
+        detector->Poll(mDir->MoveIdx(), beat, dir);
         if (bar == kRatingActive) {
             return detector->ActiveDetectFrac(player, mDir);
         }

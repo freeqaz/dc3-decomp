@@ -1782,35 +1782,35 @@ void HamDirector::UpdatePostProcOverlay(
     if (!ppOverlay->Showing())
         return;
     TextStream *reflect = TheDebug.SetReflect(ppOverlay);
-    // BUG FIX (w19-x): the unchanged early-out still RESTORES the reflect --
-    // 0x82467D1C `beq cr6` on the blend compare lands on the `stw r25, 0x18(r31)`
-    // that puts the old TextStream back.  Returning straight out left every
-    // later TheDebug print redirected into the postproc overlay.
-    if (procA == sPostProcA && procB == sPostProcB && blend == sPostProcBlend) {
-        TheDebug.SetReflect(reflect);
-        return;
-    }
-    static int sHamDirID = 0;
-    sHamDirID++;
-    int displayId = sHamDirID % 100;
-    if (procA) {
-        if (!procB) {
-            MILO_LOG(
-                "%03d:HAMDIR Post Proc %s is not blended\n", displayId, procA->Name()
-            );
-        } else {
-            MILO_LOG("%03d:HAMDIR Post Proc A %s\n", displayId, procA->Name());
+    // The unchanged case still restores the reflect (w19-x bug fix: the image's
+    // blend-compare `beq` lands on the `stw` that puts the old TextStream back).
+    // One shared SetReflect(reflect) tail, as the image has it (w25-gh): with an
+    // early `return` the restore was written twice, which raised the reflect's
+    // colour priority (pri 1 -> -12 once shared) and rotated procB / reflect /
+    // &sPostProcBlend through r25-r27.
+    if (procA != sPostProcA || procB != sPostProcB || blend != sPostProcBlend) {
+        static int sHamDirID = 0;
+        sHamDirID++;
+        int displayId = sHamDirID % 100;
+        if (procA) {
+            if (!procB) {
+                MILO_LOG(
+                    "%03d:HAMDIR Post Proc %s is not blended\n", displayId, procA->Name()
+                );
+            } else {
+                MILO_LOG("%03d:HAMDIR Post Proc A %s\n", displayId, procA->Name());
+            }
         }
+        if (procB) {
+            MILO_LOG("%03d:HAMDIR Post Proc B %s\n", displayId, procB->Name());
+        }
+        MILO_LOG(
+            "           PostProc set by %s, blend is %.2f%%\n", source ? source : "", blend * 100.0f
+        );
+        sPostProcBlend = blend;
+        sPostProcA = procA;
+        sPostProcB = procB;
     }
-    if (procB) {
-        MILO_LOG("%03d:HAMDIR Post Proc B %s\n", displayId, procB->Name());
-    }
-    MILO_LOG(
-        "           PostProc set by %s, blend is %.2f%%\n", source ? source : "", blend * 100.0f
-    );
-    sPostProcBlend = blend;
-    sPostProcA = procA;
-    sPostProcB = procB;
     TheDebug.SetReflect(reflect);
 }
 
