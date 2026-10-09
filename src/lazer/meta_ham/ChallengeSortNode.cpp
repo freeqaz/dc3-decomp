@@ -310,9 +310,8 @@ void ChallengeSortNode::SetNewIcon(UILabel *label) const {
     MILO_ASSERT(label, 0x2da);
     AppLabel *appLabel = dynamic_cast<AppLabel *>(label);
     MILO_ASSERT(appLabel, 0x2dc);
-    int timestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(
-        mChallengeRecord->GetChallengeRow().mSongID
-    );
+    int songID = mChallengeRecord->GetChallengeRow().mSongID;
+    int timestamp = TheChallengeSortMgr->GetOwnerChallengeTimeStamp(songID);
     if (timestamp > (int)mChallengeRecord->GetChallengeRow().mTimeStamp
         || mChallengeRecord->GetChallengerGamertag() == mChallengeRecord->GetMissionInfo()
         || mChallengeRecord->GetSongContentLockState() == 4 || mChallengeRecord->GetSongContentLockState() == 2

@@ -295,12 +295,10 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
     }
 }
 
-// w20-c (normalized 100, fuzzy 98.675, 18 register-only rows): volatile
-// r10/r11 swap of playerIdx vs colour in the switch; every case constant, the
-// CTR dispatch and every branch target agree with the image (constant
-// 0x276c offset), so no value differs.  Tried and inert: colour declared after
-// playerIdx; colour declared first in the body.  Plain for loops: worse
-// (98.6).  The UnlockRect name row is the 0x82B9BEC0 ICF fold.
+// playerIdx is an unsigned int, not an unsigned short: as a short it
+// outranked colour in the colour allocator (pri 18 vs 17), so it took r11 and
+// colour r10, the reverse of the image. As an int its priority drops to 11,
+// colour is coloured first and takes r11.
 void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) {
     void *texels = nullptr;
     mTex->TexelsLock(texels);
@@ -320,17 +318,8 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
                 // The `playerIdx <= 7` guard IS in the image -- `cmplwi cr6,
                 // r10, 0x7` / `bgt cr6` at 0x82432B8C -- so it is not the
                 // tautology it looks like; REMOVING it costs 93.940 -> 92.723.
-                // The residual is the dispatch: the image lowers the switch as
-                // a CTR countdown (`mtctr r10`, `cmpwi cr6, r10, 0x0`, six
-                // `bdzf cr6eq` and one `bne cr6`, 0x82432B94..0x82432BB8),
-                // which lays the eight `li r11, <colour>` blocks out in CASE
-                // order; we get a binary search (cmplwi 1/3/5/7 + blt/beq)
-                // which lays the same eight constants out in REVERSE case
-                // order.  The colour mapping is identical on both sides -- the
-                // reversed `li` sequence is block layout, NOT a reversed
-                // palette table.
                 unsigned short color = 0;
-                unsigned short playerIdx = depthPixel & 7;
+                unsigned int playerIdx = depthPixel & 7;
                 if (playerIdx <= 7) {
                 switch (playerIdx) {
                 case 0:
@@ -1095,20 +1084,16 @@ void LiveCameraInput::NuiAudioDataCallback(NUIAUDIO_RESULTS *results) {
         side = side - side / absVal;
     }
 
-    // ONE SetVoiceDirection site.  The image computes the direction into r10
-    // (`li r10, 0x0` at .L_8243073C / `li r10, 0x1` at 0x8243074C) and joins a
-    // single `lwz r11, 0x1444(r8)` / `stw r10, 0x44(r11)` at .L_82430750; the
-    // `side > 10` arm branches straight into it.  Duplicating the call in each
-    // arm costs six rows and re-materialises the `?side@@3HA` address twice.
-    int direction;
+    // One call per arm. The compiler tail-merges the two arms into a single
+    // `lwz r11, 0x1444(r8)` / `stw r10, 0x44(r11)` join, as in the image. The
+    // direction constant is then a short-lived temp assigned at that join
+    // (the reload takes r11, the value r10). A named `direction` local
+    // instead becomes a colour candidate (pri 4, tie 63) that takes r11 first.
     if (side == 10) {
-        direction = 0;
+        inst->mSpeechMgr->SetVoiceDirection(0);
     } else if (side == -10) {
-        direction = 1;
-    } else {
-        return;
+        inst->mSpeechMgr->SetVoiceDirection(1);
     }
-    inst->mSpeechMgr->SetVoiceDirection(direction);
 }
 
 bool LiveCameraInput::SetAutoexposure(bool enable) {
