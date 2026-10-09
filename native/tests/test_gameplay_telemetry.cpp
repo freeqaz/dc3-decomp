@@ -1653,8 +1653,11 @@ TEST(EmptySensorGameplayTest, SongWithScoringOffRunsCleanToTheEnd) {
     // DC3_SCORING_DEBUG makes the gesture feed announce itself ("DC3 SCORING:
     // player->slot binding ..." as soon as it binds the dummy), which is how
     // this test proves its own precondition below.
+    // Timeout: ~200 s on an idle box, but lanes share it. 900 s is a floor of
+    // ~37 frames/s (GameplayTelemetryTest's 9050 frames / 180 s is ~50), and
+    // stays under ctest's 1500 s default.
     TelRunResult run = RunWithTelemetry(
-        33500, script.c_str(), 480, "DC3_NATIVE_SCORING=0 DC3_SCORING_DEBUG=1"
+        33500, script.c_str(), 900, "DC3_NATIVE_SCORING=0 DC3_SCORING_DEBUG=1"
     );
     ASSERT_TRUE(sTelSetupError.empty()) << sTelSetupError;
     const std::string &out = run.output;
