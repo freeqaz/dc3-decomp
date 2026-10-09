@@ -953,16 +953,15 @@ int HamNavList::GetDisabledCount(int display) const {
         if (!mListState.Provider()->IsActive(i))
             count++;
     }
-    while (display < mListState.NumShowing()) {
-        if (mListState.Provider()->IsActive(display))
+    // A separate index for the trailing scan (rather than advancing the
+    // parameter) is what lets the counter outrank the first loop's &mListState
+    // for r28, as in the image: count pri 1 tie 49 vs pri 1 tie 10.
+    for (int j = display; j < mListState.NumShowing(); j++) {
+        if (mListState.Provider()->IsActive(j))
             break;
         count++;
-        display++;
     }
     MILO_ASSERT(!IsScrollable() || count == 0, 0x313);
-    // w20-d: 100 normalized, fuzzy 99.30: counter/&mListState trade r27/r28
-    // (7 diff_arg rows, values verified equal).  Inert: provider local vs inline
-    // call, hoisting the loop index declaration.
     return count;
 }
 
