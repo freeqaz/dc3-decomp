@@ -382,6 +382,17 @@ void HDCache::Init() {
             // w18-d (99.975, 9 lwzx/stwx base<->index operand rows): `i[readFiles]`
             // is byte-inert; indexing mReadArkFiles/mWriteArkFiles directly
             // instead of the two pointer locals costs 94.2.
+            // w25-gx (c2rs tap, C2RS-BRIDGE 8.7): the lwzx order is the address
+            // add's commutative operand order. Ours sorts the strength-reduced
+            // i*4 temp (sid 1140, key 0x11d00) above readFiles/writeFiles (named
+            // locals sid 19/18, keys 0x10260/0x10240); the else-loop's temp
+            // (sid 1180, 0x12700) also sorts above this->mBlockState (memory
+            // leaf 0x12008). Hypothesis: the image has ~108-116 fewer IL symbols
+            // before these temps (sid 1024..1032 gives every row the image's
+            // order, and keeps mBlockState[i] = ... base-first), or readFiles in
+            // the c1 overflow range (past the first 31 locals: 14 extra locals
+            // moved it to sid 225) plus >= 28 fewer symbols. Open: which source
+            // shape has that symbol count with the same code.
             // Check if read/write files are valid
             File **readFiles = &mReadArkFiles[0];
             File **writeFiles = &mWriteArkFiles[0];

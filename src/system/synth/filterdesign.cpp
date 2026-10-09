@@ -162,24 +162,26 @@ static void normalize(FilterBand band) {
        across the whole body and MSVC hoists them into stack temps ahead of it,
        instead of pinning 0.0 (and w0) in callee-saved FPRs across the calls in
        the pole loop. */
-    case kBandstop: {
-        double w0 = sqrt(w1 * w2), bw = w2 - w1;
+    /* The cases are in upstream mkfilter's order (lp, hp, bp, bs). The order is
+       not cosmetic: measured with the c2rs tap, the first case in source keeps
+       low symbol ids and a later case's loop index gets one above the
+       scalar-replaced `splane.numpoles` (bandstop `i`: sid 6 when bandstop came
+       first, sid 231 when last; numpoles is 36). c2 sorts a commutative
+       add's operands by that key, higher first (C2RS-BRIDGE 8.7), which is what
+       makes bandstop's `splane.numpoles + i` emit `add r11, r29, r11` (i first)
+       while bandpass's keeps numpoles first. Code layout is unchanged. */
+    case kLowpass: {
+        for (int i = 0; i < splane.numpoles; i++)
+            splane.poles[i] = splane.poles[i] * w1;
+        splane.numzeros = 0;
+        break;
+    }
+    case kHighpass: {
         for (int i = 0; i < splane.numpoles; i++) {
-            complex hba = 0.5 * (bw / splane.poles[i]);
-            complex temp = csqrt(1.0 - sqr(w0 / hba));
-            splane.poles[i] = hba * (1.0 + temp);
-            /* The two `splane.numpoles + i` adds here are the unit's last two
-               mismatches: target `add r11, r29, r11` (i first) vs our
-               `add r11, r11, r29`. Spelling them `i + splane.numpoles` changes
-               NOTHING -- measured, byte-identical output -- so MSVC canonicalizes
-               the operand order of the commutative add and the source cannot
-               steer it. Left in upstream's spelling; do not re-try the flip. */
-            splane.poles[splane.numpoles + i] = hba * (1.0 - temp);
-            /* also 2N zeros at (0, +-w0) */
-            splane.zeros[i] = complex(0.0, +w0);
-            splane.zeros[splane.numpoles + i] = complex(0.0, -w0);
+            splane.poles[i] = w1 / splane.poles[i];
+            /* also N zeros at (0,0) */
+            splane.zeros[i] = 0.0;
         }
-        splane.numpoles *= 2;
         splane.numzeros = splane.numpoles;
         break;
     }
@@ -199,22 +201,22 @@ static void normalize(FilterBand band) {
         break;
     }
 
-    case kHighpass: {
+    case kBandstop: {
+        double w0 = sqrt(w1 * w2), bw = w2 - w1;
         for (int i = 0; i < splane.numpoles; i++) {
-            splane.poles[i] = w1 / splane.poles[i];
-            /* also N zeros at (0,0) */
-            splane.zeros[i] = 0.0;
+            complex hba = 0.5 * (bw / splane.poles[i]);
+            complex temp = csqrt(1.0 - sqr(w0 / hba));
+            splane.poles[i] = hba * (1.0 + temp);
+            splane.poles[splane.numpoles + i] = hba * (1.0 - temp);
+            /* also 2N zeros at (0, +-w0) */
+            splane.zeros[i] = complex(0.0, +w0);
+            splane.zeros[splane.numpoles + i] = complex(0.0, -w0);
         }
+        splane.numpoles *= 2;
         splane.numzeros = splane.numpoles;
         break;
     }
 
-    case kLowpass: {
-        for (int i = 0; i < splane.numpoles; i++)
-            splane.poles[i] = splane.poles[i] * w1;
-        splane.numzeros = 0;
-        break;
-    }
     default:
         break;
     }

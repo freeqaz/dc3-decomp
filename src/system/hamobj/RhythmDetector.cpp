@@ -91,26 +91,18 @@ namespace {
                             normalized.insert(normalized.end(), count - normSize, normFill);
                         }
 
-                        // Fill raw with absolute joint velocities
-                        // The 4th and last residual row of this function is the
-                        // `add` at ^/* 824D32E4: the image computes the
-                        // Vector3* for `operator[](comp)` as
-                        //     add r3, r10, r11   ; hoisted jointIdx offset + per-
-                        //                        ; iteration mJointVelocities base
-                        // and we emit the two operands the other way round.
-                        // The sibling `add r11, r11, r30` at ^/* 824D32DC (the
-                        // Frame stride) already matches, so this is MSVC's
-                        // operand order for one address sum, not a source `+`
-                        // that can be written backwards.
-                        // w20-k (100 normalized, 1 diff_arg row): values
-                        // checked -- both sides add the hoisted jointIdx*16
-                        // byte offset (0x54(r1)) to the frame's
-                        // mJointVelocities base, so no value or branch
-                        // divergence. Measured inert: `(jointIdx + v.begin())[0]`
-                        // and a `const Vector3 &` local. Noise class:
-                        // commutative operand order of one address add.
+                        // Fill raw with absolute joint velocities.
+                        // The frame's velocity base is a named local: the image's
+                        // `add r3, r10, r11` (hoisted jointIdx*16 offset first)
+                        // is c2's commutative operand sort (C2RS-BRIDGE 8.7).
+                        // Inline `mJointVelocities[jointIdx]` leaves the base as
+                        // an inlined-begin() local in the c1 overflow range
+                        // (sid 453, key 0x138a0), which outranks the strength-
+                        // reduced offset temp (sid 1222, key 0x13180); a named
+                        // pointer local is sid 30 (key 0x103c0) and sorts after.
                         for (unsigned int f = 0; f < raw.size(); f++) {
-                            float val = frames[f].mJointVelocities[jointIdx][comp];
+                            const Vector3 *velocities = &frames[f].mJointVelocities[0];
+                            float val = velocities[jointIdx][comp];
                             float absVal = fabs(val);
                             raw[f] = absVal;
                             rawAbsSum += absVal;
