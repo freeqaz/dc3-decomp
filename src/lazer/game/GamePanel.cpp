@@ -146,15 +146,12 @@ void LoopVizCallback::DrawHashMarks(
 // 8287BD2C and 8287BFDC), so the Start/Start/Start/End timer reads on the
 // four label colours are the image's, not a transcription slip.
 //
-// Residual: `Hmx::Color(1,1,1)` for the meter-2 DrawLine stores alpha (0x9c)
-// before blue (0x98) at 8287BF4C/8287BF54; the 4-arg ctor is inert.  The five
-// `MakeString` rows are ICF folds (`MakeString<_D3DFORMAT>` / `MakeString<int,
-// SaveLoadManager::State>` are the same code as our `MakeString<int>` /
-// `MakeString<int,int>`).
-// w15-i2 (99.996, 2 rows): the second mDebugMeter2.DrawLine's white Color
-// stores alpha (0x9c) before blue (0x98); every value is f31 (1.0f).  INERT:
-// Color(1,1,1,1) for Color(1,1,1).  INERT (comdat lever): DrawHashMarks
-// marked `inline` (map `f i`).
+// The meter-2 DrawLine's white stores alpha (0x9c) before blue (0x98) at
+// 8287BF4C/8287BF54.  Color(1,1,1) and Color(1,1,1,1) store r,g,b,a; the
+// packed ctor Color(0xffffff) stores alpha first in the IL and matches
+// (w25-ma).  The five `MakeString` rows are ICF folds (`MakeString<_D3DFORMAT>`
+// / `MakeString<int, SaveLoadManager::State>` are the same code as our
+// `MakeString<int>` / `MakeString<int,int>`).
 float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
     if (!TheMaster || !TheMaster->GetAudio() || !TheMaster->GetAudio()->GetSongStream())
         return y;
@@ -266,7 +263,10 @@ float LoopVizCallback::UpdateOverlay(RndOverlay *o, float y) {
         loopProgress + SecondsToBeat(1.0f) / (float)(int)(loopEnd - loopStart),
         Hmx::Color(1.0f, 0.0f, 0.0f), 0.5f, -0.5f
     );
-    mDebugMeter2.DrawLine(loopProgress, Hmx::Color(1.0f, 1.0f, 1.0f), 1.0f, 0.0f);
+    // w25-ma: the packed-int ctor (alpha(1.0f) in the init list, then Unpack)
+    // gives the image's store order, alpha (0x9c) before blue (0x98); every
+    // channel is 255/255 = 1.0f exactly, so the colour is the same white.
+    mDebugMeter2.DrawLine(loopProgress, Hmx::Color(0xffffff), 1.0f, 0.0f);
 
     Hmx::Color startColor2 = mLoopStartChangeTimer > 0.0f ? Hmx::Color(1.0f, 1.0f, 0.0f) : Hmx::Color(1.0f, 1.0f, 1.0f);
     char startMarker = mLoopStartChangeTimer > 0.0f ? '*' : ' ';
