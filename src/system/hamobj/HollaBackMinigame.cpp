@@ -209,6 +209,16 @@ void HollaBackMinigame::BeginMinigame(DataArray *a) {
         mSpecifyFirstMoveMeasure = -1;
         mInitialMusicJump = -1;
         mIntroShoutout = Symbol("hb_intro_70s");
+        // Open (w25-rm): the four inlined clear() copy loops here and in the
+        // `if (a)` arm emit `lwzx rD, base, diff` or `lwzx rD, diff, base`.
+        // The image has diff first in the first three, base first in the last;
+        // we have diff first only in the first. Same inlined source in all four;
+        // both operands are colour candidates, so the order is set by context,
+        // not spelling. In our dump the first loop is the one whose __n-like k04
+        // local is dropped by the negative-benefit pass (it has one colour
+        // candidate fewer); hypothesis: the image drops it in loops two and
+        // three as well. Inert: local refs to either vector, unused named
+        // locals before the loop (symbol ordinals unchanged).
         mWinShoutouts.clear();
         mWinCamCuts.clear();
         mWinCamCuts.push_back("practice_intro_skills");
@@ -271,7 +281,10 @@ void HollaBackMinigame::BeginMinigame(DataArray *a) {
         MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
         mRoutineMoves.clear();
         for (int i = 0; i < mMaxRoutineSize; i++) {
-            HamMove *move = theMoveDir->GetMoveAtMeasure(0, mSpecifyFirstMoveMeasure + i);
+            // Named, the member read is a symbol rather than an expression
+            // temp, and the add takes it as its first operand (image order).
+            int firstMeasure = mSpecifyFirstMoveMeasure;
+            HamMove *move = theMoveDir->GetMoveAtMeasure(0, firstMeasure + i);
             bool found = false;
             FOREACH (it, mRoutineMoves) {
                 if (*it == move) {
