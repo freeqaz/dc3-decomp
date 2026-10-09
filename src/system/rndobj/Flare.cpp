@@ -306,6 +306,14 @@ bool RndFlare::RectOffscreen(const Hmx::Rect &r) const {
         return false;
 }
 
+// w25-gd stop note: the z term of the inlined Dot(v28, mMatrix.z) lists z.z
+// before cross.z in its fmadds; the image lists cross.z first (the x and y terms
+// already match, z first). Both operands are regasg temps, so the order is fixed
+// in the IL operand list before either allocator. Inert (~110 variants): Dot
+// argument order, v28 declaration position, Cross before/after Length, named
+// scaleY/scaleX/negLen, `0 < dot`. Code-changing: explicit Dot/Cross bodies,
+// named axis references, a named Length(x) before Cross. Open question: z.z here
+// is a CSE reload (#2af) shared with Length(mMatrix.z); what orders it.
 void RndFlare::CalcScale() {
     if (mMatrix != WorldXfm().m) {
         Vector3 v28;

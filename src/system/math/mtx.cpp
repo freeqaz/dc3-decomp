@@ -103,6 +103,16 @@ void Multiply(const Transform &a, const Transform &b, Transform &out) {
 }
 
 
+// w25-gd stop note: one fmuls operand order differs (min.x.y * xdot; the image
+// lists the load first, we list xdot first). Not a colour decision: the load is
+// a regasg temp and the order is fixed in the IL operand list. Row x's loads are
+// CSE'd from Dot(min.x, min.x) into the Set arguments (rows y/z read Dot through
+// the reference and are not), and both CSE'd row-x reloads (x.y, x.z) come out
+// xdot-first; the image has x.y load-first and x.z xdot-first. Inert (~300
+// variants): source operand order, per-row ternary reciprocals, named products
+// (x.x, z.y, z.z are code-neutral), Dot(min[k], min[k]), reference aliases.
+// Naming the x.y load flips this operand but hoists the load. Open question:
+// what key orders a CSE-reload operand against a named local in a commutative op.
 void FastInvert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
     float xdot = Dot(min.x, min.x);
     if (xdot != 0)

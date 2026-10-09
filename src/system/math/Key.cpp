@@ -14,20 +14,18 @@ void InterpTangent(
     float fsq = f * f;
     float f6 = f * 6.0f;
     float fsq3 = fsq * 3.0f;
-    float f4 = f * 4.0f;
 
-    float a = fsq * 6.0f - f6;
-    float b = fsq3 - f4 + 1.0f;
-    float c = f6 - fsq * 6.0f;
-    float d = fsq3 - f * 2.0f;
-
-    Scale(v1, a, vout);
+    // The four Hermite tangent weights are passed straight to Scale. Naming
+    // them (or f*4) emits the same instructions but lists three of the Add
+    // fadds operands in the other order; that order is set in the IL before
+    // either register allocator runs.
+    Scale(v1, fsq * 6.0f - f6, vout);
     Vector3 vtmp;
-    Scale(v2, b, vtmp);
+    Scale(v2, fsq3 - f * 4.0f + 1.0f, vtmp);
     Add(vout, vtmp, vout);
-    Scale(v3, c, vtmp);
+    Scale(v3, f6 - fsq * 6.0f, vtmp);
     Add(vout, vtmp, vout);
-    Scale(v4, d, vtmp);
+    Scale(v4, fsq3 - f * 2.0f, vtmp);
     Add(vout, vtmp, vout);
 }
 
