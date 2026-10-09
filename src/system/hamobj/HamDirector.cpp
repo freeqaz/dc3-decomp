@@ -1983,6 +1983,14 @@ bool HamDirector::GetPracticeFrames(Key<Symbol> *&startKey, Key<Symbol> *&endKey
             }
             idx = -1;
         end:
+            // w25-gf open row (r10/r11 in the second loop and the tail): the
+            // second-loop version of idx (sym 8 v2, pri 18 tie 77) ties the three
+            // tail address pieces (code-band mints, pri 18 tie 0) and wins on
+            // tie, so it takes r11; the image needs it after them (r10, offset
+            // r11). Needs idx v2 <= 17 or one more GPR candidate referenced in
+            // the success block (pieces 2*P). ~45 spellings (own loop vars,
+            // break/flag forms, explicit guard do-while, named key/value/begin
+            // locals, merged return, nested ifs) left the keys unchanged.
             if (startIdx < idx && startIdx != -1 && idx != -1) {
                 startKey = &(*keys)[startIdx];
                 endKey = &(*keys)[idx];

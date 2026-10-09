@@ -335,6 +335,12 @@ bool ArcDetector::IsPathAcceptable() const {
         if (dy == 0.0f) {
             return true;
         }
+        // w25-gf open FP rows: invDy (pri 13 tie 74) pops before dx and dy
+        // (pri 11), takes f0 and pushes dx to f12. The image order needs dx
+        // first: dx > invDy and dx > dy, e.g. two more FP candidates
+        // referenced in the entry block (dx +4, dy +2, invDy +0, pressure is
+        // per class). dx/dy, (1/dy)*x, named threshold/slopes, split ifs,
+        // dropping the dy/diffZ/dx locals: keys unchanged or code changed.
         float invDy = 1.0f / dy;
         if (invDy * dx >= sSlopeRatioThreshold
             || invDy * diffZ >= sSlopeRatioThreshold) {

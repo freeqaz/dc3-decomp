@@ -715,6 +715,12 @@ void FreestyleMoveRecorder::CompareDisplacementVectors(
     // commutative operand-order rows, `fmuls f9, f9, f13` (n1y) and
     // `fmuls f7, f13, f11` (n2z), immune to swapping the source operands of
     // n1y/n2z, of the dot terms, and to forming n1 with Scale().
+    // w25-gf: the loads are regasg temps, not colour candidates, so the
+    // u{} order is fixed in the IL before either allocator (C2RS-BRIDGE 8.3).
+    // Also inert: v1[1]/named component locals, invLen ternaries or early
+    // declarations, inlining n1y/n2z into the dot, avgDisp/maxDisp spellings.
+    // Open question: the commutative key that puts invLen1 before the v1.y
+    // reload but after the v1.x reload.
     float dot = n2x * n1x;
     dot += n2z * n1z;
     dot += n2y * n1y;

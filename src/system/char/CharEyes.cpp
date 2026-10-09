@@ -818,7 +818,7 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     // r31 and desc r30, as in the image.
     auto& eyes = mEyes;
     EyeDesc *desc = eyes.end();
-    int eyeCount = (int)((char *)desc - (char *)eyes.begin()) / (int)sizeof(EyeDesc);
+    int eyeCount = (int)((char *)desc - (char *)(EyeDesc *)eyes.begin()) / (int)sizeof(EyeDesc);
     if (eyeCount != 0) {
         int eyeOff = (int)((char *)ref - (char *)(EyeDesc *)mEyes.begin());
         if (eyeOff >= 0) {
@@ -826,7 +826,7 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
             if ((unsigned)eyeOff < (unsigned)eyeTotal) {
                 int eyeRounded = (eyeOff / (int)sizeof(EyeDesc)) * (int)sizeof(EyeDesc);
                 if (eyeRounded == eyeOff)
-                    desc = (EyeDesc *)((char *)eyes.begin() + eyeRounded);
+                    desc = (EyeDesc *)((char *)(EyeDesc *)eyes.begin() + eyeRounded);
             }
         }
         if (desc != mEyes.end()) {
@@ -843,7 +843,7 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
     auto& interests = mInterests;
     CharInterestState *state = interests.end();
     int stateCount =
-        (int)((char *)state - (char *)mInterests.begin()) / (int)sizeof(CharInterestState);
+        (int)((char *)state - (char *)(CharInterestState *)mInterests.begin()) / (int)sizeof(CharInterestState);
     if (stateCount != 0) {
         int stateOff = (int)((char *)ref - (char *)(CharInterestState *)interests.begin());
         if (stateOff >= 0) {
@@ -852,7 +852,7 @@ bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
                 int stateRounded = (stateOff / (int)sizeof(CharInterestState))
                     * (int)sizeof(CharInterestState);
                 if (stateRounded == stateOff)
-                    state = (CharInterestState *)((char *)mInterests.begin() + stateRounded);
+                    state = (CharInterestState *)((char *)(CharInterestState *)mInterests.begin() + stateRounded);
             }
         }
         if (state != mInterests.end()) {
