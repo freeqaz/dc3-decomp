@@ -62,6 +62,17 @@
 // (erase 563 < Set 585) and the inlining did not move.
 // w18-d (80.58): an explicit instantiation of ObjPtrVec<FlowNode>::Set ahead of
 // the erase instantiation does not stop Set being inlined into erase (inert).
+// w24-c2 (80.58, BLOCKED-PCH): residual unchanged -- rows 39-54, the inlined
+// Set body (10 inserted rows) where the image does `bl Set<FlowNode>`, plus an
+// r26/r27/r28 permutation. New observation, not built: in the image's
+// FlowManager.s the address order puts Set<FlowNode> right after
+// _Vector_base::~_Vector_base and before Node::RefOwner / Node(const Node&),
+// i.e. among the earliest ObjPtrVec<FlowNode> COMDATs, next to where our obj
+// numbers Node(ObjRefOwner*) and const begin()/end() (secs 329-331); ours
+// numbers Set at 589, after erase (579) and remove (581). So whatever made the
+// original reference Set early is in the push_back/insert/operator= path of
+// obj/ObjPtr_p.h / Object.h (all three call Set in the image), not in this
+// file -- a PCH-reached edit with whole-binary blast radius.
 template Hmx::Object *ObjPtrVec<RndTransformable, ObjectDir>::Node::RefOwner() const;
 template ObjPtrVec<FlowNode, ObjectDir>::iterator
 ObjPtrVec<FlowNode, ObjectDir>::erase(ObjPtrVec<FlowNode, ObjectDir>::iterator);
