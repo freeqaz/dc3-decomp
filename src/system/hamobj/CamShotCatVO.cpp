@@ -173,6 +173,9 @@ void CamShotVOData(
                 // spelling (58bfcfcfb), where this block sat OUTSIDE the
                 // else chain (two fewer enclosing scopes).  Not a value or
                 // control-flow difference; all operands/branches re-checked.
+                // w25-ha: symbols.txt now names them ?FI@, this spelling's
+                // ordinal (every other static's name already agreed), since
+                // the image carries no static names to contradict it.
                 if (subStrings.size() > 2) {
                     // One address for the two comparisons: the target computes
                     // `addi r29, r3, 0x10` once and reuses it (`mr r3, r29`
