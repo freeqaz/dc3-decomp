@@ -131,135 +131,15 @@ void ShellInput::Init() {
 void ShellInput::Draw() { mCursorPanel->Draw(); }
 
 void ShellInput::Poll() {
-#ifdef HX_NATIVE
-    // PLATFORM: the image's body (#else, below) with each Kinect-only member
-    // tested for null. Native never creates the HandInvoke / HandsUp gesture
-    // filters, the DepthBuffer, the SkeletonIdentifier, the
-    // SkeletonExtentTracker or mWrongHandPosAnim (ShellInput::Init), so every
-    // statement that reads one of them is skipped -- for the practice-options
-    // arms that is exactly what the image does with no invoke gesture
-    // detected. Everything else runs in the image's order.
-    static Symbol is_in_shell_pause("is_in_shell_pause");
-    static Symbol is_in_party_mode("is_in_party_mode");
-    static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");
-    static bool sPracticeOptionsInvokedPartyMode = false;
-    static bool sPracticeOptionsInvoked = false;
-    static bool sHasSkeleton = false;
-
-    if (TheUI->FocusPanel() == TheGamePanel) {
-        if (mWrongHandPosAnim && mWrongHandPosAnim->GetFrame() > 0.0f) {
-            mWrongHandPosAnim->SetFrame(0.0f, 1.0f);
-            unk_0xA4 = false;
-        }
-        // Under DC3_CONTROLLER_MODE=forced ExitControllerMode returns at once.
-        if (TheGestureMgr->InControllerMode() && !TheUIEventMgr->HasActiveDialogEvent()) {
-            ExitControllerMode(true);
-        }
-        if (!TheHamUI.InTransition()) {
-            TheGestureMgr->SetIdentificationEnabled(false);
-        }
-        static Symbol practice("practice");
-        static Symbol gameplay_mode("gameplay_mode");
-        static Symbol suppress_practice_options("suppress_practice_options");
-        if (mHandInvokeGestureFilter
-            && TheGameMode->Property(gameplay_mode)->Sym() == practice) {
-            if (mHandInvokeGestureFilter->GetInvokeDetected() && !sPracticeOptionsInvoked) {
-                if (TheHamProvider->Property(suppress_practice_options)->Int() == 0) {
-                    TheHamProvider->Export(Message("invoke_practice_options"), true);
-                    sPracticeOptionsInvoked = true;
-                }
-            }
-            if (!mHandInvokeGestureFilter->GetInvokeDetected()
-                || TheHamProvider->Property(suppress_practice_options)->Int()) {
-                if (sPracticeOptionsInvoked) {
-                    TheHamProvider->Export(Message("deinvoke_practice_options"), true);
-                    sPracticeOptionsInvoked = false;
-                }
-            }
-        }
-    } else if (TheHamProvider->Property(is_in_infinite_party_mode)->Int()
-               || TheHamProvider->Property(is_in_party_mode)->Int()) {
-        TheGestureMgr->SetIdentificationEnabled(false);
-        if (mHandInvokeGestureFilter
-            && TheHamProvider->Property(is_in_shell_pause)->Int() == 0) {
-            if (mHandInvokeGestureFilter->GetInvokeDetected()
-                && !sPracticeOptionsInvokedPartyMode) {
-                TheHamProvider->Export(Message("invoke_practice_options"), true);
-                sPracticeOptionsInvokedPartyMode = true;
-            }
-            if (!mHandInvokeGestureFilter->GetInvokeDetected()
-                && sPracticeOptionsInvokedPartyMode) {
-                TheHamProvider->Export(Message("deinvoke_practice_options"), true);
-                sPracticeOptionsInvokedPartyMode = false;
-            }
-        }
-    }
-
-    // The idle timeout. Under `forced` ExitControllerMode returns at once.
-    if (TheGestureMgr->InControllerMode() && unk_0x68.SplitMs() >= unk_0x98) {
-        ExitControllerMode(true);
-    }
-    if (mHandsUpGestureFilter && mHandsUpGestureFilter->GetHandsUp()
-        && TheHamUI.EventDialogPanel()
-        && TheHamUI.EventDialogPanel()->GetState() != UIPanel::kUp
-        && !TheHamUI.InTransition()) {
-        static Symbol ui_nav_mode("ui_nav_mode");
-        static Symbol movie("movie");
-        const DataNode *pNavModeNode = TheHamProvider->Property(ui_nav_mode);
-        MILO_ASSERT(pNavModeNode, 0xd2);
-        Symbol navmodeSym = pNavModeNode->Sym();
-        if (TheGestureMgr->IDEnabled() && navmodeSym != movie) {
-            mHandsUpGestureFilter->Clear();
-            if (TheHamUI.GetOverlayPanel()) {
-                TheHamUI.GetOverlayPanel()->Dismiss();
-            }
-            OverlayPanel *pCorrectPanel =
-                ObjectDir::Main()->Find<OverlayPanel>("correct_identity_panel");
-            MILO_ASSERT(pCorrectPanel->CheckIsLoaded(), 0xdc);
-            MILO_ASSERT(pCorrectPanel->LoadedDir(), 0xdd);
-            TheHamUI.SetOverlayPanel(pCorrectPanel);
-        }
-    }
-
-    OverlayPanel *panel = TheHamUI.GetOverlayPanel();
-    if (panel) {
-        if (mHandsUpGestureFilter) {
-            mHandsUpGestureFilter->Clear();
-        }
-        if (TheHamUI.GetTransitionState() != 0) {
-            panel->Dismiss();
-        }
-    }
-    bool raised = mHandsUpGestureFilter && mHandsUpGestureFilter->GetRaisedMs() > 0.0f;
-    HamNavList::sForceDisengage = raised != false;
-    if (mCursorPanel)
-        mCursorPanel->Poll();
-    if (mDepthBuffer)
-        mDepthBuffer->Poll();
-    if (mSkelIdentifier)
-        mSkelIdentifier->Poll();
-    // PLATFORM: the chooser is polled only while the native pose server
-    // supplies tracked skeletons; with none, its body would only drive
-    // Kinect tracking selection (UpdateTrackedSkeletonsElective) and
-    // high-five detection over absent skeletons.
-    if (mSkelChooser && NumTrackedSkeletons() > 0)
-        mSkelChooser->Poll();
-    if (mSkelExtTracker)
-        mSkelExtTracker->Poll();
-
-    bool hasSkel = HasSkeleton();
-    if (hasSkel != sHasSkeleton) {
-        static Symbol has_skeleton("has_skeleton");
-        static Message updateSkeletonStatus("update_skeleton_status");
-        Handle(updateSkeletonStatus, false);
-        TheHamProvider->SetProperty(has_skeleton, hasSkel);
-    }
-    sHasSkeleton = hasSkel;
-
-    if (TheUI->InTransition()) {
-        SetCursorAlpha(0);
-    }
-#else // !HX_NATIVE
+    // Both builds run the image body (0x82902CC0). Since w23-sk ShellInput::Init
+    // creates every member read here natively too (both gesture filters, the
+    // DepthBuffer, the SkeletonIdentifier, the SkeletonChooser, the
+    // SkeletonExtentTracker; mWrongHandPosAnim is a fail=true Find), so the old
+    // native arm's null tests were dead. It also polled the SkeletonChooser only
+    // while NumTrackedSkeletons() > 0; the image polls it unconditionally
+    // (`lwz r3,0xd0(r22); bl SkeletonChooser::Poll` at 0x82903454, no test), and
+    // the chooser body is written for an empty sensor -- Kinect with nobody in
+    // view is its ordinary state.
     static Symbol is_in_shell_pause("is_in_shell_pause");
     static Symbol is_in_party_mode("is_in_party_mode");
     static Symbol is_in_infinite_party_mode("is_in_infinite_party_mode");
@@ -366,7 +246,6 @@ void ShellInput::Poll() {
     if (TheUI->InTransition()) {
         SetCursorAlpha(0);
     }
-#endif // HX_NATIVE
 }
 
 void ShellInput::UpdateInputPanel(UIPanel *panel) { mInputPanel = panel; }

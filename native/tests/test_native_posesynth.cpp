@@ -22,22 +22,14 @@
 
 namespace {
 
-TEST(HamUserPadNumTest, NoSkeletonIdentifierMeansNoEnrolledPad) {
-    // The image's HamUser::GetPadNum reads the enrolled player's pad from
-    // TheSkeletonIdentifier (SkeletonIdentifier::UpdateEnrolledPlayers fills
-    // it from NuiIdentityGetEnrollmentInformation; a player with no NUI
-    // enrollment gets mPadNum = -1, and GetPadNum returns -1).  Native has no
-    // identifier at all -- the same "nobody enrolled" state -- so the answer
-    // must be -1, not a null dereference.
-    SkeletonIdentifier *saved = TheSkeletonIdentifier;
-    TheSkeletonIdentifier = nullptr;
-    HamUser *user = HamUser::NewHamUser(0);
-    ASSERT_NE(user, nullptr);
-    EXPECT_EQ(user->GetPadNum(), -1);
-    EXPECT_FALSE(user->CanSaveData());
-    delete user;
-    TheSkeletonIdentifier = saved;
-}
+// (NoSkeletonIdentifierMeansNoEnrolledPad, which pinned GetPadNum's native
+// `if (!TheSkeletonIdentifier) return -1;` arm, was retired by w25-n1: since
+// w23-sk ShellInput::Init builds the SkeletonIdentifier natively as the image
+// does, so the arm was dead and GetPadNum is the image body on both builds.
+// The "nobody enrolled -> -1" answer now comes from the identifier itself:
+// the typed NuiIdentityGetEnrollmentInformation stand-in in
+// xbox_link_stubs.cpp reports every slot empty, UpdateEnrolledPlayers sets
+// mPadNum = -1, and the >= 4 arm below is pinned by the control.)
 
 TEST(HamUserPadNumTest, EnrolledPadStillComesFromTheIdentifier) {
     // Control: with an identifier present the image's path is untouched --
