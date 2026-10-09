@@ -498,6 +498,18 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 // (91.6), `curFirst == maxFirst ? curSel == ScrollMaxDisplay()
                 // : false` (99.0, cntlzw form), `atZero ? curSel == 0 : false`
                 // in an if/else (96.8); `atZero && !curSel` is identical.
+                //
+                // w25-gm (c2rs scratch, ~25 spellings): MSVC's cross-jump here keeps
+                // the LATER copy of a shared tail -- base: the second arm jumps
+                // forward into the third arm's `li 1 / beq / li 0`; with the third
+                // arm spelled `? true : false` (+3 instrs) the second arm turns into
+                // the `bne / li 1 / b` diamond and the FIRST arm jumps forward into
+                // it.  The image's backward jump therefore needs the direction==1
+                // tail to be the later block in the cross-jump walk while staying
+                // first in layout.  Open question: which IL shape (block order vs
+                // layout pass) gives that.  Inert or worse: arm order inverted
+                // (layout follows it), operand swaps, a named minDisplay, inline
+                // atZero, a value select, if/else per arm.
                 if (direction == 1) {
                     int maxFirst = MaxFirstShowing();
                     curFirst = state.mFirstShowing;
