@@ -308,6 +308,24 @@ void CharHair::SimulateInternal(float fps) {
                     // and no single spelling gives both (BUG-OPEN, sub-ulp).
                     float lensq = vRes.y * vRes.y + vRes.z * vRes.z + vRes.x * vRes.x;
                     float minLenSq = minLen * minLen;
+                    // w25-ha (fuzzy 99.782, normalized 100): the 14 rows left in
+                    // this function are all commutative operand order (c2 §8.7
+                    // cqlo3 sort keys), no register or value differs.  Here: the
+                    // scaling fmuls put operator*='s inlined float param first
+                    // (variable leaf sid 737, key 0x15c20) over vRes's scalar
+                    // pieces (sids 288-291, ~0x124xx); the image has vRes first.
+                    // The pos += vRes adds compare pt.pos memory/temp leaves
+                    // (0x18008, temp 0x16d00) against the same vRes keys; the
+                    // image wants vRes.y/z first but pos.x first, which no shift
+                    // of a base temp by mod 4 gives while vRes stays a variable
+                    // leaf.  Hypothesis: the image's scaled vRes components are
+                    // CSE temps (different key class), not this spelling.  Inert
+                    // or worse (8 spellings): named scale (before or after vRes),
+                    // Scale()/Add() helpers, explicit components, a delta vector,
+                    // ScaleAddEq pairs.  The rsalen fmsubs (pt.length memory leaf,
+                    // base temp sid 1574 = 2 mod 4, key 0x18008, over rsa sid 297)
+                    // needs that base at 0 mod 4; ScaleAddEq/collide and the
+                    // points[j - 1] add are the same key class.
                     if (lensq < minLenSq) {
                         vRes *= (minLenSq / (minLenSq + lensq) - 0.5f);
                         pt.pos += vRes;
