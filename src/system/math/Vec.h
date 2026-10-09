@@ -329,7 +329,10 @@ inline void Cross(const Vector3 &v1, const Vector3 &v2, Vector3 &dst) {
 
 inline void Normalize(const Vector3 &in, Vector3 &out) {
     float inv = 0;
-    float len = Length(in);
+    float xx = in.x * in.x;
+    float yy = in.y * in.y;
+    float zz = in.z * in.z;
+    float len = std::sqrt(xx + yy + zz);
     if (len != 0) {
         inv = 1.0f / len;
     }

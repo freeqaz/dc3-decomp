@@ -660,16 +660,30 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
             );
         }
 #ifdef HX_NATIVE
-        // PLATFORM (LP64; w25-n1 audit): the image's same-type compare is one
-        // 32-bit word of mValue (`lwz; lwz; subf; cntlzw` at 0x8259EBBC) -- for a
-        // symbol that is full pointer identity. Natively mValue is 8 bytes and UncheckedInt() reads
-        // only the low 4, so compare the whole pointer. (Other pointer-valued
-        // types -- Object/Var/Func/Array/Command/Property/Glob -- still compare
-        // the low 4 bytes here; see the w25-n1 report follow-up.)
-        if (firstType == kDataSymbol) {
-            // On 64-bit, UncheckedInt() truncates the 8-byte symbol pointer to 4 bytes.
-            // Compare the full pointers instead.
-            return first.UncheckedStr() == second.UncheckedStr();
+        // The image's same-type compare is one 32-bit word of mValue (`lwz; lwz;
+        // subf; cntlzw` at 0x8259EBBC). On LP64 the value union is 8 bytes and
+        // UncheckedInt() reads only its low 4, so two pointers 4 GiB apart
+        // compared equal. Every type that stores a pointer compares the whole
+        // pointer; the int-valued types (Int, Float bits, Unhandled, Else,
+        // Endif, Autorun) keep the image's 4-byte compare.
+        switch (firstType) {
+        case kDataVar:
+        case kDataFunc:
+        case kDataObject:
+        case kDataSymbol:
+        case kDataIfdef:
+        case kDataArray:
+        case kDataCommand:
+        case kDataProperty:
+        case kDataGlob:
+        case kDataDefine:
+        case kDataInclude:
+        case kDataMerge:
+        case kDataIfndef:
+        case kDataUndef:
+            return first.mValue.object == second.mValue.object;
+        default:
+            break;
         }
 #endif
         return first.UncheckedInt() == second.UncheckedInt();
@@ -762,6 +776,12 @@ void DataNode::Load(BinStream &d) {
         break;
     }
     case kDataFloat:
+#ifdef HX_NATIVE
+        // LP64: a node reused by DataArray::Load (an ifdef'd-out entry is
+        // overwritten in place) can still hold the previous pointer's high
+        // half; a 4-byte value must zero all 8 bytes, as the ctors do.
+        mValue.object = nullptr;
+#endif
         d >> mValue.real;
         break;
     case kDataString:
@@ -794,6 +814,9 @@ void DataNode::Load(BinStream &d) {
     case kDataElse:
     case kDataEndif:
     case kDataAutorun:
+#ifdef HX_NATIVE
+        mValue.object = nullptr; // see kDataFloat
+#endif
         d >> mValue.integer;
         break;
     default:

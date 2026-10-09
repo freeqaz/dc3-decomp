@@ -177,8 +177,9 @@ __declspec(noinline) inline void Trie::inc_dup_count(unsigned int index) {
 
 __declspec(noinline) inline void Trie::dec_dup_count(unsigned int index) {
     check_index(index);
-    unsigned int *cf = &CountField(NodePtr(this, index));
-    unsigned int dupCount = GetDupCount(*cf);
+    unsigned int dupCount = GetDupCount(CountField(NodePtr(this, index)));
+    char *node = NodePtr(this, index);
+    unsigned int *cf = &CountField(node);
     check_index(index);
     *cf = ((dupCount - 1) << 8) | SiblingCountVia(cf);
 }
