@@ -633,7 +633,9 @@ void AccomplishmentManager::EarnAccomplishmentForAll(Symbol s1, bool b2) {
             if (!mSigninChanged[padnum]) {
                 HamProfile *profile = TheProfileMgr.GetProfileFromPad(padnum);
                 if (profile && profile->HasValidSaveData() && pPlayer->IsPlaying()) {
-                    if (!profile->GetAccomplishmentProgress().IsAccomplished(s1)) {
+                    const AccomplishmentProgress &progress =
+                        profile->GetAccomplishmentProgress();
+                    if (!progress.IsAccomplished(s1)) {
                         EarnAccomplishmentForProfile(profile, s1, false);
                     }
                 }

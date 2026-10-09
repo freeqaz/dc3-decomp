@@ -517,7 +517,8 @@ void ClipPlayer::PlayNormal(float f1, HamDriver::LayerArray *arr, const char *cc
         int prop = TheHamProvider->Property(merge_moves, true)->Int();
         float beat = mBeat;
         if (prop != 0) {
-            PushRoutineBuilderClip(mClipKeys->KeyLessEq(BeatToFrame(beat)), newArr);
+            int idx = mClipKeys->KeyLessEq(BeatToFrame(beat));
+            PushRoutineBuilderClip(idx, newArr);
         } else if (mClipKeys == mMasterClipKeys) {
             PushExpertClip(mClipKeys->KeyLessEq(BeatToFrame(beat)), newArr);
         } else {

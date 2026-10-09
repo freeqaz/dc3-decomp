@@ -981,8 +981,8 @@ void ProfileMgr::Poll() {
             if (profile) {
                 int padNum = profile->GetPadNum();
                 if (ThePlatformMgr.IsSignedIn(padNum)) {
-                    const char *name = profile->GetName();
-                    *mProfilesOverlay << "profile " << name << " pad" << padNum;
+                    *mProfilesOverlay << "profile " << profile->GetName() << " pad"
+                                      << padNum;
                     if (profile == activeProfile) {
                         *mProfilesOverlay << " active";
                     }
