@@ -1116,10 +1116,6 @@ float Rnd::DrawTimers(float f) {
     float bgLeft = 0.025f;
     float rowSpacing = 0.045f;
     float totalHeight = numTimers * rowSpacing;
-    // The image copies f into its callee-saved row cursor inside the argument
-    // block of the FIRST DrawRectScreen (fmr f24, f23), so y is already live
-    // there; declaring it after that call costs a scheduling row.
-    float y = f;
 
     Hmx::Rect rect(bgLeft, f, 0.95f, totalHeight);
     Hmx::Color bgColor(0.0f, 0.0f, 0.0f, 0.5f);
@@ -1167,12 +1163,13 @@ float Rnd::DrawTimers(float f) {
             DrawRectScreen(rect, worstExcessColor, nullptr, nullptr, nullptr);
         }
 
-        // w14-a RESIDUAL (99.99): the image stores rect.x (0x70) before
-        // rect.y (0x74) here; we store y first. Inert: `y += ...` hoisted above
-        // the rect.x store, and `rect.y = y += rowSpacing`.
+        // w25-ma: the row cursor is rect.y itself, not a separate `float y =
+        // f` (MSVC keeps rect.y in f24 across the calls, as it does rect.x in
+        // f27). That one change gives the image's f23/f24/f25 colouring (f,
+        // cursor, totalHeight), its `fmr f24, f23` placement and its rect.x
+        // before rect.y store order here.
         rect.x = bgLeft;
-        y += rowSpacing;
-        rect.y = y;
+        rect.y += rowSpacing;
     }
 
     rect.y = f;
