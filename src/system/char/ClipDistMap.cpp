@@ -136,9 +136,16 @@ bool ClipDistMap::LocalMin(int col, int row) {
             }
         }
     } else {
-        if (col - 1 >= 0 && row - 1 >= 0 &&
-            mDists(col - 1, row - 1) < val) {
-            return false;
+        // prevRow as a named local scoped after the column test: a named int
+        // sorts below the width temp in the commutative mullw operand list
+        // (key 0x10000|sid<<5 vs a temp's sid<<6), giving the image's
+        // mullw width, prevRow. Declared before the column test it is
+        // computed early and loses the addic. fusion.
+        if (col - 1 >= 0) {
+            int prevRow = row - 1;
+            if (prevRow >= 0 && mDists(col - 1, prevRow) < val) {
+                return false;
+            }
         }
         if (col + 1 < width && row + 1 < mDists.mHeight &&
             mDists(col + 1, row + 1) < val) {
