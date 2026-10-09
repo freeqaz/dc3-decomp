@@ -173,29 +173,31 @@ unsigned int BinkFileGetBufferSize(BINKIO *, unsigned int size) {
 }
 
 void BinkFileSetInfo(BINKIO *file, void *buf, unsigned int size, unsigned int, unsigned int fileFlags) {
-    unsigned int aligned = size & 0xFFFF8000;
+    size &= 0xFFFF8000;
+    // Address the file half through its own pointer, as BinkFileReadHeader
+    // does. With the named `io`, the pre-RA schedule puts the end-pointer add
+    // ahead of the bytesAvail `li 0`, so regasg's first fit hands the add r10
+    // and the zero r9, as in the image. Spelled inline off `file`, the li is
+    // scheduled first and the two registers swap.
+    // `size &=` (a parameter, sid 3) rather than a new local keeps `buf`
+    // (sid 4) first in the add: higher sid first (c2rs 8.7).
+    BINKIOFILE *io = &file->io;
+    io->pBuffer = (unsigned char *)buf;
+    io->pBufEnd = (unsigned char *)buf + size;
+    io->pBufPos = (unsigned char *)buf;
+    io->pBufBack = (unsigned char *)buf;
+    io->iBufEmpty = size;
 #ifdef HX_NATIVE
-    // Use struct members directly — raw PPC offsets are wrong on LP64
-    // (pointers are 8 bytes, so field offsets differ from the 32-bit layout)
-    file->io.pBuffer = (unsigned char *)buf;
-    file->io.pBufEnd = (unsigned char *)buf + aligned;
-    file->io.pBufPos = (unsigned char *)buf;
-    file->io.pBufBack = (unsigned char *)buf;
-    file->io.iBufEmpty = aligned;
-    file->BufSize = aligned;
+    file->BufSize = size;
     file->bytesAvail = 0;
-    file->io.fileFlags = fileFlags;
 #else
+    // Plain stores: through the volatile members these two would be pinned in
+    // program order, and the image schedules them as ordinary stores.
     char *p = (char *)file;
-    *(void **)(p + 0x88) = buf;
-    *(unsigned int *)(p + 0x8c) = (int)buf + aligned;
-    *(void **)(p + 0x90) = buf;
-    *(void **)(p + 0x94) = buf;
-    *(unsigned int *)(p + 0x98) = aligned;
-    *(unsigned int *)(p + 0x60) = aligned;
+    *(unsigned int *)(p + 0x60) = size;
     *(unsigned int *)(p + 0x6c) = 0;
-    *(unsigned int *)(p + 0xa0) = fileFlags;
 #endif
+    io->fileFlags = fileFlags;
 }
 
 void BinkFileClose(BINKIO *bink) {
