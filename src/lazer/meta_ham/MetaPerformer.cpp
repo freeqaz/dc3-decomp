@@ -1101,6 +1101,8 @@ void MetaPerformer::PopulatePlaylistSongProvider(HamNavProvider *prov) const {
                 arr = new DataArray(2);
                 arr->Node(0) = Symbol(str);
                 arr->Node(1) = Symbol(time);
+                prov->SetLabels(i, arr);
+                arr->Release();
             } else {
                 static Symbol song_unknown("song_unknown");
                 const char *str = MakeString(
@@ -1109,9 +1111,15 @@ void MetaPerformer::PopulatePlaylistSongProvider(HamNavProvider *prov) const {
                 arr = new DataArray(2);
                 arr->Node(0) = Symbol(str);
                 arr->Node(1) = Symbol(" ");
+                // SetLabels/Release are written once per arm: MSVC cross-jumps
+                // the two tails back into one after register colouring, but at
+                // COLOR time the extra copy lowers the hoisted kDataSymbol
+                // constant (5) to the bottom of the loop-invariant group, so it
+                // takes r16 below " " (r17) and &TheHamSongMgr (r18) as in the
+                // image.
+                prov->SetLabels(i, arr);
+                arr->Release();
             }
-            prov->SetLabels(i, arr);
-            arr->Release();
         }
     }
 }
