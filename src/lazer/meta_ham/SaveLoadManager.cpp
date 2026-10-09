@@ -1860,32 +1860,66 @@ void SaveLoadManager::SetState(State newState) {
             TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
             break;
         }
+        // One TriggerEvent arm per run of consecutive dialog states.  MSVC
+        // cross-jumps the 15 copies back into one call AFTER register colouring;
+        // before it, each copy is one more reference to &saveload_dialog_event
+        // (priority -44 -> -2 in c2's colour worklist), so it is popped ahead of
+        // the __FILE__ address and newState and gets r27, as in the image.  A
+        // single grouped arm leaves it last (r25) and rotates all three.
         case 6:
         case 7:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0xc:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0xe:
         case 0xf:
         case 0x10:
         case 0x11:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x17:
         case 0x18:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x1c:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x29:
         case 0x2a:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x2f:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x3a:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x48:
         case 0x49:
         case 0x4a:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x4c:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x4e:
         case 0x4f:
         case 0x50:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x58:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x5b:
         case 0x5c:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x5e:
         case 0x5f:
+            TheUIEventMgr->TriggerEvent(saveload_dialog_event, nullptr);
+            break;
         case 0x61:
         case 0x62:
         case 99:
