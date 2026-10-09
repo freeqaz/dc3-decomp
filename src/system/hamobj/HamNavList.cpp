@@ -1767,9 +1767,13 @@ void HamNavList::LinkRibbonDrawState(
     }
 #else
     // ILP32 (Xbox 360) version
-    // w7-by (85.72059 -> 100.0, 5 residual rows, all the r10/r11 pair on the
-    // 8244E1D0..8244E1E0 mElemDrawState store -- volatile scheduling; a named
-    // `elemAddr` local is inert).  Four levers, each reproducing a listing site:
+    // NumShowing() is passed straight to IsScrollable, with no named local:
+    // that local was one more negative-benefit candidate freed before the
+    // code band, so the mElements-begin reload piece (11th code-band mint)
+    // took a recycled low id and was coloured after the ribbonStates-begin
+    // piece, giving the r10/r11 pair on the mElemDrawState store in reverse.
+    // With 10 frees it gets a fresh id, pops first and takes r11 as the image.
+    // w7-by (85.72059 -> 100.0).  Four levers, each reproducing a listing site:
     //  - `resize(n, HamListRibbonDrawState())`, not a named `defaultState`:
     //    8244E0C8 `mr r5, r3` takes the ctor's return, a named local re-derives
     //    `addi r5, r1, 0x60`.
@@ -1798,8 +1802,7 @@ void HamNavList::LinkRibbonDrawState(
     for (int i = 0; i < (int)widgetElemCount; i++) {
         ribbonStates[i].mSelected = (i == mListState.SelectedDisplay());
 
-        int numShowing = mListState.NumShowing();
-        bool scrollable = mListRibbonResource->IsScrollable(numShowing);
+        bool scrollable = mListRibbonResource->IsScrollable(mListState.NumShowing());
 
         if (scrollable) {
             ribbonStates[i].mActive = mListState.Provider()->IsHeader(
