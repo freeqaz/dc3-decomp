@@ -108,17 +108,19 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
             float gain_reduction = ratio * peak_level;
 
             if (peak_level > threshold) {
-                gain_reduction = ((((peak_level - threshold) / mRatio) + threshold) * ratio);
+                float excess = peak_level - threshold;
+                gain_reduction = (((excess / mRatio) + threshold) * ratio);
                 if (gain_reduction > 10000.0f) {
                     gain_reduction = 10000.0f;
                 }
             }
 
             float min_level = mGateMin;
+            float gate_max = mGateMax;
             if (peak_level < min_level) {
                 mGateMin = (((peak_level - min_level) * 0.05f) + min_level);
             } else {
-                mGateMin = (((mGateMax - min_level) * 0.001f) + min_level);
+                mGateMin = (((gate_max - min_level) * 0.001f) + min_level);
             }
 
             if (peak_level < (mGateMin * 1.15f)) {
@@ -142,7 +144,8 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
                 }
             }
 
-            envelope += (gain - envelope) * envelope_coef;
+            float delta = gain - envelope;
+            envelope += delta * envelope_coef;
 
             if (envelope >= 100000.0f) {
                 envelope = 100000.0f;
@@ -151,9 +154,14 @@ void CompressionEffect::Process(float *samples, int numFrames, int numChannels) 
             int channel2 = 0;
             for (int ch_idx2 = 0; ch_idx2 < numChannels; ch_idx2++) {
                 int idx = frame * numChannels + channel2;
-                // Left-to-right: the image multiplies the SAMPLE by mDCBlock
-                // (`fmuls f0, f12, f0`), then by envelope, then by the gain.
-                samples[idx] = ((samples[idx] * mDCBlock) * envelope) * mOutputGainRatio;
+                // The image multiplies the SAMPLE by mDCBlock first
+                // (`fmuls f0, f12, f0`). c2 orders the commutative operands by
+                // key: the sample load keys off its base, a named pointer, as
+                // 0x10000|(sid<<13)+8, and only sid 31 (== 7 mod 8, given the
+                // excess/gate_max/delta locals above) beats the CSE'd
+                // &mDCBlock temp base's 0x1c008.
+                float *sample = &samples[idx];
+                *sample = ((*sample * mDCBlock) * envelope) * mOutputGainRatio;
                 channel2 += 1;
             }
         }
