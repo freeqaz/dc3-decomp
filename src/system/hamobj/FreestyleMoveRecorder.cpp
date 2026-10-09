@@ -941,7 +941,6 @@ void FreestyleMoveRecorder::CalcFrameScore(
 }
 
 float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerIdx, float beatParam, bool useDancerTake) {
-    float initScore = 0.0f;
     if (mLastFrameIndex == mCurrentTakeIndex && beatParam > 0.0f) {
         return 1.0f;
     }
@@ -963,15 +962,10 @@ float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerId
         frames = mTakes[mCurrentTakeIndex].mFrames;
         numFrames = mTakes[mCurrentTakeIndex].mNumFrames;
     }
-    // Compute maxIdx = max(0, numFrames-1)
-    unsigned int maxIdx = Max(0, numFrames - 1);
-    // Compute raw frame index: int(mDefaultTimeout * beat) - 2
-    int frameIdxRaw = (int)(mDefaultTimeout * beat) - 2;
-    // frameIdx defaults to maxIdx (used when frameIdxRaw > maxIdx)
-    unsigned int frameIdx = maxIdx;
-    if (frameIdxRaw <= (int)maxIdx) {
-        frameIdx = Max(frameIdxRaw, 0);
-    }
+    // w25-gi: one Clamp. The old max/raw/if spelling made the clamped index
+    // (coalesced with maxIdx) outrank the raw index in COLOR, swapping r10/r11
+    // against the image.
+    int frameIdx = Clamp(0, Max(0, numFrames - 1), (int)(mDefaultTimeout * beat) - 2);
     // Copy reference frame skeleton into debug global
     sLastComparedDancerSkel.Set(frames[frameIdx].skeleton);
     // Compute pointer to this player's FreestyleFrameScores
@@ -979,19 +973,13 @@ float FreestyleMoveRecorder::GetScore(const BaseSkeleton *liveSkel, int playerId
     if (liveSkel != nullptr && liveSkel->IsTracked()) {
         CalcFrameScore(frameScores, frames, numFrames, liveSkel, beatMillis - 100.0f);
     }
-    // Accumulate scores: sum(scores[i] / numFrames) for i in 0..unkc
-    int scoreCount = frameScores.unkc;
-    float total = initScore;
-    int i = 0;
-    if (scoreCount > 0) {
-        float invNumFrames = 1.0f / (float)(long long)(int)numFrames;
-        int byteIdx = 0;
-        do {
-            i++;
-            total = *(float *)((char *)(float *)frameScores.unk0.begin() + byteIdx) * invNumFrames
-                + total;
-            byteIdx += 4;
-        } while (i < scoreCount);
+    // Accumulate scores: sum(scores[i] / numFrames) for i in 0..unkc. The
+    // reciprocal is computed once (fdivs before the loop, fmadds inside), so
+    // native gets the same rounding as the image. An indexed loop also gives
+    // the image's lfsx index-first operand order.
+    float total = 0.0f;
+    for (int i = 0; i < frameScores.unkc; i++) {
+        total += frameScores.unk0[i] * (1.0f / numFrames);
     }
     return total;
 }
