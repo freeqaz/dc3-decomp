@@ -1095,20 +1095,16 @@ void LiveCameraInput::NuiAudioDataCallback(NUIAUDIO_RESULTS *results) {
         side = side - side / absVal;
     }
 
-    // ONE SetVoiceDirection site.  The image computes the direction into r10
-    // (`li r10, 0x0` at .L_8243073C / `li r10, 0x1` at 0x8243074C) and joins a
-    // single `lwz r11, 0x1444(r8)` / `stw r10, 0x44(r11)` at .L_82430750; the
-    // `side > 10` arm branches straight into it.  Duplicating the call in each
-    // arm costs six rows and re-materialises the `?side@@3HA` address twice.
-    int direction;
+    // One call per arm. The compiler tail-merges the two arms into a single
+    // `lwz r11, 0x1444(r8)` / `stw r10, 0x44(r11)` join, as in the image. The
+    // direction constant is then a short-lived temp assigned at that join
+    // (the reload takes r11, the value r10). A named `direction` local
+    // instead becomes a colour candidate (pri 4, tie 63) that takes r11 first.
     if (side == 10) {
-        direction = 0;
+        inst->mSpeechMgr->SetVoiceDirection(0);
     } else if (side == -10) {
-        direction = 1;
-    } else {
-        return;
+        inst->mSpeechMgr->SetVoiceDirection(1);
     }
-    inst->mSpeechMgr->SetVoiceDirection(direction);
 }
 
 bool LiveCameraInput::SetAutoexposure(bool enable) {
