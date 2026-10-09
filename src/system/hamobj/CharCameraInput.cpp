@@ -78,9 +78,10 @@ const SkeletonFrame *CharCameraInput::PollNewFrame() {
         if (bone) {
             Multiply(bone->WorldXfm().v, invXfm, skelData.mJointPositions[mj]);
         } else {
-            skelData.mJointPositions[mj].z = 0.0f;
-            skelData.mJointPositions[mj].y = 0.0f;
-            skelData.mJointPositions[mj].x = 0.0f;
+            // Vector3::Zero (z, y, x stores) rather than three field writes:
+            // the &mJointPositions[mj] candidate then ranks above the row base
+            // (c2 pri 51 vs 45; was 41 vs 55) and takes r31, as in the image.
+            skelData.mJointPositions[mj].Zero();
         }
         if (unk2430) {
             skelData.mJointPositions[mj].x *= -1.0f;
