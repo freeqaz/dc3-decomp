@@ -104,8 +104,13 @@ void RndScreenMask::DrawShowing() {
     // those but costs a register; reassigning `cam` scores the same and keeps
     // the image's one-variable shape.  (Spelling the TEST as `cam->TargetTex()`
     // without the re-read scores 97.44505 -- refuted earlier.)
-    cam = RndCam::Current();
-    if (!mUseCamRect && !cam->TargetTex()) {
+    // The reassignment sits INSIDE the branch, after the test re-reads
+    // Current(): same code (the two sCurrent reads CSE), but the sCurrent temp
+    // drops one ref, so its colour priority falls from 29 to 23 and ties the
+    // TheRnd temp, which wins on tie key (112 vs 111) and takes r30 as in the
+    // image.  Assigning before the test gave sCurrent r30 and TheRnd r29.
+    if (!mUseCamRect && !RndCam::Current()->TargetTex()) {
+        cam = RndCam::Current();
         TheRnd.GetDefaultCam()->Select();
         Hmx::Rect hiRes = TheHiResScreen.InvScreenRect();
         Hmx::Rect drawRect;

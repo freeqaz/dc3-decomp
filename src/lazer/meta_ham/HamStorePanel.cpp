@@ -572,6 +572,12 @@ DataNode HamStorePanel::OnMsg(const RCJobCompleteMsg &msg) {
         if (msg.Success()) {
             ReadLockData();
             GetCart();
+            // Behaviour-neutral early return (the chain falls to `return 1`
+            // anyway).  Each return site adds refs to the hidden return-slot
+            // pointer, lifting its colour priority (-16 -> -6) above the
+            // DataNode type constant 0 (-14 -> -10), so the slot takes r29
+            // and the constant r28, as in the image.  Same code otherwise.
+            return 1;
         } else {
             MILO_LOG("[HamStorePanel::OnMsg] Cart failed to lock, disabling.\n");
             DisableCart();

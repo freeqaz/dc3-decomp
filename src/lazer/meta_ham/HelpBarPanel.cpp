@@ -357,13 +357,15 @@ bool HelpBarPanel::UpdateBackButton(UIPanel *panel) {
         mLeftHandNavList->GetHelpbarProvider()->SetLabel(1, prop->Sym());
         if (backIcon) {
             static Symbol show_back_controller_icon("show_back_controller_icon");
-            if (panel) {
-                prop = panel->Property(show_back_controller_icon, false);
-                if (!prop || prop->Int() != 0) {
-                    backIcon->SetShowing(true);
-                } else {
-                    backIcon->SetShowing(false);
-                }
+            // One short-circuit chain with a single hide arm, not a nested
+            // if with three SetShowing calls: same code (MSVC merges the
+            // calls either way), but the nested form's extra show-arm left
+            // leftHandLabel one colour-priority point below the static-guard
+            // address (-14 vs -13), so they swapped r23/r24.  Here both are
+            // -13 and leftHandLabel wins on tie key (37 vs 0), as the image.
+            if (panel && (prop = panel->Property(show_back_controller_icon, false))
+                && prop->Int() == 0) {
+                backIcon->SetShowing(false);
             } else {
                 backIcon->SetShowing(true);
             }
