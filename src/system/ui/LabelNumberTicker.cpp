@@ -151,7 +151,12 @@ void LabelNumberTicker::Poll() {
             float progress = (elapsedMs - delayMs) / animTimeMs;
 
             // Apply acceleration curve: progress^(1 + acceleration)
-            float powered = std::pow(progress, mAcceleration);
+            // Named load: one more one-block local demoted before COLOR
+            // (F 5 -> 6, C 6), so the inlined Timer::Stop tail (mCycles load
+            // and cycle delta, both code-band candidates) keeps recycled ids and pops in mint order
+            // (ld r11, delta r10) as in the image. C2RS-BRIDGE 8.4/8.6.
+            float accel = mAcceleration;
+            float powered = std::pow(progress, accel);
             progress *= powered;
 
             // Interpolate from start value (mAnimStartValue) to desired value
