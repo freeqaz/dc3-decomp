@@ -102,49 +102,17 @@ public:
     }
 };
 
-// ProfileMgr stub — DTA queries profile state for tutorial gating, content unlocks,
-// and save routing. Returns "seen all tutorials, everything unlocked, no voice."
-class NativeProfileMgrStub : public Hmx::Object {
+// Native-only options (native/dta/ui/options/options_gameplay.dta): camera
+// blend and the ImGui debug panel have no image equivalent, so they are not
+// ProfileMgr messages.  They used to live on NativeProfileMgrStub, which was
+// dead -- MetaPanel::Init -> ProfileMgr::InitNative names the real
+// "profile_mgr" first, so registerStub deleted the stub every boot and
+// {profile_mgr get_camera_blend} came back unhandled.
+class NativeSettingsObject : public Hmx::Object {
 public:
-    NativeProfileMgrStub() {}
+    NativeSettingsObject() {}
     virtual DataNode Handle(DataArray *msg, bool rev) {
         Symbol sym = msg->Sym(1);
-        // Profile existence — no real profiles on native
-        if (sym == "has_active_profile") return DataNode(0);
-        if (sym == "has_active_profile_no_override") return DataNode(0);
-        if (sym == "get_active_profile") return DataNode(0);
-        if (sym == "get_non_active_profile") return DataNode(0);
-        if (sym == "get_num_valid_profiles") return DataNode(0);
-        // Tutorials — pretend all seen (skip tutorial flows)
-        if (sym == "has_seen_tutorial") return DataNode(1);
-        if (sym == "mark_tutorial_seen") return DataNode(0);
-        // Content — unlock everything
-        if (sym == "is_content_unlocked") return DataNode(1);
-        if (sym == "is_difficulty_unlocked") return DataNode(1);
-        // Voice — disabled (no Kinect microphone)
-        if (sym == "get_disable_voice") return DataNode(1);
-        if (sym == "get_disable_voice_commander") return DataNode(1);
-        if (sym == "get_disable_voice_pause") return DataNode(1);
-        if (sym == "get_disable_voice_practice") return DataNode(1);
-        if (sym == "get_show_voice_tip") return DataNode(0);
-        if (sym == "is_voice_commander_suboptimal") return DataNode(1);
-        // Profile management no-ops
-        if (sym == "clear_critical_profile") return DataNode(0);
-        if (sym == "set_critical_profile") return DataNode(0);
-        if (sym == "pose_found") return DataNode(0);
-        if (sym == "on_player_name_change") return DataNode(0);
-        // Audio defaults
-        if (sym == "get_music_volume") return DataNode(8);
-        if (sym == "get_fx_volume") return DataNode(8);
-        if (sym == "get_crowd_volume") return DataNode(8);
-        if (sym == "get_venue_preference") return DataNode(Symbol("default"));
-        // Settings
-        if (sym == "get_overscan") return DataNode(0);
-        if (sym == "get_mono") return DataNode(0);
-        if (sym == "get_disable_photos") return DataNode(0);
-        if (sym == "get_disable_freestyle") return DataNode(0);
-        if (sym == "get_no_flashcards") return DataNode(0);
-        // Native-only settings
         if (sym == "get_camera_blend") return DataNode(NativeSettings::Get().cameraBlend ? 1 : 0);
         if (sym == "toggle_camera_blend") {
             NativeSettings::Get().cameraBlend = !NativeSettings::Get().cameraBlend;
@@ -156,16 +124,10 @@ public:
             DebugPanel::Toggle();
             return DataNode(0);
         }
+#else
+        if (sym == "get_debug_panel") return DataNode(0);
+        if (sym == "toggle_debug_panel") return DataNode(0);
 #endif
-        if (sym == "has_finished_campaign") return DataNode(0);
-        if (sym == "get_all_unlocked") return DataNode(0);
-        if (sym == "needs_upload") return DataNode(0);
-        if (sym == "global_options_needs_save") return DataNode(0);
-        if (sym == "is_any_profile_signed_into_live") return DataNode(0);
-        // Player count/outfit/crew — DTA multiuser handlers may query these
-        if (sym == "get_num_players") return DataNode(2);
-        if (sym == "get_player_outfit") return DataNode(Symbol(""));
-        if (sym == "get_player_crew") return DataNode(Symbol(""));
         return Hmx::Object::Handle(msg, rev);
     }
 };
@@ -513,9 +475,11 @@ App::App(int argc, char **argv) {
     // Registered BEFORE the UI init: in the image the real managers are named
     // long before it (SaveLoadManager right after the common bank, SpeechMgr
     // in the Kinect init), and the UI init's DTA already runs.
-    // profile_mgr/content_mgr/challenges already exist by now
-    // (ProfileMgr/ContentMgr/Challenges Init), so those stubs are deleted
-    // again, as before. There is no platform_mgr stub any more: native
+    // content_mgr/challenges already exist by now (ContentMgr/Challenges
+    // Init), so those stubs are deleted again, as before. There is no
+    // profile_mgr stub any more: ProfileMgr::InitNative (MetaPanel::Init)
+    // names the real object, so DTA reaches the image's ProfileMgr handlers
+    // (w23-misc). There is no platform_mgr stub any more: native
     // SystemInit runs ThePlatformMgr.Init (w23-g14), which names the real
     // object "platform_mgr" (PlatformMgr_Native.cpp, w23-si), so DTA reaches
     // the image's PlatformMgr handlers.
@@ -528,7 +492,8 @@ App::App(int argc, char **argv) {
             }
         };
         registerStub("saveload_mgr", new NativeSaveLoadStub());
-        registerStub("profile_mgr", new NativeProfileMgrStub());
+        // Not a stub: a native-only object the native options screen talks to.
+        registerStub("native_settings", new NativeSettingsObject());
         // These don't need smart handlers — bare stubs are sufficient
         registerStub("content_mgr", new Hmx::Object());
         registerStub("challenges", new Hmx::Object());

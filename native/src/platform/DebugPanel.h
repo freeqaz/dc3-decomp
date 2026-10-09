@@ -2,7 +2,7 @@
 
 // ImGui-based debug overlay for dc3-native.
 // Provides real-time sliders for NativeSettings camera parameters.
-// Toggle with backtick (~) key or via DTA {profile_mgr toggle_debug_panel}.
+// Toggle with backtick (~) key or via DTA {native_settings toggle_debug_panel}.
 
 namespace DebugPanel {
 
