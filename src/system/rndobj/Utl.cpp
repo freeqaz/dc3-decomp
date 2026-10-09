@@ -3198,6 +3198,10 @@ void BuildFromBSP(RndMesh *mesh) {
              p != pit->mPoly.points.end();
              ++p) {
             Vector3 pt(p->x, p->y, z);
+            // vertIdx++ folded into the index (w25-rc): a separate `vertIdx++;`
+            // statement gave faceIdx colour priority 4 against mesh's 4, and
+            // faceIdx's later tie key (131 > 15) took r26.  Folded, mesh is 5
+            // and faceIdx 3, so mesh gets r26 / faceIdx r25 as in the image.
             // vertIdx * 0x60 spelled here, not hoisted to a `vertOffset` local:
             // MSVC strength-reduces it into an induction variable whose seed
             // `mulli r29, r30, 0x60` lands in the LOOP PREHEADER, after the
@@ -3206,9 +3210,8 @@ void BuildFromBSP(RndMesh *mesh) {
             Multiply(
                 pt,
                 pit->mTransform,
-                *(Vector3 *)((char *)mesh->Verts().mVerts + vertIdx * 0x60)
+                *(Vector3 *)((char *)mesh->Verts().mVerts + vertIdx++ * 0x60)
             );
-            vertIdx++;
         }
 
         // w16-a (97.81 -> 100 canonical, modulo register permutation): the
@@ -3218,8 +3221,7 @@ void BuildFromBSP(RndMesh *mesh) {
         // alive -- with the plain loop MSVC itself strength-reduces it to the
         // image's CTR loop, hoists `clrlwi firstVert`, seeds v-1 with the biased
         // `addis r10, r11, 0x1 / subi r10, r10, 0x1`, and the size() load-order
-        // rows close too.  Left: the callee-saved swap mesh r26 / faceIdx r25
-        // (9 register-only rows, forgiven by the canonical ruler).
+        // rows close too.
         int firstVert = vertIdx - (int)pit->mPoly.points.size();
         for (int v = firstVert + 2; v < vertIdx; v++) {
             mesh->Faces()[faceIdx++].Set(firstVert, v - 1, v);
