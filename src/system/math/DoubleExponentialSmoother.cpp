@@ -99,19 +99,28 @@ void Vector3DESmoother::Smooth(Vector3 v, float dt, bool normalize) {
     // store-order question -- both fields receive the same value.
     //
     // Residual (100 normalized, fuzzy 99.74, 3 rows): commutative operand order
-    // only, in the 2nd and 3rd inlined DoubleExponentialSmoother::Smooth
-    // (mY: `fmadds f13,f11,f13,f9` vs the image's `f13,f13,f11,f9`, and the
-    // mLevel `fadds`; mZ: the mTrend `fmadds`). The 1st expansion and the
-    // out-of-line body already match. No allocator decides this: regasg's
-    // registers are first fit and agree with the image; only the RT u{} order
-    // differs, and it is fixed in the IL before regasg (C2RS-BRIDGE 8.3).
-    // Measured inert (w25-fa): source operand order of the * and + in the
-    // inlinee, single-statement Min(Max()) for newAlpha/newBeta, named
-    // level/trend/change locals, and mX in place of the sx ref. Dropping
-    // all three refs flips the 2nd expansion's mPrevLevel fmadds the wrong way,
-    // so the key does see the caller's context. Open question: the ordering key
-    // for two different-shaped operands (an inlined local vs an expression
-    // temp), which the image evidently resolves differently per expansion.
+    // in the 2nd and 3rd inlined DoubleExponentialSmoother::Smooth (w25-oa,
+    // c2's commutative sort key, C2RS-BRIDGE 8.7). Not a register decision.
+    //   - mTrend fmadds (mY and mZ): both factors are subexpressions. The
+    //     change ((mPrevLevel - oldPrev) - mTrend) keys SU 1 / count 7
+    //     (0x0107xxxx) and the clamped newBeta fsel keys count 6 (0x0106xxxx),
+    //     so the change sorts first in every expansion. The image has that order
+    //     in the 1st expansion and the out-of-line body, newBeta first in the
+    //     2nd and 3rd (and in Vector2DESmoother's 2nd). Per-copy differences can
+    //     only come from the low 16 bits (a hash of the operand sids), which
+    //     decide only when the counts are equal. So the image's trees had equal
+    //     counts, and a fix needs a spelling that gives them equal counts while
+    //     emitting the same code. 13 spellings keep 7/6 (+=, named change/trend/
+    //     level/prevDiff/beta, single-expression and Clamp() clamps, oldPrev and
+    //     newBeta moved, reordered operands). The brief's "base sid mod 4"
+    //     hypothesis does not apply: no memory leaves are involved.
+    //   - mY mLevel fadds: two temp leaves, mTrend V588 (0x19300) before
+    //     mPrevLevel V382 (0x15f80); the image needs mPrevLevel first. Temp keys
+    //     are (sid << 6) & 0xffff, so this needs a temp layout where mTrend's sid
+    //     wraps past a multiple of 1024 and mPrevLevel's does not. That is not a
+    //     small sid shift.
+    // Also measured (w25-fa): mX in place of the sx ref is inert; dropping all
+    // three refs flips the 2nd expansion's mPrevLevel fmadds the wrong way.
     DoubleExponentialSmoother &sx = mX;
     DoubleExponentialSmoother &sy = mY;
     DoubleExponentialSmoother &sz = mZ;
