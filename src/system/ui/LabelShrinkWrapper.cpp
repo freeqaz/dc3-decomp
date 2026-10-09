@@ -141,10 +141,11 @@ void LabelShrinkWrapper::Init() { REGISTER_OBJ_FACTORY(LabelShrinkWrapper) }
 void LabelShrinkWrapper::UpdateAndDrawWrapper() {
     MILO_ASSERT(m_pLabel, 0x86);
     UILabel *label = m_pLabel;
-    float minX = label->mBounds.x - mLeftBorder;
-    float minZ = label->mBounds.y - mBottomBorder;
-    float maxX = mRightBorder + label->mBounds.w + label->mBounds.x;
-    float maxZ = mTopBorder + label->mBounds.h + label->mBounds.y;
+    const Hmx::Rect &bounds = label->mBounds;
+    float minX = bounds.x - mLeftBorder;
+    float minZ = bounds.y - mBottomBorder;
+    float maxX = mRightBorder + bounds.w + bounds.x;
+    float maxZ = mTopBorder + bounds.h + bounds.y;
     SetWorldXfm(label->WorldXfm());
     Vector3 topLeft(minX, 0.0f, maxZ);
     Vector3 topRight(maxX, 0.0f, maxZ);
