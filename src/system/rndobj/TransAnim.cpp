@@ -245,6 +245,15 @@ void RndTransAnim::SetTrans(RndTransformable *trans) { mTrans = trans; }
 // the image. Branch targets, the uninitialised-v70 Interp (image reads 0x90 too)
 // and the AtFrame callee (ICF 826307C8: Vector3/Color/Quat) checked. Writing the
 // Scale out as `tf.m.x *= v9c.x` etc. drops to 96.7 -- reverted.
+// w25-gu: reading the rot keys through `rotKeys` renumbers the temps so four of
+// the Scale rows take the image order (9 -> 5 rows). Open, c2 operand-sort key
+// (C2RS-BRIDGE 8.7): each remaining row is `var * load(temp base)`, and the
+// load's key depends only on the base temp's sid mod 4 (0x10008/0x14008/0x18008/
+// 0x1c008) against the var key (inv.x 0x132c0, s.y 0x146e0, s.z 0x14700, v58.y
+// 0x14400). The image needs the bases of m.x.y and m.x.z (V824/V828, now 0 mod 4)
+// at 1, m.y.x (V833, 1) at 2 or 3, m.z.x (V846, 2) at 1, and the Add's tf.v.y
+// (V1076, 0) at 2 or 3, while V1121..V1153 stay at 1. No single alias, inlined
+// helper or temp spelling tried (~40 variants) moves those sids independently.
 void RndTransAnim::MakeTransform(float frame, Transform &tf, bool whole, float blend) {
     if (mKeysOwner != this) {
         mKeysOwner->MakeTransform(frame, tf, whole, blend);
@@ -283,14 +292,15 @@ void RndTransAnim::MakeTransform(float frame, Transform &tf, bool whole, float b
             tf.v.Zero();
         }
         Vector3 v70;
-        if (!mRotKeys.empty()) {
+        const Keys<Hmx::Quat, Hmx::Quat> &rotKeys = mRotKeys;
+        if (!rotKeys.empty()) {
             Hmx::Quat q80;
             const Key<Hmx::Quat> *prev;
             const Key<Hmx::Quat> *next;
             float ref = 0;
-            mRotKeys.AtFrame(frame, prev, next, ref);
+            rotKeys.AtFrame(frame, prev, next, ref);
             if (mRotSpline)
-                QuatSpline(mRotKeys, prev, next, ref, q80);
+                QuatSpline(rotKeys, prev, next, ref, q80);
             else {
                 MILO_ASSERT(prev, 0x16D);
                 if (mRotSlerp)
