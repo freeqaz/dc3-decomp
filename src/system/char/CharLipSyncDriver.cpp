@@ -324,6 +324,18 @@ void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float weight, 
                 // past the re-test, the image's lands on it.  Same instructions
                 // on the value path, so NaN behaves as the image does.  Max()
                 // (one fsel) was 96.505; std::max 96.8 with a +0x10 frame.
+                // w25-gh: the remaining row is jump threading.  og-dc3's
+                // `MILO_ASSERT_FMT(curWeight >= 0, ...); if (curWeight < 0)
+                // curWeight = 0;` matches 103/103: the fail test then carries a
+                // GE condition in the IL, which c2 does not identify with the LT
+                // re-test, so the fail-skip lands on the re-test.  Rejected:
+                // on native (no fast-math) `>= 0` fails on a NaN weight, where
+                // the image's `bge` (fp:fast) skips the fail.  Every NaN-safe
+                // spelling probed is an LT/GT test and gets threaded (102/103):
+                // `!(w < 0)` assert, `0 > w` fail test with `w < 0` re-test,
+                // a 0.0 double literal, a `w <= 0 && w != 0` re-test; `w >= 0 ||
+                // w != w` and a nested GE/LT test add code (70/105).  Open
+                // question: a NaN-safe source form whose IL test is GE.
                 if (0.0f > curWeight)
                     curWeight = 0.0f;
                 ScaleAddViseme(clip, curWeight);
