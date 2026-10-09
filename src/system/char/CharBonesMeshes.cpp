@@ -162,26 +162,21 @@ void CharBonesMeshes::PoseMeshes() {
         Vector3 *scaleEnd = (Vector3 *)(start + mOffsets[TYPE_QUAT]);
         Vector3 *scale = (Vector3 *)(start + mOffsets[TYPE_SCALE]);
         for (; scale < scaleEnd; scale++, ++curMesh) {
-            Transform &xfm = (*curMesh)->DirtyLocalXfm();
+            RndTransformable *mesh = *curMesh;
+            Transform &xfm = mesh->DirtyLocalXfm();
             Vector3 scaleVec;
             MakeScale(xfm.m, scaleVec);
-            // Named per-row factors put the y row's three fmuls in the image's
-            // operand order (element first). Open: x.x and z.x are element-first
-            // in the image while x.y/x.z and z.y/z.z are factor-first. The
-            // c2rs CQ tap does not show these multiplies as sorted tuples at
-            // any site (cqil0..cqmach), so the 8.7 key cannot be read here.
-            // The image's pattern is not monotone in displacement, which
-            // rules out one memory-leaf key per row against one factor;
-            // hypothesis: the first element of each inlined Vector3::operator*=
-            // reaches the sort through a different base temp (row pointer vs
-            // xfm), so its key takes a different base-sid mod 4. ~140 spellings
-            // tried (inline/named/row-ref per row, Scale(), Set()).
+            // The commutative fmuls operand order (element vs factor first) in
+            // all three rows follows the c2 operand sort key, which here moves
+            // with the count of named locals in the loop body: the named mesh
+            // and the named z numerator/denominator select the image's order.
             float sx = scale->x / scaleVec.x;
             xfm.m.x *= sx;
             float sy = scale->y / scaleVec.y;
             xfm.m.y *= sy;
-            float sz = scale->z / scaleVec.z;
-            xfm.m.z *= sz;
+            float zNum = scale->z;
+            float zDen = scaleVec.z;
+            xfm.m.z *= zNum / zDen;
         }
     }
 }
