@@ -688,6 +688,15 @@ void FreestyleMoveRecorder::CompareDisplacementVectors(
     float zero = 0.0f;
     float len1 = Length(v1);
     float len2 = Length(v2);
+    // w25-oa: v1y and v2z only move two fmuls operand lists (c2 commutative
+    // key, C2RS-BRIDGE 8.7). As plain v1.y / v2.z the loads are memory leaves
+    // on base temps 228 (key 0x10008, below invLen1) and 239 (239 & 3 == 3:
+    // key 0x1c008, above invLen2); the image wants n1y load-first and n2z
+    // invLen2-first. Through a reference the base is the reference variable,
+    // keyed (sid & 7) << 13: v1y is sid 11 (0x16008 > invLen1 0x101e0) and v2z
+    // sid 16 (0x10008 < invLen2 0x10280). The declaration positions fix those
+    // sids. Measured: v1y declared next to v2z falls back onto temp 228.
+    const float &v1y = v1.y;
 
     float avgDisp1;
     if (count1 != 0) {
@@ -713,8 +722,9 @@ void FreestyleMoveRecorder::CompareDisplacementVectors(
         invLen1 = zero;
     }
 
+    const float &v2z = v2.z;
     float n1x = v1.x * invLen1;
-    float n1y = v1.y * invLen1;
+    float n1y = v1y * invLen1;
     float n1z = invLen1 * v1.z;
 
     float invLen2;
@@ -724,21 +734,12 @@ void FreestyleMoveRecorder::CompareDisplacementVectors(
         invLen2 = zero;
     }
 
-    float n2z = invLen2 * v2.z;
+    float n2z = invLen2 * v2z;
     float n2x = v2.x * invLen2;
     float n2y = v2.y * invLen2;
 
     // w11-a: accumulated by hand to pin the image's z,x,y association
-    // (the single-expression form lets /fp:fast pick y first).  Residual: 2
-    // commutative operand-order rows, `fmuls f9, f9, f13` (n1y) and
-    // `fmuls f7, f13, f11` (n2z), immune to swapping the source operands of
-    // n1y/n2z, of the dot terms, and to forming n1 with Scale().
-    // w25-gf: the loads are regasg temps, not colour candidates, so the
-    // u{} order is fixed in the IL before either allocator (C2RS-BRIDGE 8.3).
-    // Also inert: v1[1]/named component locals, invLen ternaries or early
-    // declarations, inlining n1y/n2z into the dot, avgDisp/maxDisp spellings.
-    // Open question: the commutative key that puts invLen1 before the v1.y
-    // reload but after the v1.x reload.
+    // (the single-expression form lets /fp:fast pick y first).
     float dot = n2x * n1x;
     dot += n2z * n1z;
     dot += n2y * n1y;
