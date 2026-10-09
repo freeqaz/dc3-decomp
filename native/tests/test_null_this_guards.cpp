@@ -418,11 +418,11 @@ const GuardSite kSites[] = {
      "can be null here (the old native merge_moves bypass tested it, then called "
      "straight through it), so the native arm must test it before the call."},
 
-    {"ShellInput.cpp ShellInput::Poll", "/lazer/meta_ham/ShellInput.cpp",
-     "OverlayPanel *panel = TheHamUI.GetOverlayPanel();", "mHandsUpGestureFilter->Clear();",
-     "if (mHandsUpGestureFilter) {",
-     "mHandsUpGestureFilter is `&&`-tested immediately above and immediately below "
-     "this Clear(), which is guarded only by `panel` -- a different pointer."},
+    // ShellInput::Poll's `if (mHandsUpGestureFilter)` site was retired by w25-n1:
+    // since w23-sk ShellInput::Init creates the filter natively as the image does,
+    // so the pointer is never null and Poll is now the image body on both builds
+    // (the Clear() at 0x829033D0 is guarded only by `panel` in the image too).
+
 
     {"FitnessGoalJobs.cpp GetFitnessGoal", "/lazer/net_ham/FitnessGoalJobs.cpp",
      "void GetFitnessGoalJob::GetFitnessGoal(HamProfile *profile) {",
