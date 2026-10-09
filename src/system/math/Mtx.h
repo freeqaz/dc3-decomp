@@ -341,7 +341,12 @@ public:
  * The DrawString cost is NOT a Matrix4 row: all 22 residual mismatches sit in
  * its inlined MakeColor ARGB pack (fmuls by f31, fctidz, rlwimi r,r,8,0,23)
  * with 6 PERMUTED stack slots -- the extra inline body shifted that TU's slot
- * allocation.  Accepted: +3.2 KB against ~35 B. */
+ * allocation.  Accepted: +3.2 KB against ~35 B.
+ * w24-ds: repaired in Rnd_Xbox.cpp, not here.  Once this TU can see the ctor
+ * body, DrawString's old `RndShaderMgr &shaderMgr` alias stopped being neutral
+ * and caused the reorder.  Dropping it gives 99.99 and adding a `const
+ * Hmx::Color &` alias gives 100.0.  `__declspec(noinline)` on this ctor is
+ * byte-inert tree-wide, so no caller inlines it either way. */
 inline Hmx::Matrix4::Matrix4(const Transform &tf) {
     x.x = tf.m.x.x;
     x.y = tf.m.x.y;
