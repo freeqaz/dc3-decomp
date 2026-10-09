@@ -522,6 +522,10 @@ void *MemAlloc(int iSizeBytes, const char *file, int line, const char *name, int
                 iSizeBytes, iSizeBytes, name, allocated_mem, false, 0, file, line
             );
         }
+        // Its own return, as the fast path has: the image's untracked-malloc
+        // `beq` lands on this arm's `b` to the exit instead of being threaded
+        // straight to the shared exit (w25-gt, fuzzy 99.983 -> 100).
+        return allocated_mem;
     } else {
         int sizeWords = MemHeap::GetSizeWords(iSizeBytes);
         int alignWords = MemHeap::GetAlignWords(align);
