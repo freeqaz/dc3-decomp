@@ -348,7 +348,7 @@ bool UIListState::BuildScroll(int direction, int firstShowing, int selectedDispl
                 state.mFirstShowing = Max(0, origFirst - 1);
             }
             state.mSelected = (state.mSelected - state.mFirstShowing) + origFirst;
-            return origFirst != state.mFirstShowing;
+            return state.mFirstShowing != origFirst;
         } else {
             state.mFirstShowing += (state.mSelected - mMinDisplay);
             state.mSelected = mMinDisplay;

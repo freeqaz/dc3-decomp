@@ -473,23 +473,24 @@ void HolmesClientInit() {
 #endif
     if (!UsingCD() || gHostConfig || gHostLogging) {
         MILO_LOG("Trying to connect to Holmes...\n");
-        bool conf, log;
         if (!UsingCD()) {
-            conf = gHostConfig = 0;
-            log = gHostLogging = 0;
-        } else {
-            conf = gHostConfig;
-            log = gHostLogging;
+            gHostConfig = false;
+            gHostLogging = false;
         }
-        bool unk = !conf || log ? 0 : 1;
+        // Holmes is optional when only host logging was asked for: a missing
+        // server is tolerated (null stream, no MILO_FAIL). The image tests
+        // gHostLogging first and yields logging && !config (w25-rj; this was
+        // config && !logging before, which also left an r10/r11 swap).
+        bool loggingOnly = gHostLogging && !gHostConfig;
         BeginCmd(Holmes::kVersion, true);
         gHolmesTarget = OptionStr("holmes_target", gNullStr);
         String share(gShareName);
         share = OptionStr("holmes_share", share.c_str());
         share = OptionStr("xb_share", share.c_str());
-        gHolmesStream = HolmesClient::PlatformCreateServerStream(unk, share.c_str());
+        gHolmesStream =
+            HolmesClient::PlatformCreateServerStream(loggingOnly, share.c_str());
         if (gHolmesStream == nullptr) {
-            if (!unk) {
+            if (!loggingOnly) {
                 MILO_FAIL("COULD NOT CONNECT TO HOLMES");
             }
             EndCmd(Holmes::kVersion);
@@ -500,7 +501,7 @@ void HolmesClientInit() {
             gStreamBuffer = new MemStream(true);
             gStreamBuffer->Reserve(0x2000D);
             fail = HolmesClientInitOpcode(false);
-            if (fail != 0 && unk) {
+            if (fail != 0 && loggingOnly) {
                 return;
             }
         }
@@ -508,7 +509,7 @@ void HolmesClientInit() {
             RELEASE(gHolmesStream);
             RELEASE(gStreamBuffer);
         }
-        if (fail && !unk) {
+        if (fail && !loggingOnly) {
             MILO_FAIL("COULD NOT CONNECT TO HOLMES");
         }
         DataRegisterFunc("dump_holmes_log", DumpHolmesLog);

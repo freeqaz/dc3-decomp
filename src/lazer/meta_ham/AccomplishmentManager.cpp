@@ -701,7 +701,9 @@ bool AccomplishmentManager::IsAvailable(Symbol s) const {
         MILO_ASSERT(iNumSongs <= rSongs.size(), 0x7F3);
         int thresh = 0;
         for (int i = 0; i < iNumSongs; i++) {
-            if (TheHamSongMgr.HasSong(rSongs[i], false)) {
+            // a named copy puts the vector base first in the lwzx, as the image does
+            Symbol song = rSongs[i];
+            if (TheHamSongMgr.HasSong(song, false)) {
                 thresh++;
             }
             if (thresh >= prereqNum) {
