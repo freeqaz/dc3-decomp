@@ -243,7 +243,6 @@ float NgRnd::UpdateOverlay(RndOverlay *overlay, float y) {
             );
             *mStatsOverlay
                 << MakeString("est draw %.1f %.1f\n", EstimateDraw(0), EstimateDraw(1));
-            TheNgStats = &gNgStats[2];
         } else {
             *mStatsOverlay << MakeString("faces %d\n", gNgStats[0].mFaces);
             *mStatsOverlay << MakeString("parts %d\n", gNgStats[0].mParts);
@@ -264,8 +263,13 @@ float NgRnd::UpdateOverlay(RndOverlay *overlay, float y) {
             *mStatsOverlay << MakeString("motion blur %d\n", gNgStats[0].mMotionBlurs);
             *mStatsOverlay << MakeString("spotlights %d\n", gNgStats[0].mSpotlights);
             *mStatsOverlay << MakeString("est draw %.1f\n", EstimateDraw(0));
-            TheNgStats = &gNgStats[2];
         }
+        // Once, after both branches: written in each arm, MSVC gives each arm
+        // its own &gNgStats CSE temp (pri 96 / 51), both below `this` (106),
+        // so `this` took r31.  One store after the join makes &gNgStats a
+        // single candidate across both arms (pri 143), which takes r31 and
+        // leaves `this` in r30, as in the image (`mr r30, r3`).
+        TheNgStats = &gNgStats[2];
         return y;
     } else {
         return Rnd::UpdateOverlay(overlay, y);

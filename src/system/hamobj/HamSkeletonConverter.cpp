@@ -585,12 +585,15 @@ void HamSkeletonConverter::Set(const BaseSkeleton *skel) {
             // the image inits them in that order (824CB238 `li r28, 0x0`,
             // 824CB240 `addi r26, r1, 0x160`, 824CB244 `mr r27, r25`).  The
             // index inside the for-init came out after the pointers, and
-            // curJoint declared before worldJoint costs an extra `mr`.  What
-            // is left is r26<->r27 on those two walkers (4 rows, forgiven).
+            // curJoint declared before worldJoint costs an extra `mr`.
+            // The walkers step curJoint first (824CB370 `addi r27, r27, 0x10`
+            // before `addi r26, r26, 0x10`): stepping worldJoint first gave the
+            // two walkers equal colour priority (5/5) with worldJoint holding
+            // the higher tie key (378 vs 377), so it took r27 and curJoint r26.
             int j = 0;
             const PaddedJointPos *worldJoint = worldJoints;
             PaddedJointPos *curJoint = mJointPositions;
-            for (; j < kNumJoints; j++, worldJoint++, curJoint++) {
+            for (; j < kNumJoints; j++, curJoint++, worldJoint++) {
                 int parentJoint = JointParent((SkeletonJoint)j);
                 if (parentJoint == -1) {
                     float dist = Distance(pelvisV, worldJoints[kJointHipCenter]);

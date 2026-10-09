@@ -423,11 +423,13 @@ void HamListRibbon::DrawRibbon(
     SetWorldXfm(Transform::IDXfm());
 
     if (mLabelPlaceholder) {
-        bool showLabel;
-        if (!disengaged || (showLabel = true, !inRange)) {
-            showLabel = false;
-        }
-        mLabelPlaceholder->SetShowing(showLabel);
+        // Passed straight through, with no named `showLabel` merge variable:
+        // that variable is its own colour candidate in this block, and the
+        // extra pressure lifted `inRange` to `worldXfm`'s priority (-4/-4,
+        // where inRange's later tie key wins), so `inRange` took r26 and
+        // `worldXfm` r25.  Without it inRange drops to -6 and the registers
+        // land as in the image (`mr r26, r6` / `clrlwi r25, r11, 24`).
+        mLabelPlaceholder->SetShowing(disengaged && inRange);
         mLabelPlaceholder->mCanHaveFocus = true;
         // The image materialises the enumerator with a real BRANCH --
         //   0x82481570 li r4, 0x1 / 0x82481578 lbz r11, 0x14(r24) / cmplwi /
