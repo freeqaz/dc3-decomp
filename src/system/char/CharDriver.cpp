@@ -518,12 +518,13 @@ float CharDriver::Display(float f) {
                         curOfs += 11;
                     }
                 }
-                // w20-h: the image adds (float)curOfs + mDrawPosY (fadds f0, f13, f0
-                // at row 249); ours emits the commutative operands swapped.  Same
-                // value (fadds is exactly commutative).  Tried: swapping the source
-                // operands (no change), an accumulator (96.8), RB3's
-                // `mY + (1.0f + ofs)` (re-associates -- not the image's sum).
-                curPos.y = nextDisplay->mDrawPosY + (float)curOfs + 1.0f;
+                // The image adds (float)curOfs first (fadds f0, f13, f0).  c2 orders
+                // commutative operands by key (C2RS-BRIDGE 8.7): read inline,
+                // mDrawPosY is a folded-load subexpression that outranks the
+                // conversion; as a named local it is a variable leaf, and the
+                // conversion subexpression goes first.
+                float drawPosY = nextDisplay->mDrawPosY;
+                curPos.y = drawPosY + (float)curOfs + 1.0f;
                 Hmx::Color curColor(1, 0, 0);
                 TheRnd.DrawString(MakeString("%d", i), curPos, curColor, true);
 
