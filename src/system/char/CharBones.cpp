@@ -1087,7 +1087,12 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
 // upstream without changing code.  Inert (sids or rows): block order (24),
 // Multiply() from Mtx.h, out.x=... instead of Set, named a/b locals (the
 // schedule changes).  The two Vector3 += fadds are the same key (temp vs
-// named-local leaf) on other sids.
+// named-local leaf) on other sids.  The load-temp sids are assigned after a
+// whole-function pass (dead code in the rot loop shifts them as much as dead
+// code before the loop).  One code-neutral handle measured: `*otherVecItr +=
+// v` spelled Add(*otherVecItr, v, *otherVecItr) is +32 (937 -> 969); a
+// second Add() adds nothing.  .begin() for .data(), !(a == b), and an
+// explicit `a = a + b` in the rot loop are +0.
 static void RotateByMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out) {
     float rw = a.w * b.w - a.x * b.x;
     rw -= a.y * b.y;
