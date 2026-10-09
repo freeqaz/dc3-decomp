@@ -691,6 +691,17 @@ RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
     return PostProcessTexture();
 }
 
+// w24-ds: no `RndShaderMgr &shaderMgr = TheShaderMgr;` alias for the
+// SetVConstant call.  fe85675f8 added it as a lever while
+// Matrix4(const Transform &) was out of line in mtx.cpp.  952429f11 made that
+// ctor an inline in math/Mtx.h, so this TU now sees its body; the call is
+// still a `bl` on both sides.  After that change the alias was no longer
+// neutral: it fixed the r22<->r23 permutation described below but reordered
+// the MakeColor field loads in the glyph loop (blue, alpha, green, red rather
+// than the image's blue, green, red, then alpha after the y store), and the
+// function fell from 99.99 to 96.09.  Without the alias it is back to 99.99099,
+// with the same 15 rows as before 952429f11.
+//
 // RESIDUAL (w7-bl, 99.99 canonical, 15 rows, all register/operand ORDER and
 // no value): (a) a flat r22<->r23 permutation -- the image gives r22 to the
 // `?TheShaderMgr@@...@h` page base and r23 to `s`, we give them the other way
@@ -701,9 +712,9 @@ RndTex *DxRnd::GetCurrentFrameTex(bool resolvePreProcess) {
 // rlwimi masks).  Failed spellings: reordering MakeColor's four |-terms in
 // Rnd.h so red precedes alpha is BYTE-INERT here (15 rows before and after),
 // so it is not an argument-order lever, matching the negative already recorded
-// for the same packing in rnddx9/Part.cpp; hoisting `RndShaderMgr &shaderMgr`
-// to the top of the function costs 2.8pp (it pulls the `lis`/`lwz` pair ahead
-// of D3DDevice_SetFVF and grows the frame by 0x10).
+// for the same packing in rnddx9/Part.cpp.  w24-ds: writing the pack out by
+// hand in DrawString (as separate statements in b,g,r,a or a,r,g,b order,
+// right-associated, or with 255.0f on the left) is also inert.
 //
 // Debug text: each glyph is a list of polylines held in the `font` DataArray,
 // indexed by character code, each point a pair of floats scaled to a 9x12 cell
@@ -716,8 +727,7 @@ Vector2 &DxRnd::DrawString(
     D3DDevice_SetFVF(mD3DDevice, 0x42);
     Transform screenXfm;
     screenXfm.Reset();
-    RndShaderMgr &shaderMgr = TheShaderMgr;
-    shaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(screenXfm));
+    TheShaderMgr.SetVConstant(kVS_ViewProjMatrix, Hmx::Matrix4(screenXfm));
     TheShaderMgr.SetTransform(screenXfm);
     RndShader::SelectConfig(nullptr, kLineNozShader, false);
     D3DDevice_SetRenderState_ViewportEnable(TheDxRnd.Device(), 0);
