@@ -165,9 +165,23 @@ void CharBonesMeshes::PoseMeshes() {
             Transform &xfm = (*curMesh)->DirtyLocalXfm();
             Vector3 scaleVec;
             MakeScale(xfm.m, scaleVec);
-            xfm.m.x *= scale->x / scaleVec.x;
-            xfm.m.y *= scale->y / scaleVec.y;
-            xfm.m.z *= scale->z / scaleVec.z;
+            // Named per-row factors put the y row's three fmuls in the image's
+            // operand order (element first). Open: x.x and z.x are element-first
+            // in the image while x.y/x.z and z.y/z.z are factor-first. The
+            // c2rs CQ tap does not show these multiplies as sorted tuples at
+            // any site (cqil0..cqmach), so the 8.7 key cannot be read here.
+            // The image's pattern is not monotone in displacement, which
+            // rules out one memory-leaf key per row against one factor;
+            // hypothesis: the first element of each inlined Vector3::operator*=
+            // reaches the sort through a different base temp (row pointer vs
+            // xfm), so its key takes a different base-sid mod 4. ~140 spellings
+            // tried (inline/named/row-ref per row, Scale(), Set()).
+            float sx = scale->x / scaleVec.x;
+            xfm.m.x *= sx;
+            float sy = scale->y / scaleVec.y;
+            xfm.m.y *= sy;
+            float sz = scale->z / scaleVec.z;
+            xfm.m.z *= sz;
         }
     }
 }
