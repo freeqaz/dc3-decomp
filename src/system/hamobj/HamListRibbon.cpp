@@ -575,10 +575,7 @@ void HamListRibbon::Draw(
     int numItems = (int)drawStates.size();
     // w21-t: `const` drops the base-only `stb r25, 0x74(r31)` home store of
     // scrollable (w7-as: `int scrollable` also dropped it but cost 5.6pp).
-    // The one row left in this function is `add r4, r29, r11` (image) vs
-    // `add r4, r11, r29` at the drawStates[i] push_back: begin()[i], *(begin()
-    // + i), i[begin()], (&front())[i], a named reference and an unsigned index
-    // are all inert or worse.  Fuzzy-only (canonical 100).
+    // (The last row, the drawStates[i] push_back add, is closed below.)
     const bool scrollable = numItems > 6;
     // The image keeps `li r17, 0x4` (0x82483648) when numItems > 6, and only
     // assigns `mr r17, r23` (= numItems) on the fall-through when it is not
@@ -600,8 +597,15 @@ void HamListRibbon::Draw(
 
     for (int i = 0; i < paddingPerSide; i++)
         paddedStates.push_back(defaultState);
+    // Indexed through a reference to the vector: c2 sorts `add r4, r29, r11`'s
+    // operands by key, and indexing drawStates directly leaves begin() as a
+    // variable leaf (sid 397, key 0x131a0) that outranks the strength-reduced
+    // i*40 temp (key 0x12a40), giving `add r4, r11, r29`.  Through `states`
+    // the begin() variable is minted earlier (sid 334, key 0x129c0) and the
+    // offset temp sorts first, as in the image (w25-gu).
+    const std::vector<HamListRibbonDrawState> &states = drawStates;
     for (int i = 0; i < numItems; i++)
-        paddedStates.push_back(drawStates[i]);
+        paddedStates.push_back(states[i]);
     for (int i = 0; i < paddingPerSide; i++)
         paddedStates.push_back(defaultState);
 
