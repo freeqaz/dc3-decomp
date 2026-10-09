@@ -3189,9 +3189,15 @@ void RndText::FontMap3d::SetupCharacter(
         // out of the returned sret pointer (`lwz r9, 0x0(r3)` at 0x82690018) --
         // naming it `Vector3 origin` makes MSVC address the buffer through its
         // own `addi r11, r1, 0xa0` and forward origin.x past the copy.
+        // c2 orders each scale fmuls by operand key, higher sid first.  Through
+        // the `pos` reference, y's scalar-replaced symbol is minted after the
+        // inlined *= parameter (c2-rs tap: y V238 > f V224) while x and z stay
+        // below it (V20/V22), so only the y product reads `fmuls f0, f11, f0`,
+        // as in the image.  Writing xfm.v directly mints y at V31.
         Transform xfm;
-        xfm.v = mFont->CharOriginOffset();
-        xfm.v *= state.mSize;
+        Vector3 &pos = xfm.v;
+        pos = mFont->CharOriginOffset();
+        pos *= state.mSize;
         // The image keeps z's scale and its +yPos apart (`fmuls f10, f0, f10`
         // at 0x8268ff5c, `fadds f0, f10, f30` at 0x8268ff6c).  w13-a: that
         // needs the x statement FIRST -- with z first, MSVC contracts the

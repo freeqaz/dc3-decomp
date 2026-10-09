@@ -309,7 +309,13 @@ BEGIN_COPYS(RndPostProc)
         COPY_MEMBER(mBloomStreak)
         COPY_MEMBER(mBloomStreakAttenuation)
         COPY_MEMBER(mBloomStreakAngle)
-        COPY_MEMBER(mColorXfm)
+        // Named source: RndColorXfm's memcpy operator= then sets up the source
+        // address (r4) before the destination (r3), as the image does.  Plain
+        // COPY_MEMBER gives dst first.  Dropping the hand-written operator= in
+        // ColorXfm.h does the same, but renumbers every includer's EH labels and
+        // moves two unrelated byte-signature funclet pairings (HamStore*).
+        const RndColorXfm &colorXfm = c->mColorXfm;
+        mColorXfm = colorXfm;
         COPY_MEMBER(mFlickerModBounds)
         COPY_MEMBER(mFlickerTimeBounds)
         COPY_MEMBER(mNoiseBaseScale)
