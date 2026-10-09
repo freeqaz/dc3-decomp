@@ -1040,7 +1040,8 @@ void Spotlight::UpdateTransforms() {
         // `lbz r11, 0x1f8(r30)` (mIsCone); `mr r4, r28` (ident, initialised
         // first); `bne` keeps it; else `mr r4, r29` (rot).  The arms were
         // swapped here -- normalized scored the swap as a register permutation.
-        Hmx::Matrix3 m6c(mBeam.mIsCone ? ident : rot);
+        const Hmx::Matrix3 &baseRot = mBeam.mIsCone ? ident : rot;
+        Hmx::Matrix3 m6c(baseRot);
         Hmx::Matrix3 m90;
         MakeRotMatrix(
             Vector3(

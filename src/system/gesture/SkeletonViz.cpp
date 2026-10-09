@@ -407,8 +407,8 @@ void SkeletonViz::DrawJoints(
     }
     Hmx::Color tintColor(tint, tint, tint, 1.0f);
 
-    float depthSpan = (skeleton.BoneLength((SkeletonBone)4, kCoordCamera)
-                       + skeleton.BoneLength((SkeletonBone)3, kCoordCamera))
+    float depthSpan = skeleton.BoneLength((SkeletonBone)4, kCoordCamera)
+        + skeleton.BoneLength((SkeletonBone)3, kCoordCamera)
         + skeleton.BoneLength((SkeletonBone)2, kCoordCamera);
 
     float minZ = 1.0e30f;
@@ -459,7 +459,13 @@ void SkeletonViz::DrawJoints(
     // latch and the joint loop's `li r30,0 / mr r31,r26` are MSVC's strength
     // reduction), the confidence colour as a flat if/else-if/else, baseScale
     // built straight from the local diagonal with Scale() for scaledScale,
-    // `(len4 + len3) + len2` as one parenthesised sum, and one reused `c`.
+    // `len4 + len3 + len2` as one sum, and one reused `c`.
+    // w25-gw: the SetWidth row is c2's commutative key (C2RS-BRIDGE 8.7):
+    // the memory leaf mLineWidthScale is keyed by its base temp's sid mod 4.
+    // The redundant parentheses around `len4 + len3` minted one extra temp,
+    // putting that base on sid 652 (key 0x10008, below baseWidth's 0x103c0);
+    // without them it is 651 (key 0x1c008) and the load sorts first, as in
+    // the image.  Same left-to-right association, so the sum is unchanged.
     Vector3 baseScale(
         mJointMesh->LocalXfm().m.x.x,
         mJointMesh->LocalXfm().m.y.y,
