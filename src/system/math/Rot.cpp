@@ -97,8 +97,11 @@ void Hmx::Quat::Set(const Hmx::Matrix3 &m) {
             root = 0.5f / root;
         }
         w = (m[j][k] - m[k][j]) * root;
-        (*this)[j] = (m[i][j] + m[j][i]) * root;
-        (*this)[k] = (m[i][k] + m[k][i]) * root;
+        // The fadds operand order follows the source operand order here (both
+        // operands are loads through operator[] results, so nothing reorders
+        // them); the call order and the registers are the same either way.
+        (*this)[j] = (m[j][i] + m[i][j]) * root;
+        (*this)[k] = (m[k][i] + m[i][k]) * root;
     }
 }
 

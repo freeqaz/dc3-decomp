@@ -462,10 +462,11 @@ float RndAmbientOcclusion::DistanceSH(
     float dz = (sh1.z * 2.0f - 1.0f) - (sh2.z * 2.0f - 1.0f);
     float dw = (sh1.w * 2.0f - 1.0f) - (sh2.w * 2.0f - 1.0f);
     float dist = sqrtf(dz * dz + dw * dw + dy * dy + dx * dx);
-    if (dot <= 0.0f) {
-        dot = -dot;
-    }
-    return dist / (dot + 1.0f);
+    // A ternary rather than an in-place `dot = -dot`: the in-place form makes
+    // the 1.0f constant a colour candidate with two more priority (37 vs 35)
+    // than the 2.0f one, so 1.0f got f0. With the ternary 1.0f drops to 34 and
+    // 2.0f (35) takes f0, as in the image.
+    return dist / ((dot <= 0.0f ? -dot : dot) + 1.0f);
 }
 
 template <class T>
