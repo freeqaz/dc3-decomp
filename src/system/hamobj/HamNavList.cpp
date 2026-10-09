@@ -707,19 +707,15 @@ void HamNavList::ScrollSubListToIndex(int i, int j) {
 }
 
 int HamNavList::NumItems() const {
-    int count;
-    int i;
     if (mListState.ScrollPastMinDisplay()) {
         if (mScrollBehavior.AtTop() || mScrollBehavior.AtBottom()) {
-            i = HamListRibbon::sNumListSelectable + 1;
+            return HamListRibbon::sNumListSelectable + 1;
         } else
-            i = HamListRibbon::sNumListSelectable + 2;
+            return HamListRibbon::sNumListSelectable + 2;
     } else {
-        count = GetDisabledCount(mListState.NumShowing());
-        i = mListState.NumShowing();
-        i -= count;
+        int count = GetDisabledCount(mListState.NumShowing());
+        return mListState.NumShowing() - count;
     }
-    return i;
 }
 
 float HamNavList::StartFrame() {
