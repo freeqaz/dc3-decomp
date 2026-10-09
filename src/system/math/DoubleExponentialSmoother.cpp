@@ -110,10 +110,11 @@ void Vector3DESmoother::Smooth(Vector3 v, float dt, bool normalize) {
     //     only come from the low 16 bits (a hash of the operand sids), which
     //     decide only when the counts are equal. So the image's trees had equal
     //     counts, and a fix needs a spelling that gives them equal counts while
-    //     emitting the same code. 13 spellings keep 7/6 (+=, named change/trend/
-    //     level/prevDiff/beta, single-expression and Clamp() clamps, oldPrev and
-    //     newBeta moved, reordered operands). The brief's "base sid mod 4"
-    //     hypothesis does not apply: no memory leaves are involved.
+    //     emitting the same code. 14 code-neutral spellings keep 7/6 (+=, named
+    //     change/trend/level/prevDiff/beta, single-expression and Clamp()
+    //     clamps, oldPrev and newBeta moved); Min(1, b), a negated change and a
+    //     split change alter the code. "Base temp sid mod 4" does not apply
+    //     here: no memory leaves are involved.
     //   - mY mLevel fadds: two temp leaves, mTrend V588 (0x19300) before
     //     mPrevLevel V382 (0x15f80); the image needs mPrevLevel first. Temp keys
     //     are (sid << 6) & 0xffff, so this needs a temp layout where mTrend's sid
