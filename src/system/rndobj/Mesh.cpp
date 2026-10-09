@@ -972,7 +972,11 @@ RndDrawable *RndMesh::CollideShowing(const Segment &seg, float &f, Plane &pl) {
 }
 
 int RndMesh::CollidePlane(const RndMesh::Face &face, const Plane &plane) {
-    bool first = plane.Dot(Verts(face.v1).pos) >= 0;
+    // Naming the first vertex position flips the a*x operand order of the
+    // third Dot's fmadds to the image's (a first). That order is fixed in the
+    // IL operand list before either allocator runs; the colour keys are unchanged.
+    const Vector3 &pos1 = Verts(face.v1).pos;
+    bool first = plane.Dot(pos1) >= 0;
     bool second = plane.Dot(Verts(face.v2).pos) >= 0;
     bool third = plane.Dot(Verts(face.v3).pos) >= 0;
     if (first == second && second == third) {

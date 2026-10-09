@@ -624,12 +624,16 @@ DataArray *ReadEmbeddedFile(const char *file, bool b) {
     CritSecTracker tracker(&gDataReadCrit);
     const char *filepath = FileGetPath(gFile.Str());
     const char *madePath = FileMakePath(filepath, file);
-    Symbol localfile = gFile;
-    int dataline = gDataLine;
+    // Saved in the order RB3 declares them (node, stream, line, file, array,
+    // open-array count): each load is its own statement, so the declaration
+    // order sets the tie key COLOR uses to hand out r24..r21 among these
+    // equal-priority saves.
     int node = gNode;
     BinStream *bs = gStream;
-    int openArr = gOpenArray;
+    int dataline = gDataLine;
+    Symbol localfile = gFile;
     DataArray *arr = gArray;
+    int openArr = gOpenArray;
 #ifdef HX_NATIVE
     // The native flex lexer NUL-terminates the current token in its buffer and
     // stashes the overwritten char in yy_hold_char. yyrestart() plus the recursive
