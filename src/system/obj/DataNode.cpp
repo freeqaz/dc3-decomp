@@ -140,6 +140,13 @@ const DataNode &DataNode::Evaluate() const {
         MILO_ASSERT(gDataThis, 0x7A);
         const DataNode *n = gDataThis->Property(mValue.array, true);
 #ifdef HX_NATIVE
+        // PLATFORM (w25-n1 audit): Property(fail=true) returns null only after
+        // MILO_FAIL_DTA (Object.cpp, FindArray(propKey, fail) / "property %s not
+        // found"). The image derefs it bare (Property at 0x8259D5DC feeds UseQueue
+        // at 0x8259D5E0, no test) because its fail never returns there: inside
+        // MILO_TRY it throws, outside it halts. Native throws inside a try too
+        // (w23-dta), so this arm is reached only from a native fail outside a
+        // try, which warns and returns -- the stand-in for the image's halt.
         if (!n) {
             MILO_WARN("DataNode::Evaluate: property lookup returned null on %s", PathName(gDataThis));
             static DataNode sNullNode(0);
@@ -653,6 +660,12 @@ bool DataNode::Equal(const DataNode &n, DataArray *a, bool warn) const {
             );
         }
 #ifdef HX_NATIVE
+        // PLATFORM (LP64; w25-n1 audit): the image's same-type compare is one
+        // 32-bit word of mValue (`lwz; lwz; subf; cntlzw` at 0x8259EBBC) -- for a
+        // symbol that is full pointer identity. Natively mValue is 8 bytes and UncheckedInt() reads
+        // only the low 4, so compare the whole pointer. (Other pointer-valued
+        // types -- Object/Var/Func/Array/Command/Property/Glob -- still compare
+        // the low 4 bytes here; see the w25-n1 report follow-up.)
         if (firstType == kDataSymbol) {
             // On 64-bit, UncheckedInt() truncates the 8-byte symbol pointer to 4 bytes.
             // Compare the full pointers instead.
