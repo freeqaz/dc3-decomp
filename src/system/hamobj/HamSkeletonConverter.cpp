@@ -420,8 +420,11 @@ void HamSkeletonConverter::SetLeg(
         Vector3 worldPos;
         Multiply(hipLocalPos, parentXfm, worldPos);
 
-        Subtract(kneePos, _sub0, dir);
-        Normalize(dir, dir);
+        // The thigh direction gets its own Vector3 (it was a second use of
+        // `dir`).  See the cross1 comment below for why.
+        Vector3 legDir;
+        Subtract(kneePos, _sub0, legDir);
+        Normalize(legDir, legDir);
 
         // w18-b: the axis is INDEXED at each use, not held in a pointer local.
         // The image loads hz.x through the RotateTowards argument (824C98C0
@@ -471,16 +474,23 @@ void HamSkeletonConverter::SetLeg(
         // multiplies only; same values.  The flat Dot() spelling had 4 of
         // these rows but rounds the knee angle differently natively, so the
         // explicit dot stays.
+        // CLOSED (w25-gu): c2 sorts each commutative multiply's operands by
+        // key, and two scalar-replaced components compare by sid (higher sid
+        // first).  `dir` was scalar-replaced early, at the knee-angle dot
+        // (sids 17..22), so every hz component (sids 205..209) sorted first.
+        // A fresh legDir alone mints its components inside this expression,
+        // interleaved with hz's (2 of 6 rows right).  Reading it through the
+        // reference `d` defers its scalar replacement past hz's (sids
+        // 377..487), so dir comes first in all six products, as in the image.
         Vector3 cross1;
+        const Vector3 &d = legDir;
         cross1.Set(
-            dir.z * hipZ.y - dir.y * hipZ.z,
-            dir.x * hipZ.z - dir.z * hipZ.x,
-            dir.y * hipZ.x - dir.x * hipZ.y
+            d.z * hipZ.y - d.y * hipZ.z, d.x * hipZ.z - d.z * hipZ.x, d.y * hipZ.x - d.x * hipZ.y
         );
         Normalize(cross1, cross1);
 
         Hmx::Matrix3 mat;
-        mat.x = dir;
+        mat.x = legDir;
         mat.y = cross1;
         mat.z = hipZ;
 
