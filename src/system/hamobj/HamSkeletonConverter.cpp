@@ -298,6 +298,16 @@ void HamSkeletonConverter::SetArm(
 
     Vector3 elbowToHand;
     Subtract(mJointPositions[elbow], mJointPositions[hand], elbowToHand);
+    // OPEN (w25-gl, w25-gz): fuzzy 99.886; two fmuls/fmsubs rows (dir.y x
+    // elbowToHand.x, dir.y x cross1.x) emit their operands the other way.
+    // c2 sorts commutative operands by key, and scalar-replaced components
+    // compare by sid (C2RS-BRIDGE 8.7).  Ours: dir = (26, 225, 227), eth.y
+    // 237, c.y 231, and c.x/c.z/eth.x/eth.z minted adjacent at 242..245, so
+    // dir.y sorts below everything.  The image needs dir.z < eth.x < dir.y <
+    // eth.z and dir.z < c.x < dir.y < c.z, i.e. dir.y minted between an x and
+    // a z component.  The w25-gu SetLeg alias (const Vector3 &d in an explicit
+    // cross) moves all of dir's sids above eth/c (229/236/248) and flips row
+    // b4 but breaks five others.  Open question: what orders the SR mints.
     Vector3 cross1;
     Cross(dir, elbowToHand, cross1);
     Normalize(cross1, cross1);
