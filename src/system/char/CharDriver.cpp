@@ -639,7 +639,10 @@ void CharDriver::Poll() {
                             d->mPlayFlags &= 0xffff0fff;
                             d = d->Next();
                         }
-                        if (firstFlags - 1 > 0 && (i12 & firstFlags - 1)) {
+                        // Decrement in place, like `flags--` above: the image's
+                        // `and.` lists i12 first (`and. r11, r10, r11`). With a
+                        // `firstFlags - 1` CSE temp the temp came first instead.
+                        if (--firstFlags > 0 && (i12 & firstFlags)) {
                             Play(playing->GetClip(), 0x38, -1, kHugeFloat, 0);
                         }
                     }
