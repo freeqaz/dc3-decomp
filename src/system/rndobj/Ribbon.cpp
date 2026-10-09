@@ -185,8 +185,11 @@ void RndRibbon::UpdateMesh() {
         return;
 
     int numSides = mNumSides;
-    RndMesh::VertVector &verts = mMesh->Verts();
     int seg = 0;
+    // Declared after seg: its symbol id (4 rather than 3) is what orders the
+    // data-pointer load ahead of the element offset in `verts[vertIdx]`'s add
+    // and stwx, as the image does (c2 commutative operand key; w25-gk).
+    RndMesh::VertVector &verts = mMesh->Verts();
     float angleStep = 6.2831855f / (float)(long long)numSides;
     float halfWidth = mWidth * 0.5f;
     float latestFrame = mTransforms.back().frame;
@@ -202,12 +205,11 @@ void RndRibbon::UpdateMesh() {
                     float angle = (float)side * angleStep;
                     float uFrac = (float)side * vCoord;
                     do {
-                        unsigned int rowSeg = (unsigned int)(row + seg);
                         int vertIdx = mNumSides * row + vertRowBase;
-                        unsigned int lastIdx = mTransforms.size() - 1;
-                        if ((int)rowSeg <= (int)lastIdx) {
-                            lastIdx = ((rowSeg >> 31) - 1) & rowSeg;
-                        }
+                        // Clamp<int> (inlined) rather than an open-coded merge
+                        // variable: the merge-variable form gave lastIdx a higher
+                        // COLOR priority than row + seg and swapped r10/r11 (w25-gk).
+                        int lastIdx = Clamp<int>(0, mTransforms.size() - 1, row + seg);
                         float segFrame = mTransforms[lastIdx].frame;
                         float taperScale;
                         if (mTaper) {
