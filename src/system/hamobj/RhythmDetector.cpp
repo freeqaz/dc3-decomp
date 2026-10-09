@@ -394,17 +394,17 @@ void SetupFrame(
     minJointSpeedVector();
 
     frame.mJointVelocities.resize(kJointIndices[19] + 1);
-    float invDelta = 1.0f / deltaTime;
+    // w25-gi: Subtract into a Vector3 and the reciprocal written at each use
+    // (computed once, before the loop). Named dx/dy/dz with a named invDelta
+    // put every fmuls operand list delta-first and the prev/pos address temps
+    // the other way round; the image multiplies (1/dt) * delta.
     for (int i = 0; i < 20; i++) {
         int joint = kAnalyzeJoints[i];
-        const Vector3 &curJoint = pos[joint];
-        const Vector3 &prevJoint = prev[joint];
-        float dx = curJoint.x - prevJoint.x;
-        float dy = curJoint.y - prevJoint.y;
-        float dz = curJoint.z - prevJoint.z;
-        frame.mJointVelocities[i].x = invDelta * dx;
-        frame.mJointVelocities[i].y = invDelta * dy;
-        frame.mJointVelocities[i].z = invDelta * dz;
+        Vector3 delta;
+        Subtract(pos[joint], prev[joint], delta);
+        frame.mJointVelocities[i].x = (1.0f / deltaTime) * delta.x;
+        frame.mJointVelocities[i].y = (1.0f / deltaTime) * delta.y;
+        frame.mJointVelocities[i].z = (1.0f / deltaTime) * delta.z;
     }
     frame.mTime = prev_beat + delt_beat;
 }
