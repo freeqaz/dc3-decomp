@@ -1134,9 +1134,9 @@ static int yy_get_next_buffer(YY_ONLY_ARG)
 static int yy_get_next_buffer(YY_ONLY_ARG) YY_DECL_LAST_ARG
 #endif
 {
-    register char *source = yytext_ptr;
     register char *dest = YY_G(yy_current_buffer)->yy_ch_buf;
-    register int i, number_to_move;
+    register char *source = yytext_ptr;
+    register int number_to_move, i;
 
     if (YY_G(yy_c_buf_p) > &YY_G(yy_current_buffer)->yy_ch_buf[YY_G(yy_n_chars) + 1])
         YY_FATAL_ERROR("fatal flex scanner internal error--end of buffer missed");
