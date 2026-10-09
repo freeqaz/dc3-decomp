@@ -49,8 +49,11 @@ void HamMaster::Poll(float f1) {
     if (IsLoaded() && mAudio->GetSongStream()) {
         mSongMs = f1;
         mSongPos = mSongData->CalcSongPos(this, mSongMs);
-        float f8 = mAudio->GetSongStream()->GetJumpBackTotalTime(mSongMs);
-        float f9 = f8 + mSongMs;
+        // The jump-back time is used straight from the call rather than through a
+        // named local: the fadds operands are then the call result and the mSongMs
+        // reload in that order, as in the image (`fadds f30, f1, f0`).  Through the
+        // local the reload came first.  Same sum.
+        float f9 = mAudio->GetSongStream()->GetJumpBackTotalTime(mSongMs) + mSongMs;
         mStreamJumped = f9 < mStreamMs;
         // Declaration order is the target's stack-slot order: jumpEnd occupies the
         // lower slot and is constructed first.

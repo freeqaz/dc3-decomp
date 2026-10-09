@@ -207,13 +207,15 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
     // one change resolved the whole r23/r24 + r21/r22 "allocator tie-break"
     // that w7-bi certified, the add operand order, and the MemResizeElem tail
     // scheduling.  Behaviour identical (same count, same insert pointer).
-    // LEFT: two /fp:fast commutative operand orders, both with the long-lived
-    // f30 on the other side -- `fadds f30, f0, f30` (sum += weights[i]) and
-    // `fmuls f12, f12, f30` (weights[i] * scale).  MEASURED INERT: `sum =
-    // weights[i] + sum`, `scale * weights[i]`, Clamp on the inline product,
-    // `sum = 1.0f / sum` reused as the scale.  `weights[i] / sum` (letting
-    // fp:fast form the reciprocal) is much worse (85.6 raw) and would move
-    // native rounding away from the image -- not shipped.
+    // w25-fb: the last two rows were /fp:fast commutative operand orders
+    // (`fadds f30, f0, f30` for the sum, `fmuls f12, f12, f30` for the scale).
+    // Swapping the source operands is inert: c2 orders the operands itself (in
+    // the IL, before regasg; the CAND list and registers do not change).  Each
+    // of the four named locals below (merged, both `weight`s, clamped) flips the
+    // orientation of a different subset of the three fadds/fmuls rows (the dedup
+    // merge's fadds included); this set of four gives the image's three orders.
+    // Found by search over named-local spellings, not predicted.  Open question:
+    // the ordering key itself (C2RS-BRIDGE 8.3).  Same arithmetic throughout.
     //
     // One fused loop: the dedup scan, the negative-weight report and the sum all
     // live in the same `for (i)` -- 0x826D8D98..0x826D8E68 is a single loop with
@@ -225,7 +227,8 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
     for (int i = 0; i < num; i++) {
         for (int j = i + 1; j < num; j++) {
             if (boneIndices[j] == boneIndices[i]) {
-                weights[i] += weights[j];
+                float merged = weights[j];
+                weights[i] += merged;
                 num--;
                 boneIndices[j] = boneIndices[num];
                 weights[j] = weights[num];
@@ -241,7 +244,8 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
             );
             weights[i] = 0.0f;
         }
-        sum += weights[i];
+        float weight = weights[i];
+        sum += weight;
     }
     if (Abs(sum - 1.0f) > 0.05f) {
         MILO_NOTIFY(
@@ -259,8 +263,10 @@ int RndMeshDeform::VertArray::AppendWeights(int num, int *const boneIndices, flo
     *newEntry = (u8)num;
     for (int i = 0; i < num; i++) {
         newEntry[i * 2 + 1] = (u8)boneIndices[i];
-        float w = weights[i] * scale;
-        newEntry[i * 2 + 2] = (u8)(Clamp(0.0f, 1.0f, w) * 255.0f + 0.5f);
+        float weight = weights[i];
+        float w = weight * scale;
+        float clamped = Clamp(0.0f, 1.0f, w);
+        newEntry[i * 2 + 2] = (u8)(clamped * 255.0f + 0.5f);
     }
     return vertCount;
 }
