@@ -345,7 +345,11 @@ void StorePanel::HandleNetCacheLoaderFailure(int failType) {
     case kNCMFT_ClientError:
         return;
     case kNCMFT_NoEthernetCable:
-        goto no_metadata;
+        // Explicit arm into the shared exit, as in HandleNetCacheMgrFailure:
+        // the extra merge drops `this` to pri -2, below the hoisted &TheDebug
+        // (pri -1), so `this` takes r28 as in the image.
+        err = kStoreErrorNoMetadata;
+        goto done;
     default:
         MILO_NOTIFY("Unknown failure %d in a net cache loader!", failType);
         err = kStoreErrorCacheRemoved;
@@ -353,10 +357,9 @@ void StorePanel::HandleNetCacheLoaderFailure(int failType) {
     }
 
     if (!ThePlatformMgr.IsEthernetCableConnected()) {
-no_metadata:
         err = kStoreErrorNoMetadata;
     }
-
+done:
     ExitError(err);
 }
 
