@@ -543,70 +543,68 @@ bool Campaign::UpdateEraSongUnlockInstructions(
         eraMovesMastered = movesRequired;
     }
     int i9 = Max(movesRequired - eraMovesMastered, 0);
-    // MEASURED, 2026-09-14 (lane w7-aa).  99.52 canonical, 6 residual rows, and
-    // all six are ONE cause: which of the four one-int SetTokenFmt call sites
-    // below physically holds the cross-jumped (tail-merged) `bl`.  There is
-    // exactly one `bl ??$SetTokenFmt@H@UILabel@@QAAXVSymbol@@H@Z` on each side
-    // and the other three arms branch to it; the image keeps it in the LAST arm
-    // (campaign_song_hint_moves, idx 388) and branches forward from the other
-    // three, we keep it in the FIRST arm (campaign_song_hint_both_singular_move,
-    // idx 290) and branch backward.  Instruction counts are identical (430/430)
-    // and rows 0-289, 292-308, 310-328, 330-387 and 390-429 all match, so the
-    // arm bodies and the branch structure are already faithful.
-    // Checked and NOT the cause: the two same-named function-local statics.
-    // `campaign_song_hint_singular` is declared twice here (i8==1/i9==0 arm and
-    // the fallthrough at the end); the image carries both, with the same scope
-    // ordinals we emit -- ?EJ@ and ?FD@ -- so the duplication is the image's.
-    // w17-e: still 99.52.  Turning the i8 > 1 group's `else if` arms into
-    // plain `if`s (as the i8 == 0 group is written) is byte-identical: the
-    // cross-jump survivor is not decided by the if/else-if spelling.
-    // w19-e: 99.52 -> 100 canonical (all 429 instructions equal) by writing
-    // the nine hints as ONE flat if/else-if chain with a single `return true`
-    // (same behaviour: i9 = Max(..., 0) >= 0, so every path picks the same
-    // hint as the nested early-return version did, including i8 == 0 &&
-    // i9 == 0 -> campaign_song_hint_singular).  The image's arms all branch
-    // to one shared `li r3, 1` (8291DC80), which the single return gives.
-    // CAVEAT, measured: the function-local-static scope ordinals are now
-    // ?DB@..?EP@ where the image has ?DE@ ?DI@ ?DM@ ?EC@ ?EF@ ?EJ@ ?FA@ ?FD@
-    // ?FD@ -- exactly the counts the old nested form produced (if = 2,
-    // `{` = 1, `else` = 1), so the image's SOURCE was the nested early-return
-    // shape.  The ruler folds scope ordinals (name_check shows 18 lis/addi
-    // rows, canonical 100); behaviour and code are identical either way.
-    if (i8 > 1 && i9 > 1) {
-        static Symbol campaign_song_hint_both("campaign_song_hint_both");
-        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both, i8, i9);
-    } else if (i8 > 1 && i9 == 1) {
-        static Symbol campaign_song_hint_both_singular_move(
-            "campaign_song_hint_both_singular_move"
-        );
-        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both_singular_move, i8);
-    } else if (i8 > 1 && i9 == 0) {
-        static Symbol campaign_song_hint("campaign_song_hint");
-        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint, i8);
-    } else if (i8 == 1 && i9 > 1) {
-        static Symbol campaign_song_hint_both_singular_star(
-            "campaign_song_hint_both_singular_star"
-        );
-        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both_singular_star, i9);
-    } else if (i8 == 1 && i9 == 1) {
-        static Symbol campaign_song_hint_both_singular_both(
-            "campaign_song_hint_both_singular_both"
-        );
-        i_pInstructionsLabel->SetTextToken(campaign_song_hint_both_singular_both);
-    } else if (i8 == 1 && i9 == 0) {
-        static Symbol campaign_song_hint_singular("campaign_song_hint_singular");
-        i_pInstructionsLabel->SetTextToken(campaign_song_hint_singular);
-    } else if (i8 == 0 && i9 > 1) {
-        static Symbol campaign_song_hint_moves("campaign_song_hint_moves");
-        i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_moves, i9);
-    } else if (i8 == 0 && i9 == 1) {
-        static Symbol campaign_song_hint_moves_singular(
-            "campaign_song_hint_moves_singular"
-        );
-        i_pInstructionsLabel->SetTextToken(campaign_song_hint_moves_singular);
-    } else {
-        static Symbol campaign_song_hint_singular("campaign_song_hint_singular");
-        i_pInstructionsLabel->SetTextToken(campaign_song_hint_singular);
+    // The image's source is the nested early-return shape: its
+    // function-local-static scope ordinals (?DE@ ?DI@ ?DM@ ?EC@ ?EF@ ?EJ@
+    // ?FA@ ?FD@ ?FD@) are exactly what this if/else nesting counts out.
+    // The one-int SetTokenFmt arms are tail-merged after code generation,
+    // and the image keeps the surviving `bl` in the campaign_song_hint_moves
+    // arm with the other three branching forward to it.  With a plain
+    // `return true` there as well, MSVC keeps it in the FIRST such arm
+    // instead (both_singular_move); jumping to the shared `return true`
+    // after the fallback hint makes the moves arm the survivor, as in the
+    // image.  Behaviour is the same either way.
+    if (i8 > 1) {
+        if (i9 > 1) {
+            static Symbol campaign_song_hint_both("campaign_song_hint_both");
+            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both, i8, i9);
+            return true;
+        } else if (i9 == 1) {
+            static Symbol campaign_song_hint_both_singular_move(
+                "campaign_song_hint_both_singular_move"
+            );
+            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both_singular_move, i8);
+            return true;
+        } else if (i9 == 0) {
+            static Symbol campaign_song_hint("campaign_song_hint");
+            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint, i8);
+            return true;
+        }
     }
+    if (i8 == 1) {
+        if (i9 > 1) {
+            static Symbol campaign_song_hint_both_singular_star(
+                "campaign_song_hint_both_singular_star"
+            );
+            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_both_singular_star, i9);
+            return true;
+        }
+        if (i9 == 1) {
+            static Symbol campaign_song_hint_both_singular_both(
+                "campaign_song_hint_both_singular_both"
+            );
+            i_pInstructionsLabel->SetTextToken(campaign_song_hint_both_singular_both);
+            return true;
+        } else if (i9 == 0) {
+            static Symbol campaign_song_hint_singular("campaign_song_hint_singular");
+            i_pInstructionsLabel->SetTextToken(campaign_song_hint_singular);
+            return true;
+        }
+    } else if (i8 == 0) {
+        if (i9 > 1) {
+            static Symbol campaign_song_hint_moves("campaign_song_hint_moves");
+            i_pInstructionsLabel->SetTokenFmt(campaign_song_hint_moves, i9);
+            goto done;
+        }
+        if (i9 == 1) {
+            static Symbol campaign_song_hint_moves_singular(
+                "campaign_song_hint_moves_singular"
+            );
+            i_pInstructionsLabel->SetTextToken(campaign_song_hint_moves_singular);
+            return true;
+        }
+    }
+    static Symbol campaign_song_hint_singular("campaign_song_hint_singular");
+    i_pInstructionsLabel->SetTextToken(campaign_song_hint_singular);
+done:
     return true;
 }

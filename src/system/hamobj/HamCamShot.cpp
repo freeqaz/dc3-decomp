@@ -211,19 +211,24 @@ void HamCamShot::UpdateTargetsFlipped() {
                          || (mPlayerFlag == kHamPlayer0 && targetIdx % 2 == 1))
                         && character != NULL) {
                         if (clipsDir != NULL) {
-                            Hmx::Object *found =
-                                clipsDir->Find<Hmx::Object>("crewbattle_intro", false);
-                            if (found != NULL) {
+                            // The Find results are tested inline, not held in a
+                            // named `found`: its three single-def versions were
+                            // demoted (c2 free list, C2RS-BRIDGE 8.6), and with
+                            // three fewer frees the crewbattle_intro / BattleIntro
+                            // address halves take fresh ids, so the static
+                            // Symbol's half pops first (r10) as in the image.
+                            if (clipsDir->Find<Hmx::Object>("crewbattle_intro", false)
+                                != NULL) {
                                 target.mAnimGroup = crewbattle_intro;
                             } else {
-                                found = clipsDir->Find<Hmx::Object>("BattleIntro", false);
-                                if (found != NULL) {
+                                if (clipsDir->Find<Hmx::Object>("BattleIntro", false)
+                                    != NULL) {
                                     target.mAnimGroup = BattleIntro;
                                 } else {
-                                    found = clipsDir->Find<Hmx::Object>(
-                                        "crew_battle_intro", false
-                                    );
-                                    if (found != NULL) {
+                                    if (clipsDir->Find<Hmx::Object>(
+                                            "crew_battle_intro", false
+                                        )
+                                        != NULL) {
                                         target.mAnimGroup = crew_battle_intro;
                                     }
                                 }
