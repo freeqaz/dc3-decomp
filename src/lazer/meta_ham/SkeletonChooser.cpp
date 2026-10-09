@@ -977,9 +977,17 @@ void SkeletonChooser::SetPlayerSkeletonNavData(int p1ID, int p2ID) {
             // -- exactly 8290952C/82909530 + the 4 fcmpu rows.  Behaviour is
             // identical to the if/else.  Player 2's block does not matter (its
             // literals are already hoisted), so it stays structured.
-            // Remaining: 8 rows, r28<->r29 (side1 vs p2Skel), present since the
-            // first implementation; inert: side1 declared at the top of the
-            // inMode block (99.4, worse), SkeletonSide-typed side locals.
+            // w25-re (fuzzy 99.88 -> 100): the last 8 rows were r28<->r29
+            // (side1 vs p2Skel).  The image tail-merges the two arms'
+            // `side1 = 0` into one store (82909560 `mr r28, r23`), and
+            // writing that merge out as the single shared `p1Zero:` store
+            // takes one reference off side1: its colour priority drops 6 -> 4
+            // while p2Skel's rises 6 -> 8, so p2Skel is coloured first and
+            // takes r29.  The Right arm is spelled `if (!(x < -0.15f))` so
+            // that the literal meeting order (and hence f30/f31) is
+            // unchanged; jumping into the Left arm's else instead flips them.
+            // Inert earlier: side1 declared at the top of the inMode block
+            // (99.4, worse), SkeletonSide-typed side locals.
             // Earlier (w20-i), all inert or worse: `x > 0.15f` vs `0.15f < x`;
             // one `const float` threshold; two float locals declared 0.15
             // first; a static inline per-player helper (97.6); `side !=
@@ -989,15 +997,16 @@ void SkeletonChooser::SetPlayerSkeletonNavData(int p1ID, int p2ID) {
             if (0.15f < p1Skel->GetUnkab0().x) {
                 side1 = 1;
             } else {
+            p1Zero:
                 side1 = 0;
             }
             goto p1Done;
         p1Right:
-            if (p1Skel->GetUnkab0().x < -0.15f) {
-                side1 = 0;
-            } else {
+            if (!(p1Skel->GetUnkab0().x < -0.15f)) {
                 side1 = 1;
+                goto p1Done;
             }
+            goto p1Zero;
         p1Done:;
         }
 

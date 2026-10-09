@@ -491,10 +491,16 @@ void PoseFatalities::AddFatal(int player) {
     mComboStartBeat[player] = mCurrentBeat;
     if (InStrikeAPose() && !DataVarExists("debug_pose_char")) {
         int cur = mFatalityPoseIndex[player];
-        int rand;
-        do {
+        // A pre-tested loop with the first draw hoisted, not a do-while: the
+        // emitted loop is the same (MSVC cross-jumps the two calls), but the
+        // colour priorities are not: the &mFatalityPoseIndex[player] temp goes
+        // -2 -> 0 and `player` -1 -> 0, so the temp's later tie key wins, it
+        // takes r26 and `player` r25, as in the image (`mr r25, r4` /
+        // `add r26, r11, r29`).  As a do-while `player` popped first.
+        int rand = RandomInt(1, 9);
+        while (rand == cur) {
             rand = RandomInt(1, 9);
-        } while (rand == cur);
+        }
         mFatalityPoseIndex[player] = rand;
     } else {
         mFatalityPoseIndex[player]++;
