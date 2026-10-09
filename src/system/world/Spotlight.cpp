@@ -311,7 +311,11 @@ BEGIN_COPYS(Spotlight)
             COPY_MEMBER(mSpotTarget)
             COPY_MEMBER(mSpotScale)
             COPY_MEMBER(mSpotHeight)
-            SetColorIntensity(c->Color(), c->Intensity());
+            // Named reference: it becomes a colour candidate (pri 22, tie 134)
+            // that takes r10 ahead of the tie-0 mColorOwner load, as the image
+            // does. The bare c->Color() argument left the address to regasg.
+            const Hmx::Color &color = c->Color();
+            SetColorIntensity(color, c->Intensity());
             COPY_MEMBER(mSpotMaterial)
             COPY_MEMBER(mDampingConstant)
             COPY_MEMBER(mLensSize)

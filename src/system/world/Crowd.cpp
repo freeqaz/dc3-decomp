@@ -802,14 +802,18 @@ void WorldCrowd::SetFullness(float flatFullness, float charFullness) {
                 it->mMMesh->InvalidateProxies();
             }
             unsigned int totalChars3D = it->m3DCharsCreated.size();
-            int targetChars3D = (int)((float)totalChars3D * charFullness);
             // Min(total, target), not Min(target, total).  Utl.h's Min is
             // `(y < x) ? y : x`, so this expands to `(target < total) ?
             // target : total` -- 0x8283A160 `cmpw cr6, r10, r11` with
             // r10 = target, r11 = total, `blt` to keep, `mr r10, r11`
             // otherwise.  The other order compares the same two values in the
             // opposite registers and inverts the branch.
-            targetChars3D = Min((int)totalChars3D, targetChars3D);
+            // One definition, not `target = (int)(...); target = Min(total,
+            // target);`: the second version gave targetChars3D priority 23,
+            // above currentChars3D (18), so it took r11 first. Defined once it
+            // drops to 17, currentChars3D and totalChars3D share r11, and
+            // targetChars3D gets r10 as in the image.
+            int targetChars3D = Min((int)totalChars3D, (int)((float)totalChars3D * charFullness));
             int currentChars3D = (int)it->m3DChars.size();
             if (currentChars3D < targetChars3D) {
                 int toAdd = targetChars3D - currentChars3D;
@@ -1041,8 +1045,10 @@ DataNode WorldCrowd::OnIterateFrac(DataArray *da) {
     int charIdx = 0;
     for (int i = 2; i < da->Size(); i++) {
         DataArray *sub = da->Array(i);
-        float frac = sub->Float(0);
-        threshold += frac * charsPerWeight;
+        // No named frac local here: as a named local it is one more candidate
+        // the benefit pass frees, which hands the chars[charIdx] slwi/lea pair
+        // below recycled ids in lea-first order (the image pops slwi first).
+        threshold += sub->Float(0) * charsPerWeight;
         while ((float)charIdx < threshold) {
             sub->ExecuteScript(1, chars[charIdx], 0, 1);
             charIdx++;

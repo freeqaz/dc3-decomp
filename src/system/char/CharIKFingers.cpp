@@ -618,7 +618,11 @@ void CharIKFingers::Poll() {
             float f8 = 1.0f;
             int i1 = -1;
             for (int i = 0; i < 5; i++) {
-                if (mFingers[i].mIsEngaged) {
+                // begin()[i], not mFingers[i]: operator[] converts i to
+                // size_type inside the inline, and that operand comes out second
+                // in the indexed load (lbzx base, offset). Indexing the iterator
+                // with the int directly gives the image's lbzx offset, base.
+                if (mFingers.begin()[i].mIsEngaged) {
                     if (i1 == -1)
                         i1 = i;
                     i3++;
