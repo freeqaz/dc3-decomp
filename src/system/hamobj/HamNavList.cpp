@@ -527,7 +527,11 @@ void HamNavList::Poll() {
 
             // Reset all draw state smoothers
             for (unsigned int i = 0; i < mRibbonDrawStates.size(); i++) {
-                mRibbonDrawStates[i].mSwellSmoother.SetParams(0.0f, 0.0f, 0.0f);
+                // Same shape as the swell loop above: indexing a named base
+                // puts the scaled index first in the add/stfsx (image order);
+                // mRibbonDrawStates[i] puts the begin() load first.
+                HamListRibbonDrawState *states = &mRibbonDrawStates[0];
+                states[i].mSwellSmoother.SetParams(0.0f, 0.0f, 0.0f);
             }
 
             // Send nav_select_done message
