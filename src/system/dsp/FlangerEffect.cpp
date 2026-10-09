@@ -154,7 +154,7 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
             float mixed = (*sample + delayBuf[(readBase + 9599) % 9600] * frac) * 0.5f;
             buf[i] = mixed;
             buf[i] = feedbackBuf[(readBase2 + 9600) % 9600] * (1.0f - frac2) * mFeedbackFrac + mixed;
-            float out = feedbackBuf[(readBase2 + 9599) % 9600] * frac2 * mFeedbackFrac + buf[i];
+            float out = (feedbackBuf[(readBase2 + 9599) % 9600] * frac2) * mFeedbackFrac + buf[i];
             buf[i] = out;
             mDelayBuffers[chan + 2][writeIdx] = out;
             buf[i] = buf[i] * 2.0f - in;
