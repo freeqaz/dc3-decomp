@@ -188,4 +188,68 @@ TEST_F(Lp64LiteralTest, LoadDtzReadsTheSizeTrailerLittleEndian) {
            "4 = round trip differs; a signal means the size was misread";
 }
 
+// ---------------------------------------------------------------------------
+// DataNode::Equal on pointer-valued nodes (w25-pch2).
+// The image compares two same-type nodes with UncheckedInt(), the whole 4-byte
+// value. Natively the union is 8 bytes and UncheckedInt() reads its low half,
+// so two objects / vars / funcs 4 GiB apart compared EQUAL. The pointers are
+// never dereferenced on the same-type path, so fabricated values are safe.
+TEST_F(Lp64LiteralTest, DataNodeEqualComparesWholePointer) {
+    const uintptr_t low = 0x00001000u;
+    const uintptr_t hiA = uintptr_t(1) << 32, hiB = uintptr_t(2) << 32;
+
+    DataNode objA(reinterpret_cast<Hmx::Object *>(hiA | low));
+    DataNode objB(reinterpret_cast<Hmx::Object *>(hiB | low));
+    DataNode objA2(reinterpret_cast<Hmx::Object *>(hiA | low));
+    EXPECT_FALSE(objA.Equal(objB, nullptr, false)) << "Object: same low half, different pointer";
+    EXPECT_TRUE(objA.Equal(objA2, nullptr, false)) << "Object: same pointer";
+
+    DataNode varA(reinterpret_cast<DataNode *>(hiA | low));
+    DataNode varB(reinterpret_cast<DataNode *>(hiB | low));
+    EXPECT_FALSE(varA.Equal(varB, nullptr, false)) << "Var: same low half, different pointer";
+
+    DataNode funcA(reinterpret_cast<DataFunc *>(hiA | low));
+    DataNode funcB(reinterpret_cast<DataFunc *>(hiB | low));
+    EXPECT_FALSE(funcA.Equal(funcB, nullptr, false)) << "Func: same low half, different pointer";
+
+    // Int-valued types keep the image's 4-byte compare.
+    EXPECT_TRUE(DataNode(7).Equal(DataNode(7), nullptr, false));
+    EXPECT_FALSE(DataNode(7).Equal(DataNode(8), nullptr, false));
+}
+
+// DataNode::Load of a 4-byte value (Int, Float, ...) into a node that held a
+// pointer: DataArray::Load overwrites an ifdef'd-out entry in place, so the
+// node can carry the previous pointer's high half. The ctors zero all 8 bytes
+// natively; Load must too, or the int node's union is not its value.
+TEST_F(Lp64LiteralTest, DataNodeLoadOfFourByteValueZeroesTheHighHalf) {
+    const uintptr_t stale = (uintptr_t(0xAAAAAAAAu) << 32) | 0x1234u;
+    char bytes[16];
+    {
+        BufStream out(bytes, sizeof(bytes), true);
+        out << (int)kDataInt << (int)5;
+    }
+    DataNode node(reinterpret_cast<Hmx::Object *>(stale));
+    BufStream in(bytes, sizeof(bytes), true);
+    node.Load(in);
+    ASSERT_EQ(node.Type(), kDataInt);
+    EXPECT_EQ(node.UncheckedInt(), 5);
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(node.UncheckedObj()), uintptr_t(5))
+        << "high half of an Int node loaded over a pointer was left stale";
+
+    float one = 1.0f;
+    unsigned int oneBits;
+    memcpy(&oneBits, &one, sizeof(oneBits));
+    {
+        BufStream out(bytes, sizeof(bytes), true);
+        out << (int)kDataFloat << one;
+    }
+    DataNode fnode(reinterpret_cast<Hmx::Object *>(stale));
+    BufStream fin(bytes, sizeof(bytes), true);
+    fnode.Load(fin);
+    ASSERT_EQ(fnode.Type(), kDataFloat);
+    EXPECT_EQ(fnode.UncheckedFloat(), 1.0f);
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(fnode.UncheckedObj()), uintptr_t(oneBits))
+        << "high half of a Float node loaded over a pointer was left stale";
+}
+
 } // namespace
