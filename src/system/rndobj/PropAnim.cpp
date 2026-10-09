@@ -200,7 +200,7 @@ BEGIN_LOADS(RndPropAnim)
 
     // RAII guard for proper object lifecycle during load.
     //
-    // Known residual, 2 rows (99.988 canonical), and NOT a source defect.  The
+    // Open residual, 2 rows (99.988 normalized), no behaviour difference.  The
     // whole residual is inside this local's inlined ~ObjRefConcrete ->
     // ObjRef::Release ring unlink, whose two statements are
     //     prev->next = next;   // loads 0x88 then 0x84 -- we MATCH this
@@ -208,15 +208,21 @@ BEGIN_LOADS(RndPropAnim)
     // Same two values into the same two registers feeding an identical store;
     // only the issue order of the second statement's two `lwz`s differs.
     //
-    // Refuted as a source lever by census rather than by a build: the image
-    // itself emits BOTH orders for this one inline body.  Sweeping every
-    // `lwz a / lwz b / stw _,0x4 / lwz b / lwz a / stw _,0x8` window in
-    // build/373307D9/asm gives 630 "crossed" (image's order here) against 314
-    // "uniform" (ours), and the split is present within a single frame offset
-    // pair as well -- at 0x88/0x84 it is 18 uniform to 6 crossed.  One source
-    // spelling of ObjRef::Release cannot produce both, so the order is decided
-    // by the scheduler in the enclosing function, and editing that PCH-reached
-    // header would flip hundreds of currently-matching sites to chase 2 rows.
+    // The image emits BOTH orders for this one inline body: an earlier census
+    // of `lwz a / lwz b / stw _,0x4 / lwz b / lwz a / stw _,0x8` windows in
+    // build/373307D9/asm gave 630 "crossed" (the image's order here) against
+    // 314 "uniform" (ours); restricted to function-end windows on r31 it is 56
+    // uniform to 5 crossed (w25-mb), and two of those crossed sites (a PushRev
+    // and Spotlight::Save) already match in our build.  So the order is set by
+    // the scheduler in the enclosing function, not by ObjRef::Release's
+    // spelling (a PCH-reached header; editing it is not on the table).
+    // Mechanism hypothesis (c2 P_DAG): the two loads are equal-height leaves,
+    // so the pick falls to the tuple-index tie key; the open question is
+    // whether the image's order comes from that tie in run 3 or from run 4
+    // (sched0, after lowering), whose function-flag gates may skip it here.
+    // Inert or worse (w25-mb): RndPropAnim as the ObjOwnerPtr template
+    // argument, a named frame local for GetFrame(), and declaring `obj` after
+    // the mLastFrame store (worse).
     ObjOwnerPtr<Hmx::Object> obj(this);
     mLastFrame = GetFrame();
     RemoveKeys();
