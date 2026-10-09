@@ -122,6 +122,12 @@ void CharForeTwist::Poll() {
     // Matrix3 & binding, px bound, Vector3 COPIES of py/hz (they stay in
     // memory), Cross written out three ways, newbias in four positions, Clamp
     // before/after Cross, and Dot operand order are inert or worse.
+    // w24-c1 (93.67, not reworked; same 32 rows inside the Dot/Cross/Dot
+    // block 33-70).  Re-read every value against the image: cross.x/y/z and
+    // both dots compute the same products; only the /fp:fast association
+    // of the first Dot differs (image y + (x + z), ours x + (z + y)) and the
+    // FPR colouring.  w21-al already measured the hz-binding and all 42
+    // explicit-paren spellings; not repeated.
     const Vector3 &py = parentxfm.m.y;
     float clamped = Clamp(-1.0f, 1.0f, Dot(py, handxfm.m.z));
     Vector3 v98;
