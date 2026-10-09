@@ -1119,14 +1119,16 @@ DataNode HamDirector::OnLoadSong(DataArray *a) {
     mBackupDancers = (HamBackupDancers)dancers;
     mLoadedNewSong = true;
     if (mMerger && !str.empty()) {
-        const char *speed;
+        // One mSongSpeed store per arm (MSVC tail-merges them into one Symbol
+        // ctor + stw): each arm then references `this`, which lifts its
+        // colour priority 4 -> 7 above the hoisted assert halves, so `this`
+        // takes r26 like the image (w25-gm, c2rs cands tap).
         if (bpm < 113)
-            speed = "slow";
+            mSongSpeed = "slow";
         else if (bpm < 136)
-            speed = "medium";
+            mSongSpeed = "medium";
         else
-            speed = "fast";
-        mSongSpeed = speed;
+            mSongSpeed = "fast";
         auto songBase = FileGetBase(str.c_str());
         TheGameData->SetSong(songBase);
         mMerger->Select("song", str.c_str(), true);
