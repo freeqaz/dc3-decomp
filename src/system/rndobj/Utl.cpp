@@ -2126,30 +2126,15 @@ void ConvertBonesToTranses(ObjectDir *dir, bool b) {
         } else {
             if (b) {
                 bool foundBoneRef = false;
-                // NEGATIVE RESULT (w8-m 2026-09-30) -- this `for` with the
-                // `!foundBoneRef &&` FIRST is the local optimum at 99.4536
-                // canonical; the single residual row is one dead
-                // `addi r9, r10, 0x8` we emit at idx 51 that the image does
-                // not.  That instruction is `it->Refs().end()`, i.e.
-                // `iterator((ObjRef *)this)` = &mRefs = base+0x8: MSVC CSEs
-                // the `it->Refs()` base adjustment between the init's begin()
-                // and the condition's end(), computes end() eagerly into the
-                // VOLATILE r9, then has to recompute it inside the loop after
-                // the body's calls clobber r9 (idx 54-58, which MATCH) --
-                // leaving the eager copy dead.  Three re-spellings measured,
-                // none removes it:
-                //   (a) init split out of the `for`  -> INERT, same 1 row;
-                //   (b) the rotated shape the image actually emits (end test
-                //       at the top, `if (foundBoneRef) break;` at the bottom
-                //       after ++rit, which is what idx 102-103's `beq` back to
-                //       the top test looks like) -> 90.7, because MSVC then
-                //       spills end() to 0x54(r31) and sinks the end test;
-                //   (c) `rit != it->Refs().end() && !foundBoneRef` (swapped
-                //       && operands) -> 91.6, branch polarity inverts.
-                // Backend artifact, not a source defect.  Do not retry (b)/(c).
-                for (ObjRef::iterator rit = it->Refs().begin();
-                     !foundBoneRef && rit != it->Refs().end();
-                     ++rit) {
+                // w24-pch (99.454 -> 100): a raw ObjRef* ring walk.  With
+                // ObjRef::iterator (w8-m) MSVC computed `it->Refs().end()`
+                // eagerly into volatile r9 and left that copy dead (one
+                // `addi r9, r10, 0x8`); re-spellings of the iterator loop were
+                // inert or worse (rotated shape 90.7, swapped && 91.6).  The
+                // `!foundBoneRef &&` test stays FIRST.
+                for (ObjRef *rit = it->Refs().Next();
+                     !foundBoneRef && rit != &it->Refs();
+                     rit = rit->Next()) {
                     RndMesh *curRefOwner = dynamic_cast<RndMesh *>(rit->RefOwner());
                     if (curRefOwner) {
                         for (int i = 0; i < curRefOwner->NumBones(); i++) {

@@ -218,6 +218,9 @@ public:
 
     iterator begin() const { return iterator(next); }
     iterator end() const { return iterator((ObjRef *)this); }
+    /** Raw ring link, for the `for (ObjRef *it = refs.Next(); it != &refs;
+     *  it = it->Next())` walk (see the HasDirPtrs note below). */
+    ObjRef *Next() const { return next; }
     bool empty() const { return next == this; }
 
     /** Make `this` its own standalone single list node. */

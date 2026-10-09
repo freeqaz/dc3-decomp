@@ -167,32 +167,14 @@ void RndAnimatable::StopAnimation() {
 
 void RndAnimatable::FireFlowLabel(Symbol s) {
     if (s.Null()) return;
-    // w13-a (98.3 -> 99.2): the loop test compares against the ring header as
-    // a raw pointer, as EventTrigger::Cleanup does.  end() is an inlined
-    // by-value iterator on the computed &mRefs, and with this function's EH
-    // state (the Message locals) MSVC homes that address to 0x50(r31) -- the
-    // image has no such store.  RESIDUAL: one dead `stw r10, 0x50(r31)` from
-    // begin() on the same sub-object remains (also inert as a split
-    // declaration `ObjRef::iterator it; for (it = Refs().begin(); ...)`).
-    // w16-a (99.17, still the one dead `stw r10, 0x50(r31)` of &mRefs):
-    // `mRefs.begin()` / `&mRefs` directly instead of through Refs() is inert,
-    // so the home is not the const-reference return of Refs().  Same row in
-    // EventTrigger::Cleanup (0x60(r31)).
-    // w21-x (99.17, same single row): behaviour re-checked against the image
-    // (null-owner and null-listener arms continue the loop, a delivered event
-    // breaks to the flow_label_fired export).  Standalone cl.exe probe of
-    // this loop reproduces the store exactly; it needs BOTH the begin() init
-    // and the &Refs() test on the vbase-adjusted &mRefs plus an EH state
-    // (gone when the test is `!= 0` or the init is a constant).  Inert or
-    // worse, all measured in the probe: `it != Refs().end()` (2 stores),
-    // const-ref operator!=, `&Refs() != it`, `it.operator ObjRef*()`,
-    // `it.operator++()`, Hmx::Object::Refs() qualified, mRefs direct,
-    // begin() returning `next` implicitly, a member-init vs body-assign
-    // iterator ctor, non-const operator ObjRef*/->, `iterator &operator++`.
-    // Removing it only via shapes the image does not have: a
-    // `const ObjRef &refs` local (latch stops recomputing &mRefs) or a
-    // static_cast<const Hmx::Object &> on the init (adds a null test).
-    for (ObjRef::iterator it = Refs().begin(); (ObjRef *)it != &Refs(); ++it) {
+    // w24-pch (99.17 -> 100): a raw ObjRef* ring walk, the way the ObjRef
+    // header says refs are iterated (HasDirPtrs).  Every ObjRef::iterator
+    // spelling (w13-a, w16-a, w21-x: begin()/end(), raw-pointer test, const-ref
+    // operator!=, mRefs direct, split declaration, ...) left one dead
+    // `stw r10, 0x50(r31)` homing the vbase-adjusted &mRefs; with no iterator
+    // object there is nothing to home.  Same fix in EventTrigger::Cleanup and
+    // rndobj ConvertBonesToTranses.
+    for (ObjRef *it = Refs().Next(); it != &Refs(); it = it->Next()) {
         Hmx::Object *owner = it->RefOwner();
         if (owner && owner->ClassName() == "AnimTask") {
             // The event goes to the AnimTask's listener, not to the task
