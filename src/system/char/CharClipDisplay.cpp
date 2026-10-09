@@ -173,17 +173,21 @@ void CharClipDisplay::DrawTrack() {
     // image's order) is exactly neutral -- 97.31, same 11 insert/delete rows.
     // The separate `lbl_82020B54` vs `__real@40000000` row is benign: that
     // .rdata word IS 2.0f, it is just pooled in CharacterTest's object.
+    // w24-c3 (97.31 -> 97.8 instr-level): the marker rect's y/h are written
+    // INSIDE the loop as `drawY - 3.0f` / `9.0f`, not through markerY/markerH
+    // locals declared above it.  MSVC hoists the invariant subtraction to the
+    // preheader AFTER the `bgt` loop guard (image 823DF5A0: `lfs f0,
+    // __real@40400000@l(r25)` / `fsubs f27, f29, f0`), and no longer keeps
+    // 3.0f in a callee-saved FPR there.
     // Draw integer beat markers
     float firstBeat = (float)std::ceil(startBeat);
     float lastBeat = (float)std::floor(endBeat);
     if (firstBeat + 1.0f != firstBeat) {
-        float markerY = drawY - 3.0f;
-        float markerH = 9.0f;
         float beat = firstBeat;
         Hmx::Rect markerRect;
         while (beat <= lastBeat) {
-            markerRect.y = markerY;
-            markerRect.h = markerH;
+            markerRect.y = drawY - 3.0f;
+            markerRect.h = 9.0f;
             markerRect.x = GetX(beat);
             markerRect.w = 1.0f;
             TheRnd.DrawRect(markerRect, green, nullptr, nullptr, nullptr);
