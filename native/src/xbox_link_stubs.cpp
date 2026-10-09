@@ -149,6 +149,34 @@ HRESULT NuiIdentityGetEnrollmentInformation(
 } // extern "C"
 
 // ============================================================================
+// Xbox LIVE title-server enumeration — STUB
+// ----------------------------------------------------------------------------
+// NetCacheMgrXbox (the store/MOTD download cache, created by NetCacheMgrInit)
+// reaches this through XLSPConnection::Connect -> StartEnumeration when a load
+// starts. There is no Xbox LIVE service natively, so the enumeration cannot be
+// created: the image's own failure arm then runs (MILO_NOTIFY, XLSPConnection
+// -> kFailed, NetCacheMgrXbox::Poll -> SetFail), and the cache reports
+// "store server unavailable" to MainMenuPanel / StorePanel rather than staying
+// in kNCMS_Load forever.
+//
+// The previous untyped generated stub returned 0 (ERROR_SUCCESS) without
+// writing *hEnum, which leaves XLSPConnection waiting in its enumerate state
+// for good. Any non-ERROR_SUCCESS value drives the same image path; the
+// specific code is not taken from an XDK trace. Typed here (not in the
+// generated stubs, which are compiled out under __EMSCRIPTEN__) so web links
+// a definition too.
+// ============================================================================
+
+#include "xdk/xapilibi/winerror.h"
+#include "xdk/xonline/xonline.h"
+
+extern "C" DWORD XTitleServerCreateEnumerator(LPCSTR, DWORD, DWORD *pcbBuffer, HANDLE *) {
+    HX_STUB_TRACE("XTitleServerCreateEnumerator");
+    if (pcbBuffer) *pcbBuffer = 0;
+    return ERROR_NO_SUCH_USER; // no signed-in LIVE user, so no title servers
+}
+
+// ============================================================================
 // Xbox Debug Monitor — STUB
 // ============================================================================
 

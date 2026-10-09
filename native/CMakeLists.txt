@@ -1102,6 +1102,7 @@ set(DC3_ENGINE_SOURCES
     ${CMAKE_SOURCE_DIR}/../src/system/utl/MultiTempoTempoMap.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/NetCacheLoader.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/NetCacheMgr.cpp
+    ${CMAKE_SOURCE_DIR}/../src/system/utl/NetCacheMgr_Xbox.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/NetLoader.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/OSCMessenger.cpp
     ${CMAKE_SOURCE_DIR}/../src/system/utl/Option.cpp

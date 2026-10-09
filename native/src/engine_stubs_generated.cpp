@@ -204,7 +204,7 @@ int XNetUnregisterInAddr() { HX_STUB_TRACE("XNetUnregisterInAddr"); return 0; }
 int XNetXnAddrToMachineId() { HX_STUB_TRACE("XNetXnAddrToMachineId"); return 0; }
 int XShowMarketplaceDownloadItemsUI() { HX_STUB_TRACE("XShowMarketplaceDownloadItemsUI"); return 0; }
 int XShowNuiTroubleshooterUI() { HX_STUB_TRACE("XShowNuiTroubleshooterUI"); return 0; }
-int XTitleServerCreateEnumerator() { HX_STUB_TRACE("XTitleServerCreateEnumerator"); return 0; }
+// XTitleServerCreateEnumerator: typed definition in xbox_link_stubs.cpp (desktop + web).
 #endif
 extern "C" int XNetRandom(unsigned char *pb, unsigned int cb) {
     for (unsigned int i = 0; i < cb; i++)
@@ -319,9 +319,8 @@ extern "C" long _stub_fn_640() { HX_STUB_TRACE("NetLoaderXbox::NetLoaderXbox"); 
 
 // ObjRefConcrete<LightPreset, ObjectDir>::CopyRef stub removed — real impl in LightPreset.cpp
 // RndRenderState stubs (758-773): removed - provided by RenderState_Native.cpp
-// NetCacheMgrXbox::NetCacheMgrXbox()
-extern "C" __attribute__((weak, used)) long _stub_fn_813() __asm__(ASM_SYM("_ZN15NetCacheMgrXboxC1Ev"));
-extern "C" long _stub_fn_813() { HX_STUB_TRACE("NetCacheMgrXbox::NetCacheMgrXbox"); return 0; }
+// NetCacheMgrXbox::NetCacheMgrXbox(): stub removed -- NetCacheMgr_Xbox.cpp is
+// built natively (NetCacheMgrInit creates the image's NetCacheMgrXbox).
 // SingleUserCrewSelectPanel::UpdateCrewMesh(RndMesh*, int, Symbol) - now implemented in SingleUserCrewSelectPanel.cpp
 // Rand::Int(int, int) - now implemented in Rand.cpp
 // Rand::Int() - now implemented in Rand.cpp

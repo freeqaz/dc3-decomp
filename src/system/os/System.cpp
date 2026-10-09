@@ -250,11 +250,10 @@ void SystemPoll(bool b1) {
     TheLoadMgr.Poll();
 #ifdef HX_NATIVE
     if (TheCacheMgr) TheCacheMgr->Poll();
-    if (TheNetCacheMgr) TheNetCacheMgr->Poll();
 #else
     TheCacheMgr->Poll();
-    TheNetCacheMgr->Poll();
 #endif
+    TheNetCacheMgr->Poll();
     TheWebSvcMgr.Poll();
     if (TheAppChild != nullptr) {
         TheAppChild->Poll();
@@ -507,11 +506,14 @@ void SystemInit(const char *config) {
     TheMC.Init();
     FileCache::Init();
 #ifndef HX_NATIVE
-    // Native has no CacheMgrXbox / NetCacheMgrXbox (XContent + XNet): their
-    // TUs are not in the native build, and SystemPoll null-checks both.
+    // Native has no CacheMgrXbox (XContent): its TU is not in the native
+    // build, and SystemPoll null-checks TheCacheMgr.
     CacheMgrInit();
-    NetCacheMgrInit();
 #endif
+    // Native builds the image's NetCacheMgrXbox too: with no Xbox LIVE its
+    // XLSPConnection fails, so the cache reports the store server unavailable
+    // (and ui.dta's {net_cache_mgr init ...} finds the object).
+    NetCacheMgrInit();
     TheDataPointMgr.Init();
     TheWebSvcMgr.Init();
     ThePlatformMgr.Init();
