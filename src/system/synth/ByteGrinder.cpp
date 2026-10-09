@@ -207,6 +207,19 @@ DataNode op5(DataArray *msg) {
     return DataNode(kDataInt, u8(ret));
 }
 
+// op6 stop note (w25-ga2, c2rs 8.7 commutative key): the image emits
+// `xor r11, r10, r11`, u8(operand) first. Ours is the other way round. At the
+// last sort (cqlo3) the !w side is the eq-0 compare with the Int(2) call
+// folded in (SU+7, key 0x100e040f) and u8(operand) is zext of the saved
+// Int(1) result (0x00030098). The u8(operand) side can never outrank a tree
+// that holds a call, so the image's compare must see a LEAF (key 0x1xxxx), as
+// op0's zext does once `w` is narrowed at its declaration. No 32-bit-exact
+// spelling found that keeps the call out of the compare. Tried: named
+// bool/u8/u32 results of !w and of `== 0`, a const ref to the result, int vs
+// u32 vs unsigned long for both locals, `w == 0` and `w < 1`, explicit
+// DataNode(kDataInt, ...), and inline-call orders (which swap the two Int
+// calls). Narrowing w itself changes the semantics: !w tests all 32 bits
+// (cntlzw on r3).
 DataNode op6(DataArray *msg) {
     u32 operand = msg->Int(1);
     u32 w = msg->Int(2);

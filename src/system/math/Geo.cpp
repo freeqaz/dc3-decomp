@@ -144,7 +144,15 @@ bool Box::Clamp(Vector3 &v) {
 
 void Normalize(const Plane &in, Plane &out) {
     float mult = 0;
-    float len = std::sqrt(in.a * in.a + in.b * in.b + in.c * in.c);
+    // Named squares, same association as the one-line sum. They move the
+    // address temp behind the in.b reload in the final Set from sid 164 to 165,
+    // so that load keys 0x14008, above `mult` (0x10060), and is emitted first
+    // (fmuls f0,f10,f0); in.c's address temp stays at sid 160 (0x10008, mult
+    // first). c2rs commutative key: a memory leaf orders by base sid mod 4.
+    float aa = in.a * in.a;
+    float bb = in.b * in.b;
+    float cc = in.c * in.c;
+    float len = std::sqrt(aa + bb + cc);
     if (len != 0) {
         mult = 1 / len;
     }
