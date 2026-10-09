@@ -916,13 +916,15 @@ void DecodeDxtColor(
 ) {
     unsigned short color0 = *(unsigned short *)blockData;
     unsigned short color1 = *((unsigned short *)blockData + 1);
+    // rowIdx is defined before rowBase so rowBase gets the higher candidate id
+    // and comes first in the lbzx (base, index), as in the image
+    int rowIdx = pixelY;
     unsigned char *rowBase = blockData + 4;
-    int rowIdx;
 
-    if (pixelY & 1) {
-        rowIdx = pixelY - 1;
+    if (rowIdx & 1) {
+        rowIdx--;
     } else {
-        rowIdx = pixelY + 1;
+        rowIdx++;
     }
 
     unsigned char r0 = (color0 >> 8) & 0xF8;

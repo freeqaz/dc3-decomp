@@ -114,8 +114,13 @@ void OriginalChoreoRemixer::SelectMove(int player, int measure) {
         } else {
             i8 = mDesiredDiffs[player];
         }
-        const MoveParent *mp_next = GetMoveParentsByDifficulty(i8)[measure];
-        const MoveVariant *mv_next = GetMoveVariantsByDifficulty(i8)[measure];
+        // const vector refs give the image's lwzx operand order (base first for
+        // mp_next, index first for mv_next); inline [] put the index first in both
+        const std::vector<const MoveParent *> &parents = GetMoveParentsByDifficulty(i8);
+        const MoveParent *mp_next = parents[measure];
+        const std::vector<const MoveVariant *> &variants =
+            GetMoveVariantsByDifficulty(i8);
+        const MoveVariant *mv_next = variants[measure];
         MILO_ASSERT(mp_next, 0xA1);
         AddRoutineMove(player, measure, mp_next, mv_next);
         unkec[player][measure] = i8;
