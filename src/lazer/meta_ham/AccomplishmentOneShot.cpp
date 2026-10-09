@@ -30,6 +30,13 @@ AccomplishmentOneShot::~AccomplishmentOneShot() {}
 // arms. A shared `int count` + `||`-merged arms reproduced the ordinals exactly
 // (44/47) but broke the cross-jumped block layout (85.0), so the separate-arm
 // spelling stays; the original arm spelling is still unknown.
+// w25-gs: not a register decision -- the ordinal is c1's per-function scope
+// counter, so the c2 tap has nothing to say about it. Measured costs: each
+// `else if (c) { if (x >= val) return true; }` arm opens 6 scopes, the inner
+// if 2, MILO_ASSERT 5. Writing the arms as independent `if (c) { ...;
+// continue; }` blocks is code-identical (245/245 rows) and gives ?DL@/?DO@
+// (59/62); the image needs 44/47, 15 fewer. Open question: which arm shape
+// opens about 2.5 scopes per arm and still cross-jumps like the image.
 bool AccomplishmentOneShot::AreOneShotConditionsMet(
     HamPlayerData *hpd, HamProfile *profile, Symbol s, Difficulty d
 ) {
