@@ -1503,6 +1503,17 @@ void CharEyes::Poll() {
     Vector3 facingDir(headXfm.m.y);
     Normalize(facingDir, facingDir);
 
+    // w25-gx (c2rs tap, C2RS-BRIDGE 8.7): the one residual row is the x term
+    // of this inlined Dot, image `fmadds f12, f11, f10` (facing.x first), ours
+    // targetDir.x first. The product's operands are variable leaves keyed by
+    // sid: facing.x sid 617 < targetDir.x sid 621 (the y/z fields, sids
+    // 756..759, already sort facing first). Inert (~20 variants): Dot argument
+    // order, declaration order of the two vectors, facingDir by assignment,
+    // renaming, a named dot / inline Clamp (move only the y/z group), and a
+    // dummy local anywhere (shifts every sid by one). Hypothesis: the x fields
+    // are numbered in the overflow-local group (headXfm 614 .. cang 624) by a
+    // rule other than declaration position; the image needs facing.x numbered
+    // after targetDir.x. Open: what orders that group.
     float cang = Dot(facingDir, targetDir);
     cang = Clamp(-1.0f, 1.0f, cang);
 
