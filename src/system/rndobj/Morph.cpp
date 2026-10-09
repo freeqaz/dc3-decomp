@@ -218,8 +218,15 @@ void RndMorph::SetFrame(float frame, float blend) {
                 if (it + 1 == mPoses.rend()) {
                     intenseInterp = f1;
                 } else {
-                    intenseInterp = mIntensity * InterpWeight((*it).weights, frame);
-                    f1 = f1 - intenseInterp;
+                    // w25-gn: the named poseWeight adds one IL temp ahead of the
+                    // Scale loop's strength-reduced cursor, moving that cursor's
+                    // temp sid by one.  norm.y in the Scale loop is a memory leaf
+                    // on that cursor (key 0x10008 + (sid & 3) << 14), and needs
+                    // to outrank intenseInterp (V16, 0x10200) to give the image's
+                    // `fmuls f12, f12, f0`; it now keys 0x14008.
+                    float poseWeight = mIntensity * InterpWeight((*it).weights, frame);
+                    intenseInterp = poseWeight;
+                    f1 = f1 - poseWeight;
                 }
                 if (intenseInterp != 0) {
                     intenseInterp *= blend;
@@ -239,6 +246,14 @@ void RndMorph::SetFrame(float frame, float blend) {
                             }
                         }
                     } else {
+                        // w25-gn, open: the norm.z product below emits `fmadds f13,
+                        // f13, f0, f12` where the image has `f0, f13` (same value).
+                        // c2's last commutative sort (cqlo3) still sees norm.z's
+                        // source address as cursor + index (V1720 + V1358), a
+                        // subexpression that outranks intenseInterp; the image
+                        // needs a leaf there keyed below 0x10200, i.e. a different
+                        // strength-reduction rebuild of this loop's cursors.
+                        // 23 spellings tried (loop/branch order, named locals).
                         for (; targetIt != vertEnd && itVert != itVertEnd;
                              ++targetIt, ++itVert) {
                             ScaleAddEq(targetIt->pos, itVert->pos, intenseInterp);
