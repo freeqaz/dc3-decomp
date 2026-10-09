@@ -1775,6 +1775,14 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
             // old `unsigned short base` cast only papered over. The u16 clrlwi
             // pattern in the arms comes from Set()'s int parameters, not from
             // casts here (inert either way, measured).
+            // w25-rl stop note (c2rs tap): `add r9, r3, r4` lists col (named
+            // local, id 34, sym 36) before the row*numCols induction variable
+            // (strength-reduction temp, id 111, sym 111); the image lists the
+            // IV first. Both are colour candidates, and the order is not the
+            // higher-id-first rule seen elsewhere, so it is set when strength
+            // reduction rebuilds the add. Inert (9 more spellings): operand
+            // and factor order, `numSegments + 1`, a per-column rowBase local,
+            // an outer `row`; a per-row rowBase merges the IVs (+2 insns).
             int base = row * numCols + col;
             int next = base + 1;
             int baseNext = base + numCols;

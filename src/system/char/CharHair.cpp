@@ -477,8 +477,13 @@ void CharHair::Hookup(ObjPtrList<CharCollide> &collides) {
              it != collides.end();
              ++it) {
             CharCollide *col = *it;
-            bool passAll = (col->GetFlags() == 0 && strand.HookupFlags() == 0);
-            if ((strand.HookupFlags() & col->GetFlags()) == 0 && !passAll)
+            // The flags are read once into a named local: the `and.` below then
+            // lists the strand's reloaded HookupFlags first and colFlags second,
+            // as the image does (`and. r11, r9, r11`). Through col->GetFlags()
+            // the CSE'd colour-candidate value came first in the operand list.
+            int colFlags = col->GetFlags();
+            bool passAll = (colFlags == 0 && strand.HookupFlags() == 0);
+            if ((strand.HookupFlags() & colFlags) == 0 && !passAll)
                 continue;
 
             col->SyncWorldState();

@@ -160,6 +160,16 @@ void StandingStillGestureFilter::Update(const Skeleton &skeleton, int ms) {
     }
 
 StandingStillLogic:
+    // w25-rl stop note (c2rs regasg tap): the r9/r11 swap in this 16-byte
+    // copy is not a colour decision. All three values (the first word's lwz,
+    // the dead src/dst `addi` addresses) are regasg temps, and regasg sees
+    // lwz, addi src, addi dst in sched3 order, so first fit gives the word
+    // r11 (r10 holds mRaisedMs). The image's r9 word means r11 was blocked
+    // at the lwz: the src addi came first in sched3, or was a colour
+    // candidate (memcpy makes the DST addi one, but reloads mRaisedMs).
+    // Inert: GetUnkab0Padded() casts, a named `cur` ref, `!mRaisedMs`,
+    // Vector3 temp, savedPos split. Open question: which IL shape orders the
+    // copy's src address ahead of its first load in sched3.
     if (mRaisedMs == 0) {
         unk38 = skeleton.GetUnkab0();
     }
