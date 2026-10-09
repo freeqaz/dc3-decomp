@@ -1092,7 +1092,11 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
 // code before the loop).  One code-neutral handle measured: `*otherVecItr +=
 // v` spelled Add(*otherVecItr, v, *otherVecItr) is +32 (937 -> 969); a
 // second Add() adds nothing.  .begin() for .data(), !(a == b), and an
-// explicit `a = a + b` in the rot loop are +0.
+// explicit `a = a + b` in the rot loop are +0.  The sid shift is quantised
+// (+8, +32, +34, +64 measured; extra named refs do not stack), so the
+// remaining question is which construct is worth +66..71 by itself.
+// The uncompressed Vector3 += z row is two late temps (my.z 1409 below
+// other.z 1415); field-wise, named-ref and Add() spellings leave it.
 static void RotateByMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out) {
     float rw = a.w * b.w - a.x * b.x;
     rw -= a.y * b.y;
@@ -1155,7 +1159,15 @@ void CharBones::RotateBy(CharBones &bones) const {
                         }
                         otherVecItr++;
                     }
-                    *otherVecItr += v;
+                    // Component-wise, not `*otherVecItr += v`: the inlined
+                    // operator+= copies v's components into its own high-sid
+                    // locals (sid ~420, key 0x13480), which outrank the
+                    // other.x load temp in c2's commutative sort; written
+                    // per field, v.x is the function's own local (sid 10,
+                    // key 0x10140) and the load sorts first as in the image.
+                    otherVecItr->x += v.x;
+                    otherVecItr->y += v.y;
+                    otherVecItr->z += v.z;
                     myBonesItr++;
                     if (myBonesItr == myBonesEnd) {
                         break;
