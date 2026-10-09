@@ -163,6 +163,10 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
         // `fmuls f12, f13, f12` operand order.  Inert: `out * f13_gain`;
         // worse: `for (int ch ...)` inside the guard (98.1), no numChans
         // guard (98.1).  decomp-synth hill_climb (4 rounds x 60) found nothing.
+        // w24-c3 STOP at 99.0 (same 15 rows): `f29 = f17 * f17` moved after
+        // the sin() call is much worse (raw 96.9, frame 0x110 vs 0x120, every
+        // callee-saved FPR shifts by one).  The FlangerEffect pointer-read
+        // lever does not apply: no store-forwarding row here.
         for (int i = 0; i < numSamples; i++) {
             // Compute sin of phase
             float sinVal = sin(f27);
