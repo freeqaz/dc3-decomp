@@ -74,7 +74,13 @@ DataNode UpdateFriendsListJob::OnMsg(PlatformMgrOpCompleteMsg const &msg) {
         for (int i = 0; i < friendSize - 1; i++) {
             friendName = mFriendsList[i]->GetName();
             XUID xuid = mFriendsList[i]->mXUID;
-            friendInfo += MakeString("%llu,", xuid);
+            // MakeString binds a const& to its argument; handing it a copy
+            // keeps `xuid` itself un-addressed, so c2 demotes it to a plain
+            // temp and the second allocator gives it r17 (image) instead of a
+            // colour candidate taking r27 and shifting r17-r27 (w25-gm, c2rs
+            // cands: CDEMOTE 26 -> 27).
+            XUID xuidArg = xuid;
+            friendInfo += MakeString("%llu,", xuidArg);
             Hx_snprintf(namebuf, 8, "name%03d", i);
             dataP.AddPair(namebuf, friendName);
             Hx_snprintf(namebuf, 8, "guid%03d", i);
