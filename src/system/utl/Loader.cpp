@@ -219,16 +219,15 @@ void FileLoader::SaveData(BinStream &bs, void *v, int size) {
     bs << -1;
     bs << 1;
     bs << size;
-    int i3 = 0;
+    int written = 0;
     do {
-        int i2 = size - i3;
-        if (i2 > 0x10000) {
-            i2 = 0x10000;
-        } else if (i2 == 0)
+        // Through Min, the chunk length is two colour candidates (pri 12 each)
+        // instead of one (pri 19), so the running offset (pri 14) takes r31.
+        int chunk = Min(size - written, 0x10000);
+        if (chunk == 0)
             return;
-        const char *c = (char *)v;
-        bs.Write(c + i3, i2);
-        i3 += i2;
+        bs.Write((char *)v + written, chunk);
+        written += chunk;
         MarkChunk(bs);
     } while (true);
 }
