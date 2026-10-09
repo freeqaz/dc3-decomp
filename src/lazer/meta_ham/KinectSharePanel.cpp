@@ -258,6 +258,10 @@ DataNode KinectSharePanel::OnPostLink(DataArray *a) {
     mOverlapped.hEvent = CreateEventA(nullptr, true, false, "SocialNetworkLinkPost");
     if (!mOverlapped.hEvent) {
         MILO_LOG("KinectSharePanel: mOverlapped.hEvent is null");
+        // Early return (cross-jumped into the shared tail), as in OnUpload:
+        // its extra references raise the hoisted TheDebug address above
+        // &mOverlapped, giving the image's r22/r21 split.
+        return 0;
     } else {
         mOverlapped.pCompletionRoutine = nullptr;
         mOverlapped.dwCompletionContext = (DWORD_PTR)this;
@@ -310,7 +314,7 @@ DataNode KinectSharePanel::OnPostLink(DataArray *a) {
             mUploadState = 3;
         }
     }
-    return DataNode(kDataInt, 0);
+    return 0;
 }
 
 DataNode KinectSharePanel::OnCleanup(DataArray *a) {
