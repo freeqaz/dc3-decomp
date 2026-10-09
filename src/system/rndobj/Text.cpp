@@ -115,8 +115,13 @@ bool CalcScreenHeight(float size, RndMesh *mesh, float &heightOut) {
         cam->WorldToScreen(world, screens[i]);
     }
 
-    float dx = (float)TheRnd.Width() * (screens[0].x - screens[1].x);
-    float dy = (float)TheRnd.Height() * (screens[0].y - screens[1].y);
+    // The screen-space delta is a named Vector2: with the two differences inline,
+    // the fmuls operand lists come out (delta, size); through the named pair they
+    // come out (size, delta) as the image has them (commutative operand order is
+    // fixed in the IL before either allocator runs).
+    Vector2 screenDelta(screens[0].x - screens[1].x, screens[0].y - screens[1].y);
+    float dx = (float)TheRnd.Width() * screenDelta.x;
+    float dy = (float)TheRnd.Height() * screenDelta.y;
     heightOut = std::sqrt(dx * dx + dy * dy);
     return true;
 }

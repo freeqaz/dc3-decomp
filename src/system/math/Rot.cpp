@@ -154,6 +154,19 @@ void MakeEulerScale(const Hmx::Matrix3 &m1, Vector3 &v2, Vector3 &v3) {
     MakeEuler(m38, v2);
 }
 
+// w25-ge stop note (fuzzy 99.868, one row): in the else arm the image multiplies
+// w as (res, w) and z, y, x as (q, res); ours emits both w and z res-first.  Same
+// loads, registers and schedule -- only the z fmuls operand list differs.  res
+// is a demoted one-block local and qin.y/z/w are #2af reloads of the dot
+// product's CSE loads, so no colour candidate is involved: the order is fixed in
+// the IL before either allocator (8.3's open question).  Measured with the c2rs
+// tap (tgtcmp): `const Hmx::Quat &q = qin` for the dot and the Set flips z right
+// but w wrong (all four q-first, 75/76); a named z, w or y load flips that
+// component but reschedules the arm or cross-jumps the z store into the zero arm
+// (55-68/76); a named product reorders the stores; swapping operands at the
+// source, qin[2], a separate inv local, 1/len split, early return, !res, the
+// expanded dot, zero-arm spellings: inert.  Open question: what makes w alone
+// res-first while z is q-first (an IL node ordinal of the CSE'd loads?).
 void Normalize(const Hmx::Quat &qin, Hmx::Quat &qout) {
     float res = qin * qin;
     if (res == 0) {
@@ -383,7 +396,12 @@ void FastInterp(const Hmx::Quat &q1, const Hmx::Quat &q2, float f, Hmx::Quat &qo
     }
     float dot = q1.x * q2.x;
     dot = dot + q1.w * q2.w;
-    dot = dot + q1.z * q2.z;
+    // q1.z through a named local: inline, both z operand lists (this fmadds and
+    // the dot < 0 arm's q2.z + q1.z fadds) come out q2-first; named, they come
+    // out q1-first as in the image.  Same loads, same registers -- commutative
+    // operand order is fixed in the IL before either allocator runs.
+    float q1z = q1.z;
+    dot = dot + q1z * q2.z;
     dot = dot + q1.y * q2.y;
     if (dot < 0) {
         qout.x = -(f * (q2.x + q1.x) - q1.x);
