@@ -1515,6 +1515,12 @@ void MetaPerformer::SaveAndUploadScores(Symbol song, int totalScore, int stars) 
                     static Symbol move_perfect("move_perfect");
                     int perfectCount = GetMovesPassedByType(i, move_perfect);
 
+                    // Named so that c2 demotes it (one block, one def): that is
+                    // one more pre-COLOR free (F 23 -> 24 against C 30 code-band
+                    // mints, C2RS-BRIDGE 8.4/8.6), so the eight hoisted
+                    // string/static address halves below pop in mint order and
+                    // take r9..r3, r30 as in the image.
+                    bool noFlashcardsSong = mCompletedSongWithNoFlashcards;
                     pProfile->UpdateScore(
                         songID,
                         pPlayerData,
@@ -1527,7 +1533,7 @@ void MetaPerformer::SaveAndUploadScores(Symbol song, int totalScore, int stars) 
                         GetMovesPassed(i),
                         count,
                         false,
-                        mCompletedSongWithNoFlashcards
+                        noFlashcardsSong
                     );
 
                     if (!isExpertUnlocked
