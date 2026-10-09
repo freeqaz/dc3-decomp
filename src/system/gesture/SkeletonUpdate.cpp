@@ -464,6 +464,15 @@ void SkeletonUpdate::UpdateCallbacks() {
     // `CameraInput *cam = mCameraInput;` local, array-decay arguments, the
     // ctor with a null camera then `data.mCameraInput = ...`, an explicit
     // iterator loop instead of FOREACH.
+    // w25-mb: also inert -- static_cast<SkeletonHistory *>(this), a const
+    // local, hoisting `cam` above the mSkeletonsRight loop (much worse: it
+    // stays live across the loop and recolours 20 rows).  The camera store is
+    // only promoted when its value is a load in the SAME block.  Mechanism
+    // hypothesis (c2 P_DAG): both stores are equal-height leaves before the
+    // FOREACH test, so the pick is the tuple-index tie key; the `this` ->
+    // SkeletonHistory* argument (second base, hoisted to offset 0) is
+    // materialised as its own copy tuple, which may land after the camera
+    // load's store.  Open question: whether run 4 (sched0) re-breaks that tie.
     SkeletonUpdateData data(
         &mSkeletonsLeft[0], &mSkeletonsRight[0], &mSkeletonFrame, this, mCameraInput
     );
