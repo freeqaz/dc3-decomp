@@ -598,11 +598,14 @@ void RndTransformable::DistributeChildren(bool horizontal, float f) {
 // allocator runs.  The image's per-product pattern (v first only for row 0's y
 // and z) is not a per-row or per-component rule, so the key looks like a
 // function-wide symbol/node ordinal (8.3's open question).  Measured with the
-// c2rs tap (tgtcmp, 60+ variants): a `Hmx::Matrix3 &out = m50` used as both
+// c2rs tap (tgtcmp, about 230 variants): a `Hmx::Matrix3 &out = m50` as both
 // Scale matrices fixes row 2 but inverts all of row 0 (80/83); a named const or
 // non-const ref to v68 inverts row 0 x and row 1 x,y (79/83); a distinct
 // matrix or result expression breaks the aliasing (55/83); the hand-expanded
-// three-row Scale reschedules (52/83); DEG2RAD * f2, a named angle or euler
+// three-row Scale reschedules (52/83 in all 48 row orders x v68/ref names);
+// a combinatorial search over MakeRotMatrix/Scale/SetLocalRot arguments as m50
+// or `out`, v68 or a const ref, v5c or a Vector3 ref (64 spellings) gives
+// 82/80/79/55 only; DEG2RAD * f2, a named angle or euler
 // ref, mLocalXfm vs LocalXfm(), a named LocalXfm ref, assert/decl order: inert.
 // Open question: which IL ordinal decides a commutative fmuls operand list when
 // one operand is a colour candidate and the other a regasg temp.
