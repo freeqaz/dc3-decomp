@@ -912,6 +912,11 @@ void MoveMgr::ComputeLoadedMoveSet() {
     }
 }
 
+// w25-gi: the two "keep the preferred variant, else the neighbour's" stores
+// are ternaries. As if/assign pairs (same code) the extra join blocks moved
+// three callee-saved pairs: &mRoutineMeasures[player] r27 / prevPair r26,
+// &mMoveParents[player] r25 / prevParent r24 and routinePair r21 / measure*4
+// r20, each the other way round in the image.
 void MoveMgr::FillInRoutineAt(int player, int measure) {
     const MoveParent *curParent = mMoveParents[player][measure];
     if (!curParent) {
@@ -941,10 +946,7 @@ void MoveMgr::FillInRoutineAt(int player, int measure) {
                 mCurrentSong,
                 false
             )) {
-            if (!prevPreferred) {
-                prevPreferred = prevPair->first;
-            }
-            prevPair->second = prevPreferred;
+            prevPair->second = prevPreferred ? prevPreferred : prevPair->first;
         }
     }
 
@@ -964,10 +966,7 @@ void MoveMgr::FillInRoutineAt(int player, int measure) {
                 mCurrentSong,
                 false
             )) {
-            if (!nextPreferred) {
-                nextPreferred = nextPair->second;
-            }
-            nextPair->first = nextPreferred;
+            nextPair->first = nextPreferred ? nextPreferred : nextPair->second;
         }
     }
 
