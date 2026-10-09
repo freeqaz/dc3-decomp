@@ -677,7 +677,8 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
     }
 #endif
     if (mFootFsmState == 0) {
-        *(Vector2 *)&tf.v = *(const Vector2 *)&mFinger->WorldXfm().v;
+        const Vector3 &fv = mFinger->WorldXfm().v;
+        *(Vector2 *)&tf.v = *(const Vector2 *)&fv;
         if (b2) {
             mFootPosition = tf.v;
             mFootFsmState = 1;
@@ -688,6 +689,12 @@ void CharIKFoot::DoFSM(Character *mMe, Transform &tf) {
             mFootFsmState = 2;
             mFootBlendTime = Distance(mFinger->WorldXfm().v, tf.v);
         } else {
+            // Open (c2 commutative-operand sort key, C2RS-BRIDGE 8.7): two fp rows here
+            // differ only in operand order. `v3c.x * scale` needs the inlined
+            // operator*= param (sid 389) above v3c.x (sid 393), and
+            // `v3c.z + mFootPosition.z` needs the CSE'd mFootPosition.z temp
+            // (sid 977) to wrap its 16-bit key, i.e. 47-54 more temps upstream.
+            // Neither moved over ~70 spellings of this block.
             Vector3 v3c;
             Subtract(mFinger->WorldXfm().v, mFootPosition, v3c);
             float len = Length(v3c);

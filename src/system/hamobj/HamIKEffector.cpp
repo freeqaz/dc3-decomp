@@ -1243,11 +1243,13 @@ void HamIKEffector::DoFancyElbow(QuatXfm &handQ, float handWeight) {
                 Hmx::Quat parentQ;
                 parentQ.Set(parent->LocalXfm().m);
 
+                // The sum is written per component (one CSE temp, key above the
+                // parentQ loads) so the image's fmuls operand order comes out.
+                parentQ.x *= remaining + elbowWeight;
+                parentQ.y *= remaining + elbowWeight;
+                parentQ.z *= remaining + elbowWeight;
+                parentQ.w *= remaining + elbowWeight;
                 float otherWeight = remaining + elbowWeight;
-                parentQ.x *= otherWeight;
-                parentQ.y *= otherWeight;
-                parentQ.z *= otherWeight;
-                parentQ.w *= otherWeight;
 
                 Hmx::Quat elbowXfmQ;
                 elbowXfmQ.Set(elbowXfm.m);
