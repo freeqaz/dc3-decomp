@@ -1091,6 +1091,15 @@ void UtilDrawCigar(
     // hand-stepped do/while spelled out.  Left: the top/bottom (0x90/0xa0) and
     // v1/v2 (0x80/0x70) slot pairs and the h0 `fmr` placement listed above.
     // Passing v1/v2 as unnamed Vector3 temporaries to Multiply is inert.
+    // w24-slot (98.02, unchanged): both pairs run AGAINST the slot rule's
+    // last-reference tie-break.  top and bottom have equal counts and bottom's
+    // last reference comes first, yet the image puts top lower; the same holds
+    // for v1/v2.  A standalone cl.exe skeleton shows the int->float conversion
+    // temps (`tv`, 8 bytes, liveness-shared) reorder same-size Vector3 slots, and
+    // even break the size-ascending order.  Remove the conversions and the
+    // skeleton follows the rule again.  So this layout depends on the conversion
+    // temps, not on v1/v2/top/bottom alone.  Measured inert: `Vector3 v2;
+    // v2.Set(...)` instead of the ctor (98.0, same 9 permuted slots).
     Vector3 end;
     Vector3 top;
     Vector3 bottom;

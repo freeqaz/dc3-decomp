@@ -584,6 +584,12 @@ void DirLoader::Cleanup(const char *str) {
 // ?: of the two arms (80.75, adds a cleanup-flag word).
 // w17-d (99.866): `it` declared then assigned (inert); the find folded into the
 // if condition `(it = find(...)) != end()` (96.1, materialises a bool).
+// w24-slot (99.866, unchanged): bracing the find() so its String temp dies
+// inside a nested block (`it; { it = sMemPointMap.find(String(name)); }`) is
+// byte-inert, with the same 15 rows.  A standalone cl.exe probe of this shape
+// DOES share the find temp with the else-arm temp, so whatever keeps them
+// apart here is outside the temp's lexical scope (EH state of the insert
+// path, or the pair temp's size).
 void DirLoader::AddTypeObjectMemDelta(
     const Hmx::Object *object, const MemPointDelta &memDelta
 ) const {

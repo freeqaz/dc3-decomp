@@ -68,6 +68,16 @@ void CharBone::ClearContext(int mask) {
 // which reads like the Symbols interfering with each other -- a spelling with
 // function-lifetime Symbols that does not default-construct them is the only
 // lead left, and none is known.
+// w24-slot (99.70149, unchanged): read with the measured slot rule (locals
+// sorted by size, then reference count desc, then last reference asc; each
+// one placed in the most recently created slot whose occupants' scopes do not
+// overlap it), our block-scoped Symbols give exactly our layout.  The image's
+// layout [sym1, iterator, sym2, sym3, insert-result, Bone] is exactly what the
+// same rule gives if the three Symbols' scopes OVERLAP (function lifetime)
+// while the push_back temps stay per block.  Function-scope `Symbol name1,
+// name2, name3;` plus assignment is 86.2 (the default ctor and copy-assign add
+// code), so the open question is how the original gave the Symbols
+// overlapping lifetimes without a default construction.
 void CharBone::StuffBones(std::list<CharBones::Bone> &bones, int mask) const {
     if (mPositionContext & mask) {
         Symbol name = CharBones::ChannelName(Name(), CharBones::TYPE_POS);

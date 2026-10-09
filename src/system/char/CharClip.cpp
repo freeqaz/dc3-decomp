@@ -265,6 +265,14 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
     // new num_nodes, 0x54 new num_node_vectors, 0x58 it, 0x5c old num_nodes].
     // Also inert: swapping the new arm's declaration order, declaring `it` at
     // function scope, scoping the old arm's num_node_vectors into its loop.
+    // w24-slot (99.9, unchanged): the slot rule (size, then reference count
+    // desc, then last reference asc, greedy reuse across disjoint scopes) does
+    // NOT reproduce either side here.  Listing counts: old num_nodes 4, new
+    // num_node_vectors 4, new num_nodes 3, PathName temp 2, it 2.  The rule puts
+    // a 4-count local first on both sides, but the image starts with the
+    // PathName-temp/it slot and ours with new num_nodes.  The old and new arms'
+    // counts also never share a slot, though they are disjoint if/else arms.
+    // Treat this layout as unexplained, not as a declaration-order question.
     Clear();
     static ObjectDir *sDir = nullptr;
     char buf[0x100];

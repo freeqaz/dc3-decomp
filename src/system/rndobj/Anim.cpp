@@ -499,37 +499,18 @@ DataNode RndAnimatable::OnConvertFrames(DataArray *arr) {
     return conv;
 }
 
-// The offsets in the comments below are the SHIPPED IMAGE's stack slots, and we
-// do not currently land on them: our build permutes them as
-//   blend 0x84, delay 0x78, units 0x88, name 0x74, wait 0x71, wrap 0x72,
-//   ease_power 0x80, ease 0x7c
-// against the image's 0x88 / 0x74 / 0x7c / 0x78 / 0x72 / 0x71 / 0x84 / 0x80.
-// Same slot SET, same frame size (0x160), same store order, same FindData call
-// order -- only the assignment of variables to slots differs.  That is the whole
-// residual: 25 rows, every one of them a displacement, 99.95220 canonical.
-// w22-a27: two of those "slot" rows were a real bug -- the AnimTask ctor took
-// local_wait where the image passes wrap (see the call below). With that fixed,
-// wait/wrap land on the image's 0x72/0x71 and 20 displacement rows remain
-// (blend, delay, units, name, ease_power, ease).
-//
-// Two levers measured and REFUTED here (lane w7-j, 2026-09-14):
-//   1. Declaration order is INERT.  Permuting all thirteen declarations (both
-//      the six 4-byte address-taken locals and the two bools) reproduced the
-//      identical slot assignment -- the stack-layout table came back with the
-//      same four SWAPPED and two DIFFER rows -- while perturbing instruction
-//      scheduling enough to drop the function to 97.1%.  Whatever orders these
-//      slots, it is not the order they are written in.
-//   2. The `(int &)` reinterpret casts are INERT.  Declaring local_units and
-//      local_ease as plain `int` and dropping both casts (casting back at the
-//      two consumers instead) rebuilt BYTE-IDENTICALLY to this spelling: same
-//      99.95220, same 25 rows, same offsets.
-// Neither the FindData call order nor the initialiser store order can be the
-// input either -- both already agree with the image instruction for instruction.
-// w16-a (stopped at 99.952): 25 rows, all frame-slot assignment among the
-// eight FindData out-locals (target: blend 0x88, ease_power 0x84, ease 0x80,
-// units 0x7c, name 0x78, delay 0x74, wait 0x72, wrap 0x71).  Declaring them in
-// exactly that order up front and assigning the initial values in place is
-// byte-identical (25 rows), so declaration order does not drive it.
+// The offsets in the comments below are the SHIPPED IMAGE's stack slots.
+// w24-slot (99.952 -> 100): the slot order of the six 4-byte FindData
+// out-locals is MSVC's frame-slot sort -- reference count descending, then
+// last reference ascending (see SLOT-RULE in the w24-slot lane notes).
+// Declaration order is inert, as w7-j and w16-a measured.  Read off the
+// listing, our order was exactly that sort over our references; the image's
+// order needed local_units and local_delay to carry ONE MORE reference each.
+// That reference is the second TheTaskMgr.Start call: the image's
+// trigger_anim_task test is an if / else-if with a Start call in each arm,
+// which MSVC tail-merges into one call (identical code), but the second
+// call's IL references still count in the slot sort.
+// w22-a27: the AnimTask ctor takes local_wrap, not local_wait (see the call).
 DataNode RndAnimatable::OnAnimate(DataArray *arr) {
     float local_blend = 0.0f; // 0x88
     float animTaskStart = StartFrame();
@@ -635,7 +616,9 @@ DataNode RndAnimatable::OnAnimate(DataArray *arr) {
             local_delay = taskPtr->BlendTask()->TimeUntilEnd();
     }
     static Symbol trigger_anim_task("trigger_anim_task");
-    if (!Property(trigger_anim_task, false) || Property(trigger_anim_task)->Int() != 0) {
+    if (!Property(trigger_anim_task, false)) {
+        TheTaskMgr.Start(taskPtr, local_units, local_delay);
+    } else if (Property(trigger_anim_task)->Int() != 0) {
         TheTaskMgr.Start(taskPtr, local_units, local_delay);
     }
 
