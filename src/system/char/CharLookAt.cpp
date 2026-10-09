@@ -210,184 +210,189 @@ void CharLookAt::Poll() {
     if (mTarget && mPivot) {
         if (!mPivot->TransParent() || !source || deltasecs < 0)
             return;
-        else {
-            Vector3 lookDir;
-            Subtract(mTarget->WorldXfm().v, source->WorldXfm().v, lookDir);
-            float charWeight = Weight();
-            if (mMinWeightYaw >= 0.0f) {
-                Vector3 srcFwd(source->WorldXfm().m.y);
-                Normalize(srcFwd, srcFwd);
-                Vector3 lookDir2d(lookDir);
-                lookDir2d.z = 0;
-                srcFwd.z = 0;
-                float dot = Dot(srcFwd, lookDir2d);
-                float clamped = Clamp<float>(-1.0f, 1.0f, dot / (Length(srcFwd) * Length(lookDir2d)));
-                float acosDeg = (float)std::acos(clamped) * RAD2DEG;
-                float autoWeight = Clamp<float>(
-                    0.0f,
-                    1.0f,
-                    (mMaxWeightYaw - acosDeg) / (mMaxWeightYaw - mMinWeightYaw)
-                );
-                float autoWeightDelta = (autoWeight - mPivotLookWeight) / deltasecs;
-                if (MinEq(autoWeightDelta, mWeightYawSpeed)) {
-                    autoWeight = autoWeightDelta * deltasecs + mPivotLookWeight;
+        Vector3 lookDir;
+        Subtract(mTarget->WorldXfm().v, source->WorldXfm().v, lookDir);
+        float charWeight = Weight();
+        if (mMinWeightYaw >= 0.0f) {
+            Vector3 srcFwd(source->WorldXfm().m.y);
+            Normalize(srcFwd, srcFwd);
+            Vector3 lookDir2d(lookDir);
+            lookDir2d.z = 0;
+            srcFwd.z = 0;
+            float dot = Dot(srcFwd, lookDir2d);
+            float clamped = Clamp<float>(-1.0f, 1.0f, dot / (Length(srcFwd) * Length(lookDir2d)));
+            float acosDeg = (float)std::acos(clamped) * RAD2DEG;
+            float autoWeight = Clamp<float>(
+                0.0f,
+                1.0f,
+                (mMaxWeightYaw - acosDeg) / (mMaxWeightYaw - mMinWeightYaw)
+            );
+            float autoWeightDelta = (autoWeight - mPivotLookWeight) / deltasecs;
+            if (MinEq(autoWeightDelta, mWeightYawSpeed))
+                autoWeight = autoWeightDelta * deltasecs + mPivotLookWeight;
+            charWeight *= autoWeight;
+            mPivotLookWeight = autoWeight;
+        }
+        if (charWeight != 0.0f) {
+            Vector3 sourceFilter(0.0f, 0.0f, 0.0f);
+            if (mSourceRadius > 0.0f) {
+                if (TheTaskMgr.DeltaSeconds() > 0.0f)
+                    Interp(unka4, source->WorldXfm().m.y, 0.1f, unka4);
+                Subtract(source->WorldXfm().m.y, unka4, sourceFilter);
+                // LengthSquared(sourceFilter), spelled with the component
+                // temporaries the target's schedule needs: the three loads
+                // come out rotated one position left of the declaration
+                // order, so (y, z, x) here reproduces the target's (z, x, y).
+                float fsy = sourceFilter.y;
+                float fsz = sourceFilter.z;
+                float fsx = sourceFilter.x;
+                float filterSq = fsx * fsx + fsy * fsy + fsz * fsz;
+                float srcRad = mSourceRadius * DEG2RAD;
+                if (filterSq > srcRad * srcRad) {
+                    float sqrtFilter = std::sqrt(filterSq);
+                    sourceFilter *= srcRad / sqrtFilter;
                 }
-                charWeight *= autoWeight;
-                mPivotLookWeight = autoWeight;
             }
-            if (charWeight != 0.0f) {
-                Vector3 sourceFilter(0.0f, 0.0f, 0.0f);
-                if (mSourceRadius > 0.0f) {
-                    if (TheTaskMgr.DeltaSeconds() > 0.0f) {
-                        Interp(unka4, source->WorldXfm().m.y, 0.1f, unka4);
-                    }
-                    Subtract(source->WorldXfm().m.y, unka4, sourceFilter);
-                    // LengthSquared(sourceFilter), spelled with the component
-                    // temporaries the target's schedule needs: the three loads
-                    // come out rotated one position left of the declaration
-                    // order, so (y, z, x) here reproduces the target's (z, x, y).
-                    float fsy = sourceFilter.y;
-                    float fsz = sourceFilter.z;
-                    float fsx = sourceFilter.x;
-                    float filterSq = fsx * fsx + fsy * fsy + fsz * fsz;
-                    float srcRad = mSourceRadius * DEG2RAD;
-                    if (filterSq > srcRad * srcRad) {
-                        float sqrtFilter = std::sqrt(filterSq);
-                        sourceFilter *= srcRad / sqrtFilter;
-                    }
-                }
-                if (source != mPivot) {
-                    Transform pivotXfm(mPivot->WorldXfm());
-                    Hmx::Quat rotQuat;
-                    MakeRotQuat(source->WorldXfm().m.y, lookDir, rotQuat);
-                    Hmx::Matrix3 rotMat;
-                    MakeRotMatrix(rotQuat, rotMat);
-                    Multiply(pivotXfm.m, rotMat, pivotXfm.m);
-                    mPivot->SetWorldXfm(pivotXfm);
-                    Subtract(mTarget->WorldXfm().v, source->WorldXfm().v, lookDir);
-                    MakeRotQuat(source->WorldXfm().m.y, lookDir, rotQuat);
-                    MakeRotMatrix(rotQuat, rotMat);
-                    // Multiply(pivotXfm.m.y, rotMat, lookDir), spelled as
-                    // per-component accumulators.  The header's single
-                    // expression makes MSVC seed all three rows from the
-                    // z-term; the image seeds X from the y-term (it defers the
-                    // m.z.x load to last) and only Y and Z from the z-term.
-                    // A `+=` is a reassociation barrier, and MSVC emits the
-                    // first two of whatever order is written SWAPPED -- both
-                    // for the terms inside a row and for the rows themselves --
-                    // so the orders below are the image's orders pre-swapped.
-                    // See the note above Multiply(const Vector3 &, const
-                    // Hmx::Matrix3 &, Vector3 &) in math/Mtx.h.
-                    // w20-g: normalized 100.0, fuzzy 99.86. The 10 charged FP rows
-                    // (0x822f4..0x82338, 0x823ec/0x823f4, 0x826b8) are pure
-                    // multiplicand swaps of the same products (value-identical;
-                    // every operand mapped to its frame slot and checked). Writing
-                    // the seven mismatched terms below as pivotFwd.? * rotMat.?.?
-                    // was byte-for-byte INERT (measured): MSVC canonicalises the
-                    // order. The other 2 rows are the MILO_NOTIFY_ONCE `_dw`
-                    // static's scope-ordinal name (?DI@ config vs ?DO@ ours).
-                    const Vector3 &pivotFwd = pivotXfm.m.y;
-                    float dirZ = rotMat.y.z * pivotFwd.y;
-                    dirZ += rotMat.z.z * pivotFwd.z;
-                    dirZ += rotMat.x.z * pivotFwd.x;
-                    float dirY = rotMat.y.y * pivotFwd.y;
-                    dirY += rotMat.z.y * pivotFwd.z;
-                    dirY += rotMat.x.y * pivotFwd.x;
-                    float dirX = rotMat.x.x * pivotFwd.x;
-                    dirX += rotMat.y.x * pivotFwd.y;
-                    dirX += rotMat.z.x * pivotFwd.z;
-                    lookDir.Set(dirX, dirY, dirZ);
-                } else
-                    Normalize(lookDir, lookDir);
-                Multiply(mPivot->TransParent()->WorldXfm().m, lookDir, lookDir);
+            if (source != mPivot) {
+                Transform pivotXfm(mPivot->WorldXfm());
+                Hmx::Quat rotQuat;
+                MakeRotQuat(source->WorldXfm().m.y, lookDir, rotQuat);
+                Hmx::Matrix3 rotMat;
+                MakeRotMatrix(rotQuat, rotMat);
+                Multiply(pivotXfm.m, rotMat, pivotXfm.m);
+                mPivot->SetWorldXfm(pivotXfm);
+                Subtract(mTarget->WorldXfm().v, source->WorldXfm().v, lookDir);
+                MakeRotQuat(source->WorldXfm().m.y, lookDir, rotQuat);
+                MakeRotMatrix(rotQuat, rotMat);
+                // Multiply(pivotXfm.m.y, rotMat, lookDir), spelled as
+                // per-component accumulators.  The header's single
+                // expression makes MSVC seed all three rows from the
+                // z-term; the image seeds X from the y-term (it defers the
+                // m.z.x load to last) and only Y and Z from the z-term.
+                // A `+=` is a reassociation barrier, and MSVC emits the
+                // first two of whatever order is written SWAPPED -- both
+                // for the terms inside a row and for the rows themselves --
+                // so the orders below are the image's orders pre-swapped.
+                // See the note above Multiply(const Vector3 &, const
+                // Hmx::Matrix3 &, Vector3 &) in math/Mtx.h.
+                // w20-g: normalized 100.0, fuzzy 99.86. The 10 charged FP rows
+                // (0x822f4..0x82338, 0x823ec/0x823f4, 0x826b8) are pure
+                // multiplicand swaps of the same products (value-identical;
+                // every operand mapped to its frame slot and checked). Writing
+                // the seven mismatched terms below as pivotFwd.? * rotMat.?.?
+                // was byte-for-byte INERT (measured): MSVC canonicalises the
+                // order. (The 2 `_dw` static-name rows are fixed; see the
+                // note at the second MILO_NOTIFY_ONCE below.)
+                const Vector3 &pivotFwd = pivotXfm.m.y;
+                float dirZ = rotMat.y.z * pivotFwd.y;
+                dirZ += rotMat.z.z * pivotFwd.z;
+                dirZ += rotMat.x.z * pivotFwd.x;
+                float dirY = rotMat.y.y * pivotFwd.y;
+                dirY += rotMat.z.y * pivotFwd.z;
+                dirY += rotMat.x.y * pivotFwd.x;
+                float dirX = rotMat.x.x * pivotFwd.x;
+                dirX += rotMat.y.x * pivotFwd.y;
+                dirX += rotMat.z.x * pivotFwd.z;
+                lookDir.Set(dirX, dirY, dirZ);
+            } else
                 Normalize(lookDir, lookDir);
-                mDisableRoll = mLookLimits.Clamp(lookDir);
-                Normalize(lookDir, lookDir);
-                if (mPivotLookTarget.x != kHugeFloat && mHalfTime != 0.0f) {
-                    Interp(mPivotLookTarget, lookDir, deltasecs / (deltasecs + mHalfTime), lookDir);
+            Multiply(mPivot->TransParent()->WorldXfm().m, lookDir, lookDir);
+            Normalize(lookDir, lookDir);
+            mDisableRoll = mLookLimits.Clamp(lookDir);
+            Normalize(lookDir, lookDir);
+            if (mPivotLookTarget.x != kHugeFloat && mHalfTime != 0.0f)
+                Interp(mPivotLookTarget, lookDir, deltasecs / (deltasecs + mHalfTime), lookDir);
+            mPivotLookTarget = lookDir;
+            if (mTestRange) {
+                float interpYaw, interpPitch;
+                Interp(mLookLimits.mMin.z, mLookLimits.mMax.z, mTestRangeYaw, interpYaw);
+                Interp(mLookLimits.mMin.x, mLookLimits.mMax.x, mTestRangePitch, interpPitch);
+                lookDir.Set(interpPitch, mLookLimits.mMin.y, interpYaw);
+            } else if (mShowRange) {
+                charWeight = 1.0f;
+                switch (((int)TheTaskMgr.Seconds(TaskMgr::kRealTime)) & 7) {
+                case 0:
+                    lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, mLookLimits.mMin.z);
+                    break;
+                case 1:
+                    // RB3 has (0, mMin.z, mMax.x) here; DC3's target loads
+                    // mMin.y into y and mMin.z into z (it shares case 0's
+                    // tail), so DC3 fixed that typo.
+                    lookDir.Set(0.0f, mLookLimits.mMin.y, mLookLimits.mMin.z);
+                    break;
+                case 2:
+                    lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, mLookLimits.mMin.z);
+                    break;
+                case 3:
+                    lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, 0.0f);
+                    break;
+                case 4:
+                    lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, mLookLimits.mMax.z);
+                    break;
+                case 5:
+                    lookDir.Set(0.0f, mLookLimits.mMin.y, mLookLimits.mMax.z);
+                    break;
+                case 6:
+                    lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, mLookLimits.mMax.z);
+                    break;
+                case 7:
+                    lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, 0.0f);
+                    break;
+                default:
+                    break;
                 }
-                mPivotLookTarget = lookDir;
-                if (mTestRange) {
-                    float interpYaw, interpPitch;
-                    Interp(mLookLimits.mMin.z, mLookLimits.mMax.z, mTestRangeYaw, interpYaw);
-                    Interp(mLookLimits.mMin.x, mLookLimits.mMax.x, mTestRangePitch, interpPitch);
-                    lookDir.Set(interpPitch, mLookLimits.mMin.y, interpYaw);
-                } else if (mShowRange) {
-                    charWeight = 1.0f;
-                    switch (((int)TheTaskMgr.Seconds(TaskMgr::kRealTime)) & 7) {
-                    case 0:
-                        lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, mLookLimits.mMin.z);
-                        break;
-                    case 1:
-                        // RB3 has (0, mMin.z, mMax.x) here; DC3's target loads
-                        // mMin.y into y and mMin.z into z (it shares case 0's
-                        // tail), so DC3 fixed that typo.
-                        lookDir.Set(0.0f, mLookLimits.mMin.y, mLookLimits.mMin.z);
-                        break;
-                    case 2:
-                        lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, mLookLimits.mMin.z);
-                        break;
-                    case 3:
-                        lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, 0.0f);
-                        break;
-                    case 4:
-                        lookDir.Set(mLookLimits.mMax.x, mLookLimits.mMin.y, mLookLimits.mMax.z);
-                        break;
-                    case 5:
-                        lookDir.Set(0.0f, mLookLimits.mMin.y, mLookLimits.mMax.z);
-                        break;
-                    case 6:
-                        lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, mLookLimits.mMax.z);
-                        break;
-                    case 7:
-                        lookDir.Set(mLookLimits.mMin.x, mLookLimits.mMin.y, 0.0f);
-                        break;
-                    default:
-                        break;
-                    }
+            }
+            static DataNode &disable = DataVariable("cheat.disable_eye_jitter");
+            if (mEnableJitter && !sDisableJitter && !disable && deltasecs > 0.0f) {
+                float yawJitter = RandomFloat(-mYawJitterLimit, mYawJitterLimit);
+                float pitchJitter = RandomFloat(-mPitchJitterLimit, mPitchJitterLimit);
+                lookDir.x += pitchJitter * DEG2RAD;
+                lookDir.z += yawJitter * DEG2RAD;
+            }
+            if (mSourceRadius > 0.0f) {
+                Multiply(mPivot->TransParent()->WorldXfm().m, sourceFilter, sourceFilter);
+                lookDir -= sourceFilter;
+            }
+            if (mAllowRoll) {
+                Hmx::Quat rotQuat;
+                MakeRotQuat(mPivot->LocalXfm().m.y, lookDir, rotQuat);
+                FastInterp(Hmx::Quat(0, 0, 0, 1.0f), rotQuat, charWeight, rotQuat);
+                Hmx::Matrix3 rotMat;
+                MakeRotMatrix(rotQuat, rotMat);
+                if (rotMat.x.x < -2.0f || rotMat.x.x > 2.0f || IsNaN(rotMat.x.x)) {
+                    MILO_NOTIFY_ONCE(
+                        "%s has m.x.x %g, character or target scaled or NAN",
+                        PathName(this),
+                        rotMat.x.x
+                    );
+                    rotMat.Identity();
                 }
-                static DataNode &disable = DataVariable("cheat.disable_eye_jitter");
-                if (mEnableJitter && !sDisableJitter && !disable && deltasecs > 0.0f) {
-                    float yawJitter = RandomFloat(-mYawJitterLimit, mYawJitterLimit);
-                    float pitchJitter = RandomFloat(-mPitchJitterLimit, mPitchJitterLimit);
-                    lookDir.x += pitchJitter * DEG2RAD;
-                    lookDir.z += yawJitter * DEG2RAD;
-                }
-                if (mSourceRadius > 0.0f) {
-                    Multiply(mPivot->TransParent()->WorldXfm().m, sourceFilter, sourceFilter);
-                    lookDir -= sourceFilter;
-                }
-                if (mAllowRoll) {
-                    Hmx::Quat rotQuat;
-                    MakeRotQuat(mPivot->LocalXfm().m.y, lookDir, rotQuat);
-                    FastInterp(Hmx::Quat(0, 0, 0, 1.0f), rotQuat, charWeight, rotQuat);
-                    Hmx::Matrix3 rotMat;
-                    MakeRotMatrix(rotQuat, rotMat);
-                    if (rotMat.x.x < -2.0f || rotMat.x.x > 2.0f || IsNaN(rotMat.x.x)) {
-                        MILO_NOTIFY_ONCE(
-                            "%s has m.x.x %g, character or target scaled or NAN",
-                            PathName(this),
-                            rotMat.x.x
-                        );
-                        rotMat.Identity();
-                    }
-                    Multiply(mPivot->LocalXfm().m, rotMat, mPivot->DirtyLocalXfm().m);
-                } else {
-                    Hmx::Matrix3 &dirtyMat = mPivot->DirtyLocalXfm().m;
-                    Interp(dirtyMat.y, lookDir, charWeight, dirtyMat.y);
-                    dirtyMat.z.Set(-1.0f, 0.0f, 0.0f);
-                    Normalize(dirtyMat.y, dirtyMat.y);
-                    Cross(dirtyMat.y, dirtyMat.z, dirtyMat.x);
-                    Normalize(dirtyMat.x, dirtyMat.x);
-                    Cross(dirtyMat.x, dirtyMat.y, dirtyMat.z);
-                    if (dirtyMat.x.x < -2.0f || dirtyMat.x.x > 2.0f || IsNaN(dirtyMat.x.x)) {
-                        MILO_NOTIFY_ONCE(
-                            "%s has m.x.x %g, character or target scaled or NAN",
-                            PathName(this),
-                            dirtyMat.x.x
-                        );
-                        dirtyMat.Identity();
-                    }
+                Multiply(mPivot->LocalXfm().m, rotMat, mPivot->DirtyLocalXfm().m);
+            } else {
+                Hmx::Matrix3 &dirtyMat = mPivot->DirtyLocalXfm().m;
+                Interp(dirtyMat.y, lookDir, charWeight, dirtyMat.y);
+                dirtyMat.z.Set(-1.0f, 0.0f, 0.0f);
+                Normalize(dirtyMat.y, dirtyMat.y);
+                Cross(dirtyMat.y, dirtyMat.z, dirtyMat.x);
+                Normalize(dirtyMat.x, dirtyMat.x);
+                Cross(dirtyMat.x, dirtyMat.y, dirtyMat.z);
+                if (dirtyMat.x.x < -2.0f || dirtyMat.x.x > 2.0f || IsNaN(dirtyMat.x.x)) {
+                    // MILO_NOTIFY_ONCE written out without the macro's own
+                    // block. MSVC names a function-local static by its scope
+                    // ordinal: an `if (c) {..}` costs 3 ordinals, a braceless
+                    // `if (c) stmt;` 2, an `else {..}` 2 and a bare `{}` 1. The
+                    // image's two `_dw` statics are ?DD@ and ?DI@, i.e. 5 and 6
+                    // ordinals fewer than the braced spelling (?DI@/?DO@). That
+                    // is why there is no `else {` after the early return, the
+                    // single-statement ifs above have no braces, and this
+                    // static sits in the if's block. Same code either way.
+                    static DebugNotifyOncer _dw;
+                    _dw << MakeString(
+                        "%s has m.x.x %g, character or target scaled or NAN",
+                        PathName(this),
+                        dirtyMat.x.x
+                    );
+                    dirtyMat.Identity();
                 }
             }
         }
