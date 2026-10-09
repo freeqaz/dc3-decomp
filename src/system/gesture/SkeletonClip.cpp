@@ -596,8 +596,10 @@ void SkeletonClip::WriteClipHeader(FileStream &stream) {
     stream << mSong;
     stream << mDifficulty;
     DataArray *arr = SystemConfig()->FindArray("version", false);
-    const char *str = arr ? arr->Str(1) : "milo";
-    stream << str;
+    if (arr)
+        stream << arr->Str(1);
+    else
+        stream << "milo";
     stream << (int)mRecordedFrames->size();
 }
 
