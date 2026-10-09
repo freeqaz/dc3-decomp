@@ -541,18 +541,22 @@ SynthSample *Sound::Sample() { return mSynthSample; }
 // emit ours; `speed = Clamp(...)` too. Register-only, same product.
 void Sound::SetSpeed(float speed, Hmx::Object *obj) {
     float speedTranspose = CalcSpeedFromTranspose(mFaders.GetTranspose());
-    float clamped = Clamp(sSpeedCapMin, sSpeedCapMax, speed);
+    // Clamp into the parameter rather than a new local: the operands of
+    // speedTranspose * speed are both colour candidates, which c2 emits higher
+    // candidate id first, and ids follow the symbols' first definitions. A
+    // `clamped` local defined after speedTranspose outranked it.
+    speed = Clamp(sSpeedCapMin, sSpeedCapMax, speed);
     if (obj) {
         FOREACH (it, mSamples) {
             if ((*it)->GetEventReceiver() == obj) {
                 (*it)->SetSpeed(
-                    Clamp(sSpeedCapMin, sSpeedCapMax, speedTranspose * clamped)
+                    Clamp(sSpeedCapMin, sSpeedCapMax, speedTranspose * speed)
                 );
                 return;
             }
         }
     } else {
-        mSpeed = clamped;
+        mSpeed = speed;
         FOREACH (it, mSamples) {
             (*it)->SetSpeed(Clamp(sSpeedCapMin, sSpeedCapMax, speedTranspose * mSpeed));
         }

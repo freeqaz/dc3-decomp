@@ -33,17 +33,20 @@ float DeJitter::NewMs(float f1, float &fref) {
             if (mFilteredDelta == 0.0f) {
                 mFilteredDelta = f0;
             }
-            f0 = (f0 - mFilteredDelta) * 0.1f + mFilteredDelta;
-            filteredValue = f0;
-            mFilteredDelta = f0;
+            // Smoothed straight into the member, and the arms below read it
+            // back. Both fmuls operands are colour candidates, which c2 emits
+            // higher candidate id first. As the named local f0 the smoothed
+            // value was id 9 under the sTimeScale load's id 17 and came
+            // second; as a CSE temp of the member it is minted late (id 30)
+            // and comes first, as in the image.
+            mFilteredDelta = (f0 - mFilteredDelta) * 0.1f + mFilteredDelta;
             if (sTimeScale != 1.0f) {
                 // With time scale, output is scaled delta
-                f0 = f0 * sTimeScale;
-                mFilteredDelta = f0;
-                filteredValue = f0 + mPreviousOutput;
+                mFilteredDelta *= sTimeScale;
+                filteredValue = mFilteredDelta + mPreviousOutput;
             } else {
                 // Without time scale, clamp output to ±33ms from previous value
-                float f12 = mPreviousOutput + f0;
+                float f12 = mPreviousOutput + mFilteredDelta;
                 float f11 = sample - 33.0f;
                 float f13 = sample + 33.0f;
                 float f10 = ((f11 - f12) >= 0.0f) ? f11 : f12;
