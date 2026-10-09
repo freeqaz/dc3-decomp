@@ -1219,6 +1219,18 @@ void UtilDrawPlane(
     // order/association/operand spellings of the sum get the image's chain at
     // best by moving the row-pointer bias to .x and swapping a Cross operand
     // (157 vs 156 equal rows) -- not shipped.
+    // OPEN (w25-mc), mechanism read from the c2rs tap (C2RS-BRIDGE 8.7):
+    // the three products are sorted by key and the list's second entry is
+    // emitted innermost. Each product is (row-load temp) * (m.y field), and
+    // its key's hash is 64 * (temp sid + field sid) mod 0x10000, so the order
+    // is that of (t + s) mod 1024: x 729+26 = 755, y 727+274 = 1001,
+    // z 746+273 = 1019 (the m.y y/z fields are renamed copies, x keeps its
+    // field symbol -- the same pattern as MakeNormals' e1/e2). Sorted
+    // [z, y, x] gives our y-innermost chain; the image needs [x, z, y]. A
+    // uniform shift of the row-load temp sids by +23..+267 wraps y and z past
+    // 1024 but not x and gives exactly that order. Open question: a spelling
+    // that mints that many more lowering temps ahead of this loop without
+    // changing the code around it.
     int minIdx = 0;
     int idx = 0;
     float minDotProduct = 10000.0f;
