@@ -106,9 +106,11 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
     // which is why our build spilled once, just before the call.
     ts << MakeString("\n");
     int *curPtr = mStart;
-    int curAllocCount = 0;
+    // Declared ptr, size, count: the image zeroes them in that order (`li
+    // r24` / `li r29` / `li r28` around the endPtr add).
     int *curAllocPtr = nullptr;
     int curAllocSize = 0;
+    int curAllocCount = 0;
     int *endPtr = mSizeWords + mStart;
     const AllocInfo *curAllocInfo = nullptr;
     unsigned int blockSizeWords = 0;
@@ -155,11 +157,21 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
             // 98 `li r28, 0x0`) -- not at the bottom of the branch next to the
             // blockSizeWords update.
             curAllocSize = 0;
-            const char *freeStr = " ; **** big free block!";
+            // blockSizeWords is read straight from the free block (no
+            // sizeWords copy) and freeStr is an if/else: both only move c2's
+            // colour priorities (the emitted code is the same). With the copy,
+            // blockSizeWords (pri 24) outranked newPtr/newSize (pri 20); with
+            // the big-block string as a default store, its hoisted address
+            // was pri -16 and popped before verbose / the FREE format / "".
+            // The image's order is newPtr r31, newSize r27, blockSizeWords
+            // r26 and verbose r19, format r18, "" r17, big r16.
+            const char *freeStr;
             curAllocCount = 0;
-            unsigned int sizeWords = *curFreeBlock;
-            int blockSize = sizeWords << 2;
-            if (blockSize < 100000) {
+            blockSizeWords = *curFreeBlock;
+            int blockSize = blockSizeWords << 2;
+            if (blockSize >= 100000) {
+                freeStr = " ; **** big free block!";
+            } else {
                 freeStr = "";
             }
             unsigned int timeStamp = curFreeBlock[1];
@@ -176,7 +188,6 @@ void MemHeap::Print(TextStream &ts, bool verbose) {
 #else
             curFreeBlock = (unsigned int *)curFreeBlock[2];
 #endif
-            blockSizeWords = sizeWords;
         }
     }
 
