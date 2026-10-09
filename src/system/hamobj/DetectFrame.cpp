@@ -108,28 +108,27 @@ float DetectFrame::LimbPSNR(const FilterVersion *filter_version, int i2) const {
         // mask is tested even when i2 == -1 (beq lands on the Type() load).
         if ((i2 == -1 || _tmp0 & i2) && curErrorNode->Type() & typeMask) {
             const Vector3 &nodeWeight = mMoveFrame->NodeWeight(i, mMirror);
-            // RESIDUAL (w13-b, 99.985): the image consumes the Dot terms as
-            // z, x, y.  w16-b: Dot(mBestNodeErrors[i], nodeWeight) is identical;
-            // Length() before the Dot is 89.9 (refuted).
-            // w21-at (fidelity fix, same 99.98529): the image's dot product is
-            // ((err.z*w.z + err.x*w.x) + err.y*w.y) -- 82531984 `fmuls f0,
-            // err.z, w.z`, 82531994 `fmadds f0, err.x, w.x, f0`, 8253199C
-            // `fmadds f0, err.y, w.y, f0`.  The flat Dot() is ((x + y) + z) on
-            // native and was re-sorted to ((z + y) + x) on PPC -- both round
-            // differently from the image.  Written out with the image's
-            // parentheses the association now matches on both.  The
-            // 4 rows left are LOAD ORDER only: the image loads w.y into f11
-            // first and squares it first in Length ((y*y + x*x) + z*z, which
-            // is the same value as Length's (x*x + y*y) + z*z -- a single
-            // commutative swap), we load w.x first.  Tried 14 spellings (term
-            // order, multiply operand order, a w.y local, LengthSquared+sqrt,
-            // explicit Length in both pair orders, Length before/after the
-            // f12 update, += chain): all either this exact pair of rows or
-            // worse (96.6-98.5).
+            // The image's dot product is ((err.z*w.z + err.x*w.x) + err.y*w.y)
+            // (82531984 `fmuls f0, err.z, w.z`, then `fmadds` x, then y); the
+            // parentheses give native the same association (w21-at).
+            //
+            // The weight components are named, z first, for the Length sum
+            // (w25-mc). c2 sorts the three squares of that flat sum by a key
+            // (c2rs W-STAGETAP-11, C2RS-BRIDGE 8.7) built from each operand's
+            // sid, and emits the list's SECOND entry innermost. Reading
+            // nodeWeight inline left three CSE temps minted in the dot's
+            // z, x, y order (sids 267, 272, 281), so the key order was
+            // y > x > z and we squared w.x first. Named in z, y, x order the
+            // keys run x > y > z and the image's (y*y + x*x) + z*z follows,
+            // with w.y loaded first (lfs f11, 4(r3)). Native value unchanged:
+            // the sum is still (x*x + y*y) + z*z, exactly Length()'s.
             const Vector3 &err = mBestNodeErrors[i];
-            float d = (err.z * nodeWeight.z + err.x * nodeWeight.x) + err.y * nodeWeight.y;
+            float wz = nodeWeight.z;
+            float wy = nodeWeight.y;
+            float wx = nodeWeight.x;
+            float d = (err.z * wz + err.x * wx) + err.y * wy;
             f12 += d * d;
-            f13 += Length(nodeWeight);
+            f13 += std::sqrt(wx * wx + wy * wy + wz * wz);
         }
     }
     if (f13 != 0) {
