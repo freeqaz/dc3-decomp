@@ -283,6 +283,20 @@ void CharLookAt::Poll() {
                 // was byte-for-byte INERT (measured): MSVC canonicalises the
                 // order. (The 2 `_dw` static-name rows are fixed; see the
                 // note at the second MILO_NOTIFY_ONCE below.)
+                // Open (c2 §8.7 sort key, w25-hb): here the products are
+                // var-vs-var. The pivotFwd components (sids ~1295..1298) have
+                // keys above every rotMat component (sids 357..373), so pivot
+                // sorts first in all 9. The image wants pivot first only for
+                // rot.y.z and rot.z.z, which needs the two key ranges to
+                // interleave (sid<<5 mod 0x10000).
+                // The 3 rows in the TU-local Multiply (both call sites) are
+                // var-vs-memory: the row base var's sid mod 8 sets the load key.
+                //   line-96 site, bases x/y/z: 978/1088/991 (mod 8 = 2/0/7);
+                //     needs {0,1} / >=2 / >=2.
+                //   sourceFilter site: 1154/1158/1157 (2/6/5); needs !=0 /
+                //     !=0 / ==0.
+                // Adding one named reference renumbers these non-uniformly and
+                // changes code.
                 const Vector3 &pivotFwd = pivotXfm.m.y;
                 float dirZ = rotMat.y.z * pivotFwd.y;
                 dirZ += rotMat.z.z * pivotFwd.z;
