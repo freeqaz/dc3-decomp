@@ -66,6 +66,16 @@ BEGIN_LOADS(CharSleeve)
     bs >> mInertia >> mGravity >> mStiffness >> mRange >> mNegLength >> mPosLength;
 END_LOADS
 
+// The named Vector3 references below (sleevePos, pmx2, parentPos, axis,
+// clampAxis, lenVec, parentPos2, flatAxis, topPos, toTop, topX) each bind a
+// value used in the very next statement; they exist for c2's commutative
+// operand sort (C2RS-BRIDGE 8.7).  Every named symbol shifts the sids of the
+// values minted after it, and memory-leaf keys depend on their base temp's
+// sid mod 4, so this set reproduces 7 of the image's 10 operand orders
+// (w25-gz, hill-climb over ~1,200 spellings, fuzzy 99.795 -> 99.94).
+// OPEN: the x-row fmadds of both Dot(vcc, axis) calls (vcc.x first in the
+// image) and the x row of the clamp ScaleAddEq; no single or paired
+// reference placement around them flips one without moving another.
 void CharSleeve::Poll() {
     auto _tmp1 = mSleeve->TransParent();
     if (mSleeve && _tmp1) {
@@ -80,7 +90,8 @@ void CharSleeve::Poll() {
         bool b2 = false;
         Character *me = Character::Current();
         if (me && me->Teleported()) {
-            mPos = mSleeve->WorldXfm().v;
+            const Vector3 &sleevePos = mSleeve->WorldXfm().v;
+            mPos = sleevePos;
             Vector3 v9c(0.0f, 0.0f, -(absed + mPosLength));
             // Written out rather than Dot(): with v9c.x/.y both literal 0.0f the
             // left-associated Dot() lets the compiler factor x*0 + y*0 into
@@ -92,7 +103,8 @@ void CharSleeve::Poll() {
             float dotted_orig = v9c.x * pmx.x + (v9c.y * pmx.y + v9c.z * pmx.z);
             float dotted = dotted_orig;
             ClampEq(dotted, -mRange, mRange);
-            ScaleAddEq(v9c, sleeveparent->WorldXfm().m.x, dotted - dotted_orig);
+            const Vector3 &pmx2 = sleeveparent->WorldXfm().m.x;
+            ScaleAddEq(v9c, pmx2, dotted - dotted_orig);
             mPos += v9c;
             Vector3 va8;
             ScaleAdd(sleeveparent->WorldXfm().v, sleeveparent->WorldXfm().m.x, dotted, va8);
@@ -111,16 +123,21 @@ void CharSleeve::Poll() {
         }
         vb4.z += gravity_z;
         Vector3 vcc;
-        Subtract(vb4, sleeveparent->WorldXfm().v, vcc);
-        float dotted2 = Dot(vcc, sleeveparent->WorldXfm().m.x);
+        const Vector3 &parentPos = sleeveparent->WorldXfm().v;
+        Subtract(vb4, parentPos, vcc);
+        const Vector3 &axis = sleeveparent->WorldXfm().m.x;
+        float dotted2 = Dot(vcc, axis);
         float d4 = (1.0f - powed) * dotted2;
         ClampEq(d4, -mRange, mRange);
-        ScaleAddEq(vcc, sleeveparent->WorldXfm().m.x, (d4 - dotted2));
-        float len = Length(vcc);
+        const Vector3 &clampAxis = sleeveparent->WorldXfm().m.x;
+        ScaleAddEq(vcc, clampAxis, (d4 - dotted2));
+        const Vector3 &lenVec = vcc;
+        float len = Length(lenVec);
         float interped = (absed - len) * powed + len;
         ClampEq(interped, absed - mNegLength, absed + mPosLength);
         NormalizeScale(vcc, interped, vcc);
-        Add(sleeveparent->WorldXfm().v, vcc, vb4);
+        const Vector3 &parentPos2 = sleeveparent->WorldXfm().v;
+        Add(parentPos2, vcc, vb4);
         Transform tf90;
         tf90.v = vb4;
         Scale(vcc, -1.0f, tf90.m.z);
@@ -136,10 +153,14 @@ void CharSleeve::Poll() {
             mLastPos = mPos;
         if (mTopSleeve) {
             float dotcc = Dot(vcc, sleeveparent->WorldXfm().m.x);
-            ScaleAddEq(vcc, sleeveparent->WorldXfm().m.x, -dotcc);
-            Add(sleeveparent->WorldXfm().v, vcc, tf90.v);
-            Scale(vcc, -1.0f, tf90.m.z);
-            Cross(tf90.m.z, sleeveparent->WorldXfm().m.x, tf90.m.y);
+            const Vector3 &flatAxis = sleeveparent->WorldXfm().m.x;
+            ScaleAddEq(vcc, flatAxis, -dotcc);
+            const Vector3 &topPos = sleeveparent->WorldXfm().v;
+            Add(topPos, vcc, tf90.v);
+            const Vector3 &toTop = vcc;
+            Scale(toTop, -1.0f, tf90.m.z);
+            const Vector3 &topX = sleeveparent->WorldXfm().m.x;
+            Cross(tf90.m.z, topX, tf90.m.y);
             Normalize(tf90.m.z, tf90.m.z);
             Normalize(tf90.m.y, tf90.m.y);
             Cross(tf90.m.y, tf90.m.z, tf90.m.x);
