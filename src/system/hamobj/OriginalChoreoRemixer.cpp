@@ -252,6 +252,21 @@ void OriginalChoreoRemixer::BridgeGapsInMoveParents(int i1) {
             for (int j = i12 - 1; j >= i; j--) {
                 BuildSetOfPrevAdjacentMoveParents(setVec[j], setVec[j + 1]);
             }
+            // Open (w25-rk): fuzzy 99.896, normalized 100. The only residual is
+            // r10/r11 on the two per-iteration loads below (setVec's begin
+            // pointer, moveParentsByDiff's begin pointer); the image puts the
+            // moveParentsByDiff load in r11. Hypothesis from the c2rs tap: both
+            // are code-band candidates at pri 16, tie 0 (code#81 id 13, code#82
+            // id 3), so COLOR pops them in descending id. The benefit pass frees
+            // 15 candidates and the code band mints 15, so every code mint
+            // recycles an id and mint order equals pop order (setVec first).
+            // Predicted fix: exactly one negative-benefit candidate fewer (or
+            // one more code mint before this pair), which gives code#82 a fresh,
+            // highest id. Open question: which of the 15 frees the original
+            // lacks. Inert (all 15 frees): curSet/prevMoveParent order,
+            // curSet as a pointer, the i12 init spelling, `== nullptr` test;
+            // dropping the candidate local, per-arm stores and reordered arms
+            // change the emitted code.
             for (int k = i; k < i12; k++) {
                 std::set<const MoveParent *> &curSet = setVec[k];
                 const MoveParent *prevMoveParent = moveParentsByDiff[k - 1];
