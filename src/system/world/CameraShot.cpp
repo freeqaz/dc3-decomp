@@ -1699,7 +1699,7 @@ __declspec(noinline) bool CamShot::SetPos(CamShotFrame &frame, RndCam *cam) {
             Subtract(ve0, v104, v110);
             Add(frame.mWorldOffset.v, v110, frame.mWorldOffset.v);
         } else {
-            frame.mScreenOffset.Zero();
+            frame.mScreenOffset.x = frame.mScreenOffset.y = 0;
         }
         frame.mFOV = cam->YFov();
         RndTransformable *frameParent = frame.mParent;
