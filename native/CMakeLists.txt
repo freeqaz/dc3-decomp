@@ -2175,12 +2175,14 @@ if(BUILD_TESTS)
 
     # Deliberately NOT defaulted on, with the reason recorded so the next person
     # does not have to re-derive it:
-    #   DC3_GAMEPLAY_TESTS — 48 tests behind one ~2-minute 9050-frame engine run.
+    #   DC3_GAMEPLAY_TESTS — 48 GameplayTelemetryTest cases behind one ~2-minute
+    #                        9050-frame engine run, plus EmptySensorGameplayTest
+    #                        (one ~200 s whole-song run with scoring off).
     #                        Too slow for the default loop; run it explicitly.
     #   DC3_AUDIO_TESTS    — real audio device; contends under ctest -j.
     #   MILO_LONG_TEST     — HeadlessBootTest.LongRunStability, ~5 minutes.
     list(APPEND MILO_TEST_GATES_OFF
-        "DC3_GAMEPLAY_TESTS(slow - 48 tests behind one ~2min engine run)"
+        "DC3_GAMEPLAY_TESTS(slow - 48 tests behind one ~2min engine run + 1 ~200s song)"
         "DC3_AUDIO_TESTS(audio device contention)"
         "MILO_LONG_TEST(~5min)")
 
