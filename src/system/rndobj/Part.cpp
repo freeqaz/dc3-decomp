@@ -717,6 +717,15 @@ BEGIN_LOADS(RndParticleSys)
             // expanding On() at the call site was not tried -- the image keeps
             // On()'s 0xa0 return temp and its 16-byte copy, which an expansion
             // would not reproduce.
+            // w25-ma (c2 tap, section 8.7 operand-order key): p150's forwarded
+            // fields are named-variable leaves a=V26 b=V22 c=V27 (keys 0x10340,
+            // 0x102c0, 0x10360); On()'s scalar (V971, 0x17960) and m.x
+            // (V980..983, ~0x17a80) outrank all three, so ours puts those
+            // first in every product. The image needs b and c ABOVE scalar and
+            // m.x and a below them: hypothesis, b and c reach the sort as later
+            // minted symbols (sid > 983) or temp/memory leaves. Inert (about 25
+            // spellings): v128 placement or type, a Plane copy for On(), On()
+            // expanded inline (association and operand order canonicalize).
             Transform worldXfm;
             Vector3 v128(reinterpret_cast<Vector3 &>(p150));
             worldXfm.v = p150.On();
