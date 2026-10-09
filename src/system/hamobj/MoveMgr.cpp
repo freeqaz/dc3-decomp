@@ -359,6 +359,13 @@ const MoveVariant *MoveMgr::GetRoutinePreferredVariant(int i1, int i2) const {
 
 void MoveMgr::LoadSongData() { ImportMoveData("../meta/move_data.dta", true); }
 
+// adjParent is a named local even though insert() still takes *adj.  It is
+// one more negative-benefit candidate (a load passed straight to a call), so
+// 5 candidates are freed before the code band instead of 4.  That makes the
+// curChoice address pieces (mChoiceSets begin, i2 * 16; tie 0, ordered by id)
+// both recycle ids, the begin piece's higher, so it is coloured first and
+// takes r11 as in the image.  With 4 frees the i2 * 16 piece got a fresh id
+// and took r11 instead.
 void MoveMgr::ComputePotentialMoves(std::set<const MoveParent *> &moves, int i2) {
     auto &moveParents = mMoveParents;
     if (moveParents[0].size() < i2 + 1) {
@@ -382,7 +389,8 @@ void MoveMgr::ComputePotentialMoves(std::set<const MoveParent *> &moves, int i2)
                 if (moveParents[0][i2 - 1]) {
                     const MoveParent *last = moveParents[0][i2 - 1];
                     FOREACH (adj, last->NextAdjacents()) {
-                        if ((*adj)->IsValidForMiniGame()) {
+                        const MoveParent *adjParent = *adj;
+                        if (adjParent->IsValidForMiniGame()) {
                             moves.insert(*adj);
                         }
                     }

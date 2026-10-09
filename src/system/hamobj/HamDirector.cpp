@@ -759,6 +759,11 @@ PropKeys *HamDirector::GetMasterKeys(Symbol s) {
     }
 }
 
+// The found index is its own variable, not the loop counter left behind.
+// With one variable doing both jobs, the keys-array base (pri 9, tie 93) was
+// coloured before the key count (pri 8, tie 90) and took r9, the reverse of
+// the image. foundIdx is a candidate of its own in the exit blocks, which drops
+// the base to pri 7, so the count is coloured first and takes r9.
 Key<Symbol> *HamDirector::GetMasterPracticeFrame(Symbol s) {
     if (!mMasterClipAnim) {
         SetMasterClipAnim();
@@ -768,16 +773,17 @@ Key<Symbol> *HamDirector::GetMasterPracticeFrame(Symbol s) {
     PropKeys *keys = mMasterClipAnim->GetKeys(this, DataArrayPtr(practice));
     if (keys) {
         Keys<Symbol, Symbol> *symKeys = keys->AsSymbolKeys();
-        int i = 0;
-        for (; i < symKeys->size(); i++) {
+        int foundIdx;
+        for (int i = 0; i < symKeys->size(); i++) {
             if (s == (*symKeys)[i].value) {
+                foundIdx = i;
                 goto done;
             }
         }
-        i = -1;
+        foundIdx = -1;
     done:
-        if (i != -1) {
-            return &(*symKeys)[i];
+        if (foundIdx != -1) {
+            return &(*symKeys)[foundIdx];
         }
     }
     return nullptr;

@@ -492,9 +492,11 @@ void LiveCameraInput::TextureStore::UpdateFromColorBufferClip(
 // plain for loops (MSVC rotates them and forms the same sthu itself) the
 // r27/r28 swap and the misplaced `mr r11, r27` are gone; what is left on a
 // non-PCH probe is one volatile r8/r9 swap in the inner pixel loop.
-// w20-c (normalized 100, fuzzy 99.227, 12 register-only rows): volatile r8/r9
-// swap of destRow vs depthPixel in the inner loop; values and branch targets
-// all agree with the image.  Inert: depthPixel declared before colour.
+// depthPixel is an unsigned int holding the zero-extended halfword, not an
+// unsigned short (same values: it is only masked and shifted).  As a short the
+// pixel was a short-lived temp (pri 8, tie 77) that lost to destRow (pri 8,
+// tie 97), so destRow took r9 and the pixel r8, the reverse of the image.  As
+// an int it is a named candidate at pri 13, coloured first, and takes r9.
 // Storing in each arm instead of via `color`: 94.3.
 void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
     LiveCameraInput *cam, float clipLeft, float clipTop
@@ -516,7 +518,7 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBufferClip(
             unsigned short *destRow = (unsigned short *)destBase;
             for (int x = clippedX; x < mTex->Width() + clippedX; x++) {
                     unsigned short color = 0;
-                    unsigned short depthPixel = *(unsigned short *)((x / 2) * 2 + srcBase);
+                    unsigned int depthPixel = *(unsigned short *)((x / 2) * 2 + srcBase);
                     if (depthPixel & 3) {
                         int depth = 0x1f - ((depthPixel >> 10) & 0x1f);
                         color = (((depth << 5) | depth) << 6) | depth;
