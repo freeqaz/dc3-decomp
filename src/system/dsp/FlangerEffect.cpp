@@ -88,7 +88,23 @@ void FlangerEffect::SetParameters(FlangerEffect::Params const &params) {
  *  ~15 rows of the wrap arithmetic between 0x82E58B00 and 0x82E58BB0;
  *  (c) the image's inner-loop `cmpw cr6, r28, r24` is at 0x82E58BB4, ours
  *  is hoisted to just after the index add.  None of the spellings above
- *  touched (a) or (b); they are the next lane's problem, not a floor. */
+ *  touched (a) or (b); they are the next lane's problem, not a floor.
+ *
+ *  w24-c3 (91.7 -> ~98.1 instr-level): (b) closed.  Stmt 2 reads the sample
+ *  through `float *sample = &buf[i]` -- MSVC then no longer forwards stmt 1's
+ *  store, and reloads it after the delay tap as the image does (`lfsx f12,
+ *  r5, r9` / `lfsx f10, r11, r31` at 0x82E58B64/6C); that also put the
+ *  inner-loop `cmpw` back at 0x82E58BB4 (c).  Same address, same value: no
+ *  behaviour change.  Stmt 4 needed explicit parens: once the reload landed,
+ *  /fp:fast re-associated `tap * frac2 * mFeedbackFrac` to tap*fb*frac2;
+ *  the image computes (tap*frac2)*fb (`fmuls f0, f0, f11` / `fmadds f0, f0,
+ *  f12, f11` at 0x82E58BA0/A8).  STOP, 18 rows left: (a) the step quotients
+ *  -- swapping the two step statements now matches the fdivs operands but
+ *  MSVC still computes rateStep first into f22 (the two deltas swap instead,
+ *  20 rows); and r5/r6/r8 colouring of the two `% 9600` read indices plus
+ *  one `subf r10, r3, r8` (readBase2) one slot early.  Inert: readBase2
+ *  declared after stmt 2; a named tap local; `+=` for stmt 1.  Worse: `*sample`
+ *  for stmt 4's read too (95.5 raw). */
 void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x3f);
 
