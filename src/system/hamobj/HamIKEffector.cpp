@@ -891,6 +891,15 @@ void HamIKEffector::Poll() {
                     // commutative, value-identical. `q.v *= invWeight`, Scale(), and
                     // `q.v /= totalWeight` all emit the same code. Values and branch
                     // targets of the whole function checked against the image.
+                    // Open (w25-gv, c2 §8.7 commutative key): the image emits
+                    // (inv, x) but (y, inv) and (z, inv).  Here the scalar-replaced
+                    // q.v components are variable leaves x=V15 > y=V13 > z=V11 (sid
+                    // falls with first-def order) and invWeight is V282, so it leads
+                    // all three.  The image needs sid(x) < sid(inv) < sid(y), sid(z),
+                    // or y/z as memory leaves keyed above inv.  ~40 spellings tried
+                    // (z,y,x / Zero() / Set() / x=y=z inits, refs, pointers, /=, inline
+                    // reciprocal, decl placement): each either keeps x highest or
+                    // reorders the init stores.
                     float invWeight = 1.0f / totalWeight;
                     q.v.x *= invWeight;
                     q.v.y *= invWeight;
