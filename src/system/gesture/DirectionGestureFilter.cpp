@@ -84,11 +84,20 @@ void DirectionGestureFilterSingleUser::Update(const Skeleton &skeleton, int elap
 // result compiling the real TU with the PCH and only that type swapped.  The fix
 // belongs in math/Vec.h (PCH-reached, out of scope for this lane) -- flagged to
 // the coordinator; it may move every TrackedJoint reader in gesture/.
+// w24-pch: FIXED at the call site, 99.773 -> 100.  The header fix was A/B'd
+// first (full ninja, whole-binary compare): `struct PaddedJointPos : Vector3`
+// takes this and IsValidSwipePosition to 100 but drops
+// StandingStillGestureFilter::Update 100 -> 90.16 (the image holds the knee
+// xyz in f29-f31 across Normalize(); once the joint's x/y/z ARE Vector3::x/y/z
+// MSVC reloads them after the call) and HandInvokeGestureFilter::CalcInPose
+// 99.037 -> 99.025, so the joint type is NOT Vector3-derived in the original.
+// Binding the first argument through a pointer cast removes the conversion
+// operator's inline level without changing the type (same address).
 void DirectionGestureFilterSingleUser::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
     mArcDetector.Draw(skeleton, viz);
     bool valid = IsValidSwipePosition(skeleton);
     viz.DrawPoint3D(
-        skeleton.HandJoint(mHandSide).mJointPos[0],
+        *(const Vector3 *)&skeleton.HandJoint(mHandSide).mJointPos[0],
         0.1f,
         valid ? Hmx::Color(0, 1, 0) : Hmx::Color(1, 0, 0),
         0.2f
@@ -209,14 +218,14 @@ bool DirectionGestureFilterSingleUser::IsValidSwipePosition(const Skeleton &skel
         + shoulderVec.x * shoulderVec.x
     );
 
-    // REMAINING (w21-as, 3 rows): the image sets up ClosestPoint's address
-    // arguments r4 (corner2), r3 (corner1), r6 (&closest); we emit r6 first.
-    // Same three frame slots.  Probe-inert: the hand joint as a named ref (to
-    // the joint or to its Vector3), `closest` declared before the corners or
-    // with them, corners declared separately or in the other order, &closest
-    // through a named pointer, the corners through const refs.
+    // w21-as: the image sets up ClosestPoint's address arguments r4 (corner2),
+    // r3 (corner1), r6 (&closest); with the hand joint passed through
+    // PaddedJointPos's `operator const Vector3 &` we emitted r6 first (3 rows;
+    // inert: named refs, declaration orders, &closest through a pointer).
+    // w24-pch: the pointer cast (no inline conversion call, same address) gives
+    // the image's order -- 99.980 -> 100.  See the note above Draw().
     Vector3 closest;
-    ClosestPoint(corner1, corner2, skeleton.HandJoint(mHandSide).mJointPos[0], &closest);
+    ClosestPoint(corner1, corner2, *(const Vector3 *)&skeleton.HandJoint(mHandSide).mJointPos[0], &closest);
     Vector3 closestDelta;
     Subtract(closest, skeleton.HandJoint(mHandSide).mJointPos[0], closestDelta);
 
