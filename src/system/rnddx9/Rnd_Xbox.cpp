@@ -735,6 +735,15 @@ Vector2 &DxRnd::DrawString(
     cursor = pos;
     float widest = pos.x;
     char c;
+    // w24-ds: a named alias of `color`, 99.99099 -> 100.0 canonical.  It
+    // closes residual (b) above (the red/alpha lfs order and the rlwimi
+    // naming).  Residual (a), the 9-row r22<->r23 permutation, is still there;
+    // the canonical ruler forgives it, and fuzzy reads 99.77477 (those rows
+    // plus the ICF'd MakeString callee name).  The alias works at function
+    // scope, before MILO_ASSERT, inside the inner loop, or aliasing `pos`.  With
+    // the shaderMgr alias back on SetVConstant as well, it reads 96.09 again.
+    // An `unsigned long` temp for the pack, or a cast, is inert.
+    const Hmx::Color &col = color;
     while ((c = *s) != 0) {
         if (c == '\n') {
             s++;
@@ -758,7 +767,7 @@ Vector2 &DxRnd::DrawString(
                     verts[numVerts].x = stroke->Float(j) * 9.0f + cursor.x;
                     verts[numVerts].y = stroke->Float(j + 1) * 12.0f + cursor.y;
                     verts[numVerts].z = 1.0f;
-                    verts[numVerts].color = MakeColor(color);
+                    verts[numVerts].color = MakeColor(col);
                     numVerts++;
                 }
                 D3DDevice_DrawVerticesUP(
