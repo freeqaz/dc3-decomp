@@ -1394,7 +1394,13 @@ void HamNavList::DetermineHighlightedItem() {
     float maxItemF = (float)(double)maxItem;
     float numItemsF = (float)(double)numItems;
 
-    float threshold = (1.0f - maxItemF * gNavListHighlightMargin) / numItemsF;
+    // The conversion is spelled out again here rather than reading maxItemF:
+    // CSE folds both into one k03 temp (candidate id 40, minted after the
+    // gNavListHighlightMargin load's id 19), and c2 emits the higher-id operand
+    // of the fnmsubs first, giving the image's maxItemF * margin.  Through the
+    // named local (k04, id 6) the margin load came first.  Same value either way.
+    float threshold =
+        (1.0f - (float)(double)maxItem * gNavListHighlightMargin) / numItemsF;
 
     int highlightItem = GetHighlightItem();
     bool gathering = mListState.ScrollPastMinDisplay();
@@ -1415,9 +1421,6 @@ void HamNavList::DetermineHighlightedItem() {
     // (0x8244A5C0 `cmpw cr6, r11, r31` / 0x8244A5D0 `bgt` leaves r31 = maxItem on the
     // high side, else `srwi/subi/and` masks a negative to 0).  The old spelling
     // only masked the low side, so a hand above the last item indexed past it.
-    // Remaining fuzzy row (w20-f): the threshold's `fnmsubs` multiplies
-    // maxItemF*margin where ours emits margin*maxItemF -- commutative operand
-    // order; swapping the source operands is inert.
     int pos = (int)(maxItemF * mHandHeight + 0.5f);
     float targetPos = (float)highlightItem / maxItemF;
     unsigned int adjustedPos = Clamp(0, maxItem, pos);
