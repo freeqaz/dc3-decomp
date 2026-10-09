@@ -302,26 +302,30 @@ void Leaderboards::UploadScores(HamProfile *profile) {
 
 Symbol Leaderboards::ShowGamercard(int i, HamProfile *profile) {
     static Symbol display_gamercard_pad_error("display_gamercard_pad_error");
-    if ((0 <= i) && (i <= mRows.size())) {
-        if (ThePlatformMgr.IsSignedIntoLive(profile->GetPadNum())) {
-            if (mRows.size() != 0) {
-                const OnlineID id(mRows[i].mXUID);
-                ShowGamercardResult result =
-                    ThePlatformMgr.ShowGamercardForPadNum(profile->GetPadNum(), &id);
-                if (result == (ShowGamercardResult)-2) {
-                    static Symbol display_gamercard_privilege_error(
-                        "display_gamercard_privilege_error"
-                    );
-                    return display_gamercard_privilege_error;
-                } else if (result == (ShowGamercardResult)-3) {
-                    return display_gamercard_pad_error;
-                } else if (0 > result) {
-                    static Symbol on_select_gamertag_error("on_select_gamertag_error");
-                    return on_select_gamertag_error;
-                }
+    // A separate early return for the range check: each return adds a reference
+    // to the hidden return-slot pointer, which lifts its colouring priority
+    // above display_gamercard_pad_error's address (image: sret r24, address r23).
+    if (i < 0 || i > mRows.size()) {
+        return display_gamercard_pad_error;
+    }
+    if (ThePlatformMgr.IsSignedIntoLive(profile->GetPadNum())) {
+        if (mRows.size() != 0) {
+            const OnlineID id(mRows[i].mXUID);
+            ShowGamercardResult result =
+                ThePlatformMgr.ShowGamercardForPadNum(profile->GetPadNum(), &id);
+            if (result == (ShowGamercardResult)-2) {
+                static Symbol display_gamercard_privilege_error(
+                    "display_gamercard_privilege_error"
+                );
+                return display_gamercard_privilege_error;
+            } else if (result == (ShowGamercardResult)-3) {
+                return display_gamercard_pad_error;
+            } else if (0 > result) {
+                static Symbol on_select_gamertag_error("on_select_gamertag_error");
+                return on_select_gamertag_error;
             }
-            return gNullStr;
         }
+        return gNullStr;
     }
     return display_gamercard_pad_error;
 }
