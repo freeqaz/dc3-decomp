@@ -159,6 +159,9 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
             // `while (mLoadedSubdirs.size() != 0) pop_back();` else arm gets
             // the guard back but recomputes its own cmpwi and loads through
             // r29 at the bottom, 97.2.
+            // w24-c3 (97.85, same 4 rows): `ObjectDir *mergerDir =
+            // MergerDir();` hoisted to function scope above the HX_NATIVE
+            // block is byte-inert.
             mLoadedSubdirs.clear();
         }
     }
