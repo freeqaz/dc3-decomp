@@ -1726,11 +1726,13 @@ float MoveDir::DetectFrac(
     return frac;
 }
 
-// w20-j: normalized 100 / fuzzy 99.49. 11 rows are a callee-saved permutation:
-// player r26 / filterVer r25 and range.second r29 / &filterVer->mScaleOp r27
-// in the image, the other way round here. Each value carries the same operand
-// to the same call; branch targets agree. A hoisted ScaleOp ref and a do/while
-// with an `end` local both left it unchanged.
+// w25-gi: no `if (range.first != range.second)` around the loop. The loop's
+// own entry test is the range test (the empty-range path still reaches the
+// end with best == nullptr). With the wrapper, player (r25) and filterVer
+// (r26) and range.second (r27) / &filterVer->mScaleOp (r29) came out swapped
+// against the image: the extra join block lowered range.second's colour
+// priority from 16 to -3, below the mScaleOp temp, and left player at -15
+// under filterVer's -11.
 void MoveDir::EnqueueDetectFrames(
     float adjustedSecs,
     int player,
@@ -1748,27 +1750,24 @@ void MoveDir::EnqueueDetectFrames(
     // sits between the two `lwz` of range.first/range.second and the
     // `cmplw`/`beq` at 0x82500F20.  MSVC gave it range.first's own stack slot
     // (0x50), which is dead the moment r31 holds it, so the store reads as a
-    // second write of the same slot.  Declared inside the `if` it lands four
-    // instructions later.
+    // second write of the same slot.
     DetectFrame *best = nullptr;
-    if (range.first != range.second) {
-        float bestError = 1000.0f;
-        for (DetectFrame *it = range.first; it != range.second; ++it) {
-            float error = ScaleDistToError(
-                filterVer->mScaleOp, fabsf(it->Seconds() - adjustedSecs)
+    float bestError = 1000.0f;
+    for (DetectFrame *it = range.first; it != range.second; ++it) {
+        float error = ScaleDistToError(
+            filterVer->mScaleOp, fabsf(it->Seconds() - adjustedSecs)
+        );
+        if (error < 1.0f) {
+            mFilterQueue->EnqueueFrame(
+                player, error, adjustedSecs - it->Seconds(), it, filterVer
             );
-            if (error < 1.0f) {
-                mFilterQueue->EnqueueFrame(
-                    player, error, adjustedSecs - it->Seconds(), it, filterVer
-                );
-                if (error <= bestError) {
-                    best = it;
-                }
+            if (error <= bestError) {
+                best = it;
             }
         }
-        if (best) {
-            unkf88.insert(best);
-        }
+    }
+    if (best) {
+        unkf88.insert(best);
     }
 }
 
