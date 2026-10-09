@@ -87,11 +87,8 @@ void WavReader::Poll(float dt) {
                 mSamplesLeft = 0;
                 break;
             }
-            int tmp = mSamplesLeft / mNumChannels;
-            if (tmp > 0x1000) {
-                tmp = 0x1000;
-            }
-            mBufNumSamples = tmp;
+            int numFrames = mSamplesLeft / mNumChannels;
+            mBufNumSamples = numFrames > 0x1000 ? 0x1000 : numFrames;
             mInWaveFileData->Read(mRawInputBuffer, mNumChannels * mBufNumSamples * 2);
             mBufOffset = 0;
             mSamplesLeft -= mBufNumSamples;
@@ -101,6 +98,17 @@ void WavReader::Poll(float dt) {
                     mInputBuffers[0][i] = (s << 8) | (s >> 8);
                 }
             } else {
+                // w25-gj stop note: the image emits both stores below as sthx (index,
+                // base); we emit (base, index), while the mono loop above is (base,
+                // index) in both builds. c2's commutative-operand sort (C2RS-BRIDGE 8.7,
+                // cqlo3) puts the &mInputBuffers[k] address add as M6[base V338 or V342]
+                // key 0x18008 (sid 2 mod 4) ahead of the strength-reduced index temp V492
+                // (0x17b00); the mono loop's index V475 (0x176c0) loses to the same V338.
+                // One shared V338 cannot sit on both sides, so the image either has a
+                // separate base temp here or index temp sids past 512 (21+ more temps).
+                // Open: what splits the CSE of this+0x28 across the two loops. Inert:
+                // pointer arithmetic, (*mInputBuffers)[i], named out pointers,
+                // EndianSwap/SwapBytes.
                 for (int i = 0; i < mBufNumSamples; i++) {
                     unsigned short s0 = mRawInputBuffer[i * 2];
                     mInputBuffers[0][i] = (s0 << 8) | (s0 >> 8);

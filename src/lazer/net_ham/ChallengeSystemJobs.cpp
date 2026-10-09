@@ -16,7 +16,11 @@ FlauntScoreJob::FlauntScoreJob(Hmx::Object *callback, FlauntScoreData &data)
     static Symbol diff("diff");
     static Symbol xp("xp");
     pt.AddPair(song_id, data.mStatus->mSongID);
-    pt.AddPair(pid, data.mProfile ? data.mProfile->GetOnlineID()->ToString() : "N/A");
+    if (data.mProfile) {
+        pt.AddPair(pid, data.mProfile->GetOnlineID()->ToString());
+    } else {
+        pt.AddPair(pid, "N/A");
+    }
     pt.AddPair(score, data.mStatus->mScore);
     pt.AddPair(diff, data.mStatus->mDiff);
     pt.AddPair(xp, data.mProfile->GetMetagameRank()->RankNumber());
