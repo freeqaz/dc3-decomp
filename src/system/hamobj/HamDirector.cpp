@@ -2313,47 +2313,57 @@ void HamDirector::MoveKeys(
 }
 
 DataNode HamDirector::OnClipSafeToAdd(DataArray *a) {
-    if (a->Int(2)) {
-        for (int i = 0; i < kNumDifficultiesDC2; i++) {
-            Difficulty difficulty = (Difficulty)i;
-            if (mSongAnims[difficulty]) {
-                PropKeys *propKeys = mSongAnims[difficulty]->GetKeys(
-                    this, DataArrayPtr(Symbol("clip"))
-                );
-                if (propKeys) {
-                    Keys<Symbol, Symbol> *symKeys = propKeys->AsSymbolKeys();
-                    for (int j = 0; j < symKeys->size(); j++) {
-                        Key<Symbol> &curKey = (*symKeys)[j];
-                        curKey.frame =
-                            BeatToFrame(floor(FrameToBeat(curKey.frame) + 0.5f));
-                    }
+    // Early return rather than one shared exit: same code, but the
+    // extra return arm gives the hidden return-slot pointer a reference in
+    // the entry region, lifting its colour priority (-24 -> -18) above the
+    // hoisted Symbol("clip") address (-21), so it is coloured first.
+    if (!a->Int(2)) {
+        return 0;
+    }
+    for (int i = 0; i < kNumDifficultiesDC2; i++) {
+        Difficulty difficulty = (Difficulty)i;
+        if (mSongAnims[difficulty]) {
+            PropKeys *propKeys = mSongAnims[difficulty]->GetKeys(
+                this, DataArrayPtr(Symbol("clip"))
+            );
+            if (propKeys) {
+                Keys<Symbol, Symbol> *symKeys = propKeys->AsSymbolKeys();
+                for (int j = 0; j < symKeys->size(); j++) {
+                    Key<Symbol> &curKey = (*symKeys)[j];
+                    curKey.frame =
+                        BeatToFrame(floor(FrameToBeat(curKey.frame) + 0.5f));
                 }
             }
         }
     }
-    return DataNode(kDataInt, 0);
+    return 0;
 }
 
 DataNode HamDirector::OnPracticeSafeToAdd(DataArray *a) {
-    if (a->Int(2)) {
-        for (int i = 0; i < kNumDifficultiesDC2; i++) {
-            Difficulty difficulty = (Difficulty)i;
-            if (mSongAnims[difficulty]) {
-                PropKeys *propKeys = mSongAnims[difficulty]->GetKeys(
-                    this, DataArrayPtr(Symbol("practice"))
-                );
-                if (propKeys) {
-                    Keys<Symbol, Symbol> *symKeys = propKeys->AsSymbolKeys();
-                    for (int j = 0; j < symKeys->size(); j++) {
-                        Key<Symbol> &curKey = (*symKeys)[j];
-                        curKey.frame =
-                            BeatToFrame(floor(FrameToBeat(curKey.frame) + 0.5f));
-                    }
+    // Early return rather than one shared exit: same code, but the
+    // extra return arm gives the hidden return-slot pointer a reference in
+    // the entry region, lifting its colour priority (-24 -> -18) above the
+    // hoisted Symbol("practice") address (-21), so it is coloured first.
+    if (!a->Int(2)) {
+        return 0;
+    }
+    for (int i = 0; i < kNumDifficultiesDC2; i++) {
+        Difficulty difficulty = (Difficulty)i;
+        if (mSongAnims[difficulty]) {
+            PropKeys *propKeys = mSongAnims[difficulty]->GetKeys(
+                this, DataArrayPtr(Symbol("practice"))
+            );
+            if (propKeys) {
+                Keys<Symbol, Symbol> *symKeys = propKeys->AsSymbolKeys();
+                for (int j = 0; j < symKeys->size(); j++) {
+                    Key<Symbol> &curKey = (*symKeys)[j];
+                    curKey.frame =
+                        BeatToFrame(floor(FrameToBeat(curKey.frame) + 0.5f));
                 }
             }
         }
     }
-    return DataNode(kDataInt, 0);
+    return 0;
 }
 
 void HamDirector::HandleDifficultyChange() {

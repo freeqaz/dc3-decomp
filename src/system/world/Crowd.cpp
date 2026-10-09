@@ -443,9 +443,12 @@ void WorldCrowd::ListDrawChildren(std::list<RndDrawable *> &draws) {
 
 void WorldCrowd::CollideList(const Segment &seg, std::list<Collision> &colls) {
     if (TheLoadMgr.EditMode() && CollideSphere(seg)) {
-        ObjList<CharData>::iterator end = mCharacters.end();
+        // end() re-read in the condition, not cached in a local: same code
+        // (the sentinel is loop-invariant and hoisted), but the hoisted temp
+        // gains one more reference (priority -37 -> -34), so it ties `colls`
+        // and wins on tie key (21 > 6), taking r24 as the image does.
         ObjList<CharData>::iterator it = mCharacters.begin();
-        while (it != end) {
+        while (it != mCharacters.end()) {
             if (it->mMMesh) {
                 it->mMMesh->CollideList(seg, colls);
             }
