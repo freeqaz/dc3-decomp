@@ -115,6 +115,15 @@ void Multiply(const Transform &a, const Transform &b, Transform &out) {
 // what key orders a CSE-reload operand against a named local in a commutative op.
 void FastInvert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
     float xdot = Dot(min.x, min.x);
+    // w25-oa: operand order of `min.x.y * xdot` (c2 commutative key, C2RS-BRIDGE
+    // 8.7). Row x's Set loads reuse Dot(min.x, min.x)'s address temps, so as
+    // `min.x.y` the load is a memory leaf on base temp 192 (192 & 3 == 0: key
+    // 0x10008) and sorts below xdot (variable sid 3: 0x10060) -- xdot first. The
+    // image lists the load first. Through this reference the base is the
+    // variable `xy` (sid 4: key 0x18008 > 0x10060), so the load sorts first;
+    // min.x.z stays on base temp 196 (0x10008) and keeps xdot first, as the
+    // image does. Same value, same instructions; only the operand list moves.
+    const float &xy = min.x.y;
     if (xdot != 0)
         xdot = 1.0f / xdot;
     float ydot = Dot(min.y, min.y);
@@ -127,7 +136,7 @@ void FastInvert(const Hmx::Matrix3 &min, Hmx::Matrix3 &mout) {
         min.x.x * xdot,
         min.y.x * ydot,
         min.z.x * zdot,
-        min.x.y * xdot,
+        xy * xdot,
         min.y.y * ydot,
         min.z.y * zdot,
         min.x.z * xdot,
