@@ -1976,9 +1976,12 @@ void RndText::FitTextEllipsis() {
         // Total length = truncated text + ellipsis
         int totalLen = lo + ellipsisLen;
 
-        // Allocate buffer for truncated text + ellipsis
+        // Allocate buffer for truncated text + ellipsis.  Sized from
+        // lo + ellipsisLen rather than totalLen: same value and same code (the
+        // sum is CSE'd), but one less totalLen ref drops its colour priority
+        // (64 -> 59) below `this` (61), which takes r30 as in the image.
         unsigned short *buf =
-            (unsigned short *)_alloca((totalLen + 1) * sizeof(unsigned short));
+            (unsigned short *)_alloca((lo + ellipsisLen + 1) * sizeof(unsigned short));
         memcpy(buf, &wideChars[0], lo * sizeof(unsigned short));
 
         // Respect mFixedLength if set
