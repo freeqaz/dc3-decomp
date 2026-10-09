@@ -508,8 +508,11 @@ void HamWardrobe::LoadCharacters(
 
     mMainCharacters.clear();
     for (int i = 0; i < 2; i++) {
-        HamCharacter *c = Dir()->Find<HamCharacter>(MakeString("player%d", i), true);
-        mMainCharacters.push_back(c);
+        // Passed straight through, not named: a named `HamCharacter *c` is
+        // demoted before COLOR and its freed candidate id is recycled by the
+        // code band, which pushed the hoisted __FILE__ address half (MILO_ASSERT
+        // below) onto the lowest recycled id, so it took r4 instead of r7.
+        mMainCharacters.push_back(Dir()->Find<HamCharacter>(MakeString("player%d", i), true));
     }
 
     unk34 = speed;

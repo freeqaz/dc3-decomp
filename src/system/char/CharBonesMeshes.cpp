@@ -162,12 +162,21 @@ void CharBonesMeshes::PoseMeshes() {
         Vector3 *scaleEnd = (Vector3 *)(start + mOffsets[TYPE_QUAT]);
         Vector3 *scale = (Vector3 *)(start + mOffsets[TYPE_SCALE]);
         for (; scale < scaleEnd; scale++, ++curMesh) {
-            Transform &xfm = (*curMesh)->DirtyLocalXfm();
+            RndTransformable *mesh = *curMesh;
+            Transform &xfm = mesh->DirtyLocalXfm();
             Vector3 scaleVec;
             MakeScale(xfm.m, scaleVec);
-            xfm.m.x *= scale->x / scaleVec.x;
-            xfm.m.y *= scale->y / scaleVec.y;
-            xfm.m.z *= scale->z / scaleVec.z;
+            // The commutative fmuls operand order (element vs factor first) in
+            // all three rows follows the c2 operand sort key, which here moves
+            // with the count of named locals in the loop body: the named mesh
+            // and the named z numerator/denominator select the image's order.
+            float sx = scale->x / scaleVec.x;
+            xfm.m.x *= sx;
+            float sy = scale->y / scaleVec.y;
+            xfm.m.y *= sy;
+            float zNum = scale->z;
+            float zDen = scaleVec.z;
+            xfm.m.z *= zNum / zDen;
         }
     }
 }

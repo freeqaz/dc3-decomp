@@ -648,6 +648,9 @@ void GamePanel::UpdateLatency() {
         }
     }
     gGamePanelCallback.unk4 = bFlash;
+    static int sToggle = 0;
+    static float sMs[2] = {0, 0};
+    Timer *timer;
     if (bJustPressed) {
         static Hmx::Object *sBeep = nullptr;
         if (sBeep == nullptr) {
@@ -659,17 +662,29 @@ void GamePanel::UpdateLatency() {
             sBeep = dir->Find<Hmx::Object>("beep.cue", true);
         }
         static Message playMsg("play");
-        DataNode result = sBeep->Handle(playMsg, true);
+        // The sToggle/sMs update and the overlay load are written once per
+        // arm: MSVC cross-jumps the two copies back into one sequence after
+        // register colouring, so the emitted code is unchanged, but at COLOR
+        // time `this` is live-unreferenced through two extra blocks and its
+        // priority (-15 -> -28) drops below the hoisted static-guard address
+        // half (-19), which then takes r26 and leaves `this` r25 as in the
+        // image. The timer is still taken before SetShowingOnly, for the
+        // reason given on the early-return path.
+        {
+            DataNode result = sBeep->Handle(playMsg, true);
+        }
+        int idx = sToggle;
+        sToggle = 1 - sToggle;
+        sMs[idx] = TheRnd.DrawMs();
+        timer = &mLatencyOverlay->TimerRef();
+    } else {
+        int idx = sToggle;
+        sToggle = 1 - sToggle;
+        sMs[idx] = TheRnd.DrawMs();
+        timer = &mLatencyOverlay->TimerRef();
     }
-    static int sToggle = 0;
-    static float sMs[2] = {0, 0};
-    int idx = sToggle;
-    sToggle = 1 - sToggle;
-    sMs[idx] = TheRnd.DrawMs();
-    // Same reload as the early-return path above; see the comment there.
-    Timer &timer = mLatencyOverlay->TimerRef();
     mLatencyOverlay->SetShowingOnly(true);
-    timer.Restart();
+    timer->Restart();
     mLatencyOverlay->Clear();
     float beat = TheTaskMgr.Beat();
     *mLatencyOverlay << MakeString("Joy %d Beat %.3f\nms %.2f last %.2f", joyNum, beat, sMs[0], sMs[1]);
