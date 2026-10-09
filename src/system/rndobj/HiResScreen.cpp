@@ -425,7 +425,11 @@ void HiResScreen::Merge(
                             blendY = (float)xBlend / (float)padY;
                         }
                         if (blendX > 0.0f || blendY > 0.0f) {
-                            blend = sqrtf(blendY * blendY + blendX * blendX);
+                            // The image rounds blendX*blendX and fuses blendY*blendY
+                            // (fmuls f13,f13,f13 ; fmadds f0,f0,f0,f13); the flat sum
+                            // is canonicalised the other way round under /fp:fast.
+                            float blendY2 = blendY * blendY;
+                            blend = sqrtf(blendY2 + blendX * blendX);
                             blend = blend - 0.5f;
                             blend = blend + blend;
                             blend = Max(blend, 0.0f);

@@ -240,8 +240,8 @@ void SkeletonViz::DrawLine3D(
         mat->SetColor(color1.red, color1.green, color1.blue);
     } else {
         mUtlLine->SetMat(0);
-        mUtlLine->SetPointColor(0, *color2, true);
-        mUtlLine->SetPointColor(1, color1, true);
+        mUtlLine->SetPointColor(0, color1, true);
+        mUtlLine->SetPointColor(1, *color2, true);
     }
     mUtlLine->SetWidth(mLineWidthScale * f);
     mUtlLine->DrawShowing();

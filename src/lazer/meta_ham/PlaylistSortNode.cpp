@@ -163,7 +163,7 @@ NavListSortNode *PlaylistHeaderNode::GetFirstActive() {
     FOREACH (it, Children()) {
         NavListSortNode *result = (*it)->GetFirstActive();
         if (result) {
-            return ThePlaylistSortMgr->HeadersSelectable() ? result : this;
+            return ThePlaylistSortMgr->HeadersSelectable() ? this : result;
         }
     }
     return nullptr;
