@@ -546,7 +546,8 @@ void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
     }
 
     if (transClip) {
-        offset = ClipLength(transClip) - 2.0f;
+        float transLen = ClipLength(transClip);
+        offset = transLen - 2.0f;
     } else {
         offset = 0.0f;
     }
@@ -571,12 +572,14 @@ void ClipPlayer::PushClip(int idx, HamDriver::LayerArray *arr) {
             Keys<Symbol, Symbol> *savedKeys = mClipKeys;
             mClipKeys = mMasterClipKeys;
 
-            float beatDiff = FrameToBeat(practiceKey->frame) - beat;
+            float practiceBeat = FrameToBeat(practiceKey->frame);
+            float beatDiff = practiceBeat - beat;
 
-            // w20-l: values and branch targets verified vs image (0x1a84); fuzzy
-            // 99.83 -> one row: `fadds f0, f31, f0` (beatDiff + mBeatOffset) vs ours
-            // `f0, f0, f31` -- commutative operand order, source spelling and
-            // statement order both tried, no change / regresses.
+            // w25-gm: the named practiceBeat and transLen locals each add one
+            // lowering temp ahead of this block, moving mBeatOffset's base temp
+            // to sid = 0 mod 4 (c2rs 8.7 memory-leaf key 0x10008), so beatDiff
+            // sorts first in `fadds f0, f31, f0` like the image; the other
+            // three bases land on 1 mod 4 (0x14008) and stay memory-first.
             mBeatOffset += beatDiff;
             mBeat += beatDiff;
             mPracticeStart += beatDiff;
