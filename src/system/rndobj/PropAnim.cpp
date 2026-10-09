@@ -768,8 +768,12 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
                 *var5 = (*theKeys->AsObjectKeys())[keyIdx].value.Ptr();
                 break;
             case PropKeys::kBool: {
-                Key<bool> &curBool = (*theKeys->AsBoolKeys())[keyIdx];
-                *var5 = curBool.value;
+                // w25-ma: read inline. A named Key<bool>& here was the only
+                // difference from the image: it reordered the two loads of the
+                // ObjectStage dtor's `next->prev = prev` unlink in the kObject
+                // replace case below (same values, same stores). Hypothesis: one
+                // upstream temp fewer shifts the later temp ids that c2 orders by.
+                *var5 = (*theKeys->AsBoolKeys())[keyIdx].value;
             } break;
             case PropKeys::kQuat: {
                 Hmx::Quat curQuat = (*theKeys->AsQuatKeys())[keyIdx].value;
