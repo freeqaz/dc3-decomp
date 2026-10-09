@@ -1264,22 +1264,25 @@ static float ComputeSpotBlend(int i, float f) {
         return Min(Max((f - min * (1.0f / 5.0f)) * 5.0f, 0.0f), 1.0f);
 }
 
-// w20-h: 100 normalized, fuzzy 99.796. The 6 remaining rows are commutative
-// address adds in loops 2-4 (`add rD, iv, base` vs ours `add rD, base, iv`,
-// e.g. image `add r11, r29, r11` / `add r5, r11, r30`); every operand carries
-// the same value on both sides (i*stride + vector begin), loop 1 already
-// matches. Tried: `int i` in loops 2-4 (cmplw -> cmpw, 99.4), a named
-// RndEnviron* local in loop 2 (99.99, IVs re-ordered). Noise class: commutative
-// operand order.
+// w20-h / w25-gt: the six address adds in loops 2-4 (`add rD, iv, base`) are
+// c2's commutative operand sort (C2RS-BRIDGE 8.7): the vector-begin load is a
+// memory leaf keyed by its base temp's sid mod 4, the strength-reduced offset a
+// temp leaf (~0x15000).  Loop 1's base temps sit at sid 4k+1/4k+2 (ptr/state);
+// loops 2-4 needed theirs moved by 2, which the two extra loop-1 counters do.
 void LightPreset::Animate(float f) {
     if (f < 1.1920929E-7f)
         return;
     MILO_ASSERT(mSpotlights.size() == mSpotlightState.size(), 0x35a);
-    for (uint i = 0; i != mSpotlights.size(); i++) {
+    // Two extra counters that always equal i (c2 merges them into i's IV; no
+    // code of their own).  Each loop-carried symbol here mints one more temp
+    // after loop 1's base temps, so the base temps of loops 2-4 move by +2.
+    int quintileIdx = 0;
+    int stateIdx = 0;
+    for (uint i = 0; i != mSpotlights.size(); i++, quintileIdx++, stateIdx++) {
         if (mSpotlights[i]->GetAnimateFromPreset()) {
-            float blend = ComputeSpotBlend(i, f);
+            float blend = ComputeSpotBlend(quintileIdx, f);
             if (blend >= 1.1920929E-7f) {
-                AnimateSpotFromPreset(mSpotlights[i], mSpotlightState[i], blend);
+                AnimateSpotFromPreset(mSpotlights[i], mSpotlightState[stateIdx], blend);
             }
         }
     }
