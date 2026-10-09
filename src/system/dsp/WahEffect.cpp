@@ -167,6 +167,20 @@ void WahEffect::Process(float *buf, int numSamples, int numChans) {
         // the sin() call is much worse (raw 96.9, frame 0x110 vs 0x120, every
         // callee-saved FPR shifts by one).  The FlangerEffect pointer-read
         // lever does not apply: no store-forwarding row here.
+        // Mechanism hypothesis (c2 priority colouring, c2-rs
+        // docs/whitebox/ref/P_REGALLOC.md; FPR list f0,f13,f12,...): the
+        // image colours the mGain load (0x82E5A1A0) BEFORE `1 - newFreq`, so
+        // mGain takes f13 and `1 - newFreq` falls to f12; we colour them the
+        // other way round (f13 / f10).  The schedule is identical, so the
+        // difference is the worklist order: a priority or tuple-visit-ordinal
+        // tie decided the other way.  Same shape for ch (image r10) vs the
+        // &stack50[ch] temp (image r9) in the inner loop.  Tried, all
+        // byte-identical: reading mGain into a local right after the
+        // mPrevEnv store (earlier first visit); folding `1 - newFreq` into
+        // the blend expression (shorter range); one-expression blend.
+        // Open question: what in the lowered tuple order makes the image's
+        // mGain load outrank `1 - newFreq` -- neither its live range nor its
+        // source position moves it.
         for (int i = 0; i < numSamples; i++) {
             // Compute sin of phase
             float sinVal = sin(f27);

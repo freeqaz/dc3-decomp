@@ -186,6 +186,17 @@ void CharClipDisplay::DrawTrack() {
     // Measured inert: markerRect declared inside the loop; `if (mClip) {...}`
     // instead of the goto.  Worse: Rect ctor for trackRect (96.2).
     // decomp-synth hill_climb (2 rounds x 58 variants) found nothing.
+    // Mechanism hypothesis (c2 priority colouring, c2-rs P_REGALLOC.md): the
+    // 3.0f CSE temp is a candidate whose priority (sum of weight x n_live,
+    // minus n_live where it is live but unused) comes out <= 0 in the image
+    // -- live across the whole event/IK region with no use -- so it is left
+    // in memory and rematerialised from the r25 anchor; ours stays > 0 and
+    // gets f21.  Open question: what shortens or splits that range in the
+    // image.  Related lead, not chased: every 2.0f in this TU (LineSpacing,
+    // DrawBlend, the start label here) loads lbl_82020B54, a NON-COMDAT
+    // .rdata word just below this object's split start (0x82020B58), never
+    // __real@40000000 (0x820E6390) -- so the original likely had a TU-local
+    // const float object for 2.0, and maybe for other constants too.
     // Draw integer beat markers
     float firstBeat = (float)std::ceil(startBeat);
     float lastBeat = (float)std::floor(endBeat);

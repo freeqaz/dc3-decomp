@@ -104,7 +104,15 @@ void FlangerEffect::SetParameters(FlangerEffect::Params const &params) {
  *  20 rows); and r5/r6/r8 colouring of the two `% 9600` read indices plus
  *  one `subf r10, r3, r8` (readBase2) one slot early.  Inert: readBase2
  *  declared after stmt 2; a named tap local; `+=` for stmt 1.  Worse: `*sample`
- *  for stmt 4's read too (95.5 raw). */
+ *  for stmt 4's read too (95.5 raw).
+ *  Mechanism hypotheses for what is left (not floors): the index rows are a
+ *  pre-RA SCHEDULING difference -- we place readBase2's `subf r10, r3, r8`
+ *  before the slwi of the second read index, so r10 is busy and that index
+ *  colours to r5 instead of the image's in-place r10.  The f21/f22 pair is
+ *  the order MSVC emits the two fdivs, which does not follow source order
+ *  in either direction.  Open question: what fixes the relative order of
+ *  the two step divisions (both quotients are hoisted above the
+ *  `numSamples > 0` guard at 0x82E589E0). */
 void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
     MILO_ASSERT(numChans <= 2, 0x3f);
 
