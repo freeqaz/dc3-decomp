@@ -179,6 +179,13 @@ void CharClipDisplay::DrawTrack() {
     // preheader AFTER the `bgt` loop guard (image 823DF5A0: `lfs f0,
     // __real@40400000@l(r25)` / `fsubs f27, f29, f0`), and no longer keeps
     // 3.0f in a callee-saved FPR there.
+    // w24-c3 STOP at 97.817 (38 rows): still the 3.0f anchor/remat residual
+    // above (r25 anchor + 4 reloads vs our f21), plus its f19/f20/f21 and
+    // r23/r24/r25 renumbering, the label `0x64/0x14` load order, and the
+    // nameColor r-channel store sunk below namePos.x (0x120 at 823DFAC8).
+    // Measured inert: markerRect declared inside the loop; `if (mClip) {...}`
+    // instead of the goto.  Worse: Rect ctor for trackRect (96.2).
+    // decomp-synth hill_climb (2 rounds x 58 variants) found nothing.
     // Draw integer beat markers
     float firstBeat = (float)std::ceil(startBeat);
     float lastBeat = (float)std::floor(endBeat);
