@@ -32,6 +32,37 @@ void RndShadowMap::Init() {
 
 void RndShadowMap::EndShadow() { TheRnd.SetShadowMap(nullptr, nullptr, nullptr); }
 
+// This is Multiply(v, m, out) from math/Mtx.h written out, and it has to be,
+// because PrepShadow calls it with x and z of v literal 0.0f.  Fed to the
+// shared overload, /fp:fast lets MSVC reassociate
+// `m.x.c*0 + m.y.c*(-dist) + m.z.c*0` into `(m.x.c + m.z.c)*0 + ...` and emit a
+// leading `fadds` of two matrix elements; the target emits the two zero terms
+// straight as `fmuls fN,fN,f31`.  Accumulator statements pin the association --
+// MSVC does not reassociate across a `+=` -- so each row can seed from the
+// element the target seeds from: m.z.x for x, m.x.c for y and z.  Do NOT fold
+// these back into three expressions; measured 94.66 that way (the factoring
+// returns) and 99.985 with uniform right-association.  The full accounting is
+// in the comment above the overload in Mtx.h.
+//
+// It is an inline function rather than a block inside PrepShadow because of
+// the y terms' operand order (`fmadds f0, f30(-dist), f9(m.y.x), f12`).  c2
+// orders a commutative multiply's operands by key, and two named variables go
+// higher symbol id first (C2RS-BRIDGE 8.7).  Written inline in PrepShadow, v.y
+// was sid 258 against the matrix elements' 280/421/431, so the element came
+// first; as an inlined parameter v.y is minted later (sid 428) and leads.
+static inline void MultiplyAccum(const Vector3 &v, const Hmx::Matrix3 &m, Vector3 &out) {
+    float ox = m.z.x * v.z;
+    ox += m.y.x * v.y;
+    ox += m.x.x * v.x;
+    float oy = m.x.y * v.x;
+    oy += m.y.y * v.y;
+    oy += m.z.y * v.z;
+    float oz = m.x.z * v.x;
+    oz += m.y.z * v.y;
+    oz += m.z.z * v.z;
+    out.Set(ox, oy, oz);
+}
+
 bool RndShadowMap::PrepShadow(RndDrawable *draw, RndEnviron *env) {
     if (GetGfxMode() != kNewGfx || sLightCam == NULL || sShadowTex == NULL)
         return false;
@@ -85,31 +116,7 @@ found:
     float nearPlane = dist - sphere.radius;
 
     Vector3 offset;
-    // This is Multiply(Vector3(0.0f, -dist, 0.0f), lightXfm.m, offset) written
-    // out, and it has to be, because x and z of that vector are literal 0.0f.
-    // Fed to the shared overload in Mtx.h, /fp:fast lets MSVC reassociate
-    // `m.x.c*0 + m.y.c*(-dist) + m.z.c*0` into `(m.x.c + m.z.c)*0 + ...` and
-    // emit a leading `fadds` of two matrix elements; the target emits the two
-    // zero terms straight as `fmuls fN,fN,f31`.  Accumulator statements pin the
-    // association -- MSVC does not reassociate across a `+=` -- so each row can
-    // seed from the element the target seeds from: m.z.x for x, m.x.c for y and
-    // z.  Do NOT fold these back into three expressions; measured 94.66 that
-    // way (the factoring returns) and 99.985 with uniform right-association.
-    // The full accounting is in the comment above the overload in Mtx.h.
-    {
-        const Vector3 v(0.0f, -dist, 0.0f);
-        const Hmx::Matrix3 &m = lightXfm.m;
-        float ox = m.z.x * v.z;
-        ox += m.y.x * v.y;
-        ox += m.x.x * v.x;
-        float oy = m.x.y * v.x;
-        oy += m.y.y * v.y;
-        oy += m.z.y * v.z;
-        float oz = m.x.z * v.x;
-        oz += m.y.z * v.y;
-        oz += m.z.z * v.z;
-        offset.Set(ox, oy, oz);
-    }
+    MultiplyAccum(Vector3(0.0f, -dist, 0.0f), lightXfm.m, offset);
     Add(lightXfm.v, offset, lightXfm.v);
 
     sLightCam->SetWorldXfm(lightXfm);
