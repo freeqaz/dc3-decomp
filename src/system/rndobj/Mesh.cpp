@@ -1427,9 +1427,12 @@ void RndMesh::OnSync(int flags) {
     if (PatchOkay(mVerts.size(), mFaces.size())) {
         mPatches.push_back(mFaces.size());
     } else if (flags & 0x100U) {
+        // Declaration order sets the sids: i4 first puts its zero copy ahead of
+        // i12's at the loop head, and u13 after i12 keeps (i12 - u13)'s operand
+        // order (C2RS-BRIDGE 8.7, variable vs variable = higher sid first).
+        int i4 = 0;
         u16 i12 = 0;
         u16 u13 = 0xFFFF;
-        int i4 = 0;
         FOREACH (it, mFaces) {
             i12 = Max(Max<u16>(i12, it->v1, it->v2), it->v3);
             u13 = Min(Min<u16>(u13, it->v1, it->v2), it->v3);
@@ -1456,8 +1459,8 @@ void RndMesh::OnSync(int flags) {
                 int uvar16 = !gPatchVerts.HasVert(faceIt->v1)
                     + !gPatchVerts.HasVert(faceIt->v2) + !gPatchVerts.HasVert(faceIt->v3);
                 if (uvar16 < u5) {
-                    u5 = uvar16;
                     bestFaceIt = faceIt;
+                    u5 = uvar16;
                     Vector3 v4c;
                     FaceCenter(this, &*faceIt, v4c);
                     f68 = DistanceSquared(v4c, v40);
@@ -1465,8 +1468,8 @@ void RndMesh::OnSync(int flags) {
                     Vector3 v58;
                     FaceCenter(this, &*faceIt, v58);
                     if (MinEq(f68, DistanceSquared(v58, v40))) {
-                        u5 = uvar16;
                         bestFaceIt = faceIt;
+                        u5 = uvar16;
                     }
                 }
             }
