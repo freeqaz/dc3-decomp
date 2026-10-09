@@ -237,6 +237,13 @@ void FlowManager::Poll() {
     float peakFrameTime = mPeakFrameTime;
     if (mFrameCounterModulo >= 60) {
         mAvgFrameTime = 0;
+        // Open (w25-gy): the image emits `fadds f0, f0(sample), f13(avg)`; we emit avg
+        // first. c2rs §8.7 hypothesis: the avg operand is a memory leaf whose base is
+        // the `this` temp V1122 (sid mod 4 = 2, key 0x18008), which outranks the sample
+        // load temp (key 0x16bc0). The image order needs that base at sid mod 4 = 0 or 1.
+        // 24 in-function spellings (locals, cursors, ctor forms, statement order before
+        // the first `this` use) left V1122 unchanged; the open question is which
+        // counter mints it before the body is lowered.
         for (int i = 0; i < 60; i++) {
             mAvgFrameTime += mFrameTimeSamples[i];
         }
