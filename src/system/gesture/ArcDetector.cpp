@@ -317,7 +317,10 @@ bool ArcDetector::IsPathAcceptable() const {
         return true;
     }
     if (!IsLockedIn()) {
-        Vector3 front = jointPath.front();
+        // Copying through a named reference keeps &front-node+8 a colour
+        // candidate (r11) rather than a regasg temp, as in the image's GPRs.
+        const Vector3 &frontRef = jointPath.front();
+        Vector3 front = frontRef;
         float sign = (float)(mSide != 0 ? 1 : -1);
         // All three components are formed up front (the image computes
         // front.z - back.z before the first early-out), i.e. one Subtract.

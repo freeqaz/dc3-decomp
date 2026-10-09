@@ -810,53 +810,57 @@ Vector3 CharEyes::GenerateDartOffset() {
 // other way round leaves a base+displacement row at idx 24/59), begin() wants the
 // member first and the reference at the offset computation. 91.40 -> 100.00.
 bool CharEyes::Replace(ObjRef *ref, Hmx::Object *obj) {
-    auto& _ref0 = mEyes;
-    EyeDesc *desc = _ref0.end();
-    EyeDesc *eyeBegin = mEyes.begin();
-    int eyeCount = (int)((char *)desc - (char *)eyeBegin) / (int)sizeof(EyeDesc);
+    // begin() is re-read at each use rather than held in a named local: the
+    // CSE temp that results is minted after the rounded offset, so the
+    // commutative add lists begin first (add rD, begin, rounded) as the image
+    // does.  erase() is called on the member, not the alias: its `this` is
+    // then one long-lived CSE temp whose priority beats `desc`, so &mEyes takes
+    // r31 and desc r30, as in the image.
+    auto& eyes = mEyes;
+    EyeDesc *desc = eyes.end();
+    int eyeCount = (int)((char *)desc - (char *)eyes.begin()) / (int)sizeof(EyeDesc);
     if (eyeCount != 0) {
-        int eyeOff = (int)((char *)ref - (char *)(EyeDesc *)_ref0.begin());
+        int eyeOff = (int)((char *)ref - (char *)(EyeDesc *)mEyes.begin());
         if (eyeOff >= 0) {
             int eyeTotal = eyeCount * (int)sizeof(EyeDesc);
             if ((unsigned)eyeOff < (unsigned)eyeTotal) {
                 int eyeRounded = (eyeOff / (int)sizeof(EyeDesc)) * (int)sizeof(EyeDesc);
                 if (eyeRounded == eyeOff)
-                    desc = (EyeDesc *)((char *)eyeBegin + eyeRounded);
+                    desc = (EyeDesc *)((char *)eyes.begin() + eyeRounded);
             }
         }
         if (desc != mEyes.end()) {
             if (!desc->mEye.SetObj(obj))
 #ifdef _LIBCPP_VERSION
                 // libc++ (web) keeps __wrap_iter's pointer constructor private; same element.
-                _ref0.erase(_ref0.begin() + (desc - (EyeDesc *)_ref0.begin()));
+                eyes.erase(eyes.begin() + (desc - (EyeDesc *)eyes.begin()));
 #else
-                _ref0.erase(ObjVector<EyeDesc>::iterator(desc));
+                mEyes.erase(ObjVector<EyeDesc>::iterator(desc));
 #endif
             return true;
         }
     }
-    auto& _ref1 = mInterests;
-    CharInterestState *state = _ref1.end();
-    CharInterestState *stateBegin = mInterests.begin();
+    auto& interests = mInterests;
+    CharInterestState *state = interests.end();
     int stateCount =
-        (int)((char *)state - (char *)stateBegin) / (int)sizeof(CharInterestState);
+        (int)((char *)state - (char *)mInterests.begin()) / (int)sizeof(CharInterestState);
     if (stateCount != 0) {
-        int stateOff = (int)((char *)ref - (char *)(CharInterestState *)_ref1.begin());
+        int stateOff = (int)((char *)ref - (char *)(CharInterestState *)interests.begin());
         if (stateOff >= 0) {
             int stateTotal = stateCount * (int)sizeof(CharInterestState);
             if ((unsigned)stateOff < (unsigned)stateTotal) {
                 int stateRounded = (stateOff / (int)sizeof(CharInterestState))
                     * (int)sizeof(CharInterestState);
                 if (stateRounded == stateOff)
-                    state = (CharInterestState *)((char *)stateBegin + stateRounded);
+                    state = (CharInterestState *)((char *)mInterests.begin() + stateRounded);
             }
         }
         if (state != mInterests.end()) {
             if (!state->mInterest.SetObj(obj))
 #ifdef _LIBCPP_VERSION
-                _ref1.erase(_ref1.begin() + (state - (CharInterestState *)_ref1.begin()));
+                interests.erase(interests.begin() + (state - (CharInterestState *)interests.begin()));
 #else
-                _ref1.erase(ObjVector<CharInterestState>::iterator(state));
+                mInterests.erase(ObjVector<CharInterestState>::iterator(state));
 #endif
             return true;
         }

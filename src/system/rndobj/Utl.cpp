@@ -3253,8 +3253,10 @@ void BuildSphereStratified(unsigned int numSamples, std::vector<Vector3> &dirs) 
     dirs.erase(dirsBegin, dirs.end());
     dirs.reserve(N * N);
 
-    float zStep = (1.0f / (float)N) * 2.0f;
+    // z is defined before zStep: candidate ids follow first definition, and
+    // the commutative `z += zStep` lists the higher id first (fadds z, zStep, z).
     float z = -1.0f;
+    float zStep = (1.0f / (float)N) * 2.0f;
 
     float phi = 0.0f;
     float phiStep = (1.0f / (float)N) * 6.2831855f;
