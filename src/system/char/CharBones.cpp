@@ -1075,6 +1075,19 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
 // commutative op): six fmuls/fmadds/fnmsubs from 0x823C6F08 and the two
 // Vector3 += fadds in the vector arms; swapping the source operands of the
 // six affected products is byte-identical (MSVC canonicalises them).
+// w25-gw (c2rs tap, C2RS-BRIDGE 8.7): the six products are ordered by c2's
+// commutative key, and all eight uncompressed loads are TEMP leaves, key
+// 0x10000|(sid<<6 & 0xffff), which wraps every 1024 sids.  Ours mints them
+// aw 937 < bw/bx 939/942 < ax/ay 944/950 < by 952 < az 958 < bz 960.  The
+// image's six orders are exactly that sequence with az and bz past the wrap
+// (by > ax,ay > bx,bw > aw > bz > az), i.e. the image mints 66..71 more temp
+// sids before this loop.  Confirmed: a dead inlined RotateByMultiply in the
+// ByteQuat arm (+64 sids, code unchanged) wraps bz and drops 16 -> 12 diff
+// lines.  Open question: which source construct is worth ~70 temp sids
+// upstream without changing code.  Inert (sids or rows): block order (24),
+// Multiply() from Mtx.h, out.x=... instead of Set, named a/b locals (the
+// schedule changes).  The two Vector3 += fadds are the same key (temp vs
+// named-local leaf) on other sids.
 static void RotateByMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out) {
     float rw = a.w * b.w - a.x * b.x;
     rw -= a.y * b.y;
