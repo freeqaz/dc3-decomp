@@ -190,12 +190,57 @@ namespace Hmx {
      *
      * MSVC swaps the leading pair, so the y term seeds the accumulator to get
      * the z term emitted first. Row z of the transform is the exception -- it
-     * comes out z-first from this same spelling, so it uses Dot3ZSeed below. */
+     * comes out z-first from this same spelling, so it uses Dot3ZSeed below.
+     *
+     * The variants below all compute exactly ((y*y + z*z) + x*x) (or
+     * ((z*z + y*y) + x*x) for the ZSeed pair) -- same operations, same
+     * association, so the native result is bit-identical whichever one a
+     * call site uses. They differ only in how many named locals they declare.
+     * c2 numbers the symbols of each inlined body in order, so every extra
+     * local pushes up the symbol ids of everything the *later* calls inline,
+     * including the column reference. The x-term multiply is commutative and
+     * c2 orders its operands by key (§8.7 in C2RS-BRIDGE.md: a named
+     * variable's key is 0x10000|sid<<5, higher key first), so the column ids
+     * decide whether the image's `fmuls col, row` or `fmuls row, col` comes
+     * out. The per-call choice below reproduces the image's order for all 16
+     * x terms; XTerm additionally names the x product so its multiply is
+     * keyed as a separate expression. */
     inline float Dot3(const Vector3 &row, const Vector3 &col) {
         float d = col.y * row.y;
         d += col.z * row.z;
         d += col.x * row.x;
         return d;
+    }
+
+    inline float Dot3XTerm(const Vector3 &row, const Vector3 &col) {
+        float d = col.y * row.y;
+        d += col.z * row.z;
+        float xTerm = col.x * row.x;
+        d += xTerm;
+        return d;
+    }
+
+    /** Dot3XTerm plus two (resp. three) pass-through copies of the result:
+     * symbol-count padding only, see above. */
+    inline float Dot3XTermPad2(const Vector3 &row, const Vector3 &col) {
+        float d = col.y * row.y;
+        d += col.z * row.z;
+        float xTerm = col.x * row.x;
+        d += xTerm;
+        float sum = d;
+        float result = sum;
+        return result;
+    }
+
+    inline float Dot3XTermPad3(const Vector3 &row, const Vector3 &col) {
+        float d = col.y * row.y;
+        d += col.z * row.z;
+        float xTerm = col.x * row.x;
+        d += xTerm;
+        float sum = d;
+        float total = sum;
+        float result = total;
+        return result;
     }
 
     /** Dot3 with the seed the other way round; see the note above. */
@@ -206,25 +251,35 @@ namespace Hmx {
         return d;
     }
 
+    inline float Dot3ZSeedXTerm(const Vector3 &row, const Vector3 &col) {
+        float d = col.z * row.z;
+        d += col.y * row.y;
+        float xTerm = col.x * row.x;
+        d += xTerm;
+        return d;
+    }
+
     Matrix4 operator*(const Transform &t, const Matrix4 &b) {
         Matrix4 out;
+        Vector4 &outX = out.x;
+        const Vector3 &rowX = t.m.x;
 
-        out.x.x = Dot3(t.m.x, b.Col3(0));
-        out.x.y = Dot3(t.m.x, b.Col3(1));
-        out.x.z = Dot3(t.m.x, b.Col3(2));
-        out.x.w = Dot3(t.m.x, b.Col3(3));
+        outX.x = Dot3XTerm(rowX, b.Col3(0));
+        outX.y = Dot3XTermPad2(rowX, b.Col3(1));
+        outX.z = Dot3XTermPad3(rowX, b.Col3(2));
+        outX.w = Dot3(rowX, b.Col3(3));
 
         out.y.x = Dot3(t.m.y, b.Col3(0));
-        out.y.y = Dot3(t.m.y, b.Col3(1));
-        out.y.z = Dot3(t.m.y, b.Col3(2));
-        out.y.w = Dot3(t.m.y, b.Col3(3));
+        out.y.y = Dot3XTermPad3(t.m.y, b.Col3(1));
+        out.y.z = Dot3XTerm(t.m.y, b.Col3(2));
+        out.y.w = Dot3XTerm(t.m.y, b.Col3(3));
 
-        out.z.x = Dot3ZSeed(t.m.z, b.Col3(0));
+        out.z.x = Dot3ZSeedXTerm(t.m.z, b.Col3(0));
         out.z.y = Dot3ZSeed(t.m.z, b.Col3(1));
         out.z.z = Dot3ZSeed(t.m.z, b.Col3(2));
-        out.z.w = Dot3ZSeed(t.m.z, b.Col3(3));
+        out.z.w = Dot3ZSeedXTerm(t.m.z, b.Col3(3));
 
-        out.w.x = Dot3(t.v, b.Col3(0)) + b.w.x;
+        out.w.x = Dot3XTerm(t.v, b.Col3(0)) + b.w.x;
         out.w.y = Dot3(t.v, b.Col3(1)) + b.w.y;
         out.w.z = Dot3(t.v, b.Col3(2)) + b.w.z;
         out.w.w = Dot3(t.v, b.Col3(3)) + b.w.w;
