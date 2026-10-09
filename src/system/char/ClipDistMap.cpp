@@ -491,7 +491,8 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                         facing += (1.0f - weight) * newDiff + weight * curDiff;
                         weight += 0.33333334f;
                     }
-                    facing = LimitAng(facing - curDistEntry.facing[3]);
+                    float lastDiff = facing - curDistEntry.facing[3];
+                    facing = LimitAng(lastDiff);
                     if (fabsf(facing) > maxFacing) {
                         mDists(i, j) = sLargeFloat;
                         continue;
@@ -501,6 +502,13 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                 if (floatVec.empty()) {
                     FindWeights(transes, floatVec, mWeightData);
                 }
+                // w25-ha: numWeights, meanSq and lastDiff are named on purpose.
+                // They emit no code; each shifts c2's lowering temp ids, and the
+                // three together put the final mDists(i, j) store's mWidth
+                // memory operand on a base temp at the residue whose cqlo3 key
+                // (0x10008) sorts below j (0x12380), giving the image's
+                // `mullw r11, r22, r11`, while the other two stores keep mWidth
+                // first (C2RS-BRIDGE 8.7, memory leaf vs variable).
                 float dist = 0;
                 // The bone count is materialised BEFORE the loop and only the
                 // division below reads it; the loop condition keeps calling
@@ -511,14 +519,16 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
                 // 0x50/0x54 temp pair and the r5/r6/r7 assignment.
                 unsigned int numBones = newDistEntry.bones.size();
                 for (int k = 0; k < newDistEntry.bones.size(); k++) {
-                    float curFloat = floatVec[k % floatVec.size()];
+                    unsigned int numWeights = floatVec.size();
+                    float curFloat = floatVec[k % numWeights];
                     const Vector3 &curBone = curDistEntry.bones[k];
                     float dz = newDistEntry.bones[k].z - curBone.z;
                     float dy = newDistEntry.bones[k].y - curBone.y;
                     float dx = newDistEntry.bones[k].x - curBone.x;
                     dist += (dx * dx + dy * dy + dz * dz) * curFloat;
                 }
-                float err = std::sqrt(dist / (float)numBones);
+                float meanSq = dist / (float)numBones;
+                float err = std::sqrt(meanSq);
                 MaxEq(mWorstErr, err);
                 mDists(i, j) = err;
             }

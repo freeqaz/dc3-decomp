@@ -323,6 +323,15 @@ void Locale::Init() {
                     // test re-reads Size() (lha 0x8 is CSE'd; the image spills it to
                     // 0x6c only inside the MILO_FAIL arm, which a named `size` local
                     // would not do).
+                    // w25-ha: n (r28) and k (r27) are exchanged against the image
+                    // (n r27, k r28).  c2 COLOR keys: n pri 6 tie 472, k pri 4
+                    // tie 473, so an equal priority would already pop k first.
+                    // Hypothesis: the image's n carries 2 less priority, i.e.
+                    // one fewer candidate referenced in a block where n is
+                    // referenced and k only live (node2 = n), or one more in a
+                    // k-only block (Node(k)).  Inert on the keys: for-increment
+                    // order, n++ in the body, Sort/loop bound spelled n, k
+                    // declared outside the for, a chunk reference, DataNode(n).
                     DataArray *chunkArr = curArr;
                     for (int k = curArr->Size() - 1; k >= 0; k--, n++) {
                         chunkArr = curArr->Node(k).LiteralArray(chunkArr);
@@ -371,13 +380,17 @@ void Locale::Init() {
         for (int i = 0; i < numChunks; i++) {
             Symbol curSym = chunks[i].node1.LiteralSym();
             if (curSym != prevSym) {
-                mUploadedFlags[chunkIdx] = 0;
+                // w25-ha: the named pointer gives the image's stbx base/index order.
+                bool *flags = mUploadedFlags;
+                flags[chunkIdx] = 0;
                 mSymTable[chunkIdx] = curSym;
                 mStrTable[chunkIdx] = mStringData->Add(chunks[i].node3.LiteralStr());
                 prevSym = curSym;
                 chunkIdx++;
             } else
-                TheDebug << MakeString("Locale symbol '%s' redefined\n", curSym.Str());
+                // w25-ha: prevSym, as in the image (stw r27 = prevSym; equal to curSym
+                // on this path, and it lifts `this` over the kDataSymbol constant).
+                TheDebug << MakeString("Locale symbol '%s' redefined\n", prevSym.Str());
         }
         delete[] chunks;
     }
