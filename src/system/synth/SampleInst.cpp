@@ -98,7 +98,11 @@ void SampleInst::SynthPoll() {
     if (IsPlaying() && mEventReceiver) {
         int sampleRate = mSample->GetSampleRate();
         double progress = (double)GetProgress();
-        double lengthMs = (double)mSample->LengthMs();
+        // float, widened inside the product: the widening is then a
+        // subexpression operand, which c2's commutative sort (C2RS-BRIDGE 8.7)
+        // keeps ahead of (double)sampleRate -- the image's `fmul f13, f1, f0`.
+        // A `double` local is a plain variable leaf and sorted behind it.
+        float lengthMs = mSample->LengthMs();
         double currentSample = lengthMs * (double)sampleRate * progress * 0.001;
 
         static Message msg("on_marker_event", 0L);

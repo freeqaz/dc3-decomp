@@ -70,11 +70,13 @@ bool NgFur::Shell(int layerIdx, RndMesh *mesh, RndMat *mat) const {
     float shellExponent = -(mShellOut * 0.7f - oneVal);
     float shellThickness;
     if (layerIdx != 0) {
-        // Residual row [101]: image `fmuls f13, f13, f0` (thickness first), we
-        // emit `fmuls f13, f0, f13`.  REFUTED: writing it as
-        // `(float)pow(...) * mThickness` is byte-inert -- a plain two-term
-        // same-register commutative swap, the known backend floor.
-        shellThickness = mThickness * (float)pow((double)fShell, (double)shellExponent);
+        // Named, not inline: c2 orders commutative operands by key
+        // (C2RS-BRIDGE 8.7), and an inline call result outranks every leaf,
+        // so `mThickness * (float)pow(...)` emitted the pow result first.
+        // As a named local it is a variable leaf below the mThickness memory
+        // leaf, giving the image's `fmuls f13, f13, f0`.
+        float thicknessScale = (float)pow((double)fShell, (double)shellExponent);
+        shellThickness = mThickness * thicknessScale;
     } else {
         shellThickness = mThickness / (float)mLayers;
     }

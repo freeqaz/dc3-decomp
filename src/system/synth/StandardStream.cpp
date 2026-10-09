@@ -832,7 +832,11 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
         short convBuf[0x800];
         int chIdx = 0;
         while (chIdx < numChannels) {
-            void *data;
+            // One WriteData per arm: MSVC cross-jumps the two calls back into
+            // the image's single call site AFTER colouring, but the duplicate
+            // drops the loop down-counter's COLOR priority (6 -> -6), so it
+            // pops after samplesToConsume and the memcpy size and takes r27
+            // as in the image (c2rs tap, w25-gq).
             if (mFloatSamples) {
                 unsigned int j = 0;
                 while (j < (unsigned int)samplesToConsume) {
@@ -841,11 +845,10 @@ int StandardStream::ConsumeData(void **v, int numSamples, int startSamp) {
                     convBuf[j] = (short)f;
                     j++;
                 }
-                data = convBuf;
+                mChannels[chIdx]->WriteData(convBuf, samplesToConsume << 1);
             } else {
-                data = pcm[chIdx];
+                mChannels[chIdx]->WriteData(pcm[chIdx], samplesToConsume << 1);
             }
-            mChannels[chIdx]->WriteData(data, samplesToConsume << 1);
             chIdx++;
         }
     }
