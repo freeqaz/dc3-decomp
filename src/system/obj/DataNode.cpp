@@ -542,8 +542,6 @@ Hmx::Object *DataNode::GetObj(const DataArray *source) const {
         if (*str != '\0') {
             ret = gDataDir->FindObject(str, true, true);
             if (!ret) {
-                // Native: MILO_FAIL_DTA is a warning (os/Debug.h), so this
-                // already does not stop -- no separate native body needed.
                 const char *msg =
                     PathName(gDataDir) != nullptr ? PathName(gDataDir) : "**no file**";
                 MILO_FAIL_DTA(kNotObjectMsg, str, msg);
