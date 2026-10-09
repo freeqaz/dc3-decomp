@@ -884,41 +884,41 @@ void FreestyleMoveRecorder::CalcFrameScore(
     // Accumulate score across windows if liveSkel is valid
     float totalScore = 0.0f;
     if (liveSkel != nullptr) {
-        int windowCount = (int)(windows.end() - windows.begin());
-        if (windowCount != 0) {
-            const TemporalWindow *winPtr = windows.begin();
-            int i = 0;
-            do {
-                int frameIdx = winPtr->frameIdx;
-                float twWeight = winPtr->weight;
-                // Best frame always gets weight 1.0
-                if (frameIdx == bestIdx) {
-                    twWeight = 1.0f;
-                }
-                // Displacement score
-                float outTotalWeight;
-                float dispScore = CompareSkeletonJointDisplacement(frames, frameIdx, liveSkel, outTotalWeight);
-                float dispContrib = outTotalWeight * (dispScore * twWeight);
-                // Position score
-                float poseWeight = TheOSCMessenger.GetFloat(String("/poserrorweight"), 3.5f);
-                float posScore = CompareSkeletonPositions(
-                    (const BaseSkeleton *)&frames[frameIdx].skeleton, liveSkel, poseWeight
-                );
-                float posContrib = posScore * twWeight;
-                // Select contribution: max(dispContrib, posContrib)
-                float maxContrib = (float)__fsel(dispContrib - posContrib, dispContrib, posContrib);
-                if (maxContrib == 0.0f) {
-                    // nothing
-                } else if (maxContrib == dispContrib) {
-                    // dispContrib wins — normalize by outTotalWeight
-                    totalScore += dispContrib / outTotalWeight;
-                } else if (maxContrib == posContrib) {
-                    // posContrib wins
-                    totalScore += posContrib;
-                }
-                i++;
-                winPtr++;
-            } while ((unsigned int)i < (unsigned int)windowCount);
+        // w25-gk: a plain indexed for loop over windows.size(). The earlier
+        // hand-rotated do-while (count local, explicit guard, cursor) compiled to
+        // the same instructions but gave the count a COLOR priority 6 lower, which
+        // renumbered r21-r25. Naming CompareSkeletonJointDisplacement(...) *
+        // twWeight (one product, same operands) makes it a variable leaf in
+        // c2's commutative sort, so outTotalWeight comes first in the fmuls.
+        for (unsigned int i = 0; i < windows.size(); i++) {
+            const TemporalWindow &tw = windows[i];
+            int frameIdx = tw.frameIdx;
+            float twWeight = tw.weight;
+            // Best frame always gets weight 1.0
+            if (frameIdx == bestIdx) {
+                twWeight = 1.0f;
+            }
+            // Displacement score
+            float outTotalWeight;
+            float weightedDisp = CompareSkeletonJointDisplacement(frames, frameIdx, liveSkel, outTotalWeight) * twWeight;
+            float dispContrib = outTotalWeight * weightedDisp;
+            // Position score
+            float poseWeight = TheOSCMessenger.GetFloat(String("/poserrorweight"), 3.5f);
+            float posScore = CompareSkeletonPositions(
+                (const BaseSkeleton *)&frames[frameIdx].skeleton, liveSkel, poseWeight
+            );
+            float posContrib = posScore * twWeight;
+            // Select contribution: max(dispContrib, posContrib)
+            float maxContrib = (float)__fsel(dispContrib - posContrib, dispContrib, posContrib);
+            if (maxContrib == 0.0f) {
+                // nothing
+            } else if (maxContrib == dispContrib) {
+                // dispContrib wins — normalize by outTotalWeight
+                totalScore += dispContrib / outTotalWeight;
+            } else if (maxContrib == posContrib) {
+                // posContrib wins
+                totalScore += posContrib;
+            }
         }
     }
     // Clamp totalScore to [0, 1]
