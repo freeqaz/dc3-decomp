@@ -76,6 +76,18 @@ DataNode OptionsPanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
     return DataNode(0);
 }
 
+// Open (register order only; every value, store, branch and call matches the
+// image): two COLOR pop orders differ (c2 candidate tap).
+// - The zero constant (id 1, sym 0/k0d, pri -144) pops after `this` (id 5,
+//   pri -139), so they take r20/r21 the other way round. The image needs the
+//   zero first, i.e. +6 for it relative to `this`.
+// - The hoisted static-Symbol addresses: token_redemption_too_late (id 65,
+//   pri -5 tie 131) pops before leaderboard_no_net (id 63, pri -7 tie 146);
+//   the image pops no_net first (r30, then too_late r29, too_early r27), which
+//   needs no_net +2 so the tie decides.
+// ~22 respellings (switch case order, default-arm forms, success/error
+// placement) were inert or changed the emitted code (cross-jumped
+// `success = false` tails, the guard order).
 DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
     if (msg.Job() == mRedeemTokenJob) {
         MILO_LOG("Token: server response: %s\n", mRedeemTokenJob->GetResponseString());
