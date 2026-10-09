@@ -184,7 +184,12 @@ DataNode BeatClock::OnSyncState(DataArray *a) {
             (float)((mSongPos.GetMeasure() - mySongPos.GetMeasure()) * mBeatsPerMeasure);
         float bdiff = mSongPos.GetBeat() - mySongPos.GetBeat();
         float tdiff = (float)(mSongPos.GetTick() - mySongPos.GetTick()) * 0.0020833334f;
-        float f5 = (mdiff + (bdiff + tdiff));
+        // No outer parentheses: the extra paren node mints one more temp, which
+        // moves the CSE base of mSongPos's total beat from sid 651 to 652
+        // (0 mod 4). That memory operand's key then drops below f5's, and the
+        // `fadds` below comes out f5-first instead of the image's
+        // totalBeat-first (C2RS-BRIDGE 8.7, memory leaf key).
+        float f5 = mdiff + (bdiff + tdiff);
         if (!NearlyZero(f5)) {
             float newTotalBeat = mSongPos.AccessTotalBeat() + f5;
             mSongPos.AccessTotalBeat() = newTotalBeat;
