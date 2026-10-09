@@ -59,10 +59,9 @@ void DelayEffect::Process(float *buf, int numSamples, int numChans) {
             float input = buf[i];
             float delayed = mBuffer[readPos] * mDecay;
             buf[i] = delayed;
-            int nextWritePos = writePos + 1;
-            if (nextWritePos >= kMaxDelaySamps) nextWritePos = 0;
             mBuffer[writePos] = delayed + input;
-            writePos = nextWritePos;
+            writePos++;
+            if (writePos >= kMaxDelaySamps) writePos = 0;
         }
     } else {
         float dryAmount = 1.0f - mWetAmount;

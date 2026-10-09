@@ -383,82 +383,75 @@ void HiResScreen::Merge(
 ) {
     int blendThreshX = dstX - padX;
     int blendThreshY = dstY - padY;
-    if (srcH >= dstY) {
-        return;
-    }
-    int xBlend = srcH - blendThreshY;
-    int yIter = srcY;
-    int xConst = srcH - srcY;
-    do {
+    // RB3's loop shape (counters i/j with bmY/bmX derived from them), not the
+    // hand-strength-reduced do/while it used to be. Same arithmetic; the
+    // explicit xBlend/xConst/yConst locals and rotated loops were extra
+    // colour candidates that shifted c2's priorities (bm/srcX vs the bmY
+    // blend induction temp, dstX vs srcH-srcY) and the order the loop
+    // optimiser places the induction inits (sub before mr outer, mr before
+    // sub inner).
+    for (int i = 0, bmY = srcH; bmY < dstY; i++, bmY++) {
+        int yIter = srcY + i;
         if ((unsigned int)yIter >= mAccumHeight) break;
         if (yIter >= 0) {
             mCache->LoadCache(yIter);
-            if (srcW < dstX) {
-                int xIter = srcX;
-                int yBlend = srcW - blendThreshX;
-                int yConst = srcW - srcX;
-                do {
-                    if ((unsigned int)xIter >= mAccumWidth) break;
-                    if (xIter >= 0) {
-                        int bmY = xConst + yIter;
-                        int bmX = yConst + xIter;
-                        unsigned char r, g, b, a;
-                        bm.PixelColor(bmX, bmY, r, g, b, a);
-                        unsigned char cr, cg, cb, ca;
-                        mCache->GetPixelColor(xIter, yIter, cr, cg, cb, ca);
-                        // `blend` is INITIALISED here and the guarded block has
-                        // no else: the image seeds it with `fmr f12, f31` (f31 =
-                        // 0.0f) before the two ramp tests and simply falls
-                        // through when neither fires.  Declaring it late and
-                        // assigning 0.0f in an else arm cost three rows (a
-                        // branch inversion plus `fmr f0, f31` and a `b` for the
-                        // else) and pushed the whole blend chain from f12 into
-                        // f0/f11.  Declaration order is blend, blendY, blendX --
-                        // the same as RB3's HiResScreen::Merge.
-                        float blend = 0.0f;
-                        float blendY = 0.0f;
-                        float blendX = 0.0f;
-                        if (bmX > blendThreshX) {
-                            blendX = (float)yBlend / (float)padX;
-                        }
-                        if (bmY > blendThreshY) {
-                            blendY = (float)xBlend / (float)padY;
-                        }
-                        if (blendX > 0.0f || blendY > 0.0f) {
-                            // The image rounds blendX*blendX and fuses blendY*blendY
-                            // (fmuls f13,f13,f13 ; fmadds f0,f0,f0,f13); the flat sum
-                            // is canonicalised the other way round under /fp:fast.
-                            float blendY2 = blendY * blendY;
-                            blend = sqrtf(blendY2 + blendX * blendX);
-                            blend = blend - 0.5f;
-                            blend = blend + blend;
-                            blend = Max(blend, 0.0f);
-                            blend = Min(blend, 1.0f);
-                        }
-                        float invBlend = (1.0f - blend) * 255.0f;
-                        a = (unsigned char)invBlend;
-                        if (ca != 0) {
-                            float t = ca * (1.0f / 255.0f);
-                            int dr = cr - r;
-                            int dg = cg - g;
-                            int db = cb - b;
-                            r += (unsigned char)(dr * t + 0.5f);
-                            g += (unsigned char)(dg * t + 0.5f);
-                            b += (unsigned char)(db * t + 0.5f);
-                            if (a < ca) {
-                                a = ca;
-                            }
-                        }
-                        mCache->SetPixelColor(xIter, yIter, r, g, b, a);
+            for (int j = 0; srcW + j < dstX; j++) {
+                int bmX = srcW + j;
+                int xIter = srcX + j;
+                if ((unsigned int)xIter >= mAccumWidth) break;
+                if (xIter >= 0) {
+                    unsigned char r, g, b, a;
+                    bm.PixelColor(bmX, bmY, r, g, b, a);
+                    unsigned char cr, cg, cb, ca;
+                    mCache->GetPixelColor(xIter, yIter, cr, cg, cb, ca);
+                    // `blend` is INITIALISED here and the guarded block has
+                    // no else: the image seeds it with `fmr f12, f31` (f31 =
+                    // 0.0f) before the two ramp tests and simply falls
+                    // through when neither fires.  Declaring it late and
+                    // assigning 0.0f in an else arm cost three rows (a
+                    // branch inversion plus `fmr f0, f31` and a `b` for the
+                    // else) and pushed the whole blend chain from f12 into
+                    // f0/f11.  Declared blendX, blendY, blend: the image seeds
+                    // them in that order (fmr f13 / f0 / f12).
+                    float blendX = 0.0f;
+                    float blendY = 0.0f;
+                    float blend = 0.0f;
+                    if (bmX > blendThreshX) {
+                        blendX = (float)(bmX - blendThreshX) / (float)padX;
                     }
-                    xIter++;
-                    yBlend++;
-                } while (yConst + xIter < dstX);
+                    if (bmY > blendThreshY) {
+                        blendY = (float)(bmY - blendThreshY) / (float)padY;
+                    }
+                    if (blendX > 0.0f || blendY > 0.0f) {
+                        // The image rounds blendX*blendX and fuses blendY*blendY
+                        // (fmuls f13,f13,f13 ; fmadds f0,f0,f0,f13); the flat sum
+                        // is canonicalised the other way round under /fp:fast.
+                        float blendY2 = blendY * blendY;
+                        blend = sqrtf(blendY2 + blendX * blendX);
+                        blend = blend - 0.5f;
+                        blend = blend + blend;
+                        blend = Max(blend, 0.0f);
+                        blend = Min(blend, 1.0f);
+                    }
+                    float invBlend = (1.0f - blend) * 255.0f;
+                    a = (unsigned char)invBlend;
+                    if (ca != 0) {
+                        float t = ca * (1.0f / 255.0f);
+                        int dr = cr - r;
+                        int dg = cg - g;
+                        int db = cb - b;
+                        r += (unsigned char)(dr * t + 0.5f);
+                        g += (unsigned char)(dg * t + 0.5f);
+                        b += (unsigned char)(db * t + 0.5f);
+                        if (a < ca) {
+                            a = ca;
+                        }
+                    }
+                    mCache->SetPixelColor(xIter, yIter, r, g, b, a);
+                }
             }
         }
-        yIter++;
-        xBlend++;
-    } while (xConst + yIter < dstY);
+    }
 }
 
 void HiResScreen::DownSample(RndBitmap &outBm) {
