@@ -620,6 +620,12 @@ DataNode StorePanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
 // slot 0x60 and songName its own 0x68 (OfferType temp 0x6c); we put cur_type
 // on 0x64 and songName on 0x60 (temp 0x68). Folding songName into the
 // MakeString call as a temp is worse (99.7).
+// w24-slot (99.968, unchanged): image pools songOffer with cur_type (0x60) and
+// gives pushName / songName their own words (0x64 / 0x68); ours pools
+// songOffer with songName and pushName with cur_type.  The greedy
+// most-recent-slot reuse of the slot rule cannot produce the image's pairing
+// from these scopes unless cur_type sorts ahead of pushName, i.e. carries
+// more IL references than its listing shows.  No source change tried.
 void StorePanel::ValidateOffers(std::vector<StoreOffer *> &offers) {
     std::vector<Symbol> song_names;
     std::vector<StoreOffer *> song_offers;

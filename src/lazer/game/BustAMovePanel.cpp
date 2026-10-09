@@ -259,6 +259,11 @@ void BustAMovePanel::ResetScores() {
 // lever that closed HamSongMgr::InitializePlaylists) and the inverted
 // `!= && !=` test with the gNullStr arm first -- both 99.9, frame 0x80,
 // 6 rows (the two Symbol temps still share 0x54).
+// w24-slot (99.93, unchanged): by the slot rule, the image's three distinct
+// word slots mean moveName's scope overlaps the else-arm Symbol(gNullStr)
+// temp's.  With block-scoped moveName and the temp in the else arm, the two
+// are disjoint and MSVC reuses the slot (our frame 0x80).  No spelling with
+// overlapping scopes that also keeps the image's code is known.
 void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
     int flashCardIdx = index;
     Symbol s(gNullStr);

@@ -512,6 +512,11 @@ bool VorbisReader::CheckHmxHeader() {
                 // w16-e (99.987): `s64 idx` at function scope is inert;
                 // a function-scope `magic` for the first read plus this idx
                 // for the other two is worse (99.92, frame changes).
+                // w24-slot: the image's layout puts read 1 in the slot pooled with the
+                // assert-line temps, and reads 2/3 in the slot pooled with the
+                // NOTIFY_ONCE temp.  That is two 8-byte homes whose pools are chosen by
+                // liveness (compiler temps share by live range, not scope).  Not tried
+                // further.
                 s64 idx;
                 bs >> idx;
                 mMagicA = idx;
