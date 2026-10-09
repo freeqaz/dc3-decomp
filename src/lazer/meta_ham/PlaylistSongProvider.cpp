@@ -63,14 +63,22 @@ int PlaylistSongProvider::NumData() const {
 // 0x54 as the image does (the image's block order -- valid path first,
 // gNullStr ctor last -- is unchanged).  Same behaviour: every operand of the
 // && chain is an int/pointer/bool, so the negation is exact.  The 14 rows
-// left are the r29/r30/r31 rotation (image ret=r31 this=r30 i=r29), which
-// the canonical ruler forgives; each register carries the same value on both
-// sides row by row.  Standalone cl.exe probes of the register rotation
-// (`Symbol(gNullStr)`, inlining songID, `const Symbol &` binding, De Morgan
-// form of the test) were all inert.
+// left were the r29/r30/r31 rotation (image ret=r31 this=r30 i=r29).
+// w25-gc: three early returns instead of one. Each `return gNullStr` adds
+// references to the hidden sret pointer (colour priority 5 -> 9 -> 13), so it
+// is popped before `this` (11) and `i` (8): sret r31, this r30, i r29 as the
+// image. The three gNullStr tails cross-jump back into one block after
+// colouring, so the block order is unchanged. Four returns (splitting `i >= 0`
+// from `i < NumData()` as well) reorder the blocks.
 Symbol PlaylistSongProvider::DataSymbol(int i) const {
     MILO_ASSERT(m_pPlaylist, 0x6d);
-    if (!(i >= 0 && i < NumData() && m_pPlaylist && m_pPlaylist->IsValidSong(i))) {
+    if (!(i >= 0 && i < NumData())) {
+        return gNullStr;
+    }
+    if (!m_pPlaylist) {
+        return gNullStr;
+    }
+    if (!m_pPlaylist->IsValidSong(i)) {
         return gNullStr;
     }
     int songID = m_pPlaylist->GetSong(i);

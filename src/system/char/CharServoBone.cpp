@@ -200,6 +200,20 @@ void CharServoBone::DoRegulate(
     RotateAboutZ(myxfm.m, shapeDelta * deltaBeat, myxfm.m);
 }
 
+// w25-gc: 52/54; the two rows left are the operand order of the y and z
+// `fadds` of `tf.v += v18` (image: position first in all three, ours: x
+// position first, y and z rotated value first). Registers and every other
+// instruction match. All FP values here are regasg temps (no colour
+// candidates), and the `u{}` operand lists of the fadds tuples already carry
+// the emitted order when regasg sees them, so neither allocator decides it
+// (C2RS-BRIDGE 8.3, commutative operand key). Mechanism hypothesis: a front-end operand
+// ordering that sees the Multiply() Set() arguments, evaluated right to
+// left, differently for x than for y/z. Open question: the ordering key.
+// Inert: Vector3 &pos = tf.v (before or after Multiply), a block scope, a
+// named delta or matrix reference. Changes the code: Add(tf.v, v18, tf.v) or
+// Add(v18, ...) (load order), per-component += or explicit sums (drops the
+// image's dead `addi r11, r4, 48`, i.e. the image does call operator+=),
+// Set(), Multiply(v, tf, tf.v), and an in-place Multiply on a copy.
 void CharServoBone::MoveToDeltaFacing(Transform &tf) {
     Vector3 v18;
     Multiply(*mFacingPosDelta, tf.m, v18);
