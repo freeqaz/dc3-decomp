@@ -248,6 +248,16 @@ bool BaseDisplacementNode::Displacements(
 // carry swapped commutative operands (e.g. target `fmuls f9, f0, f12` for
 // inv*y). Flipping the source operand order of every one of them was measured
 // INERT -- MSVC canonicalises the operand order itself.
+// w25-fc stop note (~440 variants through the c2rs tap): all 8 rows are fmuls/
+// fmadds whose u{} operand order is fixed in the IL before both allocators
+// (C2RS-BRIDGE 8.3); registers and candidate keys are already the image's.
+// Naming the three jointDisp loads (float jx = jointDisp.x; ...) flips the
+// dot rows and the bn rows to the image (98 -> 94 of 98 equal), but n.y and
+// n.z then always share one orientation (the image has them opposite), and
+// the three proj = n * dot rows keep `dot` (a regasg temp) first in every
+// spelling tried: Scale/Set/per-component, plain-float n, named copies of
+// dot, proj ref vs member, statement order. Open question: the commutative
+// operand key for a colour candidate (n.x) against a non-candidate temp.
 bool BaseDisplacementNode::Displacements(
     const ErrorFrameInput &frame_input,
     DisplacementData &dispData,
