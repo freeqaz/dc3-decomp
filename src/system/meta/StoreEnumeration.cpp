@@ -287,14 +287,22 @@ void XboxEnumeration::Poll() {
                 return;
             }
             // .L_82E1D4FC computes `mOfferIDsBegin + mOfferIDCount` and then
-            // jumps INTO the continue_enum block at .L_82E1D570 -- the
-            // `mOfferIDsCur >= end` test and the Start() call are SHARED
-            // between the two paths, not duplicated.
+            // jumps INTO the continue_enum block at .L_82E1D570, so the
+            // emitted `mOfferIDsCur >= end` test and Start() call are shared.
+            // In source they are a COPY: MSVC cross-jumps the two identical
+            // tails after register allocation. A `goto test_cur` puts the
+            // mOfferIDsCur load in a block of its own, where regasg's first
+            // fit finds r10 (mOfferIDsBegin) already dead and takes it; as a
+            // copy the load sits in the same block as the add, sched3 puts
+            // it while r10 is still live, and it gets r9 as in the image.
             if (mOfferIDsBegin == 0) {
                 return;
             }
             offersEnd = mOfferIDsBegin + mOfferIDCount;
-            goto test_cur;
+            if (mOfferIDsCur < offersEnd) {
+                Start();
+            }
+            return;
         }
         default: {
             DWORD extError = XGetOverlappedExtendedError(&mOverlapped);
@@ -323,7 +331,6 @@ continue_enum:
     }
 compute_end:
     offersEnd = mOfferIDsBegin + mOfferIDCount;
-test_cur:
     if (mOfferIDsCur >= offersEnd) {
         return;
     }
