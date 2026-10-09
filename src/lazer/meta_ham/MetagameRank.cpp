@@ -1118,14 +1118,24 @@ int MetagameRank::ComputeRankNumber(bool forceAward) {
     }
 
     mPctToNextRank = pct;
+    // The rank-change tail is written out per arm; MSVC cross-jumps the
+    // identical copies back into the one sequence the image has (same code),
+    // but each copy adds references to `this` before that merge, lifting its
+    // colour priority 29 -> 38 above the gRanksArray temp (35), so `this`
+    // takes r31 as in the image.
     if (mRankNumber != currentRank) {
         if (mAtMaxRank) {
             mHasNewRank = true;
-        }
-        if (!forceAward) {
+            if (!forceAward) {
+                AwardForRankUp(currentRank - mRankNumber);
+            }
+            mRankNumber = currentRank;
+        } else if (!forceAward) {
             AwardForRankUp(currentRank - mRankNumber);
+            mRankNumber = currentRank;
+        } else {
+            mRankNumber = currentRank;
         }
-        mRankNumber = currentRank;
     }
 
     return mRankNumber;

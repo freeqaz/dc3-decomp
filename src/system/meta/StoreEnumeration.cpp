@@ -68,8 +68,20 @@ void XboxEnumeration::Start() {
         // moved to mOfferIDsCur.
         MILO_ASSERT(!mCurOffers, 0x1EA);
         mCurOffers = new char[mBufferSize];
+        // The failure cleanup is written out here rather than as a
+        // `goto` to the shared tail below; MSVC cross-jumps the two copies
+        // into one (same code), but the extra arm adds a reference to the
+        // hoisted &mHandle temp (colour priority 10 -> 15), so it is coloured
+        // before &mBufferSize (11) and takes r29 as the image does.
         if (error != 0) {
-            goto error_path;
+            if (mHandle != 0) {
+                CloseHandle(mHandle);
+                mHandle = 0;
+            }
+            delete[] (char*)mCurOffers;
+            mCurOffers = 0;
+            mEnumerating = false;
+            return;
         }
     }
     memset(mCurOffers, 0, mBufferSize);
@@ -80,14 +92,13 @@ void XboxEnumeration::Start() {
             return;
         }
     }
-error_path:
     if (mHandle != 0) {
         CloseHandle(mHandle);
         mHandle = 0;
     }
     delete[] (char*)mCurOffers;
-    mEnumerating = false;
     mCurOffers = 0;
+    mEnumerating = false;
 }
 
 bool XboxEnumeration::IsEnumerating() const {
