@@ -375,7 +375,7 @@ bool ClipPlayer::GetClipRange(
         if (clip2) {
             const CharGraphNode *node = clip1->FindLastNode(clip2, beat);
             if (node) {
-                outNextStart = (node->curBeat - clip1->StartBeat()) + outEnd;
+                outNextStart = (node->curBeat - clip1->StartBeat()) + outStart;
             }
         }
         return true;

@@ -149,7 +149,7 @@ DataNode getRandomSequence32B(DataArray *da) {
 
 DataNode op0(DataArray *msg) {
     unsigned long operand = msg->Int(1);
-    unsigned long w = msg->Int(2);
+    unsigned char w = msg->Int(2);
     return DataNode(kDataInt, u8(w ^ operand));
 }
 

@@ -534,9 +534,8 @@ int SkeletonChooser::NextSkeletonIndexToTrack(int i1) {
                 }
             }
         }
-        if (idxToTrack >= 0) {
-            return idxToTrack;
-        }
+        if (idxToTrack >= 0)
+            break;
         curSkelIdx = (curSkelIdx + 1) % 6;
     }
     return idxToTrack;
