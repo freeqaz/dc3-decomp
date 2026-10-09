@@ -154,14 +154,24 @@ void MakeEulerScale(const Hmx::Matrix3 &m1, Vector3 &v2, Vector3 &v3) {
     MakeEuler(m38, v2);
 }
 
+// w25-ge: the image multiplies w as (res, w) and z, y, x as (q, res).  Those
+// commutative operand lists are fixed in the IL before either allocator runs
+// (res is a demoted one-block local; the components are #2af reloads of the dot
+// product's CSE loads), and they follow which name each component is read
+// through.  A combinatorial search over the c2rs tap (194 spellings: dot via qin
+// or a const ref, each component via qin, the ref or a named local, res reused
+// or a separate inv) found exactly one shape (with either res spelling): the dot
+// and x, w through the ref, y, z through qin.  Every single-name spelling leaves
+// w or z on the wrong side.
 void Normalize(const Hmx::Quat &qin, Hmx::Quat &qout) {
-    float res = qin * qin;
+    const Hmx::Quat &q = qin;
+    float res = q * q;
     if (res == 0) {
         MILO_NOTIFY_ONCE("trying to normalize zero quat, probable error");
         qout.Set(0, 0, 1, 0);
     } else {
         res = 1 / sqrtf(res);
-        qout.Set(qin.x * res, qin.y * res, qin.z * res, qin.w * res);
+        qout.Set(q.x * res, qin.y * res, qin.z * res, q.w * res);
     }
 }
 
@@ -383,7 +393,12 @@ void FastInterp(const Hmx::Quat &q1, const Hmx::Quat &q2, float f, Hmx::Quat &qo
     }
     float dot = q1.x * q2.x;
     dot = dot + q1.w * q2.w;
-    dot = dot + q1.z * q2.z;
+    // q1.z through a named local: inline, both z operand lists (this fmadds and
+    // the dot < 0 arm's q2.z + q1.z fadds) come out q2-first; named, they come
+    // out q1-first as in the image.  Same loads, same registers -- commutative
+    // operand order is fixed in the IL before either allocator runs.
+    float q1z = q1.z;
+    dot = dot + q1z * q2.z;
     dot = dot + q1.y * q2.y;
     if (dot < 0) {
         qout.x = -(f * (q2.x + q1.x) - q1.x);

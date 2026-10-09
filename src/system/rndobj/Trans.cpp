@@ -590,6 +590,25 @@ void RndTransformable::DistributeChildren(bool horizontal, float f) {
     }
 }
 
+// w25-ge stop note (fuzzy 99.88, one row): the tail Scale(v68, m50, m50) emits
+// row 2's z product as fmuls (v68.z, m.z.z); the image has (m.z.z, v68.z).  Same
+// loads, same registers, same schedule -- only the commutative operand list.  It
+// is not an allocator decision: v68's components are colour candidates and the
+// matrix loads are regasg temps, and the order is fixed in the IL before either
+// allocator runs.  The image's per-product pattern (v first only for row 0's y
+// and z) is not a per-row or per-component rule, so the key looks like a
+// function-wide symbol/node ordinal (8.3's open question).  Measured with the
+// c2rs tap (tgtcmp, about 230 variants): a `Hmx::Matrix3 &out = m50` as both
+// Scale matrices fixes row 2 but inverts all of row 0 (80/83); a named const or
+// non-const ref to v68 inverts row 0 x and row 1 x,y (79/83); a distinct
+// matrix or result expression breaks the aliasing (55/83); the hand-expanded
+// three-row Scale reschedules (52/83 in all 48 row orders x v68/ref names);
+// a combinatorial search over MakeRotMatrix/Scale/SetLocalRot arguments as m50
+// or `out`, v68 or a const ref, v5c or a Vector3 ref (64 spellings) gives
+// 82/80/79/55 only; DEG2RAD * f2, a named angle or euler
+// ref, mLocalXfm vs LocalXfm(), a named LocalXfm ref, assert/decl order: inert.
+// Open question: which IL ordinal decides a commutative fmuls operand list when
+// one operand is a colour candidate and the other a regasg temp.
 void RndTransformable::SetLocalRotIndex(int index, float f2) {
     MILO_ASSERT(index < 3, 0x3A4);
     Vector3 v5c;

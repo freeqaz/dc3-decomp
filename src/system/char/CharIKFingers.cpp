@@ -507,6 +507,17 @@ void CharIKFingers::FixSingleFinger(
 // all 6 declaration orders of f2/f3/tip, no FingerDesc ref, a function-scope
 // `len` shared with the loop): none closer than the current spelling, which
 // already carries the image's association (f3 + tip) + f2.
+// w25-ge: the (f3 + tip) partial sum is a named local (og-dc3's spelling).  That
+// changes no loop instruction, but it flips the tail's `mInv2ab * len` fmuls to
+// the image's (mInv2ab, len) operand list: the commutative operand order is fixed
+// in the IL before either allocator runs and depends on function-wide symbol
+// ordinals, so a local in the loop reaches it.  The 8 loop rows left are first-fit
+// regasg picks: the image's registers imply its sched3 order loads f2.y before
+// tip.x and f2.x before tip.z (f2 ahead of tip in the x and z groups), then sched0
+// puts tip first as ours does.  Open question: which IL shape gives that sched3
+// order (the same sched3 -> sched0 question as DxCam::ProjectZ).  Inert (c2rs tap,
+// regasg dump): all 6 declaration orders of named f2/f3/tip lengths, the sum
+// spelled tip + f3 + f2, a named f2 length only, dropping the totalLen ref.
 void CharIKFingers::MeasureLengths() {
     for (int i = 0; i < 5; i++) {
         auto& _sub0 = mFingers[i];
@@ -514,8 +525,8 @@ void CharIKFingers::MeasureLengths() {
         RndTransformable *f3 = _sub0.mFinger03;
         RndTransformable *tip = _sub0.mFingertip;
         if (f2 && f3 && tip) {
-            float &totalLen = _sub0.mBoneTotalLength;
-            totalLen = (Length(f2->LocalXfm().v) + (Length(f3->LocalXfm().v) + Length(tip->LocalXfm().v)));
+            float distalLen = Length(f3->LocalXfm().v) + Length(tip->LocalXfm().v);
+            _sub0.mBoneTotalLength = Length(f2->LocalXfm().v) + distalLen;
         }
     }
 
