@@ -3,9 +3,6 @@
 #include "obj\Data.h"
 #include "obj\DataFile.h"
 #include "obj/Object.h"
-#ifdef HX_NATIVE
-#include "obj\Dir.h"
-#endif
 #include "rndobj\Anim.h"
 #include "rndobj\Poll.h"
 #include "rndobj\Trans.h"
@@ -15,12 +12,7 @@
 
 HamCamTransform::HamCamTransform() : mAreas(this) {}
 
-HamCamTransform::~HamCamTransform() {
-#ifdef HX_NATIVE
-    if (!ObjectDir::InDeleteObjects())
-#endif
-        ClearOldCrowds();
-}
+HamCamTransform::~HamCamTransform() { ClearOldCrowds(); }
 
 void HamCamTransform::Enter() { Setup(false); }
 
