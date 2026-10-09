@@ -358,9 +358,8 @@ void HamAudio::FinishLoad() {
         mRawBuffer = mFileLoader->GetBuffer(&mRawBufferSize);
         delete mFileLoader;
         mFileLoader = NULL;
-        const char *mogg = "mogg";
-        mStreams[0] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, true);
-        mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, mogg, 0.25f, true);
+        mStreams[0] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, "mogg", 0.25f, true);
+        mStreams[1] = TheSynth->NewBufStream(mRawBuffer, mRawBufferSize, "mogg", 0.25f, true);
         mSongStream = mStreams[0];
 #ifdef HX_WEB
         const char *baseName = mSongInfo ? mSongInfo->GetBaseFileName() : "<no-song>";
@@ -374,22 +373,11 @@ void HamAudio::FinishLoad() {
         }
 #endif
     }
-    unsigned int counter = 2;
-    Stream **pStream = &mStreams[0];
-    do {
-        if (*pStream) {
-            (*pStream)->Faders()->Add(mMasterFader);
-#ifdef HX_NATIVE
-            Fader *crossFader = mCrossFaders[pStream - mStreams];
-            (*pStream)->Faders()->Add(crossFader);
-            crossFader->SetVolume(0.0f);
-#else
-            // PPC compiler strength-reduces this to lwz r4, 0x38, rPStream
-            // but only with hardcoded byte offset — pointer subtraction generates
-            // srawi/addi/slwi (5 extra instructions) that the compiler won't fold
-            (*pStream)->Faders()->Add(*(Fader**)((char*)pStream + 0x38));
-            (*(Fader**)((char*)pStream + 0x38))->SetVolume(0.0f);
-#endif
+    for (int i = 0; i < 2; i++) {
+        if (mStreams[i]) {
+            mStreams[i]->Faders()->Add(mMasterFader);
+            mStreams[i]->Faders()->Add(mCrossFaders[i]);
+            mCrossFaders[i]->SetVolume(0.0f);
 
             const std::vector<float> &vols = mSongInfo->GetVols();
             const std::vector<float> &pans = mSongInfo->GetPans();
@@ -405,8 +393,8 @@ void HamAudio::FinishLoad() {
                 } else {
                     fader = mChannelFaders[ch];
                 }
-                (*pStream)->ChannelFaders(ch).Add(fader);
-                (*pStream)->SetPan(ch, pans[ch]);
+                mStreams[i]->ChannelFaders(ch).Add(fader);
+                mStreams[i]->SetPan(ch, pans[ch]);
             }
 
             const std::vector<TrackChannels> &tracks = mSongInfo->GetTracks();
@@ -424,37 +412,35 @@ void HamAudio::FinishLoad() {
 
                 const std::vector<int> &channels = tracks[t].mChannels;
                 for (unsigned int c = 0; c < channels.size(); c++) {
-                    (*pStream)->ChannelFaders(channels[c]).Add(trackFader);
+                    mStreams[i]->ChannelFaders(channels[c]).Add(trackFader);
                 }
 
                 if (TheSynth->CheckCommonBank(false)) {
                     Fader *vocalsFader = TheSynth->Find<Fader>("vocals_level.fade", false);
                     if (vocalsFader && audioType == kAudioTypeVocals) {
                         for (unsigned int c = 0; c < channels.size(); c++) {
-                            (*pStream)->ChannelFaders(channels[c]).Add(vocalsFader);
+                            mStreams[i]->ChannelFaders(channels[c]).Add(vocalsFader);
                         }
                     }
 
                     Fader *multiFader = TheSynth->Find<Fader>("multi_level.fade", false);
                     if (multiFader && audioType == kAudioTypeMulti) {
                         for (unsigned int c = 0; c < channels.size(); c++) {
-                            (*pStream)->ChannelFaders(channels[c]).Add(multiFader);
+                            mStreams[i]->ChannelFaders(channels[c]).Add(multiFader);
                         }
                     }
 
                     FxSend *reverbSend = TheSynth->Find<FxSend>("song.send", false);
                     if (reverbSend) {
                         for (int ch = 0; ch < numChannels; ch++) {
-                            (*pStream)->SetFXSend(ch, reverbSend);
+                            mStreams[i]->SetFXSend(ch, reverbSend);
                         }
                         mFXSendApplied = true;
                     }
                 }
             }
         }
-        pStream++;
-        counter--;
-    } while (counter != 0);
+    }
 
     if (mStreams[1]) {
         if (mStreams[1]->IsReady()) {
