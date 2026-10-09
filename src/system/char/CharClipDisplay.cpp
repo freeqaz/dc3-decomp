@@ -173,17 +173,39 @@ void CharClipDisplay::DrawTrack() {
     // image's order) is exactly neutral -- 97.31, same 11 insert/delete rows.
     // The separate `lbl_82020B54` vs `__real@40000000` row is benign: that
     // .rdata word IS 2.0f, it is just pooled in CharacterTest's object.
+    // w24-c3 (97.31 -> 97.8 instr-level): the marker rect's y/h are written
+    // INSIDE the loop as `drawY - 3.0f` / `9.0f`, not through markerY/markerH
+    // locals declared above it.  MSVC hoists the invariant subtraction to the
+    // preheader AFTER the `bgt` loop guard (image 823DF5A0: `lfs f0,
+    // __real@40400000@l(r25)` / `fsubs f27, f29, f0`), and no longer keeps
+    // 3.0f in a callee-saved FPR there.
+    // w24-c3 STOP at 97.817 (38 rows): still the 3.0f anchor/remat residual
+    // above (r25 anchor + 4 reloads vs our f21), plus its f19/f20/f21 and
+    // r23/r24/r25 renumbering, the label `0x64/0x14` load order, and the
+    // nameColor r-channel store sunk below namePos.x (0x120 at 823DFAC8).
+    // Measured inert: markerRect declared inside the loop; `if (mClip) {...}`
+    // instead of the goto.  Worse: Rect ctor for trackRect (96.2).
+    // decomp-synth hill_climb (2 rounds x 58 variants) found nothing.
+    // Mechanism hypothesis (c2 priority colouring, c2-rs P_REGALLOC.md): the
+    // 3.0f CSE temp is a candidate whose priority (sum of weight x n_live,
+    // minus n_live where it is live but unused) comes out <= 0 in the image
+    // -- live across the whole event/IK region with no use -- so it is left
+    // in memory and rematerialised from the r25 anchor; ours stays > 0 and
+    // gets f21.  Open question: what shortens or splits that range in the
+    // image.  Related lead, not chased: every 2.0f in this TU (LineSpacing,
+    // DrawBlend, the start label here) loads lbl_82020B54, a NON-COMDAT
+    // .rdata word just below this object's split start (0x82020B58), never
+    // __real@40000000 (0x820E6390) -- so the original likely had a TU-local
+    // const float object for 2.0, and maybe for other constants too.
     // Draw integer beat markers
     float firstBeat = (float)std::ceil(startBeat);
     float lastBeat = (float)std::floor(endBeat);
     if (firstBeat + 1.0f != firstBeat) {
-        float markerY = drawY - 3.0f;
-        float markerH = 9.0f;
         float beat = firstBeat;
         Hmx::Rect markerRect;
         while (beat <= lastBeat) {
-            markerRect.y = markerY;
-            markerRect.h = markerH;
+            markerRect.y = drawY - 3.0f;
+            markerRect.h = 9.0f;
             markerRect.x = GetX(beat);
             markerRect.w = 1.0f;
             TheRnd.DrawRect(markerRect, green, nullptr, nullptr, nullptr);
@@ -202,10 +224,13 @@ void CharClipDisplay::DrawTrack() {
         float eventLabelOffset = 10.0f;
         while ((unsigned int)idx < (unsigned int)mClip->NumBeatEvents()) {
             const CharClip::BeatEvent &ev = mClip->BeatEvents()[idx];
-            float eventX = GetX(ev.beat);
-            Vector2 labelPos(eventX, drawY);
+            // w24-c3: labelPos is built from GetX() directly and the event
+            // rect reads labelPos.x -- the image stores both labelPos halves
+            // first (0x5c then 0x58), then the rect/colour; with a separate
+            // `eventX` local MSVC sank the labelPos.x store below the colour.
+            Vector2 labelPos(GetX(ev.beat), drawY);
             float halfEmVal = sEm * 0.5f;
-            Hmx::Rect eventRect(eventX, drawY - halfEmVal, 1.0f, halfEmVal);
+            Hmx::Rect eventRect(labelPos.x, drawY - halfEmVal, 1.0f, halfEmVal);
             Hmx::Color eventColor(eventAlpha, eventAlpha, 1.0f, 1.0f);
             TheRnd.DrawRect(eventRect, eventColor, nullptr, nullptr, nullptr);
 

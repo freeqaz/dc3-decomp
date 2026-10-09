@@ -89,6 +89,18 @@ END_COPYS
 // jukebox use (96.47; lever (a) binds this+0x5c, not &mNodes), and a named
 // `int historySize = mChoiceHistory.size();` before the bool (98.11: the
 // size loads hoist above the `mIndex >= 0` test and r26 is still lazy).
+// w24-c3 (98.55, same 9 rows): not re-chased beyond reading the image.  The
+// image's back() at 0x82405ED8 goes through r30 (`lwz r11, 0x64(r30)`) while
+// every other mNodes access uses r26 -- i.e. back() and the size/empty/clear/
+// [] accessors reach mNodes through DIFFERENT inline paths in the original
+// ObjPtrVec header (PCH-reached, whole-binary blast radius).  Out of scope for
+// a 5-function task; the next lane should A/B an ObjPtrVec accessor spelling
+// with a full ninja + whole-binary row diff.  Hypothesis: the image's
+// &mNodes is ONE address temp, CSE'd and hoisted to the head of the >1 arm
+// because several inlined accessors materialise it explicitly; ours folds
+// each access into a displacement and only forms the temp for _M_erase's
+// `this`.  Open question: which accessor's inline body forms the explicit
+// address.
 bool FlowPickOne::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;
