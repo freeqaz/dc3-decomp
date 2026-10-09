@@ -295,12 +295,10 @@ void LiveCameraInput::TextureStore::UpdateFromColorBuffer(LiveCameraInput *cam) 
     }
 }
 
-// w20-c (normalized 100, fuzzy 98.675, 18 register-only rows): volatile
-// r10/r11 swap of playerIdx vs colour in the switch; every case constant, the
-// CTR dispatch and every branch target agree with the image (constant
-// 0x276c offset), so no value differs.  Tried and inert: colour declared after
-// playerIdx; colour declared first in the body.  Plain for loops: worse
-// (98.6).  The UnlockRect name row is the 0x82B9BEC0 ICF fold.
+// playerIdx is an unsigned int, not an unsigned short: as a short it
+// outranked colour in the colour allocator (pri 18 vs 17), so it took r11 and
+// colour r10, the reverse of the image. As an int its priority drops to 11,
+// colour is coloured first and takes r11.
 void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) {
     void *texels = nullptr;
     mTex->TexelsLock(texels);
@@ -320,17 +318,8 @@ void LiveCameraInput::TextureStore::UpdateFromDepthBuffer(LiveCameraInput *cam) 
                 // The `playerIdx <= 7` guard IS in the image -- `cmplwi cr6,
                 // r10, 0x7` / `bgt cr6` at 0x82432B8C -- so it is not the
                 // tautology it looks like; REMOVING it costs 93.940 -> 92.723.
-                // The residual is the dispatch: the image lowers the switch as
-                // a CTR countdown (`mtctr r10`, `cmpwi cr6, r10, 0x0`, six
-                // `bdzf cr6eq` and one `bne cr6`, 0x82432B94..0x82432BB8),
-                // which lays the eight `li r11, <colour>` blocks out in CASE
-                // order; we get a binary search (cmplwi 1/3/5/7 + blt/beq)
-                // which lays the same eight constants out in REVERSE case
-                // order.  The colour mapping is identical on both sides -- the
-                // reversed `li` sequence is block layout, NOT a reversed
-                // palette table.
                 unsigned short color = 0;
-                unsigned short playerIdx = depthPixel & 7;
+                unsigned int playerIdx = depthPixel & 7;
                 if (playerIdx <= 7) {
                 switch (playerIdx) {
                 case 0:
