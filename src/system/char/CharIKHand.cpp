@@ -593,6 +593,16 @@ void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
                 // Remaining 2 rows are commutative fadds operand order (idx 367
                 // Add(axisProj, mWorldDst) x, idx 550 rz*dy + rw*dx): swapping
                 // the source operands is inert.
+                // Open (c2 §8.7 sort key, w25-hb): both are leaf-vs-leaf.
+                //   idx 367: axisProj.x is var V1424 {0x1b200}, mWorldDst.x a
+                //   load temp V2541 {0x17b40}; the image puts the load first
+                //   on x only, while y (V1423 vs V2533) and z (V1133 vs V2523)
+                //   keep axisProj first. No uniform sid shift satisfies all
+                //   three (x needs temp sid mod 1024 > 712, y < 712, z < 567).
+                //   idx 550: both products are CSE temps (V2674 = rw*dx,
+                //   V2669 = rz*dy) and the higher sid sorts first. The image
+                //   minted rz*dy later. Operand swaps in either quat group,
+                //   `+=` and Add(mWorldDst, axisProj) are inert or change code.
                 // (w21-j's earlier stop note: a separate result quat for the
                 // r*d chain was 95.8 -- REFUTED as the lever; association was.)
                 Hmx::Quat quatDir(tiltDir.x, tiltDir.y, tiltDir.z, 0.0f);

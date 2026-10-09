@@ -331,6 +331,18 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     return false;
 }
 
+// Open (c2 colour order, w25-hb): normalized 100, but two nonvolatile
+// triples are rotated against the image.
+//   - `this` (cand id5, pri -105) gets r14, below hasIntro (id8, pri -102)
+//     and the static-guard `lis` half (id197, tie 0, pri -103). The image
+//     needs `this` above hasIntro, i.e. +4: its last use (mVenueEntered)
+//     keeps it live, unreferenced, through the whole visualizer/hollaback
+//     tail.
+//   - the TheHamDirector `lis` half (id159, tie 0, pri -58) pops before
+//     set_type's address (id144, pri -60, tie 58), so it needs pri <= -60.
+// ~25 code-neutral spellings (loop/branch forms, int vs bool locals, tail and
+// goto restructures, store placement) moved none of these keys without also
+// changing the emitted code.
 void SongSequence::OnSongLoaded() {
     if (!Done()) {
         static Symbol reset("reset");
