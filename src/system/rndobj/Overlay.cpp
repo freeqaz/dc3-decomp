@@ -70,6 +70,17 @@ float RndOverlay::Draw(float topY) {
     }
     Hmx::Rect rect(0, topY, 1, Height());
     TheRnd.DrawRectScreen(rect, mBackColor, TheRnd.OverlayMat(), nullptr, nullptr);
+    // Residual (w25-fb, fuzzy 99.94, 1 row): the image emits this fadds as
+    // `topY + sDrawFloats[1]` (fadds f0, f31, f0), ours `sDrawFloats[1] + topY`.
+    // Both operands are colour candidates: topY is the formal (id 3, f31) and the
+    // sDrawFloats[1] load is a promoted static-memory symbol (k07, id 18, f0).
+    // c2 lists the higher candidate id first, and a formal's id is fixed at 3
+    // (arena order: k0d, this, formals, locals, memory symbols), so no local
+    // spelling can put topY ahead.  Measured inert (~100 variants): source
+    // operand order, `pos.y += topY` / `pos.y = topY; pos.y += ...`, a pointer to
+    // the array, named x/y/height/now/mat/bottom locals.  Hypothesis: in the
+    // original topY reaches this add through a later-minted symbol (a k03 temp
+    // or split piece); open question is which IL shape does that.
     Vector2 pos(sDrawFloats[0], sDrawFloats[1] + topY);
     if (mCursorChar > -1 && !mLines.empty()) {
         String str4c;
