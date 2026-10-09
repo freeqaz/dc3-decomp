@@ -265,6 +265,14 @@ void CharClipSet::SetFrame(float frame, float blend) {
                             RotateAboutZ(xfm.v, *rotZPtr, xfm.v);
                             Normalize(xfm.m, xfm.m);
                         }
+                        // Open (w25-gv, c2 §8.7): the image's x add is
+                        // (xfm.v.x, posPtr->x); ours sorts the posPtr memory leaf
+                        // (var base, 0x1a008) ahead of xfm.v.x, whose base temp is
+                        // V862 (mod 4 = 2, 0x18008).  The pelvis copy above has
+                        // base V819 (mod 4 = 3, 0x1c008) and matches.  Needs the
+                        // gap 819..862 to grow by one; ~45 respellings of the code
+                        // between (loop header, string ops, refs, component adds)
+                        // left both sids unchanged.
                         xfm.v += *posPtr;
                     }
                 }
