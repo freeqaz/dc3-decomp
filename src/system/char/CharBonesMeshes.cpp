@@ -52,45 +52,35 @@ void CharBonesMeshes::ReallocateInternal() {
 }
 
 void CharBonesMeshes::AcquirePose() {
+    // Typed cursors over the channel blocks (the og-dc3 spelling). With char*
+    // cursors the &mOffsets[TYPE_ROTX] CSE temp got sid 392, so its load's
+    // commutative sort key (0x10008) fell below the mStart-value temp's and
+    // the two adds in the quat/rot-x headers listed mStart first; the image
+    // lists the offset first, as this spelling does.
     ObjPtrVec<RndTransformable>::iterator curMesh = mMeshes.begin();
-
-    // Copy positions
-    char *scaleOff = mOffsets[TYPE_SCALE] + mStart;
-    char *pos = mStart;
-    for (; pos < scaleOff; pos += sizeof(Vector3), ++curMesh) {
-        *(Vector3 *)pos = (*curMesh)->LocalXfm().v;
+    Vector3 *vecEnd = (Vector3 *)ScaleOffset();
+    for (Vector3 *it = (Vector3 *)Start(); it < vecEnd; ++it, ++curMesh) {
+        *it = (*curMesh)->LocalXfm().v;
     }
-
-    // Copy scales using MakeScale
-    pos = mOffsets[TYPE_SCALE] + mStart;
-    char *quatOff = mOffsets[TYPE_QUAT] + mStart;
-    for (; pos < quatOff; pos += sizeof(Vector3), ++curMesh) {
-        MakeScale((*curMesh)->LocalXfm().m, *(Vector3 *)pos);
+    vecEnd = (Vector3 *)QuatOffset();
+    for (Vector3 *it = (Vector3 *)ScaleOffset(); it < vecEnd; ++it, ++curMesh) {
+        MakeScale((*curMesh)->LocalXfm().m, *it);
     }
-
-    // Copy quaternions using Quat::Set
-    pos = mOffsets[TYPE_QUAT] + mStart;
-    char *rotxOff = mOffsets[TYPE_ROTX] + mStart;
-    for (; pos < rotxOff; pos += sizeof(Hmx::Quat), ++curMesh) {
-        ((Hmx::Quat *)pos)->Set((*curMesh)->LocalXfm().m);
+    Hmx::Quat *quatEnd = (Hmx::Quat *)RotXOffset();
+    for (Hmx::Quat *it = (Hmx::Quat *)QuatOffset(); it < quatEnd; ++it, ++curMesh) {
+        it->Set((*curMesh)->LocalXfm().m);
     }
-
-    // Copy X rotations
-    float *rotIt = (float *)(mOffsets[TYPE_ROTX] + mStart);
-    float *rotyOff = (float *)(mOffsets[TYPE_ROTY] + mStart);
-    for (; rotIt < rotyOff; rotIt++, ++curMesh) {
+    float *rotIt = (float *)RotXOffset();
+    float *rotEnd = (float *)(mStart + mOffsets[TYPE_ROTY]);
+    for (; rotIt < rotEnd; ++rotIt, ++curMesh) {
         *rotIt = GetXAngle((*curMesh)->LocalXfm().m);
     }
-
-    // Copy Y rotations
-    float *rotzOff = (float *)(mOffsets[TYPE_ROTZ] + mStart);
-    for (; rotIt < rotzOff; rotIt++, ++curMesh) {
+    rotEnd = (float *)(mStart + mOffsets[TYPE_ROTZ]);
+    for (; rotIt < rotEnd; ++rotIt, ++curMesh) {
         *rotIt = GetYAngle((*curMesh)->LocalXfm().m);
     }
-
-    // Copy Z rotations
-    float *endOff = (float *)(mOffsets[TYPE_END] + mStart);
-    for (; rotIt < endOff; rotIt++, ++curMesh) {
+    rotEnd = (float *)EndOffset();
+    for (; rotIt < rotEnd; ++rotIt, ++curMesh) {
         *rotIt = GetZAngle((*curMesh)->LocalXfm().m);
     }
 }

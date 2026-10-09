@@ -316,11 +316,14 @@ void HttpGet::SetState(State newState) {
             SafeShutdown();
             break;
         case kHttpGet_ReceivingBody:
-            if ((int)newState == kHttpGet_Downloaded) {
+            // if/else with the shutdown arm first: the image does not thread
+            // SafeDisconnect's exit past the Failed/FailedSend test below (an
+            // early `break` after SafeDisconnect lets c2 jump-thread it on
+            // newState == Downloaded).
+            if ((int)newState != kHttpGet_Downloaded)
+                SafeShutdown();
+            else
                 SafeDisconnect();
-                break;
-            }
-            SafeShutdown();
             break;
         }
 
