@@ -608,12 +608,20 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
                 }
             }
         }
+        // d13 is cleared in each arm of the cooldown update (the image merges
+        // the two copies into one after allocation); the per-arm definitions
+        // put d13 above the static-guard address, so d13 takes r26 and the
+        // guard r25 as in the image.
+        bool d13;
         if (groove_passed[1] != move_ok && groove_passed[1] != move_awesome) {
             mGrooveCooldown = 0;
-        } else if (mGrooveCooldown > 0) {
-            mGrooveCooldown--;
+            d13 = false;
+        } else {
+            if (mGrooveCooldown > 0) {
+                mGrooveCooldown--;
+            }
+            d13 = false;
         }
-        bool d13 = false;
         if (gDebugGroove) {
             mDebugScoreValue = mNormalizedRhythmScore * 100.0f;
         } else if (gDebugFresh) {

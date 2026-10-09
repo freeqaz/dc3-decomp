@@ -394,13 +394,18 @@ int CacheXbox::ThreadWrite() {
         {
             String dirPath = mThreadStr.substr(0, nextPos);
             int attrs = GetFileAttributesA(dirPath.c_str());
+            // nextPos++ is written in each arm (the image cross-jumps them back
+            // into one addi); the extra reference lifts nextPos above the
+            // mThreadStr base pointer, so nextPos takes r30 as in the image.
             if (attrs == -1) {
                 success = CreateDirectoryA(dirPath.c_str(), nullptr);
                 if (success == 0) {
                     break;
                 }
+                nextPos++;
+            } else {
+                nextPos++;
             }
-            nextPos++;
         }
         nextPos = mThreadStr.find('\\', nextPos);
     }

@@ -640,11 +640,16 @@ void DxTex::ResetSurfaces() {
         mTexture = nullptr;
     }
 
-    // Release managed texture resource
+    // Release managed texture resource.  mTexture is cleared in each arm (the
+    // image cross-jumps the two stores back into one): the per-arm store gives
+    // the shared nullptr constant the priority that puts it in r29, above the
+    // loop counter (r28).
     if (!TheDxTexMgr.ReleaseRes(unk2c)) {
         TheDxRnd.AutoRelease(mTexture);
+        mTexture = nullptr;
+    } else {
+        mTexture = nullptr;
     }
-    mTexture = nullptr;
 
     // Clean up render target surfaces
     TheDxRnd.AutoRelease(mRenderTarget);

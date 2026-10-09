@@ -30,7 +30,10 @@ XboxContent::XboxContent(const XCONTENT_CROSS_TITLE_DATA &data, int i2, int i3, 
       mState(kUnmounted), mPadNum(i3), mPendingDelete(0), mCorrupt(0), mLRM(0) {
     MILO_ASSERT(mRoot.size() < kContentRootMaxLength, 0x6F);
     MILO_ASSERT(mPadNum < kNumberOfBuffers, 0x70);
-    mXData = data;
+    // An explicit memcpy, not a struct assignment: the copy is the same call,
+    // but this spelling lifts &mFilename to priority 15, where its tie key (13)
+    // beats the hoisted TheDebug address (tie 0): r26 and r25 as in the image.
+    memcpy(&mXData, &data, sizeof(mXData));
     char filename[XCONTENT_MAX_FILENAME_LENGTH + 1];
     memcpy(filename, mXData.szFileName, XCONTENT_MAX_FILENAME_LENGTH);
     filename[XCONTENT_MAX_FILENAME_LENGTH] = 0;

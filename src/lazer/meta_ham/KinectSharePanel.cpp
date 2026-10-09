@@ -344,6 +344,10 @@ DataNode KinectSharePanel::OnUpload(DataArray *arr) {
     mOverlapped.hEvent = CreateEventA(nullptr, true, false, "SocialNetworkImagePost");
     if (!mOverlapped.hEvent) {
         MILO_LOG("KinectSharePanel: mOverlapped.hEvent is null");
+        // Early return (cross-jumped into the shared tail): its extra
+        // references raise the hoisted TheDebug address above &mOverlapped,
+        // giving the image's r24/r23 split.
+        return 0;
     } else {
         // `this` goes in dwCompletionContext, InternalContext is zeroed (target
         // 0x5c/0x60/0x64 get r25 = 0, `stw r30, 0x70(r30)` stores this), the
@@ -395,5 +399,5 @@ DataNode KinectSharePanel::OnUpload(DataArray *arr) {
             mUploadState = 3;
         }
     }
-    return DataNode(kDataInt, 0);
+    return 0;
 }
