@@ -177,10 +177,22 @@ void FreestyleMoveRecorder::Poll() {
         }
         RndTex *streamTex = camInput->GetStreamTex(LiveCameraInput::kBufferDepth);
         if (streamTex) {
-            char *depthDst =
-                (char *)mTakes[mCurrentTakeIndex].mDepthFrames + recordFrame * 0x12c0;
+            // Through a typed frames pointer: with the load inline, c2's
+            // commutative-operand sort keys it as a 4-node subexpression that
+            // outranks the 2-node `recordFrame * 0x12c0` (ours `add r28, r11,
+            // r10`); as a named leaf the product sorts first (`add r28, r10, r11`).
+            DepthFrame *frames = mTakes[mCurrentTakeIndex].mDepthFrames;
+            char *depthDst = (char *)&frames[recordFrame];
             void *texels = nullptr;
             streamTex->TexelsLock(texels);
+            // Open (w25-gu): the image reloads texels into r10 and the take
+            // index into r11; ours is the other way round.  In c2's COLOR
+            // pass texels (pri 18, tie 61) finds r11 free, and the take-index
+            // load is a regasg temp, so it takes r10.  The image fits a take
+            // index that is a COLOR candidate (pri >= 18), interfering with
+            // texels and coloured first.  No spelling tried makes that load a
+            // candidate: named locals are demoted (one block, one def), and
+            // declaration order is inert.
             if (texels) {
                 // Through a reference: the image forms &mTakes[i] for real
                 // (`addi r10, r11, 0x48`, target idx 79) and then stores the
@@ -202,15 +214,20 @@ void FreestyleMoveRecorder::Poll() {
                     unsigned short *src = colSrc;
                     unsigned char *dst = (unsigned char *)(depthDst + col);
                     for (int row = 0x3c; row != 0; row--) {
-                        int pixelPlayer = (*src & 7) - 1;
                         unsigned long depth;
                         // Both tests have to pass: 0x82524DD4 `bne cr6` on the
                         // player compare and 0x82524DE0 `bge cr6` on
                         // playerIdx >= 0 BOTH fall into `mr r11, r26` (r26 = 0).
                         // Our if/else-if wrote the sampled depth whenever
                         // playerIdx >= 0, even for another player's pixels.
-                        if (pixelPlayer == playerIdx && playerIdx >= 0) {
-                            depth = (*src >> 7) & 0xFF;
+                        // The player id is compared inline (a named local was
+                        // an extra colour candidate that lifted playerIdx over
+                        // colSrc: r6/r7 swapped), and the depth byte is a
+                        // (unsigned char) cast, not `& 0xFF`: that keeps the
+                        // pixel copy ahead of (pixel & 7) in COLOR's pop order
+                        // (target `lhz r11` / `clrlwi r10, r11, 29`).
+                        if ((*src & 7) - 1 == playerIdx && playerIdx >= 0) {
+                            depth = (unsigned char)(*src >> 7);
                         } else {
                             depth = 0;
                         }
@@ -332,13 +349,14 @@ void FreestyleMoveRecorder::Poll() {
                 // (`clrlwi r10, r10, 16` feeds `subf r10, r29, r10`, idx
                 // 258/261), not from the raw 32-bit load
                 unsigned int diff = depthU16 - minDepth;
-                unsigned int shifted = diff << 7;
                 // The ternary selects colorMask itself -- MSVC lowers that to
                 // the subfic/subfe mask AND colorMask.  Selecting 0xFFFFFFFF
                 // and ANDing it separately emits a live `li r27, -0x1` and a
                 // redundant `and r8, r8, r27` inside the inner loop.
                 unsigned int colorBits = (depthU16 > 0) ? colorMask : 0;
-                *ptr = (unsigned short)(shifted | colorBits);
+                // the shift stays inline: a subexpression sorts ahead of the
+                // named colorBits leaf (target `or r10, r10, r8`)
+                *ptr = (unsigned short)((diff << 7) | colorBits);
                 ptr += 0x180;
             }
             pixelX++;
