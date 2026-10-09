@@ -377,7 +377,9 @@ void CamShotFrame::BuildTransform(RndCam *cam, Transform &tf, bool b3) const {
     // the store, a Vector3& to the member, a named Vector3 copy, Interp
     // through `me`, `me` declared first or last, and the copy duplicated into
     // both arms of the kHugeFloat test (which also breaks the register
-    // assignment).
+    // assignment), dt inlined, screenPos declared first, `me->` in the
+    // kHugeFloat test, the if without braces.  Worse: an Interp temp output,
+    // a `targetPos(0, 0, 0)` constructor.
     me->mLastTargetPos = targetPos;
 
     MILO_ASSERT(mLastTargetPos.x != kHugeFloat, 0x7ce);
