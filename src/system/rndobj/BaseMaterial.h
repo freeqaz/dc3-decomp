@@ -176,6 +176,7 @@ public:
     StencilMode GetStencil() const { return mStencilMode; }
     bool GetAlphaCut() const { return mAlphaCut; }
     bool GetAlphaWrite() const { return mAlphaWrite; }
+    bool GetForceAlphaWrite() const { return mForceAlphaWrite; }
     int GetAlphaThreshold() const { return mAlphaThreshold; }
     TexWrap GetTexWrap() const { return mTexWrap; }
     const Hmx::Color& GetSpecularRGB() const { return mSpecularRGB; }
