@@ -226,8 +226,7 @@ void CharIKFingers::SetName(const char *name, ObjectDir *dir) {
 }
 
 void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
-    auto _tmp0 = mHand->WorldXfm();
-    Transform curHandXfm(_tmp0);
+    mHand->WorldXfm(); // result unused; the call only brings the hand xfm up to date
     auto& _ref0 = mMoveHand;
     if (_ref0) {
         if (engagedCount > 0) {
@@ -289,13 +288,18 @@ void CharIKFingers::CalculateHandDest(int engagedCount, int firstEngaged) {
                 FingerDesc &finger = mFingers[i];
                 if (finger.mIsEngaged) {
                     // w21-i: avgPos first -- the image's x add is `fadds f11, f27, f11`
-                    // (avg.x + pos.x); closes one commutative row.  The two left
-                    // (fmuls side.z/side.y * (i - 2) at idx 102-103) did not move;
-                    // `Vector3 sideScaled(sideOffsetBase); sideScaled *= i - 2.0f`
-                    // costs 100 -> 88.3 (frame +0x10).
+                    // (avg.x + pos.x); closes one commutative row.
+                    // w25-gn: the side.z/side.y products (`fmuls f10, f30, f12`) need
+                    // the scale factor's operand key between side.x (V15) and
+                    // side.y/z (V303/V299); a named local (sid ~21) gives that, where
+                    // Scale's inlined parameter (V309) outranks all three.  The
+                    // avg.x add above then needs `finger`'s sid to stay 0 or 1 mod 8
+                    // (memory-leaf key), which dropping the unused Transform copy at
+                    // the top of the function restores.
                     Add(avgPos, finger.mTargetWorldPos, avgPos);
+                    float sideScale = i - 2.0f;
                     Vector3 sideScaled;
-                    Scale(sideOffsetBase, i - 2.0f, sideScaled);
+                    Scale(sideOffsetBase, sideScale, sideScaled);
                     Add(sideScaled, avgPos, avgPos);
                     if (i == 0) {
                         Hmx::Matrix3 thumbRotMat;
