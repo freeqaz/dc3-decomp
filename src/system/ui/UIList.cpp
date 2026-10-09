@@ -920,11 +920,11 @@ float UIList::GetDistanceToPlane(const Plane &p, Vector3 &v) {
                            Vector3(box.mMax.x, box.mMin.y, box.mMax.z),
                            Vector3(box.mMax.x, box.mMax.y, box.mMax.z),
                            Vector3(box.mMin.x, box.mMax.y, box.mMax.z) };
-    for (int i = 0; 8 > i; i++) {
-        float dot = p.Dot(boxVecs[i]);
+    for (Vector3 *it = boxVecs; it != boxVecs + 8; ++it) {
+        float dot = p.Dot(*it);
         if (first || (std::fabs(dot) < std::fabs(ret))) {
             ret = dot;
-            v = boxVecs[i];
+            v = *it;
             first = false;
         }
     }
