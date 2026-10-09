@@ -306,14 +306,20 @@ bool RndFlare::RectOffscreen(const Hmx::Rect &r) const {
         return false;
 }
 
-// w25-gd stop note: the z term of the inlined Dot(v28, mMatrix.z) lists z.z
-// before cross.z in its fmadds; the image lists cross.z first (the x and y terms
-// already match, z first). Both operands are regasg temps, so the order is fixed
-// in the IL operand list before either allocator. Inert (~110 variants): Dot
-// argument order, v28 declaration position, Cross before/after Length, named
-// scaleY/scaleX/negLen, `0 < dot`. Code-changing: explicit Dot/Cross bodies,
-// named axis references, a named Length(x) before Cross. Open question: z.z here
-// is a CSE reload (#2af) shared with Length(mMatrix.z); what orders it.
+// w25-oa: 75/76. The one row is the z term of the inlined Dot(v28, mMatrix.z)
+// (c2's commutative sort key, C2RS-BRIDGE 8.7). mMatrix.z.z is a memory leaf on
+// base temp 377 (377 & 3 == 1, key 0x14008), above the cross z, v28.z (V18,
+// 0x10240), so the load goes first. The image has cross z first, so it needs that
+// base == 0 mod 4 (key 0x10008), i.e. a temp shift of +3 or -1 before it. The
+// shift must also keep z.x's base 386 != 0 mod 4; the y term (z.y temp 396
+// over V14) holds for any shift. Nothing reachable without new code: all 18
+// code-identical spellings in a 96-way paren/order grid keep 377. Parens on
+// `-len`, Length(mMatrix.x) and Length(mMatrix.z) (grid k21100) move every temp by +3
+// (380/389/399) and flip the z term as predicted, but reschedule the block (56/76).
+// Named refs or an explicit Dot body change code, because the inline's
+// reference params are what keep the loads off a separate base.
+// Also inert (w25-gd, ~110 variants): Dot argument order, v28 declaration
+// position, Cross before/after Length, named scaleY/scaleX/negLen, `0 < dot`.
 void RndFlare::CalcScale() {
     if (mMatrix != WorldXfm().m) {
         Vector3 v28;
