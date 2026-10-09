@@ -1605,6 +1605,11 @@ void CamShot::GetKey(float frame, CamShotFrame *&prev, CamShotFrame *&next, floa
     }
 }
 
+// w25-gt: the named copies below (cosine, len, velFps, angFps, angPowed) and the
+// inline emulate-FPS ternary emit no code of their own.  They move the sids of
+// the address temps c2 mints during lowering, and a memory operand's commutative
+// sort key is its base temp's sid mod 4 (C2RS-BRIDGE 8.7); this combination puts
+// mShakeVelocity.x's base in class 0, so its fadds/fmuls take spring/powed first.
 void CamShot::Shake(float freq, float amp, const Vector2 &maxAngle, Vector3 &offset, Vector3 &angOffset) {
     if (TheTaskMgr.DeltaSeconds() > 0 && !AutoPrepTarget::sChanging) {
         Vector2 localAng = maxAngle;
@@ -1612,7 +1617,8 @@ void CamShot::Shake(float freq, float amp, const Vector2 &maxAngle, Vector3 &off
         if (RandomFloat() < freq) {
             float angle = RandomFloat(0.0f, 6.2831855f);
             float randAmp = amp * RandomFloat();
-            float cosVal = randAmp * Cosine(angle);
+            float cosine = Cosine(angle);
+            float cosVal = randAmp * cosine;
             mLastDesiredShakeOffset.x += cosVal;
             mLastDesiredShakeOffset.y += cosVal * 0.333f;
             mLastDesiredShakeOffset.z += randAmp * Sine(angle);
@@ -1620,7 +1626,8 @@ void CamShot::Shake(float freq, float amp, const Vector2 &maxAngle, Vector3 &off
             mLastDesiredShakeAngOffset.y = 0;
             mLastDesiredShakeAngOffset.z += RandomFloat(-localAng.y, localAng.y);
         }
-        float lenamp = Length(mLastDesiredShakeOffset) - amp;
+        float len = Length(mLastDesiredShakeOffset);
+        float lenamp = len - amp;
         if (lenamp > 0) {
             Normalize(mLastDesiredShakeOffset, mLastDesiredShakeOffset);
             mLastDesiredShakeOffset *= amp - lenamp;
@@ -1645,11 +1652,11 @@ void CamShot::Shake(float freq, float amp, const Vector2 &maxAngle, Vector3 &off
         int usePPFPS = 0;
         if (RndPostProc::Current() && RndPostProc::Current()->EmulateFPS() > 0)
             usePPFPS = 1;
-        float emulateFPS = usePPFPS ? RndPostProc::Current()->EmulateFPS() : 60.0f;
-        float fps = 60.0f / emulateFPS;
+        float fps = 60.0f / (usePPFPS ? RndPostProc::Current()->EmulateFPS() : 60.0f);
         spring *= 0.02f;
         Vector3 vel = mShakeVelocity;
-        vel *= fps;
+        float velFps = fps;
+        vel *= velFps;
         ::Add(mLastShakeOffset, vel, mLastShakeOffset);
         ::Add(mShakeVelocity, spring, mShakeVelocity);
         ::Add(mLastShakeOffset, spring, mLastShakeOffset);
@@ -1659,11 +1666,13 @@ void CamShot::Shake(float freq, float amp, const Vector2 &maxAngle, Vector3 &off
         Subtract(mLastDesiredShakeAngOffset, mLastShakeAngOffset, spring);
         spring *= 0.02f;
         Vector3 angVel = mShakeAngVelocity;
-        angVel *= fps;
+        float angFps = fps;
+        angVel *= angFps;
         ::Add(mLastShakeAngOffset, angVel, mLastShakeAngOffset);
         ::Add(mShakeAngVelocity, spring, mShakeAngVelocity);
         ::Add(mLastShakeAngOffset, spring, mLastShakeAngOffset);
-        mShakeAngVelocity *= powed;
+        float angPowed = powed;
+        mShakeAngVelocity *= angPowed;
     }
     offset = mLastShakeOffset;
     angOffset = mLastShakeAngOffset;

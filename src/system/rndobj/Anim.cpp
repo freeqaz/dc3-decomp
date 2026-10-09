@@ -440,6 +440,14 @@ void AnimTask::Poll(float time) {
             float endFrame = mAnim->EndFrame();
             float animMin = Min(startFrame, endFrame);
             float animMax = Max(startFrame, endFrame);
+            // w25-gt (fuzzy 99.899, 6 rows): the image's mScale / mFrameSpan
+            // loads in the two snap tests below take f13, ours f0.  regasg
+            // first-fits those temps, so f0 must be occupied there in the image.
+            // The one spelling that reproduces f13 -- fmod(.., animMax - animMin)
+            // in each arm, which keeps animMax a COLOR candidate in f0 live into
+            // the arms -- also sinks the subtraction into both arms, where the
+            // image computes it once here.  Open: what holds f0 across the snap
+            // tests while the range stays a single fsubs (16 spellings tried).
             float animRange = animMax - animMin;
             float endpoint;
             // The two snap cases share one fmod. It has to live inside the second
