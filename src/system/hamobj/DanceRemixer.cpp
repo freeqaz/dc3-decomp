@@ -230,9 +230,12 @@ void DanceRemixer::PostMoveFinished() {
     if (!detector) return;
 #endif
     for (int i = 0; i < 2; i++) {
-        auto _tmp1 = JumpedMoveIdx(moveIdx - 1);
-        auto scored = ScoredDanceMeasure(i, _tmp1 + 1);
-        if (scored) {
+        // Named `jumped` (the +1 folded in, demoted to a one-block temp) and
+        // no named bool: this lowers `this`'s colour priority (17 -> 14) under
+        // `move` (16, which then takes r30 as in the image) and lifts
+        // `measure` (-7 -> -6) over the hoisted TheMoveMgr address half.
+        int jumped = JumpedMoveIdx(moveIdx - 1) + 1;
+        if (ScoredDanceMeasure(i, jumped)) {
             detector->DisableAllDetectors();
             break;
         }

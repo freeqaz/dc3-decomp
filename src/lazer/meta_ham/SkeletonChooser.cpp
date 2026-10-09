@@ -562,12 +562,16 @@ void SkeletonChooser::ResolveSinglePlayer() {
     if (player != 0) {
         SwapPlayerDataForPractice();
         TheGameData->SwapPlayerSidesByIDOnly();
-        player = 0;
         TheHamProvider->SetProperty("ui_nav_player", 0);
         mActivePlayerIndex = 0;
         HamPlayerData *hpd = TheGameData->Player(0);
         otherPlayer = 1;
         TheGestureMgr->SetActiveSkeletonTrackingID(hpd->GetSkeletonTrackingID());
+        // `player = 0` last (same code: the constant is copy-propagated into
+        // the stores above). The late def lifts `player`'s colour priority
+        // 18 -> 26, so it pops ahead of the tie-0 TheGameData/guard address
+        // halves and takes r29 as in the image.
+        player = 0;
     }
     if (GetPlayerSide(player) != kSkeletonRight) {
         SwapPlayerSides();

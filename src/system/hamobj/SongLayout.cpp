@@ -331,7 +331,12 @@ void SongLayout::SetDefaultPattern(int totalMeasures) {
     // Create 2 verse patterns, each with 4 "Rest.move" elements
     for (int i = 0; i < 2; i++) {
         SongPattern pattern;
-        pattern.mName = Symbol(MakeString("%s%d", "Verse", i));
+        // Named MakeString result: one more one-block local demoted before
+        // COLOR (F 2 -> 3, C 5), so the three hoisted string-address halves
+        // keep recycled ids and pop in mint order (Rest.move r11, %s%d r10,
+        // Verse r9) as in the image. C2RS-BRIDGE 8.4/8.6 C-F rule.
+        const char *name = MakeString("%s%d", "Verse", i);
+        pattern.mName = Symbol(name);
         for (int j = 0; j < 4; j++) {
             pattern.mElements.push_back(Symbol("Rest.move"));
             pattern.mMoveParents.push_back(nullParent);
