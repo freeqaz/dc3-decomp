@@ -273,9 +273,12 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         // subobject (this+0x2c); the image materialises `subi r29, r25, 0x2c`
         // at the TOP of this block (before the inlined search), where calling
         // GetSkeleton through `this` sinks it to the call.
+        // w25-gm: the explicit `<= 0` test (the helper's own guard, made
+        // visible) lets the no-ID path branch straight to the scan loop
+        // (8242C80C `ble cr6` -> `li r30, 0`); through the helper alone the
+        // branch lands on its `li r11, -0x1` instead.  Same predicate.
         GestureMgr *self = this;
-        int idx = GetSkeletonIndexByTrackingID(mActiveSkelTrackingID);
-        if (idx < 0) {
+        if (mActiveSkelTrackingID <= 0 || GetSkeletonIndexByTrackingID(mActiveSkelTrackingID) < 0) {
             for (int i = 0; i < 6; i++) {
                 Skeleton &skel = self->GetSkeleton(i);
                 if (skel.IsTracked()) {
@@ -298,13 +301,16 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         int leftIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(leftID);
         int rightIdx = TheGestureMgr->GetSkeletonIndexByTrackingID(rightID);
 
-        int nextLeft = leftID;
-        // The image keeps the ID that nextLeft DISPLACED in its own variable, seeded
+        // leftID / rightID are updated in place (one variable each, two live
+        // ranges) rather than copied into separate nextLeft / nextRight
+        // locals: with separate locals the copies were their own colour
+        // candidates and nextRight (pri -6) took r28 ahead of rightIdx, which
+        // rotated this/leftID/rightID/rightIdx/displacedLeft/6 over r23-r28
+        // (w25-gm, c2rs cands tap).
+        //
+        // The image keeps the ID that leftID DISPLACED in its own variable, seeded
         // to -1 (8242C8F0 `li r26, -0x1`) and written only on the found path
-        // (8242C968 `mr r26, r24` immediately before `mr r24, r11`).  Testing the
-        // right-hand candidate against `leftID` instead is the same predicate --
-        // when the first loop does not fire, nextLeft still IS leftID -- but it
-        // keeps leftID live across both loops and costs the -1 seed.
+        // (8242C968 `mr r26, r24` immediately before `mr r24, r11`).
         int displacedLeft = -1;
         int start = 0, end = 5;
         if (leftIdx != -1) {
@@ -314,13 +320,12 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         for (int i = start; i <= end; i++) {
             int candidate = GetSkeleton(i % 6).TrackingID();
             if (candidate > 0 && candidate != rightID) {
-                displacedLeft = nextLeft;
-                nextLeft = candidate;
+                displacedLeft = leftID;
+                leftID = candidate;
                 break;
             }
         }
 
-        int nextRight = rightID;
         start = 0;
         end = 5;
         if (rightIdx != -1) {
@@ -329,14 +334,14 @@ void GestureMgr::PostUpdate(const SkeletonUpdateData *data) {
         }
         for (int i = start; i <= end; i++) {
             int candidate = GetSkeleton(i % 6).TrackingID();
-            if (candidate > 0 && candidate != nextLeft && candidate != displacedLeft) {
-                nextRight = candidate;
+            if (candidate > 0 && candidate != leftID && candidate != displacedLeft) {
+                rightID = candidate;
                 break;
             }
         }
 
-        mPlayerSkeletonIDs[0] = nextLeft;
-        mPlayerSkeletonIDs[1] = nextRight;
+        mPlayerSkeletonIDs[0] = leftID;
+        mPlayerSkeletonIDs[1] = rightID;
         UpdateTrackedSkeletons();
     }
 
