@@ -150,8 +150,8 @@ void FlangerEffect::Process(float *buf, int numSamples, int numChans) {
             int readBase2 = writePos - intDelay2 + frame;
 
             buf[i] = delayBuf[(readBase + 9600) % 9600] * (1.0f - frac) + buf[i];
-            float tap = delayBuf[(readBase + 9599) % 9600];
-            float mixed = (buf[i] + tap * frac) * 0.5f;
+            float *sample = &buf[i];
+            float mixed = (*sample + delayBuf[(readBase + 9599) % 9600] * frac) * 0.5f;
             buf[i] = mixed;
             buf[i] = feedbackBuf[(readBase2 + 9600) % 9600] * (1.0f - frac2) * mFeedbackFrac + mixed;
             float out = feedbackBuf[(readBase2 + 9599) % 9600] * frac2 * mFeedbackFrac + buf[i];
