@@ -1996,7 +1996,6 @@ if(BUILD_TESTS)
         tests/test_dxt5_alpha.cpp
         tests/test_crossfade_jump.cpp
         tests/test_enable_detector.cpp
-        tests/test_skeleton_callbacks_guard.cpp
         tests/test_sha1.cpp
         tests/test_rand_seed.cpp
         tests/test_threadtask_replace.cpp
@@ -2020,7 +2019,6 @@ if(BUILD_TESTS)
         tests/test_native_posesynth.cpp
         tests/test_native_audioseek.cpp
         tests/test_native_notables.cpp
-        tests/test_native_asan.cpp
         tests/test_lp64_literals.cpp
         tests/test_clamp_fsel_nan.cpp
         tests/test_native_memory_lp64.cpp

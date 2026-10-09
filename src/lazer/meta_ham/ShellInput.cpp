@@ -47,13 +47,6 @@ ShellInput::ShellInput()
 
 ShellInput::~ShellInput() {
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
-#ifdef HX_NATIVE
-    // PLATFORM: native ShellInput::Init never registers (its PostUpdate drives
-    // the Kinect hand-invoke/hands-up filters it does not create), and now that
-    // the SkeletonUpdate instance exists natively an unconditional
-    // RemoveCallback would assert (0xA8, non-fatal) and then erase end().
-    if (handle.HasCallback(this))
-#endif
     handle.RemoveCallback(this);
     delete mDepthBuffer;
     delete mSkelIdentifier;
@@ -99,33 +92,6 @@ void ShellInput::PostUpdate(const SkeletonUpdateData *updata) {
 
 void ShellInput::Init() {
     SetName("shell_input", ObjectDir::Main());
-#ifdef HX_NATIVE
-    // On native, skip Xbox-specific Kinect init (SkeletonUpdate thread, DepthBuffer,
-    // SkeletonIdentifier, speech) but create SkeletonChooser so player assignment
-    // logic works. Without it, GetSkeletonChooser() returns null and functions like
-    // GetPlayerIndex/UpdateNavLists bail out with fallback values.
-    //
-    // The two gesture filters are NOT created here, and the constructor does
-    // not initialise them either: the image's ShellInput::ShellInput stores
-    // 0xc8/0xcc/0xd0/0xdc and skips 0xd4/0xd8, because the retail Init always
-    // assigns both. Native Poll() tests them for null, so they must be nulled
-    // here -- otherwise that test reads whatever the allocator left behind.
-    // glibc hands out zeroed pages this early, which hid it; ASan fills new
-    // blocks with 0xbe and Poll() faulted on the first frame of attract_screen.
-    mHandInvokeGestureFilter = nullptr;
-    mHandsUpGestureFilter = nullptr;
-    mCursorPanel = ObjectDir::Main()->Find<UIPanel>("cursor_panel");
-    if (mCursorPanel && mCursorPanel->CheckIsLoaded() && mCursorPanel->LoadedDir()) {
-        mCursorPanel->Enter();
-    }
-    mSkelChooser = new SkeletonChooser;
-    static Symbol reset_controller_mode_timeout("reset_controller_mode_timeout");
-    TheHamUI.AddSink(this, reset_controller_mode_timeout);
-    // Primary boot hook: runs after HamInit() (TheGestureMgr exists, in controller
-    // mode) and after UIManager::Init() (helpbar dir loaded), so this normally wins
-    // the one-shot and activates controller_mode.flow before the first screen shows.
-    NativeBootControllerModeOnce();
-#else
     SkeletonUpdateHandle handle = SkeletonUpdate::InstanceHandle();
     handle.AddCallback(this);
     mCursorPanel = ObjectDir::Main()->Find<UIPanel>("cursor_panel");
@@ -143,11 +109,22 @@ void ShellInput::Init() {
     mHandsUpGestureFilter = Hmx::Object::New<HandsUpGestureFilter>();
     mHandsUpGestureFilter->SetRequiredMs(1200);
     mCursorPanel->Enter();
+#ifdef HX_NATIVE
+    // PLATFORM: TheSpeechMgr is built by the LiveCameraInput ctor (the Kinect
+    // NUI device, speech recognition included); there is none natively.
+    if (TheSpeechMgr)
+#endif
     TheSpeechMgr->AddSink(TheUI);
     mSkelExtTracker = new SkeletonExtentTracker;
 
     static Symbol reset_controller_mode_timeout("reset_controller_mode_timeout");
     TheHamUI.AddSink(this, reset_controller_mode_timeout);
+#ifdef HX_NATIVE
+    // Native boot plumbing: runs after HamInit() (TheGestureMgr exists, in
+    // controller mode) and after UIManager::Init() (helpbar dir loaded), so this
+    // normally wins the one-shot and activates controller_mode.flow before the
+    // first screen shows.
+    NativeBootControllerModeOnce();
 #endif
 }
 

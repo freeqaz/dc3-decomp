@@ -24,61 +24,32 @@ CriticalSection SkeletonUpdateHandle::sCritSec;
 #pragma region SkeletonUpdateHandle
 
 SkeletonUpdateHandle::SkeletonUpdateHandle(SkeletonUpdate *update) : mInst(update) {
-#ifndef HX_NATIVE
     MILO_ASSERT(mInst, 0x45);
-#endif
     sCritSec.Enter();
 }
 
 SkeletonUpdateHandle::~SkeletonUpdateHandle() { sCritSec.Exit(); }
 
 std::vector<SkeletonCallback *> &SkeletonUpdateHandle::Callbacks() {
-#ifdef HX_NATIVE
-    // Natively sInstance exists from GestureMgr::Init (GestureMgr_NativePreInit,
-    // the stand-in for LiveCameraInput::PreInit) until its exit callback.  The
-    // null-instance arms in this region only serve handles taken OUTSIDE that
-    // window -- native unit-test processes that never boot the gesture system,
-    // and teardown after SkeletonUpdate::Terminate -- where the image would
-    // assert (InstanceHandle, 0x146) and fault; MILO_ASSERT is non-fatal
-    // natively, so they keep those processes alive.  A running game never
-    // takes them.
-    static std::vector<SkeletonCallback *> sEmpty;
-    if (!mInst) return sEmpty;
-#endif
     return mInst->mCallbacks;
 }
 CameraInput *SkeletonUpdateHandle::GetCameraInput() const {
-#ifdef HX_NATIVE
-    if (!mInst) return nullptr;
-#endif
     return mInst->mCameraInput;
 }
 void SkeletonUpdateHandle::SetCameraInput(CameraInput *input) {
-#ifdef HX_NATIVE
-    if (!mInst) return;
-#endif
     mInst->SetCameraInput(input);
 }
 
 bool SkeletonUpdateHandle::HasCallback(SkeletonCallback *cb) {
-#ifdef HX_NATIVE
-    if (!mInst) return false;
-#endif
     return VectorFind(mInst->mCallbacks, cb);
 }
 
 void SkeletonUpdateHandle::AddCallback(SkeletonCallback *cb) {
-#ifdef HX_NATIVE
-    if (!mInst) return;
-#endif
     MILO_ASSERT(!HasCallback(cb), 0xA2);
     mInst->mCallbacks.push_back(cb);
 }
 
 void SkeletonUpdateHandle::RemoveCallback(SkeletonCallback *cb) {
-#ifdef HX_NATIVE
-    if (!mInst) return;
-#endif
     MILO_ASSERT(HasCallback(cb), 0xA8);
     mInst->mCallbacks.erase(
         std::find(mInst->mCallbacks.begin(), mInst->mCallbacks.end(), cb)
@@ -86,9 +57,6 @@ void SkeletonUpdateHandle::RemoveCallback(SkeletonCallback *cb) {
 }
 
 void SkeletonUpdateHandle::PostUpdate() {
-#ifdef HX_NATIVE
-    if (!mInst) return;
-#endif
     mInst->PostUpdate();
 }
 
@@ -179,9 +147,7 @@ bool SkeletonUpdate::PrevSkeleton(
 }
 
 SkeletonUpdateHandle SkeletonUpdate::InstanceHandle() {
-#ifndef HX_NATIVE
     MILO_ASSERT(sInstance, 0x146);
-#endif
     return sInstance;
 }
 
