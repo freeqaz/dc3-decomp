@@ -154,27 +154,24 @@ void MakeEulerScale(const Hmx::Matrix3 &m1, Vector3 &v2, Vector3 &v3) {
     MakeEuler(m38, v2);
 }
 
-// w25-ge stop note (fuzzy 99.868, one row): in the else arm the image multiplies
-// w as (res, w) and z, y, x as (q, res); ours emits both w and z res-first.  Same
-// loads, registers and schedule -- only the z fmuls operand list differs.  res
-// is a demoted one-block local and qin.y/z/w are #2af reloads of the dot
-// product's CSE loads, so no colour candidate is involved: the order is fixed in
-// the IL before either allocator (8.3's open question).  Measured with the c2rs
-// tap (tgtcmp): `const Hmx::Quat &q = qin` for the dot and the Set flips z right
-// but w wrong (all four q-first, 75/76); a named z, w or y load flips that
-// component but reschedules the arm or cross-jumps the z store into the zero arm
-// (55-68/76); a named product reorders the stores; swapping operands at the
-// source, qin[2], a separate inv local, 1/len split, early return, !res, the
-// expanded dot, zero-arm spellings: inert.  Open question: what makes w alone
-// res-first while z is q-first (an IL node ordinal of the CSE'd loads?).
+// w25-ge: the image multiplies w as (res, w) and z, y, x as (q, res).  Those
+// commutative operand lists are fixed in the IL before either allocator runs
+// (res is a demoted one-block local; the components are #2af reloads of the dot
+// product's CSE loads), and they follow which name each component is read
+// through.  A combinatorial search over the c2rs tap (194 spellings: dot via qin
+// or a const ref, each component via qin, the ref or a named local, res reused
+// or a separate inv) found exactly one shape (with either res spelling): the dot
+// and x, w through the ref, y, z through qin.  Every single-name spelling leaves
+// w or z on the wrong side.
 void Normalize(const Hmx::Quat &qin, Hmx::Quat &qout) {
-    float res = qin * qin;
+    const Hmx::Quat &q = qin;
+    float res = q * q;
     if (res == 0) {
         MILO_NOTIFY_ONCE("trying to normalize zero quat, probable error");
         qout.Set(0, 0, 1, 0);
     } else {
         res = 1 / sqrtf(res);
-        qout.Set(qin.x * res, qin.y * res, qin.z * res, qin.w * res);
+        qout.Set(q.x * res, qin.y * res, qin.z * res, q.w * res);
     }
 }
 
