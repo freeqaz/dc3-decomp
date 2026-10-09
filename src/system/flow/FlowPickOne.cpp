@@ -95,7 +95,12 @@ END_COPYS
 // [] accessors reach mNodes through DIFFERENT inline paths in the original
 // ObjPtrVec header (PCH-reached, whole-binary blast radius).  Out of scope for
 // a 5-function task; the next lane should A/B an ObjPtrVec accessor spelling
-// with a full ninja + whole-binary row diff.
+// with a full ninja + whole-binary row diff.  Hypothesis: the image's
+// &mNodes is ONE address temp, CSE'd and hoisted to the head of the >1 arm
+// because several inlined accessors materialise it explicitly; ours folds
+// each access into a displacement and only forms the temp for _M_erase's
+// `this`.  Open question: which accessor's inline body forms the explicit
+// address.
 bool FlowPickOne::Activate() {
     FLOW_LOG("Activate\n");
     mStopRequested = false;

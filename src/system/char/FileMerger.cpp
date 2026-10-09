@@ -161,7 +161,12 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
             // r29 at the bottom, 97.2.
             // w24-c3 (97.85, same 4 rows): `ObjectDir *mergerDir =
             // MergerDir();` hoisted to function scope above the HX_NATIVE
-            // block is byte-inert.
+            // block is byte-inert.  Hypothesis: the image hoists the common
+            // first compare of BOTH arms into the MergerDir() join block
+            // (head merge), which needs the else arm's inlined clear() in
+            // guard form; ours lowers it jump-to-bottom-test, so the two arms
+            // share no first instruction.  Open question: what decides
+            // MSVC's rotation form for that inlined loop.
             mLoadedSubdirs.clear();
         }
     }
