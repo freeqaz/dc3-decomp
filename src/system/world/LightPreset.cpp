@@ -955,13 +955,14 @@ void LightPreset::GetKey(float frame, int &prevIdx, int &curIdx, float &blend) c
             return;
         }
 
+        // `before` is initialised first: the commutative operands of
+        // (before + after) are sorted by symbol id, higher first, and a local's
+        // id follows its first use.  before = 0 ahead of the size() load makes
+        // `after` the later symbol, so the image's `add r10, r25, r29`
+        // (after, before) comes out.  Swapping the operands is inert.
+        int before = 0;
         int after = mKeyframes.size() - 1;
-        int before;
-        for (before = 0; after > before + 1;) {
-            // w20-h: image `add r10, r25, r29` (after + before) vs ours
-            // before + after -- the only row (100 normalized, fuzzy 99.948).
-            // Same value. Inert: swapping the operands, RB3's declaration
-            // order (before first). Noise class: commutative operand order.
+        for (; after > before + 1;) {
             int mid = (before + after) >> 1;
             if (frame == mKeyframes[mid].mFrame) {
                 prevIdx = -1;

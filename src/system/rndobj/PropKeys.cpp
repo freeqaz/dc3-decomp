@@ -292,10 +292,8 @@ void FloatKeys::SetFrame(float frame, float f2, float f3) {
     if (mProp && mTarget && size()) {
         int idx;
         float val;
-        if (mPropExceptionID != kHandleInterp) {
-            idx = FloatAt(frame, val);
-            mTarget->SetProperty(mProp, val * f3);
-        } else {
+        switch (mPropExceptionID) {
+        case kHandleInterp: {
             const Key<float> *prev;
             const Key<float> *next;
             float ref = 0;
@@ -310,6 +308,12 @@ void FloatKeys::SetFrame(float frame, float f2, float f3) {
             else
                 sInterpMessage[4] = 0;
             mTarget->Handle(sInterpMessage, true);
+            break;
+        }
+        default:
+            idx = FloatAt(frame, val);
+            mTarget->SetProperty(mProp, val * f3);
+            break;
         }
         mLastKeyFrameIndex = idx;
     }
