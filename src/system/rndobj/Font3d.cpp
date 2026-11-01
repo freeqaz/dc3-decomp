@@ -140,17 +140,23 @@ bool RndFont3d::CharWidthAdvanceMesh(
             } else {
                 advance = FontUnitInverse() * info->advance;
             }
-            // RESIDUAL (w9-c 2026-09-30): 96.875 canonical / 96.875 fuzzy, 2 rows
-            // of 65, and they are the SAME instruction on both sides -- the image
-            // emits `lwz r11, 0x30(r30)` / `stw r11, 0x0(r27)` / `li r3, 0x1`,
-            // while MSVC fills the load-use gap for us and emits `li r3, 0x1`
-            // BETWEEN the load and the store.  Instruction sets identical, sizes
-            // identical (256 B both sides), rows 0-55 100% equal.  A scheduler
-            // coin-flip on a two-instruction window.
-            // Refuted, one full ninja each, all exactly 96.875: binding the mesh
-            // to a local first (`RndMesh *m = info->mMesh; *mesh = m;`), writing
-            // the out-parameter as `mesh[0] = ...`, and parenthesising the loaded
-            // member.  Nothing in the source reaches this window.
+            // w9-c 2026-09-30: 96.875 canonical / 96.875 fuzzy, 2 rows of 65, and
+            // they are the SAME instruction on both sides -- the image emits
+            // `lwz r11, 0x30(r30)` / `stw r11, 0x0(r27)` / `li r3, 0x1`, while
+            // MSVC fills the load-use gap for us and emits `li r3, 0x1` BETWEEN
+            // the load and the store.  Instruction sets identical, sizes
+            // identical (256 B both sides), rows 0-55 100% equal.
+            // Mechanism: the `li` materialises the return value, and the block
+            // scheduler chooses whether to fill the lwz->stw latency slot with
+            // it.  Measured inert (w26-b, one c2 compile each, 62/64 rows every
+            // time): binding the mesh to a local first (`RndMesh *m =
+            // info->mMesh; *mesh = m;`), writing the out-parameter as
+            // `mesh[0] = ...`, parenthesising the loaded member, `return 1;`,
+            // and a `bool result` local set inside the arm and returned after
+            // the `if` (that last one re-schedules the block: 43/64).  Moving
+            // the store ahead of the advance computation is worse still (46/64).
+            // What is left to move is the block's scheduling region, not any
+            // statement in it.
             //
             // NOT A TEMPLATE MISMATCH: objdiff's "Function Call Diff" reports the
             // image's `_M_find` instantiated over `pair<const unsigned short,
