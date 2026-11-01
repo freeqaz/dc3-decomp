@@ -831,6 +831,14 @@ void MoveDir::Poll() {
 // keyIdx--)`, `keyIdx = hamMoveKeys.size()`, a `(int)` cast in place of
 // `tmp`.  Worse: std::max for i13 (97.1), indexing without the curKey ref
 // (98.5).
+// w26-d (99.63): the other five name_check rows are ICF folds, not wrong
+// callees -- MakeString<W4_D3DFORMAT> and MakeString<H> share 82610090, and
+// RadFree / ??3 / ??_V / OggFree share 82E21268 in icf_aliases.map.  So the
+// dead store above is the whole residual: the image gives the loop counter a
+// stack home at 0x50 (a home the fctiwz temp later reuses, so the store is
+// dead there too), our c2 keeps it in r28 with no home.  Re-measured inert:
+// numKeys and/or keyIdx declared in the outer block or at function scope,
+// reusing numKeys as the counter, for-loop pre-decrement.
 void MoveDir::Enter() {
     PanelDir::Enter();
     int i13 = 0;
