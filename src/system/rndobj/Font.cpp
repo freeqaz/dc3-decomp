@@ -78,8 +78,20 @@ void KerningTable::Save(BinStream &bs) {
 
 // w15-i1 (99.978 canonical, 2 rows): the image reloads mFirstChar (lhz 0x0) then
 // mSecondChar (lhz 0x2) for the table index; we load them the other way round.
-// Byte-inert: TableIndex(first, second), and an inline `(a ^ b) & 0x1F` in both
-// operand orders.  MSVC canonicalises the xor operands.
+// Byte-inert: xor is commutative and the result is masked by 0x1F, so both
+// orders compute the same index.
+// Mechanism (c2-rs §8.7): this is the COMMUTATIVE OPERAND-ORDER key, not a
+// register-assignment row.  Both operands arrive at the last sort (cqlo3) as
+// folded single-use temps of the same shape, and that sort is descending by key
+// and stable, so their order is fixed by the key of the tuple each temp was
+// folded out of.  Measured inert (one rebuild each, all exactly 90/92 rows):
+// swapping the two TableIndex arguments, inlining the xor in both operand
+// orders, naming mFirstChar first, naming mSecondChar first, and naming both
+// before the `Key` call.  That is §8.3's finding -- c1 canonicalises the
+// operand list of a commutative tuple in the IL, before the second driver ever
+// sorts it, so the two temps keep the mint order c1 gave them.  Flipping this
+// needs a change of IL NODE for one operand (a different expression producing
+// it), not a change of operand position.
 // w16-a: re-subscripting `info[i].mSecondChar, info[i].mFirstChar` for the
 // table index (instead of curInfo) does not change the load order and costs a
 // callee-saved renumbering (97.8).
