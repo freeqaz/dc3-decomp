@@ -264,6 +264,12 @@ void BustAMovePanel::ResetScores() {
 // temp's.  With block-scoped moveName and the temp in the else arm, the two
 // are disjoint and MSVC reuses the slot (our frame 0x80).  No spelling with
 // overlapping scopes that also keeps the image's code is known.
+// w26-e (99.931, unchanged): four more spellings, all worse or equal --
+// `(_D3DFORMAT)index` in both MakeStrings 75 instrs / 13 rows (the cast is
+// materialised, so the call is a different shape), `SetTextToken(Symbol(
+// gNullStr))` 74 / 48, `const int &flashCardIdx = index` behaves exactly as
+// index-direct (frame 0x80), and a nested scope around the whole body 74 / 5.
+// The three-slot frame stays out of reach from the source side.
 void BustAMovePanel::SetFlashcardName(int side, int index, int i3) {
     int flashCardIdx = index;
     Symbol s(gNullStr);
@@ -1664,6 +1670,15 @@ void BustAMovePanel::Poll() {
                 break;
             currentPhrase++;
         }
+        // w26-e (99.60107, unchanged): this add is a COMMUTATIVE use list, so
+        // c2rs section 8.7 says its order comes from the post-lowering sort and
+        // is keyed per operand -- but in this TU the tuple never surfaces as an
+        // M/T pair in the cqlo3 dump (the begin() load is folded into a
+        // single-use temp, printed `T<sid>{00000000}`), so the key pair that
+        // decides it could not be read here.  What is measured: the bool-mask
+        // rows at L1544 and this row cannot both be closed -- the `&&`
+        // initialiser that closes the former costs 24 rows downstream -- so
+        // 100 is not reachable from this row alone either way.
         // RESIDUAL (lane w7-bb, 2026-09-14), 99.60107.  The FIFTH and last row of
         // Poll -- the four others are the bool-mask block noted at L1544 -- is
         // idx 729, a commutative operand swap in the address of the element
