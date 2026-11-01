@@ -2060,6 +2060,28 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 // Not tried on purpose: seeding i5 from another zero-valued local (i9/i88)
 // would invent a use -- flagged, not shipped.
 //
+// w26-a CONFIRMS the w21-be reading by decoding the permutation out of the
+// diff rather than eyeballing it, and it is exactly ONE cyclic shift of eight
+// registers, not a scattering of 51 independent rows:
+//     value   image   ours        value    image   ours
+//     zero     r21     r28         c8/bool  r26     r25
+//     this     r22     r21         i9       r27     r26
+//     d        r23     r22         TheDebug r28     r27
+//     kAssert  r24     r23
+//     Mesh.cpp r25     r24
+// So every other row is the same shift seen from a different value; nothing
+// else about the function differs, and the image's extra instruction is the
+// single `mr r28, r21` at row 174 (804 vs 800 bytes on both sides is that one
+// instruction).  Five more spellings MEASURED INERT this wave at 101/210 --
+// all six initialisers collapsed onto one line, b3 declared first, i8c/i88/i9
+// grouped onto one line, the five ints declared in reverse, and int instead of
+// unsigned for i8c/i88/i9.  c2 canonicalises the declaration forms, so the
+// coalescing decision is not reachable from how the zero-initialisers are
+// spelled; it is a c2rs §8.4 tie-0 pop-order / §8.6 `cost` preference question
+// (`CAND asg id 1 reg r28 cost r10:-1 r26:-1 r28:-1 r29:-1 r30:-1` -- the zero
+// web is pulled to r28 by copy preferences, not by its priority of -10, which
+// would have popped it above the pri -36/-37 pair).
+//
 // NOT A DEFECT: rows 62 and 159 call different MakeString instantiations
 // (`$$BY0BD@...$$BY04` vs our `$$BY08...$$BY0DH@`) while referencing the SAME
 // `??_C@` string symbols on both sides.  Those instantiations are ICF-folded
