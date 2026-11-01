@@ -2793,6 +2793,22 @@ void BurnXfm(RndMesh *mesh, bool keepTranslation) {
     // EXACTLY, but the loop's inlined Multiply(Vector3, Matrix3) then schedules
     // its loads differently (4 insert / 4 delete) and the function drops
     // 99.887 -> 95.1.  Reverted; the loop is where the remaining lever is.
+    // w26-g canonical decomposition: report.json charges 19 units of 16800
+    // (99.8869), and all 19 are IMMEDIATE diffs -- one point each, all of them
+    // stack-slot NUMBERING, not a field or a constant: 4 in the transpose
+    // (rows 21/24/31/33) and 15 inside the two inlined
+    // Multiply(Vector3, Matrix3, Vector3) bodies (51/61 and 73-98), where both
+    // sides load/store the SAME multiset of slots in a different order. The
+    // instruction multiset, every call and every frame slot is identical, so
+    // this is c2 scheduling inside the inlined body and nothing else. All 46
+    // register/operand-order rows the fuzzy diff prints are forgiven by the
+    // canonical ruler (a register diff costs 5 and is folded into
+    // `arg_diff_score`). Refuted this lane, all measured with the c2rs
+    // scratch-object loop: single shared transpose temp (96.12, 169 insns),
+    // three-temp order yz/xz/xy (97.71) and xy/yz/xz (97.68) -- order changes
+    // WHICH four transpose rows are charged, never how many -- and the three
+    // Set(...) spellings (in-place 92.99, saved-temps 92.96, per-column 89.38,
+    // all 172 insns instead of 168), which lose the loop outright.
     float xy = normalMat.x.y;
     normalMat.x.y = normalMat.y.x;
     normalMat.y.x = xy;
