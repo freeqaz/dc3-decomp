@@ -742,17 +742,34 @@ RndTex *RndFont::ValidTexture(int idx) const {
         return nullptr;
 }
 
-// RESIDUAL (w7-al, 95.9 canonical): 55 rows, and 50 of them are one
+// w7-al (95.9 canonical then, 95.6 at w26-b): 34 rows, and 24 of them are one
 // consistent callee-saved permutation.  The image ranks the nine live values
 // cursor > left > right > info > this > bmap > top > bottom > pos (r31..r23);
 // we get left > right > cursor > info > top > bottom > this > pos > bmap.
-// Every instruction is otherwise in the same order with the same opcode, so
-// the cause is MSVC's spill-weight ordering, not the source shape -- merging
-// the two cursors into one (which is what the image does) moved the structure
-// but not the ranking.  The last five rows are the scheduler placing
-// bmap.Width()'s `lhz` before the cursor's `extsw` instead of between the
-// `fcfid` and the `frsp`, which duplicates one `frsp` and one `lfs pos.x` out
-// of the cross-jumped tail.
+// Every instruction is otherwise in the same order with the same opcode.
+// Mechanism (c2-rs candidate tap, fn 368): this is COLOR's pop order, which is
+// priority descending then tie descending.  Our worklist pops
+// id13(pri 21, sym 11/k04), id7(pri 21, sym 7/k04), id10(pri 18, sym 9/k04),
+// id14(pri 17, sym 11/k04 second live range), id11(pri 12, sym 9), id8(pri 10,
+// sym 7) -- i.e. the two live ranges of each of the three scan variables sit
+// next to each other, which is why `left`/`right` outrank `cursor`.  Priority
+// is refs_in_block x pressure, so closing this means moving references between
+// basic blocks (§6 lever 2), not reordering declarations.  Merging the two
+// cursors into one (which is what the image does) moved the structure but not
+// the ranking.  The last rows are the scheduler placing bmap.Width()'s `lhz`
+// before the cursor's `extsw` instead of between the `fcfid` and the `frsp`,
+// which duplicates one `frsp` and one `lfs pos.x` out of the cross-jumped tail.
+// NOT a template mismatch: objdiff's call diff names the image's `_M_find`
+// instantiated over `pair<const unsigned short, RndFont::CharInfo>` where ours
+// is over `RndFont3d::CharInfo *`.  Checked in the target object directly: the
+// image loads a POINTER out of the map node at 0x14 and dereferences 0x10/0x20/
+// 0x30 through it, so its map value is a pointer too; the name is the linker's
+// ICF survivor (every unsigned-short-keyed `_M_find` folds to one body).  The
+// `MakeString` in the trailing MILO_ASSERT differs the same way and is the same
+// kind of artefact: the target object contains only
+// MakeString<char const[19], int, char const[5]> and passes it the 21-byte
+// "info->charWidth >= 0" literal and the 9-byte "Font.cpp" literal, which no
+// single translation unit can type-check -- it is a merged COMDAT name.
 void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, int page) {
     info->mPage = page;
     if (mMonospace) {
