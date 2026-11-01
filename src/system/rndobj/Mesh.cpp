@@ -860,6 +860,23 @@ float RndMesh::GetDistanceToPlane(const Plane &p, Vector3 &v) {
 // (0x100) for the loop's end() and adds size*0x60 + begin; we do the
 // reverse.  VertVector::end() spelled `mVerts + mNumVerts`, `&mVerts[size()]`
 // and `begin() + size()` are all inert here, so the order is not end()'s.
+//
+// w26-a, 16 more spellings, still 107/111 (all at idx 78-82, the BACK-EDGE
+// recompute of end(); the ENTRY copy of the same expression at idx 49-55
+// already agrees with the image, in both builds): pointer and reference
+// bindings of Verts() (`const`/non-const), `&Verts()[0]`/`&Verts()[size()]`,
+// index loop, bare `Vert*` loop, `it++`, `it += 1`, reversed `!=` operands,
+// a hoisted `begin()`, a hoisted begin+size pair, and the same loop rewritten
+// as `while` and as a `for(;;)` with the increment moved into the body.
+// MECHANISM HYPOTHESIS, stated as one: end() is `&mVerts[mNumVerts]`, so its
+// two leaves are both r29-relative loads off the same base and differ only by
+// the displacement fold (0x100 vs 0x104) in the c2 commutative-sort key
+// (C2RS-BRIDGE 8.7).  That key is not reachable from this function -- the
+// expression lives in the shared Mesh.h nested class -- and the two
+// instantiations of it are coloured oppositely here, which is a property of
+// the live set across the body rather than of the expression.  Nothing was
+// found that flips the back-edge copy without either flipping the entry copy
+// or changing the instruction count.
 bool RndMesh::MakeWorldSphere(Sphere &s, bool b) {
     if (b) {
         if (mShowing) {
