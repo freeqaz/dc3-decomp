@@ -710,6 +710,10 @@ void MoveDir::PostLoad(BinStream &bs) {
 //   id 49 pri -48 tie 26  arena#50      -> r16
 //   id 42 pri -52 tie  0  code#78       -> r15
 //   id 13 pri -54 tie  0  code#84       -> r14  <- TheMaster@h
+// w26-d saw the same candidate from the allocation tap, which adds its fields:
+//   `CAND sel fn 974 id 13 pri -54 tie 0 ben 3 ref 2 allowed { r14 }`
+// -- a single-register allowed set, i.e. it takes the last free register and
+// leaves nothing for &TheTaskMgr, which must then go to 0x50.
 // So the mechanism hypothesis is: `TheMaster@h` is the last-popped code-band
 // half (lowest priority) and takes the last register, which pushes the pool
 // one over budget; the image drops that ONE candidate and rematerialises the
@@ -721,6 +725,9 @@ void MoveDir::PostLoad(BinStream &bs) {
 // result plus a named delta.  Worse: a named `HamMaster *master` (97.72 canon),
 // a named mCurMoveNormalizedResult[i] (97.55), a named bool for the beat test
 // (96.04), and calling DeltaUISeconds once with a `*=` arm (93.42).
+// w26-d re-measured the section 8.6 "+1 demotable named local" lever here:
+// a named `HamMove *curMove = mCurMove[i]` costs 96.72 -> 95.28 in the replay,
+// and dropping `oldMove` or the curPlayerData reference were inert or worse.
 void MoveDir::Poll() {
     SkeletonDir::Poll();
     mDancerViz->Poll();
