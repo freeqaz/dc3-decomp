@@ -800,6 +800,12 @@ void RndMesh::UpdateSphere() {
 //     Vector3::operator*= and the vector's end() -- all correctly written in
 //     natural x,y,z order, all shared by the whole engine.  Changing one to
 //     chase a row here would move thousands of unrelated functions.
+//     SUPERSEDED FOR GetDistanceToPlane by w26-a, and the reason is worth
+//     keeping: the rows were never the LOAD order at all.  They are which of
+//     the two y/z products c2 emits as `fmuls` -- a register/instruction pick,
+//     not a load -- and it IS reachable from source, by changing a leaf's
+//     CLASS rather than its position.  See the w26-a note in the body.  The
+//     other three named here are untouched by that finding.
 // MEASURED NEGATIVES on this class, each a full build, each EXACTLY inert on
 // BOTH rulers: declaration reorder and argument inlining and commuting the
 // combining operator (FillCompressedVertex); swapping -Dot's arguments and
@@ -820,10 +826,27 @@ float RndMesh::GetDistanceToPlane(const Plane &p, Vector3 &v) {
         // evaluated left-to-right natively, so it is spelled out here with
         // the image's grouping.  Order INSIDE the pair is inert on MSVC
         // (both spellings emit the same fmuls/fmadds pick).
-        float dot = (p.c * v.z + p.b * v.y) + p.a * v.x + p.d;
+        //
+        // w26-a CLOSED (99.9375 -> 100.0, 8 rows): the residual was NOT the load
+        // order of Plane::Dot's triple but WHICH of the two y/z products c2
+        // makes the `fmuls` (the other becomes the `fmadds`).  That is decided
+        // by the c2 commutative operand sort (C2RS-BRIDGE 8.7), whose key for a
+        // product is a hash of its two leaves -- so writing the pair the other
+        // way round in source is inert (measured: 4 spellings, 88/96 unchanged),
+        // exactly as the w22 note below records.  What DOES move it is changing
+        // a leaf's CLASS: `p.c`/`p.b` are memory leaves (a load folded into the
+        // tree), and naming them as locals makes them variable leaves with their
+        // own sids, which re-orders the pair.  Each scope needs its OWN pair --
+        // hoisting one pair over both expressions changes the shape (measured:
+        // 96 -> 98 instructions).
+        float pb = p.b;
+        float pc = p.c;
+        float dot = (pc * v.z + pb * v.y) + p.a * v.x + p.d;
         for (auto it = Verts().begin(); it != Verts().end(); ++it) {
             Multiply(it->pos, world, v58);
-            float dotted = (p.b * v58.y + p.c * v58.z) + p.a * v58.x + p.d;
+            float vpb = p.b;
+            float vpc = p.c;
+            float dotted = (vpc * v58.z + vpb * v58.y) + p.a * v58.x + p.d;
             if (std::fabs(dotted) < std::fabs(dot)) {
                 dot = dotted;
                 v = v58;
