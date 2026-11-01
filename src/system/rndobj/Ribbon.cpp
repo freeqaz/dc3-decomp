@@ -262,6 +262,21 @@ void RndRibbon::UpdateMesh() {
 // w20-t (99.8, branch-scan row 87 adjudicated ARTIFACT): the back-edge lands on
 // the image's in-loop `lwz r8, 0x0(r31)` reload of mBegin (see w7-j below);
 // the search loop stores nothing, so the hoisted value is the same.
+// w26-f VERDICT: all 17 rows are equivalent, re-checked against the target
+// listing (name_check, full).  (1) the mBegin CSE above; (2) row 94/95 is the
+// two `memcpy` argument addresses emitted in the opposite ORDER, same values
+// (`add r4,r30,r11` / `add r3,r29,r11` vs ours `add r3,r29,r11` /
+// `add r4,r30,r11`) -- right-to-left argument evaluation, not a different
+// source or destination; (3) rows 334/346/348 are commutative operand pairs
+// (`fmuls f11,f25,f11` vs `fmuls f11,f11,f25`, `fmadds f0,f26,f7,f13` vs
+// `fmadds f0,f7,f26,f13`); (4) everything else is the r8/r9/r10 cascade that
+// follows from (1).  MECHANISM for the cascade, per c2rs §8.7: the permuted
+// values are single-use fold temps whose sort key is the temp's own sid, so the
+// whole tail tracks which temp is minted when -- the same one extra live value
+// the w7-j note names.  w7-j's container-pointer spelling already reproduces
+// the image's addressing and is refused only because MSVC re-hoists the load
+// out of the loop (99.757 -> 99.032); defeating that hoist is the open question,
+// and the loop body has no store that could make the reload non-invariant.
 void RndRibbon::UpdateChase() {
     if (!mFollowA) {
         return;
