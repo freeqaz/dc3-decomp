@@ -3110,10 +3110,17 @@ void RndText::FontMap::SetupCharacter(
     // aspect*size/2 for a single centered line) — making all menu/HUD text
     // invisible. Subtraction is not commutative; the swap was match-neutral
     // (objdiff 83.8% either way) but behaviorally wrong. Reverted to og form.
-    // NEGATIVE RESULT: the image keeps `_tmp1 * size` and the subtraction apart
+    // The image keeps `_tmp1 * size` and the subtraction apart
     // (`fmuls f12, f1, f26` at 0x261c, `fsubs f12, f27, f12` at 0x2638) where we
-    // contract to one fnmsubs.  Splitting it into a named `aspectH` temporary is
-    // exactly neutral -- MSVC re-fuses across the statement boundary.  Two rows.
+    // contract to one fnmsubs.  That is a ROUNDING difference: the image rounds
+    // the product before subtracting, we keep one extra rounding step.
+    // Mechanism: c2's fp contraction peephole on `a - b * c`, which re-fires
+    // across statement boundaries.  Measured inert at w26-b (one c2 compile
+    // each): a named `aspectH` temporary, `z0 + -aspectH`, swapping the factors,
+    // an unrelated statement between product and subtraction, and reading
+    // `state.mSize` directly instead of the `size` copy -- the last one does
+    // split the pair but also drops the `fmr` copy of mSize the image keeps and
+    // shrinks the frame by 0x10, so it measures worse overall (95.2 vs 97.8).
     // w13-a: moving this below the vert[0] Set() (the FontMap3d fusion lever)
     // is inert here.
     float z1 = z0 - _tmp1 * size;
