@@ -244,6 +244,13 @@ String RecordClipName(const char *cc, int i2) {
     // inline in the argument list -> 98.8 (adds a mr r11,r3 save and moves
     // the format-string lis); a `const char *name = cc;` alias -> 96.4 (new
     // slot, cc no longer homed).  name_check charges no relocation here.
+    // w26-d (99.94, same 5 addi rows): re-read both listings -- the
+    // register->slot mapping is identical (r4 0x54, r5 0x5c, r6 0x58, r7 0x50,
+    // r9 0xbc); only the emission order differs, the image deferring `&cc` (r9)
+    // past the four stack temps we set up in reverse-argument order.  c2
+    // mechanism: &cc is the one argument whose leaf is a parameter home rather
+    // than a temp, so it is emitted in the parameter's prop order.  Re-measured
+    // inert on the current tool: `(const char *)cc`, `(cc)`.
     unsigned int code = dt.ToCode();
     Symbol song = TheGameData->GetSong();
     const String &dancer = TheGameData->Player(0)->CurrentDancer();
