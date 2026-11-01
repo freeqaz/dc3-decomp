@@ -241,6 +241,12 @@ BEGIN_PROPSYNCS(Spotlight)
     // materialising BOTH sides of `mColorOwner->mColor = c` as pointers, the way
     // MSVC lowers an operator= call, while we lower it as one anchored struct
     // copy. 4764 B at 99.8287 == those two instructions and nothing else.
+    // w26-g canonical decomposition: 204 of 119100 units = two DELETES (100
+    // each, the `mr r9, r11` and the dead `addi r10, r9, 0x1b0`) plus four
+    // IMMEDIATE anchoring rows (1 each: the stores are anchored 0x1b0(r9) in
+    // the image and 0x0(r11) here -- the SAME effective addresses, a different
+    // base register). So the "8 rows" is exactly two instructions; every
+    // register row is forgiven by the canonical ruler.
     SYNC_PROP_SET(intensity, Intensity(), SetIntensity(_val.Float()))
     SYNC_PROP(color_owner, mColorOwner)
     SYNC_PROP(damping_constant, mDampingConstant)
