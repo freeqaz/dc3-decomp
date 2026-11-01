@@ -218,6 +218,32 @@ long Voice::createOrReuse(
 // w18-e (94.97): a static inline OutputFor(mFxSend) helper for the six
 // ternaries is worse (93.3 -- its null tests come out as cr0 compares);
 // declaring the stereo destChannels above the assert is worse (94.8).
+//
+// w26-j (2026-11-01), measured against the target object with tgtcmp
+// (baseline EQUAL 384/438, ours 438 == target 438 instructions):
+//   - BEHAVIOUR: no bug.  The two insert/delete clusters are a basic-block
+//     layout flip plus a CSE, not a missing or wrong statement.  unicorn has
+//     no verdict for this symbol, so the row-for-row listing is the evidence.
+//   - the 22-row block-layout cluster is rows 81-90/105-111: the image emits
+//     `beq cr6, THEN; cmpwi 2; bne cr6, ELSE` and falls through into cos/sin,
+//     we emit `beq THEN; cmpwi 2; beq THEN`, fall through into the fill-1.0
+//     loop and jump over cos/sin.  Re-measured this lane:
+//     `if (destChannels != 6 && destChannels != 2) {fill} else {cos/sin}`
+//     is byte-inert (384/438 either way), confirming w7-an.
+//   - NEW negative: naming mVolume as `float vol = mVolume;` inside the arm
+//     collapses the function to 63/438.  Do not name it.
+//   - the other cluster (rows 40-65) is c1 keeping `TheXboxSynth@l` in r8
+//     across the first ternary's null test and reusing it for the second
+//     ternary (insert at 45, reuse at 49/58, reload at 64 and 102); the image
+//     reloads inside each ternary arm.  The textually identical MONO copy
+//     matches row for row, so this is context, not a spelling.
+//   - the 6 `fmuls` operand-order rows are c2's post-lowering commutative key
+//     (C2RS-BRIDGE 8.7): our cqlo3 emits `V25{0x10320} V23{0x102e0}` and
+//     `V617{0x19a40} V23{0x102e0}`, i.e. cos/sin (higher sid) before mVolume;
+//     the image needs mVolume's leaf key to be the higher of the two.  Source
+//     operand order is canonicalised away, so the lever is a leaf kind or sid
+//     change on mVolume -- and the `vol` negative above is that lever firing
+//     the wrong way.
 void Voice::UpdateMix() {
     if (mPoolVoice.sourceVoice == 0)
         return;
