@@ -158,6 +158,23 @@ void CharBones::RecomputeSizes() {
         // og-dc3/RB3 plain loop (both load -0x1c first like the image, but sink
         // the subf below the bl).  Only `*++offset = ...` keeps subf above the
         // call, and every such spelling loads the minuend (-0x18) first.
+        //
+        // w26-f VERDICT: equivalent -- both sides compute offset[-6] - offset[-7];
+        // only the two loads' order and the matching subf operand pair differ.
+        // MECHANISM (measured, `c2rs stage cands --regasg`): this is the sched3
+        // order, not colour and not regasg.  regasg sees the two loads as
+        // `RT 6 lwz d{s16}` (sid 198 = the -0x18 minuend) then `RT 8 lwz d{s17}`
+        // (sid 197 = the -0x1c subtrahend), then `RT 11 subf u{s17 s16}`, and
+        // first-fit hands them r11 then r7 -- the image's registers exactly.
+        // The symbol ids say the IL minted the SUBTRAHEND first (sid 197 < 198),
+        // which is also the image's emitted order, so the two tuples are already
+        // right in the IL and sched3 reverses them.  Nothing in COLOR decides it
+        // (both loads are `CDEMOTE`d to regasg temps; C 3, F 4), so the §8.4/§8.6
+        // free-list levers cannot reach it either.  Tried and inert in w26-f:
+        // `-offset[-7] + offset[-6]` (24/27, bit-identical) and the negated
+        // single-statement form `cur_offset - TypeSize(i) * (offset[-8] -
+        // offset[-7])` (5/28, worse).  Open question: what makes sched3 keep the
+        // IL order for two independent same-base loads.
         int count_diff = offset[-6] - offset[-7];
         *++offset = cur_offset + TypeSize(i) * count_diff;
         i++;
