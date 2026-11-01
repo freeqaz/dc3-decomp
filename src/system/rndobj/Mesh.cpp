@@ -64,9 +64,16 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     // RESIDUAL 99.68293 canonical / 94.31707 fuzzy, 23 rows, all register and
     // stack-slot permutation: the image INTERLEAVES the three rows -- three
     // fmuls, then three nx-fmadds sharing f7=nx as the multiplicand, then the
-    // three closing fmadds -- and holds nx in one register across all of it,
-    // where we schedule more of each row before moving on.  Zero `[sym]` rows,
-    // i.e. nothing here is a wrong callee.
+    // three closing fmadds -- and holds nx in one register across all of it.
+    // w26-a correction: we emit the SAME 3+3+3 grouping (three fmuls, then
+    // three fmadds on one term, then three on the other); the two later groups
+    // are TRANSPOSED, i.e. we fuse the row's third term second and its nx
+    // second term third, whereas the image does nx second and the third term
+    // last.  So this is not "we finish a row before starting the next" -- the
+    // grouping agrees and only which term is fused at each of the two later
+    // positions differs, which is a rounding difference (the fused product is
+    // the unrounded one), not just a register rename.
+    // Zero `[sym]` rows, i.e. nothing here is a wrong callee.
     //
     // ⚠ METHOD NOTE for whoever reads the numbers next: a large
     // (normalized - fuzzy) gap is NOT a wrong-callee tell.  This row has the
@@ -78,6 +85,23 @@ Vector3 TransformNormal(const Vector3 &normal, const Hmx::Matrix3 &mat) {
     // for `[sym]` rows under name_check, or ask
     // query_functions(objdiff_pattern='WRONG_CALLEE') -- which, asked of all
     // three of these units, returns a measured empty set.
+    //
+    // w26-a: 27 more spellings, every one still 18/41 (or 17), i.e. c2
+    // canonicalises them all to the same tree and the emitted order is
+    // invariant under all of them.  Tried: explicit parentheses `(t1 + t2) +
+    // t3`; partial-sum locals per row; a reused single partial-sum local;
+    // three partial-sum locals declared together; compound `+=` in three
+    // statements per row; every product named; only the FIRST / only the
+    // SECOND / only the THIRD product named; the second and third named;
+    // `normal.x` used directly so every multiplicand is a memory leaf; a
+    // second named copy of nx; and a `Vector3 acc` accumulator copied out.
+    // MECHANISM HYPOTHESIS: the two later fma positions are chosen by the c2
+    // commutative operand sort (C2RS-BRIDGE 8.7), whose key is a hash over
+    // the product's two leaves; the three products of a row are structurally
+    // identical (one named local x one stack leaf), so every spelling above
+    // reproduces the same three keys and the same order.  Moving it needs a
+    // leaf whose identity actually changes -- and the one that moves (nx) is
+    // shared by all three rows, so a per-row change is not available either.
     result.y = ny * inv.y.y + nx * inv.y.x + nz * inv.y.z;
     result.x = nz * inv.x.z + nx * inv.x.x + ny * inv.x.y;
     result.z = ny * inv.z.y + nx * inv.z.x + nz * inv.z.z;
