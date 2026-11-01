@@ -688,6 +688,25 @@ void HollaBackMinigame::OnBeat() {
     // in the test with no local (drops the addi). `currentBeat =
     // master->TotalBeat1()` makes the volatile re-reads below unnecessary (the
     // r29-based reload then differs by expression) but costs 17 regswap rows.
+    // w26-g canonical decomposition: report.json charges exactly ONE unit of
+    // 100 -- an insert, 100 of 69900 (99.85694) -- and it is the store below.
+    // 0x50(r31) is written twice by the base (index 57 and 641) and READ
+    // nowhere, so it cannot be a behaviour difference. The `add` operand swap
+    // at index 194 is register-only and the canonical ruler forgives it. That
+    // makes this the closest row in the 95-100 band: one dead store.
+    // Refuted this lane, every one BIT-IDENTICAL (700 insns, canonical
+    // 99.85694): `SongPos *a = &.., *b = &..;` on one declarator line (both
+    // orders), `SongPos *const`, separate declaration + assignment, a
+    // file-static helper returning &m->SongPos2(), an explicit cast, and
+    // pointer-returning accessors added to HamMaster.h as a probe (reverted).
+    // The store is a home INITIALISATION, not a spill: it survives with the
+    // GetCurrLoopBeats call deleted entirely. Mechanism = the dead home-slot
+    // store of an address-of-sub-object temporary (memory:
+    // pattern_dead_home_slot_store) -- our c1 homes the `&master->SongPos2()`
+    // temp, the image's c1 keeps it in a register and its copy is already dead
+    // (`addi r10, r30, 0x78` has no reader in the image either), so this is the
+    // inverse of the Spotlight::SyncProperty residual, where the IMAGE homes it
+    // and we do not.
     SongPos *prevSongPos = &master->SongPos2();
     SongPos *songPos = &master->SongPos1();
     MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
