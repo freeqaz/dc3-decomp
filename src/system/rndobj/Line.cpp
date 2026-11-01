@@ -569,6 +569,26 @@ void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
 // none better than this hand-written spelling, whose reload pattern (dir.y
 // reloaded for the scale, dirX forwarded) already matches the image row for
 // row.  Phase-1 proj addressed off pt->unk[4] instead of &viewPos + 1: inert.
+//
+// w26-j (2026-11-01) behaviour verdict: unicorn records DIVERGENT for this
+// symbol, class `wild_jump_match` (stable_divergent, harness v4) -- both sides
+// crash somewhere DIFFERENT, which is the documented whole-function-rewrite
+// signal for that harness class, not a defect.  It agrees with the listing read
+// above.  Re-read the name_check listing this lane:
+//   - no wrong constant: every `__real@` pairs on its own row.
+//   - no field error: the 10 OFFSET_SWAP rows are pairs like -0x50(r30) /
+//     -0x8(r30) that appear in BOTH listings, same base register, in the
+//     opposite row order -- a load-ordering difference inside phase 2/3, not a
+//     different displacement.
+//   - the 2 CONTROL_FLOW rows (idx 203/227) are the phase-4 copies written
+//     above.  The image emits `subic.` + `bne` (a condition loop) and walks the
+//     destination at +0x0..+0xc; we emit `mtctr` + `bdnz` (a CTR loop) and walk
+//     it at +0x3c..+0x48, i.e. we keep the index base 0x3c (= 0x48 - 0xc)
+//     folded into the pointer.  That bias is also where the phase-4 addr
+//     relocation rows come from.  Making MSVC pick the condition loop over the
+//     CTR loop is the c2 loop-rotation heuristic; the count is already the
+//     `divwu` quotient in both listings, so the trip count and the semantics
+//     are identical.
 void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
     // Phase 1: project every point (x, z over y in view space). The three
     // view-space components are read before either projected value is
