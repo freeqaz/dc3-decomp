@@ -1294,6 +1294,14 @@ void MoveDir::FinalPoseStateMachine() {
     // vs our <char[12],int,char[46]> call row is an ICF fold, not a bug: both
     // names sit at 824d1870 in ham_xbox_r.map, and the args (r17 = "MoveDir.cpp",
     // r16 = the other_player assert text) are identical on both sides.
+    // w26-d (99.95, rows 270-278): the six rows are one emission-order swap of
+    // two independent memory-homed walkers -- the image does `lwz 0x50 / addi
+    // +0x3c` then `lwz 0x58 / subi -0x3c`, ours the reverse, with r9/r10
+    // swapped to match.  Each slot receives the same update on both sides, so
+    // the loop state is identical.  c2 orders the pair by candidate id; both
+    // hoisted lis loads are `allowed { r14 }`, and the source shapes that could
+    // reorder them (other_player's declaration position, a MovePlayerData
+    // reference for the other player) are inert -- re-measured this lane.
     for (int i = 0; i < 2; i++) {
         int other_player = 1 - i;
         HamMove *move = mMovePlayerData[i].mCurMove;
