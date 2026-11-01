@@ -72,6 +72,22 @@ namespace {
                 // order flips, Interp(0.6f, 1.0f, meters). The image's order
                 // (0.6, 0.001, 0.4 from f13 down) never appears; an inline
                 // Interp over the whole expression folds 0.001*0.4 (0x39d1b717).
+                // w26-h, MECHANISM (c2rs tap): these five constants are not COLOR
+                // candidates, they are `lau` address temps allocated first-fit by
+                // regasg (C2RS-BRIDGE 8.2) over the sched3 tuple order, and that
+                // order is the temp sid descending: sid 164 (64.0) -> r11, 162
+                // (128.0) -> r10, 152 (0.6) -> r8, 143 (0.4) -> r7, 141 (0.001)
+                // -> r5.  The image ends 0.4, 0.001, 0.6, so ITS sched3 was
+                // 164, 162, 143, 141, 152 -- the 0.6 address must be lowered LAST.
+                // Every spelling below leaves the sids 164/162/152/143/141
+                // IDENTICAL (0.6 first in the ramp line, `ramp = 0.6f` then
+                // `ramp += ...`, a `minBright = 0.6f` local, an `int millimetres`
+                // local for the modulo): c1 puts the constant on the right of the
+                // commutative ops and folds named constant locals, so the 0.6 use
+                // cannot be moved ahead of the 0.001 one.  Inlining `meters` does
+                // move it but folds 0.001*0.4 into one constant (92.7).  Open:
+                // what source shape lowers the 0.6 constant's address first
+                // while keeping the 0.001 multiply separate.
                 float meters = (float)(depth % 1000) * 0.001f;
                 float ramp = meters * (1.0f - 0.6f) + 0.6f;
                 int r = depth ? (int)(ramp * 64.0f) : 0;
