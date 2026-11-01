@@ -906,14 +906,27 @@ Vector3 RndMesh::SkinVertex(const RndMesh::Vert &vert, Vector3 *vptr) {
     if (NumBones() > 0) {
         Transform tf60;
         tf60.Zero();
+        // w26-a CLOSED (99.98165 -> 100.0, 14 rows): the residual was two
+        // callee-saved pairs (r24<->r25, r26<->r27) plus the emission order of
+        // the two `addi rX, r5, 0x48/0x20` base pointers.  `vert.boneIndices`
+        // and `&vert.boneWeights.x` were `la`-class address expressions folded
+        // straight into their loads, so which of the two got hoisted first --
+        // and therefore which register each took -- was the scheduler's pick
+        // and not something a declaration reorder could reach (measured: 5
+        // spellings inert at 95/109, including moving the bone-index read out
+        // of the compare and reordering the `&&` operands).  Naming them as
+        // pointer locals gives each its own candidate with its own id, and
+        // both the order and the registers fall out right (109/109).
+        const short *bi = vert.boneIndices;
+        const float *bw = &vert.boneWeights.x;
         for (int i = 0; i < 4; i++) {
-            if (vert.boneIndices[i] < NumBones()) {
-                int boneIdx = vert.boneIndices[i];
+            if (bi[i] < NumBones()) {
+                int boneIdx = bi[i];
                 RndTransformable *curBoneTrans = BoneTransAt(boneIdx);
-                if ((&vert.boneWeights.x)[i] != 0.0f && curBoneTrans) {
+                if (bw[i] != 0.0f && curBoneTrans) {
                     Transform tf90;
                     Multiply(BoneOffsetAt(boneIdx), curBoneTrans->WorldXfm(), tf90);
-                    ScaleAddEq(tf60, tf90, (&vert.boneWeights.x)[i]);
+                    ScaleAddEq(tf60, tf90, bw[i]);
                 }
             }
         }
