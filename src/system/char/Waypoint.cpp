@@ -232,6 +232,18 @@ void Waypoint::ShapeDelta(const Vector3 &v, Vector3 &vout) {
 // orders, every association of dotx and doty, Dot arg orders, the subtract as
 // z/y/x-declared locals through a named WorldXfm().v (all 6 orders), and the
 // dots over those locals instead of res: none emits z first in that pair.
+// w26-c: 13 further spellings, all inert at 109/124 -- the pair is a c2
+// post-lowering commutative-sort order (C2RS-BRIDGE 8.7), not clean-upgrade
+// noise.  Both products of that pair are subexpressions, so their keys are
+// (SU<<24)|(nodes<<16)|hash16 and equal node counts leave hash16 deciding; the
+// lever has to change one operand's *shape*.  Measured inert: reference
+// aliases of `world` and of `world.m` (single and double bindings), reference
+// aliases of the m.x / m.y rows (single and double, each alone and both),
+// reference aliases of res (a double binding adds an instruction, 44/126),
+// float references to the normalDir components, and both pair source orders.
+// The lever that DID flip an equivalent row this wave (kdTree::FindSplit_Mean,
+// CharCollide::GetRadius) is rebinding a memory operand's base reference; here
+// both operands are already bound and re-binding them moves nothing.
 void Waypoint::ShapeDeltaBox(const Vector3 &v1, float f1, float f2, Vector3 &res) {
     const Transform &world = WorldXfm();
     if (f2 > 0.0f) {
