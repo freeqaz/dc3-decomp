@@ -1169,10 +1169,15 @@ BEGIN_LOADS(CamShot)
         // `arg_diff_score`, i.e. forgiven). So the "88 rows" the diff prints
         // are not 88 issues: they are the ONE frame delta above, charged at 88
         // different displacements. Repro: objdiff-cli diff -1 <target.obj> -2
-        // <our.obj> with functionRelocDiffs=none, combineDataSections=true,
-        // combineTextSections=true, ppc.calculatePoolRelocations=false, then
-        // read `canonical_match_percent` (NOT `normalized_match_percent`,
-        // which is the fuzzy score relabelled).
+        // <our.obj> with functionRelocDiffs=name_check, combineDataSections=true,
+        // combineTextSections=true, ppc.calculatePoolRelocations=false
+        // --map-file build/373307D9/icf_aliases.map, then read
+        // `canonical_match_percent` (NOT `normalized_match_percent`, which is
+        // the fuzzy score relabelled). The map file is not optional: without it
+        // 11 rows here are charged on ICF-folded names (`>>` for Key<float>,
+        // CopyRef<FlowLabel> vs CopyRef<RndTransformable>, SetObjConcrete<...>,
+        // vector<UILabel*>::erase, ObjPtrList<RndMesh>::pop_back) and the same
+        // function reads 99.826 instead of 99.893.
         // Refuted this lane: declaring `vec` at function scope, at the head of
         // the `else` block, and first in the block -- all three BIT-IDENTICAL,
         // which confirms slot assignment here is liveness/allocator-driven and
