@@ -60,12 +60,16 @@ public:
     //  - the subtraction is spelled as three locals declared z, y, x (any order
     //    with z before y keeps the image's z-first subtract and puts the x term
     //    last with the image's operand order; Subtract() does not).
-    // REMAINING (4 rows): inside the y/z pair MSVC emits the z product first
-    // (`lfs 0x204; fmuls ..., f0`) where the image emits y first.  Every probe
-    // spelling gave z first: both pair operand orders, x + (pair), separate
-    // accumulator statements, named products, locals for the axis components,
-    // dy/dz instead of out.y/out.z, Clamp vs Min(Max()), a named projection,
-    // componentwise ScaleAdd, all six subtract declaration orders.
+    // w26-c: the 4-row y/z residual is CLOSED by binding the axis a second
+    // time for the dot (`dotAxis` below).  Both products are subexpressions,
+    // and c2's post-lowering commutative sort (C2RS-BRIDGE 8.7) keys them off
+    // their operands; with the single `axis` binding the two tie and the z
+    // product is emitted first, while the image emits y first.  A second bound
+    // reference moves the memory-operand base the products are keyed on and
+    // the pair comes out y, z -- the image's order -- with no other
+    // instruction changed (65/65).  Source operand order inside the products
+    // really is inert (canonicalised by the sort), as is every spelling the
+    // w14-b/w21-as lists above tried.
     float GetRadius(const Vector3 &pos, Vector3 &out) const {
         float dz = pos.z - unk20c.z;
         float dy = pos.y - unk20c.y;
@@ -74,10 +78,11 @@ public:
         float ret = mCurRadius[0];
         if (mShape >= kCollideCigar) {
             const Vector3 &axis = unk1fc;
+            const Vector3 &dotAxis = axis;
             float clamped = Clamp(
                 mCurLength[0],
                 mCurLength[1],
-                unk1f8 * ((axis.y * out.y + axis.z * out.z) + axis.x * out.x)
+                unk1f8 * ((dotAxis.y * out.y + dotAxis.z * out.z) + dotAxis.x * out.x)
             );
             ScaleAdd(out, axis, -clamped, out);
             Interp(ret, mCurRadius[1], unk1f4 * (clamped - mCurLength[0]), ret);
