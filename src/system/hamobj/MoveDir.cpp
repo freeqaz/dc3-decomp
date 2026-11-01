@@ -2049,6 +2049,13 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // 87.6; hoist + inverting the mergeVal if/else to try to recover the layout is 64.1.
     // All four reverted. Do not retry any of those four; a recovery needs a different
     // mechanism for the block-sinking heuristic.
+    //
+    // w26-j (2026-11-01) behaviour verdict re-confirmed: unicorn records EQUIVALENT for
+    // this symbol (harness v4, high confidence), so the reciprocal ClosestMoveFrame /
+    // CurrentMoveMode WRONG_CALLEE pair is codegen, not a swapped side effect. No wrong
+    // constant either -- the single `__real@3f7d70a4` vs `__real@40800000` row at idx
+    // 154 is an alignment slip, both literals are present one row apart. All 55 offset
+    // rows resolve to frame slots or a different base register.
     MoveFrame *closest = ClosestMoveFrame();
     int mirrored = (move->Mirror() != nullptr);
 
