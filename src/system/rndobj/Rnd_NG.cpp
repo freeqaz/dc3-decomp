@@ -167,29 +167,29 @@ void NgRnd::ResetStats() {
     TheNgStats->mCams++;
 }
 
-// w8-l: 99.808690 normalized, and the ONLY function keeping this unit from
-// 100% (25/26).  Exactly two rows are charged, both in the address setup:
-//   [5] addi r8, r11, 0x4  (target)  vs  0x8 (ours)
-//   [8] addi r5, r11, 0x8  (target)  vs  0x4 (ours)
-// Everything else is equal.  The two rows mean only this: in the INNERMOST add
-// of the chain the image fuses mParts into the fmadds and leaves mPartSys as
-// the standalone fmuls, while we do the reverse.  The value computed is the
-// same, and the constants follow their fields on both sides (target [4] f0 =
-// __real@3ba3d70a = 0.005 paired with +0x8 = mPartSys; [39] f13 =
-// __real@3974aaf1 = 0.00023333334 paired with +0x4 = mParts).  Field offsets
-// are corroborated by NgRnd::UpdateOverlay, which is matched in this unit.
-// Refuted, each a full ninja + report.json read:
-//   - swapping the two innermost terms       -> 99.808690 (EXACTLY inert)
-//   - writing both innermost muls constant-first -> 99.808690 (inert)
-//   - naming the mPartSys product in a local  -> 99.808690 (inert)
-//   - flat left-associated sum (same accumulation order, no nesting)
-//                                            -> 52.530434
-//   - binding `NgStats &stats = gNgStats[idx]` -> 18.591305
-// The right-nested spelling below is therefore the correct shape; MSVC
-// canonicalises which half of the bottom pair gets fused and no source
-// rewriting found here moves it.
+// w26-h: 100.0.  The last two charged rows were [5] `addi r8, r11, 0x4` and
+// [8] `addi r5, r11, 0x8`, swapped against each other: in the INNERMOST add of
+// the chain the image fuses mParts into the `fmadds` and leaves mPartSys as the
+// standalone `fmuls`, while we did the reverse.  Both compute
+// mPartSys*0.005 + mParts*0.00023333334, so the rows were a difference of
+// rounding only -- but they are the same rows the earlier waves could not move.
+//
+// Mechanism (c2rs tap, C2RS-BRIDGE sec 8.7).  c2 sorts each commutative tuple's
+// operands descending by a key and the LAST sort, after lowering, is the emitted
+// order; the operand that lands second is the one folded into the `fmadds`.  A
+// product of an int->float conversion and a constant is a subexpression leaf
+// (key SU<<24|nodes<<16|hash16); naming the conversion in a `float` local turns
+// it into a variable leaf (key 0x10000|sid<<5) and moves it in the sort.  One
+// named local is the whole fix; the arithmetic is unchanged.
+//
+// Refuted before that, each a full ninja + report.json read and all inert at
+// 99.808690: swapping the two innermost terms, writing both innermost muls
+// constant-first, naming the mPartSys *product*, and binding
+// `NgStats &stats = gNgStats[idx]` (18.59) -- the last one, like a flat
+// left-associated sum (52.53), changes the shape more than one operand.
 float EstimateDraw(int idx) {
-    return (float)gNgStats[idx].mMotionBlurs * 0.003f + ((float)gNgStats[idx].mFlares * 0.017f + ((float)gNgStats[idx].mMultiMeshInsts * 0.001f + ((float)gNgStats[idx].mLightsApprox * 0.01f + ((float)gNgStats[idx].mLightsReal * 0.001f + ((float)gNgStats[idx].mCams * 0.0068f + ((float)gNgStats[idx].mMats * 0.0097f + ((float)gNgStats[idx].mBones * 0.00126f + ((float)gNgStats[idx].mMutMeshes * 0.0112f + ((float)gNgStats[idx].mRegMeshes * 0.0028f + ((float)gNgStats[idx].mPartSys * 0.005f + (float)gNgStats[idx].mParts * 0.00023333334f))))))))));
+    float parts = (float)gNgStats[idx].mParts;
+    return (float)gNgStats[idx].mMotionBlurs * 0.003f + ((float)gNgStats[idx].mFlares * 0.017f + ((float)gNgStats[idx].mMultiMeshInsts * 0.001f + ((float)gNgStats[idx].mLightsApprox * 0.01f + ((float)gNgStats[idx].mLightsReal * 0.001f + ((float)gNgStats[idx].mCams * 0.0068f + ((float)gNgStats[idx].mMats * 0.0097f + ((float)gNgStats[idx].mBones * 0.00126f + ((float)gNgStats[idx].mMutMeshes * 0.0112f + ((float)gNgStats[idx].mRegMeshes * 0.0028f + ((float)gNgStats[idx].mPartSys * 0.005f + parts * 0.00023333334f))))))))));
 }
 
 float NgRnd::UpdateOverlay(RndOverlay *overlay, float y) {
