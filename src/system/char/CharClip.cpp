@@ -283,6 +283,13 @@ void CharClip::Transitions::Load(BinStreamRev &d, int oldRev) {
     // PathName-temp/it slot and ours with new num_nodes.  The old and new arms'
     // counts also never share a slot, though they are disjoint if/else arms.
     // Treat this layout as unexplained, not as a declaration-order question.
+    // w26-d: the 18 charged rows on the current tool are the same permutation
+    // (0x50/0x54 <-> 0x58/0x5c, the two pairs swapping as units) plus one ICF call
+    // name (SetObjConcrete<AnimTask>/<CharClip>, one address in
+    // icf_aliases.map), so no value is read from a slot it was not written to.
+    // Re-measured inert: hoisting the OLD arm's count pair to function scope
+    // (the direction opposite to w16-c), and sharing one pair across both arms
+    // (98.4, one extra slot).
     Clear();
     static ObjectDir *sDir = nullptr;
     char buf[0x100];
