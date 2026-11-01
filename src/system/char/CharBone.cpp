@@ -78,6 +78,19 @@ void CharBone::ClearContext(int mask) {
 // name2, name3;` plus assignment is 86.2 (the default ctor and copy-assign add
 // code), so the open question is how the original gave the Symbols
 // overlapping lifetimes without a default construction.
+// w26-f (99.70149, byte-inert): confirmed the slot split directly with
+// scripts/analysis/slotprobe/slot_table.py -- ours is `0x50 name[4]`,
+// `0x54 name[4] x2`, `0x60 bone[8] x3`, i.e. block 2 and 3 pool their Symbol
+// while block 1 does not, and the image has all three distinct.  Tested the
+// stack-slot-sharing pin rule (docs/decomp/patterns/stack-slot-sharing.md: "a
+// local is pinned when its address reaches an INLINED callee"): an empty
+// `static inline` taking `const Symbol &` is inert, and so is the real
+// `Symbol::operator=` that `bone.name = name` lowers to -- Symbol is trivially
+// copyable, so c1 emits the `lwz`/`stw` pair directly and no inline call exists
+// for the rule to fire on.  Distinct names per block (posName/scaleName/rotName)
+// are inert too, so the pooling is not name-identity based.  The pin route is
+// therefore closed, which leaves w24-slot's "function-lifetime Symbol without a
+// default construction" as the only lead -- unchanged.
 void CharBone::StuffBones(std::list<CharBones::Bone> &bones, int mask) const {
     if (mPositionContext & mask) {
         Symbol name = CharBones::ChannelName(Name(), CharBones::TYPE_POS);
