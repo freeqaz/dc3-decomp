@@ -48,16 +48,16 @@ void UsbMidiKeyboard::Poll() {
             || ty == kJoypadWiiMidiBoxKeyboard || ty == kJoypadXboxKeytar
             || ty == kJoypadPs3Keytar || ty == kJoypadWiiKeytar
             || gForceDetectKeytar) {
-            ProKeysData *proData =
-                (ProKeysData *)&JoypadGetPadData(i)->mProGuitarData;
-            // REFUTED (w7-r, 2026-09-14): the image emits `li r26, 1`
-            // (slotCounter) BETWEEN the `bl JoypadGetPadData` and
-            // `addi r29, r3, 0x34` (proData), while we emit it after the addi --
-            // a 2-row adjacent swap. Declaring slotCounter FIRST does not buy it:
-            // MSVC then hoists the `li` to BEFORE the call (idx 38 vs the image's
-            // 40) and the function drops 98.05 -> 97.7. The `li` is an
-            // independent constant the scheduler places freely; there is no
-            // declaration order that lands it in the image's slot.
+            JoypadData *padData = JoypadGetPadData(i);
+            ProKeysData *proData = (ProKeysData *)&padData->mProGuitarData;
+            // RESOLVED (w27-b, 98.900 -> 100.0): the image emits `li r26, 1`
+            // (slotCounter) BETWEEN `lwz TheKeyboard` and `addi r29, r3, 0x34`
+            // (proData), i.e. one slot before the addi.  Declaring slotCounter
+            // first really does hoist the `li` to before the call (w7-r, idx 38
+            // vs the image's 40), which is why order alone never worked.  The
+            // addi's source position moves when the JoypadData pointer is named:
+            // with `padData` in a local the addi is materialised one slot later
+            // and the li lands in 40 from its natural place at the end.
             int slotCounter = 1;
 
             for (int note = 0x30; note - 0x30 < 25; note++) {
@@ -132,14 +132,18 @@ void UsbMidiKeyboard::Poll() {
                 SendMessage(msg);
             }
 
-            // NOTE: the image emits four separate fused rlwinm extractions and a
-            // flat add chain (d<<2) + (c<<1) + (e<<3) + b; MSVC here reassociates
-            // any spelling of this sum into a Horner chain instead. Tried '|',
-            // explicit sub-grouping and term reordering -- all identical or worse.
+            // The image emits four separate fused rlwinm extractions and a flat
+            // add chain (d<<2) + (c<<1) + (e<<3) + b.  The declaration order
+            // below is the one that interleaves the loads and shifts the way the
+            // image does: lbz 0xd, lbz 0xc, rlwinm 0xd, lbz 0xe, rlwinm 0xc,
+            // lbz 0xb, rlwinm 0xe.  Measured declaration orders (w27-b, canonical):
+            // B,E,C,D 100.0 | B,D,C,E 99.581 | D,B,C,E 99.165 | D,C,B,E 99.162 |
+            // B,D,E,C 98.897 | B,C,D,E 98.687 | B,C,E,D 98.684 | E,B,D,C 98.485.
+            // The sum keeps the image's term order (d<<2) + (c<<1) + (e<<3) + b.
             int hhB = proData->unkbbool;
             int hhE = proData->unkemiddle << 3;
-            int hhD = proData->unkdbool << 2;
             int hhC = proData->unkcbool << 1;
+            int hhD = proData->unkdbool << 2;
             int highhand = hhD + hhC + hhE + hhB;
             if (highhand != TheKeyboard->GetHighHandPlacement(i)) {
                 TheKeyboard->SetHighHandPlacement(i, highhand);
