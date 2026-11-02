@@ -596,7 +596,12 @@ void HamAudio::PollCrossfade() {
             // Interp(halfFade, 1.0f, clamped) below compile byte-identically
             // to these spellings (97.128 either way); the image's un-factored
             // `fmadds f30, f0, f30, f30` is not reached by either.
-            fadePos = clamped * -0.5f + 1.0f;
+            // w27-e (c2rs 8.11): the named intermediate blocks c1's rewrite of
+            // `c * -0.5f + 1.0f` into `1.0f - c * 0.5f` (which then contracts to
+            // fnmsubs with the shared +0.5).  Split, c2 contracts the image's way:
+            // `fmadds f30, f0, f13, f31` with a loaded -0.5f.  98.095 -> 99.048.
+            float scaled = clamped * -0.5f;
+            fadePos = scaled + 1.0f;
         } else {
             float end = mActiveCrossfade.mDuration * halfFade + mActiveCrossfade.mEnd;
             float start2 = mActiveCrossfade.mEnd;
@@ -607,7 +612,11 @@ void HamAudio::PollCrossfade() {
                 ratio = 1.0f;
             }
             float clamped = Clamp(0.0f, 1.0f, ratio);
-            fadePos = clamped * halfFade + halfFade;
+            // Same 8.11 lever: split, or c1 factors `c * k + k` into `(c + 1) * k`
+            // before contraction and the image's un-factored
+            // `fmadds f30, f0, f30, f30` is unreachable.
+            float scaled = clamped * halfFade;
+            fadePos = scaled + halfFade;
         }
         float vol = (float)fadePos;
         float db0 = (float)log10((double)vol) * 10.0f;

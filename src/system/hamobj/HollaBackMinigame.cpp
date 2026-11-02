@@ -428,6 +428,17 @@ void HollaBackMinigame::SetDefaultShot() {
     // w16-b (98.10, 19 rows): the image keeps only `lis r30, TheHamDirector@h`
     // and loads `@l(r30)` where we materialise the full address in r30, in all
     // four Handle arms. Chaining this lookup without the `anim` local is 90.2.
+    // w27-e (still 98.095, the same 19 rows, 13 spellings): mechanism -- the two
+    // forms c2 can pick are `lis @h` into a callee-saved GPR with a symbol-
+    // relative `lwz sym@l(rN)` at each use (the image), and a MATERIALISED
+    // address (`lis` + `addi`) that the allocator rematerialises in every block
+    // that spans a call (ours; the `addi` is dead in three of the four arms and
+    // the fourth feeds `lwz r3, 0(r30)` at the GetVenueWorld site).  Inert on
+    // all of it: reference-binding the global pointer at function scope, at the
+    // arm scope, and just before the final lookup; a named copy (-0.9pp);
+    // `((HamDirector *)TheHamDirector)`, `TheHamDirector[0]`, a named venue
+    // pointer, and hoisting `anim`'s declaration.  Open question: which IL shape
+    // makes c2 keep the @h half symbolic instead of materialising the address.
     RndPropAnim *anim = TheHamDirector->GetVenueWorld()->Find<RndPropAnim>(
         "bid_start_character_faded_out.anim", true
     );

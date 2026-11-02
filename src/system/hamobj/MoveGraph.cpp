@@ -283,6 +283,17 @@ bool MoveGraph::FindVariantPair(
         // reload of _M_start as HollaBackMinigame::SetMoveState (see the
         // w21-au note there: splitting member/reference spellings breaks the
         // CSE but MSVC then hoists the load).  Stopped.
+        // w27-e (98.103 canonical, unchanged by 3 more spellings): mechanism --
+        // the reload at the loop top exists because the loop calls `Song()`, so
+        // the image re-reads `_M_start` after it.  Our c2 hoists that load OUT of
+        // the loop (and keeps it live across the call); the image does not, and
+        // the extra `lwz` plus the register renaming it forces is the whole
+        // residual -- no value ever differs (nothing stores to the vector on
+        // either side, same exits).  Re-measured inert: the whole block with no
+        // named vector reference (every use through `p1->Variants()`), and a
+        // hybrid that keeps the local reference but re-derives begin()/size().
+        // An iterator-cursor loop is much worse (94.5).  Open question: what
+        // makes c2 treat the vector's `_M_start` as call-clobbered here.
         const std::vector<MoveVariant *> &variants = p1->Variants();
         if (variants.empty()) {
             return false;
