@@ -1392,18 +1392,22 @@ void PlatformMgr::Poll() {
                 XONLINE_FRIEND *friends = (XONLINE_FRIEND *)mFriendsBuffer;
                 for (unsigned long i = 0; i < numFriends; i++) {
                     // Pending requests in either direction are not friends yet.
-                    if (!(friends[i].dwFriendState & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
-                        && !(friends[i].dwFriendState
+                    DWORD state = friends[i].dwFriendState;
+                    if (!(state & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
+                        && !(state
                              & XONLINE_FRIENDSTATE_FLAG_RECEIVEDREQUEST)) {
                         // w17-d (99.172 -> 99.249): the plain indexed loop, not
                         // a hand-stepped `xf++` pointer -- MSVC now strength-
-                        // reduces it itself. Still open: the image biases the
+                        // reduces it itself.
+                        // w26-n2 (99.249 -> 99.422): the image biases the
                         // induction pointer +8 (&szGamertag: disps 0x10/-0x8/0),
-                        // ours +0x18 (&dwFriendState, the first field read). A
-                        // `XONLINE_FRIEND &xf = friends[i]` alias is inert; the
-                        // older pointer-loop refutations (a named gamertag
-                        // pointer ahead of `new Friend()` or at the body top)
-                        // were measured against the hand-stepped loop.
+                        // ours was +0x18 (&dwFriendState, the first field
+                        // read). Naming that first read -- `DWORD state =
+                        // friends[i].dwFriendState;` -- is what moves the bias:
+                        // the only remaining array-field address in the body is
+                        // szGamertag, so c1 makes IT the induction expression.
+                        // The `XONLINE_FRIEND &xf` alias and a named gamertag
+                        // pointer are both byte-inert in this indexed form.
                         Friend *f = new Friend();
                         String name(friends[i].szGamertag);
                         f->SetName(name);
@@ -1423,7 +1427,13 @@ void PlatformMgr::Poll() {
             CloseHandle(mFriendsEnum);
             mFriendsEnum = nullptr;
         }
-    } else if (!mFriendEnumRequests.empty() && mFriendEnumRequests.size() != 0) {
+        // w26-n2: the image has ONLY the `size()` walk here -- the
+        // `cmplw begin,sentinel / beq` at its loop head is the size loop's own
+        // entry check, not a second `empty()`.  The `!empty() &&` this used to
+        // carry was redundant with `size() != 0` (stlpmtX list: size() walks
+        // the sentinel), so dropping it is behaviour-identical and recovers the
+        // induction-setup placement: 99.42197 -> 99.75227.
+    } else if (mFriendEnumRequests.size() != 0) {
         FriendEnumRequest *request = mFriendEnumRequests.front();
         unsigned long bufSize;
         bool failed = false;
@@ -1531,6 +1541,15 @@ void PlatformMgr::Poll() {
                 // mListSize is written first does NOT keep the latch value --
                 // it repermutes the whole 0x50..0x88 stack-slot block and costs
                 // 2.5pp binary-visible here (99.17 -> 96.7, 21 rows -> 135).
+                // w26-n2: the other source handles are measured inert too --
+                // naming the re-read (`unsigned long n = ...;` between the two
+                // stores is BYTE-IDENTICAL: one-block/one-def, so c1 folds it),
+                // naming it BEFORE the state store costs 2.2pp, a
+                // `const unsigned long &n = mStorageList->dwNumItemsReturned`
+                // bound in the branch costs 2.2pp, and a cast on the re-read is
+                // byte-identical.  What is left is which register c2 gives
+                // `li 0x3`: with the latch value live it takes r10 (image), and
+                // our reload is the fixed point of it taking r11.
                 mServiceIdState = kServiceIdDownloading;
                 mListSize = mStorageList->dwNumItemsReturned;
             } else {
