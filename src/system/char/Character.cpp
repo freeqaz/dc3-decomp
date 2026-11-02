@@ -383,14 +383,37 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
         // the factoring).  Same value on every input: the two zero-weighted
         // terms are +-0 or NaN whatever the grouping.  97.32 -> 98.6.
         Plane pl70;
-        float dot = 0.0f * worldPos.x;
-        dot += 0.0f * worldPos.y;
+        // w26-t: the y-product statement comes first.  c2 reassociates the two
+        // zero-weighted products into the image's `fmuls x*0` / `fmadds y*0`
+        // pair whatever their source order, but the LOAD of the first-written
+        // component is the one it schedules longest before its use.  Writing y
+        // first gives the image's y,z,x load order (it was x,z,y) and closes
+        // both diff_arg rows.  Same value on every input: the two terms are
+        // +-0 or NaN whatever the order, and IEEE addition is commutative.
+        float dot = 0.0f * worldPos.y;
+        dot += 0.0f * worldPos.x;
         dot += worldPos.z + planeD;
         pl70.Set(0, 0, 1, -dot);
 
-        // w21-u residual at 98.6 (4 rows): load order (image y,z,x; ours
-        // x,z,y) and the last two adds -- the image adds (z + planeD) as one
-        // term, we emit (dot + z) + planeD.  Measured, all 97.0-97.2 or worse:
+        // w26-t residual: 2 rows (144), one cause -- the image computes
+        // `fadds f13, f13, f29` (z + planeD) as its OWN term and then adds it
+        // to the accumulator; /fp:fast flattens our `dot += z + planeD` into
+        // (dot + z) + planeD.  Same value on every input (adding a +-0 term is
+        // exact either way), so this is a shape residual, not a bug.
+        // 12 more spellings measured and all worse or inert: a `const float &`
+        // binding of (z + planeD) and of worldPos.z (section 8.8, inert --
+        // 98.6014, same as no change), a const/non-const named zOff, zOff built
+        // by `= z; += planeD`, the whole sum named, explicit parens in the Set
+        // call, and `pl70.d` used as the accumulator (inert).  Every spelling
+        // that DOES produce the separate `fadds z, planeD` computes it BEFORE
+        // the two products instead of in their latency shadow, which swaps the
+        // y/z loads and reverses the final `fadds` -- 97.1 canonical.  The
+        // scheduler slot is the whole difference; see the w21-u note below for
+        // the shapes that also lose the two-product factoring.
+        // w21-u residual (superseded: the load order is now closed -- image
+        // y,z,x, ours y,z,x): the last two adds -- the image adds
+        // (z + planeD) as one term, we emit (dot + z) + planeD.  Measured, all
+        // 97.0-97.2 or worse:
         // a separate `shadowZ = z + planeD` statement before or after the
         // products, `-(dot + (z + planeD))` in the Set call, a Vector3 point
         // temp, a local inline Plane(point, normal) with an accumulator body,
