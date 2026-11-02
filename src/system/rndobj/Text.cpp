@@ -2765,10 +2765,23 @@ void RndText::DrawShowing() {
                 // copy count meant DrawMesh's repeat loop never ran, so a
                 // marquee drew exactly one copy and left a gap instead of
                 // tiling across the label.
-                // NEGATIVE (w7-bx): the image hoists `lis sBlacklightModeEnabled`
-                // into r27 before `lis TheUI` into r26 (0x82699470/74); ours
-                // hoists them the other way round, and the positive form of
-                // this condition (A && B && !C) does not change that.
+                // The image hoists `lis sBlacklightModeEnabled` into r27 before
+                // `lis TheUI` into r26 (0x82699470/74); ours hoists them the
+                // other way round, and the positive form of this condition
+                // (A && B && !C) does not change that (w7-bx).
+                // Mechanism (c2-rs §8.4, measured at w26-b): this is a tie-0
+                // hoisted-address pair, so the pop order is descending
+                // candidate id, and the ids come from the free list the ben
+                // pass leaves.  The tap reads C=6 code-band mints and F=15
+                // demotions for our body; the six mints recycle the fifteen
+                // freed ids from the top down (44,43,42,41,40,39), so mint
+                // order IS pop order, and the two globals land on id41 -> r27
+                // (TheUI) and id40 -> r26 (sBlacklight).  The image needs the
+                // pair the other way, i.e. sBlacklight minted first.  Since
+                // every code mint is recycled here (C < F), adding or removing
+                // one demotion shifts all six ids together and cannot swap the
+                // pair; the handle is the order the two address computations
+                // reach the code band, which sched1 sets, not the source.
                 if (!(!sBlacklightModeEnabled || !(*it)->mBlacklight ||
                     TheUI->DisableScreenBlacklight())) {
                     QueueBlacklightPacket(mesh, mLineHeight, mScrollCopies);
@@ -3097,10 +3110,17 @@ void RndText::FontMap::SetupCharacter(
     // aspect*size/2 for a single centered line) — making all menu/HUD text
     // invisible. Subtraction is not commutative; the swap was match-neutral
     // (objdiff 83.8% either way) but behaviorally wrong. Reverted to og form.
-    // NEGATIVE RESULT: the image keeps `_tmp1 * size` and the subtraction apart
+    // The image keeps `_tmp1 * size` and the subtraction apart
     // (`fmuls f12, f1, f26` at 0x261c, `fsubs f12, f27, f12` at 0x2638) where we
-    // contract to one fnmsubs.  Splitting it into a named `aspectH` temporary is
-    // exactly neutral -- MSVC re-fuses across the statement boundary.  Two rows.
+    // contract to one fnmsubs.  That is a ROUNDING difference: the image rounds
+    // the product before subtracting, we keep one extra rounding step.
+    // Mechanism: c2's fp contraction peephole on `a - b * c`, which re-fires
+    // across statement boundaries.  Measured inert at w26-b (one c2 compile
+    // each): a named `aspectH` temporary, `z0 + -aspectH`, swapping the factors,
+    // an unrelated statement between product and subtraction, and reading
+    // `state.mSize` directly instead of the `size` copy -- the last one does
+    // split the pair but also drops the `fmr` copy of mSize the image keeps and
+    // shrinks the frame by 0x10, so it measures worse overall (95.2 vs 97.8).
     // w13-a: moving this below the vert[0] Set() (the FontMap3d fusion lever)
     // is inert here.
     float z1 = z0 - _tmp1 * size;
