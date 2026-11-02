@@ -448,6 +448,20 @@ void AnimTask::Poll(float time) {
             // the arms -- also sinks the subtraction into both arms, where the
             // image computes it once here.  Open: what holds f0 across the snap
             // tests while the range stays a single fsubs (16 spellings tried).
+            // w26-f12: the regasg dump confirms f0 is FREE at each of the three
+            // loads (t 195 b 26, t 202 b 29, t 205 b 30 all select f0 with an
+            // unoccupied f0 at the head of the list), so the image must carry a
+            // live temp in f0 across blocks 26..30 that our body does not --
+            // consistent with a sched3 order that places the `animRange` fsubs
+            // after them, which sched0 then hoists back.  Ten spellings measured
+            // with `const float &` bindings on animMin, animMax, mScale and
+            // mFrameSpan: none reached the row's own f13 (best 99.636 canonical
+            // 99.990, i.e. it changes shape), the rest 98.418-99.158.
+            // NOTE the ruler: this TU's per-object build emits `?DI` where the
+            // full build emits `?DM` for the `on_anim_event` static's scope
+            // ordinal (the target's own spelling is `?DM`), so the per-object
+            // path reads 99.832 here against report.json's 99.899.  Full-build
+            // numbers are the only ones comparable on this function.
             float animRange = animMax - animMin;
             float endpoint;
             // The two snap cases share one fmod. It has to live inside the second
