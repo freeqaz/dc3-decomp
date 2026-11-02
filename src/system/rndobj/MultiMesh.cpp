@@ -388,6 +388,19 @@ void RndMultiMesh::CollideList(const Segment &seg, std::list<Collision> &colls) 
                             // in r31 directly and the whole found-block gets
                             // sunk to the end of the function.
                             if (sit->second != stamp) {
+                                // RESIDUAL (99.2171, 2 rows): the image forms
+                                // &mRefs as `addi r8, r9, 0x4` + `addi r8, r8,
+                                // 0x4` off the vbase pointer; we fold the two
+                                // offsets into one `addi r8, r9, 0x8`.  Six
+                                // spellings of this call (named const/non-const
+                                // ObjRef& and ObjRef*, `Next() == &Refs()`,
+                                // `begin() == end()`, `!= false`, a named proxy
+                                // pointer) are byte-identical to this one, so
+                                // the fold is the constant folder's, not the
+                                // source's: the address is one IL tree either
+                                // way.  Nothing in the ObjRef/Owner headers
+                                // reaches it (both are PCH headers and are not
+                                // edited).  w26-p.
                                 if (sit->first->Refs().empty()) {
                                     proxy = sit->first;
                                     sit->second = stamp;
