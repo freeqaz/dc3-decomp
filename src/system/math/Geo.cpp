@@ -419,7 +419,10 @@ void BSPFace::OnSide(const Plane &plane, bool &front, bool &back) {
             // The one residual row is the c-term's fmadds operand order
             // (`f11,f10` vs `f10,f11`); writing `pt.z * plane.c` is inert, same
             // backend floor as recorded in Intersect(Transform,Polygon,BSPNode).
-            float dot = (plane.a * pt.x + plane.b * pt.y) + plane.c * pt.z + plane.d;
+            float px = pt.x;
+            float py = pt.y;
+            float pz = pt.z;
+            float dot = (plane.a * px + plane.b * py) + plane.c * pz + plane.d;
             if (dot > posTol) {
                 front = true;
             }

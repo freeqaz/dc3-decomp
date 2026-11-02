@@ -692,6 +692,15 @@ void RhythmBattlePlayer::UpdateAnimations(Hmx::Object *handler) {
 // image keeps 1.0f in f29 and -1.0f in f30, ours the reverse. Same values, same
 // uses. Tried: explicit 1.0f/-1.0f literals (identical); Min/Max helpers are
 // fsel shapes the image does not have.
+// w26-f11 (2026-11-02): the 15 residual rows are that swap and nothing else --
+// 453 instructions, 15 mismatched, all f29<->f30 (image 1.0f in f29, -1.0f in
+// f30; ours the reverse). The c2-rs candidate dump shows the three k03 float
+// constants at pri -14 / -16 / -26 with ben 12 / 3 / 10, i.e. their order is
+// decided by benefit/reference counts, not by a leaf key. Measured spellings
+// that leave those three triples unchanged: naming each constant, literal vs
+// static spelling, and moving the SetRatingFrac(0, -1) call. The open question
+// is what statement arrangement gives one of the two constants one more
+// reference than the other.
 void RhythmBattlePlayer::UpdateScore(Hmx::Object *handler) {
     mFramesSinceLastTrigger++;
     if (mStealPart) {
