@@ -300,6 +300,36 @@ Synapse::~Synapse() {}
 // threshold test reads the member mPitchConfidence after the two stores,
 // which keeps the confidence in f0 across the mPitchClarity copy (image
 // `lfs f12, 0x14(r11)` at 0x684).
+//
+// w26-f4 (fuzzy lane, 99.76852 fuzzy / 100.0 normalized): all 5 charged rows
+// are PENALTY_REG_DIFF with no relocation-name mismatch, and none of them is a
+// register CHOICE -- both sides use the same two registers and only the
+// operand POSITIONS swap:
+//   117/120/123/127  mVoices[v]: image `add r11, r11, r29` and
+//                    `stfsx f0, r11, r29` put the vector's _M_start (the
+//                    folded load `lwz r11, 0x0(r30)`) in the FIRST operand
+//                    slot and the strength-reduced byte offset (r29) second;
+//                    we emit the offset first.
+//   186              mOutputBuffers[v]: `lwzx r4, r11, r28` vs
+//                    `lwzx r4, r28, r11` -- same shape.
+// This is C2RS-BRIDGE 8.7's commutative operand-order key, and it is NOT a
+// per-site convention: row 21 (`inputStart[mBufferIndex]`) MATCHES on both
+// sides with the index in the first slot, in the same function.
+//
+// Measured inert (normalized held at 100.0 on every one): mVoices[v] ->
+// mVoices.begin()[v]; mVoices[v] -> *(mVoices.begin() + v); binding
+// `float *outBuf = mOutputBuffers[v]` and passing outBuf; binding
+// `PeakDetector *pdPeak`; rewriting the loop bound as `v < mVoices.size()`;
+// hoisting `unsigned int temp_r11_2` out of its `if`. Measured and REJECTED
+// for shape loss: `for (int v ...)` 99.47/99.70 canon, a named reference to
+// the vector 96.98/97.68 canon, moving `temp_r10` below the `& 3` test
+// 99.21/99.44 canon.
+//
+// Open: the deciding quantity is the key of the strength-reduced offset temp
+// (0x10000 | sid<<6, C2RS-BRIDGE 8.7) against the folded load's key. The
+// deployed c2rs has no CQT dump (strings -a | grep CQT -> 0), so which sid has
+// to move is unread here; that is the next step, not a claim that the row is
+// unreachable.
 void Synapse::ProcessInPlace(unsigned int arg1, float *arg2) {
     float temp_f30 = 0.0f;
     float temp_f31 = 4.0f;

@@ -401,9 +401,19 @@ void HDCache::Init() {
             // mBlockState;` for the else-loop does re-key that memory leaf, but it
             // also re-populates COLOR and moves `this` from r21 to r20, i.e. 27
             // new rows against 0 repaired.  The same-shape `File **` re-binding is
-            // already the source form.  Every residual row is a symbol-count
-            // question (the temp at sid 1140 / 1180 against named locals at
-            // 19/18), not an operand-binding one.
+            // already the source form.
+            // w26-f4 (fuzzy lane, 2026-11-02, 99.77444 fuzzy / 100.0
+            // normalized): re-read the charged set -- the same 9 rows, r28 the
+            // strength-reduced i*4 temp in every one. Re-measured two spellings
+            // of the w25-gx lever family, normalized held at 100.0 throughout:
+            //   `i[readFiles]` / `i[writeFiles]`: byte-identical, fuzzy
+            //     unchanged -- confirms the w18-d claim that source operand
+            //     order is not the lever (the key, not the spelling, decides).
+            //   `int idx = i;` above the test: 99.17 / 99.50 canon, rejected.
+            // Both lanes agree the residual is a symbol-count question: the temp
+            // at sid 1140 / 1180 against named locals at 19/18 (w26-n), or by the
+            // commutative key 0x10000|(sid<<6 & 0xffff) with sid mod 1024 = 116
+            // that has to fall to <= 9 (w26-f4).  Open mechanism, not a floor.
             // Check if read/write files are valid
             File **readFiles = &mReadArkFiles[0];
             File **writeFiles = &mWriteArkFiles[0];
