@@ -167,6 +167,21 @@ void FileMerger::Merger::Clear(bool shouldDraw) {
             // guard form; ours lowers it jump-to-bottom-test, so the two arms
             // share no first instruction.  Open question: what decides
             // MSVC's rotation form for that inlined loop.
+            // w26-v (97.85, same 4 rows): re-measured with the cr0/cr6 split
+            // in view.  The image's `cmplwi r28, 0` is cr0 while the size test
+            // is cr6; cr6 then survives the mergerDir branch and BOTH arm
+            // guards (`beq cr6, exit` at 0x1a4 and 0x1f4) consume the one
+            // hoisted compare, which is why the else arm falls through into
+            // its body instead of rotating.  Ours puts the mergerDir test in
+            // cr6 too, so the size compare cannot be hoisted past the branch.
+            // All inert (same bytes, 97.7852): `bool haveSubdirs =
+            // !mLoadedSubdirs.empty();` bound before the branch and used by
+            // both arms; the same with the else arm spelled as a guarded
+            // do/while; `ObjPtrList<ObjectDir> &subdirs = mLoadedSubdirs;` used
+            // by both arms; `if (mergerDir != 0)`.  Worse: guard-form else
+            // arm `if (!empty()) do {...} while (!empty())` 97.07; `while
+            // (mLoadedSubdirs.size() != 0)` 97.07; guard wrapping clear()
+            // 95.77.  The cr0 choice is not reachable from this TU's source.
             mLoadedSubdirs.clear();
         }
     }
