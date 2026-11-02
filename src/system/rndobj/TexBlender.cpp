@@ -179,6 +179,16 @@ void RndTexBlender::DrawBlendList(
 // customList's begin (`lwz r25, 0x70(r31)`) into r25 before DrawBlendList and
 // reuses it for the deallocate; we reload it after (0x78(r31) in our frame).
 // DrawBlendList takes the vector by const&, same value.  ARTIFACT.
+// w26-i (99.68 canonical, 60 rows): every row re-read -- no immediate, call or
+// field differs, so this is behaviour-equivalent.  The r28/r29 rows are NOT a
+// two-value exchange: the image holds TheShaderMgr's pointer in r26 and
+// `work` (= TheShaderMgr.GetWork()) in r29, while we hold them in r29 and r28,
+// and we additionally emit two `stw r29, 0x50(r31)` home stores around the
+// Matrix4 ctor / SetTransform calls (idx 376, 511) that the image does not.
+// Treat that as a live-range difference on a rematerialisable global load
+// rather than a priority tie (hypothesis: c2 gave the pointer a home because
+// it spans two calls, and the image did not).  The rest of the rows are the
+// Rect/Color temporary slots covered by w18-a above.
 void RndTexBlender::DrawShowing() {
     if (TheRnd.DrawMode() == Rnd::kDrawNormal
         && ((TheRnd.ProcCmds() & kProcessWorld) != 0 || TheRnd.ProcCmds() == 0)
