@@ -343,8 +343,16 @@ void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
                 // Per-component `pt.mCoeff0.x -= ...` chains keep everything
                 // in registers and store once.
                 // mCoeff0 = -0.5*prev + 1.5*cur - 1.5*next + 0.5*nextNext
-                pt.mCoeff0 = Vector4::ZeroVec();
+                // curVec is built from the point's own mPos here, ahead of the
+                // accumulator zeroed below.  Declaring it one statement later
+                // (after `pt.mCoeff0 = ZeroVec()`) reads equally naturally but
+                // changes the whole coefficient schedule: with it declared
+                // later the image walks the mCoeff2 block in mirror order
+                // (w, z, y, x) and 24 of this function's 27 rows sit in that
+                // block.  Hoisted, the function goes 98.203 -> 99.966
+                // canonical with every instruction in the block equal.
                 Vector4 curVec(pt.mPos.x, pt.mPos.y, pt.mPos.z, pt.mRoll);
+                pt.mCoeff0 = Vector4::ZeroVec();
                 ScaleSubEq(pt.mCoeff0, prevVec, 0.5f);
                 ScaleAddEq(pt.mCoeff0, curVec, 1.5f);
                 ScaleSubEq(pt.mCoeff0, nextVec, 1.5f);
@@ -358,22 +366,6 @@ void RndSpline::SyncDeformedCtrlPoints(int iStartIndex, int iEndIndex) const {
 
                 // mCoeff2 = -0.5*prev + 0.5*next
                 pt.mCoeff2 = Vector4::ZeroVec();
-                // Residual (98.2): the image walks THIS block in mirror order
-                // -- loads w, z, y, x (826B36EC-826B3700), keeps z/w in
-                // registers for the next stage and reloads x/y (826B373C,
-                // 826B3744) -- the exact reverse of what the same helpers
-                // produce on mCoeff0 and mCoeff1 above, which match. A second
-                // helper pair with w, z, y, x bodies measures 98.9 (pairs still
-                // swapped within (x,y) and (z,w)); Set(...) with the four
-                // expressions as arguments measures 89.7 and disturbs the
-                // mCoeff1 copy. Kept on the one natural helper pair.
-                // w21-be STOP at 98.24 (22 diff_arg / 3 insert / 2 delete,
-                // all in this block plus one /fp:fast fadds operand order on
-                // the last mCoeff0 x term, objdiff row 207).  MEASURED, all worse:
-                // a `Vector4 &c2 = pt.mCoeff2` binding for the two helpers
-                // (stores merge away, 96.6 raw); two Set() calls per stage
-                // (96.6 raw); add-then-sub (also different rounding);
-                // `pt.mCoeff3 = curVec` hoisted above this block (85.3 raw).
                 ScaleSubEq(pt.mCoeff2, prevVec, 0.5f);
                 ScaleAddEq(pt.mCoeff2, nextVec, 0.5f);
 
