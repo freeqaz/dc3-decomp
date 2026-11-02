@@ -173,6 +173,17 @@ void RndRibbon::ConstructMesh() {
             int v2 = v1 + mNumSides;
             int v3 = v0 + mNumSides;
             mMesh->Faces()[base + side * 2].Set(v0, v1, v2);
+            // w30-c (2026-11-02): the opcode+operand multiset differs from the
+            // image by exactly ONE `clrlwi rN, rN, 16` (image 4, ours 3), and
+            // every other mismatch row is a register or a branch displacement
+            // (target 408 B / 102 instructions, ours 404 / 101).  The image
+            // re-truncates a value that we keep already-narrowed across the two
+            // Set calls, and it re-reads mMesh->Faces() between them.  Measured
+            // and refuted this lane: v2/v3 inlined back into the two Set calls
+            // (77.235, two extra computes), v3 declared before v1/v2 (80.784,
+            // inert), and the named `faces` reference in place of
+            // mMesh->Faces() (76.794).  What is left is a register-pressure
+            // decision, not a spelling.
             mMesh->Faces()[base + side * 2 + 1].Set(v2, v3, v0);
         }
     }

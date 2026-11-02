@@ -2281,16 +2281,20 @@ void RndText::ConstructMeshes(
 #endif
 
     // Allocate meshes for each font map
-    // NEGATIVE RESULT (loop rotation).  The image tests this loop once up front
-    // -- `lwz r30, 0xa8(r3)` / `lwz r10, 0xac(r3)` / `cmplw cr6, r30, r10` /
-    // `beq cr6, 0x826866c0`, all hoisted into the prologue -- and then falls
-    // into a body that reloads the end each iteration.  We emit the
-    // branch-to-bottom shape (`b` to the test).  Spelling the rotation out as
-    // `it = begin(); if (it != end()) do { ... } while (it != end());` is
-    // EXACTLY inert: MSVC un-rotates it straight back.  The SAME source shape
-    // gives the image both lowerings -- the CleanupSyncMeshes loop at the end of
-    // this function is branch-to-bottom on both sides -- so this is a scheduler
-    // heuristic, not a source difference.  Eight rows, left alone.
+    // w30-c (2026-11-02): the image evaluates this loop's condition TWICE --
+    // `lwz r30, 0xa8(r3)` / `lwz r10, 0xac(r3)` / `cmplw cr6, r30, r10` /
+    // `beq` in the prologue, then a body that reloads the end each iteration
+    // (`lwz r11, 0xac(r31)` / `cmplw` / `bne`).  A branch-to-bottom `for`
+    // produces only the second one, and the explicit rotation
+    // `it = begin(); if (it != end()) do { ... } while (it != end());` is inert
+    // because MSVC un-rotates it (measured, 90.94 unchanged).  What DOES
+    // survive is a guard whose condition is a separate evaluation of the
+    // container -- `begin() <op> end()` -- because the rotation-cancelling pass
+    // cannot merge it with the loop's own `it != end()` test.  That reproduces
+    // the image's second compare: 90.94 -> 92.56 canonical.  The same trick is
+    // NOT available to the CleanupSyncMeshes loop at the end of this function,
+    // where the image is branch-to-bottom on both sides.
+    if (mFontMaps.begin() != mFontMaps.end())
     for (std::vector<FontMapBase *>::iterator it = mFontMaps.begin(); it != mFontMaps.end();
          ++it) {
         (*it)->AllocateMeshes(this, mFixedLength);
@@ -2316,7 +2320,19 @@ void RndText::ConstructMeshes(
             // `beq cr6` on the raw pointers (0x82686718).  The overshoot that
             // guard was defending against is already handled by the explicit
             // `if (cur > line.mEnd) break;` on the markup path below.
-            while (cur != line.mEnd) {
+            //
+            // w30-c (2026-11-02): the same DOUBLE EVALUATION as the font-map
+            // loop above.  The image has `lwz r10, 0x4(r28)` / `cmplw cr6,
+            // r30, r10` / `beq` before the body and the usual `cmplw` / `bne`
+            // at the bottom.  The guard must be spelled on the RANGE
+            // (`mStart`), not on `cur`: `if (cur != line.mEnd) do {...} while
+            // (cur != line.mEnd)` is un-rotated straight back into a plain
+            // while (measured: 92.56, unchanged), while the `mStart` spelling
+            // survives and reproduces it (92.56 -> 94.66 canonical).  This is
+            // behaviour-identical -- `cur` is `line.mStart` on entry, and the
+            // bottom test runs the body zero or more times exactly as before.
+            if (line.mStart != line.mEnd)
+            do {
                 unsigned short ch = *cur;
 
                 if (ch == 0x3c && mMarkup) {
@@ -2353,7 +2369,7 @@ void RndText::ConstructMeshes(
                     // not advance the cursor a second time.
                     cur++;
                 }
-            }
+            } while (cur != line.mEnd);
         }
     }
 
