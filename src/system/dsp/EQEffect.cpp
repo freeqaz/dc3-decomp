@@ -354,6 +354,17 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                             // zn*cosCoeff with fnmsubs, where the double
                             // negation makes MSVC build the inner sum with the
                             // opposite sign and fix it up at the fmadds.
+                            // w27-m: naming the negated product
+                            // (`float negXb = -(x * b0);` then `negXb + xn *
+                            // cosCoeff`) DOES reproduce the image's
+                            // fneg+fmadds pair here (measured: the fneg at
+                            // 0x82E592A4 lines up and the fmadds follows), but
+                            // it re-schedules the surrounding delay-line
+                            // loads/stores and costs 2.1pp overall
+                            // (91.153 -> 89.1 canonical).  Both spellings round
+                            // identically on the x*b0 term, so this is a
+                            // scheduling cost, not a semantics one.  Left
+                            // unlanded.
                             float y = zn1 * b0
                                 + (-(x * b0) + xn * cosCoeff + xn2 - zn * cosCoeff);
                             mBand1DelayZ[chan] = y;
