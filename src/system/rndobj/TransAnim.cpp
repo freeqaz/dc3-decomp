@@ -285,7 +285,8 @@ void RndTransAnim::MakeTransform(float frame, Transform &tf, bool whole, float b
                     mTransKeys, mTransSpline, frame, tf.v, mFollowPath ? &v4c : nullptr
                 );
                 if (mRepeatTrans) {
-                    ::Add(tf.v, v58, tf.v);
+                    const Vector3 &tv = tf.v;
+                    ::Add(tv, v58, tf.v);
                 }
             }
         } else if (whole) {
@@ -311,8 +312,9 @@ void RndTransAnim::MakeTransform(float frame, Transform &tf, bool whole, float b
             if (blend != 1.0f) {
                 if (!mScaleKeys.empty()) {
                     MakeScale(tf.m, v70);
+                    float invY = 1.0f / v70.y;
                     tf.m.x *= 1.0f / v70.x;
-                    tf.m.y *= 1.0f / v70.y;
+                    tf.m.y *= invY;
                     tf.m.z *= 1.0f / v70.z;
                 }
                 Hmx::Quat q90(tf.m);
