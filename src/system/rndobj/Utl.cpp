@@ -2977,6 +2977,17 @@ void TessellateMesh(RndMesh *mesh) {
     // the comparator byte stays at 0x54 (image 0x50, row 5) and the 4-byte
     // shift of the small-temp block stays with it -- the remaining 66 rows are
     // all that shift plus its register renames.
+    //
+    // w27-c (2026-11-02) measured the residual at 62 rows / 96.61224 and
+    // confirmed the shape with a register-and-branch-insensitive multiset
+    // comparison: every unmatched entry on either side is that 4-byte stack
+    // shift (`lbz R,0x50` vs 0x54, `sth R,0x58/0x5c/0x60` vs 0x5c/0x60/0x64,
+    // ...) plus the mention-count family above -- the target has 294
+    // instructions and we have 291, and the three extra are one more
+    // `lwz`/`mr` pair off 0x100 of the sub-object and one more 16-bit home.
+    // Nothing in the loop reads a different member or uses a different
+    // constant, so the body is behaviour-equivalent as written and the whole
+    // remainder hangs on the comparator temp above sharing 0x50.
     Edge e12, e23, e31;
 
     for (unsigned int i = 0; i < (unsigned int)mesh->Faces().size(); i++) {
