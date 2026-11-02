@@ -947,6 +947,27 @@ MemHeapStack &ThreadMemStack(bool createIfMissing) {
     // `idx` after the CritSecTracker to shift that allocation is BYTE-IDENTICAL
     // (measured), as docs/decomp/patterns/fixable-declarations.md says decl
     // reorder is for stack slots, not register-only swaps.
+    //
+    // OPEN (w27-b, 2026-11-02), and it is ONE colour decision, not a floor.
+    // The c2 candidate dump puts the .bss anchor first among the nonvolatiles
+    // and idx third:
+    //   id 35  sym 29/k03  pri 30  tie 13   ben 29 ref 17  -> r30   (.bss anchor)
+    //   id 3   sym  7/k04  pri 25  tie 143  ben 10 ref 10  -> r29   (idx)
+    //   id 8   sym 11/k04  pri 20  tie 86   ben  9 ref  9  -> r29
+    // The selector takes the first register in list order once costs tie, so
+    // whichever pops first takes r30.  The image has idx in r30 and the anchor
+    // in r29, i.e. idx popped first: either its priority reaches 30 (then tie
+    // 143 > 13 decides it) or the anchor drops below 25.  Priority is
+    // refs-in-block x block pressure summed over blocks, so the lever is one
+    // more or one fewer machine reference to one of the two in a block of the
+    // right weight -- nothing in the source order moves it.
+    // Measured inert this round (no change to any of the 33 swap rows):
+    // `return gThreadBuf[idx];`, dropping the named `result`, and the image's
+    // conditional write-back (store moved to the end of the
+    // `gThreadIds[...] != currentThreadId` block) -- the last re-confirms w9-d
+    // and now reads identical rather than net-negative.  Replacing the named
+    // `currentThreadId` with a second GetCurrentThreadId() call costs
+    // 98.64 -> 95.92.
     gThreadBufCurrentIndex = idx;
     MemHeapStack &result = gThreadBuf[gThreadBufCurrentIndex];
     return result;

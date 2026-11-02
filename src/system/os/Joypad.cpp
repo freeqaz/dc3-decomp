@@ -714,6 +714,20 @@ void JoypadPollCommon() {
             // the image an int, ours the float.  CharClipSet::SetFrame (100%)
             // shows this compiler materialising __real@00000000 per sibling
             // arm (f29 twice), so the merge is loop hoisting, not global CSE.
+            //
+            // OPEN (w27-b, 2026-11-02): 97.00 canonical / 95.82 fuzzy, 165 of
+            // 669 rows.  The whole cascade still hangs on the same entry: our
+            // prologue saves THREE callee-saved FPRs (stfd f29/f30/f31) where
+            // the image saves two (f30 = 127.0f, f31 = 1/127.0f), which is the
+            // +0x10 frame and the r23<->r24 (75 rows) / r18<->r19 (24 rows)
+            // renumbering that follows it.  The third is 0.0f, held live across
+            // the whole outer loop's calls.  What is missing is a source form
+            // that makes c2 REMATERIALISE 0.0f at the two pressure stores and
+            // the stick else-arm the way the image does (825E6BEC, 825E6D1C,
+            // 825E7030) instead of hoisting one copy out of both loops; the
+            // 127.0f / 1/127.0f pair it must keep hoisting, so the budget is
+            // exactly one register.  Everything above this paragraph was
+            // re-confirmed against the current tree; no new spelling landed.
             for (int k = 0; k < kNumAnalogSticks; k++) {
                 float x;
                 float y;
