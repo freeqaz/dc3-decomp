@@ -650,6 +650,12 @@ void StreamRenderer::DrawToTexture() {
             // Naming the three components is also inert; a whole-Vector4 copy
             // (`Vector4 c5src = ...`) costs 95.39, and swapping y/z in the
             // argument list is not a spelling (it changes the value).
+            // w28-c: the one lowering w26-s did not try -- building center5 by
+            // COMPONENT ASSIGNMENT (`Vector4 center5; center5.x = ...; ...`)
+            // rather than by the 4-argument ctor -- is also byte-identical
+            // here, as are three named float locals feeding the ctor.  So the
+            // ascending x,y,z load order is not reachable by changing how the
+            // value is assembled; it is the scheduler's phase.
             Vector4 center5(
                 mCrewPhotoPlayerCenters[5].x, mCrewPhotoPlayerCenters[5].y,
                 mCrewPhotoPlayerCenters[5].z, 1.0f
