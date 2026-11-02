@@ -168,8 +168,12 @@ StandingStillLogic:
     // at the lwz: the src addi came first in sched3, or was a colour
     // candidate (memcpy makes the DST addi one, but reloads mRaisedMs).
     // Inert: GetUnkab0Padded() casts, a named `cur` ref, `!mRaisedMs`,
-    // Vector3 temp, savedPos split. Open question: which IL shape orders the
-    // copy's src address ahead of its first load in sched3.
+    // Vector3 temp, savedPos split. w26-f13 also measured inert: a named
+    // `const Vector3 &` for the call result, and a named `const Vector3 *`
+    // src for the same; a named `Vector3 &`/`Vector3 *` DESTINATION moves the
+    // dst addi into a k04 but costs 0.63 fuzzy / 0.36 canonical, so the copy
+    // body itself is what has to move. Open question: which IL shape orders
+    // the copy's src address ahead of its first load in sched3.
     if (mRaisedMs == 0) {
         unk38 = skeleton.GetUnkab0();
     }

@@ -623,6 +623,19 @@ void Rnd::TestPoint(const Vector3 &pos, RndFlare *flare) {
             flare->SetVisible(false);
         }
     }
+    // w26-f13 stop note (fuzzy 99.92063, canonical 100.0).  The two charged
+    // rows are the epilogue's `li r10, 0x0` / `stb r10, 0x102` pair: the image
+    // puts the false in r10, we put it in r11 (the true that follows is r11 on
+    // both sides).  Both constants are regasg temps, so the register is first
+    // fit (r11, r10, ...) over sched3 order: ours reaches the false's def
+    // first, so it takes r11 and the later true reuses it.  The image's false
+    // in r10 means r11 was blocked when it was assigned -- either the true's
+    // def precedes it in sched3 and sched0 then reorders the pair, or the
+    // false is a colour candidate rather than a regasg temp.  Measured inert
+    // (9 spellings): literal 0/1, named bool/const bool at the use site, a
+    // named bool at the merge point, a function-scope bool, a raw `RndFlare *`
+    // local for the store base.  Open question: which IL shape orders the
+    // true's def ahead of the false's in sched3.
     flare->SetOcclusionReady(true);
 }
 

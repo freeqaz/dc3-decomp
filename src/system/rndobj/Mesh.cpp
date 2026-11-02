@@ -1763,8 +1763,13 @@ void RndMesh::InstanceGeomOwnerBones() {
         // product, or C-F <= 1 so both recycle and pop in mint order.
         // Inert (11 spellings): index-first `parentIdx + begin()`,
         // `parentIdx[begin()]`, BoneTransAt(), a named owner/begin/bone/
-        // parent local, `RndBone &` ref, `!= -1` arm order. Open question:
-        // what puts the product ahead of the base in the code-band walk.
+        // parent local, `RndBone &` ref, `!= -1` arm order. w26-f13 also
+        // measured inert: a named `RndBone *`, a named
+        // `RndTransformable *ownerParent`, and a named `unsigned int` index.
+        // Binding the owner's array as an `ObjVector<RndBone> &` is NOT inert
+        // -- it costs 1.64 fuzzy / 1.60 canonical, so the base load has to
+        // stay a direct member access. Open question: what puts the product
+        // ahead of the base in the code-band walk.
         if (parentIdx == -1) {
             bones[i].mBone->SetTransParent(newRoot, false);
         } else {

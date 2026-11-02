@@ -270,6 +270,9 @@ float ArcDetector::GetSwipeAmount() const {
     // follows GetPathError's own register use (that function is 93.5), not
     // anything in this body.  CONFIRMED (w21-n): GetPathError's one-error-vector
     // spelling (not used, see there) makes this function byte-identical (f2).
+    // w26-f13 re-measured the local side: a named `double` for the pow result,
+    // a named copy of `powered`, and naming the two pow arguments are all
+    // inert (the last one costs 14.4 fuzzy, so it is not a candidate either).
     float powered = (float)pow((double)GetPathLength(), (double)exponent);
     float pathErr = GetPathError();
     float swipeAmt = (powered - (pathErr / _acceptablePathErrorRatio)) / adjustedThreshold;
