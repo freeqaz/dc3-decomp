@@ -686,13 +686,20 @@ inline void Multiply(const Hmx::Matrix3 &a, const Hmx::Matrix3 &b, Hmx::Matrix3 
         Multiply(a.y, b, out.y);
         Multiply(a.z, b, out.z);
     } else {
+        // The three products are independent and each row is copied into a
+        // distinct row of a distinct object, so this order is a free choice.
+        // It is measured: all 6x6 product/copy orderings were ranked with the
+        // c2rs replay, and this one is 84.42 canonical against 81.05 for the
+        // previous x,y,z / x,z,y spelling; the winner was confirmed by a
+        // whole-report A/B (UP 1, DOWN 0). The three Vector3 declarations'
+        // order is inert. w26-w.
         Vector3 vx, vy, vz;
-        Multiply(a.x, b, vx);
         Multiply(a.y, b, vy);
+        Multiply(a.x, b, vx);
         Multiply(a.z, b, vz);
-        out.x = vx;
-        out.z = vz;
         out.y = vy;
+        out.z = vz;
+        out.x = vx;
     }
 }
 
