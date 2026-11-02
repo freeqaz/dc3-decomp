@@ -238,6 +238,20 @@ void SkeletonUpdate::UpdateFakeArmPos() {
     unk5398 = (clamped - 0.6f >= 0.0f) ? 0.6f : clamped;
 }
 
+// w26-k (2026-11-02): mechanism for the 91.32 residual (61 rows, 604 B), from
+// the c2 colour-allocator tap.  Unlike the FP rows in BlendVert/Poll, this
+// function HAS FP colour candidates and they all share priority 9: id12
+// tie 56 -> f0, id14 tie 51 -> f13, id16 tie 47 -> f12.  A second block of
+// eight candidates ties at priority 6 with ties 145/110/104/71/68/65/59/5 and
+// those take f0/f13/f12 in tie order.  So the f0<->f12 and f12<->f13 pairs are
+// a TIE-KEY decision (the key is the candidate's program position at its last
+// visit), which is the lever to move next: shift one use of a pri-6 value
+// across a block boundary.  f10 and f9 do not appear in the candidate list at
+// all, so the f0<->f10 and f10<->f9 rows are regasg first-fit over sched3 and
+// have no key.  Behaviour re-read against the image: the offset-swap rows are
+// the same padData mSticks[1][0] / mTriggers[] loads and the same
+// mJointPositions stores, every arithmetic value equal; objdiff diff_op none;
+// unicorn EQUIVALENT at harness h4.  No defect found.
 void SkeletonUpdate::InsertFakeArmPos(SkeletonData &data) {
     JoypadData *padData = JoypadGetPadData(0);
     float ry = padData->mSticks[1][0];

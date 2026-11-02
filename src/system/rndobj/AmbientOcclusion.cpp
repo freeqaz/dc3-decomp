@@ -136,6 +136,21 @@ void RndAmbientOcclusion::BlendVert(
     // tex scale up with it (75.4); reading v2.tangent.x/y/z into float locals
     // before the scaling (the image holds them in f11/f13 across it) hoists
     // the loads above the tangent copy instead (85.1).
+    // w26-k (2026-11-02): mechanism, from the c2 tap.  Every FPR left in the
+    // swap set (f8..f13, 12 pairs) is a SECOND-allocator (regasg) selection,
+    // not a COLOR candidate: this function's entire FP candidate list is two
+    // arena temps, id14 pri 50 tie 58 and id15 pri 25 tie 5, and both are
+    // assigned f0 (different live ranges).  regasg is first-fit over the
+    // sched3 order, so a pair's assignment is a pure function of when each
+    // load's def and each value's last use reach it, and there is no
+    // priority/tie key to move; the only source handle is expression shape,
+    // which the refutations above already varied six ways.  Behaviour checked
+    // instruction-by-instruction against the image: the two sides carry the
+    // same multiset of loads, stores, adds and multiplies, every store
+    // destination offset is equal on both sides, and there is no branch,
+    // call or constant difference (objdiff diff_op: none; unicorn verdict
+    // EQUIVALENT at harness h4).  The eight insert/delete rows are the same
+    // values emitted in a different order, not different values.
     Vector4 tang = out.tangent;
     tang.x = v2.tangent.x + tang.x;
     out.pos *= 0.5f;
@@ -1251,6 +1266,24 @@ struct FacePriority {
     bool operator<(const FacePriority &o) const { return priority < o.priority; }
 };
 
+// w26-k (2026-11-02): adjudication of the 12.5% residual (4492 B, 94.43
+// canonical / 93.35 fuzzy, 1153 instructions).  NOT a behaviour difference:
+// objdiff reports diff_op none (no comparison, branch-polarity or test
+// mismatch), and the one entry under Function Call Diff is an ICF alias --
+// the image's `vector<UILabel*>::erase` and our `vector<RndMesh*>::erase` are
+// the same pointer-vector body (build/373307D9/icf_aliases.map carries 84
+// UILabel aliases), and this TU cannot instantiate a UILabel erase at all
+// (UILabel appears 0 times in AmbientOcclusion.cpp).  Unicorn verdict for this
+// symbol is EQUIVALENT at harness h4.  The residual is structural: our frame
+// is 0x4D0 against the image's 0x4E0, and 404 of the 1153 rows are r1-relative
+// arg diffs riding on that (-16 dominant, 83 rows), with the two home stores
+// of `this + 0x98` landing at 0xA0/0x64 (ours) vs 0xE8/0x78 (image), i.e. a
+// different set of 16 bytes being kept in the frame rather than the same
+// locals shifted by the frame delta.  Remaining: 56 GPR swap pairs, dominated
+// by r10/r11 (32) and r10/r9 (22), plus 53 insert/delete rows in 25 clusters
+// of which the largest are two 16-byte copy word orders.  Re-deriving the
+// frame (which local the image keeps where) is the next step, not another
+// spelling of this body.
 void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
     if (mObjectsTessellate.empty())
         return;

@@ -319,6 +319,33 @@ void SongCollision::Update(MoveDir *moveDir) {
     // The r28/r29 rotation is therefore not reachable through the array base on
     // its own -- `dancer`'s allocation has to move with it.
     //
+    // w26-k (2026-11-02): mechanism, from the c2 colour-allocator tap, plus a
+    // correction to that last sentence: `dancer` is in r14 on BOTH sides in the
+    // current tree (`lbz 11, 425(14)` at tgt 0x30C / ours 0x308), so it is not
+    // what the rotation is about any more.  The whole knot reduces to one
+    // fact: `this` is NOT a colour candidate in our build.  `addi r28, r3,
+    // 0x2c` + `stw r28, 0x64(r31)` are the first two instructions of the body,
+    // so c2 CSE'd `this + 0x2c` and dropped `this`; the image keeps `this` in
+    // r30 (`mr 30, 3` at 0x24), forms `addi r29, r30, 0x2c` at the first mData
+    // use (0x138) and home-stores THAT to 0x50(r31).  Everything downstream
+    // follows: the two hoisted global addresses then take r28/r29 in the image
+    // and r29/r30 in ours, which is the whole r28<->r29 rotation (20 rows),
+    // and the spurious home store at 0x64 is the (0xd0,0xf0) offset swap.
+    // The second rotation, r15<->r16 (11 rows), is an independent tie-0 pair:
+    // one hoisted address half and one `li 0` zero constant.  Ours pops the
+    // address first (id 58, pri -68 tie 0, code band -> r16) and the k0d zero
+    // second (id 4, pri -71 tie 0 -> r15); the image needs the zero popped
+    // first, so address -> r15 and zero -> r16.
+    // Behaviour re-read against the image listing: same calls in the same
+    // order, same stores, same Set(minX, maxX) / push_back /
+    // bones_min_max_x sequence; objdiff diff_op none; unicorn EQUIVALENT at
+    // harness h4.  The two `MakeString` rows under Function Call Diff are the
+    // per-TU assert-instantiation class, not a defect: ICF binds one arbitrary
+    // `MakeString<char[N],int,char[M]>` spelling at the folded address: the
+    // image shows ONE (`char[19]` file, `char[4]` expression), we emit nine
+    // (all `char[18]`, one per distinct expression length), so that row is a
+    // naming artifact of the fold and not reachable from this source.
+    //
     // w7-ba (floor held at 94.2; four more spellings measured).  The image's
     // shape is now pinned down further, and the knot is a single allocator
     // choice:
