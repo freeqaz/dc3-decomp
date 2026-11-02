@@ -960,6 +960,19 @@ void CharEyes::NextLook() {
         // first `mCurrentInterest = 0` (bestState == 0 arm) are the inlined
         // ObjRef::Release unlink; the second, identical `mCurrentInterest = 0`
         // already matches, so it is the surrounding allocation, not the source.
+        // w26-i (99.55 canonical, 62 rows): every row was re-read against the
+        // target and none of them is a different immediate, call or field.  The
+        // lbl_82F5E80C rows at idx 183/188/374/391 are the SAME address as our
+        // ?$S6@?BF@??NextLook guard -- they cost only because a register rides
+        // along with the placeholder name, and objdiff forgives the name alone
+        // (cf. idx 195, where only the name differs and nothing is charged).
+        // 18 declaration-order variants (dx/dy/dz, projX/projY/projZ,
+        // sx/sy/sz) and the 8.7 named-vs-inline spellings of the scale product
+        // are inert on canonical.  The dominant r22/r23/r24 permutation
+        // (headXfm base, the __real@00000000 constant, the guard base) is the
+        // tie-0 hoisted-address shape of C2RS-BRIDGE 8.4, where the source
+        // lever is the code band's C-F count (how many demotions precede the
+        // band), not anything spelled here.
         Vector3 newFacing = facingDir;
         float dz = (facingDir.z - lastFacing.z) * 45.0f;
         float dx = (facingDir.x - lastFacing.x) * 45.0f;
