@@ -46,9 +46,9 @@ protected:
 private:
     D3DQuery *GetDXQuery(unsigned int queryIndex) {
         MILO_ASSERT(queryIndex < kMaxQueries, 0x57);
-        if (!mDXQueryArray[queryIndex][mCurrentFrameIndex]) {
+        if (!mDXQueryArray[queryIndex][GetCurrentFrameIndex()]) {
             MILO_ASSERT(GetQueryState(queryIndex) == kQueryStateInvalid, 0x5D);
-            D3DQuery **slot = &mDXQueryArray[queryIndex][mCurrentFrameIndex];
+            D3DQuery **slot = &mDXQueryArray[queryIndex][GetCurrentFrameIndex()];
             if (slot) {
                 *slot = D3DDevice_CreateQueryTiled(
                     TheDxRnd.Device(), D3DQUERYTYPE_OCCLUSION, 1
@@ -57,7 +57,7 @@ private:
             SetQueryState(queryIndex, kQueryStateReady);
         }
         MILO_ASSERT(mDXQueryArray[queryIndex][GetCurrentFrameIndex()] != NULL, 0x67);
-        return mDXQueryArray[queryIndex][mCurrentFrameIndex];
+        return mDXQueryArray[queryIndex][GetCurrentFrameIndex()];
     }
 
     D3DQuery *mDXQueryArray[256][2]; // 0x1810

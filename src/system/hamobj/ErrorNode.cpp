@@ -258,6 +258,25 @@ bool BaseDisplacementNode::Displacements(
 // spelling tried: Scale/Set/per-component, plain-float n, named copies of
 // dot, proj ref vs member, statement order. Open question: the commutative
 // operand key for a colour candidate (n.x) against a non-candidate temp.
+//
+// w26-f3 (2026-11-02): 4 rows left (fuzzy 99.59184, canonical 100).  The c2rs
+// regasg dump prints the emitted order directly as the RT u{} list, and every
+// operand here is a regasg result, so this is a key ordering and not a source
+// ordering.  Measured this lane (sid in parentheses):
+//   n.x  RT40 u{ jx(480) inv(424) }    image jx first    equal
+//   n.y  RT41 u{ inv(424) jy(479) }    image inv first   equal
+//   n.z  RT42 u{ inv(424) jz(478) }    image jz first    ROW
+//   proj RT54/56/58 u{ dot(423) n.* }  image n.* first   3 ROWS
+// n.x and n.y keep the image's order while n.z does not, so the inv temp key
+// sits between the jx and jz single-use loads; the proj rows are the same
+// shape with dot (an fmadds result) above all three n results.
+// Measured INERT this lane: source-order flip of n.z; `const float &`
+// bindings of inv, jz, dot and each n component; dropping the jointDisp,
+// baseDisp and proj aliases; per-component `proj.x = n.x * dot`;
+// `proj.Set(...)`; reordering, grouping and reversing the jx/jy/jz
+// declarations; and every pair of the above.  The open quantity is how many
+// sids separate inv and dot from the loads here (C2RS-BRIDGE 8.9 shape); it
+// is not measured.
 bool BaseDisplacementNode::Displacements(
     const ErrorFrameInput &frame_input,
     DisplacementData &dispData,

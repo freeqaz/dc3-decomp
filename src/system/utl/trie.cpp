@@ -22,6 +22,21 @@
 // exactly the image's registers) instead of a fresh temp, and the insert path
 // calls inc_count in each arm rather than through a shared local (the image's
 // `mr r3, r31` sits in both arms around a cross-jumped `bl inc_count`).
+//
+// w26-f3 (2026-11-02): the c2rs colour dump now names the whole residue.  The
+// two swapped values are colour candidates
+//   i        id 7   pri 18  tie 142   -> r26   (image: r27)
+//   sibCount id 12  pri 19  tie 27    -> r27   (image: r26)
+// and the image has i popped first.  i's tie (142) already beats sibCount's
+// (27), so priority alone decides it, and the gap is exactly ONE point:
+// i 18 -> 19, or sibCount 19 -> 17.  Measured INERT this lane: `if ('\0' <
+// sibCount)` -> `sibCount > 0`, swapping the `j` and `sibCount` declarations,
+// and moving `char ch = str[i];` across `check_index(nodeIdx)`.
+// `while (j < sibCount)` -> `while (sibCount > j)` costs a canonical point
+// (99.96528), so the comparison's operand order is not free here.
+// (Prior lanes: moving `int i;` above `strLen` is inert; the parentIdx
+// declaration move was refuted.)  The open lever is any source edit that
+// changes i's block-reference count without emitting an instruction.
 int Trie::store(const char *str) {
     if (str == 0 || *str == 0)
         goto return_zero;
