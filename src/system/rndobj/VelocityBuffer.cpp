@@ -323,6 +323,17 @@ bool RndVelocityBuffer::Draw(RndCam *cam, ObjPtrList<RndDrawable> &drawList) {
         // finishes cur one slot later.  Swapping these two declarations is
         // exactly byte-identical, so the order is the MSVC block scheduler's,
         // not the source's.
+        // w26-r: the tap names the mechanism.  The two shifted indices are
+        // candidates id 37 (sym 63, the cur offset) and id 36 (sym 64, the prev
+        // offset); both are pri 30 tie 0, so the pop order is descending id and
+        // cur takes r11 (the image has cur in r10, prev in r11).  The ids come
+        // from the "code" pass CMINT log, which numbers them DESCENDING in
+        // creation order (CMINT 91 -> id 37 sym 63, CMINT 92 -> id 36 sym 64),
+        // so the flip needs cur created after prev.  Every source spelling that
+        // could move that creation order was measured code-identical or worse
+        // here (declaration swap identical; naming either index 48.7; memcpy
+        // first 91.5), i.e. the creation order is not the declaration order.
+        // Open question: which pass orders the two address chains' symbols.
         ViewProjXfm &curXfm = unk36bec[mActiveXfmCacheIndex];
         ViewProjXfm &prevXfm = unk36bec[mActiveXfmCacheIndex ^ 1];
         memcpy(&curXfm, &mViewProjXfm, 0x40);
