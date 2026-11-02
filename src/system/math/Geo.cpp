@@ -1479,8 +1479,15 @@ bool Intersect(const Transform &tf, const Hmx::Polygon &poly, const BSPNode *nod
         Multiply(v, tf, v);
         // Not Plane::Dot (flat a*x + b*y + c*z + d).  The image emits fmuls
         // a*v.x / fmadds c*v.z / fmadds v.y*b / fadds d -- this grouping.
+        // `vy` is a named leaf, not a convenience: c2 sorts a commutative
+        // tuple's operands by expression class (C2RS-BRIDGE 8.7), so the
+        // in-place `v.y` load and `pl.b` came out with the plane component
+        // first.  Naming the product's left operand gives it the variable-leaf
+        // key and the pair emits as `fmadds f0, f10, f11` = v.y * pl.b, the
+        // image's order.  Same value, same instruction count.
         const Plane &pl = node->plane;
-        float dot = (pl.a * v.x + pl.c * v.z) + v.y * pl.b + pl.d;
+        float vy = v.y;
+        float dot = (pl.a * v.x + pl.c * v.z) + vy * pl.b + pl.d;
         if (0.0f < dot)
             front = true;
         if (dot < 0.0f)
