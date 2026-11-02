@@ -168,7 +168,19 @@ RndTexBlendController::GetBlendState(float &blend, float influence) const {
             // PARAMETER (`t3 * a + t2 * b` called with -2.0f, 3.0f) is folded to
             // the same fmuls 2.0 / fmsubs; the factored `t2 * (3.0f - 2.0f *
             // blend)` is worse (96.47, fnmsubs).
-            blend = t3 * (-2.0f) + t2 * 3.0f;
+            // w26-p: 99.2157 -> 100.0 canonical.  What moves the fusion onto
+            // the image's term is the SEPARATE `n3` statement.  Written as one
+            // expression, every `a*3 + b*(-2)` spelling (and the negated-whole
+            // `-(2.0f*t3 - 3.0f*t2)`, which reaches 99.3137) is canonicalised
+            // by c2 into `fmuls 2.0*t3` + `fmsubs t3, 2.0, that`.  Materialised
+            // as a single-use local first, `-2.0f*t3` keeps its negative
+            // constant and c2 fuses it back into the add the image's way:
+            // `fmuls t2*3.0` then `fmadds t3, -2.0, that`, with -2.0f surviving
+            // as the __real@c0000000 literal.  Exact: -2.0f*t3 == -(2.0f*t3)
+            // bit-for-bit, and the multiply is fused back into the fmadds, so
+            // no extra rounding is introduced on either compiler.
+            float n3 = -2.0f * t3;
+            blend = n3 + t2 * 3.0f;
         }
     }
 
