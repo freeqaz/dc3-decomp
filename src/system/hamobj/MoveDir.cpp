@@ -687,6 +687,40 @@ void MoveDir::PostLoad(BinStream &bs) {
 // 0` hoisted to loop scope, parenthesised / inverted ternary condition, a
 // do/while loop.  Worse: reading mCurMoveNormalizedResult[i] into a local
 // before Smooth (97.0 probe vs 97.7 probe baseline).
+// w26-t: the "17 vs 18" is now measured, not inferred.  `c2rs stage cands
+// --regasg` on this function prints 22 code-band mints and 17 demotions
+// (C-F = 5) and exactly 18 candidates whose allowed set is nonvolatile-only,
+// against 17 allocatable callee-saved registers (r31 is the frame base, so the
+// pool is r14..r30).  Pop order, highest first, with the register each took:
+//   id 2  pri 120 tie 14  (this)        -> r30
+//   id 12 pri  38 tie  0  code#85       -> r29
+//   id 40 pri  27 tie 108 arena#41      -> r28  <- &TheTaskMgr, spills to 0x50
+//   id 9  pri  27 tie  0  code#87       -> r27
+//   id 8  pri  27 tie  0  code#88       -> r26
+//   id 4  pri  25 tie 214 arena#5       -> r25
+//   id 45 pri  14 tie 228 arena#46      -> r30 (reuse)
+//   id 5  pri  -5 tie  0  code#89       -> r24
+//   id 27 pri -22 tie 19  arena#28      -> r23
+//   id 14 pri -25 tie  0  code#83       -> r22
+//   id 1  pri -41 tie  0  k0d#0         -> r21
+//   id 48 pri -44 tie 27  arena#49      -> r20
+//   id 50 pri -44 tie 25  arena#51      -> r19
+//   id 43 pri -46 tie 30  arena#44      -> r18
+//   id 47 pri -48 tie 28  arena#48      -> r17
+//   id 49 pri -48 tie 26  arena#50      -> r16
+//   id 42 pri -52 tie  0  code#78       -> r15
+//   id 13 pri -54 tie  0  code#84       -> r14  <- TheMaster@h
+// So the mechanism hypothesis is: `TheMaster@h` is the last-popped code-band
+// half (lowest priority) and takes the last register, which pushes the pool
+// one over budget; the image drops that ONE candidate and rematerialises the
+// `lis` per iteration instead.  Reaching it means removing one cross-call
+// value (or making the code band stop minting that half) -- not a spelling of
+// the ternary.
+// Measured inert in the replay harness (97.2402 fuzzy = baseline): a named
+// `TaskMgr &taskMgr` binding, a named ternary result feeding Smooth, a named
+// result plus a named delta.  Worse: a named `HamMaster *master` (97.72 canon),
+// a named mCurMoveNormalizedResult[i] (97.55), a named bool for the beat test
+// (96.04), and calling DeltaUISeconds once with a `*=` arm (93.42).
 void MoveDir::Poll() {
     SkeletonDir::Poll();
     mDancerViz->Poll();
