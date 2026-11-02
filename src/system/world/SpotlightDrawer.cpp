@@ -459,6 +459,17 @@ void SpotlightDrawer::ApplyLightingApprox(BoxMapLighting &boxMap, float f2) cons
         // materialisation (35,37,92) -- nine of the twenty-nine.  Any fix has to
         // make MSVC prefer the GPR-plus-reload trade, so it is about pressure, not
         // about how `* 2.0f` is spelled.
+        // w26-l (2026-11-02): 13 more spellings of the two `* 2.0f` statements
+        // (one named `two` inside the loop, two named `bottom`/`length` temps,
+        // the two statements swapped, `2.0f * x` operand form, `* 2`,
+        // `* (float)2`, and a `two` declared next to `params`) -- every one is
+        // byte-inert or worse (the two-temps form adds 2 instructions, 90.26).
+        // Mechanism: the image keeps the ADDRESS (`lis r26, __real@40000000@ha`)
+        // and reloads `lfs f0, @l(r26)` inside the loop, so c2 declined to hoist
+        // the load; ours takes the literal into f30, which costs the second
+        // `stfd` and pushes the save range to __savegprlr_27. The choice is
+        // c2's loop-invariant-motion cost model, not the expression: no spelling
+        // of the use changes whether the constant is CSE'd across the loop.
         // RESIDUAL (w7-am, 94.2 canonical): MSVC hoists this 2.0f out of the
         // loop into a second callee-saved FPR (f30, plus the extra stfd), where
         // the image keeps only `lis r26, __real@40000000@ha` live and reloads
