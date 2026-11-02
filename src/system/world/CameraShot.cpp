@@ -1182,6 +1182,16 @@ BEGIN_LOADS(CamShot)
         // the `else` block, and first in the block -- all three BIT-IDENTICAL,
         // which confirms slot assignment here is liveness/allocator-driven and
         // not reachable by declaration placement.
+        // w26-n3, four more (canonical, per-object path exact here -- baseline
+        // 99.8932 reproduced): moving `ObjPtr<RndTransformable> parentPtr(this)`
+        // down to its assignment (to free 0x90 for `vec`) is 96.74151, far
+        // worse; `Vector2 vecA, vecB` plus a reconstructed `Vector2 vec[2]`
+        // initialiser is 98.43811; the two read-into-one-slot spellings do not
+        // compile because both elements are read later (frame1/frame2
+        // mScreenOffset).  So the +0x20 is a slot-allocation cascade rooted in
+        // `vec` (16-byte, aligned) landing at 0x110 instead of 0x90, not a
+        // removable local: ours puts parentPtr at 0x90 first and then cannot fit
+        // vec, the image puts vec at 0x90 and parentPtr at 0xa0.
         Vector2 vec[2];
         d >> vec[0];
         d >> vec[1];
