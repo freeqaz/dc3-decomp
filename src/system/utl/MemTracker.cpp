@@ -187,6 +187,22 @@ template const char *MakeString<const char(&)[9], const char(&)[3], const char(&
 // ??_C@_0P@KDMJFNCI@MemTracker?4cpp and ??_C@_08LAKGMMIJ@mHashMem string
 // symbols on both sides, so the array-size triple is just the fold
 // representative's name.
+//
+// w26-l (2026-11-02): rows 41-66 are ONE decision, and it is not a spelling of
+// this function. The image materialises `this + 0x18180` (mFreedInfos) AFTER
+// `bl DebugHeapAlloc` into r8 and keeps nothing across the call; we hoist the
+// same `addis/subi` pair ABOVE the call into r26, which is what turns the 3
+// vector stores into `stw r3,0x0(r26) / 0x4 / add r7,r28,r3` against the
+// image's `stw r3,0x0(r8) / 0x4 / 0x8` and drags the `clrlwi` result from r5
+// to r8 (`stw r5,0x54(r31)` vs `stw r8,0x54(r31)`). The stores are inside
+// AllocInfoVec's __forceinline ctor (utl/AllocInfo.h, a PCH-reached header),
+// so the only free variables here are its arguments; 47 combinations of them
+// (y / (unsigned)y / (size_t)y / y&0x3fffffff, int vs unsigned vs size_t
+// hashSize, x<<1, `2*...`, `hashSize*4`) are byte-identical to the current
+// body. Mechanism: c2's sched0 placement of an address-materialisation pair
+// across a call. 122 of 138 rows are already equal and every surviving
+// difference is inside that block, so this is a scheduling row, not a colour
+// row -- no register assignment anywhere else in the function moves.
 MemTracker::MemTracker(int x, int y)
     : mHashMem(nullptr), mHashTable(nullptr), mTimeSlice(0), mCurStatTable(0),
       mFreedInfos(y), mLog(0), mReport(0), mHeap(x) {

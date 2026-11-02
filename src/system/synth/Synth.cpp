@@ -458,6 +458,19 @@ static const float sMeterConsts[] = { 0.2f, 40.0f, 0.7f, 0.0f };
  *      `peakHold + sMeterConsts[1]`; MSVC picks this from its own FPR
  *      assignment, not from source order (refuted repeatedly this wave)
  *
+ *  w26-l (2026-11-02): 27 more spellings, every one inert or worse (a named
+ *  `screenW` feeding barLeft/barWidth, levelNorm hoisted above them, the two
+ *  sMeterConsts indices written as literals, `sMeterConsts[1] + level`
+ *  operand flips on both norms, and an extra used temp after dbLabelPos).
+ *  Mechanism for rows 67/115 (the two `fadds` operand orders): c2's §8.7
+ *  commutative sort puts `level`/`peakHold` (variable leaves, key
+ *  0x10000|sid<<5) against the sMeterConsts[1] load (memory leaf, key
+ *  0x10000|(basesid&3)<<14|...). Ours sorts the load first, the image the
+ *  param; the base is the single hoisted `addi r29, r11, sMeterConsts@l`
+ *  address, and none of the added or removed locals above it moved that
+ *  temp's sid. Rows 58/60/68/71 and 83-103 are sched0: the image multiplies
+ *  barLeft before barWidth and writes the Max in place, and statement order
+ *  does not reach either (three permutations measured by w7-bs, four here).
  *  Also noted, not chased: the image's MakeString here is
  *  ??$MakeString@W4_D3DFORMAT@@@@... where ours is ??$MakeString@H@@... --
  *  the usual identical-COMDAT fold of MakeString<int> onto another 4-byte

@@ -488,6 +488,31 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
         // A memory-copied temp (`saved = *block`) keeps a dead load of the
         // old mSizeWords and spills it (91.4); assigning the three fields is
         // what keeps the temp in registers.
+        // w26-l (2026-11-02): 89 combinations of the remaining free spellings
+        // here (null-check form; `block += padWords`; a named `newBlock`; a
+        // direct `*(FreeBlock*)block = saved`; blockSize hoisted to an
+        // initialiser or removed from its declaration; a marker comment after
+        // the kFirstFit arm) are all inert or worse -- the best is the current
+        // body. What they cannot move is the ROOT, which the colour tap names
+        // directly: `block` is TWO candidates here (id 7 sym8/k04 pri 67 ->
+        // r30, and id 10 sym11/k04 pri 94 ref 16 -> r31, i.e. the extra
+        // `mr r31, r30` that follows our `lwz r30, 0x60(r1)` of info.mBlock
+        // and has no counterpart in the image), and that second version takes
+        // the top nonvolatile rung. With it present every later rung shifts, which is
+        // why `this`/`sizeWords` (ids 3 and 6, pri 25 and 13) come out r27/r26
+        // against the image's r26/r27 and blockSize lands in r29 instead of
+        // r28. The same extra version is why the store is `add` + `stwx`
+        // rather than the image's single `stwux`. Collapsing `block` to one
+        // live range is the lever; nothing above does it, and the obvious
+        // guess -- ONE `block = info.mBlock;` after the switch instead of one
+        // per arm, which is legal because info.mBlock starts null and the
+        // default arm runs no fit -- is REFUTED: 91.6 -> 87.6 (151 rows), so
+        // the image has the four-way phi and the extra version is not it.
+        // Nor does any spelling of the update itself fuse the store: an
+        // `int*`-walk `words += padWords`, a `char*` + padWords*4, a named
+        // `newBlock`, a direct `*(FreeBlock *)((int *)block + padWords) = saved`
+        // and a reference alias are all byte-identical to the current `add` +
+        // `stwx` pair (13 more combinations, none better than 91.6).
         FreeBlock saved;
         saved.mSizeWords = blockSize;
         saved.mTimeStamp = block->mTimeStamp;
