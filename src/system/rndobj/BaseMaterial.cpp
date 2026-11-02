@@ -251,9 +251,18 @@ const DataNode *BaseMaterial::GetDefaultPropVal(Symbol s) {
 // `base != nullptr`, `NULL != base`, `!!base`, a named `baseOk`,
 // `if (base == 0)`, an `if (base) {} else {}` arm, and the assignment spelled
 // through a cast (`(BaseMaterial *)`, `static_cast`), a double deref
-// `*(&gDefaultMat)` or a `BaseMaterial *const *` slot.  Open question: which
-// source construct makes c1 keep the global-load node while `#cond` still
-// reads "base".
+// `*(&gDefaultMat)` or a `BaseMaterial *const *` slot.
+// The obvious reconstruction -- bind the arm's value to a local NAMED `base`
+// so the message stringifies correctly -- was measured and does NOT work:
+// `BaseMaterial *base = baseIn;` (parameter renamed) with the assert on the
+// local gives 96.86, because c1 does not coalesce that copy; declaring the
+// local uninitialised and filling it in the arms gives 95.88 (assert in the
+// null arm) / 86.67 (assert after the join); and binding the global to a
+// throwaway local before `base = fallback` is BYTE-IDENTICAL to the current
+// form, i.e. the copy folds and the assert still tests the variable -> cr0.
+// So the cr6 only survives while the condition IS the global's own load node,
+// and any binding through a variable collapses it.  Open question: which
+// source construct keeps the load node while `#cond` still reads "base".
 bool BaseMaterial::PropValDifferent(Symbol s, BaseMaterial *base) {
     if (!base) {
         base = gDefaultMat;
