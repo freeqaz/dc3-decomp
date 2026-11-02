@@ -114,9 +114,17 @@ DataNode ClipPlayer::AnnotatePractice() {
     if (!cont) {
         return 0;
     }
+    // w27-e: bind the director POINTER by reference, not by copy.  A reference
+    // folds, so both tests still read TheHamDirector at their own use sites
+    // (the image reloads it too, twice), but the extra named value re-keys the
+    // IL so the scheduler issues `lwz r10, TheHamDirector@l(r28)` before
+    // `lbz r11, 0xc(r27)` in BOTH window tests.  A copy here is wrong: c2 keeps
+    // it in a callee-saved register across the Annotate calls and the prologue
+    // grows to r24-r31 (measured 99.34).  98.734 -> 100.
+    HamDirector *const &director = TheHamDirector;
     DataArray *arr = new DataArray(0);
     float f30 = 1.0f;
-    if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
+    if (!TheLoadMgr.EditMode() || !director->NoTransitions()) {
         CharClip *inClip = mInClip;
         if (inClip) {
             float f31 = mPracticeStart + f30;
@@ -125,7 +133,7 @@ DataNode ClipPlayer::AnnotatePractice() {
         }
     }
     float f31 = mPracticeEnd;
-    if (!TheLoadMgr.EditMode() || !TheHamDirector->NoTransitions()) {
+    if (!TheLoadMgr.EditMode() || !director->NoTransitions()) {
         CharClip *outClip = mOutClip;
         if (outClip) {
             Annotate(arr, f31 - f30, outClip->Name());
