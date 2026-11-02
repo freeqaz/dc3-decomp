@@ -122,7 +122,7 @@ namespace {
             // (vs 3 and 8), i.e. MSVC schedules this block independently of
             // statement order.  The r,g,b,a spelling below is the better of
             // the two at the same score, so it stands.
-            // FLOOR (94.9): target 560 B vs base 548 B, and the 12-byte gap is
+            // RESIDUAL (94.9): target 140 instructions vs base 137, and the gap is
             // exactly the three dead `stfs fN, 0x50(r31)` alpha parks -- 0x50 is
             // the shared float-temp slot that `MakeString(": %.2f%%", detected *
             // 100.0f)` takes the address of at idx 96.  Nothing ever reads those
@@ -142,6 +142,17 @@ namespace {
             // MakeString temp's slot, which is address-exposed, so they are
             // stores of a float temp that survived until stack packing; no
             // spelling found that creates one. Field writes stay (best score).
+            // w29-b (94.88611, base 137 vs target 140): re-derived the delta --
+            // the image's 3 extra instructions are exactly `fmuls f8,f8,f0` and
+            // `fmuls f7,f7,f0` plus the third park, and the whole colour block
+            // sits 4 bytes lower in the image (0x74..0x8c) than in ours
+            // (0x70..0x88), i.e. the image has one MORE 4-byte float local
+            // between 0x50 and the colours -- which is what the parks are
+            // storing to.  So the missing thing is a named float local that the
+            // image assigns three times, not a temp; c2's frame allocator will
+            // not invent one, and the parks share slot 0x50 with the address-
+            // exposed MakeString temp, so the two are told apart only by the
+            // separate 0x70 store.  Field writes stay.
             darkColor.red = sDarkerGray.red * 0.5f;
             darkColor.green = sDarkerGray.green * 0.5f;
             darkColor.blue = sDarkerGray.blue * 0.5f;
