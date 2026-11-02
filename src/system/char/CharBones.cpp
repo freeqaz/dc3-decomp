@@ -1114,6 +1114,17 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
 // remaining question is which construct is worth +66..71 by itself.
 // The uncompressed Vector3 += z row is two late temps (my.z 1409 below
 // other.z 1415); field-wise, named-ref and Add() spellings leave it.
+// w26-n: the CQS dump confirms both pairs -- the compressed arm's z row is
+//   CQS V1415/k02s03{000161c0} V1409/k02s03{00016040}
+// and the six product rows sit on the sid-937..960 load temps above.  The
+// base-reference lever was tried on the vector arm (`Vector3 &dstV =
+// *otherVecItr;`, `const Vector3 &srcV = v;`): re-keying the destination's
+// base is byte-inert (350/357 either way) and re-keying the source costs one
+// more row (the compressed x add at 0xf8, 349/357).  A dead `RotateByMultiply`
+// call placed in the ByteQuat loop is NOT eliminated before minting and moves
+// the late loads by about +156 sids (1409/1415 -> 1565/1571), so the shift is
+// real and measurable but does not land on the +66..71 the six products need;
+// `RotateByMultiplyUncompressed` there leaves all seven rows unchanged.
 static void RotateByMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out) {
     float rw = a.w * b.w - a.x * b.x;
     rw -= a.y * b.y;
