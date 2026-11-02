@@ -38,6 +38,20 @@ inline void Multiply(const Hmx::Matrix3 &m, const Vector3 &v, Vector3 &out) {
 // Multiply calls precede the copies (an early `out.y = vy` would force a b.y
 // reload, since b == out there). rb3-xenon mtx.cpp, rb3 Rot.cpp/Mtx.h and
 // og-dc3 checked: no other shape. Floor stands; nothing built.
+// w26-l (2026-11-02): re-triaged, no behaviour difference found. Every one of
+// the 164 non-equal rows is a register permutation or a schedule slot: the
+// two arms compute the same 18 products from the same 9 `a` and 9 `b`
+// elements and store the same 9 outputs to the same offsets (the buffered
+// arm's extra word per row is the Vector3 pad, identical on both sides), the
+// only alias-sensitive store order difference is inside an arm the compiler
+// chose, and the one difference that is neither a register nor a slot is the
+// image's `lfs f7, 0x14(r4)` hoist above `cmplw cr6, r4, r5` (we hoist
+// nothing), which is the b.y.y copy-order lever w13-o already swept in all
+// six orders. NOT EDITED HERE: the
+// body lives in math/Mtx.h, which is PCH-reached (confirmed with
+// `ninja -t deps build/373307D9/pch/decomp_pch.obj`), so a spellings round
+// would have whole-binary blast radius for a row already re-read by w13-o,
+// w21-an, w21-q, w24-c2. Recorded, not attempted.
 const float sMaxThreshold = 80;
 bool CharLookAt::sDisableJitter = false;
 
