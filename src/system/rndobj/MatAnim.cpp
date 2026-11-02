@@ -80,6 +80,17 @@ END_SAVES
 // both = 98.87 (shipped): the store pair then matches, but MSVC CSEs the
 // image's second `this` (`subi r4, r31, 0x88`) into the conversion's register,
 // so 5 rows remain (the conversion reads via r4 instead of r31).
+// w26-s: the residual is a c1 CSE, and 14 spellings were MEASURED INERT at
+// 98.87: both stores through `this` (97.89), self/this mixed either way, two
+// distinct named copies, `*const self`, `RndMatAnim &self = *this`, `&*self`,
+// a cast at either use, a named `Hmx::Object *obj = self`, and a nested scope
+// around the second store.  Shape read off the image: the conversion base is
+// `r11` and `subi r4, r31, 0x88` is re-materialized for the ObjOwnerPtr call,
+// i.e. the two RHSs are not CSE'd there at all; ours keeps ONE value in r4 and
+// copy-prefers it into the call.  Hypothesis (not measured): the image's r11 is
+// regasg first-fit, so the split follows from the conversion not being
+// copy-preferred to r4 -- the open question is which source makes the second
+// RHS a distinct value.
 BEGIN_COPYS(RndMatAnim)
     CREATE_COPY_AS(RndMatAnim, m)
     MILO_ASSERT(m, 0xF2);
