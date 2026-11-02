@@ -1016,7 +1016,14 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
             // (val + 1.0) * 0.5 survives a statement boundary and a named
             // constant, so it is not a front-end rewrite of one expression.
             float val = Clamp(-1.0f, 1.0f, (float)shAccum[k]);
-            shAccum[k] = val * 0.5 + 0.5;
+            // w26-y: naming the product as a double is what lets c2 contract
+            // `scaled + 0.5` into the image's single `fmadd f0, f0, f12, f12`
+            // (f12 = double 0.5).  Written as one expression, `val * 0.5 + 0.5`
+            // is rewritten by c1 to `(val + 1.0) * 0.5` before contraction, which
+            // costs a second `lfd` of double 1.0, an extra `fmul`, and shifts the
+            // volatile FPRs f9/f10/f11 across the whole k loop.
+            double scaled = (double)val * 0.5;
+            shAccum[k] = scaled + 0.5;
         }
     }
 
