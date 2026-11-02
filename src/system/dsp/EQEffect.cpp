@@ -438,6 +438,19 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
     }
 }
 
+// w27-m adjacency notes (row measured 99.335 canonical / 99.214 fuzzy, 523 of
+// 542 instructions equal).  Everything left is allocation, not semantics:
+//  - the `default:` MakeString is named W4_D3DFORMAT in the image and H (int)
+//    here.  Both are passed by reference from the SAME stack home (r1+0x10fc,
+//    the switch subject) and both format as an integer, so this is the
+//    /OPT:ICF instantiation-naming artifact, not a wrong argument type.
+//  - rows 368-376 and 426-434 are the pair of constants -0.05f and 1/24000
+//    reaching r10/r11 in the opposite order in the two bandpass blocks, which
+//    only swaps which FPR holds mBandNQ vs mBandNGain.  MEASURED AND REFUTED:
+//    writing `double invGain = pow(...)` before `float wcF = ...` in band 3
+//    only, in both bands, and with band 4's `k + half` named, each re-schedules
+//    the whole block (98.0 / 96.2 vs 99.335).  The image's order is produced by
+//    the scheduler, not by the statement order.
 void EQEffect::SetParameter(int param, float value) {
     bool updateBand0 = false;
     bool updateBand1 = false;
