@@ -179,6 +179,20 @@ void CharClipDisplay::DrawTrack() {
     // preheader AFTER the `bgt` loop guard (image 823DF5A0: `lfs f0,
     // __real@40400000@l(r25)` / `fsubs f27, f29, f0`), and no longer keeps
     // 3.0f in a callee-saved FPR there.
+    // w26-v (97.817, 42 rows) -- c2rs-bridge 8.8 does NOT reach this row.
+    // The lever was tried in both forms and both are byte-inert (identical
+    // score and identical rows): `const float &three = 3.0f;` bound once and
+    // substituted at all four sites, and `float three = 3.0f;` as the control.
+    // A reference to a FLOATING-POINT LITERAL is folded straight back to the
+    // literal, unlike a reference to a member expression (that is the case
+    // 8.8 was established on), so there is no distinct load to keep.  Also
+    // inert here: the commutative-key spelling `3.0f * sEm` on both label
+    // sites, binding `sEm` to a value or a reference local, and binding `em`
+    // through `halfEm`.  Worse: reading the marker height back through
+    // `trackRect.h` (95.99) -- we then load 0xdc(r1) instead of the pool.
+    // Not a scoring row either way: the assert's MakeString instantiation
+    // differs between the objects (`<char[14],int,char[5]>` in the image vs
+    // `<char[15],int,char[42]>` in ours) but objdiff does not charge it.
     // w24-c3 STOP at 97.817 (38 rows): still the 3.0f anchor/remat residual
     // above (r25 anchor + 4 reloads vs our f21), plus its f19/f20/f21 and
     // r23/r24/r25 renumbering, the label `0x64/0x14` load order, and the
