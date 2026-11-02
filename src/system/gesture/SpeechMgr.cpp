@@ -654,6 +654,28 @@ void SpeechMgr::Poll() {
             // &event[i] pointer -- pResult loaded into a local BEFORE eventId,
             // fully nested ifs, and an extra `cur.pResult = 0` store after the
             // destroy (not shipped; it only adds a store).
+            // w28-c (97.98, same 13 charged rows).  The image's base is
+            // r1+0x70 = &event[0].pResult, ours r1+0x60 = &event[0], and the
+            // image derives the element as `subi r30, r31, 0x10` INSIDE the
+            // loop; that single choice is the whole residual (both sides walk
+            // r31 by 0x18, and every load/store resolves to the same field).
+            // It is the c1 address-formation question, not colour.  Measured
+            // and REFUTED here, ten spellings: C2RS-BRIDGE 11's "first field
+            // read" does NOT explain it -- the image tests eventId FIRST
+            // (cmplwi 0x20 / 0x40 / 0x80 precede the pResult test), so its
+            // first read sits at the NON-base offset, and forcing pResult
+            // first in the `&&` chain costs 4.37pp (93.61) by changing the
+            // branch order.  Also inert/byte-identical: a named
+            // `NUI_SPEECH_RECORESULT **pp = &cur.pResult`, a `cur` pointer,
+            // direct `event[i]` everywhere, a base-pointer local, a
+            // pre-stepped element pointer.  Worse: reading pResult into a
+            // named local first (96.82 -- it hoists the load above the
+            // eventId test).  Decisive probe: writing the destroyed address
+            // explicitly as `(NUI_SPEECH_EVENT *)((char *)&cur.pResult -
+            // 0x10)` is FOLDED BACK to `&event[i]` and scores identically,
+            // so c1 canonicalises on the first element address formed and
+            // no expression of the address re-biases it.  Open question:
+            // what makes c1 form &elem.pResult before &elem.
             for (ULONG i = 0; i < fetched; i++) {
                 NUI_SPEECH_EVENT &cur = event[i];
                 if (cur.eventId > 0x20 && (cur.eventId == 0x40 || cur.eventId == 0x80)
