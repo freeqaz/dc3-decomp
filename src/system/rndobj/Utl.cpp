@@ -1101,6 +1101,18 @@ void UtilDrawCigar(
     // skeleton follows the rule again.  So this layout depends on the conversion
     // temps, not on v1/v2/top/bottom alone.  Measured inert: `Vector3 v2;
     // v2.Set(...)` instead of the ctor (98.0, same 9 permuted slots).
+    //
+    // w27-c (2026-11-02) measured 98.01835 / 97.21560 and 46 rows, and pinned
+    // the remainder down with a register-and-branch-insensitive multiset
+    // comparison: the target has 218 instructions and we have 219, and the
+    // ONLY unmatched entry in either direction is one extra `fmr` on our side
+    // (idx 76/78, the `fmr f0,f1` / `fmr f1,f28` pair that the image places
+    // around the `fmuls f27,f1,f0` instead).  Everything else is the two
+    // same-sized Vector3 slot pairs (top/bottom at 0x90/0xa0, v1/v2 at
+    // 0x70/0x80), the h0-in-f27-vs-f28 colouring, the TheRnd base in r30 vs
+    // r28, and three commutative operand-order rows at idx 47/85/89.  So no
+    // load, store, call or constant differs -- the body is behaviour-
+    // equivalent and the whole remainder is the slot allocation above.
     Vector3 end;
     Vector3 top;
     Vector3 bottom;
