@@ -242,6 +242,16 @@ bool RndShaderProgram::Cache(
             // this declaration below the three char buffers is byte-for-byte
             // inert (measured: identical 29-row mismatch list), so the pair is
             // not being ordered by declaration.
+            // w26-q (98.9646 fuzzy / 99.14141 canonical, 22 rows): the 0x88/0x90
+            // pair accounts for 7 of the 22, and every one of those is a +/-8
+            // displacement on that single home, so it is one slot decision, not
+            // seven. 15 more variants this round -- `const s64 &shaderFlags` bound to
+            // opts.flags, a cast form, the two cached*Path declarations swapped,
+            // the two ShaderCachedPath results named, and the FileGetStat return
+            // named -- are all byte-inert at 99.1414, so neither the type nor
+            // the reference form moves it. Open handle: which of the two
+            // same-size homes MSVC places lower, given that declaration order
+            // and binding form are both measured inert.
             s64 shaderFlags = opts.flags;
             // Buffer sizes and declaration order are read off the image's frame:
             // it is 0x410 with the three buffers at 0x2d0 (source), 0x1d0 and

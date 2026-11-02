@@ -146,6 +146,16 @@ CharClip::NodeVector *CharClip::Transitions::FindNodes(CharClip *clip) const {
 // does -- it looks like a register-allocator rematerialisation, not a source
 // shape. Behaviour re-read against the image: same moved count (computed
 // before Resize), same dst/src, same insertion and ring fix-up.
+// w26-q (99.0909 fuzzy / 99.17355 canonical, same 3 rows): 5 more spellings of
+// the tail start, all inert or worse -- `char *nextBytes` (byte pointer, one
+// base + two displacements) is byte-identical, a named `dst` local is
+// byte-identical, and the two-inline-Next() forms regress to 97.46 because the
+// +8 folds into (size+4)*8. The mechanism is the second allocator, not a
+// commutative key: the image rematerialises `this + 0x18 + size*0x60` for the
+// second use of the same value instead of reusing the CSE'd temp (two `add`
+// into different registers, then `addi` off the first), and no source spelling
+// reaches that decision. Open handle: a shape where c1 emits two distinct
+// symbols for the same address expression without changing the (size+3)*8 base.
 void CharClip::Transitions::AddNode(CharClip *clip, const CharGraphNode &node) {
     NodeVector *nodes = FindNodes(clip);
     NodeVector *resized;

@@ -65,6 +65,22 @@ void NgDOFProc::Set(const RndCam *cam, float focalPlane, float blurDepth, float 
     // The fourth row, `fnmsubs f12, f30, f0, f30` vs our f0/f30 operand order on
     // farFocal, follows the same allocation. Refuted: writing farFocal as
     // `focalPlane - mBlurDepth * focalPlane` (inert, byte-identical result).
+    // w26-q (98.9655 fuzzy / 99.13793 canonical, same 4 rows): the regasg tap
+    // names the Clamp row exactly. At the LAST fsel of the first Clamp
+    // (regasg fn 78 t48, sym s93) the first-fit list reads
+    // `f0*phys f13! f12! f11 ...` -- f0 holds the 1.0f literal, and both f13
+    // and f12 are still marked interfering, so the selector takes f11 and the
+    // value survives; the image takes f13 in place, i.e. its fsel writes the
+    // same register it reads, and therefore has to reload it from 0x48 for the
+    // test shortly after. The four rows are that one register choice plus
+    // the fnmsubs operand order it forces. 40 spellings measured this round --
+    // both source orders of the product, the product / the member / `*this`
+    // named as a local, `const float &` and `const float *` bindings of
+    // mBlurDepth (the reference form survives and costs 3.5 points instead),
+    // and all six orders of the three assignment statements (each is 2-14
+    // points worse) -- none moves t48 off f11. Open handle: make the t48 use of
+    // s91 a last use in the sched3 order, which is what frees f13 for the
+    // in-place write.
     mBlurDepth = Max(dof.mDepthScale * blurDepth + dof.mDepthOffset, 0.0f);
     mMaxBlur = Clamp(0.0f, 1.0f, dof.mMaxBlurScale * maxBlur + dof.mMaxBlurOffset);
     mMinBlur = Clamp(0.0f, 1.0f, dof.mMinBlurScale * minBlur + dof.mMinBlurOffset);

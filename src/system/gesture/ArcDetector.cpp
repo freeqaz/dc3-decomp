@@ -441,6 +441,24 @@ void ArcDetector::Update(const Skeleton &skeleton, int elapsed) {
             // spellings): frontPt via ctor, assignment, iterator,
             // const_iterator, front(), a const& alias, x 6 declaration orders
             // x 5 sum groupings -- the copy order (image w,y,x,z) never moves.
+            // w26-q (98.74779 fuzzy / 99.07964 canonical, 18 rows): the 16-byte
+            // `frontPt` copy is rows 132-139 as a load/store ORDER -- the image
+            // runs w,y,x,z and we run z,x,w,y, every src-dst pair being the same
+            // address -- and rows 140-149 are the squared-sum FPR permutation
+            // plus the image folding its second `fsubs` in place. Value-checked
+            // against the target: both sides square the same three components
+            // with the same f29/f30/f31 operands and accumulate
+            // (0x70^2 + (0x78^2 + 0x74^2)); only the emission order differs, so
+            // no behaviour differs. 16 variants of the C2RS-BRIDGE 8.8
+            // base-reference lever this round -- `const PaddedJointPos &` bound
+            // straight off TrackedJoints()[mSecondaryJoint].mJointPos[0] (the
+            // form TryToStartSwipe uses), the same with the TrackedJoint
+            // reference kept, the arm* and mSwipeExtentY reads bound the same
+            // way, and a dz/dx/dy declaration order -- all tie the replay
+            // baseline exactly (99.0354 canonical there; the replay sits 0.044
+            // under report.json only because its __FILE__ is an absolute path),
+            // so this is not a commutative-key row.
+            // Open handle: what sets the order of MSVC's 16-byte struct copy.
             if (distY * distY + distZ * distZ + distX * distX > 0.0001f) {
                 mJointPath.push_front(boneVec);
             }
