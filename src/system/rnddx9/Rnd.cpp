@@ -178,6 +178,17 @@ bool DxRnd::Offscreen() const {
 void DxRnd::DrawLargeQuad(
     const LargeQuadRenderData &data, const Transform &tf, RndMat *mat, ShaderType s
 ) {
+    // w26-f2 (fuzzy 99.357796, canonical 100.0): what is left is a 3-cycle of
+    // callee-saved GPRs from `mat` onward.  Image: r25=mat, r24=s, r23=the
+    // BaseMaterial RTTI, r22=the RndMat RTTI, r26=TheShaderMgr's address half,
+    // r21=the vtable-pointer load `lwz r21,0x0(r29)`; ours runs the mat..r22
+    // group one register lower and holds those last two the other way round.
+    // Tap (`c2rs stage cands --regasg`): the vtable-pointer load is id10
+    // pri26 code#32 and TheShaderMgr's address half is id11 pri9 code#31, so
+    // the priority relation between those two is reversed against the image.
+    // Measured inert or worse: every reshape of this loop/declaration block
+    // tried this pass (96.83-97.52) -- they break the do/while's first-pass
+    // shape, which is worth more than the cycle costs.
     RndMat *next = mat ? dynamic_cast<RndMat *>(mat->NextPass()) : nullptr;
     RndMat *it = mat;
     do {

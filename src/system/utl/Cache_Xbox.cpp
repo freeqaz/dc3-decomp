@@ -355,6 +355,18 @@ int CacheXbox::ThreadGetFileSize() {
         // next to it (the `lwz 0x1c` hoisted above `mr r31, r3`) is closed by
         // reading the device id through ContentData() in the CreateFile arm
         // (w12-c): 100 modulo register permutation.
+        //
+        // w26-f2: that 3-cycle is what is left, and the tap says the image's
+        // colouring wants err > this > ret > file, which is not ours.  Ours
+        // (priority, tie, candidate id from `c2rs stage cands --regasg`):
+        // err(9, 46, id7)->r31, file(6, 3, id3)->r30, this(4, 13, id2)->r29,
+        // ret(2, 61, id6)->r28 -- err already agrees, the other three are the
+        // cycle.  Target needs this at +3..+5 over its current 4 and ret at
+        // +4 over its 2, with file's 6 unchanged; nothing tried moves those two
+        // without moving file as well.  Measured inert or worse: hoisting
+        // `ret`'s declaration to function scope (92.49-92.83 -- it also
+        // re-places the stack slot the note above depends on) and hoisting
+        // `fileSize` (92.83).  Fuzzy 99.236115, canonical 100.0.
         DWORD fileSize = 0;
         DWORD res = GetFileSize(file, &fileSize);
         if (res != -1) {

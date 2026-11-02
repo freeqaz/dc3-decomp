@@ -21,6 +21,19 @@
 // w21-bj: CLOSED (both 100) -- this TU is now in config.pch_excluded_sources and
 // MultiMesh.h includes "utl/PoolAlloc.h" (forward slash) before obj\Data.h, so
 // it is the first opener.  Whole-binary A/B: UP 2, DOWN 0.
+//
+// w26-f2: the implicit `stlpmtx_std::list<RndMultiMesh::Instance>::operator=`
+// emitted from this TU (`??4?$list@UInstance@RndMultiMesh@@...`) reads fuzzy
+// 99.111115 at canonical 100.0, and it is NOT a spelling this TU controls.
+// All six charged rows are the emit order of two INDEPENDENT iterator advances
+// in the template body -- src/system/stlport/stl/_list.c:95, the
+// `while (__first1 != __last1 && __first2 != __last2) *__first1++ = *__first2++;`
+// loop: image `mr r11,r31; lwz r31,0(r31); mr r10,r30; lwz r30,0(r30)`, ours
+// `mr r11,r30; lwz r30,0(r30); mr r10,r31; lwz r31,0(r31)` -- plus the
+// `addi r3/r4` argument order derived from it.  The final register state is
+// identical; only the schedule differs.  Moving that means editing a
+// PCH-reached header that reaches 574 TUs, so it is out of scope for a lane
+// that may not touch one.  No edit here can reach it.
 ReclaimableAlloc gTransListAlloc(0x4C, "InstanceListNode");
 std::list<std::pair<class RndMultiMeshProxy *, int> > RndMultiMesh::sProxyPool;
 

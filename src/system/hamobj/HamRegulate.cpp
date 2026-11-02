@@ -204,6 +204,19 @@ void HamRegulate::Poll() {
     // the image orders the move value first).  Inert or worse (measured): a
     // Vector3 `move` aggregate (153, same rows), `scale * posDelta.x`, and
     // per-component `xfm.v.x = move.x + xfm.v.x` (105).
+    // w26-f2 (fuzzy 99.434525, canonical 100.0) -- two residuals, both keyed
+    // and both left in place:
+    //  (1) the FPR half above is exactly as w25-gk left it: image moveZ=f28 /
+    //      moveRot=f27, ours the swap.  moveZ (pri 14) still colours after
+    //      moveRot (pri 21).
+    //  (2) three commutative sites where the image puts the MEMORY operand
+    //      first -- `fmuls f29,f29,f0`, `fadds f13,f13,f30`,
+    //      `fadds f12,f12,f28`.  Index 149 (`fadds f0,f0,f29`, the x
+    //      component) ALREADY agrees, so the C2RS-BRIDGE 8.7 memory-leaf key
+    //      falls between moveX's and moveY/moveZ's -- it is not one uniform
+    //      "move value first" rule, which is why writing the adds that way
+    //      uniformly does not reproduce the image.  Inert or worse (measured
+    //      this pass): dropping the named `dt` (97.14).
     float moveZ = 0.0f;
     float dt = TheTaskMgr.DeltaSeconds();
     float moveX;

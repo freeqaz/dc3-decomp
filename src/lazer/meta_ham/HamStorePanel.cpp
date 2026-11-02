@@ -536,6 +536,18 @@ BEGIN_HANDLERS(HamStorePanel)
 END_HANDLERS
 
 StoreError HamStorePanel::UpdateOffers(std::list<EnumProduct> const &list, bool b) {
+    // w26-f2 (fuzzy 99.453125, canonical 100.0): the two charged rows are the
+    // tie-0 code band -- image holds `check` in r10 and `it->mOfferID` in r9,
+    // we hold them the other way round (`check` r9, mOfferID r10).
+    // Tap: four priority-16 tie-0 mints here, CFREE=4 with CFREE-ben=1, so
+    // C-F=3 and the pop order (reverse mint) gives r11=sym19, r10=mOfferID,
+    // r9=check, r8=sym16.  The image's order is what you get if all four are
+    // recycled (F>=4): r11=sym16, r10=check, r9=mOfferID, r8=sym19.  So the
+    // lever is one more free in that band, per C2RS-BRIDGE 8.4.
+    // Tried and measured: a named `int purch = listIt->mPurchased` -- the 8.6
+    // candidate -- produced NO new CDEMOTE in the tap (c1 folds the copy), so
+    // that lever does not engage on this row; swapping the `==` operands is
+    // 99.375 (normalized stays 100.0, so that one was reverted as worse fuzzy).
     FOREACH (it, mSpecialOffers) {
         if (!it->mOwned) {
             bool check = false;
