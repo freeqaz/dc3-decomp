@@ -470,6 +470,19 @@ void CharIKHand::Poll() {
     }
 }
 
+// Two charged rows remain, both commutative operand order (c2 §8.7 cqlo3
+// sort), and both live inside an inlined callee, so no spelling in this .cpp
+// reaches them:
+//   [367] `Add(axisProj, mWorldDst, axisProj)` (Vec.h): the image orders the
+//     x component mWorldDst-first and y/z axisProj-first; ours is uniform.
+//   [550] `MakeRotMatrix(rotQuat, rotMat)` (Rot.cpp): one fadds inside the
+//     rotation-matrix build, again only the x row.
+// w26-m measured inert here: a named `const Vector3 &mwd = mWorldDst`, a named
+// `float mwx` / `float apx`, `axisProj += mWorldDst`, three per-component
+// statements, swapped Add arguments, `ap_decl` reorder, and `const Hmx::Quat &q`
+// / `Hmx::Matrix3 &rm` / `Hmx::Quat q(...)` bindings at the MakeRotMatrix call
+// site.  The per-component rewrites also change the emitted code badly (333/756),
+// so the Add spelling is fixed by the header body, not by the caller.
 void CharIKHand::IKElbow(RndTransformable *elbow, RndTransformable *shoulder) {
     if (!elbow || !shoulder)
         return;

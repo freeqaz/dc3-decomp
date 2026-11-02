@@ -332,6 +332,15 @@ void Locale::Init() {
                     // k-only block (Node(k)).  Inert on the keys: for-increment
                     // order, n++ in the body, Sort/loop bound spelled n, k
                     // declared outside the for, a chunk reference, DataNode(n).
+                    // w26-m re-dumped the row for the §8.7 argument-order lever
+                    // and it does not apply: the 11 charged rows are all
+                    // mr/subic./mulli/stw/addi/cmpwi (no commutative op), and
+                    // the tap shows two plain k04 colour candidates -- `k`
+                    // id 38 pri 4 tie 473 -> r27, with `n` popping earlier and
+                    // taking r28.  It is a priority difference, not a key one.
+                    // Six more spellings measured inert: a `chunks[n]` reference
+                    // binding, `node2` stored first, `n + 0`, a named `int idx`,
+                    // a named `int kk = k`, and `DataNode`-free store reorder.
                     DataArray *chunkArr = curArr;
                     for (int k = curArr->Size() - 1; k >= 0; k--, n++) {
                         chunkArr = curArr->Node(k).LiteralArray(chunkArr);

@@ -312,15 +312,21 @@ void CharLookAt::Poll() {
                 // Adding one named reference renumbers these non-uniformly and
                 // changes code.
                 const Vector3 &pivotFwd = pivotXfm.m.y;
-                float dirZ = rotMat.y.z * pivotFwd.y;
-                dirZ += rotMat.z.z * pivotFwd.z;
-                dirZ += rotMat.x.z * pivotFwd.x;
-                float dirY = rotMat.y.y * pivotFwd.y;
-                dirY += rotMat.z.y * pivotFwd.z;
-                dirY += rotMat.x.y * pivotFwd.x;
-                float dirX = rotMat.x.x * pivotFwd.x;
-                dirX += rotMat.y.x * pivotFwd.y;
-                dirX += rotMat.z.x * pivotFwd.z;
+                // Binding rotMat through a reference is load-bearing (c2 §8.7):
+                // it moves the nine matrix elements from variable leaves to
+                // MEMORY leaves, whose key carries the element's displacement,
+                // so the sort no longer puts pivotFwd first in all nine rows.
+                // Value-identical to naming rotMat directly.
+                const Hmx::Matrix3 &rm = rotMat;
+                float dirZ = rm.y.z * pivotFwd.y;
+                dirZ += rm.z.z * pivotFwd.z;
+                dirZ += rm.x.z * pivotFwd.x;
+                float dirY = rm.y.y * pivotFwd.y;
+                dirY += rm.z.y * pivotFwd.z;
+                dirY += rm.x.y * pivotFwd.x;
+                float dirX = rm.x.x * pivotFwd.x;
+                dirX += rm.y.x * pivotFwd.y;
+                dirX += rm.z.x * pivotFwd.z;
                 lookDir.Set(dirX, dirY, dirZ);
             } else
                 Normalize(lookDir, lookDir);

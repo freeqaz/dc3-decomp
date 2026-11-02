@@ -343,6 +343,14 @@ bool SongSequence::DoNext(bool b1, bool b2) {
 // ~25 code-neutral spellings (loop/branch forms, int vs bool locals, tail and
 // goto restructures, store placement) moved none of these keys without also
 // changing the emitted code.
+// w26-m (same 71 rows): the §8.7 commutative-key lever does not apply -- every
+// charged row is an address/register rotation (lis, lwz, stw, mr, addi, stb,
+// cmplwi), with no commutative op involved.  The §8.6 demotion lever (C=43 code
+// mints, F=87 demotions) was tested with named Symbol copies in one block: a
+// `Symbol mode = curEntry.mGameplayMode` copy is inert, and copies at the
+// "intro"/"playing" SetProperty sites are worse.  The remaining handle is the
+// priority ledger for `this` and the TheHamDirector lis half, i.e. how many
+// blocks each spans unreferenced.
 void SongSequence::OnSongLoaded() {
     if (!Done()) {
         static Symbol reset("reset");
