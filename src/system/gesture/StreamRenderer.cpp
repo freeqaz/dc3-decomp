@@ -640,6 +640,16 @@ void StreamRenderer::DrawToTexture() {
             );
             TheShaderMgr.SetPConstant((PShaderConstant)0x51, center4);
 
+            // w26-s: the 0x52 site carries rows 662-667 (the image loads
+            // x,y,z in ascending offset order, we load z,y,x) -- emission
+            // ORDER only, every src/dst address pair identical.  MEASURED
+            // INERT at 98.740 (byte-identical): binding
+            // `const Vector4 &c5 = mCrewPhotoPlayerCenters[5]` (the section
+            // 8.8 base-rebinding lever) and binding it through a pointer.  So
+            // this is a scheduling phase, not a memory-operand key row.
+            // Naming the three components is also inert; a whole-Vector4 copy
+            // (`Vector4 c5src = ...`) costs 95.39, and swapping y/z in the
+            // argument list is not a spelling (it changes the value).
             Vector4 center5(
                 mCrewPhotoPlayerCenters[5].x, mCrewPhotoPlayerCenters[5].y,
                 mCrewPhotoPlayerCenters[5].z, 1.0f
