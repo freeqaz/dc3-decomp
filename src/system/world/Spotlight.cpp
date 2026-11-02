@@ -1442,7 +1442,16 @@ void Spotlight::BuildCone(BeamDef &def) {
     float bottomBorderLen = def.mBottomBorder * len;
     bottomBorderLen = (float)__fsel(len - bottomBorderLen, bottomBorderLen, len);
     float borderY = len - bottomBorderLen;
-    float borderRadius = (borderY / len) * (def.mBottomRadius - def.mTopRadius) + def.mTopRadius;
+    // w29-c: C2RS-BRIDGE 8.8 reference binding.  The image contracts this as
+    // `fmadds f28, f0, f11, f12` -- the `borderY/len` quotient is the
+    // MULTIPLICAND and the radius difference the multiplier (0x8282D3C4).
+    // Written as one expression both factors are single-use subexpressions and
+    // the emitted order follows the difference, not the quotient.  Binding the
+    // difference by reference keeps it out of the single-use subexpression
+    // class (a plain named `float` is folded away and is byte-inert), which
+    // restores the image's operand order: fuzzy 92.85965 -> 92.89474.
+    const float &radiusDelta = def.mBottomRadius - def.mTopRadius;
+    float borderRadius = (borderY / len) * radiusDelta + def.mTopRadius;
 
     float angle = 0.0f;
     float uvStep = 1.0f / 15.0f;
