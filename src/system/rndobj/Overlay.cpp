@@ -81,6 +81,16 @@ float RndOverlay::Draw(float topY) {
     // the array, named x/y/height/now/mat/bottom locals.  Hypothesis: in the
     // original topY reaches this add through a later-minted symbol (a k03 temp
     // or split piece); open question is which IL shape does that.
+    // w26-f14 (c2rs tap, `CQT cqlo3`): the use-list keys are V34{0x10440} (the
+    // promoted static-memory element, sid 34) and V2{0x10040} (the formal), so
+    // the element sorts first.  topY can only lead if the element leaves the
+    // variable-leaf class -- a memory leaf on a base with sid%4 == 0 keys
+    // 0x10008 -- or if topY arrives as a subexpression (SU<<24 beats every leaf);
+    // a formal's key is fixed and no local can outrank sid 34.  Re-measured inert
+    // (exact, per-object + patch chain): the static as a `Vector2` object,
+    // pointer-to-array and pointer-to-element aliases, a scalar reference to the
+    // element, a reference to the formal, `pos.y = topY; pos.y += sDrawFloats[1]`,
+    // and a named intermediate.
     Vector2 pos(sDrawFloats[0], sDrawFloats[1] + topY);
     if (mCursorChar > -1 && !mLines.empty()) {
         String str4c;

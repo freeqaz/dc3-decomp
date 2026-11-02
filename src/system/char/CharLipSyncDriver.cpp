@@ -336,6 +336,17 @@ void CharLipSyncDriver::UpdatePlayback(CharLipSync::PlayBack *pb, float weight, 
                 // a 0.0 double literal, a `w <= 0 && w != 0` re-test; `w >= 0 ||
                 // w != w` and a nested GE/LT test add code (70/105).  Open
                 // question: a NaN-safe source form whose IL test is GE.
+                // w26-f14 (measured in this tree, exact): the og-dc3 form
+                // `MILO_ASSERT_FMT(curWeight >= 0.0f, "weight = %f", curWeight)`
+                // alone closes the row -- fuzzy 99.951454 -> 100.000000 with
+                // canonical 100.0 unchanged.  Not landed: GE is the only IL test
+                // that lands the fail-skip on the re-test, and under clang (no
+                // fast-math) `>=` fails on a NaN weight where the image's `bge`
+                // (fp:fast) skips the fail, so native would print FAIL: (and abort
+                // under MILO_FATAL_FAILS=1) on an input the image ignores.
+                // `!(curWeight < 0.0f)` is NaN-safe and reproduces 99.951454
+                // (LT in the IL, threaded).  A behaviour trade for the owner, not
+                // a compiler limit.
                 if (0.0f > curWeight)
                     curWeight = 0.0f;
                 ScaleAddViseme(clip, curWeight);
