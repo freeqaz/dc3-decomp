@@ -1795,6 +1795,12 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
             // reduction rebuilds the add. Inert (9 more spellings): operand
             // and factor order, `numSegments + 1`, a per-column rowBase local,
             // an outer `row`; a per-row rowBase merges the IVs (+2 insns).
+            // w26-f14: also inert (exact, per-object + patch chain) -- col-first,
+            // `row * numCols; base += col;` across a statement boundary, a
+            // per-column rowStart, an explicit int cast, and `numCols * row`.
+            // The tap does not expose this add as a sortable `CQT cqlo3` tuple,
+            // consistent with the strength-reduction rebuild (0x10b84869) setting
+            // the order after the last lowered sort.
             int base = row * numCols + col;
             int next = base + 1;
             int baseNext = base + numCols;

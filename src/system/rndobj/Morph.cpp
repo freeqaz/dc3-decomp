@@ -254,6 +254,15 @@ void RndMorph::SetFrame(float frame, float blend) {
                         // needs a leaf there keyed below 0x10200, i.e. a different
                         // strength-reduction rebuild of this loop's cursors.
                         // 23 spellings tried (loop/branch order, named locals).
+                        // w26-f14 (c2rs tap): the multiply use lists carry the
+                        // source leaf at M6{0x1c008} / M6{0x14008} -- memory
+                        // operands on a temp base whose sid%4 is 3 and 1 -- against
+                        // intenseInterp V16{0x10200}, so they sort first; the image
+                        // needs this one leaf on a base with sid%4 == 0 (key
+                        // 0x10008).  Bindings measured here: `const Vector3 &nv =
+                        // itVert->norm` 99.899, `Vector3 &dv = targetIt->norm`
+                        // inert, hand-expanding the three components (with a
+                        // `const float &srcZ`) 99.798 and canonical 99.899.
                         for (; targetIt != vertEnd && itVert != itVertEnd;
                              ++targetIt, ++itVert) {
                             ScaleAddEq(targetIt->pos, itVert->pos, intenseInterp);

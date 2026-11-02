@@ -900,6 +900,11 @@ void HamIKEffector::Poll() {
                     // (z,y,x / Zero() / Set() / x=y=z inits, refs, pointers, /=, inline
                     // reciprocal, decl placement): each either keeps x highest or
                     // reorders the init stores.
+                    // w26-f14: re-measured inert (exact, per-object + patch chain) --
+                    // `const float &qy = q.v.y` / `&qz` / `&qx` scalar bindings
+                    // singly and paired, `Vector3 &qv = q.v` with the multiplies
+                    // through qv, and a const or step-divided invWeight: all
+                    // reproduce 99.93730 / 100.0 exactly.
                     float invWeight = 1.0f / totalWeight;
                     q.v.x *= invWeight;
                     q.v.y *= invWeight;
