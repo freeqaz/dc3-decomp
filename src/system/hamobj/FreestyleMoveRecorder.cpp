@@ -655,6 +655,17 @@ DataNode FreestyleMoveRecorder::OnReadCreated(DataArray *a) {
     // NOT reuse the index either side: 0xb8 is re-loaded after the store on both,
     // so the store really is treated as possibly aliasing the member but not the
     // pointer global.
+    // w26-x, from the c2 tap: the image carries THREE versions of the
+    // sInstance k07 global (loads at idx 17, 23, 30); our IL carries FOUR --
+    // the `stw` through the take pointer re-versions the global, so `RT 41`
+    // re-loads it.  That is what makes `RT 39 add` the last use of r11, so the
+    // add's destination takes r11 (first free) instead of the image's r10.
+    // Measured in w26-x: a `FreestyleMoveRecorder *&inst = sInstance;`
+    // reference gives 37/44 rows and a `FreestyleMoveRecorder *inst` copy
+    // 37/44 with an added `mr 9, 11` (the pointer then survives the store in
+    // r9, which is the right shape, but the copy costs a register and the add
+    // takes r11); swapping the two statements is 32/44 (worse).  The open
+    // question is what stops the global re-versioning at that store.
     // REFUTED: `FreestyleMoveRecorder *inst = sInstance;` for these two
     // statements only is WORSE (96.7 raw -- it buys a `mr r9, r11` copy and
     // shifts r9->r8), and `FreestyleMove &take = sInstance->mTakes[...];` is
