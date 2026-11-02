@@ -1427,7 +1427,13 @@ void PlatformMgr::Poll() {
             CloseHandle(mFriendsEnum);
             mFriendsEnum = nullptr;
         }
-    } else if (!mFriendEnumRequests.empty() && mFriendEnumRequests.size() != 0) {
+        // w26-n2: the image has ONLY the `size()` walk here -- the
+        // `cmplw begin,sentinel / beq` at its loop head is the size loop's own
+        // entry check, not a second `empty()`.  The `!empty() &&` this used to
+        // carry was redundant with `size() != 0` (stlpmtX list: size() walks
+        // the sentinel), so dropping it is behaviour-identical and recovers the
+        // induction-setup placement: 99.42197 -> 99.75227.
+    } else if (mFriendEnumRequests.size() != 0) {
         FriendEnumRequest *request = mFriendEnumRequests.front();
         unsigned long bufSize;
         bool failed = false;
