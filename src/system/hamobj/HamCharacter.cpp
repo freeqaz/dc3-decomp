@@ -947,14 +947,17 @@ zero_and_scale:
             // demote/negative-benefit set, so C2RS-BRIDGE 8.4/8.6's
             // "F = CDEMOTE + negative-benefit frees" ordering -- not the §8.7
             // commutative key -- decides which keeps the lower register.  The
-            // key lever was swept and is inert here: naming the gender index,
-            // naming the ScaleAdd target, `sSkeletonClips[idx]` via a named
-            // `int idx`, an `int gi = mGender == kHamFemale ? 1 : 0` local, and
-            // a `static CharBones *const (&clips)[2]` reference are all
-            // byte-identical; forcing the gender index through a helper
-            // function is worse (90.4, spills the map iterator).  Closing this
-            // needs an IL-shape change that adds or removes a demote candidate
-            // in the loop prologue, not an operand re-key.
+            // key lever was swept and does not move it (re-measured under the
+            // pinned name_check ruler after the 2026-11-02 vsearch fix):
+            // baseline is 99.2331 canonical / 99.0184 fuzzy, an if-form null
+            // select that computes the `addi r4, r11, 0x10` offsets ties it,
+            // and every other null-select spelling is WORSE -- the ternary
+            // forms drop to 98.7730, `skBones = mSkeletonBones; if
+            // (!mSkeletonBones) skBones = nullptr;` to 95.7055, the +0x10
+            // variant of that to 91.1656.  Forcing the gender index through a
+            // helper is worse again (90.4, spills the map iterator).  Closing
+            // this needs an IL-shape change that adds or removes a demote
+            // candidate in the loop prologue, not an operand re-key.
             {
                 CharBones *skBones = nullptr;
                 if (mSkeletonBones) {
