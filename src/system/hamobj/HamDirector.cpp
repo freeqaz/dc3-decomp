@@ -3526,9 +3526,22 @@ void HamDirector::Poll() {
                         // there the split moved work across a CALL boundary,
                         // here both products are call-free and MSVC canonicalises
                         // the fmadds operand choice regardless of source shape.
+                        // w26-o: a plain scalar local IS folded away by copy
+                        // propagation, so every spelling above was inert -- but a
+                        // REFERENCE binding is not.  `const float &idxTerm = ...`
+                        // materialises the product as a real temporary, which
+                        // gives the fadds a variable-leaf operand in the c2
+                        // commutative sort (C2RS-BRIDGE 8.7): the frame product
+                        // then sorts first, so `frame * dt` is the fused
+                        // multiply and `idx * freq` is the fmadds addend, as the
+                        // image has it.  99.384 -> 99.944 canonical, 98.754 ->
+                        // 99.314 fuzzy.  The remaining rows are the f29/f30
+                        // constants' assignment order (freq vs dt) and the
+                        // ObjRefConcrete<FlowLabel>/<RndPostProc> CopyRef pair,
+                        // which the ICF map lists at one address.
+                        const float &idxTerm = (float)backupIdx * sBackupDriftFreq;
                         float noise = RndWind::GetWhiteNoise(
-                            (float)backupIdx * sBackupDriftFreq
-                            + songAnim->GetFrame() * sBackupDriftDt
+                            idxTerm + songAnim->GetFrame() * sBackupDriftDt
                         );
                         float drift = (noise - sBackupDriftOffset) * mBackupDrift * sBackupDriftScale;
                         if (0.0f < drift) {
