@@ -664,6 +664,23 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     }
 
     // Draw distance map cells
+    // w28-b (2026-11-02): Draw's residual is 8 of 437 rows (canonical
+    // 98.15243, fuzzy 98.14088 -- the worklist's 97.691 predates a landing).
+    // Both halves are sched0 placement inside this inner block, not values:
+    //   (a) `lfs f11, 0x20(r31)` (mLastMinErr) sits one slot earlier here
+    //       than in the image, before `fsubs f12,f13,f0` instead of after;
+    //   (b) the int -> float conversion of `(mDists.mHeight - 1 - row) * 2`
+    //       (lfd/fcfid/frsp) is hoisted to just after the `std`, where the
+    //       image leaves it in the last three slots before its `fadds`
+    //       consumer.  The two are linked: the image's chain targets f13,
+    //       which is still live for `fdivs` until slot 275, so it cannot be
+    //       scheduled early; ours lands in f11, free from slot 267.
+    // MEASURED INERT (byte-identical): moving `cellColor.alpha = 1.0f` below
+    // `cellRect.y`; naming the loaded row offset as its own `float rowY`
+    // before the add; naming `float lastMin = mLastMinErr` for the compare;
+    // moving the `cellRect.y` store above the three colour stores.  Worse:
+    // `float c` instead of `const float &c` 98.09 (canonical unchanged), and
+    // dropping the `const float &worstErr` binding 97.69.
     Hmx::Rect cellRect(0, 0, 2.0f, 2.0f);
     Hmx::Color cellColor;
     for (int col = 0; col < mDists.mWidth; col++) {
