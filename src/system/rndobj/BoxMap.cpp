@@ -266,7 +266,34 @@ void BoxMapLighting::ApplyLight(
  *  gLightBuffer1 it cannot prove disjoint, so `dz` must be declared before the
  *  direct store (declaring it after: 87.9).  (2) Declaration order is dz, dy:
  *  the image loads viewPos.y/pos.y first and z last, so dy declared before dz
- *  leaves a +4/-4 offset swap on four rows (99.95). */
+ *  leaves a +4/-4 offset swap on four rows (99.95).
+ *
+ *  w26-f9 (fuzzy 99.75903, canonical 100.0, 332 B, 83 instructions): the two
+ *  rows left are instructions 56 and 57 --
+ *      image  fmuls f0,  f0,  f8      ours  fmuls f0,  f8, f0
+ *      image  fmuls f13, f13, f8      ours  fmuls f13, f8, f13
+ *  with f8 = invDist.  Instruction 55, `fmuls f11, f11, f8`, ALREADY agrees and
+ *  is the same source shape (`local * invDist`), so this is not a uniform
+ *  "value first" rule -- the same shape of finding as w26-f2 on
+ *  HamRegulate::Poll.
+ *
+ *  Tap: no memory leaf and no named variable appears in the charged tuples at
+ *  all.  regasg block 5 gives
+ *      RT 57  fmuls d{ s65 } u{ f11~ s63 }    <- index 55, matches
+ *      RT 58  fmuls d{ s66 } u{ s63 f0~  }    <- index 56
+ *      RT 59  fmuls d{ s67 } u{ s63~ f13~ }   <- index 57
+ *  and cqlo3 shows both operands of each as folded single-use temps whose
+ *  sort-time key is their DEFINING tuple's key:
+ *      CQT ... 2c5 T796{00000000}<2c5 k0d ...> T832{00000000}<2c7 k0d ...>
+ *  So the C2RS-BRIDGE 8.7 leaf keys (variable / temp / memory) are not readable
+ *  at source level on this row; the order is resolved before the last sort.
+ *
+ *  Measured inert (row byte-identical): `const float &inv = invDist;` as the
+ *  multiplier; the three products bound to `const float &` references and to
+ *  named floats before the stores; `const float &dirRed = dir.red;` (the 8.8
+ *  w26-v scalar-member lever); reference-binding dy/dz; reversing the source
+ *  operands.  Statement reorder (blue, red, green) costs fuzzy (99.157)
+ *  without closing either row. */
 void BoxMapLighting::ApplyLight(
     const BoxLightArray<LightParams_Point, 50> &arr, const Vector3 &viewPos
 ) const {
