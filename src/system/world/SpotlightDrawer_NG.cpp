@@ -381,6 +381,19 @@ void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &viewProj) {
 }
 
 void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
+    // w27-h stop note (96.48340 canonical / 95.27490 fuzzy).  All four
+    // insert/delete clusters read against the image: 161 is an `fcmpu` the
+    // image schedules one slot earlier than we do (both sides then branch on
+    // the same cr6 into the same arm); 224/227 and 256/259 are the same load
+    // moved across a store; 286-294 is the minRad/offset block, where the image
+    // hoists `lfs m.z.y`/`lfs m.z.x` above the `fmuls` and we re-load after.
+    // No value, constant or callee differs in any of the four clusters.  The
+    // bulk of the row is 43 register-swap rows (8 FPR pairs, f0/f13 dominated)
+    // plus a -32 and a -64 shift of two Vector4 stack objects -- c2 ordering
+    // and colouring.  w27-h ran no variant sweep here past the association and
+    // if/else spellings already recorded above; the open hypothesis is the 8.7
+    // key on the f0/f13 leaves plus the first-field-read bias of C2RS-BRIDGE
+    // 11 on `def`.
     TheShaderMgr.mCullModeOverride = 3;
     TheShaderMgr.unk24 = 0;
 
