@@ -335,6 +335,17 @@ bool ArcDetector::IsPathAcceptable() const {
         if (dy == 0.0f) {
             return true;
         }
+        // w26-f re-measured: still fuzzy 99.0 (canonical 100.0), and 8 of the
+        // 12 diff_arg rows are the f0<->f12 dx/dy swap.  Image: dx f0, dy f12,
+        // invDy f13.  Ours: dy f0, dx f12, invDy f0.  The tap reproduces the
+        // w25-gf reading exactly -- invDy is pri 13 tie 74 while dx (tie 30)
+        // and dy (tie 27) are both pri 11 -- so the image's order needs dx and
+        // dy lifted above a value referenced in blocks they are not.  Measured
+        // inert with nsearch (canonical 100.0 held): `diff.x * sign` for
+        // `sign * diff.x`, dx declared before dy/diffZ, and a redundant
+        // `invDy * 1.0f`.  Measured WORSE: const-reference dy/diffZ (fuzzy
+        // 98.944) and folding diffZ away (98.944); folding dy away drops
+        // canonical to 93.33.
         // w25-gf open FP rows: invDy (pri 13 tie 74) pops before dx and dy
         // (pri 11), takes f0 and pushes dx to f12. The image order needs dx
         // first: dx > invDy and dx > dy, e.g. two more FP candidates
