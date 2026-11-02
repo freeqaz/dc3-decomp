@@ -254,6 +254,17 @@ void RndTransAnim::SetTrans(RndTransformable *trans) { mTrans = trans; }
 // at 1, m.y.x (V833, 1) at 2 or 3, m.z.x (V846, 2) at 1, and the Add's tf.v.y
 // (V1076, 0) at 2 or 3, while V1121..V1153 stay at 1. No single alias, inlined
 // helper or temp spelling tried (~40 variants) moves those sids independently.
+// w26-f11 (2026-11-02): 99.838 -> 99.935 (fuzzy; 2 rows of 309 left). Naming
+// the y reciprocal as `invY` keyed that row onto a named leaf, and binding the
+// aliased `tf.v` destination as `const Vector3 &tv` re-keyed the follow-path
+// Add; both are C2RS-BRIDGE 8.7/8.8 wins, no behaviour change. The two rows
+// left are 292 and 299, and they want OPPOSITE orders relative to ours:
+//  292 image `fmuls f11, f11, f13` (load first), ours `f11, f13, f11`;
+//  299 image `fmuls f0, f12, f0` (multiplier first), ours `f0, f0, f12`.
+// They multiply by two DIFFERENT reciprocal temps (0x84(r1) vs 0x88(r1)), so
+// the nine naming slots tried (x, y, z, each pair, all three, two reorderings)
+// can only move one row at a time and every combination is worse overall than
+// the y-only form landed here.
 void RndTransAnim::MakeTransform(float frame, Transform &tf, bool whole, float blend) {
     if (mKeysOwner != this) {
         mKeysOwner->MakeTransform(frame, tf, whole, blend);
