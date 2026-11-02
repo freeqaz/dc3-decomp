@@ -244,6 +244,18 @@ void FlowManager::Poll() {
         // 24 in-function spellings (locals, cursors, ctor forms, statement order before
         // the first `this` use) left V1122 unchanged; the open question is which
         // counter mints it before the body is lowered.
+        // w26-n: the CQS sort dump confirms the note's keys exactly --
+        //   CQS M6{00018008}[b V1122]{...} V1455/k02s03{00016bc0}
+        // i.e. avg is a memory leaf on the `this` temp (sid mod 4 = 2) and the
+        // sample is a load temp at sid 1455 (mod 1024 = 431).  The base-reference
+        // lever was tried 13 ways and left the row unmoved, because the avg base
+        // never re-binds: `float &avg = mAvgFrameTime;`, `float *avg = &mAvgFrameTime;`,
+        // a `FlowManager *self = this;` and a per-iteration `float &avg` all fold
+        // back onto V1122 and emit byte-identical code.  Re-binding the SAMPLE's
+        // base does move its temp sid (`const float *s = ...; *s++` -> V1418,
+        // key 0x16280) but never across 0x18008.  Flipping needs either V1122 at
+        // sid mod 4 = 0/1 or the sample temp at sid mod 1024 in [513, 1023];
+        // both are symbol-count questions, not operand-binding ones.
         for (int i = 0; i < 60; i++) {
             mAvgFrameTime += mFrameTimeSamples[i];
         }

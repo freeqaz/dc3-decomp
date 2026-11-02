@@ -919,6 +919,17 @@ void RhythmDetector::ProcessFrames() {
                     // value becomes a named variable with a lower sid than j
                     // (flips the row, but changes COLOR priorities as above).
                     // Open: what mints the LICM temp's sid.
+                    // w26-n: the CQS dump confirms the pair exactly
+                    //   CQS V959/k02s03{0001efc0} V13/k02s04{000101a0}
+                    // and four more source orders around it
+                    // (prevTick + (j + 1), j + prevTick + 1, j + 1 + prevTick,
+                    // 1 + prevTick + j) are all byte-identical, which is the
+                    // sort canonicalising the expression rather than a source
+                    // knob.  The base-reference lever does not apply to this
+                    // row: neither operand is a memory operand, and the only
+                    // way across is the temp's sid reaching 1024..1030 (+65..71
+                    // symbols minted before it, the same crossing CharBones
+                    // RotateBy needs) -- a symbol-count question, not a binding.
                     float beatTime = (float)(prevTick + j + 1) * 0.1f;
                     // push_back takes the callee's sret buffer straight
                     // through (mr r4,r3 at 0x82489D48); a named `blended`

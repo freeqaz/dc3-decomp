@@ -393,6 +393,17 @@ void HDCache::Init() {
             // the c1 overflow range (past the first 31 locals: 14 extra locals
             // moved it to sid 225) plus >= 28 fewer symbols. Open: which source
             // shape has that symbol count with the same code.
+            // w26-n: no behaviour difference here -- lwzx/stwx compute rA+rB, so
+            // the base/index swap is the same address, and name_check charges the
+            // same 9 rows (the call-name diffs `HDCache::Flush` /
+            // `vector<UILabel*>::erase` are ICF aliases at one address).  The
+            // base-reference lever was tried: binding `int **blockState =
+            // mBlockState;` for the else-loop does re-key that memory leaf, but it
+            // also re-populates COLOR and moves `this` from r21 to r20, i.e. 27
+            // new rows against 0 repaired.  The same-shape `File **` re-binding is
+            // already the source form.  Every residual row is a symbol-count
+            // question (the temp at sid 1140 / 1180 against named locals at
+            // 19/18), not an operand-binding one.
             // Check if read/write files are valid
             File **readFiles = &mReadArkFiles[0];
             File **writeFiles = &mWriteArkFiles[0];
