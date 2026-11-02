@@ -23,6 +23,29 @@ CharSignalApplier::BoneOp::operator=(const CharSignalApplier::BoneOp &op) {
     return *this;
 }
 
+// w28-b (2026-11-02): the unit's one non-100 row is
+// vector<BoneOp>::_M_insert_overflow_aux (canonical 97.84946, fuzzy 97.52688;
+// 5 rows of 93).  It is NOT a local-copy or call-site problem: every element
+// operation in it is already byte-equal, including the `_Copy_Construct` that
+// inlines BoneOp's copy ctor (`ObjPtr` build + `operator=`).  The whole
+// residual is the three `__new_finish = <call>(...)` assignments inside the
+// template's body.  The image writes __new_finish back to its home slot
+// (0x54(r31)) after the FIRST `__uninitialized_copy` and again after the
+// `__uninitialized_fill_n`; we write it once, at the join before
+// `_M_clear_after_move`.  The image therefore carries one extra
+// `stw r3, 0x54(r31)` and orders the two register moves the other way
+// (`mr r8,r8` then `mr r29,r3` in the image; `mr r29,r3` then `mr r8,r8`
+// here).  That store is dead -- 0x54 is overwritten before any read -- so
+// this is a shape residual, not a behaviour difference.
+// Why the fix cannot live in this TU: 233 of the 235 instantiated
+// _M_insert_overflow_aux symbols in the binary are already 100.0, so the
+// shared template text (src/system/stlport/stl/_vector.c, PCH-reached) is
+// right and only this element type plus DancerFrame (HamDirector, 98.2301)
+// diverge.  Two further source-level differences show up ONLY as ICF-masked
+// relocation names and are therefore not scored: the image calls `_M_clear()`
+// where we call `_M_clear_after_move()`, and it passes a `const BoneOp *`
+// (`__uninitialized_copy<PBUBoneOp,...>`) where we pass a non-const one.  A
+// header edit for either has a whole-binary blast radius across all 235.
 BinStream &operator<<(BinStream &bs, const CharSignalApplier::BoneOp &op) {
     bs << op.mBone;
     bs << op.mOp;
