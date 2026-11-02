@@ -557,8 +557,24 @@ void Spotlight::DrawShowing() {
     //     shape -- rb3 Spotlight.cpp puts UpdateTransforms, c48 and tracker in
     //     one block; that block shape is what we had at 97.56/21 rows, so the
     //     sibling-scope split is the DC3-specific lever, not a port of rb3).
+    // w27-f (97.60507 -> 98.53986 canonical, 97.58696 -> 98.25000 fuzzy, 8
+    // rows -> 15 cheaper ones, one instruction SHORTER): C2RS-BRIDGE 8.8 on
+    // the colour source.  `Color()` returns `const Hmx::Color &`
+    // (mColorOwner->mColor), so binding it to a named reference makes the
+    // copy-constructor's four loads hang off a distinct IL leaf instead of
+    // the whole `Color()` call being re-evaluated at the temporary; the
+    // c-copy's store group then re-shapes.  This is the 8.8 "bind, do not
+    // copy" rule, and it is the first spelling in three waves to move this
+    // row.  Same lever REFUTED here in its other forms (all exactly the old
+    // 97.60507): naming the intensity, binding the intensity, binding
+    // `mColorOwner` (97.59), binding the destination `c` before
+    // SetAmbientColor, and `Multiply(src, Intensity(), c)` (91.83, it stops
+    // reading the same object).  Residual is now pure register naming on the
+    // copy scratch set (ours r7/r8/r9, image r8/r9/r10) plus the same two
+    // early stores; no value, call, branch or store is missing.
     {
-        Hmx::Color c(Color());
+        const Hmx::Color &src = Color();
+        Hmx::Color c(src);
         Multiply(c, Intensity(), c);
         sEnviron->SetAmbientColor(c);
     }
