@@ -327,16 +327,26 @@ void CharHair::SimulateInternal(float fps) {
                     // needs that base at 0 mod 4; ScaleAddEq/collide and the
                     // points[j - 1] add are the same key class.
                     if (lensq < minLenSq) {
-                        vRes *= (minLenSq / (minLenSq + lensq) - 0.5f);
-                        pt.pos += vRes;
-                        modPt.force -= vRes;
+                        float shrink = minLenSq / (minLenSq + lensq) - 0.5f;
+                        // The reference is load-bearing (c2 §8.7): it makes the
+                        // scale a MEMORY leaf in the commutative key rather than a
+                        // variable leaf, which drops its key below the operand it
+                        // is paired with.  Value-identical to using `shrink`.
+                        const float &shrinkRef = shrink;
+                        Vector3 delta;
+                        Scale(vRes, shrinkRef, delta);
+                        pt.pos += delta;
+                        modPt.force -= delta;
                     } else {
                         float maxLen = pt.sideLength + mMaxSlack;
                         float maxLenSq = maxLen * maxLen;
                         if (lensq > maxLenSq) {
-                            vRes *= (maxLenSq / (maxLenSq + lensq) - 0.5f);
-                            pt.pos += vRes;
-                            modPt.force -= vRes;
+                            float grow = maxLenSq / (maxLenSq + lensq) - 0.5f;
+                            const float &growRef = grow;
+                            Vector3 delta;
+                            Scale(vRes, growRef, delta);
+                            pt.pos += delta;
+                            modPt.force -= delta;
                         }
                     }
                 }
