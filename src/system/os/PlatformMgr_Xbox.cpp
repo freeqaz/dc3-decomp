@@ -1392,18 +1392,22 @@ void PlatformMgr::Poll() {
                 XONLINE_FRIEND *friends = (XONLINE_FRIEND *)mFriendsBuffer;
                 for (unsigned long i = 0; i < numFriends; i++) {
                     // Pending requests in either direction are not friends yet.
-                    if (!(friends[i].dwFriendState & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
-                        && !(friends[i].dwFriendState
+                    DWORD state = friends[i].dwFriendState;
+                    if (!(state & XONLINE_FRIENDSTATE_FLAG_SENTREQUEST)
+                        && !(state
                              & XONLINE_FRIENDSTATE_FLAG_RECEIVEDREQUEST)) {
                         // w17-d (99.172 -> 99.249): the plain indexed loop, not
                         // a hand-stepped `xf++` pointer -- MSVC now strength-
-                        // reduces it itself. Still open: the image biases the
+                        // reduces it itself.
+                        // w26-n2 (99.249 -> 99.422): the image biases the
                         // induction pointer +8 (&szGamertag: disps 0x10/-0x8/0),
-                        // ours +0x18 (&dwFriendState, the first field read). A
-                        // `XONLINE_FRIEND &xf = friends[i]` alias is inert; the
-                        // older pointer-loop refutations (a named gamertag
-                        // pointer ahead of `new Friend()` or at the body top)
-                        // were measured against the hand-stepped loop.
+                        // ours was +0x18 (&dwFriendState, the first field
+                        // read). Naming that first read -- `DWORD state =
+                        // friends[i].dwFriendState;` -- is what moves the bias:
+                        // the only remaining array-field address in the body is
+                        // szGamertag, so c1 makes IT the induction expression.
+                        // The `XONLINE_FRIEND &xf` alias and a named gamertag
+                        // pointer are both byte-inert in this indexed form.
                         Friend *f = new Friend();
                         String name(friends[i].szGamertag);
                         f->SetName(name);
