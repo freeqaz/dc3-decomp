@@ -515,6 +515,14 @@ void NgSpotlightDrawer::RenderConeDefs(Spotlight *sl, const Hmx::Color &color) {
         // reschedules the whole apex block 82821700..82821780 (copy words
         // 0,4,c,8 -> c,0,4,8; y/z sums swapped): 96.5 -> 93.2 twice. Kept the
         // register-sourced form.
+        // w26-z (2026-11-02): re-measured, and the two extra `lfs` the image
+        // carries (`lfs f12, 0x74(r1)` / `lfs f13, 0x70(r1)`) are exactly this
+        // read-back -- it is the ONLY non-register divergence in the function;
+        // every other row is a register or stack-slot permutation. Taking the
+        // read-back whole is 93.22 again (the 0x1d upload arm recolours
+        // totalLength/invTotalLength and reschedules the apex block), and the
+        // pieces do not grade better alone: radiusDiff from radiiVec 92.01,
+        // cosAngle from radiiVec.y 95.64. Kept the register-sourced form.
         float radiusDiff = botRad - minRad;
         float dotRelDir = dir.x * relX + dir.y * relY + dir.z * relZ;
         float tanSlope = invTotalLength * radiusDiff;
