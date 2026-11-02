@@ -88,6 +88,18 @@ DataNode OptionsPanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
 // ~22 respellings (switch case order, default-arm forms, success/error
 // placement) were inert or changed the emitted code (cross-jumped
 // `success = false` tails, the guard order).
+// w26-n: no behaviour difference -- the call-name differences objdiff reports
+// (`GetDepthRT`, `SetSuccess@MultipleItemsEnumCompleteMsg` against
+// `GetResponseString`, `SetLinkingCode`, `SetSuccess@LinkingCodeRetrievedMsg`,
+// and the `SetOfferString` count) are ICF aliases at one address: name_check
+// charges exactly the same 22 register rows and nothing else.  The prologue
+// shows the first swap directly -- ours `mr 21,4` / `li 20,0`, image
+// `mr 20,4` / `li 21,0`, so it is the incoming-message pointer and the zero
+// constant trading r20/r21.  The base-reference lever has no lever arm on
+// either contested pop order: they are two pri/tie comparisons between
+// values that are both live across the whole function and neither of which
+// is a memory operand, so the remaining handle is the §6 priority budget
+// (refs per block, or an extra merge point), not operand binding.
 DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
     if (msg.Job() == mRedeemTokenJob) {
         MILO_LOG("Token: server response: %s\n", mRedeemTokenJob->GetResponseString());
