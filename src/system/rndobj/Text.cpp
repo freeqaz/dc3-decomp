@@ -3151,7 +3151,14 @@ void RndText::FontMap::SetupCharacter(
     // shrinks the frame by 0x10, so it measures worse overall (95.2 vs 97.8).
     // w13-a: moving this below the vert[0] Set() (the FontMap3d fusion lever)
     // is inert here.
-    float z1 = z0 - _tmp1 * size;
+    // w27-d: the lever that DOES split the pair is c2-rs §8.8's reference
+    // binding.  Bound to a `const float &`, the product survives copy
+    // propagation as its own rounding step, so we emit the image's
+    // `fmuls` + `fsubs` instead of one contracted `fnmsubs`
+    // (96.95276 -> 97.54330 fuzzy, 97.77953 -> 98.40945 canonical).  A plain
+    // named `float aspectH` is inert -- c1 folds it back into the tree.
+    const float &aspectH = _tmp1 * size;
+    float z1 = z0 - aspectH;
 
     // xPos is read straight out of the reference each time (`lfs f13, 0x0(r29)`
     // at 0x2618 / 0x2648 / 0x2660 / 0x2688); caching it in a local `x` folds
