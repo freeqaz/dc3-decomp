@@ -96,6 +96,23 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
             // 8.7 commutative key on FPR temp leaves that are already loaded --
             // the fmuls/fmsubs in the first cross read the same two registers
             // in the other order -- plus sched0's post-Normalize load order.
+            // w27-h stop note (96.29444 canonical / 94.68330 fuzzy).  Read end
+            // to end against the image (8266FD80..8266FEA0): the three row
+            // equations below are the image's exactly.  Expand with
+            // M = m.y x m.z and the image computes
+            //   result.y = rx*M.y + (rz*m.z.y + ry*m.y.y)
+            //   result.z = rz*m.z.z + (rx*M.z + ry*m.y.z)
+            //   result.x = rz*m.z.x + (ry*m.y.x + rx*M.x)
+            // which is what our crossed terms evaluate to -- no wrong field,
+            // constant or call.  What differs is (a) a uniform 4-byte shift of
+            // the whole Vector3 temp block (image m.y at r1+0x70 / m.x at 0x50 /
+            // cross at 0x60; ours one word lower) and (b) the 8.7 commutative
+            // key on already-loaded FPR leaves: our `fnmadds f8, f12, f11, f8`
+            // reads the same two registers as the image's in the other order,
+            // and objdiff's alignment then reports one extra `lfs`+`fmuls` on
+            // our side against three extra fmu ops on the image's.  w26-z and
+            // w21-bf already refuted the reference-binding, scalar-first and
+            // Cross/Multiply spellings here; w27-h did not find a new lever.
             Hmx::Matrix3 m;
             m.z = xfm.m.z;
             Vector3 diff(pos.x - xfm.v.x, pos.y - xfm.v.y, pos.z - xfm.v.z);
