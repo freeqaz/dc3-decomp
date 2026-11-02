@@ -400,16 +400,23 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
         // to the accumulator; /fp:fast flattens our `dot += z + planeD` into
         // (dot + z) + planeD.  Same value on every input (adding a +-0 term is
         // exact either way), so this is a shape residual, not a bug.
-        // 12 more spellings measured and all worse or inert: a `const float &`
-        // binding of (z + planeD) and of worldPos.z (section 8.8, inert --
-        // 98.6014, same as no change), a const/non-const named zOff, zOff built
-        // by `= z; += planeD`, the whole sum named, explicit parens in the Set
-        // call, and `pl70.d` used as the accumulator (inert).  Every spelling
-        // that DOES produce the separate `fadds z, planeD` computes it BEFORE
-        // the two products instead of in their latency shadow, which swaps the
-        // y/z loads and reverses the final `fadds` -- 97.1 canonical.  The
-        // scheduler slot is the whole difference; see the w21-u note below for
-        // the shapes that also lose the two-product factoring.
+        // 35 spellings measured after the two-product shape was fixed; every
+        // one is worse or inert.  INERT (the replay harness says 98.5315,
+        // exactly the unchanged shape): a `const float &` binding of
+        // (z + planeD) and of worldPos.z (the section 8.8 lever), a
+        // `const Vector3 &` alias of worldPos, and using `pl70.d` itself as
+        // the accumulator.  WORSE, all at 97.1-97.7 canonical: a const or
+        // non-const named zOff before or after the products, zOff built by
+        // `= z; += planeD`, the whole sum named, a named total feeding the Set
+        // call, explicit parens in the Set call, a `1.0f *` wrapper, a Vector3
+        // point temp with the plane built from it (that one also re-factors the
+        // two products into (x+y)*0 and fuses the negate), and moving the
+        // offset term ahead of the products.  Every spelling that DOES produce
+        // the separate `fadds z, planeD` computes it BEFORE the two products
+        // instead of in their latency shadow, which swaps the y/z loads and
+        // reverses the final `fadds`.  The scheduler slot is the whole
+        // difference; see the w21-u note below for the shapes that also lose
+        // the two-product factoring.
         // w21-u residual (superseded: the load order is now closed -- image
         // y,z,x, ours y,z,x): the last two adds -- the image adds
         // (z + planeD) as one term, we emit (dot + z) + planeD.  Measured, all
