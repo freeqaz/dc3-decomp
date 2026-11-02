@@ -1142,6 +1142,20 @@ void CharBones::ScaleAdd(CharBones &bones, float f2) const {
 // the late loads by about +156 sids (1409/1415 -> 1565/1571), so the shift is
 // real and measurable but does not land on the +66..71 the six products need;
 // `RotateByMultiplyUncompressed` there leaves all seven rows unchanged.
+// w26-f10: the 8.8 reference-binding lever DOES reach these products, and the
+// wrap is not the only route.  Binding `const float &az = a.z;` in the
+// uncompressed helper re-keys that operand from a load TEMP leaf
+// (0x10000|(sid<<6 & 0xffff)) to a named-base memory leaf, which lands it
+// below the other loads instead of above them: four of the seven rows go
+// (fuzzy 99.804 -> 99.916, canonical 100.0, instruction count unchanged).
+// The three that remain are all the products carrying `b.z` -- `a.w*b.z`,
+// `a.y*b.z`, `a.x*b.z` -- where the image puts b.z SECOND while its fourth
+// b.z product (`a.z*b.z`, the rw term) keeps it first.  A uniform re-key of
+// b.z cannot satisfy both: `const float &bz = b.z;` scores 99.398 (and
+// 99.146 on the three charged sites alone), taking canonical to 99.72 /
+// 99.44 -- so on this row that binding changes the emitted code, not just
+// the sort key.  Binding az AND bz together: 99.482.  Binding aw/bw: 96.19.
+// Nothing tried moves the last three without a canonical regression.
 static void RotateByMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out) {
     float rw = a.w * b.w - a.x * b.x;
     rw -= a.y * b.y;
@@ -1164,21 +1178,26 @@ static void RotateByMultiply(const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &
 static void RotateByMultiplyUncompressed(
     const Hmx::Quat &a, const Hmx::Quat &b, Hmx::Quat &out
 ) {
+    // Bound, not copied: c1 folds a plain `float az = a.z;` away, but a
+    // reference survives to the load, so the operand is keyed on a named base
+    // instead of the single-use load temp (C2RS-BRIDGE 8.8).  See the note
+    // above for the four rows this fixes and the three it cannot.
+    const float &az = a.z;
     float rw = a.w * b.w - a.x * b.x;
     rw -= a.y * b.y;
-    rw -= a.z * b.z;
+    rw -= az * b.z;
     float rz = a.w * b.z;
-    rz += a.z * b.w;
+    rz += az * b.w;
     rz += a.x * b.y;
     rz -= a.y * b.x;
-    float ry = a.z * b.x;
+    float ry = az * b.x;
     ry += a.y * b.w;
     ry += a.w * b.y;
     ry -= a.x * b.z;
     float rx = a.x * b.w;
     rx += a.w * b.x;
     rx += a.y * b.z;
-    rx -= a.z * b.y;
+    rx -= az * b.y;
     out.Set(rx, ry, rz, rw);
 }
 

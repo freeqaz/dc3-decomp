@@ -480,7 +480,14 @@ void PositionNode::CalcError(
     if (base_bone_len <= 0) {
         vout.Set(1, 1, 1);
     } else {
-        Scale(baseJointDiff, desired_bone_len / base_bone_len, scaledBaseDiff);
+        // Named, not inline: left as `Scale(baseJointDiff, desired_bone_len /
+        // base_bone_len, ...)` the quotient is a single-use subexpression and
+        // c2's post-lowering commutative sort (C2RS-BRIDGE 8.7) gives it the
+        // `SU<<24` key, which outranks every leaf -- so the inlined Scale emits
+        // `fmuls <scalar>, <component>`. The image emits the component first,
+        // which is the variable-leaf key, so the image's source names it.
+        float scale = desired_bone_len / base_bone_len;
+        Scale(baseJointDiff, scale, scaledBaseDiff);
         DistanceToErrors(jointDiff, scaledBaseDiff, node_input.mNodeComponentWeight, vout);
     }
 }
