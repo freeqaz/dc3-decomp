@@ -606,6 +606,43 @@ config.custom_build_steps = {
             },
         },
         {
+            # `scripts/symbol_aliases.json` licenses objdiff to treat two
+            # differently spelled symbols as ONE function, so a false entry
+            # makes objdiff forgive a real call-target difference and the row
+            # scores 100.0 under every ruler this repo has.  Two such entries
+            # were real defects on rows reading 100.0/100.0 (CharClip::
+            # EvaluateChannel handing a byte offset to a `%s`;
+            # CharBonesSamples::Print handing a `char*` to a `%x`, a 4-byte
+            # read of an 8-byte argument on LP64).  Both hid because a group's
+            # admission evidence for the `body-test` tier is RELOCATION-
+            # INVARIANT by construction -- decomp-synth's fingerprint drops
+            # D-form bits 0..15 and the branch LI, so two bodies differing only
+            # in which `FormatString::operator<<` overload they call
+            # fingerprint identically.  No ruler in the build could see it.
+            #
+            # So this re-tests the map with relocations CHARGED: each side's
+            # relocated fields are resolved to the SYMBOL NAMES they reference
+            # and the two operand lists must match.  It is a CHECK, not a
+            # rewrite -- a failure is adjudicated by a human, and the message
+            # names the group, the member and the operand that differs.
+            #
+            # Runs after `objs_patched_verified` because it reads BOTH sides of
+            # the diff (our patched objects and the dtk-split target objects),
+            # and it must read them as the report does.  `symbol_aliases.json`
+            # is listed as an input: it is the file under test and `all_source`
+            # is a phony over .obj files, so without it editing the map would
+            # re-fire nothing.  ~5 s over the whole tree, and only when the
+            # tree actually moved -- a no-op `ninja` does not run it.
+            "outputs": str(stamp_dir / "alias_map_soundness_checked.stamp"),
+            "rule": "run_script",
+            "implicit": [str(stamp_dir / "objs_patched_verified.stamp"),
+                         "all_source", "scripts/symbol_aliases.json"],
+            "variables": {
+                "cmd": "python3 scripts/check_alias_map_soundness.py --check",
+                "desc": "VERIFY the alias map folds only relocation-identical bodies",
+            },
+        },
+        {
             # Catch "declared, called, defined nowhere" -- the defect class that
             # `-Wl,--no-undefined` on the native link is STRUCTURALLY unable to
             # see, because clang at -O2 can delete the only call site before the
@@ -618,6 +655,10 @@ config.custom_build_steps = {
             # symbol NAMES (anonymous-namespace hashes, ??__E/??__F scope
             # counters) and this compares names.  Running it earlier would
             # compare a pre-patch spelling against a post-patch inventory.
+            # It also chains on the alias-map gate above, so that gate is not a
+            # dangling stamp: the `post-compile` phony and the report edges are
+            # reached through this one, and a tree whose alias map folds two
+            # different bodies never gets a report written from it.
             #
             # Deliberately advisory-on-improvement (exit 3, non-fatal here): a
             # newly IMPLEMENTED body shrinks the inventory, and implementing
@@ -626,7 +667,8 @@ config.custom_build_steps = {
             # NEW undefined symbol is exit 1 and does fail.
             "outputs": str(stamp_dir / "undefined_symbols_checked.stamp"),
             "rule": "run_script",
-            "implicit": [str(stamp_dir / "objs_patched_verified.stamp"), "all_source"],
+            "implicit": [str(stamp_dir / "alias_map_soundness_checked.stamp"),
+                         "all_source"],
             "variables": {
                 "cmd": "python3 scripts/check_undefined_decomp_symbols.py --check "
                        "|| test $$? -eq 3",

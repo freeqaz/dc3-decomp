@@ -127,10 +127,14 @@ from __future__ import annotations
 import argparse
 import collections
 import json
+import os
 import re
 import struct
 import sys
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from project_root import project_root  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # X360 COFF / PPC
@@ -587,9 +591,13 @@ def main(argv=None):
     ap = argparse.ArgumentParser(
         description=__doc__.splitlines()[0],
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    here = Path(__file__).resolve().parent.parent
+    # From the INVOCATION, never `Path(__file__).resolve()`: the ninja edge runs
+    # this from the tree being built, and in a tree whose scripts/ is a symlink
+    # into another checkout `resolve()` would quietly re-test THAT tree's
+    # objects. See scripts/project_root.py.
+    here = project_root(__file__)
     ap.add_argument("--repo", default=str(here),
-                    help="project root (default: the tree this script lives in)")
+                    help="project root (default: the tree named by the invocation)")
     ap.add_argument("--map", default=None,
                     help="alias file (default: <repo>/scripts/symbol_aliases.json)")
     ap.add_argument("--check", action="store_true",

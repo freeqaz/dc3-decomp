@@ -226,13 +226,30 @@ disagreement is a defect in `symbols.txt` or in the source's `static`, and the
 message names which. See
 [relocation-names-are-unmetered.md](../decomp/patterns/relocation-names-are-unmetered.md#bare-vs-mangled-statics-a-linkage-claim-not-a-spelling).
 
-`scripts/verify_objs_patched.py` then runs as the last post-compile edge:
+`scripts/verify_objs_patched.py` then runs as the last of the patch passes:
 
 - `--check` re-runs all five patchers in dry-run and **fails the build** unless
   the object tree is a fixed point of them. If it ever fires during a full
   build, the dependency graph above has regressed.
 - `--emit` then writes `build/373307D9/patch_state.json` — the sha256 of every
   object at the moment the tree was verified patched.
+
+`scripts/check_alias_map_soundness.py --check` follows it (edge
+`alias_map_soundness_checked.stamp`, ~5 s, and only when the tree moved).
+`scripts/symbol_aliases.json` licenses objdiff to treat two differently spelled
+symbols as **one** function, so a false entry makes it forgive a real
+call-target difference and the row scores 100.0 under every ruler here; the two
+defects that motivated the check both sat on rows reading 100.0/100.0. The tier
+that let them in is admitted on a **relocation-invariant** body test
+(decomp-synth's fingerprint drops D-form bits 0..15 and the branch LI), so the
+map is re-tested with relocations CHARGED — both sides' relocated fields are
+resolved to the names they reference and the operand lists must match. It reads
+the patched objects **and** the dtk-split target objects, and lists
+`scripts/symbol_aliases.json` as an implicit input: `all_source` is a phony over
+`.obj` files and does not cover it, so without that a map edit would re-fire
+nothing. `tests/test_alias_map_soundness_wiring.py` pins the edge in the
+GENERATED manifest (structure, not substrings) — the check is correct and
+enforces nothing if nothing runs it.
 
 The manifest exists because no build-time check can see the remaining hole: a
 **targeted** `ninja build/373307D9/src/Foo.obj`, or a tool compiling one TU,
