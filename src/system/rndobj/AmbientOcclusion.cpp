@@ -136,6 +136,21 @@ void RndAmbientOcclusion::BlendVert(
     // tex scale up with it (75.4); reading v2.tangent.x/y/z into float locals
     // before the scaling (the image holds them in f11/f13 across it) hoists
     // the loads above the tangent copy instead (85.1).
+    // w26-k (2026-11-02): mechanism, from the c2 tap.  Every FPR left in the
+    // swap set (f8..f13, 12 pairs) is a SECOND-allocator (regasg) selection,
+    // not a COLOR candidate: this function's entire FP candidate list is two
+    // arena temps, id14 pri 50 tie 58 and id15 pri 25 tie 5, and both are
+    // assigned f0 (different live ranges).  regasg is first-fit over the
+    // sched3 order, so a pair's assignment is a pure function of when each
+    // load's def and each value's last use reach it, and there is no
+    // priority/tie key to move; the only source handle is expression shape,
+    // which the refutations above already varied six ways.  Behaviour checked
+    // instruction-by-instruction against the image: the two sides carry the
+    // same multiset of loads, stores, adds and multiplies, every store
+    // destination offset is equal on both sides, and there is no branch,
+    // call or constant difference (objdiff diff_op: none; unicorn verdict
+    // EQUIVALENT at harness h4).  The eight insert/delete rows are the same
+    // values emitted in a different order, not different values.
     Vector4 tang = out.tangent;
     tang.x = v2.tangent.x + tang.x;
     out.pos *= 0.5f;
