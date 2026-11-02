@@ -605,6 +605,24 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
         // w16-c: indexing data.mJointPositions[i] directly instead of
         // through this pointer is 96.7 (the image's extra callee-saved r20
         // holds an i*16 OFFSET IV added to two bases; neither spelling gets it).
+        // w27-a (baseline 97.5266 canonical / 96.2222 fuzzy, 44 of 209 rows):
+        // the mechanism is c2's induction-variable SHAPE, and it is the root of
+        // the whole r20-r31 rotation.  The image keeps ONE i*16 accumulator
+        // (r27, `addi r27, r27, 0x10`) shared by `jointPositions[i]` and
+        // `data.mRawPositions[i]` and re-forms both addresses every outer
+        // iteration (`add r26, r27, r22` / `add r10, r23, r27`); we
+        // strength-reduce each array into its own walking pointer
+        // (`addi r26/r28, +0x10`).  That is one more live callee-saved value
+        // (image saves r20..r31 and reserves 0xe0 of frame, we save r22..r31
+        // and reserve 0xd0), and 0/frame move up into r20/r21, shifting every
+        // downstream register.  Behaviour is identical on both sides: every
+        // load/store resolves to the same field of the same element.
+        // Measured on the per-object path (EXACT for this unit): hoisting
+        // mRawPositions into a named pointer 91.0, PaddedJointPos* base 96.22
+        // (= baseline), indexing through the cast in place 95.7, explicit
+        // `(char*)base + i*16` byte arithmetic 91.0.  Open question: which
+        // source form makes c2 keep the shared index instead of forming
+        // pointer IVs per base.
         const Vector3 *jointPositions = (const Vector3 *)data.mJointPositions;
         for (int i = 0; i < kNumJoints; i++) {
             TrackedJoint &tj = mTrackedJoints[i];
