@@ -404,6 +404,22 @@ void SongCollision::Update(MoveDir *moveDir) {
     // a function-scope pointer assigned after the Timer (92.44).  Timer::Ms
     // rows: the image's sradi/clrrwi order varies per caller (CameraTilt vs
     // FlowWhile), so it is context scheduling in the PCH inline.
+    // w29-b (C2RS-BRIDGE 8.6, one-basic-block demotion): the c2-rs tap shows
+    // `this` being DEMOTED (CDEMOTE 85 -> temp) because this reference forms
+    // `addi rN,r3,0x2c` in the ENTRY block; declaring it at function scope also
+    // costs a 4-byte frame var, since the base home-stores it to 0x64 and that
+    // pushes minX onto 0x50.  The image keeps `this` in r30 and forms the same
+    // address at the loop preheader instead (`addi r29,r30,0x2c` at row 79,
+    // after the GatherUsefulBones/Timer calls) and home-stores it to 0x50.
+    // Moving this declaration inside the if-block, just after `Timer timer;`,
+    // reproduces the image's entry block byte-for-byte (rows 0-78 all equal,
+    // the early `addi`/`stw 0x64` both gone) and lands the address at the same
+    // row 79 -- but in caller-visible r14 with NO home store, so the cascade
+    // down the loop is worse: 92.42730 / fuzzy 91.89317, base 337 = target 337
+    // instructions, vs 94.19585 / 93.52819 with base 335.  So the higher score
+    // here comes from a body two instructions SHORTER than the image (bridge
+    // 14), and the remaining handle is c2 choosing a callee-saved home over the
+    // image's stack home for a value whose live range spans the loop's calls.
     auto& data = mData;
     if (moveDir) {
         MILO_ASSERT(TheGameData, 0xFB);
