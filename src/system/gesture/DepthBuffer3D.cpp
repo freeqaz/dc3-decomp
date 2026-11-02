@@ -419,21 +419,24 @@ END_COPYS
 //     no `this`-relative displacement that differs.
 //   - NO wrong constant.  Every `__real@` that pairs differently is a slot
 //     shift (the image's `lfs f21,__real@42a00000` sits one row off ours).
-//   - ONE real transcription difference, MEASURED AND NOT LANDED: the image
-//     divides with `divwu` (rows 231/232, 267/272) where `int n` gives `divw`,
-//     i.e. the original's `n` is a size_type.  Spelling both `n` unsigned
-//     reproduces `divwu` exactly on rows 231/232 -- and costs 80.27 -> 79.30
-//     canonical, because the per-pixel loop's FPR/IV assignment re-forms
-//     around it.  p1Cols alone is the same 79.30.  Reverted; recorded here so
-//     it is not re-derived.  It is codegen-only (n is a pixel count, >= 0).
+//   - ONE real transcription difference: the image divides with `divwu`
+//     (rows 231/232, 267/272) where `int n` gives `divw`, i.e. the original's
+//     `n` is a size_type.  w26-j measured the unsigned spelling at 79.30 and
+//     reverted it; w29-e re-measured at 83.80 -> 84.216 with the same tree
+//     shape, so that 79.30 does not reproduce and the unsigned spelling is
+//     LANDED.  It is codegen-only (n is a pixel count, >= 0).
 //   - unicorn has no verdict recorded for this symbol, so the listing above
 //     is the whole behaviour evidence.
 //
-// Mechanism for the remainder: the whole function is one register-assignment
-// cascade seeded by the phase-3 loop, not a set of independent rows -- the
-// `divwu` experiment is the proof (4 rows fixed, score down 1.0).  c2rs
-// `stage cands` on this TU reports 30+ FP candidates with priorities 33..-46
-// over an 1424-instruction body; the f0<->f13 pair alone is 38 instructions.
+// w29-e (80.267 -> 84.877 canonical, 78.355 -> 82.765 fuzzy): three of the
+// four levers below are SOURCE SHAPE that the image's own instructions name,
+// not register-assignment noise -- the twelve `fsel` (Min/Max), the `divwu`
+// (unsigned `n`), and the six address spills in the SetParams arm.  Only then
+// is the remainder a register-assignment cascade: c2rs `stage cands` on this TU
+// reports 30+ FP candidates with priorities 33..-46 over a ~1300-instruction
+// body; the f0<->f13 pair alone is 38 instructions.  Frame is still TGT 0x250
+// vs BASE 0x260 (one 16-byte local too many) -- see the SetCamera note in
+// SkeletonViz.cpp for the same +0x10 shape.
 void DepthBuffer3D::DrawShowing() {
     if (TheRnd.DrawMode() != Rnd::kDrawNormal || !Showing()) {
         return;
@@ -518,6 +521,15 @@ void DepthBuffer3D::DrawShowing() {
                     // so removing the guard cannot fault the native port.
                     unsigned short v = px[(row * 0x180 + col) * 4];
                     int player = v & 7;
+                    // NOT inlined into the push_back below.  `depths.push_back(v >> 3)`
+                    // (with or without the redundant `& 0x1fff`, v is 16-bit) is
+                    // worth +0.44 canonical on this row -- 84.877 -> 85.317 -- but
+                    // it moves the EH funclet call-site displacement from 0x250 to
+                    // 0x260, and the image's two 40-byte `fn_82DF0D1C`/`fn_82DF0D6C`
+                    // funclets encode that offset (`subi r31, r12, 0x250`).  Measured:
+                    // both funclets drop 100.000 -> 99.800, i.e. the gain is bought
+                    // with two DOWN rows.  The named local is the transcription that
+                    // keeps the funclet addresses, so it stays.
                     int depthVal = v >> 3;
                     if (player == p1idx || player == p2idx) {
                         if (player == p1idx) {
@@ -544,7 +556,14 @@ void DepthBuffer3D::DrawShowing() {
 
             if (!p1Cols.empty()) {
                 std::sort(p1Cols.begin(), p1Cols.end());
-                int n = (int)p1Cols.size();
+                // UNSIGNED, because the image divides with `divwu` (0x82DF0184 and
+                // 0x82DF0188) where a signed `n` gives `divw`.  `n` is a pixel
+                // count and `size()` is a size_type, so this is also the faithful
+                // type.  Worth +0.42 canonical on this row (83.800 -> 84.216).
+                // w26-j recorded the opposite result (79.30, measured on a tree
+                // where the four vectors still sat at the wrong frame slots); it
+                // does NOT reproduce here and the divwu rows are gone.
+                unsigned int n = p1Cols.size();
                 int med = p1Cols[n / 5];
                 float mean = ((float)p1Cols[(n << 2) / 5] + (float)med) * d51;
                 float spread = (((float)p1Cols[(n << 2) / 5] - (float)med) * d42) * d51;
@@ -559,7 +578,7 @@ void DepthBuffer3D::DrawShowing() {
             }
             if (!p2Cols.empty()) {
                 std::sort(p2Cols.begin(), p2Cols.end());
-                int n = (int)p2Cols.size();
+                unsigned int n = p2Cols.size();
                 float x = (float)p2Cols[(n << 2) / 5];
                 float mean = (x + (float)p2Cols[n / 5]) * d51;
                 float spread = ((x - (float)p2Cols[n / 5]) * d42) * d51;
@@ -641,13 +660,33 @@ void DepthBuffer3D::DrawShowing() {
                 smoothDt = TheTaskMgr.DeltaUISeconds();
             }
 
+            // The six smoothers are reached through named pointer locals, one per
+            // call.  The image emits `addi rN, r26, <offset>` followed by a spill of
+            // that address (`stw rN, 0x50(r31)`) for each of the six SetParams
+            // sites; writing `unk270.SetParams(...)` directly takes the address as
+            // an inline operand and emits neither.  83.800 -> 84.877 canonical.
+            // Measured inert/refuted on this block: a shared single pointer reused
+            // across the six calls (84.827 -- one address, so five of the six
+            // spills disappear), `DoubleExponentialSmoother &` references instead of
+            // pointers, a per-call `{ }` scope holding one reference, and hoisting
+            // all six initialisers above the calls (all byte-identical to the
+            // pointer form).  A file-scope helper taking the smoother by reference
+            // measured byte-inert earlier (w21-f).  The stack-layout shift that
+            // comes with these locals is benign: both EH funclets keep their
+            // `subi r31, r12, 0x250` displacement.
             if (valid && !unk28c) {
-                unk270.SetParams(d49, d49, d45);
-                unk25c.SetParams(depthZoomParams[0], depthZoomParams[0], d45);
-                unk234.SetParams(d52, d52, d45);
-                unk248.SetParams(depthZoomParams[1], depthZoomParams[1], d45);
-                unk20c.SetParams(d47, d47, d45);
-                unk220.SetParams(d48, d48, d45);
+                DoubleExponentialSmoother *s0 = &unk270;
+                s0->SetParams(d49, d49, d45);
+                DoubleExponentialSmoother *s1 = &unk25c;
+                s1->SetParams(depthZoomParams[0], depthZoomParams[0], d45);
+                DoubleExponentialSmoother *s2 = &unk234;
+                s2->SetParams(d52, d52, d45);
+                DoubleExponentialSmoother *s3 = &unk248;
+                s3->SetParams(depthZoomParams[1], depthZoomParams[1], d45);
+                DoubleExponentialSmoother *s4 = &unk20c;
+                s4->SetParams(d47, d47, d45);
+                DoubleExponentialSmoother *s5 = &unk220;
+                s5->SetParams(d48, d48, d45);
             } else if (valid) {
                 if (100.0f < Abs(unk270.Level() - d49) ||
                     50.0f < Abs(unk25c.Level() - depthZoomParams[0]) ||
@@ -666,59 +705,35 @@ void DepthBuffer3D::DrawShowing() {
             }
             unk28c = valid;
 
+            // The twelve clamps below are the image's twelve `fsel`
+            // instructions, and they are only reachable through the math/Utl.h
+            // Min/Max helpers -- `(x - y < 0) ? x : y`, i.e. an actual compare
+            // and select.  Spelling them as `if (a < b) x = b;` gives branches
+            // (80.267 canonical, unchanged), and spelling them as C `?:`
+            // ternaries gives ZERO fsel and scores 78.716 -- MSVC folds the
+            // ternary into arithmetic instead.  Min/Max value-for-value: for
+            // non-NaN, and for NaN both forms keep the left-hand value, so no
+            // native behaviour changes.
             d53 = d43 / mMaxZoom;
             d48 = d41 / mMaxDepthZoom;
             depthZoomParams[0] = d53 * d44;
             d47 = d48 * d51;
             d53 = d53 * d38;
             depthZoomParams[1] = depthZoomParams[0] * d51;
-            if (d48 < unk270.Level()) {
-                d48 = unk270.Level();
-            }
+            d48 = Max(d48, unk270.Level());
             d50 = d53 * d51;
-            if (depthZoomParams[0] < unk20c.Level()) {
-                depthZoomParams[0] = unk20c.Level();
-            }
-            d46 = d47;
-            if (d47 < unk25c.Level()) {
-                d46 = unk25c.Level();
-            }
-            if (d53 < unk234.Level()) {
-                d53 = unk234.Level();
-            }
-            d49 = depthZoomParams[1];
-            if (depthZoomParams[1] < unk220.Level()) {
-                d49 = unk220.Level();
-            }
-            d52 = d50;
-            if (d50 < unk248.Level()) {
-                d52 = unk248.Level();
-            }
-            d39 = d41;
-            if (d48 < d41) {
-                d39 = d48;
-            }
-            d48 = d44;
-            if (depthZoomParams[0] < d44) {
-                d48 = depthZoomParams[0];
-            }
-            depthZoomParams[0] = d38;
-            if (d53 < d38) {
-                depthZoomParams[0] = d53;
-            }
-            d40 = d41 - d47;
-            if (d46 < d40) {
-                d40 = d46;
-            }
-            d53 = d44 - depthZoomParams[1];
-            if (d49 < d53) {
-                d53 = d49;
-            }
+            depthZoomParams[0] = Max(depthZoomParams[0], unk20c.Level());
+            d46 = Max(d47, unk25c.Level());
+            d53 = Max(d53, unk234.Level());
+            d49 = Max(depthZoomParams[1], unk220.Level());
+            d52 = Max(d50, unk248.Level());
+            d39 = Min(d48, d41);
+            d48 = Min(depthZoomParams[0], d44);
+            depthZoomParams[0] = Min(d53, d38);
+            d40 = Min(d46, d41 - d47);
+            d53 = Min(d49, d44 - depthZoomParams[1]);
             d48 = d48 * d51;
-            depthZoomParams[1] = d38 - d50;
-            if (d52 < depthZoomParams[1]) {
-                depthZoomParams[1] = d52;
-            }
+            depthZoomParams[1] = Min(d52, d38 - d50);
             d47 = d45;
             if (d45 < (d53 - d48)) {
                 d47 = d53 - d48;
