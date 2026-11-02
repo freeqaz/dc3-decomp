@@ -1448,9 +1448,24 @@ void Spotlight::BuildCone(BeamDef &def) {
 
         float uvX = (float)(s - 17) * uvStep;
 
-        unsigned int top = s - 17;
-        unsigned int mid = s - 1;
+        // w27-j: the three vertex indices anchor on `bot`, and the other two are
+        // DERIVED from it by a constant.  c2 strength-reduces one index and
+        // expresses the others as +/-k element offsets; written as three
+        // independent `s +/- k` locals it instead builds three separate
+        // induction variables, which costs two extra callee-saved GPRs
+        // (__savegprlr_21 vs the image's _23), a 0x10-larger frame, and the
+        // whole r24<->r26 cascade.  Anchoring on `bot` gives ONE induction
+        // variable and closes the prologue.  Measured 2026-11-02, canonical /
+        // fuzzy: three independent `s +/- k` 92.59649 / 91.19299; anchor on
+        // `top` 92.78245 / 92.23859; anchor on `mid` 92.78245 / 92.23859;
+        // anchor on `bot` 93.29825 / 92.85965 (kept).  Declaration ORDER is
+        // inert (all six permutations byte-identical); it is the derivation
+        // that matters.  Residual: the image represents the loop counter as
+        // the plain `s` and forms the face indices with `add r, s, 0xffff` +
+        // clrlwi, we bias the counter by 0x10000 and subtract it back.
         unsigned int bot = s + 15;
+        unsigned int top = bot - 32;
+        unsigned int mid = bot - 16;
 
         verts[top].pos.Set(def.mTopRadius * cosA, 0.0f, def.mTopRadius * sinA);
         verts[top].color.Set(1.0f, 1.0f, 1.0f, 1.0f);
