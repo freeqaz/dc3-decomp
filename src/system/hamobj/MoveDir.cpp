@@ -251,6 +251,15 @@ String RecordClipName(const char *cc, int i2) {
     // mechanism: &cc is the one argument whose leaf is a parameter home rather
     // than a temp, so it is emitted in the parameter's prop order.  Re-measured
     // inert on the current tool: `(const char *)cc`, `(cc)`.
+    // w28-a (still 99.943): the residual census calls this row IDENTICAL
+    // (order=opcode-order), and the five rows are ONE ROTATION of the same five
+    // address computations.  The image emits r7,r6,r5,r4 then r9 (&cc); we emit
+    // r9 first and then r7..r4.  That is exactly the c2rs 12.3 first-store
+    // deferral performed by the image and not by us, and `&cc` is the only
+    // element of the run that is a parameter home rather than a MakeString
+    // stack temp, which is what makes it deferrable.  Reordering the
+    // `code`/`song`/`dancer` declarations is much worse (90-94), so the
+    // argument list itself, not the store order, is the local optimum.
     unsigned int code = dt.ToCode();
     Symbol song = TheGameData->GetSong();
     const String &dancer = TheGameData->Player(0)->CurrentDancer();
