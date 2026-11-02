@@ -617,7 +617,14 @@ bool RndAmbientOcclusion::IsSerializable(const RndMesh *mesh) const {
         return false;
     }
     ObjectDir *meshDir = mesh->Dir();
-    if ((int)meshDir == (int)Dir())
+    // w28-e: the image compares the two pointers with a 32-bit `cmpw` because
+    // PPC pointers ARE 32 bits (0x826DB5E8 `lwz r3, 0x28(r11)`, 0x826DB5EC
+    // `cmpw cr6, r3, r10`). Truncating to `int` on LP64 compares only the low
+    // halves, so two DIFFERENT dirs 4 GiB apart compare EQUAL here and a mesh
+    // is reported serializable outside its own dir. Same class as
+    // DataNode::Equal and TypeProps' `(int)ptr == (int)ptr`. intptr_t is `int`
+    // on PPC (src/types.h:76), so the Xbox codegen is unchanged.
+    if ((intptr_t)meshDir == (intptr_t)Dir())
         return true;
     return (meshDir->IsSubDir() && meshDir->InlineSubDirType() == kInlineAlways);
 }
