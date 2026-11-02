@@ -740,6 +740,31 @@ const Transform &RndTransformable::WorldXfm_Force() {
 // top of this: const-ref binding mWorldXfm.v or refWorld.v for the Subtracts
 // (94.80 / 96.97), non-const `Vector3 &pos = mWorldXfm.v` anywhere (96.27 at
 // best), Set spelling for the Adds (97.50), Add(refWorld.v, local, ...) (inert).
+//
+// w26-f BEHAVIOUR VERDICT: all 40 rows are equivalent. Checked against the target
+// listing (name_check, full): the register pairs f13/f0 and f12/f11 swap together
+// with their loads, so every fadds/fsubs still sums/subtracts the same two
+// operands.  Listing rows 145-147: image `fadds f0,f13,f0` / `lfs f12,0x3c(r31)`
+// / `lfs f13,0x34(r30)` vs ours `fadds f0,f0,f13` / `lfs f12,0x34(r30)` /
+// `lfs f13,0x3c(r31)` -- the same two addresses, read into the other two
+// registers.  Rows 176-179 do the same for the Subtract arm (`fsubs f0,f13,f0`
+// vs `fsubs f0,f0,f13`, with 0x80(r31)/0x38(r30) exchanged). The three stores
+// and the tail Scale() rows likewise differ only in emission order.
+// w26-f MECHANISM (c2rs §8.7, measured with `c2rs stage cands --regasg` on this
+// TU, 325 `cqlo3` tuples): the leftovers are the post-lowering commutative sort
+// -- one descending stable sort on an operand key.  The operands here are loads,
+// and a load from a temp-relative address prints as
+// `M6{key}[d00000000 w029f b V<sid>]` with key
+// `0x10000 | (base sid & 3) << 14 | 8`.  The keys this function actually prints
+// are 0x10008 (29 leaves), 0x12008 (2), 0x14008 (11), 0x16008 (1), 0x1c008 (3)
+// and 0x1e008 (3), on bases V18..V1620 -- function-local temp ids, not named
+// source objects.  So which arm names which operand first is decided by where
+// each load's base temp lands in sid mod 4.  §8.7's only source lever for that
+// is "add or drop upstream temps so a base sid moves by one"; every base moves
+// together, so it cannot be aimed at the Add arms while the switch prelude and
+// the tail Scale() keep the layout they have.  No spellings were spent on it in
+// w26-f (every lever already listed above was negative); re-open it if a
+// disp-driven leaf key is ever measured.
 void RndTransformable::ApplyDynamicConstraint() {
     if (mConstraint == kConstraintTargetWorld) {
         if (mTarget)

@@ -403,6 +403,29 @@ void CharBonesSamples::Print() {
 // expressions offset-first (`mOffsets[TYPE_ROTX] + mStart`), and through the
 // CharBones::RotXOffset() accessor.  MSVC canonicalises the operand order, so
 // the source text of the sum does not reach it.
+//
+// w26-f VERDICT: all 16 rows are equivalent.  Re-read against the target listing
+// (name_check, full): the six `add` rows pair with the two `lwz` rows beside them
+// (r9/r10/r11 permuted), so each bound is `mStart + mOffsets[T]` on both sides --
+// e.g. image `lwz r10,0x40/ lwz r11,0x14/ add r28,r10,r11` vs ours the same two
+// loads into the other registers and `add r28,r11,r10`.  The one structural row
+// (image-only `add r11, r10, r11` at the kCompressNone ROTX preheader, +4 bytes,
+// dragging every downstream `b`/`bge` displacement with it) is the tail-merge
+// w21-aq already adjudicated.
+// w26-f MECHANISM (c2rs §8.7, measured): the source text cannot fix these
+// because the order is the post-lowering commutative sort, descending on the
+// printed `cqlo3` key.  The bounds are memory leaves
+// `M6{key}[d00000000 w029f b V<sid>]` with key `0x10000 | (base sid & 3) << 14 |
+// 8`.  The leaves that carry the three bounds print 0x10008 on V788, 0x14008 on
+// V849 and 0x1c008 on V859; the function's other leaves print 0x16008 / 0x18008
+// / 0x1a008 on V3 / V790 / V5.  The QUAT and END bounds agree with the image and
+// only the ROTX one does not, so the required change is to ONE bound's base sid
+// mod 4 -- and §8.7's only lever ("add or drop an upstream temp so a base sid
+// moves by one") moves every base at once, which would break the two bounds
+// that already agree.  No upstream-temp spelling was spent on it for that
+// reason.  Open question: whether the ROTX bound's base is minted by a path the
+// other two do not take (the extra image `add` above is the only structural
+// difference between the three loop entries).
 void CharBonesSamples::Relativize(CharClip *clip) {
     auto& bones = mBones;
     if (bones.empty())

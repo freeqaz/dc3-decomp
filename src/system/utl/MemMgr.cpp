@@ -1008,6 +1008,21 @@ static SIZE_T sMinPhysFree = (SIZE_T)-1;
 // bijection (21 diff_arg rows); every MakeString/MemFreeBlockStats slot,
 // compare and branch checked against the image.  Fuzzy also charges the target's
 // unnamed lbl_82F189CC for sMinPhysFree (no map name).  Inert: hoisting `i`.
+//
+// w26-f: the residual is ONE bijection -- the cursor `p` takes r31 and the
+// sMinPhysFree address temp takes r30, where the image has `p` in r30
+// (`mr r30, 4` at 0x14) and the address temp in r31 (`lis r31, 0` at 0x38).
+// c2rs tap: `p` is pri 17 tie 5; the address temp is pri 15 tie 0.  The
+// image's order therefore needs the temp +3 or `p` -2, and priority is
+// refs x block pressure over the PRE-colouring candidate set.  Measured inert
+// with nsearch under report.json's ruler (canonical held at 100.0 on every
+// variant): inlining `name`, inlining either `str`, inlining both, inlining
+// `usage`, inlining the two physical-branch KB locals, folding the four loop
+// KB locals into the MakeString call, collapsing either or both `strlen`
+// temporaries, `&buf[0]` for the cursor, and 2x2 pairs of those.  A volatile
+// cursor (control) does move the bytes, so the harness is live.  Every
+// spelling that preserves the instruction sequence preserves the candidate
+// set, and the candidate set is what sets priority.
 void MemPrintOverview(int heapId, char *const buf) {
     char *p = buf;
     if ((int)-2 == heapId || heapId == -3) {

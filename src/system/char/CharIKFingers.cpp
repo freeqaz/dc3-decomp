@@ -522,6 +522,12 @@ void CharIKFingers::FixSingleFinger(
 // order (the same sched3 -> sched0 question as DxCam::ProjectZ).  Inert (c2rs tap,
 // regasg dump): all 6 declaration orders of named f2/f3/tip lengths, the sum
 // spelled tip + f3 + f2, a named f2 length only, dropping the totalLen ref.
+// w26-f re-measured: still fuzzy 99.157 (canonical 100.0), the same 8 rows.
+// Also inert with nsearch: `f3, f2, tip` and `f2, f3, tip` declaration orders,
+// and naming `&LocalXfm()` for the two distal bones.  Measured WORSE: swapping
+// the distal sum's operands (fuzzy 98.795) and folding `distalLen` away
+// (98.675).  Declaring tip first drops canonical to 99.976 -- a real
+// regression, reverted rather than kept.
 void CharIKFingers::MeasureLengths() {
     for (int i = 0; i < 5; i++) {
         auto& _sub0 = mFingers[i];
