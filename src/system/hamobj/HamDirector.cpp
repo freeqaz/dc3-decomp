@@ -1710,6 +1710,19 @@ Symbol HamDirector::ClosestMove() {
                                     // them to this exact pointer form).  The
                                     // only clrlwi seen was tolower(uchar)
                                     // into r3 with no extsb.
+                                    // w26-o: 12 more spellings, same one row.
+                                    // The mask can only survive where c2 cannot
+                                    // prove the value's range, and every form
+                                    // here feeds it a byte load (lbzx/lbz), which
+                                    // c2 range-analyses to 0..255 and then folds
+                                    // `(char)` to a bare extsb.  unsigned int,
+                                    // int and unsigned short locals, a
+                                    // `const unsigned int &` binding of the
+                                    // materialised temporary, and an explicit
+                                    // `& 0xff` are either byte-inert or replace
+                                    // the image's cmplwi with cmpwi / extsb.
+                                    // Mechanism: a c1 cast node that survives into
+                                    // the IL, not a reachable source shape.
                                     int bufLower = tolower((char)bufCh);
                                     // 0x824744BC is `cmpw cr6, r3, r22`:
                                     // tolower(*p) is the left operand.
@@ -3138,6 +3151,15 @@ void HamDirector::DrawIconMan(Symbol moveName, Symbol nextClip, Symbol prevClip,
     PropKeys *practiceKeys = mMasterClipAnim->GetKeys(this, DataArrayPtr(practice));
     Keys<Symbol, Symbol> *keys = practiceKeys->AsSymbolKeys();
 
+    // w26-o: 99.269 canonical.  The image runs a 0x10 larger frame because it
+    // spills the Keys vector's begin pointer (`stw r11, 0x60(r31)`) inside both
+    // of these loops; we keep it in a register across them.  A `Keys&` local, a
+    // per-iteration `const Key<Symbol>&` element binding and int/unsigned index
+    // and count spellings are byte-inert or worse (a named element pointer is
+    // 98.02).  The r28/r30 and r10/r11 pairs are one colour decision each, and
+    // the lwzx base/index order is a mechanism the c2 tap has not read yet
+    // (C2RS-BRIDGE 8.7, open questions) -- there is no commutative tuple here
+    // for the sort key to reach.
     int foundIdx = 0;
     unsigned int numKeys = (unsigned int)keys->size();
     for (; foundIdx < numKeys; foundIdx++) {
@@ -3526,9 +3548,22 @@ void HamDirector::Poll() {
                         // there the split moved work across a CALL boundary,
                         // here both products are call-free and MSVC canonicalises
                         // the fmadds operand choice regardless of source shape.
+                        // w26-o: a plain scalar local IS folded away by copy
+                        // propagation, so every spelling above was inert -- but a
+                        // REFERENCE binding is not.  `const float &idxTerm = ...`
+                        // materialises the product as a real temporary, which
+                        // gives the fadds a variable-leaf operand in the c2
+                        // commutative sort (C2RS-BRIDGE 8.7): the frame product
+                        // then sorts first, so `frame * dt` is the fused
+                        // multiply and `idx * freq` is the fmadds addend, as the
+                        // image has it.  99.384 -> 99.944 canonical, 98.754 ->
+                        // 99.314 fuzzy.  The remaining rows are the f29/f30
+                        // constants' assignment order (freq vs dt) and the
+                        // ObjRefConcrete<FlowLabel>/<RndPostProc> CopyRef pair,
+                        // which the ICF map lists at one address.
+                        const float &idxTerm = (float)backupIdx * sBackupDriftFreq;
                         float noise = RndWind::GetWhiteNoise(
-                            (float)backupIdx * sBackupDriftFreq
-                            + songAnim->GetFrame() * sBackupDriftDt
+                            idxTerm + songAnim->GetFrame() * sBackupDriftDt
                         );
                         float drift = (noise - sBackupDriftOffset) * mBackupDrift * sBackupDriftScale;
                         if (0.0f < drift) {
