@@ -224,13 +224,19 @@ void DxRnd::DrawLargeQuad(
     D3DDevice_SetTexture(mD3DDevice, 0x10, nullptr, 0x8000);
 }
 
-// w20-m (normalized 100, fuzzy 99.77): 5 diff_arg rows are the index loop's
-// two strength-reduced induction registers swapped -- image r7 = y*w1 (quad
-// index) / r8 = y*width, ours the reverse; every store writes the same value
-// (y*w+x, y*w+x+1, (y+1)*w+x+1, (y+1)*w+x) and all branch targets agree. The
-// vertex loop's 1/height and 1/width also land on v[4]/v[3] as in the image.
-// Tried (inert or worse): x-first operand order, an `int base` temp, and an
-// int index instead of a pointer (94.9).
+// CLOSED (w26-f8, fuzzy 99.76744 -> 100.0, canonical 100.0).  w20-m's note was
+// right about the symptom: the index loop's two strength-reduced row offsets
+// landed the other way round (ours r8 = y*w1 / r7 = y*width, image r7 = y*w1 /
+// r8 = y*width), and because the tail emits the three row updates in register
+// order that also rotated them.  The two offsets are COLOR candidates at equal
+// priority (tap: id31 pri22 tie89 -> r8, id30 pri22 tie88 -> r7), so the tie
+// key decided and the two were one step apart.  The image computes the VALUE
+// row offset once per row, in the outer loop: `unsigned int rowV = y * width;`
+// hoisted before the x loop.  That puts its definition where the image's is,
+// which flips the tie and the update order together.  Naming the same value
+// INSIDE the x loop instead costs 4 points (95.95) -- the position is the
+// lever, not the name.  Tried in w20-m (inert or worse): x-first operand
+// order, an `int base` temp, an int index instead of a pointer (94.9).
 void DxRnd::CreateLargeQuad(int width, int height, LargeQuadRenderData &data) {
     int w1 = width - 1;
     int h1 = height - 1;
@@ -241,10 +247,11 @@ void DxRnd::CreateLargeQuad(int width, int height, LargeQuadRenderData &data) {
     EndMemTrackObjectName();
     int *indices = (int *)D3DIndexBuffer_Lock(ib, 0, 0, 0);
     for (unsigned int y = 0; y < (unsigned int)h1; y++) {
+        unsigned int rowV = y * width;
         for (unsigned int x = 0; x < (unsigned int)w1; x++) {
             int *quad = indices + (y * w1 + x) * 4;
-            quad[0] = y * width + x;
-            quad[1] = y * width + x + 1;
+            quad[0] = rowV + x;
+            quad[1] = rowV + x + 1;
             quad[2] = (y + 1) * width + x + 1;
             quad[3] = (y + 1) * width + x;
         }

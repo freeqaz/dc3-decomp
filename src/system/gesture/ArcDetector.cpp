@@ -119,9 +119,17 @@ void ArcDetector::Draw(const Skeleton &skeleton, SkeletonViz &viz) {
                 arcPath.insert(arcPath.begin(), vec);
             }
 
+            // CLOSED (w26-f8, fuzzy 99.77778 -> 100.0, canonical 100.0).  The
+            // three residual rows were `Vector3 pos(jpos.x + off.x, ...)`
+            // emitting the offset leaf first (image: jpos first).  Both are
+            // memory leaves under a named reference, so C2RS-BRIDGE 8.7/8.8
+            // key them on the base reference's symbol id -- declaring `off`
+            // before `jpos` puts jpos's id higher and it sorts first.  Swapping
+            // the operands in the source (off.x + jpos.x) is INERT, as 8.7
+            // predicts for a canonicalised commutative sort.
+            const Vector3 &off = mArcOffset;
             const Vector3 &jpos =
                 skeleton.TrackedJoints()[mSecondaryJoint].mJointPos[0];
-            const Vector3 &off = mArcOffset;
             Vector3 pos(jpos.x + off.x, jpos.y + off.y, jpos.z + off.z);
 
             DrawPath(arcPath, viz, Hmx::Color(1.0f, 1.0f, 0.0f, 1.0f), pos);
