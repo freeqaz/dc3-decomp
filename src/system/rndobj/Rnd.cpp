@@ -1479,6 +1479,20 @@ void Rnd::Modal(Debug::ModalType &type, FixedString &str, bool bb) {
                 // redundant `cmpwi r11, 2 / bne` on the type != kModalFail
                 // path (0x82662280), which only survives if the test is not
                 // dominated by the else branch.
+                //
+                // w26-f11 (2026-11-02): the last 6 fuzzy rows are ONE
+                // two-register swap between this loop's `type` load and its
+                // `gNotifyKeepGoing` load -- image `lwz r11, 0x0(r28)` +
+                // `cmpwi cr6, r11, 2` for the type and `lbz r10, -0x2(r30)` +
+                // `cmplwi r10, 0` for the bool, ours the mirror (r10 for the
+                // type, r11 for the bool). Both are volatile scratch
+                // registers, no named leaf on either side, and every branch
+                // target and the
+                // redundant cmpwi already agree. Binding the bool
+                // (`bool &`, `const bool &`, a named bool) is byte-inert --
+                // measured -- so the swap sits in regasg's schedule of the two
+                // scratch values. Reordering the two tests is not a spelling:
+                // it is a different branch structure (and a different program).
                 if (type != Debug::kModalFail) continue;
                 if (gFailRestartConsole) {
                     XLaunchNewImage(TheSystemArgs.front(), 0);
