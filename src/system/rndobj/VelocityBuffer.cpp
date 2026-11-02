@@ -111,6 +111,18 @@ bool RndXfmCache::CacheXfms(
         // before the mesh-pointer loop and we sink it to the index loop's
         // preheader (1 insert + 1 delete), and r9/r10/r11 rotate from the
         // 0x826B15F4 reload of unk1b580 onward.
+        // w26-z (2026-11-02): the c2rs regasg tap puts the cause on LOOP-
+        // STRENGTH-REDUCTION PREHEADER BLOCK PLACEMENT, not on an expression.
+        // Our build has two separate preheader blocks -- b8 `addi r10, r9, -4`
+        // (meshPtrs) and b13 `addi r10, r3, -4` (indices) -- while the image
+        // carries BOTH decrements, `subi r8, r10, 0x4` and `subi r9, r9, 0x4`,
+        // inside the one dominating setup block, before the mesh loop. The
+        // `-4` is the reducer's own, not the front end's: writing
+        // `&unk19640[startIndex] - 1` folds it into the address constant
+        // (`addi r10, r11, 0x658f`, 95.259). 13 variants measured. Byte-
+        // identical and so no help: pointer-walking the mesh loop, dropping the
+        // scope braces, `*indices = idx; indices++; idx++;`. Worse: counted
+        // `for` for the index loop (86.9), `idx` declared first (92.6).
         {
             int *indices = &unk19640[startIndex];
             const RndMesh **meshPtrs = &mMeshPtrs[startIndex];
