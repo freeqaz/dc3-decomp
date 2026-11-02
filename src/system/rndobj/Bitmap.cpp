@@ -346,6 +346,15 @@ void RndBitmap::SetPixelIndex(int x, int y, unsigned char idx) {
 // unsigned/int variants, casts, statement order): a single-use local is
 // propagated straight back into the operand.  Open question: what keeps the
 // two division results live in the image.
+// w26-r addendum (measured on a synced scratch tree, baseline reproducing
+// report.json exactly at 98.9268/99.0244): re-confirmed inert for ALL FOUR
+// remaining rows -- naming `tiledBaseOffset % scaledWidth` and `... /
+// scaledWidth` as `int`, `unsigned int` or explicit-cast locals; casting the
+// mod to unsigned inside the multiply; writing the quotient multiply as
+// `(quotient) * mRowBytes`; and computing `rowOffset` before `offsetMod`.  Every
+// one is byte-identical to the current spelling, so the folded-temp class of the
+// hypothesis above is not reachable by naming: c2 folds a single-use local back
+// into its operand before the §8.7 sort runs, whatever the spelling.
 // NEGATIVE RESULT (w7-am, 2026-09-14): writing the subscript on the left,
 // `(idx)[cond ? bytes13 : bytes02]`, is byte-identical -- MSVC's operand
 // evaluation order here is not reachable from the source spelling.
