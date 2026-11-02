@@ -2237,6 +2237,18 @@ void RndMesh::SaveVertices(BinStream &bs) {
     // 8263B1F0).  `bool b = <&& expression>;` makes MSVC materialise the 0/1
     // in a scratch register and then mask-and-move it into b, one extra
     // instruction per flag.
+    // w27-h stop note (96.79144 canonical / 96.14973 fuzzy).  Every value,
+    // store, branch and call on this row matches the image; the multiset is
+    // equal except for ONE block that the image places differently.  The
+    // `compressedSize = 0x24; isXBox = 1;` arm sits out of line at the very end
+    // of the image (8263B23C, among the loop's cold blocks) and branches BACK
+    // to the join at 8263B1A4; ours leaves it inline immediately after the
+    // assert arm, so objdiff charges 3 inserts + 3 deletes.  That is c2 block
+    // ordering, not source: arms swapped (96.76471), no initialisers (94.61),
+    // assignment order, nested scope, comma-operator, a named `notXBox` flag and
+    // a `(int)` cast on the write were all measured, 8 of 9 exactly inert.  The
+    // remaining 22 register-swap rows (r26/r27, r24/r25, r10/r11) follow the
+    // same placement: once the arm moves, `cached` and &TheDebug swap.
     bool cached;
     if (bs.Cached()
         && (bs.GetPlatform() == kPlatformPS3 || bs.GetPlatform() == kPlatformXBox))
