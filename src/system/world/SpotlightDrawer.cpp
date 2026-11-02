@@ -678,6 +678,24 @@ void SpotlightDrawer::DrawWorld() {
                     // change), and writing the three products as separate
                     // member assignments in blue/green/red order (94.1, it
                     // splits the Color() base load in two).
+                    // w27-f (2026-11-02): the w7-am/w13-c note above is stale
+                    // on the store ORDER -- both sides now store 0x60, 0x68,
+                    // 0x64.  What is left is (a) the four colour loads'
+                    // order and register names and (b) a REAL structural
+                    // difference: we emit one `stw` more than the image (8 vs
+                    // 7).  The image jumps `b 0x3294` straight onto the loop
+                    // head's `stw r11,0x50(r1)`, so `e2` is homed once; our
+                    // rotation jumps `b 0xa83c` past it to the loop test and
+                    // therefore needs a second, earlier `stw r11,0x50(r1)` at
+                    // the definition.  Same values, same instruction stream
+                    // otherwise.  Measured byte-inert: `e2 = e1 + 1`, deferring
+                    // e2's declaration to the for-loop, declaring e2 before e1,
+                    // while/for/`e2 = e2 + 1` rotations, `const float &r/g/b`
+                    // products (98.488, worse), binding `spot->Color()` to a
+                    // named reference, and naming the intensity.  Mechanism
+                    // hypothesis: c2's loop rotation for a `for(;; ++i)` with
+                    // a mid-body `break`, not a colour or operand-order
+                    // decision.
                     // w13-c: the 3-arg Hmx::Color ctor (alpha from the init
                     // list) in place of Set(r, g, b, 1.0f) is also inert, 98.47.
                     c.Set(

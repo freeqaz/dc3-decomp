@@ -537,6 +537,17 @@ void UIListDir::BuildDrawState(
         // it, while ours has r15 free and never needs to.  The open question is
         // the priority order, not the loop spelling: ours ranks
         // fadeCountStart(-100) > numDisplay(-102) > numDisplayWithData(-114).
+        // w27-f (2026-11-02): the C2RS-BRIDGE 8.8 binding lever does not reach
+        // this row.  Measured byte-inert at 98.91599 canonical / 98.63144
+        // fuzzy: `const int &numDisplay = state.NumDisplay()`, `const float
+        // &elementSpacing = mElementSpacing` (used at both fade distances),
+        // `const int &halfDisplay = numDisplay / 2`.  Worse: `const int
+        // &fadeOffset = mFadeOffset` (98.59078) -- the ternary's short-circuit
+        // is what makes the two `mr r15/r17` rows match, and a named reference
+        // breaks it.  `numDisplayWithData` cannot be reference-bound at all
+        // (it is incremented, so a const reference does not compile).  The
+        // 23 rows are branch-aligned 1:1 on both sides, so this stays a
+        // priority-order question, not a spelling one.
         UIListElementDrawState elem;
 #ifdef HX_NATIVE
         memset(&elem, 0, sizeof(elem));

@@ -596,6 +596,25 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
 // and the node loop's `add r10, r11, r30` operand order.  Tried: cellRect.y
 // assigned before the colour (inert); `Node *` / `const Node &` / begin()[i] /
 // *(begin()+i) (all inert); a float local for curBeat (back to 96.58).
+// w27-f (97.69053 -> 98.15243 canonical, 97.63280 -> 98.14088 fuzzy, 13 rows
+// -> 9): C2RS-BRIDGE 8.8 on the cell-loop members.  Binding the two members
+// the cell test reads to named references --
+//     const float &worstErr = mWorstErr;
+//     const float &c = (worstErr - err) / worstErr;
+// -- removes three whole clusters without changing a single value:
+//   - the local-minima loop's `cmpwi cr6, r11, 0` moves back onto the
+//     image's slot (it had been pushed below the fcfid);
+//   - the node loop's `add r10, r11, r30` / `lfsx f3, r11, r30` operand
+//     ORDER comes back to the image's (we had the strengthened index first);
+//   - fuzzy gains a further 0.046 from `c` alone with canonical unchanged.
+// The remaining 9 rows are two scheduling clusters and are pure order: the
+// multiset is identical (433/433 instructions, no opcode-count difference).
+// Mechanism: the bound reference gives the member load its own IL leaf, so the
+// division and the comparison stop being scheduled off one shared base.
+// Measured inert on top of this: binding mLastMinErr, the mDists.mHeight int,
+// the (float)(...) result in either loop, moving cellRect.y above the colour
+// stores, and `cellColor.alpha` hoisted; `float err = mDists(col,row)`
+// (non-const) raises canonical but costs 0.17 fuzzy.
 void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
     Hmx::Rect rect;
 
@@ -652,7 +671,8 @@ void ClipDistMap::Draw(float x, float y, CharDriver *driver) {
         for (int row = 0; row < mDists.mHeight; row++) {
             float err = mDists(col, row);
             if (err != sLargeFloat) {
-                float c = (mWorstErr - err) / mWorstErr;
+                const float &worstErr = mWorstErr;
+                const float &c = (worstErr - err) / worstErr;
                 cellColor.red = c;
                 cellColor.green = c;
                 cellColor.blue = c;
