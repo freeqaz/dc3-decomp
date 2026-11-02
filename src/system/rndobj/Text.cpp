@@ -304,6 +304,17 @@ BEGIN_LOADS(RndText)
     // resulting slot shuffle, plus one `cmpwi r21, 0xd` scheduled two rows
     // late.  With SetFixedLength(0) in place, font-before-style is still a
     // loss (94.0).
+    // w26-i: re-read every row; the non-offset residual is one instruction
+    // placement.  The image issues `cmpwi cr6, r21, 0xd` twice (idx 443 for
+    // `d.rev < 13`, idx 446 for `d.rev > 13`); we evaluate the same two
+    // compares but schedule the second one after the fdivs (idx 450), so both
+    // sides compute the same two predicates on the same value.  Everything
+    // else is the liveness-ordered slot map: the target's `vec` (idx 237) sits
+    // at 0x68 and ours at 0x70, the 3-int temp block moves with it, and the
+    // 0x8c/0xac pair is swapped.  Naming the Vector3 temporary of the d.rev<2
+    // branch and splitting `int i, j, k` into three declarations are inert
+    // (canonical unchanged), so the frame delta is a slot-shape difference,
+    // not a missing local.
     StyleData style;
     ObjPtr<RndFontBase> font(this);
     if (d.rev > 15) {
