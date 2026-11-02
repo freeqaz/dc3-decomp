@@ -89,6 +89,13 @@ void RndWind::SelfGetWind(const Vector3 &pos, float time, Vector3 &result) {
             // copy 88.9; Cross(m.y, m.z, m.x) + Multiply(result, m, result)
             // re-measured 92.7 (it does give scalar-first operands, but MSVC
             // re-sorts the flat sums x,y,z and stores x first).
+            // w26-z (2026-11-02): 4 variants, no movement. Section 8.8's
+            // reference lever does not reach this row: binding `m.z` to a named
+            // reference is 93.8, and binding `m.y`/`m.z` after Normalize moves
+            // only fuzzy (+0.056) with canonical unchanged. What is left is the
+            // 8.7 commutative key on FPR temp leaves that are already loaded --
+            // the fmuls/fmsubs in the first cross read the same two registers
+            // in the other order -- plus sched0's post-Normalize load order.
             Hmx::Matrix3 m;
             m.z = xfm.m.z;
             Vector3 diff(pos.x - xfm.v.x, pos.y - xfm.v.y, pos.z - xfm.v.z);
