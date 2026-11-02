@@ -814,6 +814,42 @@ void RndAmbientOcclusion::OnCalculate(bool b1) {
     Clean();
 }
 
+// OPEN (w26-f7): 100 normalized, fuzzy 99.444, 11 diff_arg rows, all one
+// three-way register rotation among the last three callee-saved candidates.
+// Image : r26 = `this`, r25 = the 16-step counter, r24 = `&box.mMax`.
+// Ours  : r26 = the counter, r25 = `&box.mMax`, r24 = `this`.
+// (`box` is r30 and `items` is r28 in both, so only these three move.)
+//
+// Tap (`c2rs stage cands --regasg`, fn 736): all three are the last popped and
+// all read pri 0, so the order is the tie key alone --
+//   id19 sym21/k03 tie 77 -> r26 (counter)
+//   id23 sym25/k03 tie 26 -> r25 (&box.mMax)
+//   id2  sym4/k05  tie  8 -> r24 (this, ref 7, ben 12)
+// The image needs `this` popped first, i.e. its key above the other two.
+//
+// MEASURED: the priority and tie keys are a function of the EMITTED tuple
+// stream, not of the source spelling. Rewriting the 16-step bound as a value
+// local assigned inside the axis loop (`int steps; ... steps = 16;`) renumbers
+// every symbol ordinal in the function (arena#24->#24, sym 21->23 etc.) and
+// leaves the three ties at 77 / 26 / 8, byte-identical code, fuzzy unchanged.
+// Since the image's instruction stream is also identical modulo registers, its
+// keys are the ones we compute -- so nothing that preserves the code can
+// reorder these three. That makes the open question a modelling one rather
+// than a spelling one: which IL input other than the tuple stream reaches the
+// tie key, or which symbol the image's r26/r25/r24 actually hold.
+//
+// 19 spellings measured this pass, all inert (99.444) or worse:
+//   countdown `for (int n = 16; n != 0; n--)` 97.64; `n-- > 0` 94.68;
+//   `int steps = 16;` bound (folded, inert); `while (axis < 3)` (inert);
+//   `axis++` (inert); `(unsigned char)(axis + 1)` (inert);
+//   `const Vector3 &boxMax = box.mMax` 97.41 (adds a kept pointer);
+//   the same for `boxMin` 97.41; `current` hoisted above `step` 89.91;
+//   dropping the `splitAxis` round-trip 92.73; `float span = ...; step =
+//   span * invSteps` 97.41; naming the counter outside the axis loop (inert);
+//   `kdTreeNode *self = this` for the mData writes (inert);
+//   `const Box &bounds = box` / `Box &bounds = const_cast<...>` (inert);
+//   `this->EvaluateSplit(...)` (inert); `bestAxis` selection as braced ifs
+//   (inert); `it++` in the count loop (inert).
 template <>
 bool kdTree<Triangle>::kdTreeNode::FindSplit_SAH(
     const Box &box, const std::list<Triangle *> &items

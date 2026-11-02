@@ -102,6 +102,20 @@ void DxMultiMesh::Shutdown() {
 // instructions is equal and the operand order of the `and.` is the same, so
 // this is volatile numbering, not a source shape.
 //
+// STILL OPEN (w26-f7, fuzzy 99.724, 5 rows).  The mechanism is the reader-side
+// allocator (C2RS-BRIDGE 8.1), not COLOR: `subic`/`subfe`/`ori`/`lis` are all
+// regasg temps, first-fit over the sched3 order in the list r11 r10 ... r3
+// r31 ... r14.  Ours takes r11 for `subic` first and then r12 for `lis`, so
+// r10 was already blocked when `lis` reached regasg; the image has `lis` on
+// r11 and `subic` on r10, i.e. the constant is materialised BEFORE the mask
+// and r10 is free.  Nothing about the mask expression changes that: 6
+// respellings measured this pass (`== 0 ? 0x8007000E : 0` 97.09, a named
+// `s32 mask` local, `~(x != 0) & k`, `-(x == 0) & k` 98.50, an if/else arm
+// 97.09, a `(s32)` cast on the constant) leave 5 rows or make it worse; the
+// named local and the cast are byte-inert.  Open question: which value holds
+// r10 across this block in sched3 order -- it is dead in the emitted code by
+// index 59 -- since that, not the mask's spelling, is what blocks the `lis`.
+//
 // BUSTED (w7-bs, 93.98 -> 100.0).  w7-bp's cluster (2) -- the three DEAD home
 // stores of `*(mGeomOwner + 0x148)` at 0x82622F50 / 0x82622F6C / 0x82622FA0
 // and the tail's `lwz r11, 0x148(r30)` / 0x110-0x114 / `divw` re-derivation

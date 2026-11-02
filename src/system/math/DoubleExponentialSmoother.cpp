@@ -120,6 +120,15 @@ void Vector3DESmoother::Smooth(Vector3 v, float dt, bool normalize) {
     //     are (sid << 6) & 0xffff, so this needs a temp layout where mTrend's sid
     //     wraps past a multiple of 1024 and mPrevLevel's does not. That is not a
     //     small sid shift.
+    //   - w26-f7 re-measured the three rows (61 / 63 / 85) against the current
+    //     tree: all three still reproduce and the note above still holds. What
+    //     it rules out, stated explicitly, is any UNIFORM change to the inlined
+    //     body: the image wants `change` first in the mX expansion and `newBeta`
+    //     first in mY/mZ, and the three expansions are the same inline body, so
+    //     a single spelling that flips one flips all three. A per-expansion
+    //     difference can only come from the operand sids, which is the 1024-wrap
+    //     question in C2RS-BRIDGE 8.9. Do not re-run the 14 named-local and
+    //     operator spellings listed above; they are measured.
     // Also measured (w25-fa): mX in place of the sx ref is inert; dropping all
     // three refs flips the 2nd expansion's mPrevLevel fmadds the wrong way.
     DoubleExponentialSmoother &sx = mX;
