@@ -1874,9 +1874,15 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
 void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constraint) {
     auto mesh = Hmx::Object::New<RndMesh>();
     def.mBeam = mesh;
+    // w29-c: the reference bindings follow the image's emission order.  Both
+    // `Verts()` and `Faces()` fold to one load of 0x148(mesh) plus an `addi`,
+    // and the image emits the verts `addi r31, r11, 0x100` first and the faces
+    // `addi r29, r11, 0x110` second (0x8282CE98 / 0x8282CE9C).  Declaring
+    // `verts` first reproduces that; `faces` first (the previous order) emits
+    // the pair the other way round.
+    RndMesh::VertVector &verts = def.mBeam->Verts();
     std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
     int gridSize = def.mNumSegments;
-    RndMesh::VertVector &verts = def.mBeam->Verts();
     if (def.mNumSections >= gridSize) {
         gridSize = def.mNumSections;
     }
