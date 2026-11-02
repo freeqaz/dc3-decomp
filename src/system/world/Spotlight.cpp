@@ -1274,7 +1274,13 @@ void Spotlight::BuildBeam(BeamDef &def) {
 
             float yFrac = y / def.mLength;
             float negY = -y;
-            float sideBorder = (bottomSideBorderVal - topSideBorderVal) * yFrac + topSideBorderVal;
+            // w29-c: same lever as BuildCone's borderRadius -- the image's
+            // `fmadds f30, f4, f1, f29` (0x8282D9C0) puts the border
+            // difference first and `yFrac` second.  Binding the difference by
+            // reference keeps it out of the single-use subexpression class and
+            // restores that order: fuzzy 83.17936 -> 83.20393.
+            const float &borderDelta = bottomSideBorderVal - topSideBorderVal;
+            float sideBorder = borderDelta * yFrac + topSideBorderVal;
             float borderRatio = sideBorder / (halfWidth * 2.0f);
 
             float leftInner = sideBorder - halfWidth;
@@ -1436,7 +1442,16 @@ void Spotlight::BuildCone(BeamDef &def) {
     float bottomBorderLen = def.mBottomBorder * len;
     bottomBorderLen = (float)__fsel(len - bottomBorderLen, bottomBorderLen, len);
     float borderY = len - bottomBorderLen;
-    float borderRadius = (borderY / len) * (def.mBottomRadius - def.mTopRadius) + def.mTopRadius;
+    // w29-c: C2RS-BRIDGE 8.8 reference binding.  The image contracts this as
+    // `fmadds f28, f0, f11, f12` -- the `borderY/len` quotient is the
+    // MULTIPLICAND and the radius difference the multiplier (0x8282D3C4).
+    // Written as one expression both factors are single-use subexpressions and
+    // the emitted order follows the difference, not the quotient.  Binding the
+    // difference by reference keeps it out of the single-use subexpression
+    // class (a plain named `float` is folded away and is byte-inert), which
+    // restores the image's operand order: fuzzy 92.85965 -> 92.89474.
+    const float &radiusDelta = def.mBottomRadius - def.mTopRadius;
+    float borderRadius = (borderY / len) * radiusDelta + def.mTopRadius;
 
     float angle = 0.0f;
     float uvStep = 1.0f / 15.0f;
@@ -1859,9 +1874,15 @@ void Spotlight::BuildNGSheet(BeamDef &def) {
 void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constraint) {
     auto mesh = Hmx::Object::New<RndMesh>();
     def.mBeam = mesh;
+    // w29-c: the reference bindings follow the image's emission order.  Both
+    // `Verts()` and `Faces()` fold to one load of 0x148(mesh) plus an `addi`,
+    // and the image emits the verts `addi r31, r11, 0x100` first and the faces
+    // `addi r29, r11, 0x110` second (0x8282CE98 / 0x8282CE9C).  Declaring
+    // `verts` first reproduces that; `faces` first (the previous order) emits
+    // the pair the other way round.
+    RndMesh::VertVector &verts = def.mBeam->Verts();
     std::vector<RndMesh::Face> &faces = def.mBeam->Faces();
     int gridSize = def.mNumSegments;
-    RndMesh::VertVector &verts = def.mBeam->Verts();
     if (def.mNumSections >= gridSize) {
         gridSize = def.mNumSections;
     }
