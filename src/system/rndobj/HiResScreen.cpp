@@ -36,6 +36,22 @@ int HiResScreen::GetPaddingY() const { return 270; }
 // w19-a (still 98.29): no statement order of the independent member stores
 // (mPixelsPerRow/mTotalRows, the three initial stores, the two final stores)
 // moves the __FILE__ lis -- hill-climbed over every single move, all inert.
+// w26-t (still 98.29): the mechanism hypothesis, and 12 more inert spellings.
+// The placement and the register are the same decision, and it is circular:
+//   image  divwu r8 / mullw r11, r8 / subf. r11   and  lis r9, __FILE__@h at
+//          idx 32, filling the divide's latency shadow;
+//   ours   divwu r9 / mullw r11, r9 / subf. r10   and  lis r11, __FILE__@h at
+//          idx 35.  r11 is the divisor `rowsPer`, whose last use is the subf.,
+//          so our lis cannot be scheduled before idx 34 at all.
+// The image's allocator gives the quotient/remainder chain r8 and keeps r9 for
+// the address half; ours gives that chain r9 and the address half r11.  It is
+// a GPR colour choice upstream of any schedule slot, and no statement order
+// reaches it.  Measured inert (98.2479): `%` in the assert, `--rowsPer`,
+// parenthesising the byte-size product, swapping the two final stores, naming
+// the byte budget, naming the per-row byte count, naming totalRows and/or
+// pixelsPerRow (those two are worse, 87.6 / 86.1), asserting against `rowsPer`,
+// and a named cache budget with a named totalRows.  `%` in the LOOP condition
+// is 73.8 -- the expanded `a - a/b*b` is what the image has.
 HiResScreen::BmpCache::BmpCache(unsigned int ui1, unsigned int ui2) {
     mPixelsPerRow = ui1;
     mTotalRows = ui2;
