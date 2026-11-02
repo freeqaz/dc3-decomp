@@ -87,6 +87,7 @@ _BUILD_INVOKED = (
     "verify_complete_units.py",
     "create_data_stubs.py",
     "gen_icf_alias_map.py",
+    "check_alias_map_soundness.py",
     "check_undefined_decomp_symbols.py",
     "report_freshness.py",
     "obj_patch_chain.py",
