@@ -139,6 +139,22 @@ void BaseSkeleton::NormPos(SkeletonCoordSys cs, SkeletonJoint joint, Vector3 &v)
 // const bool, a function-scope `bool right`, `result = pos` hoisted, a
 // separate bone1Len local, `result *= totalLength`.  Not a source-shape
 // lead left that I can see.
+// w26-t: `c2rs stage cands --regasg` names the five rows' cause.  bone1 is
+// candidate id 12 (pri 24, tie 75) and bone2 is id 13 (pri 18, tie 74); BOTH
+// carry `cost r4:-1`, a copy preference for r4, because each is the first
+// argument of its own BoneLength call.  bone1 pops first on the higher
+// priority and takes r4, so its `addi` writes the argument register directly
+// (`addi r4, r7, 0xb`).  The image leaves r4 free and keeps bone1 in r7 with a
+// `mr r4, r7` at the call, i.e. it did NOT take the preference -- so the two
+// builds disagree on whether r4 is free when id 12 is popped, which is an
+// interference-set difference, not a spelling one.  The `xori r5, r4, 0x1`
+// row is the same allocator's slot fill (ours emits it back to back with the
+// first xori, the image puts it 4 slots later).
+// Measured inert in the replay harness (98.2184 canon / 98.1609 fuzzy =
+// baseline): a separate bone1Len local, a const SkeletonBone & alias for
+// bone1, `totalLength = totalLength + ...` instead of `+=`, three flat ifs
+// instead of the nested pair, a named `SkeletonCoordSys camera`.  A named
+// bone3Len inside the innermost arm is worse on fuzzy (98.0460).
 void BaseSkeleton::LimbNormPos(
     SkeletonCoordSys cs,
     SkeletonJoint joint,
