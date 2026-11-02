@@ -1355,6 +1355,24 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
     // reproduces the image's order -- `addi r6, <Bitmap_buf>` then
     // `clrrwi`, then the `lis r11, Bitmap.cpp` -- for +0.46 canonical
     // (97.701 -> 98.161) and +0.46 fuzzy.  No value, store or call changes.
+    //
+    // RESIDUAL (w27-i, 98.16092 canonical / 97.61494 fuzzy): `bs` and
+    // `paletteBytes` sit in the other way round from the image -- image
+    // `bs`=r27 / paletteBytes=r26, ours `bs`=r26 / paletteBytes=r27 -- and
+    // that one pair is 18 of the 23 remaining rows.  Both are pri -3 in
+    // COLOR (ben 13/ref 11 for `bs`, ben 8/ref 8 for paletteBytes), so the
+    // selector's first key is a tie and the `+0x44` tuple-visit ordinal
+    // decides: id 5 (bs) tie 9, id 7 (paletteBytes) tie 66, sorted DESC, so
+    // paletteBytes is selected first and takes the highest free register in
+    // its interference-allowed set (r14..r27) -> r27; `bs` then gets r26.
+    // Only `bs`'s ordinal exceeding paletteBytes' would flip it, and `bs` is
+    // a parameter materialised at entry (ordinal 9) against a mid-function
+    // definition (66), so no declaration move reaches it.  Refuted on this
+    // row, best first: `palette` declared after `buf` 97.701, paletteBytes
+    // at the top 97.011, palette at the top 96.552, explicit `else` arm
+    // instead of `= 0` 96.431, `unsigned` paletteBytes 96.207, both at the
+    // top 95.402, paletteBytes after `pixelBytes` 90.057, after `rowBytes`
+    // 88.902.  No value, store or call changes in any of them.
     void *palette = nullptr;
     void *buf = MemAlloc(pixelBytes + paletteBytes, __FILE__, 0x481, "Bitmap_buf", 0);
     if (paletteBytes != 0) {
