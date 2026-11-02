@@ -309,6 +309,20 @@ void RndTexRenderer::DrawToTexture() {
             // first use, so the CSE temp keeps its key over the named local
             // (C2RS-BRIDGE 8.7: a temp leaf's sid<<6 beats a variable's sid<<5
             // for the same sid).
+            // w26-n3: the 3 insert / 3 delete pairs are reorderings, verified
+            // instruction by instruction -- each insert has its matching delete
+            // elsewhere (the two Vector3 copy blocks at ~552..577 and the single
+            // `fmuls f26, f17, f29` at ~730..735), and the three
+            // fmuls/fmadds rows at 812/821/823 are commutative operand swaps of
+            // the SAME values.  No value, store address, branch or callee
+            // differs, so this row is behaviour-equivalent.
+            // Three spellings of the vertVectors copy, measured on the
+            // per-object path (which reads 99.40723 here against report.json's
+            // 99.42579 -- this TU holds function-local statics, so rank only and
+            // confirm with a full ninja): element-wise assignment 98.85807,
+            // three named `const Vector3 &` bindings 99.40723 (bit-identical),
+            // per-element scope-bound references 99.21985.  The copy order is
+            // c2's, not the source's.
             float negDist = -f34;
             float outY = tfc8.m.z.y * 0.0f;
             outY += tfc8.m.y.y * negDist;
