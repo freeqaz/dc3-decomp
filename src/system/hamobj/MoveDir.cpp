@@ -813,6 +813,21 @@ void MoveDir::Poll() {
             // lever) at function and at if-block scope, reference-binding
             // `TheMaster`, and naming the DeltaUISeconds result.  Worse: naming
             // the ternary predicate (-2.3pp).
+            // w28-a (same 50 rows, 6 more spellings; confirmed from the c2rs tap):
+            // the two loop-invariant addresses are the last two candidates popped
+            // and each is allowed only one register --
+            //   id 13 pri -54 tie 0 ben 3 ref 2 sym 78/k03  allowed { r14 } -> r14 (cost r14:500)
+            //   id 52 pri -61 tie 20 ben 3 ref 4 split1#96  allowed { r28 } -> r28
+            // id 13 is the hoisted `lis TheMaster@h`: our scheduler sinks that lis
+            // to the top of the loop body (row 36) ahead of its use (row 110), and
+            // the calls between force it into a callee-saved register.  The image
+            // emits it at the use and keeps nothing.  Freeing id 13 would hand r14
+            // to &TheTaskMgr and delete the `stw`/`lwz r28, 0x50(r31)` spill pair,
+            // which is exactly the structural delta the residual census reports
+            // (surplus ours lwz:1 stw:1; every other row is the renaming it
+            // forces).  Inert this lane: `TheMaster != nullptr`, and
+            // `HamMaster *&master = TheMaster;` / `TaskMgr &tm = TheTaskMgr;`
+            // bound at the Smooth call site (all byte-equal).
             mCurMoveSmoothers[i].Smooth(
                 mCurMoveNormalizedResult[i],
                 TheMaster && TheMaster->GetBeat() == 3
