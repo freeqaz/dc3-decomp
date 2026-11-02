@@ -84,12 +84,34 @@ therefore splits them: a member the retail linker map also places at the
 survivor's address is ``body-test+retail-confirmed`` (ground truth, noted only);
 a member the linker map does NOT place there rests on the relocation-invariant
 body test alone and is GATED.  That split is exactly the population this lane
-exists to look at -- OUR spellings the image never emitted -- and it is what
-separated the two real defects from the 521 benign members:
+exists to look at -- OUR spellings the map does not confirm the image emitted,
+i.e. the only place a wrong overload can hide -- and it is what separated the
+two real defects from the 521 benign members:
 
     ??$MakeString@PADHPBD@@...                  ABSENT from the retail map
     ??$MakeString@HHPADW4CompressionType@...    ABSENT from the retail map
     ??$MakeString@HHHW4CompressionType@...      0x823e1008  (map-confirmed)
+
+WHAT MAP ABSENCE DOES **NOT** MEAN
+----------------------------------
+Absence is not evidence that the image never emitted the spelling.  ``/OPT:ICF``
+records the SURVIVOR's name at the folded address, so a spelling that was
+emitted and folded is expected to be absent from the map too.  Measured
+2026-11-02 (lane w27-o): ``MakeString<char[128]>`` and ``char const[7]`` appear
+nowhere in ``ham_xbox_r.map`` yet sit at the folded addresses 0x827d40f0 and
+0x8292bf68 -- the image did emit them.
+
+The wording matters because a FALSE absence claim is unfalsifiable and gets
+cited as fact (it was, in this gate's original merge message).  The GATE itself
+is unaffected: it compares the unconfirmed population with relocations charged,
+so a map-absent spelling that genuinely folded AGREES and passes.  Absence only
+selects what to examine; the body comparison decides.
+
+Corollary for anything that audits this population: key on ADDRESS, not on
+name.  A target object's callee name is a fold SURVIVOR too -- the image's call
+to ``TerminateMakeString`` is recorded as ``OnlyReturns`` in the split object --
+so an audit that filters the target side by name silently drops functions and
+reports a smaller, cleaner population than exists.
 
 CANONICALISATION (why a raw count is not the answer)
 ----------------------------------------------------
