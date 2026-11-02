@@ -143,6 +143,16 @@ long Voice::createOrReuse(
     // tracker's scope: that is what makes MSVC duplicate the Exit into both
     // arms and share the single `bl MemPopTemp` tail (82E36CDC), which the
     // w7-y `if (hr) result = hr; else {...}` spelling could not reach.
+    // w26-f6, c2 candidate tap on this function -- three contested candidates
+    // pop in this order and take these registers: id 1 pri -20 tie 6 -> r23,
+    // id 5 pri -21 tie 7 -> r22, id 3 pri -22 tie 9 -> r21.  Resolving those
+    // against the listing's roles (r23 = this, r22 = sends, r21 = wfx) gives the
+    // pop order sends, wfx, this; the image's order is this, sends, wfx, i.e.
+    // `this` needs to clear -20 (a tie at -20 also works, tie 9 > tie 6).
+    // Tried and inert or worse: a named mChannels local, a
+    // named SendCount local, the tail as if/else, a named bool holding the tail
+    // expression, and a named local for the mPoolVoice.egParams assert.  Open
+    // question: which block adds a reference to `this` without emitting code.
     MemDoTempAllocations tmp;
     {
         CritSecTracker lock(&TheXboxSynth->unkb0);

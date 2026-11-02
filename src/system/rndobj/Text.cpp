@@ -1372,6 +1372,13 @@ void RndText::ReplaceMissingCharacters(HX_VECTOR(unsigned short) &wideChars) {
                     // tried (tail duplication, goto merges, loop forms); the open
                     // question is a block that references one but not the other
                     // without changing the emitted code.
+                    //
+                    // w26-f6: the declaration-order handle above is REFUTED --
+                    // swapping count/j so j is minted first rebuilds to the same
+                    // 99.71098 / 100.0, so the mint order does not reach the pop
+                    // order.  Also measured: declaring p before the StyleState
+                    // local is worse (99.147), and taking p from
+                    // wideChars.begin() is inert.
                     unsigned int count = fontChars.size();
                     unsigned int j = 0;
                     if (count != 0) {
