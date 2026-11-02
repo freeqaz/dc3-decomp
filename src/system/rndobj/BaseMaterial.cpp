@@ -243,6 +243,17 @@ const DataNode *BaseMaterial::GetDefaultPropVal(Symbol s) {
 // Inert: moving the MILO_ASSERT inside the `if (!base)` arm.  A ternary
 // `base ? base : gDefaultMat` gets the cr6 compare but un-threads the first
 // branch (86.6).
+// w26-s: the CR field follows the SYMBOL the condition names, not the spelling
+// of the condition. `MILO_ASSERT(gDefaultMat, 0x133)` inside the if arm emits
+// the image's `cmplwi cr6` (99.90, exactly one row left: its MakeString cond
+// string is "gDefaultMat" where the image's is "base"); every form that keeps
+// the message "base" emits cr0.  Also INERT (98.82): `base != 0`,
+// `base != nullptr`, `NULL != base`, `!!base`, a named `baseOk`,
+// `if (base == 0)`, an `if (base) {} else {}` arm, and the assignment spelled
+// through a cast (`(BaseMaterial *)`, `static_cast`), a double deref
+// `*(&gDefaultMat)` or a `BaseMaterial *const *` slot.  Open question: which
+// source construct makes c1 keep the global-load node while `#cond` still
+// reads "base".
 bool BaseMaterial::PropValDifferent(Symbol s, BaseMaterial *base) {
     if (!base) {
         base = gDefaultMat;
