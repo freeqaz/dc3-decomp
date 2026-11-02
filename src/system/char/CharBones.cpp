@@ -1458,7 +1458,30 @@ static void RotateToMultiplyUncompressed(
     out.Set(rx, ry, rz, rw);
 }
 
-// MARK: RotateTo
+// w26-f4 (fuzzy lane, 99.75787 fuzzy / 100.0 normalized): 15 charged rows, no
+// relocation-name mismatch, in three groups.
+//   249/254/255  fmsubs/fmadds with f0<->f6, f11<->f6, f12<->f6: the first two
+//                operand slots of the RotateToMultiply products.
+//   292/294      image `fmuls f13, f31, f13` and `fmuls f11, f31, f11`; we
+//                emit `fmuls f13, f13, f31` / `fmuls f11, f11, f31`. Rows 288
+//                (f8*f31) and 293 (f12*f31) MATCH, so inside one q.Set the
+//                image's order for the four q components is not uniform.
+//   305-324      an f2<->f4 permutation across the RotateToMultiply expansion:
+//                otherQuatItr->z (0x8) sits in f2 and ->y (0x4) in f4 in the
+//                image, reversed here.
+//
+// Measured on the 292/294 group (normalized held at 100.0):
+//   `q.Set(myQuatItr->x * f2, ...)` -> per-field `q.x = ...` assignments:
+//     byte-identical, fuzzy unchanged -- so Set vs. field writes is NOT the lever.
+//   swapping the source operand order to `f2 * myQuatItr->x` etc.:
+//     byte-identical, fuzzy unchanged -- consistent with C2RS-BRIDGE 8.7: the
+//     emitted order is the commutative key, not the order written in the source.
+//   reordering the four components inside Set: 97.74/98.06 canon, rejected.
+//
+// Open: the alternation is not monotonic in the memory displacement -- the
+// loads at 0xc and 0x4 sort one way and those at 0x0 and 0x8 the other, while
+// all four share base r10 -- so displacement alone does not explain it. Needs
+// the commutative-key dump (CQT), which the deployed c2rs does not carry.
 void CharBones::RotateTo(CharBones &bones, float f2) const {
     if (!mBones.empty()) {
         Bone *myBonesItr = (Bone *)mBones.data();
