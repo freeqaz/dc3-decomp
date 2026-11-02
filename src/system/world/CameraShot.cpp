@@ -1163,6 +1163,25 @@ BEGIN_LOADS(CamShot)
         // vec 0x90/0x98 (= tempDraws 0x90), parentPtr 0xa0, targetList 0x120,
         // tf 0x150..0x1c0, frame2 0x1d0, frame1 0x2f0, iter 0x140,
         // oldAnimSym 0x80, targetCount 0x84 (ours: 0x84/0x80).
+        // w26-g canonical decomposition: report.json charges 88 units of 82400
+        // (99.8932) and all 88 are IMMEDIATE diffs -- one point each (objdiff
+        // PENALTY_IMM_DIFF=1; a register diff would cost 5 and is folded into
+        // `arg_diff_score`, i.e. forgiven). So the "88 rows" the diff prints
+        // are not 88 issues: they are the ONE frame delta above, charged at 88
+        // different displacements. Repro: objdiff-cli diff -1 <target.obj> -2
+        // <our.obj> with functionRelocDiffs=name_check, combineDataSections=true,
+        // combineTextSections=true, ppc.calculatePoolRelocations=false
+        // --map-file build/373307D9/icf_aliases.map, then read
+        // `canonical_match_percent` (NOT `normalized_match_percent`, which is
+        // the fuzzy score relabelled). The map file is not optional: without it
+        // 11 rows here are charged on ICF-folded names (`>>` for Key<float>,
+        // CopyRef<FlowLabel> vs CopyRef<RndTransformable>, SetObjConcrete<...>,
+        // vector<UILabel*>::erase, ObjPtrList<RndMesh>::pop_back) and the same
+        // function reads 99.826 instead of 99.893.
+        // Refuted this lane: declaring `vec` at function scope, at the head of
+        // the `else` block, and first in the block -- all three BIT-IDENTICAL,
+        // which confirms slot assignment here is liveness/allocator-driven and
+        // not reachable by declaration placement.
         Vector2 vec[2];
         d >> vec[0];
         d >> vec[1];

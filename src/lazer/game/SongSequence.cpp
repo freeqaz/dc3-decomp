@@ -253,6 +253,22 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // (`addi r18, r3, 0x8` @8288BE14, `stw r18, 0x50(r31)` @8288BE24) -- DoNext's image
     // has no such home, so whatever forces the begin reload here is not a
     // named local.
+    // w26-g canonical decomposition: report.json charges 114 of 71200 units
+    // (99.83989) = ONE insert (100) + FOUR immediate diffs (1 each) + the two
+    // reloc-NAME rows at 138/139 (5 each): the image emits
+    // `lis r26, TheGameData` before `lis r11, TheHamProvider`, we emit them in
+    // the other order, and under this project's report ruler
+    // (functionRelocDiffs=name_check) a vetted reloc-name disagreement is
+    // charged rather than folded. The
+    // insert is the dead `stw r30, 0x50(r31)` -- 0x50(r31) is a double scratch
+    // here (stfd/lfd at 180/249) and this store at 269 is never read, so it is
+    // not a behaviour difference. The four immediate units are the two swapped
+    // load pairs (102/103 and 272/273: 0x8 then 0xc vs 0xc then 0x8, with the
+    // `subf` operands swapped to match, i.e. the same end-begin value). The
+    // p0/p1 rows (195/201) are register-only and folded into arg_diff_score,
+    // i.e. forgiven. Repro must pass --map-file build/373307D9/icf_aliases.map
+    // and read `canonical_match_percent`, not `normalized_match_percent`
+    // (which is the fuzzy score relabelled).
     const std::vector<Entry> &entries = mEntries;
     if (++mCurrentIndex >= (int)entries.size() || b2) {
 
