@@ -508,6 +508,11 @@ int *MemHeap::TryAlloc(int sizeWords, int align, int &allocSize) {
         // per arm, which is legal because info.mBlock starts null and the
         // default arm runs no fit -- is REFUTED: 91.6 -> 87.6 (151 rows), so
         // the image has the four-way phi and the extra version is not it.
+        // Nor does any spelling of the update itself fuse the store: an
+        // `int*`-walk `words += padWords`, a `char*` + padWords*4, a named
+        // `newBlock`, a direct `*(FreeBlock *)((int *)block + padWords) = saved`
+        // and a reference alias are all byte-identical to the current `add` +
+        // `stwx` pair (13 more combinations, none better than 91.6).
         FreeBlock saved;
         saved.mSizeWords = blockSize;
         saved.mTimeStamp = block->mTimeStamp;
