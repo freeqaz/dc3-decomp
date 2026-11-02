@@ -457,6 +457,22 @@ void SongCollision::CheckCollision(
     // this order (98.8 -- operands then come out normalDir-first, but the
     // walker bases move) or by the 3-float ctor (98.5); the image's own issue
     // order minDz, minDy, minDx, maxDx, maxDz, maxDy (98.4, see below).
+    // w26-c: read the 12 rows off the c2 tap rather than by probing.  The min
+    // projection's products are two VARIABLE leaves and the emitted order is
+    // the post-lowering commutative sort (C2RS-BRIDGE 8.7), "higher sid
+    // first": ours is (minDz sid 24, normalDir.z sid 22) -> minDz first, and
+    // the image needs normalDir.z first, i.e. normalDir.z must key ABOVE the
+    // diffs.  Its sid cannot rise above a later-declared diff, so the image's
+    // normalDir component is either a temp leaf (0x10000|sid<<6, which beats
+    // every named local) or a memory leaf -- both of which are about how c2
+    // classifies the hoisted `normalDir` component load, not about how the
+    // expression is written.  Measured inert here (129/141 unchanged):
+    // reference aliases of normalDir (single and double binding), float
+    // references to its components, both with the explicit pair parentheses,
+    // and reference aliases of *minEdge/*maxEdge.  NB aliasing normalDir is
+    // actively worse (121); the w21-aw note's "Vector3 minDiff comes out
+    // normalDir-first at 98.8" is the one spelling seen to reach this order,
+    // and it costs more elsewhere than it buys.
     int i = 0;
     do {
         const Transform &xfm = transforms[i];

@@ -101,6 +101,18 @@ void SkeletonQualityFilter::UpdateIsConfident(const TrackedJoint *joints) {
 // (all 6 declaration orders, as TrackedJoint& or Vector3&); the cutoff as a
 // local, `cutoff * (mSideways ? 0.9f : 1.0f)`, `if (mSideways) thresh *=
 // 0.9f`, and `SkeletonQualityFilter *self = this;`.
+// w26-c: the this/joint swap is a COLOR priority decision, not a tie.  Tap:
+// `this` (sym 2, k05) pri 14 tie 35 -> r28, `joint` (sym 3, k05) pri 22 tie 34
+// -> r29; the image has r29 = this, so it needs pri(this) >= pri(joint), and
+// the tie key already favours this (35 > 34).  Priority is
+// refs_in_block x local pressure (C2RS-BRIDGE 3), so the lever is one more
+// reference to `this` (or one fewer to joint) in a block the other does not
+// reach; the last block (`mSideways = true`) is the only such block and the
+// gap is 8.  Measured inert at 71/94 this wave: `thresh` via if/else, a named
+// `dot` local, a named `hit` bool, a flat (unparenthesised) dot, and
+// reference bindings of joint[2]/[4]/[8] (all worse: 70, 71, 2-5).
+// `mSideways = mSideways || ...` is worse (46); the single-write forms cost
+// exactly one row (70).
 void SkeletonQualityFilter::UpdateIsSideways(const TrackedJoint *joint) {
     Vector3 vDiff;
     Subtract(joint[8].mJointPos[0], joint[4].mJointPos[0], vDiff);
