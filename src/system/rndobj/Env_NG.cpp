@@ -320,6 +320,20 @@ void NgEnviron::Select(const Vector3 *pos) {
     TheNgStats->mLightsReal += mNumLightsReal;
     TheNgStats->mLightsApprox += mNumLightsApprox;
 
+    // RESIDUAL (w27-i, 96.899796 canonical): in the image TheShaderMgr's
+    // address and its vtable pointer are formed SEPARATELY inside each fog
+    // arm -- `lis r9, TheShaderMgr@h` / `addi r30` / `lwz r3, TheShaderMgr@l(r9)`
+    // in the FogEnable arm, and `lis r10` / `addi r30` / `lwz r3, 0(r30)`
+    // again in the else arm.  Ours HOISTS `lis / addi r30 / lwz r3` above the
+    // FogEnable branch and shares it, which is precisely the 3-insert
+    // (208-212) / 3-delete (253-255) cluster.  Both arms open with the same
+    // `TheShaderMgr.` expression, so c1 keeps one global read for both; the
+    // image's version evidently did not offer it the same node.  Measured
+    // inert: a `RndShaderMgr &` bound in the FogEnable arm (byte-identical
+    // per-object).  Worse: the same binding in the else arm, 95.669; a
+    // redundant `fogParams.x = 0.0f;` after the constant vector, 96.812.
+    // The remaining rows are the Vector4 ctor's store order (image x,z,w
+    // with y last; ours w,x,z with y last) and the fade/LRFade block.
     if (FogEnable()) {
         Vector4 fogParams(FogEnd(), 1.0f / (FogEnd() - FogStart()), 0.0f, 1.0f);
         TheShaderMgr.SetVConstant((VShaderConstant)0x5b, fogParams);

@@ -2093,6 +2093,22 @@ DataNode RndMesh::OnConfigureMesh(const DataArray *da) {
 // and objdiff leaves both rows marked equal -- per-TU MakeString divergence is
 // not charged.  Do not chase it.
 void RndMesh::LoadVertices(BinStreamRev &d) {
+    // RESIDUAL (w27-i, 98.49751 canonical / 97.25373 fuzzy): the three
+    // MILO_ASSERTs below mint THREE different MakeString instantiations where
+    // the image calls ONE, three times:
+    //   image  MakeString<char const[19], int, char const[5], char const *>
+    //   ours   <char const[9], int, char const[19]>  (0x29C)
+    //          <char const[9], int, char const[24]>  (0x2D4)
+    //          <char const[9], int, char const[55]>  (0x2E7)
+    // i.e. the message literal's array LENGTH is a deduced template argument,
+    // so each assert site mints its own symbol.  This is name-only: objdiff
+    // scores all three `bl`s EQUAL under the canonical ruler and the emitted
+    // argument setup is identical on both sides -- the relocation name is
+    // what costs the fuzzy points.  Reproducing one instantiation means
+    // stopping the message literal from deducing as an array, which needs a
+    // different call signature and therefore different arguments; not
+    // reachable from MILO_ASSERT as written.  The rest of the residual is a
+    // 7-pair callee-saved cascade (46 rows) behind that.
     int numVerts;
     d >> numVerts;
     bool c8;
