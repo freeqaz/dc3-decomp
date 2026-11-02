@@ -612,13 +612,9 @@ void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
         Vector2 &side = *(Vector2 *)&pt->unk[8];
         Vector2 &nextProj = *(Vector2 *)&(pt + 1)->unk[4];
 
-        float dirZ = nextProj.y - proj.y;
-        dir.y = dirZ;
-        float dirX = nextProj.x - proj.x;
-        dir.x = dirX;
-        dirZ = dir.y;
-        dirX = dir.x;
-        float len = std::sqrt(dirX * dirX + dirZ * dirZ);
+        dir.y = nextProj.y - proj.y;
+        dir.x = nextProj.x - proj.x;
+        float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
         float invLen;
         if (len != 0.0f) {
             invLen = 1.0f / len;
@@ -626,7 +622,7 @@ void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
             invLen = 0.0f;
         }
         dir.y = invLen * dir.y;
-        dir.x = invLen * dirX;
+        dir.x = invLen * dir.x;
 
         side.y = dir.x;
         side.x = -dir.y;
@@ -638,10 +634,14 @@ void RndLine::UpdateLine(RndLine::Point *start, RndLine::Point *end) {
     // The last point takes the direction and side of the one before it.
     {
         Point *prev = pt - 1;
-        pt->unk[7] = prev->unk[7];
-        pt->unk[8] = prev->unk[8];
-        pt->unk[9] = prev->unk[9];
-        pt->unk[6] = prev->unk[6];
+        int prevDirY = prev->unk[7];
+        int prevSideX = prev->unk[8];
+        int prevSideY = prev->unk[9];
+        int prevDirX = prev->unk[6];
+        pt->unk[7] = prevDirY;
+        pt->unk[8] = prevSideX;
+        pt->unk[9] = prevSideY;
+        pt->unk[6] = prevDirX;
     }
 
     // Phase 3: fold the side vector at sharp interior corners.
