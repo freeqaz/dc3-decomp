@@ -443,7 +443,7 @@ def member_tier(group_tier, member, survivor_addrs, retail):
     return group_tier
 
 
-def load_index(paths, warn=None):
+def load_index(paths):
     """``{symbol: [Func, ...]}`` over the compiled objects.
 
     Every distinct copy is kept: a COMDAT lands in every instantiating TU.
