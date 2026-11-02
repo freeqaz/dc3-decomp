@@ -323,6 +323,22 @@ void RndRibbon::UpdateChase() {
             // removeCount++; }` inside the guard is WORSE (99.757 -> 99.5): it
             // keeps a separate size test ahead of the loop and the mBegin load
             // still CSEs with size()'s.
+            // w27-m (census STRUCTURAL:opcode, surplus addi:1,lis:2,lwz:1,stw:1
+            // / deficit lwz:2): the census's one-instruction deficit IS this
+            // documented target-only `lwz r8, 0x0(r31)`, i.e. the row is the
+            // known loop-invariant CSE and not a new structural difference.
+            // Re-adjudicated behaviour-equivalent.  The three remaining
+            // commutative rows (334, 346, 348) are 8.7 operand-order keys.
+            // Row 334 is the interesting one: `fmuls f25, [0x108(r1)]` here vs
+            // `fmuls [x], f25` in the image, while its NEIGHBOURS 331 and 337
+            // multiply the same f25 by loads at 0x100/0x104 and agree on both
+            // sides.  Same base, same type, so the three memory keys differ only
+            // by disp (0x100, 0x104, 0x108) while f25's leaf key is
+            // 0x10000|sid<<5 -- a value that falls BETWEEN the 0x104 and 0x108
+            // keys.  That is why exactly one of the nine products is ordered the
+            // other way; re-seeding f25's sid would flip 331/337 too and cost
+            // more rows than it buys.  346/348 multiply two elements of the same
+            // Matrix3, so their order follows the same disp-only key.
             do {
                 if (mTransforms[i].frame >= cutoff) {
                     break;

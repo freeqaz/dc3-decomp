@@ -3164,6 +3164,13 @@ void BuildVisit(BSPNode *node) {
     // w16-a: `(*lastIt).mTransform` (operator* returning a reference) instead
     // of `lastIt->` for all nine mentions here is byte-identical (94.97, 121
     // rows) -- operator-> vs operator* is not what homes them either.
+    // w27-m (2026-11-02): the census row (STRUCTURAL:opcode, deficit
+    // lwz:1/stw:10) is exactly these dead home stores and the extra
+    // callee-saved GPR -- confirmed, not a new structural difference.  Retested
+    // the remaining spelling, `Transform &xfm = lastIt->mTransform;` bound
+    // once after the iterator and used for all 18 mentions: it does NOT home
+    // the Cross() reference parameters either, and costs 0.6pp
+    // (94.97 -> 94.4), so the inlined-Cross homing question stays open.
     lastIt->mTransform.m.z = *(const Vector3 *)&plane;
 
     lastIt->mTransform.m.y.Set(0, 1, 0);

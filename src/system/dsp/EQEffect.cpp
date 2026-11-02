@@ -354,6 +354,17 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                             // zn*cosCoeff with fnmsubs, where the double
                             // negation makes MSVC build the inner sum with the
                             // opposite sign and fix it up at the fmadds.
+                            // w27-m: naming the negated product
+                            // (`float negXb = -(x * b0);` then `negXb + xn *
+                            // cosCoeff`) DOES reproduce the image's
+                            // fneg+fmadds pair here (measured: the fneg at
+                            // 0x82E592A4 lines up and the fmadds follows), but
+                            // it re-schedules the surrounding delay-line
+                            // loads/stores and costs 2.1pp overall
+                            // (91.153 -> 89.1 canonical).  Both spellings round
+                            // identically on the x*b0 term, so this is a
+                            // scheduling cost, not a semantics one.  Left
+                            // unlanded.
                             float y = zn1 * b0
                                 + (-(x * b0) + xn * cosCoeff + xn2 - zn * cosCoeff);
                             mBand1DelayZ[chan] = y;
@@ -427,6 +438,19 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
     }
 }
 
+// w27-m adjacency notes (row measured 99.335 canonical / 99.214 fuzzy, 523 of
+// 542 instructions equal).  Everything left is allocation, not semantics:
+//  - the `default:` MakeString is named W4_D3DFORMAT in the image and H (int)
+//    here.  Both are passed by reference from the SAME stack home (r1+0x10fc,
+//    the switch subject) and both format as an integer, so this is the
+//    /OPT:ICF instantiation-naming artifact, not a wrong argument type.
+//  - rows 368-376 and 426-434 are the pair of constants -0.05f and 1/24000
+//    reaching r10/r11 in the opposite order in the two bandpass blocks, which
+//    only swaps which FPR holds mBandNQ vs mBandNGain.  MEASURED AND REFUTED:
+//    writing `double invGain = pow(...)` before `float wcF = ...` in band 3
+//    only, in both bands, and with band 4's `k + half` named, each re-schedules
+//    the whole block (98.0 / 96.2 vs 99.335).  The image's order is produced by
+//    the scheduler, not by the statement order.
 void EQEffect::SetParameter(int param, float value) {
     bool updateBand0 = false;
     bool updateBand1 = false;
