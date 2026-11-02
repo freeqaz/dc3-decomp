@@ -2015,10 +2015,13 @@ void MakeNormals(RndMesh *m) {
 //     lever arm here;
 //   * 10 rows of the image's two-address multiply (`mr r9,r7 / mulli r9,r9,0x60`
 //     where we emit `mulli r9,r7,0x60` directly).
-// w26-q measured ~45 variants on this row. The 8.8 base rebinding
-// (`RndMesh::Vert &vert = m->Verts()[i]` feeding `vert.norm` and
-// `&vert.tangent`, and the pTangent-only half of it) is canonical-inert at
-// 99.0364 and costs 0.02-0.06 fuzzy. Naming the six d1/d2 components, or the
+// w26-q measured ~45 variants on this row. The 8.8 base rebinding is worse,
+// measured exactly (report.json's own entry point, post-compile patchers
+// applied): binding `RndMesh::Vert &vert = m->Verts()[i]` for `vert.norm`
+// and `&vert.tangent` reads 90.52525 canonical / 88.66666 fuzzy against this
+// source's 99.03636 / 98.48080 -- the Vert reference pins a different live
+// range and the split of the 0x60 stride disappears. Only the pTangent-half
+// binding is shape-inert (99.0364) and it still costs 0.02 fuzzy. Naming the six d1/d2 components, or the
 // six cross-product products, as float locals takes them from the
 // subexpression class to variable leaves and REGRESSES to 97.58/98.23 --
 // which confirms the class change happens, just not toward the image's order.
