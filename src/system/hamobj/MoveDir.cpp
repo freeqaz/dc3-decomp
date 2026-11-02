@@ -244,6 +244,13 @@ String RecordClipName(const char *cc, int i2) {
     // inline in the argument list -> 98.8 (adds a mr r11,r3 save and moves
     // the format-string lis); a `const char *name = cc;` alias -> 96.4 (new
     // slot, cc no longer homed).  name_check charges no relocation here.
+    // w26-d (99.94, same 5 addi rows): re-read both listings -- the
+    // register->slot mapping is identical (r4 0x54, r5 0x5c, r6 0x58, r7 0x50,
+    // r9 0xbc); only the emission order differs, the image deferring `&cc` (r9)
+    // past the four stack temps we set up in reverse-argument order.  c2
+    // mechanism: &cc is the one argument whose leaf is a parameter home rather
+    // than a temp, so it is emitted in the parameter's prop order.  Re-measured
+    // inert on the current tool: `(const char *)cc`, `(cc)`.
     unsigned int code = dt.ToCode();
     Symbol song = TheGameData->GetSong();
     const String &dancer = TheGameData->Player(0)->CurrentDancer();
@@ -710,6 +717,10 @@ void MoveDir::PostLoad(BinStream &bs) {
 //   id 49 pri -48 tie 26  arena#50      -> r16
 //   id 42 pri -52 tie  0  code#78       -> r15
 //   id 13 pri -54 tie  0  code#84       -> r14  <- TheMaster@h
+// w26-d saw the same candidate from the allocation tap, which adds its fields:
+//   `CAND sel fn 974 id 13 pri -54 tie 0 ben 3 ref 2 allowed { r14 }`
+// -- a single-register allowed set, i.e. it takes the last free register and
+// leaves nothing for &TheTaskMgr, which must then go to 0x50.
 // So the mechanism hypothesis is: `TheMaster@h` is the last-popped code-band
 // half (lowest priority) and takes the last register, which pushes the pool
 // one over budget; the image drops that ONE candidate and rematerialises the
@@ -721,6 +732,9 @@ void MoveDir::PostLoad(BinStream &bs) {
 // result plus a named delta.  Worse: a named `HamMaster *master` (97.72 canon),
 // a named mCurMoveNormalizedResult[i] (97.55), a named bool for the beat test
 // (96.04), and calling DeltaUISeconds once with a `*=` arm (93.42).
+// w26-d re-measured the section 8.6 "+1 demotable named local" lever here:
+// a named `HamMove *curMove = mCurMove[i]` costs 96.72 -> 95.28 in the replay,
+// and dropping `oldMove` or the curPlayerData reference were inert or worse.
 void MoveDir::Poll() {
     SkeletonDir::Poll();
     mDancerViz->Poll();
@@ -817,6 +831,14 @@ void MoveDir::Poll() {
 // keyIdx--)`, `keyIdx = hamMoveKeys.size()`, a `(int)` cast in place of
 // `tmp`.  Worse: std::max for i13 (97.1), indexing without the curKey ref
 // (98.5).
+// w26-d (99.63): the other five name_check rows are ICF folds, not wrong
+// callees -- MakeString<W4_D3DFORMAT> and MakeString<H> share 82610090, and
+// RadFree / ??3 / ??_V / OggFree share 82E21268 in icf_aliases.map.  So the
+// dead store above is the whole residual: the image gives the loop counter a
+// stack home at 0x50 (a home the fctiwz temp later reuses, so the store is
+// dead there too), our c2 keeps it in r28 with no home.  Re-measured inert:
+// numKeys and/or keyIdx declared in the outer block or at function scope,
+// reusing numKeys as the counter, for-loop pre-decrement.
 void MoveDir::Enter() {
     PanelDir::Enter();
     int i13 = 0;
@@ -1287,6 +1309,14 @@ void MoveDir::FinalPoseStateMachine() {
     // vs our <char[12],int,char[46]> call row is an ICF fold, not a bug: both
     // names sit at 824d1870 in ham_xbox_r.map, and the args (r17 = "MoveDir.cpp",
     // r16 = the other_player assert text) are identical on both sides.
+    // w26-d (99.95, rows 270-278): the six rows are one emission-order swap of
+    // two independent memory-homed walkers -- the image does `lwz 0x50 / addi
+    // +0x3c` then `lwz 0x58 / subi -0x3c`, ours the reverse, with r9/r10
+    // swapped to match.  Each slot receives the same update on both sides, so
+    // the loop state is identical.  c2 orders the pair by candidate id; both
+    // hoisted lis loads are `allowed { r14 }`, and the source shapes that could
+    // reorder them (other_player's declaration position, a MovePlayerData
+    // reference for the other player) are inert -- re-measured this lane.
     for (int i = 0; i < 2; i++) {
         int other_player = 1 - i;
         HamMove *move = mMovePlayerData[i].mCurMove;
