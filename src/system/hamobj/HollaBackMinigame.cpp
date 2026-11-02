@@ -593,6 +593,13 @@ void HollaBackMinigame::SetMoveState(int measure, Symbol state) {
                     // the loop (98.80, 5 rows: the lwz sits before `li r11, 0`
                     // instead of at the loop head); bound inside the loop body
                     // 98.1.
+                    // w26-o: the reload is a CSE decision, not operand order --
+                    // the loop body stores nothing, so c2 is free to keep the
+                    // _M_start that size() already loaded.  A vector reference
+                    // re-bound at the loop head is 97.7 (a dead `addi` plus a
+                    // spill), a per-iteration `const HamMove *const &` element
+                    // binding is 98.0, and `const u32 &numMoves`, a `const u32
+                    // idx = i` and a plain element local are byte-inert.
                     u32 numMoves = mRoutineMoves.size();
                     for (u32 i = 0; i < numMoves; i++) {
                         if (move == mRoutineMoves[i]) {
