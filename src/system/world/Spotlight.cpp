@@ -1274,7 +1274,13 @@ void Spotlight::BuildBeam(BeamDef &def) {
 
             float yFrac = y / def.mLength;
             float negY = -y;
-            float sideBorder = (bottomSideBorderVal - topSideBorderVal) * yFrac + topSideBorderVal;
+            // w29-c: same lever as BuildCone's borderRadius -- the image's
+            // `fmadds f30, f4, f1, f29` (0x8282D9C0) puts the border
+            // difference first and `yFrac` second.  Binding the difference by
+            // reference keeps it out of the single-use subexpression class and
+            // restores that order: fuzzy 83.17936 -> 83.20393.
+            const float &borderDelta = bottomSideBorderVal - topSideBorderVal;
+            float sideBorder = borderDelta * yFrac + topSideBorderVal;
             float borderRatio = sideBorder / (halfWidth * 2.0f);
 
             float leftInner = sideBorder - halfWidth;
