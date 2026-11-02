@@ -121,27 +121,27 @@ void WorldDir::BitmapOverride::Sync(bool b) {
     if (!b) {
         ObjRef localRing;
         localRing.Clear();
-        ObjRef::iterator it = replacement->Refs().begin();
-        while (it != replacement->Refs().end()) {
+        ObjRef *it = replacement->Refs().Next();
+        while (it != &replacement->Refs()) {
             ObjRef *ref = it;
             if (ref->RefOwner()->Dir() != replacement->Dir()) {
                 ObjRef *p = ref->SpliceToRing(&localRing);
-                it = ObjRef::iterator(p);
+                it = p;
             }
-            ++it;
+            it = it->Next();
         }
         localRing.ReplaceList(original);
     } else {
         ObjRef localRing;
         localRing.Clear();
-        ObjRef::iterator it = original->Refs().begin();
-        while (it != original->Refs().end()) {
+        ObjRef *it = original->Refs().Next();
+        while (it != &original->Refs()) {
             ObjRef *ref = it;
             if (ref->RefOwner() && ref->RefOwner()->Dir() != replacement->Dir()) {
                 ObjRef *p = ref->SpliceToRing(&localRing);
-                it = ObjRef::iterator(p);
+                it = p;
             }
-            ++it;
+            it = it->Next();
         }
         localRing.ReplaceList(replacement);
     }
