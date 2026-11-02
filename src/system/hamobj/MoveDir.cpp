@@ -2112,6 +2112,25 @@ float MoveDir::UpdateOverlay(RndOverlay *overlay, float y) {
     // constant either -- the single `__real@3f7d70a4` vs `__real@40800000` row at idx
     // 154 is an alignment slip, both literals are present one row apart. All 55 offset
     // rows resolve to frame slots or a different base register.
+    //
+    // w29-b (2026-11-02): 88.233 / fuzzy 86.762, target 1268 instructions vs base
+    // 1258 -- we are TEN SHORT, so bridge 14 says any remaining gain must be
+    // checked against the count, not just the score.  The c2-rs candidate tap
+    // attributes a large share of the diff_arg rows to one candidate:
+    // `CAND id 4 pri -130 tie 0 ben 16 ref 24 sym 3/k0d val k07 #00000000
+    // allowed { r14 }` -- the INTEGER ZERO is hoisted to a function-wide
+    // callee-saved candidate in r14 (one `li r14, 0` at idx 155, then 25 uses:
+    // Vector3/Color zero-stores at 0x60/0xd0/0xe0/0xf0, `mr rN,r14` pointer
+    // inits, `stb` for a bool).  It displaces `fv` (move->FilterVer()), whose
+    // FORMu[0] index is SPLIT (`split1#461`, sym 10/k04, pri -9 -> r22) and
+    // home-stored to 0x7c, then reloaded at idx 561/612/809/962 -- that is the
+    // 4-byte frame shift (sret 0xb4 here vs 0xb0 in the image, which keeps the
+    // value in a register and rematerialises its zero 34 times instead of
+    // hoisting it: the target has 34 `li rN, 0`, we have 28 of which one is the
+    // shared r14).  This is bridge 15(b): a loop-invariant value our scheduler
+    // hoists to the block top becomes a callee-saved candidate and displaces
+    // another.  There is no source-level handle for "do not hoist constant 0" --
+    // replacing nullptr with 0 at all 21 sites leaves the tap byte-identical.
     MoveFrame *closest = ClosestMoveFrame();
     int mirrored = (move->Mirror() != nullptr);
 
