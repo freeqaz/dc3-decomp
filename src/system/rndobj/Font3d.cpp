@@ -168,6 +168,18 @@ bool RndFont3d::CharWidthAdvanceMesh(
             // loads a POINTER out of the node at 0x14 and then dereferences it at
             // 0x10/0x20/0x30 -- and the listing's template argument is the ICF
             // survivor's, not this call site's.
+            // w26-z (2026-11-02): the mechanism is sched3, not sched0. The c2rs
+            // regasg tap shows this block's schedule order is ALREADY
+            // `lwz(info->mMesh)` / `li r3,1` (def r3, no use) / `stw *mesh`, so
+            // the `li` is placed ahead of the store by the list scheduler and
+            // sched0 never moves it back. Its height outranks the store's
+            // because it feeds the `#2f8` return pseudo-op (tap RT 61). The
+            // image's `lwz, stw, li` needs that def to rank no higher than an
+            // unused store, and no spelling of the return reaches it: 14
+            // measured, every one exactly 96.875 (named `ok` before and after
+            // the store, `return (*mesh = info->mMesh), true;`,
+            // `RndMesh *&slot = *mesh;`, `RndMesh **out`, `mesh[0]`, `(*mesh)`,
+            // `!false`, `1 != 0`, `mMonospace || true`).
             *mesh = info->mMesh;
             return true;
         }
