@@ -220,11 +220,17 @@ void RndFlare::DrawShowing() {
                 RndMat *mat = mMat;
                 mat->TexXfm() = texXfm;
 #else
-                Hmx::Matrix3 texMat;
-                memcpy(&texMat, &mMat->TexXfm(), 0x40);
-                MakeRotMatrixZ(screenPos.x - 0.5f, texMat);
+                // w26-r: the local is a Transform, not a Matrix3.  The 0x40-byte
+                // memcpy above and below is the image's own (a Matrix3 local is
+                // overflowed by 16 bytes there); sizing the local to the copy
+                // keeps every memcpy byte-for-byte identical on the X360 arm and
+                // restores the image's 0x130 frame -- the Matrix3 version ran a
+                // 0x120 one, 16 bytes short.  Same statements, same order.
+                Transform texXfm;
+                memcpy(&texXfm, &mMat->TexXfm(), 0x40);
+                MakeRotMatrixZ(screenPos.x - 0.5f, texXfm.m);
                 RndMat *mat = mMat;
-                memcpy(&mat->TexXfm(), &texMat, 0x40);
+                memcpy(&mat->TexXfm(), &texXfm, 0x40);
 #endif
                 mat->MarkDirty(2);
             }
