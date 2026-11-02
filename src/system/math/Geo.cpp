@@ -802,17 +802,28 @@ void Multiply(const Box &box, float f, Box &out) {
 void Multiply(const Plane &p, const Transform &t, Plane &out) {
     Hmx::Matrix3 invM;
     FastInvert(t.m, invM);
-    float b = p.b;
-    float c = p.c;
-    float a = p.a;
+    // Name the nine inverse-matrix components; all nine are used below.
+    // c2 orders each commutative fmuls/fmadds use list by the operand key
+    // (C2RS-BRIDGE 8.7): a variable leaf keys on its symbol id, and the ids
+    // follow first definition.  Spelling the components inline lets the matrix
+    // term outrank p.c/p.a/p.b, so it is emitted first; the image emits the
+    // plane component first in every product.  These named components (and the
+    // reference bindings just below) are the spelling that gives the image's
+    // order; the product is commutative, so behaviour is unchanged.
+    float mxx = invM.x.x, mxy = invM.x.y, mxz = invM.x.z;
+    float myx = invM.y.x, myy = invM.y.y, myz = invM.y.z;
+    float mzx = invM.z.x, mzy = invM.z.y, mzz = invM.z.z;
+    const float &b = p.b;
+    const float &c = p.c;
+    const float &a = p.a;
     // Local LOAD order is what pins the term order here, not the sum's spelling:
     // with the old `b,a,c` decl order every permutation of the three products was
     // INERT (22 rows either way).  Declaring b,c,a makes the image's p.c/p.a/p.b
     // load order and its c*c/a*a/b*b denominator fall out, and the sum then wants
     // its FIRST source term emitted LAST (b,c,a spelled -> c,a,b emitted).
-    float nx = b * invM.x.y + c * invM.x.z + a * invM.x.x;
-    float ny = b * invM.y.y + c * invM.y.z + a * invM.y.x;
-    float nz = b * invM.z.y + c * invM.z.z + a * invM.z.x;
+    float nx = b * mxy + c * mxz + a * mxx;
+    float ny = b * myy + c * myz + a * myx;
+    float nz = b * mzy + c * mzz + a * mzx;
     float scalar = -(p.d / (a * a + b * b + c * c));
     Vector3 on(a * scalar, b * scalar, c * scalar);
     Vector3 pOut;
