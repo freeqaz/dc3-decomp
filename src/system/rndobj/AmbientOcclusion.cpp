@@ -151,6 +151,17 @@ void RndAmbientOcclusion::BlendVert(
     // call or constant difference (objdiff diff_op: none; unicorn verdict
     // EQUIVALENT at harness h4).  The eight insert/delete rows are the same
     // values emitted in a different order, not different values.
+    // w29-d (2026-11-02): still 88.661766 canonical / 85.83088 fuzzy, and the
+    // classification above survives a fresh diff -- 70 equal / 57 diff_arg /
+    // 7 insert / 7 delete / 2 replace, body 136 vs 136 (identical length, so
+    // nothing here is a shortened-body score).  The two `replace` rows are the
+    // `lfs f11, 0x54(r30)` and `mr r3, r4` that the image hoists one sched0
+    // step earlier; both are single-position moves of an otherwise matching
+    // instruction.  Arithmetic re-checked as arithmetic on both sides: the
+    // tangent is summed x/z/y in that order on both, the two Normalize calls
+    // take identical inputs, and the final `Set(0.0f)` is present on both.
+    // Nothing to fix here; the residual is the regasg first-fit selection
+    // described above.
     Vector4 tang = out.tangent;
     tang.x = v2.tangent.x + tang.x;
     out.pos *= 0.5f;
@@ -1113,8 +1124,49 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     // Both are reachable only by finding the accessor spelling whose address the
     // image hands to an inlined callee; guessing at it (unrolled index temps,
     // per-component Verts() calls) was not attempted here.
+    //
+    // w29-d (2026-11-02, 96.10048 canonical / 94.246414 fuzzy): the arithmetic was
+    // re-adjudicated term by term against the listing and is still identical on
+    // both sides -- every fadds/fmuls/fsubs in the dot/angle/weight chains
+    // carries the same operands, the braces are the same, and the four colour
+    // accumulators are the same four fields.  Body is 418 vs 418, so nothing is
+    // being bought by a shortened body.  Class counts: 282 equal / 128 diff_arg
+    // / 8 insert / 8 delete / 0 replace, and every one of the 144 is placement:
+    //   * r24/r25/r26 and r20..r24 rotate as a block through the whole body
+    //     (7 of them are the `lwz r11, 0x148(r25)` reload of the same member).
+    //   * f26..f31 rotate the same way (idx 247-257: four `fmr` copies of the
+    //     same constant land in f26..f29 in a different order).
+    //   * ONE real structural fact, and it is a slot assignment, not a value:
+    //     the three Vector3 temporaries are the SAME three objects in a
+    //     different ORDER.  image  worldCenter=0xA0, worldNorm=0x70,
+    //     aoResult=0xB0;  ours  worldCenter=0xB0, worldNorm=0xA0,
+    //     aoResult=0x70.  Both sides keep worldNorm below worldCenter, so the
+    //     only disagreement is where `aoResult` sits -- ours allocates it at the
+    //     BOTTOM of the three even though it is declared first and its live
+    //     range starts at the `faceAO(n, aoResult)` copy above this loop; the
+    //     image puts it at the top.  That single rotation is what swaps the
+    //     `addi r4/r5/r6, r31, 0x{a0,b0,70}` triples at idx 135-149, and it is
+    //     the whole reason Multiply/TransformNormal/CalculateAOAtPoint receive
+    //     their outputs in a different order.
+    // FIXED in the same pass.  `aoResult`'s first live use is already above
+    // worldCenter/worldNorm, so liveness and declaration order AGREE and a decl
+    // reorder cannot move it -- which is the tell that the low slot was never
+    // aoResult's own.  `std::vector<Hmx::Color> faceAO(n, aoResult)` takes its
+    // fill value BY CONST REFERENCE, so MSVC spilled a COPY of aoResult for the
+    // call and gave THAT copy the slot it would otherwise have given aoResult;
+    // aoResult then inherited the low slot when the copy's live range ended.
+    // Passing a value-initialised temporary instead removes the spill: the
+    // image's three slots (worldCenter 0xA0, worldNorm 0x70, aoResult 0xB0) now
+    // come out exactly, `addi r4/r5/r6, r31, 0x{a0,70,b0}` is equal on all six
+    // affected rows (idx 135/139/144/145/146/149) and 8 diff_arg rows cross to
+    // equal.  96.10048 -> 96.117226 canonical, 94.246414 -> 94.28708 fuzzy,
+    // body 418 vs 418 unchanged.  Also removes a read of an uninitialised
+    // Hmx::Color from the fill -- every element is overwritten by
+    // `faceAO[f] = aoResult` in the loop below before Phase 3 reads it, so
+    // zero-fill and garbage-fill are indistinguishable here, but only one of
+    // them is free of undefined behaviour.
     Hmx::Color aoResult;
-    std::vector<Hmx::Color> faceAO(mesh->Faces().size(), aoResult);
+    std::vector<Hmx::Color> faceAO(mesh->Faces().size(), Hmx::Color());
     float oneThird = 1.0f / 3.0f;
     for (unsigned int f = 0; f < (unsigned int)mesh->Faces().size(); f++) {
         {
@@ -1366,6 +1418,45 @@ struct FacePriority {
 // uniform -0x4 shift.  Register side: 56 GPR swap pairs, r10/r11 (32) and
 // r10/r9 (22) dominant, all downstream of where those three Vector3s and the
 // two `mObjectsTessellate` iterator homes land.
+//
+// w29-d (2026-11-02, 94.43366 canonical / 93.34728 fuzzy): w27-l's verdict --
+// not a behaviour difference -- is re-confirmed independently, but its
+// *label* ("the mechanism is a dead home store") does NOT describe this row
+// and should not be inherited.  Measured decomposition of the 1123/1130
+// instruction pair (target/base, so our body is 7 LONGER, not shortened):
+//     equal 685 | diff_arg 404 | insert 30 | delete 23 | replace 11
+// Of the 404 diff_arg rows, 221 are textually identical once register NUMBERS
+// are masked -- same opcode, same displacement, same immediate -- i.e. pure
+// allocator output.  The other 183 carry a different displacement, and those
+// reduce to two placement facts, not to any dead store:
+//   (a) the frame itself: image 0x4E0, ours 0x4D0.  Every `r31`-relative slot
+//       in 0xC0..0x1E0 rides that, plus a compensatory -0x4 shift on the
+//       `sth` user slots (image 0xEE/0xF6/0xFE/..., ours 0xF2/0xFA/0x102/...)
+//       and a clean +0x10 on the one 0x10-byte local the image keeps at 0xB4
+//       where we keep it at 0xC4.  A 0x10 frame gap and a two-region slot
+//       reshuffle is what 183 rows look like; a dead store is what 3 look like.
+//   (b) the three Vector3 results are the same objects in a different order
+//       (image wp2/wp0/wp1, ours wp1/wp2/wp0) -- already recorded by w27-l.
+// The dead home store w27-l found really is there -- `sth r5/r6/r4, 0x50(r31)`
+// at idx 380/386/391 and again at 674/676/678, never read as u16 -- but it is
+// 3 of the 23 delete rows, 3 instructions out of 1130.  It cannot carry a
+// 94.4 row, and reproducing it would still need a store nothing reads.
+//
+// The one STRUCTURAL difference that is not a dead store, and that w27-l did
+// not name, is a self-cancelling pointer re-derivation in both memcpy loops
+// (idx 601/604 for Phase 2 and 1010/1013 for Phase 3):
+//     image: mulli r28,rN,0x60 ; mr r27,r30        -> src = savedVerts
+//     ours : mulli r11,rN,0x60 ; subf r10,r11,r27
+//                                add r28,r10,r11   -> src = (p - off) + off
+// `subf r10,r11,r27` followed by `add r28,r10,r11` is the identity r28 = r27,
+// i.e. c1 built the source pointer as `savedVerts - offset + offset` where the
+// image built it as a plain copy.  Two instructions per site, four total, and
+// both are `insert` rows.  The loop shape is right (`subic.`/`bne` matches on
+// both sides) and the destination side is right (both keep a byte offset and
+// re-derive `mVerts` data each iteration), so the handle would have to be in
+// how `src` is initialised -- `savedVerts` cannot be mutated here because the
+// erase() below still needs the un-advanced pointer, and every non-mutating
+// respelling tried writes the same `(p - off) + off` tree.
 void RndAmbientOcclusion::Tessellate(float *outTessTime, float *outPatchTime) {
     if (mObjectsTessellate.empty())
         return;
