@@ -887,10 +887,11 @@ struct WrapPoint {
  *  candidate must differ; `_ref0`/`_ref1` (below) are the two §8.8 base
  *  bindings already in place, and the reference form that is INERT for
  *  `mFontMaps` shows the lever does not extend to every member.  Behaviour
- *  re-read value by value against the image and unchanged.  The three `erase`,
- *  `insert` and `reserve` bl rows that differ by name are ICF folds
- *  (`vector<Line>::erase` folds with `vector<VFilterInputFrame>::erase`), not
- *  wrong callees. */
+ *  re-read value by value against the image and unchanged.  All NINE bl rows
+ *  that display different callee names are ICF folds, not wrong callees: 3
+ *  `vector<Line>::erase` rows against `vector<VFilterInputFrame>::erase` and 6
+ *  assert `MakeString` instantiations against the group representative.
+ *  objdiff reports no Function Call Diff for this row at all. */
 void RndText::WrapText(
     const unsigned short *wideChars, int wLen, float *charWidths,
     HX_VECTOR(Line) &lines, Hmx::Rect &bounds, float scale
