@@ -246,6 +246,19 @@ void CharClipSet::SetFrame(float frame, float blend) {
                     RotateAboutZ(pelvisXfm.v, *rotZPtr, pelvisXfm.v);
                     Normalize(pelvisXfm.m, pelvisXfm.m);
                 }
+                // Measured (w26-f15): the ONE row objdiff charges in this
+                // function is here, not in the loop copy below -- index 243,
+                // image `fadds f0,f13,f0` (pelvisXfm.v.x first) vs ours
+                // `fadds f0,f0,f13`. The y and z adds of the same expansion
+                // already match with posPtr first, so the two operand keys
+                // differ by little and the +4/+8 component displacements
+                // straddle them. 13 more spellings inert or worse this round:
+                // `Vector3 &`/`const Vector3 &` bindings for the whole vector
+                // cost 2 instructions (327 insns, 98.785, and 3 instructions
+                // for the pointer-plus-reference form), explicit per-component
+                // adds are byte-identical to `operator+=`, and binding the x
+                // components by reference (`float &vx`, `const float &px`)
+                // costs 3 instructions (328 insns, 97.929).
                 pelvisXfm.v += *posPtr;
             }
             auto _tmp1 = mPreviewClip->GetResource();
@@ -265,14 +278,13 @@ void CharClipSet::SetFrame(float frame, float blend) {
                             RotateAboutZ(xfm.v, *rotZPtr, xfm.v);
                             Normalize(xfm.m, xfm.m);
                         }
-                        // Open (w25-gv, c2 §8.7): the image's x add is
-                        // (xfm.v.x, posPtr->x); ours sorts the posPtr memory leaf
-                        // (var base, 0x1a008) ahead of xfm.v.x, whose base temp is
-                        // V862 (mod 4 = 2, 0x18008).  The pelvis copy above has
-                        // base V819 (mod 4 = 3, 0x1c008) and matches.  Needs the
-                        // gap 819..862 to grow by one; ~45 respellings of the code
-                        // between (loop header, string ops, refs, component adds)
-                        // left both sids unchanged.
+                        // w25-gv (c2 §8.7) predicted the loop copy was the open
+                        // one and the pelvis copy matched.  w26-f15 measured the
+                        // opposite with objdiff's own instruction table: the
+                        // only charged row is the pelvis copy (index 243), and
+                        // this loop copy scores equal.  The sid/base analysis
+                        // above is therefore applied to the wrong site; keep it
+                        // as the mechanism, not as the attribution.
                         xfm.v += *posPtr;
                     }
                 }

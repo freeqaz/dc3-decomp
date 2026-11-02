@@ -247,13 +247,17 @@ void GranularSynth::Synthesize(unsigned int count, float *const *out) {
                 s = (1.0f - mWindows[window][pos]) * s;
             }
 
-            // RESIDUAL (raw only; canonical is 100.0).  The image's accumulate is
-            // `fadds f0, f10, f0` at 0x82E4B7E8 (loaded sample first); we emit
-            // `fadds f0, f0, f10`.  NEGATIVE: `+=` and `s + out[...][k]` are both
-            // inert -- the operand order is chosen after the expression is
-            // scheduled, not from the source order.  Commutative-operand-order
-            // floor, costs 0 canonical points.
-            out[gr.mVoice][k] = out[gr.mVoice][k] + s;
+            // Bind the destination as a REFERENCE, do not copy it. The image's
+            // accumulate is `fadds f0, f10, f0` at 0x82E4B7E8 -- loaded sample
+            // first, `s` second -- and the operand order is c2's post-lowering
+            // commutative sort (C2RS-BRIDGE 8.7), not the source order: `+=`,
+            // `s + out[...][k]` and a named `float old = out[...][k]` copy are
+            // all inert. The binding survives copy propagation, so the load is
+            // a memory leaf on a variable base instead of folding into the
+            // `fadds` tree, and it sorts ahead of the `s` leaf. 100 fuzzy,
+            // normalized and canonical, 195/195 instructions.
+            float &dst = out[gr.mVoice][k];
+            dst += s;
         }
 
         gr.mLifetime -= count;
