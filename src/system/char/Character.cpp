@@ -445,6 +445,33 @@ void Character::DrawShadow(const Transform &xfm, float planeD) {
         // w16-c: `pl70.d = -(-pl70.d + planeD)` after a Plane(worldPos, up)
         // is 96.1 (fnmadds + fsubs).  The same unfactored x*0 + y*0 shape is
         // CharIKFingers::CalculateHandDest's residual.
+        // w28-b (2026-11-02): the "separate (z + planeD) term, scheduled in
+        // the products' latency shadow" hypothesis is now pinned exactly, and
+        // it is a sched0 placement, not a c1 shape.  FIVE distinct spellings
+        // that make (z + planeD) its own value -- a named `float zOff` before
+        // the products, between them, or after them, `zOff = z; zOff +=
+        // planeD`, and mutating `worldPos.z += planeD` in place -- all emit a
+        // BYTE-IDENTICAL body (canonical 97.18182 / fuzzy 97.04196): the two
+        // fadds are there, but the (z + planeD) one is hoisted to slot 41
+        // (before the fmadds instead of after it), the component loads come
+        // out z,y,x instead of the image's y,z,x, and the final add's
+        // operands swap to `fadds f0, f13, f0`.  So the shape is reachable and
+        // the image's SCHEDULE is not; every spelling that produces the extra
+        // instruction pays 1.4 points for it.
+        // REFUTED, do not land (a scoring artifact, measured here):
+        // `float dot = 0.0f * worldPos.y + 0.0f * worldPos.x;` as ONE
+        // statement, with the third term unchanged, reads canonical 98.86014 /
+        // fuzzy 98.68532 -- HIGHER than the current 98.60140 -- while the
+        // object has 142 instructions to the image's 143 and the opcode
+        // multiset is short exactly one `fmuls`.  /fp:fast factors the two
+        // zero-weighted products into (x+y)*0 and contracts to
+        // `fadds f13,f12,f13 / fmadds f0,f13,f31,f0`, i.e. it deletes the
+        // image's fmuls and changes where the accumulate happens.  objdiff
+        // pays for the move as a cheap `replace` instead of a delete+insert
+        // pair, so the graded number rises while the instruction stream moves
+        // further from the image (137/144 equal, against 142/144 here).
+        // Same score from `x*y` order swaps and from `worldPos.y * 0.0f`
+        // spellings; `-(dot + z + planeD)` inside the Set call is 94.25.
         MILO_ASSERT(GetGfxMode() == kOldGfx, 0x2E7);
         Transform tf40;
         Transpose(xfm, tf40);
