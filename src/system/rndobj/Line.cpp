@@ -436,6 +436,34 @@ inline void Subtract(const Vector3 &v, const Vector2 &d, Vector3 &dst) {
 // keeps its hand-written spelling.  Remaining: the image reloads dir.x for
 // the length and dir.y for the scale (82678B18 area), we reload dir.y for
 // the length and dir.x for the scale; plus the cap register cascade.
+//
+// w29-d (2026-11-02): 82.58741 canonical / 79.33566 fuzzy.  Re-measured the
+// w21-c sentence above rather than trusting it -- binding the three viewPos
+// components to locals is still load-bearing (dropping them to direct member
+// reads costs 5.0 canonical), and the NormalizeDir call is still the best
+// spelling.  The row is NOT closeable by spelling and this is the measurement
+// that says so: 120 equal / 135 diff_arg / 21 insert / 24 delete / 7 replace,
+// body target 286 vs base 283 (ours is 3 SHORTER, so no section-14 artifact).
+// Every one of those 187 rows is placement:
+//   * the FPR file rotates f8..f13 through the cap/body writes as one block;
+//     the image and we hand the same values to different registers throughout
+//     idx 173-301, in runs of 8+ rows, and `addi r7, r11, 0x4` vs `0x8`
+//     (idx 204/205) is that same rotation hitting two output pointers.
+//   * `fsubs f11, f10, f11` vs `fsubs f11, f11, f10` (idx 324) is REAL but
+//     benign: traced end to end, both sides compute viewPos.y - side.y; the
+//     objdiff pairing simply swapped which operand register it calls first.
+//   * the length stage differs by one forwarding decision: the image squares
+//     dir.y from the register and RELOADS dir.x (idx 133 `lfs f13, 0x38(r7)`
+//     after its own `stfs`), we forward both.  That is c2's store-forwarding
+//     choice on an in-place NormalizeDir, and the dead `fmr f13, f12` the
+//     image emits just before the reload (idx 132) is the tell that its
+//     `in.y` binding was copied and then discarded -- no source statement
+//     produces a copy whose only purpose is to be overwritten.
+// Hypothesis for the remaining rows: regasg first-fit over the sched3 order,
+// re-keyed by the dir1/proj2 forwarding difference above.  No source handle
+// in the one spelling tried this round: reading viewPos1.x/.y/.z straight
+// from the struct instead of binding them to locals costs 5.0 canonical
+// (82.58741 -> 77.58741), which re-confirms w21-c's locals are load-bearing.
 void RndLine::UpdateLinePair(RndLine::Point *pt1, RndLine::Point *pt2) {
     VertsMap vmap;
     MapVerts((pt1 - &mPoints[0]), vmap);
