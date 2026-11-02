@@ -2640,7 +2640,19 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         // at 0x82630048, `addi r9, r1, 0x50` at 0x826300C0) stop being hoisted.
         // RESIDUAL (97.33): our eight stw's still land before the StartSize
         // store, the image's after DeltaSize.x (0x82630184-0x826301A4), and
-        // ~25 f11/f13-class register-colouring rows in the top block.  Also
+        // ~25 f11/f13-class register-colouring rows in the top block.
+        // w26-y: the four "offset" rows the diff reports at idx 592-610
+        // (0x160-0x16c vs 0x170-0x17c) are NOT a wrong member -- both sides
+        // store box1 to 0x160..0x16c and box2 to 0x170..0x17c, and the row
+        // alignment slips only because the image sinks the box1 group below
+        // the StartSize stores.  Likewise idx 581/583 (`lfs ... 0x1a0` vs
+        // `0x1a4`) is which register holds StartSize.x, not which field.
+        // The six COMMUTATIVE_OP_ORDER rows are `fmuls f31, f12` vs
+        // `fmuls f12, f31`: the image puts the `scale` param first and the
+        // StartSize/DeltaSize/Speed memory leaf second, i.e. the memory leaf's
+        // §8.7 key must fall BELOW the param's 0x10000|sid<<5 (scale is sid 2).
+        // §8.8's base rebinding raises a memory leaf's key, so it moves this
+        // the wrong way.  Also
         // inert: `Vector2` temporaries instead of the four floats (+1 equal
         // row, same canonical), Scale(vb, k, vb) for the `vb *=`, and moving
         // the box Scale() calls above the vb work (90.3).  `*=` on the members

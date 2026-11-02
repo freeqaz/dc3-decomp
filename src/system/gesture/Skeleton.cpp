@@ -547,6 +547,16 @@ bool Skeleton::NeedIdentify() const {
 // The three MakeString rows in the Function Call Diff are ICF folds (the assert
 // format strings), not wrong callees.  Control flow is faithful: the `beq` at
 // 0x82436B24 goes to Init() and the `bne` two instructions later returns.
+// w26-y: behaviour re-read value by value against the image and unchanged --
+// dispatch, Reset's (-1, false), mElapsedMs, the five mHipCenter/Tracking words,
+// the EnrollmentIndex test and SetEnrollmentIndex(mClippedFlags), the
+// MakeCameraToPlayerXfm and BoneLength loops, the clip-plane z,w,x,y reorder
+// (an alignment artifact of the same cascade, the same four words land in the
+// same four slots) and the kNumJoints copy.  On the MakeString rows: all the
+// involved instantiations ARE in one ICF group in icf_aliases.map
+// (0x824d1870), yet name_check charges these three and scores the identical
+// construction in Skeleton::RequestIdentity EQUAL -- so part of this row's
+// residual is a measurement asymmetry in the ICF aliasing, not source.
 void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
     MILO_ASSERT((0) <= (skel_idx) && (skel_idx) < (6), 0x1F8);
     if (mSkeletonIdx != skel_idx && TheGestureMgr) {

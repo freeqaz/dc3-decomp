@@ -566,23 +566,24 @@ void RndAmbientOcclusion::TransformNormal(
     Normalize(vin, vtmp);
     Hmx::Matrix3 mtmp;
     Invert(min, mtmp);
-    // Declaration order z,x,y is the ONLY one of the four that reproduces the
+    // Declaration order z,x,y is the only one of the six that reproduces the
     // image's 46-instruction shape; every other order gains two instructions
-    // (a duplicated `lfs`/`fmuls` pair) and loses ~6pp:
+    // (a duplicated `lfs`/`fmuls` pair) and reads 91.1-91.2:
     //   z,x,y  97.30  46 instr  <- this
-    //   y,z,x  91.2   48 instr
-    //   y,x,z  91.2   48 instr
-    //   x,y,z  91.1   48 instr
-    // `Dot(mtmp.y, vtmp)` (operand swap) is inert -- byte-identical to
-    // `Dot(vtmp, mtmp.y)`.  Writing vout.y out by hand as
-    // `mtmp.y.x*vtmp.x + vtmp.y*mtmp.y.y + vtmp.z*mtmp.y.z` to force the
-    // image's x,y,z association reads 91.0: /fp:fast picks the association
-    // per Dot() CALL SITE, and spelling the arithmetic inline takes that
-    // decision away from it rather than steering it.
-    // Residual at 97.30: 15 diff_arg rows that are register-permutation only
-    // (f7<->f9, f0<->f13) plus one 2-row scheduling swap -- the image issues
-    // `mr r3, r30` (vout for the trailing Normalize) one slot later, after an
-    // fmuls.  Backend scheduling, no source lever left.
+    //   z,y,x 91.07,  x,z,y 91.07,  x,y,z 91.07,  y,z,x 91.20,  y,x,z 91.20
+    // Residual at 97.30 (w26-y: 29 spellings measured): 15 diff_arg rows and
+    // one 2-row scheduling swap, and they follow from ONE tree difference.
+    // `Dot(a,b)` parses left-to-right, ((a.x*b.x) + a.y*b.y) + a.z*b.z; c2 may
+    // reassociate that to a.x*b.x + (a.y*b.y + a.z*b.z) before contraction, and
+    // it decides PER CALL SITE.  The image reassociates x but not y or z (its y
+    // row starts from mtmp.y.x, its z row from mtmp.z.x); we reassociate x and
+    // y, so only y's fmuls/fmadds split and its f9/f11 accumulator differ, and
+    // the rest of the register permutation plus the `mr r3, r30` hoist follow
+    // from it.  Measured inert: all six declaration+term orders (above), all
+    // six assignment orders under z,x,y declarations, the operand swap
+    // Dot(mtmp.y, vtmp) (byte-identical), and binding mtmp.y to a reference or
+    // a by-value Vector3 (86-91).  Inline arithmetic reads 91.0: it takes the
+    // association decision away from c2 rather than steering it.
     // Compute dot products with inverted matrix rows
     float z = Dot(vtmp, mtmp.z);
     float x = Dot(vtmp, mtmp.x);
@@ -1016,7 +1017,14 @@ void RndAmbientOcclusion::CalculateAOAtPoint(
             // (val + 1.0) * 0.5 survives a statement boundary and a named
             // constant, so it is not a front-end rewrite of one expression.
             float val = Clamp(-1.0f, 1.0f, (float)shAccum[k]);
-            shAccum[k] = val * 0.5 + 0.5;
+            // w26-y: naming the product as a double is what lets c2 contract
+            // `scaled + 0.5` into the image's single `fmadd f0, f0, f12, f12`
+            // (f12 = double 0.5).  Written as one expression, `val * 0.5 + 0.5`
+            // is rewritten by c1 to `(val + 1.0) * 0.5` before contraction, which
+            // costs a second `lfd` of double 1.0, an extra `fmul`, and shifts the
+            // volatile FPRs f9/f10/f11 across the whole k loop.
+            double scaled = (double)val * 0.5;
+            shAccum[k] = scaled + 0.5;
         }
     }
 

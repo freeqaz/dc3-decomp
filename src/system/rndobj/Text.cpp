@@ -876,7 +876,22 @@ struct WrapPoint {
  *
  *  Remaining named rows beyond the relabelling: 6 OFFSET_SWAPs dominated by
  *  (0x0,0xc) x2, 5 address relocations, and the idx 536 slwi whose operand is
- *  r9 in the image and r11 for us (same value, different producer). */
+ *  r9 in the image and r11 for us (same value, different producer).
+ *
+ *  w26-y: the cascade starts at instruction 6 -- `this` is r30 in the image and
+ *  r27 for us -- while the save sets are IDENTICAL on both sides
+ *  (`__savegprlr_14`, `__savefpr_23`, frame 0x1d0).  So this is a colouring
+ *  ORDER difference (§8.4 priority/tie), not a liveness one: it is not a missing
+ *  value held across calls, it is which candidate COLOR popped first.  `this` is
+ *  the highest-ref candidate here, so the pressure term from some other
+ *  candidate must differ; `_ref0`/`_ref1` (below) are the two §8.8 base
+ *  bindings already in place, and the reference form that is INERT for
+ *  `mFontMaps` shows the lever does not extend to every member.  Behaviour
+ *  re-read value by value against the image and unchanged.  All NINE bl rows
+ *  that display different callee names are ICF folds, not wrong callees: 3
+ *  `vector<Line>::erase` rows against `vector<VFilterInputFrame>::erase` and 6
+ *  assert `MakeString` instantiations against the group representative.
+ *  objdiff reports no Function Call Diff for this row at all. */
 void RndText::WrapText(
     const unsigned short *wideChars, int wLen, float *charWidths,
     HX_VECTOR(Line) &lines, Hmx::Rect &bounds, float scale
