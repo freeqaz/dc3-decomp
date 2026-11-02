@@ -778,6 +778,14 @@ void RndFont::SetCharInfo(CharInfo *info, RndBitmap &bmap, const Vector2 &pos, i
         info->charWidth = 1.0f;
         info->mU = pos.x / (float)width;
     } else {
+        // w26-z (2026-11-02): declaration order is measured inert on this row.
+        // `int col;` declared before the bounds, `left/right` ahead of
+        // `top/bottom`, and `top/bottom` ahead of `left/right` are all exactly
+        // 95.600. The residual is the nonvolatile-GPR priority order (image:
+        // cursor > left > right > info > this > bmap > top > bottom > pos;
+        // ours: left > right > cursor > info > top > bottom > this > pos >
+        // bmap), i.e. priority = refs-in-block x local pressure, together with
+        // the stack-slot shaping of the two cross-jumped tails.
         int left = (int)pos.x;
         int top = (int)pos.y;
         int right = (int)(mCellSize.x + pos.x);
