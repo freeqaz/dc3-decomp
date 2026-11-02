@@ -2003,6 +2003,31 @@ void MakeNormals(RndMesh *m) {
     m->Sync(0x1F);
 }
 
+// 52-row residual (99.03636 canonical / 98.4808 fuzzy) is four mechanisms:
+//   * 39 rows of FPR permutation, dominated by f0<->f12 (13) and f0<->f13 (10);
+//   * 7 offset swaps, (0x14,0x18) x2 -- the y/z component pairs of the two
+//     Vector3 temps;
+//   * 4 commutative operand-order rows (fmadds at idx 80, fmuls/fmsubs at
+//     297/298, fadds at 368/373). The cqlo3 dump shows their operands as
+//     folded single-use loads, i.e. M6{0102xxxx} subexpression-class, whose
+//     key is the defining tuple's own (SU<<24|nodes<<16|hash) -- so they are
+//     not keyed on a base at all and C2RS-BRIDGE 8.8's base rebinding has no
+//     lever arm here;
+//   * 10 rows of the image's two-address multiply (`mr r9,r7 / mulli r9,r9,0x60`
+//     where we emit `mulli r9,r7,0x60` directly).
+// w26-q measured ~45 variants on this row. The 8.8 base rebinding
+// (`RndMesh::Vert &vert = m->Verts()[i]` feeding `vert.norm` and
+// `&vert.tangent`, and the pTangent-only half of it) is canonical-inert at
+// 99.0364 and costs 0.02-0.06 fuzzy. Naming the six d1/d2 components, or the
+// six cross-product products, as float locals takes them from the
+// subexpression class to variable leaves and REGRESSES to 97.58/98.23 --
+// which confirms the class change happens, just not toward the image's order.
+// Naming the acos dot as `double`, splitting the handedness `w` into `wDot`,
+// binding `angle` through `const float &`, and rewriting the three
+// `pTangent->k += ft.k` statements as `ft.k + pTangent->k` are all inert.
+// Open handle: which pass renames the y/z field symbols in the cross-product
+// loads (see the w25-mc note inside the loop) -- that, not a base, is what
+// would move these keys.
 void ResetNormals(RndMesh *m) {
     if (!m || m->GetGeomOwner() != m || m->Verts().size() == 0)
         return;
