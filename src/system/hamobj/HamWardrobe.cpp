@@ -598,6 +598,15 @@ DataNode HamWardrobe::OnSetVenue(DataArray *a) {
     // `{}` block, `Symbol(TheGameData->Venue()).Str()`, and
     // `SetDir(a->Obj<ObjectDir>(2))` with no `dir` local. Named `Symbol venue`
     // re-measured: venue 0x64, flag/line pool 0x68, worldPath still +8 (98.4 raw).
+    // w26-e: both named-Symbol readings re-measured in a splice harness --
+    // `Symbol venue = TheGameData->Venue(); const char *venueName =
+    // venue.Str();` and the `Symbol venue(...)` ctor form each compile to 159
+    // instructions against the image's 138 (the out-of-line Symbol copy
+    // constructor), so the image's `lwz r20, 0x64(r31)` is an in-place
+    // temporary re-read, NOT a named local.  The open item is a c1 frame-slot
+    // one: the image lets the Venue temp reuse the exception-state cell at
+    // 0x64; our front end gives it its own cell at 0x68 and every later cell
+    // shifts by 4 or 8.
     const char *venueName = TheGameData->Venue().Str();
     if (venueName == gNullStr && TheWorld) {
         String worldPath(TheWorld->GetPathName());

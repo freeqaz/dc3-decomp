@@ -62,6 +62,27 @@ void ThreeDSoundManager::Poll() {
     // ours TheDebug, string, kMax (kMax r24, string r25); 7 name_check rows, 4
     // normalized, same MakeString(fmt, kMax) call. A function-local or
     // non-static kMaxLoopingSounds is inert.
+    // w26-e, read through the c2rs taps (sections 8.4/8.6).  C = 7 code-band
+    // mints, F = 19 frees (19 CDEMOTE, 19 `CFREE ... ben`), so C <= F: the code
+    // band recycles the free list LIFO with descending ids and the tie-0 POP
+    // ORDER EQUALS THE MINT ORDER.  That is why the section 8.4 free-count lever
+    // does not apply here -- it needs C > F, i.e. 13 fewer demotions in this
+    // body.  The two orders, read off the register the three pops received
+    // (first pop takes r25, then r24, then r23):
+    //   image   mint/pop order  &kMax, format string, &TheDebug
+    //   ours    mint/pop order  format string, &kMax, &TheDebug
+    // i.e. the image materialises the kMax address BEFORE the format literal,
+    // and the source lever would be whatever makes sched1 reach that first.
+    // Measured inert on the row set (tgtcmp, `bl` displacements excluded):
+    // commuting the `loopCount == kMaxLoopingSounds` test and turning it into
+    // `>=`; naming the value (`float maxSounds = kMaxLoopingSounds;`) explodes
+    // the body (93 rows).
+    // Second, independent cause: the image's constant is an ANONYMOUS 4-byte
+    // .rdata dword -- lbl_820EE69C, `.4byte 0x00000064` -- while our
+    // `static const int kMaxLoopingSounds` is a NAMED symbol, so two rows are
+    // charged on the reloc NAME whatever the order does.  Matching those needs
+    // a name in config/373307D9/symbols.txt for an object the original left
+    // unnamed, which is the wrong direction.
     RndTransformable *listener;
     if (mListener.Ptr())
         listener = mListener.Ptr();

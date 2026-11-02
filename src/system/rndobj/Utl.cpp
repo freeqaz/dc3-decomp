@@ -833,31 +833,32 @@ void SortXfms(RndMultiMesh *mesh, const Vector3 &vec) {
     mesh->InvalidateProxies();
 }
 
-// FLOOR 99.931 canonical / 97.690 raw (w8-h).  The residual is six FPR
-// permutations (f0/f10/f13) plus the r4-side 0x38/0x3c load order.  MEASURED
-// NEGATIVE: re-associating mesh2's sum to mirror mesh1's -- `y*y + (z*z + x*x)`,
-// which reproduces the image's fmuls-then-two-fmadds accumulation shape on paper
-// -- reads 99.931 canonical but 94.4 raw, i.e. it ADDS an OFFSET_SWAP of
-// (0x34,0x3c) and four register swaps.  Under /fp:fast MSVC re-associates the
-// flat sum itself, so the parenthesisation below is not what selects the order.
-// RESIDUAL (w9-f, 99.93104 canonical / 97.69 fuzzy, 116 B): 8 rows of 29.  Six
-// are FPR renames; the two that cost canonical are an OFFSET SWAP at idx 5/10 --
-// the image loads mesh2.v.z (0x3c) at 8262E44C and mesh2.v.y (0x38) at 8262E460,
-// we load them the other way round.  The ASSOCIATION is already right: reading
-// the fmadds chain at 8262E480-8262E494, the image computes mesh1 as
-// y + (x + z) and mesh2 as y + (z + x), which is what is written below.
-// REFUTED (w9-f): re-spelling the mesh2 sum as `y + (z + x)` to move the load
-// order -- i.e. hoisting the y term to the front and parenthesising (z + x),
-// which is literally the image's shape -- makes it WORSE, not better: 8 rows ->
-// 13, raw 97.17 -> 94.4, and the offset swap merely moves from (0x38,0x3c) to
-// (0x34,0x3c).  The two loads are independent and MSVC orders them itself.
+// w26-e (was 99.931 canonical / 97.69 fuzzy): the written term order is a
+// SCHEDULING handle, not arithmetic.  Both sides emit an fmuls + two fmadds
+// chain for every spelling tried -- /fp:fast re-associates on its own -- so
+// what the order selects is the sequence in which the six independent `lfs`
+// reach sched3/sched0, and with it their registers.
+// A 144-variant sweep ({all 6 term orders} x {flat, grouped} on each side)
+// found exactly two spellings that reproduce the image's r4-side load sequence
+// (0x34 x, then 0x3c z, then 0x38 y): mesh1 flat y,z,x and mesh2 grouped
+// y + (x + z).  Runner-up is 21/29 instruction-text rows (the old spelling).
+// TRADE, stated plainly: this spelling matches the load sequence and reaches
+// 100.0 canonical, but its mesh1 accumulation groups as x + (y + z) where the
+// image has y + (x + z) -- same three squares, same fast-math contract, a
+// different rounding order.  The old spelling had the image's grouping and
+// instead carried an OFFSET_SWAP of (0x38,0x3c); no spelling in the sweep gave
+// both.  Residual now: the f9/f10 pair only.  The image's sched3 defines
+// mesh2.z before mesh1.y, ours the other way, so regasg's first-fit (c2rs
+// section 8.2: pure first-fit over the sched3 def order, sched0 runs after)
+// hands them the opposite registers while the emitted load order is already
+// identical.
 bool XfmSort(RndMultiMesh::Instance &mesh1, RndMultiMesh::Instance &mesh2) {
     return (mesh1.mXfm.v.y - gUtlXfms.y) * (mesh1.mXfm.v.y - gUtlXfms.y)
-            + ((mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)
-               + (mesh1.mXfm.v.z - gUtlXfms.z) * (mesh1.mXfm.v.z - gUtlXfms.z))
-        < (mesh2.mXfm.v.z - gUtlXfms.z) * (mesh2.mXfm.v.z - gUtlXfms.z)
-            + (mesh2.mXfm.v.x - gUtlXfms.x) * (mesh2.mXfm.v.x - gUtlXfms.x)
-            + (mesh2.mXfm.v.y - gUtlXfms.y) * (mesh2.mXfm.v.y - gUtlXfms.y);
+            + (mesh1.mXfm.v.z - gUtlXfms.z) * (mesh1.mXfm.v.z - gUtlXfms.z)
+            + (mesh1.mXfm.v.x - gUtlXfms.x) * (mesh1.mXfm.v.x - gUtlXfms.x)
+        < (mesh2.mXfm.v.y - gUtlXfms.y) * (mesh2.mXfm.v.y - gUtlXfms.y)
+            + ((mesh2.mXfm.v.x - gUtlXfms.x) * (mesh2.mXfm.v.x - gUtlXfms.x)
+               + (mesh2.mXfm.v.z - gUtlXfms.z) * (mesh2.mXfm.v.z - gUtlXfms.z));
 }
 
 void DistributeXfms(RndMultiMesh *mm, int i, float f) {
