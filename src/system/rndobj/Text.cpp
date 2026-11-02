@@ -2822,9 +2822,18 @@ void RndText::SizeCheck() {
                 RndMesh *mesh = (*it)->Mesh(i);
                 if (mesh != nullptr) {
                     float screenHeight;
-                    if (!CalcScreenHeight(
-                            ss.mSize * font->AspectRatio(), mesh, screenHeight
-                        )) {
+                    // w26-t: naming the aspect ratio and then the product each
+                    // move one step of this call's argument setup.  With the
+                    // product written inline, c2 materialises the `mesh` copy
+                    // one slot BEFORE the `&screenHeight` address; the image
+                    // does the address first.  Naming the product gives it a
+                    // variable leaf instead of a folded subexpression, which
+                    // both reorders the two argument registers (image: addi r5,
+                    // mr r4) and drops the `fmuls f0,f1` / `fmuls f1,f0`
+                    // operand swap.  140/140 instruction text.
+                    float aspect = font->AspectRatio();
+                    float aspectScale = ss.mSize * aspect;
+                    if (!CalcScreenHeight(aspectScale, mesh, screenHeight)) {
                         return;
                     }
                     float fontSize = font->FontUnit() * font->AspectRatio();
