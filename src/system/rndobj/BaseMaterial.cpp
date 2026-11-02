@@ -243,6 +243,26 @@ const DataNode *BaseMaterial::GetDefaultPropVal(Symbol s) {
 // Inert: moving the MILO_ASSERT inside the `if (!base)` arm.  A ternary
 // `base ? base : gDefaultMat` gets the cr6 compare but un-threads the first
 // branch (86.6).
+// w26-s: the CR field follows the SYMBOL the condition names, not the spelling
+// of the condition. `MILO_ASSERT(gDefaultMat, 0x133)` inside the if arm emits
+// the image's `cmplwi cr6` (99.90, exactly one row left: its MakeString cond
+// string is "gDefaultMat" where the image's is "base"); every form that keeps
+// the message "base" emits cr0.  Also INERT (98.82): `base != 0`,
+// `base != nullptr`, `NULL != base`, `!!base`, a named `baseOk`,
+// `if (base == 0)`, an `if (base) {} else {}` arm, and the assignment spelled
+// through a cast (`(BaseMaterial *)`, `static_cast`), a double deref
+// `*(&gDefaultMat)` or a `BaseMaterial *const *` slot.
+// The obvious reconstruction -- bind the arm's value to a local NAMED `base`
+// so the message stringifies correctly -- was measured and does NOT work:
+// `BaseMaterial *base = baseIn;` (parameter renamed) with the assert on the
+// local gives 96.86, because c1 does not coalesce that copy; declaring the
+// local uninitialised and filling it in the arms gives 95.88 (assert in the
+// null arm) / 86.67 (assert after the join); and binding the global to a
+// throwaway local before `base = fallback` is BYTE-IDENTICAL to the current
+// form, i.e. the copy folds and the assert still tests the variable -> cr0.
+// So the cr6 only survives while the condition IS the global's own load node,
+// and any binding through a variable collapses it.  Open question: which
+// source construct keeps the load node while `#cond` still reads "base".
 bool BaseMaterial::PropValDifferent(Symbol s, BaseMaterial *base) {
     if (!base) {
         base = gDefaultMat;
