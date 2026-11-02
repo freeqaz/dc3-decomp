@@ -2658,6 +2658,20 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         // the box Scale() calls above the vb work (90.3).  `*=` on the members
         // through a friend declaration is refuted outright (89.8): it emits an
         // `addi r11, r3, <member>` per Vector2 that the image lacks.
+        //
+        // w27-c (2026-11-02): the 48 residual rows are a PERMUTATION, proven
+        // rather than assumed.  With every register name replaced by a
+        // placeholder and every branch target masked, the two instruction
+        // multisets are IDENTICAL -- 732 instructions, 257 distinct, zero
+        // unmatched entries on either side.  So the whole of rows 480-613 is
+        // the same computation in a different order and different registers:
+        // there is no wrong member, no missing call and no wrong constant left
+        // in this branch.  The six commutative rows cannot be flipped from the
+        // source for the reason above (the leaf's §8.7 key has to fall below
+        // the param's 0x10040 and nothing in the expression language lowers
+        // it), and the box1/box2 store sinking is the list scheduler's, since
+        // SetBoxExtent is already first in the source and moving it later was
+        // measured at 90.5-92.1 by w7-bx.
         Vector3 box1, box2;
         Scale(partsys->BoxExtent1(), scale, box1);
         Scale(partsys->BoxExtent2(), scale, box2);
