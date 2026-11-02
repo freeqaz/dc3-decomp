@@ -1074,6 +1074,17 @@ static inline unsigned short FaceVert(const RndMesh::Face &face, int i) {
     return (&face.v1)[i];
 }
 
+// w27-h stop note (96.10052 canonical / 94.24637 fuzzy).  The 8 inserts and 8
+// deletes pair up one-for-one and every one of them is ORDER, not content: the
+// two `addi r3/r4, r31, 0x90` that we issue at 41-42 are the same two the image
+// issues at 131-132 (one Normalize argument pair, materialised earlier here);
+// the image's `lfs f8, 0x10(r9)` + `fadds` at 127/129 reappear in ours a slot
+// earlier; the rest are the fadds of the face centre and the `mulli r, r, 0x60`
+// face-stride multiplies sliding one slot against the loads.  Same operands,
+// same stores, same calls.  The other 128 diff_arg rows are one large
+// nonvolatile-GPR cascade (r23..r27) plus a uniform stack-frame shift; the
+// two accessor-CSE facts recorded below are still the upstream cause.  Left at
+// its measured number rather than moved with invented code.
 void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     const Transform &xfm = mesh->WorldXfm();
 

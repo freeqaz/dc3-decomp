@@ -71,11 +71,26 @@ void CursorPanel::Poll() {
         } else {
             pMat = LoadedDir()->Find<RndMat>("depth_buffer_right_crown.mat");
         }
+        // w27-h: the choice is spelled through its own named local.  Same values
+        // and same branch as `if (!tex) tex = pBufferLeftTex;`, but the extra
+        // nonvolatile pointer changes c2's free list by one, which is the 8.4
+        // free-count lever: measured 95.89963 -> 96.04833 fuzzy, canonical
+        // 96.56877 unchanged.  The row's remaining difference is a colour
+        // decision, not a value: the tap gives `this` (sym 4/k05) pri -18 tie 9
+        // and colours it last as split1#134 into the only register left (r29),
+        // so we home-store it to 0x1a4(r31) and reload it at the top of the loop,
+        // while the image pops it first into r14 and spends its one frame word
+        // on the ui_crown_player Symbol instead.  Named re-bindings of
+        // LoadedDir()/pBufferLeftTex/pMat and an extra DataNode or Skeleton
+        // pointer were all measured inert (96.04833 at best).
         RndTex *tex = TheRockCentral.GetMiscArt();
-        if (!tex) {
-            tex = pBufferLeftTex;
+        RndTex *useTex;
+        if (tex) {
+            useTex = tex;
+        } else {
+            useTex = pBufferLeftTex;
         }
-        pMat->SetDiffuseTex(tex);
+        pMat->SetDiffuseTex(useTex);
 
         Transform trans = pMat->TexXfm();
         int skeletonID = TheGestureMgr->GetPlayerSkeletonID(i);
