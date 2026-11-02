@@ -418,6 +418,15 @@ void HamRibbon::ConstructMesh() {
         // (int)(short) casts, a named texX.  Remaining: the face-loop store/
         // trap scheduling above, the vert-loop fcfid/extsh placement, and
         // the norm/boneWeights copy word order (image 4,8,0,c).
+        // w26-r2: no behaviour bug.  The two divide traps are in the same order
+        // on both sides (twllei r11,0x0 before twi 5,rX,-0x1); the diff renders
+        // them as insert/replace only because the surrounding adds are
+        // scheduled differently, and the memory-access multiset over the whole
+        // function is identical (no target-only or base-only entry).  Oracle
+        // verdict: EQUIVALENT (unicorn harness 4).  No variants were spent --
+        // w7-ba and w21-t already measured the declaration order, the Face
+        // field assignments, the RndRibbon spelling and the short/cast forms,
+        // and the residual is 73 rows across 33 clusters of store scheduling.
         for (int seg = 0; seg < mNumSegments; seg++) {
             int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {

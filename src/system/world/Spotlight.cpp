@@ -1914,6 +1914,25 @@ void Spotlight::BuildNGQuad(BeamDef &def, RndTransformable::Constraint constrain
     // w20-p: branch-landing rows 207/224 re-adjudicated value by value --
     // ARTIFACT (shared [2] store tail in the image, loop-top base+n in ours);
     // all six halfwords per quad carry the same values on both arms.
+    // w26-r2 read the image at instruction level (8282D150..8282D1AC) and
+    // that verdict holds.  The if-arm (8282D150) writes face0's three indices
+    // and TWO of face1's, then jumps to 8282D1A8; the else-arm (8282D180)
+    // writes face0's three and face1's outer two and falls through to the SAME
+    // 8282D1A8.  The shared instruction is `sth r30, 0x2(r11)` -- face1's
+    // middle index -- and r30 holds uPrev on the if-arm (8282D158 clrlwi of
+    // base-1) and base on the else-arm (8282D188 clrlwi of r11), exactly the
+    // two values the two Set() calls put there.  So the image runs 6+5 stores
+    // and ours 6+6 with identical values: a CSE of the common store, not a
+    // missing one.  That is the 35-row cluster at diff row 180.
+    //
+    // w26-r2 also re-measured the vertex-loop row: the -1.0f element is not
+    // hideable from source.  `float negOne = -1.0f;` before the Set and
+    // `float negOne = -(float)1.0f;` both compile to byte-identical code
+    // (90.62241, unchanged); building the positive matrix and negating one
+    // element is 89.19, and two non-const locals (`zero - one`) is 88.95.
+    // The image's `fmadds f4, f4, f9, f1` at 8282F80 multiplies by a register
+    // because the literal's live range is spilt by a wider one, not because
+    // the literal is spelled differently.
     int iFace = 0;
     for (int row = 0; row < nMinus1; row++) {
         for (int col = 0; col < nMinus1; col++) {

@@ -667,6 +667,12 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
             // short range, which Load would have to read from a corrupt file.
             // So the short is a matching artifact, not a behaviour bug.  Re-measured: `int comp` with q0/q1/sv0/sv1 hoisted
             // to function scope is 82.2 (frame 0xb0), the same as w7-by's.
+            // w26-r2 measured the NARROW spelling too, since this arm has no
+            // q0/q1/sv0/sv1 in scope: `int comp` here alone is 82.19492 --
+            // the frame repacks to 0xb0 anyway, so no narrower form recovers
+            // it.  `unsigned short comp` is 91.72034.  The two `extsh` are
+            // the entire cost of the short.  Oracle verdict: EQUIVALENT
+            // (unicorn harness 4, high confidence).
             short comp = mCompression;
             if (byteOffset >= mOffsets[TYPE_QUAT]) {
                 if (comp >= kCompressQuats) {
@@ -721,6 +727,19 @@ void CharBonesSamples::EvaluateChannel(void *dest, int byteOffset, int sample, f
                 out[3] = q0.w + (q1.w - q0.w) * frac;
             quat_done:;
             } else if (comp >= kCompressVects) {
+                // w26-r2: the residual here is the scheduler's ordering of the
+                // two fully inlined ShortVector3::ToVector3 bodies, not a
+                // source-order property.  The image interleaves the six
+                // component stores x,x,y,y,z,z (sv0.x at 0x60, sv1.x at 0xa0,
+                // sv0.y at 0x64, ...); ours emits sv0's three then sv1's.
+                // Ten spellings -- sv0/sv1 declared in either order, as one or
+                // two declarations, named pointer or reference bases, an
+                // explicit six-component Set, a named `out` for the Interp
+                // destination -- all compile BYTE-IDENTICALLY (92.47034
+                // unchanged); reversing the two calls drops to 90.53.  Both
+                // sides read the same six components and multiply each by
+                // 0.039674062f, store to the same six slots.  Oracle verdict:
+                // EQUIVALENT (unicorn harness 4, high confidence).
                 Vector3 sv0, sv1;
                 ((const ShortVector3 *)src)->ToVector3(sv0);
                 ((const ShortVector3 *)srcNext)->ToVector3(sv1);

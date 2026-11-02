@@ -385,6 +385,26 @@ void ReadFunc(BINKIO *bink, bool startRead) {
             // gives mData[0]'s chain `rldicl r9, r11, 48, 24` + `rldicr r9,
             // r9, 0, 31` whichever statement comes first, and naming the two
             // inputs under this order is 90.6 (worse).
+            //
+            // w26-r2 (behaviour): the loop is VALUE-IDENTICAL on both sides.
+            // Simulating the target's 56-instruction block and our 54
+            // instruction block over 500 random 64-bit inputs, with the free
+            // registers randomised, gives the correct 64-bit byte reversal in
+            // 500/500 cases on BOTH, and the output is invariant across 50
+            // different seed sets, so nothing is read uninitialised.  The
+            // memory-access multiset over the whole function is identical.
+            // The r29/r30 pair is `addi rX, r3, 0x80` (bf->pXTEADecrypter)
+            // against a hoisted zero; the image gives the address r30 and the
+            // zero r29, ours the reverse -- a callee-saved colour tie, and the
+            // prologue is otherwise identical (__savegprlr_24, frame 0xd0).
+            //
+            // w26-r2 (variants): `BINKIOFILE *const bf` is byte-identical
+            // (90.84762 unchanged).  Giving the loop a named `unsigned char
+            // *end` cursor instead of recomputing
+            // `(unsigned char *)bf->pBufBack + bytesRead` in the condition
+            // moves fuzzy UP by 0.98 (88.20 -> 89.18) but moves canonical DOWN
+            // by 0.10 (90.848 -> 90.752), so it is not a win and is not taken.
+            // There is no unicorn row for this function.
             XTEABlock *block = (XTEABlock *)bf->pBufBack;
             while (block < (XTEABlock *)((unsigned char *)bf->pBufBack + bytesRead)) {
                 block->mData[1] = EndianSwap(block->mData[1]);
