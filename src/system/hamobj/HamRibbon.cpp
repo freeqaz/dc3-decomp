@@ -427,6 +427,18 @@ void HamRibbon::ConstructMesh() {
         // w7-ba and w21-t already measured the declaration order, the Face
         // field assignments, the RndRibbon spelling and the short/cast forms,
         // and the residual is 73 rows across 33 clusters of store scheduling.
+        // w29-b (2026-11-02) re-derived, 90.96605 / fuzzy 90.25617: target 324
+        // instructions vs base 322, and with the branch destinations excluded
+        // the multiset delta is EXACTLY two rows -- one `addi rN,rN,0x6` (the
+        // +sizeof(Face) re-point of the second face, which the image material-
+        // ises as its own address and we fold into the `sth` displacements) and
+        // one `clrlwi rN,rN,16`.  So the image is two LONGER, not us: any gain
+        // from here has to add both back (bridge 14), and the remaining 73
+        // diff_arg rows are c2 store/trap scheduling around the two divide
+        // guards, which w7-ba/w21-t measured against declaration order, the
+        // Face field-assignment spelling, the RndRibbon v0..v3 form and the
+        // short/cast forms.  No source lever found for "materialise the
+        // incremented face pointer".
         for (int seg = 0; seg < mNumSegments; seg++) {
             int base = seg * mNumSides * 2;
             for (int side = 0; side < mNumSides; side++) {
