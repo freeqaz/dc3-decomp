@@ -297,6 +297,18 @@ void RndTexRenderer::DrawToTexture() {
             // multiply block itself comes out identical either way.  The
             // component order (y, x, z) is measured too -- x, y, z scores 1112
             // against this order's 1104.
+            //
+            // w26-o: the residual rows here are scheduler order, not content --
+            // the two insert/delete pairs at ~552..577 are the same three
+            // Vector3 copies (vertVectors[3] and the verts[3] pointer stores)
+            // emitted in the other order, and the pair at ~730 is one fmuls
+            // scheduled five slots early among independent stack loads; the
+            // last `fadds` (outZ + halfHeight) is a commutative order row.
+            // A `const float &halfHeight = mImpostorHeight / 2.0f` binding is
+            // byte-inert at the top of the block and costs 0.26 canonical at
+            // first use, so the CSE temp keeps its key over the named local
+            // (C2RS-BRIDGE 8.7: a temp leaf's sid<<6 beats a variable's sid<<5
+            // for the same sid).
             float negDist = -f34;
             float outY = tfc8.m.z.y * 0.0f;
             outY += tfc8.m.y.y * negDist;
