@@ -308,6 +308,18 @@ void RotateAboutZ(const Hmx::Matrix3 &min, float f, Hmx::Matrix3 &mout) {
 // that keep the image's association move fuzzy 89.42 -> 89.68 (the dot read
 // as a.x * b.x + ... through refs; the v2.y copy then matches) and leave
 // canonical at 90.31 -- not shipped.
+//
+// w29-a (2026-11-02): PERMUTATION CLASS -- the RESULT is equal, and the row is
+// not a spelling. Ours and the image are 62 instructions / 248 B on BOTH sides,
+// with an identical mnemonic census (b 1, ble 1, blr 1, fadds 1, fcmpu 1,
+// fdivs 2, fmadds 6, fmr 4, fmsubs 3, fmuls 12, fsqrts 2, lfd 3, lfs 10,
+// lis 4, stfd 3, stfs 8) and no diff_op row -- every remaining row is
+// diff_arg. Six further commutative operand-order spellings of the dot and the
+// length products compiled BYTE-IDENTICALLY (c2 canonicalises them --
+// C2RS-BRIDGE section 8.7), so that axis has no handle. Statement order does move
+// it and all of it is destructive: Cross after lenSq1 61.18, Cross after dot
+// 69.95, `const Vector3 &a = v1, &b = v2` ref-binding 49.02 (272 B).
+// Left as the scheduling/emission-order class.
 void MakeRotQuat(const Vector3 &v1, const Vector3 &v2, Hmx::Quat &q) {
     Vector3 vec;
     Cross(v1, v2, vec);
@@ -360,6 +372,16 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
 // (og-dc3 shape) 67.8; plain vin locals 26.2; neg locals with the products
 // inline 46.5; the reference-binding lever is inert (every component is
 // loaded once into a local).
+//
+// w29-a (2026-11-02): PERMUTATION CLASS -- the RESULT is equal, and the row is
+// not a spelling. 48 instructions / 192 B on BOTH sides, identical mnemonic
+// multiset, no diff_op row. The only two differences are the load order of
+// vin.x vs vin.y (the image reads viny at slot 11 and vinx at 13; we do vinx
+// then viny) and the slot the q.y load lands in -- i.e. whether the three
+// fmuls-by-vin run before or interleaved with the two fadds. Swapping the two
+// declarations is the one spelling that reaches it and it makes the REGISTERS
+// match the image (f3 = vinx, f5 = viny) without moving the loads: fuzzy fell
+// 85.73 -> 85.52. Emission order with no source handle; left as-is.
 void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
     float qw = q.w;
     float qx = q.x;

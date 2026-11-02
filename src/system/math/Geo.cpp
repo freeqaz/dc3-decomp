@@ -657,6 +657,15 @@ bool Intersect(const Triangle &tri, const Box &box) {
     return true;
 }
 
+// w29-a (2026-11-02): PERMUTATION CLASS -- the RESULT is equal. 108
+// instructions / 432 B on BOTH sides and no diff_op row; the mnemonic census
+// differs only in disassembler notation (`ble` vs `bf`, `subi` vs `addi`) and
+// branch-label forms. What is left is 3 COMMUTATIVE_OP_ORDER rows (idx 36, 57,
+// 68), 3 OFFSET_SWAP rows, and 4 insert / 4 delete in 4 clusters -- every
+// cluster a re-ordering of the SAME opcodes, i.e. the scheduler's order of the
+// nine fsubs and the commutative operand pairing. The previous lanes' stop
+// notes for idx 36-38 (commutative canonicalisation) and idx 47-58 (scheduler
+// order) name exactly these; nothing new to try. Left as-is.
 bool Intersect(const Segment &seg, const Triangle &tri, bool b, float &out) {
     float segDirY = seg.end.y - seg.start.y;
     float segDirX = seg.end.x - seg.start.x;
