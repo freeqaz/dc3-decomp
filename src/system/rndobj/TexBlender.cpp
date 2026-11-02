@@ -189,6 +189,21 @@ void RndTexBlender::DrawBlendList(
 // rather than a priority tie (hypothesis: c2 gave the pointer a home because
 // it spans two calls, and the image did not).  The rest of the rows are the
 // Rect/Color temporary slots covered by w18-a above.
+// w26-n3 confirmed the mechanism and found the lever, which CANNOT be landed as
+// written.  DrawShowing's 2 home stores come from the inlined DrawBlendList body
+// (`TheShaderMgr.GetWork()` -> SetVConstant -> SetTransform), and the manager is
+// already bound to `shaderMgr` for SetVConstant only.  Binding SetTransform too
+// (`shaderMgr.SetTransform(xfm)` below) moves DrawShowing 99.63126 -> 99.76479
+// canonical / 99.14568 -> 99.19575 fuzzy (per-object path; report.json reads
+// 99.68437 / 99.24431 for the same source) -- but it drops DrawBlendList's own
+// out-of-line symbol from 99.972374 to 98.53591 on the SAME ruler (it is 100.0
+// in report.json), because that spelling was chosen
+// for DrawBlendList's registers in the first place (see the note above).  One
+// source, two contexts: the inline copy wants the reference, the standalone
+// symbol wants the global.  Binding only the trailing SetVConstant is far worse
+// (97.80425), and binding the manager at the top for GetWork is worse (99.47344).
+// A landable fix would have to reach the inlined copy alone, which the source
+// cannot express here.
 void RndTexBlender::DrawShowing() {
     if (TheRnd.DrawMode() == Rnd::kDrawNormal
         && ((TheRnd.ProcCmds() & kProcessWorld) != 0 || TheRnd.ProcCmds() == 0)
