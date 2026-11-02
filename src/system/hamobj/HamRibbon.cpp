@@ -172,6 +172,23 @@ void HamRibbon::SetActive(bool active) {
 // Dot's x,y,z -- not shipped; w22-a21 ships the parenthesised z,x,y form
 // instead, see the dot below), and one commutative fmuls in the in-place
 // Multiply(smoothDir, inv) (an inline expansion costs 0.26).
+// w26-i (99.5 canonical, 28 rows across four groups, behaviour unchanged): the
+// three mechanisms are independent.  (a) idx 67-87, the search loop: the image
+// reloads `_M_start` from 0x8c(this) at the top of every iteration
+// (`lwz r8, 0x0(r31)`), so its index lands in r9 and the strength-reduced byte
+// offset in r10; ours keeps `_M_start` in r8 across the loop and the two come
+// out swapped.  That reload is a c2 rematerialisation, not a front-end CSE
+// difference: 15 loop spellings (break form, while, begin()[i],
+// (begin()+i)->frame, data()[i], a named vector reference, a named size, a
+// pointer cursor, one unified counter, post-increment in the step) all keep the
+// hoisted load, or change the block shape and lose (99.0-98.2).  (b) idx
+// 144-185: binding `Key<Transform> &last = mChaseKeys.back();` DOES reproduce
+// the image's dual-base addressing (w7-an), but rotates the loop: re-measured
+// this pass at 98.4 as a reference and 98.4 as a pointer, 96.5 when the
+// binding is refreshed each iteration.  (c) idx
+// 332-346: the two commutative products live inside Multiply(Vector3, Matrix3)
+// in math/Mtx.h (PCH-reached), and their order is decided by the post-lowering
+// cqlo3 sort (C2RS-BRIDGE 8.7), not by anything this file can express.
 void HamRibbon::UpdateChase() {
     if (!mFollowA) {
         return;
