@@ -891,7 +891,25 @@ struct WrapPoint {
  *  that display different callee names are ICF folds, not wrong callees: 3
  *  `vector<Line>::erase` rows against `vector<VFilterInputFrame>::erase` and 6
  *  assert `MakeString` instantiations against the group representative.
- *  objdiff reports no Function Call Diff for this row at all. */
+ *  objdiff reports no Function Call Diff for this row at all.
+ *
+ *  w27-d: multiset comparison (opcode + operand shape, registers and branch
+ *  targets normalised) over both listings.  The image carries exactly 6 more
+ *  instructions and all six are bookkeeping: 2 `mr`, 1 home store
+ *  `stw <r>, 0x78(r31)` (the `this + 0xa8` address homed before the emptiness
+ *  test -- the same store the note at the top of the body discusses), 1 `add`,
+ *  1 `mulli <r>, <r>, 0x18` (the wps stride) and 1 `lwz <r>, 0xc(<mem>)`.
+ *  Every call, branch and compare is present on both sides at the same
+ *  multiplicity, so this is a colouring/address-materialisation difference,
+ *  not a missing value.  That also means the 0x78 home is NOT reachable by
+ *  the `auto& _ref2 = mFontMaps;` spelling already refuted above: the store
+ *  is a c2 spill decision, not a reference-binding one.  Hypothesis for
+ *  whoever picks it up: the 0x78 slot is a spill of an address temp whose
+ *  live range the image splits across the `push_back`/`buildLines` block
+ *  (C2RS-BRIDGE §8.11 statement boundaries + §8.4 C-F pop order), and the
+ *  six extras are the rematerialisation that split forces.  Worth pairing
+ *  with the `this` = r30 vs r27 cascade above -- both are the same §8.4 tie-0
+ *  ordering decision. */
 void RndText::WrapText(
     const unsigned short *wideChars, int wLen, float *charWidths,
     HX_VECTOR(Line) &lines, Hmx::Rect &bounds, float scale
