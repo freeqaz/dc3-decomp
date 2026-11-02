@@ -439,6 +439,18 @@ void HollaBackMinigame::SetDefaultShot() {
     // `((HamDirector *)TheHamDirector)`, `TheHamDirector[0]`, a named venue
     // pointer, and hoisting `anim`'s declaration.  Open question: which IL shape
     // makes c2 keep the @h half symbolic instead of materialising the address.
+    // w28-a: the delta is exactly four `addi r30, r11, TheHamDirector@l` plus the
+    // `lwz 0(r30)` form at the GetVenueWorld site (census: surplus addi:4, lwz:1).
+    // MEASURED CAUSE -- they are PRE-inserted on the four arms because the TAIL's
+    // `TheHamDirector` needs an address at the merge point: replacing the tail
+    // with `RndPropAnim *anim = nullptr;` deletes all four and leaves the arms in
+    // the image's `lis @h` + `lwz @l(rN)` form (in a volatile register, since
+    // nothing then needs @h across the arms -- the image's r30 differs).  The
+    // image keeps the @h half in r30 across the arms and loads `@l(r30)` at the
+    // tail, so it needs no addi at all.  Splitting the tail at a statement
+    // boundary (`WorldDir *venue = TheHamDirector->GetVenueWorld();`) is
+    // byte-identical; a `HamDirector *dir` copy there is -0.5pp and at function
+    // scope -8.8pp.
     RndPropAnim *anim = TheHamDirector->GetVenueWorld()->Find<RndPropAnim>(
         "bid_start_character_faded_out.anim", true
     );

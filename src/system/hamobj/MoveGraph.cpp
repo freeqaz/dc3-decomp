@@ -294,6 +294,14 @@ bool MoveGraph::FindVariantPair(
         // hybrid that keeps the local reference but re-derives begin()/size().
         // An iterator-cursor loop is much worse (94.5).  Open question: what
         // makes c2 treat the vector's `_M_start` as call-clobbered here.
+        // w28-a (still 98.103): the residual census puts the whole structural
+        // delta at FOUR `lwz` -- the image re-reads `_M_start` at rows
+        // 145/157/184/196 and we CSE it -- plus four `bl _M_find` name rows.
+        // Those four are MASKED by icf_aliases.map (all four maps share the
+        // tree-search body; the split object can only name the survivor), so
+        // they are a fold artifact and cost no points, not a wrong callee.
+        // No value differs: nothing stores to the vector on either side and
+        // every exit lands on the same block.
         const std::vector<MoveVariant *> &variants = p1->Variants();
         if (variants.empty()) {
             return false;

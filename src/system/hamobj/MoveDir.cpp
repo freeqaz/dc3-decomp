@@ -251,6 +251,15 @@ String RecordClipName(const char *cc, int i2) {
     // mechanism: &cc is the one argument whose leaf is a parameter home rather
     // than a temp, so it is emitted in the parameter's prop order.  Re-measured
     // inert on the current tool: `(const char *)cc`, `(cc)`.
+    // w28-a (still 99.943): the residual census calls this row IDENTICAL
+    // (order=opcode-order), and the five rows are ONE ROTATION of the same five
+    // address computations.  The image emits r7,r6,r5,r4 then r9 (&cc); we emit
+    // r9 first and then r7..r4.  That is exactly the c2rs 12.3 first-store
+    // deferral performed by the image and not by us, and `&cc` is the only
+    // element of the run that is a parameter home rather than a MakeString
+    // stack temp, which is what makes it deferrable.  Reordering the
+    // `code`/`song`/`dancer` declarations is much worse (90-94), so the
+    // argument list itself, not the store order, is the local optimum.
     unsigned int code = dt.ToCode();
     Symbol song = TheGameData->GetSong();
     const String &dancer = TheGameData->Player(0)->CurrentDancer();
@@ -804,6 +813,21 @@ void MoveDir::Poll() {
             // lever) at function and at if-block scope, reference-binding
             // `TheMaster`, and naming the DeltaUISeconds result.  Worse: naming
             // the ternary predicate (-2.3pp).
+            // w28-a (same 50 rows, 6 more spellings; confirmed from the c2rs tap):
+            // the two loop-invariant addresses are the last two candidates popped
+            // and each is allowed only one register --
+            //   id 13 pri -54 tie 0 ben 3 ref 2 sym 78/k03  allowed { r14 } -> r14 (cost r14:500)
+            //   id 52 pri -61 tie 20 ben 3 ref 4 split1#96  allowed { r28 } -> r28
+            // id 13 is the hoisted `lis TheMaster@h`: our scheduler sinks that lis
+            // to the top of the loop body (row 36) ahead of its use (row 110), and
+            // the calls between force it into a callee-saved register.  The image
+            // emits it at the use and keeps nothing.  Freeing id 13 would hand r14
+            // to &TheTaskMgr and delete the `stw`/`lwz r28, 0x50(r31)` spill pair,
+            // which is exactly the structural delta the residual census reports
+            // (surplus ours lwz:1 stw:1; every other row is the renaming it
+            // forces).  Inert this lane: `TheMaster != nullptr`, and
+            // `HamMaster *&master = TheMaster;` / `TaskMgr &tm = TheTaskMgr;`
+            // bound at the Smooth call site (all byte-equal).
             mCurMoveSmoothers[i].Smooth(
                 mCurMoveNormalizedResult[i],
                 TheMaster && TheMaster->GetBeat() == 3
@@ -1329,6 +1353,15 @@ void MoveDir::FinalPoseStateMachine() {
     // hoisted lis loads are `allowed { r14 }`, and the source shapes that could
     // reorder them (other_player's declaration position, a MovePlayerData
     // reference for the other player) are inert -- re-measured this lane.
+    // w28-a (still 99.951): the residual census reads STRUCTURAL, but the
+    // opcode multiset is IDENTICAL (surplus == deficit: addi 3, bl 2, lfs 1,
+    // lis 6, lwz 4, stw 3), so the six rows are pure emission ORDER.  The
+    // latch updates the i-walker (0x50, +0x3c) and the other_player-walker
+    // (0x58, -0x3c) in the opposite order and r9/r10 follow; each slot gets
+    // the same delta on both sides.  Byte-identical: moving `other_player`
+    // below its uses, and an uninitialised decl plus a later assignment.
+    // Worse: `i ^ 1` (89.5 -- the walker needs a linear induction variable),
+    // and both counters in the for-increment (99.68).
     for (int i = 0; i < 2; i++) {
         int other_player = 1 - i;
         HamMove *move = mMovePlayerData[i].mCurMove;
