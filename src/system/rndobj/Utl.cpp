@@ -1101,6 +1101,18 @@ void UtilDrawCigar(
     // skeleton follows the rule again.  So this layout depends on the conversion
     // temps, not on v1/v2/top/bottom alone.  Measured inert: `Vector3 v2;
     // v2.Set(...)` instead of the ctor (98.0, same 9 permuted slots).
+    //
+    // w27-c (2026-11-02) measured 98.01835 / 97.21560 and 46 rows, and pinned
+    // the remainder down with a register-and-branch-insensitive multiset
+    // comparison: the target has 218 instructions and we have 219, and the
+    // ONLY unmatched entry in either direction is one extra `fmr` on our side
+    // (idx 76/78, the `fmr f0,f1` / `fmr f1,f28` pair that the image places
+    // around the `fmuls f27,f1,f0` instead).  Everything else is the two
+    // same-sized Vector3 slot pairs (top/bottom at 0x90/0xa0, v1/v2 at
+    // 0x70/0x80), the h0-in-f27-vs-f28 colouring, the TheRnd base in r30 vs
+    // r28, and three commutative operand-order rows at idx 47/85/89.  So no
+    // load, store, call or constant differs -- the body is behaviour-
+    // equivalent and the whole remainder is the slot allocation above.
     Vector3 end;
     Vector3 top;
     Vector3 bottom;
@@ -2658,6 +2670,20 @@ void RndScaleObject(Hmx::Object *obj, float scale, float fovScale) {
         // the box Scale() calls above the vb work (90.3).  `*=` on the members
         // through a friend declaration is refuted outright (89.8): it emits an
         // `addi r11, r3, <member>` per Vector2 that the image lacks.
+        //
+        // w27-c (2026-11-02): the 48 residual rows are a PERMUTATION, proven
+        // rather than assumed.  With every register name replaced by a
+        // placeholder and every branch target masked, the two instruction
+        // multisets are IDENTICAL -- 732 instructions, 257 distinct, zero
+        // unmatched entries on either side.  So the whole of rows 480-613 is
+        // the same computation in a different order and different registers:
+        // there is no wrong member, no missing call and no wrong constant left
+        // in this branch.  The six commutative rows cannot be flipped from the
+        // source for the reason above (the leaf's §8.7 key has to fall below
+        // the param's 0x10040 and nothing in the expression language lowers
+        // it), and the box1/box2 store sinking is the list scheduler's, since
+        // SetBoxExtent is already first in the source and moving it later was
+        // measured at 90.5-92.1 by w7-bx.
         Vector3 box1, box2;
         Scale(partsys->BoxExtent1(), scale, box1);
         Scale(partsys->BoxExtent2(), scale, box2);
@@ -2963,6 +2989,17 @@ void TessellateMesh(RndMesh *mesh) {
     // the comparator byte stays at 0x54 (image 0x50, row 5) and the 4-byte
     // shift of the small-temp block stays with it -- the remaining 66 rows are
     // all that shift plus its register renames.
+    //
+    // w27-c (2026-11-02) measured the residual at 62 rows / 96.61224 and
+    // confirmed the shape with a register-and-branch-insensitive multiset
+    // comparison: every unmatched entry on either side is that 4-byte stack
+    // shift (`lbz R,0x50` vs 0x54, `sth R,0x58/0x5c/0x60` vs 0x5c/0x60/0x64,
+    // ...) plus the mention-count family above -- the target has 294
+    // instructions and we have 291, and the three extra are one more
+    // `lwz`/`mr` pair off 0x100 of the sub-object and one more 16-bit home.
+    // Nothing in the loop reads a different member or uses a different
+    // constant, so the body is behaviour-equivalent as written and the whole
+    // remainder hangs on the comparator temp above sharing 0x50.
     Edge e12, e23, e31;
 
     for (unsigned int i = 0; i < (unsigned int)mesh->Faces().size(); i++) {

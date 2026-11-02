@@ -1186,6 +1186,22 @@ void RndParticleSys::UpdateRelativeXfm() {
 // midcolFrame comment says 0x80 but actual is 0x88, etc.
 void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     START_AUTO_TIMER("psysmove");
+    // w27-c (2026-11-02): the auto-timer's two statics are the one part of
+    // this function that cannot be closed from the source.  We emit
+    // `?_t@?1??MoveParticles@RndParticleSys@@IAAXMM@Z@4PAVTimer@@A@` and its
+    // `?$S9@...@4IA@` init guard; the image's two globals are at
+    // 0x830DFAA8 / 0x830DFAAC and symbols.txt carries them only as
+    // `lbl_830DFAA8` / `lbl_830DFAAC`, i.e. the image has NO recovered name
+    // for them to match.  Six rows are that relocation-name charge and no
+    // respelling of the timer macro can pay it.
+    //
+    // The rest of the 143 rows is a permutation.  Register-and-branch-
+    // insensitive multiset comparison: the target has 585 instructions and
+    // we have 581, and the four that differ are already documented below --
+    // the dead `stfs f1,0x64(r31)` home of tileTime before `bl fmod`, the
+    // `fmr f0,f12` + `lfs f12,0x8(r26)` re-read of vel.z in the drag block,
+    // and one extra `fsubs` in the three-phase size fork.  No member, call
+    // or constant differs, so the body is behaviour-equivalent as written.
 
     if (mActiveParticles == NULL || frameSpan == 0.0f)
         return;

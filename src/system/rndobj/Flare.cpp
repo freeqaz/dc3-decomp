@@ -134,17 +134,35 @@ void RndFlare::DrawShowing() {
         bool useOccResult = false;
         if (mPointTest && !TheHiResScreen.IsActive()) {
             // Semantically this is `useOccResult = !mOcclusionPending && mOcclusionReady`,
-            // and the image agrees: it computes 0/1 into a scratch GPR and narrows it with
-            // `clrlwi r28,r11,24`. Spelling it that way DOES reproduce that clrlwi and even
-            // makes our frame 0x130 like the target's -- but it stops MSVC sharing slot 0x50
-            // between `scale` and the int->float conversion scratch, shifting every body
-            // offset by +0x10 and costing 98.9 -> 97.8 canonical (w7-n, 2026-09-14).
-            // Keep the comma-operator form until someone finds a spelling that gets the
+            // and the image agrees.  Decoded straight off the listing
+            // (8270BC98-8270BCBC): test 0x89 (= mOcclusionPending) first and take 0 when
+            // it is set, otherwise test 0x88 (= mOcclusionReady) and take 1, otherwise 0;
+            // the result is narrowed by `clrlwi r28,r11,24` and lives in r28.  That also
+            // fixes the field order: the two stores after it are `stb r26,0x88` (ready =
+            // false) then `stb r10,0x89` (pending = the old ready), so 0x88 is
+            // mOcclusionReady and 0x89 is mOcclusionPending -- no behaviour difference.
+            // Spelling the `&&` DOES reproduce that clrlwi and the r28 home, but it
+            // stops MSVC sharing slot 0x50 between `scale` and the int->float conversion
+            // scratch: the scratch takes 0x60 and 0x90, `dir` moves 0x60 -> 0x70 and the
+            // frame grows to 0x140, re-opening about twenty displacement rows.  Net
+            // 98.94 -> 97.75 canonical (w7-n 2026-09-14, w15-a, and w27-c 2026-11-02
+            // re-measured it on this tree).  The older note here claimed the `&&` form
+            // kept the image's 0x130 frame; it does not.
+            // Keep the comma-operator form until a spelling is found that gets the
             // clrlwi without moving the slots.
-            // w15-a re-measured: `useOccResult = !mOcclusionPending && mOcclusionReady;`
-            // gives the image's 0x130 frame and its clrlwi, but the int->float scratch
-            // then takes its own slot at 0x60 instead of sharing 0x50 with `scale`, which
-            // pushes `dir` from the image's 0x60 to 0x70: 97.8 vs 98.94.
+            //
+            // w27-c (2026-11-02): the 24 residual rows are ONE register exchange plus
+            // that clrlwi.  The image keeps the `this-0xc0` interior pointer (13 uses:
+            // WorldXfm_Force, CalcRect, RectOffscreen) in r27 and `useOccResult` in r28;
+            // we take the opposite pair, which is 15 rows on its own.  Register-
+            // insensitive comparison of the two instruction multisets leaves exactly one
+            // unmatched instruction, the `clrlwi R,R,24` -- i.e. both bodies are the same
+            // computation and this row set is not hiding a missing call or a wrong
+            // field.  Two other rows are pure order: `fmadds f0,f13,f12` vs
+            // `fmadds f0,f12,f13` (idx 118) and the two `stfs` to 0x30/0x34 (idx 214/215).
+            // Dropping the `oldReady` temp below (RB3's literal `mOcclusionPending =
+            // mOcclusionReady; mOcclusionReady = false;`) is byte-inert: same 24 rows,
+            // same 98.94405 / 98.55944.
             if (mOcclusionPending || (useOccResult = true, !mOcclusionReady)) {
                 useOccResult = false;
             }
