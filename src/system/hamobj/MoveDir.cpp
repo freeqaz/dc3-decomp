@@ -1353,6 +1353,15 @@ void MoveDir::FinalPoseStateMachine() {
     // hoisted lis loads are `allowed { r14 }`, and the source shapes that could
     // reorder them (other_player's declaration position, a MovePlayerData
     // reference for the other player) are inert -- re-measured this lane.
+    // w28-a (still 99.951): the residual census reads STRUCTURAL, but the
+    // opcode multiset is IDENTICAL (surplus == deficit: addi 3, bl 2, lfs 1,
+    // lis 6, lwz 4, stw 3), so the six rows are pure emission ORDER.  The
+    // latch updates the i-walker (0x50, +0x3c) and the other_player-walker
+    // (0x58, -0x3c) in the opposite order and r9/r10 follow; each slot gets
+    // the same delta on both sides.  Byte-identical: moving `other_player`
+    // below its uses, and an uninitialised decl plus a later assignment.
+    // Worse: `i ^ 1` (89.5 -- the walker needs a linear induction variable),
+    // and both counters in the for-increment (99.68).
     for (int i = 0; i < 2; i++) {
         int other_player = 1 - i;
         HamMove *move = mMovePlayerData[i].mCurMove;
