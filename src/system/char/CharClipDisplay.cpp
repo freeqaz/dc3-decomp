@@ -200,6 +200,21 @@ void CharClipDisplay::DrawTrack() {
     // Measured inert: markerRect declared inside the loop; `if (mClip) {...}`
     // instead of the goto.  Worse: Rect ctor for trackRect (96.2).
     // decomp-synth hill_climb (2 rounds x 58 variants) found nothing.
+    // w27-f (2026-11-02): multiset re-verified -- target 415 instructions, ours
+    // 412, and the ENTIRE delta is the 3.0f rematerialisation: the image
+    // issues four `lfs f, __real@40400000@l(r25)` where we hold the value once
+    // in f21, which is also the +1 saved callee-saved FPR (__savefpr_19 vs
+    // __savefpr_20) and the source of the f19/f20/f21 renumbering.  Every
+    // other T-only / B-only row is register renaming or an equal-valued name
+    // pair (`lbl_82020B54` IS 2.0f; `?SUBSAMPLED_HALF_WIDTH` IS 40.0f).  One
+    // new spelling MEASURED better and was REJECTED: a C2RS-BRIDGE 8.8
+    // scalar-product binding on the label site with `const float &labelOff =
+    // sEm * 3.0f;` takes
+    // canonical 97.81686 -> 98.23856 and fuzzy 97.35904 -> 97.76868 but turns
+    // the image's `fmadds f13, f0, f13, f11` into a separate `fmuls`+`fadds`,
+    // i.e. it buys the rows by rounding differently from the image.  Also
+    // measured byte-inert: binding the two ternary members
+    // (mStartBeat/mViewStartBeat), the end pair, and mDrawPosY/sEm.
     // Mechanism hypothesis (c2 priority colouring, c2-rs P_REGALLOC.md): the
     // 3.0f CSE temp is a candidate whose priority (sum of weight x n_live,
     // minus n_live where it is live but unused) comes out <= 0 in the image
