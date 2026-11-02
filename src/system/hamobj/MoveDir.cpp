@@ -792,6 +792,18 @@ void MoveDir::Poll() {
             // &TheTaskMgr anchor and our base-only `lis r14, TheMaster@h`
             // loop-invariant hoist, which the image rematerialises per
             // iteration at 82500B4C.
+            // w27-e (still 98.245, canonical unchanged, 9 spellings): mechanism --
+            // two loop-invariant addresses compete for callee-saved GPRs,
+            // `&TheTaskMgr` (code-band `addi`) and `TheMaster@h` (code-band `lis`).
+            // The image keeps `&TheTaskMgr` in r14 and rematerialises the `lis`
+            // per iteration; we keep `TheMaster@h` in r14, put `&TheTaskMgr` in
+            // r28 and pay a `stw r28, 0x50(r31)` / `lwz r28, 0x50(r31)` spill
+            // pair around DetectFracToRatingFrac.  That single choice is the
+            // whole residual: every other row is the register renaming it forces.
+            // Inert on it: reference-binding `TheTaskMgr` (c2rs 8.8 global-object
+            // lever) at function and at if-block scope, reference-binding
+            // `TheMaster`, and naming the DeltaUISeconds result.  Worse: naming
+            // the ternary predicate (-2.3pp).
             mCurMoveSmoothers[i].Smooth(
                 mCurMoveNormalizedResult[i],
                 TheMaster && TheMaster->GetBeat() == 3
