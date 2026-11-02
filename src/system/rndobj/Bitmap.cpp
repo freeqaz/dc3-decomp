@@ -1348,8 +1348,15 @@ bool RndBitmap::LoadDIB(BinStream *bs, unsigned int offbits) {
     }
     int rowBytes = ((bitsPerRow >> 3) + 3) & ~3;
     int pixelBytes = infoheader.biHeight * rowBytes;
-    void *buf = MemAlloc(pixelBytes + paletteBytes, __FILE__, 0x481, "Bitmap_buf", 0);
+    // Declaration order matters to c2 here: with `buf` declared first, the
+    // scheduler hoists `lis r8, Bitmap.cpp@h` two slots ahead of the
+    // `clrrwi r25, r11, 2` and the MemAlloc argument pair, and picks r8 for
+    // the __FILE__ hi half.  Declaring the (still null) `palette` first
+    // reproduces the image's order -- `addi r6, <Bitmap_buf>` then
+    // `clrrwi`, then the `lis r11, Bitmap.cpp` -- for +0.46 canonical
+    // (97.701 -> 98.161) and +0.46 fuzzy.  No value, store or call changes.
     void *palette = nullptr;
+    void *buf = MemAlloc(pixelBytes + paletteBytes, __FILE__, 0x481, "Bitmap_buf", 0);
     if (paletteBytes != 0) {
         palette = buf;
         if (infoheader.biClrUsed == 0
