@@ -215,8 +215,14 @@ void NgPostProc::DoBloom() {
         // w1,w0,w3,w2 (clobbering the source pointer r10 with the last load) and
         // then stores w1,w2,w3; we load w1,w0,w2,w3 and recycle r11 for w3, which
         // forces `stw r11,0x4(r7)` two slots earlier. Refuted: naming the temporary
-        // as a local, and swapping this statement with the s_prevBloomIntensity
-        // store -- both left all 6 rows byte-identical.
+        // as a local, swapping this statement with the s_prevBloomIntensity
+        // store, and writing the four Colour components as `-1.0f` instead of
+        // `-1` (w26-h) -- every one left all 6 rows byte-identical.
+        // The remaining difference is a sched0 tie inside the 16-byte copy: the
+        // image loads w1,w0,w3,w2 and reuses the source pointer r10 for the last
+        // load (so it dies there), then stores w1,w2,w3; we load w1,w0,w2,w3 and
+        // recycle r11 for the third, which forces `stw r11,4(r7)` two slots
+        // earlier.  No source spelling found moves the death point of the temp.
         s_prevBloomColor = Hmx::Color(-1, -1, -1, -1);
     }
 

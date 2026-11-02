@@ -301,6 +301,20 @@ void NgSpotlightDrawer::RenderBeams(const Hmx::Matrix4 &viewProj) {
             // `TheDebug.Fail(MakeString(...), 0)` reorders to __FILE__, "false",
             // TheDebug -- a third order, not the image's. `int shaderShape = 0`
             // with no-op arms costs 93.2.
+            // (w26-h) MEASURED with the c2rs tap: the assert's three address
+            // constants are code-band mints, C=6 with F=5 demotions, so they get
+            // ids 37 (fresh, `false`), 27 (TheDebug) and 5 (__FILE__) and pop in
+            // that descending-id order -- exactly our register order.  The image
+            // pops __FILE__, `false`, TheDebug, i.e. __FILE__ must be the SIXTH
+            // code mint and `false` the third, so its address-computation IL
+            // order differs from ours (ours is the MakeString argument order).
+            // Changing F only rotates the pop onto the other two rotations
+            // (F=4 -> `false`,__FILE__,TheDebug; F>=6 -> TheDebug,__FILE__,`false`),
+            // so no free-list size reaches the image's order.  (An attempt to
+            // move F with a `float len = sl->mBeam.mLength;` local did NOT
+            // demote -- CDEMOTE stayed 5 -- so that test only shows c1 folds a
+            // named float copy of a load; F itself was not moved.)  The mint
+            // order is the unclosed question.
             if (hasBeam) {
                 unsigned int shape = sl->mBeam.mShape;
                 int shaderShape;
