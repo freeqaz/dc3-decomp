@@ -623,6 +623,23 @@ void Skeleton::Poll(int skel_idx, const SkeletonFrame &frame) {
         // `(char*)base + i*16` byte arithmetic 91.0.  Open question: which
         // source form makes c2 keep the shared index instead of forming
         // pointer IVs per base.
+        // w28-c: attacked that open question with C2RS-BRIDGE 12.6's
+        // "the IV COUNT is source-visible" lever, six spellings, all measured
+        // on the per-object path (EXACT here -- it reproduces 97.52657 /
+        // 96.22222 to the digit).  NONE produce the accumulator, and every one
+        // is WORSE than the hoisted `Vector3 *` above: a shared `int
+        // jointOffset` and `(const char *)base + jointOffset` for both arrays
+        // 92.28503; the same with a PaddedJointPos element index 92.28503;
+        // no hoist at all 96.74880; two PaddedJointPos * locals indexed by i
+        // 96.95169; one of each 96.95169.  So the walking pointers are not an
+        // artefact of the hoist -- spelling the shared index explicitly makes
+        // c2 materialise base+offset with a real `add` per use, costing more
+        // than the extra callee-saved register it saves.  The image's
+        // accumulator form is a different strength-reduction choice, not a
+        // source shape this TU can express.  Open question now narrower: what
+        // makes c2 pick an offset accumulator over a pointer IV for a 16-byte
+        // element (the neighbouring `int` array at stride 4 is an `lwzu`
+        // walk on BOTH sides, so stride alone does not decide it).
         const Vector3 *jointPositions = (const Vector3 *)data.mJointPositions;
         for (int i = 0; i < kNumJoints; i++) {
             TrackedJoint &tj = mTrackedJoints[i];
