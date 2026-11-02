@@ -155,7 +155,15 @@ void SuperEasyRemixer::DumpSongLayout() {
     // reproduces w7-bv: the IV appears but prev and i both stay live);
     // `[i + -1]`, `[i - 1 + 1]` (folded by the front end, identical bytes);
     // the Name() element bound to a local first (identical).
-    for (int i = 0; i < mTotalMeasures; i++) {
+    // The image carries (i-1)*4 as its own induction variable (`li r25, -0x4`
+    // in the preheader, `addi r27, r25, 0x4` for the `[i]` index, and
+    // `addi r25, r25, 0x4` on the back edge) and derives i*4 from it. A
+    // second counter that is exactly `i - 1` is what produces that: indexing
+    // the two former `i - 1` sites by `prev` lets c2 carry their (i-1)*4 as
+    // the byte IV, leaving the `[i]` sites to be derived from it. Spelling
+    // those sites `i - 1` instead reduces `i*4` per iteration (`slwi` plus
+    // `subi`) and adds the `i`-minus-one live range. (w26-v, 97.94 -> 100.)
+    for (int i = 0, prev = -1; i < mTotalMeasures; i++, prev++) {
         str = MakeString("%d", i + 1);
         for (Difficulty d = EasiestDifficulty(); d != kNumDifficulties;
              d = DifficultyOneHarder(d)) {
@@ -164,9 +172,10 @@ void SuperEasyRemixer::DumpSongLayout() {
             Difficulty next = DifficultyOneHarder(d);
             if (next != kNumDifficulties) {
                 str += "\t";
-                // w16-b: `if (i > 0)` is 85.9 (refuted); MSVC's (i-1)*4 IV
-                // basis needs the `i - 1` spelling here.
-                if (i - 1 >= 0) {
+                // w16-b: `if (i > 0)` is 85.9 (refuted).  The guard now reads
+                // the `prev` counter directly, which is the (i-1) basis the
+                // image keeps in r25.
+                if (prev >= 0) {
                     // Each pair member is a named local: the image evaluates the
                     // FIRST argument's lookup first and holds the element itself
                     // (not the vector's begin) across the second call
@@ -175,7 +184,7 @@ void SuperEasyRemixer::DumpSongLayout() {
                     // the element load past the other call, and &TheDebug then
                     // stays in r14 instead of being home-stored to 0x58(r31)
                     // (w7-ak's class (2)).
-                    const MoveParent *harderPrev = GetMoveParentsByDifficulty(next)[i - 1];
+                    const MoveParent *harderPrev = GetMoveParentsByDifficulty(next)[prev];
                     const MoveParent *easierCur = GetMoveParentsByDifficulty(d)[i];
                     if (TheMoveMgr->HasVariantPair(harderPrev, easierCur)) {
                         str += "<";
@@ -189,7 +198,7 @@ void SuperEasyRemixer::DumpSongLayout() {
                     // r5 = the next-row element at i*4.  FindVariantPair is
                     // directional (p1 -> p2), so the swapped order asked the
                     // wrong question for the '>' marker.
-                    const MoveParent *easierPrev = GetMoveParentsByDifficulty(d)[i - 1];
+                    const MoveParent *easierPrev = GetMoveParentsByDifficulty(d)[prev];
                     const MoveParent *harderCur = GetMoveParentsByDifficulty(next)[i];
                     if (TheMoveMgr->HasVariantPair(easierPrev, harderCur)) {
                         str += ">";

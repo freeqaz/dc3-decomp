@@ -672,18 +672,18 @@ void RndPostProc::UpdateColorModulation() {
             mFlickerSeconds.y = RandomFloat(mFlickerTimeBounds.x, mFlickerTimeBounds.y);
             mFlickerSeconds.y = Max(mFlickerSeconds.x, mFlickerSeconds.y);
         }
-        // NOTE (w7-av): 97.94 is a 1-row floor.  At the merge point the image
-        // RELOADS mFlickerSeconds.x (`lfs f0, 0x11c(r31)` -- and that load is
-        // the `blt` target from the inner test, so it cannot be in a register on
-        // that path); we keep the value the outer comparison already loaded into
-        // f0 at 0x11c and only load mDeltaSecs, which costs one delete plus an
-        // f0/f13 permutation.  Refuted: a named temp for the RandomFloat result
-        // instead of the double write to mFlickerSeconds.y (97.94, identical
-        // rows); spelling the += out as `x = x + mDeltaSecs` (97.94, identical).
-        // w19-a (still 97.94): `Max(mFlickerSeconds.x, RandomFloat(...))` in one
-        // statement and a named `r` temp are both inert; MaxEq(y, x) is worse
-        // (95.92).
-        mFlickerSeconds.x += mDeltaSecs;
+        // SOLVED (w26-v, 97.94 -> 100.0).  The image re-loads mFlickerSeconds.x
+        // at the merge point (`lfs f0, 0x11c(r31)` at 0x90, the `blt` target
+        // from the inner test) and lets the inner `fsel` write f0
+        // (`fsel f0, f13, f0, f1` at 0x88), which destroys the value.  Binding
+        // the operand as a REFERENCE keeps the load a distinct value, so it is
+        // no longer CSE'd with the `Max(mFlickerSeconds.x, ...)` load above:
+        // the merge-point reload appears, f0 then holds x only to the fsel
+        // (its last use frees it before the def), and the fsel takes f0.
+        // This is c2rs-bridge 8.8 applied to a scalar operand: bind, do not
+        // copy (a plain `float fv = ...` copy is folded away; measured).
+        const float &fx = mFlickerSeconds.x;
+        mFlickerSeconds.x = fx + mDeltaSecs;
     } else {
         mColorModulation = 1.0f;
     }
