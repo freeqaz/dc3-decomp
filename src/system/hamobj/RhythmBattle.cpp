@@ -976,18 +976,33 @@ void RhythmBattle::OnBeat() {
                 } else {
                     mSwagJackState = 6;
                 }
-                // w20-b: last residual (4 rows): the image loads mSwagJackState
-                // into r5 after `mr r3, r29`; we load it before. Tried and inert:
-                // a state local, an Hmx::Object*/UIPanel* local, a named receiver,
-                // (int) cast, enum-typed member, result in i6b4; the nested call
-                // form is worse (the panel conversion gets CSE'd).
-                // w21-ax: re-adjudicated at 99.95106 normalized: these 4 rows
-                // (idx 1316-1320, 824E1FD0..1FE0) are the ONLY charged rows; the
-                // other name_check rows are function-local-static scope ordinals
-                // (?PC@ vs ?PP@, ?NC@/?NH@, ?BEG@/?BEL@, ?BJK@/?BJP@; folded noise)
-                // and ICF-folded MakeString/AnimateOut names. Same values reach
-                // r4/r5/r6 on both sides -- no behaviour difference. Also inert: a
-                // RhythmBattleJackState local for the SECOND call only.
+                // w20-b/w21-ax/w26-n1: the last residual, re-adjudicated.
+                //
+                // Only idx 1316-1320 are charged at 99.95106 normalized. They are
+                // three independent instructions of the SECOND call's argument
+                // setup, emitted in a different order; both sides put the same
+                // values in r4/r5/r6 and call the same two functions, so there is
+                // no behaviour difference. Image: L1, L2, mr r6, mr r3, lwz state.
+                // Ours: L1, mr r6, lwz state, mr r3, L2. (L1/L2 are the two loads
+                // of the UIPanel* -> Hmx::Object* vbase conversion of focusPanel.)
+                //
+                // w26-n1 mechanism, from the c2rs regasg tap: the order already
+                // diverges in the pre-sched0 tuple stream (RT block 234 -- T1548
+                // lwz L1, T1549 mr r6, T1550 lwz state, T1551 mr r3, T1552 lwz L2),
+                // so sched0 is not the decider; c2 sinks L2 to its use in the
+                // `add`, and the image keeps it next to L1. Every other panel
+                // conversion in this function keeps the L1 ... L2 split on both
+                // sides, so this call is the outlier.
+                //
+                // 46 behaviour-identical spellings measured: byte-identical or
+                // worse. Named state/panel/jacked/receiver locals, reference
+                // bindings, (*p). form, nested block, i6b4 moved, ternary and
+                // 5 + !b36 forms of the state store, declaration order, cast
+                // forms, and 15 pairs. The other 8 charged rows are only
+                // function-local-static scope ordinals -- ?PC@/?PP@ 242/255,
+                // ?NC@/?NH@ 210/215, ?BEG@/?BEL@ 326/331, ?BJK@/?BJP@ 410/415,
+                // same objects and same guard bits. Recorded, not chased: moving
+                // an ordinal means adding a static, which is invented code.
                 int jacked = second->SwagJacked(focusPanel, (RhythmBattleJackState)mSwagJackState);
                 first->SwagJackedBonus(focusPanel, (RhythmBattleJackState)mSwagJackState, jacked);
                 i6b4 = (int)mSwagJackState;
