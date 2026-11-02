@@ -1864,6 +1864,25 @@ void RndParticleSys::InitParticle(
     // than one rule. Open-coding either one with per-component accumulators
     // (the lever math/Mtx.h documents) is REFUTED here: 99.2943 -> 98.5. See
     // the note on Multiply(Vector3, Matrix3, Vector3&) in math/Mtx.h.
+    //
+    // w26-p: the §8.8 base-rebinding sweep was run over the whole function and
+    // is INERT or worse (56 charged rows before and after, 99.2943 canonical /
+    // 98.73792 fuzzy): named `Vector3 &posOut = particle->Pos3();` (+ a
+    // `Vector3 &velOut`/`Hmx::Color &colVel`/`&midcolVel` sibling set, singly
+    // and in pairs), `const Hmx::Matrix3 &xfmM = xfm->m;`, a named `float
+    // invSpan = 1.0f / (midcolFrame - birthFrame);`, forcing `xfm` to a
+    // non-const `const Transform *` copy, and naming the `Color &colVel`
+    // parameter as `Hmx::Color` all reproduce the same instruction stream.
+    // The reason is that every one of those operands is ALREADY a named
+    // object or a member access off a named pointer -- their §8.7 keys are in
+    // the same class, so the re-key has nothing to move.  What is left is the
+    // /fp:fast FMA-chain seeding described above (a scheduling choice inside
+    // c2's fp fusion, per C2RS-BRIDGE §8.7 an inline call's SUBEXPRESSION key
+    // beating a load, not a commutative re-key), and it is not reachable from
+    // the operand spellings.  Behaviour is not in question: every remaining
+    // diff is a register/order permutation of identical values (no store is
+    // added, removed or moved across a call), verified against the target
+    // listing row by row.
     Multiply(particle->Vel3(), xfm->m, particle->Vel3());
     if (mBubble && mType == kFancy) {
         RndFancyParticle *fancyParticle = (RndFancyParticle *)particle;
