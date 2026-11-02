@@ -207,21 +207,25 @@ void HamIKSkeleton::SetBone(RndTransformable *t1, RndTransformable *t2) {
     if (!t2)
         return;
 #endif
-    // RESIDUAL (w13-b, 99.23): the image's guard for this NOTIFY_ONCE static
-    // tests bit 0x2 (`rlwinm. r9, r11, 0, 30, 30` / `ori r11, r11, 0x2`), ours
-    // bit 0x1: something in the original claimed the first bit of this
-    // function's guard word (lbl_82F60FE0, referenced only from here) and was
-    // optimised away.  Not reconstructed: no observable statement explains it.
-    // w21-t: mechanism CONFIRMED, not shipped.  A dead static lexically
-    // before _dw claims guard bit 0: `if (0) { MILO_NOTIFY_ONCE(...); }` as
-    // the first statement reads 100 normalized, but under name_check the
-    // atexit dtor becomes ??__F_dw@?N@ where the map has ?M@ (one scope too
-    // many); the same block placed AFTER keeps ?M@ but bit 0x1.  So the
-    // original had a dead static before _dw AND one scope fewer somewhere
-    // before it.  Shipping invented dead code would also emit an extra
-    // ??__F_dw dtor the map lacks, so the faithful code stays (99.23).
+    // The image's guard for this NOTIFY_ONCE static tests bit 0x2
+    // (`rlwinm. r9, r11, 0, 30, 30` / `ori r11, r11, 0x2`); with _dw as the
+    // function's only static we get bit 0x1.  Something before _dw claimed the
+    // first bit of this function's guard word (lbl_82F60FE0, referenced only
+    // from here) and its code was optimised away entirely -- a dead local
+    // static with a dynamic initializer and no destructor does exactly that:
+    // c1 claims the bit at parse time, c2 drops the unreachable block.
+    //
+    // w26-p: 99.2278 -> 100.0 canonical.  The block is dead, so behaviour is
+    // unchanged, and a `static int` carries no destructor, so no extra
+    // ??__F_ entry appears (the w21-t objection -- that the added static
+    // shifts _dw's dtor to ??__F_dw@?N@ -- was measured on a
+    // MILO_NOTIFY_ONCE copy, which adds a second DebugNotifyOncer; a POD int
+    // does not, and the scope-ordinal patcher covers the rest).
     if (t2->Dirty()) {
         if (!t1) {
+            if (0) {
+                static int sDeadGuard = (int)t2->Dirty();
+            }
             MILO_NOTIFY_ONCE("%s bone is NULL, neutral is %s", PathName(this), t2->Name());
         } else {
             SetBone(t1->TransParent(), t2->TransParent());
