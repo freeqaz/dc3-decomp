@@ -788,26 +788,33 @@ void ObjectDir::ResetViewports() {
     vp[6].mXfm.m.Set(-1, 0, 0, 0, -1, 0, 0, 0, 1);
     vp[6].mXfm.v.Set(0, 768, 0);
     MakeRotMatrix(Vector3(1, 1, -1), Vector3(0, 0, 1), vp[0].mXfm.m);
-    // w21-l (value-scan row, ARTIFACT): the image keeps -768 (__real@c4400000)
-    // in f30 and does fmadds m.y*(-768); we fold the sign into fmsubs with +768.
-    // Same products and same summation order -- only the constant's sign moved.
-    // w21-ay (98.65, same 11 rows: 3 fmsubs-vs-fmadds + 8 f12/f30 swaps that
-    // follow from which of +-768 must survive the call).  Standalone cl.exe probe
-    // reproduces our build exactly; MSVC folds `a + b*(-768)` into `a - b*768` for
-    // EVERY spelling measured: int vs float literal, v.x*m vs m*v operand order,
-    // (y+z)+x / x+(y+z) association, Multiply-style inline helper taking the
-    // Vector3 by const& (temp or named), v declared at function top and stored
-    // into vp[5], `-(m.y.x*768)`, `m.y.x*-768`, `x*0 - (y*768 - z*0)`.  Only
-    // reading vp[5].mXfm.v's components into locals before the call keeps
-    // fmadds, but then they are real loads + a third FPR (not the image).
-    // `#pragma float_control(precise)` defeats inlining of Set.  Numerically
-    // identical (exact negation; fused single rounding either way).
+    // w21-l: the image keeps -768 (__real@c4400000) in f30 and does
+    // fmadds m.y*(-768); we folded the sign into fmsubs with +768, so the wrong
+    // one of the two constants was the one live across MakeRotMatrix (11 rows:
+    // 3 fmsubs-vs-fmadds + 8 f12/f30 swaps).
+    // RESOLVED (w27-b, 98.35 -> 100.0): a statement boundary blocks the c1
+    // rewrite.  Written as one expression, c1 rewrites `m.z*v.z + m.y*v.y` into
+    // `m.z*v.z - m.y*768` BEFORE contraction runs, so no arrangement of the
+    // expression itself keeps the negative literal -- six spellings were measured
+    // byte-identical (int and float literals, v.x*m vs m*v, (y+z)+x vs x+(y+z), a
+    // named Vector3, `-(m.y.x*768)`, `m.y.x*-768`, `x*0 - (y*768 - z*0)`).
+    // Binding each column's products to named locals keeps v.y as a multiply
+    // operand, so -768 is what survives the call and takes f30, and c2 then
+    // contracts to fmadds.  Naming only the m.y column fixes the constant but
+    // leaves the wrong accumulator base (m.z*0.0 first) and stops at 99.73;
+    // naming both columns finishes the row.
     Vector3 v(0, -768.0f, 0);
     Hmx::Matrix3 &m = vp[0].mXfm.m;
+    float yx = m.y.x * v.y;
+    float yy = m.y.y * v.y;
+    float yz = m.y.z * v.y;
+    float zx = m.z.x * v.z;
+    float zy = m.z.y * v.z;
+    float zz = m.z.z * v.z;
     vp[0].mXfm.v.Set(
-        m.x.x * v.x + (m.z.x * v.z + m.y.x * v.y),
-        m.x.y * v.x + (m.z.y * v.z + m.y.y * v.y),
-        m.x.z * v.x + (m.z.z * v.z + m.y.z * v.y)
+        m.x.x * v.x + (yx + zx),
+        m.x.y * v.x + (yy + zy),
+        m.x.z * v.x + (yz + zz)
     );
 }
 

@@ -171,11 +171,16 @@ PlatformMgr::PlatformMgr() : mSigninMask(0) {
     for (int i = 0; i < 4; i++) {
         mXuidCache[i] = 0;
     }
+    // Store scheduling (w27-b): when a run of independent stores to anon-namespace
+    // globals is emitted, MSVC defers the FIRST one of the run to the end of it.
+    // The image's order is Overlapped, Overlapped2, StorageList, PathLen,
+    // ServiceIdState, so ServiceIdState is the one written first here.  No
+    // aliasing and no call between them, so the order is unobservable.
+    mServiceIdState = kServiceIdIdle;
     mServiceIDOverlapped = nullptr;
     mServiceIDOverlapped2 = nullptr;
     mStorageList = nullptr;
     mPathLen = 0x200;
-    mServiceIdState = kServiceIdIdle;
     mListSize = 0;
     mUserID = -1;
     mResult = 0;
