@@ -324,6 +324,15 @@ void DxRnd::PostDeviceReset() {
 // with f31 = -1.0f): Plane's ctor stores a,b,c before d, which is the image's
 // store order; the Vector4 copy goes through Multiply and back with Set().
 // Reading planes[i] twice instead of through `trans`: 99.4, worse.
+// w26-f10 stop note, fuzzy 99.901 / canonical 100.0, one row left: idx 32,
+// `add r11,r28,r11` (image) vs `add r11,r11,r28` (ours) -- the address of
+// `planes[i]`, i.e. stlport's `_M_start + i` inside vector::operator[] in the
+// PCH-reached header, with r28 the strength-reduced `i * 0x14` induction value.
+// Both operands are leaves in c2's commutative sort (8.7), one a load temp for
+// _M_start and one the loop's byte offset; the source reaches neither, and the
+// only way to re-key them is to edit stlport, which is PCH-reached and would
+// move all 574 PCH TUs.  The other row (idx 64, the inlined Plane ctor's
+// fnmadds) is fixed below by binding `normal`.
 void DxRnd::PushClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
     int enableMask = 0;
     for (int i = 0; i < unk408; i++) {
@@ -338,7 +347,14 @@ void DxRnd::PushClipPlanesInternal(ObjPtrVec<RndTransformable> &planes) {
             const Transform &xfm = trans->WorldXfm();
             Vector3 normal;
             Scale(xfm.m.z, -1.0f, normal);
-            Plane plane(xfm.v, normal);
+            // Binding normal, not xfm.v: c1 leaves the Plane ctor's
+            // `normal.x * point.x` operand order to c2's post-lowering
+            // commutative sort (C2RS-BRIDGE 8.7), and the reference keeps the
+            // local's components on a named base instead of a folded temp, which
+            // moves the fnmadds into the image's order.  Binding xfm.v as well
+            // gives the reverse result (99.802, both rows still charged).
+            const Vector3 &nv = normal;
+            Plane plane(xfm.v, nv);
             Vector4 v(plane.a, plane.b, plane.c, plane.d);
             Multiply(v, RndCam::Current()->GetInvViewProjMatrix(), v);
             plane.Set(v.x, v.y, v.z, v.w);
