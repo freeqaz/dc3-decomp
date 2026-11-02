@@ -228,6 +228,16 @@ bool BoxMapLighting::CacheData(LightParams_Spot &spot) {
             return true;
         }
     }
+    // w30-c (2026-11-02): target 79 instructions, ours 75, and the whole delta
+    // is FOUR instructions: the image RELOADS mBeamLength/mTopRadius/
+    // mBottomRadius (0x50/0x54/0x58) after the branch instead of keeping the
+    // condition's loads live, and forms `&spot.mApex` with `addi rN, r4, 0x20`.
+    // Everything else differs only in registers.  No behaviour difference: the
+    // same three fields, the same f3/f1/f2 algebra and the same six stores in
+    // both, re-derived from the target listing.  Measured inert this lane:
+    // swapping the product's operands, dropping f3's parentheses, and
+    // declaring v58 above f3 (all 83.228, byte-identical).  The reload is a
+    // liveness decision -- the image has nothing live across the branch.
     mQueued_Spot.RemoveEntry();
     return false;
 }

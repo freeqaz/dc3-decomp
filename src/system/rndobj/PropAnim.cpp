@@ -912,6 +912,23 @@ DataNode RndPropAnim::ForeachKeyframe(const DataArray *da) {
 // second arm as a bare block after the first arm's return.  No new lever found in this wave's catalogue (local
 // ref binding, early-return polarity and tail-merge placement do not touch
 // the EH-state decision).
+// w30-c (2026-11-02): re-read the residual from the target listing before
+// touching it -- it is 5 instructions, all of them ours: `stw r3, 0xd4(r31)`
+// (the sret home) plus `li r11, 1` / `stw r11, 0x50(r31)` after each of the two
+// copy-ctor sites, which is MSVC's "sret constructed" EH flag and the +0x10
+// frame that comes with the 4-byte slot it takes at 0x50.  Everything else
+// pairs 1:1 (target 512 B / 128 instructions, ours 532 / 133).
+//
+// NEW NEGATIVE this lane: the tail-duplication hypothesis -- one `return ret`
+// reached from both branches, with the duplicated copy ctor and the two ret
+// slots produced by the duplicator after the EH analysis -- is REFUTED.  Both
+// spellings (flowArr assigned in each branch then one `DataNode ret = flowArr;
+// flowArr->Release(); return ret;`, once with `DataNode ret(flowArr);`) measure
+// 78.875 against 92.773, i.e. the merged body is a different function, so the
+// image really does have two class-typed return statements and still has no
+// flag.  Together with w7-bt's discriminator (`return 0;` in the else arm
+// drops the flag) that pins the difference to a front-end EH decision, not to
+// a spelling of the DataNode.
 DataNode RndPropAnim::OnListFlowLabels(DataArray *arr) {
     if (mFlowLabels.size() != 0) {
         DataArray *flowArr = new DataArray(mFlowLabels.size());

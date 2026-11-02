@@ -464,6 +464,21 @@ void RndCam::GetViewProjectXfms(Transform &viewXfm, Hmx::Matrix4 &projMtx) const
     // expression divisor gives: the backend still CSEs the subtract, but the
     // reciprocal transform keys on source-level variable identity and does not
     // fire.  See docs/decomp/patterns/fixable-fsel-fma.md.
+    // w30-c (2026-11-02) re-measured every inherited negative on this tree and
+    // they all still hold: (-h * m.z.y) * 2.0f 81.544, -(h*m.z.y) then *=2.0f
+    // 81.544, named product + `-projY * 2.0f` 83.800 (byte-identical), named
+    // product + separate negation 81.544, mFarPlane read at point of use
+    // 78.680, `const float &` bindings of mScreenRect.{h,w} 83.800 (inert).
+    // The opcode+operand multiset now says exactly what is left: the image has
+    // ONE MORE `fmr` (f9 <- f11, h kept), ONE MORE `fneg` and ONE MORE
+    // `lfs 0x2e0(r31)` (mScreenRect.w reloaded), and we have the extra
+    // `lis`+`lfs __real@c0000000` pair (/fp:fast folds -(x)*2 into x*-2).  The
+    // fmr and the reload are CONSEQUENCES of the image evaluating h*m.z.y
+    // AFTER the cy fmadds and of keeping h and w live across it; our scheduler
+    // hoists that product above cy, so no copy or reload is needed.  Arithmetic
+    // re-derived from the listing: every value, store, divisor and call agrees
+    // (cy, cx, projYNum, projXNum, l/b/r/t, the four fdivs and both w.z forms),
+    // so this is form/scheduling, not a behaviour defect.
     projMtx.z.z = farRatio;
     projMtx.x.x = projXNum / (r - l);
     projMtx.y.y = projYNum / (t - b);
