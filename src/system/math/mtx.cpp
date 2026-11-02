@@ -224,6 +224,50 @@ float Det(const Hmx::Matrix4 &m) {
 // no construct found so far that keeps the target's order without them, so the
 // twelve mid-function stores are the price of the correct region order.
 // Do not retry either variant without a new idea for pinning the schedule.
+//
+// w29-a (2026-11-02) BEHAVIOUR VERDICT: the RESULT is equal to the image's.
+// Both sides call Det(Matrix4) once, test `fabs(det)` against __real@38d1b717
+// (0.0001f), form the reciprocal with ONE `fdivs` (f0 = 1.0f in both -- no
+// /fp:fast reciprocal-multiply to undo), multiply the same sixteen cofactor
+// expressions by it, and write all sixteen results only at the end (image:
+// the sixteen `stfs ..(r27)` at 0x82539B4C-0x82539B9C, four of them reloaded
+// from 0x5c/0x60/0xb8/0xbc(r1)). The only structural difference is WHERE the
+// y/z/w rows are stored: ours writes them mid-function, which is what pins
+// the region order (w3-m measured the store-at-end shape at 32.8).
+//
+// THE ENGINE'S Matrix4 INVERSE IS NOT A TRUE INVERSE -- INHERITED, NOT A
+// DECOMP DEFECT, and deliberately left alone. Det(const Matrix3&) returns
+// 1/det, not det (target 0x82538B70: `fcmpu`/`beqlr` on det==0, then
+// `lfs f0, __real@3f800000` / `fdivs f1, f0, f1`; it is at 100.0 normalized
+// AND fuzzy, and og-dc3-decomp and rb3-xenon independently decompiled it the
+// same way -- rb3-xenon comments it "returns its reciprocal (1/det)").
+// Det(const Matrix4&) then forms det = +-Sum_j Det3(minor_j) * m.x[j], i.e.
+// Sum_j (-1)^j m0j / det3(minor_j), which is neither the determinant nor its
+// reciprocal. Worked example -- 45 deg rotation about z + translation:
+// Det4 = 2.0 where the true det = 1.0, so out * in = 0.5 * I. This does not
+// break the title: the split listing contains exactly ONE direct `bl` to
+// ?Invert@@YAXABVMatrix4 in the whole binary, in RndCam::SetViewProj.
+// Everything else calls Invert(const Transform&) or Invert(const Matrix3&),
+// which compute 1/det inline and are correct. Both Det overloads are outside
+// this lane's targets and sit at 100.0; changing either would break them.
+// Correction to the w21-ac note above: its symbolic check compared the ADJUGATE
+// against the inverse and was right about that, but `Det(minor)` was modelled
+// there as det(minor) rather than as the 1/det the function actually returns,
+// so the SCALING was never in the checked tree.
+//
+// MEASURED w29-a: the residual is not reachable from source. Ours 642
+// instructions / 2568 B vs the image's 700 / 2800 B -- 58 SHORT. Census
+// image -> ours: lfs 138->118, stfs 67->45, mr 136->135, fmuls 100->92,
+// fmsubs 12->42, fnmsubs 36->15, fmadds 32->22, fneg 0->7, bl 73->73. The
+// image holds twelve cofactors live across the ~69 out-of-line operator[]
+// calls. Two form levers tested and rejected: (a) the fmsub/fnmsub split is
+// not source-controlled -- MSVC canonicalises `acc = -(X - acc)` and
+// `acc = acc - X` to the same opcode, and rewriting all twelve acc-chain
+// negations moved fmsubs 42->43 / fnmsubs 15->14 and scored 71.166 (worse);
+// (b) flipping the five negated y/z/w cofactors IS a clean 1:1 shift
+// (42/15 -> 37/20 after all five) but drops to 70.199 and SHORTENS the body
+// to 2560 B (C2RS-BRIDGE section 14 red flag). 71.25 is the best of the
+// spellings tried; the remainder is the spill/schedule class w3-m named.
 void Invert(const Hmx::Matrix4 &m, Hmx::Matrix4 &out) {
     float det = Det(m);
     bool small = std::fabs(det) < 0.0001f;
