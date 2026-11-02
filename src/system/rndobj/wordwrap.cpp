@@ -226,6 +226,18 @@ bool WordWrap_CanBreakLineAt(const wchar_t *cur, const wchar_t *start) {
     if (cur == start)
         return false;
 
+    // w26-x: the two `mr`s are in the front-end, not reachable by spelling.
+    // The tap shows them as real `mr` tuples in block 0 (`RT 2 mr d{r5} u{r3~}`,
+    // `RT 3 mr d{r4} u{r4}`) -- a copy of each parameter at entry, which is why
+    // `cur` lives in r5 and `ch` is staged `lhz r3` + `rlandi r31, r3` instead
+    // of the image's single `lhz r31, 0(r3)`.  Measured inert (no instruction
+    // changes) on this row: `cur[0]` instead of `*cur`; `unsigned short ch`;
+    // `*(cur - 1)`; `*(cur + 1)`; a named `next`; declaring `ch` after
+    // `option`; `(unsigned int)cur - (unsigned int)start` and the
+    // cast-the-difference form of the distance test; `const wchar_t *const`
+    // and `__restrict` parameters; `!(cur != start)`.  `int ch` is much worse
+    // (83.7 fuzzy).  The copies are emitted before any statement is seen, so
+    // the open question is which c1 construct makes it copy a pointer formal.
     // Attempt 2, INERT (wave 7, lane w7-y): reading g_uOption before the
     // character -- the image's `lis r10, g_uOption@h` sits one slot ahead of its
     // `lhz r31, 0x0(r3)` -- changes nothing, 97.60 either way.  The residual is

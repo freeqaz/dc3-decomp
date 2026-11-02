@@ -572,6 +572,24 @@ void ClipDistMap::FindDists(float maxFacing, DataArray *arr) {
 // both hoisted after the ctor (96.6 -- flips our `add` to begin+off like the
 // image but the sum stays shared).  Whatever made the image not CSE the two
 // `begin + i*12` sums is not the evaluation order of the two reads.
+// w26-x: the cell loop's residual is ONE scheduling permutation, not a value
+// difference.  Every instruction of the int->float chain is on both sides
+// (`std <slot>` / `lfd` / `fcfid` / `frsp` / `fadds` / `stfs 132(r1)`); ours
+// issues `lfd/fcfid/frsp` right after the `std` and before the `fdivs` and the
+// three colour stores, the image issues them after the stores.  Measured in w26-x:
+//   - moving the `cellRect.y = ...` statement itself (before the colour stores,
+//     before `float c`, or after `alpha`) is BYTE-IDENTICAL -- c2 list-schedules
+//     the block and source order carries no edge here;
+//   - naming the int (`int invRow`), the float (`float yf`), writing
+//     `y + (float)(...)`, and `mDists.mHeight - row - 1` are all byte-identical;
+//   - what DOES move it is adding one spare IL node to the block (a second
+//     `cellRect.y = ...`, or `float cy = (float)(...)` between two stores):
+//     that scores 98.855 fuzzy / 99.016 canonical but also emits an extra
+//     `lwz r11, 60(r31)`, i.e. it buys the schedule with a statement the image
+//     does not have.  Not landed (invented code to move a scheduler counter).
+// Mechanism hypothesis: c2 scheduling height -- the image's conversion chain has
+// a lower height than the fdivs + three colour stores, ours higher.  Open
+// question: which real IL edge would sink it.
 // w15-i1 (97.69 canonical after the node-reference fix): remaining rows are the
 // cell loop's int->float of cellRect.y (the image converts it AFTER the three
 // colour stores and loads mLastMinErr later; we hoist both), one cmpwi placement,

@@ -539,6 +539,11 @@ void Spotlight::DrawShowing() {
     // word longer, fires 0x4/0x8 as soon as their loads retire (95/96), and
     // pushes the `addi`+home store past the fmuls.  Pure MSVC store
     // scheduling driven by r8's live range.
+    // w26-x re-verified against the image: the eight rows are the same
+    // instruction MULTISET on both sides with the same values (`stw r8,
+    // 0x50(r31)` carries the same `addi r8, r10, 0x13c` result, just 8 slots
+    // later), so there is no behaviour difference -- this is c2 store
+    // scheduling, and no spelling tried in w26-x moved it.  Left at 97.605.
     // Further measured negatives, both 97.60 / 8 rows, byte-for-byte the same
     // eight rows:
     //   - `Hmx::Color c = Color();` copy-initialisation instead of direct-init
