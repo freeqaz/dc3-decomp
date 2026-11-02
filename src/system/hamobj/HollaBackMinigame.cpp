@@ -707,6 +707,21 @@ void HollaBackMinigame::OnBeat() {
     // (`addi r10, r30, 0x78` has no reader in the image either), so this is the
     // inverse of the Spotlight::SyncProperty residual, where the IMAGE homes it
     // and we do not.
+    // w26-n3 (9 more variants, canonical measured per-variant on the per-object
+    // path, which is exact on this unit -- baseline 99.85694 reproduced):
+    //   swap the two SongPos declarators            99.47639 (much worse)
+    //   const SongPos *                             99.85694 (bit-identical)
+    //   &TheMaster->SongPos2() instead of &master-> 99.85694 (bit-identical)
+    //   separate declarator + assignment            99.85694 (bit-identical)
+    //   implicit SongPos reference + `.` spelling   build error (the two uses
+    //       below go through `songPos`, not `prevSongPos`; the binding itself
+    //       was refuted by w26-g)
+    //   a named `float prevBeat` before the branch  99.77110 (one extra row)
+    // So the store is not reachable by declaring, binding or re-rooting the
+    // local: our c1 gives the `&master->SongPos2()` temp a home even though the
+    // value is already in a register and every read of it folds back to
+    // 0x7c(r30).  The image emits the same dead `addi r10, r30, 0x78` and no
+    // home, i.e. the difference is the home allocation itself, not the local.
     SongPos *prevSongPos = &master->SongPos2();
     SongPos *songPos = &master->SongPos1();
     MoveDir *theMoveDir = TheHamDirector->GetMoveDir();
