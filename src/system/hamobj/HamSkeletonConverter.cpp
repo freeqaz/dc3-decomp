@@ -308,6 +308,12 @@ void HamSkeletonConverter::SetArm(
     // a z component.  The w25-gu SetLeg alias (const Vector3 &d in an explicit
     // cross) moves all of dir's sids above eth/c (229/236/248) and flips row
     // b4 but breaks five others.  Open question: what orders the SR mints.
+    // w26-f12: eight more spellings inert at 99.886 -- `const Vector3 &` bindings
+    // on dir for each cross separately and for both, on elbowToHand, dir passed
+    // through a reference to Normalize, dir and elbowToHand declared up front,
+    // every Vector3 declared up front, and named copies of dir.y / cross1.x.
+    // A reference to a LOCAL Vector3 folds, so the 8.8 binding lever has no leaf
+    // to re-key here; the operands are the scalar-replaced component variables.
     Vector3 cross1;
     Cross(dir, elbowToHand, cross1);
     Normalize(cross1, cross1);

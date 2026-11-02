@@ -341,6 +341,15 @@ void Locale::Init() {
                     // Six more spellings measured inert: a `chunks[n]` reference
                     // binding, `node2` stored first, `n + 0`, a named `int idx`,
                     // a named `int kk = k`, and `DataNode`-free store reorder.
+                    // w26-f12: keys re-dumped today and unchanged -- n id 19 pri 6
+                    // tie 472 ben 9 ref 9 -> r28; k id 38 pri 4 tie 473 ben 6 ref 6
+                    // -> r27.  Six more spellings inert: an explicit output-pointer
+                    // walk (`out++` alongside `k--, n++`), `(int)n` on the stored
+                    // counter, the increment pair written `n++, k--`, a hoisted
+                    // `chunkBase` alias, and node1/node3/node2 store order and a
+                    // named `size` local (those two change the code: 96.666 / 99.695).
+                    // No spelling that keeps the instruction stream has moved either
+                    // key, which is what "priority, not key" predicts.
                     DataArray *chunkArr = curArr;
                     for (int k = curArr->Size() - 1; k >= 0; k--, n++) {
                         chunkArr = curArr->Node(k).LiteralArray(chunkArr);

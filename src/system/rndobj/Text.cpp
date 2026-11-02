@@ -2952,7 +2952,13 @@ void RndText::ReFitTextScroll(String str) {
             mCurScrollChars = 0;
         }
         if (*mLineWidths.begin() == mTotalWidth) {
-            mScrollOffset += maxWidth;
+            // w26-f12: naming the loaded scroll offset turns it from a CSE temp
+            // leaf into a variable leaf, and c2's commutative key (C2RS-BRIDGE
+            // 8.7) then emits `fadds f0,f13,f0` -- maxWidth first -- where the
+            // temp leaf used to sort above maxWidth and come first.  Same
+            // instruction stream; the image's operand order.
+            float offset = mScrollOffset;
+            mScrollOffset = offset + maxWidth;
         }
         if ((unsigned int)mNumLines == (unsigned int)mLineWidths.size()) {
             mLineWidths.insert(mLineWidths.end(), *mLineWidths.begin());

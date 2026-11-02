@@ -109,6 +109,16 @@ void WavReader::Poll(float dt) {
                 // Open: what splits the CSE of this+0x28 across the two loops. Inert:
                 // pointer arithmetic, (*mInputBuffers)[i], named out pointers,
                 // EndianSwap/SwapBytes.
+                // w26-f12: four more spellings measured on the same two rows, all
+                // inert at 99.868 -- `*(mRawInputBuffer + i * 2)` reads,
+                // `*(mInputBuffers[k] + i)` stores, a named `int j = i * 2`, and
+                // hoisting the doubled index.  Reading both halves before storing
+                // either changes the code (89.662).  Worth recording: the mono loop's
+                // store is (base, index) in BOTH builds (`sthx r9, r8, r11`), while
+                // the stereo loop's is (index, base) only in the image, so what is
+                // being re-keyed is the base/index pair inside the indexed operand,
+                // which is not the 8.7 use-list sort and did not follow any of the
+                // spellings that move a use-list key.
                 for (int i = 0; i < mBufNumSamples; i++) {
                     unsigned short s0 = mRawInputBuffer[i * 2];
                     mInputBuffers[0][i] = (s0 << 8) | (s0 >> 8);
