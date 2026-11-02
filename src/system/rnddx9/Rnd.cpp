@@ -178,17 +178,29 @@ bool DxRnd::Offscreen() const {
 void DxRnd::DrawLargeQuad(
     const LargeQuadRenderData &data, const Transform &tf, RndMat *mat, ShaderType s
 ) {
-    // w26-f2 (fuzzy 99.357796, canonical 100.0): what is left is a 3-cycle of
-    // callee-saved GPRs from `mat` onward.  Image: r25=mat, r24=s, r23=the
-    // BaseMaterial RTTI, r22=the RndMat RTTI, r26=TheShaderMgr's address half,
-    // r21=the vtable-pointer load `lwz r21,0x0(r29)`; ours runs the mat..r22
-    // group one register lower and holds those last two the other way round.
-    // Tap (`c2rs stage cands --regasg`): the vtable-pointer load is id10
-    // pri26 code#32 and TheShaderMgr's address half is id11 pri9 code#31, so
-    // the priority relation between those two is reversed against the image.
-    // Measured inert or worse: every reshape of this loop/declaration block
-    // tried this pass (96.83-97.52) -- they break the do/while's first-pass
-    // shape, which is worth more than the cycle costs.
+    // CLOSED (w26-f7, fuzzy 99.357796 -> 100.0, canonical 100.0).  The residual
+    // was ONE move, not a 3-cycle: the six callee-saved GPRs held, in the
+    // image, r26 = TheShaderMgr's address half, r25 = tf, r24 = s, r23 = the
+    // BaseMaterial RTTI, r22 = the RndMat RTTI, r21 = the vtable-pointer load
+    // `lwz r21,0x0(r29)`; ours had the same six in the same order except that
+    // the vtable-pointer load popped FIRST and took r26, pushing the other
+    // five down one.  Tap (`c2rs stage cands --regasg`): the vtable load is
+    // id10 pri26 code#32 and TheShaderMgr's address half id11 pri9 code#31, so
+    // the vtable load had to stop outranking every other one of the six.
+    //
+    // The fix is a reference binding, not a reshape -- a reshape of the
+    // loop/declaration block costs more than the cycle is worth (measured
+    // 96.83-97.52, w26-f2).  Binding the GLOBAL OBJECT as `RndShaderMgr &mgr`
+    // emits the identical instruction stream (c1 folds the binding away) but
+    // the vtable load is no longer the same IL temp: it drops to the bottom of
+    // the pop order, and the five behind it each move up exactly one register.
+    // Naming it as a value or a matrix temporary instead costs 6 points
+    // (`Hmx::Matrix4 mtx(tf)` 93.30) because it moves the ctor ahead of the
+    // call setup.  Note this refutes the "global reference is inert" negative
+    // for a global OBJECT: it is a global *pointer* binding that folds.
+    //
+    // w26-f2 had the mapping one param off (r25 is tf and r27 is mat); the
+    // register set and the reversed priority relation were both right.
     RndMat *next = mat ? dynamic_cast<RndMat *>(mat->NextPass()) : nullptr;
     RndMat *it = mat;
     do {
@@ -196,7 +208,8 @@ void DxRnd::DrawLargeQuad(
         D3DDevice_SetIndices(mD3DDevice, data.mIndexBuffer);
         D3DDevice_SetStreamSource(mD3DDevice, 0, data.mVertexBuffer, 0, 20, 1);
         D3DDevice_SetFVF(mD3DDevice, 0x102);
-        TheShaderMgr.SetVConstant(kVS_WorldTransform, Hmx::Matrix4(tf));
+        RndShaderMgr &mgr = TheShaderMgr;
+        mgr.SetVConstant(kVS_WorldTransform, Hmx::Matrix4(tf));
         DxTex *tex = static_cast<DxTex *>(mat->GetDiffuseTex());
         D3DDevice_SetTexture(mD3DDevice, 0x10, tex->Tex(), 0x8000);
         D3DDevice_SetTexture(mD3DDevice, 0, tex->Tex(), 0x80000000);
