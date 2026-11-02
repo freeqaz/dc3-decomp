@@ -2006,6 +2006,12 @@ bool HamDirector::GetPracticeFrames(Key<Symbol> *&startKey, Key<Symbol> *&endKey
             // the success block (pieces 2*P). ~45 spellings (own loop vars,
             // break/flag forms, explicit guard do-while, named key/value/begin
             // locals, merged return, nested ifs) left the keys unchanged.
+            // w26-f5 re-tested the C-3 prediction (one more GPR candidate
+            // referenced in the success block): naming the start pointer alone
+            // and the end pointer alone are both inert, and naming both
+            // regresses canonical 100.0 -> 90.6.  The 18/18 tie is unchanged,
+            // so the second-loop idx v2 still takes r11 while the image wants
+            // it in r10.
             if (startIdx < idx && startIdx != -1 && idx != -1) {
                 startKey = &(*keys)[startIdx];
                 endKey = &(*keys)[idx];
