@@ -1239,6 +1239,35 @@ float sFloat5 = 0.25f;
 // `int &` for trackingID (96.0) or for both selects (95.4); making the
 // sFloatN globals static (87.5 -- the image reloads them, so they are
 // external).
+// w26-f9 (fuzzy 99.788734, canonical 100.0, 1136 B): the twelve charged rows
+// are three pairs over r15/r16/r17 and nothing else.  The image puts sFloat4 in
+// r15, sFloat2 in r16 and &TheRnd in r17; we put sFloat4 in r16, sFloat2 in r17
+// and &TheRnd in r15.  All three are hoisted `lis` address halves.
+//
+// Tap: three consecutive code-band mints, all pri -51 / tie 0 / ref 4, with
+// `allowed` shrinking {r14..r17} -> {r14..r16} -> {r14,r15}:
+//     CMINT 122 id 59 code reuse sym 98   (sFloat2) -> r17
+//     CMINT 123 id 18 code reuse sym 99   (sFloat4) -> r16
+//     CMINT 124 id 17 code reuse sym 100  (&TheRnd) -> r15
+// C = 22 code mints, F = 13 demotions (four k04 `mr` copies of the four stack
+// int locals plus nine k03 `#2af` reload temps).  The `ben` free list is
+// ascending [15,16,17,18,59,60,68,78,79,80,81,82,83] and the code band pops it
+// LIFO, so mint k gets f(14-k): #9/#10/#11 -> 59/18/17.  The pop order is
+// therefore the mint order reversed, and sFloat2 pops first.
+//
+// The image needs &TheRnd first among the three, which C2RS-BRIDGE 8.4 reaches
+// two ways: &TheRnd minted at k=9 (a sched1 reorder), or F <= 10 so mint #11 is
+// fresh and takes the highest id.  F is 13 here, and the four `mr` demotions
+// are the four locals the image itself keeps on the stack
+// (lwz 0x58/0x5c/0x60(r1), see the w7-ag note in case 4), so dropping three
+// demotions changes emitted code.
+//
+// Measured inert (row byte-identical, 8 variants): `Rnd &rnd = TheRnd;` bound
+// at function scope, before the static colours, and immediately before the
+// call, used everywhere it can be; the Rect built into a named / const /
+// copy-initialised local; the static bgColor bound by reference.  Open
+// question: what puts one hoisted `lis` half earlier in sched1 -- the same
+// blocked tie-0 family as C2RS-BRIDGE section 5.
 void SkeletonChooser::DrawDebug() {
     if (mDrawDebug) {
         int skelIdx0 = -1;

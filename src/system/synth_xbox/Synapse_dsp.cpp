@@ -136,6 +136,40 @@ void GranularSynth::SetVoiceEnabled(unsigned int idx, bool enabled) {
     mVoices[idx].mEnabled = enabled;
 }
 
+// w26-f9 (fuzzy 99.75 both, canonical 100.0, 160 B, 40 instructions).  The one
+// charged row in SetAttackSmoothing AND the one in SetReleaseSmoothing are the
+// SAME mechanism, mirrored -- instruction 26, `add r3, r29, r11` in the image
+// but `add r3, r11, r29` in ours.  Identical operands, identical registers,
+// identical size; only the operand position differs.  One note covers both.
+//
+// Tap (c2rs cqlo3, identical key in both functions): the add's use list is
+//   M6{0001a008}[d00000000 w029f b V5/k02s04{00000000}]  V5/k02s04{00000000}
+// Operand 1 is the MEMORY leaf `*(void **)vp`.  Its base is the named local
+// `vp`, so the full `hash(base) << 8` term applies (0xa0 here) and the key is
+// 0x1a008.  Operand 2 is `offset` (sid 7), a variable leaf, key 0x100e0.
+// 0x1a008 > 0x100e0, so the load sorts first; the image sorts the offset first.
+//
+// This is NOT the C2RS-BRIDGE 8.8 lever.  8.8 re-binds an operand whose base is
+// a TEMP, so the memory leaf stops collapsing to `(base sid & 3) << 14` and
+// picks up the full variable-base key.  Here the base is already a named
+// variable; there is no temp to re-key, which is why every reference binding
+// measured inert.
+//
+// Measured inert (16 variants, row byte-identical): `void *begin =
+// *(void **)vp;` inside the loop and hoisted; `void *&` and `const void *&`
+// bindings of the same load; a named element pointer; `void **` for vp;
+// `char *` / `PitchCorrectedVoice *` / `unsigned char *` as the load's type;
+// `unsigned int offset`; moving the vp/count declarations; the source operand
+// swap and parenthesisation.  Measured WORSE: dropping the `vp` local (85.70 --
+// the `addi r31, r31, 0x5c` is then re-emitted at each use) and inlining the
+// base at the loop site only (90.95, a second addi inside the loop).
+//
+// Why no spelling reaches it: the variable leaf would have to beat 0x1a008,
+// which needs sid > 0x140 (320); a temp leaf would need sid > 640.  Both are
+// out of reach in this TU.  The remaining routes are a base whose hash low
+// byte is 0 (~1/256) or a temp base with sid % 4 == 0 -- and a temp base costs
+// the addi, measured above.  Open question: what sets `hash(base)`, which is
+// the whole difference here.
 void Synapse::SetAttackSmoothing(float val) {
     float coeff = Time2IirA(val * 0.001f / (float)mDetectionInterval, mTargetPitch);
     unsigned int count = 0;
