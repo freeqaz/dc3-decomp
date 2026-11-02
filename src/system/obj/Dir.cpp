@@ -536,6 +536,19 @@ void ObjectDir::Save(BinStream &bs) {
             }
         }
     }
+    // w26-n2: the last charged row in this function is a STORE ORDER inside
+    // this inlined vector::swap.  c1 materialises the address of each swapped
+    // member into a dead temp slot ($T71879 / $T71902, both at 0x58); the image
+    // emits the two dead address stores adjacently (`... &_M_finish`, `...
+    // &_M_end_of_storage`) and only then the live `unused._M_finish = <old>` at
+    // 0xa4, while we interleave that live store between them.  Every store's
+    // effective address is identical on both sides, so nothing here is
+    // observable.  Measured inert at source level (all byte-identical):
+    // `unused.swap(mInlinedDirs)`, `std::swap(mInlinedDirs, unused)`, and a
+    // trailing `unused.clear()`; the drop-in-replacement forms
+    // (`mInlinedDirs = std::vector<InlinedDir>();` 95.34,
+    // `std::vector<InlinedDir>().swap(mInlinedDirs)` 97.90) are worse because
+    // they change which member expressions are materialised at all.
     std::vector<InlinedDir> unused;
     mInlinedDirs.swap(unused);
     gLoadingProxyFromDisk = oldProxy;

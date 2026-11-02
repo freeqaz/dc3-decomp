@@ -1541,6 +1541,15 @@ void PlatformMgr::Poll() {
                 // mListSize is written first does NOT keep the latch value --
                 // it repermutes the whole 0x50..0x88 stack-slot block and costs
                 // 2.5pp binary-visible here (99.17 -> 96.7, 21 rows -> 135).
+                // w26-n2: the other source handles are measured inert too --
+                // naming the re-read (`unsigned long n = ...;` between the two
+                // stores is BYTE-IDENTICAL: one-block/one-def, so c1 folds it),
+                // naming it BEFORE the state store costs 2.2pp, a
+                // `const unsigned long &n = mStorageList->dwNumItemsReturned`
+                // bound in the branch costs 2.2pp, and a cast on the re-read is
+                // byte-identical.  What is left is which register c2 gives
+                // `li 0x3`: with the latch value live it takes r10 (image), and
+                // our reload is the fixed point of it taking r11.
                 mServiceIdState = kServiceIdDownloading;
                 mListSize = mStorageList->dwNumItemsReturned;
             } else {
