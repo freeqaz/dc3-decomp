@@ -510,6 +510,12 @@ void UIListState::Scroll(int direction, bool skipActive) {
                 // layout pass) gives that.  Inert or worse: arm order inverted
                 // (layout follows it), operand swaps, a named minDisplay, inline
                 // atZero, a value select, if/else per arm.
+                // w26-f15, 5 more spellings inert (still 182 insns, still the
+                // single row 148 `b .+16` vs the image's `b .-56`): hoisting
+                // both `curFirst`/`curSel` assignments above the if, hoisting
+                // only `atZero`, moving `atZero` below the two shared
+                // assignments, `direction != 1` with the arms swapped, and
+                // hoisting `maxFirst` into a ternary above the if.
                 if (direction == 1) {
                     int maxFirst = MaxFirstShowing();
                     curFirst = state.mFirstShowing;

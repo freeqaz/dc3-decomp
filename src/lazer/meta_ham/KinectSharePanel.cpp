@@ -199,6 +199,21 @@ void KinectSharePanel::ConvertImagesForLinkPost() {
         if (mLinkPostParams.PreviewImage.Format == D3DFMT_A8R8G8B8) {
             mLinkPostParams.PreviewImage.Format = D3DFMT_LIN_A8R8G8B8;
         }
+        // Open (w26-f15): the one charged row is this multiply -- image
+        // `mullw r28,r11,r9` (rowBytes first), ours `mullw r28,r9,r11`.  Both
+        // `lhz` loads, both registers and every neighbouring instruction
+        // already match, so this is c2's commutative sort key (C2RS-BRIDGE
+        // 8.7): `rowBytes` is a variable leaf (0x10000|sid<<5) and
+        // `bitmap90.Height()` is a memory leaf on the frame base, and the
+        // memory leaf sorts first.  The lever is coupled: inlining the
+        // RowBytes() load makes both operands memory leaves, which DOES give
+        // the image's operand order (disp 0x68 > 0x66) but swaps the two
+        // loads, because they are emitted in the reverse of the operand list
+        // -- 2 charged rows instead of 1, fuzzy 99.989 and normalized 99.989.
+        // 30 spellings inert otherwise: source swap, a named `height` before
+        // or after, `(int)`/`unsigned` casts, `const int &rowBytes`,
+        // `RndBitmap &bm = bitmap90` used for the loads, a multi-declarator,
+        // and a leading `+ 0`.
         int rowBytes = bitmap90.RowBytes();
         int mult = rowBytes * bitmap90.Height();
         mPreviewBuf = MemAlloc(mult, __FILE__, 0xA8, "FB_Preview");

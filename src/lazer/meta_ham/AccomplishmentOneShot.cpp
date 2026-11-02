@@ -37,6 +37,19 @@ AccomplishmentOneShot::~AccomplishmentOneShot() {}
 // continue; }` blocks is code-identical (245/245 rows) and gives ?DL@/?DO@
 // (59/62); the image needs 44/47, 15 fewer. Open question: which arm shape
 // opens about 2.5 scopes per arm and still cross-jumps like the image.
+//
+// w26-f15, measured on the EXACT path (`ninja post-compile`, because the
+// per-object harness is inexact for this unit -- it reads 99.440/99.440 where
+// the real row is 99.925/100.000): the current row set is the four static
+// relocations only, image ?CP@ (stars_earned) / ?CM@ (omg) vs ours ?EF@ /
+// ?EC@, i.e. the same 26-letter step apart. The two cheap scope reducers both
+// lose the cross-jump and with it 13+ instructions: merging the flawless pair
+// (`condition == flawless_a || condition == flawless_b`) or the nices pair --
+// which produce IDENTICAL code to each other, since MSVC already cross-jumps
+// the duplicate arms -- gives 281 insns and 89.907, and the
+// independent-if-with-`continue` shape gives 287 insns and 89.537. So the arms
+// have to stay separate `else if`s. The remaining lever has to lower the scope
+// counter without adding a block; not found this round.
 bool AccomplishmentOneShot::AreOneShotConditionsMet(
     HamPlayerData *hpd, HamProfile *profile, Symbol s, Difficulty d
 ) {
