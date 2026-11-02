@@ -269,6 +269,17 @@ bool SongSequence::DoNext(bool b1, bool b2) {
     // i.e. forgiven. Repro must pass --map-file build/373307D9/icf_aliases.map
     // and read `canonical_match_percent`, not `normalized_match_percent`
     // (which is the fuzzy score relabelled).
+    // w26-n3 (6 more variants, canonical, per-object path reproduced exactly
+    // here -- baseline 99.83989): `*&mEntries`, a C-cast-initialised reference,
+    // a non-const `std::vector<Entry> &` via const_cast, and an
+    // `entries.end() - entries.begin()` size are ALL 99.83989, i.e. c1 folds
+    // every one of them back to the same IL.  A named `int next = ++mCurrentIndex`
+    // is also 99.83989.  Confining the reference to its own scope
+    // (`bool atEnd; { const std::vector<Entry> &entries = mEntries; atEnd = ...; }`)
+    // collapses to 74.98876 -- it moves the block boundary the MILO_LOG static
+    // guard hangs off, so it is not a neutral way to shorten the live range.
+    // The remaining handle is still the dead home of the reference at 0x50(r31);
+    // nothing that keeps the image's `lwz r10, 0x0(r30)` begin-reload removes it.
     const std::vector<Entry> &entries = mEntries;
     if (++mCurrentIndex >= (int)entries.size() || b2) {
 
