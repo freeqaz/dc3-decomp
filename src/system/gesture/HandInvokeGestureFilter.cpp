@@ -218,6 +218,17 @@ bool HandInvokeGestureFilter::CalcInPose(const Skeleton &skel, float dt) {
     // `li r11, 0`, and the last test falls through to a `li r11, 0x1` that is
     // set up before it -- the positive `&&` chain, not an initialise-true /
     // conditionally-clear pair (which inverts all five branch polarities).
+    //
+    // w27-m (2026-11-02), census row STRUCTURAL:opcode addi:3/stwu:1 vs
+    // addi:3/clrlwi:1/stwu:1: adjudicated behaviour-equivalent.  The
+    // instruction STREAMS are identical (327 vs 327); every diff_arg row is a
+    // stack-slot or FPR number, and the frame difference (0x130 image vs 0x120
+    // here) is the same five-vs-four 16-byte Vector3 slot allocation described
+    // at the top of the function -- no instruction computes a value the other
+    // side does not.  The one charged opcode, the image's extra
+    // `clrlwi r10, r11, 24` before the tilt test, exists only because the image
+    // parks leftInPose in r10 and tiltOk in r11 while we do the reverse; both
+    // paths AND together the same three bools.
     bool rightInPose = rightAngle1 < 155.0f * DEG2RAD
         && rightAngle1 > 115.0f * DEG2RAD && rightAngle2 < 110.0f * DEG2RAD
         && rightAngle2 > 70.0f * DEG2RAD && rightBend < 35.0f * DEG2RAD;
