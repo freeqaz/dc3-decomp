@@ -100,6 +100,10 @@ DataNode OptionsPanel::OnMsg(SingleItemEnumCompleteMsg const &msg) {
 // values that are both live across the whole function and neither of which
 // is a memory operand, so the remaining handle is the §6 priority budget
 // (refs per block, or an extra merge point), not operand binding.
+// w26-f6: `bool success = false;` (an extra zero use in the entry block) is
+// inert at 99.66102/100.0, and folding the default arm into
+// `error = online ? token_redemption_error : leaderboard_no_net;` is worse
+// (98.814).  Both measured on a full ninja build.
 DataNode OptionsPanel::OnMsg(RCJobCompleteMsg const &msg) {
     if (msg.Job() == mRedeemTokenJob) {
         MILO_LOG("Token: server response: %s\n", mRedeemTokenJob->GetResponseString());
