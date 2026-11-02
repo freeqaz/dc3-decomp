@@ -317,7 +317,7 @@ float DanceRemixer::JumpedBeat(float beat) const {
     if (toBeat >= fromBeat) {
         return beat;
     }
-    // w7-bb FLOOR at 90.89% (4 rows, 824F02AC-824F02CC).  Everything through
+    // w7-bb residual at 90.89% (4 rows, 824F02AC-824F02CC).  Everything through
     // 824F02A8 matches; the residual is that the image reuses the SINGLE
     // conversion scratch slot -0x10(r1) for both int->float conversions
     // (std r11,-0x10 / lfd f0,-0x10 / std r10,-0x10 / lfd f13,-0x10) where we
@@ -352,6 +352,15 @@ float DanceRemixer::JumpedBeat(float beat) const {
     // `beat -=` exit, inline FromBeat()/ToBeat() accessors, and re-reading
     // mFromMeasure*4 in the tail.  Only a tail-first layout (w21-b) gives one
     // slot, and it reorders the blocks.
+    // w29-b (still 90.88636, same 4 rows): c2-rs candidate tap shows no COLOR
+    // candidate and no regasg row in this tail at all -- the two scratch slots
+    // are c1's frame-temp allocation for the `std/lfd` int->double idiom, whose
+    // live range ends at the `lfd`, so the image reuses -0x10 while we hold two
+    // slots for the same pair.  Three more spellings inert: two named float
+    // locals for the conversions, `float shifted = beat - (float)fromBeat;` in
+    // its own statement, and both of those combined.  Opcode multiset is
+    // IDENTICAL and the count is 44 = 44, so nothing is missing -- the whole
+    // residual is the -0x8 displacement and the f0/f13 flip it induces.
     return (beat - (float)fromBeat) + (float)toBeat;
 }
 
