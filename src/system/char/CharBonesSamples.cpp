@@ -370,7 +370,13 @@ void CharBonesSamples::Clone(const CharBonesSamples &samp) {
 
 void CharBonesSamples::Print() {
     auto size = mTotalSize * mNumSamples;
-    auto address = mRawData;
+    // The image's instantiation is MakeString<int,int,int,CompressionType>
+    // (ham_xbox_r.map 0x823E1008, char:CharBonesSamples.obj), i.e. the address
+    // is passed as an INT, matching the "%x" it is printed with.  With a
+    // `char *` the FormatString overload is operator<<(const char*), which
+    // reports "doesn't start with kStr" and then hands a pointer to a %x
+    // conversion.  A same-size store either way; only the type was wrong.
+    int address = (int)mRawData;
     auto compression = mCompression;
     MILO_LOG(
         "samples: %d size: %d address: %x compression %d\n",

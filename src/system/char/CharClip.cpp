@@ -947,7 +947,7 @@ const CharGraphNode *CharClip::FindLastNode(CharClip *clip, float beat) const {
 
 void CharClip::EvaluateChannel(void *dest, const void *channel, int frame, float blend) {
     if (!channel) {
-        MILO_FAIL("%s passed in NULL for evaluate channel", (char *)PathName(this));
+        MILO_FAIL("%s passed in NULL for evaluate channel", PathName(this));
     }
     int offset = (intptr_t)channel - 1;
     if (offset < mFull.TotalSize()) {
@@ -957,7 +957,20 @@ void CharClip::EvaluateChannel(void *dest, const void *channel, int frame, float
         if (oneOffset < mOne.TotalSize()) {
             mOne.EvaluateChannel(dest, oneOffset, 0, 0);
         } else {
-            MILO_FAIL("%s could not find offset %d %d", (char *)offset, oneOffset, PathName(this));
+            // The image's own spelling here is MakeString<int,int,const char*>
+            // (ham_xbox_r.map 0x823D13D0, char:CharClip.obj): the FIRST %d is an
+            // INT.  The `(char *)offset` this used to pass made MakeString bind
+            // operator<<(const char*), so the failure path handed a byte offset
+            // to snprintf as a %s pointer -- a wild read, not a message.
+            //
+            // The image also shows the argument is a TEMPORARY, not the compared
+            // variable: it stores r30 (the offset) into the by-ref slot AT the
+            // call (`stw r30, 0x58(r1)` at 0x823D1FBC, object offset 0xBC), while
+            // passing the lvalue gives `offset` a stack home and stores it at its
+            // definition instead -- the same function, 95.08 canonical.
+            // Writing the expression is what makes it a temporary; the value is
+            // the same one `offset` holds, and c1 CSEs the `subi`.
+            MILO_FAIL("%s could not find offset %d %d", (int)(intptr_t)channel - 1, oneOffset, PathName(this));
         }
     }
 }
