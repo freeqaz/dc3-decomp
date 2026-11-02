@@ -329,6 +329,32 @@ void RndBitmap::SetPixelIndex(int x, int y, unsigned char idx) {
 // the blockSize/width/blockWidth/pixelScale/nibble statements (12 tie at
 // 99.02, the rest lower), and in the tiled arm all declaration and statement
 // orders, `%` spellings and tiledBase operand orders.
+// w26-r (98.88 -> 98.93 fuzzy, canonical unchanged at 99.02, 5 rows -> 4):
+// `pixelScale` is now minted BEFORE `width`; this is a declaration-order
+// change, not a statement-order one.  The c2 commutative sort keys a variable
+// leaf 0x10000|sid<<5, orders descending and derives the sid from mint order,
+// so `width * pixelScale` emitted pixelScale first while the image has width
+// first (`mullw r27, r31, r9`).  Minting pixelScale earlier lowers its sid and
+// that multiply now matches.  HYPOTHESIS for the 4 remaining rows (the
+// mBpp*mod and mRowBytes*quotient operand orders, and the second `divwu` three
+// slots late): the image's `tiledBaseOffset % scaledWidth` and `... /
+// scaledWidth` reach the sort as TEMP LEAVES (0x10000|(sid<<6 & 0xffff), i.e.
+// below the mBpp/mRowBytes memory leaf at 0x12012), whereas in our build both
+// are single-use FOLDED temps and inherit their defining tuple's key
+// (>= 0x01020000), which beats every memory leaf.  Every spelling that lifts
+// them out of the folded class measured code-identical here (named locals,
+// unsigned/int variants, casts, statement order): a single-use local is
+// propagated straight back into the operand.  Open question: what keeps the
+// two division results live in the image.
+// w26-r addendum (measured on a synced scratch tree, baseline reproducing
+// report.json exactly at 98.9268/99.0244): re-confirmed inert for ALL FOUR
+// remaining rows -- naming `tiledBaseOffset % scaledWidth` and `... /
+// scaledWidth` as `int`, `unsigned int` or explicit-cast locals; casting the
+// mod to unsigned inside the multiply; writing the quotient multiply as
+// `(quotient) * mRowBytes`; and computing `rowOffset` before `offsetMod`.  Every
+// one is byte-identical to the current spelling, so the folded-temp class of the
+// hypothesis above is not reachable by naming: c2 folds a single-use local back
+// into its operand before the §8.7 sort runs, whatever the spelling.
 // NEGATIVE RESULT (w7-am, 2026-09-14): writing the subscript on the left,
 // `(idx)[cond ? bytes13 : bytes02]`, is byte-identical -- MSVC's operand
 // evaluation order here is not reachable from the source spelling.
@@ -425,9 +451,9 @@ int RndBitmap::PixelOffset(int x, int y, bool &nibble) const {
         if (bpp != 4) {
             blockSize = 4;
         }
+        int pixelScale = (((bpp - 0x20) == 0) & 1) + 1;
         int width = mWidth;
         int blockWidth = bpp < 0x10 ? 8 : 4;
-        int pixelScale = (((bpp - 0x20) == 0) & 1) + 1;
         nibble = x & 1;
         int tiledBaseOffset =
             (((((width / blockWidth) * (y / blockSize)) + (x / blockWidth))

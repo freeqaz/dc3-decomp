@@ -370,7 +370,9 @@ void NgMat::RefreshState() {
     //      Dest arm first, so the image's order comes from something else.
     //  (2) The `lwz mTexGen` / `cmplwi` of the mTexGen switch sits AFTER the
     //      four mTexGenMatrix2 diagonal stores in the image (0x8269D3B4) and is
-    //      hoisted above them here.
+    //      hoisted above them here.  CLOSED by w26-r -- see the `const TexGen &tg`
+    //      binding at the switch below.  (§8.8 base re-binding: a copy is
+    //      propagated away and the load floats; the reference pins it.)
     //  (3) In the second mBlend switch the image stores the four floats and
     //      THEN mFadeOut in every arm (0x8269D654-D664), tail-merging the
     //      Multiply/Darken arm into the Add arm's `stw 2`; ours schedules the
@@ -379,6 +381,16 @@ void NgMat::RefreshState() {
     // w19-a (still 98.95): the statement order INSIDE each of the eleven arms is
     // not the lever for cluster (1) either -- a hill-climb over every single
     // move within every arm (132 builds) found no order better than this one.
+    // w26-r (99.9768): what is LEFT is 9 diff_arg rows and nothing else -- the
+    // five `li` constants of cluster (1) rotated (ours 0,1,4,3,2 vs the image's
+    // 4,3,2,0,1; the value->register map is identical, only the emission slot
+    // moves) and two call argument-setup pairs whose `addi`s are emitted in the
+    // opposite order at 0x36c/0x370 (Normalize) and 0x4e4/0x4ec (MakeTex3).
+    // Both are pure scheduling order, not values.  Block-scoped §8.8 bindings at
+    // those two call sites (`Hmx::Matrix3 &dstMtx = xfmTmp.m;` around Normalize,
+    // `Hmx::Matrix3 &dstMat = mTexGenMatrix;` around MakeTex3) were measured
+    // byte-identical, so the argument-materialisation order is decided below the
+    // source level here -- c2's scheduler, not the operand keys of §8.7.
     switch (mBlend) {
     case kBlendDest:
         mBlendSrc = (RndRenderState::Blend)0;
@@ -495,9 +507,12 @@ void NgMat::RefreshState() {
     );
 
     // Second texgen matrix - identity
+    // w26-r: y before x.  With x first the scheduler emits the pair 680,660;
+    // the image emits 660,680 (0x8269D3C0/D4).  This is the store order the
+    // image's own schedule implies, and it is the only reason for the order.
     mTexGenMatrix2.Zero();
-    mTexGenMatrix2.x.x = 1.0f;
     mTexGenMatrix2.y.y = 1.0f;
+    mTexGenMatrix2.x.x = 1.0f;
     mTexGenMatrix2.w.w = 1.0f;
     mTexGenMatrix2.z.z = 1.0f;
 
@@ -511,7 +526,14 @@ void NgMat::RefreshState() {
     Transform xfmTmp;
     Hmx::Matrix3 mtxTmp;
     Vector3 vecTmp;
-    switch (mTexGen) {
+    // w26-r: `tg` is a REFERENCE, not a copy, and that is the whole point.  The
+    // image loads mTexGen (lwz 0x70(this)) AFTER the four mTexGenMatrix2 diagonal
+    // stores; a plain `TexGen tg = mTexGen;` copy is propagated away and the load
+    // is scheduled two stores early, while binding the base reference keeps the
+    // load where §8.8 puts it.  Normalized 98.9201 -> 99.9510 from this line
+    // plus the two swap branches below using it.
+    const TexGen &tg = mTexGen;
+    switch (tg) {
     case kTexGenNone:
         mTexGenMatrix.Zero();
         mTexGenMatrix.w.w = 1.0f;
@@ -521,14 +543,14 @@ void NgMat::RefreshState() {
         break;
     case kTexGenXfm:
     case kTexGenXfmOrigin:
-        MakeTex3(mTexXfm, mTexGen == kTexGenXfm, mTexGenMatrix);
+        MakeTex3(mTexXfm, tg == kTexGenXfm, mTexGenMatrix);
         // z, y, x: the image stores 0xd8 / 0xd4 / 0xd0 in that order
         // (0x8269D5C8-D0), i.e. the translation is cleared back-to-front.
         xfmTmp.v.z = 0.0f;
         xfmTmp.v.y = 0.0f;
         xfmTmp.v.x = 0.0f;
         Normalize(mTexXfm.m, xfmTmp.m);
-        MakeTex3(xfmTmp, mTexGen == kTexGenXfm, mTexGenMatrix2);
+        MakeTex3(xfmTmp, tg == kTexGenXfm, mTexGenMatrix2);
         break;
     case kTexGenSphere:
     case kTexGenEnviron: {
@@ -540,7 +562,7 @@ void NgMat::RefreshState() {
 
         Multiply(RndCam::Current()->WorldXfm().m, xfmTmp.m, xfmTmp.m);
 
-        if (mTexGen == kTexGenSphere) {
+        if (tg == kTexGenSphere) {
             MakeEuler(xfmTmp.m, vecTmp);
             vecTmp.x = LimitAng(vecTmp.x) * 0.5f;
             vecTmp.z = LimitAng(vecTmp.z) * 0.5f;
