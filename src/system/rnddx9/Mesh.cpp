@@ -280,6 +280,23 @@ void DxMesh::CacheFurTransform(const Transform &xfm, int i, float weight) {
     //     truncate).
     // NEGATIVE (w16-c): with `pos` but the temporaries kept, the six orders
     // read zyx 99.97 / xyz 99.99 / xzy 99.97 / yxz 99.97 / yzx 99.96 / zxy 99.96.
+    //
+    // w26-f3 (2026-11-02): 6 rows left (fuzzy 99.59731, canonical 100).  The
+    // c2rs u{} order is the emitted order, and it shows the block is a
+    // per-component key straddle around invWeight's temp (s88), not a source
+    // ordering (L = load first, I = invWeight first):
+    //   cached.m    RT76/78/80   L,I  I,L  I,L   image the same      equal
+    //   cached.v    RT85/86/88   (z)L,I (y)I,L (x)L,I   -> image (z)I,L (y)L,I (x)L,I
+    //   ScaleAddEq  RT94/95/97   L,I (all three)         -> image I,L on three
+    // i.e. y and z are exchanged in the v block and the ScaleAddEq products
+    // are inverted, so the resolution is a shift of the keys on one side of
+    // s88, not a respelling of this block.
+    // Measured INERT this lane: `const float &iw = invWeight;`,
+    // `Vector3 &cv = cached.v;`, `const float &w = weight` / `weightRef`, and
+    // naming the two Dot rows (`const Vector3 &xfmY`, `const Vector3 &cachedY`).
+    // Measured WORSE, do not retry: explicit per-component for cached.v
+    // (canonical 99.97315) and splitting ScaleAddEq into its m and v halves
+    // (canonical 98.57718).
     const Vector3 &pos = xfm.v;
     Vector3 delta;
     Subtract(cached.v, pos, delta);
