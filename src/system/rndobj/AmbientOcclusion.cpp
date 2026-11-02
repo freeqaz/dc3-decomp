@@ -1114,7 +1114,7 @@ void RndAmbientOcclusion::SmoothResults(RndMesh *mesh) const {
     // image hands to an inlined callee; guessing at it (unrolled index temps,
     // per-component Verts() calls) was not attempted here.
     Hmx::Color aoResult;
-    std::vector<Hmx::Color> faceAO(mesh->Faces().size(), aoResult);
+    std::vector<Hmx::Color> faceAO(mesh->Faces().size(), Hmx::Color());
     float oneThird = 1.0f / 3.0f;
     for (unsigned int f = 0; f < (unsigned int)mesh->Faces().size(); f++) {
         {
