@@ -372,6 +372,16 @@ void MakeRotQuatUnitX(const Vector3 &vec, Hmx::Quat &q) {
 // (og-dc3 shape) 67.8; plain vin locals 26.2; neg locals with the products
 // inline 46.5; the reference-binding lever is inert (every component is
 // loaded once into a local).
+//
+// w29-a (2026-11-02): PERMUTATION CLASS -- the RESULT is equal, and the row is
+// not a spelling. 48 instructions / 192 B on BOTH sides, identical mnemonic
+// multiset, no diff_op row. The only two differences are the load order of
+// vin.x vs vin.y (the image reads viny at slot 11 and vinx at 13; we do vinx
+// then viny) and the slot the q.y load lands in -- i.e. whether the three
+// fmuls-by-vin run before or interleaved with the two fadds. Swapping the two
+// declarations is the one spelling that reaches it and it makes the REGISTERS
+// match the image (f3 = vinx, f5 = viny) without moving the loads: fuzzy fell
+// 85.73 -> 85.52. Emission order with no source handle; left as-is.
 void Multiply(const Vector3 &vin, const Hmx::Quat &q, Vector3 &vout) {
     float qw = q.w;
     float qx = q.x;
