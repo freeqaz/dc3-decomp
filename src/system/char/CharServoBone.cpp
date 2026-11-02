@@ -220,7 +220,13 @@ void CharServoBone::DoRegulate(
 void CharServoBone::MoveToDeltaFacing(Transform &tf) {
     Vector3 v18;
     Multiply(*mFacingPosDelta, tf.m, v18);
-    tf.v += v18;
+    // Bind the routed offset as a reference before adding it (C2RS-BRIDGE 8.8).
+    // Copy-propagating the local straight into the three fadds leaves is what
+    // put the multiply results first and the tf.v loads second in the
+    // commutative use list on y and z; the binding gives them a variable leaf,
+    // which orders below the memory leafs, as the image has it on all three.
+    const Vector3 &delta = v18;
+    tf.v += delta;
     if (mFacingRotDelta) {
         RotateAboutZ(tf.m, *mFacingRotDelta, tf.m);
         Normalize(tf.m, tf.m);
