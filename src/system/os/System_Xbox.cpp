@@ -95,6 +95,16 @@ Symbol GetSystemLanguage(Symbol s) {
     // (jumptable_8207D4C0) maps each XC_LANGUAGE to the arm the source names.
     // Tried: dropping `default:` from the locale switch, `default: return s;`
     // in the language switch -- both inert.
+    //
+    // w26-f11 (2026-11-02): the c2-rs candidate dump names the three numbers
+    // that hold the rotation. The hidden return pointer is candidate id 2
+    // (sym 1/k05, arena#1) at pri -25 / tie 8, ben 58, ref 39; the two
+    // local-symbol candidates that rank above it are id 53 (sym 27/k03) at
+    // pri -23 / tie 218 and id 59 (sym 33/k03) at pri -25 / tie 173. Priority
+    // is fed by the benefit/reference counts, so the sret can only move if a
+    // spelling gives IT more references; the arms already return out of both
+    // switches (which is what produced ben 58), and every other arm spelling
+    // leaves those three triples identical.
     switch (locale) {
     case XC_LOCALE_SWEDEN:
         if (IsSupportedLanguage(swe, false))
