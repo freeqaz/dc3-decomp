@@ -526,6 +526,17 @@ void UIListDir::BuildDrawState(
         // loop (inert, 98.916); fadeCountEnd re-spelled as the min expression
         // (98.1); halfDisplay computed before NumDisplayWithData() (96.0 --
         // NumDisplay() inlines differently).
+        // w26-s: four more spellings MEASURED INERT (byte-identical, 98.916) --
+        // a named `count = numDisplayWithData` feeding `reserve` and the loop
+        // bound, the same count feeding only the loop, the increment written
+        // `numDisplayWithData = numDisplayWithData + 1`, and
+        // `for (int i = 0, count = numDisplayWithData; ...)`.  Why the split is
+        // forced in the image and not here: `showing` holds r28 in BOTH builds
+        // (the `mr r28, r3` after Display2Showing is an EQUAL row), so the
+        // image's numDisplayWithData necessarily time-shares r28 and must home
+        // it, while ours has r15 free and never needs to.  The open question is
+        // the priority order, not the loop spelling: ours ranks
+        // fadeCountStart(-100) > numDisplay(-102) > numDisplayWithData(-114).
         UIListElementDrawState elem;
 #ifdef HX_NATIVE
         memset(&elem, 0, sizeof(elem));
