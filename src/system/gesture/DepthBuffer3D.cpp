@@ -412,6 +412,28 @@ END_COPYS
 // __savefpr_18); vector slots p1Cols/rows/depths/p2Cols at 0x70/0x80/0x90/0xb0
 // vs ours 0x70/0x90/0xb0/0xc0; mat slot 0x60 vs 0x80; our extra
 // `stfs Level, 0x50(r31)` homes in the zoom-clamp section.
+//
+// w26-j behaviour verdict (2026-11-01), from the name_check listing:
+//   - NO wrong field.  objdiff examined 38 offset mismatches and excluded all
+//     38 as non-field (35 frame slots, 3 different base register).  There is
+//     no `this`-relative displacement that differs.
+//   - NO wrong constant.  Every `__real@` that pairs differently is a slot
+//     shift (the image's `lfs f21,__real@42a00000` sits one row off ours).
+//   - ONE real transcription difference, MEASURED AND NOT LANDED: the image
+//     divides with `divwu` (rows 231/232, 267/272) where `int n` gives `divw`,
+//     i.e. the original's `n` is a size_type.  Spelling both `n` unsigned
+//     reproduces `divwu` exactly on rows 231/232 -- and costs 80.27 -> 79.30
+//     canonical, because the per-pixel loop's FPR/IV assignment re-forms
+//     around it.  p1Cols alone is the same 79.30.  Reverted; recorded here so
+//     it is not re-derived.  It is codegen-only (n is a pixel count, >= 0).
+//   - unicorn has no verdict recorded for this symbol, so the listing above
+//     is the whole behaviour evidence.
+//
+// Mechanism for the remainder: the whole function is one register-assignment
+// cascade seeded by the phase-3 loop, not a set of independent rows -- the
+// `divwu` experiment is the proof (4 rows fixed, score down 1.0).  c2rs
+// `stage cands` on this TU reports 30+ FP candidates with priorities 33..-46
+// over an 1424-instruction body; the f0<->f13 pair alone is 38 instructions.
 void DepthBuffer3D::DrawShowing() {
     if (TheRnd.DrawMode() != Rnd::kDrawNormal || !Showing()) {
         return;

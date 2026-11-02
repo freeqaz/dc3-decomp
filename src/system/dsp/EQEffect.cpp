@@ -173,6 +173,16 @@ void EQEffect::Reset() {
     }
 }
 
+// w26-j (2026-11-01) behaviour verdict: unicorn records EQUIVALENT for this
+// symbol (harness v4, high confidence), and the name_check listing agrees -- no
+// wrong field (every offset row resolves to a frame slot or a different base
+// register) and no wrong constant (every __real@ that pairs differently is a
+// one-row slot shift).  The loud row, target `fneg f12,f12` + `fmadds f12,f10,f11,f12`
+// (0x82E592A4 region) against our `fmsubs f12,f10,f11,f12` + `fadds f12,f12,f9`,
+// is the SAME value by two instruction selections -- the FMADD forms are
+// interchangeable here and the target's own `-(x*b0) + ...` algebra is what
+// makes MSVC pick one or the other.  Not a bug; see the inline note at the
+// band-1 chain below for the spellings already measured against it.
 void EQEffect::Process(float *samples, int numSamples, int numChans) {
     if (mBand4Q != 0.0f) {
         // Crossover filter path.  Three Butterworth sections (low / band /
