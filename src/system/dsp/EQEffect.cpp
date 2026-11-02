@@ -214,6 +214,24 @@ void EQEffect::Process(float *samples, int numSamples, int numChans) {
                         // order reorders the whole load block instead (87.5), and
                         // `-x * b0` in band 1 still fuses to fmsubs, not the
                         // image's fmuls/fneg/fmadds at 82E592A4.
+                        //
+                        // w26-r2: oracle verdict for the whole function is
+                        // EQUIVALENT (unicorn harness 4, high confidence), and
+                        // every "target-only"/"base-only" displacement delta in
+                        // the aligned listing is base-REGISTER-relative -- the
+                        // image addresses one delay line off r9 as 0x8/0x4/0x0
+                        // while ours addresses it off r10 as -0x4/-0x8/0x0 --
+                        // rather than pointing at a different slot.  What is left is FP register
+                        // permutation and fma-slot reassociation (the image
+                        // fuses the 0x44 term of `*s = mBand2B2*fVar3 +
+                        // fVar2*mBand0B2 + fVar4*mBand1A1`, ours the 0x64).
+                        // The one row that is not register permutation --
+                        // diff 67, `fmuls f8, f8, f7` vs `fmuls f8, f7, f8` --
+                        // is a section 8.7 commutative key over two MEMORY
+                        // leaves, whose key is hash(base)<<8 | disp.  The
+                        // operands are 0x13c(r31=this) and 0x25c(r11=walker),
+                        // so the order follows those two base symbols and not
+                        // the expression's spelling.
                         float *xd = &mXoverInputDelay[chan][0];
 
                         // Stage 0 (lowpass), pass 1
