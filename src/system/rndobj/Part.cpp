@@ -1198,6 +1198,13 @@ void RndParticleSys::MoveParticles(float dt, float frameSpan) {
     // The registers are still the image's mirror (f30 holds 1/30 and f29
     // the pow result at 826BF4A4/826BF4B8; ours f29/f30), which costs the
     // two reload rows at 826BF9C4/826BF9DC (w7-bw).
+    // w26-v re-measured this mirror with c2rs-bridge 8.8: giving the
+    // exponent its own object (`float exp30 = frameSpan * (1.0f / 30.0f);`
+    // shared by both pow calls), the same as a reference, and a reference to
+    // the `1.0f / 30.0f` literal itself are all one step WORSE (fuzzy 96.2991
+    // vs 96.3419; canonical unchanged at 97.9145) -- the shared object moves
+    // rows without flipping the f29/f30 pair. So the pair is not decided by
+    // the exponent temp's identity.
     float dragFactor;
     if (mDrag > 0.0f) {
         dragFactor = std::pow(1.0f - mDrag, frameSpan * (1.0f / 30.0f));
