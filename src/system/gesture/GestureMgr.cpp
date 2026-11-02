@@ -646,6 +646,22 @@ void GestureMgr::DrawSkeletonKinectData() {
                     // TextHolder* one re-creates the null-preserving select).
                     // The epilogue closed (96.0 -> 98.8) by reading mDebugDir
                     // directly -- see the end of the function.
+                    // w27-a (98.7516 canonical / 98.6894 fuzzy, 6 rows, 324
+                    // instructions, per-object path EXACT for this unit):
+                    // re-read both sites against the image -- the null test is
+                    // present on BOTH sides (`cmplwi r3, 0x0` / `beq`), the
+                    // vtable slot is the same (0x8 of TextHolder's vtable) and
+                    // the two arguments are the same values, so this is not an
+                    // added-guard or wrong-callee row.  The only delta is the
+                    // scheduling of three instructions: the image materialises
+                    // the 0x110 sub-object adjust first (`addi r3, r3, 0x110`),
+                    // then loads the int argument, then reads the vtable
+                    // through the adjusted base (`lwz r11, 0x0(r3)`); we fold
+                    // the adjust into the vtable load (`lwz r11, 0x110(r3)`)
+                    // AND re-issue it as the addi for the call, and sink the
+                    // argument behind the vtable load.  Open question: which
+                    // spelling stops c2 re-materialising the adjusted address
+                    // after it has folded it into the load.
                     UILabel *idLabel =
                         marker->Find<UILabel>("id.lbl", false);
                     if (idLabel) {
